@@ -87,8 +87,13 @@ and [`spikes/2026-07-05-git-merge-t3d-layout/`](spikes/2026-07-05-git-merge-t3d-
   `geometry.py` (reject degenerate brushes pre-CSG; validates on `clean`ed coords),
   `clip.py` (Sutherland-Hodgman brush clipping), `vertex.py` (weld per-poly vertices into
   corners; **move-only** vertex editing), `builders.py` (model-side parametric brush builders
-  — cube/cylinder/cone/sheet/staircase/spiral; `make_brush_actor` also makes a **Mover** via
-  `mover_class=`), `movers.py` (the mover domain module: `is_mover(actor, index)` — the schema-aware
+  — cube/cylinder/cone/sheet/staircase/spiral, plus the 2D-profile sweeps extrude/revolve;
+  `make_brush_actor` also makes a **Mover** via
+  `mover_class=`), `profile.py` (the swept generators' shared 2D
+  layer: `--point U,V` parsing, weld/collinear cleanup, the non-simple-ring rejection, winding
+  normalization, and the ear-clip + Hertel–Mehlhorn convex decomposition of a cap — no brush, no
+  world coordinates, no T3D; it also OWNS `WELD`, which `builders` imports, because the reverse
+  direction is a load-time cycle), `movers.py` (the mover domain module: `is_mover(actor, index)` — the schema-aware
   descends-from-`Engine.Mover` predicate, keyframe read/write
   accessors `mover_keys`/`set_key_pos`/`set_key_rot`/`remove_key`/`num_keys`/`set_num_keys`
   (the bounded 2..8 NumKeys setter behind `mover key count`; its validator `check_num_keys` is
@@ -663,6 +668,10 @@ named `label` deliberately, since `tag` would collide with `Engine.Actor.Tag`. S
   common `build | add` pipe. Its unique effect is failing a `build > file` outside any project:
   - **`brush build <shape>`** wraps `builders.<shape>()` via `make_brush_actor` and writes each
     actor T3D to stdout (one actor; spiral: a central column + one wedge tread per step, `N+1`).
+    The eight shapes are `cube`/`cylinder`/`cone`/`sheet`/`staircase`/`spiral` (fixed parametric —
+    you choose sizes) and `extrude`/`revolve` (**2D-profile sweeps** — you draw the silhouette with
+    a repeatable `--point U,V`, then sweep it straight along `--depth` or around an in-plane axis
+    through `--angle` UU; see "Swept profile generators" below).
     Flags `--at`/`--csg`/`--solidity`/
     `--group`/`--base-name` bake into the emitted T3D. `--base-name` is a **stem**, not the final
     Name: `actor add` always appends a `_<rand>` suffix (and the spiral, one actor per brush, a per-brush index),
@@ -1689,12 +1698,15 @@ per-verb, in `dispatch._POSITIVE_BUILD_DIMS` — a `{shape: {flag: argparse-dest
 table is the plug-in point for a new `brush build <shape>`: add one row and nothing else.** The
 regression `test_every_builder_shape_declares_its_positive_dimensions` walks the real parser and
 requires every FLOAT flag of every shape to be either in the table or in that test's explicit
-non-dimension allow-list (the two angle flags), so a new shape cannot ship a dimension outside the
-guard. It checks every float flag, not just the `required=True` ones — a dimension that merely has a
-default builds inside-out geometry just as happily. Counts (`--steps` >= 1, `--sides` >= 3) and angles (`0 < --degrees-per-step < 180`) stay
-in `builders.py` instead: their constraint is tighter than "> 0", it belongs next to the geometry
-reason for it, and it already rejects negatives with a more specific message. `--angle-offset` is
-legitimately negative and is guarded by neither.
+non-dimension allow-list — which is now EMPTY, since every builder angle became a bool or an
+integer count of unreal rotation units — so a new shape cannot ship a dimension outside the guard. It checks every float flag, not just the `required=True` ones — a dimension that merely has a
+default builds inside-out geometry just as happily. Counts (`--steps` >= 1, `--sides` >= 3,
+`--segments` >= 1) and angles stay out of the table: their constraint is tighter than "> 0" and
+belongs next to the geometry reason for it — in `builders.py` for the parametric shapes, and at the
+dispatch boundary for the two checked in **unreal rotation units before conversion**
+(`--angle-per-step` in `0 < uu < 32768`, `--angle` in `0 < uu <= 65536`), where the message can name
+the flag and the value the user actually typed. `revolve` still declares a table row, an empty one:
+its radii ARE the profile's `u` coordinates, guarded by the stricter "strictly off the axis" rule.
 
 UnrealEd's native BrushBuilders are GUI-dialog-only (not console-drivable), so they're
 replicated in Python: each builder returns a `Brush` (PolyList) — or a `list[Brush]` for the
@@ -1739,12 +1751,16 @@ keeps each face planar (trapezoids stay at constant z; the verticals stay 2-poin
 wedge passes `validate_brush` and `_face`'s Newell flip still lands the winding outward after rotation.
 `--at` anchors the base of the column axis. Convex primitives (cube/cylinder/cone) are origin-centered;
 the spiral lives in one local frame with its column base at z=0.
-**Native-CSG caveat (falsifies `csg.rs:61`):** this non-convex staircase brush is built correctly
-by UnrealEd (the default `level materialize`) and the real engine (the default `level preview
---game`), but the experimental native CSG core assumes convex brushes — `uedctl-native/src/csg.rs`
-`point_in_convex` tests "behind every face" (the convex hull, not the true solid), so a stepped
-brush's concave notches classify as solid and the native paths (`level preview --native`, native
-`level materialize`) mis-build it. This joins the already-documented ~11% native solidity
+**Native-CSG caveat (falsifies `csg.rs:61`):** this non-convex staircase brush — and equally an
+`extrude`/`revolve` of a concave profile — is built correctly by UnrealEd (the default `level
+materialize`) and the real engine (the default `level preview --game`), but the **coarse** native
+core assumes convex brushes: `uedctl-native/src/csg.rs` `point_in_convex` tests "behind every face"
+(the convex hull, not the true solid), so a stepped brush's concave notches classify as solid.
+That core is what `level preview --native` and `level materialize --core coarse` use. Native
+*materialize* by DEFAULT is NOT affected — it runs `core="bspcsg"`, the incremental `bspBrushCSG`
+port, which never calls `point_in_convex` (though `bspcsg.rs` flags a non-convex FIRST Add as an
+unhandled case of its convex world-seed shortcut, so a concave brush should not lead a level's
+adds). This joins the already-documented ~11% native solidity
 divergence on walls/steps (KNOWN GAP below); the `csg.rs:61` comment "DX brush builders emit convex
 brushes, so this is exact" is now **falsified for builder output**, with an `inbox.md` follow-up to
 decompose non-convex builder brushes into convex pieces (or guard+warn) on the native path.
@@ -1753,6 +1769,77 @@ The convex CSG shapes (cube/cylinder/cone) were validated live
 staircase is verified offline (doctor-clean under the T-junction-aware `check_watertight` + the
 `actor preview` wireframe render), NOT live paste→rebuild→select (deferred — decisions.md
 2026-07-21 12:22 UTC).
+
+**Swept profile generators — `brush build extrude` / `brush build revolve`.** These two are the
+only builders whose SILHOUETTE the author supplies, rather than choosing sizes for a fixed shape.
+Both take the same closed 2D **profile** — a repeatable `--point U,V`, argument order = ring order,
+implicitly closed, either winding accepted — the same `--axis x|y|z`, and the same `--at`, and
+differ only in the sweep (`--depth` uu vs `--angle` UU / `--segments`). What they close is the
+biggest capability gap the corpus brush-idiom study surfaced: before them, any cross-section that
+was not a box, an n-gon or a stair (an arch voussoir, an L-ledge, a moulded cornice, a curved
+corridor) was unbuildable short of hand-authored T3D. Design decisions + rejected alternatives:
+`decisions.md` 2026-07-25 00:14 UTC (D1–D9), 01:05 UTC (D10), 01:40 UTC, 02:30 UTC (D11–D12).
+
+- **The 2D layer is `profile.py`** (no brush, no world coordinates, no T3D), applied by dispatch in
+  ONE fixed order before any geometry exists: `parse_point` per token → arity ≥3 → `clean_profile`
+  (weld near-duplicates at `WELD`, drop collinear vertices, re-check the arity) → `check_simple` →
+  `normalize_winding`. `ProfileError` subclasses `geometry.GeometryError`, which `dispatch()`
+  already turns into a clean exit 2 — it has no bare `ValueError` arm, so a plain `ValueError`
+  subclass would traceback at the user. For the same reason `parse_point` is called from dispatch
+  and NOT as an argparse `type=`: argparse replaces a `ValueError`'s message with its own.
+- **`check_simple` rejects more than a crossing.** Any vertex repeated ANYWHERE in the ring (a weld
+  only catches neighbours, so `A B C A D E` survives it while being a figure-eight) and any two
+  NON-ADJACENT edges that meet at all — crossing, touching at an endpoint, or overlapping
+  collinearly. A non-simple ring has no consistent inside: the decomposition below would emit
+  overlapping or inverted pieces silently, and the brush would be a self-intersecting solid.
+- **The `(u,v,w)` sweep frame** is `builders._SWEEP_FRAMES`, the single place the mapping is
+  written: `z`→(X,Y,+Z), `x`→(Y,Z,+X), `y`→(Z,X,+Y), cycled right-handed so `u × v = +axis` and one
+  winding rule (CCW in `(u,v)`) serves all three orientations.
+- **`--at` is where profile `(0,0)` lands** — local vertices are the authored coordinates verbatim,
+  no re-centering, the sweep running `0..depth` (or `0..angle`) from there. This is the THIRD `--at`
+  exception beside the staircase's front-bottom corner and the spiral's column base, and it changes
+  what `--rotate` pivots about: an actor rotates about its LOCAL ORIGIN, so a profile drawn away
+  from `(0,0)` swings through an arc instead of turning in place.
+- **Concave and >16-vertex profiles are supported as ONE brush with TILED CAPS**
+  (`profile.convex_pieces`): ear-clip, then merge back across shared diagonals for as long as each
+  fused piece stays convex and ≤16 vertices (Hertel–Mehlhorn). A convex ≤16-vertex ring returns
+  EXACTLY one piece, so the simple case still emits two cap faces. The tiling adds only diagonals —
+  never a new boundary vertex — so no T-junctions appear and `check_watertight` stays clean; face
+  count is `n + 2·pieces`. Same shape of thing as the `staircase`: a non-convex BRUSH of convex
+  FACES.
+- **The revolve axis is the profile's own `v` axis (`u = 0`), and there is NO `--pivot`**: radius is
+  written in the profile coordinates, so `--at` is the bend centre. Every profile point must be
+  strictly positive-`u`; the sweep then grows toward `+axis` like an extrude. `--angle 65536` closes
+  the turn (both caps omitted, the last ring welded onto the first) and needs ≥3 segments; the
+  `--segments` default is `max(1, floor(angle/4096 + 0.5))`, one facet per 22.5°.
+- **Per-face outward hints ROTATE with their faces, except the near cap.** `_face` FLIPS any ring
+  whose Newell normal disagrees with its hint, so a stale hint emits a backwards-wound face — an
+  inverted solid, which UnrealEd cannot recover from (it derives the face from the winding and
+  ignores the emitted `Normal`). Near cap: `−ŵ`, identical to extrude's, because the `θ=0` cap lies
+  in the `(û,v̂)` plane with the solid growing toward `+ŵ`. Far cap: `+ŵ` rotated by the whole
+  sweep. Side quad of edge `k` in segment `m`: the in-plane edge normal `(dv, −du)` rotated by that
+  segment's MID-angle. Regression: `test_profile_generators.py` asserts zero `doctor` findings at
+  90°, 180° and a full turn — written first and confirmed RED against unrotated hints.
+- **Sweep magnitudes never touch `rotation.uu_field`/`uu_to_deg`**, which wrap mod 65536 because
+  they parse an FRotator *field*. A magnitude is not modular: `uu_to_deg(65536) == 0.0` would
+  silently collapse a closed full turn into a zero sweep. `--angle` is range-checked on the raw
+  integer and converted as `uu * 360/65536`.
+- **These two builders call `geometry.validate_brush` themselves**, unlike every other generator
+  (`brush build` validates only class and texture existence; geometry validation happens downstream
+  at `actor add`). Justified by their vertices coming from arbitrary user input — two points 0.4 uu
+  apart collapse only after `emit.clean`'s grid snap — and by generator output that can bypass
+  `actor add` entirely (`> file.t3d`, `| brush intersect`).
+- **Two stderr ADVISORIES** (`dispatch._advise_swept_brush`, run after `--rotate` so
+  rotation-induced off-grid geometry counts): an off-grid brush that is also SOLID and not a mover,
+  and a brush over 64 faces. Both are gated on the swept shapes, because a `cylinder`'s ring
+  vertices are inherently fractional (with a green test asserting its silence) and a 16-step
+  staircase already exceeds 64 faces.
+- **Goldens, and what they do NOT prove.** `fixtures/builder_extrude.t3d` /
+  `builder_revolve.t3d` freeze face order, the `Cap`/`Side<k>` item names and every coordinate. They
+  are SELF-blessed, unlike the six parametric shapes' editor-captured parity cases below, so they
+  pin **drift, not correctness**; a real parity case needs the gated integration run and is a
+  follow-up. Note also that `Side<k>` numbering is invariant under an EXACT reversal of the ring but
+  not under a cyclic rotation of it, which renumbers every side.
 
 **World-geometry parity suite** (`tests/builder_parity_cases.py` + `test_builder_parity.py`
 [offline, default suite] + `test_builder_parity_capture.py` [`integration`-gated]): for each

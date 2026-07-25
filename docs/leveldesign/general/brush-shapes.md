@@ -25,15 +25,16 @@ The workhorse. A box.
 A prism / round pillar. Requires `--height` and `--radius`.
 - `--sides` — facet count. **The engine caps a single poly at 16 sides** — more sides means more faces
   and more BSP cuts, so keep it low. 8 reads as round enough for most pillars.
-- `--radius` — the circumscribed radius. `--angle-offset` rotates the cross-section (deg) to flatten a
-  face onto an axis. (uedctl's cylinder is a **solid** prism only — there is no inner-radius/hollow
+- `--radius` — the circumscribed radius. `--align-to-side` offsets the cross-section by half a segment
+  (`180/--sides` degrees) so a flat FACE, not a vertex, meets an axis — the same parameter as UED's own
+  `AlignToSide` checkbox. (For any other angle use `--rotate`.) (uedctl's cylinder is a **solid** prism only — there is no inner-radius/hollow
   tube option; build a tube by subtracting a smaller cylinder from a larger one.)
 - Round geometry is off-grid by nature — prefer **semisolid** for cylindrical detail so it doesn't seed
   BSP holes (see [geometry-and-bsp.md](geometry-and-bsp.md)).
 
 ### `cone` — `ConeBuilder`
 A pyramid or **frustum** (truncated cone) — spires, tent roofs, tapered pillars. Requires `--height` and
-`--radius`; `--sides` (default 8) and `--angle-offset` are optional.
+`--radius`; `--sides` (default 8) and `--align-to-side` are optional.
 
 ### `sheet` — `SheetBuilder`
 A single flat poly. The basis of most special surfaces:
@@ -63,11 +64,12 @@ into convex `Side` strips (`2 + 4·steps` faces). Parameters: `--steps` (count),
 
 ### `spiral` — `SpiralStairBuilder`
 A real spiral staircase: a **central column** (a cylinder filling the axis over the full height) plus
-one **wedge (pie-slice) tread per step**, each tread rotated `--degrees-per-step` and raised one `--rise`
+one **wedge (pie-slice) tread per step**, each tread rotated `--angle-per-step` and raised one `--rise`
 above the last — so the treads fan around the column and climb monotonically (a single helix, not a
 mirrored fan). Prints `N+1` brush actors (`[column, wedge_0, …]`). Requires `--steps`, `--inner-radius`
 (column radius = inner tread radius), `--step-width` (radial tread depth), and `--rise` (tread
-thickness / per-step climb); `--degrees-per-step` is optional (default 30°). `--at` anchors the base of
+thickness / per-step climb); `--angle-per-step` is optional — unreal rotation units like `--rotate`,
+default `8192` (45°). `--at` anchors the base of
 the column axis (bottom of the stair). Typically added as an **additive** structure (the treads read
 as a solid stair); each emitted brush is a clean convex solid, so subtracting works too.
 

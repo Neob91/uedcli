@@ -267,7 +267,7 @@ def test_parser_brush_build_cylinder_defaults():
     p = build_parser()
     ns = p.parse_args(["brush", "build", "cylinder", "--height", "128", "--radius", "64"])
     assert ns.sub == "build" and ns.shape == "cylinder"
-    assert ns.sides == 8 and ns.angle_offset == 0.0
+    assert ns.sides == 8 and ns.align_to_side is False
 
 
 def test_parser_brush_build_staircase():
@@ -281,10 +281,10 @@ def test_parser_brush_build_staircase():
 def test_parser_brush_build_spiral():
     p = build_parser()
     ns = p.parse_args(["brush", "build", "spiral", "--steps", "12", "--inner-radius", "48",
-                       "--step-width", "96", "--rise", "16", "--degrees-per-step", "24"])
+                       "--step-width", "96", "--rise", "16", "--angle-per-step", "4096"])
     assert ns.sub == "build" and ns.shape == "spiral"
     assert ns.inner_radius == 48.0
-    assert ns.step_width == 96.0 and ns.degrees_per_step == 24.0
+    assert ns.step_width == 96.0 and ns.angle_per_step == 4096
 
 
 def test_parser_container_flag_is_removed():

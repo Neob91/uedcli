@@ -7,6 +7,25 @@ tail, not a permanent archive. When a remnant here becomes active work, promote 
 
 ---
 
+- [~] **#12 `brush build extrude` + `brush build revolve` — SHIPPED, but the build gate's ten
+  findings were ALL deferred, unfixed, at Andrzej's explicit instruction (2026-07-25).** Built in a
+  feature worktree over seven commits (B1 `profile.py` → B2 extrude → B3 cap tiling → B4 revolve →
+  B5 advisories → B6 the UU units retrofit → B7 doc sweep), each landing green, then squash-merged.
+  Suite 2559 passed / 13 skipped, up 100 tests with no new skips. Round 1 of the build gate (1 cold
+  Opus, given `CLAUDE.md` + the spec + the plan, no priming) returned **ten findings, none
+  structural**; Andrzej directed in-session: *"Land what you have, fix the rest in another feature
+  branch."* Because nothing was fixed, the artifact did not change and **round 2 never fired** —
+  under `CLAUDE.md` "Review gates" that is the *form* of a passed gate but not the substance, since
+  findings 1 and 2 are in-scope defects and the file names deferring in-scope defects to dodge round
+  2 as gaming the gate. Recorded as Andrzej's ruling, a legitimate disposition, so the reason lives
+  outside chat. **Remnant:** the full findings list (stale `brush-shapes.md`, two spec-required
+  `--help` caveats missing, extrude tests that pass on an inside-out solid, a 90° winding case that
+  pins nothing, a doc example that exits 2, plus five smaller ones) is on `inbox.md` as one
+  `[implement] p2` item, to be fixed on a follow-up feature branch. The shipped **geometry** was
+  independently verified correct there (1400 fuzz cases + 75 configurations, zero faults) — the
+  remnant is docs and tests, not geometry. The spec and plan are **deliberately NOT deleted** (the
+  usual fate of ephemeral docs once work lands) because the follow-up branch needs them.
+
 - [x] **#10 build review — round 1 only, round 2 SKIPPED at Andrzej's explicit instruction
   (2026-07-25).** Round 1 ran the full build tier (2 Opus + 1 Haiku, cold, given `CLAUDE.md` + the
   §10 spec text, no priming). Resolving it **did change the artifact**, so the gate's own rule would

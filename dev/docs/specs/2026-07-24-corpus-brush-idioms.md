@@ -96,7 +96,9 @@ UnrealEd's builders, and has **no arbitrary-polygon extrude/prism** generator at
 yet the 2D-shape→extrude workflow is *the* canonical UE1 brush method, so many real brushes use it.
 Classify every real brush into exactly one of:
 
-- **(a) reproducible by an existing `uedctl` generator** (`cube/cylinder/cone/sheet/staircase/spiral`).
+- **(a) reproducible by an existing `uedctl` generator** (`cube/cylinder/cone/sheet/staircase/spiral`,
+  and since 2026-07-25 the 2D-profile sweeps `extrude`/`revolve` — so gap 6 below is CLOSED and a
+  swept-profile brush is now case (a), not freeform).
 - **(b) reproducible only by a builder `uedctl` lacks** — hollow-cube, hollow/tube cylinder, curved
   stair, and above all **arbitrary-polygon extrude**. This bucket is *capability-gap evidence*, the
   highest-value output: "DX leans heavily on extrude → build the verb." Route it to `inbox.md`.

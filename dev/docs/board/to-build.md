@@ -194,56 +194,6 @@ generation + `.gitignore` + `--include-data-dir=uedctl/_docs=uedctl/_docs` + dri
 packaging exists, with no command-code change. **Docs to update on landing:** `docs/usage.md` gains a
 `docs` section (the reference file the command serves); `architecture.md`. (Andrzej, 2026-07-24.)
 
-## 12. `brush build extrude` + `brush build revolve` — the 2D-profile generator family
-
-**Status:** ready. **Spec review gate PASSED** (2 cold reviewers, 2026-07-25) and **plan review gate
-PASSED** (2 cold reviewers, 2026-07-25) — all findings folded both times.
-**Plan (full detail, execute from this):** [`../plans/2026-07-25-brush-profile-generators-plan.md`](../plans/2026-07-25-brush-profile-generators-plan.md)
-**Spec:** [`../specs/2026-07-25-brush-profile-generators.md`](../specs/2026-07-25-brush-profile-generators.md) ·
-**Decisions:** `../decisions.md` 2026-07-25 00:14 (D1–D9) / 01:05 (D10) / 01:40 (spec review) /
-02:30 UTC (plan review + D11–D12)
-
-**What it is.** `brush build`'s six shapes are all *fixed parametric* — you choose sizes, never a
-silhouette — so any non-box/non-n-gon cross-section (arch voussoir, L-ledge, cornice, curved
-corridor) is unbuildable short of hand-authored T3D or chained `brush clip` planes. These two verbs
-add UE1's 2D-shape-editor method: draw a closed profile (`--point U,V`, repeatable), then **extrude**
-it (`--depth`) or **revolve** it (`--angle`/`--segments`). Closes the top capability gap the corpus
-brush-idiom study surfaced (its §7 gap 6).
-
-**Landed since the plan was written — plug into it, don't re-invent it.** #10.4 added the shared
-positive-dimension guard every builder verb now goes through: declare each new shape's dimension
-flags as ONE row in `dispatch._POSITIVE_BUILD_DIMS` (`{shape: {"--flag": "argparse-dest"}}`) and the
-exit-2 message comes out uniform for free. `extrude`'s `--depth` and `revolve`'s radius-like
-dimensions belong there; `--angle`/`--segments` do NOT (angles and counts keep their own tighter
-guards in `builders.py`, per that table's comment). This is not optional politeness —
-`test_every_builder_shape_declares_its_positive_dimensions` walks the real parser and FAILS unless
-every float flag of every `brush build` shape is either in the table or explicitly exempted in that
-test's non-dimension allow-list.
-
-**Build order (7 commits, each landing green, each carrying its own doc updates):**
-1. **B0** — move this item here from `to-plan.md` (done when this entry appeared).
-2. **B1 `profile.py`** — `--point` parsing, cleanup, non-simple-profile rejection, winding
-   normalization; convex-passthrough only. Owns `WELD` (a cycle the other way breaks every
-   invocation); `ProfileError` subclasses `GeometryError` so exit 2 is free.
-3. **B2 extrude** — `_uv_axes`, geometry, winding, profile-`(0,0)` anchoring, the CLI verb.
-4. **B3 cap tiling** — ear-clip + Hertel–Mehlhorn behind the same signature; concave + >16-vertex.
-5. **B4 revolve** — segments, the **rotated** far-cap/side outward hints (the near cap does NOT
-   rotate), closed full turn, `Side<k>` item names, goldens.
-6. **B5 advisories** — off-grid-solid + poly budget, both gated on shape and non-mover.
-7. **B6 units retrofit (alone)** — `--angle-offset` → `--align-to-side`, `--degrees-per-step` →
-   `--angle-per-step` (UU). CLI surface only: builder signatures stay (D11), or the editor-blessed
-   parity goldens need a needless re-bless.
-8. **B7** — the cross-cutting doc sweep (seven six-shape lists, two recipe indexes, kb, architecture).
-
-**Watch for:** write B4's full-turn `doctor` gate FIRST and confirm it goes red with unrotated hints —
-the inverted-face bug is invisible otherwise. Sweep magnitudes must never touch
-`rotation.uu_field`/`uu_to_deg` (they wrap mod 65536 and would silently zero a full turn). B5's
-advisory must be shape-gated or it turns `test_generators.py:281-286` red.
-
-**Not in scope:** `--taper`, path sweep, axis-touching revolve, the pre-existing `cylinder --sides`
->16 cap defect — all filed in `inbox.md`. Two claims await live verification once built (cap
-merge-back, the full-turn torus); none blocks the build. (Andrzej, 2026-07-25.)
-
 ---
 
 ## Codebase-review chore batch (2026-07-25, session `uedctl:review`)

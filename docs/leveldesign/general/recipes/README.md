@@ -18,7 +18,7 @@ builds it via `level materialize`).
 | [mover-door.md](mover-door.md)     | A door — a `--mover-class` brush + `mover key move` + a trigger |
 | [lift.md](lift.md)                 | An elevator — a vertical mover + `StandOpenTimed` / trigger |
 | [fire-and-fog.md](fire-and-fog.md) | Flame — a masked decoration + coloured light; and zone fog |
-| [shapes/](shapes/)                 | **Shape** recipes — chamfered box, wedge, octagon column, ring cornice, add/subtract twin (the non-box brush constructions) |
+| [shapes/](shapes/)                 | **Shape** recipes — chamfered box, wedge, octagon column, ring cornice, add/subtract twin, L-ledge, arch voussoir, curved corridor, moulded cornice (the non-box brush constructions) |
 
 All of these lean on the topic guides — [geometry-and-bsp.md](../geometry-and-bsp.md),
 [zones-and-performance.md](../zones-and-performance.md),

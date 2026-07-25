@@ -19,10 +19,16 @@ lifts). All are engine-generic CSG technique.
 | [octagonal-column.md](octagonal-column.md)     | A faceted round pillar (and how "round" is done at all) |
 | [ring-cornice.md](ring-cornice.md)             | A ring of blocks around an axis — the fake-a-curve copy-rotate pattern |
 | [add-subtract-twin.md](add-subtract-twin.md)   | A solid piece + its matching carved recess (the seat-the-trim workflow) |
+| [l-ledge.md](l-ledge.md)                       | A shelf/curb whose cross-section is an L — the simplest drawn-profile sweep |
+| [arch-voussoir.md](arch-voussoir.md)           | One wedge stone of a masonry arch — a trapezoid swept through the wall |
+| [curved-corridor.md](curved-corridor.md)       | A passage that BENDS — a cross-section revolved around the bend centre |
+| [moulded-cornice.md](moulded-cornice.md)       | Stepped/chamfered trim swept along a wall (supersedes copy-rotate for straight runs) |
 
-The two verbs almost every shape recipe leans on: **`brush clip`** (cut a brush by an arbitrary plane,
-keep one half — how you bevel, taper, and miter) and **`brush build cylinder --sides N`** (the only way
-to get anything round). Read [../brush-shapes.md](../brush-shapes.md) and
+The verbs almost every shape recipe leans on: **`brush clip`** (cut a brush by an arbitrary plane,
+keep one half — how you bevel, taper, and miter), **`brush build cylinder --sides N`** (a faceted
+round pillar), and — since the 2D-profile generators landed — **`brush build extrude`** /
+**`brush build revolve`**, which sweep a silhouette you draw yourself and are the general answer to
+"this cross-section is not a box". Read [../brush-shapes.md](../brush-shapes.md) and
 [../geometry-and-bsp.md](../geometry-and-bsp.md) for the underlying builders and BSP rules.
 
 ---
@@ -31,9 +37,12 @@ to get anything round). Read [../brush-shapes.md](../brush-shapes.md) and
 
 These aren't single shapes but *ways of working* that the shape recipes build on:
 
-- **Fake curves with straight brushes.** UE1 has no smooth curves. "Round" is either a low-side
-  `cylinder` (octagon columns/drums), or a **ring of straight blocks copy-rotated around an axis**
-  ([ring-cornice.md](ring-cornice.md)). Chamfers (45° clips) stand in for fillets.
+- **Fake curves with straight brushes.** UE1 has no smooth curves — every "curve" is facets. Three
+  ways to get them: a low-side `cylinder` (octagon columns/drums); **`brush build revolve`**, which
+  sweeps a cross-section you draw around an axis in flat facets and is the natural one for a bend, a
+  ring or a turned profile ([curved-corridor.md](curved-corridor.md)); or a **ring of straight
+  blocks copy-rotated around an axis** ([ring-cornice.md](ring-cornice.md)), which is still what you
+  want when the pieces must be separate actors. Chamfers (45° clips) stand in for fillets.
 - **Add then carve its twin.** Build a shaped **additive** solid, `actor duplicate` it, flip the copy to
   **subtractive**, and seat it into a wall to carve a matching recess
   ([add-subtract-twin.md](add-subtract-twin.md)).

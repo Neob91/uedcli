@@ -5,8 +5,8 @@ clipping, curved geometry, UE1 terrain, and MeshMaker. This is the "how do I mak
 that feeds [csg-bsp.md](./csg-bsp.md) (a builder produces the `FPoly` list a CSG op commits).
 
 **uedctl mapping.** uedctl exposes a subset of the native builders as `brush build {cube, cylinder, cone,
-sheet, staircase, spiral}` generators — each prints a T3D snippet to stdout, committed with `… | actor
-add -`. Where a builder maps to a uedctl verb it is noted inline; the rest are editor-GUI shapes preserved
+sheet, staircase, spiral}` generators, plus the 2D-shape-editor sweeps `brush build {extrude, revolve}`
+(§4) — each prints a T3D snippet to stdout, committed with `… | actor add -`. Where a builder maps to a uedctl verb it is noted inline; the rest are editor-GUI shapes preserved
 here for completeness (and because their params inform what a good shape looks like).
 
 ---
@@ -19,7 +19,7 @@ expressions (e.g. `=64+128`) 📖, and each builder **remembers its params for t
 | Builder | Key params | uedctl verb | Notes |
 |---|---|---|---|
 | **`CubeBuilder`** | Height / Width / Breadth, WallThickness, **Hollow**, **Tessellated** | `brush build cube` | default 256³; Hollow makes a room shell; Tessellated splits faces (for vertex-editing) |
-| **`CylinderBuilder`** | Height, OuterRadius, InnerRadius, **Sides**, AlignToSide, Hollow | `brush build cylinder` | default 8 sides, h256, r512. **Engine caps a single poly at 16 sides** — a cap face above 16 sides is invalid |
+| **`CylinderBuilder`** | Height, OuterRadius, InnerRadius, **Sides**, AlignToSide, Hollow | `brush build cylinder` | default 8 sides, h256, r512. **Engine caps a single poly at 16 sides** — a cap face above 16 sides is invalid. **`AlignToSide` maps 1:1** to uedctl's `--align-to-side` (half a segment, `180/sides`°) since 2026-07-25 |
 | **`ConeBuilder`** | Height, CapHeight, Outer/InnerRadius, Sides | `brush build cone` | actually a **pyramid / frustum** (a truncated cone when CapHeight < Height) |
 | **`TetrahedronBuilder`** | `SphereExtrapolation` (subdivision) | — | the **"Sphere"** toolbar button; a geodesic sphere. Subdivision **max ~5** (higher → node blowup) |
 | **`SheetBuilder`** | one flat poly (U/V, orientation) | `brush build sheet` | zone portals, water surfaces, banners; **NotSolid by default**; sheets **never collide** on their own |
@@ -72,6 +72,12 @@ The clip tool cuts an existing brush against a plane:
   2026-07-25 00:14 UTC (D5).
 - **Curved corridors** — 2D-editor **Revolve**: move the green pivot *away* from the cross-section, then
   revolve. 16 pieces = 360°; `Use`=4 → a 90° bend.
+  **Revolve HAS a uedctl verb since 2026-07-25**: `brush build revolve --point U,V … --angle UU
+  [--segments N]`. Its axis is fixed at the profile's own `u = 0` line, so "move the pivot away from the
+  cross-section" is spelled by drawing the profile away from `u = 0` (`decisions.md` 2026-07-25 01:05 UTC,
+  D10). The `--segments` default is one facet per 22.5°, i.e. the 16-pieces-per-turn density above — which
+  is a 📖-level fact, so the default rests on inferred semantics rather than a measurement. The straight
+  case is `brush build extrude --point U,V … --depth D`.
 - **Curved arches** — 2D-editor **Bézier** segments traced on a reference BMP.
 - **The iris doorway** — **8 quarter/eighth-segment movers** all keyed to one `Event` (see
   [movers.md](./movers.md)).
@@ -123,7 +129,9 @@ BSP and stops risking holes.
 | Flat sheet (portal/water/banner) | `brush build sheet` (NotSolid by default) | `SheetBuilder` |
 | Straight stairs (linear only) | `brush build staircase` | `LinearStairBuilder` (the `CurvedStairBuilder` has no uedctl verb) |
 | Spiral stairs | `brush build spiral` | `SpiralStairBuilder` (**native can't subtract**) |
+| Drawn profile, swept straight | `brush build extrude --point U,V … --depth D` | the 2D shape editor's **Extrude** |
+| Drawn profile, swept around an axis | `brush build revolve --point U,V … --angle UU` | the 2D shape editor's **Revolve** |
 
 Geodesic spheres, volumetric star-sheets, terrain tessellation, the Tarquin extended builders, clipping,
-Revolve/Bézier, and MeshMaker are **editor-GUI / external-tool** shapes with no uedctl generator — author
+Bézier curves, and MeshMaker are **editor-GUI / external-tool** shapes with no uedctl generator — author
 their output as a T3D snippet (or a prefab) and bring it in via the normal `actor add -` path.

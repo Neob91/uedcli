@@ -755,10 +755,14 @@ def build_parser() -> argparse.ArgumentParser:
     # Model-side parametric brush builders (replicate UnrealEd's GUI BrushBuilders).
     def _common_build_opts(bp):
         bp.add_argument("--at", type=parse_coord, default=(Decimal(0), Decimal(0), Decimal(0)),
-                        metavar="X,Y,Z", help="world Location = the brush's geometric CENTER on "
-                             "EVERY axis, including Z (cube/cylinder/cone/sheet are origin-centered; "
-                             "default origin). Exception: the staircase anchors at its front-bottom "
-                             "corner, not its center.")
+                        metavar="X,Y,Z", help="world Location for the emitted actor(s) (default "
+                             "origin). For cube/cylinder/cone/sheet it is the brush's geometric "
+                             "CENTER on EVERY axis, including Z. THREE shapes anchor elsewhere: "
+                             "the staircase at its front-bottom corner (min X/Y/Z); the spiral at "
+                             "the base of its column axis (centred in XY, BOTTOM in Z); "
+                             "extrude/revolve at the point profile coordinate (0,0) lands on — "
+                             "for a revolve that is the bend centre, since the sweep axis passes "
+                             "through it.")
         bp.add_argument("--base-name", dest="base_name",
                         help="base Name (stem) for the emitted actor(s); a unique `_<rand>` suffix "
                              "is appended at `actor add`, so this is a prefix, not the final Name "
@@ -802,7 +806,11 @@ def build_parser() -> argparse.ArgumentParser:
                              "generated actor starts at identity, so no add-vs-override ambiguity). "
                              "Rotation is stored on the actor, NOT "
                              "baked into the vertices; warns on stderr if it pushes any brush "
-                             "vertex off the integer grid (overrides any --prop Rotation=…)")
+                             "vertex off the integer grid (overrides any --prop Rotation=…). "
+                             "It turns the brush about the actor's LOCAL ORIGIN, which for most "
+                             "shapes is the brush centre — but for extrude/revolve it is profile "
+                             "coordinate (0,0), so a profile drawn away from (0,0) SWINGS through "
+                             "an arc instead of turning in place")
 
     bbuild = bsub.add_parser("build",
                              help="build a parametric shape and write T3D to stdout (stateless; no level needed)")
@@ -822,8 +830,14 @@ def build_parser() -> argparse.ArgumentParser:
                       help="prism height along the Z axis, in world units (uu)")
     bcyl.add_argument("--radius", type=float, required=True, help="circumscribed radius")
     bcyl.add_argument("--sides", type=int, default=8, help="polygon side count (default 8)")
-    bcyl.add_argument("--angle-offset", dest="angle_offset", type=float, default=0.0,
-                      help="rotate the cross-section (deg) to flatten a face onto an axis")
+    bcyl.add_argument("--align-to-side", dest="align_to_side", action="store_true",
+                      help="turn a FACE rather than a vertex toward the axes, by offsetting the "
+                           "cross-section half a segment (180/--sides degrees). Without it vertex "
+                           "0 sits on +X, so an octagonal pillar meets an axis-aligned wall on a "
+                           "CORNER, leaving two thin wedge gaps; with it a flat face sits flush. "
+                           "Same parameter as UnrealEd's own CylinderBuilder AlignToSide checkbox. "
+                           "For any other cross-section angle use --rotate, which is whole-actor "
+                           "placement")
     _common_build_opts(bcyl)
 
     bcone = bshape.add_parser("cone", help="n-faced cone (height, base radius, sides)")
@@ -831,8 +845,12 @@ def build_parser() -> argparse.ArgumentParser:
                        help="cone height (base to apex) along the Z axis, in world units (uu)")
     bcone.add_argument("--radius", type=float, required=True, help="base circumscribed radius")
     bcone.add_argument("--sides", type=int, default=8, help="polygon side count (default 8)")
-    bcone.add_argument("--angle-offset", dest="angle_offset", type=float, default=0.0,
-                       help="rotate the base ring (deg)")
+    bcone.add_argument("--align-to-side", dest="align_to_side", action="store_true",
+                       help="turn a FACE of the base ring rather than a vertex toward the axes, "
+                            "by offsetting it half a segment (180/--sides degrees), so the cone "
+                            "sits flush against an axis-aligned wall instead of meeting it on a "
+                            "corner. Same parameter as UnrealEd's own AlignToSide checkbox; for "
+                            "any other angle use --rotate")
     _common_build_opts(bcone)
 
     bsheet = bshape.add_parser("sheet", help="flat two-sided non-solid panel (width, height)")
@@ -869,9 +887,56 @@ def build_parser() -> argparse.ArgumentParser:
     bspiral.add_argument("--step-width", dest="step_width", type=float, required=True,
                          help="radial tread depth")
     bspiral.add_argument("--rise", type=float, required=True, help="rise (Z) per step")
-    bspiral.add_argument("--degrees-per-step", dest="degrees_per_step", type=float, default=30.0,
-                         help="rotation per step in degrees (default 30)")
+    bspiral.add_argument("--angle-per-step", dest="angle_per_step", type=int, default=8192,
+                         metavar="UU",
+                         help="how far each tread turns around the column, in unreal rotation "
+                              "units — 16384 = 90 degrees, 8192 = 45 degrees (the default), and "
+                              "the whole stair climbs --steps of these. Must satisfy "
+                              "0 < angle-per-step < 32768 (a half turn or more per tread would "
+                              "make the wedge non-convex)")
     _common_build_opts(bspiral)
+
+    # --- swept 2D profiles: the shapes whose cross-section the author DRAWS -----------------
+    # UnrealEd's 2D shape editor, as two generators: draw a closed profile, then sweep it in a
+    # straight line (extrude) or around an in-plane axis (revolve). Both take the same profile
+    # grammar, the same --axis orientation and the same --at anchor; they differ only in the sweep.
+    _PROFILE_POINT_HELP = (
+        "one profile vertex as `U,V` in the profile's own 2D coordinates — REPEAT the flag once "
+        "per vertex, in ring order (at least 3). The ring is closed implicitly, so do not repeat "
+        "the first point last (harmless if you do — it is welded away). Either winding is "
+        "accepted. `U,V` map onto world axes per --axis")
+    _PROFILE_AXIS_HELP = (
+        "the world axis the profile PLANE IS NORMAL TO — equivalently the direction the sweep "
+        "grows (default z). The profile's (U,V) then map onto the other two world axes in "
+        "right-handed cyclic order: z → U=X,V=Y; x → U=Y,V=Z; y → U=Z,V=X")
+
+    bextrude = bshape.add_parser(
+        "extrude",
+        help="sweep a drawn 2D profile in a straight line — the shape for an L-ledge, an arch "
+             "voussoir, a cornice or any other non-box cross-section")
+    bextrude.add_argument("--point", action="append", metavar="U,V", help=_PROFILE_POINT_HELP)
+    bextrude.add_argument("--depth", type=float, required=True,
+                          help="sweep length along +--axis, in world units (uu); must be > 0")
+    bextrude.add_argument("--axis", choices=["x", "y", "z"], default="z", help=_PROFILE_AXIS_HELP)
+    _common_build_opts(bextrude)
+
+    brevolve = bshape.add_parser(
+        "revolve",
+        help="sweep a drawn 2D profile around an in-plane axis, in flat facets — a curved "
+             "corridor, an arch ring, a turned column")
+    brevolve.add_argument("--point", action="append", metavar="U,V", help=_PROFILE_POINT_HELP)
+    brevolve.add_argument("--angle", type=int, required=True, metavar="UU",
+                          help="total sweep in unreal rotation units — 16384 = 90°, 65536 = a "
+                               "CLOSED full turn (which omits both caps); must satisfy "
+                               "0 < angle <= 65536. Thirds are not exact in UU, so a 60° bend is "
+                               "--angle 10923 (60.002°)")
+    brevolve.add_argument("--segments", type=int, default=None, metavar="N",
+                          help="how many flat facets the sweep is divided into (default: one per "
+                               "22.5° — 4 for a 90° bend, 16 for a full turn, UnrealEd's own "
+                               "density). Each segment costs one face per profile edge, so a high "
+                               "count is a heavy brush for the BSP")
+    brevolve.add_argument("--axis", choices=["x", "y", "z"], default="z", help=_PROFILE_AXIS_HELP)
+    _common_build_opts(brevolve)
 
     # --- CSG set merge: intersect / deintersect ------------------------------------------------
     # Generators like `brush build`, but their SHAPE comes from a piped brush set rather than

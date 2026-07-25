@@ -15,7 +15,7 @@ the [top README](../README.md).
 | [textures-and-surfaces.md](textures-and-surfaces.md) | `brush poly` texturing, surface flags, alignment & scrolling, MyLevel, skybox flags |
 | [movers.md](movers.md)                               | Doors/lifts/crushers — `--mover-class` + `mover key`, keyframes, encroachment, the black-door fix |
 | [actors.md](actors.md)                               | Collision cylinders & blocking, decorations & breakables, PlayerStart, pathnodes |
-| [brush-shapes.md](brush-shapes.md)                   | The `brush build` shapes (cube, cylinder, cone, sheet, staircase, spiral) and their parameters |
+| [brush-shapes.md](brush-shapes.md)                   | The `brush build` shapes (cube, cylinder, cone, sheet, staircase, spiral, extrude, revolve) and their parameters |
 | [human-scale.md](human-scale.md)                     | The engine-generic numbers — units, stairs, ceilings, doorways, grid — and how to read any class default |
 | [design-craft.md](design-craft.md)                   | Composition, lighting mood, and flow — what makes a level good (engine-generic) |
 

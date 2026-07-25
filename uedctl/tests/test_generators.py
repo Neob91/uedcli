@@ -116,7 +116,7 @@ def test_brush_build_spiral_outputs_column_plus_wedge_actors(capsys):
     steps = 4
     args = Namespace(
         cmd="brush", sub="build", shape="spiral",
-        steps=steps, inner_radius=48.0, step_width=32.0, rise=16.0, degrees_per_step=30.0,
+        steps=steps, inner_radius=48.0, step_width=32.0, rise=16.0, angle_per_step=8192,
         at=(0.0, 0.0, 0.0),
         base_name=None, csg="add", solidity="solid", group=None, texture=None)
     rc = dispatch(args)
@@ -129,22 +129,24 @@ def test_brush_build_spiral_outputs_column_plus_wedge_actors(capsys):
 def _brush_build_spiral_args(**overrides):
     defaults = dict(
         cmd="brush", sub="build", shape="spiral",
-        steps=4, inner_radius=48.0, step_width=32.0, rise=16.0, degrees_per_step=30.0,
+        steps=4, inner_radius=48.0, step_width=32.0, rise=16.0, angle_per_step=8192,
         at=(0.0, 0.0, 0.0),
         base_name=None, csg="add", solidity="solid", group=None, texture=None)
     defaults.update(overrides)
     return Namespace(**defaults)
 
 
-@pytest.mark.parametrize("bad_degrees", [200.0, -30.0])
-def test_brush_build_spiral_bad_degrees_per_step_clean_exit2(capsys, bad_degrees):
-    # validate_brush is winding/convexity-blind, so a >=180 or negative sweep would
-    # silently emit a non-convex/inverted wedge; spiral_staircase guards it. The bad
-    # value must surface in a clean exit-2 message, never a traceback.
-    rc = dispatch(_brush_build_spiral_args(degrees_per_step=bad_degrees))
+@pytest.mark.parametrize("bad_uu", [40000, -8192, 32768, 0])
+def test_brush_build_spiral_bad_angle_per_step_clean_exit2(capsys, bad_uu):
+    # validate_brush is winding/convexity-blind, so a half-turn-or-more or negative sweep would
+    # silently emit a non-convex/inverted wedge. The check lives at the dispatch boundary, in the
+    # unreal rotation units the user typed and naming the flag they typed — the builder's own
+    # guard is in degrees and names its parameter, so it could only report a value and a flag
+    # that never appeared on the command line.
+    rc = dispatch(_brush_build_spiral_args(angle_per_step=bad_uu))
     assert rc == 2
     err = capsys.readouterr().err
-    assert "degrees_per_step" in err and str(bad_degrees) in err
+    assert "--angle-per-step" in err and str(bad_uu) in err
     assert "Traceback" not in err
 
 
@@ -274,7 +276,7 @@ def test_brush_build_rotate_subquantum_stores_the_field_but_does_not_warn(capsys
 def _brush_build_cyl_args(**overrides):
     defaults = dict(
         cmd="brush", sub="build", shape="cylinder",
-        height=64.0, radius=48.0, sides=8, angle_offset=0.0,
+        height=64.0, radius=48.0, sides=8, align_to_side=False,
         at=(0.0, 0.0, 0.0), base_name=None, csg="add", solidity="solid",
         group=None, texture=None, mover_class=None, rotate=None)
     defaults.update(overrides)
@@ -423,12 +425,12 @@ def _build_args(shape, **overrides):
                   label=[], mover_class=None, rotate=None)
     per_shape = {
         "cube": dict(width=256.0, breadth=128.0, height=64.0),
-        "cylinder": dict(height=64.0, radius=48.0, sides=8, angle_offset=0.0),
-        "cone": dict(height=64.0, radius=48.0, sides=8, angle_offset=0.0),
+        "cylinder": dict(height=64.0, radius=48.0, sides=8, align_to_side=False),
+        "cone": dict(height=64.0, radius=48.0, sides=8, align_to_side=False),
         "sheet": dict(width=256.0, height=128.0, plane="xz", flags=[]),
         "staircase": dict(steps=6, depth=32.0, rise=16.0, breadth=128.0),
         "spiral": dict(steps=4, inner_radius=48.0, step_width=32.0, rise=16.0,
-                       degrees_per_step=30.0),
+                       angle_per_step=8192),
     }[shape]
     return Namespace(**{**common, **per_shape, **overrides})
 
@@ -487,10 +489,10 @@ def test_builder_rejects_a_non_finite_dimension(bad, capsys):
     assert "--width must be greater than 0" in err and "Traceback" not in err
 
 
-def test_builder_still_accepts_a_negative_angle_offset(capsys):
-    # --angle-offset is an ANGLE, not a dimension: negative is meaningful (it rotates the
-    # cross-section the other way) and must NOT be caught by the positive-dimension guard.
-    assert dispatch(_build_args("cylinder", angle_offset=-22.5)) == 0
+def test_align_to_side_is_not_caught_by_the_positive_dimension_guard(capsys):
+    # --align-to-side is a cross-section option, not a dimension: the guard must ignore it (and,
+    # being a bool, it can no longer be a float flag needing an allow-list entry either).
+    assert dispatch(_build_args("cylinder", align_to_side=True)) == 0
     assert parse_t3d(capsys.readouterr().out).actors                 # a real brush came out
 
 
@@ -510,8 +512,11 @@ def test_every_builder_shape_declares_its_positive_dimensions():
     from uedctl.cli import build_parser
     from uedctl.dispatch import _POSITIVE_BUILD_DIMS
 
-    # Angles: signed by nature, or range-checked in builders.py (0 < sweep < 180).
-    NON_DIMENSION_FLOATS = {"--angle-offset", "--degrees-per-step"}
+    # Currently EMPTY, and that is the point: since the builder-angle units retrofit, every
+    # builder angle is either a bool (--align-to-side) or an integer count of unreal rotation
+    # units (--angle, --angle-per-step), so no float flag of any shape is exempt from the guard.
+    # A future signed float flag would be added here, visibly and reviewably.
+    NON_DIMENSION_FLOATS: set[str] = set()
 
     def sub(parser, name):
         for action in parser._actions:
@@ -534,3 +539,89 @@ def test_every_builder_shape_declares_its_positive_dimensions():
         assert not unguarded, (
             f"{shape}: float flag(s) {sorted(unguarded)} are neither in _POSITIVE_BUILD_DIMS nor "
             f"in NON_DIMENSION_FLOATS — add a guard-table row, or exempt them explicitly")
+
+
+# ---------------------------------------------------------------------------
+# Builder angles are unreal rotation units (or a bool) at the CLI — the units retrofit
+# ---------------------------------------------------------------------------
+
+def _cli_brush(argv):
+    """Run the REAL parser + dispatch and return the emitted brush of the first actor."""
+    import io
+    from uedctl.cli import build_parser
+    from uedctl.dispatch import dispatch as _dispatch
+    import contextlib
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        rc = _dispatch(build_parser().parse_args(argv))
+    assert rc == 0, buf.getvalue()
+    return next(iter(parse_t3d(buf.getvalue()).actors.values())).brush
+
+
+def _verts(brush):
+    return [tuple(round(float(c), 6) for c in v) for p in brush.polys for v in p.vertices]
+
+
+def test_align_to_side_offsets_an_octagon_by_half_a_segment():
+    # `--align-to-side` IS the old `--angle-offset 22.5` for an 8-gon: a face, not a vertex, faces
+    # the axis, so the pillar sits flush against an axis-aligned wall.
+    from uedctl.builders import cylinder, make_brush_actor
+    built = _cli_brush(["brush", "build", "cylinder", "--height", "64", "--radius", "48",
+                        "--sides", "8", "--align-to-side"])
+    expect = make_brush_actor("Cylinder", cylinder(64, 48, 8, angle_offset=22.5)).brush
+    assert _verts(built) == _verts(expect)
+
+
+def test_align_to_side_is_half_a_segment_of_THIS_polygon_not_a_hardcoded_22_5():
+    from uedctl.builders import cylinder, make_brush_actor
+    built = _cli_brush(["brush", "build", "cylinder", "--height", "64", "--radius", "48",
+                        "--sides", "6", "--align-to-side"])
+    assert _verts(built) == _verts(make_brush_actor(
+        "Cylinder", cylinder(64, 48, 6, angle_offset=30.0)).brush)         # 180/6, not 22.5
+    assert _verts(built) != _verts(make_brush_actor(
+        "Cylinder", cylinder(64, 48, 6, angle_offset=22.5)).brush)
+
+
+def test_without_align_to_side_the_cross_section_is_unrotated():
+    from uedctl.builders import cylinder, make_brush_actor
+    built = _cli_brush(["brush", "build", "cylinder", "--height", "64", "--radius", "48"])
+    assert _verts(built) == _verts(make_brush_actor("Cylinder", cylinder(64, 48, 8)).brush)
+
+
+def test_angle_per_step_in_uu_reproduces_the_same_spiral_as_the_degrees_it_names():
+    # 8192 uu IS 45°, and the spiral's default is now that (not the old 30°).
+    from uedctl.builders import spiral_staircase, make_brush_actor
+    built = _cli_brush(["brush", "build", "spiral", "--steps", "3", "--inner-radius", "48",
+                        "--step-width", "32", "--rise", "16", "--angle-per-step", "8192"])
+    expect = spiral_staircase(3, 48.0, 32.0, 16.0, degrees_per_step=45.0)[0]
+    assert _verts(built) == _verts(make_brush_actor("Spiral0", expect).brush)
+
+
+def test_the_spiral_default_is_8192_uu():
+    assert _verts(_cli_brush(["brush", "build", "spiral", "--steps", "3", "--inner-radius", "48",
+                              "--step-width", "32", "--rise", "16"])) == \
+        _verts(_cli_brush(["brush", "build", "spiral", "--steps", "3", "--inner-radius", "48",
+                           "--step-width", "32", "--rise", "16", "--angle-per-step", "8192"]))
+
+
+def test_the_spiral_library_guard_still_refuses_a_half_turn_tread():
+    # Unreachable from the CLI (dispatch checks the UU value first and names --angle-per-step), so
+    # it is exercised HERE — an unreachable, untested guard is a second thing to keep true with
+    # nothing enforcing it. It names its own PARAMETER, in degrees, for its direct callers.
+    from uedctl.builders import spiral_staircase
+    from uedctl.geometry import GeometryError
+    with pytest.raises(GeometryError, match="degrees_per_step"):
+        spiral_staircase(3, 48.0, 32.0, 16.0, degrees_per_step=200)
+
+
+@pytest.mark.parametrize("argv", [
+    ["brush", "build", "cylinder", "--height", "64", "--radius", "48", "--angle-offset", "22.5"],
+    ["brush", "build", "cone", "--height", "64", "--radius", "48", "--angle-offset", "22.5"],
+    ["brush", "build", "spiral", "--steps", "3", "--inner-radius", "48", "--step-width", "32",
+     "--rise", "16", "--degrees-per-step", "45"],
+])
+def test_the_replaced_degree_flags_no_longer_parse(argv):
+    # No back-compat cruft: the old spellings are DELETED, not aliased — argparse refuses them.
+    from uedctl.cli import build_parser
+    with pytest.raises(SystemExit):
+        build_parser().parse_args(argv)

@@ -1,5 +1,9 @@
-"""Model-side parametric brush builders — cube / cylinder / cone / sheet /
-staircase / spiral staircase.
+"""Model-side brush builders — the fixed parametric shapes (cube / cylinder / cone /
+sheet / staircase / spiral staircase) plus the two 2D-PROFILE SWEEPS (extrude /
+revolve), UnrealEd's 2D-shape-editor method: the caller draws a closed polygon and
+this module sweeps it, straight (`extrude`) or around an in-plane axis (`revolve`).
+The purely 2D half of that — parsing, cleanup, validity, winding, and the convex
+decomposition of a cap — lives in `profile.py`.
 
 UnrealEd's native BrushBuilders are GUI-dialog-driven (`WDlgBrushBuilder::OnBuild`
 → builder `Build()`) and NOT console-invocable (`SET <BuilderClass>` only sets the
@@ -33,11 +37,13 @@ import copy
 import math
 
 from .emit import clean
-from .geometry import GeometryError
+from .geometry import GeometryError, validate_brush
 from .model import Actor, Brush, Polygon, Vec3
-
-# Two vertices closer than WELD collapse to one (drop zero-length ring edges).
-WELD = 1e-3
+# Two vertices closer than WELD collapse to one (drop zero-length ring edges). The constant lives
+# in `profile.py` (which has no builders import), NOT here: this module's own names are defined
+# BELOW its import block, so the reverse direction would be a load-time cycle. Re-exported for the
+# existing importers (`doctor.py`).
+from .profile import WELD
 
 # Surface/brush PolyFlags by value (named at the CLI; see dev/unrealed/quirks).
 PF_NOTSOLID = 0x00000008
@@ -271,6 +277,201 @@ def sheet(width: float, height: float, plane: str = "xz",
                  polys=[_face(ring, outward, texture, flags, item="Sheet")])
 
 
+# --- swept 2D profiles: extrude ----------------------------------------------
+#
+# A PROFILE is the closed 2D polygon the author draws (`--point U,V`, repeatable); a sweep turns it
+# into one brush. The 2D layer (parsing, cleanup, winding, convex decomposition) is `profile.py`;
+# what lives here is the 2D→3D part: the sweep frame, the swept vertices, and the per-face OUTWARD
+# directions `_face` winds against.
+
+
+# The right-handed sweep frame per `--axis`: `(u_world, v_world, w_world)`, where `w` is the
+# `--axis` direction the sweep grows along and `(u, v)` are the profile's own 2D axes on the two
+# remaining world axes, cycled so `u × v = +axis` in every case. Cycling right-handed is what lets
+# ONE winding rule (a counter-clockwise profile in `(u,v)`) serve all three orientations. This
+# table is the single place the mapping is written.
+_SWEEP_FRAMES = {
+    #        u              v              w = --axis
+    "z": ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0)),   # u→X, v→Y, sweep +Z
+    "x": ((0.0, 1.0, 0.0), (0.0, 0.0, 1.0), (1.0, 0.0, 0.0)),   # u→Y, v→Z, sweep +X
+    "y": ((0.0, 0.0, 1.0), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0)),   # u→Z, v→X, sweep +Y
+}
+
+
+def _uv_axes(axis: str):
+    """The `(u_world, v_world, w_world)` unit triple for `--axis` (see `_SWEEP_FRAMES`)."""
+    try:
+        return _SWEEP_FRAMES[axis]
+    except KeyError:
+        raise GeometryError(f"sweep axis must be x|y|z, got {axis!r}") from None
+
+
+def _sweep_point(u: float, v: float, w: float, frame) -> Vec3:
+    """A point of the sweep frame in world coordinates: `u·û + v·v̂ + w·ŵ`."""
+    U, V, W = frame
+    return (u * U[0] + v * V[0] + w * W[0],
+            u * U[1] + v * V[1] + w * W[1],
+            u * U[2] + v * V[2] + w * W[2])
+
+
+def extrude(points, depth: float, axis: str = "z",
+            texture=None, flags: int = 0) -> Brush:
+    """Sweep a closed 2D `points` profile a straight `depth` along `+axis` — ONE brush.
+
+    `points` is a sequence of `(u, v)` pairs in the profile's own 2D coordinate system (any numeric
+    type; converted to float here, since `_newell`/`_tex_basis` are float-only — nothing is lost, as
+    `make_brush_actor`'s `emit.clean` re-Decimalizes). The ring is implicitly closed and may be
+    wound either way: it is normalized counter-clockwise first, so the per-face outward directions
+    below hold regardless of the order the author typed.
+
+    The local vertices are the authored profile coordinates VERBATIM (no re-centering), with the
+    sweep running `w ∈ [0, depth]`, so the actor's `Location` — `brush build --at` — is the world
+    point that profile coordinate `(0,0)` lands on.
+
+    Faces, `n` = the profile's vertex count after cleanup:
+      - `Cap` at `w = 0`, facing `−axis`, and `Cap` at `w = depth`, facing `+axis`. Each is ONE
+        face when the profile is convex and ≤16 vertices, else one face per convex piece (§
+        `profile.convex_pieces`), so the total is `n + 2·pieces`.
+      - `Side<k>`, one quad per profile edge `k`, spanning the full sweep. The per-edge item name
+        (rather than a single `Side`) is what keeps `brush poly find --item Side0` meaningful — it
+        selects "the face swept by my first profile edge".
+
+    Unlike the parametric shapes, a swept profile's vertices come from arbitrary user input, so the
+    brush is `geometry.validate_brush`-checked HERE: `brush build` itself does not validate geometry
+    (that happens downstream at `actor add`), and generator output can bypass `actor add` entirely
+    (`> file.t3d`, `| brush intersect`).
+    """
+    from . import profile as profile2d          # function-local: see the WELD note at the imports
+    if not (depth > 0):
+        raise GeometryError(f"extrude needs depth > 0, got {depth}")
+    frame = _uv_axes(axis)
+    ring = profile2d.normalize_winding([(float(u), float(v)) for u, v in points])
+    pieces = profile2d.convex_pieces(ring)
+    W = frame[2]
+    inward_cap = (-W[0], -W[1], -W[2])
+    far = float(depth)
+
+    def at(p, w):
+        return _sweep_point(p[0], p[1], w, frame)
+
+    polys = [_face([at(p, 0.0) for p in piece], inward_cap, texture, flags, item="Cap")
+             for piece in pieces]
+    polys += [_face([at(p, far) for p in piece], W, texture, flags, item="Cap")
+              for piece in pieces]
+    n = len(ring)
+    for k in range(n):
+        a, b = ring[k], ring[(k + 1) % n]
+        du, dv = b[0] - a[0], b[1] - a[1]
+        # The outward of the quad swept by a CCW edge (du, dv) is its in-plane right normal
+        # (dv, −du), mapped through the sweep frame.
+        outward = _sweep_point(dv, -du, 0.0, frame)
+        polys.append(_face([at(a, 0.0), at(b, 0.0), at(b, far), at(a, far)],
+                           outward, texture, flags, item=f"Side{k}"))
+    brush = Brush(model_name="Model", polys=polys)
+    validate_brush(brush)
+    return brush
+
+
+def _rotate_about_v(vec, theta: float):
+    """Rotate a SWEEP-FRAME vector `(x_u, x_v, x_w)` about the `v̂` axis by `theta` radians — the
+    revolve's own rotation, in the frame where it is a plain 2D turn in the `(u, w)` plane. `û`
+    goes to `(cos θ, 0, sin θ)`, matching the sweep map, so `ŵ` goes to `(−sin θ, 0, cos θ)`."""
+    c, s = math.cos(theta), math.sin(theta)
+    return (vec[0] * c - vec[2] * s, vec[1], vec[0] * s + vec[2] * c)
+
+
+def revolve(points, angle_deg: float, segments: int, axis: str = "z",
+            texture=None, flags: int = 0) -> Brush:
+    """Sweep a closed 2D `points` profile `angle_deg` around an in-plane axis in `segments` flat
+    facets — ONE brush, like UnrealEd's own 2D shape editor (never one brush per facet).
+
+    **The revolve axis is the profile plane's own `v` axis — the line `u = 0`, through profile
+    coordinate `(0,0)`.** There is no separate pivot: distance from the axis is written in the
+    profile coordinates themselves, so a profile drawn at `u ∈ [64, 192]` revolves at radii 64 to
+    192, and the actor's `Location` (`--at`) is the world position of the BEND CENTRE. The profile
+    must lie strictly on the positive-`u` side; the sweep then grows toward `+axis`, exactly like
+    `extrude`, so both verbs share one mental model. (A negative-`u` profile would bulge toward
+    `−axis` under the same rotation, silently inverting that model and every outward direction
+    below — mirror the profile's `u` values instead.)
+
+    With `n` profile vertices and `s` segments: `n × s` swept quads, plus a tiled cap at each end.
+    Every swept quad is planar (a straight edge swept by a rotation about a coplanar axis always
+    is). At `angle_deg == 360` the sweep closes on itself: both caps are omitted and the last
+    segment's far ring IS the first segment's near ring, so no vertex column is duplicated.
+
+    **The per-face outward directions rotate with their faces — except the near cap.** `_face`
+    flips any ring whose winding disagrees with the hint it is given, so a stale hint emits a
+    backwards-wound face (an inverted solid: CSG crash or hall-of-mirrors, and unrecoverable in
+    UnrealEd, which derives the face from the winding alone):
+
+      - **near cap** (`θ = 0`): `−ŵ`, IDENTICAL to extrude's — the cap lies in the `(û, v̂)` plane
+        and the solid grows toward `+ŵ`, so nothing has rotated yet;
+      - **far cap** (`θ = angle`): `+ŵ` rotated by `angle` (at 90° that is `−û`, perpendicular to
+        the extrude hint — a hint 90° off leaves the flip sign-indeterminate AND makes `_tex_basis`
+        derive the texture axes from a non-face normal);
+      - **side quad of edge `k` in segment `m`**: the in-plane edge normal `(dv, −du)` rotated by
+        that segment's MID-angle.
+
+    `ItemName`s are `Cap` and `Side<k>`, the latter keyed to the PROFILE EDGE and therefore the
+    same in every segment: `brush poly find --item Side0` selects the whole strip swept by the
+    first profile edge. A single `Side` would leave a curved corridor's inner and outer walls with
+    no selector at all (both read as `slant` to `--facing`).
+    """
+    from . import profile as profile2d          # function-local: see the WELD note at the imports
+    if segments < 1:
+        raise GeometryError(f"revolve needs segments >= 1, got {segments}")
+    if not (0 < angle_deg <= 360.0):
+        raise GeometryError(f"revolve needs 0 < angle_deg <= 360, got {angle_deg}")
+    closed = abs(angle_deg - 360.0) < 1e-9
+    # Checked before the per-facet rule, which a 1- or 2-segment full turn also trips — the
+    # specific message wins, and this guard would otherwise be unreachable.
+    if closed and segments < 3:
+        raise GeometryError(f"a closed revolve needs segments >= 3, got {segments}")
+    if angle_deg / segments >= 180.0:
+        raise GeometryError(f"revolve needs a facet under 180 degrees, got "
+                            f"{angle_deg / segments} ({angle_deg} over {segments} segments)")
+    ring = profile2d.normalize_winding([(float(u), float(v)) for u, v in points])
+    for i, (u, v) in enumerate(ring):
+        if u <= 0:
+            raise GeometryError(f"revolve needs every profile point strictly off the axis "
+                                f"(u > 0), got point {i} at ({u},{v})")
+    frame = _uv_axes(axis)
+    total = math.radians(angle_deg)
+    step = total / segments
+
+    def world(uvw):
+        return _sweep_point(uvw[0], uvw[1], uvw[2], frame)
+
+    def at(p, theta):
+        c, s = math.cos(theta), math.sin(theta)
+        return world((p[0] * c, p[1], p[0] * s))
+
+    polys = []
+    if not closed:
+        pieces = profile2d.convex_pieces(ring)
+        polys += [_face([at(p, 0.0) for p in piece], world((0.0, 0.0, -1.0)),
+                        texture, flags, item="Cap") for piece in pieces]
+        polys += [_face([at(p, total) for p in piece],
+                        world(_rotate_about_v((0.0, 0.0, 1.0), total)),
+                        texture, flags, item="Cap") for piece in pieces]
+    rings = [[at(p, m * step) for p in ring]
+             for m in range(segments if closed else segments + 1)]
+    n = len(ring)
+    for k in range(n):
+        a, b = ring[k], ring[(k + 1) % n]
+        du, dv = b[0] - a[0], b[1] - a[1]
+        for m in range(segments):
+            # the segment's MID-angle: the quad's true normal is the edge normal turned by the
+            # rotation halfway through the facet it spans
+            outward = world(_rotate_about_v((dv, -du, 0.0), (m + 0.5) * step))
+            r0, r1 = rings[m], rings[(m + 1) % len(rings)]
+            polys.append(_face([r0[k], r0[(k + 1) % n], r1[(k + 1) % n], r1[k]],
+                               outward, texture, flags, item=f"Side{k}"))
+    brush = Brush(model_name="Model", polys=polys)
+    validate_brush(brush)
+    return brush
+
+
 # --- staircases: linear = ONE non-convex brush; spiral = convex column + wedge treads ---
 
 
@@ -304,9 +505,11 @@ def staircase(steps: int, depth: float, rise: float, breadth: float,
 
     NATIVE-CSG CAVEAT: this non-convex brush is built correctly by UnrealEd (the
     default `level materialize`) and the real engine (the default `--game` preview),
-    but the experimental native CSG core assumes convex brushes
-    (`uedctl-native/src/csg.rs` `point_in_convex`), so the native paths (`--native`,
-    native materialize) mis-classify its concave notches — see architecture.md."""
+    but the COARSE native core assumes convex brushes
+    (`uedctl-native/src/csg.rs` `point_in_convex`), so `level preview --native` and
+    `level materialize --core coarse` mis-classify its concave notches. Native
+    materialize's DEFAULT core (`bspcsg`, the incremental bspBrushCSG port) never calls
+    `point_in_convex` and is unaffected — see architecture.md."""
     if steps < 1:
         raise GeometryError("staircase needs >= 1 step")
     W, H, B = steps * depth, steps * rise, breadth
@@ -370,9 +573,14 @@ def spiral_staircase(steps: int, inner_radius: float, step_width: float, rise: f
     extrusions), so the flip already applied before rotation still holds after it."""
     if steps < 1:
         raise GeometryError("spiral staircase needs >= 1 step")
+    # An INTERNAL-API guard, naming the PARAMETER in its own units. The CLI can no longer reach it:
+    # `brush build spiral --angle-per-step` is checked in unreal rotation units at the dispatch
+    # boundary, naming that flag and the value the user typed (decisions.md 2026-07-25 02:30 UTC,
+    # D12). It stays for the direct callers D11 keeps — `tests/builder_parity_cases.py` and
+    # `native/csg_golden.py` — and is exercised directly by `test_profile_generators.py`.
     if not (0 < degrees_per_step < 180):
         raise GeometryError(
-            f"spiral staircase needs 0 < degrees_per_step < 180, got {degrees_per_step}")
+            f"spiral_staircase needs 0 < degrees_per_step < 180 (degrees), got {degrees_per_step}")
     if inner_radius <= 0:
         raise GeometryError(
             f"spiral staircase needs inner_radius > 0, got {inner_radius}")

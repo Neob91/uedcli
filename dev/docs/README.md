@@ -87,7 +87,7 @@ navigation").
 ## What's built vs open (snapshot — `board/` is the source of truth)
 - **Built:** query (`actor find/show/get`, `brush poly list`, `level doctor`); mutate
   (`actor add/delete/move/set/rotate`, `brush clip`, `brush vertex move`, `brush poly set`);
-  generators (`actor build`, `brush build` cube/cylinder/cone/sheet/staircase/spiral);
+  generators (`actor build`, `brush build` cube/cylinder/cone/sheet/staircase/spiral/extrude/revolve);
   **movers** (`mover key count/move/rotate/remove/list`); the color `actor preview` viewer
   (quad/iso/zoom/highlight/labels/CSG-colour/point-actor sprites+markers/collision+range overlays);
   the **git-tracked T3D trunk** (`level status`/`list`,

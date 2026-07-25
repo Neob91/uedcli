@@ -22,7 +22,7 @@ the float constants out of `.rdata`), a tier stronger than 📖.
 - A single **builder brush** (the red "cookie-cutter" wireframe) is shaped, positioned, then **committed**
   as a *Subtract* or *Add* operation. The builder brush is a stamp — it is **never itself part of the
   level**; committing copies its current shape into a new CSG brush actor.
-- **uedctl verb:** `brush build {cube,cylinder,cone,sheet,staircase,spiral} --csg {add,subtract} | actor
+- **uedctl verb:** `brush build {cube,cylinder,cone,sheet,staircase,spiral,extrude,revolve} --csg {add,subtract} | actor
   add -`. The generator (`brush build …`) prints a T3D snippet to **stdout**; it does **not** write the
   trunk. The write is always `… | actor add -` — show the full pipe, never `brush build` alone.
   - *(GUI equivalent: shape the red builder brush → **Shift-S** Subtract / **Shift-A** Add. 🔬 UED22
@@ -325,7 +325,7 @@ Reconciled to the disassembly (spike §5 repair table):
 
 | Craft task | uedctl | GUI equivalent |
 |---|---|---|
-| Carve / place geometry | `brush build {cube,cylinder,cone,sheet,staircase,spiral} --csg {add,subtract} --solidity {solid,semisolid,nonsolid} --texture … \| actor add -` | shape red builder → Subtract/Add |
+| Carve / place geometry | `brush build {cube,cylinder,cone,sheet,staircase,spiral,extrude,revolve} --csg {add,subtract} --solidity {solid,semisolid,nonsolid} --texture … \| actor add -` | shape red builder → Subtract/Add |
 | Solidity choice | `--solidity solid\|semisolid\|nonsolid` on `brush build` | Add Special solidity / brush flags |
 | CSG precedence (To First/Last) | `actor order --first` / `actor order --last` | Order → To First / To Last |
 | Grid discipline | **guidance only — uedctl does not snap for you** | GUI grid-snap toggle |

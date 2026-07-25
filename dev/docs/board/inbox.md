@@ -87,6 +87,120 @@ queue (don't copy — one home per item).
   `board/someday.md`, `board/HANDOFF-native-full-parity.md`. Worth one pass when `rules/` is added.
 - `p3` `[chore]` **`board/inbox.md` (2,602 lines) and `board/done.md` (1,125) are themselves
   unpruned** — out of scope for the docs restructure, noted there.
+- **[implement] p2 Profile-generator build-review follow-ups — the 2026-07-25 gate's findings, ALL
+  deferred to a follow-up feature branch by Andrzej's explicit decision.** The build review of
+  `brush build extrude`/`revolve` (item 12, squash-merged 2026-07-25) returned **ten findings, none
+  structural**. Andrzej directed: *"Land what you have, fix the rest in another feature branch."* So
+  the branch merged **unfixed** and round 2 never ran. **This is NOT a clean gate** — under
+  `CLAUDE.md` "Review gates", findings 1 and 2 are in-scope defects, and logging in-scope defects so
+  round 2 cannot fire is the pattern that file names as gaming the gate. It is recorded here as
+  Andrzej's ruling, which is a legitimate disposition, so the reason survives outside chat. Whoever
+  picks this up: it is a **docs + tests batch**, no geometry change — the shipped geometry was
+  independently verified correct (see the bottom of this entry).
+  - **(1) `docs/leveldesign/general/brush-shapes.md` contradicts the shipped CLI.** Line 78 still
+    reads "There is no dedicated curved-corridor verb" — `brush build revolve` *is* that verb, and
+    the same branch added `recipes/shapes/curved-corridor.md`. The file has **no extrude/revolve
+    section at all**, while `general/README.md:18` (edited in that branch) advertises it as covering
+    "…spiral, extrude, revolve", and `recipes/shapes/l-ledge.md` links there for the `--axis`→`(U,V)`
+    table, which actually lives in `docs/usage.md`. Also stale: `:88` ("non-box shapes come from
+    composing … `brush build` + `brush clip`") and `:98` (recipe list predating the four new files).
+  - **(2) Spec §4.5 and §6 require two caveats in the verb `--help`; they landed only in
+    `usage.md`.** Confirmed against the real parser: neither `brush build extrude --help` nor
+    `revolve --help` contains "concave" or "native". Missing: the off-grid-solid BSP risk +
+    `--solidity semisolid` steer (§4.5), and the concave / `level preview --native` mis-render
+    caveat (§6). The §2.3 `--rotate`-pivot caveat IS present via the shared `--rotate` help.
+  - **(3) No extrude test would fail if the whole solid were built INSIDE-OUT.** Proven by mutation:
+    negating every outward hint gives an identical vertex set, `doctor` findings = 0, and volume
+    `−2097152` vs `+2097152`. `doctor.check_watertight` detects *inconsistent* winding between
+    neighbours, not a globally consistent inversion, and `_vset` compares vertex sets only — spec §10
+    asked for "vertex sets **and outward normals**". Only `fixtures/builder_extrude.t3d` would catch
+    it, and that is a drift golden. Fix shape: assert `volume(brush) > 0` on the extrude cases (as
+    `test_a_full_turn_revolve_is_a_closed_solid_with_no_caps` already does at 360°), or compare the
+    Newell normals against the cube's six.
+  - **(8) The revolve winding gate's 90° case pins nothing.** In
+    `test_a_revolve_is_doctor_clean_at_a_quarter_half_and_full_turn`, at 16384 UU / 8 segments the
+    unrotated hints are still within 90° of the true normals, so `_face` emits byte-identical
+    output — the case cannot go red. Mutation matrix: 90° → 0 findings for far-cap, sides, or both;
+    180° → 4 / 20 / 20; 360° → 0 / 20 / 20. The **far-cap** hint is therefore exercised by exactly
+    ONE parametrization (180°). The test's comment claiming it was "confirmed RED against unrotated
+    hints" is false for the 90° case (commit `ba94e99`'s message is honest about this). At exactly
+    90° a wrong far-cap hint is the `_dot == 0` case spec §5.7 calls the worst one, and `doctor`
+    cannot see it; only the 90° golden pins it.
+  - **(4) `test_a_heavy_revolve_warns_about_the_poly_budget`'s comment is wrong three ways.** It says
+    "4 profile edges × 16 segments + 2 tiled caps = 66 faces"; the invocation uses **17** segments,
+    `--angle 65536` is a closed turn so there are **no** caps, and the count is **68**. The 17 is
+    load-bearing (4 × 16 = 64 is not > 64, so the advisory would not fire) — the comment hides the
+    one thing a reader needs.
+  - **(5) `dispatch._revolve_sweep`'s docstring lists a check order the code does not use.** It says
+    "…the per-facet angle → the closed-turn minimum → …"; the code runs the closed-turn minimum
+    FIRST, and an inline comment ten lines down explains why it must ("testing it second would make
+    this rule unreachable"). The deviation is correct and recorded in `ba94e99`; only the docstring
+    is wrong.
+  - **(6) `dev/docs/architecture.md:676` and `:683` still list `--group` as a `brush build` flag**
+    — removed 2026-07-24. The same commit fixed this staleness on the user side
+    (`usage.md:533` now says there is no `--group` flag) and left it in the dev paragraph it edited.
+  - **(9) `--rotate`'s new help names extrude/revolve on the merge verbs.** `_common_build_opts` is
+    shared, and `--rotate`'s help now ends "…but for extrude/revolve it is profile coordinate (0,0)".
+    `brush intersect`/`deintersect` override `--at` and `--solidity` in `_merge_opts` but not
+    `--rotate`, so their help discusses two shapes they cannot build (and whose local origin is
+    `--origin` there).
+  - **(10) `recipes/shapes/l-ledge.md`: "Rename the corner into a chamfer for free"** — "rename" is
+    the wrong verb; the instruction that follows replaces one point with two.
+  - **(11, found by hand, NOT by the reviewer) the extrude example in `docs/usage.md` does not run.**
+    It ends `--texture Ancient.Floors.Stone1`, which exits 2: *"texture not found:
+    Ancient.Floors.Stone1 — no Texture of that name on the package path (author-time validation)"*.
+    A copy-pasted doc example fails. Worth noting for calibration: the reviewer read that file
+    closely enough to find three other defects in it and still missed this one.
+  - **Verified CLEAN in the same review, for whoever inherits this:** the shipped geometry is
+    correct under an independent checker (watertightness by directed-edge pairing, signed volume by
+    divergence theorem, per-face 3D convexity) over 75 hand-picked configurations **plus 1400 fuzz
+    cases** — 0 watertight faults, 0 negative volumes, 0 non-convex faces, 0 tracebacks; 547 of 800
+    unconstrained random rings correctly rejected. The units retrofit is a clean deletion (no
+    aliases, builder signatures and parity goldens untouched). Recipe face counts and bboxes check
+    out. Suite green: 2559 passed / 13 skipped vs master's 2459 / 13.
+- **[debug] p3 A huge-but-finite coordinate reaches the user as a `decimal.InvalidOperation`
+  traceback.** `brush build extrude --depth 32 --point 1e200,1e200 --point 0,0 --point 0,1` dies in
+  `emit.fmt_vertex` on `abs(d).quantize(_SIX_DP)` — a raw traceback, which `CLAUDE.md` forbids.
+  **Pre-existing, not caused by the profile generators:** `brush build cube --width 1e25` raises the
+  same on `master`; `--point` merely adds another route. `parse_point` rejects non-finite values and
+  `1e400` dies earlier as a clean `GeometryError`, so it is finite-but-huge that slips through.
+  Measured threshold: fine at `1e20`, traceback from `1e22` (extrude) / `1e23` (cube). Related and
+  also shared with the existing shapes: `--depth 1e-9` exits 2 with "invalid brush geometry:
+  builder: face has < 3 distinct vertices", naming neither the flag nor the value (`cube
+  --height 0.0001` behaves identically). Fix both in `emit`/the shared dimension guard, not per verb.
+  (Build review, 2026-07-25.)
+- **[ANDRZEJ — decide] p3 Should the >64-face POLY-BUDGET advisory cover every `brush build`
+  shape, not just `extrude`/`revolve`?** Shipped 2026-07-25 with the profile generators, gated on
+  those two shapes (`dispatch._SWEPT_SHAPES`). The OFF-GRID advisory's gate is forced — an ungated
+  one turns `test_generators.py`'s "a solid 8-gon cylinder says nothing on stderr" red, and the
+  spec deliberately leaves `cylinder`/`cone` alone — but the poly-budget gate is a judgement call I
+  made rather than a spec requirement. Ungated it would also fire on e.g. `brush build staircase
+  --steps 16` (66 faces), which is arguably a true and useful warning. Deliberately NOT decided in
+  the build: it changes an existing verb's observable output.
+
+- **[verify live] p3 Cap merge-back after `bspMergeCoplanars`.** Materialize an L-profile
+  `brush build extrude` and count cap SURFACES in the built map. Prediction (an inference from the
+  `TryToMerge` decode, never observed): the build pass fuses tiles wherever each pairwise merge's
+  two INPUTS have vertex counts summing to ≤16 — so a 2-piece cap fuses back to one surface and a
+  3+-piece cap may fuse only partially. A by-product is whether `Engine.dll`'s `RemoveColinears`
+  carries a convexity reject our Rust port omits. Spec §6.1 / §11 of the (now landed) profile
+  generators; nothing depends on the answer, it is a documentation-truth item.
+
+- **[verify live] p3 Does a FULL-TURN revolve (a genus-1 torus brush) build correctly?**
+  `brush build revolve --angle 65536` emits a single brush with a hole through it. Nothing in
+  `kb/csg-bsp.md`, `quirks.md` or the spikes evidences UE1 `bspBrushCSG` behaviour on a genus-1
+  brush — the staircase precedent covers only a simply-connected stepped hull. Materialize one and
+  check the built map for holes; the fallback if it builds badly is two 180° revolves (two
+  brushes), which costs an actor and nothing else. Spec §4.7 / §11.
+
+- **[implement] p3 The two profile generators have NO editor-blessed parity case.** All six
+  parametric shapes are pinned against real-editor captures by `tests/builder_parity_cases.py`;
+  `extrude`/`revolve` ship with SELF-blessed goldens (`fixtures/builder_extrude.t3d`,
+  `builder_revolve.t3d`), which pin drift, not correctness. Adding a parity case needs the
+  `integration`-gated capture run against a live editor. Note the two families already dropped from
+  the live capture suite (`OFFLINE_ONLY`: staircase, spiral) were dropped because the DEINTERSECTION
+  readout invents vertices on non-convex / non-axis-aligned geometry — a swept profile is likely to
+  hit the same wall, so this may end up offline-only too.
 
 - **[ANDRZEJ — decide] p2 Where does builder input validation belong: the CLI or the builders
   library?** Item #10.4 put the positive-dimension guard in `dispatch._POSITIVE_BUILD_DIMS` /
@@ -402,16 +516,17 @@ queue (don't copy — one home per item).
   Doctor's watertight check should **skip mover brushes** (and/or brushes with intentional coincident
   semisolid faces), or downgrade to info. (Surfaced building the DeusExMover glass door, live-verified
   2026-07-25.)
-- **[spec] p3 `brush build cube --taper` (or a wedge/voussoir generator).** Trapezoidal wedges (ring
-  cornices, tapered blocks) need manual per-side `brush clip` plane math today; a taper option or a
-  dedicated wedge builder would make them a one-liner. **MOSTLY SUPERSEDED — re-scope, don't close:**
-  `brush build extrude` (specced, `to-plan.md` / `specs/2026-07-25-brush-profile-generators.md`) builds
-  wedges, voussoirs and tapered blocks directly from a **trapezoid profile**, because that taper lives
-  IN the profile plane. The genuine remnant is taper **along the sweep axis** — a frustum/loft where
-  the far cap is a scaled copy of the near one (UED's *Extrude to Point*/*Extrude to Bevel*), which
-  neither extrude nor `brush clip` nor `brush build cone` (apex-only, no `CapHeight` truncation) can
-  produce. That is a one-flag follow-up: `brush build extrude --taper S` scaling the far cap. Re-scope
-  this item to exactly that once extrude lands. (Blind-build test, 2026-07-25; re-scoped 2026-07-25.)
+- **[spec] p3 `brush build extrude --taper S` — scale the FAR cap (the frustum/loft remnant).**
+  RE-SCOPED 2026-07-25 now that `brush build extrude` has landed, which is what the rest of the old
+  "`cube --taper` / wedge builder" item asked for: wedges, voussoirs and tapered blocks come
+  straight from a **trapezoid profile**, because that taper lives IN the profile plane, and the
+  `arch-voussoir.md` recipe shows it. The genuine remnant is taper **along the sweep axis** — a
+  frustum/loft where the far cap is a scaled copy of the near one (UED's *Extrude to
+  Point*/*Extrude to Bevel*), which neither `extrude`, nor `brush clip`, nor `brush build cone`
+  (apex-only, no `CapHeight` truncation) can produce. One flag on `extrude`, scaling the far cap
+  about profile `(0,0)`; note it makes the side quads non-planar unless the scaling is uniform, so
+  the spec must say what happens to a non-uniform case. (Blind-build test, 2026-07-25; re-scoped
+  2026-07-25 when extrude landed.)
 
 - **[debug] p2 A partial `Location` still WRITES back zero-filled (the compare half is fixed).**
   The typed compare (2026-07-25 02:15 UTC) reads an omitted axis as the class default via the

@@ -27,8 +27,11 @@ brush on **every** axis including Z, so to put the base on the floor set `Z = he
 - **Round geometry is off-grid by nature** — its vertices land at `radius·cos/sin` angles, not on the
   power-of-two grid. Prefer **semisolid** (`--solidity semisolid`) for cylindrical detail so it doesn't
   seed BSP holes ([../geometry-and-bsp.md](../geometry-and-bsp.md)).
-- **`--angle-offset`** rotates the cross-section — use it to sit a flat face on an axis instead of a
-  vertex.
-- **This is the only true "round."** Anything rounder than a facet count you're willing to pay for is
-  *faked*: a ring of straight blocks copy-rotated around the axis ([ring-cornice.md](ring-cornice.md)),
-  or 45° chamfers ([chamfered-box.md](chamfered-box.md)) standing in for fillets.
+- **`--align-to-side`** offsets the cross-section by half a segment — use it to sit a flat face on an
+  axis instead of a vertex, so the column meets an axis-aligned wall flush.
+- **Nothing in UE1 is truly round** — every "curve" is facets you pay for. A cylinder is the cheapest
+  one; **`brush build revolve`** is the general one (sweep a cross-section you draw around an axis —
+  [curved-corridor.md](curved-corridor.md)), and it is what you want for a bend, a torus or a turned
+  profile rather than a plain prism. Beyond those, curves are *faked*: a ring of straight blocks
+  copy-rotated around the axis ([ring-cornice.md](ring-cornice.md)), or 45° chamfers
+  ([chamfered-box.md](chamfered-box.md)) standing in for fillets.

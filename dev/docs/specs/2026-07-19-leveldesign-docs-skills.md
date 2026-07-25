@@ -56,7 +56,7 @@ add -` consumes it into the trunk; per-surface edits run model-side via `brush p
 
 | Craft task | uedctl verb(s) | UnrealEd GUI equivalent (kept as an annotation) |
 |---|---|---|
-| Carve/place world geometry | `brush build {cube,cylinder,cone,sheet,staircase,spiral} --csg {add,subtract} --solidity {solid,semisolid,nonsolid} --texture …` \| `actor add -` | shape the red builder brush → *Subtract*/*Add* |
+| Carve/place world geometry | `brush build {cube,cylinder,cone,sheet,staircase,spiral,extrude,revolve} --csg {add,subtract} --solidity {solid,semisolid,nonsolid} --texture …` \| `actor add -` | shape the red builder brush → *Subtract*/*Add* |
 | Solidity choice | `--solidity solid\|semisolid\|nonsolid` on `brush build` | *Add Special* solidity / brush flags |
 | Point actors (lights, zone info, sky info, triggers) | `actor build Package.Class --prop KEY=VALUE --at X,Y,Z --rotate P,Y,R` \| `actor add -` | *Actor → Add \<Class\> Here*, then Properties |
 | Lights | `actor build Engine.Light --prop LightRadius=… --prop LightType=… --prop LightEffect=…` | place a `Light`, edit its Lighting props |

@@ -283,6 +283,16 @@ engine prop like `Group` is set with `--prop Group=` (no dedicated flag). **`bru
 `brush deintersect` are generators too** — they read a **T3D brush set on stdin** (`-`), CSG-merge it
 model-side, and emit one brush/mover actor, sharing the same output flags; the tiers feed them by piping
 `actor show`/`stash show`/`prefab show` (so there are no `stash`/`prefab` intersect/deintersect verbs).
+**Two of the generators sweep a profile the AUTHOR draws** rather than sizing a fixed shape:
+`brush build extrude` (straight, `--depth`) and `brush build revolve` (around an in-plane axis,
+`--angle`/`--segments`) take a repeatable `--point U,V` ring, a shared `--axis x|y|z`, and anchor
+`--at` on profile coordinate `(0,0)`; a concave or over-16-vertex profile stays ONE brush with its
+caps tiled into convex faces. **Every builder angle is expressed in unreal rotation units at the
+CLI, like `--rotate`** — never degrees (`spiral --angle-per-step`, `revolve --angle`) — except where
+the only real use is a boolean, which is why `cylinder`/`cone` take `--align-to-side` (a
+half-segment offset, matching UnrealEd's own `AlignToSide`) instead of a free angle.
+*(decisions: profile generators + UU builder angles, 2026-07-25 00:14/01:05/02:30)*
+
 `brush build --mover-class <Package.Name>` (and `brush deintersect --mover-class`) produce a **base Mover**
 (no `CsgOper`, base pose only); keyframes are then authored with the trunk-editing `mover key`
 verbs. *(decisions: generator pattern, 2026-06-24 14:30 UTC; mover support, 2026-06-25; native
