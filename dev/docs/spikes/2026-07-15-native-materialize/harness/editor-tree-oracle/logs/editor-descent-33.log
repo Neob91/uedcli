@@ -1,0 +1,45 @@
+[New LWP 182]
+[New LWP 192]
+[New LWP 193]
+[New LWP 194]
+[New LWP 195]
+[New LWP 196]
+[New LWP 197]
+[New LWP 198]
+[New LWP 199]
+[New LWP 200]
+[New LWP 201]
+[New LWP 203]
+[New LWP 206]
+[New LWP 207]
+[Thread debugging using libthread_db enabled]
+Using host libthread_db library "/lib/x86_64-linux-gnu/libthread_db.so.1".
+0xf7ee7549 in __kernel_vsyscall ()
+Breakpoint 1 at 0x10032cb6
+ORACLE_ATTACHED
+FEP inode=0 nf=0 nnv=4 nodeN=-1.00000,-0.00000,-0.00000,-1150.00000 iF=1 iB=-1 ednv=3 edN=-0.83809,0.00000,0.54553 out=0
+FEP inode=1 nf=0 nnv=4 nodeN=1.00000,-0.00000,-0.00000,-1150.00000 iF=2 iB=-1 ednv=3 edN=-0.83809,0.00000,0.54553 out=1
+FEP inode=2 nf=0 nnv=4 nodeN=-0.00000,-1.00000,-0.00000,-1150.00000 iF=3 iB=-1 ednv=3 edN=-0.83809,0.00000,0.54553 out=1
+FEP inode=3 nf=0 nnv=4 nodeN=-0.00000,1.00000,-0.00000,-1150.00000 iF=4 iB=-1 ednv=3 edN=-0.83809,0.00000,0.54553 out=1
+FEP inode=4 nf=0 nnv=4 nodeN=-0.00000,-0.00000,-1.00000,-420.00000 iF=12 iB=-1 ednv=3 edN=-0.83809,0.00000,0.54553 out=1
+FEP inode=12 nf=0 nnv=4 nodeN=0.00000,0.00000,1.00000,0.00000 iF=40 iB=-1 ednv=3 edN=-0.83809,0.00000,0.54553 out=1
+FEP inode=40 nf=0 nnv=4 nodeN=1.00000,0.00000,0.00000,160.00000 iF=250 iB=7 ednv=3 edN=-0.83809,0.00000,0.54553 out=1
+FEP inode=7 nf=0 nnv=4 nodeN=-1.00000,0.00000,0.00000,160.00000 iF=-1 iB=59 ednv=3 edN=-0.83809,0.00000,0.54553 out=0
+FEP inode=59 nf=0 nnv=4 nodeN=0.00000,1.00000,0.00000,160.00000 iF=252 iB=60 ednv=3 edN=-0.83809,0.00000,0.54553 out=0
+FEP inode=252 nf=0 nnv=4 nodeN=0.00000,1.00000,0.00000,208.04173 iF=294 iB=253 ednv=3 edN=-0.83809,0.00000,0.54553 out=1
+FEP inode=253 nf=0 nnv=4 nodeN=-0.70711,0.70711,0.00000,48.04174 iF=297 iB=254 ednv=3 edN=-0.83809,0.00000,0.54553 out=0
+FEP inode=297 nf=0x20 nnv=4 nodeN=-0.59262,0.59262,0.54553,183.29724 iF=-1 iB=-1 ednv=3 edN=-0.83809,0.00000,0.54553 out=1
+FEP inode=254 nf=0 nnv=4 nodeN=-1.00000,0.00000,0.00000,-111.95827 iF=-1 iB=264 ednv=4 edN=-0.83809,0.00000,0.54553 out=0
+FEP inode=264 nf=0 nnv=5 nodeN=0.00000,0.00000,1.00000,248.00000 iF=295 iB=-1 ednv=3 edN=-0.83809,0.00000,0.54553 out=0
+FEP inode=295 nf=0x20 nnv=3 nodeN=0.00000,0.83809,0.54553,317.39209 iF=-1 iB=298 ednv=3 edN=-0.83809,0.00000,0.54553 out=1
+FEP inode=298 nf=0x20 nnv=3 nodeN=-0.59262,0.59262,0.54553,183.29724 iF=-1 iB=-1 ednv=3 edN=-0.83809,0.00000,0.54553 out=1
+FEP inode=60 nf=0 nnv=4 nodeN=0.00000,-1.00000,0.00000,-128.00000 iF=15 iB=63 ednv=3 edN=-0.83809,0.00000,0.54553 out=0
+FEP inode=63 nf=0 nnv=4 nodeN=0.00000,0.00000,1.00000,160.00000 iF=57 iB=-1 ednv=3 edN=-0.83809,0.00000,0.54553 out=0
+FEP inode=57 nf=0 nnv=4 nodeN=1.00000,0.00000,0.00000,-80.00000 iF=64 iB=58 ednv=3 edN=-0.83809,0.00000,0.54553 out=1
+FEP inode=64 nf=0 nnv=4 nodeN=1.00000,0.00000,0.00000,-16.00000 iF=72 iB=65 ednv=3 edN=-0.83809,0.00000,0.54553 out=1
+FEP inode=72 nf=0 nnv=4 nodeN=1.00000,0.00000,0.00000,48.00000 iF=255 iB=73 ednv=3 edN=-0.83809,0.00000,0.54553 out=1
+FEP inode=255 nf=0 nnv=4 nodeN=-1.00000,0.00000,0.00000,-111.95827 iF=81 iB=258 ednv=3 edN=-0.83809,0.00000,0.54553 out=1
+FEP inode=81 nf=0 nnv=4 nodeN=-1.00000,0.00000,0.00000,-80.00000 iF=-1 iB=84 ednv=4 edN=-0.83809,0.00000,0.54553 out=1
+FEP inode=84 nf=0 nnv=4 nodeN=0.00000,0.00000,1.00000,192.00000 iF=-1 iB=-1 ednv=4 edN=-0.83809,0.00000,0.54553 out=0
+FEP inode=258 nf=0 nnv=4 nodeN=-0.70711,-0.70711,0.00000,-178.23244 iF=-1 iB=267 ednv=3 edN=-0.83809,0.00000,0.54553 out=0
+FEP inode=267 nf=0 nnv=5 nodeN=0.00000,0.00000,1.00000,248.00000 iF=-1 iB=-1 ednv=3 edN=-0.83809,0.00000,0.54553 out=0

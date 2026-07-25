@@ -1,0 +1,40 @@
+Begin Map
+Begin Actor Class=LevelInfo Name=LevelInfo0
+     TimeSeconds=7.478302
+     Title="SpikeTest"
+     Author="uedctl"
+     IdealPlayerCount="3-4"
+     Summary=LevelSummary'li_roundtrip.LevelSummary'
+     bLonePlayer=True
+     AIProfile(0)=1651
+     ZoneGravity=(Z=-666.000000)
+     AmbientBrightness=42
+     FogDistance=1337.000000
+     Level=LevelInfo'li_roundtrip.LevelInfo0'
+     Tag="LevelInfo"
+     Region=(Zone=LevelInfo'li_roundtrip.LevelInfo0',iLeaf=-1)
+     Name="LevelInfo0"
+End Actor
+Begin Actor Class=Brush Name=RoomBrush
+     CsgOper=CSG_Subtract
+     Level=LevelInfo'li_roundtrip.LevelInfo0'
+     Tag="Brush"
+     Region=(Zone=LevelInfo'li_roundtrip.LevelInfo0',iLeaf=-1)
+    Begin Brush Name=Model
+       Begin PolyList
+          Begin Polygon Link=0
+             Origin   -00256.000000,-00256.000000,-00256.000000
+             Normal   +00001.000000,+00000.000000,+00000.000000
+             TextureU +00000.000000,+00001.000000,+00000.000000
+             TextureV +00000.000000,+00000.000000,-00001.000000
+             Vertex   +00256.000000,-00256.000000,-00256.000000
+             Vertex   +00256.000000,+00256.000000,-00256.000000
+             Vertex   +00256.000000,+00256.000000,+00256.000000
+             Vertex   +00256.000000,-00256.000000,+00256.000000
+          End Polygon
+       End PolyList
+    End Brush
+     Brush=Model'li_roundtrip.Model'
+     Name="RoomBrush"
+End Actor
+End Map

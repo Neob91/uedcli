@@ -1,0 +1,8 @@
+Begin Map
+Begin Actor Class=Light Name=SpikeProbeLight999
+    Location=(X=12345.000000,Y=6789.000000,Z=4242.000000)
+    LightBrightness=200
+    Tag=SpikeProbe
+    Name=SpikeProbeLight999
+End Actor
+End Map

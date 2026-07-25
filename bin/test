@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# bin/test — run uedctl's OFFLINE unit suite host-native in the dev venv (bin/_venv.sh),
+# then the Rust `cargo test` goldens.  Integration tests (-m integration) stay deselected
+# by pytest.ini. Extra args pass straight through to pytest. Invoke path-qualified
+# (`bin/test`) — `test` is a builtin.
+#     bin/test                 # whole offline suite (pytest + cargo test)
+#     bin/test -k texture -x   # extra args -> pytest (cargo test still runs unless UEDCTL_SKIP_NATIVE)
+set -euo pipefail
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/_venv.sh"
+ensure_venv
+ensure_native_ext                      # OPTIONAL: builds uedctl_native if cargo is present
+cd "$UEDCTL_DIR"                       # pytest rootdir/testpaths resolve here
+
+rc=0
+if [ "$#" -eq 0 ]; then
+  env PYTHONPATH="$UEDCTL_DIR" "$PY" -m pytest uedctl -q || rc=$?
+else
+  env PYTHONPATH="$UEDCTL_DIR" "$PY" -m pytest "$@" -q || rc=$?
+fi
+
+# Rust goldens — only when cargo is available and not explicitly skipped (spec §6 runner).
+if [ -z "${UEDCTL_SKIP_NATIVE:-}" ] && [ -d "$UEDCTL_DIR/uedctl-native" ]; then
+  [ -f "$HOME/.cargo/env" ] && . "$HOME/.cargo/env"
+  if command -v cargo >/dev/null 2>&1; then
+    ( cd "$UEDCTL_DIR/uedctl-native" && PYO3_PYTHON="$PY" cargo test -q ) || rc=$?
+  else
+    echo "bin/test: cargo not found — skipped cargo test (uedctl_native goldens)" >&2
+  fi
+fi
+
+exit "$rc"

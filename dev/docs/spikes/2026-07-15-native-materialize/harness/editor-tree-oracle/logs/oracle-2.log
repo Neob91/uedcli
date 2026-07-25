@@ -1,0 +1,84 @@
+[New LWP 155]
+[New LWP 173]
+[New LWP 174]
+[New LWP 175]
+[New LWP 176]
+[New LWP 177]
+[New LWP 178]
+[New LWP 179]
+[New LWP 180]
+[New LWP 181]
+[New LWP 199]
+[New LWP 200]
+[New LWP 201]
+[New LWP 202]
+[Thread debugging using libthread_db enabled]
+Using host libthread_db library "/lib/x86_64-linux-gnu/libthread_db.so.1".
+0xf7f58549 in __kernel_vsyscall ()
+Breakpoint 1 at 0x10034e80
+ORACLE_ATTACHED
+ADD ret=0x10034924 model=0x592215c parent=0 place=3 flags=0x20 ilink=0 nv=4 N=-1.00000,-0.00000,-0.00000 B=1150.00000,0.00000,210.00000
+ADD ret=0x10034924 model=0x592215c parent=0 place=1 flags=0x20 ilink=1 nv=4 N=1.00000,-0.00000,-0.00000 B=-1150.00000,0.00000,210.00000
+ADD ret=0x10034924 model=0x592215c parent=1 place=1 flags=0x20 ilink=2 nv=4 N=-0.00000,-1.00000,-0.00000 B=0.00000,1150.00000,210.00000
+ADD ret=0x10034924 model=0x592215c parent=2 place=1 flags=0x20 ilink=3 nv=4 N=-0.00000,1.00000,-0.00000 B=0.00000,-1150.00000,210.00000
+ADD ret=0x10034924 model=0x592215c parent=3 place=1 flags=0x20 ilink=4 nv=4 N=-0.00000,-0.00000,-1.00000 B=0.00000,0.00000,420.00000
+ADD ret=0x10034924 model=0x592215c parent=4 place=1 flags=0x20 ilink=5 nv=4 N=-0.00000,-0.00000,1.00000 B=0.00000,0.00000,0.00000
+ADD ret=0x100345f8 model=0x260e9c parent=-1 place=3 flags=0 ilink=0 nv=4 N=1.00000,0.00000,0.00000 B=1150.00000,0.00000,210.00000
+ADD ret=0x100345f8 model=0x260e9c parent=0 place=0 flags=0 ilink=1 nv=4 N=-1.00000,0.00000,0.00000 B=-1150.00000,0.00000,210.00000
+ADD ret=0x100345f8 model=0x260e9c parent=1 place=0 flags=0 ilink=2 nv=4 N=0.00000,1.00000,0.00000 B=0.00000,1150.00000,210.00000
+ADD ret=0x100345f8 model=0x260e9c parent=2 place=0 flags=0 ilink=3 nv=4 N=0.00000,-1.00000,0.00000 B=0.00000,-1150.00000,210.00000
+ADD ret=0x100345f8 model=0x260e9c parent=3 place=0 flags=0 ilink=4 nv=4 N=0.00000,0.00000,1.00000 B=0.00000,0.00000,420.00000
+ADD ret=0x100345f8 model=0x260e9c parent=4 place=0 flags=0 ilink=5 nv=4 N=0.00000,0.00000,-1.00000 B=0.00000,0.00000,0.00000
+ADD ret=0x100317df model=0x592215c parent=5 place=1 flags=0x20 ilink=6 nv=4 N=1.00000,0.00000,0.00000 B=160.00000,144.00000,80.00000
+ADD ret=0x100317df model=0x592215c parent=6 place=0 flags=0x20 ilink=7 nv=4 N=-1.00000,0.00000,0.00000 B=-160.00000,144.00000,80.00000
+ADD ret=0x100317df model=0x592215c parent=7 place=0 flags=0x20 ilink=8 nv=4 N=0.00000,1.00000,0.00000 B=0.00000,160.00000,80.00000
+ADD ret=0x100317df model=0x592215c parent=8 place=0 flags=0x20 ilink=9 nv=4 N=0.00000,-1.00000,0.00000 B=0.00000,128.00000,80.00000
+ADD ret=0x100317df model=0x592215c parent=9 place=0 flags=0x20 ilink=10 nv=4 N=0.00000,0.00000,1.00000 B=0.00000,144.00000,160.00000
+ADD ret=0x100345f8 model=0x260e9c parent=-1 place=3 flags=0 ilink=0 nv=4 N=1.00000,0.00000,0.00000 B=160.00000,144.00000,80.00000
+ADD ret=0x100345f8 model=0x260e9c parent=0 place=0 flags=0 ilink=1 nv=4 N=-1.00000,0.00000,0.00000 B=-160.00000,144.00000,80.00000
+ADD ret=0x100345f8 model=0x260e9c parent=1 place=0 flags=0 ilink=2 nv=4 N=0.00000,1.00000,0.00000 B=0.00000,160.00000,80.00000
+ADD ret=0x100345f8 model=0x260e9c parent=2 place=0 flags=0 ilink=3 nv=4 N=0.00000,-1.00000,0.00000 B=0.00000,128.00000,80.00000
+ADD ret=0x100345f8 model=0x260e9c parent=3 place=0 flags=0 ilink=4 nv=4 N=0.00000,0.00000,1.00000 B=0.00000,144.00000,160.00000
+ADD ret=0x100345f8 model=0x260e9c parent=4 place=0 flags=0 ilink=5 nv=4 N=0.00000,0.00000,-1.00000 B=0.00000,144.00000,0.00000
+ADD ret=0x10031bfc model=0x592215c parent=5 place=2 flags=0x20 ilink=5 nv=4 N=0.00000,0.00000,1.00000 B=0.00000,0.00000,0.00000
+ADD ret=0x10031bfc model=0x592215c parent=5 place=2 flags=0x20 ilink=5 nv=4 N=0.00000,0.00000,1.00000 B=0.00000,0.00000,0.00000
+ADD ret=0x10031bfc model=0x592215c parent=5 place=2 flags=0x20 ilink=5 nv=4 N=0.00000,0.00000,1.00000 B=0.00000,0.00000,0.00000
+ADD ret=0x10031bfc model=0x592215c parent=5 place=2 flags=0x20 ilink=5 nv=4 N=0.00000,0.00000,1.00000 B=0.00000,0.00000,0.00000
+ADD ret=0x100345f8 model=0x592215c parent=-1 place=3 flags=0 ilink=5 nv=4 N=0.00000,0.00000,1.00000 B=0.00000,0.00000,0.00000
+ADD ret=0x100346bb model=0x592215c parent=0 place=2 flags=0 ilink=5 nv=4 N=0.00000,0.00000,1.00000 B=0.00000,0.00000,0.00000
+ADD ret=0x100346bb model=0x592215c parent=1 place=2 flags=0 ilink=5 nv=4 N=0.00000,0.00000,1.00000 B=0.00000,0.00000,0.00000
+ADD ret=0x100346bb model=0x592215c parent=2 place=2 flags=0 ilink=5 nv=4 N=0.00000,0.00000,1.00000 B=0.00000,0.00000,0.00000
+ADD ret=0x100345f8 model=0x592215c parent=0 place=1 flags=0 ilink=0 nv=4 N=-1.00000,-0.00000,-0.00000 B=1150.00000,0.00000,210.00000
+ADD ret=0x100345f8 model=0x592215c parent=4 place=1 flags=0 ilink=1 nv=4 N=1.00000,-0.00000,-0.00000 B=-1150.00000,0.00000,210.00000
+ADD ret=0x100345f8 model=0x592215c parent=5 place=1 flags=0 ilink=2 nv=4 N=-0.00000,-1.00000,-0.00000 B=0.00000,1150.00000,210.00000
+ADD ret=0x100345f8 model=0x592215c parent=6 place=1 flags=0 ilink=3 nv=4 N=0.00000,1.00000,0.00000 B=0.00000,-1150.00000,210.00000
+ADD ret=0x100345f8 model=0x592215c parent=7 place=1 flags=0 ilink=10 nv=4 N=0.00000,0.00000,1.00000 B=0.00000,144.00000,160.00000
+ADD ret=0x100345f8 model=0x592215c parent=8 place=1 flags=0 ilink=4 nv=4 N=0.00000,0.00000,-1.00000 B=0.00000,0.00000,420.00000
+ADD ret=0x100345f8 model=0x592215c parent=8 place=0 flags=0 ilink=6 nv=4 N=1.00000,-0.00000,-0.00000 B=160.00000,144.00000,80.00000
+ADD ret=0x100345f8 model=0x592215c parent=10 place=0 flags=0 ilink=7 nv=4 N=-1.00000,-0.00000,-0.00000 B=-160.00000,144.00000,80.00000
+ADD ret=0x100345f8 model=0x592215c parent=11 place=0 flags=0 ilink=8 nv=4 N=0.00000,1.00000,0.00000 B=0.00000,160.00000,80.00000
+ADD ret=0x100345f8 model=0x592215c parent=12 place=0 flags=0 ilink=9 nv=4 N=-0.00000,-1.00000,-0.00000 B=0.00000,128.00000,80.00000
+ADD ret=0x100aa284 model=0x592215c parent=9 place=2 flags=0x20 ilink=4 nv=4 N=0.00000,0.00000,-1.00000 B=0.00000,0.00000,420.00000
+ADD ret=0x100aa284 model=0x592215c parent=13 place=2 flags=0x20 ilink=9 nv=4 N=-0.00000,-1.00000,-0.00000 B=0.00000,128.00000,80.00000
+ADD ret=0x100aa284 model=0x592215c parent=12 place=2 flags=0x20 ilink=8 nv=4 N=0.00000,1.00000,0.00000 B=0.00000,160.00000,80.00000
+ADD ret=0x100aa284 model=0x592215c parent=11 place=2 flags=0x20 ilink=7 nv=4 N=-1.00000,-0.00000,-0.00000 B=-160.00000,144.00000,80.00000
+ADD ret=0x100aa284 model=0x592215c parent=10 place=2 flags=0x20 ilink=6 nv=4 N=1.00000,-0.00000,-0.00000 B=160.00000,144.00000,80.00000
+ADD ret=0x100aa284 model=0x592215c parent=8 place=2 flags=0x20 ilink=10 nv=4 N=0.00000,0.00000,1.00000 B=0.00000,144.00000,160.00000
+ADD ret=0x100aa284 model=0x592215c parent=7 place=2 flags=0x20 ilink=3 nv=4 N=0.00000,1.00000,0.00000 B=0.00000,-1150.00000,210.00000
+ADD ret=0x100aa284 model=0x592215c parent=7 place=2 flags=0x20 ilink=3 nv=4 N=0.00000,1.00000,0.00000 B=0.00000,-1150.00000,210.00000
+ADD ret=0x100aa284 model=0x592215c parent=7 place=2 flags=0x20 ilink=3 nv=4 N=0.00000,1.00000,0.00000 B=0.00000,-1150.00000,210.00000
+ADD ret=0x100aa284 model=0x592215c parent=7 place=2 flags=0x20 ilink=3 nv=4 N=0.00000,1.00000,0.00000 B=0.00000,-1150.00000,210.00000
+ADD ret=0x100aa284 model=0x592215c parent=6 place=2 flags=0x20 ilink=2 nv=4 N=-0.00000,-1.00000,-0.00000 B=0.00000,1150.00000,210.00000
+ADD ret=0x100aa284 model=0x592215c parent=6 place=2 flags=0x20 ilink=2 nv=4 N=-0.00000,-1.00000,-0.00000 B=0.00000,1150.00000,210.00000
+ADD ret=0x100aa284 model=0x592215c parent=6 place=2 flags=0x20 ilink=2 nv=4 N=-0.00000,-1.00000,-0.00000 B=0.00000,1150.00000,210.00000
+ADD ret=0x100aa284 model=0x592215c parent=6 place=2 flags=0x20 ilink=2 nv=4 N=-0.00000,-1.00000,-0.00000 B=0.00000,1150.00000,210.00000
+ADD ret=0x100aa284 model=0x592215c parent=5 place=2 flags=0x20 ilink=1 nv=4 N=1.00000,-0.00000,-0.00000 B=-1150.00000,0.00000,210.00000
+ADD ret=0x100aa284 model=0x592215c parent=5 place=2 flags=0x20 ilink=1 nv=4 N=1.00000,-0.00000,-0.00000 B=-1150.00000,0.00000,210.00000
+ADD ret=0x100aa284 model=0x592215c parent=4 place=2 flags=0x20 ilink=0 nv=4 N=-1.00000,-0.00000,-0.00000 B=1150.00000,0.00000,210.00000
+ADD ret=0x100aa284 model=0x592215c parent=4 place=2 flags=0x20 ilink=0 nv=4 N=-1.00000,-0.00000,-0.00000 B=1150.00000,0.00000,210.00000
+ADD ret=0x100aa284 model=0x592215c parent=0 place=2 flags=0x20 ilink=5 nv=4 N=0.00000,0.00000,1.00000 B=0.00000,0.00000,0.00000
+ADD ret=0x100aa284 model=0x592215c parent=1 place=2 flags=0x20 ilink=5 nv=4 N=0.00000,0.00000,1.00000 B=0.00000,0.00000,0.00000
+ADD ret=0x100aa284 model=0x592215c parent=2 place=2 flags=0x20 ilink=5 nv=4 N=0.00000,0.00000,1.00000 B=0.00000,0.00000,0.00000
+ADD ret=0x100aa284 model=0x592215c parent=3 place=2 flags=0x20 ilink=5 nv=4 N=0.00000,0.00000,1.00000 B=0.00000,0.00000,0.00000
+[Thread 0x9adfb40 (LWP 200) exited]
+[New Thread 0xf44fb40 (LWP 283)]

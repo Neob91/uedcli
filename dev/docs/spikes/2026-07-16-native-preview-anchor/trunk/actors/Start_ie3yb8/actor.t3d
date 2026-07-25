@@ -1,0 +1,3 @@
+Begin Actor Class=Engine.PlayerStart
+    Location=(X=-180.000000,Y=0.000000,Z=-80.000000)
+End Actor

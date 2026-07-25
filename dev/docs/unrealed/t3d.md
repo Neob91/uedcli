@@ -1,0 +1,520 @@
+# UnrealEd T3D — on-the-wire text format reference
+
+> **Name disambiguation.** "T3D" is overloaded in this codebase. This doc
+> covers the **on-the-wire text format** that `MAP EXPORT` writes and
+> `MAP IMPORTADD` reads — a plain-text description of actors and their
+> brush geometry. It does NOT describe the "T3D tree" — the
+> `{actors/, order, packages, name}` directory form used by the uedctl
+> session store. The session-store format is documented in
+> [`../architecture.md`](../architecture.md) ("Session store").
+>
+> **Gotchas live elsewhere.** Surprising behaviors that bite during
+> import/export (grid-snap, demand-load, `Brush=` ordering, paste drift,
+> …) are in [`quirks.md`](quirks.md) "T3D format", cross-linked below.
+
+---
+
+## Evidence and confidence markers
+
+Every claim below carries a confidence marker:
+- ✅ = uedctl-used / live-verified
+- 🔬 = live-probed this session
+- 📖 = extracted from the binary string table (vocabulary real, semantics
+  inferred)
+
+Evidence files: `../spikes/2026-06-18-ucc-level-export.md` (UCC export
+round-trip), `../spikes/2026-06-19-t3d-package-qualification.md` (texture
+binding), `../spikes/2026-06-19-builder-world-geometry-parity.md` (vertex
+faithfulness), `../spikes/2026-06-20-obj-dependencies-untextured-poly-correlation.md`
+(texture demand-load), `../spikes/2026-06-21-class-qualification-discovery-and-roundtrip.md`
+(class qualification). Real T3D examples in `../../uedctl/tests/fixtures/`.
+
+---
+
+## Block nesting ✅
+
+A T3D file consists of a `Begin Map` / `End Map` wrapper containing zero
+or more actor blocks. Each actor is:
+
+```
+Begin Map
+Begin Actor Class=<Package.ClassName> Name=<ActorName>
+    <actor-level properties…>
+    Begin Brush Name=<ModelName>
+       Begin PolyList
+          Begin Polygon [Item=<item>] [Flags=<n>] [Link=<n>] [Texture=<ref>] [Pan U=<n> V=<n>]
+             Origin   <X> <Y> <Z>
+             Normal   <X> <Y> <Z>
+             TextureU <X> <Y> <Z>
+             TextureV <X> <Y> <Z>
+             Vertex   <X> <Y> <Z>
+             Vertex   <X> <Y> <Z>
+             …
+          End Polygon
+          …
+       End PolyList
+    End Brush
+    Brush=Model'MyLevel.<ModelName>'
+    <remaining actor-level properties…>
+    Name="<ActorName>"
+End Actor
+…
+End Map
+```
+
+The four nesting levels are: `Map` → `Actor` → `Brush` → `PolyList` →
+`Polygon`. The `Brush` / `PolyList` / `Polygon` blocks are present only for
+brush actors (`Class=Brush` or a subclass). Point actors (lights, movers,
+pathnodes, …) have only actor-level properties and no brush block.
+
+**Concrete point-actor example** (`tests/fixtures/add_light.t3d`):
+
+```
+Begin Actor Class=Light Name=SpikeProbeLight999
+    Location=(X=12345.000000,Y=6789.000000,Z=4242.000000)
+    LightBrightness=200
+    Tag=SpikeProbe
+    Name=SpikeProbeLight999
+End Actor
+```
+
+---
+
+## Property line forms ✅
+
+### Scalar `Key=Value`
+
+The most common form. The value is:
+- **A number:** `LightBrightness=200`, `Location=(X=1.0,Y=2.0,Z=3.0)`
+- **A string literal:** `Name="Brush938"`, `Group="club_entrance"`
+- **An unquoted identifier:** `Tag=SpikeProbe`, `CsgOper=CSG_Subtract`
+- **A struct** `(Field=Val,…)`: `Location=(X=6048.0,Y=5360.0,Z=-2240.0)`,
+  `Rotation=(Yaw=-16384)`, `MainScale=(SheerAxis=SHEER_ZX)`
+- **An object reference** `Class'Package.Name'`:
+  `Level=LevelInfo'MyLevel.LevelInfo0'`, `Brush=Model'MyLevel.Model823'`
+- **A qualified texture ref** `Texture'Package.Name'` (or bare
+  `Package.Name` inline on `Begin Polygon … Texture=…`):
+  `Texture=CoreTexMetal.Area51Wall_A`
+
+### `Class=Package.ClassName` binds on import under a true collision; export is always bare 🔬
+
+When two loaded packages define classes of the **same name** (a genuine collision — e.g. duplicating
+a small `.u` under a second filename yields two distinct `UClass` objects `PkgA.Foo` and `PkgB.Foo`),
+a `MAP IMPORTADD` actor's `Class=Package.ClassName` qualifier **is the sole determinant** of which
+package's class it instantiates — per-actor, not one global pick, not load order. This reverses an
+earlier weak verdict that the package qualifier was "ignored" (that test had no real collision, so it
+could only show a wrong qualifier wasn't *rejected*), and makes `Class=` symmetric with `Texture=`
+package binding. **But `MAP EXPORT` always writes the bare class name** (`Class=Foo`, never
+`Class=PkgB.Foo`), even when the class lives only in the non-default colliding package — so an actor's
+class *package* is authored data uedctl owns and re-emits qualified at materialize; recovering it from
+a live level needs `OBJ DEPENDENCIES PACKAGE=<level>` (prints per-actor refs fully qualified). Method
+caveat: collision-by-duplication works only for small dependency-light packages — duplicating a large
+one (`Engine.u`) crashes the editor with `Palette …: Serial size mismatch`. (spike:
+`../spikes/2026-06-19-class-package-collision.md`, live 2026-06-19)
+
+### Indexed static-array form `Foo(N)=<value>` 🔬
+
+UScript `var Foo[K]` array fields serialize as separate indexed lines, one
+per element. The index `N` is zero-based:
+
+```
+AIProfile(0)=44831
+KeyPos(1)=(Z=128.0)
+KeyRot(1)=(Yaw=16384)
+MultiSkins(2)=Texture'Skins.Wood'
+```
+
+The RHS is an ordinary scalar, struct `(…)`, or object ref — the same
+value forms as the scalar `Key=Value` case. This form is general to every
+actor class; `Mover` keyframe arrays (`KeyPos(N)`/`KeyRot(N)`/`NumKeys`)
+and decoration skin arrays (`MultiSkins(N)`) are the most common examples.
+Confirmed in the substrate `Engine.u` name table (2026-06-24 🔬).
+
+> **uedctl parses/emits/normalizes these faithfully** (since 2026-06-25,
+> the mover-support work). `model._PROP` captures the optional `(N)` index
+> as part of the property key (`KeyPos(1)`, `MultiSkins(2)`), `emit_actor`
+> re-emits each indexed line verbatim via its catch-all property branch,
+> and `normalize` keeps authored indexed props (only `AIProfile(N)` is
+> stripped, by the computed-prefix rule). A parse → emit → parse round-trip
+> is identical for all of them. The mover base-pose fields `BasePos`/
+> `BaseRot` are editor-derived and ARE stripped (see the authored-vs-
+> computed taxonomy below).
+
+---
+
+## Winding defines the face, not `Normal` ✅
+
+The polygon `Normal` field is written by the exporter as a convenience but
+the importer **ignores it** — it recomputes the normal from the vertex
+winding order. The winding convention is **CCW-from-outside** (counter-
+clockwise when viewed from outside the solid). Wrong winding produces an
+inverted or invalid solid that crashes `MAP REBUILD` with a CSG GPF.
+
+Evidence: verified from uedctl's own `builders.py` (faces wound CCW-from-
+out pass the DEINTERSECTION parity suite live; a reversed face would
+flip the solid). `spikes/2026-06-19-builder-world-geometry-parity.md`.
+
+Practical consequence: when authoring or editing polygons, the vertex ORDER
+is the ground truth. But `Normal` and the texture vectors (`TextureU`/
+`TextureV`) behave DIFFERENTLY across a round-trip, and the difference is
+load-bearing for the materialize hash:
+
+- **`Normal` is NOT preserved — the engine RECOMPUTES it from winding.** An
+  authored normal and its re-export differ *structurally*, not just in
+  precision (confirmed live 2026-07-14: a roof brush authored
+  `Normal (0.707,0.707,0)` re-exported as the true slope `(0.541,0.541,0.643)`).
+  So `normalize` DROPS the poly `Normal` from the COMPARE view
+  (`compare_view` → `_geometry_text`); winding (the kept vertices) is the
+  authoritative face direction, so nothing authored is lost.
+- **`TextureU`/`TextureV` ARE preserved** (stored FVectors, round-tripped
+  through paste+rebuild — see `quirks.md` "texture vectors survive the paste
+  path"). They carry real texture-alignment content, so the hash KEEPS them
+  (only float32-quantized like every other coordinate). Do NOT drop them as if
+  they were like `Normal`.
+
+`Origin` is likewise a stored/preserved FVector (float32). uedctl's `emit.py`
+writes all of these faithfully into the durable trunk; only the hash/compare
+copy drops `Normal` and float32-quantizes coordinates.
+
+---
+
+## Fractional vertices are editor-native and CSG-safe ✅
+
+UnrealEd itself both writes and rebuilds non-integer vertex coordinates.
+The `MAP EXPORT` of a real subtracted brush contains coordinates like
+`Vertex -00479.999969,-00384.000031,+00192.000000`
+(`tests/fixtures/brush_subtract.t3d` — an actual UnrealEd export). The
+`+00000.999969` part is floating-point residue the editor writes without
+snapping.
+
+The upshot: brushes need not have integer-grid vertices. Semisolid and
+decorative geometry routinely use fractional coordinates. uedctl stores
+all coordinates as exact `decimal.Decimal` (not float) and only snaps a
+coordinate within `CLEAN_EPS=0.001` of an integer to that integer (to
+kill editor noise like `511.999969→512`). A genuine fraction (`32.5`,
+`70.71`) is preserved at 6 decimal places. See
+[`../architecture.md`](../architecture.md) "Coords" for the full rationale.
+
+---
+
+## Partial struct/array property values: import is member-wise onto the CLASS DEFAULT ✅
+
+A property value that mentions only SOME struct members (`RotationRate=(Yaw=1234)`) or only
+some static-array elements (`InitialInventory(1)=…`) does **not** zero the rest on import —
+the unmentioned members/elements **keep the class default** (T3D import edits member-wise onto
+the default-initialized object). Symmetrically, `MAP EXPORT` is **member-precise
+default-diffing**: it omits a whole property equal to the class default AND omits individual
+struct members equal to the default member (which is why the editor re-exports a composed
+`Rotation=(Pitch=0,Yaw=8192,Roll=0)` as `(Yaw=8192)` — Rotation's default is zero). Confirmed
+live 2026-07-18 with a decisive partial-equal-to-default case (`DeusEx.Rat`
+`RotationRate=(Pitch=4096)` → no export line at all, proving Yaw/Roll retained their non-zero
+defaults): [`../spikes/2026-07-18-partial-value-import-semantics/findings.md`](../spikes/2026-07-18-partial-value-import-semantics/findings.md).
+Consumed by `uedctl.propedit` (`STRUCT_FILL = "default"`): `actor prop get` fills unmentioned
+members/elements from the offline-decoded class defaults, and `unset KEY.Member` reverts that
+member to the class default (not zero).
+
+**Consumed by the COMPARE path — every property, as a TYPED VALUE** (`normalize.compare_view` →
+`_actor_values` → `typedprops`, 2026-07-25). uedctl's producers write every property and every
+struct member; the editor writes only what differs from the class default. So the built map's
+re-export and the trunk it was built from state the SAME values in DIFFERENT TEXT. Rather than
+canonicalize the text, the post-verify compares each actor's **effective typed values**: for every
+property, the stored value if the actor states one, else the class default, decoded by the
+property's DECLARED TYPE. Two actors are equal iff they would import to the same object.
+
+The types and defaults are decoded offline from the game's own `.u`
+(`uprops.resolve_class_properties` + `resolve_class_defaults`, compiled into `typedprops.Field`
+trees by `classdefaults.ClassDefaults`, memoized per class over one shared package map). What that
+buys, case by case:
+
+- a **whole property equal to the class default** is the same value as an omitted line
+  (`StayOpenTime=4.0` against a `DeusEx.DeusExMover`'s default `4`; `SoundRadius=64` on an
+  `Engine.AmbientSound`; `MoverGlideType=MV_GlideByTime`; `LightPeriod=32`;
+  `LightEffect=LE_Spotlight` — all five measured in this repo's own trunks). A float compares
+  numerically at float32, so `4.0` == `4`; an enum compares by ORDINAL, so a T3D enum NAME and a
+  default decoded as a number agree;
+- a **struct expands MEMBER-WISE against its class default** — a member the text omits takes the
+  corresponding DEFAULT member, exactly as the engine's importer does. `Rotation=(Yaw=8192)` ==
+  `(Pitch=0,Yaw=8192,Roll=0)`; a `DeusEx.Rat`'s `RotationRate=(Yaw=1234)` means
+  `(Pitch=4096,Yaw=1234,Roll=3072)`, its non-zero default members, NOT zero. This is general: it
+  covers `Rotation`, `PrePivot`, `MainScale`/`PostScale`, `KeyPos(i)`/`KeyRot(i)` and any future
+  struct, with no per-property rule;
+- an **omitted property with no class default** takes **the type's zero, from the schema** — so an
+  explicit `LightRadius=0` (ByteProperty) or `bHidden=False` on a class that does not default them
+  is the same value as an omitted line, while an explicit `Title="0"` (StrProperty, whose zero is
+  `""`) stays DIFFERENT from an omitted one. Only the declared type can tell those apart:
+  `parse_t3d` discards quoting, so the text never could — which is why the earlier text-based
+  compare deliberately refused to touch zero scalars and aborted on them instead;
+- an **FRotator component is an `IntProperty` and compares VERBATIM** (see the mod-65536 rule
+  below);
+- the editor's own **`Tag=<bare class name>` default-stamp** is dropped — but ONLY for a class that
+  does not itself default `Tag`, because `TNM.Trestkon` defaults `Tag='Player'` (5 TNM classes
+  default it), where `Tag=Trestkon` is authored event-wiring content;
+- a property with **no declared type and no class default** yields `typedprops.ABSENT`, which equals
+  nothing. The compare never fabricates a zero to match an omission against — the no-fallback rule.
+
+Two precision rules ride along, both applied to BOTH sides:
+
+- every float compares at **float32**, the precision UnrealEd stores every float property and every
+  coordinate at (an authored `43.552099` re-exports as `43.552097`);
+- a `Location` axis passes through the trunk emit's **sub-grid snap** first (`emit.clean`,
+  `CLEAN_EPS = 0.001`): the editor's export carries its own float32 noise (`Y=7215.999512`) where
+  the trunk — snapped when the value was written — holds `Y=7216.000000`. Comparing without the
+  snap fails 49 of 5125 actors on a real retail export (measured 2026-07-25, cold review). Brush
+  geometry gets the same snap through `emit_brush`.
+
+Before this, `level materialize` aborted on the H3 post-verify with nothing written for ANY yaw-only
+actor, for any of those five default-equal properties, and for any explicitly-zero scalar. **None of
+it happens in `normalize_actor`**, which feeds the durable trunk, the `MAP IMPORT` payload and
+`actor show`: reducing there would rewrite authored data and make the trunk's bytes depend on which
+packages are installed. The class schema + defaults are resolved BEFORE the editor container is
+created, so an unresolvable class costs ~0.1 s and a clean exit 2 naming the actor, not a ~100 s
+build followed by a failure — and there is deliberately **no "assume zero" fallback** (assuming zero
+is the bug).
+
+**Ingest keeps the absent-vs-zero distinction.** Since the editor omits a `Location` axis equal to
+the class default member, `Location=(X=100,Y=200)` on an `Engine.Camera` (default
+`(X=-500,Y=-300,Z=300)`) means Z=**300**. `model.parse_t3d` is deliberately schema-free — it is also
+the trunk, stash, prefab and generator-snippet reader, and a generator runs with no project context
+— so it keeps the 0-filled numeric triple the geometry math needs AND records the verbatim text in
+`Actor.location_text`, a contained side-channel the compare seam expands member-wise. That text is
+**self-invalidating**: it is trusted only while it still parses back to the current `location`, so
+any mutation silently falls back to "all three axes stated" (correct, because every write path emits
+all three) and no mutation site has to remember to clear it.
+
+The **identity hash** (`normalize.canonical_level_hash`) is the opposite: pure, schema-free, no
+typing and no defaults at all. It is the preview build-cache key, where folding two different levels
+together means serving a map built from the other one.
+
+Three properties of this rule, regression-pinned in `test_normalize.py` / `test_typedprops.py`:
+- **An FRotator component is compared as a VERBATIM integer, never reduced mod 65536** ✅ — UnrealEd
+  stores and re-serializes the field verbatim, over-range values included, through import, `MAP
+  SAVE`, the binary round-trip and the UCC re-export the post-verify reads (live-probed 2026-07-25 on
+  point actors via `MAP IMPORTADD` and brushes via `EDIT PASTE`, three independent read-back legs:
+  [`../spikes/2026-07-25-frotator-import-normalization/findings.md`](../spikes/2026-07-25-frotator-import-normalization/findings.md)).
+  Negatives are not wrapped either (`-16384` stays `-16384`). Routing components through
+  `rotation.parse_frotator`'s `% 65536` would rewrite 20,109 of the corpus's 23,960 `Rotation`
+  components to zero — and since `-131072 % 65536 == 0`, an over-range rotator would then compare
+  EQUAL to an unrotated actor: a false pass, not just a spurious abort.
+- **Expansion is against the CLASS DEFAULT, never against zero.** The two coincide for all but one
+  class: **`TNM.LavaSpitter` defaults `Rotation=(Pitch=16384,Yaw=0,Roll=0)`** (verified offline over
+  1346 actor classes — the only one that defaults `Rotation` at all). Its `(Pitch=0)` export and an
+  authored `(Pitch=0,Yaw=0,Roll=0)` are the same rotator, while "explicitly zero" and "no rotator"
+  stay DIFFERENT levels (the second is pitched 90°) — the injectivity the compare must not lose.
+- **A zero test is unsound for other struct props too:** 228 classes default `RotationRate` non-zero
+  (`DeusEx.Rat` = `(Pitch=4096,Yaw=65530,Roll=3072)`), 17 default `PrePivot` non-zero, and
+  `Engine.Camera` defaults `Location` non-zero. Member-wise expansion against each property's own
+  default handles all of them uniformly.
+
+**The corresponding WRITE-side rule: uedctl never omits a property to mean "zero".** An omitted
+property re-imports as the CLASS DEFAULT, so omitting one is only ever correct when it provably
+equals that class's default — which the write paths (the trunk emit, the generators, `actor
+rotate`, `brush apply-transform`) have no resolver to check. They therefore write the value
+explicitly and let the compare-side typed expansion handle the equivalence. Three omissions of exactly
+this shape were live silent-corruption bugs until 2026-07-25 — each built a WRONG map that
+post-verify PASSED, because both compare sides shared the same mistake:
+
+1. `actor rotate --to 0,0,0` / `--by` composing to identity dropped the `Rotation` prop, so a
+   `TNM.LavaSpitter` came back pitched 90°. (Also `brush build --rotate 0,0,0`.)
+2. `normalize_actor` cleared an all-zero `Location` into `canonical_actor_t3d` — i.e. into the
+   trunk AND the import payload — so an `Engine.Camera` (default `Location=(X=-500,Y=-300,Z=300)`)
+   placed at the origin came back 655 uu away.
+3. `normalize_actor` deleted a `Tag` equal to the actor's bare class name as the editor's
+   default-stamp, so an authored `Tag=Trestkon` on a `TNM.Trestkon` (default `Tag='Player'`) was
+   erased and the actor came back tagged `Player`, breaking its trigger/event wiring.
+
+Two more were fixed at the same time on the same rule, neither ever observed (each needs a class
+default that no placeable DX class currently has): `brush apply-transform` (`transform.bake`)
+dropped the `PrePivot` when the transform mapped it to zero — 17 classes default `PrePivot`
+non-zero — and dropped the `Rotation` it had just baked into the vertices, which for
+`TNM.LavaSpitter` would have re-applied a 90° pitch to already-flattened geometry. Both now write
+the explicit zero instead (`Rotation` only when the actor carried one, so the bake never invents an
+orientation an actor did not have).
+
+⚠ **The rule is not yet total.** Four write paths still omit against a hardcoded zero/constant:
+`movers.set_key_pos`/`set_key_rot` (an all-zero `KeyPos(i)`/`KeyRot(i)`), `movers._set_numkeys`
+(`NumKeys == 2`), `movers.canonicalize_mover` (`Rotation` when the base pose folds to identity —
+and that one runs on the map-INGEST path, into the durable trunk), and the not-yet-wired
+`native/materialize.py` (a zero `Location`). Measured harmless today — no `Engine.Mover` subclass
+defaults `NumKeys`/`KeyPos`/`KeyRot`, and the only class defaulting `Rotation` is not a mover — and
+filed on `board/inbox.md` rather than changed here, because rewriting mover keyframe emission would
+churn every mover trunk on disk for a currently-unreachable case.
+
+## Comments & unknown properties on import 🔬
+
+The T3D **import** parser (`ULevelFactory::FactoryCreateText` → `ImportProperties` →
+`Core.dll ParseLine`, all in UED22) is NOT the UnrealScript compiler tokenizer and does not share
+its comment grammar. Verified 2026-07-18 by static disassembly **and** a live `MAP IMPORTADD` probe
+([`../spikes/2026-07-18-t3d-comment-tolerance/findings.md`](../spikes/2026-07-18-t3d-comment-tolerance/findings.md)):
+
+| Input on an actor-property line | Behavior on import | Mechanism |
+|---|---|---|
+| **`//` line-comment** | **Stripped silently** — everything after `//` is dropped, the line is still consumed; a line that is just `// …` imports as empty. No log warning. | `ParseLine` strips `//` when **not inside a `"`-quoted value** AND `Exact==0` (which `ImportProperties` passes). A `//` *inside* quotes is preserved. |
+| `/* … */` block-comment | **NOT a comment.** `ParseLine` has no `*`/block handling. A standalone `/* … */` line survives, then is skipped by `ImportProperties` only because it has no `=`; a `/*` inside a value corrupts that value. | — |
+| `;` semicolon | **NOT a comment.** No `;` handling. A `; …` line with no `=` is skipped; a `; k=v` line trips the unknown-property warning. | — |
+| unknown property (`Foo=1`, no such UProperty) | **Warned + skipped, import continues** (non-fatal): `Warning: <Class>: Unknown property in defaults: <line>`. A long (>64-char) string value is fine — no FName length limit on a value. | `FindProperty`→NULL → `Logf(NAME_Warning,…)` → next line. |
+| `\|` (pipe) | end-of-line terminator (outside quotes) | `ParseLine` |
+
+**So `//` is the one robust, silent comment carrier.** uedctl uses bare `//` lines as the on-the-wire
+form of an actor's uedctl-side sidecars — **`// uedctl-folder: <path>`** for the single-path **folder**
+and **`// uedctl-labels: <l1,l2,…>`** for the multi-valued **label** set (see `../architecture.md`
+"Folders" and "Labels"): both ride `actor show` output and are stripped silently by the editor on
+paste/import while uedctl's own parser reads them back into the respective sidecars (`--t3d-only`
+suppresses both). Regression: `test_engine_facts.py`
+(`test_t3d_import_strips_double_slash_comments`) pins the `//`-strip byte pattern in the committed
+`core.dll`. Do NOT carry data in `/* */` or `;` (fragile — they only survive as no-`=` skipped lines),
+and never place the carrier inside a quoted value (there `//` is preserved, not stripped).
+
+## What T3D cannot carry ✅
+
+T3D is a **text snapshot of authored geometry and properties**. It cannot
+represent everything in a compiled `.dx` map file:
+
+| What | Why it's absent | Recovery |
+|---|---|---|
+| `myLevel` embedded resources (textures/sounds) | binary blobs, not text-representable | use a package file + qualified `Texture=` ref |
+| Computed BSP (nodes/surfs/polyverts) | built by `MAP REBUILD`, not authored | rebuild with `MAP REBUILD` |
+| Lightmaps | built by `LIGHT APPLY`, not authored | rebuild with `LIGHT APPLY` |
+| Pathnode reachspecs (`ReachSpecs`, `Paths`/`upstreamPaths` etc.) | built by **`PATHS BUILD`** (not `PATHS DEFINE`, which only spawns markers — see `commands.md`), not authored | rebuild with `PATHS BUILD` |
+
+**Practical rule:** to preserve compiled state (lighting, BSP, pathing),
+edit in place and use `MAP SAVE` — never reconstruct a `.dx` from T3D
+alone unless you plan to rebuild all of the above. uedctl's `level apply`
+always triggers a full re-import + `MAP REBUILD` + `LIGHT APPLY`, so
+rebuilding is automatic; the point is that T3D export of a built map loses
+these artifacts.
+
+---
+
+## Authored-vs-computed field taxonomy ✅
+
+Not all fields that appear in a `MAP EXPORT` are authored content. Some
+are computed by the editor at import, rebuild, or load time and must be
+ignored when diffing two T3D snapshots (otherwise every no-op export looks
+like a change).
+
+**The canonical list is `normalize.COMPUTED_PROPS`** (exact-match) and
+`normalize._COMPUTED_PREFIXES` (prefix-match, e.g. `AIProfile`). Do not
+maintain a parallel copy here — the code is the source of truth. The
+fields group by WHEN and HOW the editor/engine produces them:
+
+- **Engine-time fields** set by the engine at load: `Level`,
+  `NavigationPointList`, `PawnList`, `nextNavigationPoint`,
+  `prevNavigationPoint`, `bSelected`.
+- **Rebuild-time fields** derived during `MAP REBUILD`: `Region`,
+  `TimeSeconds`, `Summary`.
+- **Load-time / import-time fields** recomputed on import:
+  `OldLocation` (the actor's prior location, a transient editor field),
+  `AIProfile(N)` (stripped by prefix — computed AI navigation weight).
+- **Mover base-pose fields** `BasePos`/`BaseRot`: the editor derives the
+  mover's home pose from `Location`/`Rotation` at import and writes these
+  fields into the re-export. uedctl-authored movers never emit them; a
+  re-export adds them, so they must canonicalize away (confirmed by
+  spike test E, 2026-06-25).
+- **Mover engine-stamped sentinels** `SavedPos`/`SavedRot`: pure engine
+  runtime state, and the ONLY fields in this taxonomy whose value is a
+  fixed magic constant rather than something derived from the level —
+  `SavedPos=(X=-12345.000000,Y=-12345.000000,Z=-12345.000000)` and
+  `SavedRot=(Pitch=123,Yaw=456,Roll=789)`. `AMover::PostLoad()` writes
+  exactly those two values into every Mover object it loads,
+  **unconditionally** — no guard, no test of what the file stored — so an
+  authored value can never survive a round trip, and any mover that has
+  been through a package load carries the sentinel while a
+  uedctl-authored one (which omits both) does not. Without the strip,
+  every mover map fails the H3 post-verify. Disassembled out of BOTH
+  engines and corroborated by the corpus (487 occurrences of each, with
+  exactly ONE distinct value each; every retail map holding a mover — 81
+  of the 130 in `DX/Maps` — carries it once per mover):
+  [spike 2026-07-25](../spikes/2026-07-25-mover-savedpos-savedrot-engine-stamped/findings.md).
+  The same `PostLoad` also renumbers the mover brush's polygon `Link` to
+  `0..N-1`. Both writes come from that one function, so their
+  co-occurrence is a reliable fingerprint for "this mover has been
+  through a package load" — which is what distinguishes a mover the
+  editor loaded from one created in-session (the latter carries
+  neither).
+
+Two mover fields are deliberately NOT listed. `OldRot` — only
+`OldLocation` is spike-confirmed. `SavedTrigger` — `AMover::PostLoad`
+does not touch it and it appears **zero** times in the whole committed
+export corpus, so it causes no mismatch. Each is added only if a
+re-export is actually seen carrying it; neither is added on faith.
+
+Additional normalization rules (not simple field exclusion). **All three
+below happen on the throwaway COMPARE VIEW only** (`normalize._actor_values`
+via `compare_view`) — never in `normalize_actor`, which feeds the durable
+trunk and the `MAP IMPORT` payload; see the typed effective-value compare
+described under "Partial struct/array property values" above:
+- **A `Location` equal to the CLASS DEFAULT ≡ no `Location` line.** The
+  editor omits the line entirely when the value matches the default; a
+  freshly authored actor carries an explicit value. Both must resolve to the
+  same typed value (and an omitted AXIS resolves to that axis's default
+  member). Note the default is `(0,0,0)` for every class except
+  `Engine.Camera` — testing against zero instead of the class default is
+  what silently built a camera 655 uu from where it was authored, until
+  2026-07-25.
+- **Polygon `Link=N`** is a computed BSP cross-reference emitted by the
+  exporter; `emit_actor` never writes it, so it is implicitly excluded on
+  re-emit.
+- **`Tag=<ClassName>`** is NOT in `COMPUTED_PROPS`. The editor stamps an
+  unset `Tag` to the bare class name on import, but `Tag` is also real
+  authored content (`add_light.t3d` carries `Tag=SpikeProbe`). Only the
+  editor's own default stamp is noise, so ONLY that is dropped, only at
+  compare time, and only where the class does not itself default `Tag`
+  (`TNM.Trestkon` defaults `Tag='Player'`, so there a `Tag=Trestkon` is
+  authored content). Stripping it on the write side is what silently erased
+  such a tag until 2026-07-25.
+
+For the full rationale see `../architecture.md` "Coords" and
+`uedctl/normalize.py`.
+
+---
+
+## Polygon sub-fields reference ✅
+
+Each `Begin Polygon … End Polygon` block carries:
+
+| Field | Required | Notes |
+|---|---|---|
+| `Item=<name>` | no | per-face semantic label (`Base`, `Step`, `Rise`, `Side`, `OUTSIDE`); used by "Select → Matching → Item Name". Survives round-trip. |
+| `Flags=<n>` | no | `PolyFlags` bitmask: `NotSolid=8`, `Transparent=4`, `SemiSolid=32`. Omitted = 0. |
+| `Link=<n>` | no | computed BSP surface link; never authored, ignored on import per the taxonomy above |
+| `Texture=<ref>` | no | qualified `Package.Name` or bare name; see [`quirks.md`](quirks.md) for binding gotchas |
+| `Pan U=<n> V=<n>` | no | texture pan offset in texture-space units |
+| `Origin X Y Z` | yes (brush) | a point on the polygon plane; used for texture alignment |
+| `Normal X Y Z` | yes (brush) | face normal (ignored by importer — winding is authoritative) |
+| `TextureU X Y Z` | yes (brush) | texture U-axis in world space |
+| `TextureV X Y Z` | yes (brush) | texture V-axis in world space |
+| `Vertex X Y Z` | ≥3 per poly | world-space vertices in CCW-from-outside order |
+
+### The UV convention (`U = (Vertex − Origin)·TextureU + PanU`) ✅
+
+A vertex's texture coordinate is computed from the surface's stored frame as:
+
+> **U = (Vertex − Origin) · TextureU + PanU**   (and **V** the same with `TextureV`/`PanV`)
+
+so `Origin` is the world point where `(U,V) = (PanU, PanV)`, and the **texel scale is carried in the
+MAGNITUDE of `TextureU`/`TextureV`** — a *unit* `TextureU` gives **1 texel per world unit**; halving
+the density means halving `|TextureU|`. There is no separate `UScale` field on the poly (the classic
+Unreal-source `…·TextureU/|TextureU|²·UScale` form is the same mapping with the scale split out; T3D
+folds it into the magnitude). The stored `Origin`/`TextureU`/`TextureV` are in the **brush's LOCAL
+frame**; the renderer maps them to world via `base_w = Location + R·(Origin − PrePivot)`,
+`axes_w = R·axes` — so two faces on differently-placed/rotated brushes are seamlessly aligned only
+when they share the same *world* frame, NOT the same stored fields. ✅ uedctl-used: this is the
+convention `brush poly align` computes against and `render.rs`/`preview_native._world_uv_frame`
+render with; pinned by `test_polyalign.test_engine_fact_uv_formula_is_base_relative_plus_pan`.
+(Confidence: uses the authored `Origin` as `uv_base` and adds the surface `Pan` — evidence
+`render.rs:159-165`; do NOT anchor it to `light.rs`, whose base is the BSP surf point and whose pan
+is the lightmap-grid pan, a *different* quantity.)
+
+---
+
+## See also
+
+- [`quirks.md`](quirks.md) "T3D format" — the gotchas: `MAP IMPORTADD`
+  grid-snap, `Group` not required on a qualified `Texture=`, qualified
+  `Texture=` does NOT auto-demand-load its package, no coplanar auto-merge.
+  `EDIT PASTE` +32uu drift and `Brush=`-after-the-block emit ordering are
+  in [`quirks.md`](quirks.md) "How brushes enter the level".
+- [`../architecture.md`](../architecture.md) — the session store's T3D tree
+  format (different thing), exact `Decimal` coord storage, `emit.clean`.
+- [`uedctl/normalize.py`](../../../uedctl/normalize.py) — `COMPUTED_PROPS`,
+  `normalize_actor`, `canonicalize_self_refs`.

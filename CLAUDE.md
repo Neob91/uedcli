@@ -1,0 +1,671 @@
+### The repo this tool lives in
+
+`uedctl` lives at `Tools/uedctl/` inside **`dx_lum`**, a Deus Ex mod repo:
+levels in `Maps/`, mod classes in `LUM_Core/`, prefabs in `Prefabs/`, and
+sibling tools under `Tools/` (each with its own `CLAUDE.md` — read that one
+before working in its dir). **This file is the repo's canonical rule file**;
+there is no repo-root `CLAUDE.md` (deleted 2026-07-25 — its live rules were
+folded in here, and `Tools/uplayctl/CLAUDE.md` mirrors them).
+
+- **`_scratch/` (repo root, two levels up) is THE place for every temporary,
+  throwaway, or experimental file.** It is gitignored, so nothing there can
+  be committed by accident. If a throwaway file is not under `_scratch/`, it
+  is in the wrong place — no exceptions. That includes scratch scripts,
+  **every manual `MAP EXPORT`/`BRUSH EXPORT` and preview `.ppm`/`.t3d`**,
+  screenshots, texture dumps, spike output, and logs; organize into subdirs
+  (`_scratch/shots/`, `_scratch/t3d/`, …). Never write throwaway output into
+  the tracked tree — not `Temp/`, not `Maps/`, not the repo root. (This
+  session-scratch dir noted in the environment prompt is fine for files that
+  never need to outlive the session; `_scratch/` is the in-repo home.)
+- **`TODO.md` (repo root) holds repo-level, cross-cutting items**; uedctl's
+  own backlog is the board under `dev/docs/board/` (see **TODOs** below).
+  When an item is fully done, delete it — never leave it ticked `[x]`.
+
+### After every change
+
+Without being asked, do each of these that applies (a docs-only edit has no
+tests to run; a code change with no user-facing docs has none to update):
+
+- **Update every doc the change touches** — no doc may be left stale (see
+  **Documentation** below for which doc owns what).
+- **Cross off the TODOs it completed**, and **add TODOs for anything
+  deferred or left unfinished**.
+- **Run the relevant tests and confirm they pass** (`bin/test`, see
+  **Tests**).
+- **Commit and push it** (see **Commits**) — explicit pathspecs, one short
+  imperative subject, no AI attribution, never rewriting history.
+- **Gate it** (see **Review gates** below) — batched, per those rules.
+
+### Review gates
+
+**EVERY change gets reviewed** — a trivial one gets only the cheap pass,
+but nothing ships unlooked-at. At three moments fan out Claude reviewer
+subagents in parallel and resolve their findings before the work is
+declared done:
+
+1. **After writing a spec** — before planning or implementing.
+2. **After writing a plan** — before building. **Specced pipeline work
+   goes through a plan doc, so it gets a plan round**; only stage-less
+   `[chore]`/`[debug]` work and one-file fixes have no plan and therefore
+   no plan round. Not writing a plan is NOT a way to skip this round —
+   `to-build.md` takes a *reviewed* plan (see **TODOs** below and
+   `dev/docs/board/README.md`).
+3. **After building something** — before declaring done.
+
+**How many reviewers, and which model.** Every reviewer slot outside the
+trivial tier is **Opus** (`Agent(model: "opus")`) rather than a cheaper
+model: inside a bounded gate, one missed defect costs more than the slot.
+That is a rule about *which model fills a slot*, not a licence to add slots
+or rounds — the counts below and the two-round ceiling are hard. Headcount
+buys breadth, not depth: cold reviewers diverge sharply, so more reviewers
+is how an artifact gets covered, not how one finding gets re-checked.
+
+**A PLAN or BUILD round is ONE reviewer, and the second one is the
+escalation.** Each starts with a single Opus reviewer over the finished
+artifact. If it finds nothing, the gate is passed on one slot — the common
+case, and where almost all of the gate's cost is saved. If resolving its
+findings changed the artifact, round 2's single Opus reviewer reads the
+updated work cold. So a clean plan or build costs one reviewer and a
+defective one costs two, instead of every one paying for breadth up front.
+**Only the spec moment still opens wide** (3, then 2) — a spec defect
+propagates into the plan and the build stacked on top of it, so that is the
+one artifact where breadth is bought before the fact rather than after.
+*(Andrzej, 2026-07-25: the gate had grown to cost more than the work it
+guarded — on a mechanical cleanup item the review outran the implementation
+several times over. Supersedes the 2 Opus build/plan rounds of the same
+day's 18:42 UTC entry.)*
+
+This is a deliberate trade, and it is worth naming what it gives up: cold
+reviewers **diverge sharply** — in a 2026-07-25 round the two Opus reviewers
+overlapped on only two of eight findings, and the single most severe finding
+of the whole run appeared in one reviewer's report and not the other's. A
+one-reviewer round will therefore miss things a two-reviewer round would have
+caught. The answer when that matters is **not** to quietly re-widen a row:
+it is to give the work a **spec** moment (the one round that still opens
+wide), or to escalate to Andrzej.
+
+**A round's headcount IS its parallel width.** Every reviewer in a round is
+dispatched concurrently (all `Agent` calls in ONE message). Widening a round
+buys less than it looks like it should: this machine runs only ~2 concurrent
+subagents before the rest queue, so past that width a round serialises —
+costing the wall-clock of two rounds while still being one. That is why the
+ceiling is 3, at the spec moment alone, and why the plan and build moments
+spend their second slot only when round 1 actually found something.
+
+**Every row but `spec` is now a single reviewer.** Spec is the one moment
+that opens wide, because it is the only artifact whose defects get built on
+top of. Everything downstream — plan, build, docs — is one Opus, and buys
+its second reviewer only by having needed one. Read the table as: *one
+reviewer is the gate; a second is what a finding costs.*
+
+| Moment / tier      | Round 1 | Round 2 — only if resolving round 1 changed the artifact
+|--------------------|---------|---
+| **spec** review    | 3 Opus  | 2 Opus
+| **plan** review    | 1 Opus  | 1 Opus
+| **build** review   | 1 Opus  | 1 Opus
+| **docs-only**      | 1 Opus  | never — ONE round, max
+| **trivial** change | 1 Haiku | never — the one round IS the whole gate
+
+- **`build` is the DEFAULT row for anything non-trivial that is not a spec
+  or a plan** — a code change, a ledger entry, a chore sweep, a board
+  reorganisation. "Build" means *work that is finished*, not *code was
+  written*, so no non-trivial change is ever left without a row.
+- **A DOCS-ONLY change gets ONE round, maximum** — no round 2, even when the
+  round produced fixes. Docs-only means it touches no code and no test:
+  `CLAUDE.md`, `dev/docs/*`, `docs/*`, the board. (A **spec** or **plan** is
+  a doc but keeps its own row — those two moments exist precisely to catch a
+  design before it is built.) Documentation is cheap to correct after the
+  fact and its failure mode is a stale sentence, not a silent defect, so a
+  second cold round is not worth its cost.
+- **The trivial and docs-only rows are TIERS, not moments** — each replaces
+  whichever row the change would otherwise have taken, and neither has a
+  spec or plan round. **A batch takes its least-trivial member's row:** nine
+  doc typos plus one code fix is a build review, not a docs-only or trivial
+  one.
+- **NO Haiku reviewer rides along.** The trivial tier's single
+  `Agent(model: "haiku")` pass is the ONLY place a cheap reviewer appears —
+  in every other row, in both rounds, the table's Opus slots are the whole
+  round. (A Haiku reviewer used to be added additively to every first
+  round; it no longer is, because on this hardware the extra concurrent
+  slot costs wall-clock time it did not repay.) The trivial tier's Haiku
+  findings face exactly the same observability test below — a finding is
+  never discounted for having come from the cheap reviewer.
+- **Round 2 is smaller in HEADCOUNT, not in reading.** Its reviewers get
+  the full updated artifact *plus* the diff since round 1 — they are cold,
+  and a finding anywhere in the updated work counts, not just inside that
+  diff. Handing over the diff is not priming; **what round 1 found is
+  never disclosed** (see below).
+- **A trivial change is one that changes no reader's understanding and no
+  tool behavior**: a typo, a formatting fix, a comment, a `help=`
+  rewording, a test rename, a broken link.
+  - **NOT trivial, at any size:** anything that changes what a rule, doc,
+    spec, plan, ledger entry, or engine-fact note *says* — every change to
+    `CLAUDE.md`, `dev/docs/direction.md`, `dev/docs/decisions.md`,
+    `dev/docs/architecture.md`, `dev/docs/unrealed/*.md`, a spec/plan, or a
+    spike write-up is a real change, because a future agent will act on it.
+  - **NOT trivial:** anything that changes what the tool does, deletes
+    anything, or changes executable behavior — including a one-line change
+    to load-bearing code, exactly the case the cheap tier must not swallow.
+    (A comment or a test rename does not change executable behavior; a
+    `help=` string is user-visible output, so rewording one is **docs-only**,
+    not trivial.)
+  - **The two NOT-trivial lists WIN over the examples above.** A typo or a
+    broken link inside one of the rule/doc files named above is not trivial
+    just because typos are listed as trivial.
+  - **When it is arguable, it is not trivial.**
+  - **If the Haiku pass shows the change was not trivial after all**, it is
+    re-gated from scratch at its real tier — the cheap pass does not count
+    as that tier's round 1.
+
+**Reviewers get CONTEXT but never PRIMING.** These are two different
+things and only one of them is forbidden:
+
+- **Context is REQUIRED.** A reviewer who does not know the conventions
+  cannot tell a deliberate choice from a defect. Give every reviewer this
+  `CLAUDE.md`, and for a **plan** or **build** review the spec (and plan)
+  it implements — a build reviewer who has not read the spec cannot check
+  conformance to it.
+- **Priming is FORBIDDEN.** Never show a reviewer the previous round's
+  findings, never say what you expect them to find, never reuse a reviewer
+  from an earlier round. A reviewer told what was already found stops
+  looking for what wasn't.
+
+**What blocks the gate.** There is no severity scale to calibrate — cold
+reviewers cannot apply one consistently, and a scale invites arguing a
+real finding down a tier. The test is observability:
+
+> A finding may be left standing ONLY if fixing it would change nothing
+> anyone would ever observe — pure wording, formatting, or naming taste.
+
+Everything else is **fixed**, **logged** to `dev/docs/board/inbox.md` with
+enough detail to act on, **escalated to Andrzej** as an explicit decision,
+or **refuted** — the reviewer asserted something the code or doc does not
+actually do. A refutation is admissible ONLY with the check that disproves
+it recorded (commit message or board), and a round whose findings were all
+refuted is still a round that happened, with its evidence written down.
+Never waved through because the round was otherwise clean, or because it is
+pre-existing. A finding that is real but out of scope still
+blocks the round until it is logged — logging is what makes deferring
+legitimate; "noted in chat" is not, because chat scrolls away. **The same
+standard applies to a finding you leave standing**: its stated reason goes
+in the commit message or on the board, never only in chat.
+
+**TWO ROUNDS IS THE CEILING, and the second one is conditional.** Round 2
+exists for exactly one reason: **the fixes are themselves unreviewed.** So
+the trigger is whether the artifact CHANGED:
+
+- **Round 2 runs iff resolving round 1 changed the artifact.** If round 1's
+  findings were all dispositioned WITHOUT touching the artifact — logged to
+  `dev/docs/board/inbox.md`, refuted, or escalated — there is no new,
+  unreviewed text to look at, and the gate is passed at round 1. Same when
+  round 1 came back clean. On small changes this is the common case and it
+  is where most of the gate's cost is saved.
+  - **"The artifact" = the files under review**, excluding
+    `dev/docs/board/*` and the commit message. Logging a finding to the
+    board is therefore never itself the trigger, even when board files are
+    part of the diff; changing a doc or adding a test to resolve a finding
+    IS.
+- **This is NOT a licence to log instead of fix.** The disposition rule
+  above is unchanged: logging is for a finding that is real but genuinely
+  out of scope for *this* change. Choosing to log an in-scope defect so
+  that round 2 never fires is gaming the gate, and the finding's stated
+  reason (which the rule above requires on the board or in the commit
+  message) is exactly where that shows.
+- **After round 2, the gate is passed.** Anything still standing is
+  **fixed**, **logged** to `dev/docs/board/inbox.md`, or **escalated to
+  Andrzej** — all three outlets of the rule above stay open — and the work
+  is declared done. There is no round 3: a third round of cold reviewers
+  on a twice-fixed artifact buys less than it costs.
+- **A STRUCTURAL finding STOPS the work, in EITHER round.** If a round's
+  findings say the *design* is wrong rather than that a detail is wrong,
+  stop and escalate to Andrzej. It **replaces** the remaining round — never
+  licenses a third — and it does **NOT pass the gate**: the work is parked,
+  not declared done and not merged, until Andrzej rules, after which the
+  artifact re-enters the gate at round 1 of its tier. (So a structural
+  escalation is not a cheap "fix-free round 1".) That pattern does not
+  converge, and another round would not have landed it either.
+- **Expect round 2 to find NEW things** — a fix can introduce a defect, and
+  cold reviewers diverge; on 2026-07-25 a round found that the previous
+  round's own *fixes* had shipped three wrong measurements and an unpinned
+  spike finding (evidence: `dev/docs/decisions.md` 2026-07-25 17:20 UTC).
+  Finding something in round 2 is normal, not a signal that the ceiling is
+  wrong.
+
+**NEVER restate the reviewer counts outside this file.** A spec, plan, or
+board item that spells out "two cold reviewers" goes stale the moment the
+gate changes — and it has, repeatedly. Cite **`CLAUDE.md` "Review gates"**
+instead and let the count live in exactly one place.
+
+**BATCH small changes into one round — don't gate each separately.** A
+review round costs real tokens, so the unit of review is a coherent batch
+of work, not an individual edit. Accumulate small changes (a chore sweep,
+a set of doc corrections, several independent one-file fixes) and review
+them together in a single round covering the whole diff. Reviewers see
+more, not less, this way: a batch diff exposes inconsistencies between
+sibling changes that per-change rounds structurally cannot see.
+
+- **Land the batch, then gate it.** Commit each small change as it is
+  finished (per **Commits** below) — **pushing deliberately does NOT wait
+  for the gate.** The gate runs over the accumulated range before the
+  batch is declared done, not before each commit.
+- **Flush the open batch** before ending a session, before switching to
+  unrelated work, or as soon as it is large enough to be worth a round —
+  whichever comes first. A batch is never carried across a context
+  boundary, and a lone trivial change with nothing to batch against is
+  gated at that flush rather than waiting forever for company.
+- **Split a batch when it stops being reviewable** — when the diff is
+  large enough that a reviewer would skim, or when one risky change would
+  hide among many safe ones. A subtle change to load-bearing code gets its
+  own round even if it is one line; a hundred lines of mechanical rename
+  does not.
+- **Never batch across the three moments.** A spec review, a plan review
+  and a build review are different questions over different artifacts.
+
+### Feature worktrees
+
+**A FEATURE is built in its own git WORKTREE and squash-merged back into
+the branch it was branched from.** A *worktree* is a second working
+directory for the same repository, checked out on its own branch: the
+files are separate on disk, the git history is shared, so nothing is
+cloned and nothing is pushed to move work between them.
+
+**Why a worktree and not just a branch.** Several agent sessions work this
+repo at the same time. `git checkout` in the shared checkout swaps the
+files under every other session mid-edit; a worktree cannot, because each
+session keeps its own directory. That is also why this process never
+switches the main checkout's branch.
+
+**The base is the branch the main checkout is already on — do NOT ask which
+branch, and do NOT switch it.** That one branch is both the branch-off
+point and the merge target.
+
+1. **Create it**, from the main checkout (repo root, two levels above this
+   file):
+
+   ```
+   base=$(git rev-parse --abbrev-ref HEAD)
+   git worktree add .claude/worktrees/<feature-slug> -b <feature-slug> "$base"
+   ```
+
+   `.claude/worktrees/` is gitignored, so the second checkout is invisible
+   to git, ripgrep and the test runners. Never name a worktree `agent-*` —
+   that prefix belongs to Claude Code's own agent isolation. (The harness
+   equivalent is the `EnterWorktree` tool, which creates a worktree in the
+   same directory and moves the session into it. It branches from
+   `origin/<default-branch>` unless the repo's `.claude/settings.json` sets
+   `worktree.baseRef: "head"` — which this repo does, so `EnterWorktree`
+   also branches from the current branch.)
+
+2. **Build the feature in the worktree, committing locally as you go** —
+   **Commits** below applies inside a worktree exactly as it does in the
+   main checkout. A fresh worktree has no `.venv/` (it is gitignored), so
+   the first `bin/test` there pays the venv-creation cost once.
+
+3. **NEVER push the feature branch.** It is squashed away on merge and a
+   remote branch can never be deleted, so pushing one strands permanent
+   dead weight on `origin`. In-progress work is protected by local commits
+   and by the branch being short-lived. This is the one exception to
+   *always push your work* below.
+
+4. **Gate in the worktree, before merging** (see **Review gates** above).
+   Reviewers read the worktree's diff against the base:
+   `git diff "$base"...HEAD`. Only a **passed gate** earns the merge — a
+   clean or fix-free round 1, or a resolved round 2. Never a round 3
+   hunting for a clean sheet.
+
+5. **Squash-merge from the MAIN checkout** — a squash merge must run where
+   the base branch is checked out, which is the main checkout, one more
+   reason not to switch its branch:
+
+   ```
+   git diff --cached --quiet || echo "index dirty — another session staged something; STOP"
+   git merge --squash <feature-slug>
+   git commit -m "<one short imperative subject>"
+   git push
+   ```
+
+   **Check the index first, as above.** `git merge --squash` stages the
+   whole merged result and the following `git commit` commits *everything*
+   staged — including whatever a concurrent session had staged. If the
+   index is not clean, stop and sort that out rather than committing over
+   another session's staged work.
+
+6. **Clean up — but verify before deleting anything.** Confirm the base now
+   contains the work (`git diff <feature-slug> HEAD` prints nothing), then
+   `git worktree remove .claude/worktrees/<feature-slug>`. The branch
+   itself needs `git branch -D`, because `-d` refuses — a squash merge
+   records no merge — and **deleting a branch is destructive, so ask
+   Andrzej first.** Leaving the local branch costs nothing; never delete it
+   while that `git diff` is non-empty. (`ExitWorktree` with
+   `action: "remove"` is the harness equivalent and needs
+   `discard_changes: true` after a squash merge, for the same reason `-d`
+   refuses — say so plainly when asking, since that flag is what discards
+   the pre-squash commits.)
+
+**A change that is not a feature** — a doc correction, a chore sweep, a
+one-file fix — needs no worktree: it stays on the checked-out branch and
+follows the batching rules above.
+
+### Commits
+
+**Commit after every change.** Once a change is complete — code, docs,
+TODO updates, all of it — commit it before moving on, without waiting
+to be asked. Stage only the specific files you touched by explicit
+pathspec (`git commit -- <paths> ...`); never `git add .` or `git
+commit -a` (a concurrent agent may have staged its own files). Short
+imperative subject, no `type:` prefix, no AI attribution.
+
+**Always push your work — never lose it.** After committing, `git push`
+so the work lands on the remote and is never stranded only in a local
+checkout. **NEVER REWRITE HISTORY, locally OR on `origin`.** No `git push
+--force` (or `--force-with-lease`), no `git commit --amend`, no `git
+rebase` that rewrites already-pushed commits — nothing of that kind. Only
+ever add new commits on top; mistakes are corrected with a fresh commit
+(or a `git revert`), never by rewriting what is already there.
+
+### Tests
+
+Run the offline suite through the **`bin/test`** wrapper — it runs pytest
+HOST-NATIVE in the auto-managed dev venv (`bin/_venv.sh`, `.venv/`,
+Python 3.12 + `Pillow`/`pytest`), the same runtime `bin/uedctl` uses. It
+needs `python3.12` on PATH (pyenv provides it here); the venv self-creates
+on first run. Extra args pass straight through (invoke it path-qualified —
+`test` alone is a shell builtin):
+```
+cd Tools/uedctl && bin/test          # whole offline suite
+cd Tools/uedctl && bin/test -k preview -x
+```
+Integration tests (`-m integration`) require the live `dx-lum-uned`
+container and are deselected by default (`pytest.ini`).
+
+**uedctl itself runs host-native too** (via `bin/uedctl` → the same venv),
+NOT inside a container — mirroring the eventual Nuitka release binary, so it
+has native filesystem access to the game's asset dirs and needs no
+bind-mounting of external roots into a dev container. Only the editor/build
+containers it drives run under Docker. (The old Python-3.12 *dev image* +
+`_dev-run.sh` were retired 2026-07-14 — decisions.md "venv for dev".)
+
+### Background / long-running work
+
+Anything started in the background and then waited on — integration
+tests, an ephemeral editor spin-up, a `MAP REBUILD`, an `apply` — must
+never be left on a single open-ended wait. The editor is crash-prone and
+wedges *silently* (see `unrealed/quirks.md` "Stability"), so a job that
+should take ~100s can hang forever — and with no timeout you hang with it.
+
+Wait *cheaply*, though — re-invoking the model to check costs a full
+context read each time (full price once past the prompt cache's ~5-min
+TTL), so do NOT poll on short model wake-ups:
+
+- Run it as a tracked background job and let the harness re-invoke you the
+  moment it exits — completion wakes you for free, so don't poll for it.
+- Pair that with a LONG fallback timer (~20 min) that only fires if the
+  job hangs and never reports. It's a hang-detector, not a progress check;
+  a short timer just burns context reads waiting for an event that already
+  wakes you. When it fires, investigate (liveness, logs) — don't extend.
+- For live editor driving that isn't a tracked job, block inside ONE tool
+  call with an until-loop that sleeps internally (internal sleeps are
+  free) and returns on completion or at the timeout.
+
+### Code & CLI conventions
+
+- **NO BACK-COMPAT CRUFT — uedctl is UNRELEASED.** There are no external
+  users and no scripts in the wild, so nothing is ever kept for backward
+  compatibility. When you remove or rename a flag, verb, option value,
+  output format, or code path, **delete it outright** in the same change
+  that adds the replacement — the new spelling is the only spelling.
+  Never add or keep: a deprecated alias, a no-op flag "so old invocations
+  still work", a migration-error shim (a flag defined only to
+  `parser.error("X was renamed to Y")`), dual-format support kept to
+  avoid re-writing callers, or an "old way" branch in code/tests/docs.
+  Every shim is permanent maintenance surface and a second thing to keep
+  true in the docs. *(decision 2026-07-24 21:57; `direction.md` "No
+  back-compat cruft". Superseded only when uedctl is released.)*
+- **No silent half-answers.** A command that can't fully satisfy a
+  request exits 2 naming the offending value, rather than emitting a
+  partial result plus a stderr warning — stderr scrolls away and the
+  caller takes the partial answer for a complete one. *(decision
+  2026-07-24 21:58)*
+- **Every command and argument needs a `help=` string** that explains
+  what it actually does, so `-h`/`--help` is self-explanatory — never
+  just a restatement of the flag name.
+- **Never let a Python exception reach the CLI user.** A bad
+  actor/entity name must raise a clear error naming the offending value
+  (`Actor not found: Foo`) and exit non-zero — never a bare
+  `KeyError`/`IndexError` traceback. Cover each path with a regression
+  test.
+- **Verbs compose — this is the CORE CLI philosophy.** Build small,
+  single-purpose verbs that pipe together; do NOT grow big verbs with
+  many bespoke flags. Concretely:
+  - **Producer/query verbs print their result to stdout, one item per
+    line** — pipe-friendly (`actor find` prints matching names; `actor
+    add` prints the allocated names; a generator prints a T3D snippet).
+    Human summaries/counts go to **stderr** so they never pollute the
+    pipe. Add **`--json`** where a script needs structured output rather
+    than lines.
+  - **Mutating/consuming verbs read their target set from stdin via
+    `-`** — so `actor find --folder castle.tower | actor prop set -
+    Texture=…` and `brush build cube | actor add -` close the loop
+    instead of copy-paste / `$(…)`. `-` is the SOLE names source
+    (mutually exclusive with names as CLI args); empty stdin is a clean
+    no-op (exit 0), not an error.
+  - **Two stdin conventions, disambiguated by verb:** a **name list**
+    (`find → mutate -`) vs a **T3D snippet** (`build → add -`). Keep them
+    distinct; don't blur them.
+  - **A verb over a SET takes the set, and that IS the operation** — pass
+    names (or `-`); the multi-item behaviour needs no extra flag. E.g.
+    `actor bbox <names…>` returns the box enclosing ALL of them, so there
+    is **no `--union`** — `actor find --folder X | actor bbox -` already
+    gives the union. Never add a flag that merely restates "operate on
+    this set."
+  - **Prefer a stateless `find`/query verb** that prints matching names
+    (by folder, class, property, …) for other verbs to consume, over
+    per-command `--only-groups`/`--only-actors` filter flags sprinkled on
+    every verb.
+  - **`find` vs `search` — name by what's queried, never merge them.**
+    `find` = a deterministic query over concrete **T3D-tree state**
+    (actors/polys/brushes that exist in the trunk), producing an exact
+    name/selector set to pipe onward (`actor find`, `brush poly find`).
+    `search` = ranked/fuzzy **discovery over a catalog or corpus**
+    (textures, the asset catalog, docs) — *what exists* by relevance, not a
+    known set (`texture search`; future `catalog search`/`docs search`).
+    *(decision 2026-07-25 00:43 UTC; `direction.md`.)*
+
+### Documentation
+
+**Keep the user-facing docs current with the CLI — this is not optional.**
+Whenever a change alters behavior a user can observe — a new verb, a changed
+flag, different output, a new capability, a removed feature — update the
+user-facing docs in the same change so they never describe a CLI that no longer
+exists. The user-facing surface is `docs/usage.md` (the CLI reference: verbs,
+flags, output) and `docs/leveldesign/` (level-design craft mapped onto the
+verbs). The whole-tree "which doc is for what" table — authoritative on which
+doc owns what — lives in `dev/docs/README.md` (`docs/README.md` is itself just
+the user-facing index). Add a new doc (or a new section) when a verb or feature is
+substantial enough that a user would look for it and not find it — err toward
+documenting. (The dev docs track *how it's built*; keep them current too, per
+below — but the user-facing docs are the first thing to update when functionality
+changes.)
+
+**`docs/` is ALL user-facing; developer docs are a SEPARATE tree.** Everything
+under `docs/` (`usage.md`, `leveldesign/`) is written for uedctl *users* — the
+LLM level-designer driving the CLI. The developer/internal docs (architecture,
+direction, decisions, spikes, board, the `unrealed/` engine notes, the dev `kb/`)
+are for uedctl *developers*, a different audience. **User-facing docs must NEVER
+reference the developer docs** — no links or paths to spikes, the board,
+decisions, architecture, etc.: a user cannot open them and must not be sent
+there. State the fact plainly in the user doc instead (with a confidence marker
+if it's an engine claim), and put the evidence pointer in the *developer* doc.
+Symmetrically, developer docs freely cite spikes/decisions/each other. (The
+developer tree lives at `dev/docs/` — renamed from the old `docs/dev/` — so
+`docs/` is physically all user-facing and any dev reference from a user doc is
+an obvious leak.)
+
+**Markdown tables — align for a plain-text editor (vim).** Pad every column to
+its widest cell so the interior pipes line up vertically, **except the final
+column**: leave its content unpadded so a long prose column doesn't spawn huge
+trailing-whitespace runs or 200+ char lines. Separator dashes fill each padded
+column's width; the final column's separator stays a short `---`. The result:
+the label/short columns are scannable, the wide prose column flows to its
+natural length. (Applies to all docs, not just `dev/docs`.)
+
+Always document new learnings about how UnrealEd functions, what our goals are, or architectural choices/changes in `dev/docs`.
+
+UnrealEd knowledge is ESPECIALLY important, because the public documentation is very lacking and discovering the knowledge is expensive.
+
+**Write every doc for a reader with NO familiarity with the implementation.** Assume the
+reader does not know the code, the substrate, the prior conversation, or the jargon. Be clear,
+concrete, and very explicit: define terms before using them, spell out the mechanism, and never
+lean on context the reader doesn't have. An explanation that only makes sense if you already
+know how it works is a bug — rewrite it.
+
+**The dev docs split by role — keep each in its lane, and keep each current:**
+- **`architecture.md` + `unrealed/*.md`** — *what IS* (current implementation + verified engine
+  facts). **MUST be updated to match whenever the implementation changes** — no doc may be left
+  describing code that no longer exists or behavior that changed.
+- **`direction.md`** — *what we WANT to build* (the compiled target, synthesized from
+  `decisions.md`; newer decisions override older, superseded points dropped). **Whenever a
+  decision is added to or superseded in `decisions.md`, reconcile `direction.md`** so it always
+  shows the current net target. A gap between `direction.md` and `architecture.md` is expected
+  (it's work not yet done); a gap between `direction.md` and the latest decisions means
+  `direction.md` is stale — fix it.
+- **`decisions.md`** — the ledger of choices + rejected alternatives. Append new entries;
+  supersede (don't reword) an active decision that changes. Two kinds of dead entry MAY be
+  pruned (git keeps history): one a later entry has **wholly** superseded, and spike-result
+  **"gate"** notes whose evidence lives in `spikes/` (the ledger records choices, not
+  experiment outcomes). Everything else is never reworded or removed, only superseded.
+  **Each entry's heading carries the date AND UTC time (`YYYY-MM-DD HH:MM UTC`)** so same-day
+  entries order unambiguously.
+- **`specs/` + `plans/`** — ephemeral per-feature scratch (below). **`spikes/`** — durable evidence.
+
+**`dev/docs/specs/` and `dev/docs/plans/` are ephemeral** — scratch for designing
+and sequencing a piece of work, expected to go stale or get deleted once that
+work lands. They are NEVER the durable record. Once something is implemented,
+fold what was actually built, any design decision made along the way, and the
+resulting general direction into the global docs (`architecture.md`,
+`unrealed/*.md`, or another `dev/docs/*.md` as fits) — so the knowledge survives
+even if the originating spec/plan is later removed. (`spikes/` is different: it's
+kept as durable evidence, cited from `architecture.md`/`unrealed/quirks.md` etc.)
+
+**When speccing, record every decision I make** — the choice, the alternatives
+rejected, and the reason — as I make it. A spec must capture what *I* decided,
+not just your proposal; my answers to the design questions are the load-bearing
+part and must not be lost or silently overridden. Because specs are ephemeral,
+the decision itself goes in the **durable, append-only `dev/docs/decisions.md`**
+(the spec links to it), so the choice and its rejected alternatives survive the
+spec's deletion — topic docs (`architecture.md`/`unrealed/*.md`) describe what
+the system *is*, not the roads not taken. Never point a durable doc at a spec
+for "the rationale and rejected alternatives"; point it at a `decisions.md`
+entry.
+
+**Every claim about how UnrealEd behaves carries its evidence.** Cite the
+`spikes/` file it came from, and date any live finding (`confirmed live
+2026-06-20`) — the editor is undocumented and crash-prone, so an undated,
+uncited assertion can't be trusted or re-verified later.
+
+**Tag UnrealEd facts in `unrealed/*.md` with a confidence marker:** ✅ =
+uedctl-used / live-verified, 🔬 = live-probed, 📖 = extracted from the binary
+string table (vocabulary real, semantics inferred). Don't state an extracted
+fact with the certainty of a verified one.
+
+### UnrealEd navigation — docs are READ-ON-DEMAND, not in your context
+
+Only `direction.md` (the compiled target) is auto-loaded. **Every doc below is
+NOT in your context — you MUST `Read` the relevant one before the action it
+names.** These one-liners are a *router, not a substitute*: never answer a
+question about UnrealEd behavior, the T3D format, or uedctl internals from this
+summary or from training memory — the editor is undocumented and crash-prone,
+and these docs are the only ground truth. If a task touches any row below and
+you have not read that doc **this session**, read it first. (The docs
+cross-link each other, so one read surfaces the rest; `dev/docs/README.md` has
+the full "which doc is for what" table.)
+
+**A dispatched subagent does NOT inherit your reading.** When you hand work to
+a subagent — a reviewer, a spike investigator, anything — its prompt MUST name
+the docs it has to read before acting, by path. A subagent that has not read
+`unrealed/t3d.md` will flag correct T3D handling as a bug; one that has not read
+this file will flag deliberate conventions as defects. The rule above ("read the
+relevant doc before the action it names") binds the subagent too, and only its
+prompt can tell it so.
+
+- **@dev/docs/direction.md** — *(auto-loaded, already in context)* what we WANT: the compiled target, synthesized from decisions.
+- `dev/docs/architecture.md` — **Read BEFORE any uedctl code change or design question**: the layer/module map, the model-side write pattern, invariants D1–D8, the session-store shape.
+- `dev/docs/decisions.md` — **Read when you need the WHY or the rejected alternatives** behind a choice: the UTC-timestamped ledger. `direction.md` (in context) is the net target; this holds the reasoning + history it drops.
+- `dev/docs/unrealed/commands.md` — **Read BEFORE driving the editor console**: the exec-verb reference (what to type).
+- `dev/docs/unrealed/t3d.md` — **Read BEFORE authoring/parsing T3D or editing surfaces/geometry**: block nesting, property forms, winding, authored-vs-computed taxonomy.
+- `dev/docs/unrealed/quirks.md` — **Read BEFORE driving UnrealEd or debugging editor behavior**: the non-obvious traps (IMPORTADD grid-snap, demand-load, selectability, CSG).
+- `dev/docs/unrealed/rendering.md` — **Read BEFORE taking a screenshot/render**: render modes, `CAMERA OPEN`, the black-viewport traps.
+- `dev/docs/unrealed/extracting-from-dll.md` — **Read BEFORE mining the binaries** for command/behavior facts.
+- `dev/docs/parallel-editors.md` — **Read BEFORE running many ephemeral editors** concurrently.
+
+New UnrealEd findings go in `dev/docs/unrealed/` (and back-reference them from code comments).
+
+### Spikes
+
+Run a spike to completion — never defer a check or leave a question open
+for "later". Keep investigating until the spike is fully figured out, not
+just until a plausible-looking answer shows up. When stuck, consult
+subagents, and explicitly tell them to be very creative.
+
+**Commit the harness.** Any script, parser, or tool written during a spike
+belongs in `dev/docs/spikes/<slug>/` alongside the spike markdown — NOT left
+in `_scratch/` (which is gitignored and wiped). Copy it there before parking
+or wrapping up. `_scratch/` is for throwaway output (logs, PNGs, T3D exports),
+never for code that someone will need to resume from.
+
+**Pin the finding, or it rots.** A spike is not finished when you *find* the
+answer — it's finished when the answer is **pinned so a later change can't
+silently break it**. A spike answers a question about the engine/editor/T3D
+format exactly once; left as prose, that finding quietly goes stale as the
+binary, the build, or our own code moves under it. So whenever a spike lands a
+**checkable fact** (an FRotator serialization convention, a paste grid-snap
+offset, a `bspBrushCSG` ordering rule, a byte-layout field order, a
+`GMath`-table value), also land a **committed regression that re-asserts that
+fact** — against the real binary/editor where feasible, else against a
+committed golden — so a violation trips a red test instead of drifting
+unnoticed. Keep these engine-facts assertions together (e.g. a
+`test_engine_facts` module) and back-reference the spike from the test. This is
+the executable half of the Documentation rule that "every claim about how
+UnrealEd behaves carries its evidence": the prose cites the spike, the test
+*enforces* it. (A spike whose result is a one-off decision, not a standing
+fact, needs no test — use judgement.)
+
+### TODOs (`dev/docs/board/` — the stage-queue cluster)
+
+The backlog is a set of **stage queues** under `dev/docs/board/`, each named
+for the *next action* an item needs (read `dev/docs/board/README.md` for the
+full flow). An item lives in exactly ONE queue and advances by moving its
+line to the next file:
+
+- `inbox.md` — raw, **un-triaged** capture; the pre-pipeline pool AND the
+  head of stream (not a queue). Everything lands here first: ideas/gaps/
+  bugs/chores, **anything you'd flag for Andrzej** (a provisional call, an
+  assumption, a risk, a deviation from spec/plan, or work you deliberately
+  didn't do — put it here INSTEAD of only saying it in chat, which scrolls
+  away), and **his own open questions**. Triage moves each entry out to the
+  queue for its next action; a question raised mid-pipeline bounces back
+  here until answered. There is **no separate `flagged`/`to-resolve` lane** —
+  Andrzej resolves his own items by deleting or triaging them forward
+  (recording any real choice in `decisions.md`).
+- `to-spec.md` → `to-spike.md` → `to-plan.md` → `to-build.md` — the
+  pipeline. `to-build.md` is the reviewed on-deck **build queue / source
+  of truth** for what to build next.
+- `done.md` — a short tail of recently-done + partially-done-with-remnants.
+- *(Transitional: the general `[implement]`/`[chore]`/`[debug]` backlog,
+  Active vs Deferred, still sits in `to-spec.md` pending a move to
+  `inbox.md`.)*
+
+The **bracket tag ≈ the queue**: `[spec]`→`to-spec`, `[spike]`→`to-spike`,
+`[plan]`→`to-plan`. `[implement]` sits in `to-spec.md`'s backlog until a
+**reviewed plan** lands it on `to-build.md`; `[chore]`/`[debug]` are one-shot
+and **stage-less**, so they go straight to `to-build.md` with no plan — and
+therefore no plan review round (this is the distinction **Review gates**
+relies on to decide whether that round fires). `[spike]` is used only when a
+spec flags a live unknown (findings fold back into that spec). Use `[a→b]` while
+transitioning. `pN` (`p1`/`p2`/`p3`) priority rides each line.
+
+When a TODO is fully finished, remove it from the list entirely — don't
+leave it ticked `[x]` (`done.md` keeps only a short reference tail). If
+something gets deferred mid-implementation, add a new, separate TODO for it
+rather than letting the original entry quietly cover both the done part and
+the deferred part.

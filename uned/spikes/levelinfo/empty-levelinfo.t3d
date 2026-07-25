@@ -1,0 +1,23 @@
+Begin Map
+Begin Actor Class=LevelInfo Name=LevelInfo1
+     TimeSeconds=2.273744
+     AIProfile(0)=469
+     Level=LevelInfo'MyLevel.LevelInfo1'
+     Tag="LevelInfo"
+     Region=(Zone=LevelInfo'MyLevel.LevelInfo1',iLeaf=-1)
+     Name="LevelInfo1"
+End Actor
+Begin Actor Class=Brush Name=Brush1
+     MainScale=(SheerAxis=SHEER_ZX)
+     PostScale=(SheerAxis=SHEER_ZX)
+     Level=LevelInfo'MyLevel.LevelInfo1'
+     Tag="Brush"
+     Region=(Zone=LevelInfo'MyLevel.LevelInfo1',iLeaf=-1)
+    Begin Brush Name=Brush
+       Begin PolyList
+       End PolyList
+    End Brush
+     Brush=Model'MyLevel.Brush'
+     Name="Brush1"
+End Actor
+End Map

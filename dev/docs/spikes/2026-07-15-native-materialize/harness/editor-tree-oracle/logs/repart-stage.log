@@ -1,0 +1,29 @@
+[New LWP 189]
+[New LWP 190]
+[New LWP 191]
+[New LWP 192]
+[New LWP 193]
+[New LWP 194]
+[New LWP 195]
+[New LWP 196]
+[New LWP 197]
+[New LWP 198]
+[New LWP 207]
+[New LWP 209]
+[New LWP 210]
+[New LWP 211]
+[Thread debugging using libthread_db enabled]
+Using host libthread_db library "/lib/x86_64-linux-gnu/libthread_db.so.1".
+0xf7f52549 in __kernel_vsyscall ()
+Breakpoint 1 at 0x10049fc0
+Breakpoint 2 at 0x1004a00d
+Breakpoint 3 at 0x1004a027
+Breakpoint 4 at 0x1004a047
+Breakpoint 5 at 0x1004a05f
+ORACLE_ATTACHED
+A_entry nodes=2316 verts=17120 points=4939 surfs=524
+B_makeedpolys nodes=2316 verts=17120 points=4939 surfs=524
+C_mergecoplanar nodes=2316 verts=17120 points=4939 surfs=524
+D_bspbuild nodes=1127 verts=4405 points=2088 surfs=524
+E_bsprefresh nodes=1127 verts=4405 points=2088 surfs=524
+STAGEEND

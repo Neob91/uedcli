@@ -1,0 +1,4 @@
+Begin Actor Class=Engine.Light
+    Tag=TargetPan
+    Location=(X=0.000000,Y=-250.000000,Z=0.000000)
+End Actor

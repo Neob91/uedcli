@@ -1,0 +1,25 @@
+[New LWP 194]
+[New LWP 195]
+[New LWP 196]
+[New LWP 197]
+[New LWP 198]
+[New LWP 199]
+[New LWP 200]
+[New LWP 201]
+[New LWP 202]
+[New LWP 203]
+[New LWP 228]
+[New LWP 239]
+[New LWP 242]
+[New LWP 243]
+[Thread debugging using libthread_db enabled]
+Using host libthread_db library "/lib/x86_64-linux-gnu/libthread_db.so.1".
+0xf7ef7549 in __kernel_vsyscall ()
+Breakpoint 1 at 0x10049fc0
+Breakpoint 2 at 0x10036870
+ORACLE_ATTACHED
+REPART nodes=2316 verts=17120 vectors=26 points=4939 surfs=524 nss=4
+OPT nodes=1156 verts=10518 vectors=26 points=2091 surfs=524 nss=4
+POOLEND
+[New Thread 0xcbcfb40 (LWP 318)]
+[Thread 0xbb7fb40 (LWP 242) exited]

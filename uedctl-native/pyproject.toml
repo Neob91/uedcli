@@ -1,0 +1,16 @@
+[build-system]
+requires = ["maturin>=1.7,<2"]
+build-backend = "maturin"
+
+[project]
+name = "uedctl_native"
+requires-python = ">=3.12"
+description = "Native CSG/BSP + lighting compute core for uedctl's editor-free level materialize"
+classifiers = ["Programming Language :: Rust"]
+dynamic = ["version"]
+
+[tool.maturin]
+# abi3: one wheel loads under any CPython >= 3.12 (decouples from the exact patch/minor;
+# matches the interpreter Nuitka embeds — spec §8.3).  extension-module: the shipped .so must
+# not link libpython (cargo test does, via the un-defaulted feature — spec §8.2).
+features = ["extension-module"]

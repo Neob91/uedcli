@@ -1,0 +1,53 @@
+services:
+  uned:
+    build:
+      context: .
+    image: dx-lum-uned:latest
+    container_name: dx-lum-uned
+    # Substrate is BAKED into the image (no /repo mount). Game CONTENT is NO LONGER mounted
+    # statically here: the asset-wiring cutover (Part C, 2026-07-14) config-drives every asset mount
+    # per-command. The host composes each game/project CONTENT dir into a read-only bind mount at
+    # `/resources/<n>` (`container_assets.docker_mount_args`) and bind-mounts a crafted
+    # `unrealtournament.ini` whose `[Core.System] Paths` covers them (see `editor.ensure_editor` /
+    # `stub.ephemeral_build_container`). So the only static mounts left are the baked-adjacent v69
+    # stub cache and the wine prefix; `/work` (the mutable exchange dir) is made by the entrypoint.
+    volumes:
+      # Built v69 stub packages (`config.stub_cache_root`) — a v69 code source the editor
+      # OBJ LOADs at materialize, so it needs a container-visible root (`_remap_to_container` maps
+      # the cache here). `editor.ensure_editor` passes UEDCTL_STUB_CACHE (the resolved
+      # `config.stub_cache_root()`, honoring $UEDCTL_HOME) in the compose env; the ${HOME} tail is
+      # only the fallback for a hand-run `docker compose` (compose can't use `~`). Gitignored +
+      # built lazily; ensure_editor creates it so the mount source is never missing (by hand:
+      # mkdir -p "${HOME}/.uedctl/cache/stubs").
+      - ${UEDCTL_STUB_CACHE:-${HOME}/.uedctl/cache/stubs}:/stubs:ro
+      - wine-prefix:/wineprefix
+    # /work (the mutable host<->container exchange dir) is NOT a tmpfs: `docker cp` writes the
+    # file UNDER a tmpfs mountpoint on the overlay, where it's shadowed and invisible to the live
+    # mount — which silently breaks `xfer.cp_in` (verified 2026-06-21). The entrypoint's explicit
+    # `mkdir -p /work` creates it on the writable container overlay instead, which `docker cp`
+    # writes to correctly and which still dies with the container (host-isolated either way).
+    ports:
+      # Bound to localhost so it isn't reachable beyond your Mac.
+      - "127.0.0.1:6080:6080"
+    environment:
+      DISPLAY: ":99"
+      # noVNC defaults to view-only — flip to "0" to actually click around.
+      VNC_VIEW_ONLY: "0"
+      LAUNCH_UED: "1"
+      # The committed, pre-baked UnrealEd 2.2 substrate is baked DIRECTLY at /opt/UED22: inis are
+      # baked (OpenGL/32-bit/SoftDrv viewports, EditPackages stripped to the engine/builder set
+      # with DeusEx*/LUM commented out). The editor runs straight from it; its writes land on the
+      # per-container COW overlay (no boot-time assembly, no repo pollution).
+      # UnrealEd 2.2's OpenGLDrv renders the level viewports fine under Mesa
+      # llvmpipe (survives repaints/resizes) — on by default so you can see the
+      # level. (The older Ued2/2.0 editor crashed here, which is one more reason
+      # we use UED22.)
+      UED_VIEWPORTS: "1"
+      LIBGL_ALWAYS_SOFTWARE: "1"
+      UED_GEOMETRY: "1600x1200x24"
+    stdin_open: true
+    tty: true
+    restart: "no"
+
+volumes:
+  wine-prefix:

@@ -1,0 +1,13 @@
+# Overlay applied on top of uned/docker-compose.yml by the editor-tree oracle:
+# swap in the gdb-equipped debug image and grant ptrace (Docker's default
+# seccomp+cap set blocks ptrace, and host yama ptrace_scope=1 — both needed for
+# gdb to attach to the wine editor process INSIDE the container). Everything else
+# (DISPLAY/Xvfb, LAUNCH_UED, /stubs mount, ports, tty) is inherited from the base
+# compose service unchanged.
+services:
+  uned:
+    image: dx-lum-uned-dbg:latest
+    cap_add:
+      - SYS_PTRACE
+    security_opt:
+      - seccomp:unconfined

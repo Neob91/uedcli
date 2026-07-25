@@ -1,0 +1,171 @@
+[Public]
+;Object=(Name=Engine.Console,Class=Class,MetaClass=Engine.Console)
+Object=(Name=Engine.ServerCommandlet,Class=Class,MetaClass=Core.Commandlet)
+Object=(Name=Engine.CheckSumCommandlet,Class=Class,MetaClass=Core.Commandlet)
+Preferences=(Caption="Advanced",Parent="Advanced Options")
+Preferences=(Caption="Game Engine Settings",Parent="Advanced",Class=Engine.GameEngine,Category=Settings,Immediate=True)
+Preferences=(Caption="Key Aliases",Parent="Advanced",Class=Engine.Input,Immediate=True,Category=Aliases)
+Preferences=(Caption="Raw Key Bindings",Parent="Advanced",Class=Engine.Input,Immediate=True,Category=RawKeys)
+Preferences=(Caption="Drivers",Parent="Advanced Options",Class=Engine.Engine,Immediate=False,Category=Drivers)
+Preferences=(Caption="Public Server Information",Parent="Networking",Class=Engine.GameReplicationInfo,Immediate=True)
+Preferences=(Caption="Game Settings",Parent="Advanced Options",Class=Engine.GameInfo,Immediate=True)
+
+[Errors]
+NetOpen=Error opening file
+NetWrite=Error writing to file
+NetRefused=Server refused to send '%s'
+NetClose=Error closing file
+NetSize=File size mismatch
+NetMove=Error moving file
+NetInvalid=Received invalid file request
+NoDownload=Package '%s' is not downloadable
+DownloadFailed=Downloading package '%s' failed: %s
+RequestDenied=Server requested file from pending level: Denied
+ConnectionFailed=Connection failed
+ChAllocate=Couldn't allocate channel
+NetAlready=Already networking
+NetListen=Listen failed: No linker context available
+LoadEntry=Can't load Entry: %s
+InvalidUrl=Invalid URL: %s
+InvalidLink=Invalid Link: %s
+FailedBrowse=Failed to enter %s: %s
+Listen=Listen failed: %s
+AbortToEntry=Failed; returning to Entry
+ServerOpen=Servers can't open network URLs
+ServerListen=Dedicated server can't listen: %s
+Pending=Pending connect to '%s' failed; %s
+LoadPlayerClass=Failed to load player class
+ServerOutdated=Server's version is outdated
+ClientOutdated=You need to upgrade to the latest patch version
+RejectedByServer=Rejected by server
+
+[Progress]
+CancelledConnect=Попытка соединения отменена
+RunningNet=%s: %s (%i игроков)
+NetReceiving=Получение '%s': %i/%i
+NetReceiveOk=Успешно получен '%s'
+NetSend=Посылка '%s'
+NetSending=Посылка '%s': %i/%i
+Connecting=Соединение...
+Listening=Ожидание клиентов...
+Loading=Загрузка
+Saving=Сохранение
+Paused=Пауза - %s
+ReceiveFile=Скачивание '%s' (F10 - отмена)
+ReceiveOptionalFile=Скачивание доп. файла '%s' (F10 - пропуск)
+ReceiveSize=Размер %iK, Завершено %3.1f%%
+ConnectingText=Соединение (F10 - отмена):
+ConnectingURL=unreal://%s/%s
+
+[Console]
+ClassCaption=Стандартная Консоль
+LoadingMessage=ЗАГРУЗКА
+SavingMessage=СОХРАНЕНИЕ
+ConnectingMessage=СОЕДИНЕНИЕ
+PausedMessage=ПАУЗА
+PrecachingMessage=КЭШИРОВАНИЕ
+ChatChannel=(БАЗАР) 
+TeamChannel=(КОМАНДА) 
+
+[General]
+Upgrade=To enter this server, you need the latest free update to Unreal available from Epic's Web site:
+UpgradeURL=http://www.unreal.com/upgrade
+UpgradeQuestion=Do you want to launch your web browser and go to the upgrade page now?
+Version=Version %i
+
+[Menu]
+HelpMessage=
+MenuList=
+LeftString=Left
+RightString=Right
+CenterString=Center
+EnabledString=Enabled
+DisabledString=Disabled
+HelpMessage[1]="This menu has not yet been implemented."
+YesString=да
+NoString=нет
+
+[Inventory]
+PickupMessage=Схватил вещь
+M_Activated=" активирован"
+M_Selected=" выбран"
+M_Deactivated=" деактивирован"
+ItemArticle=""
+
+[WarpZoneInfo]
+OtherSideURL=
+
+[GameInfo]
+SwitchLevelMessage=Смена уровня
+DefaultPlayerName=Игрок
+LeftMessage=" вышел из игры."
+FailedSpawnMessage=Failed to spawn player actor
+FailedPlaceMessage=Could not find starting spot (level might need a 'PlayerStart' actor)
+NameChangedMessage="Имя изменено на "
+EnteredMessage=" в игре."
+GameName="Game"
+MaxedOutMessage=Сервер перегружен.
+WrongPassword=Неправильный пароль.
+NeedPassword=Нужен пароль.
+FailedTeamMessage=Не могу найти команду для игрока
+
+[LevelInfo]
+Title=Untitled
+
+[Weapon]
+MessageNoAmmo=" без патронов."
+PickupMessage=Ты получил оружие
+DeathMessage=%o убит - %k злобен, в его руках %w.
+ItemName=Оружие
+DeathMessage[0]=%o убит - %k злобен, в его руках %w.
+DeathMessage[1]=%o убит - %k злобен, в его руках %w.
+DeathMessage[2]=%o убит - %k злобен, в его руках %w.
+DeathMessage[3]=%o убит - %k злобен, в его руках %w.
+
+[Counter]
+CountMessage=Осталось %i ...
+CompleteMessage=Закончено!
+
+[Ammo]
+PickupMessage=Ты подобрал патроны.
+
+[Pickup]
+ExpireMessage=
+
+[SpecialEvent]
+DamageString=
+
+[DamageType]
+Name=killed
+AltName=killed
+
+[PlayerPawn]
+QuickSaveString=Quick Saving
+NoPauseMessage=Game is not pauseable
+ViewingFrom=Now viewing from 
+OwnCamera=own camera
+FailedView=Failed to change view.
+CantChangeNameMsg=You can't change your name during a global logged game.
+
+[Pawn]
+NameArticle=" "
+
+[Spectator]
+MenuName=Spectator
+
+[ServerCommandlet]
+HelpCmd=server
+HelpOneLiner=Network game server
+HelpUsage=server map.unr[?game=gametype] [-option...] [parm=value]...
+HelpWebLink=http://unreal.epicgames.com/servertips.htm
+HelpParm[0]=Log
+HelpDesc[0]=Specify the log file to generate
+HelpParm[1]=AllAdmin
+HelpDesc[1]=Give all players admin privelages
+
+[CheckSumCommandlet]
+HelpCmd=checksum
+HelpOneLiner=Calculate package checksum for stat logging
+HelpUsage=checksum packagename.u
+HelpParm[0]=Filename
+HelpDesc[0]=Filename to calculate checksum

@@ -1,0 +1,160 @@
+# Geometry & BSP  [ENGINE]
+
+The foundation. Get the geometry clean and on-grid and most other problems never appear; get it wrong
+and you fight invisible holes for hours. This is the single most important skill in UE1 mapping.
+
+## Subtract, then add
+
+The world starts as **infinite solid void**. You don't build walls — you **subtract** rooms out of the
+solid, then **add** detail brushes back inside the hollow.
+
+A **builder brush** (the editor's red "cookie cutter") is shaped, then committed as a *Subtract* or an
+*Add* operation. The builder brush itself is never part of the level — only the operations it stamps
+are. uedctl hides the builder brush behind generators: each `brush build` prints a T3D brush actor
+carrying its own shape and CSG operation.
+
+```
+brush build cube --csg subtract --width 512 --breadth 512 --height 256 --texture CoreTexMetal.ClenGrayMetal_A | actor add -   # carve a room
+brush build cube --csg add --solidity semisolid --width 32 --breadth 32 --height 256 | actor add -                           # a pillar inside it
+```
+
+- `--csg subtract` hollows solid; `--csg add` fills space back in. Carve the shell first, furnish after.
+
+## Brush order determines the result
+
+At build time the compiler walks brushes **in order** and, where two operations overlap the same
+region, the **last one wins**. So ordering is not cosmetic — it *is* the geometry.
+
+- Send **subtractive / structural** brushes **first**; **additive / detail** brushes **last**. "Carve
+  first, furnish after." ✅
+- uedctl's CSG precedence is the trunk's `(order_value, name)` sort. Move a brush in that order with:
+
+```
+brush build cube --csg add --width 64 --breadth 64 --height 128 | actor add -   # prints the allocated name (e.g. Cube_ab12cd; pass --base-name to steer it)
+actor order --last Cube_ab12cd     # furnish last (default for adds)
+actor order --first Wall1           # structural first
+```
+
+## Solidity: solid, semisolid, nonsolid
+
+Every CSG brush has a **solidity** (`--solidity` on `brush build`). It controls whether the brush cuts
+the BSP and whether it can seal a zone — the two things that make solidity load-bearing.
+
+| Solidity            | Cuts BSP?                 | Can be subtracted-from / seal a zone?      | Use for |
+| ------------------- | ------------------------- | ------------------------------------------ | --- |
+| **solid** (default) | yes                       | yes                                        | structural surfaces; anything you subtract from; zone boundaries |
+| **semisolid**       | **no** (cuts only itself) | no                                         | solid-collision detail that needn't cut BSP — beams, pillars, trim, **walkable** ledges |
+| **nonsolid**        | no                        | no (placed only inside a subtracted solid) | markers, **zone-portal sheets**, pure decoration |
+
+- **Semisolids are fully walkable.** A semisolid has the same reliable collision as a solid — you can
+  walk and stand on a semisolid floor, ramp, or ledge. The *only* difference from solid is that a
+  semisolid does **not cut the world BSP** (it splits only itself). 📖
+- **Semisolid keeps node count low.** Because it cuts only itself, use it to localise off-grid, curved,
+  or fine detail so it doesn't emit world-splitting planes — collision is unaffected.
+- **A semisolid must NOT touch another semisolid, a nonsolid, or a zone portal.** This reliably wrecks
+  the local BSP (invisible polys / HOM / merged zones). Keep them clear of each other. 📖 The
+  sanctioned way to make two touching semisolids safe is to **weld them into ONE brush** with
+  `brush intersect` (see below) — the community rule is "if semi geometry touches another semi,
+  intersect the touching brushes to make them one brush." 📖 (This is the **narrow** case where
+  intersect earns its keep — distinct from the "always intersect touching brushes" myth rejected
+  below, which is about routinely intersecting *solid* on-grid brushes that don't need it.)
+
+```
+brush build cube --csg add --solidity semisolid --width 128 --breadth 16 --height 16 | actor add -   # a decorative beam
+brush build sheet --width 256 --height 128 --flag portal --flag invisible | actor add -              # a zone-portal sheet (nonsolid by default; invisible so the plane doesn't render)
+```
+
+### Solidity is stored PER-FACE, not per-brush
+
+This is the load-bearing fact `--solidity` hides. In UE1 a brush has no single "solidity" field —
+**solidity is two bits in each polygon's `PolyFlags`**: `PF_Semisolid` (`0x20` = 32) and `PF_NotSolid`
+(`0x08` = 8). A "solid" brush is simply one whose faces carry neither bit; a "semisolid" brush is one
+whose faces all carry `0x20`. (In the editor, changing a brush's PolyFlags from 32 to 0 flips its
+wireframe from pink/semisolid to blue/additive — the same per-face bit uedctl's `--solidity` sets.) 📖
+
+`brush build … --solidity semisolid` just stamps that bit onto **every** face of the one brush it
+emits, so a single builder looks per-brush. But because the bit is really per-face, **one brush can
+carry a MIX of solidities** — and `brush intersect` is how you build one:
+
+- `brush intersect` CSG-merges a piped brush **set** into ONE welded brush (additives make solid,
+  subtractives carve it), and it **keeps each surviving face's own solidity**: a face from a solid
+  additive stays solid, a face from a **semisolid** additive stays semisolid (`0x20`). So intersecting
+  a solid slab + a subtracted opening + a **semisolid** pane yields a single brush that is solid frame
+  with a semisolid window in it. ✅ *(live-verified: the welded brush's glass faces read `Flags=32`,
+  the frame faces `0` — 2026-07-25.)*
+- This is exactly why the glass-in-a-door recipe works: a **mover is one brush**, and the intersect
+  bakes the frame-and-glass composite into that one brush with the glass faces still semisolid +
+  translucent. There is no "separate glass actor" — see
+  [recipes/glass.md](recipes/glass.md#glass-in-one-brush-the-intersect-composite-window) and
+  [movers.md](movers.md). The per-face rule is also why a semisolid pane can sit **flush** in its
+  opening without a gap: its side faces coincide with the subtracted reveal walls but, being
+  semisolid, do not merge into them (a solid pane would merge, and translucency would then look
+  straight into the brush interior).
+
+## Avoiding BSP holes and HOM — the core skill
+
+A **BSP hole** is a missing or see-through world face. In game it shows as **HOM** (hall-of-mirrors —
+the last frame smears across the gap because nothing drew there); in solid space a hole can even kill
+the player. It happens when the compiler couldn't cleanly split a piece of geometry and *discarded* the
+face — the discarded face literally is the hole. ✅
+
+The community myth is that "off-grid coordinates cause a floating-point overflow / the maths gives up."
+That is **false**. The real cause is a handful of **discrete tolerance bands** in the split/merge tests
+(a ~0.25 uu plane-alignment band; a ~1e-4 uu vertex-merge band). Off-grid coordinates land *inside*
+those bands, so faces get mis-classified, collapsed, or thrown away. This matters because it tells you
+the fix: **stay out of the bands** — build on clean coordinates.
+
+**uedctl does NOT snap geometry to grid for you.** On-grid discipline is yours to keep — nothing in the
+pipeline rescues an off-grid brush.
+
+### The defenses that actually work
+
+1. **Stay on-grid, in powers of two.** Build in clean multiples — 2, 4, 8, 16, 32, 64, 128, 256. `96`,
+   `112`, `128` are fine; **`100` is not.** Off-grid signature: a coordinate reading `15.999976` where
+   `16` belongs.
+2. **Rotate SOLID (world-cutting) brushes only in 90° increments.** A solid brush's off-grid planes
+   spray bad BSP cuts through the *whole* world, so an odd-angle *solid* leaves irrational coordinates
+   no "transform permanently" step can rescue. **Semisolids, nonsolids, and decoration rotate to ANY
+   angle freely** — they don't partition the world BSP, so their off-grid planes only cut themselves
+   (a 45°-rotated box as a *semisolid* is fine, and often exactly the right tool).
+3. **Keep every face planar and convex.** Never pull one corner of a quad off its plane; never place two
+   coincident vertices. A face carries exactly one plane — off-plane vertices make rendering and
+   classification diverge (cracks / HOM) or collapse the face entirely.
+4. **Coplanar surfaces: either exactly coplanar, or ≥1 unit apart.** A sheet laid flush on a floor
+   z-fights (flickers) — lift it **≥1 uu**, because 1 uu is wider than the 0.25 uu split band. Never
+   leave two surfaces almost-but-not-quite in the same plane.
+5. **Push off-grid / curved / detail geometry to semisolid.** It receives cuts but emits no
+   world-splitting planes — keep it clear of other semisolids/nonsolids/portals (see above).
+6. **Watch node count.** Every brush face is a partitioning plane; an awkward face becomes a "supercut"
+   that splits many others and seeds error. Aim for a **node:poly ratio around 2:1** (retail UT maps run
+   ~2.5–2.6:1; an unsplit cube is 1:1); a high ratio (rule of thumb, roughly >4:1) is a warning sign, not
+   a hard threshold. A runaway ratio, or one giant over-detailed brush, is the sign to simplify. **Hard ceiling ≈ 65,536 BSP nodes — overflow it and UnrealEd
+   can no longer *save* the map (a separate ~128,000-point limit is what actually *crashes*); instability
+   often starts well before, around 45–55k.**
+
+### If a hole appears anyway
+
+Work through these repair moves (`materialize` again after each to check):
+
+- **Reorder** the offending brush — `actor order --first` / `--last`.
+- **Snap it back on-grid** and rebuild.
+- **Flip a nearby semisolid ↔ solid** — re-cuts the local BSP a different way (a standard fix).
+- **Split the room** into smaller, simpler brushes.
+- **Nudge** the culprit brush slightly and rebuild.
+
+### Myths to reject
+
+- "Off-grid causes a floating-point overflow" — no; it's the tolerance bands above.
+- "High node count itself causes holes" — correlation, not cause; the only hard node effect is that
+  overflowing the ~65,536 static-node count blocks the *save* (the crash is the separate ~128,000-point limit).
+- "Always intersect/deintersect touching brushes" — unnecessary on-grid, and often *adds* complexity.
+  (The one real exception is two touching **semisolids**, which *should* be welded into one brush —
+  see "Solidity is stored per-face" above; that's a narrow safety case, not a routine habit.)
+- "Overlapping brushes cause holes" — false; only *coplanar-coincident + off-grid* surfaces do.
+- **Antiportals** and **static-mesh round-trip repair** are UE2+ techniques — they do not exist in UE1.
+
+## Related
+
+- [zones-and-performance.md](zones-and-performance.md) — sealing the shell into zones; the poly budget.
+- [brush-shapes.md](brush-shapes.md) — the shapes you build these brushes from.
+- [human-scale.md](human-scale.md) — what "on-grid at the right size" means in numbers.

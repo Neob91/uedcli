@@ -1,0 +1,24 @@
+[New LWP 150]
+[New LWP 192]
+[New LWP 193]
+[New LWP 194]
+[New LWP 195]
+[New LWP 196]
+[New LWP 197]
+[New LWP 198]
+[New LWP 199]
+[New LWP 200]
+[New LWP 201]
+[New LWP 202]
+[New LWP 203]
+[New LWP 204]
+[Thread debugging using libthread_db enabled]
+Using host libthread_db library "/lib/x86_64-linux-gnu/libthread_db.so.1".
+0xf7f60549 in __kernel_vsyscall ()
+Breakpoint 1 at 0x10036870
+Breakpoint 2 at 0x10036c32
+ORACLE_ATTACHED
+PRE nodes=1156 verts=10518 points=2091 nss=4 | c64=93614004 c6c=10518 c74=93614004 c7c=26 c80=26 c84=93614004 c8c=2091 c94=93614004 c9c=524 ca4=93614004
+POST nodes=1156 verts=16163 points=2035 nss=2739 | c64=93614004 c6c=16163 c74=93614004 c7c=26 c80=26 c84=93614004 c8c=2035 c94=93614004 c9c=485 ca4=93614004
+POOLEND
+[Inferior 1 (process 32) detached]

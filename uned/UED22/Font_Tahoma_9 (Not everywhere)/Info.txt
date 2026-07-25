@@ -1,0 +1,1 @@
+Modified resources of UnrealEd.exe and changed font of all available dialogs to Tahoma 9.

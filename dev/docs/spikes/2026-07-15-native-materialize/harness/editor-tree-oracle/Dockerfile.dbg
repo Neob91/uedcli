@@ -1,0 +1,8 @@
+# Debug variant of the standing editor image: dx-lum-uned + gdb, for the
+# editor-tree oracle (log the editor's incremental bspAddNode calls during MAP
+# REBUILD). Built once into `dx-lum-uned-dbg:latest` by build-dbg-image.sh.
+# The base image is NEVER modified (memory: never prune/clobber dx-lum-uned).
+FROM dx-lum-uned:latest
+RUN apt-get update -q \
+ && DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends gdb \
+ && rm -rf /var/lib/apt/lists/*

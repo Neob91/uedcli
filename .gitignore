@@ -1,0 +1,9 @@
+
+uedctl/game/inputs/edit/
+uedctl/game/staging/
+
+.venv/
+__pycache__/
+*.pyc
+*.swp
+_scratch/

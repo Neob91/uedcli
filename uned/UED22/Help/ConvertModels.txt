@@ -1,0 +1,8 @@
+ 2.modify the imprortscript (meshmap scale) by using the following formula :
+
+                                X=X*32 Y=Y*32 Z=Z*64
+
+ 3.if there is MeshMap Origin, then modify it using this formula: 
+ 
+                                X=X/32 Y=Y/32 Z=Z/64
+
