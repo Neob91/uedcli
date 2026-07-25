@@ -19,6 +19,75 @@ Keep entries terse here — a one-liner is fine; detail gets added when it's tri
 priority is optional until triage. When you triage an item, **move** its line out to the target
 queue (don't copy — one home per item).
 
+- **[ANDRZEJ — decide] p1 Docs restructure — spec gate round 1 returned a STRUCTURAL finding; work
+  is PARKED.** Spec: `specs/2026-07-25-docs-restructure.md` (3 cold Opus, 2026-07-25). 2 of 3
+  reviewers independently: deleting `direction.md` abolishes the **"want" lane** with no
+  replacement — after it, nothing answers "what are we building toward" (`architecture.md` may not,
+  by house rule; the board is one-line queue items; `decisions.md` is a per-choice ledger, not a
+  synthesis). Reviewers' counter-proposal: **drop the `@` import, keep the doc** — takes the whole
+  ~7k always-on cost off the table without deleting a lane, a 44-file retarget, or an editorial
+  rewrite. Per `CLAUDE.md` "Review gates" the work is parked, not merged, until Andrzej rules;
+  it then re-enters at round 1.
+- **[ANDRZEJ — decide] p1 Docs restructure: shard axis for `decisions.md`.** All 3 reviewers:
+  entries are 46 in 2026-06 / 181 in 2026-07, so a monthly shard leaves `2026-07.md` at ~7,030
+  lines — 78% of the original, against a D4 rationale that rejected one-file *because* it is ~9k
+  lines. Options: topic/subsystem axis (loses order-preservation, which C1's verification depends
+  on), fixed entry-count, prune-first-then-remeasure, or keep monthly and drop the size rationale.
+- **[ANDRZEJ — decide] p1 Docs restructure: Part A may be a net context LOSS.** Reviewers A+C: the
+  two biggest sections the spec moves (`review-gates` ~216, `documentation` ~96) are exactly the
+  ones "After every change" fires on *every* change, so most sessions re-read them as uncached
+  tool output; and R4 replaces the 382-line `direction.md` with a pointer to `architecture.md`
+  (2,157 lines / 189 KB, ~6.5x). Rare-trigger sections only (worktrees/spikes/background/board/
+  tests = 193 lines) may be the honest scope.
+- `p1` `[chore]` **Docs restructure: spec's measured facts were wrong — corrected.** `direction.md`
+  citers 10 → **45** (incl. 5 `.py`); `decisions.md` citers 120 → **171** (45 `.py`, 3 `.sh`,
+  `pyproject.toml`); ledger entries 229 → **227** (`## Format` + a template heading inside a fenced
+  code block). The spec's C1 verification used the same naive `^## ` matcher that produced the bad
+  count, so a splitter built to it would split inside the fence and self-certify green. Any redo
+  must anchor on `^## \d{4}-\d{2}-\d{2}`, be fence-aware, and assert the format block survives.
+- `p1` `[chore]` **Docs restructure: link-check scope must be repo-wide, not `dev/docs`+`docs`.**
+  ~49 citations of `decisions.md` and 5 of `direction.md` live in `uedctl/*.py`, `bin/_venv.sh`,
+  `pyproject.toml`; `CLAUDE.md` "New UnrealEd findings … back-reference them from code comments"
+  makes these load-bearing. Also: the dominant citation form is *prose* (``CLAUDE.md` "Review
+  gates"``), which a link checker passes — needs a string-based check too. And `bin/test` must run,
+  so the batch is a **build** row, not docs-only.
+- `p2` `[chore]` **Docs restructure: `decisions.md` holds 39 refs to `direction.md`** — deleting it
+  strands them, and editing them violates the never-reword rule asserted in `CLAUDE.md`,
+  `decisions.md`'s preamble and `dev/docs/README.md`. Needs an explicit carve-out (mechanical
+  repath declared not "rewording") or a superseding entry declaring them historical + a documented
+  link-check exemption for the ledger.
+- `p2` `[chore]` **Docs restructure: sequencing defects.** Ledger entries D1–D5 were scheduled
+  *last*, i.e. after the step that deletes a doc — if interrupted, the only record of why is an
+  ephemeral spec; they must land first. Step 6 also writes to `decisions.md`, which C1 has by then
+  replaced. Part A lands `rules/code-cli-conventions.md` citing `direction.md` before Part B
+  deletes it. And per `CLAUDE.md`, specced pipeline work needs a **plan round** — the spec went
+  spec-gate → build-gates with no plan doc.
+- `p2` `[chore]` **Docs restructure: `rules/` must be added to the NOT-trivial list, and router
+  lines must never be `@` imports.** After Part A ~550 of `CLAUDE.md`'s lines live in
+  `dev/docs/rules/*.md`, which is not on the NOT-trivial list — a one-line edit there would be
+  gateable as trivial, an observable weakening. Separately, one `@dev/docs/rules/…` row silently
+  negates the entire saving while looking correct; gate on `grep -n '@dev/docs/' CLAUDE.md` empty.
+- `p2` `[chore]` **Docs restructure: `direction.md` "asset catalog" content must NOT go to
+  `to-spec.md`.** It is spec'd + planned + reviewed and sits on `to-build.md:48-52`; routing it
+  back would walk a reviewed item backwards, violating "an item lives in exactly ONE queue".
+  Re-verify every board destination against the board's real state.
+- `p2` `[debug]` **`CLAUDE.md`'s "The repo this tool lives in" is factually wrong in this
+  checkout** — it says uedctl lives at `Tools/uedctl/` inside `dx_lum` with `_scratch/` "two levels
+  up"; the git toplevel is `/home/neob91/Documents/Dev/uedcli`, `_scratch/` is at that root, and
+  there is no `Tools/`. Likewise `CLAUDE.md` "Feature worktrees" asserts this repo's
+  `.claude/settings.json` sets `worktree.baseRef: "head"` — that file does not exist. Pre-existing,
+  but the restructure would carry both verbatim into the resident core / `rules/worktrees.md`.
+  (`Tools/uplayctl/CLAUDE.md`, which mirrors these rules, is in a *different* repo — this
+  restructure silently desynchronises it.)
+- `p2` `[chore]` **Docs restructure: concurrency.** A live worktree (`brush-profile-generators`)
+  holds the pre-restructure tree; git cannot auto-merge an append into a file that has become a
+  directory. Land only when no worktree is in flight, or state the manual reconciliation.
+- `p3` `[chore]` **`dev/docs/README.md`'s doc table is already incomplete** — omits `andrzej.md`,
+  `prefabs.md`, `dev-runtime.md`, `deusex-assets-setup.md`, `engine-internals/`, `reviews/`,
+  `board/someday.md`, `board/HANDOFF-native-full-parity.md`. Worth one pass when `rules/` is added.
+- `p3` `[chore]` **`board/inbox.md` (2,602 lines) and `board/done.md` (1,125) are themselves
+  unpruned** — out of scope for the docs restructure, noted there.
+
 - **[ANDRZEJ — decide] p2 Where does builder input validation belong: the CLI or the builders
   library?** Item #10.4 put the positive-dimension guard in `dispatch._POSITIVE_BUILD_DIMS` /
   `_check_positive_build_dims` (CLI layer) because the spec asked for "one exit-2 message shape
