@@ -1,13 +1,13 @@
 # Docs restructure: `direction/` + `rationale/`, no ledger — Implementation Plan
 
 > **For agentic workers:** implement task-by-task; each task ends green + committed. Steps use
-> checkbox (`- [ ]`) syntax for tracking. This is a docs change, so "green" means the task's stated
-> verification passes — plus `bin/test` from **Task 4** onward, where code comments start being
-> retargeted (`uedctl/brushcsg.py:93` is a `conventions`-topic citation, so `.py` files are in scope
-> from the first Part B group).
+> checkbox (`- [ ]`) syntax. This is a docs change, so "green" means the task's stated verification
+> passes — plus `bin/test` from **Task 4** onward, where code comments start being retargeted
+> (`uedctl/dispatch.py:3177` and `uedctl/movers.py:24` cite `direction.md` "No silent half-answers",
+> a `conventions`-topic citation, so `.py` files are in scope from the first Part B group).
 
 **Goal:** Retire the append-only decisions ledger. Replace `dev/docs/decisions.md` (8,985 lines,
-227 entries) and `dev/docs/direction.md` (**392** lines, derived and drifting) with two
+227 entries) and `dev/docs/direction.md` (392 lines, derived and drifting) with two
 **revised-in-place** per-topic trees, and move three rule sections out of the always-loaded
 `CLAUDE.md`.
 
@@ -17,14 +17,13 @@ yes**. `rationale/<topic>.md` holds engineering decisions an agent made, keyed b
 maintain it freely. Both revised in place: no supersession, no dated history, git keeps the past.
 Every entry in both trees carries `Rejected` and `Refs`.
 
-**Tech stack:** Markdown only. No behaviour changes; the only code edits are retargeted comments in
-`uedctl/*.py`, `bin/_venv.sh`, `pyproject.toml`. Verification by shell (`grep`/`awk`) + `bin/test`.
+**Tech stack:** Markdown, plus one new Python checker (Task 3). The only behaviour-neutral code
+edits are retargeted comments in `uedctl/*.py`, `bin/_venv.sh`, `pyproject.toml`.
 
 **Spec:** [`../specs/2026-07-25-docs-restructure.md`](../specs/2026-07-25-docs-restructure.md).
 
-**Build split:** a gate after each of Tasks 1, 3, 4, 5, 6, 7, 8, 9, 10. Per `CLAUDE.md`
-"Review gates"; the whole is far past what one reviewer can read without skimming. Task 2 is a
-measurement task — it commits, but carries no gate of its own.
+**Build split:** a gate after each of Tasks 3, 4, 5, 6, 7, 8, 9, 10. Tasks 1–2 are batched into
+Task 3's gate (permitted by `CLAUDE.md` "Review gates" — batch small changes into one round).
 
 **Not a feature worktree.** This lands incrementally on the checked-out branch. A squash merge
 collapses 13 separate `Andrzej-confirmed:` trailers into one commit message, destroying the audit
@@ -42,10 +41,15 @@ column except the last.
 1. **Part 0 before everything.** It carries the confirmation rule, which governs the migration
    itself, and the ledger freeze. Writing a `direction/` topic before the rule exists is the exact
    thing the rule prohibits.
-2. **Freeze before inventory.** Every count is a measurement-at-a-sha. Concurrent sessions mint new
-   `decisions.md` refs until the freeze lands, so Task 2 re-measures and its numbers govern.
+2. **Freeze before inventory.** Every count is a measurement-at-a-sha. **The spec's numbers have
+   already drifted** — `decisions.md` citers 171 → **173**, `direction.md` 45 → **46** — so Task 2
+   re-measures and its numbers govern.
 3. **Part A before Part B's citations.** Part A creates `rules/*.md`, which some retargets point at.
-4. **Both old files deleted last**, only after all 13 topics are confirmed and Andrzej signs the
+4. **The `@` swap comes LAST in Part B, not in Part A.** Swapping `@dev/docs/direction.md` for the
+   index while zero topics exist would leave every session without the compiled target for the
+   longest stretch of the migration — 13 topics, each blocking on a human confirmation. The line
+   saving is explicitly *not* the goal (spec §0), so it does not buy the degraded window.
+5. **Both old files deleted last**, only after all 13 topics are confirmed and Andrzej signs the
    `dropped` list — never partially, so the target never lacks a home.
 
 ### Concurrency — TWO worktrees exist, and one is NOT merged
@@ -53,19 +57,18 @@ column except the last.
 | Worktree | State |
 |-------------------------------|---
 | `brush-profile-generators` | content merged at `6900e34`; no hazard |
-| **`profile-generator-fixes`** | **5 commits, unmerged**, branched at `6900e34` |
+| **`profile-generator-fixes`** | **6 commits, unmerged**, branched at `6900e34` |
 
-`profile-generator-fixes` touches `dev/docs/board/inbox.md` (−82 lines), `architecture.md`,
-`board/done.md`, `docs/leveldesign/*`, `docs/usage.md`, and `uedctl/{cli,dispatch,emit,model}.py`
-plus two test files. **Every one of those is also edited by Tasks 8–10.**
+It touches `dev/docs/board/inbox.md` (−82 lines), `architecture.md`, `board/done.md`,
+`docs/leveldesign/*`, `docs/usage.md`, and `uedctl/{cli,dispatch,emit,model,builders}.py` plus two
+test files. **Every one is also edited by Tasks 8–10**, and `uedctl/builders.py` carries
+`decisions.md` citations at lines 25, 28, 504, 578 — so it is squarely in Task 8's scope.
 
 - It introduces **no** new `decisions.md`/`direction.md` citations and does not touch
   `direction.md`, so the delete/modify hazard does not fire.
-- **Merge it before Task 8**, or treat those four `uedctl/*.py` files and `inbox.md` as manual-merge
-  points. Either way the reconciliation is stated, not assumed.
+- **Merge it before Task 8**, or treat those five `uedctl/*.py` files and `inbox.md` as manual-merge
+  points.
 - **Do NOT retire the `board/inbox.md` concurrency item at Task 10** until this is actually true.
-  Its text ("land only when no worktree is in flight, or state the manual reconciliation") is
-  satisfied by the second clause — but only once this paragraph is the operative record.
 
 ---
 
@@ -81,86 +84,95 @@ plus two test files. **Every one of those is also edited by Tasks 8–10.**
       `direction/<topic>.md` and `rationale/<topic>.md`, both revised-in-place.
 - [ ] In Documentation, rewrite *"the decision itself goes in the durable, append-only
       `dev/docs/decisions.md`"* → route to the two trees; state there is no ledger.
-- [ ] **Rewrite the pruning rule** in the same section. It currently permits removing only *wholly
-      superseded* entries and spike-"gate" notes; Task 7's `dropped` disposition is a third kind and
-      is **unauthorized until this lands**.
+- [ ] **Rewrite the pruning rule** in the same section. It permits removing only *wholly superseded*
+      entries and spike-"gate" notes; Task 7's `dropped` disposition is a third kind and is
+      **unauthorized until this lands**.
 - [ ] Create `dev/docs/direction/README.md` — short model statement + a 13-row index, each row
-      carrying migration state (`(not yet migrated)` → points at `direction.md`). No topic content;
-      no `@` import.
+      carrying migration state. No topic content; no `@` import.
 - [ ] Create `dev/docs/rationale/README.md` — model, the mandated `Why / Rejected / Refs` shape, and
       the history signpost (`git log --follow -- dev/docs/decisions.md`).
 - [ ] Add a `> **FROZEN — DO NOT APPEND**` banner to the top of `dev/docs/decisions.md`.
 
 **Verify — mechanical, one per checkbox:**
 ```sh
-grep -q 'NEVER revise without confirmation' CLAUDE.md          # the rule section
-grep -q 'andrzej.md' CLAUDE.md                                 # the untouchables
-grep -c 'append-only' CLAUDE.md            # -> 0  (ledger routing rewritten)
-grep -c 'wholly.*supersed' CLAUDE.md       # -> 0  (pruning rule rewritten)
+grep -q 'NEVER revise without confirmation' CLAUDE.md
+grep -q 'andrzej.md' CLAUDE.md
+grep -c 'append-only' CLAUDE.md            # -> 0
+grep -c 'wholly.*supersed' CLAUDE.md       # -> 0
 grep -q 'FROZEN — DO NOT APPEND' dev/docs/decisions.md
 test -f dev/docs/direction/README.md && test -f dev/docs/rationale/README.md
-grep -rnE '@[A-Za-z0-9._/-]+\.md' dev/docs/direction/README.md # -> empty
-wc -l dev/docs/direction/README.md         # -> <= 25 (index rows only, no topic content)
+grep -rnE '@[A-Za-z0-9._/-]+\.md' dev/docs/direction/README.md   # -> empty
+wc -l dev/docs/direction/README.md         # -> <= 25
 ```
 
-**Note:** `CLAUDE.md` grows here (671 → ~715). Task 3 is what reduces it. Do not stop between the
-two — mid-sequence the resident context is worse than at the start.
+**Note:** `CLAUDE.md` grows here (671 → ~715). Task 3 reduces it. Do not stop between the two.
 
-**Commit:** `Add the direction/ confirmation rule and freeze the decisions ledger` **→ gate.**
+**Commit:** `Add the direction/ confirmation rule and freeze the decisions ledger`
 
 ---
 
 ## Task 2: Re-measure everything Parts C–E depend on
 
-Spec §5's commands cover only part of what later tasks consume. Measure **all** of it and record it
-in `dev/docs/rationale/MIGRATION.md` under `## Inventory at <sha>`:
+Record in `dev/docs/rationale/MIGRATION.md` under `## Inventory at <sha>`:
 
-- [ ] Spec §5's commands (`CLAUDE.md`/`direction.md` line counts, the two citer counts, entry count,
-      `Rejected` count, spikes count, section sizes).
+- [ ] Spec §5's commands (line counts, citer counts, entry count, `Rejected` count, spikes count,
+      section sizes).
 - [ ] The `CLAUDE.md "<moved section>"` code sites — spec says 4; confirm no fifth.
 - [ ] The `unrealed/*.md` **evidence** sites — spec says 7; **it is 6** (`package-format.md:65,88,184`,
-      `rendering.md:127`, `quirks.md:262,443`). `commands.md:212` is a bare dated ref, counted in the
-      next row.
-- [ ] The bare-dated-ref files (no literal `decisions.md`) — spec's "~17–19" is a range, not a number.
-- [ ] `specs/`+`plans/` citer counts and directory sizes — `plans/` holds **24** files, not 23.
-- [ ] **Files linked directly from `to-build.md`** — spec says 13; **it is 11**. "Reachable" means
-      *linked directly from `to-build.md`*, not transitively. This is an **exemption boundary**, so a
-      wrong number means files are checked or skipped incorrectly.
+      `rendering.md:127`, `quirks.md:262,443`).
+- [ ] **Bare dated refs.** Definition, so the builder does not invent one: a file matching
+      `rg -n '\(?[Dd]ecisions?\b[^)]{0,40}[0-9]{4}-[0-9]{2}-[0-9]{2}'` that contains **no** literal
+      `decisions.md`. Record the file list, not just a count.
+- [ ] `specs/`+`plans/` citer counts and directory sizes — `plans/` holds **24** files.
+- [ ] **Files referenced from `to-build.md` in ANY form** — markdown link *or* backticked path.
+      **It is 12, not 11**: item 11 cites `specs/2026-07-24-docs-command.md` as a backticked path,
+      and that file carries a live markdown link to `../decisions.md` that would dangle. This is an
+      **exemption boundary**, so a wrong number means files are checked or skipped incorrectly.
 
-**Verify:** `MIGRATION.md` has an `## Inventory at <sha>` section with a number for every row above.
-Any drift from the spec means a concurrent session moved something; **the measured numbers govern
-from here, not the spec's.**
+**Verify:** `MIGRATION.md` has an `## Inventory at <sha>` section with a number for every row.
+**The measured numbers govern from here, not the spec's.**
 
-**Commit:** `Record the docs-restructure inventory` *(no gate — measurement only)*
+**Commit:** `Record the docs-restructure inventory` *(batched into Task 3's gate)*
 
 ---
 
-## Task 3: Part A — move three rule sections out of `CLAUDE.md`
+## Task 3: Part A — move three rule sections, and build the checker
 
+- [ ] **Write the link checker first — nothing else in this plan verifies anything without it.**
+      There is none in the repo today (`bin/` holds only `test`, `uedctl`, `_venv.sh`), so R3's
+      "citations dangle or silently rot" mitigation is currently prose. Add a committed pytest
+      (`uedctl/tests/test_doc_links.py`) that walks tracked `.md`/`.py`/`.sh`/`.toml` and fails on:
+      a markdown link to a missing path; a `path#anchor` whose anchor is absent; a prose citation of
+      a file that does not exist. Encode the `specs/`+`plans/` exemption **and** its 12-file
+      carve-out. Every later task's verification calls this.
 - [ ] Create `dev/docs/rules/spikes.md` (29 body lines), `tests.md` (21), `background-work.md` (21)
-      — verbatim moves, no rewording.
+      — **verbatim except the position-relative fixes below**.
 - [ ] Create `dev/docs/rules/README.md` indexing the three.
-- [ ] **Router lines fold into the existing `### UnrealEd navigation — docs are READ-ON-DEMAND`
-      bullet list** (`CLAUDE.md:591-599`) — that is already the established router; do not leave
-      three orphan `###` stubs. Each line triggers the read at a specific moment and names the file.
-      It need not carry the content; it must fire reliably.
 - [ ] **Sweep the moved 74 lines for position-relative language**: "above", "below", "this file",
       "two levels up", bold/italic section names, and doc-relative paths (`CLAUDE.md:393` cites
       `unrealed/quirks.md "Stability"`). All become false one directory deeper.
-- [ ] Replace `@dev/docs/direction.md` with `@dev/docs/direction/README.md`, and give `direction.md`
-      an ordinary (non-`@`) router row so un-migrated topics stay reachable.
-- [ ] Fix `dev/docs/dev-runtime.md`, which still documents the Docker `uedctl-dev` image and
-      `bin/_dev-run.sh` (retired 2026-07-14). Until now the correct text was resident and won by
-      default; after this move an agent could read the stale one first.
+- [ ] **Retitle `### UnrealEd navigation — docs are READ-ON-DEMAND` → `### Read-on-demand docs —
+      the router`**, and fold the three new router lines into its bullet list. The section's current
+      heading and preamble are about UnrealEd behaviour only, so an agent looking for "how do I run
+      tests" has no reason to read it — and Part A's whole safety argument is that the router must
+      fire reliably.
+- [ ] **Do NOT swap the `@` import here** — it moves to the end of Task 6 (ordering constraint 4).
+- [ ] Fix `dev/docs/dev-runtime.md` (still documents the Docker `uedctl-dev` image and
+      `bin/_dev-run.sh`, retired 2026-07-14), **and** `dev/docs/README.md`'s description of it
+      ("uedctl-in-Docker, docker-out-of-docker + identity path-mapping"), which is equally stale.
+- [ ] **`dev/docs/README.md`: add the `rules/` row now**, and rewrite the Context-loading paragraph
+      — it says "only `direction.md` is auto-loaded", which stays true until Task 6 but must name
+      `rules/` as read-on-demand from here. Leaving it for Task 10 would let it sit false across six
+      gates, against "no doc may be left stale".
 
 **`worktrees.md` does NOT move.** Its router line cannot carry the `git diff --cached --quiet` check
 before `git merge --squash` (a data-loss trap) or "ask before `git branch -D`".
 
-**Verify:** `grep -rnE '@[A-Za-z0-9._/-]+\.md' CLAUDE.md dev/docs/direction/README.md` → exactly one
-line; position-relative sweep clean across `CLAUDE.md` **and** `dev/docs/rules/*.md`;
-`wc -l CLAUDE.md` ≈ 644; `wc -l dev/docs/direction/README.md` ≤ 25.
+**Verify:** the new pytest passes and *fails* when pointed at a deliberately broken link (test the
+test); position-relative sweep clean across `CLAUDE.md` and `dev/docs/rules/*.md`;
+`wc -l CLAUDE.md` ≈ 644; `bin/test` passes.
 
-**Commit:** `Move the spike, test and background rules to dev/docs/rules/` **→ gate.**
+**Commit:** `Move the spike, test and background rules to dev/docs/rules/` **→ gate (covers 1–3).**
 
 ---
 
@@ -170,7 +182,7 @@ line; position-relative sweep clean across `CLAUDE.md` **and** `dev/docs/rules/*
 
 | `direction.md` section | → topic |
 |-------------------------------------------------|---
-| `:1-22` **preamble** (three-doc lane table + maintenance rule) | `process.md` |
+| `:1-22` **preamble** (lane table + maintenance rule) | `process.md` |
 | `:23` Scope: a generic UnrealEngine-1 tool | `scope.md` |
 | `:31` Projects, substrates, and the global CLI | `projects-and-config.md` |
 | `:87` The T3D trunk is the source of truth | `trunk-and-editor.md` |
@@ -188,7 +200,7 @@ line; position-relative sweep clean across `CLAUDE.md` **and** `dev/docs/rules/*
 | `:348` No back-compat cruft | `conventions.md` |
 | `:365` Explicit, discoverable, model-side | `conventions.md` |
 
-Line numbers are as of `10ef91e`; match on **heading text**, not position.
+Line numbers are as of `618dff9`; **match on heading text**, not position.
 
 **Groups, one gate each.** Task 4: `scope`, `terminology`, `conventions`, `process`.
 Task 5: `trunk-and-editor`, `organization`, `materialize`, `safety`, `generators`.
@@ -196,49 +208,56 @@ Task 6: `projects-and-config`, `containers`, `packages`, `asset-catalog`.
 
 ### Per topic — this loop is the task, and none of it is optional
 
-- [ ] Draft *What we want* from that topic's section(s) per the map above.
+- [ ] Draft *What we want* from that topic's section(s) per the map.
 - [ ] Sweep `decisions.md` for that topic's still-relevant **`Rejected`** alternatives, **and any
       live decision `direction.md` never reconciled** — criterion: any entry postdating the newest
-      one `direction.md` reconciles. Re-derive it; do not use a hard-coded list.
-- [ ] Collect `Refs` from those entries' `**Refs:**` lines.
+      one `direction.md` reconciles. Re-derive; do not use a hard-coded list.
+- [ ] Collect `Refs`. **A Ref whose target does not exist is DROPPED, or replaced by the code/spike
+      site that does exist — never carried forward unresolved.** Most ledger `Refs:` lines point at
+      ephemeral specs that were deleted when their work landed (e.g. `decisions.md:276`, `:542`,
+      `:809`). A `direction/` doc is written once, on Andrzej's yes, so a dangling Ref baked in here
+      costs another confirmation cycle to remove.
 - [ ] **Put the full proposed text to Andrzej and wait for an explicit yes.** Not a summary — the
-      wording that will land. "It follows from what he said" does not satisfy the rule.
+      wording that will land.
 - [ ] On his yes, in ONE commit: write `direction/<topic>.md`; delete its section(s) from
       `direction.md`; flip its `direction/README.md` row; retarget that topic's citations; **and
       append a `direction/<topic>.md` disposition row to `MIGRATION.md` for every ledger entry
-      consumed** — otherwise Task 7 must reconstruct them by re-reading 13 commits against 227
-      entries.
+      consumed.**
 - [ ] Commit trailer: `Andrzej-confirmed: <topic>`.
 
 **`process.md` additionally carries this restructure's own rulings** — the who-decided axis,
 `direction/`-only scope, revise-in-place, no hook, deleting the ledger, **and that this work ran
-outside a feature worktree and why**. Otherwise they survive nowhere: spec and plan are both deleted
-at Task 10.
+outside a feature worktree and why**. Otherwise they survive nowhere.
 
-**Verify per group:** each landed topic has `What we want` + `Rejected` + `Refs`; its `direction.md`
-section is gone; its README row is flipped; `wc -l dev/docs/direction/README.md` still ≤ 25;
-`git log --grep='Andrzej-confirmed'` shows one commit per topic; every consumed entry has a
-`MIGRATION.md` row.
+**At the END of Task 6, once all 13 topics exist:**
 
-**Coverage gate, at Task 6:** every `^## ` heading in `direction.md` has been claimed by exactly one
-topic, and the preamble's lane model is in `process.md`. Nothing may reach Task 10 unread.
+- [ ] Swap `@dev/docs/direction.md` → `@dev/docs/direction/README.md` in `CLAUDE.md`.
+- [ ] Verify `grep -rnE '@[A-Za-z0-9._/-]+\.md' CLAUDE.md dev/docs/direction/README.md` returns
+      exactly one line.
+
+**Verify per group:** each landed topic has `What we want` + `Rejected` + `Refs`; its README row is
+flipped; `wc -l dev/docs/direction/README.md` ≤ 25; `git log --grep='Andrzej-confirmed'` shows one
+commit per topic; every consumed entry has a `MIGRATION.md` row; the link checker passes.
+
+**Coverage gate at Task 6, mechanical:** `grep -c '^## ' dev/docs/direction.md` → **0** (every topic
+commit deleted its section), and the preamble's lane model is present in `process.md`.
 
 ---
 
 ## Task 7: Part C — `rationale/` and the rest of the disposition table
 
-- [ ] For every remaining `^## \d{4}-` entry in `decisions.md` (Tasks 4–6 already filed theirs), add
-      a `MIGRATION.md` row: `<date> <title> -> direction/<t>.md | rationale/<t>.md |
-      superseded-dead | dropped`.
+- [ ] For every remaining `^## \d{4}-` entry (Tasks 4–6 filed theirs), add a `MIGRATION.md` row:
+      `<date> <title> -> direction/<t>.md | rationale/<t>.md | superseded-dead | dropped`.
 - [ ] `dropped` **and** `superseded-dead` each need a named reason; `superseded-dead` must name the
-      superseding entry. Neither is a free bucket.
+      superseding entry.
 - [ ] Fold `rationale`-dispositioned entries into `dev/docs/rationale/<topic>.md` keyed by
-      module/subsystem, each in the mandated `Why / Rejected / Refs` shape. The ledger holds **83
-      `**Rejected:**` blocks**; losing them is the failure this tree exists to prevent.
+      module/subsystem, in the mandated `Why / Rejected / Refs` shape. Same dangling-Ref rule as
+      Part B. The ledger holds **83 `**Rejected:**` blocks**; losing them is the failure this tree
+      exists to prevent.
 - [ ] Put the `dropped` list to Andrzej for sign-off.
 
 **Verify:** no `^## \d{4}-` entry lacks a `MIGRATION.md` row; every `rationale/*.md` entry has all
-three parts; `bin/test` passes.
+three parts; link checker and `bin/test` pass.
 
 **Commit:** `Populate dev/docs/rationale/ and record every ledger entry's disposition` **→ gate.**
 
@@ -246,22 +265,24 @@ three parts; `bin/test` passes.
 
 ## Task 8: Part D — citation migration
 
-Use **Task 2's** numbers, not the spec's.
+Use **Task 2's** numbers, not the spec's. **Merge `profile-generator-fixes` first**, or treat its
+five `uedctl/*.py` files and `inbox.md` as manual-merge points.
 
 - [ ] `decisions.md` / `direction.md` by name — retarget per each entry's disposition row.
 - [ ] The 4 `CLAUDE.md "<moved section>"` code sites → `rules/<file>.md`.
-- [ ] Bare dated refs → topic path + `#anchor`.
-- [ ] The `unrealed/*.md` evidence sites → the `spikes/` file, **never** a mutable doc.
+- [ ] Bare dated refs (Task 2's file list) → topic path + `#anchor`.
+- [ ] The 6 `unrealed/*.md` evidence sites → the `spikes/` file, **never** a mutable doc. Where the
+      cited entry's own Ref is a deleted spec, there is no spike to point at — drop the pointer and
+      keep the claim, or cite the code that demonstrates it.
 - [ ] The 31 `spikes/` files → retarget. Durable evidence, not ephemeral.
-- [ ] `specs/`+`plans/` exempt, **except the 11 linked directly from `to-build.md`**.
+- [ ] `specs/`+`plans/` exempt, **except the 12 referenced from `to-build.md`**.
 - [ ] Two board sites cite sections that now **stay resident** — they need *editing*, not
       retargeting. Cite them **by item title, not line range** (`inbox.md` is 2,786 lines and the
-      in-flight branch deletes 82 of them): the `[debug]` item about the repo layout and
+      in-flight branch deletes 82): the `[debug]` item about the repo layout and
       `.claude/settings.json`, and `board/README.md`'s "a spike happens when a spec flags a live
       unknown".
 
-**Verify:** repo-wide link, prose-citation, and **anchor-existence** checks clean (exempting
-`specs/`+`plans/` save the 11); `bin/test` passes.
+**Verify:** link checker clean; `bin/test` passes.
 
 **Commit:** `Retarget decisions.md and direction.md citations to the topic trees` **→ gate.**
 
@@ -269,36 +290,35 @@ Use **Task 2's** numbers, not the spec's.
 
 ## Task 9: Parts E + F — forced rule text and three false statements
 
-**Match on quoted text, not line numbers** — Tasks 1 and 3 shift every line in `CLAUDE.md`, and the
-four hardest sites straddle line breaks so no line-oriented grep finds them:
+**Tasks 1 and 3 shift every line in `CLAUDE.md`, and the four hardest sites straddle line breaks —
+so these need MULTILINE patterns. A plain `grep -F` returns 0 on two of them:**
 
-| Must-fix site | Match on |
-|--------------------|---
-| bare dated ref | `"decision 2026-07-24 21:58"` |
-| lane prose | `"architecture, direction, decisions, spikes, board"` |
-| user-doc prose | `"decisions, architecture, etc."` |
-| dev-doc prose | `"spikes/decisions/each other"` |
+```sh
+rg -U 'decision\s+2026-07-24 21:58'              CLAUDE.md   # spans :427-428
+rg -U 'architecture,\s+direction, decisions'     CLAUDE.md   # spans :492-493
+grep -n 'decisions, architecture, etc\.'         CLAUDE.md   # single line
+grep -n 'spikes/decisions/each other'            CLAUDE.md   # single line
+```
 
-Plus every `decisions.md`/`direction.md` mention a plain grep *does* find. Final check:
-`grep -c 'decisions\.md\|direction\.md' CLAUDE.md` → **0**.
+Plus every `decisions.md`/`direction.md` mention a plain grep does find.
 
+- [ ] **Remove both router rows** — the `decisions.md` row, and the non-`@` `direction.md` row Task 3
+      kept for un-migrated topics (all topics are migrated by now). Both files still *exist* until
+      Task 10, un-routed; that is intended, and Andrzej's Task-10 sign-off reads the ledger directly.
 - [ ] NOT-trivial list: drop the two deleted docs; add `direction/*`, `rationale/*`, `rules/*`.
 - [ ] Sweep the **≥12 internal cross-references**, both directions. Do not key on `see **X**` — that
-      form misses six of them.
+      misses six of them.
 - [ ] **F1** — `CLAUDE.md` claims `.claude/worktrees/` is gitignored; it is not. Add
-      `.claude/worktrees/` to `.gitignore` (making the sentence true). **Andrzej's call** — log to
-      `board/inbox.md` if he declines.
+      `.claude/worktrees/` to `.gitignore`. **Andrzej's call** — log to `board/inbox.md` if he
+      declines.
 - [ ] **F2** — rewrite the repo-layout paragraph: toplevel is `/home/neob91/Documents/Dev/uedcli`,
-      there is no `Tools/`, `_scratch/` is at that root. Same false label in `dev/docs/README.md`.
+      no `Tools/`, `_scratch/` at that root. Same false label in `dev/docs/README.md`.
 - [ ] **F3** — the `.claude/settings.json` claim references a file that does not exist. **Andrzej
       chooses:** create it, or delete the sentence and accept `EnterWorktree` branching from
       `origin/<default>`. Behavioural, not wording.
 
-**`dev/docs/README.md` belongs to Task 10, not here** — Task 10 deletes the very rows this task
-would reword. Leave it alone.
-
-**Verify:** `grep -c 'decisions\.md\|direction\.md' CLAUDE.md` → 0; `git check-ignore
-.claude/worktrees` exits 0 if F1 was taken; `bin/test` passes.
+**Verify:** `grep -c 'decisions\.md\|direction\.md' CLAUDE.md` → **0**; `git check-ignore
+.claude/worktrees` exits 0 if F1 was taken; link checker and `bin/test` pass.
 
 **Commit:** `Reconcile the rule text and fix three false CLAUDE.md statements` **→ gate.**
 
@@ -310,19 +330,18 @@ would reword. Leave it alone.
       the same as confirming nothing else in 227 entries was worth keeping.
 - [ ] `git rm dev/docs/direction.md dev/docs/decisions.md`.
 - [ ] Record the removal sha in `rationale/README.md`'s history signpost.
-- [ ] **`dev/docs/README.md`, entirely** — drop both rows; add `direction/`, `rationale/`, `rules/`;
-      fix the "A gap between `direction.md` and `architecture.md`" paragraph, the Context-loading
-      paragraph (only `direction/README.md` is auto-loaded now), the "See `direction.md` + the board"
-      line, and the `Tools/uedctl/CLAUDE.md` label.
+- [ ] `dev/docs/README.md` — drop the two doomed rows; add `direction/` and `rationale/`; fix the
+      "A gap between `direction.md` and `architecture.md`" paragraph, the "See `direction.md` + the
+      board" line, and the `Tools/uedctl/CLAUDE.md` label. (`rules/` row and Context-loading were
+      done at Task 3.)
 - [ ] Retire the resolved `board/inbox.md` items **by title, not line range** — the `@`-gate item
-      Task 3 overrides, the `[debug]` item Task 9 fixes. **Not** the concurrency item unless the
+      Task 6 overrides, the `[debug]` item Task 9 fixes. **Not** the concurrency item unless the
       second worktree has actually merged.
-- [ ] **Delete this plan's entry from `board/to-build.md`** — that file's own rule.
+- [ ] **Delete this plan's entry from `board/to-build.md`** (added when the plan gate closed).
 - [ ] **Add the short `done.md` tail entry** — `CLAUDE.md` "TODOs".
 - [ ] Delete this plan and the spec.
 
-**Verify:** neither deleted file is referenced by any tracked file outside `specs/`+`plans/`;
-`bin/test` passes; `docs/` still references nothing under `dev/docs/`; `to-build.md` has no
-docs-restructure entry.
+**Verify:** link checker clean; `bin/test` passes; `docs/` still references nothing under
+`dev/docs/`; `to-build.md` has no docs-restructure entry.
 
 **Commit:** `Delete the decisions ledger and direction.md; the topic trees replace them` **→ gate.**
