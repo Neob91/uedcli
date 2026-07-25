@@ -1,234 +1,244 @@
-# Spec — docs restructure: on-demand rules, `direction.md` removal, `decisions.md` prune + shard
+# Spec — docs restructure: a mutable `direction/` tree, on-demand rules, no ledger
 
-**Status:** drafted, awaiting spec-gate review (`CLAUDE.md` "Review gates")
-**Author:** agent session, 2026-07-25, on Andrzej's decisions recorded below
-**Ledger:** the decisions below MUST land in `decisions.md` before this work is declared done —
-this spec is ephemeral and must not be the only record (`CLAUDE.md` "Documentation")
+**Status:** v2, rewritten after round 1 returned a structural finding. Awaiting spec-gate review.
+**Supersedes:** v1 of this file (git `cf21f54`), which proposed folding `direction.md` away and
+keeping `decisions.md` as a pruned/sharded ledger. Round 1 (3 cold Opus, 2026-07-25) parked it.
 
 ---
 
-## 1. Problem
+## 1. What round 1 killed, and what replaced it
 
-Two documents are injected into **every** uedctl agent session before any work starts:
+v1 proposed: split `CLAUDE.md` into on-demand rules, delete `direction.md` by folding its sections
+into `architecture.md`, and keep `decisions.md` as an append-only ledger, pruned and sharded.
 
-| Doc | Lines | Bytes | Approx tokens | How it is loaded |
-|-----------------|-------|--------|---------------|---
-| `CLAUDE.md` | 671 | 40 KB | ~10k | project instruction file |
-| `direction.md` | 382 | 29 KB | ~7k | the literal `@dev/docs/direction.md` import in `CLAUDE.md` "UnrealEd navigation"
+Two of three reviewers raised the same **structural** finding: `direction.md`'s own preamble states
+it is written *"in the present tense even where the code doesn't match yet"*, so its sections are
+not sortable into built/unbuilt at section granularity, and folding them into `architecture.md`
+("what IS … never stale") would make that doc stale on the day it landed. Downstream of that,
+deleting the doc removed the **"want" lane** from the three-lane model with nothing inheriting it.
 
-That is **~17k tokens of always-on context**, and it grows every time a rule is clarified. Three
-separate problems hide inside it:
+Andrzej's resolution is a shape v1 never considered: **abolish the ledger model entirely and
+replace both docs with a mutable, topic-sharded `direction/` tree.**
 
-1. **Most of `CLAUDE.md` is procedure, not trigger.** A session needs to *know a review gate
-   exists*; it does not need the 224 lines of gate rationale resident until it is actually
-   running one. Same for worktrees, spikes, board flow, test invocation.
-2. **`direction.md` is a derived doc.** It is defined as "synthesized from `decisions.md`", which
-   makes it a second copy of the truth plus a standing reconciliation chore that `CLAUDE.md` has
-   to spend a maintenance rule policing. A derived doc that must be hand-reconciled is a doc that
-   is periodically wrong.
-3. **`decisions.md` has never been pruned.** 8,985 lines / 694 KB / **229 entries**, with 135
-   supersession mentions — despite its own preamble permitting two classes of pruning since it
-   was created. It is the largest file in the tree by a factor of three.
+| | Old model | New model |
+|-----------------|-------------------------------------------|---
+| `direction.md` | one file, derived from the ledger, hand-reconciled | **gone** |
+| `decisions.md` | 227 append-only entries, never reworded | **gone** |
+| replacement | — | `dev/docs/direction/<topic>.md` — **revised in place**, no history, no supersession, no timestamps |
 
-**Measured facts this spec depends on** (gathered 2026-07-25, re-verify before building):
+Git keeps the history. The docs keep the *current* answer.
 
-- `CLAUDE.md` section sizes: Review gates 224, Documentation 96, Feature worktrees 84, Code & CLI
-  conventions 63, TODOs/board 38, UnrealEd navigation 31, Spikes 29, repo-this-lives-in 22,
-  Tests 21, Background work 21, Commits 16, After every change 14.
-- `decisions.md` is cited by **120 files**, led by `architecture.md` (46 citations),
-  `board/inbox.md` (32), `board/done.md` (27).
-- `direction.md` is cited by 10 files outside itself, led by `decisions.md` (39 citations).
-- **`decisions.md` is NOT auto-loaded** — it has never cost a single context token. Its cost is
-  navigation and maintenance only.
+**Why this dissolves v1's problems rather than solving them:** there is no never-reword rule to
+collide with, so the ~410 relative paths and the 39 in-ledger `direction.md` references stop being
+obstructions. There is no shard-axis question, because topic *is* the axis. There is no "want lane"
+gap, because the tree is the want lane. And the doc stops being derived — with no ledger upstream,
+`direction/` is a primary statement of intent, which was v1's actual complaint about `direction.md`.
 
-## 2. Andrzej's decisions
+## 2. The compensating control (this is the load-bearing part)
 
-Recorded as made, per `CLAUDE.md` ("record every decision I make — the choice, the alternatives
-rejected, and the reason"). Each becomes a `decisions.md` entry.
+The append-only ledger had one safety property that was never its stated purpose: **immutability
+made unauthorized rewriting structurally impossible.** An agent could only append. A mutable
+`direction/` tree removes that, and would otherwise hand every agent write access to the statement
+of Andrzej's intent — where a wrong edit is caught by nobody, because there is no code or editor to
+contradict it.
 
-### D1 — `CLAUDE.md`'s rules split into `dev/docs/rules/`, loaded on demand
+So the rule below is not documentation hygiene bolted on afterwards; it is the control that
+replaces immutability, and **it lands before any `direction/` content exists.**
 
-The agent decides when to load a rule; `CLAUDE.md` retains only triggers and pointers.
+```markdown
+### Direction docs — NEVER revise without confirmation
 
-- **Rejected:** leaving `CLAUDE.md` monolithic. It is simple and self-enforcing, but it taxes
-  every session for rules most sessions never exercise.
+`dev/docs/direction/<topic>.md` states what Andrzej wants. Unlike every
+other doc it is MUTABLE — revised in place to match current intent, with
+no history, no supersession, no timestamps (git keeps history).
 
-### D2 — Review gates: the **trigger only** stays resident
+That mutability is exactly why it is the ONE tree an agent may never
+write unilaterally:
 
-`CLAUDE.md` keeps ~8 lines: that every change gets reviewed, that nothing ships unlooked-at, the
-pointer to `rules/review-gates.md`, and the never-restate-the-counts prohibition. The tier table,
-reviewer counts, context-vs-priming rule, round-2 trigger, disposition rule and structural-escalation
-rule all move.
+- **NEVER create, revise, reword, or delete anything under
+  `dev/docs/direction/` — including a single `Rejected` bullet — without
+  asking Andrzej and getting an explicit yes.** Propose the exact text
+  and wait for confirmation. "It follows from what he said" does NOT
+  satisfy this; he confirms the wording that actually lands.
+- **When direction looks stale, ASK — never edit.** If the work suggests
+  a direction doc no longer matches intent, surface it as a question.
+- **Confirm proactively.** When working in a topic, ask whether its
+  direction doc is still current rather than assuming it is.
 
-- **Rejected:** keeping the tier table resident (~40 lines) so a session can classify a change
-  without a read — the agent's own recommendation. Andrzej chose maximum extraction; the table
-  is the bulkiest resident candidate and a session that is about to review can afford one `Read`.
-- **Consequence, stated plainly:** a session must `Read` `rules/review-gates.md` before it can
-  tell a trivial change from a build one. See risk R1.
+Every other doc under `dev/docs/` an agent maintains on its own.
+This tree it does not.
+```
 
-### D3 — `direction.md` is REMOVED, its live content folded into other docs
-
-- **Rejected:** keeping it auto-loaded (it is the single largest always-on cost after `CLAUDE.md`,
-  and it is derived). **Rejected:** merely dropping the `@` to make it read-on-demand — that
-  leaves the reconciliation chore and the duplicate-truth problem untouched.
-
-### D4 — `decisions.md` is KEPT, pruned and sharded — not deleted
-
-- **Rejected:** deleting it and folding each live decision's rationale into the topic doc it
-  governs (Andrzej's initial instinct). Reversed on two findings surfaced during speccing:
-  (a) 120 files cite it, so folding converts the evidence graph into dangling references or
-  forces a 120-file rewrite; (b) **nothing else in the tree has a home for rejected
-  alternatives** — `architecture.md` is "what IS", `unrealed/*` is "what the engine does", and
-  `CLAUDE.md` explicitly forbids parking rationale in ephemeral specs. Deleting it would let a
-  future agent re-propose an already-killed design. Git history is not adequate preservation:
-  nobody greps deleted files.
-- **Rejected:** pruning only, leaving one file (zero citation churn, but still a 9k-line file).
-
-### D5 — Spec first, gated, then build
-
-This work touches 120+ files; a structural mistake is expensive to undo. It gets the **spec**
-moment — the one round that still opens wide.
+**Scope: `direction/` only** (Andrzej, 2026-07-25). `architecture.md`, `unrealed/*`, `spikes/`,
+`board/`, `rules/` and `docs/` stay agent-maintained — they record facts, and a wrong fact is
+contradicted by the code or the editor. A wrong statement of intent is contradicted by nothing.
 
 ## 3. Design
 
-### Part A — `CLAUDE.md` → `dev/docs/rules/`
+### Part 0 — the confirmation rule lands first
 
-**The cut rule.** Not section-by-section — *within* each section:
+`rules/documentation.md` (or resident `CLAUDE.md`, per Part A) gains the rule above, and
+`dev/docs/direction/README.md` states the model: mutable, topic-sharded, no history, confirmation
+required. **No `direction/<topic>.md` is written before this is committed.** It governs the
+migration itself, not just later edits.
 
-> **The trigger and the single most load-bearing fact stay resident. The procedure and the
-> rationale move out.**
+### Part A — move only the rare-trigger rules out of `CLAUDE.md`
 
-A router line must carry the fact, not just the pointer. `Run tests via bin/test, never pytest
-directly — full rules: dev/docs/rules/tests.md` survives an agent that never opens the file;
-`see rules/tests.md` does not.
+v1 moved 551 lines. Reviewers A and C both found that this is plausibly a **net context loss**: the
+two largest sections it moved (`review-gates` ~216, `documentation` ~96) are precisely the ones
+`CLAUDE.md` "After every change" fires on *every* change, so most sessions would re-read them as
+uncached tool output instead of reading them as a cached prefix. Andrzej's call: move only the
+sections whose trigger is genuinely rare.
 
-**Stays resident** (target: ~120 lines total):
+**Moves to `dev/docs/rules/` (193 lines):**
 
-| Section | Lines | Why it cannot move |
-|-------------------------------|-------|---
-| The repo this tool lives in | 22 | The `_scratch/` rule fires on *any* temp file in *any* session — the trigger is unpredictable, so a router line would have to be as long as the rule |
-| After every change | 14 | This section *is* the master router; everything else hangs off it |
-| Commits | 16 | Fires on every single change; cheaper to keep resident than to page in each time |
-| UnrealEd navigation | 31 | Already a router — it becomes the model for, and absorbs, the new `rules/` rows |
-| Review gates (trigger only) | ~8 | Per D2 |
+| New file | From | Lines | Trigger |
+|-------------------------|--------------------------|-------|---
+| `worktrees.md` | Feature worktrees | 84 | starting a feature |
+| `board.md` | TODOs / board | 38 | touching the backlog |
+| `spikes.md` | Spikes | 29 | running a spike |
+| `tests.md` | Tests | 21 | running tests |
+| `background-work.md` | Background / long-running | 21 | starting a background job |
 
-**Moves to `dev/docs/rules/`:**
+**Stays resident:** Review gates (216), Documentation (96), Code & CLI conventions (63), UnrealEd
+navigation (31), repo-this-lives-in (22), Commits (16), After every change (14).
 
-| New file | From | Lines | Router trigger in `CLAUDE.md` |
-|--------------------------|--------------------------|-------|---
-| `review-gates.md` | Review gates (body) | ~216 | before declaring any work done |
-| `documentation.md` | Documentation | 96 | before writing or updating any doc |
-| `worktrees.md` | Feature worktrees | 84 | before starting a feature |
-| `code-cli-conventions.md` | Code & CLI conventions | 63 | before changing uedctl code or adding a verb |
-| `board.md` | TODOs / board | 38 | before touching the backlog |
-| `spikes.md` | Spikes | 29 | before running a spike |
-| `tests.md` | Tests | 21 | before running tests |
-| `background-work.md` | Background / long-running | 21 | before starting a background job |
+Router lines carry the load-bearing fact, not just a pointer — `Run tests via bin/test, never
+pytest directly → dev/docs/rules/tests.md`, so an agent that never opens the file still gets the
+part that matters.
 
-Net: **671 → ~120 lines** resident (~8k tokens returned per session).
+**Router lines are plain backticked paths, NEVER `@` imports.** `direction.md` is auto-loaded today
+solely because `CLAUDE.md:591` writes it `@dev/docs/direction.md`. One `@dev/docs/rules/…` row
+silently negates the entire saving while the file still looks correct. Gated: `grep -n '@dev/docs/'
+CLAUDE.md` must return empty.
 
-`dev/docs/rules/README.md` indexes the set and states the load-on-demand contract.
+### Part B — replace both docs with `direction/`, one topic at a time
 
-### Part B — `direction.md` removal
+Eleven topics, seeded from `direction.md`'s 16 sections:
 
-Every section gets an explicit destination. **This table is the completion checklist** — the work
-is not done until every row is discharged and `direction.md` is deleted.
+| `direction/<topic>.md` | Seeded from |
+|--------------------------|---
+| `scope.md` | Scope: a generic UE1 tool |
+| `projects-and-config.md` | Projects, substrates, and the global CLI |
+| `trunk-and-editor.md` | T3D trunk is source of truth + the git-committed T3D tree |
+| `organization.md` | Folders + Labels |
+| `materialize.md` | `level materialize` + lighting/BSP as build output |
+| `safety.md` | Safety: never irretrievably clobber |
+| `containers.md` | Container isolation / code-content substrate split |
+| `generators.md` | Generator pattern |
+| `packages.md` | One package-format core |
+| `asset-catalog.md` | The asset catalog |
+| `terminology.md` | Terminology |
+| *(not a direction topic)* | No back-compat cruft + Explicit/discoverable/model-side → `CLAUDE.md` "Code & CLI conventions" (stays resident per Part A) |
 
-| `direction.md` section | Destination | Kind |
-|-------------------------------------------|--------------------------------------|---
-| Scope: a generic UnrealEngine-1 tool | `architecture.md` (scope preamble) | is |
-| Projects, substrates, and the global CLI | `architecture.md`; unbuilt parts → `board/to-spec.md` | mixed |
-| T3D trunk is source of truth | `architecture.md` | is |
-| The trunk: git-committed T3D tree | `architecture.md` | is |
-| Terminology | `architecture.md` (terminology section) | is |
-| Folders | `architecture.md` | is |
-| Labels | `architecture.md` | is |
-| Materializing: `level materialize` | `architecture.md` | is |
-| Safety: never irretrievably clobber | `architecture.md` | is |
-| Lighting/BSP are build output | `architecture.md` + `unrealed/t3d.md` | is |
-| Container isolation / substrate split | `architecture.md` | is |
-| Generator pattern | `architecture.md` + `rules/code-cli-conventions.md` | mixed |
-| One package-format core | `architecture.md` | is |
-| The asset catalog | `board/to-spec.md` (largely unbuilt) | want |
-| No back-compat cruft | `rules/code-cli-conventions.md` | rule |
-| Explicit, discoverable, model-side | `rules/code-cli-conventions.md` | rule |
+**Each topic doc has two sections:** *What we want*, and *Rejected* — what we deliberately are not
+doing and why. `Rejected` is forward-looking (it stops a future session re-proposing a killed
+design), which is why it survives a model that drops history. It is revised in place like
+everything else: when something stops being rejected, the bullet is edited or deleted.
 
-That the sections sort cleanly into **is** (→ `architecture.md`), **want** (→ board) and **rule**
-(→ `rules/`) is itself the argument that `direction.md` was three docs wearing one coat.
+**The migration is an interview, not a distillation.** Per Part 0, every topic doc's content needs
+Andrzej's explicit confirmation. For each topic, in order:
 
-**Also required:** remove the `@` import from `CLAUDE.md`; delete the `direction.md` row from
-`dev/docs/README.md`'s "Which doc is for what" table and the two paragraphs below it that contrast
-`direction.md` with `architecture.md`; retarget the 10 citing files.
+1. Draft *What we want* from that topic's `direction.md` section(s).
+2. Sweep `decisions.md` for that topic's still-relevant **rejected alternatives** and draft the
+   `Rejected` bullets. (Only rejected alternatives are harvested — decision *history* is not.)
+3. Put both to Andrzej for confirmation, as text, and wait.
+4. Write only what he confirms; commit.
 
-### Part C — `decisions.md` prune + shard, as TWO separate commits
+`direction.md` and `decisions.md` are deleted only after **all eleven** topics are confirmed —
+never partially, so the tree is never in a state where the target has no home.
 
-**C1 — shard (mechanical, verifiable, first).**
+### Part C — citation migration
 
-```
-dev/docs/decisions/
-  README.md      <- the preamble: purpose, format, pruning rules, index of shards
-  2026-06.md
-  2026-07.md
-```
+Both deleted files are heavily cited. Corrected counts (v1's were wrong by ~4x; re-verified
+2026-07-25, repo-wide, excluding `.git/` and `.claude/worktrees/`):
 
-Monthly shards, entries in their existing order, **no content changes whatsoever** — the commit
-must be provably content-preserving (see verification below). Citation migration is mechanical:
-a dated citation (`decisions.md 2026-07-25 17:20 UTC`) rewrites to `decisions/2026-07.md`; an
-undated one points at `decisions/README.md`.
+| Cited file | Citing files | Composition |
+|-----------------|--------------|---
+| `decisions.md` | **171** | 122 `.md`, **45 `.py`**, 3 `.sh`, `pyproject.toml` |
+| `direction.md` | **45** | 40 `.md`, **5 `.py`** |
 
-**C2 — prune (judgement, risky, second, separately reviewed).**
+Policy per class:
 
-Only the two classes the preamble already permits: entries a later one has **wholly** superseded,
-and spike-result/feasibility-"gate" notes whose evidence lives in `spikes/`. Each pruned entry is
-listed in the commit message with the entry that supersedes it. **Partially-superseded entries
-stay** — their live half still governs.
+- **Code comments** (`uedctl/*.py`, `bin/_venv.sh`, `pyproject.toml`, spike harnesses) — retargeted.
+  `CLAUDE.md` requires findings to be back-referenced from code comments, so these are load-bearing
+  by house rule, not incidental. **This is what makes the batch a `build` row, not docs-only, and
+  `bin/test` must run.**
+- **Durable dev docs** (`architecture.md` alone cites `decisions.md` 46 times, plus `spikes/`,
+  `board/`, `unrealed/`) — retargeted to the owning `direction/<topic>.md` or rules file.
+- **Ephemeral `specs/` + `plans/`** (62 + 18 files) — **not** retargeted. They are deleted when
+  their work lands; rewriting them is churn with a short half-life. Stated explicitly so the link
+  check can exempt them.
 
-**Why two commits:** sharding is mechanical and can be verified by diff; pruning is a 229-entry
-judgement call where one wrong call silently destroys a live decision. Bundling them would hide
-the risky half inside the safe half's diff — exactly the "one risky change hiding among many safe
-ones" case `CLAUDE.md` says to split.
+### Part D — rule text the restructure forces
+
+v1 claimed "relocation, not a rewrite" and all three reviewers falsified it. Enumerated here so
+each is reviewed now rather than improvised at build time:
+
+- `CLAUDE.md` "The dev docs split by role" — the three-lane `direction.md`/`decisions.md`/
+  `architecture.md` description and the "reconcile `direction.md`" maintenance rule are replaced by
+  the `direction/` model.
+- `CLAUDE.md` NOT-trivial list — drops `dev/docs/direction.md`/`decisions.md`, gains
+  `dev/docs/direction/*.md` and **`dev/docs/rules/*.md`**. Without the latter, a one-line edit to a
+  relocated rule becomes classifiable as trivial — an observable weakening of the gate caused by
+  the move itself.
+- `CLAUDE.md` "record every decision I make … in the durable, append-only `decisions.md`" — replaced
+  by the confirmation rule; there is no append-only ledger to record into.
+- `CLAUDE.md` "Never point a durable doc at a spec for the rationale and rejected alternatives;
+  point it at a `decisions.md` entry" — retargeted to `direction/<topic>.md` "Rejected".
+- `CLAUDE.md` internal `see **X** below/above` cross-references at 8 sites, wherever the target
+  section moved out.
+- `dev/docs/README.md` — **five** `direction.md` sites (the table row, the is/want gap paragraph
+  ×2, the Context-loading paragraph, and "See `direction.md` + the board"), plus a new `rules/` row
+  and a new `direction/` row. That table is authoritative on which doc owns what.
 
 ## 4. Risks
 
 | # | Risk | Mitigation |
-|----|--------------------------------------------------------|---
-| R1 | **A rule the agent never loads cannot catch the agent.** Acute for review gates under D2: a session that does not realise a gate applies will not read the file that says it does | The resident trigger states the obligation unconditionally and names the file. Accepted residual risk, explicitly Andrzej's call |
-| R2 | Pruning a *partially*-superseded entry destroys a live decision | C2 is a separate commit; every prune names its superseding entry in the commit message; partial supersessions explicitly out of scope |
-| R3 | 120-file citation churn leaves dangling links | Link-check script over `dev/docs` + `docs` as a verification gate, run before and after |
-| R4 | Removing `direction.md` loses the free always-loaded target | Router line in `CLAUDE.md`: before any design question or spec, read `architecture.md` + `board/to-spec.md` |
-| R5 | Content lost in the `direction.md` fold | The Part-B table is a checklist; every row discharged before deletion. `direction.md` is deleted in the *same* commit that lands its fold, so a half-done fold cannot ship |
+|----|---------------------------------------------------------|---
+| R1 | **A mutable direction tree is silently rewritable** — the exact protection the append-only ledger provided for free | Part 0's confirmation rule, landed **before** any `direction/` content exists. This is the whole reason Part 0 is first |
+| R2 | Migration drops a live decision that `direction.md` never reconciled (its reconcile rule was known to lag) | The `decisions.md` sweep in Part B step 2 is per-topic and reviewed by Andrzej; the ledger is deleted only after all 11 topics are confirmed |
+| R3 | 171 + 45 citing files leave dangling references | Link check **repo-wide** — `uedctl/`, `bin/`, `pyproject.toml`, `pytest.ini`, not just the doc trees. Plus a string check, because the dominant citation form is prose (`` `CLAUDE.md` "Review gates" ``) which a link checker passes silently |
+| R4 | A live worktree (`brush-profile-generators`) holds the pre-restructure tree; git cannot auto-merge an append into a deleted file | Land only when no worktree is in flight, or reconcile by hand and say so in the commit message |
+| R5 | Part A's saving evaporates via an `@` import | Gated: `grep -n '@dev/docs/' CLAUDE.md` empty |
+| R6 | Confirmation traffic makes the migration slow enough to stall half-done | Topics are independent and committed individually; a stalled migration leaves confirmed topics landed and both old files still present, which is a valid resting state |
 
 ## 5. Verification
 
-- **Link check** — no reference in `dev/docs/` or `docs/` resolves to a missing file or a deleted
-  section anchor. Before/after comparison, run as a script.
-- **Shard content-preservation (C1)** — concatenating the shards in order reproduces the original
-  entry set exactly: entry count 229, and every `^## ` heading present with identical text.
-- **Fold completeness (Part B)** — every row of the Part-B table discharged; `direction.md` gone;
-  no surviving `@dev/docs/direction.md` import.
-- **Resident size (Part A)** — `CLAUDE.md` ≤ ~130 lines; every moved section reachable from a
-  router line that carries its load-bearing fact.
-- **House rule** — no user-facing doc under `docs/` references anything under `dev/docs/`
-  (`CLAUDE.md` "Documentation"). The `rules/` tree must not leak into the user cut.
+- **Repo-wide link check** — no reference in any tracked file resolves to a missing file.
+- **Prose-citation check** — no file cites `` `CLAUDE.md` "<moved section>" ``, `direction.md`, or
+  `decisions.md` outside the exempted ephemeral `specs/`+`plans/`.
+- **`bin/test` passes** — code comments are in scope, so this is a build row.
+- **`grep -n '@dev/docs/' CLAUDE.md`** returns empty.
+- **No `see **X**` in `CLAUDE.md`** points at a section it no longer holds.
+- **Topic coverage** — all 16 `direction.md` sections are accounted for by the Part-B table, and
+  both old files are deleted only after all 11 topics are confirmed and committed.
+- **`docs/` house rule** — no user-facing doc references `dev/docs/`. Currently clean; keep it.
 
-## 6. Out of scope
+## 6. Out of scope — log to `board/inbox.md`
 
-- **`Tools/uplayctl/CLAUDE.md`**, which mirrors these rules by hand. Whether it should reference
-  the same `rules/` tree or keep mirroring is a real question → file on `board/inbox.md`.
-- The user-facing `docs/` tree — untouched.
-- Any change to what the rules *say*. This is a **relocation**, not a rewrite: a rule whose
-  wording changes is a separate, separately-gated change. (Unavoidable exception: the review-gates
-  trigger text is newly written per D2.)
-- `board/inbox.md` (2,602 lines) and `board/done.md` (1,125 lines), which are also large and also
-  unpruned → file on `board/inbox.md`.
+- **`CLAUDE.md` "The repo this tool lives in" is factually wrong in this checkout** — it says
+  uedctl lives at `Tools/uedctl/` inside `dx_lum` with `_scratch/` "two levels up"; the git toplevel
+  is `/home/neob91/Documents/Dev/uedcli` and there is no `Tools/`. Part A keeps this section
+  resident, so the error stays in the most privileged position in every session's context.
+- **`CLAUDE.md` "Feature worktrees" asserts this repo's `.claude/settings.json` sets
+  `worktree.baseRef: "head"`** — that file does not exist. Part A moves this text into
+  `rules/worktrees.md`, where it would be equally wrong.
+- **`Tools/uplayctl/CLAUDE.md`** mirrors these rules by hand and is in a **different repository** —
+  this restructure silently desynchronises it.
+- `dev/docs/README.md`'s table already omits ~8 docs; `board/inbox.md` (2,602 lines) and
+  `board/done.md` (1,125) are unpruned.
 
 ## 7. Sequencing
 
-Each step is committed and pushed on landing; the gate runs over the batch per `CLAUDE.md`.
+Per `CLAUDE.md`, specced pipeline work takes a **plan round** — v1 skipped it and reviewer C caught
+that. This spec is gated, then a plan doc is written and gated, then the parts are built.
 
 1. This spec → **spec gate**.
-2. Part A (rules split) → build gate.
-3. Part B (`direction.md` fold + delete) → build gate.
-4. Part C1 (shard) → build gate.
-5. Part C2 (prune) → build gate, separately.
-6. `decisions.md` entries for D1–D5; `dev/docs/README.md` table updated; spec deleted.
+2. **Plan doc** → plan gate.
+3. Part 0 (confirmation rule + `direction/README.md`) → build gate. **Nothing under `direction/`
+   is written before this lands.**
+4. Part A (rules split, 193 lines) → build gate.
+5. Part B, topic by topic, each confirmed by Andrzej before it is written.
+6. Part C + D (citations, forced rule text), then delete `direction.md` + `decisions.md`.
+7. Update `dev/docs/README.md`; log §6 items to `board/inbox.md`; delete this spec.
