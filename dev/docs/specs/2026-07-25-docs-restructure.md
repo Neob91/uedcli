@@ -24,9 +24,9 @@ Success, in order of what actually matters:
    and 18:42 all postdate the newest one it reconciles (10:18). After this there is one home per
    topic and nothing to reconcile.
 
-**A side effect, not the goal:** resident context drops from **1,053 lines** (`CLAUDE.md` 671 +
-the `@dev/docs/direction.md` import's 382) to **~653** — 671 − 74 moved + ~22 (the confirmation
-rule) + ~12 (router rows), plus a ~22-line auto-loaded `direction/README.md`. ~38%.
+**A side effect, not the goal:** resident context drops from **1,063 lines** (`CLAUDE.md` 671 +
+the `@dev/docs/direction.md` import's **392**) to **~653** — 671 − 74 moved + ~22 (the confirmation
+rule) + ~12 (router rows), plus a ~22-line auto-loaded `direction/README.md`. ~39%.
 
 **Be clear that most of that is cheap.** Roughly 91% of the line reduction comes from replacing one
 `@` import with an index; the rule moves add ~59 and the confirmation rule costs ~22 back. If line
@@ -281,7 +281,7 @@ All three are in the diff, so `CLAUDE.md` forbids logging them instead of dealin
 Re-run before building — these have been wrong in every prior revision:
 
 ```sh
-wc -l CLAUDE.md dev/docs/direction.md              # 671, 382  (resident today = 1053)
+wc -l CLAUDE.md dev/docs/direction.md              # 671, 392  (resident today = 1063)
 grep -rl 'decisions\.md' . --exclude-dir=.git --exclude-dir=.claude | wc -l   # 171 (170 excl. itself)
 grep -rl 'direction\.md' . --exclude-dir=.git --exclude-dir=.claude | wc -l   # 45  (44  excl. itself)
 grep -cE '^## [0-9]{4}-' dev/docs/decisions.md     # 227  (naive '^## ' gives 229: '## Format'
