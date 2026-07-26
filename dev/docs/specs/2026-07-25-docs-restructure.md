@@ -217,7 +217,7 @@ against a frozen count.
 | ephemeral `specs/` + `plans/` | 62 of 64 specs, 18 of 23 plans | exempt from retarget **and from all three checks** — **except the 13 files reachable from `to-build.md`**, which are about to be executed |
 
 Two board sites (`inbox.md:74-83`, `board/README.md:43`) cite sections that now **stay resident**;
-they need *editing*, not retargeting — `inbox.md`'s item even names `rules/worktrees.md`, a file
+they need *editing*, not retargeting — `inbox.md`'s item even names a worktrees rules file, which is a file
 Part A no longer creates.
 
 **Accepted cost:** these citations move from an immutable dated anchor to a revise-in-place doc, so

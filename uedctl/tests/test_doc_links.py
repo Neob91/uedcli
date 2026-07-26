@@ -320,3 +320,52 @@ def test_headings_inside_code_fences_are_not_anchors(tmp_path: Path) -> None:
     doc.write_text("[phantom](real.md#not-a-heading)\n", encoding="utf-8")
     with pytest.raises(AssertionError, match="cites missing anchors"):
         test_markdown_anchors_resolve(doc)
+
+# --- prose citations ------------------------------------------------------------------------
+# The dominant citation form in this tree is PROSE, not a markdown link: `dev/docs/rules/spikes.md`
+# "pin the finding". A link checker passes all of it, which is why the restructure's ~177-file
+# retarget had no check behind it.
+#
+# SCOPE, deliberately narrow. A blanket "every backticked path must exist" flags ~150 legitimate
+# references: plans naming files they will create, paths into other repos, `_scratch/` (gitignored
+# by design), and spike-internal relatives. Those are not defects, and a check that cries wolf at
+# them gets deleted. So this guards exactly what the migration creates and repoints at — the three
+# new doc trees. A citation into `direction/`, `rationale/` or `rules/` that does not resolve is
+# always a real defect, because those files are the retarget destinations.
+
+_NEW_TREES = ("dev/docs/direction/", "dev/docs/rationale/", "dev/docs/rules/")
+_PROSE_PATH = re.compile(r"`([A-Za-z0-9_./-]+/[A-Za-z0-9_.-]+\.(?:md|py|sh|toml|rs))`")
+
+
+def _declared_direction_topics() -> frozenset[str]:
+    """Topic files listed in `direction/README.md`'s index.
+
+    The index is the tree's manifest, so a citation to a topic it declares is a legitimate forward
+    reference while that topic is still pending migration — not rot. A citation to a path the index
+    does NOT declare is rot, which is what this distinction buys.
+    """
+    idx = REPO / "dev/docs/direction/README.md"
+    if not idx.is_file():
+        return frozenset()
+    return frozenset(re.findall(r"`?([a-z0-9-]+\.md)`?", idx.read_text(encoding="utf-8")))
+
+
+def _prose_paths(path: Path) -> list[str]:
+    text = _FENCE.sub("", path.read_text(encoding="utf-8", errors="replace"))
+    return _PROSE_PATH.findall(text)
+
+
+@pytest.mark.parametrize("doc", _checked_docs(), ids=lambda p: str(p.relative_to(REPO)))
+def test_prose_citations_into_the_new_trees_resolve(doc: Path) -> None:
+    """A backticked path into `direction/`, `rationale/` or `rules/` points at a real file."""
+    broken = []
+    for ref in _prose_paths(doc):
+        norm = ref if ref.startswith("dev/docs/") else "dev/docs/" + ref.lstrip("./")
+        if not norm.startswith(_NEW_TREES):
+            continue
+        if any((base / ref).exists() for base in (doc.parent, REPO, REPO / "dev/docs")):
+            continue
+        if norm.startswith("dev/docs/direction/") and Path(ref).name in _declared_direction_topics():
+            continue  # declared in the index, pending migration
+        broken.append(ref)
+    assert not broken, f"{_rel(doc)} cites missing paths in the new trees:\n  " + "\n  ".join(broken)
