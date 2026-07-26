@@ -83,7 +83,14 @@ def format_polys(actor: Actor, name: str) -> str:
 
 
 def _coord_component(d) -> str:
-    return str(int(d)) if d == d.to_integral_value() else str(d)
+    """A reported world coordinate: tolerance-snapped, then formatted by the one shared formatter.
+
+    `clean` matters here because these are DERIVED coordinates — `list_vertices` runs the vertices
+    through the actor transform, so a brush sitting exactly on Y=228 reads 227.999994 after a 180°
+    yaw (UE1's GMath table gives sin = -8.742278e-08). Without the snap this verb and `actor bbox`
+    print different numbers for the same corner."""
+    from .emit import clean, fmt_coord   # local: emit imports model, query imports emit lazily elsewhere
+    return fmt_coord(clean(d))
 
 
 def list_vertices(actor: Actor) -> list[dict]:
@@ -373,11 +380,8 @@ def list_mover_keys(actor) -> list[dict]:
     base_rot = rotation.actor_rotation_uu(actor)
 
     def trip(t):
-        out = []
-        for c in t:
-            d = c if isinstance(c, Decimal) else Decimal(str(c))
-            out.append(int(d) if d == d.to_integral_value() else float(d))
-        return out
+        from .emit import num_coord
+        return [num_coord(c) for c in t]
 
     rows: list[dict] = []
     for i, off_pos, off_rot in movers.mover_keys(actor):

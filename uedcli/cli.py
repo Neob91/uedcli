@@ -663,9 +663,9 @@ def build_parser() -> argparse.ArgumentParser:
                           "excludes --pivot/--pivot-actor")
     rg = rot.add_mutually_exclusive_group()
     rg.add_argument("--pivot", type=parse_coord, default=None, metavar="X,Y,Z",
-                    help="explicit world pivot (with --by only; default: the most grid-aligned of "
-                         "the selection's bbox CENTER and its vertices/Locations — the center wins "
-                         "ties, so a symmetric selection turns in place)")
+                    help="explicit world pivot (with --by only; default: the LOCATION of the set "
+                         "member nearest the bbox center — an authored point, so the pivot keeps "
+                         "the grid you built on and a lone actor turns in place)")
     rg.add_argument("--pivot-actor", dest="pivot_actor", default=None,
                     help="use this actor's Location as the pivot (with --by only)")
     _tree_flag(rot)
@@ -709,9 +709,9 @@ def build_parser() -> argparse.ArgumentParser:
                           "orbits each Location about the pivot (Loc' = P + S*(Loc-P))")
     sg = scl.add_mutually_exclusive_group()
     sg.add_argument("--pivot", type=parse_coord, default=None, metavar="X,Y,Z",
-                    help="explicit world pivot (with --by only; default: the most grid-aligned of "
-                         "the selection's bbox CENTER and its vertices/Locations — the center wins "
-                         "ties, so a symmetric brush mirrors/scales in place)")
+                    help="explicit world pivot (with --by only; default: the LOCATION of the set "
+                         "member nearest the bbox center — an authored point, so the pivot keeps "
+                         "the grid you built on and a lone brush mirrors/scales in place)")
     sg.add_argument("--pivot-actor", dest="pivot_actor", default=None,
                     help="use this actor's Location as the pivot (with --by only)")
     _tree_flag(scl)

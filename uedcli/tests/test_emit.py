@@ -195,6 +195,18 @@ def test_a_non_finite_coordinate_is_rejected_at_the_front_door(value):
     assert "finite" in str(exc.value)
 
 
+@pytest.mark.parametrize("value", [float("inf"), float("-inf"), float("nan"), Decimal("Infinity"),
+                                   Decimal("NaN")])
+def test_fmt_coord_rejects_a_non_finite_instead_of_tracebacking(value):
+    # `cli.parse_coord` builds coordinates with `Decimal(p)`, which ACCEPTS inf/nan, and
+    # `int(Decimal("Infinity"))` raises OverflowError — which `dispatch()` does not catch, so
+    # `brush scale --to inf,1,1` printed a traceback. `fmt_coord` guards like every sibling emitter.
+    from uedcli.emit import fmt_coord
+    with pytest.raises(CoordinateError) as exc:
+        fmt_coord(value)
+    assert "finite" in str(exc.value)
+
+
 @pytest.mark.parametrize("value", [1e200, Decimal("5e24"), Decimal("-1e22"), Decimal("1e22")])
 def test_a_vertex_too_precise_to_round_is_a_named_error_not_a_traceback(value):
     # `fmt_vertex` rounds through `quantize(_SIX_DP)`, which under Decimal's 28-digit precision

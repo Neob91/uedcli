@@ -134,8 +134,11 @@ def test_within_bbox_honours_rotation_true_world_box(tmp_path, monkeypatch, caps
 def test_within_bbox_brush_boundary_edge_inclusive_vs_over(tmp_path, monkeypatch, capsys):
     # A brush whose max FACE sits exactly on the box edge IS contained (edge-inclusive, geometry —
     # not just a point on the corner); one unit past is excluded. (Sub-unit epsilon isn't tested: the
-    # trunk's `fmt_loc`/`clean` snaps sub-tolerance fractions to the grid, and the filter itself is
-    # exact-Decimal — so the meaningful boundary at trunk precision is integer-grid.)
+    # trunk's `fmt_loc`/`clean` snaps sub-tolerance fractions to the grid, and the filter compares
+    # within that SAME `emit.CLEAN_EPS` band — so the meaningful boundary at trunk precision is the
+    # integer grid, and the 1-uu "over" case is three orders clear of the tolerance. The tolerance is
+    # what makes a rotated actor contained in its own reported bbox; see
+    # `dev/docs/rationale/reported-coordinates.md`.)
     # size-20 cube = half-extent 10: at x=90 → max 100 (on edge); at x=91 → max 101 (over).
     _mkproject(tmp_path, monkeypatch, [
         _brush("OnEdge", (90, 50, 50), size=20),

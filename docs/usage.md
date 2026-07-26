@@ -211,14 +211,16 @@ box at its Location. Default prints four labeled `min`/`max`/`size`/`center` lin
 min|max|size|center` prints just that one bare `x,y,z` vector; `--json` emits `{min,max,size,center}`
 each `{x,y,z}`. The count summary goes to stderr.
 
-The reported numbers are **tolerance-snapped** (the emitter's `CLEAN_EPS` = 0.001): UE1's rotator
-table is not exact — a 180° yaw carries `sin = 8.74e-08`, so a ±64 vertex offset leaks ~6e-06 into the
-cross axis and a brush sitting exactly on `Y=228` would otherwise report `227.999994`. That reads as
-"off-grid" for geometry whose trunk is exact, so it snaps. A **genuine** fraction (a 2.5-uu semisolid,
-an odd-span center) is preserved — the snap only fires inside the tolerance band. The snap is confined
-to this report: `doctor`, the CSG core and the preview cameras still see the raw values, because a
-cleaned coordinate feeding a geometric *decision* would mask the faults those tolerances exist to
-catch.
+The reported numbers are **tolerance-snapped** to within 0.001 uu of a whole number: UE1's rotator
+table is not exact — a 180° yaw carries `sin = -8.742278e-08`, so a ±64 vertex offset leaks ~6e-06
+into the cross axis and a brush sitting exactly on `Y=228` would otherwise report `227.999994`. That
+reads as "off-grid" for geometry whose trunk is exact, so it snaps. A **genuine** fraction (a 2.5-uu
+semisolid, an odd-span center) is preserved — the snap only fires inside that band. `brush vertex
+list` and the stash summary snap the same way, so every report of a given world coordinate agrees.
+The snap is confined to reporting: `doctor`, the CSG core and the preview cameras still see raw
+values, because a cleaned coordinate feeding a geometric *decision* would mask the faults those
+tolerances exist to catch. `actor find --within-bbox` compares within the same tolerance, so a box
+piped from `actor bbox --field min/max` contains the actor it came from.
 
 ## Brush surfaces & geometry
 
@@ -436,13 +438,32 @@ rotated brush** (the PolyList stays local; the engine applies `Rotation` at CSG 
 **relative** rotation in **unreal rotation units** (16384 = 90°) `PITCH,YAW,ROLL` (negatives allowed);
 `--to` sets the field **absolutely in
 place** (Location never moves; excludes `--pivot`). The pivot is `--pivot X,Y,Z`, or
-`--pivot-actor NAME`'s Location, or (default) the most grid-aligned of the selection's **bbox center**
-and its vertices/Locations — the center wins ties, so a symmetric selection turns **in place** instead
-of swinging about a corner. A vertex that is *strictly* more grid-aligned than the center still wins,
-which is what keeps rotated geometry on the power-of-two grid.
+`--pivot-actor NAME`'s Location, or (default) **the `Location` of the set member nearest the
+selection's bbox center**. A brush's `Location` is the point that stays fixed when it turns about
+itself, and it is an **authored** coordinate — so the pivot inherits whatever grid you built on rather
+than being computed and rounded onto a different one, which is what previously left a rotated set
+misaligned. A lone brush therefore turns in place.
 
-> **The two reference points differ on purpose.** **Rotation and scale pivot the CENTER** (you turn a
-> thing about its middle). **Placement anchors the bbox-MIN corner** — `stash`/`prefab apply --at`,
+Details that follow from that:
+
+- **Brushes supply the pivot** when the selection has any; otherwise point actors' Locations do. So a
+  lone decoration — or several sharing one Location — turns about **exactly** its own Location, and an
+  off-grid prop is never dragged onto the grid by turning it.
+- **Equidistant members take the alphabetically first Name** — the pivot is always a Location that
+  exists in the trunk, never an average of several (which would divide by the number tied and land off
+  the grid its inputs were on). It does not depend on the order names arrive in the pipe. Use
+  `--pivot X,Y,Z` or `--pivot-actor` to pick a different one.
+- **Locations are used as authored**, with no filtering. A brush in the raw CSG form
+  (`Location=(0,0,0)` with world-space vertices) therefore contributes the world origin, and a set of
+  only those turns about the origin — `--pivot`/`--pivot-actor` is the way to override it.
+- **There is no fallback rule**: every actor has an *effective* Location — an unauthored property
+  takes its **class default** — so a non-empty selection always has a pivot. The default is resolved
+  from the class, not assumed to be zero: `Engine.Camera` defaults `Location=(X=-500,Y=-300,Z=300)`.
+  The class schema is consulted only for an actor that states no Location, so an ordinary rotate
+  stays offline.
+
+> **The two reference points differ on purpose.** **Rotation and scale pivot near the CENTER** (you
+> turn a thing about its middle). **Placement anchors the bbox-MIN corner** — `stash`/`prefab apply --at`,
 > `actor duplicate --at`, and stash capture's normalization all land the set's minimum corner on the
 > target, because you place a prefab by dropping a corner on a grid point you can read off and type.
 > Neither default is changing to match the other; an operation's reference point follows what the
@@ -456,7 +477,7 @@ A zero result is **written out** (`Rotation=(Pitch=0,Yaw=0,Roll=0)`), not omitte
 mesh uses `DrawScale`) sets MainScale on BRUSH actors — `--to` absolute in place, `--by` a per-axis
 factor that also orbits each Location about the pivot (`Loc' = P + S·(Loc−P)`). A negative axis
 mirrors; there is no separate `mirror` verb (`mirror` = `brush scale --by -1,1,1`). It shares
-`actor rotate`'s default pivot, so a symmetric brush mirrors **about its own center** — in place,
+`actor rotate`'s default pivot, so a lone brush mirrors **about its own `Location`** — in place,
 rather than reflecting across a corner and landing a full width away. A point actor is
 rejected.
 

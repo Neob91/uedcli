@@ -14,7 +14,7 @@ import subprocess
 import uuid
 from decimal import Decimal
 
-from .emit import emit_map
+from .emit import CLEAN_EPS, emit_map
 from .geometry import validate_brush
 from .model import Actor, Level
 
@@ -140,8 +140,17 @@ def union_bounds(actors):
 def aabb_within(inner, outer) -> bool:
     """True when AABB `inner`=(lo, hi) is FULLY CONTAINED in AABB `outer`=(lo, hi), edge-inclusive
     (a face sitting exactly on the outer edge counts as contained). Per-axis
-    `outer.lo ≤ inner.lo AND inner.hi ≤ outer.hi`. Both boxes come from `actor_bounds` (Decimal),
-    so the compare is exact; a point actor's zero-size box is contained iff its Location is in `outer`."""
+    `outer.lo ≤ inner.lo AND inner.hi ≤ outer.hi`, within `emit.CLEAN_EPS`. A point actor's zero-size
+    box is contained iff its Location is in `outer`.
+
+    **The tolerance is what makes `actor bbox` and `--within-bbox` agree, and it is load-bearing.**
+    The two sides are not the same kind of number: `inner` is raw `actor_bounds`, carrying UE1's GMath
+    rotator noise (a 180° yaw leaks ~6e-06 into the cross axis), while `outer` is an AUTHORED box —
+    typed by a user, or piped from `actor bbox --field min/max`, which reports tolerance-snapped
+    values. Comparing them exactly makes a rotated actor fail to be contained in its own reported
+    bounding box, so the documented `bbox → --within-bbox` composition silently returns nothing at
+    exit 0. CLEAN_EPS is the band the emitter already treats as noise; the noise it absorbs (~6e-06)
+    is ~170x below it, so no real containment decision turns on it."""
     (ilo, ihi), (olo, ohi) = inner, outer
-    return all(olo[i] <= ilo[i] and ihi[i] <= ohi[i] for i in range(3))
+    return all(olo[i] - CLEAN_EPS <= ilo[i] and ihi[i] <= ohi[i] + CLEAN_EPS for i in range(3))
 

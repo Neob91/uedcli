@@ -429,54 +429,103 @@ def world_vertices(actor) -> list[tuple[float, float, float]]:
     return out
 
 
-def _v2(c: Decimal) -> int:
-    """2-adic grid alignment of a coord: largest k with c an integer multiple of 2^k; 0 → big
-    (any power divides it); a non-integer → -1 (below the integer grid)."""
-    if c != c.to_integral_value():
-        return -1
-    n = abs(int(c))
-    if n == 0:
-        return 64                       # 0 is divisible by every power of 2
-    k = 0
-    while n % 2 == 0:
-        n //= 2
-        k += 1
-    return k
+_TIE_EPS = 1e-6            # equidistant-from-centre grouping; symmetric sets tie EXACTLY
+_ORIGIN = (Decimal(0), Decimal(0), Decimal(0))
 
 
-def best_grid_pivot(actors):
-    """The selection's most grid-aligned candidate point (spec): the bbox CENTRE + brush WORLD
-    vertices + point-actor Locations, scored by min-over-XYZ 2-adic valuation; max wins, ties →
-    nearest bbox centre (so the centre wins every tie it is in), then lexicographic. Fallback (all
-    fractional) → bbox centre snapped to the nearest integer."""
-    pts: list[tuple[Decimal, Decimal, Decimal]] = []
-    for a in actors:
-        if a.brush is not None:
-            # brushes contribute their WORLD VERTICES — NOT their Location. A brush Location
-            # (often the origin for builder brushes) scores align=64 (v2(0)=∞) and would beat
-            # every real vertex, collapsing the pivot to the origin. Only point actors (no brush)
-            # contribute their Location.
-            pts += [tuple(Decimal(str(round(c, 6))) for c in w) for w in world_vertices(a)]
-        elif a.location is not None:
-            pts.append(tuple(a.location))
-    if not pts:
-        return (Decimal(0), Decimal(0), Decimal(0))
-    xs = [float(p[0]) for p in pts]; ys = [float(p[1]) for p in pts]; zs = [float(p[2]) for p in pts]
-    cx, cy, cz = (min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2, (min(zs) + max(zs)) / 2
-    # The bbox CENTRE is a candidate too, and being at dist 0 it wins every align tie it is in.
-    # Without it a SYMMETRIC selection — a sign, a panel, any box — ties on align across all its
-    # vertices (the tie is total: equal align, and every corner equidistant from the centre), falls
-    # through to the lexicographic tiebreak, and pivots about the MIN CORNER, swinging the actor a
-    # full width sideways. Align still dominates: a fractional centre scores _v2 = -1 and a
-    # less-aligned one loses to a more-aligned vertex, so the on-grid guarantee is unchanged.
-    pts.append((Decimal(str(round(cx, 6))), Decimal(str(round(cy, 6))), Decimal(str(round(cz, 6)))))
+def actor_own_pivot(actor, class_default=None):
+    """The world point that stays fixed when THIS actor turns about itself — its `Location`, because
+    `world = Location + PostScale·R·MainScale·(v − PrePivot)` maps `v == PrePivot` to `Location`
+    exactly. An AUTHORED coordinate: whatever grid the designer built on, it is already on it.
 
-    def score(p):
-        align = min(_v2(p[0]), _v2(p[1]), _v2(p[2]))
-        dist = (float(p[0]) - cx) ** 2 + (float(p[1]) - cy) ** 2 + (float(p[2]) - cz) ** 2
-        return (align, -dist, tuple(-float(c) for c in p))    # max align, then nearest, then lex
+    The Location is taken as authored — there is NO filtering on whether it sits near the actor's own
+    geometry. A raw-CSG brush (`Location=(0,0,0)` with world-space vertices, as five `revolve` brushes
+    in the TubePlatform trunk are) therefore contributes the world origin, and a set of only those
+    rotates about the origin. Owner decision, 2026-07-26: use the Location of the closest brush in the
+    set. `--pivot X,Y,Z` / `--pivot-actor` are the escape hatch.
 
-    best = max(pts, key=score)
-    if min(_v2(best[0]), _v2(best[1]), _v2(best[2])) < 0:      # all fractional → grid-snap centre
-        return (Decimal(round(cx)), Decimal(round(cy)), Decimal(round(cz)))
-    return best
+    EVERY actor has one, as an EFFECTIVE value: an unauthored property takes its **class default**.
+    So an actor carrying no `Location` is wherever its class puts it — not "missing a pivot". This
+    never returns None, and there is no case to fall back from.
+
+    `class_default` is that resolved default (a Decimal triple, or None when the class does not
+    default `Location` — then, and only then, the effective value is the zero vector). It is a
+    parameter rather than a lookup because this module is offline and schema-free; the caller owns
+    the package search path.
+
+    **"A vector defaults to (0,0,0)" is FALSE and must not be reinstated** — `Engine.Camera` defaults
+    `Location=(X=-500,Y=-300,Z=300)` (verified live), and `dev/docs/architecture.md` names assuming
+    "the default is zero" as *the bug the typed compare exists to remove*: an all-zero Location
+    cleared to None once re-imported a Camera 655 uu away. Justifying this on "the emitter always
+    writes a Location line" is likewise wrong — true of uedcli's own output, but an emission detail
+    that says nothing about an imported or hand-written T3D."""
+    loc = actor.location
+    if loc is None:
+        return _ORIGIN if class_default is None else tuple(class_default)
+    # Normalised to Decimal: a caller that built the Actor in memory can hold floats, and the
+    # arithmetic downstream is Decimal.
+    return tuple(c if isinstance(c, Decimal) else Decimal(str(c)) for c in loc)
+
+
+def best_grid_pivot(actors, class_default=None):
+    """The pivot for `--by`: **the own-pivot (`Location`) of the set member nearest the selection's
+    bbox centre**, so rotation turns about an AUTHORED point rather than a synthesized one. Grid
+    alignment is therefore inherited — a Location the designer placed on the 16-grid keeps the set on
+    the 16-grid — instead of being computed and rounded, which is what previously left a rotated set
+    misaligned.
+
+    - **Brushes win.** If the set has any brush, only brush Locations are candidates; otherwise point
+      actors' Locations are. So a lone point actor (or several sharing one Location) pivots on its own
+      Location EXACTLY — misaligned props turn in place and are never dragged onto a grid.
+    - **Ties take the alphabetically first actor Name** (owner ruling, 2026-07-26): equidistant
+      candidates are not averaged — an authored Location is used verbatim, whichever way the tie
+      falls. Name order is independent of the set's order, so the pivot does not change with the order
+      names arrive in the pipe.
+    - Locations are used **as authored, unfiltered** (owner decision, 2026-07-26). A set of raw-CSG
+      brushes (`Location=(0,0,0)`, world-space vertices) therefore pivots about the world origin;
+      `--pivot`/`--pivot-actor` is the escape hatch for that.
+
+    `class_default` is an optional `fqcn -> Decimal triple | None` callable supplying a class's
+    default `Location`, consulted ONLY for an actor that does not state one (`Engine.Camera` defaults
+    it to `(-500,-300,300)`, so assuming zero would pivot 655 uu from where the engine puts the
+    actor). Omitted, such an actor falls to the origin — correct for every class that does not
+    default `Location`, which is nearly all of them.
+
+    There is NO fallback rule: every actor has an effective Location, so a non-empty set always has a
+    pivot. An empty set is the only other case, and it is the world origin.
+
+    `--pivot X,Y,Z` and `--pivot-actor NAME` override this entirely."""
+    if not actors:
+        return _ORIGIN
+    # The centre comes from `writes.union_bounds` — THE selection bbox, the same one `actor bbox`
+    # reports and `--within-bbox` tests against. Re-deriving it here drifted: a hand-rolled loop that
+    # skipped point actors whose Location is unauthored measured a different box than either, so the
+    # "nearest the centre" candidate was chosen against a centre no other verb agreed with.
+    # Local import: `writes` imports `rotation` (`writes.actor_bounds`), so this direction must not
+    # be a module-level edge.
+    from . import writes
+    lo, hi = writes.union_bounds(actors)
+    cx, cy, cz = ((float(lo[i]) + float(hi[i])) / 2 for i in range(3))
+
+    # Candidates carry their Name, because Name breaks ties. Brushes when the set has any.
+    def _pivot(a):
+        # `class_default` is resolved ONLY for an actor that does not state a Location — the schema
+        # (and so a resolvable package path) is needed exactly then, not on every rotate.
+        return actor_own_pivot(a, None if a.location is not None or class_default is None
+                               else class_default(a.cls))
+
+    own = [(a.name or "", _pivot(a)) for a in actors if a.brush is not None]
+    if not own:
+        own = [(a.name or "", _pivot(a)) for a in actors]
+
+    def _d2(nq):
+        q = nq[1]
+        return (float(q[0]) - cx) ** 2 + (float(q[1]) - cy) ** 2 + (float(q[2]) - cz) ** 2
+
+    near = min(_d2(nq) for nq in own)
+    # Equidistant candidates take the alphabetically first Name (owner ruling, 2026-07-26) — the
+    # pivot stays an authored Location rather than an average of several, which would divide by the
+    # number tied and land off the grid its inputs were on. Casefolded first, since names resolve
+    # case-insensitively everywhere else, with the raw name as the final discriminator.
+    return min((nq for nq in own if _d2(nq) - near <= _TIE_EPS),
+               key=lambda nq: (nq[0].casefold(), nq[0]))[1]

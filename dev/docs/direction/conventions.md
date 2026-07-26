@@ -113,7 +113,7 @@ Pick the verb by which of the two a new command is. Nothing is renamed to unify 
 Content reads and mutations are pure model-side compute against the T3D. The editor is
 touched only to **build** or **preview**, never to answer a question about the trunk.
 
-### PLACEMENT anchors the bbox-min corner; ROTATION pivots the center
+### PLACEMENT anchors the bbox-min corner; ROTATION pivots a member's own Location
 
 *(Owner ruling, 2026-07-26.)* Two different default reference points, and the split is
 deliberate — neither is "the bbox point we happened to have".
@@ -123,14 +123,27 @@ deliberate — neither is "the bbox point we happened to have".
   You place a prefab by dropping a corner on a known grid point; a corner is a coordinate you
   can read off the level and type, and it stays exact under repeated placement. **This is
   KEPT** — it is not to be "unified" with the rotation default.
-- **Rotation and scale pivot the CENTER.** `actor rotate --by` and `brush scale --by` default
-  to the most grid-aligned of the selection's bbox center and its vertices, with the center
-  winning ties. You turn a thing about its middle; a corner pivot swings a symmetric brush a
-  full width sideways, which is what it used to do.
+- **Rotation and scale pivot a MEMBER'S OWN LOCATION — the one nearest the bbox center.**
+  `actor rotate --by` and `brush scale --by` take the `Location` of the set member closest to
+  the center, not the center itself. You turn a thing about its middle, but through a point
+  that already exists in the trunk.
 
-Grid alignment still outranks the center in the rotation default: a strictly more 2-adic
-aligned vertex wins, because rotating about a less-aligned point walks on-16-grid geometry
-onto a coarser grid. So the center is the *tie-breaker*, not an override.
+**Never synthesize the pivot coordinate.** *(Owner ruling, 2026-07-26 — this is the load-bearing
+half.)* A `Location` is authored: whatever grid the designer built on, it is already on it, so
+grid alignment is **inherited rather than computed**. Every rule that instead *derives* a pivot
+has to round it back onto some grid, and picking that grid is where it goes wrong — a computed
+center rounded to a size-proportional grid can be less aligned than the geometry it turns, which
+walks on-16-grid brushes onto the 8-grid. Rotating about an authored point cannot do that.
+
+Consequences that follow, rather than being separate rules: a lone actor turns exactly in place;
+an off-grid decoration is never dragged onto the grid by being turned; several actors sharing a
+Location rotate about themselves.
+
+**Locations are taken as authored — nothing is filtered, snapped or averaged.** Equidistant
+members take the **alphabetically first Name**, so the pivot is always a point that exists in
+the trunk, and does not depend on the order the set arrived in. The accepted cost: a raw-CSG brush (`Location=(0,0,0)`, world-space vertices)
+contributes the world origin, so a set of only those turns about the origin.
+`--pivot X,Y,Z` / `--pivot-actor` is the override.
 
 The asymmetry is the point — an operation's default reference point follows what the
 operation means, not a single global choice of bbox landmark.

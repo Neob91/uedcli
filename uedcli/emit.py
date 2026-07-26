@@ -127,11 +127,22 @@ def fmt_coord(value) -> str:
     The reporting counterpart to `fmt_vertex`/`fmt_loc`, which pad to T3D's fixed 6-dp form because a
     FILE is their destination. Tolerance-snapping is deliberately NOT folded in: a caller reporting a
     *derived* coordinate pairs this with `clean`, one echoing an authored value formats it as given.
-    Single definition on purpose — the bbox report and the stash summary must agree."""
-    d = _to_decimal(value)
+    Single definition on purpose — the bbox report and the stash summary must agree. Guards like every
+    other emitter entry point: `parse_coord` accepts `inf`/`nan` (`Decimal` does), and `int(Infinity)`
+    raises `OverflowError`, which `dispatch()` does not catch — so a non-finite reached the user as a
+    traceback. `_guard` converts it to `CoordinateError` → the named exit 2 the conventions require."""
+    d = _guard(value)
     if d == d.to_integral_value():
         return str(int(d))
     return format(d.normalize(), "f")
+
+
+def num_coord(value):
+    """A coordinate as a JSON NUMBER: `int` when integral, else `float`. The `--json` counterpart to
+    `fmt_coord`, so a whole coordinate serialises as `512` rather than `512.0`. Same guard, so a
+    non-finite is a named `CoordinateError` rather than a traceback out of the serialiser."""
+    d = _guard(value)
+    return int(d) if d == d.to_integral_value() else float(d)
 
 
 def quote_group(value: str) -> str:

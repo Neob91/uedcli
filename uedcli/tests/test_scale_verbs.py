@@ -271,3 +271,84 @@ def test_uniform_postscale_rotate_does_not_warp_warn(capsys):
                            tree=None, container="c")
     rc, _ = _run(args, _level(a))
     assert rc == 0 and "non-uniform PostScale" not in capsys.readouterr().err
+
+
+# ── the default pivot, end to end through dispatch ──────────────────────────────────────────────
+# (build-review finding #6, 2026-07-26: the unit tests pinned `best_grid_pivot` but nothing asserted
+# what a user actually sees — that the verbs leave a lone actor where it was.)
+
+def _bounds(actor):
+    wv = R.world_vertices(actor)
+    return (tuple(min(w[i] for w in wv) for i in range(3)),
+            tuple(max(w[i] for w in wv) for i in range(3)))
+
+
+def _offset_cube(side, shift):
+    """A cube whose LOCAL verts are shifted off the origin, so its Location is NOT its bbox centre —
+    the only shape that can tell the own-Location rule apart from a bbox-centre rule."""
+    c = cube(side, side, side)
+    for p in c.polys:
+        p.vertices = [(x + shift, y + shift, z + shift) for x, y, z in p.vertices]
+    return c
+
+
+def test_rotate_by_pivots_on_a_members_location_not_the_bbox_centre():
+    """THE distinguishing case (build-review round 2, finding #5). A generator cube's Location is its
+    own bbox centre, so a symmetric brush cannot separate the rules — both answer the same point, and
+    a test built on one passes against either implementation. Shifting the local verts by +64 puts the
+    centre at 1064 while the Location stays 1000, so the superseded centre rule and the own-Location
+    rule differ by 64 uu."""
+    a = make_brush_actor("C", _offset_cube(128, 64.0), location=(D(1000), D(0), D(0)))
+    assert R.best_grid_pivot([a]) == (D(1000), D(0), D(0))     # NOT the centre (1064, 64, 64)
+    args = SimpleNamespace(cmd="actor", sub="rotate", names=["C"], to=None,
+                           by=(D(0), D(32768), D(0)), pivot=None, pivot_actor=None,
+                           tree=None, container="c")
+    rc, saved = _run(args, _level(a))
+    assert rc == 0
+    # Pivoting on its own Location leaves Location exactly put; a centre pivot would have moved it.
+    assert tuple(saved.actors["C"].location) == (D(1000), D(0), D(0))
+
+
+def test_rotate_by_leaves_a_lone_brush_where_it_was():
+    """The default pivot is the actor's own Location, so a 180° flip is in place: same bounds, to
+    within the GMath rotator noise the table cannot avoid."""
+    a = make_brush_actor("C", cube(128, 4, 128), location=(D(1056), D(228), D(112)))
+    before = _bounds(a)
+    args = SimpleNamespace(cmd="actor", sub="rotate", names=["C"], to=None,
+                           by=(D(0), D(32768), D(0)), pivot=None, pivot_actor=None,
+                           tree=None, container="c")
+    rc, saved = _run(args, _level(a))
+    assert rc == 0
+    after = _bounds(saved.actors["C"])
+    for side in (0, 1):
+        for i in range(3):
+            assert abs(after[side][i] - before[side][i]) < 1e-3, f"{after} moved from {before}"
+
+
+def test_mirror_leaves_a_lone_brush_where_it_was():
+    """`brush scale --by -1,1,1` is the documented un-mirror lever; it shares the same default pivot,
+    so a symmetric brush mirrors in place instead of reflecting across a corner and landing a full
+    width away."""
+    a = make_brush_actor("C", cube(128, 64, 32), location=(D(512), D(256), D(64)))
+    before = _bounds(a)
+    rc, saved = _run(_scale_args(["C"], by=(D(-1), D(1), D(1))), _level(a))
+    assert rc == 0
+    after = _bounds(saved.actors["C"])
+    for side in (0, 1):
+        for i in range(3):
+            assert abs(after[side][i] - before[side][i]) < 1e-3, f"{after} moved from {before}"
+
+
+def test_an_unstated_location_orbits_from_its_CLASS_default_not_zero():
+    """The orbit must read the same EFFECTIVE Location the pivot does. `Engine.Camera` states no
+    Location and defaults it to (-500,-300,300), so it pivots about its own position and must NOT
+    move; with the orbit assuming zero it landed at (-800,200,0) — the assume-zero bug half-fixed."""
+    a = Actor(name="Cam1", cls="Engine.Camera", location=None)
+    args = SimpleNamespace(cmd="actor", sub="rotate", names=["Cam1"], to=None,
+                           by=(D(0), D(16384), D(0)), pivot=None, pivot_actor=None,
+                           tree=None, container="c", project=None)
+    with mock.patch.object(dispatch_mod, "_default_location_for",
+                           return_value=lambda fq: (D(-500), D(-300), D(300))):
+        rc, saved = _run(args, _level(a))
+    assert rc == 0
+    assert tuple(saved.actors["Cam1"].location) == (D(-500), D(-300), D(300))

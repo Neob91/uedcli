@@ -107,9 +107,13 @@ and [`spikes/2026-07-05-git-merge-t3d-layout/`](spikes/2026-07-05-git-merge-t3d-
   matching over the class schema/defaults, spec 2026-07-18 §7 — see the actor-prop section).
   **Spatial filtering** lives in the same find handler, alongside `--prop`: `actor find
   --within-bbox X0,Y0,Z0,X1,Y1,Z1` keeps actors whose world AABB is fully inside the box, a Decimal
-  predicate (`writes.aabb_within`, edge-inclusive) over `writes.actor_bounds` — the SAME full-transform
-  world bounds `actor bbox` uses, so scaled/rotated brushes and point actors (a zero-size box at
-  Location) are all handled with no new geometry (spec 2026-07-24-find-spatial; decision 2026-07-24).
+  predicate (`writes.aabb_within`, edge-inclusive **within `emit.CLEAN_EPS`**) over
+  `writes.actor_bounds` — the same full-transform world bounds `actor bbox` reports, so
+  scaled/rotated brushes and point actors (a zero-size box at Location) are all handled with no new
+  geometry (spec 2026-07-24-find-spatial; decision 2026-07-24). The tolerance is what makes the two
+  agree: `actor bbox` reports tolerance-snapped values while `actor_bounds` carries the raw GMath
+  rotator noise, so an exact compare left a rotated actor outside its own reported box — see
+  [`rationale/reported-coordinates.md`](rationale/reported-coordinates.md).
   `parse_bbox` (`cli.py`) normalizes the two-corner token to Decimal `(lo, hi)`. Only the
   `--within-bbox` slice landed; `--near`/`--overlapping`/`--overlapping-bbox` remain unbuilt. The
   class filter is likewise resolved in the find handler (`dispatch._find_class_filter`, decision
@@ -409,8 +413,8 @@ absent it a member lands in its stored folder.
 **Apply is a MODEL-SIDE merge into the trunk — NO editor.** `dispatch._apply_set` (shared by
 `stash apply` and `prefab apply`) reads the captured set via the `LevelSource` seam, translates it
 to the placement anchor (`--at` → bbox-min corner — **kept deliberately**, see
-`direction/conventions.md` "PLACEMENT anchors the bbox-min corner; ROTATION pivots the center"; else
-the captured `anchor` for a stash, or the
+`direction/conventions.md` "PLACEMENT anchors the bbox-min corner; ROTATION pivots a member's own
+Location"; else the captured `anchor` for a stash, or the
 world ORIGIN for a prefab), auto-allocates fresh random-suffix names, sets `Group`, appends to
 `order`, and `src.save(...)`s the trunk — validating all geometry up front (all-or-nothing), no
 editor, no paste, no `MAP SENDTO`, no rebuild. The trunk has **no package manifest** (the load set
@@ -948,7 +952,15 @@ named `label` deliberately, since `tag` would collide with `Engine.Actor.Tag`. S
   `prop get` prints name-prefixed KV (`<name>\t<key>=<value>`) so a multi-key dump stays parseable,
   while a single CLI name keeps the bare (or `--kv`) output.
 - **`actor rotate <names…> --by PITCH,YAW,ROLL [--pivot …]`** rotates a
-  group about a shared pivot: orbit each Location by the matrix (`rotation.euler_to_matrix_uu` +
+  group about a shared pivot — by default `rotation.best_grid_pivot`, the **`Location` of the member
+  nearest the selection's bbox centre** (brushes first; alphabetically first Name breaks ties). It is
+  an AUTHORED point, so alignment is inherited rather than computed, and there is no fallback branch:
+  every actor has an effective Location (unauthored → the CLASS default, resolved via
+  `dispatch._default_location_for` → `_class_defaults`, never assumed zero — `Engine.Camera` defaults
+  it to `(-500,-300,300)`; the schema is touched only for an actor that states no Location). See
+  [`direction/conventions.md`](direction/conventions.md) "PLACEMENT anchors the bbox-min corner;
+  ROTATION pivots a member's own Location". Then:
+  orbit each Location by the matrix (`rotation.euler_to_matrix_uu` +
   `rotate_point`) and compose orientation into the actor `Rotation` field by per-component
   FRotator **field-addition** (`rotation.compose_uu`, editor parity) — the `PolyList` stays local
   (the engine applies `Rotation` at CSG build). Because rotation + `PrePivot` live in the actor (not

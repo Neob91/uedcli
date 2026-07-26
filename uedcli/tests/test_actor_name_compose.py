@@ -20,8 +20,14 @@ from uedcli.uprops import Prop
 
 # ── fixtures ──────────────────────────────────────────────────────────────────────
 
-def _actor(name, cls="Engine.Brush", props=None):
-    return Actor(name=name, cls=cls, location=None, props=list(props or []))
+def _actor(name, cls="Engine.Brush", props=None, location=(0, 0, 0)):
+    """The Location is STATED deliberately. These tests are about name composition (`-`, dedupe,
+    canonicalisation); an actor that states NO Location sends `actor rotate --by` to the class schema
+    for its default one — `Engine.Camera` really defaults it to (-500,-300,300) — which needs a
+    resolvable package path, i.e. a real project. Stating a Location keeps these the offline unit
+    tests they are meant to be."""
+    loc = None if location is None else tuple(Decimal(str(c)) for c in location)
+    return Actor(name=name, cls=cls, location=loc, props=list(props or []))
 
 
 def _two_actor_level():

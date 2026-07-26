@@ -26,6 +26,7 @@ from pathlib import Path
 from .driver import Driver, DriverError      # DriverError → top-level clean-exit catch (no traceback)
 from .editor import ensure_editor, stop_editor, EditorBusyError
 from .geometry import validate_brush, GeometryError
+from . import emit
 from .model import parse_t3d, parse_t3d_actors, Actor, CoordinateError, Level
 from .normalize import normalize_level, normalize_actor, canonical_actor_t3d, level_order, \
     is_builder_brush
@@ -2214,17 +2215,15 @@ def _ingest_actor_t3d(args, src, level, text, *, verb: str,
 
 
 def _fmt_coord_component(value) -> str:
-    """A single reported coordinate as a tidy string — delegates to `emit.fmt_coord`, the one
-    definition, so this and `stashlib.format_summary` cannot drift apart."""
-    from . import emit
+    """A reported coordinate as a tidy string — `emit.fmt_coord` is the one definition, shared with
+    `stashlib.format_summary` and `query._coord_component` so they cannot drift apart."""
     return emit.fmt_coord(value)
 
 
 def _num_coord_component(value):
-    """A bbox coordinate as a JSON number: `int` when integral, else `float`. Keeps whole-number
-    coords printing as `512` (not `512.0`) while still yielding valid JSON."""
-    d = value if isinstance(value, Decimal) else Decimal(str(value))
-    return int(d) if d == d.to_integral_value() else float(d)
+    """A reported coordinate as a JSON number — `emit.num_coord` is the one definition, shared with
+    `query.list_mover_keys`."""
+    return emit.num_coord(value)
 
 
 def _bbox_of(actors):
@@ -2235,8 +2234,8 @@ def _bbox_of(actors):
 
     Derived coordinates are TOLERANCE-SNAPPED for reporting (`emit.clean`, CLEAN_EPS = 0.001), the
     same rule the emitter applies to authored ones. UE1's GMath rotator table is not exact — a 180°
-    yaw carries `sin = 8.74e-08`, so a ±64 vertex offset leaks ~6e-06 into the cross axis and a brush
-    sitting exactly on `Y=228` reports `227.999994`. That is noise three orders below the weld grid
+    yaw carries `sin = -8.742278e-08`, so a ±64 vertex offset leaks ~6e-06 into the cross axis and a
+    brush sitting exactly on `Y=228` reports `227.999994`. That is noise ~170x below the weld grid
     (`doctor.WELD` = 1e-3) and it reads as "the rotate pushed my geometry off-grid" when the trunk is
     in fact exact. A genuine fraction — a 2.5-uu semisolid, an odd-span centre — is still preserved
     at 6-dp, because `clean` only snaps inside the tolerance band.
@@ -2245,7 +2244,6 @@ def _bbox_of(actors):
     because `doctor`, the CSG core and the preview cameras must decide on the real numbers. Cleaning
     a value that feeds a geometric decision would mask the faults those tolerances exist to catch.
     """
-    from . import emit
     lo, hi = writes.union_bounds(actors)
     lo = tuple(emit.clean(c) for c in lo)
     hi = tuple(emit.clean(c) for c in hi)
@@ -2843,6 +2841,26 @@ def _schema_resolver_for(project):
         project = config.resolve_project(env_project=os.environ.get("UEDCLI_PROJECT"),
                                          cwd=os.getcwd())
     return packages.schema_resolver(project, config.load_user_config())
+
+
+def _default_location_for(args):
+    """`fqcn -> Decimal triple | None`, the class's default `Location`, for `best_grid_pivot`.
+
+    Consulted ONLY for an actor that does not state a Location, so an ordinary rotate stays offline
+    and schema-free; the cost (and the need for a resolvable package path) is paid exactly when the
+    answer depends on it. `Engine.Camera` defaults `Location=(X=-500,Y=-300,Z=300)`, so assuming zero
+    would pivot 655 uu from where the engine puts the actor — the "the default is zero" bug
+    `architecture.md` records the typed compare as existing to remove.
+
+    A class whose schema cannot be resolved raises `uprops.SchemaError`, which the dispatch wrapper
+    turns into the usual named exit 2 — no silent zero fallback."""
+    project = getattr(args, "project", None)
+
+    def _lookup(fqcn):
+        text = _class_defaults(fqcn, project).get(("location", 0))
+        return rotation.parse_fvector(text) if text else None
+
+    return _lookup
 
 
 def _class_defaults(cls: str, project=None) -> dict:
@@ -3925,7 +3943,11 @@ def _dispatch(args) -> int:
             import json
             rows = []
             for r in query.list_vertices(level.actors[canonical]):
-                c = r["coord"]
+                # `clean` first: these are DERIVED world coords, so they carry the GMath rotator
+                # noise. Without it `--json` reports 228.000006 where the text table and
+                # `actor bbox --json` both report 228 — the machine-readable output being the noisy
+                # one is exactly what rationale/reported-coordinates.md rejects.
+                c = [emit.clean(v) for v in r["coord"]]
                 rows.append({"coord": {"x": _num_coord_component(c[0]),
                                        "y": _num_coord_component(c[1]),
                                        "z": _num_coord_component(c[2])},
@@ -4241,14 +4263,22 @@ def _dispatch(args) -> int:
                 return 2
             pivot = level.actors[pivot_canonical].location or (Decimal(0), Decimal(0), Decimal(0))
         else:
-            pivot = rotation.best_grid_pivot(targets)
+            pivot = rotation.best_grid_pivot(targets, _default_location_for(args))
         delta_uu = tuple(rotation.uu_field(c) for c in args.by)
         # Orbit with the SAME quantized delta the actors store, via the GMath table — so Location and
         # the stored Rotation are consistent AND match what the editor renders (not float degrees).
         R = rotation.euler_to_matrix_uu(*delta_uu)
+        default_loc = _default_location_for(args)
         for actor in targets:
             _warn_rotate_postscale_distortion(actor)
-            loc = actor.location or (Decimal(0), Decimal(0), Decimal(0))
+            # The ORBIT reads the same EFFECTIVE Location the pivot does. Using `or (0,0,0)` here
+            # while `best_grid_pivot` resolves the class default is the assume-zero bug half-fixed:
+            # an `Engine.Camera` stating no Location (class default (-500,-300,300)) pivots about
+            # its own position — so it must not move — but with a zero orbit it landed at
+            # (-800,200,0). Location is then always WRITTEN, exactly as `Rotation` is below: once a
+            # verb has computed a new value, omitting it would re-import as the class default.
+            loc = rotation.actor_own_pivot(
+                actor, None if actor.location is not None else default_loc(actor.cls))
             actor.location = rotation.rotate_point(loc, R, pivot)
             new_uu = rotation.compose_uu(delta_uu, rotation.actor_rotation_uu(actor))
             props = [(k, v) for k, v in actor.props if k != "Rotation"]
@@ -4351,10 +4381,13 @@ def _dispatch(args) -> int:
         elif pivot_actor_loc is not None:                # resolved above, BEFORE the class resolver
             pivot = pivot_actor_loc
         else:
-            pivot = rotation.best_grid_pivot(targets)
+            pivot = rotation.best_grid_pivot(targets, _default_location_for(args))
         S = tuple(Decimal(c) for c in args.by)
+        default_loc = _default_location_for(args)
         for actor in targets:
-            loc = actor.location or (Decimal(0), Decimal(0), Decimal(0))
+            # Same EFFECTIVE Location the pivot resolved — see the note in `actor rotate --by`.
+            loc = rotation.actor_own_pivot(
+                actor, None if actor.location is not None else default_loc(actor.cls))
             actor.location = tuple(pivot[i] + (loc[i] - pivot[i]) * S[i] for i in range(3))
             cur = rotation.actor_main_scale(actor)
             actor.main_scale = transform.FScale(

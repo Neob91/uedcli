@@ -118,9 +118,9 @@ def test_bbox_honours_rotation(tmp_path, monkeypatch, capsys):
 
 
 def test_bbox_snaps_gmath_rotator_noise_to_the_grid(tmp_path, monkeypatch, capsys):
-    """UE1's GMath table gives sin(180°) = 8.74e-08, not 0, so a ±64 vertex offset leaks ~6e-06 into
-    the cross axis: a box sitting exactly on Y=228 used to report `min 992,225.999994,48`. The trunk
-    is exact (whole-number Location and vertices) and the noise is three orders below doctor.WELD, so
+    """UE1's GMath table gives sin(180°) = -8.742278e-08, not 0, so a ±64 vertex offset leaks ~6e-06
+    into the cross axis: a box sitting exactly on Y=228 used to report `min 992,225.999994,48`. The
+    trunk is exact (whole-number Location and vertices) and the noise is ~170x below doctor.WELD, so
     the REPORTED box snaps it through emit.clean rather than printing off-grid-looking numbers for
     on-grid geometry."""
     a = make_brush_actor("Sheet", cube(128, 4, 128), location=(1056.0, 228.0, 112.0))
@@ -181,3 +181,36 @@ def test_bbox_dash_mixed_with_names_exits_2(tmp_path, capsys, monkeypatch):
     rc = dispatch.dispatch(_ns(proj, ["-", "P0"]))        # `-` is the SOLE source, not mixable
     assert rc == 2
     assert "stdin" in capsys.readouterr().err
+
+
+# ── the report must agree with the predicates that consume it ───────────────────────────────────
+
+def test_a_rotated_actor_is_within_its_own_reported_bbox(tmp_path, monkeypatch, capsys):
+    """Build-review finding #1, 2026-07-26: `actor bbox` reports tolerance-snapped bounds while
+    `--within-bbox` compared RAW ones, so piping `bbox --field min/max` into `find --within-bbox`
+    returned an empty set at exit 0 — the actor was not contained in its own reported box. The
+    containment predicate now compares within the same CLEAN_EPS band."""
+    from uedcli import writes
+    a = make_brush_actor("Sheet", cube(128, 4, 128), location=(1056.0, 228.0, 112.0))
+    a.props.insert(0, ("Rotation", "(Pitch=0,Yaw=32768,Roll=0)"))     # 180°, the noisy case
+    proj = _project(tmp_path, monkeypatch, [a])
+    rc = dispatch.dispatch(_ns(proj, ["Sheet"], json=True))
+    assert rc == 0
+    doc = json.loads(capsys.readouterr().out)
+    reported = (tuple(doc["min"][k] for k in "xyz"), tuple(doc["max"][k] for k in "xyz"))
+    assert writes.aabb_within(writes.actor_bounds(a), reported)
+
+
+def test_vertex_list_and_bbox_report_the_same_corner(tmp_path, monkeypatch, capsys):
+    """Build-review finding #2: `query._coord_component` was a second, UNSNAPPED formatter, so the
+    two verbs printed different numbers for the same world corner."""
+    from uedcli import query
+    a = make_brush_actor("Sheet", cube(128, 4, 128), location=(1056.0, 228.0, 112.0))
+    a.props.insert(0, ("Rotation", "(Pitch=0,Yaw=32768,Roll=0)"))
+    proj = _project(tmp_path, monkeypatch, [a])
+    rc = dispatch.dispatch(_ns(proj, ["Sheet"]))
+    assert rc == 0
+    hi = capsys.readouterr().out.splitlines()[1].split()[1]           # the "max" row
+    coords = {c for row in query.list_vertices(a)
+              for c in [",".join(query._coord_component(v) for v in row["coord"])]}
+    assert hi in coords, f"bbox max {hi} is not among the reported vertices {sorted(coords)}"
