@@ -1,6 +1,6 @@
 # Spec — per-surface texture verbs: `pan`, `rotate`, and `align --run`
 
-**Date:** 2026-07-26 · **Status:** gate passed (2 rounds); revised again for the 2026-07-26 owner rulings on root derivation and branching · **Evidence:**
+**Date:** 2026-07-26 · **Status:** gate passed (2 rounds), then extended by owner rulings — world-space align, reset-to-unit, subcommand modes, `one-tile`, and the `--fit-perimeter` tile fix. **Re-gate before planning.** · **Evidence:**
 [`../spikes/2026-07-26-poly-rotate-curved-track/`](../spikes/2026-07-26-poly-rotate-curved-track/README.md)
 
 > Ephemeral, per `CLAUDE.md` "Documentation". Once built, the durable half goes to
@@ -32,12 +32,37 @@ combination of shipped verbs.
 | `brush poly set --texture --add-flag --remove-flag --pan-to --pan-by` | `brush poly set --texture --add-flag --remove-flag` | `set` assigns STORED per-face fields. Pan/rotate transform the FRAME. Two different jobs. |
 | — | `brush poly pan (--to \| --by) U,V` | integer texel offset, promoted out of `set` |
 | — | `brush poly rotate --by UU` | a face on its own terms; no continuity guarantee |
-| `brush poly align --wall \| --floor [--fresh-frame]` | `brush poly align --wall \| --floor` | now aligns to WORLD SPACE, not to a seed face; `--fresh-frame` deleted |
-| `brush poly align --ring [--fresh-frame] [--fit-perimeter]` | `brush poly align --run [--turn UU] [--fit-perimeter]` | generalised from "cylinder sides" to "any connected run", coplanar sets allowed; `--fresh-frame` deleted |
+| `brush poly align --wall \| --floor [--fresh-frame]` | `brush poly align wall \| floor` | mode becomes a SUBCOMMAND; aligns to WORLD SPACE, not a seed face; `--fresh-frame` deleted |
+| `brush poly align --ring [--fresh-frame] [--fit-perimeter]` | `brush poly align run [--turn UU] [--fit-perimeter]` | generalised from "cylinder sides" to any connected run; coplanar sets allowed |
+| — | `brush poly align one-tile` | fit exactly one tile to each face — signs, monitors, light panels |
 
-Per `CLAUDE.md` "No back-compat cruft": `--pan-to`/`--pan-by` on `set`, the `--ring` spelling, and
-`--fresh-frame` on every align mode are **deleted outright** in the same change that adds their
-replacements. No aliases, no shims.
+### 2.0 Modes are SUBCOMMANDS, not a mutually-exclusive flag group
+
+`brush poly align <mode> <targets…|->`, with `<mode>` one of `wall`, `floor`, `run`, `one-tile`.
+Owner ruling 2026-07-26. The reason is that **the flags are disjoint per mode**:
+
+| mode | valid flags | shape of the operation |
+|------------|--------------------------|---
+| `wall` | — | stamp a world basis on coplanar faces; guarded vertical |
+| `floor` | — | same, guarded horizontal |
+| `run` | `--turn`, `--fit-perimeter` | walk a connected run, carry phase across seams |
+| `one-tile` | — | per-face fit; no continuity, no orientation guard |
+
+As a flag group that cannot be expressed: `-h` shows one blob in which most options are invalid for
+most modes, and every bad combination has to be caught at runtime — `polyalign.align()` already
+carries `"--fit-perimeter applies only to --ring"`, and the review rounds found the *missing*
+`--turn`-with-`--wall` and `--fit-perimeter`-with-`--wall` paths. As subcommands those errors become
+**structurally impossible** (argparse rejects them) and `brush poly align run -h` lists exactly the two
+flags that apply, which is what `CLAUDE.md` requires of `-h`.
+
+It also matches the precedent already in the CLI: **`brush build <shape>`** is the same problem — one
+operation, several parameterised variants with disjoint flags (`--sides` for cylinder,
+`--angle`/`--segments` for revolve, `--point` for extrude) — and it is already solved this way. The
+cost is depth (`brush poly align run` is four levels); consistency with `build` outweighs it.
+
+Per `CLAUDE.md` "No back-compat cruft": `--pan-to`/`--pan-by` on `set`, the `--wall`/`--floor`/`--ring`
+**flag** spellings, and `--fresh-frame` are **deleted outright** in the same change. No aliases, no
+shims.
 
 ### 2.1 `brush poly pan (--to | --by) U,V`
 
@@ -110,7 +135,7 @@ this in the help so nobody adds `--to` on the strength of the wrong argument.
   the verb for a one-off face (a sign, a panel, a soffit). Document it, and note the contrast with
   `--run --turn`, which is the run-aware operation.
 
-### 2.3 `brush poly align --run [--turn UU] [--fresh-frame] [--fit-perimeter]`
+### 2.3 `brush poly align run [--turn UU] [--fit-perimeter]`
 
 The generalisation of `--ring`. Walks a connected run of faces and lays one continuous texture along
 it: U follows the run, V across it, phase accumulating along the run.
@@ -175,6 +200,27 @@ version.
 **Closed runs are supported.** Not optional: the wrap-a-cylinder workflow
 (`poly find Tower --item Side | poly align --ring -`) is the only `--ring` use that ships, is
 documented in `usage.md` and `architecture.md`, and is covered by eight `test_ring_*` tests.
+
+**`--fit-perimeter` is BROKEN as shipped and must be fixed in this change.** It is documented as
+giving "an exact seam meet" and does not: it snaps the total U advance to a whole number of **texels**
+(`target = max(1, round(total_chord * density_u))`), but a texture repeats every **W texels**. Measured
+on the standard 8-sided R=256 cylinder with a 256-wide texture:
+
+| | total U advance | visible mismatch (mod 256) |
+|--------------------------|-----------------|---
+| default (leave the seam) | 1567.472357 | 31.47 texels |
+| `--fit-perimeter` today | 1567.000187 | **31.00 texels** |
+| corrected (whole tiles) | 1535.999876 | **0.0001 texels** |
+
+So it removes 0.47 texels of a 31.47-texel error. **The corrected rule is `target = round(total/W)·W`**
+— fit a whole number of TILES — which needs the texture's pixel width `W`. The catalog already records
+it (`texture_catalog` entries carry `width`/`height`), so it resolves offline; but it means
+`align run --fit-perimeter` **requires a synced catalog and exits 2 naming the ref** when the texture
+is absent, never assuming 256. Prototyped and measured by
+`spikes/2026-07-26-poly-rotate-curved-track/fit_demo.py`.
+
+Note this is the **same dependency `one-tile` needs**, so the texture-catalog coupling is not new to
+that mode — `--fit-perimeter` has needed it since it shipped and has been quietly wrong without it.
 
 **`--fit-perimeter` requires a CLOSED run and a quarter `--turn`**, exiting 2 naming the offending
 value otherwise:
@@ -261,7 +307,37 @@ generic fork error. This matters beyond message quality: a cap adjacent to exact
 degree-2 node, so a bare adjacency walk would happily walk *into* it and align it, where today it is a
 named exit 2 (`test_ring_rejects_cap_face`).
 
-### 2.4 Frame construction, and what it costs
+### 2.4 `brush poly align one-tile`
+
+Fit **exactly one tile of the texture to each face** — the sign / monitor / light-panel case. Owner
+request 2026-07-26.
+
+- **Per-face and independent.** Each face gets its own density and anchor; there is no shared frame
+  and no continuity between faces. That is why it is its own mode rather than a flag on `wall`/`floor`,
+  which would imply a shared frame it structurally cannot provide.
+- **No orientation guard.** Unlike `wall`/`floor` it accepts **any** face orientation — a sign goes on
+  a slanted face as happily as a vertical one.
+- **Orientation** comes from `builders._tex_basis(n̂)`, the same world-derived basis `wall`/`floor` use.
+- **It STRETCHES to fill, non-uniformly.** One tile spans the face's U extent and one tile its V
+  extent, so the image fills the face exactly and is distorted when the aspect ratios differ. That is
+  the point: a letterboxed sign is wrong, and authors size the brush to the sign or vice versa.
+  Aspect-preserving fit is a different operation and belongs to `brush poly scale`, where U and V
+  density are set explicitly.
+- **Anchor: the MINIMUM corner of the face's extent** measured along the chosen U/V axes (the min of
+  the vertices' projections). Texture `(0,0)` lands there, so the tile covers the face's bounding box
+  exactly. Deterministic, because the axes are a pure function of the normal. Rejected: centroid
+  anchoring, which needs a half-extent offset to mean the same thing and is harder to reason about.
+- **On a NON-RECTANGULAR face** (a triangle, a trapezoid, a cap tile) the tile covers the *bounding
+  box*, so the face shows a sub-region of the texture. Documented, not discovered.
+- **Requires the texture catalog**, for the same reason `--fit-perimeter` does: `|TextureU| = W / E_u`
+  needs the texture's pixel size. Exit 2 naming the ref when it is not in the catalog.
+
+Open, flagged rather than decided: `one-tile` is arguably a **scale** operation wearing an align hat —
+it sets density and anchor, not a shared frame — so it will overlap `brush poly scale` when that
+lands. Kept under `align` because the author's intent is "make this texture fit this face", which is
+alignment.
+
+### 2.5 Frame construction, and what it costs
 
 Orthogonal axes, phase measured on **one reference radius (the centreline)**.
 
