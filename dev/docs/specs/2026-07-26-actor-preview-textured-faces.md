@@ -1,15 +1,16 @@
 # Spec: textured faces for `actor preview` (`--faces wire|flat|textured`)
 
-**Status:** round 1 of the re-entry gate PASSED WITH FINDINGS (2026-07-26, 3 cold Opus; **no
-structural finding — all three confirmed the design holds**). §13 lists what they found; resolving it
-changes the artifact, so **round 2 (2 Opus) is owed**. Two items need an owner ruling first — §14.
+**Status:** re-entry round 1 passed with findings (2026-07-26, 3 cold Opus; **no structural
+finding**). All 22 findings resolved below and three owner rulings folded in. **Round 2 (2 Opus) is
+owed**, since resolving them changed the artifact.
 **DEPENDS ON** the on-deck texture-decoder work — see §12. Build order is fixed: that item first
 (with the §12 accessor folded into its scope), then all of this.
 **Requested by:** the owner, 2026-07-26, session `uedcli:preview-textured`.
 **Ephemeral:** scratch, per `CLAUDE.md`. On build, fold the outcome into
 [`architecture.md`](../architecture.md) "Preview internals", [`docs/usage.md`](../../../docs/usage.md)
 and [`docs/leveldesign/general/textures-and-surfaces.md`](../../../docs/leveldesign/general/textures-and-surfaces.md),
-record the agent-side choices in [`rationale/preview.md`](../rationale/preview.md), and delete this file.
+record the agent-side choices in `rationale/preview.md` (**a new file this build creates** — `rationale/`
+currently holds only `cli.md`, `emit.md`, `MIGRATION.md`, `README.md`), and delete this file.
 
 ---
 
@@ -47,13 +48,21 @@ extend that same channel (§6).
    index-0 texel unconditionally* — the spike measured **464 of 2,669** corpus textures using index 0
    while unmasked, including flat swatches at 100 % that would have rendered as nothing at all;
    *rejected: rendering masked opaque like `--native`.*
-4. **All layouts accept `--faces`, no size guard, no cost ceiling** — re-affirmed against the
-   corrected figures in §7. *Rejected: rejecting `textured` under `breakdown`; rejected: a stderr cost
-   warning.*
+4. **All layouts accept `--faces`, no size guard, no cost ceiling** — **re-put and re-affirmed a
+   third time, 2026-07-26, on an accurate cost picture.** The two earlier affirmations each rested on
+   a wrong statement of mine: first pane arithmetic that was 4× off, then a claim that mip selection
+   bounded per-pixel work. It does not — under nearest-neighbour sampling there is exactly one texel
+   fetch per covered pixel at every mip level, so mip choice controls **aliasing only** and there is
+   no cost-control mechanism at all. Ruling stands on that basis. *Rejected: a stderr cost estimate
+   past a pixel-count threshold; rejected: refusing `textured` under `breakdown`.*
 5. **`textured` draws NO wireframe; `flat` KEEPS its wireframe** (§4.6). Accepted consequence: under
    `textured` two abutting brushes sharing a texture are indistinguishable and the CSG cue is absent.
-6. **Any texture the render needs and cannot get is a clean exit 2 naming the cause** (§8).
-   *Rejected: checkerboarding; rejected: silently falling back to `flat`.*
+6. **Any texture the render NEEDS and cannot get is a clean exit 2 naming the cause** (§8) — and
+   "needs" is literal (owner ruling, 2026-07-26): the scene's texture refs are collected first, and a
+   scene referencing none renders fine with no texture source at all. *Rejected: refusing whenever no
+   resolver exists regardless of what the scene contains* — I had derived that rather than asking, and
+   it would have blocked previewing a freshly generated brush. *Rejected: checkerboarding; rejected:
+   silently falling back to `flat`.*
 7. **`--brush-colors` with `--faces textured` is a clean exit 2** — re-affirmed after its original
    rationale ("it would do nothing") was **refuted**: `preview._scene_geometry` derives `vivid`, the
    `--highlight` colour, from it. It stands on the corrected ground that the flag's documented job is
@@ -73,7 +82,7 @@ extend that same channel (§6).
 ## 3. CLI surface
 
 One option, on `actor preview`, `stash preview` and `prefab preview` — they share
-**`cli._preview_opts`** (`cli.py:685, 1474, 1511`).
+**`cli._preview_opts`** (`cli.py:686, 1476, 1513`).
 
 ```
 --faces {wire,flat,textured}
@@ -87,15 +96,15 @@ One option, on `actor preview`, `stash preview` and `prefab preview` — they sh
 > (`Origin`/`TextureU`/`TextureV`/`Pan`), with NO wireframe, so alignment, panning, mirroring and
 > tiling are visible offline — no editor, no container, no lighting. Under BOTH `flat` and
 > `textured` a subtract brush shows only its far (interior) faces, so geometry inside a subtracted
-> room stays visible, and a scaled or sheared brush is rejected. `textured` additionally rejects
-> `--brush-colors`, and needs every referenced texture to be readable.
+> room stays visible. `textured` additionally rejects `--brush-colors` and scaled/sheared brushes, and
+> needs every texture the scene actually references to be readable.
 
 **Three existing `help=` strings are corrected in the same change** (`CLAUDE.md`: help must say what
 a flag actually does):
 
-- `--brush-colors` (`cli.py:156`) — says "how to colour **the wireframe**"; it also drives `flat`
+- `--brush-colors` (`cli.py:155`) — says "how to colour **the wireframe**"; it also drives `flat`
   fills and is a hard error under `textured`.
-- `--focus` (`cli.py:192`) — says other brushes "recede to a faint (dimmed) **wireframe**"; under
+- `--focus` (`cli.py:190`) — says other brushes "recede to a faint (dimmed) **wireframe**"; under
   `flat`/`textured` they recede as dimmed *fills*.
 - `--show` — its overlays are unaffected, but the ordering guarantee is now explicit (§4.10).
 
@@ -135,16 +144,22 @@ never affects `shade`.
 **Interpolation is AFFINE and exactly so** under ortho — `render.rs`'s per-pixel perspective divide
 is not needed.
 
-**Scaled OR SHEARED brushes are REJECTED under `flat` and `textured`** — clean exit 2 naming the
+**Scaled OR SHEARED brushes are REJECTED under `textured` ONLY** — clean exit 2 naming the
 actor and which of `MainScale` / `PostScale` / `SheerRate` is non-identity. `preview._scene_geometry`
 builds vertices with `rotation.actor_linear` (`PostScale·R·MainScale`, and `transform.fscale_matrix`
 folds sheer in) while the UV frame uses `rotation.actor_matrix` (**rotation only**) — so such a brush
 would render transformed geometry against an untransformed texture frame.
-`preview_native._reject_scaled` rejects the same three fields. *Rejected: transforming UV axes by the
-inverse-transpose* — UE1's actual treatment is unverified and guessing it would put a wrong answer in
-the one tool meant to be authoritative about UV. Supporting them is a follow-up (§10). **`--faces
-wire` still renders them exactly as today** — a behavioural difference from `--native`, which rejects
-in every mode (§4.9 #7).
+`preview_native._reject_scaled` rejects the same fields.
+
+**`flat` does NOT reject them.** The argument above is entirely about the *UV frame*; `flat` reads no
+UV frame — its fill is the projected polygon, which `actor_linear` already builds correctly and which
+`wire` renders correctly today. An earlier draft rejected under both modes, costing the whole level's
+`--faces flat` for one scaled brush, for a reason that does not apply to it.
+
+*Rejected: transforming UV axes by the inverse-transpose* — UE1's actual treatment is unverified and
+guessing it would put a wrong answer in the one tool meant to be authoritative about UV. Supporting
+them is a follow-up (§10). **`wire` and `flat` render them exactly as today** — a behavioural
+difference from `--native`, which rejects in every mode (§4.9 #7).
 
 ### 4.3 Per-pixel texel fetch (`textured`)
 
@@ -171,8 +186,8 @@ the face as untextured (`CLAUDE.md`: no Python exception reaches the user).
 #### 4.3a Is this face masked?
 
 ```
-flags  = (poly.flags or 0) | actor_polyflags(actor)      # the engine ORs the ACTOR's PolyFlags in
-masked = bool(flags & 0x2) or texture_has_bMasked(ref)
+flags  = (poly.flags or 0) | poly_flags_int(actor.props)   # the engine ORs the ACTOR's PolyFlags in
+masked = bool(flags & 0x2) or decoded[ref].b_masked        # b_masked rides the decoder's typed result
 ```
 
 **The actor-level `PolyFlags` OR is required**, not optional: `preview_native.build_scene` does
@@ -182,8 +197,18 @@ semisolid/nonsolid. Omitting it would leave a brush authored `PolyFlags=2` maski
 in `--native` but opaque here — re-hiding "cut-out texture on a solid face", one of the four defects
 §0 exists to expose.
 
-`PF_Masked = 0x2` (`query.PF_NAMES`). `texture_has_bMasked` is `"bMasked" in <the export's property
-block>` — a UE1 bool written **presence-only**, so present ⇒ masked (spike
+**Two mechanical points, both round-1 findings.** (a) The existing spelling is
+`preview_native._poly_flags_int(dict(actor.props))`, whose real call site guards `if actor else 0` for
+the `actor is None` join case. It moves to `texframe` with the UV helpers rather than being imported
+from `preview_native` — `preview.py` importing that module would pull in `TextureResolver` and break
+§1's resolver-free invariant. (b) There is **no separate `texture_has_bMasked(ref)` predicate**: the
+decoder's typed result already carries the flag, so the gate reads it off the result it already has. A
+second entry point would be a second way to ask one question — against the "one texture-API change,
+not two" argument that justified folding this in — and a bool-returning predicate would violate
+`conventions.md` "a predicate answers or it RAISES; 'don't know' is never returned as `False`".
+
+`PF_Masked = 0x2` (`query.PF_NAMES`); `bMasked` is a UE1 bool written **presence-only**, so present ⇒
+masked (spike
 [`2026-07-26-texture-masked-property/findings.md`](../spikes/2026-07-26-texture-masked-property/findings.md);
 `quirks.md` "Surfaces / polys"). Delivered by §12's accessor.
 
@@ -191,20 +216,29 @@ block>` — a UE1 bool written **presence-only**, so present ⇒ masked (spike
 
 ```
 gain          = 1.0                                          # top / front / side
-gain          = max(sqrt(2)*cos(r), sqrt(2*sin(r)**2 + 1))   # iso, r = radians(iso_angle)
+gain          = min(sqrt(2)*cos(r), sqrt(2*sin(r)**2 + 1))   # iso, r = radians(iso_angle)  <- MIN
 scale_world   = scale * gain                                 # px per WORLD unit
 texels_per_px = max(|tu_w|, |tv_w|) / scale_world
 level         = clamp(floor(log2(max(texels_per_px, 1.0))), 0, len(mips) - 1)
 ```
 
-`_framing`'s `scale` is px per **projected** unit, and the iso projection maps a unit world vector to
-a projected vector of length up to `gain` — so the conversion **multiplies**. `gain` is the map's
-larger singular value; `preview._draw_sphere` already computes exactly this expression
-(`preview.py:1843`) and it is reused rather than re-derived. (At the default 30° it is 1.2247; the
-per-axis gains are all 1.0, which is why "worst-case axis gain" is the wrong quantity.)
+`_framing`'s `scale` is px per **projected** unit, so the conversion **multiplies** by the
+projection's gain. The iso map's two singular values are `√2·cos r` and `√(2 sin²r + 1)` — its rows
+are orthogonal, so the row norms *are* the singular values. The per-axis gains are all exactly 1.0,
+which is why "worst-case axis gain" is the wrong quantity.
 
-`decode_texture` already decodes all mips and `mip0_to_rgb` is generic over any `Mip`. Mip choice
-bounds texel fetches to ~1 per pixel regardless of texture size, and is the only cost control (§7).
+**Use the SMALLER singular value.** A minification bound is governed by the direction of *least*
+screen gain; dividing by the larger one underestimates texels/px and picks too sharp a mip — aliasing
+in the direction the projection compresses. Moot at the default 30°, where the two coincide at 1.2247,
+but `--iso-angle` is `type=float` with no range validation: the ratio is 1.41 at 45°, 2.24 at 60° and
+**6.98 at 80°**, about three mip levels too sharp. (`preview._draw_sphere:1843` computes the *larger*
+value — correct for a silhouette radius, wrong here. Same formula shape, different quantity; do not
+"unify" them.)
+
+**Mip choice is NOT a cost control.** Under nearest-neighbour sampling (§4.3) there is exactly one
+texel fetch per covered pixel at every level, so it changes *which* bytes are read, never how many.
+It is purely an image-quality control. `decode_texture` already decodes all mips and `mip0_to_rgb` is
+generic over any `Mip`.
 
 ### 4.5 `flat` mode
 
@@ -227,20 +261,35 @@ colour, since decision 2.10 culls every camera-facing subtract poly.
 *deliberate* line art is `--highlight` (§5). A default `textured` render is not literally line-free —
 `--annotate` defaults to on and still paints decals, keylines and the legend (§5).
 
-**Line art follows the cull.** A face suppressed by §4.7's subtract cull draws no wireframe edge and
-no `--highlight` outline — the cull removes the face, not merely its fill.
+**Line art follows the cull.** A face suppressed by §4.7's subtract cull or by the `PF_Invisible`
+drop draws no wireframe edge, no `--highlight` outline and **no on-face index decal** — the cull
+removes the face entirely, not merely its fill. A culled face is also **excluded from `occluders`**,
+which grades every remaining decal's opacity via `_occluder_count`/`_decal_opacity`; without that,
+`flat` would silently re-shade annotations relative to `wire`.
+
+**Under `flat`, back-facing edges are dropped too.** `_scene_geometry` today emits an edge for every
+face regardless of facing and `render_brushes_pgm` draws them with no depth test — over opaque fills a
+cube's three hidden faces would show straight through, destroying the "diagram of what occludes what"
+the `help=` promises. Under `flat` the edge pass draws only `_is_front` faces. `wire` is untouched.
 
 ### 4.7 Visibility: CSG-aware culling, then a depth buffer
 
-| Brush op (`classify_brush`)               | Which faces render
-|-------------------------------------------|---
-| `subtract`                                | **only faces NOT facing the camera** — the far/interior surfaces
-| `add`, `semisolid`, `nonsolid`, `mover`   | **all** faces; the depth buffer resolves visibility
+| Condition (tested in order)                       | Which faces render
+|---------------------------------------------------|---
+| `flags & PF_Invisible (0x1)`, actor-OR'd per §4.3a | **none** — dropped entirely, fill and line art alike
+| the actor's `CsgOper == CSG_Subtract`             | **only faces NOT facing the camera** — the far/interior surfaces
+| otherwise                                         | **all** faces; the depth buffer resolves visibility
 
 Vertices are stored CCW-from-outside (`t3d.md`), so a subtract's near face is `_is_front` — exactly
-the set to cull. Non-subtract brushes are **not** back-face culled: a `nonsolid` sheet is one face
-and must be visible from both sides. `classify_brush` returns exactly these five values, so the table
-is total.
+the set to cull. Non-subtract brushes are **not** back-face culled: a `nonsolid` sheet is one face and
+must be visible from both sides.
+
+**The cull keys on `CsgOper` DIRECTLY, not on `classify_brush`.** That helper's mover arm is a
+documented **name guess** — its own docstring warns that a mover whose class name does not end in
+`Mover` (`CEDoor`, `BreakableGlass`, the lowercase `TNM.*mover` classes) falls through to its
+`CsgOper`. Under `wire` a misclassification costs a shade; here it would **delete every camera-facing
+face** of that actor, rendering a door inside-out. `classify_brush` keeps its existing job of choosing
+`flat`'s fill colour (§4.5), where a name guess is harmless.
 
 *(That this matches the editor and the game is the owner's ruling of 2026-07-26, quoted in decision
 2.10 — attributed, not asserted as independently verified engine fact.)*
@@ -284,7 +333,10 @@ records the chosen value plus the image in `rationale/preview.md`. Starting poin
 | 4 | **`PF_Invisible`** — both drop those polys, and both test the **actor-OR'd** flags (§4.3a). Under `wire` they keep drawing, unchanged
 | 5 | **Projection** — ortho vs perspective, hence affine UV
 | 6 | **Unresolvable/undecodable refs** — `--native` checkerboards and warns; this tier **exits 2** (§8). `conventions.md` rejects warn-and-continue, so this tier conforms and `--native` does not; that is logged against `--native`, not softened here
-| 7 | **Scaled/sheared brushes** — a **behavioural** difference, not just a message: `--native` rejects in every mode, this tier rejects only under `flat`/`textured` and still renders them under `wire`
+| 7 | **Scaled/sheared brushes** — a **behavioural** difference: `--native` rejects in every mode, this tier rejects only under `textured` and renders them under `wire` and `flat`
+| 8 | **Pre-CSG vs post-CSG** — the largest divergence, and the reason decision 2.10's cull exists at all: `--native` renders **built BSP node polys**, this tier renders **raw brush polys** with a hand-rolled subtract cull
+| 9 | **Concave faces** — `render.rs` fills by triangle fan (`render.rs:196-206`), which bleeds outside a concave face; this tier uses even-odd scanline (§6) and is correct there. `architecture.md` measures 0.1–0.6 % of real faces as concave, so the difference is real. Logged against `--native` on `board/inbox.md`, not softened here
+| 10 | **Background** — `render.rs`'s `BACKGROUND` is `[56,56,60]`; this tier's `BG` is 224
 
 ### 4.10 Draw order within a pane
 
@@ -314,8 +366,8 @@ would paint over every sprite and every `--show` overlay.
 | `--show`            | unaffected — the overlays draw at step 3, above the fills (§4.10)
 | `--frame`/`--frame-tightness` | set `scale`, which feeds the mip pick
 | `--size`            | uncapped (decision 2.4)
-| `--from-t3d`        | works **when the referenced textures are readable**. Note a builder-generated snippet has `texture=None` on every poly, so it needs no textures at all — and per §8 it still requires a resolver. Recorded as an accepted consequence of decision 2.6
-| `--prefab-dir`      | **does NOT imply "no project."** It overrides only the prefab *library root* (`dispatch._prefab_root`); `_preview_render_data` independently calls `_resolve_project(args)`. So `prefab preview --prefab-dir X --faces textured` succeeds normally from inside a project. The exit-2 case is *no resolvable project*, whatever the flags
+| `--from-t3d`        | works **when every texture the snippet references is readable**. A generated snippet carries `texture=None` per poly *only when `brush build --texture` was not passed* — that flag stamps a ref onto every face — so a no-texture snippet previews with no game install at all (decision 2.6), while a textured one needs those refs readable
+| `--prefab-dir`      | **does NOT imply "no project", and no project does NOT imply no resolver.** It overrides only the prefab *library root* (`dispatch._prefab_root`); `_preview_render_data` independently calls `_resolve_project(args)`, and `config.composed_search_files` accepts `project=None`, falling back to the base dirs — which that function already relies on. Conversely a valid project can still yield no resolver (§8's three causes). **The trigger is `resolver is None` AND the scene referencing at least one texture**, never "no project"
 | `--out`             | unchanged (always PNG)
 
 **Point actors are unaffected** by `--faces`.
@@ -332,11 +384,26 @@ alongside `--faces textured` triggers exit 2.
 | Change                                                                     | Where
 |----------------------------------------------------------------------------|---
 | `world_uv_frame`, `tex_basis_default`, `newell` move to a shared stdlib-only module | new `uedcli/texframe.py`
-| `preview._face_normal` is deleted; `preview.py`, **`query.py:13`** and **`polyalign.py:26`** all import `newell` from `texframe`. (A third copy at `builders.py:82` returns `Vec3` and is left alone — noted so it is not mistaken for an oversight) | `preview.py`, `query.py`, `polyalign.py`
+| `preview._face_normal` **and `preview_native._newell`** are both deleted (byte-identical, and `_newell` is the one `world_uv_frame` calls); `preview.py`, **`query.py:13`**, **`polyalign.py:26`** and `preview_native.py` import `newell` from `texframe`. (`builders.py:82` is a third copy returning `Vec3` — deliberately left alone) | `preview.py`, `preview_native.py`, `query.py`, `polyalign.py`
+| **every `world_uv_frame` importer re-points**: `polyalign.py:27` (used at :251/:324/:411), `tests/test_polyalign.py:445`, `tests/test_preview_native.py:167/181/195`. A re-export alias in `preview_native` is forbidden by "No back-compat cruft", so all move in the same change | `polyalign.py`, both test modules
+| `poly_flags_int` moves to `texframe` too (§4.3a) — `preview.py` must not import `preview_native` | `texframe.py`, `preview_native.py`
+| `tests/test_actor_preview.py`'s `_prev` helper hardcodes `brush_colors="csg"`, which under §5's `default=None` scheme is an EXPLICIT value and would trip §2.7's exit 2 | `tests/test_actor_preview.py`
 | the mip-pyramid accessor + the `bMasked` predicate, on the decoder's typed-result contract | **folded into the texture-decoder item — §12**
 | resolve each distinct face ref; map any typed error to exit 2; the four exit-2 validations | `uedcli/dispatch.py`
 | `--faces` parsing; `--brush-colors default=None`; three corrected `help=` strings | `uedcli/cli.py`
 | the fill rasterizer, depth buffers, focus two-pass, mip pick, texel loop | `uedcli/preview.py`
+
+**Buffers use the `array` module, not Python lists.** `--size` is uncapped (decision 2.4), and a
+`list[float]` depth buffer at `--size 4096` is ~0.5 GB against ~67 MB for `array("f")`. Depth buffers
+are `array("f")`; the scratch RGB buffer is a `bytearray` like the canvas. A `MemoryError` is still
+reachable at absurd sizes — it is caught and reported as a clean exit 2 naming the size, never a
+traceback (§8).
+
+**The interpolation plane is the face's own plane**, anchored at `verts[0]` with the **Newell** normal
+(the same `N` as §4.1). Stated because faces are not guaranteed planar — `--from-t3d` reads arbitrary
+editor T3D — so the anchor and normal choice are observable. A face whose *projected* area is zero
+(edge-on) gives a singular gradient solve; it is detected up front and skipped, the same disposition
+as §4.1's degenerate skip.
 
 **The rasterizer is EVEN-ODD SCANLINE with affine UV, not a triangle fan.** `architecture.md` records
 that **0.1–0.6 % of faces in real exported maps are concave** (spike `concave-faces/`, live
@@ -389,15 +456,19 @@ every point-actor pane pass `focus=None` (`dispatch.py:774-782`) — so the two-
 count, not N+1.
 
 **On timings, stated honestly.** The one measurement taken is `actor preview` quad @1024 **wireframe**
-at 4.6 s (~1.05 M px). That is *not* a fill rate — its cost is dominated by label placement and decal
+at 4.6 s (~1.05 M px) — measured 2026-07-26 on LUM `basement` (28 actors) via
+`time (uedcli actor find | uedcli actor preview - --out …)`, on the 4-core box this repo is developed
+on. That is *not* a fill rate — its cost is dominated by label placement and decal
 planning — so it cannot be extrapolated to fills, and this spec makes **no** slower/faster claim
 against `--native`. What is certain is qualitative: fills are O(area) where wireframe is O(perimeter),
 and a pure-Python per-pixel loop is far slower than the Rust one. **The build takes a real fill
 measurement before any doc states a number.**
 
 **The owner re-affirmed "no guard, no ceiling"** (*rejected: exit 2 for `textured` under `breakdown`;
-rejected: a stderr cost warning*). Accepted consequence: a large breakdown textured render can run for
-minutes with no progress output.
+rejected: a stderr cost estimate*). Accepted consequence: a large breakdown textured render can run
+for minutes with no progress output. **There is no cost control at all** — §4.4's mip selection is an
+image-quality control only; an earlier draft wrongly called it one, and this ruling was re-put on the
+corrected picture.
 
 ## 8. Failure and degradation
 
@@ -407,11 +478,16 @@ Validation runs in `dispatch` **before any pixel is drawn** — every failure re
 |---------------------------------------------------|---
 | bad `--faces` value                                | argparse choice error, exit 2
 | `--faces textured` + explicit `--brush-colors`     | exit 2 naming both flags and the conflict
-| `--faces flat\|textured` + a scaled/sheared brush  | exit 2 naming the actor and the offending field
-| no resolvable project (so no resolver)             | exit 2 naming **which** of `_texture_resolver`'s three causes applies — no user games config, a `ConfigError`, or an empty composed file list (`dispatch.py:936-943`); all three are reachable *with* a valid project, so a generic "no project" message would violate "naming the offending value"
+| `--faces textured` + a scaled/sheared brush        | exit 2 listing **every** such actor with its offending field (`conventions.md`: a batch is all-or-nothing). `wire`/`flat` are unaffected
+| `--faces textured`, the scene REFERENCES a texture, and no resolver | exit 2 naming **which** of `_texture_resolver`'s three causes applies — no user games config, a `ConfigError`, or an empty composed file list (`dispatch.py:936-943`); all three are reachable *with* a valid project, so a generic "no project" message would violate "naming the offending value"
 | a **bare (unqualified)** `Texture=` ref            | exit 2 naming the ref **and saying to qualify it as `Package.Name`**. `_decode_ref` rejects an unqualified ref before any lookup, so this is the most common miss on real content; `preview_native._TextureTable` already emits exactly this hint
 | a ref that does not resolve, or does not decode    | exit 2 listing **every** such ref in one run (not just the first) with the decoder's typed-error case for each — §12's contract makes "which cause applies" answerable
 | a poly with no `Texture` at all                    | `DEFAULT_GREY × shade`, silently — normal, not an error
+| `--faces textured`, scene references NO texture, no resolver | **renders normally** (decision 2.6) — nothing needed, so nothing refused
+| a `MemoryError` from an absurd `--size`            | caught, exit 2 naming the size — never a traceback
+
+**Every row is scoped to the mode named in it.** `--faces wire`, the default, gains no new failure: it
+needs no texture, no resolver and no project, exactly as today.
 
 `conventions.md` puts warn-and-continue under **Rejected**, and a textured render whose faces are
 secretly checkerboards is exactly that: the picture looks like an answer.
@@ -423,7 +499,7 @@ secretly checkerboards is exactly that: the picture looks like an answer.
 | `--faces wire` output **byte-identical** to today for a fixed scene                   | the change is additive — the primary regression guard
 | `u = (V − Origin)·TextureU + Pan` on a rotated, pre-pivoted brush                     | the UV convention
 | **mip level L samples the same world point as level 0** (the `/2**level` rescale)      | a test of level *selection* alone passes the buggy version
-| **mip pick under `--view iso` uses §4.4's `gain`**, and differs from an ortho view      | §4.4 — the value round 2 found unspecified
+| **mip pick under `--view iso`**: assert the level-selection function directly against a computed expectation at a NON-default `--iso-angle` (e.g. 80°, where σ_min/σ_max differ by 6.98×) | §4.4. Asserting only "iso differs from ortho" proves nothing — the two panes already differ in `_framing` scale, and at the default 30° the two candidate gains coincide, so such a test passes with `gain` hard-coded to 1.0
 | a **masked** face's index-0 texels leave `BG` and skip depth; an **unmasked** face's index-0 texels draw normally | decision 2.3, both directions
 | a brush with **actor-level `PolyFlags=2`** masks even though its polys carry no flag    | §4.3a's OR — the round-2 defect that would re-hide a motivating bug
 | **a synthesized fixture package carrying `bMasked`** exercises the texture-side arm     | neither committed fixture has one and the game corpus is gitignored, so without this the half the spike calls load-bearing ships untested
@@ -441,6 +517,13 @@ secretly checkerboards is exactly that: the picture looks like an answer.
 | `stash preview` / `prefab preview` accept `--faces`; `--prefab-dir` inside a project **succeeds** | §3, §5 — the inverted round-2 claim
 | `--layout quad` and `--layout breakdown` render under `flat` and `textured`               | untested layouts in both rounds
 | non-finite UV (`nan` **and** `inf`) produces a clean result, never a traceback            | §4.3
+| **`textured` emits no wireframe pixels; `flat` does** | decision 2.5 — its most visible observable, previously untested
+| **a poly with no `Texture` renders `DEFAULT_GREY × shade`** | §4.3 — the most common `textured` render in practice (a generated brush)
+| **§4.1's shade formula and truncation** on a known normal | a golden PNG cannot separate a shade error from a UV error
+| **§4.2's zero/missing-axis `_tex_basis_default` fallback** | §4.2 justifies preserving it verbatim as the anti-drift guarantee, so it needs its own pin
+| **a `CEDoor`-style mover with `CsgOper=CSG_Subtract` is NOT culled** | §4.7 — the `classify_brush` name-guess trap
+| **a scene referencing NO texture renders with no resolver**; one referencing a texture exits 2 | decision 2.6's literal "needs"
+| **`flat` drops back-facing edges**; `wire` still draws them | §4.6's hidden-line rule
 | a golden PNG of a textured cube                                                           | end-to-end pixel stability
 | `uedcli/texframe.py` imports nothing outside stdlib + uedcli                               | §0's no-cargo constraint
 
@@ -494,57 +577,26 @@ catalog, so it lands first regardless.
 *Rejected: shipping `wire`/`flat` first and `textured` after; rejected: waiting for that item without
 folding the accessor in (two API changes); rejected: building now against today's decoder.*
 
-**Two consequences to carry into that item's revision:**
-
-- Its plan was **already reviewed**, so widening its scope means its **plan re-enters the plan-review
-  round** before it builds.
-- Its S2 says a decoder error lets "**the caller** choose the disposition — per-ref requests exit 2;
-  enumeration records `undecodable` and continues; **preview degrades and warns**." `--faces textured`
-  is a caller that **refuses** (decision 2.6, §8). That is compatible — it is a command the user
-  invoked with an explicit flag, not a background frame — but it must be stated there so its builder
-  does not assume every preview caller degrades.
+**Both consequences are already carried into that item** (done 2026-07-26, not outstanding): its plan
+holds slice `S2b` with the accessor and the verbatim "`actor preview --faces textured` REFUSES — do
+not assume every preview caller degrades" contract note, and its `to-build.md` entry is flagged scope-
+widened so the plan re-enters plan review before building. That plan's own round-1 review is recorded
+at its foot; **this spec must not be built until those findings are resolved**, since two of them
+(S2b's missing tests, and the `bMasked` flag's home) are the half this spec consumes.
 
 
 ---
 
-## 13. Re-entry round 1 findings (2026-07-26, 3 cold Opus) — to fix before round 2
+## 13. Re-entry round 1 — all findings resolved
 
-Converged across reviewers unless noted. **No structural finding**; all three stated the design
-(pre-CSG ortho tier, `--faces` shape, masking gate, subtract cull) holds.
+3 cold Opus, 2026-07-26. **No structural finding**; all three confirmed the design holds. 22 defects,
+all folded into the sections above rather than listed here (git holds the original list at commit
+`77769d2`). The four that changed observable behaviour: `flat` no longer rejects scaled brushes
+(§4.2); the cull keys on `CsgOper`, not the `classify_brush` name guess (§4.7); the iso mip gain is
+the SMALLER singular value (§4.4); and `flat` drops back-facing edges so its fills actually occlude
+(§4.6).
 
-| # | Defect
-|---|---
-| 1 | **`flat` must NOT reject scaled/sheared brushes.** §4.2's entire argument is that geometry uses `actor_linear` while the UV frame uses `actor_matrix` — a UV problem. `flat` reads no UV frame at all; its fill is the projected polygon, which `actor_linear` already builds correctly and which `wire` renders fine today. As written, one scaled brush costs you `--faces flat` on the whole level for a reason that does not apply. **Scope the rejection to `textured`.**
-| 2 | **§4.4's "mip choice bounds texel fetches to ~1/px … the only cost control" is FALSE.** Under nearest-neighbour sampling there is exactly **one** fetch per covered pixel at every level; mip choice controls aliasing, not work. §7 and decision 2.4 lean on it. **Delete the claim** — §7's honest paragraph (fills are O(area), pure Python is far slower) stands on its own
-| 3 | **§4.4 uses the LARGER singular value; minification needs the SMALLER.** Dividing by σ_max underestimates texels/px and picks too sharp a mip. Moot at the default 30° (σ_min = σ_max = 1.2247) but `--iso-angle` has no range validation: measured ratios 1.41 at 45°, 2.24 at 60°, **6.98 at 80°** (~3 mip levels too sharp). `_draw_sphere` computes σ_max for a *silhouette radius*, a different question with the same formula
-| 4 | **The cull keys on `classify_brush`, whose mover arm is a documented NAME GUESS.** Its own docstring warns that `CEDoor`/`BreakableGlass`/`TNM.*mover` fall through to `CsgOper`. Under `wire` a misclassification costs a shade; under §4.7 it **deletes every camera-facing face** of that actor. **Key the cull on `CsgOper` directly**, or state the consequence
-| 5 | **`actor_polyflags(actor)` does not exist.** The spelling is `preview_native._poly_flags_int(dict(actor.props))`, and importing it into `preview.py` would make the renderer import the module owning `TextureResolver` — against §1's resolver-free invariant. §6 has no row for it. Also the real line has an `if actor else 0` arm the spec's quote drops
-| 6 | **§6 misses every `world_uv_frame` importer** — `polyalign.py:27` (used at :251/:324/:411), `tests/test_polyalign.py:445`, `tests/test_preview_native.py:167/181/195` — and misses `preview_native._newell` itself, a **fourth** Newell copy and the one `_world_uv_frame` calls. §6 also never lists `preview_native.py` as a file it changes, though that is where the moved symbols live
-| 7 | **§8 rows 4–6 carry no mode qualifier**, so read literally `actor preview` outside a project exits 2 — breaking the default `wire` render and §9's own byte-identical guard
-| 8 | **Under `flat`, hidden back-face wireframe edges paint over the fills.** `_scene_geometry` emits an edge for every face regardless of facing and `render_brushes_pgm` draws them with no depth test, so a cube's three hidden faces show through — destroying the "diagram of what occludes what" the `help=` promises. §4.6's cull rule is scoped to subtracts only, so nothing resolves this
-| 9 | **§5's `--from-t3d` claim is false.** `brush build --texture` exists and stamps a ref onto every face, so a generated snippet does NOT always have `texture=None`
-| 10 | **§5's `--prefab-dir` row is still wrong, in both directions.** No project ≠ no resolver: `config.composed_search_files` accepts `project=None` and falls back to the base dirs, which `_preview_render_data` already relies on. And a valid project ≠ a resolver (§8's own three causes). The trigger is `resolver is None`, not "no resolvable project"
-| 11 | **`PF_Invisible`'s only normative home is the divergence table.** §4.7 claims its table is total and omits it; §4.3/§4.10 never mention it; the wireframe behaviour under `flat` is undefined
-| 12 | **The depth-buffer representation is unspecified while `--size` is uncapped.** A `list[float]` at `--size 4096` is ~0.5 GB vs ~67 MB for `array("f")`; §8 has no row for `MemoryError`, which would reach the user as a traceback
-| 13 | **The rasterizer's interpolation plane is undefined** — which normal, which anchor. Faces are not guaranteed planar (`--from-t3d` reads arbitrary editor T3D). Two implementers get different pixels
-| 14 | **§4.6 vs §5 contradict on culled-face DECALS**, and whether a culled face still enters `occluders` — which grades every remaining decal's opacity, so the two readings re-shade annotations
-| 15 | **`texture_has_bMasked(ref)` duplicates a field S2's typed result already carries**, i.e. a second way to ask one question — the opposite of the "one texture-API change, not two" argument that justified folding it in. **Read the flag off the typed result instead**
-| 16 | **§12 is stale** — it says the two consequences "must be carried into" the decoder plan; they already are (that plan's S2b)
-| 17 | **Every `cli.py` citation is stale**: `_preview_opts` is at **686/1476/1513** (spec: 685/1474/1511), `--brush-colors` at **155** (156), `--focus` at **190** (192). Every non-`cli.py` anchor checked out exact
-| 18 | **`tests/test_actor_preview.py`'s `_prev` helper hardcodes `brush_colors="csg"`**, which under §5's `default=None` scheme is an *explicit* value — so every existing dispatch test would trip the §2.7 exit 2, and §9's "bare `--faces textured` succeeds" cannot be written without changing it
-| 19 | **§4.9 omits the largest divergence:** `--native` renders post-CSG BSP node polys, this tier renders raw pre-CSG brush polys. Decision 2.10's cull exists *because* of it. Also omitted: the fan-vs-scanline concave difference this spec itself establishes, and `BACKGROUND [56,56,60]` vs `BG 224`
-| 20 | **Test gaps:** no test for decision 2.5 (`textured` has no wireframe / `flat` does), the `DEFAULT_GREY` no-`Texture` path, §4.1's shade formula, §4.2's zero-axis fallback (which §4.2 justifies as the anti-drift guarantee), or the chosen dim constant. §9's iso-mip test as worded passes with `gain` hard-coded to 1.0
-| 21 | **§7's one timing has no provenance** — no scene, actor count, machine, date or file pointer, and its "dominated by label placement" explanation is asserted, not measured
-| 22 | **The header links `rationale/preview.md`, which does not exist yet** (`rationale/` holds `cli.md`, `emit.md`, `MIGRATION.md`, `README.md`)
-
-## 14. Needs an owner ruling before round 2
-
-1. **Should `--faces textured` require a texture resolver even when NO face needs a texture?** §8 refuses
-   as soon as no resolver exists, before any ref is examined. But decision 2.6 is scoped to "any texture
-   *the render needs*", and §4.3 says a poly with no `Texture` is normal. So a brush-only scene whose
-   polys carry no texture refs refuses even though it needs nothing. A reviewer flagged this as an
-   unrecorded choice that changes observable behaviour, not a consequence of 2.6.
-2. **Decision 2.4 was re-affirmed partly on finding #2, which is false.** The "no guard, no ceiling"
-   ruling was put with mip selection described as the cost control that made it safe. It isn't one.
-   The decision may well stand on its own, but it was taken against a wrong statement and should be
-   re-put.
+Three owner rulings were taken during the resolution and are recorded at their decisions: **2.4**
+re-put on an accurate cost picture (mip selection is not a cost control), **2.6** scoped so a scene
+that references no texture needs no texture source, and the decoder plan's offline fixtures are
+**synthesized rather than lifted from game content** (that plan's S2b).
