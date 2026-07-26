@@ -5,18 +5,6 @@ lands here first, with no obligation to know its stage yet. This is the *pre-pip
 stage (so no `to-` prefix). See [`README.md`](README.md).
 
 **Triage** routes each item to where its next action lives:
-- `p1` `[spike]` **Probe the TEXTURE-side `Masked` property before `--faces textured` can be
-  correct.** Blocks [`specs/2026-07-26-actor-preview-textured-faces.md`](../specs/2026-07-26-actor-preview-textured-faces.md)
-  §12 S1, which spec review round 1 **parked as structural**. `unrealed/quirks.md` (🔬 2026-07-26)
-  says `Masked` is a property of the TEXTURE, set at import, and a texture's flags are OR'ed into
-  every surface it is applied to — plus there is a per-poly `PF_Masked = 0x2`. So a face masks iff
-  its poly carries `0x2` **or** its texture was imported masked, and index 0 on any other face is an
-  ordinary colour. Measured on this repo's fixtures: `CoreTexWater.dirtywater` parks reserved magenta
-  at index 0 and uses it for 0 texels, while `LUM_InfoPortraits.ArthurCallaway` has index 0 = real
-  black at **2.2 %** of texels. quirks.md says the texture-side property is *"not yet probed to the
-  stored property name/offset on the export"* — so uedcli cannot read it today, and the spike must
-  land that before the spec is revised. Gating on the poly flag alone is implementable now but
-  knowingly misses the `ladder_a`-on-a-solid-wall case the friction log cares about. *(2026-07-26.)*
 - `p1` `[OWNER — confirm]` **The per-surface verb split (`pan`/`rotate`/`align --run`).** Spec:
   `specs/2026-07-26-poly-surface-verbs.md` (revised after review round 1). Six rulings were made in
   session on 2026-07-26 and live only in that ephemeral spec until confirmed. Proposed addition to
@@ -48,20 +36,16 @@ stage (so no `to-` prefix). See [`README.md`](README.md).
   Without it, closed runs cannot name a seam, which makes `--fit-perimeter` unreachable and drops the
   shipped cylinder-wrap workflow.
 
-- `p1` `[OWNER — confirm]` **Two `--faces` rulings were made on premises the code contradicts —
-  need re-putting.** Same spec, §12 S3 and S4. (a) **`--brush-colors` under `textured`** was ruled
-  exit-2 because the flag "would do nothing"; in fact `_scene_geometry` derives `vivid`, the
-  `--highlight` outline colour, from it, so the combination is meaningful and working. (b) **"no cost
-  guard"** was agreed against a stated worst case of "tens of seconds"; the real arithmetic is
-  `render_quad_pgm`'s `half = size // 2` (quad @1024 is ~1.05 M px TOTAL, ~1× a single pane, not 4×)
-  and the actual worst case is `--layout breakdown`, which renders **N+1 panes at full `--size`, each
-  `--focus`ed** — plausibly many minutes on a 28-actor level. *(2026-07-26.)*
-- `p1` `[OWNER — confirm]` **How should opaque fills treat PRE-CSG subtract volumes?** Same spec,
-  §12 S2 — the second structural finding. `actor preview` renders brush *volumes*, not carved
-  geometry, so once faces are opaque an add block with subtracted rooms renders as the outside of the
-  outermost box and hides everything inside. The spec's own §9 test ("a subtract's far interior wall
-  is drawn") contradicts its §4.7 nearest-wins depth rule. Needs a stated rule for how subtract and
-  nonsolid volumes participate in fill and depth. *(2026-07-26.)*
+- `p2` `[OWNER — confirm]` **`--faces textured`'s per-ref checkerboard is a `conventions.md`-Rejected
+  warn-and-continue.** [`specs/2026-07-26-actor-preview-textured-faces.md`](../specs/2026-07-26-actor-preview-textured-faces.md)
+  §8. When ONE face's texture ref won't resolve, the render continues with a checkerboard on that face
+  plus a warn-once on stderr. `direction/conventions.md` lists exactly that shape under **Rejected**
+  ("Graceful degradation … plus a stderr note, exit 0 — a half-answer that looks like a full one is
+  worse than a refusal; the note scrolls away"). It is kept because `preview_native._TextureTable`
+  already behaves this way and a divergence between the two renderers would be worse. Spec review
+  round 1 flagged the earlier "needs no direction-tree change" wording as overstated, so this is now
+  logged rather than asserted away. **Ruling needed:** bless the deviation (→ a `rationale/preview.md`
+  entry), or make an unresolvable ref exit 2 like the no-resolver case. *(2026-07-26.)*
 - `p1` `[OWNER — confirm]` **Does class curation get a general file-fact OVERRIDE field?**
   `direction/asset-catalog.md` says curation is "a description, plus **an override where the file fact is
   wrong**" — but its own *Rejected* list kills "a curated-vs-derived override model for `placeable`". The

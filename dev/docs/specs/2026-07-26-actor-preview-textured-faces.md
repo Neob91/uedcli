@@ -1,14 +1,8 @@
 # Spec: textured faces for `actor preview` (`--faces wire|flat|textured`)
 
-**Status:** ⛔ **PARKED — spec review round 1 returned STRUCTURAL findings; the gate is NOT passed.**
-3 cold Opus reviewers, 2026-07-26. Two findings say the *design* is wrong rather than a detail, and
-two recorded owner decisions were taken on premises the code contradicts. Per `CLAUDE.md` "Review
-gates" a structural finding **replaces** the remaining round, does not pass the gate, and parks the
-work until the owner rules; the artifact then re-enters at round 1. **Do not plan or build from this
-document in its current state.** The blocking items are in §12; the ordinary correctness defects
-round 1 also found are in §13 and must be fixed in the same revision.
-*(Design questions had been answered by the owner over three rounds on 2026-07-26 — §2 — but two of
-those answers are now known to rest on false premises. See §12.)*
+**Status:** revised after spec review round 1 (2026-07-26, 3 cold Opus reviewers → 2 structural
+findings + 22 correctness defects, all resolved below). **Ready to re-enter the gate at round 1.**
+**BUILD-BLOCKED** on one spike — see §11.
 **Requested by:** the owner, 2026-07-26, session `uedcli:preview-textured`.
 **Ephemeral:** scratch, per `CLAUDE.md`. On build, fold the outcome into
 [`architecture.md`](../architecture.md) "Preview internals", [`docs/usage.md`](../../../docs/usage.md)
@@ -19,302 +13,379 @@ record the agent-side choices in [`rationale/preview.md`](../rationale/preview.m
 
 ## 0. What this is, and what it is not
 
-`actor preview` renders an **orthographic schematic** of a set of actors — model-side, host-only,
-no editor and no container. Today it draws **wireframe only**. This spec adds two solid-face modes,
-one of which samples each face's **real texture** through the face's own authored UV frame.
+`actor preview` renders an **orthographic schematic** of a set of actors — model-side, host-only, no
+editor and no container. Today it draws **wireframe only**. This spec adds two solid-face modes, one
+of which samples each face's **real texture** through the face's own authored UV frame.
 
 **It is explicitly NOT:**
 
-- **Not a port of `actor preview` to Rust.** The owner deferred that (§2.9). The renderer stays
-  pure-Python and stdlib-only, and the native extension stays **optional** — `bin/_venv.sh` warns
-  and skips the native build when `cargo` is absent, and the native tests `importorskip`. Nothing
-  in this spec may make `actor preview` fail on a machine without `cargo`.
+- **Not a port of `actor preview` to Rust.** Deferred (§2.9). The renderer stays pure-Python and
+  stdlib-only, and the native extension stays **optional** — `bin/_venv.sh` warns and skips the
+  native build when `cargo` is absent, and the native tests `importorskip`. Nothing here may make
+  `actor preview` fail on a machine without `cargo`.
 - **Not a replacement for `level preview --native`.** That stays the *perspective, whole-level,
-  post-CSG, lit-ish* tier. This is the *orthographic, per-actor, pre-CSG* tier. They answer
-  different questions and both remain, under their own flag names (§2.8).
-- **Not lighting.** No lightmaps, no `Engine.Light` contribution. The only shading is the fixed
-  key-light term in §4.1, exactly as `--native` computes it.
+  post-CSG* tier; this is the *orthographic, per-actor, pre-CSG* tier.
+- **Not lighting.** No lightmaps, no `Engine.Light` contribution — only the fixed key-light term
+  in §4.1.
 
 **Why it is worth building.** Every texture-frame defect in
 [`spikes/levelbuild-friction/agent-reports.md`](../spikes/levelbuild-friction/agent-reports.md) —
 mirrored lettering, the half-shifted sheet, the wrapped door trim, the cut-out texture on a solid
 face — was **invisible in `actor preview`** and cost a full materialize + render cycle to see. Those
-faults are all properties of the *authored* UV frame, which this tier reads directly.
+faults are properties of the *authored* UV frame, which this tier reads directly.
 
 ## 1. The governing constraint: `preview.py` stays resolver-free and stdlib-only
 
-Two existing invariants shape the whole design, and neither is negotiable here
-([`architecture.md`](../architecture.md) "Preview internals"):
+Two existing invariants, neither negotiable ([`architecture.md`](../architecture.md) "Preview
+internals"):
 
 1. **`preview.py` is stdlib-only** — no PIL, no numpy.
-2. **`preview.py` is resolver-free** — it never touches `config`, packages, or the search path.
-   `dispatch.py` resolves and decodes; `preview.py` receives already-decoded pixels and draws them.
+2. **`preview.py` is resolver-free** — `dispatch.py` resolves and decodes; `preview.py` receives
+   already-decoded pixels and draws them.
 
-**This seam already exists and already carries texture pixels.** Point-actor sprites go through it
-today: `dispatch._preview_render_data()` resolves via `utexture.TextureResolver` and hands
-`preview.py` a `PointRender` whose `sprite` field is a decoded `(w, h, rgb, mask)` tuple, which
-`preview._blit` draws. **Textured brush faces extend that same `render_data` channel** — they do not
-open a new one.
+The seam already exists and already carries texture pixels: point-actor sprites resolve in
+`dispatch._preview_render_data()` and reach `preview._blit` as a decoded `(w, h, rgb, mask)` tuple.
+Textured faces extend that same `render_data` channel (§6).
 
 ## 2. Decisions (the owner's, 2026-07-26)
 
-1. **The flag is an enum: `--faces {wire,flat,textured}`, default `wire`.** *Rejected: a boolean
-   `--textured`* — it leaves no room for the `flat` tier without a second flag later, and
-   `CLAUDE.md` "No back-compat cruft" means reshaping it would be a hard break rather than an
-   addition. The enum also matches the existing `--brush-colors {csg,legend}` style.
-2. **A textured face is shaded exactly as `level preview --native` shades it** (§4.1) — same
-   key-light term, same nearest-neighbour texel fetch, same Euclidean wrap, same `DEFAULT_GREY` for
-   an untextured face. *Rejected: unlit/full-bright sampling* — truer for reading a texture's own
-   colour, but faces at different orientations stop being distinguishable and the two renderers
-   would disagree about the same brush.
-3. **Masked (index-0 cut-out) texels are HONOURED — not drawn, and whatever is behind shows
-   through** (§4.3). *Rejected: rendering masked opaque like `--native`.* **This is a deliberate,
-   single-axis divergence from decision 2, not an oversight**, and it has a real cost: `--native`'s
-   documented "lie" about masking is what makes it a free cut-out detector (a masked texture shows
-   its index-0 key as raw magenta), and `actor preview` will not inherit that. The detector remains
-   available via `level preview --native`. Recorded so a later reader does not "fix" the divergence.
-4. **All layouts accept `--faces`, with no size guard and no cost ceiling** (§7). *Rejected:
-   restricting `textured` to `--layout single`; rejected: a soft `--size` ceiling.* The accepted
-   risk is stated in §7 and is the owner's call.
-5. **`textured` draws NO wireframe at all; `flat` KEEPS its wireframe** (§4.6). *Rejected: a
-   wireframe under textured (every poly edge, or silhouette-only); rejected: dropping it from both.*
-   The two modes therefore answer different questions on purpose — `flat` is the diagram, `textured`
-   is the picture. Accepted consequence, recorded: under `textured`, two abutting brushes sharing a
-   texture are **indistinguishable**, and the CSG-op colour cue is absent entirely.
-6. **`--faces textured` with NO resolver at all (no project/config) is a clean exit 2 naming the
-   cause** (§8). *Rejected: checkerboarding every face + warning; rejected: silently falling back to
-   `flat`.* This **applies** `direction/conventions.md` "No silent half-answers" rather than
-   reinterpreting it, so it needs no direction-tree change. An *individual* unresolvable ref keeps
-   the checkerboard + warn-once fallback — there the render is still overwhelmingly the answer asked
-   for.
-7. **`--brush-colors` combined with `--faces textured` is a clean exit 2** (§5). *Rejected: accepting
-   it as a silent no-op; rejected: repurposing it to pick the highlight hue.* Under `textured` there
-   is no wireframe for it to colour, so accepting it would be a flag that does nothing — exactly what
-   the conventions doc forbids.
-8. **`level preview` is NOT changed.** It keeps `--native`/`--game`, which select a *backend*;
-   `--faces` selects *how faces are drawn*. Different axes, different names. *Rejected: unifying the
-   spelling across both preview verbs.*
-9. **Porting `actor preview` to Rust, and making the native extension non-optional, are DEFERRED**
-   — out of scope; §10 records what would change if revisited.
+1. **`--faces {wire,flat,textured}`, default `wire`.** *Rejected: a boolean `--textured`* — no room
+   for the `flat` tier without a second flag later, and "No back-compat cruft" makes reshaping a hard
+   break. Matches the existing `--brush-colors {csg,legend}` style.
+2. **A textured face is shaded as `level preview --native` shades it** (§4.1) — same key-light term,
+   nearest-neighbour fetch, Euclidean wrap, `DEFAULT_GREY` for an untextured face. *Rejected:
+   unlit/full-bright sampling.* **Two declared divergences**, both deliberate and both listed in §4.9:
+   masking (2.3) and mip selection (§4.4).
+3. **Cut-outs are honoured, but ONLY on a genuinely masked face** (§4.3). A face masks iff its poly
+   carries `PF_Masked` (`0x2`) **OR** its texture was imported masked — per `unrealed/quirks.md`
+   (🔬 2026-07-26): *"`Masked` is a property of the TEXTURE, set at import — and a texture's flags are
+   OR'ed into every surface it is applied to."* *Rejected: masking every index-0 texel unconditionally*
+   (spec review round 1 measured `LUM_InfoPortraits.ArthurCallaway` using index 0 as **real black at
+   2.2 % of texels** — that face would have rendered shot through with holes); *rejected: rendering
+   masked opaque like `--native`* (the owner wants the true cut-out). **The texture-side half is
+   BUILD-BLOCKED on a spike — §11.**
+4. **All layouts accept `--faces`, no size guard, no cost ceiling** — **re-affirmed 2026-07-26 against
+   the corrected figures** in §7 (the first ruling was taken against numbers that were wrong by 4×,
+   and omitted `--layout breakdown` entirely). *Rejected: rejecting `textured` under `breakdown`;
+   rejected: a stderr cost warning past a pixel budget.*
+5. **`textured` draws NO wireframe; `flat` KEEPS its wireframe** (§4.6). *Rejected: a wireframe under
+   textured; rejected: dropping it from both.* Accepted consequence: under `textured` two abutting
+   brushes sharing a texture are indistinguishable, and the CSG-op colour cue is absent.
+6. **`--faces textured` with no usable texture resolver is a clean exit 2 naming the actual cause**
+   (§8). *Rejected: checkerboarding every face; rejected: silently falling back to `flat`.*
+7. **`--brush-colors` combined with `--faces textured` is a clean exit 2** — **re-affirmed
+   2026-07-26 after its original rationale was refuted.** The first ruling said the flag "would do
+   nothing"; that is **false** — `preview._scene_geometry` derives `vivid`, the `--highlight` outline
+   colour, from it. The ruling stands on the corrected ground that the flag's *documented job* is
+   colouring the wireframe, and silently repurposing it to mean "highlight hue" under one mode would
+   give one flag two jobs. *Rejected: accepting it as the highlight-hue selector.*
+8. **`level preview` is NOT changed** — it keeps `--native`/`--game` (which *backend*); `--faces` is
+   *how faces are drawn*. *Rejected: unifying the spelling.*
+9. **The Rust port and a non-optional native extension are DEFERRED** (§10).
+10. **A subtract brush's faces render ONLY from inside the subtracted volume** (§4.7) — *"the
+    subtract's polys looked at from OUTSIDE do not render in UnrealEd or in game, and they should not
+    render here"* (owner, 2026-07-26). Under an orthographic camera, which is always outside, this
+    means **cull a subtract's camera-facing polys and draw its far ones**. This is what makes an
+    additive brush inside a subtracted room visible, and it dissolves review round 1's structural
+    finding S2 rather than patching it.
 
-Also decided, and folded into the sections below: `--focus` keeps every brush textured with
-non-focused ones translucent and dim, and the focused brush stays visible **through** them (§4.7);
-`--highlight` becomes the only line art in a textured render (§5); on-face decals are left exactly
-as they are (§5); `flat` fills are unshaded (§4.5); all three preview verbs get the flag (§3).
+Also decided and folded in: `--focus` keeps every brush filled with non-focused ones dimmed (§4.8);
+`--highlight` is the only *deliberate* line art under `textured` (§5); on-face decals are left as they
+are (§5); `flat` fills are unshaded (§4.5); all three preview verbs get the flag (§3).
 
 ## 3. CLI surface
 
-One new option, on `actor preview`, `stash preview` and `prefab preview` — they share
-`dispatch._preview_opts`, and a stash or prefab is the same kind of actor set, so all three get it
-(owner-decided; *rejected: `actor preview` only*, which would need deliberate exclusion from the
-shared option set and leave the three verbs inconsistent).
+One option, on `actor preview`, `stash preview` and `prefab preview` — they share
+**`cli._preview_opts`**, and a stash or prefab is the same kind of actor set.
 
 ```
 --faces {wire,flat,textured}
 ```
 
-**`help=` string** (per `CLAUDE.md` it must say what it does, not restate the name):
+**`help=`:**
 
 > how brush faces are drawn (default `wire`). `wire` = outlines only, the schematic. `flat` = each
-> face filled solid in its brush's CSG hue, wireframe kept — a readable diagram of what occludes
-> what. `textured` = each face filled by sampling its OWN texture through its authored UV frame
-> (`Origin`/`TextureU`/`TextureV`/`Pan`), with NO wireframe, so texture alignment, panning,
-> mirroring and tiling are visible offline — no editor, no container, no lighting. Point actors are
-> unaffected. Rejects `--brush-colors` (nothing to colour without a wireframe), and requires a
-> project so textures can resolve.
+> face filled solid in its brush's CSG hue, wireframe kept — a diagram of what occludes what.
+> `textured` = each face filled by sampling its OWN texture through its authored UV frame
+> (`Origin`/`TextureU`/`TextureV`/`Pan`), with NO wireframe, so alignment, panning, mirroring and
+> tiling are visible offline — no editor, no container, no lighting. Under `flat`/`textured` a
+> subtract brush shows only its far (interior) faces, so geometry inside a subtracted room stays
+> visible. Point actors are unaffected. `textured` rejects `--brush-colors` and scaled brushes, and
+> needs resolvable textures.
 
-**Not added:** no `--lit`, no `--no-wireframe`, no `--mip`. Each restates something already decided
-by `--faces` or chosen automatically (`CLAUDE.md` "Verbs compose"). Mip choice is automatic (§4.4).
+**Two existing `help=` strings must be corrected in the same change** (`CLAUDE.md` requires help to
+say what a flag actually does):
+
+- `--brush-colors` — currently "how to colour **the wireframe**"; it also drives `flat` fills and is
+  a hard error under `textured`.
+- `--focus` — currently "every OTHER brush recedes to a faint (dimmed) **wireframe**"; under
+  `flat`/`textured` they recede as dimmed *fills*.
+
+**Not added:** no `--lit`, no `--no-wireframe`, no `--mip`.
 
 ## 4. The shape of a face — exact
 
 ### 4.1 Per-face shade (`textured` only)
 
-Computed **once per face**, in world space, matching `uedcli-native/src/render.rs`:
-
 | Quantity   | Definition
 |------------|---
-| `N`        | Newell normal over the face's **world** vertices (`preview_native._newell`) — NOT the stored `Normal`, per `t3d.md` "Winding defines the face, not `Normal`"
-| `L`        | the fixed key light, `(-0.408, -0.577, 0.707)`, used **as authored and un-normalized** (its length is 0.9995, not 1 — matching byte-for-byte matters more than tidiness)
+| `N`        | Newell normal over the face's **world** vertices — NOT the stored `Normal`, per `t3d.md` "Winding defines the face, not `Normal`"
+| `L`        | the key light `(-0.408, -0.577, 0.707)`, used **as authored and un-normalized** (`|L|` = **0.99962**)
 | `shade`    | `0.55 + 0.45 * abs(dot(N, L)) / length(N)`
-| degenerate | `length(N) <= 1e-12` → the face is skipped entirely (zero area)
+| degenerate | `length(N) <= 1e-12` → face skipped (zero area)
 
-The `abs()` is load-bearing and inherited deliberately: it makes the term robust to winding, so a
-reversed face does not go flat.
+The `abs()` is inherited deliberately: it makes the term robust to winding.
+
+**Precision is pinned:** compute in Python `float` (f64) and convert with **truncation**,
+`min(int(c * shade), 255)`, matching `render.rs`'s `(c * shade).min(255.0) as u8`. `render.rs` is f32
+throughout, so byte-identity with `--native` is **not** claimed (§4.9); truncation is specified so
+two implementers agree with each other.
 
 ### 4.2 Per-vertex UV
 
-The authored frame, transformed to world space by **`preview_native._world_uv_frame(actor, poly)`**,
-which is pure math over an `Actor` + `Polygon` and needs no CSG. **It moves to a shared module**
-(§6) so `actor preview` and `level preview --native` cannot drift apart.
-
-It returns `(base_w, tu_w, tv_w, pan)` where:
+From **`texframe.world_uv_frame(actor, poly)`** (§6), returning `(base_w, tu_w, tv_w, pan)`:
 
 ```
-base_w = Location + R·(Origin − PrePivot)
-tu_w   = R·TextureU          tv_w = R·TextureV
+base_w = Location + R·(Origin − PrePivot)          tu_w = R·TextureU     tv_w = R·TextureV
+u = dot(P − base_w, tu_w) + pan[0]                 v    = dot(P − base_w, tv_w) + pan[1]
 ```
 
-and per vertex `P`, per `t3d.md` "The UV convention" (✅, pinned by
-`test_polyalign.test_engine_fact_uv_formula_is_base_relative_plus_pan`):
+per `t3d.md` "The UV convention" (✅, pinned by
+`test_polyalign.test_engine_fact_uv_formula_is_base_relative_plus_pan`). **The texel scale lives in
+the MAGNITUDE of `TextureU`/`TextureV`** — a unit axis is 1 texel per world unit; there is no separate
+scale field.
 
-```
-u = dot(P − base_w, tu_w) + pan[0]
-v = dot(P − base_w, tv_w) + pan[1]
-```
+**Zero/missing axis fallback.** `_tex_basis_default` is fed `poly.normal` when present and the Newell
+normal otherwise — i.e. the *existing* `_world_uv_frame` behaviour, which is preserved verbatim so the
+two renderers cannot drift. This is a deliberate exception to §4.1's Newell rule and is scoped to the
+fallback basis only; it does not affect `shade`, which always uses Newell.
 
-**The texel scale lives in the MAGNITUDE of `TextureU`/`TextureV`** — a unit `TextureU` is 1 texel
-per world unit. There is no separate scale field. A missing or zero axis falls back to
-`_tex_basis_default(N)`, exactly as `_world_uv_frame` already does.
+**Interpolation is AFFINE and exactly so.** Under ortho, `u`, `v` and depth are linear in screen
+space, so barycentric interpolation is exact, not an approximation — `render.rs`'s per-pixel
+perspective divide is simply not needed.
 
-**Interpolation is AFFINE, not perspective-correct.** This is the one genuine simplification an
-orthographic camera buys: `render.rs` must carry `(1/d, u/d, v/d)` and divide per pixel, whereas
-here `u`, `v` and depth are all linear in screen space, so plain barycentric interpolation is
-**exact**, not an approximation. Any conformance test between the two renderers must therefore
-compare an ortho-equivalent pose, not an arbitrary one.
+**Scaled brushes are REJECTED under `flat`/`textured`** — clean exit 2 naming the offending actor.
+`preview._scene_geometry` builds vertices with `rotation.actor_linear` (`PostScale·R·MainScale`) while
+the UV frame uses `rotation.actor_matrix` (**rotation only**), so a scaled brush would render scaled
+geometry against an unscaled texture frame — silently mis-aligned, the exact defect class this tier
+exists to expose. `level preview --native` already rejects the same case (`preview_native._reject_scaled`).
+*Rejected: transforming UV axes by the inverse-transpose* — mathematically the right shape, but UE1's
+actual treatment of a scaled brush's texture frame is unverified, and guessing it would put a wrong
+answer in the one tool meant to be authoritative about UV. Supporting scaled brushes is a follow-up
+(§10). `--faces wire` keeps rendering them exactly as today.
 
 ### 4.3 Per-pixel texel fetch (`textured`)
 
 ```
-tx = floor(u) % tex_w          # Python % on ints == Rust i64::rem_euclid — verified identical
-ty = floor(v) % tex_h          #   for positive divisors, which tex_w/tex_h always are
-texel = rgb[(ty * tex_w + tx) * 3 : ... + 3]
+tx = floor(u / 2**level) % mip_w        # u is in MIP-0 texel units — the /2**level is required
+ty = floor(v / 2**level) % mip_h        # Python % on ints == Rust rem_euclid for positive divisors
+texel = rgb[(ty * mip_w + tx) * 3 : ... + 3]
 ```
 
-Nearest-neighbour. No bilinear filtering — matches `render.rs` and keeps the pure-Python inner loop
-to integer indexing.
+**The `/ 2**level` is load-bearing** and was the single most-reported defect of review round 1: `u`
+comes out of §4.2 in mip-0 texel units, so taking it modulo a *level-L* width tiles the texture `2^L`
+times instead of scaling it down. Nearest-neighbour, no bilinear.
 
-Then, per decision 2.3, **masked texels are skipped**:
+Non-finite `u`/`v` (a degenerate frame) must not reach `math.floor`, which raises `ValueError` —
+guard and treat the face as untextured (`CLAUDE.md`: no Python exception reaches the user).
 
-| Case                                      | Result
-|-------------------------------------------|---
-| `mask[ty * tex_w + tx] == 0` (index 0)    | **pixel not written at all** — the depth buffer is NOT updated either, so a face behind shows through the hole
-| poly has no `Texture` (`texture is None`) | `DEFAULT_GREY = (128, 128, 128)`, then `× shade` — matches `render.rs`'s `tex_index < 0` path
-| ref present but unresolvable              | the `render.rs` checkerboard, `× shade`, plus **one** stderr warning per distinct ref (§8)
+**Cut-out handling, per decision 2.3:**
 
-Not updating depth on a masked texel is the whole point of honouring the mask — writing depth for a
-hole would punch a same-shaped hole in everything behind it.
+| Case                                                    | Result
+|----------------------------------------------------------|---
+| face is masked (§4.3a) **and** `mask[…] == 0` at this texel | **pixel not written, and depth NOT written** — a face behind shows through the hole
+| face is NOT masked                                       | index 0 is an ordinary palette colour and draws normally
+| poly has no `Texture`                                    | `DEFAULT_GREY = (128,128,128) × shade` — matches `render.rs`'s `tex_index < 0` path
+| ref present but unresolvable / non-P8 / imported palette | `preview_native._checkerboard()` (64², magenta/black) `× shade`, plus **one** stderr warning per distinct ref
+
+Not writing depth on a masked texel is the point: writing it would punch a same-shaped hole in
+everything behind.
+
+#### 4.3a Is this face masked?
+
+```
+masked = bool(poly.flags & 0x2) or texture_is_imported_masked(ref)
+```
+
+`PF_Masked = 0x2` is readable today (`query.PF_NAMES`). `texture_is_imported_masked` is **not yet
+implementable** — see §11. Until the spike lands, the build must not silently degrade to the poly
+flag alone: that is the blocker, not a fallback.
 
 ### 4.4 Mip selection (`textured`)
 
-Sampling mip 0 of a 256×256 texture across a 12-pixel face is both slow and aliased. The mip is
-chosen **per face, automatically**:
-
 ```
-uu_per_px     = 1.0 / scale                         # `scale` is the framing px-per-world-unit
+uu_per_px     = 1.0 / scale_world          # see the note below — NOT _framing's raw scale under iso
 texels_per_px = max(|tu_w|, |tv_w|) * uu_per_px
 level         = clamp(floor(log2(max(texels_per_px, 1.0))), 0, len(mips) - 1)
 ```
 
-`decode_texture` already decodes **all** mips into `TextureObj.mips`, and `mip0_to_rgb(mip, palette)`
-is generic over any `Mip` despite its name — so this needs only a mip-selecting resolver method
-(§6), not new decode work. Mip choice bounds texel fetches to ~1 per pixel regardless of texture
-size, and is the only cost control in v1 (§7).
+`decode_texture` already decodes **all** mips and `mip0_to_rgb(mip, palette)` is generic over any
+`Mip`, so this needs only the resolver method in §6.
+
+**`_framing`'s `scale` is px per *projected* unit, and under `iso` — the default `--view` — the iso
+projection is a shear, so that is not px per world unit.** `scale_world` must therefore be derived
+per view: for `top`/`front`/`side` it is `scale`; for `iso` it is `scale` divided by the projection's
+worst-case axis gain. Getting this wrong only mis-picks a mip (a sharpness/cost effect, never a wrong
+UV), but it must be specified so two implementations agree.
 
 ### 4.5 `flat` mode
 
-Fill is `_CSG_PALETTE[classify_brush(actor)]`, a `(front, back)` RGB pair:
+Fill is the `(front, back)` pair the wireframe already uses:
 
-- face is front-facing for this view (`_is_front`) → the **front** colour
-- otherwise → the **back** colour
+- `--brush-colors csg` (default) → `_CSG_PALETTE[classify_brush(actor)]`
+- `--brush-colors legend` → `(tint, _fade(tint))` from `assign_tints`, matching `_scene_geometry`
+- front-facing for this view (`_is_front`) → the **front** colour; otherwise the **back** colour
 
-**No key-light shade is applied** (owner-decided; *rejected: shading `flat` with the same key light*).
-`flat` is a schematic tier, and multiplying the CSG hue by a per-face factor would break the "this
-exact blue means additive" cue the palette exists to carry and the legend is matched against.
-Accepted consequence: faces at different orientations on one brush are the same colour, so an
-unrotated cube reads as a silhouette — which is what the retained wireframe (§4.6) is for.
+**No key-light shade** (*rejected: shading `flat`*) — multiplying the hue would break the "this exact
+blue means additive" cue the legend is matched against.
 
-Under `--brush-colors legend`, `flat` fills use the per-actor tint (`assign_tints`) instead of the
-CSG pair, consistent with what that flag already means for the wireframe.
+**On the legacy `color_by_csg=False` path** (`render_brushes_pgm`'s default, used by unit tests),
+`_CSG_PALETTE` is not consulted at all; `flat` there fills with the same black/grey pair that path
+already uses for edges.
 
 ### 4.6 Wireframe presence
 
 | Mode       | Wireframe
 |------------|---
 | `wire`     | yes — the whole render (unchanged)
-| `flat`     | **yes**, drawn over the fills; carries face boundaries and the CSG cue
-| `textured` | **no** — none at all. The only line art a textured render can contain is `--highlight` (§5)
+| `flat`     | **yes**, over the fills — face boundaries and the CSG cue
+| `textured` | **no**. The only *deliberate* line art is `--highlight` (§5). Note §5's decal/legend caveat — a default textured render is not literally line-free
 
-### 4.7 Visibility: depth buffers, no back-face culling
+### 4.7 Visibility: CSG-aware culling, then a depth buffer
 
-Brush volumes **interpenetrate by design** — a subtract sits inside the add it carves. A per-face
-painter's sort is therefore wrong wherever two faces cross, so visibility is per-pixel:
+**Culling rule (decision 2.10), applied in `flat` and `textured`:**
 
-- `depth(P) = dot(P, _view_depth(iso_angle, view))` — the existing into-screen direction, where
-  **smaller = nearer**; it interpolates affinely under ortho
-- a pixel is written iff `depth < zbuf[i]`, and then `zbuf[i] = depth`
-- **no back-face culling** in `flat`/`textured`: the depth buffer resolves visibility, and culling
-  would wrongly hide the far interior wall of a subtract — exactly what a designer wants to see
+| Brush op (`classify_brush`)              | Which faces render
+|-------------------------------------------|---
+| `subtract`                                | **only faces NOT facing the camera** — the far/interior surfaces. Camera-facing polys are culled outright
+| `add`, `semisolid`, `nonsolid`, `mover`   | **all** faces; the depth buffer resolves visibility
 
-`_is_front` keeps its current roles (the wireframe's shade pair, and `flat`'s fill choice) and gains
-no new one.
+Vertices are stored CCW-from-outside (`t3d.md` "Polygon sub-fields"), so a subtract's near face is
+`_is_front` — exactly the set to cull. This makes an additive brush inside a subtracted room visible
+from outside, matches what the editor and the game draw, and is why `flat`/`textured` do not simply
+show the outside of the outermost box.
 
-**Under `--focus`, two passes with SEPARATE depth buffers** (owner-decided: every brush stays
-textured, non-focused ones translucent and dim, and *the focused brush stays visible through them*):
+Non-subtract brushes are **not** back-face culled: a `nonsolid` sheet is one face and must be visible
+from both sides.
 
-| Pass | Contents           | Depth buffer | Colour
-|------|--------------------|--------------|---
-| A    | all NON-focused brushes | `zbuf_ctx`  | texel × shade, then `_fade(rgb, 0.75)`, blended into the image at **alpha 0.25** (`_blend_px`)
-| B    | the focused brush       | `zbuf_focus` | opaque, full shade — drawn after A, so it is never occluded by context
+**Depth**, after culling:
 
-Two buffers, not one, is the whole mechanism: context geometry is mutually ordered correctly among
-itself, while never being able to hide the brush you focused — even when the focused brush is
-sealed inside a container. *Rejected: one shared buffer with blending* (spatially truthful, but a
-focused brush inside geometry becomes invisible, defeating the flag); *rejected: no depth among
-context at all* (cheapest, but the context layer stops being spatially readable).
+- `depth(P) = dot(P, _view_depth(iso_angle, view))` — the existing into-screen direction, **smaller =
+  nearer**; affine under ortho
+- write iff `depth < zbuf[i]`, then `zbuf[i] = depth`
+- **coplanar tie-break:** strictly `<`, so the **first** face drawn wins a tie and iteration order is
+  the tie-break. Iteration is scene order (stable, as `assign_tints` already relies on), making the
+  result deterministic and golden-testable. No epsilon bias — a flush add/subtract pair is common
+  pre-CSG and any bias would merely move the arbitrariness
 
-With no `--focus`, there is one pass and one buffer, all opaque.
+### 4.8 `--focus`
 
-### 4.8 Draw order within a pane
+Every brush stays filled; non-focused brushes are dimmed. Two passes with **separate** depth buffers:
 
-1. background (`BG = 224`, light grey)
-2. point-actor underlays (`_draw_point_underlay`) — unchanged
-3. **face fills + depth (new)** — `flat` or `textured`; under `--focus`, pass A then pass B
-4. brush wireframe edges — **`wire` and `flat` only**; absent under `textured` (§4.6)
-5. `--highlight` outlines (§5)
-6. point markers/sprites, on-face poly decals, leader labels, `--show` overlays, legend — unchanged
+| Pass | Contents                | Depth buffer  | Colour
+|------|-------------------------|---------------|---
+| A    | all NON-focused brushes | `zbuf_ctx`    | resolved **opaquely** into a scratch buffer, then composited **once** over the canvas at `_DIM_ALPHA` (0.15)
+| B    | the focused brush       | `zbuf_focus`  | opaque, full shade — drawn after A, never occluded by context
+
+**Resolve-then-composite-once is required, not stylistic.** Per-face alpha blending against a
+nearest-wins depth buffer blends a pixel once per face that passes the test, so the result would
+depend on iteration order. Pass A therefore renders opaque into its own buffer and is composited a
+single time.
+
+**The dim is a single `_DIM_ALPHA` composite, matching the existing wireframe dimming.** Review round
+1 computed that the originally-specified `_fade(rgb, 0.75)` *then* alpha 0.25 leaves `0.0625 × texel`
+over the background — final pixels in 210–226 against `BG` 224, i.e. invisible, defeating the owner's
+intent that every brush stays visible. `preview.py` already dims non-focused wireframes with one
+`_DIM_ALPHA = 0.15` composite; `flat`/`textured` use the same constant so the two agree.
+
+Two buffers, not one, is the mechanism that keeps a focused brush visible even when sealed inside
+another. With no `--focus`: one pass, one buffer, all opaque.
+
+### 4.9 Declared divergences from `level preview --native`
+
+Decision 2.2 says "as `--native` shades it". These are the exceptions, **all deliberate**:
+
+| # | Divergence
+|---|---
+| 1 | **Masking** — `--native` renders masked faces opaque (which is what makes it a free cut-out detector, `quirks.md`); this tier honours the cut-out on genuinely masked faces (2.3)
+| 2 | **Mip selection** — `render.rs` is **mip-0 only**; this tier picks a mip per face (§4.4). Any cross-renderer test must therefore force level 0
+| 3 | **Precision** — `render.rs` is f32; this is f64. Byte-identity is not claimed (§4.1)
+| 4 | **`PF_Invisible`** — `preview_native.build_scene` drops those polys. This tier **also drops them** under `flat`/`textured` (an invisible face must not become an opaque occluder). Under `wire` they keep drawing, unchanged
+| 5 | **Projection** — ortho vs perspective, hence affine UV (§4.2)
+
+### 4.10 Draw order within a pane
+
+1. background (`BG = 224`)
+2. **face fills + depth (new)** — `flat`/`textured`; under `--focus`, pass A then pass B
+3. point-actor underlays (`_draw_point_underlay`) — selection brackets, **sprites**, and the
+   `--show` collision/light/sound overlays
+4. brush wireframe edges — **`wire` and `flat` only**
+5. `--highlight` outlines
+6. point markers, on-face poly decals, leader labels, legend
+
+**Fills moved to step 2, ahead of the point underlays.** Round 1 found the original ordering (fills
+after underlays) would paint over every sprite and every `--show` overlay, contradicting this spec's
+own claim that point actors are unaffected. Fills are brush geometry and belong under the point
+layer.
 
 ## 5. Interaction with every existing option
 
 | Option              | Behaviour under `flat` / `textured`
 |---------------------|---
-| `--layout`          | all three (`quad`, `single`, `breakdown`) accept it — decision 2.4. `quad` fills all four panes and so pays ~4× a single pane
-| `--view`            | unchanged; the UV math is view-independent, only the projection and depth axis change
-| `--iso-angle`       | unchanged; feeds `_view_depth` for the depth axis as it already does
-| `--brush-colors`    | `flat`: as today (`csg` → `_CSG_PALETTE`, `legend` → per-actor tint), governing both fills and wireframe. **`textured`: passing it explicitly is a clean exit 2** (decision 2.7)
-| `--annotate`        | unchanged, drawn over the fill, **left exactly as-is** (owner-decided; *rejected: auto-contrast per decal; rejected: a solid backing plate*). Accepted consequence: a tinted decal can be hard to read on a busy or similarly-hued texture — noted in §9
-| `--highlight`       | under `textured` the highlighted poly/actor's vivid CSG-hue outline is **the only line art in the image**, which makes it more salient than in `wire` mode, not less. Under `flat` it behaves exactly as today. *Rejected: tinting the fill instead; rejected: doing both*
-| `--focus BRUSH`     | every brush stays filled; non-focused ones render translucent + dim and **never occlude** the focused brush (§4.7)
-| `--show`            | unchanged, drawn after fills. These overlays are faint **solid** colours, so over a textured fill they read as flat patches — as they already do over the wireframe
-| `--frame`/`--frame-tightness` | unchanged. Note framing sets `scale`, which feeds mip selection (§4.4), so a tighter frame legitimately selects a finer mip
-| `--size`            | unchanged, and **uncapped** per decision 2.4
-| `--from-t3d`        | works, **inside a project** — refs resolve against the composed search path exactly as level actors do. Outside a project, `textured` is exit 2 per decision 2.6
+| `--layout`          | all three accept it (decision 2.4). See §7 for what `breakdown` costs
+| `--view`            | unchanged. The UV math is view-independent; the *mip pick* is not (§4.4)
+| `--iso-angle`       | unchanged; feeds `_view_depth` and the iso `scale_world` correction
+| `--brush-colors`    | `flat`: as today, governing fills and wireframe. **`textured`: passing it explicitly is a clean exit 2** (decision 2.7)
+| `--annotate`        | unchanged and **left exactly as-is** (owner-decided; *rejected: auto-contrast; rejected: a backing plate*). **Two accepted consequences, both recorded:** (a) a tinted decal can be unreadable on a busy texture; (b) `_decal_opacity` still paints an *occluded* face's index at a 0.12 floor, so over an opaque fill that number sits on the wall in front of it — a wrong-face label, not merely a faint one. Anyone reading indices off a `textured` render should pass `--annotate none` or use `flat`
+| `--highlight`       | under `textured` its vivid outline is the only *deliberate* line art. Its hue comes from `vivid`, which is `csg`-derived since `--brush-colors` is rejected in this mode
+| `--focus`           | §4.8
+| `--show`            | unchanged, and now genuinely unaffected — the overlays draw at step 3, above the fills (§4.10)
+| `--frame`/`--frame-tightness` | unchanged; they set `scale`, which feeds the mip pick
+| `--size`            | unchanged, **uncapped** (decision 2.4)
+| `--from-t3d`        | works inside a project. A snippet's refs resolve on the composed search path
+| `--prefab-dir`      | `prefab preview --prefab-dir X` deliberately runs with **no project**, so `--faces textured` there always exits 2 per decision 2.6. `wire`/`flat` work normally
 | `--out`             | unchanged (always PNG)
 
-**Point actors are entirely unaffected** by `--faces` — it is a brush-face option. Their sprites and
-markers keep drawing as they do now.
+**Point actors are unaffected** by `--faces` — it is a brush-face option.
 
-**How `--brush-colors` explicitness is detected.** Its argparse `default` is currently `"csg"`, so a
-defaulted value is indistinguishable from an explicit `--brush-colors csg` — and decision 2.7
-requires rejecting only the *explicit* combination. The parser therefore sets `default=None`, and
-`dispatch` treats `None` as `"csg"` everywhere it is consumed. Only a non-`None` value alongside
-`--faces textured` triggers the exit 2. This is a parser-level change with no user-visible effect on
-any other path, and it must be covered by a test asserting bare `--faces textured` still succeeds.
+**How `--brush-colors` explicitness is detected.** Its argparse `default` is `"csg"`, so a defaulted
+value is today indistinguishable from an explicit `--brush-colors csg`, and decision 2.7 rejects only
+the *explicit* combination. The parser sets `default=None` and `dispatch` treats `None` as `"csg"` at
+its four consumers. Only a non-`None` value alongside `--faces textured` triggers exit 2.
 
 ## 6. Code shape
 
 | Change                                                                     | Where
 |----------------------------------------------------------------------------|---
-| `_world_uv_frame`, `_tex_basis_default`, `_newell` move to a shared module and are imported by BOTH `preview_native.py` and the new fill path | new `uedcli/texframe.py`
-| `TextureResolver.resolve_mips(ref)` → `list[(w, h, rgb, mask)]` (all mips, masked), cached per resolver like `resolve`/`resolve_masked` | `uedcli/utexture.py`
-| resolve each distinct face `Texture` ref, decode, build a face-texture table; warn once per unresolvable ref; **exit 2 when there is no resolver at all** | `uedcli/dispatch.py` (`_preview_render_data`)
-| a `FaceTextures` payload alongside `PointRender` on the existing `render_data` channel | `uedcli/dispatch.py` → `uedcli/preview.py`
-| `--faces` parsing; `--brush-colors` `default=None`; the two exit-2 validations | `uedcli/cli.py` (parse), `uedcli/dispatch.py` (validate)
-| the scanline fill, depth buffers, focus two-pass, mip pick, texel loop        | `uedcli/preview.py`
+| `world_uv_frame`, `tex_basis_default`, `newell` move to a shared module, imported by BOTH `preview_native.py` and the fill path. `preview._face_normal` is **deleted** and re-imported from here — it is already byte-identical to `_newell`, and §6 exists to stop exactly that duplication | new `uedcli/texframe.py` (stdlib-only, no `uedcli_native` import)
+| `TextureResolver.resolve_mips(ref)` → `list[tuple[int,int,bytes,bytes]] \| None` (all mips, masked; `None` on any miss, matching `resolve`). Must reject a truncated mip chain rather than let `mip0_to_rgb` raise `IndexError` | `uedcli/utexture.py`
+| a `texture_is_imported_masked(ref)` predicate (**blocked, §11**)             | `uedcli/utexture.py`
+| resolve each distinct face ref; warn once per unresolvable ref; the three exit-2 validations | `uedcli/dispatch.py`
+| `--faces` parsing; `--brush-colors default=None`; the corrected `help=` strings | `uedcli/cli.py`
+| the scanline fill, CSG-aware cull, depth buffers, focus two-pass, mip pick, texel loop | `uedcli/preview.py`
 | `--faces` threaded through `render_brushes_pgm` / `render_quad_pgm` / `_render_breakdown_grid` | `uedcli/preview.py`, `uedcli/dispatch.py`
 
-**`preview.py` gains no import of `config`, `utexture` or `packages`** — the resolver-free invariant
-(§1) holds. It receives decoded mip pyramids and draws them.
+**The `render_data` seam, precisely.** `render_data` is today `dict[actor_name → PointRender]` and is
+indexed by name in `_scene_geometry`, `_world_aabb` and `_point_pane_region`. It becomes a small
+dataclass:
+
+```
+PreviewData(points: dict[str, PointRender], faces: FaceTextures | None)
+FaceTextures:  by_ref:   dict[str, list[tuple[int,int,bytes,bytes]]]   # ref → mip pyramid (rgb, mask)
+               masked:   dict[tuple[str,int], bool]                    # (actor, poly_idx) → §4.3a
+               fallback: list[tuple[int,int,bytes,bytes]]              # the checkerboard pyramid
+```
+
+A face's texture is looked up by its `poly.texture` ref; a ref absent from `by_ref` uses `fallback`;
+`poly.texture is None` means `DEFAULT_GREY`. Existing call sites move from `render_data[name]` to
+`render_data.points[name]` — a mechanical change with no behaviour effect, and the reason the shape is
+specified here rather than left to the plan.
+
+**`_preview_render_data` must be restructured.** It currently early-returns `{}` when the actor set
+has no point actors — the *common* case for a brush-only textured preview — so neither face
+resolution nor decision 2.6's exit 2 can be reached from it as written. Its docstring's stated
+contract ("a pure-brush preview works with no game install") remains true for `wire` and `flat` and
+is now false for `textured` by design; update it.
 
 ## 7. Cost, and the accepted risk
 
@@ -322,152 +393,102 @@ Measured on this box, LUM `basement` (28 actors), 2026-07-26:
 
 | Render                                                                 | Time
 |------------------------------------------------------------------------|---
-| `actor preview` quad @1024, wireframe, pure Python                      | **4.6 s**
-| `level preview --native` @512², full CSG carve + textured raster, Rust  | **0.68 s**
+| `actor preview` quad @1024, wireframe, pure Python                      | 4.6 s
+| `level preview --native` @512², full CSG carve + textured raster, Rust  | 0.68 s
 
-The pure-Python renderer is **already ~7× slower than the Rust one doing strictly more work**.
-Wireframe cost is O(perimeter); a fill is O(area). At quad @1024 that is ~1M px per pane × 4 panes.
+**These two are not directly comparable and no ratio is claimed from them.** The first is a
+*wireframe* render at ~1.05 M px whose cost is dominated by label placement and decal planning; the
+second is a *fill* at ~0.26 M px. Round 1 correctly refuted the earlier "~7× slower" inference. What
+stands is the qualitative point: a pure-Python per-pixel fill is far slower than the Rust one, and
+fills are O(area) where wireframe is O(perimeter).
 
-**The owner decided against any guard or ceiling (decision 2.4).** The accepted consequence,
-recorded plainly: a large `--faces textured --layout quad --size 2048` render may take **tens of
-seconds with no warning and no progress output**. That is the same silent-cost shape the friction log
-complains about elsewhere, and it is a known, deliberate trade. Mip selection (§4.4) is the only cost
-control, and it is a real one.
+**Corrected pane arithmetic** (round 1; the original figures were wrong by 4× in both directions):
 
-Note `--focus` under `textured` is the **most expensive** configuration specified here: it fills every
-brush in the scene (pass A) and then the focused brush again (pass B), rather than filling one.
+| Layout        | Panes            | Pixels at `--size 1024`
+|---------------|------------------|---
+| `single`      | 1 at `size`      | ~1.05 M
+| `quad`        | 4 at `size // 2` | ~1.05 M total — **~1× a single pane, not 4×**
+| `breakdown`   | **N+1 at full `size`**, each `--focus`ed | ~(N+1) × 1.05 M — on this 28-actor level, **~29 two-pass full-scene fills**
+
+**`--layout breakdown` is the worst case, not `--focus`.** A reviewer measured a representative
+pure-Python textured inner loop at ~4.6 s per 1 M px, putting a breakdown textured render in the
+**many-minutes** range.
+
+**The owner re-affirmed "no guard, no ceiling" against these corrected figures** (*rejected: exit 2
+for `textured` under `breakdown`; rejected: a stderr cost warning past a pixel budget*). The accepted
+consequence, recorded plainly: `--faces textured --layout breakdown` can run for minutes with no
+progress output. Mip selection (§4.4) is the only cost control.
 
 ## 8. Failure and degradation
 
-| Situation                                          | Behaviour
-|----------------------------------------------------|---
-| bad `--faces` value                                 | argparse choice error, exit 2
-| `--faces textured` + explicit `--brush-colors`      | clean exit 2 naming both flags and why they conflict (decision 2.7)
-| **no project/config, so no resolver** + `textured`  | clean exit 2 naming the cause and pointing at `project show` (decision 2.6). `wire` and `flat` still work — they need no textures
-| a face's `Texture` ref does not resolve             | checkerboard fill + **one** stderr warning per distinct ref, naming the ref and suggesting `project show` — mirrors `preview_native._TextureTable`
-| a face has no `Texture` at all                      | `DEFAULT_GREY × shade`, silently (a genuinely untextured poly is normal, not an error)
-| texture resolves but is non-P8 / imported palette   | `resolve_mips` returns `None` → treated as unresolvable (checkerboard + warning)
+| Situation                                             | Behaviour
+|--------------------------------------------------------|---
+| bad `--faces` value                                    | argparse choice error, exit 2
+| `--faces textured` + explicit `--brush-colors`         | exit 2 naming both flags and the conflict
+| `--faces flat\|textured` + a **scaled** brush          | exit 2 naming the offending actor and its scale (§4.2)
+| **no usable texture resolver** + `textured`            | exit 2 naming **which** cause applies — `_texture_resolver` returns `None` for three distinct reasons (no user games config; a `ConfigError`; an empty composed file list), all reachable *with* a valid project, so a generic "no project" message would violate "naming the offending value". `wire`/`flat` are unaffected
+| a face's `Texture` ref does not resolve                | checkerboard + **one** stderr warning per distinct ref
+| a face has no `Texture` at all                         | `DEFAULT_GREY × shade`, silently — a genuinely untextured poly is normal
+| non-P8 / imported palette / truncated mip chain        | treated as unresolvable (checkerboard + warning), never an exception
+
+**One deviation is declared rather than claimed away.** The per-ref checkerboard-and-continue is a
+warn-and-continue fallback, which `direction/conventions.md` lists under **Rejected**. It is kept
+because `preview_native._TextureTable` already does exactly this and divergence between the two
+renderers would be worse — but this spec does **not** claim it "needs no direction-tree change".
+Round 1 was right to flag the earlier wording as overstated; the deviation is logged on
+`board/inbox.md` for an owner ruling and a `rationale/preview.md` entry either way.
 
 ## 9. Tests
 
 | Test                                                                                | Guards
 |--------------------------------------------------------------------------------------|---
-| `--faces wire` output is **byte-identical** to today's render for a fixed scene       | the whole change is additive; the primary regression guard
-| `u = (V − Origin)·TextureU + Pan` on a rotated, pre-pivoted brush                     | the UV convention, independently of `polyalign`'s own pin
-| ortho Python vs `render.rs` on an ortho-equivalent pose: same texel index per pixel    | the two renderers cannot drift (§4.2)
-| Python `%` vs Rust `rem_euclid` over negative `u`/`v`                                  | wrap conformance at the one place the languages could differ
-| index-0 texels leave `BG` visible AND do not write depth                              | decision 2.3, including the depth half that is easy to get wrong
-| two overlapping brushes: the nearer face wins per-pixel                                | the depth buffer, and that painter's-sort was correctly rejected
-| a subtract's far interior wall is drawn                                                | no back-face culling (§4.7)
-| `textured` output contains **no** wireframe pixels; `flat` output does                 | decision 2.5, in both directions
-| `--highlight` under `textured` produces outline pixels and nothing else does           | §5 — highlight is the sole line art
-| `--focus` under `textured`: focused brush pixels present even when fully enclosed by another brush | §4.7's two-buffer mechanism, the subtle part
-| non-focused fills are blended at alpha 0.25 after `_fade(…, 0.75)`                     | the agreed dim amount, so it cannot drift silently
-| `flat` fill RGB == `_CSG_PALETTE[op][0/1]`, unshaded                                   | §4.5
-| bare `--faces textured` succeeds; `--faces textured --brush-colors csg` exits 2         | the `default=None` explicitness mechanism (§5), both directions
-| `--faces textured` with no project exits 2; `--faces wire`/`flat` still succeed         | decision 2.6
-| unresolvable ref → checkerboard + exactly ONE warning for N faces sharing that ref      | the warn-once contract
-| mip pick: a face at 8 texels/px selects level 3                                         | §4.4
-| a golden PNG of a textured cube, blessed like `native_preview_golden.png`                | end-to-end pixel stability
-| `--faces textured` runs with the native extension absent                                 | §0 — the no-cargo machine must not break
+| `--faces wire` output **byte-identical** to today for a fixed scene                   | the change is additive — the primary regression guard
+| `u = (V − Origin)·TextureU + Pan` on a rotated, pre-pivoted brush                     | the UV convention
+| **mip level L samples the same world point as level 0** (the `/2**level` rescale)      | §4.3's top defect; a test on level *selection* alone passes the buggy version
+| forced level 0: ortho Python vs `render.rs` agree on texel **index** (not bytes)       | cross-renderer drift, scoped past the f32/f64 and mip divergences (§4.9)
+| a **masked** face's index-0 texels leave `BG` and skip depth; an **unmasked** face's index-0 texels draw normally | decision 2.3, both directions — the round-1 defect
+| a **scaled** brush exits 2 under `flat`/`textured` and still renders under `wire`      | §4.2
+| **subtract**: camera-facing faces culled, far faces drawn, and an add brush inside a subtract is visible | decision 2.10 — the structural fix
+| a `nonsolid` sheet renders from both sides                                             | that culling is subtract-only
+| two overlapping brushes: nearer face wins; coplanar tie goes to scene order            | §4.7
+| point **sprites** and each `--show` overlay survive an opaque fill                      | §4.10's reordering
+| `--focus`: focused brush visible when fully enclosed; context composited **once** (order-independent) and at `_DIM_ALPHA` | §4.8, both the two-buffer mechanism and the blend-once fix
+| `PF_Invisible` faces do not fill and do not write depth                                 | §4.9 #4
+| `flat` fill RGB == the front/back pair for `csg` **and** `legend`, unshaded; and on the legacy `color_by_csg=False` path | §4.5, all three paths
+| bare `--faces textured` succeeds; `--faces textured --brush-colors csg` exits 2          | the `default=None` mechanism
+| each of `_texture_resolver`'s three `None` causes produces a message naming that cause   | §8
+| `stash preview` / `prefab preview` accept `--faces`; `--prefab-dir` + `textured` exits 2 | §3, §5
+| `--layout quad` and `--layout breakdown` both render under `flat` and `textured`         | untested layouts in round 1
+| unresolvable ref → checkerboard + exactly ONE warning for N faces sharing it              | the warn-once contract
+| non-finite UV and a truncated mip chain produce a clean result, never a traceback         | `CLAUDE.md`'s no-exception rule
+| a golden PNG of a textured cube, blessed like `native_preview_golden.png`                 | end-to-end pixel stability
+| `uedcli/texframe.py` imports nothing outside stdlib + uedcli                               | §0's no-cargo constraint, tested where it can actually regress
+
+Dropped from the round-1 list as vacuous: "Python `%` vs Rust `rem_euclid`" (true by definition for
+positive divisors) and "runs with the native extension absent" (`preview.py` never imports it — the
+`texframe.py` import test above is the real guard).
 
 ## 10. Deferred (explicitly out of scope)
 
-- **Porting `actor preview` to Rust / making the native ext non-optional.** If revisited, the natural
-  shape is an ortho camera mode in `render.rs` plus a scene builder taking raw brush polys instead of
-  carved BSP nodes — §4.2's affine simplification would be given back, and `bin/_venv.sh`'s
-  optional-native contract would have to change.
-- **Bilinear filtering, real lighting, mesh rendering for point actors, translucency of the
-  game's own `Transparent` polyflag** (distinct from the `--focus` context blend, which is a
-  presentation device, not a material property).
-- **A `texture list --cutout` filter** over the catalog's dominant-colour signal — a separate ask
-  from the friction log, noted only so it is not conflated with this work.
+- **The Rust port / a non-optional native extension.** If revisited: an ortho camera mode in
+  `render.rs` plus a scene builder taking raw brush polys instead of carved BSP nodes.
+- **Scaled brushes under `flat`/`textured`** — rejected with exit 2 in v1 (§4.2). Supporting them
+  needs UE1's actual scaled-brush texture-frame behaviour verified first.
+- **Bilinear filtering, real lighting, mesh rendering for point actors, the `Translucent` polyflag.**
+- **A `texture list --cutout` filter** over the catalog's dominant-colour signal — a separate ask.
 
-## 11. Open questions
+## 11. BUILD-BLOCKED on one spike
 
-Superseded by §12 — spec review round 1 (2026-07-26, 3 cold Opus reviewers) reopened several.
+**`texture_is_imported_masked(ref)` cannot be written today.** `unrealed/quirks.md` (🔬 2026-07-26)
+establishes that `Masked` is a texture-import property OR'ed into every surface using that texture,
+and says explicitly that it is *"not yet probed to the stored property name/offset on the export; do
+that before relying on the exact spelling."*
 
-## 12. BLOCKING — structural findings and decisions taken on false premises
+Decision 2.3's gate needs it. The spike must land the property's stored name/offset in `quirks.md`
+with evidence, after which §4.3a is implementable as written. **Gating on `PF_Masked` alone is not an
+acceptable interim**: it silently misses the `ladder_a`-painted-on-a-solid-wall case — a texture
+masked at import with no surface flag — which is precisely the defect two of the three levels in the
+friction log hit independently.
 
-**These stop the work.** Each needs an owner ruling before the spec is revised and re-gated.
-
-### S1 — masking is specified unconditionally, and the correct gate is NOT YET KNOWN
-
-§2.3/§4.3 skip a texel whenever `mask[…] == 0`, with no condition. That is wrong.
-`unrealed/quirks.md` (🔬, 2026-07-26) states: **"`Masked` is a property of the TEXTURE, set at import
-— and a texture's flags are OR'ed into every surface it is applied to."** There is also a per-poly
-`PF_Masked = 0x2` (`query.py` `PF_NAMES`). So a face masks iff **its poly carries `0x2` OR its
-texture was imported masked** — index 0 on any other face is an ordinary colour.
-
-Measured by a reviewer on this repo's own fixtures: `CoreTexWater.dirtywater` parks reserved magenta
-at index 0 and uses it for **0** texels, while `LUM_InfoPortraits.ArthurCallaway` has index 0 = real
-black and **2.2 %** of its texels there. Built as specified, that portrait renders shot through with
-holes that also skip the depth write, so geometry behind bleeds through.
-
-**Why this is structural, not a patch:** the same `quirks.md` entry says the texture-side masked
-property is *"not yet probed to the stored property name/offset on the export; do that before relying
-on the exact spelling."* uedcli therefore **cannot read it today**. Gating on the poly flag alone is
-implementable now but knowingly incomplete (it misses exactly the `ladder_a`-on-a-solid-wall case the
-friction log cares about). So this is a `[spike]` before it is a `[spec]`.
-
-### S2 — opaque fills over PRE-CSG geometry may hide the whole level
-
-`actor preview` renders **brush volumes, not carved geometry** — a subtract is a solid box sitting
-inside the add it carves. Once faces are opaque, an ordinary scene (an add block with subtracted
-rooms) renders as *the outside of the outermost box*, and §9's own test "a subtract's far interior
-wall is drawn" contradicts §4.7's nearest-wins depth rule. The spec records accepted consequences
-carefully everywhere else and never asks this question, which is the largest single change to what
-the render shows. **Needs a stated rule for how subtract/nonsolid volumes participate in fill and
-depth** before anything is planned.
-
-### S3 — decision 2.7 rests on a false premise
-
-It rejects `--brush-colors` under `textured` because "there is no wireframe for it to colour, so
-accepting it would be a flag that does nothing." **False:** `preview._scene_geometry` derives
-`vivid` — the `--highlight` outline colour, which §5 calls the only line art in a textured render —
-from `brush_colors` (`legend` → per-actor tint, `csg` → CSG front hue). So the combination is
-meaningful and working. The ruling may still stand, but it was made on a stated fact the code
-contradicts and must be re-put.
-
-### S4 — decision 2.4 accepted a cost that is understated by more than 10×
-
-§7's arithmetic is wrong in both directions and omits the worst case:
-
-| Claim (as written)                                         | Actual
-|-------------------------------------------------------------|---
-| "quad @1024 = ~1M px per pane × 4 panes"                    | `render_quad_pgm` uses `half = size // 2` — four 512² panes, ≈**1.05 M px total**
-| §5: "`quad` … pays ~4× a single pane"                       | **~1×** — same total pixels as `--layout single` at the same `--size`
-| §7: "`--focus` under `textured` is the most expensive"      | **`--layout breakdown` is**: `_render_breakdown_grid` renders **N+1 panes at the FULL `--size`**, each one `--focus`ed, i.e. ~(N+1)× the two-pass cost
-| §7: worst case "tens of seconds"                            | breakdown on the 28-actor example is plausibly **many minutes**
-
-The owner agreed to "no guard, no ceiling" against the wrong number, so that ruling should be re-put
-with the real one.
-
-## 13. Round-1 correctness defects to fix in the same revision (non-blocking, but real)
-
-All verified against code by at least one reviewer; most by two or three.
-
-| # | Defect
-|---|---
-| 1 | **Mip sampling never rescales UV.** §4.3 fetches `floor(u) % tex_w` while `u` is in **mip-0** texel units, so a face at level `L` tiles its texture **2^L times**. Must be `floor(u / 2**L) % mip_w`. At §4.4's own worked example (level 3) the texture repeats 8× — the tool would *manufacture* the exact defect class it exists to expose
-| 2 | **Mip selection is an undeclared SECOND divergence from `--native`** (which is mip-0 only), contradicting §2.2's "exactly" and §2.3's "single-axis". It also makes §9's per-pixel conformance test unsatisfiable by construction
-| 3 | **Scaled brushes silently mis-texture.** `preview._scene_geometry` builds vertices with `rotation.actor_linear` (`PostScale·R·MainScale`); `_world_uv_frame` uses `actor_matrix` (**rotation only**). `preview_native` is safe only because `_reject_scaled` hard-errors first — `actor preview` has no such gate. Also, UV axes need the inverse-transpose under non-uniform scale. Needs a decision: reject scaled brushes, or handle them
-| 4 | **§4.8's draw order erases point sprites and every `--show` overlay.** `_draw_point_underlay` (step 2) draws sprites *and* the collision/light/sound overlays; opaque fills at step 3 paint over them. §5 asserts the opposite twice ("drawn after fills", "point actors entirely unaffected")
-| 5 | **The `--focus` context layer computes to ~6 % opacity — effectively invisible.** `_fade(rgb, 0.75)` blends 75 % toward `BG`, then compositing at alpha 0.25 leaves `0.0625·texel` over the background (final pixels land 210–226 against `BG`=224). Compare the existing wireframe dim, a single `_DIM_ALPHA = 0.15`. §9 would pin the pair as a regression test
-| 6 | **`--focus` pass A is order-dependent.** Per-face alpha blending against a nearest-wins depth buffer blends a pixel 1..N times depending on iteration order. The stated property needs pass A resolved opaquely into its own buffer and composited **once**
-| 7 | **"The only line art" is false at default settings.** `--annotate` defaults to all face indices + names; decals, the overlap keyline and the legend all still draw. §9's "produces outline pixels and nothing else does" is unimplementable
-| 8 | **Occluded-face index decals land on top of opaque geometry.** `_decal_opacity` grades a hidden face's number down but still paints it — readable as depth over a wireframe, but over an opaque fill it is a *wrong-face label on a wall*, not merely "hard to read"
-| 9 | **`PF_Invisible` unaddressed.** `preview_native.build_scene` drops those polys; `preview.py` does not, so an invisible face becomes an opaque occluder that writes depth
-| 10 | **Rounding/precision unpinned** while §4.1 claims byte-for-byte. `render.rs` is f32 throughout and converts via `(c*shade).min(255.0) as u8` — **truncation**; `preview.py`'s idiom is `round()`
-| 11 | **`FaceTextures` has no defined shape** — the central new dispatch→preview seam. Keyed by what? Does the mip pyramid or the selected mip cross? How do "no texture" and "checkerboard" encode? And `render_data` is currently `dict[name → PointRender]`, indexed by actor name in three places
-| 12 | **`_preview_render_data` early-returns `{}` when there are no point actors** — exactly the brush-only textured path. Both face resolution and S-decision 2.6's exit 2 are specified to live in a function whose current structure forbids reaching them
-| 13 | **The exit-2 trigger names the wrong cause.** `_texture_resolver` returns `None` for three distinct reasons (no user games config; `ConfigError`; empty composed file list), all reachable with a valid project. §8 says "no project/config", violating "naming the offending value". Also `prefab preview --prefab-dir` deliberately runs with **no project**, making `--faces textured` permanently unreachable there — never stated
-| 14 | **§4.2's zero-axis fallback contradicts §4.1.** §4.1 insists on Newell "NOT the stored `Normal`"; `_tex_basis_default`'s caller prefers `poly.normal` and falls back to Newell only when absent
-| 15 | **§4.4's `scale` is not px-per-world-unit under `iso`** — the default `--view`. `_project`'s iso is a shear, so `_framing`'s scale is px per *projected* unit; this also contradicts §5's "the UV math is view-independent"
-| 16 | **`|KEY_LIGHT|` is 0.99962, not the stated 0.9995** — in the one row whose whole argument is that constant's exact value
-| 17 | **Wrong pointers.** §3 cites `dispatch._preview_opts` (it is **`cli._preview_opts`**); §4.3/§8 cite "the `render.rs` checkerboard" (it is **`preview_native._checkerboard`** — `render.rs` has none by design, and §6 never relocates it)
-| 18 | **`_newell` duplicates `preview._face_normal`**, which already exists and is byte-identical — §6 would leave two copies in one module's reach
-| 19 | **§2.6 overstates its direction conformance.** The exit-2 half applies "No silent half-answers"; the *per-ref checkerboard + warn* half is the warn-and-continue shape `conventions.md` lists under **Rejected**. There is precedent (`_TextureTable`), so it may be settled practice — but "needs no direction-tree change" is not true of that half, and no `rationale/` entry is proposed
-| 20 | **Test-list gaps:** no test for mip UV rescale, scaled brushes, masked-vs-unmasked, sprites surviving a fill, `quad`/`breakdown` under `--faces` at all, `stash`/`prefab preview` accepting the flag, `flat` + `--focus`, `flat` under `--brush-colors legend`, `PF_Invisible`, or the non-P8 checkerboard row. The named "`%` vs `rem_euclid`" test pins something true by definition and never at risk; the "native ext absent" test is near-vacuous since `preview.py` never imports it
-| 21 | **`flat` is undefined on two live paths:** its colour under `--focus` pass A, and under `render_brushes_pgm`'s default `color_by_csg=False` (the legacy path the unit tests use, where `_CSG_PALETTE` is not consulted at all). Its back-facing colour under `--brush-colors legend` is also unstated
-| 22 | **`resolve_mips` typing is contradictory** — §6 types it `list[...]`, §8 requires `None`. A truncated mip chain would reach `mip0_to_rgb`'s `IndexError`, and `math.floor(nan)` raises `ValueError` — both are Python exceptions reaching the CLI user, which `CLAUDE.md` forbids
+Tracked as a `[spike]` on `board/inbox.md`. Everything else in this spec is implementable now, and
+`wire`/`flat` are unaffected by the block.
