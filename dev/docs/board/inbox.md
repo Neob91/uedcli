@@ -5,6 +5,61 @@ lands here first, with no obligation to know its stage yet. This is the *pre-pip
 stage (so no `to-` prefix). See [`README.md`](README.md).
 
 **Triage** routes each item to where its next action lives:
+- `p1` `[OWNER — decide]` **Unified-asset-catalog spec: gate round 1 ran, found STRUCTURAL defects, work
+  is PARKED.** 3 cold Opus reviewers, 2026-07-26, ~58 findings, all three verdicts "not ready to build
+  on". Convergence was high (17+ findings hit independently by 2 or 3 reviewers), including all four
+  defects in the same day's revision. Per `CLAUDE.md` "Review gates" a structural finding replaces the
+  remaining round and does NOT pass the gate: the spec re-enters at round 1 after the rulings below.
+  **Do not start the 13 slices.** Five decisions are the owner's:
+
+  1. **Does texture identity cover the TRANSPARENCY MASK, and is the preview artifact addressed by the
+     identity or its own digest?** (all 3 reviewers). §3b freezes identity as `sha256(w, h, RGB)`; §3a
+     says the preview PNG is content-addressed by "the bare hex sha256 of its pixels" AND that "for
+     textures the preview hash IS the identity — no second digest". Those cannot both hold, because the
+     decode path already returns a mask (`utexture.TextureResolver.resolve_masked()` → `(w,h,rgb,mask)`)
+     and the gated `specs/2026-07-25-native-texture-formats.md` §8-D pins the mask as derived from pixel
+     data (P8 index-0, BC1 punch-through, BC2/BC3 block alpha; 10 stored BC3 textures measured). If the
+     preview carries the mask, its digest ≠ identity and two textures with identical RGB + different
+     masks **share one preview file** — an agent classifying a masked grille is handed the opaque twin's
+     image, the misattribution decision 14 bans the contact sheet to prevent. If the preview drops the
+     mask, every masked texture is shown OPAQUE — exactly the defect §4d was added to surface. Identity
+     is frozen and is every shard's path, so this is not revisitable after shards exist.
+  2. **Are procedural textures name-keyed?** (2 of 3; one called it structural). §4a deliberately widens
+     enumeration to `Engine.Texture` descendants, and the sibling spec measured that EVERY
+     `FireTexture`/`WetTexture`/`WaveTexture`/`IceTexture`/`ScriptedTexture` stores mips with
+     `DataCount == 0` — 208+42+14+8+50+4 across the DX tree. No pixels ⇒ no pixel-hash key ⇒ §3a's
+     "cannot be classified". So water and fire are enumerable, referenceable and **permanently
+     unclassifiable**; `texture list --unclassified` never empties and `classify status` never reaches
+     done. **`direction/asset-catalog.md` may already answer this**: "Identity: content hash where
+     content exists, **name where it does not**" — a procedural texture has no content, so the owner's
+     own rule arguably prescribes the name fallback the spec omits.
+  3. **Is `classify set -`'s JSONL an approved THIRD stdin convention?** (all 3). `conventions.md` says
+     "Exactly TWO stdin conventions … never add a third"; `direction/asset-catalog.md` blesses
+     "`classify set -` reads JSONL". Two owner-protected docs conflict, and inside one noun `-` means a
+     name list for `show`/`preview` and JSONL for `classify set`. Needs a carve-out in `conventions.md`
+     or the feature dropped.
+  4. **How are editor-icon sprites detected?** §6 marks them via an "icon **group**" pattern set, but
+     measured against tracked `uned/UED22/Engine.u`: 28 of its 32 texture exports are **groupless** —
+     `S_Weapon`, `S_Camera`, `S_ZoneInfo`, `S_Ambient`, … — and the only groups present are fonts;
+     `Engine.ZoneInfo`'s `Texture` default is the 2-part `Texture'Engine.S_ZoneInfo'`. A group pattern
+     matches NOTHING, so every sprite class would report `preview_state: ok` and `prewarm` would count
+     hundreds of lightbulb glyphs as covered — inverting the honest-reporting §6 exists to guarantee.
+     The only signal that exists is the `S_` NAME prefix, which `conventions.md` rejects for class
+     questions and §0 forbids as inference. Needs a ruling or an explicit config of icon **refs**.
+  5. **Rename the project catalog dir default to `asset-catalog/`?** (all 3). §3b and plan S1 depend on
+     it, but `direction/projects-and-config.md:41` (protected) says `texture-catalog/`, matching
+     `config.project_catalog_dir()`. Plan S11 currently instructs an agent to edit the direction tree to
+     fix the mismatch — forbidden without an explicit yes.
+
+  Also escalated because it is authored-work-destroying and half design: **`classify set` has no defined
+  behaviour over an existing shard** (replace / merge / refuse), against `direction/safety.md` "a
+  destination that already exists is never written over silently"; **pixel-hash dedup defeats §3b's own
+  conflict-free-merge premise** (two agents classifying two differently-NAMED refs with identical pixels
+  write the SAME shard, second silently overwriting the first, while the write-once `ref` still names the
+  first); and **no re-key path exists across a pixel edit**, so `classify prune --outdated` deletes
+  descriptions that are still accurate — on a project that edits its own `LUM_CoreTex.utx`.
+
+  The remaining ~45 findings need no ruling and are the agent's to fix once the above land. *(2026-07-26.)*
 - `p1` `[OWNER — confirm]` **`--faces textured` with NO project/config: exit 2, or render anyway?**
   Blocks [`specs/2026-07-26-actor-preview-textured-faces.md`](../specs/2026-07-26-actor-preview-textured-faces.md)
   §11 Q1. `direction/conventions.md` "No silent half-answers" says a command that cannot fully
