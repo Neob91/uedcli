@@ -137,7 +137,9 @@ files scattered through live ones that `cache gc` cannot distinguish.
   `facts` is **per-kind and open for extension**: a texture row carries `{"w":…, "h":…, "format":…,
   "group": "Ladder"|null, "colors": […]}` (§4b, §4c), a class row the shape above. Adding a fact is
   always safe — see the frozen-identity rule in §3b.
-  `undecodable` (the asset is unparseable → no identity, cannot be classified) and `preview_state`
+  `undecodable` (**genuinely unreadable** — the export cannot be parsed at all, so it has no identity
+  under §3b *or* §3c and cannot be classified; a *procedural* texture is NOT undecodable, it is
+  parameter-hashed per §3c) and `preview_state`
   (no artifact available, but fully classifiable) are **separate flags** — one boolean cannot do both
   jobs, and conflating them mislabels a `DT_Brush` class as corrupt.
 - **`previews/<hh>/<hash>.png`** — every preview artifact, content-addressed by the bare hex sha256
@@ -215,6 +217,48 @@ Two corollaries worth stating, because they are easy to get backwards:
   either classifies both. The write-once `ref` (below) exists only so an outdated entry can be named
   in a report.
 
+### 3c. Procedural textures — hashed on what makes them DISTINCT
+
+*(Owner ruling, 2026-07-26, resolving a structural gate finding.)*
+
+A **procedural** texture stores **no pixels**: measured, every `FireTexture`, `WetTexture`,
+`WaveTexture`, `IceTexture` and `ScriptedTexture` carries mips whose `DataCount == 0`
+(208 + 42 + 14 + 8 + 50 + 4 across the Deus Ex tree — `specs/2026-07-25-native-texture-formats.md`).
+Its pixels are **generated at runtime from its stored parameters**. So the pixel hash of §3b has
+nothing to bite on, and an earlier draft's consequence — that water and fire are enumerable but
+*permanently unclassifiable* — is rejected.
+
+**A procedural texture is identified by a hash over the properties that make it distinct.** This is
+the same principle as §3b, not an exception to it: a procedural texture's *content* IS its parameter
+set, because that set is what determines every pixel the engine will draw. Two `FireTexture`s with
+identical parameters render identically and are deliberately one classifiable thing, exactly as two
+byte-identical images are.
+
+Rules this must satisfy:
+
+- **The distinguishing property set is declared PER CLASS, and is FROZEN like §3b's function.** It is
+  the stored tagged properties that determine the generated output (a `FireTexture`'s fire parameters,
+  a `WaveTexture`'s wave parameters), resolved against the class defaults so an unstored parameter
+  still contributes its effective value. `USize`/`VSize` are stored even with no mip data and are part
+  of the key. Changing the set re-keys every procedural shard, with the same irreversibility and the
+  same owner-approved-migration requirement as §3b — and the same kind of committed golden pins it.
+- **Selecting the set is a declared table, NOT inference.** The tool does not work out which properties
+  matter; the set is written down per class and read from there, which keeps §0 intact. Reading the
+  values is "reports facts literally stored in the package."
+- **The hash is namespaced by class**, so a `FireTexture` and a `WaveTexture` with coincidentally equal
+  parameter values cannot collide.
+- **A procedural texture is NOT `undecodable`** (§3a): it is fully enumerable, classifiable and
+  outdated-detectable. Only a genuinely unparseable export is `undecodable`.
+- **`preview_state`** still reports honestly that there is no pixel preview to produce, which is a
+  separate axis from identity — that distinction is exactly why §3a keeps the two flags apart.
+
+**OPEN — needs settling during the build, and it is not a detail.** `ScriptedTexture` is drawn by
+UnrealScript at runtime, so its appearance may not be a function of its stored properties at all; the
+declared set for it may be empty, which would collapse every `ScriptedTexture` in a package to one
+identity. Decide whether that is acceptable (they are canvases, arguably interchangeable) or whether
+`ScriptedTexture` needs a different key. 50 of the 326 procedural exports are this class, so it is not
+a corner case. Do not silently pick one.
+
 **Change-awareness without a `stale` flag.** When a texture's pixels change, its identity changes, so
 it **shows unclassified** — correct, the new pixels genuinely are. The prior classification survives
 under the old identity as an **outdated entry**, surfaced by `classify list-outdated` (showing its
@@ -235,8 +279,9 @@ asset is renamed or removed.
 
 - **Textures: enumerate every export descending from `Engine.Texture`**, not `class == "Texture"`.
   The stock `.utx` set carries 40 `FireTexture`, 8 `WetTexture`, 1 `WaveTexture` — real, referenceable
-  surfaces that today's exact-match enumeration never sees. Procedural ones are marked `undecodable`
-  rather than omitted.
+  surfaces that today's exact-match enumeration never sees. Procedural ones are **fully classifiable**
+  via the parameter-hash identity of §3c; they are never `undecodable`. (Counts here are the stock
+  `.utx` subset only; `IceTexture` and `ScriptedTexture` exist too — see §3c.)
 - **Sound scope is an explicit rule, because `.uax` is the wrong set.** Measured: **10,826** Sound
   exports on the composed path — only **151** in `.uax`, **399** in `DeusExSounds.u` (the real SFX
   library), ~**10,200** conversation VO in `DeusExConAudio*.u`. `.uax`-only omits the most useful
