@@ -202,10 +202,13 @@ This overrides the spec's §2.2 assertion of `1e-3`. Recorded here and in `ratio
 *(A second reviewer counted 930/864 under a slightly different filter; the max and its location
 reproduce exactly either way, which is the load-bearing figure. State your glob when re-measuring.)*
 
-**Why not `1e-3`:** `emit.clean` snaps any coordinate within `CLEAN_EPS = 0.001` of an integer, and
-`_vec_line` runs the texture axes through it. For a unit axis one component carries the magnitude and
-cannot be snapped, so the worst displacement is `√2·0.001 = 1.41e-3` absolute — **2.1e-3 relative** at
-`0.6667`, the smallest magnitude in the corpus. A `1e-3` gate rejects frames uedcli itself wrote.
+**Why not `1e-3`:** `emit.clean` snaps any coordinate within `CLEAN_EPS = 0.001` of an integer,
+**each component independently**, and `_vec_line` runs the texture axes through it. The worst
+displacement is `√3·CLEAN_EPS ≈ 1.73e-3` absolute — `(0.999, 0.001, 0.001) → (1, 0, 0)` snaps all
+three. At `0.6667`, the smallest magnitude in the corpus, the magnitude-carrying component is near no
+integer and cannot snap, so at most two move: `√2·CLEAN_EPS = 1.41e-3`, i.e. **2.1e-3 relative**.
+Either way a `1e-3` gate rejects frames uedcli itself wrote. (An earlier draft asserted the
+magnitude-carrying component can never snap — false near unit magnitude.)
 
 **Why the harm side allows `1e-2`:** `n̂ × U` shortens the axis by `√(1−ε²)`, so tolerating a relative
 out-of-plane component `ε` costs `ε²/2` of texel density — `5e-5` at `ε = 1e-2`, invisible. A

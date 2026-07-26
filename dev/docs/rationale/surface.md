@@ -68,8 +68,14 @@ that component, changing `|U|` and therefore the texel density.
 **Why the threshold is absolute-OR-relative.** The two effects it sits between scale differently:
 
 - **the noise is ABSOLUTE.** `emit.clean` snaps any coordinate within `CLEAN_EPS = 0.001` of an
-  integer, and the texture axes pass through it. One component carries the magnitude and cannot be
-  snapped, so the worst displacement is `√2·0.001 = 1.41e-3` — *independent of the axis magnitude*.
+  integer, **each component independently**, and the texture axes pass through it. So the worst
+  displacement is `√3·CLEAN_EPS ≈ 1.73e-3` — e.g. `(0.999, 0.001, 0.001) → (1, 0, 0)`, all three
+  snapped. It is *independent of the axis magnitude*, which is the load-bearing half.
+  At the corpus minimum magnitude `0.6667` the component carrying the magnitude is not near any
+  integer and cannot snap, so at most two move there: `√2·CLEAN_EPS ≈ 1.41e-3`, i.e. **2.1e-3
+  relative**. (An earlier draft of this doc claimed the magnitude-carrying component can *never*
+  snap. That is false near unit magnitude — `0.999` snaps to `1` — and the corrected bound is the
+  one above.)
 - **the harm is RELATIVE.** `n̂ × U` shortens the axis by `√(1−ε²)` for a relative out-of-plane
   component `ε`, costing `ε²/2` of density — `5e-5` at `ε = 1e-2`, invisible.
 
@@ -86,6 +92,9 @@ itself wrote, one round trip earlier.
 - *`1e-3` relative* (the spec's first assertion) — below the `2.1e-3` relative displacement the
   serializer can produce at `0.6667`, the smallest magnitude in the corpus, so it rejects uedcli's own
   output.
+- *A purely relative gate at any threshold* — the noise is absolute and the harm is relative, so a
+  relative-only rule tightens without limit as the axis shrinks, and `brush poly scale --by` shrinks
+  it on demand.
 - *Deriving the threshold from the observed ceiling.* A threshold pinned to whatever the current
   corpus contains is only as tight as that corpus is clean; one clean corpus and the gate fires on the
   next map. Choose from the harm side and measure only to confirm the noise floor sits far below.
