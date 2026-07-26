@@ -15,14 +15,14 @@ Siblings: `../rationale/` (why the code is that way — agent-owned), `../archit
 | Topic | Covers | |
 |--------------------------|--------------------------------------------------------|---
 | [`scope.md`](scope.md) | a generic UnrealEngine-1 tool; Deus Ex as one substrate | ✅ |
-| `projects-and-config.md` | projects, substrates, the global CLI, layered packages | *(pending)* |
+| [`projects-and-config.md`](projects-and-config.md) | projects, substrates, the global CLI, layered packages | ✅ |
 | [`trunk-and-editor.md`](trunk-and-editor.md) | the T3D trunk as source of truth; the editor as build tool | ✅ |
 | [`organization.md`](organization.md) | folders (hierarchical) and labels (flat, multi-valued) | ✅ |
 | [`materialize.md`](materialize.md) | `level materialize`; lighting/BSP as build output | ✅ |
 | [`safety.md`](safety.md) | never irretrievably clobber | ✅ |
-| `containers.md` | container isolation; the code/content substrate split | *(pending)* |
-| `generators.md` | stateless T3D producers | *(pending)* |
-| `packages.md` | one package-format core | *(pending)* |
+| [`containers.md`](containers.md) | container isolation; the code/content substrate split | ✅ |
+| [`generators.md`](generators.md) | stateless T3D producers | ✅ |
+| [`packages.md`](packages.md) | one package-format core | ✅ |
 | `asset-catalog.md` | texture / class / sound / music; the tool does not infer | *(pending)* |
 | [`terminology.md`](terminology.md) | level, map file, T3D tree, folder, label | ✅ |
 | [`conventions.md`](conventions.md) | no back-compat cruft; explicit, discoverable, model-side | ✅ |
