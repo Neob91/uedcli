@@ -2971,20 +2971,33 @@ The posing rewrite landed (POS@ROT → auto-frame; decision 2026-07-12); these a
   pointed out the restriction was asserted rather than argued; recorded here rather than folded into
   that spec, whose gate had already run.
 
-- `p1` `[spike]` **Measure UnrealEd's own `POLY TEXALIGN` semantics, and diff them against uedcli's
-  `brush poly align`.** Owner instruction 2026-07-26, blocking the `--wall`/`--floor` build in
-  `specs/2026-07-26-poly-surface-verbs.md` §4b. `unrealed/commands.md` records the editor's vocabulary
-  as `TEXALIGN FLOOR | WALLDIR | WALLX | WALLY | ONETILE | CLAMP` — **six modes against our two** — but
-  the entry is 📖 (string-table mined), so the semantics are inferred and unverified. Known gaps: the
-  editor splits "wall" three ways (`WALLDIR`/`WALLX`/`WALLY`) where we have one `--wall` that picks an
-  axis automatically via `_tex_basis`; `ONETILE` (fit one tile to the face) has no uedcli counterpart
-  at all and is plausibly what an author reaching for "align this floor" actually wants — which bites
-  harder after the 2026-07-26 reset-to-unit ruling removed the last channel to a non-unit density;
-  `CLAMP` is unknown. **Method:** drive the editor, apply each mode to known faces, `MAP EXPORT`, read
-  back `TextureU`/`TextureV`/`Pan`, record measured semantics in `unrealed/` with a ✅/🔬 marker, and
-  state per mode whether uedcli matches, deliberately diverges (with the reason), or has no
-  equivalent. Divergence is a legitimate outcome — uedcli is model-side and need not mirror an editor
-  UI — but it must be a decision rather than an accident.
+- `p1` `[OWNER — decide]` **`POLY TEXALIGN` is MEASURED; four things in
+  `specs/2026-07-26-poly-surface-verbs.md` §4b now need your call.** The spike ran
+  (`../spikes/2026-07-26-unrealed-texalign-semantics/`, live 2026-07-26; durable facts in
+  `../unrealed/texalign.md`; four regressions in `test_engine_facts.py`). Headlines: the editor has
+  **nine** mode tokens, not six — and **`ONETILE` and `WALLCOLUMN` do nothing at all** in UED22, so
+  there is no fit-a-tile-to-a-face operation in the editor to port. Nothing in `TEXALIGN` ever changes
+  texel density; the modes only choose an in-plane orientation and an anchor, at 1 texel/uu. The spec
+  is NOT edited (it is yours) — the four decisions it needs:
+  1. **`align wall|floor` orientation.** The spec's `builders._tex_basis(n̂)` does not agree with the
+     editor on any of the seven face directions measured (mirror / 180° / on a yawed wall a full
+     90°), and `_tex_basis` lets V point UP on roughly half a room's walls where the editor always
+     drives V down. **Match the editor (`WALLDIR` for wall, `FLOOR` for floor), or diverge on
+     purpose?** Right now the spec reads as if `_tex_basis` were the editor's rule.
+  2. **Anchor.** The editor pins `FLOOR`/`WALLX`/`WALLY` to a **world axis** — which is what makes
+     separately-aligned faces across a level share one grid — while the spec pins to the **seed
+     face's centroid**, making the result depend on which face was listed first and on how many
+     invocations you split the plane across. A world-axis anchor would make `poly align --floor`
+     idempotent and set-order-independent. **Change it?**
+  3. **`one-tile` is a uedcli invention, not a port.** No objection from the spike; the spec should
+     just stop implying an editor precedent.
+  4. **Two modes worth adding, both absent from uedcli:** a `WALLPAN` equivalent (re-phase a wall's
+     texture to world Z=0 without touching its axes) and the `WALLX`/`WALLY` projection pair (a
+     stretched-but-continuous run across walls that are not quite parallel — the only thing the
+     editor has for a TURNING run, which is what `align run` is reaching for).
+  Also open, and deliberately not guessed at: **what `CLAMP` is FOR** (measured to be `DEFAULT` with
+  `PanV = VSize−1`; the rendering consequence was not observed), and whether `ONETILE`/`WALLCOLUMN`
+  are implemented in non-UED22 UnrealEd builds (not checked — out of scope, we ship UED22).
 ---
 
 ## From the 2026-07-18 unattended build chain (Andrzej, triage these)

@@ -516,7 +516,7 @@ then `actor preview <brush> --highlight <brush>:N` (below) to see it emphasised 
 
 **`brush poly align (--wall | --floor | --ring) [--fresh-frame] [--fit-perimeter] (targets…|-)`** makes
 one texture flow **continuously** across a set of faces instead of restarting the pattern at every
-brush edge (offline texture-vector math — the model-side analogue of UnrealEd's `TEXTURE ALIGN`).
+brush edge (offline texture-vector math — no editor involved).
 Exactly one geometry mode is required. The face set is `BRUSH:SELECTOR` positionals (or a bare brush
 Name = all its polys) **or** `-` reading the set from stdin (bare names, or the `BRUSH:idx` lines
 `poly find` prints); empty stdin is a clean no-op. The **first face is the seam/seed**. Touched brush
@@ -529,6 +529,12 @@ names → stdout, a summary → stderr.
   chord (`2·r·sin(π/N)`) around the ring, V runs along the axis. Exclude the two caps.
 - **Frame source:** default **adopt-seed** (continue the seed face's already-dialled-in
   `TextureU/V` + `Pan`); `--fresh-frame` synthesizes a canonical frame from the face normal instead.
+  ⚠ That canonical frame is **uedcli's own convention, not a reproduction of UnrealEd's own
+  "align to floor / wall direction"** — measured against the editor 2026-07-26, the two pick
+  different in-plane axis directions (a mirror, a 180° turn, or on a wall that is not axis-aligned a
+  full 90°) and pin the texture's phase to a different point (uedcli to the seed face's centre, the
+  editor to a world axis). So a face aligned here and the same face aligned in the editor's GUI will
+  not look the same; pick one tool per surface rather than mixing them.
 - **`--fit-perimeter`** (`--ring` only) snaps the scale so an integer number of texels fits the
   perimeter (an exact meet at the closing seam).
 

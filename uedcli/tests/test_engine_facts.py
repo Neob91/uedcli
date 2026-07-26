@@ -467,3 +467,205 @@ def test_index_zero_is_an_ordinary_colour_on_an_unmasked_texture():
     mip0 = tex.mips[0]
     frac = mip0.data.count(0) / len(mip0.data)
     assert 0.02 < frac < 0.03, f"index-0 usage {frac:.4f} moved; the fixture changed"
+
+
+# ── POLY TEXALIGN (spike 2026-07-26-unrealed-texalign-semantics) ────────────────────────────────
+
+_TEXALIGN_SPIKE = (Path(__file__).resolve().parents[2] /
+                   "dev" / "docs" / "spikes" / "2026-07-26-unrealed-texalign-semantics")
+
+# Every UED22 DLL is based here; the `push <imm32>` operands in the parser chain are absolute VAs.
+_IMAGE_BASE = 0x10000000
+
+# The nine tokens `POLY TEXALIGN` accepts and the ETexAlign value each maps to, in the order the
+# exec parser tests them. `unrealed/texalign.md`; `commands.md` used to list only six.
+_TEXALIGN_TOKENS = [("DEFAULT", 0), ("FLOOR", 1), ("WALLDIR", 2), ("WALLX", 6), ("WALLY", 7),
+                    ("WALLPAN", 3), ("WALLCOLUMN", 5), ("ONETILE", 4), ("CLAMP", 8)]
+
+
+def _wide_string_at(data: bytes, rva: int) -> str:
+    """The NUL-terminated UTF-16LE literal at `rva` (engine `TCHAR` strings are wide)."""
+    off = end = _rva_to_offset(data, rva)
+    while data[end:end + 2] != b"\0\0":
+        end += 2
+    return data[off:end].decode("utf-16le")
+
+
+def test_texalign_parser_maps_nine_tokens_to_these_etexalign_values():
+    """`POLY TEXALIGN` accepts NINE mode tokens, not the six `commands.md` used to list — `DEFAULT`,
+    `WALLPAN` and `WALLCOLUMN` were missing — and each maps to the ETexAlign value below.
+
+    Spike: `dev/docs/spikes/2026-07-26-unrealed-texalign-semantics/README.md` §1 (all nine driven
+    live; the mapping read out of the parser chain at `Editor.dll` RVA 0x68984). Doc:
+    `dev/docs/unrealed/texalign.md`.
+
+    The chain is a run of `ParseCommand(&Str, TEXT("<TOKEN>"))` tests, each followed on match by
+    `mov dword ptr [ebp-0x4dc], <ETexAlign>` (`C7 85 24 FB FF FF <u32>`). This walks those stores in
+    file order and resolves the `push <VA>` immediately before each one back to its wide string, so
+    it asserts the token/value PAIRING rather than two independent lists.
+    """
+    data = (UED22 / "Editor.dll").read_bytes()
+    blob = data[_rva_to_offset(data, 0x68984):_rva_to_offset(data, 0x68984) + 0x1A0]
+    pairs = []
+    for m in re.finditer(rb"\xc7\x85\x24\xfb\xff\xff(....)", blob, re.S):
+        value = struct.unpack("<I", m.group(1))[0]
+        push = None
+        for candidate in re.finditer(rb"\x68(....)", blob[:m.start()], re.S):
+            push = candidate                       # the LAST push before the store is the token
+        assert push is not None, "no `push <token>` precedes an ETexAlign store"
+        va = struct.unpack("<I", push.group(1))[0]
+        pairs.append((_wide_string_at(data, va - _IMAGE_BASE), value))
+    assert pairs == _TEXALIGN_TOKENS
+
+
+def test_texalign_onetile_and_wallcolumn_are_unimplemented_in_ued22():
+    """`ONETILE` and `WALLCOLUMN` do NOT align anything in this substrate — so UnrealEd 2.2 has no
+    fit-a-tile-to-a-face operation at all, and uedcli's proposed `poly align one-tile` is an
+    original feature rather than a port of an editor mode.
+
+    Spike: `…/2026-07-26-unrealed-texalign-semantics/README.md` §3.6 (live: the export after
+    `POLY TEXALIGN WALLCOLUMN` is byte-identical to the control on all 44 fixture faces, and
+    `ONETILE` differs only by sign-of-zero float noise). Doc: `dev/docs/unrealed/texalign.md`.
+
+    Pinned structurally, off `polyTexAlign`'s own jump table (`Editor.dll` RVA 0x4d660, indexed by
+    ETexAlign):
+      * entry 5 (WALLCOLUMN) is the SAME address as the `default:` branch — the `ja` target of the
+        `cmp eax, 8` bounds check — whose body is just `mov ecx,[ebp-0x1f4]; inc ecx; jmp <loop>`;
+      * entry 4 (ONETILE) lands on the shared epilogue (`mov [esi+0x18], -1` = invalidate the
+        lightmap, then `push 1; push 1` for `polyUpdateMaster`) with no case body of its own.
+    """
+    data = (UED22 / "Editor.dll").read_bytes()
+    # mov eax,[ebp+0xc] ; cmp eax,8 ; ja <default> ; jmp [eax*4 + 0x1004d660]
+    dispatch = data[_rva_to_offset(data, 0x4C7C3):_rva_to_offset(data, 0x4C7C3) + 17]
+    assert dispatch.startswith(bytes.fromhex("8b450c83f8080f87")), "the ETexAlign dispatch moved"
+    assert dispatch.endswith(bytes.fromhex("ff248560d6")), "the jump-table reference moved"
+    default_rva = 0x4C7CF + struct.unpack_from("<i", dispatch, 8)[0]
+
+    table = struct.unpack_from("<9I", data, _rva_to_offset(data, 0x4D660))
+    rvas = [va - _IMAGE_BASE for va in table]
+    assert len(rvas) == len(_TEXALIGN_TOKENS)      # one entry per accepted token
+
+    # WALLCOLUMN == default: nothing happens, not even polyUpdateMaster.
+    assert rvas[5] == default_rva
+    loop_continue = data[_rva_to_offset(data, rvas[5]):_rva_to_offset(data, rvas[5]) + 8]
+    assert loop_continue == bytes.fromhex("8b8d0cfeffff41e9"), \
+        "the WALLCOLUMN/default branch is no longer a bare loop-continue"
+
+    # ONETILE == the shared epilogue: invalidate the lightmap, polyUpdateMaster, done.
+    assert rvas[4] != default_rva                  # it is not literally the default branch …
+    epilogue = data[_rva_to_offset(data, rvas[4]):_rva_to_offset(data, rvas[4]) + 11]
+    assert epilogue == bytes.fromhex("c74618ffffffff6a016a01"), \
+        "the ONETILE entry no longer lands on the bare polyUpdateMaster epilogue"
+
+    # …and every mode that DOES align has a distinct entry of its own.
+    aligning = [rvas[v] for _tok, v in _TEXALIGN_TOKENS if _tok not in ("ONETILE", "WALLCOLUMN")]
+    assert len(set(aligning)) == len(aligning)
+    assert default_rva not in aligning
+
+
+def test_texalign_guard_thresholds_are_005_and_095_and_texels_is_ignored():
+    """The alignment guards are the two `.rdata` doubles 0.05 and 0.95 — `FLOOR`/`WALLX`/`WALLY`
+    skip a face whose `|N[axis]| <= 0.05`, `WALLDIR`/`WALLPAN` skip one whose `|N.Z| >= 0.95` — and
+    the `TEXELS=<n>` argument the exec parser accepts is never read by `polyTexAlign` at all.
+
+    Spike: `…/2026-07-26-unrealed-texalign-semantics/README.md` §1 and §3 (live: the guards' skip
+    DIRECTION is measured on real faces; the two constants themselves come from `.rdata`, and
+    `TEXELS=64` produced identical output on three modes). Doc: `dev/docs/unrealed/texalign.md`.
+    """
+    data = (UED22 / "Editor.dll").read_bytes()
+    body = data[_rva_to_offset(data, 0x4C6C0):_rva_to_offset(data, 0x4D615)]   # polyTexAlign
+
+    for rva, expected, uses in ((0x0DE950, 0.05, 4), (0x0E0578, 0.95, 2)):
+        assert struct.unpack_from("<d", data, _rva_to_offset(data, rva))[0] == expected
+        assert body.count(struct.pack("<I", _IMAGE_BASE + rva)) == uses, \
+            f"polyTexAlign no longer references the {expected} threshold {uses} time(s)"
+
+    # `polyTexAlign(UModel*, ETexAlign, DWORD Texels)`: Model is [ebp+8], the mode is [ebp+0xc],
+    # Texels is [ebp+0x10] — and NOTHING in the body reads that slot, in any encoding.
+    assert bytes.fromhex("8b450c") in body, "the ETexAlign argument read moved"
+    for encoding in ("8b4510", "8b4d10", "8b5510", "8b5d10", "8b7510", "8b7d10",
+                     "ff7510", "0fb74510", "8b8510000000"):
+        assert bytes.fromhex(encoding) not in body, \
+            f"polyTexAlign now reads its Texels argument ({encoding}) — TEXELS= is no longer inert"
+
+
+def test_texalign_model_reproduces_every_measured_editor_frame():
+    """The documented per-mode rules (`dev/docs/unrealed/texalign.md`) reproduce, exactly, what the
+    real editor wrote for every face of the spike's fixture in every mode.
+
+    `measured.json` is the committed golden: each face's world geometry from a control export, plus
+    the `Origin`/`TextureU`/`TextureV`/`Pan` the editor produced for it under each of the nine
+    modes. `texalign_model.frame` is the executable statement of the documented rules. If the
+    documented rule and the measurement ever part company — a substrate swap, or a wrong edit to the
+    doc's formulas propagated into the model — this trips.
+
+    Spike: `dev/docs/spikes/2026-07-26-unrealed-texalign-semantics/` (README §3-4).
+    """
+    import json
+    import sys
+    sys.path.insert(0, str(_TEXALIGN_SPIKE))
+    try:
+        import texalign_model
+    finally:
+        sys.path.remove(str(_TEXALIGN_SPIKE))
+
+    golden = json.loads((_TEXALIGN_SPIKE / "measured.json").read_text())
+    # bound texture -> VSize in texels (only CLAMP reads it)
+    vsize = {"ex_bricks": 256, "aircount_a00": 64, "calendar_2": 256}
+    # bspAddVector(…, Exact=0) shares near-equal vectors between surfaces; bspAddPoint plus the
+    # float32 world<->brush-local round trip moves an anchor by well under a tenth of a uu.
+    vec_tol, point_tol = 2e-3, 0.2
+
+    checked = 0
+    for mode, faces in golden["modes"].items():
+        for ref, got in faces.items():
+            face = golden["faces"][ref]
+            pred = texalign_model.frame(
+                mode, face["n_surf"], face["n_poly"], face["verts"],
+                face["base"], face["tu"], face["tv"], face["pan"], vsize[face["tex"]])
+            if pred is None:                        # the mode leaves this face alone
+                pred = (face["base"], face["tu"], face["tv"], face["pan"])
+            for name, want, have, tol in (("Origin", pred[0], got["base"], point_tol),
+                                          ("TextureU", pred[1], got["tu"], vec_tol),
+                                          ("TextureV", pred[2], got["tv"], vec_tol)):
+                assert all(abs(a - b) <= tol for a, b in zip(want, have)), \
+                    f"{mode} {ref}: {name} predicted {want}, editor wrote {have}"
+            assert list(pred[3]) == list(got["pan"]), f"{mode} {ref}: Pan"
+            checked += 1
+    assert checked == 396, f"the golden covers {checked} (mode, face) pairs, expected 396"
+
+
+def test_texalign_guards_match_the_editor_on_near_threshold_faces():
+    """The guard thresholds in the documented rule are the ones the real editor applies, checked
+    where it matters — on faces whose normals straddle them by 0.001.
+
+    `measured.json`'s fixture has no near-threshold face, so the model check above would pass with a
+    badly-wrong threshold. `guards.json` closes that: eight one-wedge levels, each exported with and
+    without the mode whose guard its test face straddles, recording only whether the editor TOUCHED
+    that face. Measured live 2026-07-26 — `|N[axis]|` 0.049 vs 0.051 for `FLOOR`/`WALLX`/`WALLY`,
+    `|N.Z|` 0.949 vs 0.951 for `WALLDIR` — so each threshold is pinned to a 0.002-wide window.
+
+    Spike: `dev/docs/spikes/2026-07-26-unrealed-texalign-semantics/README.md` §5.1.
+    """
+    import json
+    import sys
+    sys.path.insert(0, str(_TEXALIGN_SPIKE))
+    try:
+        import texalign_model
+    finally:
+        sys.path.remove(str(_TEXALIGN_SPIKE))
+
+    cases = json.loads((_TEXALIGN_SPIKE / "guards.json").read_text())["cases"]
+    assert len(cases) == 8
+    assert {c["changed"] for c in cases} == {True, False}       # the golden brackets, not one side
+    for case in cases:
+        n = case["n_surf"]
+        # Anything but the guard is irrelevant here: pass a placeholder frame/geometry and ask only
+        # whether the model decides to act.
+        acted = texalign_model.frame(case["mode"], n, n, [(0, 0, 0), (1, 0, 0), (0, 1, 0)],
+                                     (0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, 0.0, 1.0),
+                                     (0, 0), 256) is not None
+        assert acted == case["changed"], (
+            f"{case['case']}: TEXALIGN {case['mode']} on normal {n} — the editor "
+            f"{'changed' if case['changed'] else 'left'} the face, the documented rule says "
+            f"{'act' if acted else 'skip'}")

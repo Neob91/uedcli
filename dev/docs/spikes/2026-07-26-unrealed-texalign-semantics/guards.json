@@ -1,0 +1,93 @@
+{
+ "_note": "near-threshold faces: did POLY TEXALIGN <mode> touch this face? spike 2026-07-26-unrealed-texalign-semantics",
+ "cases": [
+  {
+   "case": "NZ049",
+   "target": 0.049,
+   "mode": "FLOOR",
+   "n_surf": [
+    0.998799,
+    0.0,
+    0.049
+   ],
+   "changed": false
+  },
+  {
+   "case": "NZ051",
+   "target": 0.051,
+   "mode": "FLOOR",
+   "n_surf": [
+    0.998699,
+    0.0,
+    0.051
+   ],
+   "changed": true
+  },
+  {
+   "case": "NZ949",
+   "target": 0.949,
+   "mode": "WALLDIR",
+   "n_surf": [
+    0.315276,
+    0.0,
+    0.949
+   ],
+   "changed": true
+  },
+  {
+   "case": "NZ951",
+   "target": 0.951,
+   "mode": "WALLDIR",
+   "n_surf": [
+    0.309191,
+    0.0,
+    0.951
+   ],
+   "changed": false
+  },
+  {
+   "case": "NY049",
+   "target": 0.049,
+   "mode": "WALLY",
+   "n_surf": [
+    0.998799,
+    0.049,
+    0.0
+   ],
+   "changed": false
+  },
+  {
+   "case": "NY051",
+   "target": 0.051,
+   "mode": "WALLY",
+   "n_surf": [
+    0.998699,
+    0.051,
+    0.0
+   ],
+   "changed": true
+  },
+  {
+   "case": "NX049",
+   "target": 0.049,
+   "mode": "WALLX",
+   "n_surf": [
+    0.049,
+    0.998799,
+    0.0
+   ],
+   "changed": false
+  },
+  {
+   "case": "NX051",
+   "target": 0.051,
+   "mode": "WALLX",
+   "n_surf": [
+    0.051,
+    0.998699,
+    0.0
+   ],
+   "changed": true
+  }
+ ]
+}

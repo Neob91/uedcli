@@ -157,12 +157,28 @@ the next command) — never use it** (`2026-06-17-brush-clip.md`).
 - `SELECT MEMORY` / `UNION` / `INTERSECT` / `XOR` / `RECALL` 📖 — selection-set algebra
   ("And/Or/Xor With Memory").
 
-## `POLY` / surfaces 📖
-Surface (BSP-poly) ops: `POLY SELECT MATCHING TEXTURE|ADJACENT|COPLANARS|ITEMS` ·
-`WALLS|FLOORS|CEILINGS|SLANTS` · `SETFLAGS=`/`CLEARFLAGS=` · texture alignment `TEXALIGN
-FLOOR|WALLDIR|WALLX|WALLY|ONETILE|CLAMP` · `TEXPAN`/`TEXSCALE`/`TEXMULT` (`UU= UV= VU= VV=`) ·
-`TEXINFO`/`TEXTURENAME` · detail-texture `SETDETAIL`/`CLEARDETAIL`/`APPLYDETAIL` ·
-`REMIP`/`BATCHAPPLY`. (uedcli edits surface attrs model-side instead — see `quirks.md`.)
+## `POLY` / surfaces 📖 ✅
+Surface (BSP-poly) ops — they act on the surfaces of the **built** `Model` (so they need a
+`MAP REBUILD`) that carry `PF_Selected`, and each one writes its result back down into the
+originating brush polygon via `polyUpdateMaster`, so a `MAP EXPORT` reads it back:
+- **Selection** ✅ `POLY SELECT NONE|ALL|REVERSE` · `MATCHING GROUPS|ITEMS|BRUSH|TEXTURE|POLYFLAGS` ·
+  `ADJACENT ALL|COPLANARS|WALLS|FLOORS|SLANTS` · `MEMORY SET|RECALL|UNION|INTERSECT|XOR` · `ZONE`.
+- **Flags/texture** 📖 `SETFLAGS=`/`CLEARFLAGS=` · `TEXTURE DEFAULT|SET` · `TEXTURENAME` ·
+  `TEXINFO` · `TESSELLATE`.
+- **Texture transform** 📖 `TEXPAN [RELATIVE] U= V=` · `TEXSCALE [RELATIVE] UU= UV= VU= VV=` ·
+  `TEXMULT`.
+- **Texture ALIGNMENT** ✅ — **`POLY TEXALIGN
+  DEFAULT|FLOOR|WALLDIR|WALLPAN|WALLCOLUMN|ONETILE|WALLX|WALLY|CLAMP [TEXELS=<n>]`**. NINE mode
+  tokens (this entry used to list six — `DEFAULT`, `WALLPAN` and `WALLCOLUMN` were missing), and
+  `TEXELS=` is **parsed but never read**. `ONETILE` and `WALLCOLUMN` are **no-ops in UED22** —
+  there is no fit-a-tile-to-a-face operation in this editor. The measured per-mode semantics
+  (formulas, guard thresholds, anchors, and how they differ from uedcli's `brush poly align`) are in
+  **[`texalign.md`](texalign.md)**; evidence
+  `../spikes/2026-07-26-unrealed-texalign-semantics/`, live 2026-07-26.
+- **Detail textures** 📖 `SETDETAIL`/`CLEARDETAIL`/`APPLYDETAIL`/`REPLACEDETAIL`/`BATCHAPPLY` ·
+  `REMIP` · `CULL`.
+
+(uedcli edits surface attrs model-side instead — see `quirks.md`.)
 
 ## `EDIT` ✅
 `EDIT COPY` (selection→clipboard, no offset) · `EDIT PASTE` (clipboard→level, **+32uu drift**,

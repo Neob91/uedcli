@@ -50,8 +50,12 @@ Combinations matter: `Fake Backdrop` **+** `Unlit` shows sky; `Mirror` **+** `Un
 
 ## Alignment & scrolling
 
-- **Align** with `brush poly align` (or the editor's Floor/Ceiling vs Wall auto-align). After any CSG
-  change a rebuild can disturb texturing — **re-align after rebuilding**.
+- **Align** with `brush poly align`. After any CSG change a rebuild can disturb texturing —
+  **re-align after rebuilding**. ⚠ `brush poly align` is uedcli's own alignment, **not** a copy of
+  the editor's Floor / Wall-Direction auto-align: measured against UnrealEd 2026-07-26, the two
+  choose different in-plane texture directions and pin the pattern's phase to different points, so
+  the same face aligned each way does not come out looking the same. Use one or the other on a given
+  surface, not both.
 - **Pan / scale** with `--pan-to X,Y`, `--pan-by dX,dY`.
 - **Scrolling surfaces** (conveyors, flowing water, scrolling signs): set the auto-pan flags on the face
   (`PF_AutoUPan` / `PF_AutoVPan` — the flag just means "this scrolls", with no speed), and set the
