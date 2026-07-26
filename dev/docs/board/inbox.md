@@ -188,9 +188,10 @@ stage (so no `to-` prefix). See [`README.md`](README.md).
   > axis is stretched, so density is `|proj|`, not 1.
   >
   > **`one-tile` is FIT TO THE POLY** — one tile of the texture spans the face, stretched
-  > non-uniformly to fill, anchored at the face's minimum corner. Its density comes from the face, so
-  > it is the one mode exempt from reset-to-unit. It takes the projection *directions*, **made
-  > orthonormal by Gram-Schmidt of U against V** (V kept, `U = normalize(U − V(U·V))`), so a sign has a
+  > non-uniformly to fill, anchored at the face's minimum corner. Its density comes from the face,
+  > which is one of the two reasons reset-to-unit binds `run` alone. It takes the projection
+  > *directions*, **made orthonormal by Gram-Schmidt of U against V** (V kept,
+  > `U = normalize(U − V(U·V))`), so a sign has a
   > predictable up-vector and square corners — the raw projected pair is not perpendicular
   > (`proj(B₁)·proj(B₂) = −(N·B₁)(N·B₂)`) and on a corner face comes out 120° apart.
   >
@@ -230,13 +231,75 @@ stage (so no `to-` prefix). See [`README.md`](README.md).
   > (texture, flags). `pan`, `rotate`, `scale` and `align` transform the texture FRAME. Pan is
   > expressed in integer texels and lives in the polygon `Pan`; a computed continuity offset lives in
   > the float `Origin`; the two never occupy the same field.
+  >
+  > **`align run` orders the chain itself, and the order faces are passed in has NO bearing on the
+  > result.** A pre-walk derives the chain *and* its starting face from the geometry and the poly
+  > indices: an open run roots at its lower-poly-index end, a closed one at its lowest poly index.
+  > `brush poly find` emits poly-index order, which the author neither controls nor sees, so any
+  > dependence on input order is a hidden coupling. Consequences: no `--centre` flag and no `--seam`
+  > flag — the author cannot place a closed run's seam, and `--fit-perimeter` makes that seam exact
+  > so its position stops mattering on the workflow that ships.
+  >
+  > **`align run` DERIVES the texture frame; it does not preserve the caller's rotation.** Whatever
+  > orientation a face carried is discarded, and the fixups an author reaches for afterwards are
+  > quarter-turn flips (`--turn`) and small texel pans (`brush poly pan`). Rejected:
+  > preserve-and-compose (rotate first, then align) — rotation alone leaves the phase broken at every
+  > seam, and deriving the frame solves the curved case outright.
+  >
+  > **The across-run turn is a scalar angle in unreal rotation units (16384 = 90°), folded into
+  > `align run` and spelled `--turn UU`.** It is not a separate verb and not a post-pass. Rejected:
+  > `--rotate` — it collides with `brush build --rotate` (an actor-orientation triple) and, worse,
+  > with `brush poly rotate` in the same noun, where the same word would carry the opposite
+  > continuity guarantee; a boolean `--across`, which covers only quarter turns; and a separate
+  > post-pass, which pivots each face about its own centroid and re-breaks the seams `run` matched.
+  >
+  > **`--ring` is renamed `run`.** The mode is no longer cylinder-only — it walks any connected run
+  > of faces, including a 90° arc and a flat curved bed — and a 90° arc is not a ring, so an author
+  > would not find the old flag. `run` is already the codebase's own word for it.
+
+- `p1` `[OWNER — confirm]` **TWO per-surface narrowings that change how EXISTING CONTENT RENDERS.**
+  Spec: `specs/2026-07-26-poly-surface-verbs.md` §7. Both follow from the rulings parked in the two
+  items above, but each is a separate thing to accept or overrule, and each touches the T3D trees —
+  the one place `direction/conventions.md` says to think before changing, because a user's *content*
+  lives there. Neither is migrated by anything: a map keeps what it has until someone re-runs the
+  verb, and then it looks different.
+
+  > **(1) A double-sided wall that errors today will succeed and come out MIRRORED on its back
+  > face.** `brush poly align wall`/`floor` drop the coplanarity and co-orientation guards, because a
+  > world-derived frame removes what they protected. The mirroring itself does not go away — a
+  > byte-identical frame on two opposite-facing coplanar faces is exactly what causes it — but under
+  > the world-space ruling it is the projection family's defined behaviour (the family is
+  > polarity-blind: both quantities it is built from are invariant under `N → −N`) rather than a
+  > fault the guard was catching. Under a world grid, two faces of one wall read as one continuous
+  > sheet of wallpaper, and a sheet seen from behind reads reversed.
+  >
+  > **(2) Re-aligning an existing cylinder wrap FLIPS ITS TEXTURE VERTICALLY.** `brush poly align
+  > run` puts `V = 0` on a cylinder's **top** rim with V growing downward; today's `--ring` puts it
+  > on the bottom rim with V growing upward. A UE1 texture's `V = 0` row is its top, so the current
+  > behaviour renders an asymmetric texture upside-down and makes `align wall` and `align run`
+  > disagree by 180° on the same cylinder — but the fix means every already-wrapped cylinder flips
+  > the next time it is aligned. Keeping the old direction as an option is not available: "No
+  > back-compat cruft" forbids the old-way branch, and it would leave `wall` and `run` permanently
+  > disagreeing.
+
+- `p3` `[chore]` **A spike scene caption describes the alternative the spec REJECTED.** In
+  `spikes/2026-07-26-poly-rotate-curved-track/uv_preview.py`, `frame_one_tile`'s docstring and the
+  `onetile-ortho` scene text both say the corrected form is *"keep V for the up-vector, set
+  `U = V × N`"* — but the code does **Gram-Schmidt** (`u_dir = unit(sub(u_dir, mul(v_dir, dot(u_dir,
+  v_dir))))`), and `specs/2026-07-26-poly-surface-verbs.md` §2.6 lists `U = V × N` under **Rejected**
+  (it picks its own sign and mirrors the image on half the face directions). The rendered evidence is
+  correct; only the caption is wrong. Two-line fix, but it is a durable evidence harness, so a future
+  reader would take the caption as the ruling. Found while closing the spec's round-2 findings;
+  out of scope for that pass because it edits a different artifact. *(2026-07-26.)*
 
 - `[resolved 2026-07-26]` **The `--run` seed had no source under "`--run` orders the chain itself".**
   Raised independently by all three round-1 spec reviewers. Resolved by the owner: the order faces are
   passed in has NO bearing on the result — a PRE-WALK derives the root too (the lower-poly-index end of
   an open run; the lowest index on a closed run), which is stronger than the reviewers' proposed
   "root = first input token". The pre-walk also detects branching. No `--seam` flag. Folded into
-  `specs/2026-07-26-poly-surface-verbs.md` §2.3; nothing outstanding.
+  `specs/2026-07-26-poly-surface-verbs.md` **§2.4.1** (the eight-step pre-walk); nothing outstanding.
+  This entry is the *resolution record* — the ruling's own proposed text is parked verbatim in the
+  `[OWNER — confirm]` item above.
 
 - `p2` `[debug]` **`level preview --native` checkerboards an unresolvable texture ref and warns —
   a `conventions.md`-Rejected warn-and-continue.** `preview_native._TextureTable` renders a
