@@ -766,3 +766,58 @@ def test_ucc_builds_a_p8_mip_chain_that_decodes_byte_exactly():
     source = Image.open(_UCC_FIXTURE / "fixture.pcx").convert("RGB")
     assert list(decoded.getdata()) == list(source.getdata()), \
         "UCC's P8 mip 0 no longer decodes byte-exactly to the imported artwork"
+
+
+# ---------------------------------------------------------------- how brushes enter the level
+# Spike `dev/docs/spikes/2026-07-26-map-import-brush-bounds/` (live 2026-07-26), extending the
+# 2026-06-28 finding in `dev/docs/unrealed/quirks.md` "How brushes enter the level".
+
+_BOUNDS = Path(__file__).resolve().parent / "fixtures" / "map_import_bounds"
+
+
+def _world_model_counts(dx: Path) -> tuple[int, int]:
+    """(nodes, surfs) of the built world model in a saved map — the offline tell for whether a
+    brush actually participated in CSG."""
+    from uedcli.native.pkg_write import parse_package
+    from uedcli.native.umodel import parse_model_body
+    raw = dx.read_bytes()
+    p = parse_package(raw)
+    models = [(i, e) for i, e in enumerate(p.exports) if p.class_of_export(i) == "Model"]
+    assert models, f"{dx.name} holds no Model export at all"
+    _, e = max(models, key=lambda t: t[1]["ssize"])
+    m = parse_model_body(raw, e["soff"], e["ssize"])
+    return len(m.nodes), len(m.surfs)
+
+
+@pytest.mark.parametrize("golden,expect_csg", [
+    ("paste.dx", True),        # EDIT PASTE — the production path
+    ("importadd.dx", False),   # MAP IMPORTADD — the 2026-06-28 known-bad control
+    ("import.dx", False),      # MAP IMPORT   — the whole-level REPLACE form, probed 2026-07-26
+])
+def test_only_edit_paste_gets_a_brush_into_csg(golden, expect_csg):
+    """A brush that enters the level by importing T3D never participates in CSG — under EITHER
+    import form — while `EDIT PASTE` does.
+
+    Why this is pinned. `ULevelFactory` (which serves both `MAP IMPORT` and `MAP IMPORTADD`) does
+    not compute a brush's `Bound`, and `MAP REBUILD` does not compute it later either, so CSG skips
+    the brush entirely and the built world model comes out with ZERO nodes. The map still saves,
+    still parses, and still draws its wireframe in the editor — but its world is solid, so the real
+    game dies at `Failed to spawn player actor`. That makes this failure silent in every check
+    except a node count, which is why it is worth a standing test.
+
+    The three goldens are real `MAP SAVE` output from one editor session driven three ways over the
+    SAME two-brush fixture (a subtractive room plus an additive pillar), so they differ only in the
+    verb that introduced the brushes. If a future editor build ever makes an imported brush
+    CSG-capable, `import.dx`/`importadd.dx` stop being reproducible and this test must be re-run
+    live (`harness/probe.py` in the spike dir) rather than edited to match.
+    """
+    nodes, surfs = _world_model_counts(_BOUNDS / golden)
+    if expect_csg:
+        assert nodes > 0 and surfs > 0, (
+            f"{golden}: EDIT PASTE no longer yields a CSG-participating brush "
+            f"(nodes={nodes}, surfs={surfs}) — the materialize drive rests on this")
+    else:
+        assert nodes == 0 and surfs == 0, (
+            f"{golden}: an IMPORTED brush now participates in CSG (nodes={nodes}, surfs={surfs}). "
+            f"That would be GOOD news — re-run the spike probe and revisit the drive design, "
+            f"which uses EDIT PASTE only because this was impossible")

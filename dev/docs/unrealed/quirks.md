@@ -408,6 +408,24 @@ measurement, stores it in typed fields, and bakes it (`brush apply-transform`) �
   the brush's `Bound`; `ULevelFactory` (IMPORTADD) doesn't, and `MAP REBUILD` doesn't recompute
   it. `SELECT ALL` *does* see IMPORTADD brushes; only the volume test skips them. ⇒ **uedcli
   adds brushes via `EDIT PASTE`, point actors via `MAP IMPORTADD`.**
+- ✅ **`MAP IMPORT` (the whole-level REPLACE form) is no better than `MAP IMPORTADD` — same missing
+  bound, same zero-node build.** Live 2026-07-26
+  (`../spikes/2026-07-26-map-import-brush-bounds/`): one editor, three rounds over one two-brush
+  fixture, differing only in the verb that introduced the brushes — `EDIT PASTE` → **16 nodes**,
+  `MAP IMPORTADD` → **0**, `MAP IMPORT` → **0**. Both import forms go through the same
+  `ULevelFactory`, and the replace form does not compute the bound either. **All three preserve
+  actor names**, so names are not what rules the import verbs out — only the missing bound is. This
+  closes the recurring "why not just import a file instead of driving the clipboard?" question:
+  there is no import-shaped escape route, because the one add path that *does* compute bounds
+  (`BRUSH IMPORT` + `BRUSH ADD`) renames brushes to `Brush1…BrushN`, which uedcli's name-keyed model
+  cannot accept. Pinned by
+  `uedcli/tests/test_engine_facts.py::test_only_edit_paste_gets_a_brush_into_csg` against the three
+  real `.dx` files that probe produced.
+- ⚠ **The failure is invisible to everything except a node count.** In the failed rounds both
+  brushes are present in the level's own re-export, with their geometry — the actor list, the save
+  and the parse all look correct. The offline tell is
+  `native.umodel.parse_model_body(...).nodes == 0` on the built map's world model (the saved `.dx`
+  is also ~4.4 KB smaller, being the absent BSP).
 - **Identify the transient red builder brush by `Class=Brush` + inner model name `Brush` + no
   `CsgOper` — NOT by `Name=="Brush0"`.** ✅ Every real world/content brush enters via the add path
   carrying an explicit `CsgOper=CSG_Add`/`CSG_Subtract`, and the editor names authored brushes' inner
