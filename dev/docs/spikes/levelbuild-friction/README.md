@@ -8,6 +8,14 @@ user-facing docs, plus a fourth agent spiking headless materialization. This fil
 records **every problem, defect, and misunderstanding they hit**, so uedcli can be
 improved against real usage rather than guesses.
 
+**Two logs, two axes.** This file and [`agent-reports.md`](agent-reports.md) record **tool friction** —
+what blocked the agents *while building*. [`owner-reports.md`](owner-reports.md) records the other
+half: **what came out wrong in the finished levels**, judged by the owner playing and inspecting them.
+The lists barely overlap, and that is the point — an agent cannot report a defect it never noticed, and
+every level here was declared finished, screenshotted and accepted with the owner's findings already in
+it. Read both before deciding what to fix: the agent log skews toward missing verbs, the owner log
+toward missing *checks*.
+
 This is the first time uedcli has been driven end-to-end, at length, by agents who
 started with **no prior knowledge of the tool** — which is exactly its intended user.
 That makes the misunderstandings as valuable as the defects: where a competent reader

@@ -1,0 +1,215 @@
+# Owner-reported findings — the LEVELS, not the tool
+
+**Date:** 2026-07-26 · **Status:** durable evidence, not a plan · **Reporter:** the owner (Andrzej)
+
+The sibling [`agent-reports.md`](agent-reports.md) records **tool friction**: what the building agents
+hit while driving `uedcli`. This file records the other half — **what is wrong with the levels they
+produced**, judged by playing and inspecting them.
+
+The distinction matters because the two lists barely overlap. An agent reports what *blocked* it; it
+cannot report what it never noticed. Every finding below was invisible to the agent that built it:
+each level was declared finished, screenshotted, and accepted. `agent-reports.md` already shows why
+that happens — a level shipped with ~15 props silently missing and nobody spotted it until a render;
+another shipped an unlit map because nothing reports whether lighting baked. **Output quality is
+therefore a separate axis from tool friction, and needs its own log.**
+
+## How to read an entry
+
+- **Observed** — the owner's finding, as reported. This is the load-bearing part.
+- **Where** — level(s), when known.
+- **Status** — `confirmed` (seen directly) · `to confirm` (needs a check, named in the entry).
+- **Tool/doc state** — *agent analysis, added after the fact, clearly separated from the observation.*
+  Whether the tool could do the right thing, whether the docs say so, and therefore whether the defect
+  is a missing capability, a missing check, or an agent that had what it needed and did not use it.
+
+That last line is the one that decides what to fix, and it is where the surprise is: **most of these
+are not missing capabilities.**
+
+---
+
+## 1. All doors slide; none rotate
+
+**Observed:** every door in every level is a sliding door. There are no rotating/swinging doors.
+**Where:** all three levels.
+**Status:** confirmed.
+**Tool/doc state:** **not a gap — the capability and the recipe both exist and were not used.**
+`mover key rotate <M> 1 --by 0,16384,0` is a first-class verb whose own `usage.md:882` example is
+annotated *"swings about the hinge, not the centre"*; `movers.set_key_rot`/`key_rot` write `KeyRot(i)`;
+and [`docs/leveldesign/general/recipes/mover-door.md`](../../../../docs/leveldesign/general/recipes/mover-door.md)
+opens with *"A door that swings (or slides) open"* and tells you to rotate about the hinge edge for a
+swing. So this is an **output-quality/agent-default finding**, not a missing verb.
+
+Worth noting one real incentive toward sliding, from `agent-reports.md`: a slide needs a solid
+**pocket** for the leaf, and getting a pocket wrong against curved geometry produced a visible
+black slab floating on a platform. A swing door needs no pocket. If anything the tool's easier path is
+the *rotating* one, which makes the uniformity more surprising, not less.
+
+**Suggested fix:** this is a docs/brief emphasis problem. The door recipe leads with the mechanism, not
+with *"a swing door is the default in an interior; slide doors are for industrial/airlock contexts."*
+
+## 2. Entrances and corridors are far too small
+
+**Observed:** entrances and corridors are very small — cramped to move through.
+**Where:** all three levels.
+**Status:** confirmed.
+**Tool/doc state:** the numbers **are** documented — `docs/leveldesign/general/human-scale.md` and
+`docs/leveldesign/deusex/human-scale.md` both exist, and `MaxStepHeight = 25` and the player's standing
+box are cited in `agent-reports.md`. So the facts were available and the results still came out tight.
+Two plausible contributors, both checkable: an agent sizes an opening to the player's *collision box*
+rather than to a comfortable clearance, and nothing measures a built passage afterwards.
+
+**Suggested fix:** this is the same measurement `level doctor` would need for finding 3 — a free
+cross-section through every passage. A minimum-clearance report turns "feels cramped" into a number.
+
+## 3. Geometry overlaps entrances, making them hard to pass
+
+**Observed:** geometry protrudes into entrances, obstructing movement through them.
+**Where:** confirmed on TubePlatform; suspected more widely.
+**Status:** confirmed.
+**Tool/doc state:** **independently corroborated in `agent-reports.md`, and it is the single
+highest-value missing check.** That log found **four** separate additive brushes occluding subtracted
+passages on one level while `level doctor` reported *"no issues found"* throughout: a wall conduit
+crossing **all three** wall openings at 20–36 uu above the floor (above `MaxStepHeight` 25, so an
+unsteppable bar across every route in the level), two ad panels cutting a 128-uu doorway to 56 uu
+(crouch-only), and two crates in front of a vent mouth. The agent found them only by reading `--game`
+renders and hand-deriving arc geometry in Python — *"the better part of an hour"* — and two of the four
+were invisible in the wireframe preview because `actor preview` draws brush outlines with no notion of
+solid-vs-void.
+
+**Suggested fix:** a `level doctor` `occlusion` category — for every additive/semisolid brush
+intersecting a subtracted volume, report the minimum free width/height through that volume, flagging
+anything below the player's standing box and any lip taller than `MaxStepHeight` across a passage
+floor. Purely offline and statically decidable. `agent-reports.md` calls it *"the single highest-value
+check that could have been run on this level."*
+
+## 4. Texture alignment is off
+
+**Observed:** textures are misaligned. *"probably due to missing verbs, so justified I guess?"*
+**Where:** all three levels.
+**Status:** confirmed.
+**Tool/doc state:** **half justified, and the split matters.** `agent-reports.md` documents both
+kinds:
+
+- **Genuinely blocked — no verb exists.** `builders._tex_basis` computes `v = cross(normal, u)`, so
+  **every** face any generator emits (cube, sheet, revolve, extrude) satisfies `U × V = +N`. The engine
+  draws that handedness mirrored, so a lettered texture is backwards on every uedcli-built surface.
+  `brush poly align --fresh-frame` calls the *same* function and therefore cannot fix it. There is no
+  `--flip-u`/`--flip-v`, and no texture **scale** control at all (`--pan-to/--pan-by` and
+  `align --wall|--floor|--ring` are the whole surface toolkit). The only lever found was
+  `brush scale --by -1,1,1` + `brush apply-transform`, which also re-orients rotated brushes and needs a
+  compensating rotate. **This part is justified.**
+- **NOT blocked — fixable with existing verbs, and shipped anyway.** Sheet generators emit `Origin` at
+  the sheet's geometric centre, so texel 0 lands in the middle of the panel and each quadrant wraps to
+  the opposite side — a visible seam down every sign. One `brush poly set --pan-to <w/2>,<h/2>` fixes
+  it. Same for a texture larger than its face wrapping into a black "+" cross. **This part is a
+  quality miss, not a capability gap** — and it is invisible on tiling concrete, which is exactly why
+  it survived.
+
+**Suggested fix:** `--flip-u`/`--flip-v` on `brush poly set` collapses the first group into one command
+(named in `agent-reports.md` three separate times). For the second, a sheet whose texture frame started
+at a **corner** rather than the centre would need no pan at all — worth considering as the generator
+default.
+
+## 5. A scripted pawn in DiveBar does not yield when bumped
+
+**Observed:** a scripted pawn behind the bar does not move away when the player bumps into it, making
+it hard to get behind the bar. Unclear whether deliberate or accidental.
+**Where:** DiveBar.
+**Status:** **to confirm** — is this the pawn's configuration, or stock DX behaviour for this pawn
+class/state?
+**Tool/doc state:** untouched by `agent-reports.md`; no finding on pawn collision or yielding.
+`docs/leveldesign/deusex/npcs.md` and `recipes/npc-patrol.md` exist but have not been checked against
+this. **The check:** compare the pawn's class and its `bBlockPlayers`/collision and orders/state
+properties against a stock DX barkeep in a retail map. If a scripted/conversation pawn blocks by
+design, the fix is placement (don't strand one in a one-tile gap); if it is misconfigured, it is a
+recipe gap.
+
+## 6. Deus Ex conversation choices overflow the screen
+
+**Observed:** too many conversation choices push some choices off-screen, and the list does not
+scroll — so those choices are unreachable.
+**Where:** Deus Ex substrate generally (surfaced via a built level's conversation).
+**Status:** **to confirm**, two questions: (a) is this stock DX behaviour or something about how the
+`.con` was authored, and (b) **what is the maximum number of choices the retail game ever uses?**
+**Tool/doc state:** a real substrate constraint with no home in the docs —
+`docs/leveldesign/deusex/conversations-and-computers.md` sets no choice ceiling.
+
+**The check, and it is cheap.** `agent-reports.md`'s `DConImport` work established that this machine
+holds **149 distinct `.con` files** after content-dedup, spanning retail DEED-reconstructed
+conversations, the DX SDK, TNM/ConEditPlus and Confix — and that the format is understood well enough
+to parse events (that work decoded `MissionFile.unrecognized1` as the byte length of the four name
+tables, and `DConImport`'s per-Choice audio naming as `Choice<NN><letter>` with `letter = 'a'+index`).
+So: **parse every retail `.con`, count `ChoiceOption`s per `Choice` event, and report the maximum and
+the distribution.** That gives a defensible ceiling from the shipped game rather than a guess, and the
+`'a'+index` audio convention gives an independent cross-check on how many the engine's own tooling
+expected. Then state the ceiling in the conversations doc.
+
+## 7. Decoration rotation and placement are broken
+
+**Observed:** decorations are rotated wrongly and placed off their surfaces. Two concrete cases: a
+**rectangular flat light rotated 90° off**, and a **subway button floating in mid-air rather than
+mounted on the wall**.
+**Where:** at least TubePlatform (subway button).
+**Status:** confirmed.
+**Tool/doc state:** **strongly corroborated, and there is a known tool defect behind part of it.**
+`agent-reports.md`:
+
+- **`actor rotate` pivots about the bbox MIN CORNER, not the actor's centre.** Flipping a 128×128 sign
+  180° swung it a whole width sideways onto a gate post, and added float dust to a brush that had been
+  exactly on grid. There is no `--about center|origin|X,Y,Z` option. A 90°-off flat light is exactly
+  the shape of defect this produces — and the "fix it with a follow-up `actor move`" workaround is
+  easy to get wrong or forget.
+- **Nothing tells an agent where a decoration's origin sits.** The spec revision for the asset catalog
+  addresses precisely this: *"an agent can see a crate and still has to guess its footprint, and
+  whether its origin sits at the base or the centre — so decorations sink into floors and
+  interpenetrate."* A button floating off a wall is the same missing fact in the horizontal direction.
+  `class show` reporting bbox/collision/`PrePivot` is specced but **not built**.
+
+**Suggested fix:** `--about center|origin|X,Y,Z` on `actor rotate` (small, and named in the friction
+log), plus the already-specced class placement facts. Both are cheaper than the renders needed to
+catch these by eye.
+
+## 8. Missing trim plates and fine detail
+
+**Observed:** entryways lack the fine detail real architecture has — a door frame or equivalent. The
+common way to build one: **make a solid cube, then subtract a slightly smaller cube.** A doorframe may
+protrude a couple of uu on both faces of the wall, but it need not.
+**Where:** all three levels.
+**Status:** confirmed.
+**Tool/doc state:** the *technique* is documented — there is an
+[`add-subtract-twin.md`](../../../../docs/leveldesign/general/recipes/shapes/add-subtract-twin.md)
+shape recipe, which is the pattern described. What is missing is any statement that an **entryway
+should have one**. The level-design craft docs cover geometry, BSP, lighting and scale, but nothing
+tells an agent that a bare subtracted hole reads as unfinished, or gives the couple-of-uu protrusion
+convention. So: **a craft/brief gap, not a capability gap.**
+
+**Suggested fix:** a short "trim and edge detail" section in
+`docs/leveldesign/general/design-craft.md` with the doorframe as the worked example — solid cube minus
+a slightly smaller cube, protrusion optional, a couple of uu — plus a line in the DX human-scale doc.
+This is the cheapest finding here to close and it affects every level.
+
+---
+
+## Cross-cutting: what this list says that the agent log does not
+
+**Six of the eight are NOT missing capabilities.** Findings 1 and 8 are docs/craft gaps where the verb
+and even the recipe already existed. Findings 2, 3 and half of 4 are *missing checks* — the tool could
+have measured the defect offline and said nothing. Only the mirroring half of 4, and the
+`actor rotate` pivot in 7, are true capability gaps.
+
+That is a different conclusion from `agent-reports.md`, which — being written by the agents that were
+blocked — skews toward missing verbs and false-success defects. **Both are needed.** An agent cannot
+report a level that came out ugly while every command it ran succeeded.
+
+**The recurring shape is: nothing measures the finished level against how a human plays it.** Passage
+clearance (2, 3), decoration seating (7), surface legibility (4) are all statically decidable from the
+trunk, and none is checked. `level doctor` is the natural owner and reported *"no issues found"* on a
+level with four blocked doorways.
+
+## Open questions
+
+1. **Should an agent review the levels independently?** Owner's question, 2026-07-26. Discussed in the
+   session; recorded here because the evidence for it is in these two files. Not yet decided.
+2. **Finding 5** — is the non-yielding pawn stock DX behaviour or misconfiguration?
+3. **Finding 6** — what is the retail maximum choice count? (Method in the entry: parse the 149 `.con`
+   files.)
