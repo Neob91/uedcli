@@ -281,7 +281,7 @@ that decisions 7 and 11 rest on is an artifact of choosing Python**. The spike a
 `render.py`/`render_class.py`, so re-measuring is cheap.
 
 **This slice MEASURES and REPORTS; it does not overturn the decision.** Decisions 7 (never render in
-`list`/`search`) and 11 (single `iso` angle) are Andrzej-decided (`decisions.md` 2026-07-25 03:40)
+`list`/`search`) and 11 (single `iso` angle) are owner-decided (`direction/asset-catalog.md`)
 and stand unless he supersedes them. If the Rust path makes rendering an order of magnitude cheaper,
 that finding goes back to him and lands as a **revision of `direction/asset-catalog.md` plus a
 `direction.md` reconcile** — not as a builder's judgement call mid-slice.
