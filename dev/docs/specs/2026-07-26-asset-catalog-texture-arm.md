@@ -24,14 +24,33 @@ destroys authored work and cannot be corrected without an explicit migration.
    properties is brittle", reason: "any game patch would orphan the curated description." §3c below hashes
    procedural parameters **resolved against the class defaults**, so a patch to `Fire.u` re-keys every
    procedural shard *with no uedcli change*, which §3b's owner-approved-migration guard cannot catch.
-2. **Graded alpha is not covered by `masked`.** A BC2/BC3 texture with 8-bit *graded* alpha is one identity
-   with its opaque twin, one opaque preview, one classification, and no fact distinguishes them. 10 measured
-   on this substrate; pervasive on UT, in scope per `direction/scope.md`. `bAlphaTexture` is currently left
-   as "decide during the build" — too late, because identity is frozen.
-3. **No re-key path across a pixel edit.** This project edits its own `LUM_CoreTex.utx`; a retouch retires
-   the identity and `classify prune --outdated` deletes a description that is still accurate. There is no
-   verb to carry a classification forward. `direction/asset-catalog.md` Rejected kills the ref→last-hash
-   ledger that would make a migration robust.
+2. **RULED 2026-07-26 — `bAlphaTexture` is a fact.** Graded 8-bit alpha (BC2/BC3) is not covered by
+   `masked`, so a glass pane and its opaque twin are one identity with one opaque preview. Identity stays
+   **pixels only** — the ruling is not reopened — and `bAlphaTexture` joins `facts` beside `masked`, same
+   read rule (stored tag else resolved class default), same cost, and filterable. The twins remain one
+   identity; they become *distinguishable*. See "Facts this arm reports".
+3. **RULED 2026-07-26 — classification CARRIES FORWARD by `Package.Name`, automatically.** *(Owner: "should
+   accept `Package.Name` — nobody's gonna know the refs, they're internal. The classification should be
+   pulled from the last version for that `package.name` texture.")*
+
+   When indexing produces a **new identity** for a ref that an **outdated shard** already names, the new
+   identity **adopts** that shard's classification rather than reading as unclassified. So retouching
+   `LUM_CoreTex.SomeWall` keeps its tags and description; nothing is retyped and `prune --outdated` no
+   longer destroys accurate work.
+
+   - **The user-facing key is the REF, never the digest.** Any verb that addresses a classification takes
+     `Package.Name`; a sha256 is internal and must never be something a person types. That includes the
+     manual form, `classify reassign <ref>`, for the case where automatic adoption did not fire.
+   - **This makes the write-once `ref` load-bearing for carry-forward, not just for labelling outdated
+     entries** — state that where the field is defined, because it changes why it exists.
+   - **Adoption is RECORDED, not silent.** An adopted classification is marked (e.g.
+     `adopted_from: <old-identity>`) and `classify status` counts it, because the pixels genuinely changed
+     and the description may now be wrong — repaint a wall green and "brown rusted panel" carries forward
+     with it. **OPEN, small:** decide whether adopted entries also surface in a `--needs-review` listing.
+     Do not make adoption invisible.
+   - Ambiguity rule needed: if two outdated shards name the same ref (edited twice), adopt the **most
+     recent** and say so. If a ref resolves to an identity that is *already* classified, adoption does not
+     fire — the existing classification wins.
 4. **Procedural class routing and the out-of-table case.** The declared property table must match **by
    descent, not exact class name** — `TNMScriptedTexture` (a mod-defined `ScriptedTexture` subclass, 4
    exports) already exists on this install. An out-of-table pixel-less class currently falls through to a
@@ -331,8 +350,11 @@ as holes **on any surface, with no surface flag set at all**.
   so §11 prerequisite 1 gates the texture arm too, not just the class arm.** `utexture.decode_texture`
   already returns the export's tagged properties (`TextureObj.props`), so the *tag* read is free; the
   default resolution is the part that needs the prerequisite.
-- The sibling `specs/2026-07-25-native-texture-formats.md` §8-D also reports **`bAlphaTexture`**; decide
-  during the build whether it joins `facts` beside `masked` (same read rule, same cost).
+- **`bAlphaTexture` joins `facts` beside `masked`** *(owner ruling 2026-07-26)*, same read rule and same
+  cost. It is the only thing that distinguishes a graded-alpha texture (BC2/BC3, 10 measured here) from its
+  opaque twin, since identity is pixels-only and they share one identity and one opaque preview. Without it
+  they are indistinguishable — and identity is frozen, so it cannot be added to the key later. The sibling
+  `specs/2026-07-25-native-texture-formats.md` §8-D already reports it, so the read is available.
 - `texture show` prints it; `--json` carries it; **`texture list --masked` / `search --masked`** filter
   on it (added to §5's per-kind filters).
 - It is a **fact, not a classification**: not LLM-overridable, no tracked shard.

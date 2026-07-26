@@ -44,6 +44,10 @@ A whole-install walk (mods included) gives 31,059 — which is where 10,826 came
    ObjectProperty-validation worked example (validate against raw export tables *because* a VO ref would
    otherwise fail).
 
+**RULED 2026-07-26 — spike first, then spec.** The owner's call: re-measure before designing any scope
+rule, rather than dropping the exclusion outright or patching the pattern. So this arm stays blocked and the
+next artifact is a spike, not a slice.
+
 **Next action: a `[spike]`, not a spec.** Re-measure on the composed path — Sound export counts per
 package, the group structure, how much is VO, and whether `sound list` needs any default filter at all.
 Only then decide whether a config key is warranted. Do not design the scope rule first.
