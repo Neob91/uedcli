@@ -84,6 +84,25 @@ def test_it_formats_a_set_summary():
     assert "archway" in text and "Arch" in text and "Brush" in text
 
 
+def test_summary_bbox_does_not_truncate_a_fraction():
+    """`int(Decimal("-2.5"))` truncates toward ZERO (-2), which shrank the reported box below the
+    real one. A genuine fraction must survive to the summary intact."""
+    a = _brush_actor("Odd", "Engine.DefaultTexture")
+    a.location = (Decimal("-2.5"), Decimal("-2.5"), Decimal("-2.5"))
+    text = stashlib.format_summary("odd", [a])
+    assert "bbox -2.5,-2.5,-2.5.." in text         # the min corner, exact
+    assert "(-2," not in text                      # not truncated toward zero, and no tuple repr
+
+
+def test_summary_bbox_snaps_rotator_noise():
+    """Sub-CLEAN_EPS noise snaps rather than truncating a unit off (227.999994 → 227 was the bug)."""
+    a = _brush_actor("Noisy", "Engine.DefaultTexture")
+    a.location = (Decimal("227.999994"), Decimal("228.000006"), Decimal(0))
+    text = stashlib.format_summary("noisy", [a])
+    assert "bbox 228,228,0.." in text              # snapped, NOT truncated to 227
+    assert "227" not in text
+
+
 _ARCH_BLOB = "Begin Actor Class=Engine.Brush Name=Arch\n    CsgOper=CSG_Add\nEnd Actor\n"
 
 

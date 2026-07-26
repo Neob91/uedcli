@@ -119,6 +119,21 @@ def fmt_loc(value) -> str:
     return f"{d:.6f}"
 
 
+def fmt_coord(value) -> str:
+    """A coordinate for REPORTING: an integer when integral (`512`), else the exact decimal with
+    trailing zeros dropped (`2.5`). Decimal-based so no float binary tail leaks into the printed
+    value, and `f` format so it is never E-notation.
+
+    The reporting counterpart to `fmt_vertex`/`fmt_loc`, which pad to T3D's fixed 6-dp form because a
+    FILE is their destination. Tolerance-snapping is deliberately NOT folded in: a caller reporting a
+    *derived* coordinate pairs this with `clean`, one echoing an authored value formats it as given.
+    Single definition on purpose — the bbox report and the stash summary must agree."""
+    d = _to_decimal(value)
+    if d == d.to_integral_value():
+        return str(int(d))
+    return format(d.normalize(), "f")
+
+
 def quote_group(value: str) -> str:
     """Always quote a Group value so multi-group lists survive import/paste."""
     return '"' + value.strip('"') + '"'

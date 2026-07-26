@@ -2214,13 +2214,10 @@ def _ingest_actor_t3d(args, src, level, text, *, verb: str,
 
 
 def _fmt_coord_component(value) -> str:
-    """A single bbox coordinate as a tidy string: an integer when integral (`512`), else the exact
-    decimal (`2.5`). Decimal so no float binary tail leaks into the printed value."""
-    d = value if isinstance(value, Decimal) else Decimal(str(value))
-    if d == d.to_integral_value():
-        return str(int(d))
-    # drop trailing zeros (2.500000 → 2.5); `f` keeps plain decimal form (never E-notation)
-    return format(d.normalize(), "f")
+    """A single reported coordinate as a tidy string — delegates to `emit.fmt_coord`, the one
+    definition, so this and `stashlib.format_summary` cannot drift apart."""
+    from . import emit
+    return emit.fmt_coord(value)
 
 
 def _num_coord_component(value):
@@ -4229,8 +4226,8 @@ def _dispatch(args) -> int:
                     validate_brush(actor.brush)
             for name in names:                           # PRODUCER: rotated names to stdout (feed `| verb -`)
                 print(name)
-            print(f"rotated {len(targets)} actor(s) to {tuple(str(c) for c in args.to)}",
-                  file=sys.stderr)
+            print(f"rotated {len(targets)} actor(s) to "
+                  f"{','.join(_fmt_coord_component(c) for c in args.to)}", file=sys.stderr)
             src.save(verb="rotate", args={"names": names, "to": [str(c) for c in args.to]},
                      level=level, touched=names)
             return 0
@@ -4342,8 +4339,8 @@ def _dispatch(args) -> int:
                     validate_brush(actor.brush)
             for name in names:                           # PRODUCER: scaled names to stdout (feed `| verb -`)
                 print(name)
-            print(f"scaled {len(targets)} actor(s) to {tuple(str(c) for c in args.to)}",
-                  file=sys.stderr)
+            print(f"scaled {len(targets)} actor(s) to "
+                  f"{','.join(_fmt_coord_component(c) for c in args.to)}", file=sys.stderr)
             src.save(verb="scale", args={"names": names, "to": [str(c) for c in args.to]},
                      level=level, touched=names)
             return 0

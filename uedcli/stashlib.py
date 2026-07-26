@@ -12,6 +12,7 @@ import tempfile
 from decimal import Decimal
 from pathlib import Path
 
+from uedcli.emit import clean, fmt_coord
 from uedcli.model import Actor, Level, Vec3, parse_t3d
 from uedcli.normalize import canonical_actor_t3d
 from uedcli.writes import union_bounds
@@ -111,9 +112,17 @@ def with_folder(actor: Actor, folder: str | None) -> Actor:
 
 
 def format_summary(set_id: str, actors: list[Actor]) -> str:
+    """The `x,y,z..x,y,z` bbox is tolerance-snapped and formatted like every other reported
+    coordinate (`emit.clean` + `emit.fmt_coord`). It used to render `tuple(int(c) for c in lo)`, and
+    `int()` on a Decimal TRUNCATES toward zero: rotator noise at 227.999994 printed as 227 — a whole
+    unit wrong, worse than showing the noise — and a genuine -2.5 min corner printed as -2, shrinking
+    the reported box below the real one."""
     lo, hi = union_bounds(actors) if actors else (_ZERO, _ZERO)
-    out = [f"{set_id}: {len(actors)} actors   bbox {tuple(int(c) for c in lo)}"
-           f"..{tuple(int(c) for c in hi)}",
+
+    def _vec(v):
+        return ",".join(fmt_coord(clean(c)) for c in v)
+
+    out = [f"{set_id}: {len(actors)} actors   bbox {_vec(lo)}..{_vec(hi)}",
            f"  {'name':<20} {'class':<14} {'polys':>5}"]
     for a in actors:
         npolys = len(a.brush.polys) if a.brush else 0
