@@ -9,8 +9,7 @@ docs" for the rule. This README is the exception: index rows only, and never an 
 Siblings: `../rationale/` (why the code is that way — agent-owned), `../architecture.md` (what IS),
 `../rules/` + `CLAUDE.md` (process).
 
-**Migration in progress** — a *(pending)* row still lives in `../direction.md`; read it there.
-[`../rationale/MIGRATION.md`](../rationale/MIGRATION.md) records where every old entry went.
+All topics migrated. [`../rationale/MIGRATION.md`](../rationale/MIGRATION.md) records where every old ledger entry went.
 
 | Topic | Covers | |
 |--------------------------|--------------------------------------------------------|---
@@ -23,7 +22,7 @@ Siblings: `../rationale/` (why the code is that way — agent-owned), `../archit
 | [`containers.md`](containers.md) | container isolation; the code/content substrate split | ✅ |
 | [`generators.md`](generators.md) | stateless T3D producers | ✅ |
 | [`packages.md`](packages.md) | one package-format core | ✅ |
-| `asset-catalog.md` | texture / class / sound / music; the tool does not infer | *(pending)* |
+| [`asset-catalog.md`](asset-catalog.md) | texture / class / sound / music; the tool does not infer | ✅ |
 | [`terminology.md`](terminology.md) | level, map file, T3D tree, folder, label | ✅ |
 | [`conventions.md`](conventions.md) | no back-compat cruft; explicit, discoverable, model-side | ✅ |
 | [`process.md`](process.md) | how the project is run — gates, worktrees, the docs model | ✅ |

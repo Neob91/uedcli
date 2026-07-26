@@ -60,34 +60,9 @@ and the latest `decisions.md` disagree, this doc is stale — fix it.
 
 **MIGRATED** → [`direction/packages.md`](direction/packages.md).
 
-## The asset catalog: uedctl lists and shows, the LLM supplies meaning
+## The asset catalog
 
-Level design by an LLM agent needs to **discover** what can be placed, not just place it. One
-**asset catalog engine** serves four kinds — **texture, class, sound, music** — each with its own CLI
-noun and the same verb family (`list`/`search`/`show`/`preview`/`classify`/`tags`/`prewarm`);
-"unified" means one implementation, never a `--kind` selector on a generic noun.
-
-**The tool does not infer.** It does four things: **lists** what exists on the composed search path;
-**reports facts literally stored in the package** (image dimensions, mesh bbox, collision
-radius/height, pivot, parent class, `DrawType`); **produces the picture** (decodes a texture, renders
-a mesh natively); and **stores + queries the classification it is handed**. What an asset *is*, what
-it is *for*, and *where the game uses it* are the LLM's findings, recorded as classification — never
-numbers the tool computed, which would be unreviewable and uncorrectable. The one deliberate
-exception is **texture colours**, pre-filled from that texture's own pixels and ordered by
-importance, so colour search works before any classification exists.
-
-Mechanically: a lazily-built per-`(kind, package)` derived index gated on a
-`(realpath, size, st_mtime_ns)` stat tuple, a content-addressed per-user preview cache, and
-**git-tracked classifications sharded one file per asset** so concurrent agents never merge-conflict.
-Identity is the **content hash** where content exists and decodes (textures) and the **name**
-otherwise (class, sound, music) — so a changed texture simply reads unclassified and its old
-classification becomes a prunable *outdated entry*, with no `stale` flag to maintain. Two verbs, two
-jobs: **`show` returns facts + classification, `preview` returns image artifacts** — and `preview` is
-the *only* producer, so no exploratory `list`/`search` can trigger a long render. Classification is
-batch-capable (`classify set -` reads JSONL) and a **byproduct of looking** (`preview --skeleton`
-emits fill-in rows for exactly the refs just previewed), never a bulk campaign. Cache eviction lives
-on the existing `cache` noun. *(decisions: unified asset catalog 2026-07-25 03:40; the tool does not
-infer 2026-07-25 05:10; spec `specs/2026-07-25-unified-asset-catalog.md`)*
+**MIGRATED** → [`direction/asset-catalog.md`](direction/asset-catalog.md).
 
 ## Conventions (no back-compat cruft; explicit, discoverable, model-side)
 

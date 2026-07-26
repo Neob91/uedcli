@@ -5,6 +5,51 @@ lands here first, with no obligation to know its stage yet. This is the *pre-pip
 stage (so no `to-` prefix). See [`README.md`](README.md).
 
 **Triage** routes each item to where its next action lives:
+- **[OWNER — review] p1 DOCS RESTRUCTURE IS COMPLETE — one issue, everything that needs your eye.**
+  Thirteen `direction/<topic>.md` docs + `rationale/` now replace `direction.md` and the frozen
+  `decisions.md`. Resident context **1,063 → 686 lines**. Spec
+  `specs/2026-07-25-docs-restructure.md`, plan `plans/2026-07-26-docs-restructure-plan.md`,
+  migration record `rationale/MIGRATION.md`.
+
+  **1. The thirteen topic docs.** Every decision in them was confirmed in session, but the prose
+  was written from subagent drafts afterwards — the *wording that landed* has not been read back by
+  you. `scope` · `terminology` · `organization` · `conventions` · `trunk-and-editor` ·
+  `materialize` · `safety` · `process` · `packages` · `containers` · `generators` ·
+  `projects-and-config` · `asset-catalog`.
+
+  **2. `asset-catalog.md` was written despite being HELD, and deliberately says nothing about the
+  two open arbitration items.** They are still `[decide]` below and decide whether ~46% of the
+  texture corpus decodes. The doc states the governing principle (the tool does not infer), the
+  colour exception, and the settled BC2/BC3 limit — and is silent on the mechanism, so confirming
+  it does not ratify them.
+
+  **3. `rationale/MIGRATION.md`'s 227-row entry index is a KEYWORD GUESS, not a disposition** —
+  **80 rows came back `?`**. Only the rows above the index, claimed by a topic's own sweep, are
+  authoritative. The table says so in its own header.
+
+  **4. NEITHER OLD FILE WAS DELETED, and that is deliberate.** `decisions.md` still holds the
+  *bodies* of ~200 entries whose substance no topic doc has absorbed; deleting it on a keyword
+  guess would destroy reasoning that only git would remember. `direction.md` is now thirteen
+  one-line pointers and is safe to delete whenever you say. Deletion needs your sign-off on what,
+  if anything, is dropped — that was the plan's design and it still holds.
+
+  **5. ~95 tracked files cite `decisions.md` by date.** Correct today (the file exists, frozen);
+  they become dangling the moment it goes. `test_no_citation_of_a_deleted_doc` makes that failure
+  loud rather than silent, so deletion cannot sneak past it.
+
+  **6. Three direction/code deltas** where confirmed direction now leads the tool (detail in
+  `rationale/MIGRATION.md`): label verbs reject `--tree stash|prefab` though your ruling says
+  accept; `stash apply`/`prefab apply` mint no batch label though the new rule says they must;
+  `actor folder list`/`actor label list` do not exist.
+
+  **7. Your name is swept from `CLAUDE.md`, `direction/`, `rationale/`, `rules/` and
+  `dev/docs/README.md`** — replaced with "the owner", pronouns neutral, parking tag `[OWNER —
+  confirm]`, trailer `Confirmed:`. It survives in ~20 files outside that scope (frozen
+  `decisions.md`, ephemeral specs/plans, board files, `architecture.md`, root `README.md`) and in
+  two FILENAMES (`dev/docs/andrzej.md`, `dev/docs/2026-06-20-open-questions-for-andrzej.md`) —
+  untouched because the first reads "My own todolist, don't touch". Four commits carry the
+  pre-rename `Andrzej-confirmed:` trailer; history is never rewritten, so audit both spellings.
+
 - needs a design → **`to-spec.md`** (tag `[spec]`)
 - needs an investigation first → **`to-spike.md`** (tag `[spike]`)
 - has a spec, needs sequencing → **`to-plan.md`** (tag `[plan]`)
@@ -78,7 +123,7 @@ queue (don't copy — one home per item).
 - `p2` `[chore]` **Docs restructure: sequencing defects.** Ledger entries D1–D5 were scheduled
   *last*, i.e. after the step that deletes a doc — if interrupted, the only record of why is an
   ephemeral spec; they must land first. Step 6 also writes to `decisions.md`, which C1 has by then
-  replaced. Part A lands `rules/code-cli-conventions.md` citing `direction.md` before Part B
+  replaced. Part A was expected to land a code-cli-conventions rules file citing `direction.md` before Part B
   deletes it. And per `CLAUDE.md`, specced pipeline work needs a **plan round** — the spec went
   spec-gate → build-gates with no plan doc.
 - `p2` `[chore]` **Docs restructure: `rules/` must be added to the NOT-trivial list, and router
@@ -93,11 +138,15 @@ queue (don't copy — one home per item).
 - `p2` `[debug]` **`CLAUDE.md`'s "The repo this tool lives in" is factually wrong in this
   checkout** — it says uedctl lives at `Tools/uedctl/` inside `dx_lum` with `_scratch/` "two levels
   up"; the git toplevel is `/home/neob91/Documents/Dev/uedcli`, `_scratch/` is at that root, and
-  there is no `Tools/`. Likewise `CLAUDE.md` "Feature worktrees" asserts this repo's
-  `.claude/settings.json` sets `worktree.baseRef: "head"` — that file does not exist. Pre-existing,
-  but the restructure would carry both verbatim into the resident core / `rules/worktrees.md`.
+  there is no `Tools/`. Pre-existing, and the section stays permanently resident, so the error sits
+  in the most privileged position available. Scheduled for the docs-restructure plan's Task 9.
   (`Tools/uplayctl/CLAUDE.md`, which mirrors these rules, is in a *different* repo — this
   restructure silently desynchronises it.)
+  **RESOLVED 2026-07-26 (`ab0ad33`), Andrzej-decided:** the two sibling claims in this item are now
+  true rather than fixed-by-deletion — `.claude/worktrees/` was added to `.gitignore` (precisely,
+  not a blanket `.claude/`, so `settings.json` stays tracked), and `.claude/settings.json` was
+  created with `worktree.baseRef: "head"` so `EnterWorktree` branches from the current branch like
+  the manual procedure does. Reasoning belongs in `direction/process.md` when Task 4 lands it.
 - `p2` `[chore]` **Docs restructure: concurrency.** A live worktree (`brush-profile-generators`)
   holds the pre-restructure tree; git cannot auto-merge an append into a file that has become a
   directory. Land only when no worktree is in flight, or state the manual reconciliation.
@@ -430,6 +479,31 @@ queue (don't copy — one home per item).
   axis degenerates its swept quads to zero width — they need collapsing to triangles. That restriction
   rules out spheres/cones of revolution, the natural use for a full-turn revolve.
   (`specs/2026-07-25-brush-profile-generators.md` §4.7; cold review, 2026-07-25.)
+- **[spec] p3 `brush build revolve` should NOT merge its faces — leave them separate so textures can
+  be aligned per face.** (Owner request, 2026-07-26.) What merges today, and it is not one thing:
+  - **The CAPS are fused, deliberately.** A non-convex or >16-vertex profile is ear-clipped and then
+    merged back across shared diagonals for as long as each piece stays convex and fits the 16-vertex
+    `FPoly` bound (Hertel–Mehlhorn, `profile.convex_pieces`). So a cap that is conceptually many
+    facets arrives as a few large ones, and there is no face to align a texture onto separately. The
+    fusion exists on purpose — its own docstring: *"merging matters, because every extra face is BSP
+    nodes and rendering cost"* — so removing it is a **trade** (more faces, more nodes, more render
+    cost) and not a pure win. That is why this is `[spec]` and not `[chore]`.
+  - **The SIDES are already unmerged model-side** — `builders.revolve` emits `n × s` separate quads,
+    one per (profile edge, segment). But every segment of profile edge `k` carries the SAME
+    `ItemName=Side<k>`, so `--item Side0` selects the whole swept strip and there is no item-level
+    handle on a single facet. Individual facets ARE addressable as `BRUSH:idx` selectors from
+    `brush poly find`, so this may be a selector-ergonomics gap rather than a geometry one.
+  - **The ENGINE merges coplanar surfaces at `MAP REBUILD`** (`bspMergeCoplanars`, within
+    `THRESH_NORMALS_ARE_SAME = 2e-5` — `unrealed/quirks.md` "More build thresholds"). Anything the
+    generator keeps separate can still be fused in the built map, so a model-side-only fix may not
+    reach the surfaces the level designer actually aligns against.
+
+  **Do not guess which of the three was meant — settle it at triage.** Then the real design questions
+  are: is unmerged the DEFAULT or a flag (`--no-merge-caps`, or a general "one face per facet" mode);
+  does it apply to `extrude` and the other cap-tiling builders too (same `convex_pieces` seam, so
+  they would diverge otherwise); and what happens to the node-count budget on a full-turn revolve,
+  where `inbox.md`'s own poly-budget note already flags a 16-segment revolve of an 8-point profile as
+  128 swept faces plus caps.
 
 <!-- Surfaced by the blind-build idiom test (5 cold agents built real-DX shapes using only the CLI +
      user docs, no source, 2026-07-25). All 5 shapes built correctly; these are the CLI papercuts they hit. -->
@@ -2481,8 +2555,248 @@ The posing rewrite landed (POS@ROT → auto-frame; decision 2026-07-12); these a
   durable outcome is folded into `architecture.md`/`usage.md` and `decisions.md`. Kept for now as a
   cross-check; prune once reviewed.
 
-- **[flag→Andrzej / spike→spec] p2 Warm-editor materialize spike (SP-E) RAN 2026-07-19 and FOUND A
-  BLOCKER — an open design decision before the build.** Spike
+- **[spike→spec] p2 SPEC REVIEW ROUND 1 (2026-07-26) — the warm-editor spec DID NOT PASS the gate.**
+  Three cold Opus reviewers over `specs/2026-07-18-warm-editor-materialize.md`; ~50 findings, heavy
+  independent convergence. **The premise survived** — all three agree a one-shot commandlet
+  structurally satisfies `commands.md`'s "fresh editor, exactly one level loaded" precondition that
+  warm reuse cannot meet. **The mechanisms did not.** The spec is PARKED, not merged; per CLAUDE.md
+  "Review gates" it re-enters at round 1 after re-design. Findings, grouped, all actionable:
+
+  **A. The verify container cannot work as specified (all 3 reviewers).**
+  1. `store_export.export_dx_t3d` is three `docker exec`s into a RUNNING container; §5.1 specifies a
+     `docker run --rm` whose command exits by itself. You cannot exec into an exited container. §6's
+     "simply handed the one-shot container" and §5.1 are mutually exclusive — and detaching to fix it
+     reinstates exactly the leak shape the spec exists to remove.
+  2. The image `ENTRYPOINT` is `tini -- bash /opt/uned/entrypoint.sh`, which ignores its args and
+     gates the editor on `${LAUNCH_UED:-1}`. `LAUNCH_UED=0` lives in `docker-compose.yml` and in
+     `stub.ephemeral_build_container`'s explicit `-e`, neither of which reaches a plain `docker run`.
+     So the specced verify container boots Xvfb + fluxbox + x11vnc + `unrealed.exe`, waits for a
+     window, THEN runs UCC — a full GUI stack, not a ~3 s one-shot. Needs `--entrypoint` + explicit
+     `-e LAUNCH_UED=0`, and the timing claim is unestablished until measured.
+  3. **`/stubs` is silently lost.** It is a compose volume, not part of `resource_mounts`, and the
+     crafted ini puts it FIRST on `[Core.System] Paths` (the whole v69-shadowing scheme). A plain
+     `docker run` has no `/stubs`, so any level using a stubbed class → the class never loads →
+     `qualify_level_classes` raises → **exit 2 on a correct build, deterministically, for every
+     stub-using project**. SP-F.2 only catches it if its fixture happens to use a stub.
+  4. **stdout contamination.** `OBJ LIST CLASS=Class` emits a line for the class literally named
+     `Engine.Polys`, which `parse_obj_dependencies` opens as a brush block. That is why
+     `qualify._blocks_only` exists — its docstring records the live failure (3 blocks for a 1-brush
+     level). §5.1's script runs both dumps into ONE undelimited stream, re-creating it; §3's "parsers
+     reused verbatim" omits `_segment_since_header`/`_blocks_only` from both the kept and deleted
+     lists. Also unknown whether `_blocks_only`'s `\nLog: Objects:` marker even appears in commandlet
+     stdout, whose format differs. Fix direction: a delimiter line between dumps, or two separate
+     invocations; either way the segmentation must survive.
+
+  **B. The foundation is unevidenced.** Neither committed harness in `spikes/headless-materialize/`
+  contains `OBJ DEPENDENCIES`, `OBJ LOAD` or `OBJ LIST` — zero hits. The findings write-up asserts
+  the verb works headless and lands on stdout, but nothing reproducible backs it, and
+  `rules/spikes.md` calls that the state a finding rots in. Nor was it observed after a `MAP LOAD` of
+  an existing `.dx` (the spike ran it, if at all, after an in-memory build). Decision 6 rests on it.
+
+  **C. The idle watchdog can kill live builds — and decision 8 puts it on the DEFAULT path.**
+  §4.5's premise "every host-side `Driver` exec routes through `wine_ctl`" is false; `driver.py`'s
+  own docstring enumerates the exceptions. `map_save` types through `wine_ctl` once, then polls up to
+  **`timeout=600.0`** via `docker exec sh -c`, touching no marker — and the proposed `UED_IDLE_S` is
+  **600**. The bounds are equal, and `levelbuild-friction` §3 records a real production `MAP SAVE
+  never produced a finished file (after 600s)`. Because decision 8 also puts the watchdog on the
+  ephemeral boot, the regression lands on the default path plus `stash intersect/deintersect`,
+  `native/csg_golden.py` and `tests/editor_oracle.py`. Fix: refresh the marker from the probe loop,
+  and make the deadline strictly greater than the longest bounded editor wait. SP-F.7 tests only the
+  true-positive direction; nothing tests that a slow healthy build survives.
+
+  **D. A killed build leaves a BUSY warm editor, and nothing detects it.** The health probe is
+  `alive` + `window=<digits>`; it cannot see "still executing the previous invocation's `MAP
+  REBUILD`". A SIGTERMed materialize (the spec's own §1(c) example) leaves the container up by
+  design; the next acquire passes the probe and types into a busy editor with fire-and-forget input —
+  which is the exact class `quirks.md` blames for the SP-E blocker. So the ~50 % failure can return
+  through a door decision 6 does not close, and decision 5 turns it into a hard exit 2. Needs a
+  busy/generation detector (e.g. a drive-start/end marker), not just a liveness probe.
+
+  **E. The warm path is LESS resilient than today.** §4.3 caps warm boot at ONE reboot; `ensure_editor`
+  retries readiness **3** times and its docstring calls startup death "the single most frequent
+  interruption in the build→preview loop". The justification ("a second failure predicts the ephemeral
+  would fail too") has no evidence and is undercut by the warm reboot minting a fresh wineprefix each
+  time. And the ephemeral fallback — kept for mere lock contention — is not used for the one case
+  where it is known-good recovery.
+
+  **F. Two more direction conflicts, unparked** (the §4.3 teardown one WAS parked correctly).
+  (i) §5.2/§5.3's read-write host `/work` staging bind mount contradicts `direction/containers.md`:
+  *"Mutable exchange — ONE container-local `/work` dir … crossed only by `docker cp` … so nothing it
+  holds can leak into the tree"*, plus its rejected "bind-mounting arbitrary host roots". Candidate
+  resolution WITHIN the ruling: read-only input mount (a `.dx` is an asset to the verify) + T3D out
+  over stdout. Needs the owner's confirmation that this reading is right. (ii) §4.1 puts the warm
+  flock and crafted-ini temp in `~/.uedctl/`, while `direction/projects-and-config.md` inventories
+  the per-user home as config + `cache/{textures,stubs,schema}` only and assigns flocks/staging temps
+  to the in-repo `.uedctl/`. `preview_game` already does the former, so code precedes spec here.
+
+  **G. The spike's acceptance criterion is both unreachable and insufficient.**
+  - Unreachable: two known pre-existing post-verify FALSE POSITIVES will fail warm builds for
+    unrelated reasons — `levelbuild-friction` §1 (engine-stamped `Base` missing from
+    `normalize.COMPUTED_PROPS`; "the single most costly defect of the run. Deterministic, not flaky")
+    and `headless-materialize` §11 (a `basement` GEOMETRY line-shift). SP-F.5 would report a design
+    failure that is actually one of these.
+  - Insufficient: a **runt/unlit** map is not a "failure" by a 0/N pass-rate criterion. `friction`
+    §1b documents a `--no-verify` build writing 23,126 bytes instead of 191,332 and printing success,
+    and the H3 compare **structurally cannot** catch it because lighting is regenerable build output
+    the compare ignores by direction. SP-E left a ready-made oracle (`warm_editor_canoncmp.py`) and
+    nominated exactly this as pinnable; SP-F uses neither it nor a size/lightmap check.
+  - N=8 at 0 failures has weak power: a residual 10 % rate still passes ~43 % of the time. State what
+    confidence N buys.
+
+  **H. Leak mechanics — the fix under-fixes, over-reaches and races.** (i) The watchdog *stops* a
+  container; it never `docker rm`s it, and ephemeral names are fresh uuid7s so nothing re-takes the
+  name — the RAM leak is fixed, the exited-container/COW-layer leak is not, and §1(c)'s "2
+  never-started" containers can never self-reap (they ran no entrypoint). (ii) The `uned-wp-*` glob
+  also matches `uned-wp-stub-*` from `stub.ephemeral_build_container`, and volumes are daemon-global
+  while the ephemeral half carries no uid. (iii) "No attached container" is NOT race-free: compose
+  creates the named volume before the container references it, so a sweep in that window removes a
+  booting editor's prefix — and the ephemeral path is deliberately lock-free, so there is nothing to
+  serialise against. (iv) The sweep runs only on the warm acquire path, i.e. never under the
+  contention that produces the leaks. (v) The verify container's own crafted ini is never unlinked —
+  one leaked temp per materialize, in a spec whose purpose is fixing leaks.
+
+  **I. Fail-closed assertion checks the wrong property.** §4.5 asserts the watchdog by checking the
+  env var made it in — but the named failure mode is a STALE IMAGE whose baked entrypoint has no
+  watchdog code, which accepts `-e UED_IDLE_S` and ignores it. Must observe the effect (the
+  entrypoint's own log line, as `game-entrypoint.sh` prints, or `/work/.last_use` existing). §8 pins
+  the same wrong property.
+
+  **J. Factual/citation defects.** (i) Today's verify runs **three** poll loops, not two —
+  `qualify_live_level` calls `dump_obj_dependencies` AND `_read_loaded_classes`, then
+  `verify_dx_matches` calls `_read_loaded_classes` again; two 90 s-ceiling class reads is also a far
+  more plausible home for the derived ~42 s. (ii) The crafted ini is NOT "a pure function of the
+  mounts" — `paths_ini_lines` host-scans each dir for present extensions, and the host pre-bake
+  `uned/UED22/unrealtournament.ini` is covered by no fingerprint component. (iii) `preview_game`
+  does not have the shape §6 says it factors: `acquire_warm_container` contains no flock (docstring:
+  "Caller MUST hold the flock") and no reboot retry; `_acquire_lock` is **bounded blocking**
+  (`WARM_LOCK_TIMEOUT_S`, raises) not nonblocking, and `REBOOT_BUDGET=3` is consumed in the render
+  loops. (iv) `Commandlet batchexport not found` is in `commands.md`, not `quirks.md`. (v) §10 lists
+  `Save.tmp`'s location as UNPINNED although the spec's own headline spike answered it 🔬 ("in the
+  destination's own directory … two concurrent saves into one directory would therefore collide") —
+  which is live for conflict F(i). (vi) §1(c)'s host numbers (8 containers / 9 volumes / ~5.5 GB) are
+  my own session's census and appear nowhere committed; `friction` §2 reports a different count over
+  a different window. (vii) "never purge" strengthens the cited spike's "does NOT **immediately**
+  purge". (viii) §1's table violates CLAUDE.md's table-alignment rule.
+
+  **K. Unaccounted memory doubling.** Every materialize now holds an editor container AND a verify
+  container running the full editor engine (worse with A2's GUI stack). `parallel-editors.md`:
+  ~0.5 GB each, concurrency is memory-bound, unbounded fan-out OOMs a small box — and §1(c)'s own
+  incident was RAM+swap exhaustion on a 4-core/7.7 GB box. Neither §4.6 nor §10 mentions it.
+
+  **L. Smaller, still real.** Fingerprint thrash when two projects alternate on one per-user warm
+  container (every acquire mismatches → reboot + teardown + 0.5 GB resident for 10 min; not on the
+  watch-list). `UED_IDLE_S`/lock keyed on `$UEDCTL_HOME` but the container name on `uid`, so two
+  sessions with different `UEDCTL_HOME` share one container with different locks. No "container
+  vanished mid-acquire" outcome in the gate §4.2 calls complete (should reboot, not exit 2). The
+  `pinned` branch is unreachable in v1 yet specified and tested. `--keep-build` mechanism must change
+  under §5.3's reorder (staging file already on host; `cp_out` source may be released) and nobody
+  unlinks staging on the verify-failure path → one stranded `.dx` per failed verify. `qualify_live_level`
+  becomes broken-not-dead if its two callees are deleted; `_FLUSH_FILLER_CMD`, `_COMPLETE_RE`,
+  `Driver.obj_dependencies/log_size/read_log_since` all lose their last caller. No docs items
+  anywhere: `docs/usage.md:12` ("no persistent session") is falsified for a USER-FACING doc,
+  `architecture.md` still describes the verify in the same ephemeral container, `commands.md` has no
+  `Editor.ExecCommandlet` entry, and the new stderr mode line is observable output. No `rationale/`
+  landing named for the many implementation choices.
+
+- **[chore] p2 `qualify.export_and_qualify` no longer exists but six files still cite it.** It is
+  referenced as a live precedent by `apply.py`, `driver.py`, `stub.py`, `packages.py`,
+  `tests/test_packages.py`, `tests/test_driver.py`, and by docs including `decisions.md` and two
+  spikes — and, load-bearingly, by `quirks.md`'s "Consequence for warm materialize" line and SP-E's
+  fix-candidate-1 rationale ("it already boots its own ephemeral editor precisely because a reused
+  editor is untrustworthy"). Anything reasoning from that precedent is reasoning from a function that
+  was deleted. Found during the 2026-07-26 spec review.
+
+- **[chore] p3 The `headless-materialize` and `levelbuild-friction` spikes are UNCOMMITTED.** Both are
+  untracked; the warm-editor spec's decision 6, its whole §5, its leak measurements and its scope
+  limits all cite them, and `rules/spikes.md` requires harnesses committed under
+  `dev/docs/spikes/<slug>/`. Until they land, a `git clean` destroys the evidence base. (Owned by
+  whichever session ran them.)
+
+- **[OWNER — confirm] p2 The H3 post-verify never runs against the build editor.** Decided
+  2026-07-26 (owner chose "verify in a one-shot commandlet container" over an idle barrier and over a
+  separate GUI verify editor). Folded into `specs/2026-07-18-warm-editor-materialize.md` decision 6;
+  **`direction/materialize.md` is NOT edited until this is confirmed.** Proposed wording, verbatim,
+  for `direction/materialize.md` § "The post-build verify":
+
+  > **The verify never runs against the editor that did the build.** It runs in its own one-shot
+  > headless container, which starts an editor engine with no GUI or display, executes a short
+  > script of console verbs, prints its output and exits by itself in a few seconds. Two reasons,
+  > and the second is the durable one. A reused build editor intermittently loses the *next* build's
+  > `MAP SAVE` after a verify has run against it — around half of reused builds — so a warm editor
+  > and an in-editor verify cannot coexist. And the qualification dump the verify depends on is
+  > documented as requiring a *fresh* editor with exactly one level loaded, because loading a level
+  > never purges the previous one's objects; a reused editor structurally cannot offer that, and a
+  > one-shot container offers it by construction. The verify also stops depending on scraping a
+  > block-buffered log file, which is what its two poll-until-settled loops existed to defeat.
+
+  *(Rejected, for the same section: an editor-quiesce/CPU-idle barrier — it only works if the cause
+  is a transient race, which the spike explicitly did not discriminate; a separate cold GUI verify
+  editor — robust, but its boot costs about as much as warm reuse saves; making `--no-verify` the
+  warm default — trading build correctness for speed on the one path whose job is detecting
+  wrongness.)*
+
+  **This decision also touches `direction/containers.md`, in two places.** (i) Its opening sentence
+  enumerates the container kinds and assigns "materialize, qualify" to the editor container;
+  qualification moves out to a fourth kind — a **one-shot headless commandlet container**, which
+  starts an engine with no GUI or display, runs a short script and exits by itself. (ii) Its
+  lifecycle bullet reads *"a warm-mode drive **or verify** failure tears it down before releasing the
+  lock"* — written when the verify ran against the warm editor. **Proposed replacement, verbatim:**
+
+  > **An untrusted container is never left warm**: a warm-mode *drive* failure tears it down before
+  > releasing the lock, and the invocation fails with a hint rather than silently retrying. A
+  > *verify* failure does not — the verify runs in its own container and so implicates the build, not
+  > the editor, and discarding a healthy warm editor there would penalise exactly the moment the
+  > operator is about to rebuild.
+
+  **Until you rule on (ii), the build follows the CURRENT direction text and tears down on a verify
+  failure too** (`specs/2026-07-18-warm-editor-materialize.md` §4.3 says so explicitly). This is the
+  one place the spec knowingly proposes against a direction doc.
+
+- **[OWNER — confirm] p2 Warm editor now; the native and commandlet BUILD backends are later,
+  separate work.** Decided 2026-07-26 ("just build a warm container for now"), taken against
+  `spikes/headless-materialize/findings.md`, which ranks `level materialize --native` first overall
+  and calls the GUI editor a dead end. Recorded so the ranking is not silently re-litigated, and so
+  the warm work is understood as a bridge rather than a foundation. Proposed wording, verbatim, as a
+  closing note to `direction/materialize.md` § "The editor container":
+
+  > The warm editor is a **bridge, not a destination.** The editor-free native build already
+  > produces a complete map — geometry, lighting, movers, actor names and paths — in a fraction of
+  > the time and with no Wine, container or display at all; what it still lacks is byte-parity with
+  > UnrealEd on large maps. When that lands as a materialize backend, the warm editor becomes the
+  > `--editor` fallback it was always going to be. Nothing should be built on top of the warm
+  > container that would be expensive to retire with it.
+
+  *(Rejected: re-scoping the warm-editor work to `materialize --native` now — a bigger, different
+  change with an open byte-parity front; promoting the headless commandlet to a build backend — it
+  cannot produce a lit map, and nine workarounds for that failed.)*
+
+- **[OWNER — confirm] p2 EVERY editor container self-terminates when idle, not just the warm one.**
+  `direction/containers.md` currently promises idle self-death only for the warm containers. That is
+  where the container leak lives: teardown exists solely in a host-side `finally`, and SIGTERM (which
+  is what `timeout … bin/uedctl level materialize` sends) kills Python without running it — so a
+  killed or wedged ephemeral build strands a running editor and its ~0.5 GB wineprefix volume,
+  permanently. Measured on this host 2026-07-26: 8 stranded containers over ~4 hours and 9 orphan
+  volumes ≈ 5.5 GB. No host-side handler can fix it (SIGKILL), so the container has to be able to
+  reap itself. Proposed addition, verbatim, to `direction/containers.md` § "Per-command ephemeral is
+  the concurrency story":
+
+  > **Every editor container self-terminates when idle — ephemeral ones included.** Teardown by the
+  > invocation that started it is the fast path, not the guarantee: a killed uedctl process runs no
+  > cleanup at all, and an editor that outlives its parent would otherwise hold its memory and its
+  > disk forever. The container's own idle timer is what makes "ephemeral" true rather than merely
+  > intended. Because a container cannot remove its own volume, the volume is reclaimed by a sweep of
+  > unattached volumes on the next acquire — keyed on having no container attached, never on age,
+  > since a legitimate build can outlive any threshold.
+
+  Folded into `specs/2026-07-18-warm-editor-materialize.md` decision 8 + §4.5. *(Rejected: host-side
+  signal handlers as the mechanism — they cannot cover SIGKILL; an age-based sweep as the primary
+  mechanism — two legitimate multi-minute builds were in flight among the 8 stranded containers
+  observed, and an age threshold would have killed them.)*
+
+- **RESOLVED 2026-07-26 — was: [flag→Andrzej / spike→spec] p2 Warm-editor materialize spike (SP-E)
+  RAN 2026-07-19 and FOUND A BLOCKER.** The design decision is made (the two `[OWNER — confirm]`
+  items above); the spec is revised; the follow-up spike is `to-spike.md` SP-F. Kept below for its
+  evidence until SP-F lands, then delete. Original entry: Spike
   `spikes/2026-07-18-warm-editor-materialize/results.md` (2-reviewer cold-gated; harnesses committed).
   **Editor reuse itself works** (a warm editor builds the castle correctly, and a genuinely-reused
   *successful* build is `canonical_level_hash`-identical to a fresh build), **but the H3 post-verify —
@@ -2750,3 +3064,27 @@ throwaway compare view. My repro predated the fix.)_
      history — **Andrzej picks what to keep.**
   4. **2 GiB of swap for 7.7 GiB of RAM with five agents is undersized** — more RAM / zram / fewer
      concurrent sessions. Machine change, outside the repo.
+
+- **[chore] p2 Tell the LLM level-designer to CHECK UEDCTL'S EXIT CODE — a failed operation is
+  easy to miss.** Raised by Andrzej 2026-07-26 after the three-level agent build run
+  (evidence: `dev/docs/spikes/levelbuild-friction/`). Agents repeatedly carried on after an
+  operation had failed, because they read the *output* rather than the *status*. Concretely
+  observed in that run:
+  - `substrate stub Endemia` fails with `Exiting due to error` and **exit 2** — correct
+    signalling — but the actionable cause (`Can't find Function in file 'Function
+    DeusEx.DeusExDecoration.BeginPlay'`) is separated from the terminal line by blank lines and an
+    out-of-order `stubbing Endemia…` progress line, so eyeballing the tail suggests "it printed
+    something, probably fine".
+  - The orchestrating session **itself misread a shell pipeline's exit status as uedctl's** and
+    briefly reported a non-existent "exits 0 on failure" defect. `cmd | grep | tail` reports the
+    LAST stage's status — `PIPESTATUS[0]`/`set -o pipefail` is needed, and every `2>&1 | tail`
+    idiom in the docs' own examples is exposed to this.
+  - Agents habitually pipe uedctl through `| tail -N`, which is exactly the idiom that discards
+    both the status and the earlier lines carrying the cause.
+  Where it belongs: `docs/usage.md` (a short "check the exit status, and how not to lose it
+  through a pipe" note) and the level-design guides that show piped invocations.
+  **Caveat that must be stated in the same note, or it teaches false confidence:** exit 0 is
+  NOT sufficient. In the same run `level materialize --no-verify` exited 0, printed
+  `materialized <path>`, and wrote a 23,126-byte runt with no light bake (correct build:
+  191,332 bytes) — see friction §1b. So the guidance is "a non-zero status always means it
+  failed; a zero status does not always mean it worked — check the artifact too."
