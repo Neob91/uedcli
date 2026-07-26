@@ -721,3 +721,48 @@ def test_texalign_pan_handling_matches_the_editor_against_a_non_zero_pan():
     assert checked == 396, f"the golden covers {checked} (mode, face) pairs, expected 396"
     # the golden must actually EXERCISE both outcomes, or a "never touches the pan" model passes
     assert authored in seen and (0, 0) in seen and (0, 63) in seen and (0, 255) in seen
+
+
+# --- UCC-built texture fixture (spikes/2026-07-26-ucc-texture-fixture/) -------------------
+
+_UCC_FIXTURE = (Path(__file__).resolve().parents[2] / "dev" / "docs" / "spikes"
+                / "2026-07-26-ucc-texture-fixture" / "fixture")
+
+
+def test_ucc_builds_a_p8_mip_chain_that_decodes_byte_exactly():
+    """`ucc make` + `#exec TEXTURE IMPORT … MIPS=ON` builds the WHOLE mip chain itself, and
+    uedcli's P8 decode of it is **byte-exact** against the source artwork that was imported.
+
+    This is the offline fixture's whole justification: the pixel bytes are written by the game's
+    own toolchain from artwork we authored, so a decode oracle built on it is independent of
+    uedcli without shipping any copyrighted content. Spike:
+    `dev/docs/spikes/2026-07-26-ucc-texture-fixture/findings.md` §1.
+
+    If this ever goes non-zero, either the decoder drifted or the committed fixture was rebuilt
+    with a different importer — both are things a later change must not do silently.
+    """
+    from uedcli import utexture
+    pytest.importorskip("PIL")
+    from PIL import Image
+
+    pkg = utexture.load_package(str(_UCC_FIXTURE / "UccFix.u"))
+    idxs = utexture.textures(pkg)
+    assert len(idxs) == 1
+    tex = utexture.decode_texture(pkg, idxs[0])
+
+    # UCC built the chain, not us: 64x64 down to 1x1, halving.
+    assert [(m.width, m.height) for m in tex.mips] == [
+        (64, 64), (32, 32), (16, 16), (8, 8), (4, 4), (2, 2), (1, 1)]
+    assert tex.fmt == 0, "fixture is no longer P8"
+
+    palette = utexture.decode_palette(
+        pkg, utexture.export_index_of_ref(pkg, tex.palette_ref))
+    assert len(palette) == 256
+
+    mip0 = tex.mips[0]
+    assert len(mip0.data) == mip0.width * mip0.height
+    decoded = Image.frombytes(
+        "RGB", (mip0.width, mip0.height), utexture.mip0_to_rgb(mip0, palette))
+    source = Image.open(_UCC_FIXTURE / "fixture.pcx").convert("RGB")
+    assert list(decoded.getdata()) == list(source.getdata()), \
+        "UCC's P8 mip 0 no longer decodes byte-exactly to the imported artwork"
