@@ -5,6 +5,26 @@ lands here first, with no obligation to know its stage yet. This is the *pre-pip
 stage (so no `to-` prefix). See [`README.md`](README.md).
 
 **Triage** routes each item to where its next action lives:
+- `p1` `[OWNER — confirm]` **`--faces textured` with NO project/config: exit 2, or render anyway?**
+  Blocks [`specs/2026-07-26-actor-preview-textured-faces.md`](../specs/2026-07-26-actor-preview-textured-faces.md)
+  §11 Q1. `direction/conventions.md` "No silent half-answers" says a command that cannot fully
+  satisfy a request exits 2 naming the offending value, rather than emitting a partial result plus a
+  stderr warning. Strictly applied, `--faces textured` outside a project is exit 2. But that spec's
+  per-ref fallback (unresolvable ref → checkerboard + warn-once) is *itself* a partial result, and it
+  is exactly what `level preview --native` does today. Proposed text (verbatim, awaiting a yes):
+
+  > Exit 2 when there is no resolver at all — the request cannot be satisfied in any part. Keep the
+  > checkerboard + warn-once fallback for an individual ref miss, where the render is still
+  > overwhelmingly the answer that was asked for.
+
+  Needs an owner ruling because it *interprets* a direction-level rule rather than applying one.
+  *(2026-07-26.)*
+- `p2` `[OWNER — confirm]` **Should `--faces` be the render-mode spelling on `level preview` too?**
+  Same spec, §11 Q2. It adds `--faces {wire,flat,textured}` to `actor`/`stash`/`prefab preview`;
+  `level preview` spells its render mode as the `--native`/`--game` backend pair, so "how are faces
+  drawn" and "which backend runs" are different axes carrying different names. NOT proposed as part
+  of that work (it would change an existing verb's surface), but worth ruling before the flag ships
+  and the name becomes load-bearing in two places. *(2026-07-26.)*
 - `p1` `[OWNER — confirm]` **`level doctor`'s scope boundary — proposed `direction/trunk-and-editor.md`
   addition.** Ruled 2026-07-26 and already written into `docs/usage.md`, `architecture.md` and
   `cli.py`'s `help=`; needs a durable home in the owner's own tree. That topic already says the
