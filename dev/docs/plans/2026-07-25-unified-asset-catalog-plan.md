@@ -5,15 +5,35 @@
 **Review:** two rounds on this plan (4 cold reviewers, 2026-07-25) — all findings folded; §5 records them.
 **Ephemeral:** scratch for sequencing this build; delete when the work lands.
 
-> **STALE vs the spec as of 2026-07-26 — re-cut before building.** The spec gained two
-> owner-directed changes after this plan was reviewed, and this plan does not yet sequence them:
-> **spec §4c** (texture **group** becomes a stored fact in the per-package row, printed by `show`,
-> filterable via `--group` on `list`/`search`) and **spec §3b** (pixel-hash identity pinned as frozen;
-> adding a fact is explicitly safe, changing the decoder is the irreversible act). Practical effect
-> here: the texture-adapter slice must carry `group` through `parse_pcx_stem` → the `facts` dict → the
-> `show`/`--json` shape → the two filters, and §5's own hazard note about "palette index-0 semantics"
-> should be read narrowly — it forbids changing what the decoder *emits*, not recording additional
-> facts. Neither the spec revision nor this plan has been through a review round yet
+> **RE-CUT REQUIRED before building — the spec moved substantially on 2026-07-26.** This plan was
+> reviewed against the pre-revision spec. The stale points fixed inline below are the anchors, the
+> tracked-package count, the `decisions.md` supersession mechanism, the S11 direction edit (now done)
+> and the S3 done-when. **What still needs re-sequencing, and is NOT yet in any slice:**
+>
+> - **§3c — procedural textures** are identified by a frozen per-class **parameter hash**; the declared
+>   property set per class is new work in the texture arm, and `ScriptedTexture` is name-keyed with no
+>   preview (`preview_state: scripted`).
+> - **§4d — `masked`** is a texture fact, read as *export tag else resolved class default*. That makes it
+>   **default-sourced**, so **prerequisite 1 (`schema_cache` v2) gates the TEXTURE arm too**, not only the
+>   class arm — and P0 must land before S1, since §13 step 1's `DrawType` is default-sourced as well.
+> - **§4c — `group`** comes from the export **Outer** (`pkg.name_of_ref(export["outer"])`), *not* from
+>   `parse_pcx_stem`, which this plan deletes. An earlier version of this banner said to route it through
+>   `parse_pcx_stem`; that was wrong.
+> - **§6 — `class show` defaults**, including the `uprops.resolve_class_defaults` **provenance** change
+>   (it currently discards which ancestor supplied a value), which is a shared-seam change, not an output
+>   tweak.
+> - **§5 — `search` now requires terms**, `--placeable` is dropped for `--include-abstract`, `--skeleton`
+>   replaces the stdout stream and carries the artifact path, and truncation must be disclosed.
+> - **§3b — `classify set` MERGES** (tags union, colours replace, conflicting description exits 2 with
+>   `--replace` to override), `classify unset` gains `-` and named-tag removal, and `set` must report when
+>   it writes an identity already classified under a different `ref`.
+> - **`.unr` is DROPPED** from the package extension set (was S1 work); the **VO exclusion** becomes
+>   per-substrate config plus `--include-vo`; the preview cache becomes its **own pool** with a recursive
+>   sweep and index-orphan reclamation.
+> - **Fixtures**: depend on the sibling formats spec's `pkgfixture` (synthetic `.utx`), plus the 34 tracked
+>   `.u` packages. Do not build a writer here.
+>
+> Neither the spec revision nor this plan has been through a review round since
 > (`board/inbox.md`).
 
 Governing principle this plan must not drift from: **the tool lists, reports file facts, produces
@@ -37,7 +57,7 @@ the cross-cutting sweep.
 
 **Two sequencing constraints that are not obvious:**
 
-1. **The `texture` noun is ONE argparse subtree routed to ONE dispatch branch** (`cli.py:1452-1497`
+1. **The `texture` noun is ONE argparse subtree routed to ONE dispatch branch** (`cli.py:1521-1566`
    → `dispatch.py:1213`), so it cannot host two implementations for even one commit. The seam is
    therefore **library-level, not CLI-level**: **S8a builds the texture adapter and asserts it
    through the catalog API with NO CLI change**, and **S8b repoints the noun and deletes the legacy
@@ -199,7 +219,9 @@ additive surface, which this slice enumerates flag by flag before code lands:**
 *(`--classified`/`--unclassified` cannot live here — there is no store until S5 — so they are S5's.)*
 **Done when:** the three nouns list and show against committed packages; `class show` accepts
 multiple refs and `-`, and empty stdin exits 0; `class list --json` and `class show --json` emit the
-documented shape; `class list` stays offline and maps-free; no existing `class` OUTPUT changes;
+documented shape; `class list` stays offline and maps-free; **`class show` GAINS the resolved default
+beside each category-bearing property (spec §6) — this slice's done-when previously said "no existing
+`class` OUTPUT changes", which the 2026-07-26 spec revision supersedes**;
 `usage.md` documents the three nouns in this commit.
 
 ### S4 — object-ref existence validation
@@ -259,7 +281,7 @@ that decisions 7 and 11 rest on is an artifact of choosing Python**. The spike a
 **This slice MEASURES and REPORTS; it does not overturn the decision.** Decisions 7 (never render in
 `list`/`search`) and 11 (single `iso` angle) are Andrzej-decided (`decisions.md` 2026-07-25 03:40)
 and stand unless he supersedes them. If the Rust path makes rendering an order of magnitude cheaper,
-that finding goes back to him and lands as a **superseding `decisions.md` entry plus a
+that finding goes back to him and lands as a **revision of `direction/asset-catalog.md` plus a
 `direction.md` reconcile** — not as a builder's judgement call mid-slice.
 
 Productise `spikes/2026-07-25-native-mesh-decode/harness/umesh.py` into `uedcli/umesh.py` — it is a
@@ -348,11 +370,13 @@ end.
 *(Per-slice `usage.md` updates already landed with their slices — §0. What remains is what no single
 slice owns.)* Replace
 `architecture.md`'s "Texture catalog" section (`architecture.md:1875`/`:1891`); fix
-`direction.md`'s `texture-catalog/` default in the projects section; update
+**(DONE 2026-07-26 — `direction/projects-and-config.md` now states the `asset-catalog/` default, owner-confirmed; do NOT edit it again, and note `config.project_catalog_dir()` still returns `texture-catalog` until this plan changes it)**; update
 `dev/docs/dev-runtime.md` and `dev/docs/deusex-assets-setup.md:95`; sweep the board files
 (`to-spec`/`inbox`/`someday`/`to-build`) for texture-catalog references; add a `leveldesign/` page on
 discovering and placing assets; delete this plan, the spec, and the superseded
-`specs/2026-07-19-texture-catalog-redesign.md`.
+`specs/2026-07-19-texture-catalog-redesign.md` **and `specs/2026-07-19-texture-show-for-llm.md`** (the
+redesign spec says to delete the two together, and it is banner-superseded by a file that will no longer
+exist).
 
 ## 3. Risks
 
@@ -361,7 +385,7 @@ discovering and placing assets; delete this plan, the spec, and the superseded
 | P1 gates S8a | it gates **only** S8a and is now specced + review-gated; S1–S7/S9–S10 proceed regardless |
 | Texture identity is a frozen unversioned key | committed golden in S8a + P1 lands before any classification exists |
 | S7 promotes script-grade code | S7 has explicit productisation items (error taxonomy, API shape, bounded fallbacks), not just a file move |
-| A third rasterizer | S7 measures the Rust path first and REPORTS; decisions 7/11 change only by a superseding `decisions.md` entry |
+| A third rasterizer | S7 measures the Rust path first and REPORTS; decisions 7/11 change only by an owner-confirmed revision of `direction/asset-catalog.md` (NOT a `decisions.md` entry — that ledger is FROZEN) |
 | Authored shards stranded by a dir rename | the `asset-catalog` default lands in S1, before any shard can be written (§0 constraint 3) |
 | S8a/S8b seam | S8a is library-level only, S8b is the single CLI repoint + deletion commit |
 | S8b's deletion breadth | the inventory in §1 is grep-verified; done-when demands zero skips |
