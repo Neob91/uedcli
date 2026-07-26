@@ -213,9 +213,9 @@ this one. **Re-derive every count before writing it into a test.**
 The DX install is located by `install_root()` in `uedcli/tests/conftest.py` (env override
 `UEDCLI_TEST_INSTALL`; its no-env fallback is `Path(__file__).resolve().parents[2]/"uned"/
 "DeusExAssets"`). **There is no equivalent pointer for the Unreal install** — S6 adds
-`UEDCLI_TEST_UNREAL_INSTALL` and skips cleanly when it is unset. The two **tracked** corpora need no
+`UEDCLI_TEST_UNREAL_INSTALL` and skips cleanly when it is unset. The **one** tracked corpus (`uned/UED22/`) and the committed fixtures need no
 env pointer at all and **S1** adds the `ued22_root()` conftest helper beside `install_root()` (S1's Done-when is its first
-caller; an earlier draft said S6 adds it, which made S1 unbuildable in its own slice). S6 adds for them, anchored the
+caller; an earlier draft said S6 adds it, which made S1 unbuildable in its own slice). S6 adds the install-root helpers, anchored the
 same way on `conftest.py`'s own location:
 
 ```python
@@ -229,7 +229,8 @@ def ued22_root() -> Path:      # <repo>/uned/UED22 — git-tracked, 34 packages
     return Path(__file__).resolve().parents[2] / "uned" / "UED22"
 
 # repo_texture_root() is DELETED — <repo>/Textures no longer exists (see the correction above).
-# Its role is taken by synthesized fixtures from pkgfixture_proto.
+# Its role is taken by synthesized fixtures from `pkgfixture` (the S1-PROMOTED module, not the
+# spike prototype it came from).
 ```
 
 (`parents[2]` is the repo root — re-verified 2026-07-26. The old `parents[4]` texture root is gone.)
@@ -265,7 +266,7 @@ path-qualified because bare `test` is a shell builtin:
 
 ```
 bin/test   # from the repo root              # the whole offline suite
-bin/test   # from the repo root -k texture -x
+bin/test -k texture -x    # from the repo root
 ```
 
 Tests marked `-m integration` need material a fresh checkout does not have; `pytest.ini` carries
@@ -662,12 +663,14 @@ the wrong slice is how the "wrong pixel" invariant gets broken (see the `:390` r
 | `uedcli/utexture.py`           | S1    | `TEXF` (`:33`) **deleted** — dead (no in-tree reader) and already wrong: it says `1 RGBA7, 2 RGB16, 4 RGB8` where every enum measured says `1 RGB32, 2 RGB64, 4 RGB24` (Unreal Gold / Deus Ex) or `1 BGRA8_LM, 2 R5G6B5, 4 RGB8` (227). `decode_texture` (`:188`) grows the second mip array, `comp_mips`/`comp_format` on `TextureObj`, and the `no_mip_data`/`trailing_bytes` flags — see the EOF-guard row |
 | `uedcli/utexture.py` `:217-219` | **S1** | the body-to-EOF guard (`if pos != end: raise ValueError("texture body not at EOF…")`). S1 turns it into a **report, not a judgement**: `decode_texture` records `trailing_bytes = end - pos` (0 when clean) and `no_mip_data` on **every** body and never raises for this condition. It is NOT weakened — the integrity signal is preserved for every texture, v61 included, and S1's `_decode_ref` treats `trailing_bytes != 0` as a miss exactly as the raise did. S2 turns the two fields into `no-mip-data` / `corrupt-body`; S3 only reads them |
 | `uedcli/utexture.py` `:390`    | **S1 (empty-mip check) then S2, S3** | the `if t.fmt != 0 or not t.mips` P8-only gate. **The `fmt != 0` half must survive S1 and S2 intact.** Deleting it before S3 lands detection sends non-P8 chains straight into `mip0_to_rgb`, which renders block bytes as palette indices — a *wrong image*, for two whole slices. But `not t.mips` is **not** the emptiness check it looks like: a list of *empty* mips is truthy, so once S1 stops raising, this gate passes and `mip0_to_rgb` returns an all-zero buffer — **a silent black image** (verified live 2026-07-25: `mip0_to_rgb(Mip(64, 64, b""), pal)` → 12,288 zero bytes). S1 therefore adds an explicit "no mip carries data" miss **ahead of** the gate. S2 replaces the gate's `return None`s with typed cases; S3 replaces the `fmt` condition with the detector's answer |
-| `uedcli/utexture.py`           | S2    | `TextureResolver._decode_ref` (`:362-402`) loses its **seven** bare `return None`s — count re-verified 2026-07-25 (bare/over-dotted ref, unknown package, `decode_texture` raised, the fmt gate, palette ref out of range, `decode_palette` raised, name never matched) — plus the miss `_package` (`:286-297`) swallows when a package will not open or parse. `resolve` (`:299`) and `resolve_masked` (`:346`) collapse into one result-returning seam sharing one cache |
+| `uedcli/utexture.py`           | S2    | `TextureResolver._decode_ref` (`:362-402`) loses its **seven** bare `return None`s — count re-verified 2026-07-25 (bare/over-dotted ref at `:372`, unknown package, `decode_texture` raised, the fmt gate, palette ref out of range, `decode_palette` raised, name never matched) — plus the miss `_package` (`:286-297`, its swallowing `except` at `:295`) swallows when a package will not open or parse. `resolve` (`:299`) and `resolve_masked` (`:346`) collapse into one result-returning seam sharing one cache |
 | `uedcli/utexture.py`           | S4    | `mip0_to_rgb` (`:250`) generalises past P8. The mask expression at `:359` stays as-is for P8 (see §5) |
 | `uedcli/preview_native.py`     | S2    | `:300-304` (`self._resolver.resolve(ref)` + the `not resolvable on the composed search path` warning) — the checkerboard degrade now prints the named case |
 | `uedcli/dispatch.py`           | S2    | grep `resolver.resolve_masked(bare)` (~`:824`) and `is not P8-decodable` (~`:837`) in `_resolve_point_render`'s sprite path. `_texture_resolver` (grep the `def`, ~`:764`) unchanged |
 | `uedcli/tests/test_utexture.py` | S1/S2 | `test_decode_all_mips_reach_eof` (`:57`) encodes the pre-`CompMips` assumption — **updated in S1, not deleted**. The nine `TextureResolver` tests (`:82` onward, after the `_resolver()` helper at `:77`) move to the result union in S2. **`test_resolve_caches_per_instance` (`:115`) asserts OBJECT IDENTITY** (`assert r.resolve("CoreTexWater.dirtywater") is first`), so S2's new result type must stay **identity-cached** — return the cached object, never an equal-but-rebuilt one |
-| `uedcli/tests/test_actor_preview.py` | **S2** | **not in the first draft's map, and S2 breaks it.** `_FakeResolver` (`:352`) implements exactly `resolve_masked(ref)` (`:359`) + `exists(ref)` (`:362`) and is constructed with 4-tuples `(w, h, rgb, mask)` (`:374`, `:463`) — all of which S2's merged seam changes. `:405` asserts the **literal string** `"not P8-decodable"` in stderr, which S2 replaces with the case name. Rewrite `_FakeResolver` onto the new seam and re-point that assertion; do not keep the old method as an alias (§0b) |
+| `uedcli/tests/test_actor_preview.py` | **S2** | **not in the first draft's map, and S2 breaks it.** `_FakeResolver` (grep `class _FakeResolver`) implements exactly `resolve_masked(ref)` + `exists(ref)` and is constructed with 4-tuples `(w, h, rgb, mask)` (grep `_FakeResolver({`) — all of which S2's merged seam changes. grep `not P8-decodable` asserts that **literal string** in stderr, which S2 replaces with the case name. Rewrite `_FakeResolver` onto the new seam and re-point that assertion; do not keep the old method as an alias (§0b) |
+| `dev/docs/spikes/2026-07-25-native-mesh-decode/harness/render.py` | **S2** | grep `got = ` then `if got:` (the skin lookup, ~`:91`). A typed error object is **truthy**, so under S2's seam it renders an error as a skin. Migrate to the typed result and **fail loudly naming the offending skin ref**. `rules/spikes.md` makes a committed harness durable evidence — product surface, not scratch |
+| `dev/docs/spikes/2026-07-25-native-mesh-decode/harness/render_class.py` | **S2** | same pattern, ~`:92`. Same migration |
 | `uedcli/tests/test_ingest_validation.py` | **S2** | **not in the first draft's map.** `:70` asserts `r.resolve("Weird.RGBA7Tex") is None` inside `test_texture_exists_is_existence_not_decodability` — under S2 `resolve` no longer returns `None`, so this becomes an assertion on the typed error case. **`exists()`'s own contract does not change** and the rest of the module stands |
 
 **New**
@@ -675,7 +678,7 @@ the wrong slice is how the "wrong pixel" invariant gets broken (see the `:390` r
 | file | what |
 |----------------------------------------------|---|
 | `uedcli/tests/pkgfixture.py`                 | test-only `.utx` builder — **promoted from the committed prototype** `dev/docs/spikes/2026-07-25-native-texture-formats/pkgfixture_proto.py`, not written from scratch (S1) |
-| `uedcli/tests/fixtures/UccCompMips.utx`     | ~20 KB (texture `SpikeFixture`), **our own artwork** — P8 mips built by `ucc make`, DXT1 blocks written by Pillow, container assembled by `pkgfixture`. No game content. Built once by `spikes/2026-07-26-ucc-texture-fixture/harness/build_fixture.sh`; its output is committed, so no test needs wine (S1) |
+| `uedcli/tests/fixtures/UccCompMips.utx`     | ~9.5 KB assembled — 5,461 B P8 + 2,744 B DXT1 + 1,024 B palette (the spike's committed `fixture/` DIRECTORY is ~20 KB; that is not this file's size). Texture `SpikeFixture`, **our own artwork** — P8 mips built by `ucc make`, DXT1 blocks written by Pillow, container assembled by `pkgfixture`. No game content. Built once by `spikes/2026-07-26-ucc-texture-fixture/harness/build_fixture.sh`; its output is committed, so no test needs wine (S1) |
 | `uedcli/tests/test_utexture_layout.py`       | layout detection (S3) |
 | `uedcli/tests/test_utexture_blocks.py`       | BC1/BC2/BC3 vs the Pillow oracle (S4/S5) |
 | `uedcli/tests/test_utexture_corpus.py`       | the **offline** tier of the corpus sweep, over the two git-tracked corpora (S6) |
@@ -706,7 +709,7 @@ both units.
 | DX `System`+`Textures`(+`Maps`, which adds no textures)    |   232 |             5,018 |         39 | 39 / 39 |
 | whole DX tree (`drive_c/DX`, incl. LUM + the TNM mod)      | 1,154 |            33,262 |        207 | 207 / 207 |
 | `LUM/Textures` — **NOT in this repo** (integration-only; the row is the live install) |     6 |               418 |         30 | 30 / 30 |
-| `LUM/Textures` — as it sits on THIS machine                |     6 |               418 |         30 | 30 / 30 |
+| *(row removed 2026-07-26 — since the repo split there is no tracked LUM subset, so this row was byte-identical to the one above)* | | | | |
 | …of which `LUM_CoreTex.utx` alone (integration)            |     1 |               253 |     **30** | 30 / 30 |
 | `uned/UED22` (**fully tracked**)                           |    34 |             1,998 |          0 | — |
 | Unreal Gold install                                        |   268 |            10,742 |          0 | — |
@@ -758,7 +761,7 @@ texture has two. A test expectation that mixes the units cannot be met. Both are
 | corpus                                 | chains     | fitting exactly ONE layout | fitting >= 2 (need the tiebreak) |
 |----------------------------------------|------------|----------------------------|---|
 | DX (S+T+M)                             |      5,018 |                      3,656 | 1,362 |
-| `LUM/Textures` — **tracked only**      |        384 |                        382 | 2 |
+| `LUM/Textures` (integration-only since the repo split)      |        384 |                        382 | 2 |
 | `LUM/Textures` — this machine (6 pkgs) |        418 |                        416 | 2 |
 | `uned/UED22` (**fully tracked**)       |      1,998 |                        861 | 1,137 |
 | Unreal Gold                            |     10,742 |                      4,916 | 5,826 |
@@ -769,7 +772,7 @@ texture has two. A test expectation that mixes the units cannot be met. Both are
 | corpus                            | arrays (`Mips` + `CompMips`) | fitting exactly ONE | fitting >= 2 |
 |-----------------------------------|------------------------------|---------------------|---|
 | DX (S+T+M)                        |       5,057 (5,018 + **39**) |               3,695 | 1,362 |
-| `LUM/Textures` — **tracked only** |           414 (384 + **30**) |                 412 | 2 |
+| `LUM/Textures` (integration-only since the repo split) |           414 (384 + **30**) |                 412 | 2 |
 | `LUM/Textures` — this machine     |           448 (418 + **30**) |                 446 | 2 |
 | `uned/UED22`                      |               1,998 (+ **0**) |                 861 | 1,137 |
 | Unreal Gold                       |              10,742 (+ **0**) |               4,916 | 5,826 |
@@ -954,10 +957,10 @@ Lands the two test enablers:
   `dev/docs/spikes/2026-07-25-native-texture-formats/pkgfixture_proto.py` (§0e2). Drop its
   `sys.path` shim and its `main()` self-check; keep `texture_package()` and its keyword surface,
   which every offline Done-when below is written against.
-- **`uedcli/tests/fixtures/UccCompMips.utx`** — *(renamed 2026-07-26: the old name and its texture
+- **`uedcli/tests/fixtures/UccCompMips.utx`** — ~9.5 KB. *(renamed 2026-07-26: the old name and its texture
   name `ClenGreyWndow_C` were the REAL LUM package and texture, carried over from the retired lifted
   fixture. Naming our own artwork after game content is exactly the provenance confusion the owner's
-  ruling exists to end.)* A ~20 KB package whose single texture is `SpikeFixture`, and which is
+  ruling exists to end.)* A package whose single texture is `SpikeFixture`, and which is
   **OWNER RULING 2026-07-26 — the payload is OUR OWN ARTWORK, compressed by a THIRD-PARTY encoder.**
   Not lifted from game content (that is no longer in this repo and would be redistribution), and not
   round-tripped through our own compressor either. The independence D7's oracle needs comes from the
@@ -1016,6 +1019,14 @@ Lands the two test enablers:
   ending 8 B, `comp_format == 3`, body parse reaches EOF.
 - (offline) a `pkgfixture`-built synthetic `.utx` with `bHasComp` **false** consumes zero bytes after
   `Mips` and reaches EOF — i.e. `CompMips` is gated on the flag, not unconditionally present.
+- (offline) **the `CompMips`-selected gate — the criterion this slice's own text promises, which an
+  earlier draft omitted.** A `pkgfixture` texture whose `Mips` array is present but whose every mip is
+  **zero-length**, while `CompMips` carries DXT1 data, **MISSES — it must not decode.** Without the
+  gate the selection rule picks `CompMips`, `t.fmt` is still the `Mips` code (`0`, P8 implied) so the
+  surviving `fmt` gate passes, and `mip0_to_rgb` indexes the palette with DXT1 **block bytes**: a
+  fully-rendered wrong picture for the three slices until S4 — the plan's governing "never a wrong
+  pixel" invariant. At S1 the miss is a bare `None` (the typed union does not exist until S2); S4
+  replaces it with a real decode, and S4's array-selection Done-when builds the same fixture.
 - (offline) **the body-integrity report, asserted here and not in S3:** a `pkgfixture` body built with
   `mips=[(64, 64, b"")], trailing=b"\x01"*24` decodes **without raising**, returning
   `no_mip_data is True` and `trailing_bytes == 24`; the same body with **real pixel data** plus the
@@ -1398,7 +1409,8 @@ data.)
 - (integration) `DmRiot.unr:SolModifié`, `:Flotte` and `DMBeyondTheSun.unr:Uebergang3` — the three
   real single-mip ambiguous samples, and the only real ones with a stored code — each resolve via the
   code, `layout_source == "format-code"`, layout `bc16` → BC3.
-- *(MOVED TO S6 — the sweep module does not exist until S6, so this cannot be an S3 criterion.)*
+- *(MOVED TO S6 — the sweep module does not exist until S6, so this is not an S3 criterion. The
+  clause itself now lives in S6's Done-when; it is NOT repeated here.)*
   (integration) the whole sweep produces **zero** `ambiguous-layout` rows and **zero**
   `unrecognised-layout` rows, matching §2b's measurement that every ambiguous chain is resolved by a
   code naming a fitted candidate.
@@ -1645,8 +1657,14 @@ Cross-cutting only (per-slice docs already landed):
   ledger." Appending would be a rule violation as the build's final act, and every
   "recorded in `decisions.md` 2026-07-25 …" citation in §0c/§0d is now a dangling pointer
   (`rationale/MIGRATION.md` maps old entries to their new homes). Decisions now split by author:
-  - **the agent's** — the §5 mask-semantics call (index 0 from the data; `bMasked`/`bAlphaTexture`
-    reported, never applied), anything the implementation forces, and how the veto and
+  - **the §5 mask-semantics call is NOT the agent's and NOT re-asked — it is ALREADY RULED.**
+    *(Resolved 2026-07-26; §5, S7 and §5's parenthetical previously gave three incompatible
+    dispositions.)* `specs/2026-07-26-actor-preview-textured-faces.md` §4.3a records the owner's
+    ruling that **the CALLER ORs `bMasked` with the poly flag** (`masked = bool(flags & 0x2) or
+    decoded[ref].b_masked`), which is exactly §5-D: the decoder reports the flags and never applies
+    them. S7 **cites that ruling** and writes nothing to `rationale/` or `direction/` for it, and
+    §5 drops its "builder-decided" framing.
+  - **the agent's** — anything the implementation forces, and how the veto and
     `ambiguous-alpha` cases behaved in practice → the `rationale/` tree under a **new texture-decode
     topic** (created by this build, so not cited as a path until it exists), revised in place, each entry stating *Why it is this way* / *Rejected* / *Refs*.
   - **the owner's** — AD1/AD2 arbitration and the synthesized-fixture ruling → propose the exact text
@@ -1686,8 +1704,13 @@ Cross-cutting only (per-slice docs already landed):
   `dev/docs/spikes/2026-07-25-native-texture-formats/` — spikes are durable evidence, not scratch.
 
 **Done when:** no doc describes a P8-only decoder; **every doc that claims "any texture from any
-engine" also states the `ambiguous-alpha` limit** (a code-less BC2/BC3 does not decode, a code-less
-BC1 does); no board line calls this work untriaged or unplanned;
+engine" also states the `ambiguous-alpha` limit **WITH ITS SCOPE** — *a code-less BC2/BC3 whose chain
+fits `bc16` **uniquely** does not decode; a code-less BC1 whose chain fits `bc8` **uniquely** does;
+where the chain ALSO fits `linear1`, the implied `Format=0` decodes it as P8.* **Re-measured
+2026-07-26 over `uned/UED22`: of 1,137 ambiguous chains 1,089 are `{linear1, bc16}` and 48 are
+`{linear1, bc8}`**, so both unscoped halves are false — and this slice writes them into
+`unrealed/package-format.md` and proposes the `direction/` clause, where a wrong claim is expensive
+to undo); no board line calls this work untriaged or unplanned;
 `dev/docs/spikes/2026-07-25-native-texture-formats/01-texture-layout-census.md` exists and is cited
 from `unrealed/package-format.md`; the spec and plan are gone and the spike dir remains; `bin/test`
 green.
@@ -1702,7 +1725,7 @@ green.
 | The `Format`-code tiebreak is 46 % of the corpus, not an edge case | §2b sizes it; S3 makes it a first-class branch with tracked offline samples and a `layout_source` field |
 | Falling back to the `Format` code re-imports the portability problem D1 rejected | the fallback only ever breaks a tie between candidates the DATA already fitted, the source is recorded, and a code naming no fitted candidate errors rather than guessing |
 | The tiebreak silently runs on a code nobody wrote              | §0d measures it (a `Format` property is present on 11/18,176) and states plainly that an absent property IS the byte 0 by UE1's own rule; S3 tests the `code=None` path separately from the implied-0 path |
-| **A code-less foreign non-P8 file returns no pixels**          | §0d rule 1: a unique data fit decodes with the code unconsulted, so a code-less **BC1** file works. S3's veto pair asserts it (same chain, `fmt=None` decodes / `fmt=8` vetoed). The **known exception is BC2/BC3**, which is stated as a limit at the top of this plan rather than engineered away |
+| **A code-less foreign non-P8 file returns no pixels**          | §0d rule 1: a unique data fit decodes with the code unconsulted, so a code-less **BC1** file works **when its chain fits `bc8` uniquely** — 48 of `uned/UED22`'s ambiguous chains also fit `linear1` and decode as P8 instead. S3's veto pair asserts it (same chain, `fmt=None` decodes / `fmt=8` vetoed). The **known exception is BC2/BC3**, which is stated as a limit at the top of this plan rather than engineered away |
 | **A stored code naming an undecodable layout is ignored, and the file is drawn wrong** | 227 slot 8 is `TEXF_BC4`, an 8-byte-block format that fits `bc8` identically to BC1. §0d's veto + S3 row 2, ordered ahead of every fit branch, with the `fmt=8` half of S3's veto pair as its red test |
 | An **uncoded** `bc8` chain is really BC4, not BC1              | accepted and **recorded as an assumption** (§0d), sound because a real BC4 export must store `Format=8` (UE1 omits only class-default values) and the veto then catches it. A future BC4 sample is a test of the assumption |
 | §0d's four-slot code→layout map quietly becomes the format table D1 rejected | it is used only to break a tie among candidates the DATA fitted and to name the codes we cannot decode — never to size a chain. S6 pins the three enums, incl. that Deus Ex is *silent* on 6/7 rather than agreeing |
@@ -1714,7 +1737,7 @@ green.
 | **`<repo>/Textures/` DOES NOT EXIST in this repo** (verified 2026-07-26: `git ls-files Textures` is empty) — uedcli is its own repository now | §0a's count-stability rule: exact counts only over `uned/UED22` (under §0a's stated enumeration rule) + the fixtures we build; **everything over the LUM textures is integration-tier**, including the `LUM_CoreTex.utx` 30 → 0 clause. S6 has a Done-when a reviewer can check by reading the test source |
 | The corpus criterion for the live bug is deselected by default | the sweep is two-tier (S6); both reachable corpora run offline, and S1's 30 → 0 clause is offline |
 | No BC3 sample is committable (Epic content)                   | BC2/BC3 pixels are pinned against Pillow over synthesized blocks; the real samples are integration-only |
-| A synthesized fixture would only test our own encoder          | the container comes from the in-tree writer, but every **expected pixel** comes from Pillow or from a real lifted payload — never from running our decoder once |
+| A synthesized fixture would only test our own encoder          | the container comes from the in-tree writer, but every **expected pixel** comes from Pillow's encoder or from UCC's own P8 import — **never** a lifted game payload (§0a's owner ruling) and never from running our decoder once |
 | The old "≤ 1/255" agreement bound is unmeetable                | measured per texture and per mip (§2d); S4 uses ≤ 8/255 at **mip 0 only** (measured 2.831 on the current fixture). It separates *layout* errors by 14–35× but does **not** catch an index bit-offset bug (4.801, inside the bound) — hence S4's second byte-exact pin |
 | The ref-level misses have no typed case, leaving four committed tests with no expectation | S2 defines `unqualified-ref` / `unknown-package` / `package-unreadable` / `unknown-texture` here and re-points `test_utexture.py:95/:99/:105/:128` onto them; the asset catalog reuses them rather than inventing its own |
 | The evidence dies with the deleted spec — the spike dir holds only a `.py` | S6 lands `01-texture-layout-census.md` in the spike dir and S7's deletion is explicitly gated on it |
