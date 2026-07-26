@@ -552,6 +552,28 @@ are also theirs — do not touch them at all.**
 Every other doc under `dev/docs/`, including `rationale/` and `rules/`, an agent
 maintains on its own.
 
+
+### An owner DECISION is implemented as given — NEVER altered without an explicit yes
+
+This governs the decision itself, wherever it was made: in a spec, in chat, in a
+one-line answer. It is not limited to `direction/`.
+
+- **Implement the ruling as stated.** Do not add a guard, a filter, a clamp, a
+  fallback or a special case that changes what it does — not "in the spirit of"
+  it, not to satisfy a different requirement the owner also stated, not because
+  measurement shows it is wrong.
+- **Finding a real flaw does NOT authorise a fix.** Measure it, STOP, report the
+  evidence, and propose the change. Wait for the yes. A defect discovered
+  mid-build is a reason to ask, never a licence to decide.
+- **Telling them afterwards is NOT consent.** Flagging an unrequested change in
+  the report — "here is what I did and why" — is the violation, not the remedy.
+  The owner has to approve it *before* it is written.
+- **An unanswered question is not an answer.** When a decision is needed and no
+  ruling exists, ask again. Do not fill the gap with a default and label it a
+  judgement call.
+- **Same rule for reverting:** once told to drop an unapproved change, restore
+  exactly what was ruled — including its known costs — and pin those costs in a
+  test or doc so they are recorded rather than quietly re-fixed later.
 ### Documentation
 
 **Keep the user-facing docs current with the CLI — this is not optional.**
