@@ -1171,7 +1171,7 @@ today raises a bare `ValueError` out of the decoder.)*
   `test_resolve_caches_per_instance` (`:115`), whose `is first` object-identity assertion must still
   hold**: the merged seam caches and returns the *same* result object, not an equal rebuild.
 - (offline) the two test modules the first draft's map missed are migrated and green:
-  `test_actor_preview.py`'s `_FakeResolver` (`:352`) is rewritten onto the merged seam (it implements
+  `test_actor_preview.py`'s `_FakeResolver` (grep `class _FakeResolver`) is rewritten onto the merged seam (it implements
   `resolve_masked`/`exists` today and is fed 4-tuples at `:374`/`:463`), and its `:405` assertion on
   the literal `"not P8-decodable"` now asserts the **`unverified-format`** case name;
   `test_ingest_validation.py:70`'s `assert r.resolve("Weird.RGBA7Tex") is None` asserts the case
