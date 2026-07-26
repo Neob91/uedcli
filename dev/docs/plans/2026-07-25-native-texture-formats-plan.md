@@ -648,7 +648,7 @@ the wrong slice is how the "wrong pixel" invariant gets broken (see the `:390` r
 | file | what |
 |----------------------------------------------|---|
 | `uedcli/tests/pkgfixture.py`                 | test-only `.utx` builder — **promoted from the committed prototype** `dev/docs/spikes/2026-07-25-native-texture-formats/pkgfixture_proto.py`, not written from scratch (S1) |
-| `uedcli/tests/fixtures/LUM_CompMips.utx`     | ~10 KB, real payload lifted from the **tracked** `Textures/LUM_CoreTex.utx:ClenGreyWndow_C` (S1) |
+| `uedcli/tests/fixtures/LUM_CompMips.utx`     | ~20 KB, **our own artwork** — P8 mips built by `ucc make`, DXT1 blocks written by Pillow, container assembled by `pkgfixture`. No game content. Built once by `spikes/2026-07-26-ucc-texture-fixture/harness/build_fixture.sh`; its output is committed, so no test needs wine (S1) |
 | `uedcli/tests/test_utexture_layout.py`       | layout detection (S3) |
 | `uedcli/tests/test_utexture_blocks.py`       | BC1/BC2/BC3 vs the Pillow oracle (S4/S5) |
 | `uedcli/tests/test_utexture_corpus.py`       | the **offline** tier of the corpus sweep, over the two git-tracked corpora (S6) |
@@ -922,6 +922,33 @@ Lands the two test enablers:
   - build its P8 mip chain ourselves — that half is not the thing under test;
   - compress the same image to DXT1 with a **named, pinned, third-party encoder**, and commit the
     resulting blocks as the `CompMips` payload.
+
+  **RESOLVED, MEASURED, by spike [`2026-07-26-ucc-texture-fixture`](../spikes/2026-07-26-ucc-texture-fixture/findings.md)
+  (2026-07-26)** — this is no longer a call left to build time:
+
+  - **The P8 half is built by `ucc make`** (`#exec TEXTURE IMPORT … MIPS=ON`), which builds the whole
+    7-mip chain itself. uedcli's decode of it is **byte-exact (0.000/255)** against the imported
+    artwork, pinned by `test_engine_facts.test_ucc_builds_a_p8_mip_chain_that_decodes_byte_exactly`.
+  - **The DXT1 half is written by Pillow** (`format="DDS", pixel_format="DXT1"`, verified on 12.3.0 —
+    already the repo's only runtime dep, so no new dependency and nothing to install). **UCC cannot
+    produce it:** this toolchain has no DDS importer (`Bad image format for texture import`), and
+    `ucc mergedxt` — which is how a package acquires `CompMips`, and which asserts
+    `CompFormat==TEXF_DXT1` — needs a DXT1 source package it therefore cannot build.
+  - **The artwork is tuned, and the tuning is load-bearing:** features must sit well above DXT1's 4×4
+    block size. A 4-pixel checker (exactly the block size) puts a **correct** decode at
+    **13.043/255**, above this plan's own pass mark; the chosen gradient-plus-16px-quadrant image puts
+    it at **2.831/255**.
+
+  **S4's bound stays ≤ 8/255, but its measured value changes to 2.831** (not the 1.98 measured on the
+  retired lifted fixture) — update that clause.
+
+  **And S4's "~10× discrimination" claim is REFUTED; it must be corrected and a second pin added.**
+  Measured against the new fixture: a colour-endianness swap scores **98.0 (34.6×)** and a c0/c1
+  endpoint swap **40.7 (14.4×)**, but an **index bit-offset off by one scores 4.801 (1.70×), which
+  PASSES ≤ 8/255**. The ratio held at 1.3–1.7× across every artwork tried, because shifted index bits
+  still select from the same four per-block colours, so the error stays bounded by intra-block
+  variation. **S4 therefore needs a SECOND, byte-exact pin for index decoding**, and the tolerance
+  check must be described as covering layout/endpoint errors only — not "the decode is correct".
 
   S4's cross-check (decode our `CompMips` with the new BC1 code, compare against the P8 chain, mean
   absolute channel error ≤ 8/255) then still tests **our decoder against someone else's compressor**,
