@@ -5,6 +5,36 @@ lands here first, with no obligation to know its stage yet. This is the *pre-pip
 stage (so no `to-` prefix). See [`README.md`](README.md).
 
 **Triage** routes each item to where its next action lives:
+- `p1` `[OWNER — confirm]` **`level doctor`'s scope boundary — proposed `direction/trunk-and-editor.md`
+  addition.** Ruled 2026-07-26 and already written into `docs/usage.md`, `architecture.md` and
+  `cli.py`'s `help=`; needs a durable home in the owner's own tree. That topic already says the
+  "is this trunk well-formed?" lint *"folds into `level doctor`"*, which is where the bound belongs.
+  Proposed text (verbatim, awaiting a yes):
+
+  > **`level doctor` is bounded by INTENT-INDEPENDENCE.** It reports only defects that are wrong
+  > *regardless of what the author intended*: the math and geometry that breaks or burdens the BSP,
+  > zoning of the same kind, and objectively-wrong footguns — an `Event` matching no `Tag` fires into
+  > the void, a light buried in solid geometry lights nothing. It does **not** judge gameplay or style.
+  > **Passage/occlusion checking is rejected, not deferred:** doctor can measure the free gap between
+  > two brushes but cannot tell a deliberately sealed wall from an accidentally blocked doorway,
+  > because the two are identical geometry and differ only in intent. Whether a space is comfortable,
+  > whether a decoration is well seated, whether the level is detailed or good — all need eyes on
+  > renders, from a human or an independent reviewing agent. A clean `doctor` report is not a quality
+  > report, and no better heuristic changes that.
+
+- `p2` `[implement]` **Two IN-SCOPE `doctor` checks are not implemented.** Both fall inside the
+  intent-independence bound ruled 2026-07-26, and both were named by the owner as things doctor should
+  catch:
+  (a) **a light buried inside solid geometry** — it lights nothing; the DiveBar polish pass found
+  **five of 40 lights** strictly inside solid brushes (two inside their own door mover, one in a
+  structural column, two in a floor dais), whose visible symptom was pure-black doors and an unlit
+  cellar, and point-in-brush-bbox over `Engine.Light` found all five in seconds
+  (`spikes/levelbuild-friction/agent-reports.md`);
+  (b) **an `Event` matching no actor's `Tag`** — this already EXISTS as `eventgraph.py`'s
+  `dangling_event` (`eventgraph.py:223`, *"fires into the void"*) but is surfaced only by
+  `event graph`, so a `doctor` run misses it. Decide whether doctor absorbs the eventgraph lint or
+  calls it; `doctor.CATEGORIES` is currently `degenerate,watertight,convex,planar,solidity,csg_order,
+  scale` with no reference-integrity category at all. *(2026-07-26.)*
 - `p1` `[spec]` **`class list`/`--subclass-of` enumerates classes from packages with NO loadable v69
   stub, and two package views disagree.** Deliberately left out of the 2026-07-26 unified-asset-catalog
   spec revision (owner's call) — recorded here because it is real and the spec now says so in §14.
@@ -130,7 +160,8 @@ stage (so no `to-` prefix). See [`README.md`](README.md).
   per-package primitives over compositions, marshal over JSON, the frozen-golden version guard);
   the intersect `BUILDER_PAD`/seed-subtract findings; the actor-name resolution implementation
   (case-fold the dict key, per-callsite try/except); the `root_outside` CSG detail. `rationale/`
-  currently holds only `cli.md`, `README.md`, `MIGRATION.md`. *(Multiple drafters, 2026-07-26.)*
+  currently holds only `cli.md`, `emit.md`, `README.md`, `MIGRATION.md`. *(Multiple drafters,
+  2026-07-26.)*
 
 - **[OWNER — review] p1 DOCS RESTRUCTURE IS COMPLETE — one issue, everything that needs your eye.**
   Thirteen `direction/<topic>.md` docs + `rationale/` now replace `direction.md` and the frozen
@@ -2801,7 +2832,11 @@ The posing rewrite landed (POS@ROT → auto-frame; decision 2026-07-12); these a
     unrelated reasons — `levelbuild-friction` §1 (engine-stamped `Base` missing from
     `normalize.COMPUTED_PROPS`; "the single most costly defect of the run. Deterministic, not flaky")
     and `headless-materialize` §11 (a `basement` GEOMETRY line-shift). SP-F.5 would report a design
-    failure that is actually one of these.
+    failure that is actually one of these. **The second of the two is FIXED (2026-07-26)** — it was
+    not a false positive but a real emit defect: uedcli wrote `Pan U=0 V=0`, which the editor never
+    writes back, so the two brush texts differed. `emit_polygon` no longer writes a zero pan
+    (`rationale/emit.md`, `unrealed/t3d.md` "A poly sub-field has NO class default"). Only the
+    `levelbuild-friction` §1 `Base` blocker remains against this criterion.
   - Insufficient: a **runt/unlit** map is not a "failure" by a 0/N pass-rate criterion. `friction`
     §1b documents a `--no-verify` build writing 23,126 bytes instead of 191,332 and printing success,
     and the H3 compare **structurally cannot** catch it because lighting is regenerable build output
@@ -3263,11 +3298,18 @@ throwaway compare view. My repro predated the fix.)_
   `origin`, `texture_u`, `texture_v` for the Rust CSG core and **never passes `poly.pan`**;
   `uedcli-native/src/fpoly.rs`'s `FPoly` has no pan field at all, so nothing downstream could
   consume it. A face with an authored `Pan U=16 V=8` would therefore build with its texture
-  unpanned. Not shipped today — `level materialize` has no `--native` flag (`--help`, checked
-  2026-07-26), so the path is unreachable from the CLI, and `unrealed/t3d.md` already lists
-  `native/materialize.py` as not-yet-wired; `architecture.md`'s `preview --native` paragraph
-  independently records "Pan doesn't survive the build", which is the same gap seen from the preview
-  side (preview works around it by computing UV from the AUTHORED poly rather than the built surf).
+  unpanned. **The module is NOT dead code** — `brushcsg.merge` imports `_build_brush_input` and
+  calls it per brush (imported at `uedcli/brushcsg.py:212`, called at 215-216), reached from
+  `dispatch.py:1257` for
+  `brush intersect`/`deintersect`. What keeps that harmless is a SECOND mechanism, not the path being
+  cold: `brushcsg.py:229` re-attaches `pan` onto each result face from the SOURCE poly it was cut
+  from, so the pan lost on the way into the CSG core is put back on the way out. A refactor that
+  dropped that re-attach would silently unpan every intersect/deintersect result. What IS unreachable
+  is the whole-map `.dx` writer in that module: `level materialize` has no `--native` flag (`--help`,
+  checked 2026-07-26), and `unrealed/t3d.md` lists `native/materialize.py` as not-yet-wired.
+  `architecture.md`'s `preview --native` paragraph independently records "Pan doesn't survive the
+  build", which is the same gap seen from the preview side (preview works around it by computing UV
+  from the AUTHORED poly rather than the built surf).
   What to do: decide whether the Rust `FPoly` carries pan (the editor bakes it into the surf's base
   point) or whether the Python side folds pan into `origin` before handing geometry over — then pin
   it with a differential test against the editor-built `.dx`, since a silently unpanned surface is

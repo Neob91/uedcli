@@ -813,7 +813,18 @@ named `label` deliberately, since `tag` would collide with `Engine.Actor.Tag`. S
     rotation being unrenderable headless — spike 2026-07-12. `unrealed/rendering.md` still
     documents the editor-render mechanics for other drivers.)*
   - `level doctor [--json] [--severity …] [--category …] [--tree KIND/NAME]` — **static, offline**
-    BSP/geometry lint (`doctor.py`; no editor). Reads the box via the `LevelSource` seam — the
+    BSP/geometry lint (`doctor.py`; no editor).
+    **SCOPE IS BOUNDED BY INTENT-INDEPENDENCE, and the boundary is permanent** *(owner ruling
+    2026-07-26; `docs/usage.md` "What `level doctor` WILL and WILL NOT find" states it user-facing)*:
+    `doctor` reports only defects that are wrong **regardless of what the author intended** — the
+    math/geometry that breaks or burdens the BSP, zoning of the same kind, and objectively-wrong
+    footguns (an `Event` matching no `Tag`; a light buried in solid geometry). It does **NOT** judge
+    gameplay or style, and **passage/occlusion checking is explicitly rejected, not deferred**: doctor
+    can measure the free gap between two brushes but cannot distinguish a deliberately sealed wall from
+    an accidentally blocked doorway, because the two are identical geometry and differ only in intent.
+    Anything needing that guess belongs to a human or an independent reviewing agent looking at renders
+    — see `spikes/levelbuild-friction/owner-reports.md`. Do not add a check here that infers what a
+    space is *for*. Reads the box via the `LevelSource` seam — the
     ambient `$UEDCLI_LEVEL` by default, or a `--tree level|stash|prefab` box (decisions 2026-07-19 / 2026-07-20;
     it names the box via the source's uniform `display_name`, and a box's empty `_ranks` yields no
     duplicate-order finding) — and reports the *single-brush-decidable* hole

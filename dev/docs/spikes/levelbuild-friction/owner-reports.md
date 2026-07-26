@@ -58,8 +58,9 @@ box are cited in `agent-reports.md`. So the facts were available and the results
 Two plausible contributors, both checkable: an agent sizes an opening to the player's *collision box*
 rather than to a comfortable clearance, and nothing measures a built passage afterwards.
 
-**Suggested fix:** this is the same measurement `level doctor` would need for finding 3 — a free
-cross-section through every passage. A minimum-clearance report turns "feels cramped" into a number.
+**Suggested fix:** NOT a `level doctor` check — see finding 3 for why (owner ruling: doctor cannot
+know what a space is *meant to be*). This belongs to an independent reviewing agent, or to the level
+brief stating target clearances up front so the number is chosen before the geometry is cut.
 
 ## 3. Geometry overlaps entrances, making them hard to pass
 
@@ -76,11 +77,23 @@ renders and hand-deriving arc geometry in Python — *"the better part of an hou
 were invisible in the wireframe preview because `actor preview` draws brush outlines with no notion of
 solid-vs-void.
 
-**Suggested fix:** a `level doctor` `occlusion` category — for every additive/semisolid brush
-intersecting a subtracted volume, report the minimum free width/height through that volume, flagging
-anything below the player's standing box and any lip taller than `MaxStepHeight` across a passage
-floor. Purely offline and statically decidable. `agent-reports.md` calls it *"the single highest-value
-check that could have been run on this level."*
+**Suggested fix — and an explicit REJECTION of the obvious one.** `agent-reports.md` proposes a
+`level doctor` `occlusion` category (and calls it *"the single highest-value check that could have been
+run on this level"*), and an earlier draft of this entry endorsed it. **The owner has ruled it OUT of
+`doctor`, permanently** *(2026-07-26)*, and the rationale is decisive rather than a matter of cost:
+
+> `doctor` has no way of knowing whether something **is meant to be a passage**.
+
+A sealed wall and an accidentally-blocked doorway are the *same geometry*; they differ only in authorial
+intent, which is not in the trunk. A check that flags one necessarily flags the other, so it would either
+cry wolf on every deliberate wall or need a heuristic guess at what each void is for. That is the general
+boundary now recorded in `docs/usage.md` and `architecture.md`: **doctor reports only what is wrong
+regardless of intent.** This is a rejection, not a deferral — do not revisit it with better heuristics.
+
+So this finding is real and remains unaddressed *by design*. It belongs to **an independent reviewing
+agent reading `--game` renders** (open question 1), which is exactly the case for having one: two of the
+four TubePlatform cases were invisible in the wireframe preview, so the reviewer must look at game
+renders, not schematics.
 
 ## 4. Texture alignment is off
 
@@ -166,8 +179,10 @@ mounted on the wall**.
   `class show` reporting bbox/collision/`PrePivot` is specced but **not built**.
 
 **Suggested fix:** `--about center|origin|X,Y,Z` on `actor rotate` (small, and named in the friction
-log), plus the already-specced class placement facts. Both are cheaper than the renders needed to
-catch these by eye.
+log), plus the already-specced class placement facts. Both are cheaper than the renders needed to catch
+these by eye. Note *detecting* a badly-seated decoration is NOT a `doctor` job — whether a button belongs
+on that wall is intent — but giving the builder the origin/bbox facts up front prevents it at authoring
+time, which is the better fix anyway.
 
 ## 8. Missing trim plates and fine detail
 
@@ -202,9 +217,23 @@ blocked — skews toward missing verbs and false-success defects. **Both are nee
 report a level that came out ugly while every command it ran succeeded.
 
 **The recurring shape is: nothing measures the finished level against how a human plays it.** Passage
-clearance (2, 3), decoration seating (7), surface legibility (4) are all statically decidable from the
-trunk, and none is checked. `level doctor` is the natural owner and reported *"no issues found"* on a
-level with four blocked doorways.
+clearance (2, 3), decoration seating (7) and surface legibility (4) all went unreported, and
+`level doctor` said *"no issues found"* on a level with four blocked doorways.
+
+**But `doctor` is NOT the owner of that gap, and saying so is the point of this section.** Owner ruling,
+2026-07-26: doctor reports only defects that are wrong *regardless of authorial intent*, because it
+cannot know what a space is meant to be — a sealed wall and a blocked doorway are identical geometry.
+Two of these findings therefore split cleanly:
+
+- **Doctor's job** (intent-independent, objectively wrong): a light buried in solid geometry lights
+  nothing; an `Event` matching no `Tag` fires into the void. Both are still unimplemented — the second
+  already exists in `eventgraph.py` as `dangling_event` but is surfaced only by `event graph`.
+- **NOT doctor's job** (needs intent): passage clearance and occlusion (2, 3), decoration seating (7),
+  trim and finish (8). These need eyes on `--game` renders.
+
+So the honest conclusion is the opposite of "add more doctor checks": **the missing thing is an
+independent reviewer**, and doctor's scope boundary is what makes that unavoidable rather than optional.
+See `docs/usage.md` "What `level doctor` WILL and WILL NOT find".
 
 ## Open questions
 

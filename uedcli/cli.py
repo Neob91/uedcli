@@ -1335,8 +1335,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     ldoc = lsub.add_parser(
         "doctor",
-        help="detect BSP/geometry issues (holes, solidity, CSG order) — "
-             "static, offline, no editor")
+        help="detect MECHANICAL defects — BSP/geometry (holes, solidity, CSG order), zoning, and "
+             "objectively-wrong footguns — static, offline, no editor. Does NOT judge gameplay or "
+             "style: a clean report says nothing about whether the level is passable, well placed, "
+             "detailed or good")
     ldoc.add_argument("--json", action="store_true",
                       help="emit findings as JSON instead of the text report")
     ldoc.add_argument("--severity", choices=["info", "warn", "error"], default=None,
