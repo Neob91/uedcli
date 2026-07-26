@@ -47,28 +47,49 @@ destroys authored work and cannot be corrected without an explicit migration.
    **pixels only** — the ruling is not reopened — and `bAlphaTexture` joins `facts` beside `masked`, same
    read rule (stored tag else resolved class default), same cost, and filterable. The twins remain one
    identity; they become *distinguishable*. See "Facts this arm reports".
-3. **RULED 2026-07-26 — classification CARRIES FORWARD by `Package.Name`, automatically.** *(Owner: "should
-   accept `Package.Name` — nobody's gonna know the refs, they're internal. The classification should be
-   pulled from the last version for that `package.name` texture.")*
+3. **RULED 2026-07-26 — DETECT the recoverable state; reassign MANUALLY with a ref-taking verb.**
+   *(Owner ruling. An earlier draft of this entry had adoption happen automatically on indexing — that is
+   **wrong** and is corrected here: nothing is carried forward without being asked for.)*
 
-   When indexing produces a **new identity** for a ref that an **outdated shard** already names, the new
-   identity **adopts** that shard's classification rather than reading as unclassified. So retouching
-   `LUM_CoreTex.SomeWall` keeps its tags and description; nothing is retyped and `prune --outdated` no
-   longer destroys accurate work.
+   The problem: this project edits its own `LUM_CoreTex.utx`. A retouch changes the pixels, so the ref
+   resolves to a **new identity** that reads unclassified, while the previous version's classification
+   survives as an outdated shard — and `classify prune --outdated` would delete a description that is still
+   perfectly accurate. Two halves to the fix:
 
-   - **The user-facing key is the REF, never the digest.** Any verb that addresses a classification takes
-     `Package.Name`; a sha256 is internal and must never be something a person types. That includes the
-     manual form, `classify reassign <ref>`, for the case where automatic adoption did not fire.
-   - **This makes the write-once `ref` load-bearing for carry-forward, not just for labelling outdated
-     entries** — state that where the field is defined, because it changes why it exists.
-   - **Adoption is RECORDED, not silent.** An adopted classification is marked (e.g.
-     `adopted_from: <old-identity>`) and `classify status` counts it, because the pixels genuinely changed
-     and the description may now be wrong — repaint a wall green and "brown rusted panel" carries forward
-     with it. **OPEN, small:** decide whether adopted entries also surface in a `--needs-review` listing.
-     Do not make adoption invisible.
-   - Ambiguity rule needed: if two outdated shards name the same ref (edited twice), adopt the **most
-     recent** and say so. If a ref resolves to an identity that is *already* classified, adoption does not
-     fire — the existing classification wins.
+   - **Detection — a DERIVED state, not a stored flag.** A ref is **`stale-classified`** when its *current*
+     identity has no classification **and** an outdated shard names that ref. It is computed by joining the
+     two, never written down: `direction/asset-catalog.md` is explicit that "there are **no**
+     `stale`/`removed`/`changed` flags to maintain — change is a derived query, not stored state", and this
+     obeys that. Surfaced by `classify status` (its own count, so the number is visible without asking) and
+     filterable as **`texture list --stale-classified`**, which prints the refs one per line like any other
+     listing.
+   - **Action — `classify reassign <ref>… | -`**, explicit and manual. It carries the outdated shard's
+     classification onto the ref's current identity. **It takes `Package.Name`, never a digest** — a sha256
+     is internal and must never be something a person types *(owner: "nobody's gonna know the refs, they're
+     internal")*. Taking `-` makes the whole loop compose:
+     `texture list --stale-classified | texture classify reassign -`.
+
+   **Why manual is the right default, beyond the owner's call:** the pixels genuinely changed. Repaint a
+   wall green and "brown rusted panel" is now wrong — carrying that forward silently would have the tool
+   assert a meaning it cannot check, which §0 forbids. Detection makes the *opportunity* visible; a human or
+   the LLM decides whether the old description still describes the new image. That is the same division of
+   labour as the rest of the catalog.
+
+   **Rules the verb needs:**
+   - **Two outdated shards name one ref** (edited twice): **exit 2** naming both candidates rather than
+     guessing, with `--from <identity>` to disambiguate. No silent "most recent wins".
+   - **The ref's current identity is already classified:** exit 2 — reassigning would overwrite authored
+     work, and `direction/safety.md` never clobbers silently. `classify set --replace` is the deliberate
+     path if that is really wanted.
+   - **After a successful reassign the source shard is gone** (moved, not copied), so the ref stops being
+     `stale-classified` and `prune --outdated` has nothing left to destroy for it.
+   - **`prune --outdated` must refuse to delete a shard that is currently reassignable**, or at minimum
+     require an explicit flag to do so. Otherwise the destructive verb still races the detection this
+     ruling exists to provide. **This is the interlock that makes the whole thing safe — do not omit it.**
+
+   This also makes the **write-once `ref` load-bearing for recovery**, not merely for labelling dead
+   entries — state that where the field is defined, because it changes why the field exists.
+
 4. **Procedural class routing and the out-of-table case.** The declared property table must match **by
    descent, not exact class name** — `TNMScriptedTexture` (a mod-defined `ScriptedTexture` subclass, 4
    exports) already exists on this install. An out-of-table pixel-less class currently falls through to a
@@ -452,6 +473,14 @@ under `uned/`; the two committed `.utx` live in `uedcli/tests/fixtures/`.
   the case that distinguishes the correct default-relative rule from "absent means false"; (iii) `--masked`
   filters and `masked` is not part of identity. **Case (ii) needs the synthetic `.utx`/`.u` pair** — every
   offline candidate class defaults `False`, so without it the wrong rule ships green.
+- **Stale-classified detection + reassign:** editing a fixture texture's pixels makes its ref report
+  `stale-classified` (derived, with **no** stored flag anywhere) and appear in
+  `list --stale-classified`, while its current identity reads unclassified; `classify reassign <ref>` moves
+  the classification onto the new identity, after which the ref is no longer `stale-classified` and the
+  source shard is gone; **`reassign` accepts `Package.Name` and a piped `-`, never a digest**; two candidate
+  shards → exit 2 naming both unless `--from`; an already-classified current identity → exit 2;
+  **`prune --outdated` refuses to delete a reassignable shard**; `classify status` counts the
+  stale-classified refs.
 - **Procedural (§3c):** the parameter-hash golden per declared class; the routing rule; the out-of-table
   fallback (whatever decision 4 settles); `ScriptedTexture` name-key and `preview_state: scripted`;
   batch-skip vs single-ref exit 2.
