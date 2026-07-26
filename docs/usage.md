@@ -211,6 +211,15 @@ box at its Location. Default prints four labeled `min`/`max`/`size`/`center` lin
 min|max|size|center` prints just that one bare `x,y,z` vector; `--json` emits `{min,max,size,center}`
 each `{x,y,z}`. The count summary goes to stderr.
 
+The reported numbers are **tolerance-snapped** (the emitter's `CLEAN_EPS` = 0.001): UE1's rotator
+table is not exact — a 180° yaw carries `sin = 8.74e-08`, so a ±64 vertex offset leaks ~6e-06 into the
+cross axis and a brush sitting exactly on `Y=228` would otherwise report `227.999994`. That reads as
+"off-grid" for geometry whose trunk is exact, so it snaps. A **genuine** fraction (a 2.5-uu semisolid,
+an odd-span center) is preserved — the snap only fires inside the tolerance band. The snap is confined
+to this report: `doctor`, the CSG core and the preview cameras still see the raw values, because a
+cleaned coordinate feeding a geometric *decision* would mask the faults those tolerances exist to
+catch.
+
 ## Brush surfaces & geometry
 
 | Command | What it does |
@@ -427,7 +436,10 @@ rotated brush** (the PolyList stays local; the engine applies `Rotation` at CSG 
 **relative** rotation in **unreal rotation units** (16384 = 90°) `PITCH,YAW,ROLL` (negatives allowed);
 `--to` sets the field **absolutely in
 place** (Location never moves; excludes `--pivot`). The pivot is `--pivot X,Y,Z`, or
-`--pivot-actor NAME`'s Location, or (default) the targets' grid-aligned center.
+`--pivot-actor NAME`'s Location, or (default) the most grid-aligned of the selection's **bbox center**
+and its vertices/Locations — the center wins ties, so a symmetric selection turns **in place** instead
+of swinging about a corner. A vertex that is *strictly* more grid-aligned than the center still wins,
+which is what keeps rotated geometry on the power-of-two grid.
 A zero result is **written out** (`Rotation=(Pitch=0,Yaw=0,Roll=0)`), not omitted: an actor with no
 `Rotation` property takes its *class* default, which is not zero for every class, so
 `--to 0,0,0` really does mean "unrotated" only when the rotator is there to say so.
@@ -435,7 +447,9 @@ A zero result is **written out** (`Rotation=(Pitch=0,Yaw=0,Roll=0)`), not omitte
 **`brush scale`** (renamed from `actor scale` 2026-07-20 — MainScale is a brush-family property; a
 mesh uses `DrawScale`) sets MainScale on BRUSH actors — `--to` absolute in place, `--by` a per-axis
 factor that also orbits each Location about the pivot (`Loc' = P + S·(Loc−P)`). A negative axis
-mirrors; there is no separate `mirror` verb (`mirror` = `brush scale --by -1,1,1`). A point actor is
+mirrors; there is no separate `mirror` verb (`mirror` = `brush scale --by -1,1,1`). It shares
+`actor rotate`'s default pivot, so a symmetric brush mirrors **about its own center** — in place,
+rather than reflecting across a corner and landing a full width away. A point actor is
 rejected.
 
 **`brush apply-transform`** (renamed from `actor apply-transform`) bakes MainScale + Rotation +

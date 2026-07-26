@@ -445,9 +445,10 @@ def _v2(c: Decimal) -> int:
 
 
 def best_grid_pivot(actors):
-    """The selection's most grid-aligned candidate point (spec): brush WORLD vertices + point-actor
-    Locations, scored by min-over-XYZ 2-adic valuation; max wins, ties → nearest bbox centre, then
-    lexicographic. Fallback (all fractional) → bbox centre snapped to the nearest integer."""
+    """The selection's most grid-aligned candidate point (spec): the bbox CENTRE + brush WORLD
+    vertices + point-actor Locations, scored by min-over-XYZ 2-adic valuation; max wins, ties →
+    nearest bbox centre (so the centre wins every tie it is in), then lexicographic. Fallback (all
+    fractional) → bbox centre snapped to the nearest integer."""
     pts: list[tuple[Decimal, Decimal, Decimal]] = []
     for a in actors:
         if a.brush is not None:
@@ -462,6 +463,13 @@ def best_grid_pivot(actors):
         return (Decimal(0), Decimal(0), Decimal(0))
     xs = [float(p[0]) for p in pts]; ys = [float(p[1]) for p in pts]; zs = [float(p[2]) for p in pts]
     cx, cy, cz = (min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2, (min(zs) + max(zs)) / 2
+    # The bbox CENTRE is a candidate too, and being at dist 0 it wins every align tie it is in.
+    # Without it a SYMMETRIC selection — a sign, a panel, any box — ties on align across all its
+    # vertices (the tie is total: equal align, and every corner equidistant from the centre), falls
+    # through to the lexicographic tiebreak, and pivots about the MIN CORNER, swinging the actor a
+    # full width sideways. Align still dominates: a fractional centre scores _v2 = -1 and a
+    # less-aligned one loses to a more-aligned vertex, so the on-grid guarantee is unchanged.
+    pts.append((Decimal(str(round(cx, 6))), Decimal(str(round(cy, 6))), Decimal(str(round(cz, 6)))))
 
     def score(p):
         align = min(_v2(p[0]), _v2(p[1]), _v2(p[2]))

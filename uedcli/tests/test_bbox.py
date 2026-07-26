@@ -117,6 +117,37 @@ def test_bbox_honours_rotation(tmp_path, monkeypatch, capsys):
     assert doc["size"]["z"] == pytest.approx(32, abs=0.05)     # unchanged by a yaw
 
 
+def test_bbox_snaps_gmath_rotator_noise_to_the_grid(tmp_path, monkeypatch, capsys):
+    """UE1's GMath table gives sin(180°) = 8.74e-08, not 0, so a ±64 vertex offset leaks ~6e-06 into
+    the cross axis: a box sitting exactly on Y=228 used to report `min 992,225.999994,48`. The trunk
+    is exact (whole-number Location and vertices) and the noise is three orders below doctor.WELD, so
+    the REPORTED box snaps it through emit.clean rather than printing off-grid-looking numbers for
+    on-grid geometry."""
+    a = make_brush_actor("Sheet", cube(128, 4, 128), location=(1056.0, 228.0, 112.0))
+    a.props.insert(0, ("Rotation", "(Pitch=0,Yaw=32768,Roll=0)"))   # 32768 UU = 180°
+    proj = _project(tmp_path, monkeypatch, [a])
+    rc = dispatch.dispatch(_ns(proj, ["Sheet"]))
+    assert rc == 0
+    lines = capsys.readouterr().out.splitlines()
+    assert lines[0] == "min    992,226,48"
+    assert lines[1] == "max    1120,230,176"
+    assert lines[2] == "size   128,4,128"
+    assert lines[3] == "center 1056,228,112"
+
+
+def test_bbox_snap_preserves_a_genuine_fraction(tmp_path, monkeypatch, capsys):
+    """`clean` snaps only INSIDE the tolerance band, so a real half-unit extent still prints — the
+    snap must not degrade into a blanket round(), which would erase authored fractional geometry."""
+    a = make_brush_actor("Odd", cube(5, 5, 5), location=(0.0, 0.0, 0.0))
+    proj = _project(tmp_path, monkeypatch, [a])
+    rc = dispatch.dispatch(_ns(proj, ["Odd"]))
+    assert rc == 0
+    lines = capsys.readouterr().out.splitlines()
+    assert lines[0] == "min    -2.5,-2.5,-2.5"
+    assert lines[1] == "max    2.5,2.5,2.5"
+    assert lines[2] == "size   5,5,5"
+
+
 # ── stdin `-` name list ──────────────────────────────────────────────────────────────────────
 
 def test_bbox_reads_names_from_stdin(tmp_path, capsys, monkeypatch):

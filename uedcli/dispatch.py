@@ -2234,12 +2234,26 @@ def _bbox_of(actors):
     """Compute the world AABB enclosing `actors` as Decimal (lo, hi, size, center). Reuses
     `writes.union_bounds` → `writes.actor_bounds`, which honours the full actor transform
     (`Location + PostScale·R·MainScale·(v − PrePivot)`, the same math as `rotation.world_vertices`)
-    and treats a point actor as a zero-size box at its Location."""
+    and treats a point actor as a zero-size box at its Location.
+
+    Derived coordinates are TOLERANCE-SNAPPED for reporting (`emit.clean`, CLEAN_EPS = 0.001), the
+    same rule the emitter applies to authored ones. UE1's GMath rotator table is not exact — a 180°
+    yaw carries `sin = 8.74e-08`, so a ±64 vertex offset leaks ~6e-06 into the cross axis and a brush
+    sitting exactly on `Y=228` reports `227.999994`. That is noise three orders below the weld grid
+    (`doctor.WELD` = 1e-3) and it reads as "the rotate pushed my geometry off-grid" when the trunk is
+    in fact exact. A genuine fraction — a 2.5-uu semisolid, an odd-span centre — is still preserved
+    at 6-dp, because `clean` only snaps inside the tolerance band.
+
+    The snap is confined to THIS reporting path on purpose: `writes.union_bounds` itself stays raw,
+    because `doctor`, the CSG core and the preview cameras must decide on the real numbers. Cleaning
+    a value that feeds a geometric decision would mask the faults those tolerances exist to catch.
+    """
+    from . import emit
     lo, hi = writes.union_bounds(actors)
-    lo = tuple(Decimal(str(c)) for c in lo)
-    hi = tuple(Decimal(str(c)) for c in hi)
-    size = tuple(hi[i] - lo[i] for i in range(3))
-    center = tuple((hi[i] + lo[i]) / 2 for i in range(3))
+    lo = tuple(emit.clean(c) for c in lo)
+    hi = tuple(emit.clean(c) for c in hi)
+    size = tuple(emit.clean(hi[i] - lo[i]) for i in range(3))
+    center = tuple(emit.clean((hi[i] + lo[i]) / 2) for i in range(3))
     return lo, hi, size, center
 
 
@@ -4250,8 +4264,8 @@ def _dispatch(args) -> int:
                 validate_brush(actor.brush)     # rigid → local geometry still valid
         for name in names:                               # PRODUCER: rotated names to stdout (feed `| verb -`)
             print(name)
-        print(f"rotated {len(targets)} actor(s) about {tuple(str(c) for c in pivot)}",
-              file=sys.stderr)
+        print(f"rotated {len(targets)} actor(s) about "
+              f"{','.join(_fmt_coord_component(c) for c in pivot)}", file=sys.stderr)
         src.save(verb="rotate",
                         args={"names": names, "by": [str(c) for c in args.by],
                               "pivot": [str(c) for c in pivot]},
@@ -4359,8 +4373,8 @@ def _dispatch(args) -> int:
                 validate_brush(actor.brush)
         for name in names:                               # PRODUCER: scaled names to stdout (feed `| verb -`)
             print(name)
-        print(f"scaled {len(targets)} actor(s) about {tuple(str(c) for c in pivot)}",
-              file=sys.stderr)
+        print(f"scaled {len(targets)} actor(s) about "
+              f"{','.join(_fmt_coord_component(c) for c in pivot)}", file=sys.stderr)
         src.save(verb="scale",
                  args={"names": names, "by": [str(c) for c in args.by],
                        "pivot": [str(c) for c in pivot]},
