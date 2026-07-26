@@ -13,6 +13,31 @@ When a plan here is built, delete its entry ([`done.md`](done.md) keeps a short 
 
 ---
 
+## Per-surface texture verbs, STEP 1 of 5 (spec + plan reviewed, 2026-07-26)
+
+- [ ] `p1` **Split `pan` out of `brush poly set`; add `brush poly rotate` and `brush poly scale --by`.**
+  Plan: [`../plans/2026-07-26-poly-surface-step1-plan.md`](../plans/2026-07-26-poly-surface-step1-plan.md).
+  Spec: [`../specs/2026-07-26-poly-surface-verbs.md`](../specs/2026-07-26-poly-surface-verbs.md)
+  §2.0–§2.2, §2.5, §3.1 — **those sections only**.
+
+  **Read the PLAN first; it is self-contained for this step.** It carries the re-anchor formulas
+  (including the 2×2 Gram solve `scale` needs — the obvious implementation is wrong on a skewed
+  frame and was caught only by review), the settled out-of-plane tolerance with its measurement, the
+  `BRUSH:idx` stdout mechanism, the full list of tests that go red, and the docs to update by anchor
+  text rather than line number.
+
+  **Scope discipline: this step touches NO part of `brush poly align`.** The align half — the
+  subcommand restructure, `wall`/`floor`'s world-space rewrite, `run`, `one-tile`,
+  `--fit-perimeter`, the texture-catalog plumbing — is steps 2–5 and is NOT ready; those wait on
+  `to-plan.md`. `polyalign.py` is not touched by this step at all.
+
+  **Gate status:** spec gate passed (2 rounds); plan gate passed (2 rounds, both rounds' findings
+  resolved). Four verbs, pure model-side, no editor and no catalog dependency.
+
+  **Known residual, already logged:** `rotate`'s turn direction follows the *polygon* normal, so on a
+  subtractive brush (a room interior — most of a map) it turns opposite to what the author sees. Kept
+  deliberately rather than made solidity-dependent; see the plan §9.
+
 ## Native texture decode for any UE1 package (spec + plan self-contained, 2026-07-25)
 
 - [ ] `p1` **Decode every UE1 texture layout natively; layout read off the DATA, not a format table.**

@@ -269,9 +269,9 @@ kept current).
 `test_surface.py`'s `touched == ["B1"]` / `["BrushA","BrushB"]` cases and `test_dispatch.py`'s
 `saved["touched"]` all survive. Do not "fix" them.
 
-**To CREATE:** `dev/docs/rationale/surface.md` — with `Why it is this way` / `Rejected` / `Refs`, plus
-an index row in `rationale/README.md`. (Not `rationale/polyalign.md`, which does not exist and is the
-wrong topic: this change is a `surface.py` split and does not touch `polyalign.py`.) It records the
+**`dev/docs/rationale/surface.md`** — created 2026-07-26 with the settled content; extend it with `Why it is this way` / `Rejected` / `Refs`, plus
+an index row in `rationale/README.md`. (The `polyalign` topic is the wrong home: this change is a `surface.py` split and does not
+touch `polyalign.py`.) It records the
 verb split, the re-anchor formula, and the §5 tolerance with its measurement.
 
 **Cite by ANCHOR TEXT, not line number.** Several sessions are editing this tree concurrently and the
