@@ -5,6 +5,17 @@
 **Review:** two rounds on this plan (4 cold reviewers, 2026-07-25) — all findings folded; §5 records them.
 **Ephemeral:** scratch for sequencing this build; delete when the work lands.
 
+> **STALE vs the spec as of 2026-07-26 — re-cut before building.** The spec gained two
+> owner-directed changes after this plan was reviewed, and this plan does not yet sequence them:
+> **spec §4c** (texture **group** becomes a stored fact in the per-package row, printed by `show`,
+> filterable via `--group` on `list`/`search`) and **spec §3b** (pixel-hash identity pinned as frozen;
+> adding a fact is explicitly safe, changing the decoder is the irreversible act). Practical effect
+> here: the texture-adapter slice must carry `group` through `parse_pcx_stem` → the `facts` dict → the
+> `show`/`--json` shape → the two filters, and §5's own hazard note about "palette index-0 semantics"
+> should be read narrowly — it forbids changing what the decoder *emits*, not recording additional
+> facts. Neither the spec revision nor this plan has been through a review round yet
+> (`board/inbox.md`).
+
 Governing principle this plan must not drift from: **the tool lists, reports file facts, produces
 pictures, and stores the classification it is handed. It never infers meaning.** The single
 exception is texture colours (spec §4b).

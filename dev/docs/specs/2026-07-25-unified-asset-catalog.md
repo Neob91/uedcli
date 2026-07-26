@@ -134,6 +134,9 @@ files scattered through live ones that `cache gc` cannot distinguish.
    "deps": [["<realpath>", 12345, 1679...]],
    "facts": {"drawtype": "DT_Mesh", "bbox": [96, 40, 72], "collision": [22, 40]}}
   ```
+  `facts` is **per-kind and open for extension**: a texture row carries `{"w":…, "h":…, "format":…,
+  "group": "Ladder"|null, "colors": […]}` (§4b, §4c), a class row the shape above. Adding a fact is
+  always safe — see the frozen-identity rule in §3b.
   `undecodable` (the asset is unparseable → no identity, cannot be classified) and `preview_state`
   (no artifact available, but fully classifiable) are **separate flags** — one boolean cannot do both
   jobs, and conflating them mislabels a `DT_Brush` class as corrupt.
@@ -187,6 +190,31 @@ For **pixel-hashed textures** the `ref` is **write-once** — set at classify ti
 existing only to identify outdated entries. A *mutable* ref list would reintroduce a per-hash write
 conflict (two agents classifying two refs of the same image would read-modify-write one shard).
 
+**Textures are stored by PIXEL HASH, never by name, and the identity function is FROZEN.**
+*(Owner, 2026-07-26 — reaffirming the design, so no later revision quietly reverts it.)* A texture's
+key is `sha256(w, h, RGB)` over its decoded pixels; the name plays no part in it. That is what makes a
+classification survive a rename, a repack, or the same image appearing in two packages, and it is why
+the same digest doubles as the preview artifact's content address (§3a) with no second hash.
+
+The function is **frozen**: `(w, h, RGB)` in that order, over the decoded RGB triples, and a committed
+golden (ref → hex digest over `CoreTexWater.utx`) pins it. Every tracked shard's *path* is that digest,
+so any change to what the decode path emits silently re-keys every shard at once — every
+classification reads back "unclassified" and becomes a prunable outdated entry. **This is the one
+irreversibility in the design that can destroy authored work**, so the identity function is changed
+only by an explicit, owner-approved migration that rewrites the shards, never as a side effect of
+touching the decoder.
+
+Two corollaries worth stating, because they are easy to get backwards:
+
+- **Adding a FACT never re-keys anything.** Facts (§4) are read from the package and stored in the
+  derived cache, outside the identity. Recording a new one — `group`, or a palette-derived flag — is
+  purely additive and safe at any time. The hazard is *changing the RGB the decoder emits*, not
+  *reading more about the texture*.
+- **Identity deliberately ignores everything but pixels.** Two textures with the same pixels in
+  different packages, groups, or under different names are ONE classifiable thing, and classifying
+  either classifies both. The write-once `ref` (below) exists only so an outdated entry can be named
+  in a report.
+
 **Change-awareness without a `stale` flag.** When a texture's pixels change, its identity changes, so
 it **shows unclassified** — correct, the new pixels genuinely are. The prior classification survives
 under the old identity as an **outdated entry**, surfaced by `classify list-outdated` (showing its
@@ -200,7 +228,7 @@ asset is renamed or removed.
 | source | every export descending from `Engine.Texture` | `.u` class exports (via `classindex`) | `.uax` + `.u`, minus VO (§4a) | `.umx` music exports |
 | identity | sha256(w, h, RGB) | `Package.Class` | `Package.Name` | `Package.Name` |
 | preview | decoded PNG | native mesh render (`DT_Mesh`) or the `Texture` default's image (`DT_Sprite`, §6) | spectrogram (phase b) | none |
-| file facts | w, h, format, **colours (§4b)** | parent, DrawType, abstract, **bbox, collision, pivot** (§6) | duration/rate/channels (phase b) | format, embedded module title |
+| file facts | w, h, format, **group (§4c)**, **colours (§4b)** | parent, DrawType, abstract, **bbox, collision, pivot** (§6) | duration/rate/channels (phase b) | format, embedded module title |
 | similarity | phash ⊕ colour distance | — | — | — |
 
 ### 4a. Corpus scope rules (measured, not assumed)
@@ -225,6 +253,41 @@ clone with an empty classification store — which is the point. An LLM classifi
 list (`colors_source: "set"`), and the override wins. This is deliberately the *only* pre-filled
 field: it reads nothing but the texture itself.
 
+### 4c. Texture group — a stored fact, not just a ref component
+
+A UE1 texture object carries a **Group** — an optional name that subdivides a package, so a texture is
+addressed `Package.Name` or, fully, `Package.Group.Name`. UCC's `batchexport` writes it into the
+exported filename (`Skins.Wood.pcx` → group `Skins`, name `Wood`); a groupless texture exports as a
+bare `Wood.pcx`. uedcli already parses it (`texture_catalog.parse_pcx_stem`) and already carries it on
+its entry record (`TextureEntry.group`).
+
+**The group is a first-class fact and MUST be stored and queryable**, not merely consumed while
+assigning refs. Two independent reasons:
+
+1. **In Deus Ex the group is load-bearing gameplay data.** A surface is climbable if and only if its
+   texture's group is the reserved `Ladder` — the group, not the name, is what the engine tests. So
+   "which textures are ladders" is a question the catalog must be able to answer directly.
+2. **Ref assignment DISCARDS it in the common case.** §9's rule emits a 2-part `Package.Name` ref
+   unless there is an intra-package name collision. `CoreTexMetal.LadrBrwnMetal` is in group `Ladder`
+   and has no colliding sibling, so its ref is 2-part and **the group appears nowhere in the output**.
+   Recovering it meant reading the raw per-package JSON by hand — measured at ~10 minutes of an
+   agent's time, for a fact the tool had already parsed and thrown away.
+
+Concretely:
+
+- `group` joins the texture `facts` dict in the §3a per-package index row (`"group": "Ladder"`, or
+  `null` for a groupless texture — never omitted, so absence is distinguishable from "not yet
+  indexed").
+- `texture show` prints it, and `--json` carries it.
+- **`texture list --group G` and `texture search --group G`** filter on it (added to §5's per-kind
+  filter list). `--group ""` selects the groupless textures, which is otherwise unaskable.
+- It is a **fact, never a classification**: it is read from the package, so it is not LLM-overridable
+  and does not live in a tracked shard. This is not an exception to §0 — reporting a value literally
+  stored in the package is exactly what "reports file facts" means.
+
+Group is **not** part of texture identity (§3b): identity is the pixel hash, and two textures with
+identical pixels in different groups are deliberately one classifiable thing.
+
 ## 5. Verb surface
 
 `<kind>` ∈ `texture` | `class` | `sound` | `music`:
@@ -243,7 +306,7 @@ field: it reads nothing but the texture itself.
 | `<kind> prewarm [--package P] [--force]` | eagerly index/decode/render ahead of an offline session | progress → stderr |
 | `cache gc [--catalog]` | evict from the DERIVED cache only — never tracked files | freed summary → stderr |
 
-Per-kind filters: `texture --color C --similar REF [--max N]`; `class --subclass-of FQCN --drawtype
+Per-kind filters: `texture --color C --group G --similar REF [--max N]`; `class --subclass-of FQCN --drawtype
 DT --placeable`. `music` ships a **reduced family** (`list`, `show`, `classify …`, `tags`): 35 assets,
 no preview artifact, so `preview`/`prewarm`/`--similar` would be surface with nothing behind it.
 `--catalog-dir` is **retained** on every kind (load-bearing for project-less use).
@@ -438,6 +501,13 @@ forces `UEDCLI_SCHEMA_CACHE=off`, so class-adapter tests exercising the cache pa
   name-keyed paths (two spellings → one shard); `unset` whole and per-field; `clone` keep-local +
   skip-report; the outdated flow (pixels change → unclassified, old shard surfaces by its stored ref,
   `prune` removes, `cache gc` never touches tracked files).
+- **Texture group (§4c):** a grouped texture's `group` is reported as a fact even when its ref is
+  2-part (the `LadrBrwnMetal` shape — grouped, no intra-package collision, so the group appears
+  nowhere in the ref); a groupless texture reports `null`, not a missing key; `--group Ladder` selects
+  it and `--group ""` selects the groupless ones; group is NOT part of identity (two identical images
+  in different groups → one shard, and classifying via either ref classifies both).
+- **Frozen identity (§3b):** the committed golden (ref → hex digest over `CoreTexWater.utx`) holds;
+  adding a fact to a row does not change any identity.
 - **Texture:** `Engine.Texture` **subclasses** enumerated (FireTexture/WetTexture/WaveTexture);
   **colours pre-filled and ordered by share**, and `--color` works with an EMPTY classification store;
   an LLM `colors` override wins and is marked `set`; similarity ranks a known near-pair above an
@@ -468,6 +538,15 @@ to serialize behind:
 5. **Audio phase (b)** — after the `.uax` decode spike: spectrograms, duration, `sound export`.
 
 ## 14. Review history
+
+**Revision 2026-07-26 — NOT YET REVIEWED.** Two owner-directed changes landed after the four rounds
+below, so the spec is no longer fully review-gated: (1) **§4c** makes the texture **group** a stored,
+queryable fact with `--group` filters — it was previously consumed only while assigning refs and
+discarded whenever a ref came out 2-part, which hid `Ladder`-group membership, i.e. DX
+climbability; (2) **§3b** pins the pixel-hash identity as load-bearing and **frozen**, with the
+corollary that adding a *fact* never re-keys a shard while changing the *decoder* re-keys all of them.
+§3a's row shape and §12's coverage list were updated to match. A `spec` round is owed on this
+revision before the plan is re-cut (`CLAUDE.md` "Review gates"); it is logged on `board/inbox.md`.
 
 **Round 1 (2026-07-25, 2 cold reviewers)** — 21 findings, all folded: the false "reads `.dx` natively"
 claim, class-default-sourced refs, sound identity in phase (a), the kind-less index key, migration

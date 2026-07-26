@@ -5,6 +5,44 @@ lands here first, with no obligation to know its stage yet. This is the *pre-pip
 stage (so no `to-` prefix). See [`README.md`](README.md).
 
 **Triage** routes each item to where its next action lives:
+- `p1` `[OWNER — confirm]` **Texture GROUP is a first-class fact — proposed `direction/asset-catalog.md`
+  addition.** Decided 2026-07-26 and already written into
+  `specs/2026-07-25-unified-asset-catalog.md` §4c, but absent from the direction topic, so the
+  decision has no durable home yet. Proposed text, to be appended to the **Identity: content hash
+  where content exists, name where it does not** section (verbatim, awaiting a yes):
+
+  > **A texture's GROUP is a stored fact, not just a ref component.** UE1 subdivides a package with an
+  > optional Group, so a texture is addressed `Package.Name` or fully `Package.Group.Name`. Ref
+  > assignment emits the 2-part form unless there is an intra-package name collision, which means the
+  > group vanishes from the output for most textures — including `CoreTexMetal.LadrBrwnMetal`, whose
+  > group is the reserved `Ladder`. In Deus Ex the group is what decides whether a surface is
+  > climbable, so the catalog must be able to answer "which textures are ladders" directly: the group
+  > is stored as a per-texture fact, printed by `show`, and filterable with `--group` on
+  > `list`/`search`. It is a fact read from the package, never a classification, so it is not
+  > LLM-overridable — and it is **not** part identity, since identical pixels in two groups are
+  > deliberately one classifiable thing.
+
+- `p2` `[OWNER — confirm]` **Should the pixel-hash identity be called FROZEN in `direction/`?** The
+  topic already records texture identity as the exact pixel hash (`sha256` over w, h, raw RGB), which
+  is correct and needs no change. What it does *not* say is that the function is **frozen**: every
+  tracked shard's path IS that digest, so any change to what the decoder emits silently re-keys every
+  shard at once — all classifications read back "unclassified" and become prunable. That is the one
+  irreversibility in the design that can destroy authored work, and it currently lives only in
+  `specs/…-unified-asset-catalog.md` §3b and the plan. Proposed one-line addition to the same section:
+
+  > The identity function is **frozen** — `(w, h, RGB)` in that order, pinned by a committed golden.
+  > Changing what the decoder emits re-keys every shard and orphans every classification, so it moves
+  > only by an explicit migration that rewrites them. Adding a new *fact* about an asset is always
+  > safe; changing the *decoder* never is.
+
+- `p1` `[chore]` **The unified-asset-catalog spec revision is UNREVIEWED — a `spec` round is owed.**
+  `specs/2026-07-25-unified-asset-catalog.md` was four-rounds-gated on 2026-07-25, then revised
+  2026-07-26 with §4c (group as a queryable fact), a rewritten §3b (frozen pixel-hash identity), an
+  extended §3a row shape and two new §12 coverage bullets. `CLAUDE.md` "Review gates" puts the spec
+  moment at the widest row precisely because a spec defect gets built on top of, and this one has 13
+  planned slices stacked on it. `plans/2026-07-25-unified-asset-catalog-plan.md` carries a STALE
+  banner and must be re-cut after the spec round passes — the group fact adds work to the
+  texture-adapter slice that the plan does not sequence. *(2026-07-26.)*
 - `p1` `[chore]` **The `uedctl`→`uedcli` rename shipped UNGATED — it never had its build review.**
   The whole-repo rename (777 files, 5383±5383 lines, all three case variants, plus 12 doc filenames
   and the `uedctl/`→`uedcli/`, `uedctl-native/`→`uedcli-native/`, `bin/uedctl`→`bin/uedcli`,
