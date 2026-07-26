@@ -2,10 +2,17 @@
 
 **Status:** specced, **two review rounds folded** (2026-07-25, 4 cold reviewers). Next step is a plan.
 **Requested by:** Andrzej (2026-07-25, session `uedcli:catalog`).
-**Ephemeral:** scratch, per the uedcli `CLAUDE.md`. The load-bearing decisions + rejected
-alternatives live in the durable append-only [`dev/docs/decisions.md`](../decisions.md) (entries
-**2026-07-25 03:40** and **2026-07-25 05:10 — the tool does not infer**). On build, fold the outcome
-into `architecture.md` (replacing its "Texture catalog" section) + `usage.md`, and delete this file.
+**Ephemeral:** scratch, per the uedcli `CLAUDE.md`. **The durable homes are
+[`direction/asset-catalog.md`](../direction/asset-catalog.md)** (the owner's decisions — agents may not
+write it without an explicit yes) **and [`rationale/`](../rationale/)** (the agent's implementation
+choices). On build, fold the outcome into `architecture.md` (replacing its "Texture catalog" section) +
+`usage.md`, and delete this file.
+
+> **Do not cite `dev/docs/decisions.md`.** Earlier drafts of this spec called it "the durable
+> append-only ledger" and pointed at entries *2026-07-25 03:40* and *2026-07-25 05:10*. That file is
+> **FROZEN — DO NOT APPEND**, and `CLAUDE.md` states there is no decisions ledger;
+> [`rationale/MIGRATION.md`](../rationale/MIGRATION.md) maps every old dated citation to its new home.
+> A decision recorded there on build would land in a file nobody is allowed to touch.
 
 **Supersedes / folds in:** [`specs/2026-07-19-texture-catalog-redesign.md`](2026-07-19-texture-catalog-redesign.md)
 (specced + review-gated, never built — its mechanics are generalized here; §9 restates what carries
@@ -60,7 +67,11 @@ identity key*, *what preview artifact can be produced*, *what file facts does it
 keeps **per-kind nouns** — `texture …`, `class …`, `sound …`, `music …` — each with the same verb
 family, so no verb grows a `--kind` selector.
 
-## 2. Decisions (Andrzej) — recorded in `decisions.md`
+## 2. Decisions (the owner) — durable home: `direction/asset-catalog.md`
+
+*(This section is a working restatement for the reader's convenience. The authoritative text is
+`direction/asset-catalog.md`; where the two differ, that doc wins and this one is stale. Two divergences
+were found by the 2026-07-26 gate and are fixed below — music's verb family and the curation override.)*
 
 1. **The tool does not infer** (§0). *Rejected: a tool-computed stock-map usage index and class
    placement histogram* — the tool would be guessing at meaning, the numbers would be unreviewable
@@ -101,6 +112,12 @@ family, so no verb grows a `--kind` selector.
     class is for**, and `--subclass-of` already exists. Curation is a **description plus tags**.
     *Rejected: curating a role taxonomy over ~1,900 classes.* This also avoids a second meaning for
     `class show --category` (which means the UnrealEd property category).
+    **Open — `direction/asset-catalog.md` is ambiguous here and the spec must not resolve it silently.**
+    That doc says curation is "a description, plus **an override where the file fact is wrong**", while its
+    own *Rejected* list kills "a curated-vs-derived override model for `placeable`". The shard payload
+    (§3b) carries `tags`/`description`/`colors` and no general override field, so as specced a wrong
+    file-fact cannot be corrected at all. Parked as an `[OWNER — confirm]` question on `board/inbox.md`;
+    the colours override (§4b) stays the one existing instance either way.
 11. **`class preview` angles:** `iso` (front-¾) is the default SINGLE shot; `--angles` opts into
     `front, back, left, right, top, bottom, iso`. **"side" is spelled `left`/`right`** — a mesh is
     not symmetric in general. One angle by default because a render measures **~300 ms**, not the
@@ -140,12 +157,20 @@ files scattered through live ones that `cache gc` cannot distinguish.
    "deps": [["<realpath>", 12345, 1679...]],
    "facts": {"drawtype": "DT_Mesh", "bbox": [96, 40, 72], "collision": [22, 40]}}
   ```
-  `facts` is **per-kind and open for extension**: a texture row carries `{"w":…, "h":…, "format":…,
-  "group": "Ladder"|null, "colors": […]}` (§4b, §4c), a class row the shape above. Adding a fact is
-  always safe — see the frozen-identity rule in §3b.
-  `undecodable` (**genuinely unreadable** — the export cannot be parsed at all, so it has no identity
-  under §3b *or* §3c and cannot be classified; a *procedural* texture is NOT undecodable, it is
-  parameter-hashed per §3c) and `preview_state`
+  `facts` is **per-kind and open for extension**: a texture row carries
+  `{"w":…, "h":…, "format":…, "group": "Ladder"|null, "masked": true|false, "colors": […],
+  "phash": "<hex>"}` — §4b (colours), §4c (group), §4d (masked) — and a class row the shape above.
+  Adding a fact is always safe: see the frozen-identity rule in §3b.
+  **`phash` lives here deliberately.** §9 requires a *second*, perceptual hash for `--similar`, which is
+  inherently whole-catalog; without a persisted field every `--similar` invocation would re-decode the
+  corpus (§9's own measured ~50 s cold, per call). It is a derived digest rather than a package fact, but
+  it is stored in the derived index like any other, and it is **not** part of identity — §3b's "adding a
+  fact never re-keys anything" covers it for exactly that reason.
+  `undecodable` (**genuinely unreadable** — the export cannot be parsed at all; a *procedural* texture is
+  NOT undecodable, it is parameter-hashed per §3c. Note the "cannot be classified" consequence is
+  **texture-only**: for the name-keyed kinds identity IS the name, so an unreadable class/sound/music
+  export still has a key and stays fully classifiable — it merely has no facts and no preview) and
+  `preview_state`
   (no artifact available, but fully classifiable) are **separate flags** — one boolean cannot do both
   jobs, and conflating them mislabels a `DT_Brush` class as corrupt.
 - **`previews/<hh>/<hash>.png`** — every preview artifact, content-addressed by the bare hex sha256
@@ -159,6 +184,37 @@ files scattered through live ones that `cache gc` cannot distinguish.
 
 All derived: deletable at any time, rebuilt lazily. An undecodable asset **stays enumerable** —
 never silently dropped, which would read as "this package has fewer assets than it does".
+
+**The preview cache is its OWN pool with its OWN budget, and the existing sweep must be made recursive.**
+Decision 9 reuses the `cache` noun, which is right, but not the existing *pool*: `schema_cache` LRU-evicts
+by atime against a **single shared 256 MiB cap** (`SCHEMA_CACHE_MAX_BYTES`) and sweeps **automatically once
+per process after any blob write**. Three concrete failures if previews simply join it:
+
+- `schema_cache.evict_lru` scans **one flat directory**, so it would find nothing under the catalog's
+  nested `packages/<kind>/…` and `previews/<hh>/…` — the cache would grow unbounded while appearing managed.
+  The sweep has to walk recursively.
+- A full `prewarm` (4,791 texture PNGs + 657 mesh renders) is the same order as the whole existing cap, so
+  it can **evict its own output mid-run** — and `prewarm` exists precisely to prepare an *offline* session,
+  where recovery costs ~11 minutes of re-rendering.
+- The existing sweep's safety argument ("a wrongly-evicted blob is merely a future re-decode, never a wrong
+  answer") was written for tens-of-KB schema blobs and **does not transfer** to an 11-minute re-render.
+
+So: previews get a separate byte budget, evicted independently of the schema blobs, and the auto-sweep must
+never be able to evict a preview written by the *current* process. `cache gc --previews` targets that pool
+by name (**not `--catalog`**, which reads as though it touches the tracked catalog one line after the rule
+that it never does).
+
+**`cache clear` must learn about the catalog pool in the same change.** Today it is schema-cache-specific in
+both name and help; leaving it alone ships a verb whose help says "delete the persistent cache" while a
+multi-hundred-MB catalog cache survives — the stale-help failure `conventions.md` names.
+
+**Stat-keyed index files are reclaimed by `gc`, not left to accumulate.** `packages/<kind>/<stat-key>.json`
+embeds `(realpath, size, st_mtime_ns)` in the filename, so **every** package rebuild, re-download or `touch`
+strands the previous file *inside the live `v<N>/` dir* — precisely the "files scattered through live ones
+that `cache gc` cannot distinguish" that §3a's version-as-path-segment rationale claims to avoid. On a tree
+whose packages are actively rebuilt this grows without bound. `gc` therefore also drops index rows whose
+`realpath` no longer exists **or** whose stat tuple no longer matches the file, which is decidable from the
+filename alone.
 
 **Preview paths are verified at emit time, never trusted from the row.** Artifacts are shared by many
 rows and `cache gc` LRU-evicts them with no back-reference; the schema cache may evict freely only
@@ -267,7 +323,23 @@ masks are **one identity and share one preview file**. They are the same image; 
 flag that `masked` reports separately.
 
 The function is **frozen**: `(w, h, RGB)` in that order, over the decoded RGB triples, and a committed
-golden (ref → hex digest over `CoreTexWater.utx`) pins it. Every tracked shard's *path* is that digest,
+golden (ref → hex digest over `CoreTexWater.utx`) pins it. **Pin the byte encoding too, because a golden
+only fixes whatever the first builder happened to write.** The existing `texture_catalog.image_hash`
+digests `b"%d:%d:" % (w, h)` followed by `rgb.tobytes()` and returns a **`sha256:`-prefixed** string,
+while §9 mandates a bare hex digest: adopt that exact byte encoding and strip the prefix, so the frozen
+function is a known, already-exercised one rather than a fresh invention.
+
+**Consequence to state plainly: `texture list` is NOT a cheap verb on a cold cache.** A texture's identity
+*is* its decoded pixels, so answering `list` — or `--classified`/`--unclassified`, which need the identity to
+look up a shard — requires decoding the corpus (§9's measured ~26.4 s / ~50 s cold). That is in tension with
+`direction/asset-catalog.md`'s promise that "no exploratory command can ever trigger a long render", so the
+spec must be explicit rather than let a user discover it: the first `texture list` on a cold cache announces
+that it is indexing, with progress on stderr, and every later run is served from the index. It is a *decode*,
+not a *render* — no PNG is produced — which is what keeps decision 7 intact. **And because the decode has
+already been paid for, index-building writes the preview PNG it has in hand**; otherwise the corpus is
+decoded twice, once to key it and once to look at it. This is the one narrow exception to "only `preview`
+produces artifacts", and it is invisible: the artifact is a cache entry, `list` still prints no path unless
+one is cached. Every tracked shard's *path* is that digest,
 so any change to what the decode path emits silently re-keys every shard at once — every
 classification reads back "unclassified" and becomes a prunable outdated entry. **This is the one
 irreversibility in the design that can destroy authored work**, so the identity function is changed
@@ -367,6 +439,16 @@ asset is renamed or removed.
   surfaces that today's exact-match enumeration never sees. Procedural ones are **fully classifiable**
   via the parameter-hash identity of §3c; they are never `undecodable`. (Counts here are the stock
   `.utx` subset only; `IceTexture` and `ScriptedTexture` exist too — see §3c.)
+- **The VO exclusion is CONFIG, not a hardcoded Deus Ex pattern.** The rule below drops ~10,200 of 10,826
+  sound exports, so it must be visible and overridable rather than a substrate fact buried in a
+  generic-UE1 tool: the excluded packages come from a per-substrate key in the games config (along
+  `paths`), Deus Ex sets it to the `DeusExConAudio*` pattern, and **`--include-vo`** opts back in. A
+  listing that omits 94% of the corpus with no way to see it, and no statement of what was dropped, is
+  the half-answer `conventions.md` targets — so `sound list` reports the excluded count on stderr. The
+  exclusion applies to **enumeration only**: `sound show` and `sound classify` accept a VO ref by name, so
+  a deliberately-referenced line is never unreachable. *(This rule is absent from
+  `direction/asset-catalog.md`; it is the agent's implementation choice and belongs in `rationale/` on
+  build, not in the owner's tree.)*
 - **Sound scope is an explicit rule, because `.uax` is the wrong set.** Measured: **10,826** Sound
   exports on the composed path — only **151** in `.uax`, **399** in `DeusExSounds.u` (the real SFX
   library), ~**10,200** conversation VO in `DeusExConAudio*.u`. `.uax`-only omits the most useful
@@ -386,17 +468,32 @@ field: it reads nothing but the texture itself.
 ### 4c. Texture group — a stored fact, not just a ref component
 
 A UE1 texture object carries a **Group** — an optional name that subdivides a package, so a texture is
-addressed `Package.Name` or, fully, `Package.Group.Name`. UCC's `batchexport` writes it into the
-exported filename (`Skins.Wood.pcx` → group `Skins`, name `Wood`); a groupless texture exports as a
-bare `Wood.pcx`. uedcli already parses it (`texture_catalog.parse_pcx_stem`) and already carries it on
-its entry record (`TextureEntry.group`).
+addressed `Package.Name` or, fully, `Package.Group.Name`. In the package it is the texture export's
+**Outer** name.
+
+**Read it from the export table: `pkg.name_of_ref(export["outer"])`, `None` when there is no outer.**
+`utexture` already carries `outer` on every export row and already resolves it this way when it builds
+3-part refs (`utexture._texture_named`, `_decode_ref`), so no new parsing is needed. Verified live
+2026-07-26 against tracked `uned/UED22/Engine.u`: the font textures report `SmallFont`/`MedFont`/…, plain
+textures report `None`; `CoreTexWater.utx`'s two textures report `water`.
+
+*(Do NOT reach for `texture_catalog.parse_pcx_stem` / `TextureEntry.group`. They exist today and do carry
+the group, but they parse a **UCC `batchexport` PCX filename** — `Skins.Wood.pcx` → group `Skins` — and
+§9 deletes that whole export/sync path, with both symbols named in the plan's deletion inventory. An
+earlier draft of this section cited them, which would have routed a new first-class fact through code
+being removed in the same change.)*
 
 **The group is a first-class fact and MUST be stored and queryable**, not merely consumed while
 assigning refs. Two independent reasons:
 
-1. **In Deus Ex the group is load-bearing gameplay data.** A surface is climbable if and only if its
+1. **In Deus Ex the group is load-bearing gameplay data.** 📖 A surface is climbable if and only if its
    texture's group is the reserved `Ladder` — the group, not the name, is what the engine tests. So
    "which textures are ladders" is a question the catalog must be able to answer directly.
+   *(Evidence: `docs/leveldesign/deusex/classes.md` and `recipes/ladder.md` state the rule; the
+   level-building friction log records an agent spending ~10 min recovering a group by hand because no
+   verb prints it. **NOT live-probed** — there is no spike and no ✅/🔬 entry under `unrealed/`, so this
+   is 📖 by `CLAUDE.md`'s marker scale. It is load-bearing for this fact and two filters: probe it, and
+   land the result in `unrealed/`, during the texture-arm slice.)*
 2. **Ref assignment DISCARDS it in the common case.** §9's rule emits a 2-part `Package.Name` ref
    unless there is an intra-package name collision. `CoreTexMetal.LadrBrwnMetal` is in group `Ladder`
    and has no colliding sibling, so its ref is 2-part and **the group appears nowhere in the output**.
@@ -426,9 +523,22 @@ import dialog's `Masked` checkbox), and it is stored in the package on that text
 surface's at render time — which is why a texture imported as masked draws its palette-index-0 pixels
 as holes **on any surface, with no surface flag set at all**.
 
-- `masked` joins the texture `facts` dict (`true`/`false`, never omitted), read from the texture
-  export's stored properties — `utexture` already parses export properties, so this is a new field
-  read, not a new decode path.
+- `masked` joins the texture `facts` dict (`true`/`false`, never omitted).
+- **The property is spelled `bMasked`** (a bool tag), and it is **stored only when it differs from the
+  class default** — a UE1 tagged-property block is a sparse diff against the class defaults, not a full
+  record. Probed 2026-07-26 across four `.utx`: present on 84 of 320 texture exports in tracked
+  `DeusExDeco.u` and 9 in `UNATCO.utx`; entirely **absent** from both committed fixtures
+  (`CoreTexWater.utx`, `LUM_InfoPortraits.utx`).
+- **So the read rule is: the export's `bMasked` tag if present, ELSE the resolved class default.** Not
+  "absent means false". On this substrate `Engine.Texture`, `Fire.FireTexture`, `Fire.WetTexture`,
+  `Fire.WaveTexture` and `Engine.ScriptedTexture` all default it `False`, so absent-means-false is
+  *accidentally* right here and silently wrong on a mod — or another UE1 game, which is this tool's
+  stated scope — whose texture class defaults it `True`. **This makes `masked` a default-sourced fact,
+  so §11 prerequisite 1 gates the texture arm too, not just the class arm.** `utexture.decode_texture`
+  already returns the export's tagged properties (`TextureObj.props`), so the *tag* read is free; the
+  default resolution is the part that needs the prerequisite.
+- The sibling `specs/2026-07-25-native-texture-formats.md` §8-D also reports **`bAlphaTexture`**; decide
+  during the build whether it joins `facts` beside `masked` (same read rule, same cost).
 - `texture show` prints it; `--json` carries it; **`texture list --masked` / `search --masked`** filter
   on it (added to §5's per-kind filters).
 - It is a **fact, not a classification**: not LLM-overridable, no tracked shard.
@@ -455,22 +565,54 @@ Not part of identity (§3b): identity is pixels, and the flag lives beside them.
 
 | Verb | Role | Output |
 |---|---|---|
-| `<kind> list [--package P] [--classified\|--unclassified] [--json]` | enumerate | refs one-per-line; `--json` = JSONL rows carrying `preview: <path>\|null` (cached only) |
-| `<kind> search <terms> [--tag T] [--package P] [--unclassified] [--json]` + per-kind filters | ranked discovery over the corpus (§5b) | bare refs one-per-line; `--json` as above |
+| `<kind> list [--package P] [--classified\|--unclassified] [--json]` | **enumerate** — the deterministic corpus listing, sorted by ref | refs one-per-line; `--json` = JSONL rows carrying `preview: <path>\|null` (cached only) |
+| `<kind> search <terms…> [--tag T] [--package P] [--classified\|--unclassified] [--json]` + per-kind filters | **ranked discovery** (§5b) — `<terms…>` is REQUIRED | bare refs one-per-line, best first; `--json` as above |
 | `<kind> show <ref>… \| -` | **facts + classification** | one block per ref; `--json` |
-| `<kind> preview <ref>… \| - [--out DIR]` | **the sole producer of image artifacts** | `<ref>\t<path>` lines (ref-qualified, so multi-artifact kinds stay unambiguous) |
+| `<kind> preview <ref>… \| - [--out DIR] [--skeleton]` | **the sole producer of image artifacts** | `<ref>\t<path>` lines (ref-qualified, so multi-artifact kinds stay unambiguous); `--skeleton` switches the stream to JSONL (§5a) |
 | `<kind> classify set <ref> --tags … --description …` **or `-`** | record classification; `-` reads JSONL `{ref, tags, description[, colors]}` | summary → stderr |
-| `<kind> classify unset <ref> [--tags[=T,…]\|--description\|--colors\|--all]` | undo a mis-tag; `--tags a,b` removes THOSE tags, bare `--tags` clears the field | summary → stderr |
-| `<kind> classify status [--full]` / `tags [--package P]` | progress / tag vocabulary | text |
+| `<kind> classify unset <ref>… \| - [--tags[=T,…]\|--description\|--colors\|--all]` | undo a mis-tag; `--tags a,b` removes THOSE tags, bare `--tags` clears the field | summary → stderr |
+| `<kind> classify status [--full] [--json]` | classification progress | counts → **stdout** one metric per line; `--json` for a script |
+| `<kind> tags [--package P] [--json]` | the tag vocabulary in use | tags one-per-line → **stdout** (a producer: pipe it into `search --tag`); counts → stderr |
 | `<kind> classify list-outdated` / `prune [--outdated]` | classifications whose identity no longer resolves | rows → stdout / count → stderr |
 | `<kind> classify clone --from <catalog-dir\|project-root>` | copy classification by identity (keep-local, skip-report) | counts → stderr |
 | `<kind> prewarm [--package P] [--force]` | eagerly index/decode/render ahead of an offline session | progress → stderr |
-| `cache gc [--catalog]` | evict from the DERIVED cache only — never tracked files | freed summary → stderr |
+| `cache gc [--previews]` | evict from the DERIVED cache only — never tracked files | freed summary → stderr |
 
-Per-kind filters: `texture --color C --group G --masked --similar REF [--max N]`; `class --subclass-of FQCN --drawtype
-DT --placeable`. `music` ships a **reduced family** (`list`, `show`, `classify …`, `tags`): 35 assets,
-no preview artifact, so `preview`/`prewarm`/`--similar` would be surface with nothing behind it.
-`--catalog-dir` is **retained** on every kind (load-bearing for project-less use).
+Per-kind filters: `texture --color C --group G --masked --similar REF [--max N]`;
+`class --subclass-of FQCN --drawtype DT --include-abstract`. `music` ships a **reduced family**
+(`list`, `search`, `show`, `classify …`, `tags`): 35 assets and **no preview artifact**, so it drops
+exactly `preview`/`prewarm`/`--similar` and nothing else — matching `direction/asset-catalog.md`, which
+authorises dropping only the artifact-dependent verbs. *(An earlier draft also dropped `search`; that
+diverged from the owner's doc and from the plan, and is corrected here.)* `--catalog-dir` is **retained**
+on every kind (load-bearing for project-less use).
+
+**`search` REQUIRES terms; `list` is the verb for filters alone.** Otherwise the two produce byte-identical
+output from identical inputs, and `direction/conventions.md` is explicit: "Two verbs with the same output
+shape are one verb too many." A term-less "ranked" query also has no defined order. So: `search` without
+terms **exits 2** pointing at `list`; every filter (`--package`, `--tag`, `--classified`/`--unclassified`,
+and the per-kind ones) is available on **both**, so nothing is only reachable through ranking. §5a's loop
+is written accordingly.
+
+**`--similar` is mutually exclusive with lexical TERMS, and composes with FILTERS.** `--similar REF` plus
+terms exits 2 (two different rankings). `--similar REF --package P --group G --masked` is legal and means
+"rank by similarity within this subset" — filters narrow the candidate set, they do not rank. Stated because
+§4c and §4d added two filters after the original exclusivity rule was written, leaving
+`search --similar X --group Ladder` undefined.
+
+**A truncated result set says so.** `--max N` (and any default cap) prints the cap and the number withheld
+**to stderr** whenever it elides rows, per "no silent half-answers" — a capped list on stdout is otherwise
+taken for the complete answer.
+
+**`class` keeps ONE spelling of the placeable axis: the existing `--include-abstract`.** `class list` has it
+today and it means "drop the placeable filter"; there is no `--placeable`, and adding one would ship two
+spellings of one axis on sibling verbs — the back-compat cruft `conventions.md` forbids on arrival. The new
+`class search` takes `--include-abstract` too.
+
+**`--classified`/`--unclassified` require `--flat` on `class list`.** They select a *set*, and `class list`'s
+default output is an indented inheritance TREE where a filtered set has no well-defined shape (prune to
+surviving leaves? keep branch-points as context?). Rather than guess, the tree form **exits 2** naming the
+flag and pointing at `--flat`. This is the same asymmetry §6 already accepts for `class`, made explicit for
+the two new flags.
 
 Inherited rules: producers print to stdout one item per line, summaries to stderr; `-` reads a ref set
 from stdin, empty stdin is a clean exit-0 no-op; a command that cannot fully satisfy a request exits 2
@@ -481,13 +623,26 @@ deterministic query over trunk state.
 ### 5a. The intended agent loop
 
 ```bash
-texture search --unclassified --package CoreTexMetal | texture preview -   # produces + prints paths
-#   harness Reads each path as its own image (one asset, one file — no montage, no misattribution)
-… | texture classify set -        # JSONL {ref, tags, description} back in, one shard per row
+texture list --unclassified --package CoreTexMetal \
+  | texture preview - --skeleton > work.jsonl     # produces the PNGs, emits one JSONL row per ref
+#   each row is {"ref": …, "preview": "<path>", "tags": [], "description": ""}
+#   harness Reads row["preview"] as its own image (one asset, one file — no montage, no misattribution),
+#   fills tags/description in place, then:
+texture classify set - < work.jsonl               # one shard per row
 ```
 
-`preview` also accepts `--skeleton`, emitting a ready-to-fill JSONL row per ref it just handed over,
-so classification is a **byproduct of looking** rather than a separate bulk campaign: an agent that
+**`--skeleton` REPLACES the `<ref>\t<path>` stream with JSONL; the two never interleave.** The row
+**carries the artifact path** in a `preview` field, which is what makes the loop closed: without it the
+harness would have the JSONL but not the images, and with two formats on one stdout `classify set -`
+could not parse the pipe. The extra keys (`tags: []`, `description: ""`) are the ready-to-fill shape, and
+`classify set` ignores `preview` on the way back in. Bare `preview` (no `--skeleton`) keeps the plain
+`<ref>\t<path>` lines for the common one-off case.
+
+*(Note the producer is `list`, not `search`: this query has filters and no terms, and `search` now
+requires terms — see §5. An earlier draft wrote `search --unclassified --package …`, which is exactly the
+term-less case that made `search` and `list` the same verb.)*
+
+Classification is therefore a **byproduct of looking** rather than a separate bulk campaign: an agent that
 previewed 20 assets while building a room can classify exactly those 20.
 
 ### 5b. `search` ranking must be specified, because early on it IS the product
@@ -528,16 +683,28 @@ turned out to be elsewhere entirely — and the answer it needed (`AmbientBright
 so a fresh `ZoneInfo` adds no ambient at all) would have eliminated its prime suspect in seconds.
 
 So `class show` reports the **resolved default beside each property**: `AmbientBrightness: ByteProperty
-= 0`. Resolution walks the inheritance chain exactly as `uprops.resolve_class_defaults` already does,
-so an inherited default is reported with the class it came from when that differs from the class asked
-about. A property with no default anywhere reports its type's zero value, marked as such — never blank,
+= 0`. A property with no default anywhere reports its type's zero value, marked as such — never blank,
 which reads as "unknown".
 
-This is **not new machinery**: prerequisite 1 already persists these defaults precisely because the
-class arm needs them corpus-wide, so the values are in the cache regardless. It is an output change
-over data the catalog is already paying to have. It also removes the documentation workaround this
-detour currently lives in — one parenthetical inside the DX class catalog, which is where an agent
-looking for lighting behavior does not look.
+**Scope of "each property", stated precisely:** `class show` prints the *category-bearing editable*
+properties (it groups by UnrealEd category), so this adds a default to each of those — it is not a dump
+of every field on the class. Say so in `--help`; "every property" would over-promise.
+
+**Two honest cost notes, because an earlier draft called this "not new machinery" and that was wrong:**
+
+- The **values** are indeed already paid for — prerequisite 1 persists resolved defaults because the
+  class arm needs them corpus-wide, and `Engine.ZoneInfo.AmbientBrightness` really does resolve to `0`
+  off the tracked packages (verified 2026-07-26, 282 defaults resolved).
+- But **provenance is not**. `uprops.resolve_class_defaults` returns
+  `dict[(casefold(name), array_index)] -> rendered str` and its root→leaf overlay loop **overwrites
+  without recording which ancestor supplied the value**. Reporting "inherited from `Engine.Actor`"
+  therefore changes a shared function's return contract, and prerequisite 1's cached blob holds raw
+  per-class tags rather than resolved values. The information is available *at* that loop so the change
+  is small — but it is a change to a shared seam, not a pure output tweak. **Either implement provenance
+  as part of this, or drop the "names the class it came from" promise; do not assume it is free.**
+
+It also removes the documentation workaround this detour currently lives in — one parenthetical inside
+the DX class catalog, which is where an agent looking for lighting behavior does not look.
 
 **A class that declares no own properties says so.** `class show DeusEx.DataCube` prints a header, a
 superclass chain and `(+142 inherited, in 16 more categories: …)` — and **no property names**, because
@@ -546,9 +713,16 @@ exist", and the bare category list gives no clue which of the 16 holds the one y
 has zero own properties, `show` prints an explicit one-line hint naming the two ways through
 (`--depth all`, or `--category NAME`), rather than leaving an empty space to be misread.
 
-**`placeable` keeps ONE definition — the existing file-fact proxy** (`classindex.is_placeable`:
-non-abstract, descends from `Actor`), and its `--help` is corrected to say exactly that rather than
-implying judgement. *No histogram, no derived "commonly placed"* (decision 1). Whether something is
+**`placeable` keeps ONE definition — the existing file-fact proxy** (`classindex.is_placeable`), and its
+`--help` is corrected to state what the predicate actually does. **It is FAIL-OPEN**, which the earlier
+wording ("non-abstract, descends from `Actor`") hid: the real test is
+`descends_from(fqcn, Engine.Actor) and is_abstract(fqcn) is not True`, so a class whose abstractness is
+**undeterminable counts as placeable** — deliberately, so it is listed rather than hidden. Two consequences
+to settle in the same slice: the help text must name that third case, and the branch is a "don't know"
+answered as a confident yes, which sits against `conventions.md` "A predicate answers or it RAISES".
+**Pick one and do it: state the fail-open behaviour in the help, or make the undeterminable case raise.**
+Do not ship the promised-but-inaccurate string, which is exactly the stale-help failure `conventions.md`
+cites by name. *No histogram, no derived "commonly placed"* (decision 1). Whether something is
 worth placing is a classification an LLM writes. This keeps `class list` **offline, maps-free and
 ~0.4 s**, instead of requiring 120 stock map files on disk.
 
@@ -582,6 +756,18 @@ and worth little. The only name-based alternative (the `S_` prefix) is exactly t
 
 `DT_Brush`/`DT_None` → `preview_state: no-mesh` (an honest "no artifact exists", not a judgement).
 
+**`--out DIR` file naming.** `<ref>` with dots replaced by `-`, casefolded, plus the angle for multi-angle
+kinds: `coretexmetal-ladder-ladrbrwnmetal.png`, `deusexdeco-barstool-iso.png`. Dots are the ref separator so
+they cannot survive into a filename unambiguously; casefolding matches the shard paths (§3b) and refs
+resolving case-insensitively everywhere else. A collision after that transformation **exits 2 naming both
+refs** rather than overwriting — `--out` writes where the user asked, so `direction/safety.md`'s
+never-clobber rule applies to it exactly as to any other destination.
+
+**`sound preview` does not exist in phase (a).** Its artifact is the spectrogram, which is phase (b) work
+behind the `.uax` decode spike, and music's precedent is that a verb with nothing behind it should not
+ship. So phase (a)'s `sound` family is `list`/`search`/`show`/`classify …`/`tags`, and `preview`/`prewarm`
+arrive with phase (b).
+
 **Cost shapes the design:** ~254 ms flat / ~332 ms textured at 256 px per render (~75/109 ms at
 128 px); mesh *decode* is only ~2–13 ms — the rasterizer dominates. Hence decisions 7 and 11.
 
@@ -598,9 +784,18 @@ frame is characteristic (thumbnails use frame 0; an `Idle` sequence's `StartFram
 
 **Phase (a) — everything that needs no sample decoding.** Enumeration, ref names, package/group
 structure, name-keyed identity (decision 4), the full `classify` family, and for `.umx` the
-**embedded module title** — verified live: the tracker header carries it at a fixed offset (`IMPM` +
-26-byte name), giving `Area51_Music` → "Area 51", `Credits_Music` → "The Illuminati",
-`Area51Bunker_Music` → "Begin the End". A ~20-line sniffer delivers most of the music arm's value.
+**embedded module title** — verified live: for an **Impulse Tracker** module the header carries it at a
+fixed offset (`IMPM` magic + 26-byte name), giving `Area51_Music` → "Area 51", `Credits_Music` → "The
+Illuminati", `Area51Bunker_Music` → "Begin the End". A ~20-line sniffer delivers most of the music arm's
+value.
+
+**The sniffer must dispatch on magic, and report absence as absence.** `.umx` is a container: UE1 also
+wraps **S3M** (`SCRM` at +0x2C), **XM** (`Extended Module:` at 0), and **MOD** (a 4-byte tag at +0x438,
+with no reliable magic in the oldest variants). Deus Ex ships IT, but `direction/scope.md` puts other UE1
+games in scope, so an IT-only reader silently returns an empty title on a valid S3M. Rule: recognise
+IT/S3M/XM by magic and read each one's title field; on an unrecognised container report
+`title: null` **and** a `format` fact naming what was found (or `unknown`), never a blank that reads as
+"this module has no title". A wrong or silently-absent title is a half-answer.
 Because identity is name-based, **phase (a) ships the classify verbs for both audio kinds** — there
 is no key to invent later and nothing to re-key.
 
@@ -608,16 +803,41 @@ is no key to invent later and nothing to re-key.
 previews, and an opt-in `sound export <ref> --out X.wav` for human audition. Purely additive.
 
 Note what is *not* here: the tool does not tell you where a sound is used. An agent investigates that
-and writes it into the description (§0). Also: **`.unr` must be added to the package extension set**
-in all three places that define it — `config.PKG_EXTS`, `packages._PKG_EXTS` (a test already enforces
-that pair) and `dxpkg._PKG_EXTS` (which has **no** sync test).
+and writes it into the description (§0).
+
+**`.unr` is NOT added to the package extension set. Dropped, with the reason recorded.** An earlier draft
+made it a one-line aside ("`.unr` must be added … in all three places" — `config.PKG_EXTS`,
+`packages._PKG_EXTS`, `dxpkg._PKG_EXTS`). The 2026-07-26 gate established that this is not a catalog
+detail but a **global change to the tool's search path**, with no stated reason and no test:
+
+- `config.PKG_EXTS` drives `config.composed_search_files`, i.e. the load set for *every* consumer — the
+  class index, all texture resolution, materialize's `editor_search_dirs`, and `_validate_ingest_actors`
+  on the **hot author path** (`actor add`), which plan S4 holds to sub-100 ms.
+- `_dedup_by_stem` is **extension-blind** ("identity is the bare stem regardless of extension"), so a
+  `Foo.unr` would silently **shadow** a same-stemmed `Foo.utx`/`Foo.uax` for all consumers.
+- Every measured number in this spec (the ~550 sound corpus, `class list` ~0.4 s, the 26.4 s/~50 s
+  texture cold costs, the 10,826-export sweep) was taken **without** it, so adding it invalidates the
+  measurements the design rests on.
+
+If map-embedded objects are wanted in the catalog later, that is its own spec with its own measurements
+and a `dxpkg._PKG_EXTS` sync test (which does not exist today — only the `config`↔`packages` pair is
+enforced). Nothing in the four kinds needs it.
 
 ## 8. What the catalog unlocks downstream
 
 Author-time validation of **ObjectProperty refs** (`AmbientSound`, `Song`, `OpeningSound`, mesh, …):
-a typo'd ref currently exits 0 and **silently ships a broken level**. It needs only the
-**enumeration** layer — does this ref exist on the composed path — not classification, so it lands in
-step 1 (§14) rather than waiting for the catalog to be populated.
+a typo'd ref currently exits 0 and **silently ships a broken level**.
+
+**Honest scoping — this may not need the catalog at all.** The check is "does this object exist on the
+composed path", and `utexture.TextureResolver.exists()` already answers it for textures (and is already
+wired into `_validate_ingest_actors`, stubbed in tests by `conftest._stub_author_validation`). Validation
+must moreover query the **raw export tables**, not the catalog's kind-scoped enumeration — otherwise a
+perfectly valid `DeusExConAudio…` ref would exit 2 merely because the VO exclusion (§4a) hides it from
+`sound list`. So the honest statement is: **this fix is generalising an existing existence check across
+the remaining property types, and the catalog's package-loading layer is a convenience, not a
+prerequisite.** It stays early in §13 because it is cheap and fixes a live bug — not because the catalog
+unlocks it. *(An earlier draft claimed the catalog "supplies the dependency this was waiting on"; the
+2026-07-26 gate showed that overstates it.)*
 
 ## 9. Carried over from the texture-catalog redesign (that spec is DELETED on build)
 
@@ -686,9 +906,27 @@ step 1 (§14) rather than waiting for the catalog to be populated.
 **Split offline vs integration deliberately.** `bin/test` is the offline suite; real Deus Ex packages
 live in the gitignored install reachable only via `conftest.install_root()` and `-m integration`,
 which `pytest.ini` deselects. So every assertion about the real corpus is integration-only unless it
-runs against a committed fixture. The build **commits tiny synthetic fixture packages** (a hand-built
-`.u`/`.utx` with a couple of textures, a class with a mesh, a sprite class) so the facts that must not
-silently regress are enforced in the offline suite. Note `conftest.py`'s autouse `_schema_cache_off`
+runs against a committed fixture.
+
+**Fixtures come from two sources, and the split is not the one earlier drafts assumed.** This spec once
+said "commits tiny synthetic fixture packages (a hand-built `.u`/`.utx` …)"; the plan then rejected that
+outright as infeasible ("there is no UE1 package writer in the tree") and switched to real packages only.
+**Both were wrong.** Measured 2026-07-26:
+
+- **Synthetic `.utx` is available and is not this spec's to build.** `uedcli/native/pkg_write.py` has
+  `build_package`/`NameTable`/`ExportRec`, and `dev/docs/spikes/2026-07-25-native-texture-formats/pkgfixture_proto.py`
+  is a **committed, self-verifying** v69 `.utx` builder with back-patched `TLazyArray` offsets. The
+  already-gated `specs/2026-07-25-native-texture-formats.md` §5a promotes it to `uedcli/tests/pkgfixture.py`
+  and makes it "the fixture API every offline test is written against". **This spec depends on that,
+  rather than growing a fixture slice of its own** — say so, because two artifacts inventing one writer is
+  how they diverge.
+- **Synthetic `.u` is NOT available** — a hand-built class package with a mesh would be a slice in itself
+  and the mesh layout is not established until the class arm. So class/sound/music assertions use the
+  **34 git-tracked real `.u` packages** under `uned/UED22/` (`DeusEx.u`, `DeusExDeco.u`, `DeusExSounds.u`,
+  `Engine.u`, `Fire.u`, `core.u`), which are enough: `Engine.ZoneInfo`'s defaults, the 84 `bMasked`
+  exports in `DeusExDeco.u`, and the groupless `S_*` sprite icons in `Engine.u` all resolve offline.
+  *(There are **no** tracked `.utx`/`.uax`/`.umx` under `uned/` — the two committed `.utx` live in
+  `uedcli/tests/fixtures/` — which is exactly why the synthetic `.utx` writer matters.)* Note `conftest.py`'s autouse `_schema_cache_off`
 forces `UEDCLI_SCHEMA_CACHE=off`, so class-adapter tests exercising the cache path must opt back in.
 
 - **Engine (offline, fixtures):** ref → identity → preview resolution per kind; cross-package dedup
@@ -717,11 +955,15 @@ forces `UEDCLI_SCHEMA_CACHE=off`, so class-adapter tests exercising the cache pa
   nowhere in the ref); a groupless texture reports `null`, not a missing key; `--group Ladder` selects
   it and `--group ""` selects the groupless ones; group is NOT part of identity (two identical images
   in different groups → one shard, and classifying via either ref classifies both).
-- **Texture `masked` (§4d):** a fixture texture imported masked reports `masked: true` and an ordinary
-  one `false` (never a missing key); the value is READ from the export's stored properties, asserted by
-  a fixture whose palette HAS an index-0 colour but which is **not** flagged — it must report `false`,
-  which is the regression that stops anyone re-deriving the fact from the palette; `--masked` filters;
-  `masked` is not part of identity.
+- **Texture `masked` (§4d):** a texture with the `bMasked` tag reports `true`, one without it reports the
+  **resolved class default** (never a missing key). Three distinct regressions, because the obvious one
+  is not sufficient: (i) a texture whose palette HAS an index-0 colour but which carries no `bMasked` tag
+  reports `false` — stops anyone re-deriving the fact from the palette; (ii) **a texture with no tag whose
+  CLASS defaults `bMasked = True` reports `true`** — this is the one that distinguishes the correct
+  default-relative rule from "absent means false", and without it the wrong rule ships green, since no
+  committed fixture carries the tag at all; (iii) `--masked` filters, and `masked` is not part of
+  identity. Offline sources: tracked `uned/UED22/DeusExDeco.u` has 84 tagged exports; case (ii) needs a
+  synthetic fixture (§12 fixture note).
 - **Frozen identity (§3b):** the committed golden (ref → hex digest over `CoreTexWater.utx`) holds;
   adding a fact to a row does not change any identity.
 - **Texture:** `Engine.Texture` **subclasses** enumerated (FireTexture/WetTexture/WaveTexture);
@@ -740,6 +982,16 @@ forces `UEDCLI_SCHEMA_CACHE=off`, so class-adapter tests exercising the cache pa
   `--depth all`/`--category` hint rather than an empty property list.
 - **Search ranking (§5b):** tokenization of `ClenGrayMetal_A`; field weights; `texture search wall`
   ranks walls first over a zero-classification corpus.
+- **Audio (§7):** the `.umx` title read is pinned by a committed regression (`rules/spikes.md`: pin every
+  checkable finding or it rots) — an IT module's title is read at `IMPM`+26, an S3M's and an XM's from
+  their own header fields, and an unrecognised container reports `title: null` with a `format` fact rather
+  than a blank; the **VO exclusion** drops the configured packages from `sound list`, reports the excluded
+  count on stderr, `--include-vo` restores them, and `sound show`/`classify` still accept an excluded ref
+  by name; `sound preview`/`prewarm` are **absent from the parser** in phase (a), as `music`'s are
+  permanently.
+- **ObjectProperty-ref validation (§8):** a typo'd `AmbientSound`/`Song`/mesh ref exits 2 naming it at
+  author time instead of exiting 0; a **valid but VO-excluded** ref still validates (the check reads raw
+  export tables, not the kind-scoped enumeration); the existing texture path keeps working.
 - **CLI:** `show` vs `preview` output shapes; `preview` emits `<ref>\t<path>`; `--json` carries
   `preview: null` when uncached; `preview --skeleton` emits one JSONL row per ref; empty stdin → exit 0.
 
@@ -748,9 +1000,14 @@ forces `UEDCLI_SCHEMA_CACHE=off`, so class-adapter tests exercising the cache pa
 Value-first (Andrzej, 2026-07-25), with the texture arm no longer first because there is no migration
 to serialize behind:
 
-1. **Engine + enumeration + `list`/`show` + ObjectProperty-ref validation (§8).** Fixes a live bug
-   that silently ships broken levels today. Blocks on nothing.
-2. **Class arm** — prerequisite 1 (schema_cache v2), then productise the spike's mesh decoder into
+1. **Engine + enumeration + `list`/`show` + ObjectProperty-ref validation (§8).** Fixes a live bug that
+   silently ships broken levels today. **Blocks on prerequisite 1 (`schema_cache` v2), NOT on nothing** —
+   an earlier draft said "blocks on nothing" and that is wrong: `DrawType` is a class file-fact (§4) and
+   is default-sourced, and `masked` is default-sourced too (§4d), so without persisted defaults every
+   cold `class list --json` / `class show` / `--drawtype` re-resolves corpus-wide (~14.6 s measured) —
+   the exact outcome decision 7 exists to prevent, on the very first exploratory command. **Prerequisite
+   1 therefore lands FIRST, ahead of the adapters**, and gates the texture arm as well as the class arm.
+2. **Class arm** — then productise the spike's mesh decoder into
    `uedcli/`, `class preview`, and the size/collision/pivot facts. This is the capability an agent
    most lacks: it cannot see what it is placing.
 3. **Texture arm** — prerequisite 2 (non-P8), native decode, pre-filled colours, `--similar`; deletes
@@ -758,27 +1015,64 @@ to serialize behind:
 4. **Audio phase (a)** — enumeration, names, module titles, classify for both audio kinds.
 5. **Audio phase (b)** — after the `.uax` decode spike: spectrograms, duration, `sound export`.
 
+**Two changes need a slice that the plan does not currently have** — the plan predates them and its
+done-when for the class slice still says "no existing `class` OUTPUT changes", which they violate:
+**§4d** (`masked` as a texture fact, in the texture arm, and it moves `masked`'s default-resolution
+dependency onto prerequisite 1) and **§6**'s `class show` default-value reporting (in the class arm,
+including the `uprops` provenance question). Re-cut the plan before building; neither is optional
+polish, and both change user-visible output.
+
 ## 14. Review history
 
-**Revision 2026-07-26 — NOT YET REVIEWED.** Two owner-directed changes landed after the four rounds
-below, so the spec is no longer fully review-gated: (1) **§4c** makes the texture **group** a stored,
-queryable fact with `--group` filters — it was previously consumed only while assigning refs and
-discarded whenever a ref came out 2-part, which hid `Ladder`-group membership, i.e. DX
-climbability; (2) **§3b** pins the pixel-hash identity as load-bearing and **frozen**, with the
-corollary that adding a *fact* never re-keys a shard while changing the *decoder* re-keys all of them;
-(3) **§4d** adds `masked` as a texture fact — **read from the texture export's stored flag**, set at
-import in UnrealEd, never inferred from the palette; (4) **§6** makes `class show` print each
-property's **resolved default** (the spec previously named the trunk-requiring `actor build | actor
-add - | actor prop get -` detour as a problem, then fixed only the three placement fields), and makes a
-class with no own properties say so instead of printing nothing. §3a's row shape and §12's coverage
-list were updated to match.
+**Round 1 + 2 (2026-07-25, 4 cold reviewers)** — see the two entries below.
 
-Findings (3) and (4) came from `spikes/levelbuild-friction/agent-reports.md`, i.e. from agents using
-the current tool on real levels rather than from cold review — a source none of the four rounds below
-had. **One catalog-shaped finding from that log is deliberately NOT specced**: `class list --subclass-of`
-enumerates classes from packages with no loadable v69 stub (the `Endemia.*` case), which the log calls
-the worst-shaped defect it hit. Owner's call, 2026-07-26; logged on `board/inbox.md` so it is not lost. A `spec` round is owed on this
-revision before the plan is re-cut (`CLAUDE.md` "Review gates"); it is logged on `board/inbox.md`.
+**Revision (2026-07-26, owner-directed) — four changes.** (1) **§4c** makes the texture **group** a
+stored, queryable fact with `--group`, where it had been consumed only while assigning refs and discarded
+whenever a ref came out 2-part, hiding `Ladder`-group membership; (2) **§3b** pins the pixel-hash identity
+as load-bearing and **frozen**; (3) **§4d** adds `masked` as a fact read from the export's stored flag;
+(4) **§6** makes `class show` print each property's **resolved default** and makes a class with no own
+properties say so. *(An earlier version of this section said "two owner-directed changes" while listing
+four.)*
+
+**Round 3 (2026-07-26, 3 cold Opus reviewers) — ~58 findings, all three verdicts "not ready to build on".**
+Convergence was high: 17+ findings were hit independently by two or three reviewers, including **all four
+defects in the revision above**. The round is recorded here rather than summarised away because it changed
+the design, not just the prose.
+
+**Owner rulings that resolved the structural findings** (2026-07-26; durable home
+`direction/asset-catalog.md`, parked as `[OWNER — confirm]` items where that tree needs editing):
+
+- **Procedural textures are hashed on what makes them distinct** → new **§3c** (per-class declared
+  parameter set, frozen, class-namespaced). Replaces the earlier consequence that ~326 water/fire/ice
+  textures were enumerable but permanently unclassifiable.
+- **Only pixels are hashed** → §3b. The mask is *not* in identity, so the preview PNG is opaque RGB at
+  native size and cut-out-ness reaches the agent as the `masked` fact instead.
+- **`ScriptedTexture`**: no preview (`preview_state: scripted`, reason on stderr), name-keyed identity.
+- **`classify set` MERGES** (tags union, colours replace, conflicting description refused) → §3b.
+- **JSONL on `classify set -` is an approved third stdin convention** → decision 8.
+- **The catalog dir default is `asset-catalog/`** → `direction/projects-and-config.md` updated.
+- **Sprite previews**: `DrawType == DT_Sprite` → the resolved `Texture` default's image, reported as-is;
+  **editor-icon detection deleted** (the "icon group" signal does not exist — 28 of 32 `Engine.u` texture
+  exports are groupless `S_*` — and judging a glyph useless was the tool inferring meaning).
+
+**What the non-structural findings changed** (all folded, this revision): the group fact's real source is
+the export **Outer**, not the deleted PCX-stem parser; `bMasked` is **default-relative**, so the read rule
+is tag-else-class-default and the texture arm now needs prerequisite 1; `class show`'s provenance is **not**
+free (`resolve_class_defaults` discards it); the row shape carries `masked` and `phash`; **`search` now
+requires terms** (term-less it was byte-identical to `list`); `--placeable` dropped for the existing
+`--include-abstract`; `is_placeable` is **fail-open** so the promised help text was wrong; `--skeleton`
+replaces the stdout stream and carries the artifact path, making §5a's loop actually typecheck; the preview
+cache is its **own pool** with its own budget and a recursive sweep; stat-keyed index files are reclaimed by
+`gc`; the VO exclusion is **config with `--include-vo`**, not a hardcoded DX pattern; the `.umx` sniffer
+dispatches on magic instead of assuming Impulse Tracker; **`.unr` is dropped** from the package extension
+set (global blast radius, no rationale, and it would have invalidated every measurement here); `§8`'s
+premise is scoped down to "generalising an existing existence check"; the fixture story is split into the
+sibling spec's synthetic `.utx` writer plus the 34 tracked `.u` packages; and every citation of the frozen
+`decisions.md` is repointed.
+
+**Still open, and NOT resolvable by an implementer** — `board/inbox.md` carries each as `[OWNER — confirm]`:
+the `conventions.md` carve-out for the third stdin convention, and whether curation gets a general
+file-fact **override** field (decision 10 — `direction/asset-catalog.md` contradicts itself).
 
 **Round 1 (2026-07-25, 2 cold reviewers)** — 21 findings, all folded: the false "reads `.dx` natively"
 claim, class-default-sourced refs, sound identity in phase (a), the kind-less index key, migration
