@@ -106,88 +106,35 @@ queue (don't copy — one home per item).
   `board/someday.md`, `board/HANDOFF-native-full-parity.md`. Worth one pass when `rules/` is added.
 - `p3` `[chore]` **`board/inbox.md` (2,602 lines) and `board/done.md` (1,125) are themselves
   unpruned** — out of scope for the docs restructure, noted there.
-- **[implement] p2 Profile-generator build-review follow-ups — the 2026-07-25 gate's findings, ALL
-  deferred to a follow-up feature branch by Andrzej's explicit decision.** The build review of
-  `brush build extrude`/`revolve` (item 12, squash-merged 2026-07-25) returned **ten findings, none
-  structural**. Andrzej directed: *"Land what you have, fix the rest in another feature branch."* So
-  the branch merged **unfixed** and round 2 never ran. **This is NOT a clean gate** — under
-  `CLAUDE.md` "Review gates", findings 1 and 2 are in-scope defects, and logging in-scope defects so
-  round 2 cannot fire is the pattern that file names as gaming the gate. It is recorded here as
-  Andrzej's ruling, which is a legitimate disposition, so the reason survives outside chat. Whoever
-  picks this up: it is a **docs + tests batch**, no geometry change — the shipped geometry was
-  independently verified correct (see the bottom of this entry).
-  - **(1) `docs/leveldesign/general/brush-shapes.md` contradicts the shipped CLI.** Line 78 still
-    reads "There is no dedicated curved-corridor verb" — `brush build revolve` *is* that verb, and
-    the same branch added `recipes/shapes/curved-corridor.md`. The file has **no extrude/revolve
-    section at all**, while `general/README.md:18` (edited in that branch) advertises it as covering
-    "…spiral, extrude, revolve", and `recipes/shapes/l-ledge.md` links there for the `--axis`→`(U,V)`
-    table, which actually lives in `docs/usage.md`. Also stale: `:88` ("non-box shapes come from
-    composing … `brush build` + `brush clip`") and `:98` (recipe list predating the four new files).
-  - **(2) Spec §4.5 and §6 require two caveats in the verb `--help`; they landed only in
-    `usage.md`.** Confirmed against the real parser: neither `brush build extrude --help` nor
-    `revolve --help` contains "concave" or "native". Missing: the off-grid-solid BSP risk +
-    `--solidity semisolid` steer (§4.5), and the concave / `level preview --native` mis-render
-    caveat (§6). The §2.3 `--rotate`-pivot caveat IS present via the shared `--rotate` help.
-  - **(3) No extrude test would fail if the whole solid were built INSIDE-OUT.** Proven by mutation:
-    negating every outward hint gives an identical vertex set, `doctor` findings = 0, and volume
-    `−2097152` vs `+2097152`. `doctor.check_watertight` detects *inconsistent* winding between
-    neighbours, not a globally consistent inversion, and `_vset` compares vertex sets only — spec §10
-    asked for "vertex sets **and outward normals**". Only `fixtures/builder_extrude.t3d` would catch
-    it, and that is a drift golden. Fix shape: assert `volume(brush) > 0` on the extrude cases (as
-    `test_a_full_turn_revolve_is_a_closed_solid_with_no_caps` already does at 360°), or compare the
-    Newell normals against the cube's six.
-  - **(8) The revolve winding gate's 90° case pins nothing.** In
-    `test_a_revolve_is_doctor_clean_at_a_quarter_half_and_full_turn`, at 16384 UU / 8 segments the
-    unrotated hints are still within 90° of the true normals, so `_face` emits byte-identical
-    output — the case cannot go red. Mutation matrix: 90° → 0 findings for far-cap, sides, or both;
-    180° → 4 / 20 / 20; 360° → 0 / 20 / 20. The **far-cap** hint is therefore exercised by exactly
-    ONE parametrization (180°). The test's comment claiming it was "confirmed RED against unrotated
-    hints" is false for the 90° case (commit `ba94e99`'s message is honest about this). At exactly
-    90° a wrong far-cap hint is the `_dot == 0` case spec §5.7 calls the worst one, and `doctor`
-    cannot see it; only the 90° golden pins it.
-  - **(4) `test_a_heavy_revolve_warns_about_the_poly_budget`'s comment is wrong three ways.** It says
-    "4 profile edges × 16 segments + 2 tiled caps = 66 faces"; the invocation uses **17** segments,
-    `--angle 65536` is a closed turn so there are **no** caps, and the count is **68**. The 17 is
-    load-bearing (4 × 16 = 64 is not > 64, so the advisory would not fire) — the comment hides the
-    one thing a reader needs.
-  - **(5) `dispatch._revolve_sweep`'s docstring lists a check order the code does not use.** It says
-    "…the per-facet angle → the closed-turn minimum → …"; the code runs the closed-turn minimum
-    FIRST, and an inline comment ten lines down explains why it must ("testing it second would make
-    this rule unreachable"). The deviation is correct and recorded in `ba94e99`; only the docstring
-    is wrong.
-  - **(6) `dev/docs/architecture.md:676` and `:683` still list `--group` as a `brush build` flag**
-    — removed 2026-07-24. The same commit fixed this staleness on the user side
-    (`usage.md:533` now says there is no `--group` flag) and left it in the dev paragraph it edited.
-  - **(9) `--rotate`'s new help names extrude/revolve on the merge verbs.** `_common_build_opts` is
-    shared, and `--rotate`'s help now ends "…but for extrude/revolve it is profile coordinate (0,0)".
-    `brush intersect`/`deintersect` override `--at` and `--solidity` in `_merge_opts` but not
-    `--rotate`, so their help discusses two shapes they cannot build (and whose local origin is
-    `--origin` there).
-  - **(10) `recipes/shapes/l-ledge.md`: "Rename the corner into a chamfer for free"** — "rename" is
-    the wrong verb; the instruction that follows replaces one point with two.
-  - **(11, found by hand, NOT by the reviewer) the extrude example in `docs/usage.md` does not run.**
-    It ends `--texture Ancient.Floors.Stone1`, which exits 2: *"texture not found:
-    Ancient.Floors.Stone1 — no Texture of that name on the package path (author-time validation)"*.
-    A copy-pasted doc example fails. Worth noting for calibration: the reviewer read that file
-    closely enough to find three other defects in it and still missed this one.
-  - **Verified CLEAN in the same review, for whoever inherits this:** the shipped geometry is
-    correct under an independent checker (watertightness by directed-edge pairing, signed volume by
-    divergence theorem, per-face 3D convexity) over 75 hand-picked configurations **plus 1400 fuzz
-    cases** — 0 watertight faults, 0 negative volumes, 0 non-convex faces, 0 tracebacks; 547 of 800
-    unconstrained random rings correctly rejected. The units retrofit is a clean deletion (no
-    aliases, builder signatures and parity goldens untouched). Recipe face counts and bboxes check
-    out. Suite green: 2559 passed / 13 skipped vs master's 2459 / 13.
-- **[debug] p3 A huge-but-finite coordinate reaches the user as a `decimal.InvalidOperation`
-  traceback.** `brush build extrude --depth 32 --point 1e200,1e200 --point 0,0 --point 0,1` dies in
-  `emit.fmt_vertex` on `abs(d).quantize(_SIX_DP)` — a raw traceback, which `CLAUDE.md` forbids.
-  **Pre-existing, not caused by the profile generators:** `brush build cube --width 1e25` raises the
-  same on `master`; `--point` merely adds another route. `parse_point` rejects non-finite values and
-  `1e400` dies earlier as a clean `GeometryError`, so it is finite-but-huge that slips through.
-  Measured threshold: fine at `1e20`, traceback from `1e22` (extrude) / `1e23` (cube). Related and
-  also shared with the existing shapes: `--depth 1e-9` exits 2 with "invalid brush geometry:
-  builder: face has < 3 distinct vertices", naming neither the flag nor the value (`cube
-  --height 0.0001` behaves identically). Fix both in `emit`/the shared dimension guard, not per verb.
-  (Build review, 2026-07-25.)
+- **[debug] p2 `brush vertex move` reaches the user as a bare Python traceback.**
+  `brush vertex move <name> --at 64,64,64 --to 1e30,64,64` prints a full traceback ending
+  `ValueError: no brush vertex at (…)` from `uedctl/vertex.py:81`. `dispatch`'s top-level handler
+  chain catches `_SelectionExit`, `_ProjectError`, `LevelSelectionError`, `ConfigError`,
+  `CoordinateError`, `GeometryError`, and the editor errors — but not a plain `ValueError`, so this
+  one escapes. Violates `CLAUDE.md` "never let a Python exception reach the CLI user". Pre-existing
+  and untouched by the profile-generator work; found while probing the neighbouring write-path
+  guard. Fix by raising a named error at the vertex lookup, with a regression test.
+  (Round-2 build review, 2026-07-26.)
+- **[debug] p3 A positive-but-degenerate `--angle` builds a NON-MANIFOLD revolve at exit 0.**
+  `brush build revolve --angle 1 --segments 1 --point 64,0 --point 192,0 --point 192,128
+  --point 64,128` exits 0 with only the off-grid advisory, and `level doctor` then reports
+  `edge … is shared by 4 faces (non-manifold)`. Confirmed IDENTICAL on `master`, so the profile
+  generators did not introduce it — a 1-uu sweep collapses the near and far rings to within
+  `WELD`. Same family as the degenerate-dimension item below, but that one names only
+  `--depth`/`--height`, so this instance would otherwise go uncaptured. The fix likely belongs
+  with it: a minimum representable sweep, named per flag. (Round-2 build review, 2026-07-26.)
+- **[debug] p3 A degenerate-but-positive dimension exits 2 without naming the flag or the
+  value.** `brush build extrude --depth 1e-9 --point 0,0 --point 96,0 --point 96,32` and
+  `brush build cube --width 256 --breadth 64 --height 0.0001` both print `invalid brush geometry:
+  builder: face has < 3 distinct vertices` — true, but it names neither the offending flag nor
+  what the user typed, so there is nothing to act on. The positive-dimension guard
+  (`dispatch._POSITIVE_BUILD_DIMS`) passes them because they ARE > 0; the face only collapses
+  later, when `_dedup_ring` welds vertices that land within `WELD` of each other. Fix at the
+  shared guard (a minimum representable extent, named per flag), not per verb — it affects every
+  shape. **Re-filed 2026-07-26:** this was the second half of the coordinate `[debug]` item, and
+  it was deleted along with the half that WAS fixed (the `decimal.InvalidOperation` traceback,
+  now `model.CoordinateError`, guarded in `emit`). Caught by the round-2 build review; the deletion was the error the
+  board exists to prevent, so it is logged here rather than only corrected in place.
 - **[ANDRZEJ — decide] p3 Should the >64-face POLY-BUDGET advisory cover every `brush build`
   shape, not just `extrude`/`revolve`?** Shipped 2026-07-25 with the profile generators, gated on
   those two shapes (`dispatch._SWEPT_SHAPES`). The OFF-GRID advisory's gate is forced — an ungated

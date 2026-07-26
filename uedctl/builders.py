@@ -103,9 +103,42 @@ def _dedup_ring(ring):
     return out
 
 
+_DIR_EPS = 1e-12
+
+
+def _denoise(v: Vec3) -> Vec3:
+    """Snap a UNIT direction's float noise to exact 0/±1 components.
+
+    Not cosmetic. `_tex_basis` seeds from `min(range(3), key=lambda i: abs(normal[i]))` — the world axis least aligned
+    with the normal — so when two components tie, which one wins is decided by whatever sits in
+    the last bits. A computed normal that lands on `-0.0` or `1e-17` where an analytic one gave
+    exact `0.0` can therefore flip the seed and rotate the whole in-plane texture basis by 90°,
+    which is visible in the built map as a rotated texture on that face. Snapping first makes the
+    choice a function of the geometry rather than of accumulated rounding.
+    """
+    out = []
+    for c in v:
+        for target in (0.0, 1.0, -1.0):
+            if abs(c - target) < _DIR_EPS:
+                c = target
+                break
+        out.append(c)
+    return (out[0], out[1], out[2])
+
+
 def _tex_basis(normal: Vec3):
     """Unit in-plane (TextureU, TextureV) for a face. Zero-length texture vectors
-    crash REBUILD, so seed from the world axis least aligned with the normal."""
+    crash REBUILD, so seed from the world axis least aligned with the normal.
+
+    **Ties resolve to the LOWEST axis index**, via `min`'s first-wins rule. That is not an
+    accident to be tidied away: an axis-aligned normal like `(0,0,1)` ties on X and Y, so every
+    axis-aligned face every builder emits depends on it, and changing it would re-project textures
+    across the whole tool. What PINS it is the committed T3D goldens, which are self-blessed —
+    the editor-blessed parity fixtures (`builder_parity.json`) carry only vertices and a poly
+    count, no texture vectors, so they do NOT constrain this choice against the real editor. `_denoise` makes ties MORE common by design (a snapped
+    component is exactly 0.0, where a residue would have broken the tie arbitrarily), which is
+    the point: the basis becomes a function of the geometry rather than of rounding.
+    """
     ax = min(range(3), key=lambda i: abs(normal[i]))
     seed = [0.0, 0.0, 0.0]
     seed[ax] = 1.0
@@ -409,8 +442,11 @@ def revolve(points, angle_deg: float, segments: int, axis: str = "z",
       - **far cap** (`θ = angle`): `+ŵ` rotated by `angle` (at 90° that is `−û`, perpendicular to
         the extrude hint — a hint 90° off leaves the flip sign-indeterminate AND makes `_tex_basis`
         derive the texture axes from a non-face normal);
-      - **side quad of edge `k` in segment `m`**: the in-plane edge normal `(dv, −du)` rotated by
-        that segment's MID-angle.
+      - **side quad of edge `k` in segment `m`**: the quad's OWN normal, computed from the
+        emitted ring and oriented outward using the segment's mid-angle direction. It is NOT the
+        rotated 2D edge normal — see the comment at that loop for why that shortcut is inexact on
+        a slanted profile edge, and why the error shows up in the texture basis rather than in
+        the winding.
 
     `ItemName`s are `Cap` and `Side<k>`, the latter keyed to the PROFILE EDGE and therefore the
     same in every segment: `brush poly find --item Side0` selects the whole strip swept by the
@@ -449,10 +485,16 @@ def revolve(points, angle_deg: float, segments: int, axis: str = "z",
     polys = []
     if not closed:
         pieces = profile2d.convex_pieces(ring)
-        polys += [_face([at(p, 0.0) for p in piece], world((0.0, 0.0, -1.0)),
+        # Both cap hints are denoised for the same reason the side quads are: `_rotate_about_v`
+        # leaves a float residue (at 180° it returns (-1.22e-16, 0, -1)), and `_tex_basis` seeds
+        # from the least-aligned world axis, so that residue alone can pick a different seed for
+        # the far cap than for the near one — two parallel planes ending up with texture bases
+        # 90° apart. Verified before this snap: near cap TextureU (1,0,0), far cap (0,1,0).
+        near_hint = _denoise(world((0.0, 0.0, -1.0)))
+        far_hint = _denoise(world(_rotate_about_v((0.0, 0.0, 1.0), total)))
+        polys += [_face([at(p, 0.0) for p in piece], near_hint,
                         texture, flags, item="Cap") for piece in pieces]
-        polys += [_face([at(p, total) for p in piece],
-                        world(_rotate_about_v((0.0, 0.0, 1.0), total)),
+        polys += [_face([at(p, total) for p in piece], far_hint,
                         texture, flags, item="Cap") for piece in pieces]
     rings = [[at(p, m * step) for p in ring]
              for m in range(segments if closed else segments + 1)]
@@ -461,12 +503,27 @@ def revolve(points, angle_deg: float, segments: int, axis: str = "z",
         a, b = ring[k], ring[(k + 1) % n]
         du, dv = b[0] - a[0], b[1] - a[1]
         for m in range(segments):
-            # the segment's MID-angle: the quad's true normal is the edge normal turned by the
-            # rotation halfway through the facet it spans
-            outward = world(_rotate_about_v((dv, -du, 0.0), (m + 0.5) * step))
             r0, r1 = rings[m], rings[(m + 1) % len(rings)]
-            polys.append(_face([r0[k], r0[(k + 1) % n], r1[(k + 1) % n], r1[k]],
-                               outward, texture, flags, item=f"Side{k}"))
+            quad = [r0[k], r0[(k + 1) % n], r1[(k + 1) % n], r1[k]]
+            # The hint is the quad's OWN normal, computed from the emitted ring. The obvious
+            # shortcut — the 2D edge normal `(dv, −du)` turned by the facet's mid-angle — is NOT
+            # the true normal: de-rotated, the quad's normal is proportional to
+            # `(dv, −du·cos(Δ/2))` for a facet of angle Δ, so the two agree only when `du == 0`
+            # or `dv == 0` (an axis-parallel profile edge). On any slanted edge — a tapered
+            # column, a chamfered arch ring — the shortcut is off by `90° − 2·atan(√cos(Δ/2))`,
+            # which is 0.56° at the default 22.5° facet, 2.27° at 45° and 9.88° at 90° (it only
+            # approaches Δ/2 as Δ→180°). Small, but it does not wash out. That never
+            # mis-WINDS the face (`_dot(nw, shortcut) = dv² + du²·cos(Δ/2) > 0` always, which is
+            # why `doctor` and a signed-volume check both stay silent), but `_face` also feeds
+            # the hint to `_tex_basis`, and the editor PRESERVES TextureU/TextureV while
+            # recomputing `Normal` — so the error survives into the built map as a texture basis
+            # tilted out of the face plane. The mid-angle direction is still used, but only to
+            # ORIENT the computed normal outward, where its sign is all that matters.
+            radial = world(_rotate_about_v((dv, -du, 0.0), (m + 0.5) * step))
+            outward = _denoise(_normalize(_newell(quad)))
+            if _dot(outward, radial) < 0:
+                outward = _mul(outward, -1.0)
+            polys.append(_face(quad, outward, texture, flags, item=f"Side{k}"))
     brush = Brush(model_name="Model", polys=polys)
     validate_brush(brush)
     return brush
@@ -507,7 +564,7 @@ def staircase(steps: int, depth: float, rise: float, breadth: float,
     default `level materialize`) and the real engine (the default `--game` preview),
     but the COARSE native core assumes convex brushes
     (`uedctl-native/src/csg.rs` `point_in_convex`), so `level preview --native` and
-    `level materialize --core coarse` mis-classify its concave notches. Native
+    the coarse core behind `level preview --native` mis-classifies its concave notches. Native
     materialize's DEFAULT core (`bspcsg`, the incremental bspBrushCSG port) never calls
     `point_in_convex` and is unaffected — see architecture.md."""
     if steps < 1:

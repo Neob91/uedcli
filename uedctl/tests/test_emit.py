@@ -1,6 +1,8 @@
 from decimal import Decimal
 
-from uedctl.model import Actor, Brush, Polygon, parse_t3d
+import pytest
+
+from uedctl.model import Actor, Brush, CoordinateError, Polygon, parse_t3d
 from uedctl.emit import emit_actor, emit_actor_t3d, emit_brush_block, emit_map, snap, clean, fmt_vertex, fmt_loc, quote_group
 from uedctl.tests.conftest import read_fixture
 
@@ -179,3 +181,52 @@ def test_it_round_trips_indexed_array_props_through_emit():
     assert "MultiSkins(2)=Texture'Pkg.Skin'" in out
     again = parse_t3d("Begin Map\n" + out + "\nEnd Map\n").actors["Door1"]
     assert dict(again.props) == dict(actor.props)
+
+
+# --- unrepresentable coordinates fail as a NAMED error, never a traceback ------------------------
+
+
+@pytest.mark.parametrize("value", [float("inf"), float("nan"), Decimal("NaN")])
+def test_a_non_finite_coordinate_is_rejected_at_the_front_door(value):
+    # Non-finite is the ONLY thing `clean` rejects on magnitude grounds, because it is the only
+    # thing neither emitter can write. Anything else is decided per-emitter, below.
+    with pytest.raises(CoordinateError) as exc:
+        clean(value)
+    assert "finite" in str(exc.value)
+
+
+@pytest.mark.parametrize("value", [1e200, Decimal("5e24"), Decimal("-1e22"), Decimal("1e22")])
+def test_a_vertex_too_precise_to_round_is_a_named_error_not_a_traceback(value):
+    # `fmt_vertex` rounds through `quantize(_SIX_DP)`, which under Decimal's 28-digit precision
+    # allows 22 integer digits — so 1e22 is the wall. Before the guard these raised a bare
+    # `decimal.InvalidOperation`, the failure class CLAUDE.md forbids.
+    with pytest.raises(CoordinateError) as exc:
+        fmt_vertex(value)
+    assert str(value).lower() in str(exc.value).lower() or "precision" in str(exc.value)
+
+
+@pytest.mark.parametrize("value", [Decimal("1e22"), Decimal("1e30"), Decimal("1e200")])
+def test_a_location_beyond_the_vertex_wall_still_emits(value):
+    # THE REGRESSION GUARD. `fmt_loc` formats with f"{d:.6f}" and has no precision wall, so its
+    # range has always been wider than `fmt_vertex`'s. A guard placed in the shared front door
+    # instead of at the quantize made these exit 2 — which made an existing trunk carrying such a
+    # Location unreadable to `actor show`/`level doctor`. Master emits every one of them.
+    assert fmt_loc(value).endswith(".000000")
+    clean(value)          # and the shared path must not reject it either
+    snap(value)
+
+
+@pytest.mark.parametrize("value", [32768, -32768, 1e15, Decimal("9999999999999999999999.5")])
+def test_a_representable_vertex_is_not_rejected(value):
+    # The engine's own world is ±32768; the rest are absurd but genuinely emittable, and the
+    # guard must not narrow what already round-tripped.
+    fmt_vertex(value)
+    clean(value)
+
+
+@pytest.mark.parametrize("value", [float("inf"), float("nan")])
+def test_snap_rejects_a_non_finite_coordinate(value):
+    # `snap` bypasses `clean`'s rounding, so without the shared `_guard` a non-finite input raises
+    # OverflowError/ValueError — neither caught by dispatch, i.e. a traceback.
+    with pytest.raises(CoordinateError):
+        snap(value)

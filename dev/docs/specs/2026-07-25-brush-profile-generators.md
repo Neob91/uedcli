@@ -452,7 +452,24 @@ winding).
 |---------------------------|---|
 | near cap (at `θ = 0`)     | `−w` — **unchanged from extrude** (see below) |
 | far cap (at `θ = angle`)  | `+w` **rotated about the revolve axis by `angle`** — for a 90° sweep it is `−û`, exactly perpendicular to `+w` |
-| side quad of edge `k` in segment `m` | `(dv, −du)` mapped to `(u,v)`-world, then **rotated about the revolve axis by that segment's mid-angle** `θ_m + Δ/2` |
+| side quad of edge `k` in segment `m` | the quad's OWN normal, computed from its emitted vertex ring and oriented outward — **not** the formula this row originally gave (see the correction below) |
+
+**CORRECTION (2026-07-26, from the follow-up branch's build review).** This row originally read
+"`(dv, −du)` mapped to `(u,v)`-world, then **rotated about the revolve axis by that segment's
+mid-angle** `θ_m + Δ/2`", and that is what shipped. It is **not** the quad's true normal: de-rotated,
+the true normal is proportional to `(dv, −du·cos(Δ/2))` for a facet of angle `Δ`, so the two agree
+only when `du == 0` or `dv == 0` — i.e. only for an axis-parallel profile edge. Every profile in the
+test suite was a rectangle, so the error went unnoticed until a cold review. The angular error is
+`90° − 2·atan(√cos(Δ/2))`: 0.56° at the default 22.5° facet, 2.27° at 45°, 9.88° at 90°.
+
+It never mis-WINDS a face — `_dot(nw, shortcut) = dv² + du²·cos(Δ/2) > 0` for every `Δ < 180°`,
+which the CLI enforces — so `doctor` and a signed-volume check are both structurally blind to it.
+It lands in the TEXTURE BASIS instead: `_face` seeds `_tex_basis` from the hint, and per
+`unrealed/t3d.md` the editor PRESERVES `TextureU`/`TextureV` while recomputing `Normal`, so the
+error survives into the built map as a texture projected from off the face's plane.
+`builders.revolve` now computes each side quad's own Newell normal and uses the mid-angle direction
+only to ORIENT it (its sign is all that was ever needed). The cap rows above are unchanged and
+remain correct.
 
 **Why the near cap does not rotate.** Under §4.2's sweep map, the `θ = 0` cap lies in the `(û, v̂)`
 plane and the solid grows toward `+ŵ` (every `u > 0`), so its outward is `−ŵ` — identical to

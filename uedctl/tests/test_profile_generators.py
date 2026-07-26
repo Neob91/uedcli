@@ -32,8 +32,32 @@ def _points(*pairs):
 
 def _vset(brush):
     """The brush's vertex SET, rounded past float noise (face order and item names differ by
-    design between a swept brush and the parametric oracle, so only the point set is compared)."""
+    design between a swept brush and the parametric oracle, so only the point set is compared).
+
+    A vertex set is orientation-BLIND — an inside-out solid has exactly the same one — so every
+    caller pairs it with `_volume(...) > 0`, which is the half that catches inverted winding.
+    """
     return {tuple(round(float(c), 6) for c in v) for p in brush.polys for v in p.vertices}
+
+
+def _volume(brush):
+    """Enclosed volume by the divergence theorem over triangle fans. Positive iff every face is
+    wound counter-clockwise seen from OUTSIDE — so this measures orientation as well as size.
+
+    This is the ONLY oracle here that sees a globally inverted solid: `doctor.check_watertight`
+    pairs directed edges, so it detects winding that is INCONSISTENT between neighbouring faces
+    and stays silent when every face is flipped together (verified by mutation — negating every
+    outward hint yields 0 doctor findings, an identical `_vset`, and a negated volume).
+    """
+    total = 0.0
+    for poly in brush.polys:
+        vs = [tuple(float(c) for c in v) for v in poly.vertices]
+        for i in range(1, len(vs) - 1):
+            a, b, c = vs[0], vs[i], vs[i + 1]
+            total += (a[0] * (b[1] * c[2] - b[2] * c[1])
+                      - a[1] * (b[0] * c[2] - b[2] * c[0])
+                      + a[2] * (b[0] * c[1] - b[1] * c[0])) / 6.0
+    return total
 
 
 # --- the cube oracle: the axis mapping and the sweep, checked against builders.cube --------------
@@ -54,6 +78,10 @@ CENTRED_SQUARE = [(-W / 2, -H / 2), (W / 2, -H / 2), (W / 2, H / 2), (-W / 2, H 
 def test_extruded_square_reproduces_the_equivalent_cube(axis, shift, oracle):
     swept = translate_brush(builders.extrude(CENTRED_SQUARE, D, axis), *shift)
     assert _vset(swept) == _vset(builders.cube(*oracle))
+    # The vertex set alone would also pass on an inside-out solid; the volume's SIGN is what
+    # pins the outward orientation, and its magnitude must match the oracle box.
+    assert _volume(swept) == pytest.approx(_volume(builders.cube(*oracle)))
+    assert _volume(swept) > 0
 
 
 def test_extruded_square_has_one_face_per_profile_edge_plus_two_caps():
@@ -119,8 +147,10 @@ def _doctor_findings(brush):
 
 
 def test_a_box_profile_extrude_is_doctor_clean():
-    findings = _doctor_findings(builders.extrude(CENTRED_SQUARE, D, "z"))
+    brush = builders.extrude(CENTRED_SQUARE, D, "z")
+    findings = _doctor_findings(brush)
     assert [(f.category, f.message) for f in findings] == []
+    assert _volume(brush) > 0        # doctor alone is blind to a uniformly inverted solid
 
 
 @pytest.mark.parametrize("axis", ["x", "y", "z"])
@@ -128,8 +158,10 @@ def test_an_irregular_convex_profile_extrude_is_doctor_clean(axis):
     # A non-axis-aligned, off-grid profile: catches an outward hint that is merely "not obviously
     # wrong" on a box, where every face normal is a world axis.
     ring = [(0, 0), (96, 0), (128, 48), (64, 96), (8, 40)]
-    findings = _doctor_findings(builders.extrude(ring, 48.0, axis))
+    brush = builders.extrude(ring, 48.0, axis)
+    findings = _doctor_findings(brush)
     assert [(f.category, f.message) for f in findings] == []
+    assert _volume(brush) > 0        # doctor alone is blind to a uniformly inverted solid
 
 
 # --- concave / oversized profiles: tiled caps, ONE brush -----------------------------------------
@@ -165,14 +197,49 @@ def test_a_concave_or_oversized_profile_extrudes_to_one_brush_with_tiled_caps(ri
 def test_a_tiled_cap_extrude_is_doctor_clean(ring):
     # The point of tiling: every FACE is convex (so no `convex` finding) while the BRUSH is not,
     # and tiling adds only diagonals, so the solid stays watertight (no T-junctions).
-    findings = _doctor_findings(builders.extrude(ring, 32.0, "z"))
+    brush = builders.extrude(ring, 32.0, "z")
+    findings = _doctor_findings(brush)
     assert [(f.category, f.message) for f in findings] == []
+    assert _volume(brush) > 0        # doctor alone is blind to a uniformly inverted solid
 
 
 # --- revolve: the rotated outward hints are the load-bearing part --------------------------------
 
 # A corridor cross-section: 128 uu wide, 128 uu tall, inner wall 64 uu from the bend centre.
 CORRIDOR = [(64, 0), (192, 0), (192, 128), (64, 128)]
+
+# A TAPERED cross-section — a turned column, an arch ring with a batter. Every profile edge of
+# CORRIDOR is axis-parallel in (u,v), which makes it blind to a whole class of hint error: the
+# rotated-2D-edge-normal shortcut is exact iff `du == 0` or `dv == 0`. These two rings have
+# slanted edges and are the ones that actually exercise the side-quad hint.
+TAPERED = [(64, 0), (192, 0), (160, 128), (96, 128)]
+CHAMFERED = [(64, 0), (192, 0), (192, 96), (160, 128), (96, 128), (64, 96)]
+
+
+def _hint_disagreements(brush, tol=1e-6):
+    """Faces whose STORED hint disagrees with the face's own winding-derived normal.
+
+    `builders._face` takes a rough outward direction and uses it for three things: to decide
+    whether to reverse the ring, as the emitted `Normal`, and as the seed for `_tex_basis`. Only
+    the first is self-correcting. So a hint that is merely CLOSE ENOUGH to flip correctly can
+    still leave a face whose `Normal` points somewhere else and whose TextureU/TextureV lie in
+    the wrong plane — and the editor PRESERVES TextureU/V (it only recomputes `Normal`), so wrong
+    texture axes survive into the built map as a visibly mis-projected surface.
+
+    Returns `(item, reason)` pairs so a failure names the offending face.
+    """
+    bad = []
+    for poly in brush.polys:
+        ring = [tuple(float(c) for c in v) for v in poly.vertices]
+        true_n = builders._normalize(builders._newell(ring))
+        stored = tuple(float(c) for c in poly.normal)
+        if builders._dot(true_n, stored) < 1 - 1e-9:
+            bad.append((poly.item, f"Normal {stored} != winding normal {true_n}"))
+        for name, axis in (("TextureU", poly.texture_u), ("TextureV", poly.texture_v)):
+            d = builders._dot(true_n, tuple(float(c) for c in axis))
+            if abs(d) > tol:
+                bad.append((poly.item, f"{name} is not in the face plane (dot={d:g})"))
+    return bad
 
 
 @pytest.mark.parametrize("angle_uu, degrees", [(16384, 90.0), (32768, 180.0), (65536, 360.0)])
@@ -181,25 +248,36 @@ def test_a_revolve_is_doctor_clean_at_a_quarter_half_and_full_turn(angle_uu, deg
     # disagrees with the outward hint it is given, so a hint that has not been rotated with its
     # face emits a BACKWARDS-WOUND face — `doctor`'s "inverted solid → CSG crash / HOM", and
     # unrecoverable in UnrealEd's importer, which derives the face from the winding alone.
-    # Written before the geometry and confirmed RED against unrotated hints (the far cap and
-    # roughly half of a full turn's side faces invert). Note the full turn omits BOTH caps, so the
-    # cap hint is only exercised by the two partial sweeps.
-    findings = _doctor_findings(builders.revolve(CORRIDOR, degrees, 8, "z"))
+    # Written before the geometry and confirmed RED against unrotated hints — but only at 180°
+    # and 360°. MEASURED sensitivity of the doctor assertion alone, by mutation (unrotated
+    # far cap / unrotated sides / both):
+    #     90°  → 0 / 0  / 0  findings      180° → 4 / 20 / 20      360° → 0 / 20 / 20
+    # At 90° an unrotated far-cap hint is exactly perpendicular to the true normal, so
+    # `_dot(nw, out)` is 0, no flip happens, and the winding comes out right by luck — `doctor`
+    # cannot see it. That is the `_dot == 0` case, and it is the WORST one, because the same
+    # degenerate hint still seeds the texture basis. `_hint_disagreements` is what covers it, and
+    # it is why the 90° row above is not evidence that this parametrization is redundant.
+    brush = builders.revolve(CORRIDOR, degrees, 8, "z")
+    findings = _doctor_findings(brush)
     assert [(f.category, f.message) for f in findings] == []
+    assert _hint_disagreements(brush) == []
+    assert _volume(brush) > 0
 
 
-def _volume(brush):
-    """Enclosed volume by the divergence theorem over triangle fans. Positive iff every face is
-    wound counter-clockwise seen from OUTSIDE — so this measures orientation as well as size."""
-    total = 0.0
-    for poly in brush.polys:
-        vs = [tuple(float(c) for c in v) for v in poly.vertices]
-        for i in range(1, len(vs) - 1):
-            a, b, c = vs[0], vs[i], vs[i + 1]
-            total += (a[0] * (b[1] * c[2] - b[2] * c[1])
-                      - a[1] * (b[0] * c[2] - b[2] * c[0])
-                      + a[2] * (b[0] * c[1] - b[1] * c[0])) / 6.0
-    return total
+@pytest.mark.parametrize("ring", [TAPERED, CHAMFERED])
+@pytest.mark.parametrize("degrees, segments", [(30.0, 1), (90.0, 4), (180.0, 5), (360.0, 8)])
+def test_a_slanted_profile_revolve_has_an_exact_outward_hint(ring, degrees, segments):
+    # The case CORRIDOR structurally cannot cover. A profile edge that is neither horizontal nor
+    # vertical in (u,v) has a swept quad whose true normal is proportional to
+    # `(dv, −du·cos(Δ/2))`, so the rotated 2D edge normal is off by `90° − 2·atan(√cos(Δ/2))` — 0.56° at the default 22.5° facet, 2.27° at 45° — and that error is
+    # INVISIBLE to both other oracles here: it never mis-winds the face (the two directions stay
+    # within 90° of each other), so `doctor` is silent and the volume stays positive. It lands in
+    # TextureU/TextureV instead, which the editor preserves. Measured against the pre-fix
+    # builder: 20 disagreements at 90°/4 and 32 at 360°/8 for TAPERED, worst axis 1° out of plane.
+    brush = builders.revolve(ring, degrees, segments, "z")
+    assert _hint_disagreements(brush) == []
+    assert [(f.category, f.message) for f in _doctor_findings(brush)] == []
+    assert _volume(brush) > 0
 
 
 def test_a_full_turn_revolve_is_a_closed_solid_with_no_caps():
@@ -382,6 +460,12 @@ def test_the_emitted_t3d_matches_its_committed_golden(fixture, argv, capsys):
     # pinned against real-editor captures by `builder_parity_cases.py`. So they pin DRIFT, not
     # correctness: face order, the Cap/Side<k> item names and every coordinate. A parity case
     # against the live editor is a follow-up, not covered here.
+    #
+    # `builder_revolve.t3d` was re-blessed once, 2026-07-26, on ONE face: the far cap's
+    # TextureU/V. Its texture basis had been selected by a 6.1e-17 rotation residue rather than by
+    # its geometry (`_tex_basis` seeds from the least-aligned world axis, so a residue can decide
+    # the seed), and `_denoise` now snaps that away. The re-blessed values are exactly in-plane
+    # (`U·N = V·N = 0`); the previous ones were valid too, but arbitrary. Vertices did not move.
     from uedctl.tests.conftest import read_fixture
     assert _run(argv) == 0
     assert capsys.readouterr().out == read_fixture(fixture)
@@ -435,7 +519,9 @@ def test_a_cylinder_still_says_nothing_about_its_own_fractional_ring(capsys):
 
 
 def test_a_heavy_revolve_warns_about_the_poly_budget(capsys):
-    # 4 profile edges × 16 segments + 2 tiled caps = 66 faces.
+    # 4 profile edges × 17 segments = 68 faces, and NO caps — `--angle 65536` is a closed turn,
+    # which omits both. 17 rather than 16 is load-bearing: the advisory fires above 64 faces, and
+    # a full turn's default 16 segments gives exactly 4 × 16 = 64, which is not > 64.
     rc = _run(["brush", "build", "revolve", "--angle", "65536", "--segments", "17",
                "--solidity", "semisolid", *_points(*CORRIDOR)])
     assert rc == 0

@@ -22,6 +22,15 @@ from . import labellib
 # defines the face, not Normal".
 Vec3 = tuple[Decimal, Decimal, Decimal]
 
+
+class CoordinateError(ValueError):
+    """A coordinate that cannot be represented as a T3D value.
+
+    Lives here, in the lowest layer, because `emit` (which detects it) may not import `geometry`
+    (which owns `GeometryError`) — `geometry` already imports `emit`, so the dependency only runs
+    one way. `dispatch` turns it into a clean exit 2.
+    """
+
 _VEC_LINE = re.compile(
     r"^\s*(Origin|Normal|TextureU|TextureV|Vertex)\s+"
     r"([-+]?\d+\.\d+),([-+]?\d+\.\d+),([-+]?\d+\.\d+)\s*$"

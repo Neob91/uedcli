@@ -580,7 +580,7 @@ use `--rotate`, which is whole-actor placement.
   strips, `2 + 4·steps` faces. Its per-step boundaries are watertight T-junctions that `level doctor`
   accepts. **Native caveat:** UnrealEd (the default `level materialize`) and the real engine (the
   default `level preview --game`) build this non-convex brush correctly, but the experimental native
-  CSG core assumes convex brushes, so `level preview --native` and native materialize mis-build its
+  CSG core assumes convex brushes, so `level preview --native` mis-builds its
   concave notches — use `--game`/UnrealEd for staircases. **Spiral is currently rough** (rectangular
   slabs, gaps) — prefer a cylinder column + per-step wedges until it's redone.
 
@@ -595,7 +595,7 @@ hand-written T3D or a chain of `brush clip` planes.
 # an L-shaped ledge, 16 uu deep, swept along Y
 uedctl brush build extrude --axis y --depth 16 --at 0,0,0 \
   --point 0,0 --point 96,0 --point 96,32 --point 32,32 --point 32,96 --point 0,96 \
-  --folder castle.hall --texture Ancient.Floors.Stone1 | uedctl actor add -
+  --folder castle.hall --texture CoreTexBrick.Brick.DrtyGrayWalks_A | uedctl actor add -
 ```
 
 - **`--point U,V` (repeatable, ≥3)** is one profile vertex in the profile's own 2D coordinates;

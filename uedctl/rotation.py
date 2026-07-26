@@ -7,10 +7,14 @@ from __future__ import annotations
 
 import math
 import struct
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal
+
+# Shared with the write path so a huge coordinate exits 2 naming the value instead of
+# raising a bare decimal.InvalidOperation here (rotation quantizes at three sites of its
+# own, which `emit.clean` never sees). `emit` does not import `rotation`, so no cycle.
+from .emit import quantize6
 
 _UU = 65536
-_6DP = Decimal("0.000001")
 
 # UE1 GMath integer sine table (spike 2026-06-19-group-rotate-exact-parity + §92 §41): the editor
 # builds world geometry from a 16384-entry FLOAT32 table indexed by the 16-bit FRotator field shifted
@@ -224,7 +228,7 @@ def rotate_point(p, R, pivot):
     out = matvec(R, rel)
     # quantize at 6-dp with ROUND_HALF_UP to match emit.clean/fmt_loc (the repo's exact-Decimal
     # rounding); emit.clean then re-snaps sub-grid noise to the integer grid.
-    return tuple(Decimal(str(out[i] + float(pivot[i]))).quantize(_6DP, ROUND_HALF_UP)
+    return tuple(quantize6(Decimal(str(out[i] + float(pivot[i]))))
                  for i in range(3))
 
 
@@ -307,7 +311,7 @@ def rotate_local(R, v):
     if R is None:
         return tuple(v)
     f = matvec(R, (float(v[0]), float(v[1]), float(v[2])))
-    return tuple(Decimal(str(c)).quantize(_6DP, ROUND_HALF_UP) for c in f)
+    return tuple(quantize6(Decimal(str(c))) for c in f)
 
 
 _ZERO3 = (Decimal(0), Decimal(0), Decimal(0))
@@ -375,7 +379,7 @@ def world_to_local_point(actor, world):
     if L is None:
         return tuple(_as_dec(world[i]) - _as_dec(loc[i]) + pp[i] for i in range(3))
     rel = matvec(inverse(L), tuple(float(world[i]) - float(loc[i]) for i in range(3)))
-    return tuple(Decimal(str(rel[i] + float(pp[i]))).quantize(_6DP, ROUND_HALF_UP) for i in range(3))
+    return tuple(quantize6(Decimal(str(rel[i] + float(pp[i])))) for i in range(3))
 
 
 def world_to_local_delta(actor, world_delta):

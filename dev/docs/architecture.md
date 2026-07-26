@@ -672,15 +672,16 @@ named `label` deliberately, since `tag` would collide with `Engine.Actor.Tag`. S
     you choose sizes) and `extrude`/`revolve` (**2D-profile sweeps** — you draw the silhouette with
     a repeatable `--point U,V`, then sweep it straight along `--depth` or around an in-plane axis
     through `--angle` UU; see "Swept profile generators" below).
-    Flags `--at`/`--csg`/`--solidity`/
-    `--group`/`--base-name` bake into the emitted T3D. `--base-name` is a **stem**, not the final
+    Flags `--at`/`--csg`/`--solidity`/`--folder`/`--label`/
+    `--base-name` bake into the emitted T3D (there is no `--group` flag — the engine `Group`
+    property is set with `--prop Group=<name>`, removed as a dedicated flag 2026-07-24). `--base-name` is a **stem**, not the final
     Name: `actor add` always appends a `_<rand>` suffix (and the spiral, one actor per brush, a per-brush index),
     so the emitted Name is a prefix (default: the shape/mover-class name). Session-free.
     **`--mover-class <Package.Name>`** makes a **Mover** instead of an `Engine.Brush`: the actor's
     `cls` is the given FQCN and NO `CsgOper` is emitted (a mover is out of world CSG — spike
     2026-06-25), base pose only (keyframes via `mover key`). `--csg`/`--solidity` are REJECTED with
     `--mover-class` (a mover carries neither — exit 2); the base name defaults to the mover-class
-    bare-name (`Engine.Mover` → `Mover0`). `--at`/`--texture`/`--group`/`--base-name` apply as for
+    bare-name (`Engine.Mover` → `Mover0`). `--at`/`--texture`/`--base-name` apply as for
     any brush.
   - **`actor build <Package.ClassName>`** constructs an `Actor` with the given class, location,
     optional `--base-name` (stem for the emitted Name; default the bare class name — give distinct
@@ -1756,7 +1757,7 @@ the spiral lives in one local frame with its column base at z=0.
 materialize`) and the real engine (the default `level preview --game`), but the **coarse** native
 core assumes convex brushes: `uedctl-native/src/csg.rs` `point_in_convex` tests "behind every face"
 (the convex hull, not the true solid), so a stepped brush's concave notches classify as solid.
-That core is what `level preview --native` and `level materialize --core coarse` use. Native
+That core is what `level preview --native` uses (and what `_build_level_model`'s `core=` kwarg selects internally — there is no `--core` CLI flag). Native
 *materialize* by DEFAULT is NOT affected — it runs `core="bspcsg"`, the incremental `bspBrushCSG`
 port, which never calls `point_in_convex` (though `bspcsg.rs` flags a non-convex FIRST Add as an
 unhandled case of its convex world-seed shortcut, so a concave brush should not lead a level's

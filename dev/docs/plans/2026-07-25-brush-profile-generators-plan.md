@@ -220,6 +220,12 @@ that disagrees with its hint (`builders.py:129-130`):
 | far cap (`θ=angle`)         | `+w` rotated about `v̂` by `angle` (`−û` at 90°) |
 | side quad, edge `k`, seg `m`| `(dv, −du)` mapped to world, rotated by the segment **mid**-angle `θ_m + Δ/2` |
 
+> **SUPERSEDED 2026-07-26.** This formula is NOT the quad's true normal — de-rotated that is
+> proportional to `(dv, −du·cos(Δ/2))`, so the two agree only for an axis-parallel profile
+> edge. It shipped, and the error landed in the TEXTURE BASIS (the editor preserves
+> `TextureU`/`TextureV`), not in the winding. `builders.revolve` now computes each quad's own
+> Newell normal. See the correction in spec §5.7.
+
 `ItemName`: `Side<k>` keyed to the **profile edge**, identical across segments (spec §4.4); caps
 `Cap`. Closed turn (`angle == 65536`): omit both caps, weld the last ring to the first.
 
@@ -330,7 +336,7 @@ listed four:
 | `dev/docs/unrealed/leveldesign/kb/geometry-builders.md` | `:7`, §1, §4, §7 | intro list; Revolve now HAS a verb; `AlignToSide` maps 1:1 |
 | `dev/docs/specs/2026-07-24-corpus-brush-idioms.md` | `:99` | its generator vocabulary (an ephemeral spec, but it is the *input* to the reverse-mapping work — update it) |
 | `dev/docs/specs/2026-07-19-leveldesign-docs-skills.md` | `:59` | same |
-| `dev/docs/architecture.md`                  | `:1535-1544` | the staircase native-CSG caveat. **Nuance:** native `materialize` defaults to `core="bspcsg"` (`native/materialize.py:383,:785`), which never calls `point_in_convex` — but `--core coarse` still does. Reword to "the `--native` preview and `--core coarse`", not a blanket deletion |
+| `dev/docs/architecture.md`                  | `:1535-1544` | the staircase native-CSG caveat. **Nuance:** native `materialize` defaults to `core="bspcsg"` (`native/materialize.py:383,:785`), which never calls `point_in_convex` — but the coarse core still does. Reword to "the `--native` preview" (there is no `--core` CLI flag), not a blanket deletion |
 | `uedctl/builders.py`                        | `:305-309`| the same stale claim in the `staircase` docstring |
 | `docs/leveldesign/general/recipes/README.md`| `:21`     | the inline shape-recipe list |
 | `docs/leveldesign/general/recipes/shapes/README.md` | index + `:25`, `:34` | add the four new recipes; **and correct two claims the change falsifies** — "`cylinder --sides N` (the only way to get anything round)" and "'Round' is either a low-side cylinder, or a ring of straight blocks copy-rotated": `revolve` is now a third and more natural way |

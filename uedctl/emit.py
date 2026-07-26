@@ -7,9 +7,9 @@ emitted Normal, defines a face in UnrealEd's importer.
 """
 from __future__ import annotations
 
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 
-from .model import Actor, Brush, Polygon, Vec3
+from .model import Actor, Brush, CoordinateError, Polygon, Vec3
 
 # A coordinate within CLEAN_EPS of an integer is editor/float NOISE and snaps to
 # that integer; anything further is a GENUINE fractional vertex and is preserved
@@ -19,6 +19,18 @@ from .model import Actor, Brush, Polygon, Vec3
 CLEAN_EPS = Decimal("0.001")
 _SIX_DP = Decimal("0.000001")
 
+# There is deliberately NO magnitude constant here, and the representability check is NOT global.
+# The two emitters have genuinely different ranges and always have: `fmt_vertex` rounds through
+# `quantize(_SIX_DP)`, which under Decimal's 28-digit working precision leaves 22 digits for the
+# integer part (the wall is 1e22), while `fmt_loc` formats with `f"{d:.6f}"` and has no wall at
+# all. So the check lives at each quantize site rather than in the shared front door: putting it
+# in `_guard` made a Location that had always emitted start exiting 2, which is how an existing
+# trunk becomes unreadable to `actor show`. `_guard` therefore rejects only NON-FINITE values —
+# never representable in either emitter — and `_quantize6` converts the precision failure into a
+# named error where it actually occurs. Net effect: every value master emitted still emits, and
+# the ones that used to raise `InvalidOperation` now exit 2 instead of printing a traceback.
+# (For scale: the engine's own world is ±32768, far below any of this.)
+
 
 def _to_decimal(value) -> Decimal:
     # str() first so a float's binary tail (0.1 -> 0.1000000000000000055…) never
@@ -26,22 +38,66 @@ def _to_decimal(value) -> Decimal:
     return value if isinstance(value, Decimal) else Decimal(str(value))
 
 
+def _guard(value) -> Decimal:
+    """Decimal-ise a coordinate, rejecting one that is not a finite number.
+
+    Deliberately does NOT check magnitude — see the note above `_to_decimal`: `fmt_loc` can emit
+    values `fmt_vertex` cannot, so a shared magnitude check narrows the Location range.
+
+    NOTE the value reported is the one that reached THIS function, which is not always the one
+    the user typed — `brush build cube --width 1e25` halves the width to a half-extent first, so
+    the message names 5e+24. That is accepted: the emitter cannot see the flag that produced a
+    vertex, and a wrong flag name would be worse than an unfamiliar magnitude.
+    """
+    d = _to_decimal(value)
+    if not d.is_finite():
+        raise CoordinateError(f"coordinate is not a finite number: {value}")
+    return d
+
+
+def quantize6(d: Decimal) -> Decimal:
+    """Round to T3D's 6 decimal places, turning an unrepresentable magnitude into a named error.
+
+    Decimal raises `InvalidOperation` when the result would exceed the context precision; left
+    alone that surfaces as a bare traceback, which `CLAUDE.md` forbids. Asking the operation
+    itself — rather than comparing against a hand-written bound — is what keeps this check exactly
+    equal to the real limit, at the one place the limit applies.
+    """
+    try:
+        return d.quantize(_SIX_DP, rounding=ROUND_HALF_UP)
+    except InvalidOperation:
+        raise CoordinateError(
+            f"coordinate {d} needs more precision than a T3D vertex can carry (6 decimal places "
+            f"within 28 significant digits); UE1 world coordinates run to ±32768") from None
+
+
 def clean(value) -> Decimal:
     """Tolerance-snap a coordinate: snap to the nearest integer when within
     CLEAN_EPS of it (kills editor/float noise), else keep it at 6-dp precision.
-    Always returns a Decimal so fractional vertices round-trip without binary drift."""
-    d = _to_decimal(value)
+    Always returns a Decimal so fractional vertices round-trip without binary drift.
+
+    Raises `CoordinateError` on a value that cannot be emitted at all — non-finite, or too large
+    to round to 6 decimals — so the caller gets a named exit 2 rather than a
+    `decimal.InvalidOperation` traceback out of the formatter.
+    """
+    d = _guard(value)
     nearest = d.to_integral_value(rounding=ROUND_HALF_UP)
     if abs(d - nearest) <= CLEAN_EPS:
         return nearest
-    return d.quantize(_SIX_DP, rounding=ROUND_HALF_UP)
+    return quantize6(d)
 
 
 def snap(value) -> int:
-    """Snap a coordinate to the nearest integer grid point. Used by selection/box
-    math that is inherently integer (builder boxes, INSIDE prediction); vertex
-    emission uses clean() instead so genuine fractions survive."""
-    return int(_to_decimal(value).to_integral_value(rounding=ROUND_HALF_UP))
+    """Snap a coordinate to the nearest integer grid point; vertex emission uses `clean` instead,
+    so genuine fractions survive.
+
+    **No production caller today** — `grep -rn '\bsnap(' uedctl/` finds only this definition and
+    its tests. It was written for selection/box math that is inherently integer (builder boxes,
+    INSIDE prediction), which has since moved elsewhere. Kept, not deleted, because it is the
+    natural integer counterpart to `clean` on the write path and deleting it is a separate call;
+    it goes through the same `_guard` precisely so the two entry points cannot drift apart if a
+    caller reappears. See the board for the delete-or-keep question."""
+    return int(_guard(value).to_integral_value(rounding=ROUND_HALF_UP))
 
 
 def fmt_vertex(value) -> str:
@@ -49,7 +105,7 @@ def fmt_vertex(value) -> str:
     fractions are preserved (cleaned of sub-grid noise first)."""
     d = clean(value)
     sign = "-" if d < 0 else "+"
-    q = abs(d).quantize(_SIX_DP)
+    q = quantize6(abs(d))
     int_part = int(q)
     frac_digits = f"{q - int_part:.6f}"[2:]      # "0.500000" -> "500000"
     return f"{sign}{int_part:05d}.{frac_digits}"

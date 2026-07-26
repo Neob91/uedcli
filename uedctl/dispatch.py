@@ -26,7 +26,7 @@ from pathlib import Path
 from .driver import Driver, DriverError      # DriverError → top-level clean-exit catch (no traceback)
 from .editor import ensure_editor, stop_editor, EditorBusyError
 from .geometry import validate_brush, GeometryError
-from .model import parse_t3d, parse_t3d_actors, Actor, Level
+from .model import parse_t3d, parse_t3d_actors, Actor, CoordinateError, Level
 from .normalize import normalize_level, normalize_actor, canonical_actor_t3d, level_order, \
     is_builder_brush
 from . import order_ops
@@ -128,10 +128,15 @@ def _revolve_sweep(args, points) -> tuple[float, int]:
     """Validate `brush build revolve`'s sweep and return `(degrees, segments)`.
 
     Checked in this fixed order, each failure a clean exit 2 naming the flag AND the value the user
-    typed: `--angle` range → the `--segments` default → `--segments` range → the per-facet angle →
-    the closed-turn minimum → the strictly-off-axis profile rule.
+    typed: `--angle` range → the `--segments` default → `--segments` range → the closed-turn
+    minimum → the per-facet angle → the strictly-off-axis profile rule.
 
-    Two things here are load-bearing:
+    Three things here are load-bearing:
+
+    - **The closed-turn minimum is tested BEFORE the per-facet angle**, not after — see the comment
+      at that check. A full turn in 1 or 2 segments trips both rules, and `65536/2` is exactly the
+      32768 the facet rule rejects, so ordering them the other way would make the closed-turn rule
+      unreachable and report the generic facet message for a mistake that has a specific one.
 
     - **The range check is on the RAW integer, before any conversion**, and the conversion is a
       plain `uu * 360/65536`. `rotation.uu_field`/`uu_to_deg` must NEVER be used: they wrap mod
@@ -177,9 +182,9 @@ def _revolve_sweep(args, points) -> tuple[float, int]:
 def _build_brushes(builders, shape, args):
     """Dispatch `brush build <shape>` to its generator. Returns a Brush or a list of
     Brush (single-element list for convex primitives; staircase → one non-convex
-    Brush; extrude → one swept brush; spiral → a central column plus one wedge tread per step, a
-    list of len > 1). The dispatch caller emits one actor per Brush, so the `len(list) > 1` branch
-    stays live for the spiral."""
+    Brush; extrude and revolve → one swept brush each, non-convex whenever the profile is;
+    spiral → a central column plus one wedge tread per step, a list of len > 1). The dispatch
+    caller emits one actor per Brush, so the `len(list) > 1` branch stays live for the spiral."""
     _check_positive_build_dims(shape, args)
     if shape == "cube":
         return [builders.cube(args.width, args.breadth, args.height, args.texture)]
@@ -3336,6 +3341,12 @@ def dispatch(args) -> int:
         return 2
     except (_ProjectError, level_select.LevelSelectionError, config.ConfigError) as e:
         print(str(e), file=sys.stderr)
+        return 2
+    except CoordinateError as e:
+        # A coordinate that cannot be written as T3D at all (non-finite, or past emit.MAX_COORD).
+        # Raised from the single write path, so it covers every generator and every mutating verb
+        # rather than one flag on one shape.
+        print(f"invalid coordinate: {e}", file=sys.stderr)
         return 2
     except GeometryError as e:
         # Degenerate/invalid brush geometry from a model-side verb (actor add, brush clip/vertex,

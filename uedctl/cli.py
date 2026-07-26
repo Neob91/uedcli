@@ -757,7 +757,7 @@ def build_parser() -> argparse.ArgumentParser:
         bp.add_argument("--at", type=parse_coord, default=(Decimal(0), Decimal(0), Decimal(0)),
                         metavar="X,Y,Z", help="world Location for the emitted actor(s) (default "
                              "origin). For cube/cylinder/cone/sheet it is the brush's geometric "
-                             "CENTER on EVERY axis, including Z. THREE shapes anchor elsewhere: "
+                             "CENTER on EVERY axis, including Z. THE OTHER SHAPES anchor elsewhere: "
                              "the staircase at its front-bottom corner (min X/Y/Z); the spiral at "
                              "the base of its column axis (centred in XY, BOTTOM in Z); "
                              "extrude/revolve at the point profile coordinate (0,0) lands on — "
@@ -807,10 +807,11 @@ def build_parser() -> argparse.ArgumentParser:
                              "Rotation is stored on the actor, NOT "
                              "baked into the vertices; warns on stderr if it pushes any brush "
                              "vertex off the integer grid (overrides any --prop Rotation=…). "
-                             "It turns the brush about the actor's LOCAL ORIGIN, which for most "
-                             "shapes is the brush centre — but for extrude/revolve it is profile "
-                             "coordinate (0,0), so a profile drawn away from (0,0) SWINGS through "
-                             "an arc instead of turning in place")
+                             "It turns the brush about the actor's LOCAL ORIGIN — the SAME point "
+                             "--at anchors, so see --at for exactly where that is per shape: "
+                             "cube/cylinder/cone/sheet centre it, while the staircase, the spiral "
+                             "and extrude/revolve each anchor elsewhere. A shape whose origin is "
+                             "not its centre SWINGS through an arc instead of turning in place")
 
     bbuild = bsub.add_parser("build",
                              help="build a parametric shape and write T3D to stdout (stateless; no level needed)")
@@ -910,10 +911,32 @@ def build_parser() -> argparse.ArgumentParser:
         "grows (default z). The profile's (U,V) then map onto the other two world axes in "
         "right-handed cyclic order: z → U=X,V=Y; x → U=Y,V=Z; y → U=Z,V=X")
 
+    # The two caveats spec §4.5 and §6 require in the verb's own --help. They belong to the
+    # SHAPE, not to any one flag, so they ride the subparser description rather than being
+    # bolted onto an unrelated flag's help.
+    _PROFILE_CONCAVE_NOTE = (
+        "CONCAVE PROFILES are fully supported, as ONE brush: the engine's polygon must be convex "
+        "and holds at most 16 vertices, so a concave profile (an L, a notched cornice) or one "
+        "longer than 16 points has each of its two caps tiled into several convex faces, adding "
+        "only diagonals of your own outline. CAVEAT: UnrealEd (`level materialize`) and the real "
+        "engine (`level preview --game`) build such a brush correctly, but the offline draft "
+        "renderer `level preview --native` assumes convex solids and draws a concave notch FILLED "
+        "IN — a preview artefact, not a geometry bug."
+    )
+    _REVOLVE_OFFGRID_NOTE = (
+        "OFF-GRID BY CONSTRUCTION: every vertex away from theta=0 lands on radius*cos/sin theta, "
+        "and uedctl never snaps coordinates for you. An off-grid SOLID brush throws its BSP "
+        "partition planes off-grid too — the primary cause of slivers, T-junctions and holes in "
+        "the built map. Prefer --solidity semisolid wherever the swept shape is detail rather "
+        "than structure: a semisolid receives cuts but emits no world-splitting planes. uedctl "
+        "warns on stderr when it emits an off-grid solid."
+    )
+
     bextrude = bshape.add_parser(
         "extrude",
         help="sweep a drawn 2D profile in a straight line — the shape for an L-ledge, an arch "
-             "voussoir, a cornice or any other non-box cross-section")
+             "voussoir, a cornice or any other non-box cross-section",
+        description="Sweep a drawn 2D profile in a straight line along --axis. " + _PROFILE_CONCAVE_NOTE)
     bextrude.add_argument("--point", action="append", metavar="U,V", help=_PROFILE_POINT_HELP)
     bextrude.add_argument("--depth", type=float, required=True,
                           help="sweep length along +--axis, in world units (uu); must be > 0")
@@ -923,7 +946,10 @@ def build_parser() -> argparse.ArgumentParser:
     brevolve = bshape.add_parser(
         "revolve",
         help="sweep a drawn 2D profile around an in-plane axis, in flat facets — a curved "
-             "corridor, an arch ring, a turned column")
+             "corridor, an arch ring, a turned column",
+        description=("Sweep a drawn 2D profile around the profile plane's own V axis (the line "
+                     "U=0, through profile coordinate (0,0), so --at is the bend centre). "
+                     + _REVOLVE_OFFGRID_NOTE + " " + _PROFILE_CONCAVE_NOTE))
     brevolve.add_argument("--point", action="append", metavar="U,V", help=_PROFILE_POINT_HELP)
     brevolve.add_argument("--angle", type=int, required=True, metavar="UU",
                           help="total sweep in unreal rotation units — 16384 = 90°, 65536 = a "
@@ -967,6 +993,17 @@ def build_parser() -> argparse.ArgumentParser:
                 a.help = ("world Location for the result: the merged brush is placed so its PIVOT "
                           "sits here. DEFAULT (omitted) = keep the position it was carved at. "
                           "Rejected with --origin keep, which is already an absolute form")
+            elif a.dest == "rotate":
+                # `_common_build_opts`' text ends on the extrude/revolve local-origin caveat,
+                # which is meaningless here — these verbs cannot build a swept profile, and
+                # their local origin is set by --origin, not by a profile's (0,0).
+                a.help = ("SET the emitted actor's Rotation field to this ABSOLUTE orientation "
+                          "in unreal rotation units (16384 = 90°, 65536 = a full turn; a fresh "
+                          "generated actor starts at identity, so no add-vs-override ambiguity). "
+                          "Rotation is stored on the actor, NOT baked into the vertices; warns on "
+                          "stderr if it pushes any brush vertex off the integer grid (overrides "
+                          "any --prop Rotation=…). It turns the brush about the actor's LOCAL "
+                          "ORIGIN, which on this verb is wherever --origin put it")
             elif a.dest == "solidity":
                 a.help = ("override the result's solidity — world-brush result ONLY; INVALID with "
                           "--mover-class (a mover always keeps the source per-face solidity, since a "

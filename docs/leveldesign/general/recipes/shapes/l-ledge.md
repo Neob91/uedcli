@@ -34,7 +34,7 @@ convex faces, because the engine's polygon must be convex. `level doctor` report
   `(0,0)` swings through an arc instead of spinning in place.
 - **Ring order is argument order** and the ring closes itself — do not repeat the first point last.
   Either winding works.
-- **Rename the corner into a chamfer for free**: replace `--point 32,32` with the two points of a
+- **Turn the corner into a chamfer for free**: replace `--point 32,32` with the two points of a
   45° cut (`--point 40,32 --point 32,40`). Doing the same thing with boxes would need a
   [`brush clip`](chamfered-box.md).
 - **Mind the CSG order** if the ledge is additive inside a room you subtract later — `level doctor`
