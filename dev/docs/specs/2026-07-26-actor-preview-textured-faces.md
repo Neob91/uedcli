@@ -25,6 +25,11 @@ of which samples each face's **real texture** through the face's own authored UV
 perspective, whole-level, post-CSG tier); **not** lighting. The native extension stays optional —
 nothing here may make `actor preview` fail on a machine without `cargo`.
 
+**One property IS given up, deliberately (decision 2.13).** `actor preview` today needs no game
+install for a brush-only render. `--faces flat` and `--faces textured` **do** — they load the class
+hierarchy to tell a mover from a real subtraction (§4.7), and `textured` additionally needs the
+textures the scene references. **`--faces wire`, the default, is unchanged and still needs nothing.**
+
 **Why it is worth building.** Every texture-frame defect in
 [`spikes/levelbuild-friction/agent-reports.md`](../spikes/levelbuild-friction/agent-reports.md) —
 mirrored lettering, the half-shifted sheet, the wrapped door trim, the cut-out texture on a solid
@@ -79,6 +84,15 @@ extend that same channel (§6).
     rejected: waiting for that item without folding the accessor in; rejected: building now against
     today's decoder and reworking.*
 12. **`--focus` context dimming is strengthened and VERIFIED BY RENDER, not by arithmetic** (§4.8).
+13. **`flat` and `textured` LOAD THE CLASS HIERARCHY to identify movers** (§4.7) — so the §4.7 cull
+    applies to real subtractions and never to a mover, which is never carved into the world.
+    **Accepted cost, stated plainly: those two modes lose the "works with no game install" property.**
+    `--faces wire`, the default, keeps it entirely. *Rejected: culling on the raw `CsgOper` marker*
+    (simple and index-free, but a door or breakable carrying that marker renders inside-out);
+    *rejected: using the hierarchy only when it happens to be reachable* (the same command would draw
+    two different pictures depending on the environment — the silent inconsistency `conventions.md`
+    rejects); *rejected: dropping the cull* (a subtracted room would render as a solid box hiding
+    everything inside it, which is what makes the filled view useful).
 
 ## 3. CLI surface
 
@@ -97,8 +111,10 @@ One option, on `actor preview`, `stash preview` and `prefab preview` — they sh
 > (`Origin`/`TextureU`/`TextureV`/`Pan`), with NO wireframe, so alignment, panning, mirroring and
 > tiling are visible offline — no editor, no container, no lighting. Under BOTH `flat` and
 > `textured` a subtract brush shows only its far (interior) faces, so geometry inside a subtracted
-> room stays visible. `textured` additionally rejects `--brush-colors` and scaled/sheared brushes, and
-> needs every texture the scene actually references to be readable.
+> room stays visible. **`flat` and `textured` both load the game's class hierarchy** (to tell a mover
+> from a real subtraction), so unlike `wire` they need the game content available. `textured`
+> additionally rejects `--brush-colors` and scaled/sheared brushes, and needs every texture the scene
+> actually references to be readable.
 
 **Three existing `help=` strings are corrected in the same change** (`CLAUDE.md`: help must say what
 a flag actually does):
@@ -287,6 +303,7 @@ untouched.
 | Condition (tested in order)                       | Which faces render
 |---------------------------------------------------|---
 | `flags & PF_Invisible (0x1)`, actor-OR'd per §4.3a | **none** — dropped entirely, fill and line art alike
+| `movers.is_mover(actor, index)`                   | **all** faces — a mover is never carved into the world, whatever `CsgOper` it carries
 | the actor's `CsgOper == CSG_Subtract`             | **only faces NOT facing the camera** — the far/interior surfaces
 | otherwise                                         | **all** faces; the depth buffer resolves visibility
 
@@ -294,12 +311,24 @@ Vertices are stored CCW-from-outside (`t3d.md`), so a subtract's near face is `_
 the set to cull. Non-subtract brushes are **not** back-face culled: a `nonsolid` sheet is one face and
 must be visible from both sides.
 
-**The cull keys on `CsgOper` DIRECTLY, not on `classify_brush`.** That helper's mover arm is a
-documented **name guess** — its own docstring warns that a mover whose class name does not end in
-`Mover` (`CEDoor`, `BreakableGlass`, the lowercase `TNM.*mover` classes) falls through to its
-`CsgOper`. Under `wire` a misclassification costs a shade; here it would **delete every camera-facing
-face** of that actor, rendering a door inside-out. `classify_brush` keeps its existing job of choosing
-`flat`'s fill colour (§4.5), where a name guess is harmless.
+**Mover-ness comes from `movers.is_mover(actor, index)` — the repo's single shared, schema-AWARE
+predicate — not from `classify_brush` and not from the raw `CsgOper` marker.** Both index-free
+candidates are wrong, in opposite directions, and an earlier draft of this spec got it backwards:
+
+| Brush                                        | `classify_brush` | raw `CsgOper` | correct
+|----------------------------------------------|------------------|---------------|---
+| a real subtracted room                        | `subtract`       | `CSG_Subtract`| cull — both agree
+| `SomethingMover` with `CsgOper=CSG_Subtract`  | `mover`          | `CSG_Subtract`| **do not cull** — raw marker gets it wrong
+| `CEDoor` / `BreakableGlass` / `TNM.*mover`    | `subtract`       | `CSG_Subtract`| **do not cull** — BOTH get it wrong
+
+`classify_brush`'s mover arm is a documented **name guess**, and `movers.is_mover`'s own docstring
+records that the `endswith("Mover")` test was already tried and rejected precisely because `CEDoor`,
+`CaroneElevator`, `BreakableGlass` and `BreakableWall` are real movers whose names do not end in
+`Mover`. Under `wire` a misclassification costs a shade; here it deletes every camera-facing face.
+
+**This is why decision 2.13 accepts loading the class hierarchy for these two modes.**
+`classify_brush` keeps its existing job of choosing `flat`'s fill colour (§4.5), where a name guess is
+harmless.
 
 *(That this matches the editor and the game is the owner's ruling of 2026-07-26, quoted in decision
 2.10 — attributed, not asserted as independently verified engine fact.)*
@@ -397,6 +426,8 @@ alongside `--faces textured` triggers exit 2.
 | `preview._face_normal` **and `preview_native._newell`** are both deleted (byte-identical, and `_newell` is the one `world_uv_frame` calls); `preview.py`, **`query.py:13`**, **`polyalign.py:32`** and `preview_native.py` import `newell` from `texframe`. (`builders.py:82` is a third copy returning `Vec3` — deliberately left alone) | `preview.py`, `preview_native.py`, `query.py`, `polyalign.py`
 | **every `world_uv_frame` importer re-points**: `polyalign.py:33` (used at :257/:330/:417), `tests/test_polyalign.py:445`, `tests/test_preview_native.py:167/181/195`. A re-export alias in `preview_native` is forbidden by "No back-compat cruft", so all move in the same change | `polyalign.py`, both test modules
 | `poly_flags_int` moves to `texframe` too (§4.3a) — `preview.py` must not import `preview_native` | `texframe.py`, `preview_native.py`
+| build the `ClassIndex` and resolve **mover-ness per actor** (decision 2.13), passing the result across the seam as data — `preview.py` stays schema-free and never calls `movers.is_mover` itself | `uedcli/dispatch.py`
+| the `--faces` MODE itself needs a channel: a `faces=` parameter on `render_brush_pgm`, `render_brushes_pgm`, `render_quad_pgm` and `dispatch._render_breakdown_grid`'s `_pane`. It cannot be inferred from the seam — `faces=None` would be both `wire` and `flat` | `preview.py`, `dispatch.py`
 | `tests/test_actor_preview.py`'s `_prev` helper hardcodes `brush_colors="csg"`, which under §5's `default=None` scheme is an EXPLICIT value and would trip §2.7's exit 2 | `tests/test_actor_preview.py`
 | the mip-pyramid accessor + the `bMasked` predicate, on the decoder's typed-result contract | **folded into the texture-decoder item — §12**
 | resolve each distinct face ref; map any typed error to exit 2; the four exit-2 validations | `uedcli/dispatch.py`
@@ -429,6 +460,7 @@ matching `render.rs:241-244`.
 PreviewData(points: dict[str, PointRender], faces: FaceTextures | None)
 FaceTextures:  by_ref: dict[str, list[tuple[int,int,bytes,bytes]]]   # casefolded ref → mip pyramid
                masked: dict[tuple[str,int], bool]                    # (actor, poly_idx) → §4.3a
+               movers: frozenset[str]                                # actor names movers.is_mover said yes to
 ```
 
 `by_ref` is keyed on `ref.casefold()` (FName semantics, matching `preview_native._TextureTable`), and
@@ -493,7 +525,8 @@ Validation runs in `dispatch` **before any pixel is drawn** — every failure re
 | a **bare (unqualified)** `Texture=` ref            | exit 2 naming the ref **and saying to qualify it as `Package.Name`**. `_decode_ref` rejects an unqualified ref before any lookup, so this is the most common miss on real content; `preview_native._TextureTable` already emits exactly this hint
 | a ref that does not resolve, or does not decode    | exit 2 listing **every** such ref in one run (not just the first) with the decoder's typed-error case for each — §12's contract makes "which cause applies" answerable
 | a poly with no `Texture` at all                    | `DEFAULT_GREY × shade`, silently — normal, not an error
-| `--faces textured`, scene references NO texture, no resolver | **renders normally** (decision 2.6) — nothing needed, so nothing refused
+| `--faces flat` or `textured` and the class hierarchy cannot be loaded | exit 2 naming the cause — decision 2.13 requires the index to tell a mover from a subtraction, and guessing is what that ruling rejected. `wire` is unaffected
+| `--faces textured`, scene references NO texture, no resolver | **renders normally** (decision 2.6) — nothing needed, so nothing refused. (The class index is still required, per the row above)
 | a `MemoryError` from an absurd `--size`            | caught, exit 2 naming the size — never a traceback
 
 **Every row is scoped to the mode named in it.** `--faces wire`, the default, gains no new failure: it
@@ -531,7 +564,8 @@ secretly checkerboards is exactly that: the picture looks like an answer.
 | **a poly with no `Texture` renders `DEFAULT_GREY × shade`** | §4.3 — the most common `textured` render in practice (a generated brush)
 | **§4.1's shade formula and truncation** on a known normal | a golden PNG cannot separate a shade error from a UV error
 | **§4.2's zero/missing-axis `_tex_basis_default` fallback** | §4.2 justifies preserving it verbatim as the anti-drift guarantee, so it needs its own pin
-| *(the mover/subtract cull test is DEFERRED — §14 escalation 1 decides what the rule is)* | §4.7
+| a `CEDoor`-style mover carrying `CsgOper=CSG_Subtract` is **NOT** culled, while a real subtract brush **is** | §4.7 + decision 2.13 — the case both index-free rules get wrong
+| `--faces flat` and `textured` exit 2 when the class hierarchy cannot be loaded; `wire` still renders | decision 2.13's accepted cost, in both directions
 | **a scene referencing NO texture renders with no resolver**; one referencing a texture exits 2 | decision 2.6's literal "needs"
 | **`flat` drops back-facing edges**; `wire` still draws them | §4.6's hidden-line rule
 | a golden PNG of a textured cube                                                           | end-to-end pixel stability
@@ -613,7 +647,14 @@ either round. Findings are resolved into the sections above; git holds the repor
 Round 2 is the gate's ceiling (`CLAUDE.md` "Review gates"), so what is still standing is escalated
 rather than carried into a third round.
 
-### E1 — how is a "subtract brush" identified, given no class index? (BLOCKS §4.7)
+### E1 — RESOLVED 2026-07-26 by owner ruling: load the class hierarchy (decision 2.13)
+
+The owner ruled that `flat`/`textured` load the class hierarchy and use `movers.is_mover`, accepting
+that those two modes lose the "works with no game install" property while `wire` keeps it. §4.7 and
+§8 implement it; the alternatives and their costs are recorded at decision 2.13. The analysis that
+led there is kept below because it is what makes the ruling's cost legible.
+
+#### (the analysis)
 
 Decision 2.10 culls a subtract's camera-facing faces. **Both candidate rules are wrong, in opposite
 directions, and I got this backwards last revision.**
