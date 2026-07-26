@@ -1,5 +1,13 @@
 # Decisions log
 
+> **FROZEN 2026-07-26 — DO NOT APPEND.** This append-only ledger is being retired and will be
+> deleted. New decisions go to a **revised-in-place** topic doc instead: Andrzej's to
+> `direction/<topic>.md` (only with his explicit yes — `CLAUDE.md` "Direction docs"), yours to
+> `rationale/<topic>.md`. See [`direction/README.md`](direction/README.md),
+> [`rationale/README.md`](rationale/README.md), and
+> [`specs/2026-07-25-docs-restructure.md`](specs/2026-07-25-docs-restructure.md). Entries below
+> migrate topic by topic; `rationale/MIGRATION.md` records where each one went.
+
 The **durable** record of design decisions Andrzej made. Specs and plans
 (`specs/`, `plans/`) are ephemeral and get deleted once their work lands; the
 decisions made inside them must NOT die with them.

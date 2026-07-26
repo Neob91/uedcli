@@ -97,13 +97,20 @@ test files. **Every one is also edited by Tasks 8–10**, and `uedctl/builders.p
 ```sh
 grep -q 'NEVER revise without confirmation' CLAUDE.md
 grep -q 'andrzej.md' CLAUDE.md
-grep -c 'append-only' CLAUDE.md            # -> 0
-grep -c 'wholly.*supersed' CLAUDE.md       # -> 0
-grep -q 'FROZEN — DO NOT APPEND' dev/docs/decisions.md
+grep -q 'There is NO decisions ledger' CLAUDE.md   # the routing rule was rewritten
+grep -c 'wholly.*supersed' CLAUDE.md               # -> 0  (pruning rule gone)
+grep -q 'FROZEN' dev/docs/decisions.md             # plain ASCII: the banner has an em-dash
 test -f dev/docs/direction/README.md && test -f dev/docs/rationale/README.md
 grep -rnE '@[A-Za-z0-9._/-]+\.md' dev/docs/direction/README.md   # -> empty
-wc -l dev/docs/direction/README.md         # -> <= 25
+wc -l dev/docs/direction/README.md         # -> <= 30
 ```
+
+> **Two checks that look obvious are wrong, and cost a build cycle to discover.** `grep -c
+> 'append-only' CLAUDE.md -> 0` fails on the *correct* result, because the sentence abolishing the
+> ledger contains the words "append-only". And matching the freeze banner on `FROZEN — DO NOT
+> APPEND` trips over the em-dash through a shell. Check the routing sentence and the bare word.
+> The README budget is **30**, not 25: 13 topic rows plus a header, separator and per-topic state
+> cannot fit in 25 lines, and the budget was set before the table had state.
 
 **Note:** `CLAUDE.md` grows here (671 → ~715). Task 3 reduces it. Do not stop between the two.
 

@@ -27,7 +27,9 @@ Without being asked, do each of these that applies (a docs-only edit has no
 tests to run; a code change with no user-facing docs has none to update):
 
 - **Update every doc the change touches** — no doc may be left stale (see
-  **Documentation** below for which doc owns what).
+  **Documentation** below for which doc owns what). **EXCEPT
+  `dev/docs/direction/`**: never edit that tree to fix staleness — ask
+  Andrzej (see **Direction docs** below).
 - **Cross off the TODOs it completed**, and **add TODOs for anything
   deferred or left unfinished**.
 - **Run the relevant tests and confirm they pass** (`bin/test`, see
@@ -471,6 +473,44 @@ TTL), so do NOT poll on short model wake-ups:
     known set (`texture search`; future `catalog search`/`docs search`).
     *(decision 2026-07-25 00:43 UTC; `direction.md`.)*
 
+### Direction docs — NEVER revise without confirmation
+
+`dev/docs/direction/<topic>.md` holds what **Andrzej** decided — product intent
+and process rulings alike. It is **MUTABLE**: revised in place, no supersession,
+no dated-entry history (git keeps that). Evidence citations and live-finding
+dates ARE kept, per **Documentation** below.
+
+Be clear-eyed about what that costs. The old append-only ledger meant a
+violation still **preserved the prior text**, and stood out because the file's
+diffs were otherwise pure appends. Revise-in-place destroys the prior text and
+makes a bad edit look exactly like a good one. **Nothing mechanical replaces
+that** — no hook, no check. The rule below is a convention, and the trailer is
+an audit marker, not a gate.
+
+- **NEVER create, revise, reword, or delete anything under
+  `dev/docs/direction/` — including a single `Rejected` bullet — without asking
+  Andrzej and getting an explicit yes.** Propose the exact text and wait.
+  "It follows from what he said" does NOT satisfy this.
+- **`direction/README.md` is the exception**: its index rows and its short model
+  statement may be maintained freely. No topic *content* goes there, and it may
+  **never** contain an `@` import.
+- **Moving a topic OUT of `direction/` needs his yes too** — it removes the
+  protection, so it is as much a change as an edit.
+- **When direction looks stale, ASK — never edit.**
+- **Confirm proactively.** When working in a topic, ask whether its direction
+  doc is still current.
+- **A decision awaiting his yes is parked** as an `[ANDRZEJ — confirm]` item on
+  `board/inbox.md` carrying the proposed text verbatim.
+- Commits touching `dev/docs/direction/` carry an `Andrzej-confirmed: <topic>`
+  trailer, so `git log --grep='Andrzej-confirmed' -- dev/docs/direction/` shows
+  every confirmed edit and an unconfirmed one stands out on inspection.
+
+**`dev/docs/andrzej.md` and `dev/docs/2026-06-20-open-questions-for-andrzej.md`
+are also his — do not touch them at all.**
+
+Every other doc under `dev/docs/`, including `rationale/` and `rules/`, an agent
+maintains on its own.
+
 ### Documentation
 
 **Keep the user-facing docs current with the CLI — this is not optional.**
@@ -523,19 +563,16 @@ know how it works is a bug — rewrite it.
 - **`architecture.md` + `unrealed/*.md`** — *what IS* (current implementation + verified engine
   facts). **MUST be updated to match whenever the implementation changes** — no doc may be left
   describing code that no longer exists or behavior that changed.
-- **`direction.md`** — *what we WANT to build* (the compiled target, synthesized from
-  `decisions.md`; newer decisions override older, superseded points dropped). **Whenever a
-  decision is added to or superseded in `decisions.md`, reconcile `direction.md`** so it always
-  shows the current net target. A gap between `direction.md` and `architecture.md` is expected
-  (it's work not yet done); a gap between `direction.md` and the latest decisions means
-  `direction.md` is stale — fix it.
-- **`decisions.md`** — the ledger of choices + rejected alternatives. Append new entries;
-  supersede (don't reword) an active decision that changes. Two kinds of dead entry MAY be
-  pruned (git keeps history): one a later entry has **wholly** superseded, and spike-result
-  **"gate"** notes whose evidence lives in `spikes/` (the ledger records choices, not
-  experiment outcomes). Everything else is never reworded or removed, only superseded.
-  **Each entry's heading carries the date AND UTC time (`YYYY-MM-DD HH:MM UTC`)** so same-day
-  entries order unambiguously.
+- **`direction/<topic>.md`** — *what ANDRZEJ decided*: product intent AND process rulings.
+  **Revised in place** to state the current answer — no supersession, no dated-entry history
+  (git keeps that). A gap between `direction/` and `architecture.md` is expected (it's work not
+  yet done). **You may NEVER write this tree without his explicit yes** — see **Direction docs**
+  above.
+- **`rationale/<topic>.md`** — *why the CODE is the way it is*: the engineering decisions an
+  agent made (a tolerance, a scope limit, a format choice), keyed by module or subsystem. Also
+  **revised in place**; agents maintain it freely. Every entry states **Why it is this way**,
+  **Rejected** (alternatives killed, so nobody re-proposes them) and **Refs** (spike/code
+  pointers). Point a durable doc here for rationale — never at an ephemeral spec.
 - **`specs/` + `plans/`** — ephemeral per-feature scratch (below). **`spikes/`** — durable evidence.
 
 **`dev/docs/specs/` and `dev/docs/plans/` are ephemeral** — scratch for designing
@@ -551,12 +588,21 @@ kept as durable evidence, cited from `architecture.md`/`unrealed/quirks.md` etc.
 rejected, and the reason — as I make it. A spec must capture what *I* decided,
 not just your proposal; my answers to the design questions are the load-bearing
 part and must not be lost or silently overridden. Because specs are ephemeral,
-the decision itself goes in the **durable, append-only `dev/docs/decisions.md`**
-(the spec links to it), so the choice and its rejected alternatives survive the
-spec's deletion — topic docs (`architecture.md`/`unrealed/*.md`) describe what
-the system *is*, not the roads not taken. Never point a durable doc at a spec
-for "the rationale and rejected alternatives"; point it at a `decisions.md`
-entry.
+the decision must land in a **durable** doc before the spec is deleted:
+
+- **A decision I made** → `dev/docs/direction/<topic>.md`, **revised in place**
+  to state the new current answer. Propose the exact wording and wait for my
+  yes (see **Direction docs** above). While it waits, park it as an
+  `[ANDRZEJ — confirm]` item on `board/inbox.md` carrying the proposed text
+  verbatim, so it survives the session ending.
+- **A decision you made** (an implementation choice) →
+  `dev/docs/rationale/<topic>.md`, revised in place, with its `Rejected`
+  alternatives and its `Refs`.
+
+**There is NO decisions ledger.** Nothing is append-only and nothing is
+superseded — a doc is *edited* to say the current answer, and git holds what it
+used to say. Never point a durable doc at a spec for "the rationale and rejected
+alternatives"; point it at the owning `direction/` or `rationale/` topic.
 
 **Every claim about how UnrealEd behaves carries its evidence.** Cite the
 `spikes/` file it came from, and date any live finding (`confirmed live
