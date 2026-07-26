@@ -19,6 +19,44 @@ reachable from here; changes made here do not propagate to it.)
   own backlog is the board under `dev/docs/board/` (see **TODOs** below).
   When an item is fully done, delete it — never leave it ticked `[x]`.
 
+### Asking the owner — ALWAYS via the question widget, and explain it properly
+
+**Every decision that is the owner's to make is put through Claude Code's
+`AskUserQuestion` widget — never as prose in the chat.** A question buried in a
+wall of text gets skimmed, answered partially, or scrolls away; the widget
+forces the choice to be explicit and records the answer next to the options it
+was chosen from. This covers design forks, rulings on `direction/` topics,
+sequencing calls, and anything a review gate escalates.
+
+**Write the question for someone who does NOT have the spec or the code
+memorised.** The owner decides *what we want*; they are not carrying the current
+state of a 400-line spec or the call graph of `preview.py` in their head. So:
+
+- **Say what the thing IS before asking about it.** Name the verb, flag, file or
+  behaviour in plain words. "`--faces textured` reads a face's texture from the
+  package and paints it into the preview image" — not "the §4.3 fetch path".
+- **NEVER make a section number, symbol name, or piece of jargon load-bearing.**
+  `§12`, `resolve_mips`, `_DIM_ALPHA`, `PF_Masked` mean nothing without the file
+  open. Use them only *after* the plain-English version, never instead of it.
+- **State why it is a decision at all** — what makes it genuinely ambiguous, and
+  why the agent cannot just pick.
+- **Make every option self-contained**, with its concrete consequence: what
+  changes, what it costs, what breaks or gets slower, what it forecloses. The
+  owner should be able to choose without reading anything else.
+- **Give the recommendation first** when there is one, marked as such — a
+  recommendation is not a substitute for laying out the alternatives.
+- **Surface what is genuinely uncertain**, including where the agent's own
+  earlier statement turned out to be wrong. A ruling made on a false premise is
+  worse than no ruling, and has to be re-put.
+
+**Never overrule the owner silently, and never downgrade a real question into a
+board item to avoid asking it.** If a rule of theirs (a `direction/` topic,
+`conventions.md`, a previous ruling) points one way and the agent judges
+otherwise, that is a question for the widget — not a deviation to be recorded in
+a commit message and moved past. Logging is for a real finding that is out of
+scope for the current change; it is not a way to settle a decision on the
+owner's behalf. *(Owner ruling, 2026-07-26.)*
+
 ### After every change
 
 Without being asked, do each of these that applies (a docs-only edit has no
