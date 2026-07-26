@@ -145,7 +145,25 @@ def emit_polygon(p: Polygon) -> str:
         out.append(_vec_line("TextureU", p.texture_u))
     if p.texture_v is not None:
         out.append(_vec_line("TextureV", p.texture_v))
-    if p.pan is not None:
+    if p.pan is not None and tuple(p.pan) != (0, 0):
+        # A ZERO PAN IS NEVER WRITTEN — an absent `Pan` line already means zero, so `Pan U=0 V=0`
+        # and no line at all are the same surface (`U = (Vertex − Origin)·TextureU + PanU`;
+        # unrealed/t3d.md "Polygon sub-fields reference" / "The UV convention"). Unlike an omitted
+        # ACTOR property — which re-imports as the CLASS DEFAULT and so must always be stated
+        # explicitly (unrealed/t3d.md "The corresponding WRITE-side rule") — a polygon Pan is a
+        # field of the brush's FPoly with no class behind it and no default but zero, so the two
+        # spellings are interchangeable on import. UnrealEd's exporter writes only the non-zero
+        # spelling, and the H3 post-verify compares each brush as one block of TEXT, so the
+        # redundant line was a difference wherever it sat and aborted `level materialize` with
+        # nothing written (live 2026-07-26: `brush poly align` on a freshly built brush, whose faces
+        # carry no Pan, gained one on every aligned face). It reported as a bogus VERTEX mismatch
+        # because `verify._first_diff` pairs the two texts up by line number to describe the
+        # difference. Collapsing both spellings HERE — the single serialization choke point behind
+        # the trunk, the `MAP IMPORT` payload, the compare view and the identity hash — keeps all
+        # four stating exactly what the editor would, whichever write path produced the zero
+        # (`polyalign`, `brush poly set --pan-to 0,0`, `clip`'s caps). `Flags` is already omitted
+        # when zero, in the `Begin Polygon` header above; this is the same rule.
+        # rationale/emit.md "A zero polygon Pan is never emitted".
         out.append(f"         Pan      U={p.pan[0]} V={p.pan[1]}")
     for v in p.vertices:
         out.append(_vec_line("Vertex", v))

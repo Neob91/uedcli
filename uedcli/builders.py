@@ -174,10 +174,11 @@ def _face(ring, outward: Vec3, texture=None, flags: int = 0,
     p.normal = out                 # advisory; the editor recomputes from winding
     p.texture_u = u
     p.texture_v = v
-    # pan stays at Polygon's own default (None) -- a freshly built face is never panned;
-    # an explicit (0, 0) here would always emit `Pan U=0 V=0`, which the editor's own re-export
-    # omits as the implicit zero default, breaking canonical-hash equality on first materialize
-    # (2026-06-21, same family of fix as normalize.py's zero-Location handling).
+    # pan stays at Polygon's own default (None) -- a freshly built face is never panned. Since
+    # 2026-07-26 an explicit (0, 0) would be harmless: `emit_polygon` omits a zero Pan either way,
+    # because the editor's re-export omits it as the implicit zero default and emitting it aborted
+    # every materialize on the text compare (unrealed/t3d.md "A poly sub-field has NO class
+    # default"; rationale/emit.md). None is still what a never-panned face MEANS, so it stays.
     p.vertices = ring
     return p
 

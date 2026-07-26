@@ -305,9 +305,10 @@ Three properties of this rule, regression-pinned in `test_normalize.py` / `test_
   `Engine.Camera` defaults `Location` non-zero. Member-wise expansion against each property's own
   default handles all of them uniformly.
 
-**The corresponding WRITE-side rule: uedcli never omits a property to mean "zero".** An omitted
-property re-imports as the CLASS DEFAULT, so omitting one is only ever correct when it provably
-equals that class's default — which the write paths (the trunk emit, the generators, `actor
+**The corresponding WRITE-side rule: uedcli never omits an ACTOR PROPERTY to mean "zero".** (A
+polygon SUB-FIELD is a different thing and this rule does not reach it — see the note at the end of
+this section.) An omitted property re-imports as the CLASS DEFAULT, so omitting one is only ever
+correct when it provably equals that class's default — which the write paths (the trunk emit, the generators, `actor
 rotate`, `brush apply-transform`) have no resolver to check. They therefore write the value
 explicitly and let the compare-side typed expansion handle the equivalence. Three omissions of exactly
 this shape were live silent-corruption bugs until 2026-07-25 — each built a WRONG map that
@@ -338,6 +339,17 @@ and that one runs on the map-INGEST path, into the durable trunk), and the not-y
 defaults `NumKeys`/`KeyPos`/`KeyRot`, and the only class defaulting `Rotation` is not a mover — and
 filed on `board/inbox.md` rather than changed here, because rewriting mover keyframe emission would
 churn every mover trunk on disk for a currently-unreachable case.
+
+**A POLYGON SUB-FIELD is outside this rule, and IS omitted when zero.** The rule above is about
+**actor properties**, and rests entirely on the class default: an omitted property re-imports as the
+class's default, which is not always zero, so the write paths must state the value. `Flags` and `Pan`
+inside a `Begin Polygon` block are not actor properties and have no class default at all — an omitted
+one is zero, always and unconditionally (see "A poly sub-field has NO class default" below). uedcli
+therefore omits both when zero. For `Pan` it MUST: the editor never writes a zero one, so emitting it
+aborted every build (below). For `Flags` the choice is free — the editor DOES sometimes write
+`Flags=0` (`../../../uedcli/tests/fixtures/split7.t3d`), but a `Flags=0` line and no line both parse
+to `flags == 0`, and both compare sides reach the comparison through uedcli's own emit, so whichever
+spelling uedcli picks is applied to both.
 
 ## Comments & unknown properties on import 🔬
 
@@ -478,12 +490,61 @@ Each `Begin Polygon … End Polygon` block carries:
 | `Flags=<n>` | no | `PolyFlags` bitmask: `NotSolid=8`, `Transparent=4`, `SemiSolid=32`. Omitted = 0. |
 | `Link=<n>` | no | computed BSP surface link; never authored, ignored on import per the taxonomy above |
 | `Texture=<ref>` | no | qualified `Package.Name` or bare name; see [`quirks.md`](quirks.md) for binding gotchas |
-| `Pan U=<n> V=<n>` | no | texture pan offset in texture-space units |
+| `Pan U=<n> V=<n>` | no | texture pan offset in texture-space units. **Omitted = 0**, and the exporter writes the line ONLY when a component is non-zero — see below |
 | `Origin X Y Z` | yes (brush) | a point on the polygon plane; used for texture alignment |
 | `Normal X Y Z` | yes (brush) | face normal (ignored by importer — winding is authoritative) |
 | `TextureU X Y Z` | yes (brush) | texture U-axis in world space |
 | `TextureV X Y Z` | yes (brush) | texture V-axis in world space |
 | `Vertex X Y Z` | ≥3 per poly | world-space vertices in CCW-from-outside order |
+
+### A poly sub-field has NO class default — `Pan U=0 V=0` ≡ no `Pan` line ✅
+
+**The OBSERVED fact ✅: `MAP EXPORT` writes `Pan` only when a component is non-zero, and never writes
+`Pan U=0 V=0`** — and the editor accepts an explicitly-zero `Pan` on import and re-serializes it as
+absent, so the two spellings are one value to it. The evidence, all re-checkable:
+
+- **The export corpus.** Not one `Pan U=0 V=0` occurs in any real editor export held in this repo,
+  while non-zero pans are common — of the two genuine `MAP EXPORT` goldens,
+  `../../../uedcli/tests/fixtures/level_small.t3d` carries `Pan U=0 V=384` (×12) and `Pan U=16 V=8`
+  (×36), and `brush_subtract.t3d` carries `Pan U=0 V=384` (×2). So a HALF-zero pan IS written, and
+  only the all-zero pair is dropped. Pinned by
+  `test_engine_facts.test_editor_export_never_writes_an_all_zero_poly_pan`, so a later fixture that
+  contradicted it would fail the suite rather than sit unnoticed.
+- **One live `level materialize` run on the `basement` level**, recorded twice before anyone
+  understood it: it imported a trunk stating `Pan U=0 V=0` and got back a re-export with no `Pan`
+  line on that face, which the line-oriented diagnostic reported as a `Vertex` opposite a `Pan`
+  (`actor 'RoomA_jwvaq0' differs in GEOMETRY at line 7`). Filed as a suspected post-verify FALSE
+  POSITIVE in both
+  [`../spikes/headless-materialize/findings.md`](../spikes/headless-materialize/findings.md) §11 and
+  [`../spikes/levelbuild-friction/agent-reports.md`](../spikes/levelbuild-friction/agent-reports.md)
+  ("post-verify diff prints two sides that look line-shifted") — two reports of the one run, not two
+  runs. It was this.
+- **A minimal repro on a plain cube**, live 2026-07-26 (an independent second run): `brush build
+  cube | actor add -`, then `brush poly find --facing +Z | brush poly align --floor -`, then
+  `level materialize` → exit 2, `differs in GEOMETRY at line 43`,
+  `built: Vertex … / intended: Pan U=0 V=0`.
+
+**The MECHANISM below it is inferred, not verified.** The sub-fields in a `Begin Polygon` block are
+not UnrealScript properties on an actor class — they are fields of the brush model's `FPoly` records,
+so there is no class whose defaults could back them and an omitted one can only take the field's own
+fixed zero. That explains why an omitted `Pan` can safely mean zero, but it is read off the format,
+not extracted from the binary or probed: treat the export/import behavior above as the fact and this
+as the story for it. Note that it does NOT predict what the exporter chooses to *write*: the editor
+does emit `Flags=0` on occasion (`../../../uedcli/tests/fixtures/split7.t3d`, all 7 polys) while
+never emitting a zero `Pan`, so per-field export behavior has to be measured, not derived.
+
+**Consequence for uedcli, and why it bit.** The post-verify compares each actor's brush as **one
+block of text** (`normalize._geometry_text` renders it, `verify` compares the whole string; the
+line-by-line walk in `verify._first_diff` only builds the human diagnostic afterwards). So a
+redundant line is a difference *wherever it sits*, and it is reported by pairing up line numbers,
+which makes it surface as a bogus *vertex* mismatch rather than as "the pan differs". Until
+2026-07-26 `emit_polygon` wrote `Pan U=0 V=0` whenever the model held a zero pan, which
+`brush poly align` produces on any face that had no prior pan (i.e. every face of a freshly built
+brush). `level materialize` then aborted with
+`post-verify mismatch: … differs in GEOMETRY at line 43` and wrote **nothing**, making the whole
+`brush poly find … | brush poly align …` → build workflow unusable. `emit_polygon` now omits a zero
+`Pan` exactly as it already omitted a zero `Flags`; rationale, and the alternatives rejected, in
+[`../rationale/emit.md`](../rationale/emit.md).
 
 ### The UV convention (`U = (Vertex − Origin)·TextureU + PanU`) ✅
 

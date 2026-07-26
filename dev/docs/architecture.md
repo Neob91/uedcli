@@ -482,12 +482,27 @@ compare seam expands member-wise. It is **self-invalidating**: trusted only whil
 back to the current `location`, so any mutation makes the compare fall back to "all three axes
 stated", and no mutation site has to remember to clear it.
 
-**The typed expansion is compare-only — the write side never omits a property to mean zero.**
+**The typed expansion is compare-only — the write side never omits an ACTOR PROPERTY to mean zero.**
 `canonical_actor_t3d` (the durable trunk emit, the `MAP IMPORT` payload and `actor show`) keeps every
 authored property verbatim, so its bytes never depend on which packages are installed. An omitted
 property re-imports as the class default, so omitting one where the default is non-zero silently
 builds a wrong map that post-verify *passes* (both sides share the mistake) — see the three fixed
 instances in `unrealed/t3d.md`.
+
+**A POLYGON SUB-FIELD is the deliberate exception, and is omitted when zero.** `Flags` and `Pan`
+inside a `Begin Polygon` block are `FPoly` fields with no UnrealScript class behind them, so they
+have no class default — absent means a fixed zero, always. `emit_polygon` therefore writes neither
+when zero. For `Pan` that is forced, because it is exactly what `MAP EXPORT` writes back (the editor
+never emits a zero pan; it does sometimes emit `Flags=0`, which is harmless either way since both
+compare sides re-emit through `emit_polygon`). It has to: the geometry half of the
+compare is a **whole-text compare** of `_geometry_text`'s `emit_brush` rendering, so a redundant
+`Pan U=0 V=0` in the intended level is a difference wherever it sits and aborts the build. It does
+not even report as a pan difference: `verify._first_diff` pairs the two texts up by LINE NUMBER to
+describe the mismatch, so the extra line shifts every following one and the message names a *vertex*.
+That shipped: `brush poly align` on a freshly built brush (no prior `Pan` on any face) made every
+subsequent `level materialize` exit 2 with nothing written, until 2026-07-26. See
+`unrealed/t3d.md` "A poly sub-field has NO class default" and
+[`rationale/emit.md`](rationale/emit.md).
 
 ## Folders (uedcli-side actor organization)
 A **folder** is a per-actor, uedcli-side, hierarchical dotted organization path (`castle.tower.roof`)

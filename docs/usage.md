@@ -478,7 +478,9 @@ brush's local frame, so they edit a rotated brush correctly and preserve its `Ro
 to read the `BRUSH:idx` lines `brush poly find` prints from stdin (empty stdin = clean no-op).
 Options: `--texture REF` (qualified `Package[.Group].Name`), `--add-flag`/`--remove-flag` (flag by
 **name**, case-insensitive — `Unlit`, `unlit`, `MASKED` all work; repeatable),
-`--pan-to U,V` / `--pan-by U,V` (integer texel pan).
+`--pan-to U,V` / `--pan-by U,V` (integer texel pan). A pan of `0,0` **is** the unpanned state, so
+`--pan-to 0,0` clears the surface's pan and `brush poly list` then shows `-` in the `pan` column
+(same as a surface that was never panned) — there is no separate "explicitly zero" pan.
 
 ```bash
 uedcli brush poly find WALL --facing +Z | uedcli brush poly set - --texture DeusExDeco.Wood

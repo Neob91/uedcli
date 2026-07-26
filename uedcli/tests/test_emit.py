@@ -230,3 +230,37 @@ def test_snap_rejects_a_non_finite_coordinate(value):
     # OverflowError/ValueError — neither caught by dispatch, i.e. a traceback.
     with pytest.raises(CoordinateError):
         snap(value)
+
+
+def test_a_zero_pan_emits_no_pan_line_at_all():
+    # A polygon's `Pan U=<u> V=<v>` is the texture offset added by the UV formula
+    # `U = (Vertex − Origin)·TextureU + PanU` (unrealed/t3d.md "The UV convention"). The line is
+    # OPTIONAL and an absent one means zero — there is no class default behind it, so `Pan U=0 V=0`
+    # and no Pan line at all are the SAME surface. UnrealEd's own exporter writes only the
+    # non-default spelling: it never emits a zero Pan (no `Pan U=0 V=0` occurs anywhere in this
+    # repo's real editor exports, and a live 2026-07-26 `level materialize` proved the editor drops
+    # one uedcli had imported). Since the H3 post-verify compares the two sides' brush text LINE BY
+    # LINE, emitting the redundant line shifted every following line and aborted the build with
+    # nothing written. So emit is the ONE place both spellings collapse: a zero pan is never
+    # written, exactly as `Flags=0` is never written.
+    p = Polygon(pan=(0, 0), vertices=[(Decimal(0), Decimal(0), Decimal(0))])
+    assert "Pan" not in emit_brush_block(Brush(model_name="Model0", polys=[p]))
+
+
+@pytest.mark.parametrize("pan", [(0, 16), (16, 0), (-1, 0), (7, 3)])
+def test_a_pan_with_any_non_zero_component_is_emitted(pan):
+    # Only the all-zero pan is the default spelling; a half-zero one is real content.
+    p = Polygon(pan=pan, vertices=[(Decimal(0), Decimal(0), Decimal(0))])
+    body = emit_brush_block(Brush(model_name="Model0", polys=[p]))
+    assert f"Pan      U={pan[0]} V={pan[1]}" in body
+
+
+def test_a_zero_pan_parsed_back_is_the_same_surface_as_one_never_panned():
+    # Round-trip: the emitted trunk for a zero-panned poly re-parses with `pan is None`, which every
+    # reader (the renderer, `--pan-by`'s base, the compare) already treats as zero.
+    p = Polygon(pan=(0, 0), origin=(Decimal(0), Decimal(0), Decimal(0)),
+                vertices=[(Decimal(0), Decimal(0), Decimal(0))])
+    a = Actor(name="B", cls="Engine.Brush")
+    a.brush = Brush(model_name="Model0", polys=[p])
+    back = parse_t3d(emit_map([a]))
+    assert back.actors["B"].brush.polys[0].pan is None

@@ -2,9 +2,13 @@
 UnrealEd 2.2 binary behaves, so a binary swap / rebuild that changes the behavior trips a red test
 instead of drifting unnoticed (uedcli `dev/docs/rules/spikes.md` "pin the finding, or it rots").
 
-Each test cites the spike it enforces. These run OFFLINE against the committed `uned/UED22/*.dll`
-(no editor, no capstone/pefile) — they assert byte patterns read out of the binary by the spike's
-disassembly harness.
+Each test cites the spike or engine-fact doc it enforces. They all run OFFLINE, against one of two
+kinds of committed artifact (`dev/docs/rules/spikes.md` accepts either as the pin):
+
+* the committed `uned/UED22/*.dll` — asserting byte patterns read out of the binary by a spike's
+  disassembly harness (no editor, no capstone/pefile needed at test time); or
+* a committed GOLDEN produced by the real editor — a `MAP EXPORT` under `fixtures/` — asserting a
+  property of what the editor actually wrote.
 """
 from __future__ import annotations
 
@@ -373,3 +377,35 @@ def test_save_package_writes_a_temp_and_moves_it_and_never_reads_a_file_through_
             f"Core.dll now imports {absent} — the 'the import table settles nothing about the move' "
             f"reasoning in driver.package_header_problem must be re-derived")
     assert "CreateFileW" in imported and "WriteFile" in imported     # it does open + write files
+
+
+@pytest.mark.parametrize("golden", ["level_small.t3d", "brush_subtract.t3d"])
+def test_editor_export_never_writes_an_all_zero_poly_pan(golden):
+    """UnrealEd's `MAP EXPORT` writes a polygon's `Pan U=<u> V=<v>` line ONLY when at least one
+    component is non-zero — a zero pan is written as NO `Pan` line at all, because an absent one
+    already means zero (`unrealed/t3d.md` "A poly sub-field has NO class default").
+
+    Pinned against the committed editor-exported goldens because uedcli's `emit_polygon` now relies
+    on it: it omits a zero `Pan` so that the trunk states exactly what the editor would, and the H3
+    post-verify (which compares the two sides' brush TEXT) therefore has no spelling difference to
+    trip over. Emitting the redundant line aborted `level materialize` with nothing written until
+    2026-07-26.
+
+    If this ever trips — a future editor build, or a re-captured golden, writing an explicit zero pan
+    — the fix is NOT to start emitting one. An exported `Pan U=0 V=0` parses to `(0, 0)` and re-emits
+    as nothing through the same `emit_polygon`, so both compare sides stay symmetric and uedcli is
+    still correct. The invariant that protects the post-verify is that `pan is None` and
+    `pan == (0, 0)` emit IDENTICAL text — not that uedcli match the exporter byte for byte. A trip
+    here means the documented engine fact (`unrealed/t3d.md`) needs restating, and that anything
+    reasoning FROM it (e.g. reading an absent `Pan` in an export as definitely-zero) needs re-checking.
+
+    Note what is NOT asserted: that a Pan line is rare. A HALF-zero pan IS written (`Pan U=0 V=384`
+    in these very goldens), so only the all-zero pair is the omitted spelling.
+    """
+    t3d = (Path(__file__).resolve().parent / "fixtures" / golden).read_text()
+    pans = re.findall(r"^\s*Pan\s+U=(-?\d+)\s+V=(-?\d+)\s*$", t3d, re.MULTILINE)
+    assert pans, f"{golden} must exercise the fact (it carries no Pan line at all)"
+    assert any(u == "0" or v == "0" for u, v in pans), \
+        f"{golden} no longer exercises the HALF-zero case, so it cannot show what is omitted"
+    for u, v in pans:
+        assert (int(u), int(v)) != (0, 0), f"{golden}: editor wrote an all-zero pan: Pan U={u} V={v}"

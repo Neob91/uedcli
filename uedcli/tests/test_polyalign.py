@@ -473,3 +473,61 @@ def test_engine_fact_cylinder_facet_chord_is_2r_sin_pi_over_n():
         assert len(bottom) == 2
         measured = polyalign._len(polyalign._sub(bottom[0], bottom[1]))
         assert abs(measured - 2 * r * math.sin(math.pi / n)) < 1e-6
+
+
+def _editor_reexport(level):
+    """The intended level as UnrealEd would RE-EXPORT it after a `level materialize` round trip,
+    modelled on the one difference that matters here: the editor's `MAP EXPORT` never writes a
+    zero polygon `Pan`. It writes `Pan U=<u> V=<v>` only when at least one component is non-zero
+    (no `Pan U=0 V=0` appears in any real editor export in this repo's fixtures), because an absent
+    Pan already means zero — the poly Pan has no class default behind it, unlike an actor property.
+
+    So: emit the level exactly as the trunk/`MAP IMPORT` payload does, drop any zero-Pan line, and
+    parse it back. Everything else (coordinates, texture vectors, properties) round-trips through
+    the compare view's own float32/typed reductions and is not modelled here."""
+    from uedcli.emit import emit_map
+    from uedcli.model import parse_t3d
+    text = emit_map(list(level.actors.values()))
+    kept = [ln for ln in text.splitlines() if ln.strip() != "Pan      U=0 V=0"]
+    out = parse_t3d("\n".join(kept) + "\n")
+    out.order = list(level.order)
+    return out
+
+
+def test_align_emits_no_zero_pan_so_materialize_can_verify_the_built_map():
+    """REGRESSION (shipped bug, 2026-07-26). `brush build cube | actor add -` then
+    `brush poly find --facing +Z | brush poly align --floor -` then `level materialize` aborted
+    with `post-verify mismatch: … differs in GEOMETRY at line 43` and wrote NOTHING — the entire
+    documented `poly find | poly align` workflow could not complete.
+
+    Cause: align writes the seed's pan onto every target face, and a freshly built brush carries no
+    Pan at all, so the aligned face GAINED a `Pan U=0 V=0` line in the emitted trunk. The editor
+    imports that (zero pan == no pan) but omits it again on export, and the post-verify compares
+    brush text LINE BY LINE — so the extra line shifted every following line and the compare
+    aborted the build. The fix is in `emit_polygon`: a zero pan is the default spelling and is
+    never written, so the trunk states exactly what the editor would.
+    """
+    from uedcli.normalize import canonical_actor_t3d, compare_view
+    from uedcli.tests.conftest import StubDefaults
+    a = _brush("Box", cube(256, 256, 256))
+    lv = _level(a)
+    f = polyalign.find_faces(a, "Box", facing="+Z")[0]
+    assert a.brush.polys[f].pan is None                    # a built cube has no Pan anywhere
+    polyalign.align(lv, [f"Box:{f}"], "floor")
+    assert "Pan" not in canonical_actor_t3d(a)             # …and aligning must not invent one
+    d = StubDefaults()
+    assert compare_view(_editor_reexport(lv), defaults=d) == compare_view(lv, defaults=d)
+
+
+def test_align_still_carries_a_non_zero_seed_pan_into_the_trunk():
+    """The counterpart guard: only the all-zero pan is a spelling of the default. A seed pan the
+    user dialled in is real content and must reach the trunk, or align would silently discard it."""
+    from uedcli.normalize import canonical_actor_t3d
+    a1 = _brush("W1", cube(64, 8, 128), loc=(32, 0, 0))
+    a2 = _brush("W2", cube(64, 8, 128), loc=(96, 0, 0))
+    lv = _level(a1, a2)
+    f1 = polyalign.find_faces(a1, "W1", facing="+Y")[0]
+    f2 = polyalign.find_faces(a2, "W2", facing="+Y")[0]
+    a1.brush.polys[f1].pan = (7, 3)
+    polyalign.align(lv, [f"W1:{f1}", f"W2:{f2}"], "wall")
+    assert "Pan      U=7 V=3" in canonical_actor_t3d(a2)
