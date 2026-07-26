@@ -25,6 +25,15 @@ The decoder this plan builds is deliberately **not** universal, and the exceptio
 permanent. It must be stated wherever the universality claim is made, in code comments, docs and
 error text:
 
+> **CORRECTED 2026-07-26 (plan review round 1): this is stated more strongly than S3 implements, and
+> S5/S7 order the overstatement into the durable engine-fact docs.** `ambiguous-alpha` is produced
+> only at S3's row 5 — where `bc16` is the *unique* fit. A code-less BC2/BC3 whose chain **also** fits
+> `linear1` falls to row 7, where the implied `Format=0` names `linear1` and it decodes as **P8: a
+> confident wrong image**, the outcome the "never a wrong pixel" invariant forbids. Not a corner —
+> `uned/UED22/uwindow.u:WhiteTexture` is exactly that shape, as are 1,137 UED22 and 5,826 Unreal Gold
+> chains. **The limit must be written with its scope everywhere S5/S7 order it:** *…whose mip chain
+> fits `bc16` **uniquely**; where the chain also fits P8, the implied `Format=0` decodes it as P8.*
+>
 > **A BC2 or BC3 (DXT3/DXT5) texture that stores no `Format` code does NOT decode.** It returns the
 > named error `ambiguous-alpha` and no pixels. BC2 and BC3 have byte-identical sizes and mip chains
 > and differ only in how each block's alpha half is encoded; nothing in the data separates them, and
@@ -78,7 +87,7 @@ is classified**, and treat "which mip array wins" and "what the mask means" as s
 
 ## 0. Shape of the build
 
-**Seven slices, each one commit whose tests pass with no NEW skips versus the pre-slice baseline.**
+**EIGHT slices** (`S1 S2 S2b S3 S4 S5 S6 S7`), **each one commit whose tests pass with no NEW skips versus the pre-slice baseline.**
 
 **Re-measure the baseline at the start of S1 — do not trust a number written here.** The tree moves
 under this plan (concurrent sessions land tests continuously), so the *passed* count is stale by the
@@ -113,13 +122,28 @@ S7  Docs, board, spec deletion
 
 ### 0a. The environment: where the corpora live, and what is committed
 
-The tool lives at `/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedcli`. The git repo root is
-`/home/neob91/Games/LutrisDX/drive_c/DX/LUM` (the `LUM` Deus Ex mod). A fresh checkout on another
-machine has only the **committed** rows.
+> **CORRECTED 2026-07-26 (plan review round 1).** This section described the layout from before
+> uedcli became its own repository, and every path below was wrong as a result. **uedcli's repo root
+> is now `/home/neob91/Documents/Dev/uedcli`** (`git@github.com:Neob91/uedcli.git`), it is no longer a
+> subdirectory of the LUM mod, and **`<repo>/Textures/` does not exist** — `git ls-files Textures` is
+> empty. The old `repo_texture_root() = parents[4]/"Textures"` resolves to `/home/neob91/Documents/Textures`.
+>
+> **Consequence, and the owner's ruling.** The second offline corpus is gone, which removed the
+> offline criterion for the bug that motivates this build, and it invalidated S1's fixture provenance
+> argument — the payload was justified as "lifted from the repo's own **tracked** `Textures/LUM_CoreTex.utx`
+> … already in git, no third-party redistribution", and it is no longer in git. **Owner ruling
+> 2026-07-26: offline fixtures are SYNTHESIZED from scratch, never lifted from game content.**
+> `pkgfixture_proto.texture_package(...)` already builds packages byte-wise; extend it to emit the
+> layouts under test (`CompMips`, BC1/2/3 chains, and a `bMasked` flag — see S2b). *Rejected:
+> committing small real excerpts* — that redistributes copyrighted game content the `.gitignore`
+> rules exist to keep out. *Rejected: making those tests integration-only* — the motivating bug would
+> then have no test that runs by default, which this plan itself calls unacceptable.
+
+A fresh checkout on another machine has only the **committed** rows.
 
 | corpus                             | path | committed? |
 |------------------------------------|------|---|
-| **Deus Ex install**                | `/home/neob91/Games/LutrisDX/drive_c/DX/{System,Textures,Maps}` | **no** — it sits *outside* the repo (the repo root is a subdirectory of it). Reachable in-tree only through the symlink `Tools/uedcli/uned/DeusExAssets → /home/neob91/Games/LutrisDX/drive_c/DX`, which is itself gitignored (`.gitignore:9`). |
+| **Deus Ex install**                | `/home/neob91/Games/LutrisDX/drive_c/DX/{System,Textures,Maps}` | **no** — it sits *outside* the repo (the repo root is a subdirectory of it). Reachable in-tree only through the symlink `Tools/uedcli/uned/DeusExAssets → /home/neob91/Games/LutrisDX/drive_c/DX`, which is itself **tracked** (`git ls-files uned/` lists it; `.gitignore:9` is `_scratch/`, not this). |
 | **The project's own textures**     | `/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Textures/*.utx` — notably `LUM_CoreTex.utx` (17 MB) | **PARTLY.** `git ls-files Textures/` lists four packages: `France.utx`, `LUM_CharacterTex.utx`, `LUM_CoreTex.utx`, `LUM_InfoPortraits.utx` (384 `Texture` exports). `CoreTexSky.utx` + `CoreTexWater.utx` are in the same dir **untracked** (34 more), and sessions add content there. See the count-stability rule below |
 | **Unreal Gold** (227i-patched; its `System/Engine.u` is still the stock 8-slot build) | `/home/neob91/Games/Unreal/pfx/drive_c/Unreal` | **no** — outside every repo, and there is **no in-tree pointer to it at all** |
 | **UED22 editor substrate**         | `Tools/uedcli/uned/UED22/` — 214 tracked files, 34 of them packages this parser reads, 1,998 `Texture` exports | **yes** |
@@ -166,14 +190,14 @@ env pointer at all and S6 adds two conftest helpers beside `install_root()` for 
 same way on `conftest.py`'s own location:
 
 ```python
-def ued22_root() -> Path:      # Tools/uedcli/uned/UED22 — git-tracked, 34 packages
+def ued22_root() -> Path:      # <repo>/uned/UED22 — git-tracked, 34 packages
     return Path(__file__).resolve().parents[2] / "uned" / "UED22"
 
-def repo_texture_root() -> Path:   # <repo>/Textures — PARTLY tracked (4 of 6 pkgs here) and live:
-    return Path(__file__).resolve().parents[4] / "Textures"   # invariants only, never exact counts
+# repo_texture_root() is DELETED — <repo>/Textures no longer exists (see the correction above).
+# Its role is taken by synthesized fixtures from pkgfixture_proto.
 ```
 
-(`parents[2]` is `Tools/uedcli`, `parents[4]` is the repo root — both verified 2026-07-25.)
+(`parents[2]` is the repo root — re-verified 2026-07-26. The old `parents[4]` texture root is gone.)
 
 **Note on paths in older material:** the developer docs tree was renamed `docs/dev/` → `dev/docs/`
 (so `docs/` is physically all user-facing). Older commits, docs and board lines may still spell the
@@ -1041,8 +1065,13 @@ disposition.
    an accessor, not new decoding. Note it must interact correctly with S1's `Mips`-preferred /
    `CompMips` rule — the pyramid handed out is the one S1 selected, and which array it came from is
    part of the typed result.
-2. **`texture_has_bMasked(ref)`** — `"bMasked" in <the export's property block>`. A UE1 bool written
-   **presence-only**, so present ⇒ masked, absent ⇒ not. Evidence and the corpus measurements are in
+2. **`bMasked` rides S2's typed result** — NOT a separate `texture_has_bMasked(ref)` predicate.
+   *(Corrected 2026-07-26, plan review round 1: S2's result already carries the `bMasked` flag, so a
+   second entry point would be a second way to ask one question — against the "one texture-API change,
+   not two" argument that justified folding this slice in. A bool-returning predicate would also
+   violate `direction/conventions.md` "a predicate answers or it RAISES; 'don't know' is never
+   returned as `False`", since it could not distinguish an unqualified ref from an unreadable one.)*
+   The flag is a UE1 bool written **presence-only**, so present ⇒ masked, absent ⇒ not. Evidence in
    [`../spikes/2026-07-26-texture-masked-property/findings.md`](../spikes/2026-07-26-texture-masked-property/findings.md)
    and `unrealed/quirks.md` "Surfaces / polys"; the decode needs no new parser (`_read_props` already
    handles `_PT_BOOL`).
@@ -1053,6 +1082,32 @@ lists "preview degrades and warns" as an example disposition. That is true of `l
 spec's decision 2.6). Do not assume every preview caller degrades; the typed result must carry enough
 to let a caller write either message, including distinguishing a **bare (unqualified) ref** from a
 package/name miss, since the refusing caller has to tell the user to qualify it.
+
+**Sequencing note (round 1).** At S2b's position only P8 decodes, so a `CompMips`-only texture's
+pyramid is an `unverified-format` error until S4 lands BC1 — expected, not a defect. The typed
+result's `array: mips | comp-mips` field that this slice hands out is introduced by **S4**; until
+then S2b reports the array it actually read. Either S4's field moves forward into S1/S2, or this
+slice's contract states the field is absent before S4 — **decide at build time and say which**, so
+the slice stays a self-contained green commit.
+
+**Done when**
+
+- `pkgfixture_proto.texture_package(...)` gains a **`bmasked=`** parameter and can emit a package
+  whose `Texture` export carries the `bMasked` bool. This is a prerequisite, not a nicety: **neither
+  committed fixture carries the flag** (measured: `CoreTexWater.utx` 2 textures / 0 masked;
+  `LUM_InfoPortraits.utx` 1 / 0) and the game corpus is gitignored, so without it the flag ships
+  **untested** — the half `spikes/2026-07-26-texture-masked-property/findings.md` calls load-bearing.
+  Per the §0a correction, this fixture is synthesized, never lifted from game content.
+- A test asserts a synthesized `bMasked` package reports the flag, and a synthesized unmasked one does
+  not — both arms, offline, no game install.
+- A test asserts the mip-pyramid accessor returns **every** level of a synthesized multi-mip texture,
+  each at the expected dimensions, and that the pyramid is the array S1's `Mips`-preferred rule
+  selected.
+- A test asserts an unreadable ref yields the **typed error**, never a bare `None` and never a
+  truthy-but-empty result (see the mesh-skin caller trap in S2).
+- `architecture.md`'s `utexture.py` module description (grep `UTexture/UPalette decoder`) is updated
+  to name the new public surface — §0f's "docs move with the slice" applies to this slice too, and
+  round 1 found it had no docs obligation at all.
 
 ### S3 — layout detection from the mip chain
 *D1 — the governing idea, and the slice where the spec was most optimistic.*
@@ -1373,22 +1428,33 @@ property-gated `CompMips`, the arbitration rule — go where format facts live,
 
 ### S7 — docs, board, spec deletion
 Cross-cutting only (per-slice docs already landed):
-- **`decisions.md`** — the arbitration decision (AD1 + AD2) is **already in the ledger** as
-  *"2026-07-25 17:45 UTC — Texture layout arbitration is a tiebreak-and-veto; `format-disagreement`
-  is deleted and a code-less BC2/BC3 does not decode"*; do **not** re-record it. S7 appends only what
-  the BUILD itself learns beyond it: the surviving builder-decided call of §5 (mask semantics ignore
-  `bMasked`/`bAlphaTexture`), anything the implementation forces, and the outcome of the veto and
-  `ambiguous-alpha` cases in practice. Append; never reword an existing entry.
+- **~~`decisions.md`~~ — CORRECTED 2026-07-26 (plan review round 1): that ledger is FROZEN.** Its
+  header says "**FROZEN 2026-07-26 — DO NOT APPEND**", and `CLAUDE.md` says "There is NO decisions
+  ledger." Appending would be a rule violation as the build's final act, and every
+  "recorded in `decisions.md` 2026-07-25 …" citation in §0c/§0d is now a dangling pointer
+  (`rationale/MIGRATION.md` maps old entries to their new homes). Decisions now split by author:
+  - **the agent's** — the §5 mask-semantics call (index 0 from the data; `bMasked`/`bAlphaTexture`
+    reported, never applied), anything the implementation forces, and how the veto and
+    `ambiguous-alpha` cases behaved in practice → **`rationale/texture-decode.md`**, revised in
+    place, each entry stating *Why it is this way* / *Rejected* / *Refs*.
+  - **the owner's** — AD1/AD2 arbitration and the synthesized-fixture ruling → propose the exact text
+    and park it as an `[OWNER — confirm]` item on `board/inbox.md`; it may only be written into
+    `direction/` with an explicit yes and a `Confirmed:` commit trailer.
 - **`architecture.md`** — the four non-preview texture passages of §0f (grep
   `textures decode natively`, `utexture.TextureResolver.exists`, `the native` +
   `UTexture/UPalette decoder`, `utexture.TextureResolver.resolve_masked`).
 - **`unrealed/package-format.md`** — finish the `UTexture`/`FMipmap`/`CompMips` body section under
   §`Object body layouts (byte-exact) 🔬` and the layout-detection rule, with confidence markers, and
   **state the `ambiguous-alpha` limit** beside the arbitration rule; cite S6's spike markdown.
-- **`direction.md`** — the asset-catalog section's "**produces the picture** (decodes a texture,
-  renders a mesh natively)" is where the compiled target claims universal decoding. Reconcile it with
-  the limit: a code-less BC2/BC3 texture is reported undecodable rather than drawn. One clause, but
-  the maintenance rule requires it because a decision landed.
+- **`direction/asset-catalog.md` — DO NOT EDIT; propose and wait.** *(Corrected 2026-07-26: the old
+  `direction.md` asset-catalog section is now a MIGRATED stub; the live text is
+  `direction/asset-catalog.md:16`.)* Its "**produces the picture** (decodes a texture, renders a mesh
+  natively)" is where the compiled target claims universal decoding, and reconciling it with the
+  limit *is* a change to the owner's tree — `CLAUDE.md`: "NEVER create, revise, reword, or delete
+  anything under `dev/docs/direction/` … without asking the owner and getting an explicit yes."
+  S7 therefore **parks an `[OWNER — confirm]` item on `board/inbox.md` carrying the proposed clause
+  verbatim** (a code-less BC2/BC3 texture that fits `bc16` uniquely is reported undecodable rather
+  than drawn), and does not touch the file.
 - **`plans/2026-07-25-unified-asset-catalog-plan.md`** — mark its `P1` landed; correct its S1 note
   that "there is no UE1 package writer in the tree" (§0e2).
 - **board** — the item is **already on `to-build.md`**, not `to-plan.md`: `to-plan.md`'s "Native
