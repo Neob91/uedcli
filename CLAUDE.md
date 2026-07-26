@@ -389,10 +389,35 @@ follows the batching rules above.
 
 **Commit after every change.** Once a change is complete — code, docs,
 TODO updates, all of it — commit it before moving on, without waiting
-to be asked. Stage only the specific files you touched by explicit
-pathspec (`git commit -- <paths> ...`); never `git add .` or `git
-commit -a` (a concurrent agent may have staged its own files). Short
-imperative subject, no `type:` prefix, no AI attribution.
+to be asked. Short imperative subject, no `type:` prefix, no AI
+attribution.
+
+**COMMIT ONLY YOUR OWN HUNKS — never another session's, unless told
+to.** File-level pathspecs are NOT sufficient: several agents work this
+repo at once, so a file you edited may ALSO carry hunks you did not
+write, and `git commit -- <path>` commits the whole file including
+theirs.
+
+- **Read `git diff <path>` for every file before committing it**, and
+  satisfy yourself that every hunk is one you made. A file you never
+  touched is obviously not yours; a file you *did* touch is the
+  dangerous case.
+- **If a file carries foreign hunks, stage only yours** — write your
+  hunks to a patch and `git apply --cached` it, then commit the index.
+  (`git add -p` is interactive and unavailable in this environment.)
+  Never commit the file wholesale "because most of it is mine".
+- **Never `git add .`, `git add -A` or `git commit -a`.**
+- **Leave what is not yours alone** — do not revert it, do not stage it,
+  do not tidy it. It belongs to a session still working.
+- **Check the index is clean before you stage** (`git diff --cached
+  --quiet`): a non-empty index is another session mid-commit, and
+  anything already staged will ride along on your `git commit`.
+
+The same care applies to `git push` on a shared branch: it publishes
+every local commit on that branch, including other sessions' commits
+that happen to be sitting there. That is normally fine and is not a
+reason to skip pushing your own work — but do not be surprised by it,
+and never treat a push as "only my change went out".
 
 **Always push your work — never lose it.** After committing, `git push`
 so the work lands on the remote and is never stranded only in a local
