@@ -30,7 +30,9 @@ error text:
 > only at S3's row 5 — where `bc16` is the *unique* fit. A code-less BC2/BC3 whose chain **also** fits
 > `linear1` falls to row 7, where the implied `Format=0` names `linear1` and it decodes as **P8: a
 > confident wrong image**, the outcome the "never a wrong pixel" invariant forbids. Not a corner —
-> `uned/UED22/uwindow.u:WhiteTexture` is exactly that shape, as are 1,137 UED22 and 5,826 Unreal Gold
+> `uned/UED22/uwindow.u:WhiteTexture` is exactly that shape, as are **1,089** UED22 chains
+> (re-measured 2026-07-26: of the 1,137 ambiguous, 1,089 are `{linear1, bc16}` and 48 are
+> `{linear1, bc8}`, which cannot be BC2/BC3) and the corresponding Unreal Gold
 > chains. **The limit must be written with its scope everywhere S5/S7 order it:** *…whose mip chain
 > fits `bc16` **uniquely**; where the chain also fits P8, the implied `Format=0` decodes it as P8.*
 >
@@ -38,6 +40,17 @@ error text:
 > named error `ambiguous-alpha` and no pixels. BC2 and BC3 have byte-identical sizes and mip chains
 > and differ only in how each block's alpha half is encoded; nothing in the data separates them, and
 > this design never guesses.
+>
+> **CORRECTED 2026-07-26 (plan review): the BC1 half of this claim is FALSE as stated, and needs the
+> same `uniquely` scoping the BC2/BC3 half already got.** `bc8` and `linear1` are byte-identical
+> whenever `⌈w/4⌉·⌈h/4⌉·8 == w·h`, i.e. for any non-4-aligned dimension. **Re-measured 2026-07-26**
+> over `uned/UED22`: of the 1,137 ambiguous chains, **1,089 are `{linear1, bc16}` and 48 are
+> `{linear1, bc8}`** — e.g. `DeusExUI.u:HUDItemsBorder_Center` (64×2) and `:HealthButtonNormal_Center`
+> (2×16). Such a code-less BC1 file reaches S3 **row 7**, where the implied `Format=0` names `linear1`
+> and it decodes as **P8 — a confident wrong image**. Write it as: *a code-less BC1 file whose chain
+> fits `bc8` **uniquely** decodes; where the chain also fits `linear1`, the implied `Format=0` decodes
+> it as P8.* S5 and S7 order this sentence into the durable engine-fact docs, so the scoping must
+> travel with it.
 >
 > **A BC1 (DXT1) file in the same position DOES decode** — 8-byte blocks are shared with no other
 > layout we decode, so the data alone settles it. So does P8, and so does any chain whose mip sizes
@@ -172,7 +185,7 @@ committed material. Each Done-when clause below is tagged **(offline)** or **(in
 `uned/UED22/` (34 packages, 1,998 `Texture` exports, 1,137 ambiguous — under §0a's enumeration rule)
 is committed, as are the fixtures under `uedcli/tests/fixtures/`. The concern that drove the two-tier
 design still stands and is still met: the criterion for the **bug that motivates the build** must not
-be deselected by default. It now runs offline against the **committed synthesized `LUM_CompMips.utx`**
+be deselected by default. It now runs offline against the **committed synthesized `UccCompMips.utx`**
 (same defect class, no game content), while the live "30 → 0" confirmation over the real
 `LUM_CoreTex.utx` is **integration**. S6 keeps both tiers (§S6).
 
@@ -188,7 +201,7 @@ have *and* that nothing else writes:
   asserts **invariants** rather than totals: 0 parse failures, 0 `unrecognised-layout`,
   0 `size-mismatch`, 0 `ambiguous-layout`, 0 `ambiguous-alpha`, every export either decodes or names
   a case, no unhandled exception.
-- ✅ **the motivating-bug clause is exact against a fixture we BUILD** — `LUM_CompMips.utx` parses
+- ✅ **the motivating-bug clause is exact against a fixture we BUILD** — `UccCompMips.utx` parses
   EOF-clean with 7 P8 `Mips` + 7 DXT1 `CompMips`. Exact by construction, and it is the offline
   criterion. The live `LUM_CoreTex.utx` **30 → 0** figure (253 `Texture` exports, all 30 failures in
   that one file; re-measured 2026-07-25) is asserted in the **integration** tier.
@@ -626,7 +639,8 @@ Per the repo rule, each slice updates the docs it invalidates in its own commit 
 | `the native` + `UTexture/UPalette decoder`     | the `utexture.py` module description | 1762 |
 | `utexture.TextureResolver.resolve_masked`      | sprite decode in `_preview_render_data` | 1963 |
 
-S7 keeps only the cross-cutting sweep (`decisions.md` addendum, board moves, spec deletion).
+S7 keeps only the cross-cutting sweep (the `rationale/` entry — **NOT a `decisions.md` addendum;
+that ledger is FROZEN, see S7**, board moves, spec deletion).
 
 There is **no CLI surface change in this plan**, so `docs/usage.md` needs only the point-actor
 bullet — grep **`or, for DT_Mesh/DT_None (or a missing/undecodable sprite)`** (~`:874`) — checked in
@@ -661,7 +675,7 @@ the wrong slice is how the "wrong pixel" invariant gets broken (see the `:390` r
 | file | what |
 |----------------------------------------------|---|
 | `uedcli/tests/pkgfixture.py`                 | test-only `.utx` builder — **promoted from the committed prototype** `dev/docs/spikes/2026-07-25-native-texture-formats/pkgfixture_proto.py`, not written from scratch (S1) |
-| `uedcli/tests/fixtures/LUM_CompMips.utx`     | ~20 KB, **our own artwork** — P8 mips built by `ucc make`, DXT1 blocks written by Pillow, container assembled by `pkgfixture`. No game content. Built once by `spikes/2026-07-26-ucc-texture-fixture/harness/build_fixture.sh`; its output is committed, so no test needs wine (S1) |
+| `uedcli/tests/fixtures/UccCompMips.utx`     | ~20 KB (texture `SpikeFixture`), **our own artwork** — P8 mips built by `ucc make`, DXT1 blocks written by Pillow, container assembled by `pkgfixture`. No game content. Built once by `spikes/2026-07-26-ucc-texture-fixture/harness/build_fixture.sh`; its output is committed, so no test needs wine (S1) |
 | `uedcli/tests/test_utexture_layout.py`       | layout detection (S3) |
 | `uedcli/tests/test_utexture_blocks.py`       | BC1/BC2/BC3 vs the Pillow oracle (S4/S5) |
 | `uedcli/tests/test_utexture_corpus.py`       | the **offline** tier of the corpus sweep, over the two git-tracked corpora (S6) |
@@ -691,14 +705,16 @@ both units.
 |-----------------------------------------------------------|-------|-------------------|------------|---|
 | DX `System`+`Textures`(+`Maps`, which adds no textures)    |   232 |             5,018 |         39 | 39 / 39 |
 | whole DX tree (`drive_c/DX`, incl. LUM + the TNM mod)      | 1,154 |            33,262 |        207 | 207 / 207 |
-| `LUM/Textures` — **git-tracked packages only**             |     4 |               384 |         30 | 30 / 30 |
+| `LUM/Textures` — **NOT in this repo** (integration-only; the row is the live install) |     6 |               418 |         30 | 30 / 30 |
 | `LUM/Textures` — as it sits on THIS machine                |     6 |               418 |         30 | 30 / 30 |
-| …of which the tracked `LUM_CoreTex.utx` alone              |     1 |               253 |     **30** | 30 / 30 |
+| …of which `LUM_CoreTex.utx` alone (integration)            |     1 |               253 |     **30** | 30 / 30 |
 | `uned/UED22` (**fully tracked**)                           |    34 |             1,998 |          0 | — |
 | Unreal Gold install                                        |   268 |            10,742 |          0 | — |
 
 *(The two `LUM/Textures` rows differ by the untracked `CoreTexSky.utx` + `CoreTexWater.utx` — 34
-exports, 0 failures. **All 30 failures sit in the tracked `LUM_CoreTex.utx`**, which is what makes
+exports, 0 failures. **All 30 failures sit in `LUM_CoreTex.utx`** — which since the repo split is
+**not committed here**, so this is the INTEGRATION-tier confirmation; the offline criterion is the
+synthesized `UccCompMips.utx` (S1). This is what makes
 the motivating-bug criterion both offline and exactly assertable; see §0a's count-stability rule.
 The four-corpora totals quoted elsewhere — 18,176 exports — include the two untracked packages,
 because they are measurements of this machine, not offline test expectations.)*
@@ -760,7 +776,7 @@ texture has two. A test expectation that mixes the units cannot be met. Both are
 | **total**                         |                   **18,245** |           **9,918** | **8,327 (45.6 %)** |
 
 **The `CompMips` arrays counted on their own — the arrays this build adds:** **69** across the four
-corpora (39 in DX `System`+`Textures`, 30 in the tracked `LUM_CoreTex.utx`, **0** in `uned/UED22`,
+corpora (39 in DX `System`+`Textures`, 30 in `LUM_CoreTex.utx` — both integration-only, **0** in `uned/UED22`,
 **0** in Unreal Gold; 207 over the whole `drive_c/DX` tree). **All 69 fit `bc8` uniquely**, so the
 data alone decides every one of them, and **all 69 carry `CompFormat = 3`**, which corroborates
 without being needed. They add zero ambiguity — which is why the ">= 2" column is identical in both
@@ -938,14 +954,19 @@ Lands the two test enablers:
   `dev/docs/spikes/2026-07-25-native-texture-formats/pkgfixture_proto.py` (§0e2). Drop its
   `sys.path` shim and its `main()` self-check; keep `texture_package()` and its keyword surface,
   which every offline Done-when below is written against.
-- **`uedcli/tests/fixtures/LUM_CompMips.utx`** — a ~10 KB package whose single texture is
+- **`uedcli/tests/fixtures/UccCompMips.utx`** — *(renamed 2026-07-26: the old name and its texture
+  name `ClenGreyWndow_C` were the REAL LUM package and texture, carried over from the retired lifted
+  fixture. Naming our own artwork after game content is exactly the provenance confusion the owner's
+  ruling exists to end.)* A ~20 KB package whose single texture is `SpikeFixture`, and which is
   **OWNER RULING 2026-07-26 — the payload is OUR OWN ARTWORK, compressed by a THIRD-PARTY encoder.**
   Not lifted from game content (that is no longer in this repo and would be redistribution), and not
   round-tripped through our own compressor either. The independence D7's oracle needs comes from the
   *encoder* being outside our control, not from the *artwork* being someone else's:
 
   - author a small source image in-repo (deterministic, generated by the fixture script);
-  - build its P8 mip chain ourselves — that half is not the thing under test;
+  - **build its P8 mip chain with `ucc make`** — the game's own importer, which is what makes the
+    cross-check independent (see the RESOLVED block below; an earlier draft of this bullet said
+    "ourselves", which would have removed the oracle);
   - compress the same image to DXT1 with a **named, pinned, third-party encoder**, and commit the
     resulting blocks as the `CompMips` payload.
 
@@ -991,7 +1012,7 @@ Lands the two test enablers:
   only in `_scratch/`.
 
 **Done when**
-- (offline) `LUM_CompMips.utx`'s texture decodes: `Mips` = 7 mips 64×64 → 1×1, `CompMips` = 7 mips
+- (offline) `UccCompMips.utx`'s texture decodes: `Mips` = 7 mips 64×64 → 1×1, `CompMips` = 7 mips
   ending 8 B, `comp_format == 3`, body parse reaches EOF.
 - (offline) a `pkgfixture`-built synthetic `.utx` with `bHasComp` **false** consumes zero bytes after
   `Mips` and reaches EOF — i.e. `CompMips` is gated on the flag, not unconditionally present.
@@ -1015,12 +1036,12 @@ Lands the two test enablers:
   the old raise gave, now stated positively — and still covers both existing fixtures; `test_decode_v69_pixel_exact` (`:39`)
   and `test_decode_v61_pixel_exact` (`:48`) digests are **unchanged** — this slice must not move a
   single decoded pixel.
-- (offline) resolving `LUM_CompMips.ClenGreyWndow_C` through `TextureResolver` returns the **P8**
+- (offline) resolving `UccCompMips.SpikeFixture` through `TextureResolver` returns the **P8**
   image, not the DXT1 copy.
 - (offline) **the motivating bug, pinned to a COMMITTED FIXTURE.** *(Rewritten 2026-07-26: the old
   clause called `conftest.repo_texture_root()`, a helper §0a deleted, over a directory this repo no
   longer contains.)* The defect class is "a second mip array makes the body parse overrun", and it is
-  now pinned without any game content: **`uedcli/tests/fixtures/LUM_CompMips.utx` parses EOF-clean and
+  now pinned without any game content: **`uedcli/tests/fixtures/UccCompMips.utx` parses EOF-clean and
   both its arrays decode** — 7 P8 `Mips` (64×64 → 1×1) and 7 DXT1 `CompMips`. Before S1 the same file
   raises the body-to-EOF guard. That fixture is our own artwork built by `ucc make` + Pillow
   (`spikes/2026-07-26-ucc-texture-fixture/`), committed, so this runs on a bare checkout.
@@ -1232,6 +1253,10 @@ if got:                      # <-- a typed ERROR object is TRUTHY
 - `dev/docs/spikes/2026-07-25-native-mesh-decode/harness/render.py:91`
 - `dev/docs/spikes/2026-07-25-native-mesh-decode/harness/render_class.py:92`
 
+**Both are in §1's CHANGED map** (added 2026-07-26): `harness/render.py` and `harness/render_class.py`
+— migrated to the typed result in **S2**, the slice that breaks them. `rules/spikes.md` makes a
+committed harness durable evidence, so they are product surface for this build, not scratch.
+
 Under S2's return-type change each would accept an **error** as a decoded skin and render garbage.
 `rules/spikes.md` makes committed harnesses durable evidence, not scratch, and master already carries
 `745d0fa` "Gate textured class previews on native texture decode; error on an undecodable skin" — so
@@ -1245,8 +1270,10 @@ this is live scope. Neither file appears in §1's *Changed* map nor its *Deliber
 
 **Done when**
 
-- *(RELOCATED — the clauses now live in S2 and S5 respectively; this slice keeps only the plan-level
-  work below. Round 2 found the relocation had been announced but never performed.)*
+- *(RELOCATED — the clauses now live in S2 and S5 respectively.)*
+- **The two plan edits this slice owed are now MADE, not merely announced** (a third review found them
+  still outstanding): the harness files are listed in §1's *Changed* map, and §6 "Not in this plan"
+  carries an explicit skin-path scope statement. Both are below.
 - §1's module map lists both harness files, and §6 states explicitly what of the skin path is out of
   scope. **These are plan edits made NOW, not build steps** — a Done-when satisfied by editing a
   document S7 deletes is not a criterion.
@@ -1387,7 +1414,9 @@ The mask S2's result carries is derived from the punch-through alpha for BC1 and
 0 = transparent" for P8 (§5, decision D).
 
 **S4 also fixes ARRAY SELECTION, and it is a defined procedure, not a preference.** S1 wires the
-fallback inertly ("prefer `Mips`, fall back to `CompMips`"); BC1 is what makes the fallback real, so
+fallback with a **gate** ("prefer `Mips`, fall back to `CompMips`, but return `unverified-format`
+whenever the selected array is `CompMips`" — *not* "inertly"; see S1's correction, and note S1's miss
+is a bare `None` because the typed union does not exist until S2); BC1 is what makes the fallback real, so
 S4 is where the ordering has to be exact. Detection is never run on an empty chain — it would index
 mip 0 of an empty list and raise, against "no Python exception ever reaches the user":
 
@@ -1409,13 +1438,13 @@ mip 0 of an empty list and raise, against "no Python exception ever reaches the 
 
 **Done when**
 - (offline) **the `CompMips` array is judged against `CompFormat`, not `Format`** — the
-  `LUM_CompMips.utx` texture's `CompMips` chain (64×64 → 1×1, flooring at 8 B) detects as `bc8`/BC1
+  `UccCompMips.utx` texture's `CompMips` chain (64×64 → 1×1, flooring at 8 B) detects as `bc8`/BC1
   with `layout_source == "data"`, while the **same texture's** `Mips` chain detects as `linear1`/P8.
   One texture, two arrays, two layouts, and neither array's code interfering with the other's.
   *(Measured over all four corpora
   2026-07-25: all 69 `CompMips` arrays fit `bc8` **uniquely** and all 69 carry `CompFormat = 3`, so
   the data alone decides and the code corroborates.)*
-- (offline) our BC1 decode is **byte-exact** against Pillow-DDS over the `LUM_CompMips.utx`
+- (offline) our BC1 decode is **byte-exact** against Pillow-DDS over the `UccCompMips.utx`
   `CompMips` chain, at every mip including 2×2 and 1×1. Pillow's conventions are pinned in §2d
   (bit-replication expansion, integer `(2a+b)/3` interpolants), so byte-exactness is the right bar;
   if a ±1 LSB divergence nonetheless appears, pin the convention actually observed and match it — do
@@ -1425,8 +1454,16 @@ mip 0 of an empty list and raise, against "no Python exception ever reaches the 
 - (offline) the punch-through mode (`c0 ≤ c1`) yields a transparent index-3 pixel, matched against
   Pillow's alpha channel.
 - (offline) the third-party agreement oracle: P8 `Mips` vs our BC1 `CompMips` on
-  `LUM_CompMips.ClenGreyWndow_C` **mip 0** has mean absolute channel error **≤ 8/255** (measured
-  1.98; four wrong-decode controls measured 20.3–62.0, so the bound discriminates by ~10×). Apply it
+  `UccCompMips.SpikeFixture` **mip 0** has mean absolute channel error **≤ 8/255** (measured
+  **2.831 on the current fixture** — the 1.98 figure belonged to the retired lifted fixture).
+  **The "~10× discrimination" claim is REFUTED and must not be repeated:** spike
+  `2026-07-26-ucc-texture-fixture` §5 measured a colour-endianness swap at 98.0 (34.6×) and a c0/c1
+  endpoint swap at 40.7 (14.4×), but an **index bit-offset off by one at 4.801 (1.70×), which PASSES
+  ≤ 8/255**. So this tolerance covers **layout and endpoint errors only**. **A SECOND, byte-exact pin
+  is required for index decoding** — compare the decoded mip-0 buffer byte-for-byte against Pillow's
+  own decode of the same blocks; that is the load-bearing check, not this one. Note also that the
+  tolerance is valid at **mip 0 only**: per-level agreement degrades to 53–60 by 8×8 (spike §6).
+  Apply it
   at **mip 0 only** — mip 3 of the same texture measures 8.47 (§2d).
 - (offline) **array selection, all four shapes** (the procedure above): a `pkgfixture` texture whose
   `Mips` array is **empty** and whose `CompMips` carries data decodes **through the fallback**, with
@@ -1452,7 +1489,10 @@ does not decode.** It is not a corner the implementation "hasn't got to yet" and
 described as one — there is no future measurement that fixes it, because the two layouts are
 identical in size. Say it in the `unrealed/package-format.md` section this build writes, in the
 `ambiguous-alpha` error text, and in the decoder's own comment. And say the other half in the same
-breath, because it is what keeps the claim honest: **a code-less BC1 file DOES decode**, since 8-byte
+breath, because it is what keeps the claim honest — **and it must carry the `uniquely` scoping**
+(48 of `uned/UED22`'s ambiguous chains fit `{linear1, bc8}`, so this is not universal; see the
+corrected block at the top of this plan): **a code-less BC1 file whose chain fits `bc8` uniquely DOES
+decode**, since 8-byte
 blocks are unambiguous.
 
 Three Done-whens (here, S3's, and S6's sweep census) depend on `ambiguous-alpha` being reachable.
@@ -1566,7 +1606,14 @@ property-gated `CompMips`, the arbitration rule — go where format facts live,
 - (integration) the sweep is green over both installs with the same zero-exception /
   zero-`unrecognised-layout` bar, and records exactly the §2a failure profile: 0 `Texture` failures
   post-S1.
-- (offline) **against a SYNTHESIZED `pkgfixture` texture with zero-length mips** — *not* a tracked
+- (offline) **against a SYNTHESIZED `pkgfixture` texture with zero-length mips**, asserting only that
+  **a zero-length-mip export reports `no-mip-data`** — *not* that it is `FireTexture`-classed.
+  `pkgfixture.texture_package` hardcodes the export class to `Texture` (its import record is
+  `names.index("Texture")`, no class parameter), so a procedural-CLASS export cannot be synthesized,
+  and `utexture.textures()` matches `class_of_export(i) == "Texture"` exactly — so a synthetic *is*
+  returned by it. **An earlier wording asserted both that the export was procedural-classed and that
+  `textures()` skipped it; neither holds for a synthesized fixture.** The procedural-class behaviour
+  over real `FireTexture` bodies is **integration**-tier. *(Corrected 2026-07-26.)* Not a tracked
   package. Measured 2026-07-26: every `Texture`-classed export in `uned/UED22` and in both committed
   fixtures has class exactly `Texture`; there are **no** `FireTexture`/`WetTexture`/`IceTexture`/
   `WaveTexture` exports in any tracked material, so the old wording asserted over an empty set and
@@ -1664,11 +1711,11 @@ green.
 | **S1 ships a silent black image** — the `not t.mips` gate passes a list of *empty* mips and `mip0_to_rgb` returns all zeros (verified live) | S1 adds an explicit "no mip carries data ⇒ miss" ahead of the gate, in the same commit that stops the raising, with its own Done-when that forbids a zero-buffer from satisfying it |
 | Detection is invoked on an empty chain and raises `IndexError` | S4's array-selection procedure runs **before** detection and returns `no-mip-data` when neither array carries data |
 | A census figure means textures in one place and mip arrays in another | §2b states both units explicitly and counts the 69 `CompMips` arrays separately; S6 requires every reported number to name its unit |
-| **An "offline exact count" over `<repo>/Textures/` is wrong on a fresh checkout** — 2 of its 6 packages here are untracked, and it is live content | §0a's count-stability rule: exact counts only over `uned/UED22` + fixtures + the single tracked `LUM_CoreTex.utx` (30 → 0); invariants elsewhere. S6 has a Done-when a reviewer can check by reading the test source |
+| **`<repo>/Textures/` DOES NOT EXIST in this repo** (verified 2026-07-26: `git ls-files Textures` is empty) — uedcli is its own repository now | §0a's count-stability rule: exact counts only over `uned/UED22` (under §0a's stated enumeration rule) + the fixtures we build; **everything over the LUM textures is integration-tier**, including the `LUM_CoreTex.utx` 30 → 0 clause. S6 has a Done-when a reviewer can check by reading the test source |
 | The corpus criterion for the live bug is deselected by default | the sweep is two-tier (S6); both reachable corpora run offline, and S1's 30 → 0 clause is offline |
 | No BC3 sample is committable (Epic content)                   | BC2/BC3 pixels are pinned against Pillow over synthesized blocks; the real samples are integration-only |
 | A synthesized fixture would only test our own encoder          | the container comes from the in-tree writer, but every **expected pixel** comes from Pillow or from a real lifted payload — never from running our decoder once |
-| The old "≤ 1/255" agreement bound is unmeetable                | measured per texture and per mip (§2d); S4 uses ≤ 8/255 at **mip 0 only**, which still separates right from wrong by ~10× |
+| The old "≤ 1/255" agreement bound is unmeetable                | measured per texture and per mip (§2d); S4 uses ≤ 8/255 at **mip 0 only** (measured 2.831 on the current fixture). It separates *layout* errors by 14–35× but does **not** catch an index bit-offset bug (4.801, inside the bound) — hence S4's second byte-exact pin |
 | The ref-level misses have no typed case, leaving four committed tests with no expectation | S2 defines `unqualified-ref` / `unknown-package` / `package-unreadable` / `unknown-texture` here and re-points `test_utexture.py:95/:99/:105/:128` onto them; the asset catalog reuses them rather than inventing its own |
 | The evidence dies with the deleted spec — the spike dir holds only a `.py` | S6 lands `01-texture-layout-census.md` in the spike dir and S7's deletion is explicitly gated on it |
 | S1 silently moves a decoded pixel                              | the two frozen digests in `test_utexture.py:39`/`:48` are an explicit S1 Done-when |
@@ -1678,7 +1725,15 @@ green.
 
 ---
 
-## 5. One question this plan settles (builder-decided, reversible)
+## 5. One question this plan does NOT settle by itself — it is the owner's
+
+*(Retitled 2026-07-26. §0b's own correction says a call that changes observable behaviour is **asked,
+not derived**, and `CLAUDE.md` "Asking the owner" forbids downgrading a real question into a board
+item to avoid asking it. Parking is for a decision already put and awaiting a yes — not a substitute
+for putting it. **Mitigating, and probably decisive:** `specs/2026-07-26-actor-preview-textured-faces.md`
+§4.3a already records the owner's ruling that the CALLER ORs `bMasked` with the poly flag, which is
+consistent with D below. If that is the ruling, cite it here and drop the "builder-decided" framing
+rather than re-asking.)*
 
 It was left open by the spec and it **blocks work**, so it is decided here rather than deferred. It
 is chosen to fit the documents' own principles — *never a wrong pixel* and *no silent half-answers* —
@@ -1731,6 +1786,12 @@ the beginning of exactly the per-game-semantics table D1 rejected.
 ---
 
 ## 6. Not in this plan
+
+**The mesh-skin path — scope statement (added 2026-07-26).** IN scope: the two committed mesh
+harnesses migrate to the typed result (S2) and fail loudly naming the offending skin ref; one
+mesh-skin case is covered for every format this build adds (S5). OUT of scope: any change to mesh
+*decoding* itself, to `class preview`'s render pipeline, or to how skins are resolved to refs — this
+build changes what a failed skin lookup *returns*, not what a skin *is*.
 
 - **Encoding** textures. `pkgfixture` is test-only and never ships.
 - **The unsampled linear slots** (Unreal Gold `RGB32`/`RGB64`/`RGB24`/`RGBA8`; 227
@@ -1861,7 +1922,17 @@ Both plan-review rounds have run (2026-07-26) at the headcount `CLAUDE.md` "Revi
 2's verdict: **the round-1 corrections were written into §0a/§0b/S7 but not PROPAGATED** — the §0a
 correction deletes a helper, a fixture justification and an oracle that later clauses still depend on.
 
-**Two items block the build and are escalated (round 2 is the ceiling):**
+**BOTH ESCALATIONS ARE NOW RESOLVED — this plan is not parked.** *(Updated 2026-07-26.)* **PE1** is
+fixed: `repo_texture_root()` has no live callers, the offline criterion is the committed synthesized
+fixture, and the live 30 → 0 count is integration-tier. **PE2** is fixed by spike
+[`2026-07-26-ucc-texture-fixture`](../spikes/2026-07-26-ucc-texture-fixture/findings.md): the P8 half
+is built by `ucc make`, the DXT1 half by Pillow, so the oracle is independent without game content.
+Several items in the "standing" list below were also fixed in the body (slice count, `Tools/uedcli`
+paths, the S2c ordering, the "inert" claim, `pkgfixture`'s post-S1 home) — the list is kept as the
+record of what the rounds found, **not as a live blocker list**. What genuinely remains is tracked in
+the slices themselves.
+
+The rounds found, for the record:
 
 **PE1 — `repo_texture_root()` is deleted by §0a but eight downstream clauses still call it, and the
 build's headline offline criterion now has no home.** S1's Done-when — flagged in the plan itself as
