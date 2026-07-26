@@ -155,12 +155,31 @@ both faces agree exactly. The *along*-run axis has gradient ∝ `±sin(Δθ/2)` 
 faces disagree by twice that. The offsets match at the seam midpoint (where the phase is anchored)
 and the error grows linearly outward, peaking at the track edges.
 
-### Consequence for `--turn`
+### Consequence for `--turn` — ON A FLAT BEND ONLY
 
-Exactly **one** axis can be continuous, and only at **quarter turns**; the turn selects which one.
-`--turn 0` gives an exact across-axis, `--turn 16384` an exact along-axis, and any intermediate angle
-(8192, 5000) is continuous on **neither** — the error merely redistributes. A non-quarter `--turn`
-silently costs the only continuity guarantee the verb can make.
+**Scoped, like the formula above.** On a **flat bend**, exactly one axis can be continuous and only at
+multiples of a quarter turn; the turn selects which one. `--turn 0` leaves the across-run direction
+exact (measured in ΔV), `--turn 16384` puts it in ΔU, and any intermediate angle (8192, 5000) is
+continuous on **neither** — the mismatch vector merely rotates (`ΔU = d_u·S·|cos θ|`,
+`ΔV = d_v·S·|sin θ|`). A non-quarter `--turn` there silently costs the only continuity guarantee.
+
+**On a cylinder-style run this does not apply at all — it stays exact at EVERY turn angle.** Measured
+2026-07-26 on an open 7-face sub-run of the 8-sided cylinder (one face dropped to open the loop):
+
+| `--turn` | max interior ΔU | max interior ΔV |
+|----------|-----------------|---
+| 0 | 0.000000 | 0.000000 |
+| 8192 (45°) | 0.000000 | 0.000000 |
+| 5000 (27.5°) | 0.000000 | 0.000000 |
+
+Why: the seam edge ê is parallel to the turn axis, so the tangent has `t·ê = 0` and the across
+direction `c·ê = 1` **on both faces**. After a turn θ the gradients are `sin θ` and `cos θ` — equal
+from either side at any θ, so nothing to mismatch. The odd-sine term that creates the flat-bend shear
+only exists when the seam lies *within* the plane the faces turn in.
+
+**Consequence for the implementation:** a warning or rejection keyed on "non-quarter turn" would be
+wrong for the case that ships today, and any reported shear figure must be **measured** from the
+written frames (the `seam_check.py` computation), not evaluated from the closed form.
 
 ## Finding 5 — an EXACT frame exists, and its cost is unbounded
 
@@ -238,7 +257,7 @@ Consequence: the only backend that renders this subject is `level preview --game
 level to carry a `PlayerStart` and at least one `Light` (an unlit level renders solid black), costs
 ~1 min per iteration once the trunk changes, and **wedged silently three times** on one particular
 pose (two timeouts, one empty log, container restarting in between) — the failure mode
-`../rules/background-work.md` describes.
+`../../rules/background-work.md` describes.
 
 ## Harness
 
@@ -253,7 +272,7 @@ pose (two timeouts, one empty log, container restarting in between) — the fail
 
 ## What must be pinned when `align --run` is built
 
-`../rules/spikes.md` requires a checkable finding to land with a committed regression, or it rots.
+`../../rules/spikes.md` requires a checkable finding to land with a committed regression, or it rots.
 The shear formula cannot be pinned today because the code it describes does not exist yet — the
 prototypes here are throwaway. So the obligation transfers to the implementation, and the spec must
 carry it:

@@ -135,6 +135,9 @@ def main(argv=None) -> int:
     ap.add_argument("--trunk", required=True)
     ap.add_argument("--brush", required=True)
     ap.add_argument("--facing", default="+Z")
+    ap.add_argument("--only", default=None,
+                    help="comma-separated poly indices to restrict the run to (e.g. to open a "
+                         "closed cylinder loop by dropping one face)")
     ap.add_argument("--turn", type=float, default=0.0,
                     help="uniform turn in UNREAL ROTATION UNITS (16384 = 90 degrees)")
     ap.add_argument("--density-u", type=float, default=None)
@@ -147,6 +150,9 @@ def main(argv=None) -> int:
     name = resolve_actor_name(level, args.brush)
     actor = level.actors[name]
     idxs = find_faces(actor, name, facing=args.facing)
+    if args.only:
+        keep = {int(v) for v in args.only.split(",")}
+        idxs = [i for i in idxs if i in keep]
     if len(idxs) < 2:
         print(f"need >= 2 faces, got {len(idxs)}", file=sys.stderr)
         return 2
