@@ -409,3 +409,61 @@ def test_editor_export_never_writes_an_all_zero_poly_pan(golden):
         f"{golden} no longer exercises the HALF-zero case, so it cannot show what is omitted"
     for u, v in pans:
         assert (int(u), int(v)) != (0, 0), f"{golden}: editor wrote an all-zero pan: Pan U={u} V={v}"
+
+
+# --- texture-side masking (spikes/2026-07-26-texture-masked-property/) --------------------
+
+def _texture_props(pkg, i):
+    from uedcli import utexture
+    e = pkg.exports[i]
+    props, _ = utexture._read_props(pkg.buf, e["soff"], e["soff"] + e["ssize"], pkg.names)
+    return props
+
+
+def test_utexture_bmasked_is_stored_presence_only_and_never_as_false():
+    """A UE1 `Texture` records import-time masking as the bool property **`bMasked`**, and UE1 omits
+    any property equal to its class default — so `bMasked` present ⇒ masked, absent ⇒ NOT masked, and
+    a stored `bMasked=False` never occurs.
+
+    Spike: `dev/docs/spikes/2026-07-26-texture-masked-property/findings.md` §1. Measured over the
+    2,669-texture Deus Ex corpus: 191 carry `bMasked`, **all True**. This test re-asserts the
+    presence-only encoding against the committed fixtures, so a decoder change that started
+    materialising `bMasked=False` (which would invert the gate) trips red.
+    """
+    from uedcli import utexture
+    for name in ("CoreTexWater.utx", "LUM_InfoPortraits.utx"):
+        pkg = utexture.load_package(str(Path(__file__).parent / "fixtures" / name))
+        for i in utexture.textures(pkg):
+            v = _texture_props(pkg, i).get("bMasked")
+            assert v is None or v[1] is True, f"{name}: bMasked stored as {v!r}"
+
+
+def test_index_zero_is_an_ordinary_colour_on_an_unmasked_texture():
+    """**Palette index 0 is only a cut-out on a masked face** — on any other texture it is an
+    ordinary colour that must render opaque.
+
+    `LUM_InfoPortraits.ArthurCallaway` is the committed counter-example: it carries **no** `bMasked`,
+    its palette entry 0 is real black `(0,0,0)` (not the reserved magenta key), and **2.2 %** of its
+    mip-0 texels use it. A renderer that treats index 0 as transparent unconditionally punches holes
+    in this face. Corpus-wide that mistake hits **464 of 2,669** textures, including flat colour
+    swatches that are 100 % index 0 and would vanish entirely.
+
+    Spike: `dev/docs/spikes/2026-07-26-texture-masked-property/findings.md` §2-3. This pins the
+    gate that `actor preview --faces textured` depends on.
+    """
+    from uedcli import utexture
+    pkg = utexture.load_package(str(Path(__file__).parent / "fixtures" / "LUM_InfoPortraits.utx"))
+    idx = next(i for i in utexture.textures(pkg)
+               if pkg.names[pkg.exports[i]["nm"]].casefold() == "arthurcallaway")
+
+    assert "bMasked" not in _texture_props(pkg, idx), "fixture is no longer an UNMASKED texture"
+
+    tex = utexture.decode_texture(pkg, idx)
+    # palette_ref is an object REF, not an export index — decode_palette needs the resolved index
+    # (passing the raw ref raises "palette body not at EOF"; spike findings.md §4).
+    palette = utexture.decode_palette(pkg, utexture.export_index_of_ref(pkg, tex.palette_ref))
+    assert palette[0] == (0, 0, 0), f"palette[0] is {palette[0]}, expected real black"
+
+    mip0 = tex.mips[0]
+    frac = mip0.data.count(0) / len(mip0.data)
+    assert 0.02 < frac < 0.03, f"index-0 usage {frac:.4f} moved; the fixture changed"

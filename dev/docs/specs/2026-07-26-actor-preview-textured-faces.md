@@ -2,7 +2,7 @@
 
 **Status:** revised after spec review round 1 (2026-07-26, 3 cold Opus reviewers → 2 structural
 findings + 22 correctness defects, all resolved below). **Ready to re-enter the gate at round 1.**
-**BUILD-BLOCKED** on one spike — see §11.
+**Spike complete** — the §11 blocker is cleared (`spikes/2026-07-26-texture-masked-property/`).
 **Requested by:** the owner, 2026-07-26, session `uedcli:preview-textured`.
 **Ephemeral:** scratch, per `CLAUDE.md`. On build, fold the outcome into
 [`architecture.md`](../architecture.md) "Preview internals", [`docs/usage.md`](../../../docs/usage.md)
@@ -207,9 +207,10 @@ everything behind.
 masked = bool(poly.flags & 0x2) or texture_is_imported_masked(ref)
 ```
 
-`PF_Masked = 0x2` is readable today (`query.PF_NAMES`). `texture_is_imported_masked` is **not yet
-implementable** — see §11. Until the spike lands, the build must not silently degrade to the poly
-flag alone: that is the blocker, not a fallback.
+`PF_Masked = 0x2` is readable today (`query.PF_NAMES`). **The texture-side half is now resolved:**
+the stored property is **`bMasked`**, a UE1 bool written PRESENCE-ONLY, so
+`texture_is_imported_masked(ref)` is `"bMasked" in <the export's property block>` — no new decoding
+(spike `2026-07-26-texture-masked-property/findings.md`; `quirks.md` "Surfaces / polys").
 
 ### 4.4 Mip selection (`textured`)
 
@@ -485,18 +486,20 @@ positive divisors) and "runs with the native extension absent" (`preview.py` nev
 - **Bilinear filtering, real lighting, mesh rendering for point actors, the `Translucent` polyflag.**
 - **A `texture list --cutout` filter** over the catalog's dominant-colour signal — a separate ask.
 
-## 11. BUILD-BLOCKED on one spike
+## 11. The masking spike — DONE, blocker cleared
 
-**`texture_is_imported_masked(ref)` cannot be written today.** `unrealed/quirks.md` (🔬 2026-07-26)
-establishes that `Masked` is a texture-import property OR'ed into every surface using that texture,
-and says explicitly that it is *"not yet probed to the stored property name/offset on the export; do
-that before relying on the exact spelling."*
+`spikes/2026-07-26-texture-masked-property/findings.md` (2026-07-26) answered it: the stored property
+is **`bMasked`**, a UE1 bool on the `Texture` export written **presence-only** (present ⇒ masked,
+absent ⇒ not), decoded by the existing `utexture._read_props`. §4.3a is implementable as written.
 
-Decision 2.3's gate needs it. The spike must land the property's stored name/offset in `quirks.md`
-with evidence, after which §4.3a is implementable as written. **Gating on `PF_Masked` alone is not an
-acceptable interim**: it silently misses the `ladder_a`-painted-on-a-solid-wall case — a texture
-masked at import with no surface flag — which is precisely the defect two of the three levels in the
-friction log hit independently.
+Two measurements from that spike belong here because they size what decision 2.3 avoided:
 
-Tracked as a `[spike]` on `board/inbox.md`. Everything else in this spec is implementable now, and
-`wire`/`flat` are unaffected by the block.
+- **464 of 2,669** corpus textures use palette index 0 while NOT masked — **17.4 %**. The original
+  unconditional-masking draft would have punched false holes in all of them, and flat colour swatches
+  (`LUM_CoreTex.White` and eleven more) are **100 %** index 0, so those faces would have rendered as
+  nothing at all.
+- **Reserved magenta at palette[0] is not a masking signal** — three unmasked textures park it and
+  never use it, while the one texture that most needs protecting (`ArthurCallaway`, 2.2 % index-0
+  usage) has real black there. `bMasked` is the only reliable gate.
+
+Pinned by two `test_engine_facts` regressions against committed fixtures.

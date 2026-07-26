@@ -466,8 +466,31 @@ measurement, stores it in typed fields, and bakes it (`brush apply-transform`) �
   - Corollary: **`level preview --native` is a free detector** — it renders masked faces opaque, so an
     index-0 region shows as raw magenta. Container-free and seconds, versus a `--game` render.
   *(Import-side mechanism: owner, 2026-07-26. Render-side behavior observed live in `--game` renders
-  on two levels — `../spikes/levelbuild-friction/agent-reports.md`. Not yet probed to the stored
-  property name/offset on the export; do that before relying on the exact spelling.)*
+  on two levels — `../spikes/levelbuild-friction/agent-reports.md`. Stored property probed and
+  measured 2026-07-26 — see the next entry.)*
+- ✅ **The stored property is `bMasked`, a UE1 bool on the `Texture` export, written PRESENCE-ONLY.**
+  UE1 omits any property equal to its class default and `UTexture.bMasked` defaults False, so
+  **present ⇒ masked, absent ⇒ not masked**; a stored `bMasked=False` never occurs. Measured across
+  the 2,669-texture Deus Ex corpus: **191 carry `bMasked` (7.2 %), all True.** It decodes with the
+  existing `utexture._read_props` — no new parser needed.
+  **Therefore a face draws index 0 as a hole iff `poly.flags & PF_Masked (0x2)` OR its texture carries
+  `bMasked`.** Both halves are load-bearing: gating on the poly flag alone misses
+  `CoreTexMetal.ladder_a` (`bMasked`, 66 % of its texels index 0) painted on an unflagged solid wall —
+  the ContainerYard see-through-the-containers bug, whose polys decode to `flags: none`.
+  - **Index 0 is an ordinary colour on an unmasked texture, and treating it as transparent
+    unconditionally is catastrophic.** **464 of 2,669** textures use index 0 while NOT carrying
+    `bMasked` — including flat colour swatches (`LUM_CoreTex.White`, `.Red`, …) that are **100 %**
+    index 0 and would render as nothing at all. `LUM_InfoPortraits.ArthurCallaway` is the committed
+    counter-example: no `bMasked`, palette[0] = real black `(0,0,0)`, 2.2 % of texels.
+  - **Reserved magenta at palette[0] does NOT mean masked.** `CoreTexMetal.ShipGrayMetal_A`,
+    `CoreTexWater.dirtywater` and `MolePeople.WirePanel` all park `(255,0,255)` at index 0 and carry
+    no `bMasked` — and all three use it for **0 %** of their texels. The key colour is a convention,
+    not a flag.
+  - **Decoder gotcha:** `TextureObj.palette_ref` is an object **ref**, not an export index — it must
+    go through `export_index_of_ref` or `decode_palette` raises *"palette body not at EOF"*.
+  *(`../spikes/2026-07-26-texture-masked-property/findings.md`; pinned by
+  `test_engine_facts.test_utexture_bmasked_is_stored_presence_only_and_never_as_false` and
+  `…test_index_zero_is_an_ordinary_colour_on_an_unmasked_texture`.)*
 - **Per-poly `PolyFlags` + `Texture`/`Pan`/`TextureU/V` survive the paste path** → surface
   attributes are **model-side edits** (set poly fields → emit → paste). Verified: `flags=4`
   (Translucent) preserved through paste+rebuild.
