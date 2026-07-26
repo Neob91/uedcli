@@ -1204,7 +1204,7 @@ invocation; a single unparseable `.u` is skipped with a stderr note (never abort
   left empty. There is no own-only fallback (it was deleted 2026-07-25 along with the `--category`
   special case that had to reject it): printing the class's own props with a "inherited props
   unavailable" stderr note is a **silent half-answer** — the note scrolls away and the caller reads a
-  truncated property set as a complete one. *(`direction.md` "No silent half-answers"; decisions.md
+  truncated property set as a complete one. *(`dev/docs/direction/conventions.md` "No silent half-answers"; decisions.md
   2026-07-24 21:58 UTC.)*
 - **Abstract detection is offline** via `uprops.class_is_abstract` → the shipped ScriptText `.uc`
   source (all DX classes ship it), NOT `ClassFlags` (unreachable past the variable-length script body

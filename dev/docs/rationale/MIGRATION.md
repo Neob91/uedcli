@@ -122,6 +122,18 @@ either old file is deleted.
 | 2026-07-22 20:49 / 2026-07-23 05:58 / 2026-07-24 08:31 / 08:40 / 10:02 — actor labels (5 entries) | `direction/organization.md` | intent. Rejected carried. 05:58 #6 (fnmatch char class) **superseded** by 08:40 — only the current answer stated. 08:31's "bare duplicate stays a WARNING" **superseded** by 10:02 (now an error) |
 | 2026-07-24 17:04 — generator-flag cleanup | `direction/organization.md` | intent; the reversal that kills 12:14 #8. All 3 `Rejected` carried |
 | 2026-07-25 00:43 — folder/label stay under `actor`; add `list` | `direction/organization.md` | intent. **Never reconciled into `direction.md`** — it postdates everything that doc cited |
+| 2026-07-24 21:57 — no back-compat cruft | `direction/conventions.md` | intent; both `Rejected` carried |
+| 2026-07-24 21:58 — board triage (items 1, 3) | `direction/conventions.md` | items 1+3 only (the `class show` degrade, the `.ppm` escape hatch); items 2/4/5/6 belong to other topics and are NOT consumed here |
+| 2026-07-25 00:43 — `find` vs `search` naming rule | `direction/conventions.md` | intent; `Rejected` carried |
+| 2026-07-25 10:18 — schema-aware `movers.is_mover` | `direction/conventions.md` | intent; all four `Rejected` carried, incl. the silent-`False` trap promoted into *What we want* |
+| 2026-06-26 12:41 — error, never fallback | `direction/conventions.md` | intent; 3 of 5 `Rejected` carried (2 belong to other topics) |
+| 2026-06-25 11:04 — actor-name resolution | `direction/conventions.md` (the batch rule) + `rationale/` (the implementation bullets) | its `Refs:` cited `specs/2026-06-24-uedctl-actor-name-resolution-design.md`, **deleted** — dropped |
+| 2026-07-18 08:33 — exact-miss vs glob-miss | `direction/conventions.md` | intent; `Rejected` carried |
+| 2026-07-24 16:28 — `brush poly find` skips non-brushes | `direction/conventions.md` | the calibrated exception; no `Rejected` block in the entry |
+| 2026-07-24 18:50 — an inert flag ERRORS | `direction/conventions.md` | its superseded warn-and-continue recorded as a `Rejected` bullet |
+| 2026-07-18 14:03 — compose-pipe (items 1–4) | `direction/conventions.md` | intent; 3 `Rejected` carried. Items 5–6 are CSG-order, other topic |
+| 2026-06-25 10:36 + 2026-07-11 23:19 — `actor find`; drop `actor list` | `direction/conventions.md` | the one-query-verb rule; find-specific bullets belong to an actor-verbs topic |
+| **2026-07-25 18:15 — `--class-exact` → `--exact-class`** | **`rationale/cli.md`** | **Andrzej ruled 2026-07-26: NOT direction.** It is an argparse implementation trap (deleting a shim re-opens prefix abbreviation), so it lands in `rationale/` keyed to the CLI module. All three `Rejected` carried there. **Never reconciled into `direction.md`** |
 | *(remaining entries populated by Tasks 5–7)* | | |
 
 ### Direction/code deltas created by the `organization` confirmation (2026-07-26)

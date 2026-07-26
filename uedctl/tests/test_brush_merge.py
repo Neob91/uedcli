@@ -98,7 +98,7 @@ def test_deintersect_without_a_subtractive_points_at_intersect(monkeypatch, caps
 
 
 def test_a_non_brush_in_the_set_is_refused_not_silently_skipped(monkeypatch, capsys):
-    """`CLAUDE.md` "No silent half-answers": dropping it and warning would hand back a merge that
+    """`dev/docs/direction/conventions.md` "No silent half-answers": dropping it and warning would hand back a merge that
     is quietly missing a piece, and the warning scrolls away."""
     blob = _t3d(_cube("A")) + 'Begin Actor Class=Light Name=L1\n    Name="L1"\nEnd Actor\n'
     rc, cap = _run("intersect", blob, monkeypatch, capsys)

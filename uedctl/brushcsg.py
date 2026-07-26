@@ -90,7 +90,7 @@ def check_all_csg_brushes(actors, *, verb: str, index) -> None:
     of world CSG entirely) cannot contribute to the merge.  Silently dropping it and warning on
     stderr would hand back a plug that is quietly missing a piece — the caller reads the T3D as the
     complete answer and the warning scrolls away.  So we refuse and say how to narrow the pipe.
-    *(`CLAUDE.md` "No silent half-answers", decision 2026-07-24 21:58 — this SUPERSEDES the spec's
+    *(`dev/docs/direction/conventions.md` "No silent half-answers", decision 2026-07-24 21:58 — this SUPERSEDES the spec's
     original warn-and-skip, which predates that rule.)*
     """
     from .native.materialize import _in_world_csg

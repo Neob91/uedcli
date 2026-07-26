@@ -297,48 +297,6 @@ emits fill-in rows for exactly the refs just previewed), never a bulk campaign. 
 on the existing `cache` noun. *(decisions: unified asset catalog 2026-07-25 03:40; the tool does not
 infer 2026-07-25 05:10; spec `specs/2026-07-25-unified-asset-catalog.md`)*
 
-## No back-compat cruft: uedctl is unreleased, so a removed thing is DELETED
+## Conventions (no back-compat cruft; explicit, discoverable, model-side)
 
-uedctl has **never been released** — no external users, no pinned versions, no scripts in the wild.
-So **nothing is kept for backward compatibility.** When a flag, verb, option value, output format,
-or code path is removed or renamed, it is **deleted outright** in the same commit that introduces
-the replacement; the new spelling is the only spelling. Explicitly forbidden: deprecated aliases,
-no-op flags kept so old invocations still run, migration-error shims (a flag defined only to
-`parser.error("X was renamed to Y")`), dual-format support kept to avoid re-writing callers, and
-"the old way" branches lingering in code, tests, or docs.
-
-Every such shim is permanent maintenance surface and a second thing to keep true in the docs —
-the direct cause of the stale-help class of bug (`--png`'s help described behavior the code had
-not had for months). An unreleased tool's one advantage is that it can simply change. **This is
-superseded on release**, when a real deprecation policy replaces it.
-
-*(decision: no back-compat cruft, 2026-07-24 21:57)*
-
-## Explicit, discoverable, model-side
-
-- Verbs compose; prefer a query verb whose output feeds another over per-command filter flags.
-- Every flag/arg has a real `help=`; no Python exception reaches the user; errors name the
-  offending value.
-- Content reads/mutations are model-side (no editor); the editor is touched only to build/preview.
-- **`find` vs `search` — two verbs by a naming RULE, never renamed into one.** **`find`** = a
-  deterministic query over concrete **T3D-tree state** (actors, polys, brushes that exist in the
-  trunk) — exact, produces a name/selector SET to pipe into a mutating verb (`actor find`, `brush poly
-  find`). **`search`** = ranked / fuzzy **discovery over a catalog or corpus** (textures, the asset
-  catalog, docs) — finding out *what exists* by relevance, not enumerating a known set (`texture
-  search`; the future `catalog search` / `docs search`). Pick the verb by which of the two a new
-  command is. *(decision: find-vs-search naming rule, 2026-07-25 00:43)*
-- **No silent half-answers.** A command that cannot fully satisfy a request fails cleanly (exit 2,
-  naming the offending value) rather than returning a partial result with a warning on stderr —
-  stderr scrolls away and the caller believes the partial answer was complete. *(decision:
-  `class show` degrade removal, 2026-07-24 21:58)*
-- **A question about an actor's CLASS is answered from the class hierarchy, never from its name.**
-  "Is this a Mover?" means "does its class descend from `Engine.Mover`?", resolved offline against
-  the game's own `.u` packages — one shared predicate (`movers.is_mover`), no per-substrate class
-  list, no name-suffix guess, and no optional heuristic fallback. The cost is accepted deliberately:
-  every mover-aware verb (`mover key`, `level doctor`, `event graph`, `brush scale`/
-  `apply-transform`/`intersect`/`deintersect`, `stash capture`, `level preview --native`, the native
-  build) needs a resolvable package search path, and without one exits 2 naming the verb and what is
-  missing rather than guessing. *(decision: schema-aware `is_mover` / "doctor may require config",
-  2026-07-25 10:18)*
-
-*(uedctl `CLAUDE.md` conventions; store-centric model)*
+**MIGRATED** → [`direction/conventions.md`](direction/conventions.md).

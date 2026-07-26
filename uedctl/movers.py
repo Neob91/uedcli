@@ -21,7 +21,7 @@ MOVER_BASE = "Engine.Mover"     # the engine root every mover class descends fro
 
 # One canonical message for "this run has no class resolver, so mover-ness cannot be decided".
 # Raised (never warned) because an index that resolves nothing answers `False` for EVERY actor —
-# a real mover would silently read as a static brush (`direction.md` "No silent half-answers").
+# a real mover would silently read as a static brush (`dev/docs/direction/conventions.md` "No silent half-answers").
 NO_MOVER_RESOLVER = (
     f"cannot resolve {MOVER_BASE}: deciding whether an actor is a Mover needs the game's code "
     f"packages (`.u`) on the composed search path — check the per-user games config "
