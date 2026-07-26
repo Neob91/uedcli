@@ -3111,6 +3111,20 @@ The posing rewrite landed (POS@ROT → auto-frame; decision 2026-07-12); these a
   Also open, and deliberately not guessed at: **what `CLAMP` is FOR** (measured to be `DEFAULT` with
   `PanV = VSize−1`; the rendering consequence was not observed), and whether `ONETILE`/`WALLCOLUMN`
   are implemented in non-UED22 UnrealEd builds (not checked — out of scope, we ship UED22).
+
+- `p2` `[OWNER — decide]` **`brush poly rotate`'s turn direction is opposite to what the author sees on
+  a SUBTRACTIVE brush.** `n̂` comes from the polygon's own winding, so it is the *polygon* normal; the
+  visible surface normal is reversed on a subtract, and a negative `MainScale` flips handedness too.
+  So `--by 16384` turns the texture one way on an added solid and the other way inside a room — and
+  room interiors are most of a map's visible surface.
+
+  **Step 1 ships the polygon-normal convention deliberately** (`plans/2026-07-26-poly-surface-step1-plan.md`
+  §9): flipping on solidity would make the verb's sign depend on `CsgOper`, which is invisible at the
+  point of use and harder to reason about than a documented inversion. But it is user-visible
+  semantics and the spec pins the sign only on an *additive* `+Z` face, so it was never actually
+  ruled. Worth a look: keep it, or flip on the visible surface normal and accept the `CsgOper`
+  dependency. The `wall`/`floor`/`one-tile` family is immune either way — `proj()` and `d/N.A` are
+  invariant under `n̂ → −n̂`; only `rotate` (and `run`'s across axis, resolved separately) is affected.
 ---
 
 ## From the 2026-07-18 unattended build chain (Andrzej, triage these)
