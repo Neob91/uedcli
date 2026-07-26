@@ -88,7 +88,13 @@ family, so no verb grows a `--kind` selector.
    already-cached artifacts only. *Rejected: rendering inline for "cheap" kinds* — measurement showed
    a cold `class list --json` would render 657 meshes (~11 min) on an agent's first command.
 8. **`classify set -` reads JSONL from stdin.** *Rejected: single-ref writes only* (~0.3 s cold
-   start per ref makes classification process- and turn-bound).
+   start per ref makes classification process- and turn-bound). **This is an owner-approved THIRD stdin
+   convention** *(ruling 2026-07-26: "it's fine")*. `direction/conventions.md` otherwise says "Exactly
+   TWO stdin conventions … never add a third", so the exception is deliberate and must be recorded
+   there as a calibrated carve-out rather than left as a silent contradiction — parked as an
+   `[OWNER — confirm]` item on `board/inbox.md`. Within the catalog nouns `-` therefore means a **name
+   list** for `show`/`preview`/`classify unset` and a **JSONL row set** for `classify set`, and the
+   split is per verb, as the two-convention rule itself already requires.
 9. **Cache eviction goes on the existing `cache` noun** (`cache gc`). *Rejected: a `catalog gc` verb*
    — a second maintenance surface over one cache root.
 10. **No curated role/category taxonomy for classes.** Andrzej: the **superclass already says what a
@@ -197,6 +203,30 @@ conflict (two agents classifying two refs of the same image would read-modify-wr
 key is `sha256(w, h, RGB)` over its decoded pixels; the name plays no part in it. That is what makes a
 classification survive a rename, a repack, or the same image appearing in two packages, and it is why
 the same digest doubles as the preview artifact's content address (§3a) with no second hash.
+
+**ONLY PIXELS ARE HASHED.** *(Owner ruling, 2026-07-26, resolving a structural gate finding.)* The
+digest covers `(w, h, RGB)` and **nothing else** — in particular the **transparency mask is NOT part of
+identity**, even though the decode path returns one (`utexture.TextureResolver.resolve_masked()` yields
+`(w, h, rgb, mask)`, and the gated `specs/2026-07-25-native-texture-formats.md` §8-D derives the mask
+from pixel data: P8 index-0, BC1 punch-through, BC2/BC3 block alpha).
+
+Two consequences follow, and **both are binding**, because §3a addresses the preview artifact by this
+same digest ("for textures the preview hash IS the identity — no second digest"):
+
+1. **A texture preview PNG is plain, opaque RGB at the texture's own size** — no alpha channel, no
+   resampling. If it ever carried the mask, its pixel digest would stop equalling the identity and the
+   "no second digest" invariant would break; and since the digest is every shard's path, "improving"
+   the preview to RGBA later would silently **re-key every shard**. Do not do it. This is the specific
+   trap all three 2026-07-26 gate reviewers independently flagged.
+2. **Cut-out-ness reaches the agent as a FACT, not as a picture.** Because the preview is opaque, a
+   masked texture's holes are not visible in it — which is fine, and is why §4d exists: `masked` is
+   reported as a queryable fact and `--masked` filters on it. The agent is *told*, rather than having
+   to *see* it. (`level preview --native` renders masked faces opaque for the same reason, which the
+   level-building friction log found makes it a free index-0 detector.)
+
+Accepted cost, stated so nobody rediscovers it as a bug: two textures with identical RGB but different
+masks are **one identity and share one preview file**. They are the same image; they differ only in a
+flag that `masked` reports separately.
 
 The function is **frozen**: `(w, h, RGB)` in that order, over the decoded RGB triples, and a committed
 golden (ref → hex digest over `CoreTexWater.utx`) pins it. Every tracked shard's *path* is that digest,
@@ -477,11 +507,25 @@ uniform, and the spec accepts that explicitly rather than pretending otherwise.
 
 **Thumbnails.** `DT_Mesh` → native render from `Mesh` + `MultiSkins[i]` in the class defaults (the
 mesh's own `Textures` array is only a fallback — Deus Ex characters carry none). `DT_Sprite` → the
-`Texture` default's image, **but most of the 432 sprite classes are lights, triggers, spawn points
-and path nodes whose `Texture` default is an EDITOR ICON** — a picture of a lightbulb glyph tells an
-agent nothing. The build measures what fraction resolve to an icon group and marks those
-`preview_state: editor-icon`, which `prewarm` skips and `list --json` reports honestly, rather than
-counting them as covered. `DT_Brush`/`DT_None` → `preview_state: no-mesh`.
+`Texture` default's image — **read the class's resolved `DrawType`; if it is `DT_Sprite`, the picture is
+the resolved `Texture` default's image, reported as-is.** *(Owner ruling, 2026-07-26.)* Probed live on
+the tracked packages: `Engine.ZoneInfo` → `Texture'Engine.S_ZoneInfo'`, `Engine.Light` →
+`Texture'Engine.S_Light'`, `Engine.PlayerStart` → `Texture'Engine.S_Player'`, all with
+`DrawType = DT_Sprite`. Note the property is **`Texture`**, not `Sprite`: `Sprite` exists on
+`Engine.Actor` but resolved to `None` on every class sampled.
+
+**There is deliberately NO editor-icon detection, and no `preview_state: editor-icon`.** An earlier
+draft marked sprite classes whose `Texture` resolves to an "icon group" and had `prewarm` skip them.
+That is deleted for two reasons. First it does not work: measured against tracked `uned/UED22/Engine.u`,
+**28 of its 32 texture exports are GROUPLESS** — `S_Weapon`, `S_Camera`, `S_ZoneInfo`, `S_Ambient`, … —
+and the only groups present are fonts, so a group pattern matches nothing and every sprite class would
+have been silently reported `ok`. Second, and decisive: deciding that a lightbulb glyph "tells an agent
+nothing" is the tool **inferring meaning**, which §0 forbids. That glyph genuinely *is* what the class
+looks like in the editor. The tool produces the picture; the LLM looks at it and decides it is an icon
+and worth little. The only name-based alternative (the `S_` prefix) is exactly the name guess
+`direction/conventions.md` rejects for class questions.
+
+`DT_Brush`/`DT_None` → `preview_state: no-mesh` (an honest "no artifact exists", not a judgement).
 
 **Cost shapes the design:** ~254 ms flat / ~332 ms textured at 256 px per render (~75/109 ms at
 128 px); mesh *decode* is only ~2–13 ms — the rasterizer dominates. Hence decisions 7 and 11.
