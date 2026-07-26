@@ -1,8 +1,8 @@
 # Spec: textured faces for `actor preview` (`--faces wire|flat|textured`)
 
-**Status:** re-entry round 1 passed with findings (2026-07-26, 3 cold Opus; **no structural
-finding**). All 22 findings resolved below and three owner rulings folded in. **Round 2 (2 Opus) is
-owed**, since resolving them changed the artifact.
+**Status:** spec review complete — both rounds run, **gate at its ceiling** (`CLAUDE.md` "Review
+gates"). No structural finding in either round. Everything found is fixed below, logged, or escalated;
+**two items are escalated and BLOCK the build** — see §14.
 **DEPENDS ON** the on-deck texture-decoder work — see §12. Build order is fixed: that item first
 (with the §12 accessor folded into its scope), then all of this.
 **Requested by:** the owner, 2026-07-26, session `uedcli:preview-textured`.
@@ -173,9 +173,13 @@ texel = rgb[(ty * mip_w + tx) * 3 : ... + 3]
 The `/ 2**level` is load-bearing: `u` is in mip-0 units, so taking it modulo a level-`L` width tiles
 the texture `2^L` times instead of scaling it down.
 
-Nearest-neighbour, no bilinear. **Non-finite `u`/`v` must not reach `math.floor`** — `floor(nan)`
-raises `ValueError` and `floor(±inf)` raises **`OverflowError`**; guard on `math.isfinite` and treat
-the face as untextured (`CLAUDE.md`: no Python exception reaches the user).
+Nearest-neighbour, no bilinear. **A non-finite `u`/`v` is a clean exit 2 naming the actor and poly —
+not a silent fallback.** `floor(nan)` raises `ValueError` and `floor(±inf)` raises **`OverflowError`**,
+so the frame is checked with `math.isfinite` before any pixel is drawn. Rendering such a face as
+`DEFAULT_GREY` would make a *corrupt authored frame* pixel-identical to the legitimate "no `Texture`
+set" case two rows below — a half-answer that looks like a full one, which `conventions.md` puts under
+**Rejected** ("No fallbacks, anywhere"). Avoiding the traceback is only half that rule; the other half
+is refusing.
 
 | Case                                     | Result
 |------------------------------------------|---
@@ -216,25 +220,25 @@ masked (spike
 ### 4.4 Mip selection (`textured`)
 
 ```
-gain          = 1.0                                          # top / front / side
-gain          = min(sqrt(2)*cos(r), sqrt(2*sin(r)**2 + 1))   # iso, r = radians(iso_angle)  <- MIN
-scale_world   = scale * gain                                 # px per WORLD unit
-texels_per_px = max(|tu_w|, |tv_w|) / scale_world
+# PER FACE, from the affine solve §6 already computes for this face:
+texels_per_px = max(hypot(du_dx, du_dy), hypot(dv_dx, dv_dy))   # screen-space UV gradients
 level         = clamp(floor(log2(max(texels_per_px, 1.0))), 0, len(mips) - 1)
 ```
 
-`_framing`'s `scale` is px per **projected** unit, so the conversion **multiplies** by the
-projection's gain. The iso map's two singular values are `√2·cos r` and `√(2 sin²r + 1)` — its rows
-are orthogonal, so the row norms *are* the singular values. The per-axis gains are all exactly 1.0,
-which is why "worst-case axis gain" is the wrong quantity.
+**The quantity is PER FACE, and it is already in hand.** Two earlier drafts tried to derive it from a
+view-global projection gain — first the larger singular value of the iso map, then the smaller. Both
+are wrong, because what a mip pick needs is the least screen gain *within the face's own plane*, which
+a view-global number cannot see. Worked example at the **default** `--iso-angle 30`, where the
+view-global values coincide at 1.2247 and the question looks moot: a wall with normal +X has in-plane
+basis mapping `Y→(−cos r, sin r)`, `Z→(0, 1)`, whose singular values are 1.2247 and **0.7071** — so
+the view-global figure understates texels/px by 1.73×, about 0.8 of a mip level too sharp, on the most
+common face orientation. For a near-edge-on face the error is unbounded.
 
-**Use the SMALLER singular value.** A minification bound is governed by the direction of *least*
-screen gain; dividing by the larger one underestimates texels/px and picks too sharp a mip — aliasing
-in the direction the projection compresses. Moot at the default 30°, where the two coincide at 1.2247,
-but `--iso-angle` is `type=float` with no range validation: the ratio is 1.41 at 45°, 2.24 at 60° and
-**6.98 at 80°**, about three mip levels too sharp. (`preview._draw_sphere:1843` computes the *larger*
-value — correct for a silhouette radius, wrong here. Same formula shape, different quantity; do not
-"unify" them.)
+§6's affine solve already produces `∂u/∂x, ∂u/∂y, ∂v/∂x, ∂v/∂y` for this face in order to interpolate
+UV, so the correct quantity costs nothing extra and needs no projection special-casing — `top`,
+`front`, `side` and `iso` all fall out of the same gradients. (`preview._draw_sphere:1843`'s
+`max(√2·cos r, √(2 sin²r + 1))` is a *silhouette radius*, a different question that merely shares a
+formula shape — do not "unify" them.)
 
 **Mip choice is NOT a cost control.** Under nearest-neighbour sampling (§4.3) there is exactly one
 texel fetch per covered pixel at every level, so it changes *which* bytes are read, never how many.
@@ -268,10 +272,15 @@ removes the face entirely, not merely its fill. A culled face is also **excluded
 which grades every remaining decal's opacity via `_occluder_count`/`_decal_opacity`; without that,
 `flat` would silently re-shade annotations relative to `wire`.
 
-**Under `flat`, back-facing edges are dropped too.** `_scene_geometry` today emits an edge for every
-face regardless of facing and `render_brushes_pgm` draws them with no depth test — over opaque fills a
-cube's three hidden faces would show straight through, destroying the "diagram of what occludes what"
-the `help=` promises. Under `flat` the edge pass draws only `_is_front` faces. `wire` is untouched.
+**Under `flat`, the edge pass draws the edges of the faces that SURVIVED the cull and are visible —
+not "`_is_front` only".** `_scene_geometry` today emits an edge for every face regardless of facing and
+`render_brushes_pgm` draws them with no depth test, so over opaque fills a cube's three hidden faces
+would show straight through. But "`_is_front` only" is wrong in the other direction: for a subtract
+brush §4.7 culls exactly the `_is_front` set, so the two rules would intersect to **nothing** and a
+subtracted room would render as an outline-free blob — contradicting decision 2.5 and the `help=`.
+The rule is therefore: **an edge draws iff its face was not culled and is the nearest surface along
+that edge** — for an add brush that is its front faces, for a subtract brush its far faces. `wire` is
+untouched.
 
 ### 4.7 Visibility: CSG-aware culling, then a depth buffer
 
@@ -336,7 +345,7 @@ records the chosen value plus the image in the `rationale/` preview topic. Start
 | 6 | **Unresolvable/undecodable refs** — `--native` checkerboards and warns; this tier **exits 2** (§8). `conventions.md` rejects warn-and-continue, so this tier conforms and `--native` does not; that is logged against `--native`, not softened here
 | 7 | **Scaled/sheared brushes** — a **behavioural** difference: `--native` rejects in every mode, this tier rejects only under `textured` and renders them under `wire` and `flat`
 | 8 | **Pre-CSG vs post-CSG** — the largest divergence, and the reason decision 2.10's cull exists at all: `--native` renders **built BSP node polys**, this tier renders **raw brush polys** with a hand-rolled subtract cull
-| 9 | **Concave faces** — `render.rs` fills by triangle fan (`render.rs:196-206`), which bleeds outside a concave face; this tier uses even-odd scanline (§6) and is correct there. `architecture.md` measures 0.1–0.6 % of real faces as concave, so the difference is real. Logged against `--native` on `board/inbox.md`, not softened here
+| 9 | **Concave faces** — `render.rs` fills by triangle fan (`render.rs:196-206`), which bleeds outside a concave face; this tier uses even-odd scanline (§6) and is correct there. `architecture.md` measures 0.1–0.6 % of real faces as concave, so the difference is real. Not softened here. **Not yet logged against `--native`** — see §14, which parks it
 | 10 | **Background** — `render.rs`'s `BACKGROUND` is `[56,56,60]`; this tier's `BG` is 224
 
 ### 4.10 Draw order within a pane
@@ -385,8 +394,8 @@ alongside `--faces textured` triggers exit 2.
 | Change                                                                     | Where
 |----------------------------------------------------------------------------|---
 | `world_uv_frame`, `tex_basis_default`, `newell` move to a shared stdlib-only module | new `uedcli/texframe.py`
-| `preview._face_normal` **and `preview_native._newell`** are both deleted (byte-identical, and `_newell` is the one `world_uv_frame` calls); `preview.py`, **`query.py:13`**, **`polyalign.py:26`** and `preview_native.py` import `newell` from `texframe`. (`builders.py:82` is a third copy returning `Vec3` — deliberately left alone) | `preview.py`, `preview_native.py`, `query.py`, `polyalign.py`
-| **every `world_uv_frame` importer re-points**: `polyalign.py:27` (used at :251/:324/:411), `tests/test_polyalign.py:445`, `tests/test_preview_native.py:167/181/195`. A re-export alias in `preview_native` is forbidden by "No back-compat cruft", so all move in the same change | `polyalign.py`, both test modules
+| `preview._face_normal` **and `preview_native._newell`** are both deleted (byte-identical, and `_newell` is the one `world_uv_frame` calls); `preview.py`, **`query.py:13`**, **`polyalign.py:32`** and `preview_native.py` import `newell` from `texframe`. (`builders.py:82` is a third copy returning `Vec3` — deliberately left alone) | `preview.py`, `preview_native.py`, `query.py`, `polyalign.py`
+| **every `world_uv_frame` importer re-points**: `polyalign.py:33` (used at :257/:330/:417), `tests/test_polyalign.py:445`, `tests/test_preview_native.py:167/181/195`. A re-export alias in `preview_native` is forbidden by "No back-compat cruft", so all move in the same change | `polyalign.py`, both test modules
 | `poly_flags_int` moves to `texframe` too (§4.3a) — `preview.py` must not import `preview_native` | `texframe.py`, `preview_native.py`
 | `tests/test_actor_preview.py`'s `_prev` helper hardcodes `brush_colors="csg"`, which under §5's `default=None` scheme is an EXPLICIT value and would trip §2.7's exit 2 | `tests/test_actor_preview.py`
 | the mip-pyramid accessor + the `bMasked` predicate, on the decoder's typed-result contract | **folded into the texture-decoder item — §12**
@@ -504,7 +513,7 @@ secretly checkerboards is exactly that: the picture looks like an answer.
 | a **masked** face's index-0 texels leave `BG` and skip depth; an **unmasked** face's index-0 texels draw normally | decision 2.3, both directions
 | a brush with **actor-level `PolyFlags=2`** masks even though its polys carry no flag    | §4.3a's OR — the round-2 defect that would re-hide a motivating bug
 | **a synthesized fixture package carrying `bMasked`** exercises the texture-side arm     | neither committed fixture has one and the game corpus is gitignored, so without this the half the spike calls load-bearing ships untested
-| a **scaled** and a **sheared** brush each exit 2 under `flat`/`textured`, and still render under `wire` | §4.2, both fields and both modes
+| a **scaled** and a **sheared** brush each exit 2 under `textured`, and still render under **`wire` AND `flat`** | §4.2 — an earlier draft rejected under `flat` too, and this row still asserted it
 | **subtract**: camera-facing faces culled, far faces drawn, an add brush inside a subtract visible, and no wireframe/highlight on a culled face | decision 2.10 + §4.6
 | a `nonsolid` sheet renders from both sides                                             | the cull is subtract-only
 | a **concave** face fills only inside its boundary                                      | §6's scanline choice; a fan would bleed outside
@@ -522,7 +531,7 @@ secretly checkerboards is exactly that: the picture looks like an answer.
 | **a poly with no `Texture` renders `DEFAULT_GREY × shade`** | §4.3 — the most common `textured` render in practice (a generated brush)
 | **§4.1's shade formula and truncation** on a known normal | a golden PNG cannot separate a shade error from a UV error
 | **§4.2's zero/missing-axis `_tex_basis_default` fallback** | §4.2 justifies preserving it verbatim as the anti-drift guarantee, so it needs its own pin
-| **a `CEDoor`-style mover with `CsgOper=CSG_Subtract` is NOT culled** | §4.7 — the `classify_brush` name-guess trap
+| *(the mover/subtract cull test is DEFERRED — §14 escalation 1 decides what the rule is)* | §4.7
 | **a scene referencing NO texture renders with no resolver**; one referencing a texture exits 2 | decision 2.6's literal "needs"
 | **`flat` drops back-facing edges**; `wire` still draws them | §4.6's hidden-line rule
 | a golden PNG of a textured cube                                                           | end-to-end pixel stability
@@ -573,7 +582,10 @@ catalog, so it lands first regardless.
 
 1. **A mip-pyramid accessor** — every mip of a ref as `(w, h, rgb, mask)`, on its typed-result
    contract, replacing this spec's earlier `resolve_mips(...) -> … | None`.
-2. **`texture_has_bMasked(ref)`** — `"bMasked" in <the export's property block>` (§4.3a, §11).
+2. **`bMasked` on the typed result**, NOT a `texture_has_bMasked(ref)` predicate — §4.3a explains why
+   (a second entry point for one question, and a bool predicate cannot distinguish "unqualified ref"
+   from "unreadable"). *(That plan already carries this correction; recorded here because §12 is the
+   section its builder reads.)*
 
 *Rejected: shipping `wire`/`flat` first and `textured` after; rejected: waiting for that item without
 folding the accessor in (two API changes); rejected: building now against today's decoder.*
@@ -590,8 +602,65 @@ at its foot; **this spec must not be built until those findings are resolved**, 
 
 ## 13. Review history
 
-Two cold spec-review rounds have run (2026-07-26, 3 Opus each). **No structural finding** — every
-reviewer confirmed the design holds. All findings are resolved into the sections above rather than
-listed here; git holds each round's report at commits `77769d2` and `559405e`. Three owner rulings
-were taken during resolution and are recorded at the decisions they govern (2.4, 2.6, and the
-decoder plan's synthesized-fixture ruling).
+Both spec-review rounds have run (2026-07-26) at the headcount `CLAUDE.md` "Review gates" sets — the
+count is deliberately not restated here, per that section's own rule. **No structural finding** in
+either round. Findings are resolved into the sections above; git holds the reports at `77769d2` and
+`559405e`. Owner rulings taken during resolution are recorded at the decisions they govern.
+
+
+## 14. ESCALATED — two items block the build
+
+Round 2 is the gate's ceiling (`CLAUDE.md` "Review gates"), so what is still standing is escalated
+rather than carried into a third round.
+
+### E1 — how is a "subtract brush" identified, given no class index? (BLOCKS §4.7)
+
+Decision 2.10 culls a subtract's camera-facing faces. **Both candidate rules are wrong, in opposite
+directions, and I got this backwards last revision.**
+
+`preview.classify_brush` tests `cls.endswith("Mover")` **first**, then `CsgOper`. So
+`classify_brush == "subtract"` is a strict **subset** of `CsgOper == CSG_Subtract`:
+
+| Brush                                            | `classify_brush` | raw `CsgOper` | cull?
+|--------------------------------------------------|------------------|---------------|---
+| a real subtract                                   | `subtract`       | `CSG_Subtract`| yes, both rules agree
+| `SomethingMover` with `CsgOper=CSG_Subtract`      | `mover`          | `CSG_Subtract`| **classify: no · raw: YES** — a door rendered inside-out
+| `CEDoor` / `BreakableGlass` / `TNM.*mover`        | `subtract`       | `CSG_Subtract`| **both cull it** — also inside-out
+
+So switching to raw `CsgOper` (my last revision) culls *more*, not less, and **the `CEDoor` case both
+rules get wrong**. The §9 test I wrote to guard it was unsatisfiable under either rule.
+
+There is no schema-free fix: `movers.is_mover` needs a `ClassIndex`, which `actor`/`stash`/`prefab
+preview` deliberately do not thread (that is an existing open item `classify_brush`'s own docstring
+points at). `preview_native` only gets this right because it *does* have an index.
+
+**Options, all with real costs:** cull on raw `CsgOper` and accept subtract-movers rendering
+inside-out; keep `classify_brush` and accept a `*Mover`-named subtract escaping the cull; thread a
+class index into these three verbs (scope increase, and it breaks their "no game install needed"
+property); or drop the cull for anything that looks like a mover by any signal and accept the same
+name guess one layer down.
+
+### E2 — `--native`'s triangle-fan concave bleed is not yet logged
+
+§4.9 #9 previously claimed this was "logged against `--native` on `board/inbox.md`". It is not — I
+asserted a disposition I had not performed, which is exactly what `CLAUDE.md` says makes deferring
+legitimate. Needs an `inbox.md` entry. Scope caveat a reviewer added: `render.rs` rasterizes **BSP
+node** polys, which CSG produces convex, so the 0.1–0.6 % concave measurement over *authored* faces
+reaches it only on the mover path — the divergence is real but narrower than #9 implied.
+
+### Also standing, lower severity — fix during the build
+
+- **A mirrored brush** (`brush scale --by -1,1,1`, negative determinant) reverses ring orientation, so
+  `_is_front` inverts and §4.7's cull runs backwards — a mirrored subtract room renders inside-out,
+  silently. `flat` does not reject scaled brushes (§4.2), so this reaches it.
+- **§6 defines no channel for the `--faces` MODE itself** to reach `preview.py` — the `render_data`
+  seam carries textures, but `faces=None` is both `wire` and `flat`, so the renderer cannot tell which
+  mode it is in. A `faces=` parameter is needed on `render_brush_pgm`, `render_brushes_pgm`,
+  `render_quad_pgm` and `_render_breakdown_grid`'s `_pane`.
+- **The owner's decisions in §2 have no durable `direction/` home**, and this file is deleted on build.
+  `CLAUDE.md` requires the decision to land durably first. Several are policy, not implementation:
+  2.4 (no cost ceiling), 2.6 ("needs" is literal), 2.10 (subtract visibility), and the §4.8
+  choose-by-render ruling. Propose the wording and park each as `[OWNER — confirm]` before deletion.
+- **`--from-t3d` + point-actor sprite refs** under decision 2.6: does an unresolvable *sprite* count as
+  "a texture the render needs"? The existing path degrades it to a marker plus a stderr note. And are
+  refs on culled faces collected before or after the cull? Both change the exit code.
