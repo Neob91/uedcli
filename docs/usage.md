@@ -17,6 +17,10 @@ uedcli <verb> …                      # if installed on $PATH (pipx)
 bin/uedcli <verb> …                  # from Tools/uedcli, host-native via the dev venv
 ```
 
+**These docs are inside the tool.** `uedcli docs list|show|search` prints this file and the
+level-design guides straight to your terminal, so you never need to locate them on disk — see
+[Documentation](#documentation--read-the-docs-from-the-cli) below.
+
 ## Composability — the core philosophy
 
 Verbs are small and pipe together instead of growing bespoke flags:
@@ -1326,6 +1330,63 @@ uedcli class show <Package.Class> [--depth N|all] [--category NAME]
   `cannot read schema for DeusEx.Flare: package 'Engine' (needed for Engine.Actor) not found on the
   schema search path …` — instead of printing the class's own properties as if that were the full
   list. (A missing package for the class you NAMED is caught earlier, as `unknown class: …`.)
+
+---
+
+# Documentation — read the docs from the CLI
+
+uedcli carries its own user documentation, so the pages you are reading right now are queryable
+from the tool itself — no network, no repo checkout, and always the version that matches the
+binary you are running. There is a pleasing recursion here: `uedcli docs show usage` prints *this
+file*.
+
+```bash
+# every page's topic key, one per line
+uedcli docs list [--json]
+
+# print one page's markdown, verbatim
+uedcli docs show leveldesign/general/lighting
+
+# rank pages matching a text query, printing the keys `docs show` takes
+uedcli docs search "mover" [--json]
+
+# search feeds show directly
+uedcli docs search voussoir | uedcli docs show -
+```
+
+**A topic key** is how a page is addressed: its path with the `.md` dropped, so
+`leveldesign/general/lighting` (a trailing `.md` is accepted too, and matching is
+case-insensitive). A directory's overview page is addressed by the **directory's own name** —
+`uedcli docs show leveldesign/deusex` gives you that section's overview — and this usage reference
+is `usage`, with the docs landing page at `index`.
+
+- **`docs list`** prints every topic key to stdout, sorted, with the count on stderr. `--json`
+  gives `[{"path": <topic key>, "title": …}]` — `path` holds the topic key, not a filesystem path.
+- **`docs show <topic>`** writes the page's markdown to stdout byte-for-byte and nothing to
+  stderr. `docs show -` instead reads topic keys from stdin, one per line, and prints them all,
+  each preceded by a `<!-- topic: <key> -->` marker line naming it. That form is **all-or-nothing**:
+  if any key is unknown, nothing is printed at all and it exits 2 naming the offending keys — you
+  never get a partial dump that looks complete. Empty stdin is a clean no-op (exit 0).
+- **`docs search <query>`** matches a literal, case-insensitive substring against every page's
+  title and body lines, and prints the matching topic keys best-first. The ranking is worth knowing
+  exactly, because it is simple: **a title match is worth ten matching body lines**, and matching
+  body lines are worth one each. So a page *about* your query usually leads — but a long page that
+  mentions it eleven times will outrank a short page that has it in the title, and that is working
+  as intended rather than a bug. No matches is a normal, empty success (exit 0); an empty query is
+  refused (exit 2), since a blank substring would "match" every page. `--json` adds a `snippet` —
+  the first matching **body** line, up to 120 characters. The page's heading is its `title`, not a
+  body line, so a snippet never just repeats it.
+
+An unknown topic exits 2 with `Doc not found: <topic>` and, where there is an obvious near miss, a
+`did you mean:` hint. A bare page name that exists in two places (`human-scale`) deliberately does
+*not* resolve — the hint lists both candidates so you pick the one you meant.
+
+There are no partial answers. If any part of the docs tree cannot be read — a permission problem on
+a directory, say — every `docs` verb exits 2 naming that directory, rather than quietly serving the
+pages it *could* read and leaving you to believe that is all of them.
+
+Every `docs` verb is read-only and fully offline: it needs no project, no selected level and no
+game install, so it works in a bare checkout or a bare install.
 
 ---
 

@@ -10,7 +10,9 @@ levels* with it. There are two:
 
 - **[usage.md](usage.md)** — the CLI: query/mutate verbs, the `preview` viewer, `brush poly list`,
   brush clip, stash/prefab, the texture catalog (`sync`/`list`/`search`/`tags`/`classify`). Read
-  this for **what to type**.
+  this for **what to type**. It also documents `uedcli docs list|show|search`, which serves these
+  very pages from the CLI — so you can read all of this in the terminal, offline, without going
+  looking for the files.
 - **[leveldesign/](leveldesign/README.md)** — level-design craft for uedcli users: geometry/BSP,
   zoning, lighting, textures, movers, NPCs, human-scale numbers, and the Deus Ex immersive-sim
   design philosophy — mapped onto the verbs. Read this for **how to build something worth looking

@@ -227,22 +227,6 @@ nothing was sent to `to-spec.md`.
 
 ---
 
-## 11. `docs` command — serve the user-facing docs from the CLI (self-documenting binary)
-
-Add `uedcli docs list|show|search` serving `docs/` minus `dev/docs/**`, so a shipped Claude skill
-routes to the docs by **querying the tool** — the skill/plugin ships zero doc copies. **The spec
-doubles as the plan** (implementation-detailed; review gate passed 2026-07-24, two cold reviewers,
-findings folded): `specs/2026-07-24-docs-command.md`. Key points baked in: `show` resolves via the
-enumerated served-set (kills path-traversal + dev-tree leak structurally, no raw path-join); resolver
-= `UEDCLI_DOCS_DIR` → source tree → packaged `uedcli/_docs` (**source-first** so a stale local build
-can't shadow live dev docs); a `README.md` folds to its directory topic (root → `index`); errors reuse
-`_SelectionExit` (clean exit 2, no new type). **Deferred, NOT this item:** the Nuitka/wheel `_docs`
-generation + `.gitignore` + `--include-data-dir=uedcli/_docs=uedcli/_docs` + drift-CI — added only when
-packaging exists, with no command-code change. **Docs to update on landing:** `docs/usage.md` gains a
-`docs` section (the reference file the command serves); `architecture.md`. (Andrzej, 2026-07-24.)
-
----
-
 ## Docs restructure — `direction/` + `rationale/`, no ledger (spec + plan reviewed, 2026-07-26)
 
 - [ ] `p1` **Retire the append-only decisions ledger; replace it and `direction.md` with two

@@ -68,7 +68,12 @@ and [`spikes/2026-07-05-git-merge-t3d-layout/`](spikes/2026-07-05-git-merge-t3d-
   **`tool_assets.py`** anchors the tool-INSTALL assets package-relative: `tool_root()` (the
   `Tools/uedcli/` dir holding the package, via `__file__`), `uned_dir()` (compose dir + UED22),
   `umodel_dir()` (`Tools/umodel_win32` — a SIBLING of the tool dir, deliberately outside the
-  anchor; the packaging item owns how these ship under pipx/Nuitka). The top-level `dispatch()` guard converts expected failures to a
+  anchor; the packaging item owns how these ship under pipx/Nuitka).
+  **`userdocs.py`** applies the same package-relative anchoring to the tool's own USER-facing
+  prose: it resolves a **docs root** and enumerates the served `.md` set behind the
+  `docs list|show|search` verbs (see "Commands" below). It is a leaf module — pure filesystem
+  enumeration, no level, no project, no editor — imported lazily by `dispatch._dispatch_docs`.
+  The top-level `dispatch()` guard converts expected failures to a
   clean stderr message + exit 2 — never a traceback: `_SelectionExit`/`_ProjectError`/
   `LevelSelectionError`/`ConfigError`; **`GeometryError`** (a degenerate/invalid brush from a
   model-side verb — actor add, brush clip/vertex, mover key, the builders, stash/prefab apply;
@@ -729,6 +734,59 @@ named `label` deliberately, since `tag` would collide with `Engine.Actor.Tag`. S
     gitignored image tree). Consumers check existence and error "run `texture sync`".
   - See [decisions.md](decisions.md) 2026-06-22 entries for the full design rationale and
     rejected alternatives.
+- **`docs list|show|search`** (`userdocs.py`, `dispatch._dispatch_docs`) — uedcli serves its own
+  **user-facing** documentation, so a consumer reads the pages baked into the binary it has rather
+  than carrying a copy that drifts (the `git help <topic>` / `rustc --explain` pattern). The
+  motivating consumer is a shipped Claude skill that routes a user to a page by *querying the
+  tool*, shipping **zero** doc copies. Read-only and fully offline: no project, no ambient level,
+  no games config, no editor — it must answer in a bare checkout and a bare install.
+  - **Docs root**, resolved in a fixed order (`userdocs.docs_root`): `$UEDCLI_DOCS_DIR` → the
+    source checkout's `docs/` beside the package dir → the packaged `uedcli/_docs/`. **Source
+    before packaged, deliberately** — a stale `_docs/` from an experimental local build must never
+    shadow the live tree a developer is editing. The anchor is
+    `importlib.resources.files("uedcli")`, not a `parents[N]` count, so moving the module inside
+    the package cannot break it. The `_docs` branch is dormant: nothing generates it yet (see the
+    packaging item on `board/inbox.md`). Any failure is a clean exit-2 `_SelectionExit` naming what
+    was wrong — never a silently empty listing, which would read as "this build has no docs".
+  - **Topic key** — how a page is addressed: its path under the docs root with `.md` dropped, with
+    a `README.md` folded onto the directory it documents (`leveldesign/deusex/README.md` →
+    `leveldesign/deusex`) and the root `README.md` onto the reserved key `index`. `list`/`search`
+    print topic keys; `show` takes one (a trailing `.md` is optional, matching is
+    case-insensitive). A **bare basename is deliberately not a resolver** — `human-scale` names two
+    pages, so it is a miss whose hint lists both, never a coin flip.
+  - **What keeps the developer tree out is the ROOT, not the prune.** `dev/docs/` is a **sibling**
+    of `docs/`, not a subdirectory, so it is not under the docs root and never was reachable — the
+    served set is defined by where enumeration starts. The enumeration additionally never descends
+    a **top-level** `dev/` directory inside the root (matched as `parts[0]`, so a legitimate
+    `guide/dev/…` deeper down still serves) and drops any symlink whose real target resolves
+    outside the root or back into that `dev/`. **That prune is defence in depth and fires on
+    nothing today** — it guards a future layout that nests the two trees, or an operator pointing
+    `$UEDCLI_DOCS_DIR` at the repo root. It is not a licence to weaken the root resolution.
+  - **`show` resolves by looking a key up in the enumerated served set** — there is no path join
+    anywhere — which is what structurally kills `../` traversal, absolute paths, directory reads
+    and non-`.md` dumps rather than blacklisting them. ONE enumeration feeds all three sub-verbs,
+    so they cannot disagree about what is served.
+    **Every comparison in the module is case-insensitive** — the `dev/` prune, the `README` fold,
+    the `.md` extension, key lookup, the duplicate-key check and the sort order — so the served set
+    does not change shape on a case-insensitive filesystem (the Nuitka ship target).
+  - **An unreadable directory is an error, not an empty one.** The walk is hand-written
+    (`userdocs._markdown_files`) rather than `Path.rglob`, because `pathlib`'s glob swallows the
+    `OSError` from `scandir`: an unreadable docs root would list as zero topics at exit 0, and an
+    unreadable *subdirectory* would silently drop its pages from `list`, `search` **and** `show` —
+    a partial answer with no signal, which "No silent half-answers" forbids. Root-owned trees left
+    by container runs make that a live failure mode here. Every unreadable directory (and an
+    unreadable file, in `userdocs._read`) is a clean exit 2 naming the path.
+  - **A duplicate topic key is a hard error** naming both files (case-insensitively compared, the
+    same way lookup resolves). An ambiguous served set cannot be trusted, and because the failure
+    happens during *enumeration* it trips every `docs` invocation **and** `bin/test` — so it is
+    caught while authoring the docs and a shipped binary can never carry one.
+  - Output follows the house pipe conventions: topic keys (or a page's markdown) on stdout, the
+    count on stderr, `--json` for structure. `show` writes **bytes** (`sys.stdout.buffer`) because
+    the docs carry UTF-8 typography a locale-driven re-encode would corrupt. `show -` reads keys
+    from stdin and is **atomic** — one unresolvable key means nothing at all on stdout and exit 2,
+    never a partial dump that reads as complete; on success each page is preceded by a
+    `<!-- topic: <key> -->` marker naming it, so `docs search … | docs show -` composes.
+  - Rationale + rejected alternatives: [`rationale/userdocs.md`](rationale/userdocs.md).
 - **`class list`/`class show`** — offline actor-class discovery over the composed `.u` path (no
   editor, no ambient level); see "Class discovery + qualify-and-validate on ingest" below.
 - **Generator verbs (stdout T3D producers)** — `dispatch.py` handles these without resolving a

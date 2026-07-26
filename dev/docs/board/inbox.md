@@ -26,6 +26,42 @@ stage (so no `to-` prefix). See [`README.md`](README.md).
 
   If you would rather these stay agent-side, say so and they go to `rationale/` instead — but they
   cannot stay only in an ephemeral spec. *(2026-07-26.)*
+- `p2` `[OWNER — confirm]` **Two `uedcli docs` decisions of yours are currently recorded only in
+  the agent-owned `rationale/` tree, where a future session may revise them freely.** The `docs`
+  command shipped 2026-07-26; its spec (`specs/2026-07-24-docs-command.md`, ephemeral) attributes
+  these two to you, so they need a `direction/` home. Both are implemented and live — this is
+  about where the *ruling* is filed, not about changing behaviour. Proposed text, verbatim,
+  awaiting a yes:
+
+  **(A) Suggested home: a NEW topic in the `direction/` tree, suggested name **documentation**
+  (nothing covers documentation today; fold it into the existing `scope` topic instead if you
+  prefer fewer topics). Only you can create it, so it does not exist yet:**
+
+  > **The docs are an asset of the TOOL, and the tool serves them.** uedcli's user-facing
+  > documentation ships inside uedcli and is readable through it (`uedcli docs list|show|search`),
+  > the way `git help <topic>` and `rustc --explain` work. A consumer that needs to point a user at
+  > a page — including a shipped Claude skill or plugin — **queries the tool** and ships **zero**
+  > copies of the docs. There is one source of truth, and a user always reads the pages that match
+  > the binary they are running: version-locked, offline, cross-platform.
+  >
+  > **Rejected:** *bundling the documentation under the skill's own `references/`* — it duplicates
+  > the corpus, inverts ownership (the skill would own uedcli's docs), and needs a bake/sync step
+  > that is one more thing to keep true. *Referencing hosted docs by URL* — needs a network and
+  > drifts from the installed version.
+
+  **(B) Suggested home: `direction/conventions.md`, under "No silent half-answers and no
+  fallbacks"** (it is an instance of that rule):
+
+  > **An ambiguous served set is an error, not a precedence rule.** Where two inputs claim one
+  > name — two documentation files deriving the same topic key, say — the tool refuses and names
+  > both, rather than picking one silently. Where such a conflict can only be created by an author
+  > (not by a user of a shipped binary), the refusal fires during enumeration so it breaks the test
+  > suite and every invocation at authoring time, and can never reach a user.
+
+  **What I judged NOT yours, and left in `rationale/userdocs.md`:** the resolver's
+  source-tree-before-packaged-`_docs` order. The spec marks it a review finding (`[R:H2-B]`), not
+  a ruling of yours, and it is an implementation trade about dev iteration. Say the word if you
+  read it as yours and it moves too. *(2026-07-26.)*
 - **[debug] p3 `parse_decimal` admits an INFINITY by another spelling — `1e999999999` is finite as a
   `Decimal` and infinite as a `float`.** Reproduced 2026-07-26:
 
@@ -2530,6 +2566,31 @@ the substrate's class vocabulary** or **validate a texture/class ref at author t
   + Pillow baked in, no host deps). Open: how the editor-driving verbs' Docker dependency is handled
   in a standalone binary (the binary still needs a docker CLI + daemon to spin editor containers).
   (Deferred per Andrzej, 2026-07-11.)
+
+- `[implement]` **Bundle the user-facing docs into the wheel/Nuitka build (`uedcli/_docs/`).** p2.
+  **Deliberately not built** with the `docs` command that landed 2026-07-26 — that command is
+  complete and shipped, and this is the packaging half it was always specced to wait for (spec
+  `specs/2026-07-24-docs-command.md` §8, Andrzej 2026-07-24). Today `uedcli docs list|show|search`
+  serves the source checkout's `docs/` tree; `userdocs.docs_root()` already has the third branch
+  that reads a packaged `uedcli/_docs/`, and it is **dormant because nothing generates that
+  directory**. So an installed wheel or a Nuitka binary built today ships with NO docs and every
+  `docs` verb exits 2 with "uedcli docs unavailable (broken install)". **No command-code change is
+  needed** — only build wiring: (1) a build step that copies the served subset (`*.md` under
+  `docs/`, minus the top-level `dev/`) into `uedcli/_docs/`; (2) `.gitignore` it — it is generated,
+  never committed; (3) `pyproject.toml` `package-data = { uedcli = ["_docs/**"] }` (currently
+  explicitly empty) **plus MANIFEST**, with generation running BEFORE the sdist/wheel build, else a
+  clean-checkout build ships a broken install; (4) Nuitka
+  `--include-data-dir=uedcli/_docs=uedcli/_docs` — the ALREADY-FILTERED bundle, never
+  `docs=uedcli/_docs`, which would re-bundle the developer tree into a user-facing binary; (5) a CI
+  drift guard that `_docs` regenerates identically from source. Also verify then (untestable now)
+  that the resolver picks the bundled branch identically under a wheel and under Nuitka —
+  **and specifically this hazard**: the source-tree branch is
+  `importlib.resources.files("uedcli").parent / "docs"`, which in a wheel install resolves to
+  `site-packages/docs`. If any OTHER installed distribution ships a top-level `docs/` package
+  directory, it would satisfy that branch and shadow uedcli's own bundled `uedcli/_docs`, serving a
+  stranger's documentation. The spec assumed no `docs/` sibling exists in an install. Unverified
+  and speculative — packaging does not exist yet — but it is cheap to check once it does, and the
+  fix if real is to require a marker file inside the candidate directory. *(2026-07-26.)*
 
 - `[implement]` **Editor-driving verbs under the dev wrapper leave root-owned files.** p2. The dev
   container runs `--user host-uid`, but the sibling editor containers it spawns (`editor.py`'s
