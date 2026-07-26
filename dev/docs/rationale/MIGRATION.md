@@ -118,7 +118,34 @@ either old file is deleted.
 | 2026-06-23 — Terminology: "level" = content, "map file" = the artifact | `direction/terminology.md` | intent; both `Rejected` bullets carried over. `Refs:` cited the same **deleted** new-level-authoring spec — dropped, not carried dangling |
 | 2026-07-22 20:49 — actor `label` dimension | `direction/terminology.md` (glossary) + `direction/organization.md` (the feature, Task 5) | its "internals stay label-named pending a rename" clause did NOT survive — superseded below |
 | 2026-07-25 18:40 — preview internals renamed `annotation*`; drawing keeps "label" | `direction/terminology.md` | supersedes the clause above; only the CURRENT answer is stated, which is what revise-in-place means |
-| *(remaining entries populated by Tasks 4–7)* | | |
+| 2026-07-18 12:14 / 12:32 / 12:45 — actor folders (3 entries) | `direction/organization.md` | intent. All `Rejected` carried EXCEPT 12:14's "no `--folder` on the generators", which 2026-07-24 17:04 **reversed** — the reversed bullet is dead and was dropped, replaced by 17:04's rejection of the two-setter model |
+| 2026-07-22 20:49 / 2026-07-23 05:58 / 2026-07-24 08:31 / 08:40 / 10:02 — actor labels (5 entries) | `direction/organization.md` | intent. Rejected carried. 05:58 #6 (fnmatch char class) **superseded** by 08:40 — only the current answer stated. 08:31's "bare duplicate stays a WARNING" **superseded** by 10:02 (now an error) |
+| 2026-07-24 17:04 — generator-flag cleanup | `direction/organization.md` | intent; the reversal that kills 12:14 #8. All 3 `Rejected` carried |
+| 2026-07-25 00:43 — folder/label stay under `actor`; add `list` | `direction/organization.md` | intent. **Never reconciled into `direction.md`** — it postdates everything that doc cited |
+| *(remaining entries populated by Tasks 5–7)* | | |
+
+### Direction/code deltas created by the `organization` confirmation (2026-07-26)
+
+Three places where confirmed direction now leads the tool. Not bugs introduced here — two are
+pre-existing divergences the confirmation surfaced, one is new intent.
+
+1. **`--tree stash|prefab` is REJECTED for label verbs, but direction says accept.** Andrzej's
+   2026-07-23 05:58 #5 ruling already said allow; `dispatch.py:348-358`
+   (`_reject_nonlevel_target_for_labels`) rejects, its own docstring calling it "a plan scope-cut
+   … deferred". `cli.py:439` advertises "Level-only". **Andrzej ruled 2026-07-26: the ruling
+   stands, the code is wrong.** The sibling *folder* guard is already parked on `board/inbox.md`;
+   this label one was not.
+2. **`stash apply` / `prefab apply` mint no batch label.** New ruling, 2026-07-26: they must mint
+   `prefab-<name>-<rand>` / `stash-<id>-<rand>`, always, additive with an explicit `--label`,
+   with the source name sanitised into `[A-Za-z0-9_+-]`. `actor duplicate` already does the
+   equivalent (`dispatch.py:4066`); placement does not.
+3. **`actor folder list` / `actor label list` do not exist.** Confirmed as direction anyway —
+   direction states intent, not status, and the gap to `architecture.md` is expected by design.
+   On `board/to-spec.md`.
+
+Also corrected in passing: `direction.md` documented **`actor label set`**, a sub-verb Andrzej's
+2026-07-23 ruling explicitly refused and the code has never had. The same error is repeated inside
+the frozen ledger's 2026-07-24 17:04 entry — noted so nobody re-copies it.
 
 ---
 

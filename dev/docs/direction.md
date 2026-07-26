@@ -136,36 +136,9 @@ spike 2026-07-01 07:05)*
 
 **MIGRATED** → [`direction/terminology.md`](direction/terminology.md).
 
-## Folders: hierarchical actor organization
+## Folders and labels
 
-Actors are organized into a **tree of folders** — a per-actor dotted **path** (`castle.tower.roof`),
-so logical subsets are addressable ("list `castle.moat.**`", "retexture every `**.roof`"). A folder
-is **uedctl-side only**: it lives in the per-actor `folder` sidecar (beside `order_value`), is
-**never emitted to the built map**, and is a **separate dimension** from the T3D `Group=` property
-(which is retained unchanged). One folder path per actor (no multi-membership). Set at creation on the **generators**
-(`brush build`/`actor build` `--folder <path>`, emitted as the `// uedctl-folder:` T3D carrier that
-`actor add` persists — folder rides the wire), and managed on the trunk with `actor folder set|unset|get`;
-`actor add` itself carries NO `--folder` flag (it is a pure carrier-consumer). Queried with
-`actor find --folder <pattern>`. Pattern matching is **globstar**: a wildcard-free name selects its
-whole subtree, `*` matches exactly one path segment, `**` matches any depth. *(decisions:
-actor-folders, 2026-07-18 12:14; flag moved to generators, 2026-07-24 17:04)*
-
-## Labels: flat, multi-valued cross-cutting classification
-
-Alongside the single-path `folder`, an actor carries a **set of labels** — flat tokens
-(`lighting`, `flammable`, `hero`) answering "what is this about," the cross-cutting axis a single
-hierarchy can't express (a torch is at `castle.tower` AND is `lighting` AND `interactive` at once).
-Like folders, labels are **uedctl-side only** (a per-actor `labels` sidecar beside `order_value`/`folder`,
-**never emitted to the built map**) and **orthogonal** to `folder`, the engine `Group` prop, and the
-engine `Tag` prop — named `label` precisely because "tag" would collide with `Engine.Actor.Tag` (freed
-by renaming `actor preview`'s annotation flag `--labels` → `--annotate`). Multi-valued: set at creation on the
-**generators** (`brush build`/`actor build` `--label <l>`, repeatable, emitted as the `// uedctl-labels:`
-carrier `actor add` persists — `actor add` carries NO `--label` flag), managed on the trunk with
-`actor label add|remove|set|clear|get`, queried with `actor
-find --label <glob>` (flat fnmatch; multiple `--label` OR). **`actor duplicate` uses labels as the batch
-handle:** copies inherit their source's labels AND all get one fresh unique `dup-<rand>` label (a
-union), so the whole duplicated batch is re-addressable as a set after the pipeline ends. *(decisions:
-actor-labels, 2026-07-22 20:49)*
+**MIGRATED** → [`direction/organization.md`](direction/organization.md).
 
 ## Materializing the map file: `level materialize`
 

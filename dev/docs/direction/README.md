@@ -17,7 +17,7 @@ Siblings: `../rationale/` (why the code is that way — agent-owned), `../archit
 | [`scope.md`](scope.md) | a generic UnrealEngine-1 tool; Deus Ex as one substrate | ✅ |
 | `projects-and-config.md` | projects, substrates, the global CLI, layered packages | *(pending)* |
 | `trunk-and-editor.md` | the T3D trunk as source of truth; the editor as build tool | *(pending)* |
-| `organization.md` | folders (hierarchical) and labels (flat, multi-valued) | *(pending)* |
+| [`organization.md`](organization.md) | folders (hierarchical) and labels (flat, multi-valued) | ✅ |
 | `materialize.md` | `level materialize`; lighting/BSP as build output | *(pending)* |
 | `safety.md` | never irretrievably clobber | *(pending)* |
 | `containers.md` | container isolation; the code/content substrate split | *(pending)* |
