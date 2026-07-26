@@ -15,9 +15,9 @@ Only the editor/build containers it *drives* run under Docker.
 
 | Path | Role |
 |------------------|---
-| `bin/_venv.sh` | sourced helper: finds `python3.12`, creates `.venv/` on first use, installs `Pillow` + `pytest`, and calls `ensure_native_ext`. |
-| `bin/uedctl` | runs the CLI through that venv. |
-| `bin/test` | runs pytest through the same venv, **then `cargo test` in `uedctl-native/`** — see [`rules/tests.md`](rules/tests.md). |
+| `bin/_venv.sh` | sourced helper: finds `python3.12`, creates `.venv/` on first use, installs `Pillow` + `pytest`. It *defines* `ensure_native_ext` but does not call it. |
+| `bin/uedctl` | runs the CLI through that venv. Calls `ensure_venv` only — **it does not build the Rust extension**. |
+| `bin/test` | calls `ensure_native_ext`, runs pytest through the same venv, **then `cargo test` in `uedctl-native/`** — see [`rules/tests.md`](rules/tests.md). |
 | `uedctl-native/` | the **Rust PyO3 extension** (`uedctl_native`), built into the venv with `maturin develop --release`. |
 | `.venv/` | gitignored; self-creates, so a fresh checkout needs no setup step. |
 
@@ -25,6 +25,11 @@ Only the editor/build containers it *drives* run under Docker.
 native paths**. The Python side has one third-party runtime dependency, **Pillow** (texture-catalog
 PCX decode), and carries **no compatibility shims** — no `tomllib`→`tomli` fallback, no 3.10
 support. That is deliberate: the code targets one interpreter version and stays clean.
+
+**`bin/test` is the only thing that builds the extension.** On a fresh checkout,
+`bin/uedctl level materialize --native` will **not** compile it first — `uedctl/native/materialize.py`
+swallows the `ImportError` and falls back. Run `bin/test` once before expecting a native path to
+work.
 
 **The Rust extension is OPTIONAL by design.** `ensure_native_ext` is source-hash-gated on
 `Cargo.toml` + `src/*.rs`; if `cargo` is absent it **warns and returns success**, so a docs-only or

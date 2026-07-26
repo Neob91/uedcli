@@ -57,7 +57,11 @@ def _is_doc_target(target: str) -> bool:
     pure fragment) keeps the check honest without flagging prose nobody will "fix".
     """
     core = target.split("#")[0]
-    return "/" in core or core.endswith(".md") or target.startswith("#")
+    if target.startswith("#") or "/" in core:
+        return True
+    # A bare filename counts if it has a plausible file suffix. Spike docs link to their committed
+    # harness scripts as `harness.py`, which a `.md`-only test drops.
+    return bool(re.search(r"\.(md|py|sh|toml|txt|json|t3d|rs)$", core, re.IGNORECASE))
 
 
 def _links(path: Path) -> list[str]:
@@ -104,9 +108,15 @@ def _on_deck() -> frozenset[str]:
 
 
 def _slug(heading: str) -> str:
-    """GitHub's anchor slug: lowercase, drop punctuation, EACH space becomes a hyphen.
+    """An APPROXIMATION of GitHub's anchor slug: lowercase, drop punctuation, each space to a hyphen.
 
-    Runs are NOT collapsed — that is the whole subtlety. ``Movers — animated brush actors``
+    Deliberately coarser than `github-slugger` — it also strips `_` and symbols (→ ⇒ ✅) that
+    GitHub keeps, so ~535 real headings slug differently here. That is safe in one direction only:
+    the same coarsening is applied to both the heading and the citation, so it can accept an
+    anchor GitHub would reject, but never reject one GitHub would accept. False negatives, not
+    false positives — the right way round for a check that must not redden the suite.
+
+    Runs are NOT collapsed. ``Movers — animated brush actors``
     drops the em-dash and leaves two adjacent spaces, which GitHub renders as ``movers--animated``.
     A slugger that collapses whitespace produces ``movers-animated``, matches nothing, and reports
     every em-dashed heading in the tree as broken.
@@ -117,11 +127,38 @@ def _slug(heading: str) -> str:
 
 
 def _anchors(path: Path) -> set[str]:
+    """Every anchor the target file offers, in document order.
+
+    Two subtleties, both of which produced wrong answers before they were handled:
+
+    * **Repeated headings get numeric suffixes.** GitHub disambiguates a second ``## Procedure``
+      as ``#procedure-1``. Collecting slugs into a plain set loses that, so a *correct*
+      cross-reference into any doc with repeated headings reads as broken — nine checked docs
+      have them today, and one false positive is what gets a check switched off.
+    * **Fences are stripped**, matching `_links`. Otherwise a ``#`` line inside a code sample
+      registers as a real heading, and a citation into it passes silently — the exact
+      revise-in-place rot the anchor check exists to catch.
+    """
     try:
         text = path.read_text(encoding="utf-8", errors="replace")
     except OSError:
         return set()
-    return {_slug(h) for h in _HEADING.findall(text)}
+    seen: dict[str, int] = {}
+    out: set[str] = set()
+    for heading in _HEADING.findall(_FENCE.sub("", text)):
+        slug = _slug(heading)
+        n = seen.get(slug, 0)
+        out.add(slug if n == 0 else f"{slug}-{n}")
+        seen[slug] = n + 1
+    return out
+
+
+def _rel(path: Path) -> str:
+    """Repo-relative path for messages, tolerating a scratch doc outside the repo (self-tests)."""
+    try:
+        return str(path.relative_to(REPO))
+    except ValueError:
+        return str(path)
 
 
 def _checked_docs() -> list[Path]:
@@ -145,7 +182,7 @@ def test_markdown_links_resolve(doc: Path) -> None:
         resolved = (doc.parent / target.split("#")[0]).resolve()
         if not resolved.exists():
             broken.append(f"{target} -> {resolved}")
-    assert not broken, f"{doc.relative_to(REPO)} links to missing files:\n  " + "\n  ".join(broken)
+    assert not broken, f"{_rel(doc)} links to missing files:\n  " + "\n  ".join(broken)
 
 
 @pytest.mark.parametrize("doc", _checked_docs(), ids=lambda p: str(p.relative_to(REPO)))
@@ -165,7 +202,7 @@ def test_markdown_anchors_resolve(doc: Path) -> None:
             continue
         if _slug(anchor) not in _anchors(resolved):
             broken.append(f"{target} (no heading '#{anchor}')")
-    assert not broken, f"{doc.relative_to(REPO)} cites missing anchors:\n  " + "\n  ".join(broken)
+    assert not broken, f"{_rel(doc)} cites missing anchors:\n  " + "\n  ".join(broken)
 
 
 #: Files that MAY name a deleted doc, because naming it is their job. Without these the check
@@ -187,7 +224,8 @@ def test_no_citation_of_a_deleted_doc() -> None:
     `_MAY_NAME_DELETED` is exempt by design.
     """
     on_deck = _on_deck()
-    # Built, not literal, so this module does not match its own check.
+    # NOTE: this module DOES contain both literals (see its docstring); it passes only because
+    # it is in `_MAY_NAME_DELETED`. Do not remove that entry on the strength of this loop.
     for name in ("decisions" + ".md", "direction" + ".md"):
         if (REPO / "dev/docs" / name).exists():
             continue
@@ -226,26 +264,59 @@ def test_is_doc_target(target: str, should_be_checked: bool) -> None:
     assert _is_doc_target(target) is should_be_checked
 
 
-def test_checker_catches_a_broken_link_and_anchor(tmp_path: Path) -> None:
-    """The two failure modes, exercised end to end against a scratch doc."""
-    doc = tmp_path / "probe.md"
-    (tmp_path / "real.md").write_text("# Real Heading\n", encoding="utf-8")
-    doc.write_text(
-        "[gone](./no-such-file.md)\n"
-        "[dead anchor](real.md#not-a-heading)\n"
-        "[fine](real.md#real-heading)\n",
+def _probe(tmp_path: Path, body: str) -> Path:
+    """A scratch doc plus a real target to link at."""
+    (tmp_path / "real.md").write_text(
+        "# Real Heading\n\n## Procedure\n\ntext\n\n## Procedure\n\nmore\n",
         encoding="utf-8",
     )
-    targets = _links(doc)
-    assert "./no-such-file.md" in targets and "real.md#not-a-heading" in targets
+    doc = tmp_path / "probe.md"
+    doc.write_text(body, encoding="utf-8")
+    return doc
 
-    missing = [t for t in targets if not (doc.parent / t.split("#")[0]).resolve().exists()]
-    assert missing == ["./no-such-file.md"]
 
-    bad_anchors = [
-        t for t in targets
-        if "#" in t
-        and (doc.parent / t.split("#")[0]).is_file()
-        and _slug(t.split("#", 1)[1]) not in _anchors(doc.parent / t.split("#")[0])
-    ]
-    assert bad_anchors == ["real.md#not-a-heading"]
+def test_link_check_fails_on_a_missing_file(tmp_path: Path) -> None:
+    """Drive the REAL gate, not a re-implementation of it.
+
+    The earlier version of this test asserted `_links`/`_slug`/`_anchors` inline, so gutting
+    `test_markdown_links_resolve` to a no-op still passed — 476 green tests guarding nothing.
+    Calling the gate function itself is what makes this a regression rather than decoration.
+    """
+    doc = _probe(tmp_path, "[gone](./no-such-file.md)\n")
+    with pytest.raises(AssertionError, match="links to missing files"):
+        test_markdown_links_resolve(doc)
+
+
+def test_anchor_check_fails_on_a_missing_anchor(tmp_path: Path) -> None:
+    doc = _probe(tmp_path, "[dead](real.md#not-a-heading)\n")
+    with pytest.raises(AssertionError, match="cites missing anchors"):
+        test_markdown_anchors_resolve(doc)
+
+
+def test_both_checks_pass_on_a_clean_doc(tmp_path: Path) -> None:
+    """A green run must be reachable, or the checks are just a wall."""
+    doc = _probe(tmp_path, "[fine](real.md#real-heading)\n[code](real.md)\n")
+    test_markdown_links_resolve(doc)
+    test_markdown_anchors_resolve(doc)
+
+
+def test_repeated_headings_get_numeric_suffixes(tmp_path: Path) -> None:
+    """`#procedure-1` is a VALID citation into a doc with two `## Procedure` headings.
+
+    Nine checked docs have repeated headings; treating the second one's anchor as broken is a
+    false positive on correct content, which is how a check earns its own deletion.
+    """
+    doc = _probe(tmp_path, "[second](real.md#procedure-1)\n")
+    test_markdown_anchors_resolve(doc)
+    assert {"procedure", "procedure-1"} <= _anchors(tmp_path / "real.md")
+
+
+def test_headings_inside_code_fences_are_not_anchors(tmp_path: Path) -> None:
+    """A `#` line in a code sample is not a heading, so citing it must fail."""
+    (tmp_path / "real.md").write_text(
+        "# Real Heading\n\n```\n# Not A Heading\n```\n", encoding="utf-8"
+    )
+    doc = tmp_path / "probe.md"
+    doc.write_text("[phantom](real.md#not-a-heading)\n", encoding="utf-8")
+    with pytest.raises(AssertionError, match="cites missing anchors"):
+        test_markdown_anchors_resolve(doc)

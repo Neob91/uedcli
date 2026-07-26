@@ -29,7 +29,7 @@ READMEs, this file), so the `decisions.md` count rises before it falls.
 
 | Measure | Spec said | **Measured** |
 |-------------------------------------|-----------|---
-| `CLAUDE.md` lines | 671 | **717** (Task 1 added the confirmation rule) |
+| `CLAUDE.md` lines | 671 | **655** — 671 + ~34 (confirmation rule + router rows) − 74 moved to `rules/` |
 | `direction.md` lines | 392 | 392 |
 | `decisions.md` lines | 8,985 | **8,993** (Task 1's freeze banner) |
 | Ledger entries (`^## \d{4}-`) | 227 | 227 |
@@ -56,7 +56,7 @@ The plan "corrected" the spec's 7 down to 6 by reclassifying `commands.md:212` a
 (right), but did not know about the two `geometry-builders.md` sites the profile-generators work
 added (wrong). Net: 8.
 
-### Bare dated refs — 22 files
+### Bare dated refs — 21 tracked (22 in the working tree)
 
 Definition: matches `\(?[Dd]ecisions?\b[^)]{0,40}[0-9]{4}-[0-9]{2}-[0-9]{2}` and contains **no**
 literal `decisions.md`, so a filename grep cannot see it.
@@ -65,6 +65,7 @@ literal `decisions.md`, so a filename grep cannot see it.
 dev/docs/board/to-spike.md                     uedctl/normalize.py
 dev/docs/specs/2026-07-17-game-actor-relative-poses.md   uedctl/preview_game.py
 dev/docs/spikes/levelbuild-friction/README.md   uedctl/rotation.py
+  ^^ UNTRACKED (another session's spike) — not in the checker's git ls-files set
 dev/docs/unrealed/commands.md                   uedctl/stash_register.py
 uedctl/cli.py                                   uedctl/tests/test_apply.py
 uedctl/level_select.py                          uedctl/tests/test_brush_merge.py
@@ -75,21 +76,25 @@ uedctl/tests/test_normalize.py                  uedctl/tests/test_stashlib.py
 uedctl/tests/test_trunk_verbs.py                uedctl/tests/test_uprops.py
 ```
 
-### `CLAUDE.md "<moved section>"` citations — recheck at Task 8
+### `CLAUDE.md "<moved section>"` citations — DONE (retargeted 2026-07-26)
 
-A `grep -rn 'CLAUDE\.md "'` over `uedctl`/`bin`/`pyproject.toml` returns **3** files, and one of
-them cites a section that **stays resident**:
+All four citations of the three *moved* sections were retargeted in the rules-split commit:
 
 ```
-uedctl/editor.py       "Background / long-running work"   -> MOVES to rules/background-work.md
-uedctl/editor.py       "never let a Python exception…"    -> STAYS (Code & CLI conventions)
-uedctl/tests/test_polyalign.py  "Spikes: pin the finding" -> MOVES to rules/spikes.md
+uedctl/editor.py:267              -> dev/docs/rules/background-work.md
+uedctl/tests/test_polyalign.py    -> dev/docs/rules/spikes.md "pin the finding"
+uedctl/tests/test_engine_facts.py -> dev/docs/rules/spikes.md
+uedctl/tests/test_mesh_decode.py  -> dev/docs/rules/spikes.md
+dev/docs/board/to-build.md:256    -> dev/docs/rules/spikes.md "Commit the harness"
 ```
 
-The spec's list of four included `test_engine_facts.py:3` and `test_mesh_decode.py:3`, which this
-pattern does not return — their citation is worded differently. **Task 8 must re-derive this class
-by section title, not by the `CLAUDE.md "` prefix.** Only citations of the three *moved* sections
-(`spikes`, `tests`, `background-work`) need retargeting; citations of resident sections stay.
+`grep -rn 'CLAUDE\.md "' uedctl bin pyproject.toml` now returns exactly one file —
+`uedctl/editor.py:40`, citing "never let a Python exception reach the CLI user", a section that
+**stays resident**. Citations of resident sections are correct and must not be retargeted.
+
+**Lesson for Task 8:** the class must be re-derived **by section title**, not by grepping the
+`CLAUDE.md "` prefix — two of these four were worded differently and that prefix missed them. The
+spec's count of 4 was right by luck, not by method.
 
 ### Files referenced from `to-build.md` — the exemption boundary
 
@@ -109,3 +114,35 @@ either old file is deleted.
 | Entry | Disposition | Reason / superseder |
 |-------|-------------|---
 | *(populated by Tasks 4–7)* | | |
+
+---
+
+## Review record — Tasks 1–3
+
+`CLAUDE.md` "Review gates" requires every finding's disposition to be recorded somewhere durable
+rather than left in chat. The commit messages are one-liners by house rule, so the record is here.
+
+**Both rounds returned no structural finding.** Findings fixed in the batch: the checker's
+fragment-stripping bug (same-directory `file.md#anchor` links were silently skipped, including a
+live citation into `decisions.md`); `_on_deck`'s wrong resolution base (no backticked reference
+resolved, so the exemption boundary was inert); the deleted-doc check's missing allowlist (it would
+have failed at Task 10 with ~108 offenders, including on the two files whose job is to say where
+the ledger went); duplicate-heading anchors (`#procedure-1` read as broken — a false positive on
+correct content in nine docs); `_anchors` not stripping code fences (phantom anchors from code
+samples); self-tests that re-implemented the assertion logic instead of driving the real gate
+(proven worthless by mutation — gutting the check left 476 tests green); three false claims in the
+rewritten `dev-runtime.md`; and broken relative paths in three files this batch itself created.
+
+**Deferred, with reason:**
+
+- **The prose-citation check was not implemented.** Task 3 asked for three failure modes; two
+  shipped. A naive version returns ~2,700 unresolvable backticked strings, most legitimately not
+  paths, so it would be a false-positive generator — the one thing that reliably gets a check
+  deleted. The narrow version (backticked strings containing `/` **and** a known suffix) is worth
+  building **before Task 8**, which retargets ~177 files with no prose check behind it. Until then,
+  every downstream "the link checker passes" is weaker than the plan assumes. Tracked as an open
+  `p1` on `board/inbox.md` ("the dominant citation form is prose").
+- **Setext headings** (`Title` over `====`) are invisible to the anchor check. Two accidental hits,
+  both in a spike doc; latent only.
+- **`_on_deck` over-collects** (~28 entries, including non-ephemeral files). It can only ever
+  *remove* an exemption, never add one, so the effect is more checking rather than less.

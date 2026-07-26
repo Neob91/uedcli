@@ -62,10 +62,11 @@ router that says which doc to read when lives in [`CLAUDE.md`](../../CLAUDE.md)
   knowledge base, split into `commands.md` (exec verbs), `quirks.md` (gotchas), `rendering.md`
   (screenshots), and `extracting-from-dll.md` (how it's mined). **Read before touching the
   driver** — the "don't relearn this" reference.
-- **[dev-runtime.md](dev-runtime.md)** — how to **run** uedctl on a host without
-  Python 3.12: the `bin/uedctl` / `bin/test` wrappers over the auto-managed host-native
-  `.venv/`, and the deferred Nuitka release path. (uedctl is **not** containerised — only the
-  editor/build containers it drives are.)
+- **[dev-runtime.md](dev-runtime.md)** — how uedctl **runs** during development: the
+  `bin/uedctl` / `bin/test` wrappers over the auto-managed host-native `.venv/` (which
+  **requires `python3.12` on `PATH`**), the optional `uedctl-native/` Rust extension, and the
+  deferred Nuitka release path. (uedctl is **not** containerised — only the editor/build
+  containers it drives are.)
 - **[parallel-editors.md](parallel-editors.md)** — how to drive many ephemeral
   editors at once (`docker compose run` per work item): per-run wineprefix volume, unique
   export paths, the memory-bound concurrency cap, cleanup.
