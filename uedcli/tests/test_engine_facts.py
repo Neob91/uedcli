@@ -541,9 +541,13 @@ def test_texalign_onetile_and_wallcolumn_are_unimplemented_in_ued22():
     assert dispatch.endswith(bytes.fromhex("ff248560d6")), "the jump-table reference moved"
     default_rva = 0x4C7CF + struct.unpack_from("<i", dispatch, 8)[0]
 
-    table = struct.unpack_from("<9I", data, _rva_to_offset(data, 0x4D660))
-    rvas = [va - _IMAGE_BASE for va in table]
-    assert len(rvas) == len(_TEXALIGN_TOKENS)      # one entry per accepted token
+    # The `cmp eax, 8` above is what SIZES the table: indices 0..8, one per accepted token. Read
+    # one more entry than that and assert the extra is NOT a code address, so a table that grew
+    # (a rebuild adding a mode) trips here rather than being silently mis-indexed below.
+    assert len(_TEXALIGN_TOKENS) == 9 and dispatch[4:6] == bytes.fromhex("f808")     # cmp eax, 8
+    table = struct.unpack_from("<10I", data, _rva_to_offset(data, 0x4D660))
+    rvas = [va - _IMAGE_BASE for va in table[:9]]
+    assert table[9] == 0xCCCCCCCC, "the ETexAlign jump table has grown past its 9 entries"
 
     # WALLCOLUMN == default: nothing happens, not even polyUpdateMaster.
     assert rvas[5] == default_rva
@@ -595,9 +599,11 @@ def test_texalign_model_reproduces_every_measured_editor_frame():
 
     `measured.json` is the committed golden: each face's world geometry from a control export, plus
     the `Origin`/`TextureU`/`TextureV`/`Pan` the editor produced for it under each of the nine
-    modes. `texalign_model.frame` is the executable statement of the documented rules. If the
-    documented rule and the measurement ever part company — a substrate swap, or a wrong edit to the
-    doc's formulas propagated into the model — this trips.
+    modes. `texalign_model.frame` is the executable statement of the documented rules, so this trips
+    when the rule and the measurement part company — i.e. when the documented formulas are edited
+    wrongly, or when a re-capture against a different editor build replaces the golden. It CANNOT
+    see a substrate swap on its own (both sides are committed data); the three byte-pattern tests
+    above are what watch `uned/UED22/Editor.dll` itself.
 
     Spike: `dev/docs/spikes/2026-07-26-unrealed-texalign-semantics/` (README §3-4).
     """
@@ -669,3 +675,49 @@ def test_texalign_guards_match_the_editor_on_near_threshold_faces():
             f"{case['case']}: TEXALIGN {case['mode']} on normal {n} — the editor "
             f"{'changed' if case['changed'] else 'left'} the face, the documented rule says "
             f"{'act' if acted else 'skip'}")
+
+
+def test_texalign_pan_handling_matches_the_editor_against_a_non_zero_pan():
+    """Which modes ZERO a surface's `Pan` and which leave it alone — measured where it is visible.
+
+    The main fixture cannot show this: all 44 of its faces already carried `Pan = (0,0)`, so
+    "the mode sets the pan to zero" and "the mode never touches the pan" produce identical exports,
+    and `measured.json` therefore cannot discriminate. `pans.json` is a re-run of the same fixture
+    with **`Pan U=7 V=13` authored on every face**, which separates them: `WALLCOLUMN`/`ONETILE`/
+    `WALLPAN` came back `(7,13)` on all 44, `DEFAULT` came back `(0,0)` on all 44, the guarded modes
+    zeroed exactly the faces their guard admits, and `CLAMP` came back `(0, VSize−1)` — `(0,63)` on
+    the eleven faces textured `AirCount_A00` and `(0,255)` on the rest.
+
+    That last split re-confirms `CLAMP`'s `VSize` dependence on a second, independent run, and the
+    guarded splits re-confirm the guards from a signal entirely different from the frame geometry.
+
+    Spike: `dev/docs/spikes/2026-07-26-unrealed-texalign-semantics/README.md` §5.3.
+    """
+    import json
+    import sys
+    sys.path.insert(0, str(_TEXALIGN_SPIKE))
+    try:
+        import texalign_model
+    finally:
+        sys.path.remove(str(_TEXALIGN_SPIKE))
+
+    golden = json.loads((_TEXALIGN_SPIKE / "pans.json").read_text())
+    authored = tuple(golden["authored_pan"])
+    assert authored != (0, 0), "the golden must carry a NON-ZERO authored pan or it proves nothing"
+    vsize = {"ex_bricks": 256, "aircount_a00": 64, "calendar_2": 256}
+
+    checked = 0
+    seen = set()
+    for mode, faces in golden["pans"].items():
+        for ref, got in faces.items():
+            face = golden["faces"][ref]
+            pred = texalign_model.frame(
+                mode, face["n_surf"], face["n_poly"], face["verts"],
+                face["base"], face["tu"], face["tv"], authored, vsize[face["tex"]])
+            want = list(authored) if pred is None else [int(pred[3][0]), int(pred[3][1])]
+            assert want == got, f"{mode} {ref}: pan predicted {want}, editor wrote {got}"
+            seen.add(tuple(got))
+            checked += 1
+    assert checked == 396, f"the golden covers {checked} (mode, face) pairs, expected 396"
+    # the golden must actually EXERCISE both outcomes, or a "never touches the pan" model passes
+    assert authored in seen and (0, 0) in seen and (0, 63) in seen and (0, 255) in seen

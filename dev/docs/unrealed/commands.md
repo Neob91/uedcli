@@ -161,10 +161,13 @@ the next command) — never use it** (`2026-06-17-brush-clip.md`).
 Surface (BSP-poly) ops — they act on the surfaces of the **built** `Model` (so they need a
 `MAP REBUILD`) that carry `PF_Selected`, and each one writes its result back down into the
 originating brush polygon via `polyUpdateMaster`, so a `MAP EXPORT` reads it back:
-- **Selection** ✅ `POLY SELECT NONE|ALL|REVERSE` · `MATCHING GROUPS|ITEMS|BRUSH|TEXTURE|POLYFLAGS` ·
-  `ADJACENT ALL|COPLANARS|WALLS|FLOORS|SLANTS` · `MEMORY SET|RECALL|UNION|INTERSECT|XOR` · `ZONE`.
-- **Flags/texture** 📖 `SETFLAGS=`/`CLEARFLAGS=` · `TEXTURE DEFAULT|SET` · `TEXTURENAME` ·
-  `TEXINFO` · `TESSELLATE`.
+- **Selection** — `POLY SELECT NONE` ✅ / `ALL` ✅ (both driven live 2026-07-26) · `REVERSE` 📖 ·
+  `MATCHING GROUPS|ITEMS|BRUSH|TEXTURE|POLYFLAGS` 📖 ·
+  `ADJACENT ALL|COPLANARS|WALLS|FLOORS|CEILINGS|SLANTS` 📖 ·
+  `MEMORY SET|RECALL|UNION|INTERSECT|XOR` 📖 · `ZONE` 📖. (Only `NONE`/`ALL` have been driven; the
+  rest is the string-table vocabulary, semantics inferred.)
+- **Flags/texture** 📖 `SETFLAGS=`/`CLEARFLAGS=` · `TEXTURE DEFAULT|SET` · `MAKETEXTURECURRENT` ·
+  `TEXTURENAME` · `TEXINFO` · `TESSELLATE`.
 - **Texture transform** 📖 `TEXPAN [RELATIVE] U= V=` · `TEXSCALE [RELATIVE] UU= UV= VU= VV=` ·
   `TEXMULT`.
 - **Texture ALIGNMENT** ✅ — **`POLY TEXALIGN

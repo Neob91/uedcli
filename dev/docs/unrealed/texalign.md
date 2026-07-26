@@ -6,9 +6,10 @@ itself (`U = (Vertex − Origin)·TextureU + PanU`, texel scale in the magnitude
 [`t3d.md`](t3d.md) — **read that first**, everything below is expressed in its terms.
 
 Evidence: [`../spikes/2026-07-26-unrealed-texalign-semantics/`](../spikes/2026-07-26-unrealed-texalign-semantics/README.md)
-(live 2026-07-26, 44 faces × 9 modes; plus disassembly of
+(live 2026-07-26: 44 faces × 9 modes twice — once from a zero pan and once from an authored
+`Pan U=7 V=13` — plus eight one-wedge levels bracketing the guard thresholds, plus disassembly of
 `UEditorEngine::polyTexAlign`, `Editor.dll` RVA `0x4c6c0`). Pinned by
-`test_engine_facts.py::test_texalign_*`.
+`test_engine_facts.py::test_texalign_*` (six regressions).
 
 > **Confidence:** ✅ = live-verified · 🔬 = read out of the shipped binary and consistent with every
 > live measurement · 📖 = binary only, unconfirmed live.
@@ -67,13 +68,14 @@ of them reads a texture's `USize`/`VSize` except `CLAMP`, which reads `VSize` fo
 One family. Each drops one world axis, re-anchors the texture where the surface plane crosses that
 axis, and builds the frame by projecting the other two world axes onto the face and negating them:
 
-| mode | axis | guard | new `Origin` | `TextureU` | `TextureV` |
-|---------|---|------------------|-------------------|-------------|---
-| `FLOOR` | Z | `\|N.Z\| > 0.05` | `(0, 0, d/N.Z)`  | `−proj(X̂)` | `−proj(Ŷ)` |
-| `WALLX` | X | `\|N.X\| > 0.05` | `(d/N.X, 0, 0)`  | `−proj(Ŷ)` | `−proj(Ẑ)` |
-| `WALLY` | Y | `\|N.Y\| > 0.05` | `(0, d/N.Y, 0)`  | `−proj(X̂)` | `−proj(Ẑ)` |
+| mode    | axis | guard            | new `Origin`    | `TextureU` | `TextureV`
+|---------|------|------------------|-----------------|------------|---
+| `FLOOR` | Z    | `\|N.Z\| > 0.05` | `(0, 0, d/N.Z)` | `−proj(X̂)` | `−proj(Ŷ)`
+| `WALLX` | X    | `\|N.X\| > 0.05` | `(d/N.X, 0, 0)` | `−proj(Ŷ)` | `−proj(Ẑ)`
+| `WALLY` | Y    | `\|N.Y\| > 0.05` | `(0, d/N.Y, 0)` | `−proj(X̂)` | `−proj(Ẑ)`
 
-`Pan` becomes `(0, 0)`. A face failing the guard is left untouched. The guard threshold `0.05` is
+`Pan` is **zeroed** (measured against an authored non-zero pan, not merely observed to stay zero).
+A face failing the guard is left untouched, pan included. The guard threshold `0.05` is
 🔬 (an `.rdata` double the case bodies `comisd` against); the *direction* of the comparison is ✅.
 
 Two consequences worth internalising:
@@ -95,7 +97,7 @@ Guard: `|N.Z| < 0.95` 🔬 (anything but a near-horizontal face).
 TextureU = normalize( (N.Y, −N.X, 0) )        # horizontal, along the wall
 TextureV = normalize( TextureU × N )          # in-plane, down the face
 if TextureV.Z > 0:  negate BOTH
-Origin  unchanged;  Pan = (0, 0)
+Origin  unchanged;  Pan = (0, 0)               # actively zeroed
 ```
 
 Both axes are unit on every face it accepts, slanted ones included — **`WALLDIR` never stretches**.
@@ -105,14 +107,19 @@ else. Measured on `N = (0.6, 0.8, 0)`: `TextureU = (−0.8, 0.6, 0)`, `TextureV 
 
 ### `WALLPAN` — slide the anchor to world Z = 0 ✅
 
-Guards: `|N.Z| < 0.95` **and** `|TextureV.Z| > 0.05` (the current V must have a vertical component).
+Guards: `|N.Z| < 0.95` 🔬 **and** `|TextureV.Z| > 0.05` 🔬 (the current V must have a vertical
+component). Both thresholds are 🔬 only — read from `.rdata` and pinned by reference count, but
+**not** bracketed live the way `FLOOR`/`WALLX`/`WALLY`/`WALLDIR`'s are (§5.1 of the spike): the one
+live datum is a face whose `TextureV.Z` was exactly 0, which shows a guard near zero exists but not
+where it sits.
 
 ```
 Origin ← Origin + TextureV · ( −Origin.Z / TextureV.Z )
 TextureU, TextureV, Pan  ALL unchanged
 ```
 
-Keep the frame, walk the anchor along V until its Z reaches zero. This is the "make every wall's
+Keep the frame — `TextureU`, `TextureV` and `Pan` are all left exactly as they were (verified
+against an authored non-zero pan) — and walk the anchor along V until its Z reaches zero. This is the "make every wall's
 vertical texture phase agree" operation. Measured: a +X face of a cube centred at `z = 48` moved its
 `Origin` from `(576, 96, 48)` to `(576, 96, 0)` with the axes and pan byte-identical; across a
 44-face fixture `WALLPAN` altered `Origin` lines and nothing else. The **second** guard is real and
@@ -128,7 +135,7 @@ regenerate them:
 ```
 TextureU = normalize( (Vertex[0] − Vertex[i]) × N_poly )   # first i ≥ 1 that is non-degenerate
 TextureV = normalize( N_poly × TextureU )
-Origin  unchanged;  Pan = (0, 0)
+Origin  unchanged;  Pan = (0, 0)               # actively zeroed, on every face — no guard
 ```
 
 Unit axes. Because the result depends on **which corner the polygon's vertex list starts at**, this
@@ -139,7 +146,7 @@ different corners come out 90° apart.
 
 Identical to `DEFAULT` in every field except `PanV`, set to the bound texture's **height in texels
 minus one**. Measured across three textures: `256×256 → PanV 255`, `256×64 → 63`, `128×256 → 255`
-— the 256-wide, 64-tall one is decisive, so the field is `VSize`, not `USize`. `PanU` is always 0.
+— the 256-wide, 64-tall one is decisive, so the field is `VSize`, not `USize`. `PanU` is zeroed.
 **What it is FOR was NOT determined** — only what it writes was measured. No render was made and no
 interaction with texture addressing or `PolyFlags` was probed, so do not infer a rendering behaviour
 from this entry.
@@ -168,15 +175,15 @@ live editor and a built BSP). `brush poly align --wall|--floor` with `--fresh-fr
 frame from `builders._tex_basis(n̂)` at unit density anchored at the seed face's centroid; without
 `--fresh-frame` it adopts the seed face's frame. That is **not** any of the editor's rules:
 
-| face | editor mode | UnrealEd `TU / TV` | uedcli `_tex_basis` `TU / TV` | relationship |
-|-------------------------|-----------|--------------------------|-------------------------|---
-| +X wall                 | `WALLDIR` | `(0,1,0) / (0,0,−1)`     | `(0,1,0) / (0,0,1)`     | V flipped (uedcli's V points up) |
-| −X wall                 | `WALLDIR` | `(0,−1,0) / (0,0,−1)`    | `(0,1,0) / (0,0,−1)`    | U mirrored |
-| +Y wall                 | `WALLDIR` | `(−1,0,0) / (0,0,−1)`    | `(1,0,0) / (0,0,−1)`    | U mirrored |
-| −Y wall                 | `WALLDIR` | `(1,0,0) / (0,0,−1)`     | `(1,0,0) / (0,0,1)`     | V flipped |
-| yawed wall `(0.6,0.8,0)`| `WALLDIR` | `(−0.8,0.6,0) / (0,0,−1)`| `(0,0,1) / (0.8,−0.6,0)`| different axes (uedcli's U runs vertically) |
-| floor `(0,0,1)`         | `FLOOR`   | `(−1,0,0) / (0,−1,0)`    | `(1,0,0) / (0,1,0)`     | 180° rotation |
-| ceiling `(0,0,−1)`      | `FLOOR`   | `(−1,0,0) / (0,−1,0)`    | `(1,0,0) / (0,−1,0)`    | U mirrored |
+| face                     | editor mode | UnrealEd `TU / TV`        | uedcli `_tex_basis` `TU / TV` | relationship
+|--------------------------|-------------|---------------------------|-------------------------------|---
+| +X wall                  | `WALLDIR`   | `(0,1,0) / (0,0,−1)`      | `(0,1,0) / (0,0,1)`           | V flipped (uedcli's V points up)
+| −X wall                  | `WALLDIR`   | `(0,−1,0) / (0,0,−1)`     | `(0,1,0) / (0,0,−1)`          | U mirrored
+| +Y wall                  | `WALLDIR`   | `(−1,0,0) / (0,0,−1)`     | `(1,0,0) / (0,0,−1)`          | U mirrored
+| −Y wall                  | `WALLDIR`   | `(1,0,0) / (0,0,−1)`      | `(1,0,0) / (0,0,1)`           | V flipped
+| yawed wall `(0.6,0.8,0)` | `WALLDIR`   | `(−0.8,0.6,0) / (0,0,−1)` | `(0,0,1) / (0.8,−0.6,0)`      | different axes (uedcli's U runs vertically)
+| floor `(0,0,1)`          | `FLOOR`     | `(−1,0,0) / (0,−1,0)`     | `(1,0,0) / (0,1,0)`           | 180° rotation
+| ceiling `(0,0,−1)`       | `FLOOR`     | `(−1,0,0) / (0,−1,0)`     | `(1,0,0) / (0,−1,0)`          | U mirrored
 
 Plus: uedcli anchors on the seed face's **centroid** where the editor's projection modes anchor on a
 **world axis**, so uedcli's result depends on which face was listed first and two separate

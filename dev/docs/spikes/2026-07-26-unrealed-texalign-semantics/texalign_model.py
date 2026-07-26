@@ -84,7 +84,10 @@ def frame(mode, n_surf, n_poly, verts, base, tu, tv, pan, vsize):
         a, iu, iv = PROJECTED[mode]
         if abs(n_surf[a]) <= THRESH_AXIS:
             return None
-        d = _dot(base, n_surf)                          # any point of the plane would do
+        # ANY point of the plane serves; take a VERTEX rather than `base`. The surface's stored
+        # Origin is normally in-plane, but nothing enforces it — an authored or hand-edited frame can
+        # sit off the face's plane, and using it would silently place the anchor on the wrong plane.
+        d = _dot(verts[0], n_surf)
         nb = [0.0, 0.0, 0.0]
         nb[a] = d / n_surf[a]
         au, av = AXIS[iu], AXIS[iv]

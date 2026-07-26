@@ -11,7 +11,7 @@ Geometry is chosen so that every hypothesis about `POLY TEXALIGN` is separable:
                                                           so an anchor at the face min-corner is
                                                           distinguishable from one at the world origin
   SlantXZ  additive wedge with a face normal (0.7071, 0, 0.7071)      - a 45 deg ramp
-  SlantYZ  additive wedge with a face normal (0, 0.6, 0.8)            - a non-45 deg slope
+  SlantYZ  additive wedge with a face normal (0, 0.8, 0.6)            - a non-45 deg slope
   SlantXYZ additive wedge with a face normal (0.577, 0.577, 0.577)    - fully diagonal
   WallYaw  additive prism whose two big faces are VERTICAL but yawed: normals (0.6, 0.8, 0) and
            (-0.6, -0.8, 0) - a wall that is neither an X wall nor a Y wall, which is the

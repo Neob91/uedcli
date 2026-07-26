@@ -20,7 +20,7 @@ sys.path.insert(0, str(_REPO))
 
 from uedcli import container_assets, editor, writes, xfer          # noqa: E402
 from uedcli.driver import Driver, to_z_path                        # noqa: E402
-from uedcli.emit import emit_map
+from uedcli.emit import emit_map                                   # noqa: E402
 from uedcli.model import parse_t3d                                 # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))

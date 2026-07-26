@@ -22,8 +22,6 @@ from uedcli.preview_native import _world_uv_frame                         # noqa
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from fixture import TEXTURES                                              # noqa: E402
 
-SKIP = {"LevelInfo", "Brush"}
-
 
 def faces(path: Path):
     lvl = parse_t3d(path.read_text())

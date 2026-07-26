@@ -2974,7 +2974,7 @@ The posing rewrite landed (POS@ROT → auto-frame; decision 2026-07-12); these a
 - `p1` `[OWNER — decide]` **`POLY TEXALIGN` is MEASURED; four things in
   `specs/2026-07-26-poly-surface-verbs.md` §4b now need your call.** The spike ran
   (`../spikes/2026-07-26-unrealed-texalign-semantics/`, live 2026-07-26; durable facts in
-  `../unrealed/texalign.md`; four regressions in `test_engine_facts.py`). Headlines: the editor has
+  `../unrealed/texalign.md`; six regressions in `test_engine_facts.py`). Headlines: the editor has
   **nine** mode tokens, not six — and **`ONETILE` and `WALLCOLUMN` do nothing at all** in UED22, so
   there is no fit-a-tile-to-a-face operation in the editor to port. Nothing in `TEXALIGN` ever changes
   texel density; the modes only choose an in-plane orientation and an anchor, at 1 texel/uu. The spec

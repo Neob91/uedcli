@@ -1616,7 +1616,11 @@ texture, `Pan`, `TextureU/V`) → `validate_brush` → `src.save(...)`. Address 
 
 **Surface texture alignment** (`polyalign.py`, build item 11 — decisions.md 2026-07-18 21:40 UTC)
 makes one texture flow **continuously** across a set of faces instead of restarting at each brush
-edge — the offline analogue of UnrealEd's `TEXTURE ALIGN`. Two verbs:
+edge. It is uedcli's OWN alignment, **not** a port of the editor's: UnrealEd's own verb is
+`POLY TEXALIGN` (there is no `TEXTURE ALIGN`), and its rules were measured on 2026-07-26 and agree
+with `_tex_basis` on none of seven face directions, besides anchoring on a world axis where uedcli
+anchors on the seed face's centroid — see [`unrealed/texalign.md`](unrealed/texalign.md)
+"How uedcli differs". Two verbs:
 - **`brush poly find <brush> [--item][--facing][--texture][--json]`** — a stateless PRODUCER
   printing matching faces as `BRUSH:idx` selectors (one/line, summary→stderr), so
   `brush poly find Tower --item Side | brush poly align --ring -` skips a cylinder's caps.

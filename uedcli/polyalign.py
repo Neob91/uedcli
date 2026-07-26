@@ -1,6 +1,12 @@
 """Continuous texture alignment across a set of faces — `brush poly align` + the `brush poly find`
-producer that feeds it. Pure model-side texture-vector math (no editor), the offline analogue of
-UnrealEd's `TEXTURE ALIGN`.
+producer that feeds it. Pure model-side texture-vector math (no editor).
+
+This is uedcli's OWN alignment, NOT a port of the editor's. UnrealEd's own verb is `POLY TEXALIGN`
+(there is no `TEXTURE ALIGN` verb), it needs a built BSP, and its rules were measured on 2026-07-26:
+they agree with `_tex_basis` on none of seven face directions, and its `FLOOR`/`WALLX`/`WALLY`
+anchor the texture on a WORLD AXIS where this module anchors on the seed face's centroid. See
+`dev/docs/unrealed/texalign.md`; whether any of that should change is an open product question
+parked on `dev/docs/board/inbox.md`.
 
 Design authority: dev/docs/decisions.md 2026-07-18 21:40 UTC (`poly align` v1 scope + face-selection
 grammar) and specs/2026-07-18-poly-align.md (UV math + algorithms).
