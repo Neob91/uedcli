@@ -109,19 +109,12 @@ stage (so no `to-` prefix). See [`README.md`](README.md).
   > integer texels and lives in the polygon `Pan`; a computed continuity offset lives in the float
   > `Origin`; the two never occupy the same field.
 
-- `p1` `[OWNER — confirm]` **Refinement of the "`--run` orders the chain itself" ruling.** All three
-  round-1 spec reviewers independently found that the ruling as stated leaves the run's SEED with no
-  source — and the seed fixes the phase zero, the seam on a closed run, the adopted density and the
-  adopted `Pan`. Under the ruling the prototype fell back to "lowest poly index at a run end", which
-  is exactly the not-author-controlled ordering the ruling exists to reject. Proposed refinement
-  (recorded in the spec as the working assumption, needs a yes):
-
-  > `--run` derives the chain ORDER from shared-edge adjacency, but the ROOT of the walk is the FIRST
-  > TOKEN of the input set. This preserves today's documented "the first face is the seam/seed"
-  > guarantee while still not trusting input order for the chain itself.
-
-  Without it, closed runs cannot name a seam, which makes `--fit-perimeter` unreachable and drops the
-  shipped cylinder-wrap workflow.
+- `[resolved 2026-07-26]` **The `--run` seed had no source under "`--run` orders the chain itself".**
+  Raised independently by all three round-1 spec reviewers. Resolved by the owner: the order faces are
+  passed in has NO bearing on the result — a PRE-WALK derives the root too (the lower-poly-index end of
+  an open run; the lowest index on a closed run), which is stronger than the reviewers' proposed
+  "root = first input token". The pre-walk also detects branching. No `--seam` flag. Folded into
+  `specs/2026-07-26-poly-surface-verbs.md` §2.3; nothing outstanding.
 
 - `p2` `[debug]` **`level preview --native` checkerboards an unresolvable texture ref and warns —
   a `conventions.md`-Rejected warn-and-continue.** `preview_native._TextureTable` renders a

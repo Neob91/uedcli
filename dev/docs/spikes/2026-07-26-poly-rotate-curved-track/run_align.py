@@ -149,7 +149,7 @@ def main(argv=None) -> int:
     level = src.load()
     name = resolve_actor_name(level, args.brush)
     actor = level.actors[name]
-    idxs = find_faces(actor, name, facing=args.facing)
+    idxs = find_faces(actor, name, facing=None if args.facing == "any" else args.facing)
     if args.only:
         keep = {int(v) for v in args.only.split(",")}
         idxs = [i for i in idxs if i in keep]

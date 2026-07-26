@@ -1,6 +1,6 @@
 # Spec — per-surface texture verbs: `pan`, `rotate`, and `align --run`
 
-**Date:** 2026-07-26 · **Status:** revised after spec review round 1 · **Evidence:**
+**Date:** 2026-07-26 · **Status:** gate passed (2 rounds); revised again for the 2026-07-26 owner rulings on root derivation and branching · **Evidence:**
 [`../spikes/2026-07-26-poly-rotate-curved-track/`](../spikes/2026-07-26-poly-rotate-curved-track/README.md)
 
 > Ephemeral, per `CLAUDE.md` "Documentation". Once built, the durable half goes to
@@ -139,28 +139,38 @@ edge, `polyalign.py:382`):
 
 Both anchors are satisfiable by one `Origin`: two constraints, two in-plane degrees of freedom.
 
-**Ordering is derived; the ROOT is the first input token, and it MUST be a run end.** `--ring` today
-requires the caller's whole input order to be the chain order and errors otherwise; `poly find` emits
-poly-index order, which the author neither controls nor sees. `--run` builds an adjacency map from
-shared edges and walks the chain from the **first token in the input set**, which fixes the phase
-zero, the seam on a closed run, the walk direction, and which face's frame is adopted for density and
-`Pan`.
+**The order the faces are passed in has NO bearing on the result.** Not the chain order, and not the
+root either — owner ruling, 2026-07-26. `--ring` today requires the caller's whole input order to be
+the chain order and errors otherwise; `poly find` emits poly-index order, which the author neither
+controls nor sees, so any dependence on it is a hidden coupling.
 
-- On an **open** run the root must be a **degree-1 face**; a root in the middle has two neighbours and
-  the walk would cover one arm only. **Exit 2 naming the face**: *"the first face must be an end of
-  the run, or the run must be closed"*. (The spike prototype rooted at "lowest poly index **at a run
-  end**"; dropping the second half is what left this undefined.)
-- On a **closed** run any face may be the root, and the seam is the root's run-edge **opposite the
-  walk direction**. (Not "the outer edge" — in a closed run every edge is shared.)
-- The walk direction is from the root toward its neighbour of lower poly index, stated so it is
-  reproducible.
-- **This does not by itself give the author control**, because in `poly find … | align --run -` the
-  first token is simply the lowest poly index. The idiom for choosing a different seam is to prepend
-  the wanted selector — `resolve_align_targets` dedups by first occurrence, so it becomes the root.
-  Document that.
+`--run` therefore does a **PRE-WALK** before aligning anything:
 
-This keeps ruling 3 intact: the *chain order* is derived, only the *anchor* comes from input, which
-preserves today's documented "the first face is the seam/seed" guarantee.
+1. Build the shared-edge adjacency map over the set, and compute every member's neighbour count.
+2. **Branch check** — any face with **3 or more** neighbours in the set exits 2 naming the face and
+   its count: *"face `BRUSH:idx` has N neighbours in the set; a run cannot branch — align each arm as
+   its own set"*. A run's phase cannot fork: at a junction it would have to be simultaneously
+   consistent along two continuations, and nothing picks which arm continues. Catching it in the
+   pre-walk gives a specific message instead of a mid-walk surprise.
+3. **Root selection**, entirely derived:
+   - an **open** run has exactly two degree-1 ends; the root is the one with the **lower poly index**;
+   - a **closed** run has no ends, so the root is the **lowest poly index in the set**, and the seam is
+     its shared edge with its own lower-indexed neighbour.
+4. Walk from the root, which fixes the phase zero, the seam, the walk direction, and whose frame is
+   adopted for density and `Pan` — all reproducibly, from geometry and index alone.
+
+**Consequence, stated because it is a real change:** the author can no longer place the seam of a
+closed run, which input order allows today. Accepted deliberately — `--fit-perimeter` makes the
+closing seam exact, so on the shipped cylinder workflow the seam's position stops mattering, and a
+determinism that cannot be perturbed by an upstream filter is worth more than the control it replaces.
+There is deliberately **no `--seam` flag**.
+
+**Edge coincidence is a DISTANCE test, not bucket rounding.** Two edges coincide when their endpoints
+are within `_WELD` (0.5 uu) of each other, as `polyalign._edge_eq` already does. The spike prototype
+buckets coordinates (`round(p / 0.5)`), which mis-welds any pair straddling a bucket boundary — a real
+risk on a revolve's off-grid vertices after `emit.clean` snapping, and it would surface as a phantom
+fork or a phantom disconnection rather than as anything obviously wrong. Do not port the prototype's
+version.
 
 **Closed runs are supported.** Not optional: the wrap-a-cylinder workflow
 (`poly find Tower --item Side | poly align --ring -`) is the only `--ring` use that ships, is
@@ -259,6 +269,24 @@ correction):
   a **uniform** per-facet turn — the seam must bisect it; unequal turns break the even-cosine
   cancellation that makes the exact axis exact.
 
+**What this means for corners, which is the first thing an author will ask.** The discriminator is the
+seam's orientation relative to the turn, not how sharp the turn is — so a 90° corner can be perfect or
+unusable depending only on which way the seam runs:
+
+| run | seam vs turn | measured |
+|-----------------------------------------|-------------------|---
+| L-shaped **wall**, 90° corner | ∥ the turn axis | **ΔU = ΔV = 0.000000**, at `--turn` 0 and 8192 |
+| flat bend, Δθ = 45° (2-segment revolve) | in the turn plane | ΔU = 48.98 (closed form 48.983) |
+| flat **L**, Δθ = 90°, 128 uu wide | in the turn plane | 90.5 texels (closed form) |
+
+A wall run turning a corner is exact and needs no compromise. A **flat** corner is the pathological
+case: 90.5 texels of shear out of a 256-texel texture, at one seam — and unlike a revolve it cannot be
+improved by adding segments, because Δθ is fixed by the corner itself. This is what the stderr shear
+report is for: on a flat L it prints ~90 and tells the author to mitre the corner or accept a visible
+seam, at the moment they need to know.
+
+Any **degree-2 chain** runs, including the minimal two-face case (two faces, one seam, both ends).
+
 The alternative — a sheared, non-orthogonal frame — is exactly continuous on **both** axes but
 stretches by `√(1+ψ²)` (86% at the end of a 90° bend) and skews the frame to 34°, and **neither
 degradation is reducible by segmentation**, whereas the orthogonal frame's shear halves with every
@@ -272,7 +300,7 @@ doubling of `--segments`. Measured both ways; see finding 5.
 |---|--------|---
 | 1 | **Pan moves out of `poly set` into its own verb.** | Leaving it on `set` — the `--pan-to`/`--pan-by` compound spelling exists only because it shares a verb; alone it is `pan --to/--by`, matching every other transform in the CLI. |
 | 2 | **Per-face mutators echo `BRUSH:idx` on stdout**, not touched brush names. Applies to `poly set`, `poly pan`, `poly rotate` **and `poly align` (all modes)**. | Keeping brush-name output — a bare name means *all* that brush's polys, so a second per-face verb in the pipe silently widens the set. |
-| 3 | **`--run` orders the chain itself.** ⚠ `[OWNER — confirm]` the amendment that the ROOT still comes from the first input token (§2.3) — this is the reviewers' consensus fix, not the owner's words, and must NOT ride into `direction/conventions.md` unconfirmed. | Trusting pipe order for the whole chain, as `--ring` does — `find`'s order is not author-controlled. Consequence: no `--centre` flag is needed. |
+| 3 | **`--run` orders the chain itself, and the order faces are passed in has NO bearing on the result — the ROOT is derived by a pre-walk too** (lower-poly-index end; lowest index on a closed run). Confirmed 2026-07-26, superseding the reviewers' "root = first input token" proposal. | Trusting pipe order for the whole chain, as `--ring` does — `find`'s order is not author-controlled. Consequence: no `--centre` flag is needed. |
 | 4 | **`--run` DERIVES the frame; it does not preserve the caller's rotation.** Fixups afterwards are quarter-turn flips and small texel pans. | Preserve-and-compose (`rotate --bend \| align --run`) — proposed by the agent, rejected by the owner, and vindicated by the spike: rotation alone leaves the phase broken (finding 2) and `--run` deriving solves the case outright (finding 3). |
 | 5 | **The turn is a scalar angle in unreal rotation units, folded into `--run`, spelled `--turn`.** | `--rotate` — collides with `brush build --rotate` (actor orientation, a triple) and, worse, with `brush poly rotate` in the same noun, where the same word would carry the opposite continuity guarantee. A boolean `--across` — covers only quarter turns. A separate post-pass — pivots each face about its own centroid and re-breaks the seams. |
 | 6 | **`--ring` is renamed `--run`.** | Keeping `--ring` — a 90° arc is not a ring, and an author would not find the flag; `run` is already the codebase's own word (`polyalign._check_orientation`: *"turning runs deferred"*). |

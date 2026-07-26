@@ -41,7 +41,7 @@ def main(argv=None) -> int:
     level = TrunkLevelSource(Path(args.trunk)).load()
     name = resolve_actor_name(level, args.brush)
     actor = level.actors[name]
-    idxs = find_faces(actor, name, facing=args.facing)
+    idxs = find_faces(actor, name, facing=None if args.facing == "any" else args.facing)
 
     verts = {i: _world_verts(actor, actor.brush.polys[i]) for i in idxs}
     edges: dict = {}
