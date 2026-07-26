@@ -9,8 +9,9 @@ owed**, since resolving them changed the artifact.
 **Ephemeral:** scratch, per `CLAUDE.md`. On build, fold the outcome into
 [`architecture.md`](../architecture.md) "Preview internals", [`docs/usage.md`](../../../docs/usage.md)
 and [`docs/leveldesign/general/textures-and-surfaces.md`](../../../docs/leveldesign/general/textures-and-surfaces.md),
-record the agent-side choices in `rationale/preview.md` (**a new file this build creates** — `rationale/`
-currently holds only `cli.md`, `emit.md`, `MIGRATION.md`, `README.md`), and delete this file.
+record the agent-side choices in the `rationale/` tree under a **new preview topic** (that tree
+currently holds only `cli.md`, `emit.md`, `MIGRATION.md`, `README.md` — the file is created by this
+build, so it is deliberately not cited as a path yet), and delete this file.
 
 ---
 
@@ -321,7 +322,7 @@ independently flagged by all three round-2 reviewers as probably *also* too fain
 **lines**, where a faint stroke still reads as a stroke; a large flat area at that strength is
 near-uniform. **Owner ruling (2026-07-26): make it stronger, then verify with a real before/after
 render rather than arithmetic.** The build produces that render, picks the constant from it, and
-records the chosen value plus the image in `rationale/preview.md`. Starting point ≈ 0.35.
+records the chosen value plus the image in the `rationale/` preview topic. Starting point ≈ 0.35.
 
 ### 4.9 Declared divergences from `level preview --native`
 

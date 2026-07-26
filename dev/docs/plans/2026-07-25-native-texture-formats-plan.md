@@ -1482,8 +1482,8 @@ Cross-cutting only (per-slice docs already landed):
   (`rationale/MIGRATION.md` maps old entries to their new homes). Decisions now split by author:
   - **the agent's** — the §5 mask-semantics call (index 0 from the data; `bMasked`/`bAlphaTexture`
     reported, never applied), anything the implementation forces, and how the veto and
-    `ambiguous-alpha` cases behaved in practice → **`rationale/texture-decode.md`**, revised in
-    place, each entry stating *Why it is this way* / *Rejected* / *Refs*.
+    `ambiguous-alpha` cases behaved in practice → the `rationale/` tree under a **new texture-decode
+    topic** (created by this build, so not cited as a path until it exists), revised in place, each entry stating *Why it is this way* / *Rejected* / *Refs*.
   - **the owner's** — AD1/AD2 arbitration and the synthesized-fixture ruling → propose the exact text
     and park it as an `[OWNER — confirm]` item on `board/inbox.md`; it may only be written into
     `direction/` with an explicit yes and a `Confirmed:` commit trailer.
