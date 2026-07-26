@@ -1,5 +1,5 @@
 import sys
-sys.path.insert(0, "/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedctl/dev/docs/spikes/2026-07-15-native-materialize/harness")
+sys.path.insert(0, "/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedcli/dev/docs/spikes/2026-07-15-native-materialize/harness")
 import pe
 
 G = '/home/neob91/Games/LutrisDX/drive_c/DX/System/Engine.dll'

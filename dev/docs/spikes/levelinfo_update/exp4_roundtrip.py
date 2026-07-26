@@ -21,7 +21,7 @@ CONT = L.CONT
 LEVEL = r"""Begin Map
 Begin Actor Class=LevelInfo Name=LevelInfo0
      Title="SpikeTest"
-     Author="uedctl"
+     Author="uedcli"
      IdealPlayerCount="3-4"
      bLonePlayer=True
      AmbientBrightness=42
@@ -62,23 +62,23 @@ try:
     print(L.levelinfo_block(pre), flush=True)
 
     L.ex("MAP REBUILD")
-    dxz = r"Z:\repo\Tools\uedctl\_scratch\liupdate\li_roundtrip.dx"
+    dxz = r"Z:\repo\Tools\uedcli\_scratch\liupdate\li_roundtrip.dx"
     L.ex(f"MAP SAVE FILE={dxz}")
     # confirm the file exists in the container
     r = subprocess.run(["docker", "exec", CONT, "ls", "-la",
-                        "/repo/Tools/uedctl/_scratch/liupdate/li_roundtrip.dx"],
+                        "/repo/Tools/uedcli/_scratch/liupdate/li_roundtrip.dx"],
                        capture_output=True, text=True)
     print(f"\n=== saved .dx: {r.stdout.strip()}{r.stderr.strip()} ===", flush=True)
 
     # --- INDEPENDENT offline reader: UCC batchexport the saved .dx ---
-    outdir = r"Z:\repo\Tools\uedctl\_scratch\liupdate\ucc_out"
+    outdir = r"Z:\repo\Tools\uedcli\_scratch\liupdate\ucc_out"
     subprocess.run(["docker", "exec", CONT, "mkdir", "-p",
-                    "/repo/Tools/uedctl/_scratch/liupdate/ucc_out"],
+                    "/repo/Tools/uedcli/_scratch/liupdate/ucc_out"],
                    capture_output=True, text=True)
     ucc = subprocess.run(
         ["docker", "exec", CONT, "sh", "-c",
          "cd /opt/UED22 && wine UCC.exe batchexport "
-         "Z:\\repo\\Tools\\uedctl\\_scratch\\liupdate\\li_roundtrip.dx "
+         "Z:\\repo\\Tools\\uedcli\\_scratch\\liupdate\\li_roundtrip.dx "
          "Level T3D " + outdir + " 2>&1"],
         capture_output=True, text=True)
     print("\n=== UCC batchexport output (tail) ===", flush=True)
@@ -86,7 +86,7 @@ try:
 
     # read the exported T3D
     rd = subprocess.run(["docker", "exec", CONT, "sh", "-c",
-                         "cat /repo/Tools/uedctl/_scratch/liupdate/ucc_out/*.t3d 2>/dev/null"],
+                         "cat /repo/Tools/uedcli/_scratch/liupdate/ucc_out/*.t3d 2>/dev/null"],
                         capture_output=True, text=True)
     print("\n=== UCC-exported LevelInfo block (offline reader, post-save) ===", flush=True)
     print(L.levelinfo_block(rd.stdout) if rd.stdout.strip() else "<empty / not exported>", flush=True)

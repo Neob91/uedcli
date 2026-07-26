@@ -36,14 +36,14 @@ import json
 import sys
 from pathlib import Path
 
-# The uedctl package lives at Tools/uedctl/ — five parents up from this spike file
-# (…/uedctl/dev/docs/spikes/<slug>/feature_cluster.py).
+# The uedcli package lives at Tools/uedcli/ — five parents up from this spike file
+# (…/uedcli/dev/docs/spikes/<slug>/feature_cluster.py).
 _PKG_ROOT = Path(__file__).resolve().parents[4]
 if str(_PKG_ROOT) not in sys.path:
     sys.path.insert(0, str(_PKG_ROOT))
 
-from uedctl.model import Actor, parse_t3d, parse_t3d_actors   # noqa: E402
-from uedctl.writes import actor_bounds                        # noqa: E402
+from uedcli.model import Actor, parse_t3d, parse_t3d_actors   # noqa: E402
+from uedcli.writes import actor_bounds                        # noqa: E402
 
 
 def _aabb_touch(a, b, gap):
@@ -103,7 +103,7 @@ def cluster_features(actors: list[Actor], gap: float = 16.0) -> list[list[Actor]
 
 
 def _cluster_bbox(cluster: list[Actor]):
-    from uedctl.writes import union_bounds
+    from uedcli.writes import union_bounds
     lo, hi = union_bounds(cluster)
     return (tuple(str(v) for v in lo), tuple(str(v) for v in hi))
 
@@ -180,8 +180,8 @@ def _selftest() -> int:
     emitted to T3D and re-parsed through `parse_t3d`, exactly the path a real MAP EXPORT takes — so the
     numeric types (Decimal location AND Decimal vertices) match production, not a hand-built shortcut."""
     from decimal import Decimal
-    from uedctl.builders import cube
-    from uedctl.emit import emit_actor
+    from uedcli.builders import cube
+    from uedcli.emit import emit_actor
 
     def brush_actor(name, x, y, z):
         return Actor(name=name, cls="Brush", brush=cube(64, 64, 64),

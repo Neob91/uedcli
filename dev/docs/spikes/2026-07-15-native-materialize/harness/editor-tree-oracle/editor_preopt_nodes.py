@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 r"""EDITOR PRE-bspOptGeom TREE ORACLE — dump Model->Nodes at bspOptGeom ENTRY (0x10036870).
 
-The fair node-for-node counterpart to native's `UEDCTL_BSPCSG_PREOPT_NODES` dump: both sides are
+The fair node-for-node counterpart to native's `UEDCLI_BSPCSG_PREOPT_NODES` dump: both sides are
 post-refresh, post-Pass-D, PRE-weld, in engine child convention.  This disambiguates a partitioner
 (SplitPolyList) ring-vertex gap from a bspOptGeom weld gap — is the editor's SplitPolyList already
 producing fat fragments (node nv > native's) BEFORE the T-junction weld, or does the weld create
@@ -19,7 +19,7 @@ import sys
 import time
 from pathlib import Path
 
-ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedctl")
+ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedcli")
 HARNESS = ROOT / "dev/docs/spikes/2026-07-15-native-materialize/harness"
 HERE = HARNESS / "editor-tree-oracle"
 sys.path.insert(0, str(ROOT))
@@ -27,7 +27,7 @@ sys.path.insert(0, str(HARNESS))
 sys.path.insert(0, str(HERE))
 
 import editor_tree_oracle as O  # noqa: E402
-from uedctl.driver import Driver, to_z_path  # noqa: E402
+from uedcli.driver import Driver, to_z_path  # noqa: E402
 import subset_diff  # noqa: E402
 
 GOLDEN = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("/home/neob91/Games/LutrisDX/drive_c/DX/Maps/Test_Castle.dx")

@@ -19,11 +19,11 @@ Usage: overlap_discriminator.py <trunk-dir> [<trunk-dir> ...]
 import sys
 from pathlib import Path
 
-ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedctl")
+ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedcli")
 sys.path.insert(0, str(ROOT))
 
-from uedctl import trunk  # noqa: E402
-from uedctl import rotation as ROT  # noqa: E402
+from uedcli import trunk  # noqa: E402
+from uedcli import rotation as ROT  # noqa: E402
 
 _CSG = {"CSG_Active": 0, "CSG_Add": 1, "CSG_Subtract": 2, "CSG_Intersect": 3, "CSG_Deintersect": 4}
 

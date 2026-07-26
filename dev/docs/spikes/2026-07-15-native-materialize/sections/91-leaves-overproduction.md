@@ -69,7 +69,7 @@ disassembly of §70.
 
 ## 1. Method & the reversal (✅)
 
-Decode both level Models (`harness/leaf_structure_diff.py`, on `uedctl.native.umodel`) and, for
+Decode both level Models (`harness/leaf_structure_diff.py`, on `uedcli.native.umodel`) and, for
 every model, walk the front/back tree (engine order: FRONT = `iChild[1]` = `i_back`, BACK =
 `iChild[0]` = `i_front`; coplanar `iPlane` chain followed only for reachability), counting empty
 terminal child slots (`child == -1 && iLeaf >= 0`), and separately count the distinct `iLeaf` values
@@ -194,7 +194,7 @@ already made the flood editor-exact *on a correct tree*. Not a leaf-specific iss
 
 ## 7. Reproduce
 ```
-cd Tools/uedctl
+cd Tools/uedcli
 # the decode that reverses the headline (uses the §89 cached builds under _scratch/uedgolden/)
 .venv/bin/python dev/docs/spikes/2026-07-15-native-materialize/harness/leaf_structure_diff.py \
   _scratch/uedgolden/Native_unatco.dx _scratch/uedgolden/UEDGolden_unatco_world.dx
@@ -204,7 +204,7 @@ cd Tools/uedctl
 # RESULT: byte-identical Model body to the 8-read golden (762 leaves) -> proves the leaf defect is
 # deterministic in the build path, NOT a barrier-timing truncation.
 .venv/bin/python -u dev/docs/spikes/2026-07-15-native-materialize/harness/build_ued_golden.py \
-  --trunk _scratch/unatco/uedctl/maps/unatco --out _scratch/uedgolden/UEDGolden_unatco_world_gen.dx \
+  --trunk _scratch/unatco/uedcli/maps/unatco --out _scratch/uedgolden/UEDGolden_unatco_world_gen.dx \
   --world-only --no-light --overwrite --quiet-reads 30 --rebuild-min-seconds 90
 ```
 
@@ -402,7 +402,7 @@ does not hold against the corrected golden.
 
 ### 10.7 Reproduce
 ```
-cd Tools/uedctl
+cd Tools/uedcli
 .venv/bin/python dev/docs/spikes/2026-07-15-native-materialize/harness/vectors_attribution.py \
   _scratch/uedgolden/Native_unatco.dx _scratch/uedgolden/UEDGolden_unatco_world_zones.dx \
   /home/neob91/Games/LutrisDX/drive_c/DX/Maps/03_NYC_UNATCOHQ.dx

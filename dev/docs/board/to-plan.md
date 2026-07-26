@@ -60,7 +60,7 @@ Tag: `[plan]`.
   before planning** (extrude-generator priority; find-spatial unpark timing; interim-route acceptance).
   Owns the shared `MAP EXPORT`->trunk harness that the `2026-07-19` item (Half B2, dimensions) consumes —
   don't fork. Stands up per-game install scripts + gitignored `dev/games/` for the UE1 control. Surfaces
-  uedctl gaps (`brush identify` + reverse-mapping + `brush stats` -> `inbox.md`; `brush build extrude`
+  uedcli gaps (`brush identify` + reverse-mapping + `brush stats` -> `inbox.md`; `brush build extrude`
   -> specced, plan-reviewed, and now **on-deck in `to-build.md` #12** together with `brush build
   revolve`, so this study's bucket-(a) vocabulary must include both).
   (Andrzej, 2026-07-24.)
@@ -70,39 +70,39 @@ Tag: `[plan]`.
   Three deliverables: (A) verb-first rewrite of the `leveldesign/` guides (GUI-equivalent notes
   retained, per-guide retention checklist); (B) a measurement spike for DeusEx human-scale numbers
   (offline class-defaults + a MAP-EXPORT map-geometry corpus + player collision cylinder + object
-  sizes); (C) a Claude Code skills plugin at `claude/plugins/uedctl/` (repo-as-marketplace;
-  distribution blocked on the uedctl-own-repo move — interim dev via a `.claude/skills` symlink). Needs
+  sizes); (C) a Claude Code skills plugin at `claude/plugins/uedcli/` (repo-as-marketplace;
+  distribution blocked on the uedcli-own-repo move — interim dev via a `.claude/skills` symlink). Needs
   a build plan sequencing A+B then C, with the two cold-reviewer gates. (Andrzej, 2026-07-19.)
 
-- [ ] `p1` `[plan→build]` **uedctl as a global CLI over multiple projects (config + projects +
+- [ ] `p1` `[plan→build]` **uedcli as a global CLI over multiple projects (config + projects +
   layered assets).** **BIG PRIORITY.** Spec + **plan** written, both cold-reviewed (findings folded):
   `specs/2026-06-29-…-design.md`, `plans/2026-06-29-…-plan.md`. **Foundation BUILT + tested +
   reviewed** (commits `817bdc42b`, `0eec5f293`): slice A pyproject/pipx (also fixes the `PIL` bug),
   slice B `config.py` (39 tests, unwired → suite green). **Remaining slices C–H DEFERRED/GATED** —
   see `inbox.md` (slice C needs a `packages.py` consumer refactor; 2 open decisions:
   migration, container mounts). Original spec ref:
-  `specs/2026-06-29-uedctl-global-cli-projects-design.md`. Turns uedctl from a repo-bound tool into
+  `specs/2026-06-29-uedcli-global-cli-projects-design.md`. Turns uedcli from a repo-bound tool into
   a `pipx`-installed CLI operating on many project dirs. Core: tool/substrate/project/session
-  **separation**; **two config files** — `~/.uedctl/config.toml` (per-user base substrate, ABSOLUTE
-  colon-glob `paths=`) + `<project>/uedctl.toml` (project overlay, RELATIVE globs + a uuid `id`);
+  **separation**; **two config files** — `~/.uedcli/config.toml` (per-user base substrate, ABSOLUTE
+  colon-glob `paths=`) + `<project>/uedcli.toml` (project overlay, RELATIVE globs + a uuid `id`);
   **layered resolution** (project shadows base; `--explain-paths`); **central per-project state**
-  `~/.uedctl/projects/<id>/{store,locks,tmp,shots}` (sessions move OUT of the content tree — apply
+  `~/.uedcli/projects/<id>/{store,locks,tmp,shots}` (sessions move OUT of the content tree — apply
   still writes the `.dx`/T3D artifact INTO it); **content-addressed texture store**
-  `~/.uedctl/textures/{packages/<pkg-hash>.<schema>/index.json, data/<pixel-hash>.png}` (dedup +
+  `~/.uedcli/textures/{packages/<pkg-hash>.<schema>/index.json, data/<pixel-hash>.png}` (dedup +
   explicit `texture gc`). Replaces hardcoded `substrate_search_dirs` + `host_repo_root`; new verbs
   `project init/ls/rm`, `config`, `texture gc`. **GATED on 3 decisions for Andrzej (spec §10):**
-  (1) base-catalog cross-machine sharing — moving the base catalog to per-user `~/.uedctl/` is a
+  (1) base-catalog cross-machine sharing — moving the base catalog to per-user `~/.uedcli/` is a
   **sharing regression** vs today's tracked/committed catalog; (2) migration carry-vs-drop of
   in-flight sessions; (3) overlay container-mount strategy (programmatic `docker run` bridge vs
   decontainerize-first). Resolve those, then plan — likely sliced: **(a) pipx packaging** (also fixes
   the `No module named PIL` host-interpreter bug — self-contained, do first), (b) project/config
-  resolution + `uedctl.toml`/`config.toml`, (c) content-addressed texture store, (d) container overlay.
+  resolution + `uedcli.toml`/`config.toml`, (c) content-addressed texture store, (d) container overlay.
   **⚠ STALE — re-spec before building.** The 2026-06-29 spec behind this predates three superseding
   decisions and must be reconciled first, not built as-written: (1) **no project `id`, no central
-  `~/.uedctl/projects/<id>/` state, no session store** (2026-07-05 in-tree-state / git-trunk / no-id
+  `~/.uedcli/projects/<id>/` state, no session store** (2026-07-05 in-tree-state / git-trunk / no-id
   decisions — `direction.md`); (2) **`project init/ls/rm` reduce to `project show`** (name→id
-  registry + uuid minting are gone); (3) the **project-layout reorg** — free `uedctl.toml` at the repo
-  root + in-repo gitignored `.uedctl/` for throwaway state + free relative tracked dirs — now BUILT
+  registry + uuid minting are gone); (3) the **project-layout reorg** — free `uedcli.toml` at the repo
+  root + in-repo gitignored `.uedcli/` for throwaway state + free relative tracked dirs — now BUILT
   and closed out (2026-07-18; `done.md` tail): decisions.md 2026-07-17 20:58 UTC (no scaffold verb —
   `project` stays `project show` only; tool-install assets go package-relative, and how they ship
   under pipx/Nuitka belongs to THIS item's re-spec). Re-spec against current `direction.md` +

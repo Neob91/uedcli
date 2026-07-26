@@ -1,4 +1,4 @@
-# `uedctl docs` — serve the user-facing docs from the CLI (dev + Nuitka)
+# `uedcli docs` — serve the user-facing docs from the CLI (dev + Nuitka)
 
 **Status: SPEC v1.2** — TWO review gates passed (2026-07-24 the base design; 2026-07-24 the
 README-fold refinement) — four cold reviewers total, findings folded (cross-noted `[R…]`). All design
@@ -11,9 +11,9 @@ keep the decision in `decisions.md`.
 
 ## 1. Goal
 
-Make uedctl **self-documenting**: a `docs` verb serving the repo's **user-facing** prose docs
+Make uedcli **self-documenting**: a `docs` verb serving the repo's **user-facing** prose docs
 (`usage.md`, `leveldesign/**`, and the folder `README.md` overviews) from the CLI, so a human can read
-them in-terminal and a shipped **Claude skill routes to them by querying the tool** (`uedctl docs …`)
+them in-terminal and a shipped **Claude skill routes to them by querying the tool** (`uedcli docs …`)
 rather than bundling a copy. Docs are an asset of the **tool**; the skill/plugin ships **zero** copies.
 One source of truth (`docs/`); a user reads the docs baked into the binary they have (version-locked,
 offline, cross-platform) — the `git help <topic>` / `rustc --explain` pattern. *Rejected:* bundling the
@@ -26,9 +26,9 @@ Top-level `docs` verb, three subverbs, mirroring `texture list|search` / `class 
 subparser/argument carries a real `help=` (>10 chars) — `tests/test_help_completeness.py`.
 
 ```
-uedctl docs list   [--json]
-uedctl docs show   (<topic> | -)
-uedctl docs search <query> [--json]
+uedcli docs list   [--json]
+uedcli docs show   (<topic> | -)
+uedcli docs search <query> [--json]
 ```
 
 **Terminology (one word, used everywhere):** a **topic key** identifies a doc (§3). `list`/`search`
@@ -55,7 +55,7 @@ human-scale` (two files: `leveldesign/deusex/human-scale`, `leveldesign/general/
 addressable **only if it holds a `README.md`** (its overview) — a README-less directory is not a topic
 (intentional; §7 hint may still redirect `<dir>/README` → `<dir>`).
 
-**No bare sugar:** only `docs show <topic>` (no `uedctl docs <topic>`).
+**No bare sugar:** only `docs show <topic>` (no `uedcli docs <topic>`).
 
 **`-` (stdin) is ATOMIC** `[R2:M2 — "no silent half-answers"]`: reads topic keys from stdin (one per
 line), resolves **all** first; if **any** is unresolved it prints **nothing** to stdout, names the
@@ -101,26 +101,26 @@ the live served set has **no duplicate keys** (the standing authoring gate). *(d
 
 ## 4. Source resolution — one resolver, source-tree before packaged `_docs`
 
-Source of truth stays **`Tools/uedctl/docs/`**. Order keeps dev iteration live even if a local build
+Source of truth stays **`Tools/uedcli/docs/`**. Order keeps dev iteration live even if a local build
 left a stale bundle `[R:H2-B]`:
 
 ```python
 def docs_root() -> Path:
-    if (p := os.environ.get("UEDCTL_DOCS_DIR")):          # 1. override (tests, packaging)
+    if (p := os.environ.get("UEDCLI_DOCS_DIR")):          # 1. override (tests, packaging)
         return Path(p)
-    pkg = importlib.resources.files("uedctl")             # package anchor (not parents[N])
-    src = Path(pkg).parent / "docs"                       # 2. source checkout → Tools/uedctl/docs
+    pkg = importlib.resources.files("uedcli")             # package anchor (not parents[N])
+    src = Path(pkg).parent / "docs"                       # 2. source checkout → Tools/uedcli/docs
     if src.is_dir():
         return src
     bundled = pkg / "_docs"                               # 3. packaged wheel / Nuitka one-file
     if bundled.is_dir():
         return Path(bundled)
-    raise _SelectionExit("uedctl docs unavailable (broken install)")
+    raise _SelectionExit("uedcli docs unavailable (broken install)")
 ```
 
-- Dev (`bin/uedctl`) → branch 2, always live; no build step to iterate.
+- Dev (`bin/uedcli`) → branch 2, always live; no build step to iterate.
 - Wheel / Nuitka → branch 3 (no source `docs/` sibling exists there).
-- Resolver lives in a top-level `uedctl/*.py` module and derives from `files("uedctl")`, so it can't
+- Resolver lives in a top-level `uedcli/*.py` module and derives from `files("uedcli")`, so it can't
   break if moved. Filesystem-backed installs only; zip-import/zipapp out of scope. The
   "resolves identically in wheel & Nuitka" claim is **to verify when packaging lands** (§8). `[R:M3/M4]`
 - Ships complete in v1; branch 3 dormant until packaging exists.
@@ -150,12 +150,12 @@ index. Symlinks pointing outside the root / into `dev/` are not added (structura
 - `docs_root()` unresolvable → `_SelectionExit`, exit 2.
 
 ## 8. Deferred to when Nuitka/wheel packaging exists (NOT built in v1) — no command-code change
-- Build step generates the served subset (`.md` under `docs/` minus `dev/`) into **`uedctl/_docs/`**.
-- `.gitignore` `uedctl/_docs/`; generated, never committed.
-- Wheel: `package-data = { uedctl = ["_docs/**"] }` (currently `[]`); generation runs **before** the
+- Build step generates the served subset (`.md` under `docs/` minus `dev/`) into **`uedcli/_docs/`**.
+- `.gitignore` `uedcli/_docs/`; generated, never committed.
+- Wheel: `package-data = { uedcli = ["_docs/**"] }` (currently `[]`); generation runs **before** the
   sdist/wheel build (+ MANIFEST), else a clean-checkout build ships a broken install. `[R:H2-A]`
-- Nuitka include source is the **already-filtered** bundle: `--include-data-dir=uedctl/_docs=uedctl/_docs`
-  (NOT `docs=uedctl/_docs`, which re-bundles `dev/`). `[R:H2/M2]`
+- Nuitka include source is the **already-filtered** bundle: `--include-data-dir=uedcli/_docs=uedcli/_docs`
+  (NOT `docs=uedcli/_docs`, which re-bundles `dev/`). `[R:H2/M2]`
 - CI drift guard: `_docs` regenerates identically from source.
 
 ## 9. Testing (offline, `bin/test`)
@@ -180,7 +180,7 @@ index. Symlinks pointing outside the root / into `dev/` are not added (structura
   on stdout, exit 2. Empty stdin → exit 0.
 - **`search`** emits folded keys (a README hit prints the dir key, resolvable by `show`); title hit >
   body hit; snippet ≤120; `--json` = `{path,title,snippet}`; no-hit → exit 0.
-- Resolver: `UEDCTL_DOCS_DIR` wins; source-before-`_docs` (fixture with both → source wins); broken
+- Resolver: `UEDCLI_DOCS_DIR` wins; source-before-`_docs` (fixture with both → source wins); broken
   root → clean `_SelectionExit`, **assert no traceback**. Bare-install smoke (no config, no level).
 
 ## 10. Docs & house-rule updates on landing

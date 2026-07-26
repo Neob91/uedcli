@@ -27,7 +27,7 @@ When a plan here is built, delete its entry ([`done.md`](done.md) keeps a short 
 
   **Why it matters here and now:** `utexture.py` decodes one layout (`fmt==0`), so a `UTexture`'s
   second mip array (`CompMips`) makes the body parse overrun — **30 textures in the project's own
-  `LUM/Textures/LUM_CoreTex.utx` are invisible to uedctl today** and render as a checkerboard.
+  `LUM/Textures/LUM_CoreTex.utx` are invisible to uedcli today** and render as a checkerboard.
   This is a live bug on this substrate, not generic-UE1 hygiene.
 
   **Seven slices:** `S1` CompMips + fixture builder → `S2` typed error results → `S3` layout
@@ -65,7 +65,7 @@ When a plan here is built, delete its entry ([`done.md`](done.md) keeps a short 
   `P0` schema_cache v2 (raw default tags — gates S2 onward) → `S1` engine core →
   `S2` adapters → `S3` list/show (class, sound, music) → `S4` object-ref validation *(fixes a live
   bug that silently ships broken levels)* → `S5` classification store → `S6` search + ranking →
-  `S7` class arm (mesh decoder → `uedctl/`, `class preview`, size facts) → `S8a` texture adapter
+  `S7` class arm (mesh decoder → `uedcli/`, `class preview`, size facts) → `S8a` texture adapter
   (library-level) → `S8b` repoint the noun + delete the legacy subsystem → `S9` `.umx` title sniffer
   → `S10` lifecycle → `S11` doc sweep.
 
@@ -93,8 +93,8 @@ fixes are new `inbox.md` items awaiting Andrzej's triage. Entries live in `done.
 ## 7. BSP-issue detector (D0 + the P0 spike + `level doctor --rebuilt` + D0-b)
 
 **Status:** PARKED mid-spike (2026-06-25). Spec reviewed (6 rounds), plan reviewed (3 rounds).
-**Plan (full detail):** [`../plans/2026-06-24-uedctl-bsp-detector-plan.md`](../plans/2026-06-24-uedctl-bsp-detector-plan.md)
-**Spec:** [`../specs/2026-06-24-uedctl-offline-bsp-engine-design.md`](../specs/2026-06-24-uedctl-offline-bsp-engine-design.md) ·
+**Plan (full detail):** [`../plans/2026-06-24-uedcli-bsp-detector-plan.md`](../plans/2026-06-24-uedcli-bsp-detector-plan.md)
+**Spec:** [`../specs/2026-06-24-uedcli-offline-bsp-engine-design.md`](../specs/2026-06-24-uedcli-offline-bsp-engine-design.md) ·
 **Decision:** `../decisions.md` 2026-06-24 12:40 UTC
 
 **What it is.** Catch the *build-emergent* BSP problems (slivers, hall-of-mirrors, invisible walls,
@@ -103,7 +103,7 @@ fall-through) that the already-shipped static `level doctor` structurally can't.
 **Build order (the near-term scope — D1-b and all D2 engine slices are OUT/deferred):**
 1. **`UModel`-parser feasibility spike (first, alone)** — the value gate: decides whether the
    located-issue tier (`--built`) is even buildable. One session, on a *built* `.dx`.
-2. **Promote D0** — the validated drop-warning parser → a new `uedctl/bsp/editorlog.py` + helpers +
+2. **Promote D0** — the validated drop-warning parser → a new `uedcli/bsp/editorlog.py` + helpers +
    offline golden tests. (Offline, pure, touches no shared code.)
 3. **`level doctor --rebuilt`** — the MVP: rebuild the level in an ephemeral editor, read the
    drop-warnings, report (a CI tripwire). Self-contained — wraps the injected `rebuild` callable, so
@@ -112,7 +112,7 @@ fall-through) that the already-shipped static `level doctor` structurally can't.
 4. **D0-b measurement** — run over real maps to decide whether D1 is worth building (needs the
    gitignored install content; content-blocked → tracked TODO).
 
-**Footprint (mostly additive):** a new `uedctl/bsp/` module + an opt-in `level doctor --rebuilt`
+**Footprint (mostly additive):** a new `uedcli/bsp/` module + an opt-in `level doctor --rebuilt`
 flag. The static `level doctor` and `level apply` are left as-is; `doctor.py` gets only a cosmetic
 stale-string fix. The one change that would touch a load-bearing feature (surfacing build-health on
 `level apply`, step 3b) is **deferred, optional, warn-only, and never alters `apply`/`materialize`
@@ -182,21 +182,21 @@ nothing was sent to `to-spec.md`.
 
 ## 11. `docs` command — serve the user-facing docs from the CLI (self-documenting binary)
 
-Add `uedctl docs list|show|search` serving `docs/` minus `dev/docs/**`, so a shipped Claude skill
+Add `uedcli docs list|show|search` serving `docs/` minus `dev/docs/**`, so a shipped Claude skill
 routes to the docs by **querying the tool** — the skill/plugin ships zero doc copies. **The spec
 doubles as the plan** (implementation-detailed; review gate passed 2026-07-24, two cold reviewers,
 findings folded): `specs/2026-07-24-docs-command.md`. Key points baked in: `show` resolves via the
 enumerated served-set (kills path-traversal + dev-tree leak structurally, no raw path-join); resolver
-= `UEDCTL_DOCS_DIR` → source tree → packaged `uedctl/_docs` (**source-first** so a stale local build
+= `UEDCLI_DOCS_DIR` → source tree → packaged `uedcli/_docs` (**source-first** so a stale local build
 can't shadow live dev docs); a `README.md` folds to its directory topic (root → `index`); errors reuse
 `_SelectionExit` (clean exit 2, no new type). **Deferred, NOT this item:** the Nuitka/wheel `_docs`
-generation + `.gitignore` + `--include-data-dir=uedctl/_docs=uedctl/_docs` + drift-CI — added only when
+generation + `.gitignore` + `--include-data-dir=uedcli/_docs=uedcli/_docs` + drift-CI — added only when
 packaging exists, with no command-code change. **Docs to update on landing:** `docs/usage.md` gains a
 `docs` section (the reference file the command serves); `architecture.md`. (Andrzej, 2026-07-24.)
 
 ---
 
-## Codebase-review chore batch (2026-07-25, session `uedctl:review`)
+## Codebase-review chore batch (2026-07-25, session `uedcli:review`)
 
 A coherent batch of small, independent fixes surfaced by a 5-agent codebase review and directed by
 Andrzej. **Build together, then run ONE build-review gate over the accumulated diff** (per `CLAUDE.md`
@@ -308,6 +308,6 @@ and are NOT part of this batch.
   measurements-at-a-sha and have already drifted once (citers 171→173, 45→46) — **Task 2 re-measures
   and its numbers govern.**
 
-  **Blocked on:** `profile-generator-fixes` (6 unmerged commits touching five `uedctl/*.py` files
+  **Blocked on:** `profile-generator-fixes` (6 unmerged commits touching five `uedcli/*.py` files
   and `inbox.md`, all in Task 8's scope) merging first, or those files being treated as manual-merge
   points.

@@ -1,4 +1,4 @@
-"""Mine subagent transcripts for uedctl friction: failed commands, argparse rejections,
+"""Mine subagent transcripts for uedcli friction: failed commands, argparse rejections,
 tool errors. Writes a deduped, counted report; prints only a compact summary."""
 import json, re, sys, collections, pathlib
 
@@ -16,9 +16,9 @@ NAMES = {
     "ac0d18c19b9e183e5": "spike-headless",
 }
 
-# Signatures of a uedctl/CLI problem, not general shell noise.
+# Signatures of a uedcli/CLI problem, not general shell noise.
 SIG = re.compile(
-    r"(unrecognized arguments|invalid choice|error: argument|usage: uedctl|"
+    r"(unrecognized arguments|invalid choice|error: argument|usage: uedcli|"
     r"Traceback \(most recent call last\)|"
     r"materialize failed|post-verify mismatch|did not complete within|"
     r"is not built|not found:|No such file|refuses to overwrite|"
@@ -83,7 +83,7 @@ for f in sorted(SUB.glob("agent-*.jsonl")):
                     per_agent[who] += 1
 
 with OUT.open("w") as out:
-    out.write("# Raw mined uedctl friction from subagent transcripts\n")
+    out.write("# Raw mined uedcli friction from subagent transcripts\n")
     out.write("# (deduped + normalised; <ID>/<RND>/<PATH>/N are placeholders)\n\n")
     for sig, who in sorted(buckets.items(), key=lambda kv: -sum(kv[1].values())):
         tot = sum(who.values())

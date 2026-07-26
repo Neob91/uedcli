@@ -28,7 +28,7 @@ try:
         "Begin Map\n"
         "Begin Actor Class=LevelInfo Name=LevelInfo0\n"
         '     Title="SpikeTest"\n'
-        '     Author="uedctl"\n'
+        '     Author="uedcli"\n'
         "     AmbientBrightness=42\n"
         "     FogDistance=1337.000000\n"
         "     ZoneGravity=(X=0.000000,Y=0.000000,Z=-666.000000)\n"

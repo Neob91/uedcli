@@ -40,14 +40,14 @@ import sys
 import time
 from pathlib import Path
 
-ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedctl")
+ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedcli")
 HARNESS = ROOT / "dev/docs/spikes/2026-07-15-native-materialize/harness"
 HERE = HARNESS / "editor-tree-oracle"
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(HARNESS))
 
-from uedctl import config, container_assets, editor as editor_mod  # noqa: E402
-from uedctl.driver import Driver, to_z_path  # noqa: E402
+from uedcli import config, container_assets, editor as editor_mod  # noqa: E402
+from uedcli.driver import Driver, to_z_path  # noqa: E402
 
 import subset_diff  # noqa: E402
 
@@ -106,7 +106,7 @@ class _UnatcoTarget(_Target):
 
     @property
     def project_dir(self):
-        # `<...>/unatco/uedctl/maps/unatco` -> project root `<...>/unatco/uedctl`.
+        # `<...>/unatco/uedcli/maps/unatco` -> project root `<...>/unatco/uedcli`.
         return self._mod().FULL_TRUNK.parent.parent
 
     def golden(self, n: int):
@@ -117,9 +117,9 @@ class _UnatcoTarget(_Target):
         return p
 
     def ref_pkgs(self, n: int):
-        from uedctl import trunk  # noqa: E402
-        from uedctl.materialize import _short_class  # noqa: E402
-        from uedctl.apply import _level_referenced_packages  # noqa: E402
+        from uedcli import trunk  # noqa: E402
+        from uedcli.materialize import _short_class  # noqa: E402
+        from uedcli.apply import _level_referenced_packages  # noqa: E402
         u = self._mod()
         lvl, _ = trunk.read_level(u.FULL_TRUNK)
         order = [nm for nm in lvl.order if _short_class(lvl.actors[nm].cls) in ("Brush", "LevelInfo")]
@@ -159,7 +159,7 @@ def _composed_mounts(project_dir: Path):
 
 
 def _state_dir(project_dir: Path) -> Path:
-    """The project's `.uedctl/` state dir — threaded into editor.py's ini helpers (which since
+    """The project's `.uedcli/` state dir — threaded into editor.py's ini helpers (which since
     the 2026-07-17 20:58 refactor require an explicit `state_dir` for their tmp-ini path)."""
     project = config.load_project(str(project_dir))
     return config.state_dir(project.root, create=True)
@@ -296,7 +296,7 @@ def run(n: int, quiet_secs: float, out_dir: Path, target_name: str = "castle") -
         if ref:
             print(f"[oracle] OBJ LOAD {len(ref)} referenced packages ...")
             try:
-                from uedctl.packages import ensure_load, editor_search_dirs  # noqa: E402
+                from uedcli.packages import ensure_load, editor_search_dirs  # noqa: E402
                 project = config.load_project(str(target.project_dir))
                 uc = config.load_user_config()
                 sdirs = config.composed_search_dirs(project, uc)

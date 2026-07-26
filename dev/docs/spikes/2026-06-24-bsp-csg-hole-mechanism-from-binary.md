@@ -98,7 +98,7 @@ this loop walks. No heuristic re-sorts them.
 3. For each of the brush's `FPoly`s: copy it, `FPoly::Transform` it into world space (apply the
    coords **and subtract `PrePivot`** — confirmed by the `FVector::operator-=` between
    `Transform` and the next step; this is the same `Location + R·(v − PrePivot)` transform
-   uedctl mirrors, see `quirks.md` "Pivots"), then `FPoly::Fix` it.
+   uedcli mirrors, see `quirks.md` "Pivots"), then `FPoly::Fix` it.
 4. Run the transformed brush through the world via the recursive **leaf-filter** static
    (`0x31f50`, called twice — the classic two-direction CSG: filter the world's polys against
    the brush, and the brush's polys against the world).
@@ -250,7 +250,7 @@ spike:
   and annotate float operands. This is what made the call graphs above readable.
 - `strings_dump.py` — regex over ASCII runs (the C++ symbol/RTTI names).
 
-Install once into the uedctl venv: `pip install capstone pefile`. Everything is **static** (reads
+Install once into the uedcli venv: `pip install capstone pefile`. Everything is **static** (reads
 the DLLs, never runs the editor), so it's safe and fast — complements
 `unrealed/extracting-from-dll.md` (which covers the *wide string table*; this adds *code
 disassembly*).

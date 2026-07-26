@@ -8,7 +8,7 @@ the two trailing INTs) lands exactly at `serial_offset+serial_size`. So the full
 `UModel` read format is decoded and validated — and the WRITE is the inverse, using the
 same TArray/ci/raw primitives, so serializing a built `Model` into a `.dx` is mechanical.
 This closes the de-containerization roadmap's "Model serialization is an incomplete
-second port" risk (`spikes/2026-06-27-decontainerize-uedctl/03-native-package-write.md`):
+second port" risk (`spikes/2026-06-27-decontainerize-uedcli/03-native-package-write.md`):
 the remaining long pole is the CSG/BSP *build* (D2) that GENERATES the data, not its
 (de)serialization. One open *interpretation* detail (not a parse error): `FBspVert.iVertex`
 ranges above the `Points` count (max 18932 vs 13493 points on 00_Intro), so it indexes a
@@ -28,7 +28,7 @@ real map files. The working harness lives in `_scratch/bspspike/` (`umodel_parse
 
 A `.dx` map file is an Unreal package. Deus Ex uses **package file version 68–69**: the original
 shipped maps are **v68** (and `Entry.dx` is older, v61), while any map re-saved in UnrealEd 2.2
-(UT99-based, package v69 — the editor uedctl drives) comes out **v69**. The `UModel::Serialize`
+(UT99-based, package v69 — the editor uedcli drives) comes out **v69**. The `UModel::Serialize`
 binary layout documented here is **identical across that v68↔v69 bump** (which is why one parser
 reads both byte-exact; the version differences are header-level — generation info, etc. — not in the
 Model body). Each object is serialized by its class's `Serialize` method. The level geometry lives in

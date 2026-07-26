@@ -5,7 +5,7 @@ This is the tool that localizes a CSG *fragment-set* divergence (as opposed to `
 compares the FINAL, post-repartition tree order).  The insight (measured 2026-07-17): the editor
 golden `.dx`'s `Model.Polys` export is the editor's **post-merge, pre-`SplitPolyList` soup** — the
 exact FPoly list `FindBestSplit` repartitions.  Native's equivalent is `bsp_merge_coplanars(
-bsp_build_fpolys(model))`, exposed for the harness by the `UEDCTL_BSPCSG_SOUP_ONLY` env hook in
+bsp_build_fpolys(model))`, exposed for the harness by the `UEDCLI_BSPCSG_SOUP_ONLY` env hook in
 `bspcsg.rs` (it packs the merged soup as leaf nodes and returns before `bsp_build`).  Comparing the
 two order-independent FACE multisets (plane + rounded vertex-set) answers: does our repartition INPUT
 match the editor's?  If not, the repartition ROOT (and thus the whole `node_diff` prefix) cannot match
@@ -28,18 +28,18 @@ import sys
 from collections import Counter
 from pathlib import Path
 
-ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedctl")
+ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedcli")
 sys.path.insert(0, str(ROOT))
-sys.path.insert(0, str(ROOT / "dev/docs/spikes/2026-06-27-decontainerize-uedctl/harness"))
+sys.path.insert(0, str(ROOT / "dev/docs/spikes/2026-06-27-decontainerize-uedcli/harness"))
 sys.path.insert(0, str(ROOT / "dev/docs/spikes/2026-07-15-native-materialize/harness"))
 
-from uedctl import trunk  # noqa: E402
-from uedctl.native import materialize as M, umodel as UM  # noqa: E402
-import uedctl_native  # noqa: E402
+from uedcli import trunk  # noqa: E402
+from uedcli.native import materialize as M, umodel as UM  # noqa: E402
+import uedcli_native  # noqa: E402
 import utexture_decode as UT  # noqa: E402
 import upolys_decode as UP  # noqa: E402
 
-TRUNK = "/home/neob91/Games/LutrisDX/drive_c/DX/LUM/_scratch/castle/uedctl/maps/foobar"
+TRUNK = "/home/neob91/Games/LutrisDX/drive_c/DX/LUM/_scratch/castle/uedcli/maps/foobar"
 FULL_EDITOR = "/home/neob91/Games/LutrisDX/drive_c/DX/Maps/Test_Castle.dx"
 SUBSET = "/home/neob91/Games/LutrisDX/drive_c/DX/LUM/_scratch/castle-subset"
 
@@ -68,13 +68,13 @@ def editor_soup(path):
 
 
 def native_soup(bs):
-    """(Counter face->mult, num_faces) — native post-merge soup via UEDCTL_BSPCSG_SOUP_ONLY."""
-    os.environ["UEDCTL_BSPCSG_SOUP_ONLY"] = "1"
+    """(Counter face->mult, num_faces) — native post-merge soup via UEDCLI_BSPCSG_SOUP_ONLY."""
+    os.environ["UEDCLI_BSPCSG_SOUP_ONLY"] = "1"
     try:
-        m = uedctl_native.build_geometry_bspcsg(bs)
+        m = uedcli_native.build_geometry_bspcsg(bs)
     finally:
-        os.environ.pop("UEDCTL_BSPCSG_SOUP_ONLY", None)
-    mm = UM.parse_model_body(uedctl_native.serialize_model(m), 0, len(uedctl_native.serialize_model(m)))
+        os.environ.pop("UEDCLI_BSPCSG_SOUP_ONLY", None)
+    mm = UM.parse_model_body(uedcli_native.serialize_model(m), 0, len(uedcli_native.serialize_model(m)))
     c = Counter()
     for nd in mm.nodes:
         s = mm.surfs[nd.i_surf]

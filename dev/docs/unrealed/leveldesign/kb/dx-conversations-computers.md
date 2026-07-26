@@ -25,7 +25,7 @@ Markers: `[DX]` throughout unless flagged `[ENGINE]`. ✅🔬/⟨bin⟩ = binary
 ## 1. Conversations (ConEdit)  [DX] 📖
 
 Conversations are authored in an **external tool, ConEdit** (not UnrealEd, not
-uedctl), and compiled into packages.
+uedcli), and compiled into packages.
 
 **Build pipeline.** `ucc make` compiles a conversation package into three `.u`
 files:

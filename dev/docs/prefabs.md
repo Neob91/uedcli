@@ -13,7 +13,7 @@ stdout. See [`../../docs/usage.md`](../../docs/usage.md) for the user-facing ref
 > **Historical note.** These were once `stash intersect` / `stash deintersect`, which drove a live
 > UnrealEd through a per-command ephemeral container. Both the editor dependency and the
 > stash-shaped interface are **gone**: the merge is native (`brushcsg.py` →
-> `uedctl_native.intersect_brushset`, the decoded `bspBrushCSG` intersect tail), and the input is a
+> `uedcli_native.intersect_brushset`, the decoded `bspBrushCSG` intersect tail), and the input is a
 > pipe, so every tier feeds it through its own `show` verb instead of needing a bespoke wrapper.
 > The verbs were deleted outright, not aliased (`CLAUDE.md` "no back-compat cruft").
 > *(decisions.md 2026-07-24 16:32 / 17:04, 2026-07-25.)*
@@ -35,14 +35,14 @@ The intermediate construction never touches the trunk — only the final brush l
 explicit `actor add`.
 
 ```bash
-uedctl actor find --folder castle.door | uedctl actor show - \
-  | uedctl brush deintersect - --mover-class Engine.Mover --solidity solid --pivot min \
-  | uedctl actor add -
+uedcli actor find --folder castle.door | uedcli actor show - \
+  | uedcli brush deintersect - --mover-class Engine.Mover --solidity solid --pivot min \
+  | uedcli actor add -
 ```
 
 ## The stash register
 
-Every project has a machine-local **stash register** at `<root>/.uedctl/stash/` (inside the
+Every project has a machine-local **stash register** at `<root>/.uedcli/stash/` (inside the
 project's self-ignoring state dir) (`stash_register.FileStashRegister`). It holds named entries,
 each a captured set of actors (`write_stash`/`read_stash`/`list_stashes`/`drop_stash`). `stash
 capture` fills it from the selected level or from `--from-t3d <FILE…|->` (one-or-more T3D files, or
@@ -53,9 +53,9 @@ the merge verbs read a pipe, and a stash reaches them the same way anything else
 ## How the result is verified
 
 The bar is **T3D face-set parity with UnrealEd's own `BRUSH FROM INTERSECTION`/`DEINTERSECTION`**,
-and it is enforced OFFLINE against committed goldens in `uedctl/tests/fixtures/intersect/`
+and it is enforced OFFLINE against committed goldens in `uedcli/tests/fixtures/intersect/`
 (`test_brush_merge.py` — cases covering ordered add/subtract/re-add, overlapping and abutting
 brushes, nested and disjoint voids, and thin/rotated/off-grid geometry). The goldens were captured
 from the live editor by `tests/editor_oracle.py`, which survives ONLY as the regenerator: it runs
 under `-m integration` (deselected by default), and it rewrites the fixtures only when
-`UEDCTL_REGEN_GOLDENS=1` is set, so a wedged editor run can never silently become the new oracle.
+`UEDCLI_REGEN_GOLDENS=1` is set, so a wedged editor run can never silently become the new oracle.

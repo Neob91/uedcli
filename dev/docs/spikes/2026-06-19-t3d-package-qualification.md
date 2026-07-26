@@ -7,7 +7,7 @@ name** (no package) — verified across the real Deus Ex level exports under
 UnrealEd export a **fully-qualified** `Texture=Package.Name` when the bare name
 is ambiguous? Does **IMPORT** accept and correctly bind an explicit qualified
 `Texture=Package.Name` / `Class=Package.ClassName`? The answer decides whether
-uedctl can store the package *inside* the T3D, or must track packages as
+uedcli can store the package *inside* the T3D, or must track packages as
 separate declared data.
 
 ## Verdicts (all observed live, exact bytes captured)
@@ -23,7 +23,7 @@ separate declared data.
 **Bottom line for the spec:** the package round-trips through the editor in
 *neither* direction — EXPORT strips it, so you can never read it back out of a
 plain export; but IMPORT *honours* it for textures (it is the lever that picks
-the right package). So uedctl **can put the package into the `Texture=` field of
+the right package). So uedcli **can put the package into the `Texture=` field of
 the T3D it feeds the editor at materialize**, and **must track the package
 separately as authored data** in the store (a `Texture` poly field's
 package, or a name→package index), because no export will ever tell it the
@@ -37,7 +37,7 @@ content per the content-install spike
 ([`2026-06-18-deusex-content-install.md`](2026-06-18-deusex-content-install.md)):
 
 1. Build a runtime dir `_scratch/pkgqual/rt/` = symlinks to the real substrate
-   `Tools/uedctl/uned/UED22/*` (binaries) + copied inis, with the
+   `Tools/uedcli/uned/UED22/*` (binaries) + copied inis, with the
    `[Core.System] Paths` rewritten to **absolute** substrate-code +
    install-content lines (the relative `../Textures/*.utx` form does not resolve
    under UCC's cwd — the content-install spike's load-bearing fix).
@@ -45,11 +45,11 @@ content per the content-install spike
    override (the baked image path is stale):
    ```
    docker compose run -d --name uned-pkgqual \
-     --entrypoint "/usr/bin/tini -- bash /repo/Tools/uedctl/uned/entrypoint.sh" \
+     --entrypoint "/usr/bin/tini -- bash /repo/Tools/uedcli/uned/entrypoint.sh" \
      -e UED_DIR=/repo/_scratch/pkgqual/rt \
      -v uned-wp-pkgqual:/wineprefix  uned
    ```
-3. Drive with `docker exec uned-pkgqual python3 /repo/Tools/uedctl/uned/wine_ctl.py exec "<VERB>"`.
+3. Drive with `docker exec uned-pkgqual python3 /repo/Tools/uedcli/uned/wine_ctl.py exec "<VERB>"`.
    `OBJ LIST` lands in `/opt/UED22/Editor.log` (flush-laggy → follow with a noisy
    command, then `grep -a`; the log is a binary file, so `grep -a`).
 
@@ -147,8 +147,8 @@ qualifies a `Texture=` on export.
 
 **Store the package, and put it into the `Texture=` field at materialize.**
 
-1. **The package is authored data uedctl must own.** Because EXPORT strips it,
-   no read of a `.dx`/T3D ever recovers the package. uedctl must carry, per
+1. **The package is authored data uedcli must own.** Because EXPORT strips it,
+   no read of a `.dx`/T3D ever recovers the package. uedcli must carry, per
    textured poly, **which package** the texture came from — as a field on the
    model `Polygon` (a `texture_package`, beside the existing bare `Texture`), or
    an equivalent name→package binding resolved from the `main/packages` manifest.
@@ -185,7 +185,7 @@ qualifies a `Texture=` on export.
 
 5. **`Class=` is a non-issue for surface texturing** but confirms the known gap:
    the actor's class package can't be derived from `Class=` (export bare; import
-   ignores the qualifier). uedctl must likewise track an actor's class package as
+   ignores the qualifier). uedcli must likewise track an actor's class package as
    authored data if it ever needs it (it lives in the `packages` manifest today).
 
 ## Artifacts (`_scratch/pkgqual/`, gitignored)
@@ -204,7 +204,7 @@ qualifies a `Texture=` on export.
 - Content install (the package path wiring this depended on):
   [`2026-06-18-deusex-content-install.md`](2026-06-18-deusex-content-install.md).
 - Surface flags + texturing design (to be written):
-  `2026-06-19-uedctl-surface-flags-texturing-design.md` — this spike's verdict
+  `2026-06-19-uedcli-surface-flags-texturing-design.md` — this spike's verdict
   is its input for the package side.
 - T3D format/quirks: [`../unrealed/quirks.md`](../unrealed/quirks.md) (surfaces,
   the paste path that preserves per-poly `Texture=`).

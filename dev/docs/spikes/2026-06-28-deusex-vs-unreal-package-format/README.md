@@ -24,7 +24,7 @@ answer** with a committed harness, because the fact was scattered and hard to fi
 
 ## What was verified (`verify.py`, offline, reads bytes directly)
 
-Run from `Tools/uedctl` with `.venv-uedctl/bin/python`. Inputs: the real Deus Ex install
+Run from `Tools/uedcli` with `.venv-uedcli/bin/python`. Inputs: the real Deus Ex install
 (`uned/DeusExAssets/System/*.u`, v68 game code) and the committed UT-lineage UED22 editor
 substrate (`uned/UED22/*.u`, the v69 editor).
 
@@ -36,7 +36,7 @@ substrate (`uned/UED22/*.u`, the v69 editor).
    v68 `DeusEx.u` (11293 names, 3151 imports) and the v69 `DeusEx.u` (7017 names, 1952
    imports) through the **same `ver>=64` code path** with no version-specific branch. Only
    v61 (five old content packages) uses a different name-table encoding. So 68→69 is a
-   minor bump that does not change the header, name-table, or import-table layout uedctl
+   minor bump that does not change the header, name-table, or import-table layout uedcli
    parses.
 
 3. **The decisive fact — the v69 editor ships and loads v68 packages directly.** The
@@ -77,7 +77,7 @@ The version number is a red herring in **both** directions, but for different ar
 
 ## Prior evidence this consolidates
 
-- `spikes/2026-06-27-decontainerize-uedctl/06-stub-elimination.md` — "the two real
+- `spikes/2026-06-27-decontainerize-uedcli/06-stub-elimination.md` — "the two real
   reasons — neither is v68/v69": Engine/Core divergence + mesh format.
 - `decisions.md` 2026-06-22 — UED22's v469 UCC was forced to a genuine `Ver: 68` load
   (by hiding the v69 substrate copy) and exported v68 classes + textures fine.

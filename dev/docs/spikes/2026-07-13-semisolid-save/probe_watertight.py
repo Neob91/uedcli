@@ -12,7 +12,7 @@ Scenarios (textured, real LUM_CoreTex loaded):
   W4 room + 1 SEMISOLID free add                   -> brushes=2
 For each: non-empty Engine.Polys blocks and whether qualify raises.
 
-    UEDCTL_REUSE_EDITOR=uned-<uuid> PYTHONPATH=. python3 .../probe_watertight.py
+    UEDCLI_REUSE_EDITOR=uned-<uuid> PYTHONPATH=. python3 .../probe_watertight.py
 """
 from __future__ import annotations
 
@@ -22,12 +22,12 @@ import sys
 import time
 import uuid
 
-from uedctl import builders, writes
-from uedctl.driver import Driver, to_z_path
-from uedctl.model import Level
-from uedctl.qualify import dump_obj_dependencies, parse_obj_dependencies, qualify_level_textures
-from uedctl.uuid7 import uuid7
-from uedctl.editor import ensure_editor, stop_editor
+from uedcli import builders, writes
+from uedcli.driver import Driver, to_z_path
+from uedcli.model import Level
+from uedcli.qualify import dump_obj_dependencies, parse_obj_dependencies, qualify_level_textures
+from uedcli.uuid7 import uuid7
+from uedcli.editor import ensure_editor, stop_editor
 
 TEX_HOST = "/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Textures/LUM_CoreTex.utx"
 TEXNAME = "LUM_CoreTex.grey_stone_tile"
@@ -85,7 +85,7 @@ def probe(ed, tag, actors):
 
 
 def main():
-    reuse = os.environ.get("UEDCTL_REUSE_EDITOR")
+    reuse = os.environ.get("UEDCLI_REUSE_EDITOR")
     ed_id = None
     if reuse:
         container = reuse; log(f"REUSING {container}")

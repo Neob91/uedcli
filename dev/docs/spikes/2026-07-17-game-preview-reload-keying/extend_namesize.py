@@ -9,9 +9,9 @@ truncates onto the first and serves the resident (identical screenshot hash).
 import sys, time, hashlib, subprocess
 from pathlib import Path
 
-UEDCTL = Path(__file__).resolve().parents[4]
-sys.path.insert(0, str(UEDCTL))
-from uedctl import config, preview_game as pg           # noqa: E402
+UEDCLI = Path(__file__).resolve().parents[4]
+sys.path.insert(0, str(UEDCLI))
+from uedcli import config, preview_game as pg           # noqa: E402
 
 MAPS = Path("/home/neob91/Games/LutrisDX/drive_c/DX/Maps")
 OUT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/_scratch/spike-reload")
@@ -58,7 +58,7 @@ def travel(c, stem):
 
 def main():
     m_entry, m_dx = MAPS / "Entry.dx", MAPS / "DX.dx"
-    project = config.load_project(str(UEDCTL.parent.parent / "uedctl"))
+    project = config.load_project(str(UEDCLI.parent.parent / "uedcli"))
     row = pg._substrate_row(project.game)
     c, _ = pg.start_game(project, config.load_user_config(), row, SIZE)
     print(f"READY container={c}", flush=True)

@@ -11,7 +11,7 @@ read back via `MAP EXPORT` — PLUS static disassembly of `core.dll` (`capstone`
 (which established MainScale=local/pre-rotation, PostScale=world/post-rotation,
 `world = Location + PostScale·R·MainScale·(v − PrePivot)`, and that `APPLYTRANSFORM` bakes all three).
 
-This is the substrate uedctl's **scale support** needs (preview/bounds, clip/vertex-move inverse,
+This is the substrate uedcli's **scale support** needs (preview/bounds, clip/vertex-move inverse,
 the offline `apply-transform`). It removes ALL gating unknowns the scale design flagged.
 
 ---
@@ -19,7 +19,7 @@ the offline `apply-transform`). It removes ALL gating unknowns the scale design 
 ## 1. Scale-field emission format (H3-critical) ✅
 
 Imported brushes with known scale and `MAP EXPORT`'d immediately (no transform). The editor's exact
-serialization — uedctl must reproduce it byte-for-byte or H3 post-verify fails on every
+serialization — uedcli must reproduce it byte-for-byte or H3 post-verify fails on every
 authored-scale brush:
 
 ```
@@ -31,7 +31,7 @@ authored-scale brush:
 - `SheerAxis=` is **always** present (default `SHEER_ZX`). 6-dp throughout.
 
 Evidence: `2,2,2`→`Scale=(X=2.000000,Y=2.000000,Z=2.000000)`; `2,1,1`→`Scale=(X=2.000000)`;
-identity→`(SheerAxis=SHEER_ZX)` (matches uedctl's current default emit); mirror→`Scale=(X=-1.000000)`;
+identity→`(SheerAxis=SHEER_ZX)` (matches uedcli's current default emit); mirror→`Scale=(X=-1.000000)`;
 combined `2,0.5,1`+rate0.3+`SHEER_YZ`→`Scale=(X=2.000000,Y=0.500000),SheerRate=0.300000,SheerAxis=SHEER_YZ`.
 
 ## 2. `ACTOR APPLYTRANSFORM` bake formula ✅
@@ -86,7 +86,7 @@ f(r) = 0                       if |r| <= 0.05            (deadzone)
 (The `.55–.65 → .50` plateau is the snap-to-0.5 band. The plateau was re-confirmed with 3s sleeps +
 import-verification, so it's genuine editor behavior, not a stale export.)
 
-**Consequence for uedctl:** offline sheer = apply `f(SheerRate)` for the coefficient, place per
+**Consequence for uedcli:** offline sheer = apply `f(SheerRate)` for the coefficient, place per
 `SHEER_AB ⇒ B += k·A`. **No lookup table needed** — exact editor parity by construction. Validate the
 exact sign/off-diagonal placement against the differential harness.
 

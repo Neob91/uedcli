@@ -10,7 +10,7 @@ that produces selectable brushes.
 import subprocess
 import sys
 import select_matrix as M
-from uedctl.model import parse_t3d
+from uedcli.model import parse_t3d
 
 
 def set_clipboard(content):

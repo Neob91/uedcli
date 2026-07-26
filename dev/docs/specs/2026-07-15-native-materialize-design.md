@@ -6,17 +6,17 @@
 to make; until he signs off they are proposals and are **NOT** written into `decisions.md` (flagged in
 `board/inbox.md`). If accepted, they would supersede the "lighting/paths are the second/third long
 pole, defer to an optional editor final-bake" disposition of
-`spikes/2026-06-27-decontainerize-uedctl/05-lighting-and-paths.md` — the lighting bake turned out to
+`spikes/2026-06-27-decontainerize-uedcli/05-lighting-and-paths.md` — the lighting bake turned out to
 be **1-bit visibility masks, not a light-transport port**, which collapses that long pole.
 
 **Grounding (durable evidence — this spec is a synthesis of three deep RE sections):**
 - [`spikes/2026-07-15-native-materialize/sections/10-bsp-csg-build.md`](../spikes/2026-07-15-native-materialize/sections/10-bsp-csg-build.md) — CSG→BSP geometry build (both D2 gaps closed; 33/33 checks).
 - [`spikes/2026-07-15-native-materialize/sections/20-lighting-bake.md`](../spikes/2026-07-15-native-materialize/sections/20-lighting-bake.md) — `LIGHT APPLY` lightmap bake (format double-proven).
 - [`spikes/2026-07-15-native-materialize/sections/30-ulevel-paths-assembly.md`](../spikes/2026-07-15-native-materialize/sections/30-ulevel-paths-assembly.md) — ULevel body, actor bodies, reachspecs, GUID mint, assembly (100/100 byte-exact).
-- Prior proven pieces it builds on: `spikes/2026-06-27-decontainerize-uedctl/03-native-package-write.md`
+- Prior proven pieces it builds on: `spikes/2026-06-27-decontainerize-uedcli/03-native-package-write.md`
   (package container, byte-exact), `spikes/2026-06-28-umodel-serialize-byte-exact.md` (`UModel`
   serialize, byte-exact), `07-native-actor-bodies.md` / `10-native-upolys-fpoly.md`,
-  `specs/2026-06-24-uedctl-offline-bsp-engine-design.md` (the D2 CSG design this completes).
+  `specs/2026-06-24-uedcli-offline-bsp-engine-design.md` (the D2 CSG design this completes).
 - Harness (all in `spikes/2026-07-15-native-materialize/harness/`, reproducible): `verify_csg_build.py`
   (33/33), `lightmap_reconcile.py` (byte format proof), `level_roundtrip.py` (100/100 ULevel),
   `guid_generations.py` (100/100 GUID/gen).
@@ -70,7 +70,7 @@ how each is gated.
 
 ## 2. The full native pipeline
 
-Input: the git-tracked T3D trunk (`<project>/uedctl/maps/<level>/`) — the same input the editor path
+Input: the git-tracked T3D trunk (`<project>/uedcli/maps/<level>/`) — the same input the editor path
 reads. Output: a game-loadable `.dx` (or `.unr`). Steps:
 
 ```
@@ -115,12 +115,12 @@ built surfs and trace shadows through built nodes; reachspecs trace collision th
 
 ## 3. Module layout — RUST compute core + PYTHON glue (the §8 decision)
 
-Two artifacts. The **Rust crate `uedctl-native`** owns everything CPU-bound (the D2 `uedctl/bsp/`
-plan, now in Rust); the **Python package `uedctl/native/`** owns orchestration + the already-proven
+Two artifacts. The **Rust crate `uedcli-native`** owns everything CPU-bound (the D2 `uedcli/bsp/`
+plan, now in Rust); the **Python package `uedcli/native/`** owns orchestration + the already-proven
 byte-exact serializers. The FFI boundary is the built `UModel` body (§8.1): Python → `build_geometry`
 → `bytes`.
 
-**RUST — `uedctl-native/src/` (compute; pure-Rust core, `cargo test`-able, no PyO3 except `lib.rs`):**
+**RUST — `uedcli-native/src/` (compute; pure-Rust core, `cargo test`-able, no PyO3 except `lib.rs`):**
 
 | Module | Owns | Ref |
 |---|---|---|
@@ -136,7 +136,7 @@ byte-exact serializers. The FFI boundary is the built `UModel` body (§8.1): Pyt
 | `model_write.rs` | serialize the built `UModel` body bytes (Nodes/Surfs/Verts/…/lightmap) — **dev-pinned byte-identical to Python `umodel_serialize.py`** | §20.8 |
 | `lib.rs` | **THIN** `#[pymodule]` shim: PyO3 in → core structs, core → `bytes`. `build_geometry(brushes, lights, params) -> (model_body, summary)` | §8.1 |
 
-**PYTHON — `uedctl/native/` (glue + the proven serializers, all unchanged in language):**
+**PYTHON — `uedcli/native/` (glue + the proven serializers, all unchanged in language):**
 
 | Module | Owns | Ref |
 |---|---|---|
@@ -145,7 +145,7 @@ byte-exact serializers. The FFI boundary is the built `UModel` body (§8.1): Pyt
 | `native/actor_write.py` | StateFrame + `FPropertyTag` property-list writer (promote `prop_writer.py`) + struct value layouts + the `UPolys` writer | §30.2 |
 | `native/level_write.py` | the ULevel body writer (Actors array, FURL, ModelRef, ReachSpecs, trailing) | §30.1 |
 | `native/assemble.py` | object-graph → name/import synthesis (via `pkgref`) → **splice the Rust `model_body`** → assembly order → offset recompute; **synthesizes the mandatory `Actors[0]` LevelInfo + `Actors[1]` Default Brush + `UModel` when the trunk lacks them; asserts a `PlayerStart` is present** (see below) | §30.5–6 |
-| `native/materialize.py` | top-level `run_materialize_native(level, out)` orchestrator (step 2→7): read trunk → build brush/light inputs → `uedctl_native.build_geometry(...)` → assemble → **always-on self-check (§6 gate 1)** → atomic swap | §2 |
+| `native/materialize.py` | top-level `run_materialize_native(level, out)` orchestrator (step 2→7): read trunk → build brush/light inputs → `uedcli_native.build_geometry(...)` → assemble → **always-on self-check (§6 gate 1)** → atomic swap | §2 |
 
 **Where each RE section's serialize work lives (no duplication):** the Rust `model_write.rs` emits the
 `UModel` body; the Python `umodel_serialize.py` (promoted) is retained as the **dev oracle** the Rust
@@ -169,9 +169,9 @@ synthesizing one — a map with no `PlayerStart` loads but fails the §6 gate-4 
 player should start is an authoring decision, not something to invent. (`LevelSummary` is conventional
 but **omittable** — `LevelInfo.Summary`=`None` still loads; §30.2.3 — so it is NOT in this invariant.)
 
-**Brush `Scale` application (a gap the rest of uedctl punts).** `bspBrushCSG` transforms brush polys
+**Brush `Scale` application (a gap the rest of uedcli punts).** `bspBrushCSG` transforms brush polys
 via `BuildCoords()` = Location/Rotation **/Scale** (`MainScale`/`PostScale`/`SheerRate`; §10.4.1) —
-but existing uedctl model-side code deliberately does **not** apply Scale (`architecture.md`/`quirks`
+but existing uedcli model-side code deliberately does **not** apply Scale (`architecture.md`/`quirks`
 "Pivots"). Native CSG cannot punt it: `native/fpoly.Transform` must implement Scale + SheerRate to
 match the editor's world geometry. **First cut may reject scaled brushes** (`MainScale`/`PostScale`≠
 identity) with a clear error rather than silently mis-building — but this must be an explicit scoped
@@ -268,8 +268,8 @@ self-consistency). Gates 2–5 are **dev-test gates** against once-captured, com
 **Runner reality (there is NO CI today — the repo has none).** These gates are, for now, an explicit
 **local-runner responsibility**: a single documented command (or pair) must drive **both** the Rust
 `cargo test` goldens **and** the Python `pytest` suite. Because the Python suite must run without a
-built extension (docs-only / pure-Python changes), every test that needs `uedctl_native` carries a
-`pytest.importorskip("uedctl_native")` guard so `pytest` **degrades gracefully** rather than hard-fails
+built extension (docs-only / pure-Python changes), every test that needs `uedcli_native` carries a
+`pytest.importorskip("uedcli_native")` guard so `pytest` **degrades gracefully** rather than hard-fails
 when the `.so` isn't built. Standing up real CI (building Rust + Python + eventually Nuitka) is its own
 board item; until then "CI-able" below means "scriptable + a human/routine actually re-runs it".
 
@@ -417,7 +417,7 @@ already noted "numpy buys ~5–20×, not the 100×+ needed").
 ### 8.1 ✅ DECIDED (Andrzej, 2026-07-14): the compute goes in RUST, as a PyO3 extension
 
 The two hot loops — (a) CSG classify/split and (b) BSP `LineCheck` (shared by lighting + paths) — go
-in **Rust**, exposed to Python as a **PyO3 / maturin native extension module `uedctl_native`**. A
+in **Rust**, exposed to Python as a **PyO3 / maturin native extension module `uedcli_native`**. A
 Rust core makes ≤ 20 s realistic even for UNATCO-Island, and `rayon` gives real multi-core lighting
 with no GIL. **FP parity — RESOLVED in Rust's favour (spike 41).** The substrate is a **2022 MSVC
 `/arch:SSE2` rebuild**, not a 1999 x87 binary: the CSG math is pure SSE scalar `f32` (`movss/subss/
@@ -435,10 +435,10 @@ N-3-before-N-4 order fall out, and paths — which serialize into the *Python* U
 the Model — have a defined return):
 
 ```
-uedctl_native.build_geometry(brushes, params)          -> Result<Built, BuildError>   # CSG→BSP→zones
-uedctl_native.bake_lighting(handle, lights)            -> Result<(), BuildError>       # fills lightmap arrays (rayon)
-uedctl_native.build_paths(handle, navpoints, scout)   -> Result<PathData, BuildError> # reachspecs (for Python level_write)
-uedctl_native.serialize_model(handle)                 -> bytes                          # the UModel body
+uedcli_native.build_geometry(brushes, params)          -> Result<Built, BuildError>   # CSG→BSP→zones
+uedcli_native.bake_lighting(handle, lights)            -> Result<(), BuildError>       # fills lightmap arrays (rayon)
+uedcli_native.build_paths(handle, navpoints, scout)   -> Result<PathData, BuildError> # reachspecs (for Python level_write)
+uedcli_native.serialize_model(handle)                 -> bytes                          # the UModel body
   Built/handle: an opaque Rust-owned build (nodes/surfs/verts/…); summary = counts + surf→iLightMap map
   brushes[{polys[flat f32 buffers], csg_oper, polyflags, loc,rot,scale,prepivot}]  # flat buffers, NOT nested PyO3 objects
   PathData: FReachSpec[] + per-navpoint Paths/upstreamPaths/prunedPaths index arrays → Python serializes
@@ -455,7 +455,7 @@ runtime Rust serializer cannot silently drift from the proven Python one.
 
 **FFI mechanics (repo-rule-load-bearing — the spec had omitted these):**
 - **Error contract:** the core returns `Result<_, BuildError>`; the `lib.rs` shim maps `Err` to a
-  dedicated Python `uedctl_native.BuildError` carrying the offending value (brush name, coord) — so a
+  dedicated Python `uedcli_native.BuildError` carrying the offending value (brush name, coord) — so a
   degenerate/`GeometryError` brush, a scaled-brush rejection, or a CSG failure surfaces as a clean
   exit-2 message, **never a traceback** (the repo's hard "no exception reaches the CLI user" rule).
 - **Panics:** keep `panic = "unwind"` (never `abort`, which kills the Python process); the shim
@@ -472,7 +472,7 @@ the package they assemble — all unchanged, all proven.
 ### 8.2 Crate shape — pure-Rust core + thin PyO3 shim
 
 ```
-uedctl-native/                       (Rust crate, in the uedctl tree)
+uedcli-native/                       (Rust crate, in the uedcli tree)
   src/lib.rs      ← #[pymodule] shim ONLY: PyO3 in → core structs, core out → bytes. THIN.
   src/{f32,fpoly,csg,build,passes,zones,light,linecheck,model_write}.rs   ← pure Rust core, NO PyO3
   tests/          ← cargo golden tests: frozen editor Tier-S surf sets + shadow masks (no Python, no editor)
@@ -489,9 +489,9 @@ order**. It is **never** applied to the BSP build and **never** to a floating-po
 ### 8.3 Packaging — Nuitka ships; the venv is dev-only
 
 **The shipped artifact is the Nuitka build**; the dev venv exists only for iteration. A PyO3 `.so` is
-an ordinary CPython **extension module** — the same kind of artifact as the `Pillow` uedctl already
+an ordinary CPython **extension module** — the same kind of artifact as the `Pillow` uedcli already
 bundles — so Nuitka `--standalone`/onefile *should* include it via the exact mechanism that already
-ships Pillow (auto-detected on `import uedctl_native`; belt-and-suspenders `--include-module=uedctl_native`).
+ships Pillow (auto-detected on `import uedcli_native`; belt-and-suspenders `--include-module=uedcli_native`).
 In-process, no sidecar to locate at runtime, one coherent app.
 
 > **✅ PROVEN end-to-end (spike 40, `spikes/…/40-nuitka-pyo3.md`).** A trivial `abi3-py312` PyO3 module
@@ -514,7 +514,7 @@ Gotchas the "like Pillow" line glosses — now MEASURED (spike 40), design them 
 - **Per-platform Rust toolchain** — the "generic UE1 tool, one binary" direction implies a
   multi-platform matrix; cross-compiling a PyO3 extension is materially harder than pure Python — each
   target needs its own toolchain/build (out of scope for the Linux/x86_64 first cut).
-- **Dev flow, concretely:** `maturin develop` builds `uedctl_native.so` into the auto-managed venv —
+- **Dev flow, concretely:** `maturin develop` builds `uedcli_native.so` into the auto-managed venv —
   but `bin/_venv.sh` currently builds nothing Rust and short-circuits on a pip-marker string, so it
   needs real changes: **detect `cargo`, run `maturin develop` gated on a Rust-source hash/mtime marker
   (a `.rs` edit must trigger a rebuild — the pip marker won't), and make it OPTIONAL/skippable so a
@@ -556,7 +556,7 @@ behalf.
   lighting/paths/bounds are build output, checked for presence+consistency only, never byte-compared.
 - **The compute goes in RUST (PyO3 extension); Python keeps the proven serializers.** *(Andrzej,
   2026-07-14 — §8.)* Measured: pure CPython misses the ≤2 min / ≤20 s target (UNATCO-Island ~7.6 min).
-  Decision: the two hot loops (CSG classify/split + BSP `LineCheck`) are a Rust crate `uedctl-native`
+  Decision: the two hot loops (CSG classify/split + BSP `LineCheck`) are a Rust crate `uedcli-native`
   exposed via **PyO3/maturin**; the FFI boundary is the `UModel` body (bulk `bytes`, never per-op);
   Python retains orchestration + the byte-exact package/ULevel/actor/import serializers; **Nuitka
   bundles the `.so` like Pillow** (ship = Nuitka, venv = dev only). Rejected: subprocess sidecar

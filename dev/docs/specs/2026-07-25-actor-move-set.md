@@ -33,7 +33,7 @@ actor find --label lit          | actor move - --by 0,0,64   # can't nudge a set
 
 `actor rotate` and `brush scale` both take `names… | -` (`nargs="+"`, `-` the sole stdin source) and a
 mutually-exclusive `--by` / `--to`. `move` is the odd one out — a direct violation of the
-compose-verbs philosophy (uedctl `CLAUDE.md`: "a verb over a SET takes the set, and that IS the
+compose-verbs philosophy (uedcli `CLAUDE.md`: "a verb over a SET takes the set, and that IS the
 operation").
 
 ## 2. The design
@@ -110,7 +110,7 @@ Resolution + iteration mirror `actor rotate` (`dispatch.py:3909`):
   feature but with an ambiguous anchor (centroid vs bbox-min vs a named actor's Location) and its own
   flag surface (`--anchor`); deferred to a follow-up rather than overloading `--to` now. The board item
   explicitly scoped v1 to "`--by`-only for sets, `--to` single-actor-only."
-- **`--by` applies to any count** (1..N) — the set operation needs no extra flag (uedctl `CLAUDE.md`:
+- **`--by` applies to any count** (1..N) — the set operation needs no extra flag (uedcli `CLAUDE.md`:
   "a verb over a SET takes the set, and that IS the operation"; no `--all`/`--set` flag).
 - **Dedupe on canonical names** — a repeated/aliased name is one actor; `--by` twice would double-move.
 - **Empty stdin → exit 0 no-op** — the uniform consuming-verb contract.

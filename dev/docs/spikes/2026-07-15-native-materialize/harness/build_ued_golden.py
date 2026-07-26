@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build a **UnrealEd golden** `.dx` from a uedctl T3D trunk — UnrealEd's OWN build of the SAME
+"""Build a **UnrealEd golden** `.dx` from a uedcli T3D trunk — UnrealEd's OWN build of the SAME
 trunk the native materializer consumes. This is the CORRECT parity basis (board 2026-07-19):
 
 WHY: native `level materialize` parity was long judged against the hand-authored SHIPPED `.dx`
@@ -75,20 +75,20 @@ import sys
 import time
 from pathlib import Path
 
-ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedctl")
+ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedcli")
 sys.path.insert(0, str(ROOT))
 
-from uedctl import config, trunk, xfer                          # noqa: E402
-from uedctl.container_assets import resource_mounts             # noqa: E402
-from uedctl.driver import Driver                                # noqa: E402
-from uedctl.editor import ensure_editor, stop_editor            # noqa: E402
-from uedctl.apply import _level_referenced_packages             # noqa: E402
-from uedctl.materialize import levelinfo_first_order, _short_class  # noqa: E402
-from uedctl.packages import editor_search_dirs, ensure_load     # noqa: E402
-from uedctl.writes import _re_add                               # noqa: E402
-from uedctl.uuid7 import uuid7                                  # noqa: E402
+from uedcli import config, trunk, xfer                          # noqa: E402
+from uedcli.container_assets import resource_mounts             # noqa: E402
+from uedcli.driver import Driver                                # noqa: E402
+from uedcli.editor import ensure_editor, stop_editor            # noqa: E402
+from uedcli.apply import _level_referenced_packages             # noqa: E402
+from uedcli.materialize import levelinfo_first_order, _short_class  # noqa: E402
+from uedcli.packages import editor_search_dirs, ensure_load     # noqa: E402
+from uedcli.writes import _re_add                               # noqa: E402
+from uedcli.uuid7 import uuid7                                  # noqa: E402
 
-DEFAULT_TRUNK = "/home/neob91/Games/LutrisDX/drive_c/DX/LUM/_scratch/unatco/uedctl/maps/unatco"
+DEFAULT_TRUNK = "/home/neob91/Games/LutrisDX/drive_c/DX/LUM/_scratch/unatco/uedcli/maps/unatco"
 DEFAULT_OUT = "/home/neob91/Games/LutrisDX/drive_c/DX/LUM/_scratch/uedgolden/UEDGolden_unatco.dx"
 
 
@@ -130,7 +130,7 @@ def _wait_idle(container: str, *, label: str, thresh: float = 8.0, quiet_reads: 
 def _scratch_project(trunk_dir: Path, game: str) -> config.Project:
     maps_root = trunk_dir.parent
     proj_root = maps_root.parent
-    toml = proj_root / "uedctl.toml"
+    toml = proj_root / "uedcli.toml"
     if not toml.exists():
         toml.write_text(f'game = "{game}"\nmaps = "{maps_root.name}"\n')
     return config.load_project(str(proj_root))

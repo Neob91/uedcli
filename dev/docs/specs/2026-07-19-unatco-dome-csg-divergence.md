@@ -44,7 +44,7 @@ boundary — the two cached subset goldens already exist (`_scratch/unatco-subse
    packages OBJ LOAD). The gdb machinery (`bspAddNode` @ `0x10034e80`, `compose.override.yml` ptrace)
    is geometry-agnostic and unchanged.
 2. **Capture both ADD streams for N=105** (and N=104 as the identical-prefix control): editor
-   `oracle-105.log` (gdb) + native `native-105.log` (the `UEDCTL_BSPCSG_TREE_DUMP` hook), and
+   `oracle-105.log` (gdb) + native `native-105.log` (the `UEDCLI_BSPCSG_TREE_DUMP` hook), and
    `compare_trees.py` them under the plane-normalised key. Because the ADD stream is convention-stable
    (unlike the final surf set — §9), this pins the FIRST diverging incremental add: the exact dome
    facet + world plane + `SplitWithPlane` front/back routing that native resolves opposite to the
@@ -57,7 +57,7 @@ boundary — the two cached subset goldens already exist (`_scratch/unatco-subse
 ## 2. The fix + gate (only after the decode)
 
 Port the decoded `FPoly::split_with_plane` (vertex-side classification + near-zero handling + piece
-routing) and/or `TryToMerge` parity into `uedctl-native/src/bspcsg.rs`, matching UnrealEd bit-exactly
+routing) and/or `TryToMerge` parity into `uedcli-native/src/bspcsg.rs`, matching UnrealEd bit-exactly
 for the `Brush755` facets. **HARD GATES (both must hold):**
 - **Castle byte-identity UNCHANGED** — `build_native_castle.py` + `ground_truth_bytediff.py`: 485
   surfs / 1156 nodes / 26 vectors / soup 853/853 / 43.04% UNCHANGED. Any regression ⇒ revert.

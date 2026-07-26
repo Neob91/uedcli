@@ -3,14 +3,14 @@ the log, diff against the Python port. Spins a fresh isolated ephemeral editor a
 """
 import re, subprocess, sys, time, os
 
-sys.path.insert(0, "/home/human/src/dx_lum/Tools/uedctl")
-from uedctl.driver import Driver
-from uedctl import builders, writes
+sys.path.insert(0, "/home/human/src/dx_lum/Tools/uedcli")
+from uedcli.driver import Driver
+from uedcli import builders, writes
 import bsp_port
 
 CONT = "uned-slice1"
 VOL = "uned-wp-slice1"
-COMPOSE_DIR = "/home/human/src/dx_lum/Tools/uedctl/uned"
+COMPOSE_DIR = "/home/human/src/dx_lum/Tools/uedcli/uned"
 T3D = "/home/human/src/dx_lum/_scratch/bspspike/diffbox.t3d"
 
 

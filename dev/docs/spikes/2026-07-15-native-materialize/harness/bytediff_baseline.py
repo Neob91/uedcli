@@ -1,14 +1,14 @@
 import sys
 from pathlib import Path
-ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedctl")
+ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedcli")
 sys.path.insert(0, str(ROOT))
-sys.path.insert(0, str(ROOT / "dev/docs/spikes/2026-06-27-decontainerize-uedctl/harness"))
-from uedctl import trunk
-from uedctl.native import materialize as M, umodel as UM
-import uedctl_native
+sys.path.insert(0, str(ROOT / "dev/docs/spikes/2026-06-27-decontainerize-uedcli/harness"))
+from uedcli import trunk
+from uedcli.native import materialize as M, umodel as UM
+import uedcli_native
 import utexture_decode as UT
 
-TRUNK = "/home/neob91/Games/LutrisDX/drive_c/DX/LUM/_scratch/castle/uedctl/maps/foobar"
+TRUNK = "/home/neob91/Games/LutrisDX/drive_c/DX/LUM/_scratch/castle/uedcli/maps/foobar"
 EDITOR = "/home/neob91/Games/LutrisDX/drive_c/DX/Maps/Test_Castle.dx"
 
 def load(path):
@@ -21,7 +21,7 @@ def load(path):
 lvl, _ = trunk.read_level(Path(TRUNK))
 brush_order = [n for n in lvl.order if lvl.actors[n].brush is not None]
 bs = [M._build_brush_input(n, lvl.actors[n]) for n in brush_order]
-nat_body = uedctl_native.serialize_model(uedctl_native.build_geometry(bs))
+nat_body = uedcli_native.serialize_model(uedcli_native.build_geometry(bs))
 nat = UM.parse_model_body(nat_body, 0, len(nat_body))
 ed, ed_size = load(EDITOR)
 

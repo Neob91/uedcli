@@ -11,7 +11,7 @@ Add/Subtract half of `bspBrushCSG` and **deliberately skipped** the Intersect/De
 `BRUSH FROM INTERSECTION` / `BRUSH FROM DEINTERSECTION` editor commands (the "carve the builder brush
 to the world, then make it a Mover" workflow). This doc closes that gap: the two commands are now
 decoded to instruction level and are **directly reimplementable** on top of the already-ported filter
-machinery (`uedctl-native/src/bspcsg.rs`). It builds on the sibling doc — `bspFilterFPoly` (`0x31f50`),
+machinery (`uedcli-native/src/bspcsg.rs`). It builds on the sibling doc — `bspFilterFPoly` (`0x31f50`),
 `FilterEdPoly` (`0x32bf0`), `FilterLeaf` (`0x33130`), `SplitWithPlane`, the `EPolyNodeFilter`
 6-way classification, `bspNodeToFPoly` (`0x365b0`), `FilterWorldThroughBrush` (`0x33250`) — are NOT
 re-derived here.
@@ -93,7 +93,7 @@ if (World->Nodes.Num != 0 && !(argPolyFlags & 0x28)) {      // 0x35b43/0x35b4d
 //               Polys[i].Fix();                                                        // 0x100cee38
 //               Polys[i].Actor = NULL; Polys[i].iBrushPoly = i; }                      // +0x1b4/+0x1c8
 //   i.e. the result is mapped back into BUILDER-LOCAL space and its surf-link metadata reset.
-//   uedctl's port deliberately stops before this (see `bspcsg.rs::intersect_brushset`): it returns
+//   uedcli's port deliberately stops before this (see `bspcsg.rs::intersect_brushset`): it returns
 //   WORLD-space polys and KEEPS the source `iActor`/`iBrushPoly`, because the CSG core never sees
 //   textures and the Python caller needs those ids to recover each face's Texture/PanU/PanV — and
 //   it does its own re-centring (spec §6b) rather than the editor's fixed builder-local form.

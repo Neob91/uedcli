@@ -11,7 +11,7 @@ Node-plane key: (normal @1e-3, offset @1e-2).  We compare the ORDER-INDEPENDENT 
 native build the same SET of splitter planes?), and separately the EMIT-ORDER sequence (does native
 emit them in the same order?).  Both matter: byte-parity needs set AND order.
 
-  * NATIVE  — uedctl_native.build_geometry_bspcsg over the first N MOVER-CLEAN brush inputs
+  * NATIVE  — uedcli_native.build_geometry_bspcsg over the first N MOVER-CLEAN brush inputs
               (materialize._in_world_csg), serialize_model -> parse -> m.nodes.  (Mirrors
               unatco_subset.native_surfs exactly; movers dropped per cd56c1ae2.)
   * EDITOR  — cached golden{N}.dx (bare world-only MAP REBUILD), largest Model -> m.nodes.
@@ -34,13 +34,13 @@ import sys
 from collections import Counter
 from pathlib import Path
 
-ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedctl")
+ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedcli")
 HARNESS = ROOT / "dev/docs/spikes/2026-07-15-native-materialize/harness"
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(HARNESS))
 
 from spike_classindex import class_index  # noqa: E402  (schema-aware mover gate's index)
-from uedctl.native import umodel as UM  # noqa: E402
+from uedcli.native import umodel as UM  # noqa: E402
 import unatco_subset as US  # noqa: E402
 import surf_class_diff as SCD  # noqa: E402
 
@@ -83,18 +83,18 @@ def order_diff(nat_keys, gold_keys):
 
 def native_model(n):
     """Native mover-clean N-brush build -> parsed Model (mirrors unatco_subset.native_surfs)."""
-    import uedctl_native
-    from uedctl.native import materialize as M
+    import uedcli_native
+    from uedcli.native import materialize as M
     level, _ = US.trunk.read_level(US.FULL_TRUNK)
     brushes = [nm for nm in US._brush_order(level)[:n] if M._in_world_csg(level.actors[nm], class_index())]
     bs = [M._build_brush_input(nm, level.actors[nm]) for nm in brushes]
-    mdl = uedctl_native.build_geometry_bspcsg(bs)
-    body = uedctl_native.serialize_model(mdl)
+    mdl = uedcli_native.build_geometry_bspcsg(bs)
+    body = uedcli_native.serialize_model(mdl)
     return UM.parse_model_body(body, 0, len(body))
 
 
 def n_world_brushes(n):
-    from uedctl.native import materialize as M
+    from uedcli.native import materialize as M
     level, _ = US.trunk.read_level(US.FULL_TRUNK)
     return sum(1 for nm in US._brush_order(level)[:n] if M._in_world_csg(level.actors[nm], class_index()))
 

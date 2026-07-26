@@ -7,7 +7,7 @@ native tail, AFTER its None-terminated property list, serialized as:
     Num * <compact-index object ref>   (ref 0 == null/deleted slot)
 
 Actors[0] == LevelInfo0 (UE1 invariant), Actors[1] == the default/builder brush.
-This matches the native WRITE side already in `uedctl/native/level_write.py`
+This matches the native WRITE side already in `uedcli/native/level_write.py`
 (`write_level_body`: `struct.pack("<ii", Num, Max)` then `ci(ref)` per actor).
 
 Q1 decodable: YES.  Q2 nulls: YES (interspersed + trailing; must drop).  Q3 does raw
@@ -20,7 +20,7 @@ from __future__ import annotations
 import struct
 import sys
 
-from uedctl import upackage
+from uedcli import upackage
 
 
 def decode_level_actors(path: str) -> dict:

@@ -1,7 +1,7 @@
 # Deus Ex content install spike (2026-06-18)
 
 Goal: make the missing base Deus Ex *content* packages available to the
-`uedctl` editor substrate so real maps load/export end-to-end, by
+`uedcli` editor substrate so real maps load/export end-to-end, by
 downloading the user-pointed Deus Ex install.
 
 **Outcome: content layer SOLVED.** With the install's content packages
@@ -43,8 +43,8 @@ was deleted.
 ## Where the install lives (NOT in git)
 
 **UPDATE 2026-06-20:** the durable copy of this content has since moved out of `_scratch/`
-to `Tools/uedctl/uned/DeusExAssets/` — see
-the asset-layout design (`specs/2026-06-20-uedctl-deusex-assets-layout-design.md`, landed; deleted) for why
+to `Tools/uedcli/uned/DeusExAssets/` — see
+the asset-layout design (`specs/2026-06-20-uedcli-deusex-assets-layout-design.md`, landed; deleted) for why
 (`_scratch/` is documented as throwaway-only; a real substrate dependency doesn't belong there)
 and how it's wired into the container by default. The extraction narrative below (obtained
 from the installer, the music-patch fix) is unchanged history; only the final resting path
@@ -60,7 +60,7 @@ At extraction time (this spike), it sat under `_scratch/` (gitignored; substrate
   source: `Textures/` (57 `.utx`), `Sounds/`, `Music/` (35 `.umx`),
   `Maps/` (83 retail `.dx`), plus a `System/` of ver-68 game `.u` that
   is **deliberately NOT on the editor's path**. **Moved** to
-  `Tools/uedctl/uned/DeusExAssets/` 2026-06-20.
+  `Tools/uedcli/uned/DeusExAssets/` 2026-06-20.
 
 ## How it was obtained / extracted
 
@@ -84,7 +84,7 @@ content (content only — no game `.u`):
 ```
 [Core.System]
 ...
-Paths=/repo/Tools/uedctl/uned/UED22/*.u        ; substrate code (authoritative)
+Paths=/repo/Tools/uedcli/uned/UED22/*.u        ; substrate code (authoritative)
 Paths=/repo/System/*.u                          ; repo code (Endemia, CaroneElevatorSet)
 Paths=/repo/Textures/*.utx                      ; repo textures incl. LUM_CoreTex
 Paths=/repo/Sounds/*.uax
@@ -95,7 +95,7 @@ Paths=/repo/_scratch/deusex/game/Sounds/*.uax
 Paths=/repo/_scratch/deusex/game/Music/*.umx
 ```
 
-**DONE 2026-06-20:** made permanent at `Tools/uedctl/uned/DeusExAssets/{Textures,Sounds,
+**DONE 2026-06-20:** made permanent at `Tools/uedcli/uned/DeusExAssets/{Textures,Sounds,
 Music}/*` — `entrypoint.sh` now appends these `Paths=` lines automatically at container boot,
 conditional on the directory's presence (see the layout design doc above). The relative→
 absolute rewrite described here is still the load-bearing mechanism; only the source dir and

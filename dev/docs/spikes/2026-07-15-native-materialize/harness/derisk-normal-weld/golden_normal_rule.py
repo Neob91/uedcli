@@ -28,15 +28,15 @@ import sys, struct, math
 from collections import Counter
 from pathlib import Path
 
-ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedctl")
+ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedcli")
 HARNESS = ROOT / "dev/docs/spikes/2026-07-15-native-materialize/harness"
 sys.path.insert(0, str(ROOT)); sys.path.insert(0, str(HARNESS))
 import surf_class_diff as SCD           # noqa: E402
 import unatco_subset as U               # noqa: E402
 from spike_classindex import class_index  # noqa: E402  (schema-aware mover gate's index)
-from uedctl import trunk                # noqa: E402
-from uedctl.native import materialize as M, umodel as UM  # noqa: E402
-import uedctl_native                    # noqa: E402
+from uedcli import trunk                # noqa: E402
+from uedcli.native import materialize as M, umodel as UM  # noqa: E402
+import uedcli_native                    # noqa: E402
 
 r32 = lambda x: struct.unpack("<f", struct.pack("<f", x))[0]
 bits = lambda x: struct.unpack("<I", struct.pack("<f", x))[0]
@@ -70,7 +70,7 @@ def main():
     level, _ = trunk.read_level(U.FULL_TRUNK)
     brushes = [nm for nm in U._brush_order(level)[:105] if M._in_world_csg(level.actors[nm], class_index())]
     bs = [M._build_brush_input(nm, level.actors[nm]) for nm in brushes]
-    body = uedctl_native.serialize_model(uedctl_native.build_geometry_bspcsg(bs))
+    body = uedcli_native.serialize_model(uedcli_native.build_geometry_bspcsg(bs))
     nat = UM.parse_model_body(body, 0, len(body))
     gold = SCD.load_model(gpath)
     print(f"native N=105 surfs={len(nat.surfs)} vecs={len(nat.vectors)}   golden surfs={len(gold.surfs)} vecs={len(gold.vectors)}")

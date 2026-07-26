@@ -15,7 +15,7 @@ convention authors think in — a 128-uu ceiling is 8 feet. The world maxes out 
 
 Build on a **power-of-two grid**. **16** is the default working grid (= 1 foot = the default stair rise);
 drop to **8 / 4 / 2** for fine detail. **Never build sub-grid** — off-grid coordinates are the main cause
-of BSP holes ([geometry-and-bsp.md](geometry-and-bsp.md)). uedctl does not snap for you.
+of BSP holes ([geometry-and-bsp.md](geometry-and-bsp.md)). uedcli does not snap for you.
 
 ## The load-bearing dimensions
 
@@ -42,11 +42,11 @@ Reference limits from the other guides that are really scale numbers:
 
 ## Reading any other default
 
-You don't have to memorise or guess — uedctl decodes a class's default properties **offline, with no
+You don't have to memorise or guess — uedcli decodes a class's default properties **offline, with no
 editor**. An unset property resolves to its class default:
 
 ```
-bin/uedctl actor build <Package.Class> | actor add - | actor prop get - <Prop>
+bin/uedcli actor build <Package.Class> | actor add - | actor prop get - <Prop>
 ```
 
 For example, `actor build Engine.Light | actor add - | actor prop get - LightRadius` prints `64`. Use

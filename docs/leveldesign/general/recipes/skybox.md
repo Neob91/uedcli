@@ -31,7 +31,7 @@ high/low-detail pair via `bHighDetail` — but one is the norm).
 `SkyZoneInfo`. For a moving sky, set `SkyZoneInfo bStatic=False` + `Physics=PHYS_Rotating` +
 `RotationRate` + **`bFixedRotationDir=True`** (without the fixed-direction flag it won't spin as intended).
 
-## uedctl pipeline (what you run)
+## uedcli pipeline (what you run)
 
 ```
 # 1. a sealed sky room off to the side (subtract a hollow box)

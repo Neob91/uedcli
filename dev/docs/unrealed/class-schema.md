@@ -1,19 +1,19 @@
 # UClass on-disk facts — abstractness + shipped source (offline)
 
-How uedctl reads a class's *abstractness* and its `.uc` source directly from a v68 `.u` package,
-with no editor. Consumed by `uedctl/uprops.py` (`class_is_abstract`, `_class_script_source`) and
-`uedctl/classindex.py` (the `class list` placeable filter). See `package-format.md` for the header/
+How uedcli reads a class's *abstractness* and its `.uc` source directly from a v68 `.u` package,
+with no editor. Consumed by `uedcli/uprops.py` (`class_is_abstract`, `_class_script_source`) and
+`uedcli/classindex.py` (the `class list` placeable filter). See `package-format.md` for the header/
 name/import/export table layout these build on.
 
 All facts here were **live-verified 2026-07-17** against the real Deus Ex `Engine.u` (89 classes),
-`DeusEx.u` (1158), and `DeusExDeco.u` (5). Confidence: ✅ (uedctl-used / live-verified) unless noted.
+`DeusEx.u` (1158), and `DeusExDeco.u` (5). Confidence: ✅ (uedcli-used / live-verified) unless noted.
 
 > **Cache-version note.** These layouts feed the persistent package-schema cache (`schema_cache.py`,
 > `architecture.md` "Package schema cache"). Any change to the documented UClass-tail / UProperty /
 > TextBuffer layout — or to what the discovery decoders (`iter_classes`, `class_index_map`,
 > `super_fqcn_by_index`, `class_is_abstract`, `own_class_properties`) emit — **MUST bump
 > `schema_cache.SCHEMA_CACHE_VERSION`** (and refresh the committed frozen-golden bundle
-> `tests/fixtures/schema_golden_fire_v1.marshal`), or a post-upgrade uedctl will read stale,
+> `tests/fixtures/schema_golden_fire_v1.marshal`), or a post-upgrade uedcli will read stale,
 > wrongly-shaped cache entries an older build wrote. The `test_schema_cache.py` frozen-golden guard
 > trips red to force this. When it trips on a REAL decoder change, the correct remedy is to **bump the
 > version** (making already-written on-disk entries unreachable); refreshing the golden blob ALONE
@@ -35,7 +35,7 @@ But `ClassFlags` is **not reliably reachable by an offline byte-seek**:
   `0xff6a7900`). `ClassFlags` IS cleanly readable for a **script-free** class (`ScriptSize == 0`,
   e.g. `Light`/`Brush` = `0x32`, `Info`/`Keypoint`/`Decoration` = `0x33`), but that's the minority.
 
-**So uedctl reads the class's shipped `.uc` SOURCE instead** — uniform across all classes, no
+**So uedcli reads the class's shipped `.uc` SOURCE instead** — uniform across all classes, no
 bytecode walker. Every DX class ships its source in a `TextBuffer` referenced by `UStruct.ScriptText`
 (89/89, 1158/1158, 5/5 — ✅). Parse the class declaration for the `abstract` keyword:
 `abstract_from_source` strips `//` and `/* */` comments FIRST (a `;` inside a comment must not
@@ -118,7 +118,7 @@ gives an O(1) `casefold(name) → 1-based export index` map that replaces repeat
 
 ## UClass body: full layout, the script walker, and the DEFAULTS block ✅
 
-✅ **RE'd + corpus-verified 2026-07-18** (uedctl-used: `uprops.class_default_tags` / `_walk_expr`;
+✅ **RE'd + corpus-verified 2026-07-18** (uedcli-used: `uprops.class_default_tags` / `_walk_expr`;
 validated by exact-EOF landing on **1914/1914 classes** across every v68+ `.u` in the DX install —
 integration test `test_uprops_defaults.py`; consumed live by `actor prop get`'s default fallback).
 

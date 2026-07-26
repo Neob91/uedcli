@@ -9,7 +9,7 @@ real built `UModel` parsed from `/home/neob91/Games/LutrisDX/drive_c/DX/Maps/*.d
 checks pass). All RVAs are file RVAs at ImageBase `0x10000000`; subtract nothing.
 
 ### Confidence legend
-- ✅ live-verified (used by uedctl / matched against a real `.dx`)
+- ✅ live-verified (used by uedcli / matched against a real `.dx`)
 - 🔬 live-probed (differential editor run in a prior spike)
 - 📖 binary-extracted (read out of the compiled code / `.rdata` this session or a cited prior spike)
 
@@ -247,7 +247,7 @@ the four opers; all four are byte-decoded (§4.3). *(`harness/verify_csg_build.p
 decoded from the disassembly at the cited addresses in §4.3 and not yet added to that harness's
 assertion set.)*
 `Transform` = `FPoly::Transform(coords, PrePivot, PostAdd, Orientation)` `Engine.dll 0x152360`
-(same `Location + R·(v−PrePivot)` uedctl already mirrors). `CsgOper` enum: `CSG_Add=1,
+(same `Location + R·(v−PrePivot)` uedcli already mirrors). `CsgOper` enum: `CSG_Add=1,
 CSG_Subtract=2, CSG_Intersect=3, CSG_Deintersect=4`.
 
 ### 4.2 The recursion `FilterEdPoly` (📖 `Editor.dll 0x32bf0`) — dispatched via `bspFilterFPoly 0x31f50`
@@ -592,7 +592,7 @@ some brush models; the level model uses 42). `umodel_serialize.detect_prefix` di
   diagnosis (§6.5).
 - Output mapping to every serializer array, validated against `Model300` in `02_NYC_Bar.dx`. §9
 
-**N-2 native-port status (2026-07-15, `uedctl-native/src/{passes,build}.rs`):** the cleanup passes
+**N-2 native-port status (2026-07-15, `uedcli-native/src/{passes,build}.rs`):** the cleanup passes
 are ported — `bspMergeCoplanars` (§7.1) is implemented as a **T-junction-aware per-surface
 reassembly** (`passes::bsp_merge_coplanars` + `union_group`): CSG world fragments are grouped by
 source brush face (owning `actor` + `iBrushPoly`) and each group's coplanar edge-tiling fragments

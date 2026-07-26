@@ -1,6 +1,6 @@
 # CLI mechanics — why the argument surface is built this way
 
-Engineering decisions about `uedctl/cli.py` and `uedctl/dispatch.py`. The *conventions* these
+Engineering decisions about `uedcli/cli.py` and `uedcli/dispatch.py`. The *conventions* these
 serve are the owner's and live in [`../direction/conventions.md`](../direction/conventions.md);
 this doc is the machinery.
 
@@ -33,4 +33,4 @@ apparent from the diff.
 - **Accepting the new abbreviation** and documenting it — it silently changes what an existing
   invocation means, which is the one outcome the no-back-compat rule is meant to prevent.
 
-**Refs:** `../direction/conventions.md` "No back-compat cruft" · `uedctl/cli.py`
+**Refs:** `../direction/conventions.md` "No back-compat cruft" · `uedcli/cli.py`

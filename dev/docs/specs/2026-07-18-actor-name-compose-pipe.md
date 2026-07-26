@@ -59,7 +59,7 @@ names** from stdin (exactly `actor find`'s output) instead of taking names on th
 
 ### Multi-actor output for the read verbs
 - **`actor show -`** emits each actor's T3D block in piped order (each block self-identifies via its
-  `Name=`; with the folders carrier, its `// uedctl-folder:` line). Concatenation is valid T3D.
+  `Name=`; with the folders carrier, its `// uedcli-folder:` line). Concatenation is valid T3D.
 - **`actor get -`** prints, **per actor**, its value line(s) **prefixed with `<name>\t`** so a
   multi-actor dump stays parseable (`Wall1\t512`); a single CLI name (not `-`) is unchanged (bare
   value). *(Small format point — flagged for review.)*

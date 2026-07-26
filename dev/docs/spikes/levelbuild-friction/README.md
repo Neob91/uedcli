@@ -1,14 +1,14 @@
-# uedctl friction log — building three levels with LLM agents
+# uedcli friction log — building three levels with LLM agents
 
 **Date:** 2026-07-25/26 · **Status:** durable evidence, not a plan
 
 Three Claude subagents each built a detailed Deus Ex level from a reference photo
-(`ContainerYard`, `TubePlatform`, `DiveBar`) using only the `uedctl` CLI and the
+(`ContainerYard`, `TubePlatform`, `DiveBar`) using only the `uedcli` CLI and the
 user-facing docs, plus a fourth agent spiking headless materialization. This file
-records **every problem, defect, and misunderstanding they hit**, so uedctl can be
+records **every problem, defect, and misunderstanding they hit**, so uedcli can be
 improved against real usage rather than guesses.
 
-This is the first time uedctl has been driven end-to-end, at length, by agents who
+This is the first time uedcli has been driven end-to-end, at length, by agents who
 started with **no prior knowledge of the tool** — which is exactly its intended user.
 That makes the misunderstandings as valuable as the defects: where a competent reader
 of the docs still guessed wrong, the tool or the docs are at fault, not the reader.
@@ -23,7 +23,7 @@ of the docs still guessed wrong, the tool or the docs are at fault, not the read
   across all agents, so a high count means *repeatedly* tripped over.
 
 Each finding is tagged:
-**[DEFECT]** uedctl is wrong · **[UX]** uedctl is right but misleads ·
+**[DEFECT]** uedcli is wrong · **[UX]** uedcli is right but misleads ·
 **[INFRA]** environment/substrate · **[AGENT]** the agent's own mistake, recorded
 because a tool that is easy to misuse invites the mistake.
 
@@ -115,7 +115,7 @@ no signal at all until, having placed more, `level materialize` refused the whol
 ```
 materialize failed (nothing written): level references v68 code package(s) with no v69
 stub: Endemia — the v69 editor cannot load a v68 `.u` directly; build the stub(s) first
-(`uedctl substrate stub <pkg>`) or the referencing level cannot materialize
+(`uedcli substrate stub <pkg>`) or the referencing level cannot materialize
 ```
 
 The refusal message is **good** — it names the package and the fix. The defect is that it
@@ -127,9 +127,9 @@ that placing an actor of an unloadable class is accepted silently in the first p
 `stub_missing_packages`, documented in its own docstring as *"the lazy auto-trigger
 core"* — for each missing package with a v68 `.u` on the composed search path, build or
 reuse its v69 stub. It is fully implemented and **nothing in the codebase calls it**
-(grep across `uedctl/`: the only other occurrence is a reference inside a neighbouring
-docstring). Stubbing is therefore manual-only via `uedctl substrate stub <pkg>`, and the
-user's stub cache (`~/.uedctl/cache/stubs/`) was **empty**.
+(grep across `uedcli/`: the only other occurrence is a reference inside a neighbouring
+docstring). Stubbing is therefore manual-only via `uedcli substrate stub <pkg>`, and the
+user's stub cache (`~/.uedcli/cache/stubs/`) was **empty**.
 
 Everything else needed for it to work was in place:
 
@@ -147,13 +147,13 @@ So the designed behaviour would have handled this exactly, had anything invoked 
 Attempted at Andrzej's instruction, 2026-07-26:
 
 ```
-$ uedctl substrate stub Endemia
+$ uedcli substrate stub Endemia
 Failed loading package: Can't find Function in file 'Function DeusEx.DeusExDecoration.BeginPlay'
 Exiting due to error                                    # exit 2, cache unchanged
 ```
 
 Stubbing the dependency first fails the same way:
-`uedctl substrate stub DeusEx` → `Exiting due to error`, exit 2, cache still empty.
+`uedcli substrate stub DeusEx` → `Exiting due to error`, exit 2, cache still empty.
 
 **Why this is structural, not a one-off.** Stubbing is *mesh-preserving* — it keeps assets
 and strips code. `Endemia` is a **mod code package whose bytecode links against game code
@@ -239,7 +239,7 @@ failures across all three agents.
 
 There is **no warm-editor path in the code at all** — grep finds warm-container logic only
 in `preview_game.py` (the game-preview container, which *is* correctly reused: exactly one
-`uedctl-game-preview-1000` existed throughout). `direction.md` describes a
+`uedcli-game-preview-1000` existed throughout). `direction.md` describes a
 "warm per-user editor container for materialize"; that is the *target*, not the
 implementation, and the gap is invisible from the docs.
 
@@ -270,7 +270,7 @@ make bounds configurable.
 ## 4. [DEFECT] `actor preview` with no name source silently does nothing
 
 ```
-$ bin/uedctl actor preview --annotate name --size 900 --out shots/x.png
+$ bin/uedcli actor preview --annotate name --size 900 --out shots/x.png
 $ echo $?
 0                      # exit 0, no output, NO FILE WRITTEN
 ```
@@ -287,13 +287,13 @@ entirely is a different case** and should be an error naming what is missing.
 
 ## 5. [UX] Verb/flag guesses that a careful reader still gets wrong
 
-Each of these is uedctl behaving as designed, but repeatedly mis-guessed:
+Each of these is uedcli behaving as designed, but repeatedly mis-guessed:
 
 | Guessed | Reality | Note |
 | ------- | ------- | --- |
 | `actor find --class X` | `--exact-class` / `--subclass-of` | Both an agent **and the orchestrator** reached for `--class` first. Two independent readers guessing the same wrong flag is a naming signal. |
 | `texture show` | `texture` has only `sync,list,search,tags,classify` | `direction.md` describes `show`/`preview` for the asset catalog; the noun doesn't have them yet. Docs describe the target, users type the target. |
-| `actor add --folder …` | `--folder` lives on the **generators** | `uedctl: error: unrecognized arguments: --folder light.plant`. A deliberate decision (2026-07-24) that users keep tripping on. |
+| `actor add --folder …` | `--folder` lives on the **generators** | `uedcli: error: unrecognized arguments: --folder light.plant`. A deliberate decision (2026-07-24) that users keep tripping on. |
 | `texture search --color teal` / `cyan` | 12-word vocabulary: black white grey red orange yellow green blue purple pink brown tan | Hit while building a **cyan neon** level — the one colour it needed. The error does list valid values (good). |
 
 **The `--color` vocabulary deserves attention.** It is a closed 12-word list with no
@@ -338,10 +338,10 @@ applies a texture containing **text**, which is exactly what signage, adverts, p
 and DX's readable world-detail are. It is also invisible in `actor preview` wireframes and
 in `--native` draft renders; only the lit in-game render exposes it.
 
-**FINAL ROOT CAUSE — a single line in uedctl's own source.** The `TubePlatform` polish
+**FINAL ROOT CAUSE — a single line in uedcli's own source.** The `TubePlatform` polish
 agent read the code rather than guessing:
 
-> **`builders._tex_basis()` computes `V = N × U`, so EVERY face emitted by EVERY uedctl
+> **`builders._tex_basis()` computes `V = N × U`, so EVERY face emitted by EVERY uedcli
 > generator has `U × V = +N` — the handedness the engine renders MIRRORED.**
 
 That is systematic, not per-brush, and it explains why two agents who never communicated
@@ -400,7 +400,7 @@ Reproduction material is in both levels' trunks under `_scratch/levelbuild/`.
 Recording these so they are not "fixed" into something worse — they worked:
 
 - `texture not found: CoreTexMetal.NYC_GrayMetal_A — no Texture of that name on the package path (author-time validation)` — catches a bad ref at author time instead of at build.
-- `uedctl brush build cube: error: argument --at: coordinate must be X,Y,Z (3 comma-separated numbers), got '0,'` — names the offending value exactly as the conventions require.
+- `uedcli brush build cube: error: argument --at: coordinate must be X,Y,Z (3 comma-separated numbers), got '0,'` — names the offending value exactly as the conventions require.
 - `brush build staircase: --depth must be greater than 0, got -8.0`.
 - Unknown-colour error listing the whole valid vocabulary.
 
@@ -415,7 +415,7 @@ Recording these so they are not "fixed" into something worse — they worked:
 
 ---
 
-## 9. [INFRA] Not uedctl's fault, but shaping the experience
+## 9. [INFRA] Not uedcli's fault, but shaping the experience
 
 - **Host saturation.** 4 cores, 7.7 GB RAM. Three agents plus the orchestrator drove load to **~16** with swap fully exhausted; one container OOM-killed. Most "flaky editor" behaviour traced back to this.
 - `CreateWindowEx failed: Success.` (4x) — Wine/X noise from the GUI editor.
@@ -431,18 +431,18 @@ this disappears if materialize does not need a Wine-hosted GUI editor.
 
 Recorded honestly so the list above is not inflated:
 
-- ~~No uedctl traceback ever reached an agent.~~ **CORRECTED.** That claim was made from
+- ~~No uedcli traceback ever reached an agent.~~ **CORRECTED.** That claim was made from
   the transcript mining alone and is **wrong**. The 2 `AttributeError`s the miner found
   (`'tuple' object has no attribute 'actors'`, `'list' object has no attribute 'get'`)
-  were indeed the **spike agent's own harness script**, not uedctl — but the
-  `TubePlatform` agent later reported uedctl leaking a **`BrokenPipeError` traceback**
+  were indeed the **spike agent's own harness script**, not uedcli — but the
+  `TubePlatform` agent later reported uedcli leaking a **`BrokenPipeError` traceback**
   from `--folder` on `actor add`. So the "never let a Python exception reach the CLI user"
   rule **was** violated, in at least one path; the mining simply missed it (a signature
   the regex did not catch, or output the agent paraphrased rather than pasted).
   *Method note: absence of evidence in the mined signatures is not evidence of absence —
   the miner is a floor on what happened, never a ceiling.*
-- `ModuleNotFoundError: No module named 'uedctl'` / `'PIL'` — ran system `python3` instead
-  of going through `bin/uedctl` / the venv.
+- `ModuleNotFoundError: No module named 'uedcli'` / `'PIL'` — ran system `python3` instead
+  of going through `bin/uedcli` / the venv.
 - Several agents idled waiting on background jobs whose completion never woke them,
   instead of running previews in the foreground.
 - Agents repeatedly re-derived the same environment facts (texture sync cost, the

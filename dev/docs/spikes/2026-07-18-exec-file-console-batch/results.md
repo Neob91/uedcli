@@ -2,13 +2,13 @@
 
 **Date:** 2026-07-18 (all probes live-confirmed against a fresh ephemeral `dx-lum-uned` editor).
 **Question (Andrzej):** instead of typing each console command into UnrealEd's Command box one at
-a time, should uedctl write a command file and submit a single `EXEC <filename>` — and would that
+a time, should uedcli write a command file and submit a single `EXEC <filename>` — and would that
 be safer?
 **Answer: YES — `EXEC` works, is ~6× faster per command on drive overhead, executes THROUGH the
 GC blocking dialog that stalls the typed console, and shrinks the fragile X11-typing surface to
 one short constant-shaped line.** Details + caveats below. Harness:
 [`harness/exec_file_probe.sh`](harness/exec_file_probe.sh) (re-runs every probe against a named
-container). Regression: `uedctl/tests/test_driver_integration.py::test_exec_file_runs_script_and_
+container). Regression: `uedcli/tests/test_driver_integration.py::test_exec_file_runs_script_and_
 continues_past_errors` (integration-marked).
 
 ## Why this was worth asking
@@ -32,7 +32,7 @@ string table, semantics unverified).
    TextBuffer, then executed line by line).
 2. **A relative filename resolves against the System dir (`/opt/UED22`)**, NOT the process CWD or
    `/work`: with `relprobe.txt` present in BOTH `/opt/UED22` and `/work`, `EXEC relprobe.txt` ran
-   the System-dir one. Absolute `Z:\...` paths work and are what uedctl should use (no ambiguity,
+   the System-dir one. Absolute `Z:\...` paths work and are what uedcli should use (no ambiguity,
    `/work` is the container-scratch convention).
 3. **Errors do NOT abort the script.** A file containing a bogus verb (`TOTALLYBOGUSVERB FOO=1`)
    and a failing `OBJ LOAD FILE=<missing>` between two exports → both exports still ran, editor

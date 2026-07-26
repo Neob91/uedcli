@@ -83,7 +83,7 @@ shorter than strip `k+1`; the base's long edge opposed by the collinear chain of
 ### A2. Native CSG blast radius (was missing — reviewer HIGH)
 
 A single non-convex brush is mis-handled by the **native** CSG core, which assumes convexity:
-`uedctl-native/src/csg.rs:60` `point_in_convex` tests "behind every face" (the convex hull, not the
+`uedcli-native/src/csg.rs:60` `point_in_convex` tests "behind every face" (the convex hull, not the
 true solid), and `bspcsg.rs:1866` documents a convex-only world seed. A stepped brush's concave
 notches would classify as solid → the profile mis-builds/fills. Affected paths: `level preview
 --native` (`preview_native.py:366`) and native `level materialize` (default `bspcsg` core).
@@ -195,7 +195,7 @@ new line-canonicalization):
 - **Value re-bless:** `stair_*` in `fixtures/builder_parity.json` freezes the multi-box output and
   changes to single-brush. Axis-aligned integer staircase coords reconstruct identically in the
   editor (same basis as `cube_*`), so **offline re-bless is legitimate** (`python -m
-  uedctl.tests.builder_parity_cases`).
+  uedcli.tests.builder_parity_cases`).
 - **⚠ Live-capture harness incompatibility (must decide):** `builder_parity_cases.py:30-32` captures
   the spiral **per-slab** *because* a combined non-convex cavity makes the editor invent interior
   vertices; `capture_world_verts` reconstructs via `BRUSH FROM DEINTERSECTION` and the `regenerate`

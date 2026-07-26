@@ -17,7 +17,7 @@ NPC (dropped when they're killed or knocked out) via a `PickupDistributor`.
 4. **Give it a `Description`** — the text the player sees on pickup. **Set this**, or the player gets
    the placeholder "NO KEY DESCRIPTION - REPORT THIS AS A BUG!".
 
-### With uedctl
+### With uedcli
 
 ```bash
 # 1. Door requires the key.
@@ -48,7 +48,7 @@ to get it. A single **`PickupDistributor`** can distribute up to **8** nanokeys.
    *placed* `NanoKey`.) Add more entries (`[1]`, `[2]`, …) for more keys/NPCs; add
    another distributor if you exceed 8.
 
-### With uedctl
+### With uedcli
 
 ```bash
 # 2. Ensure the carrier has a unique Tag.

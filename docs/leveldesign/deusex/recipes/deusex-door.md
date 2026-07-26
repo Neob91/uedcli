@@ -4,10 +4,10 @@ A door in Deus Ex is a **`DeusExMover`** — a brush promoted to a mover actor, 
 (closed and open) and DX door properties (lock, pick strength, blow-up strength, key). This is the
 single most common interactive object in a DX level, and the one most worth getting right.
 
-> **What the editor makes you do vs. what uedctl does.** In UnrealEd you build an Addition brush,
+> **What the editor makes you do vs. what uedcli does.** In UnrealEd you build an Addition brush,
 > texture it, size the red brush a little larger, hit **Intersect** to snap it to the door shape,
 > select `DeusExMover` in the class browser, hit **Create Mover**, then delete the leftover Addition
-> brush. **uedctl collapses that entire ritual into one generator verb:** `brush build cube
+> brush. **uedcli collapses that entire ritual into one generator verb:** `brush build cube
 > --mover-class DeusEx.DeusExMover`. There is no Intersect step, no leftover brush, no Create-Mover
 > button — the generator emits a mover actor directly.
 >
@@ -25,8 +25,8 @@ single most common interactive object in a DX level, and the one most worth gett
    brush as the closed slab, standing in the doorway you already subtracted. Author it on the 16-uu
    grid.
 2. **Build the door as a `DeusExMover` brush** at its closed position. Texture it with `--texture` now,
-   or retexture later with `brush poly set` — **uedctl can edit a mover's faces any time** (the "surfaces
-   frozen after Add Mover" limit is a GUI-editor thing, not a uedctl one). Wood (`CoreTexWood`) and metal
+   or retexture later with `brush poly set` — **uedcli can edit a mover's faces any time** (the "surfaces
+   frozen after Add Mover" limit is a GUI-editor thing, not a uedcli one). Wood (`CoreTexWood`) and metal
    (`CoreTexMetal`) sets are the usual starting points.
 3. **Set the closed pose as key 0 and the open pose as key 1.** Key 0 is the base pose (where you
    built it). Key 1 is where the door travels to when triggered:
@@ -50,7 +50,7 @@ single most common interactive object in a DX level, and the one most worth gett
 7. **(Optional) Require a key** — set `KeyIDNeeded` to a `name`; a matching `NanoKey.KeyID` then unlocks it
    (see [`nanokey.md`](nanokey.md)).
 
-## With uedctl
+## With uedcli
 
 ```bash
 # 1-2. Build the door mover at its closed pose, textured, and write it into the trunk.
@@ -108,11 +108,11 @@ mover key list DeusExMover0
   movers guide in [`../../general/`](../../general/) for the pivot details.
 - **A mover is lit from its key-0 pose only** — a door can look black in its open pose ("black door").
   Fix with `Unlit` surfaces, a Special-Lit light, or `bDynamicLightMover=True`.
-- **Reset any scale/rotation before building.** uedctl's generator emits a clean brush, so this is a
+- **Reset any scale/rotation before building.** uedcli's generator emits a clean brush, so this is a
   non-issue here — but it is the reason the editor tutorial insists on Reset → All.
 - **Textures on a mover.** Pass `--texture` on `brush build`, or edit faces later with `brush poly set` —
-  uedctl can retexture a mover at any time. (The "can't re-surface after Add Mover" restriction is
-  GUI-editor-only, not a uedctl limitation.)
+  uedcli can retexture a mover at any time. (The "can't re-surface after Add Mover" restriction is
+  GUI-editor-only, not a uedcli limitation.)
 
 ## Fitting a door to an existing doorway (`brush deintersect`)
 
@@ -121,12 +121,12 @@ When the doorway is already carved into the world, you do not have to measure a 
 and you get the solid plug that exactly fills them, already a Mover:
 
 ```bash
-uedctl actor find --folder castle.gate | uedctl actor show - \
-  | uedctl brush deintersect - --mover-class DeusEx.DeusExMover \
+uedcli actor find --folder castle.gate | uedcli actor show - \
+  | uedcli brush deintersect - --mover-class DeusEx.DeusExMover \
         --pivot min --texture CoreTexWood.ClenWoodDoor_A \
-  | uedctl actor add -
+  | uedcli actor add -
 #   -> DeusExMover1
-uedctl mover key rotate DeusExMover1 1 --from-base --to 0,16384,0
+uedcli mover key rotate DeusExMover1 1 --from-base --to 0,16384,0
 ```
 
 Why the flags matter here:

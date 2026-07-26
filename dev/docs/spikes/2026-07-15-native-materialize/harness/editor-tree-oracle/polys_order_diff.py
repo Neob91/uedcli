@@ -4,7 +4,7 @@ r"""Diff the repartition-input face ORDER: native post-merge soup vs the editor'
 Inputs:
   * EDITOR — `logs/editor-polys-N.log` from `editor_polys_oracle.py N` (the `Model->Polys->Element`
     array at the `bspBuild` call inside `bspRepartition`, i.e. the true SplitPolyList input order).
-  * NATIVE — captured in-process via the `UEDCTL_BSPCSG_SOUP_ORDER` env hook in `bspcsg.rs`
+  * NATIVE — captured in-process via the `UEDCLI_BSPCSG_SOUP_ORDER` env hook in `bspcsg.rs`
     (one `POLY` line per merged-soup face, in the order `bsp_build` consumes it).
 
 Each face keys on `(normal, base, vert0, nv)` rounded.  Content is byte-exact as a multiset
@@ -24,7 +24,7 @@ import sys
 from difflib import SequenceMatcher
 from pathlib import Path
 
-ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedctl")
+ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedcli")
 HARNESS = ROOT / "dev/docs/spikes/2026-07-15-native-materialize/harness"
 HERE = HARNESS / "editor-tree-oracle"
 sys.path.insert(0, str(ROOT))
@@ -75,10 +75,10 @@ def parse_log(path: Path, ndp: int):
 
 
 def native_order(n: int, ndp: int):
-    from uedctl import trunk
-    from uedctl.native import materialize as M
+    from uedcli import trunk
+    from uedcli.native import materialize as M
     import castle_build
-    import uedctl_native
+    import uedcli_native
 
     level, _ = trunk.read_level(Path(castle_build.TRUNK))
     names = [nm for nm in level.order if level.actors[nm].brush is not None]
@@ -92,15 +92,15 @@ def native_order(n: int, ndp: int):
     fd = os.open(str(raw), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o644)
     # The dump lives INSIDE the repartition block (right after bsp_merge_coplanars), so do NOT
     # set NOREPART (which would skip the whole block); a full build is fine.
-    os.environ["UEDCTL_BSPCSG_SOUP_ORDER"] = "1"
+    os.environ["UEDCLI_BSPCSG_SOUP_ORDER"] = "1"
     try:
         os.dup2(fd, 2)
-        uedctl_native.build_geometry_bspcsg(inputs)
+        uedcli_native.build_geometry_bspcsg(inputs)
     finally:
         os.dup2(saved, 2)
         os.close(fd)
         os.close(saved)
-        os.environ.pop("UEDCTL_BSPCSG_SOUP_ORDER", None)
+        os.environ.pop("UEDCLI_BSPCSG_SOUP_ORDER", None)
     keys = parse_log(raw, ndp)
     raw.unlink(missing_ok=True)
     return keys

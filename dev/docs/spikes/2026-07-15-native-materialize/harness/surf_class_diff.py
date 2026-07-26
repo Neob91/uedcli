@@ -13,10 +13,10 @@ import sys
 from collections import Counter
 from pathlib import Path
 
-ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedctl")
+ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedcli")
 sys.path.insert(0, str(ROOT))
-from uedctl.native import umodel as UM
-from uedctl.native.pkg_write import parse_package
+from uedcli.native import umodel as UM
+from uedcli.native.pkg_write import parse_package
 
 PF_NOTSOLID = 0x8
 PF_SEMISOLID = 0x20

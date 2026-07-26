@@ -7,7 +7,7 @@ Ephemeral build scratch. Design authority: `dev/docs/decisions.md` 2026-07-18 21
 
 ## Deliverables
 
-1. **`uedctl/polyalign.py`** — pure model-side texture-vector math + face-set/continuity logic.
+1. **`uedcli/polyalign.py`** — pure model-side texture-vector math + face-set/continuity logic.
    - `resolve_align_targets(level, tokens)` → ordered, deduped `[(brush, poly_idx)]` from either
      bare actor names (= all polys) or `BRUSH:SELECTOR` tokens (what `poly find` emits). Order is
      preserved (ring seam = first).

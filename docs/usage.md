@@ -1,6 +1,6 @@
-# uedctl — usage
+# uedcli — usage
 
-`uedctl` is the LLM-facing CLI for authoring **UnrealEngine-1 levels** (Deus Ex `.dx`,
+`uedcli` is the LLM-facing CLI for authoring **UnrealEngine-1 levels** (Deus Ex `.dx`,
 Unreal/UT `.unr`) without opening the editor by hand. You issue **semantic, by-name commands**
 (`actor find`, `brush build`, `mover key move`, …); the T3D text format is internal plumbing.
 
@@ -13,8 +13,8 @@ The real editor / headless game is reached **only** for the few commands that mu
 and no `--container` flag.
 
 ```
-uedctl <verb> …                      # if installed on $PATH (pipx)
-bin/uedctl <verb> …                  # from Tools/uedctl, host-native via the dev venv
+uedcli <verb> …                      # if installed on $PATH (pipx)
+bin/uedcli <verb> …                  # from Tools/uedcli, host-native via the dev venv
 ```
 
 ## Composability — the core philosophy
@@ -46,33 +46,33 @@ scale` / `apply-transform` / `poly set` / `align` (touched brush names), and `st
 `prefab apply`. (For `delete`
 the stdout is the removed names — a log/count, since they no longer exist to pipe into an edit.)
 
-## Projects: `uedctl.toml`
+## Projects: `uedcli.toml`
 
-A **project** is any repo with a free-standing **`uedctl.toml`** at its root (found by walking up
-from cwd; nearest wins — or point `--project` / `$UEDCTL_PROJECT` at the root dir or the file). The
+A **project** is any repo with a free-standing **`uedcli.toml`** at its root (found by walking up
+from cwd; nearest wins — or point `--project` / `$UEDCLI_PROJECT` at the root dir or the file). The
 file is hand-written (there is no `project init`):
 
 ```toml
-game = "deusex"                 # required: selects [games.deusex] in ~/.uedctl/config.toml
+game = "deusex"                 # required: selects [games.deusex] in ~/.uedcli/config.toml
 paths = "Textures:System"       # optional overlay package dirs, colon-separated, relative to root
-maps = "uedctl/maps"            # optional maps dir (T3D trunks), default "maps"
+maps = "uedcli/maps"            # optional maps dir (T3D trunks), default "maps"
 prefabs = "Prefabs"             # optional prefab library dir, default "prefabs"
 catalog = "texture-catalog"     # optional texture-catalog dir, default "texture-catalog"
 ```
 
-All dir keys are relative to the project root (absolute allowed), so uedctl can point at a repo's
+All dir keys are relative to the project root (absolute allowed), so uedcli can point at a repo's
 **existing** dirs rather than force a parallel tree.
 
 - **Machine-local throwaway state** (stash register, locks, staging temps, delivered preview maps)
-  lives in a gitignored, **self-ignoring** `.uedctl/` beside the file —
-  uedctl creates it (writing its own `.gitignore` of `*`) on first use; safe to delete.
-- **The per-user `~/.uedctl/`** holds only `config.toml` (the `[games.*]` blocks — where each game's
+  lives in a gitignored, **self-ignoring** `.uedcli/` beside the file —
+  uedcli creates it (writing its own `.gitignore` of `*`) on first use; safe to delete.
+- **The per-user `~/.uedcli/`** holds only `config.toml` (the `[games.*]` blocks — where each game's
   base asset packages live) and the derivable, content-addressed `cache/{textures,stubs,schema}`
   shared across projects. There is no central per-project bucket and no project `id`.
 
 **Package layering.** The effective package search path is the project's overlay `paths` first, then
 the selected game's base dirs, deduped project-shadows-base. `paths` are **bare directories**,
-colon-separated — uedctl owns the five package extensions (`.u .dx .utx .uax .umx`) and scans the
+colon-separated — uedcli owns the five package extensions (`.u .dx .utx .uax .umx`) and scans the
 dirs itself.
 
 **Mover detection reads the class hierarchy, so it needs the packages.** Whether an actor is a
@@ -81,7 +81,7 @@ decided by resolving its class against `Engine.Mover` in the game's own code pac
 guessing from the class name. So every verb that has to know — `mover key *`, `level doctor`,
 `event graph`, `brush scale`, `brush apply-transform`, `brush intersect`/`deintersect`,
 `stash capture`, `level preview --native` — needs a resolvable package search path: a project
-**and** `~/.uedctl/config.toml`. Without one the verb exits 2 naming itself and what is missing; it
+**and** `~/.uedcli/config.toml`. Without one the verb exits 2 naming itself and what is missing; it
 never falls back to a name guess, because that would silently report a real mover as a static brush.
 (`level materialize` and `level preview --game` need the same config for an unrelated reason — they
 load the game's packages to build and to render — so in practice every verb on this page that
@@ -90,7 +90,7 @@ touches packages at all wants it configured.)
 The same rule applies **per actor**: if an actor's class — or any class on its ancestor chain — is
 not on the composed search path, the verbs listed above exit 2 naming that class instead of quietly
 deciding it is not a mover. If you hit that, the package holding the class is missing from your
-project `paths` or the game's base dirs (`uedctl project show` prints the resolved path).
+project `paths` or the game's base dirs (`uedcli project show` prints the resolved path).
 
 **`project show [--json]`** prints the resolved root, game, managed dirs, and composed package search
 path (each entry tagged `project`/`base`); `--json` emits
@@ -98,25 +98,25 @@ path (each entry tagged `project`/`base`); `--json` emits
 
 ## Choosing a level
 
-Most verbs operate on the **current level**, named by the **`UEDCTL_LEVEL` environment variable** (a
+Most verbs operate on the **current level**, named by the **`UEDCLI_LEVEL` environment variable** (a
 bare level name; a level's identity is its `maps/<name>/` directory). Set it once per shell:
 
 ```
-export UEDCTL_LEVEL=20_AireGardens
-uedctl actor find --folder castle.**        # operates on 20_AireGardens
+export UEDCLI_LEVEL=20_AireGardens
+uedcli actor find --folder castle.**        # operates on 20_AireGardens
 ```
 
-A verb with no `UEDCTL_LEVEL` and no explicit `--tree` exits 2 with `no level: set the environment
-variable (export UEDCTL_LEVEL=<name>) or pass a level explicitly (--tree level/<name>)`. There is no
+A verb with no `UEDCLI_LEVEL` and no explicit `--tree` exits 2 with `no level: set the environment
+variable (export UEDCLI_LEVEL=<name>) or pass a level explicitly (--tree level/<name>)`. There is no
 `level select` verb — the level is the env var (a child process can't set the parent shell's env).
-When a **mutating** verb resolves the level from `UEDCTL_LEVEL` (not an explicit `--tree`), it echoes
-`editing level 'X' (from $UEDCTL_LEVEL)` to stderr, so a stale export can't silently edit the wrong
+When a **mutating** verb resolves the level from `UEDCLI_LEVEL` (not an explicit `--tree`), it echoes
+`editing level 'X' (from $UEDCLI_LEVEL)` to stderr, so a stale export can't silently edit the wrong
 level.
 
 | Command | What it does |
 |---|---|
-| `level create <name>` | scaffold a NEW level directory `maps/<name>/` with a `LevelInfo` actor (required by `materialize`); prints `to edit it: export UEDCTL_LEVEL=<name>` |
-| `level list [--json]` | list the project's levels (trunk dirs under `<maps>`), one name per line to stdout (pipe-friendly); a count + the active `$UEDCTL_LEVEL` go to stderr. `--json` emits `[{name, active}, …]` |
+| `level create <name>` | scaffold a NEW level directory `maps/<name>/` with a `LevelInfo` actor (required by `materialize`); prints `to edit it: export UEDCLI_LEVEL=<name>` |
+| `level list [--json]` | list the project's levels (trunk dirs under `<maps>`), one name per line to stdout (pipe-friendly); a count + the active `$UEDCLI_LEVEL` go to stderr. `--json` emits `[{name, active}, …]` |
 | `level status [--tree KIND/NAME] [--json]` | thin read-only dashboard for the current level (or a `--tree` box): actor counts, duplicate `order_value`s, git state. `--json` emits a `{kind, name, actors, duplicate_order_values, git, texture_packages}` object (`{"selected": null}` when no level is set) |
 
 ---
@@ -131,8 +131,8 @@ level.
 | `actor show <name\|glob\|->` | print matching actors' full canonical T3D blocks |
 | `actor bbox <names…\|-> [--field F \| --json]` | the world axis-aligned bounding box enclosing the given actors as ONE box |
 | `actor prop get <name\|-> [KEY…] [--kv \| --json]` | print EFFECTIVE property values (see below) |
-| `actor folder get <names…\|->` | print each actor's uedctl-side folder path (`(none)` if unfoldered) |
-| `actor label get <names…\|-> [--json]` | print each actor's uedctl-side labels as `Name<TAB>l1,l2` (sorted, comma-joined; `(none)` if unlabelled); `--json` emits `{name: [labels…]}` |
+| `actor folder get <names…\|->` | print each actor's uedcli-side folder path (`(none)` if unfoldered) |
+| `actor label get <names…\|-> [--json]` | print each actor's uedcli-side labels as `Name<TAB>l1,l2` (sorted, comma-joined; `(none)` if unlabelled); `--json` emits `{name: [labels…]}` |
 
 **`actor find` filters** (repeat any flag; within a flag the patterns OR, across flags they AND):
 - `--exact-class C` — match the class EXACTLY (bare or `Package.Name`, case-insensitive). Does NOT
@@ -166,9 +166,9 @@ level.
 - `--json` — emit the names as a JSON array.
 
 ```bash
-uedctl actor find --group cells | uedctl actor delete -
-uedctl actor find --folder castle.tower.** | uedctl actor bbox -   # enclosing box of a subtree
-uedctl actor find --within-bbox -512,0,-256,512,768,256 --kind brush | uedctl actor preview -   # wireframe a region
+uedcli actor find --group cells | uedcli actor delete -
+uedcli actor find --folder castle.tower.** | uedcli actor bbox -   # enclosing box of a subtree
+uedcli actor find --within-bbox -512,0,-256,512,768,256 --kind brush | uedcli actor preview -   # wireframe a region
 ```
 
 **Boolean queries — `find <filters> -`:** with a trailing `-`, `find` reads a newline actor-name list
@@ -184,8 +184,8 @@ validator).
 
 `actor show <name>` — an exact name that matches nothing errors (exit 2); a glob with zero matches
 prints nothing (exit 0, grep-like). Reads a stdin name list with `-`. By default each block also
-carries the uedctl-side sidecars as comments — a `// uedctl-folder:` line for a foldered actor and a
-`// uedctl-labels:` line for a labelled one — so `actor show A | actor add -` round-trips both;
+carries the uedcli-side sidecars as comments — a `// uedcli-folder:` line for a foldered actor and a
+`// uedcli-labels:` line for a labelled one — so `actor show A | actor add -` round-trips both;
 `--t3d-only` suppresses them for a byte-exact editor export.
 
 The T3D that `actor show` prints — and that the trunk stores — is **faithful, not abbreviated**: it
@@ -249,20 +249,20 @@ world coordinate, engine symptom, and fix.
 - It is a **high-recall per-brush predictor**, not a completeness guarantee: holes that only emerge
   from how brushes split each other during the build (slivers, T-junction cracks) need the build
   itself.
-- **It needs the game's code packages on the search path** (a project + `~/.uedctl/config.toml`):
+- **It needs the game's code packages on the search path** (a project + `~/.uedcli/config.toml`):
   the watertight check applies to closed solids — world brushes *and movers* — and mover-ness is a
-  class-hierarchy question (see [Projects](#projects-uedctltoml)). With no resolver it exits 2
+  class-hierarchy question (see [Projects](#projects-uedclitoml)). With no resolver it exits 2
   naming the verb and what is missing, rather than reporting a partly-checked level as clean.
 
 **`event graph [--dot | --json]`** reports how the level's actors are wired to trigger each other —
 **offline, model-side** (no editor; it does read the game's `.u` packages, because a Mover is a node
-even with no eventing props — see [Projects](#projects-uedctltoml)).
+even with no eventing props — see [Projects](#projects-uedclitoml)).
 An actor's **`Event`** property is the event it *fires*; another actor's
 **`Tag`** property is its *receiver* identity. A directed edge **A → B** means `A.Event == B.Tag`.
 
 - **Default (text):** one wiring per line to **stdout** —
   `Trig (Engine.Trigger) --OpenDoor--> Door (Engine.Mover)`; the summary + lint go to **stderr**.
-- **`--dot`:** Graphviz DOT to stdout (`uedctl event graph --dot | dot -Tpng -o wiring.png`).
+- **`--dot`:** Graphviz DOT to stdout (`uedcli event graph --dot | dot -Tpng -o wiring.png`).
 - **`--json`:** a `{nodes, edges, lint}` object.
 
 The **lint** reports `dangling_event`, `unreachable_tag`, `unreachable_mover`, and `cycle`. It
@@ -272,17 +272,17 @@ explicitly-set, non-empty `Tag` counts as a receiver.
 ## Folders — hierarchical actor organization
 
 Actors are organized into a **tree of folders** — a per-actor dotted **path** (`castle.tower.roof`),
-so logical subsets are addressable. A folder is **uedctl-side only**: it lives in a trunk sidecar
+so logical subsets are addressable. A folder is **uedcli-side only**: it lives in a trunk sidecar
 beside the actor, is **never emitted to the built map**, and is a **separate dimension** from the T3D
 `Group=` property (which is retained unchanged). One folder per actor.
 
 - **Set at creation:** on the **generator** — `brush build … --folder <path>` / `actor build … --folder
-  <path>` — which emits a `// uedctl-folder:` carrier the T3D carries; `actor add` persists it (it has no
+  <path>` — which emits a `// uedcli-folder:` carrier the T3D carries; `actor add` persists it (it has no
   `--folder` of its own). `actor show` emits the same carrier, so `actor show A | actor add -` round-trips.
 - **Manage:** `actor folder set --to <path> <names…|->`, `actor folder unset <names…|->`,
   `actor folder get <names…|->`. `set`/`unset` are PRODUCERS (touched Names → stdout, a summary →
-  stderr), so they chain: `uedctl actor find --subclass-of Engine.Light | uedctl actor folder set
-  --to castle.lights - | uedctl actor prop set - LightBrightness=200`.
+  stderr), so they chain: `uedcli actor find --subclass-of Engine.Light | uedcli actor folder set
+  --to castle.lights - | uedcli actor prop set - LightBrightness=200`.
 - **Query:** `actor find --folder <pattern>`.
 
 Pattern matching is **globstar** with one asymmetry:
@@ -298,14 +298,14 @@ Pattern matching is **globstar** with one asymmetry:
 Alongside the single-path folder, each actor carries a **set of labels** — flat tokens
 (`lighting`, `flammable`, `hero`) that answer "what is this about", the cross-cutting axis one
 hierarchy can't express (a torch is at `castle.tower` AND is `lighting` AND `interactive`). Like
-folders, labels are **uedctl-side only**: they live in a per-actor trunk sidecar, are **never emitted
+folders, labels are **uedcli-side only**: they live in a per-actor trunk sidecar, are **never emitted
 to the built map**, and are **orthogonal** to the folder, the T3D `Group=` prop, and the T3D `Tag=`
 prop (named `label`, not `tag`, precisely to avoid colliding with `Engine.Actor.Tag`). An actor may
 carry any number of labels. A label token is `[A-Za-z0-9_+-]`, no `.`, no leading `-`; stored as
 authored (case preserved) and matched case-insensitively.
 
 - **Set at creation:** on the **generator** — `brush build … --label L` / `actor build … --label L`
-  (repeatable) — which emits a `// uedctl-labels:` carrier; `actor add` persists it (no `--label` of its
+  (repeatable) — which emits a `// uedcli-labels:` carrier; `actor add` persists it (no `--label` of its
   own). `actor show` emits the same carrier, so a show → add round-trips.
 - **Manage:** `actor label add --label L <names…|->` (set union), `actor label remove --label L
   <names…|->` (set difference), `actor label clear <names…|->` (drop all), `actor label get
@@ -321,8 +321,8 @@ label), and `?`/`[`/`]` are rejected. Repeat `--label` to OR patterns; it ANDs a
 the only way to query them, since an unlabelled actor matches no `--label` pattern.
 
 ```bash
-uedctl actor find --subclass-of Engine.Light | uedctl actor label add --label lighting -
-uedctl actor find --label 'dup-*' | uedctl actor move -   # re-address a duplicated batch
+uedcli actor find --subclass-of Engine.Light | uedcli actor label add --label lighting -
+uedcli actor find --label 'dup-*' | uedcli actor move -   # re-address a duplicated batch
 ```
 
 Labels are **trunk-only** this release: every label surface (`actor label …`, `actor find
@@ -341,7 +341,7 @@ one of them also accepts `--tree KIND/NAME` (see below) to edit a different box.
 
 | Command | What it does |
 |---|---|
-| `actor add <file\|-> [--order POS]` | add the actor(s) in a T3D snippet (point → IMPORTADD, brush → PASTE); a pure carrier-consumer — persists any `// uedctl-folder:`/`// uedctl-labels:` carrier in the T3D (folder/label are set on the generator or later via `actor folder set`/`actor label`); prints allocated names to stdout |
+| `actor add <file\|-> [--order POS]` | add the actor(s) in a T3D snippet (point → IMPORTADD, brush → PASTE); a pure carrier-consumer — persists any `// uedcli-folder:`/`// uedcli-labels:` carrier in the T3D (folder/label are set on the generator or later via `actor folder set`/`actor label`); prints allocated names to stdout |
 | `actor duplicate <names…\|-> (--by DX,DY,DZ \| --at X,Y,Z) [--label L…] [--folder PATH]` | copy actors with fresh names, offset by `--by` or anchored by `--at` (one is REQUIRED); copies inherit the source's labels plus a fresh `dup-<rand>` batch label. Always appends (no `--order`). Prints allocated names to stdout |
 | `actor delete <names…\|->` | delete one or more actors, restoring swept neighbours |
 | `actor move <name> (--to X,Y,Z \| --by DX,DY,DZ)` | move a single actor |
@@ -351,14 +351,14 @@ one of them also accepts `--tree KIND/NAME` (see below) to edit a different box.
 | `actor order <names…\|-> (--first \| --last \| --before NAME \| --after NAME)` | reorder EXISTING actors' CSG precedence (no geometry change) |
 | `actor prop set <name> KEY[.PATH]=VALUE…` | set properties in one atomic, schema-validated edit |
 | `actor prop unset <name> KEY[.PATH]…` | clear properties (revert to class default) |
-| `actor folder set/unset` | manage the uedctl-side folder (see Folders); prints the touched names |
-| `actor label add/remove/clear` | manage the uedctl-side labels (see Labels) |
+| `actor folder set/unset` | manage the uedcli-side folder (see Folders); prints the touched names |
+| `actor label add/remove/clear` | manage the uedcli-side labels (see Labels) |
 
 **`actor add`** — a point actor enters via `MAP IMPORTADD`, a brush via `EDIT PASTE` (only
-paste/ADD brushes are later selectable — uedctl handles this and compensates the +32uu paste drift).
-`--folder PATH` stamps every added actor's folder (overrides any `// uedctl-folder:` carrier).
+paste/ADD brushes are later selectable — uedcli handles this and compensates the +32uu paste drift).
+`--folder PATH` stamps every added actor's folder (overrides any `// uedcli-folder:` carrier).
 `--label L` (repeatable) stamps labels on every added actor, likewise overriding any
-`// uedctl-labels:` carrier; absent, the carrier (from `actor show`) sets the labels, else the actor
+`// uedcli-labels:` carrier; absent, the carrier (from `actor show`) sets the labels, else the actor
 is unlabelled. `--order first|last|before=NAME|after=NAME` (default `last`) places the added actor(s)
 in CSG order; multiple actors land as a block preserving input order (level target only — rejected on
 `--tree stash|prefab`).
@@ -446,7 +446,7 @@ Options: `--texture REF` (qualified `Package[.Group].Name`), `--add-flag`/`--rem
 `--pan-to U,V` / `--pan-by U,V` (integer texel pan).
 
 ```bash
-uedctl brush poly find WALL --facing +Z | uedctl brush poly set - --texture DeusExDeco.Wood
+uedcli brush poly find WALL --facing +Z | uedcli brush poly set - --texture DeusExDeco.Wood
 ```
 
 **Identifying a surface to edit:** `brush poly list <brush>` for the exact index/facing/texture,
@@ -474,24 +474,24 @@ names → stdout, a summary → stderr.
   perimeter (an exact meet at the closing seam).
 
 ```bash
-uedctl brush poly find Tower --item Side | uedctl brush poly align --ring -
-uedctl actor find --folder castle.hall.northwall | uedctl brush poly align --wall -
+uedcli brush poly find Tower --item Side | uedcli brush poly align --ring -
+uedcli actor find --folder castle.hall.northwall | uedcli brush poly align --wall -
 ```
 
 ## `--tree KIND/NAME` — edit a stash, prefab, or another level in place
 
 Every content mutating/query verb above takes **`--tree KIND/NAME`** (KIND ∈ `level|stash|prefab`)
-to operate on a named tree instead of `$UEDCTL_LEVEL`: `--tree level/<other>` another level,
+to operate on a named tree instead of `$UEDCLI_LEVEL`: `--tree level/<other>` another level,
 `--tree stash/<id>` a captured stash, `--tree prefab/<name>` a library prefab **in place**
 (the one-command prefab-template edit — no apply / re-capture / promote roundtrip). NAME may be
-nested (`stash/hangar/arch`). Omit it for the ambient `$UEDCTL_LEVEL` (the default). It rides
+nested (`stash/hangar/arch`). Omit it for the ambient `$UEDCLI_LEVEL` (the default). It rides
 `actor find/show/add/delete/move/prop/rotate/scale/order/bbox/folder/label`, `brush clip/replace/vertex/poly`,
 `mover key *`, the read verbs `actor show`/`level status`/`level doctor`/`event graph` and `stash
 capture`'s SOURCE (`stash capture --tree level/<name>`; rejected together with `--from-t3d`),
 **and — level-kind only — `level materialize`/`level preview`** (`--tree level/<name>`
 builds/previews that level; `--tree stash|prefab` is rejected there, since a captured set has no world
 — use `stash`/`prefab preview`). Passing `--tree` explicitly suppresses the `editing level '…' (from
-$UEDCTL_LEVEL)` echo (you named the target). For a stash/prefab box, `level status`/`level doctor`
+$UEDCLI_LEVEL)` echo (you named the target). For a stash/prefab box, `level status`/`level doctor`
 label it by kind and skip the git hint. It is **not** on the generators (`brush build`/`actor build` —
 they read no box) or `actor preview` (use `stash`/`prefab preview`).
 
@@ -506,8 +506,8 @@ not at generation time** — so `--base-name` is a *stem/prefix*, and `actor add
 per-brush index; the staircase is one actor). Duplicate base names are safe.
 
 ```bash
-uedctl brush build cube --width 256 --breadth 256 --height 128 | uedctl actor add -
-uedctl brush build cube --width 256 --breadth 256 --height 128 > /tmp/cube.t3d
+uedcli brush build cube --width 256 --breadth 256 --height 128 | uedcli actor add -
+uedcli brush build cube --width 256 --breadth 256 --height 128 > /tmp/cube.t3d
 ```
 
 ## `brush build <shape>`
@@ -593,9 +593,9 @@ hand-written T3D or a chain of `brush clip` planes.
 
 ```bash
 # an L-shaped ledge, 16 uu deep, swept along Y
-uedctl brush build extrude --axis y --depth 16 --at 0,0,0 \
+uedcli brush build extrude --axis y --depth 16 --at 0,0,0 \
   --point 0,0 --point 96,0 --point 96,32 --point 32,32 --point 32,96 --point 0,96 \
-  --folder castle.hall --texture CoreTexBrick.Brick.DrtyGrayWalks_A | uedctl actor add -
+  --folder castle.hall --texture CoreTexBrick.Brick.DrtyGrayWalks_A | uedcli actor add -
 ```
 
 - **`--point U,V` (repeatable, ≥3)** is one profile vertex in the profile's own 2D coordinates;
@@ -647,9 +647,9 @@ axis are the same operation.)
 
 ```bash
 # a 90° curved corridor, 128 uu wide and tall, bending around the world origin
-uedctl brush build revolve --axis x --angle 16384 --csg subtract --solidity semisolid \
+uedcli brush build revolve --axis x --angle 16384 --csg subtract --solidity semisolid \
   --point 64,0 --point 192,0 --point 192,128 --point 64,128 \
-  --at 0,0,0 --folder castle.corridor | uedctl actor add -
+  --at 0,0,0 --folder castle.corridor | uedcli actor add -
 ```
 
 - **`--angle UU`** is the total sweep in **unreal rotation units**, the same units as `--rotate`:
@@ -669,7 +669,7 @@ uedctl brush build revolve --axis x --angle 16384 --csg subtract --solidity semi
   `brush poly find --item Side0` selects the whole strip swept by your first profile edge — the
   handle you actually think in ("the inner wall of the corridor").
 - **A revolve is off the integer grid by construction** (every vertex away from `θ=0` lands on
-  `radius · cos/sin θ`), and uedctl never snaps coordinates for you. An off-grid **solid** brush
+  `radius · cos/sin θ`), and uedcli never snaps coordinates for you. An off-grid **solid** brush
   throws its BSP partition planes off-grid too, which is the primary cause of slivers, T-junctions
   and holes in the built map. Prefer **`--solidity semisolid`** wherever the swept shape is detail
   rather than structure: a semisolid receives cuts but emits no world-splitting planes.
@@ -703,14 +703,14 @@ actor build <Package.Class> [--at X,Y,Z] [--base-name NAME] [--prop KEY[.PATH]=V
   flag entirely to emit no `Rotation` line.
 
 ```bash
-uedctl actor build Engine.Light --at 1000,2000,128 --prop LightBrightness=80 | uedctl actor add -
+uedcli actor build Engine.Light --at 1000,2000,128 --prop LightBrightness=80 | uedcli actor add -
 ```
 
 ---
 
 # Movers — animated brush actors (doors / lifts / gears)
 
-A **mover** is a brush actor that animates between **keyframes** (poses). uedctl authors them
+A **mover** is a brush actor that animates between **keyframes** (poses). uedcli authors them
 model-side: a generator builds the base mover, then `mover key` verbs author its keyframes. Key 0 is
 the **base pose** (the ordinary `Location`/`Rotation`); keys 1..`NumKeys`-1 are stored as offsets
 from base. A mover has **2..8 keys** (`NumKeys` — the KeyPos/KeyRot arrays are a fixed `[8]`).
@@ -721,21 +721,21 @@ index (they never grow the count).
 
 ```bash
 # 1. build the base mover (no CsgOper — a mover is out of world CSG) and add it
-uedctl brush build cube --width 128 --breadth 16 --height 256 \
-    --mover-class DeusEx.ElevatorMover --at 512,0,0 | uedctl actor add -
+uedcli brush build cube --width 128 --breadth 16 --height 256 \
+    --mover-class DeusEx.ElevatorMover --at 512,0,0 | uedcli actor add -
 
 # 2. raise the waypoint count, then author each key's pose
-uedctl mover key count  ElevatorMover0                      # print the current NumKeys
-uedctl mover key count  ElevatorMover0 4                    # a 4-stop elevator (2..8)
-uedctl mover key move   ElevatorMover0 1 --from-base --to 0,0,256   # key 1: 256uu above base
-uedctl mover key move   ElevatorMover0 2 --from-world --to 512,0,512  # key 2: an absolute world pose
-uedctl mover key rotate ElevatorMover0 3 --from-base --to 0,16384,0  # key 3: yaw 90° off base
+uedcli mover key count  ElevatorMover0                      # print the current NumKeys
+uedcli mover key count  ElevatorMover0 4                    # a 4-stop elevator (2..8)
+uedcli mover key move   ElevatorMover0 1 --from-base --to 0,0,256   # key 1: 256uu above base
+uedcli mover key move   ElevatorMover0 2 --from-world --to 512,0,512  # key 2: an absolute world pose
+uedcli mover key rotate ElevatorMover0 3 --from-base --to 0,16384,0  # key 3: yaw 90° off base
 
 # 3. inspect / nudge / remove keys
-uedctl mover key list   ElevatorMover0 [--json]             # world pose + offset per key
-uedctl mover key move   ElevatorMover0 1 --by 0,0,-16       # nudge the current offset (no frame)
-uedctl mover key rotate ElevatorMover0 3 --by 0,8192,0
-uedctl mover key remove ElevatorMover0 1                    # delete + compact indices (NumKeys--)
+uedcli mover key list   ElevatorMover0 [--json]             # world pose + offset per key
+uedcli mover key move   ElevatorMover0 1 --by 0,0,-16       # nudge the current offset (no frame)
+uedcli mover key rotate ElevatorMover0 3 --by 0,8192,0
+uedcli mover key remove ElevatorMover0 1                    # delete + compact indices (NumKeys--)
 ```
 
 - **What counts as a mover is the CLASS HIERARCHY, not the class name.** `mover key` accepts any
@@ -745,7 +745,7 @@ uedctl mover key remove ElevatorMover0 1                    # delete + compact i
   `Mover` without descending from it is not one. A rejection says which class failed and against
   what: `mover key count: Wall0 is not a Mover (class Engine.Brush does not descend from
   Engine.Mover)`. Resolving the hierarchy reads the game's `.u` packages, so `mover key` needs a
-  project + `~/.uedctl/config.toml` (see [Projects](#projects-uedctltoml)).
+  project + `~/.uedcli/config.toml` (see [Projects](#projects-uedclitoml)).
 - **`--mover-class <Package.Name>`** (on `brush build`) must be fully qualified. It **rejects
   `--csg`/`--solidity`** (a mover carries neither); `--at`/`--texture`/`--group`/`--base-name` apply
   normally.
@@ -758,7 +758,7 @@ uedctl mover key remove ElevatorMover0 1                    # delete + compact i
   `NumKeys` — raise it first with `mover key count`. Index 0 is the base pose (edit it with `actor
   move`/`actor rotate`, which rigidly shift/rotate the whole animation).
   - **`--to` requires a coordinate frame:** `--from-base` (the coords are the offset from the base
-    pose, written straight in) or `--from-world` (absolute world; uedctl subtracts the base). Passing
+    pose, written straight in) or `--from-world` (absolute world; uedcli subtracts the base). Passing
     `--to` with no frame is an error — there is no silent default.
   - **`--by DX,DY,DZ`** nudges the *current* offset and is frame-agnostic (it rejects
     `--from-base`/`--from-world`).
@@ -778,7 +778,7 @@ uedctl mover key remove ElevatorMover0 1                    # delete + compact i
 Two **generators** that take their shape from a piped brush set instead of parameters: they read a
 T3D brush set on **stdin** (`-`) and write **one** brush (or Mover) actor T3D to stdout. Model-side
 and instant — no editor, no container. (They do need the game's `.u` packages: a Mover in the piped
-set is refused, and that is a class-hierarchy question — see [Projects](#projects-uedctltoml).)
+set is refused, and that is a class-hierarchy question — see [Projects](#projects-uedclitoml).)
 
 ```
 brush intersect   - [<brush build output flags>] [--origin …] [--pivot …]
@@ -797,9 +797,9 @@ like block-minus-notch. `deintersect` gives you the solid that exactly fills wha
 the door **plug** that fits a subtracted doorway, which is why it pairs with `--mover-class`.
 
 ```bash
-uedctl actor find --folder castle.door | uedctl actor show - | uedctl brush intersect - | uedctl actor add -
-uedctl stash show arch                 | uedctl brush deintersect -                     > plug.t3d
-uedctl prefab show archway             | uedctl brush intersect -                       | uedctl actor add -
+uedcli actor find --folder castle.door | uedcli actor show - | uedcli brush intersect - | uedcli actor add -
+uedcli stash show arch                 | uedcli brush deintersect -                     > plug.t3d
+uedcli prefab show archway             | uedcli brush intersect -                       | uedcli actor add -
 ```
 
 Every tier feeds them through its own `show` verb — which is why there are no `stash`/`prefab`
@@ -872,12 +872,12 @@ is already a natural pipe.
 ## The door-mover flow
 
 ```bash
-uedctl actor find --folder castle.door | uedctl actor show - \
-  | uedctl brush deintersect - --mover-class Engine.Mover \
+uedcli actor find --folder castle.door | uedcli actor show - \
+  | uedcli brush deintersect - --mover-class Engine.Mover \
         --pivot min --at 4096,2048,128 \
-  | uedctl actor add -
-uedctl mover key count Mover0 2
-uedctl mover key rotate Mover0 1 --by 0,16384,0        # swings about the hinge, not the centre
+  | uedcli actor add -
+uedcli mover key count Mover0 2
+uedcli mover key rotate Mover0 1 --by 0,16384,0        # swings about the hinge, not the centre
 ```
 
 ---
@@ -1026,7 +1026,7 @@ actor preview [<names…> | --from-t3d <FILE…|->]
   LLM-viewable form — there is no flag and no other way to get raw PPM out of the CLI). Whatever
   extension you pass is **replaced** by `.png`, so `--out shot.jpg` writes `shot.png`, and an
   extensionless `--out shot` writes `shot.png`. `--out` is **optional**: with no `--out`, a unique
-  temp file is minted (`uedctl-preview-*.png`). Either way the **absolute path actually written is
+  temp file is minted (`uedcli-preview-*.png`). Either way the **absolute path actually written is
   always printed to stdout**.
 
 ---
@@ -1034,7 +1034,7 @@ actor preview [<names…> | --from-t3d <FILE…|->]
 # `stash` / `prefab` — capture, place, and share actor sets
 
 A **stash** is a private, machine-local register entry (a named, captured actor set living in
-`.uedctl/stash/<id>/`). A **prefab** is the durable, git-tracked, shareable form under the library
+`.uedcli/stash/<id>/`). A **prefab** is the durable, git-tracked, shareable form under the library
 root (`<prefabs-dir>/<name>/`). A stash, a prefab, and a level trunk are the **SAME on-disk format** —
 the per-actor T3D tree `actors/<name>/{actor.t3d, order_value[, folder]}` — read/written through one
 shared code path, with any per-box extras (`meta.json` capture anchor, `packages` deps) beside
@@ -1058,20 +1058,20 @@ stash promote <id> --as <name> [--force] [--prefab-dir DIR]
   auto-slug from the first actor name; `--force` overwrites an existing id. Capture normalizes the set
   to its bbox-min corner and records the original world anchor. It reads the game's `.u` packages
   (an ingested Mover is folded to its base pose, which needs the class hierarchy — see
-  [Projects](#projects-uedctltoml)).
+  [Projects](#projects-uedclitoml)).
 - **`stash apply`** is a **model-side merge into the current level** (no editor): it translates to
   the placement anchor, auto-allocates fresh names, sets Group, appends order, and unions the set's
   packages. **Without `--at`, it applies at the captured world anchor.** `--group` defaults to the id;
-  `--no-group` strips it; `--folder PATH` also stamps a uedctl-side folder (independent of `--group`).
+  `--no-group` strips it; `--folder PATH` also stamps a uedcli-side folder (independent of `--group`).
 - **`stash promote`** copies a register entry into the durable prefab library (the sharing step).
 - **CSG-combining a stash** is not a stash verb: pipe it into the generator instead —
-  `uedctl stash show arch | uedctl brush intersect - | uedctl actor add -` (see
+  `uedcli stash show arch | uedcli brush intersect - | uedcli actor add -` (see
   [`brush intersect` / `brush deintersect`](#brush-intersect--brush-deintersect--csg-merge-a-brush-set-into-one-brush)).
 
 ## Prefab
 
 The durable library. Its **reads are project-only** (they touch just the tracked dir); `apply`
-mutates the current level. The library root is the resolved project's prefabs dir (the `uedctl.toml`
+mutates the current level. The library root is the resolved project's prefabs dir (the `uedcli.toml`
 `prefabs` key, default `<root>/prefabs/`); override per-invocation with **`--prefab-dir DIR`**, placed
 **before** the sub-verb (with the flag, no project is needed).
 
@@ -1102,7 +1102,7 @@ level materialize [--out OUT] [--overwrite] [--no-verify] [--keep-build]
   existing file** (exit 2) unless **`--overwrite`** is given.
 - A **post-build verify** (H3) confirms the rebuilt map matches the intended trunk; **`--no-verify`**
   skips it (debugging / known-buggy verify), and **`--keep-build`** copies the built map to the
-  project's `.uedctl/tmp/` on a verify FAILURE instead of discarding it.
+  project's `.uedcli/tmp/` on a verify FAILURE instead of discarding it.
 - The verify compares the built map against the trunk in UnrealEd's own terms, which means it needs
   each actor class's **defaults** out of the game's `.u` packages. They are resolved *before* the
   editor starts, so an actor whose `Class=` is not fully qualified (`Package.Class`) — or whose
@@ -1182,26 +1182,26 @@ can discover `@Actor` refs to compose into shots. `--sample N` prints N evenly-s
 The `texture` verbs maintain a tracked, hash-versioned catalog of every texture package on the
 substrate path. Classification (`tags[]`, `description`, named colors) accretes onto each entry and is
 never clobbered by a re-sync. Every verb takes `--catalog-dir DIR` (default: the resolved project's
-catalog dir — the `uedctl.toml` `catalog` key, or `<root>/texture-catalog/`).
+catalog dir — the `uedcli.toml` `catalog` key, or `<root>/texture-catalog/`).
 
 ```bash
 # discover + export packages; build/refresh the per-package manifests
-uedctl texture sync [--package CoreTexMetal] [--force]
+uedcli texture sync [--package CoreTexMetal] [--force]
 
 # list catalog entries (offline, manifest-only), optionally filtered by state
-uedctl texture list [--package P] [--unclassified | --classified | --stale | --removed]
+uedcli texture list [--package P] [--unclassified | --classified | --stale | --removed]
 
 # search refs by text/tag/color (ranked)
-uedctl texture search wall --tag metal --color grey
+uedcli texture search wall --tag metal --color grey
 
 # the tag vocabulary + occurrence counts (curbs drift)
-uedctl texture tags [--package P]
+uedcli texture tags [--package P]
 
 # classification progress + worklist
-uedctl texture classify status [--full] [--package P]
+uedcli texture classify status [--full] [--package P]
 
 # record LLM/human classification (replaces the provided fields)
-uedctl texture classify set CoreTexMetal.Area51Wall_A \
+uedcli texture classify set CoreTexMetal.Area51Wall_A \
     --tags metal,wall --description "riveted metal wall panel" --colors grey
 ```
 
@@ -1209,7 +1209,7 @@ Each entry carries: `ref` (the address for `brush poly set --texture`, e.g.
 `CoreTexMetal.Area51Wall_A`), `image_hash` (sha256 of the decoded pixels — tracks identity across
 renames), auto-derived dominant `colors` (overridable), open `tags[]` / `description`, and the
 `stale`/`removed` flags. Manifests live in the tracked `catalog` dir; viewable PNGs land under the
-per-user cache `~/.uedctl/cache/textures/<package>/` (never the in-repo `.uedctl/`).
+per-user cache `~/.uedcli/cache/textures/<package>/` (never the in-repo `.uedcli/`).
 
 ---
 
@@ -1217,11 +1217,11 @@ per-user cache `~/.uedctl/cache/textures/<package>/` (never the in-repo `.uedctl
 
 ```bash
 # browse actor classes as an indented inheritance TREE (rooted at Engine.Actor)
-uedctl class list [--depth N|all] [--subclass-of Package.Class] [--package P]
+uedcli class list [--depth N|all] [--subclass-of Package.Class] [--package P]
                   [--flat] [--include-non-actor] [--include-abstract]
 
 # a class's OWN editable props grouped by editor category + super chain + placeable/abstract flags
-uedctl class show <Package.Class> [--depth N|all] [--category NAME]
+uedcli class show <Package.Class> [--depth N|all] [--category NAME]
 ```
 
 - **`class list`** auto-fits ~60 lines; abstract classes are marked `*`, a collapsed node shows its
@@ -1244,7 +1244,7 @@ uedctl class show <Package.Class> [--depth N|all] [--category NAME]
 - **`substrate stub [package] [--force] [--list]`** — convert a Deus Ex v68 code package (`.u`) into
   a UED22-loadable v69 "stub" (mesh-preserving; the editor is v69-authoritative). `--list` prints the
   stub cache manifest without building.
-- **`cache clear`** — delete the persistent package-schema cache (`~/.uedctl/cache/schema`); it is
+- **`cache clear`** — delete the persistent package-schema cache (`~/.uedcli/cache/schema`); it is
   pure derivable throwaway and rebuilds on the next command (escape-hatch / reclaim old
   decoder-version dirs).
 - **`cache gc [--max-bytes N] [--max-entries N]`** — *shrink* that cache instead of emptying it:

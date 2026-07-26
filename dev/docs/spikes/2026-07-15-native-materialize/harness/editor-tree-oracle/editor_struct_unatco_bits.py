@@ -4,12 +4,12 @@
 Guarded/bounded; writes _scratch/ptx/editor-struct-unatco-105.log."""
 import subprocess, sys, time
 from pathlib import Path
-ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedctl")
+ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedcli")
 HARNESS = ROOT / "dev/docs/spikes/2026-07-15-native-materialize/harness"
 HERE = HARNESS / "editor-tree-oracle"
 sys.path.insert(0, str(ROOT)); sys.path.insert(0, str(HARNESS)); sys.path.insert(0, str(HERE))
 import editor_tree_oracle as O
-from uedctl.driver import Driver, to_z_path
+from uedcli.driver import Driver, to_z_path
 
 N = 105
 VA = 0x10036090  # bspBuildFPolys

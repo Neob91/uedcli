@@ -9,7 +9,7 @@ anything "circular" out of flat brushes.
 A ring of ~8 identical trapezoidal blocks spaced 45° apart around a central vertical (Z) axis, each
 rotated to face the centre — a voussoir/cornice ring.
 
-### uedctl pipeline (what you run)
+### uedcli pipeline (what you run)
 
 ```
 # 1. one block out at the ring radius (+X), 40 radial x 64 tangential x 24 tall
@@ -21,8 +21,8 @@ brush clip wedge_ab12cd --plane 148,-32,0 -16,-40,0 --keep below
 
 # 3. replicate 7 more at 45° steps about the Z axis (16384 UU = 90°, so 8192 = 45°)
 for i in 1 2 3 4 5 6 7; do
-  dup=$(bin/uedctl actor duplicate wedge_ab12cd --by 0,0,0 | tail -1)   # copy onto itself
-  bin/uedctl actor rotate "$dup" --by 0,$((i*8192)),0 --pivot 0,0,0     # ORBIT about the world axis
+  dup=$(bin/uedcli actor duplicate wedge_ab12cd --by 0,0,0 | tail -1)   # copy onto itself
+  bin/uedcli actor rotate "$dup" --by 0,$((i*8192)),0 --pivot 0,0,0     # ORBIT about the world axis
 done
 ```
 

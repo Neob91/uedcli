@@ -6,7 +6,7 @@ measures how often the fallback is actually needed.) Finding: convex is the stro
 invariant — a small fraction of faces in real exported maps are concave (arbitrary vertex editing in
 UnrealEd can produce them). See findings.md.
 
-Run:  cd Tools/uedctl && env PYTHONPATH=. .venv/bin/python \
+Run:  cd Tools/uedcli && env PYTHONPATH=. .venv/bin/python \
         dev/docs/spikes/concave-faces/count_concave_faces.py <map.t3d> [<map.t3d> ...]
 """
 import math
@@ -17,16 +17,16 @@ import sys
 def _find_pkg_root(start):
     d = os.path.dirname(os.path.abspath(start))
     while d != os.path.dirname(d):
-        if os.path.isfile(os.path.join(d, "uedctl", "__init__.py")):
+        if os.path.isfile(os.path.join(d, "uedcli", "__init__.py")):
             return d
         d = os.path.dirname(d)
-    raise RuntimeError("could not locate the uedctl package root above " + start)
+    raise RuntimeError("could not locate the uedcli package root above " + start)
 
 
 sys.path.insert(0, _find_pkg_root(__file__))
 
-from uedctl.model import parse_t3d
-from uedctl.rotation import actor_linear, actor_prepivot, local_offset
+from uedcli.model import parse_t3d
+from uedcli.rotation import actor_linear, actor_prepivot, local_offset
 
 
 def is_face_convex(v3) -> bool:

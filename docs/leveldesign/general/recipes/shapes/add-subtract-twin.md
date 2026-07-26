@@ -9,7 +9,7 @@ so it carves a recess the exact shape of the trim. The piece then sits in its ow
 A wall block, a beveled trim block (additive), and a subtractive duplicate of the trim carving a
 matching recess into the wall.
 
-### uedctl pipeline (what you run)
+### uedcli pipeline (what you run)
 
 ```
 # 1. the wall mass

@@ -4,7 +4,7 @@
 > covers the **on-the-wire text format** that `MAP EXPORT` writes and
 > `MAP IMPORTADD` reads — a plain-text description of actors and their
 > brush geometry. It does NOT describe the "T3D tree" — the
-> `{actors/, order, packages, name}` directory form used by the uedctl
+> `{actors/, order, packages, name}` directory form used by the uedcli
 > session store. The session-store format is documented in
 > [`../architecture.md`](../architecture.md) ("Session store").
 >
@@ -17,7 +17,7 @@
 ## Evidence and confidence markers
 
 Every claim below carries a confidence marker:
-- ✅ = uedctl-used / live-verified
+- ✅ = uedcli-used / live-verified
 - 🔬 = live-probed this session
 - 📖 = extracted from the binary string table (vocabulary real, semantics
   inferred)
@@ -27,7 +27,7 @@ round-trip), `../spikes/2026-06-19-t3d-package-qualification.md` (texture
 binding), `../spikes/2026-06-19-builder-world-geometry-parity.md` (vertex
 faithfulness), `../spikes/2026-06-20-obj-dependencies-untextured-poly-correlation.md`
 (texture demand-load), `../spikes/2026-06-21-class-qualification-discovery-and-roundtrip.md`
-(class qualification). Real T3D examples in `../../uedctl/tests/fixtures/`.
+(class qualification). Real T3D examples in `../../uedcli/tests/fixtures/`.
 
 ---
 
@@ -106,7 +106,7 @@ earlier weak verdict that the package qualifier was "ignored" (that test had no 
 could only show a wrong qualifier wasn't *rejected*), and makes `Class=` symmetric with `Texture=`
 package binding. **But `MAP EXPORT` always writes the bare class name** (`Class=Foo`, never
 `Class=PkgB.Foo`), even when the class lives only in the non-default colliding package — so an actor's
-class *package* is authored data uedctl owns and re-emits qualified at materialize; recovering it from
+class *package* is authored data uedcli owns and re-emits qualified at materialize; recovering it from
 a live level needs `OBJ DEPENDENCIES PACKAGE=<level>` (prints per-actor refs fully qualified). Method
 caveat: collision-by-duplication works only for small dependency-light packages — duplicating a large
 one (`Engine.u`) crashes the editor with `Palette …: Serial size mismatch`. (spike:
@@ -130,7 +130,7 @@ actor class; `Mover` keyframe arrays (`KeyPos(N)`/`KeyRot(N)`/`NumKeys`)
 and decoration skin arrays (`MultiSkins(N)`) are the most common examples.
 Confirmed in the substrate `Engine.u` name table (2026-06-24 🔬).
 
-> **uedctl parses/emits/normalizes these faithfully** (since 2026-06-25,
+> **uedcli parses/emits/normalizes these faithfully** (since 2026-06-25,
 > the mover-support work). `model._PROP` captures the optional `(N)` index
 > as part of the property key (`KeyPos(1)`, `MultiSkins(2)`), `emit_actor`
 > re-emits each indexed line verbatim via its catch-all property branch,
@@ -150,7 +150,7 @@ winding order. The winding convention is **CCW-from-outside** (counter-
 clockwise when viewed from outside the solid). Wrong winding produces an
 inverted or invalid solid that crashes `MAP REBUILD` with a CSG GPF.
 
-Evidence: verified from uedctl's own `builders.py` (faces wound CCW-from-
+Evidence: verified from uedcli's own `builders.py` (faces wound CCW-from-
 out pass the DEINTERSECTION parity suite live; a reversed face would
 flip the solid). `spikes/2026-06-19-builder-world-geometry-parity.md`.
 
@@ -172,7 +172,7 @@ load-bearing for the materialize hash:
   (only float32-quantized like every other coordinate). Do NOT drop them as if
   they were like `Normal`.
 
-`Origin` is likewise a stored/preserved FVector (float32). uedctl's `emit.py`
+`Origin` is likewise a stored/preserved FVector (float32). uedcli's `emit.py`
 writes all of these faithfully into the durable trunk; only the hash/compare
 copy drops `Normal` and float32-quantizes coordinates.
 
@@ -188,7 +188,7 @@ The `MAP EXPORT` of a real subtracted brush contains coordinates like
 snapping.
 
 The upshot: brushes need not have integer-grid vertices. Semisolid and
-decorative geometry routinely use fractional coordinates. uedctl stores
+decorative geometry routinely use fractional coordinates. uedcli stores
 all coordinates as exact `decimal.Decimal` (not float) and only snaps a
 coordinate within `CLEAN_EPS=0.001` of an integer to that integer (to
 kill editor noise like `511.999969→512`). A genuine fraction (`32.5`,
@@ -209,12 +209,12 @@ struct members equal to the default member (which is why the editor re-exports a
 live 2026-07-18 with a decisive partial-equal-to-default case (`DeusEx.Rat`
 `RotationRate=(Pitch=4096)` → no export line at all, proving Yaw/Roll retained their non-zero
 defaults): [`../spikes/2026-07-18-partial-value-import-semantics/findings.md`](../spikes/2026-07-18-partial-value-import-semantics/findings.md).
-Consumed by `uedctl.propedit` (`STRUCT_FILL = "default"`): `actor prop get` fills unmentioned
+Consumed by `uedcli.propedit` (`STRUCT_FILL = "default"`): `actor prop get` fills unmentioned
 members/elements from the offline-decoded class defaults, and `unset KEY.Member` reverts that
 member to the class default (not zero).
 
 **Consumed by the COMPARE path — every property, as a TYPED VALUE** (`normalize.compare_view` →
-`_actor_values` → `typedprops`, 2026-07-25). uedctl's producers write every property and every
+`_actor_values` → `typedprops`, 2026-07-25). uedcli's producers write every property and every
 struct member; the editor writes only what differs from the class default. So the built map's
 re-export and the trunk it was built from state the SAME values in DIFFERENT TEXT. Rather than
 canonicalize the text, the post-verify compares each actor's **effective typed values**: for every
@@ -305,7 +305,7 @@ Three properties of this rule, regression-pinned in `test_normalize.py` / `test_
   `Engine.Camera` defaults `Location` non-zero. Member-wise expansion against each property's own
   default handles all of them uniformly.
 
-**The corresponding WRITE-side rule: uedctl never omits a property to mean "zero".** An omitted
+**The corresponding WRITE-side rule: uedcli never omits a property to mean "zero".** An omitted
 property re-imports as the CLASS DEFAULT, so omitting one is only ever correct when it provably
 equals that class's default — which the write paths (the trunk emit, the generators, `actor
 rotate`, `brush apply-transform`) have no resolver to check. They therefore write the value
@@ -354,11 +354,11 @@ its comment grammar. Verified 2026-07-18 by static disassembly **and** a live `M
 | unknown property (`Foo=1`, no such UProperty) | **Warned + skipped, import continues** (non-fatal): `Warning: <Class>: Unknown property in defaults: <line>`. A long (>64-char) string value is fine — no FName length limit on a value. | `FindProperty`→NULL → `Logf(NAME_Warning,…)` → next line. |
 | `\|` (pipe) | end-of-line terminator (outside quotes) | `ParseLine` |
 
-**So `//` is the one robust, silent comment carrier.** uedctl uses bare `//` lines as the on-the-wire
-form of an actor's uedctl-side sidecars — **`// uedctl-folder: <path>`** for the single-path **folder**
-and **`// uedctl-labels: <l1,l2,…>`** for the multi-valued **label** set (see `../architecture.md`
+**So `//` is the one robust, silent comment carrier.** uedcli uses bare `//` lines as the on-the-wire
+form of an actor's uedcli-side sidecars — **`// uedcli-folder: <path>`** for the single-path **folder**
+and **`// uedcli-labels: <l1,l2,…>`** for the multi-valued **label** set (see `../architecture.md`
 "Folders" and "Labels"): both ride `actor show` output and are stripped silently by the editor on
-paste/import while uedctl's own parser reads them back into the respective sidecars (`--t3d-only`
+paste/import while uedcli's own parser reads them back into the respective sidecars (`--t3d-only`
 suppresses both). Regression: `test_engine_facts.py`
 (`test_t3d_import_strips_double_slash_comments`) pins the `//`-strip byte pattern in the committed
 `core.dll`. Do NOT carry data in `/* */` or `;` (fragile — they only survive as no-`=` skipped lines),
@@ -378,7 +378,7 @@ represent everything in a compiled `.dx` map file:
 
 **Practical rule:** to preserve compiled state (lighting, BSP, pathing),
 edit in place and use `MAP SAVE` — never reconstruct a `.dx` from T3D
-alone unless you plan to rebuild all of the above. uedctl's `level apply`
+alone unless you plan to rebuild all of the above. uedcli's `level apply`
 always triggers a full re-import + `MAP REBUILD` + `LIGHT APPLY`, so
 rebuilding is automatic; the point is that T3D export of a built map loses
 these artifacts.
@@ -407,7 +407,7 @@ fields group by WHEN and HOW the editor/engine produces them:
   `AIProfile(N)` (stripped by prefix — computed AI navigation weight).
 - **Mover base-pose fields** `BasePos`/`BaseRot`: the editor derives the
   mover's home pose from `Location`/`Rotation` at import and writes these
-  fields into the re-export. uedctl-authored movers never emit them; a
+  fields into the re-export. uedcli-authored movers never emit them; a
   re-export adds them, so they must canonicalize away (confirmed by
   spike test E, 2026-06-25).
 - **Mover engine-stamped sentinels** `SavedPos`/`SavedRot`: pure engine
@@ -419,7 +419,7 @@ fields group by WHEN and HOW the editor/engine produces them:
   **unconditionally** — no guard, no test of what the file stored — so an
   authored value can never survive a round trip, and any mover that has
   been through a package load carries the sentinel while a
-  uedctl-authored one (which omits both) does not. Without the strip,
+  uedcli-authored one (which omits both) does not. Without the strip,
   every mover map fails the H3 post-verify. Disassembled out of BOTH
   engines and corroborated by the corpus (487 occurrences of each, with
   exactly ONE distinct value each; every retail map holding a mover — 81
@@ -464,7 +464,7 @@ described under "Partial struct/array property values" above:
   such a tag until 2026-07-25.
 
 For the full rationale see `../architecture.md` "Coords" and
-`uedctl/normalize.py`.
+`uedcli/normalize.py`.
 
 ---
 
@@ -498,7 +498,7 @@ Unreal-source `…·TextureU/|TextureU|²·UScale` form is the same mapping with
 folds it into the magnitude). The stored `Origin`/`TextureU`/`TextureV` are in the **brush's LOCAL
 frame**; the renderer maps them to world via `base_w = Location + R·(Origin − PrePivot)`,
 `axes_w = R·axes` — so two faces on differently-placed/rotated brushes are seamlessly aligned only
-when they share the same *world* frame, NOT the same stored fields. ✅ uedctl-used: this is the
+when they share the same *world* frame, NOT the same stored fields. ✅ uedcli-used: this is the
 convention `brush poly align` computes against and `render.rs`/`preview_native._world_uv_frame`
 render with; pinned by `test_polyalign.test_engine_fact_uv_formula_is_base_relative_plus_pan`.
 (Confidence: uses the authored `Origin` as `uv_base` and adds the surface `Pan` — evidence
@@ -516,5 +516,5 @@ is the lightmap-grid pan, a *different* quantity.)
   in [`quirks.md`](quirks.md) "How brushes enter the level".
 - [`../architecture.md`](../architecture.md) — the session store's T3D tree
   format (different thing), exact `Decimal` coord storage, `emit.clean`.
-- [`uedctl/normalize.py`](../../../uedctl/normalize.py) — `COMPUTED_PROPS`,
+- [`uedcli/normalize.py`](../../../uedcli/normalize.py) — `COMPUTED_PROPS`,
   `normalize_actor`, `canonicalize_self_refs`.

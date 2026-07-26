@@ -4,7 +4,7 @@
 
 ### No back-compat cruft — a removed thing is DELETED
 
-uedctl has **never been released**: no external users, no pinned versions, no scripts in
+uedcli has **never been released**: no external users, no pinned versions, no scripts in
 the wild. So **nothing is kept for backward compatibility.** When a flag, verb, option
 value, output format, on-disk tree layout, config key or internal API is removed or
 renamed, it is **deleted outright in the same commit that introduces the replacement** —
@@ -27,7 +27,7 @@ The T3D trees are the one place to **think** before deleting, because a user's *
 lives there — but the rule still holds: change the format and migrate or regenerate the
 trees, never teach the reader two layouts.
 
-**This is superseded the day uedctl is released**, when a real deprecation policy replaces
+**This is superseded the day uedcli is released**, when a real deprecation policy replaces
 it.
 
 ### No silent half-answers, and no fallbacks

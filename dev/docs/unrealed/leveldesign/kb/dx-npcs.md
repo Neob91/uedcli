@@ -88,7 +88,7 @@ box" temperament.
 
 **Alarm broadcast:** `RaiseAlarm` (`ERaiseAlarmType`: `RAISEALARM_Never` / `_BeforeAttacking` /
 `_BeforeFleeing`). **Vanilla default is `RAISEALARM_BeforeFleeing`** on `ScriptedPawn`, with `Animal`
-and `Robot` overriding to `RAISEALARM_Never`. ⚠ The **UED22 editing package** uedctl decodes shows
+and `Robot` overriding to `RAISEALARM_Never`. ⚠ The **UED22 editing package** uedcli decodes shows
 `_BeforeAttacking` uniformly (the `Animal`/`Robot` `Never` overrides dropped) — a recompile divergence,
 like `Aggressiveness`; the **shipped game uses the vanilla defaults above**. Also `bEmitDistress`,
 `MaxProvocations` (**def 1** — provocations before turning hostile).
@@ -144,7 +144,7 @@ the pawn's **`CarcassType`**. Ambient spawners exist (`PawnGenerator`,
 
 Discover the live roster:
 ```
-bin/uedctl class list --flat --subclass-of DeusEx.ScriptedPawn
+bin/uedcli class list --flat --subclass-of DeusEx.ScriptedPawn
 ```
 
 ---
@@ -211,7 +211,7 @@ home/flee toggles: `bDefendHome`, `bEmitDistress`, `bCower`, `bLeaveAfterFleeing
    ([`dx-conversations-computers.md`](dx-conversations-computers.md)).
 8. **Rebuild paths, playtest.**
 
-uedctl performs steps 2–7 as `actor build DeusEx.<Class> --prop … | actor add -`
+uedcli performs steps 2–7 as `actor build DeusEx.<Class> --prop … | actor add -`
 plus `actor prop set` for later edits. Paths (step 1/8) are a build-time editor
 operation, not a trunk edit.
 
@@ -237,8 +237,8 @@ models:
   orders (+ `PatrolPoint`), not `AmbushPoint`.
 
 > **Caveat — `Aggressiveness` (and `bAssaultAttack`/`bDefendPosition`/`DefendPoint`):** vanilla DX's
-> `HumanMilitary` has **no** such vars, but the **UED22 editing package** (the `DeusEx.u` recompile uedctl
-> validates against) *added* `var() float Aggressiveness` (and those others) on `HumanMilitary`. So uedctl
+> `HumanMilitary` has **no** such vars, but the **UED22 editing package** (the `DeusEx.u` recompile uedcli
+> validates against) *added* `var() float Aggressiveness` (and those others) on `HumanMilitary`. So uedcli
 > **accepts** `Aggressiveness` (it won't error), but the **shipped game ignores it** — don't rely on it for
 > behaviour. It is NOT in the truly-absent list above for that reason.
 

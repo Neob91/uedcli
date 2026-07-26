@@ -4,12 +4,12 @@
 **Method:** live probe in `uned-spike1` (UED22 under wine). Authored mover T3Ds with known
 `BasePos`/`BaseRot`/`KeyPos(N)`/`KeyRot(N)`/`KeyNum`/`Location`/`Rotation`, `MAP IMPORTADD`'d
 them, switched the editing keyframe via `ACTOR KEYFRAME NUM=#`, and read every field back via
-`MAP EXPORT`. Also verified the mover survives uedctl's `EDIT PASTE` materialize path.
+`MAP EXPORT`. Also verified the mover survives uedcli's `EDIT PASTE` materialize path.
 **Confidence:** ✅ live-verified (every value below is a `MAP EXPORT` readback).
 
 This closes the design fork raised while speccing offline mover support: "when `actor move`/
 `actor rotate` change a mover's `Location`/`Rotation`, how do we keep `BasePos`/`BaseRot` from
-drifting?" Answer: **uedctl does not author `BasePos`/`BaseRot` at all** — the editor derives
+drifting?" Answer: **uedcli does not author `BasePos`/`BaseRot` at all** — the editor derives
 them. See "Design consequences" below.
 
 ---
@@ -58,19 +58,19 @@ KeyPos[1] = 256`. `BasePos`/`BaseRot` cannot be set independently via T3D.
 
 ## Materialize path (`EDIT PASTE`) — movers are fine
 
-uedctl materializes brushes via `EDIT PASTE` (not `MAP IMPORTADD`). Pasting a `Mover` block:
+uedcli materializes brushes via `EDIT PASTE` (not `MAP IMPORTADD`). Pasting a `Mover` block:
 `KeyPos(1)`/`KeyRot(1)` are preserved and **survive `MAP REBUILD`**; the mover brush carries
 **no `CsgOper`** (default `CSG_Active` = 0) → it stays out of the world BSP/CSG, matching the
 collision spike (`2026-06-24-bsp-collision-solidity-movers-from-binary.md` §3 — movers use the
 dynamic collision hash, not world CSG). The usual `EDIT PASTE` **+32uu drift on all 3 axes**
-applies (`Location`/`BasePos` came back +32 each) — uedctl's existing −32 pre-shift cancels it,
+applies (`Location`/`BasePos` came back +32 each) — uedcli's existing −32 pre-shift cancels it,
 same as for any brush.
 
 ## Design consequences (for the mover spec)
 
-1. **uedctl authors movers at `KeyNum=0` and stores the base pose in the ordinary
+1. **uedcli authors movers at `KeyNum=0` and stores the base pose in the ordinary
    `Location`/`Rotation` fields** — exactly like every other actor — plus `KeyPos(N)`/`KeyRot(N)`
-   offset arrays for keys 1..N-1. **uedctl never emits `BasePos`/`BaseRot`**; the editor derives
+   offset arrays for keys 1..N-1. **uedcli never emits `BasePos`/`BaseRot`**; the editor derives
    them from `Location`/`Rotation` at materialize.
 2. **The fork dissolves: `actor move`/`actor rotate` need NO mover special-casing.** They edit
    `Location`/`Rotation` (the base pose at `KeyNum=0`); the editor re-derives `BasePos`/`BaseRot`
@@ -78,7 +78,7 @@ same as for any brush.
    stored `KeyNum=0`. (Neither "recompute `BasePos` at emit" nor "sync inside move/rotate" is
    needed.)
 3. **`normalize.COMPUTED_PROPS` must strip `BasePos`, `BaseRot`, `OldLocation`** (and `OldRot`
-   if it appears) — they are editor-computed from `Location`/`Rotation`, so a uedctl-authored
+   if it appears) — they are editor-computed from `Location`/`Rotation`, so a uedcli-authored
    mover (which lacks them) and its re-exported form (which has them = `Location`/`Rotation`)
    must canonicalize equal, or H3 post-verify and the canonical hash spuriously differ.
 4. **`KeyPos(N)`/`KeyRot(N)` are the `Foo(N)` indexed-array lines** the model currently drops —
@@ -87,7 +87,7 @@ same as for any brush.
 5. **`mover key list` resolves a key's world pose** as `Location + KeyPos[i]` /
    `Rotation + KeyRot[i]` (base = `Location`/`Rotation`, since stored `KeyNum=0`).
 6. **Reading existing maps (THEIRS):** a mapper may leave a mover at `KeyNum≠0`, so `Location`
-   for that actor is `base + offset`, not the base. **uedctl canonicalizes such a mover back to
+   for that actor is `base + offset`, not the base. **uedcli canonicalizes such a mover back to
    `KeyNum=0` on ingest** (`movers.canonicalize_mover`; rationale in `decisions.md` 2026-06-25 mover
    entry) — folding the selected-key offset
    out of `Location`/`Rotation` and dropping `KeyNum` — rather than preserving `KeyNum≠0`
@@ -96,16 +96,16 @@ same as for any brush.
    offset`, then `Location := BasePos + KeyPos[KeyNum] = base + 2·offset` — drift. The
    `KeyNum≠0`-via-`EDIT PASTE` drift is an extrapolation from test D's `MAP IMPORTADD` result,
    confirmed by the spec's integration step.) The computed `BasePos`/`BaseRot` are stripped by (3);
-   for uedctl-authored movers `KeyNum` is always 0.
+   for uedcli-authored movers `KeyNum` is always 0.
 
 ## Notes / loose ends
 
 - `BRUSH ADDMOVER` on the default (empty) builder brush after `MAP NEW` produced an empty mover
-  (no PolyList, no `Brush=` ref) — irrelevant to authoring (uedctl emits the brush model-side),
+  (no PolyList, no `Brush=` ref) — irrelevant to authoring (uedcli emits the brush model-side),
   but it confirms `BRUSH ADDMOVER`/`ACTOR KEYFRAME` are a dead end for *authoring* (Spike 7,
   2026-06-23): keyframe values are T3D-authored regardless.
 - The `EDIT PASTE` test produced two mover actors from a one-mover clipboard (an auto-naming
-  artifact of pasting a `Begin Map` block); uedctl controls clipboard content + names (D6) so
+  artifact of pasting a `Begin Map` block); uedcli controls clipboard content + names (D6) so
   this is not a concern for the real materialize path.
 ## Follow-up: `KeyPos[i]` is world-additive even when `BaseRot≠0` (✅ resolved 2026-07-07)
 
@@ -122,7 +122,7 @@ independent ways:
 The companion **rotation** question was never actually open: test E above already verified
 `Rotation = BaseRot + KeyRot[i]` live (`Yaw=8192 + Yaw=16384 = Yaw=24576`), and FRotator addition
 is componentwise integer addition — the same `rotation.compose_uu`/`subtract_uu` path `actor
-rotate` uses for every actor, with no world-vs-object subtlety. So uedctl's v1 assumption (both
+rotate` uses for every actor, with no world-vs-object subtlety. So uedcli's v1 assumption (both
 offsets stored plainly, no `BaseRot` special-casing) was correct on both axes.
 
 **Consequence:** the interim `mover key add/move/rotate` stderr caution on a base-rotated mover was

@@ -2,7 +2,7 @@
 
 ## What we want
 
-uedctl is editor-automation for **UnrealEngine 1.0 games in general**, with
+uedcli is editor-automation for **UnrealEngine 1.0 games in general**, with
 **Deus Ex as one baked-in substrate**, not as the tool's identity.
 
 - New code, flags, verbs and naming avoid DeusEx-only framing.
@@ -19,7 +19,7 @@ the TOML says what the owner says, and the code keeps the generic abstraction.
 
 ## Rejected
 
-- **Treating uedctl as a Deus Ex tool.** The substrate split (code vs content,
+- **Treating uedcli as a Deus Ex tool.** The substrate split (code vs content,
   per-substrate helper classes) and the UE1-generic T3D/console-verb surface
   already make the core game-agnostic; naming should reflect that rather than
   re-entrench a DeusEx-only framing.

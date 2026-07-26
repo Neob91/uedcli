@@ -14,7 +14,7 @@ NativeUnatco.dx 03_NYC_UNATCOHQ.dx` (raw on-disk diff). Nothing normalized; RAW 
 
 ## 1. Which shipped map is the golden — and how it was confirmed ✅
 
-The trunk `_scratch/unatco/uedctl/maps/unatco` (1437 actors) was ingested from **one** of
+The trunk `_scratch/unatco/uedcli/maps/unatco` (1437 actors) was ingested from **one** of
 `DX/Maps/0{1,3,4,5}_NYC_UNATCOHQ.dx`. Pinned to **`03_NYC_UNATCOHQ.dx`** by the **Brush-class
 export count**, which is exact and unambiguous:
 
@@ -119,8 +119,8 @@ recent blocker, so it was not repeated here.
 
 ## 6. Reproduce
 ```
-cd Tools/uedctl
-. "$HOME/.cargo/env" && .venv/bin/maturin develop --release -m uedctl-native/Cargo.toml
+cd Tools/uedcli
+. "$HOME/.cargo/env" && .venv/bin/maturin develop --release -m uedcli-native/Cargo.toml
 .venv/bin/python dev/docs/spikes/2026-07-15-native-materialize/harness/build_native_unatco.py
 .venv/bin/python dev/docs/spikes/2026-07-15-native-materialize/harness/ground_truth_bytediff.py \
     DX/Maps/NativeUnatco.dx DX/Maps/03_NYC_UNATCOHQ.dx

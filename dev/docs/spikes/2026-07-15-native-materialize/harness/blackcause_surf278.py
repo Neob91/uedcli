@@ -3,12 +3,12 @@
 is it (a) backface-culled (no in-front light) or (b) LOS over-occluded (in-front+in-range
 light exists but every lumel fails line_clear)?"""
 import sys, os, struct, math
-HARN = "/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedctl"
+HARN = "/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedcli"
 sys.path.insert(0, os.path.join(HARN, "dev/docs/spikes/bspspike"))
-sys.path.insert(0, os.path.join(HARN, "dev/docs/spikes/2026-06-27-decontainerize-uedctl/harness"))
+sys.path.insert(0, os.path.join(HARN, "dev/docs/spikes/2026-06-27-decontainerize-uedcli/harness"))
 sys.path.insert(0, HARN)
 import umodel_parser as UP
-from uedctl.native import umodel as UM
+from uedcli.native import umodel as UM
 from utexture_decode import load_package, ci, read_props
 
 RF_HasStack = 0x02000000

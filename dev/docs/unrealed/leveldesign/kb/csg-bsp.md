@@ -22,7 +22,7 @@ the float constants out of `.rdata`), a tier stronger than 📖.
 - A single **builder brush** (the red "cookie-cutter" wireframe) is shaped, positioned, then **committed**
   as a *Subtract* or *Add* operation. The builder brush is a stamp — it is **never itself part of the
   level**; committing copies its current shape into a new CSG brush actor.
-- **uedctl verb:** `brush build {cube,cylinder,cone,sheet,staircase,spiral,extrude,revolve} --csg {add,subtract} | actor
+- **uedcli verb:** `brush build {cube,cylinder,cone,sheet,staircase,spiral,extrude,revolve} --csg {add,subtract} | actor
   add -`. The generator (`brush build …`) prints a T3D snippet to **stdout**; it does **not** write the
   trunk. The write is always `… | actor add -` — show the full pipe, never `brush build` alone.
   - *(GUI equivalent: shape the red builder brush → **Shift-S** Subtract / **Shift-A** Add. 🔬 UED22
@@ -32,8 +32,8 @@ the float constants out of `.rdata`), a tier stronger than 📖.
 
 **UnrealEd's brush `.u3d` Save/Load is broken — Export/Import `.t3d` is the reliable path** (import as
 "Solid Mesh" + "Keep Original Polygons Intact"). 📖 Wolf. This is worth a callout because it independently
-validates uedctl's entire git-tracked-T3D-trunk design: the community's own reliable interchange format is
-the T3D text that uedctl treats as the source of truth.
+validates uedcli's entire git-tracked-T3D-trunk design: the community's own reliable interchange format is
+the T3D text that uedcli treats as the source of truth.
 
 ---
 
@@ -53,7 +53,7 @@ top of the F8 / `MAP REBUILD` pipeline. It:
 Each `bspBrushCSG` mutates the accumulated world model, so the **last** operation touching a region wins.
 `MAP SENDTO FIRST/LAST` merely reorders the actor list the loop walks — **no heuristic re-sorts them**.
 
-- **uedctl mapping:** CSG precedence is the trunk's **`(order_value, name)` sort**. `actor order --first`
+- **uedcli mapping:** CSG precedence is the trunk's **`(order_value, name)` sort**. `actor order --first`
   is the verb analog of "To First"; `actor order --last` of "To Last". There is no live editor state to
   reorder — the sort key IS the order.
   - *(GUI equivalent: select brush → Order → To First / To Last.)*
@@ -94,7 +94,7 @@ subtracted-from / seal a zone.
 | **Semisolid** | **no** (cuts only itself) | no | detail that shouldn't cut the BSP (beams, pillars, trim, **walkable** platforms) — full reliable collision; keeps node count low, localises off-grid / curved geometry |
 | **Nonsolid** | no | no (placed only inside a subtracted solid) | markers, **zone-portal sheets**, decoration |
 
-- **uedctl verb:** `--solidity solid|semisolid|nonsolid` on `brush build`.
+- **uedcli verb:** `--solidity solid|semisolid|nonsolid` on `brush build`.
   - *(GUI equivalent: Add Special solidity, or the brush's Solidity flags.)*
 - **Semisolids are fully walkable** — they have complete, reliable collision; you can walk and stand on them,
   so floors, ramps, and platforms built from semisolids are fine. Their ONLY special trait is that they do
@@ -236,7 +236,7 @@ yield different geometry — just not because one skips the merge.
 1. **Grid discipline / integer on-grid coords / powers of two** (2-4-8-…-256; prefer 96/112/128 over 100).
    Off-grid signature to hunt: coords reading **`15.999976`** where `16` belongs. *Why:* exact plane
    coincidence → exact splits, nothing lands in the 1e-4 collapse band or the 0.25 split band as a sliver.
-   - **uedctl caveat:** grid discipline is **guidance, not an enforced operation — uedctl does NOT snap
+   - **uedcli caveat:** grid discipline is **guidance, not an enforced operation — uedcli does NOT snap
      coordinates for you.** The generators emit exactly the coords you pass; keeping them on-grid is the
      author's responsibility.
 2. **Rotate SOLID (world-cutting) brushes only in 90° increments.** Off-90° *solid* brushes throw
@@ -248,7 +248,7 @@ yield different geometry — just not because one skips the merge.
 3. **Keep every face planar & convex; never two coincident verts** (crashes Finalize).
 4. **Coplanar surfaces: exactly coplanar (then Merge) or cleanly ≥1 uu apart** — never in-plane.
 5. **Brush order: subtractive/structural To First; additive/semisolid/nonsolid/mover To Last** (last op
-   wins — matches the actor-order rebuild loop, §2). uedctl: `actor order --first`/`--last`.
+   wins — matches the actor-order rebuild loop, §2). uedcli: `actor order --first`/`--last`.
 6. **Push off-grid / curved / detail geometry to SEMISOLID** — it receives cuts but emits no
    world-splitting planes, localising instability and cutting node count. *Constraint:* a semisolid must
    **not touch another semisolid, a nonsolid, or a zone portal** (§4).
@@ -279,7 +279,7 @@ Reconciled to the disassembly (spike §5 repair table):
 | **Locate** via Zone/Portal view, a fog detector (`set PlayerPawn ConstantGlowFog (X=0.3)` → HOM spots turn solid red), or "show paths" (paths won't form over bad BSP) | narrows the culprit brush before you touch anything |
 | **Grid discipline / clean multiples** (console `ACTOR ALIGN` to snap, then Transform Permanently) | keeps face planes exactly coincident → exact splits → nothing lands in the ±0.25 band as a sliver |
 | **Transform Permanently** | bakes the float transform into vertices, so CSG sees stable coords instead of re-deriving drifting ones each rebuild |
-| **Reorder** (To First / Last) | changes which planes partition which region → a different, cleaner set of splits (the `csgRebuild` order loop, §2) — uedctl `actor order --first/--last` |
+| **Reorder** (To First / Last) | changes which planes partition which region → a different, cleaner set of splits (the `csgRebuild` order loop, §2) — uedcli `actor order --first/--last` |
 | **Nudge** the culprit brush | shifts it out of a coplanar-coincident / near-band configuration |
 | **Flip a nearby semisolid ↔ solid** | changes whether that brush cuts the world BSP at all → re-partitions locally, avoiding the bad split |
 | **Hand-rebuild the face — select surrounding verts CLOCKWISE → Create** | re-adds an `FPoly` that survives `Finalize`; **clockwise *as seen in the viewport* = correct winding** so `CalcNormal` faces it outward (CCW-in-viewport = inverted). This is the same convention as `t3d.md`'s "CCW-from-outside", just viewed in UnrealEd's Y-down 2D view. Random vertex order → degenerate / Critical Error |
@@ -321,14 +321,14 @@ Reconciled to the disassembly (spike §5 repair table):
 
 ---
 
-## 6. uedctl verb summary for this file
+## 6. uedcli verb summary for this file
 
-| Craft task | uedctl | GUI equivalent |
+| Craft task | uedcli | GUI equivalent |
 |---|---|---|
 | Carve / place geometry | `brush build {cube,cylinder,cone,sheet,staircase,spiral,extrude,revolve} --csg {add,subtract} --solidity {solid,semisolid,nonsolid} --texture … \| actor add -` | shape red builder → Subtract/Add |
 | Solidity choice | `--solidity solid\|semisolid\|nonsolid` on `brush build` | Add Special solidity / brush flags |
 | CSG precedence (To First/Last) | `actor order --first` / `actor order --last` | Order → To First / To Last |
-| Grid discipline | **guidance only — uedctl does not snap for you** | GUI grid-snap toggle |
+| Grid discipline | **guidance only — uedcli does not snap for you** | GUI grid-snap toggle |
 
 The disassembly-grounded facts here (the 0.25 split band, the ~1e-4 collapse threshold, the <3-verts /
 zero-area rejection, brush-order = actor-order) are pinned by the `2026-06-24` spike's committed evidence;

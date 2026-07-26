@@ -2,11 +2,11 @@
 """Spike harness: root-cause why a `--solidity semisolid` brush makes `level
 materialize`'s MAP SAVE silently write no `.dx`.
 
-Run on the HOST (Python 3.12, direct docker) from the uedctl dir:
+Run on the HOST (Python 3.12, direct docker) from the uedcli dir:
     PYTHONPATH=. python3 dev/docs/spikes/2026-07-13-semisolid-save/probe.py
 
 Reuse an already-booted editor (skip the ~90s boot) with:
-    UEDCTL_REUSE_EDITOR=uned-<uuid> PYTHONPATH=. python3 .../probe.py
+    UEDCLI_REUSE_EDITOR=uned-<uuid> PYTHONPATH=. python3 .../probe.py
 
 CRITICAL: the ephemeral editor container's filesystem is NOT the host. MAP
 EXPORT/SAVE must write to the container's own `/work` (POSIX) path, which we then
@@ -20,7 +20,7 @@ SAVE (container /work), then check CONTAINER-SIDE whether the .dx exists +
 capture the editor log across the save.
 
   A. one SOLID cube          -> control (must save)
-  B. one SEMISOLID cube      -> minimal repro? (uedctl emits PolyFlags=32 on actor)
+  B. one SEMISOLID cube      -> minimal repro? (uedcli emits PolyFlags=32 on actor)
   C. editor-native semisolid -> paste SOLID cube, flip via MAP SETBRUSH SETFLAGS=32,
                                 EXPORT to see the editor's OWN representation.
 
@@ -36,11 +36,11 @@ import time
 import uuid
 from pathlib import Path
 
-from uedctl import builders, writes
-from uedctl.driver import Driver, to_z_path
-from uedctl.editor import ensure_editor, stop_editor
-from uedctl.emit import emit_actor
-from uedctl.uuid7 import uuid7
+from uedcli import builders, writes
+from uedcli.driver import Driver, to_z_path
+from uedcli.editor import ensure_editor, stop_editor
+from uedcli.emit import emit_actor
+from uedcli.uuid7 import uuid7
 
 SCRATCH = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/_scratch/semisolid")
 SCRATCH.mkdir(parents=True, exist_ok=True)
@@ -133,12 +133,12 @@ def emit_polyflag_lines(text):
             log("     >", s)
 
 
-def show_uedctl_emit(actor, label):
-    log(f"  uedctl emits for the {label} actor (key lines):")
+def show_uedcli_emit(actor, label):
+    log(f"  uedcli emits for the {label} actor (key lines):")
     for l in emit_actor(actor).splitlines():
         s = l.strip()
         if s.startswith("Begin Actor") or "PolyFlags" in s or "CsgOper" in s or s.startswith("Begin Polygon"):
-            log("     uedctl>", s)
+            log("     uedcli>", s)
 
 
 def build_room():
@@ -153,7 +153,7 @@ def build_cube(name, solidity, at):
 
 
 def main():
-    reuse = os.environ.get("UEDCTL_REUSE_EDITOR")
+    reuse = os.environ.get("UEDCLI_REUSE_EDITOR")
     ed_id = None
     if reuse:
         container = reuse
@@ -171,7 +171,7 @@ def main():
         add_brushes(ed, [build_room()])
         ed.rebuild(); settle(ed)
         solid = build_cube("SolidCube", "solid", (0, 0, 0))
-        show_uedctl_emit(solid, "SOLID")
+        show_uedcli_emit(solid, "SOLID")
         add_brushes(ed, [solid])
         ed.rebuild(); settle(ed)
         emit_polyflag_lines(export_probe(ed, "A_solid_export"))
@@ -183,7 +183,7 @@ def main():
         add_brushes(ed, [build_room()])
         ed.rebuild(); settle(ed)
         semi = build_cube("SemiCube", "semisolid", (0, 0, 0))
-        show_uedctl_emit(semi, "SEMISOLID")
+        show_uedcli_emit(semi, "SEMISOLID")
         add_brushes(ed, [semi])
         ed.rebuild(); settle(ed)
         emit_polyflag_lines(export_probe(ed, "B_semi_export"))

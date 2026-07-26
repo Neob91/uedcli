@@ -19,7 +19,7 @@ LIGHT APPLY is the untested step. This probe:
      carries an OWNER name (e.g. `MyLevel.Model`) that lets us drop the world-Model
      block by identity instead of by fragile position.
 
-    UEDCTL_REUSE_EDITOR=uned-<uuid> PYTHONPATH=. python3 .../probe_lightsave.py
+    UEDCLI_REUSE_EDITOR=uned-<uuid> PYTHONPATH=. python3 .../probe_lightsave.py
 """
 from __future__ import annotations
 
@@ -29,11 +29,11 @@ import sys
 import time
 import uuid
 
-from uedctl import builders, writes
-from uedctl.driver import Driver, to_z_path
-from uedctl.qualify import dump_obj_dependencies, parse_obj_dependencies
-from uedctl.uuid7 import uuid7
-from uedctl.editor import ensure_editor, stop_editor
+from uedcli import builders, writes
+from uedcli.driver import Driver, to_z_path
+from uedcli.qualify import dump_obj_dependencies, parse_obj_dependencies
+from uedcli.uuid7 import uuid7
+from uedcli.editor import ensure_editor, stop_editor
 
 TEX_HOST = "/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Textures/LUM_CoreTex.utx"
 TEXNAME = "LUM_CoreTex.grey_stone_tile"
@@ -78,7 +78,7 @@ def add_cube(name, solidity, at):
 
 
 def a_light():
-    from uedctl.model import parse_t3d
+    from uedcli.model import parse_t3d
     t = ("Begin Map\nBegin Actor Class=Light Name=Torch\n"
          "    Location=(X=0.000000,Y=0.000000,Z=0.000000)\n    Name=\"Torch\"\nEnd Actor\nEnd Map")
     return next(iter(parse_t3d(t).actors.values()))
@@ -147,7 +147,7 @@ def q2_raw(ed):
 
 
 def main():
-    reuse = os.environ.get("UEDCTL_REUSE_EDITOR")
+    reuse = os.environ.get("UEDCLI_REUSE_EDITOR")
     ed_id = None
     if reuse:
         container = reuse; log(f"REUSING {container}")

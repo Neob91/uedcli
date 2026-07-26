@@ -26,7 +26,7 @@ was raised by the corpus brush-idiom study
 (`cli.py`, `builders.py`). Every one of them is a *fixed parametric* shape: you choose sizes, not a
 silhouette. But one of UnrealEd's two standard ways to build geometry is the **2D shape editor**: draw
 a closed polygon in a 2D viewport, then **Extrude** it (sweep it in a straight line) or **Revolve** it
-(sweep it around a pivot axis). uedctl has no equivalent, so any shape whose cross-section is not a
+(sweep it around a pivot axis). uedcli has no equivalent, so any shape whose cross-section is not a
 box, an n-gon, or a stair — an arch voussoir, an L-shaped ledge, a moulded cornice, a chamfered
 pillar, a curved corridor — is unbuildable except by hand-authoring T3D or chaining `brush clip`
 planes. The corpus brush-idiom study named this the single biggest capability gap it surfaced, because
@@ -42,7 +42,7 @@ workflow's *prevalence*; the earlier draft's "*the* canonical method" was not.)*
 This spec defines **two new generators** that close it, plus the small shared vocabulary they need.
 
 **Terms used throughout.** A **profile** is the closed 2D polygon you draw. A **generator** is a
-stateless uedctl verb that prints a T3D snippet to stdout and touches no level (`brush build …`); the
+stateless uedcli verb that prints a T3D snippet to stdout and touches no level (`brush build …`); the
 caller pipes it into `actor add -`. A **brush** is one CSG solid; a **face** (the engine's `FPoly`) is
 one flat polygon of that solid. **Convex** means no interior angle exceeds 180°. **UU** = unreal
 rotation units, the engine's 16-bit angle field: `65536` = a full turn, `16384` = 90°, `4096` = 22.5°.
@@ -94,7 +94,7 @@ Arity is checked in the dispatch handler, before any geometry is built, and agai
 (welding can drop the count below 3).
 
 *Rejected:* a single `--profile "u,v u,v …"` string (compact, but quoting-sensitive and invisible in
-`--help`); a **point list on stdin via `-`** (pipe-friendly, but uedctl deliberately has exactly two
+`--help`); a **point list on stdin via `-`** (pipe-friendly, but uedcli deliberately has exactly two
 stdin conventions — a newline-separated *name list* and a *T3D snippet* — and the tool's `CLAUDE.md`
 requires keeping them distinct; a third, a bare coordinate list, would blur what `-` means per verb).
 If long generated profiles ever become a real workflow, adding stdin later is a compatible extension;
@@ -328,7 +328,7 @@ reason. Cheap now; unfixable later without breaking §10's committed goldens.
 
 Every revolve vertex except at `θ = 0` lands on `radius · cos/sin(θ)` — irrational. `emit.clean`
 deliberately **preserves** genuine fractions, and `kb/csg-bsp.md` §5.5 records the consequence as
-uedctl's own standing caveat: "grid discipline is guidance, not an enforced operation — uedctl does
+uedcli's own standing caveat: "grid discipline is guidance, not an enforced operation — uedcli does
 NOT snap coordinates for you." That section's Tier-A prevention list is unambiguous: an off-grid
 **solid** brush throws its partition planes off-grid, landing faces inside the ±0.25 uu
 `SplitWithPlane` band and the ~1e-4 `RemoveColinears` band → slivers, T-junctions, discarded `FPoly`s,
@@ -396,7 +396,7 @@ bulges into +X. `--solidity semisolid` per §4.5.
 
 Applied identically by both verbs, before any face is built. This mirrors what the engine does to
 every `FPoly` at `FPoly::Fix` / `FPoly::RemoveColinears` (see
-[`kb/csg-bsp.md`](../unrealed/leveldesign/kb/csg-bsp.md) §5.2), so uedctl rejects offline what the
+[`kb/csg-bsp.md`](../unrealed/leveldesign/kb/csg-bsp.md) §5.2), so uedcli rejects offline what the
 editor would silently mangle or crash on.
 
 1. **Weld** consecutive (and wrap-around) near-duplicate points, reusing `builders.WELD` (1e-3) — the
@@ -539,7 +539,7 @@ answer. **Two distinct things carry the name:**
 
 **The mechanism** 🔬 (instruction-decoded from `Editor.dll 0x34b10` —
 [`spikes/2026-07-15-native-materialize/sections/82-bspbrushcsg-port-decode.md`](../spikes/2026-07-15-native-materialize/sections/82-bspbrushcsg-port-decode.md)
-§10.3, ported as `uedctl-native/src/bspcsg.rs::try_to_merge`): `TryToMerge(P1, P2)` first rejects
+§10.3, ported as `uedcli-native/src/bspcsg.rs::try_to_merge`): `TryToMerge(P1, P2)` first rejects
 outright if **`NV1 + NV2 > 16`** — a gate on the two inputs' vertex **sum**, applied *before* any
 splicing. It then looks for a shared point (the first hit in `(i,j)` scan order) **whose forward or
 backward neighbour also matches**, using `FPointsAreSame`'s 0.002 **box** (Chebyshev) tolerance;
@@ -575,7 +575,7 @@ them at `18 > 16`. A cap tiled into three or more pieces may therefore fuse only
 **inference from the decode, not yet observed** — §11 carries the item to verify it live.
 
 **The one caveat, stated plainly.** The offline `level preview --native` draft tier classifies
-solidity with `uedctl-native/src/csg.rs:62 point_in_convex` — a point is inside a brush iff it is
+solidity with `uedcli-native/src/csg.rs:62 point_in_convex` — a point is inside a brush iff it is
 *behind every face plane*, which is only valid for a convex solid. For a concave brush (an L-profile,
 or a revolve's inner wall) the notch is behind all the planes too, so it is classified solid and
 **drawn filled in**. Native *materialize* is not affected: it defaults to `core="bspcsg"`
@@ -594,7 +594,7 @@ users in two contradictory forms.
 
 `decisions.md` 2026-07-19 19:28 UTC established that rotation CLI input is **unreal rotation units,
 not degrees** — "one unit system end to end", extended even to the preview camera-pose grammar. That
-decision reached the *rotation* flags but not the **builder-geometry** angles, so uedctl today mixes
+decision reached the *rotation* flags but not the **builder-geometry** angles, so uedcli today mixes
 units: `brush build cylinder --angle-offset` and `brush build cone --angle-offset` take **degrees**,
 and `brush build spiral --degrees-per-step` takes **degrees**, while `--rotate` takes UU.
 
@@ -714,19 +714,19 @@ overlaps `--rotate`. *Rejected:* deleting the flag outright and telling authors 
 
 Where the code lands (`architecture.md`'s layer map is unchanged — these are ordinary generators):
 
-- **`uedctl/profile.py` (new, small)** — the shared 2D layer, deliberately separate from `builders.py`
+- **`uedcli/profile.py` (new, small)** — the shared 2D layer, deliberately separate from `builders.py`
   so it is testable without any brush: `--point` token parsing, cleanup + validation (§5), signed area
   / winding normalization, the non-simple-profile test, and the convex decomposition (§6, the one
   non-trivial algorithm here). No world coordinates, no `Polygon`, no T3D.
-- **`uedctl/builders.py`** — `extrude(points, depth, axis, …) -> Brush` and
+- **`uedcli/builders.py`** — `extrude(points, depth, axis, …) -> Brush` and
   `revolve(points, angle_deg, segments, axis, …) -> Brush`, both returning a single `Brush` through
   the existing `_face` winding machinery and `make_brush_actor` wrapper. The `(u,v) → world`
   mapping of §2.2 and the
   per-verb outward directions of §5.7 live here as small helpers. Existing builder **signatures are
   unchanged** (§7): only `spiral_staircase`'s guard message is reworded.
-- **`uedctl/cli.py`** — two new `bshape` subparsers, each `_common_build_opts(…)`; plus the §7 unit
+- **`uedcli/cli.py`** — two new `bshape` subparsers, each `_common_build_opts(…)`; plus the §7 unit
   retrofit on `cylinder`/`cone`/`spiral`, and the `--at` help rewrite (§2.3).
-- **`uedctl/dispatch.py`** — two new branches in `_build_brushes` (which returns a list; both verbs
+- **`uedcli/dispatch.py`** — two new branches in `_build_brushes` (which returns a list; both verbs
   return a single-element one), the raw-value range checks of §5.6, the UU→degrees conversion of §7,
   and the two stderr advisories (§4.5, §4.6).
 
@@ -826,9 +826,9 @@ durable ones and delete the spec):
 - **`docs/leveldesign/general/brush-shapes.md`** — the `--angle-offset` prose (two places) → the bool.
 - **`docs/leveldesign/general/README.md`** line 18 — the six-shape list in the doc-index table.
 - **`dev/docs/unrealed/leveldesign/kb/geometry-builders.md`** — the **intro** (which hardcodes the six
-  shapes), §1's builder table (`AlignToSide` now maps 1:1 to a uedctl flag), §4 (curved geometry:
-  Revolve now HAS a uedctl verb), and §7's verb-summary table.
-- **`dev/docs/unrealed/leveldesign/kb/csg-bsp.md`** — §1's uedctl-verb line and §6's verb summary,
+  shapes), §1's builder table (`AlignToSide` now maps 1:1 to a uedcli flag), §4 (curved geometry:
+  Revolve now HAS a uedcli verb), and §7's verb-summary table.
+- **`dev/docs/unrealed/leveldesign/kb/csg-bsp.md`** — §1's uedcli-verb line and §6's verb summary,
   both hardcoding the six shapes.
 - **`builders.py:305-309` + the matching `architecture.md` paragraph** — the `staircase` docstring's
   stale claim that native *materialize* mis-classifies concave brushes (§6: it defaults to the

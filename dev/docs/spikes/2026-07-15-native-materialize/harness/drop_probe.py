@@ -15,11 +15,11 @@ Usage: python drop_probe.py Map.dx X,Y,Z [X,Y,Z ...]
 import sys
 from pathlib import Path
 
-ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedctl")
+ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedcli")
 sys.path.insert(0, str(ROOT))
-sys.path.insert(0, str(ROOT / "dev/docs/spikes/2026-06-27-decontainerize-uedctl/harness"))
+sys.path.insert(0, str(ROOT / "dev/docs/spikes/2026-06-27-decontainerize-uedcli/harness"))
 import utexture_decode as UT  # noqa: E402
-from uedctl.native import umodel as UM  # noqa: E402
+from uedcli.native import umodel as UM  # noqa: E402
 
 
 def load_model(path):

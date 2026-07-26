@@ -11,13 +11,13 @@ import sys
 import time
 
 sys.path.insert(0, ".")
-from uedctl.model import Actor, Brush, Polygon, parse_t3d
-from uedctl.emit import emit_map
-from uedctl.writes import exact_fit_cube_t3d
+from uedcli.model import Actor, Brush, Polygon, parse_t3d
+from uedcli.emit import emit_map
+from uedcli.writes import exact_fit_cube_t3d
 
 # A known-good 200^3 CSG_Add brush the editor itself produced (carries the
 # Origin/Normal/TextureU/TextureV a brush needs to survive CSG). The IMPORTADD
-# variant re-emits THIS through uedctl's own parse->emit path, exactly as
+# variant re-emits THIS through uedcli's own parse->emit path, exactly as
 # add_actor does on real data — not a hand-built (texture-less) cube.
 _TEMPLATE = parse_t3d(open("/home/human/src/dx_lum/Temp/good_brush.t3d").read())
 _TEMPLATE_BRUSH = next(a for a in _TEMPLATE.actors.values() if a.brush)

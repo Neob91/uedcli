@@ -22,7 +22,7 @@ to a wall face and the player can climb it. That is the whole mechanism.
 4. **That's it** — rebuild/materialize and the surface is climbable in-game. No actor, no property,
    no path node for the climb itself.
 
-## With uedctl
+## With uedcli
 
 ```bash
 # Find the wall face(s) you want to make a ladder, then texture them.
@@ -42,7 +42,7 @@ brush poly find ShaftWall --facing +X | brush poly align - --wall
 - **The Group is what matters, not the texture name.** `ladder_a`/`LadrBrwnMetal` are just the
   built-ins that happen to live in the `Ladder` group. A custom texture works identically the moment
   its package group is `Ladder`.
-- **The `Ladder` texture-group is unrelated to uedctl's `folder` and to the T3D `Group=` actor
+- **The `Ladder` texture-group is unrelated to uedcli's `folder` and to the T3D `Group=` actor
   property** — three different "group" senses. This one is the texture-browser group baked into the
   package, and it is the *only* one with in-game behaviour.
 - **The climb texture makes a surface climbable for the *player* only.** There is **no `Ladder`

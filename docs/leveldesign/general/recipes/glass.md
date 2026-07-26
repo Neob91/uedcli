@@ -28,7 +28,7 @@ Collision Hull** placed around the sheet stops the player. 📖
 **Tips:** the collision hull must **not touch surrounding walls or zone boundaries** — a hull abutting
 geometry causes HOM. Keep it a clean thin box just around the glass.
 
-## uedctl pipeline (what you run)
+## uedcli pipeline (what you run)
 
 ```
 # 1. the visible glass: a translucent, 2-sided sheet across the opening (translucent set at build; sheets are 2-sided by default)

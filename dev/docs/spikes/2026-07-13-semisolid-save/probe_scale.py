@@ -6,7 +6,7 @@ ONLY difference is PolyFlags. Whichever semisolid config fails to save (while it
 solid twin saves) is the reproduction; we capture the editor log across that save.
 
 Reuse the booted editor:
-    UEDCTL_REUSE_EDITOR=uned-<uuid> PYTHONPATH=. python3 .../probe_scale.py
+    UEDCLI_REUSE_EDITOR=uned-<uuid> PYTHONPATH=. python3 .../probe_scale.py
 
 Container /work for EXPORT/SAVE, docker cp out, container-side existence check
 (see probe.py header for why host paths don't work).
@@ -20,10 +20,10 @@ import time
 import uuid
 from pathlib import Path
 
-from uedctl import builders, writes
-from uedctl.driver import Driver, to_z_path
-from uedctl.uuid7 import uuid7
-from uedctl.editor import ensure_editor, stop_editor
+from uedcli import builders, writes
+from uedcli.driver import Driver, to_z_path
+from uedcli.uuid7 import uuid7
+from uedcli.editor import ensure_editor, stop_editor
 
 SCRATCH = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/_scratch/semisolid")
 SCRATCH.mkdir(parents=True, exist_ok=True)
@@ -126,7 +126,7 @@ def n_cubes(solidity, n=16, *, overlap=False, embed_in_wall=False):
 
 
 def main():
-    reuse = os.environ.get("UEDCTL_REUSE_EDITOR")
+    reuse = os.environ.get("UEDCLI_REUSE_EDITOR")
     ed_id = None
     if reuse:
         container = reuse; log(f"REUSING {container}")

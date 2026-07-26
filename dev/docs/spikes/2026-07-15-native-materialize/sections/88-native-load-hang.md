@@ -41,7 +41,7 @@ original CPU loop, unmasked.
 
 ## 2. Blocker 1 — the exact defect, in code ✅
 
-- `uedctl/native/pkgref.py::_package_of_class` returns `default_package` ("Engine") whenever
+- `uedcli/native/pkgref.py::_package_of_class` returns `default_package` ("Engine") whenever
   `uprops.package_of_class` is missing — and **it is missing** (`hasattr(uprops,
   "package_of_class") == False`), so it is missing for EVERY class:
   ```python
@@ -103,7 +103,7 @@ Fixed by giving the native build a real class→package oracle instead of the `E
 to_real_packages` (index oracle: `DeusExMover`/`ATM`/`AllianceTrigger`→`DeusEx`, `PlayerStart`/
 `ZoneInfo`→`Engine`) and `::test_real_deusex_class_imports_as_deusex_not_engine` (end-to-end: a
 synthetic 1-DeusEx-actor build emits `DeusEx.DeusExMover`, not `Engine.*`). Both read the real
-configured install (`~/.uedctl/config.toml` `[games.deusex].paths`, or `$UEDCTL_GAME_SYSTEM`) and
+configured install (`~/.uedcli/config.toml` `[games.deusex].paths`, or `$UEDCLI_GAME_SYSTEM`) and
 skip when no install is present.
 
 ## 3. It is level-independent — every real level has it, none "hangs" at blocker 1 ✅
@@ -185,8 +185,8 @@ editor's 17 `Sound` + 1 `Music` imports — an unrelated actor-property omission
 
 ## 6. Reproduce
 ```
-cd Tools/uedctl
-. "$HOME/.cargo/env" && .venv/bin/maturin develop --release -m uedctl-native/Cargo.toml   # if core changed
+cd Tools/uedcli
+. "$HOME/.cargo/env" && .venv/bin/maturin develop --release -m uedcli-native/Cargo.toml   # if core changed
 H=dev/docs/spikes/2026-07-15-native-materialize/harness
 # Blocker 1 — fast-fail on Engine.DeusExMover:
 .venv/bin/python $H/build_native_unatco.py         ; $H/load_hang_probe.sh NativeUnatco 7

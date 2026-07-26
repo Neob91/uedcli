@@ -273,7 +273,7 @@ tail, not a permanent archive. When a remnant here becomes active work, promote 
   described here is gone; see the entry below and `decisions.md` 2026-07-25 11:31 UTC.
   **9.3** `actor folder set/unset` are PRODUCERS (touched Names → stdout, count → stderr), so the
   folder and label dimensions now behave identically and folder edits chain in a pipeline.
-  **9.6** `uedctl cache gc [--max-bytes N] [--max-entries N]` wires the shipped
+  **9.6** `uedcli cache gc [--max-bytes N] [--max-entries N]` wires the shipped
   `schema_cache.sweep()` to the CLI (reclaim orphaned `v<N>/` dirs + LRU-evict to a cap; a negative
   cap exits 2). Docs updated in the same commits (`usage.md`, `architecture.md`).
   **9.5 was MOOT as written** — its premise (the two `test_native_materialize.py` box-sweep tests
@@ -281,7 +281,7 @@ tail, not a permanent archive. When a remnant here becomes active work, promote 
   now sits in the spikes tree and self-inserts its sibling harness on `sys.path`. Marking two GREEN
   tests skipped would have deleted real coverage of the "pawn falls through the floor" bug, so
   instead `_load_line_check()` now turns a harness-side `ImportError` into a SKIP naming the spike
-  env while letting a `uedctl` `ImportError` propagate (a real regression must stay red). Flagged on
+  env while letting a `uedcli` `ImportError` propagate (a real regression must stay red). Flagged on
   `inbox.md` for Andrzej.
 
 - [x] **Mover `SavedPos`/`SavedRot` stripped as engine-stamped — FIXED 2026-07-25 03:07 UTC.**
@@ -335,11 +335,11 @@ tail, not a permanent archive. When a remnant here becomes active work, promote 
   licensee addition. Vertex stride (DX 8-byte int16 quad vs stock 4-byte packed dword) is
   **self-describing** via the TLazyArray skip offset, so ONE decoder serves both — the generic-UE1
   goal. Class thumbnails resolve skins from CLASS defaults (`MultiSkins[i]`), not the mesh's own
-  Textures array. **Remnants:** productise the harness into `uedctl/` (rides the asset-catalog
+  Textures array. **Remnants:** productise the harness into `uedcli/` (rides the asset-catalog
   build); `RemapAnimVerts` element layout unverified (empty everywhere in the corpus).
 
 - [x] **Class-default contraction at the compare seam + the write side stops omitting to mean
-  zero — BUILT 2026-07-25 00:36 UTC.** UnrealEd omits what equals the CLASS DEFAULT; uedctl tested
+  zero — BUILT 2026-07-25 00:36 UTC.** UnrealEd omits what equals the CLASS DEFAULT; uedcli tested
   against ZERO. Fixed in four parts: (1) `normalize.contract_actor` (fed by `classdefaults.ClassDefaults`)
   contracts BOTH compare sides against the real class defaults — whole property, `Rotation` members,
   `Location`, and the editor's `Tag=<class>` default-stamp (the last only where the class does not
@@ -361,7 +361,7 @@ tail, not a permanent archive. When a remnant here becomes active work, promote 
 - [x] **Native `brush intersect` / `brush deintersect` over a piped brush SET — BUILT 2026-07-25.**
   Replaces the editor-driven `stash intersect`/`deintersect`, which are **deleted** (no shim, per
   "no back-compat cruft"); the editor path survives only as the golden REGENERATOR
-  (`tests/editor_oracle.py`, `-m integration`, writes only under `UEDCTL_REGEN_GOLDENS=1`). Rust:
+  (`tests/editor_oracle.py`, `-m integration`, writes only under `UEDCLI_REGEN_GOLDENS=1`). Rust:
   the decoded `bspBrushCSG` Intersect/Deintersect tail fills the `bspcsg.rs:1845` stub — Phase 1
   (builder faces ↓ world) + Phase 2 (world faces ↓ builder hull, reusing FWTB's straddle recursion
   with a NEW non-mutating collect leaf) + the four leaf callbacks + the two-pass iLink renumber.
@@ -378,7 +378,7 @@ tail, not a permanent archive. When a remnant here becomes active work, promote 
 - **Generator-flag cleanup: `--folder`/`--label` move to the generators; ditch `--group`** — BUILT
   2026-07-24 (`22f82b8a8` code + `960275b0d` docs; suite green). Three parts, all shipped: (1) `--folder`
   + repeatable `--label` added to the `brush build` shapes and `actor build` (they emit the existing
-  `// uedctl-folder:`/`// uedctl-labels:` carriers); (2) both flags REMOVED from `actor add`, which is now
+  `// uedcli-folder:`/`// uedcli-labels:` carriers); (2) both flags REMOVED from `actor add`, which is now
   a **pure carrier-consumer** (post-hoc organization = `actor folder set` / `actor label`) — an explanatory
   comment at the `actor add` parser records why; (3) `--group` dropped from `brush build` in favour of
   `--prop Group=`. The two surviving `--group` flags are out of scope and intentionally kept (`prefab/stash
@@ -395,7 +395,7 @@ tail, not a permanent archive. When a remnant here becomes active work, promote 
   `--single`+`--breakdown` → **`--layout {quad,single,breakdown}`** (default `quad`, so mutual exclusion
   is free); `--zoom`+`--zoom-region`+`--zoom-factor` → **`--frame TARGET`** (one input taking either a
   `BRUSH[:IDX]` selector or an explicit six-field world AABB) + `--frame-tightness`; the three
-  `--show-*` booleans → one comma-set **`--show`**; `--out` made optional (a `uedctl-preview-*` temp file
+  `--show-*` booleans → one comma-set **`--show`**; `--out` made optional (a `uedcli-preview-*` temp file
   is minted and its absolute path printed). `--layout breakdown` now gives each **point** actor its own
   captioned pane (framed via `_point_pane_region`, expanded to at least `Location ± 32 UU` so a
   zero-extent marker centres instead of jamming into a corner — regression-pinned). A **breaking CLI
@@ -511,19 +511,19 @@ tail, not a permanent archive. When a remnant here becomes active work, promote 
   **Remnant:** the native CSG core's convex assumption is now falsified for this brush — tracked as
   the `[implement]` "Native CSG core assumes CONVEX brushes" item in `inbox.md`.
 
-- **Level is the ambient `$UEDCTL_LEVEL`; `--target`→`--tree`; drop `level select`** — BUILT
+- **Level is the ambient `$UEDCLI_LEVEL`; `--target`→`--tree`; drop `level select`** — BUILT
   2026-07-20 (2-reviewer cold gates on BOTH the spec and the build; all findings resolved). Fixes the p1
   CLI-probe finding (shared unlocked pointer → concurrent cross-writes): the machine-local
-  `.uedctl/current-level` pointer + `level select` verb are GONE, replaced by the per-process
-  `$UEDCTL_LEVEL` env (resolved via `level_select.resolve_level(env_level=…)`, precedence `--tree` >
+  `.uedcli/current-level` pointer + `level select` verb are GONE, replaced by the per-process
+  `$UEDCLI_LEVEL` env (resolved via `level_select.resolve_level(env_level=…)`, precedence `--tree` >
   env > clean exit-2 naming both set-methods). `--target KIND/NAME` renamed `--tree KIND/NAME`
   everywhere and extended to `level materialize`/`preview` (level-kind only). A **mutating** verb
-  resolved from the env echoes `editing level 'X' (from $UEDCTL_LEVEL)` to stderr (at
+  resolved from the env echoes `editing level 'X' (from $UEDCLI_LEVEL)` to stderr (at
   `TrunkLevelSource.save`), the visibility guard against a stale export. Spec
   `specs/2026-07-20-tree-flag-and-env-level.md`; decisions 2026-07-20 21:30 UTC (supersedes 2026-07-05
   19:07/19:28). Suite-wide test sweep (`test_tree_flag.py`, env-based `test_level_select.py`,
   `set_selected`→`monkeypatch.setenv`). **Remnant:** the p2 `level delete/rename/clone` spec item
-  (to-spec) still references "retarget the selected pointer" — reword to `$UEDCTL_LEVEL` when specced.
+  (to-spec) still references "retarget the selected pointer" — reword to `$UEDCLI_LEVEL` when specced.
 
 - **`mover key` keyframe model rework** — BUILT 2026-07-20. `spec
   specs/2026-07-20-mover-key-base-relative-frame.md`, decisions 2026-07-20 16:18 UTC. `mover key
@@ -544,8 +544,8 @@ tail, not a permanent archive. When a remnant here becomes active work, promote 
 
 - **Lazy-import per-verb modules — DROPPED as obsolete (Andrzej, 2026-07-20).** The item's premise
   (~1s import tax, ~2s→1.1s warm-start win) was measured on the **retired dev CONTAINER** (`_dev-run.sh`,
-  gone 2026-07-14). Re-measured HOST-NATIVE (the current runtime): `bin/uedctl level select` ≈ 0.21s
-  total, of which uedctl imports are only **~37ms** (`-X importtime`: `uedctl.cli` cum 37ms, `model`
+  gone 2026-07-14). Re-measured HOST-NATIVE (the current runtime): `bin/uedcli level select` ≈ 0.21s
+  total, of which uedcli imports are only **~37ms** (`-X importtime`: `uedcli.cli` cum 37ms, `model`
   20ms, `dataclasses` 15ms); the rest is Python+wrapper startup. A lazy restructure would save ~20-30ms
   while being invasive on the shared cli/dispatch bottleneck AND constrained (the top-level `dispatch()`
   exception guard pins `driver`/`editor`/`geometry` imports). Not worth it — closed, not built.
@@ -825,7 +825,7 @@ tail, not a permanent archive. When a remnant here becomes active work, promote 
   (actor-level `PolyFlags` OR'd with per-poly flags), so a `brush build sheet` zone-portal, whose
   `PF_NotSolid|PF_Portal` live only on its polys, is skipped from watertight checks instead of
   tripping phantom open-edge errors; (2) `level status`/`_git_hint` reports the edited PROJECT's own
-  repo, not uedctl's — returns "not a git repo" when the project only sits inside uedctl's source
+  repo, not uedcli's — returns "not a git repo" when the project only sits inside uedcli's source
   tree (was leaking the tool branch); (3) `--base-name`/actor-add no longer strips trailing digits
   (`Pillar1`/`Pillar2` stay distinct, not both `Pillar`); (4) XS bundle — surface-flag names
   case-insensitive (`encode_flags` + `poly set` choices), `brush clip` prints a no-op message when
@@ -878,7 +878,7 @@ tail, not a permanent archive. When a remnant here becomes active work, promote 
   the delta-write diff compares folder BOTH directions incl `"x"`→None. New pure `folderlib.py`
   (path/pattern grammar + the §3 globstar match). `actor folder set --to <path> <names|->` /
   `unset` / `get` (`(none)` sentinel); `actor add --folder`; `actor find --folder <pattern>` /
-  `--no-folder`; `actor show` `// uedctl-folder:` carrier (+ `--t3d-only`); `stash/prefab apply
+  `--no-folder`; `actor show` `// uedcli-folder:` carrier (+ `--t3d-only`); `stash/prefab apply
   --folder` (beside `--group`). ALL folder surfaces reject `--target stash|prefab`. Folder excluded
   from the canonical hash / never emitted to the map. Folded into `architecture.md` ("Folders");
   `unrealed/t3d.md` already documents the carrier. Tests: `test_folderlib.py`, `test_folders.py`.
@@ -912,16 +912,16 @@ tail, not a permanent archive. When a remnant here becomes active work, promote 
   the explicit-default shapes the two open H3 post-verify items trip on — their practical
   priority rises now.
 
-- **Project layout reorg: free `uedctl.toml` at the repo root + in-repo `.uedctl/` state dir** —
+- **Project layout reorg: free `uedcli.toml` at the repo root + in-repo `.uedcli/` state dir** —
   BUILT 2026-07-18 (4 slices: `421b8add0` flag-day cutover + LUM migration, `e301a37cf` state-dir
   threading, `3dc4c7ccb` package-relative tool assets + cwd-relative CLI paths + `repo_paths.py`
-  deletion, + the docs/board sweep). A project is a repo with `<root>/uedctl.toml` (root-relative
+  deletion, + the docs/board sweep). A project is a repo with `<root>/uedcli.toml` (root-relative
   managed-dir keys, defaults `maps/`/`prefabs/`/`texture-catalog/`; `id`/`name` dropped); ALL
-  machine-local state in the self-ignoring `<root>/.uedctl/` (`config.state_dir`, `*` .gitignore
+  machine-local state in the self-ignoring `<root>/.uedcli/` (`config.state_dir`, `*` .gitignore
   written on first create); tool-install assets package-relative (`tool_assets.py`); relative CLI
-  paths resolve against the cwd; `UEDCTL_REPO_ROOT`/`UEDCTL_PREFAB_DIR`/`UEDCTL_TEXTURE_CATALOG`
-  retired. Spec/plan (ephemeral): `specs/2026-07-17-project-layout-uedctl-toml.md`,
-  `plans/2026-07-18-project-layout-uedctl-toml-plan.md`; durable record decisions.md 2026-07-17
+  paths resolve against the cwd; `UEDCLI_REPO_ROOT`/`UEDCLI_PREFAB_DIR`/`UEDCLI_TEXTURE_CATALOG`
+  retired. Spec/plan (ephemeral): `specs/2026-07-17-project-layout-uedcli-toml.md`,
+  `plans/2026-07-18-project-layout-uedcli-toml-plan.md`; durable record decisions.md 2026-07-17
   20:58 UTC. The slice-2 `texture classify set` lock deviation was RESOLVED 2026-07-18: texture
   flocks are catalog-adjacent `<catalog>/.locks/` (decisions.md 2026-07-18 07:53). The live
   materialize/preview check PASSED (spec §10.6 — inbox record).
@@ -979,9 +979,9 @@ tail, not a permanent archive. When a remnant here becomes active work, promote 
 - [~] **`level preview --game` — WARM reusable container + live map delivery** — BUILT + live-verified
   2026-07-17 (spec `specs/2026-07-17-game-preview-warm-container.md`, 4 review rounds; decisions
   2026-07-17 06:57/07:30/08:31). `--game` now delivers into ONE warm per-user container
-  (`uedctl-game-preview-<uid>`, flock + fingerprint-label reuse + inline idle watchdog); map delivery
+  (`uedcli-game-preview-<uid>`, flock + fingerprint-label reuse + inline idle watchdog); map delivery
   is a hash-named (`materialized__…`/`copied__…`, dot-free/lowercased/capped) build written to
-  `uedctl/tmp/preview/`, bind-mounted at `/resources/preview`, POST-boot symlinked into Maps — the
+  `uedcli/tmp/preview/`, bind-mounted at `/resources/preview`, POST-boot symlinked into Maps — the
   SP-R-confirmed reload path (`spikes/2026-07-17-game-preview-reload-keying/`). Live: cold 79s → reuse
   17s → idle self-death (exit 0). `.dx`+`.unr` inputs; `--keep-alive` pins; `--rebuild` mints a fresh
   name. Post-build review gate (2 cold reviewers) resolved: `stop_game`/lock-hang bounding, `--game`
@@ -1051,7 +1051,7 @@ tail, not a permanent archive. When a remnant here becomes active work, promote 
   roundtrip). Includes the prerequisite `stashlib.read_prefab` meta-clobber fix and the
   `parse_poly_target`→`parse_poly_selector` rename (frees "target" on `brush poly set`). Path
   traversal refused before any source is built (`validate_member_name`). Spec:
-  `specs/2026-07-12-uedctl-target-flag-design.md`; decision 2026-07-12 03:06 UTC; folded into
+  `specs/2026-07-12-uedcli-target-flag-design.md`; decision 2026-07-12 03:06 UTC; folded into
   `architecture.md` ("The `LevelSource` seam and `--target`"). **Non-goals (by design):** no
   instance/placement refresh of already-applied copies; no new lifecycle verbs; last-writer-wins on
   a concurrent same-box edit (atomic swap, no merge).
@@ -1064,7 +1064,7 @@ tail, not a permanent archive. When a remnant here becomes active work, promote 
   a total deterministic decompile. All 6 verbs (`new`/`compile`/`decompile`/`validate`/`search`/
   `voices`) with a no-traceback error boundary. Plan:
   `plans/2026-07-05-dxconcli-implementation-plan.md`; spec:
-  `specs/2026-06-26-uedctl-deusex-con-tool-design.md`. A live spike corrected the
+  `specs/2026-06-26-uedcli-deusex-con-tool-design.md`. A live spike corrected the
   `Jump.conversationID` model (`spikes/2026-07-05-deusex-con-jump-conid-live/`).
   Inline-collapse pass DONE 2026-07-06 (single-use fragments inlined; Mission1 −77% fragments);
   multi-error `validate` DONE 2026-07-06 (reports every broken conversation in one pass, each
@@ -1092,7 +1092,7 @@ tail, not a permanent archive. When a remnant here becomes active work, promote 
 
 - [~] **Builder-brush identification predicate — CONFIRMED ROBUST** (2026-06-23, Spike 1 in
   `spikes/2026-06-23-capability-gaps-round2.md`). Editor always assigns inner model `Model<N>` +
-  explicit `CsgOper` to authored brushes; uedctl uses `Model_{actorname}`; inner name `Brush` is a
+  explicit `CsgOper` to authored brushes; uedcli uses `Model_{actorname}`; inner name `Brush` is a
   singleton reserved for the live builder brush, never duplicated. No false positive possible.
   Documented; no code change needed.
 
@@ -1113,14 +1113,14 @@ tail, not a permanent archive. When a remnant here becomes active work, promote 
 - [~] **`ACTOR DUPLICATE`/`MIRROR`/`APPLYTRANSFORM` — CONFIRMED console-drivable** (2026-06-23,
   Spike 8). `ACTOR DUPLICATE` copies selection with ~16uu XY offset. `ACTOR MIRROR X=-1`/`Y=-1`/
   `Z=-1` sets `MainScale` per-axis (corrected from the wrong `BRUSH MIRROR XY` inference).
-  `ACTOR APPLYTRANSFORM` bakes scale into vertices. uedctl does symmetry model-side; these console
+  `ACTOR APPLYTRANSFORM` bakes scale into vertices. uedcli does symmetry model-side; these console
   verbs are documented for completeness in `unrealed/commands.md`. (The model-side `actor mirror`
   CLI verb is tracked in `to-spec.md`.)
 
 ## Done
 
 - [x] **Batch `actor add`/`stash capture` no longer silently drop duplicate-Named actors +
-  `brush build`/`actor build` `--name`→`--base-name`** — 2026-07-12 (branch `uedctl-impl`). Root
+  `brush build`/`actor build` `--name`→`--base-name`** — 2026-07-12 (branch `uedcli-impl`). Root
   cause: `model.parse_t3d` keys actors in a `dict[Name]`, so user-concatenated T3D (e.g. 14
   `brush build --base-name Merlon | actor add`) lost all-but-last *at parse*, before the uniquify
   loop ran. Fix: new `model.parse_t3d_actors` (ordered, duplicate-preserving); `parse_t3d`
@@ -1139,7 +1139,7 @@ tail, not a permanent archive. When a remnant here becomes active work, promote 
   findings resolved (the filter-then-uniquify order came from a spec-review finding).
 
 - [x] **`brush`/`stash`/`prefab preview` render host-side — no container** — 2026-07-12
-  (branch `uedctl-impl`, commit `d9d7e98af`). These three preview verbs were the ONLY container
+  (branch `uedcli-impl`, commit `d9d7e98af`). These three preview verbs were the ONLY container
   users that drove neither the editor nor UCC; they used the standing `dx-lum-uned` container purely
   as an ImageMagick + `/work` file-staging utility. Now `_render_actors_to_out` (`dispatch.py`)
   writes the PPM straight to the host `--out`, and `--png` decodes PPM→PNG with Pillow (already the
@@ -1158,21 +1158,21 @@ tail, not a permanent archive. When a remnant here becomes active work, promote 
   be dropped on a future pass. The `from PIL import Image` sits lazily in the `--png` branch, aligning
   with the open lazy-import item in `inbox.md`.
 
-- [x] **`bin/test` — scope pytest to the `uedctl` package (fixes tree-walk hang) + rename from
-  `bin/uedctl-test`** — 2026-07-12 (branch `uedctl-impl`, commit `6cd30ce58`). Root cause of a
+- [x] **`bin/test` — scope pytest to the `uedcli` package (fixes tree-walk hang) + rename from
+  `bin/uedcli-test`** — 2026-07-12 (branch `uedcli-impl`, commit `6cd30ce58`). Root cause of a
   reproducible multi-minute hang: `pytest.ini` had **no `testpaths`**, so the wrapper's args branch
-  (`pytest -k … -q`, no path) made pytest recursively collect the ENTIRE `Tools/uedctl` tree — the
+  (`pytest -k … -q`, no path) made pytest recursively collect the ENTIRE `Tools/uedcli` tree — the
   baked editor, asset dirs, and a stray `dev/docs/spikes/bspspike/test_umodel_serialize.py` that
-  hardcodes another machine's `/home/human/...` paths. (No-arg runs passed an explicit `uedctl`
-  target, so they were fine — which is why it looked intermittent.) Fix: `testpaths = uedctl` in
+  hardcodes another machine's `/home/human/...` paths. (No-arg runs passed an explicit `uedcli`
+  target, so they were fine — which is why it looked intermittent.) Fix: `testpaths = uedcli` in
   `pytest.ini` scopes every bare pytest (incl. `-k`) to the package; an explicit path arg still
   overrides. Verified: the previously-hanging `bin/test -k "preview or stash"` now finishes in ~24s.
-  Renamed the wrapper `bin/uedctl-test` → `bin/test` and updated all references (`CLAUDE.md`,
+  Renamed the wrapper `bin/uedcli-test` → `bin/test` and updated all references (`CLAUDE.md`,
   `README.md`, `docs/README.md`, `dev/docs/dev-runtime.md`, `bin/_dev-run.sh` header), noting in each
   that it must be run **path-qualified** (`bin/test`) since `test` is a shell builtin.
   **Wrapper-hang debugging note for the next session:** the dev wrapper's own hang symptom can also be
   caused by concurrent `bin/test` runs leaving stray `docker exec … pytest` processes inside the warm
-  `uedctl-run-*` container — if the wrapper stalls, `docker exec <c> python -m pytest uedctl -k … -q`
+  `uedcli-run-*` container — if the wrapper stalls, `docker exec <c> python -m pytest uedcli -k … -q`
   directly (repo is mounted at the same host path inside the container) bypasses it and is the fast
   way to confirm the container itself is healthy.
 
@@ -1194,20 +1194,20 @@ tail, not a permanent archive. When a remnant here becomes active work, promote 
   crop `(104,92,1596,1104)`. Modes shaded/lit/wire/zones/polys/skybox (radii deferred — ShowActors
   enum value TBD, see the `level preview` modes item in `inbox.md`). **Replaces the old VNC `level preview --rotate` handoff.** Two
   live-boot bugs found + fixed along the way: the override-ini bind source must be daemon-visible
-  (`.uedctl/tmp/`, not the sandbox-private `/tmp`), and `_wait_ready` must require a resolved
+  (`.uedcli/tmp/`, not the sandbox-private `/tmp`), and `_wait_ready` must require a resolved
   `window=<id>` (not the transient `window=<unresolved>` line). Recipe: `unrealed/rendering.md`
-  "Posed shots"; spec `specs/2026-07-06-uedctl-level-preview-snapshots-design.md`; decisions
+  "Posed shots"; spec `specs/2026-07-06-uedcli-level-preview-snapshots-design.md`; decisions
   2026-07-06 12:01/12:59/15:58.
-- [x] **Poly identification tooling** — `uedctl preview` (model-side wireframe: UED-style quad
+- [x] **Poly identification tooling** — `uedcli preview` (model-side wireframe: UED-style quad
   default, true-30° iso, thick/bright front edges, front-only labels, `--zoom-poly`/`--zoom-region`,
-  `--single`, `--png`) + **`uedctl poly list <brush>`** text table (idx / facing / texture /
+  `--single`, `--png`) + **`uedcli poly list <brush>`** text table (idx / facing / texture /
   flags-by-NAME / centroid / area). Verified on the downtown bench.
-- [x] **Native brush clipping** — `clip.py` (Sutherland-Hodgman), exposed as `uedctl brush clip`,
+- [x] **Native brush clipping** — `clip.py` (Sutherland-Hodgman), exposed as `uedcli brush clip`,
   verified end-to-end (Z=0 clip halved a live brush, stayed selectable).
 - [x] **`select_by_name` brush box sizing** — brush targets drive a box sized to union world bounds
   (+margin) for full containment. Verified end-to-end. See [[uned-brush-selectability]].
 - [x] **Native render `Bounds` (c0) + collision `LeafHulls` (cc) — faithful `FilterBound` emit**
-  (`uedctl-native/src/passes.rs::bsp_build_bounds`, 2026-07-18). Replaced the empty-Bounds +
+  (`uedcli-native/src/passes.rs::bsp_build_bounds`, 2026-07-18). Replaced the empty-Bounds +
   approximate-hull stub with a verbatim port of the editor's `bspBuildBounds`/`FilterBound`/
   `SplitPartitioner`/`BuildInfiniteFPoly` (recipe: `re-raw-zones/bounds-and-zonelayout.md` §1).
   Ground-truth raw bytes: Bounds `0→484` entries (`12102 B`, length byte-EXACT, all IsValid=1),

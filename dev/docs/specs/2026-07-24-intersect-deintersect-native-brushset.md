@@ -16,10 +16,10 @@
 
 ## 0. Goal
 
-Reimplement `intersect`/`deintersect` **natively (no editor)** and reframe them to fit uedctl's stateless,
+Reimplement `intersect`/`deintersect` **natively (no editor)** and reframe them to fit uedcli's stateless,
 generator-based model. Today they spin up UnrealEd, recreate a red builder brush, and drive
 `BRUSH FROM INTERSECTION`. UnrealEd's operation is `builder-brush ∩ world-solid` — it structurally needs a
-live builder brush AND a surrounding carved room. uedctl has neither. So the operation is reframed, not
+live builder brush AND a surrounding carved room. uedcli has neither. So the operation is reframed, not
 ported literally.
 
 ## 1. The model (what the verbs compute)
@@ -82,7 +82,7 @@ T3D brush set and PRODUCE one brush actor T3D. Both ends are the pipe, so the op
   `nonsolid` sets actor-level solidity), **`--mover-class <FQCN>`** (emit a Mover — the door-plug→mover in
   ONE command; rejects `--csg`/`--solidity`), **`--texture`**, **`--prop KEY=VALUE`**, **`--rotate`**,
   **`--base-name`**, **`--folder <path>` / `--label <l>` (repeatable)** (emitted as the
-  `// uedctl-folder:` / `// uedctl-labels:` T3D carriers, persisted at `actor add`), and **`--at X,Y,Z`**
+  `// uedcli-folder:` / `// uedcli-labels:` T3D carriers, persisted at `actor add`), and **`--at X,Y,Z`**
   (place the re-centered result — §6b). Plus the verb-specific placement flags **`--origin`** and
   **`--pivot`** (§6b). **NOT** shared: `--group` (ditched everywhere → `--prop Group=`).
   > `--solid` from an earlier draft is GONE — it is subsumed by the shared `--solidity solid`.
@@ -336,7 +336,7 @@ Door-mover flow: `… | actor show - | brush deintersect - --mover-class Engine.
 The shared-flag design depends on a cross-cutting CLI change to the **generators**, decided this session
 (decisions `2026-07-24 17:04`) and tracked separately on the board (it touches `brush build`, `actor build`,
 `actor add` — not just these two verbs): **(1)** add `--folder`/`--label` (repeatable) to every generator
-(`brush build` shapes, `actor build`), emitted as the `// uedctl-folder:`/`// uedctl-labels:` carriers;
+(`brush build` shapes, `actor build`), emitted as the `// uedcli-folder:`/`// uedcli-labels:` carriers;
 **(2)** REMOVE `--folder`/`--label` from `actor add` (it becomes a pure carrier-consumer; post-hoc changes
 use `actor folder set` / `actor label`); **(3)** ditch `--group` from `brush build` (→ `--prop Group=`). This
 REVERSES the "folder/label live on `actor add`, not generators" rule (`direction.md`, decisions 2026-07-18

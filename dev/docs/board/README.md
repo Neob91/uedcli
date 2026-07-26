@@ -1,6 +1,6 @@
 # The board (`dev/docs/board/`)
 
-The work-state cluster for uedctl. Work flows through **stages**; most stage files are **queues**
+The work-state cluster for uedcli. Work flows through **stages**; most stage files are **queues**
 named for the *next action* an item needs (`to-<verb>.md`). An item lives in one place at a time and
 advances by moving its line to the next file. When an item is fully done, **delete it** (don't leave
 a ticked entry); `done.md` keeps only a short tail of recently-finished + partially-done work.
@@ -40,7 +40,7 @@ a ticked entry); `done.md` keeps only a short tail of recently-finished + partia
 **AI flags for Andrzej** (a provisional call, assumption, risk, or deviation), and **his own open
 questions**. Triage moves each entry out to the queue for its next action; a question raised
 mid-pipeline bounces back to `inbox.md` until answered. Spike is a **side-loop, not a stage**: per the
-uedctl `CLAUDE.md` flow a spike happens when a spec flags a live unknown, and its findings fold back
+uedcli `CLAUDE.md` flow a spike happens when a spec flags a live unknown, and its findings fold back
 into that spec (`to-spike.md` also holds standalone investigations not tied to one spec).
 
 ## The files
@@ -85,7 +85,7 @@ into that spec (`to-spike.md` also holds standalone investigations not tied to o
 
 - **Guiding goal:** expose *all* UnrealEd functionality as text (LLM-drivable verbs), so an agent
   can do anything a human can in the editor without touching the GUI.
-- **Portability goal (eventually):** keep uedctl usable for *other UnrealEngine games*, not just
+- **Portability goal (eventually):** keep uedcli usable for *other UnrealEngine games*, not just
   Deus Ex. Avoid baking DeusEx-specific assumptions into the core (class names, packages,
   substrate); pick helper classes/packages per-substrate rather than hardcoding. (Example: the
   `CAMERA ALIGN` rotation helper needs a benign point actor — `Light` works on the stripped DeusEx

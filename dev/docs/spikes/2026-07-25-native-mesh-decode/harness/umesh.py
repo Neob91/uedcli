@@ -1,7 +1,7 @@
 """Native decoder for Deus Ex / Unreal-1 `UMesh` + `ULodMesh` export bodies.
 
 Spike `2026-07-25-native-mesh-decode`. Builds on spike
-`2026-06-27-decontainerize-uedctl/02-native-mesh-format.md`, which established that a Deus Ex
+`2026-06-27-decontainerize-uedcli/02-native-mesh-format.md`, which established that a Deus Ex
 `FMeshVert` is **8 bytes** (`int16 X,Y,Z,pad`) rather than stock Unreal's 4-byte bit-packed dword,
 and disassembled `ULodMesh::Serialize`'s member order. This harness decodes the WHOLE body.
 
@@ -20,7 +20,7 @@ import sys
 from dataclasses import dataclass, field
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", ".."))
-from uedctl.upackage import load_package, read_compact_index, read_property_tags  # noqa: E402
+from uedcli.upackage import load_package, read_compact_index, read_property_tags  # noqa: E402
 
 
 class MeshParseError(ValueError):

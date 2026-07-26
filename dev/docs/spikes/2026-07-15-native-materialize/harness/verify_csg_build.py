@@ -13,7 +13,7 @@ import pe
 
 UED22 = os.environ.get(
     "UED22",
-    "/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedctl/uned/UED22",
+    "/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedcli/uned/UED22",
 )
 ED = os.path.join(UED22, "Editor.dll")
 EN = os.path.join(UED22, "Engine.dll")

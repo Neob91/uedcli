@@ -92,20 +92,20 @@ behavior is in [`rendering.md`](rendering.md). Evidence: `../../dev/docs/spikes/
 - 🔬 **`OBJ LOAD PACKAGE=<name>` (name only) does NOT appear to search `[Core.System] Paths`** — it is
   not a reliable way to test whether a Paths entry resolves a package (even a known-good
   `Paths=/resources/A/*.utx` reads as "not loaded" through it). Content packages resolve via `MAP
-  LOAD`/demand-load or an explicit `OBJ LOAD FILE=<path>`; uedctl's materialize uses the latter. So
+  LOAD`/demand-load or an explicit `OBJ LOAD FILE=<path>`; uedcli's materialize uses the latter. So
   the middle-directory wildcard `Paths=/resources/*/*.utx` remains UNVERIFIED (not shown to fail —
   just untestable this way); verify it end-to-end (a real materialize with wildcard-only Paths) if the
   line-count optimisation is ever wanted. (spike `2026-07-14-paths-wildcard`.)
 - **The locally cached `dx-lum-uned:latest` image can be STALE relative to `Dockerfile` —
   `docker compose run`/`up` silently reuses it, never auto-rebuilds on a Dockerfile change.**
   Confirmed live 2026-06-20: the image cached on this devbox still had the pre-`Extra/AI`→
-  `Tools/uedctl`-rename `ENTRYPOINT`, even though `Dockerfile` had long since been corrected to
-  `/repo/Tools/uedctl/uned/entrypoint.sh` — every FRESH per-session editor (`ensure_editor`,
+  `Tools/uedcli`-rename `ENTRYPOINT`, even though `Dockerfile` had long since been corrected to
+  `/repo/Tools/uedcli/uned/entrypoint.sh` — every FRESH per-session editor (`ensure_editor`,
   i.e. every real `level apply`/`level preview`/`session start <dx>`) failed immediately
   (`bash: /repo/Extra/AI/entrypoint.sh: No such file or directory`, container exits 127) while
   the already-running persistent `dx-lum-uned` kept working fine (it doesn't need to pull the
   new image — it's already up). **If a fresh per-session editor won't start, `cd
-  Tools/uedctl/uned && docker compose build` before debugging anything else.** This is a
+  Tools/uedcli/uned && docker compose build` before debugging anything else.** This is a
   per-machine operational fix, not something a commit can carry. **This now bites HARDER under
   container-fs isolation:** the whole UED22 substrate is BAKED into the image (directly at
   `/opt/UED22`), and `entrypoint.sh`/`wine_ctl.py` are baked at `/opt/uned/` — no longer read off
@@ -161,7 +161,7 @@ behavior is in [`rendering.md`](rendering.md). Evidence: `../../dev/docs/spikes/
   confirmed 2026-06-23 (🔬 `spikes/2026-06-23-capability-gaps-round2.md`); their own deps are
   just Core/Engine (substrate), so the closure terminates cleanly after recursing into them.
   Measured against the real install: closures over 6 real maps land at 6-65 packages, not the
-  whole ~190-file install. See `dev/docs/specs/2026-06-18-uedctl-package-extraction-design.md`
+  whole ~190-file install. See `dev/docs/specs/2026-06-18-uedcli-package-extraction-design.md`
   and `board/to-spec.md`.
 - **`[Core.System] Paths` is first-match-wins, and only `UCC`/the by-name linker honors it — a live
   console `OBJ LOAD` does NOT** (🔬 2026-07-01, `spikes/2026-07-01-paths-precedence/`). Two dirs on
@@ -171,7 +171,7 @@ behavior is in [`rendering.md`](rendering.md). Evidence: `../../dev/docs/spikes/
   is the reliable precedence probe (the exported set reveals which file won). (b) **No live-editor
   console verb does a by-name `Paths` search:** `OBJ LOAD PACKAGE=Foo` is a silent no-op,
   `OBJ LOAD FILE=<bare-name>` fails; only `OBJ LOAD FILE=<resolved path> PACKAGE=` works (explicit
-  file, bypasses `Paths`) — which is exactly why uedctl's `apply` resolves the file HOST-SIDE and
+  file, bypasses `Paths`) — which is exactly why uedcli's `apply` resolves the file HOST-SIDE and
   `OBJ LOAD FILE=`s it, so overlay shadowing is a host-resolver job, not the editor's. (c) Only
   **directory-glob** `Paths=` entries (`<dir>/*.utx`) are searched — a full-file-path entry is
   ignored.
@@ -193,7 +193,7 @@ behavior is in [`rendering.md`](rendering.md). Evidence: `../../dev/docs/spikes/
   faithfully (see [`t3d.md`](t3d.md) "Fractional vertices"); the snap
   happens on import, not in the T3D text.
 - **Static-array actor properties (`Foo(N)=<value>`) round-trip
-  faithfully through uedctl (since 2026-06-25).** The T3D format
+  faithfully through uedcli (since 2026-06-25).** The T3D format
   serializes any UScript `var Foo[K]` array as separate indexed lines
   (`KeyPos(1)=(Z=128.0)`, `MultiSkins(2)=Texture'…'`, …) — see
   [`t3d.md`](t3d.md) "Indexed static-array form" for the full format spec.
@@ -213,7 +213,7 @@ behavior is in [`rendering.md`](rendering.md). Evidence: `../../dev/docs/spikes/
   (no group) bound it correctly — re-export came back with the bare bound
   name, proving it resolved the same object the 3-part form does. The
   editor searches a named package's objects by `Name` regardless of group;
-  group is a display/organizational detail only. **uedctl convention:
+  group is a display/organizational detail only. **uedcli convention:
   always write/construct qualified texture refs as `Package.Name` — never
   include the group**, even when one is known to exist. This does NOT apply
   to a ref *read back* from the editor — store and round-trip whatever the
@@ -301,7 +301,7 @@ behavior is in [`rendering.md`](rendering.md). Evidence: `../../dev/docs/spikes/
   Other consumers may depend on the exact value too (texture-lock pivoting, BSP, prefab
   placement) — treat it as **load-bearing** even when you don't know who reads it.
 - **RULE: never change `PrePivot` unless that is the explicit, deliberate intent of the verb.**
-  uedctl preserves it as an ordinary authored prop (it is **not** in
+  uedcli preserves it as an ordinary authored prop (it is **not** in
   `normalize.COMPUTED_PROPS`, so it round-trips and is never stripped), and every model-side
   transform must leave it byte-for-byte intact: `actor move` writes only `Location`,
   `actor rotate` writes only `Location` + `Rotation` — neither touches `PrePivot`. A transform
@@ -315,7 +315,7 @@ behavior is in [`rendering.md`](rendering.md). Evidence: `../../dev/docs/spikes/
   `R⁻¹·(world − Location) + PrePivot` — **rotation-aware** (a clip normal de-rotates by `Rᵀ`, a
   `--by` delta by `R⁻¹`). Points/deltas use the TRUE matrix inverse, not `Rᵀ`: the float32 GMath `R`
   isn't perfectly orthonormal, so `Rᵀ` drifts a point by up to ~1e-3uu at ±32768 extent (a normal
-  correctly stays `Rᵀ` — its exact pullback). uedctl still never *writes* `PrePivot`. **Scale
+  correctly stays `Rᵀ` — its exact pullback). uedcli still never *writes* `PrePivot`. **Scale
   (`MainScale`/`PostScale`) IS now applied** model-side — the world/inverse math generalizes `R` to
   the full linear part `L = PostScale·R·MainScale` (`rotation.actor_linear`; a normal stays `Lᵀ`).
   See the "Scale & sheer" section below and `architecture.md` "Scale".
@@ -332,17 +332,17 @@ behavior is in [`rendering.md`](rendering.md). Evidence: `../../dev/docs/spikes/
   editor actually renders by **up to ~0.074uu** for any field that isn't a multiple of 4 (the low
   2 bits the editor truncates). It is exact only at multiples of 4. So any tool that must match the
   editor's geometry (preview, bounds, parity tests) must drive its matrices from the SAME table —
-  uedctl does (`rotation.gmath_sin`/`gmath_cos`). The float32 storage of the table is the residual
+  uedcli does (`rotation.gmath_sin`/`gmath_cos`). The float32 storage of the table is the residual
   floor (~1e-5uu), so `_f32`-round the table values to match.
 - A **mouse-drag** rotation can't be byte-reproduced from the stored field alone: the editor orbits
   Location with the raw free drag angle but stores the rounded integer field, so the two disagree by
-  the rounding (~0.005uu). uedctl is immune — it derives Location AND `Rotation` from one integer
+  the rounding (~0.005uu). uedcli is immune — it derives Location AND `Rotation` from one integer
   field.
 - **Multi-actor group-rotate ground truth (console-selected set), verified live to ≈0.005uu against
   `EDIT COPY` readback.** ✅ Driving the rotate gizmo over a *console*-selected multi-selection:
   (1) **pivot = the grid origin `(0,0,0)`**, not the bbox centre/centroid/any actor — a console
   `SELECT ALL`/`OFCLASS`/`SELECTNAME` leaves the pivot widget at the origin (a human GUI select would
-  move it onto the selection, so "pivot = origin" is specifically the headless case; uedctl defines
+  move it onto the selection, so "pivot = origin" is specifically the headless case; uedcli defines
   its own pivot regardless); (2) **Location orbits rigidly** `new = pivot + R·(Location − pivot)` with
   the same GMath-table matrices as single-actor rotation; (3) **orientation composes by naive
   per-component FRotator ADDITION, not matrix product** — a single-axis drag adds its delta into one
@@ -353,7 +353,7 @@ behavior is in [`rendering.md`](rendering.md). Evidence: `../../dev/docs/spikes/
   synthetic drag. (spike: `../spikes/2026-06-19-multiactor-rotate-groundtruth.md`, live 2026-06-19)
 
 ## Scale & sheer (`MainScale` / `PostScale` / `SheerRate`)
-A brush actor carries two scale transforms plus a sheer. uedctl **applies** scale in its model-side
+A brush actor carries two scale transforms plus a sheer. uedcli **applies** scale in its model-side
 measurement, stores it in typed fields, and bakes it (`brush apply-transform`) — see `architecture.md`
 "Scale" and spec `../specs/2026-07-18-scale-support.md`. The substrate's exact behavior is pinned
 (`../spikes/2026-06-25-scale-transform-mechanics.md` ✅ live +
@@ -363,7 +363,7 @@ measurement, stores it in typed fields, and bakes it (`brush apply-transform`) �
   non-uniform `PostScale` under a rotation **shears** the brush (`PostScale·R·PostScale⁻¹` is not a
   rotation) — UnrealEd's own rotate gizmo distorts a non-uniform-PostScale brush identically and
   silently; `MainScale` under rotation stays rigid.
-- **`MAP EXPORT` emission format** (H3-critical — uedctl must reproduce byte-for-byte):
+- **`MAP EXPORT` emission format** (H3-critical — uedcli must reproduce byte-for-byte):
   `<Field>=( [Scale=( [X=][,Y=][,Z=] ),] [SheerRate=,] SheerAxis= )`. A `Scale` axis is written
   **iff ≠ 1.0** (identity components dropped; negatives ARE written), the whole `Scale=(…)` is
   omitted if all three are 1.0; `SheerRate=` is written **iff ≠ 0.0**; `SheerAxis=` is **always**
@@ -406,17 +406,17 @@ measurement, stores it in typed fields, and bakes it (`brush apply-transform`) �
   `EDIT PASTE` — NOT via `MAP IMPORTADD`.** Proven by `EDIT CUT` + re-IMPORTADD of the editor's
   own canonical T3D → unselectable. Mechanism: BRUSH ADD / paste run the CSG path that computes
   the brush's `Bound`; `ULevelFactory` (IMPORTADD) doesn't, and `MAP REBUILD` doesn't recompute
-  it. `SELECT ALL` *does* see IMPORTADD brushes; only the volume test skips them. ⇒ **uedctl
+  it. `SELECT ALL` *does* see IMPORTADD brushes; only the volume test skips them. ⇒ **uedcli
   adds brushes via `EDIT PASTE`, point actors via `MAP IMPORTADD`.**
 - **Identify the transient red builder brush by `Class=Brush` + inner model name `Brush` + no
   `CsgOper` — NOT by `Name=="Brush0"`.** ✅ Every real world/content brush enters via the add path
   carrying an explicit `CsgOper=CSG_Add`/`CSG_Subtract`, and the editor names authored brushes' inner
-  model `Model<N>` (uedctl's own use `Model_<actorname>`). The live builder brush is the only actor
+  model `Model<N>` (uedcli's own use `Model_<actorname>`). The live builder brush is the only actor
   whose `Begin Brush Name=` is the reserved unnumbered singleton `Brush`, and it never carries a
   `CsgOper`. `Brush0` is not a constant — a fresh editor numbered the builder brush `Brush1` and kept
   the counter across `MAP NEW`, and `LevelInfo` (not the builder brush) is actor 0 — so index/name
   gating fails in the common fresh-editor case. No authored brush can have inner model `Brush` **and**
-  no `CsgOper`, so a false positive is impossible; this is uedctl's `is_builder_brush` predicate (and
+  no `CsgOper`, so a false positive is impossible; this is uedcli's `is_builder_brush` predicate (and
   `actor add` skips such actors). (spikes: `../spikes/2026-06-18-builder-brush-identification.md`
   probed live 2026-06-18; robustness re-confirmed `../spikes/2026-06-23-capability-gaps-round2.md`
   live 2026-06-23)
@@ -435,7 +435,7 @@ measurement, stores it in typed fields, and bakes it (`brush apply-transform`) �
   game-compatible — the v68/v69 version gap is a red herring;** the spawn failure was 100% the
   missing CSG, not the package version. (Native BSP-node check: `umodel_parser.parse_model_serial`
   → `len(nodes)==0` is the offline tell that a build is solid/uncarved.)
-- **`EDIT PASTE` drift: +32uu on ALL THREE axes** (copy has no offset). uedctl pre-subtracts 32.
+- **`EDIT PASTE` drift: +32uu on ALL THREE axes** (copy has no offset). uedcli pre-subtracts 32.
   ⚠️ The compensation belongs to the PASTE, not to the geometry: a `(cx−32, …)` placement in
   editor-driving code is a cube that lands at `(cx, …)` in world space. Reading such an offset
   as authored geometry and reproducing it on a non-paste path (e.g. a native port, or
@@ -461,7 +461,7 @@ measurement, stores it in typed fields, and bakes it (`brush apply-transform`) �
 - ✅ **`BRUSH FROM INTERSECTION` / `DEINTERSECTION` is `builder ∩ world`, in two phases** — decoded to
   instruction level in
   [`../spikes/2026-07-15-native-materialize/re-raw-zones/bspbrushcsg-intersect-deintersect-decode.md`](../spikes/2026-07-15-native-materialize/re-raw-zones/bspbrushcsg-intersect-deintersect-decode.md)
-  and ported natively as `bspcsg.rs::intersect_brushset` (uedctl `brush intersect`/`deintersect`).
+  and ported natively as `bspcsg.rs::intersect_brushset` (uedcli `brush intersect`/`deintersect`).
   **Phase 1** clips each BUILDER face down the world tree (intersect keeps the pieces INSIDE solid,
   deintersect the pieces in EMPTY space); **Phase 2** clips each straddling WORLD face down the
   builder's convex temp BSP and appends the survivors — which is why the result inherits the
@@ -478,7 +478,7 @@ measurement, stores it in typed fields, and bakes it (`brush apply-transform`) �
 - ✅ **A leading `CSG_Add` into an EMPTY world does not behave like the later ones** (live-verified
   2026-07-25, `fixtures/intersect/h_leading_additive_deintersect.t3d`). UnrealEd filter-classifies
   it normally, so a subsequent overlapping `CSG_Subtract` cuts its faces away and the region reads
-  as plain void. (uedctl's native core instead SEEDS a leading Add as the convex world shell — right
+  as plain void. (uedcli's native core instead SEEDS a leading Add as the convex world shell — right
   for a real level's first brush, divergent here; tracked in `board/inbox.md`.)
 
 - **The CSG/BSP build mechanism is disassembled** in

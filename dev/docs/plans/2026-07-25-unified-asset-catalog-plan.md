@@ -52,7 +52,7 @@ S3 CLI: list / show                     (class, sound, music)
 S4 object-ref existence validation      ← fixes a live silent bug
 S5 classification store + classify verbs
 S6 search + ranking
-S7 class arm: mesh decoder → uedctl/, class preview, size facts
+S7 class arm: mesh decoder → uedcli/, class preview, size facts
 S8a texture arm on the new engine
 S8b delete the legacy texture subsystem
 S9 audio phase (a): sound + music
@@ -62,8 +62,8 @@ S11 docs
 
 ## 1. Module map
 
-**New:** `uedctl/catalog/{__init__,index,store,previews,query}.py`,
-`uedctl/catalog/adapters/{texture,klass,sound,music}.py`, `uedctl/umesh.py`,
+**New:** `uedcli/catalog/{__init__,index,store,previews,query}.py`,
+`uedcli/catalog/adapters/{texture,klass,sound,music}.py`, `uedcli/umesh.py`,
 plus a mesh render path (S7 decides whether that is a new module or the existing Rust core — §2 S7).
 
 **Changed:** `config.py`, `schema_cache.py` (P0), `classindex.py` (`is_placeable` help text),
@@ -125,14 +125,14 @@ as a `p1` and needs its own plan before S8a is scheduled. Two things changed sin
 called it "non-P8 decoders": layout is **derived from the data** rather than any per-game format
 table (slot numbers are not portable between engines), and it is **not** DX-irrelevant — the
 `bHasComp`/`CompMips` finding means 30 textures in the project's own `LUM_CoreTex.utx` are invisible
-to uedctl today.
+to uedcli today.
 
 ### S1 — engine core
 Stat-keyed per-`(kind, package)` index with a **`v<N>/` path segment** (a version bump then leaves a
 reclaimable orphan dir); `deps` stat-tuple list per row, re-stat'd on read; content-addressed preview
 store; tracked shard store + per-project `shard-index` gated on `(file count, max mtime_ns, total
 size)`; atomic writes; **two lock domains** — tracked shards under `<catalog>/.locks/`, derived cache
-under `~/.uedctl/cache/catalog/.locks/`. Adapter protocol: `enumerate`, `identity`, `facts`, `preview`.
+under `~/.uedcli/cache/catalog/.locks/`. Adapter protocol: `enumerate`, `identity`, `facts`, `preview`.
 
 **Fixtures use REAL committed packages, not synthetic ones.** There is no UE1 package *writer* in the
 tree (`upackage.py` is read-only; `native/pkg_write.py` assembles a container but knows nothing of
@@ -240,8 +240,8 @@ done-when instead.)*
 
 ### S7 — class arm
 **Settle first: reuse the Rust rasterizer, or ship a Python one?** `preview_native.py` already
-rasterizes textured, z-buffered scenes through the Rust core (`uedctl_native.render_frame`), so a new
-Python render module would be uedctl's **third** rasterizer — and the **~300 ms/render measurement
+rasterizes textured, z-buffered scenes through the Rust core (`uedcli_native.render_frame`), so a new
+Python render module would be uedcli's **third** rasterizer — and the **~300 ms/render measurement
 that decisions 7 and 11 rest on is an artifact of choosing Python**. The spike already ships
 `render.py`/`render_class.py`, so re-measuring is cheap.
 
@@ -251,7 +251,7 @@ and stand unless he supersedes them. If the Rust path makes rendering an order o
 that finding goes back to him and lands as a **superseding `decisions.md` entry plus a
 `direction.md` reconcile** — not as a builder's judgement call mid-slice.
 
-Productise `spikes/2026-07-25-native-mesh-decode/harness/umesh.py` into `uedctl/umesh.py` — it is a
+Productise `spikes/2026-07-25-native-mesh-decode/harness/umesh.py` into `uedcli/umesh.py` — it is a
 **script, not a module**: `sys.path` bootstrapping, argv parsing, `raise SystemExit` on empty
 geometry, silent `continue` on a bad wedge index, and a hard error on a non-empty `RemapAnimVerts`
 that is correct for a spike but an unhandled crash for `class preview` over an unknown package. It

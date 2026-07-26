@@ -17,7 +17,7 @@ Asserts, per package:
     real object name (never a dangling ref);
   - reports the array-dim distribution (genuine static arrays only).
 
-Run: python validate_corpus.py  (from Tools/uedctl/)
+Run: python validate_corpus.py  (from Tools/uedcli/)
 """
 from __future__ import annotations
 

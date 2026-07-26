@@ -30,10 +30,10 @@ brush:
   (`Location=(X=..,Y=..)` when Z==0); the `_LOC` regex required X,Y,Z and returned None. Fixed
   to parse axes independently (absent → 0.0); regression test added.
 
-## What uedctl does now (per design decision)
+## What uedcli does now (per design decision)
 `select_by_name` centers a builder cube at the targets' PIVOT (no geometry measuring) and tries
 3 fixed sizes [256, 1024, 4096] smallest-first, caching the smallest working size PER ACTOR
-(UEDCTL_BOX_CACHE) so later selects start there. It keeps the D1 fail-safe: it returns only when
+(UEDCLI_BOX_CACHE) so later selects start there. It keeps the D1 fail-safe: it returns only when
 every named target is in the read-back, else raises. **Consequence:** the by-name
 select/delete/modify pipeline works for Lights/placed actors; a brush target typically exhausts
 the ladder and raises (fail-safe — never a wrong edit). Brush *add* works (IMPORTADD); brush

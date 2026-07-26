@@ -6,19 +6,19 @@ so CalcNormal = *(0x100cee9c) - 0x150ac0 + 0x150510, tail = *(0x100cee9c) - 0x15
 Two breakpoints share the pass. Writes _scratch/normfin/calcnormal.log."""
 import subprocess, sys, time
 from pathlib import Path
-ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedctl")
+ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedcli")
 HARNESS = ROOT / "dev/docs/spikes/2026-07-15-native-materialize/harness"
 HERE = HARNESS / "editor-tree-oracle"
 sys.path.insert(0, str(ROOT)); sys.path.insert(0, str(HARNESS)); sys.path.insert(0, str(HERE))
 import editor_tree_oracle as O
 import unatco_subset as U
-from uedctl import trunk, config
-from uedctl.driver import Driver
-from uedctl.materialize import levelinfo_first_order, _short_class
-from uedctl.writes import _re_add
-from uedctl.packages import editor_search_dirs, ensure_load
-from uedctl.container_assets import resource_mounts
-from uedctl.apply import _level_referenced_packages
+from uedcli import trunk, config
+from uedcli.driver import Driver
+from uedcli.materialize import levelinfo_first_order, _short_class
+from uedcli.writes import _re_add
+from uedcli.packages import editor_search_dirs, ensure_load
+from uedcli.container_assets import resource_mounts
+from uedcli.apply import _level_referenced_packages
 
 BRUSH = sys.argv[1] if len(sys.argv) > 1 else "Brush755"
 OUT = ROOT / "_scratch/normfin/calcnormal.log"

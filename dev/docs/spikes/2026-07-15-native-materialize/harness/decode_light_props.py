@@ -4,7 +4,7 @@ props so we can diff a real DeusEx light vs our synthesized Light0 — hunting a
 LIFETIME prop (bStatic/bNoDelete/bMovable/bStaticLighting) that would let the engine
 destroy the light after load and leave Model.Lights dangling."""
 import sys, struct
-sys.path.insert(0, "/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedctl/dev/docs/spikes/2026-06-27-decontainerize-uedctl/harness")
+sys.path.insert(0, "/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedcli/dev/docs/spikes/2026-06-27-decontainerize-uedcli/harness")
 from utexture_decode import load_package, ci, read_props
 
 RF_HasStack = 0x02000000

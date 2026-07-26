@@ -184,7 +184,7 @@ screenshot.
 
 ## Suggested regression (per the spikes "pin the finding" rule)
 
-If uedctl grows a "faithful UED palette" the numbers above are checkable facts. Worth a
+If uedcli grows a "faithful UED palette" the numbers above are checkable facts. Worth a
 `test_engine_facts`-style assertion that our brush-type→RGB table matches the source-verified
 values (builder 255,63,63 / add 127,127,255 / subtract 255,192,63 / semisolid 223,149,157 /
 nonsolid 63,192,32 / mover 255,0,255), with this spike back-referenced, so a palette edit that

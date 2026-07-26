@@ -27,7 +27,7 @@ Three Rats were `MAP IMPORTADD`ed into an ephemeral editor and `MAP EXPORT`ed ba
 
 ## Consequences
 
-- `uedctl.propedit.STRUCT_FILL = "default"`: `actor prop get`'s full-form struct rendering and
+- `uedcli.propedit.STRUCT_FILL = "default"`: `actor prop get`'s full-form struct rendering and
   member fall-through fill unmentioned members/elements from the class default (decoded
   offline), matching what the built map will actually contain.
 - `unset KEY.Member` (removing a member from a stored value) therefore reverts that member to

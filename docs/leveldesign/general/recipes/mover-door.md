@@ -26,7 +26,7 @@ the keyframe model and the inverted-record trap.
    someone).
 6. *(Optional)* Give the mover open/close sounds; **rebuild** and test.
 
-## uedctl pipeline (what you run)
+## uedcli pipeline (what you run)
 
 ```
 # 1. build the door as a mover (one brush)

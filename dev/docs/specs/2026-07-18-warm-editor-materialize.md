@@ -65,7 +65,7 @@ untouched, so that spec's ceiling was a **20 %** improvement.
 
 **(c) Ephemeral editors LEAK, and the leak is structural.** Teardown lives only in
 `run_materialize`'s `finally`. Python's default SIGTERM disposition terminates the process without
-unwinding, so `finally` never runs — and `timeout <n> bin/uedctl level materialize …` (SIGTERM) is a
+unwinding, so `finally` never runs — and `timeout <n> bin/uedcli level materialize …` (SIGTERM) is a
 routine invocation shape in this repo, as are harness and agent-session job kills. There is no
 `--rm` (the editor is detached), no in-container watchdog, and no startup sweep, so a killed or
 wedged run **always** strands a running `unrealed.exe` plus a ~0.5 GB wineprefix volume. Observed on
@@ -156,33 +156,33 @@ not edited until they are confirmed.
 - The ephemeral path (`ensure_editor`/`stop_editor`) — it remains as the fallback and is still what
   `stash intersect`/`deintersect` use.
 - Overwrite/preflight guards, `--no-verify`, `--keep-build`.
-- The warm **game** container (`uedctl-game-preview-<uid>`) — unrelated lifecycle, untouched.
+- The warm **game** container (`uedcli-game-preview-<uid>`) — unrelated lifecycle, untouched.
 - `dev/docs/direction/` — not edited by this work; decisions 6–8 are parked for confirmation (§2).
 
 ## 4. The warm editor container
 
 ### 4.1 Identity, lock, volume, ini
 
-- **One per Unix user:** `uedctl-editor-<uid>` (mirrors `uedctl-game-preview-<uid>`), same image as
+- **One per Unix user:** `uedcli-editor-<uid>` (mirrors `uedcli-game-preview-<uid>`), same image as
   the ephemeral editors.
-- **WINEPREFIX volume: unique per BOOT**, `uedctl-editor-wp-<uid>-<nonce>` — never the compose
+- **WINEPREFIX volume: unique per BOOT**, `uedcli-editor-wp-<uid>-<nonce>` — never the compose
   default `wine-prefix`, and never reused across boots (a wedge/GPF may corrupt the prefix; a fresh
   volume seeds clean from the image bake — `parallel-editors.md`). Every explicit teardown removes
   container AND volume; idle self-death can only stop the container, so **acquire runs an orphan
   sweep** (§4.5).
-- **Per-user lock:** `flock` on `editor.lock` under the resolved per-user home (honors `$UEDCTL_HOME`,
+- **Per-user lock:** `flock` on `editor.lock` under the resolved per-user home (honors `$UEDCLI_HOME`,
   beside the preview's `game-preview.lock`), taken NONBLOCKING for the whole acquire-and-drive. Lock
   held → ephemeral fallback for this invocation (decision 2).
 - **Crafted engine ini: per-user home, torn down with the container.** The RW single-file bind-mount
   source (`editor.engine_ini_mount`'s output) for the WARM container lives under the per-user
-  `~/.uedctl/tmp/`, NOT a project's `<state_dir>/tmp/` — the container is per-user and outlives any
+  `~/.uedcli/tmp/`, NOT a project's `<state_dir>/tmp/` — the container is per-user and outlives any
   one project's invocation, and a project tree can be deleted under an idle warm container. That path
   is daemon-visible (the stub-cache mount already binds from the same home; `parallel-editors.md`'s
   bind-source trap). Unlinked ONLY at teardown/reboot.
 
 ### 4.2 Fingerprint (the ONE-inspect reuse gate)
 
-A `uedctl.editor.fingerprint` LABEL stamped at container create; reuse requires an exact match read
+A `uedcli.editor.fingerprint` LABEL stamped at container create; reuse requires an exact match read
 back in ONE `docker inspect` (same shape as `preview_game._fingerprint`):
 
 - image id;
@@ -283,7 +283,7 @@ Same *pattern* as the preview container, with two placements the 2026-07-18 spec
   confirmed the worst single editor op is far under 10 min.
 - A `/work/.pinned` marker disables self-death (honored, not exposed — §4.2).
 - **Orphan-volume sweep, covering BOTH naming schemes.** A self-died container cannot remove its own
-  volume, so `acquire` sweeps volumes with no attached container: `uedctl-editor-wp-<uid>-*` (warm)
+  volume, so `acquire` sweeps volumes with no attached container: `uedcli-editor-wp-<uid>-*` (warm)
   **and `uned-wp-*` (ephemeral)**. The ephemeral half is what reclaims the ~5.5 GB already stranded on
   this host. The sweep keys on *no attached container*, never on age — §1(c) observed two legitimate
   multi-minute builds in flight among the stranded set, and an age threshold would have killed them.
@@ -347,7 +347,7 @@ Why this is not merely "the same thing, elsewhere":
 
 `docker run --rm` around a process that **exits by itself** in ~1.4–3.7 s. No detach, no readiness
 poll, no `ensure_editor` retry loop, no `stop_editor` a killed parent might skip. A SIGKILL of the
-uedctl process leaves at worst one container that is already exiting on its own.
+uedcli process leaves at worst one container that is already exiting on its own.
 
 **No wineprefix volume is mounted.** The verify container uses the image's baked `/wineprefix` on its
 own copy-on-write layer, which is per-container by construction and dies with `--rm`. This is why it
@@ -468,7 +468,7 @@ Offline (mocked docker/driver, like the warm-preview suite):
 - health probe fail → one reboot attempt → second fail → container+volume removed + named exit 2.
 - warm-mode drive error → container + volume + ini temp removed before lock release; exit 2 carries
   the warm-mode hint; no auto-retry occurred. **Verify FAILURE → editor NOT torn down** (§4.3).
-- volume lifecycle: per-boot unique name; orphan sweep removes unattached `uedctl-editor-wp-*` **and
+- volume lifecycle: per-boot unique name; orphan sweep removes unattached `uedcli-editor-wp-*` **and
   `uned-wp-*`** volumes only, and never one with a container attached.
 - watchdog gating: warm boot AND ephemeral boot both pass `UED_IDLE_S`; the standing-container config
   does not (assert absent).
@@ -520,7 +520,7 @@ board rather than blocking here.
 
 - **`(path,size,mtime)` blind spot** (inherited from the preview fingerprint, restated because the
   output is a durable artifact): a same-size, mtime-preserving package/stub edit is missed → a
-  silently stale build. Escape hatch: `docker rm -f uedctl-editor-<uid>`.
+  silently stale build. Escape hatch: `docker rm -f uedcli-editor-<uid>`.
 - **The verify is a CONTENT backstop only.** It compares the built map to the intended trunk; it
   cannot detect a stale resident package (same names, old bytes). Package freshness is solely the
   fingerprint's job. Moving the verify to a fresh container does not change this — if anything it

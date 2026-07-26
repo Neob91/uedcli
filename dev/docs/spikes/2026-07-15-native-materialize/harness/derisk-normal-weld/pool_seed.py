@@ -25,7 +25,7 @@ F7=0x3f3504f7; F3=0x3f3504f3
 def is45(t):  # (±0.7071..,±0.7071..,0) family within 2e-5
     return abs(abs(t[0])-0.70710677)<2e-5 and abs(abs(t[1])-0.70710677)<2e-5 and abs(t[2])<2e-5
 
-TRUNK="/home/neob91/Games/LutrisDX/drive_c/DX/LUM/_scratch/castle/uedctl/maps/foobar/actors"
+TRUNK="/home/neob91/Games/LutrisDX/drive_c/DX/LUM/_scratch/castle/uedcli/maps/foobar/actors"
 # process in the SAME csg_order the build uses? We don't have it; just tally sources of an EXACT f7.
 exact_f7_normals=0; exact_f7_texu=0; exact_f7_texv=0
 calc_hits_f7=0; calc_hits_f3=0; calc_other={}

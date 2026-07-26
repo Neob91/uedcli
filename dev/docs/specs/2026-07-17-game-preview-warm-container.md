@@ -14,7 +14,7 @@ reproduce) · ✅ mission-map frame **clean** with the no-abort driver (conversa
 unneeded).
 
 **Builds on:** the shipped `--game` tier (`specs/2026-07-13-ingame-preview-design.md`,
-`plans/2026-07-16-ingame-preview-plan.md`; `preview_game.py` + `uedctl/game/`). Changes the
+`plans/2026-07-16-ingame-preview-plan.md`; `preview_game.py` + `uedcli/game/`). Changes the
 CONTAINER LIFECYCLE + MAP-DELIVERY only; SHOT grammar, posing, capture unchanged.
 
 **Decisions:** `decisions.md` `2026-07-17 06:57` + the `07:30` supersession (per-user identity,
@@ -47,14 +47,14 @@ add an abort only if a tainted frame is ever actually observed (§9).
 
 | # | Decision |
 |---|---|
-| D1 | **ONE reusable game container per Unix user** — `uedctl-game-preview-<uid>`, not machine-global, not a registry. |
+| D1 | **ONE reusable game container per Unix user** — `uedcli-game-preview-<uid>`, not machine-global, not a registry. |
 | D2 | **A kernel `flock(2)` on an open fd** serializes access (SIGKILLed holder auto-releases). |
 | D3 | **Idle self-death after 10 min** via a watchdog run **INLINE in `game-entrypoint.sh` (tini's direct child), NEVER backgrounded** — its `exit` stops the container (no `kill 1`; §4.3). |
 | D4 | **Map delivery = a bind mount at `/resources/preview` (OUTSIDE the `/resources/r*` farm namespace) + a LOCAL Maps-farm symlink**, NOT a raw-bind-mount `Paths` glob. Preserves the esync boot fix. **Fallback (R4): `docker cp` a real file into `/work/dx/Maps` — the shipped, proven mechanism — if SP-R(b) shows the symlink form doesn't resolve.** |
 | D5 | **Maps hash-named, kind-prefixed, dot-free, lowercased, length-CAPPED (§5.1).** Trunk `materialized__<level>__<hash12>[__<nonce>].dx`; `--map` `copied__<contenthash12>.<ext>`. UE1 FName cap is **63 usable (`NAME_SIZE`=64), truncated SILENTLY** (source-memory; **pin empirically in SP-R §8c** — R4-B). Whole stem is length-budgeted, hash+nonce guaranteed to survive, over-budget = **LOUD error** never truncation. Dot-free (`.`=UE1 `Package.Object` sep); **fully lowercased** (the farm link is lowercased and `open <stem>` resolves only via wine case-folding — §5.2, R4-B case-bridge). Prefixes guarantee a non-numeric first segment. |
 | D6 | **Reload keying: filename-derived. Offline-CONFIRMED for the file; the RUNNING-ENGINE behavior is a LIVE GATE (SP-R §8).** Offline (via `pkg_write.py`/`parse_package`) proves only that the `.dx` header has GUID+generations and **no package-name field** → on disk, package identity is the filename stem. Whether the *running* engine (a) keys its resident pool by that FName not GUID and (b) re-resolves per-`open` is confirmed LIVE in SP-R(a)/(b) — it is NOT settled offline (R4-A M1). D6's "internal-rename" alternative is judged moot by the offline fact but is the documented fallback (§8, R3 MED-2). **No fresh-GUID belt-and-suspenders** — the preview `.dx` is built by `run_materialize` (the ephemeral UnrealEd path), which never calls `pkg_write.build_package`, so that GUID is not on the path; and on a *reused* name a mismatched GUID would trip a load ERROR, not a silent reload (R4-A H2 / R4-B Claim 3). The guarantee rests on the **unique filename alone**. |
 | D7 | **`.dx` AND `.unr` for INPUT + GLOBS only** (`--map` + farm/Paths); trunk materialize stays `.dx`. |
-| D8 | **Dir = existing `<project>/uedctl/tmp/preview/`**, bind-mounted at `/resources/preview/`. |
+| D8 | **Dir = existing `<project>/uedcli/tmp/preview/`**, bind-mounted at `/resources/preview/`. |
 
 ---
 
@@ -75,19 +75,19 @@ R4) — both build items. (A DX-driver conversation abort is NOT a build item �
 ## 4. The warm container (D1–D3)
 
 ### 4.1 Identity, lock, fingerprint — PER-USER
-- Container `uedctl-game-preview-<uid>`; lock `~/.uedctl/game-preview.lock`.
+- Container `uedcli-game-preview-<uid>`; lock `~/.uedcli/game-preview.lock`.
 - **Reuse fingerprint** (a container label) = hash of ALL of: (a) the **image id**
   (`docker image inspect`); (b) the **realpath-normalized ordered mount `source:dest` pairs** (incl.
-  `<project>/uedctl/tmp/preview →/resources/preview` → embeds project identity, closes two-project
+  `<project>/uedcli/tmp/preview →/resources/preview` → embeds project identity, closes two-project
   reuse); (c) **`--size`** (baked at boot); (d) **the PROJECT-OVERLAY packages' `(path,size,mtime)`
   tuples** (R3 MED-4 — folded IN here; base game `.utx` immutable → EXCLUDED; NOT a byte-hash, NOT a
   separate post-reuse check). Deterministic. Mismatch → reboot (unless pinned — §4.7).
 
 ### 4.2 Lifecycle
 ```
-open fd on ~/.uedctl/game-preview.lock ; flock(fd)                     # D2; bounded acquire timeout
+open fd on ~/.uedcli/game-preview.lock ; flock(fd)                     # D2; bounded acquire timeout
   fp = fingerprint(image id, normalized mounts, size, overlay stat tuples)
-  container = uedctl-game-preview-<uid>
+  container = uedcli-game-preview-<uid>
   if up(container): docker exec touch /work/.last_use  (best-effort)   # R3 MED-5 — FIRST, before Ping
   if up AND label==fp AND Ping OK:
       if RSS(container) > CEILING or travel_count(container) >= N: reboot-fresh   # R3 HIGH-1/F6 — container-scoped
@@ -102,7 +102,7 @@ finally: stop+join heartbeat WITH A BOUND (never hang on a wedged exec); close f
 ```
 No static in-use sentinel — the heartbeated `/work/.last_use` is the sole liveness signal. `.pinned`
 (§4.7) is the only opt-in immortality. **Heartbeat is NEVER load-bearing for shutdown or the lock**
-(R3 MED-3): bounded-timeout daemon thread; a wedged exec can neither hang `uedctl` exit nor keep the
+(R3 MED-3): bounded-timeout daemon thread; a wedged exec can neither hang `uedcli` exit nor keep the
 `flock` held.
 
 ### 4.3 Idle self-death (D3)
@@ -164,7 +164,7 @@ rm -f`. A pinned container is never silently `rm -f`'d by a fingerprint mismatch
 
 ## 5. Map delivery (D4, D5, D8)
 
-### 5.1 Host side — hash-named write into `uedctl/tmp/preview/`, lowercased, length-capped
+### 5.1 Host side — hash-named write into `uedcli/tmp/preview/`, lowercased, length-capped
 - **Trunk**: `materialized__<level>__<hash12>.dx` (`canonical_level_hash`; reuse if present).
   **`--rebuild`** appends a **SHORT unique nonce (6–8 base62, NOT uuid7 — R3 F1)**:
   `…__<hash12>__<nonce>.dx` → a never-resident name forces a fresh load.
@@ -180,7 +180,7 @@ rm -f`. A pinned container is never silently `rm -f`'d by a fingerprint mismatch
 - **Prune** per prefix, **N=8**, protecting the newest; count `--rebuild` variants.
 
 ### 5.2 Container side — bind mount + local farm symlink (verified boot-safe R3 F7)
-`<project>/uedctl/tmp/preview/` bind-mounted ro at **`/resources/preview/`** — leading `p`, so the
+`<project>/uedcli/tmp/preview/` bind-mounted ro at **`/resources/preview/`** — leading `p`, so the
 `/resources/r*` farm glob never sweeps it and it never enters `Paths` (**boot-safety only — this is
 NOT the same as post-boot resolvability, which is §5.3's gate; R4-B corrects §5.2's earlier
 over-broad "verified" tag**). A boot-time **assertion** (build item) enforces "no `/resources/preview`

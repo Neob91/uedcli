@@ -6,7 +6,7 @@ to binary-search / scan for the SMALLEST N where the native `build_geometry_bspc
 diverges from what UnrealEd's `MAP REBUILD` produces.  That N's brush + operation is the concrete
 first-diverging culprit.
 
-  * NATIVE  — `uedctl_native.build_geometry_bspcsg` over the first N brushes (in trunk order),
+  * NATIVE  — `uedcli_native.build_geometry_bspcsg` over the first N brushes (in trunk order),
               serialized and re-parsed to a `Model` (identical to castle_build.build_native but
               on a prefix).
   * EDITOR  — a SUBSET TRUNK holding all non-brush actors (LevelInfo/PlayerStart/lights — they do
@@ -29,20 +29,20 @@ import shutil
 import sys
 from pathlib import Path
 
-ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedctl")
+ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedcli")
 sys.path.insert(0, str(ROOT))
-sys.path.insert(0, str(ROOT / "dev/docs/spikes/2026-06-27-decontainerize-uedctl/harness"))
+sys.path.insert(0, str(ROOT / "dev/docs/spikes/2026-06-27-decontainerize-uedcli/harness"))
 sys.path.insert(0, str(ROOT / "dev/docs/spikes/2026-07-15-native-materialize/harness"))
 
-from uedctl import config, trunk, apply  # noqa: E402
-from uedctl.native import materialize as M, umodel as UM  # noqa: E402
-import uedctl_native  # noqa: E402
+from uedcli import config, trunk, apply  # noqa: E402
+from uedcli.native import materialize as M, umodel as UM  # noqa: E402
+import uedcli_native  # noqa: E402
 import utexture_decode as UT  # noqa: E402
 
 import castle_build  # noqa: E402
 import node_diff  # noqa: E402
 
-CASTLE_PROJECT = ROOT.parent.parent / "_scratch/castle/uedctl"       # .../castle/uedctl (project dir)
+CASTLE_PROJECT = ROOT.parent.parent / "_scratch/castle/uedcli"       # .../castle/uedcli (project dir)
 FULL_TRUNK = Path(castle_build.TRUNK)                                 # .../maps/foobar
 SUBSET_ROOT = ROOT.parent.parent / "_scratch/castle-subset"          # scratch outputs (gitignored)
 
@@ -73,7 +73,7 @@ def _make_subset_trunk(n: int) -> Path:
 
 def _composed(project):
     """(load_set, search_dirs) for the castle project — mirrors dispatch._composed_*."""
-    from uedctl.packages import search_path_package_names
+    from uedcli.packages import search_path_package_names
     uc = config.load_user_config()
     load_set = search_path_package_names(config.composed_search_files(project, uc))
     search_dirs = config.composed_search_dirs(project, uc)
@@ -107,8 +107,8 @@ def build_native_subset(n: int) -> UM.Model:
     level, _ = trunk.read_level(FULL_TRUNK)
     brushes = _brush_order(level)[:n]
     bs = [M._build_brush_input(name, level.actors[name]) for name in brushes]
-    native = uedctl_native.build_geometry_bspcsg(bs)
-    body = uedctl_native.serialize_model(native)
+    native = uedcli_native.build_geometry_bspcsg(bs)
+    body = uedcli_native.serialize_model(native)
     return UM.parse_model_body(body, 0, len(body))
 
 

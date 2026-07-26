@@ -29,12 +29,12 @@ architecture bullet already describes the tier; add the symlink-farm boot note).
 
 ## 0. Concurrency contract (the native-materialize agent is still active)
 
-**NOT touched:** `uedctl/native/*`, `uedctl-native/*`, `apply.py`/`materialize.py`/`packages.py`
+**NOT touched:** `uedcli/native/*`, `uedcli-native/*`, `apply.py`/`materialize.py`/`packages.py`
 internals (G3 only CALLS `run_materialize` through its existing API), `preview_native.py`,
 `editor.py` (read for patterns; the game container gets its own module), `preview_shots.py`
 grammar semantics (shared; additive helpers only if needed).
 
-**Touched:** NEW `uedctl/preview_game.py`, NEW `uedctl/game/` (image build: Dockerfile,
+**Touched:** NEW `uedcli/preview_game.py`, NEW `uedcli/game/` (image build: Dockerfile,
 entrypoint, uscript sources, build script, host substrate table), `dispatch.py` — ONLY the
 `_level_preview` `--game` branch + error-catch list, `cli.py` — only help-text updates for the
 now-functional `--map`/`--rebuild`/`--keep-alive`. Same standing rules: rebase-free, commit+push
@@ -45,7 +45,7 @@ per slice, re-run `bin/test` before each push, plain-merge on drift.
 ## 1. Slices (each: build → offline tests green → commit+push)
 
 ### G1 — UnrealScript package + game image + entrypoint (boots to the boot map, link answers)
-- `uedctl/game/uscript/UedPreview/Classes/`: `UedPreviewConsole.uc` (Console subclass, Tick-poll
+- `uedcli/game/uscript/UedPreview/Classes/`: `UedPreviewConsole.uc` (Console subclass, Tick-poll
   ~1 s, spawns the link when possessed+absent — NotifyLevelChange misses the initial level),
   `UedPreviewLink.uc` (TcpLink 127.0.0.1:7777, `#<id> …` framing, verbs: `Ping`,
   `GetCurrentLevelName`, `GetPlayerPosition`, `TravelToLevel` [reply OK BEFORE `open` — the
@@ -55,11 +55,11 @@ per slice, re-run `bin/test` before each push, plain-merge on drift.
   guard; DX driver class baked in link defaultproperties). Engine.* only in the generic classes.
 - Freeze: START with `bPlayersOnly` compiled in; SP-1 (G4) decides whether it stays or the build
   flips to `TimeDilation≈0` — one recompile, no runtime fallback (spec §5).
-- `uedctl/game/` image build, uplayctl's shape, uedctl-owned: `Dockerfile` (`FROM dx-lum-uned`,
+- `uedcli/game/` image build, uplayctl's shape, uedcli-owned: `Dockerfile` (`FROM dx-lum-uned`,
   warm-wineprefix `RUN xvfb-run -a wineboot -u`, baked `.u` + boot map + entrypoint),
   `build-image.sh` (flock; two-step: compile `.u` in a MOUNTED builder container against the
   game's own code dir from the composed config paths, source-hash stamp; then thin
-  `docker build`), gitignored `uedctl/game/inputs/edit/` for the user-supplied v469 UCC
+  `docker build`), gitignored `uedcli/game/inputs/edit/` for the user-supplied v469 UCC
   toolchain (9 files, same provenance as uplayctl's — document `docker cp`/local copy; named
   exit-2 when absent). Boot map staged from the substrate's own Maps dir (DX: `00_Training.dx`).
 - `game-entrypoint.sh`: assemble the game root from `/resources/<n>` mounts **in composed order

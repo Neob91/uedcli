@@ -101,7 +101,7 @@ you are narrowing. That symmetry is the whole point of the grep framing.
 - **`--json`:** emits the restricted set (`find` has **no** stderr count today and this spec adds none —
   it stays stdout-only; do NOT claim any stderr summary is "unchanged").
 - **`--tree` interaction:** the piped names resolve against the SAME tree `find` is querying (its
-  `--tree`, else `$UEDCTL_LEVEL`). A cross-tree pipe resolves each name in the target tree; a name
+  `--tree`, else `$UEDCLI_LEVEL`). A cross-tree pipe resolves each name in the target tree; a name
   absent there is an error under the strict rule (§3.1).
 - **`--exclude` requires `-`:** `--exclude` without a piped set is meaningless → clean exit 2. It
   composes with all existing filters and with `--no-label`/`--no-folder`.
@@ -140,17 +140,17 @@ comes from chaining `find … | find … -`.
 
 ## 5. Module shape / touchpoints
 
-- **`uedctl/cli.py`** — `find` gains an optional trailing positional accepting `-` (distinct `dest`,
+- **`uedcli/cli.py`** — `find` gains an optional trailing positional accepting `-` (distinct `dest`,
   e.g. `restrict`), and a `--exclude` flag (help: "with `-`, keep the piped actors that DON'T match the
   filters instead of those that do"). Reject `--exclude` without `-`, and a non-`-` positional, at
   parse/dispatch.
-- **`uedctl/dispatch.py`** — the `find` handler (`dispatch.py:3124-3205`): if `-` is present, read the
+- **`uedcli/dispatch.py`** — the `find` handler (`dispatch.py:3124-3205`): if `-` is present, read the
   stdin name list (`_resolve_target_names`, which strips/blank-drops; the handler dedupes via
   `dict.fromkeys` as the other verbs do — `_resolve_target_names` itself does NOT dedupe), resolve it
   strictly to canonical names (`resolve_actor_names`, §3.1), then keep/drop against the FINAL `names`
   list AFTER the `--prop` block (`dispatch.py:3199`), honoring `--exclude`. Preserve in-tree order by
   filtering `names` in place (it is already `list_actors`-ordered).
-- **`uedctl/query.py`** — NO change to `list_actors` (stays filter-only, in-tree order preserved for
+- **`uedcli/query.py`** — NO change to `list_actors` (stays filter-only, in-tree order preserved for
   free). Reuse `resolve_actor_names` for the strict `P` resolution.
 
 No model/trunk change; a pure read-path/query feature.

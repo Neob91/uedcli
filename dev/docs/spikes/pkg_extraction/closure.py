@@ -12,7 +12,7 @@ import dxpkg
 
 # Where package files might live, in priority order (the substrate's path set).
 SEARCH_DIRS = [
-    "/home/human/src/dx_lum/Tools/uedctl/uned/UED22",
+    "/home/human/src/dx_lum/Tools/uedcli/uned/UED22",
     "/home/human/src/dx_lum/Maps",
     "/home/human/src/dx_lum/Textures",
     "/home/human/src/dx_lum/System",

@@ -1,6 +1,6 @@
 """D0 — capture the editor's MAP REBUILD drop-warnings = the dropped (absent) faces, as ground
 truth. Pure parser (offline-testable) + a live capture over a Driver. Spike-grade in _scratch;
-promotes to uedctl/bsp/editorlog.py once validated on a real map (D0-b).
+promotes to uedcli/bsp/editorlog.py once validated on a real map (D0-b).
 
 Channels (Editor.dll wide strings, confirmed flushing under MAP REBUILD — see the BSP spikes):
   FPoly::CalcNormal: Zero-area polygon                 -> a dropped face (zero area)

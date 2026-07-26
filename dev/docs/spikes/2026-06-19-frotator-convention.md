@@ -1,6 +1,6 @@
 # Spike: UnrealEd FRotator convention for `actor rotate` (2026-06-19)
 
-**Goal:** pin UE1/UED22's exact FRotator behavior so uedctl's `actor rotate` matches the editor
+**Goal:** pin UE1/UED22's exact FRotator behavior so uedcli's `actor rotate` matches the editor
 (parity-first). Run live on `dx-lum-uned` (UED22 under wine). Method: drive the editor, capture
 geometry, derive the convention from observed coordinates — no assumptions.
 
@@ -12,11 +12,11 @@ geometry, derive the convention from observed coordinates — no assumptions.
   way" the design chose — **confirmed correct**.
 - **The `Rotation` field unit is the standard `2^16` (65536 = 360°): `16384 = 90°`.** Round-trips
   faithfully through `MAP IMPORTADD`/`MAP EXPORT`, and values **normalize mod 65536** (an imported
-  `Yaw=4194304 = 64·65536` re-exported as `0`). So uedctl's `deg_to_uu`/`uu_to_deg` at **65536 is
+  `Yaw=4194304 = 64·65536` re-exported as `0`). So uedcli's `deg_to_uu`/`uu_to_deg` at **65536 is
   correct** — the original plan was right.
 - **`BRUSH ROTATETO`'s *input* is ×256 vs the field** (`ROTATETO YAW=16384` stores
   `Yaw=4194304`; to get a 90° field value you'd pass `YAW=64`). This is a console-input quirk of
-  `ROTATETO` only — **uedctl never uses `ROTATETO`** (it writes the field directly), so it's a
+  `ROTATETO` only — **uedcli never uses `ROTATETO`** (it writes the field directly), so it's a
   non-issue, recorded to avoid confusion.
 - **The rotation matrices (axis + sign), corner-tracked from captured world geometry:**
   - **Yaw (about Z):** `(x,y) → (-y, x)` — matches the standard `Rz` **unchanged**.
@@ -94,12 +94,12 @@ Original (now-corrected) notes kept for context:
 
 **What that leaves genuinely open (narrow):** orbit-Location-about-a-pivot + compose-each-Rotation
 is standard rigid-body math, not editor-magic — any correct rigid group rotation does exactly that,
-and **uedctl defines its OWN pivot** (best-grid vertex, a design choice), so it needn't match the
+and **uedcli defines its OWN pivot** (best-grid vertex, a design choice), so it needn't match the
 editor's pivot. The only truly editor-specific unknowns are (a) the editor's *default* pivot
-(irrelevant to uedctl's chosen pivot) and (b) how the editor **composes a delta onto an
+(irrelevant to uedcli's chosen pivot) and (b) how the editor **composes a delta onto an
 already-rotated actor** (matrix vs additive, gimbal handling) — which only matters for
-byte-identical-to-mouse parity, not for a correct rotate (uedctl uses matrix compose, which is
-correct). uedctl's correctness rests on the VERIFIED per-actor matrix + standard group math.
+byte-identical-to-mouse parity, not for a correct rotate (uedcli uses matrix compose, which is
+correct). uedcli's correctness rests on the VERIFIED per-actor matrix + standard group math.
 
 **Editor parity is now CLOSED** (no human-VNC step needed): the multi-actor pivot/orbit/compose
 were captured headless via the `drag` verb — see

@@ -1,7 +1,7 @@
 # Spike: extracting a class's property set offline (for prop-name validation)
 
 **Date:** 2026-06-26 · **Status:** RESOLVED — feasible, recommended approach below.
-**Question (board `to-spike.md`):** Can uedctl obtain an actor class's full set of legal
+**Question (board `to-spike.md`):** Can uedcli obtain an actor class's full set of legal
 properties offline, so `actor prop`/`actor build --prop` can ERROR on an invalid property name
 instead of accepting unknown keys opaquely? We suspected we'd "have to read the packages."
 

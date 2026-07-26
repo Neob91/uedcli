@@ -27,16 +27,16 @@ Z_WORK = r"Z:\work"          # where the engine sees `workdir`
 # A 512-cube subtract brush, in the two shapes the two import verbs want:
 #   ROOM_MAP  — a level T3D (`Begin Map`…`End Map`), what `MAP IMPORT`/`MAP IMPORTADD` take.
 #   CUBE_POLY — a bare `Begin PolyList`…`End PolyList`, what `BRUSH IMPORT` takes.
-# Generate both from uedctl so they stay in step with the emitter:
-#   uedctl brush build cube --width 512 --breadth 512 --height 512 --at 0,0,0 --csg subtract
-_GEN = ("uedctl --project <root> brush build cube --width 512 --breadth 512 --height 512 "
+# Generate both from uedcli so they stay in step with the emitter:
+#   uedcli brush build cube --width 512 --breadth 512 --height 512 --at 0,0,0 --csg subtract
+_GEN = ("uedcli --project <root> brush build cube --width 512 --breadth 512 --height 512 "
         "--at 0,0,0 --csg subtract")
 
 
 def _inputs(work: Path) -> None:
     sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
-    from uedctl.builders import cube, make_brush_actor    # noqa: E402
-    from uedctl.emit import emit_actor, emit_map          # noqa: E402
+    from uedcli.builders import cube, make_brush_actor    # noqa: E402
+    from uedcli.emit import emit_actor, emit_map          # noqa: E402
     import re                                             # noqa: E402
     a = make_brush_actor(name="Cube", brush=cube(512, 512, 512),
                          location=(0, 0, 0), csg="subtract")
@@ -88,7 +88,7 @@ def main() -> int:
     work.mkdir(parents=True, exist_ok=True)
     try:
         _inputs(work)
-    except Exception as e:                       # uedctl not importable from here → say how
+    except Exception as e:                       # uedcli not importable from here → say how
         print(f"could not generate the T3D inputs ({e}); make them by hand with:\n  {_GEN}")
     for name, question, cmds in VARIANTS:
         body = ["MAP GRID X=1 Y=1 Z=1"] + [c.format(W=Z_WORK) for c in cmds]

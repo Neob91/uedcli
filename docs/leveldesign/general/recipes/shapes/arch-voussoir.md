@@ -9,7 +9,7 @@ side sits outward) — swept through the wall's thickness.
 One trapezoidal prism, 48 uu wide at the base and 32 at the top over a 64-uu height, swept 64 uu
 through the wall. Six faces: 4 side quads and 2 caps.
 
-### uedctl pipeline (what you run)
+### uedcli pipeline (what you run)
 
 ```
 brush build extrude --axis y --depth 64 --at 0,0,256 \

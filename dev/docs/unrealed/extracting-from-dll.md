@@ -4,7 +4,7 @@ UnrealEd's exec commands are almost undocumented publicly. The fastest source of
 shipped binaries themselves — the exec parser literals (`ParseCommand(&Str, TEXT("VERB"))`) and
 the frontend's format strings are all in the DLLs/EXE. This is how the `commands.md` catalog
 was built. Everything here is **static** (reads files, never runs the editor) — do it on the
-bind-mounted `Tools/uedctl/uned/UED22/*.dll` directly, or inside any container.
+bind-mounted `Tools/uedcli/uned/UED22/*.dll` directly, or inside any container.
 
 ## The one gotcha: strings are UTF-16LE
 Engine `TCHAR` string literals are **wide (UTF-16LE)**. Only the C++ symbol/RTTI names are

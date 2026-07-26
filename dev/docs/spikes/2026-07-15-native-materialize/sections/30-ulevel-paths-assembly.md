@@ -8,7 +8,7 @@ serialize, texture decode, property list). It covers: (1) the `ULevel` object bo
 object set + assembly order, (6) import/name-table synthesis.
 
 It builds directly on and does not re-derive: the **package container writer** (byte-exact
-v61/68/69, `2026-06-27-decontainerize-uedctl/03-native-package-write.md`,
+v61/68/69, `2026-06-27-decontainerize-uedcli/03-native-package-write.md`,
 `harness/package_rw.py`), the **`UModel` serializer** (byte-exact 72419/72419 Model exports,
 `2026-06-28-umodel-serialize-byte-exact.md`, `bspspike/umodel_serialize.py`), the **property
 list** reader/writer (`07-native-actor-bodies.md`, `harness/prop_writer.py` +

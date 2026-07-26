@@ -2,18 +2,18 @@
 
 **This is the committed prototype the spec/plan's `pkgfixture.py` is lifted from.** It is
 spike evidence, not shipped code — the build promotes it (cleaned up) to
-`uedctl/tests/pkgfixture.py`. Run it directly to self-verify:
+`uedcli/tests/pkgfixture.py`. Run it directly to self-verify:
 
-    cd Tools/uedctl && .venv/bin/python \
+    cd Tools/uedcli && .venv/bin/python \
         dev/docs/spikes/2026-07-25-native-texture-formats/pkgfixture_proto.py
 
 It writes nothing to disk by default; `main()` builds every shape the build needs, parses
-each one back through `uedctl.utexture.load_package`, and asserts the round trip.
+each one back through `uedcli.utexture.load_package`, and asserts the round trip.
 
 Why it exists: every offline "Done when" in the native-texture-formats plan needs a package
 containing a texture with a *chosen* mip chain (a `CompMips` array, a zero-length mip, a
 dangling `Palette` ref, a hostile mip count). No such package can be lifted from real
-content, and `uedctl/native/pkg_write.py` already contains a from-scratch container writer
+content, and `uedcli/native/pkg_write.py` already contains a from-scratch container writer
 (`build_package`) — so the whole fixture is ~150 lines of body encoding on top of it.
 
 What it covers, and the shapes it proves buildable:
@@ -51,8 +51,8 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))))
 
-from uedctl.native.codec import write_ci                       # noqa: E402
-from uedctl.native.pkg_write import (NameTable, ImportRec,     # noqa: E402
+from uedcli.native.codec import write_ci                       # noqa: E402
+from uedcli.native.pkg_write import (NameTable, ImportRec,     # noqa: E402
                                      ExportRec, build_package)
 
 # UE1 property type nibbles (see `utexture._read_props`).
@@ -227,7 +227,7 @@ def _bc1_chain(w, h):
 
 def main() -> int:
     import tempfile
-    from uedctl import utexture
+    from uedcli import utexture
 
     def parse(buf, fname="Fixture.utx"):
         d = tempfile.mkdtemp()

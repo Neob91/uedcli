@@ -6,7 +6,7 @@ Each check pins a SPECIFIC byte sequence or instruction at a SPECIFIC address, s
 substrate swap changes the binary the assertion fails loudly rather than the doc silently
 going stale. Run:
 
-    UED22=/home/human/src/dx_lum/Tools/uedctl/uned/UED22 \
+    UED22=/home/human/src/dx_lum/Tools/uedcli/uned/UED22 \
         python verify_heuristic.py
 
 Prints one line per check; exits non-zero on any mismatch.
@@ -18,7 +18,7 @@ import sys
 
 import pe
 
-UED22 = os.environ.get("UED22", "/home/human/src/dx_lum/Tools/uedctl/uned/UED22")
+UED22 = os.environ.get("UED22", "/home/human/src/dx_lum/Tools/uedcli/uned/UED22")
 EDITOR = os.path.join(UED22, "Editor.dll")
 ENGINE = os.path.join(UED22, "Engine.dll")
 

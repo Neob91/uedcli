@@ -17,21 +17,21 @@ this spec sequences the *port* foundation-first with a byte-diff gate at every p
   `FindBestSplit`/`bspBrushCSG`/`csgRebuild` decode (the port's ground truth).
 - `sections/70-zones-portalization.md` + `re-raw-zones/bounds-and-zonelayout.md` — `TestVisibility`
   and `bspBuildBounds` (`Bounds` + `LeafHulls`), both already partly ported.
-- Current code being replaced/extended: `uedctl-native/src/csg.rs`, `build.rs`, `passes.rs`,
+- Current code being replaced/extended: `uedcli-native/src/csg.rs`, `build.rs`, `passes.rs`,
   `zones.rs`, `fpoly.rs`, `model.rs`, `model_write.rs`.
 
 ---
 
 ## 0. Definitions and the parity oracle
 
-**Trunk** — the git-tracked T3D tree of a level (`uedctl/maps/<level>/`). **Editor build** —
+**Trunk** — the git-tracked T3D tree of a level (`uedcli/maps/<level>/`). **Editor build** —
 UnrealEd materializing that trunk (`MAP IMPORT` of the assembled `.t3d` then `MAP REBUILD` with
 `Balance=50, PortalBias=70, OPTIMAL` — the byte-verified `MAP REBUILD` params,
 `bspbuild-splitpolylist-decode.md §FindBestSplit`). **Native build** —
-`uedctl_native::build_geometry` over the same brush inputs.
+`uedcli_native::build_geometry` over the same brush inputs.
 
 **The castle golden.** `Maps/Test_Castle.dx` is the committed editor build of the castle trunk at
-`_scratch/castle/uedctl/maps/foobar`. `harness/bytediff_baseline.py` already loads both and prints
+`_scratch/castle/uedcli/maps/foobar`. `harness/bytediff_baseline.py` already loads both and prints
 per-section counts. Current gap (native → editor):
 
 | section | native (repaired) | editor golden | body |
@@ -47,7 +47,7 @@ per-section counts. Current gap (native → editor):
 byte-diffing the `UModel` export body and object tables.** `Test_Castle.dx` is the castle golden;
 `DXOnly.dx` is a trivial second golden; the CSG differential fixtures (a/c/d/e single/few-brush
 cases in `build.rs` tests) are the micro-goldens. **The oracle must be regeneratable on demand** —
-the editor-materialize path (`uedctl/materialize.py` → `driver.MAP IMPORTADD` + `rebuild()`) can
+the editor-materialize path (`uedcli/materialize.py` → `driver.MAP IMPORTADD` + `rebuild()`) can
 rebuild the golden from the current trunk, so a Phase-0 task pins a script that (re)builds the
 editor golden from a trunk with the exact `MAP REBUILD` params, guarding against the checked-in
 `.dx` drifting from the trunk it is diffed against.

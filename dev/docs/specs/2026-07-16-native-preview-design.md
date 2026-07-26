@@ -26,14 +26,14 @@ Meanwhile the native (editor-free) materialize line has produced, as by-products
 **offline software renderer** needs:
 
 - **Carved geometry with no editor:** the Rust CSG/BSP core builds a level's real post-CSG surface
-  set from the trunk in-process (`uedctl-native/src/{csg,build}.rs`, `lib.rs::build_geometry` —
+  set from the trunk in-process (`uedcli-native/src/{csg,build}.rs`, `lib.rs::build_geometry` —
   architecture.md "Native (editor-free) materialize"; differential-validated against editor goldens).
 - **Pixel-exact texture decode:** the pure-Python `.utx`/UTexture decoder is byte-identical to
   `UCC batchexport` across the whole Deus Ex corpus (spike
-  `2026-06-27-decontainerize-uedctl/01-native-texture-decode.md`, ✅ RESOLVED).
+  `2026-06-27-decontainerize-uedcli/01-native-texture-decode.md`, ✅ RESOLVED).
 - **A working textured rasterizer harness:** the same spike series already renders a built `.dx`'s
   BSP surfs with real decoded textures to PNG
-  (`spikes/2026-06-27-decontainerize-uedctl/harness/native_render.py` — top-down ortho only, but the
+  (`spikes/2026-06-27-decontainerize-uedcli/harness/native_render.py` — top-down ortho only, but the
   surf→UV→texel path is proven).
 
 **The fix:** promote those pieces into a first-class **draft preview backend** — `level preview`
@@ -55,8 +55,8 @@ All from `decisions.md 2026-07-16 12:13 UTC` (Andrzej):
 | D3 | **Geometry = the Rust CSG build on the trunk, in-process.** The preview shows the CARVED world (BSP surfs), not raw brushes. N-2 residuals (un-merged coplanar fragments; missing zone splits) accepted — both invisible to a textured render. No `--from-dx` in v1 (rejected, can be added later). |
 | D4 | **Pose grammar = the in-game spec's SHOT tokens, shared verbatim** (`at:…;rot:…` / `look:` / `orbit:`; 2026-07-13 spec §3). Same tokens work on both backends. |
 | D5 | **Lighting: flat-textured v1; `--lit` is a scoped fast-follow** consuming the N-4 bake (§8). |
-| D6 | **Rasterizer in Rust** (`uedctl-native`), Python orchestration, Pillow PNG encode. |
-| D7 | **Promote the texture decoder** to a shipped `uedctl/utexture.py`. |
+| D6 | **Rasterizer in Rust** (`uedcli-native`), Python orchestration, Pillow PNG encode. |
+| D7 | **Promote the texture decoder** to a shipped `uedcli/utexture.py`. |
 | — | `brush preview` texturing was considered and **DROPPED** (not deferred) — wireframe stays the brush-inspection look. |
 
 ---
@@ -64,7 +64,7 @@ All from `decisions.md 2026-07-16 12:13 UTC` (Andrzej):
 ## 3. CLI surface
 
 ```
-uedctl level preview SHOT [SHOT ...] --out-dir DIR
+uedcli level preview SHOT [SHOT ...] --out-dir DIR
                      [--native | --game]   # backend; --native is the default
                      [--size WxH]          # output resolution (default 1280x960, 4:3 — matches --game)
                      [--fov DEG]           # horizontal FOV (default: the game's first-person default)
@@ -128,7 +128,7 @@ trunk ──► brush transform ──► Rust CSG build ──► surf→textur
      `SheerRate`** → named exit-2 (actor + field). NB materialize today checks only `MainScale`
      and silently ignores `PostScale`/`SheerRate` (reviewer finding — boarded as its own inbox
      item); preview must not inherit that hole. The scale-support spec lifts this later for both.
-3. **CSG build.** `uedctl_native.build_geometry(brushes)` carves the world (N-1 core;
+3. **CSG build.** `uedcli_native.build_geometry(brushes)` carves the world (N-1 core;
    architecture.md). `BuildError` → clean exit 2. Then `serialize_model` → `umodel.parse_model_body`
    → the `Model` (nodes/surfs/verts/points/vectors) — the same bytes-across-FFI shape materialize
    uses (no new FFI geometry types).
@@ -141,7 +141,7 @@ trunk ──► brush transform ──► Rust CSG build ──► surf→textur
    in §5 read the SOURCE poly's flags via this join, never the built surf's). **Guard the join like
    `_patch_surf_refs` does:** an out-of-range/`-1` `i_actor`/`i_brush_poly` (the build emits such
    surfs) → the flat default grey, never an `IndexError`. No package assembly, no import tables.
-5. **Texture decode** (`uedctl/utexture.py`, promoted from the proven spike decoder). Resolve each
+5. **Texture decode** (`uedcli/utexture.py`, promoted from the proven spike decoder). Resolve each
    referenced `Package[.Group].Name` against the **composed config search path**
    (`config.composed_search_files` — project overlay shadows game base, same as materialize), decode
    mip0 + palette → RGB. Decoded per-package results cached in-memory for the invocation.
@@ -153,7 +153,7 @@ trunk ──► brush transform ──► Rust CSG build ──► surf→textur
    draft preview should always produce an image, and the placeholder makes the miss visible in the
    render itself; revisit if wrong)*. A face with **no texture set** renders in the flat default
    grey.
-6. **Rasterize** (`uedctl-native/src/render.rs`, §5): per shot, Rust renders an RGB framebuffer;
+6. **Rasterize** (`uedcli-native/src/render.rs`, §5): per shot, Rust renders an RGB framebuffer;
    Python encodes PNG via Pillow (the existing sole third-party dep) into `--out-dir`.
 
 **No cache, no freshness key:** the build is in-process and takes seconds; every invocation renders
@@ -255,9 +255,9 @@ precisely because CPython missed such targets; rasterizing ~1.2 MP × 8 is trivi
 
 ## 6. Module layout / what changes
 
-- **New:** `uedctl/utexture.py` (promoted decoder — same API as the spike harness:
+- **New:** `uedcli/utexture.py` (promoted decoder — same API as the spike harness:
   `load_package`/`decode_texture`/`decode_palette`/`mip0_to_rgb`; the spike file stays put as
-  evidence), `uedctl/preview_native.py` (orchestration §4), `uedctl-native/src/render.rs` + a
+  evidence), `uedcli/preview_native.py` (orchestration §4), `uedcli-native/src/render.rs` + a
   `render_frame(...)` FFI entry beside `build_geometry`/`serialize_model`/`bake_lighting` (an
   **additive** `lib.rs` registration — the `BrushTuple` shape and the build/CSG modules are NOT
   touched; see the §5 plan refinement and the plan's concurrency contract).

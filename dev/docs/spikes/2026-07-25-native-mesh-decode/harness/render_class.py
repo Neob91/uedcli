@@ -2,7 +2,7 @@
 
 This is the shape a class catalog actually needs. A mesh's own `Textures` array is only the
 fallback skin set; for Deus Ex characters it is usually empty, and the real skins come from the
-CLASS's `MultiSkins[i]` (per material index) or `Skin`. uedctl already resolves class defaults
+CLASS's `MultiSkins[i]` (per material index) or `Skin`. uedcli already resolves class defaults
 offline (`uprops.resolve_class_defaults`), so the whole thumbnail is offline, editor-free.
 
 Usage:
@@ -17,8 +17,8 @@ import re
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", ".."))
-from uedctl.upackage import load_package  # noqa: E402
-from uedctl import uprops, utexture  # noqa: E402
+from uedcli.upackage import load_package  # noqa: E402
+from uedcli import uprops, utexture  # noqa: E402
 import umesh  # noqa: E402
 import render as R  # noqa: E402
 

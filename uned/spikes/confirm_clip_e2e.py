@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
-"""End-to-end: add a brush (paste), then CLIP it via the real uedctl path
+"""End-to-end: add a brush (paste), then CLIP it via the real uedcli path
 (select_by_name bounds-box -> modify_actor delete+paste). Verify the brush's
 Z-extent is halved by a Z=0 clip and it's still present + selectable.
 """
 import subprocess
 import sys
 import select_matrix as M
-from uedctl.driver import Driver
-from uedctl.model import parse_t3d
-from uedctl.normalize import normalize_level
-from uedctl.writes import add_actor, modify_actor, actor_bounds
-from uedctl.clip import clip_brush, axis_plane
+from uedcli.driver import Driver
+from uedcli.model import parse_t3d
+from uedcli.normalize import normalize_level
+from uedcli.writes import add_actor, modify_actor, actor_bounds
+from uedcli.clip import clip_brush, axis_plane
 import copy
 
 

@@ -22,7 +22,7 @@ MAP-EXPORT map-geometry corpus for **human-scale (dimension) measurement** — t
 ## 1. What this is, and the one thing it extracts
 
 **Goal.** Distill a set of **level-construction best practices** from the real shipped Deus Ex (and,
-as a control, Unreal 1 / UT99) levels, expressed so an LLM driving `uedctl` builds geometry the way
+as a control, Unreal 1 / UT99) levels, expressed so an LLM driving `uedcli` builds geometry the way
 those levels were actually built — and, critically, does **not** overbuild (no 20,000-vertex brush).
 
 **Scope — deliberately narrow (Decision D1).** The corpus's *unique* value is the knowledge an LLM
@@ -96,15 +96,15 @@ UnrealEd's builders, and has **no arbitrary-polygon extrude/prism** generator at
 yet the 2D-shape→extrude workflow is *the* canonical UE1 brush method, so many real brushes use it.
 Classify every real brush into exactly one of:
 
-- **(a) reproducible by an existing `uedctl` generator** (`cube/cylinder/cone/sheet/staircase/spiral`,
+- **(a) reproducible by an existing `uedcli` generator** (`cube/cylinder/cone/sheet/staircase/spiral`,
   and since 2026-07-25 the 2D-profile sweeps `extrude`/`revolve` — so gap 6 below is CLOSED and a
   swept-profile brush is now case (a), not freeform).
-- **(b) reproducible only by a builder `uedctl` lacks** — hollow-cube, hollow/tube cylinder, curved
+- **(b) reproducible only by a builder `uedcli` lacks** — hollow-cube, hollow/tube cylinder, curved
   stair, and above all **arbitrary-polygon extrude**. This bucket is *capability-gap evidence*, the
   highest-value output: "DX leans heavily on extrude → build the verb." Route it to `inbox.md`.
 - **(c) genuinely freehand / vertex-edited** — real non-generatable geometry.
 
-"Freeform frequency" as a single number is **forbidden** — it would conflate (b), a uedctl tooling
+"Freeform frequency" as a single number is **forbidden** — it would conflate (b), a uedcli tooling
 gap, with (c), a craft fact, and inflate both. Report the three separately. Bias classification toward
 (c) only when params truly don't reproduce within tolerance; prefer tagging (b) when a known missing
 builder would.
@@ -139,7 +139,7 @@ pilot validates *method*; only the scaled run earns durable KB numbers.
 1. **Validated extraction harness** — committed as durable spike evidence under `dev/docs/spikes/<slug>/`
    (per `CLAUDE.md`: harness code lives beside the spike markdown, never in `_scratch/`). Includes the
    shape classifier + reverse-mapper, and — as its **first, dependency-free acceptance gate** — a
-   **self-consistency round-trip**: feed uedctl's *own* generators (`brush build cube/cylinder/…`) →
+   **self-consistency round-trip**: feed uedcli's *own* generators (`brush build cube/cylinder/…`) →
    emit polys → classify → recover params → compare to the known input. A classifier bug otherwise
    fakes every headline number, so this gate precedes any corpus claim (§8).
 2. **Method write-up + a small pilot dataset** (4 DX maps + control) — per-brush JSON (shape class,
@@ -187,7 +187,7 @@ Andrzej: reproducible **per-game setup scripts**, one per game, each installing 
 **gitignored** dir in the repo — "ideally a few scripts, each setting up its own game for dev
 purposes."
 
-- **Install root:** `Tools/uedctl/dev/games/` (beside the existing `dev/scripts/`), with a committed
+- **Install root:** `Tools/uedcli/dev/games/` (beside the existing `dev/scripts/`), with a committed
   `.gitkeep`; the installed game trees themselves are gitignored.
 - **Source (legitimate, free):** Epic has officially sanctioned free preservation of **Unreal Gold**
   and **UT99 GOTY** on the Internet Archive via the OldUnreal non-profit (with Epic's permission).
@@ -197,7 +197,7 @@ purposes."
 - **Scripts:** `install-unreal.sh`, `install-ut99.sh` (and document the existing DX install as the
   same pattern). Each is idempotent, writes only under `dev/games/<game>/`, and verifies the maps
   landed.
-- These UE1 maps become the control corpus's substrate; `uedctl.toml`/`~/.uedctl/config.toml` point a
+- These UE1 maps become the control corpus's substrate; `uedcli.toml`/`~/.uedcli/config.toml` point a
   `game` at them for import + preview.
 
 ## 6. Confidence marker (Decision D7)
@@ -211,12 +211,12 @@ durable-doc grounding waits for the scaled run — §3). `📊` is **not** used 
 scope), nor as a *safe bound* — a corpus ceiling is descriptive ("real brushes sit under X"), not a
 validated limit (§1.3). Shape/composition prose stays qualitative unless a specific count backs it.
 
-## 7. uedctl capability gaps this surfaces
+## 7. uedcli capability gaps this surfaces
 
-The study both **depends on** and **prototypes** uedctl capabilities. Flagged to the board (§8):
+The study both **depends on** and **prototypes** uedcli capabilities. Flagged to the board (§8):
 
 1. **Offline `.dx`→T3D import (`level import`) — LATER CONVENIENCE, not a hard blocker (revised).**
-   Spec'd but unbuilt (`specs/2026-07-24-level-import.md`; no `uedctl/mapimport.py`), and itself gated
+   Spec'd but unbuilt (`specs/2026-07-24-level-import.md`; no `uedcli/mapimport.py`), and itself gated
    on an actor-order spike — a big, still-moving piece. The pilot does **not** wait on it: the
    **editor `MAP EXPORT` → T3D route is already proven** — it is `level import`'s *own* test oracle
    (`store_export.export_dx_level`) and the sister spec `2026-07-19` (Half B2) already budgets a
@@ -233,7 +233,7 @@ The study both **depends on** and **prototypes** uedctl capabilities. Flagged to
 3. **Brush→generator reverse-mapping — NEW (the deliverable's spine).** Emit the `brush build
    <shape> --params…` that reproduces a given brush (exact for boxes, approximate for prisms/cones —
    §2), or route to bucket (b)/(c). No verb today; prototyped in the harness; a strong candidate for a
-   `uedctl` verb (`brush identify --as-generator`).
+   `uedcli` verb (`brush identify --as-generator`).
 4. **Spatial subset selection in `actor find` — `--within-bbox` now BUILT.** Carving "a region" out of
    a big map for per-feature wireframes is `actor find --within-bbox X0,Y0,Z0,X1,Y1,Z1 | actor preview
    -` — **built + tested 2026-07-24** (full containment; `decisions.md` 2026-07-24 21:44 UTC), the
@@ -268,7 +268,7 @@ The study both **depends on** and **prototypes** uedctl capabilities. Flagged to
   parallel; if sequencing conflicts, spin a joint `[spike]`.
 - **Sequencing (revised — de-risked, no hard block on `level import`):**
   1. **Classifier self-consistency gate FIRST — dependency-free.** Build the shape classifier +
-     reverse-mapper and validate them round-trip against uedctl's *own* generators (§3.1). Needs no
+     reverse-mapper and validate them round-trip against uedcli's *own* generators (§3.1). Needs no
      import, no container, no find-spatial, no game installs. This de-risks the spine before any
      corpus claim.
   2. **Game-install scripts + UE1 control** — independent, land in parallel.

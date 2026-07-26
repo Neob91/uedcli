@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# One-time generator for the committed Tools/uedctl/uned/UED22/ editor substrate.
+# One-time generator for the committed Tools/uedcli/uned/UED22/ editor substrate.
 #
-# Copies Extra/UED22 -> Tools/uedctl/uned/UED22 and bakes the OpenGL/windowed/viewport ini
+# Copies Extra/UED22 -> Tools/uedcli/uned/UED22 and bakes the OpenGL/windowed/viewport ini
 # settings UnrealEd needs under wine+llvmpipe, replacing the runtime ued2_stub.sh
 # symlink-farm + ini-patching with a committed, deterministic, pre-baked editor dir.
 #
@@ -14,7 +14,7 @@
 # and they can be re-enabled (uncommented) against a real Deus Ex install.
 set -euo pipefail
 SRC="${1:-Extra/UED22}"
-DST="${2:-Tools/uedctl/uned/UED22}"
+DST="${2:-Tools/uedcli/uned/UED22}"
 KEEP="core engine editor fire ipdrv extension davesbrushbuilders framebuilder rahnembrushbuilders extendedbuilders tarquinbrushbuilders unrealedex tarquinextrudebuilder"
 
 rm -rf "$DST"

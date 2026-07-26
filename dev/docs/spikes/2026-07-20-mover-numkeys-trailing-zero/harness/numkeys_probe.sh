@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Spike: does UnrealEd (the materialize path uedctl uses — MAP IMPORTADD + MAP EXPORT,
+# Spike: does UnrealEd (the materialize path uedcli uses — MAP IMPORTADD + MAP EXPORT,
 # and after MAP REBUILD) preserve a Mover's authored NumKeys when trailing keyframes are
 # zero, or does it auto-decrement NumKeys past trailing all-zero keys?
 #
-# The answer decides uedctl's shrink model: if the editor KEEPS NumKeys, then move/rotate
+# The answer decides uedcli's shrink model: if the editor KEEPS NumKeys, then move/rotate
 # only ever GROW it and shrinking must be an explicit verb (remove/clear); if the editor
-# DECREMENTS it, uedctl should mirror that automatically.
+# DECREMENTS it, uedcli should mirror that automatically.
 #
 # Method mirrors 2026-07-18-exec-file-console-batch/harness/exec_file_probe.sh: boot an
 # ephemeral uned editor, drive it over `docker exec … wine_ctl.py`, batch the per-fixture
@@ -17,7 +17,7 @@
 set -u
 HERE="$(cd "$(dirname "$0")" && pwd)"
 FIX="$HERE/fixtures"
-UNED_DIR="$(cd "$HERE/../../../../../uned" && pwd)"   # Tools/uedctl/uned
+UNED_DIR="$(cd "$HERE/../../../../../uned" && pwd)"   # Tools/uedcli/uned
 OUT="$HERE/out"; mkdir -p "$OUT"
 
 C="${1:-}"; OWN=0

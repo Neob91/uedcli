@@ -13,7 +13,7 @@ import json, marshal, os, statistics, sys, time
 from dataclasses import asdict
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
-from uedctl import uprops  # noqa: E402
+from uedcli import uprops  # noqa: E402
 
 
 def build_bundle(path, name):

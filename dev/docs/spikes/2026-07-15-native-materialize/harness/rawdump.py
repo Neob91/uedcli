@@ -1,8 +1,8 @@
 import sys, struct
-sys.path.insert(0, "/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedctl")
-from uedctl.native.pkg_write import parse_package
-from uedctl.native import umodel as UM
-from uedctl.native.codec import read_ci
+sys.path.insert(0, "/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedcli")
+from uedcli.native.pkg_write import parse_package
+from uedcli.native import umodel as UM
+from uedcli.native.codec import read_ci
 
 def load(path):
     buf = open(path, "rb").read()

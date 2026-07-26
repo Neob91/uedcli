@@ -1,6 +1,6 @@
 # Spike: `level preview` headless arbitrary-pose shaded capture
 
-**Question (from the preview spec §Feasibility):** can uedctl render a **shaded image from an arbitrary
+**Question (from the preview spec §Feasibility):** can uedcli render a **shaded image from an arbitrary
 camera pose, headless, for multiple shots in one editor boot** — the mechanism the batch snapshot
 renderer needs? Two cold reviews found the drafted `CAMERA ALIGN`+`RMODE`+`driver.screenshot` sequence
 can't work (screenshot grabs the main frame; RMODE can't target the perspective pane headless; the
@@ -67,7 +67,7 @@ is crash-prone — long fallback timer). Committed here (not `_scratch`) per the
 ## ⇒ RESOLUTION: don't drive the editor — render NATIVELY (spike `09-native-textured-preview`)
 
 The whole editor path below is a **dead end for a clean posed, multi-mode preview** (see rounds 1–7).
-The clean answer already exists and is RESOLVED: **`spikes/2026-06-27-decontainerize-uedctl/09-native-textured-preview.md`** — a pure-Python offline renderer (`harness/native_render.py`) that parses the
+The clean answer already exists and is RESOLVED: **`spikes/2026-06-27-decontainerize-uedcli/09-native-textured-preview.md`** — a pure-Python offline renderer (`harness/native_render.py`) that parses the
 level's built `Model`, decodes each surface texture natively, and rasterizes with affine UV + a
 z-buffer (real maps render in ~0.7–1.1 s, no editor). It currently does **top-down ortho**; arbitrary
 **perspective pose is a camera-transform swap** at the projection (`native_render.py` `sx`/`sy`),
@@ -78,7 +78,7 @@ standard rasterizer work — NOT a feasibility gap. Per-shot **mode** = a render
 **New `level preview` shape:** materialize the trunk → build `.dx` (the ONE editor touch, = CSG build,
 which materialize already does) → **native perspective-render** from each vantage point, offline. No
 `CAMERA OPEN`/`RMODE`/restart/XTEST/crop. This removes the editor's *display* role from preview (the
-de-containerize direction — memory `decontainerize-uedctl`). The editor findings below stay as durable
+de-containerize direction — memory `decontainerize-uedcli`). The editor findings below stay as durable
 UnrealEd facts (folded into `unrealed/rendering.md`), but the FEATURE is built on the native renderer.
 
 ## Findings (editor path — durable UnrealEd facts, folded into `unrealed/rendering.md`)

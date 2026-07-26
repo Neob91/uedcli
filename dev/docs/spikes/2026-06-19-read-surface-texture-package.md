@@ -8,7 +8,7 @@ serialization paths drop it: `MAP EXPORT` and `EDIT COPY` emit a **bare**
 Is there **any OTHER way** to read, for a loaded/identified surface, the
 **package-qualified** texture it actually bound (e.g.
 `CoreTexMetal.Metal.Area51Wall_A` vs `Area51Textures.Metal.Area51Wall_A`)? This
-decides whether uedctl can **recover** texture→package bindings from a loaded
+decides whether uedcli can **recover** texture→package bindings from a loaded
 `.dx`, not just from authored edits.
 
 ## Headline verdicts (all live-observed, exact bytes captured)
@@ -25,7 +25,7 @@ decides whether uedctl can **recover** texture→package bindings from a loaded
 | `GET <topic>` / `CURRENTTEXTURE` / texture-browser reflection console-readable? | **NO** — the topic-handler `Get` API returns into a frontend buffer, not the log; no console verb reaches it |
 | Surface selection state readable (which surf is selected / its texture)? | **NO** — surface state lives on derived BSP Surfs; `PF_Selected` and surf texture do not round-trip through `MAP EXPORT`/`EDIT COPY` |
 
-**Bottom line.** uedctl **can** recover texture→package bindings from a loaded
+**Bottom line.** uedcli **can** recover texture→package bindings from a loaded
 `.dx` by driving the editor once: `OBJ DEPENDENCIES PACKAGE=MyLevel` walks the
 level object graph and prints every brush's per-poly texture **package-qualified**,
 disambiguating collisions. It is NOT forced to rely solely on authored per-poly
@@ -40,13 +40,13 @@ following the content-install spike
 ([`2026-06-18-deusex-content-install.md`](2026-06-18-deusex-content-install.md)):
 
 1. Assemble a runtime dir `_scratch/texread/rt/` exactly like the entrypoint does:
-   symlink the substrate binaries `Tools/uedctl/uned/UED22/*`, copy the `*.ini`,
+   symlink the substrate binaries `Tools/uedcli/uned/UED22/*`, copy the `*.ini`,
    and rewrite `[Core.System] Paths` to **absolute** substrate-code +
    install-content lines (the relative `../Textures/*.utx` form does not resolve
    under UCC's cwd — the content-install spike's load-bearing fix). Add
    `Paths=/repo/_scratch/deusex/game/Textures/*.utx`.
 2. Launch: `docker compose run -d --name uned-texread
-   --entrypoint "/usr/bin/tini -- bash /repo/Tools/uedctl/uned/entrypoint.sh"
+   --entrypoint "/usr/bin/tini -- bash /repo/Tools/uedcli/uned/entrypoint.sh"
    -e UED_DIR=/repo/_scratch/texread/rt -v uned-wp-texread:/wineprefix uned`.
 3. Drive console verbs via `wine_ctl.py exec` into the **Command box** (proven for
    `OBJ LIST`/`OBJ DEPENDENCIES`). The log is flush-laggy → snapshot
@@ -99,7 +99,7 @@ Class Engine.Polys
 
 So the dump is **per-brush** (one `Engine.Polys` block each) and **per-poly-ordered**
 within a brush. Correlating block-order×poly-order with the `MAP EXPORT` brush/poly
-order gives a per-surface package — uedctl knows both orders model-side.
+order gives a per-surface package — uedcli knows both orders model-side.
 
 ### Confirmed on a REAL loaded `.dx`
 
@@ -124,7 +124,7 @@ browser/sprite textures, trivially filtered: they are not level-content packages
 - **`MAP NEW` / `MAP LOAD` does NOT immediately purge the previous level's objects**
   from the `MyLevel`/transient pool. Reusing one editor across loads → the dump
   accumulates **stale** textures from prior levels. **Recover in a FRESH editor that
-  loads exactly one `.dx`** (which is uedctl's natural model — load → dump → tear
+  loads exactly one `.dx`** (which is uedcli's natural model — load → dump → tear
   down), or the result is polluted. Every clean per-level result above used a
   freshly-recreated container.
 - **The textures surface from `Engine.Polys` (the authored brush PolyList), not from
@@ -192,10 +192,10 @@ that is exactly where the per-brush `OBJ DEPENDENCIES` read is needed.
 
 ## Recommendation for the surface-texturing design
 
-1. **Recovery is now possible — uedctl is no longer limited to authored package
+1. **Recovery is now possible — uedcli is no longer limited to authored package
    data.** To bootstrap texture→package bindings from an existing `.dx` that has no
    session/per-poly package field (e.g. importing a hand-authored level, or a merge
-   from a foreign `.dx`), uedctl can: load the `.dx` in a **fresh** editor →
+   from a foreign `.dx`), uedcli can: load the `.dx` in a **fresh** editor →
    ensure-load its package manifest → `OBJ DEPENDENCIES PACKAGE=MyLevel` →
    parse the `Engine.Polys` blocks → correlate block-order × poly-order with the
    `MAP EXPORT` brush/poly order → recover the qualified package per textured poly.
@@ -211,7 +211,7 @@ that is exactly where the per-brush `OBJ DEPENDENCIES` read is needed.
    whereas the store must answer offline.
 4. **Treat recovery as one-shot per `.dx`, in isolation.** Because the object pool
    accumulates stale textures across loads in a reused editor, a recovery read must
-   run on a freshly-loaded single level (uedctl's `session start <dx>` already
+   run on a freshly-loaded single level (uedcli's `session start <dx>` already
    implies a fresh, per-session editor — a future `--recover-texture-packages` could
    ride that seam).
 
@@ -232,7 +232,7 @@ that is exactly where the per-brush `OBJ DEPENDENCIES` read is needed.
 - Content install (the package-path wiring this depends on):
   [`2026-06-18-deusex-content-install.md`](2026-06-18-deusex-content-install.md).
 - Surface flags + texturing design (the consumer of this verdict):
-  `specs/2026-06-19-uedctl-surface-flags-texturing-design.md` (landed; spec deleted).
+  `specs/2026-06-19-uedcli-surface-flags-texturing-design.md` (landed; spec deleted).
 - Object-graph / surface-state quirks:
   [`../unrealed/quirks.md`](../unrealed/quirks.md) (`PF_Selected` does not
   round-trip; surface state is on derived BSP).

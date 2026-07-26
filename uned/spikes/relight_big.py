@@ -1,8 +1,8 @@
 """Big room so the default load-camera is inside it -> MAP LOAD renders lit, no mouse."""
 import sys
 sys.path.insert(0, "/home/human/src/dx_lum/Extra/AI")
-from uedctl import builders, writes
-from uedctl import driver as drv
+from uedcli import builders, writes
+from uedcli import driver as drv
 
 TEX = "Engine.DefaultTexture"
 d = drv.Driver()

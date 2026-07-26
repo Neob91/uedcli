@@ -16,14 +16,14 @@ import argparse
 import sys
 from pathlib import Path
 
-ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedctl")
+ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedcli")
 sys.path.insert(0, str(ROOT))
 
 from spike_classindex import class_index  # noqa: E402  (schema-aware mover gate's index)
-from uedctl import trunk  # noqa: E402
-from uedctl.native import materialize as M  # noqa: E402
+from uedcli import trunk  # noqa: E402
+from uedcli.native import materialize as M  # noqa: E402
 
-DEFAULT_TRUNK = "/home/neob91/Games/LutrisDX/drive_c/DX/LUM/_scratch/unatco/uedctl/maps/unatco"
+DEFAULT_TRUNK = "/home/neob91/Games/LutrisDX/drive_c/DX/LUM/_scratch/unatco/uedcli/maps/unatco"
 PKG_DIRS = [
     "/home/neob91/Games/LutrisDX/drive_c/DX/Textures",
     "/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Textures",

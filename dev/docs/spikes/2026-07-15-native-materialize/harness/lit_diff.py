@@ -6,11 +6,11 @@ import sys, os, math
 
 HARN = os.path.dirname(__file__)
 sys.path.insert(0, os.path.join(HARN, "..", "..", "bspspike"))
-# uedctl package (native.umodel) — repo root is Tools/uedctl
+# uedcli package (native.umodel) — repo root is Tools/uedcli
 sys.path.insert(0, os.path.abspath(os.path.join(HARN, "..", "..", "..", "..", "..")))
 
 import umodel_parser as UP  # noqa
-from uedctl.native import umodel as UM  # noqa
+from uedcli.native import umodel as UM  # noqa
 
 
 def load_model(path):

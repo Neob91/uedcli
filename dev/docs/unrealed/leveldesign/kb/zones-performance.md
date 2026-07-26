@@ -12,7 +12,7 @@ limits you design against, and the concrete optimization/finishing workflow. Thi
 - A **zone** is a watertight region — any solid brush shape — sealed from its neighbours by **zone-portal
   SHEET brushes**. Each zone carries a `ZoneInfo` actor placed **inside** it, resolved to that zone at
   rebuild. Verify zones in **Zone/Portal view** (one colour per zone).
-  - **uedctl:** `actor build Engine.ZoneInfo --prop … | actor add -`; portal sheet via `brush build sheet
+  - **uedcli:** `actor build Engine.ZoneInfo --prop … | actor add -`; portal sheet via `brush build sheet
     --width 128 --height 128 --flag portal --flag invisible | actor add -` (invisible so the portal plane
     itself doesn't render; a *water* surface is the visible exception — it's `portal`+`translucent`).
   - *(GUI equivalent: place a `ZoneInfo`; build a Sheet brush over the opening → Add Special → Zone
@@ -108,7 +108,7 @@ Fog is engine-generic and lives on the `ZoneInfo`:
   "pop in" as you cross.
 - **A far sightline with neither a skybox nor distance fog to fill it → HOM** at the far plane (the
   un-cleared framebuffer shows through). See [csg-bsp.md](./csg-bsp.md) §5.4 HOM cause (3).
-- **uedctl:** all `actor` edits on the `ZoneInfo` — `actor prop set` / `actor build Engine.ZoneInfo --prop
+- **uedcli:** all `actor` edits on the `ZoneInfo` — `actor prop set` / `actor build Engine.ZoneInfo --prop
   bFogZone=True --prop FogDistance=… | actor add -`. DX adds **no bespoke fog class**.
 - *(UT99 vs DX:* the `FogColor`/`FogDistance`/`bFogZone` *fields* exist in stock UT99's `ZoneInfo` too, but
   stock Unreal/UT99 barely implements **distance** fog from them — its `bFogZone` mainly gates **volumetric
@@ -124,7 +124,7 @@ Fog is engine-generic and lives on the `ZoneInfo`:
 - **Node** = a BSP tree node, each carrying a surface fragment. **Poly** = a rendered surface. Zone/Portal
   view colours by *zone* (not by node). **Target node:poly ≈ 2:1** (retail 2.5–2.6; unsplit cube 1.0).
 - Rebuild with **Optimal** BSP + geometry optimization (**never "Lame"**). The optimization level sets how
-  many candidate splitter polys the builder evaluates (`uedctl-native/src/bspcsg.rs`: LAME strides
+  many candidate splitter polys the builder evaluates (`uedcli-native/src/bspcsg.rs`: LAME strides
   `NumPolys/4` → ~4 candidates, GOOD strides `NumPolys/20` → ~20, Optimal every poly) — **more candidates
   → better splitters → fewer nodes**, so Lame (fewest candidates) leaves the most nodes. **Coplanar-merge
   is a separate pass, not gated by this level**. A full **geometry** rebuild is deterministic from the
@@ -147,7 +147,7 @@ Fog is engine-generic and lives on the `ZoneInfo`:
 **Geometry → BSP → Lighting → Paths.** Two traps:
 
 - **Rebuilding Geometry+BSP ERASES lighting** → you must **relight after any geometry change**. (From the
-  uedctl seat there is no standalone bake verb — re-`materialize`/`preview` re-bakes; see
+  uedcli seat there is no standalone bake verb — re-`materialize`/`preview` re-bakes; see
   [lighting.md](./lighting.md).)
 - **Keep "Build Visibility Zones" checked** — unchecking it **wipes zones**.
 
@@ -182,9 +182,9 @@ The pre-ship checklist:
 
 ---
 
-## 7. uedctl verb summary for this file
+## 7. uedcli verb summary for this file
 
-| Task | uedctl | GUI equivalent |
+| Task | uedcli | GUI equivalent |
 |---|---|---|
 | Place a zone | `actor build Engine.ZoneInfo --prop … \| actor add -` | place `ZoneInfo` |
 | Zone portal | `brush build sheet --width W --height H --flag portal --flag invisible \| actor add -` | Sheet brush → Add Special → Zone Portal |
@@ -192,5 +192,5 @@ The pre-ship checklist:
 | Fog | `actor build Engine.ZoneInfo --prop bFogZone=True --prop FogDistance=… \| actor add -` | `ZoneInfo` fog fields |
 | Portal ordering | `actor order <names…> --last` (portals To Last; or `… \| actor order - --last`) | Order → To Last |
 
-Optimization readouts (STAT/rmode) and the build passes are **editor-side** — from the uedctl seat they
+Optimization readouts (STAT/rmode) and the build passes are **editor-side** — from the uedcli seat they
 run inside `level materialize`/`level preview`.

@@ -1,6 +1,6 @@
 # Spike: group-rotate EXACT trig parity + the GMath sine table (2026-06-19)
 
-**Goal:** drive the residual of uedctl's rotation math against UED22 to ZERO and explain it, for a
+**Goal:** drive the residual of uedcli's rotation math against UED22 to ZERO and explain it, for a
 HETEROGENEOUS multi-actor selection (brushes + several point-actor classes). Builds on, and
 resolves the open residual from, the two existing rotation spikes:
 [`2026-06-19-frotator-convention.md`](2026-06-19-frotator-convention.md) (per-actor matrix
@@ -26,7 +26,7 @@ container (never `dx-lum-uned`).
   **mouse-drag free angle** — the editor orbited Location with the raw float mouse angle
   (−38.8903°) but stored `Rotation` as the rounded integer field −7080 (= −38.8916°). The orbit and
   the stored field disagree by the rounding, so a mouse drag can NEVER be byte-reproduced from the
-  stored field alone. This is moot for uedctl (it computes Location AND Rotation from the same
+  stored field alone. This is moot for uedcli (it computes Location AND Rotation from the same
   exact field).
 - **The rule is uniform across actor types** — the group orbit applies one matrix to every actor's
   `Location` regardless of class, and the per-actor materialize transform routes through the same
@@ -84,7 +84,7 @@ big signal). Two fields chosen to discriminate the trig model:
 `sin(idx·2π/16384)`; cos uses the same truncated idx (the `Yaw=4095` case mixes sin and cos
 non-trivially and still matches to 1e-5). Verdict: **table-driven, not float.**
 
-Reproduced against the production code path (`uedctl/rotation.py`) in
+Reproduced against the production code path (`uedcli/rotation.py`) in
 `_scratch/rotspike/compare_trig.py`:
 
 ```
@@ -99,14 +99,14 @@ the editor Location gives **−38.8903°** (field −7079.77); the editor STORED
 **−7080** (= −38.8916°). Field −7080 is `−1770·4`, so `>>2` is lossless ⇒ table == float for this
 field. The 0.0044uu residual is purely `(−7079.77 vs −7080)`: the mouse drag orbited Location with
 the raw float angle but quantized the stored field to an integer. **Two different precisions in one
-op.** uedctl is immune: it derives a single integer field `F` from the user's angle, then orbits
+op.** uedcli is immune: it derives a single integer field `F` from the user's angle, then orbits
 Location AND stores `Rotation` from that same `F` (dispatch `actor rotate` does exactly this — one
 `R = euler_to_matrix(uu_to_deg(delta_uu))`, one `compose_uu`).
 
 ## Heterogeneous selection (what was built)
 
 Mixed set, all off the rotation axes so every actor moves on every axis drag (built offline via
-`uedctl.builders.cube` + `emit`, `_scratch/rotspike/build_input.py`):
+`uedcli.builders.cube` + `emit`, `_scratch/rotspike/build_input.py`):
 
 | actor | class | Location | note |
 |---|---|---|---|
@@ -120,7 +120,7 @@ Loaded type-correctly: **point actors (Light×2 + PathNode) via `MAP IMPORTADD`*
 `EDIT PASTE`** (clipboard + paste, −32uu pre-shift) → `MAP REBUILD`. All five enter, and
 **`ACTOR SELECT ALL` selects exactly those five as one group** (LevelInfo + the red builder brush
 are excluded from `EDIT COPY`). **PrePivot:** the editor assigned PrePivot=0 to the pasted cubes
-(none emitted), and uedctl's builders are PrePivot-free, so offline and editor agree trivially —
+(none emitted), and uedcli's builders are PrePivot-free, so offline and editor agree trivially —
 the `Location + R·(v − PrePivot)` transform reduces to `Location + R·v` here.
 
 ### Group moves as one unit (verified), uniform across types
@@ -156,16 +156,16 @@ boot floats above.) Recorded for provenance.
 
 ## Recommendation for `actor rotate`
 
-1. **uedctl is store-authoritative; the editor recomputes world geometry from the stored `Rotation`
+1. **uedcli is store-authoritative; the editor recomputes world geometry from the stored `Rotation`
    field at materialize.** So the brush's WORLD geometry the player sees always uses the editor's
-   GMath table regardless of uedctl's offline trig — uedctl only needs to store the right integer
+   GMath table regardless of uedcli's offline trig — uedcli only needs to store the right integer
    field, which it does. **No table needed for materialize correctness.**
-2. **For uedctl's OWN model-side world consumers** (`world_vertices`/`level_bounds`/`preview`/
+2. **For uedcli's OWN model-side world consumers** (`world_vertices`/`level_bounds`/`preview`/
    `poly`/`vertex list`), `rotation.py` currently uses full-precision float sin, which differs from
    what the editor will render by up to ~0.074uu for fields not a multiple of 4. This is a
    measurement/preview discrepancy, NOT stored-geometry corruption. **Recommendation: make
    `rotation.py`'s trig table-driven** (a tiny `gmath_sin(uu)=sin(((uu>>2)&16383)·2π/16384)`,
-   `gmath_cos` likewise) so uedctl's previews/bounds match exactly what the editor will produce.
+   `gmath_cos` likewise) so uedcli's previews/bounds match exactly what the editor will produce.
    Cheap, removes a class of "preview vs editor differs by a hair" confusion, and makes the
    integration round-trip test assert at ~1e-5 instead of needing a 0.1uu tolerance.
 3. **Parity test tolerance:** with table-driven trig, compare at **1e-4uu** (covers float32 table
@@ -176,22 +176,22 @@ boot floats above.) Recorded for provenance.
    source feeding `euler_to_matrix`.
 
 Net: float trig is *adequate for stored correctness* (the editor re-derives), but a **UU-indexed
-GMath sine table is required for bit-exact offline parity** of uedctl's own world-geometry readouts
+GMath sine table is required for bit-exact offline parity** of uedcli's own world-geometry readouts
 and for a tight parity test. Recommend adopting the table.
 
 ## Reproduce
 
 ```bash
 # offline input + comparison (host)
-cd /home/human/src/dx_lum && .venv-uedctl/bin/python _scratch/rotspike/build_input.py
-.venv-uedctl/bin/python _scratch/rotspike/compare_trig.py   # prints float vs table err
+cd /home/human/src/dx_lum && .venv-uedcli/bin/python _scratch/rotspike/build_input.py
+.venv-uedcli/bin/python _scratch/rotspike/compare_trig.py   # prints float vs table err
 
 # live world-geometry readout (ephemeral editor)
-cd Tools/uedctl/uned
+cd Tools/uedcli/uned
 docker compose run -d --name uned-rotspike \
-  --entrypoint "/usr/bin/tini -- bash /repo/Tools/uedctl/uned/entrypoint.sh" \
+  --entrypoint "/usr/bin/tini -- bash /repo/Tools/uedcli/uned/entrypoint.sh" \
   -v uned-wp-rotspike:/wineprefix uned          # image entrypoint path is stale → override
-ex(){ docker exec uned-rotspike python3 /repo/Tools/uedctl/uned/wine_ctl.py "$@"; }
+ex(){ docker exec uned-rotspike python3 /repo/Tools/uedcli/uned/wine_ctl.py "$@"; }
 # poll status until alive=True AND window=...
 ex exec "MAP NEW"; ex exec "MAP GRID X=1 Y=1 Z=1"
 docker exec -i -e DISPLAY=:99 uned-rotspike xclip -selection clipboard -i < /repo/_scratch/rotspike/rotbox_paste.t3d
@@ -203,6 +203,6 @@ docker rm -f uned-rotspike; docker volume rm uned-wp-rotspike      # ALWAYS tear
 ```
 
 > NOTE: the committed `dx-lum-uned:latest` image (2 days old) bakes the OLD entrypoint path
-> `/repo/Extra/AI/entrypoint.sh`; uedctl moved it to `/repo/Tools/uedctl/uned/entrypoint.sh`. Until
+> `/repo/Extra/AI/entrypoint.sh`; uedcli moved it to `/repo/Tools/uedcli/uned/entrypoint.sh`. Until
 > the image is rebuilt, ephemeral `compose run` MUST override `--entrypoint` as above, or the
 > container exits immediately. (Flag for the user — see below.)

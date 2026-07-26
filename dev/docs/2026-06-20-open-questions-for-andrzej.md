@@ -1,6 +1,6 @@
 # Open questions from the 2026-06-20 second-round review (`Opus 4.8` + `Sonnet`)
 
-Two independent reviewers went over the full `uedctl-impl` diff (export_and_qualify,
+Two independent reviewers went over the full `uedcli-impl` diff (export_and_qualify,
 the live OBJ DEPENDENCIES read, `apply`'s qualify-aware THEIRS, `poly set`). Two real bugs were
 found and fixed (see `board/to-spec.md`'s "FIXED 2026-06-20 (second review round)" note — `run_apply`'s
 exception handling around the qualify phase, and `dispatch.py`'s hardcoded

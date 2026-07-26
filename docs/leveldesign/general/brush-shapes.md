@@ -18,7 +18,7 @@ The workhorse. A box.
 - `--width` / `--breadth` / `--height` — the three dimensions (editor default 256³).
 - Build rooms by **subtracting** a cube; build blocks/pillars by **adding** one.
 
-> The editor's own cube builder has a hollow-box + wall-thickness option; uedctl's `brush build cube`
+> The editor's own cube builder has a hollow-box + wall-thickness option; uedcli's `brush build cube`
 > does **not** expose it. Build a room shell by subtracting a solid cube instead.
 
 ### `cylinder` — `CylinderBuilder`
@@ -27,7 +27,7 @@ A prism / round pillar. Requires `--height` and `--radius`.
   and more BSP cuts, so keep it low. 8 reads as round enough for most pillars.
 - `--radius` — the circumscribed radius. `--align-to-side` offsets the cross-section by half a segment
   (`180/--sides` degrees) so a flat FACE, not a vertex, meets an axis — the same parameter as UED's own
-  `AlignToSide` checkbox. (For any other angle use `--rotate`.) (uedctl's cylinder is a **solid** prism only — there is no inner-radius/hollow
+  `AlignToSide` checkbox. (For any other angle use `--rotate`.) (uedcli's cylinder is a **solid** prism only — there is no inner-radius/hollow
   tube option; build a tube by subtracting a smaller cylinder from a larger one.)
 - Round geometry is off-grid by nature — prefer **semisolid** for cylindrical detail so it doesn't seed
   BSP holes (see [geometry-and-bsp.md](geometry-and-bsp.md)).
@@ -59,7 +59,7 @@ into convex `Side` strips (`2 + 4·steps` faces). Parameters: `--steps` (count),
   staircases with `--game`, not `--native`.
 
 > The editor's separate curved-stair builder (`CurvedStairBuilder` — inner radius, angle of curve,
-> clockwise/counter-clockwise) has **no uedctl verb**. For a rising rotation use `spiral` (a different
+> clockwise/counter-clockwise) has **no uedcli verb**. For a rising rotation use `spiral` (a different
 > builder); otherwise approximate a curved stair by placing linear runs at angles.
 
 ### `spiral` — `SpiralStairBuilder`
@@ -111,9 +111,9 @@ density is one facet per 22.5°, matching UnrealEd. The profile must sit strictl
 side of the axis.
 
 - **A revolve is off the integer grid by construction** — every vertex away from `θ=0` lands on
-  `radius · cos/sin θ`, and uedctl never snaps for you. An off-grid **solid** throws its BSP partition
+  `radius · cos/sin θ`, and uedcli never snaps for you. An off-grid **solid** throws its BSP partition
   planes off-grid too, the primary cause of slivers, T-junctions and holes. Prefer
-  **`--solidity semisolid`** wherever the swept shape is detail rather than structure; uedctl warns on
+  **`--solidity semisolid`** wherever the swept shape is detail rather than structure; uedcli warns on
   stderr when it emits an off-grid solid.
 
 ## Curved geometry

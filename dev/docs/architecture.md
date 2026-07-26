@@ -1,13 +1,13 @@
-# uedctl — architecture & development
+# uedcli — architecture & development
 
 ## Terminology (use consistently)
-- **level** — the authored content and uedctl's domain object / verb namespace (`level
+- **level** — the authored content and uedcli's domain object / verb namespace (`level
   apply`, `Level`, `canonical_level_hash`/`level_hash`, "level name"). Substrate-agnostic.
 - **map file** — the binary on-disk artifact only: `.dx` (Deus Ex) or `.unr` (Unreal/UT).
   Matches the engine's own `MAP SAVE`/`MAP EXPORT` verbs (`.unr` = "Unreal map").
 - **T3D tree** — the directory form of a level: one directory per actor,
   `actors/<name>/{actor.t3d, order_value}`, under `<maps-dir>/<level>/` (the project's maps dir —
-  the `uedctl.toml` `maps` key, default `<root>/maps/`; in the LUM repo `uedctl/maps/`) — the git-tracked
+  the `uedcli.toml` `maps` key, default `<root>/maps/`; in the LUM repo `uedcli/maps/`) — the git-tracked
   trunk `level materialize` builds from. `order_value` is a per-actor LexoRank sidecar (the CSG order
   is the `(order_value, name)` sort); there is **no shared `order` file and no `packages` manifest**
   (packages resolve on demand at build). The actor's name is its directory name; the level's name is
@@ -16,7 +16,7 @@
 "level" is never used for the file; "map" is never used for the abstract content. See
 [decisions.md](decisions.md) (2026-06-23).
 
-> **Direction (not current breadth):** uedctl *aims* to be a generic UnrealEngine-1 tool with
+> **Direction (not current breadth):** uedcli *aims* to be a generic UnrealEngine-1 tool with
 > Deus Ex as one baked-in substrate. **Today it targets the Deus Ex substrate and `.dx` map
 > files only.** The intent is that *new* code/naming avoid DeusEx-only framing and that map-file
 > handling grow to accept `.unr`; this is forward-looking guidance, not a description of current
@@ -27,13 +27,13 @@
 > history holds them). See [`direction.md`](direction.md) for the net target.
 >
 > **Project layout (decisions.md 2026-07-17 20:58):** a project is a repo with a free-standing
-> **`uedctl.toml` at its root** (à la `pyproject.toml`) — the dir containing it IS the project
+> **`uedcli.toml` at its root** (à la `pyproject.toml`) — the dir containing it IS the project
 > root. The file declares `game` (required) + optional `paths`/`maps`/`prefabs`/`catalog`, all
 > root-relative (defaults `maps/`, `prefabs/`, `texture-catalog/`). Discovery is a walk-up to the
-> nearest ancestor containing `uedctl.toml` (`config.walk_up_root`; nearest wins). All
+> nearest ancestor containing `uedcli.toml` (`config.walk_up_root`; nearest wins). All
 > machine-local project state (stash, delivered preview maps, locks, staging) lives in the
-> **self-ignoring `<root>/.uedctl/`** (`config.state_dir`): first creation
-> writes `.uedctl/.gitignore` containing `*`, so it can never be committed.
+> **self-ignoring `<root>/.uedcli/`** (`config.state_dir`): first creation
+> writes `.uedcli/.gitignore` containing `*`, so it can never be committed.
 
 ## Premise (git-native trunk)
 The durable source of truth is the **git-tracked T3D trunk** — one directory per actor under
@@ -43,7 +43,7 @@ it is a build/preview tool reached only via a per-command ephemeral spin-up (`le
 `level preview`, the `stash` CSG generators). Every `actor`/`brush`/`poly`/`vertex` read and
 mutation is pure model-side compute against the trunk (no `docker exec`, no `MAP EXPORT`); the LLM
 issues semantic by-name commands; T3D is internal plumbing. Git is the history — `git commit` is
-the user's own, uedctl never wraps version control.
+the user's own, uedcli never wraps version control.
 
 This is a **pivot from the earlier editor-centric model** (where a live UnrealEd held the
 authoritative level and every read was a `MAP EXPORT`), and from the interim session store (slices
@@ -56,10 +56,10 @@ and [`spikes/2026-07-05-git-merge-t3d-layout/`](spikes/2026-07-05-git-merge-t3d-
 - **Command API** — `cli.py` (argparse verb surface), `dispatch.py` (routes verbs, records
   one command per mutation). Relative CLI file paths (`--out`, `--map`, `--from-t3d`, …) resolve
   against the **cwd** (standard CLI semantics; the repo-root join, the legacy `/repo/` remap, and
-  the whole `repo_paths.py` module — CLAUDE.md-marker walk-up, `UEDCTL_REPO_ROOT`/
-  `UEDCTL_PREFAB_DIR`/`UEDCTL_TEXTURE_CATALOG` env overrides — were deleted, 2026-07-17 20:58).
+  the whole `repo_paths.py` module — CLAUDE.md-marker walk-up, `UEDCLI_REPO_ROOT`/
+  `UEDCLI_PREFAB_DIR`/`UEDCLI_TEXTURE_CATALOG` env overrides — were deleted, 2026-07-17 20:58).
   **`tool_assets.py`** anchors the tool-INSTALL assets package-relative: `tool_root()` (the
-  `Tools/uedctl/` dir holding the package, via `__file__`), `uned_dir()` (compose dir + UED22),
+  `Tools/uedcli/` dir holding the package, via `__file__`), `uned_dir()` (compose dir + UED22),
   `umodel_dir()` (`Tools/umodel_win32` — a SIBLING of the tool dir, deliberately outside the
   anchor; the packaging item owns how these ship under pipx/Nuitka). The top-level `dispatch()` guard converts expected failures to a
   clean stderr message + exit 2 — never a traceback: `_SelectionExit`/`_ProjectError`/
@@ -159,7 +159,7 @@ and [`spikes/2026-07-05-git-merge-t3d-layout/`](spikes/2026-07-05-git-merge-t3d-
      table offset inside the file, and enough bytes after each offset to hold that many entries at
      their minimum encoded size. **The blind window, measured** over the 264 packages the real
      composed path resolves (`spikes/2026-07-25-map-save-mechanism/measure_header_window.py`): over
-     the 101 EDITOR-written maps (the 120 `.dx` minus the 19 `Native*.dx` uedctl's own native build
+     the 101 EDITOR-written maps (the 120 `.dx` minus the 19 `Native*.dx` uedcli's own native build
      wrote — not `MAP SAVE` output, so they must not set the bar) the required end lands at
      98.4–99.7 % of the real size (median 99.5 %) versus 93.5–98.9 % (median 98.3 %) for an
      offsets-only rule — so a truncation in the last ~1.6 % of a map still passes; the room rule
@@ -277,7 +277,7 @@ FULL RE-IMPORTs the merged result:
 Every content verb is source-agnostic about *where* the actor set lives: it does
 `src = _resolve_level_source(args)`, then `level = src.load(); …transform…; src.save(verb=…,
 args=…, level=level, touched=…)`. `_resolve_level_source` is the ONE place that picks the box, so
-the same verbs edit any of three T3D "boxes" — the ambient `$UEDCTL_LEVEL` level (the default), a **stash**, or a
+the same verbs edit any of three T3D "boxes" — the ambient `$UEDCLI_LEVEL` level (the default), a **stash**, or a
 **prefab** — with zero per-verb logic. Three `LevelSource` classes implement that `load()`/`save()`
 seam (all in `dispatch.py`):
 - **`TrunkLevelSource(trunk_dir)`** — the git-native trunk (`trunk.read_level`/`write_level`);
@@ -301,9 +301,9 @@ single-JSON meta-clobber trap is GONE: `packages` is its own sibling file and `o
 `order_value` sort, so the sibling `meta.json` holds ONLY the capture extras (`anchor`/`ts`) and
 cannot clobber structural state.
 
-**The default level is the ambient `$UEDCTL_LEVEL`** (a bare level name), read by
-`level_select.resolve_level(env_level=os.environ.get("UEDCTL_LEVEL"), maps_dir=…)` — per-process, so
-there is no shared mutable pointer to race on (it replaced the old `.uedctl/current-level` pointer +
+**The default level is the ambient `$UEDCLI_LEVEL`** (a bare level name), read by
+`level_select.resolve_level(env_level=os.environ.get("UEDCLI_LEVEL"), maps_dir=…)` — per-process, so
+there is no shared mutable pointer to race on (it replaced the old `.uedcli/current-level` pointer +
 `level select` verb; decisions.md 2026-07-20 21:30 UTC). The env value is `strip`ped, blank ⇒ unset,
 `_check_safe_level`d, and existence-checked; unset/malformed/nonexistent → a clean exit-2
 `LevelSelectionError` naming BOTH set-methods, never a silent empty level. When the env fallback is
@@ -331,7 +331,7 @@ so no duplicate-order finding, and `level status` prints a git hint only for a `
 
 **Mutation visibility echo.** Because a per-shell env var still lets a *stale* `export` silently edit
 the wrong level, a **mutating** verb that resolved from the ambient env (`src.from_env` and no
-explicit `--tree`) echoes ONE line to **stderr** — `editing level 'X' (from $UEDCTL_LEVEL)`
+explicit `--tree`) echoes ONE line to **stderr** — `editing level 'X' (from $UEDCLI_LEVEL)`
 (`materializing …`/`capturing from …` per verb). It lives at the mutation seam
 (`TrunkLevelSource.save`, once per save via `_announce_env_level`), so it self-limits to writes with
 no per-verb list; reads never reach `save`, and an explicit `--tree` leaves `from_env` `False`
@@ -362,7 +362,7 @@ unrealed/quirks).
   before delete; on any re-add failure, restore the original (+ swept neighbours) and
   re-raise; `level` advances only on success. Never a bare re-import (live-name collision
   duplicates).
-- **D6 — uedctl owns the `Name` namespace.** `allocate_name` mints `Uedctl<Class><n>`
+- **D6 — uedcli owns the `Name` namespace.** `allocate_name` mints `Uedcli<Class><n>`
   checked against the level; `add_actor` refuses a live-name collision.
 - **D5/D7 — parallelism = N per-command ephemeral editors, no shared session.** Each
   editor-driving verb mints its own throwaway container (`uuid7`), so concurrent invocations
@@ -382,7 +382,7 @@ A stash, a prefab, and a level trunk are **ONE on-disk format** — the per-acto
 `t3dtree` consistency test pins this), so a stash/prefab is structurally the same kind of tree as a
 level.
 
-A **stash** is a private, per-project register entry at `<root>/.uedctl/stash/<id>/`.
+A **stash** is a private, per-project register entry at `<root>/.uedcli/stash/<id>/`.
 `stash_register.FileStashRegister.{write,read,list,drop}_stash` own it (wrapping `stashlib`'s
 shared `write_tree_box`/`read_tree_box`), built at the ONE `dispatch._stash_register_for` seam (the
 self-ignoring state dir — `config.state_subdir(root, "stash", create=True)`); capture normalizes
@@ -392,7 +392,7 @@ treated as **absent** (read-empty AND `exists()==False`) and simply regenerated 
 
 A **prefab** is the durable, tracked, shareable tier-2 form: the per-actor tree
 `<library-root>/<name>/{actors/…, packages, meta.json}` under the resolved project's prefabs dir
-(`config.project_prefabs_dir`, the `uedctl.toml` `prefabs` key, default `<root>/prefabs/`; in the
+(`config.project_prefabs_dir`, the `uedcli.toml` `prefabs` key, default `<root>/prefabs/`; in the
 LUM repo `Prefabs/`), overridable per-invocation via `--prefab-dir` (with the flag no project is
 needed; with neither a project nor the flag → clean exit 2). `stash promote` copies a register entry
 there; `stashlib.{write,read,list}_prefab` are the pure file I/O. `prefab` reads
@@ -437,7 +437,7 @@ class (decisions.md 2026-07-25 00:36 UTC):
   reduction to drift out of step.
 
 **The typed compare is the compare-side half of UnrealEd's member-precise default-diffing**
-(`unrealed/t3d.md`): the editor writes only what differs from the CLASS DEFAULT, uedctl's producers
+(`unrealed/t3d.md`): the editor writes only what differs from the CLASS DEFAULT, uedcli's producers
 write everything, so comparing their TEXT is comparing two spellings of one value. Instead, each
 actor resolves to its **effective typed values** — for every property, the stored value if the actor
 states one, else the class default — decoded by the property's DECLARED TYPE:
@@ -489,8 +489,8 @@ property re-imports as the class default, so omitting one where the default is n
 builds a wrong map that post-verify *passes* (both sides share the mistake) — see the three fixed
 instances in `unrealed/t3d.md`.
 
-## Folders (uedctl-side actor organization)
-A **folder** is a per-actor, uedctl-side, hierarchical dotted organization path (`castle.tower.roof`)
+## Folders (uedcli-side actor organization)
+A **folder** is a per-actor, uedcli-side, hierarchical dotted organization path (`castle.tower.roof`)
 that lets a big build be addressed as a tree ("retexture every `**.roof`"). It is stored in the
 trunk, **never emitted to the built map**, and is a **separate dimension** from the T3D `Group=`
 prop (which is retained, parsed, and emitted exactly as before — the two never interact). Spec
@@ -522,8 +522,8 @@ prop (which is retained, parsed, and emitted exactly as before — the two never
   with **no** subtree extension (so `**.roof` matches roof NODES only — the `--folder` help documents
   this asymmetry loudly). `folder is None` matches no pattern; select the ungrouped set with
   `--no-folder`.
-- **The `// uedctl-folder:` carrier (`actor show` ↔ `actor add`).** The interchange form of a folder
-  is a **bare `// uedctl-folder: <path>` T3D comment** inside the actor block. `actor show` emits it
+- **The `// uedcli-folder:` carrier (`actor show` ↔ `actor add`).** The interchange form of a folder
+  is a **bare `// uedcli-folder: <path>` T3D comment** inside the actor block. `actor show` emits it
   by DEFAULT (`query.actor_show_block`, via the shared `emit.inject_carriers` seam) — importable T3D that
   ALSO round-trips the folder, because the UnrealEd importer **silently strips bare `//` lines** (spike
   `spikes/2026-07-18-t3d-comment-tolerance/`, `unrealed/t3d.md`; engine-facts regression pins the strip).
@@ -552,7 +552,7 @@ prop (which is retained, parsed, and emitted exactly as before — the two never
   targets is a deferred follow-up (inbox). `list_actors` gained `folders`/`no_folder` params.
   Deferred (inbox): `folder rename`, exact-single-node match, a `--from-group` migration sugar.
 
-## Labels (uedctl-side actor classification)
+## Labels (uedcli-side actor classification)
 A **label** is a flat token (`lighting`, `flammable`, `hero`) on an actor, the multi-valued
 cross-cutting axis a single folder hierarchy can't express (a torch is at `castle.tower` AND is
 `lighting` AND `interactive`). Labels are the SET analog of the single-path folder: same storage
@@ -585,8 +585,8 @@ named `label` deliberately, since `tag` would collide with `Engine.Actor.Tag`. S
   (never leaks fnmatch char-class semantics — `*` is the only wildcard) and matching is
   case-insensitive (`fnmatch.fnmatchcase` over both sides `casefold()`ed, Linux-safe). An actor matches
   a `--label` pattern if ANY of its labels matches.
-- **The `// uedctl-labels:` carrier (`actor show` ↔ `actor add`).** The interchange form is a bare
-  `// uedctl-labels: a,b,c` T3D comment (comma-joined, sorted) inside the actor block, mirroring the
+- **The `// uedcli-labels:` carrier (`actor show` ↔ `actor add`).** The interchange form is a bare
+  `// uedcli-labels: a,b,c` T3D comment (comma-joined, sorted) inside the actor block, mirroring the
   folder carrier — the UnrealEd importer silently strips bare `//` lines. `actor show` emits it by
   DEFAULT (`query.actor_show_block`, whose `with_folder` param was renamed `with_sidecars` since it now
   gates BOTH carriers) and the **generators** emit it via `emit.emit_actor_t3d`→`inject_carriers` (the
@@ -626,11 +626,11 @@ named `label` deliberately, since `tag` would collide with `Engine.Actor.Tag`. S
     game base; ALL extensions incl `.u`, since a `.u` can hold textures too — decisions.md 2026-07-14
     19:21), UCC-batchexports each package's textures to PNG under the gitignored, per-user,
     cross-project cache
-    `~/.uedctl/cache/textures/<package>/` (`config.texture_images_root` — per-user cache home)
+    `~/.uedcli/cache/textures/<package>/` (`config.texture_images_root` — per-user cache home)
     (host-side Pillow decodes PCX → PNG + derives `image_hash` over RGB pixels + dominant named colors
     from a 12-name controlled palette), and builds/refreshes a **tracked** per-package manifest in the
     PROJECT's catalog dir `<catalog-dir>/<package>.json` (`config.project_catalog_dir` — the
-    `uedctl.toml` `catalog` key, default `<root>/texture-catalog/`).
+    `uedcli.toml` `catalog` key, default `<root>/texture-catalog/`).
     Each entry: `ref` (`Package.Name`; 3-part `Package.Group.Name` only when two stems share a
     bare name), `image`, WxH, `image_hash`, `colors`/`colors_source`, `tags`, `description`,
     `stale`, `removed`, `classified` (derived). Change detection: raw `.u`/`.utx` file sha256
@@ -691,7 +691,7 @@ named `label` deliberately, since `tag` would collide with `Engine.Actor.Tag`. S
     dependent, see above; unknown class → exit 2).
   - **`brush intersect -` / `brush deintersect -`** are generators whose SHAPE comes from a piped
     T3D brush SET instead of parameters, merged **natively — no editor, no container**
-    (`brushcsg.py` -> `uedctl_native.intersect_brushset`). Both reduce to UnrealEd's
+    (`brushcsg.py` -> `uedcli_native.intersect_brushset`). Both reduce to UnrealEd's
     `builder-brush ∩ world`, with the scaffolding the editor needs a live builder brush and a carved
     room for synthesized INTERNALLY: a `bbox+64` builder cube centred on the set, plus — for
     `intersect` only — a wrap-SUBTRACT of the SAME box that forces the empty background
@@ -714,8 +714,8 @@ named `label` deliberately, since `tag` would collide with `Engine.Actor.Tag`. S
     `.dx`/`.unr` map file. No session, no 3-way reconcile, no THEIRS read, no anti-clobber name
     guards, no backup, no git commit — git holds the authored trunk, the map file is a regenerable
     build artifact. Trunk-only; resolves the project + the level via `_resolve_level_only`
-    (`--tree level/NAME` else `$UEDCTL_LEVEL`; a stash/prefab `--tree` is rejected — no world to build).
-    Echoes `materializing level 'X' (from $UEDCTL_LEVEL)` when resolved from the env. Flow: read the
+    (`--tree level/NAME` else `$UEDCLI_LEVEL`; a stash/prefab `--tree` is rejected — no world to build).
+    Echoes `materializing level 'X' (from $UEDCLI_LEVEL)` when resolved from the env. Flow: read the
     trunk (`TrunkLevelSource`) → warn on any
     duplicate `order_value` (arbitrary CSG order; `trunk.duplicate_ranks`) → **resolve every
     distinct class's DEFAULTS** (`apply._level_defaults`, needs the game's `.u`; done here, before
@@ -751,7 +751,7 @@ named `label` deliberately, since `tag` would collide with `Engine.Actor.Tag`. S
     the built surf's synthesized texture vectors are never read, and Pan doesn't survive the
     build), textures decode natively (`utexture.py`; unresolvable ref → magenta/black
     checkerboard + one stderr warning per distinct ref; no texture → flat grey), movers render
-    directly as world-transformed extra polys at their base pose, and `uedctl_native.
+    directly as world-transformed extra polys at their base pose, and `uedcli_native.
     render_frame` rasterizes (camera BASIS passed from Python's `euler_to_matrix_uu` — Rust never
     converts angles; perspective, ~4uu near clip, z-buffer, perspective-correct nearest mip0 UV,
     per-face key-light shading factor, dark-grey background). `PF_Invisible` faces are dropped;
@@ -762,13 +762,13 @@ named `label` deliberately, since `tag` would collide with `Engine.Actor.Tag`. S
     The U/V/Pan mapping is pinned against live editor+game references —
     `spikes/2026-07-16-native-preview-anchor/`. **`--game` (the DEFAULT) is the faithful in-game
     tier** (`preview_game.py`, spec 2026-07-13; warm-container spec 2026-07-17, built 2026-07-17): it
-    delivers the map into a **WARM per-user headless-game container** (`uedctl-game`, `FROM
+    delivers the map into a **WARM per-user headless-game container** (`uedcli-game`, `FROM
     dx-lum-uned` + a warm-wineprefix bake + the compiled `UedPreview` link package + a staged boot
-    map; built on demand by `uedctl/game/build-image.sh` with a source-hash fast path), whose
+    map; built on demand by `uedcli/game/build-image.sh` with a source-hash fast path), whose
     `Console=` subclass self-spawns a TCP link that FREEZES + noclips + HUD/weapon-cleans the world
     at possession (`bPlayersOnly` + `Ghost()`, spec D9). **Warm lifecycle (decisions 2026-07-17):**
-    one container per Unix user (`uedctl-game-preview-<uid>`), serialized by a per-user
-    `flock(~/.uedctl/game-preview.lock)`; reuse is gated in **ONE `docker inspect`** on the
+    one container per Unix user (`uedcli-game-preview-<uid>`), serialized by a per-user
+    `flock(~/.uedcli/game-preview.lock)`; reuse is gated in **ONE `docker inspect`** on the
     fingerprint LABEL (image id + realpath-normalized mount pairs + `--size` + project-overlay
     `(path,size,mtime)`) — a mismatch or a stopped container reboots fresh (a pinned other-config
     container errors instead of being clobbered). The container **self-terminates after 10 min
@@ -778,7 +778,7 @@ named `label` deliberately, since `tag` would collide with `Engine.Actor.Tag`. S
     mounts AND the game ini's `[Core.System]
     Paths` are wired from the COMPOSED CONFIG PATHS (decision 2026-07-16 15:49 UTC —
     `resource_mounts`/`paths_ini_lines` over `config.composed_search_dirs`, project-shadows-base;
-    `.dx` AND `.unr` globbed, D7). **Map delivery** writes the build into `<root>/.uedctl/preview/` under
+    `.dx` AND `.unr` globbed, D7). **Map delivery** writes the build into `<root>/.uedcli/preview/` under
     a dot-free, lowercased, kind-prefixed, length-capped hash name (`materialized__<level>__<hash12>`
     for the trunk, `copied__<contenthash12>` for `--map`; `--rebuild` mints a short-nonce variant),
     bind-mounted read-only at `/resources/preview` (OUTSIDE the `/resources/r*` farm namespace, so
@@ -814,7 +814,7 @@ named `label` deliberately, since `tag` would collide with `Engine.Actor.Tag`. S
     documents the editor-render mechanics for other drivers.)*
   - `level doctor [--json] [--severity …] [--category …] [--tree KIND/NAME]` — **static, offline**
     BSP/geometry lint (`doctor.py`; no editor). Reads the box via the `LevelSource` seam — the
-    ambient `$UEDCTL_LEVEL` by default, or a `--tree level|stash|prefab` box (decisions 2026-07-19 / 2026-07-20;
+    ambient `$UEDCLI_LEVEL` by default, or a `--tree level|stash|prefab` box (decisions 2026-07-19 / 2026-07-20;
     it names the box via the source's uniform `display_name`, and a box's empty `_ranks` yields no
     duplicate-order finding) — and reports the *single-brush-decidable* hole
     causes: degenerate faces the engine drops at `FPoly::Finalize` (<3 verts after coincident/
@@ -845,10 +845,10 @@ named `label` deliberately, since `tag` would collide with `Engine.Actor.Tag`. S
     `level_select.list_levels`): every immediate subdir of `<maps-dir>` that holds an `actors/` tree
     (the structural marker of a T3D trunk; dotted dirs like `.locks` skipped), sorted case-insensitively.
     Follows the producer convention — one name per line to **stdout** (pipe-friendly), a count + the
-    active `$UEDCTL_LEVEL` to **stderr**; `--json` emits a `[{name, active}, …]` array to stdout. Needs a
+    active `$UEDCLI_LEVEL` to **stderr**; `--json` emits a `[{name, active}, …]` array to stdout. Needs a
     project but NO ambient level (routed before the trunk-level resolution, like `project show`). The
-    marker reads the RAW env (unvalidated) so a bad `$UEDCTL_LEVEL` shows `(not listed)`, never crashing `list`.
-  - `level status [--tree KIND/NAME] [--json]` — read-only summary of the ambient `$UEDCTL_LEVEL`, or of a
+    marker reads the RAW env (unvalidated) so a bad `$UEDCLI_LEVEL` shows `(not listed)`, never crashing `list`.
+  - `level status [--tree KIND/NAME] [--json]` — read-only summary of the ambient `$UEDCLI_LEVEL`, or of a
     `--tree level|stash|prefab` box (`dispatch._level_status`, via the `LevelSource` seam). `--json` emits `{kind, name, actors:{total,brush,point},
     duplicate_order_values, git, texture_packages}` (or `{"selected": null}` when nothing is selected);
     the text form is a `<kind>: <name>` header (`level: castle` / `stash: bay` / `prefab: door`,
@@ -858,7 +858,7 @@ named `label` deliberately, since `tag` would collide with `Engine.Actor.Tag`. S
     TrunkLevelSource)` — branch + uncommitted-change count scoped to the trunk dir), and a `texture
     packages:` line of the box's directly-referenced texture packages (`stashlib.referenced_packages`
     — distinct non-Engine `Texture` prefixes; `(none referenced)` when empty). Class packages aren't
-    string-derivable, so the line is texture-only. With no `--tree` and no ambient `$UEDCTL_LEVEL` it prints a
+    string-derivable, so the line is texture-only. With no `--tree` and no ambient `$UEDCLI_LEVEL` it prints a
     friendly hint (exit 0), not an error.
 - **`project show`** — read-only project diagnostic (`dispatch._project_show`; git-native slice 4 §1,
   the surviving remnant of the old `project` verb family). Prints the resolved project ROOT, its
@@ -867,10 +867,10 @@ named `label` deliberately, since `tag` would collide with `Engine.Actor.Tag`. S
   each entry tagged `project`/`base` (project overlay shadows game base — the old `--explain-paths`).
   Needs no ambient level (routed before the trunk-level resolution). Three exit-2 error paths, each
   naming the offending value: no project resolvable (`_ProjectError`), no per-user games config
-  (`~/.uedctl/config.toml` absent — a separate hard error, decision 2026-07-06 05:12), and a game
+  (`~/.uedcli/config.toml` absent — a separate hard error, decision 2026-07-06 05:12), and a game
   missing from a present config (`config.ConfigError` from `select_substrate`).
 - **`event graph [--dot | --json]`** — read-only Tag↔Event **trigger-wiring** analysis over the
-  ambient `$UEDCTL_LEVEL` (`dispatch._event_graph` + `eventgraph.py`; pure, model-side, no editor). In UE1/
+  ambient `$UEDCLI_LEVEL` (`dispatch._event_graph` + `eventgraph.py`; pure, model-side, no editor). In UE1/
   Deus Ex an actor's `Event` prop is the event it FIRES and its `Tag` prop is its receiver identity;
   a directed edge **A → B** exists when `A.Event == B.Tag` (non-empty, case-insensitive FName
   match). `build_graph(level, index)` collects nodes (any actor with a non-empty `Event`/`Tag`, or
@@ -883,7 +883,7 @@ named `label` deliberately, since `tag` would collide with `Engine.Actor.Tag`. S
   (`Src (Class) --Event--> Dst (Class)`), the summary + lint to stderr; `--dot` = Graphviz DOT to
   stdout; `--json` = `{nodes, edges, lint}` with lint folded in. **Exit 0 on any successful scan**
   (lint is advisory — a query verb, decision 2026-07-18 20:54 UTC). Takes `--tree KIND/NAME` to
-  analyse a named `level|stash|prefab` box instead of the ambient `$UEDCTL_LEVEL` (the handler is
+  analyse a named `level|stash|prefab` box instead of the ambient `$UEDCLI_LEVEL` (the handler is
   source-agnostic — it only `src.load()`s). **Load-bearing
   modelling choice:** only an explicitly-set, non-empty `Tag` is a
   matchable receiver — an unset Tag's class-name default is NOT an edge target (decision 2026-07-18
@@ -940,7 +940,7 @@ named `label` deliberately, since `tag` would collide with `Engine.Actor.Tag`. S
   `Rz·Ry·Rx`; unit 65536) is spike-verified (`spikes/2026-06-19-frotator-convention.md`). The
   matrix trig is **GMath-table-driven** (`rotation.gmath_sin`/`gmath_cos` → `euler_to_matrix_uu`):
   the editor builds world geometry from a 16384-entry sine table indexed `(field>>2)&16383`
-  (truncation), so uedctl uses the same table — not float `math.sin` — to match the editor's
+  (truncation), so uedcli uses the same table — not float `math.sin` — to match the editor's
   rendered geometry to ~1e-5uu, the float32-table floor (float trig drifts up to ~0.074uu; spike
   `spikes/2026-06-19-group-rotate-exact-parity.md`).
 - **Scale (`MainScale`/`PostScale`) is USED, STORED, and BAKED** (spec
@@ -1086,10 +1086,10 @@ member depth; rich kinds pass on type — name + bounds still enforced). Warn-bu
 props, `MainScale`/`PostScale`) and set-silently buckets are unchanged (decision 2026-06-26 10:53).
 
 ### Package schema cache (`schema_cache.py`)
-Every `uedctl` command is a fresh cold process, so all `.u` schema decoding otherwise restarts from
+Every `uedcli` command is a fresh cold process, so all `.u` schema decoding otherwise restarts from
 zero each invocation — and the dominant cost is `load_package`'s name/import/export **table parse**
 (38–211 ms per big package), not the property decode. `schema_cache.py` persists each package's
-decoded **discovery primitives** to `~/.uedctl/cache/schema/v<N>/<key>.bin` so a warm cold run skips
+decoded **discovery primitives** to `~/.uedcli/cache/schema/v<N>/<key>.bin` so a warm cold run skips
 `load_package` entirely (never touches the raw bytes `buf`). *(spec
 `specs/2026-07-18-package-schema-cache.md`; decisions.md 2026-07-18 21:30 UTC.)*
 
@@ -1115,7 +1115,7 @@ decoded **discovery primitives** to `~/.uedctl/cache/schema/v<N>/<key>.bin` so a
   detector, while re-hashing the bytes every run costs about as much as the parse it saves (~1.4 s for
   the whole `class list` path). Accepted narrow caveat: a content change that preserves BOTH size and
   nanosecond-mtime (a deliberate spoof / timestamp-restoring copy over a same-size file) serves a
-  stale entry — bypass with `UEDCTL_SCHEMA_CACHE=off` or `uedctl cache clear`. `realpath` (symlinks
+  stale entry — bypass with `UEDCLI_SCHEMA_CACHE=off` or `uedcli cache clear`. `realpath` (symlinks
   resolved) keys the entry, so symlinks to one file share it.
 - **Storage mirrors `stub_cache`**: immutable per-key files, `_atomic_write` (tmp + `os.replace`;
   parallel writers race harmlessly), a corrupt/version-mismatched entry is a MISS (re-decode), never
@@ -1138,14 +1138,14 @@ decoded **discovery primitives** to `~/.uedctl/cache/schema/v<N>/<key>.bin` so a
   every class fact and every property now comes off the cache. The `resolve_class_properties` cache path
   preserves the no-fallback contract: a corrupt super ref re-raises `SchemaError` (via the `""`
   sentinel + `super_ref_for`), and with the cache OFF it uses the old live per-class decode, not a
-  whole-package one. Escape hatch `UEDCTL_SCHEMA_CACHE=off` (unset/other = on); the offline test suite
+  whole-package one. Escape hatch `UEDCLI_SCHEMA_CACHE=off` (unset/other = on); the offline test suite
   runs with it OFF by default.
-- **Footprint GC + the `cache` verbs.** `uedctl cache clear` deletes the whole schema cache;
-  **`uedctl cache gc [--max-bytes N] [--max-entries N]`** *shrinks* it — `schema_cache.sweep()`
+- **Footprint GC + the `cache` verbs.** `uedcli cache clear` deletes the whole schema cache;
+  **`uedcli cache gc [--max-bytes N] [--max-entries N]`** *shrinks* it — `schema_cache.sweep()`
   reclaims the orphaned `v<older>/` dirs a version bump left unreachable, then LRU-evicts (by atime)
   current-version blobs until under the byte/count cap. The flags override the env-or-constant
-  defaults (`SCHEMA_CACHE_MAX_BYTES` = 256 MiB / `UEDCTL_SCHEMA_CACHE_MAX_BYTES`,
-  `SCHEMA_CACHE_MAX_ENTRIES` = off / `UEDCTL_SCHEMA_CACHE_MAX_ENTRIES`) for that run; a negative
+  defaults (`SCHEMA_CACHE_MAX_BYTES` = 256 MiB / `UEDCLI_SCHEMA_CACHE_MAX_BYTES`,
+  `SCHEMA_CACHE_MAX_ENTRIES` = off / `UEDCLI_SCHEMA_CACHE_MAX_ENTRIES`) for that run; a negative
   value exits 2. The same `sweep()` also runs automatically (best-effort, at most once per process)
   after a blob write, so the cache self-bounds without the verb. Eviction carries NO correctness
   pressure — blobs are immutable and derivable, so an evicted one is just a future re-decode — and
@@ -1240,11 +1240,11 @@ properties, not editor-computed (the console `BRUSH ADDMOVER`/`ACTOR KEYFRAME` v
 end for authoring; the editor is reached only at the normal `level apply` materialize). Grounded
 in `spikes/2026-06-25-mover-keyframe-basepos-semantics.md`.
 
-- **Canonical representation:** uedctl stores a mover at **`KeyNum=0`**, with the **base pose in
+- **Canonical representation:** uedcli stores a mover at **`KeyNum=0`**, with the **base pose in
   the ordinary `Location`/`Rotation` fields** and keyframe offsets in `KeyPos(i)`/`KeyRot(i)` props
   for i = 1..N-1 (relative to the base; `KeyPos(0)`/`KeyRot(0)` are `(0,0,0)` by definition).
-  uedctl **never emits `BasePos`/`BaseRot`** — the editor derives them from `Location`/`Rotation`
-  at materialize, so they are stripped via `normalize.COMPUTED_PROPS` (a uedctl-authored mover and
+  uedcli **never emits `BasePos`/`BaseRot`** — the editor derives them from `Location`/`Rotation`
+  at materialize, so they are stripped via `normalize.COMPUTED_PROPS` (a uedcli-authored mover and
   its re-export then canonicalize equal — the H3 invariant). It likewise **never emits
   `SavedPos`/`SavedRot`**, which `AMover::PostLoad()` overwrites with a fixed sentinel
   (`(-12345,-12345,-12345)` / `(Pitch=123,Yaw=456,Roll=789)`) on **every load** of a Mover object —
@@ -1371,17 +1371,17 @@ container + volume). Because each container is unshared, concurrent invocations 
 other's editor state — parallel-safe by construction, no drive lock needed; `preview` boots one
 editor per distinct render mode. The container is **derived per command, never a `--container`
 flag.** *(decisions.md 2026-07-06 05:12 — per-command editor identity.)* Every editor/build-
-container spin-up takes an explicit **`state_dir`** — the resolved project's `<root>/.uedctl/`
+container spin-up takes an explicit **`state_dir`** — the resolved project's `<root>/.uedcli/`
 (`config.state_dir(project.root, create=True)`, threaded from the dispatching verb; decisions.md
 2026-07-17 20:58) — hosting the crafted/override ini temps (`tmp/`) and the flocks (`locks/`);
-`repo_paths.state_root()` (the CLAUDE.md-marker-derived `<repo>/.uedctl`) is retired.
+`repo_paths.state_root()` (the CLAUDE.md-marker-derived `<repo>/.uedcli`) is retired.
 
-## Native (editor-free) materialize (`uedctl/native/`, `uedctl-native/`)
+## Native (editor-free) materialize (`uedcli/native/`, `uedcli-native/`)
 The offline build path that turns the git-tracked T3D trunk into a game-loadable `.dx`/`.unr`
 **with no editor, no wine, no container** — the design is `specs/2026-07-15-native-materialize-design.md`
 (RE evidence: `spikes/2026-07-15-native-materialize/sections/{10,20,30}`). Two artifacts:
 
-- **Python glue `uedctl/native/`** owns orchestration + the proven byte-exact serializers:
+- **Python glue `uedcli/native/`** owns orchestration + the proven byte-exact serializers:
   `codec.py` (FCompactIndex + primitives + FString), `pkg_write.py` (package container:
   header/names/imports/exports layout + GUID/generation mint + a `parse_package` re-reader),
   `umodel.py` (UModel body parse + write-from-arrays — the Python **dev oracle**),
@@ -1409,7 +1409,7 @@ The offline build path that turns the git-tracked T3D trunk into a game-loadable
     subclass not named `*Mover` leaking into CSG) is CLOSED: `is_mover` is schema-aware since
     2026-07-25, so `_in_world_csg`/`_build_level_model`/`run_materialize_native` take the
     `ClassIndex` (`index=`/`class_index=`) and resolve the hierarchy for real.
-- **Rust crate `uedctl-native/`** (a PyO3/maturin extension `uedctl_native`) owns the CPU-bound
+- **Rust crate `uedcli-native/`** (a PyO3/maturin extension `uedcli_native`) owns the CPU-bound
   compute (spec §8: pure CPython misses the ≤2 min build target). `src/` is a pure-Rust core
   plus a THIN `lib.rs` PyO3 shim exposing the staged FFI contract (`build_geometry`/
   `serialize_model`/`bake_lighting`/`build_paths`) with a `BuildError` exception and `allow_threads`
@@ -1554,7 +1554,7 @@ oracle `spikes/2026-07-15-native-materialize/harness/line_check.py` (a downward 
 at `floor+extent`). `bake_lighting`/`build_paths` are N-4/N-5. `apply.run_materialize` still drives the editor; flipping
 it to the native path as its **sole** path awaits full CSG parity (b/f) + N-3 typed-prop
 serialization + editor-mock test migration (flagged in `board/inbox.md`). Build the extension:
-`cd uedctl-native && maturin develop`; `cargo test` runs the core goldens.
+`cd uedcli-native && maturin develop`; `cargo test` runs the core goldens.
 
 ## Adding a verb (model-side, no editor)
 1. `cli.py`: add the parser under `actor`/`brush` (brush sub-groups: `poly`/`vertex`)/`mover`/
@@ -1660,7 +1660,7 @@ auto-stubs dependencies without any explicit user step.
 - `stub_closure.py` — resolves the direct-deps closure (one hop; not recursive into deps-of-deps
   unless the substrate demands it; a dep whose `defaultproperties`/mesh ref crosses a package
   boundary is flagged, not auto-chased).
-- `stub_cache.py` — cache at the per-user, cross-project `~/.uedctl/cache/stubs/`
+- `stub_cache.py` — cache at the per-user, cross-project `~/.uedcli/cache/stubs/`
   (`config.stub_cache_root` — per-user cache home; gitignored — copyright-derived);
   keyed by v68 source sha256 + dep stub shas + substrate id + toolchain id (a rebuilt dep,
   re-stripped substrate, or toolchain bump invalidates dependents). `substrate stub` CLI exposes
@@ -1679,7 +1679,7 @@ before game base = config shadowing). The build container mounts the whole compo
 `.u` on `[Core.System] Paths` is harmless because `/stubs` (v69) is FIRST, so `make` (and the editor)
 always bind the v69 stub over any same-named v68 `.u`. (The install pointers for schema/closure
 integration tests live in `tests/conftest.py` — `install_system_root`/`install_content_dirs`,
-`UEDCTL_TEST_INSTALL`-overridable — not in any production module.)
+`UEDCLI_TEST_INSTALL`-overridable — not in any production module.)
 
 ### Scope
 Decompile failures for stripped engine symbols (e.g. `Engine.PlayerPawn.PostRenderFlash`) fail
@@ -1755,7 +1755,7 @@ the spiral lives in one local frame with its column base at z=0.
 **Native-CSG caveat (falsifies `csg.rs:61`):** this non-convex staircase brush — and equally an
 `extrude`/`revolve` of a concave profile — is built correctly by UnrealEd (the default `level
 materialize`) and the real engine (the default `level preview --game`), but the **coarse** native
-core assumes convex brushes: `uedctl-native/src/csg.rs` `point_in_convex` tests "behind every face"
+core assumes convex brushes: `uedcli-native/src/csg.rs` `point_in_convex` tests "behind every face"
 (the convex hull, not the true solid), so a stepped brush's concave notches classify as solid.
 That core is what `level preview --native` uses (and what `_build_level_model`'s `core=` kwarg selects internally — there is no `--core` CLI flag). Native
 *materialize* by DEFAULT is NOT affected — it runs `core="bspcsg"`, the incremental `bspBrushCSG`
@@ -1849,7 +1849,7 @@ readout (paste `CSG_Subtract` −32uu → REBUILD → enclosing `CSG_Add` → BR
 DEINTERSECTION → BRUSH EXPORT), and that set is frozen as a golden fixture
 (`fixtures/builder_parity.json`). The offline test asserts each builder still emits the golden
 world-corner set + face count (CI regression guard, no editor); the gated capture test re-derives
-it live and is the re-bless path (`python -m uedctl.tests.builder_parity_cases`, which refuses to
+it live and is the re-bless path (`python -m uedcli.tests.builder_parity_cases`, which refuses to
 bless a case where the editor disagrees with the builder). What this proves is world-corner/
 coordinate faithfulness per shape, **not** our builder algorithm vs UED's (the GUI-only
 `BrushBuilders` can't be console-driven, so there is no algorithm oracle), and **not** winding
@@ -1873,25 +1873,25 @@ see the `level preview` verb above) is split across four pieces:
 orchestration described under the `level preview` verb above), `utexture.py` (the native
 UTexture/UPalette decoder + `TextureResolver` over `config.composed_search_files` — promoted
 from the 2026-06-27 decontainerize spike, corpus-validated byte-identical to UCC's export),
-and `uedctl-native/src/render.rs` (`render_frame` — the pure-Rust rasterizer, `cargo test`-able
+and `uedcli-native/src/render.rs` (`render_frame` — the pure-Rust rasterizer, `cargo test`-able
 with no Python). The camera FRotator convention is single-sourced: Python builds the basis via
 the GMath `euler_to_matrix_uu` and Rust only projects. Offline test oracles: the pixel-probe
 projection test, the rotated-brush/mover transform cross-checks vs `rotation.world_vertices`,
 and the byte-exact golden (`tests/fixtures/native_preview_golden.png`, Linux/x86_64, blessed
 against the live anchor — `spikes/2026-07-16-native-preview-anchor/`; re-bless with
-`UEDCTL_BLESS_GOLDEN=1` only after re-verifying the anchor).
+`UEDCLI_BLESS_GOLDEN=1` only after re-verifying the anchor).
 
 **`level preview --game`** (the faithful tier) is a THIN host (`preview_game.py`: D5 delivered-map
 naming `materialized_dx`/`copied_map`; `acquire_warm_container` = one `docker inspect` reuse gate +
 flock + fingerprint LABEL; `run_batch` = one `docker exec` feeding a JSON request to the container
 script and parsing the length-framed PNG stream; `ensure_image` with a host-side source-hash marker
-fast-path; a bounded reboot-retry) driving `uedctl/game/`: `preview_batch.py` (the in-container
+fast-path; a bounded reboot-retry) driving `uedcli/game/`: `preview_batch.py` (the in-container
 one-exec batch — deliver symlink → 3-phase travel/skip → per-shot `PrepareCamera`+settle+X-grab →
 framed PNGs), `Dockerfile`, `build-image.sh`, `game-entrypoint.sh` (farms composed content into local
 dirs, patches the ini with relative `../Maps/*.dx`+`*.unr` Paths, runs the inline bash idle
 watchdog), and `uscript/` — the `UedPreview` link/console/base-driver package
 + the `UedPreviewDX` DeusEx substrate driver, compiled in a mounted builder against the game's own
-`DeusEx.u`). The v469 UCC toolchain is user-supplied/gitignored at `uedctl/game/inputs/edit/` (see
+`DeusEx.u`). The v469 UCC toolchain is user-supplied/gitignored at `uedcli/game/inputs/edit/` (see
 its README). Container/host seams are mocked offline (`test_preview_game.py`) and the batch script's
 link/travel seams too (`test_preview_batch.py`, fake link socket + fake X-grab); the live paths are
 the SP-R reload-keying spike + the 2026-07-17 one-exec acceptance (warm ~2.2s, 10-shot 8.37s).
@@ -2099,7 +2099,7 @@ write boundary (`_render_actors_to_out`) encodes them to **PNG** with Pillow (al
 REQUIRED third-party dep) before writing. **PNG is the only on-disk preview form** — PPM is unviewable
 by browsers, most viewers and an LLM, which is the audience previews exist for, so no CLI route to raw
 PPM exists (decision 2026-07-24 21:57). `--out`'s extension is REPLACED by `.png` (`--out shot.jpg` →
-`shot.png`); with `--out` omitted a `uedctl-preview-*.png` temp path is minted. Either way the absolute
+`shot.png`); with `--out` omitted a `uedcli-preview-*.png` temp path is minted. Either way the absolute
 path actually written is printed to stdout. The `actor`/`stash`/`prefab
 preview` verbs were the only container users that drove neither the editor nor UCC; they no longer
 need a running container at all.
@@ -2107,13 +2107,13 @@ need a running container at all.
 ## Testing
 Offline unit tests (committed fixtures, no container):
 ```bash
-cd Tools/uedctl && bin/test          # the auto-managed dev venv (bin/_venv.sh, .venv/)
+cd Tools/uedcli && bin/test          # the auto-managed dev venv (bin/_venv.sh, .venv/)
 ```
 Integration work runs against the live container; findings live in `dev/docs/spikes/`
 (the editor state is the variable), and the `integration` marker is deselected by default.
 
 ## Substrate
-`Tools/uedctl/uned/UED22` = committed pre-baked editor (OpenGL/32-bit, `SoftDrv` viewports, browsers
+`Tools/uedcli/uned/UED22` = committed pre-baked editor (OpenGL/32-bit, `SoftDrv` viewports, browsers
 closed, `EditPackages` stripped with `DeusEx*`/LUM commented out — uncomment against a real
 Deus Ex install). It is **baked directly into the image at its final runtime location** at build (`Dockerfile`
 `COPY UED22/ /opt/UED22/` + `COPY entrypoint.sh wine_ctl.py /opt/uned/` — the *scripts* stay at
@@ -2142,7 +2142,7 @@ fine (it is the decompiler in the stub pipeline above); see
 concern: a real Deus Ex install's content packages, copyrighted and never committed, are
 needed to materialize real (non-synthetic) maps.
 
-**Where the install content lives:** `Tools/uedctl/uned/DeusExAssets/` — a sibling of `UED22`
+**Where the install content lives:** `Tools/uedcli/uned/DeusExAssets/` — a sibling of `UED22`
 under the same `uned/` dir, gitignored, holding the install's content tree verbatim
 (`Textures/`, `Sounds/`, `Music/`, plus inert `Maps/System/Help/Save` kept for completeness).
 **Not** `_scratch/` — that dir is documented as throwaway-only, and this is a durable substrate
@@ -2153,7 +2153,7 @@ gitignored `dev/games/<game>/` and populates this tree from it). The `System/*.u
 "inert kept for completeness" — they are the inputs to package stubbing. See `decisions.md`
 (2026-06-21/22) for the stubbing + asset-layout rationale and the (rejected) alternatives.
 
-The raw **installer** the content is extracted FROM lives at `Tools/uedctl/uned/deusex-installer/`
+The raw **installer** the content is extracted FROM lives at `Tools/uedcli/uned/deusex-installer/`
 (the ACE archive `deusex.ace` + `.c00`–`.c52` volumes + `Install.exe`), also a sibling of `UED22`
 and also gitignored. It was moved here out of `_scratch/` precisely because the once-extracted
 `game/` content tree under `_scratch/` was already lost to a scratch wipe — `_scratch/` is
@@ -2186,9 +2186,9 @@ no-GUI **build container** (`stub.ephemeral_build_container`, for stub-build + `
 the preview game — ALL mount the SAME whole composed set through `resource_mounts`. `build_stub`'s
 `batchexport`/`umodel` read the v68 `.u` decompile SOURCE by its remapped `/resources/<n>` path
 (never via Paths). The only static mounts left in `docker-compose.yml` are the baked-adjacent v69
-stub cache (`${UEDCTL_STUB_CACHE:-${HOME}/.uedctl/cache/stubs}:/stubs:ro` — both
-`editor.ensure_editor` and `stub.ephemeral_build_container` pass `UEDCTL_STUB_CACHE` = the resolved
-`config.stub_cache_root()` in the compose env, so the mount honors `$UEDCTL_HOME`; the `${HOME}`
+stub cache (`${UEDCLI_STUB_CACHE:-${HOME}/.uedcli/cache/stubs}:/stubs:ro` — both
+`editor.ensure_editor` and `stub.ephemeral_build_container` pass `UEDCLI_STUB_CACHE` = the resolved
+`config.stub_cache_root()` in the compose env, so the mount honors `$UEDCLI_HOME`; the `${HOME}`
 tail is only the hand-run-compose fallback) and the wine prefix. `packages.editor_search_dirs`
 (host-side, `[/stubs cache, UED22, *composed dirs]`) resolves manifests, and
 `packages._remap_to_container` maps each
@@ -2228,16 +2228,16 @@ shared by reused/standing containers — a fixed path would race), `cp_in(contai
 `driver.to_z_path` where wine/UCC needs `Z:\`), `cp_out` copies a result file OUT, and
 `remove` is best-effort cleanup (never raises — the editor is crash-prone). Every seam that
 crosses the boundary goes through it: the target `.dx` is `cp_in`'d before any `MAP LOAD`/UCC
-read (and the host snapshot under `<root>/.uedctl/tmp/` is itself made inside
+read (and the host snapshot under `<root>/.uedcli/tmp/` is itself made inside
 `export_and_qualify`, from its threaded `state_dir`, so every caller gets it for free); results
-(verified `.dx`, texture PNGs) are `cp_out`'d to host paths under `<root>/.uedctl/` or the
+(verified `.dx`, texture PNGs) are `cp_out`'d to host paths under `<root>/.uedcli/` or the
 per-user cache; all editor scratch lives in `/work`.
 
 **Writing the apply result back is atomic and repo-clean** (`apply._save_and_swap_verified` →
 `_install_atomic`): the editor `MAP SAVE`s to `/work`, the H3 verify re-exports it **in the
 editor container** (B1 — that container's `/work` is private to it, so the saved temp must be
 read back there, not in the substrate container), then `cp_out` to a host staging file under
-`<root>/.uedctl/tmp/` (the project state dir, threaded as `state_dir` from dispatch) and an
+`<root>/.uedcli/tmp/` (the project state dir, threaded as `state_dir` from dispatch) and an
 atomic `os.replace` onto the target. `os.replace` is atomic for an
 in-repo target (same filesystem); for an out-of-repo target on a different filesystem (a
 supported input) it raises `EXDEV`, and the fallback copies into a temp IN the target's own

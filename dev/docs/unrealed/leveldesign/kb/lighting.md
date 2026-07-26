@@ -8,7 +8,7 @@ default, the two animation/shape enums, and the craft of lighting a level well. 
 [`README.md`](README.md). Engine-driving mechanics: [`../../commands.md`](../../commands.md),
 [`../../rendering.md`](../../rendering.md).
 
-**Confidence markers** (repo convention): ✅ uedctl-used / live-verified · 🔬 live-probed against the
+**Confidence markers** (repo convention): ✅ uedcli-used / live-verified · 🔬 live-probed against the
 real DX binary/editor · 📖 extracted from the community tutorial corpus (vocabulary real, semantics to
 confirm). **[ENGINE]** = generic UnrealEngine 1 · **[DX]** = Deus-Ex-specific.
 
@@ -51,15 +51,15 @@ Verified by the native-materialize spike
   properties — they are *not* baked into the mask. This is why re-tinting a light (`LightHue`,
   `LightSaturation`, `LightBrightness`) does **not** strictly require re-running the visibility bake:
   the mask says *where* the light reaches; the colour/falloff maths run per-frame from the live
-  property values. (In practice, from the uedctl seat you re-`materialize`/`preview` to see the change
+  property values. (In practice, from the uedcli seat you re-`materialize`/`preview` to see the change
   regardless — there is no partial-bake verb.)
 - **Radius → world reach** ≈ **(LightRadius + 1) × 25 uu**. A default `LightRadius=64` therefore reaches
   ≈ 1625 uu. This is the single most useful lighting number: it converts the abstract 0–255 radius byte
   into world units so you can size light pools against the geometry.
 
-### 1.3 The uedctl seat: there is NO standalone bake verb  ✅
+### 1.3 The uedcli seat: there is NO standalone bake verb  ✅
 
-From uedctl, **lights are pure `actor` edits** — placing and tuning a light is authoring trunk state,
+From uedcli, **lights are pure `actor` edits** — placing and tuning a light is authoring trunk state,
 nothing more:
 
 ```
@@ -67,9 +67,9 @@ actor build Engine.Light --prop LightRadius=8 --prop LightBrightness=200 --at 12
 actor find --subclass-of Engine.Light | actor prop set - LightHue=28 LightSaturation=64   # re-tint a set
 ```
 
-**There is no `uedctl light bake` / `uedctl relight` verb.** The lightmap bake happens *inside*
+**There is no `uedcli light bake` / `uedcli relight` verb.** The lightmap bake happens *inside*
 `level materialize` and `level preview` — you author lights as actors, then materialize/preview to see
-the result. So the old GUI advice "run `LIGHT APPLY` after retinting" becomes, at the uedctl seat:
+the result. So the old GUI advice "run `LIGHT APPLY` after retinting" becomes, at the uedcli seat:
 **"re-`materialize`/`preview` to see lighting; authoring lights is just `actor` edits."**
 
 > **UnrealEd GUI equivalent:** place a `Light` actor (L+RMB), edit its *Lighting* property category, then
@@ -110,7 +110,7 @@ names/types only, **not** values).
   R0/O25/Y50/G60/B150/P190). The wheel is a **continuous byte 0–255**; treat any table as *approximate*,
   not canonical. The one exact fact is that `LightSaturation` is inverted (255 = white).
 
-*To read any other default:* `bin/uedctl actor build Engine.Light | actor add - | actor prop get -
+*To read any other default:* `bin/uedcli actor build Engine.Light | actor add - | actor prop get -
 <Prop>` — offline, no editor.
 
 ---
@@ -221,7 +221,7 @@ Mechanics are only half of it; these are the actionable craft rules distilled fr
 
 ---
 
-## 6. Quick verb reference (uedctl)  ✅
+## 6. Quick verb reference (uedcli)  ✅
 
 | Task | Verb pipeline |
 |---|---|

@@ -1,7 +1,7 @@
 # D0 built + validated: editor drop-warning capture (the cheap, complete-on-real-build hole detector half)
 
 **Date:** 2026-06-24
-**Implements:** the D0 half of `decisions.md` 2026-06-24 12:40 UTC / `specs/2026-06-24-uedctl-offline-bsp-engine-design.md` §6 (D0).
+**Implements:** the D0 half of `decisions.md` 2026-06-24 12:40 UTC / `specs/2026-06-24-uedcli-offline-bsp-engine-design.md` §6 (D0).
 **Code (spike-grade, `_scratch/bspspike/`):** `bsp_editorlog.py` (parser + live capture), `d0_live.py` (live validation).
 **Result:** ✅ D0's parser works on all channels (offline, deterministic) and **caught a real
 injected hole live**, cleanly distinguishing it from a good build.
@@ -61,7 +61,7 @@ clean geometry live.**
    DeusEx maps** and count how many drops/HoM are build-emergent vs single-brush (cross-ref the
    shipped static `doctor`); the residual "silent-absence" frequency decides D2. *Needs the
    gitignored DeusEx install content present (real maps).* 
-2. **Promote** `bsp_editorlog.py` → `uedctl/bsp/editorlog.py` with offline golden tests (the
+2. **Promote** `bsp_editorlog.py` → `uedcli/bsp/editorlog.py` with offline golden tests (the
    synthetic-log parser cases) + an integration-gated live test, and wire a `level doctor` verb
    (author-time/CI report). Per discipline, promote after D0-b runs on a real map.
 3. **D1 — P0-a feasibility:** can a saved `.dx`'s built `Model` (`Nodes`/`Surfs`/`Vectors`/`Points`/

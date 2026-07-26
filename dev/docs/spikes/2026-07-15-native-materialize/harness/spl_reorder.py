@@ -113,7 +113,7 @@ def run(polys, label):
 def build_soup():
     import subset_diff as S
     import os
-    os.environ["UEDCTL_BSPCSG_NOREPART"] = "1"
+    os.environ["UEDCLI_BSPCSG_NOREPART"] = "1"
     nat = S.build_native_subset(2)
     polys = []
     for n in nat.nodes:

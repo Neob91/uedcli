@@ -18,8 +18,8 @@ Usage: python level_roundtrip.py <map.dx> [<map.dx> ...]
 """
 from __future__ import annotations
 import struct, sys, glob
-sys.path.insert(0, "/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedctl/dev/docs/spikes/2026-06-27-decontainerize-uedctl/harness")
-sys.path.insert(0, "/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedctl/dev/docs/spikes/2026-07-15-native-materialize/harness")
+sys.path.insert(0, "/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedcli/dev/docs/spikes/2026-06-27-decontainerize-uedcli/harness")
+sys.path.insert(0, "/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedcli/dev/docs/spikes/2026-07-15-native-materialize/harness")
 from utexture_decode import load_package, ci, read_props
 from package_rw import write_ci
 

@@ -2,7 +2,7 @@
 
 Task-by-task walkthroughs for common Deus Ex authoring jobs. Each recipe is the **complete
 procedure** — numbered steps that explain *what* you are building and why — followed by a **"With
-uedctl"** block that gives the exact verb pipeline. Where a classic UnrealEd tutorial relies on a
+uedcli"** block that gives the exact verb pipeline. Where a classic UnrealEd tutorial relies on a
 GUI-only gesture (grabbing a brush with Intersect, clicking a pivot vertex, snapping to grid), the
 recipe says so and gives the closest model-side path.
 
@@ -33,7 +33,7 @@ Every recipe uses the same four verb families (full reference in
 > `Pitch,Yaw,Roll`. (Note: *mesh-import* `#exec` angles are a different, 8-bit scale where 64 = 90° —
 > that's the asset pipeline, not level authoring.)
 
-> **On-grid by construction.** The editor's "snap to grid" step has no uedctl equivalent because you
+> **On-grid by construction.** The editor's "snap to grid" step has no uedcli equivalent because you
 > author coordinates directly — choose integer, power-of-two positions (16/32/64/128/256) and your
 > geometry is already on-grid. Off-grid coordinates are the #1 cause of BSP holes (see
 > [`../../general/geometry-and-bsp.md`](../../general/geometry-and-bsp.md)).

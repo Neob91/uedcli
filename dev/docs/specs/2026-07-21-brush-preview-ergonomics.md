@@ -21,7 +21,7 @@ capture`); `--zoom-poly` selector-only (drop bare-int); zoom does NOT highlight;
 ## Architecture note (load-bearing)
 
 Two UNRELATED preview systems; do not conflate:
-1. **`actor preview`** — orthographic **wireframe** PPM renderer in **`uedctl/preview.py`**
+1. **`actor preview`** — orthographic **wireframe** PPM renderer in **`uedcli/preview.py`**
    (`render_brushes_pgm`/`render_quad_pgm`/`render_brush_pgm`), configured by `_preview_opts`
    (`cli.py:130`), driven by `_render_actors_to_out` (`dispatch.py:379`). **The only renderer this
    spec touches.** No tiers.

@@ -24,9 +24,9 @@ is written next to this script (durable).
 import sys, time, hashlib, subprocess
 from pathlib import Path
 
-UEDCTL = Path(__file__).resolve().parents[4]           # Tools/uedctl (dev/docs/spikes/<slug>/file)
-sys.path.insert(0, str(UEDCTL))
-from uedctl import config, preview_game as pg           # noqa: E402
+UEDCLI = Path(__file__).resolve().parents[4]           # Tools/uedcli (dev/docs/spikes/<slug>/file)
+sys.path.insert(0, str(UEDCLI))
+from uedcli import config, preview_game as pg           # noqa: E402
 
 MAPS = Path("/home/neob91/Games/LutrisDX/drive_c/DX/Maps")
 OUT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/_scratch/spike-reload")
@@ -121,7 +121,7 @@ def main():
     log(f"content hashes: Entry={content_hash(m_entry)} DX={content_hash(m_dx)} "
         f"End={content_hash(m_end)}")
 
-    project = config.load_project(str(UEDCTL.parent.parent / "uedctl"))
+    project = config.load_project(str(UEDCLI.parent.parent / "uedcli"))
     user_config = config.load_user_config()
     row = pg._substrate_row(project.game)
 

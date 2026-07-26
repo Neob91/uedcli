@@ -81,7 +81,7 @@ level import MAPFILE --tree KIND/NAME [--overwrite]
   qualification. No project → exit 2.
 - **Output:** destination + actor count → stderr; imported actor names → stdout (producer convention).
 
-## 5. Decode pipeline (`uedctl/mapimport.py`) → T3D text, then `parse_t3d`
+## 5. Decode pipeline (`uedcli/mapimport.py`) → T3D text, then `parse_t3d`
 
 `import_map(pkg, index, schema) -> str` returns a `Begin Map … End Map` string that `model.parse_t3d`
 ingests (the tested inverse of `emit_actor` — gets `Location`/`MainScale`/`PostScale`/`Brush`-ref and
@@ -188,7 +188,7 @@ forgiving lens is where silent corruption hides; the broadened retail goldens ar
   structural self-ref classes; a mover `Base=`/`Owner=`/event ref renders `Class'<mapstem>.Other'` and
   isn't rebased. Symmetric for the compare; but the durable trunk stores stem-pinned refs (won't rebind
   under a different package name). Widening self-ref canonicalization is a follow-up.
-- **uedctl-native-built maps** have empty private brush Models (shape lives in the world BSP), so their
+- **uedcli-native-built maps** have empty private brush Models (shape lives in the world BSP), so their
   brushes import geometry-less. Corpus is UnrealEd-built OG levels (populated Polys) — doesn't bite v1.
 - **Folders & labels start empty.** Deriving a folder from `Group=` is a follow-up.
 - **Strict validation (decision 6):** a map referencing an off-path package fails import exit 2. OG DX
@@ -208,15 +208,15 @@ forgiving lens is where silent corruption hides; the broadened retail goldens ar
   handled (arrays-in-struct raise `SchemaError` today — decide keep-raising vs support).
 
 ## 10. Module shape / touchpoints
-- **NEW `uedctl/mapimport.py`** — `import_map(pkg, index, schema) -> str`: StateFrame skip, value decode
+- **NEW `uedcli/mapimport.py`** — `import_map(pkg, index, schema) -> str`: StateFrame skip, value decode
   via `render_default_tag`, UCC-exact render (struct member-strip + 6dp floats), dynamic-array decode,
   FPoly/UPolys decode, text render.
 - **Promote (from spikes, with round-trip pins where an encoder exists):** `native_dx_actors`
   StateFrame skip (Spike 07); `decode_upolys`/`decode_fpoly` (rewire onto `upackage`).
-- **`uedctl/uprops.py`** — expose an `ArrayProperty` Inner element KIND on `Prop` (§5.2d); a UCC-exact
+- **`uedcli/uprops.py`** — expose an `ArrayProperty` Inner element KIND on `Prop` (§5.2d); a UCC-exact
   render mode (6dp floats + member-strip) or a thin `mapimport` wrapper over `render_default_tag`.
-- **`uedctl/cli.py`** — `level import` subparser (positional `MAPFILE`, reuse `_tree_flag`, `--overwrite`).
-- **`uedctl/dispatch.py`** — handler + `_resolve_import_dest` (create-mode, overwrite-before-load,
+- **`uedcli/cli.py`** — `level import` subparser (positional `MAPFILE`, reuse `_tree_flag`, `--overwrite`).
+- **`uedcli/dispatch.py`** — handler + `_resolve_import_dest` (create-mode, overwrite-before-load,
   name-collision), `qualify_and_validate` call; route `SchemaError`/`GeometryError` to the clean-exit
   guard.
 - **Reused unchanged:** `render_default_tag`/`_decode_struct_bin`, `resolve_class_defaults`,

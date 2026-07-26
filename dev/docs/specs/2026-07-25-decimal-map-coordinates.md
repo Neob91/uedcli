@@ -4,7 +4,7 @@
 post-round-2 revision. A fresh round follows). Round 2 verified the producer enumeration COMPLETE, the
 byte-safety sound, and no wrongly-excluded parse; the changes below correct two overstated justifications
 and the acceptance-gate claims. Stays at 3 reviewers.
-**Requested by:** Andrzej (2026-07-25, session `uedctl:review`) — "Switch parsing from float to decimal
+**Requested by:** Andrzej (2026-07-25, session `uedcli:review`) — "Switch parsing from float to decimal
 everywhere we work with map numbers", off a finding that `model._parse_polygon` parses poly
 Origin/Normal/TextureU/TextureV as `float` while the `Polygon` dataclass declares them `Decimal`.
 **Ephemeral:** scratch; deleted once the work lands. Durable record: `decisions.md`, `architecture.md`,
@@ -20,9 +20,9 @@ other document need be opened.
 
 - **`Vec3`** — `model.py` type alias `tuple[Decimal, Decimal, Decimal]`. The `Polygon`/`Actor` coordinate
   fields are all declared `Vec3 | None`.
-- **Authored value** — a coordinate from a `.t3d` the user wrote (or that uedctl wrote and must
+- **Authored value** — a coordinate from a `.t3d` the user wrote (or that uedcli wrote and must
   reproduce). Fidelity: exact round-trip.
-- **Computed value** — a coordinate uedctl calculates (centroid, rotated normal, rasterizer coord).
+- **Computed value** — a coordinate uedcli calculates (centroid, rotated normal, rasterizer coord).
   Float-precision by nature; no authored text to preserve.
 - **`Decimal(str(x))` boundary** — the correct float→Decimal coercion (stringify first;
   `Decimal(str(3.1))` = `Decimal("3.1")`, not `Decimal(3.1)`).

@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# uedcli — HOST-NATIVE dev launcher. Runs the uedcli CLI on the host in a Python
+# 3.12 venv (mirroring the eventual Nuitka release binary), with native access to
+# asset dirs and no dev-container path/mount juggling. Editor/build containers it
+# drives still run via docker. See bin/_venv.sh + dev/docs/dev-runtime.md.
+#
+# Put this dir on PATH (or symlink into ~/.local/bin), then: `uedcli level status`,
+# `printf '%s' "$t3d" | uedcli actor add -`. The venv auto-creates on first run;
+# `UEDCLI_VENV_REBUILD=1 uedcli …` forces a dep refresh.
+set -euo pipefail
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/_venv.sh"
+ensure_venv
+exec env PYTHONPATH="$UEDCLI_DIR" "$PY" -m uedcli "$@"

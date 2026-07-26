@@ -96,7 +96,7 @@ none (today's default). An unknown member errors naming the offending token (CLI
 
 ### 2.4 `--out` (done) + `--png` (help fix only)
 
-`--out` is now optional with a `uedctl-preview-*` temp default and always prints the absolute written
+`--out` is now optional with a `uedcli-preview-*` temp default and always prints the absolute written
 path — **already implemented this session** (`cli.py::_preview_opts`, `dispatch.py` mktemp branch).
 This spec only *records* it.
 
@@ -202,7 +202,7 @@ to the new flag (and argparse prefix-abbrev can't resurrect it), matching the `-
     regression (§2.5).
   - `test_stash_dispatch.py::_preview_stash_args` / any `test_dispatch.py` preview namespace — update
     to the new fields (or rely on the defensive `getattr` defaults above; still update for clarity).
-- **Memory** — `uedctl-preview-default-breakdown` says "pass `--breakdown` by default". `[R]` The edit
+- **Memory** — `uedcli-preview-default-breakdown` says "pass `--breakdown` by default". `[R]` The edit
   to `--layout breakdown` **lands in the SAME commit as the flag rename**, not a follow-up — the
   `_RemovedFlag` error is the safety net, but the window where an agent following that memory errors on
   every preview should be zero.

@@ -2,13 +2,13 @@
 
 ## Target binary + tools
 
-- DLL: `/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedctl/uned/UED22/Editor.dll`
+- DLL: `/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedcli/uned/UED22/Editor.dll`
   (32-bit x86, MSVC 2022 SSE build of the UT-v469-lineage editor). ImageBase `0x10000000`.
   All RVAs below are file RVAs; VA = 0x10000000 + RVA.
 - Disassembler harness (already exists, works):
   ```
-  cd /home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedctl/dev/docs/spikes/2026-07-15-native-materialize/harness
-  /home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedctl/.venv/bin/python adis.py Editor <rva-hex> <len-hex>
+  cd /home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedcli/dev/docs/spikes/2026-07-15-native-materialize/harness
+  /home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedcli/.venv/bin/python adis.py Editor <rva-hex> <len-hex>
   ```
   `adis.py` annotates call targets with demangled export names, string literals and float
   constants. `pe.py` has `read_at_va`, `exports`, `disasm` if you need raw bytes. Wide strings:

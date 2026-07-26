@@ -3,7 +3,7 @@
 root-splitter CHOICE our native tree-builder makes against the decoded editor algorithm on a GIVEN
 FPoly soup.  Isolates method-1: given the same soup, does the decoded scoring pick the editor's root?
 
-split_with_plane mirrors uedctl-native/src/fpoly.rs (THRESH=0.25).  Score = Balance*|F-B| +
+split_with_plane mirrors uedcli-native/src/fpoly.rs (THRESH=0.25).  Score = Balance*|F-B| +
 (100-Balance)*Splits, Balance=50/PortalBias=70, OPTIMAL stride 1, no SPLIT_WEIGHT.  STRICT-less
 tie-break keeps the earliest candidate.
 """

@@ -29,16 +29,16 @@ import argparse
 import sys
 from pathlib import Path
 
-ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedctl")
+ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedcli")
 sys.path.insert(0, str(ROOT))
 
 from spike_classindex import class_index  # noqa: E402  (schema-aware mover gate's index)
-from uedctl import trunk  # noqa: E402
-from uedctl.native import materialize as M  # noqa: E402
-from uedctl.native import umodel as UM  # noqa: E402
-from uedctl.native.pkg_write import parse_package  # noqa: E402
+from uedcli import trunk  # noqa: E402
+from uedcli.native import materialize as M  # noqa: E402
+from uedcli.native import umodel as UM  # noqa: E402
+from uedcli.native.pkg_write import parse_package  # noqa: E402
 
-DEFAULT_TRUNK = "/home/neob91/Games/LutrisDX/drive_c/DX/LUM/_scratch/hkmarket/uedctl/maps/hkmarket"
+DEFAULT_TRUNK = "/home/neob91/Games/LutrisDX/drive_c/DX/LUM/_scratch/hkmarket/uedcli/maps/hkmarket"
 DEFAULT_OUT = "/home/neob91/Games/LutrisDX/drive_c/DX/Maps/NativeHKMarket.dx"
 # The game texture dirs so HK_*/CoreTex*/G_Station/NYCBar/MJ12_lab GROUPS resolve
 # (else "Can't find Texture").

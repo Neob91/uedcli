@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 r"""NATIVE-TREE DUMP — the native counterpart of the editor-tree oracle.
 
-Runs `uedctl_native.build_geometry_bspcsg` over the first N castle brushes (trunk order) with the
-env-gated `UEDCTL_BSPCSG_TREE_DUMP` hook (bspcsg.rs `trace_node_add`) enabled, capturing every
+Runs `uedcli_native.build_geometry_bspcsg` over the first N castle brushes (trunk order) with the
+env-gated `UEDCLI_BSPCSG_TREE_DUMP` hook (bspcsg.rs `trace_node_add`) enabled, capturing every
 INCREMENTAL world-BSP-tree node add on stderr:
 
     NADD phase={ADD|SUB|FWTB} node=<idx> parent=<i> place=<code> flags=<hex> ilink=<i> nv=<n> \
@@ -24,18 +24,18 @@ import os
 import sys
 from pathlib import Path
 
-ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedctl")
+ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedcli")
 HARNESS = ROOT / "dev/docs/spikes/2026-07-15-native-materialize/harness"
 HERE = HARNESS / "editor-tree-oracle"
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(HARNESS))
-sys.path.insert(0, str(ROOT / "dev/docs/spikes/2026-06-27-decontainerize-uedctl/harness"))
+sys.path.insert(0, str(ROOT / "dev/docs/spikes/2026-06-27-decontainerize-uedcli/harness"))
 
 
 def _inputs_castle(n: int):
     """First N castle brushes in trunk order (no mover exclusion — the castle has none)."""
-    from uedctl import trunk
-    from uedctl.native import materialize as M
+    from uedcli import trunk
+    from uedcli.native import materialize as M
     import castle_build
     level, _ = trunk.read_level(Path(castle_build.TRUNK))
     brush_names = [nm for nm in level.order if level.actors[nm].brush is not None][:n]
@@ -47,8 +47,8 @@ def _inputs_unatco(n: int):
     `unatco_subset.native_surfs` / `materialize._in_world_csg` (movers are never CSG'd into the
     world, and the editor golden excludes them), so the native ADD stream matches the golden's."""
     from spike_classindex import class_index   # the schema-aware mover gate's ClassIndex
-    from uedctl import trunk
-    from uedctl.native import materialize as M
+    from uedcli import trunk
+    from uedcli.native import materialize as M
     import unatco_subset as U
     level, _ = trunk.read_level(U.FULL_TRUNK)
     brush_order = [nm for nm in level.order if level.actors[nm].brush is not None][:n]
@@ -65,7 +65,7 @@ def run(n: int, out_dir: Path, target: str = "castle") -> Path:
     The hook writes to the process's real fd 2; to capture it we redirect fd 2 to a temp file around
     the (native, GIL-releasing) build call, then read it back and keep only NADD lines."""
     out_dir.mkdir(parents=True, exist_ok=True)
-    import uedctl_native
+    import uedcli_native
 
     if target not in _INPUTS:
         raise SystemExit(f"unknown --target {target!r} (choose from {sorted(_INPUTS)})")
@@ -74,10 +74,10 @@ def run(n: int, out_dir: Path, target: str = "castle") -> Path:
     raw = out_dir / f"native-{n}.raw"
     saved = os.dup(2)
     fd = os.open(str(raw), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o644)
-    os.environ["UEDCTL_BSPCSG_TREE_DUMP"] = "1"
+    os.environ["UEDCLI_BSPCSG_TREE_DUMP"] = "1"
     try:
         os.dup2(fd, 2)
-        uedctl_native.build_geometry_bspcsg(inputs)
+        uedcli_native.build_geometry_bspcsg(inputs)
     finally:
         os.dup2(saved, 2)
         os.close(fd)

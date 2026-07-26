@@ -5,7 +5,7 @@ qualify_level_textures off-by-one) can be identified STRUCTURALLY (tree depth /
 parent object) rather than by fragile position. Dumps every raw line with its
 original indentation to _scratch/semisolid/tree.txt.
 
-    UEDCTL_REUSE_EDITOR=uned-<uuid> PYTHONPATH=. python3 .../probe_tree.py
+    UEDCLI_REUSE_EDITOR=uned-<uuid> PYTHONPATH=. python3 .../probe_tree.py
 """
 from __future__ import annotations
 
@@ -15,11 +15,11 @@ import sys
 import time
 import uuid
 
-from uedctl import builders, writes
-from uedctl.driver import Driver, to_z_path
-from uedctl.qualify import dump_obj_dependencies
-from uedctl.uuid7 import uuid7
-from uedctl.editor import ensure_editor, stop_editor
+from uedcli import builders, writes
+from uedcli.driver import Driver, to_z_path
+from uedcli.qualify import dump_obj_dependencies
+from uedcli.uuid7 import uuid7
+from uedcli.editor import ensure_editor, stop_editor
 
 TEX_HOST = "/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Textures/LUM_CoreTex.utx"
 TEXNAME = "LUM_CoreTex.grey_stone_tile"
@@ -39,7 +39,7 @@ def settle(ed, s=2.0):
 
 
 def main():
-    reuse = os.environ.get("UEDCTL_REUSE_EDITOR")
+    reuse = os.environ.get("UEDCLI_REUSE_EDITOR")
     ed_id = None
     if reuse:
         container = reuse; log(f"REUSING {container}")

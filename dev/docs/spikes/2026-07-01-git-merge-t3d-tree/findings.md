@@ -1,13 +1,13 @@
-# Spike: can plain `git merge` replace uedctl's custom 3-way merge for T3D trees?
+# Spike: can plain `git merge` replace uedcli's custom 3-way merge for T3D trees?
 
 **Date:** 2026-07-01
-**Question:** Can plain `git merge` replace uedctl's custom per-actor 3-way
+**Question:** Can plain `git merge` replace uedcli's custom per-actor 3-way
 merge for T3D trees, enabling parallel work via branches?
 **Kind:** offline, no editor / no container. Pure git.
 
 Harness (committed alongside this file):
 
-- `build_tree.sh` — writes a realistic uedctl T3D-tree fixture (8 actors: 6
+- `build_tree.sh` — writes a realistic uedcli T3D-tree fixture (8 actors: 6
   point actors + 2 brush actors carrying `Begin Brush ... End Brush` polylists,
   plus `order` / `packages` / `name`). Properties one-per-line, sorted, to model
   canonical/deterministic emission.
@@ -36,10 +36,10 @@ Two conditions must hold:
    precedence to a per-actor ordering key (see caveat below). Otherwise every
    "add an actor" merge conflicts.
 2. **Emission must be canonical and stable.** Non-canonical property order turns
-   semantic-noop edits into spurious text conflicts (Scenario 6). uedctl already
+   semantic-noop edits into spurious text conflicts (Scenario 6). uedcli already
    emits sorted/normalized — keep that invariant; it is load-bearing for merge.
 
-If those hold, uedctl's custom per-actor 3-way replay merge is not needed for the
+If those hold, uedcli's custom per-actor 3-way replay merge is not needed for the
 common case. It may still be wanted as a *fallback resolver* for same-actor
 conflicts (semantic property-level merge instead of hunk text merge), but that is
 an optimization, not a requirement.
@@ -89,7 +89,7 @@ Both branches edit `Light0` `LightBrightness` to different values. Merge yields:
 
 **Cleanly resolvable.** The conflict is scoped to the single changed property
 line, with full surrounding context intact. A human or LLM can pick a side (or
-compute a value) trivially. This is the failure mode uedctl's custom merge is
+compute a value) trivially. This is the failure mode uedcli's custom merge is
 designed to handle better — but even the raw git hunk is legible.
 
 ### Scenario 6: non-canonical emit -> spurious conflict (`run_spike.sh`, repo `reorder`)
@@ -110,7 +110,7 @@ semantically overlap, because the reorder rewrote the same text region:
 ```
 
 **Canonical emit is necessary.** Stable line order is what keeps disjoint
-property edits from colliding. This is a strong argument for keeping uedctl's
+property edits from colliding. This is a strong argument for keeping uedcli's
 deterministic emission as an enforced invariant, not a nicety.
 
 ### Order-file probe (`probe_order.sh`)
@@ -185,6 +185,6 @@ edits, but it does not change the verdict.
 Git resolves same-actor conflicts at the text-hunk level, not the property
 level. For adjacent-but-different properties this is fine (they don't conflict).
 For the *same* property edited two ways, git can't decide — nor could a naive
-custom merge without a resolution policy. uedctl's per-actor 3-way replay could
+custom merge without a resolution policy. uedcli's per-actor 3-way replay could
 add value here as a *conflict resolver* (property-level 3-way), but it is not
 required to make branch-based parallel work function.

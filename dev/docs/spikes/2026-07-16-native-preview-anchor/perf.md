@@ -3,7 +3,7 @@
 **Trunk:** the full castle, regenerated from `Maps/Test_Castle.dx` via
 `../2026-07-15-native-materialize/harness/ingest_dx_trunk.py` (161 actors / 95 brushes /
 622 texture refs, all qualified from the map's own import table, 0 misses) into
-`_scratch/castle/uedctl/maps/foobar`.
+`_scratch/castle/uedcli/maps/foobar`.
 
 **Batch:** 8 shots at 1280×960 / FOV 75 — interior, approach, exterior bird's-eye (the shot
 the editor backend could never take), straight-down top-down, two orbit ring shots, a
@@ -13,7 +13,7 @@ look-at-roofline, and a gatehouse look-up.
 
 | run | time |
 |---|---|
-| 8 shots end-to-end (`bin/uedctl level preview …`) | **11.4–11.5 s** |
+| 8 shots end-to-end (`bin/uedcli level preview …`) | **11.4–11.5 s** |
 | 1 shot end-to-end | 9.0 s |
 | `build_geometry` (Rust CSG carve of the 95-brush trunk) | **8.0 s** (profiled) |
 | trunk read | 0.11 s |

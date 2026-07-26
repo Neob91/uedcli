@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 r"""Spike harness part 5 — THE ROOT CAUSE TEST.
 
-Geometry saves fine (probe_full.py); the real materialize failure is in uedctl's
+Geometry saves fine (probe_full.py); the real materialize failure is in uedcli's
 TEXTURE-QUALIFY step. `qualify_level_textures` demands a 1:1 match between the
 level's textured brushes and the NON-EMPTY `Class Engine.Polys` blocks that `OBJ
 DEPENDENCIES PACKAGE=MyLevel` dumps. Hypothesis: a SEMISOLID (or NONSOLID) brush
@@ -13,10 +13,10 @@ as "MAP SAVE produced no file").
 This loads the REAL LUM_CoreTex package and, for solid / semisolid / nonsolid
 detail, dumps OBJ DEPENDENCIES the exact way qualify does and reports:
   * total Engine.Polys blocks, non-empty count, and how many textured brushes
-    uedctl counts (the two numbers qualify compares)
+    uedcli counts (the two numbers qualify compares)
   * whether qualify_level_textures() RAISES.
 
-    UEDCTL_REUSE_EDITOR=uned-<uuid> PYTHONPATH=. python3 .../probe_tex.py
+    UEDCLI_REUSE_EDITOR=uned-<uuid> PYTHONPATH=. python3 .../probe_tex.py
 """
 from __future__ import annotations
 
@@ -27,13 +27,13 @@ import time
 import uuid
 from pathlib import Path
 
-from uedctl import builders, writes
-from uedctl.driver import Driver, to_z_path
-from uedctl.model import Level, parse_t3d
-from uedctl.qualify import (dump_obj_dependencies, parse_obj_dependencies,
+from uedcli import builders, writes
+from uedcli.driver import Driver, to_z_path
+from uedcli.model import Level, parse_t3d
+from uedcli.qualify import (dump_obj_dependencies, parse_obj_dependencies,
                             qualify_level_textures)
-from uedctl.uuid7 import uuid7
-from uedctl.editor import ensure_editor, stop_editor
+from uedcli.uuid7 import uuid7
+from uedcli.editor import ensure_editor, stop_editor
 
 TEX_HOST = "/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Textures/LUM_CoreTex.utx"
 TEXNAME = "LUM_CoreTex.grey_stone_tile"
@@ -105,11 +105,11 @@ def scenario(ed, tag, solidity):
         log(f"  OBJ DEPENDENCIES: {len(blocks)} Engine.Polys blocks, {len(non_empty)} non-empty")
         for i, b in enumerate(blocks):
             log(f"    block[{i}]: {len(b)} textures {b[:3]}{'...' if len(b) > 3 else ''}")
-        # how many textured brushes uedctl counts (the OTHER side of the correlation)
+        # how many textured brushes uedcli counts (the OTHER side of the correlation)
         lv = build_level_model(actors)
         textured = [n for n in lv.order if lv.actors[n].brush is not None
                     and any(p.texture is not None for p in lv.actors[n].brush.polys)]
-        log(f"  uedctl textured brushes in order: {len(textured)} ({textured})")
+        log(f"  uedcli textured brushes in order: {len(textured)} ({textured})")
         try:
             qualify_level_textures(lv, blocks)
             log("  qualify_level_textures: OK (no raise)")
@@ -125,7 +125,7 @@ def scenario(ed, tag, solidity):
 
 
 def main():
-    reuse = os.environ.get("UEDCTL_REUSE_EDITOR")
+    reuse = os.environ.get("UEDCLI_REUSE_EDITOR")
     ed_id = None
     if reuse:
         container = reuse; log(f"REUSING {container}")

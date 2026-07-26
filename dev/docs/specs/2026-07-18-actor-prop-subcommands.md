@@ -25,9 +25,9 @@ real contract: a read of an unset property returns the **class default**, decode
 the game's own packages — never silence.
 
 ```
-uedctl actor prop set   <actor> KEY=VALUE [KEY=VALUE ...]
-uedctl actor prop unset <actor> KEY [KEY ...]
-uedctl actor prop get   <actor> [KEY ...] [--kv]
+uedcli actor prop set   <actor> KEY=VALUE [KEY=VALUE ...]
+uedcli actor prop unset <actor> KEY [KEY ...]
+uedcli actor prop get   <actor> [KEY ...] [--kv]
 ```
 
 Everything stays model-side (no editor), schema-validated, atomic per invocation, and reachable
@@ -159,7 +159,7 @@ Examples: `MultiSkins.2`, `Location.X`, `Rotation.Yaw`, `VectArray.0.X`.
   that member changed. Base value for the re-emit: the **stored** struct if present; if the
   prop is entirely unset, the **effective default** (§5) materialized explicitly — so
   `set X.Y=v` never silently zeroes sibling members that the default had non-zero. (Store
-  explicit — decision round 4 Q3: uedctl never auto-drops zero/default members on write; a
+  explicit — decision round 4 Q3: uedcli never auto-drops zero/default members on write; a
   power user prunes with `unset`. **Consequence, see §10:** targeted struct edits and `--kv`
   round-trips therefore *store explicit default-valued members*, the exact shape the two open
   H3 post-verify items trip on — those items become more urgent once this lands.)
@@ -302,7 +302,7 @@ _TYPED_FIELDS = {"location": TypedField(get=…, set=…, set_member=…, unset=
 ## 7. Adjacent verbs (decision round 5/6)
 
 - **`actor get` is retired** (deleted, not aliased). `query.get_prop` goes with it; the p3
-  "silent rc-0" inbox item closes as superseded. Doc-update scope: the **uedctl docs**
+  "silent rc-0" inbox item closes as superseded. Doc-update scope: the **uedcli docs**
   (`docs/usage.md` etc.); the repo-level historical design docs (`DX/LUM/docs/superpowers/…`,
   2026-06-16) are dated archives and stay untouched.
 - **`actor find --prop` adopts the new grammar AND effective-value matching** (decision:

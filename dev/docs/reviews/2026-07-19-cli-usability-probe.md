@@ -1,7 +1,7 @@
-# uedctl CLI usability probe — 2026-07-19
+# uedcli CLI usability probe — 2026-07-19
 
 **Method.** Six independent agents, each playing a veteran Deus Ex / UnrealEd 2.x
-level designer on first contact with `uedctl`, drove the CLI **cold**: discovery via
+level designer on first contact with `uedcli`, drove the CLI **cold**: discovery via
 `-h`/`--help` and live command runs only — **no source read, no dev-docs read** — so
 the findings measure what a user can figure out from the CLI surface *alone*. Each
 agent owned one slice of UnrealEd level authoring and worked in its own throwaway
@@ -27,7 +27,7 @@ working tool, most severe first.
 Hit independently by **4 of 6 agents** (geometry, actors, movers, world) — the single
 most severe finding.
 
-`level select` writes ONE machine-local pointer in `.uedctl/`. Any concurrent `uedctl`
+`level select` writes ONE machine-local pointer in `.uedcli/`. Any concurrent `uedcli`
 process flips it, and every verb that defaults to "the selected level" (`actor add`,
 `find`, `status`, …) silently follows. Agent 4 created `probe-actors`, placed a
 PlayerStart + 5 lights + 3 decorations, and **all of it landed in another agent's
@@ -41,7 +41,7 @@ reported success for).
   *real design property*, not a test artifact — the repo's own `CLAUDE.md` states
   "expect multiple separate agentic sessions to work on the same repos concurrently."
   Silent cross-level writes are a live hazard.
-- Fix directions surfaced by agents: a `UEDCTL_LEVEL` env var (mirroring `--project`),
+- Fix directions surfaced by agents: a `UEDCLI_LEVEL` env var (mirroring `--project`),
   a per-shell/session binding or `flock` instead of a global pointer, or at minimum a
   **warning when a mutation runs with no explicit `--target`**.
 
@@ -74,7 +74,7 @@ So the two "is my level OK?" verbs (`status`, `doctor`) and the wiring inspector
 - **`level delete` / `rename` / `clone`** — none exist. Throwaway levels can't be
   cleaned up or renamed in-tool; "copy this level as a start" is impossible.
 - No `undo` / `save` / `commit`. Top-level help says *"Git is the history,"* but `level
-  status` prints *"project is not a git repo (it lives inside the uedctl tool tree...)"*
+  status` prints *"project is not a git repo (it lives inside the uedcli tool tree...)"*
   — the advertised recovery path is a dead end in this layout. (Worth reconciling the
   help text regardless.)
 - `status` is counts-only, no `--json` (only `doctor` has it).

@@ -19,7 +19,7 @@ comma-separated membership string with exact-per-member matching and no hierarch
 (`query._group_matches`).
 
 This spec introduces a **folder**: a per-actor, hierarchical, dotted organizational path that is
-**entirely uedctl-side** — it lives in the trunk, never in the built map, and is a *separate
+**entirely uedcli-side** — it lives in the trunk, never in the built map, and is a *separate
 dimension* from the T3D `Group` property.
 
 ### Naming: why `folder`, not `group`
@@ -220,7 +220,7 @@ actor add prefab.t3d --folder castle.props
   they stay pure T3D producers).
 - The **existing** `brush build --group` flag is unaffected (it writes a T3D `Group=` prop, a
   different thing). *(Whether to keep it is orthogonal; left as-is.)*
-- **`actor add` also PARSES a `// uedctl-folder: <path>` carrier** out of the incoming T3D (the
+- **`actor add` also PARSES a `// uedcli-folder: <path>` carrier** out of the incoming T3D (the
   `actor show` interchange form, below) into the sidecar, then strips it from the stored body.
   Precedence: an explicit `--folder` **overrides** any carrier in the stream; absent `--folder`, the
   carrier (if present) sets the folder; absent both, the actor is ungrouped. Generator output has no
@@ -241,16 +241,16 @@ actor add prefab.t3d --folder castle.props
   `--prop` are fixed dimensions, so `--group` is the multi-tag safety valve. **Do not retire it while
   folder is single-path.** *(Resolves review R1/S2 — §8 R1 is now decided KEEP.)*
 
-### `actor show` includes the folder as a `// uedctl-folder:` comment (R6 RESOLVED by the spike)
-The interchange encoding of a folder is a **bare `// uedctl-folder: <path>` T3D comment line** placed
+### `actor show` includes the folder as a `// uedcli-folder:` comment (R6 RESOLVED by the spike)
+The interchange encoding of a folder is a **bare `// uedcli-folder: <path>` T3D comment line** placed
 inside the actor block (omitted when the actor has no folder). This **reconciles the two goals
 Andrzej raised** — "`actor show | actor add -` should retain the folder" AND "`actor show` should
 expose UnrealEd-compatible T3D" — in **one default output**, because the spike proved UnrealEd's T3D
 importer **silently strips `//` line-comments** (`Core.dll ParseLine`, gated `Exact==0` + not-in-quotes;
 static-RE **and** live `MAP IMPORTADD` confirmed, `spikes/2026-07-18-t3d-comment-tolerance/`,
 `unrealed/t3d.md`):
-- `actor show A` → an importable T3D block carrying `// uedctl-folder: castle.tower.roof`.
-- `actor show A | actor add -` → uedctl's own parser reads the comment back into the sidecar
+- `actor show A` → an importable T3D block carrying `// uedcli-folder: castle.tower.roof`.
+- `actor show A | actor add -` → uedcli's own parser reads the comment back into the sidecar
   (**folder round-trips**).
 - The same text pasted/imported into UnrealEd → the `//` line is silently dropped, no warning, no
   crash (**UnrealEd-compatible**).
@@ -328,7 +328,7 @@ Offline (CI, no editor):
   2 before any write; **any folder surface with `--target stash|prefab` → exit 2** ("folders apply
   only to a level target"); `actor folder set --to <path> <names…>` grammar parses (incl. the
   stdin-`-` names form) and rejects a missing `--to`.
-- **`actor show` carrier round-trip:** default output carries `// uedctl-folder: <path>` per foldered
+- **`actor show` carrier round-trip:** default output carries `// uedcli-folder: <path>` per foldered
   block; **`actor show A | actor add -` reproduces A's folder** (parse the carrier → sidecar);
   `--t3d-only` omits the comment; an explicit `actor add --folder` overrides an incoming carrier;
   a non-carrier `//` comment in the input is ignored (not mistaken for a folder).
@@ -384,7 +384,7 @@ No bulk auto-migration verb in v1 (a `--from-group` sugar could follow if wanted
   --folder"). So apply's `--folder` has **no default** — absent it, placed actors have `folder=None`;
   `--group` keeps its own id/basename default (T3D prop, independent). §6 updated.
 - **R6 — `actor show` folder output → RESOLVED by the spike** (`spikes/2026-07-18-t3d-comment-tolerance/`):
-  the `// uedctl-folder:` comment carrier makes the DEFAULT output both folder-round-tripping AND
+  the `// uedcli-folder:` comment carrier makes the DEFAULT output both folder-round-tripping AND
   UnrealEd-importable, so the round-trip tension is gone — no `--t3d-only` needed for the pipe (§4).
 
 **Deferred (filed to inbox):** `folder rename <old> <new>` (whole-subtree re-parent/rename);
@@ -397,7 +397,7 @@ exact-single-node match; a `--from-group` bulk-migration sugar.
 `TrunkLevelSource.load`/`save` in `dispatch.py` (`_loaded_bodies` baseline gains loaded-folders;
 folder in the changed-set diff, incl. →None) · `query.py` (`_folder_matches` globstar +
 `list_actors` `folders`/`no_folder` params) · a new **`folderlib.py`** for the pure path
-grammar/validation + the normative match algorithm (§3) · the **`// uedctl-folder:` carrier**: an
+grammar/validation + the normative match algorithm (§3) · the **`// uedcli-folder:` carrier**: an
 ingest-side parse (a bare-`//`-line reader on the `actor add`/`parse_t3d` path → sidecar, carrier
 stripped from the stored body) + a show-side emit (generate the comment from the sidecar) · `cli.py`
 (`actor folder set|unset|get` subparser with `--to`; `actor add --folder`; `actor find
@@ -406,4 +406,4 @@ stripped from the stored body) + a show-side emit (generate the comment from the
 `dispatch.py` (handlers; the **trunk-only target guard** on all folder surfaces; `_apply_set`
 folder) · `stashlib.py` (new `with_folder`, `with_group` unchanged) · `normalize.py` (regression:
 folder stays out of the canonical hash). Docs on build: `architecture.md` (the folder dimension +
-sidecar), `unrealed/t3d.md` (folder is uedctl-side, not a T3D construct).
+sidecar), `unrealed/t3d.md` (folder is uedcli-side, not a T3D construct).

@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Writes a realistic uedctl T3D-tree fixture into $1 (a directory).
-# Layout mirrors uedctl `read_state_dir`: actors/<safe_name>.t3d (one canonical
+# Writes a realistic uedcli T3D-tree fixture into $1 (a directory).
+# Layout mirrors uedcli `read_state_dir`: actors/<safe_name>.t3d (one canonical
 # actor block per file), a newline-delimited `order` (CSG precedence), plus small
 # `packages` / `name` metadata files. Properties are emitted one-per-line, sorted,
-# to model uedctl's canonical/deterministic emission.
+# to model uedcli's canonical/deterministic emission.
 set -euo pipefail
 DIR="${1:?usage: build_tree.sh <dir>}"
 mkdir -p "$DIR/actors"

@@ -1,6 +1,6 @@
 # Spike: builder world-geometry parity via DEINTERSECTION (2026-06-19)
 
-**Goal:** establish whether each of uedctl's Python brush builders (`cube`, `cylinder`,
+**Goal:** establish whether each of uedcli's Python brush builders (`cube`, `cylinder`,
 `cone`, `staircase`, `spiral_staircase`, `sheet`) can be parity-checked against the live
 editor, and how — so the reimplemented builders get continuous regression coverage, not
 just offline structural checks. Builds on the DEINTERSECTION world-geometry readout proven
@@ -14,7 +14,7 @@ UnrealEd's native `BrushBuilders` are GUI-dialog-only (`WDlgBrushBuilder::OnBuil
 builder `Build()`); `SET <BuilderClass>` only writes class defaults, so the editor can NOT
 be driven to "build a cylinder" from the console. There is therefore **no way to compare
 our builder algorithm against UED's**. What is capturable, and what the suite guards, is
-that the geometry uedctl EMITS for each builder round-trips through the real importer + CSG
+that the geometry uedcli EMITS for each builder round-trips through the real importer + CSG
 with the same WORLD-CORNER SET — i.e. world-transform/coordinate faithfulness per shape.
 
 Scope limits worth stating plainly (the comparison is an unlabelled vertex SET):
@@ -64,8 +64,8 @@ EXPORT. The exported `Vertex` lines are the cavity's world vertices, compared by
 
 ## Outcome
 
-Built as a golden-fixture suite: `uedctl/tests/builder_parity_cases.py` (registry + capture
+Built as a golden-fixture suite: `uedcli/tests/builder_parity_cases.py` (registry + capture
 + `regenerate`), `test_builder_parity.py` (offline regression, default suite),
 `test_builder_parity_capture.py` (`@pytest.mark.integration` live parity + re-bless),
-fixture `uedctl/tests/fixtures/builder_parity.json`. Re-bless with
-`python -m uedctl.tests.builder_parity_cases`.
+fixture `uedcli/tests/fixtures/builder_parity.json`. Re-bless with
+`python -m uedcli.tests.builder_parity_cases`.

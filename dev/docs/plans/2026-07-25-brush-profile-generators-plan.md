@@ -97,14 +97,14 @@ Move the `brush build extrude`/`revolve` line from `dev/docs/board/to-plan.md` t
 
 ---
 
-## 3. B1 — `uedctl/profile.py` (new)
+## 3. B1 — `uedcli/profile.py` (new)
 
 Pure 2D; no `Brush`, no `Polygon`, no world coordinates, no T3D.
 
 - **`WELD = 1e-3` lives HERE**, and `builders.py` imports it from `profile` (keeping its own name
   bound for `_dedup_ring`). It must **not** go the other way: `builders.WELD` is defined at
   `builders.py:40`, *below* its import block, so `profile` importing it while `builders` imports
-  `profile` is a genuine cycle that fails at load — breaking every `uedctl` invocation, not just the
+  `profile` is a genuine cycle that fails at load — breaking every `uedcli` invocation, not just the
   new verbs. Where `builders` needs `profile` at call time, follow the pattern already used at
   `builders.py:256` (`from .surface import encode_flags`) and `:458` — a **function-local import**.
 - `class ProfileError(geometry.GeometryError)` — subclassing is what buys the clean exit: `dispatch()`
@@ -127,7 +127,7 @@ Pure 2D; no `Brush`, no `Polygon`, no world coordinates, no T3D.
   vertices returns `[points]`; anything else raises `ProfileError("concave/oversized profiles land in
   B3")`. B3 replaces the body.
 
-**Gate B1** (new `uedctl/tests/test_profile.py`, offline):
+**Gate B1** (new `uedcli/tests/test_profile.py`, offline):
 - `parse_point` rejects `128`, `1,2,3`, `a,b`, each with the token in the message.
 - `clean_profile` welds a repeated final point, drops a collinear midpoint, rejects a 2-distinct ring.
 - `check_simple` rejects a bowtie (crossing), a **pinch** (non-adjacent edges sharing an endpoint), a
@@ -141,7 +141,7 @@ Pure 2D; no `Brush`, no `Polygon`, no world coordinates, no T3D.
 
 ## 4. B2 — extrude
 
-**`uedctl/builders.py`** — add after `sheet`, before the staircases:
+**`uedcli/builders.py`** — add after `sheet`, before the staircases:
 
 - `_uv_axes(axis) -> (u_world, v_world, w_world)` — spec §2.2's right-handed cyclic table; the single
   place the mapping is written.
@@ -150,13 +150,13 @@ Pure 2D; no `Brush`, no `Polygon`, no world coordinates, no T3D.
   through `_uv_axes`. Caps loop over `profile.convex_pieces(...)` from the start — one `Polygon` per
   piece — so B3 needs no structural change. `ItemName`s: `Cap`, `Side<k>`.
 
-**`uedctl/cli.py`** — `bextrude = bshape.add_parser("extrude", …)` inside the `bshape` block
+**`uedcli/cli.py`** — `bextrude = bshape.add_parser("extrude", …)` inside the `bshape` block
 (`cli.py:846-910`): `--point` (`action="append"`, `metavar="U,V"`, **no `type=`**), `--depth`
 (`type=float`, required), then `_common_build_opts(bextrude)`. Every flag needs a real `help=` —
 `test_help_completeness.py` walks the live argparse tree and rejects a `help=` that is missing,
 echoes the flag name, or is under 10 characters.
 
-**`uedctl/dispatch.py`** — `_build_brushes` (`:42`) gains an `extrude` branch. **The profile pipeline
+**`uedcli/dispatch.py`** — `_build_brushes` (`:42`) gains an `extrude` branch. **The profile pipeline
 runs here, in this order**, each failure raising `_SelectionExit` naming the offending value:
 `parse_point` per token → arity ≥3 → `clean_profile` → `check_simple` → `normalize_winding` → arity
 re-check → `--depth > 0`. Update `_build_brushes`'s own docstring (`:43-47`), which enumerates each
@@ -251,7 +251,7 @@ off-grid-solid and `--native` concave caveats.
 - **Face count / naming** — `n × s` sides + caps; `Side<k>` appears exactly `s` times for each `k`.
 - **Rejections, exit 2** — `--angle 0`, `65537`, `--segments 0`, `--angle 32768 --segments 1`,
   `--angle 65536 --segments 2`, profiles straddling / touching / wholly negative-`u`.
-- **Goldens** — one extrude + one revolve snippet in `uedctl/tests/fixtures/`, compared as exact
+- **Goldens** — one extrude + one revolve snippet in `uedcli/tests/fixtures/`, compared as exact
   text, landing **now** that `ItemName`s are final.
 
 ---
@@ -328,7 +328,7 @@ listed four:
 
 | File | Line(s) | Change |
 |---------------------------------------------|-----------|---|
-| `uedctl/builders.py`                        | `:1-2`    | module docstring's six-shape list |
+| `uedcli/builders.py`                        | `:1-2`    | module docstring's six-shape list |
 | `dev/docs/README.md`                        | `:90`     | six-shape list (moved here from `docs/README.md` in the 2026-07-25 user/dev doc split) |
 | `dev/docs/architecture.md`                  | `:89`     | six-shape list + the new `profile.py` module |
 | `docs/leveldesign/general/README.md`        | `:18`     | six-shape list |
@@ -337,7 +337,7 @@ listed four:
 | `dev/docs/specs/2026-07-24-corpus-brush-idioms.md` | `:99` | its generator vocabulary (an ephemeral spec, but it is the *input* to the reverse-mapping work — update it) |
 | `dev/docs/specs/2026-07-19-leveldesign-docs-skills.md` | `:59` | same |
 | `dev/docs/architecture.md`                  | `:1535-1544` | the staircase native-CSG caveat. **Nuance:** native `materialize` defaults to `core="bspcsg"` (`native/materialize.py:383,:785`), which never calls `point_in_convex` — but the coarse core still does. Reword to "the `--native` preview" (there is no `--core` CLI flag), not a blanket deletion |
-| `uedctl/builders.py`                        | `:305-309`| the same stale claim in the `staircase` docstring |
+| `uedcli/builders.py`                        | `:305-309`| the same stale claim in the `staircase` docstring |
 | `docs/leveldesign/general/recipes/README.md`| `:21`     | the inline shape-recipe list |
 | `docs/leveldesign/general/recipes/shapes/README.md` | index + `:25`, `:34` | add the four new recipes; **and correct two claims the change falsifies** — "`cylinder --sides N` (the only way to get anything round)" and "'Round' is either a low-side cylinder, or a ring of straight blocks copy-rotated": `revolve` is now a third and more natural way |
 | `docs/leveldesign/general/recipes/shapes/`  | new       | L-ledge, arch voussoir, curved corridor (**with `--solidity semisolid`**), moulded cornice — the last must **cross-reference or supersede** the existing `ring-cornice.md`, which solves the same problem by copy-rotation, not sit silently beside it |

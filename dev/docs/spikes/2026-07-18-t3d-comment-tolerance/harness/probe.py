@@ -23,15 +23,15 @@ import tempfile
 import uuid
 from pathlib import Path
 
-# make `import uedctl.*` work when run straight from the repo
+# make `import uedcli.*` work when run straight from the repo
 HERE = Path(__file__).resolve()
-# harness/ → spike/ → spikes/ → dev/ → docs/ → uedctl(tool root, holds the `uedctl` package)
-TOOL_ROOT = HERE.parents[5]            # …/Tools/uedctl
+# harness/ → spike/ → spikes/ → dev/ → docs/ → uedcli(tool root, holds the `uedcli` package)
+TOOL_ROOT = HERE.parents[5]            # …/Tools/uedcli
 sys.path.insert(0, str(TOOL_ROOT))
 
-from uedctl import editor as ued_editor   # noqa: E402
-from uedctl import xfer                    # noqa: E402
-from uedctl.driver import Driver, DriverError, to_z_path  # noqa: E402
+from uedcli import editor as ued_editor   # noqa: E402
+from uedcli import xfer                    # noqa: E402
+from uedcli.driver import Driver, DriverError, to_z_path  # noqa: E402
 
 EDITOR_LOG = "/opt/UED22/Editor.log"
 LONG_PATH = "castle.tower.roof.window.frame.hinge.upperleft.rivet.detail0123456789"  # >64 chars
@@ -51,33 +51,33 @@ CASES: dict[str, str] = {
     "line_comment_inside": _block(
         "Begin Actor Class=Light Name=ProbeLight0\n"
         "    Location=(X=0.000000,Y=0.000000,Z=64.000000)\n"
-        "    // uedctl-folder: castle.tower.roof\n"
+        "    // uedcli-folder: castle.tower.roof\n"
         "    LightBrightness=32\n"
         "End Actor"),
     # a /* block comment */ inside the actor block
     "block_comment_inside": _block(
         "Begin Actor Class=Light Name=ProbeLight0\n"
         "    Location=(X=0.000000,Y=0.000000,Z=64.000000)\n"
-        "    /* uedctl-folder: castle.tower.roof */\n"
+        "    /* uedcli-folder: castle.tower.roof */\n"
         "    LightBrightness=32\n"
         "End Actor"),
     # a ; semicolon-comment inside (ini-style; some Unreal text readers honor it)
     "semicolon_comment_inside": _block(
         "Begin Actor Class=Light Name=ProbeLight0\n"
         "    Location=(X=0.000000,Y=0.000000,Z=64.000000)\n"
-        "    ; uedctl-folder: castle.tower.roof\n"
+        "    ; uedcli-folder: castle.tower.roof\n"
         "    LightBrightness=32\n"
         "End Actor"),
     # an UNKNOWN string property (no such UProperty on Light) — long value, no FName length limit
     "unknown_prop": _block(
         "Begin Actor Class=Light Name=ProbeLight0\n"
         "    Location=(X=0.000000,Y=0.000000,Z=64.000000)\n"
-        f'    UedctlFolder="{LONG_PATH}"\n'
+        f'    UedcliFolder="{LONG_PATH}"\n'
         "    LightBrightness=32\n"
         "End Actor"),
     # a stray // line BEFORE the actor block (inside Begin Map, between blocks)
     "stray_line_before_actor": _block(
-        "    // uedctl-folder: castle.tower.roof\n"
+        "    // uedcli-folder: castle.tower.roof\n"
         "Begin Actor Class=Light Name=ProbeLight0\n"
         "    Location=(X=0.000000,Y=0.000000,Z=64.000000)\n"
         "End Actor"),
@@ -118,7 +118,7 @@ def run_case(drv: Driver, name: str, t3d: str, out_dir: Path) -> dict:
         return res
     res["actor_present"] = "ProbeLight0" in text
     res["carrier_present"] = any(
-        m in text for m in ("uedctl-folder", "UedctlFolder", LONG_PATH))
+        m in text for m in ("uedcli-folder", "UedcliFolder", LONG_PATH))
     res["export_len"] = len(text)
     # log tail
     try:

@@ -24,5 +24,5 @@ therefore stay correct for concave faces (it detects convexity per face via `_po
 back to a bounded grid search), NOT assume convexity.
 
 `count_concave_faces.py` is the harness. Run:
-`cd Tools/uedctl && env PYTHONPATH=. .venv/bin/python dev/docs/spikes/concave-faces/count_concave_faces.py \
+`cd Tools/uedcli && env PYTHONPATH=. .venv/bin/python dev/docs/spikes/concave-faces/count_concave_faces.py \
 Temp/hexagon.t3d Temp/downtown.deduped.t3d` (re-measure if the map set changes).

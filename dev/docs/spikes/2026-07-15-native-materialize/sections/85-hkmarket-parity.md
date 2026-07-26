@@ -145,10 +145,10 @@ This run is geometry measurement only.
 
 ## 7. Reproduce
 ```
-cd Tools/uedctl
+cd Tools/uedcli
 # trunk (needs Sounds+Music dirs, not just Textures — see §1):
 .venv/bin/python dev/docs/spikes/2026-07-15-native-materialize/harness/ingest_dx_trunk.py \
-    DX/Maps/06_HongKong_WanChai_Market.dx _scratch/hkmarket/uedctl/maps/hkmarket \
+    DX/Maps/06_HongKong_WanChai_Market.dx _scratch/hkmarket/uedcli/maps/hkmarket \
     --search DX/Textures --search DX/LUM/Textures --search DX/Sounds --search DX/Music
 # native build (UNLIT) + raw diff:
 .venv/bin/python dev/docs/spikes/2026-07-15-native-materialize/harness/build_native_hkmarket.py

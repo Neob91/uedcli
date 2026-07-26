@@ -140,7 +140,7 @@ leaked (2434→2434 in the box column). The flipped-parent bound flips ANY leake
 
 - **Offline (`line_check.py`, extent 20,20,44):** native box-drops now match the editor **exactly**
   (identical time, location, normal) at every probed column — (0,-250) center z 52→**64** (= editor),
-  (300,-100), (0,0), (100,100). Regression test: `uedctl/tests/test_native_collision.py` (skips
+  (300,-100), (0,0), (100,100). Regression test: `uedcli/tests/test_native_collision.py` (skips
   without the castle assets) + Rust `build::tests::leaf_bounding_flips_a_leaked_solid_cell_to_solid`
   / `leaf_bounding_is_noop_on_a_convex_room`.
 - **Live** (session `e3752809`, `TravelToLevel DXONLY` → `NativeCastle`): pawn

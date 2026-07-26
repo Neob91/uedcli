@@ -21,7 +21,7 @@ import umodel_parser as P
 import umodel_serialize as S
 
 _MAPS_DIR = Path(
-    "/home/human/src/dx_lum/Tools/uedctl/uned/DeusExAssets/Maps"
+    "/home/human/src/dx_lum/Tools/uedcli/uned/DeusExAssets/Maps"
 )
 
 

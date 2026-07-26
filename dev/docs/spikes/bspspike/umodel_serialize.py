@@ -389,7 +389,7 @@ def _test_primitives() -> None:
 # ---------------------------------------------------------------------------
 
 _MAPS_DIR = Path(
-    "/home/human/src/dx_lum/Tools/uedctl/uned/DeusExAssets/Maps"
+    "/home/human/src/dx_lum/Tools/uedcli/uned/DeusExAssets/Maps"
 )
 
 # A spread of small→large maps; every Model export in each is validated.

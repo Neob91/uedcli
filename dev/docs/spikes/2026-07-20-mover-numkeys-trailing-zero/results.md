@@ -5,7 +5,7 @@
 `harness/numkeys_probe.sh`. For each fixture: `MAP NEW` → `MAP GRID X=1 Y=1 Z=1` →
 `MAP IMPORTADD` the mover T3D → `MAP EXPORT` (pre-rebuild) → `MAP REBUILD` → `MAP EXPORT`
 (post-rebuild), batched into one `EXEC <file>` script, then the whole-level T3D read back and
-the mover's `NumKeys`/`KeyPos` grepped. Fixtures (`harness/fixtures/`) are a uedctl-generated
+the mover's `NumKeys`/`KeyPos` grepped. Fixtures (`harness/fixtures/`) are a uedcli-generated
 128³ `Engine.Mover` cube with hand-set keyframe props, wrapped in `Begin Map…End Map` (bare
 `Begin Actor` blocks do NOT import via `MAP IMPORTADD`).
 **Confidence:** ✅ live-verified (every value below is a `MAP EXPORT` readback; editor stayed
@@ -16,7 +16,7 @@ alive through all three fixtures).
 While speccing `mover key` (drop `add`; `move`/`rotate` create-or-edit a key by index, growing
 `NumKeys`), Andrzej asked: **"if you set, say, key 5 to a location and then back to `0,0,0`, does
 UnrealEd keep `NumKeys=6` or decrement it?"** — because if the editor auto-shrinks past trailing
-all-zero keys, uedctl should mirror that; if it keeps them, uedctl must retain keys and reducing
+all-zero keys, uedcli should mirror that; if it keeps them, uedcli must retain keys and reducing
 `NumKeys` becomes an explicit verb.
 
 ## The finding
@@ -40,16 +40,16 @@ Key observations:
 
 ## Scope / caveat
 
-This tests the **materialize path uedctl actually uses** (`MAP IMPORTADD` + `MAP EXPORT`, and
+This tests the **materialize path uedcli actually uses** (`MAP IMPORTADD` + `MAP EXPORT`, and
 `MAP REBUILD`). It does **not** test the interactive GUI keyframe workflow (set `KeyNum`, drag the
-mover in a viewport). That distinction is moot for uedctl: the 2026-06-25 spike established that
+mover in a viewport). That distinction is moot for uedcli: the 2026-06-25 spike established that
 the GUI keyframe path (`ACTOR KEYFRAME`/`BRUSH ADDMOVER`) is a derived-view recompute and a dead
-end for authoring — uedctl authors keyframes entirely in T3D. So the materialize-path result is
+end for authoring — uedcli authors keyframes entirely in T3D. So the materialize-path result is
 the binding one.
 
 ## Design consequence (folds into `specs/2026-07-20-mover-key-base-relative-frame.md`)
 
-uedctl **mirrors the editor: no auto-shrink.** `mover key move`/`rotate` set a key's offset and
+uedcli **mirrors the editor: no auto-shrink.** `mover key move`/`rotate` set a key's offset and
 only ever *grow* `NumKeys` (to `index+1`); zeroing a key leaves `NumKeys` unchanged. Reducing the
 count is an explicit operation — `mover key remove <i>` (delete + compact) already does this; a
 `clear` verb is an optional convenience, not required by any engine behavior. This matches the

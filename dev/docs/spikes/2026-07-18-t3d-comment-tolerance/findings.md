@@ -35,17 +35,17 @@ so `/* */` and `;` are not comment tokens. Unknown property → `FindProperty` N
 Harness: [`harness/probe.py`](harness/probe.py). Six one-actor `Light` T3D variants were imported
 into ephemeral UED22 editors and re-exported. Every variant imported with the actor intact and the
 editor alive; the carrier was never re-exported (UnrealEd doesn't store comments); only the unknown
-property emitted a non-fatal `Warning: Engine.Light: Unknown property in defaults: UedctlFolder="…"`
+property emitted a non-fatal `Warning: Engine.Light: Unknown property in defaults: UedcliFolder="…"`
 (the >64-char value caused no problem — a StrProperty *value* has no FName length limit). This
 matches Track A exactly: the `//`/`/* */`/`;` lines are silently absorbed; only a name-with-`=`
 warns.
 
 ## Decision — the folder interchange carrier
-Use a **bare `// uedctl-folder: <path>` line** as the on-the-wire form of an actor's folder:
+Use a **bare `// uedcli-folder: <path>` line** as the on-the-wire form of an actor's folder:
 - `actor show` emits it inside each actor block → the output **round-trips the folder** through
-  uedctl's own parser (`actor add -`) AND stays **UnrealEd-importable** (the editor strips the `//`
+  uedcli's own parser (`actor add -`) AND stays **UnrealEd-importable** (the editor strips the `//`
   silently, no warning, no crash).
-- Chosen over the unknown-property carrier (`UedctlFolder="…"`), which works but spams a per-actor
+- Chosen over the unknown-property carrier (`UedcliFolder="…"`), which works but spams a per-actor
   `Unknown property in defaults` warning; and over `/* */`/`;`, which only survive incidentally.
 - Constraints: the carrier must be a **bare** `//` line (never inside a quoted value — there `//` is
   preserved, not stripped); avoid `|` (a `ParseLine` line-terminator). The folder itself stays stored
@@ -57,7 +57,7 @@ default output is both importable and folder-carrying), and the durable engine f
 `unrealed/t3d.md` "Comments & unknown properties on import".
 
 ## Pinned regression
-`uedctl/tests/test_engine_facts.py::test_t3d_import_strips_double_slash_comments` asserts the unique
+`uedcli/tests/test_engine_facts.py::test_t3d_import_strips_double_slash_comments` asserts the unique
 16-byte `//`-detect-and-latch pattern (`83fa2f 750f 66395102 b8010000000f44`) at `ParseLine` RVA
 0x5730e in the committed `core.dll` — offline, no editor/capstone. A UED22 rebuild that changes the
 comment-strip trips it.

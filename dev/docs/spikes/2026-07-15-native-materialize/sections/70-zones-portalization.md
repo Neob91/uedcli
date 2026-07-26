@@ -53,7 +53,7 @@ native CSG originally dropped it**, which silently defeated the whole pipeline: 
 Pass C's flood merged the water region into the dry interior and the pawn inherited the water zone's
 `bWaterZone` → it **swam instead of walking**.
 
-Root cause + fix (`uedctl-native/src/csg.rs` `leaf_apply`): a portal sheet is `PF_NotSolid` and
+Root cause + fix (`uedcli-native/src/csg.rs` `leaf_apply`): a portal sheet is `PF_NotSolid` and
 floats in empty space, so the point-in-solid classifier sees **void on both sides** and returns
 `Filter::CospatialFacingOut` — the "shared wall between two empty voids → annihilate" rule, which is
 correct **only for solid faces**. The fix keeps a face when `filter == CospatialFacingOut &&
@@ -174,7 +174,7 @@ original node is killed and only the per-zone fragment nodes survive (this is wh
 `NumSharedSides` at `+0xfc`, **`NumZones` at `+0x100`**, **`Zones[64]` at `+0x104`, stride
 `0x18`**: `ZoneActor` (+0), pad (+4), `Connectivity` u64 (+8), `Visibility` u64 (+0x10). Serial
 order = `i32 NumSharedSides, i32 NumZones, NumZones×{ci(ZoneActor), u64 Connectivity, u64
-Visibility}` — **exactly what `uedctl.native.umodel.write_model_body` already emits; no serializer
+Visibility}` — **exactly what `uedcli.native.umodel.write_model_body` already emits; no serializer
 change is needed.** `Visibility` is never computed → emit `0xffffffffffffffff`.
 
 ## 8. Native-port contract (what `zones.rs` must produce, replacing the single-zone finalize)
@@ -373,7 +373,7 @@ editor's `FPoly::Fix`.
 **Localization (native-side, `preopt_runs2.py`).** Decompose both PRE-`bspOptGeom` vert pools into
 live-ring slots (per-node `[iVertPool, +NumVertices)`) and ORPHAN runs (the gaps). The editor's PRE
 layout comes from `editor-preopt-nodes.log` (`editor_preopt_nodes.py`, the gdb `bspOptGeom`-entry
-Nodes dump); native's from a `UEDCTL_PASSD_DUMP` dump added to `zones.rs`. Both sides have **28
+Nodes dump); native's from a `UEDCLI_PASSD_DUMP` dump added to `zones.rs`. Both sides have **28
 orphan runs**; **26 are byte-length-identical**. The whole +9 is two runs: native run @5596 is **843**
 long vs editor **840** (+3), and native @7591 is **632** vs editor **626** (+6).
 
@@ -515,7 +515,7 @@ polygon spans several; the real-poly re-filter is required.)
 {1:359,2:11,3:14}, node `iZone` pairs unchanged, whole-body positional 43.04% (= the §12 baseline).
 The castle's portal surfaces seal their whole cross-section (real polygon == cell face), so both
 rules agree there — which is exactly why the castle masked the bug. Committed regression:
-`uedctl/tests/test_zone_flood.py` (BlockPortal flood == editor NumZones on each shipped golden
+`uedcli/tests/test_zone_flood.py` (BlockPortal flood == editor NumZones on each shipped golden
 present) + `cargo test` 40 passed + offline suite 1789 passed.
 
 ### 13.3 Cause 2 (OUT-OF-LANE — `bspcsg.rs`/`passes.rs`): native's CSG tree is geometrically SHATTERED

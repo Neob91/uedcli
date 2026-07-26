@@ -13,7 +13,7 @@ DLLS = {
     "engine": "uned/UED22/Engine.dll",
     "core":   "uned/UED22/core.dll",
 }
-ROOT = "/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedctl/"
+ROOT = "/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedcli/"
 
 def load(which):
     path = DLLS.get(which, which)

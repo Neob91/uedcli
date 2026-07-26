@@ -1,6 +1,6 @@
 # Human scale — the real DX numbers  [DX]
 
-Build to the player's actual size, not by eye. These figures were **decoded by uedctl straight from the
+Build to the player's actual size, not by eye. These figures were **decoded by uedcli straight from the
 shipped `DeusEx.u`** — they are the game's real defaults, not tutorial lore. Getting scale right is what
 separates a playable level from one where the player can't fit through a door or climb a step.
 
@@ -56,7 +56,7 @@ Every one of these numbers came from the same offline route — no editor needed
 default (a pawn's health, a decoration's collision extent, a light's radius):
 
 ```
-bin/uedctl actor build DeusEx.<Class> | actor add - | actor prop get - <Prop>
+bin/uedcli actor build DeusEx.<Class> | actor add - | actor prop get - <Prop>
 ```
 
 An unset property resolves to its class default, which is exactly the shipped value. Note that

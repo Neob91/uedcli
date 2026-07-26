@@ -36,7 +36,7 @@ Three different roll-ups of the same Model-body byte diff, do not conflate them:
 
 ## 3. The golden is deterministic ✅
 
-`build_ued_golden.py` on the castle trunk (`_scratch/castle/uedctl/maps/foobar` — 161 actors: 95
+`build_ued_golden.py` on the castle trunk (`_scratch/castle/uedcli/maps/foobar` — 161 actors: 95
 `Brush`, 62 `Light`, 1 `ZoneInfo`, 1 `SkyZoneInfo`, 1 `PlayerStart`, 1 `LevelInfo` — **all engine
 classes, so NO `DeusEx.u` stub needed and no world-only/mover contamination risk**) run **twice**:
 both `.dx` are **448 858 bytes**; their Model bodies are **100.00 % byte-identical** (all 17 sections
@@ -93,13 +93,13 @@ or incrementally-built — verify per level with a golden-vs-shipped diff before
 
 ## 6. Reproduce
 ```
-cd Tools/uedctl
+cd Tools/uedcli
 # native (lit) from the castle trunk
 .venv/bin/python dev/docs/spikes/2026-07-15-native-materialize/harness/build_native_castle.py \
   _scratch/gtruth/NativeCastle.dx
 # UnrealEd golden (FULL + LIT) from the SAME trunk — BOUNDED BACKGROUND JOB (editor wedges silently)
 .venv/bin/python -u dev/docs/spikes/2026-07-15-native-materialize/harness/build_ued_golden.py \
-  --trunk _scratch/castle/uedctl/maps/foobar \
+  --trunk _scratch/castle/uedcli/maps/foobar \
   --out _scratch/uedgolden/UEDGolden_castle_r1.dx --overwrite            # no --world-only, no --no-light
 # the three diffs + the compiled %
 D=dev/docs/spikes/2026-07-15-native-materialize/harness

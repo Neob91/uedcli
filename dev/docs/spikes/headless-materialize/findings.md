@@ -5,7 +5,7 @@
 `headless_build.py`, `probe_variants.py`. The empirical case for why this matters is the companion
 friction log [`../levelbuild-friction/README.md`](../levelbuild-friction/README.md).*
 
-> **Confidence markers** (repo convention): ✅ = uedctl-used / live-verified · 🔬 = live-probed in
+> **Confidence markers** (repo convention): ✅ = uedcli-used / live-verified · 🔬 = live-probed in
 > this spike · 📖 = extracted from the binary string/import tables (vocabulary real, semantics
 > inferred). Every engine claim below carries the observation it rests on.
 
@@ -183,9 +183,9 @@ unchanged. 📖 Consistent with `Core.dll`'s user32 imports
 (`OpenClipboard`/`GetClipboardData`/`SetClipboardData`/`GetActiveWindow`): with no window there is
 no active window to own the clipboard.
 
-**This is the single most consequential finding for uedctl**, because `writes._re_add` adds every
+**This is the single most consequential finding for uedcli**, because `writes._re_add` adds every
 brush with `EDIT PASTE` (the only add verb that yields a CSG-participating brush — see
-`unrealed/quirks.md` "How brushes enter the level"). uedctl's current materialize sequence
+`unrealed/quirks.md` "How brushes enter the level"). uedcli's current materialize sequence
 therefore **cannot** simply be replayed in a commandlet. §5 is the way around it.
 
 ### (b) `CAMERA OPEN` cannot create a window 🔬
@@ -236,7 +236,7 @@ commandlet's temporary one is not.
 
 **Consequence:** a commandlet build can produce **geometry + BSP + zones + paths**, but not a
 **lit** map. Lighting must come from somewhere else (the GUI editor, or the native Rust bake —
-`uedctl_native.bake_lighting` already exists and works).
+`uedcli_native.bake_lighting` already exists and works).
 
 ---
 
@@ -291,8 +291,8 @@ the 8 Lights, the PlayerStart and the LevelInfo kept their trunk names (they arr
 for brushes, so the H3 post-verify — which compares by canonical actor name — cannot run unchanged.
 
 Three ways out, none free: (i) map trunk name → `Brush<N>` positionally, since add order is ours
-and the numbering is deterministic; (ii) rewrite the names in the saved package offline (uedctl
-already owns a complete UE1 package reader/writer in `uedctl/native/pkg_write.py` +
+and the numbering is deterministic; (ii) rewrite the names in the saved package offline (uedcli
+already owns a complete UE1 package reader/writer in `uedcli/native/pkg_write.py` +
 `assemble.py`); (iii) accept editor names in the artifact and re-base the compare.
 
 ### (b) Movers cannot be built this way 🔬
@@ -367,7 +367,7 @@ spike ran against a hardlinked scratch copy rather than the tracked `uned/UED22/
 
 ## 9. What the native Rust path still lacks — and why it is nevertheless ahead
 
-`uedctl/native/` + `uedctl-native/` already contain a complete editor-free build: CSG
+`uedcli/native/` + `uedcli-native/` already contain a complete editor-free build: CSG
 (`bspcsg.rs`, the ported `bspBrushCSG`), BSP, zones/portalisation, `bspOptGeom`, a lightmap bake
 (`light.rs`), path building (`paths.rs`), and a full UE1 package writer. 🔬 It built the basement
 level end to end in **1.22 s** including lighting (140 lightmaps) and its mover, with **no Wine, no

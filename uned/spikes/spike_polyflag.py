@@ -7,10 +7,10 @@ import copy
 import subprocess
 import sys
 import select_matrix as M
-from uedctl.driver import Driver
-from uedctl.writes import add_actor
-from uedctl.model import parse_t3d
-from uedctl.normalize import normalize_level
+from uedcli.driver import Driver
+from uedcli.writes import add_actor
+from uedcli.model import parse_t3d
+from uedcli.normalize import normalize_level
 
 TRANSLUCENT = 4   # PF_Translucent
 

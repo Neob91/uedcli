@@ -15,7 +15,7 @@ candidate identifiers:
   (4) Bare-name (suffix) sequence matching: does each brush's authored bare-name sequence
       uniquely pick its block, leaving the aggregate unmatched?
 
-    UEDCTL_REUSE_EDITOR=uned-<uuid> PYTHONPATH=. python3 .../probe_aggregate.py
+    UEDCLI_REUSE_EDITOR=uned-<uuid> PYTHONPATH=. python3 .../probe_aggregate.py
 """
 from __future__ import annotations
 
@@ -26,11 +26,11 @@ import sys
 import time
 import uuid
 
-from uedctl import builders, writes
-from uedctl.driver import Driver, to_z_path
-from uedctl.qualify import dump_obj_dependencies
-from uedctl.uuid7 import uuid7
-from uedctl.editor import ensure_editor, stop_editor
+from uedcli import builders, writes
+from uedcli.driver import Driver, to_z_path
+from uedcli.qualify import dump_obj_dependencies
+from uedcli.uuid7 import uuid7
+from uedcli.editor import ensure_editor, stop_editor
 
 TEX_HOST = "/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Textures/LUM_CoreTex.utx"
 # a few genuinely different textures so bare-name matching is exercised
@@ -78,7 +78,7 @@ def bare(ref):
 
 
 def main():
-    reuse = os.environ.get("UEDCTL_REUSE_EDITOR")
+    reuse = os.environ.get("UEDCLI_REUSE_EDITOR")
     ed_id = None
     if reuse:
         container = reuse; log(f"REUSING {container}")

@@ -335,7 +335,7 @@ FZoneProperties` (ci ZoneActor + u64 Connectivity + u64 Visibility), then `Polys
 `Leaves`(+0xd8), `Lights`(+0xe4) (0x10170820-0x10170878), then raw i32 `RootOutside`(+0xf0) and
 `Linked`(+0xf4) (0x101708a5-0x101708c1).
 
-**Python serializer cross-check** (`uedctl/native/umodel.py`): matches exactly — header comment
+**Python serializer cross-check** (`uedcli/native/umodel.py`): matches exactly — header comment
 lines 14-15 (`i32 NumSharedSides, i32 NumZones` then `NumZones * FZoneProperties (ci ZoneActor +
 16 raw bytes)`) and `write_model_body` lines 228-230
 (`enc_i32(len(m.zones))` + `write_ci(z.actor_ref) + enc_u64(z.connectivity) +

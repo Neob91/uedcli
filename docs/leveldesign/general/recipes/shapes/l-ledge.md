@@ -10,7 +10,7 @@ One brush whose cross-section is a 96×96 L with a 32-uu-thick tail, swept 16 uu
 profile generators this needed either two boxes (a seam through the corner, two actors to keep
 aligned) or a box plus a subtractive box.
 
-### uedctl pipeline (what you run)
+### uedcli pipeline (what you run)
 
 ```
 brush build extrude --axis y --depth 16 --at 0,0,0 \

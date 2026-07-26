@@ -24,7 +24,7 @@ UNATCO 15.3%→1.1%, Catacombs 9.7%→0.9%, castle byte-identical, committed reg
 own tree has 4 / 3). This section pins Cause 2's mechanism, the exact pipeline stage, the real
 cross-level trigger, whether it is one defect or several, and the module + scoped fix.
 **Reproduce:** `harness/shatter_probe.py` (cross-tree PointRegion probe) + `harness/overlap_discriminator.py`
-(trigger metric) + the `UEDCTL_BSPCSG_NOREPART` env toggle. Nothing normalized; RAW geometry only.
+(trigger metric) + the `UEDCLI_BSPCSG_NOREPART` env toggle. Nothing normalized; RAW geometry only.
 
 ### Confidence legend
 ✅ live-verified against the real `.dx` this session (golden geometric evidence).
@@ -81,7 +81,7 @@ Whole rooms are solid, not just a sliver near each face.
 
 The pipeline is: Pass-1 incremental `bsp_brush_csg` per structural brush → **bspRepartition**
 (`bsp_build_fpolys` → `bsp_merge_coplanars` → `bsp_build`/`find_best_split`) → `bsp_refresh` → Pass-2
-detail brushes → `finalize` (`zones::assign_leaves_and_zones`). Building HK with `UEDCTL_BSPCSG_NOREPART=1`
+detail brushes → `finalize` (`zones::assign_leaves_and_zones`). Building HK with `UEDCLI_BSPCSG_NOREPART=1`
 (repartition skipped, raw incremental tree) and re-probing:
 
 | HK build | nodes | leaves | surfs | **[A] over-solidified** |
@@ -181,7 +181,7 @@ is the golden `[A]` measurement itself.
 
 ## 7. MODULE + scoped fix + effort ✅🔎
 
-**Module to change:** `uedctl-native/src/bspcsg.rs` ONLY — `is_csg_filter` (437), the FWTB
+**Module to change:** `uedcli-native/src/bspcsg.rs` ONLY — `is_csg_filter` (437), the FWTB
 dead-node deletion in `filter_one_world_node` (~881), and the LOOP-2 `Outside` propagation
 (`filter_ed_poly` 622-654). **NOT** `zones.rs` (proven faithful), **NOT** `passes.rs` merge, **NOT**
 `find_best_split`.
@@ -211,19 +211,19 @@ ADDED to the differential loop — the castle alone provably hides this entire c
 
 ## 8. Reproduce
 ```
-cd Tools/uedctl
+cd Tools/uedcli
 # cross-tree over-solidification probe (validated [A]=0 on the byte-identical castle):
 .venv/bin/python dev/docs/spikes/2026-07-15-native-materialize/harness/shatter_probe.py \
     DX/Maps/NativeHKMarket.dx DX/Maps/06_HongKong_WanChai_Market.dx        # [A]=74.5%
 .venv/bin/python dev/docs/spikes/2026-07-15-native-materialize/harness/shatter_probe.py \
     DX/Maps/NativeCastle.dx  DX/Maps/Test_Castle.dx                        # [A]=0 (control)
 # stage isolation (pre- vs post-repartition): [A] identical => Pass-1 root
-UEDCTL_BSPCSG_NOREPART=1 .venv/bin/python \
+UEDCLI_BSPCSG_NOREPART=1 .venv/bin/python \
     dev/docs/spikes/2026-07-15-native-materialize/harness/build_native_hkmarket.py \
     DX/Maps/NativeHKMarket_norepart.dx
 # trigger metric (additive-overlap density per level):
 .venv/bin/python dev/docs/spikes/2026-07-15-native-materialize/harness/overlap_discriminator.py \
-    _scratch/{unatco,catacombs,hkmarket}/uedctl/maps/*
+    _scratch/{unatco,catacombs,hkmarket}/uedcli/maps/*
 ```
 
 ---
@@ -282,7 +282,7 @@ of `[A]` (HK residual 8.9% is comparable to UNATCO's *baseline* and is an artifa
 hack's PostScale-pivot / winding-normal approximation, not large-coordinate precision).
 
 ### 9.5 SCOPED FIX
-- **Module: `uedctl/native/materialize.py` — `_build_brush_input`** (Python; **NOT** `bspcsg.rs`,
+- **Module: `uedcli/native/materialize.py` — `_build_brush_input`** (Python; **NOT** `bspcsg.rs`,
   **NOT** `zones.rs`). Apply the authored scale by composing `rotation.actor_linear`
   (`PostScale·R·MainScale`) into the world transform passed to the Rust core, transforming
   vertices/base by the full linear map and normals/tex-axes by its inverse-transpose (or recompute
@@ -315,7 +315,7 @@ that one brush; geometrically harmless).
 
 ## 10. FIX LANDED (2026-07-19): brush scale baked in `_build_brush_input`, gated on non-identity scale ✅
 
-The §9 fix is now the durable production path in `uedctl/native/materialize.py::_build_brush_input`
+The §9 fix is now the durable production path in `uedcli/native/materialize.py::_build_brush_input`
 (NOT the diagnostic harness). For a brush with non-identity `MainScale`/`PostScale`:
 - the full linear map `L = PostScale·R·MainScale` (`rotation.actor_linear`) is baked into the `rot`
   3×3 handed to the Rust core, so `FPoly::transform` yields `world = Location + L·(v − PrePivot)` —
@@ -359,7 +359,7 @@ leaf-blobs 131→21. Castle Model-body byte-identity to a fresh baseline-HEAD bu
 100.00 % (245234/245234 B; GUID in the header excluded). Without the mirror reversal HK sits at
 `[A]=9.8 %` / 4712 surfs — i.e. the 30 mirrored brushes were the bulk of the post-scale residual.
 
-### 10.2 Committed regression — `uedctl/tests/test_native_scale.py` ✅
+### 10.2 Committed regression — `uedcli/tests/test_native_scale.py` ✅
 
 Real-level probes run out of gitignored `_scratch/` trunks and can't be committed, and the castle
 differential provably HIDES this bug class (0 scaled brushes). So the regression is a self-contained

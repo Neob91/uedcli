@@ -382,7 +382,7 @@ model — the game computes it from the light actors; the bake neither stores no
 > now renders **clean** (the "NativeDark crashes" claim below predates the collision fix and is stale).
 > Read §12 for the corrected root-cause hunt; the text below is kept for history only.
 
-The native baker (§8) is **implemented and shipped** (`uedctl-native/src/light.rs` + `linecheck.rs`,
+The native baker (§8) is **implemented and shipped** (`uedcli-native/src/light.rs` + `linecheck.rs`,
 FFI `bake_lighting`, Python orchestration in `materialize.py`/`assemble.py`). It produces lightmap
 output that is **field-for-field identical to real DeusEx maps**: decoding `NativeLit.dx` (our single
 subtracted room + one steady Light) beside `00_Intro.dx` shows the same unit texture basis, the same
@@ -744,7 +744,7 @@ it verified the Model ARRAY order byte-exactly but not the per-`FBspSurf` FIELD 
 ## 15. Complex-map confirm (the CASTLE) + texture/asset wiring the real map needs (✅ 2026-07-16)
 
 After the §14 surf fix, `run_materialize_native` now **defaults `no_light=False` (lit)**; NativeLit renders
-clean. Verifying on the **real castle** (`_scratch/castle/uedctl/maps/foobar`, 161 actors → **418 lit
+clean. Verifying on the **real castle** (`_scratch/castle/uedcli/maps/foobar`, 161 actors → **418 lit
 surfs, 90 brushes**) surfaced — and fixed — two ASSET-WIRING gaps that a textured map hits but the
 textureless NativeLit never did:
 
@@ -800,7 +800,7 @@ lumels tall, pushed the sample tens of lumels out of the surf's own plane → it
 bit-planes / neighbouring lights** in `LightBits`, blending all the castle's coloured lights (orange
 hue≈28 + cyan hue≈156) into a continuous spectrum.
 
-**The fix (`uedctl-native/src/light.rs`, `bake_surf`).** Project vertices base-relative:
+**The fix (`uedcli-native/src/light.rs`, `bake_surf`).** Project vertices base-relative:
 `base_u = Base·TextureU; u = vertex·TextureU − base_u` (same for V). `extent = Umax − Umin` is unchanged
 (base-invariant) so **USize/UScale/VSize/VScale are untouched** — only `Pan = Umin − 0.125` moves into
 the small/local base-relative frame. The per-lumel raytrace still needs **world** positions, so
@@ -864,7 +864,7 @@ list a light on the "back" side; the strict plane test would drop it, making tha
 the editor. `Test_Castle` has zero such cases (the 0/3497 basis), so this is untested for other maps —
 tracked in `board/inbox.md`. Do not add two-sided handling speculatively without an oracle for it.
 
-**The fix (`uedctl-native/src/light.rs`).** In `bake_surf`, before a light does any per-lumel work,
+**The fix (`uedcli-native/src/light.rs`).** In `bake_surf`, before a light does any per-lumel work,
 skip it unless it is strictly in front of the surface plane:
 ```rust
 fn light_in_front(normal: &Vec3, base: &Vec3, light: &Vec3) -> bool {

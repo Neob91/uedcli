@@ -6,7 +6,7 @@
 > `single_box` (6=6) is truly exact → 1/5, not 2/5.** The port's `merge_coplanars`/`*_nodes` are
 > count-fitting placeholders and the code drifted from the narrative below. Treat §3's `10|10|✅` row
 > and §7's "holds on 2/5" as repudiated; the design spec
-> (`specs/2026-06-24-uedctl-offline-bsp-engine-design.md` §3b) carries the corrected 1/5. The
+> (`specs/2026-06-24-uedcli-offline-bsp-engine-design.md` §3b) carries the corrected 1/5. The
 > mechanism findings (call graph, `MAP REBUILD` params, located gaps) stand.
 
 **Date:** 2026-06-24
@@ -198,7 +198,7 @@ slice 1 predicted — not a blocker reached this session.
   truth — the build log is the oracle, confirming the 2026-06-24 09:07 decision that the editor
   is the test oracle, not a runtime dependency.
 - **Node-plane parity** is gated on a binary `UModel` parser (§5), deferred.
-- **Promotion:** the port **stays in `_scratch/bspspike/`** (not promoted to `uedctl/bsp/`).
+- **Promotion:** the port **stays in `_scratch/bspspike/`** (not promoted to `uedcli/bsp/`).
   Per the engine plan, promotion waits until count-parity holds across the discriminating set;
   it holds on 2/5, so the bar isn't met yet. The next work item is the two faithful ports in §4.
 

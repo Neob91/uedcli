@@ -16,7 +16,7 @@ decoded from `Editor.dll` (RVA `0x36160` -> recursive worker `0x32100`) and port
 Dead nodes are NOT removed from the array (indices stay stable); they just become unreachable.
 
 This script proves the rule: it applies `CleanupNodes` to the PRE-repartition native struct (built
-via tree_struct_diff.native_struct, i.e. `UEDCTL_BSPCSG_NOREPART=1`+`UEDCTL_BSPCSG_TREE_STRUCT=1`) and
+via tree_struct_diff.native_struct, i.e. `UEDCLI_BSPCSG_NOREPART=1`+`UEDCLI_BSPCSG_TREE_STRUCT=1`) and
 shows the resulting `MakeEdPolys` tree-walk (self,front,back,plane) emits the SAME node sequence as
 the editor's post-cleanup struct (`editor_struct.py N` -> `logs/editor-struct-N.log`).  The reachable
 emit structure matches node-for-node; only unreachable orphaned dead-node links differ.

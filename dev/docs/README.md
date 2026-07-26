@@ -1,11 +1,11 @@
-# uedctl docs — the whole-tree index (dev + user)
+# uedcli docs — the whole-tree index (dev + user)
 
-This is the **developer/agent index for the entire uedctl documentation ecosystem** — every doc,
+This is the **developer/agent index for the entire uedcli documentation ecosystem** — every doc,
 what it's for, and which is authoritative. The **user-facing cut** (how to drive the CLI and design
 levels) lives one tree over at [`../../docs/`](../../docs/README.md); by house rule that tree never
 references this one, so the cross-tree routing lives **here**.
 
-`uedctl` makes level design a **queryable, scriptable, auditable** text surface an LLM can drive
+`uedcli` makes level design a **queryable, scriptable, auditable** text surface an LLM can drive
 entirely as text — no GUI. The **git-tracked T3D trunk is the source of truth**; the `.dx`/`.unr`
 map file is a build artifact; UnrealEd-2.2-under-wine (in the `dx-lum-uned` container) is a
 **build-only** tool — `level materialize` drives it to compile the trunk into a map file. Preview
@@ -19,7 +19,7 @@ Every doc has ONE job. Don't mix them up:
 | Doc | Answers | Tense / status | Mutability |
 |---|---|---|---|
 | **[../../docs/usage.md](../../docs/usage.md)** | "How do I use the CLI?" | current commands | tracks the CLI |
-| **[../../docs/leveldesign/](../../docs/leveldesign/README.md)** | "How do I design a **good, buildable level** (with uedctl)?" | user-facing level-design craft | the curated user cut of the dev knowledge base |
+| **[../../docs/leveldesign/](../../docs/leveldesign/README.md)** | "How do I design a **good, buildable level** (with uedcli)?" | user-facing level-design craft | the curated user cut of the dev knowledge base |
 | **[architecture.md](architecture.md)** | "How is it built **now**?" | what IS (implementation) | updated to match whenever the code changes — never stale |
 | **[direction.md](direction.md)** | "What are we building **toward**?" | what we WANT (the compiled target) | reconciled whenever a decision lands; superseded points dropped |
 | **[decisions.md](decisions.md)** | "**Why** is it this way, and what did we reject?" | the ledger of choices (UTC-timestamped) | active decisions never reworded — supersede, don't edit; fully-superseded & spike-"gate" entries may be pruned (git keeps history) |
@@ -42,7 +42,7 @@ A gap between `direction.md` (want) and `architecture.md` (is) is **expected** �
 not yet done. A gap between a topic doc and the code, or between `direction.md` and the latest
 decision, is a **bug** in the docs.
 
-**Context-loading:** in a uedctl agent session only `direction.md` is auto-loaded into context;
+**Context-loading:** in a uedcli agent session only `direction.md` is auto-loaded into context;
 every other doc here (incl. `architecture.md`, `decisions.md`, all `unrealed/*.md`, and all
 `rules/*.md`) is **read-on-demand** — the agent must `Read` it before the task that needs it. The
 router that says which doc to read when lives in [`CLAUDE.md`](../../CLAUDE.md)
@@ -51,7 +51,7 @@ router that says which doc to read when lives in [`CLAUDE.md`](../../CLAUDE.md)
 ## Read these
 - **[../../docs/usage.md](../../docs/usage.md)** — the CLI: query/mutate verbs, the `preview` viewer,
   `brush poly list`, brush clip, stash/prefab, the texture catalog (`sync`/`list`/`search`/`tags`/`classify`).
-- **[../../docs/leveldesign/](../../docs/leveldesign/README.md)** — level-design craft for uedctl users: geometry/BSP,
+- **[../../docs/leveldesign/](../../docs/leveldesign/README.md)** — level-design craft for uedcli users: geometry/BSP,
   zoning, lighting, textures, movers, NPCs, human-scale numbers, and the Deus Ex immersive-sim design
   philosophy — mapped onto the verbs. The exhaustive engine reference behind it is the dev knowledge
   base at [`unrealed/leveldesign/kb/`](unrealed/leveldesign/kb/README.md).
@@ -62,10 +62,10 @@ router that says which doc to read when lives in [`CLAUDE.md`](../../CLAUDE.md)
   knowledge base, split into `commands.md` (exec verbs), `quirks.md` (gotchas), `rendering.md`
   (screenshots), and `extracting-from-dll.md` (how it's mined). **Read before touching the
   driver** — the "don't relearn this" reference.
-- **[dev-runtime.md](dev-runtime.md)** — how uedctl **runs** during development: the
-  `bin/uedctl` / `bin/test` wrappers over the auto-managed host-native `.venv/` (which
-  **requires `python3.12` on `PATH`**), the optional `uedctl-native/` Rust extension, and the
-  deferred Nuitka release path. (uedctl is **not** containerised — only the editor/build
+- **[dev-runtime.md](dev-runtime.md)** — how uedcli **runs** during development: the
+  `bin/uedcli` / `bin/test` wrappers over the auto-managed host-native `.venv/` (which
+  **requires `python3.12` on `PATH`**), the optional `uedcli-native/` Rust extension, and the
+  deferred Nuitka release path. (uedcli is **not** containerised — only the editor/build
   containers it drives are.)
 - **[parallel-editors.md](parallel-editors.md)** — how to drive many ephemeral
   editors at once (`docker compose run` per work item): per-run wineprefix volume, unique
@@ -73,12 +73,12 @@ router that says which doc to read when lives in [`CLAUDE.md`](../../CLAUDE.md)
 - Roadmap / open work: **`board/`** — `inbox.md` (capture pool) → the stage queues
   (`to-spec`/`to-spike`/`to-plan`) → `to-build.md` (the build queue); + `done.md`; start at
   **`board/README.md`**. Spike evidence: **`spikes/`** (canonical).
-  Original design spec: `docs/superpowers/specs/2026-06-16-uedctl-design.md` (repo root).
+  Original design spec: `docs/superpowers/specs/2026-06-16-uedcli-design.md` (repo root).
 
 ## The five facts that drive everything
 1. **Brushes enter the level via `EDIT PASTE`, point actors via `MAP IMPORTADD`.** Only
    paste/`BRUSH ADD` brushes are later `ACTOR SELECT INSIDE`-selectable (IMPORTADD brushes
-   never are). uedctl handles the split + the +32uu paste drift automatically.
+   never are). uedcli handles the split + the +32uu paste drift automatically.
 2. **All edits are model-side:** compute on the `Actor`/`Brush`, `validate_brush`, emit
    canonical T3D, materialize via paste/IMPORTADD; modify = delete-then-readd. No GUI driving.
 3. **Polys are identified model-side by `(brush, index)`** (`PF_Selected` doesn't round-trip);

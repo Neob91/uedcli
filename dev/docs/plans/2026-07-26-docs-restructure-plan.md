@@ -3,7 +3,7 @@
 > **For agentic workers:** implement task-by-task; each task ends green + committed. Steps use
 > checkbox (`- [ ]`) syntax. This is a docs change, so "green" means the task's stated verification
 > passes — plus `bin/test` from **Task 4** onward, where code comments start being retargeted
-> (`uedctl/dispatch.py:3177` and `uedctl/movers.py:24` cite `direction.md` "No silent half-answers",
+> (`uedcli/dispatch.py:3177` and `uedcli/movers.py:24` cite `direction.md` "No silent half-answers",
 > a `conventions`-topic citation, so `.py` files are in scope from the first Part B group).
 
 **Goal:** Retire the append-only decisions ledger. Replace `dev/docs/decisions.md` (8,985 lines,
@@ -18,7 +18,7 @@ maintain it freely. Both revised in place: no supersession, no dated history, gi
 Every entry in both trees carries `Rejected` and `Refs`.
 
 **Tech stack:** Markdown, plus one new Python checker (Task 3). The only behaviour-neutral code
-edits are retargeted comments in `uedctl/*.py`, `bin/_venv.sh`, `pyproject.toml`.
+edits are retargeted comments in `uedcli/*.py`, `bin/_venv.sh`, `pyproject.toml`.
 
 **Spec:** [`../specs/2026-07-25-docs-restructure.md`](../specs/2026-07-25-docs-restructure.md).
 
@@ -60,13 +60,13 @@ column except the last.
 | **`profile-generator-fixes`** | **6 commits, unmerged**, branched at `6900e34` |
 
 It touches `dev/docs/board/inbox.md` (−82 lines), `architecture.md`, `board/done.md`,
-`docs/leveldesign/*`, `docs/usage.md`, and `uedctl/{cli,dispatch,emit,model,builders}.py` plus two
-test files. **Every one is also edited by Tasks 8–10**, and `uedctl/builders.py` carries
+`docs/leveldesign/*`, `docs/usage.md`, and `uedcli/{cli,dispatch,emit,model,builders}.py` plus two
+test files. **Every one is also edited by Tasks 8–10**, and `uedcli/builders.py` carries
 `decisions.md` citations at lines 25, 28, 504, 578 — so it is squarely in Task 8's scope.
 
 - It introduces **no** new `decisions.md`/`direction.md` citations and does not touch
   `direction.md`, so the delete/modify hazard does not fire.
-- **Merge it before Task 8**, or treat those five `uedctl/*.py` files and `inbox.md` as manual-merge
+- **Merge it before Task 8**, or treat those five `uedcli/*.py` files and `inbox.md` as manual-merge
   points.
 - **Do NOT retire the `board/inbox.md` concurrency item at Task 10** until this is actually true.
 
@@ -146,9 +146,9 @@ Record in `dev/docs/rationale/MIGRATION.md` under `## Inventory at <sha>`:
 ## Task 3: Part A — move three rule sections, and build the checker
 
 - [ ] **Write the link checker first — nothing else in this plan verifies anything without it.**
-      There is none in the repo today (`bin/` holds only `test`, `uedctl`, `_venv.sh`), so R3's
+      There is none in the repo today (`bin/` holds only `test`, `uedcli`, `_venv.sh`), so R3's
       "citations dangle or silently rot" mitigation is currently prose. Add a committed pytest
-      (`uedctl/tests/test_doc_links.py`) that walks tracked `.md`/`.py`/`.sh`/`.toml` and fails on:
+      (`uedcli/tests/test_doc_links.py`) that walks tracked `.md`/`.py`/`.sh`/`.toml` and fails on:
       a markdown link to a missing path; a `path#anchor` whose anchor is absent; a prose citation of
       a file that does not exist. Encode the `specs/`+`plans/` exemption **and** its 12-file
       carve-out. Every later task's verification calls this.
@@ -164,9 +164,9 @@ Record in `dev/docs/rationale/MIGRATION.md` under `## Inventory at <sha>`:
       tests" has no reason to read it — and Part A's whole safety argument is that the router must
       fire reliably.
 - [ ] **Do NOT swap the `@` import here** — it moves to the end of Task 6 (ordering constraint 4).
-- [ ] Fix `dev/docs/dev-runtime.md` (still documents the Docker `uedctl-dev` image and
+- [ ] Fix `dev/docs/dev-runtime.md` (still documents the Docker `uedcli-dev` image and
       `bin/_dev-run.sh`, retired 2026-07-14), **and** `dev/docs/README.md`'s description of it
-      ("uedctl-in-Docker, docker-out-of-docker + identity path-mapping"), which is equally stale.
+      ("uedcli-in-Docker, docker-out-of-docker + identity path-mapping"), which is equally stale.
 - [ ] **`dev/docs/README.md`: add the `rules/` row now**, and rewrite the Context-loading paragraph
       — it says "only `direction.md` is auto-loaded", which stays true until Task 6 but must name
       `rules/` as read-on-demand from here. Leaving it for Task 10 would let it sit false across six
@@ -273,7 +273,7 @@ three parts; link checker and `bin/test` pass.
 ## Task 8: Part D — citation migration
 
 Use **Task 2's** numbers, not the spec's. **Merge `profile-generator-fixes` first**, or treat its
-five `uedctl/*.py` files and `inbox.md` as manual-merge points.
+five `uedcli/*.py` files and `inbox.md` as manual-merge points.
 
 - [ ] `decisions.md` / `direction.md` by name — retarget per each entry's disposition row.
 - [ ] The 4 `CLAUDE.md "<moved section>"` code sites → `rules/<file>.md`.
@@ -339,7 +339,7 @@ Plus every `decisions.md`/`direction.md` mention a plain grep does find.
 - [ ] Record the removal sha in `rationale/README.md`'s history signpost.
 - [ ] `dev/docs/README.md` — drop the two doomed rows; add `direction/` and `rationale/`; fix the
       "A gap between `direction.md` and `architecture.md`" paragraph, the "See `direction.md` + the
-      board" line, and the `Tools/uedctl/CLAUDE.md` label. (`rules/` row and Context-loading were
+      board" line, and the `Tools/uedcli/CLAUDE.md` label. (`rules/` row and Context-loading were
       done at Task 3.)
 - [ ] Retire the resolved `board/inbox.md` items **by title, not line range** — the `@`-gate item
       Task 6 overrides, the `[debug]` item Task 9 fixes. **Not** the concurrency item unless the

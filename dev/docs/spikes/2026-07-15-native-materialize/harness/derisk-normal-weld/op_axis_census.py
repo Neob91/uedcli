@@ -69,7 +69,7 @@ def run(trunk, label):
     print(f"CASTLE-SAFETY BREAKERS = SUBTRACT plain non-axis faces w/ calc!=authored: {len(danger)}")
     for d in danger[:20]: print("   ",d)
 
-CASTLE="/home/neob91/Games/LutrisDX/drive_c/DX/LUM/_scratch/castle/uedctl/maps/foobar/actors"
-UNATCO="/home/neob91/Games/LutrisDX/drive_c/DX/LUM/_scratch/unatco/uedctl/maps/unatco/actors"
+CASTLE="/home/neob91/Games/LutrisDX/drive_c/DX/LUM/_scratch/castle/uedcli/maps/foobar/actors"
+UNATCO="/home/neob91/Games/LutrisDX/drive_c/DX/LUM/_scratch/unatco/uedcli/maps/unatco/actors"
 run(CASTLE,"CASTLE")
 run(UNATCO,"UNATCO")

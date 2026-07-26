@@ -35,26 +35,26 @@ recommendations. This build follows the decisions, not the spec's recommendation
 
 ## Production changes
 
-- **NEW `uedctl/t3dtree.py`** — the ONE shared per-actor tree I/O: rank algebra (`rank_between`,
+- **NEW `uedcli/t3dtree.py`** — the ONE shared per-actor tree I/O: rank algebra (`rank_between`,
   `ranks_between`, `initial_ranks`, `append_rank`, `duplicate_ranks`), name alloc (`alloc_name`),
   body strip/inject (`dump_actor_body`/`load_actor_body`), `check_safe_segment` (public),
   `write_actor_tree`/`read_actor_tree` (moved verbatim from `trunk.py`'s `write_level`/
   `read_level_with_bodies`), `remove_actor`, and `write_sidecars`/`read_sidecars` for the beside-
   `actors/` extras (`packages` + `meta.json`).
-- **`uedctl/trunk.py`** — thin re-exports over `t3dtree`; `read_level`/`write_level`/… names kept so
+- **`uedcli/trunk.py`** — thin re-exports over `t3dtree`; `read_level`/`write_level`/… names kept so
   callers/tests don't churn.
-- **`uedctl/stash_register.py`** — `write_stash`/`read_stash` rewritten as wrappers over `t3dtree`
+- **`uedcli/stash_register.py`** — `write_stash`/`read_stash` rewritten as wrappers over `t3dtree`
   (per-actor tree + sidecars + folder channel + `_ranks_for` preserve-then-append + stale-flat
   detection); `exists`/`list`/`drop` intact.
-- **`uedctl/stashlib.py`** — `write_prefab`/`read_prefab`/`list_prefabs` rewritten (per-actor tree +
+- **`uedcli/stashlib.py`** — `write_prefab`/`read_prefab`/`list_prefabs` rewritten (per-actor tree +
   sidecars + folder channel + `OldFormatPrefab` hard-cutover error); wrapper helpers `_level_from_blobs`,
   `_ranks_for`, `_read_ranks_if_present`. `referenced_packages`/`normalize_for_capture`/`translate`/
   `with_group`/`with_folder`/`validate_member_name`/`format_summary` unchanged.
-- **`uedctl/movers.py`** — gains public `canonicalize_mover_blob` (relocated from `tree_io`).
-- **`uedctl/dispatch.py`** — folder channel threaded (capture, promote, apply, LevelSources);
+- **`uedcli/movers.py`** — gains public `canonicalize_mover_blob` (relocated from `tree_io`).
+- **`uedcli/dispatch.py`** — folder channel threaded (capture, promote, apply, LevelSources);
   `prefab drop` rmtree's the dir; `_read_prefab_or_exit`/`PrefabLevelSource.load` surface
   `OldFormatPrefab` cleanly; capture canonicalizes movers on external ingest.
-- **DELETE `uedctl/tree_io.py`** — no production caller after this change.
+- **DELETE `uedcli/tree_io.py`** — no production caller after this change.
 
 ## Tests
 Consistency (byte-identical trunk/stash/prefab `actors/` trees), stash+prefab round-trip through the

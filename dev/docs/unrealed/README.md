@@ -18,5 +18,5 @@ here** (per `../../CLAUDE.md`). Evidence lives in `../spikes/`.
 The docs above are about **driving** UnrealEd headless; [`leveldesign/`](leveldesign/README.md)
 is about **designing levels** in it. They cross-reference where they overlap (the CSG model).
 
-Related (one level up): [`../architecture.md`](../architecture.md) (uedctl layers / write pattern),
+Related (one level up): [`../architecture.md`](../architecture.md) (uedcli layers / write pattern),
 [`../parallel-editors.md`](../parallel-editors.md) (driving many ephemeral editors at once).

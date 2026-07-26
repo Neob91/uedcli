@@ -13,7 +13,7 @@ KEPT by any `BSP REBUILD` (`EmptyModel(0,0)`, §82 §10.16 / §92 §3), so the g
 IS the incremental-CSG surf set. We compare the order-independent surf multiset under the same geo key
 `surf_class_diff.surf_geokey` = (normal@1e-3, plane-offset@1e-2, polyflag-class).
 
-  * NATIVE — `uedctl_native.build_geometry_bspcsg` over the first N brush inputs (trunk order),
+  * NATIVE — `uedcli_native.build_geometry_bspcsg` over the first N brush inputs (trunk order),
              serialized + re-parsed (identical to soup_cmp `_brushes(n)`), its `Model.surfs`.
   * EDITOR — a subset trunk (LevelInfo + first N brush actors) editor-materialized to `golden{N}.dx`
              via `build_ued_golden.py` (bare `MAP REBUILD` default — retains surfs, fast, less
@@ -37,19 +37,19 @@ import sys
 from collections import Counter
 from pathlib import Path
 
-ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedctl")
+ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedcli")
 HARNESS = ROOT / "dev/docs/spikes/2026-07-15-native-materialize/harness"
 sys.path.insert(0, str(ROOT))
-sys.path.insert(0, str(ROOT / "dev/docs/spikes/2026-06-27-decontainerize-uedctl/harness"))
+sys.path.insert(0, str(ROOT / "dev/docs/spikes/2026-06-27-decontainerize-uedcli/harness"))
 sys.path.insert(0, str(HARNESS))
 
 from spike_classindex import class_index  # noqa: E402  (schema-aware mover gate's index)
-from uedctl import trunk  # noqa: E402
-from uedctl.native import materialize as M, umodel as UM  # noqa: E402
-import uedctl_native  # noqa: E402
+from uedcli import trunk  # noqa: E402
+from uedcli.native import materialize as M, umodel as UM  # noqa: E402
+import uedcli_native  # noqa: E402
 import surf_class_diff as SCD  # noqa: E402
 
-FULL_TRUNK = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/_scratch/unatco/uedctl/maps/unatco")
+FULL_TRUNK = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/_scratch/unatco/uedcli/maps/unatco")
 SUBSET_ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/_scratch/unatco-subset")
 BUILDER = HARNESS / "build_ued_golden.py"
 PYTHON = ROOT / ".venv/bin/python"
@@ -117,8 +117,8 @@ def native_surfs(n: int):
     # first N brush actors in trunk order, then drop the movers — matching the editor's own exclusion.
     brushes = [nm for nm in _brush_order(level)[:n] if M._in_world_csg(level.actors[nm], class_index())]
     bs = [M._build_brush_input(nm, level.actors[nm]) for nm in brushes]
-    m = uedctl_native.build_geometry_bspcsg(bs)
-    body = uedctl_native.serialize_model(m)
+    m = uedcli_native.build_geometry_bspcsg(bs)
+    body = uedcli_native.serialize_model(m)
     return UM.parse_model_body(body, 0, len(body))
 
 

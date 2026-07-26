@@ -14,12 +14,12 @@ services:
     volumes:
       # Built v69 stub packages (`config.stub_cache_root`) — a v69 code source the editor
       # OBJ LOADs at materialize, so it needs a container-visible root (`_remap_to_container` maps
-      # the cache here). `editor.ensure_editor` passes UEDCTL_STUB_CACHE (the resolved
-      # `config.stub_cache_root()`, honoring $UEDCTL_HOME) in the compose env; the ${HOME} tail is
+      # the cache here). `editor.ensure_editor` passes UEDCLI_STUB_CACHE (the resolved
+      # `config.stub_cache_root()`, honoring $UEDCLI_HOME) in the compose env; the ${HOME} tail is
       # only the fallback for a hand-run `docker compose` (compose can't use `~`). Gitignored +
       # built lazily; ensure_editor creates it so the mount source is never missing (by hand:
-      # mkdir -p "${HOME}/.uedctl/cache/stubs").
-      - ${UEDCTL_STUB_CACHE:-${HOME}/.uedctl/cache/stubs}:/stubs:ro
+      # mkdir -p "${HOME}/.uedcli/cache/stubs").
+      - ${UEDCLI_STUB_CACHE:-${HOME}/.uedcli/cache/stubs}:/stubs:ro
       - wine-prefix:/wineprefix
     # /work (the mutable host<->container exchange dir) is NOT a tmpfs: `docker cp` writes the
     # file UNDER a tmpfs mountpoint on the overlay, where it's shadowed and invisible to the live

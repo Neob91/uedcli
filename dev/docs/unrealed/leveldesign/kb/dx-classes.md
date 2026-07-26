@@ -10,7 +10,7 @@ have their own page ([`dx-npcs.md`](dx-npcs.md)), and the
 
 **Read the markers.** `[DX]` = Deus-Ex-specific (does NOT apply to raw UE1);
 `[ENGINE]` = generic UnrealEngine 1 (flagged where a DX author leans on it).
-Confidence: ✅ uedctl-used / live-verified · 🔬 live-probed against the real
+Confidence: ✅ uedcli-used / live-verified · 🔬 live-probed against the real
 `DeusEx.u` this session · 📖 from the DX SDK manual / tutorial corpus (vocabulary
 real, semantics to confirm). Everything below marked 🔬 was grepped/decoded out
 of the pristine shipped `DX/System/DeusEx.u`.
@@ -27,12 +27,12 @@ of the pristine shipped `DX/System/DeusEx.u`.
 ## How to discover and read any class
 
 The catalog below is a **curated top-N** of the classes worth naming; the live
-tree is the source of truth. Regenerate / verify with uedctl:
+tree is the source of truth. Regenerate / verify with uedcli:
 
 ```
-bin/uedctl class list --subclass-of DeusEx.HackableDevices   # inheritance tree
-bin/uedctl class list --flat --subclass-of DeusEx.ScriptedPawn
-bin/uedctl class show DeusEx.SecurityCamera                  # property NAMES + TYPES only
+bin/uedcli class list --subclass-of DeusEx.HackableDevices   # inheritance tree
+bin/uedcli class list --flat --subclass-of DeusEx.ScriptedPawn
+bin/uedcli class show DeusEx.SecurityCamera                  # property NAMES + TYPES only
 ```
 
 **`class show` prints names and types, NOT default values.** To read a default,
@@ -40,13 +40,13 @@ build a throwaway instance and query the resolved property (an unset property
 resolves to its class default — the offline schema-decode route):
 
 ```
-bin/uedctl actor build DeusEx.SecurityCamera | actor add - | actor prop get - cameraFOV
+bin/uedcli actor build DeusEx.SecurityCamera | actor add - | actor prop get - cameraFOV
 ```
 
 To place a configured actor into the trunk, the generator → `actor add -` pipe:
 
 ```
-bin/uedctl actor build DeusEx.NanoKey --prop KeyID=tower_door --at 128,256,64 | actor add -
+bin/uedcli actor build DeusEx.NanoKey --prop KeyID=tower_door --at 128,256,64 | actor add -
 ```
 
 ---
@@ -79,7 +79,7 @@ Related lift mover (NOT a `DeusExMover` — it `expands Mover` directly 🔬):
 - **`ElevatorMover`** — a lift; combine with the sequencing actors (§8) for
   multi-stop lifts (`bFollowKeyframes`).
 
-**Authoring (uedctl).** A mover is one brush promoted to an actor. Author
+**Authoring (uedcli).** A mover is one brush promoted to an actor. Author
 model-side:
 ```
 brush build cube --width 72 --height 144 --breadth 8 --mover-class DeusEx.DeusExMover \

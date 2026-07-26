@@ -16,7 +16,7 @@ process:
 - While ANY button is held (a drag), inject RELATIVE motion (`mousemove_relative`) so
   the editor's capture-warp reads exactly the intended per-frame delta -- the clean
   ~0.07 deg/px yaw / ~0.12 deg/px pitch rate (findings:
-  dev/docs/specs/2026-06-18-uedctl-viewport-drag-sensitivity-findings.md).
+  dev/docs/specs/2026-06-18-uedcli-viewport-drag-sensitivity-findings.md).
 - While NO button is held (hover) and on a button-state change, position the cursor
   ABSOLUTELY at the VNC-reported (x,y), so clicks land where the user points and the
   cursor re-syncs after a warp -- a pure-relative bridge would drift the X cursor away

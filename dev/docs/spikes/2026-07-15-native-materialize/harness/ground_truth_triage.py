@@ -24,11 +24,11 @@ import sys
 from collections import Counter
 from pathlib import Path
 
-ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedctl")
+ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedcli")
 sys.path.insert(0, str(ROOT))
-sys.path.insert(0, str(ROOT / "dev/docs/spikes/2026-06-27-decontainerize-uedctl/harness"))
+sys.path.insert(0, str(ROOT / "dev/docs/spikes/2026-06-27-decontainerize-uedcli/harness"))
 
-from uedctl.native import umodel as UM  # noqa: E402
+from uedcli.native import umodel as UM  # noqa: E402
 import utexture_decode as UT  # noqa: E402
 
 NATIVE = "/home/neob91/Games/LutrisDX/drive_c/DX/LUM/_scratch/gtruth/NativeCastle.dx"

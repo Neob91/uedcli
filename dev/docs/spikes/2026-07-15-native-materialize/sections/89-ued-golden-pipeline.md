@@ -135,15 +135,15 @@ because native also builds in one batch.
 
 ## 5. Reproduce
 ```
-cd Tools/uedctl
+cd Tools/uedcli
 # native (unlit) from the trunk
-.venv/bin/python -c "from pathlib import Path; from uedctl import trunk; from uedctl.native import materialize as M; \
-  lvl,_=trunk.read_level(Path('_scratch/unatco/uedctl/maps/unatco')); \
+.venv/bin/python -c "from pathlib import Path; from uedcli import trunk; from uedcli.native import materialize as M; \
+  lvl,_=trunk.read_level(Path('_scratch/unatco/uedcli/maps/unatco')); \
   M.run_materialize_native(level=lvl, out_path='_scratch/uedgolden/Native_unatco.dx', overwrite=True, version=68, no_light=True, \
   pkg_dirs=['/home/neob91/Games/LutrisDX/drive_c/DX/Textures','/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Textures'])"
 # UnrealEd golden (world, unlit) from the SAME trunk — RUN AS A BOUNDED BACKGROUND JOB
 .venv/bin/python -u dev/docs/spikes/2026-07-15-native-materialize/harness/build_ued_golden.py \
-  --trunk _scratch/unatco/uedctl/maps/unatco --out _scratch/uedgolden/UEDGolden_unatco_world.dx \
+  --trunk _scratch/unatco/uedcli/maps/unatco --out _scratch/uedgolden/UEDGolden_unatco_world.dx \
   --world-only --no-light --overwrite
 # the goal metric, and the methodology-validation diff
 .venv/bin/python dev/docs/spikes/2026-07-15-native-materialize/harness/ground_truth_bytediff.py \

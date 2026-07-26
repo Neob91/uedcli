@@ -2,7 +2,7 @@
 structurally sound but *usable* for catalog thumbnails, with no editor, no container, no umodel.
 
 Pipeline: parse the mesh body (`umesh.py`) -> take animation frame 0 -> build triangles from
-Faces -> Wedges -> Verts -> resolve each material's skin through uedctl's own `utexture` decoder ->
+Faces -> Wedges -> Verts -> resolve each material's skin through uedcli's own `utexture` decoder ->
 rasterize with a z-buffer and affine UV mapping + Lambert shading.
 
 Usage:
@@ -17,8 +17,8 @@ import struct
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", ".."))
-from uedctl.upackage import load_package  # noqa: E402
-from uedctl import utexture  # noqa: E402
+from uedcli.upackage import load_package  # noqa: E402
+from uedcli import utexture  # noqa: E402
 import umesh  # noqa: E402
 
 from PIL import Image  # noqa: E402
@@ -67,7 +67,7 @@ def frame_triangles(m, frame=0):
 
 
 def skin_images(pkg, m, search_dirs):
-    """material index -> (w, h, rgb bytes), resolved through uedctl's texture decoder.
+    """material index -> (w, h, rgb bytes), resolved through uedcli's texture decoder.
 
     `Materials[i].TextureIndex` indexes the mesh's own `Textures` array, whose entries are package
     object refs; `object_path` turns each into the `Package.Name` ref the resolver takes.

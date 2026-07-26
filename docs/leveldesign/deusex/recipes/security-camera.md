@@ -28,7 +28,7 @@ the player. Optionally it feeds a **`ComputerSecurity` console** — and here is
 3. **Set hackability** (optional) — `bHackable`, `hackStrength` (0.20 = two multitools untrained).
 4. **Tag it** if a console will show its feed.
 
-### With uedctl
+### With uedcli
 
 ```bash
 actor build DeusEx.SecurityCamera \
@@ -56,7 +56,7 @@ actor build DeusEx.SecurityCamera \
 4. **Assign controllable turrets.** Each `Views[i].turretTag` points to an `AutoTurret`/
    `AutoTurretSmall` `Tag`; the player can set it to Bypassed / Allies / Enemies / Everything.
 
-### With uedctl
+### With uedcli
 
 ```bash
 # 1. The console (ADD an account — there is none by default — and pick a logo).
@@ -88,7 +88,7 @@ actor prop set ComputerSecurity0 \
 2. **Tag it** so a console can control it.
 3. Its hack strength is **fixed at 50%** — you don't set it.
 
-### With uedctl
+### With uedcli
 
 ```bash
 # Wall turret:

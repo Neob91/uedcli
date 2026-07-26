@@ -5,7 +5,7 @@
 
 **Binding decision (do NOT re-litigate):** `decisions.md` **`2026-07-18 23:01 UTC — INVARIANT:
 stash, prefab, and trunk MUST share ONE T3D tree format`**. All three on-disk T3D trees — the git
-**trunk** (`maps/<level>/`), a **stash** entry (`.uedctl/stash/<id>/`), and a library **prefab**
+**trunk** (`maps/<level>/`), a **stash** entry (`.uedcli/stash/<id>/`), and a library **prefab**
 (`<prefabs-dir>/<name>/`) — MUST use the trunk's per-actor layout
 `actors/<name>/{actor.t3d, order_value[, folder]}` (per-actor directory; per-actor LexoRank
 `order_value` sidecar; optional per-actor `folder` sidecar; **no shared `order` file**), read/written
@@ -72,7 +72,7 @@ treated as meaningless and re-set on apply). Now the slot exists, so we *could* 
   `castle.tower.*` organization. Arguably useful for capturing a labelled sub-build, but it collides
   with `apply --folder`'s "replace on placement" model (which wins?) and is a behavior change. **It
   is also NOT a free toggle:** the wrapper currency is `full_level: dict[name→T3D blob]`, and a T3D
-  blob carries NO folder (folder is a uedctl-side sidecar, never in T3D). So (b) requires a new
+  blob carries NO folder (folder is a uedcli-side sidecar, never in T3D). So (b) requires a new
   folder channel through capture → `write_stash`/`write_prefab` (a signature change §1 otherwise
   keeps unchanged) — e.g. an extra `folders: dict[name→str|None]` arg. That extra cost is part of the
   choice.
@@ -103,7 +103,7 @@ of `actors/`** (the prefab's single JSON is split — see §2).
 
 ## 1. The shared per-actor tree module/API
 
-**Create `uedctl/t3dtree.py`** (name chosen so it reads as "the T3D per-actor tree", not "trunk" or
+**Create `uedcli/t3dtree.py`** (name chosen so it reads as "the T3D per-actor tree", not "trunk" or
 "level" — stash/prefab are neither). It houses the per-actor tree I/O **already present in
 `trunk.py`**, moved verbatim so there is exactly ONE implementation:
 
@@ -366,10 +366,10 @@ round-trip case to pin this.
 `stash_register` (removed here) and `test_apply.py`; `safe_name` only by `stash_register` (removed)
 and a stale comment in `surface.py:30`. After this change `tree_io.py` has no production caller.
 `_canonicalize_mover_blob` (its private mover helper) is still imported by
-`uedctl/tests/test_movers.py` (`test_canonicalize_blob_only_touches_movers`) — so deleting the file
+`uedcli/tests/test_movers.py` (`test_canonicalize_blob_only_touches_movers`) — so deleting the file
 breaks that test. **Recommend: relocate the mover-blob canonicalizer to `movers.py`** (as a public
 `canonicalize_mover_blob`, the natural home — capture will call the actor-level `canonicalize_mover`
-anyway), re-point `test_movers.py`'s import there, then **delete `uedctl/tree_io.py`**, update/remove
+anyway), re-point `test_movers.py`'s import there, then **delete `uedcli/tree_io.py`**, update/remove
 `test_apply.py::test_read_state_dir_round_trips_…`, and drop the `surface.py:30` comment reference.
 If deletion feels too aggressive for one PR, leave `tree_io.py` with a `# DEAD except the mover
 helper` banner and remove in a follow-up noted in `board/inbox.md`.
@@ -395,7 +395,7 @@ foldered trunk actor cannot be reproduced folder-for-folder by the folderless st
 ## 5. Migration
 
 Covered as **Open sub-choice (1)** (the headline). Stash is machine-local throwaway under the
-gitignored `.uedctl/` — **no migration path needed**: a stale-format stash entry (flat
+gitignored `.uedcli/` — **no migration path needed**: a stale-format stash entry (flat
 `actors/<name>.t3d` + `order` file) is simply regenerated. Add a **stale detector**
 `_is_stale_flat_stash(dest)` = "`dest/actors/` contains loose `*.t3d` FILES" (the old flat form;
 `read_actor_tree` only iterates sub-DIRs, so it would otherwise return an empty Level while
@@ -471,22 +471,22 @@ with `tree_io`). Keep the pinned `2026-07-01` git-merge fact intact (canonical e
 
 **Production code (≈4 files changed, 1 new, 1 deleted):**
 
-- **`uedctl/t3dtree.py`** — NEW: the shared module (per-actor tree I/O + rank algebra + body
+- **`uedcli/t3dtree.py`** — NEW: the shared module (per-actor tree I/O + rank algebra + body
   strip/inject + `check_safe_segment` + `write_sidecars`/`read_sidecars`), moved from `trunk.py`.
-- **`uedctl/trunk.py`** — becomes thin re-exports of the moved functions; `read_level`/`write_level`
+- **`uedcli/trunk.py`** — becomes thin re-exports of the moved functions; `read_level`/`write_level`
   names preserved so its ~20 caller/test sites don't churn.
-- **`uedctl/stash_register.py`** — `write_stash`/`read_stash` rewritten as wrappers over
+- **`uedcli/stash_register.py`** — `write_stash`/`read_stash` rewritten as wrappers over
   `t3dtree`; drop `from .tree_io import read_state_dir, safe_name`; `exists`/`list`/`drop` unchanged.
-- **`uedctl/stashlib.py`** — `write_prefab`/`read_prefab`/`list_prefabs` rewritten (per-actor tree +
+- **`uedcli/stashlib.py`** — `write_prefab`/`read_prefab`/`list_prefabs` rewritten (per-actor tree +
   split siblings + old-format read shim + dir-containment guard); `referenced_packages`,
   `normalize_for_capture`, `with_folder`/`with_group`, `validate_member_name`, `translate`,
   `format_summary` UNCHANGED. Add `prefab migrate` support if option B is chosen.
-- **`uedctl/movers.py`** — gains a public `canonicalize_mover_blob` (relocated from
+- **`uedcli/movers.py`** — gains a public `canonicalize_mover_blob` (relocated from
   `tree_io._canonicalize_mover_blob`), the new home for the mover-blob helper `test_movers.py`
   imports (§3).
-- **`uedctl/tree_io.py`** — DELETE (no production caller after this change); or banner + follow-up
+- **`uedcli/tree_io.py`** — DELETE (no production caller after this change); or banner + follow-up
   (§3). Its mover helper moves to `movers.py` FIRST so `test_movers.py` doesn't break.
-- **`uedctl/dispatch.py`** — mostly unchanged because the wrapper signatures are preserved
+- **`uedcli/dispatch.py`** — mostly unchanged because the wrapper signatures are preserved
   (`full_level`/`order`/`packages`/`meta` in, `(full, order, packages, meta)` out). Verify/adjust:
   `_dispatch_stash` capture (`write_stash`) — **now canonicalizes movers on the `--from-t3d`/
   `--from-stdin` ingest** (`_capture_from_t3d`, §3); `_promote_stash` (its `meta` = `{anchor, ts}`
@@ -514,7 +514,7 @@ unchanged, verified compatible. **New:** `test_t3d_tree_consistency.py`, `test_p
   wording; the `read_prefab` meta-strip note is gone), and the module map (lines ~116-117:
   `tree_io.py`/`read_state_dir`/`safe_name` removed; add `t3dtree.py`).
 - **`docs/usage.md`** — the prefab "a `.t3d` + `.json` sidecar" description (lines ~373-374) and the
-  stash `.uedctl/stash/<id>/` shape (line ~372) → the per-actor tree; add `prefab migrate` to the
+  stash `.uedcli/stash/<id>/` shape (line ~372) → the per-actor tree; add `prefab migrate` to the
   verb list if option B lands.
 - **`dev/docs/decisions.md`** — append a short entry recording the resolved sub-choices (migration
   option, folder-on-capture) once Andrzej confirms. **(Not written by this spec — decisions are

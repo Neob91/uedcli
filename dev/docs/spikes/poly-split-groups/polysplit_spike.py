@@ -8,7 +8,7 @@ group: the whole scene as a faint context wireframe, plus THIS group's face numb
 painted opaque on top. Since group members never overlap, every number sits on a
 fully-unshadowed face -> unambiguous which face each number labels.
 
-Run:  cd Tools/uedctl && bin/uedctl-py _scratch/polysplit_spike.py
+Run:  cd Tools/uedcli && bin/uedcli-py _scratch/polysplit_spike.py
 """
 import math
 import os
@@ -18,17 +18,17 @@ import sys
 def _find_pkg_root(start):
     d = os.path.dirname(os.path.abspath(start))
     while d != os.path.dirname(d):
-        if os.path.isfile(os.path.join(d, "uedctl", "__init__.py")):
+        if os.path.isfile(os.path.join(d, "uedcli", "__init__.py")):
             return d
         d = os.path.dirname(d)
-    raise RuntimeError("could not locate the uedctl package root above " + start)
+    raise RuntimeError("could not locate the uedcli package root above " + start)
 
 
 sys.path.insert(0, _find_pkg_root(__file__))
 
-from uedctl import preview as P
-from uedctl.builders import cube, cylinder, make_brush_actor
-from uedctl.rotation import actor_linear, actor_prepivot, local_offset
+from uedcli import preview as P
+from uedcli.builders import cube, cylinder, make_brush_actor
+from uedcli.rotation import actor_linear, actor_prepivot, local_offset
 
 OUT = os.environ.get("POLYSPLIT_OUT",
                      os.path.join(_find_pkg_root(__file__), "_scratch", "polysplit"))

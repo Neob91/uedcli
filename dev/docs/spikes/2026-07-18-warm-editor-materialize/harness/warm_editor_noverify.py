@@ -15,7 +15,7 @@ This isolates it: two phases in ONE warm editor.
                   container (the isolation fix: docker cp the saved .dx there + export), leaving the
                   warm editor untouched by any 2nd wine process. If ALL succeed → the fix works.
 
-Run: cd Tools/uedctl && .venv/bin/python dev/docs/spikes/2026-07-18-warm-editor-materialize/harness/warm_editor_noverify.py
+Run: cd Tools/uedcli && .venv/bin/python dev/docs/spikes/2026-07-18-warm-editor-materialize/harness/warm_editor_noverify.py
 """
 from __future__ import annotations
 
@@ -29,15 +29,15 @@ from pathlib import Path
 TOOL = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(TOOL))
 
-from uedctl import apply, config, trunk               # noqa: E402
-from uedctl import editor as editor_mod               # noqa: E402
-from uedctl import store_export                       # noqa: E402
-from uedctl.driver import Driver                      # noqa: E402
-from uedctl.container_assets import resource_mounts   # noqa: E402
-from uedctl.packages import search_path_package_names  # noqa: E402
-from uedctl.uuid7 import uuid7                          # noqa: E402
+from uedcli import apply, config, trunk               # noqa: E402
+from uedcli import editor as editor_mod               # noqa: E402
+from uedcli import store_export                       # noqa: E402
+from uedcli.driver import Driver                      # noqa: E402
+from uedcli.container_assets import resource_mounts   # noqa: E402
+from uedcli.packages import search_path_package_names  # noqa: E402
+from uedcli.uuid7 import uuid7                          # noqa: E402
 
-CASTLE_DIR = TOOL / "_scratch/castle/uedctl"
+CASTLE_DIR = TOOL / "_scratch/castle/uedcli"
 OUT_DIR = Path(os.environ.get("OUT_DIR", str(TOOL / "_scratch/warm-spike")))
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 RES = OUT_DIR / "warm_noverify_results.json"

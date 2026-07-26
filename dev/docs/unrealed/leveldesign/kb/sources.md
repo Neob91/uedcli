@@ -8,7 +8,7 @@ denote, the access notes for anyone re-running the crawl, and the residual gaps 
 
 The overarching rule (repo convention): *every claim about how UnrealEd behaves carries its evidence,
 and an undated, uncited assertion cannot be trusted.* This KB was built by a multi-pass crawl of the
-community tutorial corpus, **reconciled against the shipped game binaries and uedctl's own offline
+community tutorial corpus, **reconciled against the shipped game binaries and uedcli's own offline
 decoders** — the binaries win every disagreement.
 
 ---
@@ -17,7 +17,7 @@ decoders** — the binaries win every disagreement.
 
 | Marker | Tier | Meaning |
 |---|---|---|
-| **✅** | uedctl-used / live-verified | a fact uedctl actually exercises, or that was live-verified against the running editor. |
+| **✅** | uedcli-used / live-verified | a fact uedcli actually exercises, or that was live-verified against the running editor. |
 | **🔬** | binary-probed | read directly from the shipped `DX/System/*.u` / `DX/Textures/*.utx` this session — a decoded default, an enum membership, a class presence, a `case` switch. The **strongest** tier short of the disassembly spike. |
 | **📖** | tutorial-extracted | from the community tutorials/wikis — vocabulary and mechanism are real, but the specific semantics are "leads to confirm," not verified against this build. |
 | **decompiled** | disassembly spike | grounded in the CSG/BSP disassembly spike (§4) — read from the compiled instructions and constants, a tier *stronger* than 📖 (we read the machine code and constant tables, not just string literals). |
@@ -40,7 +40,7 @@ from stock UE1, and UT-only content/gametypes do **not** transfer.
 | **Official Deus Ex SDK "Level Design" manual** (scrigroup mirror) | The shipped SDK design/gameplay-wiring reference | **[DX]** |
 | **DeusEx `.uc` source** (Deus-Ex-Plus GitHub mirror) | Near-vanilla class source; byte-exact defaults verified against the local `DeusEx.u` | **[DX]** |
 | **Spector / Smith immersive-sim talks** (GDC / Gamasutra postmortems, "Rules of Roleplaying", "Systemic Level Design"; wesplays "Spaghetti Level Design") | The design-philosophy doctrine — see [`design-craft.md`](./design-craft.md) | **[DX]** (doctrine) |
-| **🔬 the shipped DX packages** — `DX/System/{Engine,DeusEx,Fire}.u`, `DX/Textures/*.utx` | direct greps + uedctl decodes this session | **[DX]** / [ENGINE] (per fact) |
+| **🔬 the shipped DX packages** — `DX/System/{Engine,DeusEx,Fire}.u`, `DX/Textures/*.utx` | direct greps + uedcli decodes this session | **[DX]** / [ENGINE] (per fact) |
 | **The CSG/BSP disassembly spike** ([`../../../spikes/2026-06-24-bsp-csg-hole-mechanism-from-binary.md`](../../../spikes/2026-06-24-bsp-csg-hole-mechanism-from-binary.md)) | decompiled ground truth for the BSP-hole mechanism | [ENGINE] |
 | ~~ut99.org file id=14742~~ | **UNRETRIEVABLE** — JS bot-check / 403; coverage overlaps tactical-ops | — |
 
@@ -61,7 +61,7 @@ These are the seeds of the engine-facts regression the measurement spike pins (p
 - **`LE_Negative` is ABSENT from DeusEx `Engine.u`.** The UT2004-era `LE_Negative` spatial-light
   effect does not exist in the DX `ELightEffect` enum (re-verified against this install's `Engine.u`
   🔬). ⇒ a **doc bug** in the old lighting guide, corrected in [`lighting.md`](./lighting.md).
-  *(Verified against the game `System/Engine.u` — the package uedctl actually reads (config `paths` =
+  *(Verified against the game `System/Engine.u` — the package uedcli actually reads (config `paths` =
   `/DX/System`): the `ELightEffect` enum has **20 members** (`LE_None … LE_Unused`, the standard UE1
   roster **including** `LE_Shock`/`LE_Disco`/`LE_Shell`/`LE_Rotor`); the **only** absent value is
   `LE_Negative` (a UT2004-era value). **Trap that bit us:** a `strings`-grep of the name table
@@ -90,7 +90,7 @@ These are the seeds of the engine-facts regression the measurement spike pins (p
 - **UT `ScriptedPawn` names confirmed ABSENT from DX** — `bFearIndoors/Darkness/Zones`, `HateTag`,
   `HateThreshold`, `IdealRange`, `SeekTag`, `bCanClimb`, `ThingFactory`,
   `AlarmPoint`. (**`Aggressiveness` is NOT truly absent** — vanilla `HumanMilitary` lacks it, but the
-  UED22 editing package adds a `var() float Aggressiveness`; uedctl accepts it, the shipped game ignores
+  UED22 editing package adds a `var() float Aggressiveness`; uedcli accepts it, the shipped game ignores
   it. See the caveat in [`dx-npcs.md`](./dx-npcs.md) §8.) (**`AlarmTag` IS a real DX `ScriptedPawn` property** — `var(Orders) name AlarmTag`;
   `AmbushPoint` **exists** in `Engine.u` as a stock `NavigationPoint` but DX drives NPCs via
   `ScriptedPawn` orders, not `AmbushPoint`.) In [`dx-npcs.md`](./dx-npcs.md).
@@ -121,7 +121,7 @@ a violation trips a red test rather than drifting unnoticed.
 - **ut99.org downloads** are gated behind a crypto-JS bot-check; **file id=14742 could not be
   fetched.** If its content is wanted, it must be supplied directly. Its coverage overlaps the
   tactical-ops mirror, so the gap is small.
-- **Class defaults** are read from the substrate with uedctl, not crawled: `actor build <Class> |
+- **Class defaults** are read from the substrate with uedcli, not crawled: `actor build <Class> |
   actor add - | actor prop get - <Prop>` (offline, no editor). `class show` gives names/types only.
 - **Per-package texture enumeration** comes from the `texture` catalog verb, not from reading tutorial
   lists.
@@ -139,7 +139,7 @@ these blocks authoring:
    `defaultproperties`**, so their defaults live in compiled C++ and are **NOT in the package** — the
    `Fire.u` fractal-texture `FX_*` / `RenderHeat` / `WaveAmp` numeric values are the notable case.
    These are **unrecoverable offline**. *Everything script-defaulted* (actors, pawns, lights, movers,
-   particles, decorations, cameras) reads cleanly via uedctl — this gap is confined to the fractal
+   particles, decorations, cameras) reads cleanly via uedcli — this gap is confined to the fractal
    painting parameters, which are a Texture-Browser authoring concern, not a level-geometry one.
 3. **Shipped-map architectural dimensions** — the real room/corridor/doorway extents *as built in the
    shipped maps* (beyond the player-anchored figures in [`human-scale.md`](./human-scale.md)) are
@@ -150,7 +150,7 @@ these blocks authoring:
    (class-default anchors) is already done inline (see gap 2's "reads cleanly" note and
    [`human-scale.md`](./human-scale.md) §8).
 
-**Net:** the remaining specifics are read from the substrate with uedctl (defaults, texture catalog)
+**Net:** the remaining specifics are read from the substrate with uedcli (defaults, texture catalog)
 or pinned by the spike's B2 map-export corpus — not found by more reading.
 
 ---

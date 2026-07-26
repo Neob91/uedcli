@@ -9,15 +9,15 @@ Usage:  .venv/bin/python docs/.../harness/bspcsg_diff.py [grid_step]
 """
 import sys
 from pathlib import Path
-ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedctl")
+ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedcli")
 sys.path.insert(0, str(ROOT))
-sys.path.insert(0, str(ROOT / "dev/docs/spikes/2026-06-27-decontainerize-uedctl/harness"))
-from uedctl import trunk
-from uedctl.native import materialize as M, umodel as UM
-import uedctl_native
+sys.path.insert(0, str(ROOT / "dev/docs/spikes/2026-06-27-decontainerize-uedcli/harness"))
+from uedcli import trunk
+from uedcli.native import materialize as M, umodel as UM
+import uedcli_native
 import utexture_decode as UT
 
-TRUNK = "/home/neob91/Games/LutrisDX/drive_c/DX/LUM/_scratch/castle/uedctl/maps/foobar"
+TRUNK = "/home/neob91/Games/LutrisDX/drive_c/DX/LUM/_scratch/castle/uedcli/maps/foobar"
 EDITOR = "/home/neob91/Games/LutrisDX/drive_c/DX/Maps/Test_Castle.dx"
 
 # editor golden target counts (from the task brief)
@@ -119,10 +119,10 @@ def main():
     brush_order = [n for n in lvl.order if lvl.actors[n].brush is not None]
     bs = [M._build_brush_input(n, lvl.actors[n]) for n in brush_order]
 
-    default = uedctl_native.build_geometry(bs)
-    new = uedctl_native.build_geometry_bspcsg(bs)
-    nb = uedctl_native.serialize_model(new)
-    db = uedctl_native.serialize_model(default)
+    default = uedcli_native.build_geometry(bs)
+    new = uedcli_native.build_geometry_bspcsg(bs)
+    nb = uedcli_native.serialize_model(new)
+    db = uedcli_native.serialize_model(default)
     m_new = UM.parse_model_body(nb, 0, len(nb))
     m_def = UM.parse_model_body(db, 0, len(db))
     ed = load_editor()

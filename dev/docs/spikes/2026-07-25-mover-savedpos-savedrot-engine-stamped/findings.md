@@ -19,7 +19,7 @@ end-to-end by a live `level materialize`.
   `Engine.dll` and disassembles it, annotating the sentinel stores (`pefile` + `capstone`).
 - `scan_corpus.py` — sweeps a tree of editor-exported `*.t3d` for the `Saved*` fields (counts,
   per-class breakdown, **distinct values**), and counts the raw sentinel byte patterns in a
-  directory of binary `.dx`/`.unr` maps. No uedctl imports; runs on a bare Python 3.
+  directory of binary `.dx`/`.unr` maps. No uedcli imports; runs on a bare Python 3.
 
 ---
 
@@ -51,7 +51,7 @@ game's v68 `System/*.u` or UED22's v69 set. So an omitted `SavedPos`/`SavedRot` 
 `PostLoad` is UE1's "this object has just been loaded" hook. It is an exported virtual, so it is
 located by **name**, not by a guessed address.
 
-**UED22 `Engine.dll`** (`Tools/uedctl/uned/UED22/Engine.dll`), `?PostLoad@AMover@@UAEXXZ` @ RVA
+**UED22 `Engine.dll`** (`Tools/uedcli/uned/UED22/Engine.dll`), `?PostLoad@AMover@@UAEXXZ` @ RVA
 `0x171140`:
 
 ```

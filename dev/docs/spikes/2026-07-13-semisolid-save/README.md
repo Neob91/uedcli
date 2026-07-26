@@ -33,13 +33,13 @@ MAP EXPORT/SAVE go to the container's `/work` (POSIX) path and are `docker cp`'d
 the ephemeral container's filesystem is NOT the host, so `FILE=Z:\home\…` would write
 inside the container and be invisible to a host read.
 
-Run on the HOST (Python 3.12 + direct docker) from `Tools/uedctl`. To skip the ~90s
+Run on the HOST (Python 3.12 + direct docker) from `Tools/uedcli`. To skip the ~90s
 editor boot, reuse a booted editor:
 
 ```
 PYTHONPATH=. python3 dev/docs/spikes/2026-07-13-semisolid-save/probe.py
 # reuse:
-UEDCTL_REUSE_EDITOR=uned-<uuid> PYTHONPATH=. python3 .../probe.py
+UEDCLI_REUSE_EDITOR=uned-<uuid> PYTHONPATH=. python3 .../probe.py
 ```
 
 Scripts (run in this order; each writes its `run*.log` under `_scratch/semisolid/`):

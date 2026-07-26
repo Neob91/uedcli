@@ -36,8 +36,8 @@ conclusion holds for actor classes, just for a different underlying reason
 
 Ephemeral editor (never `dx-lum-uned`), same recipe as the qualification
 spike: a runtime dir `_scratch/classdupe/rt/` of symlinks to the substrate
-`Tools/uedctl/uned/UED22/*` (container-relative symlink targets,
-`/repo/Tools/uedctl/uned/UED22/<name>`, since the bind mount path differs
+`Tools/uedcli/uned/UED22/*` (container-relative symlink targets,
+`/repo/Tools/uedcli/uned/UED22/<name>`, since the bind mount path differs
 from the host path used to build the runtime dir) + copied inis, `[Core.
 System] Paths` rewritten to absolute substrate + an extra
 `Paths=/repo/_scratch/classdupe/rt/*.u` line so a `*Dupe.u` file dropped into
@@ -45,12 +45,12 @@ System] Paths` rewritten to absolute substrate + an extra
 
 ```
 docker compose run -d --name uned-classdupe \
-  --entrypoint "/usr/bin/tini -- bash /repo/Tools/uedctl/uned/entrypoint.sh" \
+  --entrypoint "/usr/bin/tini -- bash /repo/Tools/uedcli/uned/entrypoint.sh" \
   -e UED_DIR=/repo/_scratch/classdupe/rt \
   -v uned-wp-classdupe:/wineprefix uned
 ```
 
-Driven via `docker exec uned-classdupe python3 /repo/Tools/uedctl/uned/wine_ctl.py exec "<VERB>"`.
+Driven via `docker exec uned-classdupe python3 /repo/Tools/uedcli/uned/wine_ctl.py exec "<VERB>"`.
 
 ## Picking a package to duplicate
 
@@ -210,7 +210,7 @@ actor instantiates.
   spike's merge implication (item 4) is unaffected.
 - **The actor's class package still can't be *read back* from a plain
   export or `OBJ LIST`** — recovering it after the fact needs the heavier
-  `OBJ DEPENDENCIES PACKAGE=MyLevel` reflection (or, for uedctl's own
+  `OBJ DEPENDENCIES PACKAGE=MyLevel` reflection (or, for uedcli's own
   purposes, simply never losing it — see below).
 
 ## What DOES change — surface-texturing spec implication
@@ -221,21 +221,21 @@ can't be derived from `Class=` (export bare; import ignores the
 qualifier)."* The **"import ignores the qualifier"** half is now disproven
 under a true collision — import **honors** it, exactly like `Texture=`.
 
-This means uedctl's actor-class package handling is symmetric with the
+This means uedcli's actor-class package handling is symmetric with the
 texture-package design (already recommended in the qualification spike):
 
-1. **The package is still authored data uedctl must own** — unchanged,
+1. **The package is still authored data uedcli must own** — unchanged,
    because EXPORT still strips it. No read of a `.dx`/T3D recovers an
    actor's class package, regardless of whether a real collision exists in
    the loaded package set today.
 2. **But the materialize-time qualified emit is now confirmed to matter
-   for correctness, not just to be safely ignorable.** If uedctl ever emits
+   for correctness, not just to be safely ignorable.** If uedcli ever emits
    actors whose class lives in a package that collides by name with another
    loaded package (plausible for DeusEx mod content — many LUM/community
    `.u` files reuse common class names), emitting **bare** `Class=` risks
    the editor binding the **wrong package's class** under ambiguity
    (whichever loads first/last — not pinned down here, and not needed: the
-   fix is to never rely on it). uedctl should emit the **qualified**
+   fix is to never rely on it). uedcli should emit the **qualified**
    `Class=Package.ClassName` at materialize (the same `packages` manifest
    that already tracks the actor's declared package, mirroring the
    `texture_package` design) whenever the package is known, exactly as
@@ -295,6 +295,6 @@ texture-package design (already recommended in the qualification spike):
   string-extraction method; note its UTF-16LE assumption is for the
   **engine DLLs**, not `.u` asset/code packages (ANSI name tables).
 - Surface texturing design (package-binding consumer):
-  `2026-06-19-uedctl-surface-flags-texturing-design.md` (if/when written) —
+  `2026-06-19-uedcli-surface-flags-texturing-design.md` (if/when written) —
   this spike's actor-class-package finding generalizes the texture-package
   recommendation to `Class=`.

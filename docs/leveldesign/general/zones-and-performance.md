@@ -89,7 +89,7 @@ actor prop set MyZone bFogZone=True                          # distance fog (see
 ## Build order matters
 
 The editor rebuilds in the order **Geometry → BSP → Lighting → Paths**. Rebuilding Geometry+BSP
-**erases lighting** — so relight after any geometry change (uedctl bakes lighting inside `materialize`,
+**erases lighting** — so relight after any geometry change (uedcli bakes lighting inside `materialize`,
 so this is automatic there). Keep **Build Visibility Zones** on during a rebuild — unchecking it wipes
 your zones.
 

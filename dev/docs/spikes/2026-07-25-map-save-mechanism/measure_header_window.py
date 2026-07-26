@@ -7,7 +7,7 @@ every offset to lie inside the file AND each table to have room for `count` entr
 encoded size. `required_end / size` is therefore the fraction of the file the check can vouch for;
 `1 - that` is the blind tail. Reported against the weaker offsets-only rule for comparison.
 
-Run:  python3 measure_header_window.py         (from Tools/uedctl, with a project + games config)
+Run:  python3 measure_header_window.py         (from Tools/uedcli, with a project + games config)
 
 Feeds the numbers quoted in `driver.package_header_problem`, `architecture.md` "Editor driver" and
 `decisions.md` 2026-07-25 11:31 UTC. Re-run it before re-quoting them.
@@ -20,17 +20,17 @@ from collections import Counter
 
 sys.path.insert(0, os.getcwd())
 
-from uedctl import config, driver                                          # noqa: E402
+from uedcli import config, driver                                          # noqa: E402
 
 # Must mirror driver.package_header_problem's table order + per-entry minimums.
 PER_ENTRY = {"name": 5, "export": 12, "import": 7}
 
 
 def main() -> int:
-    project = config.resolve_project(env_project=os.environ.get("UEDCTL_PROJECT"), cwd=os.getcwd())
+    project = config.resolve_project(env_project=os.environ.get("UEDCLI_PROJECT"), cwd=os.getcwd())
     user_config = config.load_user_config()
     if user_config is None:
-        raise SystemExit("no ~/.uedctl/config.toml — cannot resolve the composed search path")
+        raise SystemExit("no ~/.uedcli/config.toml — cannot resolve the composed search path")
 
     rows = []
     for path, _prov in config.composed_search_files(project, user_config):

@@ -1,6 +1,6 @@
 ### The repo this tool lives in
 
-`uedctl` is its own repository — this file sits at its root and **is the
+`uedcli` is its own repository — this file sits at its root and **is the
 repo's canonical rule file**. There is no rule file above it. (A sibling
 `uplayctl` mirrors these rules, but it lives in a *different* repo and is not
 reachable from here; changes made here do not propagate to it.)
@@ -15,7 +15,7 @@ reachable from here; changes made here do not propagate to it.)
   the tracked tree — not `Temp/`, not `Maps/`, not the repo root. (This
   session-scratch dir noted in the environment prompt is fine for files that
   never need to outlive the session; `_scratch/` is the in-repo home.)
-- **`TODO.md` (repo root) holds repo-level, cross-cutting items**; uedctl's
+- **`TODO.md` (repo root) holds repo-level, cross-cutting items**; uedcli's
   own backlog is the board under `dev/docs/board/` (see **TODOs** below).
   When an item is fully done, delete it — never leave it ticked `[x]`.
 
@@ -366,7 +366,7 @@ ever add new commits on top; mistakes are corrected with a fresh commit
 
 ### Code & CLI conventions
 
-- **NO BACK-COMPAT CRUFT — uedctl is UNRELEASED.** There are no external
+- **NO BACK-COMPAT CRUFT — uedcli is UNRELEASED.** There are no external
   users and no scripts in the wild, so nothing is ever kept for backward
   compatibility. When you remove or rename a flag, verb, option value,
   output format, or code path, **delete it outright** in the same change
@@ -377,7 +377,7 @@ ever add new commits on top; mistakes are corrected with a fresh commit
   avoid re-writing callers, or an "old way" branch in code/tests/docs.
   Every shim is permanent maintenance surface and a second thing to keep
   true in the docs. *(`dev/docs/direction/conventions.md` "No
-  back-compat cruft". Superseded only when uedctl is released.)*
+  back-compat cruft". Superseded only when uedcli is released.)*
 - **No silent half-answers.** A command that can't fully satisfy a
   request exits 2 naming the offending value, rather than emitting a
   partial result plus a stderr warning — stderr scrolls away and the
@@ -485,10 +485,10 @@ below — but the user-facing docs are the first thing to update when functional
 changes.)
 
 **`docs/` is ALL user-facing; developer docs are a SEPARATE tree.** Everything
-under `docs/` (`usage.md`, `leveldesign/`) is written for uedctl *users* — the
+under `docs/` (`usage.md`, `leveldesign/`) is written for uedcli *users* — the
 LLM level-designer driving the CLI. The developer/internal docs (architecture,
 direction, decisions, spikes, board, the `unrealed/` engine notes, the dev `kb/`)
-are for uedctl *developers*, a different audience. **User-facing docs must NEVER
+are for uedcli *developers*, a different audience. **User-facing docs must NEVER
 reference the developer docs** — no links or paths to spikes, the board,
 decisions, architecture, etc.: a user cannot open them and must not be sent
 there. State the fact plainly in the user doc instead (with a confidence marker
@@ -567,7 +567,7 @@ alternatives"; point it at the owning `direction/` or `rationale/` topic.
 uncited assertion can't be trusted or re-verified later.
 
 **Tag UnrealEd facts in `unrealed/*.md` with a confidence marker:** ✅ =
-uedctl-used / live-verified, 🔬 = live-probed, 📖 = extracted from the binary
+uedcli-used / live-verified, 🔬 = live-probed, 📖 = extracted from the binary
 string table (vocabulary real, semantics inferred). Don't state an extracted
 fact with the certainty of a verified one.
 
@@ -576,7 +576,7 @@ fact with the certainty of a verified one.
 Only `direction/README.md` (the topic index) is auto-loaded. **Every doc below is
 NOT in your context — you MUST `Read` the relevant one before the action it
 names.** These one-liners are a *router, not a substitute*: never answer a
-question about UnrealEd behavior, the T3D format, uedctl internals, **or a
+question about UnrealEd behavior, the T3D format, uedcli internals, **or a
 process rule** from this summary or from training memory — the editor is
 undocumented and crash-prone, and these docs are the only ground truth. If a
 task touches any row below and you have not read that doc **this session**,
@@ -593,7 +593,7 @@ prompt can tell it so.
 
 - **@dev/docs/direction/README.md** — *(auto-loaded, already in context)* the index of what we WANT. **Read the topic doc itself before any design question, spec or plan** — the index is a router, not the content.
 - `dev/docs/direction.md` — **being retired.** Holds only the topics `direction/README.md` still marks *(pending)*; every other section is a pointer.
-- `dev/docs/architecture.md` — **Read BEFORE any uedctl code change or design question**: the layer/module map, the model-side write pattern, invariants D1–D8, the session-store shape.
+- `dev/docs/architecture.md` — **Read BEFORE any uedcli code change or design question**: the layer/module map, the model-side write pattern, invariants D1–D8, the session-store shape.
 - `dev/docs/decisions.md` — **FROZEN, historical reading only — never append.** The retired ledger, migrating into `dev/docs/direction/` (the owner's decisions) and `dev/docs/rationale/` (yours). `dev/docs/rationale/MIGRATION.md` records where each entry went and is the map from an old dated citation to its new home.
 - `dev/docs/unrealed/commands.md` — **Read BEFORE driving the editor console**: the exec-verb reference (what to type).
 - `dev/docs/unrealed/t3d.md` — **Read BEFORE authoring/parsing T3D or editing surfaces/geometry**: block nesting, property forms, winding, authored-vs-computed taxonomy.
@@ -606,7 +606,7 @@ prompt can tell it so.
 cannot afford to miss; the doc carries the rest:
 
 - `dev/docs/rules/tests.md` — **Read BEFORE running tests.** Run them via **`bin/test`**, never
-  bare `pytest`; uedctl and its suite are **host-native, not containerised**.
+  bare `pytest`; uedcli and its suite are **host-native, not containerised**.
 - `dev/docs/rules/spikes.md` — **Read BEFORE starting or finishing a spike.** Commit the harness to
   `dev/docs/spikes/<slug>/`, never leave it in `_scratch/`; **pin every checkable finding with a
   committed regression test** or it rots.

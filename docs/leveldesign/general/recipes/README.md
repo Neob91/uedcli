@@ -2,7 +2,7 @@
 
 Full step-by-step builds for the classic UnrealEngine-1 set-pieces. Each recipe gives both the
 **numbered editor procedure** (what the GUI flow does, so you understand the mechanism) **and** the
-**uedctl verb pipeline** (what you actually run — the trunk is the source of truth; the editor only
+**uedcli verb pipeline** (what you actually run — the trunk is the source of truth; the editor only
 builds it via `level materialize`).
 
 > **Names in the pipelines are placeholders.** `actor add` allocates each actor a name with a random

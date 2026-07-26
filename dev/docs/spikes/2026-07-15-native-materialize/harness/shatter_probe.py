@@ -31,10 +31,10 @@ from pathlib import Path
 HARNESS = Path(__file__).resolve().parent
 ROOT = HARNESS.parents[4]
 sys.path.insert(0, str(ROOT))
-sys.path.insert(0, str(ROOT / "dev/docs/spikes/2026-06-27-decontainerize-uedctl/harness"))
+sys.path.insert(0, str(ROOT / "dev/docs/spikes/2026-06-27-decontainerize-uedcli/harness"))
 
 import utexture_decode as UT  # noqa: E402
-from uedctl.native import umodel as UM  # noqa: E402
+from uedcli.native import umodel as UM  # noqa: E402
 
 # reuse the verified portal collector / clip from the zone oracle
 sys.path.insert(0, str(HARNESS))

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 r"""Spike harness part 4: reproduce the failure at FULL CASTLE SCALE by driving the
-editor directly (bypassing uedctl's texture-qualify step, which errors on an
+editor directly (bypassing uedcli's texture-qualify step, which errors on an
 unrelated package issue in this env). We feed the ENTIRE castle trunk (95 brushes
 + points) PLUS the 16 detail brushes from build_detail.sh BATCH 3+4, rebuild, and
 MAP SAVE — once with the 16 detail brushes SEMISOLID, once SOLID. Textures are
@@ -8,7 +8,7 @@ stripped from every brush (both variants equally) so the editor needs no package
 loads; the only difference between the two runs is the detail solidity flag.
 
 Reuse the booted editor:
-    UEDCTL_REUSE_EDITOR=uned-<uuid> PYTHONPATH=. python3 .../probe_full.py
+    UEDCLI_REUSE_EDITOR=uned-<uuid> PYTHONPATH=. python3 .../probe_full.py
 """
 from __future__ import annotations
 
@@ -20,14 +20,14 @@ import time
 import uuid
 from pathlib import Path
 
-from uedctl import builders, writes
-from uedctl.driver import Driver, to_z_path
-from uedctl.materialize import levelinfo_first_order
-from uedctl.trunk import read_level
-from uedctl.uuid7 import uuid7
-from uedctl.editor import ensure_editor, stop_editor
+from uedcli import builders, writes
+from uedcli.driver import Driver, to_z_path
+from uedcli.materialize import levelinfo_first_order
+from uedcli.trunk import read_level
+from uedcli.uuid7 import uuid7
+from uedcli.editor import ensure_editor, stop_editor
 
-CASTLE = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/_scratch/castle/uedctl/maps/foobar")
+CASTLE = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/_scratch/castle/uedcli/maps/foobar")
 
 
 def log(*a):
@@ -134,7 +134,7 @@ def main():
     base = load_castle_actors()
     log(f"loaded {len(base)} castle actors "
         f"({sum(1 for a in base if a.brush is not None)} brushes)")
-    reuse = os.environ.get("UEDCTL_REUSE_EDITOR")
+    reuse = os.environ.get("UEDCLI_REUSE_EDITOR")
     ed_id = None
     if reuse:
         container = reuse; log(f"REUSING {container}")

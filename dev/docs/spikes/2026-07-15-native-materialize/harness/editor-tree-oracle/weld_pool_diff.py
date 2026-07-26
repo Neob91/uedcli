@@ -4,7 +4,7 @@ r"""Evidence harness for decode §6a/§6b: the `bspOptGeom` T-junction detector 
 Cross-checks a native build's welds + point pool against the editor golden, three ways:
 
   1. WELDS — match native's inserter log (NINS lines, emitted by `bspoptgeom.rs` under
-     `UEDCTL_OPTGEOM_DEBUG=1`) against the editor inserter oracle (`logs/bspopt-insert.log`,
+     `UEDCLI_OPTGEOM_DEBUG=1`) against the editor inserter oracle (`logs/bspopt-insert.log`,
      produced by `bspopt_insert_oracle.py`).  Keyed permutation-invariantly on (node-plane, welded-P)
      because the two trees are isomorphic under a node RELABELING, so raw node indices do not align.
      Expected after the perpendicular (E×N) detector fix: 959/975 editor welds reproduced.
@@ -17,7 +17,7 @@ Cross-checks a native build's welds + point pool against the editor golden, thre
      orphan-point bookkeeping (native clears+rebuilds → 1797; editor keeps CSG-transients → 2035).
 
 Usage:
-  UEDCTL_OPTGEOM_DEBUG=1 python ../build_native_castle.py /tmp/NativeCastle.dx 2>/tmp/nins.log
+  UEDCLI_OPTGEOM_DEBUG=1 python ../build_native_castle.py /tmp/NativeCastle.dx 2>/tmp/nins.log
   python weld_pool_diff.py /tmp/nins.log /tmp/NativeCastle.dx [Test_Castle.dx]
 """
 import re
@@ -25,11 +25,11 @@ import sys
 from collections import Counter
 from pathlib import Path
 
-ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedctl")
+ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedcli")
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT))
-from uedctl.native import umodel as UM  # noqa: E402
-from uedctl.native.pkg_write import parse_package  # noqa: E402
+from uedcli.native import umodel as UM  # noqa: E402
+from uedcli.native.pkg_write import parse_package  # noqa: E402
 
 NINS_LOG = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("/tmp/nins.log")
 NATIVE = Path(sys.argv[2]) if len(sys.argv) > 2 else Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/_scratch/NativeCastle.dx")

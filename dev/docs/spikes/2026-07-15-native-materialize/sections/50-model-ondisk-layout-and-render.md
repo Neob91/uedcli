@@ -6,7 +6,7 @@ vs our native `NativeCSG.dx`) + static disassembly of the **game's** `Render.dll
 (`capstone`+`pefile`; ImageBase `0x10b00000`). All RVAs below are file-RVAs at that base.
 **Reproduce:** the decode/dump scripts are `rawdump.py` / `trailingdump.py` (byte layout) and the
 `Render.dll` disasm one-liners in this doc; parser under test is
-`uedctl/native/umodel.py`, writer `uedctl-native/src/model_write.rs`.
+`uedcli/native/umodel.py`, writer `uedcli-native/src/model_write.rs`.
 
 ### Confidence legend
 - ✅ live-verified / byte-exact against a real `.dx`

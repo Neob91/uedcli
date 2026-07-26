@@ -23,10 +23,10 @@ Usage:  weld_livetable_diff.py     # needs _scratch/gtruth/NativeCastle.dx + nin
 import re,sys,math
 from pathlib import Path
 from collections import defaultdict
-ROOT=Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedctl")
+ROOT=Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedcli")
 sys.path.insert(0,str(ROOT))
-from uedctl.native import umodel as UM
-from uedctl.native.pkg_write import parse_package
+from uedcli.native import umodel as UM
+from uedcli.native.pkg_write import parse_package
 THRESH=0.25; DEGEN=1e-6; CAP=0.251001
 def load(p):
     pkg=parse_package(Path(p).read_bytes())

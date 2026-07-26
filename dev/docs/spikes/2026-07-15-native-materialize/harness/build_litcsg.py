@@ -5,15 +5,15 @@ bake produces a non-empty lightmap (the surfaces render lit in-game instead of b
 Prints lightmap stats for a quick sanity check.
 """
 import sys
-sys.path.insert(0, '/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedctl')
+sys.path.insert(0, '/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedcli')
 
 from decimal import Decimal as D
 from spike_classindex import class_index   # the schema-aware mover gate's ClassIndex
-from uedctl.builders import cube, make_brush_actor
-from uedctl.model import Level, Actor
-from uedctl.native.materialize import run_materialize_native
-from uedctl.native.umodel import parse_model_body
-from uedctl.native.pkg_write import parse_package
+from uedcli.builders import cube, make_brush_actor
+from uedcli.model import Level, Actor
+from uedcli.native.materialize import run_materialize_native
+from uedcli.native.umodel import parse_model_body
+from uedcli.native.pkg_write import parse_package
 
 room = make_brush_actor("RoomA", cube(512, 512, 256), location=(D(0), D(0), D(0)),
                         csg="subtract")

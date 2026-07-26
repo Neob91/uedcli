@@ -185,7 +185,7 @@ scope, revise-in-place, no hook, deleting the ledger. Otherwise they exist only 
 ## <the decision>
 **Why it is this way:** …
 **Rejected:** <alternative> — because …
-**Refs:** `spikes/<file>`, `uedctl/<module>.py`
+**Refs:** `spikes/<file>`, `uedcli/<module>.py`
 ```
 
 v3 specified no shape, which would have discarded the ledger's **83 `**Rejected:**` blocks** —
@@ -234,7 +234,7 @@ and three times it missed `CLAUDE.md:428`, `:493`, `:496`, `:499` — because th
 the list below is the contract.
 
 `CLAUDE.md`: 143, 230, 386, 422, 428, 472, 493, 496, 499, 526-531, 532, 554, 558, 573, 591, 593, 649.
-`dev/docs/README.md`: 24, 25, 38, 39, 42, 43, 45 (the `Tools/uedctl/` label), 103.
+`dev/docs/README.md`: 24, 25, 38, 39, 42, 43, 45 (the `Tools/uedcli/` label), 103.
 
 - **NOT-trivial list** drops the two deleted docs; gains `direction/*`, `rationale/*`, `rules/*`.
 - **≥12 internal cross-references**, both directions. The gate is **not** keyed on `see **X**` —
@@ -242,7 +242,7 @@ the list below is the contract.
   "above", "below", "this file", "two levels up", bold/italic section names, and doc-relative paths
   (e.g. `:393`'s `unrealed/quirks.md "Stability"`) across the moved 74 lines.
 - **`dev-runtime.md` is stale in the opposite direction** — it still documents the Docker
-  `uedctl-dev` image and `bin/_dev-run.sh`, retired 2026-07-14. Today the correct text is resident
+  `uedcli-dev` image and `bin/_dev-run.sh`, retired 2026-07-14. Today the correct text is resident
   and wins; after the move an agent could read the wrong one first. Fix it in the same change.
 
 ### Part F — three false statements in the retained/moved text
@@ -255,7 +255,7 @@ All three are in the diff, so `CLAUDE.md` forbids logging them instead of dealin
    `.gitignore`**, making the sentence true — the owner's call, logged to `board/inbox.md` if he
    declines. Note this interacts with (3): a blanket `.claude/` ignore would block committing
    `.claude/settings.json`, so use `.claude/worktrees/` if (3) is resolved by creating that file.
-2. **`CLAUDE.md:3-19` — the `Tools/uedctl/` inside `dx_lum` layout, and "`_scratch/` two levels
+2. **`CLAUDE.md:3-19` — the `Tools/uedcli/` inside `dx_lum` layout, and "`_scratch/` two levels
    up".** Toplevel is `/home/neob91/Documents/Dev/uedcli`; no `Tools/`; `_scratch/` is at that root.
    **Remedy: rewrite the paragraph to the real layout.** Same false label at `dev/docs/README.md:45`.
 3. **`CLAUDE.md:293-297` — "this repo's `.claude/settings.json` sets `worktree.baseRef: head`".**

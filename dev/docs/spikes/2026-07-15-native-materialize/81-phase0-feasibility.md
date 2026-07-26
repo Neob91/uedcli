@@ -4,7 +4,7 @@
 name/import/export-table byte-identity is reachable for the castle; GUID/timestamps excluded).
 Instruction-level evidence: `re-raw-zones/fp-classification-sites.md`,
 `re-raw-zones/bspbuild-splitpolylist-decode.md`, `41-fp-model-x87-vs-sse.md`, `42-bspoptgeom-decode.md`.
-Confidence legend: ✅ uedctl-used/live-verified · 🔬 live-probed (disassembly) · 📖 binary-extracted.
+Confidence legend: ✅ uedcli-used/live-verified · 🔬 live-probed (disassembly) · 📖 binary-extracted.
 
 This section converts the four Phase-0 unknowns in `specs/bspbrushcsg-port.md §Phase 0` into
 verdicts. It does NOT start the port.
@@ -24,7 +24,7 @@ verdicts. It does NOT start the port.
 
 ## 1. Gate 1 — input identity (castle bit-trivial; rotation is the future blocker)
 
-Dumped all brush `actor.t3d` under `_scratch/castle/uedctl/maps/foobar/actors/` (95 brush actors):
+Dumped all brush `actor.t3d` under `_scratch/castle/uedcli/maps/foobar/actors/` (95 brush actors):
 - `Rotation=(…)`: **0 brushes** (absent ⇒ zero).
 - non-zero `SheerRate`: **0**. `PrePivot=(…)`: **0**. explicit `MainScale`/`PostScale` `Scale=(X..)`
   vector: **0** — every brush's scale block is `(SheerAxis=SHEER_ZX)` ⇒ default identity `(1,1,1)`.

@@ -10,7 +10,7 @@ import sys
 import time
 
 CONT = "uned-liupdate"
-WCTL = ["docker", "exec", CONT, "python3", "/repo/Tools/uedctl/uned/wine_ctl.py"]
+WCTL = ["docker", "exec", CONT, "python3", "/repo/Tools/uedcli/uned/wine_ctl.py"]
 DELAY = 1.2
 
 

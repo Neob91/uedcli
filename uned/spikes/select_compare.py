@@ -2,7 +2,7 @@
 """Clean side-by-side: is an IMPORTADD'd brush selectable vs a BRUSH ADD'd one?
 
 Both in ONE fresh session, at distinct locations, no clear() confound:
-  IA_BRUSH  -> MAP IMPORTADD (uedctl's add path) at X=-300
+  IA_BRUSH  -> MAP IMPORTADD (uedcli's add path) at X=-300
   (auto)    -> BRUSH ADD (editor's own) at X=+300
 Then: SELECT ALL read-back, and an enclosing SELECT INSIDE box at each.
 """
@@ -12,7 +12,7 @@ import select_matrix as M
 def run():
     M.restart_editor()          # guaranteed-empty fresh map, no leftovers
     M.clear()
-    # IMPORTADD brush at X=-300 (uedctl add_actor path: parse->emit->IMPORTADD)
+    # IMPORTADD brush at X=-300 (uedcli add_actor path: parse->emit->IMPORTADD)
     p = M.put(M.emit_map([M.importadd_actor("IA_BRUSH", (-300, 0, 0))]), "cmp_ia")
     M.ex("MAP GRID X=1 Y=1 Z=1"); M.ex(f"MAP IMPORTADD FILE={p}")
     # BRUSH ADD brush at X=+300 (editor's own add)

@@ -2,7 +2,7 @@
 
 Goal: go/no-go on whether we can reliably extract Vectors, Points, Nodes, Surfs,
 Verts, Leaves from a built .dx and locate BSP issues (invisible walls, fall-through,
-T-junction T-points). This is the spike; if go, it promotes to uedctl/bsp/umodel.py.
+T-junction T-points). This is the spike; if go, it promotes to uedcli/bsp/umodel.py.
 
 Usage:
     python3 umodel_parser.py <path-to-.dx> [--model-export=N]

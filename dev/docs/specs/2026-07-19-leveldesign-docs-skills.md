@@ -18,11 +18,11 @@ the roads not taken, read that ledger entry — they are not restated here.
 The `dev/docs/unrealed/leveldesign/` guides (`README`, `csg-and-bsp`, `lighting`, `movers`,
 `textures-and-surfaces`, `zoning-occlusion-performance`) are good *craft* references but were
 written from the **UnrealEd GUI operator's** seat — "commit the builder brush with *Add Special*",
-"set flags in *Surface Properties*", "*Transform Permanently*". uedctl users (and the LLM driving
+"set flags in *Surface Properties*", "*Transform Permanently*". uedcli users (and the LLM driving
 it) never touch that GUI; they compose **verbs** against the git-tracked T3D trunk. Three concrete
 gaps surfaced while building the castle by hand:
 
-1. **GUI-first framing.** Each guide teaches menu operations, not the uedctl verb that achieves the
+1. **GUI-first framing.** Each guide teaches menu operations, not the uedcli verb that achieves the
    same thing. `movers.md` is the sole exception — it is already verb-first (it names `brush build
    --mover-class` and the `mover key` verbs) and is the model the others should follow.
 2. **No DeusEx human-scale numbers.** Nothing tells an author how tall a corridor should be, how
@@ -41,7 +41,7 @@ gaps surfaced while building the castle by hand:
 CLI-only repo move**, §6.1.1); (d) wiring `leveldesign/` into
 the `CLAUDE.md` "read BEFORE X" router.
 
-**Non-goals:** no new uedctl verbs are invented for this effort — the rewrite maps the craft onto
+**Non-goals:** no new uedcli verbs are invented for this effort — the rewrite maps the craft onto
 the verbs that **already exist** (verified below). If a craft step has no verb (e.g. grid-snap is
 guidance, not an enforced operation), the guide says so plainly rather than implying a command.
 No changes to the editor-driving path, the build pipeline, or the T3D format.
@@ -50,11 +50,11 @@ No changes to the editor-driving path, the build pipeline, or the T3D format.
 
 ## 3. The verb surface the rewrite maps onto (verified 2026-07-19)
 
-Every mapping below was checked against `bin/uedctl … --help` on this checkout. The composing
+Every mapping below was checked against `bin/uedcli … --help` on this checkout. The composing
 convention is the repo's core CLI philosophy: **generators print a T3D snippet to stdout; `actor
 add -` consumes it into the trunk; per-surface edits run model-side via `brush poly`.**
 
-| Craft task | uedctl verb(s) | UnrealEd GUI equivalent (kept as an annotation) |
+| Craft task | uedcli verb(s) | UnrealEd GUI equivalent (kept as an annotation) |
 |---|---|---|
 | Carve/place world geometry | `brush build {cube,cylinder,cone,sheet,staircase,spiral,extrude,revolve} --csg {add,subtract} --solidity {solid,semisolid,nonsolid} --texture …` \| `actor add -` | shape the red builder brush → *Subtract*/*Add* |
 | Solidity choice | `--solidity solid\|semisolid\|nonsolid` on `brush build` | *Add Special* solidity / brush flags |
@@ -66,7 +66,7 @@ add -` consumes it into the trunk; per-surface edits run model-side via `brush p
 | Water | `brush build sheet --flag portal --flag translucent` \| `actor add -` (the water surface) **plus** `actor build Engine.ZoneInfo --prop bWaterZone=True` \| `actor add -` (recipe §4.1) | translucent portal surface + `bWaterZone` ZoneInfo |
 | Texturing / surface flags / alignment | `brush poly find` → `brush poly set --texture … --add-flag … --remove-flag … --pan-to/--pan-by` ; `brush poly align --wall\|--floor\|--ring` ; `brush poly list` | select faces in *Surface Properties*, set texture/flags/pan/align |
 | Skybox | `actor build Engine.SkyZoneInfo …` in a separate sky box, sky-room faces `--add-flag Unlit`, playable "sky window" faces `--add-flag FakeBackdrop` | `SkyZoneInfo` + *Fake Backdrop* surfaces |
-| Grid discipline | **guidance only — no enforcement verb.** The guide states the on-grid / clean-multiple / 90°-rotation rules and notes uedctl does not snap for you | GUI grid-snap toggle |
+| Grid discipline | **guidance only — no enforcement verb.** The guide states the on-grid / clean-multiple / 90°-rotation rules and notes uedcli does not snap for you | GUI grid-snap toggle |
 | Class discovery | `class list` (inheritance tree; `--flat`, `--subclass-of`, `--depth`), `class show <Class>` | Actor Class Browser |
 
 Two verb facts worth pinning for the rewrite so it doesn't overstate:
@@ -80,7 +80,7 @@ Two verb facts worth pinning for the rewrite so it doesn't overstate:
 
 ## 4. Deliverable A — docs rewrite (verb-first, GUI-annotated)
 
-**Shape of every rewritten guide:** verb-first prose is primary; each craft step names the uedctl
+**Shape of every rewritten guide:** verb-first prose is primary; each craft step names the uedcli
 verb (with a runnable one-liner where it helps), and a short *"UnrealEd GUI equivalent: …"* note in
 parentheses or a callout preserves the mental model for a GUI-aware reader. This is a reframing, not
 a content cull. Human-scale numbers (from Deliverable B) are cited, never
@@ -88,7 +88,7 @@ invented; until the spike lands, a guide may reference "see the human-scale tabl
 
 **Retention checklist (a "full rewrite" is diffed against this keep-list, so hard-won content can't
 silently drop).** Every rewritten guide MUST preserve, verbatim where they are facts:
-- the **confidence markers** (✅ uedctl-used/live-verified, 🔬 live-probed, 📖 binary-extracted) on
+- the **confidence markers** (✅ uedcli-used/live-verified, 🔬 live-probed, 📖 binary-extracted) on
   every UnrealEd fact — a reframed sentence keeps its marker;
 - the **"Debunked" callouts** (e.g. the no-antiportals note in the zoning guide, both lighting-guide
   debunks) — these are expensive negative findings and are carried over intact;
@@ -105,7 +105,7 @@ File-by-file:
 - **`csg-and-bsp.md`** — rewrite the subtractive workflow, brush order, solidity table, and BSP-hole
   repair around `brush build … --csg/--solidity | actor add -` and `actor order` (CSG precedence is
   the trunk's `(order_value, name)` sort — `actor order --first` is the verb analog of "To First").
-  Grid discipline stays as **guidance** with an explicit "uedctl does not enforce snapping" note.
+  Grid discipline stays as **guidance** with an explicit "uedcli does not enforce snapping" note.
   Keep the disassembly mechanism box and the `2026-06-24` spike citation.
 - **`zoning-occlusion-performance.md`** — zones/portals via `actor build Engine.ZoneInfo … | actor
   add -` and a portal sheet (`brush build sheet --flag portal | actor add -`). **The water recipe
@@ -114,7 +114,7 @@ File-by-file:
 - **`lighting.md`** — this guide is **already the most current** (it correctly states `MAP REBUILD`
   wipes lighting and `LIGHT APPLY` bakes, and carries the `2026-07-15` bake-mechanism box). The
   rewrite is light: reframe light *placement* as `actor build Engine.Light --prop … | actor add -`,
-  and state plainly that from the uedctl seat **there is no standalone bake verb** — the lightmap
+  and state plainly that from the uedcli seat **there is no standalone bake verb** — the lightmap
   bake happens inside `level materialize` / `level preview`, so "run `LIGHT APPLY` after retinting"
   becomes "re-`materialize`/`preview` to see lighting; authoring lights is pure `actor` edits". Keep
   the `LightType` vs `LightEffect` split, the `LE_Negative` note, and both Debunked callouts.
@@ -122,7 +122,7 @@ File-by-file:
   `brush poly find/set/align`. Flag names map to `--add-flag`/`--remove-flag`; alignment maps to
   `brush poly align --wall|--floor|--ring` and `--pan-to/--pan-by`. Skybox becomes the `SkyZoneInfo` +
   `FakeBackdrop`/`Unlit` recipe using `actor build` + `brush poly set`. `MyLevel` stays described as
-  editor/engine mechanism (note whether uedctl exposes an embed path or it's editor-only — **open
+  editor/engine mechanism (note whether uedcli exposes an embed path or it's editor-only — **open
   question Q3**).
 - **`movers.md`** — already verb-first; **touch-ups only** (confirm verb names still current after
   the rewrite, cross-link the new water/zone recipes if a mover borders a water zone). It is the
@@ -163,7 +163,7 @@ portal = the water surface) is settled from the existing guides.
 markdown, per the spikes rule — never left only in gitignored `_scratch/`).
 
 The spike has **two halves with different data-access methods** — this split matters because there
-is **no offline uedctl verb that ingests a binary `.dx` into a measurable T3D trunk**. uedctl verbs
+is **no offline uedcli verb that ingests a binary `.dx` into a measurable T3D trunk**. uedcli verbs
 read the *trunk* (the T3D tree), and the trunk for a shipped map only exists after an **editor `MAP
 EXPORT`** produces it. So map-geometry measurement is NOT "no editor"; class-default measurement is.
 
@@ -182,7 +182,7 @@ class defaults are read straight from the game's `.u` schema, no map corpus need
 
 **Half B2 — architectural dimensions (REQUIRES a one-time editor `MAP EXPORT`).** Room heights/
 footprints, corridor widths/heights, doorway width & height, step rise & run, ceiling clearances,
-and `PlayerStart` height-above-floor are properties of shipped **map geometry**, which uedctl can
+and `PlayerStart` height-above-floor are properties of shipped **map geometry**, which uedcli can
 only measure once the map is a trunk:
 - **Budget a one-time editor `MAP EXPORT` step** that exports a handful of shipped `DX/Maps/*.dx`
   into a **trunk corpus** under the spike dir. This is the only editor touch in the spike and it is
@@ -216,9 +216,9 @@ not a parallel copy.
 ### 6.1 Layout
 
 ```
-Tools/uedctl/claude/plugins/uedctl/
+Tools/uedcli/claude/plugins/uedcli/
   .claude-plugin/plugin.json                          # NEW — plugin manifest
-  docs -> (within-repo relative symlink) ../../../dev/docs/unrealed/leveldesign/   # → Tools/uedctl/docs/… ; see §6.3
+  docs -> (within-repo relative symlink) ../../../dev/docs/unrealed/leveldesign/   # → Tools/uedcli/docs/… ; see §6.3
   skills/
     build-water/SKILL.md
     build-mover/SKILL.md
@@ -229,17 +229,17 @@ Tools/uedctl/claude/plugins/uedctl/
     grid-discipline/SKILL.md
 ```
 
-- The non-hidden **`claude/`** dir under `Tools/uedctl/` groups all Claude-integration assets (today
-  just this plugin). It sits **outside** the `uedctl/` Python package, so it needs **no packaging
+- The non-hidden **`claude/`** dir under `Tools/uedcli/` groups all Claude-integration assets (today
+  just this plugin). It sits **outside** the `uedcli/` Python package, so it needs **no packaging
   change** — it ships via git, never via the wheel/Nuitka binary. This **in-repo plugin layout** and
   the **bundled-docs-via-symlink** design (§6.3) are settled and unchanged; only the *distribution*
   mechanism (below) is deferred.
 
 ### 6.1.1 Distribution — UPDATED DECISION (Andrzej, 2026-07-19)
 
-uedctl is being **moved into its own CLI-only repo**, separate from the ~3.3 GB `dx_lum` mod repo.
+uedcli is being **moved into its own CLI-only repo**, separate from the ~3.3 GB `dx_lum` mod repo.
 The **repo-as-its-own-marketplace** distribution (a `.claude-plugin/marketplace.json` at the repo
-root, `/plugin marketplace add <repo-url>` → `/plugin install uedctl@<marketplace-name>`) is
+root, `/plugin marketplace add <repo-url>` → `/plugin install uedcli@<marketplace-name>`) is
 **BLOCKED ON that repo move** — and the move is exactly what makes it viable: a small, clean CLI-only
 repo is a fine thing to clone into the plugin cache, whereas cloning the whole 3.3 GB mod repo (the
 problem the reviewers flagged) is not. So **no `marketplace.json` is created yet**, and distribution
@@ -270,8 +270,8 @@ duplicate it. Proposed set (one per common authoring task):
 
 Each names the concrete verb pipeline (from §3) and reaches its bundled guide through the skill-dir
 variable Claude Code exposes: **`${CLAUDE_SKILL_DIR}/../../docs/<guide>.md`**. From a skill at
-`plugins/uedctl/skills/<skill>/SKILL.md`, `${CLAUDE_SKILL_DIR}` is that skill's own dir, so `../../`
-climbs to the plugin root (`plugins/uedctl/`) and `docs/<guide>.md` is the bundled guide via the
+`plugins/uedcli/skills/<skill>/SKILL.md`, `${CLAUDE_SKILL_DIR}` is that skill's own dir, so `../../`
+climbs to the plugin root (`plugins/uedcli/`) and `docs/<guide>.md` is the bundled guide via the
 symlink (§6.3). The path **stays within the plugin root** (it never escapes to `../` above the
 plugin), so it is allowed under the cache-isolation constraint, and a marketplace-installed copy
 resolves it inside its own cache.
@@ -282,14 +282,14 @@ A marketplace-installed plugin runs from a **cached copy** of only the plugin di
 **cannot reference files outside the plugin dir** — a `../` path escaping the plugin root is
 **blocked**. So the craft docs must physically live **inside** the plugin. To avoid a second copy of
 the guides (which would immediately diverge from the canonical docs), bundle them via a
-**within-repo relative symlink** at `Tools/uedctl/claude/plugins/uedctl/docs`, with target
+**within-repo relative symlink** at `Tools/uedcli/claude/plugins/uedcli/docs`, with target
 **`../../../dev/docs/unrealed/leveldesign/`**. From the plugin dir
-(`Tools/uedctl/claude/plugins/uedctl/`) that `../../../` climbs to `Tools/uedctl/`, so it resolves to
-the real guides at **`Tools/uedctl/dev/docs/unrealed/leveldesign/`** — note there is **no repo-root
-`docs/`**; the canonical guides live under `Tools/uedctl/docs/`. **Same-marketplace symlink targets
+(`Tools/uedcli/claude/plugins/uedcli/`) that `../../../` climbs to `Tools/uedcli/`, so it resolves to
+the real guides at **`Tools/uedcli/dev/docs/unrealed/leveldesign/`** — note there is **no repo-root
+`docs/`**; the canonical guides live under `Tools/uedcli/docs/`. **Same-marketplace symlink targets
 are dereferenced/copied into the cache** at install time (see Q2 — resolved as documented-safe), so
 the installed plugin gets a real copy of the guides while the repo keeps exactly **one editable
-source** (`Tools/uedctl/dev/docs/unrealed/leveldesign/`). The symlink is **relative** (never
+source** (`Tools/uedcli/dev/docs/unrealed/leveldesign/`). The symlink is **relative** (never
 absolute) so it resolves in every clone. **Open question Q2** (now a documented-safe assumption, not
 a blocker): an optional local-clone install probe can confirm the dereference on the exact Claude
 Code version in use.
@@ -299,7 +299,7 @@ Code version in use.
 Add a `leveldesign/` row to the **`CLAUDE.md` "read BEFORE X" router** (the UnrealEd navigation
 section) so the guides are discoverable on demand: *"`dev/docs/unrealed/leveldesign/` — Read BEFORE
 authoring level geometry/lighting/zoning/texturing: the verb-first craft guides (what makes a good,
-buildable level, mapped onto uedctl verbs)."* This is the one edit this effort makes to `CLAUDE.md`.
+buildable level, mapped onto uedcli verbs)."* This is the one edit this effort makes to `CLAUDE.md`.
 (Not done in this spec — `CLAUDE.md` is out of scope for the spec file per the task; it lands in the
 build step.)
 
@@ -336,7 +336,7 @@ build step.)
   on the exact version in use, but it does not block the design. If a future version ever changed
   this, the fallback is a build-time copy step with a committed check that the copy matches the
   canonical guides.
-- **Q3 (`MyLevel` from uedctl).** Does uedctl expose an asset-embed path equivalent to importing
+- **Q3 (`MyLevel` from uedcli).** Does uedcli expose an asset-embed path equivalent to importing
   into the `MyLevel` pseudo-package, or is that editor-only? The texture guide's `MyLevel` section
   should say which — verify against the `texture` verb surface and the materialize path.
 - **Q4 (spike map corpus).** Which shipped DeusEx maps form the measurement corpus, and are they
@@ -367,7 +367,7 @@ facts land in `unrealed/leveldesign/*.md` during the build, not in this ephemera
 > the **full** compiled reference at
 > [`../unrealed/leveldesign/kb/README.md`](../unrealed/leveldesign/kb/README.md) (dev,
 > keeps everything incl. asset-creation/modding/GUI depth), and the **curated user subset** at
-> [`../../leveldesign/`](../../leveldesign/) (for uedctl users). §10–§12 below are the working notes
+> [`../../leveldesign/`](../../leveldesign/) (for uedcli users). §10–§12 below are the working notes
 > those were built from — the knowledge base is now authoritative. Confidence:
 tutorial lore is 📖 (leads-to-confirm) unless a fact is marked 🔬 (live-probed vs the real DX package
 this session) or cites our disassembly spike (strongest).
@@ -442,7 +442,7 @@ guides, now reconciled:
    1-unit cube, and **collision hulls / masked brushes must not touch geometry** (→ HOM).
 6. **Cross-cutting doc note (validates our architecture):** UnrealEd's **brush `.u3d` Save/Load is
    broken — Export/Import `.t3d` is the reliable path** (Wolf T1). This is worth a one-line callout
-   because it independently validates uedctl's git-tracked-T3D-trunk design.
+   because it independently validates uedcli's git-tracked-T3D-trunk design.
 7. **Hue-wheel values** differ between tutorials (Steve Tack R0/O20/Y40/G80/C120/B160/P200; Wolf
    R0/O25/Y50/G60/B150/P190) — the wheel is continuous byte 0–255; present values as **approximate**,
    not canonical. Reminder: `LightSaturation` is **inverted** (255 = white/no tint; lower = more
@@ -458,9 +458,9 @@ convention DX inherits and authors think in explicitly.
 |---|---|---|---|
 | Unit scale | 1 uu = 0.75 in; **1 ft = 16 uu**; 1 m = 52.5 uu; 256 uu = 16 ft | Legacy:General_Scale; Steve Tack | generic (DX explicit) |
 | Max world | 65536 uu (2¹⁶) / axis | Legacy:General_Scale | generic |
-| **Player collision cylinder — DX 🔬** | JC Denton **Radius 20 (40 wide) × Height 47.5 (95 tall)**, Mass 150; MJ12Troop identical | uedctl `actor prop get` (decoded from `DeusEx.u`) | **DX** (UT99 pawn was 17×39) |
-| **Player eye height — DX 🔬** | `BaseEyeHeight=40` above center → **~87 uu above floor** | uedctl decode | **DX** (UT99 was 27→~66) |
-| **Jump / speed / step — DX 🔬** | `JumpZ=300`, `GroundSpeed=320`, `WaterSpeed=300`, **`MaxStepHeight=25`**, `AccelRate=1000` | uedctl decode | **DX** (UT99 JumpZ was 325) |
+| **Player collision cylinder — DX 🔬** | JC Denton **Radius 20 (40 wide) × Height 47.5 (95 tall)**, Mass 150; MJ12Troop identical | uedcli `actor prop get` (decoded from `DeusEx.u`) | **DX** (UT99 pawn was 17×39) |
+| **Player eye height — DX 🔬** | `BaseEyeHeight=40` above center → **~87 uu above floor** | uedcli decode | **DX** (UT99 was 27→~66) |
+| **Jump / speed / step — DX 🔬** | `JumpZ=300`, `GroundSpeed=320`, `WaterSpeed=300`, **`MaxStepHeight=25`**, `AccelRate=1000` | uedcli decode | **DX** (UT99 JumpZ was 325) |
 | Stair rise (recommended) | **16** uu | Legacy:Making_Stairs; Steve Tack | generic + DX |
 | Stair run | 16 steep / **32 good** / 48–64 stately | Legacy:Making_Stairs | generic |
 | Ceiling height | min **83**, recommended **128** | Legacy:General_Scale | generic |
@@ -481,7 +481,7 @@ convention DX inherits and authors think in explicitly.
 | **PathNode spacing** | **300–700 uu** (≤300–350 on ramps/stairs; ≥50 min or "paths too close" error; ≥50 from corners); DX: **<700 uu, <350 on stairs** | Legacy:Bot_Pathing; DX SDK | generic + DX |
 | Corona `DrawScale` | 0.1–0.3 | Legacy:Corona | generic |
 
-**Spike (§5) impact:** **B1 (offline class-defaults) is effectively DONE inline — uedctl already
+**Spike (§5) impact:** **B1 (offline class-defaults) is effectively DONE inline — uedcli already
 decodes class defaults**, so the DX-authoritative numbers above were read directly with no editor and
 no separate spike, via `actor build <Class> | actor add - | actor prop get - <Prop>` (an unset
 property resolves to its class default — `direction.md` "One package-format core"; verified
@@ -668,7 +668,7 @@ confidence caveat: tutorial/source lore is 📖 (leads-to-confirm) unless binary
 
 - **Native brush builders (right-click the toolbar button for params; numeric fields accept `=`
   math expressions like `=64+128`; builders remember params for the session).** The set and their
-  key params — these map directly onto uedctl's `brush build {cube,cylinder,cone,sheet,staircase,
+  key params — these map directly onto uedcli's `brush build {cube,cylinder,cone,sheet,staircase,
   spiral}` verbs, so the rewrite can name the real UnrealEd params:
   - `CubeBuilder`: Height/Width/Breadth, WallThickness, Hollow, Tessellated (default 256³).
   - `CylinderBuilder`: Height, OuterRadius, InnerRadius, Sides, AlignToSide, Hollow (default 8 sides,
@@ -803,7 +803,7 @@ current guides.
 ### 11.4 What to add to which guide (rewrite guidance)
 
 - `csg-and-bsp.md` / a new **"brush geometry & builders"** section: §11.1 (native+extended builders,
-  clipping, curves, terrain, MeshMaker) — and name the real builder params next to the uedctl verbs.
+  clipping, curves, terrain, MeshMaker) — and name the real builder params next to the uedcli verbs.
 - A **new "actors, collision & pathing"** guide (currently MISSING — the guides only cover geometry/
   lighting/zoning/textures/movers): §11.2 (collision model, physics enum, decorations, PlayerStart,
   KeyPoints, NavigationPoint/pathing). This is the biggest coverage gap for "buildable" levels.
@@ -1008,7 +1008,7 @@ Coverage is now broad across geometry, BSP, zones, lighting, textures, movers, t
 physics/pathing layer, DX gameplay wiring, NPC AI, and design craft/philosophy. **Genuine residual
 gaps** (candidates only; none blocking):
 - **ut99.org file id=14742** — still unretrievable (JS bot-check); overlaps tactical-ops.
-- **Numeric class defaults — NO LONGER A GAP: uedctl decodes them.** `actor build <Class> | actor add
+- **Numeric class defaults — NO LONGER A GAP: uedcli decodes them.** `actor build <Class> | actor add
   - | actor prop get - <Prop>` returns the resolved class default offline (verified 2026-07-19 — see
   §10.4 and its Spike-impact note for the DX-authoritative numbers). The rewrite pulls any default it
   needs this way rather than citing tutorials. **One residual sub-case:** truly `native` classes whose
@@ -1020,5 +1020,5 @@ gaps** (candidates only; none blocking):
   codes to flags) — partly covered (Steve Tack + §10.5 + §11.3); a dedicated ConEdit walkthrough would
   finish it, but it edges from *level design* into *mission scripting*.
 - Net: external crawling has hit diminishing returns; the few remaining specifics are **read from the
-  substrate with uedctl** (defaults, texture catalog) or pinned by the spike's B2 map-export corpus —
+  substrate with uedcli** (defaults, texture catalog) or pinned by the spike's B2 map-export corpus —
   not found by more reading.

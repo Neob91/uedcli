@@ -7,7 +7,7 @@ doorways the collision cylinder can't fit through).
 
 **Two tiers of confidence live in this file, and the difference matters:**
 
-- **✅🔬 real Deus Ex figures, uedctl-decoded.** These were read **directly from the shipped
+- **✅🔬 real Deus Ex figures, uedcli-decoded.** These were read **directly from the shipped
   `DX/System/DeusEx.u`** by building a throwaway instance of the class and reading the resolved
   property default — no editor, no guessing, no UT proxy. An unset property resolves to its class
   default (the offline decode-read semantics — see `direction.md` "One package-format core"), which
@@ -25,7 +25,7 @@ doorways the collision cylinder can't fit through).
 
 ---
 
-## 1. The real DX figures  ✅🔬 (uedctl-decoded from `DeusEx.u`)
+## 1. The real DX figures  ✅🔬 (uedcli-decoded from `DeusEx.u`)
 
 ### 1.1 The player  — `JCDentonMale` / `JCDentonFemale`
 
@@ -121,7 +121,7 @@ and get mis-classified into holes).
 | Detail grid | 8 / 4 / 2 for trim and fine detail |
 | Rotation | **solid brushes: 90° increments** (off-90° → irrational coords → BSP holes); **semisolid/nonsolid/decoration: any angle** (they don't cut the world) |
 
-uedctl does **not** snap for you — grid discipline is authoring guidance, not an enforced operation.
+uedcli does **not** snap for you — grid discipline is authoring guidance, not an enforced operation.
 The off-grid failure signature to hunt for is a coordinate reading **`15.999976`** where `16` belongs
 (see [`csg-bsp.md`](./csg-bsp.md)).
 
@@ -181,16 +181,16 @@ earlier engine build with a differently-sized pawn. Listed here only so an autho
 Every ✅🔬 figure above came from this route — offline, no editor:
 
 ```
-bin/uedctl actor build <Package.Class> | actor add - | actor prop get - <Prop>
+bin/uedcli actor build <Package.Class> | actor add - | actor prop get - <Prop>
 ```
 
 `actor build` allocates a throwaway instance; `actor add -` writes it into the trunk; `actor prop get`
 reads the resolved default (unset → class default). Examples:
 
 ```
-bin/uedctl actor build DeusEx.JCDentonMale | actor add - | actor prop get - CollisionRadius   # → 20
-bin/uedctl actor build DeusEx.MJ12Troop    | actor add - | actor prop get - MaxRange           # → 1000
-bin/uedctl actor build Engine.Light        | actor add - | actor prop get - LightRadius         # → 64
+bin/uedcli actor build DeusEx.JCDentonMale | actor add - | actor prop get - CollisionRadius   # → 20
+bin/uedcli actor build DeusEx.MJ12Troop    | actor add - | actor prop get - MaxRange           # → 1000
+bin/uedcli actor build Engine.Light        | actor add - | actor prop get - LightRadius         # → 64
 ```
 
 **`class show <Class>` prints property NAMES and TYPES only — never the default VALUES.** The values

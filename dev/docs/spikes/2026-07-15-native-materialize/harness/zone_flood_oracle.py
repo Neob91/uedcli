@@ -12,7 +12,7 @@ faithful Python port of native's Pass B/C.  If it over-fragments the editor's ow
 it reproduces ~7 zones, the flood is fine and the bug is upstream in the CSG tree.
 
 Port fidelity: clip_poly / plane_axes / poly_area / filter_subtree / collect_portals / union-find
-are line-for-line the `uedctl-native/src/zones.rs` logic (WORLD=32768, MIN_AREA=1.0, 1e-4 clip
+are line-for-line the `uedcli-native/src/zones.rs` logic (WORLD=32768, MIN_AREA=1.0, 1e-4 clip
 band, PF_PORTAL=0x04000000).  Pass A is SKIPPED — we reuse the editor's node.iLeaf + Leaves array.
 
 Usage: python zone_flood_oracle.py /path/to/Map.dx
@@ -24,10 +24,10 @@ from pathlib import Path
 HARNESS = Path(__file__).resolve().parent
 ROOT = HARNESS.parents[4]
 sys.path.insert(0, str(ROOT))
-sys.path.insert(0, str(ROOT / "dev/docs/spikes/2026-06-27-decontainerize-uedctl/harness"))
+sys.path.insert(0, str(ROOT / "dev/docs/spikes/2026-06-27-decontainerize-uedcli/harness"))
 
 import utexture_decode as UT  # noqa: E402
-from uedctl.native import umodel as UM  # noqa: E402
+from uedcli.native import umodel as UM  # noqa: E402
 
 import os
 WORLD = 32768.0
@@ -174,7 +174,7 @@ class UF:
 
 def blockportal_interior_zones(model):
     """The faithful native zone flood (Pass B portals + BlockPortal barriers + Pass C union-find),
-    reimplementing `uedctl-native/src/zones.rs` on a parsed Model.  Returns the number of INTERIOR
+    reimplementing `uedcli-native/src/zones.rs` on a parsed Model.  Returns the number of INTERIOR
     zones (== NumZones - 1 == the union-find component count).  A zone BARRIER is a leaf-pair a
     PF_Portal node's REAL polygon separates (re-filtered through its coplanar-chain HEAD's subtrees);
     every non-barrier portal merges.  This is the committed reference the pytest golden-checks the

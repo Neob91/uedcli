@@ -3,7 +3,7 @@
 Environment: ephemeral editor container `uned-pkgspike`
 (`docker compose run -d --name uned-pkgspike -v uned-wp-pkgspike:/wineprefix
 --entrypoint bash uned`), UCC assembled at `/opt/UED22` (symlink farm from
-`/repo/Tools/uedctl/uned/UED22`, writable `.ini` copies). Real maps under
+`/repo/Tools/uedcli/uned/UED22`, writable `.ini` copies). Real maps under
 `/home/human/src/dx_lum/Maps/`.
 
 ## 1. Package header is version 69, magic 0x9E2A83C1

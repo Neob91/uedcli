@@ -1,8 +1,8 @@
 # Spec: the unified asset catalog — one engine, four kinds (texture / class / sound / music)
 
 **Status:** specced, **two review rounds folded** (2026-07-25, 4 cold reviewers). Next step is a plan.
-**Requested by:** Andrzej (2026-07-25, session `uedctl:catalog`).
-**Ephemeral:** scratch, per the uedctl `CLAUDE.md`. The load-bearing decisions + rejected
+**Requested by:** Andrzej (2026-07-25, session `uedcli:catalog`).
+**Ephemeral:** scratch, per the uedcli `CLAUDE.md`. The load-bearing decisions + rejected
 alternatives live in the durable append-only [`dev/docs/decisions.md`](../decisions.md) (entries
 **2026-07-25 03:40** and **2026-07-25 05:10 — the tool does not infer**). On build, fold the outcome
 into `architecture.md` (replacing its "Texture catalog" section) + `usage.md`, and delete this file.
@@ -17,7 +17,7 @@ validation** item was waiting on (§8).
 
 ## 0. THE GOVERNING PRINCIPLE: the tool does not infer
 
-**uedctl is a faithful data layer, not a clever one.** It does exactly four things:
+**uedcli is a faithful data layer, not a clever one.** It does exactly four things:
 
 1. **Lists** what exists on the composed search path.
 2. **Reports facts that are literally stored in the package** — image dimensions, mesh bounding box,
@@ -115,7 +115,7 @@ family, so no verb grows a `--kind` selector.
 
 ### 3a. Per-user derived cache — regenerable, never committed
 
-Root: `~/.uedctl/cache/catalog/v<N>/`. The **version is a path segment as well as part of the key**,
+Root: `~/.uedcli/cache/catalog/v<N>/`. The **version is a path segment as well as part of the key**,
 mirroring `schema_cache`: a version bump then leaves whole reclaimable orphan directories instead of
 files scattered through live ones that `cache gc` cannot distinguish.
 
@@ -157,7 +157,7 @@ often, so under `relatime` their atimes are near-frozen — they are the *first*
 
 ### 3b. Per-project tracked classification — git-committed, sharded
 
-Root: the project's catalog dir (`uedctl.toml` `catalog` key), default **`asset-catalog/`**.
+Root: the project's catalog dir (`uedcli.toml` `catalog` key), default **`asset-catalog/`**.
 
 ```
 <catalog>/classified/texture/<hh>/<pixel-hash>.json
@@ -169,7 +169,7 @@ Root: the project's catalog dir (`uedctl.toml` `catalog` key), default **`asset-
 One file per classified thing, so disjoint edits never touch the same file → conflict-free
 `git merge` under concurrent agents, mirroring the per-actor `.t3d` ethos. **Name-keyed paths are
 casefolded** (authored spelling preserved in the payload): refs resolve case-insensitively
-everywhere else in uedctl, so a case-sensitive path would let two agents write two shards for one
+everywhere else in uedcli, so a case-sensitive path would let two agents write two shards for one
 class.
 
 ```json
@@ -374,7 +374,7 @@ step 1 (§14) rather than waiting for the catalog to be populated.
   collision (`texture_catalog.assign_refs`).
 - **Atomic writes, and TWO distinct lock domains.** Tracked-shard writes keep the catalog-dir flock
   (`<catalog>/.locks/`, per-catalog and correct). The derived cache — which is **per-user and
-  cross-project** — needs its own flock under `~/.uedctl/cache/catalog/.locks/`, because two projects
+  cross-project** — needs its own flock under `~/.uedcli/cache/catalog/.locks/`, because two projects
   with different catalog dirs decoding the same base package would otherwise be unserialized. Atomic
   writes already prevent torn reads, so the cache flock is duplicate-work suppression only.
 - Broad/cold queries pay a real cost and must **say so** on stderr. Measured: **26.4 s** to decode the
@@ -409,7 +409,7 @@ step 1 (§14) rather than waiting for the catalog to be populated.
    [`specs/2026-07-25-native-texture-formats.md`](2026-07-25-native-texture-formats.md) (review-gated
    2026-07-25). Note it is **not** the generic-UE1-hygiene-only job this spec first assumed: the
    `bHasComp`/`CompMips` finding means **30 textures in the project's own `LUM_CoreTex.utx` are
-   invisible to uedctl today**, so it fixes a live bug on this substrate.
+   invisible to uedcli today**, so it fixes a live bug on this substrate.
 
 *(The earlier "native map-actor reader" prerequisite is GONE with the usage index — decision 1.)*
 
@@ -421,7 +421,7 @@ which `pytest.ini` deselects. So every assertion about the real corpus is integr
 runs against a committed fixture. The build **commits tiny synthetic fixture packages** (a hand-built
 `.u`/`.utx` with a couple of textures, a class with a mesh, a sprite class) so the facts that must not
 silently regress are enforced in the offline suite. Note `conftest.py`'s autouse `_schema_cache_off`
-forces `UEDCTL_SCHEMA_CACHE=off`, so class-adapter tests exercising the cache path must opt back in.
+forces `UEDCLI_SCHEMA_CACHE=off`, so class-adapter tests exercising the cache path must opt back in.
 
 - **Engine (offline, fixtures):** ref → identity → preview resolution per kind; cross-package dedup
   (two refs, one identity, one file, one classification); stat invalidation on
@@ -460,7 +460,7 @@ to serialize behind:
 1. **Engine + enumeration + `list`/`show` + ObjectProperty-ref validation (§8).** Fixes a live bug
    that silently ships broken levels today. Blocks on nothing.
 2. **Class arm** — prerequisite 1 (schema_cache v2), then productise the spike's mesh decoder into
-   `uedctl/`, `class preview`, and the size/collision/pivot facts. This is the capability an agent
+   `uedcli/`, `class preview`, and the size/collision/pivot facts. This is the capability an agent
    most lacks: it cannot see what it is placing.
 3. **Texture arm** — prerequisite 2 (non-P8), native decode, pre-filled colours, `--similar`; deletes
    `texture sync` and the UCC/Wine path; deletes the legacy `texture-catalog/` (decision 13).

@@ -8,7 +8,7 @@ contamination SP-E.1 exists to detect. The genuinely-reused successful builds ar
 renumbering, §82/§83), so this canonically compares them via the SAME oracle H3 uses
 (`export_dx_level` → `canonical_level_hash`), in one throwaway editor.
 
-Run: cd Tools/uedctl && .venv/bin/python dev/docs/spikes/2026-07-18-warm-editor-materialize/harness/warm_editor_canoncmp.py
+Run: cd Tools/uedcli && .venv/bin/python dev/docs/spikes/2026-07-18-warm-editor-materialize/harness/warm_editor_canoncmp.py
 """
 from __future__ import annotations
 
@@ -20,15 +20,15 @@ from pathlib import Path
 TOOL = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(TOOL))
 
-from uedctl import config, trunk                      # noqa: E402
-from uedctl import editor as editor_mod              # noqa: E402
-from uedctl.container_assets import resource_mounts  # noqa: E402
-from uedctl.normalize import canonical_level_hash    # noqa: E402
-from uedctl.store_export import export_dx_level      # noqa: E402
-from uedctl.uuid7 import uuid7                         # noqa: E402
+from uedcli import config, trunk                      # noqa: E402
+from uedcli import editor as editor_mod              # noqa: E402
+from uedcli.container_assets import resource_mounts  # noqa: E402
+from uedcli.normalize import canonical_level_hash    # noqa: E402
+from uedcli.store_export import export_dx_level      # noqa: E402
+from uedcli.uuid7 import uuid7                         # noqa: E402
 
 OUT = TOOL / "_scratch/warm-spike"
-CASTLE = TOOL / "_scratch/castle/uedctl"
+CASTLE = TOOL / "_scratch/castle/uedcli"
 TARGETS = ["cold", "warm1", "warm4", "warm6"]
 
 

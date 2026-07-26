@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Build NativeCastle.dx from the castle trunk via the native (editor-free) materialize path.
 
-The castle trunk (`_scratch/castle/uedctl/maps/foobar`, 95 brushes / 62 lights / 1 ZoneInfo /
+The castle trunk (`_scratch/castle/uedcli/maps/foobar`, 95 brushes / 62 lights / 1 ZoneInfo /
 1 SkyZoneInfo / 1 PlayerStart) is the full-parity target: the SAME geometry the editor built as
 `DX/Maps/Test_Castle.dx`.  This is the reproducible acceptance-gate build (was an ad-hoc scratch
 script before).
@@ -17,17 +17,17 @@ import argparse
 import sys
 from pathlib import Path
 
-ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedctl")
+ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedcli")
 sys.path.insert(0, str(ROOT))
-sys.path.insert(0, str(ROOT / "dev/docs/spikes/2026-06-27-decontainerize-uedctl/harness"))
+sys.path.insert(0, str(ROOT / "dev/docs/spikes/2026-06-27-decontainerize-uedcli/harness"))
 
 from spike_classindex import class_index  # noqa: E402  (schema-aware mover gate's index)
-from uedctl import trunk  # noqa: E402
-from uedctl.native import materialize as M  # noqa: E402
-from uedctl.native import umodel as UM  # noqa: E402
-from uedctl.native.pkg_write import parse_package  # noqa: E402
+from uedcli import trunk  # noqa: E402
+from uedcli.native import materialize as M  # noqa: E402
+from uedcli.native import umodel as UM  # noqa: E402
+from uedcli.native.pkg_write import parse_package  # noqa: E402
 
-DEFAULT_TRUNK = "/home/neob91/Games/LutrisDX/drive_c/DX/LUM/_scratch/castle/uedctl/maps/foobar"
+DEFAULT_TRUNK = "/home/neob91/Games/LutrisDX/drive_c/DX/LUM/_scratch/castle/uedcli/maps/foobar"
 DEFAULT_OUT = "/home/neob91/Games/LutrisDX/drive_c/DX/Maps/NativeCastle.dx"
 # The project package dirs so LUM_* + Core texture GROUPS resolve (else "Can't find Texture").
 PKG_DIRS = [

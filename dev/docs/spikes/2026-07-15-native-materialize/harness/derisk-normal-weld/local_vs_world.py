@@ -4,10 +4,10 @@ WORLD winding (local+loc, f32) differ from calc_normal over the LOCAL winding?  
 residual twins = the editor computing the surf plane over world-space verts (bspAddNode), not local."""
 import struct, sys, math
 from pathlib import Path
-ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedctl")
+ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedcli")
 HARNESS = ROOT / "dev/docs/spikes/2026-07-15-native-materialize/harness"
 sys.path.insert(0, str(ROOT)); sys.path.insert(0, str(HARNESS))
-from uedctl import trunk
+from uedcli import trunk
 import unatco_subset as U
 r32=lambda x: struct.unpack("<f",struct.pack("<f",x))[0]
 bits=lambda x: struct.unpack("<I",struct.pack("<f",x))[0]

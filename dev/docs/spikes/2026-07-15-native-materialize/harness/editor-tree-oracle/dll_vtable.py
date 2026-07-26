@@ -1,5 +1,5 @@
 import pefile, struct
-pe=pefile.PE("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedctl/uned/UED22/Editor.dll")
+pe=pefile.PE("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedcli/uned/UED22/Editor.dll")
 base=pe.OPTIONAL_HEADER.ImageBase
 data=pe.get_memory_mapped_image()
 # map RVA->export name

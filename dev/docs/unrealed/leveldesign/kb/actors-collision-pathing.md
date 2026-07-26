@@ -7,10 +7,10 @@ family, and NavigationPoint pathing. Siblings: [`lighting.md`](lighting.md) · [
 · [`movers.md`](movers.md). Parent monolith: [`README.md`](README.md).
 Engine-driving: [`../../commands.md`](../../commands.md).
 
-**Confidence markers:** ✅ uedctl-used / live-verified · 🔬 live-probed against the real DX binary/editor ·
+**Confidence markers:** ✅ uedcli-used / live-verified · 🔬 live-probed against the real DX binary/editor ·
 📖 tutorial-corpus. **[ENGINE]** = generic UE1 · **[DX]** = Deus-Ex-specific.
 
-**uedctl seat** ✅: point actors are placed with `actor build Package.Class --prop KEY=VALUE --at X,Y,Z
+**uedcli seat** ✅: point actors are placed with `actor build Package.Class --prop KEY=VALUE --at X,Y,Z
 --rotate P,Y,R | actor add -`; properties are read/edited with `actor prop get`/`actor prop set`; classes
 are discovered with `class list` / `class show`. Any class default is read offline with
 `actor build <Class> | actor add - | actor prop get - <Prop>` (an unset property resolves to its class
@@ -209,11 +209,11 @@ The load-bearing figures, decoded from the shipped `DeusEx.u` (full table in
 | Ceiling / corridor / doorway | ceiling min **~96–100** (the DX player cylinder is 95 tall, so the UT "83" won't clear a DX pawn), rec **128**; corridor min **48**; DX doors **144×72 or 128×64**, 1–8 thick |
 | PlayerStart height / PathNode spacing | **40 uu** above floor / **300–700 uu** (≤350 on stairs) |
 
-*Read any other default:* `bin/uedctl actor build <Package.Class> | actor add - | actor prop get - <Prop>`.
+*Read any other default:* `bin/uedcli actor build <Package.Class> | actor add - | actor prop get - <Prop>`.
 
 ---
 
-## 9. Quick verb reference (uedctl)  ✅
+## 9. Quick verb reference (uedcli)  ✅
 
 | Task | Verb pipeline |
 |---|---|

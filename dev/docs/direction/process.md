@@ -62,13 +62,13 @@ to put it. This doc is that home.
 - **Exactly ONE canonical rule file**, with no second rule file above it
   delegating to it. A session that loads two rule files loads a seam, and the
   seam invites the two to disagree.
-- **uedctl and its test suite run HOST-NATIVE**, in an auto-managed Python venv —
-  never inside a dev container. Only the editor/build containers uedctl *drives*
+- **uedcli and its test suite run HOST-NATIVE**, in an auto-managed Python venv —
+  never inside a dev container. Only the editor/build containers uedcli *drives*
   run under Docker. The reason is asset access: a game's asset dirs live outside
   the repo, and reaching them from a dev container would mean bind-mounting
   arbitrary host roots at identity paths, which can shadow or clobber the
   container's own dirs. Host-native also mirrors the eventual release binary, so
-  dev path handling is prod path handling — uedctl never branches on "am I in a
+  dev path handling is prod path handling — uedcli never branches on "am I in a
   container?". Accepted cost: `python3.12` on `PATH`. Mechanics:
   `../dev-runtime.md`, `../rules/tests.md`.
 - **A permanently-red test is repaired or skipped, never left red** — a suite
@@ -134,7 +134,7 @@ to put it. This doc is that home.
 - **Letting the harness's worktree tool keep its default base** — it branches
   from `origin/<default-branch>`, contradicting "branch off the branch we are
   on". The repo commits `.claude/settings.json` with `worktree.baseRef: "head"`.
-- **Running uedctl itself in a dev container**, in either workable variant:
+- **Running uedcli itself in a dev container**, in either workable variant:
   identity-mounting external roots under a `$HOME` allowlist (still mounts
   arbitrary user paths into a container — a stopgap), or mounting at a sandboxed
   prefix and translating (reintroduces the host-vs-container path branch that

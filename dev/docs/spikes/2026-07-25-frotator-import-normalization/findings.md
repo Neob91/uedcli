@@ -8,7 +8,7 @@
 
 UE1 stores rotations as FRotator integers (65536 = 360°). Committed editor-exported `.t3d` files
 contain out-of-range values — `Yaw=-131072` (two full turns), `Yaw=-65536`, `Yaw=-81920` — apparently
-preserved verbatim. But two committed docstrings in `uedctl/rotation.py` contradicted each other:
+preserved verbatim. But two committed docstrings in `uedcli/rotation.py` contradicted each other:
 
 - `compose_uu` claimed *"a materialize import normalizes mod 65536 anyway"*.
 - `emit_frotator` / the compare-side fold require that values are **never** reduced.
@@ -67,7 +67,7 @@ Brushes pasted via `EDIT PASTE` (plus a `MAP REBUILD`) behaved identically for `
   Reducing would now make an over-range rotator compare EQUAL to an unrotated actor —
   `-131072 % 65536 == 0` — i.e. a false pass, not merely a spurious abort.)
 - **`compose_uu`'s claim was FALSE and is superseded** (`rotation.py`, 2026-07-25). Its own mod
-  reduction is harmless — uedctl writes the reduced value to the trunk, so both compare sides agree —
+  reduction is harmless — uedcli writes the reduced value to the trunk, so both compare sides agree —
   but the justification was wrong, and wrong justifications license real bugs.
 - **Reducing mod 65536 is fine for MEASURING orientation** (`actor_rotation_uu`, `is_identity_uu`),
   **never for anything written or compared as text.**

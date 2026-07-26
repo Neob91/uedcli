@@ -10,8 +10,8 @@ production drive (full re-import → MAP REBUILD → LIGHT APPLY → MAP SAVE �
 qualify pass against the reused editor). The only thing that changes vs today is that the container
 is booted ONCE up front and torn down ONCE at the end instead of per build.
 
-Run HOST-NATIVE in the dev venv (same runtime `bin/uedctl` uses):
-    cd Tools/uedctl && .venv/bin/python dev/docs/spikes/2026-07-18-warm-editor-materialize/harness/warm_editor_probe.py
+Run HOST-NATIVE in the dev venv (same runtime `bin/uedcli` uses):
+    cd Tools/uedcli && .venv/bin/python dev/docs/spikes/2026-07-18-warm-editor-materialize/harness/warm_editor_probe.py
 
 Env knobs: WARM_N (warm castle builds, default 6), SKIP_COLD=1, SKIP_CROSS=1.
 Outputs: a JSON blob to stdout AND to $OUT_DIR/warm_spike_results.json (default under _scratch).
@@ -26,22 +26,22 @@ import sys
 import time
 from pathlib import Path
 
-TOOL = Path(__file__).resolve().parents[5]          # …/Tools/uedctl
+TOOL = Path(__file__).resolve().parents[5]          # …/Tools/uedcli
 sys.path.insert(0, str(TOOL))
 
-from uedctl import apply, config, trunk                       # noqa: E402
-from uedctl import editor as editor_mod                       # noqa: E402
-from uedctl import driver as driver_mod                       # noqa: E402
-from uedctl.driver import Driver                              # noqa: E402
-from uedctl.container_assets import resource_mounts           # noqa: E402
-from uedctl.packages import editor_search_dirs, search_path_package_names  # noqa: E402
-from uedctl.normalize import canonical_level_hash             # noqa: E402
-from uedctl.store_export import export_dx_level               # noqa: E402
-from uedctl.uuid7 import uuid7                                 # noqa: E402
+from uedcli import apply, config, trunk                       # noqa: E402
+from uedcli import editor as editor_mod                       # noqa: E402
+from uedcli import driver as driver_mod                       # noqa: E402
+from uedcli.driver import Driver                              # noqa: E402
+from uedcli.container_assets import resource_mounts           # noqa: E402
+from uedcli.packages import editor_search_dirs, search_path_package_names  # noqa: E402
+from uedcli.normalize import canonical_level_hash             # noqa: E402
+from uedcli.store_export import export_dx_level               # noqa: E402
+from uedcli.uuid7 import uuid7                                 # noqa: E402
 
-CASTLE_DIR = TOOL / "_scratch/castle/uedctl"
+CASTLE_DIR = TOOL / "_scratch/castle/uedcli"
 CASTLE_LEVEL = "foobar"
-ANCHOR_DIR = TOOL / "_scratch/anchor/uedctl"
+ANCHOR_DIR = TOOL / "_scratch/anchor/uedcli"
 ANCHOR_LEVEL = "anchor"
 
 OUT_DIR = Path(os.environ.get("OUT_DIR", str(TOOL / "_scratch/warm-spike")))
@@ -67,7 +67,7 @@ def load_ctx(project_dir: Path, level_name: str) -> dict:
     project = config.load_project(str(project_dir))
     uc = config.load_user_config()
     if uc is None:
-        raise SystemExit("no ~/.uedctl/config.toml — needed for base game paths")
+        raise SystemExit("no ~/.uedcli/config.toml — needed for base game paths")
     search_dirs = config.composed_search_dirs(project, uc)
     package_names = search_path_package_names(config.composed_search_files(project, uc))
     maps_dir = Path(config.project_maps_dir(project))

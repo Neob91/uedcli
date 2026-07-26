@@ -1,5 +1,5 @@
 import sys, pefile, capstone
-path="/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedctl/uned/UED22/Editor.dll"
+path="/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedcli/uned/UED22/Editor.dll"
 rva=int(sys.argv[1],16); n=int(sys.argv[2]) if len(sys.argv)>2 else 400
 pe=pefile.PE(path, fast_load=True)
 base=pe.OPTIONAL_HEADER.ImageBase

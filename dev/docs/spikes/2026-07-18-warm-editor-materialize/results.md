@@ -26,7 +26,7 @@ the one warm container; `apply.stop_editor` → no-op) and then calls the **real
 `MAP REBUILD` → `LIGHT APPLY` → `MAP SAVE` → H3 verify with the live qualify pass against the reused
 editor). The only thing changed vs today is that the container boots once and tears down once.
 
-Trunk: the 161-actor castle (`_scratch/castle/uedctl/maps/foobar`, packages CoreTexSky / CoreTexWater
+Trunk: the 161-actor castle (`_scratch/castle/uedcli/maps/foobar`, packages CoreTexSky / CoreTexWater
 / LUM_CoreTex). Harnesses (committed beside this doc, re-runnable):
 - [`harness/warm_editor_probe.py`](harness/warm_editor_probe.py) — main run: cold baseline, boot,
   6 warm builds, RSS/log/OBJ-LOAD instrumentation, the first SP-E.1 comparison.

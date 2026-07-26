@@ -159,4 +159,4 @@ dependency gap — see `board/to-spec.md`) returned a correctly fully-qualified 
 - [`2026-06-19-read-surface-texture-package.md`](2026-06-19-read-surface-texture-package.md) — the `OBJ DEPENDENCIES` mechanism this spike refines.
 - [`2026-06-18-deusex-content-install.md`](2026-06-18-deusex-content-install.md) — the runtime-dir/install-content recipe reused here.
 - `unrealed/quirks.md` "T3D format" — the group-optional and demand-load findings from this same session.
-- `plans/2026-06-20-uedctl-export-and-qualify-plan.md` (landed; plan deleted) — D-Q2, Task 1, Task 4.
+- `plans/2026-06-20-uedcli-export-and-qualify-plan.md` (landed; plan deleted) — D-Q2, Task 1, Task 4.

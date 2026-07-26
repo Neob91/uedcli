@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Spike harness: does ALIGN-then-CAMERA-OPEN give a posed, headless shaded shot?
 
-Run from Tools/uedctl with the uedctl venv. Spins an ephemeral editor, materializes an asymmetric
+Run from Tools/uedcli with the uedcli venv. Spins an ephemeral editor, materializes an asymmetric
 scene, then runs the experiments and prints numeric stats. PNGs land in _scratch/preview-spike/.
 Always tears the editor down. See spike.md for the plan + pass criteria.
 """
@@ -10,15 +10,15 @@ import sys
 import time
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[4]))  # Tools/uedctl
+sys.path.insert(0, str(Path(__file__).resolve().parents[4]))  # Tools/uedcli
 
-from uedctl.editor import ensure_editor, stop_editor          # noqa: E402
-from uedctl.driver import Driver                              # noqa: E402
-from uedctl import builders, writes                           # noqa: E402
-from uedctl.apply import _materialize, _materialized_order    # noqa: E402
-from uedctl.normalize import canonical_actor_t3d              # noqa: E402
-from uedctl.model import Level, Actor                         # noqa: E402
-from uedctl.rotation import deg_to_uu                         # noqa: E402
+from uedcli.editor import ensure_editor, stop_editor          # noqa: E402
+from uedcli.driver import Driver                              # noqa: E402
+from uedcli import builders, writes                           # noqa: E402
+from uedcli.apply import _materialize, _materialized_order    # noqa: E402
+from uedcli.normalize import canonical_actor_t3d              # noqa: E402
+from uedcli.model import Level, Actor                         # noqa: E402
+from uedcli.rotation import deg_to_uu                         # noqa: E402
 
 SID = "preview-spike"
 OUT = Path("/home/human/src/dx_lum/_scratch/preview-spike")

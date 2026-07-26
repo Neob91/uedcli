@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""End-to-end: the REAL uedctl add_actor (now paste-based for brushes) must produce
+"""End-to-end: the REAL uedcli add_actor (now paste-based for brushes) must produce
 an ACTOR SELECT INSIDE-selectable brush. Uses the actual Driver + add_actor.
 """
 import sys
 import select_matrix as M
-from uedctl.driver import Driver
-from uedctl.writes import add_actor
+from uedcli.driver import Driver
+from uedcli.writes import add_actor
 
 for attempt in range(1, 4):
     try:

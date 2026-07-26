@@ -6,7 +6,7 @@ of render behaviours.
 
 ## The `brush poly` verbs
 
-uedctl edits surfaces model-side. The pattern is **find faces → set them**:
+uedcli edits surfaces model-side. The pattern is **find faces → set them**:
 
 ```
 brush poly find Wall1                               # print ALL faces of brush Wall1 (positional name)
@@ -35,12 +35,12 @@ The flags you actually reach for (editor: F5 Surface Properties → Flags):
 | **Translucent**   | additive blend — masks **DARK** colours (glass, energy, decals) |
 | **Modulated**     | multiply (2×) blend — **50% grey is neutral**; darker darkens, lighter brightens (grime, decals, shadow overlays) |
 | **Fake Backdrop** | draws the **skybox** through this face — **needs an `Unlit` companion** on the same face |
-| **2-Sided**       | renders both faces (banners, chain-link). uedctl's `brush build sheet` is 2-sided by default, so you don't add this to a plain sheet |
+| **2-Sided**       | renders both faces (banners, chain-link). uedcli's `brush build sheet` is 2-sided by default, so you don't add this to a plain sheet |
 | **Mirror**        | reflective; editor-invisible; **not** a portal |
 | **Special Lit**   | lit only by lights with `bSpecialLit` |
 
 > **Bright Corners** (and **Small/Big Wavy**, **High/Low Shadow Detail**) exist in the editor's F5 Surface
-> Properties GUI but are **not** values uedctl's `--add-flag` / `--remove-flag` accept. The 16 flags uedctl
+> Properties GUI but are **not** values uedcli's `--add-flag` / `--remove-flag` accept. The 16 flags uedcli
 > can set by name are: `invisible`,
 > `masked`, `translucent`, `notsolid`, `environment`, `semisolid`, `modulated`, `fakebackdrop`,
 > `twosided`, `autoupan`, `autovpan`, `nosmooth`, `speciallit`, `unlit`, `portal`, `mirror`.

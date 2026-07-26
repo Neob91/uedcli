@@ -8,14 +8,14 @@ catalog. Siblings: [`lighting.md`](lighting.md) · [`movers.md`](movers.md) ·
 [`README.md`](README.md). Engine-driving: [`../../commands.md`](../../commands.md),
 [`../../t3d.md`](../../t3d.md).
 
-**Confidence markers:** ✅ uedctl-used / live-verified · 🔬 live-probed against the real DX binary/editor ·
+**Confidence markers:** ✅ uedcli-used / live-verified · 🔬 live-probed against the real DX binary/editor ·
 📖 tutorial-corpus (vocabulary real, semantics to confirm). **[ENGINE]** = generic UE1 · **[DX]** =
 Deus-Ex-specific.
 
 Texturing is **per-surface**: you pick a texture from a package and set its alignment + flags. Flags
 change how a surface *renders*, never its geometry.
 
-**uedctl seat** ✅: `brush poly find` prints face selectors → `brush poly set - --texture … --add-flag …
+**uedcli seat** ✅: `brush poly find` prints face selectors → `brush poly set - --texture … --add-flag …
 --remove-flag … --pan-to/--pan-by`; `brush poly align --wall|--floor|--ring`; `brush poly list` inspects.
 Flags are always set **by NAME** (`--add-flag Masked`), never by bit value. Faces are targeted by
 `BRUSH:SELECTOR` (`Wall1:3,5` or `Wall2:all`).
@@ -28,12 +28,12 @@ Flags are always set **by NAME** (`--add-flag Masked`), never by bit value. Face
 ## 1. Surface flags — the poly-flag catalog  🔬
 
 Surface flags are a bitmask on each poly. Sum the hex values to combine. Hex values are 🔬 binary-verified
-(they match UE1's `EPolyFlags` and uedctl's `query.py PF_NAMES`). **Not every flag is settable via
-`--add-flag`:** uedctl exposes 16 names; `Bright Corners`, `Small/Big Wavy`, and `High/Low Shadow Detail`
+(they match UE1's `EPolyFlags` and uedcli's `query.py PF_NAMES`). **Not every flag is settable via
+`--add-flag`:** uedcli exposes 16 names; `Bright Corners`, `Small/Big Wavy`, and `High/Low Shadow Detail`
 are real poly-flags but are **not** in that set (they would need a raw bit write) — listed here for
 completeness and tagged *(no `--add-flag`)*.
 
-| Flag (F5 name / uedctl) | Hex | Effect |
+| Flag (F5 name / uedcli) | Hex | Effect |
 |---|---|---|
 | **Unlit** | `0x400000` (`PF_Unlit`) | Fullbright — skips the lightmap entirely (always max brightness). |
 | **Masked** | `0x2` (`PF_Masked`) | **Palette index 0 → transparent.** Span-clipped but **non-occluding**, drawn in the deferred pass with translucent/modulated (a small framerate cost). Grilles, foliage, cut-outs. |
@@ -69,9 +69,9 @@ Key semantic distinctions to keep straight:
 ## 2. Alignment & scrolling  🔬
 
 - **Auto-align:** Floor/Ceiling alignment vs Wall / Wall-Panning alignment (project the texture onto the
-  face by its dominant axis). uedctl: `brush poly align --floor|--wall|--ring` (`--ring` wraps a texture
+  face by its dominant axis). uedcli: `brush poly align --floor|--wall|--ring` (`--ring` wraps a texture
   around a cylinder's side faces).
-- **Manual:** Pan / Rotate / Scale. uedctl: `brush poly set - --pan-to U,V` (absolute) / `--pan-by dU,dV`
+- **Manual:** Pan / Rotate / Scale. uedcli: `brush poly set - --pan-to U,V` (absolute) / `--pan-by dU,dV`
   (relative). Console: `POLY TEXPAN`, `POLY TEXSCALE`, `POLY TEXALIGN`, `POLY TEXINFO`.
 - **Re-align after CSG changes** — a rebuild can disturb texturing; re-run alignment after geometry
   edits.
@@ -100,7 +100,7 @@ Importing a resource (texture/sound) into the pseudo-package **`MyLevel`** embed
   a geometry rebuild.)
 - **A level screenshot texture must be named exactly `ScreenShot`** (256×256, P8), **mipmaps off**. Set
   it plus `LevelInfo` Title/Author to finish a level (see [`README.md`](README.md) §13).
-- **Open question for uedctl:** whether uedctl exposes a `MyLevel`-embed path or it stays editor-only is
+- **Open question for uedcli:** whether uedcli exposes a `MyLevel`-embed path or it stays editor-only is
   tracked as spec Q3 — treat `MyLevel` as an editor/engine mechanism until the `texture`/materialize
   verb surface confirms an embed path.
 
@@ -135,7 +135,7 @@ Importing a resource (texture/sound) into the pseudo-package **`MyLevel`** embed
 | **Water** | The translucent water-surface sheet for a `bWaterZone` (water recipe — [`zones-performance.md`](./zones-performance.md) §1.1). |
 | **Semi-Solid Pillar** | A semisolid detail brush. |
 
-uedctl reaches these via `brush build … --flag …` at build time (a sheet is NotSolid by default), so
+uedcli reaches these via `brush build … --flag …` at build time (a sheet is NotSolid by default), so
 most presets are a one-line pipe: e.g. `brush build sheet --width 256 --height 256 --flag portal --flag
 translucent | actor add -` for the water surface.
 
@@ -182,9 +182,9 @@ Both distort a `SourceTexture` by the wave field. `IceTexture` adds `GlassTextur
 ### 6.4 Native defaults & painting  🔬
 
 - **Numeric defaults are `native` C++** — the classes have empty script `defaultproperties`, so those
-  specific values are **not recoverable offline** from the package (the one residual gap for uedctl's
+  specific values are **not recoverable offline** from the package (the one residual gap for uedcli's
   decode route; everything script-defaulted reads cleanly).
-- **Painting is a Texture-Browser GUI task with no uedctl verb:** Texture Browser → New → set Class +
+- **Painting is a Texture-Browser GUI task with no uedcli verb:** Texture Browser → New → set Class +
   Size (**locked at creation**) → set `FX_*` / `RenderHeat` / `WaveAmp` **before painting** → **left-drag
   paints, right-drag erases** (lightning is click-drag-release).
 
@@ -223,7 +223,7 @@ In the Texture Browser you pick a package, then a **`Group`** to narrow the list
 
 *(The other three unrelated "group" senses — the `Group=` **actor** property, texture
 `Package.Group.Name`, and the `var(Group)` property category — are all distinct from the reserved
-`Ladder` texture group and from uedctl's actor `folder`; see [`README.md`](README.md)
+`Ladder` texture group and from uedcli's actor `folder`; see [`README.md`](README.md)
 terminology.)*
 
 ---
@@ -244,7 +244,7 @@ offline-probed 📖). Used for scoreboards, counters, tombstones.
 
 ---
 
-## 9. Quick verb reference (uedctl)  ✅
+## 9. Quick verb reference (uedcli)  ✅
 
 | Task | Verb pipeline |
 |---|---|

@@ -6,7 +6,7 @@ set -u
 C="${1:-}"
 OWN=0
 HERE="$(cd "$(dirname "$0")" && pwd)"
-UNED_DIR="$(cd "$HERE/../../../../../uned" && pwd)"   # Tools/uedctl/uned
+UNED_DIR="$(cd "$HERE/../../../../../uned" && pwd)"   # Tools/uedcli/uned
 
 if [ -z "$C" ]; then
   C=uned-spike-execfile

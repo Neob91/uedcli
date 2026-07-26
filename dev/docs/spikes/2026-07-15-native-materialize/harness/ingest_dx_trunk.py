@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Ingest an on-disk `.dx` map into a uedctl T3D trunk — OFFLINE (no live editor, no stubs).
+"""Ingest an on-disk `.dx` map into a uedcli T3D trunk — OFFLINE (no live editor, no stubs).
 
 Regenerates the wipeable acceptance trunks (`_scratch/castle/...`) from `Maps/Test_Castle.dx`,
 and builds scratch trunks from RETAIL maps for `level preview --native` study (e.g. the UNATCO
@@ -29,16 +29,16 @@ import argparse
 import sys
 from pathlib import Path
 
-ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedctl")
+ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedcli")
 sys.path.insert(0, str(ROOT))
 
 from spike_classindex import class_index  # noqa: E402  (schema-aware mover gate's index)
-from uedctl import trunk as trunk_mod                     # noqa: E402
-from uedctl.container_assets import resource_mounts      # noqa: E402
-from uedctl.movers import canonicalize_mover             # noqa: E402
-from uedctl.store_export import export_dx_level          # noqa: E402
-from uedctl.stub import ephemeral_build_container        # noqa: E402
-from uedctl.utexture import load_package                 # noqa: E402
+from uedcli import trunk as trunk_mod                     # noqa: E402
+from uedcli.container_assets import resource_mounts      # noqa: E402
+from uedcli.movers import canonicalize_mover             # noqa: E402
+from uedcli.store_export import export_dx_level          # noqa: E402
+from uedcli.stub import ephemeral_build_container        # noqa: E402
+from uedcli.utexture import load_package                 # noqa: E402
 
 
 def texture_package_index(dx_path: str) -> dict[str, str]:
@@ -110,11 +110,11 @@ def main() -> int:
 
     search = [str(Path(d).resolve()) for d in args.search]
     mounts = resource_mounts(search)
-    from uedctl import xfer
-    # `ephemeral_build_container` now takes a `state_dir` (project `.uedctl/`, decisions.md
+    from uedcli import xfer
+    # `ephemeral_build_container` now takes a `state_dir` (project `.uedcli/`, decisions.md
     # 2026-07-17 20:58) instead of the old `repo_root`; for an offline scratch ingest any
     # writable dir suffices (it only hosts the crafted-ini temp), so use the trunk's own scratch.
-    state_dir = out.parent.parent / ".uedctl"
+    state_dir = out.parent.parent / ".uedcli"
     state_dir.mkdir(parents=True, exist_ok=True)
     with ephemeral_build_container(state_dir=state_dir, mounts=mounts) as container:
         c_dx = xfer.cp_in(container, str(dx), ext="dx")
@@ -122,7 +122,7 @@ def main() -> int:
 
     # `movers.is_mover` is schema-aware since 2026-07-25 (decisions.md 2026-07-25 10:18 UTC): the
     # mover canonicalization gate resolves the class hierarchy against `Engine.Mover`, so it needs a
-    # ClassIndex over the game's `.u` packages (project + ~/.uedctl/config.toml). `class_index()`
+    # ClassIndex over the game's `.u` packages (project + ~/.uedcli/config.toml). `class_index()`
     # raises naming what is missing rather than letting the harness mis-ingest movers silently.
     idx = class_index()
     for actor in level.actors.values():

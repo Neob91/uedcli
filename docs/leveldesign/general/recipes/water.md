@@ -32,7 +32,7 @@ build is not yet live-verified.)
 invites BSP holes). Any object that pokes through the surface must be added **before** the water sheet.
 The sheet is immovable, so rising/falling water needs scripting, not geometry.
 
-## uedctl pipeline (what you run)
+## uedcli pipeline (what you run)
 
 ```
 # 1. carve the pool cavity into the floor

@@ -11,7 +11,7 @@ Method: import three DeusEx.Rat actors into an ephemeral editor and MAP EXPORT:
   RatC  InitialInventory(1)=(Count=5)  — sparse array write; elements 0/2 default (…,Count=1):
                                          absent from export ⇒ kept default; present ⇒ zeroed.
 
-Run host-native from Tools/uedctl with the LUM project resolvable (cwd repo root).
+Run host-native from Tools/uedcli with the LUM project resolvable (cwd repo root).
 """
 import os
 import re
@@ -20,12 +20,12 @@ import tempfile
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
 
-from uedctl import config, xfer                                   # noqa: E402
-from uedctl.container_assets import resource_mounts               # noqa: E402
-from uedctl.driver import Driver                                  # noqa: E402
-from uedctl.editor import ensure_editor, stop_editor              # noqa: E402
-from uedctl.packages import editor_search_dirs, ensure_load       # noqa: E402
-from uedctl.uuid7 import uuid7                                    # noqa: E402
+from uedcli import config, xfer                                   # noqa: E402
+from uedcli.container_assets import resource_mounts               # noqa: E402
+from uedcli.driver import Driver                                  # noqa: E402
+from uedcli.editor import ensure_editor, stop_editor              # noqa: E402
+from uedcli.packages import editor_search_dirs, ensure_load       # noqa: E402
+from uedcli.uuid7 import uuid7                                    # noqa: E402
 
 T3D = """Begin Map
 Begin Actor Class=DeusEx.Rat Name=RatA
@@ -45,7 +45,7 @@ End Map
 
 
 def main() -> int:
-    project = config.resolve_project(env_project=os.environ.get("UEDCTL_PROJECT"),
+    project = config.resolve_project(env_project=os.environ.get("UEDCLI_PROJECT"),
                                      cwd=os.getcwd())
     user_config = config.load_user_config()
     search_dirs = config.composed_search_dirs(project, user_config)

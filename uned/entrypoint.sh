@@ -52,7 +52,7 @@ else
     # camera (UnrealEd's per-frame cursor warp + RFB's absolute positions = unbounded
     # over-rotation). x11vnc stops injecting itself under -pipeinput; the bridge is the
     # sole injector. See vnc_input_bridge.py and
-    # dev/docs/specs/2026-06-18-uedctl-viewport-drag-sensitivity-findings.md.
+    # dev/docs/specs/2026-06-18-uedcli-viewport-drag-sensitivity-findings.md.
     VNC_FLAGS+=( -pipeinput "python3 /opt/uned/vnc_input_bridge.py" )
 fi
 x11vnc "${VNC_FLAGS[@]}" >/var/log/x11vnc.log 2>&1 &

@@ -3,7 +3,7 @@
 **Date:** 2026-07-25 · **Substrate:** the committed `uned/UED22/core.dll` (UnrealEd 2.2 for Deus Ex)
 · **Harnesses:** [`extract_save_mechanism.py`](extract_save_mechanism.py),
 [`measure_header_window.py`](measure_header_window.py)
-· **Pinned by:** `uedctl/tests/test_engine_facts.py::test_save_package_writes_a_temp_and_moves_it_and_never_reads_a_file_through_its_imports`
+· **Pinned by:** `uedcli/tests/test_engine_facts.py::test_save_package_writes_a_temp_and_moves_it_and_never_reads_a_file_through_its_imports`
 · **Consumers:** `driver.map_save` / `driver.package_header_problem`, `unrealed/commands.md`
 "`MAP SAVE` writes `Save.tmp`", `decisions.md` 2026-07-25 11:31 UTC (+ its two corrections)
 

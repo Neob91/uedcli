@@ -9,7 +9,7 @@ instead of nibbling an edge.
 A box sliced by a single diagonal plane running the full length, leaving a triangular cross-section
 that ramps from 0 up to full height. One brush.
 
-### uedctl pipeline (what you run)
+### uedcli pipeline (what you run)
 
 ```
 # a 192(X) x 64(Y) x 96(Z) box, origin-centred -> X:-96..96, Y:-32..32, Z:-48..48

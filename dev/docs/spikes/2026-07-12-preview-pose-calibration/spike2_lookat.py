@@ -10,7 +10,7 @@ Test: same landmark scene, align to each landmark BRUSH in turn and screenshot. 
 (East->1 pillar centred, West->3 pillars, South->wide wall, North->2 pillars), look-at works. Also
 capture where the camera ends up (does align reposition, or just aim?) by reading the silhouette size.
 
-Run (from Tools/uedctl):
+Run (from Tools/uedcli):
     bash -c 'source bin/_dev-run.sh && dev_docker_run python3 \
         dev/docs/spikes/2026-07-12-preview-pose-calibration/spike2_lookat.py'
 """
@@ -19,16 +19,16 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[4]))  # Tools/uedctl
+sys.path.insert(0, str(Path(__file__).resolve().parents[4]))  # Tools/uedcli
 sys.path.insert(0, str(Path(__file__).resolve().parent))      # this spike dir (import calib)
 
-from uedctl.apply import _materialize, _materialized_order     # noqa: E402
-from uedctl.driver import Driver                               # noqa: E402
-from uedctl.editor import ensure_editor, stop_editor           # noqa: E402
-from uedctl.normalize import canonical_actor_t3d               # noqa: E402
-from uedctl.preview_render import (CLICK, CROP, _WMCTRL_SWEEP,  # noqa: E402
+from uedcli.apply import _materialize, _materialized_order     # noqa: E402
+from uedcli.driver import Driver                               # noqa: E402
+from uedcli.editor import ensure_editor, stop_editor           # noqa: E402
+from uedcli.normalize import canonical_actor_t3d               # noqa: E402
+from uedcli.preview_render import (CLICK, CROP, _WMCTRL_SWEEP,  # noqa: E402
                                    _ini_for_mode)
-from uedctl.uuid7 import uuid7                                 # noqa: E402
+from uedcli.uuid7 import uuid7                                 # noqa: E402
 
 import calib                                                  # noqa: E402  (scene builder)
 

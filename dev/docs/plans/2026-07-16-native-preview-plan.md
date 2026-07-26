@@ -9,25 +9,25 @@
 
 ## 0. Concurrency contract — coexistence with the native-materialize agent
 
-Another agent is actively working the native-materialize line (`uedctl/native/*.py`,
-`uedctl-native/src/{build,csg,fpoly,model_write,light,lib}.rs`, `apply.py`). This build is
+Another agent is actively working the native-materialize line (`uedcli/native/*.py`,
+`uedcli-native/src/{build,csg,fpoly,model_write,light,lib}.rs`, `apply.py`). This build is
 deliberately architected to stay out of its way (the spec §5 "plan refinement"):
 
 **NOT touched (read-only consumption or no contact at all):**
-- `uedctl-native/src/{build,csg,fpoly,model,model_write,light,linecheck,passes,zones,paths}.rs` —
+- `uedcli-native/src/{build,csg,fpoly,model,model_write,light,linecheck,passes,zones,paths}.rs` —
   `build_geometry` + `serialize_model` are called through the EXISTING FFI, unchanged. The
   `BrushTuple` shape is not modified (preview computes UV frames Python-side; the boarded
   texture-axes FFI extension is the materialize agent's fidelity fix, not ours).
-- `uedctl/native/{materialize,assemble,umodel,actor_write,level_write,pkg_write,pkgref,codec}.py` —
+- `uedcli/native/{materialize,assemble,umodel,actor_write,level_write,pkg_write,pkgref,codec}.py` —
   `umodel.parse_model_body` is imported read-only; `materialize._build_brush_input` is NOT called
   (preview has its own brush-input builder with different rotation/scale policy).
 - `apply.py`, `packages.py`, `verify.py`, `writes.py`, `editor.py`, `stub*.py` — untouched.
 
 **Touched, with expected-zero conflict:**
-- `uedctl-native/src/lib.rs` — ADDITIVE only: register the new `render_frame` pyfunction + `mod
+- `uedcli-native/src/lib.rs` — ADDITIVE only: register the new `render_frame` pyfunction + `mod
   render;`. Two new-line insertions; if the other agent edits `lib.rs` concurrently, the merge is
   trivial. Coordinate by appending at the end of the registration block.
-- `uedctl-native/src/render.rs`, `Cargo.toml` (only if a dep were needed — none is planned) — new
+- `uedcli-native/src/render.rs`, `Cargo.toml` (only if a dep were needed — none is planned) — new
   file.
 - `preview_shots.py` — S3 adds the SHOT parser/pose math, S6 prunes the old grammar. Preview-only.
 - `cli.py` / `dispatch.py` — the `level preview` verb region only. NB the preview and materialize
@@ -58,11 +58,11 @@ re-run once before digging.
 
 ## 1. Slices (each: build → offline tests green → commit+push)
 
-### S1 — `uedctl/utexture.py` (texture decode, promoted)
-- Copy `spikes/2026-06-27-decontainerize-uedctl/harness/utexture_decode.py` →
-  `uedctl/utexture.py`; keep the spike file as evidence. API unchanged
+### S1 — `uedcli/utexture.py` (texture decode, promoted)
+- Copy `spikes/2026-06-27-decontainerize-uedcli/harness/utexture_decode.py` →
+  `uedcli/utexture.py`; keep the spike file as evidence. API unchanged
   (`load_package`/`decode_texture`/`decode_palette`/`mip0_to_rgb`); drop the stdlib PNG writer
-  (Pillow owns encode in uedctl) or keep it private — implementer's call.
+  (Pillow owns encode in uedcli) or keep it private — implementer's call.
 - Add a ref-resolution helper: `Package[.Group].Name` → decoded RGB, searching
   `config.composed_search_files` (project shadows base), per-invocation cache, bare-ref → miss.
 - **Tests:** decode a committed tiny fixture package pixel-exact (build the fixture once with the
@@ -168,7 +168,7 @@ editor-screenshot `level preview` — is deleted in S6. Capture the reference NO
 ### S7 — Acceptance + perf
 - Castle trunk (~90 brushes): batch of 8 shots (interior, exterior bird's-eye — the shot the old
   backend could never take, top-down, orbit ring) — eyeball pass, note anything off as inbox items.
-  ⚠️ The castle trunk lives ONLY in wipeable scratch (`_scratch/castle/uedctl/maps/foobar`; the
+  ⚠️ The castle trunk lives ONLY in wipeable scratch (`_scratch/castle/uedcli/maps/foobar`; the
   committed project trunk is 1 actor) — regenerate via the native-materialize spike harness
   (`spikes/2026-07-15-native-materialize/harness/build_native_castle.py`) if wiped, or use any
   comparable multi-brush trunk; don't let a scratch wipe stall acceptance.
@@ -198,4 +198,4 @@ Every slice's tests are in the default offline suite and green (`bin/test`); **e
 error path has a regression test** (not a subset); the anchor verdict is recorded; the golden is
 blessed post-anchor; the editor preview path is deleted with no stray importers OR name references;
 docs + board reconciled per S6; S7 acceptance shots recorded. The `--game` flag exists as a clean
-reserved error; nothing in `uedctl/native/` or the Rust build/CSG modules has changed.
+reserved error; nothing in `uedcli/native/` or the Rust build/CSG modules has changed.

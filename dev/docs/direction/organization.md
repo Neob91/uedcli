@@ -2,7 +2,7 @@
 
 ## What we want
 
-Two **independent** organizational dimensions on every actor, both uedctl-side only.
+Two **independent** organizational dimensions on every actor, both uedcli-side only.
 [`terminology.md`](terminology.md) defines the terms; this doc is how they are set,
 managed and queried, and why there are two.
 
@@ -13,7 +13,7 @@ rather than a loosened folder.
 
 **Set at CREATION, on the generators.** `brush build`/`actor build` take
 `--folder <path>` and `--label <l>` (repeatable). They emit the organization as T3D
-comment carriers — `// uedctl-folder:` and `// uedctl-labels:` — which `actor add`
+comment carriers — `// uedcli-folder:` and `// uedcli-labels:` — which `actor add`
 persists into the sidecars:
 
     brush build cube --folder castle.wall --label lit | actor add -
@@ -73,7 +73,7 @@ library prefab into the current level. It keeps **both** dimensions, independent
 - `--group` stamps the engine `Group` prop, defaulting to the stash id / prefab
   basename. Renaming it to `--folder` would have silently changed what an existing
   scripted `stash apply --group X` does.
-- `--folder` sets the uedctl sidecar and has **no default** — placed actors are
+- `--folder` sets the uedcli sidecar and has **no default** — placed actors are
   unfoldered unless asked for, rather than being silently filed under a name the user
   never chose.
 - **A fresh batch token is ALWAYS minted**, exactly as `actor duplicate` does:
@@ -91,14 +91,14 @@ so an accidental invisible overlapping copy is an error rather than a warning.
 
 **The carrier is a T3D comment, so `actor show` output is both round-tripping and
 editor-importable.** UnrealEd's importer silently strips `//` line-comments, so the
-default output carries the organization for uedctl and is dropped without warning by the
+default output carries the organization for uedcli and is dropped without warning by the
 editor. `--t3d-only` suppresses the comments for a byte-exact editor export.
 
 **Never emitted to the built map, never in the level hash.** Both are editor-organization
 metadata with no gameplay meaning; the sidecar is the source of truth, which also
 sidesteps UnrealEd's FName length limit on `Group=` for deep dotted paths. The
 consequence is accepted: open the built map in UnrealEd and the organization is not
-there — only the engine `Group` prop, which uedctl leaves untouched.
+there — only the engine `Group` prop, which uedcli leaves untouched.
 
 **Enumeration lives under `actor` too.** `actor folder list` prints the distinct folder
 paths in use, `actor label list` the distinct labels — answering *what exists*, which
@@ -174,7 +174,7 @@ parallel namespace would duplicate the query surface.
 
 **Interchange carrier**
 
-- **The unknown-property carrier `UedctlFolder="…"`.** It works, but spams a per-actor
+- **The unknown-property carrier `UedcliFolder="…"`.** It works, but spams a per-actor
   `Unknown property in defaults` warning on import.
 - **`/* */` and `;`** — not comment syntax to the T3D importer at all; they survive only as
   incidental no-`=` skipped lines.

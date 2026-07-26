@@ -62,18 +62,18 @@ Definition: matches `\(?[Dd]ecisions?\b[^)]{0,40}[0-9]{4}-[0-9]{2}-[0-9]{2}` and
 literal `decisions.md`, so a filename grep cannot see it.
 
 ```
-dev/docs/board/to-spike.md                     uedctl/normalize.py
-dev/docs/specs/2026-07-17-game-actor-relative-poses.md   uedctl/preview_game.py
-dev/docs/spikes/levelbuild-friction/README.md   uedctl/rotation.py
+dev/docs/board/to-spike.md                     uedcli/normalize.py
+dev/docs/specs/2026-07-17-game-actor-relative-poses.md   uedcli/preview_game.py
+dev/docs/spikes/levelbuild-friction/README.md   uedcli/rotation.py
   ^^ UNTRACKED (another session's spike) — not in the checker's git ls-files set
-dev/docs/unrealed/commands.md                   uedctl/stash_register.py
-uedctl/cli.py                                   uedctl/tests/test_apply.py
-uedctl/level_select.py                          uedctl/tests/test_brush_merge.py
-uedctl/native/materialize.py                    uedctl/tests/test_class_discovery.py
-uedctl/tests/test_env_level_and_echo.py         uedctl/tests/test_generators.py
-uedctl/tests/test_level_select.py               uedctl/tests/test_level_verbs.py
-uedctl/tests/test_normalize.py                  uedctl/tests/test_stashlib.py
-uedctl/tests/test_trunk_verbs.py                uedctl/tests/test_uprops.py
+dev/docs/unrealed/commands.md                   uedcli/stash_register.py
+uedcli/cli.py                                   uedcli/tests/test_apply.py
+uedcli/level_select.py                          uedcli/tests/test_brush_merge.py
+uedcli/native/materialize.py                    uedcli/tests/test_class_discovery.py
+uedcli/tests/test_env_level_and_echo.py         uedcli/tests/test_generators.py
+uedcli/tests/test_level_select.py               uedcli/tests/test_level_verbs.py
+uedcli/tests/test_normalize.py                  uedcli/tests/test_stashlib.py
+uedcli/tests/test_trunk_verbs.py                uedcli/tests/test_uprops.py
 ```
 
 ### `CLAUDE.md "<moved section>"` citations — DONE (retargeted 2026-07-26)
@@ -81,15 +81,15 @@ uedctl/tests/test_trunk_verbs.py                uedctl/tests/test_uprops.py
 All four citations of the three *moved* sections were retargeted in the rules-split commit:
 
 ```
-uedctl/editor.py:267              -> dev/docs/rules/background-work.md
-uedctl/tests/test_polyalign.py    -> dev/docs/rules/spikes.md "pin the finding"
-uedctl/tests/test_engine_facts.py -> dev/docs/rules/spikes.md
-uedctl/tests/test_mesh_decode.py  -> dev/docs/rules/spikes.md
+uedcli/editor.py:267              -> dev/docs/rules/background-work.md
+uedcli/tests/test_polyalign.py    -> dev/docs/rules/spikes.md "pin the finding"
+uedcli/tests/test_engine_facts.py -> dev/docs/rules/spikes.md
+uedcli/tests/test_mesh_decode.py  -> dev/docs/rules/spikes.md
 dev/docs/board/to-build.md:256    -> dev/docs/rules/spikes.md "Commit the harness"
 ```
 
-`grep -rn 'CLAUDE\.md "' uedctl bin pyproject.toml` now returns exactly one file —
-`uedctl/editor.py:40`, citing "never let a Python exception reach the CLI user", a section that
+`grep -rn 'CLAUDE\.md "' uedcli bin pyproject.toml` now returns exactly one file —
+`uedcli/editor.py:40`, citing "never let a Python exception reach the CLI user", a section that
 **stays resident**. Citations of resident sections are correct and must not be retargeted.
 
 **Lesson for Task 8:** the class must be re-derived **by section title**, not by grepping the
@@ -113,7 +113,7 @@ either old file is deleted.
 
 | Entry | Disposition | Reason / superseder |
 |--------------------------------------------------|--------------------------|---
-| 2026-06-23 — uedctl is a generic UnrealEngine-1 tool | `direction/scope.md` | intent; its `Rejected` ("treating uedctl as a Deus Ex tool") carried over verbatim. Its `Refs:` cited `specs/2026-06-23-uedctl-new-level-authoring-design.md`, **deleted** — dropped rather than carried dangling |
+| 2026-06-23 — uedcli is a generic UnrealEngine-1 tool | `direction/scope.md` | intent; its `Rejected` ("treating uedcli as a Deus Ex tool") carried over verbatim. Its `Refs:` cited `specs/2026-06-23-uedcli-new-level-authoring-design.md`, **deleted** — dropped rather than carried dangling |
 | 2026-06-30 21:07 — config key is `game`, not `substrate` | `direction/scope.md` | intent; refines the above. Both `Rejected` bullets carried over |
 | 2026-06-23 — Terminology: "level" = content, "map file" = the artifact | `direction/terminology.md` | intent; both `Rejected` bullets carried over. `Refs:` cited the same **deleted** new-level-authoring spec — dropped, not carried dangling |
 | 2026-07-22 20:49 — actor `label` dimension | `direction/terminology.md` (glossary) + `direction/organization.md` (the feature, Task 5) | its "internals stay label-named pending a rename" clause did NOT survive — superseded below |
@@ -127,7 +127,7 @@ either old file is deleted.
 | 2026-07-25 00:43 — `find` vs `search` naming rule | `direction/conventions.md` | intent; `Rejected` carried |
 | 2026-07-25 10:18 — schema-aware `movers.is_mover` | `direction/conventions.md` | intent; all four `Rejected` carried, incl. the silent-`False` trap promoted into *What we want* |
 | 2026-06-26 12:41 — error, never fallback | `direction/conventions.md` | intent; 3 of 5 `Rejected` carried (2 belong to other topics) |
-| 2026-06-25 11:04 — actor-name resolution | `direction/conventions.md` (the batch rule) + `rationale/` (the implementation bullets) | its `Refs:` cited `specs/2026-06-24-uedctl-actor-name-resolution-design.md`, **deleted** — dropped |
+| 2026-06-25 11:04 — actor-name resolution | `direction/conventions.md` (the batch rule) + `rationale/` (the implementation bullets) | its `Refs:` cited `specs/2026-06-24-uedcli-actor-name-resolution-design.md`, **deleted** — dropped |
 | 2026-07-18 08:33 — exact-miss vs glob-miss | `direction/conventions.md` | intent; `Rejected` carried |
 | 2026-07-24 16:28 — `brush poly find` skips non-brushes | `direction/conventions.md` | the calibrated exception; no `Rejected` block in the entry |
 | 2026-07-24 18:50 — an inert flag ERRORS | `direction/conventions.md` | its superseded warn-and-continue recorded as a `Rejected` bullet |
@@ -156,7 +156,7 @@ neither old file may be deleted, on the strength of this table alone.**
 | Date | Entry | Guessed topic |
 |------|-------|---
 | 2026-06-21 | Container filesystem isolation (drop the `/repo` mount) | `containers` |
-| 2026-06-21 | Deus Ex package "stubbing" (v68→v69 round-trip, integrated into uedctl) | `packages` |
+| 2026-06-21 | Deus Ex package "stubbing" (v68→v69 round-trip, integrated into uedcli) | `packages` |
 | 2026-06-22 | Package stubbing: body-stripping, temp-name, shallow closure (refines 2026-06-21) | `packages` |
 | 2026-06-22 | noVNC viewport drag: an x11vnc `-pipeinput` abs→rel bridge | `?` |
 | 2026-06-22 | Full `texture` tool: an offline, hash-versioned texture catalog | `packages` |
@@ -169,7 +169,7 @@ neither old file may be deleted, on the strength of this table alone.**
 | 2026-06-23 | New-level authoring: uniform state-tree format + explicit commit choice (extends above) | `packages` |
 | 2026-06-23 | New-level authoring: drop the bound target, `name` is the sole identity (extends above) | `?` |
 | 2026-06-23 | New-level authoring: explicit `--to-map-file`/`--to-t3d-tree` mode flags | `?` |
-| 2026-06-23 | uedctl is a generic UnrealEngine-1 tool (DeusEx is a baked-in substrate, not the scope) | `scope` |
+| 2026-06-23 | uedcli is a generic UnrealEngine-1 tool (DeusEx is a baked-in substrate, not the scope) | `scope` |
 | 2026-06-23 | Terminology: "level" = content, "map file" = the binary artifact | `terminology` |
 | 2026-06-23 | New-level authoring: four-reviewer-fleet resolutions | `process` |
 | 2026-06-23 13:39 UTC | Dev-doc system: add `direction.md`, UTC-stamp decisions, doc-upkeep rules | `process` |
@@ -178,14 +178,14 @@ neither old file may be deleted, on the strength of this table alone.**
 | 2026-06-18 | FULL RE-IMPORT as the materialize strategy (over suffix-rebuild) | `materialize` |
 | 2026-06-21 | Class qualification via `OBJ LIST` (not `OBJ DEPENDENCIES` positional match) | `?` |
 | 2026-06-24 08:50 UTC | `level doctor` BSP-issue detector is static-only; live "deep" mode deferred | `?` |
-| 2026-06-24 09:07 UTC | Reimplement UnrealEd's BSP/CSG build OFFLINE in uedctl (faithful, editor-verified) — sup | `?` |
+| 2026-06-24 09:07 UTC | Reimplement UnrealEd's BSP/CSG build OFFLINE in uedcli (faithful, editor-verified) — sup | `?` |
 | 2026-06-24 12:40 UTC | BSP-issue ground truth = D0+D1 (editor drop-warnings + saved-build reader); the fully-of | `?` |
 | 2026-06-24 14:30 UTC | Generator pattern: `brush build`, `actor build`, `stash intersect`/`deintersect` | `generators` |
 | 2026-06-25 10:36 UTC | `actor find`: separate verb, group-membership semantics, OR/AND combining, case-insensit | `?` |
 | 2026-06-25 11:04 UTC | Case-insensitive actor-name resolution via resolver helpers, not dict key change | `?` |
 | 2026-06-25 12:17 UTC | Mover support: offline keyframe authoring | `generators` |
 | 2026-06-26 10:53 UTC | `actor prop`: model-side property set/clear (replaces the `actor set` stub) | `packages` |
-| 2026-06-26 | `uedctl deusex con`: high-level conversation source ↔ `.con` | `?` |
+| 2026-06-26 | `uedcli deusex con`: high-level conversation source ↔ `.con` | `?` |
 | 2026-06-26 12:41 UTC | Property validation: sole `.u` parse, error-not-fallback, normalize key casing to `.u` | `?` |
 | 2026-06-26 | `deusex con`: remaining `.con` field semantics resolved (supersedes "MoveCamera under-de | `packages` |
 | 2026-06-26 14:10 UTC | Class-property schema parses the game's REAL `.u`, never the stub cache | `packages` |
@@ -195,11 +195,11 @@ neither old file may be deleted, on the strength of this table alone.**
 | 2026-06-29 | Class-property schema source is the configured `paths`, not a hardcoded schema search li | `packages` |
 | 2026-06-29 05:18 UTC | Global-CLI: drop migration; container overlay = dynamic mount + dynamic ini Paths | `containers` |
 | 2026-06-29 05:18 UTC | `actor prop`: fold typed + enum-value + array-bounds validation into v1 | `?` |
-| 2026-06-29 06:02 UTC | Ditch the in-repo ignored `.uedctl/`; a project gets a TRACKED `.uedctl/` config dir | `projects-and-config` |
+| 2026-06-29 06:02 UTC | Ditch the in-repo ignored `.uedcli/`; a project gets a TRACKED `.uedcli/` config dir | `projects-and-config` |
 | 2026-06-29 06:48 UTC | Prefab naming (slashes/subdirs) + texture model: classification in-project, images in ho | `packages` |
-| 2026-06-29 08:09 UTC | The `.con` conversation tool is a STANDALONE `dxconcli` prod tool, not `uedctl deusex co | `?` |
-| 2026-06-30 06:18 UTC | Project layout: the project dir IS the (conventionally-named) `uedctl/` dir; project roo | `projects-and-config` |
-| 2026-06-30 18:47 UTC | Global-CLI rulings: home stays `~/.uedctl/`; substrate = game (one install, many games); | `scope` |
+| 2026-06-29 08:09 UTC | The `.con` conversation tool is a STANDALONE `dxconcli` prod tool, not `uedcli deusex co | `?` |
+| 2026-06-30 06:18 UTC | Project layout: the project dir IS the (conventionally-named) `uedcli/` dir; project roo | `projects-and-config` |
+| 2026-06-30 18:47 UTC | Global-CLI rulings: home stays `~/.uedcli/`; substrate = game (one install, many games); | `scope` |
 | 2026-06-30 21:07 UTC | Config key is `game`/`[games.*]` (user-facing), not `substrate` | `scope` |
 | 2026-07-01 04:26 UTC | No per-game editor image: one shared UED22, game paths wired into the ini at launch | `containers` |
 | 2026-07-01 04:33 UTC | Ditch the `container` config key/knob: container instances are ephemeral and derived | `scope` |
@@ -208,10 +208,10 @@ neither old file may be deleted, on the strength of this table alone.**
 | 2026-07-01 06:16 UTC | DEFER replacing sessions with git branches; spike its viability first | `trunk-and-editor` |
 | 2026-07-01 07:05 UTC | Git-merge-on-T3D-tree spike: viable; the shared `order` file is the one blocker | `?` |
 | 2026-07-01 07:20 UTC | Paths-precedence spike: shadowing is enforced HOST-SIDE at apply; editor `Paths` order o | `containers` |
-| 2026-07-01 07:45 UTC | Walk-up project discovery is by SCHEMA (any dir name), not conventional-`uedctl/`-only | `packages` |
+| 2026-07-01 07:45 UTC | Walk-up project discovery is by SCHEMA (any dir name), not conventional-`uedcli/`-only | `packages` |
 | 2026-07-05 14:58 UTC | Project state goes fully in-tree; git feature branches replace the session store; `~/.ue | `trunk-and-editor` |
 | 2026-07-05 15:11 UTC | Order-key scheme: `(order_value, random-id)` tiebreak; random-suffix actor names; duplic | `?` |
-| 2026-07-05 15:54 UTC | Git-branch model: `level apply`→a pure `level materialize`; uedctl reads/writes only (gi | `materialize` |
+| 2026-07-05 15:54 UTC | Git-branch model: `level apply`→a pure `level materialize`; uedcli reads/writes only (gi | `materialize` |
 | 2026-07-05 16:06 UTC | `level materialize` refuses to overwrite; guards A/B + backup dropped; H3 kept | `materialize` |
 | 2026-07-05 16:48 UTC | Layout/ordering clarifications: `actor.t3d` (name lives only in the dir); tiebreak sorts | `projects-and-config` |
 | 2026-07-05 17:11 UTC | Git-native spec review resolutions: materialize dup-order warn, `level materialize --ove | `materialize` |
@@ -243,7 +243,7 @@ neither old file may be deleted, on the strength of this table alone.**
 | 2026-07-14 03:30 UTC | Asset wiring, finalized: editor+game share the mounts; code-vs-content split; schema fol | `packages` |
 | 2026-07-14 12:00 UTC | Bare `*` Paths DOESN'T WORK (UE1 needs `*.<ext>`); use per-dir-per-ext — SUPERSEDES the  | `containers` |
 | 2026-07-14 13:30 UTC | Asset wiring Part C: retire the static compose mounts + entrypoint sed; build container  | `scope` |
-| 2026-07-14 14:30 UTC | uedctl runs HOST-NATIVE in a dev venv (retire the uedctl-dev container); asset paths nee | `process` |
+| 2026-07-14 14:30 UTC | uedcli runs HOST-NATIVE in a dev venv (retire the uedcli-dev container); asset paths nee | `process` |
 | 2026-07-14 17:35 UTC | Materialize OBJ-LOADs only the LEVEL's referenced packages, not the whole composed insta | `materialize` |
 | 2026-07-14 17:40 UTC | Stub-build + texture-sync discovery config-driven; ONE uniform `resource_mounts` for cod | `scope` |
 | 2026-07-14 19:21 UTC | ONE uniform mount set for ALL containers (editor/preview/texture/stub); retire the code- | `trunk-and-editor` |
@@ -251,7 +251,7 @@ neither old file may be deleted, on the strength of this table alone.**
 | 2026-07-16 12:13 UTC | `level preview` becomes two-backend: `--native` (offline Rust rasterizer, DEFAULT) + `-- | `trunk-and-editor` |
 | 2026-07-16 15:20 UTC | Native `level materialize` builds COLLISION HULLS (`bspBuildBounds`); this — not zones — | `materialize` |
 | 2026-07-16 17:30 UTC | Native `TestVisibility` zones ported (leaves/flood/ZoneActor); CSG-geometry parity is th | `?` |
-| 2026-07-16 15:49 UTC | the `--game` preview container wires its packages/ini from the uedctl config (composed s | `trunk-and-editor` |
+| 2026-07-16 15:49 UTC | the `--game` preview container wires its packages/ini from the uedcli config (composed s | `trunk-and-editor` |
 | 2026-07-16 | native CSG classifier is POINT-IN-SOLID, not rebuilt-BSP propagation | `asset-catalog` |
 | 2026-07-17 04:36 UTC | Native byte-identity ⇒ port UnrealEd's INCREMENTAL `bspBrushCSG` (supersedes the scope o | `materialize` |
 | 2026-07-17 04:36 UTC | Delete the synthetic leaf-bounding scaffold once the faithful CSG lands | `?` |
@@ -262,7 +262,7 @@ neither old file may be deleted, on the strength of this table alone.**
 | 2026-07-17 07:30 UTC | (supersedes the 2026-07-17 06:57 warm-container entry, in part) per-user identity + `mat | `materialize` |
 | 2026-07-17 18:46 UTC | `level preview` default backend flips to `--game`; `--native` becomes opt-in | `trunk-and-editor` |
 | 2026-07-17 21:10 UTC | Native lit build ships through the `bspcsg` CSG core (cleaner BSP → clearer light LOS) | `?` |
-| 2026-07-17 20:58 UTC | Project layout reorg: a free `uedctl.toml` at the repo root; in-repo gitignored `.uedctl | `projects-and-config` |
+| 2026-07-17 20:58 UTC | Project layout reorg: a free `uedcli.toml` at the repo root; in-repo gitignored `.uedcli | `projects-and-config` |
 | 2026-07-18 07:53 UTC | Texture per-package flock is CATALOG-adjacent (`<catalog>/.locks/`), not project-derived | `safety` |
 | 2026-07-18 08:08 UTC | Trunk saves are DELTA writes under a per-level flock; concurrent disjoint edits compose | `trunk-and-editor` |
 | 2026-07-18 08:26 UTC | Trunk delta writes, completed: content-diff writes + atomic per-actor files + dotted-lev | `trunk-and-editor` |
@@ -270,9 +270,9 @@ neither old file may be deleted, on the strength of this table alone.**
 | 2026-07-18 10:02 UTC | `actor prop set|unset|get` subcommands, dot-paths, default-value fallback (spec `specs/2 | `containers` |
 | 2026-07-18 10:30 UTC | `actor prop` subcommands: spec review-gate rulings (amends 10:02) | `?` |
 | 2026-07-18 11:47 UTC | `actor prop` subcommands BUILT; the §9 probe + two engine facts (closes the 10:02/10:30  | `?` |
-| 2026-07-18 12:14 UTC | Actor "folders": hierarchical, per-actor-sidecar, uedctl-only (the groups overhaul) (spe | `organization` |
+| 2026-07-18 12:14 UTC | Actor "folders": hierarchical, per-actor-sidecar, uedcli-only (the groups overhaul) (spe | `organization` |
 | 2026-07-18 12:32 UTC | Actor folders: spec review-gate resolutions (amends 12:14) | `organization` |
-| 2026-07-18 12:45 UTC | Actor folders: the `// uedctl-folder:` interchange carrier + R2/R5/R6 rulings (closes th | `organization` |
+| 2026-07-18 12:45 UTC | Actor folders: the `// uedcli-folder:` interchange carrier + R2/R5/R6 rulings (closes th | `organization` |
 | 2026-07-18 12:36 UTC | `actor prop` build: 3-reviewer gate findings resolved (amends 11:47) | `process` |
 | 2026-07-18 14:03 UTC | Unattended build batch: compose-pipe, CSG-order, scale (3 specs) | `?` |
 | 2026-07-18 21:30 UTC | Persistent package-schema cache (v1 discovery; phased) (spec `specs/2026-07-18-package-s | `packages` |
@@ -292,7 +292,7 @@ neither old file may be deleted, on the strength of this table alone.**
 | 2026-07-19 08:58 UTC | Port `bspValidateBrush` coplanar surf-link into the native incremental CSG (`bspcsg.rs`) | `?` |
 | 2026-07-19 (water-cluster triage) | WaterZone authoring, doctor `fallthrough`, and poly-flag verb naming (Andrzej-decided) | `?` |
 | 2026-07-19 (level-design docs + AI-skills plugin) | verb-first craft guides shipped as a Claude Code plugin (Andrzej-decided) | `?` |
-| 2026-07-19 (addendum) | Move uedctl into its own CLI-only repo; plugin distribution blocked on that move (Andrze | `?` |
+| 2026-07-19 (addendum) | Move uedcli into its own CLI-only repo; plugin distribution blocked on that move (Andrze | `?` |
 | 2026-07-19 12:30 UTC | Extend `--target KIND/NAME` to the read verbs (race escape hatch); skip generators (Andr | `generators` |
 | 2026-07-19 19:28 UTC | Rotation CLI input is UNREAL ROTATION UNITS, not degrees (Andrzej-decided) | `?` |
 | 2026-07-19 13:30 UTC | `actor find`: rename `--class` → `--class-exact`, add `--subclass-of` (Andrzej-decided) | `?` |
@@ -301,7 +301,7 @@ neither old file may be deleted, on the strength of this table alone.**
 | 2026-07-20 13:48 UTC | `mover key` gains a `--from-base` base-relative coordinate frame | `generators` |
 | 2026-07-20 15:24 UTC | `mover key` keyframe model: index-addressed create-or-edit + required frame (SUPERSEDES  | `generators` |
 | 2026-07-20 16:18 UTC | `mover key`: `count` owns `NumKeys` (settable); `move`/`rotate` edit-only (SUPERSEDES th | `generators` |
-| 2026-07-20 21:30 UTC | Level is the ambient `$UEDCTL_LEVEL`; rename `--target`→`--tree`; drop `level select` | `?` |
+| 2026-07-20 21:30 UTC | Level is the ambient `$UEDCLI_LEVEL`; rename `--target`→`--tree`; drop `level select` | `?` |
 | 2026-07-21 12:06 UTC | `brush build` emits ONE non-convex brush actor + `doctor` becomes T-junction-aware | `generators` |
 | 2026-07-21 12:22 UTC | Addendum to the 12:06 single-brush decision: native-convex caveat + spiral split (post-r | `?` |
 | 2026-07-21 13:42 UTC | Brush-cluster confirmations (Andrzej): unified `--from-t3d`, preview knobs, spiral split | `trunk-and-editor` |
@@ -315,7 +315,7 @@ neither old file may be deleted, on the strength of this table alone.**
 | 2026-07-22 06:21 UTC | point-actor highlight: corner brackets, not a spotlight disc | `?` |
 | 2026-07-22 08:28 UTC | spiral staircase: wedge treads + central column, monotonic helix | `?` |
 | 2026-07-22 09:54 UTC | granular `--labels` grammar + density-aware label placement | `organization` |
-| 2026-07-22 20:49 UTC | Actor `label` dimension (flat, multi-valued, uedctl-side); preview `--labels`→`--annotat | `organization` |
+| 2026-07-22 20:49 UTC | Actor `label` dimension (flat, multi-valued, uedcli-side); preview `--labels`→`--annotat | `organization` |
 | 2026-07-23 05:58 UTC | Resolve the actor-`label` sub-choices (grammar, no `set`, `--tree`, patterns) | `organization` |
 | 2026-07-24 08:31 UTC | `actor duplicate` ALWAYS mints `dup-<rand>`; `--label` is purely additive | `organization` |
 | 2026-07-24 08:40 UTC | `--label` patterns drop char-class; `*`-only, matching folder | `organization` |
@@ -351,10 +351,10 @@ neither old file may be deleted, on the strength of this table alone.**
 | 2026-07-24 19:01 UTC | `actor preview` param cleanup: `--layout`, `--frame`, `--show`; breakdown gives point ac | `trunk-and-editor` |
 | 2026-07-24 19:49 UTC | Corpus study: extract ONLY brush-construction idioms from real levels | `?` |
 | 2026-07-24 21:44 UTC | `actor find --within-bbox` BUILT (containment; the rest of find-spatial stays parked) | `?` |
-| 2026-07-24 21:46 UTC | `uedctl docs` serves the user-facing docs from the CLI (tool documents itself) | `?` |
-| 2026-07-24 21:57 UTC | NO BACK-COMPAT CRUFT: uedctl is unreleased, so a removed thing is DELETED | `conventions` |
+| 2026-07-24 21:46 UTC | `uedcli docs` serves the user-facing docs from the CLI (tool documents itself) | `?` |
+| 2026-07-24 21:57 UTC | NO BACK-COMPAT CRUFT: uedcli is unreleased, so a removed thing is DELETED | `conventions` |
 | 2026-07-24 21:58 UTC | Board triage of the cheap-item shortlist (10 items) | `process` |
-| 2026-07-24 22:28 UTC | `uedctl docs`: a README folds to its directory's topic key (root → `index`) | `?` |
+| 2026-07-24 22:28 UTC | `uedcli docs`: a README folds to its directory's topic key (root → `index`) | `?` |
 | 2026-07-25 | `Rotation` folded at COMPARE time; the underlying class-default bug class opened | `?` |
 | 2026-07-25 | `intersect`/`deintersect` BUILT: the editor's wrap/builder cubes COINCIDE (spec §4 corre | `generators` |
 | 2026-07-25 00:14 UTC | `brush build extrude` + `brush build revolve`: the 2D-profile generator family (Andrzej- | `generators` |
@@ -367,7 +367,7 @@ neither old file may be deleted, on the strength of this table alone.**
 | 2026-07-25 03:40 UTC | The unified asset catalog: one engine, four kinds (Andrzej-decided) | `asset-catalog` |
 | 2026-07-25 03:40 UTC | UE1 meshes decode and render natively; `umodel.exe` is not needed to READ a mesh | `packages` |
 | 2026-07-25 02:30 UTC | Profile-generator BUILD PLAN: cold-review refinements + D11/D12 | `generators` |
-| 2026-07-25 05:10 UTC | The tool does NOT infer: uedctl is a faithful data layer, the LLM supplies meaning (Andr | `?` |
+| 2026-07-25 05:10 UTC | The tool does NOT infer: uedcli is a faithful data layer, the LLM supplies meaning (Andr | `?` |
 | 2026-07-25 02:15 UTC | The H3 post-verify compares TYPED effective values, not canonicalized text; contraction  | `materialize` |
 | 2026-07-25 03:07 UTC | mover `SavedPos`/`SavedRot` are stripped as computed, NOT authored into the trunk | `materialize` |
 | 2026-07-25 03:05 UTC | UnrealEd's 2D shape editor yields ONE brush: attested, not open (Andrzej) | `?` |

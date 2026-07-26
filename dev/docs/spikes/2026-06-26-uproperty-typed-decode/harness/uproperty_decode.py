@@ -70,7 +70,7 @@ structural decode of every replicated (net) property (which lands byte-exact)
 and against the decompiled `var` types.
 
 Pure offline: parses `.u` bytes, never runs the editor. Reuses
-`uedctl.dxpkg._read_compact_index`.
+`uedcli.dxpkg._read_compact_index`.
 """
 from __future__ import annotations
 
@@ -80,10 +80,10 @@ from dataclasses import dataclass
 
 # Import the production compact-index primitive.
 try:
-    from uedctl.dxpkg import _read_compact_index
+    from uedcli.dxpkg import _read_compact_index
 except ModuleNotFoundError:  # running from the harness dir directly
     sys.path.insert(0, ".")
-    from uedctl.dxpkg import _read_compact_index
+    from uedcli.dxpkg import _read_compact_index
 
 _MAGIC = 0x9E2A83C1
 

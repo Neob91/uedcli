@@ -7,14 +7,14 @@ point at a named text resource compiled into a package. **A datacube is special:
 into the player's Notes when read** (books and newspapers are read-and-forget). Datacubes are the
 classic way to hand out a door code or a story beat with a mechanical payoff.
 
-> **Authoring the text itself is a package-build step, not a uedctl verb.** The text lives in `.txt`
+> **Authoring the text itself is a package-build step, not a uedcli verb.** The text lives in `.txt`
 > files compiled into a `.u` package with `ucc make` (`#exec DEUSEXTEXT IMPORT FILE=…`). That is an
-> asset-pipeline task outside uedctl. What uedctl does is **place the device and point it at the
+> asset-pipeline task outside uedcli. What uedcli does is **place the device and point it at the
 > already-compiled text** via `textTag` + `TextPackage`.
 
 ## Procedure
 
-1. **Write the text** (pipeline step, outside uedctl). Create e.g. `16_DataCube01.txt` — the naming
+1. **Write the text** (pipeline step, outside uedcli). Create e.g. `16_DataCube01.txt` — the naming
    convention is `<missionNumber>_DataCube<NN>.txt` (`_Book<NN>`, `_Newspaper<NN>`). Use the DX markup
    (below). Import it into your package with a `#exec DEUSEXTEXT IMPORT` line and `ucc make` the
    package.
@@ -25,7 +25,7 @@ classic way to hand out a door code or a story beat with a mechanical payoff.
 4. **(Optional) attach a DataVault image** — set `imageClass` to a `DataVaultImage` subclass to show a
    picture alongside the text.
 
-## With uedctl
+## With uedcli
 
 ```bash
 # 2-4. Place a datacube and point it at compiled text (text was built with ucc make).

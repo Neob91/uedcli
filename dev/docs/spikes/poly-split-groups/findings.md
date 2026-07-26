@@ -72,5 +72,5 @@ in.
 - Per-perspective: a split is valid only for the view it was computed in.
 
 `polysplit_spike.py` is the harness (three test scenes; prints group membership + writes a
-per-scene filmstrip to `_scratch/polysplit/`). Run: `cd Tools/uedctl && env PYTHONPATH=.
+per-scene filmstrip to `_scratch/polysplit/`). Run: `cd Tools/uedcli && env PYTHONPATH=.
 .venv/bin/python dev/docs/spikes/poly-split-groups/polysplit_spike.py`.

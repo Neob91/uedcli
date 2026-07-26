@@ -42,7 +42,7 @@ try:
         "Begin Map\n"
         "Begin Actor Class=DeusExLevelInfo Name=DeusExLevelInfo0\n"
         '     Title="DXSpike"\n'
-        '     Author="uedctl"\n'
+        '     Author="uedcli"\n'
         "     AmbientBrightness=33\n"
         '     Name="DeusExLevelInfo0"\n'
         "End Actor\n"

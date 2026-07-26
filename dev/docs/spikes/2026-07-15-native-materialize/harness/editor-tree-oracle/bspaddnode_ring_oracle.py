@@ -16,7 +16,7 @@ the single node/vert emitter for the whole build.  At its entry (first insn, pro
 We MAP LOAD the golden (default Test_Castle.dx), attach gdb with a breakpoint that logs
 `ADD ivp=<Verts.Num> nv=<NumVertices> ilink=<iLink>` and continues, then MAP REBUILD.  The result
 is the editor's full append sequence: each ring's [ivp, ivp+nv) slot range in emission order, so
-the orphan-run ring boundaries can be diffed against native's `UEDCTL_PASSD_DUMP` EMIT lines.
+the orphan-run ring boundaries can be diffed against native's `UEDCLI_PASSD_DUMP` EMIT lines.
 
 Usage:  bspaddnode_ring_oracle.py [golden.dx] [--target castle|unatco]  ->  logs/bspaddnode-rings.log
         (--target selects the ASSET MOUNTS project — castle default, unatco = bare deusex base dirs.)
@@ -27,7 +27,7 @@ import sys
 import time
 from pathlib import Path
 
-ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedctl")
+ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedcli")
 HARNESS = ROOT / "dev/docs/spikes/2026-07-15-native-materialize/harness"
 HERE = HARNESS / "editor-tree-oracle"
 sys.path.insert(0, str(ROOT))
@@ -35,7 +35,7 @@ sys.path.insert(0, str(HARNESS))
 sys.path.insert(0, str(HERE))
 
 import editor_tree_oracle as O  # noqa: E402
-from uedctl.driver import Driver, to_z_path  # noqa: E402
+from uedcli.driver import Driver, to_z_path  # noqa: E402
 
 _ap = argparse.ArgumentParser(description="editor bspAddNode ring-sequence oracle")
 _ap.add_argument("golden", nargs="?",

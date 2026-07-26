@@ -30,7 +30,7 @@ _PKG_ROOT = Path(__file__).resolve().parents[4]
 if str(_PKG_ROOT) not in sys.path:
     sys.path.insert(0, str(_PKG_ROOT))
 
-from uedctl import dispatch, trunk, writes   # noqa: E402
+from uedcli import dispatch, trunk, writes   # noqa: E402
 
 
 def _is_axis_aligned_box(actor, tol=1e-3):

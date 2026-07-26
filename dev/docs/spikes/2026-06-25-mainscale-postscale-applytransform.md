@@ -2,13 +2,13 @@
 
 **Date:** 2026-06-25
 **Method:** live probe in `uned-spike1` (UED22 under wine). Built an **asymmetric** box (local
-half-extents X=64, Y=32, Z=16 — distinct per axis so orientation is readable) via uedctl's
+half-extents X=64, Y=32, Z=16 — distinct per axis so orientation is readable) via uedcli's
 `builders.cube`, hand-set `MainScale`/`PostScale`/`Rotation` in the actor T3D, `MAP IMPORTADD`'d it,
 `SELECTNAME` + `ACTOR APPLYTRANSFORM`, and read the baked PolyList + remaining transform fields back
 via `MAP EXPORT`.
 **Confidence:** ✅ live-verified (every coordinate below is a `MAP EXPORT` readback).
 
-This confirms the transform semantics needed to make uedctl **use** scale (previews + bounds),
+This confirms the transform semantics needed to make uedcli **use** scale (previews + bounds),
 **store** it (already round-trips as a string; needs parsing), and do **offline permanent
 transforms** (bake rotation+scale into vertices, reset the fields).
 
@@ -18,7 +18,7 @@ transforms** (bake rotation+scale into vertices, reset the fields).
 
 ### 1. MainScale is LOCAL / pre-rotation; PostScale is WORLD / post-rotation
 
-Both are `FScale` = `Scale` (FVector) + `SheerRate` + `SheerAxis` (the `SheerAxis=SHEER_ZX` uedctl
+Both are `FScale` = `Scale` (FVector) + `SheerRate` + `SheerAxis` (the `SheerAxis=SHEER_ZX` uedcli
 already emits is the identity-shear default).
 
 - **Test B — `MainScale=(Scale=(X=2))` + `Rotation=(Yaw=16384)` (90°), then APPLYTRANSFORM.** Baked
@@ -51,7 +51,7 @@ together and zeroes all three.
 > scale to identity" (implying MainScale only). It bakes the full transform.
 
 This is exactly the "permanent transform" primitive: one console verb already does what we want.
-uedctl can replicate it **offline** (no editor) by evaluating the chain in §1 and resetting the
+uedcli can replicate it **offline** (no editor) by evaluating the chain in §1 and resetting the
 fields — but see the open items.
 
 ### 3. Negative scale (mirror) bakes to a VALID, correctly-wound brush
@@ -63,7 +63,7 @@ fields — but see the open items.
 
 **Load-bearing for the offline port:** a naïve offline bake that just multiplies coords by the
 scale matrix would, for a negative determinant (odd number of negative scale axes), leave the
-winding reversed → inside-out solid → CSG crash on rebuild. uedctl's bake **must reverse each
+winding reversed → inside-out solid → CSG crash on rebuild. uedcli's bake **must reverse each
 polygon's vertex order when `det(PostScale·R·MainScale) < 0`** to match the editor. (This is the
 same winding gotcha as the planned `actor mirror`; mirror is just `MainScale` with one −1 axis, so
 the two features share this fix.)

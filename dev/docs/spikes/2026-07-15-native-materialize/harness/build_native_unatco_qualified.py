@@ -6,22 +6,22 @@ The native build imports every bare class under `Engine` (pkgref `_package_of_cl
 "Engine" because `uprops.package_of_class` does not exist), so the game aborts loading on the first
 non-Engine class (`Engine.DeusExMover`, then `Engine.ATM`, ...).  This harness derives the TRUE
 package of every class from the shipped golden `03_NYC_UNATCOHQ.dx` import table and RUNTIME-patches
-`uedctl.uprops.package_of_class` with that map (no production file is edited) so every class resolves
+`uedcli.uprops.package_of_class` with that map (no production file is edited) so every class resolves
 to its real `Package.Class`.  If the resulting map LOADS, the whole load blocker is import
 resolution; if it still spins CPU-bound, a real geometry loop remains.
 """
 import sys
 from pathlib import Path
 
-ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedctl")
+ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedcli")
 sys.path.insert(0, str(ROOT))
 
 from spike_classindex import class_index  # noqa: E402  (schema-aware mover gate's index)
-from uedctl import trunk, uprops  # noqa: E402
-from uedctl.native import materialize as M  # noqa: E402
-from uedctl.native.pkg_write import parse_package  # noqa: E402
+from uedcli import trunk, uprops  # noqa: E402
+from uedcli.native import materialize as M  # noqa: E402
+from uedcli.native.pkg_write import parse_package  # noqa: E402
 
-DEFAULT_TRUNK = "/home/neob91/Games/LutrisDX/drive_c/DX/LUM/_scratch/unatco/uedctl/maps/unatco"
+DEFAULT_TRUNK = "/home/neob91/Games/LutrisDX/drive_c/DX/LUM/_scratch/unatco/uedcli/maps/unatco"
 GOLDEN = "/home/neob91/Games/LutrisDX/drive_c/DX/Maps/03_NYC_UNATCOHQ.dx"
 OUT = "/home/neob91/Games/LutrisDX/drive_c/DX/Maps/NativeUnatcoQual.dx"
 PKG_DIRS = [

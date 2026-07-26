@@ -29,12 +29,12 @@ differential harness works.
   front/back, coplanar-same become the node's surface, recurse.
 
 It is **spike-grade and stays in `_scratch/`** (gitignored) until parity is locked across more
-cases; it is NOT yet promoted to a `uedctl/` module.
+cases; it is NOT yet promoted to a `uedcli/` module.
 
 ## 2. The differential harness (`oracle_diff.py`) — and cost-driver #4 retired
 
 The harness spins a **fresh isolated ephemeral editor** (`docker compose run` + its own
-WINEPREFIX volume, per `parallel-editors.md`), drives it via uedctl's `Driver`, and tears it down:
+WINEPREFIX volume, per `parallel-editors.md`), drives it via uedcli's `Driver`, and tears it down:
 `MAP NEW` → **`writes.add_actor` (EDIT PASTE)** the brush → `MAP REBUILD` → read `Editor.log` →
 diff → cleanup.
 
@@ -97,5 +97,5 @@ then a merge/optimize pass (`bspMergeCoplanars`/`bspOptGeom`) reduces to 6. The 
    (fall-through / invisible-wall ground truth; the `Portalized: … leaves` channel is the oracle).
 4. **Float32 discipline** — only matters once a case shows a boundary diff; the box didn't.
 
-Promote `bsp_port.py` from `_scratch/` to a real `uedctl/bsp/` module once parity holds across
+Promote `bsp_port.py` from `_scratch/` to a real `uedcli/bsp/` module once parity holds across
 the slice-1b discriminating set (not on a single box).

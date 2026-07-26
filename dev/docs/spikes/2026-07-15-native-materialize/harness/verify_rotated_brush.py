@@ -14,20 +14,20 @@ This harness builds a single Add box under several rotations through BOTH the Ru
 and asserts every world vertex the native build emits is explained by the reference — a
 differential check against the convention proven live against the editor.
 
-Run:  cd Tools/uedctl && .venv/bin/python dev/docs/spikes/2026-07-15-native-materialize/harness/verify_rotated_brush.py
+Run:  cd Tools/uedcli && .venv/bin/python dev/docs/spikes/2026-07-15-native-materialize/harness/verify_rotated_brush.py
 """
 import sys
 from pathlib import Path
 from decimal import Decimal as D
 
-ROOT = Path(__file__).resolve().parents[5]      # Tools/uedctl
+ROOT = Path(__file__).resolve().parents[5]      # Tools/uedcli
 sys.path.insert(0, str(ROOT))
 
-from uedctl import rotation as ROT
-from uedctl.model import Actor, Brush, Polygon
-from uedctl.native import materialize as MAT
-from uedctl.native import umodel as UM
-import uedctl_native
+from uedcli import rotation as ROT
+from uedcli.model import Actor, Brush, Polygon
+from uedcli.native import materialize as MAT
+from uedcli.native import umodel as UM
+import uedcli_native
 
 
 def make_box(loc, rot_str=None, hx=256, hy=64, hz=64):
@@ -45,7 +45,7 @@ def make_box(loc, rot_str=None, hx=256, hy=64, hz=64):
 
 def native_world_points(actor):
     bt = MAT._build_brush_input(actor.name, actor)
-    body = uedctl_native.serialize_model(uedctl_native.build_geometry([bt]))
+    body = uedcli_native.serialize_model(uedcli_native.build_geometry([bt]))
     m = UM.parse_model_body(body, 0, len(body))
     return {tuple(round(c, 3) for c in p) for p in m.points}
 

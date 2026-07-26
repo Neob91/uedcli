@@ -14,9 +14,9 @@
 
 ## File Structure
 
-- `uedctl/cli.py` — the `find` subparser gains a `-`-only trailing positional (`dest="restrict"`) and `--exclude`.
-- `uedctl/dispatch.py` — the `find` handler (`if args.cmd == "actor" and args.sub == "find":`, ~line 3124) gains the universe restriction, applied to the final `names` (after the `--prop` block, before the print at ~line 3199), plus the `--exclude`-requires-`-` guard.
-- `uedctl/tests/test_find_compose.py` — NEW: the grep-model behavior tests.
+- `uedcli/cli.py` — the `find` subparser gains a `-`-only trailing positional (`dest="restrict"`) and `--exclude`.
+- `uedcli/dispatch.py` — the `find` handler (`if args.cmd == "actor" and args.sub == "find":`, ~line 3124) gains the universe restriction, applied to the final `names` (after the `--prop` block, before the print at ~line 3199), plus the `--exclude`-requires-`-` guard.
+- `uedcli/tests/test_find_compose.py` — NEW: the grep-model behavior tests.
 - `docs/usage.md` — the `find` reference gains the `-`/`--exclude` grammar + a boolean-queries example.
 
 Reuse (do NOT reimplement): `_resolve_target_names(["-"])` (reads stdin, strips, drops blanks, empty→`[]`, `dispatch.py:148`); `query.resolve_actor_names(level, raw)` (canonical, case-insensitive, all-or-nothing — raises `KeyError("Actors not found: …")`, `query.py`).
@@ -26,15 +26,15 @@ Reuse (do NOT reimplement): `_resolve_target_names(["-"])` (reads stdin, strips,
 ## Task 1: CLI — add the `-` restrict positional and `--exclude` to `find`
 
 **Files:**
-- Modify: `uedctl/cli.py` (the `find = asub.add_parser("find", …)` block — add after its last filter argument, immediately before the `_tree_flag(find)` call)
-- Test: `uedctl/tests/test_find_compose.py` (NEW)
+- Modify: `uedcli/cli.py` (the `find = asub.add_parser("find", …)` block — add after its last filter argument, immediately before the `_tree_flag(find)` call)
+- Test: `uedcli/tests/test_find_compose.py` (NEW)
 
 - [ ] **Step 1: Write the failing test**
 
 ```python
-# uedctl/tests/test_find_compose.py
+# uedcli/tests/test_find_compose.py
 from __future__ import annotations
-from uedctl.cli import build_parser
+from uedcli.cli import build_parser
 
 
 def test_it_parses_find_restrict_and_exclude():
@@ -53,12 +53,12 @@ def test_it_defaults_restrict_none_and_exclude_false():
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd /home/human/src/dx_lum/Tools/uedctl && bin/test uedctl/tests/test_find_compose.py -x`
+Run: `cd /home/human/src/dx_lum/Tools/uedcli && bin/test uedcli/tests/test_find_compose.py -x`
 Expected: FAIL — `AttributeError: 'Namespace' object has no attribute 'restrict'` (the flags don't exist yet).
 
 - [ ] **Step 3: Add the argparse entries**
 
-In `uedctl/cli.py`, inside the `find` subparser block, just before `_tree_flag(find)`, add:
+In `uedcli/cli.py`, inside the `find` subparser block, just before `_tree_flag(find)`, add:
 
 ```python
     find.add_argument(
@@ -75,13 +75,13 @@ In `uedctl/cli.py`, inside the `find` subparser block, just before `_tree_flag(f
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd /home/human/src/dx_lum/Tools/uedctl && bin/test uedctl/tests/test_find_compose.py -x`
+Run: `cd /home/human/src/dx_lum/Tools/uedcli && bin/test uedcli/tests/test_find_compose.py -x`
 Expected: PASS (2 passed).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git commit -m 'find: add `-` restrict positional + `--exclude` flag' -- uedctl/cli.py uedctl/tests/test_find_compose.py
+git commit -m 'find: add `-` restrict positional + `--exclude` flag' -- uedcli/cli.py uedcli/tests/test_find_compose.py
 ```
 
 ---
@@ -89,8 +89,8 @@ git commit -m 'find: add `-` restrict positional + `--exclude` flag' -- uedctl/c
 ## Task 2: Dispatch — the universe restriction + `--exclude` guard
 
 **Files:**
-- Modify: `uedctl/dispatch.py` (the `find` handler — insert the guard near its top, and the restriction immediately before the print: after the `if args.prop:` block ends with `names = matched`, before `if getattr(args, "json", False):`, ~line 3199)
-- Test: `uedctl/tests/test_find_compose.py`
+- Modify: `uedcli/dispatch.py` (the `find` handler — insert the guard near its top, and the restriction immediately before the print: after the `if args.prop:` block ends with `names = matched`, before `if getattr(args, "json", False):`, ~line 3199)
+- Test: `uedcli/tests/test_find_compose.py`
 
 - [ ] **Step 1: Write the failing tests** (append to the test file; add the imports + helper at the top)
 
@@ -99,8 +99,8 @@ import io
 from types import SimpleNamespace
 from unittest import mock
 
-from uedctl.dispatch import dispatch
-from uedctl.model import Actor, Level
+from uedcli.dispatch import dispatch
+from uedcli.model import Actor, Level
 
 
 def _lv(*names):
@@ -122,7 +122,7 @@ def _find_args(**over):
 def _run(args, level, stdin=""):
     src = mock.Mock(); src.load.return_value = level
     out = io.StringIO()
-    with mock.patch("uedctl.dispatch._resolve_level_source", return_value=src), \
+    with mock.patch("uedcli.dispatch._resolve_level_source", return_value=src), \
             mock.patch("sys.stdin", io.StringIO(stdin)), \
             mock.patch("sys.stdout", out):
         rc = dispatch(args)
@@ -178,12 +178,12 @@ def test_it_errors_exit2_when_exclude_without_dash():
 
 - [ ] **Step 2: Run to verify they fail**
 
-Run: `cd /home/human/src/dx_lum/Tools/uedctl && bin/test uedctl/tests/test_find_compose.py -x`
+Run: `cd /home/human/src/dx_lum/Tools/uedcli && bin/test uedcli/tests/test_find_compose.py -x`
 Expected: FAIL — the restriction isn't implemented, so intersection/exclude/strict-error don't happen.
 
 - [ ] **Step 3: Implement the guard + restriction**
 
-In `uedctl/dispatch.py`, in the `find` handler, right after `level = src.load()` (currently ~line 3132), add the guard:
+In `uedcli/dispatch.py`, in the `find` handler, right after `level = src.load()` (currently ~line 3132), add the guard:
 
 ```python
         if getattr(args, "exclude", False) and getattr(args, "restrict", None) != "-":
@@ -210,18 +210,18 @@ Then, immediately before the print block (after the `if args.prop:` block, befor
 
 - [ ] **Step 4: Run to verify they pass**
 
-Run: `cd /home/human/src/dx_lum/Tools/uedctl && bin/test uedctl/tests/test_find_compose.py -x`
+Run: `cd /home/human/src/dx_lum/Tools/uedcli && bin/test uedcli/tests/test_find_compose.py -x`
 Expected: PASS (all tests, including Task 1's).
 
 - [ ] **Step 5: Run the whole suite (no regressions)**
 
-Run: `cd /home/human/src/dx_lum/Tools/uedctl && bin/test -k find`
+Run: `cd /home/human/src/dx_lum/Tools/uedcli && bin/test -k find`
 Expected: PASS — existing `find` tests unaffected (the restriction is inert when `restrict` is None).
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git commit -m 'find: apply stdin name-set universe restriction (grep model) + --exclude guard' -- uedctl/dispatch.py uedctl/tests/test_find_compose.py
+git commit -m 'find: apply stdin name-set universe restriction (grep model) + --exclude guard' -- uedcli/dispatch.py uedcli/tests/test_find_compose.py
 ```
 
 ---

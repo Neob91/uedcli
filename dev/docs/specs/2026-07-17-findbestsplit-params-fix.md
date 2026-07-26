@@ -26,7 +26,7 @@ WallBack side plane, which straddles and shreds the ceiling/floor/walls into fra
 the split term dominates: floor `12·10+88·0=120` vs WallBack `12·6+88·3=336` — the floor wins strictly
 (0 splits), exactly as the editor does, and the ceiling stays whole.
 
-## The three changes to `uedctl-native/src/bspcsg.rs`
+## The three changes to `uedcli-native/src/bspcsg.rs`
 
 All three are needed for byte-parity; **change #1 (Balance) is dominant** (~500 of the ~500-node
 over-fragmentation on the full castle; stride is ~150; PortalBias is 0-effect on the portal-free

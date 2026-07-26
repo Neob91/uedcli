@@ -2,7 +2,7 @@
 recurse iChild[side]; iChild[0]=+0x20=i_front=BACK, iChild[1]=+0x24=i_back=FRONT).
 Show which leaf a point resolves to, before vs after the fix."""
 import sys
-from uedctl.native import pkg_write, umodel
+from uedcli.native import pkg_write, umodel
 import sys, os
 sys.path.insert(0, os.path.dirname(__file__))
 import leaf_fix_classify as FX

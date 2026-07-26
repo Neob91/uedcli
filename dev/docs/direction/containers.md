@@ -2,10 +2,10 @@
 
 ## What we want
 
-A **container** here means a Docker container uedctl starts, drives and throws away in order to run
+A **container** here means a Docker container uedcli starts, drives and throws away in order to run
 a Windows program under wine: the **UnrealEd 2.2 editor** (materialize, qualify), the no-GUI **UCC
 build container** (stub building, texture batchexport), and the **game container**
-(`level preview --game`). uedctl itself never runs in one — that is a separate ruling
+(`level preview --game`). uedcli itself never runs in one — that is a separate ruling
 ([`process.md`](process.md)); this topic is about the containers it *drives*.
 
 ### No container writes into the repo tree
@@ -64,7 +64,7 @@ cannot load gets **stubs**: mesh-preserving stand-in packages built on demand fr
 - **The stub cache is derived, per-user and never committed** — generated from copyrighted game
   code, it lives with the other per-user caches.
 - **Game CONTENT is user-supplied and never committed.** Texture/sound/music packages come from the
-  user's own install; uedctl builds, and its offline test suite runs, without them.
+  user's own install; uedcli builds, and its offline test suite runs, without them.
 
 ### Per-command ephemeral is the concurrency story; warm containers are a fast path
 
@@ -159,4 +159,4 @@ cannot load gets **stubs**: mesh-preserving stand-in packages built on demand fr
 `../architecture.md` "Substrate" · `../unrealed/quirks.md` · `../unrealed/package-format.md` ·
 `../parallel-editors.md` · `../dev-runtime.md` · `../deusex-assets-setup.md` ·
 `../spikes/2026-06-21-deusex-package-stubbing-roundtrip.md` ·
-`../spikes/2026-06-27-decontainerize-uedctl/` · `../spikes/2026-07-18-warm-editor-materialize/`
+`../spikes/2026-06-27-decontainerize-uedcli/` · `../spikes/2026-07-18-warm-editor-materialize/`

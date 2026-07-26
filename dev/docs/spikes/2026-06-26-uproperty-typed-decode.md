@@ -2,7 +2,7 @@
 
 **Date:** 2026-06-26 · **Status:** RESOLVED — all three (typed, enum-values, array-bounds) are
 feasible offline and reliable; v1-scope recommendation below.
-**Question:** Can uedctl extend its offline class-property extraction from **name-only**
+**Question:** Can uedcli extend its offline class-property extraction from **name-only**
 validation to **typed / enum / array-bounds** validation — by decoding each property's
 `UProperty` serial body out of a `.u` package's export table, with NO wine/editor? This is the
 follow-on deferred by `2026-06-26-class-property-extraction.md` ("Defer array-bounds + typed/enum
@@ -32,7 +32,7 @@ are function parameters/locals, which the schema validator filters out, see "Rel
 ## Method
 
 Pure-offline byte parsing of the corpus, reusing the production compact-index primitive
-(`uedctl.dxpkg._read_compact_index`) and the export-table reader proven by the name-only spike. No
+(`uedcli.dxpkg._read_compact_index`) and the export-table reader proven by the name-only spike. No
 wine, no editor, no container. The harness is committed alongside this doc
 (`harness/uproperty_decode.py` + `harness/validate_corpus.py`); the latter validates the whole
 corpus. The layout below was reverse-engineered by hex-dumping real bodies and confirmed by the
@@ -276,7 +276,7 @@ as confirmed scope** (type + enum + array-bounds on top of name-only), reusing t
   closed set; cursor-to-EOF integrity check), `decisions.md` 2026-06-26 12:41 UTC (no-fallback,
   error-not-accept, normalize-casing) + 2026-06-26 14:10 UTC (parse the game's real `.u`, not
   stubs).
-- Production primitives reused: `uedctl/dxpkg.py` (`_read_compact_index`, header/name/import/export
+- Production primitives reused: `uedcli/dxpkg.py` (`_read_compact_index`, header/name/import/export
   parsing).
 - Harness (committed): `harness/uproperty_decode.py` (the decoder — `load_package`,
   `decode_property`, `enum_values`, `enum_values_for_type_ref`, `class_properties`),

@@ -31,7 +31,7 @@ things previously imagined as separate: the discovery verbs, class validation, a
 bare→FQCN qualification on ingest** (so newly-stored trunk T3D is fully qualified without a live
 editor).
 
-New module `uedctl/classindex.py` (or fold into `qualify.py` beside `qualify_level_classes`); a small
+New module `uedcli/classindex.py` (or fold into `qualify.py` beside `qualify_level_classes`); a small
 `uprops.iter_classes(pkg) -> list[str]` and `uprops.class_is_abstract(pkg, name) -> bool | None`
 back it.
 

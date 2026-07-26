@@ -5,7 +5,7 @@ NOTE (2026-07-17 correction): the assertions below are BODY-level and remain val
 bspOptGeom *body* (0x36870-0x36c32) writes only Verts[].iSide + NumSharedSides and never
 DECREMENTS an array. But bspOptGeom DOES insert vertices (T-junction elimination) via the
 AddPointLink->inserter subroutine (0x325e0 -> 0x31920), which GROWS Verts. See the corrected
-decode doc §0/§1 and the validated port in `uedctl-native/src/bspoptgeom.rs`
+decode doc §0/§1 and the validated port in `uedcli-native/src/bspoptgeom.rs`
 (`harness/optgeom_validate.py`).  The "does NOT remove/merge nodes" prose below is about
 removal only and is not the whole story.
 

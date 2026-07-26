@@ -14,7 +14,7 @@ the version field.
 > editor substrate · 🔬 = live-probed.
 >
 > Evidence: [`../spikes/2026-06-28-deusex-vs-unreal-package-format/`](../spikes/2026-06-28-deusex-vs-unreal-package-format/)
-> (harness `verify.py`). The parser is `uedctl/dxpkg.py`.
+> (harness `verify.py`). The parser is `uedcli/dxpkg.py`.
 
 ---
 
@@ -34,7 +34,7 @@ uint32 ImportCount, ImportOffset
 ... (GUID + generations for version >= 68)
 ```
 
-`uedctl/dxpkg.py` reads the magic, version, name table, and import table for **versions
+`uedcli/dxpkg.py` reads the magic, version, name table, and import table for **versions
 61, 68, and 69** — and **68 and 69 share the exact same code path** (`ver>=64`:
 compact-index length + string + 4-byte flags). Only **version 61** (five old content
 packages: `CoreTexDetail`/`CoreTexWater`/`Palettes`/`Render`/`TITAN`) uses a different
@@ -42,7 +42,7 @@ name-table encoding (null-terminated string, no length prefix). So:
 
 - **61 → 68** is a real name-table format change.
 - **68 → 69** is a minor bump that changes **nothing** in the header / name table / import
-  table that uedctl parses.
+  table that uedcli parses.
 
 Verified directly: the v68 `DeusEx.u` (11293 names, 3151 imports) and the v69 `DeusEx.u`
 (7017 names, 1952 imports) both parse through the identical `ver>=64` reader.
@@ -81,7 +81,7 @@ Two contributing facts (both already grounded in earlier spikes):
 - **Engine/Core divergence** — the v469 UCC can't link decompiled Deus Ex function bodies
   against UT's DLLs; this is why the "stubbing" pipeline strips every function/state body.
 - **Mesh format** — Deus Ex `FMeshVert` is 8-byte int16; stock Unreal expects 4-byte
-  packed (`spikes/2026-06-27-decontainerize-uedctl/02-native-mesh-format.md`).
+  packed (`spikes/2026-06-27-decontainerize-uedcli/02-native-mesh-format.md`).
 
 Both are content/class-graph problems. **Neither is a package-version problem.** (The whole
 stubbing subsystem exists to bridge these for the editor; a native read/write path deletes
@@ -134,7 +134,7 @@ in the `ULevel` body after the actor-ref list and an `FURL`. Read natively from 
 `PlayerStart` correctly surfaced unreachable nav regions across 4 maps with no editor/game. Caveats:
 the record *count* isn't decoded (found as the longest self-validating run) and the exact header
 before the records is undecoded — validate the count against the editor's `PATHS` for production.
-(spike: `../spikes/2026-06-27-uedctl-direction-ideas/02-level-nav-reachability.md`, native read 2026-06-27)
+(spike: `../spikes/2026-06-27-uedcli-direction-ideas/02-level-nav-reachability.md`, native read 2026-06-27)
 
 ### `UMusic` / `USound` — audio object body 🔬
 
@@ -145,27 +145,27 @@ extension) → a **`TLazyArray` blob** that *is* the raw asset file byte-for-byt
 and meshes use). There is **no re-encoding** — extraction is a straight copy. Verified by extracting
 `Training_Music` (`format=it`, 1,449,937 B) from `Area51Bunker_Music.umx` to a valid, playable Impulse
 Tracker `.it`; `USound` parses identically (66 `wav` objects with correct sizes from `MoverSFX.uax`).
-(spike: `../spikes/2026-06-27-uedctl-direction-ideas/15-native-audio.md`, native read 2026-06-27)
+(spike: `../spikes/2026-06-27-uedcli-direction-ideas/15-native-audio.md`, native read 2026-06-27)
 
 **Further raw byte-level detail** (package internals beyond the header and the bodies above) lives in
 these kept evidence spikes:
 
 - [`../spikes/2026-06-28-umodel-serialize-byte-exact.md`](../spikes/2026-06-28-umodel-serialize-byte-exact.md)
   — `UModel` serialize order + `FBspNode`, `FZoneProperties`, `FCompactIndex`, `UPrimitive` layouts.
-- [`../spikes/2026-06-27-decontainerize-uedctl/01-native-texture-decode.md`](../spikes/2026-06-27-decontainerize-uedctl/01-native-texture-decode.md)
+- [`../spikes/2026-06-27-decontainerize-uedcli/01-native-texture-decode.md`](../spikes/2026-06-27-decontainerize-uedcli/01-native-texture-decode.md)
   — `UTexture` body, `FMipmap`/`UPalette`, and the `FPropertyTag` (tagged-property) encoding.
-- [`../spikes/2026-06-27-decontainerize-uedctl/03-native-package-write.md`](../spikes/2026-06-27-decontainerize-uedctl/03-native-package-write.md)
+- [`../spikes/2026-06-27-decontainerize-uedcli/03-native-package-write.md`](../spikes/2026-06-27-decontainerize-uedcli/03-native-package-write.md)
   — the order package sections are written on disk (summary / name / import / export tables).
-- [`../spikes/2026-06-27-decontainerize-uedctl/07-native-actor-bodies.md`](../spikes/2026-06-27-decontainerize-uedctl/07-native-actor-bodies.md)
+- [`../spikes/2026-06-27-decontainerize-uedcli/07-native-actor-bodies.md`](../spikes/2026-06-27-decontainerize-uedcli/07-native-actor-bodies.md)
   — an actor object body: the `StateFrame` prefix followed by tagged properties.
-- [`../spikes/2026-06-27-decontainerize-uedctl/10-native-upolys-fpoly.md`](../spikes/2026-06-27-decontainerize-uedctl/10-native-upolys-fpoly.md)
+- [`../spikes/2026-06-27-decontainerize-uedcli/10-native-upolys-fpoly.md`](../spikes/2026-06-27-decontainerize-uedcli/10-native-upolys-fpoly.md)
   — `UPolys` container and `FPoly` field order.
 
 ---
 
 ## Practical takeaways
 
-- Treat `.u`/`.dx`/`.utx`/`.uax`/`.umx` as one UnrealEngine-1 format. uedctl's offline
+- Treat `.u`/`.dx`/`.utx`/`.uax`/`.umx` as one UnrealEngine-1 format. uedcli's offline
   parser (`dxpkg.py`) already reads v61/68/69; extend it by name-table encoding, never by
   assuming a version means a different file shape.
 - Never explain a Deus-Ex-won't-load-in-Unreal (or vice-versa) symptom as "wrong version".

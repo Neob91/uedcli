@@ -1,15 +1,15 @@
 # UnrealEd 2.2 — console command reference
 
-The exec verbs uedctl drives, plus a catalog of the **full** editor/engine exec vocabulary
+The exec verbs uedcli drives, plus a catalog of the **full** editor/engine exec vocabulary
 extracted from the binaries. Setup: the `dx-lum-uned` container runs UED22 under wine on Xvfb
 `:99` + fluxbox, driven by `wine_ctl.py` over `docker exec`. Substrate = committed
-`Tools/uedctl/uned/UED22` (EditPackages stripped to the engine/builder set; `DeusEx*`/LUM commented out).
+`Tools/uedcli/uned/UED22` (EditPackages stripped to the engine/builder set; `DeusEx*`/LUM commented out).
 
 For *weird behaviors* see [`quirks.md`](quirks.md); for producing an image see
 [`rendering.md`](rendering.md); for **how this catalog was extracted** see
 [`extracting-from-dll.md`](extracting-from-dll.md).
 
-> **Confidence:** ✅ = uedctl-used / live-verified · 🔬 = live-probed this session · 📖 =
+> **Confidence:** ✅ = uedcli-used / live-verified · 🔬 = live-probed this session · 📖 =
 > extracted from the binary string table (token + arg keys real; exact semantics inferred).
 
 ## Driving the editor (`wine_ctl.py`)
@@ -98,14 +98,14 @@ brush**, not selected world brushes; no axis arg → mirrors ALL 3 axes simultan
 `Preparing brush <name>`; keyframe positions set via T3D hacking, not this verb — see Spike 7,
 and the 2026-06-25 mover data-model spike
 [`../spikes/2026-06-25-mover-keyframe-basepos-semantics.md`](../spikes/2026-06-25-mover-keyframe-basepos-semantics.md):
-keyframe values are AUTHORED T3D props, so uedctl authors movers model-side via `brush build
+keyframe values are AUTHORED T3D props, so uedcli authors movers model-side via `brush build
 --mover-class` + the `mover key` verbs — no editor) ·
 **`BRUSH APPLYTRANSFORM` 🔬** (bakes the builder brush's **full transform — `MainScale` +
 `Rotation` + `PostScale`** — into world-space vertex coords and resets all three to identity;
 log: "Apply brush transform"; also works on selected world brush actors. See `ACTOR APPLYTRANSFORM`
 below + `../spikes/2026-06-25-mainscale-postscale-applytransform.md`).
 **`BRUSH CLIP` is GUI-marker-only** (FLIP/SPLIT/DELMARKERS),
-not console-drivable → uedctl clips model-side (`clip.py`). ⚠️ **`BRUSHCLIP`
+not console-drivable → uedcli clips model-side (`clip.py`). ⚠️ **`BRUSHCLIP`
 (one token, no space) 🔬 reproducibly crashes the editor (3/3 attempts, GPF on
 the next command) — never use it** (`2026-06-17-brush-clip.md`).
 
@@ -135,8 +135,8 @@ the next command) — never use it** (`2026-06-17-brush-clip.md`).
 - `ACTOR RESET` 📖 · `ALIGN SNAPTOGRID` 📖 · `HIDE`/`UNHIDE` 📖 ·
   **`ACTOR KEYFRAME NUM=#` 🔬** (sets editing keyframe index `KeyNum=N` on a selected Mover;
   recomputes that mover's `Location`/`Rotation` to `BasePos + KeyPos[KeyNum]` — the derived-view
-  model, spike `../spikes/2026-06-25-mover-keyframe-basepos-semantics.md`. NOT a uedctl authoring
-  path: keyframe poses are authored in T3D, so uedctl sets them model-side via `mover key`) ·
+  model, spike `../spikes/2026-06-25-mover-keyframe-basepos-semantics.md`. NOT a uedcli authoring
+  path: keyframe poses are authored in T3D, so uedcli sets them model-side via `mover key`) ·
   `BAKEPREPIVOT` 📖.
 - **There is no console verb for setting individual actor properties directly** (🔬 2026-06-24).
   Neither `ACTOR SET Location=...` nor `ACTOR Name=<n> <prop>=<value>` nor any other syntax
@@ -162,7 +162,7 @@ Surface (BSP-poly) ops: `POLY SELECT MATCHING TEXTURE|ADJACENT|COPLANARS|ITEMS` 
 `WALLS|FLOORS|CEILINGS|SLANTS` · `SETFLAGS=`/`CLEARFLAGS=` · texture alignment `TEXALIGN
 FLOOR|WALLDIR|WALLX|WALLY|ONETILE|CLAMP` · `TEXPAN`/`TEXSCALE`/`TEXMULT` (`UU= UV= VU= VV=`) ·
 `TEXINFO`/`TEXTURENAME` · detail-texture `SETDETAIL`/`CLEARDETAIL`/`APPLYDETAIL` ·
-`REMIP`/`BATCHAPPLY`. (uedctl edits surface attrs model-side instead — see `quirks.md`.)
+`REMIP`/`BATCHAPPLY`. (uedcli edits surface attrs model-side instead — see `quirks.md`.)
 
 ## `EDIT` ✅
 `EDIT COPY` (selection→clipboard, no offset) · `EDIT PASTE` (clipboard→level, **+32uu drift**,
@@ -221,7 +221,7 @@ Parser in `Editor.dll`; frontend `printf` usages in `unrealed.exe`.
   target." / "…on named object."; errors "Missing name" / "Can't find target (viewport or selected
   actor)". (Old note, now inverted by the finding: the builder brush "does NOT work" as a *rotation*
   target — correct, because brushes frame instead of adopting rotation; framing is exactly what we
-  now use.) See `specs/2026-06-18-uedctl-camera-rotation-no-mouse-design.md` (superseded notice) and the
+  now use.) See `specs/2026-06-18-uedcli-camera-rotation-no-mouse-design.md` (superseded notice) and the
   `uned-camera-rotate-via-align` memory note for the full recipe and caveats.
 - **`CAMERA CLOSE NAME=…`** — reliably closes only the **frontend-managed browser cameras**
   (`TextureBrowser`, `MeshBrowser`, `MeshViewer`, `TEXREPLACE1/2`), opened with an `HWND=`
@@ -365,5 +365,5 @@ Reachable in the editor where relevant; most are game-runtime. Useful ones:
   `RECONNECT`, `JOIN`, `LOGIN`, `EXIT`/`QUIT` (`URL=`, `GAME=`, `CLASS=`, `PASSWORD=`, …).
 
 ## BrushBuilders are not console commands ✅
-GUI-dialog-driven (`WDlgBrushBuilder::OnBuild` → builder `Build()`) → uedctl replicates them
+GUI-dialog-driven (`WDlgBrushBuilder::OnBuild` → builder `Build()`) → uedcli replicates them
 model-side (`builders.py`). See `../architecture.md` "Builders".

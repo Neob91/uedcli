@@ -1,4 +1,4 @@
-# Running uedctl operations in parallel (ephemeral editors)
+# Running uedcli operations in parallel (ephemeral editors)
 
 Some tasks want to drive **many independent editor sessions at once** — validating
 every builder, exercising a clip across 20 brushes, sweeping a parameter space —
@@ -6,7 +6,7 @@ without touching the persistent `dx-lum-uned` editor or serializing through it.
 The pattern: spin up one **ephemeral editor per work item** via `docker compose
 run`, drive it, tear it down. This doc is the recipe and its load-bearing gotchas.
 
-> All `docker compose` commands below run from `Tools/uedctl/uned/` (where
+> All `docker compose` commands below run from `Tools/uedcli/uned/` (where
 > `docker-compose.yml` lives). There is **no `/repo` bind mount** (container-fs
 > isolation, D4): the substrate is baked into the image and game assets are exposed via
 > per-command config-driven read-only mounts — the WHOLE composed config dir set at `/resources/<n>`
@@ -43,10 +43,10 @@ scratch concerns are now handled structurally by container-fs isolation:
    already-initialized prefix — no slow runtime `wineboot`.
 
 2. **Box-size cache — one per worker.** `writes` caches the working SELECT-INSIDE
-   box size at `UEDCTL_BOX_CACHE` (default `/tmp/uedctl_box_cache.json`) — a HOST
+   box size at `UEDCLI_BOX_CACHE` (default `/tmp/uedcli_box_cache.json`) — a HOST
    file. Parallel host processes racing on one file can corrupt it (writes are
    best-effort, so it degrades rather than crashes, but set
-   `UEDCTL_BOX_CACHE=/tmp/box_<id>.json` per worker to be clean).
+   `UEDCLI_BOX_CACHE=/tmp/box_<id>.json` per worker to be clean).
 
 ⚠️ **A bind-mount SOURCE must be visible to the docker DAEMON, not just your shell.**
 `level preview` boots the editor with a per-boot `UnrealEd.ini` override mounted
@@ -55,10 +55,10 @@ tempdir (`/tmp`); under a sandboxed shell (e.g. `devdawg-shell`) `/tmp` is **pri
 sandbox**, so the daemon resolves `/tmp/<c>.preview.ini` against its OWN tmp, finds nothing,
 **auto-creates a directory** there, and the file-onto-file mount fails with
 `not a directory` — the editor never boots. Write any host→daemon bind source **under the
-repo tree** (uedctl uses the project state dir `<root>/.uedctl/tmp/`), which the daemon sees at an identical real path,
+repo tree** (uedcli uses the project state dir `<root>/.uedcli/tmp/`), which the daemon sees at an identical real path,
 exactly as the repo-relative compose asset mount (`./DeusExAssets`) already relies on. (The
 stub-cache mount is NO longer such an example — it is the absolute per-user stub cache,
-`${UEDCTL_STUB_CACHE:-${HOME}/.uedctl/cache/stubs}`, fed the resolved `config.stub_cache_root()`
+`${UEDCLI_STUB_CACHE:-${HOME}/.uedcli/cache/stubs}`, fed the resolved `config.stub_cache_root()`
 via the compose env, not a repo-tree path.) Live-confirmed 2026-07-06. The `UnrealEd.ini` mount is **read-write** (wine rewrites
 the ini on exit; a `:ro` mount → EACCES → GPF).
 
@@ -108,8 +108,8 @@ at once" when it didn't.
 
 ## Bypass the trunk for headless exercises
 
-uedctl runs host-side and reaches the editor via `docker exec`; its durable state is the
-git-tracked T3D trunk, and machine-local scratch lives in the project's `<root>/.uedctl/`
+uedcli runs host-side and reaches the editor via `docker exec`; its durable state is the
+git-tracked T3D trunk, and machine-local scratch lives in the project's `<root>/.uedcli/`
 state dir (the session store is long deleted). For *validation/exercise* runs (where you're
 proving geometry round-trips, not recording authored history), call `builders` / `writes` /
 `clip` **directly** against a `Driver(container)` — no trunk, no project resolution. That
@@ -119,8 +119,8 @@ Example — export the current level from a named container:
 
 ```python
 import tempfile, pathlib
-from uedctl.driver import Driver
-from uedctl import xfer
+from uedcli.driver import Driver
+from uedcli import xfer
 
 driver = Driver("uned-job-7")
 work = xfer.work_path("t3d")                   # uuid-suffixed /work path
@@ -146,6 +146,6 @@ docker volume rm <each uned-wp-* volume>
 ```
 Removing the container reclaims its `/work` scratch automatically (it's
 container-local, not a host mount — nothing to `rm` on the host). Any host-side
-files you `xfer.cp_out`'d under `.uedctl/` you clean up yourself. Leave the
+files you `xfer.cp_out`'d under `.uedcli/` you clean up yourself. Leave the
 persistent `dx-lum-uned` editor and its `wine-prefix` volume untouched — the
 ephemeral runs never share them.

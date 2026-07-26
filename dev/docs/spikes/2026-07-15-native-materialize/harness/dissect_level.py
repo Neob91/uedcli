@@ -10,7 +10,7 @@ Usage: python dissect_level.py <map.dx>
 """
 from __future__ import annotations
 import struct, sys
-sys.path.insert(0, "/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedctl/dev/docs/spikes/2026-06-27-decontainerize-uedctl/harness")
+sys.path.insert(0, "/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedcli/dev/docs/spikes/2026-06-27-decontainerize-uedcli/harness")
 from utexture_decode import load_package, ci, read_props
 
 RF_HasStack = 0x02000000

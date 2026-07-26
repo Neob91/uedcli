@@ -16,9 +16,9 @@ Harness: [`harness/umesh.py`](harness/umesh.py) (decoder), [`harness/render.py`]
 (mesh → PNG), [`harness/render_class.py`](harness/render_class.py) (class → PNG via class
 defaults), [`harness/trace.py`](harness/trace.py) + [`harness/tail_probe.py`](harness/tail_probe.py)
 (the instruments used to find each desync).
-Builds directly on [`2026-06-27-decontainerize-uedctl/02-native-mesh-format.md`](../2026-06-27-decontainerize-uedctl/02-native-mesh-format.md)
+Builds directly on [`2026-06-27-decontainerize-uedcli/02-native-mesh-format.md`](../2026-06-27-decontainerize-uedcli/02-native-mesh-format.md)
 (Spike 2), which established the 8-byte Deus Ex vertex and disassembled `ULodMesh::Serialize`'s
-member order. Regression: `uedctl/tests/test_mesh_decode.py`.
+member order. Regression: `uedcli/tests/test_mesh_decode.py`.
 
 ---
 
@@ -141,7 +141,7 @@ DeusExCharacters **32/100** — see below.
 ## Rendering: class defaults are the authority on skins
 
 The mesh's own `Textures` array is only a fallback. For Deus Ex characters it is usually empty;
-the real skins live in the **class's** `MultiSkins[i]` (per material index) or `Skin`, which uedctl
+the real skins live in the **class's** `MultiSkins[i]` (per material index) or `Skin`, which uedcli
 already resolves offline via `uprops.resolve_class_defaults`. ✅ So a class thumbnail is:
 
 ```
@@ -152,7 +152,7 @@ class defaults -> Mesh'Pkg.Name' + MultiSkins[i]  ->  decode mesh  ->  decode sk
 mesh-side skins, **8** class `MultiSkins` overrides → a correct, recognizable JC Denton (trench
 coat, sunglasses). Decorations resolve entirely mesh-side and need no class at all.
 
-Renderer: z-buffered, affine-UV, Lambert-shaded, pure Python + Pillow (uedctl's only dependency).
+Renderer: z-buffered, affine-UV, Lambert-shaded, pure Python + Pillow (uedcli's only dependency).
 Parse + skin-resolve for a whole package is ~3–4 s for 100–178 meshes.
 
 ## What this changes for the asset catalog

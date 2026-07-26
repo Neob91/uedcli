@@ -1,4 +1,4 @@
-# Asset catalog — uedctl lists and shows, the LLM supplies meaning
+# Asset catalog — uedcli lists and shows, the LLM supplies meaning
 
 ## What we want
 
@@ -8,7 +8,7 @@ what it turns out to be.
 
 ### The tool does not infer
 
-uedctl does exactly four things with an asset:
+uedcli does exactly four things with an asset:
 
 1. **lists** what exists on the composed search path;
 2. **reports facts literally stored in the package** — image dimensions, mesh bounding box,

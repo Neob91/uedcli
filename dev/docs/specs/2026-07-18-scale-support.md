@@ -10,7 +10,7 @@ gating spike is CLOSED). **Ledger:** [`decisions.md` 2026-07-18](../decisions.md
 support" and the "honour scale" deferral on `actor rotate`.
 
 ## 1. Motivation & model
-uedctl ignores actor scale today: `MainScale`/`PostScale`/`SheerRate` round-trip as opaque strings,
+uedcli ignores actor scale today: `MainScale`/`PostScale`/`SheerRate` round-trip as opaque strings,
 but every model-side world-geometry measurement (preview, bounds, `query.*`, `rotation.world_vertices`)
 drops them — so a scaled/sheared/mirrored brush renders and measures wrong, and there is no way to bake
 a scale into geometry. This spec stops ignoring scale.
@@ -67,7 +67,7 @@ editor is the **test-time parity oracle only** (one integration-gated suite, lik
   MATH handles the full `PostScale·R·MainScale` chain.** Defer the *verb*, handle the *field*:
   preview/bounds, the clip/vertex-move inverse, and apply-transform all honor a non-identity PostScale,
   because (a) ingested brushes from real maps carry one, and (b) apply-transform must bake all three to
-  match the editor or H3 fails. For uedctl-authored brushes PostScale is identity (no-op). *(Rejected:
+  match the editor or H3 fails. For uedcli-authored brushes PostScale is identity (no-op). *(Rejected:
   rejecting brushes that carry a non-identity PostScale — apply-transform needs it for parity and
   rejecting blocks real maps.)*
 - **Geometry edits work DIRECTLY on a scaled brush — no bake-first.** `brush clip`/`vertex move`

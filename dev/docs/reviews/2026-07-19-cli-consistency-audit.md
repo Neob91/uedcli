@@ -1,7 +1,7 @@
 # CLI consistency & clarity audit (2026-07-19)
 
-**Scope:** the complete `uedctl` verb surface after build items 1–11 landed.
-**Rubric:** the "Code & CLI conventions" section of `Tools/uedctl/CLAUDE.md` — the
+**Scope:** the complete `uedcli` verb surface after build items 1–11 landed.
+**Rubric:** the "Code & CLI conventions" section of `Tools/uedcli/CLAUDE.md` — the
 composability philosophy (producers → stdout one-per-line; summaries/counts → stderr;
 `--json` where scripted; mutators read their set from stdin via `-`; a verb over a SET
 takes the set and that IS the operation, no redundant set-flags; prefer a stateless
@@ -10,7 +10,7 @@ flag has a real `help=`; no Python exception reaches the user; errors name the o
 value).
 
 **This audit ships NOTHING but this report.** No code changed. Accepted findings become
-new queue items later. Line numbers are `uedctl/cli.py` unless prefixed `dispatch.py`.
+new queue items later. Line numbers are `uedcli/cli.py` unless prefixed `dispatch.py`.
 
 ---
 
@@ -153,7 +153,7 @@ stderr; leave `folder get` as-is for humans but add `--json` (see M2) for script
 
 ### L3 — `--catalog-dir` help depth varies across the texture verbs
 `texture sync`'s `--catalog-dir` carries the full "(default: the resolved project's catalog
-dir — the uedctl.toml `catalog` key, or `<root>/texture-catalog/`)" (cli 1027); the same
+dir — the uedcli.toml `catalog` key, or `<root>/texture-catalog/`)" (cli 1027); the same
 flag on `list`/`search`/`tags`/`classify status|set` is just `"tracked manifest dir"` (cli
 1038, 1048, 1052, 1059, 1066). Every flag having a *real* help is satisfied, but the
 terse variants drop the default-resolution detail. **Fix:** reuse the sync wording (or a

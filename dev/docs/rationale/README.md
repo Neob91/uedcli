@@ -18,7 +18,7 @@ and dropping it lets a future session re-propose a design that was already kille
 
 **Why it is this way:** …
 **Rejected:** <alternative> — because …
-**Refs:** `spikes/<file>`, `uedctl/<module>.py`
+**Refs:** `spikes/<file>`, `uedcli/<module>.py`
 ```
 
 A `Refs` target that no longer exists is **dropped**, or replaced by the code/spike site that does

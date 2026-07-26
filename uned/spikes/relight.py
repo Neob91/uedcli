@@ -1,8 +1,8 @@
 """Rebuild the carved room and add a DIMMER, more-saturated colored light."""
 import sys
 sys.path.insert(0, "/home/human/src/dx_lum/Extra/AI")
-from uedctl import builders, writes
-from uedctl import driver as drv
+from uedcli import builders, writes
+from uedcli import driver as drv
 
 TEX = "Engine.DefaultTexture"
 d = drv.Driver()

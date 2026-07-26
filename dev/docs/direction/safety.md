@@ -8,11 +8,11 @@ path by hand. A built map file, a lightmap and a rebuilt BSP are **regenerable b
 and are deliberately NOT protected — losing them costs a rebuild, so no mechanism here spends
 anything on them (see [`materialize.md`](materialize.md)).
 
-### Git is the recovery route — uedctl keeps no backups
+### Git is the recovery route — uedcli keeps no backups
 
-There is no uedctl-side backup file, snapshot, undo or history. The trunk is git-tracked, so
+There is no uedcli-side backup file, snapshot, undo or history. The trunk is git-tracked, so
 recovery is the user's own `git checkout` / `git reflog`, and `git fsck` plus git's content
-addressing give corruption and tamper detection for free. uedctl reads and writes the T3D
+addressing give corruption and tamper detection for free. uedcli reads and writes the T3D
 files and never wraps version control ([`trunk-and-editor.md`](trunk-and-editor.md)).
 
 The consequence is accepted and stated plainly: work that was never committed is protected
@@ -27,7 +27,7 @@ already exists — exit 2 naming it — and takes one explicit opt-in flag to pr
 uniform across the tool, so no verb needs its own judgement about how precious its
 destination is.
 
-**Refuse and instruct; never guess.** Where uedctl finds state it does not understand — a
+**Refuse and instruct; never guess.** Where uedcli finds state it does not understand — a
 corrupt box, leftovers from a crashed write — it exits 2 naming the file and the recovery
 instead of repairing it or writing over it. Concretely, `--force` over an *already-corrupt*
 stash or prefab box exits 2; recovery is removing the directory by hand. Silently clobbering
@@ -57,7 +57,7 @@ concurrent writer.
   writing, a save re-reads the current on-disk state of every actor in its own changed-or-
   deleted set and compares it against its load snapshot; any difference exits 2 naming the
   conflicting actors and writes nothing. It **aborts, it does not merge** — git is the merge
-  engine, and a uedctl invocation is stateless, so the loser simply re-runs against fresh
+  engine, and a uedcli invocation is stateless, so the loser simply re-runs against fresh
   state with nothing stranded.
 
 ### Every write is atomic, and a killed writer leaves a readable tree
@@ -89,7 +89,7 @@ concurrent writer.
 
 **Recovery and backups**
 
-- **A uedctl-side backup of the build artifact** (the pre-write binary copy) — the authored
+- **A uedcli-side backup of the build artifact** (the pre-write binary copy) — the authored
   work is in git and the map file regenerates, so the backup guarded the one thing that did
   not need guarding.
 - **A `backups/` copy of the written T3D tree** — git already holds the prior committed state.

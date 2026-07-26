@@ -10,11 +10,11 @@
 > is replaced. Kept for history only — do not build from this file.
 
 **Status:** SUPERSEDED (see banner). ~~specced (revised after review gate), awaiting plan → build.~~
-**Requested by:** Andrzej (2026-07-19), session `uedctl:textures`. A black-box CLI run found that
+**Requested by:** Andrzej (2026-07-19), session `uedcli:textures`. A black-box CLI run found that
 texture **classification is blind**: the write path works but nothing in the `texture` verb surface
 lets the classifier *see* the texture it is naming. Andrzej decided to build the viewing capability
 and made the load-bearing calls below.
-**Ephemeral:** per the uedctl `CLAUDE.md`, this spec is scratch. The load-bearing decisions +
+**Ephemeral:** per the uedcli `CLAUDE.md`, this spec is scratch. The load-bearing decisions +
 rejected alternatives are in the durable append-only [`dev/docs/decisions.md`](../decisions.md)
 (entry **2026-07-18 22:25 UTC — surface texture image to the LLM…**); on build, fold the outcome
 into `docs/usage.md` + `architecture.md` and delete/stale-mark this file.
@@ -50,7 +50,7 @@ Today (`texture` verbs: `sync`, `list`, `search`, `tags`, `classify status|set`)
   colors — it is pixel-histogram math.
 - But **no verb surfaces the pixels.** `list`/`search`/`classify status` print text rows; none yields
   the image or even the path to its decoded PNG.
-- The decoded PNGs **do exist** under the per-user cache `~/.uedctl/cache/textures/<Package>/`, but a
+- The decoded PNGs **do exist** under the per-user cache `~/.uedcli/cache/textures/<Package>/`, but a
   user/LLM **cannot locate one by hand from a ref**, because the on-disk filename is the manifest
   **stem** (`<group>.<name>`, or bare `<name>`), which uses the texture's internal **Group**, not the
   package in the ref: ref `CoreTexWater.bluewater` → file `…/CoreTexWater/water.bluewater.png`.
@@ -176,7 +176,7 @@ texture classify set CoreTexMetal.Area51Wall_A --tags metal,wall \
 - Making the LLM set colors (rejected, Decision 3).
 - **Native (non-UCC) `sync` decode** — separate inbox `[spec]` item; this feature only *reads* the
   cache `sync` populates, however sync produces it.
-- **The root-owned `~/.uedctl/cache/textures` bootstrap permission wall** — separate inbox `[debug]`
+- **The root-owned `~/.uedcli/cache/textures` bootstrap permission wall** — separate inbox `[debug]`
   item. It is a **dependency/risk** here: the resolver reads that cache. The errno taxonomy (§A) is the
   contract at the boundary — it must *report* the wall distinctly, not *fix* it.
 - **Material behavior tags** (masked/translucent/animated/env-map): a flat PNG + colors conveys visual

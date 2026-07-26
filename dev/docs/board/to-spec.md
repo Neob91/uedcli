@@ -19,7 +19,7 @@ truth for what to build next). See [`README.md`](README.md). Tags: `[spec]`/`[im
   schema-aware (`decisions.md` 2026-07-25 10:18 UTC — "one predicate, no split") propagated the
   class-resolver requirement to every call site: **`mover key`, `level doctor`, `event graph`,
   `stash capture`, `brush scale`, `brush apply-transform`, `brush intersect`/`deintersect`** now
-  exit 2 without a project + `~/.uedctl/config.toml`. (`level materialize` and both `level preview`
+  exit 2 without a project + `~/.uedcli/config.toml`. (`level materialize` and both `level preview`
   tiers already required one.) Andrzej's ruling only sanctioned it for `level doctor`; the other six
   came along as a consequence, and that is a wider user-facing narrowing than the question asked
   about.
@@ -141,13 +141,13 @@ truth for what to build next). See [`README.md`](README.md). Tags: `[spec]`/`[im
   a subset, plus a regression that the settable set matches the catalog, and updating `kb/textures.md`'s
   "these are the `--add-flag` names" claim to match. (Surfaced 2026-07-20 level-design docs review.)
 
-- [ ] `p2` `[spec]` **Extract uedctl into its own standalone git repo (out of the `dx_lum` mod tree).**
-  `direction.md` already frames uedctl as a **globally-installed, generic-UE1 CLI that operates on many
+- [ ] `p2` `[spec]` **Extract uedcli into its own standalone git repo (out of the `dx_lum` mod tree).**
+  `direction.md` already frames uedcli as a **globally-installed, generic-UE1 CLI that operates on many
   independent projects, not a tool living inside one content repo** (project = any repo with a
-  `uedctl.toml`; tool-install assets resolve package-relative, never from a project). Its home should match
-  that identity — independent of the mod. Spec scope: which dirs travel (the `uedctl/` package, `bin/`,
+  `uedcli.toml`; tool-install assets resolve package-relative, never from a project). Its home should match
+  that identity — independent of the mod. Spec scope: which dirs travel (the `uedcli/` package, `bin/`,
   `dev/docs/**` incl. this board + `spikes/`, the compose dir / UED22 substrate / umodel tool assets);
-  git-history handling (a fresh repo vs a `filter-repo`/subtree extraction of `Tools/uedctl/**` — note the
+  git-history handling (a fresh repo vs a `filter-repo`/subtree extraction of `Tools/uedcli/**` — note the
   global "never rewrite published history" rule applies to the EXISTING repo, so this builds a NEW repo from
   a copy, never a rewrite of `dx_lum`); how the mod repo consumes the CLI afterward (pipx install / pinned
   dependency / submodule — decide); the pipx/Nuitka release story; and cutover mechanics (CI/tests, the
@@ -155,14 +155,14 @@ truth for what to build next). See [`README.md`](README.md). Tags: `[spec]`/`[im
   distribution entry below. (Andrzej, 2026-07-19; decisions.md addendum.)
 
 - [ ] `p3` `[spec]` **Skills-plugin distribution via repo-as-its-own-marketplace (depends on the repo
-  move).** Ship uedctl's `claude/plugins/uedctl/` skills through the plugin marketplace (decisions
+  move).** Ship uedcli's `claude/plugins/uedcli/` skills through the plugin marketplace (decisions
   2026-07-19). **Blocked on the standalone-repo extraction above:** `/plugin marketplace add` on the current
   `dx_lum` tree would clone the whole ~3.3 GB private mod repo to deliver a few KB of skills; a dedicated
   small CLI repo makes distribution clean. Spec the marketplace manifest, the skills layout, and the
   install/update flow once the CLI has its own repo. Interim dev install = symlink `skills/` into
   `.claude/skills/`. (Andrzej, 2026-07-19; decisions.md addendum.)
 
-- [ ] `p2` `[spec]` **`level delete` / `rename` / `clone` — git-agnostic trunk-dir lifecycle verbs.** The probe found no way to delete, rename, or copy a level. Spec thin verbs operating on the TRUNK DIRECTORY directly (filesystem — git-agnostic, per `direction.md`'s "uedctl never wraps version control"), NOT git wrappers: `rename` = move `<maps>/<old>` → `<new>` (+ name/rank fixups + retarget the selected pointer if it pointed there); `clone` = copy the trunk under a new name; `delete` = rm the trunk dir behind a guard (refuse if selected, or `--force`). Works whether or not the project is under git. (Surfaced 2026-07-19 usability probe; git-agnostic per Andrzej.)
+- [ ] `p2` `[spec]` **`level delete` / `rename` / `clone` — git-agnostic trunk-dir lifecycle verbs.** The probe found no way to delete, rename, or copy a level. Spec thin verbs operating on the TRUNK DIRECTORY directly (filesystem — git-agnostic, per `direction.md`'s "uedcli never wraps version control"), NOT git wrappers: `rename` = move `<maps>/<old>` → `<new>` (+ name/rank fixups + retarget the selected pointer if it pointed there); `clone` = copy the trunk under a new name; `delete` = rm the trunk dir behind a guard (refuse if selected, or `--force`). Works whether or not the project is under git. (Surfaced 2026-07-19 usability probe; git-agnostic per Andrzej.)
 
 - [ ] `p2` `[spec]` **Author-time validation of ObjectProperty refs (AmbientSound/Song/OpeningSound/mesh/…).** A typo'd object-property ref currently exits 0 and ships a silently-broken level — the same class of gap `class`/`texture` validation already closed for class + texture refs. Spec author-time existence-validation of object-valued props against the composed package set. Rides the unified asset catalog's ENUMERATION layer for the reference set (specced 2026-07-25, `specs/2026-07-25-unified-asset-catalog.md` §8) — it needs enumeration only, NOT classification, so it is not gated on the catalog being populated. (Surfaced 2026-07-19 usability probe.)
 
@@ -177,7 +177,7 @@ truth for what to build next). See [`README.md`](README.md). Tags: `[spec]`/`[im
   (cylinder/sphere) alignment.** Reproduce UnrealEd's TEXTURE ALIGN semantics model-side: make
   pan/rotation/texture-vectors continuous across adjacent coplanar/wrapped faces (`--wall`/`--floor`)
   so brickwork doesn't seam at every brush boundary — pure offline math on the PolyList texture
-  vectors, currently impossible via uedctl (per-face `poly set --pan` only). ALSO wanted (Andrzej
+  vectors, currently impossible via uedcli (per-face `poly set --pan` only). ALSO wanted (Andrzej
   2026-07-16): alignment onto **curved surfaces** — wrap a texture continuously around e.g. a
   cylinder's facet ring or a sphere (per-face U advance matching arc length), so curved builder
   output doesn't seam at every facet. (AI brainstorm 2026-07-16; endorsed + extended by Andrzej
@@ -233,7 +233,7 @@ truth for what to build next). See [`README.md`](README.md). Tags: `[spec]`/`[im
   folder paths in use (one per line, sorted — the pipe-friendly producer form); `label list` prints the
   distinct labels (flat, so no tree). Spec the exact output: per-path/per-label actor COUNTS (to stderr,
   or a `--count` column?); a `folder tree` view rendering the hierarchy indented (labels have none); do
-  they take `-`/stdin to scope the enumeration to a piped actor set; `--json`. Both are uedctl-side
+  they take `-`/stdin to scope the enumeration to a piped actor set; `--json`. Both are uedcli-side
   sidecars, never emitted to the built map; query stays on `actor find`, this is pure enumeration.
   (Andrzej, 2026-07-25 — reframed from the closed "promote folder/label to top-level" item.)
 
@@ -284,24 +284,24 @@ truth for what to build next). See [`README.md`](README.md). Tags: `[spec]`/`[im
 
 - [ ] `p2` `[debug]` **Live-verify the `/stubs` container mount under the env-fed source** (git-native
   slice 7; premise updated 2026-07-18). The stub-mount source is now
-  `${UEDCTL_STUB_CACHE:-${HOME}/.uedctl/cache/stubs}` — BOTH `editor.ensure_editor` and
-  `stub.ephemeral_build_container` pass `UEDCTL_STUB_CACHE` (the resolved `config.stub_cache_root()`,
+  `${UEDCLI_STUB_CACHE:-${HOME}/.uedcli/cache/stubs}` — BOTH `editor.ensure_editor` and
+  `stub.ephemeral_build_container` pass `UEDCLI_STUB_CACHE` (the resolved `config.stub_cache_root()`,
   an absolute path) in the compose env, so `${HOME}` interpolation and the stripped-env cron/systemd
-  concern no longer apply to uedctl-driven spin-ups (only to a hand-run `docker compose`). Remaining
+  concern no longer apply to uedcli-driven spin-ups (only to a hand-run `docker compose`). Remaining
   leg: confirm on a live editor container that a real `level materialize`/`level preview` still
   `OBJ LOAD`s the v69 stubs from `/stubs`. Substrate-gated — cannot be checked offline. From the
   slice-7 flag (2026-07-08).
 
 - [ ] `p1` `[implement]` **BSP-issue ground-truth detector = D0 + D1 (the complete detector on the
   real editor build); D2 = optional fully-offline upgrade.** Full design (3-round-reviewed):
-  `specs/2026-06-24-uedctl-offline-bsp-engine-design.md`; decision: `decisions.md` 2026-06-24 12:40
+  `specs/2026-06-24-uedcli-offline-bsp-engine-design.md`; decision: `decisions.md` 2026-06-24 12:40
   UTC (revises 09:07). Five grounding spikes (`spikes/2026-06-24-*bsp*` / `*offline-bsp-engine*`)
   hold the decoded substrate. **(Also in `to-build.md` #1.)**
   - **D0 DONE + validated** (`spikes/2026-06-24-offline-bsp-engine-d0-editorlog.md`): `bsp_editorlog.py`
     parses the editor's `MAP REBUILD` drop-warnings — caught an injected open-box hole live.
     **Next:** **D0-b** — run it over the repo's real DeusEx maps (needs gitignored install content)
     to measure build-emergent vs single-brush hole frequency; then promote `bsp_editorlog.py` →
-    `uedctl/bsp/editorlog.py` with offline golden + integration tests and a `level doctor` verb.
+    `uedcli/bsp/editorlog.py` with offline golden + integration tests and a `level doctor` verb.
   - **D1 (next):** **P0-a** — feasibility of a binary `UModel` parser for the saved `.dx` built model;
     then `report.analyze_built` LOCATES HoM/T-junction cracks, invisible-wall phantom nodes,
     fall-through. D0+D1 = complete detector.
@@ -311,7 +311,7 @@ truth for what to build next). See [`README.md`](README.md). Tags: `[spec]`/`[im
 - [ ] `p2` `[implement]` **D2 — fully-offline BSP/CSG/collision engine (the no-editor-ever upgrade —
   FOR LATER).** The pure-Python reimplementation so build-emergent holes/HoM/invisible-walls/
   fall-through are caught with **no editor at all**. Fully specced:
-  `specs/2026-06-24-uedctl-offline-bsp-engine-design.md` (D2 sections) + `decisions.md` 2026-06-24
+  `specs/2026-06-24-uedcli-offline-bsp-engine-design.md` (D2 sections) + `decisions.md` 2026-06-24
   09:07/12:40 UTC. Slice-1/1b/2/3 already prototyped (`_scratch/bspspike/`): single-box &
   abutting-subtracts exact, 3/5 corpus diverge 4–8 nodes with both gaps located — port the
   leaf-filter `0x32bf0`/`0x32030` and the real `SplitPolyList 0x34530`, then cleanup passes +
@@ -413,10 +413,10 @@ truth for what to build next). See [`README.md`](README.md). Tags: `[spec]`/`[im
 
 - [ ] `p3` `[implement]` **`actor preview` rendering improvements** — filled faces (back-to-front
   grey alpha compositing for stacked/concentric geometry), depth-sorted, pane captions in a header
-  strip (not overlaid). See `specs/2026-06-22-uedctl-brush-preview-improvements-design.md`.
+  strip (not overlaid). See `specs/2026-06-22-uedcli-brush-preview-improvements-design.md`.
 
 - [ ] `p3` `[implement]` **`texture view` + dockerized web viewer with a search UI** — reads the
-  tracked `texture-catalog/` + gitignored `.uedctl/textures/`; `view` is the entry verb. See
+  tracked `texture-catalog/` + gitignored `.uedcli/textures/`; `view` is the entry verb. See
   `decisions.md` 2026-06-22. Deferred from the 2026-06-22 texture tool.
 
 - [ ] `p3` `[implement]` **`classify prune` / `sync --prune`** — explicitly remove `removed` entries
@@ -497,7 +497,7 @@ truth for what to build next). See [`README.md`](README.md). Tags: `[spec]`/`[im
 - `p3` `[chore] plain `brush build` (no --prop/--texture/--mover-class) hard-requires the games
   config for zero validation value` — every `brush build`/`actor build` runs the author-time ingest
   gate `_validate_ingest_actors` (`dispatch.py:2711`) before emit, which resolves the game's base
-  package paths (exit 2 `_NO_GAMES_CONFIG` if `~/.uedctl/config.toml` is absent) to existence-check
+  package paths (exit 2 `_NO_GAMES_CONFIG` if `~/.uedcli/config.toml` is absent) to existence-check
   the class + textures. But for a plain shape the class is the hardcoded `Engine.Brush` (always
   exists) and the default texture is `None` (texture loop skipped) — the gate can only ever pass, yet
   it still blocks the stateless generator on config. Consider skipping the gate (or the config

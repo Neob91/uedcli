@@ -26,7 +26,7 @@ so it rises when stood on (or triggered). Read [../movers.md](../movers.md) firs
 **Tip:** for bots and DX NPCs to use the lift, add a `LiftCenter` on the platform and a `LiftExit` at
 each floor, tagged to the mover, then rebuild paths.
 
-## uedctl pipeline (what you run)
+## uedcli pipeline (what you run)
 
 ```
 # 1. the platform as a mover, at the bottom floor

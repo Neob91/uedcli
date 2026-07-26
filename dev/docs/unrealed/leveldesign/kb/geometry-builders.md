@@ -4,9 +4,9 @@ The native brush builders (with their real UnrealEd parameters), the third-party
 clipping, curved geometry, UE1 terrain, and MeshMaker. This is the "how do I make *this shape*" reference
 that feeds [csg-bsp.md](./csg-bsp.md) (a builder produces the `FPoly` list a CSG op commits).
 
-**uedctl mapping.** uedctl exposes a subset of the native builders as `brush build {cube, cylinder, cone,
+**uedcli mapping.** uedcli exposes a subset of the native builders as `brush build {cube, cylinder, cone,
 sheet, staircase, spiral}` generators, plus the 2D-shape-editor sweeps `brush build {extrude, revolve}`
-(§4) — each prints a T3D snippet to stdout, committed with `… | actor add -`. Where a builder maps to a uedctl verb it is noted inline; the rest are editor-GUI shapes preserved
+(§4) — each prints a T3D snippet to stdout, committed with `… | actor add -`. Where a builder maps to a uedcli verb it is noted inline; the rest are editor-GUI shapes preserved
 here for completeness (and because their params inform what a good shape looks like).
 
 ---
@@ -16,16 +16,16 @@ here for completeness (and because their params inform what a good shape looks l
 Right-click a builder's toolbar button to open its parameter dialog. Numeric fields accept `=` math
 expressions (e.g. `=64+128`) 📖, and each builder **remembers its params for the session**.
 
-| Builder | Key params | uedctl verb | Notes |
+| Builder | Key params | uedcli verb | Notes |
 |---|---|---|---|
 | **`CubeBuilder`** | Height / Width / Breadth, WallThickness, **Hollow**, **Tessellated** | `brush build cube` | default 256³; Hollow makes a room shell; Tessellated splits faces (for vertex-editing) |
-| **`CylinderBuilder`** | Height, OuterRadius, InnerRadius, **Sides**, AlignToSide, Hollow | `brush build cylinder` | default 8 sides, h256, r512. **Engine caps a single poly at 16 sides** — a cap face above 16 sides is invalid. **`AlignToSide` maps 1:1** to uedctl's `--align-to-side` (half a segment, `180/sides`°) since 2026-07-25 |
+| **`CylinderBuilder`** | Height, OuterRadius, InnerRadius, **Sides**, AlignToSide, Hollow | `brush build cylinder` | default 8 sides, h256, r512. **Engine caps a single poly at 16 sides** — a cap face above 16 sides is invalid. **`AlignToSide` maps 1:1** to uedcli's `--align-to-side` (half a segment, `180/sides`°) since 2026-07-25 |
 | **`ConeBuilder`** | Height, CapHeight, Outer/InnerRadius, Sides | `brush build cone` | actually a **pyramid / frustum** (a truncated cone when CapHeight < Height) |
 | **`TetrahedronBuilder`** | `SphereExtrapolation` (subdivision) | — | the **"Sphere"** toolbar button; a geodesic sphere. Subdivision **max ~5** (higher → node blowup) |
 | **`SheetBuilder`** | one flat poly (U/V, orientation) | `brush build sheet` | zone portals, water surfaces, banners; **NotSolid by default**; sheets **never collide** on their own |
 | **`VolumetricBuilder`** | a **star of sheets** | — | crossed sheets for torches / flame / volumetric FX |
 | **`LinearStairBuilder`** | StepHeight / StepWidth / StepLength / NumSteps / AddToFirstStep | `brush build staircase` | a straight run of steps |
-| **`CurvedStairBuilder`** | InnerRadius, StepHeight, StepWidth, AngleOfCurve, NumSteps, CounterClockwise | — (no uedctl verb; `brush build staircase` is **linear only**) | curving run. 📖 Community advises keeping StepHeight ≤ the pawn auto-step (`MaxStepHeight` = **25** in DX; the oft-quoted "32" is looser general-stair lore, not a builder-specific limit) |
+| **`CurvedStairBuilder`** | InnerRadius, StepHeight, StepWidth, AngleOfCurve, NumSteps, CounterClockwise | — (no uedcli verb; `brush build staircase` is **linear only**) | curving run. 📖 Community advises keeping StepHeight ≤ the pawn auto-step (`MaxStepHeight` = **25** in DX; the oft-quoted "32" is looser general-stair lore, not a builder-specific limit) |
 | **`SpiralStairBuilder`** | InnerRadius, StepWidth/Height/Thickness, NumStepsPer360, NumSteps, SlopedCeiling/SlopedFloor | `brush build spiral` | **native spiral-stair brushes CANNOT be subtracted** (known limit — build them additive, or use Tarquin's mk2) |
 | **`TerrainBuilder`** | WidthSegments / DepthSegments | — | a tessellated cube → vertex-edit into terrain (see §4) |
 
@@ -45,7 +45,7 @@ gaps in the native set:
 - **Extruder** — sweep a 2D profile along a `PathPoints[]` list (absolute or relative) for **pipes / curved
   tubes**; auto-caps unless the path is a closed loop.
 
-These are not exposed as uedctl verbs; they are GUI builders. Their existence matters because they are the
+These are not exposed as uedcli verbs; they are GUI builders. Their existence matters because they are the
 sanctioned way to get subtractable spirals and swept tubes without off-grid vertex editing.
 
 ---
@@ -72,7 +72,7 @@ The clip tool cuts an existing brush against a plane:
   2026-07-25 00:14 UTC (D5).
 - **Curved corridors** — 2D-editor **Revolve**: move the green pivot *away* from the cross-section, then
   revolve. 16 pieces = 360°; `Use`=4 → a 90° bend.
-  **Revolve HAS a uedctl verb since 2026-07-25**: `brush build revolve --point U,V … --angle UU
+  **Revolve HAS a uedcli verb since 2026-07-25**: `brush build revolve --point U,V … --angle UU
   [--segments N]`. Its axis is fixed at the profile's own `u = 0` line, so "move the pivot away from the
   cross-section" is spelled by drawing the profile away from `u = 0` (`decisions.md` 2026-07-25 01:05 UTC,
   D10). The `--segments` default is one facet per 22.5°, i.e. the 16-pieces-per-turn density above — which
@@ -119,19 +119,19 @@ BSP and stops risking holes.
 
 ---
 
-## 7. uedctl verb summary for this file
+## 7. uedcli verb summary for this file
 
-| Shape | uedctl | Native builder |
+| Shape | uedcli | Native builder |
 |---|---|---|
 | Box / room shell | `brush build cube` (no `--hollow`; subtract a solid cube for a shell) | `CubeBuilder` |
 | Cylinder / tube | `brush build cylinder --sides N` (poly cap ≤16) | `CylinderBuilder` |
 | Pyramid / frustum | `brush build cone` | `ConeBuilder` |
 | Flat sheet (portal/water/banner) | `brush build sheet` (NotSolid by default) | `SheetBuilder` |
-| Straight stairs (linear only) | `brush build staircase` | `LinearStairBuilder` (the `CurvedStairBuilder` has no uedctl verb) |
+| Straight stairs (linear only) | `brush build staircase` | `LinearStairBuilder` (the `CurvedStairBuilder` has no uedcli verb) |
 | Spiral stairs | `brush build spiral` | `SpiralStairBuilder` (**native can't subtract**) |
 | Drawn profile, swept straight | `brush build extrude --point U,V … --depth D` | the 2D shape editor's **Extrude** |
 | Drawn profile, swept around an axis | `brush build revolve --point U,V … --angle UU` | the 2D shape editor's **Revolve** |
 
 Geodesic spheres, volumetric star-sheets, terrain tessellation, the Tarquin extended builders, clipping,
-Bézier curves, and MeshMaker are **editor-GUI / external-tool** shapes with no uedctl generator — author
+Bézier curves, and MeshMaker are **editor-GUI / external-tool** shapes with no uedcli generator — author
 their output as a T3D snippet (or a prefab) and bring it in via the normal `actor add -` path.

@@ -12,7 +12,7 @@ Usage:
 import sys, struct, re
 import pe
 
-UED = "/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedctl/uned/UED22"
+UED = "/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedcli/uned/UED22"
 DLLS = {
     "Engine": f"{UED}/Engine.dll",
     "Editor": f"{UED}/Editor.dll",

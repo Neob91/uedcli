@@ -1,7 +1,7 @@
 # 83 — Surfs parity: the residual is object-table-INDEX ORDER (plus a small pBase tail)
 
 **Status:** measurement + triage, CLOSED for this session. **Date:** 2026-07-18.
-**Layer:** package EXPORT-TABLE / assembly (`uedctl/native/assemble.py`, `pkgref.py`, `umodel.py`).
+**Layer:** package EXPORT-TABLE / assembly (`uedcli/native/assemble.py`, `pkgref.py`, `umodel.py`).
 **Method:** raw-byte, per-FIELD diff of the 485-surf `Surfs` section, native `NativeCastle.dx`
 (rebuilt via `harness/build_native_castle.py`) vs the golden `DX/Maps/Test_Castle.dx`.
 **Reproduce:** `harness/surf_ref_order_analysis.py` (per-field match, ref widths, reorder ceilings).

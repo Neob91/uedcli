@@ -17,7 +17,7 @@ RAW on-disk bytes only.
 
 ## 1. Which shipped map is the golden — and how it was confirmed ✅
 
-The trunk `_scratch/catacombs/uedctl/maps/catacombs` (2710 actors) was ingested from
+The trunk `_scratch/catacombs/uedcli/maps/catacombs` (2710 actors) was ingested from
 **`DX/Maps/10_Paris_Catacombs.dx`**. Trunk↔golden identity pinned by the **Brush-class export
 count**, which is exact and unambiguous:
 
@@ -136,15 +136,15 @@ suspects; re-booting would only re-confirm a documented blocker.
 
 ## 6. Reproduce
 ```
-cd Tools/uedctl
+cd Tools/uedcli
 # 1. ingest trunk from the shipped map (offline UCC; needs Sounds/Music/System search dirs)
 .venv/bin/python dev/docs/spikes/2026-07-15-native-materialize/harness/ingest_dx_trunk.py \
     /home/neob91/Games/LutrisDX/drive_c/DX/Maps/10_Paris_Catacombs.dx \
-    /home/neob91/Games/LutrisDX/drive_c/DX/LUM/_scratch/catacombs/uedctl/maps/catacombs \
+    /home/neob91/Games/LutrisDX/drive_c/DX/LUM/_scratch/catacombs/uedcli/maps/catacombs \
     --search DX/Textures --search DX/LUM/Textures \
     --search DX/Sounds --search DX/Music --search DX/System
 # 2. native UNLIT build (rebuild core first if src changed:
-#    . "$HOME/.cargo/env" && .venv/bin/maturin develop --release -m uedctl-native/Cargo.toml)
+#    . "$HOME/.cargo/env" && .venv/bin/maturin develop --release -m uedcli-native/Cargo.toml)
 .venv/bin/python dev/docs/spikes/2026-07-15-native-materialize/harness/build_native_catacombs.py
 # 3. raw on-disk diff
 .venv/bin/python dev/docs/spikes/2026-07-15-native-materialize/harness/ground_truth_bytediff.py \

@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Set up a complete, working Deus Ex install for uedctl — end to end — from a SOURCE you supply.
+# Set up a complete, working Deus Ex install for uedcli — end to end — from a SOURCE you supply.
 #
 # Given <SOURCE> (REQUIRED: a path to an installed Deus Ex, OR a raw retail ACE installer dir),
 # this does everything:
 #   1. Assembles a full working game copy under  dev/games/<game>/   (default <game>=deusex).
 #        - SOURCE is a raw ACE installer (has deusex.ace + deusex.c00..) -> extract with `unace x`.
 #        - SOURCE is an installed game     (has System/ + Textures/)      -> copy the whole tree.
-#   2. Populates the uedctl substrate asset tree  uned/DeusExAssets/  FROM that working copy — the
+#   2. Populates the uedcli substrate asset tree  uned/DeusExAssets/  FROM that working copy — the
 #      curated subset the editor/build containers mount: System/ (v68 `.u` code, for stubbing) +
 #      Textures/ *.utx, Sounds/ *.uax, Music/ *.umx (content), + Maps/ *.dx with --with-maps.
 #
@@ -29,7 +29,7 @@ SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # dev/scripts/): the working copy under dev/games/, and the substrate tree at uned/DeusExAssets/
 # (the latter fixed by code in tool_assets.py `uned_dir()`). `cd` only into always-present dirs
 # (dev/, the tool root) and append the leaf as a string — the leaf dirs are created later.
-GAMES_PARENT="$(cd "$SELF_DIR/.." && pwd)/games"          # Tools/uedctl/dev/games
+GAMES_PARENT="$(cd "$SELF_DIR/.." && pwd)/games"          # Tools/uedcli/dev/games
 DEST_ROOT="$(cd "$SELF_DIR/../.." && pwd)/uned/DeusExAssets"
 
 # Print the header comment block (everything after the shebang up to the first non-comment line),
@@ -194,5 +194,5 @@ if [[ -n "$ace_src" ]] && ! ls "$DEST_ROOT/Music"/*.umx >/dev/null 2>&1; then
 fi
 echo
 echo "Working game copy: $WORKING_COPY   (full, gitignored)"
-echo "Substrate tree is the v68 install source for stub-building + texture sync; uedctl mounts it"
+echo "Substrate tree is the v68 install source for stub-building + texture sync; uedcli mounts it"
 echo "per-command (no container restart needed). See dev/docs/deusex-assets-setup.md."

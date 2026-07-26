@@ -9,13 +9,13 @@ import sys
 import time
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[4]))  # Tools/uedctl
+sys.path.insert(0, str(Path(__file__).resolve().parents[4]))  # Tools/uedcli
 sys.path.insert(0, str(Path(__file__).resolve().parent))       # this dir (import harness)
 
-from uedctl.editor import ensure_editor, stop_editor           # noqa: E402
-from uedctl.driver import Driver                               # noqa: E402
-from uedctl.apply import _materialize, _materialized_order     # noqa: E402
-from uedctl.normalize import canonical_actor_t3d               # noqa: E402
+from uedcli.editor import ensure_editor, stop_editor           # noqa: E402
+from uedcli.driver import Driver                               # noqa: E402
+from uedcli.apply import _materialize, _materialized_order     # noqa: E402
+from uedcli.normalize import canonical_actor_t3d               # noqa: E402
 import harness as H                                            # noqa: E402
 
 SID = "preview-spike2"

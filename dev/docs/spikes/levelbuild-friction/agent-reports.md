@@ -13,52 +13,52 @@ Append only; never edit or delete another agent's entry.
 ---
 
 ## DiveBar — `class show` cannot show a class's DEFAULT property values
-**What I tried:** `bin/uedctl class show Engine.ZoneInfo --category ZoneLight` and then, guessing, `bin/uedctl class show Engine.ZoneInfo --category ZoneLight --defaults`
-**What happened:** The first prints only the property NAMES and types (`AmbientBrightness: ByteProperty`). The second exits 2 with `uedctl: error: unrecognized arguments: --defaults` — and the usage it prints is the TOP-LEVEL `uedctl` usage, not `class show`'s, so it doesn't even show you which flags do exist.
+**What I tried:** `bin/uedcli class show Engine.ZoneInfo --category ZoneLight` and then, guessing, `bin/uedcli class show Engine.ZoneInfo --category ZoneLight --defaults`
+**What happened:** The first prints only the property NAMES and types (`AmbientBrightness: ByteProperty`). The second exits 2 with `uedcli: error: unrecognized arguments: --defaults` — and the usage it prints is the TOP-LEVEL `uedcli` usage, not `class show`'s, so it doesn't even show you which flags do exist.
 **What I expected:** To be able to see the engine default of `AmbientBrightness` on `Engine.ZoneInfo`. I was diagnosing a room that had gone fullbright immediately after 8 `Engine.ZoneInfo` actors were added, and the whole question was "does a freshly-placed ZoneInfo carry a nonzero ambient by default?". There is no way to answer that from the CLI: `actor prop get` only prints properties that were explicitly SET, so a newly built actor shows just `Location=`, and `class show` only prints names. The only route left is an expensive in-game render experiment.
 **Workaround:** Explicitly set `AmbientBrightness=0 AmbientSaturation=255 AmbientHue=0` on every ZoneInfo and re-render to see if anything changed — i.e. binary-search by screenshot, at ~5-10 min per iteration.
 
 ## DiveBar — `level preview --game --rebuild` fails where `level materialize` succeeds
-**What I tried:** `bin/uedctl level preview --game --rebuild --out-dir .../shots/diag --size 800x600 "at:960,96,88;look:256,760,96;name:d1-bar-wide" ...` (twice, back to back)
-**What happened:** Both times, after ~40s: `materialize for preview failed: materialize failed (nothing written): OBJ DEPENDENCIES PACKAGE=MyLevel did not complete within 20 attempts (20s)`. Immediately afterwards `bin/uedctl level materialize --no-verify --out .../maps/diag.dx --overwrite` succeeded on the FIRST attempt with the identical trunk.
+**What I tried:** `bin/uedcli level preview --game --rebuild --out-dir .../shots/diag --size 800x600 "at:960,96,88;look:256,760,96;name:d1-bar-wide" ...` (twice, back to back)
+**What happened:** Both times, after ~40s: `materialize for preview failed: materialize failed (nothing written): OBJ DEPENDENCIES PACKAGE=MyLevel did not complete within 20 attempts (20s)`. Immediately afterwards `bin/uedcli level materialize --no-verify --out .../maps/diag.dx --overwrite` succeeded on the FIRST attempt with the identical trunk.
 **What I expected:** The same build to succeed or fail the same way in both verbs — they materialize the same trunk.
 **Workaround:** `level materialize` to an explicit `.dx`, then `level preview --game --map <that .dx>`. Two commands instead of one, but reliable. It would help a lot if `preview`'s internal materialize retried the way the docs tell the human to retry (`sleep 30 && retry, up to 5x`) instead of surfacing the raw failure.
 
 ## DiveBar — `level preview --game` gives no progress output and no queue feedback while blocked on the shared container lock
-**What I tried:** `bin/uedctl level preview --game --map .../maps/diag.dx --out-dir .../shots/diag --size 800x600 "<3 shots>"`
-**What happened:** Complete silence for 10 minutes (only repeated `XGetWindowProperty[_NET_ACTIVE_WINDOW] failed (code=1)` lines from the X stack), then my harness timeout killed it. `docker ps` showed `uedctl-game-preview-1000  Up 2 seconds` — i.e. another agent's preview had just claimed the container, and mine was silently waiting behind a lock. Killing and re-running apparently loses your place in the queue, so retrying makes it worse.
+**What I tried:** `bin/uedcli level preview --game --map .../maps/diag.dx --out-dir .../shots/diag --size 800x600 "<3 shots>"`
+**What happened:** Complete silence for 10 minutes (only repeated `XGetWindowProperty[_NET_ACTIVE_WINDOW] failed (code=1)` lines from the X stack), then my harness timeout killed it. `docker ps` showed `uedcli-game-preview-1000  Up 2 seconds` — i.e. another agent's preview had just claimed the container, and mine was silently waiting behind a lock. Killing and re-running apparently loses your place in the queue, so retrying makes it worse.
 **What I expected:** A line on stderr like `waiting for the game container lock (held by another session)…` and/or `booting container… / travelling… / shooting 1/3`. With zero output there is no way to tell "blocked on a lock" from "wedged" from "slowly booting", which is exactly the distinction you need to decide whether to wait or to kill it.
 **Workaround:** Run the preview as a tracked background job and poll the output file, rather than blocking a foreground tool call that a timeout will kill.
 
 ## TubePlatform — `actor show` refuses several names, unlike every sibling verb
-**What I tried:** `bin/uedctl actor show StationBore_6cuhtp TrackTrench_rg0hvt RoomPlant_kov79m PassPlant_h2uryd NicheBay_1rpd5c VentDuct_lu0a6o`
+**What I tried:** `bin/uedcli actor show StationBore_6cuhtp TrackTrench_rg0hvt RoomPlant_kov79m PassPlant_h2uryd NicheBay_1rpd5c VentDuct_lu0a6o`
 **What happened:**
 ```
-usage: uedctl [-h] [--project PROJECT] {actor,brush,...} ...
-uedctl: error: unrecognized arguments: TrackTrench_rg0hvt RoomPlant_kov79m PassPlant_h2uryd NicheBay_1rpd5c VentDuct_lu0a6o
+usage: uedcli [-h] [--project PROJECT] {actor,brush,...} ...
+uedcli: error: unrecognized arguments: TrackTrench_rg0hvt RoomPlant_kov79m PassPlant_h2uryd NicheBay_1rpd5c VentDuct_lu0a6o
 ```
 **What I expected:** `actor bbox` takes `<names…|->` and the whole CLI philosophy is "a verb over a SET takes the set", so `actor show` reading several names looked like the obvious spelling. `docs/usage.md` writes its signature as `actor show <name|glob|->` — a single positional — but the distinction from `actor bbox <names…|->` two rows above is easy to miss when scanning the table.
-**Workaround:** `printf 'A\nB\nC\n' | bin/uedctl actor show -`. Worked first try. The usage line dumps the *top-level* parser usage, not `actor show`'s own, so it doesn't show you the accepted form; a message naming the verb ("actor show takes ONE name/glob — pipe a list with `-`") would have saved the lookup.
+**Workaround:** `printf 'A\nB\nC\n' | bin/uedcli actor show -`. Worked first try. The usage line dumps the *top-level* parser usage, not `actor show`'s own, so it doesn't show you the accepted form; a message naming the verb ("actor show takes ONE name/glob — pipe a list with `-`") would have saved the lookup.
 
 ## TubePlatform — `--folder` lives on the generator, not on `actor add`
-**What I tried:** `bin/uedctl actor build DeusEx.CageLight --at 700,608,254 | bin/uedctl actor add - --folder props.plant`
+**What I tried:** `bin/uedcli actor build DeusEx.CageLight --at 700,608,254 | bin/uedcli actor add - --folder props.plant`
 **What happened:**
 ```
-uedctl: error: unrecognized arguments: --folder props.plant
+uedcli: error: unrecognized arguments: --folder props.plant
 Exception ignored in: <_io.TextIOWrapper name='<stdout>' mode='w' encoding='utf-8'>
 BrokenPipeError: [Errno 32] Broken pipe
 ```
-**What I expected:** `actor add` is the verb that writes the trunk, and the folder is trunk-side (uedctl sidecar) state, so I assumed the consumer owned it. It is actually on `actor build`, which rides it through as a `// uedctl-folder:` comment.
+**What I expected:** `actor add` is the verb that writes the trunk, and the folder is trunk-side (uedcli sidecar) state, so I assumed the consumer owned it. It is actually on `actor build`, which rides it through as a `// uedcli-folder:` comment.
 **Workaround:** move `--folder PATH` onto the `actor build` side. Note the failure also leaks a `BrokenPipeError` traceback from the *producer* half of the pipeline onto stderr — that is a raw Python exception reaching the CLI user, which `CLAUDE.md` forbids, and it made the real (clear) argparse error harder to spot in a batch of six commands.
 
 ## TubePlatform — piping `brush poly find` with `2>&1` feeds the stderr summary into `poly set`
-**What I tried:** `bin/uedctl brush poly find PlantConsole_lm6lng --facing +Y 2>&1 | bin/uedctl brush poly set - --texture Airfield.AF_CommPanel_A`
+**What I tried:** `bin/uedcli brush poly find PlantConsole_lm6lng --facing +Y 2>&1 | bin/uedcli brush poly set - --texture Airfield.AF_CommPanel_A`
 **What happened:** `surface selector must be BRUSH:SELECTOR, got '1 face(s) matched'`
 **What I expected:** my own mistake (the `2>&1` was left over from a debugging invocation), but it is worth recording because the producer/consumer convention makes it a trap that costs a minute every time: the human-readable count on stderr is *syntactically plausible* as a selector line, so the error surfaces as a confusing "your selector is wrong" rather than "that came from stderr".
 **Workaround:** drop the `2>&1`. The error text is accurate; adding a hint ("did you merge stderr into the pipe?") when the offending token matches the summary format would make it self-diagnosing.
 
 ## TubePlatform — `class show` hides every property name by default, with no route to the one you want
-**What I tried:** `bin/uedctl class show DeusEx.DataCube`, then `bin/uedctl class show DeusEx.DataCube --all`
+**What I tried:** `bin/uedcli class show DeusEx.DataCube`, then `bin/uedcli class show DeusEx.DataCube --all`
 **What happened:** the bare form prints only
 ```
 DeusEx.DataCube  [concrete, placeable]
@@ -71,7 +71,7 @@ DeusEx.DataCube  [concrete, placeable]
 **Workaround:** `class show DeusEx.DataCube --category InformationDevices` (guessed from the superclass name), or `--depth all`. Suggest the empty-own-props case print a one-line hint: `no own properties — use --depth all or --category NAME`.
 
 ## TubePlatform — `level materialize` post-verify rejects a good build (known)
-**What I tried:** `bin/uedctl level materialize --out .../TubePlatform.dx --overwrite`
+**What I tried:** `bin/uedcli level materialize --out .../TubePlatform.dx --overwrite`
 **What happened:** pre-warned by my brief that the post-verify wrongly rejects when the engine stamps `Base=LevelInfo'MyLevel.LevelInfo0'` onto an actor resting in the level.
 **What I expected:** a clean build to verify clean.
 **Workaround:** `--no-verify` on every `materialize`, then `level preview --game --map <that file>` rather than letting `--game` materialize internally — because `level preview --game` has **no `--no-verify` escape** (`docs/usage.md` says so explicitly). That is the sharp edge: with the verify bug live, the documented default path (`level preview --game` with no `--map`) is unusable, and the only way through is to know the two-step materialize/preview split. Worth a mention in `usage.md`'s preview section.
@@ -79,7 +79,7 @@ DeusEx.DataCube  [concrete, placeable]
 ## ContainerYard — `level preview --game` has no `--no-verify`, so a false post-verify failure blocks ALL in-game rendering
 **What I tried:**
 ```
-bin/uedctl level preview --game --out-dir $P/shots --size 800x600 \
+bin/uedcli level preview --game --out-dir $P/shots --size 800x600 \
   "at:1120,64,56;rot:0,16384;name:m3-1-gate" ... (5 shots)
 ```
 **What happened:** six retries over ~25 minutes, every one dying inside the implicit materialize:
@@ -129,7 +129,7 @@ badly framed cameras afterwards then costs seconds instead of a full rebuild.
 ## ContainerYard — `texture list` hides the texture Group, which is load-bearing for DX ladders
 **What I tried:**
 ```
-bin/uedctl texture list | grep -i "ladd\|ladr"
+bin/uedcli texture list | grep -i "ladd\|ladr"
 ```
 **What happened:**
 ```
@@ -142,7 +142,7 @@ decides whether my brush is climbable, and the discovery verb does not print it.
 **What I expected:** `texture list`/`texture search` to surface the group, or a `texture show
 <ref>` verb. `texture show` does not exist:
 ```
-uedctl texture: error: argument sub: invalid choice: 'show' (choose from sync, list, search, tags, classify)
+uedcli texture: error: argument sub: invalid choice: 'show' (choose from sync, list, search, tags, classify)
 ```
 **Workaround:** grep the raw catalog JSON —
 `python3 -c "import json; d=json.load(open('texture-catalog/CoreTexMetal.json')); …"` — where the
@@ -154,8 +154,8 @@ the reserved group.
 **What I tried:** (inherited from the previous session's `02c_fixes.sh`, whose comment says the
 intent was to push the stash interior clear of the container's west face)
 ```
-bin/uedctl brush build cube --csg subtract --width 520 --breadth 112 --height 112 --at 2164,704,64 \
-  | bin/uedctl brush replace ObjIn_cdfzhi -
+bin/uedcli brush build cube --csg subtract --width 520 --breadth 112 --height 112 --at 2164,704,64 \
+  | bin/uedcli brush replace ObjIn_cdfzhi -
 ```
 **What happened:** the replaced brush ended up spanning X 1912..2432, not the intended
 X 1904..2424 — `brush replace` keeps the *target actor's* existing Location (2172) and only takes
@@ -186,13 +186,13 @@ named, deterministic, purely model-side rule and doctor already walks every brus
 **Workaround:** compute it by hand — dump `actor bbox` for every semisolid and check the pairs.
 
 ## headless-materialize spike — a killed `level materialize` strands its container, and I reproduced it in one run
-**What I tried:** `bin/uedctl --project <LUM> level materialize --tree level/basement --no-verify --out _scratch/.../gui_basement.dx --overwrite`, to get a GUI-built reference for the spike.
+**What I tried:** `bin/uedcli --project <LUM> level materialize --tree level/basement --no-verify --out _scratch/.../gui_basement.dx --overwrite`, to get a GUI-built reference for the spike.
 **What happened:** the run was still going at 600 s (the previous, identical run had finished in 106 s) so I killed it. It left `uned-019f9b87-d5d2-7856-ab74-1cbd9b3fbebc` and its `uned-wp-…` volume behind; I had to `docker rm -f` + `docker volume rm` by hand. Teardown lives only in `apply.run_materialize`'s `finally`, which a SIGKILL never reaches — so **every killed or externally-timed-out materialize leaks a container plus a ~0.5 GB wineprefix volume.** This is §2 of `README.md` observed from the producing side rather than the counting side.
 **What I expected:** either the ephemeral container to be reaped (a label + startup sweep would do it), or the tool to be interruptible without leaking.
 **Workaround:** none from inside the tool. Manually: `docker ps --format '{{.Names}}\t{{.CreatedAt}}'`, match the creation time to your own run (do NOT reap by prefix — other sessions' editors share it), then `docker rm -f <name>; docker volume rm uned-wp-<uuid>`.
 
 ## headless-materialize spike — post-verify diff prints two sides that look line-shifted, not different
-**What I tried:** `bin/uedctl --project <LUM> level materialize --tree level/basement --out … --overwrite` (with verify on).
+**What I tried:** `bin/uedcli --project <LUM> level materialize --tree level/basement --out … --overwrite` (with verify on).
 **What happened:** after 106 s:
 ```
 post-verify mismatch: … actor 'RoomA_jwvaq0' differs in GEOMETRY at line 7:
@@ -204,7 +204,7 @@ post-verify mismatch: … actor 'RoomA_jwvaq0' differs in GEOMETRY at line 7:
 
 ## headless-materialize spike — `bsp_health_check.py` and the native harnesses hardcode an absolute `ROOT`
 **What I tried:** `python3 dev/docs/spikes/2026-07-15-native-materialize/harness/bsp_health_check.py <map.dx>`
-**What happened:** `ModuleNotFoundError: No module named 'uedctl'` — the harness sets `ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedctl")`, which is the checkout it was written in, not this one. `build_native_castle.py` and `spike_classindex.py` have the same hardcoded root, and `build_native_castle.py` additionally imports `spike_classindex` from a `2026-06-27-decontainerize-uedctl/harness` path that no longer exists (the file lives under `2026-07-15-native-materialize/harness`).
+**What happened:** `ModuleNotFoundError: No module named 'uedcli'` — the harness sets `ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedcli")`, which is the checkout it was written in, not this one. `build_native_castle.py` and `spike_classindex.py` have the same hardcoded root, and `build_native_castle.py` additionally imports `spike_classindex` from a `2026-06-27-decontainerize-uedcli/harness` path that no longer exists (the file lives under `2026-07-15-native-materialize/harness`).
 **What I expected:** a committed harness to run from the repo it is committed in. `CLAUDE.md` "Commit the harness" makes these durable artifacts, so they are worth being path-independent.
 **Workaround:** `sys.path.insert` the real root and `exec()` the harness, or sed the constant. Suggest deriving `ROOT` from `Path(__file__).resolve().parents[N]` in all three.
 
@@ -212,7 +212,7 @@ post-verify mismatch: … actor 'RoomA_jwvaq0' differs in GEOMETRY at line 7:
 **What I tried:** flip a 128x128 sign sheet 180 degrees so its face pointed at the player instead
 of away:
 ```
-bin/uedctl actor rotate Sign_r03nug --by 0,32768,0
+bin/uedcli actor rotate Sign_r03nug --by 0,32768,0
 ```
 **What happened:**
 ```
@@ -235,7 +235,7 @@ doc warns about.
 ## ContainerYard — the DX guides imply computers are HackableDevices; they are not
 **What I tried:**
 ```
-bin/uedctl actor build DeusEx.ComputerSecurity --at 1616,112,52 --rotate 0,16384,0 \
+bin/uedcli actor build DeusEx.ComputerSecurity --at 1616,112,52 --rotate 0,16384,0 \
    --prop Views.0.cameraTag=GateCam --prop Views.0.doorTag=YardGate \
    --prop bHackable=True --prop hackStrength=0.25
 ```
@@ -263,24 +263,24 @@ does a single `actor add` at the end. One actor deep in the middle had a bad `--
 **What happened:** the script died at that line. Because the `actor add` is at the *end*, nothing
 from the `a()` accumulator had landed — but three earlier movers piped straight to `actor add -`
 HAD landed, so the trunk was half-applied and re-running the script would have duplicated them.
-**What I expected:** nothing from uedctl specifically — but a `--dry-run`/validate mode on
+**What I expected:** nothing from uedcli specifically — but a `--dry-run`/validate mode on
 `actor build` (or an `actor add --if-absent`) would make batch scripts re-runnable, which matters
 a lot when a level build is a sequence of shell scripts.
 **Workaround:** guard the direct-to-trunk section with
-`if [ -z "$(uedctl actor find --name 'YardGate_*')" ]; then … fi`, and validate every new class's
+`if [ -z "$(uedcli actor find --name 'YardGate_*')" ]; then … fi`, and validate every new class's
 props with a throwaway `actor build … | head` before putting it in the script.
 
 ## DiveBar — a far-away skybox brush silently collapses `actor preview` to an unreadable dot
-**What I tried:** `bin/uedctl actor find | bin/uedctl actor preview - --annotate name --size 900 --out .../shots/wire-m5-final.png` — the exact invocation the level-build brief recommends.
+**What I tried:** `bin/uedcli actor find | bin/uedcli actor preview - --annotate name --size 900 --out .../shots/wire-m5-final.png` — the exact invocation the level-build brief recommends.
 **What happened:** The PNG rendered fine (exit 0) but the level was a ~40px smudge in the bottom-left of each quad, because the set included `SKYROOM` (a subtract at 12000,12000,6000) and `SkyZoneInfo` (same). The quad views auto-fit the bounding box of the whole set, and one distant sky brush is ~15x the level's own extent. Output dropped from 65KB to 10KB — the only hint anything was wrong.
 **What I expected:** Something usable, or at least a warning that one actor was inflating the fit by an order of magnitude.
-**Workaround:** `bin/uedctl actor find | grep -v -e SKYROOM -e SkyZoneInfo | bin/uedctl actor preview - ...`. A `--fit` / `--exclude` option, or auto-dropping the sky-zone island from the framing, would make the documented one-liner just work — every DX level has a distant skybox.
+**Workaround:** `bin/uedcli actor find | grep -v -e SKYROOM -e SkyZoneInfo | bin/uedcli actor preview - ...`. A `--fit` / `--exclude` option, or auto-dropping the sky-zone island from the framing, would make the documented one-liner just work — every DX level has a distant skybox.
 
 ## DiveBar — `level materialize --no-verify` reports SUCCESS after writing a broken, unlit map (this is what "the room went fullbright" actually was)
-**What I tried:** `bin/uedctl level materialize --no-verify --out .../maps/diag.dx --overwrite`
+**What I tried:** `bin/uedcli level materialize --no-verify --out .../maps/diag.dx --overwrite`
 **What happened:** It printed exactly two lines and exited 0:
 
-    materializing level 'DiveBar' (from $UEDCTL_LEVEL)
+    materializing level 'DiveBar' (from $UEDCLI_LEVEL)
     materialized /home/neob91/Documents/Dev/uedcli/_scratch/levelbuild/dive-bar/maps/diag.dx
 
 The file it wrote was **23,126 bytes**. A correct build of the same, unchanged trunk is **191,332 bytes** — and the level's own blockout-only build back at milestone 1 was already 96,870 bytes. Nothing in the output distinguished the two. Immediately after, the same command WITH verify failed six times in a row with `materialize failed (nothing written): OBJ DEPENDENCIES PACKAGE=MyLevel did not complete within 20 attempts (20s)`, then a later `--no-verify` run of the identical trunk produced the correct 191KB map. So `--no-verify` does not merely "skip the check" — when the underlying editor build goes wrong it **writes the partial result and calls it success.**
@@ -298,17 +298,17 @@ The file it wrote was **23,126 bytes**. A correct build of the same, unchanged t
 
 i.e. you must *place a throwaway actor into your level*, query one named property at a time, then delete it. That paragraph lives in the DX class catalog, not in `lighting.md`, `zones-and-performance.md`, or `class show --help`, so I did not find it until I had already spent a preview cycle testing the hypothesis blind.
 **What I expected:** `class show <Class>` to print `AmbientBrightness: ByteProperty = 0`, or `actor prop get <actor> <Prop>` to be advertised in `--help` as default-resolving.
-**Workaround:** `T=$(uedctl actor build Engine.ZoneInfo --base-name TMPPROBE --at ... | uedctl actor add -); uedctl actor prop get "$T" AmbientBrightness; uedctl actor delete "$T"` — and note this also trips `warning: 2 actors share Location`, since the natural place to probe is next to the real actor.
+**Workaround:** `T=$(uedcli actor build Engine.ZoneInfo --base-name TMPPROBE --at ... | uedcli actor add -); uedcli actor prop get "$T" AmbientBrightness; uedcli actor delete "$T"` — and note this also trips `warning: 2 actors share Location`, since the natural place to probe is next to the real actor.
 **Also worth fixing in the docs:** `docs/leveldesign/general/lighting.md` says you can darken a space by "lowering the zone's `AmbientBrightness` (keep it <= ~32 so surfaces don't go flat)". That reads as though ambient starts somewhere above zero and is a knob you turn down. It starts at 0 — there is nothing to lower — and saying so explicitly would have removed my prime suspect in ten seconds.
 
 ## ContainerYard — `level preview --game` gives no signal that it is queued behind another user's lock
 **What I tried:**
 ```
-bin/uedctl level preview --game --map $P/build/CY.dx --out-dir $P/shots --size 800x600 <7 shots>
+bin/uedcli level preview --game --map $P/build/CY.dx --out-dir $P/shots --size 800x600 <7 shots>
 ```
 **What happened:** the process sat with no output for 31+ minutes (`ps -o etime` on the python
 process was the only way to tell it was alive). Three agents share
-`uedctl-game-preview-1000` and the verb serialises on it, but the waiting process prints nothing —
+`uedcli-game-preview-1000` and the verb serialises on it, but the waiting process prints nothing —
 not "waiting for the shared preview container", not a queue position, not a heartbeat. It is
 indistinguishable from a hang, which is exactly the state where the documented advice is "sleep 30 s
 and retry" — and retrying makes the contention worse.
@@ -321,15 +321,15 @@ preview that is merely slow. Note this interacts badly with the earlier entry ab
 materialize failures — with no output at all you cannot tell "queued" from "failing and retrying".
 
 ## DiveBar — `class list` and `actor build` happily accept classes from a package the editor cannot load; you only find out at materialize
-**What I tried:** `bin/uedctl class list --flat --subclass-of DeusEx.DeusExDecoration` listed `Endemia.Ashtray`, `Endemia.AshtraySmall_1a`..`_1f`, `Endemia.GlassBottle`, `Endemia.Candle1`, `Endemia.ToiletPaper`, `Endemia.TrashCan5`, `TNM.NapalmCanister` alongside the `DeusEx.*` ones, so I placed several: `bin/uedctl actor build Endemia.AshtraySmall_1b --at 192,176,44 --folder props | bin/uedctl actor add -`
+**What I tried:** `bin/uedcli class list --flat --subclass-of DeusEx.DeusExDecoration` listed `Endemia.Ashtray`, `Endemia.AshtraySmall_1a`..`_1f`, `Endemia.GlassBottle`, `Endemia.Candle1`, `Endemia.ToiletPaper`, `Endemia.TrashCan5`, `TNM.NapalmCanister` alongside the `DeusEx.*` ones, so I placed several: `bin/uedcli actor build Endemia.AshtraySmall_1b --at 192,176,44 --folder props | bin/uedcli actor add -`
 **What happened:** Every one of those `actor build | actor add` calls succeeded and printed `added 1 actor(s)`. The level then refused to build, on every retry:
 
-    materialize failed (nothing written): level references v68 code package(s) with no v69 stub: Endemia — the v69 editor cannot load a v68 `.u` directly; build the stub(s) first (`uedctl substrate stub <pkg>`) or the referencing level cannot materialize
+    materialize failed (nothing written): level references v68 code package(s) with no v69 stub: Endemia — the v69 editor cannot load a v68 `.u` directly; build the stub(s) first (`uedcli substrate stub <pkg>`) or the referencing level cannot materialize
 
 **What I expected:** `class list` to either not offer classes the level cannot actually use, or to mark them; and `actor build Endemia.X` to refuse (or at minimum warn) at build time rather than 20 minutes later at materialize. The error message itself is genuinely good — it names the package AND the fix — but it fires at the wrong end of the pipeline, after the class is already scattered through the trunk.
-**Extra sting:** the *previous* session on this level had already tried the same classes inside a shell helper that redirected stderr (`... 2>/dev/null | actor add - >/dev/null 2>&1 || echo "failed"`), so ~15 `Endemia.*` props were silently dropped and the level shipped without them and without anyone noticing. Two different agents lost time to the same package in two different ways. Note also that `bin/uedctl class list --flat` (unfiltered) reports the substrate packages as `DeusEx, DXOgg, Engine, TNM` — `Endemia` is not in that list, yet `--subclass-of` returns `Endemia.*` classes. Those two views disagree.
+**Extra sting:** the *previous* session on this level had already tried the same classes inside a shell helper that redirected stderr (`... 2>/dev/null | actor add - >/dev/null 2>&1 || echo "failed"`), so ~15 `Endemia.*` props were silently dropped and the level shipped without them and without anyone noticing. Two different agents lost time to the same package in two different ways. Note also that `bin/uedcli class list --flat` (unfiltered) reports the substrate packages as `DeusEx, DXOgg, Engine, TNM` — `Endemia` is not in that list, yet `--subclass-of` returns `Endemia.*` classes. Those two views disagree.
 **Workaround:** grep the trunk for the offending package and delete/replace by hand:
-`grep -rl "Class=Endemia" $UEDCTL_PROJECT/maps/<LEVEL>/actors/*/actor.t3d` then `actor delete`, substituting `DeusEx.LiquorBottle` / `DeusEx.WineBottle` / `DeusEx.Sodacan` for the Endemia clutter. A `level doctor` check for "references a package with no stub" would have caught this offline in a second.
+`grep -rl "Class=Endemia" $UEDCLI_PROJECT/maps/<LEVEL>/actors/*/actor.t3d` then `actor delete`, substituting `DeusEx.LiquorBottle` / `DeusEx.WineBottle` / `DeusEx.Sodacan` for the Endemia clutter. A `level doctor` check for "references a package with no stub" would have caught this offline in a second.
 
 ## DiveBar — ~15 props were reported as "added" and then did not exist in the level (silent no-op placement, `Endemia.*`)
 **What I tried:** the previous session on this level placed a batch of bar clutter with a helper of this shape (verbatim from `_scratch/levelbuild/dive-bar/build-03-detail.sh`):
@@ -347,15 +347,15 @@ materialize failures — with no output at all you cannot tell "queued" from "fa
     D Endemia.SinkSmall 1400 300 60 49152; D Endemia.SinkSmall 1470 300 60 49152
     D Endemia.HandDry 1540 306 84 49152
 
-**What happened:** roughly **15 `Endemia.*` props — every stool at the bar, every bottle on the back-bar shelves, both washroom sinks, the hand dryer, the alley dumpster, two ashtrays — are simply not in the level.** `bin/uedctl actor find` over all 275 actors returns **zero** names matching `WoodStool`, `GlassBottle`, `AshtraySmall`, `Dumpster`, `SinkSmall` or `HandDry`; `grep -rl "Class=Endemia" maps/DiveBar/actors/*/actor.t3d` returned nothing. The script's own `|| echo "  !! failed"` guard never fired, so nothing in its output said anything was wrong, and the milestone-3 screenshots were taken and accepted without anyone noticing the bar had no stools and the shelves no bottles. (The later `LiquorBottle`/`WineBottle`/`Liquor40oz` actors that ARE present are `DeusEx.*` classes the agent evidently substituted by hand afterwards, presumably having spotted the empty shelves in a render.)
+**What happened:** roughly **15 `Endemia.*` props — every stool at the bar, every bottle on the back-bar shelves, both washroom sinks, the hand dryer, the alley dumpster, two ashtrays — are simply not in the level.** `bin/uedcli actor find` over all 275 actors returns **zero** names matching `WoodStool`, `GlassBottle`, `AshtraySmall`, `Dumpster`, `SinkSmall` or `HandDry`; `grep -rl "Class=Endemia" maps/DiveBar/actors/*/actor.t3d` returned nothing. The script's own `|| echo "  !! failed"` guard never fired, so nothing in its output said anything was wrong, and the milestone-3 screenshots were taken and accepted without anyone noticing the bar had no stools and the shelves no bottles. (The later `LiquorBottle`/`WineBottle`/`Liquor40oz` actors that ARE present are `DeusEx.*` classes the agent evidently substituted by hand afterwards, presumably having spotted the empty shelves in a render.)
 
 **What I then did, and what it cost:** not knowing this history, I placed more of the same clutter with the same class names — this time WITHOUT stderr suppression:
 
-    bin/uedctl actor build Endemia.AshtraySmall_1b --at 192,176,44 --folder props | bin/uedctl actor add -
+    bin/uedcli actor build Endemia.AshtraySmall_1b --at 192,176,44 --folder props | bin/uedcli actor add -
 
-Every call printed `editing level 'DiveBar' (from $UEDCTL_LEVEL)` / `added 1 actor(s)` and exited 0. `bin/uedctl level status` went from `actors: 275` to `actors: 290`, i.e. the tool agreed the actors were there. They were written into the trunk (`grep -rl "Class=Endemia"` found all 8 of mine). The problem surfaced only at build time, and then on every single retry:
+Every call printed `editing level 'DiveBar' (from $UEDCLI_LEVEL)` / `added 1 actor(s)` and exited 0. `bin/uedcli level status` went from `actors: 275` to `actors: 290`, i.e. the tool agreed the actors were there. They were written into the trunk (`grep -rl "Class=Endemia"` found all 8 of mine). The problem surfaced only at build time, and then on every single retry:
 
-    materialize failed (nothing written): level references v68 code package(s) with no v69 stub: Endemia — the v69 editor cannot load a v68 `.u` directly; build the stub(s) first (`uedctl substrate stub <pkg>`) or the referencing level cannot materialize
+    materialize failed (nothing written): level references v68 code package(s) with no v69 stub: Endemia — the v69 editor cannot load a v68 `.u` directly; build the stub(s) first (`uedcli substrate stub <pkg>`) or the referencing level cannot materialize
 
 So the level had become **unbuildable**, and the only clue tying the failure to the eight `actor add` calls I had made twenty minutes earlier was the package name in that message.
 
@@ -366,12 +366,12 @@ So the level had become **unbuildable**, and the only clue tying the failure to 
 - Without stderr suppression (my case) the placement **appears to succeed**, the actor count *does* move, and the trunk is poisoned — every subsequent build of the level fails until you find and delete the actors by hand.
 Either way, the verb reports success while the outcome is wrong, and the discovery is deferred to the slowest, most expensive step in the pipeline.
 
-**Also inconsistent:** `bin/uedctl class list --flat --subclass-of DeusEx.DeusExDecoration` cheerfully lists `Endemia.Ashtray`, `Endemia.AshtraySmall_1a`..`_1f`, `Endemia.GlassBottle`, `Endemia.Candle1`, `Endemia.ToiletPaper`, `Endemia.TrashCan5` and `TNM.NapalmCanister` interleaved with the usable `DeusEx.*` classes, with no marking. That listing is where I (and the previous agent) got the class names from. Yet unfiltered `bin/uedctl class list --flat` reports the substrate packages as only `DeusEx, DXOgg, Engine, TNM` — `Endemia` is not among them. Two views of the same catalog disagree about whether the package exists.
+**Also inconsistent:** `bin/uedcli class list --flat --subclass-of DeusEx.DeusExDecoration` cheerfully lists `Endemia.Ashtray`, `Endemia.AshtraySmall_1a`..`_1f`, `Endemia.GlassBottle`, `Endemia.Candle1`, `Endemia.ToiletPaper`, `Endemia.TrashCan5` and `TNM.NapalmCanister` interleaved with the usable `DeusEx.*` classes, with no marking. That listing is where I (and the previous agent) got the class names from. Yet unfiltered `bin/uedcli class list --flat` reports the substrate packages as only `DeusEx, DXOgg, Engine, TNM` — `Endemia` is not among them. Two views of the same catalog disagree about whether the package exists.
 
-**Workaround:** `grep -rl "Class=Endemia" $UEDCTL_PROJECT/maps/<LEVEL>/actors/*/actor.t3d` to find them, `actor delete` each, and substitute `DeusEx.LiquorBottle` / `DeusEx.WineBottle` / `DeusEx.Sodacan`. Suggested fixes, in order of value: (1) reject the class at `actor build` with the message materialize already has; (2) mark or omit unstubbed packages in `class list`; (3) add a `level doctor` check for "trunk references a package with no v69 stub", so it is catchable offline in a second instead of after a multi-minute editor round-trip.
+**Workaround:** `grep -rl "Class=Endemia" $UEDCLI_PROJECT/maps/<LEVEL>/actors/*/actor.t3d` to find them, `actor delete` each, and substitute `DeusEx.LiquorBottle` / `DeusEx.WineBottle` / `DeusEx.Sodacan`. Suggested fixes, in order of value: (1) reject the class at `actor build` with the message materialize already has; (2) mark or omit unstubbed packages in `class list`; (3) add a `level doctor` check for "trunk references a package with no v69 stub", so it is catchable offline in a second instead of after a multi-minute editor round-trip.
 
 ## TubePlatform — `level doctor` is clean while additive brushes block three doorways
-**What I tried:** `bin/uedctl level doctor` after every geometry change. It reported `TubePlatform: no issues found.` throughout.
+**What I tried:** `bin/uedcli level doctor` after every geometry change. It reported `TubePlatform: no issues found.` throughout.
 **What happened:** the level had **four** separate additive semisolid brushes occluding subtracted passages, none of which `doctor` sees:
 - `CableTray_iwk14w` (a wall conduit, z60..76) crossed **all three** wall openings — the plant-room door, the service-niche mouth, and the exit passage — at 20..36 uu above a floor at z=40. `MaxStepHeight` is 25, so the top at 36 is an unsteppable bar across every route in the level.
 - `AdPanel_4fniyy` sat across the plant-room doorway, cutting a 128-uu opening down to 56 uu (crouch-only).
@@ -385,14 +385,14 @@ Either way, the verb reports success while the outcome is wrong, and the discove
 ## TubePlatform — `brush poly list --json` centroid is a bare array and polys have no index field
 **What I tried:**
 ```
-bin/uedctl brush poly list AdPanel_ndtk5h --json | python3 -c "... d['polys'] ... p['centroid']['x'] ... p['index'] ..."
+bin/uedcli brush poly list AdPanel_ndtk5h --json | python3 -c "... d['polys'] ... p['centroid']['x'] ... p['index'] ..."
 ```
 **What happened:** `TypeError: list indices must be integers or slices, not str`
 **What I expected:** the text table prints `idx` and a `centroid` rendered as `(517,1102,152)`, and `actor bbox --json` emits its vectors as `{"x":…,"y":…,"z":…}` objects. I assumed `poly list --json` used the same vector shape and carried the `idx` column. It does neither: `centroid` is `[x, y, z]`, and there is no `index`/`idx` key — poly identity is positional in the array.
 **Workaround:** `for i, p in enumerate(d['polys']): c = p['centroid']; ... c[0], c[1]`. Worth either aligning the vector encoding with `actor bbox --json` or documenting the difference in `docs/usage.md`'s `--json` note, since the two verbs are used together constantly.
 
 ## TubePlatform — no way to select a face by "which way does it point on a curve"
-**What I tried:** `bin/uedctl brush poly find <AdPanel> --facing +Y` on a panel built with `--rotate 0,-4096,0`
+**What I tried:** `bin/uedcli brush poly find <AdPanel> --facing +Y` on a panel built with `--rotate 0,-4096,0`
 **What happened:** matched nothing useful — every face of a yaw-rotated box reports `facing: slant`, so `--facing` is unusable on any brush that follows a curve. The same is true of every brush the `revolve`-built bore needed.
 **What I expected:** `--facing` snaps to `±X/±Y/±Z or slant`, which is fine for axis-aligned work, but this level is an arc: **almost every detail brush is rotated**, so the one semantic face selector effectively does not apply to the whole map.
 **Workaround:** dump `brush poly list --json` and pick the face with the largest `hypot(centroid.x, centroid.y)` (i.e. the one furthest from the arc centre) — I did this repeatedly. A `--facing outward/inward` relative to the brush's own centre, or `brush poly find --extreme +radius|+x|…`, would have removed most of the Python I wrote for this level.
@@ -400,7 +400,7 @@ bin/uedctl brush poly list AdPanel_ndtk5h --json | python3 -c "... d['polys'] ..
 ## ContainerYard — `level materialize --no-verify` reports SUCCESS while writing a truncated, unusable map
 **What I tried:**
 ```
-bin/uedctl level materialize --out $P/build/CY.dx --overwrite --no-verify
+bin/uedcli level materialize --out $P/build/CY.dx --overwrite --no-verify
 ```
 on a 265-actor level (148 brush / 117 point).
 **What happened:** it printed
@@ -429,8 +429,8 @@ is silent and it *looks* like the documented transient.
 ## ContainerYard — `brush build sheet` produces a MIRRORED texture, and neither rotating nor re-aligning obviously fixes it
 **What I tried:** a signboard on a fence, built with the documented sheet generator:
 ```
-bin/uedctl brush build sheet --plane xz --width 128 --height 32 --flag masked \
-  --at 1600,262,176 --texture Dockyard.dy_sign_04 | bin/uedctl actor add -
+bin/uedcli brush build sheet --plane xz --width 128 --height 32 --flag masked \
+  --at 1600,262,176 --texture Dockyard.dy_sign_04 | bin/uedcli actor add -
 ```
 **What happened:** in the `--game` render the sign's lettering was **mirrored** (readable only
 right-to-left). `brush poly find --json` showed the face `"facing": "+Y"`, i.e. we were behind it,
@@ -501,7 +501,7 @@ one) and delete the old actor. Two verbs and a lost Name instead of one align.
 
 ## ContainerYard (polish pass) — a datacube's text package CAN be built offline; here is the whole loop
 
-The datacube recipe says the text package is "outside uedctl" and stops there, which reads like a
+The datacube recipe says the text package is "outside uedcli" and stops there, which reads like a
 dead end. It is not — the round trip works and is worth writing down:
 
 ```
@@ -544,7 +544,7 @@ Root cause is systematic, not per-brush: `builders._tex_basis(normal)` computes 
 so **every** face any generator emits (cube, sheet, revolve, extrude...) satisfies `U x V = +N`.
 `brush poly align --wall --fresh-frame` calls the *same* `_tex_basis`, so it cannot fix it either —
 which is worth knowing before spending a render cycle on it, as this agent nearly did. The engine
-draws a face with that handedness mirrored, so a lettered texture is backwards on every uedctl-built
+draws a face with that handedness mirrored, so a lettered texture is backwards on every uedcli-built
 surface. Symmetric wall/floor textures hide it; the moment a texture contains text, it is obvious.
 
 The only lever that changes it is **`brush scale --by -1,1,1` + `brush apply-transform`**: the bake
@@ -708,7 +708,7 @@ it is what now blocks landing DiveBar's audio.
 - **`CoreTexMetal.ladder_a` carries a masked lattice**, so painting it straight onto a *solid* shaft
   wall renders the void through the rungs. It needs to be a sheet standing off the wall, or the
   `masked` flag has to come off. Same class of trap as the sheet-mirroring note above.
-- **Finding buried lights is a scriptable check uedctl could own.** Five of this level's 40 lights
+- **Finding buried lights is a scriptable check uedcli could own.** Five of this level's 40 lights
   sat strictly inside a solid brush (two inside their own door mover, one inside a structural
   column, two inside a floor dais) and therefore lit nothing — the visible symptom was pure-black
   doors and an unlit cellar. Point-in-brush-bbox over `Engine.Light` found all five in seconds, and
@@ -830,11 +830,11 @@ last good build was 04:34 with the trunk edited at 04:36.
 
 Two things worth acting on:
 
-- **`max_attempts`/`poll_interval` in `dump_obj_dependencies` (`uedctl/qualify.py`) are hardcoded
+- **`max_attempts`/`poll_interval` in `dump_obj_dependencies` (`uedcli/qualify.py`) are hardcoded
   defaults with no CLI or env override**, as is the 600 s `MAP SAVE` bound. When a level crosses
-  whatever threshold this one crossed, an agent has no lever at all short of editing uedctl source —
+  whatever threshold this one crossed, an agent has no lever at all short of editing uedcli source —
   which is exactly what a level-building agent must not do. A `--build-timeout`/
-  `UEDCTL_BUILD_TIMEOUT` escape hatch would have turned a hard stop into a slow build.
+  `UEDCLI_BUILD_TIMEOUT` escape hatch would have turned a hard stop into a slow build.
 - **The retry advice in this file needs a bound.** "Retry after ~30 s" is right for a genuine
   transient, but a deterministic failure is indistinguishable from one until you have burned an hour.
   The cheap discriminator is the control build: **materialize a known-good different level before
@@ -846,6 +846,6 @@ Also worth a number: this box has **4 cores**, and it spent much of the run at *
 agent sessions. `dev/docs/parallel-editors.md` should carry a hard ceiling, because past it every
 session's builds fail in ways that read as level defects rather than as contention. Editor containers
 also **outlive their driving process** — several were still up 4+ hours later holding memory, and a
-failed materialize reliably leaves one behind. A `uedctl` reaper for `uned-*` containers with no live
+failed materialize reliably leaves one behind. A `uedcli` reaper for `uned-*` containers with no live
 parent would recover the box without a human having to work out which container belongs to which
 session, which an agent cannot safely do since it must not kill containers it did not create.

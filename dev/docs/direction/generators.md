@@ -101,9 +101,9 @@ rule, winding and cap generation, differing only in the sweep.
 subtracted brush), sweeping along an arbitrary path, and a revolve profile that touches or crosses
 the axis.
 
-**A revolve is off-grid by construction** — uedctl never snaps coordinates for the author. An
+**A revolve is off-grid by construction** — uedcli never snaps coordinates for the author. An
 off-grid *solid* brush throws its BSP partition planes off-grid too, the primary cause of slivers
-and holes, so uedctl emits a stderr advisory when a brush is both off-grid and solid, and the
+and holes, so uedcli emits a stderr advisory when a brush is both off-grid and solid, and the
 guidance is `--solidity semisolid` for swept detail.
 
 ### Every builder angle is in unreal rotation units
@@ -137,7 +137,7 @@ family, so index bookkeeping has one owner and editing one key needs no rebuild.
 ### `brush intersect` / `brush deintersect` — the set merge
 
 UnrealEd's `BRUSH FROM INTERSECTION` is `builder-brush ∩ world-solid`, needing a live red builder
-brush and a surrounding carved room, neither of which exists in uedctl. The verbs are reframed onto
+brush and a surrounding carved room, neither of which exists in uedcli. The verbs are reframed onto
 an **in-tree SET of brush actors against a uniform assumed background**, computed **natively — no
 editor**:
 

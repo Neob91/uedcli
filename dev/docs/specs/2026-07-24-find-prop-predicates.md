@@ -109,7 +109,7 @@ NOT-a-prop → `--exclude` (mind §3.4). Cross-filter AND (`--prop … --folder 
 
 ## 5. Module shape / touchpoints
 
-- **`uedctl/propedit.py`** — `PropToken.op: str` (default `"="`); a NEW `parse_match_token` (§2);
+- **`uedcli/propedit.py`** — `PropToken.op: str` (default `"="`); a NEW `parse_match_token` (§2);
   `effective_match` dispatches on `op` across BOTH seams (§3); `TypedField.match`/`ScaleField.match`
   gain an `op` param (numeric per-axis, whole-vector-compare rejected, `~=`, existence — no `assert` on
   None); `_validate_query_value` branches per op (§3). The set/get/`actor prop` callers pass no op —
@@ -119,9 +119,9 @@ NOT-a-prop → `--exclude` (mind §3.4). Cross-filter AND (`--prop … --folder 
   neutral module (`textmatch`/`glob`) that whichever of {this spec, actor-labels} lands first
   introduces and the other reuses; do NOT cite a not-yet-built `labellib` symbol. *(Sequencing
   sub-choice §8.4.)*
-- **`uedctl/cli.py`** — the `find --prop` help documents the operator grammar (`KEY=V | KEY!=V | KEY>V
+- **`uedcli/cli.py`** — the `find --prop` help documents the operator grammar (`KEY=V | KEY!=V | KEY>V
   | KEY>=V | KEY<V | KEY<=V | KEY~=GLOB | KEY`). No new flag.
-- **`uedctl/dispatch.py`** — the `find --prop` block calls `parse_match_token`; the AND-within loop,
+- **`uedcli/dispatch.py`** — the `find --prop` block calls `parse_match_token`; the AND-within loop,
   typo protection, and `SchemaError` handling are unchanged.
 
 No model/trunk change.

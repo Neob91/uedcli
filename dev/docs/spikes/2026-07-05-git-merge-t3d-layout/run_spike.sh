@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# De-risk spike for the git-native model (decisions.md 2026-07-05; spec 2026-07-05-uedctl-git-native-model-design).
-# Validates `git merge` on the EXACT trunk layout:  uedctl/maps/<lvl>/actors/<name>/{actor.t3d, order_value}
-# across the scenarios the two cold reviewers flagged. Pure git — no editor, no uedctl code.
+# De-risk spike for the git-native model (decisions.md 2026-07-05; spec 2026-07-05-uedcli-git-native-model-design).
+# Validates `git merge` on the EXACT trunk layout:  uedcli/maps/<lvl>/actors/<name>/{actor.t3d, order_value}
+# across the scenarios the two cold reviewers flagged. Pure git — no editor, no uedcli code.
 # Creates a throwaway repo in a mktemp dir (nothing touches the real tree). Prints PASS/FAIL vs expectation.
 set -uo pipefail
 
@@ -12,7 +12,7 @@ git init -q
 git config user.email spike@x ; git config user.name spike
 git config merge.conflictstyle merge >/dev/null 2>&1 || true
 
-L=uedctl/maps/lvl/actors
+L=uedcli/maps/lvl/actors
 FAILS=0
 
 mk() { # <name> <order_value> <body-line>
@@ -104,10 +104,10 @@ o=$(merge_scenario s6c 'sed -i "s/Title=Test/Title=Nano/" "$L/LevelInfo_000000/a
 check "6c LevelInfo NON-adjacent-line edits" CLEAN "$o"
 
 # 7. the 'name' file question. 7a: a shared name file both branches change -> conflict.
-git checkout -q -B s7base "$BASE"; printf 'lvl.dx\n' > uedctl/maps/lvl/name; git add -A; git commit -qm s7base >/dev/null
+git checkout -q -B s7base "$BASE"; printf 'lvl.dx\n' > uedcli/maps/lvl/name; git add -A; git commit -qm s7base >/dev/null
 B7=$(git rev-parse HEAD)
-git checkout -q -B s7a "$B7"; printf 'aa.dx\n' > uedctl/maps/lvl/name; git add -A; git commit -qm s7A >/dev/null
-git checkout -q -B s7b "$B7"; printf 'bb.dx\n' > uedctl/maps/lvl/name; git add -A; git commit -qm s7B >/dev/null
+git checkout -q -B s7a "$B7"; printf 'aa.dx\n' > uedcli/maps/lvl/name; git add -A; git commit -qm s7A >/dev/null
+git checkout -q -B s7b "$B7"; printf 'bb.dx\n' > uedcli/maps/lvl/name; git add -A; git commit -qm s7B >/dev/null
 git checkout -q s7a
 if git merge -q --no-edit s7b >/dev/null 2>&1; then o7=CLEAN; else o7=CONFLICT; git merge --abort 2>/dev/null; fi
 check "7a shared 'name' file both changed" CONFLICT "$o7"

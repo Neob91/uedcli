@@ -26,7 +26,7 @@ textured with a fire texture) plus a *separate coloured light* — the flame has
 5. **Place a light at the flame's centre**, tint it orange, and set its `LightEffect` to **`LE_FireWaver`**
    (or `LE_TorchWaver`) so the cast light flickers like fire.
 
-### uedctl pipeline (what you run)
+### uedcli pipeline (what you run)
 
 ```
 # 1. the flame: a masked, 2-sided, nonsolid, Unlit decoration sheet (all flags set at build; sheets are 2-sided + nonsolid by default)

@@ -140,6 +140,6 @@ collision + round-trip test).
 - [Class-package collision spike](2026-06-19-class-package-collision.md) — the import-honors-
   qualifier finding this spike builds on; that spike's "EXPORT is still always bare" finding is
   unaffected.
-- [`qualify.py`](../../../uedctl/qualify.py) — `qualify_level_textures`/`dump_obj_dependencies`, the
+- [`qualify.py`](../../../uedcli/qualify.py) — `qualify_level_textures`/`dump_obj_dependencies`, the
   existing texture-side implementation this spike found does NOT generalize to classes as-is.
 - `../board/to-spec.md` — Class-package autoload for apply.

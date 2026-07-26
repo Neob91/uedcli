@@ -12,12 +12,12 @@ fix; characterized, not forced.**
 
 **Reader with no prior context:** UnrealEd builds the world BSP for a level by feeding brushes
 (convex solids the mapper places) into the engine one at a time. Each brush *adds to* or *subtracts
-from* a growing binary-space-partition tree of the world. Our native builder (`uedctl-native`)
+from* a growing binary-space-partition tree of the world. Our native builder (`uedcli-native`)
 currently takes a shortcut — it CSG's brushes into a flat surface list and partitions that once — so
 its tree is leaner and not byte-identical to UnrealEd's. To get a byte-identical `.dx` we must port
 UnrealEd's actual *incremental* algorithm. This doc is the decoded algorithm.
 
-**Confidence:** ✅ uedctl-used/live-verified · 🔬 live-probed (static disassembly) · 📖 binary-extracted.
+**Confidence:** ✅ uedcli-used/live-verified · 🔬 live-probed (static disassembly) · 📖 binary-extracted.
 **Evidence:** `../re-raw-zones/bspbrushcsg-filter-decode.md` (full VA-cited disasm, this session) +
 `../re-raw-zones/bspbuild-splitpolylist-decode.md` (the already-decoded `bspBuild`/`SplitPolyList`/
 `FindBestSplit`/`bspAddNode`/`csgRebuild` half). Read those for the raw instructions; this section is
@@ -475,7 +475,7 @@ needs a live coplanar trace; do not re-apply blind).
 ### 8.6 The FIRST soup divergence is OVER-production over a DEAD node, NOT under-fragmentation (PINNED 2026-07-17) 🔬 ✅
 
 **This overturns the standing "§8.1 world-face split-and-re-add UNDER-fragments" hypothesis.** A
-proper **pre-repartition SOUP differential** (new harness `soup_cmp.py` + the `UEDCTL_BSPCSG_SOUP_ONLY`
+proper **pre-repartition SOUP differential** (new harness `soup_cmp.py` + the `UEDCLI_BSPCSG_SOUP_ONLY`
 hook in `bspcsg.rs`) compared native's **post-merge soup** against the editor golden's `Model.Polys`
 — which is *exactly* the editor's post-merge, pre-`SplitPolyList` soup (measured: full castle 853
 `Model.Polys` vs 1156 final nodes; the SplitPolyList INPUT, not the final faces). The finding:
@@ -705,7 +705,7 @@ This closes the §10.5 trace to full mechanism, names every actor/node, disasm-p
 results, and pins the one architectural fact that reframes the whole residual. Evidence + throwaway
 harness reverted; instrumentation added to `bspcsg.rs` then removed (soup back to baseline 24→**N32
 `0/0`, N33 `onlyN=2/onlyE=1`**, full `21/15`). Actors identified with `find_box.py`; descent traced
-with a `UEDCTL_BSPCSG_TRACE` gate on the roof-underside poly (`normal≈(0,0,-1)`, `base.z≈248`).
+with a `UEDCLI_BSPCSG_TRACE` gate on the roof-underside poly (`normal≈(0,0,-1)`, `base.z≈248`).
 
 **The three actors (measured, world-space bboxes):**
 | brush idx / N | actor | oper | role |
@@ -799,7 +799,7 @@ The editor's call-SITE (`ret`) separates the phases: `ret=0x100317df` = `AddBrus
 Add, `ret=0x10034924` = the Subtract leaf, `ret=0x10031bfc` = `FilterWorldThroughBrush` re-add, and
 `ret=0x100345f8`/`0x100346bb`/`0x100aa284` = the final `bspRepartition`/`SplitPolyList` rebuild. The
 native counterpart is `native_tree_dump.py N` — the same brushes through `build_geometry_bspcsg` with
-the env-gated `UEDCTL_BSPCSG_TREE_DUMP` hook (`bspcsg.rs trace_node_add`), phase-tagged
+the env-gated `UEDCLI_BSPCSG_TREE_DUMP` hook (`bspcsg.rs trace_node_add`), phase-tagged
 `ADD`/`SUB`/`FWTB`. `compare_trees.py N` aligns the two LOOP-2 streams under a **plane-normalised** key
 `(place, ilink, nv, N, d=N·B)` — so a different base POINT on the same plane (e.g. roof `z=248` at
 `(160,160)` vs `(217.28,136.27)`) is treated equal (bspAddNode stores the plane, not the base).
@@ -859,11 +859,11 @@ leaf-ADD multiset and **deliberately ignores each add's parent/linkage**.
   `FilterLoop` iteration — `goto SP_Front/SP_Back` included — falls through here; `iNode=[ebp-0x5a4]`,
   `EdPoly=[ebp-0x5ac]`, `Model=[ebp-0x5b4]`), conditional on `EdPoly->iLink==ILINK`, logging the exact
   tree path the poly + its fragments descend. The native counterpart is the env-gated `DESC` trace in
-  `filter_ed_poly` (`bspcsg.rs`, `UEDCTL_BSPCSG_DESCENT=<ilink>`).
+  `filter_ed_poly` (`bspcsg.rs`, `UEDCLI_BSPCSG_DESCENT=<ilink>`).
 - `editor_struct.py N` — gdb dumps the editor's **whole** `Model->Nodes` (plane, `iFront`, `iBack`,
   `iPlane`, `iSurf`, `NumVertices`) at the entry to `bspBuildFPolys` (`0x10036090`) — the complete
   incremental tree the instant before `bspRepartition` rebuilds it. Native counterpart: the env-gated
-  `STRUCT` dump in `build_geometry_bspcsg` (`UEDCTL_BSPCSG_TREE_STRUCT=1`). `tree_struct_diff.py N`
+  `STRUCT` dump in `build_geometry_bspcsg` (`UEDCLI_BSPCSG_TREE_STRUCT=1`). `tree_struct_diff.py N`
   diffs the two node tables.
 - `oracle_pp.py N` — the `bspAddNode` oracle AUGMENTED with the **parent node's plane**
   (`PP=X,Y,Z,W`); native's `trace_node_add` now also emits `PP`/`pnv`. This confirms the leaf-ADD
@@ -917,7 +917,7 @@ routes through different splitters, so a from-scratch `bspRepartition` sees a di
 coplanar-chain-head parity problem, materially larger than §10.7's framing — flagged for Andrzej in
 `board/inbox.md`). Evidence logs `editor-descent-33`, `editor-struct-33`, `oracle-pp-33`,
 `native-{32,33}` (now PP-augmented) live beside the harness. The `bspcsg.rs` probes
-(`UEDCTL_BSPCSG_DESCENT`, `UEDCTL_BSPCSG_TREE_STRUCT`, and `PP`/`pnv` in `UEDCTL_BSPCSG_TREE_DUMP`) are
+(`UEDCLI_BSPCSG_DESCENT`, `UEDCLI_BSPCSG_TREE_STRUCT`, and `PP`/`pnv` in `UEDCLI_BSPCSG_TREE_DUMP`) are
 env-gated — the default build path is byte-unchanged (N=32 still `compare_trees.py`-identical; full
 offline suite green).
 
@@ -1020,7 +1020,7 @@ temporary pointer array filtering out `NumVertices==0` and hands THAT (in elemen
 `SplitPolyList`. So the SplitPolyList input order == `Element[0..Num)` (nv>0) in array order. The
 oracle breakpoints `0x1004a041`, walks `Element`, and dumps each FPoly's normal/base and every vertex
 (`FPoly` fields: Base=+0x00, Normal=+0x0c, Vertex[k]=+0x30+12k, NumVertices=+0x1c0, iLink=+0x1c4).
-`polys_order_diff.py` diffs it against native's post-merge soup (`UEDCTL_BSPCSG_SOUP_ORDER` env hook),
+`polys_order_diff.py` diffs it against native's post-merge soup (`UEDCLI_BSPCSG_SOUP_ORDER` env hook),
 keying each face by `(normal, w=N·V0, sorted-vertex-set)` — base/first-vertex alone are NOT stable
 identities (base is the texture-mapping point; the vertex ring can be rotated).
 
@@ -1071,7 +1071,7 @@ the plane-prefix at 51. Separately, the editor sets `node_flags=8` on 598 nodes 
 whole tree) that native never sets — a node-flag derivation gap, orthogonal to tree shape. Both are
 tracked in `board/inbox.md`; the repartition-order + `FindBestSplit` splitter-choice half (this
 task) is complete. Harness committed: `editor_polys_oracle.py`, `fbs_stride_oracle.py`,
-`polys_order_diff.py` beside the oracle; `UEDCTL_BSPCSG_SOUP_ORDER` env hook in `bspcsg.rs` (env-gated,
+`polys_order_diff.py` beside the oracle; `UEDCLI_BSPCSG_SOUP_ORDER` env hook in `bspcsg.rs` (env-gated,
 default path byte-unchanged, mirrors the committed `SOUP_ONLY`/`TREE_STRUCT` hooks).
 
 ### 10.11 The structural remainder is NOT a `bspcsg.rs` second-layer gap — it is `zones.rs` Pass D node-fragmentation; and `node_flags=8/0x10` are render-only occlusion bits (2026-07-18) 🔬 ✅
@@ -1173,7 +1173,7 @@ the gap is a `bspOptGeom` T-junction-DETECTOR bug.**
 **The oracle — `editor_preopt_nodes.py` (Model->Nodes at `bspOptGeom` ENTRY `0x10036870`).** Dumps
 every node's plane + iF/iB/iP + `NumVertices` at the exact instant `bspOptGeom` begins — i.e. the
 PRE-weld tree, post-`bspRefresh`/post-Pass-D, engine child convention. Diffed against native's
-`UEDCTL_BSPCSG_PREOPT_NODES` dump (added to `bspcsg.rs`, env-gated, default path byte-unchanged).
+`UEDCLI_BSPCSG_PREOPT_NODES` dump (added to `bspcsg.rs`, env-gated, default path byte-unchanged).
 
 **Finding 1 — the "9.1 vs 3.8 verts/node" comparison mixed a DEAD-ORPHAN array size with a live
 count.** The editor's pre-opt `Verts.Num = 10518` (the "9.1/node" figure) is NOT the live tree — only
@@ -1215,7 +1215,7 @@ edge-interior weld it currently rejects), plus a secondary `bspcsg.rs` point-poo
 repartition pool is 1797 pts; the editor keeps ~2091 — native's incremental CSG over-produces
 transient points, 6627 uncleared, and the clear+rebuild over-merges the ~294 T-corner deltas). This
 **reverses `fbb0c9f8`'s conclusion** ("not the detector"): it IS the detector. Committed this pass:
-the `editor_preopt_nodes.py` oracle, the `UEDCTL_BSPCSG_PREOPT_NODES` hook in `bspcsg.rs`, the
+the `editor_preopt_nodes.py` oracle, the `UEDCLI_BSPCSG_PREOPT_NODES` hook in `bspcsg.rs`, the
 prototype/evidence doc. NO change to `bspcsg.rs` logic or `bspoptgeom.rs` (the detector fix is a
 byte-exact re-decode that wants its own scoped task + review gate). Flagged for re-scope.
 
@@ -1297,7 +1297,7 @@ remains and blocks the no-clear + no-vert-repack switch that would keep the edit
 it (the `clear`+`reclaim`+`keeppool` toggles all tried live) does NOT reproduce the editor's specific
 2091 pool — it produces *differently-wrong* pools (reclaim→2513 with the wrong orphan set; keeppool→
 2884 with 1313 spurious) and does **not** move the +37 over-weld. **Committed this pass:** the
-tree-safe FWTB bound-pruning fix (`bspcsg.rs`), the `UEDCTL_BSPCSG_POOLDUMP` uncleared-pool
+tree-safe FWTB bound-pruning fix (`bspcsg.rs`), the `UEDCLI_BSPCSG_POOLDUMP` uncleared-pool
 instrumentation hook, and this decode. **NOT committed:** no `bspoptgeom.rs` change (detector frozen),
 no no-clear/reclaim (would regress or mis-produce the pool). Follow-on flagged in `board/inbox.md`.
 
@@ -1522,7 +1522,7 @@ CLEAR" and proposed a risky no-clear repartition. **That diagnosis is WRONG on m
 cheap RAW measurements disprove it and pin the real cause:
 
 - **The clear is not the cause.** Gating out the `model.points.clear()` at repartition
-  (`UEDCTL_BSPCSG_NOCOMPACT`, throwaway) leaves the total pool fat (3838) but the **referenced**-point
+  (`UEDCLI_BSPCSG_NOCOMPACT`, throwaway) leaves the total pool fat (3838) but the **referenced**-point
   count IDENTICAL: `refd_points = 1681` with OR without the clear. The rebuilt tree genuinely
   *references* only 1681 distinct points either way — so no clear/no-clear knob moves the on-disk pool
   (the editor drops unreferenced points at `bspRefresh` regardless). Keeping the pool would only add
@@ -1536,7 +1536,7 @@ cheap RAW measurements disprove it and pin the real cause:
   orphan point; native stored a ring CORNER (only 103 orphan bases, 448 distinct).
 - **Root cause: the authored `Origin` was dropped in marshalling.** `FPoly::new(verts)` defaults
   `base = verts[0]`, and `_build_brush_input` passed verts/normals/texture-axes but **never the T3D
-  `Origin=`** (`poly.origin`, which `uedctl/model.py` already parses). So every surf `pBase` welded onto
+  `Origin=`** (`poly.origin`, which `uedcli/model.py` already parses). So every surf `pBase` welded onto
   a corner. The editor keeps `EdPoly->Base` = the stored texture origin (usually not a vertex): e.g.
   the World shell's x=1150 face has authored `Origin (0,0,210)` → LOOP-1 base-snap onto the plane →
   `(1150,0,210)`, matching the editor byte-for-byte.

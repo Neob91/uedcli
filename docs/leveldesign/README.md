@@ -1,6 +1,6 @@
-# Level design with uedctl
+# Level design with uedcli
 
-Practical guidance for building good, buildable **UnrealEngine-1** levels **with uedctl** — what makes
+Practical guidance for building good, buildable **UnrealEngine-1** levels **with uedcli** — what makes
 a level work, mapped onto the verbs you actually run. You author a git-tracked **T3D trunk** with small
 composing verbs; the editor is only ever touched to `level materialize` / `level preview`.
 
@@ -21,7 +21,7 @@ class name, a DX dimension, or the multi-path immersive-sim approach.
 
 ## The composing pattern
 
-uedctl has no monolithic "make a room" command. Instead small verbs pipe together. *Generators* print a
+uedcli has no monolithic "make a room" command. Instead small verbs pipe together. *Generators* print a
 T3D snippet to stdout; `actor add -` writes it into the trunk; per-surface and per-actor edits run
 model-side (no editor):
 
@@ -65,8 +65,8 @@ edit inside the editor by hand — the verbs write the trunk, the editor only bu
   verbs, placeable classes, and their editor-**editable** properties. Engine-internal / non-editable
   properties, binary citations, and the asset-creation / modding / editor-GUI depth are out of scope
   for these user guides.
-- Two "group" senses differ and neither is uedctl's `folder`: a texture's `Package.Group.Name` (browser
-  convenience) vs the T3D `Group=` actor property. uedctl's own **folder** (`actor find --folder …`) is a
+- Two "group" senses differ and neither is uedcli's `folder`: a texture's `Package.Group.Name` (browser
+  convenience) vs the T3D `Group=` actor property. uedcli's own **folder** (`actor find --folder …`) is a
   third, separate organizational dimension that never reaches the built map.
 
 **The Deus Ex design philosophy** — problems-not-puzzles, multiple keyed solutions, readable stealth,

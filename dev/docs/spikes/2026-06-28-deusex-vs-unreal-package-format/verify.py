@@ -4,10 +4,10 @@ format level. The real reason a DeusEx code package won't LOAD into the
 UT-lineage UED22 editor is class-graph divergence (its own Engine/Core), not the
 version field.
 
-Pure offline, reads bytes directly. Run from Tools/uedctl with the .venv-uedctl python."""
+Pure offline, reads bytes directly. Run from Tools/uedcli with the .venv-uedcli python."""
 import struct, sys
 sys.path.insert(0, ".")
-from uedctl import dxpkg
+from uedcli import dxpkg
 
 MAGIC = 0x9E2A83C1
 

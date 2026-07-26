@@ -18,7 +18,7 @@ There is **no session, no session id, and no event-sourced session store** — g
 and the merge engine, and work in progress is simply an uncommitted or feature-branch state in
 the project's own repo.
 
-- **uedctl reads and writes the T3D files; git is the user's.** No branch, merge, or commit
+- **uedcli reads and writes the T3D files; git is the user's.** No branch, merge, or commit
   verbs — the surface never grows a VCS layer.
 - **Per-actor files are what make this work.** One directory per actor (`actors/<name>/`) holding
   a constant-named `actor.t3d`, so disjoint edits touch disjoint files and auto-merge with zero
@@ -33,7 +33,7 @@ the project's own repo.
 - **An actor's name lives only in its directory name** — stripped from the stored body and
   re-injected as `Name=` at materialize, so a directory name and a body `Name=` can never drift.
 - The one bespoke store that survives is the **stash** (captured actor sets), and it is
-  machine-local throwaway under the gitignored in-repo `.uedctl/` — not a session, not durable
+  machine-local throwaway under the gitignored in-repo `.uedcli/` — not a session, not durable
   state.
 
 **One T3D tree format across trunk, stash and prefab (INVARIANT).** All three on-disk T3D trees —
@@ -75,7 +75,7 @@ the ingest tool" — after import, the only remaining editor seam is `level mate
 
 - **`--game` (the DEFAULT) — the faithful tier.** Delivers the map into a warm per-user headless
   game container and renders truly-lit first-person stills: freezes the world, ghosts the player,
-  poses the pawn per shot, and captures the engine's own frame over a uedctl-owned TCP link (VNC
+  poses the pawn per shot, and captures the engine's own frame over a uedcli-owned TCP link (VNC
   is dev-debug only). What the *player* sees — for hero shots and lighting judgment. It is the
   default because a misleading default feedback loop is worse than a slow one: the offline draft
   silently mis-renders overlapping-subtract geometry (doorways) and shows no lighting, meshes or
@@ -96,7 +96,7 @@ The editor is the preview driver in **neither** tier; the editor-screenshot rend
   Git branches plus `git merge` give the same merge semantics for free — per-actor T3D files merge
   natively — and collapse `session.py`/`replay.py`/`merge.py`/`audit.py`/`ownership.py`. Sessions
   as a concept are dropped, not squashed.
-- **uedctl wrapping git** (branch/merge verbs). The cleanest surface is files-only; git stays git,
+- **uedcli wrapping git** (branch/merge verbs). The cleanest surface is files-only; git stays git,
   driven by the user.
 - **Keeping `apply`'s 3-way reconcile and its dual `--to-map-file` / `--to-t3d-tree` modes.** Git
   is the merge engine now and the trunk *is* the T3D tree, so "apply to a tree" is just a commit;
@@ -140,7 +140,7 @@ The editor is the preview driver in **neither** tier; the editor-screenshot rend
   — `CAMERA ALIGN` auto-frames from one canonical angle and a free pose never reaches the pixels —
   and editor-lit is not in-game baked lighting.
 - **Putting previewing in another tool, or shelling out to its session/link.** Previewing is a
-  uedctl authoring concern — uedctl owns the trunk, materialize, the level hash and the verb — and
+  uedcli authoring concern — uedcli owns the trunk, materialize, the level hash and the verb — and
   routing through another tool's session lifecycle couples the two.
 - **Always re-materializing before a preview.** Materialize is the expensive step; a level-hash
   freshness check reuses an up-to-date build, and because the hash guarantees "current for the

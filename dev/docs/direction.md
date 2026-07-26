@@ -1,6 +1,6 @@
-# uedctl — direction (what we're building toward)
+# uedcli — direction (what we're building toward)
 
-This is the **compiled target**: the coherent end-state uedctl is being built toward, stated
+This is the **compiled target**: the coherent end-state uedcli is being built toward, stated
 in the present tense even where the code doesn't match yet. It is *synthesized from*
 [`decisions.md`](decisions.md) — newer decisions override older ones and the superseded points
 are dropped here (this doc shows the **net** philosophy, not the history). Each section cites

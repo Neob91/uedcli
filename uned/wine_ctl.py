@@ -289,7 +289,7 @@ def cmd_click(args: argparse.Namespace) -> int:
 
 def cmd_drag(args: argparse.Namespace) -> int:
     """Paced relative-motion drag in a viewport — the verified way to drive UnrealEd's mouse
-    rotate/move (dev/docs/specs/2026-06-18-uedctl-viewport-drag-sensitivity-findings.md). RMB
+    rotate/move (dev/docs/specs/2026-06-18-uedcli-viewport-drag-sensitivity-findings.md). RMB
     drag = camera rotate; Ctrl+RMB (`--modifier ctrl`) = rotate the selected actor(s).
 
     UnrealEd warps the captured cursor back to a recenter anchor every frame and derives the delta

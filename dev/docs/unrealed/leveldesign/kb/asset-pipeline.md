@@ -2,7 +2,7 @@
 
 The modding-adjacent pipeline for getting **custom content** into Deus Ex —
 packages and `ucc make`, meshes, textures, sounds, music, custom pickups/augs,
-and the credits screen. A uedctl user authoring geometry through verbs never
+and the credits screen. A uedcli user authoring geometry through verbs never
 touches most of this; it is kept in full as the internal reference for when a
 level needs a bespoke mesh, texture, sound or item.
 

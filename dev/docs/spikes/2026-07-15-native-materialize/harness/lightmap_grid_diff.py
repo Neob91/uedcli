@@ -20,11 +20,11 @@ import sys
 from collections import Counter
 from pathlib import Path
 
-ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedctl")
+ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedcli")
 sys.path.insert(0, str(ROOT))
 
-from uedctl.native import umodel as UM  # noqa: E402
-from uedctl.native.pkg_write import parse_package  # noqa: E402
+from uedcli.native import umodel as UM  # noqa: E402
+from uedcli.native.pkg_write import parse_package  # noqa: E402
 
 NATIVE = "/home/neob91/Games/LutrisDX/drive_c/DX/LUM/_scratch/gtruth/NativeCastle.dx"
 EDITOR = "/home/neob91/Games/LutrisDX/drive_c/DX/Maps/Test_Castle.dx"

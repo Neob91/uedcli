@@ -1,7 +1,7 @@
 # 82c §12 — render `Bounds` (c0) + `LeafHulls` (cc): decode, then FAITHFUL EMIT (byte-structure parity)
 
 > **UPDATE 2026-07-18 (IMPLEMENTED): both aux arrays are now EMITTED via a faithful `FilterBound`
-> port** in `uedctl-native/src/passes.rs::bsp_build_bounds` (replacing the old empty-Bounds +
+> port** in `uedcli-native/src/passes.rs::bsp_build_bounds` (replacing the old empty-Bounds +
 > approximate-hull stub). The port follows the byte-decoded editor algorithm in
 > `re-raw-zones/bounds-and-zonelayout.md` §1.1–§1.8 verbatim. Ground-truth raw-byte state
 > (`harness/ground_truth_bytediff.py`, `NativeCastle.dx` vs `Test_Castle.dx`):
@@ -101,7 +101,7 @@ surface (§50) for zero byte-gate progress, so native still ships `Bounds` empty
 | LeafHulls (cc) | 15 466 | **15 466** | **length byte-EXACT; all 308 plane-ref sets byte-IDENTICAL**; 174/308 bboxes byte-equal | ≤0.005-unit drift on 120/308 bboxes, same pBase cause |
 
 Both aux arrays are now built by the faithful `FilterBound` port
-(`uedctl-native/src/passes.rs::bsp_build_bounds`; recipe = `bounds-and-zonelayout.md` §1). The only
+(`uedcli-native/src/passes.rs::bsp_build_bounds`; recipe = `bounds-and-zonelayout.md` §1). The only
 remaining gap is the sub-0.005-unit float drift in the FBox/bbox corners, which is **inherited from
 the not-yet-byte-identical `Points` pool** (the node Base `Points[pBase]` is 0/1156 byte-equal to the
 editor — same plane, different representative vertex). Closing that gap requires Point-pool parity, a

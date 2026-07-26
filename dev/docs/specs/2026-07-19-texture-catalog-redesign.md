@@ -1,10 +1,10 @@
 # Spec: texture catalog redesign — lazy native decode, content-addressed cache, `show` + similarity
 
 **Status:** specced (awaiting review gate → plan → build).
-**Requested by:** Andrzej (2026-07-19, session `uedctl:board`). A re-design of the whole texture
+**Requested by:** Andrzej (2026-07-19, session `uedcli:board`). A re-design of the whole texture
 catalog, not just the `texture show` add-on. Supersedes the narrower
 [`specs/2026-07-19-texture-show-for-llm.md`](2026-07-19-texture-show-for-llm.md).
-**Ephemeral:** per the uedctl `CLAUDE.md`, this spec is scratch. The load-bearing decisions +
+**Ephemeral:** per the uedcli `CLAUDE.md`, this spec is scratch. The load-bearing decisions +
 rejected alternatives are recorded in the durable append-only
 [`dev/docs/decisions.md`](../decisions.md) (entry **2026-07-19 03:58 UTC — texture catalog
 redesign**). On build, fold the outcome into `architecture.md` (replace the current "Texture catalog"
@@ -95,7 +95,7 @@ case.
 
 ### 4a. Per-user derived cache — regenerable, never committed
 
-Root: `~/.uedctl/cache/textures/` (`config.texture_images_root`).
+Root: `~/.uedcli/cache/textures/` (`config.texture_images_root`).
 
 - **`images/<hh>/<pixel-hash>.png`** — the decoded image, content-addressed. The key is the **bare
   hex sha256 digest** (no `sha256:` prefix — the current code stores `"sha256:"+digest`; strip it);
@@ -104,7 +104,7 @@ Root: `~/.uedctl/cache/textures/` (`config.texture_images_root`).
 - **`packages/<package-index-key>.json`** — the per-package **decoded index**, keyed like the
   `class list`/`class show` schema cache: the **filename encodes the full stat identity**
   `(CACHE_VERSION, realpath, size, st_mtime_ns)` (architecture.md schema-cache §), NOT the bare package
-  stem. This matters because uedctl is a multi-project CLI where **project overlays shadow base packages
+  stem. This matters because uedcli is a multi-project CLI where **project overlays shadow base packages
   by stem** — stock `CoreTexMetal.utx` and a project's modified overlay both have stem `CoreTexMetal`,
   so a stem-keyed file would collide + thrash + briefly serve the wrong project's data. Realpath-keying
   (the schema cache's exact trick) gives each distinct file its own entry; a changed
@@ -136,7 +136,7 @@ today's UCC path.
 
 ### 4b. Per-project tracked classification — git-committed, pixel-hash-keyed
 
-Root: the project's catalog dir (`uedctl.toml` `catalog` key, default `<root>/texture-catalog/`).
+Root: the project's catalog dir (`uedcli.toml` `catalog` key, default `<root>/texture-catalog/`).
 
 - **`classified/<hh>/<pixel-hash>.json`** — ONE file per classified *image* (`<hh>` = digest's first
   2 hex chars; `<pixel-hash>` = bare hex digest). Contents:
@@ -294,7 +294,7 @@ texture search --similar CoreTexMetal.Area51Wall_A --max 12 --json
 set matches UCC and `undecodable` covers only genuinely corrupt/unparseable textures — not a supported
 format. `utexture.py` decodes **P8 palettized textures only** today (`fmt==0`, local palette); it
 returns nothing for RGBA8/DXT1/imported-palette/other formats until the prerequisite lands. The DX
-corpus is ~100 % P8, so this redesign is complete FOR DEUS EX. But `direction.md` aims uedctl at
+corpus is ~100 % P8, so this redesign is complete FOR DEUS EX. But `direction.md` aims uedcli at
 **generic UE1** (incl. `.unr` UT/Unreal, which ship non-P8 textures), and UCC `batchexport` (being
 dropped) exported *every* format. So on a non-P8 substrate this is a **coverage regression**: such
 textures would otherwise become `undecodable` index rows (§4a) on a non-P8 substrate. **RESOLVED

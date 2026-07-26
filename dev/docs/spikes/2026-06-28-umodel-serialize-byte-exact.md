@@ -29,15 +29,15 @@ corpus validation + per-map EXACT/MISMATCH table). It builds ON the read parser
 ## Reproduce
 
 ```
-cd Tools/uedctl/dev/docs/spikes/bspspike
+cd Tools/uedcli/dev/docs/spikes/bspspike
 # per-map EXACT/MISMATCH table + final "N/M models byte-exact":
-/home/human/src/dx_lum/.venv-uedctl/bin/python test_umodel_serialize.py
+/home/human/src/dx_lum/.venv-uedcli/bin/python test_umodel_serialize.py
 # or the standalone corpus runner (sample + all-maps sweep):
-/home/human/src/dx_lum/.venv-uedctl/bin/python umodel_serialize.py
+/home/human/src/dx_lum/.venv-uedcli/bin/python umodel_serialize.py
 # or pytest (3 tests; ~125s — the prefix-ambiguity test re-walks every model twice):
-/home/human/src/dx_lum/.venv-uedctl/bin/python -m pytest test_umodel_serialize.py -q
+/home/human/src/dx_lum/.venv-uedcli/bin/python -m pytest test_umodel_serialize.py -q
 # one map:
-/home/human/src/dx_lum/.venv-uedctl/bin/python umodel_serialize.py <path.dx>
+/home/human/src/dx_lum/.venv-uedcli/bin/python umodel_serialize.py <path.dx>
 ```
 
 Result: `72419/72419 models byte-exact` across the 82 v68 install maps (the runner
@@ -145,7 +145,7 @@ Everything else: **0 mismatches, 0 exceptions** across 72419 v68 Model exports.
 ## What the next step (native `.dx` write + game-load) must watch for
 
 1. **The geometry proof is for RE-serialization of an already-built `Model`.** It
-   proves the serial *format* inverse is exact — NOT that uedctl can *generate*
+   proves the serial *format* inverse is exact — NOT that uedcli can *generate*
    the node/surf/vert/leaf/zone arrays. Generating them is the offline BSP/CSG
    build (D2). This spike removes the "serialization is an unverified second port"
    risk; the long pole remains the build that produces the arrays.
@@ -167,7 +167,7 @@ Everything else: **0 mismatches, 0 exceptions** across 72419 v68 Model exports.
    prefix is the natural choice for a freshly built level Model, matching every
    v69 *level* Model in the corpus.
 5. **The decisive remaining game-side gate** (per `decisions.md` 2026-06-28) — does
-   a `Model` written *natively by uedctl* (not via the editor's `EDIT PASTE`) load
+   a `Model` written *natively by uedcli* (not via the editor's `EDIT PASTE`) load
    and spawn in the actual game? — is now unblocked on the serialization side: the
    body bytes are reproducible exactly, so a hand-built minimal carved-room `Model`
    can be emitted natively and load-tested in `dx-game`.

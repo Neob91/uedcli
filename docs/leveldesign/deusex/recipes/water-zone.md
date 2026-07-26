@@ -27,7 +27,7 @@ underwater sound. A plain `bWaterZone` `ZoneInfo` is swimmable but loses those c
    behaves as water — you swim in it.
 5. **Rebuild** and go for a swim.
 
-### With uedctl
+### With uedcli
 
 ```bash
 # 1. Carve the pool (grid-aligned).
@@ -68,7 +68,7 @@ A pain zone damages anyone inside it. It is a normal sealed zone whose `ZoneInfo
    `ElectricityEmitter` for a visible/audible cue matching the damage type (see
    [`particles.md`](particles.md)).
 
-### With uedctl
+### With uedcli
 
 ```bash
 # 1. Seal the doorway as a zone portal. A vertical sheet across the opening = --plane xz (the

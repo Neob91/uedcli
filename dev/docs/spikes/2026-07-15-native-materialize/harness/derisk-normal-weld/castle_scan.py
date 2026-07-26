@@ -69,7 +69,7 @@ def all_orderings(verts):
     return outs
 
 TRUNK = sys.argv[1] if len(sys.argv) > 1 else \
-    "/home/neob91/Games/LutrisDX/drive_c/DX/LUM/_scratch/castle/uedctl/maps/foobar/actors"
+    "/home/neob91/Games/LutrisDX/drive_c/DX/LUM/_scratch/castle/uedcli/maps/foobar/actors"
 
 nonaxis = 0          # non-axis faces with a valid winding normal
 authored_kept = 0    # dot(calc_raw, authored) > 0.9999  (native keeps authored → must stay byte-exact)

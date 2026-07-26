@@ -34,9 +34,9 @@ def calc_normal(v):
     return (f32(n[0]*inv), f32(n[1]*inv), f32(n[2]*inv))
 
 T3D = sys.argv[1] if len(sys.argv) > 1 else \
-    "/home/neob91/Games/LutrisDX/drive_c/DX/LUM/_scratch/unatco/uedctl/maps/unatco/actors/Brush755/actor.t3d"
+    "/home/neob91/Games/LutrisDX/drive_c/DX/LUM/_scratch/unatco/uedcli/maps/unatco/actors/Brush755/actor.t3d"
 EDLOG = sys.argv[2] if len(sys.argv) > 2 else \
-    "/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedctl/_scratch/ptx/editor-struct-unatco-105.log"
+    "/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedcli/_scratch/ptx/editor-struct-unatco-105.log"
 
 # Brush755 is unscaled + identity rotation; local winding = raw T3D verts.
 txt = open(T3D).read()

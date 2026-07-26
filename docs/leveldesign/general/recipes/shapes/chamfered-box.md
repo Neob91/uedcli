@@ -15,7 +15,7 @@ cross-section). One brush, one clip.
 **normal** (which side is "above"). To bevel an edge at 45°, put the plane through the two points where
 you want the cut to start, with a normal that points diagonally out of the corner you're removing.
 
-### uedctl pipeline (what you run)
+### uedcli pipeline (what you run)
 
 ```
 # a 192(X) x 128(Y) x 96(Z) cube, centred on the origin -> X:-96..96, Y:-64..64, Z:-48..48

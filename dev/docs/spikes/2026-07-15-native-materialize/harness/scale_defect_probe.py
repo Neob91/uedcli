@@ -39,14 +39,14 @@ import argparse
 import sys
 from pathlib import Path
 
-ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedctl")
+ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedcli")
 sys.path.insert(0, str(ROOT))
 
 from spike_classindex import class_index  # noqa: E402  (schema-aware mover gate's index)
-from uedctl import trunk, rotation as ROT               # noqa: E402
-from uedctl.native import materialize as M              # noqa: E402
-from uedctl.native import umodel as UM                  # noqa: E402
-from uedctl.native.pkg_write import parse_package       # noqa: E402
+from uedcli import trunk, rotation as ROT               # noqa: E402
+from uedcli.native import materialize as M              # noqa: E402
+from uedcli.native import umodel as UM                  # noqa: E402
+from uedcli.native.pkg_write import parse_package       # noqa: E402
 
 # Game texture dirs so texture refs resolve at assembly time (else "Can't find Texture").
 PKG_DIRS = ["/home/neob91/Games/LutrisDX/drive_c/DX/Textures",

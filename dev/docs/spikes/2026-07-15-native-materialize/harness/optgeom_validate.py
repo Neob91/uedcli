@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate the standalone Rust `bspOptGeom` port (`uedctl-native/src/bspoptgeom.rs`) against the
+"""Validate the standalone Rust `bspOptGeom` port (`uedcli-native/src/bspoptgeom.rs`) against the
 editor golden `Test_Castle.dx`.
 
 The golden Model is POST-bspOptGeom (T-junctions already eliminated, iSide/NumSharedSides set).
@@ -15,12 +15,12 @@ Run:  .venv/bin/python docs/.../harness/optgeom_validate.py
 import sys
 from pathlib import Path
 
-ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedctl")
+ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedcli")
 sys.path.insert(0, str(ROOT))
-sys.path.insert(0, str(ROOT / "dev/docs/spikes/2026-06-27-decontainerize-uedctl/harness"))
-from uedctl.native import umodel as UM
+sys.path.insert(0, str(ROOT / "dev/docs/spikes/2026-06-27-decontainerize-uedcli/harness"))
+from uedcli.native import umodel as UM
 import utexture_decode as UT
-import uedctl_native
+import uedcli_native
 
 EDITOR = "/home/neob91/Games/LutrisDX/drive_c/DX/Maps/Test_Castle.dx"
 
@@ -47,7 +47,7 @@ def main():
     vert_ivertex = [v.i_vertex for v in verts]
     gold_iside = [v.i_side for v in verts]
 
-    (out_iv, out_iside, out_pool, out_nv, nss) = uedctl_native.opt_geom_from_arrays(
+    (out_iv, out_iside, out_pool, out_nv, nss) = uedcli_native.opt_geom_from_arrays(
         points, node_plane, node_ivertpool, node_numverts,
         node_ifront, node_iback, node_iplane, vert_ivertex,
     )

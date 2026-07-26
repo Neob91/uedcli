@@ -3,7 +3,7 @@
 Goal: pin down, **live**, whether (and how) a Deus Ex code package (`.u`, package
 version 68) can be converted into a UED22-loadable version-69 package **without losing
 its mesh assets** — the mechanism behind the hacky `Tools/recompile_for_ued2` prototype,
-which we want to integrate into uedctl. Confidence: ✅ = live-verified this session.
+which we want to integrate into uedcli. Confidence: ✅ = live-verified this session.
 
 All runs were in an isolated ephemeral container (`uned-spike-recompile`, an override-
 entrypoint `dx-lum-uned:latest` with `/sdk`, `/deusex`, `/umodel` bind-mounts), never the
@@ -129,7 +129,7 @@ older package format fine** and exports its source.
    content dep is on `Paths`. Reuses `dxpkg.transitive_closure`.
 3. Mesh/texture preservation is via **umodel `.3d` + `batchexport` PCX**, re-imported by
    `#exec` during `make`. The `#exec` paths and (group-prefixed) texture filenames must be
-   normalized — the `unrclsprs` regex munger's job, to be ported into uedctl proper.
+   normalized — the `unrclsprs` regex munger's job, to be ported into uedcli proper.
 4. A package that references **symbols stripped from the v69 deps** can't be stubbed yet —
    fail loudly and name the missing symbol; don't emit a broken stub.
 5. Outputs are copyright-derived → cache **gitignored**, never committed.

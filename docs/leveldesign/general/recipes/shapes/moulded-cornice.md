@@ -18,7 +18,7 @@ One brush, 512 uu long, whose cross-section is a 24×24 moulding with a square s
 — 7 profile points. It emits **11 faces**: 7 side quads plus 2 tiled cap pieces at each end (the
 profile is concave, so each cap is split into convex faces automatically).
 
-### uedctl pipeline (what you run)
+### uedcli pipeline (what you run)
 
 ```
 brush build extrude --axis x --depth 512 --at 0,0,0 --solidity semisolid \
@@ -36,7 +36,7 @@ step, back in to 16, up to 16, then a 45° chamfer to `(8,24)` and back to the w
   length for no gameplay benefit. `--solidity semisolid` keeps collision and lets it receive cuts
   without splitting the world — see [../../geometry-and-bsp.md](../../geometry-and-bsp.md).
 - **Concave profiles are fine, and stay ONE brush.** The engine's polygon must be convex and holds
-  at most 16 vertices, so uedctl tiles each *cap* into convex faces while the brush as a whole stays
+  at most 16 vertices, so uedcli tiles each *cap* into convex faces while the brush as a whole stays
   concave — the same arrangement `brush build staircase` uses. The tiling only adds diagonals of
   your profile, so the solid stays watertight.
 - **Preview caveat:** `level preview --native`, the fast offline draft, assumes convex solids and

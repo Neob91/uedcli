@@ -30,7 +30,7 @@ A conversation is owned by a character and triggered when the player interacts w
 
 From the level author's seat, your job is: set `BindName`s on the NPCs, point `DeusExLevelInfo` at the
 conversation package, place `DataLinkTrigger`s where briefings should fire, and let the ConEdit-authored
-content bind to those names. The actual dialogue trees are authored outside uedctl.
+content bind to those names. The actual dialogue trees are authored outside uedcli.
 
 ## Computers
 

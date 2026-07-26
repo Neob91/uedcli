@@ -23,7 +23,7 @@ it first, place it in a hole you cut. They don't move, so they need no keyframes
 5. Optionally back it with an **invisible collision hull** if you want it to block movement until
    broken (a bare sheet doesn't block on its own — see caveats).
 
-### With uedctl
+### With uedcli
 
 ```bash
 # 2-3. A thin BreakableGlass pane, glass-textured, translucent — built as a SHEET mover.
@@ -53,7 +53,7 @@ Same as a door, but a solid-looking wall segment. Once you know breakable glass,
    demand a LAM/GEP.
 4. **Fit it into the opening** on-grid so there are no gaps.
 
-### With uedctl
+### With uedcli
 
 ```bash
 brush build cube --width 8 --breadth 96 --height 96 \
@@ -83,7 +83,7 @@ The simplest of the three — just place a container decoration.
    chance, then `content3` likewise — so `contents` is the most common drop and each later slot ~30%.
    Keep it thematic: ammo in Combat crates, medkits in Medical, misc in General.
 
-### With uedctl
+### With uedcli
 
 ```bash
 # 1. Default crate — done.

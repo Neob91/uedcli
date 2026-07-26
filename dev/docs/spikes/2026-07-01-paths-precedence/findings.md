@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-01 · **Status:** complete · live-verified against an ephemeral UED22 editor.
 
-**Question.** The global-CLI `paths` design (spec `2026-06-29-uedctl-global-cli-projects-design.md`
+**Question.** The global-CLI `paths` design (spec `2026-06-29-uedcli-global-cli-projects-design.md`
 §3.4/§8) relies on *project-shadows-base*: a project package overrides a same-named base one, the way
 the engine's own search path shadows. Verify the two hypotheses it rests on:
 - **H1 — first-match-wins:** if two dirs on `[Core.System] Paths` each hold a same-named package, the
@@ -43,7 +43,7 @@ Getting a *reliable* by-name probe was most of the work. Three durable findings 
 ## Design implication (folded into spec §8)
 
 The editor's `[Core.System] Paths` precedence governs only the **indirect / by-name** linker path
-(what UCC exercises). uedctl's shipped `apply` load path uses **explicit `OBJ LOAD FILE=<resolved
+(what UCC exercises). uedcli's shipped `apply` load path uses **explicit `OBJ LOAD FILE=<resolved
 path>`**, so at apply **precedence is decided HOST-SIDE** by whichever resolver picks the file (today
 `substrate_search_dirs`; under the global CLI, the composed `paths`, first-wins §3.4). The editor does
 not shadow at load time for that path. So:

@@ -16,7 +16,7 @@ dropped by `normalize_level`?
 
 - The editor assigns inner model names as `Model<N>` (e.g. `Model3`, `Model12`) for authored
   brushes and always attaches an explicit `CsgOper=CSG_Add` or `CSG_Subtract`.
-- uedctl builder names brushes `Model_{actorname}` (e.g. `Model_Brush1`, `Model_Cube1`).
+- uedcli builder names brushes `Model_{actorname}` (e.g. `Model_Brush1`, `Model_Cube1`).
 - Inner model name `Brush` is a singleton reserved by the editor for the live builder brush
   (the red "active" brush); the editor never assigns it to a second actor.
 - `actor add` already explicitly skips `is_builder_brush` actors (verified in `dispatch.py`).
@@ -25,7 +25,7 @@ dropped by `normalize_level`?
 `Brush` + no `CsgOper`) cannot occur:
 
 1. The editor uses `Model<N>` for authored brushes.
-2. uedctl uses `Model_{actorname}`.
+2. uedcli uses `Model_{actorname}`.
 3. The inner name `Brush` is never duplicated.
 
 **Verdict:** ✅ No change needed. Document and close.
@@ -271,7 +271,7 @@ End Actor
 - ✅ `ACTOR APPLYTRANSFORM` / `BRUSH APPLYTRANSFORM` console-drivable; bakes scale into
   vertices, resets scale to identity.
 
-**Implementation note:** uedctl's store-centric model does symmetry model-side (flip vertex
+**Implementation note:** uedcli's store-centric model does symmetry model-side (flip vertex
 coords in Python, adjust winding) and does not use these console commands. They are documented
 here for completeness and for any future live-editor manipulation use.
 
@@ -283,11 +283,11 @@ here for completeness and for any future live-editor manipulation use.
 camera rotation hack) — should it be tagged so we can detect it if it leaks? And does
 `LightBrightness=0` make it invisible?
 
-**Method:** Import a `Light` actor with `LightBrightness=0` and `Group="UedctlHelper"`;
+**Method:** Import a `Light` actor with `LightBrightness=0` and `Group="UedcliHelper"`;
 check that both properties survive round-trip.
 
 **Findings:**
-- `Group="UedctlHelper"` survives `MAP IMPORTADD` + `EDIT COPY` + `MAP EXPORT`. ✅
+- `Group="UedcliHelper"` survives `MAP IMPORTADD` + `EDIT COPY` + `MAP EXPORT`. ✅
 - `LightBrightness=0` survives import. ✅
 - A `LightBrightness=0` light emits zero illumination: in UE1, brightness multiplies directly
   into the lighting calculation; at 0, the contribution is exactly 0 regardless of radius/hue.
@@ -295,13 +295,13 @@ check that both properties survive round-trip.
 
 **Recommendations:**
 1. The camera rotation helper already deletes itself (`SELECTNAME` + `ACTOR DELETE`). A
-   crash mid-helper could leave the actor. Tag it `Group="UedctlInternal"` so it is
+   crash mid-helper could leave the actor. Tag it `Group="UedcliInternal"` so it is
    identifiable in a post-crash scan. `dispatch._camera_rotation_helper` should use this
    group on the `Light` T3D it imports.
 2. Set `LightBrightness=0` on the helper light so that even if it leaks (crash before
    DELETE), it has zero effect on any subsequent `LIGHT APPLY`. Already safe to do.
 3. In `apply._materialize` or `materialize.py`, warn (not error) if any actor with
-   `Group="UedctlInternal"` is found in `main/` — that indicates a helper leaked into the
+   `Group="UedcliInternal"` is found in `main/` — that indicates a helper leaked into the
    session and was accidentally committed. Do NOT silently strip it: warn so the user can
    investigate.
 
@@ -325,8 +325,8 @@ check that both properties survive round-trip.
 - ✅ Property names in T3D are **case-insensitive on import**. The editor normalizes them to
   canonical case on parse; `MAP EXPORT` always emits canonical mixed case.
 
-**Implication for uedctl:**
-- `SELECTNAME` calls can use any case for the name — this is fine; uedctl always uses the
+**Implication for uedcli:**
+- `SELECTNAME` calls can use any case for the name — this is fine; uedcli always uses the
   canonical stored name from the model.
 - T3D property name case in our emitters is not load-bearing (the editor normalizes anyway),
   but emitting canonical case keeps our output round-trippable and diff-stable.
@@ -344,8 +344,8 @@ directory?
 
 **Analysis:**
 - `docker compose` follows host-side symlinks for bind mounts. A symlink at
-  `Tools/uedctl/uned/DeusExAssets` → `/some/other/path` works transparently.
-- `packages.substrate_search_dirs()` uses `Path(repo_root) / "Tools/uedctl/uned/DeusExAssets"`;
+  `Tools/uedcli/uned/DeusExAssets` → `/some/other/path` works transparently.
+- `packages.substrate_search_dirs()` uses `Path(repo_root) / "Tools/uedcli/uned/DeusExAssets"`;
   `pathlib.Path` follows symlinks in `iterdir`/`glob`.
 - `install-deusex-assets.sh` currently copies files. A `--symlink` flag could create a
   single symlink `DeusExAssets → <install>` instead of copying ~1.5 GB. This avoids

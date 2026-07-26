@@ -7,15 +7,15 @@ N nodes`, `bspBuildBounds: ... bounds, ... hulls`, `BspMergeCoplanars reduced X-
 """
 import re, subprocess, sys, time, json
 
-sys.path.insert(0, "/home/human/src/dx_lum/Tools/uedctl")
-from uedctl.driver import Driver
-from uedctl import builders, writes
+sys.path.insert(0, "/home/human/src/dx_lum/Tools/uedcli")
+from uedcli.driver import Driver
+from uedcli import builders, writes
 
 import cases as casemod
 
 CONT = "uned-bspcorpus"
 VOL = "uned-wp-bspcorpus"
-COMPOSE_DIR = "/home/human/src/dx_lum/Tools/uedctl/uned"
+COMPOSE_DIR = "/home/human/src/dx_lum/Tools/uedcli/uned"
 
 # Live builder spec per case: (cube dims, location, csg, poly_flags).
 # Mirrors cases.CASES geometry. cube(width=2hx, breadth=2hy, height=2hz) centered at origin,

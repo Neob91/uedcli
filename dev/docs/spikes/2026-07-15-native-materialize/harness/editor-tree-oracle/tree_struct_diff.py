@@ -40,7 +40,7 @@ it drops the bar the editor over-keeps) stands; the exact first-divergence is th
 of the first brush.  §23's "native 52" was the wrong-order build; trunk-order native is **69**.
 
 Inputs:
-  * NATIVE  — built in-process with `UEDCTL_BSPCSG_TREE_STRUCT=1` (bspcsg.rs dumps every node's
+  * NATIVE  — built in-process with `UEDCLI_BSPCSG_TREE_STRUCT=1` (bspcsg.rs dumps every node's
               plane + child/plane links + surf + nv to stderr, pre-repartition), captured by
               redirecting fd 2 around the (GIL-releasing) build.
   * EDITOR  — `logs/editor-struct-N.log` (castle) or `logs/editor-struct-unatco-N.log` (unatco),
@@ -59,12 +59,12 @@ import re
 import sys
 from pathlib import Path
 
-ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedctl")
+ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedcli")
 HARNESS = ROOT / "dev/docs/spikes/2026-07-15-native-materialize/harness"
 HERE = HARNESS / "editor-tree-oracle"
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(HARNESS))
-sys.path.insert(0, str(ROOT / "dev/docs/spikes/2026-06-27-decontainerize-uedctl/harness"))
+sys.path.insert(0, str(ROOT / "dev/docs/spikes/2026-06-27-decontainerize-uedcli/harness"))
 
 _NA = re.compile(
     r"STRUCT node=(\d+) plane=\(([-0-9.,]+)\) iF=(-?\d+) iB=(-?\d+) iP=(-?\d+) "
@@ -73,13 +73,13 @@ _ED = re.compile(
     r"ND (\d+) plane=([-0-9.,]+) iF=(-?\d+) iB=(-?\d+) iP=(-?\d+) isurf=(-?\d+) nv=(-?\d+) nf=(\S+)")
 
 FULL_TRUNK_UNATCO = Path(
-    "/home/neob91/Games/LutrisDX/drive_c/DX/LUM/_scratch/unatco/uedctl/maps/unatco")
+    "/home/neob91/Games/LutrisDX/drive_c/DX/LUM/_scratch/unatco/uedcli/maps/unatco")
 
 
 def _native_inputs(n: int, target: str):
     from spike_classindex import class_index   # the schema-aware mover gate's ClassIndex
-    from uedctl import trunk
-    from uedctl.native import materialize as M
+    from uedcli import trunk
+    from uedcli.native import materialize as M
     if target == "castle":
         import castle_build
         level, _ = trunk.read_level(Path(castle_build.TRUNK))
@@ -94,17 +94,17 @@ def _native_inputs(n: int, target: str):
 
 def native_struct(n: int, target: str) -> dict[int, tuple]:
     """Build the N-brush native subset with the struct-dump hook; {idx: (plane,iF,iB,iP,isurf,nv)}."""
-    import uedctl_native
+    import uedcli_native
     _, inputs = _native_inputs(n, target)
     raw = HERE / "logs" / f"native-struct-{target}-{n}.raw"
     raw.parent.mkdir(parents=True, exist_ok=True)
     saved = os.dup(2)
     fd = os.open(str(raw), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o644)
-    os.environ["UEDCTL_BSPCSG_TREE_STRUCT"] = "1"
-    os.environ["UEDCTL_BSPCSG_NOREPART"] = "1"  # dump fires before repartition regardless; keeps it short
+    os.environ["UEDCLI_BSPCSG_TREE_STRUCT"] = "1"
+    os.environ["UEDCLI_BSPCSG_NOREPART"] = "1"  # dump fires before repartition regardless; keeps it short
     try:
         os.dup2(fd, 2)
-        uedctl_native.build_geometry_bspcsg(inputs)
+        uedcli_native.build_geometry_bspcsg(inputs)
     finally:
         os.dup2(saved, 2)
         os.close(fd)
@@ -196,16 +196,16 @@ def main() -> int:
     print(f"editor root plane: {ed.get(0, ('?',))[0]}")
 
     # Per-first-brush node contribution: build native with ONLY brush[0], count nodes.
-    import uedctl_native
-    from uedctl import trunk
-    from uedctl.native import materialize as M
+    import uedcli_native
+    from uedcli import trunk
+    from uedcli.native import materialize as M
     level, _ = trunk.read_level(FULL_TRUNK_UNATCO)
     b0 = M._build_brush_input(names[0], level.actors[names[0]])
     raw = HERE / "logs" / "native-struct-unatco-b0.raw"
     saved = os.dup(2); fd = os.open(str(raw), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o644)
-    os.environ["UEDCTL_BSPCSG_TREE_STRUCT"] = "1"; os.environ["UEDCTL_BSPCSG_NOREPART"] = "1"
+    os.environ["UEDCLI_BSPCSG_TREE_STRUCT"] = "1"; os.environ["UEDCLI_BSPCSG_NOREPART"] = "1"
     try:
-        os.dup2(fd, 2); uedctl_native.build_geometry_bspcsg([b0])
+        os.dup2(fd, 2); uedcli_native.build_geometry_bspcsg([b0])
     finally:
         os.dup2(saved, 2); os.close(fd); os.close(saved)
     b0_nodes = sum(1 for ln in raw.read_text(errors="replace").splitlines() if ln.startswith("STRUCT"))

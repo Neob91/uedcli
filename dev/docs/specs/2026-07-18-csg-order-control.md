@@ -102,7 +102,7 @@ Both reviewers verified against the code. Corrections:
   `compute_reorder_ranks` filters the moved set out before finding neighbours.
 - **`rank_between` CAN raise `ValueError`** on genuinely-adjacent INGESTED ranks (`trunk.py:48-50`,
   e.g. between `a` and `a0`) and on `--first` when the current min is a smallest-digit rank
-  (`rank_between(None,'0')` raises — the docstring warns). uedctl-minted ranks avoid this, but
+  (`rank_between(None,'0')` raises — the docstring warns). uedcli-minted ranks avoid this, but
   `actor order` runs on arbitrary/imported trunks. **Catch the `ValueError` around the mint loop → a
   named exit-2** ("cannot reorder: no order_value fits between X and Y — the trunk has adjacent
   imported ranks"), never a traceback (§4 / CLAUDE.md).

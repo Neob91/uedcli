@@ -1,6 +1,6 @@
 # RE decode: zone-setter pass 0xa93c0 + volumetric sphere-flood 0xa9290 (Editor.dll, UED22)
 
-Decoded 2026-07-16 from `/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedctl/uned/UED22/Editor.dll`
+Decoded 2026-07-16 from `/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedcli/uned/UED22/Editor.dll`
 (ImageBase 0x10000000; addresses below are VAs, RVA = VA − 0x10000000). All claims anchored to
 quoted instructions. Supporting context (portal-record layout, iZone seed) was chased into
 0xa7760 / 0xa72a0 / 0xa6ab0 / 0xa7870 / 0xa9750 — quoted where load-bearing.

@@ -1,7 +1,7 @@
 import sys, struct
 from pathlib import Path
 from collections import defaultdict, Counter
-ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedctl")
+ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedcli")
 sys.path.insert(0, str(ROOT)); sys.path.insert(0, str(ROOT/"dev/docs/spikes/2026-07-15-native-materialize/harness"))
 import surf_class_diff as SCD, unatco_subset as U
 bits=lambda x:struct.unpack("<I",struct.pack("<f",x))[0]

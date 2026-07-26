@@ -29,7 +29,7 @@ hostile to the player. The full NPC reference (roster, reactions, inventory, bin
    references it. Usually leave reactions/fears at the class defaults.
 7. **Build paths and playtest.** Rebuild the path network (the `Paths Define` step), then run the map.
 
-## With uedctl
+## With uedcli
 
 ```bash
 # 1-2. A two-point patrol loop. Each point's Nextpatrol names the OTHER's Tag.
@@ -50,7 +50,7 @@ actor build DeusEx.MJ12Troop \
 
 > **Paths must be built in the editor** (`PATHS BUILD` / F8 → Paths Define). **`level materialize` does
 > NOT currently run the paths pass** — so a materialized map has no reachspecs and the guard won't move
-> until paths are built in the editor. (Known gap; uedctl has no standalone "define paths" verb yet.)
+> until paths are built in the editor. (Known gap; uedcli has no standalone "define paths" verb yet.)
 > Verify by playing that the guard walks its loop.
 
 ## Making an NPC hostile to *other* NPCs
@@ -95,7 +95,7 @@ Karkians). Give an NPC a custom `Alliance` name if a trigger will flip its alleg
   `InitialAlliances(0).…` parenthesis form (the CLI rejects `KEY(N)`).
 - **These UT knobs don't exist in DX** — don't set `SeekTag`, `HateTag`,
   `bFearDarkness`, `bCanClimb` (see [`../npcs.md`](../npcs.md) for the full absent list). (`Aggressiveness`
-  is a UED22-package addition uedctl accepts but the game ignores — not truly absent; see the KB note.)
+  is a UED22-package addition uedcli accepts but the game ignores — not truly absent; see the KB note.)
 
 ## See also
 

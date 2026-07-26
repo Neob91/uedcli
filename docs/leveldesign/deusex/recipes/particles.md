@@ -32,7 +32,7 @@ plain point actors: place, set properties, optionally gate on a trigger.
    to target. **Watch out:** `bInitiallyOn` defaults **True**, so with `bTriggered` alone the generator
    spews immediately and the first trigger turns it *off* — you must set `bInitiallyOn=False`.
 
-### With uedctl
+### With uedcli
 
 ```bash
 # Always-on steam from a vent:
@@ -57,7 +57,7 @@ actor build DeusEx.ParticleGenerator \
    no effect** (`ejectSpeed`=0), so there's no arrow to aim.
 2. Tune `frequency` / `particleTexture` as for the base generator.
 
-### With uedctl
+### With uedcli
 
 ```bash
 actor build DeusEx.WaterDrips --at 0,0,240 | actor add -   # falls by gravity (bGravity default on); no rotation needed
@@ -72,7 +72,7 @@ actor build DeusEx.WaterDrips --at 0,0,240 | actor add -   # falls by gravity (b
    **damages** the player and carries its **own light**, so no separate light is needed.
 3. Pairs naturally with a `Shocked` [pain zone](water-zone.md#b-pain--gas--hazard-zones).
 
-### With uedctl
+### With uedcli
 
 ```bash
 actor build DeusEx.ElectricityEmitter \
@@ -89,7 +89,7 @@ actor build DeusEx.ElectricityEmitter \
 2. Optionally add a coloured static light nearby for the surrounding glow (a DX `Fire` handles its own
    waver, but a larger fire scene usually wants extra motivated lighting).
 
-### With uedctl
+### With uedcli
 
 ```bash
 actor build DeusEx.Fire --at 0,0,24 | actor add -

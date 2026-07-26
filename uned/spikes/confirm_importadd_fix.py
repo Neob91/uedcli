@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Confirm the Brush=-ordering fix on the REAL uedctl path: MAP IMPORTADD.
+"""Confirm the Brush=-ordering fix on the REAL uedcli path: MAP IMPORTADD.
 broken (Brush ref before block) vs fixed (after block) -> rebuild -> giant box.
 Self-contained (no cross-module import side effects).
 """

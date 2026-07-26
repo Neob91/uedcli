@@ -1,6 +1,6 @@
 
-uedctl/game/inputs/edit/
-uedctl/game/staging/
+uedcli/game/inputs/edit/
+uedcli/game/staging/
 
 .venv/
 __pycache__/

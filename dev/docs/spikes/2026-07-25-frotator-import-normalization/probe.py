@@ -8,7 +8,7 @@ value. `level materialize` imports the T3D trunk, `MAP SAVE`s, re-exports the sa
 text-compares against the trunk (H3 post-verify). If import reduced mod 65536, an actor authored
 `(Yaw=-131072)` would come back as `(Yaw=0)` -- i.e. the whole `Rotation=` line would VANISH
 (zero == class default, never exported) -- and post-verify could never pass for any ingested
-retail actor with an over-range rotation. Two committed docstrings in `uedctl/rotation.py`
+retail actor with an over-range rotation. Two committed docstrings in `uedcli/rotation.py`
 disagreed on this (`compose_uu` said "a materialize import normalizes mod 65536 anyway";
 the compare-side fold said values must NEVER be reduced). This settles it empirically.
 
@@ -26,8 +26,8 @@ an in-range positive control, an in-range negative (does it wrap to 49152?), a 1
 negative, and one actor exercising Pitch/Roll rather than Yaw.
 
 Run host-native from anywhere inside the LUM project:
-    /home/.../Tools/uedctl/.venv/bin/python <this file>
-(or `cd Tools/uedctl && bin/uedctl`-style venv python). Raw exports land in `_scratch/`.
+    /home/.../Tools/uedcli/.venv/bin/python <this file>
+(or `cd Tools/uedcli && bin/uedcli`-style venv python). Raw exports land in `_scratch/`.
 """
 import os
 import re
@@ -39,12 +39,12 @@ import time
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                 "..", "..", "..", ".."))
 
-from uedctl import config, xfer                                   # noqa: E402
-from uedctl.container_assets import resource_mounts               # noqa: E402
-from uedctl.driver import Driver                                  # noqa: E402
-from uedctl.editor import ensure_editor, stop_editor              # noqa: E402
-from uedctl.store_export import export_dx_t3d                     # noqa: E402
-from uedctl.uuid7 import uuid7                                    # noqa: E402
+from uedcli import config, xfer                                   # noqa: E402
+from uedcli.container_assets import resource_mounts               # noqa: E402
+from uedcli.driver import Driver                                  # noqa: E402
+from uedcli.editor import ensure_editor, stop_editor              # noqa: E402
+from uedcli.store_export import export_dx_t3d                     # noqa: E402
+from uedcli.uuid7 import uuid7                                    # noqa: E402
 
 # name -> (class, authored Rotation=... value)
 CASES = [
@@ -128,7 +128,7 @@ def main() -> int:
     scratch = os.path.abspath(scratch)
     os.makedirs(scratch, exist_ok=True)
 
-    project = config.resolve_project(env_project=os.environ.get("UEDCTL_PROJECT"),
+    project = config.resolve_project(env_project=os.environ.get("UEDCLI_PROJECT"),
                                      cwd=os.getcwd())
     user_config = config.load_user_config()
     search_dirs = config.composed_search_dirs(project, user_config)

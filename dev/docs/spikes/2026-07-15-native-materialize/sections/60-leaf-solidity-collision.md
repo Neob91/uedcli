@@ -2,7 +2,7 @@
 
 **Status:** RE spike, root-cause CLOSED + fix spec. **Date:** 2026-07-15.
 **Method:** byte-level decode of two real single-box `.dx` Models (`DXOnly.dx` known-good vs our
-`NativeCSG.dx`) with `uedctl/native/umodel.py`, plus static disassembly of the **game's**
+`NativeCSG.dx`) with `uedcli/native/umodel.py`, plus static disassembly of the **game's**
 `System/Engine.dll` collision/zone functions (`capstone`+`pefile`; ImageBase `0x10300000`), plus a
 Python simulation of the engine's BSP descent applied to both models.
 **Reproduce:** harness in this spike's `harness/`:

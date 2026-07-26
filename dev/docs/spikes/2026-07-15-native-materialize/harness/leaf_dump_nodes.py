@@ -1,6 +1,6 @@
 """Dump node/leaf/collision structure of a .dx level Model."""
 import sys
-from uedctl.native import pkg_write, umodel
+from uedcli.native import pkg_write, umodel
 
 
 def find_model(buf):

@@ -81,7 +81,7 @@ Location**). So spatial filters are AABB tests over `actor_bounds` — no new ge
 
 ## 5. Module shape / touchpoints
 
-- **`uedctl/cli.py`** — three new `find` flags, each with a real `help=`:
+- **`uedcli/cli.py`** — three new `find` flags, each with a real `help=`:
   - `--near`: **`nargs=2, type=str, metavar=("POINT","RADIUS")`** — a single `type=` cannot serve a
     point-or-`@Actor` first token and a scalar-radius second, so both arrive as strings and the handler
     parses them (point via `parse_coord` OR `@`-resolve; radius via `Decimal`). (`parse_coord`,
@@ -93,12 +93,12 @@ Location**). So spatial filters are AABB tests over `actor_bounds` — no new ge
   - Negative coordinates need no `nargs`/`=` gymnastics: subparsers inherit `_CoordArgumentParser`
     whose `_parse_optional` matches `_COORD_TOKEN` and passes `-128,0,0` as a VALUE. The bare `-` stdin
     token (composable-`find`) does not match `_COORD_TOKEN`, so no collision.
-- **`uedctl/dispatch.py`** — the spatial predicates live in the **`find` handler, AFTER `list_actors`**
+- **`uedcli/dispatch.py`** — the spatial predicates live in the **`find` handler, AFTER `list_actors`**
   (NOT in `list_actors`), mirroring the deliberate `--prop` placement (`list_actors` stays geometry-free
   / dependency-light; the handler already imports `writes`). The handler: resolves `@Actor` (strict) +
   literal points, validates the radius, builds each AABB predicate over `writes.actor_bounds(a)`, and
   filters the `names` list (AND with the other filters, alongside `--prop`, before the print).
-- **`uedctl/writes.py`** — small AABB helpers beside `actor_bounds`: `aabb_within(inner, outer)`,
+- **`uedcli/writes.py`** — small AABB helpers beside `actor_bounds`: `aabb_within(inner, outer)`,
   `aabb_intersects(a, b)`, `point_aabb_sqdist(point, lo, hi)` — all `Decimal`.
 
 No model/trunk change; a read-path/query feature over offline world bounds.

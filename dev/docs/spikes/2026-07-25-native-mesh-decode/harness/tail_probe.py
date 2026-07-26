@@ -15,7 +15,7 @@ import sys
 from collections import Counter
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", ".."))
-from uedctl.upackage import load_package  # noqa: E402
+from uedcli.upackage import load_package  # noqa: E402
 import umesh  # noqa: E402
 
 

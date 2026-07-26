@@ -30,7 +30,7 @@ working."
   `DXOnly.dx` (the menu-backdrop map — this is the `DXONLY` you see from `GetCurrentLevelName`). So
   `uplayctl shot` catches the Deus Ex menu logo, not the world.
 - **Root cause = the native BSP is MINIMAL: no real zones, one leaf, no side pool, no bounds.** Zone
-  portalization (`TestVisibility`) is a **stub** (`uedctl-native/src/zones.rs`). This is the whole
+  portalization (`TestVisibility`) is a **stub** (`uedcli-native/src/zones.rs`). This is the whole
   remaining job.
 
 **IMPORTANT correction to prior belief:** the zoning mechanism was **NOT** fully reverse-engineered.
@@ -44,8 +44,8 @@ valid *for collision* but does not make the level a playable multi-zone world.
 ## 1. The binary diff that proves it — native vs editor (SAME castle)
 
 `NativeCastle.dx` (native, from the `foobar` trunk) vs `Test_Castle.dx` (UnrealEd, the same castle).
-Decode both with `dev/docs/spikes/2026-06-27-decontainerize-uedctl/harness/utexture_decode.load_package`
-+ `uedctl.native.umodel.parse_model_body`:
+Decode both with `dev/docs/spikes/2026-06-27-decontainerize-uedcli/harness/utexture_decode.load_package`
++ `uedcli.native.umodel.parse_model_body`:
 
 | Model field | editor (Test_Castle, **plays**) | native (NativeCastle, **menu**) |
 |---|---|---|
@@ -65,7 +65,7 @@ leaf tree.
 
 ## 2. Remaining work for FULL PARITY (the build side)
 
-All in the native core (`uedctl-native/src/`), then wired through `uedctl/native/`:
+All in the native core (`uedcli-native/src/`), then wired through `uedcli/native/`:
 
 1. **Real leaf construction.** Build one `FBspLeaf` per convex empty BSP region (not the single leaf
    `finalize_leaves_and_bbox` emits today, `build.rs` ~line 375). Each node terminal on the empty
@@ -74,7 +74,7 @@ All in the native core (`uedctl-native/src/`), then wired through `uedctl/native
    across a **non-`PF_Portal`, non-solid** boundary are the SAME zone; a `PF_Portal` face SEPARATES
    zones. Assign a zone number per connected component. RE `Engine.dll 0xaa940` instruction-level OR
    implement the standard UE1 zone-flood from first principles, then validate MEMBERSHIP (not counts)
-   against `DXOnly` (1 zone) and `Test_Castle` (4 zones). `uedctl-native/src/zones.rs` is the stub to
+   against `DXOnly` (1 zone) and `Test_Castle` (4 zones). `uedcli-native/src/zones.rs` is the stub to
    fill; design spec §10.8.
 3. **`FZoneProperties` + ZoneInfo assignment.** For each zone, `ZoneActor` = the `ZoneInfo`/`SkyZoneInfo`
    actor whose Location point-region-resolves into that zone; the default/interior zone with no ZoneInfo
@@ -161,10 +161,10 @@ native `.dx` vs `Test_Castle.dx` for leaf/zone MEMBERSHIP parity.
 
 ## 5. Key files / pointers
 
-- **Build:** `uedctl-native/src/zones.rs` (STUB — the work), `build.rs::finalize_leaves_and_bbox`
+- **Build:** `uedcli-native/src/zones.rs` (STUB — the work), `build.rs::finalize_leaves_and_bbox`
   (~L375, current single-zone cut), `passes.rs::bsp_build_bounds` (empty bounds), `model.rs`
   (FBspNode/Leaf/Zone structs), `model_write.rs` (serializer — pinned to `umodel.py` oracle).
-- **Assembly:** `uedctl/native/assemble.py` (add a zone-actor-ref patch like `_patch_light_refs`),
+- **Assembly:** `uedcli/native/assemble.py` (add a zone-actor-ref patch like `_patch_light_refs`),
   `umodel.py` (Model struct + serialize/parse; zones at `write_model_body`), `materialize.py`
   (`run_materialize_native`, `pkg_dirs`).
 - **RE docs:** design spec `dev/docs/specs/2026-07-15-native-materialize-design.md` §10.8 (zones scope);
@@ -173,9 +173,9 @@ native `.dx` vs `Test_Castle.dx` for leaf/zone MEMBERSHIP parity.
 - **RE harness:** `spikes/2026-07-15-native-materialize/harness/`: `leaf_dump_nodes.py`,
   `leaf_fix_classify.py`, `leaf_descent.py` (engine descent sim), `leaf_disas.py`/`leaf_scan.py`
   (Engine.dll disasm), `dishere.py` (disassembler), `pe.py`.
-- **Test corpus:** `_scratch/castle/uedctl/maps/foobar` (the castle trunk — `trunk.read_level`);
+- **Test corpus:** `_scratch/castle/uedcli/maps/foobar` (the castle trunk — `trunk.read_level`);
   `DX/Maps/Test_Castle.dx` (editor parity reference); `DX/Maps/DXOnly.dx` (menu backdrop, single-zone).
-- **Verify offline suite:** `cd Tools/uedctl && bin/test` (1161 pass; native ext rebuilds via
+- **Verify offline suite:** `cd Tools/uedcli && bin/test` (1161 pass; native ext rebuilds via
   `maturin develop --release` in `bin/_venv.sh`).
 
 ---

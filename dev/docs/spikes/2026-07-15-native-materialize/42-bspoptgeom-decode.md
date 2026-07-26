@@ -1,7 +1,7 @@
 # Section 42 — `bspOptGeom` decoded (T-junction retess + side-links), implemented & validated
 
 **Status:** instruction-level decode of `UEditorEngine::bspOptGeom` (`Editor.dll 0x36870`) and its
-subroutines, **ported standalone** to `uedctl-native/src/bspoptgeom.rs`, and **validated byte-exact
+subroutines, **ported standalone** to `uedcli-native/src/bspoptgeom.rs`, and **validated byte-exact
 against `Test_Castle.dx`**. **Method:** static disassembly of UED22 `Editor.dll` (`capstone`+`pefile`,
 host-native; the UT-v469-lineage 2022 MSVC/SSE rebuild — see `41-fp-model-x87-vs-sse.md`) +
 empirical inspection of the golden Model. ImageBase `0x10000000`; all RVAs are file RVAs.
@@ -186,7 +186,7 @@ table teardown · vtable `+0x200` `bspRefresh`.
 
 ---
 
-## 2. Standalone port (`uedctl-native/src/bspoptgeom.rs`) & validation ✅
+## 2. Standalone port (`uedcli-native/src/bspoptgeom.rs`) & validation ✅
 
 `pub fn bsp_opt_geom(model: &mut Model)` = `merge_near_points` → `eliminate_tjunctions` (pass 1) →
 `build_side_links` (pass 2), all pure over `model::Model`. `build_side_links` is exposed separately.

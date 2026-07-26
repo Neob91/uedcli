@@ -25,7 +25,7 @@ Num × <compact-index object ref>           # signed FCompactIndex; ref 0 == a n
 - Nulls are **interspersed and trailing**; drop them.
 - After the array come URL, the Model ref, ReachSpecs, and the trailing block.
 
-**This matches the native WRITE side already in the tree** — `uedctl/native/level_write.py`
+**This matches the native WRITE side already in the tree** — `uedcli/native/level_write.py`
 `write_level_body` emits `struct.pack("<ii", Num, Max)` then `ci(ref)` per actor, docstring
 "index 0 = LevelInfo, 1 = Default Brush". The spike independently CONFIRMS that layout by DECODING
 three real retail maps.
@@ -55,7 +55,7 @@ index* decoded `0x0872` as `562` and desynced the array (nulls-first, `Actors[0]
 Treated as **near-definitional and scheduled, not an open unknown**: UnrealEd's `UExporter` for a
 Level iterates `Level->Actors` in order, skipping NULL entries — it cannot emit any other order. The
 LevelInfo-first convention this predicts is confirmed by the committed UCC goldens
-(`dev/docs/spikes/levelinfo_update/ucc_export_after_save.t3d`, `uedctl/tests/fixtures/level_small.t3d`
+(`dev/docs/spikes/levelinfo_update/ucc_export_after_save.t3d`, `uedcli/tests/fixtures/level_small.t3d`
 both list `LevelInfo0` first). A direct `batchexport` of a retail map was attempted but needs the
 map's package deps staged (`Can't find file for package 'CoreTexMetal'`) — that full-package
 `export_dx_level` path is exactly plan **Slice 5**'s integration golden, where the end-to-end
@@ -66,6 +66,6 @@ Import decodes the `Engine.Level` Actors array (layout above), **drops null slot
 in that order (LevelInfo first). No export-table-order shortcut. The build is unblocked.
 
 ## Regression
-`uedctl/tests/test_engine_facts.py::test_level_actors_array_is_int_num_max_then_compact_refs` pins the
+`uedcli/tests/test_engine_facts.py::test_level_actors_array_is_int_num_max_then_compact_refs` pins the
 layout via a round-trip against the encode mirror `native.level_write.write_level_body` (offline, no
 committed binary — game maps are gitignored copyrighted assets).

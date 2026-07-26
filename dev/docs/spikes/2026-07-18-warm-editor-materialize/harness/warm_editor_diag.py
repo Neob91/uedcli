@@ -13,7 +13,7 @@ each reused build) fixes it. One warm editor, three phases:
   C. CROSS-LEVEL (SP-E.2) — build the anchor trunk (disjoint UNATCO textures) after castle in the
                   same warm editor; check its build + residue.
 
-Run: cd Tools/uedctl && .venv/bin/python dev/docs/spikes/2026-07-18-warm-editor-materialize/harness/warm_editor_diag.py
+Run: cd Tools/uedcli && .venv/bin/python dev/docs/spikes/2026-07-18-warm-editor-materialize/harness/warm_editor_diag.py
 Env: DIAG_N (builds per phase, default 4).
 """
 from __future__ import annotations
@@ -28,16 +28,16 @@ from pathlib import Path
 TOOL = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(TOOL))
 
-from uedctl import apply, config, trunk           # noqa: E402
-from uedctl import editor as editor_mod           # noqa: E402
-from uedctl import store_export                   # noqa: E402
-from uedctl.driver import Driver                  # noqa: E402
-from uedctl.container_assets import resource_mounts  # noqa: E402
-from uedctl.packages import search_path_package_names  # noqa: E402
-from uedctl.uuid7 import uuid7                     # noqa: E402
+from uedcli import apply, config, trunk           # noqa: E402
+from uedcli import editor as editor_mod           # noqa: E402
+from uedcli import store_export                   # noqa: E402
+from uedcli.driver import Driver                  # noqa: E402
+from uedcli.container_assets import resource_mounts  # noqa: E402
+from uedcli.packages import search_path_package_names  # noqa: E402
+from uedcli.uuid7 import uuid7                     # noqa: E402
 
-CASTLE_DIR = TOOL / "_scratch/castle/uedctl"
-ANCHOR_TRUNK = TOOL / "_scratch/anchor/uedctl/maps/anchor"
+CASTLE_DIR = TOOL / "_scratch/castle/uedcli"
+ANCHOR_TRUNK = TOOL / "_scratch/anchor/uedcli/maps/anchor"
 OUT_DIR = Path(os.environ.get("OUT_DIR", str(TOOL / "_scratch/warm-spike")))
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 RES = OUT_DIR / "warm_diag_results.json"

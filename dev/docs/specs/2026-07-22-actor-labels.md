@@ -9,7 +9,7 @@ matcher/casefold folded in; §11.1 raises a scope-cut for Andrzej). Code refs ar
 choice below is Andrzej's, recorded from the speccing Q&A; this spec compiles them.
 **Sibling dimension:** [`2026-07-18-actor-folders-hierarchical.md`](2026-07-18-actor-folders-hierarchical.md)
 — a label is the *flat, multi-valued* counterpart to the *single-path, hierarchical* `folder`. Both
-are uedctl-side, never emitted to the built map, and both ride the one shared per-actor T3D-tree path.
+are uedcli-side, never emitted to the built map, and both ride the one shared per-actor T3D-tree path.
 **Pairs with** the sibling **copy-between-trees** spec (separate) — labels travel across trees the way
 folders do, and that verb consumes the same inheritance rule.
 
@@ -49,7 +49,7 @@ with two things, both now cleared:
 
 ### Relationship to `folder`, `Group`, `Tag` — all INDEPENDENT
 A label is **not** derived from, absorbed into, or written to the `folder` sidecar, the engine `Group`
-prop, or the engine `Tag` prop. It is a separate uedctl-side dimension, never emitted to the built
+prop, or the engine `Tag` prop. It is a separate uedcli-side dimension, never emitted to the built
 map. An actor may carry a folder, a `Group=`, a `Tag=`, and any number of labels; none interact.
 
 ---
@@ -196,15 +196,15 @@ Add to `actor find` (mirroring `--folder`):
 `actor add` gains **`--label L`** (repeatable), stamping the given label(s) on EVERY added actor —
 mirroring `actor add --folder`. Per the generator pattern (labels are trunk state), the flag lives on
 `actor add`, **not** on the generators (`brush build`/`actor build`). Precedence, identical to
-`--folder`: an explicit `--label` **OVERRIDES** any `// uedctl-labels:` carrier in the input; absent
+`--folder`: an explicit `--label` **OVERRIDES** any `// uedcli-labels:` carrier in the input; absent
 `--label`, the carrier sets the labels; absent both, the actor is unlabelled.
 
 ### The carrier — parsed in `model.parse_t3d`, NOT in labellib
-For labels to round-trip through `actor show A | actor add -`, the `// uedctl-labels: l1,l2` comment
+For labels to round-trip through `actor show A | actor add -`, the `// uedcli-labels: l1,l2` comment
 must be consumed where the folder carrier already is: **`model.parse_t3d`** reads `_FOLDER_CARRIER`
 (`model.py:40,147`) into `Actor.folder`; add a parallel `_LABELS_CARRIER` read into `Actor.labels`
 there. `labellib` provides the regex + `format_labels_carrier`; `query.actor_show_block` emits the
-comment (alongside `// uedctl-folder:`) when the actor is labelled and its carrier gate is on;
+comment (alongside `// uedcli-folder:`) when the actor is labelled and its carrier gate is on;
 `--t3d-only` suppresses BOTH carriers. Since `actor_show_block`'s existing `with_folder` param now
 gates the labels carrier too, its meaning becomes "emit sidecar carriers" — **rename it
 `with_sidecars`** (a deliberate rename, not a silent overload; update its callers).
@@ -231,7 +231,7 @@ copy.labels = (inherited labels, from the source's carrier)  ∪  {dup-<rand>}  
   the batch" ambiguity is gone. `--label` on `duplicate` is **purely additive**: its value(s) are
   unioned IN ADDITION to the auto `dup-<rand>` (they do NOT replace it), so `duplicate X --label wing-b`
   yields copies carrying inherited labels + `dup-<rand>` + `wing-b`.
-- **Inherited labels** arrive because `actor_show_block` now emits the `// uedctl-labels:` carrier
+- **Inherited labels** arrive because `actor_show_block` now emits the `// uedcli-labels:` carrier
   (§6), so the shared ingest parses them into `Actor.labels` for free. A duplicated `lighting` torch
   therefore stays `lighting`.
 - **Mechanism (required — do NOT route through add's override):** `_ingest_actor_t3d` gains a distinct
@@ -278,7 +278,7 @@ Today copies land ON their originals (overlap), forcing a second `| actor move -
 ## 8. Cross-tree travel — a real `labels` channel, NOT free ⚠️
 
 **(Corrected in the revision.)** Labels do **not** ride stash/prefab "for free." `read_stash`/`read_prefab`
-re-serialize each actor to a canonical-T3D blob, which **drops every uedctl-side sidecar field**
+re-serialize each actor to a canonical-T3D blob, which **drops every uedcli-side sidecar field**
 (folder, and now labels). Folder solved this with a **separate `folders: name→folder|None` channel**
 threaded through the wrappers; labels need the **identical parallel `labels: name→frozenset[str]`
 channel**:
@@ -316,7 +316,7 @@ sidecar is carried through capture/read/write via this channel, and lists the to
 
 ## 10. Module shape / touchpoints
 
-- **`uedctl/labellib.py`** (NEW) — `validate_label` (charset via `folderlib.validate_segment` PLUS its
+- **`uedcli/labellib.py`** (NEW) — `validate_label` (charset via `folderlib.validate_segment` PLUS its
   OWN leading-`-` guard on top: the shared segment regex `[A-Za-z0-9_+-]+` admits a leading `-` and
   folders depend on that regex, so the label-only "no leading `-`" restriction must layer in `labellib`,
   NOT inside `validate_segment`); `_LABELS_CARRIER` regex + `format_labels_carrier`; and a **FLAT match
@@ -324,17 +324,17 @@ sidecar is carried through capture/read/write via this channel, and lists the to
   `fnmatchcase`** (the house pattern at `query.py:195`; bare `fnmatch.fnmatch` is case-SENSITIVE on
   Linux). This mirrors folder's *stance*, NOT `folderlib.validate_pattern`'s code (which is dotted /
   `**`-aware — wrong for a flat label). Sibling of `folderlib.py`.
-- **`uedctl/folderlib.py`** — expose a public `validate_segment(s)` (shared single-segment charset;
+- **`uedcli/folderlib.py`** — expose a public `validate_segment(s)` (shared single-segment charset;
   does NOT itself reject a leading `-` — that stays a labellib-layer concern so folder validation is
   unchanged).
-- **`uedctl/model.py`** — `Actor.labels: frozenset[str]` field (default `frozenset()`);
+- **`uedcli/model.py`** — `Actor.labels: frozenset[str]` field (default `frozenset()`);
   `parse_t3d` gains the `_LABELS_CARRIER` read into `Actor.labels` (mirroring `_FOLDER_CARRIER`,
   `model.py:147`).
-- **`uedctl/t3dtree.py`** — read/write the `labels` sidecar in `read_actor_tree`/`write_actor_tree`
+- **`uedcli/t3dtree.py`** — read/write the `labels` sidecar in `read_actor_tree`/`write_actor_tree`
   (the ONE shared path; **no tuple-shape change** — labels ride on `Actor.labels`).
-- **`uedctl/query.py`** — `list_actors` gains `labels`/`no_label` filters (flat `*`-only match per
+- **`uedcli/query.py`** — `list_actors` gains `labels`/`no_label` filters (flat `*`-only match per
   §5/§9, OR-within, empty set for `no_label`); `actor_show_block` emits the labels carrier.
-- **`uedctl/dispatch.py`** — the label baseline + diff clause (§3, `_loaded_labels`, the
+- **`uedcli/dispatch.py`** — the label baseline + diff clause (§3, `_loaded_labels`, the
   `TrunkLevelSource.save` delta diff); `actor label add|remove|clear|get` handlers (producer stdout,
   validate-all-then-apply); `actor add`/`actor find` wiring; **`_ingest_actor_t3d` gains a
   `labels_override` param SET BY THE ADD HANDLER ONLY** (do NOT read `args.label` unconditionally inside
@@ -343,15 +343,15 @@ sidecar is carried through capture/read/write via this channel, and lists the to
   (`{dup-<rand>} ∪ args.label`, with `labels_override=None`); + the `--by`/`--at` translate
   (`stashlib.translate` + `writes.union_bounds`, NOT `_apply_set`); `_apply_set` re-attaches stored
   labels (§8).
-- **`uedctl/stashlib.py`, `uedctl/stash_register.py`** — the `labels: name→frozenset[str]` channel
+- **`uedcli/stashlib.py`, `uedcli/stash_register.py`** — the `labels: name→frozenset[str]` channel
   through `read_tree_box`/`write_tree_box` + `_level_from_blobs`/`write_prefab`/`read_prefab`/
   `read_stash`/`write_stash`, mirroring the `folders` channel's STANCE (§8). `read_tree_box` sources
   labels from `level.actors[n].labels` (the model field), NOT from a read-tuple element (labels never
   grew the tuple, §2).
-- **`uedctl/dispatch.py` box sources** — `StashLevelSource.save`/`.load` and `PrefabLevelSource.save`/
+- **`uedcli/dispatch.py` box sources** — `StashLevelSource.save`/`.load` and `PrefabLevelSource.save`/
   `.load` must compute + re-attach the `labels` channel exactly as they already do `folders`; without
   it a `label add --tree stash/x` (allowed below) silently drops on save — the §3 delta-trap, for boxes.
-- **`uedctl/cli.py`** — the `label` sub-parser, `find --label`/`--no-label`, `add --label`,
+- **`uedcli/cli.py`** — the `label` sub-parser, `find --label`/`--no-label`, `add --label`,
   `duplicate --label`/`--by`/`--at`.
 - **`--tree stash|prefab` reach (Decided — ALLOW, 2026-07-23):** every label surface accepts
   `--tree stash|prefab` — the per-actor sidecar slot exists in stash/prefab post-unify, and §8 carries
@@ -411,7 +411,7 @@ plumbing with its only consumer. Andrzej: cut (defer §8) or keep?
 4. **`find --label`:** flat `*`-only match (a `?`/`[` pattern → exit 2); case-insensitive; repeated
    `--label` ORs; ANDs with `--folder`/`--class`;
    `--no-label` finds only unlabelled and is mutually exclusive with `--label`.
-5. **`actor add --label`** stamps every added actor; the `// uedctl-labels:` carrier round-trips through
+5. **`actor add --label`** stamps every added actor; the `// uedcli-labels:` carrier round-trips through
    `show | add -` (via `model.parse_t3d`); explicit `--label` OVERRIDES the carrier; `--t3d-only`
    suppresses it.
 6. **Duplicate:** copies inherit originals' labels (UNION) AND all carry ONE shared fresh `dup-<rand>`
@@ -435,7 +435,7 @@ Use artificial label values (`hero`, `flammable`, `dup-1337ab`) and realistic mu
   `add --label`, `duplicate --label/--by/--at`); `docs/leveldesign/` (labels as the cross-cutting
   organization axis beside folders); `architecture.md` (the `labels` sidecar + `Actor.labels` field +
   the `_loaded_labels` delta baseline + `labellib.py` + the stash/prefab `labels` channel +
-  `labellib`/`folderlib.validate_segment` in the module map); `unrealed/t3d.md` (labels are uedctl-side,
+  `labellib`/`folderlib.validate_segment` in the module map); `unrealed/t3d.md` (labels are uedcli-side,
   never emitted — like folder).
 - **Decisions ledger:** append the resolved choices (name `label`; multi-valued set; the freed-via-
   `--annotate` rename; inherit+fresh dup label as a UNION; grammar) to `decisions.md`.

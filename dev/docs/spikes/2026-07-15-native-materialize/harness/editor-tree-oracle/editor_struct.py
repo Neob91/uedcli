@@ -3,17 +3,17 @@
 
 Breakpoint bspBuildFPolys (0x10036090); at entry Model=[esp+4]. Walk Nodes[0..Num): plane, iF, iB,
 iP, iSurf, nv, nodeflags. This is the complete incremental tree just before bspRepartition rebuilds it
-— the direct counterpart of native's UEDCTL_BSPCSG_TREE_STRUCT dump.
+— the direct counterpart of native's UEDCLI_BSPCSG_TREE_STRUCT dump.
 """
 import subprocess, sys, time
 from pathlib import Path
 
-ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedctl")
+ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedcli")
 HARNESS = ROOT / "dev/docs/spikes/2026-07-15-native-materialize/harness"
 HERE = HARNESS / "editor-tree-oracle"
 sys.path.insert(0, str(ROOT)); sys.path.insert(0, str(HARNESS)); sys.path.insert(0, str(HERE))
 import editor_tree_oracle as O
-from uedctl.driver import Driver, to_z_path
+from uedcli.driver import Driver, to_z_path
 import subset_diff
 
 N = int(sys.argv[1]) if len(sys.argv) > 1 else 33

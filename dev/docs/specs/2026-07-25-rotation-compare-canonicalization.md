@@ -20,7 +20,7 @@ property values" for what is actually built. Ephemeral per-feature scratch; the 
 `level materialize` (and `level preview --game`'s internal materialize) aborts on the H3 post-verify —
 writing **nothing** — for any actor carrying an axis-only rotation.
 
-uedctl's producers write all three FRotator components:
+uedcli's producers write all three FRotator components:
 
     Rotation=(Pitch=0,Yaw=16384,Roll=0)
 
@@ -33,7 +33,7 @@ compare fails. Any yaw-only door, mover, or angled decoration hits it. Reported 
 "materialize post-verify rejects axis-aligned actor Rotation"; the workaround was to drop the
 rotation. Repro: a `PlayerStart` built with `--rotate 0,16384,0` in the `basement` demo.
 
-`Location` is immune only because it is a **typed field** (`Actor.location`) that uedctl re-emits
+`Location` is immune only because it is a **typed field** (`Actor.location`) that uedcli re-emits
 canonically on both sides of the compare.
 
 ## 2. The engine rule (already documented, not honoured by the code)
@@ -65,7 +65,7 @@ and exists because an earlier version folded round-trip-noise reduction into `ca
 which silently float32-rounded coords and stripped `Normal` from the git-tracked trunk (cold review
 caught it, 2026-07-14).
 
-The `Rotation` spelling difference is exactly that category: **round-trip noise between uedctl's
+The `Rotation` spelling difference is exactly that category: **round-trip noise between uedcli's
 spelling and the editor's**, carrying no authored information. It therefore folds on the **throwaway
 compare copy**, alongside the float32/Normal prep.
 
@@ -98,7 +98,7 @@ Pitch/Yaw/Roll order; return `None` when nothing differs (caller drops the whole
 
 Applied to the exact key `Rotation` and nothing else. `RotationRate`/`DesiredRotation` carry non-zero
 class defaults on 228 classes; the same fold there is *correct in principle* but is **out of scope**
-because uedctl has no producer that writes them in full-member form — the asymmetry cannot arise
+because uedcli has no producer that writes them in full-member form — the asymmetry cannot arise
 today, and widening the blast radius of a compare-path change without a driving bug is not worth it.
 Filed to `inbox.md` as the general "member-diff every struct prop at compare time" follow-up.
 

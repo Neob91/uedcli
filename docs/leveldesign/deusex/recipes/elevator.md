@@ -7,11 +7,11 @@ positions, driven by triggers and buttons. There are two levels of ambition:
   per floor, and a button per floor. This uses only stock DX classes.
 - **A full Carone elevator** — the community **CaroneElevatorSet** mod adds `CaroneElevator`,
   `CESequenceTrigger`, `CEDoor` (auto-managed floor doors), `CEDoorButton`, call buttons, and inner
-  doors that ride with the car. It requires shipping `CaroneElevatorSet.u` with your map; uedctl resolves
+  doors that ride with the car. It requires shipping `CaroneElevatorSet.u` with your map; uedcli resolves
   the classes as long as that package is on the **composed search path** (no `EditPackages` ini edit —
-  that's a `ucc make` / GUI-editor concept, not part of the uedctl flow).
+  that's a `ucc make` / GUI-editor concept, not part of the uedcli flow).
 
-Both are authored the same way in uedctl: build the mover, key the floors, place trigger/button
+Both are authored the same way in uedcli: build the mover, key the floors, place trigger/button
 actors, wire tags and events.
 
 ## Part 1 — a basic lift
@@ -27,7 +27,7 @@ actors, wire tags and events.
    <car> N` (N = number of floors, max 8 — key 0 = floor 1). Then position each higher floor with
    `mover key move <car> <i> --to 0,0,<height> --from-base` (key 1 = floor 2, key 2 = floor 3, …),
    the height measured **from the bottom-floor base pose**. (In the UnrealEd GUI, adding a keyframe
-   auto-bumps `NumKeys`; via uedctl you set the count explicitly with `mover key count`, then edit
+   auto-bumps `NumKeys`; via uedcli you set the count explicitly with `mover key count`, then edit
    each key by index.)
 4. **Give the car a `Tag`** (e.g. `Elevator_A`) so buttons and triggers can address it.
 5. **Add a `SequenceTrigger` per floor** (`CESequenceTrigger` with the Carone mod). Each one's
@@ -40,7 +40,7 @@ actors, wire tags and events.
    in the property browser — `OpeningSound`, `ClosingSound`, `MoveAmbientSound`, `ClosedSound`; there is
    no single property literally named `MoverSounds`) from a sound package such as `MoverSFX`.
 
-### With uedctl
+### With uedcli
 
 ```bash
 # 2. Build the car at floor 1 (key 0), textured. (There is no --hollow flag: this emits a solid
@@ -53,7 +53,7 @@ brush build cube --width 96 --breadth 96 --height 128 \
 #   -> ElevatorMover0
 
 # 3. Set the floor count (keys 0..2), then place each higher floor's key at its ABSOLUTE world
-#    pose with --from-world (uedctl subtracts the base to store the offset). The car base sits at
+#    pose with --from-world (uedcli subtracts the base to store the offset). The car base sits at
 #    z=64, so these are floor heights, not offsets. Raise the count first — move/rotate are edit-only.
 mover key count ElevatorMover0 3               # 3 floors = keys 0,1,2
 mover key move ElevatorMover0 1 --from-world --to 0,0,256   # floor 2 = key 1 (absolute z=256, i.e. 192 above floor 1)
@@ -98,7 +98,7 @@ actor build DeusEx.Button1 --prop ButtonType=BT_2 --prop Event=ElevatorA_Floor2 
    keyframe `i` (CEEvents[0] = floor-1 doors, CEEvents[1] = floor-2 doors, …), and set
    `bCEControlsDoors=True`.
 
-### With uedctl
+### With uedcli
 
 ```bash
 # 1. A wall call button per floor (NOT attached to the car).
@@ -131,7 +131,7 @@ actor prop set ElevatorMover0 \
 3. **Wire the inner doors** — on the `CaroneElevator`, set `CESlaveMover` = the inner-door tag and
    `bCEControlsSlave=True`.
 
-### With uedctl
+### With uedcli
 
 ```bash
 # 1. Inner doors: CEDoor movers that ride the car.
@@ -169,8 +169,8 @@ actor prop set ElevatorMover0 CESlaveMover=ElevatorA_innerdoors bCEControlsSlave
 - **The Intersect/Create-Mover editor ritual is gone** — `brush build … --mover-class` emits the
   mover directly. Everything else (keyframes, tags, events) is `actor prop set` / `mover key`.
 - **Texture the car** with `--texture` on `brush build`, or retexture it later with `brush poly set` —
-  uedctl can edit a mover's faces at any time. (The "surfaces frozen after Add Mover" limit is a
-  GUI-editor constraint, not a uedctl one.)
+  uedcli can edit a mover's faces at any time. (The "surfaces frozen after Add Mover" limit is a
+  GUI-editor constraint, not a uedcli one.)
 - **Carone classes are a shipped dependency.** They only resolve during `level materialize` if
   `CaroneElevatorSet.u` is on the composed package search path. Distribute it with the map, and
   credit Carone.

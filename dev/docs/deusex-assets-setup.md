@@ -3,7 +3,7 @@
 The committed `uned/UED22` editor substrate ships only **stripped editor CODE** (the
 version-69 `.u` the editor loads). To do real work — materialize/preview actual maps, and
 **stub** v68 Deus Ex code packages into v69 (see the "Package stubbing" section of
-[`architecture.md`](architecture.md)) — uedctl also needs the game's
+[`architecture.md`](architecture.md)) — uedcli also needs the game's
 **content** (textures/sounds/music) and the original **v68 `.u` code** as inputs. Those are
 copyrighted Deus Ex game files: **user-supplied, gitignored, never committed.** This is how
 you put them in place.
@@ -11,7 +11,7 @@ you put them in place.
 ## Where to get Deus Ex (and the patch)
 
 Deus Ex is a **commercial game** — there is no official free-of-charge source; you supply your own
-copy. For uedctl you only need the files on disk (the game is never run), so any of these works:
+copy. For uedcli you only need the files on disk (the game is never run), so any of these works:
 
 - **Buy it (simplest, ~$8–10, already patched).** [GOG.com](https://www.gog.com/en/game/deus_ex)
   (DRM-free GOTY Edition) or Steam. Both ship at `1.112fm` already, so there is nothing to patch —
@@ -34,7 +34,7 @@ either an installed Deus Ex (a folder containing `System/`, `Textures/`, …) **
 installer (a folder containing `deusex.ace`):
 
 ```bash
-cd Tools/uedctl
+cd Tools/uedcli
 dev/scripts/install-deusex-assets.sh /path/to/DeusEx              # installed game OR ACE installer
 dev/scripts/install-deusex-assets.sh --with-maps /path/to/DeusEx # also the retail .dx maps
 dev/scripts/install-deusex-assets.sh --dry-run /path/to/DeusEx   # show what it would do, write nothing
@@ -42,14 +42,14 @@ dev/scripts/install-deusex-assets.sh --dry-run /path/to/DeusEx   # show what it 
 
 SOURCE is **required** — the script never downloads anything. From it, the script does two things:
 
-1. **Assembles a full working game copy** under `Tools/uedctl/dev/games/<game>/` (default
+1. **Assembles a full working game copy** under `Tools/uedcli/dev/games/<game>/` (default
    `<game>=deusex`; override with `--game`). If SOURCE is an ACE installer it extracts it with
    `unace`; if SOURCE is an installed game it copies the whole tree.
-2. **Populates the substrate tree** `Tools/uedctl/uned/DeusExAssets/` from that working copy — the
-   curated subset uedctl's editor/build containers mount.
+2. **Populates the substrate tree** `Tools/uedcli/uned/DeusExAssets/` from that working copy — the
+   curated subset uedcli's editor/build containers mount.
 
 Both `dev/games/` and `uned/DeusExAssets/` are **gitignored and never committed**. No config edits and
-no container restart — uedctl reaches `uned/DeusExAssets/` per-command: every container (GUI editor +
+no container restart — uedcli reaches `uned/DeusExAssets/` per-command: every container (GUI editor +
 the build container `stub.ephemeral_build_container`) bind-mounts the WHOLE composed config dir set at
 `/resources/<n>` via the ONE `container_assets.resource_mounts` scheme, with a crafted
 `[Core.System] Paths` (`/stubs`+`/opt/UED22` first, then the mounts) — no `docker-compose.yml`
@@ -59,18 +59,18 @@ the build container `stub.ephemeral_build_container`) bind-mounts the WHOLE comp
 ## What you need
 
 A `1.112fm`-level Deus Ex **SOURCE** — either an installed game or the raw retail ACE installer (see
-[Where to get Deus Ex](#where-to-get-deus-ex-and-the-patch) above). uedctl expects the original package
+[Where to get Deus Ex](#where-to-get-deus-ex-and-the-patch) above). uedcli expects the original package
 versions: textures are package version 61/68, the code `.u` are version 68. (A patch that
 *re-versions* the packages to something exotic is the only thing that could surprise the stubber;
 standard patched installs are fine.)
 
-You only need the files on disk — uedctl never runs the Deus Ex game.
+You only need the files on disk — uedcli never runs the Deus Ex game.
 
 ## What gets copied, and why each part matters
 
-Step 1 puts the **whole** SOURCE into the working copy `Tools/uedctl/dev/games/<game>/` (a complete,
+Step 1 puts the **whole** SOURCE into the working copy `Tools/uedcli/dev/games/<game>/` (a complete,
 playable install you can also point a launcher at). Step 2 then copies these subtrees from that working
-copy into `Tools/uedctl/uned/DeusExAssets/`:
+copy into `Tools/uedcli/uned/DeusExAssets/`:
 
 | Subtree | Becomes | Needed for |
 |---|---|---|
@@ -105,7 +105,7 @@ Two seams already know about `DeusExAssets/` — copying the files in is all tha
 This skips the `dev/games/` working copy and populates `uned/DeusExAssets/` directly from an install:
 
 ```bash
-DST=Tools/uedctl/uned/DeusExAssets
+DST=Tools/uedcli/uned/DeusExAssets
 mkdir -p "$DST"
 cp -a /path/to/DeusEx/System   "$DST"/   # v68 .u code (for stubbing)
 cp -a /path/to/DeusEx/Textures "$DST"/   # *.utx content
@@ -121,7 +121,7 @@ case differences for you).
 ## Verify it worked
 
 ```bash
-cd Tools/uedctl/uned
+cd Tools/uedcli/uned
 for s in System:u Textures:utx Sounds:uax Music:umx; do
   d=${s%%:*}; e=${s##*:}; printf "%-9s %s .%s\n" "$d" "$(ls DeusExAssets/$d/*.$e 2>/dev/null | wc -l)" "$e"
 done
@@ -129,8 +129,8 @@ done
 # Sounds ~2 .uax, Music ~35 .umx.
 ```
 
-A live end-to-end check is `uedctl level materialize` / `level preview` on a base-content map (it
-fails fast and names any still-missing package), or `uedctl substrate stub <pkg>` once package
+A live end-to-end check is `uedcli level materialize` / `level preview` on a base-content map (it
+fails fast and names any still-missing package), or `uedcli substrate stub <pkg>` once package
 stubbing lands.
 
 ## Caveats

@@ -20,7 +20,7 @@ that predate the core migrate onto it; none survives as a second parser to keep 
 ### The file describes itself — never a per-game table
 
 Layout is derived from the **data**, not from a table of what a particular game meant. This is the
-rule that makes uedctl a generic UnrealEngine-1 tool rather than a Deus Ex one: a decoder that needs
+rule that makes uedcli a generic UnrealEngine-1 tool rather than a Deus Ex one: a decoder that needs
 a game's own code package in order to read that game's asset cannot read a lone `.utx` from an
 engine we have never seen.
 
@@ -57,7 +57,7 @@ editor is given ([`containers.md`](containers.md)).
 
 A stub is recompiled against UT's `Engine`/`Core`, so its inherited base-class properties are UT's,
 not the game's. Reading one for schema would be subtly, invisibly wrong, so the schema **never**
-consults the stub cache. The set of packages searched is the composed `paths` uedctl already
+consults the stub cache. The set of packages searched is the composed `paths` uedcli already
 resolves ([`projects-and-config.md`](projects-and-config.md)) — never a second, hardcoded search
 list that would drift from it and miss a project's own overriding classes.
 
@@ -69,7 +69,7 @@ which survives only inside the stub pipeline it already serves.
 
 ### Decoding is cheap on a cold process
 
-Every `uedctl` invocation is a fresh cold process, so decoded package primitives are cached
+Every `uedcli` invocation is a fresh cold process, so decoded package primitives are cached
 per-package on disk, in the derivable, never-committed per-user cache, and invalidated when the
 file changes. **A cache that cannot be written is a loud, actionable error** naming the directory —
 never a swallowed failure, because a silently dead cache re-decodes everything on every run,

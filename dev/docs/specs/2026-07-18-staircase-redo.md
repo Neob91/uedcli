@@ -156,7 +156,7 @@ The redo breaks every test that assumed a single `Brush` return / old geometry. 
 against the live editor's DEINTERSECTION reconstruction). They must be regenerated for the new
 geometry.
 
-- **Documented re-bless path:** `python -m uedctl.tests.builder_parity_cases` drives the **live
+- **Documented re-bless path:** `python -m uedcli.tests.builder_parity_cases` drives the **live
   editor** (`regenerate(driver)`), captures each case per-slab, and refuses to bless a case whose
   live capture disagrees with the builder. `staircase` returning a `list[Brush]` is captured
   per-slab automatically (`capture_world_verts` already loops `_as_brushes`), exactly like
@@ -174,7 +174,7 @@ geometry.
   until the live re-bless runs, the regenerated `stair_*` goldens are a **change-detector**, not an
   editor oracle; the fixture `_meta` note's "EDITOR's reconstruction" provenance is aspirational for
   these four entries until then.
-- **Flagged for Andrzej:** a live `python -m uedctl.tests.builder_parity_cases` re-bless should be
+- **Flagged for Andrzej:** a live `python -m uedcli.tests.builder_parity_cases` re-bless should be
   run when the container is available to reconfirm the stair goldens end-to-end (recorded in
   `board/inbox.md`). For axis-aligned boxes this is expected to be a no-op.
 

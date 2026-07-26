@@ -18,7 +18,7 @@ Variants:
   V3  Paths=/resources/A/*.utx    no middle `*` (per-dir)          (KNOWN-GOOD control)
   V4  (no injected line)          baked only                       (NEGATIVE control → must FAIL)
 
-Run on the HOST from Tools/uedctl:  PYTHONPATH=. python3 .../probe.py
+Run on the HOST from Tools/uedcli:  PYTHONPATH=. python3 .../probe.py
 """
 from __future__ import annotations
 
@@ -30,13 +30,13 @@ import time
 import uuid
 from pathlib import Path
 
-from uedctl import editor
-from uedctl.driver import Driver
+from uedcli import editor
+from uedcli.driver import Driver
 
 TEX = "/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Textures/LUM_CoreTex.utx"
 SCRATCH = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/_scratch/paths-wildcard")
 BAKED_INI = Path(__file__).resolve().parents[4] / "uned" / "UED22" / "unrealtournament.ini"
-# ^ Tools/uedctl/uned/UED22/unrealtournament.ini (probe is at Tools/uedctl/dev/docs/spikes/<slug>/)
+# ^ Tools/uedcli/uned/UED22/unrealtournament.ini (probe is at Tools/uedcli/dev/docs/spikes/<slug>/)
 
 
 def log(*a):

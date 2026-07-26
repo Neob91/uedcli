@@ -4,7 +4,7 @@ of a real DeusEx `.dx` WITHOUT a live editor and reports which LevelInfo-class p
 names and which volatile names are present, plus whether the level's level-info actor is the
 stock `LevelInfo` or the DeusEx `DeusExLevelInfo` subclass.
 
-This is the EVIDENCE for dev/docs/specs/2026-06-18-uedctl-levelinfo-extraction-design.md.
+This is the EVIDENCE for dev/docs/specs/2026-06-18-uedcli-levelinfo-extraction-design.md.
 
 NOTE: the Names table is package-wide (zone-info actors share names like AmbientBrightness),
 so a present name is INDICATIVE that the level authored it, not proof. The authoritative field

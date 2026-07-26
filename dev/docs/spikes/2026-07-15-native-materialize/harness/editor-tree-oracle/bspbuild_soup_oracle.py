@@ -17,7 +17,7 @@ import sys
 import time
 from pathlib import Path
 
-ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedctl")
+ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedcli")
 HARNESS = ROOT / "dev/docs/spikes/2026-07-15-native-materialize/harness"
 HERE = HARNESS / "editor-tree-oracle"
 sys.path.insert(0, str(ROOT))
@@ -25,7 +25,7 @@ sys.path.insert(0, str(HARNESS))
 sys.path.insert(0, str(HERE))
 
 import editor_tree_oracle as O  # noqa: E402
-from uedctl.driver import Driver, to_z_path  # noqa: E402
+from uedcli.driver import Driver, to_z_path  # noqa: E402
 import subset_diff  # noqa: E402
 
 GOLDEN = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("/home/neob91/Games/LutrisDX/drive_c/DX/Maps/Test_Castle.dx")

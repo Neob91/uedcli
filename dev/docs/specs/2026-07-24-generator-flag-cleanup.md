@@ -34,8 +34,8 @@ This **reverses** the earlier rule that folder/label flags live on `actor add`, 
 
 ## 1. The mechanism (already in place)
 
-`folder` and `label` are uedctl-side sidecars that ride the T3D wire as comment carriers the editor
-strips silently: `// uedctl-folder: <path>` (`model._FOLDER_CARRIER`) and `// uedctl-labels: a,b,c`
+`folder` and `label` are uedcli-side sidecars that ride the T3D wire as comment carriers the editor
+strips silently: `// uedcli-folder: <path>` (`model._FOLDER_CARRIER`) and `// uedcli-labels: a,b,c`
 (`labellib._LABELS_CARRIER`). Today the carriers are emitted in exactly ONE place — `query.actor_show_block`
 (`query.py:308-316`, used by `actor show`) — and parsed back by `actor add` (`dispatch.py:1846`+). So the
 *parsing* plumbing exists, but **generators emit NO carriers today — that is genuinely new emit code**, and
@@ -108,7 +108,7 @@ WHERE it goes is load-bearing (a wrong locus corrupts the trunk store):
 ## 4. Tests
 
 - **Generator emits carriers:** `brush build cube --folder a.b --label x --label y` → the emitted T3D block
-  contains `// uedctl-folder: a.b` and `// uedctl-labels: x,y`; piped to `actor add -`, the trunk actor has
+  contains `// uedcli-folder: a.b` and `// uedcli-labels: x,y`; piped to `actor add -`, the trunk actor has
   folder `a.b` and labels `{x,y}`. Same for `actor build`.
 - **`actor add` has no `--folder`/`--label`:** argparse rejects them (regression that they're gone).
 - **`actor add` still persists carriers** from hand-written / `stash show` T3D (unchanged behavior).
@@ -133,7 +133,7 @@ walkthrough. `direction.md` is already reconciled (Folders/Labels/Generator-patt
 - **Generator set is `brush build` shapes + `actor build`** (+ the new `brush intersect`/`deintersect`,
   which inherit via `emit_actor_t3d`). `stash`/`prefab` are stores, not generators; `actor duplicate`/`apply`
   are copy-verbs that KEEP their own flags (§2 exception). Set is exhaustive.
-- **Hard removal, no deprecation window** — `uedctl` is a pre-1.0 internal tool with no external callers;
+- **Hard removal, no deprecation window** — `uedcli` is a pre-1.0 internal tool with no external callers;
   all call sites are in-repo and migrated in this change. (The dependent intersect/deintersect build assumes
   the cleanup has landed, so a deprecation shim would only add noise.)
 

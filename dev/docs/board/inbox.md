@@ -5,6 +5,19 @@ lands here first, with no obligation to know its stage yet. This is the *pre-pip
 stage (so no `to-` prefix). See [`README.md`](README.md).
 
 **Triage** routes each item to where its next action lives:
+- `p1` `[chore]` **The `uedctl`→`uedcli` rename shipped UNGATED — it never had its build review.**
+  The whole-repo rename (777 files, 5383±5383 lines, all three case variants, plus 12 doc filenames
+  and the `uedctl/`→`uedcli/`, `uedctl-native/`→`uedcli-native/`, `bin/uedctl`→`bin/uedcli`,
+  `2026-06-27-decontainerize-uedctl/` path moves) was committed on the owner's explicit instruction
+  to "commit and worry about reviews later", so the `build` round CLAUDE.md "Review gates" requires
+  was deliberately skipped, not passed. `bin/test` was green (3345 passed, 16 skipped, 64 deselected,
+  1 xfailed, + 58 cargo goldens) and `git grep -i uedctl` is empty, but no cold reviewer ever read
+  the diff. What a reviewer would have been asked to check, and what therefore remains unverified:
+  a substring that merely *contained* `uedctl` but denoted something external (docker image/tag
+  names, registry names, anything crossing a repo or machine boundary) and now points at nothing;
+  word-boundary damage; cross-doc links into the 12 renamed filenames; and whether the diff is
+  purely mechanical. Run a `build` round over `git show <rename-commit>` when convenient.
+  *(2026-07-26.)*
 - `p1` `[chore]` **The texture-format evidence has NO durable home and will die with an ephemeral
   spec.** `spikes/2026-07-25-native-texture-formats/` contains only `pkgfixture_proto.py` and no
   write-up. The measured facts — the three dumped `ETextureFormat` enums and where they disagree,
@@ -23,12 +36,12 @@ stage (so no `to-` prefix). See [`README.md`](README.md).
 - `p2` `[chore]` **`architecture.md`'s Substrate section carries a deferred note whose symbols are
   deleted.** It still ends with "*Deferred follow-up: the stub-build + texture sync mounts are
   sourced from `substrate_code_dirs`/`install_system_root`, NOT yet from the composed config*" —
-  un-deferred 2026-07-14 17:40, and both symbols are gone from `uedctl/`. *(containers drafter.)*
-- `p2` `[spec]` **`$UEDCTL_LEVEL` / `--tree` / the dropped `level select` have no direction home.**
+  un-deferred 2026-07-14 17:40, and both symbols are gone from `uedcli/`. *(containers drafter.)*
+- `p2` `[spec]` **`$UEDCLI_LEVEL` / `--tree` / the dropped `level select` have no direction home.**
   Decided 2026-07-20 21:30 and BUILT (`level_select.py`, `cli.py`'s `_tree_flag`, no `select`
   parser), but absent from every `direction/` topic — the trunk-and-editor and projects-and-config
   drafters each judged it the other's. Half is level targeting (`trunk-and-editor.md`), half is
-  ambient-resolution precedence mirroring `$UEDCTL_PROJECT` (`projects-and-config.md`). Needs a
+  ambient-resolution precedence mirroring `$UEDCLI_PROJECT` (`projects-and-config.md`). Needs a
   home before it is lost. *(Both drafters, 2026-07-26.)*
 - `p2` `[chore]` **`rationale/` topics are unwritten for material the drafters surfaced.** Agent-owned
   engineering decisions with no home yet: the schema-cache mechanism (stat tuple over content hash,
@@ -142,7 +155,7 @@ queue (don't copy — one home per item).
   count, so a splitter built to it would split inside the fence and self-certify green. Any redo
   must anchor on `^## \d{4}-\d{2}-\d{2}`, be fence-aware, and assert the format block survives.
 - `p1` `[chore]` **Docs restructure: link-check scope must be repo-wide, not `dev/docs`+`docs`.**
-  ~49 citations of `decisions.md` and 5 of `direction.md` live in `uedctl/*.py`, `bin/_venv.sh`,
+  ~49 citations of `decisions.md` and 5 of `direction.md` live in `uedcli/*.py`, `bin/_venv.sh`,
   `pyproject.toml`; `CLAUDE.md` "New UnrealEd findings … back-reference them from code comments"
   makes these load-bearing. Also: the dominant citation form is *prose* (``CLAUDE.md` "Review
   gates"``), which a link checker passes — needs a string-based check too. And `bin/test` must run,
@@ -168,7 +181,7 @@ queue (don't copy — one home per item).
   back would walk a reviewed item backwards, violating "an item lives in exactly ONE queue".
   Re-verify every board destination against the board's real state.
 - `p2` `[debug]` **`CLAUDE.md`'s "The repo this tool lives in" is factually wrong in this
-  checkout** — it says uedctl lives at `Tools/uedctl/` inside `dx_lum` with `_scratch/` "two levels
+  checkout** — it says uedcli lives at `Tools/uedcli/` inside `dx_lum` with `_scratch/` "two levels
   up"; the git toplevel is `/home/neob91/Documents/Dev/uedcli`, `_scratch/` is at that root, and
   there is no `Tools/`. Pre-existing, and the section stays permanently resident, so the error sits
   in the most privileged position available. Scheduled for the docs-restructure plan's Task 9.
@@ -189,7 +202,7 @@ queue (don't copy — one home per item).
   unpruned** — out of scope for the docs restructure, noted there.
 - **[debug] p2 `brush vertex move` reaches the user as a bare Python traceback.**
   `brush vertex move <name> --at 64,64,64 --to 1e30,64,64` prints a full traceback ending
-  `ValueError: no brush vertex at (…)` from `uedctl/vertex.py:81`. `dispatch`'s top-level handler
+  `ValueError: no brush vertex at (…)` from `uedcli/vertex.py:81`. `dispatch`'s top-level handler
   chain catches `_SelectionExit`, `_ProjectError`, `LevelSelectionError`, `ConfigError`,
   `CoordinateError`, `GeometryError`, and the editor errors — but not a plain `ValueError`, so this
   one escapes. Violates `CLAUDE.md` "never let a Python exception reach the CLI user". Pre-existing
@@ -276,7 +289,7 @@ queue (don't copy — one home per item).
   actor dimension, Docker container labels in `preview_game.py`, the legend). Recorded in
   `decisions.md` 2026-07-25 18:40 UTC. **Confirm the split or ask for the full rename.**
 - **[chore] p3 `test_zoom_does_not_highlight` does not test its own claim.**
-  `uedctl/tests/test_actor_preview.py` — the comment says "a zoom target is NOT bolded/highlighted",
+  `uedcli/tests/test_actor_preview.py` — the comment says "a zoom target is NOT bolded/highlighted",
   but the assertion (`_CSG_PALETTE["subtract"][0] in _colors(...)`) only proves the brush drew in its
   normal CSG hue, which holds with or without highlighting. Pre-existing; #10.1 only swapped its
   pixel reader from PPM-header parsing to a Pillow decode. A real test would compare against a
@@ -287,13 +300,13 @@ queue (don't copy — one home per item).
   was split that way only because a stream watchdog fired mid-task and the in-flight work had to be
   committed immediately to avoid losing it. Not repaired because that would mean rewriting published
   history, which is forbidden; the branch is squash-merged, so the red intermediate does not reach
-  `uedctl-impl`. Recorded so the "each commit lands green" rule is not silently eroded.
+  `uedcli-impl`. Recorded so the "each commit lands green" rule is not silently eroded.
 - **[chore] p3 Trunk-save lost-update detection aborts at whole-save granularity (known tradeoff).**
   The `TrunkLevelSource.save` compare-and-abort (spec `specs/2026-07-25-trunk-write-safety.md`, D3)
   aborts the ENTIRE save if any one actor in `changed ∪ deleted` was touched concurrently — so a large
   batched pipeline (`actor find … | actor prop set -` over hundreds of actors) loses its whole save
   when a single target raced, and a persistent concurrent writer could livelock the retry. This is the
-  deliberate abort-not-merge semantics (Andrzej 2026-07-25) and is recoverable (uedctl is stateless per
+  deliberate abort-not-merge semantics (Andrzej 2026-07-25) and is recoverable (uedcli is stateless per
   invocation; the re-run reloads fresh and recomputes), so it is not a correctness bug — logged as a
   known coarse-granularity tradeoff, not surfaced as a surprise. A finer-grained "write the
   non-conflicting subset, report the conflicts" mode is the possible future refinement. (From the D3
@@ -312,13 +325,13 @@ queue (don't copy — one home per item).
   same-actor lost updates over `changed ∪ deleted`). (From the D3 spec review, 2026-07-25.)
 
 - **[spec] p1 ANDRZEJ — the two `CLAUDE.md` files now give contradictory review-gate rules, and the
-  new uedctl policy block has no ledger entry.** Three reviewers in one round independently flagged
+  new uedcli policy block has no ledger entry.** Three reviewers in one round independently flagged
   this; escalating rather than editing your own convention files. (a) **Direct contradiction, both
-  auto-loaded:** `Tools/uedctl/CLAUDE.md` opens "**EVERY change gets reviewed — there is no
+  auto-loaded:** `Tools/uedcli/CLAUDE.md` opens "**EVERY change gets reviewed — there is no
   trivial-change exemption**" with a 2/3/4 reviewer ladder, while the repo-root `CLAUDE.md` still
   says "For any **non-trivial** change … fan out **two** … (A trivial change — a typo, a one-line doc
-  tweak — doesn't need the gate; use judgement.)" and is not scoped to exclude uedctl. An agent
-  working in `Tools/uedctl` reads both and gets opposite instructions on the exemption AND on the
+  tweak — doesn't need the gate; use judgement.)" and is not scoped to exclude uedcli. An agent
+  working in `Tools/uedcli` reads both and gets opposite instructions on the exemption AND on the
   headcount. Suggest the repo file say a per-tool file may impose a stricter gate. (b) **Dangling
   citation:** the tool file cites "in one 2026-07-25 round the two reviewers overlapped on only two
   of eight findings … — see `decisions.md`, 2026-07-25", but no `decisions.md` entry records that
@@ -340,11 +353,11 @@ queue (don't copy — one home per item).
   evidence for the inferred sequence than what was published. (b) Both docs call the summary "the
   36-byte header"; the engine's summary is **64 bytes** (measured `nameoff=64` on `00_Intro.dx`,
   `00_Training.dx`, `00_TrainingCombat.dx` — bytes 36-63 hold the GUID + generation records). 36 is
-  uedctl's READ WINDOW, not what `RewriteSummary` patches. (c) `measure_header_window.py` bare-asserts
+  uedcli's READ WINDOW, not what `RewriteSummary` patches. (c) `measure_header_window.py` bare-asserts
   every package passes; it should collect outliers instead, since legitimate zero-count packages exist
   (`uned/UED22/WinDrv.u`, `Window.u`) and a search path containing one would die with an unexplained
   `AssertionError`. (d) That harness needs the retail install AND the tool dir as cwd (run from the
-  repo root it dies with a confusing `ImportError` because the repo's `uedctl/` maps dir shadows the
+  repo root it dies with a confusing `ImportError` because the repo's `uedcli/` maps dir shadows the
   package); document both and fail with a named error. (e) `architecture.md` says
   "`qualify.export_and_qualify` … never called either" — that function no longer exists (removed in
   `607dc430f`); say it was deleted with the store. (2026-07-25, round-4 cold reviews.)
@@ -373,15 +386,15 @@ queue (don't copy — one home per item).
 - **[chore] p3 Two tests in `test_engine_facts.py` don't test what they claim (pre-existing).**
   `test_collision_box_is_twice_the_half_height` is `radius, half_height = 22.0, 40.0` then
   `assert 2 * half_height == 80.0` — a tautology over its own literals that imports nothing from
-  uedctl and can never fail. `test_the_sheer_axis_enum_matches_the_real_core_package` docstrings "It
+  uedcli and can never fail. `test_the_sheer_axis_enum_matches_the_real_core_package` docstrings "It
   must match `Core.u`'s real `ESheerAxis` ordering" but never opens a package, though the real names
   are in the committed `uned/UED22/core.u`. Both predate this work; surfaced by a round-4 reviewer
   reading the file the new regression was added to. (2026-07-25.)
 
 - **[chore] p3 Stale `canonicalize_mover_blob` references in two more ephemeral docs.**
   `specs/2026-07-18-unify-t3d-trees.md` (5 places) and `plans/2026-07-18-build-unify-t3d-trees.md:53`
-  still describe the deleted helper as shipped API ("**uedctl/movers.py** — gains a public
-  `canonicalize_mover_blob`"). Its sibling `specs/2026-06-27-uedctl-native-dx-read-design.md` got a
+  still describe the deleted helper as shipped API ("**uedcli/movers.py** — gains a public
+  `canonicalize_mover_blob`"). Its sibling `specs/2026-06-27-uedcli-native-dx-read-design.md` got a
   STALE banner in the same batch; these were missed. Ephemeral docs, so lowest priority — but the
   deleted name now appears nowhere else. (2026-07-25, round-4 cold reviews.)
 
@@ -479,7 +492,7 @@ queue (don't copy — one home per item).
   become resolver-dependent lightly. (2026-07-25, cold review of #9.4.)
 
 - **[spec] p3 A fourth confidence marker for AUTHOR-ATTESTED UnrealEd facts?** `CLAUDE.md` defines
-  three: ✅ uedctl-used / live-verified, 🔬 live-probed, 📖 extracted from the binary string table.
+  three: ✅ uedcli-used / live-verified, 🔬 live-probed, 📖 extracted from the binary string table.
   Andrzej's own hands-on knowledge of the editor is none of them literally, yet it is stronger than
   📖 — e.g. "every 2D-shape-editor operation yields ONE builder brush" (`kb/geometry-builders.md` §4,
   `decisions.md` 2026-07-25 03:05 UTC), currently filed ✅ with the attestation spelled out inline so
@@ -541,7 +554,7 @@ queue (don't copy — one home per item).
   bend, and on that evidence the merge framing above is mostly a red herring.** Ran
   `brush build revolve --point 64,0 --point 96,0 --point 96,32 --point 64,32 --angle 16384
   --segments 4` and read the emitted T3D:
-  - **`Link=` is NOT the mechanism and is not ours.** uedctl emits **zero** `Link=` lines (0 across
+  - **`Link=` is NOT the mechanism and is not ours.** uedcli emits **zero** `Link=` lines (0 across
     18 polys), `model.Polygon` has no `link` field so ingest drops it, and `normalize.py` says
     outright *"The emitter drops Link."* `unrealed/t3d.md`'s polygon reference: *"computed BSP surface
     link; never authored, **ignored on import**."* A real editor export of a 6-poly cube in `_scratch`
@@ -775,7 +788,7 @@ queue (don't copy — one home per item).
   (2026-07-24).** Every consuming/mutating verb that reads its target set from stdin via `-` should equally
   take the same names directly on the command line, so `actor prop set Foo Bar Texture=…` works without a
   `printf 'Foo\nBar' | ... -` dance. Revisits the current CLI convention that `-` is the SOLE names source,
-  mutually exclusive with CLI args (uedctl `CLAUDE.md`): positional names and `-` stay mutually exclusive
+  mutually exclusive with CLI args (uedcli `CLAUDE.md`): positional names and `-` stay mutually exclusive
   per-call, but a verb must offer BOTH intake modes, not stdin-only. Audit which consuming verbs are
   currently stdin-only and add positional intake where missing. Andrzej flagged.
 - **[spec] p2 Rename `brush build --mover-class` → `--brush-class`, and enforce the class descends from
@@ -788,7 +801,7 @@ queue (don't copy — one home per item).
   `docs/usage.md` + `direction.md`'s generator-pattern note. Andrzej flagged.
 - **[flag] p2 Proposal: collapse level/stash/prefab into ONE flat "tree" concept — rename the `level`
   concept → `tree`, a `Trees/{Maps,Stash,Prefabs}/<name>/` layout with an auto-created `Trees/.gitignore`
-  ignoring `Stash/`, `UEDCTL_LEVEL`→`UEDCTL_TREE`, `--target`→`--target-tree` (Andrzej idea, 2026-07-22).
+  ignoring `Stash/`, `UEDCLI_LEVEL`→`UEDCLI_TREE`, `--target`→`--target-tree` (Andrzej idea, 2026-07-22).
   MY EVAL: recommend AGAINST the wholesale rename/reorg — the valuable core already shipped and the
   residual is net-negative.** ALREADY DONE (so this is NOT greenfield): the three share ONE T3D-tree
   format (`t3dtree.py`, invariant 2026-07-18 23:01), and "tree" is ALREADY the umbrella — `--tree
@@ -805,19 +818,19 @@ queue (don't copy — one home per item).
   "not valid for this kind" errors (worse). **(2) "tree" is already taken:** terminology (2026-06-23)
   fixes **T3D tree** = the on-disk directory FORM shared by all three, and **level** = the playable
   domain object; renaming level→tree collapses the content/container distinction and makes "tree" mean
-  both. **(3) moving stash into `Trees/Stash/` erodes the `.uedctl/` safety invariant** (direction.md:
+  both. **(3) moving stash into `Trees/Stash/` erodes the `.uedcli/` safety invariant** (direction.md:
   ALL machine-local throwaway — stash, flocks, staging temps, delivered preview maps — sits in ONE
-  self-ignoring gitignored `.uedctl/`); it splits throwaway state across two homes and swaps a
+  self-ignoring gitignored `.uedcli/`); it splits throwaway state across two homes and swaps a
   self-ignoring dir for a tracked dir + carve-out `.gitignore` (more fragile — a mis-edit commits
-  scratch; the other `.uedctl/` tenants still can't move). **(4) the `Trees/{Maps,Prefabs}/` root
+  scratch; the other `.uedcli/` tenants still can't move). **(4) the `Trees/{Maps,Prefabs}/` root
   re-forces the parallel tree that the project-layout decision (2026-07-17 20:58) explicitly rejected**
-  — maps-dir/prefabs-dir are independently-configurable relative paths with defaults *so uedctl can
+  — maps-dir/prefabs-dir are independently-configurable relative paths with defaults *so uedcli can
   point at a repo's EXISTING dirs* (LUM already has `Maps/`, `Prefabs/` at their own locations).
-  **(5) `$UEDCTL_LEVEL` is deliberately a BARE level name** — the ambient default is "which LEVEL am I
+  **(5) `$UEDCLI_LEVEL` is deliberately a BARE level name** — the ambient default is "which LEVEL am I
   editing"; you never ambiently edit a stash/prefab (those are always explicit `--tree stash/x`), so
-  `$UEDCTL_TREE` (implying `KIND/NAME`) is meaningless as an editing default. SALVAGEABLE: a single
+  `$UEDCLI_TREE` (implying `KIND/NAME`) is meaningless as an editing default. SALVAGEABLE: a single
   `Trees/` root with an auto-created `.gitignore` is a genuinely nice ergonomic *default* IF decoupled
-  from forcing the layout AND from moving stash out of `.uedctl/` — but given (3)/(4) probably not worth
+  from forcing the layout AND from moving stash out of `.uedcli/` — but given (3)/(4) probably not worth
   the churn. DECIDE-OR-DROP: your call; record in `decisions.md` if you pursue any of it.
 - **[debug] p3 Re-evaluate whether `_reject_nonlevel_target_for_folders` is STALE post-unify (2026-07-22).**
   Folder verbs reject a `--tree stash|prefab` target (`dispatch.py:1707,3011-3021`), a guard from before
@@ -838,7 +851,7 @@ queue (don't copy — one home per item).
   `dev/scripts/install-deusex-assets.sh` (clean), previewed. `--native` renders brushdemo fine.
   `--game` is blocked by:
   **(1) The `edit/` UCC toolchain is unprovisioned.** `preview_game.py` gates on
-  `uedctl/game/inputs/edit/hUCC.exe`. The 9-file set is user-supplied/gitignored (uplayctl provenance)
+  `uedcli/game/inputs/edit/hUCC.exe`. The 9-file set is user-supplied/gitignored (uplayctl provenance)
   and is NOT anywhere on this box (`../uplayctl/game/inputs/edit` absent). `hUCC` = **Hanfling's** UCC
   (a community build matched to the DX **v68** engine), NOT "headless" — plain `UCC.exe` is already a
   headless CLI tool; `UnrealEd.exe` is the GUI binary that wedges open. **Can `uned/UED22/UCC.exe`
@@ -866,9 +879,9 @@ queue (don't copy — one home per item).
     method-stripping) if this is pursued.
   **(2) DinD asset-path visibility.** This box runs Docker-in-Docker; the daemon sees the repo tree but
   NOT `~/Games` — a container mount of `~/Games/DeusEx` comes up EMPTY (verified: repo path → 93 files,
-  home path → 0). So `~/.uedctl [games.deusex].paths` MUST point at the in-repo `dev/games/deusex/`
+  home path → 0). So `~/.uedcli [games.deusex].paths` MUST point at the in-repo `dev/games/deusex/`
   (fixed 2026-07-21), not `~/Games`. `--native` didn't catch this (it's in-process/host-side). Worth
-  deciding whether uedctl should detect/repoint or document this for the global-CLI model, since
+  deciding whether uedcli should detect/repoint or document this for the global-CLI model, since
   `~/Games`-style paths are the natural user choice and silently yield empty mounts under DinD.
 - **[docs] p2 `deusex-assets-setup.md` "How it's wired" cites the RETIRED `packages.substrate_code_dirs`
   symbol + a stale host-side resolution mechanism.** Cold review (2026-07-21) found the "Host-side
@@ -892,7 +905,7 @@ queue (don't copy — one home per item).
   UNLESS it's step 1 of a full product-vs-dev reorg** (see last point). Churn/`git blame` cost is NOT
   the objection (Andrzej doesn't mind it); the substantive reasons are: (1) **The consolidation is
   illusory.** Dev machinery is already scattered and stays scattered — `bin/` (`test`, `_venv.sh`),
-  `uned/` (`bake_ued22.sh`, `wine_ctl.py`, `entrypoint.sh`), `tests/`, `uedctl-native/`. Moving
+  `uned/` (`bake_ued22.sh`, `wine_ctl.py`, `entrypoint.sh`), `tests/`, `uedcli-native/`. Moving
   `dev/docs/` adds a THIRD dev location (`dev/docs` + `dev/scripts` AND still `bin/`+`uned/`+`tests/`),
   it doesn't unify. (2) **`docs/` is already a clean audience-split doc root, one level down:** `usage.md`
   + `leveldesign/` (user) vs `dev/` (dev), with `docs/README.md` the authoritative router. Pulling `dev/`
@@ -902,14 +915,14 @@ queue (don't copy — one home per item).
   knowledge, board, specs, plans); `dev/docs` = "the docs corner of dev" inverts what the thing is.
   (4) It isn't pure docs anyway — `dev/docs/spikes/` holds ~209 committed `.py` harness files; `dev/docs`
   honestly frames it as "dev knowledge base incl. evidence," `dev/docs` promises docs then hides scripts.
-  **When it WOULD make sense:** as step 1 of a real top-level split — **product** (`uedctl/`,
-  `uedctl-native/`, `bin/uedctl`) vs **development-of-product** (everything else: docs, spike harnesses,
+  **When it WOULD make sense:** as step 1 of a real top-level split — **product** (`uedcli/`,
+  `uedcli-native/`, `bin/uedcli`) vs **development-of-product** (everything else: docs, spike harnesses,
   `bin/test`, the `uned/` build scripts, `tests/` all under `dev/**`). Then `dev/docs` is coherent and
   reason (3) weakens. So the decision is about SCOPE, not effort: one-off doc relocation (no) vs commit
   to pulling ALL dev machinery under `dev/` (yes — then do the whole reorg, don't half-move). Andrzej:
   keep/drop/expand-scope — your call.
 - **[implement] p2 Native CSG core assumes CONVEX brushes — decompose or guard for non-convex builder
-  output.** Surfaced by the one-actor `brush build` review gate (2026-07-21). `uedctl-native/src/
+  output.** Surfaced by the one-actor `brush build` review gate (2026-07-21). `uedcli-native/src/
   csg.rs:60` `point_in_convex` classifies "inside" as behind EVERY face (the convex hull), and
   `csg.rs:61`'s comment "DX brush builders emit convex brushes, so this is exact" is now **falsified**
   — the single non-convex staircase brush mis-builds on `level preview --native` + native `level
@@ -923,13 +936,13 @@ queue (don't copy — one home per item).
   principled source of truth. The schema decode already carries the signal: `Prop.property_flags`
   (the `CPF_*` bits; the editor-edit flag is `0x1`) and `Prop.category` (`None` for a non-editable
   plain `var`, set for an editable `var(Category)`). **Reconcile the two axes at spec time:**
-  editor-editability ≠ uedctl policy. Some editor-editable props are still uedctl-owned-elsewhere and
+  editor-editability ≠ uedcli policy. Some editor-editable props are still uedcli-owned-elsewhere and
   must stay blocked (`keynum` is editable but we canonicalize it to 0; check whether `name` carries
   the edit flag), and `keypos`/`keyrot` are authored via `mover key` (verify they're non-editable so
   the gate blocks them for free). So the likely shape is "not editor-editable → block" PLUS a small
-  explicit policy set for editable-but-uedctl-managed props. Consistent with the 2026-07-20 16:18
+  explicit policy set for editable-but-uedcli-managed props. Consistent with the 2026-07-20 16:18
   decision that `NumKeys` (editor-editable) is settable. Ref: `propedit.HARD_REJECT`, `uprops.Prop`.
-- **[implement] p2 Reimplement UnrealEd's `PATHS DEFINE` in uedctl.** Build the AI navigation network
+- **[implement] p2 Reimplement UnrealEd's `PATHS DEFINE` in uedcli.** Build the AI navigation network
   (reachspecs between `PathNode`/`NavigationPoint` actors) natively, the way the editor's `PATHS DEFINE`
   console command does, so pathnoding is drivable offline instead of only via the editor. Needs a spike
   to decode what `PATHS DEFINE` actually computes/emits (reachspec fields, connectivity/collision
@@ -1128,7 +1141,7 @@ queue (don't copy — one home per item).
   via the harness oracle, and the shipped Rust is confirmed to reproduce the oracle on the native
   UNATCO/Catacombs trees (45=44+1, 43=42+1) — but `tests/test_zone_flood.py` runs the Python oracle,
   not the Rust; the only Rust-path zone tests (castle build, water-portal) are on NON-discriminating
-  topology. Add a `uedctl_native` FFI entry that runs `assign_leaves_and_zones` on an externally
+  topology. Add a `uedcli_native` FFI entry that runs `assign_leaves_and_zones` on an externally
   supplied Model so a test can feed a shipped map's tree through the REAL Rust flood and assert
   editor NumZones — or a synthetic map through the materialize path where the infinite-quad and
   real-poly rules differ. Also: Pass F `Connectivity` (the zone adjacency bitmask) is untested on any
@@ -1166,7 +1179,7 @@ queue (don't copy — one home per item).
   OVER-SOLIDIFICATION: a golden cross-tree PointRegion probe (`harness/shatter_probe.py`, validated
   `[A]=0` on the byte-identical castle) shows native fills as SOLID **74.5 %** of the editor's OPEN
   space on HK Market, 15.3 % UNATCO, 9.7 % Catacombs — and `[A]` is IDENTICAL pre- vs
-  post-repartition (`UEDCTL_BSPCSG_NOREPART`), so the root is Pass-1 incremental `bsp_brush_csg`, NOT
+  post-repartition (`UEDCLI_BSPCSG_NOREPART`), so the root is Pass-1 incremental `bsp_brush_csg`, NOT
   repartition/merge/find_best_split (all ruled out) and NOT `zones.rs` (proven byte-faithful). The
   mechanism is the `is_csg_filter` dead-node hack (`bspcsg.rs:437`, drops the engine's `NumVertices>0`
   clause): an FWTB-DEAD face buried solid-on-both-sides by overlapping ADDITIVE brushes wrongly keeps
@@ -1419,7 +1432,7 @@ the substrate's class vocabulary** or **validate a texture/class ref at author t
   So the fast offline loop can't aim at your own geometry by name — raw coords only, made worse by the
   suffix item above. Native should resolve `@refs` host-side against the trunk (thought `actor_aim_point`
   did — live it did not; verify + fix). (My probe.)
-- **[docs] p2 Craft docs are UnrealEd-GUI-framed with NO uedctl-verb walkthrough, no DX scale
+- **[docs] p2 Craft docs are UnrealEd-GUI-framed with NO uedcli-verb walkthrough, no DX scale
   numbers, no class catalog.** `leveldesign/*.md` teach the GUI mental model (red builder brush,
   Order→To First, F8 rebuild) but nothing maps that craft onto the actual verbs; there are no DX
   human-scale proportions (room height, doorway W×H, camera eye height — both agents guessed from
@@ -1564,7 +1577,7 @@ the substrate's class vocabulary** or **validate a texture/class ref at author t
   mtime math is trivial); flag only if a container is ever seen lingering.
 
 - **[implement] Incremental `bspBrushCSG` core (`build_geometry_bspcsg`,
-  `uedctl-native/src/bspcsg.rs`) — §8.1 split-and-re-add + §8.2 Subtract-reverse LANDED; residual now
+  `uedcli-native/src/bspcsg.rs`) — §8.1 split-and-re-add + §8.2 Subtract-reverse LANDED; residual now
   at REPARTITION, not the filter.** p1. Default `build_geometry` untouched, full suite green (1242
   passed / 1 skipped / 2 xfailed; 30 cargo tests). What changed this increment (decode
   `sections/82-bspbrushcsg-port-decode.md §8`): (1) `filter_world_through_brush` replaced the old
@@ -1638,7 +1651,7 @@ the substrate's class vocabulary** or **validate a texture/class ref at author t
   texture axes discard BOTH authored axes; (10) LOW shading uses |N·L| where spec §5 said
   max(0,N·L) — doc the deviation; (11) LOW `query.py` missing blank lines after the
   `overview_brush` deletion; architecture.md says "never an IndexError" (false until (1)) and
-  cites the golden at `tests/fixtures/…` (actual: `uedctl/tests/fixtures/…`); (12) test gaps:
+  cites the golden at `tests/fixtures/…` (actual: `uedcli/tests/fixtures/…`); (12) test gaps:
   BuildError-wrap test can pass vacuously, no mover-scale-rejection test, no over-limit --size
   test. Full reports in the session transcript 2026-07-16; fix before calling the native tier
   done.
@@ -1689,7 +1702,7 @@ the substrate's class vocabulary** or **validate a texture/class ref at author t
   through the floor because the native build shipped no collision hulls. `UModel::LineCheck` forks on
   Extent — every pawn/actor sweep (`Extent!=0`) is `FBoxLineCheckInfo::BoxLineCheck` (game `0xf42f0`),
   whose ONLY hit clips the swept box against `LeafHulls[iCollisionBound]`; `iColl=-1` = non-solid, no
-  node-plane fallback. Fixed by porting `bspBuildBounds` (`uedctl-native/src/passes.rs::bsp_build_bounds`
+  node-plane fallback. Fixed by porting `bspBuildBounds` (`uedcli-native/src/passes.rs::bsp_build_bounds`
   → `LeafHulls` + `iCollisionBound`); `Bounds`/`iRenderBound` stay empty/`-1` (render, separate).
   Offline oracle: `harness/line_check.py` (box sweep HITs at `floor+extent`). Decision:
   `decisions.md` 2026-07-16 15:20 UTC; full decode `re-raw-zones/linecheck-oracle.md`. Supersedes
@@ -1728,7 +1741,7 @@ the substrate's class vocabulary** or **validate a texture/class ref at author t
   project OVERLAY (`/overlay` = `DX/LUM`) so custom `LUM_*` packages resolve. ⚠️ The original "needs a
   fuller Model" and "FP singularity" framings below are SUPERSEDED (kept for history).
   **N-4 is built + tested + committed:**
-  `uedctl-native/src/light.rs` (the `LIGHT APPLY` bake, rayon) + `linecheck.rs` (the `UModel::
+  `uedcli-native/src/light.rs` (the `LIGHT APPLY` bake, rayon) + `linecheck.rs` (the `UModel::
   LineCheck` BSP shadow ray) are real now; FFI `bake_lighting(built, lights)`; Python orchestration
   collects participating lights, bakes, and `assemble._patch_light_refs` rewrites the `Lights` array
   light-indices → export refs. Output is **byte-format-correct vs real maps** (decoded `NativeLit.dx`
@@ -1759,7 +1772,7 @@ the substrate's class vocabulary** or **validate a texture/class ref at author t
   wrong per-room zones (test `test_multizone_warning_fires_for_multi_room_and_is_quiet_for_single`).
   **Infra:** drive the game with `bin/uplayctl session start --map <MAP>` (NOT raw `docker run`); it
   needs the `dx-lum-uned` base image — do NOT `docker image prune -a` (it deletes that base; rebuild
-  via `Tools/uedctl/uned` docker-compose, cache-fast). Disk is at ~96% — `docker system prune -f`
+  via `Tools/uedcli/uned` docker-compose, cache-fast). Disk is at ~96% — `docker system prune -f`
   periodically (NOT `-a`).
 - **[spike] LIT-RENDER crash is LIT-ONLY and a LIGHTMAP-EMISSION bug — NOT Model completeness (side
   pool / Bounds RULED OUT).** p1. **Premise corrected 2026-07-16 (spike section 20 §12).** The earlier
@@ -1880,7 +1893,7 @@ the substrate's class vocabulary** or **validate a texture/class ref at author t
   contributes to **f** (portal). Context: the native CSG/BSP core (N-1) + N-2 cleanup passes
   (`bspMergeCoplanars` surface reassembly, `bspRefresh`, `bspBuildBounds`) now reproduce case b's
   node COUNT (19) and surf COUNT (11) EXACTLY, but 5 surfs' per-surf VERTEX SETS still differ. Root
-  cause: `find_best_split` uses a **split-minimizing deviation** (see `uedctl-native/src/build.rs`)
+  cause: `find_best_split` uses a **split-minimizing deviation** (see `uedcli-native/src/build.rs`)
   instead of the byte-verified MAP REBUILD `Balance=50` heuristic, because `Balance=50` over-splits
   (case c goes 12→24 nodes) and the editor only recovers via `bspOptGeom`'s redundant-node removal,
   which §7.2/§10 of `spikes/2026-07-15-native-materialize/sections/10-bsp-csg-build.md` describe
@@ -1889,7 +1902,7 @@ the substrate's class vocabulary** or **validate a texture/class ref at author t
   trim and reproduce the editor's exact split distribution (e.g. b's far +X wall split at y=-87.5
   by a wedge plane the split-minimizing heuristic never makes). Simple adjacency-based trims were
   ruled out (they would wrongly drop b's far-wall split, which no surf is adjacent to). Differential
-  harness ready: `uedctl/native/csg_golden.py` + `tests/test_csg_native_differential.py` (b/f are
+  harness ready: `uedcli/native/csg_golden.py` + `tests/test_csg_native_differential.py` (b/f are
   strict xfail).
 - **[spike] Portal CSG: cospatial discard of a NotSolid-forced portal's side faces + multi-zone
   `TestVisibility` (`0xaa940`).** p2. Blocks corpus case **f** (portal). Two sub-unknowns: (1) the
@@ -1913,7 +1926,7 @@ the substrate's class vocabulary** or **validate a texture/class ref at author t
   battery reinstated, lighting shadow-correctness gate added, import resolver + `Actors[0]/[1]`
   synthesis owned, zones scoped honestly, Scale/UPolys assigned). **NEEDS ANDRZEJ SIGN-OFF** before
   the port: it PROPOSES decisions that revise the "lighting/paths = defer to optional editor
-  final-bake" disposition (`spikes/2026-06-27-decontainerize-uedctl/05-lighting-and-paths.md`) — see
+  final-bake" disposition (`spikes/2026-06-27-decontainerize-uedcli/05-lighting-and-paths.md`) — see
   spec §9. Until sign-off these are proposals, NOT in `decisions.md`. The port itself is a scoped
   multi-slice build (N-1..N-5, spec §7), not overnight work.
 - **[DECISION-MADE / build-lang] Native materialize: editor DITCHED entirely (no `--native`/`--verify`),
@@ -1922,7 +1935,7 @@ the substrate's class vocabulary** or **validate a texture/class ref at author t
   editor survives only as a dev-time golden-capture oracle. Perf was measured early (harness
   `.../harness/perf_probe.py`+`bench.py`): pure CPython misses the ≤2min/≤20s target — UNATCO-HQ ~71s,
   **UNATCO-Island ~7.6min** — so the two hot loops (CSG classify/split + BSP LineCheck) go in Rust with
-  Python orchestration + the proven serializers. **Glue DECIDED: PyO3/maturin extension `uedctl-native`**
+  Python orchestration + the proven serializers. **Glue DECIDED: PyO3/maturin extension `uedcli-native`**
   (in-process; FFI boundary = the `UModel` body as bulk `bytes`; ship=Nuitka, venv=dev-only; sidecar
   rejected). Adds a Rust toolchain to dev. Spec §3/§4/§6/§8/§9 updated. **Reviewed (2 architecture
   reviewers, findings folded):** mandatory §6 **gate 5** (Rust↔Python serializer cross-check — anti-drift);
@@ -1998,8 +2011,8 @@ the substrate's class vocabulary** or **validate a texture/class ref at author t
   library root is repo-relative, not project-scoped — a minor over-constraint matching the spec's
   "all three live under the project". Cheap to relax if it bites; left as-is.
 
-- `[spec]` **Nuitka standalone-release build for uedctl.** p2. The dev loop now runs uedctl in a
-  Python-3.12 Docker image (`bin/uedctl` + `docker/Dockerfile` + `bin/_dev-run.sh`; see
+- `[spec]` **Nuitka standalone-release build for uedcli.** p2. The dev loop now runs uedcli in a
+  Python-3.12 Docker image (`bin/uedcli` + `docker/Dockerfile` + `bin/_dev-run.sh`; see
   `dev/docs/dev-runtime.md`). The intended *release* is a Nuitka-compiled single binary (interpreter
   + Pillow baked in, no host deps). Open: how the editor-driving verbs' Docker dependency is handled
   in a standalone binary (the binary still needs a docker CLI + daemon to spin editor containers).
@@ -2008,18 +2021,18 @@ the substrate's class vocabulary** or **validate a texture/class ref at author t
 - `[implement]` **Editor-driving verbs under the dev wrapper leave root-owned files.** p2. The dev
   container runs `--user host-uid`, but the sibling editor containers it spawns (`editor.py`'s
   `docker compose run`) run as **root** with no `--user`, so files they write into mounted host paths
-  (`~/.uedctl/cache/stubs`, editor scratch) become root-owned and can then block the host user / the
+  (`~/.uedcli/cache/stubs`, editor scratch) become root-owned and can then block the host user / the
   `--user` dev container from rewriting them. (This already bit us: a pre-existing root-owned
-  `~/.uedctl/cache/stubs` from an earlier editor/stub run — `sudo chown -R "$USER":"$USER" ~/.uedctl`
+  `~/.uedcli/cache/stubs` from an earlier editor/stub run — `sudo chown -R "$USER":"$USER" ~/.uedcli`
   clears it.) Fix: run editor containers as the host user, or make the caches tolerate mixed
-  ownership. Also: only the repo + `~/.uedctl` are identity-mounted — per-game base-asset `paths`
+  ownership. Also: only the repo + `~/.uedcli` are identity-mounted — per-game base-asset `paths`
   outside the repo (`[games.*]`) will need identity mounts once materialize wires them. Full editor-
   verb validation under the wrapper (path translation, socket perms) is still unrun.
   (Flagged 2026-07-11 during dev-wrapper build; from cold-review findings.)
 
 - `[chore]` **Confirm or downgrade the ✅ confidence markers on two salvaged engine facts.** In
   `unrealed/quirks.md` I marked the builder-brush-identification predicate and the multi-actor
-  group-rotate ground truth **✅** (uedctl-used / live-verified) although their source spikes are 🔬
+  group-rotate ground truth **✅** (uedcli-used / live-verified) although their source spikes are 🔬
   live-probes — downgrade both to 🔬 if you want strict source-spike confidence. (AI flag, 2026-07-11.)
 
 - `[chore]` **Relocate or delete the orphaned `dev/docs/spikes/bspspike/` harness.** Bare
@@ -2037,7 +2050,7 @@ the substrate's class vocabulary** or **validate a texture/class ref at author t
   one — highest-value). Substrate-gated (`-m integration`), so it can't be verified on a box without the
   `dx-lum-uned` container. Surfaced by slice 6 (2026-07-07).
 
-- **Namespace the stub cache by substrate** (`.uedctl/cache/stubs/` → e.g. `.../stubs/deusex/`, or
+- **Namespace the stub cache by substrate** (`.uedcli/cache/stubs/` → e.g. `.../stubs/deusex/`, or
   key it by substrate id). Stubs are inherently substrate-specific (the v68→v69 DeusEx conversion);
   separating them per-substrate aligns with the generic-UE1 direction (per-substrate, no DeusEx
   baked into shared paths) and avoids cross-substrate name clashes if a second substrate is ever
@@ -2045,9 +2058,9 @@ the substrate's class vocabulary** or **validate a texture/class ref at author t
   `substrate_search_dirs`, the `/stubs` bind-mount, cache-key/migration. Surfaced 2026-06-26 (Andrzej).
   Small but has a substrate-identity design angle — triage to `to-spec`/`to-build` accordingly.
 
-- **De-containerize uedctl (drop Docker/wine/`.exe`) — roadmap specced, awaiting Andrzej's scope
-  decision.** `p2` Spike series `../spikes/2026-06-27-decontainerize-uedctl/` (texture/mesh/package-
-  write/qualify/lighting/stub-elimination) + roadmap `../specs/2026-06-27-uedctl-decontainerization-roadmap-design.md`.
+- **De-containerize uedcli (drop Docker/wine/`.exe`) — roadmap specced, awaiting Andrzej's scope
+  decision.** `p2` Spike series `../spikes/2026-06-27-decontainerize-uedcli/` (texture/mesh/package-
+  write/qualify/lighting/stub-elimination) + roadmap `../specs/2026-06-27-uedcli-decontainerization-roadmap-design.md`.
   PROVEN native: texture decode (pixel-exact vs UCC), package-container write (byte-exact), qualification.
   CONFIRMED: stubs exist for mesh-format + Engine/Core divergence (not v68/v69); native write deletes the
   whole stub pipeline. The dominant work is the offline BSP engine (D2) + completing/​inverting the `Model`
@@ -2086,7 +2099,7 @@ the substrate's class vocabulary** or **validate a texture/class ref at author t
     (`spikes/2026-07-25-native-mesh-decode/`): full `UMesh`/`ULodMesh` body decodes byte-exact on
     902 meshes (466 retail v68 + 436 UED22 v69), vertex stride self-detects, textured render
     proven. `umodel.exe` is no longer needed for a mesh READ — it survives only inside the stub
-    pipeline. Remaining: productise the harness into `uedctl/` (rides the asset-catalog build).
+    pipeline. Remaining: productise the harness into `uedcli/` (rides the asset-catalog build).
   - `[spike]` p3 — **Native textured preview** — **superseded: specced as `level preview --native`
     (Andrzej 2026-07-16)**; see `specs/2026-07-16-native-preview-design.md` + the `to-plan.md` entry.
   - `[spec]` p3 — **Native lighting baker** (2nd long pole): per-lumel raytrace producing the
@@ -2178,7 +2191,7 @@ The posing rewrite landed (POS@ROT → auto-frame; decision 2026-07-12); these a
 
 - **RESOLVED (live-confirmed 2026-07-19) — the DeusEx base texture library is now fully reachable.** The
   old root cause (the dev container mounting only `$REPO_ROOT=LUM`, so the parent `DX/` was unmounted and
-  `DX/Textures` globbed to zero) is gone: uedctl runs HOST-NATIVE since 2026-07-14, and config `paths`
+  `DX/Textures` globbed to zero) is gone: uedcli runs HOST-NATIVE since 2026-07-14, and config `paths`
   are bare dirs. `[games.deusex].paths` already lists `.../DX/Textures`; `project show` resolves 264
   packages (54 base `.utx` tagged `[base]`), and a base-only package (`Airfield.utx`, 108 textures) syncs
   and decodes clean. No mount, no stopgap-copy needed. (Was: `[flag for Andrzej]` p1.)
@@ -2216,10 +2229,10 @@ The posing rewrite landed (POS@ROT → auto-frame; decision 2026-07-12); these a
 - `[chore]` **Asset-wiring Part A: base-game config dir typos are silently skipped (diagnosability
   cost).** p3. `config.resolve_dirs` skips a NON-existent dir even under `require_absolute=True` (the
   games config) — the intended offline-safety behavior (decisions.md 2026-07-14 03:30: model verbs
-  must run without the base game installed). Cost: a typo in `~/.uedctl/config.toml`'s game `paths`
+  must run without the base game installed). Cost: a typo in `~/.uedcli/config.toml`'s game `paths`
   degrades to a generic downstream error (empty schema code-path → `SchemaError`; incomplete load
   set → materialize "missing package"), never "configured dir X does not exist". Both cold reviewers
-  flagged it (2026-07-14). Consider an OPT-IN existence check / `uedctl doctor`-style config lint for
+  flagged it (2026-07-14). Consider an OPT-IN existence check / `uedcli doctor`-style config lint for
   the games config, where existence is not offline-optional. Not a bug — a UX follow-up.
 
 - `[flag for Andrzej][debug] Asset-wiring Part A: `actor prop`'s new config-error path has no
@@ -2235,8 +2248,8 @@ The posing rewrite landed (POS@ROT → auto-frame; decision 2026-07-12); these a
   in code with `# TODO(asset-wiring Part B)` (dispatch.py `_class_schema`).
 
 - **[flag for Andrzej][implement] Native materialize: M0 landed; wire apply.run_materialize as the
-  SOLE path only after N-1 CSG parity.** p1. The native glue (`uedctl/native/`) + Rust crate
-  (`uedctl-native/`) are in: a trivial carved-room `.dx` assembles, passes the always-on offline
+  SOLE path only after N-1 CSG parity.** p1. The native glue (`uedcli/native/`) + Rust crate
+  (`uedcli-native/`) are in: a trivial carved-room `.dx` assembles, passes the always-on offline
   self-check, and re-parses with both parsers; §6 gate 5 (Rust `model_write` == Python oracle) passes;
   `fpoly.rs` is the N-1 start. **Deviation from spec §3/§4 ("editor DITCHED, native is the ONLY
   path"):** `apply.run_materialize` still drives the editor. Flipping it now would make `level
@@ -2283,7 +2296,7 @@ The posing rewrite landed (POS@ROT → auto-frame; decision 2026-07-12); these a
   set carries class + Location only (N-3 typed-prop serialization). This is the §6 gate-4 game-load
   smoke, first real test of from-scratch synthesized values.
 
-<!-- ── AI brainstorm (2026-07-16, "uedctl:creative" session) — un-triaged idea capture;
+<!-- ── AI brainstorm (2026-07-16, "uedcli:creative" session) — un-triaged idea capture;
      checked against every board queue for duplicates before writing. Grouped by theme. ── -->
 
 ### Brainstorm — small composable wins
@@ -2477,11 +2490,11 @@ The posing rewrite landed (POS@ROT → auto-frame; decision 2026-07-12); these a
 
 <!-- ── layout-reorg review round 1 (2026-07-18) ── -->
 
-- `[flag for Andrzej]` **Untracked test level `uedctl/maps/foobar/` + the machine-local
+- `[flag for Andrzej]` **Untracked test level `uedcli/maps/foobar/` + the machine-local
   `current-level` pointer aim at it.** p3. A round-1 build reviewer flagged it as live-check
   leftovers, but it PREDATES the build (it appears in this session's opening git status), so it was
   not deleted on the never-discard rule — it may be another session's scratch. If it's yours/dead:
-  delete `uedctl/maps/foobar/` and re-run `level select` (the stale pointer errors cleanly once the
+  delete `uedcli/maps/foobar/` and re-run `level select` (the stale pointer errors cleanly once the
   dir goes). Review round 1, 2026-07-18.
 
 <!-- ── layout-reorg review round 3 (2026-07-18) ── -->
@@ -2605,8 +2618,8 @@ The posing rewrite landed (POS@ROT → auto-frame; decision 2026-07-12); these a
 - **RESOLVED (triaged + built 2026-07-19) — CLI consistency & clarity audit** (`../reviews/2026-07-19-cli-consistency-audit.md`, 8 findings, all accepted): **H1** poly-set stdin, **M1** mutator summaries→stderr, **M2** `--json` ×3, **M3** `--prop` on `brush build` (re-scoped to movers — CSG brushes were already fully covered by dedicated flags), **L2** clip/folder-get polish, **L3** unify `--catalog-dir` help (flag KEPT — load-bearing for project-less texture verbs) — all BUILT + committed 2026-07-19. **H2** (`actor move` over a SET) routed to `to-spec` (`--by`-only when moving >1 actor, per Andrzej).
 
 - `p2 [spec-done→plan]` **`config.toml paths` as a TOML list** (Andrzej-requested 2026-07-19). Accept
-  `paths` as a TOML array alongside today's colon-separated string, on both `~/.uedctl/config.toml`
-  `[games.*].paths` and project `uedctl.toml`. Reviewed spec:
+  `paths` as a TOML array alongside today's colon-separated string, on both `~/.uedcli/config.toml`
+  `[games.*].paths` and project `uedcli.toml`. Reviewed spec:
   `../specs/2026-07-19-config-paths-list.md`. **Awaiting your call on the sub-choices** (all
   recommended in the spec): accept-both-forms (not list-only); apply to both loaders; leave
   `catalog`/`prefabs`/`maps` as single strings; headline benefit is a colon-containing POSIX dir
@@ -2697,9 +2710,9 @@ The posing rewrite landed (POS@ROT → auto-frame; decision 2026-07-12); these a
   holds can leak into the tree"*, plus its rejected "bind-mounting arbitrary host roots". Candidate
   resolution WITHIN the ruling: read-only input mount (a `.dx` is an asset to the verify) + T3D out
   over stdout. Needs the owner's confirmation that this reading is right. (ii) §4.1 puts the warm
-  flock and crafted-ini temp in `~/.uedctl/`, while `direction/projects-and-config.md` inventories
+  flock and crafted-ini temp in `~/.uedcli/`, while `direction/projects-and-config.md` inventories
   the per-user home as config + `cache/{textures,stubs,schema}` only and assigns flocks/staging temps
-  to the in-repo `.uedctl/`. `preview_game` already does the former, so code precedes spec here.
+  to the in-repo `.uedcli/`. `preview_game` already does the former, so code precedes spec here.
 
   **G. The spike's acceptance criterion is both unreachable and insufficient.**
   - Unreachable: two known pre-existing post-verify FALSE POSITIVES will fail warm builds for
@@ -2757,8 +2770,8 @@ The posing rewrite landed (POS@ROT → auto-frame; decision 2026-07-12); these a
 
   **L. Smaller, still real.** Fingerprint thrash when two projects alternate on one per-user warm
   container (every acquire mismatches → reboot + teardown + 0.5 GB resident for 10 min; not on the
-  watch-list). `UED_IDLE_S`/lock keyed on `$UEDCTL_HOME` but the container name on `uid`, so two
-  sessions with different `UEDCTL_HOME` share one container with different locks. No "container
+  watch-list). `UED_IDLE_S`/lock keyed on `$UEDCLI_HOME` but the container name on `uid`, so two
+  sessions with different `UEDCLI_HOME` share one container with different locks. No "container
   vanished mid-acquire" outcome in the gate §4.2 calls complete (should reboot, not exit 2). The
   `pinned` branch is unreachable in v1 yet specified and tested. `--keep-build` mechanism must change
   under §5.3's reorder (staging file already on host; `cp_out` source may be released) and nobody
@@ -2845,7 +2858,7 @@ The posing rewrite landed (POS@ROT → auto-frame; decision 2026-07-12); these a
 - **[OWNER — confirm] p2 EVERY editor container self-terminates when idle, not just the warm one.**
   `direction/containers.md` currently promises idle self-death only for the warm containers. That is
   where the container leak lives: teardown exists solely in a host-side `finally`, and SIGTERM (which
-  is what `timeout … bin/uedctl level materialize` sends) kills Python without running it — so a
+  is what `timeout … bin/uedcli level materialize` sends) kills Python without running it — so a
   killed or wedged ephemeral build strands a running editor and its ~0.5 GB wineprefix volume,
   permanently. Measured on this host 2026-07-26: 8 stranded containers over ~4 hours and 9 orphan
   volumes ≈ 5.5 GB. No host-side handler can fix it (SIGKILL), so the container has to be able to
@@ -2853,7 +2866,7 @@ The posing rewrite landed (POS@ROT → auto-frame; decision 2026-07-12); these a
   the concurrency story":
 
   > **Every editor container self-terminates when idle — ephemeral ones included.** Teardown by the
-  > invocation that started it is the fast path, not the guarantee: a killed uedctl process runs no
+  > invocation that started it is the fast path, not the guarantee: a killed uedcli process runs no
   > cleanup at all, and an editor that outlives its parent would otherwise hold its memory and its
   > disk forever. The container's own idle timer is what makes "ephemeral" true rather than merely
   > intended. Because a container cannot remove its own volume, the volume is reclaimed by a sweep of
@@ -2914,10 +2927,10 @@ The posing rewrite landed (POS@ROT → auto-frame; decision 2026-07-12); these a
   the argparse-usage case.)
 
 
-- `p3` `[chore] two tool-hygiene finds from the leveldesign docs re-review` — (a) `uedctl-native/src/
+- `p3` `[chore] two tool-hygiene finds from the leveldesign docs re-review` — (a) `uedcli-native/src/
   bspcsg.rs:44` and `:1172` carry stale `NumPolys/10` comments that contradict the code two lines below
   (the stride is `NumPolys/20` for GOOD — the `*0x66666667 >> 35` idiom); fix the comments. (b) running
-  `uedctl` outside a project prints stray debug lines to the terminal (`plaintext False`, `swingperiod
+  `uedcli` outside a project prints stray debug lines to the terminal (`plaintext False`, `swingperiod
   True`, …) — looks like leaked debug output in schema/catalog loading; track down and remove.
 
 
@@ -2992,12 +3005,12 @@ throwaway compare view. My repro predated the fix.)_
   `sys.path`, so `utexture_decode` imports fine here. Marking two GREEN tests skipped would have
   deleted live coverage of the "pawn falls through the floor" bug, so I did **not** do it. What I
   built instead (commit `291c8f6e4`): `_load_line_check()` converts a HARNESS-side `ImportError`
-  into a `pytest.skip` whose reason names the spike env, while an `ImportError` from `uedctl` itself
+  into a `pytest.skip` whose reason names the spike env, while an `ImportError` from `uedcli` itself
   still propagates (a regression in the code under test must stay red). Net effect: green here,
   a clean skip (never an ERROR) on a checkout where the harness's hardcoded absolute paths don't
   resolve. **Confirm this reading, or tell me to hard-skip the two tests as originally written.**
   Related latent fragility, un-fixed: `line_check.py` hardcodes
-  `ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedctl")` — it only imports at all
+  `ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedcli")` — it only imports at all
   on this machine's checkout path.
 
 - `p2` `[debug] The SAME silent half-answer that 9.1 deleted from` `class show` `still lives in`
@@ -3012,8 +3025,8 @@ throwaway compare view. My repro predated the fix.)_
   aborting the whole listing, so the call is where to draw the line between "skip a broken package"
   and "refuse to answer". Surfaced by the #9 build-review gate (2026-07-25).
 
-- `p3` `[chore] Bad cache-cap values behave two different ways.` `uedctl cache gc --max-bytes -1`
-  exits 2 naming the flag (new, 2026-07-25), while `UEDCTL_SCHEMA_CACHE_MAX_BYTES=-1` is silently
+- `p3` `[chore] Bad cache-cap values behave two different ways.` `uedcli cache gc --max-bytes -1`
+  exits 2 naming the flag (new, 2026-07-25), while `UEDCLI_SCHEMA_CACHE_MAX_BYTES=-1` is silently
   ignored and falls back to the built-in default (`schema_cache._env_int`, deliberate: "a bad
   override must never raise"). Defensible as-is — a typo'd env var must not break every command,
   whereas a typo'd flag is a direct instruction — but if the divergence bothers you, the env path
@@ -3073,7 +3086,7 @@ throwaway compare view. My repro predated the fix.)_
   underlying question is yours: **should those two packages be committed, gitignored, or moved?** A
   content directory that is half-tracked and live is a permanent trap for any corpus test.
   *(A copy of `CoreTexWater.utx` is already committed as a test fixture under
-  `Tools/uedctl/uedctl/tests/fixtures/`, so at least that one is duplicated content.)*
+  `Tools/uedcli/uedcli/tests/fixtures/`, so at least that one is duplicated content.)*
 
 - **[chore] p2 — Review-gate round-2 findings left standing (logged, not fixed).** The 2026-07-25
   gate-loosening batch's round 2 raised 14 findings; most were fixed in that batch, these were not.
@@ -3106,11 +3119,11 @@ throwaway compare view. My repro predated the fix.)_
      an entry is still inside its own review gate. **Andrzej's call which.**
 
 - **[spec] p1 ANDRZEJ — the older gate-contradiction item above is now STALE.** The `[spec] p1
-  ANDRZEJ` entry that quotes `Tools/uedctl/CLAUDE.md`'s "there is no trivial-change exemption" and a
+  ANDRZEJ` entry that quotes `Tools/uedcli/CLAUDE.md`'s "there is no trivial-change exemption" and a
   "2/3/4 reviewer ladder", and the repo-root `CLAUDE.md`'s competing "two reviewers", describes text
   that no longer exists: the ladder was replaced 2026-07-25 17:20 UTC and the **repo-root
   `CLAUDE.md` was deleted entirely** the same day (its live rules folded into
-  `Tools/uedctl/CLAUDE.md`, mirrored in uplayctl's). Its parts (b) dangling citation and (c) no
+  `Tools/uedcli/CLAUDE.md`, mirrored in uplayctl's). Its parts (b) dangling citation and (c) no
   ledger entry are also both resolved. Left for you to delete or re-scope rather than edited by the
   session that obsoleted it.
 
@@ -3125,7 +3138,7 @@ throwaway compare view. My repro predated the fix.)_
      two-thirds of the concurrency. No code change; a habit.
   2. **Root-level `rg` costs 3.6 s per search, vs 0.16 s excluding the binary-heavy dirs** (22×).
      Cause: ~500 MB of **tracked** blobs in the search path — `Temp/downtown_export*.t3d` (24 MB
-     each), **three copies** of the 25 MB UED22 packages (`Tools/uedctl/uned/UED22/`, `Extra/UED22/`,
+     each), **three copies** of the 25 MB UED22 packages (`Tools/uedcli/uned/UED22/`, `Extra/UED22/`,
      `Extra/UED22_COPY/`), `Maps/20_Downtown.dx` (18 MB), `Textures/*.utx`. `.gitignore` cannot help
      (they are tracked). Fix: a repo `.ignore` (ripgrep-only, does not affect git or the build).
      Separately: is `Extra/UED22_COPY/` needed at all? Three tracked copies of the same 60 MB look
@@ -3137,7 +3150,7 @@ throwaway compare view. My repro predated the fix.)_
   4. **2 GiB of swap for 7.7 GiB of RAM with five agents is undersized** — more RAM / zram / fewer
      concurrent sessions. Machine change, outside the repo.
 
-- **[chore] p2 Tell the LLM level-designer to CHECK UEDCTL'S EXIT CODE — a failed operation is
+- **[chore] p2 Tell the LLM level-designer to CHECK UEDCLI'S EXIT CODE — a failed operation is
   easy to miss.** Raised by Andrzej 2026-07-26 after the three-level agent build run
   (evidence: `dev/docs/spikes/levelbuild-friction/`). Agents repeatedly carried on after an
   operation had failed, because they read the *output* rather than the *status*. Concretely
@@ -3147,11 +3160,11 @@ throwaway compare view. My repro predated the fix.)_
     DeusEx.DeusExDecoration.BeginPlay'`) is separated from the terminal line by blank lines and an
     out-of-order `stubbing Endemia…` progress line, so eyeballing the tail suggests "it printed
     something, probably fine".
-  - The orchestrating session **itself misread a shell pipeline's exit status as uedctl's** and
+  - The orchestrating session **itself misread a shell pipeline's exit status as uedcli's** and
     briefly reported a non-existent "exits 0 on failure" defect. `cmd | grep | tail` reports the
     LAST stage's status — `PIPESTATUS[0]`/`set -o pipefail` is needed, and every `2>&1 | tail`
     idiom in the docs' own examples is exposed to this.
-  - Agents habitually pipe uedctl through `| tail -N`, which is exactly the idiom that discards
+  - Agents habitually pipe uedcli through `| tail -N`, which is exactly the idiom that discards
     both the status and the earlier lines carrying the cause.
   Where it belongs: `docs/usage.md` (a short "check the exit status, and how not to lose it
   through a pipe" note) and the level-design guides that show piped invocations.

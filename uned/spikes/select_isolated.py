@@ -6,7 +6,7 @@ Removes both the 'malformed template' and 'box in wrong place' confounds.
 import copy
 import sys
 import select_matrix as M
-from uedctl.model import parse_t3d
+from uedcli.model import parse_t3d
 
 
 def clean_ia_actor(name, loc):

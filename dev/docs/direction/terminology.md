@@ -18,7 +18,7 @@ the abstract content.**
   manifest. The level's name is the `<level>` directory name — there is no
   `name` file.
 - **folder** — an actor's hierarchical, dotted organization **path**
-  (`castle.tower.roof`), uedctl-side only: stored in the per-actor `folder`
+  (`castle.tower.roof`), uedcli-side only: stored in the per-actor `folder`
   sidecar, **never** emitted to the built map, and a **separate dimension**
   from the T3D `Group=` property (which is retained unchanged). Distinct from
   the three unrelated "group" senses: the `Group=` actor prop, texture
@@ -26,7 +26,7 @@ the abstract content.**
 - **label** — an actor's flat, multi-valued classification token (`lighting`,
   `flammable`, `hero`): the cross-cutting axis a single hierarchy can't
   express — a torch is at `castle.tower` AND is `lighting` AND `interactive`
-  at once. Like `folder`, uedctl-side only (a per-actor `labels` sidecar,
+  at once. Like `folder`, uedcli-side only (a per-actor `labels` sidecar,
   **never emitted to the built map**) and **orthogonal** to `folder`, the
   engine `Group` prop, and the engine `Tag` prop. Named `label` precisely
   because "tag" would collide with `Engine.Actor.Tag`. The word is overloaded

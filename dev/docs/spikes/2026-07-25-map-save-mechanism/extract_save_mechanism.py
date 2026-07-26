@@ -8,9 +8,9 @@ Two questions, because a wrong answer to the second one produced a published ret
                                                              from here; see below)
 
 Run:  python3 extract_save_mechanism.py [path/to/core.dll]
-(defaults to the committed substrate at Tools/uedctl/uned/UED22/core.dll)
+(defaults to the committed substrate at Tools/uedcli/uned/UED22/core.dll)
 
-The findings are pinned by `uedctl/tests/test_engine_facts.py::
+The findings are pinned by `uedcli/tests/test_engine_facts.py::
 test_save_package_writes_a_temp_and_moves_it_and_never_reads_a_file_through_its_imports`.
 """
 import struct

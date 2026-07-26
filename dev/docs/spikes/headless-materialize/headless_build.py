@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build a uedctl T3D trunk into a `.dx` map file with NO GUI, NO X server and NO window —
+"""Build a uedcli T3D trunk into a `.dx` map file with NO GUI, NO X server and NO window —
 by driving UnrealEd's own engine through `UCC.exe Editor.ExecCommandlet <script>` (the
 `UExecCommandlet` in `Editor.dll`, which instantiates `ini:Engine.Engine.EditorEngine` and
 runs a file of ordinary editor exec verbs).
@@ -8,7 +8,7 @@ This is the harness for the spike `dev/docs/spikes/headless-materialize/findings
 It EMITS the exec script + the per-brush polylist files; it does not run wine itself
 (run the printed command inside the editor image, or under host wine).
 
-Why it cannot simply replay uedctl's existing materialize sequence: uedctl adds brushes with
+Why it cannot simply replay uedcli's existing materialize sequence: uedcli adds brushes with
 `EDIT PASTE`, and the clipboard is DEAD in the headless commandlet (`EDIT COPY` writes nothing,
 `EDIT PASTE` pastes nothing — measured, see findings.md §4). The clipboard-free equivalent that
 still produces a CSG-participating brush is `BRUSH IMPORT` (builder polylist) + `BRUSH MOVETO` /
@@ -35,16 +35,16 @@ import sys
 from pathlib import Path
 
 
-def _uedctl_root() -> Path:
-    # .../Tools/uedctl/dev/docs/spikes/headless-materialize/headless_build.py
+def _uedcli_root() -> Path:
+    # .../Tools/uedcli/dev/docs/spikes/headless-materialize/headless_build.py
     return Path(__file__).resolve().parents[4]
 
 
-sys.path.insert(0, str(_uedctl_root()))
+sys.path.insert(0, str(_uedcli_root()))
 
-from uedctl import trunk                      # noqa: E402
-from uedctl.emit import emit_actor, emit_map  # noqa: E402
-from uedctl.materialize import levelinfo_first_order  # noqa: E402
+from uedcli import trunk                      # noqa: E402
+from uedcli.emit import emit_actor, emit_map  # noqa: E402
+from uedcli.materialize import levelinfo_first_order  # noqa: E402
 
 _POLYLIST = re.compile(r"(Begin PolyList.*?End PolyList)", re.S)
 
@@ -84,12 +84,12 @@ def _has_unsupported_scale(actor) -> bool:
 
 
 def build(project: str, level_name: str, workdir: Path, out_name: str, light: bool) -> int:
-    from uedctl import config
+    from uedcli import config
     root = config.walk_up_root(project) if hasattr(config, "walk_up_root") else project
-    maps_dir = Path(project) / "uedctl" / "maps"
+    maps_dir = Path(project) / "uedcli" / "maps"
     if not (maps_dir / level_name).is_dir():          # fall back to the toml-declared maps dir
         import tomllib
-        cfg = tomllib.loads((Path(project) / "uedctl.toml").read_text())
+        cfg = tomllib.loads((Path(project) / "uedcli.toml").read_text())
         maps_dir = Path(project) / cfg.get("maps", "maps")
     level, _ranks = trunk.read_level(maps_dir / level_name)
 
@@ -154,7 +154,7 @@ def build(project: str, level_name: str, workdir: Path, out_name: str, light: bo
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--project", required=True, help="uedctl project root (holds uedctl.toml)")
+    ap.add_argument("--project", required=True, help="uedcli project root (holds uedcli.toml)")
     ap.add_argument("--level", required=True, help="level name (a dir under the project's maps dir)")
     ap.add_argument("--workdir", required=True, type=Path,
                     help="host dir mounted at /work in the editor container")

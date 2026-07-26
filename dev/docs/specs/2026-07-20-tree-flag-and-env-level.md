@@ -1,4 +1,4 @@
-# Spec — `--tree` flag + `$UEDCTL_LEVEL` env; drop `level select`
+# Spec — `--tree` flag + `$UEDCLI_LEVEL` env; drop `level select`
 
 **Status:** reviewed (post-gate); ready to implement.
 **Decisions recorded in:** `decisions.md` 2026-07-20 (this spec is ephemeral — the choices + rejected
@@ -12,7 +12,7 @@ reconciles the flag name from 2026-07-12 / 2026-07-19.
 
 Two coupled problems with today's level targeting:
 
-1. **The "selected level" is a machine-local pointer file** (`<root>/.uedctl/current-level`, set by
+1. **The "selected level" is a machine-local pointer file** (`<root>/.uedcli/current-level`, set by
    `level select`, read by `level_select.resolve_level()` as the default source). The 2026-07-19
    CLI-usability probe proved it is a **live cross-session race**: a concurrent `level select`
    silently reflags it, so any verb defaulting to "the selected level" can read/write the *wrong*
@@ -24,8 +24,8 @@ Two coupled problems with today's level targeting:
 
 **Fix (decided by Andrzej, 2026-07-20):**
 
-- **Replace the pointer file with an ambient env var `$UEDCTL_LEVEL`** — per-process, so there is no
-  shared mutable pointer to race on. Mirrors the existing `$UEDCTL_PROJECT` **precedence order**
+- **Replace the pointer file with an ambient env var `$UEDCLI_LEVEL`** — per-process, so there is no
+  shared mutable pointer to race on. Mirrors the existing `$UEDCLI_PROJECT` **precedence order**
   (flag > env > fallback); the value *grammar* differs (see §2).
 - **Rename `--target` → `--tree`** — the value is a level / stash / prefab, which per the
   T3D-tree-consistency invariant (`decisions.md` 2026-07-18 23:01) are **one tree format**. This
@@ -34,16 +34,16 @@ Two coupled problems with today's level targeting:
 - **Add `--tree` to the remaining level-using verbs** so *every* level-using verb resolves through one
   seam.
 - **Drop `level select` entirely** (and `level create --select`). Setting the level is
-  `export UEDCTL_LEVEL=<name>`. The eval-emitter form (`eval "$(uedctl level select foo)"`) was
+  `export UEDCLI_LEVEL=<name>`. The eval-emitter form (`eval "$(uedcli level select foo)"`) was
   offered and **rejected** in favor of the clean drop (Andrzej, 2026-07-20).
 
 ### Named tradeoffs (documented, not blockers)
 
 - **Ergonomics:** the pointer persisted across every terminal in a checkout (that persistence *was*
-  the race); `$UEDCTL_LEVEL` persists only within one shell + its children — a new terminal / CI step
+  the race); `$UEDCLI_LEVEL` persists only within one shell + its children — a new terminal / CI step
   re-exports. Accepted: the residual per-shell staleness is mitigated by §6 (the visibility echo).
-- **Per-project scoping:** the pointer was per-root (`<root>/.uedctl/current-level`); `$UEDCTL_LEVEL`
-  is per-shell and **global across projects**, with no cwd walk-up (unlike `$UEDCTL_PROJECT`). `cd` to
+- **Per-project scoping:** the pointer was per-root (`<root>/.uedcli/current-level`); `$UEDCLI_LEVEL`
+  is per-shell and **global across projects**, with no cwd walk-up (unlike `$UEDCLI_PROJECT`). `cd` to
   another project in the same shell and a stale export bites — but it bites *loudly* (`level not
   found` under the new project's maps), not silently. Accepted.
 
@@ -55,25 +55,25 @@ Every level-using verb resolves through `_resolve_level_source(args)` with this 
 
 ```
 --tree KIND/NAME     (explicit, any of the three kinds)     ─┐
-   else $UEDCTL_LEVEL (an ambient LEVEL name → level/<name>) ─┼─ first that resolves wins
+   else $UEDCLI_LEVEL (an ambient LEVEL name → level/<name>) ─┼─ first that resolves wins
    else  error        (see message below)                    ─┘
 ```
 
 - **`--tree` value grammar is unchanged from `--target`:** `KIND/NAME`, `KIND ∈ level|stash|prefab`,
   NAME nested-allowed for stash/prefab, single safe segment for level. All existing validation in
   `_resolve_level_source` is retained verbatim; only the attribute/flag name changes (`target`→`tree`).
-- **`$UEDCTL_LEVEL` is a bare LEVEL name only** (not `KIND/NAME`) — the "which level am I editing"
+- **`$UEDCLI_LEVEL` is a bare LEVEL name only** (not `KIND/NAME`) — the "which level am I editing"
   ambient. stash/prefab work is always explicit via `--tree stash/… | prefab/…`.
 - **Env-value normalization order (exact):** read → `strip()` → **blank ⇒ treat as unset** →
   `_check_safe_level(name)` → existence under `maps_dir`. A value containing `/` fails `_check_safe_level`;
-  its error **hints the grammar**: `$UEDCTL_LEVEL is a bare level name, not KIND/NAME: <value>`.
+  its error **hints the grammar**: `$UEDCLI_LEVEL is a bare level name, not KIND/NAME: <value>`.
 - **The "no level" error names BOTH ways to set it** (Andrzej, 2026-07-20 — clean break, no legacy
   file read):
   ```
-  no level: set the environment variable (export UEDCTL_LEVEL=<name>)
+  no level: set the environment variable (export UEDCLI_LEVEL=<name>)
             or pass a level explicitly (--tree level/<name>)
   ```
-- A malformed / nonexistent `$UEDCTL_LEVEL` errors loudly (exit 2) naming the offending value — never
+- A malformed / nonexistent `$UEDCLI_LEVEL` errors loudly (exit 2) naming the offending value — never
   a silent empty-level read or a raw traceback. (`LevelSelectionError`/`_SelectionExit` are already
   caught at `dispatch.py` top-level → exit 2; §5 nails which layer owns each message.)
 
@@ -88,7 +88,7 @@ this pass — avoids import churn; §9). Docstring rewritten.
 |---|---|
 | `_pointer(root)` | **delete** — no pointer file. |
 | `set_selected(...)` | **delete** — nothing sets a pointer. |
-| `get_selected(root)` | **delete** — replaced by reading `$UEDCTL_LEVEL` at the dispatch layer. |
+| `get_selected(root)` | **delete** — replaced by reading `$UEDCLI_LEVEL` at the dispatch layer. |
 | `_check_safe_level(level)` | **keep** — the level-name validator (used by `--tree level/…` AND the env path). |
 | `list_levels(maps_dir)` | **keep** — unchanged. |
 | `resolve_level` | **rewrite** — new signature below; **does NOT read `os.environ` itself**. |
@@ -97,14 +97,14 @@ this pass — avoids import churn; §9). Docstring rewritten.
 **New signature (env passed IN, mirroring `config.resolve_project(env_project=…)`):**
 ```python
 def resolve_level(*, env_level: str | None, maps_dir: Path) -> str:
-    """Resolve the ambient level from $UEDCTL_LEVEL (passed in as env_level). strip; blank⇒unset;
+    """Resolve the ambient level from $UEDCLI_LEVEL (passed in as env_level). strip; blank⇒unset;
     _check_safe_level; must exist under maps_dir. Raises LevelSelectionError (→ exit 2) otherwise."""
 ```
 `root` param dropped — all four live callers (`dispatch.py:1305,1787,1891,1905`) already hold
 `maps_dir`, and the only `root`-consumers (`get_selected` at 1583/1629/1658) are deleted/rewired. The
-caller supplies `env_level=os.environ.get("UEDCTL_LEVEL")`.
+caller supplies `env_level=os.environ.get("UEDCLI_LEVEL")`.
 
-The stale `.uedctl/current-level` file, if left from a prior checkout, is **ignored** (gitignored
+The stale `.uedcli/current-level` file, if left from a prior checkout, is **ignored** (gitignored
 throwaway) — no migration/cleanup step, no read of it (clean break).
 
 ---
@@ -136,8 +136,8 @@ for free once the seam is renamed.
 | `level materialize` | `resolve_level` direct (1787) | `--tree` (LEVEL kind only) → env → error. |
 | `level preview` (trunk mode) | `resolve_level` direct (1891/1905) | `--tree` (LEVEL kind only) → env → error. |
 | `level preview` `--map` / `--list-actors` | no level resolved (gated on `args.map is None`, 1889) | **unchanged — no level resolved.** `--tree` + `--map` is contradictory → reject exit 2. |
-| `level status` | direct `get_selected` at 1658 + dead `level select` hint at 1662 | rewire: read `$UEDCTL_LEVEL`; "nothing set" hint → `export UEDCTL_LEVEL=…`. |
-| `level list` | reads pointer to mark active (1629/1640-1645) | mark from the **raw** `$UEDCTL_LEVEL` (unvalidated); compute listed/stale itself; **swallow ALL resolution failures** (unset AND malformed) → mark nothing. Never crash `list` on a bad env. |
+| `level status` | direct `get_selected` at 1658 + dead `level select` hint at 1662 | rewire: read `$UEDCLI_LEVEL`; "nothing set" hint → `export UEDCLI_LEVEL=…`. |
+| `level list` | reads pointer to mark active (1629/1640-1645) | mark from the **raw** `$UEDCLI_LEVEL` (unvalidated); compute listed/stale itself; **swallow ALL resolution failures** (unset AND malformed) → mark nothing. Never crash `list` on a bad env. |
 
 **materialize/preview accept the `level` kind ONLY.** `--tree stash/…`/`prefab/…` → clear exit-2
 ("materialize/preview operate on a level; use `stash preview` / `prefab preview`"). Rationale: a
@@ -174,7 +174,7 @@ When a **mutating** verb resolves its level from the **ambient env** (i.e. `--tr
 the env fallback was used), emit ONE line to **stderr** (pipe-safe, per the CLI ethos of human notes
 → stderr):
 ```
-editing level 'castle' (from $UEDCTL_LEVEL)
+editing level 'castle' (from $UEDCLI_LEVEL)
 ```
 - **Only mutating verbs** (they *write*): the `actor …`/`brush …`/`mover …`/`poly …` write paths,
   `stash capture`, `actor add`, materialize (it writes a map). **Not** pure reads (`find`, `show`,
@@ -190,15 +190,15 @@ editing level 'castle' (from $UEDCTL_LEVEL)
 
 ## 7. Impact — docs
 
-- **`architecture.md`** — `level_select` module description; the `.uedctl/` state list (drop
+- **`architecture.md`** — `level_select` module description; the `.uedcli/` state list (drop
   `current-level`); the resolution-seam + env description; the visibility echo.
-- **`direction.md`** — the safety/state section lists "the selected-level pointer" under `.uedctl/`
-  throwaway state → replace with the ambient `$UEDCTL_LEVEL` framing (env, not in-tree state).
+- **`direction.md`** — the safety/state section lists "the selected-level pointer" under `.uedcli/`
+  throwaway state → replace with the ambient `$UEDCLI_LEVEL` framing (env, not in-tree state).
 - **`decisions.md`** — new 2026-07-20 entry (choice + the rejected eval-emitter + the `--t3d-tree`
   rebuttal + the two named tradeoffs + the echo + clean-break migration); supersede 2026-07-05 19:07 +
   19:28; reconciling note on 2026-07-12 / 2026-07-19 (flag renamed).
 - **`usage.md`, `docs/README.md`, `unrealed/commands.md`** — every `level select` / `--target`
-  example → `export UEDCTL_LEVEL=…` / `--tree`.
+  example → `export UEDCLI_LEVEL=…` / `--tree`.
 - **Docstrings** — `_resolve_level_source` (dispatch.py:1261) and `_target_flag`→`_tree_flag`
   (cli.py:154-162) both narrate the pointer model; rewrite both (add to the sweep by name).
 - **`board/`** — driving inbox/to-spec item → `done.md`; any deferred remnant → a new line.
@@ -209,7 +209,7 @@ editing level 'castle' (from $UEDCTL_LEVEL)
 
 ~30 modules reference `--target` / `level select`.
 
-- `level select <name>` setup → `monkeypatch.setenv("UEDCTL_LEVEL", name)` **per-invocation** (proper
+- `level select <name>` setup → `monkeypatch.setenv("UEDCLI_LEVEL", name)` **per-invocation** (proper
   teardown — never a bare `os.environ[...] =` that leaks across tests and re-creates a global-mutable
   race in the suite itself).
 - `--target …` → `--tree …`; `test_target_flag.py` → `test_tree_flag.py`.
@@ -228,9 +228,9 @@ editing level 'castle' (from $UEDCTL_LEVEL)
 - Renaming the `level_select.py` module file (kept to avoid import churn; revisit later — Open Q #2 →
   deferred).
 - Any change to the `KIND/NAME` grammar or to stash/prefab resolution.
-- A `level select`-style "print current level" convenience (dropped; `echo $UEDCTL_LEVEL` /
+- A `level select`-style "print current level" convenience (dropped; `echo $UEDCLI_LEVEL` /
   `level status` suffice).
-- Reading the legacy `.uedctl/current-level` for a migration hint (clean break — Andrzej).
+- Reading the legacy `.uedcli/current-level` for a migration hint (clean break — Andrzej).
 
 ## 10. Review-gate resolutions (2026-07-20)
 
@@ -268,4 +268,4 @@ is fully gone. Resolved:
 
 Full offline suite green after fixes: **1981 passed, 1 skipped, 1 xfailed** (+ 53 Rust). End-to-end
 smoke confirmed the echo, the explicit-`--tree` suppression, the empty-`--tree` error, and the
-materialize stash/prefab rejection through the real `bin/uedctl` binary.
+materialize stash/prefab rejection through the real `bin/uedcli` binary.

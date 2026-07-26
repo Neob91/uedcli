@@ -64,23 +64,23 @@ throughout (see §4.1, §4.3, §7, §9, §10, §11, §12).
   export table.
 - **Class schema.** For a given class (e.g. `Engine.Light`), the list of its properties — each
   property's name, kind (`IntProperty`, `ByteProperty`, `StructProperty`, …), static-array size,
-  flags, editor category, and — for enum-typed bytes — the enum's value names. uedctl decodes this
+  flags, editor category, and — for enum-typed bytes — the enum's value names. uedcli decodes this
   **offline, straight from the game's own `.u` bytes** (never by running the editor). Code:
   `uprops.own_class_properties` (a class's OWN props) and `uprops.resolve_class_properties` (own +
   every ancestor's, unioned across packages by walking the Super chain).
 - **Class defaults.** Every class body carries a *sparse* block of default property values (a diff
   against its superclass's defaults). Decoding it is expensive: the block sits at the **tail** of
   the UClass export body, *after* a variable-length script-bytecode blob that has no on-disk length
-  field, so uedctl must **replay the bytecode token-by-token** (`uprops._walk_expr` /
+  field, so uedcli must **replay the bytecode token-by-token** (`uprops._walk_expr` /
   `_skip_script`) just to find where the defaults begin. Code: `uprops.class_default_tags` (raw
   per-class block) and `uprops.resolve_class_defaults` (every ancestor's block overlaid root→leaf,
   rendered to CLI text). This walk runs for every class touched — the DX install has ~1914 classes.
 - **FQCN.** Fully-qualified class name, `Package.Class` (e.g. `Engine.Light`).
 - **Content-addressed cache.** A cache whose key is a hash of the *content* being cached (here, a
   package file's bytes). Changed bytes ⇒ a different hash ⇒ a different key ⇒ a guaranteed miss, so
-  a stale entry can never be served and **no explicit invalidation logic is needed**. uedctl
-  already uses this shape for two caches under `~/.uedctl/cache/` (see §2).
-- **Cold run.** Each `uedctl` command is a **fresh host-native process** (no daemon — see
+  a stale entry can never be served and **no explicit invalidation logic is needed**. uedcli
+  already uses this shape for two caches under `~/.uedcli/cache/` (see §2).
+- **Cold run.** Each `uedcli` command is a **fresh host-native process** (no daemon — see
   `direction.md`). It starts empty, does its work, and exits. Anything cached *in memory* dies with
   the process.
 
@@ -105,7 +105,7 @@ name/import/export tables** (the dominant cost — 38 ms for `Engine.u`, 211 ms 
 decode property bodies, and replay the class bytecode. Nothing survives to the next process.
 
 Meanwhile, **two persistent, content-addressed caches already exist** under the per-user cache home
-(`config.user_cache_home()` → `~/.uedctl/cache/`, or `$UEDCTL_HOME/cache`):
+(`config.user_cache_home()` → `~/.uedcli/cache/`, or `$UEDCLI_HOME/cache`):
 
 - `cache/textures/` (`config.texture_images_root`) — decoded texture PNGs.
 - `cache/stubs/` (`config.stub_cache_root`) — built v69 stub packages + a per-package JSON sidecar
@@ -122,7 +122,7 @@ every run would cost about as much as the parse the cache exists to remove).
 
 ## 3. Goal and the one load-bearing idea
 
-Make repeated cold `uedctl` invocations **skip re-parsing and re-decoding the same `.u` packages**
+Make repeated cold `uedcli` invocations **skip re-parsing and re-decoding the same `.u` packages**
 by persisting each package's decoded schema primitives to disk, keyed by a per-package
 `(size, mtime_ns)` stat tuple (§4.3).
 
@@ -306,7 +306,7 @@ content-hash ground truth), so a genuine spoof serves a stale entry. Mitigations
 
 - **Nanosecond** mtime (`st_mtime_ns`, not whole-second `st_mtime`) makes accidental collisions
   astronomically unlikely.
-- An **escape hatch** — an env/flag (e.g. `UEDCTL_SCHEMA_CACHE=off`) that bypasses the cache and
+- An **escape hatch** — an env/flag (e.g. `UEDCLI_SCHEMA_CACHE=off`) that bypasses the cache and
   always cold-decodes, for the paranoid or for CI determinism.
 - Deleting the whole `cache/schema/` dir always recovers a fully-correct cold decode; the cache is
   pure derivable throwaway.
@@ -318,14 +318,14 @@ re-hashing shortcut.
 
 ### 4.4 Storage, serialization, immutability
 
-- **Path:** `~/.uedctl/cache/schema/v<N>/<tuple-sha1>.json` (or `.bin` — see serialization), where
+- **Path:** `~/.uedcli/cache/schema/v<N>/<tuple-sha1>.json` (or `.bin` — see serialization), where
   `<tuple-sha1>` is the short hash of the `(SCHEMA_CACHE_VERSION, realpath, size, st_mtime_ns)` key
   string (§4.3) — NOT a hash of the file bytes. Via a new `config.schema_cache_root()` =
   `user_cache_home() / "schema"`, sibling to `stub_cache_root` / `texture_images_root`. `v<N>` is the
   decoder version (§4.5).
 - **Serialization: JSON is the default choice, but the format is decided by a measurement taken
   BEFORE the serializer is committed** (§9, MED finding). Justification for defaulting to JSON:
-  - **Portability + the release binary.** uedctl ships as a Nuitka-compiled binary. `pickle` /
+  - **Portability + the release binary.** uedcli ships as a Nuitka-compiled binary. `pickle` /
     `marshal` are Python-version- and layout-fragile across a rebuilt binary and a plain-file cache
     that outlives one build; JSON is stable, language-agnostic, and human-inspectable (debugging a
     bad entry by eye matters for an undocumented-format tool).
@@ -343,7 +343,7 @@ re-hashing shortcut.
   and concurrent writers of the same new entry are last-writer-wins-safe. A corrupt/unparseable
   entry is treated as a **miss** (re-decode), never an error — exactly `stub_cache._load_sidecar`'s
   rule.
-- **`uedctl cache clear` (v1) + GC (deferred).** v1 ships a tiny **`uedctl cache clear`** verb that
+- **`uedcli cache clear` (v1) + GC (deferred).** v1 ships a tiny **`uedcli cache clear`** verb that
   deletes `cache/schema/` — useful for the escape-hatch/paranoid case and to reclaim `v<N-1>/` dirs
   orphaned by a version bump. Automatic **LRU / size-capped GC** stays a deferred follow-up (an
   atime/size sweep), because immutability means there is no *correctness* pressure to evict — only a
@@ -353,11 +353,11 @@ re-hashing shortcut.
 
 ### 4.5 The schema/format VERSION (prominent — do not skip)
 
-**The stat tuple detects *package* changes, not uedctl's *decode-logic* changes. Both must key the
+**The stat tuple detects *package* changes, not uedcli's *decode-logic* changes. Both must key the
 entry.** If we improve or fix a decoder (a new property kind, a corrected UClass-tail layout, an
 extra field on `Prop`, a different rendering), the *same package* (same size/mtime) must now yield a
 *different* cached bundle — but the stat tuple is unchanged. Without a version dimension, a
-post-upgrade uedctl would happily read a stale, wrongly-shaped entry an older build wrote.
+post-upgrade uedcli would happily read a stale, wrongly-shaped entry an older build wrote.
 
 So `SCHEMA_CACHE_VERSION` is folded into the key on **both** axes: it is part of the hashed key
 string (§4.3) **and** realized as the `v<N>/` path segment (so old versions live in separate dirs,
@@ -422,10 +422,10 @@ full fix.
    (§4.3). We accept that caveat to keep the win; the escape hatch + `cache/schema/` deletion cover
    the paranoid case.
 4. **In-memory-only memoization across a batch of commands.** This is what exists today, and it's
-   the exact thing that fails: uedctl is per-command cold, so the memo dies at process exit and the
+   the exact thing that fails: uedcli is per-command cold, so the memo dies at process exit and the
    *next* command pays full cost again. A persistent, on-disk cache is the whole point. (If a future
    batch/REPL mode appears, in-process memo still complements this — it's not either/or.)
-5. **A SQLite index instead of plain per-key files.** Rejected: many `uedctl` processes run in
+5. **A SQLite index instead of plain per-key files.** Rejected: many `uedcli` processes run in
    parallel (per-command, parallel-safe by construction — `direction.md`); a single SQLite file is a
    write-lock contention point and a schema-migration burden, and adds a dependency, for **no**
    correctness or performance advantage over immutable per-key files (which are naturally lock-free
@@ -437,7 +437,7 @@ full fix.
 
 ## 6. Non-goals
 
-- **Not a daemon / not a persistent process.** uedctl stays per-command host-native; this caches
+- **Not a daemon / not a persistent process.** uedcli stays per-command host-native; this caches
   *decoded artifacts on disk*, it does not keep a process warm.
 - **Not caching cross-package compositions** (ancestry, resolved property union, resolved rendered
   defaults, the class tree) — recomputed in-process (§4.1a/§4.1b).
@@ -446,7 +446,7 @@ full fix.
 - **Not a texture-pixel or import-closure cache** — those are separate concerns (`cache/textures`,
   `dxpkg`), untouched.
 - **Not an AUTOMATIC eviction/GC policy in v1** — immutable entries have no correctness pressure; v1
-  ships a manual `uedctl cache clear`, and automatic LRU/size-cap GC is a flagged follow-up (§4.4).
+  ships a manual `uedcli cache clear`, and automatic LRU/size-cap GC is a flagged follow-up (§4.4).
 - **Not changing any decode semantics or the no-fallback contract.** Same bytes in ⇒ same primitives
   out; a corrupt package still raises `SchemaError` on a miss-path decode exactly as today (and a
   corrupt *cache entry* is a miss, not an error).
@@ -466,11 +466,11 @@ full fix.
   `v<N>/`, is simply ignored.
 - **No project / empty package path** behaves exactly as today (the cache is transparent; a missing
   game `.u` still yields the honest `SchemaError`, exit 2 — no fallback).
-- **Escape hatch — exact semantics:** the env var **`UEDCTL_SCHEMA_CACHE=off`** disables the cache
+- **Escape hatch — exact semantics:** the env var **`UEDCLI_SCHEMA_CACHE=off`** disables the cache
   entirely — never read, never write, always cold-decode. **Unset (the default) or any other value
   = on.** Used for debugging, CI determinism, and the spoof-staleness paranoid case.
 - **Test harness runs with the cache OFF by default (MED finding).** The offline suite exports
-  `UEDCTL_SCHEMA_CACHE=off` by default, so a stale dev-written entry can NOT poison unrelated
+  `UEDCLI_SCHEMA_CACHE=off` by default, so a stale dev-written entry can NOT poison unrelated
   tests — important right now, while the `uprops`/`upackage` decoder is being refactored by a
   concurrent session and any cached bundle could be shaped by an interim decoder. Only the dedicated
   cache tests opt back in (§11).
@@ -483,8 +483,8 @@ Nothing, functionally — this is a pure performance feature. Same command surfa
 errors (v1 touches only `class list`/`class show`; the `actor prop`/`find` defaults path is untouched
 until v2). The only observable difference is **latency**: the first command that reads a given
 package pays the parse+decode; subsequent cold commands that see the same package (same stat tuple)
-are fast. A `~/.uedctl/cache/schema/` directory appears (derivable, safe to delete anytime, or
-`uedctl cache clear`).
+are fast. A `~/.uedcli/cache/schema/` directory appears (derivable, safe to delete anytime, or
+`uedcli cache clear`).
 
 ---
 
@@ -493,7 +493,7 @@ are fast. A `~/.uedctl/cache/schema/` directory appears (derivable, safe to dele
 The gating measurement is **complete** (host-native, median of 5–7 runs). It **justifies the build**
 and **refuted the original hypothesis** (DEFAULTS decode was NOT the cost). Results:
 
-- **Uncacheable floor:** ~150 ms interpreter-start + import (`uedctl --help`). Every warm number
+- **Uncacheable floor:** ~150 ms interpreter-start + import (`uedcli --help`). Every warm number
   below is bounded from beneath by this.
 - **End-to-end warm win (projected):**
   - `class list` (tree) **3.6 s cold → ~0.5 s warm (~6×)** — the biggest win. `--flat --all` 3.2 s.
@@ -535,7 +535,7 @@ and **refuted the original hypothesis** (DEFAULTS decode was NOT the cost). Resu
 
 ### v1 (build now)
 
-**New module — `uedctl/schema_cache.py`:**
+**New module — `uedcli/schema_cache.py`:**
 
 - `SCHEMA_CACHE_VERSION: int` — the decoder-version constant (§4.5).
 - `@dataclass PackageSchema` — the serializable **v1 discovery** bundle (§4.1a: class list, cmap,
@@ -545,7 +545,7 @@ and **refuted the original hypothesis** (DEFAULTS decode was NOT the cost). Resu
 - `cache_key(path) -> str` — `os.stat` the file, build the
   `(SCHEMA_CACHE_VERSION, realpath, size, st_mtime_ns)` key string, return its short sha1 (§4.3).
   Does **not** read or hash the file bytes.
-- `load_package_schema(path) -> PackageSchema` — the wrapped boundary: honor `UEDCTL_SCHEMA_CACHE=off`
+- `load_package_schema(path) -> PackageSchema` — the wrapped boundary: honor `UEDCLI_SCHEMA_CACHE=off`
   → always decode; else in-process memo → on-disk `v<N>/<cache_key>` → on miss,
   `_decode(uprops.load_package(path))` + atomic write.
 - `_decode(pkg) -> PackageSchema` — calls the existing v1 `uprops` producers (`iter_classes`,
@@ -554,20 +554,20 @@ and **refuted the original hypothesis** (DEFAULTS decode was NOT the cost). Resu
 - `clear()` — delete `schema_cache_root()`; backs the `cache clear` verb.
 - Reuse `stub_cache._atomic_write`; consider factoring a shared `cache_util` if it's cleaner.
 
-**`uedctl/config.py`** (edit at build time — being concurrently edited now): add
+**`uedcli/config.py`** (edit at build time — being concurrently edited now): add
 `schema_cache_root(*, create=False) -> Path` = `user_cache_home() / "schema"`, sibling to
 `stub_cache_root` / `texture_images_root`.
 
-**`uedctl/classindex.py`:** `_package`/`_cmap`/`ancestry`/`is_abstract`/`_all_fqcns`/`children_map`
+**`uedcli/classindex.py`:** `_package`/`_cmap`/`ancestry`/`is_abstract`/`_all_fqcns`/`children_map`
 source their per-package inputs from `load_package_schema` instead of re-deriving from a live
 `Package`. The in-process memo fields stay (they still help within one command); they're now
 populated from the cached bundle.
 
-**`uedctl/uprops.py`:** `resolve_class_properties` (schema union only — no values) sources cached
+**`uedcli/uprops.py`:** `resolve_class_properties` (schema union only — no values) sources cached
 own-props via `load_package_schema`. The pure producers stay as the miss-path decoders. (Coordinate
 with the concurrent `uprops`/`upackage` refactor.)
 
-**CLI — a new `cache` group with `uedctl cache clear`** (deletes `cache/schema/`); each command/arg
+**CLI — a new `cache` group with `uedcli cache clear`** (deletes `cache/schema/`); each command/arg
 gets a real `help=` per `CLAUDE.md`.
 
 ### v2 (follow-up — specced, not built now)
@@ -585,10 +585,10 @@ gets a real `help=` per `CLAUDE.md`.
 
 ## 11. Tests
 
-**The harness runs with the cache OFF by default** (`UEDCTL_SCHEMA_CACHE=off` exported for the suite —
+**The harness runs with the cache OFF by default** (`UEDCLI_SCHEMA_CACHE=off` exported for the suite —
 §7, MED finding), so no stale dev-written entry can poison unrelated tests during the concurrent
 decoder refactor. Only the cache tests below **opt back in** (set the env / point at a temp cache
-root via `$UEDCTL_HOME`).
+root via `$UEDCLI_HOME`).
 
 v1 tests:
 
@@ -603,7 +603,7 @@ v1 tests:
 - **Stat-change ⇒ miss:** rewrite the file (new size and/or `st_mtime_ns`), assert a new key/new
   entry, no stale serve. Also cover the accepted staleness caveat: an `os.utime`-restored
   `(size, mtime_ns)` over changed bytes DOES serve the old entry (documents the known limitation),
-  and `UEDCTL_SCHEMA_CACHE=off` bypasses it.
+  and `UEDCLI_SCHEMA_CACHE=off` bypasses it.
 - **Version-bump ⇒ miss:** bump `SCHEMA_CACHE_VERSION`, assert old entries unreachable (both the
   hashed key string and the `v<N>/` dir change).
 - **realpath keying:** two symlinked paths to one file share a single entry.
@@ -625,7 +625,7 @@ Run via `bin/test` (host-native venv). Corpus/equivalence checks that need the r
 ## 12. Docs to update on build
 
 - **`architecture.md`** — a new "Package schema cache" subsection under the class-schema section,
-  and add `schema` to the `~/.uedctl/cache/{textures,stubs}` cache-shape overview; document the
+  and add `schema` to the `~/.uedcli/cache/{textures,stubs}` cache-shape overview; document the
   `cache clear` verb.
 - **`decisions.md`** — append the timestamped entry once approved, capturing the **three** decisions
   (stat-tuple key / content-hash rejected; per-package primitives / compositions rejected; phased

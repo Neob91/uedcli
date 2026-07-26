@@ -2,7 +2,7 @@ Begin Map
 Begin Actor Class=LevelInfo Name=LevelInfo0
      TimeSeconds=7.478302
      Title="SpikeTest"
-     Author="uedctl"
+     Author="uedcli"
      IdealPlayerCount="3-4"
      Summary=LevelSummary'li_roundtrip.LevelSummary'
      bLonePlayer=True

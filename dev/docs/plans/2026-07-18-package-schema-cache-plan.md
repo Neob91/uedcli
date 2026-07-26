@@ -13,7 +13,7 @@ Once landed, the durable record lives in `architecture.md` / `decisions.md` / `u
 Add sibling to `stub_cache_root`/`texture_images_root`: `user_cache_home() / "schema"`, `create=`
 flag. (Clean file, no foreign hunks.)
 
-## STEP 2 — `uedctl/schema_cache.py` (new)
+## STEP 2 — `uedcli/schema_cache.py` (new)
 - `SCHEMA_CACHE_VERSION: int = 1` — folded into BOTH the hashed key string AND the `v<N>/` path.
 - `PackageSchema` frozen dataclass: `package_name`, `class_list`, `cmap` (cf→1-based idx),
   `super_refs` (cf→FQCN|None), `abstract` (cf→bool|None), `own_props` (cf→tuple[Prop]|None sentinel
@@ -49,7 +49,7 @@ flag. (Clean file, no foreign hunks.)
 New top-level `cache` group in `cli.py`; `cache clear` handler in `dispatch.py` → `schema_cache.clear()`.
 
 ## STEP 5 — tests (`test_schema_cache.py`) + harness OFF-by-default
-conftest autouse `UEDCTL_SCHEMA_CACHE=off`; cache tests opt back in. Frozen-golden version guard
+conftest autouse `UEDCLI_SCHEMA_CACHE=off`; cache tests opt back in. Frozen-golden version guard
 (marshal blob for `uned/UED22/fire.u`, committed, byte-equal to a fresh decode+serialize); same-stat
 hit (spy load_package); stat-change miss; `os.utime` staleness caveat; version-bump miss; realpath
 keying; corrupt=miss; parallel writers; `cache clear`; `class list` warm-vs-cold equivalence.

@@ -12,7 +12,7 @@ minimization so it is visually clear which label belongs to what.
 element. All three label kinds (poly indices, brush names, point names) route through one
 `_place_labels` pass that minimizes a normalized cost over a coarse geometry `DensityGrid`.
 
-**Tech stack:** Python 3.12, stdlib-only renderer (`uedctl/preview.py`), `Pillow` only for PPM→PNG.
+**Tech stack:** Python 3.12, stdlib-only renderer (`uedcli/preview.py`), `Pillow` only for PPM→PNG.
 Tests via `bin/test` (host-native pytest in the dev venv).
 
 **Spec:** [`../specs/2026-07-22-labels-granularity.md`](../specs/2026-07-22-labels-granularity.md).
@@ -30,14 +30,14 @@ the offending value); update `docs/usage.md` + `architecture.md` in the same cha
 
 ## File structure
 
-- **`uedctl/preview.py`** — `LabelSpec`/`PolyLabels`… → the category-set `LabelSpec` + `parse_label_spec`
+- **`uedcli/preview.py`** — `LabelSpec`/`PolyLabels`… → the category-set `LabelSpec` + `parse_label_spec`
   + `DensityGrid`; `_place_labels` reworked; `render_brush_pgm`/`render_brushes_pgm`/`render_quad_pgm`
   take a `LabelSpec`; `_draw_point_overlay` stops drawing name text.
-- **`uedctl/cli.py:136`** — `--labels` becomes a free `str`, default `"poly:vis,poly:hi,name"`, new help.
-- **`uedctl/dispatch.py:504,509`** — parse `args.labels` via `LabelSpec.parse`, clean error on failure.
-- **`uedctl/tests/test_preview.py`** — parser table, render-honors-spec, placement tests; convert ~17
+- **`uedcli/cli.py:136`** — `--labels` becomes a free `str`, default `"poly:vis,poly:hi,name"`, new help.
+- **`uedcli/dispatch.py:504,509`** — parse `args.labels` via `LabelSpec.parse`, clean error on failure.
+- **`uedcli/tests/test_preview.py`** — parser table, render-honors-spec, placement tests; convert ~17
   `labels=` string call sites to `LabelSpec` constructors.
-- **`uedctl/tests/test_cli.py`, `test_actor_preview.py`** — flag default + end-to-end error tests.
+- **`uedcli/tests/test_cli.py`, `test_actor_preview.py`** — flag default + end-to-end error tests.
 - **`docs/usage.md`, `dev/docs/architecture.md`** — grammar + placement docs.
 
 ---
@@ -45,8 +45,8 @@ the offending value); update `docs/usage.md` + `architecture.md` in the same cha
 ## Task 1: `LabelSpec` + `parse_label_spec` (pure grammar)
 
 **Files:**
-- Modify: `uedctl/preview.py` (add near the top-level dataclasses)
-- Test: `uedctl/tests/test_preview.py`
+- Modify: `uedcli/preview.py` (add near the top-level dataclasses)
+- Test: `uedcli/tests/test_preview.py`
 
 - [ ] **Step 1: Write the failing parser tests.** Add to `test_preview.py` (import `LabelSpec`,
   `parse_label_spec`). Categories: poly `(is_front, is_highlighted)`, name `(is_brush, is_highlighted)`.
@@ -218,8 +218,8 @@ def _union(parts):
 
 ```bash
 git commit -m "Add LabelSpec + parse_label_spec for granular --labels grammar" \
-  -- uedctl/preview.py uedctl/tests/test_preview.py
-git push origin uedctl-impl
+  -- uedcli/preview.py uedcli/tests/test_preview.py
+git push origin uedcli-impl
 ```
 
 ---
@@ -230,9 +230,9 @@ The default must reproduce today's output exactly (poly labels on `front OR hi` 
 Brush names are NOT added yet (Task 3).
 
 **Files:**
-- Modify: `uedctl/preview.py` (`render_brush_pgm:395`, `render_brushes_pgm:406`, `render_quad_pgm:636`,
-  `want_label:473`, `show_lbl:513`); `uedctl/cli.py:136`; `uedctl/dispatch.py:504,509`
-- Test: `uedctl/tests/test_preview.py`, `test_cli.py`, `test_actor_preview.py`
+- Modify: `uedcli/preview.py` (`render_brush_pgm:395`, `render_brushes_pgm:406`, `render_quad_pgm:636`,
+  `want_label:473`, `show_lbl:513`); `uedcli/cli.py:136`; `uedcli/dispatch.py:504,509`
+- Test: `uedcli/tests/test_preview.py`, `test_cli.py`, `test_actor_preview.py`
 
 - [ ] **Step 1: Convert the ~17 string call sites + 3 signatures.** Change the `labels:
   Literal["none","all","highlighted"]` params to `labels: LabelSpec` on the three render functions.
@@ -296,10 +296,10 @@ def test_it_rejects_a_bad_labels_value_with_a_clean_error(capsys):
 
 ```bash
 git commit -m "Thread LabelSpec through preview render + --labels grammar" \
-  -- uedctl/preview.py uedctl/cli.py uedctl/dispatch.py \
-     uedctl/tests/test_preview.py uedctl/tests/test_cli.py uedctl/tests/test_actor_preview.py \
+  -- uedcli/preview.py uedcli/cli.py uedcli/dispatch.py \
+     uedcli/tests/test_preview.py uedcli/tests/test_cli.py uedcli/tests/test_actor_preview.py \
      docs/usage.md
-git push origin uedctl-impl
+git push origin uedcli-impl
 ```
 
 ---
@@ -311,9 +311,9 @@ names leave `_draw_point_overlay`). Placement stays greedy (Task 4 adds density)
 highlighted-brush logic land here.
 
 **Files:**
-- Modify: `uedctl/preview.py` (`render_brushes_pgm` label collection + the `_place_labels` call;
+- Modify: `uedcli/preview.py` (`render_brushes_pgm` label collection + the `_place_labels` call;
   `_draw_point_overlay:574-584`; `_place_labels:340` to carry per-item scale + metadata)
-- Test: `uedctl/tests/test_preview.py`
+- Test: `uedcli/tests/test_preview.py`
 
 - [ ] **Step 1: Extend `_place_labels` to carry per-item scale + metadata.** New anchor tuple
   `((ax, ay), text, scale, meta)`; returns `((ax, ay), (lx, ly), text, scale, meta)`. `meta` is an
@@ -351,8 +351,8 @@ def test_it_anchors_a_hollow_brushs_name_on_its_wireframe_not_the_hollow():
 
 ```bash
 git commit -m "Add brush-name labels; unify all label kinds into one placement pass" \
-  -- uedctl/preview.py uedctl/tests/test_preview.py
-git push origin uedctl-impl
+  -- uedcli/preview.py uedcli/tests/test_preview.py
+git push origin uedcli-impl
 ```
 
   **STOP for the post-Part-A build review** — at the headcount `CLAUDE.md` **Review gates** specifies
@@ -364,9 +364,9 @@ git push origin uedctl-impl
 ## Task 4: `DensityGrid` + cost-minimizing placement (Part B)
 
 **Files:**
-- Modify: `uedctl/preview.py` (`DensityGrid` type; `render_brushes_pgm` builds + populates it;
+- Modify: `uedcli/preview.py` (`DensityGrid` type; `render_brushes_pgm` builds + populates it;
   `_place_labels` cost function + deterministic order)
-- Test: `uedctl/tests/test_preview.py`
+- Test: `uedcli/tests/test_preview.py`
 
 - [ ] **Step 1: `DensityGrid` unit tests.**
 
@@ -408,8 +408,8 @@ def test_placement_is_deterministic():
 
 ```bash
 git commit -m "Place labels by cost minimization over a geometry DensityGrid" \
-  -- uedctl/preview.py uedctl/tests/test_preview.py
-git push origin uedctl-impl
+  -- uedcli/preview.py uedcli/tests/test_preview.py
+git push origin uedcli-impl
 ```
 
 ---
@@ -417,7 +417,7 @@ git push origin uedctl-impl
 ## Task 5: Tune, re-render showcase, docs
 
 **Files:**
-- Modify: `uedctl/preview.py` (final `k1/k2/k3` + `cell_px` constants + a comment); `docs/usage.md`;
+- Modify: `uedcli/preview.py` (final `k1/k2/k3` + `cell_px` constants + a comment); `docs/usage.md`;
   `dev/docs/architecture.md`
 - Scratch: `_scratch/gen_showcase.py` (re-run only)
 
@@ -442,8 +442,8 @@ git push origin uedctl-impl
 
 ```bash
 git commit -m "Tune label placement weights; document --labels grammar + placement" \
-  -- uedctl/preview.py docs/usage.md dev/docs/architecture.md dev/docs/board/done.md
-git push origin uedctl-impl
+  -- uedcli/preview.py docs/usage.md dev/docs/architecture.md dev/docs/board/done.md
+git push origin uedcli-impl
 ```
 
   **STOP for the post-Part-B build review** (headcount per `CLAUDE.md` **Review gates**). Fold findings. Then re-render + send the 50

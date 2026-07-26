@@ -3,17 +3,17 @@
 pixel's hit surface as baked-DARK / LIT / VOID(miss). Distinguishes the two black causes:
   - hit a baked-DARK surface  -> lighting-bake black (texture x 0)
   - hit NOTHING (void)         -> surface not drawn / backdrop black (render/topology)
-Uses the EXACT game camera basis (uedctl.rotation) + 75deg H-FOV, aspect 1280x960."""
+Uses the EXACT game camera basis (uedcli.rotation) + 75deg H-FOV, aspect 1280x960."""
 import sys, os, math
 
-HARN = "/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedctl"
+HARN = "/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedcli"
 sys.path.insert(0, os.path.join(HARN, "dev/docs/spikes/bspspike"))
-sys.path.insert(0, os.path.join(HARN, "dev/docs/spikes/2026-06-27-decontainerize-uedctl/harness"))
+sys.path.insert(0, os.path.join(HARN, "dev/docs/spikes/2026-06-27-decontainerize-uedcli/harness"))
 sys.path.insert(0, HARN)
 
 import umodel_parser as UP
-from uedctl.native import umodel as UM
-from uedctl.rotation import deg_to_uu, euler_to_matrix_uu, matvec
+from uedcli.native import umodel as UM
+from uedcli.rotation import deg_to_uu, euler_to_matrix_uu, matvec
 from PIL import Image
 
 NAT = "/home/neob91/Games/LutrisDX/drive_c/DX/Maps/NativeCastle.dx"

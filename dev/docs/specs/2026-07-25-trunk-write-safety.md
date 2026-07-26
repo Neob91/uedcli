@@ -4,7 +4,7 @@
 post-round-2 revision. A fresh round follows). This changes an on-disk write invariant AND its failure
 mode is silent, so it stays at 4 reviewers. Round 2 verified every code premise correct and the D3
 concurrency argument airtight; the changes below are spec-completeness and test-plan fixes.
-**Requested by:** Andrzej (2026-07-25, session `uedctl:review`) — from a codebase review that surfaced
+**Requested by:** Andrzej (2026-07-25, session `uedcli:review`) — from a codebase review that surfaced
 the non-atomic `order_value` write; he then added the illegal-empty gate ("error rather than corrupt
 data") and asked for same-actor lost-update detection ("Add lost-update detection").
 **Ephemeral:** scratch for designing the work; deleted once it lands. The durable record afterwards is
@@ -22,7 +22,7 @@ constrain it — is stated here. Source may be read; no other document needs to 
 - **T3D trunk** — the git-tracked source of truth for a level: one directory per actor,
   `maps/<level>/actors/<name>/{actor.t3d, order_value[, folder][, labels]}`. `actor.t3d` is the
   actor body; `order_value` is a **per-actor LexoRank string** (a sortable token) that fixes the
-  actor's position in export / CSG-precedence order; `folder`/`labels` are uedctl-side organization
+  actor's position in export / CSG-precedence order; `folder`/`labels` are uedcli-side organization
   sidecars.
 - **Shared tree format** — the same per-actor layout is used by all three on-disk T3D trees (git
   **trunk**, machine-local **stash**, git-committed **prefab**), read and written through ONE code path
@@ -179,7 +179,7 @@ file is byte-identical, so no `load_actor_body`/`dump_actor_body` round-trip is 
   error) and only scaffolds a fresh `LevelInfo`, so its actor set is disjoint from any concurrent editor's
   by construction — it cannot participate in a same-actor lost update. (Alternative: bring it under the
   flock — rejected as unnecessary given the guard, and the lock dir may not exist at create time.)
-- **Semantics: abort, do not merge.** The losing process re-runs against fresh state; uedctl is stateless
+- **Semantics: abort, do not merge.** The losing process re-runs against fresh state; uedcli is stateless
   per invocation, so an abort writes nothing and the re-run recomputes — no in-memory work is stranded.
   Git is the merge engine. *Rejected: accept + document last-writer-wins* (Andrzej chose detection);
   *rejected: in-`save` three-way merge* (git's job).

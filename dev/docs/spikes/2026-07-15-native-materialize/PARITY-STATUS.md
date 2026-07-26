@@ -17,7 +17,7 @@ non-deterministic editor-session artifacts ("and similar"). Two reference levels
 
 ---
 
-## HEADLINE STATE (checkpoint `e0a566f10`, branch `uedctl-impl`)
+## HEADLINE STATE (checkpoint `e0a566f10`, branch `uedcli-impl`)
 
 - **NINE real byte-parity fixes landed + pushed** (§11 dome-cap, §33 convex-seed, §34 texture-covector,
   §42 GMath trig, §43/44 scaled-normal, §45 vertex-PointXform+pBase, §48 per-face-normal-CSG-op, §52
@@ -61,7 +61,7 @@ repartitioned). Native was mis-routing some brushes between passes:
   for semisolids too (a broader, higher-risk pass-staging change — gate carefully). Tooling is ready:
   `harness/editor-tree-oracle/editor_struct_unatco_n.py` (editor committed-tree dump at any N,
   auto-builds golden{N}) + `committed_tree_diff.py` (intrinsic-structural vs w-twin comparator) vs native
-  `UEDCTL_BSPCSG_TREE_STRUCT` NOREPART. (An agent was mid-bisect when this checkpoint was taken; it had
+  `UEDCLI_BSPCSG_TREE_STRUCT` NOREPART. (An agent was mid-bisect when this checkpoint was taken; it had
   only confirmed the gate castle has 0 detail/portal brushes = the pass-staging changes are castle-safe
   by construction. No uncommitted code — tree is clean at `e0a566f10`.)
 

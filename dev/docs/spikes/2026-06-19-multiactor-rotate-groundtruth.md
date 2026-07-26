@@ -1,7 +1,7 @@
 # Spike: UnrealEd MULTI-ACTOR group-rotate ground truth (2026-06-19)
 
 **Goal:** capture how UED22 rotates a multi-actor selection via the mouse gizmo — pivot,
-Location orbit, and Rotation compose — the ground truth for uedctl's planned `actor rotate`
+Location orbit, and Rotation compose — the ground truth for uedcli's planned `actor rotate`
 verb. Driven live on `dx-lum-uned` (UED22 under wine), measured from `EDIT COPY` T3D. This
 closes the gap left open by [`2026-06-19-frotator-convention.md`](2026-06-19-frotator-convention.md)
 ("the GROUP-rotate semantics are NOT verified against the editor").
@@ -23,7 +23,7 @@ closes the gap left open by [`2026-06-19-frotator-convention.md`](2026-06-19-fro
   A single-axis ortho drag adds its delta into exactly ONE FRotator field
   (`new.Pitch = old.Pitch + Δpitch`, etc.) and leaves the other two untouched. Verified across
   5 compose cases including two-field existing rotations.
-  **This DIVERGES from uedctl's planned matrix `compose_uu`** whenever the existing rotation has
+  **This DIVERGES from uedcli's planned matrix `compose_uu`** whenever the existing rotation has
   a field that doesn't commute with the delta axis — see "Compose divergence" and the plan
   reconciliation below.
 - **`MAP ROTGRID` does NOT snap the synthetic gizmo drag** — angles come out free (e.g. a
@@ -48,7 +48,7 @@ no-ops (matches `driver.to_z_path`). This bit the first attempt.
 
 ### Driving the gizmo (the binding that worked)
 
-`docker exec dx-lum-uned python3 /repo/Tools/uedctl/uned/wine_ctl.py drag <x> <y> <dx> <dy> --modifier ctrl --button 3 --steps 40`
+`docker exec dx-lum-uned python3 /repo/Tools/uedcli/uned/wine_ctl.py drag <x> <y> <dx> <dy> --modifier ctrl --button 3 --steps 40`
 
 - `--modifier ctrl --button 3` = **Ctrl+RMB = actor-rotate** (plain RMB = camera rotate).
 - `<x> <y>` are MAIN-window-relative; aim at the centre of the ortho pane whose perpendicular
@@ -111,7 +111,7 @@ SAME per-actor matrices verified in the FRotator spike, about the grid origin.**
 > trig is the **GMath integer sine table** (`SinTab[(field>>2)&16383]`, 16384 entries), not float
 > `math.sin`. Here the fields are multiples of 4 (lossless `>>2`), so table == float and the residual
 > is instead the **mouse-drag free angle vs the rounded integer field stored** (the orbit used the
-> raw float angle, the field is its integer round). uedctl avoids this by deriving Location AND
+> raw float angle, the field is its integer round). uedcli avoids this by deriving Location AND
 > Rotation from one integer field; a table-driven matrix then matches the editor to ~1e-5uu.
 
 ## Pivot — it's the grid origin, decisively
@@ -137,7 +137,7 @@ ALL` / `OFCLASS` / `SELECTNAME` all leave the widget at origin (reproduced: re-s
 single-`SELECTNAME`-then-`OFCLASS` gave the identical origin-pivot result). A human GUI
 click-select would drop the widget on the clicked actor / selection, moving the pivot. So
 "pivot = origin" is the measured behavior **for console-driven selection** (the only path
-relevant headless). It is moot for uedctl anyway: uedctl defines its OWN pivot (best-grid
+relevant headless). It is moot for uedcli anyway: uedcli defines its OWN pivot (best-grid
 vertex, a design choice) and need not match the editor's widget.
 
 ## Compose — per-component FRotator ADDITION, not matrix compose
@@ -174,18 +174,18 @@ left-multiply by `Rz`). For a general 2+-field existing rotation, field-add is i
 suffers gimbal coupling. (Location, by contrast, is a *proper* rigid orbit — the editor is
 matrix-correct for positions, Euler-naive for orientations.)
 
-## Reconciliation with uedctl's plan
+## Reconciliation with uedcli's plan
 
 - **Location orbit — adopt as planned.** `pivot + R·(Location − pivot)` with the verified
-  matrices is exactly what the editor does (modulo pivot choice, which uedctl owns). No change.
-- **Rotation compose — DECISION NEEDED.** uedctl's plan composes via matrix (`compose_uu`,
+  matrices is exactly what the editor does (modulo pivot choice, which uedcli owns). No change.
+- **Rotation compose — DECISION NEEDED.** uedcli's plan composes via matrix (`compose_uu`,
   matrix-correct). The editor does **Euler field-addition**, which is *not* matrix-correct and
   differs for multi-field existing rotations. Two honest options:
   1. **Match the editor (byte parity):** compose by per-component FRotator addition. Bit-identical
      to a mouse group-rotate, but inherits UnrealEd's gimbal coupling (rotating a tilted actor by
      yaw does not spin it about world-Z).
-  2. **Stay matrix-correct (uedctl's plan):** `compose_uu` matrix product. Geometrically "more
-     correct", diverges from the editor for tilted actors, but uedctl already defines its own
+  2. **Stay matrix-correct (uedcli's plan):** `compose_uu` matrix product. Geometrically "more
+     correct", diverges from the editor for tilted actors, but uedcli already defines its own
      pivot and is store-authoritative (the editor is only a build target), so it isn't bound to
      byte-match the mouse path. The per-actor *world geometry* on materialize is still governed by
      the verified per-actor matrix regardless of which FRotator we store, so either choice
@@ -193,7 +193,7 @@ matrix-correct for positions, Euler-naive for orientations.)
 
   Recommendation: **field-addition for the common axis-aligned case is identical to matrix**, so
   for the overwhelmingly common "rotate upright actors about one axis" the two agree. Reach for a
-  decision only if uedctl must rotate already-tilted actors. Document the divergence in
+  decision only if uedcli must rotate already-tilted actors. Document the divergence in
   `actor rotate` and pick matrix-correct (option 2) unless explicit editor byte-parity is a
   requirement — it's the safer default and matches the rest of the store-centric design (the
   editor isn't the source of truth).
@@ -211,7 +211,7 @@ literally those matrices applied per actor).
 
 ```bash
 ct=dx-lum-uned
-ex(){ docker exec $ct python3 /repo/Tools/uedctl/uned/wine_ctl.py "$@"; }
+ex(){ docker exec $ct python3 /repo/Tools/uedcli/uned/wine_ctl.py "$@"; }
 ex exec "MAP NEW"; ex exec "MAP GRID X=1 Y=1 Z=1"
 ex exec 'MAP IMPORTADD FILE=Z:\repo\Temp\spike_multi.t3d'
 ex exec 'ACTOR SELECT OFCLASS CLASS=Light'

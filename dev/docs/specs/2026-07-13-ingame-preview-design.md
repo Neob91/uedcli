@@ -8,8 +8,8 @@ built, fold the durable parts into `architecture.md` + `unrealed/*.md` and the d
 **Decisions captured (Andrzej, 2026-07-13):** see `decisions.md` entry
 `2026-07-13 … — level preview renders in-game via a uplayctl-style TCP link`. This spec links to it;
 the decision + rejected alternatives live there (durable), not here. **Plus (Andrzej, 2026-07-16
-15:49 UTC):** the game container's packages/ini are wired from the COMPOSED UEDCTL CONFIG PATHS
-(`~/.uedctl/config.toml` `[games.*].paths` + the project `uedctl/config.toml` `paths`,
+15:49 UTC):** the game container's packages/ini are wired from the COMPOSED UEDCLI CONFIG PATHS
+(`~/.uedcli/config.toml` `[games.*].paths` + the project `uedcli/config.toml` `paths`,
 project-shadows-base) — NOT an uplayctl-style `/deusex` asset root + `/overlay` pair; see that
 decisions.md entry and §5 "Asset & map wiring".
 
@@ -51,7 +51,7 @@ This **replaces the editor as the preview driver** and **supersedes** the editor
 
 | # | Decision | Detail |
 |---|---|---|
-| D1 | **New `uedctl` verb; the game engine replaces UnrealEd as the preview driver. NO uplayctl dependency — port a minimal preview stack into uedctl.** | `level preview` no longer boots an editor. It boots an ephemeral **game** container and drives it over a **uedctl-owned minimal TCP link** (freeze + noclip + pose + shot). uedctl does **not** import, shell out to, or share a package/image with `uplayctl` at build or runtime; the uplayctl link is only the proven *reference design*. uedctl ports the **minimal subset** it needs into its own tree (Andrzej, 2026-07-13). |
+| D1 | **New `uedcli` verb; the game engine replaces UnrealEd as the preview driver. NO uplayctl dependency — port a minimal preview stack into uedcli.** | `level preview` no longer boots an editor. It boots an ephemeral **game** container and drives it over a **uedcli-owned minimal TCP link** (freeze + noclip + pose + shot). uedcli does **not** import, shell out to, or share a package/image with `uplayctl` at build or runtime; the uplayctl link is only the proven *reference design*. uedcli ports the **minimal subset** it needs into its own tree (Andrzej, 2026-07-13). |
 | D2 | **Supersedes the editor auto-frame preview; ONE faithful lit render, no modes.** | The `TARGET[:MODE][=NAME]` auto-frame grammar + per-mode editor boot are retired. There is no render-mode taxonomy (shaded/lit/wire/zones/polys/skybox) — the game renders one real, fully-lit reality. Debug views are already covered offline elsewhere: BSP/zone lint by `level doctor`, wireframe by `brush preview`. **`brush`/`stash`/`prefab preview` (the offline PGM renderer, `preview.py`) are UNAFFECTED** — only `preview_render.py` + `MODE_INI`/`parse_frame` go away. |
 | D3 | **Pose inputs are positional SHOT tokens (not flags), batched.** | Each shot is one positional token (`at:…;rot:…` / `look:` / `orbit:`), so N tokens → N images in **one** boot+freeze (a batch is impossible with singular flags). Absolute loc/rot, look-at (point or `@actor`), and orbit conveniences. §3 is the authoritative grammar. |
 | D4 | **Reuse a materialized `.dx` iff it is current for the trunk; `--rebuild` forces a fresh build.** | Cache key = `canonical_level_hash(trunk)` alone — the `.dx` is a pure function of the trunk. Packages are **loaded dynamically at game runtime** (not baked into the `.dx`), so they don't belong in the key; the rare relight/materialize-logic change is handled by `--rebuild`/`--no-cache`. `--map PATH.dx` bypasses caching. **No lock:** each preview runs its own ephemeral container and materialize swaps the `.dx` atomically, so a concurrent run can only read a complete file (at worst a harmless redundant rebuild). |
@@ -59,7 +59,7 @@ This **replaces the editor as the preview driver** and **supersedes** the editor
 | D6 | **HUD + first-person weapon hidden via a BY-NAME-loaded substrate driver — the generic link has ZERO DeusEx compile dependency.** | Frame-cleaning is `Driver.CleanFrameForPreview(P)` on a substrate driver spawned by name (`DynamicLoadObject`), exactly as uplayctl decouples its link. The generic link never names `DeusExPlayer`. DeusEx driver: `ShowHud(False)` + weapon put-away + flash/conversation guards (§5). |
 | D7 | **Game-agnostic: any UE1 game (Unreal AND Deus Ex), not DX-only.** | The whole drive path (freeze/noclip/pose/capture) uses stock `Engine.*` only; the sole substrate-specific piece (frame-clean) is behind the by-name driver (D6). Game image is per-substrate via `[games.*]`. Unreal unverified now, but nothing is DX-only outside the substrate driver. |
 | D8 | **v1 REQUIRES a valid PlayerStart; a spawn failure is a clean error, not a crash we hide.** | An authored trunk needs a spawnable PlayerStart for preview to boot (the game spawns the pawn there; a missing/in-solid PlayerStart aborts the boot — the logged spawn-crash). For v1 the previewer detects the boot/spawn failure and surfaces a clear exit-2 ("map has no spawnable PlayerStart — add one, or fix its placement"). **Deferred (post-v1, Andrzej):** auto-inject a safe PlayerStart so preview works on any trunk without one — explicitly NOT built now. |
-| D9 | **Freeze + noclip + clean applied at POSSESSION, not lazily on the first shot.** | If the world runs live between travel and the first `Screenshot`, intro scripts/conversations/scripted pawns move (and a conversation can hijack the camera). The preview console sets `bPlayersOnly`+noclip+clean as soon as the target level is possessed, so it's already frozen/clean when uedctl connects. The verb only re-ensures + poses. |
+| D9 | **Freeze + noclip + clean applied at POSSESSION, not lazily on the first shot.** | If the world runs live between travel and the first `Screenshot`, intro scripts/conversations/scripted pawns move (and a conversation can hijack the camera). The preview console sets `bPlayersOnly`+noclip+clean as soon as the target level is possessed, so it's already frozen/clean when uedcli connects. The verb only re-ensures + poses. |
 | D10 | **Roll is NOT accepted; level horizon always. Pitch is engine-clamped.** | `rot` is `pitch,yaw` only — no roll field (Andrzej). The verb forces `ViewRotation.Roll = 0` (a rolled preview still is rarely wanted, and roll *would* otherwise reach pixels — `ViewShake` proves it — so it must be explicitly zeroed, not assumed ignored). Pitch is clamped by `UpdateRotation` to ≈ ±98.9° (±18000 units) — documented in `--help`. |
 | D11 | **Capture = X-framebuffer grab of the game window off `:99` — uplayctl's proven method, already demonstrated.** | Exactly how `uplayctl shot` works: `wmctrl` finds the game window, `import -window` grabs it, `docker cp` out. **Proven this session** — `uplayctl shot` captured live game frames (the review's "uplayctl never screenshots" premise was wrong; its `shot` verb IS an X-grab). No gating spike for the grab itself; SP-1/SP-2b just re-confirm the frame is good once frozen + posed + HUD/weapon-hidden. |
 
@@ -68,7 +68,7 @@ This **replaces the editor as the preview driver** and **supersedes** the editor
 ## 3. CLI surface
 
 ```
-uedctl level preview SHOT [SHOT ...] --out-dir DIR
+uedcli level preview SHOT [SHOT ...] --out-dir DIR
                      [--size WxH]          # game viewport resolution (default 1280x960, 4:3)
                      [--map PATH.dx]       # preview a prebuilt map instead of the trunk (skips cache)
                      [--rebuild]           # force a fresh materialize, ignore the cache
@@ -129,7 +129,7 @@ confirms the constant live.
 
 ## 4. Freshness cache (D4)
 
-- Cache path: gitignored `<project>/uedctl/tmp/preview/<level>.<hash12>.dx` — the artifact is
+- Cache path: gitignored `<project>/uedcli/tmp/preview/<level>.<hash12>.dx` — the artifact is
   **keyed by the trunk hash in its filename, no sidecar** *(gate fold — the earlier `.dx` +
   `.dx.hash` pair swapped non-atomically: two concurrent runs straddling a trunk edit could leave
   a fresh sidecar over a stale build, silently reused forever; a hash-named file is
@@ -164,11 +164,11 @@ confirms the constant live.
 ## 5. Mechanism — the preview TCP link
 
 Grounded in the uplayctl mechanism briefing (2026-07-13). uplayctl proves the whole
-headless-game-over-TCP stack; **uedctl does not depend on it (D1)** — it **ports the minimal subset**
+headless-game-over-TCP stack; **uedcli does not depend on it (D1)** — it **ports the minimal subset**
 below into its own tree, using uplayctl's implementation only as the reference design.
 
-**What uedctl ports (minimal, self-contained — new code under uedctl):**
-- **A minimal preview game image**, built `FROM dx-lum-uned` (the editor base uedctl already owns —
+**What uedcli ports (minimal, self-contained — new code under uedcli):**
+- **A minimal preview game image**, built `FROM dx-lum-uned` (the editor base uedcli already owns —
   Xvfb `:99` + noVNC), with a **warm wineprefix BAKED into the image** (`RUN xvfb-run -a wineboot -u`
   — *gate fold: without it every per-command ephemeral boot pays a cold ~2-min wineboot; uplayctl's
   bake makes it a 2–4 s no-op*). A game entrypoint assembles the game root (below), patches the ini,
@@ -177,7 +177,7 @@ below into its own tree, using uplayctl's implementation only as the reference d
 - **Asset & map wiring is CONFIG-DRIVEN (Andrzej, 2026-07-16 15:49 UTC — decisions.md):** the
   container's package mounts come from `container_assets.resource_mounts` over
   `config.composed_search_dirs` (per-user `[games.*].paths` + project overlay,
-  project-shadows-base) — the SAME uniform scheme every other uedctl container uses — and the game
+  project-shadows-base) — the SAME uniform scheme every other uedcli container uses — and the game
   ini's `[Core.System] Paths` is GENERATED from that composed set (the crafted-ini pattern of
   `editor.engine_ini_mount`, extended with the game boot keys below). The entrypoint assembles the
   game root from the `/resources/<n>` mounts: `System/` copied from the base game's code dir,
@@ -200,7 +200,7 @@ below into its own tree, using uplayctl's implementation only as the reference d
   `TravelToLevel <target>`, retrying on `ERR no-player`, requiring `OK`; (3) **reconnect** (the
   travel destroys the accepted connection) and poll `GetCurrentLevelName == <target>`. Robust to
   the **buffered** DeusEx log and to mid-travel false-positives.
-- **A minimal preview UnrealScript package** (uedctl's own, e.g. `UedPreview`): a `Console` subclass
+- **A minimal preview UnrealScript package** (uedcli's own, e.g. `UedPreview`): a `Console` subclass
   that spawns the link keypress-free + survives travel (Tick-poll ~1 s — `NotifyLevelChange` does
   NOT fire for the initial level, so polling is the only boot-map-safe trigger), plus a `TcpLink`
   on 127.0.0.1:7777 (`MODE_Line`, `RMODE_Event`); framed protocol copied (`#<id> … OK/ERR`).
@@ -212,7 +212,7 @@ below into its own tree, using uplayctl's implementation only as the reference d
   is a DEUS-EX-ADDED field on `Engine.PlayerPawn` — fine here (the package compiles against the
   game's own Engine.u), but the D7 "any UE1 substrate" claim carries this caveat; a stock-Unreal
   build must re-check the field exists.
-- **Compile plumbing** *(gate fold — "compiled from source in uedctl's image build" glossed it)*:
+- **Compile plumbing** *(gate fold — "compiled from source in uedcli's image build" glossed it)*:
   a Docker `RUN` cannot see the asset mounts, so the `.u` compiles in a MOUNTED builder container
   against the game's own code packages (uplayctl's two-step `build-image.sh` dance, staged UCC
   toolchain), is `docker cp`'d out, source-hash-stamped (recompile only on `.uc` change), then the
@@ -237,7 +237,7 @@ as uplayctl decouples its link from `UPlayCtlDeusExDriver`. The generic verb cal
 `Driver.CleanFrameForPreview(P)`; the link never names `DeusExPlayer`.
 
 **Freeze + noclip + clean at POSSESSION, not lazily (D9).** The preview console, as soon as the target
-level is possessed (before uedctl connects), sets the world up ONCE — so intro scripts/conversations
+level is possessed (before uedcli connects), sets the world up ONCE — so intro scripts/conversations
 never run live between travel and the first shot (a conversation would hijack the camera via
 `ConCamera`):
 ```
@@ -254,7 +254,7 @@ Driver.CleanFrameForPreview(P); // substrate: hide HUD + weapon + kill flash + g
 SP-1 determines whether `bPlayersOnly` freezes-while-still-rendering **AND whether the TCP LINK
 KEEPS ANSWERING under it** *(gate fold — HIGH: `bPlayersOnly` is documented "only update players",
 and the link is a TcpLink ACTOR, not a player; if frozen actors stop ticking, the link goes dead
-and — because D9 freezes at possession before uedctl ever connects — the readiness poll, the
+and — because D9 freezes at possession before uedcli ever connects — the readiness poll, the
 travel, and every `Screenshot` die with it. The `TimeDilation≈0` alternative does NOT share this
 failure mode: all actors still tick. The cheap pre-build probe: `RunConsoleCommand playersonly`
 against a live uplayctl session, then any link command.)* If `bPlayersOnly` freezes-and-answers,
@@ -296,23 +296,23 @@ conversation**
 `bBehindView=False`. (Doing this at possession per D9 avoids the mid-travel conversation entirely; the
 guard is belt-and-suspenders.) The exact weapon-hide flag is confirmed in SP-2b.
 
-**Per-shot orchestration** (uedctl host, one connection): the console has already frozen/cleaned the
+**Per-shot orchestration** (uedcli host, one connection): the console has already frozen/cleaned the
 world at possession; for each shot → `Screenshot x y z pitch yaw` (re-ensure + pose, reply OK) → X-grab
 off `:99` + cp PNG out. No per-shot reboot; field writes are instantaneous. No editor-style
 click-to-repaint race — the game viewport redraws continuously (a real advantage over the editor path);
 the only settle is the async weapon put-away above.
 
-**Rebuild path:** uedctl's preview package is **compiled from source in uedctl's image build**
+**Rebuild path:** uedcli's preview package is **compiled from source in uedcli's image build**
 (mirroring uplayctl's `wine UCC.exe Editor.MakeCommandlet` step), with a **source-hash fast-path** so
 it recompiles only when the `.uc` changes. So: edit the link `.uc`, next preview boot auto-recompiles.
 No prebuilt-`.u` surgery, no dependency on uplayctl's build.
 
-**Ownership (resolved — Andrzej, 2026-07-13):** **no uplayctl dependency.** uedctl ports the minimal
+**Ownership (resolved — Andrzej, 2026-07-13):** **no uplayctl dependency.** uedcli ports the minimal
 subset above into its own tree — its own preview UnrealScript package, its own game image built on the
 `dx-lum-uned` base it already owns, its own in-container client and orchestration. The verbs are added
-to *uedctl's* link `.uc`, not uplayctl's. uplayctl's implementation is the reference/template only.
+to *uedcli's* link `.uc`, not uplayctl's. uplayctl's implementation is the reference/template only.
 (Cost: a small amount of link/console/entrypoint boilerplate is duplicated; benefit: the two tools
-stay fully decoupled and uedctl's previewer is self-contained.)
+stay fully decoupled and uedcli's previewer is self-contained.)
 
 ---
 
@@ -331,7 +331,7 @@ debug view is ever wanted, `rmode N` over the link can add it later — explicit
 
 ---
 
-## 7. uedctl-side architecture
+## 7. uedcli-side architecture
 
 - `dispatch._level_preview` keeps its SHIPPED front half *(gate fold — the structure that landed
   2026-07-16)*: parse+validate all SHOT tokens up front (all-or-nothing → clean exit 2), resolve

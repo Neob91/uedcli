@@ -23,7 +23,7 @@ verbs emit through it and inherit carriers for free.
 **A1 — carrier emission at `emit_actor_t3d` (the shared seam).**
 - Extract a **folder-carrier helper** (none exists; `query.py:310` hand-formats it) beside
   `labellib.format_labels_carrier`; use it in BOTH `query.actor_show_block` and the new emit.
-- In `emit.emit_actor_t3d` (`emit.py:155`) emit `// uedctl-folder:` / `// uedctl-labels:` carriers **gated on
+- In `emit.emit_actor_t3d` (`emit.py:155`) emit `// uedcli-folder:` / `// uedcli-labels:` carriers **gated on
   the actor having `folder`/`labels` set**.
 - **DO NOT** touch `emit.emit_actor` / `emit.emit_map` / `normalize.canonical_actor_t3d` — the latter writes
   the stored trunk body whose invariant is carrier-free (`model.py:38-43`, `t3dtree.py:126`); carriers there

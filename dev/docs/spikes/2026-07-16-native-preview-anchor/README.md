@@ -10,7 +10,7 @@ only AFTER these verdicts (2026-07-16).
 
 ## The fixture (`trunk/` — the committed T3D tree)
 
-One room + one pillar, authored with uedctl verbs (live 2026-07-16):
+One room + one pillar, authored with uedcli verbs (live 2026-07-16):
 
 | Actor | What | Why |
 |---|---|---|
@@ -62,7 +62,7 @@ console, so an unbound-texture render is the only symptom.
 
 ```
 # trunk lives here (committed); scratch copies under _scratch/anchor/
-UEDCTL_PROJECT=<...>/_scratch/anchor/uedctl bin/uedctl level materialize --out <Maps>/AnchorPan.dx
+UEDCLI_PROJECT=<...>/_scratch/anchor/uedcli bin/uedcli level materialize --out <Maps>/AnchorPan.dx
 cd Tools/uplayctl && bin/uplayctl session start --map AnchorPan
 UPLAYCTL_SESSION=<id> bin/uplayctl send "RunConsoleCommand ghost" "SetPlayerLocation 0 0 0" \
     "FaceActor TargetPan" "GetPlayerPosition" "GetPlayerRotation"

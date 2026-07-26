@@ -6,10 +6,10 @@ AActor*.  So we check: (1) every FLightMapIndex.i_light_actors is a valid index 
 Model.lights; (2) every Model.lights ref resolves to a real *Light* actor export (not None,
 not out-of-range, not a non-light class)."""
 import sys
-sys.path.insert(0, "/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedctl/dev/docs/spikes/2026-06-27-decontainerize-uedctl/harness")
-sys.path.insert(0, "/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedctl")
+sys.path.insert(0, "/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedcli/dev/docs/spikes/2026-06-27-decontainerize-uedcli/harness")
+sys.path.insert(0, "/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedcli")
 from utexture_decode import load_package
-from uedctl.native.umodel import parse_model_body
+from uedcli.native.umodel import parse_model_body
 
 
 def resolve_ref(p, ref):

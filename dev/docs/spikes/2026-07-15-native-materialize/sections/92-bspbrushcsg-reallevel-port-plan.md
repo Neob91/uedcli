@@ -267,7 +267,7 @@ measured, castle-safe result), not a forced code change.
 
 ## 7. Reproduce
 ```
-cd Tools/uedctl
+cd Tools/uedcli
 # the surf/vector residual is basis-independent (both goldens = 3616 / 599):
 .venv/bin/python dev/docs/spikes/2026-07-15-native-materialize/harness/vectors_attribution.py \
   _scratch/uedgolden/Native_unatco.dx _scratch/uedgolden/UEDGolden_unatco_world_zones.dx \
@@ -292,7 +292,7 @@ the crashed run) and wrote `_scratch/uedgolden/UEDGolden_unatco_good_zones.dx` (
 the save.** (`build_ued_golden.py` keeps 8 as the arg default but its `--quiet-reads` help already
 warns; the §92 canonical basis command below passes 30.)
 
-**Measured node counts by rebuild path** (all from the SAME uedctl UNATCO trunk; surfs/vectors shown
+**Measured node counts by rebuild path** (all from the SAME uedcli UNATCO trunk; surfs/vectors shown
 to prove invariance):
 
 | build | rebuild path | nodes | Δ vs bare `MAP REBUILD` | surfs | vectors | refs/leaf |
@@ -326,7 +326,7 @@ carry the two-basis note.
 
 **Canonical native-parity measurement command (GOOD basis, generous barrier):**
 ```
-cd Tools/uedctl
+cd Tools/uedcli
 # node/surf/vector basis — bare MAP REBUILD (native's exact csgRebuild target):
 .venv/bin/python dev/docs/spikes/2026-07-15-native-materialize/harness/build_ued_golden.py \
   --out _scratch/uedgolden/UEDGolden_unatco_world.dx --overwrite --world-only --no-light
@@ -379,7 +379,7 @@ decode is Stage 2, spec `specs/2026-07-19-unatco-dome-csg-divergence.md`).
 
 **Reproduce.**
 ```
-cd Tools/uedctl
+cd Tools/uedcli
 .venv/bin/python dev/docs/spikes/2026-07-15-native-materialize/harness/unatco_subset.py diff 105
 # -> N=105 only-native=28 (first over-production); brush index 104 = Brush755, 78-poly dome subtract
 .venv/bin/python dev/docs/spikes/2026-07-15-native-materialize/harness/unatco_subset.py bisect 98 109
@@ -610,7 +610,7 @@ f64 mag, base-snap/offset in f32 vs f64) over the identical verts did NOT contai
 the exact reduction/normalize sequence must be read from the `0x150510` disassembly, not guessed.
 
 **The complete fix is two coupled parts:**
-1. **Match Engine.dll `CalcNormal` (0x150510) op-order byte-exact** in `uedctl-native/src/fpoly.rs::calc_normal`
+1. **Match Engine.dll `CalcNormal` (0x150510) op-order byte-exact** in `uedcli-native/src/fpoly.rs::calc_normal`
    — so native's recomputed normal equals the editor's for BOTH curved faces (dome 0.730585) AND axis faces.
    This is the missing piece that made §14's naive recompute regress: native's 1-ULP-off `calc_normal` gives
    axis faces `-0.99999994` where the editor stores exact `-1.0`; a byte-exact `CalcNormal` should yield the
@@ -763,7 +763,7 @@ the §18/§19 Points/Verts/Nodes order permutation.
 **Why no castle-safe `FindBestSplit` fix:** scoring is already editor-faithful. Forcing `(0,0,1)@240` (e.g.
 OPTIMAL stride-1) would fix UNATCO but flips the CASTLE root away from the editor's GOOD-stride pick →
 regresses castle 1156/1156. Any scoring/stride/tie-break change trades castle for UNATCO. Confirmed via an
-env-gated `UEDCTL_FBS_ROOT_DUMP` diagnostic (inert on normal builds; castle 485/1156/26 held).
+env-gated `UEDCLI_FBS_ROOT_DUMP` diagnostic (inert on normal builds; castle 485/1156/26 held).
 
 **The dominant lever (supersedes §19's "match FindBestSplit"): match the editor's SOUP — the ORDER and COUNT
 of `bspBuildFPolys` (`make_ed_polys`) + `bspMergeCoplanars` output at scale.** This single target gates BOTH:
@@ -1480,7 +1480,7 @@ divergence into ONE lever: native's incremental `bsp_brush_csg` tree ORDER diver
 full internal node order — which the next decode must check.
 
 **NEXT decode (the dominant remaining lever): reconstruct both incremental trees at N=58** — native
-`UEDCTL_BSPCSG_TREE_STRUCT`/`TREE_DUMP` vs the editor `oracle-105.log` batch#57 ADD stream — node-by-node, and
+`UEDCLI_BSPCSG_TREE_STRUCT`/`TREE_DUMP` vs the editor `oracle-105.log` batch#57 ADD stream — node-by-node, and
 find where native's walk inserts a horizontal z-splitter that fragments poly4 before reaching the x=-768
 coplanar leaf, vs the editor's order. Decode the editor's `bspAddNode`/`bspBrushCSG` node-emit order past the
 root and match it. This is the deep incremental-tree-order port (the §23–§29 residual past the root the
@@ -1552,14 +1552,14 @@ AND the af95ff73 "brush 7" pin AND §26–§29's earlier confusions.
 **The real residual (unchanged target, correctly re-localized):** the committed incremental tree matches through
 N=8; the §36 repartition emit-order permutation (node 56) + §38 Brush336 N=58 nv=5 are driven by a committed
 incremental-tree divergence that first appears in **brushes 9–57**. NEXT: bisect the COMMITTED incremental tree
-over N∈(8,58] — native `UEDCTL_BSPCSG_TREE_STRUCT` (committed nodes only) vs the editor's committed tree
+over N∈(8,58] — native `UEDCLI_BSPCSG_TREE_STRUCT` (committed nodes only) vs the editor's committed tree
 (reconstruct from `oracle-105.log` applying the rollback, or `editor_struct_unatco.py` per-N) — pin the FIRST
 committed node that differs, then decode that brush's incremental clip/routing against the editor. Guard against
 the raw-vs-kept trap throughout. THREE fixes landed this session (§33/§34 + faithfulness); this is the frontier.
 
 ## 41. THE ROOT (reframes §36–§40): the residual is PRECISION, not emit-order — first committed divergence is a 1-ULP GMath trig-table twin at N=22 (Brush639, first yaw-rotated brush)
 
-Bisecting the COMMITTED incremental tree (native `UEDCTL_BSPCSG_TREE_STRUCT` NOREPART vs editor
+Bisecting the COMMITTED incremental tree (native `UEDCLI_BSPCSG_TREE_STRUCT` NOREPART vs editor
 `editor_struct_unatco.py` gdb dumps; method validated — N=8 = 101 nodes byte-identical, no raw-vs-kept
 contamination):
 
@@ -1737,7 +1737,7 @@ mover.
 editor's incremental world-tree `Model->Nodes` plane BITS (hex) at `bspBuildFPolys` entry for UNATCO
 **N=105** (MAP LOAD `golden105.dx`; guarded/bounded; `_scratch/ptx/editor_struct_105.py` →
 `editor-struct-unatco-105.log`, 1637 ND lines).  Native's committed NOREPART tree
-(`UEDCTL_BSPCSG_NOREPART=1 UEDCTL_BSPCSG_TREE_STRUCT=1`) also has **1637** nodes.
+(`UEDCLI_BSPCSG_NOREPART=1 UEDCLI_BSPCSG_TREE_STRUCT=1`) also has **1637** nodes.
 
 **LINCHPIN (the whole verdict rests on this): the N=105 committed incremental tree is STRUCTURALLY
 IDENTICAL native↔editor.** All 1637 nodes match INDEX-FOR-INDEX on `(iFront, iBack, iPlane, iSurf, nv)`
@@ -2190,7 +2190,7 @@ those brushes). The normal-twin family is CLOSED and, for UNATCO whole-map parit
 
 §53's guess that the (105,213] divergence is the "coplanar chain-head orientation §23/§29 family" is **WRONG
 about the mechanism** — it is far simpler and CLEANLY FIXABLE. Committed-tree bisection (native NOREPART
-`UEDCTL_BSPCSG_TREE_STRUCT` vs editor `editor_struct_unatco_n.py` gdb dump at `bspBuildFPolys` entry, both
+`UEDCLI_BSPCSG_TREE_STRUCT` vs editor `editor_struct_unatco_n.py` gdb dump at `bspBuildFPolys` entry, both
 POST-rollback per §40; new comparator `committed_tree_diff.py` that ignores index-label drift and w-twins):
 
 - **N=105 committed tree = byte-IDENTICAL (1637/1637, 0 structural nodes).** Confirmed from the cached

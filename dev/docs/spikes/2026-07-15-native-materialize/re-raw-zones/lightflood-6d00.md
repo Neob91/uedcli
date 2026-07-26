@@ -1,6 +1,6 @@
 # RE decode — per-light leaf-visibility flood: `FEditorVisibility::ActorVisibility` @ Editor.dll RVA 0xa6d00
 
-Decoded 2026-07-16 from `/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedctl/uned/UED22/Editor.dll`
+Decoded 2026-07-16 from `/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedcli/uned/UED22/Editor.dll`
 (ImageBase 0x10000000; all addresses below are VAs). Function name is the binary's own: the
 MSVC EH handler's __except path pushes the string `"FEditorVisibility::ActorVisibility"`
 (0x100fe658, quoted at `0x100a7218 push 0x100fe658`). The helper asserts carry the source path

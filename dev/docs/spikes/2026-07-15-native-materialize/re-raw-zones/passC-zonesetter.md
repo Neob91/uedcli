@@ -1,6 +1,6 @@
 # Pass C — the ZONE SETTER (`Editor.dll` RVA 0xa93c0, "Found %i zones")
 
-Decoded 2026-07-16 from `/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedctl/uned/UED22/Editor.dll`
+Decoded 2026-07-16 from `/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedcli/uned/UED22/Editor.dll`
 (ImageBase 0x10000000) with `adis.py`. `this` (ecx) = `FEditorVisibility`; `this+0x10` = `UModel*`.
 
 **Headline correction to the task brief:** pass C does **NOT** write node `iZone[0/1]`, node

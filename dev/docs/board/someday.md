@@ -23,7 +23,7 @@ elsewhere; priority here is relative *within* the parked set, not a claim on the
 - [ ] `p3` `[implement]` **`apply --csg first|last`** — control CSG insert position; v1 appends at end.
 - [ ] `p3` `[implement]` **Strict autoload mode (`--require-packages`)** — fail apply on a missing texture/class package instead of warn-and-continue.
 - [ ] `p3` `[implement]` **Unify `stash apply` + `prefab apply`** into one resolver; v1 keeps them separate (shared `_place_actors`).
-- [ ] `p3` `[implement]` **uedctl config file** — persist settings (e.g. the prefab dir) without env/flag; v1 is env + flag only.
+- [ ] `p3` `[implement]` **uedcli config file** — persist settings (e.g. the prefab dir) without env/flag; v1 is env + flag only.
 - [ ] `p3` `[implement]` **Stash/prefab lineage via a real git merge edge** — record a promoted prefab's source commit/branch as a second parent. *(Reframed 2026-07-18: "source session" → source commit; sessions removed by the git-native migration.)*
 - [ ] `p3` `[implement]` **True 3D depth sort for composite preview** — correct inter-brush occlusion; v1 reuses the facing-based 2D painter order.
 - [ ] `p3` `[implement]` **`preview` of non-brush point actors** — render lights/movers (radii/icons); would make `actor preview` the honest name.
@@ -106,7 +106,7 @@ from `inbox.md`, 2026-07-19).
 
 ## Brainstorm features (deferred, 2026-07-16 creative session)
 
-Feature ideas from the "uedctl:creative" capture, triaged 2026-07-19: **all parked here**
+Feature ideas from the "uedcli:creative" capture, triaged 2026-07-19: **all parked here**
 (parametric prefabs **dropped entirely**; semantic texturing **sequenced after** the
 texture-catalog redesign). Pulled back to `inbox.md` when actively picked up.
 

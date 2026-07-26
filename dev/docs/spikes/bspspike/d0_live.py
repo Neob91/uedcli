@@ -2,13 +2,13 @@
 Clean box -> no holes; open box (one face removed) -> not-watertight leak."""
 import subprocess, sys, time, re
 
-sys.path.insert(0, "/home/human/src/dx_lum/Tools/uedctl")
-from uedctl.driver import Driver
-from uedctl import builders, writes
+sys.path.insert(0, "/home/human/src/dx_lum/Tools/uedcli")
+from uedcli.driver import Driver
+from uedcli import builders, writes
 from bsp_editorlog import capture_build_log
 
 CONT, VOL = "uned-d0", "uned-wp-d0"
-CD = "/home/human/src/dx_lum/Tools/uedctl/uned"
+CD = "/home/human/src/dx_lum/Tools/uedcli/uned"
 
 
 def sh(*a): return subprocess.run(a, capture_output=True, text=True)

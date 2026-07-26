@@ -2,7 +2,7 @@
 
 Static only — reads the UED22 DLLs, never runs the editor. Mirror of the reusable
 `_scratch/bspspike/pe.py` harness, committed here so this spike is reproducible without
-the throwaway scratch dir. Needs `pip install capstone pefile` into the uedctl venv.
+the throwaway scratch dir. Needs `pip install capstone pefile` into the uedcli venv.
 """
 import struct
 

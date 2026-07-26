@@ -46,9 +46,9 @@ extension is genuinely bundled and loaded, not picked up from the build tree.
 
 - **Versions used (host):** Python 3.12.9, Rust 1.97.0, PyO3 0.23.5, maturin 1.14.1, Nuitka 4.1.3,
   Nuitka backend C compiler gcc 11.
-- **`--include-module=uedctl_native` is OPTIONAL** — Nuitka's import-follower auto-includes the
-  extension on `import`. Keep it as a belt-and-suspenders flag (spec §8.3) since uedctl imports
-  `uedctl_native` behind a `try/except`-guarded path; an explicit include guarantees it survives even
+- **`--include-module=uedcli_native` is OPTIONAL** — Nuitka's import-follower auto-includes the
+  extension on `import`. Keep it as a belt-and-suspenders flag (spec §8.3) since uedcli imports
+  `uedcli_native` behind a `try/except`-guarded path; an explicit include guarantees it survives even
   if the import is conditional.
 - **`patchelf` is REQUIRED on Linux for `--standalone`/`--onefile`.** Nuitka hard-fails without it
   (`FATAL: ... requires 'patchelf'`). It is **pip-installable** (`pip install patchelf` ships a
@@ -69,7 +69,7 @@ extension is genuinely bundled and loaded, not picked up from the build tree.
    **2.35** (Ubuntu 22.04). So a binary built here needs **glibc ≥ 2.34** on the target — fine for any
    distro from ~2021 on, but per the spec, **build the release on the OLDEST supported glibc** (e.g. a
    manylinux_2_28 / Rust `x86_64-unknown-linux-gnu` container) to lower that floor. The 2.34 symbols come
-   from the Rust/glibc side (e.g. `__libc_start_main@2.34`), not from anything uedctl controls, so the
+   from the Rust/glibc side (e.g. `__libc_start_main@2.34`), not from anything uedcli controls, so the
    only lever is the build host.
 3. **Per-platform Rust toolchain — unchanged, still real.** This spike only proves the **Linux/x86_64**
    path. The "one binary, many platforms" direction still means each target (Windows, macOS, other

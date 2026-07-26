@@ -4,12 +4,12 @@ surf normal -> game backface-culls the surface (undrawn -> black void) AND the b
 backface cull lists the wrong lights. Match native->editor by plane POSITION (|cos|>0.999,
 either sign) + texture + centroid, then report sign agreement."""
 import sys, os, math
-HARN = "/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedctl"
+HARN = "/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedcli"
 sys.path.insert(0, os.path.join(HARN, "dev/docs/spikes/bspspike"))
-sys.path.insert(0, os.path.join(HARN, "dev/docs/spikes/2026-06-27-decontainerize-uedctl/harness"))
+sys.path.insert(0, os.path.join(HARN, "dev/docs/spikes/2026-06-27-decontainerize-uedcli/harness"))
 sys.path.insert(0, HARN)
 import umodel_parser as UP
-from uedctl.native import umodel as UM
+from uedcli.native import umodel as UM
 import utexture_decode as UT
 
 def load(p):

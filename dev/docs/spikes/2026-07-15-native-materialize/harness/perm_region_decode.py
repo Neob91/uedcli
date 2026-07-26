@@ -28,17 +28,17 @@ import sys
 from collections import Counter, defaultdict
 from pathlib import Path
 
-ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedctl")
+ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedcli")
 sys.path.insert(0, str(ROOT))
-sys.path.insert(0, str(ROOT / "dev/docs/spikes/2026-06-27-decontainerize-uedctl/harness"))
+sys.path.insert(0, str(ROOT / "dev/docs/spikes/2026-06-27-decontainerize-uedcli/harness"))
 
-from uedctl import trunk  # noqa: E402
-from uedctl.native import materialize as M  # noqa: E402
-from uedctl.native import umodel as UM  # noqa: E402
+from uedcli import trunk  # noqa: E402
+from uedcli.native import materialize as M  # noqa: E402
+from uedcli.native import umodel as UM  # noqa: E402
 import utexture_decode as UT  # noqa: E402
 
 EDITOR = "/home/neob91/Games/LutrisDX/drive_c/DX/Maps/Test_Castle.dx"
-TRUNK = "/home/neob91/Games/LutrisDX/drive_c/DX/LUM/_scratch/castle/uedctl/maps/foobar"
+TRUNK = "/home/neob91/Games/LutrisDX/drive_c/DX/LUM/_scratch/castle/uedcli/maps/foobar"
 
 
 def load(path: str):

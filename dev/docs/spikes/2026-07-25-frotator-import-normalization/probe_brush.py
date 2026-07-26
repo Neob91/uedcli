@@ -22,12 +22,12 @@ import time
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                 "..", "..", "..", ".."))
 
-from uedctl import builders, config, writes                       # noqa: E402
-from uedctl.container_assets import resource_mounts               # noqa: E402
-from uedctl.driver import Driver                                  # noqa: E402
-from uedctl.editor import ensure_editor, stop_editor              # noqa: E402
-from uedctl.store_export import export_dx_t3d                     # noqa: E402
-from uedctl.uuid7 import uuid7                                    # noqa: E402
+from uedcli import builders, config, writes                       # noqa: E402
+from uedcli.container_assets import resource_mounts               # noqa: E402
+from uedcli.driver import Driver                                  # noqa: E402
+from uedcli.editor import ensure_editor, stop_editor              # noqa: E402
+from uedcli.store_export import export_dx_t3d                     # noqa: E402
+from uedcli.uuid7 import uuid7                                    # noqa: E402
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from probe import export_and_read, rotation_of, wait_for_file      # noqa: E402
@@ -42,7 +42,7 @@ def main() -> int:
                                            *([".."] * 6), "_scratch"))
     os.makedirs(scratch, exist_ok=True)
 
-    project = config.resolve_project(env_project=os.environ.get("UEDCTL_PROJECT"),
+    project = config.resolve_project(env_project=os.environ.get("UEDCLI_PROJECT"),
                                      cwd=os.getcwd())
     user_config = config.load_user_config()
     search_dirs = config.composed_search_dirs(project, user_config)

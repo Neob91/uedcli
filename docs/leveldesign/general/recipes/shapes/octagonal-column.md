@@ -8,7 +8,7 @@ pedestals, and pipes.
 
 A free-standing 8-sided vertical prism, base on the floor. One brush, one verb.
 
-### uedctl pipeline (what you run)
+### uedcli pipeline (what you run)
 
 ```
 # 8-sided prism, 64 across, 256 tall, base seated on the floor (Z=0)

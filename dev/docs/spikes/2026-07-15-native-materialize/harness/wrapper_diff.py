@@ -19,12 +19,12 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedctl")
+ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedcli")
 sys.path.insert(0, str(ROOT))
 
 import struct  # noqa: E402
 
-from uedctl.native.pkg_write import parse_package, ParsedPackage  # noqa: E402
+from uedcli.native.pkg_write import parse_package, ParsedPackage  # noqa: E402
 
 
 def read_generations(buf: bytes):

@@ -37,17 +37,17 @@ import sys
 from collections import Counter
 from pathlib import Path
 
-ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedctl")
+ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedcli")
 sys.path.insert(0, str(ROOT))
-sys.path.insert(0, str(ROOT / "dev/docs/spikes/2026-06-27-decontainerize-uedctl/harness"))
+sys.path.insert(0, str(ROOT / "dev/docs/spikes/2026-06-27-decontainerize-uedcli/harness"))
 
 import utexture_decode as UT  # noqa: E402
-from uedctl.native import umodel as UM  # noqa: E402
-from uedctl.native.codec import write_ci, ref_export, deref  # noqa: E402
+from uedcli.native import umodel as UM  # noqa: E402
+from uedcli.native.codec import write_ci, ref_export, deref  # noqa: E402
 
 NATIVE = "/home/neob91/Games/LutrisDX/drive_c/DX/Maps/NativeCastle.dx"
 EDITOR = "/home/neob91/Games/LutrisDX/drive_c/DX/Maps/Test_Castle.dx"
-TRUNK = "/home/neob91/Games/LutrisDX/drive_c/DX/LUM/_scratch/castle/uedctl/maps/foobar"
+TRUNK = "/home/neob91/Games/LutrisDX/drive_c/DX/LUM/_scratch/castle/uedcli/maps/foobar"
 
 FIELDS = ["texture_ref", "poly_flags", "p_base", "v_normal", "v_texture_u", "v_texture_v",
           "i_light_map", "i_brush_poly", "i_zone", "i_actor"]
@@ -158,7 +158,7 @@ def main():
     # sweep (the editor's real brush block sits at export idx ~39-164, so a narrow sweep understates
     # the ceiling — reviewer-caught 2026-07-18).
     try:
-        from uedctl import trunk
+        from uedcli import trunk
         lvl, _ = trunk.read_level(Path(TRUNK))
         tb = [nn for nn in lvl.order if lvl.actors[nn].brush is not None]
         first_ref, seen = [], set()

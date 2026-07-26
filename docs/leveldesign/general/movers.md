@@ -35,14 +35,14 @@ mover key move <that-name> 1 --from-base --to 0,0,112        # key 1 = open pose
   key count <name> <n>`** (or the equivalent `actor prop set <name> NumKeys=<n>`). A fresh mover has
   `NumKeys=2` (keys 0 and 1), so a two-pose door needs no count change.
 - **Key 0 is the base (closed / bottom) pose.** Additional keys are **stored** as offsets from the base —
-  uedctl stores the base at key 0 and never emits an absolute `BasePos`/`BaseRot`. `mover key
+  uedcli stores the base at key 0 and never emits an absolute `BasePos`/`BaseRot`. `mover key
   move`/`rotate <i>` edit an EXISTING key `1 ≤ i < NumKeys` (raise the count first with `mover key
   count`); `--to` needs a frame — **`--from-base`** (the coords are the offset from base) or
-  **`--from-world`** (an absolute world pose, uedctl subtracts the base). `--by` takes a frame-agnostic
+  **`--from-world`** (an absolute world pose, uedcli subtracts the base). `--by` takes a frame-agnostic
   delta.
 - **The editor's "record" flow is inverted** — a classic trap. In the GUI you add the mover (which
   becomes key 0), then **select the *target* key first and only then move the brush** to set that pose.
-  Get the order backwards and you move the base instead of the target. uedctl's `mover key move …`
+  Get the order backwards and you move the base instead of the target. uedcli's `mover key move …`
   avoids the trap by naming the target key + pose directly.
 
 ```

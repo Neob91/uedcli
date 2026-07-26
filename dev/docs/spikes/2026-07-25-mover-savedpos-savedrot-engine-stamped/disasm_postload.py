@@ -10,7 +10,7 @@ Requires `pefile` + `capstone` (`pip install pefile capstone`) — see
 `dev/docs/unrealed/extracting-from-dll.md` "Beyond strings: disassembly".
 
 Usage:
-    python3 disasm_postload.py Tools/uedctl/uned/UED22/Engine.dll
+    python3 disasm_postload.py Tools/uedcli/uned/UED22/Engine.dll
     python3 disasm_postload.py --follow-thunk /path/to/DX/System/Engine.dll
 """
 from __future__ import annotations

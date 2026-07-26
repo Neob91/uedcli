@@ -182,13 +182,13 @@ Established live over a 6-round spike (2026-07-06,
   (An untested cleaner path: click the render-mode button on the *pane's own toolbar* — it targets
   that pane directly, no command box. Under investigation.)
 
-## uedctl's offline `actor preview` — what UnrealEd draws, matched host-side
+## uedcli's offline `actor preview` — what UnrealEd draws, matched host-side
 
 `actor preview` (`preview.py`) is our OWN stdlib rasterizer, not the editor — but its colours and
 sizes are chosen to MATCH what UnrealEd's viewports show, so a preview reads like the editor.
 
 - **Brush wire colours by CSG classification** — UnrealEd colours each brush's wireframe by its
-  CSG role. uedctl reproduces the legend (hue preserved, luminance re-tuned for our light-grey background
+  CSG role. uedcli reproduces the legend (hue preserved, luminance re-tuned for our light-grey background
   — UED tunes for a grey/black viewport): **added-solid = blue, subtracted = yellow/gold, semi-solid
   = warm coral, non-solid = green, mover = magenta/purple**. Red is UED's *builder* brush (not rendered
   here), so it is free — a highlighted poly (`--highlight`) uses its brush's OWN vivid hue + a
@@ -201,7 +201,7 @@ sizes are chosen to MATCH what UnrealEd's viewports show, so a preview reads lik
   `spikes/2026-07-22-unrealed-brush-wire-colors.md` for the source-verified UE1 `C_*` brush-wire RGBs.
   Otherwise adapted from the Andrzej-provided UED legend (ergonomics spec 2026-07-21 §4), NOT
   binary-mined — the hues are a design choice matching UED, so no confidence marker applies.
-  The actual RGB values are uedctl's own
+  The actual RGB values are uedcli's own
   white-bg re-tuning; `test_preview.py` pins the classify→palette→render **wiring** (a subtracted
   brush renders in the `subtract` pair, a point actor is never painted CSG-additive), not the literal
   RGB numbers.
@@ -216,7 +216,7 @@ sizes are chosen to MATCH what UnrealEd's viewports show, so a preview reads lik
   - **Light/sound reach** (`--show light-range`/`--show sound-range`) — spheres of
     `25·(LightRadius+1)` / `25·(SoundRadius+1)` UU (the `+1` is real: `LightRadius=0` still reaches 25
     UU) (`AActor.h` `WorldLightRadius`/`WorldSoundRadius`). UED draws collision+light both dark red and
-    sound dark blue; uedctl keeps collision red / sound blue but **deviates light to orange** so the
+    sound dark blue; uedcli keeps collision red / sound blue but **deviates light to orange** so the
     two red overlays (separate toggles) stay distinguishable.
 
 ## Texture swatches → PNG

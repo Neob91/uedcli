@@ -28,7 +28,7 @@ A keypad opens or unlocks whatever its `Event` targets when the player enters `v
 5. **Wire it to the door** — set the keypad's `Event` to the door's `Tag`. That is the connection (in
    the editor it shows as a red line from keypad to door).
 
-### With uedctl
+### With uedcli
 
 ```bash
 # 1. A locked DeusExMover door with a Tag (see deusex-door.md for the full door).
@@ -56,7 +56,7 @@ bypassed, by firing their `UnTriggerEvent`.
 3. **Wire the panel to the lasers** — set `UnTriggerEvent[0]` to the lasers' `Tag`. When the player
    hacks the panel, it un-triggers (switches off) the beams. Set `hackStrength` for difficulty.
 
-### With uedctl
+### With uedcli
 
 ```bash
 # 1. Lasers sharing one Tag (place several, alternating facing via --rotate yaw).
@@ -105,7 +105,7 @@ Only a **`DeusExMover`** can be locked (the engine `Mover` cannot). The lock sur
 ## Caveats and gotchas
 
 - **Placement height (~60–80 uu) is just authored coordinates** — there is no grid-snap step in
-  uedctl; pick on-grid values directly.
+  uedcli; pick on-grid values directly.
 - **Array properties** like `UnTriggerEvent` and a console's `Views`/`doorTag` are indexed with the
   **dot** form: `--prop UnTriggerEvent.0=…` (the CLI rejects the T3D `KEY(N)` parenthesis form —
   write `KEY.N`).

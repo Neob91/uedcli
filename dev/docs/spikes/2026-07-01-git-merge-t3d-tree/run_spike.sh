@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Spike driver: does plain `git merge` work as uedctl's session-merge mechanism
+# Spike driver: does plain `git merge` work as uedcli's session-merge mechanism
 # for T3D trees? Builds a trunk, two disjoint-work branches, merges; then forces
 # a same-actor conflict; then tests whether property reordering (non-canonical
 # emit) causes a spurious conflict.

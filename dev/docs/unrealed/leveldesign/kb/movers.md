@@ -3,12 +3,12 @@
 Part of the split-out **level-design knowledge base**. FULL dev reference for UE1/DX movers: what a
 mover is, the engine subclass family vs the Deus Ex `DeusExMover` family, keyframe authoring (incl. the
 inverted GUI record flow), encroachment behaviour, initial states, the mover self-lighting "black door"
-fix, and the uedctl `mover key` verbs. Siblings: [`lighting.md`](lighting.md) · [`textures.md`](textures.md)
+fix, and the uedcli `mover key` verbs. Siblings: [`lighting.md`](lighting.md) · [`textures.md`](textures.md)
 · [`actors-collision-pathing.md`](actors-collision-pathing.md). Parent monolith:
 [`README.md`](README.md). Engine-driving: [`../../commands.md`](../../commands.md),
 [`../../t3d.md`](../../t3d.md), [`../../quirks.md`](../../quirks.md).
 
-**Confidence markers:** ✅ uedctl-used / live-verified · 🔬 live-probed against the real DX binary/editor ·
+**Confidence markers:** ✅ uedcli-used / live-verified · 🔬 live-probed against the real DX binary/editor ·
 📖 tutorial-corpus. **[ENGINE]** = generic UE1 · **[DX]** = Deus-Ex-specific.
 
 ---
@@ -59,7 +59,7 @@ A mover interpolates between **keyframes**: numbered poses **0–7 (max 8)**.
 
 - **Key 0 is the base / closed pose.** Higher keys are the open/intermediate poses.
 - `NumKeys` **must equal the number of keys actually used** — a mismatch misbehaves.
-- **`KeyPos(i)` / `KeyRot(i)` are OFFSETS from the base pose**, not absolute world coordinates. uedctl
+- **`KeyPos(i)` / `KeyRot(i)` are OFFSETS from the base pose**, not absolute world coordinates. uedcli
   stores the base at `KeyNum=0` and **never emits `BasePos` / `BaseRot`** (the base is the brush's own
   authored location).
 - The **pivot** (rotation centre for `KeyRot`) is set by clicking a vertex in the GUI.
@@ -71,9 +71,9 @@ The UnrealEd keyframe recording flow is **inverted** and catches everyone:
 2. Select the **TARGET key first** (e.g. "Key 1"), **then** move/rotate the brush to where that key
    should be.
 
-You are not "moving then recording" — you select the destination slot, then pose. uedctl sidesteps this
+You are not "moving then recording" — you select the destination slot, then pose. uedcli sidesteps this
 entirely: keys are authored as T3D offsets via the `mover key` verbs (§6), so the inverted record flow
-never applies at the uedctl seat — but it is essential context for a GUI-aware reader.
+never applies at the uedcli seat — but it is essential context for a GUI-aware reader.
 
 ---
 
@@ -126,9 +126,9 @@ to `ME_StopWhenEncroach`** — so a DX mover stops (rather than reverses) on enc
 
 ---
 
-## 6. Authoring movers with uedctl  ✅
+## 6. Authoring movers with uedcli  ✅
 
-uedctl authors movers entirely **model-side** — no editor:
+uedcli authors movers entirely **model-side** — no editor:
 
 ```
 # 1. build the mover shape as a mover-class brush (base pose only — no CsgOper, no keyframes yet)

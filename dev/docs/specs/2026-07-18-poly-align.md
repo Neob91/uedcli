@@ -2,7 +2,7 @@
 
 **Status:** DECIDED + BUILT (2026-07-18). The three open decisions below are **resolved** — see
 `dev/docs/decisions.md` 2026-07-18 21:40 UTC ("`poly align` v1 scope + face-selection grammar").
-Implemented in `uedctl/polyalign.py` (`brush poly find` + `brush poly align`); durable knowledge
+Implemented in `uedcli/polyalign.py` (`brush poly find` + `brush poly align`); durable knowledge
 folded into `architecture.md` ("Surface texture alignment") + `unrealed/t3d.md` (the UV convention).
 This ephemeral spec may be deleted once that fold is confirmed stable.
 
@@ -36,11 +36,11 @@ Two headline cases from the board item:
 
 ---
 
-## The UV convention uedctl uses (load-bearing — this is the formula we implement against)
+## The UV convention uedcli uses (load-bearing — this is the formula we implement against)
 
-**Evidence (uedctl's own code, not memory):**
+**Evidence (uedcli's own code, not memory):**
 
-- `uedctl-native/src/render.rs:159-165` — the software rasterizer computes per-vertex texel UV as:
+- `uedcli-native/src/render.rs:159-165` — the software rasterizer computes per-vertex texel UV as:
   ```
   dp = Vertex − uv_base
   tu = dp · TextureU + PanU
@@ -48,9 +48,9 @@ Two headline cases from the board item:
   ```
   where `uv_base` is the poly's **world-space `Origin`** (`render.rs:21` "world point where (u,v) =
   (pan_u, pan_v)").
-- `uedctl/preview_native.py:192-220` (`_world_uv_frame`) builds that frame from the authored fields:
+- `uedcli/preview_native.py:192-220` (`_world_uv_frame`) builds that frame from the authored fields:
   `uv_base = Location + R·(Origin − PrePivot)`, `axes = R·(TextureU, TextureV)`, `pan = poly.pan`.
-- `uedctl-native/src/light.rs:337-352` — the lightmap bake independently confirms the frame is
+- `uedcli-native/src/light.rs:337-352` — the lightmap bake independently confirms the frame is
   **base-relative** (`(vert − Base)·TextureU/V`). **Caveat (reviewer-flagged):** `light.rs`'s `base`
   is the *BSP surf base point* `s.p_base` (a build product), and the `Pan = min(vert−Base)·Tex −
   0.125` relation it verifies is the **lightmap-grid** pan (`axis_grid`, `light.rs:369-370`), a
@@ -61,13 +61,13 @@ Two headline cases from the board item:
   surface `Pan`) plus the paste round-trip that preserves `Origin`/`TextureU`/`TextureV`
   (`t3d.md:169-177`, `emit.py`).
 
-So uedctl's canonical UV per vertex is:
+So uedcli's canonical UV per vertex is:
 
 > **U = (Vertex − Origin) · TextureU + PanU**   (and V analogously)
 
 **Note on the handoff's `/ TextureU²` form.** The classic Unreal-source formula
 `U = (V − Base)·TextureU / |TextureU|² · UScale + PanU` is the *same mapping* under a different split:
-there TextureU is a **unit** axis and `UScale` is separate. uedctl folds the scale into the
+there TextureU is a **unit** axis and `UScale` is separate. uedcli folds the scale into the
 **magnitude** of `TextureU` — a unit `TextureU` (as `builders._tex_basis` emits, `builders.py:98-107`)
 gives **1 texel per world unit**; halving the texture density means halving `|TextureU|`. There is no
 separate scale field on the poly. So our implementation uses the no-division form above (matching

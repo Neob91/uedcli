@@ -259,8 +259,8 @@ binary.)
   call, the classify→counter jump table, and the `MAP REBUILD` `0x32`/`0x46`/`shl 8` defaults.
   **24/24 checks pass** (each tests a distinct, load-bearing byte sequence or value). Run:
   ```
-  UED22=/home/human/src/dx_lum/Tools/uedctl/uned/UED22 \
-      /home/human/src/dx_lum/.venv-uedctl/bin/python verify_heuristic.py
+  UED22=/home/human/src/dx_lum/Tools/uedcli/uned/UED22 \
+      /home/human/src/dx_lum/.venv-uedcli/bin/python verify_heuristic.py
   ```
 - **`find_best_split.py`** — the faithful reference port (§2d + §3), runnable as a sanity demo.
 - **`sim_candidate_loop.py`** — an instruction-level simulator of the candidate-selection loop
@@ -289,7 +289,7 @@ retired — a faithful offline port of `FindBestSplit` is feasible with HIGH con
 - **Float32 risk is LOW.** Splits/Front/Back/Balance are integers; the only fractional term is the
   PortalBias bonus, computed in float32 in the port exactly as the SSE code does. Ties resolve
   deterministically by index, so even an exact tie can't pick a different plane than the binary.
-  This matches the GMath-table discipline uedctl already uses elsewhere.
+  This matches the GMath-table discipline uedcli already uses elsewhere.
 - **The residual risk is NOT the heuristic — it's the surrounding machinery**, which is *volume,
   not unknowns*, and was already located by the prior slices spike:
   1. **`SplitPolyList` (Editor `0x34530`) node emission + coplanar-node placement** — the

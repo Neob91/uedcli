@@ -7,7 +7,7 @@ spec overrides conflicting prose. Grounding spikes: `spikes/2026-06-25-scale-tra
 
 Transform (spike-verified): `world = Location + PostScale·R·MainScale·(v − PrePivot)`.
 
-## The scale/transform algebra module — `uedctl/transform.py` (NEW)
+## The scale/transform algebra module — `uedcli/transform.py` (NEW)
 - `FScale` dataclass — `scale: Vec3=(1,1,1)`, `sheer_rate: Decimal=0`, `sheer_axis: str="SHEER_ZX"`;
   `.is_identity()`. `IDENTITY = FScale()`.
 - `parse_fscale(text)` — nested `(Scale=(X=,Y=,Z=),SheerRate=,SheerAxis=)` → `FScale` (absent axis

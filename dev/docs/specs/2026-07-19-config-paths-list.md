@@ -1,11 +1,11 @@
 # Spec: `paths` as a TOML list (as well as a colon-string)
 
 **Status:** specced, awaiting plan → build.
-**Requested by:** Andrzej (2026-07-19) — "Can `~/.uedctl/config.toml` define `paths` as a **TOML
+**Requested by:** Andrzej (2026-07-19) — "Can `~/.uedcli/config.toml` define `paths` as a **TOML
 list** instead of a single string with `:` as separator? Spec now if needed." Andrzej has **decided
 he wants the list form supported**; this spec designs *how* and flags the sub-choices with
 recommendations.
-**Ephemeral:** per the uedctl `CLAUDE.md`, this spec is scratch. The load-bearing decision + rejected
+**Ephemeral:** per the uedcli `CLAUDE.md`, this spec is scratch. The load-bearing decision + rejected
 alternatives go in the durable append-only `dev/docs/decisions.md` (add an entry when this is
 accepted); on build, fold the outcome into `direction.md` / `architecture.md` / `docs/usage.md` and
 delete or stale-mark this file.
@@ -16,10 +16,10 @@ delete or stale-mark this file.
 
 | # | Question | Options | **Recommendation** |
 |---|---|---|---|
-| A | Accept BOTH forms, or migrate to list-only? | (a) accept string OR list; (b) list-only, drop string | **(a) accept both.** Zero migration cost; every existing `config.toml`/`uedctl.toml` in the wild keeps working. The colon-string stays a valid, documented form. |
-| B | Apply the list form to the project `uedctl.toml` `paths` too, or only `~/.uedctl/config.toml`? | (a) both loaders; (b) per-user only | **(a) both.** Consistency — one rule for "a `paths` value" everywhere. Andrzej asked specifically about `config.toml`; note that the per-user loader is the must-have and the project loader is the consistency add-on. |
+| A | Accept BOTH forms, or migrate to list-only? | (a) accept string OR list; (b) list-only, drop string | **(a) accept both.** Zero migration cost; every existing `config.toml`/`uedcli.toml` in the wild keeps working. The colon-string stays a valid, documented form. |
+| B | Apply the list form to the project `uedcli.toml` `paths` too, or only `~/.uedcli/config.toml`? | (a) both loaders; (b) per-user only | **(a) both.** Consistency — one rule for "a `paths` value" everywhere. Andrzej asked specifically about `config.toml`; note that the per-user loader is the must-have and the project loader is the consistency add-on. |
 | C | Should the single-dir keys `catalog`/`prefabs`/`maps` also accept a list? | (a) leave as plain single-dir strings; (b) make them lists | **(a) leave them.** They are semantically ONE directory each (`project_catalog_dir` etc. return a single path); a list is meaningless there. Out of scope. |
-| D | What is the headline benefit — expressing a directory whose path contains a `:`? | (a) frame it as **any colon-containing POSIX dir** (works today on the Linux host); (b) frame it as **Windows drive-letter paths** | **(a) colon-containing POSIX dir.** This is the reachable benefit on uedctl's actual (host-native Linux) runtime. A Windows drive letter (`C:\…`) is NOT `os.path.isabs`-absolute on POSIX and is rejected/dropped by the unchanged absolute-dir + existence checks — genuine Windows-host support is a **separate, out-of-scope** concern (§Out of scope). Do NOT claim the drive-letter case as "accepted." |
+| D | What is the headline benefit — expressing a directory whose path contains a `:`? | (a) frame it as **any colon-containing POSIX dir** (works today on the Linux host); (b) frame it as **Windows drive-letter paths** | **(a) colon-containing POSIX dir.** This is the reachable benefit on uedcli's actual (host-native Linux) runtime. A Windows drive letter (`C:\…`) is NOT `os.path.isabs`-absolute on POSIX and is rejected/dropped by the unchanged absolute-dir + existence checks — genuine Windows-host support is a **separate, out-of-scope** concern (§Out of scope). Do NOT claim the drive-letter case as "accepted." |
 | E | Should a list element itself still be allowed to contain a `:` separator (i.e. one element = several dirs)? | (a) NO — each element is exactly one dir, `:` in an element is a literal path char; (b) still split each element on `:` | **(a) no inner split.** The whole point of the list is to escape the `:`-as-separator overload. In list form, one element = one directory, verbatim; a `:` in it is part of the path (that is what lets a colon-containing dir through). |
 
 ---
@@ -46,13 +46,13 @@ there is no separator to collide with — so `paths = ["/games/od:d/Textures", "
 unambiguous and needs no `:`-splitting and no `_WIN_DRIVE` guard.
 
 **Headline benefit (sub-choice D):** the list form is the supported, unambiguous way to express a
-directory **whose path contains a colon** on uedctl's actual host-native (Linux) runtime — an
+directory **whose path contains a colon** on uedcli's actual host-native (Linux) runtime — an
 absolute POSIX dir like `/games/od:d/Textures`, which the colon-string form structurally cannot
 represent (and today mis-splits silently). The colon-string remains the terse form for ordinary
 colon-free POSIX dirs.
 
 **What the list form does NOT unlock here — a Windows drive letter.** `paths = ["C:\\Textures"]`
-looks like it should now work, but on the Linux host uedctl runs on, `os.path.isabs("C:\\Textures")`
+looks like it should now work, but on the Linux host uedcli runs on, `os.path.isabs("C:\\Textures")`
 is **False** (a drive letter is not POSIX-absolute) and `os.path.abspath` turns it into
 `<cwd>/C:\Textures`. So such an element is *rejected* by the unchanged `require_absolute` check in
 the per-user loader, and *dropped* by the unchanged existence filter everywhere else. The list form
@@ -70,7 +70,7 @@ genuinely works, not on drive letters, which do not.
 2. a TOML **array of directory strings** — new (`["Textures", "System"]`, or a colon-containing dir
    like `["/games/od:d/Textures"]`).
 
-Applies to the per-user `[games.<name>].paths` (the must-have) **and** the project `uedctl.toml`
+Applies to the per-user `[games.<name>].paths` (the must-have) **and** the project `uedcli.toml`
 `paths` (the consistency add-on) — sub-choice B(a).
 
 The single-dir keys `catalog`/`prefabs`/`maps` are **unchanged** (plain single-dir strings) —
@@ -86,8 +86,8 @@ list* happens in `resolve_dirs`, which every **production** consumer already fun
 (`_composed_dirs_with_provenance`, `config.py:408-411`) — those need no change.
 
 **One consumer bypasses `resolve_dirs` and MUST be fixed** (reviewer finding): the integration test
-`uedctl/tests/test_uprops_defaults.py:37` reads the loaded Substrate directly with
-`paths = [d for d in sub.paths.split(":") if d]`. Once a real `~/.uedctl/config.toml` migrates to the
+`uedcli/tests/test_uprops_defaults.py:37` reads the loaded Substrate directly with
+`paths = [d for d in sub.paths.split(":") if d]`. Once a real `~/.uedcli/config.toml` migrates to the
 list form, `sub.paths` is a `list` and `.split(":")` raises `AttributeError`. It is
 `@pytest.mark.integration` (deselected by default, so `bin/test` stays green and would *hide* the
 break), which makes it doubly important to fix as part of this change: replace line 37 with
@@ -236,7 +236,7 @@ don't over-engineer.
 
 ## Backward compatibility
 
-- Every existing colon-string `config.toml` / `uedctl.toml` is **byte-for-byte unchanged in
+- Every existing colon-string `config.toml` / `uedcli.toml` is **byte-for-byte unchanged in
   behaviour** — the `str` branch is the old code path verbatim.
 - Value objects store the original form; the only readers of `paths` are `resolve_dirs` (via the
   composers) and the one integration test called out above (fixed to use `resolve_dirs`).
@@ -251,7 +251,7 @@ don't over-engineer.
   example must show the CORRECT split-into-elements migration (`["System", "Textures"]`) to steer
   users away from this.
 - **One existing test intentionally reverses.** `test_project_non_string_or_empty_keys_are_named_errors`
-  (`test_config.py:605-617`) currently asserts `paths = ["Textures"]` in a project `uedctl.toml`
+  (`test_config.py:605-617`) currently asserts `paths = ["Textures"]` in a project `uedcli.toml`
   **raises** a `ConfigError` matching `"paths"`. That case must be **removed from that test** (it now
   becomes *legal*) and re-expressed as a positive test that a project list `paths` parses. This is a
   deliberate, documented behaviour change, not a regression. The other cases in that test
@@ -259,7 +259,7 @@ don't over-engineer.
 
 ---
 
-## Test strategy (offline; extend `uedctl/tests/test_config.py`)
+## Test strategy (offline; extend `uedcli/tests/test_config.py`)
 
 The suite runs via `bin/test` (host-native venv). Add:
 
@@ -311,7 +311,7 @@ The suite runs via `bin/test` (host-native venv). Add:
 identical `composed_search_dirs` / `composed_search_files` as the colon-string equivalents (extend the
 `test_config.py:290-320` compose tests).
 
-**Consumer fix:** update `uedctl/tests/test_uprops_defaults.py:37` from `sub.paths.split(":")` to
+**Consumer fix:** update `uedcli/tests/test_uprops_defaults.py:37` from `sub.paths.split(":")` to
 `config.resolve_dirs(sub.paths, "/", require_absolute=True)` so the integration resolver survives a
 real config migrated to the list form (see §Backward compatibility). It's integration-marked, so it
 won't run under the default `bin/test`, but it must not silently `AttributeError` when it does run.
@@ -320,7 +320,7 @@ won't run under the default `bin/test`, but it must not silently `AttributeError
 
 ## Docs to update on build
 
-- **`docs/usage.md`** — the `uedctl.toml` schema block (`docs/usage.md:33-39`): show `paths` accepts a
+- **`docs/usage.md`** — the `uedcli.toml` schema block (`docs/usage.md:33-39`): show `paths` accepts a
   colon-string **or** a list; use a CORRECT list example (`paths = ["Textures", "System"]`, one dir
   per element — NOT `["Textures:System"]`, per the migration footgun) and note the list form is the
   way to express a dir whose path contains a colon. Also note the per-user `config.toml`
@@ -345,7 +345,7 @@ won't run under the default `bin/test`, but it must not silently `AttributeError
 - Making `catalog`/`prefabs`/`maps` lists (they are one dir each — sub-choice C).
 - Any change to how dirs are composed/deduped/scanned (`composed_search_*` untouched).
 - Cross-platform path handling beyond "let a colon-containing POSIX element through in list form" —
-  uedctl still normalizes with `os.path.abspath` and gates on POSIX `os.path.isabs`. **Genuine
+  uedcli still normalizes with `os.path.abspath` and gates on POSIX `os.path.isabs`. **Genuine
   Windows-host support** (making `C:\…` drive-letter paths `isabs`-absolute and existence-checkable)
   is explicitly a separate concern; the list form does NOT deliver it, and this spec must not be read
   as claiming it does (see §Motivation, sub-choice D, and the negative test above).

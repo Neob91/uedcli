@@ -5,7 +5,7 @@ Render.dll RVA 0x17adb is `if (Node.iRenderBound(+0x30) == -1) skip; else index 
 (Model+0xc0, FBox stride 28) and call BoundVisible`.  A node with iRenderBound != -1 while the
 Bounds array is empty (Data == NULL) dereferences a null FBox -> AV in BoundVisible.
 
-Run:  <uedctl>/.venv/bin/python render_bound_guard.py [path-to-Render.dll]
+Run:  <uedcli>/.venv/bin/python render_bound_guard.py [path-to-Render.dll]
 (needs `capstone` + `pefile` in the venv)
 """
 import sys

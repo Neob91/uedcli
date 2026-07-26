@@ -11,7 +11,7 @@ import struct
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", ".."))
-from uedctl.upackage import load_package, read_compact_index, read_property_tags  # noqa: E402
+from uedcli.upackage import load_package, read_compact_index, read_property_tags  # noqa: E402
 import umesh  # noqa: E402
 
 

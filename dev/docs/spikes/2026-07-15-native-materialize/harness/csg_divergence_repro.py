@@ -14,23 +14,23 @@ The editor (UnrealEd `bspBrushCSG`) avoids this by maintaining the world BSP INC
 removing nodes), never rebuilding a classifier from a possibly-non-watertight surface list.
 
 This script reproduces the castle divergence, bisects to the culprit brush pair, and traces the
-misclassification, using the live `uedctl_native` build + the editor `Test_Castle.dx` as oracle.
+misclassification, using the live `uedcli_native` build + the editor `Test_Castle.dx` as oracle.
 
 Usage: python csg_divergence_repro.py
 """
 import sys
 from pathlib import Path
 
-ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedctl")
+ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedcli")
 sys.path.insert(0, str(ROOT))
-sys.path.insert(0, str(ROOT / "dev/docs/spikes/2026-06-27-decontainerize-uedctl/harness"))
+sys.path.insert(0, str(ROOT / "dev/docs/spikes/2026-06-27-decontainerize-uedcli/harness"))
 
-from uedctl import trunk  # noqa: E402
-from uedctl.native import materialize as M, umodel as UM  # noqa: E402
-import uedctl_native  # noqa: E402
+from uedcli import trunk  # noqa: E402
+from uedcli.native import materialize as M, umodel as UM  # noqa: E402
+import uedcli_native  # noqa: E402
 import utexture_decode as UT  # noqa: E402
 
-TRUNK = "/home/neob91/Games/LutrisDX/drive_c/DX/LUM/_scratch/castle/uedctl/maps/foobar"
+TRUNK = "/home/neob91/Games/LutrisDX/drive_c/DX/LUM/_scratch/castle/uedcli/maps/foobar"
 EDITOR = "/home/neob91/Games/LutrisDX/drive_c/DX/Maps/Test_Castle.dx"
 
 
@@ -49,7 +49,7 @@ def solid(m, p):
 
 def build_names(lvl, names):
     bs = [M._build_brush_input(n, lvl.actors[n]) for n in names]
-    body = uedctl_native.serialize_model(uedctl_native.build_geometry(bs))
+    body = uedcli_native.serialize_model(uedcli_native.build_geometry(bs))
     return UM.parse_model_body(body, 0, len(body))
 
 

@@ -3,24 +3,24 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "uedctl"
+name = "uedcli"
 version = "0.1.0"
 description = "Editor-automation CLI for UnrealEngine-1 games (Deus Ex substrate) — queryable, scriptable, auditable level design as text"
 requires-python = ">=3.12"
 # Pillow is the ONLY third-party runtime dependency (texture-catalog decode); everything else
-# uedctl imports is stdlib. Pinned to a floor for the deterministic NEAREST-resample color
+# uedcli imports is stdlib. Pinned to a floor for the deterministic NEAREST-resample color
 # derivation (decisions.md 2026-06-22).
 dependencies = ["Pillow>=11"]
 
 [project.scripts]
-uedctl = "uedctl.cli:main"
+uedcli = "uedcli.cli:main"
 
 [tool.setuptools]
-# Explicit static list (NOT find_packages) so the `uedctl.tests` subpackage + fixtures never ship
-# in the wheel. If this ever becomes a find directive, add `exclude = ["uedctl.tests*"]`.
-packages = ["uedctl"]
+# Explicit static list (NOT find_packages) so the `uedcli.tests` subpackage + fixtures never ship
+# in the wheel. If this ever becomes a find directive, add `exclude = ["uedcli.tests*"]`.
+packages = ["uedcli"]
 
 [tool.setuptools.package-data]
 # No non-Python data files ship inside the package (the substrate/editor live in the Docker
 # image + content mounts, not in the wheel) — declared empty so a future addition is explicit.
-uedctl = []
+uedcli = []

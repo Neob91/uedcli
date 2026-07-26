@@ -15,7 +15,7 @@ Fix (single-zone convex room):
     4. iZone = (0,1): back=solid=zone0, front=interior=zone1.  Bounds = -1.
 """
 import sys
-from uedctl.native import pkg_write, umodel
+from uedcli.native import pkg_write, umodel
 
 NF_ISNEW = 0x20
 

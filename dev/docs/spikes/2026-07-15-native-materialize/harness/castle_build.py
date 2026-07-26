@@ -3,7 +3,7 @@
 Builds the castle Model TWO ways and hands both to the section diff tools:
 
   * NATIVE  — the flagged incremental byte-identity core
-              (`uedctl_native.build_geometry_bspcsg`), the path we are driving
+              (`uedcli_native.build_geometry_bspcsg`), the path we are driving
               toward node-for-node parity.  It is built from the castle trunk's
               brush inputs, serialized, and re-parsed with `umodel.parse_model_body`
               so both sides are the SAME `Model` dataclass.
@@ -20,16 +20,16 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedctl")
+ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedcli")
 sys.path.insert(0, str(ROOT))
-sys.path.insert(0, str(ROOT / "dev/docs/spikes/2026-06-27-decontainerize-uedctl/harness"))
+sys.path.insert(0, str(ROOT / "dev/docs/spikes/2026-06-27-decontainerize-uedcli/harness"))
 
-from uedctl import trunk  # noqa: E402
-from uedctl.native import materialize as M, umodel as UM  # noqa: E402
-import uedctl_native  # noqa: E402
+from uedcli import trunk  # noqa: E402
+from uedcli.native import materialize as M, umodel as UM  # noqa: E402
+import uedcli_native  # noqa: E402
 import utexture_decode as UT  # noqa: E402
 
-TRUNK = "/home/neob91/Games/LutrisDX/drive_c/DX/LUM/_scratch/castle/uedctl/maps/foobar"
+TRUNK = "/home/neob91/Games/LutrisDX/drive_c/DX/LUM/_scratch/castle/uedcli/maps/foobar"
 EDITOR = "/home/neob91/Games/LutrisDX/drive_c/DX/Maps/Test_Castle.dx"
 
 
@@ -38,8 +38,8 @@ def build_native(trunk_dir: str = TRUNK) -> UM.Model:
     lvl, _ = trunk.read_level(Path(trunk_dir))
     brush_order = [n for n in lvl.order if lvl.actors[n].brush is not None]
     bs = [M._build_brush_input(n, lvl.actors[n]) for n in brush_order]
-    native = uedctl_native.build_geometry_bspcsg(bs)
-    body = uedctl_native.serialize_model(native)
+    native = uedcli_native.build_geometry_bspcsg(bs)
+    body = uedcli_native.serialize_model(native)
     return UM.parse_model_body(body, 0, len(body))
 
 

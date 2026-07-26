@@ -10,7 +10,7 @@ solid, then **add** detail brushes back inside the hollow.
 
 A **builder brush** (the editor's red "cookie cutter") is shaped, then committed as a *Subtract* or an
 *Add* operation. The builder brush itself is never part of the level — only the operations it stamps
-are. uedctl hides the builder brush behind generators: each `brush build` prints a T3D brush actor
+are. uedcli hides the builder brush behind generators: each `brush build` prints a T3D brush actor
 carrying its own shape and CSG operation.
 
 ```
@@ -27,7 +27,7 @@ region, the **last one wins**. So ordering is not cosmetic — it *is* the geome
 
 - Send **subtractive / structural** brushes **first**; **additive / detail** brushes **last**. "Carve
   first, furnish after." ✅
-- uedctl's CSG precedence is the trunk's `(order_value, name)` sort. Move a brush in that order with:
+- uedcli's CSG precedence is the trunk's `(order_value, name)` sort. Move a brush in that order with:
 
 ```
 brush build cube --csg add --width 64 --breadth 64 --height 128 | actor add -   # prints the allocated name (e.g. Cube_ab12cd; pass --base-name to steer it)
@@ -70,7 +70,7 @@ This is the load-bearing fact `--solidity` hides. In UE1 a brush has no single "
 **solidity is two bits in each polygon's `PolyFlags`**: `PF_Semisolid` (`0x20` = 32) and `PF_NotSolid`
 (`0x08` = 8). A "solid" brush is simply one whose faces carry neither bit; a "semisolid" brush is one
 whose faces all carry `0x20`. (In the editor, changing a brush's PolyFlags from 32 to 0 flips its
-wireframe from pink/semisolid to blue/additive — the same per-face bit uedctl's `--solidity` sets.) 📖
+wireframe from pink/semisolid to blue/additive — the same per-face bit uedcli's `--solidity` sets.) 📖
 
 `brush build … --solidity semisolid` just stamps that bit onto **every** face of the one brush it
 emits, so a single builder looks per-brush. But because the bit is really per-face, **one brush can
@@ -104,7 +104,7 @@ That is **false**. The real cause is a handful of **discrete tolerance bands** i
 those bands, so faces get mis-classified, collapsed, or thrown away. This matters because it tells you
 the fix: **stay out of the bands** — build on clean coordinates.
 
-**uedctl does NOT snap geometry to grid for you.** On-grid discipline is yours to keep — nothing in the
+**uedcli does NOT snap geometry to grid for you.** On-grid discipline is yours to keep — nothing in the
 pipeline rescues an off-grid brush.
 
 ### The defenses that actually work

@@ -23,7 +23,7 @@ sits); keys 1 … `NumKeys-1` are stored as offsets **from base** in the fixed-s
   auto-decrements. `KeyPos`/`KeyRot` are a fixed `[8]` array, so `NumKeys` is meaningful only in
   `2 … 8` (`MIN_KEYS`/`MAX_KEYS`).
 - **`KeyNum`** — the editor's *view selector* (which keyframe is displayed); pure editing-time state,
-  which uedctl canonicalizes to 0 on ingest. Not authored here.
+  which uedcli canonicalizes to 0 on ingest. Not authored here.
 
 ## Problems being solved
 
@@ -103,7 +103,7 @@ stored key-2/3 offsets dormant in case you raise it again).
 
 ## Scope of change
 
-`uedctl/cli.py`
+`uedcli/cli.py`
 - **Add** the `count` subparser: `name`, optional `n` (int), `_target_flag`. Help explains the
   non-destructive get/set and the `2..8` bound.
 - **Remove** the `add` subparser (`mka`) and its `--at`/`--rot`.
@@ -111,7 +111,7 @@ stored key-2/3 offsets dormant in case you raise it again).
   `--from-base`/`--from-world` (own group, enforced in dispatch — see Validation). Update `--to`/subparser
   help off the unconditional "absolute world" wording.
 
-`uedctl/dispatch.py` `_dispatch_mover_key`
+`uedcli/dispatch.py` `_dispatch_mover_key`
 - **Add** `keysub == "count"`: is-mover guard; no `n` → print `movers.num_keys(actor)`; with `n` →
   set via the shared NumKeys setter (bounds + canonical form).
 - **Delete** the `add` branch.
@@ -120,13 +120,13 @@ stored key-2/3 offsets dormant in case you raise it again).
   the base-subtracted math); reject a frame flag with `--by`; reject `--to` with no frame. Guards
   before any mutation.
 
-`uedctl/propedit.py`
+`uedcli/propedit.py`
 - Remove `"numkeys"` from `HARD_REJECT` (keep `name`, `brush`, `keypos`, `keyrot`, `keynum`).
 - Route a `NumKeys` set through the shared setter that enforces `2 … 8` (error names the value) and
   keeps the omit-when-2 canonical form — so `actor prop set NumKeys=` and `mover key count` are
   byte-identical in effect.
 
-`uedctl/movers.py`
+`uedcli/movers.py`
 - Add `set_num_keys(actor, n)` (the shared setter: validate `2 ≤ n ≤ 8`, write via `_set_numkeys`
   for omit-at-2). `num_keys` already reads it.
 - Remove `next_key_index` (its only caller, `add`, is gone). `set_key_pos`/`set_key_rot` unchanged
@@ -188,4 +188,4 @@ stored key-2/3 offsets dormant in case you raise it again).
 - **`NumKeys` as a raw unbounded byte.** Rejected — `KeyPos[8]` is fixed and a mover needs ≥ 2 keys,
   so `2 … 8` is enforced on both set routes (a `>8` mover reads out of bounds).
 - **`--offset` arg / `--frame world|base` value / auto-decrement `NumKeys`.** As in prior drafts —
-  the frame-flag pair reads best; the editor doesn't auto-decrement, so uedctl doesn't either.
+  the frame-flag pair reads best; the editor doesn't auto-decrement, so uedcli doesn't either.

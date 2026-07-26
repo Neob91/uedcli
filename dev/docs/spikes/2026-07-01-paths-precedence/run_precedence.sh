@@ -32,7 +32,7 @@ set -euo pipefail
 
 CNAME="${1:?container name}"
 VOL="wp-${CNAME}"
-COMPOSE_DIR="/home/human/src/dx_lum/Tools/uedctl/uned"
+COMPOSE_DIR="/home/human/src/dx_lum/Tools/uedcli/uned"
 SCRATCH="/home/human/src/dx_lum/_scratch/paths-precedence"
 INI="/opt/UED22/unrealtournament.ini"
 

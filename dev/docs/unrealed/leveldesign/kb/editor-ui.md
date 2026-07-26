@@ -5,7 +5,7 @@ The UnrealEd 2.x **GUI/console** reference — keyboard shortcuts, brush colours
 engine-generic (it applies to UnrealEd 2.x for Unreal/UT/Deus Ex alike), kept
 here for completeness.
 
-> **uedctl drives verbs, not this GUI.** uedctl authors the git-tracked T3D trunk
+> **uedcli drives verbs, not this GUI.** uedcli authors the git-tracked T3D trunk
 > with composing verbs (`brush build … | actor add -`, `brush poly set`,
 > `actor prop set`, `mover key …`) and only touches the editor to
 > `level materialize` / `preview`. This page exists so a GUI-aware reader keeps
@@ -88,7 +88,7 @@ All* (see [`../../rendering.md`](../../rendering.md) for the black-viewport trap
 - **3D viewport:** LMB-drag = look/move; RMB-drag = look in place; both = strafe.
   Camera speed set by the **1 / 2 / 3** keys.
 - **Grid snap** stays on; grid 16 for general work, drop lower for detail.
-  (uedctl does **not** enforce snapping — it is guidance; see
+  (uedcli does **not** enforce snapping — it is guidance; see
   [`./csg-bsp.md`](./csg-bsp.md).)
 
 ---
@@ -97,7 +97,7 @@ All* (see [`../../rendering.md`](../../rendering.md) for the black-viewport trap
 
 Accessed from the top toolbar / *View → Browsers*:
 
-- **Actor Class Browser** — the class tree; select a class to place. (uedctl
+- **Actor Class Browser** — the class tree; select a class to place. (uedcli
   equivalent: `class list` / `class show`.)
 - **Texture Browser** — pick a package, then a **Group** to narrow the list
   (Group is browser-convenience only, **except** the reserved Group `Ladder`
@@ -107,7 +107,7 @@ Accessed from the top toolbar / *View → Browsers*:
 - **Sound Browser** / **Music Browser** — audio/song packages
   ([`asset-pipeline.md`](asset-pipeline.md)).
 - **Group Browser** — the actor-`Group=` organizational dimension (distinct from
-  uedctl's `folder` sidecar).
+  uedcli's `folder` sidecar).
 - **Mesh Viewer** — preview meshes/skins.
 
 ---
@@ -122,14 +122,14 @@ Accessed from the top toolbar / *View → Browsers*:
   lose their textures.
 - **`.u3d` brush Save/Load is broken** — Export/Import `.T3D` is the reliable
   path (import as "Solid Mesh" + "Keep Original Polygons Intact"). This
-  independently validates uedctl's git-tracked-**T3D**-trunk design
+  independently validates uedcli's git-tracked-**T3D**-trunk design
   ([`README.md`](README.md)).
 
 ---
 
 ## 6. Useful console commands  [ENGINE] 🔬
 
-Typed in the editor console (or issued headlessly by uedctl —
+Typed in the editor console (or issued headlessly by uedcli —
 [`../../commands.md`](../../commands.md)):
 
 - **Build/rebuild:** `MAP REBUILD`, `LIGHT APPLY` (bake lightmaps),

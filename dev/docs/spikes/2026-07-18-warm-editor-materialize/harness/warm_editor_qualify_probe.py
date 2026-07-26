@@ -11,7 +11,7 @@ verify is the live qualify pass's `OBJ DEPENDENCIES` dump (qualify_driver=ed). T
   dump is the disruptor. If it still alternates → the disruptor is the map_save→UCC-read sequence
   itself, not the qualify dump.
 
-Run: cd Tools/uedctl && .venv/bin/python dev/docs/spikes/2026-07-18-warm-editor-materialize/harness/warm_editor_qualify_probe.py
+Run: cd Tools/uedcli && .venv/bin/python dev/docs/spikes/2026-07-18-warm-editor-materialize/harness/warm_editor_qualify_probe.py
 """
 from __future__ import annotations
 
@@ -24,15 +24,15 @@ from pathlib import Path
 TOOL = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(TOOL))
 
-from uedctl import apply, config, trunk               # noqa: E402
-from uedctl import editor as editor_mod               # noqa: E402
-from uedctl import verify as verify_mod               # noqa: E402
-from uedctl.driver import Driver                      # noqa: E402
-from uedctl.container_assets import resource_mounts   # noqa: E402
-from uedctl.packages import search_path_package_names  # noqa: E402
-from uedctl.uuid7 import uuid7                          # noqa: E402
+from uedcli import apply, config, trunk               # noqa: E402
+from uedcli import editor as editor_mod               # noqa: E402
+from uedcli import verify as verify_mod               # noqa: E402
+from uedcli.driver import Driver                      # noqa: E402
+from uedcli.container_assets import resource_mounts   # noqa: E402
+from uedcli.packages import search_path_package_names  # noqa: E402
+from uedcli.uuid7 import uuid7                          # noqa: E402
 
-CASTLE_DIR = TOOL / "_scratch/castle/uedctl"
+CASTLE_DIR = TOOL / "_scratch/castle/uedcli"
 OUT_DIR = Path(os.environ.get("OUT_DIR", str(TOOL / "_scratch/warm-spike")))
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 RES = OUT_DIR / "warm_qualify_results.json"

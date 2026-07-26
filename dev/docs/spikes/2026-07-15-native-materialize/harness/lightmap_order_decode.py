@@ -21,11 +21,11 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedctl")
+ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedcli")
 sys.path.insert(0, str(ROOT))
 
-from uedctl.native import umodel as UM  # noqa: E402
-from uedctl.native.pkg_write import parse_package  # noqa: E402
+from uedcli.native import umodel as UM  # noqa: E402
+from uedcli.native.pkg_write import parse_package  # noqa: E402
 
 EDITOR = "/home/neob91/Games/LutrisDX/drive_c/DX/Maps/Test_Castle.dx"
 PF_NO_LIGHTMAP = 0x0040_0081  # PF_Unlit | PF_FakeBackdrop | PF_Invisible (editor skip mask, §20 §14)

@@ -4,15 +4,15 @@ Implements [`specs/2026-07-18-actor-folders-hierarchical.md`](../specs/2026-07-1
 (cold-review-gated; §8 resolutions binding). Ephemeral scratch — folded into `architecture.md` +
 `unrealed/t3d.md` on build.
 
-A **folder** = a per-actor, uedctl-side, hierarchical dotted path (`castle.tower.roof`) stored in a
+A **folder** = a per-actor, uedcli-side, hierarchical dotted path (`castle.tower.roof`) stored in a
 `folder` SIDECAR file beside `order_value`. NEVER in the T3D body, NEVER emitted to the map,
 independent of the T3D `Group=` prop.
 
 ## Build order (each step compiles + tests green before the next)
 
 1. **`model.py`** — add `Actor.folder: str | None = None` (a typed field like `location`, NOT a
-   `props` entry). Add a `// uedctl-folder: <path>` carrier reader to `_parse_actor`: a bare
-   `//`-comment line matching `^\s*//\s*uedctl-folder:\s*(\S+)\s*$` sets `actor.folder`. Only the
+   `props` entry). Add a `// uedcli-folder: <path>` carrier reader to `_parse_actor`: a bare
+   `//`-comment line matching `^\s*//\s*uedcli-folder:\s*(\S+)\s*$` sets `actor.folder`. Only the
    `actor show` interchange form carries it; stored trunk bodies never do (folder is the sidecar).
    Other `//` comments stay ignored. `emit.py`/`canonical_actor_t3d` are UNTOUCHED — they never
    emit the field, so folder is naturally out of the body, the map, and the hash.
@@ -76,4 +76,4 @@ CLI guards incl trunk-only target + missing `--to` + bad path; carrier round-tri
 ## Docs on build
 `architecture.md` (a "Folders" subsection: the sidecar, the model field, the delta-write diff, the
 carrier, trunk-only), `unrealed/t3d.md` (already notes the carrier — confirm the "folder is
-uedctl-side, not a T3D construct" line), board `to-plan.md` → `done.md`.
+uedcli-side, not a T3D construct" line), board `to-plan.md` → `done.md`.

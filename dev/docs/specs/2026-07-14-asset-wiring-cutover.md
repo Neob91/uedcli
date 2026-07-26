@@ -35,7 +35,7 @@ the precedence order the code already depends on `[R-#5/F5]`:
 
 ```
 search_dirs(project) -> [ uned/UED22 (substrate code, host),
-                          ~/.uedctl/cache/stubs (v69 stub cache, host),
+                          ~/.uedcli/cache/stubs (v69 stub cache, host),
                           *project-overlay dirs (host),      # project shadows base
                           *base-game dirs (host) ]           # from the selected [games.*]
 ```
@@ -69,7 +69,7 @@ baked entry.
   dir for the five exts** (`.u .dx .utx .uax .umx`, **case-insensitive** `[R-#F8c]`, flat), returning
   `(package_stem, host_file)` tuples **stem-deduped first-wins** so substrate/project shadow base
   `[R-#7/F7-dedup]`. Dir-dedup (mounts) and stem-dedup (load-set names) are SEPARATE and both required.
-- **Migration** `[R-#10]`: rewrite `~/.uedctl/config.toml`, the LUM project `uedctl/config.toml`, and
+- **Migration** `[R-#10]`: rewrite `~/.uedcli/config.toml`, the LUM project `uedcli/config.toml`, and
   `_scratch` test configs from `.../X/*.ext` → `.../X`; update `config.py`'s docstring.
 
 `Paths` **line form — per-dir-per-ext** (`Paths=/resources/<n>/*.<ext>` per mount × ext, emitting an
@@ -135,7 +135,7 @@ No call site passes a project today; this is NEW plumbing:
 ## 7. `docker-compose.yml` + `entrypoint.sh`
 
 - Remove the static asset mounts (`/deusex`, `/content/*`, Sounds/Music stubs); keep image/build,
-  `wine-prefix`, env, `ports`, `/work`, and the `~/.uedctl/cache/stubs:/stubs` mount (baked-adjacent).
+  `wine-prefix`, env, `ports`, `/work`, and the `~/.uedcli/cache/stubs:/stubs` mount (baked-adjacent).
 - `entrypoint.sh`: delete the `$DEUSEX_ASSETS_DIR` `Paths` block (host composes Paths now); keep the
   rest.
 
@@ -169,5 +169,5 @@ the config-driven content path. Action: update its docstring TODO to reference t
 
 `architecture.md` (D4 container-fs roots `/deusex`+`/content` → `/resources/<n>`); `unrealed/quirks.md`
 ("Containers / package resolution" — the deleted `/deusex` Paths mechanism); the layout spec
-`2026-06-20-uedctl-deusex-assets-layout-design.md` (its `DeusExAssets`/`/deusex` model is superseded —
+`2026-06-20-uedcli-deusex-assets-layout-design.md` (its `DeusExAssets`/`/deusex` model is superseded —
 mark it so).

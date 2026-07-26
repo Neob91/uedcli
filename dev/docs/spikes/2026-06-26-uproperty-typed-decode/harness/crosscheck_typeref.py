@@ -17,7 +17,7 @@ This is a stronger check than a structural re-parse: it needs no assumed middle
 grammar, and a wrong type ref would land on an object of the wrong class. Run on
 the corpus (2026-06-26) it found ZERO wrong-kind targets across 49 packages.
 
-Run: python crosscheck_typeref.py   (from Tools/uedctl/)
+Run: python crosscheck_typeref.py   (from Tools/uedcli/)
 """
 from __future__ import annotations
 

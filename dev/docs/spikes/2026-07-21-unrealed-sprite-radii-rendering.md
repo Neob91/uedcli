@@ -291,7 +291,7 @@ the editor icon PCXs (`S_Actor`, `S_Light`, `S_Trigger`, …); those live in the
 ## Regression-test candidates (per the "pin the finding" rule)
 
 The three world-radius conversions and the half-height convention are **checkable engine facts**
-and should get a committed assertion (e.g. in a `test_engine_facts`-style module) if uedctl ever
+and should get a committed assertion (e.g. in a `test_engine_facts`-style module) if uedcli ever
 computes them:
 
 - `world_light_radius(0) == 25`, `world_light_radius(8) == 225`, `world_light_radius(255) == 6400`.

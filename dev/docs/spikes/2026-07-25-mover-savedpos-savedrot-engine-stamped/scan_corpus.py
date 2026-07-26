@@ -2,7 +2,7 @@
 """Corpus evidence for the mover `Saved*` question: are `SavedPos`/`SavedRot`/`SavedTrigger` ever
 AUTHORED content, or always the same engine-stamped sentinel?
 
-Two independent sweeps, no uedctl imports (runs on a bare Python 3):
+Two independent sweeps, no uedcli imports (runs on a bare Python 3):
 
 1. `--t3d <dir>` — walk every `*.t3d` under a directory, split it into `Begin Actor … End Actor`
    blocks, and report per file: how many Mover-derived actors it holds, how many carry each
