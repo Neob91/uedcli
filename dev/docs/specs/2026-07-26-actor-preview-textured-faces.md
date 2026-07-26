@@ -588,16 +588,10 @@ at its foot; **this spec must not be built until those findings are resolved**, 
 
 ---
 
-## 13. Re-entry round 1 — all findings resolved
+## 13. Review history
 
-3 cold Opus, 2026-07-26. **No structural finding**; all three confirmed the design holds. 22 defects,
-all folded into the sections above rather than listed here (git holds the original list at commit
-`77769d2`). The four that changed observable behaviour: `flat` no longer rejects scaled brushes
-(§4.2); the cull keys on `CsgOper`, not the `classify_brush` name guess (§4.7); the iso mip gain is
-the SMALLER singular value (§4.4); and `flat` drops back-facing edges so its fills actually occlude
-(§4.6).
-
-Three owner rulings were taken during the resolution and are recorded at their decisions: **2.4**
-re-put on an accurate cost picture (mip selection is not a cost control), **2.6** scoped so a scene
-that references no texture needs no texture source, and the decoder plan's offline fixtures are
-**synthesized rather than lifted from game content** (that plan's S2b).
+Two cold spec-review rounds have run (2026-07-26, 3 Opus each). **No structural finding** — every
+reviewer confirmed the design holds. All findings are resolved into the sections above rather than
+listed here; git holds each round's report at commits `77769d2` and `559405e`. Three owner rulings
+were taken during resolution and are recorded at the decisions they govern (2.4, 2.6, and the
+decoder plan's synthesized-fixture ruling).
