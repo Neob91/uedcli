@@ -5,6 +5,24 @@ lands here first, with no obligation to know its stage yet. This is the *pre-pip
 stage (so no `to-` prefix). See [`README.md`](README.md).
 
 **Triage** routes each item to where its next action lives:
+- `p1` `[OWNER — confirm]` **Four `actor preview --faces` rulings need a durable `direction/` home
+  before their spec is deleted.** `specs/2026-07-26-actor-preview-textured-faces.md` is ephemeral and
+  is deleted on build; `CLAUDE.md` requires a decision you made to land in `direction/` first. These
+  four are product policy, not implementation detail. Proposed text (verbatim, awaiting a yes —
+  suggested home `direction/trunk-and-editor.md`, since it is about what the preview tiers show):
+
+  > **The offline preview tiers.** `actor preview` renders brush volumes as authored, before CSG.
+  > Its `--faces` modes are `wire` (outlines, the default, needing no game content at all), `flat`
+  > (solid CSG-coloured fills) and `textured` (each face painted with its real texture through its
+  > authored UV frame). **A subtract brush shows only its far faces**, because a subtraction's
+  > polys are not drawn from outside in the editor or the game. **`flat` and `textured` load the
+  > game's class hierarchy** to tell a mover from a real subtraction, and so — unlike `wire` — need
+  > the game content available. **A texture the render actually needs and cannot read is a refusal,
+  > never a placeholder**; a scene that references no texture needs no texture source. **No cost
+  > ceiling is imposed** on preview size or layout.
+
+  If you would rather these stay agent-side, say so and they go to `rationale/` instead — but they
+  cannot stay only in an ephemeral spec. *(2026-07-26.)*
 - `p1` `[question]` **→ whoever is driving the native-texture-formats plan: are PE1/PE2 still open? The
   escalation block reads stale against your own later commits.** Asked by a concurrent session
   2026-07-26; I did **not** edit your plan, because two sessions resolving one escalation is how a gate

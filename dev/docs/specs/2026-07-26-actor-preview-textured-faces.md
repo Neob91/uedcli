@@ -2,7 +2,8 @@
 
 **Status:** spec review complete — both rounds run, **gate at its ceiling** (`CLAUDE.md` "Review
 gates"). No structural finding in either round. Everything found is fixed below, logged, or escalated;
-**two items are escalated and BLOCK the build** — see §14.
+**nothing is escalated and nothing blocks** — §14 records the two former escalations, both resolved.
+The only gate is the build-order dependency in §12.
 **DEPENDS ON** the on-deck texture-decoder work — see §12. Build order is fixed: that item first
 (with the §12 accessor folded into its scope), then all of this.
 **Requested by:** the owner, 2026-07-26, session `uedcli:preview-textured`.
@@ -123,7 +124,10 @@ a flag actually does):
   fills and is a hard error under `textured`.
 - `--focus` (`cli.py:190`) — says other brushes "recede to a faint (dimmed) **wireframe**"; under
   `flat`/`textured` they recede as dimmed *fills*.
-- `--show` — its overlays are unaffected, but the ordering guarantee is now explicit (§4.10).
+- `--show` (`cli.py:199-205`) — its tail says *"Brush actors (incl. movers) are excluded — their
+  preview stays **schema-free (no class lookup)**"*. Under `flat`/`textured` the brush preview now
+  DOES do a class lookup (decision 2.13), so that clause must be scoped to `wire`. Its overlays
+  themselves are unaffected; the ordering guarantee is also now explicit (§4.10).
 
 ## 4. The shape of a face — exact
 
@@ -284,7 +288,13 @@ colour, since decision 2.10 culls every camera-facing subtract poly.
 
 **Line art follows the cull.** A face suppressed by §4.7's subtract cull or by the `PF_Invisible`
 drop draws no wireframe edge, no `--highlight` outline and **no on-face index decal** — the cull
-removes the face entirely, not merely its fill. A culled face is also **excluded from `occluders`**,
+removes the face entirely, not merely its fill. A culled face is also **excluded from `occluders`** —
+and the reason is the opposite of what an earlier draft claimed. `occluders` today takes only
+`_is_front` faces, and `wire` culls nothing, so *keeping* culled faces would preserve `wire`'s decal
+grading exactly; **excluding** them is what changes it. It is excluded anyway because a face that
+draws nothing must not dim a decal on a face that does — the visual rule wins, and the cost is that
+`flat`'s decal opacity legitimately differs from `wire`'s. That difference is intended, not a
+regression, and §9 pins it. The mechanism it feeds is
 which grades every remaining decal's opacity via `_occluder_count`/`_decal_opacity`; without that,
 `flat` would silently re-shade annotations relative to `wire`.
 
@@ -294,9 +304,15 @@ not "`_is_front` only".** `_scene_geometry` today emits an edge for every face r
 would show straight through. But "`_is_front` only" is wrong in the other direction: for a subtract
 brush §4.7 culls exactly the `_is_front` set, so the two rules would intersect to **nothing** and a
 subtracted room would render as an outline-free blob — contradicting decision 2.5 and the `help=`.
-The rule is therefore: **an edge draws iff its face was not culled and is the nearest surface along
-that edge** — for an add brush that is its front faces, for a subtract brush its far faces. `wire` is
-untouched.
+**The rule, stated once and unambiguously: an edge draws iff its face SURVIVED the cull and that face
+is front-facing *for its own brush's cull sense*.** Concretely: for a non-subtract brush that is its
+`_is_front` faces; for a subtract brush it is its NON-`_is_front` (far) faces, which are exactly the
+ones §4.7 kept. It is a **per-face facing test, not a per-pixel depth test** — an earlier draft said
+"the nearest surface along that edge", which reads as true hidden-line removal against the depth
+buffer. That is a different and much larger renderer (`_line` has no depth parameter, and §4.7's
+strictly-`<` test would reject an edge pixel against its own face's fill), and it is NOT what this
+spec asks for. A rear brush's front-facing edges therefore still draw over a nearer brush's fill;
+that is accepted, and it matches how `wire` reads today. `wire` is untouched.
 
 ### 4.7 Visibility: CSG-aware culling, then a depth buffer
 
@@ -333,6 +349,15 @@ harmless.
 *(That this matches the editor and the game is the owner's ruling of 2026-07-26, quoted in decision
 2.10 — attributed, not asserted as independently verified engine fact.)*
 
+**A MIRRORED brush inverts the cull, and must be rejected under `flat` too.** `_scene_geometry` builds
+world vertices with `rotation.actor_linear`, so a negative-determinant scale (`brush scale --by -1,1,1`
+— `cli.py`'s own help says "a negative axis mirrors") reverses ring orientation, flips the Newell
+normal and inverts `_is_front` for every face. The §4.7 cull then keeps a subtract's NEAR faces and
+drops its far ones: the room renders inside-out, silently. §4.2 rejects scaled/sheared brushes under
+`textured` only, so **that rejection extends to `flat` for the negative-determinant case specifically**
+— not for scale in general (a positive-determinant scale leaves facing intact and `flat` still renders
+it, per §4.2). The test is `det(actor_linear(actor)) < 0`.
+
 **Depth**, after culling: `depth(P) = dot(P, _view_depth(iso_angle, view))`, **smaller = nearer**,
 affine under ortho. Write iff `depth < zbuf[i]`. **Coplanar tie-break:** strictly `<`, so the first
 face drawn wins and iteration is scene order (stable, as `assign_tints` already relies on) — no
@@ -355,7 +380,7 @@ order.
 **The dim strength is NOT fixed by this spec — it is chosen by render.** The originally-specified
 `_fade(rgb, 0.75)` then alpha 0.25 was refuted (it leaves `0.0625·texel + 210` against `BG` 224, i.e.
 invisible). The obvious replacement — one `_DIM_ALPHA = 0.15` composite, as the wireframe uses — was
-independently flagged by all three round-2 reviewers as probably *also* too faint: it gives
+independently flagged by every reviewer in that round as probably *also* too faint: it gives
 `0.15·c + 190.4`, so a mid-grey texel lands ~210 against `BG` 224. `_DIM_ALPHA` was tuned for thin
 **lines**, where a faint stroke still reads as a stroke; a large flat area at that strength is
 near-uniform. **Owner ruling (2026-07-26): make it stronger, then verify with a real before/after
@@ -376,6 +401,7 @@ records the chosen value plus the image in the `rationale/` preview topic. Start
 | 8 | **Pre-CSG vs post-CSG** — the largest divergence, and the reason decision 2.10's cull exists at all: `--native` renders **built BSP node polys**, this tier renders **raw brush polys** with a hand-rolled subtract cull
 | 9 | **Concave faces** — `render.rs` fills by triangle fan (`render.rs:196-206`), which bleeds outside a concave face; this tier uses even-odd scanline (§6) and is correct there. `architecture.md` measures 0.1–0.6 % of real faces as concave, so the difference is real. Not softened here — **logged against `--native` on `board/inbox.md`** (filed 2026-07-26)
 | 10 | **Background** — `render.rs`'s `BACKGROUND` is `[56,56,60]`; this tier's `BG` is 224
+| 11 | **Non-planar faces** — this tier interpolates UV and depth from ONE plane per face (§6, anchored at `verts[0]` with the Newell normal); `render.rs` fan-triangulates, so each triangle carries its own plane. On a face that is not planar the two disagree in both UV and depth. Reachable via `--from-t3d` over arbitrary editor T3D
 
 ### 4.10 Draw order within a pane
 
@@ -396,8 +422,8 @@ would paint over every sprite and every `--show` overlay.
 | Option              | Behaviour under `flat` / `textured`
 |---------------------|---
 | `--layout`          | all three accept it. See §7 for what `breakdown` costs
-| `--view`            | unchanged. The UV math is view-independent; the **mip pick is not** — `iso` needs §4.4's `gain`
-| `--iso-angle`       | feeds `_view_depth` and §4.4's `gain`
+| `--view`            | unchanged, **including the mip pick**. §4.4 derives it from the face's own screen-space UV gradients, which already account for the projection — there is no per-view `gain` term (an earlier draft had one; §4.4 measured it wrong and removed it)
+| `--iso-angle`       | feeds `_view_depth` only. It does **not** feed the mip pick — see the `--view` row
 | `--brush-colors`    | `flat`: as today. **`textured`: passing it explicitly is a clean exit 2** (decision 2.7)
 | `--annotate`        | unchanged and **left exactly as-is** (owner-decided). Two accepted consequences: (a) a tinted decal can be unreadable on a busy texture; (b) `_decal_opacity` still paints an *occluded* face's index at a 0.12 floor, so over an opaque fill that number sits on the wall in front of it — a wrong-face label. Read indices off `flat`, or pass `--annotate none`
 | `--highlight`       | under `textured` its vivid outline is the only deliberate line art. Hue comes from `vivid`, `csg`-derived since `--brush-colors` is rejected here. A face removed by the §4.7 cull gets no outline
@@ -405,7 +431,7 @@ would paint over every sprite and every `--show` overlay.
 | `--show`            | unaffected — the overlays draw at step 3, above the fills (§4.10)
 | `--frame`/`--frame-tightness` | set `scale`, which feeds the mip pick
 | `--size`            | uncapped (decision 2.4)
-| `--from-t3d`        | works **when every texture the snippet references is readable**. A generated snippet carries `texture=None` per poly *only when `brush build --texture` was not passed* — that flag stamps a ref onto every face — so a no-texture snippet previews with no game install at all (decision 2.6), while a textured one needs those refs readable
+| `--from-t3d`        | works **when every texture the snippet references is readable**. A generated snippet carries `texture=None` per poly *only when `brush build --texture` was not passed* — that flag stamps a ref onto every face — a no-texture snippet needs no **texture** source (decision 2.6) — but under `flat`/`textured` it still needs the **class hierarchy** (decision 2.13, §8), so those two modes are not offline-capable on `--from-t3d` either. `--faces wire` is
 | `--prefab-dir`      | **does NOT imply "no project", and no project does NOT imply no resolver.** It overrides only the prefab *library root* (`dispatch._prefab_root`); `_preview_render_data` independently calls `_resolve_project(args)`, and `config.composed_search_files` accepts `project=None`, falling back to the base dirs — which that function already relies on. Conversely a valid project can still yield no resolver (§8's three causes). **The trigger is `resolver is None` AND the scene referencing at least one texture**, never "no project"
 | `--out`             | unchanged (always PNG)
 
@@ -428,7 +454,8 @@ alongside `--faces textured` triggers exit 2.
 | `poly_flags_int` moves to `texframe` too (§4.3a) — `preview.py` must not import `preview_native` | `texframe.py`, `preview_native.py`
 | build the `ClassIndex` and resolve **mover-ness per actor** (decision 2.13), passing the result across the seam as data — `preview.py` stays schema-free and never calls `movers.is_mover` itself | `uedcli/dispatch.py`
 | the `--faces` MODE itself needs a channel: a `faces=` parameter on `render_brush_pgm`, `render_brushes_pgm`, `render_quad_pgm` and `dispatch._render_breakdown_grid`'s `_pane`. It cannot be inferred from the seam — `faces=None` would be both `wire` and `flat` | `preview.py`, `dispatch.py`
-| `tests/test_actor_preview.py`'s `_prev` helper hardcodes `brush_colors="csg"`, which under §5's `default=None` scheme is an EXPLICIT value and would trip §2.7's exit 2 | `tests/test_actor_preview.py`
+| `tests/test_actor_preview.py`'s `_prev` helper hardcodes `brush_colors="csg"`, which under §5's `default=None` scheme is an EXPLICIT value and would trip §2.7's exit 2. Its `SimpleNamespace` also lacks `faces`, so **dispatch must read the mode as `getattr(args, "faces", "wire")`** | `tests/test_actor_preview.py`
+| **a third committed harness calls the same seam**: `dev/docs/spikes/2026-07-24-corpus-brush-idioms/render_brushes.py:186` invokes `dispatch._render_actors_to_out` with a hand-built namespace (`_args_for`, `:92-96`) that has no `faces` attribute. `rules/spikes.md` makes it durable evidence, so it is in scope | that harness
 | the mip-pyramid accessor + the `bMasked` predicate, on the decoder's typed-result contract | **folded into the texture-decoder item — §12**
 | resolve each distinct face ref; map any typed error to exit 2; the four exit-2 validations | `uedcli/dispatch.py`
 | `--faces` parsing; `--brush-colors default=None`; three corrected `help=` strings | `uedcli/cli.py`
@@ -457,11 +484,21 @@ matching `render.rs:241-244`.
 **The `render_data` seam.** Today `dict[actor_name → PointRender]`; it becomes:
 
 ```
-PreviewData(points: dict[str, PointRender], faces: FaceTextures | None)
-FaceTextures:  by_ref: dict[str, list[tuple[int,int,bytes,bytes]]]   # casefolded ref → mip pyramid
+PreviewData(points: dict[str, PointRender], faces: FaceData | None)
+FaceData:      movers:  frozenset[str]      # actor names movers.is_mover said yes to — §4.7's cull
+               textures: TextureData | None  # None under `flat`; populated under `textured`
+
+TextureData:   by_ref: dict[str, list[tuple[int,int,bytes,bytes]]]   # casefolded ref → mip pyramid
                masked: dict[tuple[str,int], bool]                    # (actor, poly_idx) → §4.3a
-               movers: frozenset[str]                                # actor names movers.is_mover said yes to
 ```
+
+**The split is deliberate and load-bearing.** `flat` needs `movers` (§4.7's cull) and needs **no**
+textures at all. A single `FaceTextures | None` would tempt an implementer to pass `None` for `flat` —
+the natural reading of a type named for textures when there are none — which silently drops the mover
+set, and §4.7's cull would then treat a `CsgOper=CSG_Subtract` mover as a subtraction and render the
+door inside-out. That is precisely the failure decision 2.13 was ruled to prevent. So: `faces` is
+`None` only under `wire`; under `flat` it carries `movers` with `textures=None`; under `textured` it
+carries both.
 
 `by_ref` is keyed on `ref.casefold()` (FName semantics, matching `preview_native._TextureTable`), and
 every ref in the set is guaranteed present — an unreadable one exits 2 before rendering, so there is
@@ -514,7 +551,12 @@ corrected picture.
 
 ## 8. Failure and degradation
 
-Validation runs in `dispatch` **before any pixel is drawn** — every failure refuses, none degrades.
+**Every failure refuses; none degrades.** Most run in `dispatch` before any pixel is drawn. **Two
+cannot**, and are called out rather than papered over: the **non-finite UV frame** (§4.3) is detected
+per face inside `preview.py`, and a **`MemoryError`** necessarily surfaces during rasterization. Both
+still refuse — `preview.py` raises a dedicated `PreviewAbort` carrying the actor/poly, and `dispatch`
+maps it to exit 2 — but neither is a pre-flight check, and a reader must not infer that a `--faces`
+render is fully validated before it starts.
 
 | Situation                                        | Behaviour
 |---------------------------------------------------|---
@@ -524,6 +566,7 @@ Validation runs in `dispatch` **before any pixel is drawn** — every failure re
 | `--faces textured`, the scene REFERENCES a texture, and no resolver | exit 2 naming **which** of `_texture_resolver`'s three causes applies — no user games config, a `ConfigError`, or an empty composed file list (`dispatch.py:936-943`); all three are reachable *with* a valid project, so a generic "no project" message would violate "naming the offending value"
 | a **bare (unqualified)** `Texture=` ref            | exit 2 naming the ref **and saying to qualify it as `Package.Name`**. `_decode_ref` rejects an unqualified ref before any lookup, so this is the most common miss on real content; `preview_native._TextureTable` already emits exactly this hint
 | a ref that does not resolve, or does not decode    | exit 2 listing **every** such ref in one run (not just the first) with the decoder's typed-error case for each — §12's contract makes "which cause applies" answerable
+| a **non-finite UV frame** on any face (`nan`/`inf`) | exit 2 naming the actor and poly. Detected in `preview.py`, raised as `PreviewAbort`, mapped by `dispatch`. **Not** rendered as `DEFAULT_GREY`: that would be pixel-identical to the legitimate no-`Texture` row below, i.e. a half-answer that looks like a full one
 | a poly with no `Texture` at all                    | `DEFAULT_GREY × shade`, silently — normal, not an error
 | `--faces flat` or `textured` and the class hierarchy cannot be loaded | exit 2 naming the cause — decision 2.13 requires the index to tell a mover from a subtraction, and guessing is what that ruling rejected. `wire` is unaffected
 | `--faces textured`, scene references NO texture, no resolver | **renders normally** (decision 2.6) — nothing needed, so nothing refused. (The class index is still required, per the row above)
@@ -628,7 +671,13 @@ folding the accessor in (two API changes); rejected: building now against today'
 holds slice `S2b` with the accessor and the verbatim "`actor preview --faces textured` REFUSES — do
 not assume every preview caller degrades" contract note, and its `to-build.md` entry is flagged scope-
 widened so the plan re-enters plan review before building. That plan's own round-1 review is recorded
-at its foot; **this spec must not be built until those findings are resolved**, since two of them
+at its foot. **Both of that plan's escalations are now RESOLVED** (its `repo_texture_root()`
+propagation, and its decode oracle — the latter by spike `2026-07-26-ucc-texture-fixture`), so the
+dependency is not parked. **This spec still builds SECOND**: it consumes S2b's mip-pyramid accessor
+and the `bMasked` flag on S2's typed result, neither of which exists until that item lands.
+*(Superseded text follows for the record — it named findings that were closed by the time it was
+written, which is exactly why the gate is now stated as a slice dependency rather than a findings
+list.)* Two of them
 (S2b's missing tests, and the `bMasked` flag's home) are the half this spec consumes.
 
 
@@ -642,7 +691,7 @@ either round. Findings are resolved into the sections above; git holds the repor
 `559405e`. Owner rulings taken during resolution are recorded at the decisions they govern.
 
 
-## 14. ESCALATED — two items block the build
+## 14. Former escalations (both RESOLVED) and items carried to the build
 
 Round 2 is the gate's ceiling (`CLAUDE.md` "Review gates"), so what is still standing is escalated
 rather than carried into a third round.
@@ -692,7 +741,9 @@ are convex, so the authored-face measurement reaches it only on the mover path).
 - **A mirrored brush** (`brush scale --by -1,1,1`, negative determinant) reverses ring orientation, so
   `_is_front` inverts and §4.7's cull runs backwards — a mirrored subtract room renders inside-out,
   silently. `flat` does not reject scaled brushes (§4.2), so this reaches it.
-- **§6 defines no channel for the `--faces` MODE itself** to reach `preview.py` — the `render_data`
+- ~~**§6 defines no channel for the `--faces` MODE itself**~~ — **DONE**, §6's table now carries the
+  `faces=` row. Kept struck rather than deleted so a reader of an older review can see it closed.
+  *(original text)* — the `render_data`
   seam carries textures, but `faces=None` is both `wire` and `flat`, so the renderer cannot tell which
   mode it is in. A `faces=` parameter is needed on `render_brush_pgm`, `render_brushes_pgm`,
   `render_quad_pgm` and `_render_breakdown_grid`'s `_pane`.
