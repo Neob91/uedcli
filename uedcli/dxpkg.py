@@ -11,6 +11,11 @@ import os
 import struct
 from dataclasses import dataclass
 
+# The ONE package-parse error type, defined by the low-level reader `upackage` and reused here so a
+# corrupt package raises the same class whichever decoder read it. It subclasses `ValueError`, so
+# callers that already caught this module's `ValueError`s keep working unchanged.
+from .upackage import SchemaError
+
 _MAGIC = 0x9E2A83C1
 # Three versions in the Deus Ex install:
 #   61 — five older-format content packages (CoreTexDetail/CoreTexWater/Palettes/Render/TITAN).
@@ -48,41 +53,87 @@ def _read_compact_index(buf: bytes, pos: int) -> tuple[int, int]:
     return (-val if neg else val), pos
 
 
-def _read_name_v61(buf: bytes, pos: int) -> tuple[str, int]:
-    """ver<64 name entry: null-terminated ANSI string + u32 ObjectFlags (no compact-index prefix)."""
-    end = buf.index(b'\x00', pos)
+def _read_name_v61(buf: bytes, pos: int, path: str) -> tuple[str, int]:
+    """ver<64 name entry: null-terminated ANSI string + u32 ObjectFlags (no compact-index prefix).
+
+    `path` is carried for the same reason as in `_read_name` — so a truncation NAMES the file."""
+    end = buf.index(b'\x00', pos)   # no NUL anywhere → ValueError, wrapped with the path above
+    # The 4 ObjectFlags bytes AFTER the NUL are part of the entry, and nothing here ever READS
+    # them — the string stops at the NUL and `pos` just steps over them. So a file truncated
+    # inside those 4 bytes parsed as COMPLETE and returned a plausible name list: a silent wrong
+    # answer on exactly the input class this module's SchemaError contract exists to catch.
+    # `buf.index` catches every other v61 truncation; this is the one it cannot see. A strict
+    # lower bound from the format itself, so no complete package can fail it.
+    if end + 1 + 4 > len(buf):
+        raise SchemaError(f"{path}: name entry at {pos} is missing its 4 trailing ObjectFlags "
+                          f"bytes (size={len(buf)}) — the file is truncated")
     s = buf[pos:end].decode('latin-1')
     return s, end + 1 + 4   # skip null + 4-byte flags
 
 
-def _read_name(buf: bytes, pos: int) -> tuple[str, int]:
+def _read_name(buf: bytes, pos: int, path: str) -> tuple[str, int]:
     """ver>=64 name entry: compact-index length, string incl. null, u32 flags. NEGATIVE
     length = UTF-16LE of -length code units (DeusEx Unicode Group names, e.g. 20_AireGardens.dx);
-    positive = ANSI."""
+    positive = ANSI.
+
+    `path` is carried purely so a truncation raises a SchemaError that NAMES THE FILE. It cannot be
+    added by the `parse_header` wrapper: that wrapper re-raises an already-typed `SchemaError`
+    unchanged (so the bad-magic/bad-version messages are not double-prefixed), so an unprefixed one
+    raised from here would reach the user with no filename at all — and the caller that matters,
+    `stub_closure`'s dependency walk, parses files the user never named."""
     length, pos = _read_compact_index(buf, pos)
+    nbytes = (-length) * 2 if length < 0 else length     # both branches are >= 0
+    # Slicing a short buffer would silently yield a TRUNCATED name and walk `pos` past the end,
+    # so check explicitly: a name whose bytes (plus the trailing u32 flags) run past EOF means the
+    # file is truncated, not that the name is short.
+    if pos + nbytes + 4 > len(buf):
+        raise SchemaError(f"{path}: name entry at {pos} overruns buffer "
+                          f"(len={length}, size={len(buf)}) — the file is truncated")
     if length < 0:
-        nbytes = (-length) * 2
         s = buf[pos:pos + nbytes].decode("utf-16-le", "replace").split("\x00", 1)[0]
     else:
-        nbytes = length
         s = buf[pos:pos + nbytes].split(b"\x00", 1)[0].decode("latin-1")
     return s, pos + nbytes + 4
 
 
 def parse_header(path: str) -> PackageHeader:
-    buf = open(path, "rb").read()
+    """Parse a package's header + name/import tables. Any malformed or TRUNCATED input raises
+    `SchemaError` naming the file — never a bare `struct.error`/`IndexError`/`ValueError`
+    traceback out of the byte-level readers below.
+
+    This mirrors `upackage.load_package`'s integrity gate deliberately: the raw
+    `struct.unpack_from` / `_read_compact_index` / `buf.index(b"\\x00")` calls all raise on a
+    short buffer, and a truncated `.u` is an ordinary thing to hit (a half-copied file, a
+    download cut short). `SchemaError` subclasses `ValueError`, so every existing caller that
+    already handled this function's `ValueError`s (bad magic, unsupported version) keeps
+    handling it and turns it into a clean exit-2 message."""
+    try:
+        buf = open(path, "rb").read()
+    except OSError as e:
+        raise SchemaError(f"{path}: cannot read package ({e})") from e
+    if len(buf) < 36:
+        raise SchemaError(f"{path}: too small to be an Unreal package ({len(buf)} bytes)")
+    try:
+        return _parse_header(buf, path)
+    except SchemaError:
+        raise
+    except (struct.error, ValueError, IndexError) as e:
+        raise SchemaError(f"{path}: malformed package ({e})") from e
+
+
+def _parse_header(buf: bytes, path: str) -> PackageHeader:
     tag, ver_l, _flags, namecnt, nameoff, _expcnt, _expoff, impcnt, impoff = \
         struct.unpack_from("<9I", buf, 0)
     if tag != _MAGIC:
-        raise ValueError(f"{path}: bad magic {tag:#010x} (not an Unreal package)")
+        raise SchemaError(f"{path}: bad magic {tag:#010x} (not an Unreal package)")
     version = ver_l & 0xFFFF
     if version not in _SUPPORTED_VERSIONS:
-        raise ValueError(f"{path}: package version {version} not in {_SUPPORTED_VERSIONS} "
-                         "(refusing to guess offsets for an unverified version)")
+        raise SchemaError(f"{path}: package version {version} not in {_SUPPORTED_VERSIONS} "
+                          "(refusing to guess offsets for an unverified version)")
     _read = _read_name_v61 if version < 64 else _read_name
     names, pos = [], nameoff
     for _ in range(namecnt):
-        s, pos = _read(buf, pos)
+        s, pos = _read(buf, pos, path)
         names.append(s)
     imports, pos = [], impoff
     for _ in range(impcnt):

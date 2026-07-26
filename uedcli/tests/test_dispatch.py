@@ -614,7 +614,7 @@ def test_brush_clip_handles_a_rotated_brush():
     # to local z=0 → the cube halves (5 faces + cap) and the Rotation field is preserved.
     args = SimpleNamespace(
         cmd="brush", sub="clip", name="B1", container="c",
-        axis="z", coord=Decimal(0), plane=None, keep="below")
+        axis="z", offset=Decimal(0), plane=None, keep="below")
     lv = _rotated_brush_level()
     src = _fake_src(lv)
     with mock.patch("uedcli.dispatch._resolve_level_source", return_value=src):
@@ -636,7 +636,7 @@ def test_brush_clip_succeeds_on_a_model_brush_axis():
     # brush clip via dispatch on a real (Decimal-vertex) brush used to TypeError; --axis path.
     args = SimpleNamespace(
         cmd="brush", sub="clip", name="B1", container="c",
-        axis="z", coord=Decimal(0), plane=None, keep="below")
+        axis="z", offset=Decimal(0), plane=None, keep="below")
     lv = _plain_brush_level()
     src = _fake_src(lv)
     with mock.patch("uedcli.dispatch._resolve_level_source", return_value=src):
@@ -655,7 +655,7 @@ def test_brush_clip_plane_records_decimal_coords_without_serialization_error():
     src = _fake_src(lv)
     args = SimpleNamespace(
         cmd="brush", sub="clip", name="B1", container="c",
-        axis=None, coord=None, keep="below",
+        axis=None, offset=None, keep="below",
         plane=[(Decimal(0), Decimal(0), Decimal(0)), (Decimal(0), Decimal(0), Decimal(1))])
     with mock.patch("uedcli.dispatch._resolve_level_source", return_value=src):
         assert dispatch(args) == 0
@@ -2052,9 +2052,10 @@ def test_maps_key_pointing_at_a_file_is_a_clean_filesystem_error(tmp_path, capsy
     assert "filesystem error" in err and "Traceback" not in err
 
 
-def test_actor_show_exact_miss_is_a_clean_exit_2(tmp_path, monkeypatch, capsys):
-    """`actor show <exact-no-match>` exits 2 with 'Actor not found: …' — never a silent empty
-    rc 0 and never a KeyError traceback (board chore, fixed 2026-07-18). A glob keeps rc 0."""
+def test_actor_show_miss_is_a_clean_exit_2(tmp_path, monkeypatch, capsys):
+    """`actor show <no-match>` exits 2 with 'Actor not found: …' — never a silent empty rc 0 and
+    never a KeyError traceback. `show` does NOT glob (owner ruling 2026-07-25), so a pattern is
+    just another name that matches nothing: exit 2 too, and no blank line on stdout."""
     import argparse
     from uedcli import dispatch
     from uedcli.model import Level
@@ -2066,7 +2067,10 @@ def test_actor_show_exact_miss_is_a_clean_exit_2(tmp_path, monkeypatch, capsys):
     assert rc == 2
     cap = capsys.readouterr()
     assert "Actor not found: Ghost" in cap.err and "Traceback" not in cap.err
-    assert dispatch.dispatch(ns("Ghost*")) == 0            # glob miss: empty, rc 0
+    assert dispatch.dispatch(ns("Ghost*")) == 2            # a pattern is a name like any other
+    cap = capsys.readouterr()
+    assert "Actor not found: Ghost*" in cap.err
+    assert cap.out == ""                                   # and NO spurious blank stdout line
 
 
 # ── _git_hint: report the PROJECT's own repo, not uedcli's (board bug 2) ──────

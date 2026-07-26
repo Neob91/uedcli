@@ -315,27 +315,21 @@ def actor_show_block(actor: Actor, with_sidecars: bool) -> str:
     return inject_carriers(t, actor)                       # shared seam (folder + labels carriers)
 
 
-def show_actor(level: Level, name_or_glob: str, *, with_sidecars: bool = False) -> str:
-    """Return canonical T3D for the actor(s) matching name_or_glob (with the `// uedcli-folder:` /
-    `// uedcli-labels:` carriers per block when `with_sidecars`).
+def show_actor(level: Level, name: str, *, with_sidecars: bool = False) -> str:
+    """Return canonical T3D for the ONE actor called `name` (with the `// uedcli-folder:` /
+    `// uedcli-labels:` carriers when `with_sidecars`).
 
-    A GLOB (contains ``*?[``) with zero matches returns "" — grep-like, an empty match set is
-    legitimate pipeline data. A NO-glob token that names no actor raises
-    ``KeyError("Actor not found: …")`` via `resolve_actor_name` (the house bad-actor-name rule:
-    named error + non-zero exit, never a silent empty rc-0 — board chore, fixed 2026-07-18).
-    Multiple matches are joined with a newline.
+    A **pure name resolver — it does NOT glob.** Matching is case-insensitive (FName semantics,
+    via `resolve_actor_name`); a token naming no actor raises ``KeyError("Actor not found: …")``,
+    which dispatch turns into that message on stderr and exit 2 — the house bad-actor-name rule,
+    never a silent empty rc-0.
+
+    Pattern matching lives in `actor find`, and `actor find <pattern> | actor show -` prints the
+    whole matched set. `show` carrying a SECOND, redundant pattern mechanism contradicted the
+    compose philosophy, and its zero-match glob printed a blank line at exit 0 (owner ruling,
+    2026-07-25).
     """
-    matched = list_actors(level, name_glob=name_or_glob)
-    if not matched:
-        # Any `*?[` marks the input as a glob — including an UNBALANCED `[` (fnmatch would treat
-        # it literally). A literal-bracket actor-name typo therefore gets the grep-like empty rc-0,
-        # not the named error: accepted — trunk FNames don't carry glob chars, and `actor find`
-        # classifies identically (review note, 2026-07-18).
-        if any(c in name_or_glob for c in "*?["):
-            return ""                                     # empty glob result: data, not an error
-        matched = [resolve_actor_name(level, name_or_glob)]   # miss → KeyError (named), rc 2
-    blocks = [actor_show_block(level.actors[n], with_sidecars) for n in matched]
-    return "\n".join(blocks)
+    return actor_show_block(level.actors[resolve_actor_name(level, name)], with_sidecars)
 
 
 def describe(level: Level) -> dict:

@@ -5,7 +5,7 @@ import pytest
 from pathlib import Path
 
 from uedcli import tool_assets
-from uedcli.dxpkg import (PackageHeader, direct_packages, parse_header,
+from uedcli.dxpkg import (PackageHeader, SchemaError, direct_packages, parse_header,
                           transitive_closure)
 from uedcli.tests.conftest import install_content_dirs, install_root
 
@@ -66,6 +66,97 @@ def test_it_rejects_bad_magic(tmp_path):
     bad.write_bytes(struct.pack("<9I", 0xDEADBEEF, 69, 0, 0, 64, 0, 64, 0, 64) + b"\x00" * 64)
     with pytest.raises(ValueError, match="magic"):
         parse_header(str(bad))
+
+
+def test_it_rejects_a_truncated_package_with_a_named_error(tmp_path):
+    # A truncated `.u` used to escape as a bare struct.error/IndexError traceback from the raw
+    # byte readers — breaking "no Python exception ever reaches the user". It must now be a
+    # SchemaError (a ValueError subclass, so every existing handler catches it) naming the FILE.
+    # Header claims 400 names at offset 36; the file holds nothing after the header, so the FIRST
+    # compact-index read runs off the end (the generic IndexError path).
+    bad = tmp_path / "truncated.u"
+    bad.write_bytes(struct.pack("<9I", 0x9E2A83C1, 69, 0, 400, 36, 0, 36, 0, 36))
+    with pytest.raises(SchemaError, match="truncated.u"):
+        parse_header(str(bad))
+    with pytest.raises(SchemaError, match="truncated.u"):
+        direct_packages(str(bad))
+
+
+def test_a_name_entry_running_past_eof_names_the_file(tmp_path):
+    """Exercises `_read_name`'s OWN overrun guard — the branch the test above never reaches,
+    because that fixture dies in the compact-index read first.
+
+    Here the compact index parses fine and declares a 100-byte name with only 3 bytes behind it.
+    The guard must fire AND the message must carry the path: `parse_header` re-raises an
+    already-typed SchemaError unchanged, so an unprefixed one would reach the user with no
+    filename — and `stub_closure`'s dependency walk parses files the user never named, so the
+    filename is the only way to learn WHICH package is corrupt."""
+    # compact index for 100: low 6 bits (36) with the continuation bit, then 100 >> 6 == 1.
+    body = bytes([0x40 | 36, 0x01]) + b"abc"
+    bad = tmp_path / "cutname.u"
+    bad.write_bytes(struct.pack("<9I", 0x9E2A83C1, 69, 0, 1, 36, 0, 36, 0, 36) + body)
+    with pytest.raises(SchemaError) as ei:
+        parse_header(str(bad))
+    msg = str(ei.value)
+    assert "cutname.u" in msg, msg                 # the one thing item 3 required
+    assert "overruns buffer" in msg and "len=100" in msg, msg
+
+
+def test_a_v61_name_truncated_inside_its_flag_bytes_is_rejected(tmp_path):
+    """The version-61 name layout is `<NUL-terminated string><u32 ObjectFlags>`, and nothing ever
+    READS those 4 flag bytes — the string stops at the NUL and `pos` steps over them. So a file cut
+    off inside them used to parse as COMPLETE: this exact 39-byte fixture returned
+    `PackageHeader(version=61, names=['AB'], imports=[])` with no error, a silent wrong answer on
+    the very input class the SchemaError contract exists to catch. Every OTHER v61 truncation is
+    caught by `buf.index` raising; this was the one hole."""
+    bad = tmp_path / "v61trunc.u"
+    bad.write_bytes(struct.pack("<9I", 0x9E2A83C1, 61, 0, 1, 36, 0, 36, 0, 36) + b"AB\x00")
+    assert bad.stat().st_size == 39
+    with pytest.raises(SchemaError) as ei:
+        parse_header(str(bad))
+    assert "v61trunc.u" in str(ei.value), str(ei.value)
+
+
+def test_a_v61_name_with_its_flag_bytes_intact_still_parses(tmp_path):
+    """The guard is a strict LOWER bound from the format, so a complete v61 entry — the same
+    fixture plus its 4 ObjectFlags bytes — must still parse. Pins that the fix cannot reject a
+    real package (the install's five v61 content packages are the live case)."""
+    ok = tmp_path / "v61ok.u"
+    ok.write_bytes(struct.pack("<9I", 0x9E2A83C1, 61, 0, 1, 36, 0, 36, 0, 36)
+                   + b"AB\x00" + b"\x00\x00\x00\x00")
+    h = parse_header(str(ok))
+    assert h.version == 61 and h.names == ["AB"] and h.imports == []
+
+
+def test_a_utf16_name_running_past_eof_also_names_the_file(tmp_path):
+    """The NEGATIVE-length (UTF-16LE) branch of the same guard — its byte count is `-length * 2`,
+    so a short buffer overruns twice as fast."""
+    # compact index for -40: sign bit | low 6 bits (40 & 0x3F == 40 → needs continuation).
+    body = bytes([0x80 | 0x40 | (40 & 0x3F), 40 >> 6]) + b"ab"
+    bad = tmp_path / "cutwide.u"
+    bad.write_bytes(struct.pack("<9I", 0x9E2A83C1, 69, 0, 1, 36, 0, 36, 0, 36) + body)
+    with pytest.raises(SchemaError, match="cutwide.u"):
+        parse_header(str(bad))
+
+
+def test_it_rejects_a_package_cut_off_mid_import_table(tmp_path):
+    # Names parse; the IMPORT table's compact indices run off the end of the buffer.
+    bad = tmp_path / "cut.u"
+    bad.write_bytes(struct.pack("<9I", 0x9E2A83C1, 69, 0, 0, 36, 0, 36, 8, 36))
+    with pytest.raises(SchemaError, match="cut.u"):
+        parse_header(str(bad))
+
+
+def test_it_rejects_a_file_too_small_to_hold_a_header(tmp_path):
+    bad = tmp_path / "stub.u"
+    bad.write_bytes(b"\xc1\x83\x2a\x9e")
+    with pytest.raises(SchemaError, match="too small"):
+        parse_header(str(bad))
+
+
+def test_it_reports_an_unreadable_package_rather_than_raising_oserror(tmp_path):
+    with pytest.raises(SchemaError, match="cannot read package"):
+        parse_header(str(tmp_path / "nope.u"))
 
 
 def test_transitive_closure_includes_indirect_code_deps():

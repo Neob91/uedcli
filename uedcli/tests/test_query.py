@@ -413,18 +413,18 @@ def test_it_reports_all_missing_names():
         assert "Brush1" not in e.args[0]
 
 
-def test_it_show_actor_fallback_resolves_case_insensitively():
+def test_it_show_actor_resolves_case_insensitively():
     lv = _resolver_level()
-    # show_actor with a plain name (no glob chars) falls through list_actors → fallback path
+    # show_actor is a pure name resolver: case-insensitive FName matching, no globbing
     out_lower = show_actor(lv, "brush1")
     out_canonical = show_actor(lv, "Brush1")
     assert out_lower == out_canonical
     assert "Brush1" in out_lower
 
 
-def test_it_show_actor_fallback_raises_on_missing_exact_name():
-    # Pinned the old silent-empty behavior; since the 2026-07-18 chore fix an exact-name miss
-    # raises the named KeyError (globs still return "" — see the glob-miss test above).
+def test_it_show_actor_raises_on_a_missing_name():
+    # A name that matches nothing raises the named KeyError → dispatch's exit 2. There is no
+    # longer any input to `show` that answers with silence.
     lv = _resolver_level()
     with pytest.raises(KeyError):
         show_actor(lv, "NoSuch")
@@ -446,17 +446,21 @@ def test_format_mover_keys_columns():
     assert "0,0,356" in lines[2] and "0,16384,0" in lines[2] and "0,0,256" in lines[2]
 
 
-def test_show_actor_exact_miss_raises_named_keyerror():
-    """A NO-glob name that matches nothing raises the named KeyError (dispatch → 'Actor not
-    found: …', exit 2) — it used to return "" silently, rc 0 (board chore, fixed 2026-07-18)."""
+def test_show_actor_miss_raises_named_keyerror():
+    """A name that matches nothing raises the named KeyError (dispatch → 'Actor not found: …',
+    exit 2) — never a silent empty string at rc 0."""
     lv = _make_level_with_actors()
     with pytest.raises(KeyError) as ei:
         show_actor(lv, "NoSuchActor")
     assert "Actor not found: NoSuchActor" in ei.value.args[0]
 
 
-def test_show_actor_glob_miss_stays_empty_and_silent():
-    """A GLOB with zero matches stays grep-like: empty string, no exception — an empty match set
-    is legitimate pipeline data (deliberately unchanged by the exact-miss fix)."""
+def test_show_actor_does_not_glob():
+    """`show` is a pure NAME resolver (owner ruling 2026-07-25): a glob metacharacter is just an
+    ordinary character in a name, so a pattern is a miss like any other unknown name — exit 2,
+    not a blank line at rc 0. `actor find <pattern> | actor show -` is how a set is shown."""
     lv = _make_level_with_actors()
-    assert show_actor(lv, "NoSuch*") == ""
+    for pattern in ("NoSuch*", "Brush?", "[Bb]rush1", "*"):
+        with pytest.raises(KeyError) as ei:
+            show_actor(lv, pattern)
+        assert "Actor not found" in ei.value.args[0]

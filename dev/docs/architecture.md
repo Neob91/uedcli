@@ -30,7 +30,14 @@
 > **`uedcli.toml` at its root** (à la `pyproject.toml`) — the dir containing it IS the project
 > root. The file declares `game` (required) + optional `paths`/`maps`/`prefabs`/`catalog`, all
 > root-relative (defaults `maps/`, `prefabs/`, `texture-catalog/`). Discovery is a walk-up to the
-> nearest ancestor containing `uedcli.toml` (`config.walk_up_root`; nearest wins). All
+> nearest ancestor containing `uedcli.toml` (`config.walk_up_root`; nearest wins). **The walk STOPS
+> at a marker it cannot read** — malformed, not a regular file, or unstatable (a permission-denied
+> dir) — and raises a named `ConfigError`, because climbing past one binds the caller to an OUTER
+> project and silently edits the wrong tree. Both readers of a colon-separated dir list
+> (`resolve_dirs` at compose time, `load_user_config` at load time) run the shared
+> `config.reject_windows_drive` BEFORE splitting, so a pasted `C:\DX\System` is named as a
+> Windows path instead of splitting on the separator and being reported as
+> `dir must be absolute: 'C'`. All
 > machine-local project state (stash, delivered preview maps, locks, staging) lives in the
 > **self-ignoring `<root>/.uedcli/`** (`config.state_dir`): first creation
 > writes `.uedcli/.gitignore` containing `*`, so it can never be committed.
@@ -66,7 +73,7 @@ and [`spikes/2026-07-05-git-merge-t3d-layout/`](spikes/2026-07-05-git-merge-t3d-
   `LevelSelectionError`/`ConfigError`; **`GeometryError`** (a degenerate/invalid brush from a
   model-side verb — actor add, brush clip/vertex, mover key, the builders, stash/prefab apply;
   `level materialize` catches its own build-time geometry error locally); and editor-driver failures
-  (`EditorBusyError`/`DriverError`/`TimeoutError` from materialize/preview/stash CSG). Per-verb
+  (`DriverError`/`TimeoutError` from materialize/preview/stash CSG — `EditorNotReadyError` subclasses `TimeoutError`, so a startup death lands there too). Per-verb
   guards cover the rest: unreadable/missing/corrupt T3D input (`_read_t3d_input` for
   `actor add`/`stash capture --from-t3d`; `_read_prefab_or_exit` for the prefab library — both name
   the offender), a not-found stash id / prefab name (clean "not found", not a silent no-op or
@@ -101,8 +108,12 @@ and [`spikes/2026-07-05-git-merge-t3d-layout/`](spikes/2026-07-05-git-merge-t3d-
   byte-identical result), and
   `canonicalize_mover` — folds an ingested `KeyNum≠0` mover to
   `KeyNum=0`; see "Mover support" below), `query.py` (list/show, `brush poly list` +
-  `brush vertex list` metadata, flag decode; `actor find` + `actor show` (`show_actor`) both use
-  `list_actors`, whose name/class/group matching is **case-insensitive** (`FName` semantics);
+  `brush vertex list` metadata, flag decode; `actor find` uses `list_actors`, whose
+  name/class/group matching is **case-insensitive** (`FName` semantics) and whose `name_glob` is
+  the CLI's ONE pattern mechanism. **`actor show` (`show_actor`) does NOT glob** — it is a pure
+  name resolver over `resolve_actor_name`, so a token matching no actor is the house
+  `Actor not found: <name>` at exit 2, never an empty string printed as a blank line at rc 0;
+  showing a SET is `actor find <pattern> | actor show -` (owner ruling 2026-07-25);
   `--prop` matching moved OUT of `list_actors` to the dispatch find handler (EFFECTIVE-value
   matching over the class schema/defaults, spec 2026-07-18 §7 — see the actor-prop section).
   **Spatial filtering** lives in the same find handler, alongside `--prop`: `actor find
@@ -133,14 +144,21 @@ and [`spikes/2026-07-05-git-merge-t3d-layout/`](spikes/2026-07-05-git-merge-t3d-
   `uprops.py` (offline class-property SCHEMA + class-DEFAULT extraction from the game's own
   `.u` — the source of truth for `actor prop` validation and effective-value reads),
   `propedit.py` (the pure `actor prop set|unset|get` verb logic: dot-path grammar, planner,
-  effective values, typed-field registry; see "Class-property schema" below),
+  effective values, typed-field registry; see "Class-property schema" below. Its
+  `split_struct_text` does NOT re-implement the struct-literal grammar — the quote- and
+  depth-aware member split (`typedprops.split_struct_members`) and the name/value `=` finder
+  (`typedprops.top_level_eq`) are shared with the compare path, so a quoted comma
+  (`(Msg="a,b",Count=1)`) parses identically on both sides; see
+  [`rationale/propedit.md`](rationale/propedit.md)),
   `polyalign.py` (the `brush poly find` producer + `brush poly align` verb: pure texture-vector
   math that makes one texture flow continuously across a face set — coplanar `--wall`/`--floor`
   and cylinder `--ring` wrap; world-space continuity written back per-brush via each brush's own
   inverse transform; see "Surface texture alignment" below).
 - **Editor driver** — `driver.py` over `wine_ctl.py`: console `exec`, `BRUSH IMPORT/EXPORT`,
-  `MAP EXPORT/IMPORTADD`, selection, `EDIT COPY`→xclip read, `set_clipboard`+`edit_paste`,
-  screenshots. `wine_ctl` fast-fails on a dead/crashed editor (see unrealed/commands).
+  `MAP EXPORT/IMPORTADD`, selection, `set_clipboard`+`edit_paste` (the clipboard WRITE path that
+  makes a pasted brush selectable), screenshots. Reading the level back is `MAP EXPORT` only —
+  the `EDIT COPY`→xclip READ path is gone (`Driver.edit_copy` deleted 2026-07-26 as uncalled).
+  `wine_ctl` fast-fails on a dead/crashed editor (see unrealed/commands).
   **`map_save` WAITS FOR AND VERIFIES its own output** (returning the saved size): driving is
   fire-and-forget — `wine_ctl exec` types the line, presses Return, settles 0.3 s and returns, long
   before the editor has written anything — and `MAP SAVE` answers nothing over the console, so the
@@ -204,6 +222,27 @@ and [`spikes/2026-07-05-git-merge-t3d-layout/`](spikes/2026-07-05-git-merge-t3d-
   `_wine_ctl`, `dexec_bash`, `set_clipboard`, `log_size`, `read_log_since`, `dismiss_blocking_dialog`
   — do NOT go through `_container_probe` and are still unbounded; `board/inbox.md` carries that
   chore.)
+
+  **Every docker subprocess OUTSIDE `driver.py` is bounded.** `editor.py`'s container lifecycle
+  (`_is_running`, `_reap_container`, `_spin_up`'s `docker compose run`, each `_wait_ready` poll,
+  `stop_editor`), `xfer.py`'s `cp_in`/`cp_out`/`remove`, and `store_export.export_dx_t3d`'s three
+  execs all pass a `timeout=`; a query/teardown call that blows it is SWALLOWED where it runs on a
+  teardown path (mirroring `preview_game.stop_game`) and otherwise raises a named `DriverError`,
+  which the materialize/preview guards already surface as a clean exit 2. `_wait_ready`'s bound is
+  the load-bearing one: an unbounded `docker exec` inside its deadline loop meant the deadline could
+  never expire, so `ensure_editor`'s readiness retry never fired. `export_dx_t3d` also removes its
+  `/work/ucc_export-<uuid>` dir in a `finally:`, so a failed export strands nothing. See
+  [`rationale/containers.md`](rationale/containers.md).
+
+  **Most `Driver` methods have no uedcli-COMMAND caller, and that is deliberate.** After the
+  model-side pivot and the 2026-07-16 deletion of the editor-screenshot preview flow, ~17 of them
+  are called only by the committed spike harnesses under `spikes/` and by the
+  **default-deselected** integration suite — populations a grep over `uedcli/` does not see, so a
+  green `bin/test` would not catch their removal. They are retained (owner ruling 2026-07-26); only
+  genuinely uncalled symbols were removed (`select_inside`, `edit_copy`, `map_sendto`,
+  `select_by_csg`, `editor.novnc_url`, and the never-raised `EditorBusyError`). Before re-proposing
+  a dead-code sweep here, read [`rationale/driver.md`](rationale/driver.md), which carries the
+  measurement.
 - **T3D tree I/O** — `t3dtree.py` is the ONE shared per-actor-tree reader/writer
   (`write_actor_tree`/`read_actor_tree` over `actors/<name>/{actor.t3d, order_value[, folder][, labels]}`, plus
   the LexoRank rank algebra, the coordination-free name allocator, the `actor.t3d` body strip/inject,
@@ -225,7 +264,11 @@ and [`spikes/2026-07-05-git-merge-t3d-layout/`](spikes/2026-07-05-git-merge-t3d-
   independent post-verify; `dxpkg.transitive_closure` is the manifest extractor used by all
   three call sites since 2026-06-20 — the TRANSITIVE package closure, not just a `.dx`'s direct
   import-table deps, recursing into code AND content packages alike — see the package-extraction
-  design spec).
+  design spec. **`dxpkg.parse_header` raises `upackage.SchemaError` on ANY malformed or truncated
+  input** — the same class, from the same canonical home, that `upackage.load_package` raises, so
+  a corrupt package names the offending file and exits 2 instead of escaping as a bare
+  `struct.error`/`IndexError`. `SchemaError` subclasses `ValueError`, so the existing
+  `substrate stub` handler in `dispatch.py` catches it unchanged).
 
 ## The core write pattern (model-side; the editor is touched only at `materialize`)
 Every read and mutation is **pure model-side compute against the git-tracked trunk** — no editor
@@ -346,6 +389,13 @@ no per-verb list; reads never reach `save`, and an explicit `--tree` leaves `fro
 Vertex and `Location` coords are stored as **`decimal.Decimal`** (parsed from the T3D
 strings), and the CLI takes coordinates as one `X,Y,Z` token parsed by `cli.parse_coord`
 (Decimal, integer or decimal, negatives via the `_CoordArgumentParser` leading-dash fix).
+**`cli.parse_decimal` is the ONE scalar-number validator** every Decimal-valued argument goes
+through — `brush clip --offset` directly, `parse_coord`/`parse_bbox` per component. The bare
+`Decimal` constructor must never be an argparse `type=`: it raises `decimal.InvalidOperation` (an
+`ArithmeticError` argparse does NOT convert, so a typo escaped as a traceback) and it *accepts*
+`nan`/`snan`/`inf`. `parse_decimal` rejects both as a clean `ArgumentTypeError`; `parse_pan` stays
+outside it because it is int-valued and `int()` already rejects those. See
+[`rationale/cli.md`](rationale/cli.md).
 Decimal — not float — so authored fractional coords carry no binary drift and match stored
 vertices exactly. `emit.clean` is the single grid rule: a coord within **`CLEAN_EPS`
 (0.001)** of an integer snaps to it (kills editor/float noise like `511.999969→512`), but a

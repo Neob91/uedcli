@@ -133,21 +133,33 @@ def key_text(key: tuple[str, int]) -> str:
 
 # ── struct literal parsing ──────────────────────────────────────────────────────────────────────
 
-def parse_struct_text(text: str) -> dict[str, str] | None:
-    """`(A=1,B=(X=2),C="a,b")` → `{"a": "1", "b": "(X=2)", "c": '"a,b"'}`; `None` when `text` is not
-    a parenthesised struct literal at all.
+def split_struct_members(text: str) -> list[str] | None:
+    """Split a struct literal `(A=1,B=(X=2),C="a,b")` into its RAW member texts
+    `['A=1', 'B=(X=2)', 'C="a,b"']` — the ONE member split both struct-literal parsers in the
+    codebase share (`parse_struct_text` here and `propedit.split_struct_text`), so the two can
+    never disagree about where a member ends.
 
-    Splitting is depth- and quote-aware, so a nested struct or a comma inside a quoted string never
-    splits a member. Member names are casefolded (UnrealScript identifiers are case-insensitive).
-    An empty literal `()` yields `{}` — a struct that states no members, i.e. one that is entirely
-    at its default."""
+    Splitting is depth- AND quote-aware: neither a comma nested inside a `(...)` member nor one
+    inside a quoted string (`Msg="a,b"`) ever splits a member. Returns `None` when `text` is not
+    a *balanced* parenthesised literal — the outer parens must be present and every inner paren
+    must close inside them. An empty literal `()` yields `[]`. Members are returned verbatim
+    (unstripped); callers strip and interpret them.
+
+    **An EMPTY member is dropped, here and therefore for both callers.** A trailing or doubled
+    comma (`(A=1,)`, `(A=1, ,B=2)`) yields just the real members. This has to live in the shared
+    splitter rather than in each caller, and that is the whole point: while it lived in
+    `parse_struct_text` alone, `(A=1,)` read as a struct on the compare path and as "not a struct"
+    on the `actor prop` path, so `actor prop get Foo.A` errored on a value the post-verify was
+    happily comparing. Dropping is the lenient of the two behaviours and the one the compare path
+    already had, so nothing the post-verify used to accept becomes an error."""
     t = text.strip()
     if not (t.startswith("(") and t.endswith(")")):
         return None
     inner = t[1:-1]
-    out: dict[str, str] = {}
-    depth, quote, start = 0, "", 0
+    if inner.strip() == "":
+        return []
     parts: list[str] = []
+    depth, quote, start = 0, "", 0
     for i, ch in enumerate(inner):
         if quote:
             if ch == quote:
@@ -159,22 +171,42 @@ def parse_struct_text(text: str) -> dict[str, str] | None:
             depth += 1
         elif ch == ")":
             depth -= 1
+            if depth < 0:
+                return None                  # a `)` that closes past the outer literal
         elif ch == "," and depth == 0:
             parts.append(inner[start:i])
             start = i + 1
+    if depth != 0 or quote:
+        return None                          # an unclosed `(` or an unclosed quote
     parts.append(inner[start:])
+    return [p for p in parts if p.strip()]   # drop empty members (trailing/doubled comma)
+
+
+def parse_struct_text(text: str) -> dict[str, str] | None:
+    """`(A=1,B=(X=2),C="a,b")` → `{"a": "1", "b": "(X=2)", "c": '"a,b"'}`; `None` when `text` is not
+    a (balanced) parenthesised struct literal at all.
+
+    Splitting is depth- and quote-aware (it is `split_struct_members`), so a nested struct or a
+    comma inside a quoted string never splits a member. Member names are casefolded
+    (UnrealScript identifiers are case-insensitive). An empty literal `()` yields `{}` — a struct
+    that states no members, i.e. one that is entirely at its default."""
+    parts = split_struct_members(text)
+    if parts is None:
+        return None
+    out: dict[str, str] = {}
     for part in parts:
-        p = part.strip()
-        if not p:
-            continue
-        eq = _top_level_eq(p)
+        p = part.strip()                     # never empty — the splitter drops empty members
+        eq = top_level_eq(p)
         if eq is None:
             return None                      # not `name=value` — not a struct literal we understand
         out[p[:eq].strip().casefold()] = p[eq + 1:].strip()
     return out
 
 
-def _top_level_eq(part: str) -> int | None:
+def top_level_eq(part: str) -> int | None:
+    """Index of the `=` that separates a struct member's NAME from its value — the first `=` that
+    is neither inside a nested `(...)` nor inside a quoted string — or `None` if there is none.
+    Shared with `propedit.split_struct_text` for the same reason the member split is."""
     depth, quote = 0, ""
     for i, ch in enumerate(part):
         if quote:

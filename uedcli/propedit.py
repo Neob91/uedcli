@@ -25,6 +25,7 @@ from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation
 from typing import Callable
 
+from . import typedprops
 from .normalize import is_computed_key
 from .uprops import Prop, SchemaError
 
@@ -199,36 +200,27 @@ def check_overlaps(tokens: list[PropToken]) -> None:
 
 def split_struct_text(text: str) -> list[tuple[str, str]] | None:
     """`(A=1,B=(C=2))` → [("A","1"), ("B","(C=2)")]; None if not a parenthesized K=V list.
-    Top-level commas split; nested parens stay intact. Keys may be identifiers, integers
-    (the array tuple form), or `Name(N)` (a struct member that is a static array)."""
-    t = text.strip()
-    if not (t.startswith("(") and t.endswith(")")):
+    Keys may be identifiers, integers (the array tuple form), or `Name(N)` (a struct member
+    that is a static array).
+
+    The member split and the name/value `=` both come from `typedprops`
+    (`split_struct_members` / `top_level_eq`) — the SAME quote- and depth-aware code the typed
+    compare path uses — so the two struct-literal parsers in the codebase cannot disagree. That
+    is what makes a quoted comma or a quoted `=` inside a member value safe: `(Msg="a,b",N=1)`
+    is two members, not three, and `(Msg="x=y")` has value `"x=y"`.
+
+    This one differs from `typedprops.parse_struct_text` ONLY in its result shape: an ORDERED
+    list with the key's authored case preserved, because `emit_struct_text` writes the members
+    back out and a struct's member order and spelling are part of the emitted T3D."""
+    items = typedprops.split_struct_members(text)
+    if items is None:
         return None
-    inner = t[1:-1]
-    if inner.strip() == "":
-        return []
-    items: list[str] = []
-    depth = 0
-    start = 0
-    for i, ch in enumerate(inner):
-        if ch == "(":
-            depth += 1
-        elif ch == ")":
-            depth -= 1
-            if depth < 0:
-                return None
-        elif ch == "," and depth == 0:
-            items.append(inner[start:i])
-            start = i + 1
-    if depth != 0:
-        return None
-    items.append(inner[start:])
     out: list[tuple[str, str]] = []
     for item in items:
-        if "=" not in item:
+        eq = typedprops.top_level_eq(item)
+        if eq is None:
             return None
-        k, v = item.split("=", 1)
-        out.append((k.strip(), v.strip()))
+        out.append((item[:eq].strip(), item[eq + 1:].strip()))
     return out
 
 

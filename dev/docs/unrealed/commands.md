@@ -81,8 +81,8 @@ For *weird behaviors* see [`quirks.md`](quirks.md); for producing an image see
 | `MAP REBUILD` | rebuild geometry/BSP **only** (wipes lighting) |
 | `MAP NEW` | empty level — its `MAP EXPORT` holds exactly `LevelInfo` + the builder brush; **no viewport `Camera` actors enter the level** (🔬 2026-06-28; the 4 editor viewports are UI objects, not level actors — so materialize/`level apply` post-verify never sees a spurious `Camera`) |
 | `MAP SAVE` / `MAP LOAD FILE=<Z:\…>` | save/open `.dx` (preserves BSP/lightmaps/myLevel). ✅ `SAVE` answers NOTHING over the console and does not block the caller — wait for the written file to reach a stable non-zero size AND for its 36-byte header to describe a complete package before reading it (see "Driving is fire-and-forget" + "`MAP SAVE` writes `Save.tmp`" above; `driver.map_save` does this) |
-| `MAP SENDTO FIRST\|LAST` | reorder selected brush in CSG order (`driver.map_sendto`) |
-| `MAP SELECT ADDS\|SUBTRACTS\|SEMISOLIDS\|NONSOLIDS` | select brushes by CSG type (`driver.select_by_csg`) |
+| `MAP SENDTO FIRST\|LAST` | reorder selected brush in CSG order (no uedcli caller — CSG order is authored as `order_value` in the trunk) |
+| `MAP SELECT ADDS\|SUBTRACTS\|SEMISOLIDS\|NONSOLIDS` | select brushes by CSG type (no uedcli caller — selection by CSG op is a model-side `actor find` query) |
 | `MAP SETBRUSH …` 📖 | set brush props (`CSGOPER=`, `COLOR=`, `SETFLAGS=`, `CLEARFLAGS=`, `GROUP=`) |
 
 ## `BRUSH` ✅ 🔬

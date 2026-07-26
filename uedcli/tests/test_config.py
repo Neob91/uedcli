@@ -654,6 +654,50 @@ def test_walk_up_hard_errors_on_a_non_regular_file_marker(tmp_path):
         config.walk_up_root(str(inner))
 
 
+def test_walk_up_hard_errors_on_an_unstatable_marker_instead_of_climbing_past(tmp_path):
+    """An ancestor whose `uedcli.toml` cannot be stat'ed (permission-denied directory) is a STOP,
+    not a skip. `except OSError: continue` used to climb straight past it and bind the caller to
+    the OUTER project — silently editing the wrong tree, the exact hazard this function's own
+    docstring rule forbids."""
+    if os.geteuid() == 0:
+        pytest.skip("permission checks are void as root")
+    outer = tmp_path / "outer"
+    blocked = outer / "blocked"
+    deep = blocked / "sub"
+    deep.mkdir(parents=True)
+    (outer / "uedcli.toml").write_text('game = "dx"\n')
+    (blocked / "uedcli.toml").write_text('game = "dx"\n')
+    blocked.chmod(0o000)                      # stat of blocked/uedcli.toml → PermissionError
+    try:
+        with pytest.raises(config.ConfigError, match="cannot check for a project marker"):
+            config.walk_up_root(str(deep))
+    finally:
+        blocked.chmod(0o755)
+
+
+def test_a_windows_drive_in_the_user_config_paths_is_named_at_LOAD_time(tmp_path, monkeypatch):
+    """A pasted `C:\\DX\\System` used to split on the `:` list separator and be reported as
+    `dir must be absolute: 'C'` — a message about a path the user never typed. `load_user_config`
+    runs long before `resolve_dirs`, so the dedicated drive-letter error has to fire there too."""
+    cfg = tmp_path / "config.toml"
+    cfg.write_text('[games.deusex]\npaths = "C:\\\\DX\\\\System"\n')
+    with pytest.raises(config.ConfigError, match="Windows-style drive") as ei:
+        config.load_user_config(str(cfg))
+    assert "games.deusex" in str(ei.value)          # names the offending table
+    assert "must be absolute: 'C'" not in str(ei.value)   # NOT the old confusing message
+
+
+def test_the_windows_drive_check_is_one_shared_helper(tmp_path):
+    """Both readers of a colon-separated dir list go through `reject_windows_drive`, so the two
+    can never drift into different messages (or one of them losing the check)."""
+    for bad in ("C:\\DX\\System", "/ok:Z:/work"):
+        with pytest.raises(config.ConfigError, match="Windows-style drive"):
+            config.reject_windows_drive(bad)
+        with pytest.raises(config.ConfigError, match="Windows-style drive"):
+            config.resolve_dirs(bad, str(tmp_path))
+    config.reject_windows_drive("/a:/b")            # ordinary separator colons are fine
+
+
 def test_project_file_marker_must_be_named_uedcli_toml(tmp_path):
     """--project/UEDCLI_PROJECT pointing at a FILE accepts only an actual `uedcli.toml` — any
     other existing file is a named error, not a silently blessed marker (round-3 review)."""

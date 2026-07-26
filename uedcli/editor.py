@@ -13,7 +13,23 @@ import time
 from pathlib import Path
 
 from . import config, container_assets, tool_assets
-from .driver import WINE_CTL
+from .driver import WINE_CTL, DriverError
+
+# --- hard bounds on the container-lifecycle `docker` calls ---------------------
+# Every `subprocess.run` in this module carries a `timeout=`. A docker daemon that stops answering
+# used to park the whole verb with no output and no way to tell it from a slow editor — the failure
+# mode `dev/docs/rules/background-work.md` exists to forbid ("never leave one on a single
+# open-ended wait"). The three bounds differ because the calls do genuinely different work:
+#
+#   PROBE   — a sub-second query/teardown (`docker ps`, `docker rm -f`, `docker volume rm`, one
+#             `wine_ctl status` poll). Anything near a minute is dockerd not answering, not work.
+#   LAUNCH  — `docker compose run`, which on a cold machine creates a volume and a container (and
+#             may pull) before returning. Generous, because exceeding it aborts a legitimate start.
+#
+# A bound is NOT a retry budget: `ensure_editor`'s existing `ready_timeout`/`start_attempts` still
+# govern how long the EDITOR may take to come up. These only stop `docker` itself hanging forever.
+PROBE_TIMEOUT = 60.0
+LAUNCH_TIMEOUT = 600.0
 
 
 def editor_container(editor_id: str) -> str:
@@ -24,14 +40,6 @@ def editor_container(editor_id: str) -> str:
     return f"uned-{uuid}"
 
 
-def novnc_url(container: str, host_port: int) -> str:
-    return f"http://127.0.0.1:{host_port}/vnc.html  (container {container})"
-
-
-class EditorBusyError(RuntimeError):
-    pass
-
-
 class EditorNotReadyError(TimeoutError):
     """The editor container never became ready within the readiness timeout, across every bounded
     start attempt. Raised by `ensure_editor` after it has reaped the failed container and exhausted
@@ -39,8 +47,8 @@ class EditorNotReadyError(TimeoutError):
     timeout, so the crash-prone editor's intermittent startup death surfaces as an intelligible
     message (CLAUDE.md "never let a Python exception reach the CLI user") instead of a bare
     `TimeoutError`. Subclasses `TimeoutError` so the dispatcher's existing top-level editor-error
-    handler (`dispatch.py`, catching `(EditorBusyError, DriverError, TimeoutError)`) surfaces it as a
-    clean `editor error: …` / exit 2 with no change needed there."""
+    handler (`dispatch.py`, catching `(DriverError, TimeoutError)`) surfaces it as a clean
+    `editor error: …` / exit 2 with no change needed there."""
     pass
 
 
@@ -56,8 +64,15 @@ def _wineprefix_volume(editor_id: str) -> str:
 
 
 def _is_running(container: str) -> bool:
-    res = subprocess.run(["docker", "ps", "-q", "-f", f"name=^{container}$"],
-                         capture_output=True, text=True, check=True)
+    """Is this container up? BOUNDED (`PROBE_TIMEOUT`) — a `docker ps` that never answers is a dead
+    daemon, and it must raise a named `DriverError` (which the materialize/preview guards turn into
+    a clean exit 2) rather than hanging `ensure_editor` before it has even tried to start."""
+    try:
+        res = subprocess.run(["docker", "ps", "-q", "-f", f"name=^{container}$"],
+                             capture_output=True, text=True, check=True, timeout=PROBE_TIMEOUT)
+    except subprocess.TimeoutExpired:
+        raise DriverError(f"`docker ps` did not answer within {PROBE_TIMEOUT:.0f}s while checking "
+                          f"container {container} (dockerd hung?)") from None
     return bool(res.stdout.strip())
 
 
@@ -65,8 +80,15 @@ def _reap_container(container: str) -> None:
     """`docker rm -f <container>` — force-remove a stale/leaked ephemeral editor container (running
     OR exited) so a fresh `docker compose run --name <container>` can re-take the name. Best-effort:
     `check=False`, output swallowed — a missing container is not an error (nothing to reap). Used by
-    `ensure_editor`'s bounded readiness retry to clear the wedged container before re-spinning."""
-    subprocess.run(["docker", "rm", "-f", container], capture_output=True, text=True, check=False)
+    `ensure_editor`'s bounded readiness retry to clear the wedged container before re-spinning.
+
+    Bounded (`PROBE_TIMEOUT`) and the timeout SWALLOWED, like `preview_game.stop_game`: this runs on
+    the failure path, so a wedged `rm` must not replace the real error with a hang."""
+    try:
+        subprocess.run(["docker", "rm", "-f", container],
+                       capture_output=True, text=True, check=False, timeout=PROBE_TIMEOUT)
+    except subprocess.TimeoutExpired:
+        pass
 
 
 def _wait_ready(container: str, timeout: float) -> None:
@@ -74,12 +96,27 @@ def _wait_ready(container: str, timeout: float) -> None:
     `window=<id>`, NOT the substring `window=`: for the first seconds after launch `status` prints
     `window=<unresolved: could not find an UnrealEd window>` (window not yet mapped), which a bare
     substring check treats as ready — then the very next `exec` fails "could not find an UnrealEd
-    window". The `\\d` guard waits for the real handle."""
+    window". The `\\d` guard waits for the real handle.
+
+    **Each poll's `docker exec` is BOUNDED**, at `PROBE_TIMEOUT` or whatever is left of the
+    readiness deadline, whichever is smaller. Without a bound the deadline loop was decorative: one
+    `docker exec` that never returned parked the wait forever *inside* an iteration, so `timeout`
+    could not expire and `ensure_editor`'s retry never fired. A poll that times out counts as "not
+    ready yet" rather than an error — the deadline is what ends the wait, exactly as for a poll that
+    answers with an unresolved window.
+    """
     deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline:
-        res = subprocess.run(
-            ["docker", "exec", container, "python3", WINE_CTL, "status"],
-            capture_output=True, text=True, check=False)
+    while True:
+        left = deadline - time.monotonic()
+        if left <= 0:
+            break
+        try:
+            res = subprocess.run(
+                ["docker", "exec", container, "python3", WINE_CTL, "status"],
+                capture_output=True, text=True, check=False,
+                timeout=min(PROBE_TIMEOUT, left))
+        except subprocess.TimeoutExpired:
+            continue                # a wedged probe is "not ready"; the deadline ends the wait
         if "alive=True" in res.stdout and re.search(r"window=\d", res.stdout):
             return
         time.sleep(1.0)
@@ -299,10 +336,19 @@ def ensure_editor(editor_id: str, *, state_dir: Path, mounts=None, ready_timeout
         # always exists.
         env = {**os.environ,
                "UEDCLI_STUB_CACHE": str(config.stub_cache_root(create=True))}
-        subprocess.run(
-            ["docker", "compose", "run", "-d", "-p", "0:6080", "--name", container,
-             "-v", f"{_wineprefix_volume(editor_id)}:/wineprefix", *extra, "uned"],
-            cwd=_compose_dir(), env=env, capture_output=True, text=True, check=True)
+        # BOUNDED at LAUNCH_TIMEOUT: `docker compose run -d` returns once the container is created,
+        # but on a cold machine that includes creating the wineprefix volume (and, first time, a
+        # pull), so the bound is generous. A launch that blows it raises a named DriverError rather
+        # than hanging before the readiness wait — which cannot help, since it has not started yet.
+        try:
+            subprocess.run(
+                ["docker", "compose", "run", "-d", "-p", "0:6080", "--name", container,
+                 "-v", f"{_wineprefix_volume(editor_id)}:/wineprefix", *extra, "uned"],
+                cwd=_compose_dir(), env=env, capture_output=True, text=True, check=True,
+                timeout=LAUNCH_TIMEOUT)
+        except subprocess.TimeoutExpired:
+            raise DriverError(f"`docker compose run` did not start editor container {container} "
+                              f"within {LAUNCH_TIMEOUT:.0f}s (dockerd hung?)") from None
 
     attempts = max(1, start_attempts)
     for attempt in range(attempts):
@@ -326,10 +372,19 @@ def ensure_editor(editor_id: str, *, state_dir: Path, mounts=None, ready_timeout
 def stop_editor(editor_id: str, state_dir: Path) -> None:
     """Tear down this ephemeral editor's container + its wineprefix volume (free the ~0.5 GB); remove
     any override/engine ini the boot wrote under `<state_dir>/tmp/` (no leak per preview mode-group /
-    materialize)."""
+    materialize).
+
+    Every docker call here is BOUNDED (`PROBE_TIMEOUT`) with the timeout SWALLOWED — the same
+    discipline as `preview_game.stop_game`. This runs from a `finally:` in `apply.run_materialize`,
+    so a wedged teardown would otherwise swallow the real failure and hang the verb *after* the work
+    was already done; the local ini temps below are still unlinked either way."""
     container = editor_container(editor_id)
-    subprocess.run(["docker", "rm", "-f", container], capture_output=True, text=True, check=False)
-    subprocess.run(["docker", "volume", "rm", _wineprefix_volume(editor_id)],
-                   capture_output=True, text=True, check=False)
+    for cmd in (["docker", "rm", "-f", container],
+                ["docker", "volume", "rm", _wineprefix_volume(editor_id)]):
+        try:
+            subprocess.run(cmd, capture_output=True, text=True, check=False,
+                           timeout=PROBE_TIMEOUT)
+        except subprocess.TimeoutExpired:
+            pass
     _override_ini_path(container, state_dir).unlink(missing_ok=True)
     _engine_ini_path(container, state_dir).unlink(missing_ok=True)

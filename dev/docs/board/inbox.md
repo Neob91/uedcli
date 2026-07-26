@@ -19,10 +19,43 @@ stage (so no `to-` prefix). See [`README.md`](README.md).
   > game's class hierarchy** to tell a mover from a real subtraction, and so — unlike `wire` — need
   > the game content available. **A texture the render actually needs and cannot read is a refusal,
   > never a placeholder**; a scene that references no texture needs no texture source. **No cost
-  > ceiling is imposed** on preview size or layout.
+  > ceiling is imposed** on preview size or layout. **A visual constant is chosen by looking at a
+  > render, not by arithmetic** — where a preview's appearance is in question (how faint a
+  > de-emphasised brush should be), the value is picked from an actual before/after image and that
+  > image is kept with the reasoning.
 
   If you would rather these stay agent-side, say so and they go to `rationale/` instead — but they
   cannot stay only in an ephemeral spec. *(2026-07-26.)*
+- **[debug] p3 `parse_decimal` admits an INFINITY by another spelling — `1e999999999` is finite as a
+  `Decimal` and infinite as a `float`.** Reproduced 2026-07-26:
+
+  ```
+  parse_decimal('1e999999999')  → Decimal('1E+999999999'), .is_finite() is True
+  float(that)                   → inf
+  brush clip --axis z --offset 1e999999999  → plane ((0.0, 0.0, inf), (0.0, 0.0, 1.0))
+  actor move --to 1e999999999,0,0           → the same, per component, via parse_coord
+  ```
+
+  **Mechanism.** `parse_decimal` rejects the *literal* non-finite spellings (`nan`/`snan`/`inf`)
+  with `Decimal.is_finite()`, and that check is correct: `Decimal` has arbitrary exponent range, so
+  `1E+999999999` genuinely IS a finite decimal. The infinity is created later, by the
+  `Decimal`→`float` conversion at the geometry boundary (`clip.axis_plane`, and every computed-
+  geometry module that finalizes through floats), where the value overflows IEEE-754 double.
+
+  **Nothing observable breaks today**, which is why this is logged rather than fixed: with an
+  infinite plane offset, `--keep below` is a clean no-op ("clip plane did not intersect brush …",
+  exit 0) and `--keep above` or a negative offset is a clean `GeometryError` → exit 2. No traceback,
+  no silent wrong geometry.
+
+  **Why it is deferred rather than fixed in the 2026-07-25 chore batch:** the hole is not in the
+  validator, it is in where `Decimal` is allowed to lose range on its way to `float`. Fixing it
+  properly means deciding that boundary — a float32/float64 representability bound on every
+  coordinate entering the geometry layer, not one more `is_finite()` call in `cli.py` — and that is
+  wider than a chore. It also overlaps the specced "uniform Decimal map coordinates" work. The two
+  places that claimed the validator prevents an infinite value reaching the model
+  (`cli.parse_decimal`'s docstring, `rationale/cli.md`) were corrected 2026-07-26 to state this gap
+  instead of asserting it away. (Build-review round 2, 2026-07-26.)
+
 - `p1` `[question]` **→ whoever is driving the native-texture-formats plan: are PE1/PE2 still open? The
   escalation block reads stale against your own later commits.** Asked by a concurrent session
   2026-07-26; I did **not** edit your plan, because two sessions resolving one escalation is how a gate
@@ -837,24 +870,24 @@ queue (don't copy — one home per item).
   specs that are untracked (`2026-07-25-trunk-write-safety.md`,
   `2026-07-25-decimal-map-coordinates.md`). (2026-07-25, round-4 cold reviews.)
 
-- **[chore] p3 Every docker subprocess in `driver.py`/`xfer.py` EXCEPT the `map_save` probes is
-  still an unbounded wait — 8 `docker exec`s across 6 driver methods, plus all THREE in `xfer.py`.** `map_save`'s file probes go through
-  `_container_probe`, which bounds each `docker exec` with `PROBE_TIMEOUT` and turns a
-  `TimeoutExpired` into a `DriverError`. Nothing else does: `_wine_ctl`, `dexec_bash`,
-  `set_clipboard`, `log_size`, `read_log_since`, `dismiss_blocking_dialog` (three calls), and
-  `xfer.remove`'s `docker exec rm -rf` **plus `xfer.cp_in`/`cp_out`'s `docker cp`** all call
-  `subprocess.run` with no `timeout=`, so a hung dockerd parks the caller forever (`CLAUDE.md`
-  "never an open-ended wait"). **Seven of those calls also pass `check=True`** (`log_size`,
-  `read_log_since`, all three in `dismiss_blocking_dialog`, and both `xfer` `docker cp`s), so a
+- **[chore] p3 `driver.py`'s 8 `docker exec`s outside the `map_save` probes are still unbounded
+  waits.** `map_save`'s file probes go through `_container_probe`, which bounds each `docker exec`
+  with `PROBE_TIMEOUT` and turns a `TimeoutExpired` into a `DriverError`. Six driver methods still
+  do not: `_wine_ctl`, `dexec_bash`, `set_clipboard`, `log_size`, `read_log_since`,
+  `dismiss_blocking_dialog` (three calls) all call `subprocess.run` with no `timeout=`, so a hung
+  dockerd parks the caller forever (`CLAUDE.md` "never an open-ended wait"). **Five of those also
+  pass `check=True`** (`log_size`, `read_log_since`, all three in `dismiss_blocking_dialog`), so a
   docker failure reaches the user as a raw `CalledProcessError` traceback instead of a named
-  `DriverError` — a second rule broken ("never let a Python exception reach the CLI user"). The
-  `docker cp` pair matters most in practice: `level materialize` funnels every map in and out through
-  them. Not folded into the `map_save` fix because `_wine_ctl exec` drives genuinely long editor verbs
-  (`MAP REBUILD` can run minutes) and needs its own bound chosen rather than copied — and note
+  `DriverError` — a second rule broken ("never let a Python exception reach the CLI user"). Not
+  folded into the `map_save` fix because `_wine_ctl exec` drives genuinely long editor verbs (`MAP
+  REBUILD` can run minutes) and needs its own bound chosen rather than copied — and note
   `map_save`'s own `MAP SAVE` line goes out through `_wine_ctl`, so its bounded poll loop is preceded
-  by one unbounded call. (2026-07-25, while fixing the `map_save` verification; counts corrected
-  twice by the build reviews. Deliberately no line numbers — method names are stable, line numbers
-  rot within the commit that adds them.)
+  by one unbounded call. **`xfer.py`'s three subprocesses are DONE** (2026-07-26: `cp_in`/`cp_out`
+  bounded at `CP_TIMEOUT` and raising `DriverError`, `remove` bounded and swallowed), along with
+  `editor.py`'s lifecycle calls and `store_export.export_dx_t3d` — only `driver.py` is left.
+  (2026-07-25, while fixing the `map_save` verification; counts corrected twice by the build
+  reviews. Deliberately no line numbers — method names are stable, line numbers rot within the
+  commit that adds them.)
 
 - **[chore] p3 `map_save` has no INTEGRATION test — the new accept rule has never run against a real
   editor.** `test_driver.py` drives it against a fake container and a fake clock (thorough: every
@@ -1025,8 +1058,13 @@ queue (don't copy — one home per item).
 - **[spec] p2 `actor find <NAME>` (bare positional) is rejected — must use `--name GLOB`.** The positional
   slot is reserved solely for the `-` stdin token, so the natural `actor find Foo` errors ("find takes
   no positional name; use --name"). Three independent hits (2 build agents + Andrzej). Consider accepting
-  a positional name-glob when the token isn't `-` (mirrors `actor show <glob>`), keeping `-` as the
-  universe pipe. (Blind-build test + Andrzej, 2026-07-25.)
+  a positional name-glob when the token isn't `-`, keeping `-` as the universe pipe — i.e. `actor find
+  Foo*` would mean `actor find --name Foo*`. **NOTE the premise changed 2026-07-26:** this used to say
+  "mirrors `actor show <glob>`", but `actor show` no longer globs — it is a pure name resolver, and the
+  owner's ruling is that patterns belong to `actor find` alone. So the argument for this item is no
+  longer symmetry with a sibling verb; it is that `find` is now the ONLY verb that globs, which makes a
+  bare positional there more defensible, not less. (Blind-build test + Andrzej, 2026-07-25; premise
+  corrected 2026-07-26.)
 - **[chore] p3 `brush clip` prints nothing on success.** A successful clip emits only the "editing level"
   banner — no confirmation — so a blind builder can't tell it did anything without re-inspecting. Print
   e.g. `clipped <name>: 6→7 faces`. (Blind-build test, 2026-07-25.)
@@ -1159,12 +1197,6 @@ queue (don't copy — one home per item).
   DELIBERATE empty-`-`-stdin no-op distinct:** `actor find … | actor preview -` with empty stdin is a
   clean exit-0 no-op (the composable-pipe convention) and must stay — only the *no-set-at-all* case
   (no names, no `-`) should error. Cost me ~20 min of "exit 0 but no file" debugging. (Andrzej, 2026-07-25.)
-- **[debug] p3 `parse_coord`/`parse_pan` accept `nan`/`inf`/`snan` (same class as the fixed `parse_bbox`).**
-  `decimal.Decimal("nan"|"snan"|"inf")` construct fine, so they slip past the `except InvalidOperation`
-  guard in `cli.parse_coord` (and likely `parse_pan`): `--at nan,0,0` yields a NaN triple that misbehaves
-  downstream, `--at inf,0,0` a silent infinity. `parse_bbox` got a `.is_finite()` check (2026-07-24 review
-  of `--within-bbox`); apply the same guard to `parse_coord`/`parse_pan` and add non-finite cases to their
-  parse tests. (Flagged by the `--within-bbox` cold review, 2026-07-24.)
 - **[chore] p3 `brush stats` — per-map poly/vertex complexity histogram (2026-07-24).** Minor: aggregate
   per-brush poly/vertex counts across a level (the complexity-budget number for the corpus study,
   `specs/2026-07-24-corpus-brush-idioms.md` §7 gap 5). Scriptable today from `brush poly list` + `model.py`;

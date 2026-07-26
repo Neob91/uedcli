@@ -73,7 +73,9 @@ All dir keys are relative to the project root (absolute allowed), so uedcli can 
 **Package layering.** The effective package search path is the project's overlay `paths` first, then
 the selected game's base dirs, deduped project-shadows-base. `paths` are **bare directories**,
 colon-separated — uedcli owns the five package extensions (`.u .dx .utx .uax .umx`) and scans the
-dirs itself.
+dirs itself. Because `:` is the list separator, a pasted **Windows path** (`C:\DX\System`) cannot be
+a dir: uedcli names it as such and exits 2, in both the project and the `[games.*]` config. Use the
+POSIX path the dirs are actually at.
 
 **Mover detection reads the class hierarchy, so it needs the packages.** Whether an actor is a
 **mover** (an animated brush — see [Movers](#movers--animated-brush-actors-doors--lifts--gears)) is
@@ -128,7 +130,7 @@ level.
 | Command | What it does |
 |---|---|
 | `actor find [filters…] [--json] [--exclude] [-]` | print names of matching actors, one per line, for piping; with no filters, prints **every** actor; a trailing `-` restricts the search to a piped name-set (boolean queries — see below) |
-| `actor show <name\|glob\|->` | print matching actors' full canonical T3D blocks |
+| `actor show <name\|->` | print named actors' full canonical T3D blocks |
 | `actor bbox <names…\|-> [--field F \| --json]` | the world axis-aligned bounding box enclosing the given actors as ONE box |
 | `actor prop get <name\|-> [KEY…] [--kv \| --json]` | print EFFECTIVE property values (see below) |
 | `actor folder get <names…\|->` | print each actor's uedcli-side folder path (`(none)` if unfoldered) |
@@ -182,8 +184,10 @@ keeps the non-matches instead. This composes into full boolean logic:
 Unknown piped names are a hard error (exit 2). `find -` with no filters echoes the piped set (a strict
 validator).
 
-`actor show <name>` — an exact name that matches nothing errors (exit 2); a glob with zero matches
-prints nothing (exit 0, grep-like). Reads a stdin name list with `-`. By default each block also
+`actor show <name>` takes ONE actor name (case-insensitive) — **not a glob**: patterns belong to
+`actor find`, and `actor find 'Light*' | actor show -` prints the whole matched set. A name that
+matches no actor errors (exit 2). Reads a stdin name list with `-` (empty stdin is a clean no-op,
+exit 0). By default each block also
 carries the uedcli-side sidecars as comments — a `// uedcli-folder:` line for a foldered actor and a
 `// uedcli-labels:` line for a labelled one — so `actor show A | actor add -` round-trips both;
 `--t3d-only` suppresses them for a byte-exact editor export.
@@ -492,13 +496,13 @@ fixed.
 
 | Command | What it does |
 |---|---|
-| `brush clip <name> (--axis A --coord N \| --plane PX,PY,PZ NX,NY,NZ) [--keep below\|above]` | model-side Sutherland-Hodgman halfspace clip |
+| `brush clip <name> (--axis A --offset N \| --plane PX,PY,PZ NX,NY,NZ) [--keep below\|above]` | model-side Sutherland-Hodgman halfspace clip |
 | `<generator> \| brush replace <name> -` | in-place shape swap, keeping the target's identity |
 | `brush vertex move <name> --at X,Y,Z (--to X,Y,Z \| --by DX,DY,DZ)` | move welded corners (selected by coordinate; repeat `--at`) |
 | `brush poly set BRUSH:SELECTOR… \| -` | set flags/texture/pan on one or more surfaces |
 | `brush poly align (--wall\|--floor\|--ring) targets…\|-` | flow one texture continuously across faces |
 
-**`brush clip`** plane is world-space (axis+coord, or point+normal); `--keep below` keeps the side
+**`brush clip`** plane is world-space (`--axis` + `--offset`, or point+normal); `--keep below` keeps the side
 opposite the normal. It clips the model, validates, then re-adds via paste so the clipped brush stays
 selectable. If the plane misses the brush interior it is a no-op and prints
 `clip plane did not intersect brush <name> — left unchanged`.

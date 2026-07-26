@@ -10,7 +10,20 @@ from __future__ import annotations
 import subprocess
 import uuid
 
+from .driver import DriverError
+
 WORK = "/work"
+
+# Hard bound on ONE `docker cp`, in seconds. Generous rather than tight: the payload is a whole map
+# package or a directory of exported textures, and a cold host page-cache copy of a ~50 MB `.dx`
+# through the docker daemon is legitimately slow. Anything past this is dockerd or the container not
+# answering, and per `dev/docs/rules/background-work.md` ("never leave a wait open-ended") that must
+# surface as a named error rather than parking the caller forever — a wedged copy used to hang the
+# whole verb with no output at all.
+CP_TIMEOUT = 300.0
+# Hard bound on the best-effort `rm -rf` cleanup exec. Short: it is a local unlink inside a container
+# that is about to die anyway, and cleanup must never delay the caller.
+REMOVE_TIMEOUT = 60.0
 
 
 def work_path(ext: str) -> str:
@@ -23,21 +36,37 @@ def work_dir(stem: str) -> str:
     return f"{WORK}/{stem}-{uuid.uuid4().hex}"
 
 
+def _cp(args: list[str], what: str) -> None:
+    """One BOUNDED `docker cp`. A copy that does not finish within `CP_TIMEOUT` raises
+    `DriverError` naming what was being copied — a `RuntimeError` subclass, so the materialize /
+    preview guards already turn it into a clean `exit 2` message instead of a traceback or, as
+    before, an unbounded hang with no output."""
+    try:
+        subprocess.run(args, check=True, capture_output=True, text=True, timeout=CP_TIMEOUT)
+    except subprocess.TimeoutExpired:
+        raise DriverError(f"docker cp did not finish within {CP_TIMEOUT:.0f}s ({what}) — "
+                          f"dockerd or the container is not answering") from None
+
+
 def cp_in(container: str, host_path: str, *, ext: str) -> str:
     """Copy a host file into the container at a freshly-minted /work path; return that path."""
     cpath = work_path(ext)
-    subprocess.run(["docker", "cp", host_path, f"{container}:{cpath}"],
-                   check=True, capture_output=True, text=True)
+    _cp(["docker", "cp", host_path, f"{container}:{cpath}"], f"{host_path} → {container}:{cpath}")
     return cpath
 
 
 def cp_out(container: str, container_path: str, host_path: str) -> None:
     """Copy a container file out to a host path."""
-    subprocess.run(["docker", "cp", f"{container}:{container_path}", host_path],
-                   check=True, capture_output=True, text=True)
+    _cp(["docker", "cp", f"{container}:{container_path}", host_path],
+        f"{container}:{container_path} → {host_path}")
 
 
 def remove(container: str, *paths: str) -> None:
-    """Best-effort cleanup of /work paths (the editor is crash-prone; never raise on cleanup)."""
-    subprocess.run(["docker", "exec", container, "rm", "-rf", *paths],
-                   capture_output=True, text=True, check=False)
+    """Best-effort cleanup of /work paths (the editor is crash-prone; never raise on cleanup).
+    Bounded and swallowed: a container that has already died — or a wedged dockerd — must not turn
+    cleanup into a hang on a path the caller is only passing through."""
+    try:
+        subprocess.run(["docker", "exec", container, "rm", "-rf", *paths],
+                       capture_output=True, text=True, check=False, timeout=REMOVE_TIMEOUT)
+    except subprocess.TimeoutExpired:
+        pass

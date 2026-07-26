@@ -32,14 +32,6 @@ def test_map_importadd_uses_z_drive_path():
     assert ex.call_args[0][0] == r"MAP IMPORTADD FILE=Z:\repo\Temp\x.t3d"
 
 
-def test_edit_copy_returns_clipboard_text():
-    d = Driver(container="test-ctr")
-    with mock.patch("uedcli.driver.subprocess.run") as run:
-        run.return_value = mock.Mock(stdout="Begin Map\nEnd Map\n", returncode=0)
-        out = d.edit_copy()
-    assert out.startswith("Begin Map")
-
-
 def test_screenshot_shoots_into_work_then_cps_out_to_the_host_path():
     d = Driver(container="test-ctr")
     calls = []
@@ -61,39 +53,6 @@ def test_screenshot_shoots_into_work_then_cps_out_to_the_host_path():
     # and THAT /work png was cleaned up (not merely some rm -rf)
     assert any(c[:3] == ["docker", "exec", "test-ctr"] and c[3:5] == ["rm", "-rf"] and work in c
                for c in calls)
-
-
-# --- CSG verbs (subtractive model + composition) ----------------------------
-
-def test_map_sendto_first_and_last():
-    d = Driver(container="c")
-    with mock.patch.object(d, "exec") as ex:
-        d.map_sendto("first"); d.map_sendto("LAST")
-    assert ex.call_args_list[0][0][0] == "MAP SENDTO FIRST"
-    assert ex.call_args_list[1][0][0] == "MAP SENDTO LAST"
-
-
-def test_map_sendto_rejects_bad_arg():
-    import pytest
-    from uedcli.driver import DriverError
-    d = Driver(container="c")
-    with pytest.raises(DriverError):
-        d.map_sendto("middle")
-
-
-def test_select_by_csg_kinds():
-    d = Driver(container="c")
-    with mock.patch.object(d, "exec") as ex:
-        d.select_by_csg("subtracts")
-    assert ex.call_args[0][0] == "MAP SELECT SUBTRACTS"
-
-
-def test_select_by_csg_rejects_bad_kind():
-    import pytest
-    from uedcli.driver import DriverError
-    d = Driver(container="c")
-    with pytest.raises(DriverError):
-        d.select_by_csg("walls")
 
 
 def test_map_load_dx_issues_map_load_with_z_path():

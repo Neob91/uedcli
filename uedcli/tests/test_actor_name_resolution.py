@@ -290,7 +290,7 @@ def test_it_actor_rotate_pivot_actor_records_pivot_coords(tmp_path, monkeypatch)
 def test_it_brush_clip_resolves_case_insensitively(tmp_path, monkeypatch):
     args = SimpleNamespace(
         cmd="brush", sub="clip", name="brush1",
-        axis="z", coord=Decimal(0), plane=None, keep="above",
+        axis="z", offset=Decimal(0), plane=None, keep="above",
         container="dx-lum-uned")
     src = _fake_src(_fixture_level())
     with mock.patch("uedcli.dispatch._resolve_level_source", return_value=src):
@@ -300,7 +300,7 @@ def test_it_brush_clip_resolves_case_insensitively(tmp_path, monkeypatch):
 def test_it_brush_clip_errors_on_missing(tmp_path, monkeypatch, capsys):
     args = SimpleNamespace(
         cmd="brush", sub="clip", name="NoSuch",
-        axis="z", coord=Decimal(0), plane=None, keep="above",
+        axis="z", offset=Decimal(0), plane=None, keep="above",
         container="dx-lum-uned")
     src = _fake_src(_fixture_level())
     with mock.patch("uedcli.dispatch._resolve_level_source", return_value=src):
@@ -314,7 +314,7 @@ def test_it_brush_clip_errors_on_missing(tmp_path, monkeypatch, capsys):
 def test_it_brush_clip_records_canonical_name(tmp_path, monkeypatch):
     args = SimpleNamespace(
         cmd="brush", sub="clip", name="brush1",
-        axis="z", coord=Decimal(0), plane=None, keep="above",
+        axis="z", offset=Decimal(0), plane=None, keep="above",
         container="dx-lum-uned")
     src = _fake_src(_fixture_level())
     with mock.patch("uedcli.dispatch._resolve_level_source", return_value=src):

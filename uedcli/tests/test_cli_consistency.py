@@ -345,7 +345,7 @@ def test_brush_clip_noop_message_goes_to_stderr(tmp_path, monkeypatch, capsys):
     a = make_brush_actor("WALL", cube(64, 64, 64), location=(Decimal(0), Decimal(0), Decimal(0)))
     _write_project(tmp_path, monkeypatch, [a])
     # a plane far above the cube misses its interior → the "left unchanged" no-op notice
-    rc = _run(["brush", "clip", "WALL", "--axis", "z", "--coord", "100000", "--keep", "below"])
+    rc = _run(["brush", "clip", "WALL", "--axis", "z", "--offset", "100000", "--keep", "below"])
     assert rc == 0
     cap = capsys.readouterr()
     assert cap.out == ""                                    # no stdout chatter on a no-op mutator

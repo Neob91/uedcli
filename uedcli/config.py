@@ -137,6 +137,26 @@ def _dedup_by_stem(files: list[tuple[str, str]]) -> list[tuple[str, str]]:
     return out
 
 
+def reject_windows_drive(paths_str: str, where: str = "") -> None:
+    """Raise the shared "Windows-style drive?" `ConfigError` if `paths_str` holds a drive-letter
+    colon (`C:\\DX\\System`, `Z:/work`).
+
+    Both places that read a colon-separated dir list call this, and that is the point. A pasted
+    Windows path is the single most likely way to get a `:` into a value where `:` is the LIST
+    SEPARATOR, and without a dedicated message the split is silent: `C:\\DX\\System` becomes the two
+    elements `C` and `\\DX\\System`, and the user is told `dir must be absolute: 'C'` — a message
+    about a path they never typed. The check therefore has to run on the WHOLE string, before any
+    split, everywhere such a string is read: `resolve_dirs` (compose time) AND `load_user_config`
+    (load time, which runs first and used to produce exactly that confusing error).
+
+    `where` prefixes the message with the offending file/table when the caller knows it."""
+    if _WIN_DRIVE.search(paths_str):
+        prefix = f"{where}: " if where else ""
+        raise ConfigError(
+            f"{prefix}path element contains a ':' (Windows-style drive?) — values are POSIX and "
+            f"':' is the list separator: {paths_str!r}")
+
+
 def resolve_dirs(paths_str: str, base: str, *, require_absolute: bool = False) -> list[str]:
     """Resolve a colon-separated DIRECTORY list to absolute host dirs, in order (decisions.md
     2026-07-14 03:30 — `paths` are bare dirs now, NOT globs). No file globbing: uedcli scans each
@@ -152,10 +172,7 @@ def resolve_dirs(paths_str: str, base: str, *, require_absolute: bool = False) -
     games config, which has no project root to anchor to) rejects any relative element."""
     if not paths_str:
         return []
-    if _WIN_DRIVE.search(paths_str):
-        raise ConfigError(
-            f"path element contains a ':' (Windows-style drive?) — values are POSIX and ':' is the "
-            f"list separator: {paths_str!r}")
+    reject_windows_drive(paths_str)
     out: list[str] = []
     for element in paths_str.split(":"):
         element = element.strip()
@@ -274,6 +291,9 @@ def load_user_config(override: str | None = None) -> UserConfig | None:
         paths = tbl.get("paths")
         if not isinstance(paths, str) or not paths.strip():
             raise ConfigError(f"{where}: required key 'paths' (a colon-separated dir list) is missing")
+        # BEFORE the split, so a pasted `C:\DX\System` gets the dedicated drive-letter error rather
+        # than splitting into `C` + `\DX\System` and being reported as "dir must be absolute: 'C'".
+        reject_windows_drive(paths, where)
         for pat in (p.strip() for p in paths.split(":") if p.strip()):
             if not os.path.isabs(pat):
                 raise ConfigError(f"{where}: dir must be absolute: {pat!r}")
@@ -465,8 +485,16 @@ def walk_up_root(start: str) -> str | None:
     """Walk up from `start`; the FIRST ancestor directory containing an `uedcli.toml` FILE is the
     project root (nearest wins — a nested project shadows an outer one, `.git`-style). Returns the
     root dir, None if none found. No child-dir scan, no schema sniffing — the distinctive filename
-    is the marker. A malformed or unreadable marker is NOT climbed past: the caller loads it and
-    `load_project`/`_read_toml` raise a hard ConfigError (spec §4)."""
+    is the marker. **A marker that cannot be read or trusted is NEVER climbed past** — climbing
+    past one binds the caller to an OUTER project and silently edits the wrong tree — but the two
+    cases raise in different places, which matters when tracing an error:
+
+    - **Unreadable/untrustworthy HERE:** a marker this function cannot stat (EACCES) or that is not
+      a regular file (a dangling symlink, a symlink loop, a directory) raises `ConfigError` from
+      inside `walk_up_root` itself, before any load is attempted.
+    - **Malformed at the CALLER:** a marker that stats fine is RETURNED as the root; its content is
+      the caller's problem, and `load_project`/`_read_toml` raise the hard `ConfigError` on bad TOML
+      or an unreadable-at-open file (spec §4)."""
     cur = Path(start).resolve()
     for anc in (cur, *cur.parents):
         marker = anc / "uedcli.toml"
@@ -480,8 +508,21 @@ def walk_up_root(start: str) -> str | None:
                 raise ConfigError(
                     f"project marker exists but is not a regular file: {marker} "
                     "(dangling symlink or directory? fix or remove it)")
-        except OSError:
-            continue
+        except OSError as e:
+            # An ancestor whose marker cannot even be STAT'ed is a STOP, not a skip. `continue` here
+            # contradicted this function's own rule ("an unreadable marker is NOT climbed past") and
+            # was actively dangerous: the walk sailed past a project it could not read and bound the
+            # caller to an OUTER project, silently editing the wrong tree.
+            #
+            # In practice this branch is EACCES — a directory the process may not stat into.
+            # `Path.is_file` swallows ENOENT, ENOTDIR, EBADF and ELOOP (`pathlib._IGNORED_ERRNOS`)
+            # and answers False, so plain absence never reaches here, and neither does a
+            # SELF-REFERENCING symlink: ELOOP is ignored, `is_file()` is False, `lexists()` is True,
+            # and it lands in the "not a regular file" branch above (verified on CPython 3.12.9,
+            # 2026-07-26). Do not describe a symlink loop as reaching this branch — it does not.
+            raise ConfigError(
+                f"cannot check for a project marker at {marker}: {e.strerror or e} — refusing to "
+                "climb past it, since an outer project would then be used instead") from e
     return None
 
 

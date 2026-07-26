@@ -21,7 +21,7 @@ uedcli level status
 uedcli actor find --exact-class Brush
 uedcli brush poly list Brush41
 uedcli actor preview Brush41 --out /tmp/b41.png   # color quad wireframe PNG, poly-index labels
-uedcli brush clip Brush41 --axis z --coord 128 --keep below
+uedcli brush clip Brush41 --axis z --offset 128 --keep below
 
 # offline unit tests (committed fixtures, no editor container) — same venv, host-native
 bin/test          # path-qualified: `test` alone is a shell builtin

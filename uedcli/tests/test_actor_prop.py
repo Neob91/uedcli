@@ -46,6 +46,9 @@ _SCHEMA = {
     "bselected": _prop("bSelected", "BoolProperty"),      # a computed prop that IS in the schema
     "bhidden": _prop("bHidden", "BoolProperty"),
     "mass": _prop("Mass", "FloatProperty"),
+    # A struct with a STRING member, so a member value can legitimately contain a comma
+    # (`(Text="a,b",Count=1)`) — the quoted-comma regression below.
+    "note": _prop("Note", "StructProperty", type_ref=5, type_name="NoteS"),
 }
 
 # Effective class defaults (what `_class_defaults` would decode from the .u).
@@ -59,11 +62,16 @@ _DEFAULTS = {
 }
 
 
+_NOTE_MEMBERS = [_prop("Text", "StrProperty"), _prop("Count", "IntProperty")]
+
+
 def _members_for(prop):
     if (prop.type_name or "").casefold() == "vector":
         return list(_VECTOR_MEMBERS)
     if (prop.type_name or "").casefold() == "rotator":
         return list(_ROTATOR_MEMBERS)
+    if (prop.type_name or "").casefold() == "notes":
+        return list(_NOTE_MEMBERS)
     return []
 
 
@@ -506,6 +514,22 @@ def test_get_struct_member_falls_through_stored_then_default(capsys):
     rc, _s, _a = _run(level, "get", ["Rotation.Yaw", "Rotation.Pitch"])
     assert rc == 0
     assert capsys.readouterr().out.splitlines() == ["8192", "4096"]
+
+
+def test_get_struct_member_with_a_quoted_comma_in_a_sibling(capsys):
+    # Regression: the struct-text splitter used to split on ANY depth-0 comma, so the comma inside
+    # `Text="a,b"` broke the literal into bogus members and every read/write of the struct failed.
+    level = _level(props=[("Note", '(Text="a,b",Count=1)')])
+    rc, _s, _a = _run(level, "get", ["Note.Count", "Note.Text"])
+    assert rc == 0
+    assert capsys.readouterr().out.splitlines() == ["1", '"a,b"']
+
+
+def test_set_struct_member_preserves_a_quoted_comma_sibling():
+    level = _level(props=[("Note", '(Text="a,b",Count=1)')])
+    rc, _s, actor = _run(level, "set", ["Note.Count=7"])
+    assert rc == 0
+    assert dict(actor.props)["Note"] == '(Text="a,b",Count=7)'
 
 
 def test_get_unset_struct_prints_class_default(capsys):

@@ -7,6 +7,7 @@ from decimal import Decimal
 import pytest
 
 from uedcli import propedit as pe
+from uedcli import typedprops as tp
 from uedcli.propedit import PropEditError, TypedField, parse_token, split_struct_text
 
 
@@ -69,6 +70,62 @@ def test_split_struct_text_nested_and_malformed():
     assert split_struct_text("bare") is None
     assert split_struct_text("(A=1") is None
     assert split_struct_text("(A)") is None
+
+
+def test_split_struct_text_is_quote_aware():
+    # A comma (or an `=`) inside a quoted member value must NOT split/cut the member. This used to
+    # split on any depth-0 comma, so `(Msg="a,b",Count=1)` parsed as three broken members and every
+    # `actor prop get/set/find` over such a struct errored. Both parsers now share
+    # `typedprops.split_struct_members` + `top_level_eq`, so they cannot drift apart again.
+    assert split_struct_text('(Msg="a,b",Count=1)') == [("Msg", '"a,b"'), ("Count", "1")]
+    assert split_struct_text('(Msg="x=y")') == [("Msg", '"x=y"')]
+    assert split_struct_text('(Outer=(Msg="a,b"),N=2)') == [("Outer", '(Msg="a,b")'), ("N", "2")]
+    assert split_struct_text('(Msg="a,b)c",N=2)') == [("Msg", '"a,b)c"'), ("N", "2")]
+    assert split_struct_text('(Msg="unclosed)') is None      # an unclosed quote is not a literal
+
+
+def test_single_quotes_are_object_reference_delimiters_and_are_tracked_as_such():
+    """In T3D a single quote delimits an OBJECT REFERENCE — `Texture'Package.Name'`,
+    `Model'MyLevel.Model823'` (`dev/docs/unrealed/t3d.md` "Property line forms"). It is always
+    PAIRED, and a string literal is DOUBLE-quoted (`Name="Brush938"`), so an apostrophe inside a
+    string is ordinary text the `"` quote state already swallows.
+
+    Audited over the 39 committed `.t3d` files: 102 lines contain a single quote and every one has
+    an EVEN count — there is no unpaired apostrophe anywhere in the corpus, and none of the 159
+    struct-valued properties parses differently under quote tracking. So tracking `'` is right, and
+    a bare unquoted `(Text=it's ok)` is not a T3D value form (it would be written
+    `(Text="it's ok")`). Escaping of a quote INSIDE a literal is undocumented and untested here —
+    neither parser claims to handle it."""
+    assert split_struct_text("(Skin=Texture'Pkg.Name',N=2)") == \
+        [("Skin", "Texture'Pkg.Name'"), ("N", "2")]
+    assert split_struct_text('(Msg="it\'s ok",N=1)') == [("Msg", '"it\'s ok"'), ("N", "1")]
+    # An UNPAIRED single quote leaves the literal unbalanced → "not a struct literal", the same
+    # answer both parsers give. It cannot occur in real T3D (see the audit above).
+    assert split_struct_text("(A=it's,N=1)") is None
+    assert tp.parse_struct_text("(A=it's,N=1)") is None
+
+
+def test_split_struct_text_drops_empty_members_like_typedprops_does():
+    # A trailing or doubled comma used to be the one remaining DISAGREEMENT: typedprops skipped the
+    # empty member, propedit returned None. Observable as `actor prop get Foo.A` erroring "not a
+    # struct" on a stored `(A=1,)` that the post-verify compare read as a struct all along.
+    assert split_struct_text("(A=1,)") == [("A", "1")]
+    assert split_struct_text("(A=1, ,B=2)") == [("A", "1"), ("B", "2")]
+    assert split_struct_text("(,)") == []
+    assert split_struct_text("( )") == []
+
+
+def test_split_struct_text_agrees_with_typedprops_parse_struct_text():
+    # The two parsers differ ONLY in result shape (ordered+case-preserving vs casefolded dict).
+    for text in ('(A=1,B=(C=2,D=3))', '(Msg="a,b",Count=1)', "()", "bare", "(A=1", "(A)",
+                 '(Msg="x=y")', "(A=1))", "(A=1,)", "(A=1, ,B=2)", "(,)", "( )", "(,A=1)",
+                 "(A=1,,)", '(Skin=Texture\'Pkg.Name\',N=2)', '(Msg="it\'s ok",N=1)'):
+        pairs = split_struct_text(text)
+        dct = tp.parse_struct_text(text)
+        if pairs is None or dct is None:
+            assert pairs is None and dct is None, text
+        else:
+            assert {k.casefold(): v for k, v in pairs} == dct, text
 
 
 # ── format helpers ───────────────────────────────────────────────────────────────

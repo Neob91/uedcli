@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .driver import Driver, DriverError
-from .editor import ensure_editor, stop_editor, EditorBusyError
+from .editor import ensure_editor, stop_editor
 from .uuid7 import uuid7
 from .verify import verify_dx_matches
 
@@ -290,8 +290,6 @@ def run_materialize(*, level, packages, out_path, overwrite, state_dir, schema_r
         host_out.parent.mkdir(parents=True, exist_ok=True)
         _save_and_swap_verified(ed, out_path, _expected_level(result, mo), defaults=defaults,
                                 state_dir=state_dir, no_verify=no_verify, keep_build=keep_build)
-    except EditorBusyError as e:
-        return ApplyResult(rc=2, message=str(e))
     except (DriverError, RuntimeError, TimeoutError, ValueError, OSError,
             subprocess.CalledProcessError) as e:
         # OSError covers the crafted-ini write in ensure_editor (`_write_engine_ini`) and any

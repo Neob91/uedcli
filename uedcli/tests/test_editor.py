@@ -273,7 +273,7 @@ def test_ensure_editor_start_attempts_zero_clamps_to_one(monkeypatch):
 
 def test_editor_not_ready_error_subclasses_timeout_and_os_error():
     # Load-bearing fact: dispatch.py needs NO change because EditorNotReadyError IS a TimeoutError,
-    # so the existing top-level `(EditorBusyError, DriverError, TimeoutError)` handler catches it.
+    # so the existing top-level `(DriverError, TimeoutError)` handler catches it.
     # It is also an OSError subclass (TimeoutError subclasses OSError) — which is why dispatch
     # ordering matters. Pin both so a later refactor of the base class trips a red test.
     assert issubclass(editormod.EditorNotReadyError, TimeoutError)
@@ -305,3 +305,63 @@ def test_ensure_editor_passes_stub_cache_env_for_the_compose_mount(monkeypatch, 
     # DOCKER_* to run at all (review fix: pin the {**os.environ, …} shape, 2026-07-18).
     import os as _os
     assert seen["env"]["PATH"] == _os.environ["PATH"]
+
+
+# ── every docker call is BOUNDED (dev/docs/rules/background-work.md) ──────────────
+
+
+def test_every_lifecycle_docker_call_passes_a_timeout(monkeypatch, tmp_path):
+    """A `docker` subprocess with no `timeout=` parks the whole verb when dockerd hangs — and in
+    `_wait_ready`'s case it does so INSIDE the readiness deadline loop, so the deadline can never
+    expire and `ensure_editor`'s retry never fires. Pinned as a property of the module, so a new
+    call site cannot slip through unbounded."""
+    calls = []
+
+    def fake_run(cmd, **kw):
+        calls.append(kw)
+        if cmd[:3] == ["docker", "ps", "-q"]:
+            return mock.Mock(returncode=0, stdout="")             # not running → spin up
+        return mock.Mock(returncode=0, stdout="alive=True window=29360129")
+
+    monkeypatch.setattr(editormod.subprocess, "run", fake_run)
+    monkeypatch.setattr(editormod.time, "sleep", lambda s: None)
+    editormod.ensure_editor("0193abcd-0000-7000-8000-000000000001", state_dir=tmp_path)
+    editormod.stop_editor("0193abcd-0000-7000-8000-000000000001", tmp_path)
+    assert calls, "no docker call was made"
+    for kw in calls:
+        assert kw.get("timeout"), kw
+
+
+def test_is_running_turns_a_hung_docker_ps_into_a_named_error(monkeypatch):
+    import subprocess
+    from uedcli.driver import DriverError
+    monkeypatch.setattr(editormod.subprocess, "run",
+                        mock.Mock(side_effect=subprocess.TimeoutExpired(cmd="docker ps",
+                                                                        timeout=1)))
+    with pytest.raises(DriverError, match="docker ps"):
+        editormod._is_running("uned-x")
+
+
+def test_reap_and_stop_swallow_a_hung_docker(monkeypatch, tmp_path):
+    """Teardown runs from a `finally:`, so a wedged `docker rm` must not replace the real error
+    with a hang — the timeout is swallowed, exactly like `preview_game.stop_game`."""
+    import subprocess
+    monkeypatch.setattr(editormod.subprocess, "run",
+                        mock.Mock(side_effect=subprocess.TimeoutExpired(cmd="docker rm",
+                                                                        timeout=1)))
+    editormod._reap_container("uned-x")                            # must not raise
+    editormod.stop_editor("0193abcd-0000-7000-8000-000000000001", tmp_path)   # must not raise
+
+
+def test_wait_ready_treats_a_hung_probe_as_not_ready_and_still_times_out(monkeypatch):
+    """A `docker exec` that never answers is "not ready yet", not an error — but it must not stop
+    the deadline from being reached, which is exactly what an unbounded call did."""
+    import subprocess
+    monkeypatch.setattr(editormod.subprocess, "run",
+                        mock.Mock(side_effect=subprocess.TimeoutExpired(cmd="docker exec",
+                                                                        timeout=1)))
+    monkeypatch.setattr(editormod.time, "sleep", lambda s: None)
+    clock = iter([0.0, 0.5, 1.0, 11.0])
+    monkeypatch.setattr(editormod.time, "monotonic", lambda: next(clock))
+    with pytest.raises(TimeoutError, match="not ready within"):
+        editormod._wait_ready("uned-x", timeout=10)

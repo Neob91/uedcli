@@ -66,21 +66,63 @@ def _nonempty_class(s: str) -> str:
     return s
 
 
+def parse_decimal(text: str) -> Decimal:
+    """Parse ONE scalar number into an exact Decimal — the single validator every
+    Decimal-valued CLI argument goes through.
+
+    The bare `Decimal` constructor must NEVER be used as an argparse `type=`, for two
+    independent reasons this function fixes:
+
+    1. **Non-numeric input escapes as a traceback.** argparse only converts `ValueError`
+       and `TypeError` into a clean parser error; `Decimal("abc")` raises
+       `decimal.InvalidOperation`, which is an `ArithmeticError` — so it propagates out of
+       argparse as a raw traceback, breaking "no Python exception ever reaches the user".
+    2. **`Decimal` ACCEPTS `"nan"`, `"snan"` and `"inf"`.** They construct fine and then
+       misbehave silently downstream: a NaN coordinate compares false against everything,
+       an infinite one matches every actor on that axis, and a signaling NaN raises an
+       `InvalidOperation` from deep inside later arithmetic rather than at parse time.
+
+    Both cases raise `ArgumentTypeError`, which argparse turns into a clean message naming
+    the offending value plus exit 2. Accepts optional surrounding whitespace.
+
+    **What this does NOT guarantee: that no infinite value reaches the geometry layer.** It
+    rejects the non-finite SPELLINGS, and `Decimal` has arbitrary exponent range, so
+    `1e999999999` is a perfectly finite `Decimal` and passes — then becomes `inf` when a
+    computed-geometry module converts it to `float`. That overflow lives at the
+    `Decimal`→`float` boundary, not here, and closing it means bounding coordinates to what a
+    float can represent (see `board/inbox.md`, "`parse_decimal` admits an INFINITY by another
+    spelling"). Nothing observable breaks today — such a value ends as a clean no-op or a clean
+    `GeometryError` — but do not read this validator as a range check."""
+    try:
+        value = Decimal(text.strip())
+    except InvalidOperation:
+        raise argparse.ArgumentTypeError(f"expected a number, got {text!r}") from None
+    if not value.is_finite():
+        raise argparse.ArgumentTypeError(f"number must be finite, got {text!r}") from None
+    return value
+
+
 def parse_coord(text: str) -> Vec3:
     """Parse a single `X,Y,Z` coordinate token into an exact Decimal triple.
 
     Decimal (not float) so authored fractional coords carry no binary-representation
     drift and match stored vertices exactly. Accepts integers and decimals, optional
-    surrounding whitespace. Raises ArgumentTypeError (clean CLI error) on bad input."""
+    surrounding whitespace. Each component goes through `parse_decimal`, so a non-numeric
+    OR non-finite (`nan`/`snan`/`inf`) component raises ArgumentTypeError (clean CLI
+    error), never a traceback and never a silently poisoned coordinate.
+
+    The component's OWN reason is carried through verbatim — "expected a number" and "must be
+    finite" are different mistakes and must not collapse into one message: telling someone who
+    typed `abc` that it "must be finite" describes a problem their input does not have."""
     parts = [p.strip() for p in text.split(",")]
     if len(parts) != 3:
         raise argparse.ArgumentTypeError(
             f"coordinate must be X,Y,Z (3 comma-separated numbers), got {text!r}"
         )
     try:
-        return tuple(Decimal(p) for p in parts)
-    except InvalidOperation:
-        raise argparse.ArgumentTypeError(f"coordinate has a non-numeric component: {text!r}")
+        return tuple(parse_decimal(p) for p in parts)
+    except argparse.ArgumentTypeError as e:
+        raise argparse.ArgumentTypeError(f"coordinate {text!r}: {e}") from None
 
 
 def parse_bbox(text: str):
@@ -93,15 +135,15 @@ def parse_bbox(text: str):
         raise argparse.ArgumentTypeError(
             f"bbox must be X0,Y0,Z0,X1,Y1,Z1 (6 comma-separated numbers), got {text!r}"
         )
+    # `parse_decimal` rejects both the non-numeric component and the non-finite one
+    # ("nan"/"snan"/"inf" all CONSTRUCT as Decimals): a NaN would raise a signaling
+    # InvalidOperation from the min/max below, and an infinity would silently match every
+    # actor on that axis. A bbox coord must be a finite number. The component's own reason is
+    # carried through — "expected a number" and "must be finite" are different mistakes.
     try:
-        nums = [Decimal(p) for p in parts]
-    except InvalidOperation:
-        raise argparse.ArgumentTypeError(f"bbox has a non-numeric component: {text!r}")
-    # Decimal ACCEPTS "nan"/"snan"/"inf" — reject them: nan/snan raise a signaling InvalidOperation
-    # (ArithmeticError, which argparse would NOT convert to a clean exit) on the min/max below, and inf
-    # would silently match every actor on that axis. A bbox coord must be a finite number.
-    if any(not n.is_finite() for n in nums):
-        raise argparse.ArgumentTypeError(f"bbox coords must be finite numbers, got {text!r}")
+        nums = [parse_decimal(p) for p in parts]
+    except argparse.ArgumentTypeError as e:
+        raise argparse.ArgumentTypeError(f"bbox {text!r}: {e}") from None
     a, b = nums[:3], nums[3:]
     lo = tuple(min(a[i], b[i]) for i in range(3))
     hi = tuple(max(a[i], b[i]) for i in range(3))
@@ -128,7 +170,11 @@ def depth_value(text: str):
 
 def parse_pan(text: str) -> tuple[int, int]:
     """Parse a single `U,V` integer pan offset (`model.Polygon.pan` is `tuple[int, int]` — v1
-    pan is integer-only, decimal pan is a deferred fast-follow)."""
+    pan is integer-only, decimal pan is a deferred fast-follow).
+
+    Pan does NOT go through `parse_decimal`: it is int-valued, and `int()` already rejects
+    every non-finite spelling (`int("nan")`/`int("inf")` raise `ValueError`, which argparse
+    converts cleanly) as well as any non-integer text. A regression test pins that."""
     parts = [p.strip() for p in text.split(",")]
     if len(parts) != 2:
         raise argparse.ArgumentTypeError(f"pan must be U,V (2 comma-separated integers), got {text!r}")
@@ -359,13 +405,13 @@ def build_parser() -> argparse.ArgumentParser:
              "Requires -.")
     _tree_flag(find)
 
-    show = asub.add_parser("show", help="print matching actors' full T3D blocks")
+    show = asub.add_parser("show", help="print named actors' full T3D blocks")
     show.add_argument("name",
-                      help="actor Name or glob (case-insensitive; a glob may print several "
-                           "actors), or - to read a newline-separated name list from stdin "
-                           "(e.g. `actor find … | actor show -`; concatenated blocks in piped "
-                           "order). An exact name that matches nothing errors (exit 2); a glob "
-                           "with zero matches prints nothing (exit 0, grep-like)")
+                      help="ONE actor Name (case-insensitive; NOT a glob — `actor find` owns "
+                           "patterns), or - to read a newline-separated name list from stdin "
+                           "(e.g. `actor find 'Light*' | actor show -`; concatenated blocks in "
+                           "piped order). A name that matches no actor errors (exit 2); empty "
+                           "stdin is a clean no-op (exit 0)")
     show.add_argument("--t3d-only", dest="t3d_only", action="store_true",
                       help="suppress the `// uedcli-folder:` comment for a byte-exact editor export "
                            "(rarely needed). By DEFAULT each foldered block carries the comment — "
@@ -734,8 +780,9 @@ def build_parser() -> argparse.ArgumentParser:
     clip = bsub.add_parser("clip", help="clip a brush by a plane, keeping one half")
     clip.add_argument("name", help="brush actor Name to clip (case-insensitive)")
     clip.add_argument("--axis", choices=["x", "y", "z"],
-                      help="axis-aligned plane; use with --coord")
-    clip.add_argument("--coord", type=Decimal, help="coordinate of the axis plane (world)")
+                      help="axis-aligned plane; use with --offset")
+    clip.add_argument("--offset", type=parse_decimal,
+                      help="plane offset along --axis (world)")
     clip.add_argument("--plane", type=parse_coord, nargs=2,
                       metavar=("PX,PY,PZ", "NX,NY,NZ"),
                       help="general plane: world point + normal")

@@ -1,7 +1,15 @@
 """Editor driver — wraps wine_ctl.py over `docker exec`. Every console verb goes
-through `wine_ctl exec`; reads go through `wine_ctl edit-copy` (EDIT COPY → X
-clipboard) and `MAP EXPORT`. Window resolution is cached inside wine_ctl per
-editor lifespan, so per-command cost is sub-second after the first call.
+through `wine_ctl exec`.
+
+**Reading the level back goes through `MAP EXPORT` alone** (`dispatch._export_editor_level`),
+and even that is rare: the git-tracked T3D trunk is authoritative, so only the build/snapshot
+path (materialize/preview) ever reads from the editor at all. The old `EDIT COPY` → X-clipboard
+read path is GONE — `Driver.edit_copy` was deleted 2026-07-26 as uncalled. The clipboard is
+still WRITTEN, though: `set_clipboard` + `edit_paste` are how brushes are added, because
+IMPORTADD'd brushes are not selectable (`writes._re_add`, `native.csg_golden`).
+
+Window resolution is cached inside wine_ctl per editor lifespan, so per-command cost is
+sub-second after the first call.
 """
 from __future__ import annotations
 
@@ -162,8 +170,13 @@ class Driver:
 
     def click(self, x: int, y: int, button: int = 1) -> None:
         """A real XTEST click at window-relative (x,y) — makes that viewport pane current AND forces
-        the llvmpipe repaint that command-driven redraws don't (the stale-framebuffer trap). Used by
-        `level preview` after posing the pane. (`wine_ctl click` takes x,y POSITIONALLY.)"""
+        the llvmpipe repaint that command-driven redraws don't (the stale-framebuffer trap).
+        (`wine_ctl click` takes x,y POSITIONALLY.)
+
+        **No uedcli verb calls this.** It was used by the editor-screenshot preview flow that was
+        deleted 2026-07-16 (`level preview` now renders model-side, without the editor); its live
+        callers today are the committed spike harnesses under `dev/docs/spikes/`. Retained
+        deliberately — see `dev/docs/rationale/driver.md`."""
         self._wine_ctl("click", str(x), str(y), "--button", str(button))
 
     def dexec_bash(self, script: str) -> str:
@@ -175,12 +188,9 @@ class Driver:
             raise DriverError(f"dexec_bash failed: {(res.stderr or '').strip()}")
         return res.stdout
 
-    def edit_copy(self) -> str:
-        return self._wine_ctl("edit-copy", capture=True)
-
     def set_clipboard(self, content: str) -> None:
         """Load the X CLIPBOARD selection (which wine reads for EDIT PASTE) with
-        `content`. Mirror of edit_copy's `xclip -o` read. Brushes are added via
+        `content`. Brushes are added via
         set_clipboard + edit_paste because IMPORTADD'd brushes are not selectable."""
         res = subprocess.run(
             ["docker", "exec", "-i", "-e", "DISPLAY=:99", self.container,
@@ -222,9 +232,6 @@ class Driver:
     def select_none(self) -> None:
         self.exec("ACTOR SELECT NONE")
 
-    def select_inside(self) -> None:
-        self.exec("ACTOR SELECT INSIDE")
-
     def actor_delete(self) -> None:
         self.exec("ACTOR DELETE")
 
@@ -239,8 +246,13 @@ class Driver:
         camera POSITION only — its `Rotation` is *stored* but never reaches the headless render
         (calibration spike 2026-07-12; the old rotation-adopt claim was verified only via a MAP SAVE
         readback, never pixels). For a BRUSH actor it repositions AND aims the camera to FRAME the
-        brush, and the render DOES reflect it — this is how `level preview` auto-frames. See
-        unrealed/commands.md `CAMERA ALIGN` + rendering.md "Posed shots"."""
+        brush, and the render DOES reflect it. See unrealed/commands.md `CAMERA ALIGN` +
+        rendering.md "Posed shots".
+
+        **No uedcli verb calls this.** It used to auto-frame the editor-screenshot `level preview`
+        flow, which was deleted 2026-07-16 — `level preview` renders model-side now and never poses
+        an editor camera. Its live callers are the committed spike harnesses under
+        `dev/docs/spikes/`. Retained deliberately — see `dev/docs/rationale/driver.md`."""
         self.exec("CAMERA ALIGN" if name is None else f"CAMERA ALIGN NAME={name}")
 
     def map_save(self, container_path: str, *, timeout: float = 600.0, poll: float = 1.0,
@@ -479,21 +491,6 @@ class Driver:
     # authors the CsgOper as an actor prop (see builders.make_brush_actor) and applies
     # it on rebuild — no special driver verb needed to place a subtract brush. These
     # verbs cover the rest of the subtractive workflow.
-
-    def map_sendto(self, where: str) -> None:
-        """Reorder the selected brush in the CSG order (`FIRST`/`LAST`). Order
-        determines the result — a later subtract carves earlier adds."""
-        w = where.upper()
-        if w not in ("FIRST", "LAST"):
-            raise DriverError(f"map_sendto: where must be FIRST/LAST, got {where!r}")
-        self.exec(f"MAP SENDTO {w}")
-
-    def select_by_csg(self, kind: str) -> None:
-        """Select brushes by CSG type: ADDS / SUBTRACTS / SEMISOLIDS / NONSOLIDS."""
-        k = kind.upper()
-        if k not in ("ADDS", "SUBTRACTS", "SEMISOLIDS", "NONSOLIDS"):
-            raise DriverError(f"select_by_csg: bad kind {kind!r}")
-        self.exec(f"MAP SELECT {k}")
 
 
     # --- preview / camera helpers ---------------------------------------------

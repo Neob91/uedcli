@@ -3,7 +3,82 @@ from decimal import Decimal
 
 import pytest
 
-from uedcli.cli import build_parser, parse_coord
+from uedcli.cli import build_parser, parse_bbox, parse_coord, parse_decimal, parse_pan
+
+
+def test_parse_decimal_returns_exact_decimal():
+    assert parse_decimal(" 32.5 ") == Decimal("32.5")
+    assert parse_decimal("-16") == Decimal("-16")
+
+
+@pytest.mark.parametrize("bad", ["abc", "", "1,2", "12x"])
+def test_parse_decimal_rejects_non_numeric(bad):
+    # `Decimal("abc")` raises decimal.InvalidOperation, an ArithmeticError argparse does NOT
+    # convert — it would escape as a raw traceback. The validator must raise ArgumentTypeError.
+    with pytest.raises(argparse.ArgumentTypeError):
+        parse_decimal(bad)
+
+
+@pytest.mark.parametrize("bad", ["nan", "NaN", "snan", "inf", "-inf", "Infinity"])
+def test_parse_decimal_rejects_non_finite(bad):
+    # Decimal CONSTRUCTS all of these; they must not survive into the model.
+    with pytest.raises(argparse.ArgumentTypeError):
+        parse_decimal(bad)
+
+
+@pytest.mark.parametrize("bad", ["nan,0,0", "0,inf,0", "0,0,snan", "-inf,0,0"])
+def test_parse_coord_rejects_non_finite_components(bad):
+    with pytest.raises(argparse.ArgumentTypeError):
+        parse_coord(bad)
+
+
+@pytest.mark.parametrize("bad", ["nan,0,0,1,1,1", "0,0,0,1,inf,1"])
+def test_parse_bbox_rejects_non_finite_components(bad):
+    with pytest.raises(argparse.ArgumentTypeError):
+        parse_bbox(bad)
+
+
+def test_coord_and_bbox_keep_the_two_failure_modes_distinct():
+    """"not a number" and "not finite" are DIFFERENT mistakes and must not collapse into one
+    message — telling someone who typed `abc` that it "must be finite" describes a problem their
+    input does not have. Both parsers carry the component's own reason through."""
+    with pytest.raises(argparse.ArgumentTypeError, match="expected a number") as ei:
+        parse_coord("abc,0,0")
+    assert "finite" not in str(ei.value)
+    with pytest.raises(argparse.ArgumentTypeError, match="must be finite"):
+        parse_coord("inf,0,0")
+    with pytest.raises(argparse.ArgumentTypeError, match="expected a number") as ei:
+        parse_bbox("abc,0,0,1,1,1")
+    assert "finite" not in str(ei.value)
+    with pytest.raises(argparse.ArgumentTypeError, match="must be finite"):
+        parse_bbox("inf,0,0,1,1,1")
+
+
+@pytest.mark.parametrize("bad", ["nan,0", "0,inf", "1.5,0"])
+def test_parse_pan_rejects_non_integer_and_non_finite(bad):
+    # Pan is int-valued and does not route through parse_decimal — `int()` already rejects every
+    # non-finite spelling with a ValueError argparse converts cleanly. Pinned so it stays true.
+    with pytest.raises(argparse.ArgumentTypeError):
+        parse_pan(bad)
+
+
+def test_clip_offset_flag_rejects_bad_values_cleanly(capsys):
+    # `brush clip --offset` is the renamed `--coord` (no alias — unreleased). Its type is
+    # parse_decimal, so a non-numeric/non-finite value is a clean parser error (SystemExit 2),
+    # never the decimal.InvalidOperation traceback the bare `Decimal` type used to leak.
+    p = build_parser()
+    assert p.parse_args(["brush", "clip", "W", "--axis", "z", "--offset", "128"]).offset == Decimal(128)
+    for bad in ("abc", "inf"):
+        with pytest.raises(SystemExit):
+            p.parse_args(["brush", "clip", "W", "--axis", "z", "--offset", bad])
+        assert "--offset" in capsys.readouterr().err
+
+
+def test_clip_coord_flag_is_gone():
+    # The old spelling is DELETED outright (no back-compat cruft), and shares no unambiguous
+    # argparse prefix with a surviving option, so it is genuinely unrecognized.
+    with pytest.raises(SystemExit):
+        build_parser().parse_args(["brush", "clip", "W", "--axis", "z", "--coord", "128"])
 
 
 def test_parse_coord_returns_decimal_triple():

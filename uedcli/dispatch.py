@@ -24,7 +24,7 @@ from decimal import Decimal
 from pathlib import Path
 
 from .driver import Driver, DriverError      # DriverError → top-level clean-exit catch (no traceback)
-from .editor import ensure_editor, stop_editor, EditorBusyError
+from .editor import ensure_editor, stop_editor
 from .geometry import validate_brush, GeometryError
 from . import emit
 from .model import parse_t3d, parse_t3d_actors, Actor, CoordinateError, Level
@@ -1601,7 +1601,9 @@ def _dispatch_substrate(args) -> int:
                                             ) as container:
             path = stub.ensure_stub(args.package, container=container, search_dirs=search_dirs,
                                     mounts=mounts, force=args.force)
-    except (RuntimeError, ValueError) as e:   # StubBuild/StubClosure + parse_header unsupported-version
+    # StubBuild/StubClosure, plus every `dxpkg.parse_header` refusal — an unsupported version, bad
+    # magic, or a corrupt/truncated package (SchemaError, a ValueError subclass).
+    except (RuntimeError, ValueError) as e:
         print(f"substrate stub {args.package}: {e}", file=sys.stderr)
         return 2
     print(path)
@@ -3414,9 +3416,10 @@ def dispatch(args) -> int:
         # GeometryError locally with a "materialize failed" message.)
         print(f"invalid brush geometry: {e}", file=sys.stderr)
         return 2
-    except (EditorBusyError, DriverError, TimeoutError) as e:
-        # Any editor-driving verb (level materialize/preview) whose
-        # ephemeral editor is busy, wedged, or crashes mid-drive → clean error, never a traceback.
+    except (DriverError, TimeoutError) as e:
+        # Any editor-driving verb (level materialize/preview) whose ephemeral editor is wedged or
+        # crashes mid-drive → clean error, never a traceback. (`EditorNotReadyError` subclasses
+        # TimeoutError, so a startup death lands here too.)
         print(f"editor error: {e}", file=sys.stderr)
         return 2
     except ClassRefError as e:
@@ -3801,8 +3804,9 @@ def _dispatch(args) -> int:
         # By default each block carries `// uedcli-folder:`/`// uedcli-labels:` comments (importable
         # T3D that also round-trips the sidecars through `actor add -`); `--t3d-only` suppresses them.
         with_sidecars = not getattr(args, "t3d_only", False)
-        # `-` (a stdin name list) is intercepted BEFORE the glob path — `show`'s name is otherwise
-        # glob-capable, a SEPARATE multi-actor mechanism (spec §8).
+        # `-` (a stdin name list) is `show`'s ONLY multi-actor mechanism: the positional is a
+        # single actor name, never a glob (owner ruling 2026-07-25 — `actor find` owns patterns,
+        # and `actor find <pattern> | actor show -` composes).
         if args.name == "-":
             raw = _resolve_target_names([args.name])
             if not raw:
@@ -3819,7 +3823,7 @@ def _dispatch(args) -> int:
         level = src.load()                               # outside the guard, like the sibling verbs
         try:
             out = query.show_actor(level, args.name, with_sidecars=with_sidecars)
-        except KeyError as e:                            # exact-name miss (globs return "" instead)
+        except KeyError as e:                            # a name that matches no actor → exit 2
             print(e.args[0], file=sys.stderr)
             return 2
         print(out)
@@ -4511,10 +4515,10 @@ def _dispatch(args) -> int:
             return 2
         if args.plane is not None:
             point, normal = args.plane                # two X,Y,Z triples
-        elif args.axis is not None and args.coord is not None:
-            point, normal = clipmod.axis_plane(args.axis, args.coord)
+        elif args.axis is not None and args.offset is not None:
+            point, normal = clipmod.axis_plane(args.axis, args.offset)
         else:
-            print("brush clip needs --axis AXIS --coord N, or --plane PX PY PZ NX NY NZ",
+            print("brush clip needs --axis AXIS --offset N, or --plane PX PY PZ NX NY NZ",
                   file=sys.stderr)
             return 2
         # The plane is world-space; map it into the brush's LOCAL frame (vertices are local):
