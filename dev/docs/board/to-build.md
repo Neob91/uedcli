@@ -45,13 +45,20 @@ When a plan here is built, delete its entry ([`done.md`](done.md) keeps a short 
 
 ---
 
-## Unified asset catalog — one engine, four kinds (spec + plan reviewed, 2026-07-25)
+## Unified asset catalog — one engine, four kinds (NOT ON DECK — spec re-gating, 2026-07-26)
+
+> **DO NOT START THIS.** It is **not** a reviewed on-deck item despite sitting on this queue. A
+> 3-reviewer spec round on 2026-07-26 returned structural findings; the owner's rulings were folded and
+> the spec re-entered the gate at round 1, which is where it is now. The plan is **stale and needs
+> re-cutting** (it carries its own `RE-CUT REQUIRED` banner listing what no slice covers yet). Two
+> `[OWNER — confirm]` items are still open on `inbox.md`. This item returns to on-deck only when the
+> spec passes a round and the plan is re-cut and reviewed — `inbox.md` tracks it.
 
 - [ ] `p2` **The unified asset catalog: texture / class / sound / music.** Plan:
   [`../plans/2026-07-25-unified-asset-catalog-plan.md`](../plans/2026-07-25-unified-asset-catalog-plan.md).
   Spec: [`../specs/2026-07-25-unified-asset-catalog.md`](../specs/2026-07-25-unified-asset-catalog.md).
-  Decisions: `decisions.md` 2026-07-25 03:40 + 05:10. **Four review rounds total** — two on the spec,
-  two on the plan, all findings folded.
+  Decisions: [`../direction/asset-catalog.md`](../direction/asset-catalog.md) (the owner's) and
+  `../rationale/` (the agent's) — **not** `decisions.md`, which is FROZEN.
 
   **Governing principle:** the tool **lists, reports file facts, produces pictures, and stores the
   classification it is handed — it never infers meaning.** The LLM works out what an asset is and
