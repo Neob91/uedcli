@@ -352,3 +352,40 @@ def test_an_unstated_location_orbits_from_its_CLASS_default_not_zero():
         rc, saved = _run(args, _level(a))
     assert rc == 0
     assert tuple(saved.actors["Cam1"].location) == (D(-500), D(-300), D(300))
+
+
+# ── the class-default seam itself (build review round 3: nothing executed it) ────────────────────
+
+def test_a_rotate_whose_actors_all_state_a_location_never_needs_a_project():
+    """The seam must stay LAZY. Resolving the project eagerly made an ordinary offline rotate demand
+    a resolvable project — contradicting the promise that it stays offline, and turning 25 tests red.
+    Nothing here mocks `_default_location_for`: the real closure runs and must not touch the project."""
+    a = make_brush_actor("C", cube(64, 64, 64), location=(D(100), D(0), D(0)))
+    args = SimpleNamespace(cmd="actor", sub="rotate", names=["C"], to=None,
+                           by=(D(0), D(16384), D(0)), pivot=None, pivot_actor=None,
+                           tree=None, container="c", project="/nonexistent/not-a-project")
+    rc, saved = _run(args, _level(a))
+    assert rc == 0 and saved is not None
+
+
+def test_the_class_default_lookup_is_memoized_per_class():
+    """`_class_defaults` costs ~50 ms per class (250 ms for a DeusExMover) and builds a fresh package
+    map each call, while BOTH the pivot scan and the orbit ask for every actor — so an unmemoized
+    lookup is 2N resolutions. Measured before the memo: 500 Location-less actors took 59.9 s against
+    1.07 s with Locations stated. `test_normalize.py`'s PERF GUARD says the same: per-ACTOR
+    resolution turns a ~1 s job into a ~2 min one."""
+    calls = []
+
+    def _fake_defaults(cls, project=None):
+        calls.append(cls)
+        return {("location", 0): "(X=-500,Y=-300,Z=300)"}
+
+    actors = [Actor(name=f"Cam{i}", cls="Engine.Camera", location=None) for i in range(20)]
+    args = SimpleNamespace(cmd="actor", sub="rotate", names=[a.name for a in actors], to=None,
+                           by=(D(0), D(16384), D(0)), pivot=None, pivot_actor=None,
+                           tree=None, container="c", project=None)
+    with mock.patch.object(dispatch_mod, "_class_defaults", _fake_defaults), \
+            mock.patch.object(dispatch_mod, "_resolve_project", lambda a: None):
+        rc, _ = _run(args, _level(*actors))
+    assert rc == 0
+    assert calls == ["Engine.Camera"], f"resolved {len(calls)}x for 20 actors of ONE class"

@@ -2844,7 +2844,8 @@ def _schema_resolver_for(project):
 
 
 def _default_location_for(args):
-    """`fqcn -> Decimal triple | None`, the class's default `Location`, for `best_grid_pivot`.
+    """`actor -> Decimal triple | None`, the class's default `Location`, for `best_grid_pivot` and
+    the `--by` orbit.
 
     Consulted ONLY for an actor that does not state a Location, so an ordinary rotate stays offline
     and schema-free; the cost (and the need for a resolvable package path) is paid exactly when the
@@ -2852,13 +2853,42 @@ def _default_location_for(args):
     would pivot 655 uu from where the engine puts the actor — the "the default is zero" bug
     `architecture.md` records the typed compare as existing to remove.
 
-    A class whose schema cannot be resolved raises `uprops.SchemaError`, which the dispatch wrapper
-    turns into the usual named exit 2 — no silent zero fallback."""
-    project = getattr(args, "project", None)
+    Three things this has to get right, each of which it got WRONG on arrival (build review, round 3):
 
-    def _lookup(fqcn):
-        text = _class_defaults(fqcn, project).get(("location", 0))
-        return rotation.parse_fvector(text) if text else None
+    * **Resolve the project.** `args.project` is argparse's RAW STRING; `_class_defaults` wants a
+      `config.Project`. Passing the string reached `config._composed_dirs_with_provenance` and raised
+      `AttributeError: 'str' object has no attribute 'paths'` — a traceback, exit 1, on any
+      `--project` invocation touching a Location-less actor. `Engine.Brush` without a `Location` line
+      is ordinary: 5 of the 9 committed LUM probe trunks contain one.
+    * **Memoize per CLASS.** `_class_defaults` builds a fresh resolver and package map per call
+      (~50 ms for `Engine.Camera`, 250 ms for `DeusEx.DeusExMover`), and both the pivot scan and the
+      orbit ask for the same actor — so 500 Location-less actors cost 1000 resolutions and **59.9 s**
+      against 1.07 s for the same set with Locations stated. `test_normalize.py`'s PERF GUARD says
+      this in as many words: resolving per-ACTOR turns a ~1 s job into a ~2 min one. A level has
+      5-60 distinct classes across hundreds of actors.
+    * **Name the actor on failure.** A `SchemaError` reading `class must be fully qualified: ''`
+      leaves the user to grep a 500-actor level for it, and says nothing about why a *rotate* wanted
+      the schema at all. Same remedy as `apply.py`'s `cannot verify actor 'X' — …`."""
+    memo: dict[str, tuple | None] = {}
+    resolved: list = []          # the project, resolved at most once, and only if actually needed
+
+    def _lookup(actor):
+        fqcn = actor.cls
+        if fqcn not in memo:
+            try:
+                if not resolved:
+                    # LAZY: resolving eagerly demanded a project from every rotate, including the
+                    # ones that never consult the schema — which contradicts the promise that an
+                    # ordinary rotate stays offline, and broke 25 offline tests.
+                    resolved.append(_resolve_project(args))
+                text = _class_defaults(fqcn, resolved[0]).get(("location", 0))
+            except (SchemaError, _ProjectError) as e:
+                raise _SelectionExit(
+                    f"actor {actor.name!r} states no Location, so its class default is needed to "
+                    f"place the pivot — {e}. Qualify the class as Package.Class and put its package "
+                    f"on the project's search paths, or state a Location on the actor") from None
+            memo[fqcn] = rotation.parse_fvector(text) if text else None
+        return memo[fqcn]
 
     return _lookup
 
@@ -4253,6 +4283,9 @@ def _dispatch(args) -> int:
             src.save(verb="rotate", args={"names": names, "to": [str(c) for c in args.to]},
                      level=level, touched=names)
             return 0
+        # ONE closure per invocation: it carries the per-class memo, so building a second one for the
+        # orbit doubled every class resolution (~50 ms each, 250 ms for a DeusExMover).
+        default_loc = _default_location_for(args)
         if args.pivot is not None:
             pivot = args.pivot
         elif args.pivot_actor is not None:
@@ -4261,14 +4294,18 @@ def _dispatch(args) -> int:
             except KeyError as e:
                 print(e.args[0], file=sys.stderr)
                 return 2
-            pivot = level.actors[pivot_canonical].location or (Decimal(0), Decimal(0), Decimal(0))
+            # The named actor's EFFECTIVE Location — the same answer the default pivot would give for
+            # it. `location or (0,0,0)` made one verb report two different positions for one actor
+            # depending only on whether it was named or chosen (build review, round 3).
+            pa = level.actors[pivot_canonical]
+            pivot = rotation.actor_own_pivot(
+                pa, None if pa.location is not None else default_loc(pa))
         else:
-            pivot = rotation.best_grid_pivot(targets, _default_location_for(args))
+            pivot = rotation.best_grid_pivot(targets, default_loc)
         delta_uu = tuple(rotation.uu_field(c) for c in args.by)
         # Orbit with the SAME quantized delta the actors store, via the GMath table — so Location and
         # the stored Rotation are consistent AND match what the editor renders (not float degrees).
         R = rotation.euler_to_matrix_uu(*delta_uu)
-        default_loc = _default_location_for(args)
         for actor in targets:
             _warn_rotate_postscale_distortion(actor)
             # The ORBIT reads the same EFFECTIVE Location the pivot does. Using `or (0,0,0)` here
@@ -4278,7 +4315,7 @@ def _dispatch(args) -> int:
             # (-800,200,0). Location is then always WRITTEN, exactly as `Rotation` is below: once a
             # verb has computed a new value, omitting it would re-import as the class default.
             loc = rotation.actor_own_pivot(
-                actor, None if actor.location is not None else default_loc(actor.cls))
+                actor, None if actor.location is not None else default_loc(actor))
             actor.location = rotation.rotate_point(loc, R, pivot)
             new_uu = rotation.compose_uu(delta_uu, rotation.actor_rotation_uu(actor))
             props = [(k, v) for k, v in actor.props if k != "Rotation"]
@@ -4341,6 +4378,7 @@ def _dispatch(args) -> int:
         # Same reason: `--pivot-actor` names an actor in the ALREADY-LOADED level, so resolving it is
         # as cheap as the checks above — and a typo'd pivot name must say `Actor not found: …`, not
         # blame a missing games config.
+        default_loc = _default_location_for(args)          # ONE closure = one memo (see rotate)
         pivot_actor_loc = None
         if args.pivot_actor is not None:
             try:
@@ -4348,8 +4386,10 @@ def _dispatch(args) -> int:
             except KeyError as e:
                 print(e.args[0], file=sys.stderr)
                 return 2
-            pivot_actor_loc = (level.actors[pivot_canonical].location
-                               or (Decimal(0), Decimal(0), Decimal(0)))
+            # The named actor's EFFECTIVE Location — see the same note on `actor rotate --by`.
+            pa = level.actors[pivot_canonical]
+            pivot_actor_loc = rotation.actor_own_pivot(
+                pa, None if pa.location is not None else default_loc(pa))
         # AFTER every cheap argument check above (so a bad factor, a flag conflict or an unknown
         # pivot actor reports itself, not a missing resolver) and once per invocation, not per actor.
         mover_index = _mover_index(args, "brush scale")
@@ -4381,13 +4421,12 @@ def _dispatch(args) -> int:
         elif pivot_actor_loc is not None:                # resolved above, BEFORE the class resolver
             pivot = pivot_actor_loc
         else:
-            pivot = rotation.best_grid_pivot(targets, _default_location_for(args))
+            pivot = rotation.best_grid_pivot(targets, default_loc)
         S = tuple(Decimal(c) for c in args.by)
-        default_loc = _default_location_for(args)
         for actor in targets:
             # Same EFFECTIVE Location the pivot resolved — see the note in `actor rotate --by`.
             loc = rotation.actor_own_pivot(
-                actor, None if actor.location is not None else default_loc(actor.cls))
+                actor, None if actor.location is not None else default_loc(actor))
             actor.location = tuple(pivot[i] + (loc[i] - pivot[i]) * S[i] for i in range(3))
             cur = rotation.actor_main_scale(actor)
             actor.main_scale = transform.FScale(

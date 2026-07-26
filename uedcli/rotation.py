@@ -510,9 +510,10 @@ def best_grid_pivot(actors, class_default=None):
     # Candidates carry their Name, because Name breaks ties. Brushes when the set has any.
     def _pivot(a):
         # `class_default` is resolved ONLY for an actor that does not state a Location — the schema
-        # (and so a resolvable package path) is needed exactly then, not on every rotate.
+        # (and so a resolvable package path) is needed exactly then, not on every rotate. It takes
+        # the ACTOR, not the class name, so a schema failure can name the actor the user has to fix.
         return actor_own_pivot(a, None if a.location is not None or class_default is None
-                               else class_default(a.cls))
+                               else class_default(a))
 
     own = [(a.name or "", _pivot(a)) for a in actors if a.brush is not None]
     if not own:
