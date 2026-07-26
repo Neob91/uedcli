@@ -1616,3 +1616,26 @@ the way it now does.)
     checkout's reality), and a durable record that is one `.py` file, so deleting the spec would
     delete the census, the enum dumps and the oracle tables. Fixed by §0a's count-stability rule and
     S6's spike markdown, with S7's deletion gated on the latter.
+
+
+---
+
+## Plan review round 1 (2026-07-26, 1 cold Opus) — BLOCKING findings
+
+Ran because the scope was widened with `S2b`. Reviewed whole-plan. Fix before building; resolving
+these changes the artifact, so **round 2 (1 Opus) is owed**.
+
+| # | Defect
+|---|---
+| 1 | **BLOCKING — the offline-corpus foundation is stale. `<repo>/Textures/` does not exist.** The plan says "the tool lives at `…/DX/LUM/Tools/uedcli`, the git repo root is `…/DX/LUM`". uedcli is now its **own repo** at `~/Documents/Dev/uedcli`; `git ls-files Textures` is **empty**, and the proposed `repo_texture_root() = parents[4]/"Textures"` resolves to `/home/neob91/Documents/Textures`. This kills S1's clause explicitly flagged as *"the offline criterion for the bug that motivates the whole build"*, and S6's second offline root. **Worse, S1's fixture provenance argument is now false**: the payload was justified as "lifted from the repo's own **tracked** `Textures/LUM_CoreTex.utx` … already in git — no third-party redistribution". It is no longer in git, so committing it would redistribute user-supplied game content. **Needs an owner ruling on where the offline payload comes from.**
+| 2 | **The plan directs the builder to APPEND to `decisions.md`, which is FROZEN** ("DO NOT APPEND", and `CLAUDE.md`: "There is NO decisions ledger"). S7's final act is therefore a rule violation, and every "recorded in `decisions.md` 2026-07-25" citation in §0c/§0d is a dangling pointer. Decisions now split: owner's → `direction/` (with explicit yes), agent's → `rationale/`
+| 3 | **S7 orders an unconfirmed edit to a protected `direction/` doc, and names the wrong file.** `direction.md`'s asset-catalog section is now a MIGRATED stub; the text lives at `direction/asset-catalog.md:16`, which may never be written without the owner's yes + a `Confirmed:` trailer
+| 4 | **The plan does not implement its spec's owner-directed MESH-SKIN requirement** (spec header, ADDED 2026-07-26: every format must be reachable from the skin path, with one mesh-skin case, and the typed failure must name the offending skin ref). The plan contains zero mesh/skin content. **And S2 silently breaks two committed harnesses**: `spikes/2026-07-25-native-mesh-decode/harness/render_class.py:91` and `render.py:91` both do `got = tres.resolve(...)` then `if got:` — a typed error object is **truthy**, so they would accept an error as a decoded skin. Neither is in §1's changed or deliberately-untouched lists
+| 5 | **S2b (the slice added for the preview) has no Done-when, no tests, and no doc obligations** — every other slice has all three. And `texture_has_bMasked` has **no offline test path at all**: `pkgfixture_proto.texture_package()` takes no `bmasked=` parameter, neither committed fixture carries the flag, and the game corpus is gitignored. As written the predicate can ship untested
+| 6 | **S2b is not self-contained at its position** — it references a typed-result `array: mips \| comp-mips` field that S4 introduces, two slices later. At S2b's position only P8 decodes, so any `CompMips`-only texture is an `unverified-format` error until S4
+| 7 | **`texture_has_bMasked(ref)` violates `conventions.md`'s predicate rule** — "A predicate answers or it RAISES; 'Don't know' is never returned as `False`", with "returning `False` for don't-know" explicitly Rejected. And S2's result already carries the `bMasked` flag, so this is a second way to ask one question — against the "one API change, not two" argument that justified folding it in
+| 8 | **§0 still says "Seven slices" and the ordered slice block omits `S2b`** (the board says "Eight" then lists seven). A builder sequencing off §0 skips it entirely
+| 9 | **The headline "THE LIMIT" is stated more strongly than S3 implements**, and S5/S7 order the overstatement into the durable engine-fact docs. A code-less BC2/BC3 whose chain *also* fits `linear1` falls to row 7 and decodes as **P8 — a confident wrong image**. Not a corner: `uwindow.u:WhiteTexture` is exactly that shape, and 1,137 UED22 + 5,826 Unreal Gold chains are too. Needs its scope: *…whose chain fits `bc16` **uniquely***
+| 10 | **Eight stale `test_actor_preview.py` anchors** (~40 lines of drift): `_FakeResolver` is at **392** (plan: 352), `resolve_masked` **399** (359), `exists` **402** (362), 4-tuples **414/501** (374/463), `"not P8-decodable"` **444** (405). Every `utexture.py`, `pkg_write.py`, `test_utexture.py`, `preview_native.py`, `architecture.md` and board anchor checked out exact
+| 11 | **§0b's reproduced house rules are stale, and the plan tells the builder not to open `CLAUDE.md`.** Missing: **feature worktrees** (this is an 8-slice feature; §0b instead says "push after committing", the non-feature path), the decisions-ledger retirement, the `direction/` write protection, and the 2026-07-26 rule that owner decisions go through the question widget
+| 12 | **`.gitignore` claim wrong** — §0a says the `uned/DeusExAssets` symlink "is itself gitignored (`.gitignore:9`)"; it is **tracked**, and `.gitignore:9` is `_scratch/`
