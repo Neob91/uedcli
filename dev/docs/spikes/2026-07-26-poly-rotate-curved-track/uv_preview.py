@@ -96,7 +96,8 @@ def frame_one_tile(vs, orthogonalise: bool):
     """`align one-tile` — spec §2.6. Direction from the projection family; density fit to the face.
 
     `orthogonalise=False` is the ruling as originally worded ("normalised"), which leaves a SKEWED
-    pair; True is the corrected form (keep V for the up-vector, U = V x N)."""
+    pair; True is the corrected form: keep V for the up-vector and Gram-Schmidt U against it
+    (U = normalize(U - V(U.V))). NOT U = V x N, which picks its own sign and mirrors the image."""
     N = face_normal(vs)
     axis = max(range(3), key=lambda i: (abs(N[i]), -i))
     iu, iv = PROJECTED[axis]
@@ -236,7 +237,7 @@ def build():
           "the grid is a rhombus. This is the defect all three reviewers found.",
           corner, frame_one_tile(corner, False))
     scene("onetile-ortho", "one-tile on a corner face — ORTHOGONALISED (adopted)",
-          "Keep V for the up-vector, set U = V × N. Square grid, upright F, and the predictable "
+          "Keep V for the up-vector and Gram-Schmidt U against it. Square grid, and the predictable "
           "up-vector the ruling was for is preserved.",
           corner, frame_one_tile(corner, True))
 
