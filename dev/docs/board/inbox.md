@@ -5,6 +5,28 @@ lands here first, with no obligation to know its stage yet. This is the *pre-pip
 stage (so no `to-` prefix). See [`README.md`](README.md).
 
 **Triage** routes each item to where its next action lives:
+- `p1` `[spec]` **`class list`/`--subclass-of` enumerates classes from packages with NO loadable v69
+  stub, and two package views disagree.** Deliberately left out of the 2026-07-26 unified-asset-catalog
+  spec revision (owner's call) — recorded here because it is real and the spec now says so in §14.
+  The friction log calls it *"the worst-shaped defect I hit"*
+  (`spikes/levelbuild-friction/agent-reports.md`, two independent entries):
+  - `class list --flat --subclass-of DeusEx.DeusExDecoration` lists `Endemia.Ashtray`,
+    `Endemia.GlassBottle`, `Endemia.WoodStool1`, `TNM.NapalmCanister` … interleaved with usable
+    `DeusEx.*` classes, **unmarked**. Every `actor build | actor add` of one printed `added 1 actor(s)`
+    and exited 0. The level then failed EVERY materialize with `level references v68 code package(s)
+    with no v69 stub: Endemia`, i.e. the trunk was poisoned and the only clue was the package name in
+    an error twenty minutes downstream.
+  - The failure has an **opposite, worse shape under stderr suppression**: a previous session's helper
+    redirected stderr, so ~15 props were a silent no-op — the bar shipped with no stools and no
+    bottles and nobody noticed until a render.
+  - **Internal inconsistency, independent of the above:** unfiltered `class list --flat` reports the
+    substrate packages as `DeusEx, DXOgg, Engine, TNM` — `Endemia` is absent — yet `--subclass-of`
+    returns `Endemia.*`. Two views of one catalog disagree about whether a package exists. This one is
+    arguably a plain bug rather than a design question.
+  The log's suggested fixes, in its own order of value: (1) reject the class at `actor build` with the
+  message materialize already produces; (2) mark or omit unstubbed packages in `class list`; (3) a
+  `level doctor` check for "trunk references a package with no v69 stub", catchable offline in a second.
+  The spec mentions stub/v68/v69 **zero times**. *(2026-07-26.)*
 - `p1` `[OWNER — confirm]` **Texture GROUP is a first-class fact — proposed `direction/asset-catalog.md`
   addition.** Decided 2026-07-26 and already written into
   `specs/2026-07-25-unified-asset-catalog.md` §4c, but absent from the direction topic, so the

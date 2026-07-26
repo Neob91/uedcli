@@ -386,6 +386,36 @@ and interpenetrate. The only way to read a default today is the three-command de
 **mesh bbox × `DrawScale`, `CollisionRadius`/`CollisionHeight`, and `PrePivot`/origin offset**. The
 mesh decoder already produces the bbox; the rest are class defaults.
 
+**`class show` prints every property's resolved DEFAULT — not just the placement three.** Today it
+prints names and types only (`AmbientBrightness: ByteProperty`), and `actor prop get` prints only
+properties that were explicitly *set*, so a freshly placed actor appears to have no properties at all.
+Between them there is **no way to answer "what value does this property start at"** without the
+`actor build | actor add - | actor prop get -` detour named above — which needs a trunk, writes a
+throwaway actor into the user's level, and answers one property at a time. Measured cost: an agent
+diagnosing a room that had gone fullbright immediately after 8 `Engine.ZoneInfo` actors were placed
+spent **over an hour** on `AmbientBrightness`, per-light radii and polyflags before the real cause
+turned out to be elsewhere entirely — and the answer it needed (`AmbientBrightness` defaults to **0**,
+so a fresh `ZoneInfo` adds no ambient at all) would have eliminated its prime suspect in seconds.
+
+So `class show` reports the **resolved default beside each property**: `AmbientBrightness: ByteProperty
+= 0`. Resolution walks the inheritance chain exactly as `uprops.resolve_class_defaults` already does,
+so an inherited default is reported with the class it came from when that differs from the class asked
+about. A property with no default anywhere reports its type's zero value, marked as such — never blank,
+which reads as "unknown".
+
+This is **not new machinery**: prerequisite 1 already persists these defaults precisely because the
+class arm needs them corpus-wide, so the values are in the cache regardless. It is an output change
+over data the catalog is already paying to have. It also removes the documentation workaround this
+detour currently lives in — one parenthetical inside the DX class catalog, which is where an agent
+looking for lighting behavior does not look.
+
+**A class that declares no own properties says so.** `class show DeusEx.DataCube` prints a header, a
+superclass chain and `(+142 inherited, in 16 more categories: …)` — and **no property names**, because
+`DataCube` declares none of its own. The output is indistinguishable from "this property does not
+exist", and the bare category list gives no clue which of the 16 holds the one you want. When a class
+has zero own properties, `show` prints an explicit one-line hint naming the two ways through
+(`--depth all`, or `--category NAME`), rather than leaving an empty space to be misread.
+
 **`placeable` keeps ONE definition — the existing file-fact proxy** (`classindex.is_placeable`:
 non-abstract, descends from `Actor`), and its `--help` is corrected to say exactly that rather than
 implying judgement. *No histogram, no derived "commonly placed"* (decision 1). Whether something is
@@ -553,6 +583,11 @@ forces `UEDCLI_SCHEMA_CACHE=off`, so class-adapter tests exercising the cache pa
   `DT_Brush`/`DT_None` → no preview, editor-icon sprites flagged and skipped by `prewarm`;
   `list`/`search` **never render** (a cold `class list --json` completes producing no artifact);
   `class show` reports bbox/collision/pivot; `class list` stays offline and maps-free.
+- **Class defaults in `show` (§6):** `Engine.ZoneInfo.AmbientBrightness` reports `= 0` — the exact
+  regression that cost an hour, asserted against a committed fixture so it holds offline; an
+  *inherited* default names the class it came from; a property with no default reports its type's zero
+  value marked as such, never blank; a class declaring **zero own properties** emits the
+  `--depth all`/`--category` hint rather than an empty property list.
 - **Search ranking (§5b):** tokenization of `ClenGrayMetal_A`; field weights; `texture search wall`
   ranks walls first over a zero-classification corpus.
 - **CLI:** `show` vs `preview` output shapes; `preview` emits `<ref>\t<path>`; `--json` carries
@@ -582,8 +617,17 @@ discarded whenever a ref came out 2-part, which hid `Ladder`-group membership, i
 climbability; (2) **§3b** pins the pixel-hash identity as load-bearing and **frozen**, with the
 corollary that adding a *fact* never re-keys a shard while changing the *decoder* re-keys all of them;
 (3) **§4d** adds `masked` as a texture fact — **read from the texture export's stored flag**, set at
-import in UnrealEd, never inferred from the palette. §3a's row shape and §12's coverage list were
-updated to match. A `spec` round is owed on this
+import in UnrealEd, never inferred from the palette; (4) **§6** makes `class show` print each
+property's **resolved default** (the spec previously named the trunk-requiring `actor build | actor
+add - | actor prop get -` detour as a problem, then fixed only the three placement fields), and makes a
+class with no own properties say so instead of printing nothing. §3a's row shape and §12's coverage
+list were updated to match.
+
+Findings (3) and (4) came from `spikes/levelbuild-friction/agent-reports.md`, i.e. from agents using
+the current tool on real levels rather than from cold review — a source none of the four rounds below
+had. **One catalog-shaped finding from that log is deliberately NOT specced**: `class list --subclass-of`
+enumerates classes from packages with no loadable v69 stub (the `Endemia.*` case), which the log calls
+the worst-shaped defect it hit. Owner's call, 2026-07-26; logged on `board/inbox.md` so it is not lost. A `spec` round is owed on this
 revision before the plan is re-cut (`CLAUDE.md` "Review gates"); it is logged on `board/inbox.md`.
 
 **Round 1 (2026-07-25, 2 cold reviewers)** — 21 findings, all folded: the false "reads `.dx` natively"
