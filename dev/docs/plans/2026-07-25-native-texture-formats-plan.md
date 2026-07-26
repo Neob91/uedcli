@@ -87,7 +87,7 @@ is classified**, and treat "which mip array wins" and "what the mask means" as s
 
 ## 0. Shape of the build
 
-**EIGHT slices** (`S1 S2 S2b S3 S4 S5 S6 S7`), **each one commit whose tests pass with no NEW skips versus the pre-slice baseline.**
+**NINE slices** (`S1 S2 S2b S2c S3 S4 S5 S6 S7`), **each one commit whose tests pass with no NEW skips versus the pre-slice baseline.**
 
 **Re-measure the baseline at the start of S1 — do not trust a number written here.** The tree moves
 under this plan (concurrent sessions land tests continuously), so the *passed* count is stale by the
@@ -109,6 +109,16 @@ plan recorded 2389 and 2394 — which is exactly why the instruction above repla
 
 Order is **value-first**: the live bug (69 textures invisible across Deus Ex + LUM, 30 of them in
 the project's own `LUM_CoreTex.utx`) is fixed in S1, before any new pixel format is decoded.
+
+> **PROPAGATED 2026-07-26 (plan review round 2).** §0a's correction removed `<repo>/Textures/` and
+> `repo_texture_root()`, but eight later clauses still called them — including S1's own "offline
+> criterion for the motivating bug". **That criterion now has a home that actually exists:** the
+> synthesized `CompMips` fixture (S1) is parsed EOF-clean and its texture decodes, offline, on a bare
+> checkout. That is the same defect class — a second mip array making the body parse overrun — pinned
+> without any game content. **The `LUM_CoreTex.utx` 30 → 0 count is now INTEGRATION-tier**, since that
+> file is reachable only through the gitignored install. Every clause that named
+> `conftest.repo_texture_root()` reads the synthesized fixture instead; every clause that asserted the
+> 30 → 0 count carries the `integration` marker.
 
 ```
 S1  CompMips: parse BOTH mip arrays; prefer Mips     <- fixes the live bug, 69 textures
@@ -133,7 +143,8 @@ S7  Docs, board, spec deletion
 > argument — the payload was justified as "lifted from the repo's own **tracked** `Textures/LUM_CoreTex.utx`
 > … already in git, no third-party redistribution", and it is no longer in git. **Owner ruling
 > 2026-07-26: offline fixtures are SYNTHESIZED from scratch, never lifted from game content.**
-> `pkgfixture_proto.texture_package(...)` already builds packages byte-wise; extend it to emit the
+> `pkgfixture.texture_package(...)` (the module S1 promotes out of the spike prototype — extend the
+> PROMOTED module, not the prototype) already builds packages byte-wise; extend it to emit the
 > layouts under test (`CompMips`, BC1/2/3 chains, and a `bMasked` flag — see S2b). *Rejected:
 > committing small real excerpts* — that redistributes copyrighted game content the `.gitignore`
 > rules exist to keep out. *Rejected: making those tests integration-only* — the motivating bug would
@@ -143,11 +154,11 @@ A fresh checkout on another machine has only the **committed** rows.
 
 | corpus                             | path | committed? |
 |------------------------------------|------|---|
-| **Deus Ex install**                | `/home/neob91/Games/LutrisDX/drive_c/DX/{System,Textures,Maps}` | **no** — it sits *outside* the repo (the repo root is a subdirectory of it). Reachable in-tree only through the symlink `Tools/uedcli/uned/DeusExAssets → /home/neob91/Games/LutrisDX/drive_c/DX`, which is itself **tracked** (`git ls-files uned/` lists it; `.gitignore:9` is `_scratch/`, not this). |
+| **Deus Ex install**                | `/home/neob91/Games/LutrisDX/drive_c/DX/{System,Textures,Maps}` | **no** — it sits *outside* the repo (the repo root is a subdirectory of it). Reachable in-tree only through the symlink `<repo>/uned/DeusExAssets → /home/neob91/Games/LutrisDX/drive_c/DX`, which is itself **tracked** (`git ls-files uned/` lists it; `.gitignore:9` is `_scratch/`, not this). |
 | **The project's own textures**     | `/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Textures/*.utx` — notably `LUM_CoreTex.utx` (17 MB) | **PARTLY.** `git ls-files Textures/` lists four packages: `France.utx`, `LUM_CharacterTex.utx`, `LUM_CoreTex.utx`, `LUM_InfoPortraits.utx` (384 `Texture` exports). `CoreTexSky.utx` + `CoreTexWater.utx` are in the same dir **untracked** (34 more), and sessions add content there. See the count-stability rule below |
 | **Unreal Gold** (227i-patched; its `System/Engine.u` is still the stock 8-slot build) | `/home/neob91/Games/Unreal/pfx/drive_c/Unreal` | **no** — outside every repo, and there is **no in-tree pointer to it at all** |
-| **UED22 editor substrate**         | `Tools/uedcli/uned/UED22/` — 214 tracked files, 34 of them packages this parser reads, 1,998 `Texture` exports | **yes** |
-| **Existing fixtures**              | `Tools/uedcli/uedcli/tests/fixtures/{CoreTexWater,LUM_InfoPortraits}.utx` | **yes** |
+| **UED22 editor substrate**         | `<repo>/uned/UED22/` — 214 tracked files, 34 of them packages this parser reads, 1,998 `Texture` exports | **yes** |
+| **Existing fixtures**              | `<repo>/uedcli/tests/fixtures/{CoreTexWater,LUM_InfoPortraits}.utx` | **yes** |
 
 **Offline vs integration is decided entirely by that column.** Every corpus-wide criterion over the
 Deus Ex install or the Unreal Gold install is `-m integration`; everything else must run against
@@ -229,8 +240,8 @@ PATH; the venv self-creates on first run. Extra args pass straight through, and 
 path-qualified because bare `test` is a shell builtin:
 
 ```
-cd Tools/uedcli && bin/test              # the whole offline suite
-cd Tools/uedcli && bin/test -k texture -x
+bin/test   # from the repo root              # the whole offline suite
+bin/test   # from the repo root -k texture -x
 ```
 
 Tests marked `-m integration` need material a fresh checkout does not have; `pytest.ini` carries
@@ -554,7 +565,7 @@ engine builds agree on, plus an explicit "everything else is out of our depth".
    needs:
 
    ```
-   cd Tools/uedcli && .venv/bin/python \
+   cd <repo> && .venv/bin/python \
        dev/docs/spikes/2026-07-25-native-texture-formats/pkgfixture_proto.py
    ```
 
@@ -902,9 +913,27 @@ Lands the two test enablers:
   `sys.path` shim and its `main()` self-check; keep `texture_package()` and its keyword surface,
   which every offline Done-when below is written against.
 - **`uedcli/tests/fixtures/LUM_CompMips.utx`** — a ~10 KB package whose single texture is
-  `ClenGreyWndow_C`'s **real** payload (64×64 P8 chain to 1×1 + its 7-mip DXT1 `CompMips` + its
-  256-entry palette) lifted out of the repo's own tracked `Textures/LUM_CoreTex.utx`.
-  Project-authored content already in git — no third-party redistribution. The lift script goes into
+  **OWNER RULING 2026-07-26 — the payload is OUR OWN ARTWORK, compressed by a THIRD-PARTY encoder.**
+  Not lifted from game content (that is no longer in this repo and would be redistribution), and not
+  round-tripped through our own compressor either. The independence D7's oracle needs comes from the
+  *encoder* being outside our control, not from the *artwork* being someone else's:
+
+  - author a small source image in-repo (deterministic, generated by the fixture script);
+  - build its P8 mip chain ourselves — that half is not the thing under test;
+  - compress the same image to DXT1 with a **named, pinned, third-party encoder**, and commit the
+    resulting blocks as the `CompMips` payload.
+
+  S4's cross-check (decode our `CompMips` with the new BC1 code, compare against the P8 chain, mean
+  absolute channel error ≤ 8/255) then still tests **our decoder against someone else's compressor**,
+  which is exactly what it was for. *Rejected: swapping the artwork inside the real file but keeping
+  our own compression* — no copyrighted bytes, but the check compares our compressor against our
+  decompressor and passes even when both are wrong the same way, which is the one thing D7 exists to
+  rule out. *Rejected: committing the genuine payload* — strongest technically, but it ships
+  copyrighted content the ignore rules exist to keep out.
+
+  **The encoder must be named and pinned in the fixture script**, with its version recorded, so the
+  committed blocks are reproducible and the oracle's independence is auditable. The build script goes
+  into
   the commit (as a documented function in `pkgfixture.py`, or beside the spike); it must not live
   only in `_scratch/`.
 
@@ -1107,7 +1136,8 @@ the slice stays a self-contained green commit.
 
 **Done when**
 
-- `pkgfixture_proto.texture_package(...)` gains a **`bmasked=`** parameter and can emit a package
+- `pkgfixture.texture_package(...)` — the S1-promoted module, **not** the spike prototype — gains a
+  **`bmasked=`** parameter and can emit a package
   whose `Texture` export carries the `bMasked` bool. This is a prerequisite, not a nicety: **neither
   committed fixture carries the flag** (measured: `CoreTexWater.utx` 2 textures / 0 masked;
   `LUM_InfoPortraits.utx` 1 / 0) and the game corpus is gitignored, so without it the flag ships
@@ -1147,12 +1177,22 @@ Under S2's return-type change each would accept an **error** as a decoded skin a
 `745d0fa` "Gate textured class previews on native texture decode; error on an undecodable skin" — so
 this is live scope. Neither file appears in §1's *Changed* map nor its *Deliberately untouched* list.
 
+> **ORDERING CORRECTED 2026-07-26 (round 2).** The two harness migrations move **into S2**, the slice
+> that breaks them — leaving them here would ship two commits with two committed callers silently
+> broken, against §0's per-slice-green contract and `rules/spikes.md`'s "harnesses are durable
+> evidence". And "one mesh-skin case for every format" cannot be met at this position, since BC1 is
+> S4 and BC2/BC3 are S5: that clause moves to **S5's** Done-when, where every format exists.
+
 **Done when**
 
-- Both harnesses are migrated to the typed result and **fail loudly** on an error rather than
-  treating it as an image; each names the offending skin ref in its message.
-- One mesh-skin case is covered for every format this build adds, per the spec's requirement — not
-  only surface reads.
+- *(moved to S2)* Both harnesses are migrated to the typed result and **fail loudly** on an error
+  rather than treating it as an image; each names the offending skin ref in its message.
+  (`render.py:91`, `render_class.py:92`.)
+- *(moved to S5)* One mesh-skin case is covered for every format this build adds, per the spec's
+  requirement — not only surface reads.
+- §1's module map lists both harness files, and §6 states explicitly what of the skin path is out of
+  scope. **These are plan edits made NOW, not build steps** — a Done-when satisfied by editing a
+  document S7 deletes is not a criterion.
 - §1's module map lists both harness files, and §6 states explicitly what of the skin path is *not*
   in scope.
 
