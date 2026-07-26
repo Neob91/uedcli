@@ -24,6 +24,6 @@ Siblings: `../rationale/` (why the code is that way — agent-owned), `../archit
 | `generators.md` | stateless T3D producers | *(pending)* |
 | `packages.md` | one package-format core | *(pending)* |
 | `asset-catalog.md` | texture / class / sound / music; the tool does not infer | *(pending)* |
-| `terminology.md` | level vs map file vs T3D tree vs folder | *(pending)* |
+| [`terminology.md`](terminology.md) | level, map file, T3D tree, folder, label | ✅ |
 | `conventions.md` | no back-compat cruft; explicit, discoverable, model-side | *(pending)* |
 | `process.md` | how the project is run — gates, worktrees, the docs model | *(pending)* |

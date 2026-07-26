@@ -115,6 +115,9 @@ either old file is deleted.
 |--------------------------------------------------|--------------------------|---
 | 2026-06-23 — uedctl is a generic UnrealEngine-1 tool | `direction/scope.md` | intent; its `Rejected` ("treating uedctl as a Deus Ex tool") carried over verbatim. Its `Refs:` cited `specs/2026-06-23-uedctl-new-level-authoring-design.md`, **deleted** — dropped rather than carried dangling |
 | 2026-06-30 21:07 — config key is `game`, not `substrate` | `direction/scope.md` | intent; refines the above. Both `Rejected` bullets carried over |
+| 2026-06-23 — Terminology: "level" = content, "map file" = the artifact | `direction/terminology.md` | intent; both `Rejected` bullets carried over. `Refs:` cited the same **deleted** new-level-authoring spec — dropped, not carried dangling |
+| 2026-07-22 20:49 — actor `label` dimension | `direction/terminology.md` (glossary) + `direction/organization.md` (the feature, Task 5) | its "internals stay label-named pending a rename" clause did NOT survive — superseded below |
+| 2026-07-25 18:40 — preview internals renamed `annotation*`; drawing keeps "label" | `direction/terminology.md` | supersedes the clause above; only the CURRENT answer is stated, which is what revise-in-place means |
 | *(remaining entries populated by Tasks 4–7)* | | |
 
 ---
