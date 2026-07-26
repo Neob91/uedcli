@@ -54,8 +54,8 @@ Textured faces extend that same `render_data` channel (§6).
    break. Matches the existing `--brush-colors {csg,legend}` style.
 2. **A textured face is shaded as `level preview --native` shades it** (§4.1) — same key-light term,
    nearest-neighbour fetch, Euclidean wrap, `DEFAULT_GREY` for an untextured face. *Rejected:
-   unlit/full-bright sampling.* **Two declared divergences**, both deliberate and both listed in §4.9:
-   masking (2.3) and mip selection (§4.4).
+   unlit/full-bright sampling.* Every divergence from `--native` is deliberate and enumerated in
+   §4.9 — nothing diverges by accident.
 3. **Cut-outs are honoured, but ONLY on a genuinely masked face** (§4.3). A face masks iff its poly
    carries `PF_Masked` (`0x2`) **OR** its texture was imported masked — per `unrealed/quirks.md`
    (🔬 2026-07-26): *"`Masked` is a property of the TEXTURE, set at import — and a texture's flags are
@@ -195,8 +195,8 @@ guard and treat the face as untextured (`CLAUDE.md`: no Python exception reaches
 |----------------------------------------------------------|---
 | face is masked (§4.3a) **and** `mask[…] == 0` at this texel | **pixel not written, and depth NOT written** — a face behind shows through the hole
 | face is NOT masked                                       | index 0 is an ordinary palette colour and draws normally
-| poly has no `Texture`                                    | `DEFAULT_GREY = (128,128,128) × shade` — matches `render.rs`'s `tex_index < 0` path
-| ref present but unresolvable / non-P8 / imported palette | `preview_native._checkerboard()` (64², magenta/black) `× shade`, plus **one** stderr warning per distinct ref
+| poly has no `Texture`                                    | `DEFAULT_GREY = (128,128,128) × shade` — matches `render.rs`'s `tex_index < 0` path. A genuinely untextured poly is normal, not an error
+| ref present but unresolvable / non-P8 / imported palette | **clean exit 2 naming the offending ref**, before anything is rendered (§8). No checkerboard, no partial render
 
 Not writing depth on a masked texel is the point: writing it would punch a same-shaped hole in
 everything behind.
@@ -312,6 +312,8 @@ Decision 2.2 says "as `--native` shades it". These are the exceptions, **all del
 | 3 | **Precision** — `render.rs` is f32; this is f64. Byte-identity is not claimed (§4.1)
 | 4 | **`PF_Invisible`** — `preview_native.build_scene` drops those polys. This tier **also drops them** under `flat`/`textured` (an invisible face must not become an opaque occluder). Under `wire` they keep drawing, unchanged
 | 5 | **Projection** — ortho vs perspective, hence affine UV (§4.2)
+| 6 | **Unresolvable refs** — `--native` checkerboards the face and warns once; this tier **exits 2** (§8). `conventions.md` rejects warn-and-continue, so this tier conforms and `--native` does not; that is logged against `--native`, not softened here
+| 7 | **Scaled brushes** — both reject them; `--native` via `_reject_scaled`, this tier via §4.2. Listed for completeness, as it is a divergence in *message*, not behaviour
 
 ### 4.10 Draw order within a pane
 
@@ -360,7 +362,7 @@ its four consumers. Only a non-`None` value alongside `--faces textured` trigger
 | `world_uv_frame`, `tex_basis_default`, `newell` move to a shared module, imported by BOTH `preview_native.py` and the fill path. `preview._face_normal` is **deleted** and re-imported from here — it is already byte-identical to `_newell`, and §6 exists to stop exactly that duplication | new `uedcli/texframe.py` (stdlib-only, no `uedcli_native` import)
 | `TextureResolver.resolve_mips(ref)` → `list[tuple[int,int,bytes,bytes]] \| None` (all mips, masked; `None` on any miss, matching `resolve`). Must reject a truncated mip chain rather than let `mip0_to_rgb` raise `IndexError` | `uedcli/utexture.py`
 | a `texture_is_imported_masked(ref)` predicate (**blocked, §11**)             | `uedcli/utexture.py`
-| resolve each distinct face ref; warn once per unresolvable ref; the three exit-2 validations | `uedcli/dispatch.py`
+| resolve + decode each distinct face ref; collect unresolvable ones and raise the exit 2; the four exit-2 validations | `uedcli/dispatch.py`
 | `--faces` parsing; `--brush-colors default=None`; the corrected `help=` strings | `uedcli/cli.py`
 | the scanline fill, CSG-aware cull, depth buffers, focus two-pass, mip pick, texel loop | `uedcli/preview.py`
 | `--faces` threaded through `render_brushes_pgm` / `render_quad_pgm` / `_render_breakdown_grid` | `uedcli/preview.py`, `uedcli/dispatch.py`
@@ -373,11 +375,11 @@ dataclass:
 PreviewData(points: dict[str, PointRender], faces: FaceTextures | None)
 FaceTextures:  by_ref:   dict[str, list[tuple[int,int,bytes,bytes]]]   # ref → mip pyramid (rgb, mask)
                masked:   dict[tuple[str,int], bool]                    # (actor, poly_idx) → §4.3a
-               fallback: list[tuple[int,int,bytes,bytes]]              # the checkerboard pyramid
 ```
 
-A face's texture is looked up by its `poly.texture` ref; a ref absent from `by_ref` uses `fallback`;
-`poly.texture is None` means `DEFAULT_GREY`. Existing call sites move from `render_data[name]` to
+A face's texture is looked up by its `poly.texture` ref. Every ref present in the set is guaranteed
+to be in `by_ref` — an unresolvable one exits 2 before rendering (§8), so there is no fallback slot
+and no missing-key path. `poly.texture is None` means `DEFAULT_GREY`. Existing call sites move from `render_data[name]` to
 `render_data.points[name]` — a mechanical change with no behaviour effect, and the reason the shape is
 specified here rather than left to the plan.
 
@@ -427,16 +429,21 @@ progress output. Mip selection (§4.4) is the only cost control.
 | `--faces textured` + explicit `--brush-colors`         | exit 2 naming both flags and the conflict
 | `--faces flat\|textured` + a **scaled** brush          | exit 2 naming the offending actor and its scale (§4.2)
 | **no usable texture resolver** + `textured`            | exit 2 naming **which** cause applies — `_texture_resolver` returns `None` for three distinct reasons (no user games config; a `ConfigError`; an empty composed file list), all reachable *with* a valid project, so a generic "no project" message would violate "naming the offending value". `wire`/`flat` are unaffected
-| a face's `Texture` ref does not resolve                | checkerboard + **one** stderr warning per distinct ref
+| a face's `Texture` ref does not resolve                | **exit 2 naming that ref**, listing every unresolvable ref in the set (not just the first) so one run fixes them all
+| non-P8 / imported palette / truncated mip chain        | same — exit 2 naming the ref and which of those applies, never an exception and never a partial render
 | a face has no `Texture` at all                         | `DEFAULT_GREY × shade`, silently — a genuinely untextured poly is normal
-| non-P8 / imported palette / truncated mip chain        | treated as unresolvable (checkerboard + warning), never an exception
 
-**One deviation is declared rather than claimed away.** The per-ref checkerboard-and-continue is a
-warn-and-continue fallback, which `direction/conventions.md` lists under **Rejected**. It is kept
-because `preview_native._TextureTable` already does exactly this and divergence between the two
-renderers would be worse — but this spec does **not** claim it "needs no direction-tree change".
-Round 1 was right to flag the earlier wording as overstated; the deviation is logged on
-`board/inbox.md` for an owner ruling and a `rationale/preview.md` entry either way.
+**Every failure here refuses; none degrades.** `direction/conventions.md` lists warn-and-continue
+under **Rejected** ("a half-answer that looks like a full one is worse than a refusal; the note
+scrolls away"), and a textured render whose faces are secretly checkerboards is exactly that — the
+picture looks like an answer. Validation runs in `dispatch` **before** any pixel is drawn, so the
+failure is a refusal rather than a half-finished image.
+
+This makes `--faces textured` **stricter than `level preview --native`**, which today checkerboards
+an unresolvable ref and warns once (`preview_native._TextureTable`). That inconsistency is real and
+now runs the other way; it is `level preview --native`'s behaviour that does not match
+`conventions.md`, and changing an existing verb is out of scope here. Logged on `board/inbox.md` as
+its own item — **not** as a reason to weaken this spec.
 
 ## 9. Tests
 
@@ -459,7 +466,8 @@ Round 1 was right to flag the earlier wording as overstated; the deviation is lo
 | each of `_texture_resolver`'s three `None` causes produces a message naming that cause   | §8
 | `stash preview` / `prefab preview` accept `--faces`; `--prefab-dir` + `textured` exits 2 | §3, §5
 | `--layout quad` and `--layout breakdown` both render under `flat` and `textured`         | untested layouts in round 1
-| unresolvable ref → checkerboard + exactly ONE warning for N faces sharing it              | the warn-once contract
+| an unresolvable ref exits 2 naming it, lists ALL unresolvable refs, and writes no image        | §8 — refuse, never degrade
+| a non-P8 / imported-palette / truncated-mip texture exits 2 naming which applies                | §8, the same refusal path
 | non-finite UV and a truncated mip chain produce a clean result, never a traceback         | `CLAUDE.md`'s no-exception rule
 | a golden PNG of a textured cube, blessed like `native_preview_golden.png`                 | end-to-end pixel stability
 | `uedcli/texframe.py` imports nothing outside stdlib + uedcli                               | §0's no-cargo constraint, tested where it can actually regress

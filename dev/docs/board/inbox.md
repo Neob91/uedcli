@@ -106,16 +106,15 @@ stage (so no `to-` prefix). See [`README.md`](README.md).
   Without it, closed runs cannot name a seam, which makes `--fit-perimeter` unreachable and drops the
   shipped cylinder-wrap workflow.
 
-- `p2` `[OWNER — confirm]` **`--faces textured`'s per-ref checkerboard is a `conventions.md`-Rejected
-  warn-and-continue.** [`specs/2026-07-26-actor-preview-textured-faces.md`](../specs/2026-07-26-actor-preview-textured-faces.md)
-  §8. When ONE face's texture ref won't resolve, the render continues with a checkerboard on that face
-  plus a warn-once on stderr. `direction/conventions.md` lists exactly that shape under **Rejected**
-  ("Graceful degradation … plus a stderr note, exit 0 — a half-answer that looks like a full one is
-  worse than a refusal; the note scrolls away"). It is kept because `preview_native._TextureTable`
-  already behaves this way and a divergence between the two renderers would be worse. Spec review
-  round 1 flagged the earlier "needs no direction-tree change" wording as overstated, so this is now
-  logged rather than asserted away. **Ruling needed:** bless the deviation (→ a `rationale/preview.md`
-  entry), or make an unresolvable ref exit 2 like the no-resolver case. *(2026-07-26.)*
+- `p2` `[debug]` **`level preview --native` checkerboards an unresolvable texture ref and warns —
+  a `conventions.md`-Rejected warn-and-continue.** `preview_native._TextureTable` renders a
+  checkerboard for any ref it cannot resolve and prints one stderr warning, then exits 0 with an
+  image that looks like an answer. `direction/conventions.md` lists exactly that under **Rejected**
+  ("a half-answer that looks like a full one is worse than a refusal; the note scrolls away").
+  Surfaced while speccing `--faces textured`, which now **exits 2** on an unresolvable ref per that
+  rule — so the two renderers are deliberately inconsistent until this one is brought in line.
+  Changing an existing verb was out of scope for that spec; it is not out of scope forever.
+  *(2026-07-26.)*
 - `p1` `[OWNER — confirm]` **Does class curation get a general file-fact OVERRIDE field?**
   `direction/asset-catalog.md` says curation is "a description, plus **an override where the file fact is
   wrong**" — but its own *Rejected* list kills "a curated-vs-derived override model for `placeable`". The
@@ -2969,6 +2968,15 @@ The posing rewrite landed (POS@ROT → auto-frame; decision 2026-07-12); these a
   found as the OPPOSITE edge of the quad (`entry = (exit + 2) % 4`), and an n-gon needs a different
   rule for "the far edge". No shipped builder currently produces a non-quad swept face, so the error
   is correct today; this item exists so the limitation is findable if one ever does.
+
+- `p3` `[spec]` **Fitting a texture to an OPEN run — the sibling `--fit-perimeter` does not cover.**
+  `specs/2026-07-26-poly-surface-verbs.md` restricts `--fit-perimeter` to CLOSED runs, because "fit an
+  integer texel count so the loop closes" needs a loop. But "snap the density so a whole number of
+  texels spans this wall run / this staircase stringer" is a legitimate and probably more common
+  request, and it has no verb. It wants a different flag name (perimeter implies closure) and a
+  decision about which end absorbs the residual. Raised by spec review round 2, which correctly
+  pointed out the restriction was asserted rather than argued; recorded here rather than folded into
+  that spec, whose gate had already run.
 ---
 
 ## From the 2026-07-18 unattended build chain (Andrzej, triage these)
