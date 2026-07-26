@@ -22,6 +22,20 @@ stage (so no `to-` prefix). See [`README.md`](README.md).
   > LLM-overridable — and it is **not** part identity, since identical pixels in two groups are
   > deliberately one classifiable thing.
 
+- `p1` `[OWNER — confirm]` **Texture `masked` is a stored fact — proposed `direction/asset-catalog.md`
+  addition.** Decided 2026-07-26, written into `specs/2026-07-25-unified-asset-catalog.md` §4d and
+  `unrealed/quirks.md`, but not yet in the direction topic. Proposed text (verbatim, awaiting a yes):
+
+  > **`masked` is a texture fact, read from the package.** `Masked` is a property of the *texture
+  > object*, set by the `Masked` checkbox when the texture is imported into UnrealEd; UE1 then ORs a
+  > texture's own flags into every surface it is applied to. So a masked texture punches its
+  > palette-index-0 pixels into see-through holes on any surface, with no surface polyflag set — which
+  > makes it invisible to any audit of surface flags, and a hole into unbuilt space wherever it lands
+  > on a solid face. The catalog therefore stores `masked` as a per-texture fact **read from the
+  > export's stored flag, never inferred** from the palette or from derived colours: inference is
+  > forbidden by the governing principle, and a texture may carry an index-0 colour without being
+  > imported masked. Filterable with `--masked`; not part of identity.
+
 - `p2` `[OWNER — confirm]` **Should the pixel-hash identity be called FROZEN in `direction/`?** The
   topic already records texture identity as the exact pixel hash (`sha256` over w, h, raw RGB), which
   is correct and needs no change. What it does *not* say is that the function is **frozen**: every
@@ -3211,3 +3225,20 @@ throwaway compare view. My repro predated the fix.)_
   `materialized <path>`, and wrote a 23,126-byte runt with no light bake (correct build:
   191,332 bytes) — see friction §1b. So the guidance is "a non-zero status always means it
   failed; a zero status does not always mean it worked — check the artifact too."
+
+- `p2` `[debug]` **The unwired native materialize path drops a non-zero polygon `Pan`.** Found while
+  fixing the zero-`Pan` emit bug (2026-07-26, `rationale/emit.md`), NOT fixed there — it is a
+  different defect on a different path and the fix under way was the compare/emit spelling, not the
+  native builder. `native/materialize.py` (~line 716) flattens each poly's `vertices`, `normal`,
+  `origin`, `texture_u`, `texture_v` for the Rust CSG core and **never passes `poly.pan`**;
+  `uedcli-native/src/fpoly.rs`'s `FPoly` has no pan field at all, so nothing downstream could
+  consume it. A face with an authored `Pan U=16 V=8` would therefore build with its texture
+  unpanned. Not shipped today — `level materialize` has no `--native` flag (`--help`, checked
+  2026-07-26), so the path is unreachable from the CLI, and `unrealed/t3d.md` already lists
+  `native/materialize.py` as not-yet-wired; `architecture.md`'s `preview --native` paragraph
+  independently records "Pan doesn't survive the build", which is the same gap seen from the preview
+  side (preview works around it by computing UV from the AUTHORED poly rather than the built surf).
+  What to do: decide whether the Rust `FPoly` carries pan (the editor bakes it into the surf's base
+  point) or whether the Python side folds pan into `origin` before handing geometry over — then pin
+  it with a differential test against the editor-built `.dx`, since a silently unpanned surface is
+  exactly the kind of wrongness a post-verify on a native build would have to catch itself.

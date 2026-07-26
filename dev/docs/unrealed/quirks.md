@@ -449,6 +449,25 @@ measurement, stores it in typed fields, and bakes it (`brush apply-transform`) �
   `MAP IMPORTADD` of a brush can GPF in `PrepBrush`. Point-actor IMPORTADD location is exact.
 
 ## Surfaces / polys
+- 🔬 **`Masked` is a property of the TEXTURE, set at import — and a texture's flags are OR'ed into
+  every surface it is applied to.** In UnrealEd's texture-import dialog `Masked` is a checkbox on the
+  *imported texture object*, and it is stored on that texture's export in the package. At render time
+  the engine ORs the texture's own flags into the surface's, so a texture imported as masked draws its
+  **palette-index-0** pixels as see-through holes on ANY surface — **with no surface polyflag set at
+  all**. Consequences, both of which cost real time:
+  - **Auditing surface flags cannot find it.** A wall rendering see-through because its texture is
+    masked has polys that decode to `flags: none`. An agent sent to fix "no poly carries `Masked`"
+    found the premise true and the bug still present — the bug was the inverse.
+  - **A masked texture is only correct where real geometry sits behind it** (a grille, a fence, a
+    mover leaf, a detail brush against a wall). On a *solid* brush face it is a hole into unbuilt
+    space: `CoreTexMetal.ladder_a` across the north flank of two stacked solid containers meant you
+    looked straight through both into the yard. The same trap was hit independently on a second level
+    (a masked lattice painted onto a solid shaft wall).
+  - Corollary: **`level preview --native` is a free detector** — it renders masked faces opaque, so an
+    index-0 region shows as raw magenta. Container-free and seconds, versus a `--game` render.
+  *(Import-side mechanism: owner, 2026-07-26. Render-side behavior observed live in `--game` renders
+  on two levels — `../spikes/levelbuild-friction/agent-reports.md`. Not yet probed to the stored
+  property name/offset on the export; do that before relying on the exact spelling.)*
 - **Per-poly `PolyFlags` + `Texture`/`Pan`/`TextureU/V` survive the paste path** → surface
   attributes are **model-side edits** (set poly fields → emit → paste). Verified: `flags=4`
   (Translucent) preserved through paste+rebuild.

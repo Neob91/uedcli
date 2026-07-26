@@ -288,6 +288,37 @@ Concretely:
 Group is **not** part of texture identity (§3b): identity is the pixel hash, and two textures with
 identical pixels in different groups are deliberately one classifiable thing.
 
+### 4d. Texture `masked` — read the stored flag, never infer it
+
+**`Masked` is a property of the TEXTURE OBJECT, set when the texture is imported into UnrealEd** (the
+import dialog's `Masked` checkbox), and it is stored in the package on that texture's export. It is
+**the same flag** as the surface polyflag of that name — UE1 ORs a texture's own flags into the
+surface's at render time — which is why a texture imported as masked draws its palette-index-0 pixels
+as holes **on any surface, with no surface flag set at all**.
+
+- `masked` joins the texture `facts` dict (`true`/`false`, never omitted), read from the texture
+  export's stored properties — `utexture` already parses export properties, so this is a new field
+  read, not a new decode path.
+- `texture show` prints it; `--json` carries it; **`texture list --masked` / `search --masked`** filter
+  on it (added to §5's per-kind filters).
+- It is a **fact, not a classification**: not LLM-overridable, no tracked shard.
+
+**It must be READ, not derived.** An earlier draft of this section proposed inferring hole-punching
+from palette index 0, or from the auto-derived colour list containing `pink`. Both are inference,
+which §0 forbids, and both are wrong in ways that matter: a texture can have an index-0 colour without
+being imported masked (the flag is what the engine tests), and `pink` is a coincidence of the stock
+art, not a rule. Reading the stored flag is exact.
+
+**Why it earns a field of its own.** A masked texture is only correct where real geometry sits behind
+it — a grille, a fence, a mover leaf, a detail brush against a wall. On a *solid* wall it is a
+see-through hole into unbuilt space, and it is undetectable by auditing surface flags because the
+offending polys carry none. This is the one texture fact whose misuse produces a defect that reads as
+a lighting or BSP bug; making it a filterable fact turns "which of this level's textures punch holes"
+from a `--game` render into a lookup. *(Evidence: `spikes/levelbuild-friction/agent-reports.md` — hit
+independently on two of three levels; `unrealed/quirks.md` "Surfaces / polys".)*
+
+Not part of identity (§3b): identity is pixels, and the flag lives beside them.
+
 ## 5. Verb surface
 
 `<kind>` ∈ `texture` | `class` | `sound` | `music`:
@@ -306,7 +337,7 @@ identical pixels in different groups are deliberately one classifiable thing.
 | `<kind> prewarm [--package P] [--force]` | eagerly index/decode/render ahead of an offline session | progress → stderr |
 | `cache gc [--catalog]` | evict from the DERIVED cache only — never tracked files | freed summary → stderr |
 
-Per-kind filters: `texture --color C --group G --similar REF [--max N]`; `class --subclass-of FQCN --drawtype
+Per-kind filters: `texture --color C --group G --masked --similar REF [--max N]`; `class --subclass-of FQCN --drawtype
 DT --placeable`. `music` ships a **reduced family** (`list`, `show`, `classify …`, `tags`): 35 assets,
 no preview artifact, so `preview`/`prewarm`/`--similar` would be surface with nothing behind it.
 `--catalog-dir` is **retained** on every kind (load-bearing for project-less use).
@@ -506,6 +537,11 @@ forces `UEDCLI_SCHEMA_CACHE=off`, so class-adapter tests exercising the cache pa
   nowhere in the ref); a groupless texture reports `null`, not a missing key; `--group Ladder` selects
   it and `--group ""` selects the groupless ones; group is NOT part of identity (two identical images
   in different groups → one shard, and classifying via either ref classifies both).
+- **Texture `masked` (§4d):** a fixture texture imported masked reports `masked: true` and an ordinary
+  one `false` (never a missing key); the value is READ from the export's stored properties, asserted by
+  a fixture whose palette HAS an index-0 colour but which is **not** flagged — it must report `false`,
+  which is the regression that stops anyone re-deriving the fact from the palette; `--masked` filters;
+  `masked` is not part of identity.
 - **Frozen identity (§3b):** the committed golden (ref → hex digest over `CoreTexWater.utx`) holds;
   adding a fact to a row does not change any identity.
 - **Texture:** `Engine.Texture` **subclasses** enumerated (FireTexture/WetTexture/WaveTexture);
@@ -544,8 +580,10 @@ below, so the spec is no longer fully review-gated: (1) **§4c** makes the textu
 queryable fact with `--group` filters — it was previously consumed only while assigning refs and
 discarded whenever a ref came out 2-part, which hid `Ladder`-group membership, i.e. DX
 climbability; (2) **§3b** pins the pixel-hash identity as load-bearing and **frozen**, with the
-corollary that adding a *fact* never re-keys a shard while changing the *decoder* re-keys all of them.
-§3a's row shape and §12's coverage list were updated to match. A `spec` round is owed on this
+corollary that adding a *fact* never re-keys a shard while changing the *decoder* re-keys all of them;
+(3) **§4d** adds `masked` as a texture fact — **read from the texture export's stored flag**, set at
+import in UnrealEd, never inferred from the palette. §3a's row shape and §12's coverage list were
+updated to match. A `spec` round is owed on this
 revision before the plan is re-cut (`CLAUDE.md` "Review gates"); it is logged on `board/inbox.md`.
 
 **Round 1 (2026-07-25, 2 cold reviewers)** — 21 findings, all folded: the false "reads `.dx` natively"
