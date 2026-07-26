@@ -30,7 +30,12 @@ When a plan here is built, delete its entry ([`done.md`](done.md) keeps a short 
   `LUM/Textures/LUM_CoreTex.utx` are invisible to uedcli today** and render as a checkerboard.
   This is a live bug on this substrate, not generic-UE1 hygiene.
 
-  **Seven slices:** `S1` CompMips + fixture builder → `S2` typed error results → `S3` layout
+  **SCOPE WIDENED 2026-07-26 (owner ruling)** — a new slice `S2b` adds the two accessors
+  `actor preview --faces textured` needs (a mip pyramid + `texture_has_bMasked`), so the texture
+  API changes once rather than twice. **The plan therefore re-enters the plan-review round
+  before building.** See `../specs/2026-07-26-actor-preview-textured-faces.md` §12.
+
+  **Eight slices:** `S1` CompMips + fixture builder → `S2` typed error results → `S3` layout
   detection → `S4` BC1 → `S5` BC2/BC3 → `S6` integration sweep + engine-fact pins → `S7` docs/board.
 
   **Gates** slice `S8a` of the asset-catalog plan below. Land it **before any texture is

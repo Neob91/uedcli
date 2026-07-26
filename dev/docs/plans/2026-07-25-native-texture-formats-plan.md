@@ -1024,6 +1024,36 @@ today raises a bare `ValueError` out of the decoder.)*
   `architecture.md` passages (grep `textures decode natively` and
   `utexture.TextureResolver.resolve_masked`) describe the new degrade text.
 
+### S2b — the preview accessors (SCOPE ADDED 2026-07-26, owner ruling)
+
+**Added after this plan was first reviewed**, so this plan **re-enters the plan-review round** before
+building (`CLAUDE.md` "Review gates"). Requested by
+[`../specs/2026-07-26-actor-preview-textured-faces.md`](../specs/2026-07-26-actor-preview-textured-faces.md)
+§12: that spec needs two things from this decoder, and folding them in here means the texture API
+changes **once** rather than twice.
+
+Both ride S2's typed-result contract — they never return a bare `None`, and the caller chooses the
+disposition.
+
+1. **A mip-pyramid accessor.** Every mip of a ref as `(w, h, rgb, mask)`, not just mip 0. `actor
+   preview --faces textured` picks a mip per face from screen density, so it needs the whole pyramid;
+   `decode_texture` already decodes all mips and `mip0_to_rgb` is generic over any `Mip`, so this is
+   an accessor, not new decoding. Note it must interact correctly with S1's `Mips`-preferred /
+   `CompMips` rule — the pyramid handed out is the one S1 selected, and which array it came from is
+   part of the typed result.
+2. **`texture_has_bMasked(ref)`** — `"bMasked" in <the export's property block>`. A UE1 bool written
+   **presence-only**, so present ⇒ masked, absent ⇒ not. Evidence and the corpus measurements are in
+   [`../spikes/2026-07-26-texture-masked-property/findings.md`](../spikes/2026-07-26-texture-masked-property/findings.md)
+   and `unrealed/quirks.md` "Surfaces / polys"; the decode needs no new parser (`_read_props` already
+   handles `_PT_BOOL`).
+
+**One contract note for this slice's builder.** S2 says a decoder error lets the caller choose, and
+lists "preview degrades and warns" as an example disposition. That is true of `level preview
+--native`'s frame, but **`actor preview --faces textured` REFUSES** — it exits 2 naming the ref (that
+spec's decision 2.6). Do not assume every preview caller degrades; the typed result must carry enough
+to let a caller write either message, including distinguishing a **bare (unqualified) ref** from a
+package/name miss, since the refusing caller has to tell the user to qualify it.
+
 ### S3 — layout detection from the mip chain
 *D1 — the governing idea, and the slice where the spec was most optimistic.*
 

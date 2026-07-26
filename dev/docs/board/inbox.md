@@ -5,23 +5,6 @@ lands here first, with no obligation to know its stage yet. This is the *pre-pip
 stage (so no `to-` prefix). See [`README.md`](README.md).
 
 **Triage** routes each item to where its next action lives:
-- `p1` `[OWNER — confirm]` **Sequencing: `--faces textured` is specced against a TextureResolver
-  API that a reviewed on-deck `p1` deletes.** Spec review re-entry round (2026-07-26, 3 cold Opus)
-  returned this as STRUCTURAL, so `specs/2026-07-26-actor-preview-textured-faces.md` is parked
-  (its §12). `to-build.md`'s **"Native texture decode for any UE1 package"**
-  (`specs/2026-07-25-native-texture-formats.md`, reviewed + planned) **deletes
-  `TextureResolver.resolve_masked`** (that spec, line 159), **replaces `resolve`'s `None`-on-miss
-  contract with a typed error object**, and adds **`CompMips`** — a second compressed mip array,
-  changing what "the mip pyramid" is. The textured-faces spec's §6 specifies
-  `resolve_mips(ref) -> list[…] | None`, "None on any miss, matching `resolve`" — i.e. against the
-  exact contract being replaced, beside a method being deleted. Also: that item records **30
-  textures in `LUM/Textures/LUM_CoreTex.utx` that do not decode today**, and because
-  `--faces textured` refuses rather than degrades, any LUM level using one would fail to render
-  at all (where `--native` shows a checkerboard).
-  **Ruling needed — three genuinely different builds:** (a) land textured-faces now against
-  today's API and rework it after; (b) wait for the texture-decode item and design `resolve_mips`
-  against the new typed-error contract; (c) fold the mip-pyramid accessor into that item's scope
-  so there is ONE texture API change rather than two. *(2026-07-26.)*
 - `p1` `[OWNER — decide]` **Asset-catalog spec: re-gate round 1 found NEW STRUCTURAL findings. Parked
   again. Recommend SPLITTING the spec rather than a third fix-and-regate.** 3 cold Opus reviewers
   2026-07-26 (second round of 3), ~65 findings, all three verdicts "not ready to build on" — after the
