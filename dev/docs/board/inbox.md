@@ -115,10 +115,15 @@ stage (so no `to-` prefix). See [`README.md`](README.md).
   own, where the irreversible decisions get a dedicated gate; (3) re-measure the sound corpus on the
   composed path, then spec audio. `CLAUDE.md`: the answer to a non-converging gate is to give the work a
   fresh spec moment, not a third round. *(2026-07-26.)*
-- `p1` `[OWNER — confirm]` **FIVE further per-surface rulings made 2026-07-26, durably recorded here
+- `p1` `[OWNER — confirm]` **SIX further per-surface rulings made 2026-07-26, durably recorded here
   because they currently live only in the ephemeral spec.** Verbatim, awaiting a yes for
   `direction/conventions.md`:
 
+  > **Texel density RESETS TO UNIT.** No `brush poly align` mode adopts a seed face's texel scale, so
+  > `--fresh-frame` has one possible value and is deleted. Scoped by the two rulings below: it binds
+  > **`run` alone**, because `wall`/`floor` take the projection's own `|proj|` density and `one-tile`
+  > derives its density from the face.
+  >
   > **Align modes are SUBCOMMANDS**, not a mutually-exclusive flag group: `brush poly align
   > wall|floor|run|one-tile`. The flags are disjoint per mode, so `-h` is accurate per mode and bad
   > combinations become argparse errors rather than runtime checks — the same shape as
