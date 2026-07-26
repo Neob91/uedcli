@@ -32,8 +32,8 @@ tests to run; a code change with no user-facing docs has none to update):
   Andrzej (see **Direction docs** below).
 - **Cross off the TODOs it completed**, and **add TODOs for anything
   deferred or left unfinished**.
-- **Run the relevant tests and confirm they pass** (`bin/test`, see
-  **Tests**).
+- **Run the relevant tests and confirm they pass** — via `bin/test`, never
+  bare `pytest` (`dev/docs/rules/tests.md`).
 - **Commit and push it** (see **Commits**) — explicit pathspecs, one short
   imperative subject, no AI attribution, never rewriting history.
 - **Gate it** (see **Review gates** below) — batched, per those rules.
@@ -365,50 +365,6 @@ rebase` that rewrites already-pushed commits — nothing of that kind. Only
 ever add new commits on top; mistakes are corrected with a fresh commit
 (or a `git revert`), never by rewriting what is already there.
 
-### Tests
-
-Run the offline suite through the **`bin/test`** wrapper — it runs pytest
-HOST-NATIVE in the auto-managed dev venv (`bin/_venv.sh`, `.venv/`,
-Python 3.12 + `Pillow`/`pytest`), the same runtime `bin/uedctl` uses. It
-needs `python3.12` on PATH (pyenv provides it here); the venv self-creates
-on first run. Extra args pass straight through (invoke it path-qualified —
-`test` alone is a shell builtin):
-```
-cd Tools/uedctl && bin/test          # whole offline suite
-cd Tools/uedctl && bin/test -k preview -x
-```
-Integration tests (`-m integration`) require the live `dx-lum-uned`
-container and are deselected by default (`pytest.ini`).
-
-**uedctl itself runs host-native too** (via `bin/uedctl` → the same venv),
-NOT inside a container — mirroring the eventual Nuitka release binary, so it
-has native filesystem access to the game's asset dirs and needs no
-bind-mounting of external roots into a dev container. Only the editor/build
-containers it drives run under Docker. (The old Python-3.12 *dev image* +
-`_dev-run.sh` were retired 2026-07-14 — decisions.md "venv for dev".)
-
-### Background / long-running work
-
-Anything started in the background and then waited on — integration
-tests, an ephemeral editor spin-up, a `MAP REBUILD`, an `apply` — must
-never be left on a single open-ended wait. The editor is crash-prone and
-wedges *silently* (see `unrealed/quirks.md` "Stability"), so a job that
-should take ~100s can hang forever — and with no timeout you hang with it.
-
-Wait *cheaply*, though — re-invoking the model to check costs a full
-context read each time (full price once past the prompt cache's ~5-min
-TTL), so do NOT poll on short model wake-ups:
-
-- Run it as a tracked background job and let the harness re-invoke you the
-  moment it exits — completion wakes you for free, so don't poll for it.
-- Pair that with a LONG fallback timer (~20 min) that only fires if the
-  job hangs and never reports. It's a hang-detector, not a progress check;
-  a short timer just burns context reads waiting for an event that already
-  wakes you. When it fires, investigate (liveness, logs) — don't extend.
-- For live editor driving that isn't a tracked job, block inside ONE tool
-  call with an until-loop that sleeps internally (internal sleeps are
-  free) and returns on completion or at the timeout.
-
 ### Code & CLI conventions
 
 - **NO BACK-COMPAT CRUFT — uedctl is UNRELEASED.** There are no external
@@ -614,17 +570,17 @@ uedctl-used / live-verified, 🔬 = live-probed, 📖 = extracted from the binar
 string table (vocabulary real, semantics inferred). Don't state an extracted
 fact with the certainty of a verified one.
 
-### UnrealEd navigation — docs are READ-ON-DEMAND, not in your context
+### Read-on-demand docs — the router
 
 Only `direction.md` (the compiled target) is auto-loaded. **Every doc below is
 NOT in your context — you MUST `Read` the relevant one before the action it
 names.** These one-liners are a *router, not a substitute*: never answer a
-question about UnrealEd behavior, the T3D format, or uedctl internals from this
-summary or from training memory — the editor is undocumented and crash-prone,
-and these docs are the only ground truth. If a task touches any row below and
-you have not read that doc **this session**, read it first. (The docs
-cross-link each other, so one read surfaces the rest; `dev/docs/README.md` has
-the full "which doc is for what" table.)
+question about UnrealEd behavior, the T3D format, uedctl internals, **or a
+process rule** from this summary or from training memory — the editor is
+undocumented and crash-prone, and these docs are the only ground truth. If a
+task touches any row below and you have not read that doc **this session**,
+read it first. (The docs cross-link each other, so one read surfaces the rest;
+`dev/docs/README.md` has the full "which doc is for what" table.)
 
 **A dispatched subagent does NOT inherit your reading.** When you hand work to
 a subagent — a reviewer, a spike investigator, anything — its prompt MUST name
@@ -644,37 +600,19 @@ prompt can tell it so.
 - `dev/docs/unrealed/extracting-from-dll.md` — **Read BEFORE mining the binaries** for command/behavior facts.
 - `dev/docs/parallel-editors.md` — **Read BEFORE running many ephemeral editors** concurrently.
 
+**Process rules** (`dev/docs/rules/README.md` indexes them). Each line carries the one fact you
+cannot afford to miss; the doc carries the rest:
+
+- `dev/docs/rules/tests.md` — **Read BEFORE running tests.** Run them via **`bin/test`**, never
+  bare `pytest`; uedctl and its suite are **host-native, not containerised**.
+- `dev/docs/rules/spikes.md` — **Read BEFORE starting or finishing a spike.** Commit the harness to
+  `dev/docs/spikes/<slug>/`, never leave it in `_scratch/`; **pin every checkable finding with a
+  committed regression test** or it rots.
+- `dev/docs/rules/background-work.md` — **Read BEFORE starting a background job or long wait.**
+  Never leave one on a single open-ended wait — the editor wedges *silently*; pair a tracked job
+  with a ~20-minute hang-detector, and never poll on short wake-ups.
+
 New UnrealEd findings go in `dev/docs/unrealed/` (and back-reference them from code comments).
-
-### Spikes
-
-Run a spike to completion — never defer a check or leave a question open
-for "later". Keep investigating until the spike is fully figured out, not
-just until a plausible-looking answer shows up. When stuck, consult
-subagents, and explicitly tell them to be very creative.
-
-**Commit the harness.** Any script, parser, or tool written during a spike
-belongs in `dev/docs/spikes/<slug>/` alongside the spike markdown — NOT left
-in `_scratch/` (which is gitignored and wiped). Copy it there before parking
-or wrapping up. `_scratch/` is for throwaway output (logs, PNGs, T3D exports),
-never for code that someone will need to resume from.
-
-**Pin the finding, or it rots.** A spike is not finished when you *find* the
-answer — it's finished when the answer is **pinned so a later change can't
-silently break it**. A spike answers a question about the engine/editor/T3D
-format exactly once; left as prose, that finding quietly goes stale as the
-binary, the build, or our own code moves under it. So whenever a spike lands a
-**checkable fact** (an FRotator serialization convention, a paste grid-snap
-offset, a `bspBrushCSG` ordering rule, a byte-layout field order, a
-`GMath`-table value), also land a **committed regression that re-asserts that
-fact** — against the real binary/editor where feasible, else against a
-committed golden — so a violation trips a red test instead of drifting
-unnoticed. Keep these engine-facts assertions together (e.g. a
-`test_engine_facts` module) and back-reference the spike from the test. This is
-the executable half of the Documentation rule that "every claim about how
-UnrealEd behaves carries its evidence": the prose cites the spike, the test
-*enforces* it. (A spike whose result is a one-off decision, not a standing
-fact, needs no test — use judgement.)
 
 ### TODOs (`dev/docs/board/` — the stage-queue cluster)
 

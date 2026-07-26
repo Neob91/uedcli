@@ -27,6 +27,7 @@ Every doc has ONE job. Don't mix them up:
 | **[unrealed/t3d.md](unrealed/t3d.md)** | "What is the T3D on-the-wire text format?" | format reference (block nesting, property forms, winding, what T3D can't carry) | updated as format is verified |
 | **[unrealed/leveldesign/kb/](unrealed/leveldesign/kb/README.md)** | "What's the **comprehensive** UE1/DX level-design knowledge?" (the dev-side engine/DX reference behind the user cut) | the exhaustive compiled reference (geometry/BSP, zoning, lighting, textures, movers, actors, DX class catalog, AI, human scale, design craft) | updated as findings are verified |
 | **[engine-internals/](engine-internals/README.md)** | "How does the **game runtime** behave, and how do I RE / live-debug it?" | game-DLL facts (`Render.dll`/`Engine.dll`) + RE-workflow & wine-debug **gotchas** | appended to as traps are hit |
+| **[rules/](rules/README.md)** | "What process rule binds me *right now*?" (tests, spikes, background work) | process rules moved out of the always-loaded `CLAUDE.md` | read-on-demand; `CLAUDE.md`'s router names the moment to read each |
 | **specs/** + **plans/** | "How will we design/sequence this one feature?" | ephemeral per-feature scratch | deleted once the work lands |
 | **spikes/** | "What did we actually observe in this experiment?" | durable evidence | kept, cited by the docs above |
 | **[board/](board/README.md)** | the work-state cluster — flow + stages (see its `README.md`) | living |  |
@@ -40,10 +41,10 @@ not yet done. A gap between a topic doc and the code, or between `direction.md` 
 decision, is a **bug** in the docs.
 
 **Context-loading:** in a uedctl agent session only `direction.md` is auto-loaded into context;
-every other doc here (incl. `architecture.md`, `decisions.md`, all `unrealed/*.md`) is
-**read-on-demand** — the agent must `Read` it before the task that needs it. The router that
-says which doc to read when lives in [`Tools/uedctl/CLAUDE.md`](../../CLAUDE.md) ("UnrealEd
-navigation").
+every other doc here (incl. `architecture.md`, `decisions.md`, all `unrealed/*.md`, and all
+`rules/*.md`) is **read-on-demand** — the agent must `Read` it before the task that needs it. The
+router that says which doc to read when lives in [`CLAUDE.md`](../../CLAUDE.md)
+("Read-on-demand docs — the router").
 
 ## Read these
 - **[../../docs/usage.md](../../docs/usage.md)** — the CLI: query/mutate verbs, the `preview` viewer,
@@ -60,8 +61,9 @@ navigation").
   (screenshots), and `extracting-from-dll.md` (how it's mined). **Read before touching the
   driver** — the "don't relearn this" reference.
 - **[dev-runtime.md](dev-runtime.md)** — how to **run** uedctl on a host without
-  Python 3.12: the `bin/uedctl` / `bin/test` dev wrapper (uedctl-in-Docker, docker-out-of-
-  docker + identity path-mapping), and the deferred Nuitka release path.
+  Python 3.12: the `bin/uedctl` / `bin/test` wrappers over the auto-managed host-native
+  `.venv/`, and the deferred Nuitka release path. (uedctl is **not** containerised — only the
+  editor/build containers it drives are.)
 - **[parallel-editors.md](parallel-editors.md)** — how to drive many ephemeral
   editors at once (`docker compose run` per work item): per-run wineprefix volume, unique
   export paths, the memory-bound concurrency cap, cleanup.
