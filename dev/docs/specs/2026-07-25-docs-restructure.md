@@ -2,14 +2,14 @@
 
 **Status:** v5 — gated. Ready for a plan.
 **History:** v1 (`cf21f54`) and v2 (`eee7e4e`) were parked on structural findings and resolved by
-Andrzej's rulings. v3 (`892a62c`) and v4 (`70d55fd`) drew none; their reviewers converged on
+the owner's rulings. v3 (`892a62c`) and v4 (`70d55fd`) drew none; their reviewers converged on
 mechanism defects, fixed here.
 
 ---
 
 ## 0. What this is for
 
-**The goal is to stop keeping an append-only ledger** (Andrzej, 2026-07-25). Decisions should live
+**The goal is to stop keeping an append-only ledger** (the owner, 2026-07-25). Decisions should live
 in per-topic docs that are **revised** to say the current answer, not appended to forever. Decision
 *history* is git's job.
 
@@ -40,7 +40,7 @@ enumerates it.
 
 | Tree | Holds | Owner |
 |---------------------------------|-----------------------------------------------|---
-| `dev/docs/direction/<topic>.md` | what **Andrzej** decided — product intent *and* process rulings | Andrzej; agents must ask |
+| `dev/docs/direction/<topic>.md` | what **the owner** decided — product intent *and* process rulings | the owner; agents must ask |
 | `dev/docs/rationale/<topic>.md` | what an **agent** decided — why the code is the way it is | agents |
 
 Both **revised in place**: no supersession, no dated-entry history.
@@ -48,7 +48,7 @@ Both **revised in place**: no supersession, no dated-entry history.
 **The axis is WHO DECIDED, not what it is about.** v3 stated this and then derived its topic lists
 by subject, losing a whole category: **process rulings** — the review gate (`decisions.md:8650`,
 `:8872`), worktrees (`:8809`), the dev-doc system (`:719`), the host-native venv (`:3439`). Those
-are Andrzej's, so they go to `direction/process.md`, not `rationale/`.
+are the owner's, so they go to `direction/process.md`, not `rationale/`.
 
 ## 2. The confirmation rule — a convention, and only a convention
 
@@ -60,7 +60,7 @@ message exists and takes no arguments, so a hook reading `.git/COMMIT_EDITMSG` s
 commit's message — meaning a trailerless `direction/` commit passes whenever the one before it was
 confirmed, which is the steady state of the migration. It fails open and looks green.
 
-**Andrzej's ruling (2026-07-25): no hook.** `core.hooksPath` is a single value that overrides any
+**The owner's ruling (2026-07-25): no hook.** `core.hooksPath` is a single value that overrides any
 global or system hooks path, and the house rules depend on a system-wide pre-push hook enforcing
 no-force-push; a repo-local override could silently disable it. Not worth the risk for a guard that
 was never more than a marker.
@@ -75,36 +75,36 @@ So, stated honestly and finally:
 ```markdown
 ### Direction docs — NEVER revise without confirmation
 
-`dev/docs/direction/<topic>.md` holds what ANDRZEJ decided — product intent
+`dev/docs/direction/<topic>.md` holds what the OWNER decided — product intent
 and process rulings alike. MUTABLE: revised in place, no supersession, no
 dated-entry history (git keeps that). Evidence citations and live-finding
 dates ARE kept, per the Documentation rules.
 
 - **NEVER create, revise, reword, or delete anything under
   `dev/docs/direction/` — including a single `Rejected` bullet — without
-  asking Andrzej and getting an explicit yes.** Propose the exact text and
-  wait. "It follows from what he said" does NOT satisfy this.
+  asking the owner and getting an explicit yes.** Propose the exact text and
+  wait. "It follows from what they said" does NOT satisfy this.
 - **`direction/README.md` is the exception**: its index rows and its short
   model statement may be maintained freely. No topic CONTENT goes there, and
   it may never contain an `@` import.
-- **Moving a topic OUT of `direction/` needs his yes too** — it removes the
+- **Moving a topic OUT of `direction/` needs their yes too** — it removes the
   protection.
 - **When direction looks stale, ASK — never edit.**
 - **Confirm proactively.** When working in a topic, ask whether its direction
   doc is still current.
-- **A decision awaiting his yes is parked** as an `[ANDRZEJ — confirm]` item
+- **A decision awaiting their yes is parked** as an `[OWNER — confirm]` item
   on `board/inbox.md` carrying the proposed text verbatim.
-- Commits touching `dev/docs/direction/` carry an `Andrzej-confirmed: <topic>`
+- Commits touching `dev/docs/direction/` carry a `Confirmed: <topic>`
   trailer — an audit marker, not enforcement.
 
 `dev/docs/andrzej.md` and `dev/docs/2026-06-20-open-questions-for-andrzej.md`
-are also his — do not touch them at all.
+are also theirs — do not touch them at all.
 
 Every other doc under `dev/docs/`, including `rationale/` and `rules/`, an
 agent maintains on its own.
 ```
 
-**Scope: `direction/` only** (Andrzej). Not because everything else is "facts" — `rules/` holds his
+**Scope: `direction/` only** (owner ruling). Not because everything else is "facts" — `rules/` holds their
 normative process text too — but because of **exposure time**: `rules/` is exercised by every
 session so a corruption surfaces fast; `direction/` governs work that may not start for months.
 
@@ -169,8 +169,8 @@ had one, and dropping it discards spike/code evidence pointers by construction.
 
 **Per topic, one commit:** draft *What we want*; sweep the ledger for that topic's still-relevant
 rejected alternatives **and any live decision `direction.md` never reconciled** (criterion: any
-entry postdating the newest one it reconciles — not a hard-coded list); put both to Andrzej as text;
-on his yes write the doc, **delete that section from `direction.md`**, and **retarget that topic's
+entry postdating the newest one it reconciles — not a hard-coded list); put both to the owner as text;
+on their yes write the doc, **delete that section from `direction.md`**, and **retarget that topic's
 citations**, all in the same commit.
 
 **This spec's own rulings land in `direction/process.md`** — the who-decided axis, `direction/`-only
@@ -201,7 +201,7 @@ outlives the migration.
 
 `dropped` **and** `superseded-dead` both need a named reason; `superseded-dead` must name the
 superseding entry (v4 left it unsigned, making it a free escape hatch from `dropped`'s sign-off).
-Both get Andrzej's sign-off. Gate stated **dynamically** — *no `^## \d{4}-` entry lacks a row* — not
+Both get the owner's sign-off. Gate stated **dynamically** — *no `^## \d{4}-` entry lacks a row* — not
 against a frozen count.
 
 ### Part D — citation migration
@@ -252,7 +252,7 @@ All three are in the diff, so `CLAUDE.md` forbids logging them instead of dealin
 1. **`CLAUDE.md:290` — "`.claude/worktrees/` is gitignored" is FALSE.** `.gitignore` has no
    `.claude` entry; `git check-ignore .claude/worktrees` exits 1; `git status` shows `?? .claude/`.
    An agent trusting it could `git add` an entire second checkout. **Remedy: add `.claude/` to
-   `.gitignore`**, making the sentence true — Andrzej's call, logged to `board/inbox.md` if he
+   `.gitignore`**, making the sentence true — the owner's call, logged to `board/inbox.md` if he
    declines. Note this interacts with (3): a blanket `.claude/` ignore would block committing
    `.claude/settings.json`, so use `.claude/worktrees/` if (3) is resolved by creating that file.
 2. **`CLAUDE.md:3-19` — the `Tools/uedctl/` inside `dx_lum` layout, and "`_scratch/` two levels
@@ -260,21 +260,21 @@ All three are in the diff, so `CLAUDE.md` forbids logging them instead of dealin
    **Remedy: rewrite the paragraph to the real layout.** Same false label at `dev/docs/README.md:45`.
 3. **`CLAUDE.md:293-297` — "this repo's `.claude/settings.json` sets `worktree.baseRef: head`".**
    That file does not exist, so `EnterWorktree` branches from `origin/<default>`, contradicting
-   "the base is the branch the main checkout is already on". **Behavioural, not wording — Andrzej
+   "the base is the branch the main checkout is already on". **Behavioural, not wording — the owner
    chooses:** create the file, or delete the sentence and accept the default.
 
 ## 4. Risks
 
 | # | Risk | Mitigation |
 |----|-----------------------------------------------|---
-| R1 | `direction/` is silently rewritable | The resident rule + the `[ANDRZEJ — confirm]` parking lane + the audit trailer. **Convention only** — nothing mechanical, and §2 says so |
+| R1 | `direction/` is silently rewritable | The resident rule + the `[OWNER — confirm]` parking lane + the audit trailer. **Convention only** — nothing mechanical, and §2 says so |
 | R2 | Migration drops a live decision | Every entry dispositioned in durable `MIGRATION.md`; `dropped` and `superseded-dead` both reasoned and signed off; deletion is itself a confirmation point |
 | R3 | Citations dangle or silently rot | Repo-wide link + prose + **anchor-existence** checks |
 | R4 | Concurrent sessions | The `brush-profile-generators` branch **has merged** (`6900e34`), so the precondition is met — but any session may create a worktree and, until Part 0 lands, keeps minting `decisions.md` refs. **Re-run every inventory grep immediately after Part 0**; the counts here are measurements-at-a-sha, not constants |
 | R5 | Migration stalls part-done | Each topic is one self-contained commit; `direction/README.md` carries per-topic state so the index never points at a missing file |
 | R6 | Steady-state confirmation traffic | The two-tree split. Relocating a topic out of `direction/` is itself a confirmation point, so it cannot be the escape hatch |
 | R7 | **`rationale/` is unprotected** and is where most of the 83 `Rejected` blocks land | **Accepted cost, named.** Any agent can delete a `Rejected` bullet and re-propose a killed design, with no confirmation and no signal in the diff. The mandated shape and the NOT-trivial listing are partial answers; there is no full one |
-| R8 | Squash-merging this work would collapse 13 `Andrzej-confirmed:` trailers into one | **This work does not run in a feature worktree** — it lands incrementally on the checked-out branch, so each confirmation keeps its own commit. Recorded as a deliberate exception to the worktree rule |
+| R8 | Squash-merging this work would collapse 13 `Confirmed:` trailers into one | **This work does not run in a feature worktree** — it lands incrementally on the checked-out branch, so each confirmation keeps its own commit. Recorded as a deliberate exception to the worktree rule |
 
 ## 5. Verification
 
@@ -318,7 +318,7 @@ what one reviewer can read without skimming.
 4. Part A → gate.
 5. Part B — 13 topics, each confirmed; gate per group of ~4.
 6. Part C → gate. 7. Part D → gate. 8. Parts E+F → gate.
-9. Delete `direction.md` + `decisions.md` on Andrzej's explicit confirmation.
+9. Delete `direction.md` + `decisions.md` on the owner's explicit confirmation.
 10. `dev/docs/README.md` updated; retire the resolved inbox items **by title, not line range**
     (the concurrency item, the `@`-gate item Part A overrides, the `[debug]` item Part F fixes);
     delete this spec.

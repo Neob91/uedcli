@@ -1,7 +1,7 @@
 # CLI mechanics — why the argument surface is built this way
 
 Engineering decisions about `uedctl/cli.py` and `uedctl/dispatch.py`. The *conventions* these
-serve are Andrzej's and live in [`../direction/conventions.md`](../direction/conventions.md);
+serve are the owner's and live in [`../direction/conventions.md`](../direction/conventions.md);
 this doc is the machinery.
 
 ## Deleting a migration shim can silently re-open a prefix-abbreviation hole

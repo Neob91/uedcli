@@ -108,7 +108,7 @@ spec and plan.
 ## Dispositions
 
 One row per ledger entry. `dropped` and `superseded-dead` each need a named reason;
-`superseded-dead` must name the superseding entry. Both columns need Andrzej's sign-off before
+`superseded-dead` must name the superseding entry. Both columns need the owner's sign-off before
 either old file is deleted.
 
 | Entry | Disposition | Reason / superseder |
@@ -133,7 +133,7 @@ either old file is deleted.
 | 2026-07-24 18:50 — an inert flag ERRORS | `direction/conventions.md` | its superseded warn-and-continue recorded as a `Rejected` bullet |
 | 2026-07-18 14:03 — compose-pipe (items 1–4) | `direction/conventions.md` | intent; 3 `Rejected` carried. Items 5–6 are CSG-order, other topic |
 | 2026-06-25 10:36 + 2026-07-11 23:19 — `actor find`; drop `actor list` | `direction/conventions.md` | the one-query-verb rule; find-specific bullets belong to an actor-verbs topic |
-| **2026-07-25 18:15 — `--class-exact` → `--exact-class`** | **`rationale/cli.md`** | **Andrzej ruled 2026-07-26: NOT direction.** It is an argparse implementation trap (deleting a shim re-opens prefix abbreviation), so it lands in `rationale/` keyed to the CLI module. All three `Rejected` carried there. **Never reconciled into `direction.md`** |
+| **2026-07-25 18:15 — `--class-exact` → `--exact-class`** | **`rationale/cli.md`** | **Owner ruled 2026-07-26: NOT direction.** It is an argparse implementation trap (deleting a shim re-opens prefix abbreviation), so it lands in `rationale/` keyed to the CLI module. All three `Rejected` carried there. **Never reconciled into `direction.md`** |
 | *(remaining entries populated by Tasks 5–7)* | | |
 
 ### Direction/code deltas created by the `organization` confirmation (2026-07-26)
@@ -141,10 +141,10 @@ either old file is deleted.
 Three places where confirmed direction now leads the tool. Not bugs introduced here — two are
 pre-existing divergences the confirmation surfaced, one is new intent.
 
-1. **`--tree stash|prefab` is REJECTED for label verbs, but direction says accept.** Andrzej's
+1. **`--tree stash|prefab` is REJECTED for label verbs, but direction says accept.** the owner's
    2026-07-23 05:58 #5 ruling already said allow; `dispatch.py:348-358`
    (`_reject_nonlevel_target_for_labels`) rejects, its own docstring calling it "a plan scope-cut
-   … deferred". `cli.py:439` advertises "Level-only". **Andrzej ruled 2026-07-26: the ruling
+   … deferred". `cli.py:439` advertises "Level-only". **Owner ruled 2026-07-26: the ruling
    stands, the code is wrong.** The sibling *folder* guard is already parked on `board/inbox.md`;
    this label one was not.
 2. **`stash apply` / `prefab apply` mint no batch label.** New ruling, 2026-07-26: they must mint
@@ -155,7 +155,7 @@ pre-existing divergences the confirmation surfaced, one is new intent.
    direction states intent, not status, and the gap to `architecture.md` is expected by design.
    On `board/to-spec.md`.
 
-Also corrected in passing: `direction.md` documented **`actor label set`**, a sub-verb Andrzej's
+Also corrected in passing: `direction.md` documented **`actor label set`**, a sub-verb the owner's
 2026-07-23 ruling explicitly refused and the code has never had. The same error is repeated inside
 the frozen ledger's 2026-07-24 17:04 entry — noted so nobody re-copies it.
 

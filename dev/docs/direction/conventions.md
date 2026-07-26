@@ -120,7 +120,7 @@ touched only to **build** or **preview**, never to answer a question about the t
 - **A deprecation window** (warn now, remove later) — a released-software ritual with no
   meaning for a tool that has no users.
 - **Keeping a migration-error shim "because the error message is friendly"** — the
-  friendliness is for users who do not exist; the real readers are Andrzej and the agents
+  friendliness is for users who do not exist; the real readers are the owner and the agents
   working this repo, who read `usage.md` and the commit.
 - **Carving one shim out of the rule** (keep one, delete the rest) — an explicit exception
   that buys nothing and invites the next one.

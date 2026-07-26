@@ -29,7 +29,7 @@ tests to run; a code change with no user-facing docs has none to update):
 - **Update every doc the change touches** — no doc may be left stale (see
   **Documentation** below for which doc owns what). **EXCEPT
   `dev/docs/direction/`**: never edit that tree to fix staleness — ask
-  Andrzej (see **Direction docs** below).
+  The owner (see **Direction docs** below).
 - **Cross off the TODOs it completed**, and **add TODOs for anything
   deferred or left unfinished**.
 - **Run the relevant tests and confirm they pass** — via `bin/test`, never
@@ -72,7 +72,7 @@ defective one costs two, instead of every one paying for breadth up front.
 **Only the spec moment still opens wide** (3, then 2) — a spec defect
 propagates into the plan and the build stacked on top of it, so that is the
 one artifact where breadth is bought before the fact rather than after.
-*(Andrzej, 2026-07-25: the gate had grown to cost more than the work it
+*(Owner ruling, 2026-07-25: the gate had grown to cost more than the work it
 guarded — on a mechanical cleanup item the review outran the implementation
 several times over. Supersedes the 2 Opus build/plan rounds of the same
 day's 18:42 UTC entry.)*
@@ -84,7 +84,7 @@ of the whole run appeared in one reviewer's report and not the other's. A
 one-reviewer round will therefore miss things a two-reviewer round would have
 caught. The answer when that matters is **not** to quietly re-widen a row:
 it is to give the work a **spec** moment (the one round that still opens
-wide), or to escalate to Andrzej.
+wide), or to escalate to the owner.
 
 **A round's headcount IS its parallel width.** Every reviewer in a round is
 dispatched concurrently (all `Agent` calls in ONE message). Widening a round
@@ -180,7 +180,7 @@ real finding down a tier. The test is observability:
 > anyone would ever observe — pure wording, formatting, or naming taste.
 
 Everything else is **fixed**, **logged** to `dev/docs/board/inbox.md` with
-enough detail to act on, **escalated to Andrzej** as an explicit decision,
+enough detail to act on, **escalated to the owner** as an explicit decision,
 or **refuted** — the reviewer asserted something the code or doc does not
 actually do. A refutation is admissible ONLY with the check that disproves
 it recorded (commit message or board), and a round whose findings were all
@@ -215,14 +215,14 @@ the trigger is whether the artifact CHANGED:
   message) is exactly where that shows.
 - **After round 2, the gate is passed.** Anything still standing is
   **fixed**, **logged** to `dev/docs/board/inbox.md`, or **escalated to
-  Andrzej** — all three outlets of the rule above stay open — and the work
+  The owner** — all three outlets of the rule above stay open — and the work
   is declared done. There is no round 3: a third round of cold reviewers
   on a twice-fixed artifact buys less than it costs.
 - **A STRUCTURAL finding STOPS the work, in EITHER round.** If a round's
   findings say the *design* is wrong rather than that a detail is wrong,
-  stop and escalate to Andrzej. It **replaces** the remaining round — never
+  stop and escalate to the owner. It **replaces** the remaining round — never
   licenses a third — and it does **NOT pass the gate**: the work is parked,
-  not declared done and not merged, until Andrzej rules, after which the
+  not declared done and not merged, until the owner rules, after which the
   artifact re-enters the gate at round 1 of its tier. (So a structural
   escalation is not a cheap "fix-free round 1".) That pattern does not
   converge, and another round would not have landed it either.
@@ -337,7 +337,7 @@ point and the merge target.
    `git worktree remove .claude/worktrees/<feature-slug>`. The branch
    itself needs `git branch -D`, because `-d` refuses — a squash merge
    records no merge — and **deleting a branch is destructive, so ask
-   Andrzej first.** Leaving the local branch costs nothing; never delete it
+   the owner first.** Leaving the local branch costs nothing; never delete it
    while that `git diff` is non-empty. (`ExitWorktree` with
    `action: "remove"` is the harness equivalent and needs
    `discard_changes: true` after a squash merge, for the same reason `-d`
@@ -431,7 +431,7 @@ ever add new commits on top; mistakes are corrected with a fresh commit
 
 ### Direction docs — NEVER revise without confirmation
 
-`dev/docs/direction/<topic>.md` holds what **Andrzej** decided — product intent
+`dev/docs/direction/<topic>.md` holds what **the owner** decided — product intent
 and process rulings alike. It is **MUTABLE**: revised in place, no supersession,
 no dated-entry history (git keeps that). Evidence citations and live-finding
 dates ARE kept, per **Documentation** below.
@@ -445,24 +445,26 @@ an audit marker, not a gate.
 
 - **NEVER create, revise, reword, or delete anything under
   `dev/docs/direction/` — including a single `Rejected` bullet — without asking
-  Andrzej and getting an explicit yes.** Propose the exact text and wait.
+  The owner and getting an explicit yes.** Propose the exact text and wait.
   "It follows from what he said" does NOT satisfy this.
 - **`direction/README.md` is the exception**: its index rows and its short model
   statement may be maintained freely. No topic *content* goes there, and it may
   **never** contain an `@` import.
-- **Moving a topic OUT of `direction/` needs his yes too** — it removes the
+- **Moving a topic OUT of `direction/` needs their yes too** — it removes the
   protection, so it is as much a change as an edit.
 - **When direction looks stale, ASK — never edit.**
 - **Confirm proactively.** When working in a topic, ask whether its direction
   doc is still current.
-- **A decision awaiting his yes is parked** as an `[ANDRZEJ — confirm]` item on
+- **A decision awaiting their yes is parked** as an `[OWNER — confirm]` item on
   `board/inbox.md` carrying the proposed text verbatim.
-- Commits touching `dev/docs/direction/` carry an `Andrzej-confirmed: <topic>`
-  trailer, so `git log --grep='Andrzej-confirmed' -- dev/docs/direction/` shows
-  every confirmed edit and an unconfirmed one stands out on inspection.
+- Commits touching `dev/docs/direction/` carry a `Confirmed: <topic>` trailer,
+  so `git log --grep='Confirmed' -- dev/docs/direction/` shows every confirmed
+  edit and an unconfirmed one stands out on inspection. (Four commits from
+  2026-07-26 predate the rename and carry `Andrzej-confirmed:` instead —
+  history is never rewritten, so grep for both when auditing that day.)
 
 **`dev/docs/andrzej.md` and `dev/docs/2026-06-20-open-questions-for-andrzej.md`
-are also his — do not touch them at all.**
+are also theirs — do not touch them at all.**
 
 Every other doc under `dev/docs/`, including `rationale/` and `rules/`, an agent
 maintains on its own.
@@ -519,10 +521,10 @@ know how it works is a bug — rewrite it.
 - **`architecture.md` + `unrealed/*.md`** — *what IS* (current implementation + verified engine
   facts). **MUST be updated to match whenever the implementation changes** — no doc may be left
   describing code that no longer exists or behavior that changed.
-- **`direction/<topic>.md`** — *what ANDRZEJ decided*: product intent AND process rulings.
+- **`direction/<topic>.md`** — *what the OWNER decided*: product intent AND process rulings.
   **Revised in place** to state the current answer — no supersession, no dated-entry history
   (git keeps that). A gap between `direction/` and `architecture.md` is expected (it's work not
-  yet done). **You may NEVER write this tree without his explicit yes** — see **Direction docs**
+  yet done). **You may NEVER write this tree without their explicit yes** — see **Direction docs**
   above.
 - **`rationale/<topic>.md`** — *why the CODE is the way it is*: the engineering decisions an
   agent made (a tolerance, a scope limit, a format choice), keyed by module or subsystem. Also
@@ -549,7 +551,7 @@ the decision must land in a **durable** doc before the spec is deleted:
 - **A decision I made** → `dev/docs/direction/<topic>.md`, **revised in place**
   to state the new current answer. Propose the exact wording and wait for my
   yes (see **Direction docs** above). While it waits, park it as an
-  `[ANDRZEJ — confirm]` item on `board/inbox.md` carrying the proposed text
+  `[OWNER — confirm]` item on `board/inbox.md` carrying the proposed text
   verbatim, so it survives the session ending.
 - **A decision you made** (an implementation choice) →
   `dev/docs/rationale/<topic>.md`, revised in place, with its `Rejected`
@@ -592,7 +594,7 @@ prompt can tell it so.
 
 - **@dev/docs/direction.md** — *(auto-loaded, already in context)* what we WANT: the compiled target, synthesized from decisions.
 - `dev/docs/architecture.md` — **Read BEFORE any uedctl code change or design question**: the layer/module map, the model-side write pattern, invariants D1–D8, the session-store shape.
-- `dev/docs/decisions.md` — **FROZEN 2026-07-26, historical reading only — never append.** The retired UTC-timestamped ledger, migrating into `dev/docs/direction/` (Andrzej's decisions) and `dev/docs/rationale/` (yours); `dev/docs/rationale/MIGRATION.md` records where each entry went.
+- `dev/docs/decisions.md` — **FROZEN 2026-07-26, historical reading only — never append.** The retired UTC-timestamped ledger, migrating into `dev/docs/direction/` (the owner's decisions) and `dev/docs/rationale/` (yours); `dev/docs/rationale/MIGRATION.md` records where each entry went.
 - `dev/docs/unrealed/commands.md` — **Read BEFORE driving the editor console**: the exec-verb reference (what to type).
 - `dev/docs/unrealed/t3d.md` — **Read BEFORE authoring/parsing T3D or editing surfaces/geometry**: block nesting, property forms, winding, authored-vs-computed taxonomy.
 - `dev/docs/unrealed/quirks.md` — **Read BEFORE driving UnrealEd or debugging editor behavior**: the non-obvious traps (IMPORTADD grid-snap, demand-load, selectability, CSG).
@@ -623,13 +625,13 @@ line to the next file:
 
 - `inbox.md` — raw, **un-triaged** capture; the pre-pipeline pool AND the
   head of stream (not a queue). Everything lands here first: ideas/gaps/
-  bugs/chores, **anything you'd flag for Andrzej** (a provisional call, an
+  bugs/chores, **anything you'd flag for the owner** (a provisional call, an
   assumption, a risk, a deviation from spec/plan, or work you deliberately
   didn't do — put it here INSTEAD of only saying it in chat, which scrolls
-  away), and **his own open questions**. Triage moves each entry out to the
+  away), and **their own open questions**. Triage moves each entry out to the
   queue for its next action; a question raised mid-pipeline bounces back
   here until answered. There is **no separate `flagged`/`to-resolve` lane** —
-  Andrzej resolves his own items by deleting or triaging them forward
+  The owner resolves their own items by deleting or triaging them forward
   (recording any real choice in `decisions.md`).
 - `to-spec.md` → `to-spike.md` → `to-plan.md` → `to-build.md` — the
   pipeline. `to-build.md` is the reviewed on-deck **build queue / source

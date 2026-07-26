@@ -4,9 +4,9 @@ One doc per module or subsystem, **revised in place**: no supersession, no dated
 Git keeps the past.
 
 **Agents maintain this tree on their own** — no confirmation needed. That is the difference from
-`../direction/`, which holds what *Andrzej* decided and may never be written without his yes
+`../direction/`, which holds what *the owner* decided and may never be written without his yes
 (`CLAUDE.md` "Direction docs"). The axis is **who decided**, not what it is about: a tolerance, a
-scope limit, a format choice is yours; product intent and process rulings are his.
+scope limit, a format choice is yours; product intent and process rulings are theirs.
 
 ## Shape
 

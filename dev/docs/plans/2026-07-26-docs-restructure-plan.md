@@ -11,8 +11,8 @@
 **revised-in-place** per-topic trees, and move three rule sections out of the always-loaded
 `CLAUDE.md`.
 
-**Architecture:** Two trees split by **who decided**. `direction/<topic>.md` holds Andrzej's
-decisions — product intent *and* process rulings — and **may never be written without his explicit
+**Architecture:** Two trees split by **who decided**. `direction/<topic>.md` holds the owner's
+decisions — product intent *and* process rulings — and **may never be written without their explicit
 yes**. `rationale/<topic>.md` holds engineering decisions an agent made, keyed by module, and agents
 maintain it freely. Both revised in place: no supersession, no dated history, git keeps the past.
 Every entry in both trees carries `Rejected` and `Refs`.
@@ -25,10 +25,10 @@ edits are retargeted comments in `uedctl/*.py`, `bin/_venv.sh`, `pyproject.toml`
 **Build split:** a gate after each of Tasks 3, 4, 5, 6, 7, 8, 9, 10. Tasks 1–2 are batched into
 Task 3's gate (permitted by `CLAUDE.md` "Review gates" — batch small changes into one round).
 
-**Not a feature worktree.** This lands incrementally on the checked-out branch. A squash merge
-collapses 13 separate `Andrzej-confirmed:` trailers into one commit message, destroying the audit
-trail that is the confirmation rule's only product. Deliberate exception — and because the spec is
-deleted at Task 10, **`direction/process.md` must record it** (Tasks 4–6).
+**Worktree:** the default stands — a feature is built in its own worktree and squash-merged, one
+commit per feature. **An exception is the owner's call, made live in the session; it is not a
+standing rule and `process.md` must NOT record one.** This restructure has already landed
+incrementally on the checked-out branch, which is a fact about what happened, not a precedent.
 
 **Conventions reminder:** commit only touched files by explicit pathspec (never `git add .`/`-a`);
 one short imperative subject; no AI attribution; never rewrite history. Markdown tables pad every
@@ -49,7 +49,7 @@ column except the last.
    index while zero topics exist would leave every session without the compiled target for the
    longest stretch of the migration — 13 topics, each blocking on a human confirmation. The line
    saving is explicitly *not* the goal (spec §0), so it does not buy the degraded window.
-5. **Both old files deleted last**, only after all 13 topics are confirmed and Andrzej signs the
+5. **Both old files deleted last**, only after all 13 topics are confirmed and the owner signs the
    `dropped` list — never partially, so the target never lacks a home.
 
 ### Concurrency — TWO worktrees exist, and one is NOT merged
@@ -222,15 +222,15 @@ Task 6: `projects-and-config`, `containers`, `packages`, `asset-catalog`.
 - [ ] Collect `Refs`. **A Ref whose target does not exist is DROPPED, or replaced by the code/spike
       site that does exist — never carried forward unresolved.** Most ledger `Refs:` lines point at
       ephemeral specs that were deleted when their work landed (e.g. `decisions.md:276`, `:542`,
-      `:809`). A `direction/` doc is written once, on Andrzej's yes, so a dangling Ref baked in here
+      `:809`). A `direction/` doc is written once, on the owner's yes, so a dangling Ref baked in here
       costs another confirmation cycle to remove.
-- [ ] **Put the full proposed text to Andrzej and wait for an explicit yes.** Not a summary — the
+- [ ] **Put the full proposed text to the owner and wait for an explicit yes.** Not a summary — the
       wording that will land.
-- [ ] On his yes, in ONE commit: write `direction/<topic>.md`; delete its section(s) from
+- [ ] On their yes, in ONE commit: write `direction/<topic>.md`; delete its section(s) from
       `direction.md`; flip its `direction/README.md` row; retarget that topic's citations; **and
       append a `direction/<topic>.md` disposition row to `MIGRATION.md` for every ledger entry
       consumed.**
-- [ ] Commit trailer: `Andrzej-confirmed: <topic>`.
+- [ ] Commit trailer: `Confirmed: <topic>`.
 
 **`process.md` additionally carries this restructure's own rulings** — the who-decided axis,
 `direction/`-only scope, revise-in-place, no hook, deleting the ledger, **and that this work ran
@@ -243,7 +243,7 @@ outside a feature worktree and why**. Otherwise they survive nowhere.
       exactly one line.
 
 **Verify per group:** each landed topic has `What we want` + `Rejected` + `Refs`; its README row is
-flipped; `wc -l dev/docs/direction/README.md` ≤ 30; `git log --grep='Andrzej-confirmed'` shows one
+flipped; `wc -l dev/docs/direction/README.md` ≤ 30; `git log --grep='Confirmed'` shows one
 commit per topic; every consumed entry has a `MIGRATION.md` row; the link checker passes.
 
 **Coverage gate at Task 6, mechanical:** `grep -c '^## ' dev/docs/direction.md` → **0** (every topic
@@ -261,7 +261,7 @@ commit deleted its section), and the preamble's lane model is present in `proces
       module/subsystem, in the mandated `Why / Rejected / Refs` shape. Same dangling-Ref rule as
       Part B. The ledger holds **83 `**Rejected:**` blocks**; losing them is the failure this tree
       exists to prevent.
-- [ ] Put the `dropped` list to Andrzej for sign-off.
+- [ ] Put the `dropped` list to the owner for sign-off.
 
 **Verify:** no `^## \d{4}-` entry lacks a `MIGRATION.md` row; every `rationale/*.md` entry has all
 three parts; link checker and `bin/test` pass.
@@ -311,16 +311,16 @@ Plus every `decisions.md`/`direction.md` mention a plain grep does find.
 
 - [ ] **Remove both router rows** — the `decisions.md` row, and the non-`@` `direction.md` row Task 3
       kept for un-migrated topics (all topics are migrated by now). Both files still *exist* until
-      Task 10, un-routed; that is intended, and Andrzej's Task-10 sign-off reads the ledger directly.
+      Task 10, un-routed; that is intended, and the owner's Task-10 sign-off reads the ledger directly.
 - [ ] NOT-trivial list: drop the two deleted docs; add `direction/*`, `rationale/*`, `rules/*`.
 - [ ] Sweep the **≥12 internal cross-references**, both directions. Do not key on `see **X**` — that
       misses six of them.
 - [ ] **F1** — `CLAUDE.md` claims `.claude/worktrees/` is gitignored; it is not. Add
-      `.claude/worktrees/` to `.gitignore`. **Andrzej's call** — log to `board/inbox.md` if he
+      `.claude/worktrees/` to `.gitignore`. **the owner's call** — log to `board/inbox.md` if he
       declines.
 - [ ] **F2** — rewrite the repo-layout paragraph: toplevel is `/home/neob91/Documents/Dev/uedcli`,
       no `Tools/`, `_scratch/` at that root. Same false label in `dev/docs/README.md`.
-- [ ] **F3** — the `.claude/settings.json` claim references a file that does not exist. **Andrzej
+- [ ] **F3** — the `.claude/settings.json` claim references a file that does not exist. **the owner
       chooses:** create it, or delete the sentence and accept `EnterWorktree` branching from
       `origin/<default>`. Behavioural, not wording.
 
@@ -333,7 +333,7 @@ Plus every `decisions.md`/`direction.md` mention a plain grep does find.
 
 ## Task 10: Delete the old docs and close out
 
-- [ ] **Andrzej's explicit confirmation** that both files may go — confirming 13 topic docs is not
+- [ ] **the owner's explicit confirmation** that both files may go — confirming 13 topic docs is not
       the same as confirming nothing else in 227 entries was worth keeping.
 - [ ] `git rm dev/docs/direction.md dev/docs/decisions.md`.
 - [ ] Record the removal sha in `rationale/README.md`'s history signpost.

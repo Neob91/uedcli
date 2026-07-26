@@ -15,7 +15,7 @@ uedctl is editor-automation for **UnrealEngine 1.0 games in general**, with
 **The naming split:** the user-facing config key is **`game`**
 (`[games.<name>]`, `--game`); the internal concept and code symbols stay
 **`substrate`**. A substrate maps 1:1 to a game for every game we support, so
-the TOML says what Andrzej says, and the code keeps the generic abstraction.
+the TOML says what the owner says, and the code keeps the generic abstraction.
 
 ## Rejected
 
@@ -23,7 +23,7 @@ the TOML says what Andrzej says, and the code keeps the generic abstraction.
   per-substrate helper classes) and the UE1-generic T3D/console-verb surface
   already make the core game-agnostic; naming should reflect that rather than
   re-entrench a DeusEx-only framing.
-- **`substrate` as the user-facing config key.** Andrzej reads and says
+- **`substrate` as the user-facing config key.** The owner reads and says
   "game"; the TOML should match.
 - **Renaming the internal `substrate` concept and symbols too.** Churns
   established code for no user benefit — the term is correct as the
