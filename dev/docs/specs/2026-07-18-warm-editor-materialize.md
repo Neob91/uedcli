@@ -3,8 +3,34 @@
 **Status:** specced 2026-07-18; design-gated 2026-07-18. **Blocking spike SP-E ran 2026-07-19 and
 falsified the original drive+verify design** (`spikes/2026-07-18-warm-editor-materialize/results.md`).
 **REVISED 2026-07-26** to resolve that blocker: the H3 post-verify moves OFF the build editor
-entirely, into a one-shot headless commandlet container. Awaiting the SP-F spike (§9) and the review
-gate (CLAUDE.md "Review gates") before build.
+entirely, into a one-shot headless commandlet container.
+
+> ## ⛔ PARKED — this revision DID NOT PASS its spec review (2026-07-26)
+>
+> Three cold reviewers returned ~50 findings with heavy independent convergence. **The premise
+> survived**: a one-shot commandlet structurally satisfies the "fresh editor, exactly one level
+> loaded" precondition `commands.md` states for `OBJ DEPENDENCIES`, which warm reuse cannot meet.
+> **The mechanisms did not.** Do not build from this document. The findings are logged in full on
+> `board/inbox.md` ("SPEC REVIEW ROUND 1"); the headlines:
+>
+> - The verify container is specified two mutually exclusive ways (`docker exec` into a container
+>   that has exited), boots the full GUI stack (the image `ENTRYPOINT` ignores its args and
+>   `LAUNCH_UED` defaults to 1 outside compose), and loses the `/stubs` mount that its own crafted
+>   ini puts first on `Paths` — the last of which is a deterministic exit 2 on correct builds.
+> - Both dumps share one undelimited stdout stream, re-creating the exact contamination
+>   `qualify._blocks_only` exists to prevent.
+> - The single engine fact decision 6 rests on is **not reproducible from any committed harness**.
+> - The idle watchdog's deadline equals `map_save`'s own 600 s bound and the marker is not refreshed
+>   by its poll loop, so it can kill a healthy build — on the ephemeral **default** path.
+> - Two further `direction/` conflicts are taken silently (the §4.3 one was parked correctly).
+> - SP-F's acceptance criterion is both unreachable (two known pre-existing verify false positives)
+>   and insufficient (it cannot see a runt/unlit map, which the compare structurally ignores).
+>
+> **Next step is a spike, not a spec revision.** Roughly half the findings are questions that should
+> be answered empirically — what the commandlet actually does with `OBJ LOAD`/`MAP LOAD`/
+> `OBJ DEPENDENCIES`/`OBJ LIST`, in what stdout format, under which entrypoint and mounts, at what
+> cost — rather than inferred and then reviewed. Re-spec on measured facts; per CLAUDE.md
+> "Review gates" the artifact then re-enters at round 1.
 
 **What changed on 2026-07-26, in one paragraph.** SP-E proved the *design*'s premise false: reused
 builds fail ~50% of the time, and the decisive isolation showed the disruptor is the H3 post-verify
