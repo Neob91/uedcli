@@ -1,6 +1,6 @@
 """Engine-facts regressions — assertions that re-check a spike's finding about how the real
 UnrealEd 2.2 binary behaves, so a binary swap / rebuild that changes the behavior trips a red test
-instead of drifting unnoticed (uedctl `CLAUDE.md` "Spikes: pin the finding, or it rots").
+instead of drifting unnoticed (uedctl `dev/docs/rules/spikes.md` "pin the finding, or it rots").
 
 Each test cites the spike it enforces. These run OFFLINE against the committed `uned/UED22/*.dll`
 (no editor, no capstone/pefile) — they assert byte patterns read out of the binary by the spike's

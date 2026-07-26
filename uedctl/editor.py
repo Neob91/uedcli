@@ -264,7 +264,7 @@ def ensure_editor(editor_id: str, *, state_dir: Path, mounts=None, ready_timeout
     (`docker rm -f`, clearing the leaked name) and re-spin a fresh one, re-waiting each time. Only
     when every attempt has timed out do we raise `EditorNotReadyError` (a clear, named error, never
     a bare `TimeoutError` traceback). The bound keeps a genuinely dead editor from looping forever
-    (CLAUDE.md "Background / long-running work" — a wedged job must never wait open-endedly).
+    (dev/docs/rules/background-work.md — a wedged job must never wait open-endedly).
 
     Worst-case wait is ≈ `start_attempts × ready_timeout` (the default 3 × 90s = 270s), since each
     attempt runs its own full readiness wait before the next re-spin — so a caller passing a tight

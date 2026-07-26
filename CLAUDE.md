@@ -592,7 +592,7 @@ prompt can tell it so.
 
 - **@dev/docs/direction.md** — *(auto-loaded, already in context)* what we WANT: the compiled target, synthesized from decisions.
 - `dev/docs/architecture.md` — **Read BEFORE any uedctl code change or design question**: the layer/module map, the model-side write pattern, invariants D1–D8, the session-store shape.
-- `dev/docs/decisions.md` — **Read when you need the WHY or the rejected alternatives** behind a choice: the UTC-timestamped ledger. `direction.md` (in context) is the net target; this holds the reasoning + history it drops.
+- `dev/docs/decisions.md` — **FROZEN 2026-07-26, historical reading only — never append.** The retired UTC-timestamped ledger, migrating into `dev/docs/direction/` (Andrzej's decisions) and `dev/docs/rationale/` (yours); `dev/docs/rationale/MIGRATION.md` records where each entry went.
 - `dev/docs/unrealed/commands.md` — **Read BEFORE driving the editor console**: the exec-verb reference (what to type).
 - `dev/docs/unrealed/t3d.md` — **Read BEFORE authoring/parsing T3D or editing surfaces/geometry**: block nesting, property forms, winding, authored-vs-computed taxonomy.
 - `dev/docs/unrealed/quirks.md` — **Read BEFORE driving UnrealEd or debugging editor behavior**: the non-obvious traps (IMPORTADD grid-snap, demand-load, selectability, CSG).

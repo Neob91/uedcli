@@ -4,15 +4,28 @@ This file records what happened to every entry of the retired `dev/docs/decision
 measured scope of the citation migration. **It outlives the migration**: it is the only map from an
 old dated citation (`decisions.md 2026-07-21 12:06 UTC`) to where that reasoning now lives.
 
-Plan: `plans/2026-07-26-docs-restructure-plan.md`. Spec: `specs/2026-07-25-docs-restructure.md`.
+Plan: [`../plans/2026-07-26-docs-restructure-plan.md`](../plans/2026-07-26-docs-restructure-plan.md).
+Spec: [`../specs/2026-07-25-docs-restructure.md`](../specs/2026-07-25-docs-restructure.md).
+(Both are ephemeral and get deleted when the work lands — this file is what survives.)
 
 ---
 
-## Inventory at `0e4783f` (2026-07-26)
+## Inventory at `ae7967e` (2026-07-26)
 
 **These numbers govern, not the spec's.** The spec's figures were measured before `6900e34`
 (the profile-generators merge) and have drifted materially — which is why the plan requires a
 re-measurement after the freeze rather than trusting them.
+
+**Measure the TRACKED tree, not the working tree.** Use `git ls-files -z | xargs -0 grep -l …`,
+not a bare `grep -r`. The link checker walks `git ls-files`, so a target derived from working-tree
+counts can never be driven to zero — the citation pass would chase files the tooling cannot see.
+Two untracked spike directories (`spikes/headless-materialize/`, `spikes/levelbuild-friction/`)
+inflated the first pass of this table by exactly that mechanism; they belong to another session and
+`rules/spikes.md` says their harnesses should be committed.
+
+**Expect these to keep moving**, and re-measure at the top of each task rather than trusting a
+number written here: this restructure itself adds citations (the freeze banner, the two tree
+READMEs, this file), so the `decisions.md` count rises before it falls.
 
 | Measure | Spec said | **Measured** |
 |-------------------------------------|-----------|---
@@ -22,13 +35,13 @@ re-measurement after the freeze rather than trusting them.
 | Ledger entries (`^## \d{4}-`) | 227 | 227 |
 | — naive `^## ` | 229 | 229 — the two extras are `## Format` and a heading **inside a fenced block** |
 | `**Rejected:**` blocks | 83 | 83 |
-| Files citing `decisions.md` | 171 | **175** (174 excl. itself) |
-| Files citing `direction.md` | 45 | **50** (49 excl. itself) |
-| `spikes/` citers | 31 | **33** |
+| Files citing `decisions.md` | 171 | **177** tracked (176 excl. itself) |
+| Files citing `direction.md` | 45 | **50** tracked (49 excl. itself) |
+| `spikes/` citers | 31 | **31** tracked (33 in the working tree — 2 untracked dirs) |
 | `specs/` citers | 62 of 64 | 62 of 64 |
 | `plans/` citers | 18 of 23 | **19 of 24** |
 | `unrealed/*.md` evidence sites | 7 (plan corrected to 6) | **8** — both corrections were wrong |
-| Bare dated refs, no literal `decisions.md` | ~17–19 | **22 files** |
+| Bare dated refs, no literal `decisions.md` | ~17–19 | **21** tracked |
 
 ### `unrealed/` evidence sites — 8, not 6
 
@@ -50,7 +63,7 @@ literal `decisions.md`, so a filename grep cannot see it.
 
 ```
 dev/docs/board/to-spike.md                     uedctl/normalize.py
-dev/docs/specs/2026-07-17-game-actor-…md        uedctl/preview_game.py
+dev/docs/specs/2026-07-17-game-actor-relative-poses.md   uedctl/preview_game.py
 dev/docs/spikes/levelbuild-friction/README.md   uedctl/rotation.py
 dev/docs/unrealed/commands.md                   uedctl/stash_register.py
 uedctl/cli.py                                   uedctl/tests/test_apply.py

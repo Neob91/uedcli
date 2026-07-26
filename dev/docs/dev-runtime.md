@@ -14,16 +14,30 @@ Only the editor/build containers it *drives* run under Docker.
 ## The pieces
 
 | Path | Role |
-|-----------------|---
-| `bin/_venv.sh` | sourced helper: finds `python3.12`, creates `.venv/` on first use, installs `Pillow` + `pytest`. |
+|------------------|---
+| `bin/_venv.sh` | sourced helper: finds `python3.12`, creates `.venv/` on first use, installs `Pillow` + `pytest`, and calls `ensure_native_ext`. |
 | `bin/uedctl` | runs the CLI through that venv. |
-| `bin/test` | runs pytest through the same venv — see [`rules/tests.md`](rules/tests.md). |
+| `bin/test` | runs pytest through the same venv, **then `cargo test` in `uedctl-native/`** — see [`rules/tests.md`](rules/tests.md). |
+| `uedctl-native/` | the **Rust PyO3 extension** (`uedctl_native`), built into the venv with `maturin develop --release`. |
 | `.venv/` | gitignored; self-creates, so a fresh checkout needs no setup step. |
 
-**Requirement:** `python3.12` on `PATH` (pyenv provides it here). uedctl is pure Python 3.12 with
-one third-party runtime dependency, **Pillow** (texture-catalog PCX decode), and carries **no
-compatibility shims** — no `tomllib`→`tomli` fallback, no 3.10 support. That is deliberate: the code
-targets one interpreter version and stays clean.
+**Requirements:** `python3.12` on `PATH` (pyenv provides it here), and `cargo` **if you need the
+native paths**. The Python side has one third-party runtime dependency, **Pillow** (texture-catalog
+PCX decode), and carries **no compatibility shims** — no `tomllib`→`tomli` fallback, no 3.10
+support. That is deliberate: the code targets one interpreter version and stays clean.
+
+**The Rust extension is OPTIONAL by design.** `ensure_native_ext` is source-hash-gated on
+`Cargo.toml` + `src/*.rs`; if `cargo` is absent it **warns and returns success**, so a docs-only or
+pure-Python change still runs the suite. The native tests `importorskip("uedctl_native")` and
+`bin/test` skips `cargo test` with a message. The consequence worth knowing: **on a machine without
+cargo, part of the suite silently does not run** — `level materialize --native` and
+`preview --native` depend on that extension.
+
+| Env knob | Effect |
+|-----------------------|---
+| `UEDCTL_VENV=<dir>` | put the venv somewhere other than `.venv/` |
+| `UEDCTL_VENV_REBUILD=1` | force a dependency reinstall |
+| `UEDCTL_SKIP_NATIVE=1` | skip the Rust build *and* `cargo test` entirely |
 
 ## Usage
 
@@ -45,7 +59,8 @@ venv-creation cost once.
 ## Releases (deferred)
 
 The release artifact is intended to be a **Nuitka**-compiled standalone binary: a single executable
-with the Python runtime and Pillow baked in, so an end user runs `uedctl` with nothing installed —
-no Docker, no Python. Building it (and deciding how the editor-driving verbs' Docker dependency is
-handled for a standalone binary) is an open board item. The host-native venv is what stands in for
-that binary during development, which is part of why the dev path mirrors it.
+with the Python runtime, Pillow **and the compiled `uedctl_native` extension** baked in, so an end
+user runs `uedctl` with nothing installed — no Docker, no Python, no cargo. Building it (and
+deciding how the editor-driving verbs' Docker dependency is handled for a standalone binary) is an
+open board item. The host-native venv is what stands in for that binary during development, which
+is part of why the dev path mirrors it.

@@ -1,6 +1,6 @@
 """Mesh-format regressions — pin the findings of spike `2026-07-25-native-mesh-decode` so a change
 to the decoder (or a package swap) trips a red test instead of drifting unnoticed (uedctl
-`CLAUDE.md` "Spikes: pin the finding, or it rots").
+`dev/docs/rules/spikes.md` "pin the finding, or it rots").
 
 The OFFLINE tests run against the **committed** UED22 v69 packages (`uned/UED22/*.u`), which carry
 stock-Unreal 4-byte packed vertices. The Deus Ex v68 side (8-byte vertices) lives in the

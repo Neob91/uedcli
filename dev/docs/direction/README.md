@@ -9,8 +9,8 @@ docs" for the rule. This README is the exception: index rows only, and never an 
 Siblings: `../rationale/` (why the code is that way — agent-owned), `../architecture.md` (what IS),
 `../rules/` + `CLAUDE.md` (process).
 
-**Migration in progress** (`specs/2026-07-25-docs-restructure.md`): a *(pending)* row still lives in
-`../direction.md` — read it there.
+**Migration in progress** — a *(pending)* row still lives in `../direction.md`; read it there.
+[`../rationale/MIGRATION.md`](../rationale/MIGRATION.md) records where every old entry went.
 
 | Topic | Covers | |
 |--------------------------|--------------------------------------------------------|---

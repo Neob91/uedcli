@@ -253,7 +253,7 @@ and are NOT part of this batch.
   nowhere → unreachable busy path). Several docstrings claim live use by the editor-preview flow
   deleted 2026-07-16 (`click`, `camera_align`) — actively misleading. Fix: **copy the removed methods
   into a committed spike harness** under `dev/docs/spikes/<slug>/harness/` (so the editor-driving
-  knowledge isn't lost — per `CLAUDE.md` "Commit the harness"), then delete them + the dead
+  knowledge isn't lost — per `dev/docs/rules/spikes.md` "Commit the harness"), then delete them + the dead
   `EditorBusyError` catch/raise from prod. Distinct symbol set from the completed `canonicalize_mover`
   deletion and the `to-spec.md` dead-code item.
 

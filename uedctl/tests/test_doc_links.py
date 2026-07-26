@@ -56,7 +56,8 @@ def _is_doc_target(target: str) -> bool:
     code-fence stripping catches. Restricting to path-shaped targets (a separator, a `.md`, or a
     pure fragment) keeps the check honest without flagging prose nobody will "fix".
     """
-    return "/" in target or target.endswith(".md") or target.startswith("#")
+    core = target.split("#")[0]
+    return "/" in core or core.endswith(".md") or target.startswith("#")
 
 
 def _links(path: Path) -> list[str]:
@@ -86,11 +87,19 @@ def _on_deck() -> frozenset[str]:
     refs = set(_MD_LINK.findall(text)) | set(re.findall(r"`([^`]+\.md)`", board.read_text(encoding="utf-8")))
     out = set()
     for ref in refs:
-        resolved = (board.parent / ref.split("#")[0]).resolve()
-        try:
-            out.add(str(resolved.relative_to(REPO)))
-        except ValueError:
-            continue
+        stem = ref.split("#")[0]
+        # A markdown link resolves against `board/`; a backticked path is written from the
+        # dev-docs root (`specs/2026-07-24-docs-command.md`). Try both and keep what exists —
+        # resolving only against `board/` silently drops every backticked ref, which is the
+        # exemption boundary, so the miss shows up as files being checked or skipped wrongly.
+        for base in (board.parent, REPO / "dev/docs", REPO):
+            resolved = (base / stem).resolve()
+            if resolved.exists():
+                try:
+                    out.add(str(resolved.relative_to(REPO)))
+                except ValueError:
+                    pass
+                break
     return frozenset(out)
 
 
@@ -159,20 +168,34 @@ def test_markdown_anchors_resolve(doc: Path) -> None:
     assert not broken, f"{doc.relative_to(REPO)} cites missing anchors:\n  " + "\n  ".join(broken)
 
 
+#: Files that MAY name a deleted doc, because naming it is their job. Without these the check
+#: below makes the migration's own end state unreachable: the signpost and the disposition map
+#: exist precisely to say where `decisions.md` went, and this module names both docs to check them.
+_MAY_NAME_DELETED = frozenset({
+    "dev/docs/rationale/README.md",     # the "git log --follow -- dev/docs/decisions.md" signpost
+    "dev/docs/rationale/MIGRATION.md",  # the durable date -> topic map, which is *about* the ledger
+    "uedctl/tests/test_doc_links.py",   # this file
+})
+
+
 def test_no_citation_of_a_deleted_doc() -> None:
     """No tracked file cites `decisions.md` or `direction.md` once they are gone.
 
     Skips while either still exists — during the migration they legitimately have citations. The
-    moment Task 10 removes one, this starts enforcing that nothing points at it. Ephemeral
-    specs/plans are exempt (they are deleted with their work), except the on-deck ones.
+    moment the restructure removes one, this starts enforcing that nothing points at it. Ephemeral
+    specs/plans are exempt (they are deleted with their work), except the on-deck ones, and
+    `_MAY_NAME_DELETED` is exempt by design.
     """
     on_deck = _on_deck()
-    for name in ("decisions.md", "direction.md"):
+    # Built, not literal, so this module does not match its own check.
+    for name in ("decisions" + ".md", "direction" + ".md"):
         if (REPO / "dev/docs" / name).exists():
             continue
         offenders = []
         for p in _tracked(".md", ".py", ".sh", ".toml"):
             rel = str(p.relative_to(REPO))
+            if rel in _MAY_NAME_DELETED:
+                continue
             if rel.startswith(_EPHEMERAL) and rel not in on_deck:
                 continue
             if name in p.read_text(encoding="utf-8", errors="replace"):
@@ -180,3 +203,49 @@ def test_no_citation_of_a_deleted_doc() -> None:
         assert not offenders, (
             f"{name} is deleted but still cited by:\n  " + "\n  ".join(sorted(offenders))
         )
+
+
+# --- the checker's own regressions -------------------------------------------------------------
+# `dev/docs/rules/spikes.md` "pin the finding, or it rots" — a check nobody has watched fail is a check
+# nobody knows works. Two of these shapes DID silently pass an earlier revision: a same-directory
+# anchored link (`architecture.md#nope`) was dropped because the target ends in the fragment, not
+# in `.md`.
+
+@pytest.mark.parametrize(
+    "target, should_be_checked",
+    [
+        ("other.md", True),
+        ("sub/dir/other.md", True),
+        ("other.md#some-anchor", True),   # regression: the fragment used to defeat the suffix test
+        ("#same-file-anchor", True),
+        ("u16", False),                   # struct notation in a table cell, not a link
+        ("i32", False),
+    ],
+)
+def test_is_doc_target(target: str, should_be_checked: bool) -> None:
+    assert _is_doc_target(target) is should_be_checked
+
+
+def test_checker_catches_a_broken_link_and_anchor(tmp_path: Path) -> None:
+    """The two failure modes, exercised end to end against a scratch doc."""
+    doc = tmp_path / "probe.md"
+    (tmp_path / "real.md").write_text("# Real Heading\n", encoding="utf-8")
+    doc.write_text(
+        "[gone](./no-such-file.md)\n"
+        "[dead anchor](real.md#not-a-heading)\n"
+        "[fine](real.md#real-heading)\n",
+        encoding="utf-8",
+    )
+    targets = _links(doc)
+    assert "./no-such-file.md" in targets and "real.md#not-a-heading" in targets
+
+    missing = [t for t in targets if not (doc.parent / t.split("#")[0]).resolve().exists()]
+    assert missing == ["./no-such-file.md"]
+
+    bad_anchors = [
+        t for t in targets
+        if "#" in t
+        and (doc.parent / t.split("#")[0]).is_file()
+        and _slug(t.split("#", 1)[1]) not in _anchors(doc.parent / t.split("#")[0])
+    ]
+    assert bad_anchors == ["real.md#not-a-heading"]

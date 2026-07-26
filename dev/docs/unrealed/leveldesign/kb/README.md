@@ -9,7 +9,7 @@ here is compressed for brevity — this is the durable, exhaustive record.
 
 > **The curated user cut is elsewhere.** The reader-facing subset — the level-design craft scoped to what
 > someone *authoring a level with uedctl* actually needs — lives outside `dev/` at
-> [`../../../leveldesign/`](../../../../../docs/leveldesign/). This `kb/` tree is the superset it is drawn from; when
+> [`docs/leveldesign/`](../../../../../docs/leveldesign/). This `kb/` tree is the superset it is drawn from; when
 > the two disagree, `kb/` is the record of what was found and the user doc is the editorial cut.
 
 > **What the user cut EXCLUDES (editorial scope — keep this in mind when editing `docs/leveldesign/`).**

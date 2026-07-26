@@ -431,7 +431,7 @@ def test_dispatch_poly_align_error_exit2_no_save(capsys):
 
 
 # --------------------------------------------------------------------- engine-fact regressions
-# Per uedctl CLAUDE.md "Spikes: pin the finding" — re-assert the two load-bearing facts poly align's
+# Per uedctl dev/docs/rules/spikes.md "pin the finding" — re-assert the two load-bearing facts poly align's
 # math rests on, so a change to the UV convention or the cylinder builder trips a red test.
 # Evidence: specs/2026-07-18-poly-align.md (UV convention §) — render.rs:159-165 +
 # preview_native._world_uv_frame; builders.cylinder radius placement (builders.py:206-207).

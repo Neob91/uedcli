@@ -243,7 +243,7 @@ outside a feature worktree and why**. Otherwise they survive nowhere.
       exactly one line.
 
 **Verify per group:** each landed topic has `What we want` + `Rejected` + `Refs`; its README row is
-flipped; `wc -l dev/docs/direction/README.md` ≤ 25; `git log --grep='Andrzej-confirmed'` shows one
+flipped; `wc -l dev/docs/direction/README.md` ≤ 30; `git log --grep='Andrzej-confirmed'` shows one
 commit per topic; every consumed entry has a `MIGRATION.md` row; the link checker passes.
 
 **Coverage gate at Task 6, mechanical:** `grep -c '^## ' dev/docs/direction.md` → **0** (every topic
