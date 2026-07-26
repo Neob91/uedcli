@@ -205,6 +205,21 @@ old path; `dev/docs/` is current and `docs/dev/` no longer exists.
 
 ### 0b. The house rules this build must satisfy
 
+> **CORRECTED 2026-07-26 (plan review round 1): this section is stale, and the header's "no other
+> document needs to be opened" is no longer safe.** Four current `CLAUDE.md` rules are missing here.
+> **Open `CLAUDE.md`.** In particular:
+> - **Feature worktrees.** This is an eight-slice feature, so it is built in its own git worktree on
+>   its own branch and squash-merged back — the feature branch is **never pushed**. §0b below instead
+>   says "push after committing", which is the *non-feature* path and is wrong for this build.
+> - **The decisions ledger is retired** — see the S7 correction; nothing is appended to
+>   `decisions.md`.
+> - **`dev/docs/direction/` may not be written without the owner's explicit yes** — see S7.
+> - **Owner decisions go through the question widget** (rule added 2026-07-26) and are never
+>   downgraded to a board item to avoid asking. This bears directly on §5's items "builder-decided
+>   under delegation": a call that changes observable behaviour is asked, not derived.
+> - **Commit only your own hunks** — several sessions work this repo at once; read `git diff <path>`
+>   before staging and never `git add -A`.
+
 Reproduced here so the builder does not have to open `CLAUDE.md`.
 
 **Running the tests.** From `Tools/uedcli`, run **`bin/test`**. It runs pytest *host-native* in the
@@ -1108,6 +1123,38 @@ the slice stays a self-contained green commit.
 - `architecture.md`'s `utexture.py` module description (grep `UTexture/UPalette decoder`) is updated
   to name the new public surface — §0f's "docs move with the slice" applies to this slice too, and
   round 1 found it had no docs obligation at all.
+
+### S2c — the MESH-SKIN path (SCOPE ADDED 2026-07-26, plan review round 1)
+
+**This plan did not implement a requirement its own spec carries.** The spec's header block (ADDED
+2026-07-26, owner-directed) says every format this build adds *"must be reachable from the skin path
+too, and its coverage must include one mesh-skin case, not only surface reads"*, and that the typed
+failure result *"must carry enough to name the offending skin ref to its caller"*. The plan contained
+**zero** mesh/skin content — no Done-when, no module-map row, and no entry in §6 "Not in this plan".
+
+**And S2 silently breaks two committed callers.** Both mesh-render harnesses do:
+
+```
+got = tres.resolve(f"{rp[0]}.{rp[-1]}")
+if got:                      # <-- a typed ERROR object is TRUTHY
+```
+
+- `dev/docs/spikes/2026-07-25-native-mesh-decode/harness/render_class.py:91`
+- `dev/docs/spikes/2026-07-25-native-mesh-decode/harness/render.py:91`
+
+Under S2's return-type change each would accept an **error** as a decoded skin and render garbage.
+`rules/spikes.md` makes committed harnesses durable evidence, not scratch, and master already carries
+`745d0fa` "Gate textured class previews on native texture decode; error on an undecodable skin" — so
+this is live scope. Neither file appears in §1's *Changed* map nor its *Deliberately untouched* list.
+
+**Done when**
+
+- Both harnesses are migrated to the typed result and **fail loudly** on an error rather than
+  treating it as an image; each names the offending skin ref in its message.
+- One mesh-skin case is covered for every format this build adds, per the spec's requirement — not
+  only surface reads.
+- §1's module map lists both harness files, and §6 states explicitly what of the skin path is *not*
+  in scope.
 
 ### S3 — layout detection from the mip chain
 *D1 — the governing idea, and the slice where the spec was most optimistic.*
