@@ -1,8 +1,13 @@
 # Spec: textured faces for `actor preview` (`--faces wire|flat|textured`)
 
-**Status:** revised after spec review round 1 (2026-07-26, 3 cold Opus reviewers → 2 structural
-findings + 22 correctness defects, all resolved below). **Ready to re-enter the gate at round 1.**
-**Spike complete** — the §11 blocker is cleared (`spikes/2026-07-26-texture-masked-property/`).
+**Status:** ⛔ **PARKED AGAIN — re-entry round returned a STRUCTURAL finding.** The masking spike is
+complete and its blocker cleared, but a second cold round (2026-07-26, 3 fresh Opus reviewers) found
+that this spec is designed against a `TextureResolver` API that a **reviewed, on-deck `p1` item is
+about to delete**. Per `CLAUDE.md` "Review gates" a structural finding replaces the remaining round,
+does **not** pass the gate, and parks the work for an owner ruling. **Do not plan or build from this
+document.** The blocker is §12; the detail defects the same round found are §13 and must be fixed in
+the same revision — deliberately NOT fixed yet, because the §12 ruling may change what `resolve_mips`
+should even be.
 **Requested by:** the owner, 2026-07-26, session `uedcli:preview-textured`.
 **Ephemeral:** scratch, per `CLAUDE.md`. On build, fold the outcome into
 [`architecture.md`](../architecture.md) "Preview internals", [`docs/usage.md`](../../../docs/usage.md)
@@ -503,3 +508,70 @@ Two measurements from that spike belong here because they size what decision 2.3
   usage) has real black there. `bMasked` is the only reliable gate.
 
 Pinned by two `test_engine_facts` regressions against committed fixtures.
+
+
+---
+
+## 12. BLOCKING (re-entry round, 2026-07-26) — a sequencing conflict
+
+**`dev/docs/board/to-build.md` carries a REVIEWED, on-deck `p1`: "Native texture decode for any UE1
+package"** (spec `specs/2026-07-25-native-texture-formats.md` + its plan). That work:
+
+- **deletes `TextureResolver.resolve_masked`** outright — its spec line 159: *"§4's return-type change
+  **deletes** `TextureResolver.resolve_masked` rather than keeping it beside…"*, citing no-back-compat;
+- **replaces `resolve`'s `None`-on-miss contract** with a typed error object naming the case;
+- adds **`CompMips`** — a second, compressed mip array — changing what "the mip pyramid" is;
+- records **30 textures in the project's own `LUM/Textures/LUM_CoreTex.utx` that do not decode today.**
+
+This spec's §6 specifies `resolve_mips(ref) -> list[…] | None`, *"`None` on any miss, matching
+`resolve`"* — designed against the exact contract being replaced, beside a method being deleted. §0,
+§10 and §11 name no such dependency because this spec never knew about it.
+
+Two further consequences: §8's "non-P8 → exit 2" becomes wrong the day that item lands; and because
+`--faces textured` **refuses** rather than degrades, any LUM level using one of those 30 undecodable
+textures would fail to render at all — where `level preview --native` shows a checkerboard today.
+
+**The owner's ruling is needed on sequencing**, and the options are genuinely different builds:
+land textured-faces first against today's API and rework it after; wait for the texture-decode item
+and design `resolve_mips` against the new typed-error contract; or fold the mip-pyramid accessor into
+that item's scope so there is one texture API change, not two.
+
+## 13. Detail defects from the re-entry round (fix in the same revision as §12)
+
+Converged across the three reviewers unless noted. **Not yet applied** — see the status header.
+
+| # | Defect
+|---|---
+| 1 | **The masking gate ignores the brush ACTOR's `PolyFlags`** (all 3). `preview_native.build_scene` ORs `_poly_flags_int(actor.props)` into every poly (`preview_native.py:382`), and `preview.classify_brush` already reads actor-level flags. §4.3a reads `poly.flags` only, so a brush authored `PolyFlags=2` masks in the engine and in `--native` but renders opaque here — re-hiding "cut-out texture on a solid face", one of §0's four motivating defects. §4.9 #4's `PF_Invisible` drop has the identical hole
+| 2 | **`--prefab-dir` does NOT imply "no project"** (all 3). It overrides only the prefab library root (`dispatch._prefab_root`); `_preview_render_data` independently calls `_resolve_project(args)`. §5's row is false and §9's test would pass or fail by cwd
+| 3 | **§4.4 declares `scale_world` "must be specified" and never specifies it** (all 3), and the recipe given is wrong: `scale` is px per *projected* unit so the correction multiplies, not divides; and the iso map is an orthogonal anisotropic scale, not a shear. `preview._draw_sphere` already carries the constant (`max(√2·cos r, √(2 sin²r + 1))` = 1.2247 at 30°). Three readings ⇒ three mip picks, and §9 has no iso mip test
+| 4 | **`resolve_mips -> … \| None` cannot produce §8's "naming which cause applies"** (2 of 3). `_decode_ref` collapses six distinct misses to `None`; `_texture_resolver` likewise, and §6 does not list it as changing. Either it returns a reason or §8/§9 drop the requirement
+| 5 | **`preview._face_normal` is imported by `query.py:13` and `polyalign.py:26`** (all 3). §6 says "deleted"; deleting it breaks `actor show` / `brush poly *` at import, and a re-export alias is the shim `conventions.md` forbids. Neither file is listed as touched. A third `_newell` also lives at `builders.py:82`
+| 6 | **The `render_data` reshape is not mechanical and the call-site list is short** (all 3). `preview.render_quad_pgm:1868-1870` is unlisted; `render_brushes_pgm:1622` and `render_quad_pgm:1868` both do `render_data or {}`, which yields a plain dict with no `.points` ⇒ `AttributeError` to the user; `_scene_geometry`'s `.get(name)` + `is None` guard becomes a `KeyError` under `[name]`
+| 7 | **`math.floor(±inf)` raises `OverflowError`, not `ValueError`** (2 of 3). §4.3 names only `ValueError`, so an implementer following it literally still leaks a traceback — in the one place the spec cites the no-exception rule
+| 8 | **The rasterizer is underspecified** (1 of 3, but load-bearing). §6 says "scanline fill", §4.2 says "barycentric" — different rasterizers, and no pixel-coverage/fill rule is given. `architecture.md` records that **0.1–0.6 % of faces in real exported maps are concave** (spike `concave-faces/`, live 2026-07-23), which is why `preview.py` already carries `_poly_is_convex_2d`. A fan triangulation fills outside a concave face; even-odd scanline does not. §9's golden PNG would bless whichever was built
+| 9 | **No offline test can exercise the `bMasked = True` arm** (1 of 3). Neither committed fixture carries `bMasked` (I verified), and the game corpus is gitignored — so the half the spike calls load-bearing ships untested. §6 budgets no synthesized masked fixture
+| 10 | **§9's cross-renderer test is unimplementable** (2 of 3). `render.rs` is reachable only as `render_frame` → RGB bytes; texel indices are never exposed, the projections differ, and the Rust half is `importorskip`-gated so it would silently skip on the no-cargo machine §0 protects
+| 11 | **`--brush-colors` has THREE consumers, not four**, and `getattr(args, "brush_colors", "csg")` does **not** fire for an existing-but-`None` attribute — each site needs an explicit `or "csg"` (all 3)
+| 12 | **§7 over-counts breakdown**: `_render_breakdown_grid` passes `focus=None` for pane 0 and every point-actor pane, so only brush panes are two-pass. Reviewers put the real figure at ~2.2–4.5 min, not "many minutes" (all 3)
+| 13 | **The swatch count contradicts the spike it cites** — "and eleven more" (12) vs findings.md's 13 (all 3)
+| 14 | **§4.9 #7 mislabels the scaled-brush divergence** as message-only; it is behavioural (this tier rejects only under `flat`/`textured`). And `_reject_scaled` also rejects **`SheerRate`**, which `actor_linear` folds into geometry — a pure-sheer brush is the same silent hazard and §8's "naming its scale" mis-describes it (all 3)
+| 15 | **§6's truncated-mip reasoning is inverted**: a SHORT mip silently zero-fills (the dangerous case); only an over-long one raises `IndexError`. §6 directs guarding the wrong one (all 3)
+| 16 | **§4.5's legacy-path claim is wrong about the mechanism** — `_CSG_PALETTE` *is* evaluated unconditionally at `preview.py:1464-1467` and then discarded. Colours right, mechanism wrong
+| 17 | **§4.10 step 6's internal order is wrong** — the code draws markers → leader labels → decals → keyline → legend
+| 18 | **Unspecified**: pass-A scratch buffer initialisation; `by_ref` key casefolding (`_TextureTable` uses `ref.casefold()`, §6 does not say); whether the §4.7 cull also suppresses `--highlight`/`flat` line art on culled faces; `textured` on the legacy `color_by_csg=False` path; faces with <3 vertices (`render.rs` skips them explicitly)
+| 19 | **A bare (unqualified) `Texture=` ref is the most common miss and §8 never names it.** `_decode_ref` rejects it before any lookup; `_TextureTable` already emits the right hint ("qualify the ref as `Package.Name`"). Exiting 2 without saying that is the biggest practical usability risk
+| 20 | **§8 vs §4.3 collide when nothing needs a texture** — `brush build cube \| actor preview --from-t3d - --faces textured` has every poly `texture=None`, yet exits 2 outside a project. Follows from decision 2.6 but is nowhere recorded as a consequence
+| 21 | **§4.7's "matches what the editor and the game draw" is an undated, uncited engine claim.** The support is the owner's dated ruling (2.10); attribute it plainly or cite evidence, since this text folds into a durable doc
+| 22 | **`_DIM_ALPHA = 0.15` may not restore the intent** (all 3, as a concern). One composite gives `0.15·c + 190.4` → 190–229; a mid-grey texel lands ~210 against `BG` 224. `_DIM_ALPHA` was tuned for thin *lines*, not area fills. Wants one test render before building
+
+**Refuted, with the check recorded** (`CLAUDE.md` requires the disproving check, not just the claim):
+one reviewer reported that procedural textures (`FireTexture`/`WetTexture`/…) pass `_decode_ref`'s
+`not t.mips` gate with an empty mip and render **all-black at exit 0**. I scanned the **full 2,669
+`Texture`-classed export corpus**: **zero** have `fmt == 0` with an empty mip-0. The code path exists
+but no corpus texture reaches it, and a poly naming a procedural texture misses the name lookup and
+exits 2 correctly. Not a defect here.
+
+**Three reviewers independently confirmed there is no OTHER structural problem** — the pre-CSG ortho
+tier, the `--faces` shape, the masking gate's structure and the subtract-culling rule all hold up
+against the docs and the code. §12 is a sequencing conflict, not a design error in this spec.
