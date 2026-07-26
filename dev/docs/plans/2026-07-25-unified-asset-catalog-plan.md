@@ -1,12 +1,17 @@
 # Plan: the unified asset catalog
 
-**Spec:** [`specs/2026-07-25-unified-asset-catalog.md`](../specs/2026-07-25-unified-asset-catalog.md).
+**Spec:** the split set — [`engine`](../specs/2026-07-26-asset-catalog-engine.md), [`class`](../specs/2026-07-26-asset-catalog-class-arm.md), [`texture`](../specs/2026-07-26-asset-catalog-texture-arm.md), [`audio`](../specs/2026-07-26-asset-catalog-audio-arm.md).
 **Decisions:** [`direction/asset-catalog.md`](../direction/asset-catalog.md) (the owner's) and
 [`rationale/`](../rationale/) (the agent's). **Not `decisions.md`** — that ledger is FROZEN;
 [`rationale/MIGRATION.md`](../rationale/MIGRATION.md) maps the old dated citations.
 **Review:** two rounds on this plan (4 cold reviewers, 2026-07-25) — all findings folded; §5 records them.
 **Ephemeral:** scratch for sequencing this build; delete when the work lands.
 
+> **SUPERSEDED BY THE SPLIT (2026-07-26). This plan sequences a spec that no longer exists as one
+> document and must be re-cut PER ARM** — the class arm is buildable now, the texture arm has four
+> open owner decisions, and the audio arms are blocked on a re-measurement spike. Everything below
+> predates the split; treat it as raw material, not a sequence.
+>
 > **RE-CUT REQUIRED before building — the spec moved substantially on 2026-07-26.** This plan was
 > reviewed against the pre-revision spec. The stale points fixed inline below are the anchors, the
 > tracked-package count, the `decisions.md` supersession mechanism, the S11 direction edit (now done)

@@ -56,7 +56,7 @@ When a plan here is built, delete its entry ([`done.md`](done.md) keeps a short 
 
 - [ ] `p2` **The unified asset catalog: texture / class / sound / music.** Plan:
   [`../plans/2026-07-25-unified-asset-catalog-plan.md`](../plans/2026-07-25-unified-asset-catalog-plan.md).
-  Spec: [`../specs/2026-07-25-unified-asset-catalog.md`](../specs/2026-07-25-unified-asset-catalog.md).
+  Spec: SPLIT 2026-07-26 into [`engine`](../specs/2026-07-26-asset-catalog-engine.md) + [`class`](../specs/2026-07-26-asset-catalog-class-arm.md) + [`texture`](../specs/2026-07-26-asset-catalog-texture-arm.md) + [`audio`](../specs/2026-07-26-asset-catalog-audio-arm.md).
   Decisions: [`../direction/asset-catalog.md`](../direction/asset-catalog.md) (the owner's) and
   `../rationale/` (the agent's) — **not** `decisions.md`, which is FROZEN.
 
