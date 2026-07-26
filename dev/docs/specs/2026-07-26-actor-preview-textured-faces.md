@@ -1,7 +1,14 @@
 # Spec: textured faces for `actor preview` (`--faces wire|flat|textured`)
 
-**Status:** specced, **all design questions answered by the owner** (2026-07-26, three rounds).
-Awaiting the spec review round (`CLAUDE.md` "Review gates").
+**Status:** ⛔ **PARKED — spec review round 1 returned STRUCTURAL findings; the gate is NOT passed.**
+3 cold Opus reviewers, 2026-07-26. Two findings say the *design* is wrong rather than a detail, and
+two recorded owner decisions were taken on premises the code contradicts. Per `CLAUDE.md` "Review
+gates" a structural finding **replaces** the remaining round, does not pass the gate, and parks the
+work until the owner rules; the artifact then re-enters at round 1. **Do not plan or build from this
+document in its current state.** The blocking items are in §12; the ordinary correctness defects
+round 1 also found are in §13 and must be fixed in the same revision.
+*(Design questions had been answered by the owner over three rounds on 2026-07-26 — §2 — but two of
+those answers are now known to rest on false premises. See §12.)*
 **Requested by:** the owner, 2026-07-26, session `uedcli:preview-textured`.
 **Ephemeral:** scratch, per `CLAUDE.md`. On build, fold the outcome into
 [`architecture.md`](../architecture.md) "Preview internals", [`docs/usage.md`](../../../docs/usage.md)
@@ -378,5 +385,89 @@ brush in the scene (pass A) and then the focused brush again (pass B), rather th
 
 ## 11. Open questions
 
-**None.** All design questions were put to the owner and answered across three rounds on 2026-07-26;
-each answer is recorded in §2 or in the section it governs, together with the alternatives rejected.
+Superseded by §12 — spec review round 1 (2026-07-26, 3 cold Opus reviewers) reopened several.
+
+## 12. BLOCKING — structural findings and decisions taken on false premises
+
+**These stop the work.** Each needs an owner ruling before the spec is revised and re-gated.
+
+### S1 — masking is specified unconditionally, and the correct gate is NOT YET KNOWN
+
+§2.3/§4.3 skip a texel whenever `mask[…] == 0`, with no condition. That is wrong.
+`unrealed/quirks.md` (🔬, 2026-07-26) states: **"`Masked` is a property of the TEXTURE, set at import
+— and a texture's flags are OR'ed into every surface it is applied to."** There is also a per-poly
+`PF_Masked = 0x2` (`query.py` `PF_NAMES`). So a face masks iff **its poly carries `0x2` OR its
+texture was imported masked** — index 0 on any other face is an ordinary colour.
+
+Measured by a reviewer on this repo's own fixtures: `CoreTexWater.dirtywater` parks reserved magenta
+at index 0 and uses it for **0** texels, while `LUM_InfoPortraits.ArthurCallaway` has index 0 = real
+black and **2.2 %** of its texels there. Built as specified, that portrait renders shot through with
+holes that also skip the depth write, so geometry behind bleeds through.
+
+**Why this is structural, not a patch:** the same `quirks.md` entry says the texture-side masked
+property is *"not yet probed to the stored property name/offset on the export; do that before relying
+on the exact spelling."* uedcli therefore **cannot read it today**. Gating on the poly flag alone is
+implementable now but knowingly incomplete (it misses exactly the `ladder_a`-on-a-solid-wall case the
+friction log cares about). So this is a `[spike]` before it is a `[spec]`.
+
+### S2 — opaque fills over PRE-CSG geometry may hide the whole level
+
+`actor preview` renders **brush volumes, not carved geometry** — a subtract is a solid box sitting
+inside the add it carves. Once faces are opaque, an ordinary scene (an add block with subtracted
+rooms) renders as *the outside of the outermost box*, and §9's own test "a subtract's far interior
+wall is drawn" contradicts §4.7's nearest-wins depth rule. The spec records accepted consequences
+carefully everywhere else and never asks this question, which is the largest single change to what
+the render shows. **Needs a stated rule for how subtract/nonsolid volumes participate in fill and
+depth** before anything is planned.
+
+### S3 — decision 2.7 rests on a false premise
+
+It rejects `--brush-colors` under `textured` because "there is no wireframe for it to colour, so
+accepting it would be a flag that does nothing." **False:** `preview._scene_geometry` derives
+`vivid` — the `--highlight` outline colour, which §5 calls the only line art in a textured render —
+from `brush_colors` (`legend` → per-actor tint, `csg` → CSG front hue). So the combination is
+meaningful and working. The ruling may still stand, but it was made on a stated fact the code
+contradicts and must be re-put.
+
+### S4 — decision 2.4 accepted a cost that is understated by more than 10×
+
+§7's arithmetic is wrong in both directions and omits the worst case:
+
+| Claim (as written)                                         | Actual
+|-------------------------------------------------------------|---
+| "quad @1024 = ~1M px per pane × 4 panes"                    | `render_quad_pgm` uses `half = size // 2` — four 512² panes, ≈**1.05 M px total**
+| §5: "`quad` … pays ~4× a single pane"                       | **~1×** — same total pixels as `--layout single` at the same `--size`
+| §7: "`--focus` under `textured` is the most expensive"      | **`--layout breakdown` is**: `_render_breakdown_grid` renders **N+1 panes at the FULL `--size`**, each one `--focus`ed, i.e. ~(N+1)× the two-pass cost
+| §7: worst case "tens of seconds"                            | breakdown on the 28-actor example is plausibly **many minutes**
+
+The owner agreed to "no guard, no ceiling" against the wrong number, so that ruling should be re-put
+with the real one.
+
+## 13. Round-1 correctness defects to fix in the same revision (non-blocking, but real)
+
+All verified against code by at least one reviewer; most by two or three.
+
+| # | Defect
+|---|---
+| 1 | **Mip sampling never rescales UV.** §4.3 fetches `floor(u) % tex_w` while `u` is in **mip-0** texel units, so a face at level `L` tiles its texture **2^L times**. Must be `floor(u / 2**L) % mip_w`. At §4.4's own worked example (level 3) the texture repeats 8× — the tool would *manufacture* the exact defect class it exists to expose
+| 2 | **Mip selection is an undeclared SECOND divergence from `--native`** (which is mip-0 only), contradicting §2.2's "exactly" and §2.3's "single-axis". It also makes §9's per-pixel conformance test unsatisfiable by construction
+| 3 | **Scaled brushes silently mis-texture.** `preview._scene_geometry` builds vertices with `rotation.actor_linear` (`PostScale·R·MainScale`); `_world_uv_frame` uses `actor_matrix` (**rotation only**). `preview_native` is safe only because `_reject_scaled` hard-errors first — `actor preview` has no such gate. Also, UV axes need the inverse-transpose under non-uniform scale. Needs a decision: reject scaled brushes, or handle them
+| 4 | **§4.8's draw order erases point sprites and every `--show` overlay.** `_draw_point_underlay` (step 2) draws sprites *and* the collision/light/sound overlays; opaque fills at step 3 paint over them. §5 asserts the opposite twice ("drawn after fills", "point actors entirely unaffected")
+| 5 | **The `--focus` context layer computes to ~6 % opacity — effectively invisible.** `_fade(rgb, 0.75)` blends 75 % toward `BG`, then compositing at alpha 0.25 leaves `0.0625·texel` over the background (final pixels land 210–226 against `BG`=224). Compare the existing wireframe dim, a single `_DIM_ALPHA = 0.15`. §9 would pin the pair as a regression test
+| 6 | **`--focus` pass A is order-dependent.** Per-face alpha blending against a nearest-wins depth buffer blends a pixel 1..N times depending on iteration order. The stated property needs pass A resolved opaquely into its own buffer and composited **once**
+| 7 | **"The only line art" is false at default settings.** `--annotate` defaults to all face indices + names; decals, the overlap keyline and the legend all still draw. §9's "produces outline pixels and nothing else does" is unimplementable
+| 8 | **Occluded-face index decals land on top of opaque geometry.** `_decal_opacity` grades a hidden face's number down but still paints it — readable as depth over a wireframe, but over an opaque fill it is a *wrong-face label on a wall*, not merely "hard to read"
+| 9 | **`PF_Invisible` unaddressed.** `preview_native.build_scene` drops those polys; `preview.py` does not, so an invisible face becomes an opaque occluder that writes depth
+| 10 | **Rounding/precision unpinned** while §4.1 claims byte-for-byte. `render.rs` is f32 throughout and converts via `(c*shade).min(255.0) as u8` — **truncation**; `preview.py`'s idiom is `round()`
+| 11 | **`FaceTextures` has no defined shape** — the central new dispatch→preview seam. Keyed by what? Does the mip pyramid or the selected mip cross? How do "no texture" and "checkerboard" encode? And `render_data` is currently `dict[name → PointRender]`, indexed by actor name in three places
+| 12 | **`_preview_render_data` early-returns `{}` when there are no point actors** — exactly the brush-only textured path. Both face resolution and S-decision 2.6's exit 2 are specified to live in a function whose current structure forbids reaching them
+| 13 | **The exit-2 trigger names the wrong cause.** `_texture_resolver` returns `None` for three distinct reasons (no user games config; `ConfigError`; empty composed file list), all reachable with a valid project. §8 says "no project/config", violating "naming the offending value". Also `prefab preview --prefab-dir` deliberately runs with **no project**, making `--faces textured` permanently unreachable there — never stated
+| 14 | **§4.2's zero-axis fallback contradicts §4.1.** §4.1 insists on Newell "NOT the stored `Normal`"; `_tex_basis_default`'s caller prefers `poly.normal` and falls back to Newell only when absent
+| 15 | **§4.4's `scale` is not px-per-world-unit under `iso`** — the default `--view`. `_project`'s iso is a shear, so `_framing`'s scale is px per *projected* unit; this also contradicts §5's "the UV math is view-independent"
+| 16 | **`|KEY_LIGHT|` is 0.99962, not the stated 0.9995** — in the one row whose whole argument is that constant's exact value
+| 17 | **Wrong pointers.** §3 cites `dispatch._preview_opts` (it is **`cli._preview_opts`**); §4.3/§8 cite "the `render.rs` checkerboard" (it is **`preview_native._checkerboard`** — `render.rs` has none by design, and §6 never relocates it)
+| 18 | **`_newell` duplicates `preview._face_normal`**, which already exists and is byte-identical — §6 would leave two copies in one module's reach
+| 19 | **§2.6 overstates its direction conformance.** The exit-2 half applies "No silent half-answers"; the *per-ref checkerboard + warn* half is the warn-and-continue shape `conventions.md` lists under **Rejected**. There is precedent (`_TextureTable`), so it may be settled practice — but "needs no direction-tree change" is not true of that half, and no `rationale/` entry is proposed
+| 20 | **Test-list gaps:** no test for mip UV rescale, scaled brushes, masked-vs-unmasked, sprites surviving a fill, `quad`/`breakdown` under `--faces` at all, `stash`/`prefab preview` accepting the flag, `flat` + `--focus`, `flat` under `--brush-colors legend`, `PF_Invisible`, or the non-P8 checkerboard row. The named "`%` vs `rem_euclid`" test pins something true by definition and never at risk; the "native ext absent" test is near-vacuous since `preview.py` never imports it
+| 21 | **`flat` is undefined on two live paths:** its colour under `--focus` pass A, and under `render_brushes_pgm`'s default `color_by_csg=False` (the legacy path the unit tests use, where `_CSG_PALETTE` is not consulted at all). Its back-facing colour under `--brush-colors legend` is also unstated
+| 22 | **`resolve_mips` typing is contradictory** — §6 types it `list[...]`, §8 requires `None`. A truncated mip chain would reach `mip0_to_rgb`'s `IndexError`, and `math.floor(nan)` raises `ValueError` — both are Python exceptions reaching the CLI user, which `CLAUDE.md` forbids
