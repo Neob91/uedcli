@@ -22,11 +22,7 @@ and the latest `decisions.md` disagree, this doc is stale — fix it.
 
 ## Scope: a generic UnrealEngine-1 tool
 
-uedctl is editor-automation for **UnrealEngine 1.0 games in general**, with **Deus Ex as one
-baked-in substrate**, not as the tool's identity. New code, flags, verbs, and naming avoid
-DeusEx-only framing; map-file handling supports `.dx` (Deus Ex) and `.unr` (Unreal/UT) alike.
-Substrate-specific knowledge (class names, helper actors, packages) is selected per-substrate,
-never hardcoded. *(decisions: generic-UE1 tool, 2026-06-23; `board/README.md` "Portability goal")*
+**MIGRATED** → [`direction/scope.md`](direction/scope.md).
 
 ## Projects, substrates, and the global CLI
 

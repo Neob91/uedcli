@@ -112,8 +112,10 @@ One row per ledger entry. `dropped` and `superseded-dead` each need a named reas
 either old file is deleted.
 
 | Entry | Disposition | Reason / superseder |
-|-------|-------------|---
-| *(populated by Tasks 4–7)* | | |
+|--------------------------------------------------|--------------------------|---
+| 2026-06-23 — uedctl is a generic UnrealEngine-1 tool | `direction/scope.md` | intent; its `Rejected` ("treating uedctl as a Deus Ex tool") carried over verbatim. Its `Refs:` cited `specs/2026-06-23-uedctl-new-level-authoring-design.md`, **deleted** — dropped rather than carried dangling |
+| 2026-06-30 21:07 — config key is `game`, not `substrate` | `direction/scope.md` | intent; refines the above. Both `Rejected` bullets carried over |
+| *(remaining entries populated by Tasks 4–7)* | | |
 
 ---
 
