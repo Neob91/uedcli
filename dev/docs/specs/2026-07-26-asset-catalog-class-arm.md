@@ -181,6 +181,31 @@ need one.
 1. **Prerequisite: `schema_cache` v2** (engine spec §11.1) — persists resolved class defaults. Gates this
    arm: `DrawType` is default-sourced, so without it every cold `class list --json` re-resolves
    corpus-wide (~14.6 s measured).
+1b. **Prerequisite: FULL NATIVE TEXTURE DECODE** —
+   [`2026-07-25-native-texture-formats.md`](2026-07-25-native-texture-formats.md), the texture arm's
+   prerequisite 2. **It gates TEXTURED mesh previews in this arm, which the split originally failed to
+   declare.** A `DT_Mesh` thumbnail is textured from the class's `MultiSkins[i]`, so it runs the *same*
+   texture decoder as the texture arm — the spike's `render_class.py` builds a
+   `utexture.TextureResolver` for exactly this. Today's decoder is P8-only, and that prerequisite exists
+   because non-P8/`CompMips` textures are invisible (**30 in this project's own `LUM_CoreTex.utx`**). So
+   without it, some classes would render with a missing or wrong skin.
+
+   **A skin that cannot be decoded is an ERROR, not a degraded picture.** *(Owner ruling 2026-07-26.)*
+   `class preview <ref>` is a **per-ref request**, so per `direction/asset-catalog.md` "Produce the
+   picture, or a named error — never a wrong pixel" it **exits 2 naming the class AND the offending skin
+   ref** — it does not flat-shade, substitute, or silently omit the texture. That doc's reasoning is the
+   whole point: "a guess that returns a plausible-but-wrong image is worse than a refusal, because nothing
+   downstream ever re-checks it", and an agent classifying from a wrongly-skinned thumbnail writes a
+   description that is wrong forever.
+
+   The same doc's disposition rule sets the other two cases, and they are **not** exceptions to the ruling
+   — they are what "per-ref" is distinguished from: **enumeration** (`class list`) records the row as
+   `undecodable` and keeps listing, and a **batch** (`class preview -`) reports the failing refs and their
+   skins and exits non-zero, rather than dying on the first.
+
+   *Ordering consequence:* the untextured parts of this arm (`list`, `show`, defaults, facts, `DT_Sprite`
+   previews, `DT_Brush`/`DT_None`) do **not** need this and can ship first. Only textured `DT_Mesh`
+   rendering waits.
 2. Class adapter: enumeration + file facts.
 3. `class list`/`class show` on the new engine, including the resolved defaults and the empty-own-props hint.
 4. `class preview` (mesh render productised from the spike) + the size/collision/pivot facts.

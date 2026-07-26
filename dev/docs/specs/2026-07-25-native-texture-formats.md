@@ -26,6 +26,18 @@ which named formats speculatively.
 
 ---
 
+
+> **ADDED 2026-07-26 (owner-directed) — NOT YET RE-REVIEWED. Mesh skins are a first-class consumer of this
+> decoder.** This spec is written around textures as *surfaces*, but the asset catalog's **class arm** renders
+> mesh thumbnails textured from a class's `MultiSkins[i]`, through the same `utexture` path (the mesh spike's
+> `render_class.py` builds a `TextureResolver` for it). So every format this spec adds must be reachable from
+> the skin path too, and its coverage must include **one mesh-skin case**, not only surface reads — otherwise
+> a class thumbnail silently loses its texture on exactly the formats this spec exists to fix (30 invisible
+> today in `LUM_CoreTex.utx`). Owner ruling: a skin that cannot be decoded is an **error**, per
+> `direction/asset-catalog.md` "Produce the picture, or a named error — never a wrong pixel" — so the decoder's
+> typed failure result must carry enough to name the offending skin ref to its caller. This spec was
+> review-gated 2026-07-25; **this addition has not been through a round** (`board/inbox.md`).
+
 ## THE LIMIT ON "reads any texture from any engine" — read this before anything else
 
 This decoder is deliberately **not** universal, and the exception is small, sharp and permanent.
