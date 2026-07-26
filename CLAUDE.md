@@ -1,13 +1,11 @@
 ### The repo this tool lives in
 
-`uedctl` lives at `Tools/uedctl/` inside **`dx_lum`**, a Deus Ex mod repo:
-levels in `Maps/`, mod classes in `LUM_Core/`, prefabs in `Prefabs/`, and
-sibling tools under `Tools/` (each with its own `CLAUDE.md` — read that one
-before working in its dir). **This file is the repo's canonical rule file**;
-there is no repo-root `CLAUDE.md` (deleted 2026-07-25 — its live rules were
-folded in here, and `Tools/uplayctl/CLAUDE.md` mirrors them).
+`uedctl` is its own repository — this file sits at its root and **is the
+repo's canonical rule file**. There is no rule file above it. (A sibling
+`uplayctl` mirrors these rules, but it lives in a *different* repo and is not
+reachable from here; changes made here do not propagate to it.)
 
-- **`_scratch/` (repo root, two levels up) is THE place for every temporary,
+- **`_scratch/` (at the repo root, beside this file) is THE place for every temporary,
   throwaway, or experimental file.** It is gitignored, so nothing there can
   be committed by accident. If a throwaway file is not under `_scratch/`, it
   is in the wrong place — no exceptions. That includes scratch scripts,
@@ -142,7 +140,8 @@ reviewer is the gate; a second is what a finding costs.*
   rewording, a test rename, a broken link.
   - **NOT trivial, at any size:** anything that changes what a rule, doc,
     spec, plan, ledger entry, or engine-fact note *says* — every change to
-    `CLAUDE.md`, `dev/docs/direction.md`, `dev/docs/decisions.md`,
+    `CLAUDE.md`, `dev/docs/direction/*.md`, `dev/docs/rationale/*.md`,
+    `dev/docs/rules/*.md`,
     `dev/docs/architecture.md`, `dev/docs/unrealed/*.md`, a spec/plan, or a
     spike write-up is a real change, because a future agent will act on it.
   - **NOT trivial:** anything that changes what the tool does, deletes
@@ -229,7 +228,7 @@ the trigger is whether the artifact CHANGED:
 - **Expect round 2 to find NEW things** — a fix can introduce a defect, and
   cold reviewers diverge; on 2026-07-25 a round found that the previous
   round's own *fixes* had shipped three wrong measurements and an unpinned
-  spike finding (evidence: `dev/docs/decisions.md` 2026-07-25 17:20 UTC).
+  spike finding (evidence: `dev/docs/direction/process.md`).
   Finding something in round 2 is normal, not a signal that the ceiling is
   wrong.
 
@@ -377,7 +376,7 @@ ever add new commits on top; mistakes are corrected with a fresh commit
   `parser.error("X was renamed to Y")`), dual-format support kept to
   avoid re-writing callers, or an "old way" branch in code/tests/docs.
   Every shim is permanent maintenance surface and a second thing to keep
-  true in the docs. *(decision 2026-07-24 21:57; `direction.md` "No
+  true in the docs. *(`dev/docs/direction/conventions.md` "No
   back-compat cruft". Superseded only when uedctl is released.)*
 - **No silent half-answers.** A command that can't fully satisfy a
   request exits 2 naming the offending value, rather than emitting a
@@ -427,7 +426,7 @@ ever add new commits on top; mistakes are corrected with a fresh commit
     `search` = ranked/fuzzy **discovery over a catalog or corpus**
     (textures, the asset catalog, docs) — *what exists* by relevance, not a
     known set (`texture search`; future `catalog search`/`docs search`).
-    *(decision 2026-07-25 00:43 UTC; `direction.md`.)*
+    *(`dev/docs/direction/conventions.md` "`find` vs `search`".)*
 
 ### Direction docs — NEVER revise without confirmation
 
@@ -574,7 +573,7 @@ fact with the certainty of a verified one.
 
 ### Read-on-demand docs — the router
 
-Only `direction.md` (the compiled target) is auto-loaded. **Every doc below is
+Only `direction/README.md` (the topic index) is auto-loaded. **Every doc below is
 NOT in your context — you MUST `Read` the relevant one before the action it
 names.** These one-liners are a *router, not a substitute*: never answer a
 question about UnrealEd behavior, the T3D format, uedctl internals, **or a
@@ -592,9 +591,10 @@ this file will flag deliberate conventions as defects. The rule above ("read the
 relevant doc before the action it names") binds the subagent too, and only its
 prompt can tell it so.
 
-- **@dev/docs/direction.md** — *(auto-loaded, already in context)* what we WANT: the compiled target, synthesized from decisions.
+- **@dev/docs/direction/README.md** — *(auto-loaded, already in context)* the index of what we WANT. **Read the topic doc itself before any design question, spec or plan** — the index is a router, not the content.
+- `dev/docs/direction.md` — **being retired.** Holds only the topics `direction/README.md` still marks *(pending)*; every other section is a pointer.
 - `dev/docs/architecture.md` — **Read BEFORE any uedctl code change or design question**: the layer/module map, the model-side write pattern, invariants D1–D8, the session-store shape.
-- `dev/docs/decisions.md` — **FROZEN 2026-07-26, historical reading only — never append.** The retired UTC-timestamped ledger, migrating into `dev/docs/direction/` (the owner's decisions) and `dev/docs/rationale/` (yours); `dev/docs/rationale/MIGRATION.md` records where each entry went.
+- `dev/docs/decisions.md` — **FROZEN, historical reading only — never append.** The retired ledger, migrating into `dev/docs/direction/` (the owner's decisions) and `dev/docs/rationale/` (yours). `dev/docs/rationale/MIGRATION.md` records where each entry went and is the map from an old dated citation to its new home.
 - `dev/docs/unrealed/commands.md` — **Read BEFORE driving the editor console**: the exec-verb reference (what to type).
 - `dev/docs/unrealed/t3d.md` — **Read BEFORE authoring/parsing T3D or editing surfaces/geometry**: block nesting, property forms, winding, authored-vs-computed taxonomy.
 - `dev/docs/unrealed/quirks.md` — **Read BEFORE driving UnrealEd or debugging editor behavior**: the non-obvious traps (IMPORTADD grid-snap, demand-load, selectability, CSG).
@@ -632,7 +632,7 @@ line to the next file:
   queue for its next action; a question raised mid-pipeline bounces back
   here until answered. There is **no separate `flagged`/`to-resolve` lane** —
   The owner resolves their own items by deleting or triaging them forward
-  (recording any real choice in `decisions.md`).
+  (recording any real choice in the owning `dev/docs/direction/` topic).
 - `to-spec.md` → `to-spike.md` → `to-plan.md` → `to-build.md` — the
   pipeline. `to-build.md` is the reviewed on-deck **build queue / source
   of truth** for what to build next.
