@@ -55,6 +55,16 @@ When a plan here is built, delete its entry ([`done.md`](done.md) keeps a short 
   `LUM/Textures/LUM_CoreTex.utx` are invisible to uedcli today** and render as a checkerboard.
   This is a live bug on this substrate, not generic-UE1 hygiene.
 
+  **STATUS 2026-07-26: BUILDABLE.** Both escalations from the plan reviews are resolved — the
+  `repo_texture_root()` propagation (that directory left this repo when uedcli split out; the offline
+  criterion is now a committed synthesized fixture and the live `LUM_CoreTex.utx` 30 → 0 count is
+  integration-tier), and the decode oracle (spike
+  [`../spikes/2026-07-26-ucc-texture-fixture/`](../spikes/2026-07-26-ucc-texture-fixture/findings.md)
+  builds the fixture's P8 half with the game's own `ucc make` — byte-exact — and its DXT1 half with
+  Pillow, so the cross-check stays independent with no copyrighted content). That spike also **refuted
+  the plan's own ≤8/255 discrimination claim**: an index bit-offset bug scores 4.801 and PASSES, so
+  S4 now carries a second byte-exact pin.
+
   **SCOPE WIDENED 2026-07-26 (owner ruling)** — a new slice `S2b` adds the two accessors
   `actor preview --faces textured` needs (a mip pyramid, and `bMasked` carried on S2's typed result — **not** a `texture_has_bMasked` predicate, which `conventions.md`'s predicate rule forbids), so the texture
   API changes once rather than twice. **The plan therefore re-enters the plan-review round
