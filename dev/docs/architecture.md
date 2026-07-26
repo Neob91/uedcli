@@ -408,7 +408,9 @@ absent it a member lands in its stored folder.
 
 **Apply is a MODEL-SIDE merge into the trunk — NO editor.** `dispatch._apply_set` (shared by
 `stash apply` and `prefab apply`) reads the captured set via the `LevelSource` seam, translates it
-to the placement anchor (`--at` → bbox-min corner; else the captured `anchor` for a stash, or the
+to the placement anchor (`--at` → bbox-min corner — **kept deliberately**, see
+`direction/conventions.md` "PLACEMENT anchors the bbox-min corner; ROTATION pivots the center"; else
+the captured `anchor` for a stash, or the
 world ORIGIN for a prefab), auto-allocates fresh random-suffix names, sets `Group`, appends to
 `order`, and `src.save(...)`s the trunk — validating all geometry up front (all-or-nothing), no
 editor, no paste, no `MAP SENDTO`, no rebuild. The trunk has **no package manifest** (the load set
@@ -627,7 +629,8 @@ named `label` deliberately, since `tag` would collide with `Engine.Actor.Tag`. S
   `--label`, 2026-07-24 17:04) so it passes `labels_override=None` — the incoming carrier wins.
   `_ingest_actor_t3d` retains the `labels_override` param (still the override channel, now used only if a
   caller supplies it) and `labels_add` (used ONLY by `actor duplicate` — UNIONs onto the carrier labels). `actor duplicate` was overhauled: it now REQUIRES exactly one of `--by DX,DY,DZ` (relative
-  per-actor delta) / `--at X,Y,Z` (anchor the set's bbox-min corner) — a bare `duplicate` is exit 2,
+  per-actor delta) / `--at X,Y,Z` (anchor the set's bbox-min corner, per the placement convention in
+`direction/conventions.md`) — a bare `duplicate` is exit 2,
   `--by 0,0,0` the explicit overlap escape — and always mints a fresh `dup-<rand>` batch label
   (`t3dtree._rand_suffix`, re-rolled until unused anywhere in the target level, echoed to stderr) so
   the batch is re-addressable via `find --label dup-<rand>`. Copies inherit their source's labels via

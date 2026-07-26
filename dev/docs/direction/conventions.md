@@ -113,6 +113,28 @@ Pick the verb by which of the two a new command is. Nothing is renamed to unify 
 Content reads and mutations are pure model-side compute against the T3D. The editor is
 touched only to **build** or **preview**, never to answer a question about the trunk.
 
+### PLACEMENT anchors the bbox-min corner; ROTATION pivots the center
+
+*(Owner ruling, 2026-07-26.)* Two different default reference points, and the split is
+deliberate — neither is "the bbox point we happened to have".
+
+- **Placement anchors the bbox-MIN corner.** `stash`/`prefab apply --at`, `actor duplicate
+  --at`, and `stashlib.normalize_for_capture` all put the set's minimum corner on the target.
+  You place a prefab by dropping a corner on a known grid point; a corner is a coordinate you
+  can read off the level and type, and it stays exact under repeated placement. **This is
+  KEPT** — it is not to be "unified" with the rotation default.
+- **Rotation and scale pivot the CENTER.** `actor rotate --by` and `brush scale --by` default
+  to the most grid-aligned of the selection's bbox center and its vertices, with the center
+  winning ties. You turn a thing about its middle; a corner pivot swings a symmetric brush a
+  full width sideways, which is what it used to do.
+
+Grid alignment still outranks the center in the rotation default: a strictly more 2-adic
+aligned vertex wins, because rotating about a less-aligned point walks on-16-grid geometry
+onto a coarser grid. So the center is the *tie-breaker*, not an override.
+
+The asymmetry is the point — an operation's default reference point follows what the
+operation means, not a single global choice of bbox landmark.
+
 ## Rejected
 
 **Back-compat**

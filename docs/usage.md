@@ -440,6 +440,14 @@ place** (Location never moves; excludes `--pivot`). The pivot is `--pivot X,Y,Z`
 and its vertices/Locations — the center wins ties, so a symmetric selection turns **in place** instead
 of swinging about a corner. A vertex that is *strictly* more grid-aligned than the center still wins,
 which is what keeps rotated geometry on the power-of-two grid.
+
+> **The two reference points differ on purpose.** **Rotation and scale pivot the CENTER** (you turn a
+> thing about its middle). **Placement anchors the bbox-MIN corner** — `stash`/`prefab apply --at`,
+> `actor duplicate --at`, and stash capture's normalization all land the set's minimum corner on the
+> target, because you place a prefab by dropping a corner on a grid point you can read off and type.
+> Neither default is changing to match the other; an operation's reference point follows what the
+> operation means.
+
 A zero result is **written out** (`Rotation=(Pitch=0,Yaw=0,Roll=0)`), not omitted: an actor with no
 `Rotation` property takes its *class* default, which is not zero for every class, so
 `--to 0,0,0` really does mean "unrotated" only when the rotator is there to say so.
