@@ -17,6 +17,37 @@ stage (so no `to-` prefix). See [`README.md`](README.md).
   stored property name/offset on the export"* — so uedcli cannot read it today, and the spike must
   land that before the spec is revised. Gating on the poly flag alone is implementable now but
   knowingly misses the `ladder_a`-on-a-solid-wall case the friction log cares about. *(2026-07-26.)*
+- `p1` `[OWNER — confirm]` **The per-surface verb split (`pan`/`rotate`/`align --run`).** Spec:
+  `specs/2026-07-26-poly-surface-verbs.md` (revised after review round 1). Six rulings were made in
+  session on 2026-07-26 and live only in that ephemeral spec until confirmed. Proposed addition to
+  `direction/conventions.md` under "Verbs compose" (verbatim, awaiting a yes):
+
+  > **A per-face verb prints per-face selectors.** The `brush poly` mutators (`set`, `pan`, `rotate`,
+  > `align`) print the `BRUSH:idx` selectors they acted on, one per line — not the touched brush
+  > names. A bare brush name means *all* of that brush's polys, so a per-face verb that printed one
+  > would silently widen the set for the next verb in the pipe. Consequence, stated so it is not a
+  > surprise: a poly verb chains into another poly verb, not into a whole-actor verb like
+  > `brush scale`, which takes bare names.
+  >
+  > **Attributes and frames are different verbs.** `brush poly set` assigns stored per-face fields
+  > (texture, flags). `pan`, `rotate` and `align` transform the texture FRAME. Pan is expressed in
+  > integer texels and lives in the polygon `Pan`; a computed continuity offset lives in the float
+  > `Origin`; the two never occupy the same field.
+
+- `p1` `[OWNER — confirm]` **Refinement of the "`--run` orders the chain itself" ruling.** All three
+  round-1 spec reviewers independently found that the ruling as stated leaves the run's SEED with no
+  source — and the seed fixes the phase zero, the seam on a closed run, the adopted density and the
+  adopted `Pan`. Under the ruling the prototype fell back to "lowest poly index at a run end", which
+  is exactly the not-author-controlled ordering the ruling exists to reject. Proposed refinement
+  (recorded in the spec as the working assumption, needs a yes):
+
+  > `--run` derives the chain ORDER from shared-edge adjacency, but the ROOT of the walk is the FIRST
+  > TOKEN of the input set. This preserves today's documented "the first face is the seam/seed"
+  > guarantee while still not trusting input order for the chain itself.
+
+  Without it, closed runs cannot name a seam, which makes `--fit-perimeter` unreachable and drops the
+  shipped cylinder-wrap workflow.
+
 - `p1` `[OWNER — confirm]` **Two `--faces` rulings were made on premises the code contradicts —
   need re-putting.** Same spec, §12 S3 and S4. (a) **`--brush-colors` under `textured`** was ruled
   exit-2 because the flag "would do nothing"; in fact `_scene_geometry` derives `vivid`, the
@@ -2884,6 +2915,21 @@ The posing rewrite landed (POS@ROT → auto-frame; decision 2026-07-12); these a
   "a subtract that carves nothing" (`docs/usage.md`), so the symmetric case — an ADD wholly consumed
   by a later subtract — belongs beside it. Cheap to detect model-side and it turns a black screenshot
   into a named actor.
+
+- `p2` `[spec]` **`brush poly scale` — the fourth canonical surface op, still missing.** Pan, rotate
+  and align are specced (`specs/2026-07-26-poly-surface-verbs.md`); scale is deliberately NOT, because
+  it interacts with how `align --run` derives texel density from the seed frame (by projection onto
+  the run tangent/across directions), and speccing it blind would duplicate or contradict that. Needs
+  its own spec once `--run` lands. (Supersedes the "fold in `texture scale`/`texture rotate`" clause on
+  `to-spec.md`'s texture-alignment item — rotate is now specced under its real name, `brush poly
+  rotate`; only scale remains.)
+
+- `p3` `[implement]` **A non-quad face in an `align --run` set exits 2 — generalise it later if a
+  builder ever emits one.** Decided in `specs/2026-07-26-poly-surface-verbs.md` §6 rather than
+  deferred to the implementer. The quad assumption is load-bearing: a terminal face's free edge is
+  found as the OPPOSITE edge of the quad (`entry = (exit + 2) % 4`), and an n-gon needs a different
+  rule for "the far edge". No shipped builder currently produces a non-quad swept face, so the error
+  is correct today; this item exists so the limitation is findable if one ever does.
 ---
 
 ## From the 2026-07-18 unattended build chain (Andrzej, triage these)

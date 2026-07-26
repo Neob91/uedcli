@@ -62,9 +62,17 @@ Evidence: `_scratch/trackspike-shots/BEFORE-top.png` → `AFTER-top.png`.
 ## Finding 3 — `align --run` is the right primitive, and it solves the case outright
 
 `run_align.py` prototypes a generalised `align --run`: it auto-orders the facets into a connected
-run by shared edges, derives U along the run direction and V across it, and accumulates arc length
-so the phase carries across seams. It **derives** the frame rather than preserving what is there,
-which is the owner's 2026-07-26 ruling.
+run by shared edges, derives U along the run direction and V across it, and accumulates the **chord
+between consecutive seam midpoints** so the phase carries across seams. It **derives** the frame
+rather than preserving what is there, which is the owner's 2026-07-26 ruling.
+
+> **Chord, not arc length.** The advance is the straight-line distance between the entry and exit
+> seam midpoints — 112.92 uu here (`2·576·sin(5.625°)`), against a true centreline arc of 113.10 uu.
+> Chord is what makes the phase actually meet at the seam, because the anchor is a *point*, and it is
+> what the shipped `--ring` already does (`usage.md`: "U advances by each facet's true chord
+> `2·r·sin(π/N)`", pinned by `test_polyalign.py::test_engine_fact_cylinder_facet_chord_is_2r_sin_pi_over_n`).
+> An earlier draft of this document said "arc length" throughout; that was wrong wording for the
+> right construction, and using true arc length would inject ~0.18 texels of error at every seam.
 
 Measured on the fixture: 8 facets ordered 18→25, 112.92 uu each, 903.33 uu total, run direction
 sweeping a smooth 90°. Rendered (`RUN-top-close.png`): one unbroken rail around the whole bend with
@@ -90,16 +98,57 @@ The mismatch is **12.5 texels out of 256** (~5%), concentrated at the track edge
 features are not — which is why it survives visual inspection. **The seam check is the test; the
 render is not.**
 
-### The closed form
+### The closed form — and the geometry it is SCOPED TO
 
-> **seam shear = 2·sin(Δθ/2) × half-width**, in texels at 1 texel/uu, where Δθ is the per-facet turn.
+> **seam shear = density_u × 2·sin(Δθ/2) × half_width**, in texels, where Δθ is the per-facet turn
+> and `half_width` is half the run's cross-run extent measured from the phase reference (the
+> centreline). At the fixture's 1 texel/uu and 128 uu width that is `2·sin(Δθ/2)·64`.
 
-Verified predictive, not merely fitted:
+**⚠ This applies ONLY to a run whose seams lie IN the plane of the turn** — a flat bend, like this
+track bed's top. It is **not** a property of `--run` in general, and the distinction is not subtle:
 
-| segments | Δθ | predicted | measured |
-|----------|--------|-----------|---
-| 8 | 11.25° | 12.546 | 12.546781 |
+**A cylinder-style run has ZERO shear.** Measured 2026-07-26 on a closed 8-sided cylinder through the
+**shipped** `brush poly align --ring`:
+
+```
+seam 0|1 … 6|7    dU = 0.000000   dV = 0.000000     ← all 7 interior seams, EXACT on both axes
+seam 0|7          dU = 1567.472357                  ← the closing seam --ring deliberately leaves
+                                                      (= the full perimeter; --fit-perimeter closes it)
+```
+
+Why: on a cylinder the seam edge runs **parallel to the turn axis**, so each face's U axis is
+perpendicular to the seam from both sides (`tu·e = 0`) and V is the axis itself — both match exactly.
+On the flat annulus the seam is radial, lying *within* the plane the faces turn in, so each face's U
+tilts by ±Δθ/2 relative to seam-perpendicular and the mismatch appears. Any generalised `--run` must
+therefore preserve the cylinder case's exactness, and a regression must pin it.
+
+**A second unstated assumption:** the "one axis is exact" result needs the seam to **bisect** the
+turn, i.e. both adjacent facets turning by the same Δθ. The across-axis gradients are `cos(Δθ_A/2)`
+and `cos(Δθ_B/2)`, equal only when the turns are equal. A uniform revolve satisfies this; a run of
+unequally-turned facets does not.
+
+Verified predictive within that scope, not merely fitted:
+
+| segments | Δθ | closed form | measured (single pass, clean trunk) |
+|----------|--------|-------------|---
+| 8 | 11.25° | 12.546194 | 12.546615 |
 | 16 | 5.625° | 6.281 | 6.281331 |
+
+### ⚠ The measured digits are NOT stable — assert the closed form, with tolerance
+
+Re-running the same alignment over an already-aligned trunk changes the low-order digits, because
+`emit.clean`'s `CLEAN_EPS = 0.001` snapping acts on a revolve's off-grid vertices every round trip:
+
+| trunk state | max ΔU |
+|-------------------------------|---
+| closed form | 12.546194 |
+| one pass from a clean baseline | 12.546615 |
+| two passes | 12.546781 |
+| after many passes (incl. a sheared frame in between) | 12.6278 |
+
+So a regression must assert **`|max ΔU − density_u·2·sin(Δθ/2)·half_width| < 2e-3`** and
+**`max ΔV < 2e-3`** — never a six-decimal golden, which pins fixture history rather than the result.
+(The measured ΔV "zero" is 0.0005, the same order as this noise.)
 
 **Why.** Along the shared edge, the *across*-run axis has gradient ∝ `cos(Δθ/2)` — cosine is even, so
 both faces agree exactly. The *along*-run axis has gradient ∝ `±sin(Δθ/2)` — sine is odd, so the two
@@ -138,7 +187,9 @@ condition for both axes at once.
 | 21 | 34–45° | 1.217 | 55.4° |
 | 25 | 79–90° | **1.787** | **34.1°** |
 
-The stretch follows `√(1+ψ²)` — 79% by the end of a 90° bend — and the frame skews to 34°. Rendered
+The stretch follows `√(1+ψ²)` — **86% at the end of a 90° bend** (`√(1+(π/2)²) = 1.862`); the 1.787
+in the table is the last facet's *centre*, at ψ ≈ 84.4°, not the endpoint — and the frame skews to
+34°. Rendered
 (`SHEAR-top.png`), the rails are genuinely seamless and the **sleepers lean over progressively**
 instead of staying perpendicular.
 
@@ -207,9 +258,12 @@ The shear formula cannot be pinned today because the code it describes does not 
 prototypes here are throwaway. So the obligation transfers to the implementation, and the spec must
 carry it:
 
-- **`seam_check.py`'s assertion becomes the test**: for `align --run` on an N-segment revolve, max
-  ΔU across every seam must equal `2·sin(Δθ/2)·half_width` within tolerance, and max ΔV must be zero.
-  Both numbers above (12.546781 at 8 segments, 6.281331 at 16) are the goldens.
+- **`seam_check.py`'s assertion becomes the test**, against the CLOSED FORM and a `2e-3` tolerance —
+  never the six-decimal measurements, which drift with trunk history (see the stability table above).
+  State the fixture with it, since `half_width` and `density_u` come from the fixture, not the verb.
+- **A cylinder-run regression is mandatory**, and is the more important of the two: `--run` over a
+  cylinder's sides must reproduce today's `--ring` exactness (interior seams ΔU = ΔV = 0), or the
+  generalisation has silently broken the only case that shipped.
 - What IS pinnable today, and is pinned by
   `test_generators.py::test_revolve_facets_are_evenly_spaced_by_angle_over_segments`, is the fact the
   formula rests on: a `--segments N` revolve of a `--angle A` sweep produces facets whose turn is
