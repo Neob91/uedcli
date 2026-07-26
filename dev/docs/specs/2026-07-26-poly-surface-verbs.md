@@ -313,12 +313,8 @@ pinned, and it matches the editor, which anchors `FLOOR`/`WALLX`/`WALLY` on a wo
 **`one-tile` is deliberately exempt from unit density** — a fit-to-poly mode whose density comes from
 the face is the one thing that cannot also be 1 texel/uu.
 
-**Open, and NOT assumed:** `one-tile` still takes its orientation from `_tex_basis(n̂)`, whose in-plane
-choice ("the world axis least aligned with the normal") is unpredictable on a slanted face — so a sign
-can come out sideways, for the one use case the mode exists to serve. Adopting the same
-projection-axis *directions* (normalised, since `one-tile` supplies its own density) would make the
-up-vector predictable. The owner's ruling was scoped to `wall`/`floor`; this is filed rather than
-silently extended.
+**Resolved 2026-07-26:** `one-tile` takes the editor's projection *directions*, normalised — see §2.4.
+All three world-space-oriented modes now share one up-vector convention.
 
 **`wall`/`floor` therefore align to WORLD SPACE, not to any one poly** (owner ruling). Because
 `_tex_basis` depends only on the normal, two coplanar co-oriented faces receive *identical* frames
@@ -393,7 +389,19 @@ request 2026-07-26.
   which would imply a shared frame it structurally cannot provide.
 - **No orientation guard.** Unlike `wall`/`floor` it accepts **any** face orientation — a sign goes on
   a slanted face as happily as a vertical one.
-- **Orientation** comes from `builders._tex_basis(n̂)`, the same world-derived basis `wall`/`floor` use.
+- **Orientation uses the EDITOR'S PROJECTION DIRECTIONS, normalised** — owner ruling 2026-07-26,
+  extending the `wall`/`floor` ruling to this mode. Project along the world axis `A` of **maximum**
+  `|N.A|` over all three (ties to the lowest index, matching `_tex_basis`'s documented convention),
+  take `TextureU`/`TextureV` = `−proj` of the other two world axes as §2.3 does, then **normalise
+  them** and set the magnitudes from the fit below.
+  Why not `_tex_basis(n̂)`: it seeds from the world axis *least* aligned with the normal, which fixes
+  no up-vector an author can predict — so a sign could render sideways or upside down, failing the one
+  use case the mode exists for. The projection convention gives `TextureV = −proj(Ẑ)`, i.e. `−Ẑ` on a
+  vertical face: V increases *downward*, matching the image-row convention, so a texture authored
+  top-row-first renders upright. Normalising is what makes this safe to borrow — the `1/|proj|` stretch
+  that `wall`/`floor` inherit is discarded here, because `one-tile` supplies its own density.
+  Choosing the **maximum** `|N.A|` (rather than §2.3's per-mode axis) means the guard can never fire:
+  a unit normal always has some `|N.A| ≥ 1/√3`, so `one-tile` keeps its "any face orientation" promise.
 - **It STRETCHES to fill, non-uniformly.** One tile spans the face's U extent and one tile its V
   extent, so the image fills the face exactly and is distorted when the aspect ratios differ. That is
   the point: a letterboxed sign is wrong, and authors size the brush to the sign or vice versa.
@@ -557,6 +565,10 @@ every named-error path to carry one. Non-negotiable:
 - **`scale`** — `--by 2,2` halves the stored magnitudes (texture looks twice as big); `--to 128,128`
   on a `W×H` texture gives `|TextureU| = W/128`; the face centroid's `(U,V)` is unchanged by both;
   `Pan` untouched. `--by` needs no catalog, `--to` does.
+- **`one-tile` orientation** — on a `+Y`-facing wall, `TextureV` is `−Ẑ` (V runs downward, so a
+  top-row-first texture renders upright) and the axes are unit-normalised before the fit scales them;
+  on a floor, `−X̂`/`−Ŷ`. Pin a slanted face too, since unpredictable up-vectors there are the defect
+  this rule exists to prevent.
 - **`one-tile`** — a `W×H` texture on an `E_u × E_v` face gives `|TextureU| = W/E_u`,
   `|TextureV| = H/E_v`, `Pan` (0,0), `Origin` at the min corner; a rectangular face's corners map to
   (0,0), (W,0), (W,H), (0,H); a triangle maps its bounding box; a zero-extent axis and a
