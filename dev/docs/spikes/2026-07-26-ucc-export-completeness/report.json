@@ -1,0 +1,1319 @@
+{
+  "phase1": {
+    "00_Intro.dx": {
+      "ok": false,
+      "why": "Failed loading package: Can't find Class in file 'Class Engine.CameraPoint'",
+      "secs": 1.7
+    },
+    "00_Training.dx": {
+      "ok": true,
+      "secs": 2.7,
+      "bytes": 5933599,
+      "actors": 1304
+    },
+    "00_TrainingCombat.dx": {
+      "ok": true,
+      "secs": 2.9,
+      "bytes": 3664316,
+      "actors": 870
+    },
+    "00_TrainingFinal.dx": {
+      "ok": true,
+      "secs": 2.8,
+      "bytes": 5716996,
+      "actors": 1142
+    },
+    "01_NYC_UNATCOHQ.dx": {
+      "ok": true,
+      "secs": 3.1,
+      "bytes": 4089209,
+      "actors": 1470
+    },
+    "01_NYC_UNATCOIsland.dx": {
+      "ok": true,
+      "secs": 3.2,
+      "bytes": 8603068,
+      "actors": 3653
+    },
+    "02_NYC_Bar.dx": {
+      "ok": true,
+      "secs": 3.1,
+      "bytes": 1088884,
+      "actors": 487
+    },
+    "02_NYC_BatteryPark.dx": {
+      "ok": true,
+      "secs": 4.0,
+      "bytes": 7690166,
+      "actors": 1989
+    },
+    "02_NYC_FreeClinic.dx": {
+      "ok": true,
+      "secs": 4.5,
+      "bytes": 1677320,
+      "actors": 536
+    },
+    "02_NYC_Hotel.dx": {
+      "ok": true,
+      "secs": 3.4,
+      "bytes": 3378258,
+      "actors": 904
+    },
+    "02_NYC_Smug.dx": {
+      "ok": true,
+      "secs": 2.8,
+      "bytes": 1891598,
+      "actors": 535
+    },
+    "02_NYC_Street.dx": {
+      "ok": true,
+      "secs": 3.7,
+      "bytes": 7847557,
+      "actors": 2060
+    },
+    "02_NYC_Underground.dx": {
+      "ok": true,
+      "secs": 2.5,
+      "bytes": 2844094,
+      "actors": 821
+    },
+    "02_NYC_Warehouse.dx": {
+      "ok": true,
+      "secs": 2.9,
+      "bytes": 5902051,
+      "actors": 2127
+    },
+    "03_NYC_747.dx": {
+      "ok": true,
+      "secs": 3.0,
+      "bytes": 2495927,
+      "actors": 520
+    },
+    "03_NYC_Airfield.dx": {
+      "ok": true,
+      "secs": 4.7,
+      "bytes": 9511280,
+      "actors": 2856
+    },
+    "03_NYC_AirfieldHeliBase.dx": {
+      "ok": true,
+      "secs": 3.7,
+      "bytes": 7730791,
+      "actors": 1965
+    },
+    "03_NYC_BatteryPark.dx": {
+      "ok": true,
+      "secs": 2.9,
+      "bytes": 5393023,
+      "actors": 1112
+    },
+    "03_NYC_BrooklynBridgeStation.dx": {
+      "ok": true,
+      "secs": 2.6,
+      "bytes": 5443260,
+      "actors": 1242
+    },
+    "03_NYC_Hangar.dx": {
+      "ok": true,
+      "secs": 3.0,
+      "bytes": 2399854,
+      "actors": 655
+    },
+    "03_NYC_MolePeople.dx": {
+      "ok": true,
+      "secs": 2.3,
+      "bytes": 3592862,
+      "actors": 694
+    },
+    "03_NYC_UNATCOHQ.dx": {
+      "ok": true,
+      "secs": 2.9,
+      "bytes": 4252640,
+      "actors": 1437
+    },
+    "03_NYC_UNATCOIsland.dx": {
+      "ok": true,
+      "secs": 2.4,
+      "bytes": 2644604,
+      "actors": 901
+    },
+    "04_NYC_Bar.dx": {
+      "ok": true,
+      "secs": 2.1,
+      "bytes": 1086615,
+      "actors": 486
+    },
+    "04_NYC_BatteryPark.dx": {
+      "ok": true,
+      "secs": 2.6,
+      "bytes": 4986924,
+      "actors": 1134
+    },
+    "04_NYC_Hotel.dx": {
+      "ok": true,
+      "secs": 2.5,
+      "bytes": 3385211,
+      "actors": 930
+    },
+    "04_NYC_NSFHQ.dx": {
+      "ok": true,
+      "secs": 2.9,
+      "bytes": 4822162,
+      "actors": 1992
+    },
+    "04_NYC_Smug.dx": {
+      "ok": true,
+      "secs": 1.9,
+      "bytes": 1887624,
+      "actors": 526
+    },
+    "04_NYC_Street.dx": {
+      "ok": true,
+      "secs": 2.8,
+      "bytes": 7233862,
+      "actors": 1929
+    },
+    "04_NYC_UNATCOHQ.dx": {
+      "ok": true,
+      "secs": 3.1,
+      "bytes": 4266282,
+      "actors": 1442
+    },
+    "04_NYC_UNATCOIsland.dx": {
+      "ok": true,
+      "secs": 2.1,
+      "bytes": 2584623,
+      "actors": 934
+    },
+    "04_NYC_Underground.dx": {
+      "ok": true,
+      "secs": 1.8,
+      "bytes": 1123969,
+      "actors": 333
+    },
+    "05_NYC_UNATCOHQ.dx": {
+      "ok": true,
+      "secs": 2.3,
+      "bytes": 4266223,
+      "actors": 1484
+    },
+    "05_NYC_UNATCOIsland.dx": {
+      "ok": true,
+      "secs": 2.0,
+      "bytes": 2660984,
+      "actors": 897
+    },
+    "05_NYC_UNATCOMJ12lab.dx": {
+      "ok": true,
+      "secs": 3.6,
+      "bytes": 11047441,
+      "actors": 3039
+    },
+    "06_HongKong_Helibase.dx": {
+      "ok": true,
+      "secs": 2.9,
+      "bytes": 7835527,
+      "actors": 1911
+    },
+    "06_HongKong_MJ12lab.dx": {
+      "ok": true,
+      "secs": 3.3,
+      "bytes": 8123930,
+      "actors": 2303
+    },
+    "06_HongKong_Storage.dx": {
+      "ok": true,
+      "secs": 2.6,
+      "bytes": 5752503,
+      "actors": 1366
+    },
+    "06_HongKong_TongBase.dx": {
+      "ok": true,
+      "secs": 2.7,
+      "bytes": 2225253,
+      "actors": 652
+    },
+    "06_HongKong_VersaLife.dx": {
+      "ok": true,
+      "secs": 2.9,
+      "bytes": 5232388,
+      "actors": 1756
+    },
+    "06_HongKong_WanChai_Canal.dx": {
+      "ok": true,
+      "secs": 3.2,
+      "bytes": 9357592,
+      "actors": 2745
+    },
+    "06_HongKong_WanChai_Garage.dx": {
+      "ok": true,
+      "secs": 1.9,
+      "bytes": 1624128,
+      "actors": 351
+    },
+    "06_HongKong_WanChai_Market.dx": {
+      "ok": true,
+      "secs": 3.2,
+      "bytes": 6347999,
+      "actors": 2288
+    },
+    "06_HongKong_WanChai_Street.dx": {
+      "ok": true,
+      "secs": 3.3,
+      "bytes": 7067490,
+      "actors": 2346
+    },
+    "06_HongKong_WanChai_Underworld.dx": {
+      "ok": true,
+      "secs": 2.7,
+      "bytes": 5299845,
+      "actors": 1858
+    },
+    "08_NYC_Bar.dx": {
+      "ok": true,
+      "secs": 1.8,
+      "bytes": 1082290,
+      "actors": 479
+    },
+    "08_NYC_FreeClinic.dx": {
+      "ok": true,
+      "secs": 1.9,
+      "bytes": 1585529,
+      "actors": 498
+    },
+    "08_NYC_Hotel.dx": {
+      "ok": true,
+      "secs": 2.0,
+      "bytes": 3360452,
+      "actors": 876
+    },
+    "08_NYC_Smug.dx": {
+      "ok": true,
+      "secs": 1.8,
+      "bytes": 1889649,
+      "actors": 532
+    },
+    "08_NYC_Street.dx": {
+      "ok": true,
+      "secs": 2.5,
+      "bytes": 4571583,
+      "actors": 1575
+    },
+    "08_NYC_Underground.dx": {
+      "ok": true,
+      "secs": 2.7,
+      "bytes": 1424105,
+      "actors": 408
+    },
+    "09_NYC_Dockyard.dx": {
+      "ok": true,
+      "secs": 2.8,
+      "bytes": 7127860,
+      "actors": 2761
+    },
+    "09_NYC_Graveyard.dx": {
+      "ok": true,
+      "secs": 2.2,
+      "bytes": 2674628,
+      "actors": 1003
+    },
+    "09_NYC_Ship.dx": {
+      "ok": true,
+      "secs": 3.2,
+      "bytes": 9426463,
+      "actors": 2283
+    },
+    "09_NYC_ShipBelow.dx": {
+      "ok": true,
+      "secs": 3.0,
+      "bytes": 6641047,
+      "actors": 2133
+    },
+    "09_NYC_ShipFan.dx": {
+      "ok": true,
+      "secs": 2.0,
+      "bytes": 1185704,
+      "actors": 289
+    },
+    "10_Paris_Catacombs.dx": {
+      "ok": true,
+      "secs": 2.9,
+      "bytes": 7703247,
+      "actors": 2710
+    },
+    "10_Paris_Catacombs_Tunnels.dx": {
+      "ok": true,
+      "secs": 2.4,
+      "bytes": 4706701,
+      "actors": 1691
+    },
+    "10_Paris_Chateau.dx": {
+      "ok": true,
+      "secs": 2.7,
+      "bytes": 6024583,
+      "actors": 2126
+    },
+    "10_Paris_Club.dx": {
+      "ok": true,
+      "secs": 2.2,
+      "bytes": 1983709,
+      "actors": 787
+    },
+    "10_Paris_Metro.dx": {
+      "ok": true,
+      "secs": 3.1,
+      "bytes": 7841522,
+      "actors": 3178
+    },
+    "11_Paris_Cathedral.dx": {
+      "ok": true,
+      "secs": 3.6,
+      "bytes": 9754426,
+      "actors": 3001
+    },
+    "11_Paris_Everett.dx": {
+      "ok": true,
+      "secs": 2.7,
+      "bytes": 4830060,
+      "actors": 1521
+    },
+    "11_Paris_Underground.dx": {
+      "ok": true,
+      "secs": 2.2,
+      "bytes": 1684719,
+      "actors": 582
+    },
+    "12_Vandenberg_Cmd.dx": {
+      "ok": true,
+      "secs": 3.7,
+      "bytes": 11219439,
+      "actors": 3361
+    },
+    "12_Vandenberg_Computer.dx": {
+      "ok": true,
+      "secs": 3.1,
+      "bytes": 4634804,
+      "actors": 1210
+    },
+    "12_Vandenberg_Gas.dx": {
+      "ok": true,
+      "secs": 5.3,
+      "bytes": 5273861,
+      "actors": 1334
+    },
+    "12_Vandenberg_Tunnels.dx": {
+      "ok": true,
+      "secs": 4.8,
+      "bytes": 7749317,
+      "actors": 1532
+    },
+    "14_OceanLab_Lab.dx": {
+      "ok": true,
+      "secs": 5.2,
+      "bytes": 12559360,
+      "actors": 2745
+    },
+    "14_OceanLab_UC.dx": {
+      "ok": true,
+      "secs": 3.8,
+      "bytes": 6836766,
+      "actors": 1635
+    },
+    "14_Oceanlab_Silo.dx": {
+      "ok": true,
+      "secs": 3.8,
+      "bytes": 9785784,
+      "actors": 2512
+    },
+    "14_Vandenberg_Sub.dx": {
+      "ok": true,
+      "secs": 3.7,
+      "bytes": 9668536,
+      "actors": 2398
+    },
+    "15_Area51_Bunker.dx": {
+      "ok": true,
+      "secs": 4.8,
+      "bytes": 10495501,
+      "actors": 2641
+    },
+    "15_Area51_Entrance.dx": {
+      "ok": true,
+      "secs": 4.3,
+      "bytes": 7515962,
+      "actors": 1888
+    },
+    "15_Area51_Final.dx": {
+      "ok": true,
+      "secs": 5.9,
+      "bytes": 12759169,
+      "actors": 3068
+    },
+    "15_Area51_Page.dx": {
+      "ok": true,
+      "secs": 5.6,
+      "bytes": 14890675,
+      "actors": 3533
+    },
+    "99_Endgame1.dx": {
+      "ok": false,
+      "why": "Failed loading package: Can't find Class in file 'Class Engine.CameraPoint'",
+      "secs": 2.6
+    },
+    "99_Endgame2.dx": {
+      "ok": false,
+      "why": "Failed loading package: Can't find Class in file 'Class Engine.CameraPoint'",
+      "secs": 1.4
+    },
+    "99_Endgame3.dx": {
+      "ok": false,
+      "why": "Failed loading package: Can't find Class in file 'Class Engine.CameraPoint'",
+      "secs": 1.9
+    },
+    "99_Endgame4.dx": {
+      "ok": false,
+      "why": "Failed loading package: Can't find Class in file 'Class Engine.CameraPoint'",
+      "secs": 1.8
+    },
+    "AnchorPan.dx": {
+      "ok": true,
+      "secs": 1.5,
+      "bytes": 9929,
+      "actors": 7
+    },
+    "Auto0.dx": {
+      "ok": true,
+      "secs": 2.7,
+      "bytes": 422685,
+      "actors": 327
+    },
+    "Auto1.dx": {
+      "ok": true,
+      "secs": 2.3,
+      "bytes": 422686,
+      "actors": 327
+    },
+    "Auto2.dx": {
+      "ok": true,
+      "secs": 2.1,
+      "bytes": 337381,
+      "actors": 144
+    },
+    "Auto3.dx": {
+      "ok": true,
+      "secs": 1.8,
+      "bytes": 337382,
+      "actors": 144
+    },
+    "Auto4.dx": {
+      "ok": true,
+      "secs": 2.0,
+      "bytes": 337382,
+      "actors": 144
+    },
+    "Auto5.dx": {
+      "ok": true,
+      "secs": 2.0,
+      "bytes": 337383,
+      "actors": 144
+    },
+    "Auto6.dx": {
+      "ok": true,
+      "secs": 1.8,
+      "bytes": 337383,
+      "actors": 144
+    },
+    "Auto7.dx": {
+      "ok": true,
+      "secs": 1.7,
+      "bytes": 337383,
+      "actors": 144
+    },
+    "Auto8.dx": {
+      "ok": true,
+      "secs": 1.7,
+      "bytes": 353418,
+      "actors": 145
+    },
+    "Auto9.dx": {
+      "ok": true,
+      "secs": 1.8,
+      "bytes": 337360,
+      "actors": 144
+    },
+    "Autoplay.dx": {
+      "ok": true,
+      "secs": 1.9,
+      "bytes": 426603,
+      "actors": 327
+    },
+    "DX.dx": {
+      "ok": true,
+      "secs": 1.9,
+      "bytes": 36925,
+      "actors": 37
+    },
+    "DXMP_Area51Bunker.dx": {
+      "ok": true,
+      "secs": 4.1,
+      "bytes": 5012404,
+      "actors": 1342
+    },
+    "DXMP_CMD.dx": {
+      "ok": true,
+      "secs": 4.8,
+      "bytes": 5586450,
+      "actors": 1663
+    },
+    "DXMP_Cathedral.dx": {
+      "ok": true,
+      "secs": 3.5,
+      "bytes": 4811300,
+      "actors": 1283
+    },
+    "DXMP_Silo.dx": {
+      "ok": true,
+      "secs": 3.3,
+      "bytes": 4953846,
+      "actors": 1430
+    },
+    "DXMP_Smuggler.dx": {
+      "ok": true,
+      "secs": 2.8,
+      "bytes": 4045526,
+      "actors": 739
+    },
+    "DXOnly.dx": {
+      "ok": true,
+      "secs": 2.3,
+      "bytes": 9126,
+      "actors": 11
+    },
+    "Entry.dx": {
+      "ok": true,
+      "secs": 1.8,
+      "bytes": 27619,
+      "actors": 14
+    },
+    "NativeBig.dx": {
+      "ok": true,
+      "secs": 1.6,
+      "bytes": 2035,
+      "actors": 3
+    },
+    "NativeCSG.dx": {
+      "ok": true,
+      "secs": 1.6,
+      "bytes": 1869,
+      "actors": 3
+    },
+    "NativeCastle.dx": {
+      "ok": true,
+      "secs": 2.1,
+      "bytes": 64580,
+      "actors": 161
+    },
+    "NativeCatacombs.dx": {
+      "ok": false,
+      "why": "Failed loading package: Can't find Class in file 'Class Engine.BreakableGlass'",
+      "secs": 1.5
+    },
+    "NativeDark.dx": {
+      "ok": true,
+      "secs": 1.8,
+      "bytes": 2158,
+      "actors": 4
+    },
+    "NativeE2E.dx": {
+      "ok": true,
+      "secs": 2.7,
+      "bytes": 2435,
+      "actors": 4
+    },
+    "NativeHKMarket.dx": {
+      "ok": false,
+      "why": "Failed loading package: Can't find Class in file 'Class Engine.BreakableGlass'",
+      "secs": 1.7
+    },
+    "NativeInside.dx": {
+      "ok": true,
+      "secs": 1.9,
+      "bytes": 2459,
+      "actors": 4
+    },
+    "NativeLit.dx": {
+      "ok": true,
+      "secs": 2.0,
+      "bytes": 2240,
+      "actors": 4
+    },
+    "NativeM0.dx": {
+      "ok": true,
+      "secs": 2.0,
+      "bytes": 1588,
+      "actors": 2
+    },
+    "NativeRest.dx": {
+      "ok": true,
+      "secs": 1.5,
+      "bytes": 2043,
+      "actors": 3
+    },
+    "NativeRoomOnly.dx": {
+      "ok": true,
+      "secs": 1.6,
+      "bytes": 2081,
+      "actors": 3
+    },
+    "NativeSmall.dx": {
+      "ok": true,
+      "secs": 1.6,
+      "bytes": 2047,
+      "actors": 3
+    },
+    "NativeTwoRoom.dx": {
+      "ok": true,
+      "secs": 1.5,
+      "bytes": 2497,
+      "actors": 4
+    },
+    "NativeUnatco.dx": {
+      "ok": true,
+      "secs": 2.7,
+      "bytes": 392918,
+      "actors": 1437
+    },
+    "NativeUnatcoNoMov.dx": {
+      "ok": false,
+      "why": "Failed loading package: Can't find Class in file 'Class Engine.ATM'",
+      "secs": 1.6
+    },
+    "NativeUnatcoQual.dx": {
+      "ok": true,
+      "secs": 3.1,
+      "bytes": 401722,
+      "actors": 1437
+    },
+    "NativeUnatcoWorld.dx": {
+      "ok": true,
+      "secs": 3.0,
+      "bytes": 356011,
+      "actors": 1208
+    },
+    "NativeUnlit.dx": {
+      "ok": true,
+      "secs": 1.6,
+      "bytes": 2162,
+      "actors": 4
+    },
+    "Test_Castle.dx": {
+      "ok": true,
+      "secs": 1.7,
+      "bytes": 447943,
+      "actors": 161
+    }
+  },
+  "phase2": {
+    "01_NYC_UNATCOIsland.dx": {
+      "n_ucc": 3653,
+      "n_ued": 3653,
+      "missing_from_ucc": [],
+      "only_in_ucc": [],
+      "class_diff": [],
+      "prop_only_in_ued": [
+        [
+          "ATM0",
+          "UserList(0)",
+          "(accountNumber=\"230023\",PIN=\"4558\",balance=200)"
+        ],
+        [
+          "AutoTurret0",
+          "MaxRange",
+          "1400"
+        ],
+        [
+          "AutoTurret2",
+          "MaxRange",
+          "1400"
+        ],
+        [
+          "ComputerPersonal0",
+          "UserList(0)",
+          "(Username=\"GUEST\",Password=\"GUEST\")"
+        ],
+        [
+          "ComputerPersonal0",
+          "UserList(1)",
+          "(Username=\"KLloyd\",Password=\"squishy\")"
+        ],
+        [
+          "ComputerSecurity0",
+          "UserList(0)",
+          "(Username=\"SATCOM\",Password=\"UNATCO_001\")"
+        ],
+        [
+          "ComputerSecurity1",
+          "UserList(0)",
+          "(Username=\"NSF001\",Password=\"smashthestate\")"
+        ],
+        [
+          "ComputerSecurity2",
+          "UserList(0)",
+          "(Username=\"NSF001\",Password=\"smashthestate\")"
+        ],
+        [
+          "ThugMale0",
+          "MaxRange",
+          "1000.000000"
+        ],
+        [
+          "ThugMale3",
+          "MaxRange",
+          "1000.000000"
+        ],
+        [
+          "ThugMale5",
+          "MaxRange",
+          "1000.000000"
+        ],
+        [
+          "ThugMale7",
+          "MaxRange",
+          "1000.000000"
+        ],
+        [
+          "ThugMale9",
+          "MaxRange",
+          "1000.000000"
+        ],
+        [
+          "UNATCOTroop0",
+          "MaxRange",
+          "2000.000000"
+        ],
+        [
+          "UNATCOTroop1",
+          "MaxRange",
+          "2000.000000"
+        ],
+        [
+          "UNATCOTroop2",
+          "MaxRange",
+          "2000.000000"
+        ],
+        [
+          "UNATCOTroop6",
+          "MaxRange",
+          "2000.000000"
+        ]
+      ],
+      "prop_only_in_ucc": [
+        [
+          "ATM0",
+          "userList(0)",
+          "(accountNumber=\"230023\",PIN=\"4558\",balance=200)"
+        ],
+        [
+          "AutoTurret0",
+          "maxRange",
+          "1400"
+        ],
+        [
+          "AutoTurret2",
+          "maxRange",
+          "1400"
+        ],
+        [
+          "ComputerPersonal0",
+          "userList(0)",
+          "(Username=\"GUEST\",Password=\"GUEST\")"
+        ],
+        [
+          "ComputerPersonal0",
+          "userList(1)",
+          "(Username=\"KLloyd\",Password=\"squishy\")"
+        ],
+        [
+          "ComputerSecurity0",
+          "userList(0)",
+          "(Username=\"SATCOM\",Password=\"UNATCO_001\")"
+        ],
+        [
+          "ComputerSecurity1",
+          "userList(0)",
+          "(Username=\"NSF001\",Password=\"smashthestate\")"
+        ],
+        [
+          "ComputerSecurity2",
+          "userList(0)",
+          "(Username=\"NSF001\",Password=\"smashthestate\")"
+        ],
+        [
+          "ThugMale0",
+          "maxRange",
+          "1000.000000"
+        ],
+        [
+          "ThugMale3",
+          "maxRange",
+          "1000.000000"
+        ],
+        [
+          "ThugMale5",
+          "maxRange",
+          "1000.000000"
+        ],
+        [
+          "ThugMale7",
+          "maxRange",
+          "1000.000000"
+        ],
+        [
+          "ThugMale9",
+          "maxRange",
+          "1000.000000"
+        ],
+        [
+          "UNATCOTroop0",
+          "maxRange",
+          "2000.000000"
+        ],
+        [
+          "UNATCOTroop1",
+          "maxRange",
+          "2000.000000"
+        ],
+        [
+          "UNATCOTroop2",
+          "maxRange",
+          "2000.000000"
+        ],
+        [
+          "UNATCOTroop6",
+          "maxRange",
+          "2000.000000"
+        ]
+      ],
+      "value_diff": [],
+      "brush_diff": [],
+      "editor_ok": true,
+      "ucc_ok": true,
+      "secs_ued": 128.5,
+      "secs_ucc": 3.2,
+      "bytes_ucc": 8603068,
+      "bytes_ued": 8461036
+    },
+    "15_Area51_Page.dx": {
+      "n_ucc": 3533,
+      "n_ued": 3533,
+      "missing_from_ucc": [
+        "Light1"
+      ],
+      "only_in_ucc": [
+        "light1"
+      ],
+      "class_diff": [],
+      "prop_only_in_ued": [
+        [
+          "AutoTurret0",
+          "MaxRange",
+          "768"
+        ],
+        [
+          "AutoTurret2",
+          "MaxRange",
+          "768"
+        ],
+        [
+          "ComputerPersonal0",
+          "UserList(0)",
+          "(Username=\"Icarus\",Password=\"panopticon\")"
+        ],
+        [
+          "ComputerSecurity0",
+          "UserList(0)",
+          "(Username=\"page\",Password=\"uberalles\")"
+        ],
+        [
+          "ComputerSecurity1",
+          "UserList(0)",
+          "(Username=\"graytest\",Password=\"Lab12\")"
+        ],
+        [
+          "SequenceTrigger1",
+          "SeqNum",
+          "1"
+        ],
+        [
+          "SequenceTrigger2",
+          "SeqNum",
+          "1"
+        ],
+        [
+          "SequenceTrigger5",
+          "SeqNum",
+          "1"
+        ],
+        [
+          "SequenceTrigger6",
+          "SeqNum",
+          "1"
+        ],
+        [
+          "SequenceTrigger8",
+          "SeqNum",
+          "1"
+        ]
+      ],
+      "prop_only_in_ucc": [
+        [
+          "AutoTurret0",
+          "maxRange",
+          "768"
+        ],
+        [
+          "AutoTurret2",
+          "maxRange",
+          "768"
+        ],
+        [
+          "ComputerPersonal0",
+          "userList(0)",
+          "(Username=\"Icarus\",Password=\"panopticon\")"
+        ],
+        [
+          "ComputerSecurity0",
+          "userList(0)",
+          "(Username=\"page\",Password=\"uberalles\")"
+        ],
+        [
+          "ComputerSecurity1",
+          "userList(0)",
+          "(Username=\"graytest\",Password=\"Lab12\")"
+        ],
+        [
+          "SequenceTrigger1",
+          "seqnum",
+          "1"
+        ],
+        [
+          "SequenceTrigger2",
+          "seqnum",
+          "1"
+        ],
+        [
+          "SequenceTrigger5",
+          "seqnum",
+          "1"
+        ],
+        [
+          "SequenceTrigger6",
+          "seqnum",
+          "1"
+        ],
+        [
+          "SequenceTrigger8",
+          "seqnum",
+          "1"
+        ]
+      ],
+      "value_diff": [],
+      "brush_diff": [],
+      "editor_ok": true,
+      "ucc_ok": true,
+      "secs_ued": 84.0,
+      "secs_ucc": 5.6,
+      "bytes_ucc": 14890675,
+      "bytes_ued": 14816825
+    },
+    "12_Vandenberg_Cmd.dx": {
+      "n_ucc": 3361,
+      "n_ued": 3361,
+      "missing_from_ucc": [
+        "Light1"
+      ],
+      "only_in_ucc": [
+        "light1"
+      ],
+      "class_diff": [],
+      "prop_only_in_ued": [
+        [
+          "AutoTurret0",
+          "MaxRange",
+          "1024"
+        ],
+        [
+          "AutoTurret1",
+          "MaxRange",
+          "1024"
+        ],
+        [
+          "AutoTurret2",
+          "MaxRange",
+          "1024"
+        ],
+        [
+          "AutoTurret4",
+          "MaxRange",
+          "1024"
+        ],
+        [
+          "ComputerPersonal1",
+          "UserList(0)",
+          "(Username=\"tbaker\",Password=\"dalek\")"
+        ],
+        [
+          "ComputerSecurity0",
+          "UserList(0)",
+          "(Username=\"command\",Password=\"zebra42\")"
+        ],
+        [
+          "ComputerSecurity1",
+          "UserList(0)",
+          "(Username=\"command\",Password=\"zebra42\")"
+        ],
+        [
+          "ComputerSecurity2",
+          "UserList(0)",
+          "(Username=\"command\",Password=\"zebra42\")"
+        ],
+        [
+          "SequenceTrigger1",
+          "SeqNum",
+          "1"
+        ],
+        [
+          "SequenceTrigger2",
+          "SeqNum",
+          "2"
+        ]
+      ],
+      "prop_only_in_ucc": [
+        [
+          "AutoTurret0",
+          "maxRange",
+          "1024"
+        ],
+        [
+          "AutoTurret1",
+          "maxRange",
+          "1024"
+        ],
+        [
+          "AutoTurret2",
+          "maxRange",
+          "1024"
+        ],
+        [
+          "AutoTurret4",
+          "maxRange",
+          "1024"
+        ],
+        [
+          "ComputerPersonal1",
+          "userList(0)",
+          "(Username=\"tbaker\",Password=\"dalek\")"
+        ],
+        [
+          "ComputerSecurity0",
+          "userList(0)",
+          "(Username=\"command\",Password=\"zebra42\")"
+        ],
+        [
+          "ComputerSecurity1",
+          "userList(0)",
+          "(Username=\"command\",Password=\"zebra42\")"
+        ],
+        [
+          "ComputerSecurity2",
+          "userList(0)",
+          "(Username=\"command\",Password=\"zebra42\")"
+        ],
+        [
+          "SequenceTrigger1",
+          "seqnum",
+          "1"
+        ],
+        [
+          "SequenceTrigger2",
+          "seqnum",
+          "2"
+        ]
+      ],
+      "value_diff": [],
+      "brush_diff": [],
+      "editor_ok": true,
+      "ucc_ok": true,
+      "secs_ued": 88.5,
+      "secs_ucc": 3.7,
+      "bytes_ucc": 11219439,
+      "bytes_ued": 11120289
+    },
+    "10_Paris_Metro.dx": {
+      "n_ucc": 3178,
+      "n_ued": 3178,
+      "missing_from_ucc": [],
+      "only_in_ucc": [],
+      "class_diff": [],
+      "prop_only_in_ued": [
+        [
+          "ATM4",
+          "UserList(0)",
+          "(accountNumber=\"005133\",PIN=\"salem008\",balance=200)"
+        ],
+        [
+          "ATM4",
+          "UserList(1)",
+          "(accountNumber=\"001506\",PIN=\"naga066\",balance=300)"
+        ],
+        [
+          "ATM4",
+          "UserList(2)",
+          "(accountNumber=\"002639\",PIN=\"aramis01\",balance=150)"
+        ],
+        [
+          "ATM4",
+          "UserList(3)",
+          "(accountNumber=\"004418\",PIN=\"morbus13\",balance=100)"
+        ],
+        [
+          "ATM5",
+          "UserList(0)",
+          "(accountNumber=\"005133\",PIN=\"salem008\",balance=200)"
+        ],
+        [
+          "ATM5",
+          "UserList(1)",
+          "(accountNumber=\"001506\",PIN=\"naga066\",balance=300)"
+        ],
+        [
+          "ATM5",
+          "UserList(2)",
+          "(accountNumber=\"002639\",PIN=\"aramis01\",balance=150)"
+        ],
+        [
+          "ATM5",
+          "UserList(3)",
+          "(accountNumber=\"004418\",PIN=\"morbus13\",balance=100)"
+        ],
+        [
+          "ATM6",
+          "UserList(0)",
+          "(accountNumber=\"005133\",PIN=\"salem008\",balance=200)"
+        ],
+        [
+          "ATM6",
+          "UserList(1)",
+          "(accountNumber=\"001506\",PIN=\"naga066\",balance=300)"
+        ],
+        [
+          "ATM6",
+          "UserList(2)",
+          "(accountNumber=\"002639\",PIN=\"aramis01\",balance=150)"
+        ],
+        [
+          "ATM6",
+          "UserList(3)",
+          "(accountNumber=\"004418\",PIN=\"morbus13\",balance=100)"
+        ],
+        [
+          "ComputerPersonal0",
+          "UserList(0)",
+          "(Username=\"streetstation17\",Password=\"werewolf\")"
+        ]
+      ],
+      "prop_only_in_ucc": [
+        [
+          "ATM4",
+          "userList(0)",
+          "(accountNumber=\"005133\",PIN=\"salem008\",balance=200)"
+        ],
+        [
+          "ATM4",
+          "userList(1)",
+          "(accountNumber=\"001506\",PIN=\"naga066\",balance=300)"
+        ],
+        [
+          "ATM4",
+          "userList(2)",
+          "(accountNumber=\"002639\",PIN=\"aramis01\",balance=150)"
+        ],
+        [
+          "ATM4",
+          "userList(3)",
+          "(accountNumber=\"004418\",PIN=\"morbus13\",balance=100)"
+        ],
+        [
+          "ATM5",
+          "userList(0)",
+          "(accountNumber=\"005133\",PIN=\"salem008\",balance=200)"
+        ],
+        [
+          "ATM5",
+          "userList(1)",
+          "(accountNumber=\"001506\",PIN=\"naga066\",balance=300)"
+        ],
+        [
+          "ATM5",
+          "userList(2)",
+          "(accountNumber=\"002639\",PIN=\"aramis01\",balance=150)"
+        ],
+        [
+          "ATM5",
+          "userList(3)",
+          "(accountNumber=\"004418\",PIN=\"morbus13\",balance=100)"
+        ],
+        [
+          "ATM6",
+          "userList(0)",
+          "(accountNumber=\"005133\",PIN=\"salem008\",balance=200)"
+        ],
+        [
+          "ATM6",
+          "userList(1)",
+          "(accountNumber=\"001506\",PIN=\"naga066\",balance=300)"
+        ],
+        [
+          "ATM6",
+          "userList(2)",
+          "(accountNumber=\"002639\",PIN=\"aramis01\",balance=150)"
+        ],
+        [
+          "ATM6",
+          "userList(3)",
+          "(accountNumber=\"004418\",PIN=\"morbus13\",balance=100)"
+        ],
+        [
+          "ComputerPersonal0",
+          "userList(0)",
+          "(Username=\"streetstation17\",Password=\"werewolf\")"
+        ]
+      ],
+      "value_diff": [],
+      "brush_diff": [],
+      "editor_ok": true,
+      "ucc_ok": true,
+      "secs_ued": 117.4,
+      "secs_ucc": 3.1,
+      "bytes_ucc": 7841522,
+      "bytes_ued": 7775225
+    },
+    "00_Training.dx": {
+      "n_ucc": 1304,
+      "n_ued": 1304,
+      "missing_from_ucc": [],
+      "only_in_ucc": [],
+      "class_diff": [],
+      "prop_only_in_ued": [],
+      "prop_only_in_ucc": [],
+      "value_diff": [],
+      "brush_diff": [],
+      "editor_ok": true,
+      "ucc_ok": true,
+      "secs_ued": 11.1,
+      "secs_ucc": 2.7,
+      "bytes_ucc": 5933599,
+      "bytes_ued": 5918787
+    }
+  }
+}

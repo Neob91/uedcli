@@ -192,6 +192,28 @@ behavior is in [`rendering.md`](rendering.md). Evidence: `../../dev/docs/spikes/
   first for exact coords. The format itself carries fractional coordinates
   faithfully (see [`t3d.md`](t3d.md) "Fractional vertices"); the snap
   happens on import, not in the T3D text.
+- ✅ **`EXEC` does NOT abort on a failed line, so a failed `MAP LOAD` leaves the PREVIOUS level
+  loaded and the next `MAP EXPORT` writes THAT** — a complete, healthy-looking export of the wrong
+  map. Hit live 2026-07-26 (`../spikes/2026-07-26-ucc-export-completeness/`): three maps the
+  substrate could not load each "exported successfully" as byte-identical copies of the map loaded
+  before them; only the identical file sizes gave it away. **Guard by emptying the level first
+  (`MAP NEW` before `MAP LOAD`)** so a failed load yields an unmistakably tiny export, and check the
+  actor count. The general rule this instances: **a completion marker proves a script RAN, never
+  that it did what it was asked** — so no script-driven operation may be judged by its marker alone
+  (`commands.md` "`EXEC <file>`").
+- ✅ **The editor is NOT authoritative on the CASE of an actor name; the package is, and UCC reports
+  it faithfully.** UE1 `FName`s are case-insensitive, and on `MAP LOAD` a name already registered in
+  the editor process wins over the spelling the package stores. Measured 2026-07-26 across 5 retail
+  maps: UCC always wrote the package's stored spelling, while a REUSED editor wrote `Light1` for
+  maps storing `light1` — and a FRESH editor loading the same map wrote `light1`. So a reused
+  editor's `MAP LOAD` exports drift with what it loaded earlier in the session.
+  **`EDIT PASTE` does NOT drift** — three successive `MAP NEW`+paste builds in one editor round-trip
+  `probelight1`, `ProbeLight1`, `probelight1` each verbatim. So the boundary is the verb: **`MAP
+  LOAD` into a reused editor re-cases, `EDIT PASTE` does not** (mechanism unestablished). This
+  matters because `normalize.compare_view` keys actors by VERBATIM name (property keys and class
+  names are casefolded; actor names are not) — so re-opening a built map in a reused editor could
+  fail the post-verify on a correct build, while `level materialize`'s own build path, which never
+  `MAP LOAD`s, is unaffected.
 - **Static-array actor properties (`Foo(N)=<value>`) round-trip
   faithfully through uedcli (since 2026-06-25).** The T3D format
   serializes any UScript `var Foo[K]` array as separate indexed lines
