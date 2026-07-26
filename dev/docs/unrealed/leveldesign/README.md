@@ -7,7 +7,7 @@ scale, design craft & the immersive-sim philosophy, plus the asset-pipeline / ed
 at [`kb/README.md`](kb/README.md).**
 
 The **curated user cut** (for uedctl *users*, not internal dev) lives outside `dev/` at
-[`../../../leveldesign/`](../../../leveldesign/) — topic guides + step-by-step recipes, split
+[`../../../leveldesign/`](../../../../docs/leveldesign/) — topic guides + step-by-step recipes, split
 `general/` (engine-generic) and `deusex/` (Deus Ex-specific).
 
 > **History.** The older hand-written craft guides that used to live here — `csg-and-bsp.md`,

@@ -23,10 +23,10 @@ brush on **every** axis including Z, so to put the base on the floor set `Z = he
 
 - **`--sides` is your roundness/cost dial.** The engine caps a single poly at 16 sides, and every side is
   another face + BSP cut. 8 is the sweet spot for columns; use 6 for chunky pillars, 12–16 only for a
-  hero drum. See [../brush-shapes.md](../brush-shapes.md).
+  hero drum. See [../../brush-shapes.md](../../brush-shapes.md).
 - **Round geometry is off-grid by nature** — its vertices land at `radius·cos/sin` angles, not on the
   power-of-two grid. Prefer **semisolid** (`--solidity semisolid`) for cylindrical detail so it doesn't
-  seed BSP holes ([../geometry-and-bsp.md](../geometry-and-bsp.md)).
+  seed BSP holes ([../../geometry-and-bsp.md](../../geometry-and-bsp.md)).
 - **`--align-to-side`** offsets the cross-section by half a segment — use it to sit a flat face on an
   axis instead of a vertex, so the column meets an axis-aligned wall flush.
 - **Nothing in UE1 is truly round** — every "curve" is facets you pay for. A cylinder is the cheapest

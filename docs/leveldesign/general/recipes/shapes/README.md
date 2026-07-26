@@ -28,8 +28,8 @@ The verbs almost every shape recipe leans on: **`brush clip`** (cut a brush by a
 keep one half — how you bevel, taper, and miter), **`brush build cylinder --sides N`** (a faceted
 round pillar), and — since the 2D-profile generators landed — **`brush build extrude`** /
 **`brush build revolve`**, which sweep a silhouette you draw yourself and are the general answer to
-"this cross-section is not a box". Read [../brush-shapes.md](../brush-shapes.md) and
-[../geometry-and-bsp.md](../geometry-and-bsp.md) for the underlying builders and BSP rules.
+"this cross-section is not a box". Read [../../brush-shapes.md](../../brush-shapes.md) and
+[../../geometry-and-bsp.md](../../geometry-and-bsp.md) for the underlying builders and BSP rules.
 
 ---
 

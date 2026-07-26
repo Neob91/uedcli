@@ -13,7 +13,7 @@ here** (per `../../CLAUDE.md`). Evidence lives in `../spikes/`.
 | [`quirks.md`](quirks.md) | The weird, surprising **gotchas** — `MAP IMPORTADD` grid-snap, `Texture=` demand-load, selectability (paste vs IMPORTADD), `SELECTNAME`, CSG model, paste drift, no coplanar merge, etc. |
 | [`rendering.md`](rendering.md) | Getting pixels out — GL/device setup, render modes, the stale-framebuffer trap, black-viewport causes, building lighting, and `CAMERA OPEN` as the clean shaded-shot path. |
 | [`extracting-from-dll.md`](extracting-from-dll.md) | How this knowledge is mined from the binaries (UTF-16LE wide-string extraction of the exec grammar) and verified live. |
-| [`leveldesign/`](leveldesign/README.md) | The other axis — **level-design craft** (what makes a good, buildable level): the comprehensive dev reference is [`leveldesign/kb/`](leveldesign/kb/README.md) (geometry/BSP, zoning, lighting, textures, movers, actors/collision/pathing, the DX class catalog, NPC AI, human scale, design craft), binary-fact-checked. The reader-facing user cut is at [`../../leveldesign/`](../../leveldesign/README.md). |
+| [`leveldesign/`](leveldesign/README.md) | The other axis — **level-design craft** (what makes a good, buildable level): the comprehensive dev reference is [`leveldesign/kb/`](leveldesign/kb/README.md) (geometry/BSP, zoning, lighting, textures, movers, actors/collision/pathing, the DX class catalog, NPC AI, human scale, design craft), binary-fact-checked. The reader-facing user cut is at [`../../leveldesign/`](../../../docs/leveldesign/README.md). |
 
 The docs above are about **driving** UnrealEd headless; [`leveldesign/`](leveldesign/README.md)
 is about **designing levels** in it. They cross-reference where they overlap (the CSG model).

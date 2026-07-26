@@ -30,6 +30,6 @@ rise over the 192 run. `brush poly list` shows exactly **5 faces** (2 triangular
   ramp angle; the point can stay at the origin.
 - **`--keep above`/`--keep below`** picks which triangle you keep. Wrong one = flip it.
 - For a ramp you'll actually walk up, keep the rise ≤ the pawn's step where it meets the floor, or lead
-  into it with a step — see [../human-scale.md](../human-scale.md).
+  into it with a step — see [../../human-scale.md](../../human-scale.md).
 - A wedge is just a box + one clip, so it composes: clip twice for a tapered (trapezoidal) block — see
   [ring-cornice.md](ring-cornice.md).
