@@ -99,13 +99,42 @@ if [ ! -e "$B/System/UccFix.u" ]; then
 fi
 cp "$B/System/UccFix.u" "$OUT/"
 cp "$B/UccFix/Classes/fixture.pcx" "$OUT/"
-# the DXT1 half: encoded by Pillow (third-party to uedcli) from the SAME artwork.
-"$PY" - "$OUT" <<'PY'
-import sys, pathlib
+# The DXT1 half: a FULL 7-level pyramid, each level encoded by Pillow (third-party to uedcli).
+# Each DXT1 level is the compression of THAT LEVEL'S UCC-BUILT P8 IMAGE, not a Pillow-downscaled
+# copy of mip 0 — so level N of CompMips and level N of Mips are the same picture, which is what
+# makes a per-level cross-check meaningful. Pillow's DDS writer emits a single surface, so the
+# container is assembled here: a DDS header with mipMapCount=7 plus the concatenated blocks.
+"$PY" - "$OUT" "$REPO" <<'PY'
+import io, struct, sys, pathlib
 from PIL import Image
 d = pathlib.Path(sys.argv[1])
-Image.open(d / "fixture.pcx").convert("RGB").save(d / "fixture.dds", format="DDS", pixel_format="DXT1")
-print("wrote", d / "fixture.dds")
+sys.path.insert(0, sys.argv[2])          # the repo root, so `uedcli` imports
+from uedcli import utexture
+
+pkg = utexture.load_package(str(d / "UccFix.u"))
+i = utexture.textures(pkg)[0]
+tex = utexture.decode_texture(pkg, i)
+pal = utexture.decode_palette(pkg, utexture.export_index_of_ref(pkg, tex.palette_ref))
+
+blocks = []
+for m in tex.mips:
+    rgb = Image.frombytes("RGB", (m.width, m.height), utexture.mip0_to_rgb(m, pal))
+    buf = io.BytesIO()
+    rgb.save(buf, format="DDS", pixel_format="DXT1")
+    blocks.append(buf.getvalue()[128:])          # strip each single-surface header
+
+w, h = tex.mips[0].width, tex.mips[0].height
+DDSD = 0x1 | 0x2 | 0x4 | 0x1000 | 0x80000 | 0x20000        # +LINEARSIZE +MIPMAPCOUNT
+hdr = bytearray(128)
+hdr[0:4] = b"DDS "
+struct.pack_into("<IIIIII", hdr, 4, 124, DDSD, h, w, len(blocks[0]), 0)
+struct.pack_into("<I", hdr, 28, len(blocks))                 # dwMipMapCount
+struct.pack_into("<II", hdr, 76, 32, 0x4)                    # pixelformat size, DDPF_FOURCC
+hdr[84:88] = b"DXT1"
+struct.pack_into("<I", hdr, 108, 0x1000 | 0x400000 | 0x8)    # TEXTURE|MIPMAP|COMPLEX
+(d / "fixture.dds").write_bytes(bytes(hdr) + b"".join(blocks))
+print(f"wrote {d/'fixture.dds'} — {len(blocks)} DXT1 levels, "
+      f"{[len(b) for b in blocks]} bytes each")
 PY
 echo "built: $OUT/UccFix.u  ($(stat -c%s "$OUT/UccFix.u") bytes)"
 rm -rf "$B"

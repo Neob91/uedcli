@@ -107,6 +107,31 @@ bounded by intra-block variation.
 against a stored expected buffer, not a tolerance. The tolerance test keeps its value for layout
 errors; it must not be described as covering index decoding.
 
+## Finding 6 — the DXT1 side is a FULL 7-level pyramid, and the cross-check is valid at MIP 0 ONLY
+
+Pillow's DDS writer emits a single surface, so the pyramid is assembled by the harness: **each DXT1
+level is the compression of THAT LEVEL'S UCC-built P8 image**, not a Pillow-downscaled copy of mip 0.
+That is what makes level N of `CompMips` and level N of `Mips` the same picture. Levels and sizes:
+`[2048, 512, 128, 32, 8, 8, 8]` bytes for 64×64 → 1×1, i.e. the 8-byte block floor at 4×4/2×2/1×1 —
+the shape the plan expects.
+
+**But the agreement tolerance does not generalise down the chain.** Measured per level:
+
+| level | dims | mean abs error |
+|-------|-------|----------------|
+| 0 | 64×64 | **2.831** |
+| 1 | 32×32 | 5.159 |
+| 2 | 16×16 | 9.483 |
+| 3 | 8×8 | **53.177** |
+| 4 | 4×4 | 60.396 |
+| 5 | 2×2 | 35.417 |
+| 6 | 1×1 | 0.667 |
+
+At small sizes the downsampled image carries detail at or below DXT1's 4×4 block, so a *correct*
+decode diverges wildly — the same effect as finding 4, reached from the other end. **The plan's
+oracle compares mip 0 and must stay that way**; a per-level tolerance would need a per-level bound,
+and below 16×16 no useful bound exists for this artwork.
+
 ## What the plan should now say
 
 1. **Fixture provenance:** our own generated artwork; **P8 mips built by `ucc make`**; **DXT1 blocks
@@ -121,5 +146,5 @@ errors; it must not be described as covering index decoding.
 ## Committed artifacts
 
 `fixture/UccFix.u` (7,702 B — UCC's package, 7 P8 mips), `fixture/fixture.pcx` (2,983 B — the source
-artwork), `fixture/fixture.dds` (2,176 B — Pillow's DXT1 of the same image). All ours; nothing
-derived from the game.
+artwork), `fixture/fixture.dds` (2,872 B — a 7-level DXT1 pyramid, each level Pillow's compression of
+the corresponding UCC P8 level, `mipMapCount = 7`). All ours; nothing derived from the game.
