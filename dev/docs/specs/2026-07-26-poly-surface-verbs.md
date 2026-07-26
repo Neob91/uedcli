@@ -2,16 +2,23 @@
 
 **Date:** 2026-07-26 · **Status:** §2–§4 REWRITTEN from the settled ruling set (thirteen owner rulings,
 several superseding earlier ones) after two re-gate rounds found the patched document describing more
-than one design. The three previously-open algorithm questions — cap detection, terminal faces,
-connectivity validation — are decided in §2.4.1–§2.4.2. **Re-enters the gate at round 1.**
+than one design, then **corrected in place after a three-reviewer round** that converged on five
+blocking defects: the closed-run walk direction (§2.4.1 step 7), the cap predicate (step 4, now
+removed outright), `run`'s across-run axis convention (§2.4.2), `one-tile`'s skewed basis (§2.6, owner
+ruling), and a false premise in §2.3/§7 about what deleting the co-orientation guard costs. The
+previously-open algorithm questions — branching, terminal faces, connectivity validation, the derived
+root and walk direction, the across-run axis — are decided in §2.4.1–§2.4.2.
+**Re-enters the gate at round 1.**
 · **Evidence:** [`../spikes/2026-07-26-poly-rotate-curved-track/`](../spikes/2026-07-26-poly-rotate-curved-track/README.md)
 (the curved run) and [`../spikes/2026-07-26-unrealed-texalign-semantics/`](../spikes/2026-07-26-unrealed-texalign-semantics/README.md)
 (the measured editor semantics).
 
 > Ephemeral, per `CLAUDE.md` "Documentation". Once built, the durable half goes to
 > `direction/conventions.md` (the owner's rulings — **which needs their explicit yes and a
-> `Confirmed:` trailer**, see §7) and `rationale/polyalign.md` (the engineering choices). Do not cite
-> this file from a durable doc.
+> `Confirmed:` trailer**, see §7) and the `rationale/` tree (the engineering choices): the verb split
+> and the re-anchor are already in `rationale/surface.md`, and the align frame math lands in a
+> **new sibling topic for `polyalign`**, created when step 4 does — it does not exist yet, so nothing
+> may cite it as a path until then. Do not cite this file from a durable doc.
 
 ## 1. Problem
 
@@ -59,11 +66,14 @@ Owner ruling 2026-07-26. The reason is that **the flags are disjoint per mode**:
 | `one-tile` | — | per-face fit; no continuity, no orientation guard (§2.6) |
 
 As a flag group that cannot be expressed: `-h` shows one blob in which most options are invalid for
-most modes, and every bad combination has to be caught at runtime — `polyalign.align()` already
-carries `"--fit-perimeter applies only to --ring"` (`polyalign.py:401-402`), and the review rounds
-found the *missing* `--turn`-with-`wall` and `--fit-perimeter`-with-`wall` paths. As subcommands those
-errors become **structurally impossible** (argparse rejects them) and `brush poly align run -h` lists
-exactly the two flags that apply, which is what `CLAUDE.md` requires of `-h`.
+most modes, and every bad combination has to be caught at runtime — one hand-written check and one
+regression test per combination. `polyalign.align()` already carries exactly one such check
+(`"--fit-perimeter applies only to --ring"`, `polyalign.py:401-402`, pinned by
+`test_fit_perimeter_requires_ring`), and the new `--turn` would need a second one that nobody has
+written. As subcommands both vanish: argparse rejects `--fit-perimeter` on `wall` before any uedcli
+code runs, so the shipped check and its test are **deleted** (§4.1), and `--turn` never needs one.
+`brush poly align run -h` then lists exactly the two flags that apply, which is what `CLAUDE.md`
+requires of `-h`.
 
 It also matches the precedent already in the CLI: **`brush build <shape>`** is the same problem — one
 operation, several parameterised variants with disjoint flags (`--sides` for cylinder,
@@ -80,12 +90,17 @@ flags, and its rule is *at least* one rather than *exactly* one.) Values are **i
 written to the polygon `Pan` field.
 
 **Target grammar across the per-face verbs.** `align` also accepts a bare brush Name meaning all its
-polys (`resolve_align_targets`); `pan`, `rotate` and `scale` take `BRUSH:SELECTOR` only. That
-asymmetry is deliberate — a whole-brush pan is meaningful, a whole-brush *run* is what `align` is for
-— but it must be stated, since ruling 2 unifies their **output** and a reader will assume the input
-matches. A duplicate/overlapping target set is **deduped before applying**, because `--by` is relative
-and would otherwise double-apply (`surface.apply_surface_edit` already does this deliberately — carry
-it forward).
+polys (`resolve_align_targets`); `pan`, `rotate` and `scale` take `BRUSH:SELECTOR` only. The asymmetry
+is deliberate and runs this way round: **a whole brush is a meaningful unit for `align` and not for
+the three transforms.** "Wrap this cylinder", "stamp the world grid on this brush" are whole-brush
+operations — that IS what a mode does — so a bare `Tower` is the natural spelling of the set. A
+whole-brush *pan/rotate/scale* is a blanket nudge of every face the brush has, including the ones the
+author never looked at, and `--by` compounds it silently; requiring `Tower:all` makes "yes, all of
+them" a deliberate act rather than a name typed one selector short. The asymmetry must be **stated**
+in the docs, since ruling 2 unifies these verbs' **output** and a reader will assume the input matches.
+A duplicate/overlapping target set is **deduped before applying**, because `--by` is relative and
+would otherwise double-apply (`surface.apply_surface_edit` already does this deliberately — carry it
+forward).
 
 `--to 0,0` clears the pan, which emits **no `Pan` line** (`unrealed/t3d.md` "A poly sub-field has NO
 class default": an absent `Pan` ≡ zero; see the 2026-07-26 `emit` fix).
@@ -136,14 +151,22 @@ this in the help so nobody adds `--to` on the strength of the wrong argument.
   untouched. This is the counterpart to `pan`'s "never touches `Origin`" invariant.
 - **`TextureU`/`TextureV` are assumed to lie in the face plane.** T3D does not require it, and
   `n̂ × U` silently annihilates any normal component, changing `|U|` and hence the texel density. A
-  face whose stored axes have a normal component **exits 2 naming the face** rather than being
-  silently projected, on a **relative** test `|axis·n̂| / |axis| > TOL`. An exact-zero test would
-  reject ordinary content, since `emit.clean`'s `CLEAN_EPS` snapping and a normalised cross product
-  both leave dust, and the batch is all-or-nothing so one noisy face would kill the whole invocation.
-  Pin both sides of the threshold. **`TOL` is deliberately NOT fixed here** — the step-1 plan
-  (`plans/2026-07-26-poly-surface-step1-plan.md` §5) closes it by measuring the observed ceiling
-  across the committed fixture T3Ds, because the value an earlier draft asserted (`1e-3`) is the same
-  order as the noise it must tolerate.
+  face whose stored axes have a normal component **exits 2 naming every such face** (a pre-pass over
+  the whole set, before any write — `conventions.md` "A batch is all-or-nothing … collects *all*
+  misses") rather than being silently projected, on a **relative** test `|axis·n̂| / |axis| > TOL`. An
+  exact-zero test would reject ordinary content, since `emit.clean`'s `CLEAN_EPS` snapping and a
+  normalised cross product both leave dust, and the batch is all-or-nothing so one noisy face would
+  kill the whole invocation. Pin both sides of the threshold.
+  **`TOL = 1e-2`, relative — SETTLED** by the step-1 plan
+  (`plans/2026-07-26-poly-surface-step1-plan.md` §5), which supersedes the `1e-3` an earlier draft of
+  this spec asserted. The threshold is chosen from the **harm** side, not from the observed ceiling:
+  tolerating a relative out-of-plane component `ε` costs `ε²/2` of texel density (`5e-5` at `1e-2`,
+  invisible), while a genuinely out-of-plane authored frame is `ε ≥ 0.05` (~3° of tilt) — so `1e-2`
+  sits mid-way in a two-decade gap. `1e-3` is *inside* the noise it must tolerate: `emit.clean` can
+  displace an axis by `√3·0.001` absolute, which is `2.6e-3` relative at `0.6667`, the smallest
+  magnitude the corpus contains — a `1e-3` gate can reject a frame uedcli itself wrote. The plan's
+  measurement (max `4.135e-07` over 942 fixture axes) **confirms** the noise floor sits far below the
+  threshold; it does not set it.
 - **No continuity guarantee.** Applied across a run, each face pivots about its own centroid, which
   breaks the seams `run` matched — and equally breaks the shared world grid `wall`/`floor` stamp. This
   is the verb for a one-off face (a sign, a panel, a soffit). Document it, and note the contrast with
@@ -219,14 +242,29 @@ So `wall`/`floor` produce a **byte-identical frame** from either normal. That is
 `WALLDIR`, whose `TU = normalize(N.Y, −N.X, 0)` flips outright — which is one reason `WALLDIR` is not
 adopted (§4b).
 
-**A face failing the `|N.A| > 0.05` guard EXITS 2 naming the face** — and this is a deliberate
-divergence from the editor, which **silently skips** such a face and leaves it untouched, pan
-included. `direction/conventions.md` "No silent half-answers" forbids that shape: a flag that
+**A face failing the `|N.A| > 0.05` guard EXITS 2, naming EVERY failing face** — and this is a
+deliberate divergence from the editor, which **silently skips** such a face and leaves it untouched,
+pan included. `direction/conventions.md` "No silent half-answers" forbids that shape: a flag that
 succeeds while doing nothing is indistinguishable from a broken one, and stderr scrolls away. The
-error names the face selector, its normal, and the projection axis that failed, e.g.
-*"brush poly align floor: face `Ramp:4` is too close to vertical for a Z projection (|N.Z| = 0.031 ≤
-0.05) — a texture projected down Z would be stretched past 20× and anchored thousands of uu away"*.
-Because a batch is all-or-nothing (`conventions.md`), nothing is written when any face fails.
+guard is a **pre-pass over the whole set before any write**, collecting *all* offenders and reporting
+the complete set — `conventions.md` "A batch is all-or-nothing … collects all misses and reports the
+complete set, rather than … dying on the first". Each is named with its selector, its normal, and the
+projection axis that failed, e.g. *"brush poly align floor: 2 faces are too close to vertical for a Z
+projection — `Ramp:4` (|N.Z| = 0.031), `Ramp:5` (|N.Z| = 0.009); the 0.05 floor exists because a
+texture projected down Z would be stretched past 20× and anchored thousands of uu away"*. Nothing is
+written when any face fails.
+
+**Why `conventions.md`'s calibrated exception does NOT apply here, since a mixed `poly find` result is
+exactly how this set arrives.** That exception lets *a set member the verb structurally cannot act on*
+(the canonical case: a point actor handed to a poly verb) be named on stderr and skipped. A
+guard-failing face is not that: it is a poly, `align floor` can act on it, and the refusal is about
+the *result* being useless rather than the *object* being the wrong kind. Two consequences follow.
+First, "this actor has no polys" is a fact about the member alone, so skipping it leaves the rest of
+the batch meaningful; "this face is 87° off horizontal" is a fact about the member **and the mode the
+author chose**, so skipping it silently produces a set in which some faces moved and some did not,
+with no way to tell which from the exit code. Second, the escape is already composable and needs no
+flag: `brush poly find --facing +Z` filters the set by orientation upstream, which is what the
+`find → mutate -` idiom is for. So: hard exit 2, complete list of offenders, nothing written.
 
 Why the threshold matters rather than being a formality: `d/N.A` diverges as the face turns parallel
 to `A`, and the 0.05 floor caps the multiplier at 20×. It is the face's offset *transverse* to `A`
@@ -241,9 +279,15 @@ The new guard is far more permissive: `floor` now accepts anything up to ~87° o
 because a world-derived frame removes their whole motivation:
 
 - the co-orientation guard existed because a coplanar face pointing the *opposite* way shared the
-  seed's frame and would render the texture **mirrored**. Under the projection family that face now
-  receives a **byte-identical** frame (the `N → −N` invariance above), so there is nothing to mirror
-  and nothing to reject;
+  seed's frame and would render the texture **mirrored** (`polyalign.py:242-244` states exactly
+  that). **The mirroring does not go away — a byte-identical frame is precisely what causes it**: the
+  two faces are viewed from opposite sides, so one world→UV map reads reversed on the back one. What
+  goes away is the *reason to reject it*. The editor's projection family is **polarity-blind by
+  design** — `proj(B)` and `d/N.A` are both invariant under `N → −N` (§4b), so the family cannot
+  express "which way this face points", and a world-axis grid has no notion of facing to begin with.
+  Under a world grid, mirrored **is** the right answer: both faces read one continuous wallpaper, and
+  a sheet of wallpaper seen from behind reads reversed. Rejecting that would be rejecting the family's
+  defining behaviour, which ruling 9 adopts deliberately;
 - the coplanarity guard existed because one seed frame was being stamped on a set, so a set spanning
   two planes was meaningless. There is no seed now: each face's frame comes from its own plane, and
   the *point* of the projection family is that faces on different planes still share one world grid
@@ -263,9 +307,14 @@ and re-running over the same set changes nothing. Pin both directions (§4).
 **No `--turn` and no `--fit-perimeter`** on these modes — structurally, via §2.0's subcommands.
 
 ⚠ **`wall`/`floor` are DESTRUCTIVE on imported content, and `usage.md` must warn at the point of use,
-not in a footnote.** Real maps carry deliberate texel scales: across the committed editor fixtures, 17
-of 253 `TextureU` magnitudes are non-unit, 14 of them exactly `0.667` (= 2/3 — authored, not float
-noise). Aligning imported geometry replaces those with the projection's own density and discards any
+not in a footnote.** Real maps carry deliberate texel scales. Measured 2026-07-26 over a **precisely
+stated population** — every `TextureU` line in the seven top-level `uedcli/tests/fixtures/*.t3d`
+exports, 253 axes in all — **17 are non-unit**: 14 at exactly `0.6667` (= 2/3, authored, not float
+noise), 2 at `0.9967`, 1 at `0.9762`. All 14 of the `0.6667`s come from the two **editor-exported**
+maps (`level_small.t3d`, `brush_subtract.t3d`); uedcli's own builder output is unit throughout. (The
+`intersect/` sub-tree adds 218 more axes and no non-unit ones, so widening the population to the whole
+fixture tree gives *the same 17*, out of 471.)
+Aligning imported geometry replaces those with the projection's own density and discards any
 authored `Pan`. `brush poly scale` (§2.5) is the general control that puts a density back; `one-tile`
 (§2.6) and `--fit-perimeter` (§2.4) reach non-unit densities too, but only for their own specific fits.
 
@@ -292,12 +341,20 @@ would get this wrong, because today's code anchors at `start[0]`, the *low endpo
   midpoint is what makes `half_width` the lever arm in the shear formula; anchoring at an endpoint
   would measure the inner-radius chord on a flat bend (100.4 uu instead of 112.92 on the fixture) and
   double the shear;
-- the **across-run** zero stays where today's `--ring` puts it — the seam endpoint with the lower
-  projection on the across axis. On a cylinder that is the bottom rim, so **existing cylinder wraps do
-  not shift**. Deliberate: a midpoint anchor for both axes would move `V = PanV` from the bottom rim
-  to mid-height on every cylinder the tool has ever textured, and `direction/conventions.md` singles
-  out the T3D trees as the one place to think before changing, because a user's *content* lives there.
-  **Which seam it is read from is settled below** ("Terminal faces and the across-run zero").
+- the **across-run** zero keeps today's `--ring` RULE — an **endpoint** of the seam edge, the one with
+  the lower projection on the across axis, never its midpoint. Deliberate: a midpoint anchor for both
+  axes would move `V = PanV` to *mid-height* on every cylinder the tool has ever textured — half the
+  texture above the anchor and half below — and `direction/conventions.md` singles out the T3D trees
+  as the one place to think before changing, because a user's *content* lives there. An endpoint
+  anchor keeps `V = 0` on a rim, so one texture height spans the run's cross section exactly.
+  **Which** rim it lands on follows the across-axis DIRECTION settled in §2.4.2, and that direction
+  changes: `run` adopts the spec-wide V-down convention, so on a cylinder the zero moves from today's
+  bottom rim to the **top** rim and V grows downward. That is the intended fix, not a regression — a
+  UE1 texture's `V = 0` row is its top (§2.6, `unrealed/texalign.md` `WALLDIR`), so today's V-up
+  `--ring` renders an asymmetric texture upside-down, and `align wall` and `align run` on the same
+  cylinder disagree. The cost is stated plainly: **re-aligning an existing cylinder wrap flips its
+  texture vertically.** Pin it (§4.2).
+  **Which seam the zero is read from is settled below** ("Terminal faces and the across-run zero").
 
 Both anchors are satisfiable by one `Origin`: two constraints, two in-plane degrees of freedom.
 
@@ -307,7 +364,7 @@ the chain order and errors otherwise; `poly find` emits poly-index order, which 
 controls nor sees, so any dependence on it is a hidden coupling. `resolve_align_targets`'s docstring
 claim that "the ring seam is the first face" is therefore deleted with the behaviour.
 
-#### 2.4.1 The PRE-WALK — three decided algorithms
+#### 2.4.1 The PRE-WALK — eight steps, every one decided here
 
 `run` derives everything from the set before aligning anything. The steps run in **this order**, and
 the order is load-bearing: each one is what makes the next one's message specific instead of a
@@ -328,62 +385,60 @@ straddling a bucket boundary — a real risk on a revolve's off-grid vertices af
 snapping, and it would surface as a phantom fork or a phantom disconnection rather than as anything
 obviously wrong. Do not port the prototype's version.
 
-**3. An edge shared by MORE THAN TWO faces exits 2** naming the edge's faces. The set is not a
-surface strip and no walk over it is defined.
+**3. An edge shared by MORE THAN TWO faces exits 2**, naming **every** such edge with its faces (all
+offenders, per `conventions.md` "a batch … collects all misses"). The set is not a surface strip and
+no walk over it is defined.
 
-**4. BRANCH CHECK — and the CAP message is a diagnostic REFINEMENT of it.** *Decided here; the two
-earlier attempts at a standalone cap predicate both failed.* A run's phase cannot fork: at a junction
-it would have to be simultaneously consistent along two continuations, and nothing picks which arm
-continues. So:
+**4. BRANCH CHECK — ONE error, and it ALWAYS carries the cap hint.** *Decided here; three earlier
+attempts at a cap predicate all failed, and the third failure is why there is no predicate at all
+now.* A run's phase cannot fork: at a junction it would have to be simultaneously consistent along two
+continuations, and nothing picks which arm continues. So:
 
 > Collect every member with **3 or more** neighbours in the set. If that collection is empty, continue
-> to step 5. Otherwise the invocation exits 2 — with **which** message decided by the cap predicate
-> below, applied to each collected member.
+> to step 5. Otherwise the invocation exits 2, naming **every** collected member with its neighbour
+> count, and **always** appending the actionable hint that must survive from `--ring`:
+> *"face `BRUSH:idx` has N neighbours in the set; a run cannot branch — align each arm as its own set.
+> If these are a cylinder's caps, exclude them:
+> `brush poly find <brush> --item Side | brush poly align run -`"*.
 
-**The cap predicate is pure ADJACENCY plus the face's own edge count** — no normals, no tangents, no
-cylinder axis. A collected member `c` is reported as a **cap** when either holds:
+**There is no cap PREDICATE.** The requirement was only ever that the `--item Side` hint reach the
+author — `test_ring_rejects_cap_face` is re-derived against this message (§4.1) and asserts **the
+hint**, not a classification — and appending it unconditionally satisfies that at zero cost. Three
+attempts to *decide* cap-vs-branch first, and why each is rejected:
 
-- **(a)** `c` shares an edge with **every other member of the set** (its degree is `|set| − 1`); or
-- **(b)** `c` shares edges with **≥ 3 members whose shared edges are pairwise NON-OPPOSITE**, where
-  two edges of a face are *opposite* iff the face is a quad and their indices in its vertex ring
-  differ by 2. (A non-quad face has no opposite pair at all, so (b) holds for any non-quad of degree
-  ≥ 3.)
+- the **first** tested each member's normal against its neighbours' run tangents and was **backwards
+  in both directions**: a cylinder cap's normal is the axis while the side tangents are tangential, so
+  `n̂·t̂ = 0` and the cap *passed*; while for a legitimate side face `n̂_k · t̂_{k+1} = sin Δθ` = 0.707
+  on an 8-gon, so **every real side face** was rejected as a cap;
+- the **second** keyed on the shared edge being parallel to the neighbour's **run tangent** — but the
+  run tangent only exists *after* the walk this check is supposed to gate. It is not computable where
+  it is needed;
+- the **third** was pure adjacency: report a member as a cap when its degree is `|set| − 1`, or when
+  ≥ 3 of its shared edges are pairwise non-opposite. It **misfires in both directions**. `|set| − 1`
+  is a set-size coincidence, not a cap test: a genuine 4-face T-junction satisfies it and is announced
+  as a cap; a tetrahedron reports all four faces as caps; and a square prism selected with **both**
+  caps satisfies neither disjunct, so its caps go undetected — and a bare
+  `brush poly align run <Box>` is exactly that set, which §2.1's target grammar explicitly allows. The
+  second disjunct is dead weight besides: any 3 of a quad's 4 edges contain an opposite pair, so it
+  reduces to "a non-quad of degree ≥ 3".
 
-If any collected member satisfies (a) or (b), the error is the **cap-specific** one, naming those
-members and carrying the actionable hint that must survive from `--ring`:
-*"exclude caps, e.g. `brush poly find <brush> --item Side | brush poly align run -`"*. Otherwise it is
-the **generic branch** error, naming the lowest-index offender and its neighbour count: *"face
-`BRUSH:idx` has N neighbours in the set; a run cannot branch — align each arm as its own set"*.
+The first two were geometric, and the geometry they need is exactly what `run` gave up when it stopped
+being cylinder-only; the third bought a distinction it could not draw correctly. Adjacency alone
+answers the question that actually matters — *does the phase fork here* — and one honest message with
+the hint attached is strictly more useful than two messages, one of which is sometimes a lie.
 
-Why this shape, in full, because two previous specifications of it shipped wrong:
-
-- the **first** attempt tested each member's normal against its neighbours' run tangents and was
-  **backwards in both directions**: a cylinder cap's normal is the axis while the side tangents are
-  tangential, so `n̂·t̂ = 0` and the cap *passed*; while for a legitimate side face
-  `n̂_k · t̂_{k+1} = sin Δθ` = 0.707 on an 8-gon, so **every real side face** was rejected as a cap;
-- the **second** attempt keyed on the shared edge being parallel to the neighbour's **run tangent** —
-  but the run tangent only exists *after* the walk this check is supposed to gate. It is not
-  computable where it is needed;
-- both were geometric predicates, and the geometry they need is exactly what `run` gave up when it
-  stopped being cylinder-only. Adjacency is available before the walk, on any run, coplanar included.
-
-**It separates the cases it has to separate.** On the flagship fixture (`test_ring_rejects_cap_face`:
-an 8-sided cylinder's 8 sides plus one cap) the cap has degree 8 and each side has degree 3, so *every*
-member is collected — which is why a bare "first offender by index" branch error would name a side
-face and never show the `--item Side` hint. The cap satisfies (a) (8 = 9 − 1) and, being an 8-gon,
-(b); no side satisfies either (a side's degree is 3 ≠ 8, and its three shared edges include an
-opposite pair, since any 3 of a quad's 4 edges do). So the cap message fires and names the cap. A
-square prism's cap is a *quad* of degree 4 and fails (b), but satisfies (a) — which is why (a) and (b)
-are both needed. A genuine T-junction in a quad strip has degree 3 with an opposite pair among its
-shared edges, so it fails both and gets the generic branch error, correctly.
+**What this reads like on the flagship fixture** (`test_ring_rejects_cap_face`: an 8-sided cylinder's
+8 sides plus one cap): the cap has degree 8 and each side has degree 3, so *every* member is collected
+and all nine are named with their counts, followed by the `--item Side` hint — which is precisely the
+next command the author should run. A T-junction in a quad strip reports the one degree-3 face and the
+same hint, which there is merely inapplicable rather than wrong.
 
 ⚠ **Accepted narrowing, stated so it is not discovered later: a cap that does NOT branch is not
 detected.** Select a 4-sided prism's cap plus only 2 of its sides and the cap has degree 2 — a legal
 path, walked as an ordinary run member with a 90° corner in it. The old geometric guard would have
-caught it. This is the price of a predicate that works on coplanar runs at all, and the two attempts
-above are the evidence that the geometric alternative is not available. A non-branching cap produces a
-defined (if odd) alignment rather than a wrong-looking silent one, and the `--item Side` idiom the
-docs teach avoids it.
+caught it. This is the price of a check that works on coplanar runs at all, and the attempts above are
+the evidence that the alternative is not available. A non-branching cap produces a defined (if odd)
+alignment rather than a wrong-looking silent one, and the `--item Side` idiom the docs teach avoids it.
 
 **5. CONNECTIVITY VALIDATION.** *Decided here.* The adjacency graph must be a **single connected
 component that is a simple path or a simple cycle**; anything else exits 2 naming the members of every
@@ -398,19 +453,35 @@ otherwise:
 - **an isolated face** has degree 0, matching neither "two ends" nor "no ends"; it is a component of
   size 1 and is caught by the same count. (A single-face *set* is already rejected at step 1.)
 
-**6. NON-QUAD REJECTION** — every member must have exactly 4 vertices, else exit 2 naming the face
-(§6). **It comes after steps 4–5 deliberately:** a cylinder cap is an N-gon, so a non-quad check
-placed earlier would report the flagship fixture's cap as "not a quad" and the author would never see
-the `--item Side` hint that `test_ring_rejects_cap_face` pins.
+**6. NON-QUAD REJECTION** — every member must have exactly 4 vertices, else exit 2 naming **every**
+non-quad member (§6). **It comes after steps 4–5 deliberately:** a cylinder cap is an N-gon, so a
+non-quad check placed earlier would report the flagship fixture's cap as "not a quad" and the author
+would never see the `--item Side` hint that `test_ring_rejects_cap_face` pins. That ordering argument
+survives step 4's simplification unchanged — the hint now rides on *every* branch error, but it still
+rides on no non-quad error.
 
-**7. ROOT SELECTION, entirely derived:**
+**7. ROOT SELECTION AND WALK DIRECTION, entirely derived.** Both must be stated: a root alone leaves
+a closed run's two continuations undecided, and picking the wrong one reverses U on every cylinder the
+tool has ever wrapped.
 
-- an **open** run has exactly two degree-1 ends; the root is the one with the **lower poly index**;
-- a **closed** run has no ends, so the root is the **lowest poly index in the set**, and its entry
-  seam is its shared edge with its own lower-indexed neighbour.
+- an **open** run has exactly two degree-1 ends; the root is the one with the **lower poly index**,
+  and the direction is forced (an end has one neighbour);
+- a **closed** run has no ends, so the root is the **lowest poly index in the set**. Its two
+  neighbours both have higher indices — it is the minimum — so the tie is broken between *them*:
+  **the walk LEAVES the root through the seam it shares with the LOWER-indexed of its two
+  neighbours**, and the root's **entry** seam (where phase zero sits, §2.4.2) is the other one, shared
+  with its higher-indexed neighbour. That seam is also the **open** seam the run deliberately leaves.
 
-**8. WALK** from the root, which fixes the phase zero, the entry seam, the walk direction, and the
-frame — all reproducibly, from geometry and poly index alone.
+  Concretely on the shipped case — an 8-sided cylinder whose side polys are consecutive in index
+  order, `0 … 7` — the root is `0`, the walk goes `0 → 1 → … → 7`, **U increases with poly index**, and
+  the open seam stays `7 | 0`, exactly where `--ring` puts it today (`find_faces` emits poly-index
+  order and `_ring_align` walks that order). The opposite choice — leaving toward `7` — would reverse
+  U on every existing wrap and move the open seam to `0 | 1`. Nothing in the shipped suite would catch
+  that: `_assert_seam_continuous`, the per-facet U-span assertion and the closing-gap measurement are
+  all direction-agnostic, which is why §4.2 adds a direction pin.
+
+**8. WALK** from the root in the direction step 7 fixed, which fixes the phase zero, the entry seam
+and the frame — all reproducibly, from geometry and poly index alone.
 
 **Consequence, stated because it is a real change:** the author can no longer place the seam of a
 closed run, which input order allows today. Accepted deliberately — `--fit-perimeter` makes the
@@ -444,19 +515,59 @@ chord and (for the root) its phase zero are otherwise undefined:
 that edge with the lower projection on the across axis (the root's far edge on an open run, its entry
 seam on a closed one), and `V` at that point is `PanV = 0`. Every **other** face gets its `V` phase by
 **continuity across its entry seam** with its predecessor, not by re-deriving a low endpoint of its
-own. The two rules agree on a cylinder and on a symmetric bend — both faces' bottom rims sit at the
-same V — which is why today's per-face derivation (`polyalign.py:388` recomputes `base_w` from each
-face's own `start[0]`) has never shown the difference. They **disagree** whenever the run's cross
+own. The two rules agree on a cylinder and on a symmetric bend — the rim the zero lands on reads the
+same V from either face — which is why today's per-face derivation (`polyalign.py:388` recomputes
+`base_w` from each face's own `start[0]`) has never shown the difference. They **disagree** whenever the run's cross
 section changes along it, and there the propagated version is the one that keeps V continuous, which
 is the property `run` exists to provide. Fixing it at the root also makes it order-independent by
 construction.
 
-**The across-run axis DIRECTION must be specified**, because the cylinder axis that supplied it is
-gone: it is `n̂ × t̂` (face normal × run tangent), with the same determinism tie-break `--ring` uses
-today (orient "+Z-ish"; `polyalign.py:314`). Its **sign is fixed once at the root and propagated along
-the walk**, never recomputed per face against a world axis — which would flip mid-sweep on a turning
-run and mirror V. Seam continuity alone does not pin this (a cylinder aligned upside-down and
-backwards is equally continuous), so it needs its own assertion (§4).
+**The across-run axis DIRECTION, stated as a convention — decided here**, because the cylinder axis
+that supplied it is gone and `--ring`'s "+Z-ish" tie-break (`polyalign.py:314`) does not survive the
+generalisation. The axis itself is forced: the across direction `ĉ` is the unit vector perpendicular
+to both `n̂` (face normal) and `t̂` (run tangent), i.e. `ĉ = ±(n̂ × t̂)`. Only the **sign** is a choice,
+and `--ring`'s does not work on the case this spec exists for: on a **flat** run `n̂ = ±Ẑ` and `t̂` is
+horizontal, so `ĉ` is horizontal, `ĉ·Ẑ = 0`, and "+Z-ish" disambiguates nothing at all — the sign
+would fall through to whatever `n̂ × t̂` happened to give, which is the **walk direction**, a thing the
+author cannot see or predict. The convention instead is:
+
+> **`ĉ` takes the NEGATIVE side of the first world axis, in the order `Ẑ`, then `Ŷ`, then `X̂`, on
+> which it has a non-negligible component.** So: choose the sign with `ĉ·Ẑ < 0` if `|ĉ·Ẑ|` is above
+> the tie epsilon; else with `ĉ·Ŷ < 0` if `|ĉ·Ŷ|` is; else with `ĉ·X̂ < 0`. (`ĉ` is a unit vector, so
+> the last case cannot also tie.)
+
+This is not a fresh invention: it is §2.3's projection family read off its own table. `wall` puts
+`V = −proj(Ẑ)`, `floor` puts `V = −proj(Ŷ)` and `U = −proj(X̂)` — the same `Ẑ`-then-`Ŷ`-then-`X̂`
+priority, each negated. It therefore satisfies all four things the mode needs:
+
+- **well-defined on a flat run** — `ĉ` is horizontal, so the `Ẑ` test ties and the `Ŷ` test decides
+  (or `X̂`, on a run travelling along `Ŷ`);
+- **V runs DOWN**, matching `wall`, `floor` and `one-tile`, so a top-row-first UE1 texture renders
+  upright and `align wall` and `align run` on one cylinder no longer disagree by 180°;
+- **independent of the walk direction** — reversing `t̂` flips `n̂ × t̂`, and the world test flips it
+  straight back, so `ĉ` is unchanged. (`U` runs *along* the walk, so it does follow it; that is why
+  step 7 derives the direction rather than leaving it to the geometry. What this bullet buys is that
+  the across axis cannot be flipped by it, so a run and its mirror image are not textured
+  upside-down relative to each other);
+- **invariant under `n̂ → −n̂`**, for the same reason, so a **subtractive** brush's inner wall gets the
+  same frame as the identical additive geometry. `run` is therefore polarity-blind exactly as
+  `wall`/`floor` are (§2.3, §4b).
+
+**Handedness follows from that and is not separately chosen.** `TextureU` runs along `t̂` and
+`TextureV` along `ĉ`, so `U × V = ±n̂` — which sign depends on which way the polygon happens to face.
+That is inherent to a polarity-blind family and is NOT a defect to fix: the editor's own family is the
+same (`FLOOR` gives `U × V = +N` on a floor and `−N` on a ceiling, and `WALLY`'s axis pair is the
+opposite hand from `FLOOR`/`WALLX` by construction — see the "not cyclic" note in §2.3), so "match the
+editor's handedness" is not a well-posed target and this spec does not claim it. The visible
+consequence, stated once and documented: **on a face read from its back side — a subtractive brush's
+inner wall, the routine case for a curved corridor — U appears mirrored, while V still runs down.**
+Identical to what `wall`/`floor` do on the same geometry (§2.3's co-orientation bullet), so a run and
+the walls around it stay consistent with each other.
+
+The chosen sign is **fixed once at the root and propagated along the walk** by V-continuity across
+each seam, never re-derived per face — a per-face world test would flip mid-sweep on a run that turns
+past vertical and mirror V at that seam. Seam continuity alone does not pin any of this (a cylinder
+aligned upside-down and backwards is equally continuous), so it needs its own assertions (§4.2).
 
 #### 2.4.3 `--turn UU`
 
@@ -599,18 +710,42 @@ individual face entirely; fit-to-poly means it is derived from that one face.
   which would imply a shared frame it structurally cannot provide.
 - **No orientation guard.** Unlike `wall`/`floor` it accepts **any** face orientation — a sign goes on
   a slanted face as happily as a vertical one.
-- **Orientation uses the EDITOR'S PROJECTION DIRECTIONS, NORMALISED** — owner ruling 2026-07-26,
+- **Orientation uses the EDITOR'S PROJECTION DIRECTIONS, ORTHOGONALISED** — owner ruling 2026-07-26,
   extending §2.3's family to this mode so all three world-oriented modes share one up-vector
   convention. Project along the world axis `A` of **maximum** `|N.A|` over all three (ties to the
-  lowest index, matching `_tex_basis`'s documented convention, `builders.py:133-141`), take
-  `TextureU`/`TextureV` from §2.3's table for that `A`, then **normalise them** and set the magnitudes
-  from the fit below.
+  lowest index, matching `_tex_basis`'s documented convention, `builders.py:133-141`), take the
+  `TextureU`/`TextureV` pair from §2.3's table for that `A`, then build an **orthonormal** frame from
+  them and set the magnitudes from the fit below.
+
+  **Normalising alone is NOT enough, and this is a measured defect the owner ruled on 2026-07-26.**
+  The two projected axes are not perpendicular to each other:
+  `proj(B₁)·proj(B₂) = −(N·B₁)(N·B₂)`, which is zero only when the normal is square to one of the two
+  axes being projected. On a corner face `N = (0.577, 0.577, 0.577)` the pair comes out **120° apart**
+  — a 30° shear on a sign — and the anchor misses too: the fit spans `U ∈ [−85, 171]` instead of
+  `[0, 256]`, because with skewed axes the "minimum corner" of the extent is not a vertex of the face.
+
+  > **Owner ruling 2026-07-26: ORTHOGONALISE by GRAM-SCHMIDT of U against V.** Keep `V` exactly as
+  > the table gives it — that is the predictable up-vector the whole mode exists for — and square `U`
+  > to it:
+  >
+  >     V̂ = normalize(−proj(B_v))
+  >     Û = normalize(−proj(B_u) − V̂ ((−proj(B_u)) · V̂))
+  >
+  > **Rejected: `U = V × N`.** It also produces an orthogonal frame, but it picks its own sign rather
+  > than inheriting the table's, so it mirrors the image on half the face directions — the one failure
+  > this mode must not have.
+
+  Verified: Gram-Schmidt returns the pair to **90°** on that same corner normal and the fit to an exact
+  `[0, 256]²` span. On any face where the pair is already perpendicular (every axis-aligned face — the
+  common case) `Û` is unchanged, so this costs nothing where nothing was wrong.
+
   Why not `_tex_basis(n̂)`: it seeds from the world axis *least* aligned with the normal, which fixes
   no up-vector an author can predict — so a sign could render sideways or upside down, failing the one
   use case the mode exists for. The projection convention gives `TextureV = −proj(Ẑ)` on a wall, i.e.
   `−Ẑ` on a vertical face: V increases *downward*, matching the image-row convention, so a texture
   authored top-row-first renders upright. Normalising is what makes this safe to borrow — the `|proj|`
-  shrink `wall`/`floor` inherit is discarded here, because `one-tile` supplies its own density.
+  shrink `wall`/`floor` inherit is discarded here, because `one-tile` supplies its own density — and
+  orthogonalising is what makes the *fit* mean what it says.
   Choosing the **maximum** `|N.A|` (rather than §2.3's per-mode axis) means the guard can never fire:
   a unit normal always has some `|N.A| ≥ 1/√3 ≈ 0.577`, so `one-tile` keeps its "any face orientation"
   promise without an exception.
@@ -621,14 +756,20 @@ individual face entirely; fit-to-poly means it is derived from that one face.
   V density are set explicitly.
 - **Anchor: the MINIMUM corner of the face's extent** measured along the chosen U/V axes (the min of
   the vertices' projections). Texture `(0,0)` lands there, so the tile covers the face's bounding box
-  exactly. Deterministic, because the axes are a pure function of the normal. Rejected: centroid
+  exactly. Deterministic, because the axes are a pure function of the normal — and **exact only
+  because the frame is orthonormal**: on a rectangular face square to the axes the minimum corner is a
+  vertex and the four corners map to `(0,0)`, `(W,0)`, `(W,H)`, `(0,H)`. Under the skewed pair the
+  ruling above replaces, that was not true and the fit overshot its own tile. Rejected: centroid
   anchoring, which needs a half-extent offset to mean the same thing and is harder to reason about.
 - **`Pan` is `(0,0)`**, like every other mode.
 - **On a NON-RECTANGULAR face** (a triangle, a trapezoid, a cap tile) the tile covers the *bounding
   box*, so the face shows a sub-region of the texture. Documented, not discovered.
 - **Requires the texture catalog**, for the same reason `--fit-perimeter` does: `|TextureU| = W / E_u`
   needs the texture's pixel size. Exit 2 naming the ref when it is not in the catalog, naming the face
-  when it carries no texture or has a zero extent along either axis.
+  when it carries no texture or has a zero extent along either axis — and, because a batch is
+  all-or-nothing (`conventions.md`), **as one pre-pass reporting the COMPLETE set of offenders**, not
+  the first one hit. A `poly find` result over a whole brush routinely contains several untextured
+  faces at once, and fixing them one exit-2 at a time is the failure mode that rule exists to prevent.
 
 Open, flagged rather than decided: `one-tile` is arguably a **scale** operation wearing an align hat —
 it sets density and anchor, not a shared frame — so it overlaps `brush poly scale` (§2.5). Kept under
@@ -650,9 +791,12 @@ correction):
   (same). `run` must preserve this.
 - **A run whose seams lie IN the plane of the turn — a flat bend, like the track bed's top — shears
   one axis** by `S = 2·sin(Δθ/2)·half_width` world units, appearing on each stored axis scaled by
-  **that axis's own density**: `ΔU = d_u·S·|cos θ|`, `ΔV = d_v·S·|sin θ|`. **`half_width`** is the
-  greatest distance from the phase reference (the seam midpoint) to a seam endpoint — the cross
-  section need not be symmetric about the centreline. The other axis is exact at **multiples of a
+  **that axis's own density**: `ΔU = d_u·S·|cos θ|`, `ΔV = d_v·S·|sin θ|`. **`half_width` is HALF the
+  seam edge's length** — the distance from the phase reference (that seam's midpoint) to either of its
+  endpoints, which by construction are the same. It is therefore a **per-seam** quantity, not a
+  property of the run: a run whose cross section varies along it (a bed that widens through the bend)
+  shears differently at every seam, and the figure to quote — in the stderr report and in a test — is
+  the **widest** seam's. The other axis is exact at **multiples of a
   quarter turn** (`--turn 0` included, which is the default and the case §4 tests). This also assumes
   a **uniform** per-facet turn — the seam must bisect it; unequal turns break the even-cosine
   cancellation that makes the exact axis exact.
@@ -661,14 +805,16 @@ correction):
 seam's orientation relative to the turn, not how sharp the turn is — so a 90° corner can be perfect or
 unusable depending only on which way the seam runs:
 
-| run | seam vs turn | measured |
+| run | seam vs turn | seam mismatch, and where the number comes from |
 |-----------------------------------------|-------------------|---
-| L-shaped **wall**, 90° corner | ∥ the turn axis | **ΔU = ΔV = 0.000000**, at `--turn` 0 and 8192 |
-| flat bend, Δθ = 45° (2-segment revolve) | in the turn plane | ΔU = 48.98 (closed form 48.983) |
-| flat **L**, Δθ = 90°, 128 uu wide | in the turn plane | 90.5 texels (closed form) |
+| L-shaped **wall**, 90° corner | ∥ the turn axis | **ΔU = ΔV = 0.000000** — MEASURED, at `--turn` 0 and 8192 |
+| flat bend, Δθ = 45° (2-segment revolve) | in the turn plane | ΔU = 48.98 — MEASURED (48.983561, against a closed form of 48.983) |
+| flat **L**, Δθ = 90°, 128 uu wide | in the turn plane | ≈ 90.5 texels — **CLOSED FORM ONLY, extrapolated; never measured** (`2·sin(45°)·64`) |
 
 A wall run turning a corner is exact and needs no compromise. A **flat** corner is the pathological
-case: 90.5 texels of shear out of a 256-texel texture, at one seam — and unlike a revolve it cannot be
+case: ~90.5 texels of shear out of a 256-texel texture, at one seam — a *predicted* figure, since the
+flat-L fixture was never built, but predicted by the one closed form the two rows above it confirm to
+five decimal places. Unlike a revolve it cannot be
 improved by adding segments, because Δθ is fixed by the corner itself. This is what the stderr shear
 report is for: on a flat L it prints ~90 and tells the author to mitre the corner or accept a visible
 seam, at the moment they need to know.
@@ -686,8 +832,10 @@ doubling of `--segments`. Measured both ways; see finding 5.
 ### 3.1 Owner rulings (all 2026-07-26)
 
 The complete set. Rows 1–6 were made in the first session and are parked verbatim on
-`board/inbox.md` under *"The per-surface verb split"*; rows 7–12 followed and are parked under *"SIX
-further per-surface rulings"*; row 13 is the `[resolved]` pre-walk entry. **Keep this table and those
+`board/inbox.md` under *"The per-surface verb split"*; rows 7–13 followed and are parked under
+*"SEVEN further per-surface rulings"*. (Ruling 3's *resolution* — that the root is derived rather than
+taken from the first input token — is additionally recorded in the board's `[resolved]` pre-walk
+entry; that entry is a resolution record, not the parked ruling text.) **Keep this table and those two
 inbox items in step** — they are the same text awaiting the same yes (§7).
 
 | # | Ruling | Rejected, and why |
@@ -698,15 +846,18 @@ inbox items in step** — they are the same text awaiting the same yes (§7).
 | 4 | **`run` DERIVES the frame; it does not preserve the caller's rotation.** Fixups afterwards are quarter-turn flips and small texel pans. | Preserve-and-compose (`rotate --bend \| align --run`) — proposed by the agent, rejected by the owner, and vindicated by the spike: rotation alone leaves the phase broken (finding 2) and `run` deriving solves the case outright (finding 3). |
 | 5 | **The turn is a scalar angle in unreal rotation units, folded into `run`, spelled `--turn UU`.** | `--rotate` — collides with `brush build --rotate` (actor orientation, a triple) and, worse, with `brush poly rotate` in the same noun, where the same word would carry the opposite continuity guarantee. A boolean `--across` — covers only quarter turns. A separate post-pass — pivots each face about its own centroid and re-breaks the seams. |
 | 6 | **`--ring` is renamed `run`.** | Keeping `--ring` — a 90° arc is not a ring, and an author would not find the flag; `run` is already the codebase's own word (`polyalign._check_orientation`: *"turning runs deferred"*). |
-| 7 | **Align modes are SUBCOMMANDS**: `brush poly align wall\|floor\|run\|one-tile` (§2.0). | A mutually-exclusive flag group — the flags are disjoint per mode, so `-h` becomes one blob of mostly-invalid options and every bad combination needs a runtime check. Two of those checks were already missing when the review found them. |
+| 7 | **Align modes are SUBCOMMANDS**: `brush poly align wall\|floor\|run\|one-tile` (§2.0). | A mutually-exclusive flag group — the flags are disjoint per mode, so `-h` becomes one blob of mostly-invalid options and every bad combination needs a runtime check — the shipped code carries exactly one (`--fit-perimeter` outside `--ring`), and the new `--turn` would need another that nobody has written. |
 | 8 | **Density RESETS TO UNIT** — no mode adopts a seed face's texel scale, so `--fresh-frame` has one possible value and is deleted. **This binds `run` ALONE**, per ruling 9. | Adopt-seed as the default — it makes the result depend on which face was listed first, which rulings 3 and 9 remove everywhere else. |
 | 9 | **`wall` and `floor` are WORLD-SPACE aligned in orientation AND anchor, adopting UnrealEd's `FLOOR`/`WALLX`/`WALLY` projection family** (§2.3): anchored where the plane crosses the projection axis; `floor` projects along Z, `wall` along whichever of X/Y the face faces more. **Its consequence is accepted: a face not square to its axis is stretched, so density is `\|proj\|`, not 1.** | `builders._tex_basis` — measured against the editor, the two agree on **none** of seven face directions, and `_tex_basis` lets V point up on roughly half a room's walls. A seed face's centroid as the anchor — it makes two invocations over one plane disagree, which is exactly what the ruling removes. `WALLDIR` — unit and never stretched, but its sign depends on the CSG **surface** normal, which a model-side tool does not have (§2.3, §4b). |
-| 10 | **`one-tile` is FIT TO THE POLY** (§2.6) — one tile spans the face, stretched non-uniformly, anchored at the face's minimum corner — taking the projection **directions NORMALISED**, so a sign has a predictable up-vector. It is the one mode exempt from ruling 8. | `_tex_basis`'s orientation — no predictable up-vector, so a sign can render sideways. Aspect-preserving fit — that is `scale` (§2.5); a letterboxed sign is the wrong default. A flag on `wall`/`floor` — implies a shared frame it structurally cannot provide. |
+| 10 | **`one-tile` is FIT TO THE POLY** (§2.6) — one tile spans the face, stretched non-uniformly, anchored at the face's minimum corner — taking the projection **directions, ORTHOGONALISED by Gram-Schmidt of U against V** (`V` kept, `U = normalize(U − V(U·V))`) and then scaled by the fit, so a sign has a predictable up-vector *and* square corners. It is the one mode exempt from ruling 8. | `_tex_basis`'s orientation — no predictable up-vector, so a sign can render sideways. **Merely normalising the projected pair** — `proj(B₁)·proj(B₂) = −(N·B₁)(N·B₂)`, so on a corner face `N = (0.577,0.577,0.577)` the axes stay **120° apart** (a 30° shear) and the anchor misses its own tile (`U ∈ [−85,171]`, not `[0,256]`). **`U = V × N`** — orthogonal, but it picks its own sign and mirrors the image. Aspect-preserving fit — that is `scale` (§2.5); a letterboxed sign is the wrong default. A flag on `wall`/`floor` — implies a shared frame it structurally cannot provide. |
 | 11 | **`brush poly scale` is IN SCOPE** as the fourth canonical surface op (§2.5) — after ruling 8 it is the only general way to express a texel density. | Deferring it — it was out of scope until reset-to-unit removed every other route to a non-unit density; `--fit-perimeter` (closed runs only) would have been the sole remaining channel. |
 | 12 | **`--fit-perimeter` fits whole TILES, not whole texels** (§2.4.4), using the pixel size of the axis the along-run advance lands in. | The shipped integer-texel rule — measured, it removes 0.47 texels of a 31.47-texel mismatch on the standard 8-sided cylinder. Using `USize` unconditionally — a 4× error at `--turn 16384` on a non-square texture. |
 | 13 | **No `--seam` flag**, and **both `wall` and `floor` exist** (not one merged mode). | A `--seam` flag — it would re-introduce the author-placed seam that ruling 3 derives; `--fit-perimeter` makes the closing seam exact, so its position stops mattering on the workflow that ships. Merging `wall` and `floor` into one auto-axis mode — the projection axis is a design choice on a slanted face (`floor` on a ramp is a legitimate, different answer from `wall` on it), so deriving it would remove a choice rather than a chore. |
 
-### 3.2 Agent choices (→ `rationale/polyalign.md` on landing)
+### 3.2 Agent choices (→ the `rationale/` tree on landing)
+
+`rationale/surface.md` already holds the verb-level ones; the frame math goes to a new `polyalign`
+sibling, created with step 4.
 
 - **Orthogonal frame, centreline reference radius** — from the measured trade in §2.7, not taste.
   Also answers the owner's deferred arc-length question: per-strip arc length and the sheared frame
@@ -715,9 +866,20 @@ inbox items in step** — they are the same text awaiting the same yes (§7).
 - **Chord, not arc**, for the phase advance.
 - **Exact component path at quarter turns**, scoped to axis-aligned orthogonal frames.
 - **Non-quarter `--turn` allowed + stderr shear report**, rather than an error.
-- **Cap detection is a pure ADJACENCY refinement of the branch check** (§2.4.1 step 4), with its
-  accepted narrowing stated. Rejected: both geometric predicates — one backwards in both directions,
-  one needing the run tangent that only exists after the walk it gates.
+- **There is NO cap predicate: ONE branch error, which always carries the `--item Side` hint**
+  (§2.4.1 step 4), with its accepted narrowing stated. Rejected: two geometric predicates (one
+  backwards in both directions, one needing the run tangent that only exists after the walk it gates)
+  and an adjacency one (`degree == |set| − 1` is a set-size coincidence — it calls a 4-face T-junction
+  a cap and misses a prism selected with both caps, which is the plain `align run <Box>` invocation).
+- **Root selection fixes the WALK DIRECTION too** (§2.4.1 step 7): on a closed run the walk leaves the
+  lowest-index root toward its lower-indexed neighbour, so U increases with poly index and the open
+  seam stays between the highest and lowest index — where `--ring` puts it today. Rejected: naming
+  only the entry seam, which reverses U on every shipped cylinder wrap and is invisible to every
+  existing assertion.
+- **The across-run axis takes the negative side of the first world axis in the order `Ẑ`, `Ŷ`, `X̂`
+  on which it has a component** (§2.4.2), fixed once at the root and propagated. Rejected: `--ring`'s
+  "+Z-ish" tie-break — degenerate on a flat run, where it hands the sign to the walk direction; and
+  a per-face world test, which flips mid-sweep on a run that turns past vertical.
 - **A terminal face's far edge is the quad edge opposite its seam**, its midpoint standing in for the
   missing seam midpoint; the root's phase zero sits on it (§2.4.2). Rejected: extrapolating a tangent
   from the single seam's own endpoints, which is the endpoint-derived tangent the chord rule already
@@ -742,7 +904,9 @@ every named-error path to carry one.
 
 **5 are deleted, 14 change, 20 survive unchanged.** *This is the most important table in the change*:
 the cylinder wrap is the only capability that ships today, and a test relaxed to make it pass is how
-that capability is lost quietly. Verdicts below were read off the file, not inferred.
+that capability is lost quietly. Verdicts below were read off the file, not inferred. **"Changes"
+counts a re-worded `match=` as a change** — the three verdict words are the only three, and a test
+whose assertion text must be edited is not one that survives unchanged.
 
 **Coplanar `wall`/`floor` (8)**
 
@@ -758,7 +922,11 @@ that capability is lost quietly. Verdicts below were read off the file, not infe
 | `test_wall_rejects_coplanar_but_opposite_facing_faces` | **DELETED** — the co-orientation guard is deleted. **Replaced** by a positive test asserting the two opposite faces receive a **byte-identical** frame, which pins the `N → −N` invariance §2.3 rests on. |
 
 **`run` (the eight `test_ring_*`)** — all renamed `test_run_*`; assertions kept unless a ruling
-genuinely changes the answer.
+genuinely changes the answer. ⚠ **None of these eight observes the walk DIRECTION or the across-axis
+SIGN**: `_assert_seam_continuous`, the per-facet U-span assertion and the closing-gap measurement are
+all direction-agnostic, so every one of them stays green under a run walked backwards or textured
+upside-down. That is a hole in the shipped suite, not a licence — §4.2 adds the two pins that close
+it.
 
 | test | verdict |
 |-------------------------------------------------|---
@@ -768,8 +936,8 @@ genuinely changes the answer.
 | `test_ring_fresh_frame_unit_density_and_continuous` | **changes** — loses `fresh_frame=True` and becomes the default case; both assertions unchanged. |
 | `test_ring_keeps_pan_integer` | **INVERTS** — it seeds `pan = (3,5)` and asserts every face carries it; under ruling 8 the answer is `(0,0)` on every face. Keep the "components are `int`" half. |
 | `test_ring_fit_perimeter_closes_the_seam` | **changes** — integer-texel meet → whole-**tile** meet; needs a texture and injected sizes; and `--fit-perimeter` now also requires a quarter `--turn`, which the default 0 satisfies. |
-| `test_ring_rejects_cap_face` | **survives in intent, message re-derived** — the cap is now reported by the branch check's cap refinement (§2.4.1 step 4), so `match="not a ring side face"` becomes the new cap message, which **must still carry the `--item Side` hint**. The step ordering in §2.4.1 exists to keep this test green. |
-| `test_ring_rejects_multi_brush` | **survives, message re-worded** — `match="ONE cylinder brush"` → one *brush* (a run is no longer cylinder-only). |
+| `test_ring_rejects_cap_face` | **changes** (intent survives, message re-derived) — the cap is now caught by the plain branch check (§2.4.1 step 4); there is no cap classification, so `match="not a ring side face"` becomes the branch message. **Assert the `--item Side` hint, not a classification** — the hint rides on every branch error, and step 6's placement after step 4 is what keeps it reachable on this fixture. |
+| `test_ring_rejects_multi_brush` | **changes** (message re-worded) — `match="ONE cylinder brush"` → one *brush* (a run is no longer cylinder-only). |
 
 **Everything else (23)**
 
@@ -793,7 +961,7 @@ genuinely changes the answer.
 | `test_dispatch_poly_align_reads_stdin_selectors` | **changes** — args shape only. |
 | `test_dispatch_poly_align_empty_stdin_noop` | **changes** — args shape only. |
 | `test_dispatch_poly_align_mixing_stdin_and_names_exit2` | **changes** — args shape only. |
-| `test_dispatch_poly_align_error_exit2_no_save` | **changes** — args shape, and `"ring side face"` → the new cap message. |
+| `test_dispatch_poly_align_error_exit2_no_save` | **changes** — args shape, and `"ring side face"` → the new branch message (§2.4.1 step 4). |
 | `test_engine_fact_uv_formula_is_base_relative_plus_pan` | **survives unchanged** — a T3D-convention fact. |
 | `test_engine_fact_cylinder_facet_chord_is_2r_sin_pi_over_n` | **survives unchanged** — a fact about `builders.cylinder`. |
 | `test_align_emits_no_zero_pan_so_materialize_can_verify_the_built_map` | **survives** — a `+Z` cube face passes `floor`'s `\|N.Z\| = 1` guard and the mode writes `Pan = (0,0)`, so no `Pan` line is emitted and the materialize round trip still compares equal. Keep it: it guards a shipped bug. |
@@ -833,9 +1001,23 @@ editor-produced golden.
 - **Turn axis selection, stated by STORED COMPONENT** (not by "along/across", which inverts and is
   easy to misread): on the flat-bend fixture, `--turn 0` gives `ΔV < 2e-3` with `ΔU ≈ 12.55`;
   `--turn 16384` gives `ΔU < 2e-3` with `ΔV ≈ 12.55`; `--turn 8192` gives both `≈ 8.87`.
-- **The across-run axis direction and handedness** — the sign is fixed once at the root and
-  **propagated along the walk**, not recomputed per face against a world axis (which would flip
-  mid-sweep on a turning run and mirror V).
+- **The across-run axis DIRECTION — V runs DOWN, and nothing currently pins it** (§2.4.2). Three
+  assertions, because one geometry cannot show all three: (a) on an upright cylinder, `TextureV·Ẑ < 0`
+  and the `V = 0` rim is the **top** one — which is a deliberate flip of what `--ring` writes today,
+  so it is the pin that would catch an accidental revert; (b) on a **flat** run (the curved track bed,
+  where `n̂ = ±Ẑ` and the `Ẑ` test ties) the sign comes from the `Ŷ`-then-`X̂` fallback: on a bed
+  travelling `+X̂`, `TextureV·Ŷ < 0` — **and on the mirror-image bed, built so the walk travels `−X̂`,
+  `TextureV·Ŷ < 0` again**, the *same world direction*. A sign that leaked from the walk direction
+  flips between those two and nothing else catches it; (c) feeding the **negated** face normal (the
+  subtractive case) yields a byte-identical frame.
+- **The across-run axis SIGN is fixed once at the root and propagated** — not recomputed per face
+  against a world axis, which would flip mid-sweep and mirror V. Pin on a run that turns **past
+  vertical**, the only geometry where the two rules differ.
+- **Walk DIRECTION on a closed run** (§2.4.1 step 7) — on the shipped 8-sided cylinder, U increases
+  with poly index and the open seam is `sides[-1] | sides[0]`, not `sides[0] | sides[1]`. Assert the
+  *position* of the open seam (the one pair whose U gap is ≈ the full perimeter), not just its size:
+  every shipped assertion is direction-agnostic, so this is the only thing standing between the
+  generalisation and a silently reversed wrap.
 - **The across-run zero is the ROOT's entry-edge low endpoint, propagated** — pin it on a run whose
   cross section CHANGES along it, which is the only fixture where the propagated and the per-face
   rules differ (§2.4.2). A cylinder cannot detect this.
@@ -845,34 +1027,44 @@ editor-produced golden.
   result. Plus a positive pin on the derived root: an open run roots at its lower-poly-index end, a
   closed run at its lowest index. (An earlier draft pinned "changing the first token moves the seam",
   which asserts the opposite of ruling 3 and cannot pass.)
-- **Cap vs branch** — (i) the flagship 8-sided cylinder + cap gives the **cap** message with the
-  `--item Side` hint (predicate (a) and (b)); (ii) a **square prism**'s cap + all 4 sides gives the cap
-  message via (a) alone, since that cap is a quad; (iii) a genuine **T-junction** of quads gives the
-  **generic branch** message, naming the offending face and its neighbour count.
+- **Branching** — one message, so the pins assert *what it names* rather than which of two it is.
+  (i) the flagship 8-sided cylinder + cap exits 2 and the message carries the `--item Side` hint;
+  (ii) a **square prism selected with BOTH caps** — the plain `align run <Box>` set — exits 2 too,
+  which the abandoned `degree == |set| − 1` predicate did not catch; (iii) a genuine **T-junction** of
+  quads exits 2 naming the offending face and its neighbour count. All three name **every** degree-≥3
+  member, so (i) lists all nine faces of the cylinder+cap fixture — assert the cap is among them.
 - **Connectivity** — (i) two disjoint 3-face chains exit 2 (four degree-1 ends, no branch, so nothing
   else catches it); (ii) a set containing one isolated face exits 2.
 - **Terminal faces** — on a 3-face open run, the root's far edge maps to `U = 0` and the last face's
   far edge to `U = total chord`; a **two-face** run (both faces terminal) aligns and is seam-continuous.
 - **Non-quad ordering** — a set containing a triangle exits 2 naming the face, but the cylinder+cap set
-  still reports the CAP message rather than "not a quad" (this is what step 6's placement buys).
+  still reports the BRANCH message (with its hint) rather than "not a quad" (this is what step 6's
+  placement after step 4 buys, and it is the whole reason the ordering is load-bearing).
 
 **Behaviour**
 - **`wall`/`floor` idempotence and set-independence** — aligning face A alone and face B alone (same
   plane, separate invocations) yields byte-identical frames; a second run over the same set changes
   nothing; and a set spanning **two different planes** succeeds, each face getting its own anchor.
-- **`wall`/`floor` guard failure exits 2 naming the face**, on both sides of `|N.A| = 0.05`
+- **`wall`/`floor` guard failure exits 2 naming EVERY failing face** (pin a set with two of them, and
+  that no face in the set was written), on both sides of `|N.A| = 0.05`
   (the spike brackets the editor's threshold live at `0.049` / `0.051`).
 - **`scale`** — `--by 2,2` halves the stored magnitudes (texture looks twice as big); `--to 128,128`
   on a `W×H` texture gives `|TextureU| = W/128`; the face centroid's `(U,V)` is unchanged by both;
   `Pan` untouched. `--by` needs no catalog, `--to` does.
 - **`one-tile` orientation** — on a `+Y`-facing wall, `TextureV` is `−Ẑ` (V runs downward, so a
-  top-row-first texture renders upright) and the axes are unit-normalised before the fit scales them;
-  on a floor, `−X̂`/`−Ŷ`. Pin a slanted face too, since unpredictable up-vectors there are the defect
-  this rule exists to prevent.
+  top-row-first texture renders upright) and the axes are unit before the fit scales them; on a floor,
+  `−X̂`/`−Ŷ`. Pin a slanted face too, since unpredictable up-vectors there are the defect this rule
+  exists to prevent.
+- **`one-tile` axes are ORTHOGONAL** — on the corner normal `N = (0.577, 0.577, 0.577)`, assert
+  `TextureU·TextureV ≈ 0` (90°, not the 120° the un-orthogonalised pair gives) **and** that `TextureV`
+  still points along `−proj(Ẑ)`, which is what fixes Gram-Schmidt's direction: an implementation that
+  squared V against U instead, or took `U = V × N`, passes the first half and fails the second.
 - **`one-tile` fit** — a `W×H` texture on an `E_u × E_v` face gives `|TextureU| = W/E_u`,
   `|TextureV| = H/E_v`, `Pan` (0,0), `Origin` at the min corner; a rectangular face's corners map to
-  (0,0), (W,0), (W,H), (0,H); a triangle maps its bounding box; a zero-extent axis and a texture
-  missing from the catalog each exit 2 naming the face or the ref.
+  exactly (0,0), (W,0), (W,H), (0,H) — **an assertion that is only valid for an orthogonal frame, and
+  is the cheapest end-to-end check that the orthogonalisation happened**; a triangle maps its bounding
+  box; a zero-extent axis and a texture missing from the catalog each exit 2 naming the face or the
+  ref, all offenders at once.
 - **Coplanar sets are accepted** by `run` (the deleted "all faces are parallel" rejection), and the
   same coplanar set gives a **different** result under `floor` than under `run` — one straight, one
   turning. Pin both, since "they collapse into each other" is the obvious wrong reading.
@@ -891,14 +1083,19 @@ editor-produced golden.
   round trip, not just the format. The model functions keep returning **brush names** for
   `src.save(touched=…)`, which is a session-store contract; only the CLI print changes.
 
-**Error paths**, each a named exit 2 with a regression: branch (generic); cap (with the `--item Side`
-hint); disconnected set; isolated face; edge shared by >2 faces; `< 2 faces`; multi-brush set;
+**Error paths**, each a named exit 2 with a regression: branch (one message, always carrying the
+`--item Side` hint); disconnected set; isolated face; edge shared by >2 faces; `< 2 faces`;
+multi-brush set;
 non-quad face; `--to` with `--by`; `pan`/`scale` with **neither** `--to` nor `--by`; a zero or negative
 `scale` factor; `one-tile` on a face with a zero extent; `wall`/`floor` failing the `|N.A|` guard; a
 texture absent from the catalog, a face with no texture, or a project with no synced catalog, for each
 of `scale --to`, `one-tile` and `--fit-perimeter`; a run whose faces carry different textures under
 `--fit-perimeter`; `--fit-perimeter` on an open run; `--fit-perimeter` at a non-quarter `--turn`; a
 face whose texture axes have a normal component beyond §2.2's tolerance.
+
+**Each of those that can have more than one offender is pinned on a set with TWO**, asserting both are
+named and that nothing was written — `conventions.md` requires the complete set, and an
+all-or-nothing batch is only observable when the failure is not the first face.
 
 **NOT error paths, and their tests are DELETED not moved:** `--turn` or `--fit-perimeter` passed to
 `wall`/`floor` (argparse rejects them before any uedcli code runs, so there is no uedcli message to
@@ -907,30 +1104,39 @@ not a run end" (unreachable once the pre-walk derives the root).
 
 ### 4.3 Docs to update in the same change
 
-A rename with no shim, so every occurrence is a broken instruction. **Line numbers verified
-2026-07-26 against the working tree** — several in the previous draft had drifted, and the corrections
-are noted.
+A rename with no shim, so every occurrence is a broken instruction.
 
-| file | where | what |
-|---------------------------------------------------|---------------------|---
-| `docs/usage.md` | 40–46 | "Output streams for mutators" lists `poly set`/`align` as printing brush names (ruling 2) |
-| `docs/usage.md` | 494–495 | the brush-shape verb table's two `poly` rows |
-| `docs/usage.md` | 515–530 | the `brush poly set` section (`--pan-to`/`--pan-by`) |
-| `docs/usage.md` | 532–561 | the whole align section, **including the ⚠ paragraph at 546–553** saying uedcli's frame is *not* a reproduction of the editor's — for `wall`/`floor` it now IS |
-| `docs/leveldesign/general/textures-and-surfaces.md` | 16, 17, 25, 53–56, 59 | *(previous draft said "16, 24, 25, 55" — wrong)*; 17 is `brush poly align - --floor`, and 53–56 is the same "not a copy of the editor" warning |
-| `dev/docs/unrealed/leveldesign/kb/textures.md` | 19, 72, 74, 253, 254 | *(verified correct)* |
-| `dev/docs/rationale/emit.md` | 49, 56, 77 | *(previous draft also said 69 — there is no occurrence there)*; all three name `brush poly set --pan-to 0,0` as the producer of the zero-`Pan` case, which is the durable rationale §2.1 depends on, and must now name `brush poly pan --to 0,0` |
-| `dev/docs/unrealed/texalign.md` | 177–198 ("How uedcli differs") | **not in the previous draft.** It says uedcli's frame is "**not** any of the editor's rules" and carries the seven-direction divergence table. Under ruling 9 `wall`/`floor` ADOPT the projection family, so this section inverts. It is an engine-fact doc, so the editor facts above it do not move — only the uedcli comparison |
-| `dev/docs/architecture.md` | 133–135, 1620–1641 | the `polyalign.py` module line and the whole "Surface texture alignment" entry (verb list, flags, adopt-seed, the coplanarity guard) |
-| `uedcli/emit.py` | 190 | *(previous draft said 164)* — a comment naming `brush poly set --pan-to 0,0` |
-| `uedcli/query.py` | 71 | *(verified correct)* — the `pan` column docstring |
-| `uedcli/surface.py` | 86–87, 95–96 | *(previous draft said 89)* — the `pan_to`/`pan_by` parameters and the "at least one of …" message, which drops from five flags to three |
-| `uedcli/cli.py` | 1172–1174, 1197–1224 | the `--pan-to`/`--pan-by` flags and the whole `poly align` parser |
-| `docs/leveldesign/general/recipes/` | new file | a curved-run recipe — the motivating workflow (§1) has none |
+⚠ **Cited by ANCHOR TEXT, never by line number** — the step-1 plan already ruled this
+(`plans/2026-07-26-poly-surface-step1-plan.md` §6) and this section is the reason: its numbers were
+"verified against the working tree" twice and were wrong both times, because several sessions edit
+this tree concurrently and a line number is stale the moment someone inserts a paragraph above it. An
+anchor is grep-able and survives that. Every string below was grepped 2026-07-26.
 
-**Leave alone:** `dev/docs/unrealed/t3d.md:523` and `:542-545` spell `brush poly align --floor -` and
-`brush poly find … | brush poly align …` inside a **record of a live repro actually run on
-2026-07-26**. Rewriting a historical evidence citation to a syntax that did not exist when it was run
+| file | anchor to grep for → what to change |
+|-----------------------------------------------------|---
+| `docs/usage.md` | `Output streams for mutators.` → it lists `poly set` / `align` as printing touched brush names; ruling 2 makes every per-face mutator print `BRUSH:idx` |
+| `docs/usage.md` | `selectors, for piping` (the verb-table row) and `is a stateless producer` (the paragraph) → `poly find`'s own output description, the other half of the pipe ruling 2 changes. *Omitted from the previous draft* |
+| `docs/usage.md` | `## Brush shape & surfaces` → in that verb table, the `poly set` row and the `poly align` row become seven rows: `set`, `pan`, `rotate`, `scale`, and the four align modes |
+| `docs/usage.md` | `edits surface attributes model-side` → drop `--pan-to`/`--pan-by`, and move the "a pan of 0,0 **is** the unpanned state" note that follows them onto `pan` |
+| `docs/usage.md` | `### Continuous texture alignment` and, inside it, `That canonical frame is` → the whole align section. The ⚠ paragraph says uedcli's frame is *not* a reproduction of the editor's; for `wall`/`floor` it now **is**, so it inverts rather than being deleted (`run`/`one-tile` stay uedcli-only) |
+| `docs/usage.md` | **new sections** → one per new verb (`brush poly pan`, `rotate`, `scale`) plus a sub-heading per align mode, since `-h` per subcommand now has content to mirror; the ⚠ destructive-on-imported-content warning (§2.3) **at the point of use**; and the ordering rules (`pan` after `align`, `scale` before `align run`) |
+| `docs/leveldesign/general/textures-and-surfaces.md` | `--pan-by 0,32`, `align - --floor`, `auto-aligns (walls, floors/ceilings, or around a cylinder)`, and `is uedcli's own alignment` → the worked examples and the same "not a copy of the editor" warning |
+| `dev/docs/unrealed/leveldesign/kb/textures.md` | `--pan-to/--pan-by`, `- **Auto-align:**`, `- **Manual:** Pan / Rotate / Scale`, and the cheat-sheet `Align` / `Pan` rows → the Manual row still calls Rotate and Scale GUI-only; they are uedcli verbs now |
+| `dev/docs/rationale/emit.md` | `--pan-to 0,0` (three occurrences) → all three name `brush poly set` as the producer of the zero-`Pan` case, the durable rationale §2.1 depends on, and must name `brush poly pan --to 0,0`. One also names `surface.set_surface`, a function that does not exist (`apply_surface_edit` does) — fix while there |
+| `dev/docs/unrealed/texalign.md` | `## How uedcli differs` → it says uedcli's frame is "**not** any of the editor's rules" and carries the seven-direction divergence table; under ruling 9 `wall`/`floor` ADOPT the projection family, so the section inverts. Engine-fact doc: the editor facts above it do not move, only the uedcli comparison |
+| `dev/docs/architecture.md` | `verb: pure texture-vector` (the module-map line) and `Surface texture alignment` (the subsystem entry) → verb list, flags, adopt-seed, the coplanarity guard |
+| `uedcli/polyalign.py` | the **module docstring** — `This is uedcli's OWN alignment, NOT a port of the editor's` … `is an open product question` → ruling 9 *answers* that question and inverts the paragraph for `wall`/`floor`; the docstring also still describes anchoring on the seed face's centroid, which §2.3 removes. *Omitted from the previous draft* |
+| `uedcli/polyalign.py` | `the ring seam is the first face` (in `resolve_align_targets`'s docstring) → ruling 3 deletes the behaviour, so the claim goes with it; §4.1 flags this against `test_resolve_targets_bare_name_is_all_polys_ordered`. *Omitted from the previous draft* |
+| `uedcli/emit.py` | `--pan-to 0,0` → one comment carrying the old spelling |
+| `uedcli/query.py` | `target) prints as` → the `pan` column docstring, which names the old spelling |
+| `uedcli/surface.py` | `pan_to` / `pan_by` (in `apply_surface_edit`'s signature) and `at least one of --texture/--add-flag/--remove-flag/` → the parameters, and the message, which drops from five flags to three |
+| `uedcli/cli.py` | `--pan-to` / `--pan-by` (the `add_argument` calls on the `poly set` parser) and `: make a texture flow continuously across a face set` (the align-parser comment) → the flags and the whole `poly align` parser |
+| `docs/leveldesign/general/recipes/` | **new file** → a curved-run recipe; the motivating workflow (§1) has none |
+
+**Leave alone:** in `dev/docs/unrealed/t3d.md`, the two passages anchored on
+`**A minimal repro on a plain cube**, live 2026-07-26` and
+`making the whole` … `` `brush poly find … | brush poly align …` → build workflow unusable `` spell
+the old flags inside a **record of a live repro actually run on 2026-07-26**. Rewriting a historical evidence citation to a syntax that did not exist when it was run
 would falsify the record. The surrounding prose is about `emit_polygon`, not about the align flags.
 
 **`--segments` must be documented as a texture-quality parameter**, with the shear formula **scoped to
@@ -940,24 +1146,38 @@ of seams**.
 ### 4.4 Build order
 
 `CLAUDE.md` "BATCH small changes" — a subtle change to load-bearing code gets its own round. **Five
-steps**; the previous four left the `wall`/`floor` rewrite in no step at all and `scale --by`
-unassigned.
+steps.** The governing rule, which an earlier draft of this section broke three ways: **no step may
+introduce a flag, a subcommand or a deletion whose behaviour arrives in a later step.** Every step
+below ends with a CLI that is internally consistent and fully documented.
 
 1. **`set`/`pan` split + `rotate` + `scale --by`** — mechanical promotions, settled semantics, no
    catalog, no `polyalign` frame math. **Already planned and building**:
    `plans/2026-07-26-poly-surface-step1-plan.md` (plan review round 1 pending). `scale --by` belongs
    here because it needs no catalog; `scale --to` does, so it waits for step 5.
-2. **Flags → subcommands** (§2.0), behaviour otherwise unchanged. One atomic CLI change across all
-   four modes plus `usage.md` and the recipes — not separable, and not "mechanical".
+2. **`align` flags → subcommands** (§2.0), over the modes that **exist**: `align wall`, `align floor`,
+   `align run` (the `--ring` rename, ruling 6, algorithm untouched). Three things ride along because
+   they are the same CLI change:
+   - **`--fresh-frame` is deleted, and the FRESH branch is what survives** — a canonical frame at unit
+     density with `Pan = (0,0)`. Adopt-seed is deleted with the flag (ruling 8). Deleting the flag and
+     keeping *adopt-seed* would leave the tool doing the opposite of the ruling for two whole steps,
+     which is what the previous draft did.
+   - **`align` joins the `BRUSH:idx` stdout contract** — ruling 2's other half, which the previous
+     draft assigned to no step at all and the step-1 plan (§9) logged as an interim inconsistency.
+     This step closes it.
+   - **`--turn` and `one-tile` do NOT appear here.** Each arrives with its implementation (steps 4 and
+     5), so no author ever sees a flag or a subcommand that does nothing.
+   Not separable and not mechanical: one atomic change across `cli.py`, `dispatch.py`, `polyalign`'s
+   entry point, `usage.md` and the recipes.
 3. **`wall`/`floor` world-space rewrite** (§2.3) — the projection family, the derived wall axis, the
    `|N.A|` guard replacing `_check_orientation`, the deletion of the coplanarity/co-orientation guards,
    and the §4.2 editor-parity pins. Small, self-contained, and the one step with an editor-produced
    golden to check itself against, so it goes before the frame math rather than after.
-4. **`align run`** (§2.4) — the pre-walk's three decided algorithms, the frame math, reset-to-unit,
-   `--turn`, the stderr shear report. Reviewed alone; this is the riskiest *logic*.
-5. **Catalog plumbing + `--fit-perimeter` tile fix + `one-tile` + `scale --to`** — introduces a new
-   cross-module dependency and a project requirement on a verb that is pure model-side today.
-   Riskiest *coupling*, so it goes last where it gets its own round.
+4. **`align run`** (§2.4) — the pre-walk (steps 1–8, including the derived root **and walk
+   direction**), the frame math, the across-axis convention, reset-to-unit, **the `--turn` flag and
+   its behaviour together**, and the stderr shear report. Reviewed alone; this is the riskiest *logic*.
+5. **Catalog plumbing + `--fit-perimeter` tile fix + `one-tile` (subcommand and behaviour together) +
+   `scale --to`** — introduces a new cross-module dependency and a project requirement on a verb that
+   is pure model-side today. Riskiest *coupling*, so it goes last where it gets its own round.
 
 > ⚠ **Renumbering note for the step-1 plan.** `plans/2026-07-26-poly-surface-step1-plan.md` was
 > written against the previous **four**-step order and calls the catalog step "step 4"; it is now
@@ -1077,16 +1297,26 @@ verbatim as an `[OWNER — confirm]` item on `board/inbox.md`, so it survives th
 carries the complete ruling set rather than the first six:
 
 - the **owner's** thirteen rulings are §3.1, parked verbatim on `board/inbox.md` in the two
-  `[OWNER — confirm]` items ("The per-surface verb split" and "FIVE further per-surface rulings") plus
-  the `[resolved]` pre-walk entry. **Keep §3.1 and those items in step** — the same text is awaiting
-  the same yes;
-- the three **algorithm** questions the re-gate left open are decided in §2.4.1 (cap detection as an
-  adjacency refinement of the branch check; connectivity as one component of maximum degree 2) and
-  §2.4.2 (terminal faces, and where the two phase zeros sit). Those are **agent** choices, so they land
-  in `rationale/polyalign.md` and need no owner confirmation — they are listed in §3.2 with their
-  rejected alternatives.
+  `[OWNER — confirm]` items ("The per-surface verb split" — rulings 1–6 — and "SEVEN further
+  per-surface rulings" — rulings 7–13). **Keep §3.1 and those two items in step** — the same text is
+  awaiting the same yes. (The board's `[resolved]` pre-walk entry records how ruling 3 was *resolved*;
+  it is not a fourteenth ruling and is not the parked text.)
+- the **algorithm** questions the re-gate left open are decided in §2.4.1 (branching, with no cap
+  predicate at all; connectivity as one component of maximum degree 2; the derived root **and walk
+  direction**) and §2.4.2 (terminal faces, where the two phase zeros sit, and the across-run axis
+  convention). Those are **agent** choices, so they land in the `rationale/` tree — the new
+  `polyalign` topic that step 4 creates, beside the existing `rationale/surface.md` — and need no
+  owner confirmation; they are listed in §3.2 with their rejected alternatives.
 
 The one **product** question this rewrite answers rather than defers, and which the owner may want to
-overrule, is §2.3's deletion of the `wall`/`floor` coplanarity and co-orientation guards. It follows
-from ruling 9 (a world-derived frame gives an opposite-facing coplanar face a byte-identical frame, so
-there is nothing left to mirror), but it is a visible narrowing of what the tool refuses.
+overrule, is §2.3's deletion of the `wall`/`floor` coplanarity and co-orientation guards. **State the
+consequence honestly, because an earlier draft of this section put a false premise in front of the
+owner:** it is *not* true that "there is nothing left to mirror". A byte-identical frame is exactly
+what mirrors two opposite-facing coplanar faces — they are viewed from opposite sides, so one
+world→UV map reads reversed on the back one, which is what `polyalign.py:242-244` says today. What
+ruling 9 changes is whether that is a *fault*: the editor's projection family is polarity-blind by
+construction (`proj(B)` and `d/N.A` are invariant under `N → −N`), and a world-axis grid has no notion
+of facing, so under ruling 9 the mirroring is the family's defined behaviour rather than an accident
+the guard was catching. The narrowing to accept or overrule is therefore: **a double-sided wall that
+errors today will succeed and come out mirrored on its back face.** Both `wall`/`floor` and `run`
+behave this way (§2.4.2), by the same invariance.

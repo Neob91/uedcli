@@ -133,7 +133,7 @@ stage (so no `to-` prefix). See [`README.md`](README.md).
   own, where the irreversible decisions get a dedicated gate; (3) re-measure the sound corpus on the
   composed path, then spec audio. `CLAUDE.md`: the answer to a non-converging gate is to give the work a
   fresh spec moment, not a third round. *(2026-07-26.)*
-- `p1` `[OWNER — confirm]` **SIX further per-surface rulings made 2026-07-26, durably recorded here
+- `p1` `[OWNER — confirm]` **SEVEN further per-surface rulings made 2026-07-26, durably recorded here
   because they currently live only in the ephemeral spec.** Verbatim, awaiting a yes for
   `direction/conventions.md`:
 
@@ -156,8 +156,10 @@ stage (so no `to-` prefix). See [`README.md`](README.md).
   >
   > **`one-tile` is FIT TO THE POLY** — one tile of the texture spans the face, stretched
   > non-uniformly to fill, anchored at the face's minimum corner. Its density comes from the face, so
-  > it is the one mode exempt from reset-to-unit. It takes the projection *directions*, normalised, so
-  > a sign has a predictable up-vector.
+  > it is the one mode exempt from reset-to-unit. It takes the projection *directions*, **made
+  > orthonormal by Gram-Schmidt of U against V** (V kept, `U = normalize(U − V(U·V))`), so a sign has a
+  > predictable up-vector and square corners — the raw projected pair is not perpendicular
+  > (`proj(B₁)·proj(B₂) = −(N·B₁)(N·B₂)`) and on a corner face comes out 120° apart.
   >
   > **`brush poly scale` is in scope** as the fourth canonical surface op — after reset-to-unit it is
   > the only general way to express a texel density.
@@ -165,6 +167,14 @@ stage (so no `to-` prefix). See [`README.md`](README.md).
   > **`--fit-perimeter` fits whole TILES, not whole texels.** As shipped it rounds the total advance
   > to an integer texel, which on a 256-texel texture leaves the closing seam ~31 texels out; it must
   > round to a multiple of the texture's pixel size along the axis the advance lands in.
+  >
+  > **No `--seam` flag, and both `wall` and `floor` exist** (not one merged auto-axis mode). A closed
+  > run's seam is derived by the pre-walk, not placed by the author — `--fit-perimeter` makes the
+  > closing seam exact, so its position stops mattering on the workflow that ships, and a determinism
+  > an upstream filter cannot perturb is worth more than the control it replaces. `wall` and `floor`
+  > stay two modes because the projection axis is a **design choice** on a slanted face (`floor` on a
+  > ramp is a legitimate, different answer from `wall` on it), so deriving it would remove a choice
+  > rather than a chore.
 
   Evidence: `spikes/2026-07-26-unrealed-texalign-semantics/`, `spikes/2026-07-26-poly-rotate-curved-track/`.
   Supersedes the two now-ruled `[OWNER — decide]` items below (orientation, anchor).
@@ -172,19 +182,21 @@ stage (so no `to-` prefix). See [`README.md`](README.md).
 - `p1` `[OWNER — confirm]` **The per-surface verb split (`pan`/`rotate`/`align --run`).** Spec:
   `specs/2026-07-26-poly-surface-verbs.md` (revised after review round 1). Six rulings were made in
   session on 2026-07-26 and live only in that ephemeral spec until confirmed. Proposed addition to
-  `direction/conventions.md` under "Verbs compose" (verbatim, awaiting a yes):
+  `direction/conventions.md` under "Verbs compose" (verbatim, awaiting a yes). *(`scale` appears in
+  the text below because the later ruling that pulled `brush poly scale` into scope — item above,
+  spec §3.1 ruling 11 — makes it one of these verbs; the two items must state the same verb list.)*
 
   > **A per-face verb prints per-face selectors.** The `brush poly` mutators (`set`, `pan`, `rotate`,
-  > `align`) print the `BRUSH:idx` selectors they acted on, one per line — not the touched brush
-  > names. A bare brush name means *all* of that brush's polys, so a per-face verb that printed one
-  > would silently widen the set for the next verb in the pipe. Consequence, stated so it is not a
-  > surprise: a poly verb chains into another poly verb, not into a whole-actor verb like
-  > `brush scale`, which takes bare names.
+  > `scale`, `align` — every mode) print the `BRUSH:idx` selectors they acted on, one per line — not
+  > the touched brush names. A bare brush name means *all* of that brush's polys, so a per-face verb
+  > that printed one would silently widen the set for the next verb in the pipe. Consequence, stated
+  > so it is not a surprise: a poly verb chains into another poly verb, not into a whole-actor verb
+  > like `brush scale`, which takes bare names.
   >
   > **Attributes and frames are different verbs.** `brush poly set` assigns stored per-face fields
-  > (texture, flags). `pan`, `rotate` and `align` transform the texture FRAME. Pan is expressed in
-  > integer texels and lives in the polygon `Pan`; a computed continuity offset lives in the float
-  > `Origin`; the two never occupy the same field.
+  > (texture, flags). `pan`, `rotate`, `scale` and `align` transform the texture FRAME. Pan is
+  > expressed in integer texels and lives in the polygon `Pan`; a computed continuity offset lives in
+  > the float `Origin`; the two never occupy the same field.
 
 - `[resolved 2026-07-26]` **The `--run` seed had no source under "`--run` orders the chain itself".**
   Raised independently by all three round-1 spec reviewers. Resolved by the owner: the order faces are
