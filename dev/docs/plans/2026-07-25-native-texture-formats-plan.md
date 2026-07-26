@@ -1733,7 +1733,41 @@ the way it now does.)
 
 ---
 
-## Review history
+## Review history and ESCALATIONS
+
+Both plan-review rounds have run (2026-07-26) at the headcount `CLAUDE.md` "Review gates" sets. Round
+2's verdict: **the round-1 corrections were written into §0a/§0b/S7 but not PROPAGATED** — the §0a
+correction deletes a helper, a fixture justification and an oracle that later clauses still depend on.
+
+**Two items block the build and are escalated (round 2 is the ceiling):**
+
+**PE1 — `repo_texture_root()` is deleted by §0a but eight downstream clauses still call it, and the
+build's headline offline criterion now has no home.** S1's Done-when — flagged in the plan itself as
+*"the offline criterion for the bug that motivates the whole build — it must not be marked
+integration"* — asserts a parse-failure count over `conftest.repo_texture_root()/"LUM_CoreTex.utx"`,
+a function §0a removed over a directory that no longer exists. S6 repeats it twice, and §0a's own
+count-stability rule still carries the `<repo>/Textures/` rows. A builder stalls at S1.
+
+**PE2 — synthesizing the fixture (the owner's ruling) destroys D7's INDEPENDENT oracle.** S4's
+Done-when cross-checks our BC1 decode against the file's own P8 mips (mean abs channel error ≤ 8/255,
+measured 1.98, against 20.3–62.0 for a wrong layout). That is a real third-party oracle **only because
+the original tools encoded both arrays**. Against a package whose P8 bytes *and* DXT1 blocks we author,
+the agreement is whatever we made it — the exact circularity D7 exists to forbid. Pillow byte-exactness
+survives; this cross-check does not, and the plan names no replacement. S1's fixture text also still
+says the payload is "lifted … already in git", contradicting the ruling recorded in the same document.
+
+**Standing, fix during the build:** S2c is ordered *after* the S2 break it repairs, so two commits ship
+with two committed harnesses silently broken (the fix belongs inside S2); three S3 Done-whens and one
+S2c Done-when depend on later slices; S1's "the fallback is inert until S4" is false for a texture
+whose `Mips` list is non-empty but empty-bodied while `CompMips` carries DXT1 — that reaches
+`mip0_to_rgb` and produces a **confident wrong image**; S6's procedural-class Done-when is vacuous
+offline (zero `FireTexture`-class exports exist in tracked material); the slice count says EIGHT and
+the tree has NINE (S2c missing from count, list and diagram); §0b/§0e2 still say `cd Tools/uedcli`,
+which does not exist; `pkgfixture` has two homes after S1 and §0a/S2b name the pre-S1 one; and §1's
+`test_actor_preview.py` anchors are stale (`:392/:399/:402/:414/:501/:444`) against §0f's own
+grep-text rule.
+
+Git holds both reports at `77769d2` and this commit's parent.
 
 One cold plan-review round has run (2026-07-26), triggered by the `S2b` scope widening. Its findings
 are resolved into the slices and sections above — the corpus/fixture correction in §0a, the frozen-
