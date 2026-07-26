@@ -35,6 +35,7 @@ combination of shipped verbs.
 | `brush poly align --wall \| --floor [--fresh-frame]` | `brush poly align wall \| floor` | mode becomes a SUBCOMMAND; aligns to WORLD SPACE, not a seed face; `--fresh-frame` deleted |
 | `brush poly align --ring [--fresh-frame] [--fit-perimeter]` | `brush poly align run [--turn UU] [--fit-perimeter]` | generalised from "cylinder sides" to any connected run; coplanar sets allowed |
 | — | `brush poly align one-tile` | fit exactly one tile to each face — signs, monitors, light panels |
+| — | `brush poly scale (--to \| --by) U,V` | the fourth canonical surface op; the only general density control |
 
 ### 2.0 Modes are SUBCOMMANDS, not a mutually-exclusive flag group
 
@@ -243,17 +244,29 @@ that rejection is deleted. Note this does **not** collapse `--run` into `--wall`
 coplanar set, `--floor` yields one shared frame (texture straight across) and `--run` a turning frame
 (texture follows the curve). Both are wanted; they are different operations on the same input.
 
-**There is NO seed, and `--fresh-frame` is DELETED from `brush poly align` entirely.** Owner ruling,
-2026-07-26: **the frame is reset to unit density with `Pan` (0,0)**, in every mode. `--fresh-frame`
+**There is NO seed, and `--fresh-frame` is DELETED from `brush poly align` entirely.** `--fresh-frame`
 existed only to choose between "canonical" and "adopt the seed's density/pan"; with adopt-seed gone it
 is a flag with one possible value, so per "No back-compat cruft" it goes.
 
-So the frame is fully determined by geometry in all three modes:
+**Owner ruling 2026-07-26: `wall` and `floor` are WORLD-SPACE aligned; `one-tile` is FIT TO THE
+POLY.** Those are two different things and the difference is the point — world-space means the frame
+ignores the individual face entirely; fit-to-poly means it is derived from that one face.
 
-| mode | orientation | density | pan |
-|---------------------|---------------------------------|---------|---
-| `--wall` / `--floor` | `builders._tex_basis(n̂)` — a pure function of the plane normal | 1 texel/uu | (0,0) |
-| `--run` | along/across the run, from the walk | 1 texel/uu | (0,0) |
+| mode | orientation | **anchor** | density | pan |
+|------------|-----------------------------------|-----------------------|--------------------|---
+| `wall` / `floor` | `builders._tex_basis(n̂)` — a pure function of the plane normal | **world-derived**: the plane's point closest to the world origin. NOT any face's centroid | 1 texel/uu | (0,0) |
+| `run` | along/across the run, from the walk | the seam midpoint (§ above) | 1 texel/uu, unless `--fit-perimeter` | (0,0) |
+| `one-tile` | `builders._tex_basis(n̂)` | the face's min corner along those axes | **fit to the face**: `W/E_u`, `H/E_v` | (0,0) |
+
+**The world anchor is what makes `wall`/`floor` idempotent.** Identical *axes* are not identical
+*frames* — phase lives in `Origin`, so a face-derived anchor (today's `_coplanar_align` uses the seed
+face's centroid, `polyalign.py:254`) gives two invocations over different subsets of one plane
+different phases. With a world-derived anchor, aligning face A alone and face B alone produces
+byte-identical frames and re-running is a no-op. That is the property the ruling is for, it must be
+pinned, and it matches the editor, which anchors `FLOOR`/`WALLX`/`WALLY` on a world axis (§4b).
+
+**`one-tile` is deliberately exempt from unit density** — a fit-to-poly mode whose density comes from
+the face is the one thing that cannot also be 1 texel/uu.
 
 **`--wall`/`--floor` therefore align to WORLD SPACE, not to any one poly** (owner ruling). Because
 `_tex_basis` depends only on the normal, two coplanar co-oriented faces receive *identical* frames
@@ -264,8 +277,9 @@ deliberate texel scales: across the committed editor fixtures, 17 of 253 `Textur
 non-unit, 14 of them exactly `0.667` (= 2/3, authored, not float noise). Aligning imported geometry
 resets those to 1:1, and **there is currently no verb that can put them back** — `--fit-perimeter`
 (closed runs only) is the sole remaining channel to a non-unit density. Accepted deliberately; it
-raises the priority of `brush poly scale` from "later" to "the only way to express density", and
-`usage.md` must warn about it at the point of use, not in a footnote.
+raises the priority of `brush poly scale`, and `usage.md` must warn about it at the point of use, not
+in a footnote. `brush poly scale` (§2.5) is the general control that puts a density back; `one-tile`
+and `--fit-perimeter` reach non-unit densities too, but only for their own specific fits.
 
 **`--turn UU`** applies a uniform **rigid** turn in each face's own **run frame**, not in world space,
 so every face receives the same transform relative to the run and the along-run density follows the
@@ -337,7 +351,39 @@ it sets density and anchor, not a shared frame — so it will overlap `brush pol
 lands. Kept under `align` because the author's intent is "make this texture fit this face", which is
 alignment.
 
-### 2.5 Frame construction, and what it costs
+### 2.5 `brush poly scale (--to U,V | --by FU,FV)`
+
+The fourth canonical surface op, pulled into this change on the owner's 2026-07-26 ruling. After
+reset-to-unit it is the **only general way to express a texel density**: `one-tile` fits one tile to a
+face and `--fit-perimeter` closes a loop, but neither lets an author say how big a texture should be.
+
+Targets are `BRUSH:SELECTOR` positionals or `-`, same grammar as `pan`/`rotate`; `-` is the sole
+source; empty stdin is a clean no-op; the target set is **deduped** (`--by` is relative and would
+otherwise compound).
+
+- **`--by FU,FV` multiplies the texture's APPARENT SIZE**, so `--by 2,2` makes the texture look twice
+  as large. Note that this *divides* the stored magnitudes (`|TextureU| ← |TextureU| / FU`), because
+  T3D density is texels-per-world-unit — bigger magnitude means a smaller-looking texture. The verb is
+  named for what the author sees, not for what is stored, and the help must say so or the sign of the
+  effect will surprise everyone once. Pure math, no catalog needed.
+- **`--to U,V` sets the absolute scale in WORLD UNITS PER TILE** — `--to 128,128` means the texture
+  repeats every 128 uu each way, which is how a level designer thinks about it. This needs the
+  texture's `W`/`H` from the catalog (`|TextureU| = W / U`), the same dependency `one-tile` and
+  `--fit-perimeter` carry; a texture missing from the catalog, an untextured face, or no synced
+  catalog each **exit 2 naming what is missing**.
+- **Non-uniform is allowed** — U and V scale independently, which is what makes it the general control
+  `one-tile`'s stretch is a special case of.
+- **Re-anchored on the face centroid**, exactly like `rotate`: the face's world centroid keeps its
+  `(U,V)`, so the texture scales *in place* rather than sliding off. It writes `Origin` and
+  `TextureU`/`TextureV`, and leaves `Pan` alone.
+- **A zero or negative factor exits 2** — a zero-length texture vector crashes REBUILD
+  (`builders._tex_basis`).
+- **No continuity guarantee**, and more strongly than `rotate`: scaling **breaks a run even when
+  applied uniformly to all of it**, because each face re-anchors about its own centroid while the run's
+  phase offsets were computed for the old density. Scale before `align run`, not after. Document it
+  next to the pan-after-align rule in §2.1.
+
+### 2.6 Frame construction, and what it costs
 
 Orthogonal axes, phase measured on **one reference radius (the centreline)**.
 
@@ -402,7 +448,8 @@ Rulings 5 and 6 were confirmed 2026-07-26 after the review round raised both as 
   are *the same construction*, so option (a) is rejected on that evidence; per-facet fit (option c) is
   disqualified because it reproduces the restart defect.
 - **Chord, not arc**, for the phase advance.
-- **Adjacency walk rooted at the first input token.**
+- **Adjacency walk with the root DERIVED by pre-walk** (lower-poly-index end; lowest index on a
+  closed run) — no dependence on input order.
 - **Exact component path at quarter turns**, scoped to axis-aligned orthogonal frames.
 - **Non-quarter `--turn` allowed + stderr shear report**, rather than an error.
 
@@ -437,11 +484,21 @@ every named-error path to carry one. Non-negotiable:
   `--turn 16384` gives `ΔU < 2e-3` with `ΔV ≈ 12.55`; `--turn 8192` gives both `≈ 8.87`.
 
 **Behaviour**
-- **Ordering invariance, stated so it can pass**: shuffling every token **after the first** produces
-  an identical result; **changing the first token** moves the seam and phase zero. Both halves pinned
-  — the first is ruling 3's central claim, the second is §2.3's root rule.
+- **Ordering invariance** — shuffling **all** tokens, the first included, produces a byte-identical
+  result. Plus a positive pin on the derived root: an open run roots at its lower-poly-index end, a
+  closed run at its lowest index. (An earlier draft pinned "changing the first token moves the seam",
+  which asserts the opposite of the ruling and cannot pass.)
+- **`wall`/`floor` idempotence** — aligning face A alone and face B alone (same plane, separate
+  invocations) yields byte-identical frames; a second run over the same set changes nothing.
+- **`scale`** — `--by 2,2` halves the stored magnitudes (texture looks twice as big); `--to 128,128`
+  on a `W×H` texture gives `|TextureU| = W/128`; the face centroid's `(U,V)` is unchanged by both;
+  `Pan` untouched. `--by` needs no catalog, `--to` does.
+- **`one-tile`** — a `W×H` texture on an `E_u × E_v` face gives `|TextureU| = W/E_u`,
+  `|TextureV| = H/E_v`, `Pan` (0,0), `Origin` at the min corner; a rectangular face's corners map to
+  (0,0), (W,0), (W,H), (0,H); a triangle maps its bounding box; a zero-extent axis and a
+  texture missing from the catalog each exit 2 naming the face or the ref.
 - **Coplanar sets are accepted** by `--run` (the deleted "all faces are parallel" rejection).
-- **`--fit-perimeter`** closes a closed run exactly.
+- **`--fit-perimeter`** closes a closed run exactly, in whole TILES.
 - **Quarter-turn exactness**, split by verb because they are different assertions:
   (a) `brush poly rotate --by 16384` on a `+Z` face with `TextureU=+X, TextureV=+Y` yields exactly
   `TextureU=+Y, TextureV=−X` — this is also the **sign** pin;
@@ -457,12 +514,18 @@ every named-error path to carry one. Non-negotiable:
 
 **Error paths**, each a named exit 2 with a regression: fork; disconnected member; edge shared by >2
 faces; `< 2 faces`; cap faces included (the cap-specific message, per §2.3's predicate); multi-brush
-set; a root that is not a run end on an open run; non-quad face; `--to` with `--by`; `pan` with
-**neither** `--to` nor `--by`; `--fit-perimeter` on an open run; `--fit-perimeter` at a non-quarter
-`--turn`; `--turn` passed with `--wall`/`--floor`; `--fit-perimeter` passed with `--wall`/`--floor`
-(today's `test_fit_perimeter_requires_ring` covers this and its message names `--ring`, so it moves);
-a face whose texture axes have a normal component. The two new verbs also join the
-`test_name_not_found_sweep.py` table, which enumerates every verb's unknown-name path.
+set; non-quad face; `--to` with `--by`; `pan`/`scale` with **neither** `--to` nor `--by`; a zero or
+negative `scale` factor; `one-tile` on a face with a zero extent; a texture absent from the catalog,
+a face with no texture, or a project with no synced catalog, for each of `scale --to`, `one-tile` and
+`--fit-perimeter`; `--fit-perimeter` on an open run; `--fit-perimeter` at a non-quarter `--turn`; a
+face whose texture axes have a normal component beyond the §2.2 tolerance.
+
+**NOT error paths, and their tests are DELETED not moved:** `--turn` or `--fit-perimeter` passed to
+`wall`/`floor`. Under §2.0's subcommands argparse rejects them before any uedcli code runs, so there
+is no uedcli message to name. `polyalign.align()`'s `if fit_perimeter and mode != "ring"` guard
+(`polyalign.py:401`) becomes dead code that "No back-compat cruft" requires removing in the same
+change, and `test_fit_perimeter_requires_ring` goes with it. Likewise "a root that is not a run end"
+is unreachable once the pre-walk derives the root.
 
 **Docs to update in the same change** — a rename with no shim, so every occurrence is a broken
 instruction:
@@ -482,8 +545,18 @@ flat bends**, and the caveat that doubling segments halves each seam's shear but
 of seams**.
 
 **Build order** (`CLAUDE.md` "BATCH small changes" — a subtle change to load-bearing code gets its own
-round): land the `set`/`pan` split and `rotate` first (mechanical promotions), then `--run` on its own,
-so the frame math is not reviewed inside a large mechanical diff.
+round). Four steps; the earlier two-step order left the riskiest work unsequenced:
+
+1. **`set`/`pan` split + `rotate`** — mechanical promotions, settled semantics, nothing outstanding.
+2. **Flags → subcommands**, behaviour otherwise unchanged. One atomic CLI change across all four
+   modes plus `usage.md` and the recipes — not separable, and not "mechanical".
+3. **`align run`** + the reset-to-unit deletion of adopt-seed — the frame math, reviewed alone.
+4. **Catalog plumbing + `--fit-perimeter` tile fix + `one-tile` + `scale --to`** — introduces a new
+   cross-module dependency and a project requirement on a verb that is pure model-side today. Riskiest
+   step, so it goes last where it gets its own round.
+
+Step 1 is unblocked now; `wall`/`floor` inside steps 2–3 still carry one open owner decision (whether
+to adopt the editor's ORIENTATION, §4b) though their world-space anchor is ruled.
 
 ## 4b. UnrealEd parity — MEASURED 2026-07-26
 
@@ -560,8 +633,7 @@ multi-brush set either way.
   needs a different rule for "the far edge" and no shipped builder produces a non-quad swept face.
   Filed to `board/inbox.md` as its own item rather than guessed at here.
 - **Runs spanning more than one brush** — exit 2 naming the brushes.
-- **`brush poly scale`**, the fourth canonical op. It interacts with `--run`'s density derivation and
-  adding it blind would duplicate that. Filed to `board/inbox.md`.
+- ~~`brush poly scale`~~ — **pulled INTO this change** on the owner's 2026-07-26 ruling; see §2.5.
 - Fixing `level preview --native`'s inability to render a revolve (spike finding 6; filed). It makes
   this feature harder to *verify* but does not change its design.
 
@@ -571,8 +643,8 @@ Per `CLAUDE.md` "Direction docs", the durable landing of §3.1 in `direction/con
 owner's explicit yes and a `Confirmed: conventions` trailer. Until then the proposed text is parked
 verbatim as an `[OWNER — confirm]` item on `board/inbox.md`, so it survives this session.
 
-**Outstanding:** ruling 3's refinement — that the chain order is derived but the **root** comes from
-the first input token (§2.3). Round 1 raised, independently and unanimously, that ruling 3 as
-originally stated left the seed with no source at all. The refinement is the reviewers' consensus fix
-and is recorded here as the working assumption; it amends the owner's ruling and therefore needs their
-yes.
+**Nothing is outstanding on the design.** The two gaps the review rounds raised were both ruled by the
+owner on 2026-07-26: the run's root is **derived by pre-walk** (stronger than the reviewers' proposed
+"root = first input token" — it removes input-order dependence rather than narrowing it), and
+`wall`/`floor` are **world-space aligned** while `one-tile` is **fit to the poly**, which settles the
+anchor question §2.3 had left open. §3.1 and §2.3 record both as confirmed text.

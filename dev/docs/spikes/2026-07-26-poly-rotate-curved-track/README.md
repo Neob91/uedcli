@@ -181,6 +181,26 @@ only exists when the seam lies *within* the plane the faces turn in.
 wrong for the case that ships today, and any reported shear figure must be **measured** from the
 written frames (the `seam_check.py` computation), not evaluated from the closed form.
 
+## Finding 4b — corners: the seam's orientation decides everything, not the angle
+
+Measured 2026-07-26 with `run_align.py` + `seam_check.py`, same fixtures rebuilt by `fixture.sh`.
+
+| run | seam vs turn | `--turn` | max interior ΔU | max interior ΔV |
+|--------------------------------------------|-------------------|----------|-----------------|---
+| **L-shaped WALL**, two 90° corners (`brush build extrude` of an L profile, 5 of its 6 side faces) | ∥ the turn axis | 0 | **0.000000** | **0.000000** |
+| same | | 8192 | **0.000000** | **0.000000** |
+| **flat bend**, Δθ = 45° (`revolve --segments 2`) | in the turn plane | 0 | **48.983561** | 0.000510 |
+
+The L-wall run walks cleanly through 90° corners (`d` steps `(0,1,0)` → `(-1,0,0)`) and is **exactly
+continuous on both axes** — the same class as the cylinder, because a vertical corner's seam is
+parallel to the yaw axis it turns about. A *flat* corner is the opposite extreme: the closed form at
+Δθ = 45° predicts 48.983 and measures 48.983561, and extrapolating to a flat 90° L gives
+`2·sin(45°)·64 = 90.5` texels — over a third of a 256-texel texture, at one seam, and **not reducible
+by segmentation** because Δθ is fixed by the corner itself.
+
+So "will my corner work?" has a clean answer: a wall corner is free; a flat corner is not alignable
+with an orthogonal frame and wants a mitre or an accepted seam.
+
 ## Finding 5 — an EXACT frame exists, and its cost is unbounded
 
 T3D stores `TextureU`/`TextureV` as independent FVectors with **no orthogonality requirement**, so a
