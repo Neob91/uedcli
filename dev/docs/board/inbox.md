@@ -5,6 +5,17 @@ lands here first, with no obligation to know its stage yet. This is the *pre-pip
 stage (so no `to-` prefix). See [`README.md`](README.md).
 
 **Triage** routes each item to where its next action lives:
+- `p2` `[debug]` **`level preview --native` fills polygons by triangle FAN, which bleeds outside a
+  concave face.** `render.rs:196-206` triangulates each poly as `(v0, vk, vk+1)`; that is only valid
+  for a convex polygon, and for a concave one it paints area outside the boundary.
+  `architecture.md` records **0.1–0.6 % of faces in real exported maps are concave** (spike
+  `concave-faces/`, live 2026-07-23), which is why `preview.py` already carries
+  `_poly_is_convex_2d` rather than assuming convexity.
+  **Scope caveat from the reviewer who found it:** `render.rs` rasterizes post-CSG **BSP node**
+  polys, which the build produces convex, so the authored-face measurement reaches it only on the
+  **mover** path (movers are not carved into the world model). Narrower than it first looks, but
+  real. Surfaced while speccing `actor preview --faces`, whose scanline fill handles concave faces
+  correctly — so the two renderers deliberately disagree here until this is fixed. *(2026-07-26.)*
 - `p1` `[OWNER — decide]` **Asset-catalog spec: re-gate round 1 found NEW STRUCTURAL findings. Parked
   again. Recommend SPLITTING the spec rather than a third fix-and-regate.** 3 cold Opus reviewers
   2026-07-26 (second round of 3), ~65 findings, all three verdicts "not ready to build on" — after the
@@ -75,6 +86,37 @@ stage (so no `to-` prefix). See [`README.md`](README.md).
   own, where the irreversible decisions get a dedicated gate; (3) re-measure the sound corpus on the
   composed path, then spec audio. `CLAUDE.md`: the answer to a non-converging gate is to give the work a
   fresh spec moment, not a third round. *(2026-07-26.)*
+- `p1` `[OWNER — confirm]` **FIVE further per-surface rulings made 2026-07-26, durably recorded here
+  because they currently live only in the ephemeral spec.** Verbatim, awaiting a yes for
+  `direction/conventions.md`:
+
+  > **Align modes are SUBCOMMANDS**, not a mutually-exclusive flag group: `brush poly align
+  > wall|floor|run|one-tile`. The flags are disjoint per mode, so `-h` is accurate per mode and bad
+  > combinations become argparse errors rather than runtime checks — the same shape as
+  > `brush build <shape>`.
+  >
+  > **`wall` and `floor` are WORLD-SPACE aligned**, in orientation AND anchor: they adopt UnrealEd's
+  > own `POLY TEXALIGN FLOOR`/`WALLX`/`WALLY` projection family (measured 2026-07-26), anchoring where
+  > the surface plane crosses the projection axis rather than on any face. `floor` projects along Z;
+  > `wall` along whichever of X/Y the face faces more. This makes alignment idempotent and independent
+  > of which faces were selected. Its consequence is accepted: a face not square to its projection
+  > axis is stretched, so density is `|proj|`, not 1.
+  >
+  > **`one-tile` is FIT TO THE POLY** — one tile of the texture spans the face, stretched
+  > non-uniformly to fill, anchored at the face's minimum corner. Its density comes from the face, so
+  > it is the one mode exempt from reset-to-unit. It takes the projection *directions*, normalised, so
+  > a sign has a predictable up-vector.
+  >
+  > **`brush poly scale` is in scope** as the fourth canonical surface op — after reset-to-unit it is
+  > the only general way to express a texel density.
+  >
+  > **`--fit-perimeter` fits whole TILES, not whole texels.** As shipped it rounds the total advance
+  > to an integer texel, which on a 256-texel texture leaves the closing seam ~31 texels out; it must
+  > round to a multiple of the texture's pixel size along the axis the advance lands in.
+
+  Evidence: `spikes/2026-07-26-unrealed-texalign-semantics/`, `spikes/2026-07-26-poly-rotate-curved-track/`.
+  Supersedes the two now-ruled `[OWNER — decide]` items below (orientation, anchor).
+
 - `p1` `[OWNER — confirm]` **The per-surface verb split (`pan`/`rotate`/`align --run`).** Spec:
   `specs/2026-07-26-poly-surface-verbs.md` (revised after review round 1). Six rulings were made in
   session on 2026-07-26 and live only in that ephemeral spec until confirmed. Proposed addition to

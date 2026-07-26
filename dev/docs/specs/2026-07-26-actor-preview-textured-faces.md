@@ -345,7 +345,7 @@ records the chosen value plus the image in the `rationale/` preview topic. Start
 | 6 | **Unresolvable/undecodable refs** — `--native` checkerboards and warns; this tier **exits 2** (§8). `conventions.md` rejects warn-and-continue, so this tier conforms and `--native` does not; that is logged against `--native`, not softened here
 | 7 | **Scaled/sheared brushes** — a **behavioural** difference: `--native` rejects in every mode, this tier rejects only under `textured` and renders them under `wire` and `flat`
 | 8 | **Pre-CSG vs post-CSG** — the largest divergence, and the reason decision 2.10's cull exists at all: `--native` renders **built BSP node polys**, this tier renders **raw brush polys** with a hand-rolled subtract cull
-| 9 | **Concave faces** — `render.rs` fills by triangle fan (`render.rs:196-206`), which bleeds outside a concave face; this tier uses even-odd scanline (§6) and is correct there. `architecture.md` measures 0.1–0.6 % of real faces as concave, so the difference is real. Not softened here. **Not yet logged against `--native`** — see §14, which parks it
+| 9 | **Concave faces** — `render.rs` fills by triangle fan (`render.rs:196-206`), which bleeds outside a concave face; this tier uses even-odd scanline (§6) and is correct there. `architecture.md` measures 0.1–0.6 % of real faces as concave, so the difference is real. Not softened here — **logged against `--native` on `board/inbox.md`** (filed 2026-07-26)
 | 10 | **Background** — `render.rs`'s `BACKGROUND` is `[56,56,60]`; this tier's `BG` is 224
 
 ### 4.10 Draw order within a pane
@@ -640,13 +640,11 @@ class index into these three verbs (scope increase, and it breaks their "no game
 property); or drop the cull for anything that looks like a mover by any signal and accept the same
 name guess one layer down.
 
-### E2 — `--native`'s triangle-fan concave bleed is not yet logged
+### E2 — RESOLVED 2026-07-26: `--native`'s triangle-fan concave bleed is now filed
 
-§4.9 #9 previously claimed this was "logged against `--native` on `board/inbox.md`". It is not — I
-asserted a disposition I had not performed, which is exactly what `CLAUDE.md` says makes deferring
-legitimate. Needs an `inbox.md` entry. Scope caveat a reviewer added: `render.rs` rasterizes **BSP
-node** polys, which CSG produces convex, so the 0.1–0.6 % concave measurement over *authored* faces
-reaches it only on the mover path — the divergence is real but narrower than #9 implied.
+§4.9 #9 had claimed a board entry that did not exist. The entry is now on `board/inbox.md` as a `p2`
+`[debug]`, carrying the reviewer's scope caveat (`render.rs` rasterizes post-CSG BSP node polys, which
+are convex, so the authored-face measurement reaches it only on the mover path).
 
 ### Also standing, lower severity — fix during the build
 
