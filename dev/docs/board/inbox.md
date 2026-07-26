@@ -5,6 +5,20 @@ lands here first, with no obligation to know its stage yet. This is the *pre-pip
 stage (so no `to-` prefix). See [`README.md`](README.md).
 
 **Triage** routes each item to where its next action lives:
+- `p1` `[OWNER — confirm]` **Does class curation get a general file-fact OVERRIDE field?**
+  `direction/asset-catalog.md` says curation is "a description, plus **an override where the file fact is
+  wrong**" — but its own *Rejected* list kills "a curated-vs-derived override model for `placeable`". The
+  two cannot both hold, and the catalog spec's shard payload carries `tags`/`description`/`colors` with no
+  general override, so as specced a wrong file-fact cannot be corrected at all. Raised independently by
+  two of three gate reviewers 2026-07-26. Either the topic drops the override clause, or the spec gains a
+  field — an implementer must not pick. (The §4b colours override is the one existing instance and stays
+  either way.)
+- `p3` `[chore]` **`class list --all` / `class show --all` are migration-error shims, which
+  `conventions.md` forbids.** `cli.py:1418` and `:1443` define them as `argparse.SUPPRESS`'d flags whose
+  only job is to `parser.error()` with a pointer to `--depth all` — the exact "a flag defined only to
+  `parser.error(\"X was renamed to Y\")`" pattern the no-back-compat-cruft rule names. Pre-existing, not
+  caused by the catalog work, but the catalog build is what next touches both verbs, so delete them then.
+  Surfaced by a gate reviewer 2026-07-26 as adjacent-but-real. *(2026-07-26.)*
 - `p1` `[OWNER — confirm]` **`conventions.md` needs a calibrated carve-out for the THIRD stdin
   convention.** Ruled 2026-07-26 ("it's fine") and written into the catalog spec's decision 8, but
   `direction/conventions.md` still says "Exactly TWO stdin conventions … never add a third", with a

@@ -1,7 +1,9 @@
 # Plan: the unified asset catalog
 
 **Spec:** [`specs/2026-07-25-unified-asset-catalog.md`](../specs/2026-07-25-unified-asset-catalog.md).
-**Decisions:** `decisions.md` 2026-07-25 03:40 + 2026-07-25 05:10.
+**Decisions:** [`direction/asset-catalog.md`](../direction/asset-catalog.md) (the owner's) and
+[`rationale/`](../rationale/) (the agent's). **Not `decisions.md`** — that ledger is FROZEN;
+[`rationale/MIGRATION.md`](../rationale/MIGRATION.md) maps the old dated citations.
 **Review:** two rounds on this plan (4 cold reviewers, 2026-07-25) — all findings folded; §5 records them.
 **Ephemeral:** scratch for sequencing this build; delete when the work lands.
 
