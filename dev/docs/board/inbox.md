@@ -5,6 +5,38 @@ lands here first, with no obligation to know its stage yet. This is the *pre-pip
 stage (so no `to-` prefix). See [`README.md`](README.md).
 
 **Triage** routes each item to where its next action lives:
+- `p1` `[chore]` **The texture-format evidence has NO durable home and will die with an ephemeral
+  spec.** `spikes/2026-07-25-native-texture-formats/` contains only `pkgfixture_proto.py` and no
+  write-up. The measured facts — the three dumped `ETextureFormat` enums and where they disagree,
+  the 18,176-export sweep, the 8,327 ambiguous chains, the 11 stored `Format` properties,
+  `CompMips` as the true trailing-bytes cause — live **only** in
+  `specs/2026-07-25-native-texture-formats.md`, which is ephemeral and gets deleted when the work
+  lands. Nothing under `unrealed/` mentions `TEXF`/`ETextureFormat`/`CompMips`/`DXT1`. Land them in
+  `unrealed/package-format.md` (or a new `unrealed/texture-format.md`) BEFORE that spec is deleted.
+  `rules/spikes.md`: pin the finding, or it rots. *(Surfaced by the packages + asset-catalog
+  drafters, 2026-07-26.)*
+- `p2` `[debug]` **`architecture.md` contradicts `direction/conventions.md` on half-answers.**
+  `architecture.md` says `ClassIndex` skips a single unparseable `.u` "with a stderr note (never
+  aborts)" — the exact warn-and-continue shape `conventions.md` "No silent half-answers, and no
+  fallbacks" forbids. Either the doc is stale or the code needs a ruling; `inbox.md:2939` already
+  notes the fix is not mechanical. Decide which side moves. *(packages drafter, 2026-07-26.)*
+- `p2` `[chore]` **`architecture.md`'s Substrate section carries a deferred note whose symbols are
+  deleted.** It still ends with "*Deferred follow-up: the stub-build + texture sync mounts are
+  sourced from `substrate_code_dirs`/`install_system_root`, NOT yet from the composed config*" —
+  un-deferred 2026-07-14 17:40, and both symbols are gone from `uedctl/`. *(containers drafter.)*
+- `p2` `[spec]` **`$UEDCTL_LEVEL` / `--tree` / the dropped `level select` have no direction home.**
+  Decided 2026-07-20 21:30 and BUILT (`level_select.py`, `cli.py`'s `_tree_flag`, no `select`
+  parser), but absent from every `direction/` topic — the trunk-and-editor and projects-and-config
+  drafters each judged it the other's. Half is level targeting (`trunk-and-editor.md`), half is
+  ambient-resolution precedence mirroring `$UEDCTL_PROJECT` (`projects-and-config.md`). Needs a
+  home before it is lost. *(Both drafters, 2026-07-26.)*
+- `p2` `[chore]` **`rationale/` topics are unwritten for material the drafters surfaced.** Agent-owned
+  engineering decisions with no home yet: the schema-cache mechanism (stat tuple over content hash,
+  per-package primitives over compositions, marshal over JSON, the frozen-golden version guard);
+  the intersect `BUILDER_PAD`/seed-subtract findings; the actor-name resolution implementation
+  (case-fold the dict key, per-callsite try/except); the `root_outside` CSG detail. `rationale/`
+  currently holds only `cli.md`, `README.md`, `MIGRATION.md`. *(Multiple drafters, 2026-07-26.)*
+
 - **[OWNER — review] p1 DOCS RESTRUCTURE IS COMPLETE — one issue, everything that needs your eye.**
   Thirteen `direction/<topic>.md` docs + `rationale/` now replace `direction.md` and the frozen
   `decisions.md`. Resident context **1,063 → 686 lines**. Spec
