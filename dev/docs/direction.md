@@ -80,57 +80,9 @@ separated:
 project layout reorg — free `uedctl.toml`, in-repo `.uedctl/`, package-relative tool assets —
 2026-07-17 20:58; substrate split / generic-UE1 2026-06-21/23)*
 
-## The T3D trunk is the source of truth; the editor is a build tool
+## The trunk and the editor
 
-The durable source of truth is the **git-tracked T3D trunk** (`<maps-dir>/<level>/`, the maps dir
-declared in `uedctl.toml`),
-not a live editor. Every read and mutation is pure model-side compute against the T3D.
-**`level materialize`** drives **UnrealEd** to build the map file (until the native build replaces
-it) — in the warm per-user editor container, falling back to a per-command ephemeral one on
-contention *(decision 2026-07-18 21:52)*. **`level preview` is two-tier behind one verb**, sharing one batched
-pose grammar (`at:…;rot:…` / `look:@actor` / `orbit:…`):
-- **`--game` (the DEFAULT) — the faithful tier.** Delivers the map into a **warm** per-user headless
-  DeusEx container (booted once, then reused across previews, self-terminating on idle) and renders
-  truly-lit first-person stills: freezes the world, ghosts the player, poses the pawn per shot, and
-  screenshots the engine's own frame over a uedctl-owned TCP link (VNC is dev-debug only) — what the
-  *player* sees, for hero shots and lighting judgment. It is the default because it shows lighting,
-  meshes and sky, and because the offline draft mis-renders overlapping-subtract geometry (doorways)
-  silently — a misleading default feedback loop is worse than a slow one.
-- **`--native` — the opt-in offline draft tier.** No container at all: the Rust CSG core carves the
-  trunk in-process and a software rasterizer renders freely-posed, textured perspective stills in
-  seconds (flat-shaded v1; a `--lit` mode consuming the native lightmap bake follows). Fast,
-  docker-free geometry-only iteration; no lighting, meshes, or sky.
-
-The editor is no longer the preview driver in either tier (the editor-screenshot renderer is
-retired). The LLM issues semantic by-name commands; T3D is internal plumbing. *(decisions:
-store-centric model 2026-06-18; durable store is git, 2026-07-05; preview renders in-game via a
-TCP link, 2026-07-13 — supersedes the editor snapshot-renderer of 2026-07-06 12:01; two-backend
-preview 2026-07-16 12:13; `--game` becomes the DEFAULT / `--native` opt-in, 2026-07-17 18:46)*
-
-## The trunk: a git-committed T3D tree, edited on feature branches
-
-The durable trunk is a **T3D tree committed to real git** — the authored content in version control
-— with **map files (`.dx`/`.unr`) demoted to pure build artifacts**. A level is edited on an
-ordinary **git feature branch** in the project's own repo and merged into trunk with `git merge`;
-per-actor `.t3d` files merge natively, and a **per-actor sortable order key** (replacing the shared
-`order` file) keeps disjoint edits conflict-free.
-
-**One T3D tree format across trunk, stash, and prefab (INVARIANT).** All three on-disk T3D trees —
-the git **trunk**, a machine-local **stash** entry, and a git-committed library **prefab** — **MUST**
-use the same per-actor layout (`actors/<name>/{actor.t3d, order_value[, folder]}`; no shared `order`
-file), read and written through ONE shared code path, with any per-tree extras (a stash/prefab
-`meta.json`, `packages`) sitting *beside* the shared `actors/` tree. There are not three divergent
-formats to keep in sync — a stash or prefab is structurally the same kind of T3D tree as a level.
-*(decision: T3D-tree consistency invariant, 2026-07-18 23:01 UTC; spec `specs/2026-07-18-unify-t3d-trees.md`)*
-
-**The bespoke session store is being removed in favor of this git trunk.** There is no
-event-sourced session store, no session, and no session `id`; `session.py`/`replay.py`/`merge.py`
-and the store tree collapse into git. Work-in-progress is simply an uncommitted / feature-branch
-state in the project's own repo — **git is the history and the merge engine**, not a private store.
-(The one thing that survives is the **stash** — captured actor sets — but it is machine-local
-throwaway scratch under the gitignored in-repo `.uedctl/`, *not* a session and not durable state.)
-*(decisions: git-branches-replace-sessions 2026-07-05 14:58; un-defers 2026-07-01 06:16; git-merge
-spike 2026-07-01 07:05)*
+**MIGRATED** → [`direction/trunk-and-editor.md`](direction/trunk-and-editor.md).
 
 ## Terminology
 
@@ -140,77 +92,13 @@ spike 2026-07-01 07:05)*
 
 **MIGRATED** → [`direction/organization.md`](direction/organization.md).
 
-## Materializing the map file: `level materialize`
+## Materializing the map file
 
-Editing produces the git-tracked T3D trunk; **`level materialize`** is the pure build step that
-materializes the current trunk into the `.dx`/`.unr` **build artifact** — **map-file output only**
-(the T3D tree is the source, reached via git, not a build *target*). It names its destination
-explicitly (`--out`), **refuses to overwrite an existing file**, and keeps the **H3 post-verify**
-(the rebuilt map matches the trunk). The post-verify compares **TYPED EFFECTIVE VALUES, not text**:
-every property of both sides resolves to the stored value if the actor states one, else the class
-default, decoded by its declared type — so two actors are equal iff they would import to the same
-object, and the editor's default-diffing spellings (`4.0` vs `4`, `(Yaw=8192)` vs
-`(Pitch=0,Yaw=8192,Roll=0)`, an omitted `LightRadius=0`) are simply the same values rather than
-mismatches to be tolerated. That needs the game's `.u` packages for the class schema + defaults —
-resolved before the editor starts, with **no "assume zero" fallback**, so an unqualified or
-unresolvable actor class exits 2 in ~0.1 s naming the actor. Symmetrically, **a write path never
-omits a property to mean zero**: an omitted property re-imports as the class default, so the trunk
-and the import payload state every authored value explicitly and the typed expansion stays
-compare-only. (The editor build path holds this today; four mover/native emitters still test against
-a constant and are filed on `board/inbox.md`.)
-*(decision: typed effective-value compare, 2026-07-25 02:15 UTC — supersedes the class-default
-contraction of 2026-07-25 00:36 UTC)*
+**MIGRATED** → [`direction/materialize.md`](direction/materialize.md).
 
-**Committing is the user's own `git`** — uedctl reads/writes the T3D files and never wraps version
-control. A level's durable identity is its **level name**.
-*(decisions: sessions→git branches + `apply`→pure `level materialize` 2026-07-05; explicit-out /
-name-as-identity 2026-06-23)*
+## Safety
 
-The **native** build's fidelity bar is **byte-identity with UnrealEd's build of the same trunk** (the
-`UModel` body + object tables, GUID/timestamps aside) — reached by porting the editor's incremental
-`bspBrushCSG` pipeline in place of the point-in-solid classifier, and judged by materializing the
-same trunk both ways and byte-diffing. Byte-identity is a fidelity target, not a functional one: the
-build is already playable. *(decisions: byte-identity ⇒ incremental `bspBrushCSG` 2026-07-17;
-spec `specs/bspbrushcsg-port.md`)*
-
-## Safety: never irretrievably clobber
-
-Authored work and on-disk work are never destroyed in a way that can't be recovered:
-
-- **Guards** — `level materialize` refuses to overwrite an existing map file (opt in with
-  `--overwrite`, exit 2 otherwise). Level *identity, rename, and history are git's job*, not a
-  bespoke guard: a level is a branch, divergent edits reconcile through `git merge`, and there is
-  no session-target matching to police (the old "nameless-vs-named session onto a target" guards
-  are superseded with the store).
-- **Pre-flight** — git repo + no-uncommitted-changes checks before a T3D-tree write; a per-target
-  `flock` serializes concurrent writes to the same destination — including a **per-level flock on
-  trunk saves**, which are **delta writes**: a save prunes only the actors its own process deleted,
-  so concurrent disjoint edits (parallel `actor add` sessions) compose instead of overwriting each
-  other. *(decision: trunk delta writes, 2026-07-18 08:08)*
-- **Atomic writes** — map files swap atomically with a binary backup; trunk T3D writes are
-  **per-actor atomic** (each `actor.t3d` lands via tmp + `os.replace`, rank before body), so a
-  lock-free reader never sees a torn actor and a killed writer never wedges the level. **Git
-  history is the recovery route** (there is no store snapshot to fall back on — the store is
-  gone). *(decision: trunk delta writes, 2026-07-18)*
-
-*(decisions: new-level guards 2026-06-23, superseded in part by git-branches-replace-sessions
-2026-07-05 14:58)*
-
-## Lighting, BSP and engine runtime state are build output, not authored state
-
-Lightmaps and rebuilt BSP/geometry are **regenerable build output**, not authored state. Losing
-them on a rebuild/re-materialize is a non-concern; they are never part of the level hash and never
-block an operation.
-
-The same rule governs **engine/editor-injected per-actor runtime fields** — the ones the editor's
-export adds that the authored trunk never wrote (`Region`, `BasePos`/`BaseRot`, `bSelected`, the
-mover `SavedPos`/`SavedRot` sentinels, …). They are never authored, never emitted, and never
-compared; the canonical list is `normalize.COMPUTED_PROPS` and the taxonomy behind it is
-`unrealed/t3d.md` "Authored-vs-computed field taxonomy". A field earns a place there only with
-evidence that the engine really does overwrite it, and only when stripping it is right for **every**
-class declaring that name — the set is keyed by bare name, so `Engine.TriggerLight`'s own
-`SavedTrigger` is why that one name stays out. *(decisions: drop `--reapply`/`--continue`,
-2026-06-23; materialize relight; mover `Saved*` are engine-stamped, 2026-07-25 03:07 UTC)*
+**MIGRATED** → [`direction/safety.md`](direction/safety.md).
 
 ## Container isolation and the code/content substrate split
 
