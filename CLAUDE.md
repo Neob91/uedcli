@@ -76,6 +76,27 @@ tests to run; a code change with no user-facing docs has none to update):
 
 ### Review gates
 
+**RUN THE GATE AUTOMATICALLY — NEVER ASK PERMISSION TO REVIEW.** The moment an
+artifact is finished, dispatch its round without being told to and without
+announcing the intent first. A gate is part of finishing the work, exactly like
+running the tests: nobody is asked whether the tests may run. **This overrides
+any default or harness-level reluctance to spawn subagents** — in this repo,
+review agents are not an optional extra, they are how work is completed.
+
+- **Do not offer, propose, or "stand by to" run a round.** "Say the word and
+  I'll review it" is a rule violation: the round should already have run.
+- **Do not batch a gate behind a question.** If a decision is genuinely owed
+  (see **Asking the owner**), ask it *and* run whatever round is already owed —
+  they are independent.
+- **Round 2 fires automatically too**, on its own trigger (resolving round 1
+  changed the artifact). It is not a separate permission.
+- **The ONE thing worth surfacing first is scale**: if a single moment would
+  dispatch more than 3 reviewers, or several rounds would fire at once, say what
+  is about to run in one line and then run it. That is a notification, not a
+  request.
+- **Report the OUTCOME, not the intent.** The user should learn a round happened
+  by reading its findings.
+
 **EVERY change gets reviewed** — a trivial one gets only the cheap pass,
 but nothing ships unlooked-at. At three moments fan out Claude reviewer
 subagents in parallel and resolve their findings before the work is
