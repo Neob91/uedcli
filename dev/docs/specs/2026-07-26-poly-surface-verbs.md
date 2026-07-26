@@ -485,33 +485,58 @@ of seams**.
 round): land the `set`/`pan` split and `rotate` first (mechanical promotions), then `--run` on its own,
 so the frame math is not reviewed inside a large mechanical diff.
 
-## 4b. ⚠ UnrealEd parity — MUST be checked before `--wall`/`--floor` are built
+## 4b. UnrealEd parity — MEASURED 2026-07-26
 
-Owner instruction, 2026-07-26: check `--wall`/`--floor` against how UnrealEd itself does floor/wall
-alignment, and surface the discrepancies. **This is not yet done, and it is a real gap** — what we
-know already shows our two flags do not map onto the editor's model.
+Spike: [`../spikes/2026-07-26-unrealed-texalign-semantics/`](../spikes/2026-07-26-unrealed-texalign-semantics/README.md);
+verified facts in [`../unrealed/texalign.md`](../unrealed/texalign.md). This section previously
+asserted three things the spike **disproved** — they are corrected here, not argued:
 
-`unrealed/commands.md` records the editor's own vocabulary as
-**`POLY TEXALIGN FLOOR | WALLDIR | WALLX | WALLY | ONETILE | CLAMP`** — six modes against our two, and
-the entry is marked **📖** (mined from the binary string table: the vocabulary is real, the semantics
-are *inferred*). So we cannot currently say what any of them does. Visible discrepancies to resolve:
+| earlier claim | measured |
+|--------------------------------------------|---
+| "six modes against our two" | **nine** — `commands.md` was missing `DEFAULT`, `WALLPAN`, `WALLCOLUMN` |
+| "we cannot say what any of them does" | all nine measured, 396 frames over 44 faces |
+| "`ONETILE` — fit exactly one tile to the face" | **`ONETILE` is a NO-OP**; so is `WALLCOLUMN` |
 
-- **UnrealEd splits "wall" three ways** — `WALLDIR`, `WALLX`, `WALLY` — presumably "align to the wall's
-  own direction" vs "to world X" vs "to world Y". Our single `--wall` picks an axis automatically via
-  `_tex_basis`'s "world axis least aligned with the normal", which is *an* answer but not obviously
-  the editor's, and gives the author no way to choose the other one.
-- **`ONETILE` has no counterpart at all** — fit exactly one tile to the face. That is a scale
-  operation, and it interacts directly with the 2026-07-26 reset-to-unit ruling: `ONETILE` is
-  plausibly what an author reaching for "align this floor" actually wants, and after reset-to-unit we
-  have no way to express it until `brush poly scale` exists.
-- **`CLAMP`** — no counterpart, semantics unknown.
+**There is no fit-a-tile-to-a-face operation in UnrealEd 2.2.** `WALLCOLUMN`'s switch entry *is* the
+`default:` branch and `ONETILE`'s falls through to the bare epilogue. So **`align one-tile` (§2.4) is
+a uedcli INVENTION, not a port** — nothing in the editor constrains it, and its design stands or falls
+on its own merits rather than on parity.
 
-**Required before build:** a spike that drives the editor, applies each `TEXALIGN` mode to known
-faces, `MAP EXPORT`s, and reads back the resulting `TextureU`/`TextureV`/`Pan` — then records the
-measured semantics in `unrealed/` with a ✅/🔬 marker and states, per mode, whether uedcli matches,
-deliberately diverges (with the reason), or has no equivalent. Filed to `board/inbox.md`. Divergence
-may well be the right answer — uedcli is model-side and need not mirror an editor UI — but it has to
-be a decision, not an accident.
+**No mode changes texel density.** All nine only choose an in-plane orientation and an anchor, at
+1 texel/uu; `TEXELS=<n>` is parsed and never read. Combined with the reset-to-unit ruling (§2.3),
+that means **neither tool can currently set a texel scale** except `--fit-perimeter` on a closed run —
+which strengthens the case for pulling `brush poly scale` into this work rather than after it.
+
+Measured semantics, with `N` = **surface** normal (reversed vs the brush polygon on a subtractive
+brush), `d = N·P`, `proj(A) = A − N(N·A)` **not renormalised**:
+
+- **`FLOOR` / `WALLX` / `WALLY`** — one family: orthographic projection down world Z/X/Y. `TU`/`TV` are
+  `−proj` of the other two world axes, `Pan` zeroed, guard `|N[axis]| > 0.05`. The anchor is a **world
+  axis** (`(0,0,d/N.Z)` etc.), so every coplanar face shares one grid. A tilted face is **stretched by
+  `1/|proj|`** (45° ramp → `|TU| = 0.70711`).
+- **`WALLDIR`** — `TU = normalize(N.Y,−N.X,0)`, `TV = normalize(TU×N)`, both negated; unit, never
+  stretches, **V always points down**; anchor untouched; guard `|N.Z| < 0.95`.
+- **`WALLPAN`** — slides the anchor along `TextureV` to world `Z = 0`; axes and pan untouched.
+- **`DEFAULT`** — regenerates the frame from the polygon's own winding; a reset, not a design tool.
+- **`CLAMP`** — `DEFAULT` plus `PanV = VSize − 1`.
+
+### Diff against uedcli
+
+| editor mode | uedcli | verdict |
+|-------------|-----------------|---
+| `FLOOR` | `align floor` | **diverges** on all seven face directions tested (mirror / 180°); anchor differs (world axis vs face centroid) |
+| `WALLDIR` | `align wall` | **diverges** similarly, up to a full 90° on a yawed wall; our V points *up* on ~half a room's walls, the editor's is always down |
+| `WALLX` / `WALLY` / `WALLPAN` / `CLAMP` / `DEFAULT` | — | **no equivalent** |
+| `ONETILE` / `WALLCOLUMN` | `align one-tile` | **nothing to conform to** — the editor modes do nothing |
+| — | `align run` | **uedcli-only** |
+
+Divergence is a legitimate outcome — uedcli is model-side and need not mirror an editor UI. But it is
+now a visible choice. **Four `[OWNER — decide]` items are parked on `board/inbox.md`** and any of them
+can change §2: whether `wall`/`floor` should adopt the editor's orientation; whether the anchor moves
+to a **world axis** (which would make alignment idempotent and independent of which faces were
+selected — the property the world-space ruling was reaching for, and the editor already has it);
+whether `one-tile` is accepted as original; and whether to add `WALLX`/`WALLY`/`WALLPAN` equivalents,
+the only editor modes that handle a turning run.
 
 ## 5. Sequencing
 
