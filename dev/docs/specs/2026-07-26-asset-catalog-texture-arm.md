@@ -19,11 +19,29 @@ destroys authored work and cannot be corrected without an explicit migration.
 
 ## OPEN OWNER DECISIONS — this arm does not enter the gate until these are settled
 
-1. **The procedural parameter hash conflicts with an owner *Rejected* bullet.**
-   `direction/asset-catalog.md` rejects "**Content-hashing everything** — a class fingerprint over default
-   properties is brittle", reason: "any game patch would orphan the curated description." §3c below hashes
-   procedural parameters **resolved against the class defaults**, so a patch to `Fire.u` re-keys every
-   procedural shard *with no uedcli change*, which §3b's owner-approved-migration guard cannot catch.
+1. **RULED 2026-07-26 — hash ONLY the properties stored on the export. Never the inherited class
+   defaults.** *(Owner ruling.)* An earlier draft hashed the parameters *resolved against the class
+   defaults*, which conflicts with `direction/asset-catalog.md`'s Rejected bullet — "**Content-hashing
+   everything** — a class fingerprint over default properties is brittle", reason: "any game patch would
+   orphan the curated description."
+
+   The failure that rules out resolved defaults: a procedural texture's settings live in two places, the
+   tagged properties **written on the export**, and the values it **inherits from its class** (in `Fire.u`).
+   Hashing the inherited half means a patched or modded `Fire.u`, or another UE1 game's, changes every
+   identity — orphaning every procedural classification **with no uedcli change**, so §3b's
+   owner-approved-migration guard never fires and the re-key is silent. Hashing only the stored tags makes
+   that impossible.
+
+   **Accepted cost, stated so it is not refiled as a bug:** two procedural textures that differ *only* in a
+   parameter neither of them stores hash identically and share one classification. Under any single game
+   version they render identically, so this is arguably correct rather than merely tolerable.
+
+   **Consequences for the frozen function:** the input is the export's tagged-property block, so the
+   per-class declared set names *which stored tags participate* and in what order; nothing is resolved, and
+   `render_default_tag` is **not** in the path — which also removes the round-1 finding that the key rested
+   on a shared, leaf-schema-dependent, unfrozen rendering. **Pin the byte encoding** as §3b does for the
+   pixel hash (property order, name casing, value bytes); a golden alone only fixes whatever the first
+   builder wrote.
 2. **RULED 2026-07-26 — `bAlphaTexture` is a fact.** Graded 8-bit alpha (BC2/BC3) is not covered by
    `masked`, so a glass pane and its opaque twin are one identity with one opaque preview. Identity stays
    **pixels only** — the ruling is not reopened — and `bAlphaTexture` joins `facts` beside `masked`, same
@@ -219,12 +237,14 @@ byte-identical images are.
 
 Rules this must satisfy:
 
-- **The distinguishing property set is declared PER CLASS, and is FROZEN like §3b's function.** It is
-  the stored tagged properties that determine the generated output (a `FireTexture`'s fire parameters,
-  a `WaveTexture`'s wave parameters), resolved against the class defaults so an unstored parameter
-  still contributes its effective value. `USize`/`VSize` are stored even with no mip data and are part
-  of the key. Changing the set re-keys every procedural shard, with the same irreversibility and the
-  same owner-approved-migration requirement as §3b — and the same kind of committed golden pins it.
+- **The distinguishing property set is declared PER CLASS, and is FROZEN like §3b's function.** It is the
+  **stored** tagged properties that determine the generated output (a `FireTexture`'s fire parameters, a
+  `WaveTexture`'s wave parameters). **Inherited class defaults are NOT hashed** — owner ruling 2026-07-26,
+  see open-decision 1 above for why (a patched `Fire.u` would otherwise silently orphan every procedural
+  classification). `USize`/`VSize` are stored even with no mip data and are part of the key. Changing the
+  set, the property order, or the byte encoding re-keys every procedural shard, with the same
+  irreversibility and the same owner-approved-migration requirement as §3b; a committed golden **plus a
+  pinned byte encoding** fixes it, as §3b learned.
 - **Selecting the set is a declared table, NOT inference.** The tool does not work out which properties
   matter; the set is written down per class and read from there, which keeps §0 intact. Reading the
   values is "reports facts literally stored in the package."
