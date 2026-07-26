@@ -38,7 +38,7 @@ climb** — climbing past it would silently bind a nested repo to an outer proje
 | `paths` | no | the project's own package **overlay** dirs, resolved against the root |
 | `maps` | no | where the per-level T3D trunks live — default `maps/` |
 | `prefabs` | no | the prefab library — default `prefabs/` |
-| `catalog` | no | the tracked asset classification — default `texture-catalog/` |
+| `catalog` | no | the tracked asset classification — default `asset-catalog/` |
 
 The three managed dirs are **relative paths with conventional defaults**, so uedcli can be pointed
 at a repo's **existing** directories instead of forcing a parallel tree beside them. A minimal

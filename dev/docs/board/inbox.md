@@ -20,6 +20,21 @@ stage (so no `to-` prefix). See [`README.md`](README.md).
   > `show`/`preview`/`classify unset` and JSONL for `classify set`. No further convention is added
   > without the same explicit approval.
 
+- `p1` `[OWNER — confirm]` **`conventions.md` needs a calibrated carve-out for the THIRD stdin
+  convention.** Ruled 2026-07-26 ("it's fine") and written into the catalog spec's decision 8, but
+  `direction/conventions.md` still says "Exactly TWO stdin conventions … never add a third", with a
+  third listed under Rejected — so two protected docs contradict each other until this lands. Proposed
+  addition (verbatim, awaiting a yes):
+
+  > **Calibrated exception — `classify set -` reads JSONL.** The asset catalog's `classify set` accepts a
+  > JSONL row set on stdin (`{ref, tags, description[, colors]}`), a THIRD `-` convention beside the
+  > name list and the T3D snippet. It is approved because a classification write carries per-item
+  > *fields*, which a bare name list cannot express, and because a per-ref process start (~0.3 s) would
+  > make classifying a corpus turn-bound. The two-convention rule's actual requirement — that `-` means
+  > exactly one thing *per verb* — still holds: within the catalog nouns `-` is a name list for
+  > `show`/`preview`/`classify unset` and JSONL for `classify set`. No further convention is added
+  > without the same explicit approval.
+
 - `p2` `[OWNER — decide]` **`ScriptedTexture`'s identity is unresolved (50 of 326 procedural exports).**
   Falls out of the 2026-07-26 parameter-hash ruling (spec §3c): a procedural texture is keyed on the
   properties that make it distinct, but a `ScriptedTexture` is drawn by UnrealScript at runtime, so its
@@ -68,10 +83,15 @@ stage (so no `to-` prefix). See [`README.md`](README.md).
      hundreds of lightbulb glyphs as covered — inverting the honest-reporting §6 exists to guarantee.
      The only signal that exists is the `S_` NAME prefix, which `conventions.md` rejects for class
      questions and §0 forbids as inference. Needs a ruling or an explicit config of icon **refs**.
-  5. **Rename the project catalog dir default to `asset-catalog/`?** (all 3). §3b and plan S1 depend on
-     it, but `direction/projects-and-config.md:41` (protected) says `texture-catalog/`, matching
-     `config.project_catalog_dir()`. Plan S11 currently instructs an agent to edit the direction tree to
-     fix the mismatch — forbidden without an explicit yes.
+  5. **RULED 2026-07-26 — `asset-catalog/` approved.** `direction/projects-and-config.md` updated to
+     state it (`Confirmed:` trailer). Note `config.project_catalog_dir()` still returns
+     `texture-catalog`: that direction↔code gap is expected and is plan S1's job, NOT to be "fixed"
+     early — LUM's existing `texture-catalog/` resolves under today's default, and decision 13 deletes
+     the legacy catalog as part of the build.
+
+  **Rulings 1-5 are all in as of 2026-07-26** (see the spec's §3b "ONLY PIXELS ARE HASHED", §3c,
+  §6 thumbnails, decision 8, and this item). **What still blocks the gate is the remaining cluster
+  below plus the ~45 non-structural findings.**
 
   Also escalated because it is authored-work-destroying and half design: **`classify set` has no defined
   behaviour over an existing shard** (replace / merge / refuse), against `direction/safety.md` "a

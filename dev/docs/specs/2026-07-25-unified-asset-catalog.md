@@ -282,12 +282,29 @@ Rules this must satisfy:
 - **`preview_state`** still reports honestly that there is no pixel preview to produce, which is a
   separate axis from identity — that distinction is exactly why §3a keeps the two flags apart.
 
-**OPEN — needs settling during the build, and it is not a detail.** `ScriptedTexture` is drawn by
-UnrealScript at runtime, so its appearance may not be a function of its stored properties at all; the
-declared set for it may be empty, which would collapse every `ScriptedTexture` in a package to one
-identity. Decide whether that is acceptable (they are canvases, arguably interchangeable) or whether
-`ScriptedTexture` needs a different key. 50 of the 326 procedural exports are this class, so it is not
-a corner case. Do not silently pick one.
+**`ScriptedTexture` is the one procedural class the parameter hash does NOT cover, and it is handled
+separately.** *(Owner ruling, 2026-07-26.)* It is drawn by UnrealScript at runtime, so its appearance is
+not a function of its stored properties — there is no distinguishing set to hash. 50 of the 326
+procedural exports are this class.
+
+- **No preview artifact, and the reason is named.** `texture preview` produces nothing for a
+  `ScriptedTexture` and **says on stderr that it is scripted**; the row carries
+  `preview_state: scripted` so `--json` reports it honestly and `prewarm` skips it. This is an honest
+  "no artifact exists for this kind of thing", the same shape as `no-mesh` — not a judgement about
+  whether the picture would be useful.
+- **Batch vs single ref follows the existing calibrated exception** (`direction/asset-catalog.md`): in a
+  batch (`-`, `--package`) it is **skipped with the stderr note and a count**, because enumeration must
+  keep listing what exists; asked for **by name as the only ref**, `preview` **exits 2 naming it**,
+  because silently producing nothing for an explicit single request is the half-answer
+  `direction/conventions.md` forbids.
+- **Identity falls back to the NAME** (`Package.Name`), like class/sound/music. This follows the owner's
+  own rule in `direction/asset-catalog.md` — "content hash where content exists, **name where it does
+  not**" — and it is the only option left once the pixels are absent *and* the parameters do not
+  determine them: an empty declared set would otherwise collapse every `ScriptedTexture` in a package to
+  one identity. It keeps them individually classifiable, which is the point. **Flagged for veto rather
+  than assumed settled:** this is the agent applying the owner's stated rule, not a separate ruling.
+  It also means a renamed `ScriptedTexture` drifts to an outdated entry, exactly as the name-keyed kinds
+  already do.
 
 **Change-awareness without a `stale` flag.** When a texture's pixels change, its identity changes, so
 it **shows unclassified** — correct, the new pixels genuinely are. The prior classification survives
