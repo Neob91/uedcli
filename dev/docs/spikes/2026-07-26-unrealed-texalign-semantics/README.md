@@ -47,16 +47,16 @@ The parser (`Editor.dll` RVA `0x68984`–`0x68b21`, a `ParseCommand` chain) maps
 described in the editor's own undo stack as `Poly Texalign` / `(Type=%i,Texels=%i)`.
 
 | token        | `ETexAlign` 🔬 | switch target 🔬
-|--------------|---------------|---
-| `DEFAULT`    | 0             | `0x4c7d6`
-| `FLOOR`      | 1             | `0x4cac6`
-| `WALLDIR`    | 2             | `0x4cd71`
-| `WALLPAN`    | 3             | `0x4cee3`
-| `ONETILE`    | 4             | `0x4d5c3` — **the shared epilogue, no case body**
-| `WALLCOLUMN` | 5             | `0x4d5e5` — **the `default:` branch, i.e. nothing at all**
-| `WALLX`      | 6             | `0x4d011`
-| `WALLY`      | 7             | `0x4d2bf`
-| `CLAMP`      | 8             | `0x4c985`
+|--------------|----------------|---
+| `DEFAULT`    | 0              | `0x4c7d6`
+| `FLOOR`      | 1              | `0x4cac6`
+| `WALLDIR`    | 2              | `0x4cd71`
+| `WALLPAN`    | 3              | `0x4cee3`
+| `ONETILE`    | 4              | `0x4d5c3` — **the shared epilogue, no case body**
+| `WALLCOLUMN` | 5              | `0x4d5e5` — **the `default:` branch, i.e. nothing at all**
+| `WALLX`      | 6              | `0x4d011`
+| `WALLY`      | 7              | `0x4d2bf`
+| `CLAMP`      | 8              | `0x4c985`
 
 `TEXELS=<n>` is **parsed and then ignored** 🔬: the third parameter arrives at `[ebp+0x10]` and that
 stack slot is never read anywhere in the 725-instruction function body (only `[ebp+8]` = the model
@@ -164,12 +164,14 @@ Consequences, all of them visible in the numbers:
   keyed to the world origin — which is the entire point of the mode. The same face under `WALLDIR`
   or `ONETILE` keeps `Origin = (512, 96, 112)` and spans `U, V ∈ [−64, 64]`.
 - **The guards are what stop the anchor exploding.** `d/N[a]` diverges as the face turns parallel to
-  the anchor axis; the 0.05 floor caps the multiplier at 20×. A caller that mimics these modes must
-  keep the guard, or a nearly-parallel face gets an anchor thousands of uu away (a face at
-  `x ≈ −1600` with `|N.X| = 0.049` anchors past ±32768 — outside UE1's world extent). *No claim is
-  made that this crashes the editor: the guard fixture did kill it twice on the `WALLX` round, but
-  a later run of the same fixture died on a round that ran no `TEXALIGN` at all, so those deaths are
-  the ordinary UED22 flakiness (`quirks.md` "Stability"), not evidence about the anchor.*
+  the anchor axis, and the 0.05 floor caps the multiplier at 20×. Note WHICH offset gets amplified:
+  `d/N[a] = P[a] + (the other two components of P·N)/N[a]`, so it is the face's offset TRANSVERSE
+  to the anchor axis that blows up, not its offset along it. A wedge 1600 uu off the origin
+  transversely, with `|N| = 0.049` on the anchor axis, anchors ~32,600 uu out — right at the edge of
+  UE1's ±32768 world. A caller that mimics these modes must keep the guard. *No claim is made that a
+  large anchor crashes the editor: an earlier guard fixture did kill it twice on the `WALLX` round,
+  but a later run of the same fixture died on a round that ran no `TEXALIGN` at all, so those deaths
+  are the ordinary UED22 flakiness (`quirks.md` "Stability"), not evidence about the anchor.*
 
 ### 3.2 `WALLDIR` — a unit frame along the wall's own direction ✅
 
@@ -186,6 +188,13 @@ Both axes are **unit**, on every face including slanted ones, so `WALLDIR` never
 flip guarantees `TextureV.Z ≤ 0` — **V points downwards**, which is the correct orientation for a
 UE1 texture (whose V=0 row is its top). The `Origin` is left exactly where it was, so `WALLDIR`
 changes orientation and nothing else.
+
+The conditional is written as a conditional in the binary (`Editor.dll` 0x4ce3c–0x4ce7c) but is in
+fact **unconditional**: `(TextureU × N).Z = (N.x² + N.y²)/|(N.y,−N.x,0)|`, which is positive on every
+face the `|N.Z| < 0.95` guard admits. So the whole mode reduces to
+`TextureU = normalize(−N.Y, N.X, 0)`, `TextureV = −normalize(TextureU × N)`. Worth knowing if you
+reimplement it: the branch never has to be evaluated, and a reader who assumes it sometimes does not
+fire will get the sign wrong.
 
 Worked example, `WallYaw:3`, normal `(0.6, 0.8, 0)`:
 `TextureU = (−0.8, 0.6, 0)`, `TextureV = (0, 0, −1)`, `|TextureU| = |TextureV| = 1`,
@@ -439,7 +448,7 @@ centroid**; `WALLDIR`/`DEFAULT`/`CLAMP` leave the anchor alone. Measured: `CubeC
 still: `FLOOR` stretches by `1/|proj|` while uedcli stays at unit density.
 
 Note what uedcli's slant handling actually is, because it is easy to misread: `_check_orientation`
-(`polyalign.py:210`) is a **dominant-normal-axis** test, not a "is this face axis-aligned?" test. It
+(`uedcli/polyalign.py`) is a **dominant-normal-axis** test, not a "is this face axis-aligned?" test. It
 rejects a face from `--wall` iff its dominant axis is Z and from `--floor` iff it is not — so a
 45° ramp `(0.7071, 0, 0.7071)` is **accepted** by `--wall`, a 30° ramp `(0.5, 0, 0.866)` is
 **accepted** by `--floor`, and the corner face `(0.577, 0.577, 0.577)` is **accepted** by `--wall`
@@ -449,7 +458,12 @@ doesn't"; it is **"we lay an undistorted frame where the editor lays a projected
 
 ### 6.3 What this means for `dev/docs/specs/2026-07-26-poly-surface-verbs.md` §4b
 
-Reported, not applied — the spec is the owner's to edit.
+**Reported, not applied.** The spike was commissioned with an explicit instruction not to edit that
+spec, so nothing below was written into it — including the three plain factual corrections, which
+need no ruling at all. ⚠ **Until someone applies them, §4b tells its reader three false things**:
+"six modes against our two" (there are nine), "we cannot currently say what any of them does" (all
+nine are measured), and "`ONETILE` … fit exactly one tile to the face" (it is a no-op and fits
+nothing). Whoever builds §4b should fix those first and then rule on the four questions below.
 
 1. **`align wall|floor` "orientation from `builders._tex_basis(n̂)`" does not match UnrealEd.**
    Neither the sign convention (V up vs V down) nor, on a wall, the axis choice. If matching the
@@ -498,6 +512,12 @@ Reported, not applied — the spec is the owner's to edit.
 - **Behaviour when a brush polygon is split into several surfaces by CSG.** The fixture deliberately
   avoids it; with several surfaces writing back to one master polygon, the last one wins, but that
   was not measured.
+- **What the projection modes do with an OFF-PLANE base point.** They anchor at
+  `(Surf->pBase · N)/N[a]` — the surface's own base point, which after CSG always lies in the face's
+  plane, so the fixture cannot separate "the base point" from "any point of the plane". A caller
+  feeding an authored frame whose `Origin` has drifted off-plane (uedcli's adopt-seed path can
+  produce one) is outside what was measured, and `texalign_model.py` follows the binary rather than
+  guessing.
 - **`WALLPAN`'s two guard THRESHOLDS.** `|N.Z| < 0.95` and `|TextureV.Z| > 0.05` are read from
   `.rdata` and pinned by reference count, but no wedge brackets them live the way §5.1 brackets the
   other four. Two more one-wedge levels would close it.

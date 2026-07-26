@@ -84,10 +84,14 @@ def frame(mode, n_surf, n_poly, verts, base, tu, tv, pan, vsize):
         a, iu, iv = PROJECTED[mode]
         if abs(n_surf[a]) <= THRESH_AXIS:
             return None
-        # ANY point of the plane serves; take a VERTEX rather than `base`. The surface's stored
-        # Origin is normally in-plane, but nothing enforces it — an authored or hand-edited frame can
-        # sit off the face's plane, and using it would silently place the anchor on the wrong plane.
-        d = _dot(verts[0], n_surf)
+        # The editor uses the SURFACE's own base point, not a vertex: `Editor.dll` 0x4cae1 loads
+        # `Surf->pBase` ([esi+8]) out of `Model->Points`, dots it with the normal and divides. After
+        # CSG that point is always ON the face's plane, so "any point of the plane" and "the base
+        # point" coincide there — but they do NOT coincide for a caller feeding an authored frame
+        # whose Origin has drifted off-plane (uedcli's adopt-seed path can produce one). This models
+        # the editor, so it uses the base point; what the editor does with an OFF-plane base was not
+        # measured (spike §7).
+        d = _dot(base, n_surf)
         nb = [0.0, 0.0, 0.0]
         nb[a] = d / n_surf[a]
         au, av = AXIS[iu], AXIS[iv]

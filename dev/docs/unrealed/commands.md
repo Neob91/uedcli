@@ -158,9 +158,13 @@ the next command) — never use it** (`2026-06-17-brush-clip.md`).
   ("And/Or/Xor With Memory").
 
 ## `POLY` / surfaces 📖 ✅
-Surface (BSP-poly) ops — they act on the surfaces of the **built** `Model` (so they need a
-`MAP REBUILD`) that carry `PF_Selected`, and each one writes its result back down into the
-originating brush polygon via `polyUpdateMaster`, so a `MAP EXPORT` reads it back:
+Surface (BSP-poly) ops. They act on the **built** `Model`'s surfaces, so they need a `MAP REBUILD`
+first. ⚠ Only **`POLY TEXALIGN`** has been disassembled and driven: *it* walks `Model->Surfs`, acts
+only on the ones carrying `PF_Selected`, and writes each result back down into the originating brush
+polygon via `polyUpdateMaster` — which is why a `MAP EXPORT` reads it back. **Do not assume the same
+of the other `POLY` verbs**: `SELECT` obviously does not (it *sets* the selection), and nothing here
+establishes the selection-scoping or the master write-back for `TEXPAN`/`TEXSCALE`/`SETFLAGS=`/the
+detail verbs.
 - **Selection** — `POLY SELECT NONE` ✅ / `ALL` ✅ (both driven live 2026-07-26) · `REVERSE` 📖 ·
   `MATCHING GROUPS|ITEMS|BRUSH|TEXTURE|POLYFLAGS` 📖 ·
   `ADJACENT ALL|COPLANARS|WALLS|FLOORS|CEILINGS|SLANTS` 📖 ·

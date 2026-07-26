@@ -4,10 +4,12 @@ one of the guard thresholds read out of `Editor.dll`'s `.rdata` (0.05 for FLOOR/
 for WALLDIR/WALLPAN).
 
 One brush per level on purpose. The three projection modes anchor the surface at
-`plane_offset / N[axis]`, which BLOWS UP as `N[axis]` approaches the guard — a wedge placed a
-couple of thousand uu off the origin sends that anchor past +-32768 and the editor dies (it
-reproducibly killed the editor twice when six such wedges shared one level). Keeping each wedge's
-local origin at the world origin keeps the anchor a couple of hundred uu.
+`plane_offset / N[axis]`, which BLOWS UP as `N[axis]` approaches the guard, and keeping each wedge's
+local origin at the world origin keeps that anchor a couple of hundred uu instead of tens of
+thousands. NO claim is made that a large anchor crashes anything: an earlier six-wedge version of
+this fixture did kill the editor twice, but a later run of the same fixture died on a round that ran
+no `TEXALIGN` at all, so those deaths are the ordinary UED22 flakiness (`unrealed/quirks.md`
+"Stability"). Small levels are simply cheaper to re-run when it dies.
 
 `CASES` maps a level name to (target |N[axis]|, the mode whose guard it brackets).
 """

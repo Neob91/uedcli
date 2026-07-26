@@ -38,9 +38,9 @@ editor.
   verb therefore costs a paste + rebuild per alignment, which is one reason uedcli aligns
   model-side.
 - Each touched surface gets `iLightMap = −1` (its lightmap is invalidated) and then
-  `polyUpdateMaster(Model, iSurf, 1, 1)`, which writes the new frame **back down into the
+  `polyUpdateMaster(Model, iSurf, 1, 1)` 🔬, which writes the new frame **back down into the
   originating brush polygon** — which is why the change survives into `MAP EXPORT` and into a saved
-  `.dx`.
+  `.dx` (that survival is itself ✅: the whole spike reads its results back through `MAP EXPORT`).
 
 ## The normal it uses is the SURFACE normal ✅
 
@@ -104,6 +104,12 @@ Both axes are unit on every face it accepts, slanted ones included — **`WALLDI
 The final flip guarantees `TextureV.Z ≤ 0`, i.e. **V always points downwards**, which is the correct
 orientation for a UE1 texture (whose `V = 0` row is its top). It changes orientation and nothing
 else. Measured on `N = (0.6, 0.8, 0)`: `TextureU = (−0.8, 0.6, 0)`, `TextureV = (0, 0, −1)`.
+
+The flip is coded as a conditional but is **unconditional in practice**: `(TextureU × N).Z` works out
+to `(N.x² + N.y²)/|(N.y, −N.x, 0)|`, positive on every face the `|N.Z| < 0.95` guard admits. If you
+reimplement this, the mode is just `TextureU = normalize(−N.Y, N.X, 0)`,
+`TextureV = −normalize(TextureU × N)` — a reader who assumes the branch sometimes does not fire gets
+both signs wrong.
 
 ### `WALLPAN` — slide the anchor to world Z = 0 ✅
 
