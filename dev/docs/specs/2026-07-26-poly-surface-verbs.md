@@ -32,11 +32,12 @@ combination of shipped verbs.
 | `brush poly set --texture --add-flag --remove-flag --pan-to --pan-by` | `brush poly set --texture --add-flag --remove-flag` | `set` assigns STORED per-face fields. Pan/rotate transform the FRAME. Two different jobs. |
 | — | `brush poly pan (--to \| --by) U,V` | integer texel offset, promoted out of `set` |
 | — | `brush poly rotate --by UU` | a face on its own terms; no continuity guarantee |
-| `brush poly align --wall \| --floor [--fresh-frame]` | unchanged | coplanar faces, one shared frame, orientation-guarded |
-| `brush poly align --ring [--fresh-frame] [--fit-perimeter]` | `brush poly align --run [--turn UU] [--fresh-frame] [--fit-perimeter]` | generalised from "cylinder sides" to "any connected run", coplanar sets allowed |
+| `brush poly align --wall \| --floor [--fresh-frame]` | `brush poly align --wall \| --floor` | now aligns to WORLD SPACE, not to a seed face; `--fresh-frame` deleted |
+| `brush poly align --ring [--fresh-frame] [--fit-perimeter]` | `brush poly align --run [--turn UU] [--fit-perimeter]` | generalised from "cylinder sides" to "any connected run", coplanar sets allowed; `--fresh-frame` deleted |
 
-Per `CLAUDE.md` "No back-compat cruft": `--pan-to`/`--pan-by` on `set` and the `--ring` spelling are
-**deleted outright** in the same change that adds their replacements. No aliases, no shims.
+Per `CLAUDE.md` "No back-compat cruft": `--pan-to`/`--pan-by` on `set`, the `--ring` spelling, and
+`--fresh-frame` on every align mode are **deleted outright** in the same change that adds their
+replacements. No aliases, no shims.
 
 ### 2.1 `brush poly pan (--to | --by) U,V`
 
@@ -75,12 +76,11 @@ Rotates a face's `TextureU`/`TextureV` within the face plane, re-anchoring so th
 Targets are `BRUSH:SELECTOR` positionals or `-`, same grammar as `pan`; empty stdin is a clean no-op;
 the target set is **deduped** (relative operation, same reason as `pan`). `--by` is the only form,
 with deliberately **no `--to`** — but not for the reason an earlier draft gave. The codebase *does*
-define a canonical frame (`builders._tex_basis(n̂)`, which is what `--fresh-frame` synthesizes), so
-"there is no zero to be absolute against" is false. The real reason: an absolute texture angle would
-be measured against that synthesized basis, whose in-plane orientation is an implementation detail no
-author can see or predict, so `--to 8192` would mean something different per face normal. Reaching for
-a *known* orientation is what `--fresh-frame` and `align` are for. State this in the help so nobody
-adds `--to` on the strength of the wrong argument.
+define a canonical frame (`builders._tex_basis(n̂)`), so "there is no zero to be absolute against" is
+false. The real reason: an absolute texture angle would be measured against that basis, whose in-plane
+orientation is an implementation detail no author can see or predict, so `--to 8192` would mean
+something different per face normal. Reaching for a *known* orientation is what `align` is for. State
+this in the help so nobody adds `--to` on the strength of the wrong argument.
 
 - `--by` is in **unreal rotation units** (16384 = 90°), matching `brush build --rotate`,
   `mover key rotate` and the `level preview` pose grammar.
@@ -197,17 +197,29 @@ that rejection is deleted. Note this does **not** collapse `--run` into `--wall`
 coplanar set, `--floor` yields one shared frame (texture straight across) and `--run` a turning frame
 (texture follows the curve). Both are wanted; they are different operations on the same input.
 
-**`--fresh-frame` is KEPT and means the same thing it does today**: synthesize a canonical frame
-(density 1/1, `Pan` (0,0)) instead of adopting the seed's. It does not conflict with ruling 4 —
-"derives" governs the *orientation and phase*, which come from run geometry either way; `--fresh-frame`
-governs only the *density and pan source*. Stated explicitly because the goldens differ between the
-two branches.
+**There is NO seed, and `--fresh-frame` is DELETED from `brush poly align` entirely.** Owner ruling,
+2026-07-26: **the frame is reset to unit density with `Pan` (0,0)**, in every mode. `--fresh-frame`
+existed only to choose between "canonical" and "adopt the seed's density/pan"; with adopt-seed gone it
+is a flag with one possible value, so per "No back-compat cruft" it goes.
 
-**Density is derived by PROJECTION**, as `_ring_align` does today (`polyalign.py:324-328`): resolve
-which stored axis is along-run vs across-run by projecting the seed's axes onto the run tangent and
-the across direction. Do not simply take `|TextureU|`/`|TextureV|` — that silently mis-assigns density
-on a builder frame whose U runs along the axis. (The spike prototype took the naive path; that is a
-prototype shortcut, not the specified behaviour.)
+So the frame is fully determined by geometry in all three modes:
+
+| mode | orientation | density | pan |
+|---------------------|---------------------------------|---------|---
+| `--wall` / `--floor` | `builders._tex_basis(n̂)` — a pure function of the plane normal | 1 texel/uu | (0,0) |
+| `--run` | along/across the run, from the walk | 1 texel/uu | (0,0) |
+
+**`--wall`/`--floor` therefore align to WORLD SPACE, not to any one poly** (owner ruling). Because
+`_tex_basis` depends only on the normal, two coplanar co-oriented faces receive *identical* frames
+whether or not they were aligned together — continuity stops being computed and becomes structural.
+
+⚠ **This is DESTRUCTIVE on imported content, and must be documented as such.** Real maps carry
+deliberate texel scales: across the committed editor fixtures, 17 of 253 `TextureU` magnitudes are
+non-unit, 14 of them exactly `0.667` (= 2/3, authored, not float noise). Aligning imported geometry
+resets those to 1:1, and **there is currently no verb that can put them back** — `--fit-perimeter`
+(closed runs only) is the sole remaining channel to a non-unit density. Accepted deliberately; it
+raises the priority of `brush poly scale` from "later" to "the only way to express density", and
+`usage.md` must warn about it at the point of use, not in a footnote.
 
 **`--turn UU`** applies a uniform **rigid** turn in each face's own **run frame**, not in world space,
 so every face receives the same transform relative to the run and the along-run density follows the
@@ -324,10 +336,16 @@ Rulings 5 and 6 were confirmed 2026-07-26 after the review round raised both as 
 every named-error path to carry one. Non-negotiable:
 
 **Continuity**
-- **The eight existing `test_ring_*` tests are carried over to `--run` with their EXPECTATIONS
-  UNCHANGED** — not renamed, not relaxed. They pin fresh-frame density, integer `Pan`,
-  `--fit-perimeter` closure, the rotated/relocated cylinder, and the cap/multi-brush errors. *This is
-  the most important item in the change*: the cylinder wrap is the only capability that ships today.
+- **The eight existing `test_ring_*` tests are carried over to `--run`** — renamed, but their
+  assertions kept unless the reset-to-unit ruling genuinely changes the answer. *This is the most
+  important item in the change*: the cylinder wrap is the only capability that ships today.
+  **Which ones legitimately change, and why**, so nobody relaxes a test to make it pass:
+  `test_ring_fresh_frame_unit_density_and_continuous` loses its `fresh_frame=True` argument and
+  becomes the *default* case; any assertion that a seed's non-unit density propagates is now wrong by
+  ruling and must assert unit instead. Everything else — continuity, integer `Pan`,
+  `--fit-perimeter` closure, the rotated/relocated cylinder, the cap and multi-brush errors — must
+  survive **unchanged**. `test_wall_fresh_frame_zeroes_pan_and_uses_unit_axes` likewise drops the flag
+  and becomes the plain `--wall` case.
   A bare "interior seams are ΔU = ΔV = 0" assertion is **not** sufficient on its own — continuity is
   invariant under reversing the walk, mirroring V, swapping the densities, or moving the seam, all of
   which the generalisation can plausibly change. Add an explicit assertion on the **across-axis
@@ -390,6 +408,34 @@ of seams**.
 **Build order** (`CLAUDE.md` "BATCH small changes" — a subtle change to load-bearing code gets its own
 round): land the `set`/`pan` split and `rotate` first (mechanical promotions), then `--run` on its own,
 so the frame math is not reviewed inside a large mechanical diff.
+
+## 4b. ⚠ UnrealEd parity — MUST be checked before `--wall`/`--floor` are built
+
+Owner instruction, 2026-07-26: check `--wall`/`--floor` against how UnrealEd itself does floor/wall
+alignment, and surface the discrepancies. **This is not yet done, and it is a real gap** — what we
+know already shows our two flags do not map onto the editor's model.
+
+`unrealed/commands.md` records the editor's own vocabulary as
+**`POLY TEXALIGN FLOOR | WALLDIR | WALLX | WALLY | ONETILE | CLAMP`** — six modes against our two, and
+the entry is marked **📖** (mined from the binary string table: the vocabulary is real, the semantics
+are *inferred*). So we cannot currently say what any of them does. Visible discrepancies to resolve:
+
+- **UnrealEd splits "wall" three ways** — `WALLDIR`, `WALLX`, `WALLY` — presumably "align to the wall's
+  own direction" vs "to world X" vs "to world Y". Our single `--wall` picks an axis automatically via
+  `_tex_basis`'s "world axis least aligned with the normal", which is *an* answer but not obviously
+  the editor's, and gives the author no way to choose the other one.
+- **`ONETILE` has no counterpart at all** — fit exactly one tile to the face. That is a scale
+  operation, and it interacts directly with the 2026-07-26 reset-to-unit ruling: `ONETILE` is
+  plausibly what an author reaching for "align this floor" actually wants, and after reset-to-unit we
+  have no way to express it until `brush poly scale` exists.
+- **`CLAMP`** — no counterpart, semantics unknown.
+
+**Required before build:** a spike that drives the editor, applies each `TEXALIGN` mode to known
+faces, `MAP EXPORT`s, and reads back the resulting `TextureU`/`TextureV`/`Pan` — then records the
+measured semantics in `unrealed/` with a ✅/🔬 marker and states, per mode, whether uedcli matches,
+deliberately diverges (with the reason), or has no equivalent. Filed to `board/inbox.md`. Divergence
+may well be the right answer — uedcli is model-side and need not mirror an editor UI — but it has to
+be a decision, not an accident.
 
 ## 5. Sequencing
 

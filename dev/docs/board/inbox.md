@@ -2970,6 +2970,21 @@ The posing rewrite landed (POS@ROT → auto-frame; decision 2026-07-12); these a
   decision about which end absorbs the residual. Raised by spec review round 2, which correctly
   pointed out the restriction was asserted rather than argued; recorded here rather than folded into
   that spec, whose gate had already run.
+
+- `p1` `[spike]` **Measure UnrealEd's own `POLY TEXALIGN` semantics, and diff them against uedcli's
+  `brush poly align`.** Owner instruction 2026-07-26, blocking the `--wall`/`--floor` build in
+  `specs/2026-07-26-poly-surface-verbs.md` §4b. `unrealed/commands.md` records the editor's vocabulary
+  as `TEXALIGN FLOOR | WALLDIR | WALLX | WALLY | ONETILE | CLAMP` — **six modes against our two** — but
+  the entry is 📖 (string-table mined), so the semantics are inferred and unverified. Known gaps: the
+  editor splits "wall" three ways (`WALLDIR`/`WALLX`/`WALLY`) where we have one `--wall` that picks an
+  axis automatically via `_tex_basis`; `ONETILE` (fit one tile to the face) has no uedcli counterpart
+  at all and is plausibly what an author reaching for "align this floor" actually wants — which bites
+  harder after the 2026-07-26 reset-to-unit ruling removed the last channel to a non-unit density;
+  `CLAMP` is unknown. **Method:** drive the editor, apply each mode to known faces, `MAP EXPORT`, read
+  back `TextureU`/`TextureV`/`Pan`, record measured semantics in `unrealed/` with a ✅/🔬 marker, and
+  state per mode whether uedcli matches, deliberately diverges (with the reason), or has no
+  equivalent. Divergence is a legitimate outcome — uedcli is model-side and need not mirror an editor
+  UI — but it must be a decision rather than an accident.
 ---
 
 ## From the 2026-07-18 unattended build chain (Andrzej, triage these)
