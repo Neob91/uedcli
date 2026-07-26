@@ -625,3 +625,52 @@ def test_the_replaced_degree_flags_no_longer_parse(argv):
     from uedcli.cli import build_parser
     with pytest.raises(SystemExit):
         build_parser().parse_args(argv)
+
+
+# ---------------------------------------------------------------------------
+# Revolve segmentation — the fact the curved-texture shear formula rests on
+# (spike: dev/docs/spikes/2026-07-26-poly-rotate-curved-track/)
+# ---------------------------------------------------------------------------
+
+import math
+
+import pytest
+
+
+@pytest.mark.parametrize("angle_deg,segments", [(90.0, 8), (90.0, 16), (60.0, 4), (180.0, 12)])
+def test_revolve_facets_are_evenly_spaced_by_angle_over_segments(angle_deg, segments):
+    """A `--segments N` revolve of a `--angle A` sweep divides the sweep into facets of EXACTLY
+    `A/N`, with vertices only at those angles.
+
+    Pinned because a whole family of texture-alignment numbers is derived from it, not because the
+    spacing is surprising. The 2026-07-26 curved-track spike measured the seam texture mismatch of an
+    orthogonally-framed run as `2*sin(dtheta/2) * half_width` texels, where `dtheta` is the per-facet
+    turn — verified predictive at 8 segments (12.546781) and 16 (6.281331). Every one of those
+    numbers, and the "add segments to halve the mismatch" guidance that follows from them, silently
+    goes stale if the builder ever spaces facets differently (unevenly, or off by an end cap). This
+    test is what makes that a red failure instead of quietly wrong documentation.
+    """
+    from uedcli.builders import revolve
+
+    # Profile in the (u, v) plane: a rectangle at radii 512..640. axis="x" maps u->Y, v->Z, so the
+    # sweep revolves about world Z and a vertex's angle is measured in the XY plane.
+    brush = revolve([(512, 0), (640, 0), (640, 16), (512, 16)],
+                    angle_deg=angle_deg, segments=segments, axis="x")
+
+    angles = set()
+    for poly in brush.polys:
+        for vx, vy, _vz in poly.vertices:
+            x, y = float(vx), float(vy)
+            if math.hypot(x, y) < 1e-6:          # a vertex on the axis has no bearing
+                continue
+            angles.add(round(math.degrees(math.atan2(x, y)), 6))
+
+    step = angle_deg / segments
+    expected = [round(k * step, 6) for k in range(segments + 1)]
+    got = sorted(angles)
+
+    assert len(got) == len(expected), (
+        f"expected {len(expected)} distinct facet angles for {segments} segments, got {len(got)}: "
+        f"{got}")
+    for want, have in zip(expected, got):
+        assert abs(have - want) < 1e-4, f"facet angle {have} is not the expected {want}"
