@@ -122,7 +122,10 @@ the project's own `LUM_CoreTex.utx`) is fixed in S1, before any new pixel format
 
 ```
 S1  CompMips: parse BOTH mip arrays; prefer Mips     <- fixes the live bug, 69 textures
-S2  Typed decode results + caller dispositions        <- the error layering
+S2  Typed decode results + caller dispositions        <- the error layering; ALSO migrates the
+                                                         two mesh-skin harnesses it breaks
+S2b Preview accessors (mip pyramid; bMasked on the result)
+S2c Mesh-skin path: module map + scope statement
 S3  Layout detection from the mip chain               <- D1, the governing idea
 S4  BC1 decode                                        <- makes the CompMips fallback real
 S5  BC2 / BC3 decode + ambiguous-alpha
@@ -155,7 +158,7 @@ A fresh checkout on another machine has only the **committed** rows.
 | corpus                             | path | committed? |
 |------------------------------------|------|---|
 | **Deus Ex install**                | `/home/neob91/Games/LutrisDX/drive_c/DX/{System,Textures,Maps}` | **no** — it sits *outside* the repo (the repo root is a subdirectory of it). Reachable in-tree only through the symlink `<repo>/uned/DeusExAssets → /home/neob91/Games/LutrisDX/drive_c/DX`, which is itself **tracked** (`git ls-files uned/` lists it; `.gitignore:9` is `_scratch/`, not this). |
-| **The project's own textures**     | `/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Textures/*.utx` — notably `LUM_CoreTex.utx` (17 MB) | **PARTLY.** `git ls-files Textures/` lists four packages: `France.utx`, `LUM_CharacterTex.utx`, `LUM_CoreTex.utx`, `LUM_InfoPortraits.utx` (384 `Texture` exports). `CoreTexSky.utx` + `CoreTexWater.utx` are in the same dir **untracked** (34 more), and sessions add content there. See the count-stability rule below |
+| **The project's own textures**     | `/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Textures/*.utx` — notably `LUM_CoreTex.utx` (17 MB) | **NO.** *(Corrected 2026-07-26.)* These were tracked back when uedcli lived inside the LUM mod repo. uedcli is now its own repository and **`git ls-files Textures` is empty** — nothing under this path is committed here. Everything over it is **integration**-tier |
 | **Unreal Gold** (227i-patched; its `System/Engine.u` is still the stock 8-slot build) | `/home/neob91/Games/Unreal/pfx/drive_c/Unreal` | **no** — outside every repo, and there is **no in-tree pointer to it at all** |
 | **UED22 editor substrate**         | `<repo>/uned/UED22/` — 214 tracked files, 34 of them packages this parser reads, 1,998 `Texture` exports | **yes** |
 | **Existing fixtures**              | `<repo>/uedcli/tests/fixtures/{CoreTexWater,LUM_InfoPortraits}.utx` | **yes** |
@@ -164,13 +167,14 @@ A fresh checkout on another machine has only the **committed** rows.
 Deus Ex install or the Unreal Gold install is `-m integration`; everything else must run against
 committed material. Each Done-when clause below is tagged **(offline)** or **(integration)**.
 
-**Two of the four corpora are reachable offline, so most corpus criteria are OFFLINE.**
-`Textures/LUM_CoreTex.utx` (which holds **all 30** of the LUM textures this build exists to fix) and
-`uned/UED22/` (34 packages, 1,998 `Texture` exports, 1,137 of them ambiguous) are both in git —
-verified with `git ls-files` on 2026-07-25. An earlier draft filed the whole corpus sweep as
-integration-only, which would have **deselected by default the criterion for the very bug that
-motivates the build**. S6 therefore runs the sweep in **two tiers** (§S6), and S1's "30 → 0" clause
-is **offline**.
+**ONE of the four corpora is reachable offline, plus the fixtures we build.** *(Corrected
+2026-07-26 — an earlier draft said two, counting `Textures/`, which is no longer in this repo.)*
+`uned/UED22/` (34 packages, 1,998 `Texture` exports, 1,137 ambiguous — under §0a's enumeration rule)
+is committed, as are the fixtures under `uedcli/tests/fixtures/`. The concern that drove the two-tier
+design still stands and is still met: the criterion for the **bug that motivates the build** must not
+be deselected by default. It now runs offline against the **committed synthesized `LUM_CompMips.utx`**
+(same defect class, no game content), while the live "30 → 0" confirmation over the real
+`LUM_CoreTex.utx` is **integration**. S6 keeps both tiers (§S6).
 
 **COUNT-STABILITY RULE — where an exact expected count is legitimate, and where it is a bug.**
 An offline test may assert an **exact count** only over material a fresh checkout is guaranteed to
@@ -179,15 +183,15 @@ have *and* that nothing else writes:
 - ✅ `uned/UED22/` — **fully tracked**: 34 packages, 1,998 `Texture` exports, no `CompMips` arrays,
   861 chains fitting one layout / 1,137 ambiguous.
 - ✅ the committed fixtures under `uedcli/tests/fixtures/`.
-- ❌ **`<repo>/Textures/`** — only 4 of the 6 packages present here are tracked, and it is live
-  content sessions add packages to. **Any total measured there is a snapshot, not a contract.** Over
-  that root a test asserts **invariants** instead: 0 parse failures, 0 `unrecognised-layout`,
+- ❌ **the LUM `Textures/` directory** — *not in this repo at all* since the split, and live content
+  besides. Nothing offline may reference it; every criterion over it is **integration**, where a test
+  asserts **invariants** rather than totals: 0 parse failures, 0 `unrecognised-layout`,
   0 `size-mismatch`, 0 `ambiguous-layout`, 0 `ambiguous-alpha`, every export either decodes or names
   a case, no unhandled exception.
-- ✅ **the one exception**: the motivating-bug clause is exact because it is pinned to a single
-  tracked *file* — `LUM_CoreTex.utx` goes from **30** `Texture`-class parse failures to **0**
-  (re-measured 2026-07-25: it holds 253 `Texture` exports and all 30 of the tracked failures; the
-  other three tracked packages fail zero).
+- ✅ **the motivating-bug clause is exact against a fixture we BUILD** — `LUM_CompMips.utx` parses
+  EOF-clean with 7 P8 `Mips` + 7 DXT1 `CompMips`. Exact by construction, and it is the offline
+  criterion. The live `LUM_CoreTex.utx` **30 → 0** figure (253 `Texture` exports, all 30 failures in
+  that one file; re-measured 2026-07-25) is asserted in the **integration** tier.
 
 An earlier draft asserted "6 packages / 418 exports" over that directory as an offline expectation.
 Both numbers include untracked files, so the assertion was wrong on a fresh checkout and unstable on
@@ -197,10 +201,17 @@ The DX install is located by `install_root()` in `uedcli/tests/conftest.py` (env
 `UEDCLI_TEST_INSTALL`; its no-env fallback is `Path(__file__).resolve().parents[2]/"uned"/
 "DeusExAssets"`). **There is no equivalent pointer for the Unreal install** — S6 adds
 `UEDCLI_TEST_UNREAL_INSTALL` and skips cleanly when it is unset. The two **tracked** corpora need no
-env pointer at all and S6 adds two conftest helpers beside `install_root()` for them, anchored the
+env pointer at all and **S1** adds the `ued22_root()` conftest helper beside `install_root()` (S1's Done-when is its first
+caller; an earlier draft said S6 adds it, which made S1 unbuildable in its own slice). S6 adds for them, anchored the
 same way on `conftest.py`'s own location:
 
 ```python
+# ENUMERATION RULE — state it wherever a count is asserted, or the same tree gives three answers.
+# Measured 2026-07-26: `git ls-files uned/UED22` = 214 files. Counting packages as
+# RECURSIVE + EXTENSION-EXACT {.u,.utx,.uax,.umx} gives 34 packages / 1,998 Texture exports (the
+# figures this plan uses). A loose `*.u*` glob also catches the tracked `DeusEx.u.bak` -> 35 / 2,002.
+# Top-level-only gives 32 / 1,934 (it misses DoNotPlaceInventorySpots/Engine.u and
+# PlaceInventorySpots/Engine.u). All three are defensible; only one matches the asserted numbers.
 def ued22_root() -> Path:      # <repo>/uned/UED22 — git-tracked, 34 packages
     return Path(__file__).resolve().parents[2] / "uned" / "UED22"
 
@@ -219,7 +230,7 @@ old path; `dev/docs/` is current and `docs/dev/` no longer exists.
 > **CORRECTED 2026-07-26 (plan review round 1): this section is stale, and the header's "no other
 > document needs to be opened" is no longer safe.** Four current `CLAUDE.md` rules are missing here.
 > **Open `CLAUDE.md`.** In particular:
-> - **Feature worktrees.** This is an eight-slice feature, so it is built in its own git worktree on
+> - **Feature worktrees.** This is a NINE-slice feature, so it is built in its own git worktree on
 >   its own branch and squash-merged back — the feature branch is **never pushed**. §0b below instead
 >   says "push after committing", which is the *non-feature* path and is wrong for this build.
 > - **The decisions ledger is retired** — see the S7 correction; nothing is appended to
@@ -251,7 +262,9 @@ integration module must therefore move the *deselected* count, not the *skipped*
 **Committing.** Commit each completed slice without being asked. Stage **only the files you touched,
 by explicit pathspec** (`git commit -- <path> <path>`); never `git add .`, never `git add -A`, never
 `git commit -a` — a concurrent session may have staged its own work. One **short imperative subject
-line**, no `type:` prefix, **no AI attribution**. Push after committing. **Never rewrite history**,
+line**, no `type:` prefix, **no AI attribution**. **Do NOT push the feature branch** — it is squashed
+away on merge (CLAUDE.md "Feature worktrees"); an earlier draft said "push after committing", which is
+the non-feature path. **Never rewrite history**,
 locally or on `origin`: no `--amend`, no `rebase` of pushed commits, no force-push in any form.
 Mistakes are fixed with a new commit or a `git revert`.
 
@@ -873,8 +886,21 @@ with the identical reader, then applies the existing body-to-EOF guard across **
 `WidthOffset` cursor check applies per-array unchanged. `TextureObj` grows `comp_mips` +
 `comp_format`. `_decode_ref` selects its array by **S4's rule** — `Mips` if it *carries data* (the
 array is non-empty and at least one mip has bytes), else `CompMips` if present and carrying data,
-else the `no-mip-data` miss; "`Mips` is absent" is not a separate concept. The fallback is inert
-until S4 lands BC1 — say so in the code comment, don't pretend otherwise. Delete `TEXF` (`:33`).
+else the `no-mip-data` miss; "`Mips` is absent" is not a separate concept. Delete `TEXF` (`:33`).
+
+**The fallback is NOT inert until S4 — S1 must gate it, or S1 ships a confident wrong image.**
+*(Corrected 2026-07-26, plan review round 2.)* An earlier draft said "inert"; it is not. Take a
+texture whose `Mips` are all zero-length while `CompMips` carries DXT1: the selection rule above
+skips `Mips` (no data) and **selects `CompMips`**, so it is not the `no-mip-data` miss. The surviving
+gate `if t.fmt != 0 or not t.mips` then passes, because `t.fmt` is the **`Mips`** format code (`0`,
+P8 implied) — `CompFormat` is a different field the gate never reads. `mip0_to_rgb` then indexes the
+palette with DXT1 **block bytes** and returns a fully-rendered wrong picture, for the three slices
+until S4 exists. That breaks this plan's governing "never a wrong pixel" invariant.
+
+**S1 therefore returns `unverified-format` whenever the SELECTED array is `CompMips`**, and carries
+its own Done-when for it (a `pkgfixture` texture with empty `Mips` + DXT1 `CompMips` must miss, not
+decode). S4 replaces that miss with a real decode; S4's existing Done-when already constructs exactly
+this fixture, so the two meet.
 
 **S1 also owns the body-integrity REPORT, because S1 is where the guard is written.** The guard lives
 at `utexture.py:217-219` and today raises *before* any other logic runs, so a later slice cannot put
@@ -991,14 +1017,21 @@ Lands the two test enablers:
   single decoded pixel.
 - (offline) resolving `LUM_CompMips.ClenGreyWndow_C` through `TextureResolver` returns the **P8**
   image, not the DXT1 copy.
-- (offline) **the motivating bug, pinned to a tracked FILE, not to a directory total:** the
-  `Texture`-class parse-failure count over `conftest.repo_texture_root()/"LUM_CoreTex.utx"` (tracked,
-  253 `Texture` exports) drops from **30 to 0**; the failure count over the whole
-  `repo_texture_root()` directory is **0** as an invariant (no exact package/export total asserted —
-  §0a's count-stability rule: 2 of the 6 packages there are untracked); and it stays **0** over
-  `conftest.ued22_root()`, where the exact 34 packages / 1,998 exports **may** be asserted because
-  that tree is fully tracked. **This is the offline criterion for the bug that motivates the whole
-  build** — it must not be marked integration.
+- (offline) **the motivating bug, pinned to a COMMITTED FIXTURE.** *(Rewritten 2026-07-26: the old
+  clause called `conftest.repo_texture_root()`, a helper §0a deleted, over a directory this repo no
+  longer contains.)* The defect class is "a second mip array makes the body parse overrun", and it is
+  now pinned without any game content: **`uedcli/tests/fixtures/LUM_CompMips.utx` parses EOF-clean and
+  both its arrays decode** — 7 P8 `Mips` (64×64 → 1×1) and 7 DXT1 `CompMips`. Before S1 the same file
+  raises the body-to-EOF guard. That fixture is our own artwork built by `ucc make` + Pillow
+  (`spikes/2026-07-26-ucc-texture-fixture/`), committed, so this runs on a bare checkout.
+- (offline) the parse-failure count stays **0** over `conftest.ued22_root()`, where the exact
+  **34 packages / 1,998 `Texture` exports** may be asserted because that tree is fully tracked —
+  **subject to the enumeration rule in §0a**, without which the same tree yields 32/1,934 or 35/2,002.
+- (integration) the `Texture`-class parse-failure count over the real
+  `conftest.install_root()/"LUM"/"Textures"/"LUM_CoreTex.utx"` (253 `Texture` exports) drops from
+  **30 to 0**. This is the *live-content* confirmation of the same bug; it is integration-tier because
+  that file is reachable only through the gitignored install, and the offline criterion above is what
+  runs by default.
 - (integration) the same count over `conftest.install_root()`'s `System` + `Textures` drops from
   **39 to 0**.
 - `unrealed/package-format.md` §`Object body layouts (byte-exact) 🔬` gains the `UTexture` body (🔬),
@@ -1196,8 +1229,8 @@ got = tres.resolve(f"{rp[0]}.{rp[-1]}")
 if got:                      # <-- a typed ERROR object is TRUTHY
 ```
 
-- `dev/docs/spikes/2026-07-25-native-mesh-decode/harness/render_class.py:91`
 - `dev/docs/spikes/2026-07-25-native-mesh-decode/harness/render.py:91`
+- `dev/docs/spikes/2026-07-25-native-mesh-decode/harness/render_class.py:92`
 
 Under S2's return-type change each would accept an **error** as a decoded skin and render garbage.
 `rules/spikes.md` makes committed harnesses durable evidence, not scratch, and master already carries
@@ -1212,16 +1245,23 @@ this is live scope. Neither file appears in §1's *Changed* map nor its *Deliber
 
 **Done when**
 
-- *(moved to S2)* Both harnesses are migrated to the typed result and **fail loudly** on an error
-  rather than treating it as an image; each names the offending skin ref in its message.
-  (`render.py:91`, `render_class.py:92`.)
-- *(moved to S5)* One mesh-skin case is covered for every format this build adds, per the spec's
-  requirement — not only surface reads.
+- *(RELOCATED — the clauses now live in S2 and S5 respectively; this slice keeps only the plan-level
+  work below. Round 2 found the relocation had been announced but never performed.)*
 - §1's module map lists both harness files, and §6 states explicitly what of the skin path is out of
   scope. **These are plan edits made NOW, not build steps** — a Done-when satisfied by editing a
   document S7 deletes is not a criterion.
 - §1's module map lists both harness files, and §6 states explicitly what of the skin path is *not*
   in scope.
+
+#### S2 Done-when — ADDED 2026-07-26 (the relocation from S2c)
+
+- Both committed mesh-skin harnesses are migrated to the typed result **in this slice, the one that
+  breaks them**, and **fail loudly** on an error instead of treating it as an image; each names the
+  offending skin ref. `render.py:91` and `render_class.py:92` both do `got = …resolve(…)` / `if got:`,
+  and a typed error object is **truthy** — leaving them for a later slice would ship two commits with
+  two committed callers silently rendering garbage, against §0's per-slice-green contract and
+  `rules/spikes.md` ("harnesses are durable evidence").
+- §1's *Changed* map lists both harness files.
 
 ### S3 — layout detection from the mip chain
 *D1 — the governing idea, and the slice where the spec was most optimistic.*
@@ -1307,7 +1347,9 @@ data.)
   `bc16` **with `code=None`**; the 16 B one then yields `ambiguous-alpha` (rows 6 and 5).
 - (offline) **the veto pair — the reason this slice exists in this form** (row 2 vs row 6): a
   `pkgfixture` texture with **no stored `Format`** (`fmt=None`) whose chain fits `bc8` uniquely — a
-  foreign 227/UT **BC1** file — detects as `bc8` with `layout_source == "data"` and **decodes**. The
+  foreign 227/UT **BC1** file — detects as `bc8` with `layout_source == "data"`. *(It DETECTS here;
+  it does not decode until S4 lands BC1 — at S3 the correct answer is the `unverified-format` miss of
+  row 9. Corrected 2026-07-26: an earlier draft said "and decodes", which S3 cannot do.)* The
   **same chain** with `fmt=8` stored (a `TEXF_BC4` claim) yields **`unverified-format` naming code 8
   and no pixels**, even though the data fits exactly one layout. One keyword on the fixture, two
   answers; without this pair the veto can be deleted without a red test, and a BC4 texture becomes a
@@ -1329,7 +1371,8 @@ data.)
 - (integration) `DmRiot.unr:SolModifié`, `:Flotte` and `DMBeyondTheSun.unr:Uebergang3` — the three
   real single-mip ambiguous samples, and the only real ones with a stored code — each resolve via the
   code, `layout_source == "format-code"`, layout `bc16` → BC3.
-- (integration) the whole sweep produces **zero** `ambiguous-layout` rows and **zero**
+- *(MOVED TO S6 — the sweep module does not exist until S6, so this cannot be an S3 criterion.)*
+  (integration) the whole sweep produces **zero** `ambiguous-layout` rows and **zero**
   `unrecognised-layout` rows, matching §2b's measurement that every ambiguous chain is resolved by a
   code naming a fitted candidate.
 
@@ -1426,6 +1469,12 @@ Three Done-whens (here, S3's, and S6's sweep census) depend on `ambiguous-alpha`
 - (integration) `UnrealShare.u:TranslatorHUDHD` (2048², 12 mips) decodes end to end without an
   exception and in bounded memory.
 
+#### S5 Done-when — ADDED 2026-07-26 (the relocation from S2c)
+
+- **One mesh-skin case is covered for every format this build adds** — the spec's owner-directed
+  requirement. It lands here, not in S2c, because BC1 arrives in S4 and BC2/BC3 in S5: this is the
+  first slice at which "every format" exists.
+
 ### S6 — the corpus sweep (offline + integration) and the engine-fact pins
 *The test that would have caught both the fmt-7 gap and `CompMips`.*
 
@@ -1441,13 +1490,11 @@ in `Textures/LUM_CoreTex.utx` — **deselected by default on the machine that ha
     layout, **1,137** ambiguous, 0 parse failures, 0 `unrecognised-layout`, 0 `ambiguous-layout`,
     0 `ambiguous-alpha`. Say in the assertion which unit each number is in (exports vs arrays);
     they differ the moment a `CompMips` appears.
-  - `conftest.repo_texture_root()` — **partly tracked and live** (4 of 6 packages here), so
-    **invariants only**: every export decodes or names a case, 0 parse failures,
-    0 `unrecognised-layout`, 0 `size-mismatch`, 0 `ambiguous-layout`, 0 `ambiguous-alpha`, no
-    unhandled exception. **Do not assert a package or export total.** The one exact clause is pinned
-    to a tracked *file*: `LUM_CoreTex.utx` goes from **30** `Texture`-class parse failures to **0**
-    (it holds 253 `Texture` exports and all 30 of the failures; the other three tracked packages fail
-    zero).
+  - *(the second offline root is GONE — `<repo>/Textures/` does not exist since uedcli became its own
+    repo, and `repo_texture_root()` is deleted. Its role is taken by the committed synthesized
+    fixtures, which are exact by construction because we build them.)* The `LUM_CoreTex.utx`
+    **30 → 0** clause moves to the **integration** tier below, against
+    `conftest.install_root()/"LUM"/"Textures"/`.
 
   Exact counts where they are legitimate are what turn a silent regression into a red test; a "no
   exceptions" sweep passes happily while everything degrades to a named error. An exact count over a
@@ -1507,12 +1554,11 @@ property-gated `CompMips`, the arbitration rule — go where format facts live,
 **Done when**
 - (offline) the sweep is green with **zero** unhandled exceptions, zero `unrecognised-layout`, zero
   `ambiguous-layout`, zero `ambiguous-alpha`; the exact `uned/UED22` fit census above holds; and the
-  `Texture`-class parse-failure count is **0** over both roots — including **0 for
-  `LUM_CoreTex.utx`, down from 30**, the one exact clause allowed over `Textures/`.
-- (offline) **the count-stability rule is respected in the test source itself**: no assertion in
-  `test_utexture_corpus.py` compares a package or export **total** over `repo_texture_root()` (that
-  directory holds untracked packages on this machine and unknown content on another). A reviewer
-  should be able to check this by reading the file.
+  `Texture`-class parse-failure count is **0** over `ued22_root()` and over the committed fixtures.
+  The **`LUM_CoreTex.utx` 30 → 0** clause is asserted in the **integration** tier only.
+- (offline) **the count-stability rule is respected in the test source itself**: every exact total is
+  asserted only over a fully-tracked root or a fixture we build, and each such assertion states the
+  §0a enumeration rule it counted under. A reviewer should be able to check this by reading the file.
 - (offline) **the spike markdown exists** at
   `dev/docs/spikes/2026-07-25-native-texture-formats/01-texture-layout-census.md`, carries the census
   in both units, the three enum dumps, the eleven stored codes and the oracle tables, and is cited
@@ -1520,7 +1566,12 @@ property-gated `CompMips`, the arbitration rule — go where format facts live,
 - (integration) the sweep is green over both installs with the same zero-exception /
   zero-`unrecognised-layout` bar, and records exactly the §2a failure profile: 0 `Texture` failures
   post-S1.
-- (offline) using the sweep's own `_texture_like` matcher on a tracked package, every
+- (offline) **against a SYNTHESIZED `pkgfixture` texture with zero-length mips** — *not* a tracked
+  package. Measured 2026-07-26: every `Texture`-classed export in `uned/UED22` and in both committed
+  fixtures has class exactly `Texture`; there are **no** `FireTexture`/`WetTexture`/`IceTexture`/
+  `WaveTexture` exports in any tracked material, so the old wording asserted over an empty set and
+  passed vacuously. The real procedural corpus is integration-only. Using the sweep's own
+  `_texture_like` matcher, every
   procedural-class export (`FireTexture` et al.) reports `no-mip-data` — **and** the shipped
   `utexture.textures()` still returns none of them, asserted in the same test so the widening cannot
   leak into production.
@@ -1631,6 +1682,10 @@ green.
 
 It was left open by the spec and it **blocks work**, so it is decided here rather than deferred. It
 is chosen to fit the documents' own principles — *never a wrong pixel* and *no silent half-answers* —
+**(2026-07-26: §0b's own correction says a call that changes observable behaviour is ASKED, not
+derived — `CLAUDE.md` "An owner DECISION is implemented as given". §5-D changes what a caller sees,
+so before S7 it is parked as an `[OWNER — confirm]` item on `board/inbox.md` carrying the proposed
+text verbatim, not routed to `rationale/` as an agent decision.)**
 and it is **builder-decided under Andrzej's "do whatever it takes" delegation and cheaply
 reversible**, so overruling it costs one small change plus its test.
 
