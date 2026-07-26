@@ -233,7 +233,7 @@ old path; `dev/docs/` is current and `docs/dev/` no longer exists.
 
 Reproduced here so the builder does not have to open `CLAUDE.md`.
 
-**Running the tests.** From `Tools/uedcli`, run **`bin/test`**. It runs pytest *host-native* in the
+**Running the tests.** From the repo root, run **`bin/test`**. It runs pytest *host-native* in the
 auto-managed dev venv (`bin/_venv.sh` → `.venv/`, Python 3.12 + `Pillow` + `pytest`) — the same
 runtime `bin/uedcli` uses — and then the Rust golden suite (`cargo test`). It needs `python3.12` on
 PATH; the venv self-creates on first run. Extra args pass straight through, and it must be invoked
