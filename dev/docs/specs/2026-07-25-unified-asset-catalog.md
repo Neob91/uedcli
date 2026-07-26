@@ -191,6 +191,44 @@ class.
  "colors": ["grey", "brown"], "colors_source": "set"}
 ```
 
+**`classify set` MERGES into an existing shard — it does not replace it.** *(Owner ruling,
+2026-07-26.)* Two agents (or one agent twice) will classify the same identity, and the earlier work must
+survive. "Merge" needs a rule per field, because only one of them is a set:
+
+| field | on re-`set` |
+|---------------|---
+| `tags` | **union** with what is stored, deduped and normalized through `_norm_tags`. Additive, so a second agent's tags never displace the first's. |
+| `colors` | **replaced**, and `colors_source` becomes `"set"` — an explicit colour override is a single answer, and the override already beats the derived list by design (§4b). |
+| `description` | **prose, and the only scalar** — see the rule below. |
+
+**A conflicting `description` is REFUSED, not overwritten.** If the shard already holds a *different*,
+non-empty description, `classify set --description …` **exits 2**, naming the ref and printing the stored
+text, and `--replace` is the explicit opt-in that overwrites it. Re-setting the *same* text is a no-op,
+and filling in an empty description is an ordinary merge. Rationale: `direction/safety.md` makes
+"never irretrievably clobber" the tool's uniform rule and requires that same-target concurrent edits be
+"DETECTED and REFUSED, not lost", and a curated description is the most expensive thing in the catalog to
+recreate — `direction/asset-catalog.md` calls classification "the product". Merging prose is not
+possible, so refusing is the only option that does not silently destroy it.
+*(This last rule is the agent applying `safety.md` to the one field the merge ruling cannot cover —
+flagged for veto, not presented as a separate owner decision.)*
+
+**Sharding does NOT make this unnecessary, and that is the subtle part.** §3b's conflict-free-merge
+argument is about *git*: disjoint identities are disjoint files, so `git merge` never conflicts. But
+identity ignores names, so two agents classifying two **differently named** refs whose pixels are
+identical (`CoreTexMetal.X` and `LUM_CoreTex.X`) write the **same shard** — disjointness by asset *name*,
+which is what an agent can see, is not disjointness by *identity*, which is what the path is. Without
+merge the second write silently wins while the write-once `ref` still names the first, so
+`classify list-outdated` would later report a ref that does not describe the stored text. So
+**`classify set` must also report on stderr when it is writing an identity that is already classified
+under a different `ref`** — the agent has no other way to know it just edited what it thought was a
+different texture.
+
+**There is deliberately NO `classify clear`.** `unset --all` already is it; a second spelling of one
+operation is the back-compat cruft `direction/conventions.md` forbids on arrival. What merge *does*
+require is the ability to remove a NAMED tag — with `set` additive and bare `unset --tags` clearing the
+whole field, dropping one wrong tag would otherwise mean clearing and retyping the rest. Hence
+`unset --tags a,b`.
+
 Everything in `tags`/`description` comes from the LLM. Note the description carries *usage* — that is
 where "where is this used" lives now, written by whoever investigated it, rather than computed.
 
@@ -422,7 +460,7 @@ Not part of identity (§3b): identity is pixels, and the flag lives beside them.
 | `<kind> show <ref>… \| -` | **facts + classification** | one block per ref; `--json` |
 | `<kind> preview <ref>… \| - [--out DIR]` | **the sole producer of image artifacts** | `<ref>\t<path>` lines (ref-qualified, so multi-artifact kinds stay unambiguous) |
 | `<kind> classify set <ref> --tags … --description …` **or `-`** | record classification; `-` reads JSONL `{ref, tags, description[, colors]}` | summary → stderr |
-| `<kind> classify unset <ref> [--tags\|--description\|--colors\|--all]` | undo a mis-tag | summary → stderr |
+| `<kind> classify unset <ref> [--tags[=T,…]\|--description\|--colors\|--all]` | undo a mis-tag; `--tags a,b` removes THOSE tags, bare `--tags` clears the field | summary → stderr |
 | `<kind> classify status [--full]` / `tags [--package P]` | progress / tag vocabulary | text |
 | `<kind> classify list-outdated` / `prune [--outdated]` | classifications whose identity no longer resolves | rows → stdout / count → stderr |
 | `<kind> classify clone --from <catalog-dir\|project-root>` | copy classification by identity (keep-local, skip-report) | counts → stderr |
@@ -663,6 +701,12 @@ forces `UEDCLI_SCHEMA_CACHE=off`, so class-adapter tests exercising the cache pa
   dangling path.
 - **shard-index:** matches a full scan; the gate catches a **deletion** (prune → gone from
   `tags`/`status`); two projects on one machine get separate roll-ups.
+- **Merge semantics (§3b):** re-`set` unions tags rather than replacing them; `colors` replace and mark
+  `set`; a *different* non-empty `description` exits 2 naming the ref and printing the stored text, and
+  `--replace` overwrites it; re-setting identical text is a no-op; filling an empty description merges;
+  `unset --tags a,b` removes exactly those and leaves the rest; bare `unset --tags` clears the field;
+  **two differently-named refs with identical pixels resolve to ONE shard and the second `set` reports on
+  stderr that the identity was already classified under another `ref`**.
 - **Classification:** round-trip per kind; write-once `ref` on pixel-hashed shards; two agents writing
   different identities never touch one file; `classify set -` JSONL writes N shards; casefolded
   name-keyed paths (two spellings → one shard); `unset` whole and per-field; `clone` keep-local +
