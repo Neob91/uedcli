@@ -1,0 +1,147 @@
+# Raw mined uedctl friction from subagent transcripts
+# (deduped + normalised; <ID>/<RND>/<PATH>/N are placeholders)
+
+[  19x] materialize for preview failed: materialize failed (nothing written): OBJ DEPENDENCIES PACKAGE=MyLevel did not complete within N attempts (Ns)
+         agents: {'container-yard (1st)': 17, 'dive-bar (2nd)': 2}
+[   8x] Traceback (most recent call last):
+         agents: {'container-yard (2nd)': 1, 'spike-headless': 6, 'container-yard (1st)': 1}
+[   8x] usage: uedctl [-h] [--project PROJECT]
+         agents: {'tube-platform (1st)': 1, 'tube-platform (2nd)': 6, 'dive-bar (2nd)': 1}
+[   7x] Exit code N
+         agents: {'dive-bar (1st)': 2, 'container-yard (2nd)': 1, 'tube-platform (1st)': 1, 'spike-headless': 2, 'container-yard (1st)': 1}
+[   6x] ls: cannot access '<PATH>*.png': No such file or directory
+         agents: {'container-yard (2nd)': 6}
+[   4x] CreateWindowEx failed: Success.
+         agents: {'spike-headless': 4}
+[   3x] materialize for preview failed: materialize failed (nothing written): Command '['docker', 'exec', 'uned-<ID>', 'wmctrl', '-l']' returned non-zero exit status N.
+         agents: {'tube-platform (1st)': 2, 'container-yard (1st)': 1}
+[   3x] usage: uedctl level materialize [-h] [--out OUT] [--overwrite] [--no-verify]
+         agents: {'tube-platform (1st)': 1, 'spike-headless': 1, 'dive-bar (2nd)': 1}
+[   3x] N 'A package file must be specified.'
+         agents: {'spike-headless': 3}
+[   3x] usage: uedctl brush build cube [-h] --width WIDTH --breadth BREADTH --height
+         agents: {'spike-headless': 1, 'container-yard (1st)': 2}
+[   2x] materialize for preview failed: materialize failed (nothing written): post-verify mismatch: on-disk /work/<ID>.dx does not match the intended level — actor 'DeusExLevelInfo_<RND>' differs on property MapName:
+         agents: {'dive-bar (1st)': 1, 'tube-platform (1st)': 1}
+[   2x] texture not found: CoreTexMetal.NYC_GrayMetal_A — no Texture of that name on the package path (author-time validation)
+         agents: {'dive-bar (1st)': 2}
+[   2x] materialize failed (nothing written): OBJ DEPENDENCIES PACKAGE=MyLevel did not complete within N attempts (Ns)
+         agents: {'dive-bar (1st)': 2}
+[   2x] attempt N failed:
+         agents: {'dive-bar (1st)': 2}
+[   2x] ls: cannot access '<PATH>': No such file or directory
+         agents: {'dive-bar (1st)': 1, 'spike-headless': 1}
+[   2x] usage: uedctl texture [-h] {sync,list,search,tags,classify} ...
+         agents: {'container-yard (2nd)': 1, 'tube-platform (1st)': 1}
+[   2x] usage: uedctl level preview [-h] [--out-dir DIR] [--list-actors Package.Class]
+         agents: {'tube-platform (1st)': 1, 'dive-bar (2nd)': 1}
+[   2x] materialize for preview failed: materialize failed (nothing written): MAP SAVE never produced a finished file at /work/<ID>.dx: no file appeared (after Ns, bound Ns). The editor accepted the command but did not complete the save — check the
+         agents: {'tube-platform (1st)': 1, 'container-yard (1st)': 1}
+[   2x] N. **Make the door lockable.** Regular engine movers have no lock, so the target must be a
+         agents: {'tube-platform (1st)': 1, 'container-yard (1st)': 1}
+[   2x] materialize for preview failed: materialize failed (nothing written): post-verify mismatch: on-disk /work/<ID>.dx does not match the intended level — actor 'BarrelN_<RND>' differs on property Base:
+         agents: {'tube-platform (1st)': 2}
+[   2x] materialize for preview failed: materialize failed (nothing written): post-verify mismatch: on-disk /work/<ID>.dx does not match the intended level — actor 'BridgeA_<RND>' is in the intended level but MISSING from the built map
+         agents: {'container-yard (1st)': 2}
+[   2x] uedctl brush build cube: error: argument --at: coordinate must be X,Y,Z (N comma-separated numbers), got 'N,'
+         agents: {'container-yard (1st)': 2}
+[   2x] usage: uedctl class show [-h] [--depth N|all] [--category NAME] Package.Class
+         agents: {'tube-platform (2nd)': 1, 'dive-bar (2nd)': 1}
+[   2x] surface selector must be BRUSH:SELECTOR, got 'N face(s) matched'
+         agents: {'tube-platform (2nd)': 2}
+[   2x] uedctl: error: unrecognized arguments: --folder light.plant
+         agents: {'tube-platform (2nd)': 2}
+[   1x] stash not found: 'probe'
+         agents: {'dive-bar (1st)': 1}
+[   1x] materialize for preview failed: materialize failed (nothing written): post-verify mismatch: on-disk /work/<ID>.dx does not match the intended level — actor 'ALLEYDOCK_<RND>' is in the intended level but MISSING from the built map
+         agents: {'dive-bar (1st)': 1}
+[   1x] Command did not complete within its Ns timeout and was moved to the background (ID: buluohiqv). Output is being written to: <PATH><ID><PATH> You will be notified when it completes. To check interim output, use Read on that file path.
+         agents: {'dive-bar (1st)': 1}
+[   1x] Command did not complete within its Ns timeout and was moved to the background (ID: bzzgrptwx). Output is being written to: <PATH><ID><PATH> You will be notified when it completes. To check interim output, use Read on that file path.
+         agents: {'dive-bar (1st)': 1}
+[   1x] materialize failed (nothing written): level references vN code package(s) with no vN stub: Endemia — the vN editor cannot load a vN `.u` directly; build the stub(s) first (`uedctl substrate stub <pkg>`) or the referencing level cannot mater
+         agents: {'dive-bar (1st)': 1}
+[   1x] materialize failed (nothing written): post-verify mismatch: on-disk /work/<ID>.dx does not match the intended level — actor 'BarrelN_<RND>' differs on property Base:
+         agents: {'dive-bar (1st)': 1}
+[   1x] /bin/bash: line N: build<PATH>: No such file or directory
+         agents: {'container-yard (2nd)': 1}
+[   1x] Command did not complete within its Ns timeout and was moved to the background (ID: bdukNpsk). Output is being written to: <PATH><ID><PATH> You will be notified when it completes. To check interim output, use Read on that file path.
+         agents: {'container-yard (2nd)': 1}
+[   1x] uedctl texture: error: argument sub: invalid choice: 'show' (choose from sync, list, search, tags, classify)
+         agents: {'container-yard (2nd)': 1}
+[   1x] swallow the sightline so the player cannot see the end.
+         agents: {'tube-platform (1st)': 1}
+[   1x] usage: uedctl brush build revolve [-h] [--point U,V] --angle UU [--segments N]
+         agents: {'tube-platform (1st)': 1}
+[   1x] usage: uedctl brush build extrude [-h] [--point U,V] --depth DEPTH
+         agents: {'tube-platform (1st)': 1}
+[   1x] ls: cannot access 'texture-catalog/': No such file or directory
+         agents: {'tube-platform (1st)': 1}
+[   1x] ls: cannot access 'texture-catalog/*': No such file or directory
+         agents: {'tube-platform (1st)': 1}
+[   1x] materialize for preview failed: materialize failed (nothing written): post-verify mismatch: on-disk /work/<ID>.dx does not match the intended level — actor 'BoreNorth_<RND>' is in the intended level but MISSING from the built map
+         agents: {'tube-platform (1st)': 1}
+[   1x] usage: uedctl brush apply-transform [-h]
+         agents: {'tube-platform (1st)': 1}
+[   1x] usage: uedctl brush poly set [-h] [--texture REF] [--add-flag FLAG]
+         agents: {'tube-platform (1st)': 1}
+[   1x] usage: uedctl brush poly align [-h] (--wall | --floor | --ring)
+         agents: {'tube-platform (1st)': 1}
+[   1x] uedctl: error: unrecognized arguments: --class
+         agents: {'tube-platform (1st)': 1}
+[   1x] Command did not complete within its Ns timeout and was moved to the background (ID: bfNmqhyaN). Output is being written to: <PATH><ID><PATH> You will be notified when it completes. To check interim output, use Read on that file path.
+         agents: {'tube-platform (1st)': 1}
+[   1x] Command did not complete within its Ns timeout and was moved to the background (ID: bhtwNpNd). Output is being written to: <PATH><ID><PATH> You will be notified when it completes. To check interim output, use Read on that file path.
+         agents: {'tube-platform (1st)': 1}
+[   1x] Command did not complete within its Ns timeout and was moved to the background (ID: bigjNhfbN). Output is being written to: <PATH><ID><PATH> You will be notified when it completes. To check interim output, use Read on that file path.
+         agents: {'tube-platform (1st)': 1}
+[   1x] materialize for preview failed: materialize failed (nothing written): exec OBJ LIST CLASS=Class failed:
+         agents: {'tube-platform (1st)': 1}
+[   1x] native transform"). Reproducing rotated input bit-exactly requires porting UnrealEd's
+         agents: {'spike-headless': 1}
+[   1x] uedctl/dispatch.py:N:        print("--fov requires --native (the in-game tier renders at the game's own FOV)",
+         agents: {'spike-headless': 1}
+[   1x] covariant normal map's per-axis reciprocals must be built at fN to match it (§N §N)."""
+         agents: {'spike-headless': 1}
+[   1x] Every parse error raises `SchemaError` (the no-fallback contract): a malformed package is a
+         agents: {'spike-headless': 1}
+[   1x] class SchemaError(ValueError):
+         agents: {'spike-headless': 1}
+[   1x] degrade. (Canonical home here; `uprops` re-exports it, so `uprops.SchemaError` remains
+         agents: {'spike-headless': 1}
+[   1x] N. Under load (N cores, three concurrent builds) the editor wedges constantly. Observed failures: `OBJ DEPENDENCIES PACKAGE=MyLevel did not complete within N attempts (Ns)`, and one `MAP SAVE never produced a finished file ... after Ns` whe
+         agents: {'spike-headless': 1}
+[   1x] materialize failed (nothing written): post-verify mismatch: on-disk /work/<ID>.dx does not match the intended level — actor 'RoomA_<RND>' differs in GEOMETRY at line N:
+         agents: {'spike-headless': 1}
+[   1x] ls: cannot access '/work/xN_lit.dx': No such file or directory
+         agents: {'spike-headless': 1}
+[   1x] N-    """The native CSG/BSP path cannot yet build this level (N-N port incomplete)."""
+         agents: {'spike-headless': 1}
+[   1x] N-    (`movers.is_mover`).  An index that cannot resolve `Engine.Mover` raises rather than silently
+         agents: {'spike-headless': 1}
+[   1x] ls: cannot access '_scratch<PATH>': No such file or directory
+         agents: {'spike-headless': 1}
+[   1x] you get a "paths too close" error, and ≥N from corners). Each node must be **visible from its
+         agents: {'container-yard (1st)': 1}
+[   1x] Command did not complete within its Ns timeout and was moved to the background (ID: bNnNqpNe). Output is being written to: <PATH><ID><PATH> You will be notified when it completes. To check interim output, use Read on that file path.
+         agents: {'container-yard (1st)': 1}
+[   1x] materialize for preview failed: materialize failed (nothing written): post-verify mismatch: on-disk /work/<ID>.dx does not match the intended level — actor 'LevelInfoDX_<RND>' differs on property MapName:
+         agents: {'container-yard (1st)': 1}
+[   1x] N. If a preview dies with `OBJ DEPENDENCIES PACKAGE=MyLevel did not complete within N attempts` or a similar materialize failure, that's transient editor flakiness under load, not a real error: sleep ~Ns and retry the same command, up to ~N
+         agents: {'container-yard (1st)': 1}
+[   1x] uedctl: error: unrecognized arguments: TrackTrench_<RND> RoomPlant_<RND> PassPlant_<RND> NicheBay_<RND> VentDuct_<RND>
+         agents: {'tube-platform (2nd)': 1}
+[   1x] usage: uedctl actor bbox [-h] [--field {min,max,size,center} | --json]
+         agents: {'tube-platform (2nd)': 1}
+[   1x] uedctl: error: unrecognized arguments: NanoKey_<RND> SecurityCamera_<RND> VentGrille_<RND>
+         agents: {'tube-platform (2nd)': 1}
+[   1x] uedctl: error: unrecognized arguments: DeusExLevelInfo_<RND>
+         agents: {'tube-platform (2nd)': 1}
+[   1x] usage: uedctl actor move [-h] (--to X,Y,Z | --by DX,DY,DZ) [--tree KIND/NAME]
+         agents: {'tube-platform (2nd)': 1}
+[   1x] uedctl: error: unrecognized arguments: --folder props.plant
+         agents: {'tube-platform (2nd)': 1}
+[   1x] usage: uedctl actor build [-h] [--at X,Y,Z] [--base-name BASE_NAME]
+         agents: {'tube-platform (2nd)': 1}
+[   1x] uedctl: error: unrecognized arguments: --defaults
+         agents: {'dive-bar (2nd)': 1}
