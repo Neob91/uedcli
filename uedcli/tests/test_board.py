@@ -7,10 +7,10 @@ the directory it sits in, and an item advances by `git mv`. Each item directory 
 
 WHY THESE ARE TESTS AND NOT PROSE. Three of them guard things that fail silently otherwise:
 
-* **A question file under `to-plan/`/`to-build/`** (:test_no_questions_past_to_spec) means an item is
-  queued as ready while a decision it depends on is unmade. The gate keys on the file being GONE
-  rather than on its answer being filled in, so folding the decision into a durable doc — not merely
-  typing a reply — is what unblocks the item.
+* **A question file is reachable from every stage** (:test_a_question_never_moves_its_item). A
+  blocked item keeps its stage — the owner ruled that a question is filed against the item where it
+  is, never bounced — so the only way a blocker hides is by sitting somewhere `bin/board questions`
+  does not look.
 * **A dangling `board item` reference** (:test_slug_references_resolve). Slug references replaced
   ~400 path citations precisely because a path into `specs/` rots silently; that trade only pays if
   a dangling slug is loud.
@@ -35,9 +35,6 @@ REPO = Path(__file__).resolve().parents[2]
 BOARD = REPO / "dev/docs/board"
 
 STAGES = ("inbox", "to-spec", "to-spike", "to-plan", "to-build", "someday", "stale", "done")
-#: Stages where a live decision would be queued as ready. `to-spec/` is deliberately absent —
-#: drafting a spec is how questions get found, so gating it would be circular.
-GATED = ("to-plan", "to-build")
 
 REQUIRED_KEYS = {"priority", "kind", "summary"}
 OPTIONAL_KEYS = {"depends-on", "spikes"}
@@ -230,23 +227,30 @@ def test_question_files_are_well_formed(item: Path) -> None:
         assert re.search(r"^## Answer\s*$", text, re.M), f"{_rel(q)}: no `## Answer` section"
 
 
-@pytest.mark.parametrize("stage", GATED)
-def test_no_questions_past_to_spec(stage: str) -> None:
-    """An item with an unresolved question may not be queued for planning or building.
+def test_a_question_never_moves_its_item() -> None:
+    """A blocked item keeps its stage — so there is nothing here to forbid, only to surface.
 
-    Keyed on the file's ABSENCE, deliberately. Keying on "the answer is filled in" would unblock the
-    item the moment the owner typed a reply — before any durable doc recorded the decision, and
-    before the spec absorbed it.
+    An earlier revision asserted that no item under `to-plan/`/`to-build/` may hold a question file,
+    on the theory that a blocked item must not sit in the build queue looking ready. **The owner
+    ruled otherwise:** a question is filed against the item where it is, and the item does not move.
+    Bouncing it would shelve finished spec or plan work over one open decision.
+
+    What replaces the gate is visibility, not relocation: `bin/board questions` lists every open
+    question wherever it lives, so this test only checks that questions are reachable from any
+    stage — a question directory in a stage the tool does not scan would be invisible, which is the
+    real failure mode now.
     """
-    blocked = [
-        f"{_rel(item)} ({', '.join(q.name for q in sorted((item / 'questions').glob('*.md')))})"
-        for item in (BOARD / stage).glob("*")
-        if item.is_dir() and (item / "questions").is_dir() and any((item / "questions").glob("*.md"))
-    ]
-    assert not blocked, (
-        f"items in `{stage}/` have open questions and must move back to `to-spec/`:\n  "
-        + "\n  ".join(blocked)
-    )
+    scanned = set(STAGES)
+    with_questions = {
+        item.parent.name
+        for item in BOARD.glob("*/*/questions")
+        if item.is_dir() and any(item.glob("*.md"))
+    }
+    unreachable = {
+        q.parent.parent.parent.name for q in BOARD.glob("*/*/questions/*.md")
+    } - scanned
+    assert not unreachable, f"question files in stages `bin/board questions` does not scan: {unreachable}"
+    assert with_questions or True  # no lower bound: an empty board legitimately has none
 
 
 @pytest.mark.parametrize("doc", _tracked(*_REF_SUFFIXES), ids=_rel)

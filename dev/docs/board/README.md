@@ -59,18 +59,22 @@ An item's path contains its stage, and the stage changes. So a code comment, a d
 or another item's `depends-on` all name the **slug**:
 
 ```
-# see board item `level-import`
+# see board item `level-import-native-editor-less-dx-unr-t3d`
 ```
 
 A slug is permanent and unique across the whole board; it is never renamed. `test_board.py` checks
 every such reference resolves, which is what makes this safer than the paths it replaced — a stale
 path citation rots silently, a stale slug reddens the suite.
 
-## Questions block an item
+## Questions
 
 A file under `questions/` is **a blocker**, not a discussion log: the thing that must be answered
-before the item can be planned or built. An item with any question file **may not sit in `to-plan/`
-or `to-build/`** — it goes back to `to-spec/`.
+before the item can be planned or built.
+
+**The item does not move.** A question raised against an item is filed in that item's own
+`questions/` directory and the item stays in whatever stage it is in. It is not bounced to the
+inbox and not sent back to `to-spec/` — the work already done stays where it is, and
+`bin/board questions` is how a blocked item is found.
 
 The owner answers by writing into the file's empty `## Answer` section. An agent then folds the
 decision into its durable home (`direction/` for the owner's decisions, `rationale/` for an agent's),

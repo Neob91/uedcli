@@ -29,7 +29,7 @@ bounce-to-inbox rule at the `inbox/` bullet contradicts `board/README.md`'s boun
 name `to-build.md`; and the `bin/board` section still says the board "is migrating … both shapes
 exist".
 
-**`board/README.md`'s own worked example does not resolve** — it writes ``board item `level-import``
+**`board/README.md`'s own worked example does not resolve** — it writes the reference form with the slug `level-import`
 but the real slug is `level-import-native-editor-less-dx-unr-t3d`. The test cannot catch it because
 that file is on the exemption list for documenting the form.
 

@@ -14,7 +14,7 @@ in the `decisions.md` addendum cited below.
 plan-review addendum (D11–D12). D1–D10 are Andrzej's, made in the speccing Q&A; those entries are the durable record of the choices
 *and the alternatives rejected*.
 **Board item:** [`to-build/`](../board/to-build/) #12 — on-deck, both gates passed. Triaged
-forward through `to-plan.md` from [`to-spec.md`](../board/to-spec.md), where it
+forward through `to-plan.md` from [`to-spec/`](../board/to-spec/), where it
 was raised by the corpus brush-idiom study
 ([`specs/2026-07-24-corpus-brush-idioms.md`](2026-07-24-corpus-brush-idioms.md) §7 gap 6).
 
@@ -117,7 +117,7 @@ counter-clockwise profile in `(u,v)` always has its 2D normal pointing along `+a
 is the revolve axis of §4, spelled out here so the reader need not derive it.
 
 This is also the naming precedent for the parked `brush build cylinder/cone --axis x|y|z` item in
-[`to-spec.md`](../board/to-spec.md) — that item should adopt this flag name and this table rather than
+[`to-spec/`](../board/to-spec/) — that item should adopt this flag name and this table rather than
 inventing a second spelling. Both exist to remove the same problem: without them the author must
 reason about which of pitch/yaw/roll lays a +Z shape onto Y and reach for `--rotate`.
 

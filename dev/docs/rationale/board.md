@@ -70,12 +70,19 @@ edit, reintroducing the write contention.
 
 **Refs.** Spec §2.9, §3.3. `uedcli/tests/test_board.py::test_slug_references_resolve`.
 
-## The question gate keys on the file's ABSENCE
+## A question never moves its item
 
-**Why it is this way.** If the gate keyed on "the answer is non-empty", typing an answer would
-unblock the item immediately — before any durable doc recorded the decision and before the spec
-absorbed it. Keying on the file being gone makes the durable write a precondition of planning. It
-also means the test needs no emptiness parsing and cannot be fooled by a malformed question file.
+**Why it is this way.** Owner ruling: a question is filed against the item where it is, and the
+item keeps its stage. Bouncing it — to the inbox, as the old board did, or back to `to-spec/`, as an
+earlier revision of this design did — shelves finished spec or plan work over one open decision.
+Visibility replaces relocation: `bin/board questions` finds a blocker wherever it lives, so the only
+way one can hide is by sitting in a stage the tool does not scan, which is what the test now checks.
+
+**What still keys on the file's ABSENCE** is the *unblocking*, not the item's position. Folding the
+answer into its durable home and deleting the question file is what clears the blocker; a non-empty
+`## Answer` alone does not, or typing a reply would clear it before any durable doc recorded the
+decision. That also means the check needs no emptiness parsing and cannot be fooled by a malformed
+question file.
 
 A missing `## Answer` section is a **failure**, not an open question: worded the other way round, a
 malformed file would satisfy the gate.
