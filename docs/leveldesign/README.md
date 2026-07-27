@@ -66,8 +66,8 @@ same verbs you author with:
 level import ~/DeusEx/Maps/02_NYC_Street.dx --tree level/nyc-study
 export UEDCLI_LEVEL=nyc-study
 
-level status                                  # how big is it, really
-actor find --class DeusEx.DeusExMover          # every door and elevator
+level status                                   # how big is it, really
+actor find --subclass-of DeusEx.DeusExMover    # every door and elevator
 actor show LevelInfo0                          # zone, ambience, mission setup
 brush poly find <a-brush-name>                 # how a wall is textured
 ```

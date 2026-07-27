@@ -1289,7 +1289,7 @@ level import MAPFILE --tree KIND/NAME [--overwrite]
 ```
 level import ~/DeusEx/Maps/02_NYC_Street.dx --tree level/nyc-study
 export UEDCLI_LEVEL=nyc-study
-actor find --class Engine.Light            # now query it like any other level
+actor find --subclass-of Engine.Light      # now query it like any other level
 ```
 
 ## What import leaves out
