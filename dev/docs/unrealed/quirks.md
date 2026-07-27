@@ -58,10 +58,10 @@ behavior is in [`rendering.md`](rendering.md). Evidence: `../../dev/docs/spikes/
   guessing from a fixed sleep. See `qualify.dump_obj_dependencies` and
   `dev/docs/spikes/2026-06-20-obj-dependencies-untextured-poly-correlation.md`.
 
-### The GUI editor cannot run under x86-32 EMULATION; UCC can 🔬
+### Under x86-32 emulation the editor GPFs at startup — but it is RECOVERABLE 🔬
 
 On an **aarch64** host (Apple Silicon), `docker build --platform linux/amd64` of `uned/Dockerfile`
-succeeds and wine runs, but **`unrealed.exe` dies at startup every time**:
+builds and runs, and `unrealed.exe` **always** GPFs during startup:
 
 ```
 General protection fault!
@@ -69,21 +69,69 @@ History: SyntaxHighlighting::AddQuote <- SyntaxHighlighting::Setup
       <- WCodeFrame::OnCreate <- WM_CREATE
 ```
 
-It is deterministic, not the intermittent startup flakiness `editor.ensure_editor` retries around —
-four reap-and-respin attempts all crashed identically. Verified on the **unmodified** image with no
-asset mounts, no ini changes and no console command issued, so nothing about a caller's setup is
-implicated: the fault is in the editor creating its UnrealScript code-editor window
-(`WCodeFrame`) under `qemu-i386`.
+Deterministic, not the intermittent flakiness `editor.ensure_editor` retries around — four
+reap-and-respin attempts crashed identically, on the unmodified image with no asset mounts and no
+console command issued. The fault is in creating the UnrealScript code-editor window (`WCodeFrame`).
 
-**`UCC.exe` is unaffected** — a console app that creates no windows. In the very same container, under
-the same emulation, `xvfb-run -a wine UCC.exe batchexport <map>.dx Level T3D 'Z:\work\out'` exported
-retail maps successfully. That is the control that isolates the fault to GUI window creation rather
-than to wine or the emulation generally.
+**It is not fatal.** Dismiss it and the editor carries on:
 
-**Consequence for tooling:** on such a host the **offline/UCC** routes work (native decode, map
-export, `batchexport` textures) and every route needing the live editor does not — `level
-materialize`, `level preview --game`, and any `MAP EXPORT`/`EDIT COPY` oracle. Those need an x86-64
-host. (2026-07-27)
+1. `xdotool key alt+i` on the `Critical Error` window (**Ignore**) — a mouse click on the button does
+   not register; the accelerator does.
+2. `xdotool key alt+y` on the `Question` window that follows ("UnrealEd will now continue in Recovery
+   Mode… Click any option to continue").
+
+The title then reads `[Recovery Mode]` and the editor is fully drivable: `MAP LOAD`, `ACTOR SELECT
+ALL` and `EDIT COPY` all work, viewports render under llvmpipe, and `UCC.exe batchexport` works
+independently (it is a console app and never hits this path). Recovery Mode does spam
+`Init: Safely failed to initialize Galaxy: 15` — harmless audio init.
+
+**`_wait_ready` does not notice any of this**: it requires only a numeric `window=<id>`, which the
+crashed-but-alive editor reports, so uedcli calls such an editor READY. `wine_ctl`'s `_assert_alive`
+then refuses every command while the dialog is open ("UnrealEd has crashed"). So on this hardware a
+caller must dismiss the two dialogs between "ready" and the first command.
+
+### Driving the command box: two traps that make input vanish silently 🔬
+
+Both cost real time on 2026-07-27, and both look identical from the outside — `wine_ctl exec` returns
+0, nothing happens, no error anywhere.
+
+- **fluxbox's toolbar covers the command bar.** The editor maximizes to the full screen, so its
+  bottom bar sits under the panel and clicks there hit the panel. Fix: unmaximize BEFORE resizing —
+  `wmctrl -r <title> -b remove,maximized_vert,maximized_horz` then
+  `wmctrl -r <title> -e 0,0,0,1600,1120`; a bare `xdotool windowsize` is ignored while maximized.
+- **`wine_ctl` measures from the FRAME origin, the layout from the CLIENT origin.** `wmctrl -lG`
+  reported the frame at `y=39` while `xwininfo -id <wid>` reported `Absolute upper-left Y: 20` — a
+  19 px discrepancy, enough to land one row below the box. At a 1120-tall window `wine_ctl`'s own
+  default (`h-36`) is correct; overriding `UED_CMD_Y` to a client-relative value reintroduces the
+  error.
+
+**Verify input landed rather than guessing coordinates:** type a distinctive marker
+(`xdotool type ZZMARKERZZ`), then `import -window <wid>` and crop the bar. Three coordinate guesses
+produced three silent no-ops; the marker found the truth in one step. Stray clicks are not harmless —
+one closed the Level MDI child (the title loses `- [Level]`).
+
+### `EDIT COPY` is NOT equivalent to `MAP EXPORT`/`batchexport` 🔬
+
+Measured on retail `DXOnly.dx` (2026-07-27): `MAP LOAD` → `ACTOR SELECT ALL` → `EDIT COPY` (clipboard
+via `xclip`) against `UCC.exe batchexport` of the same map. Geometry is identical — 2 brushes,
+7 polygons each — and after normalising the package stem the entire diff is 29 lines, all of it these
+three differences:
+
+| | `EDIT COPY` | `batchexport` |
+|--------------------------|--------------------------------|---
+| `Engine.LevelInfo` actor | **absent** (11 actors) | present (12 actors)
+| object-ref package stem | `MyLevel.LevelInfo0` | `DXOnly.LevelInfo0`
+| `bSelected=True` | on 8 actors | never emitted
+
+**The missing `LevelInfo` is the load-bearing one.** `ACTOR SELECT ALL` does not select the level-info
+singleton, so a selection-scoped copy cannot contain it — and materialize REQUIRES a `LevelInfo` (a
+level with none inherits `MAP NEW`'s default, which then fails post-verify). `DeusExLevelInfo0` *is*
+copied; the base `LevelInfo0` is not. `bSelected` is editor-transient selection state, meaningless in
+a trunk. The stem difference means the clipboard names refs after the in-editor package (`MyLevel`)
+rather than the file's own name.
+
+So the two are interchangeable as an oracle **only** for actor properties and geometry, and never for
+the level's completeness.
 
 ## Viewport focus & input model (UED22)
 - **UED22's viewport input is a focus-bound "activate-then-operate" model: the first mouse gesture
