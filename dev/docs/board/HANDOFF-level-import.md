@@ -301,8 +301,8 @@ this machine). Whether generating and committing that pairing is acceptable is a
   **Identical.** No new failures, no new skips, no new tests.
 - The one failure is the **pre-existing** `test_doc_links.py::
   test_prose_citations_into_the_new_trees_resolve[dev/docs/plans/2026-07-27-actor-preview-faces-plan.md]`,
-  caused by another session's in-flight work citing a `rationale/preview.md` that does not exist
-  yet. **It is not this branch's, and it must not be "fixed" here.**
+  caused by another session's in-flight work citing a not-yet-written preview rationale topic.
+  **It is not this branch's, and it must not be "fixed" here.**
 - Run with `bin/test` from the worktree root, never bare `pytest` (`dev/docs/rules/tests.md`).
 
 ---
