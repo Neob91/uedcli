@@ -6,7 +6,7 @@ summary = "`level import` — native (editor-less) `.dx`/`.unr` → T3D ingestio
 
 # `level import` — native (editor-less) `.dx`/`.unr` → T3D ingestion — BUILT, with ONE remnant
 
-(2026-07-27, was §8 on `board/to-build/`; spec `plan.md` v3, plan
+(2026-07-27, was §8 on `board/to-build/`; spec `spec.md` v3, plan
 `plan.md`). `level import MAPFILE --tree level|stash/NAME
 [--overwrite]` decodes a compiled map file into a new T3D tree with no editor, no container and no
 game: the level's own `Actors` array gives the order, each actor's `StateFrame` is skipped and its

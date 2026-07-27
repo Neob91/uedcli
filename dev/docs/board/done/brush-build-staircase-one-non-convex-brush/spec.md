@@ -237,4 +237,4 @@ non-convex brush; tiled convex sides; interval-parity watertight; the falsified 
 2. ~~Drop `stair_*` from live parity?~~ **Resolved (Andrzej 2026-07-21): drop from the live suite;
    keep the offline value goldens.**
 3. Native-convex-assumption fix — scope the follow-up board item (decompose-to-convex vs guard+warn).
-   Tracked as an `board/inbox/` `[implement]` item.
+   Tracked as a `board/inbox/` `[implement]` item.

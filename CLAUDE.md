@@ -660,7 +660,10 @@ paragraph above demands: cut the padding, not the explanation. *(Owner ruling, 2
 
 **A spec or plan lives INSIDE the board item it belongs to** —
 `dev/docs/board/<stage>/<slug>/spec.md` and `plan.md`, alongside that item's
-`overview.md`. There is no separate specs or plans tree. **Both are ephemeral**:
+`overview.md`. There is no separate specs or plans tree. A few items carry a
+**second** spec, from work that was specced twice or split in two; it is named
+`spec-<topic>.md` and is **not** covered by the ephemeral exemption below — the
+link checker checks it in every stage. **Both are ephemeral**:
 scratch for designing and sequencing one piece of work, expected to go stale or
 get deleted once that work lands, and deleted with the item when it is pruned
 from `done/`. They are NEVER the durable record. Once something is implemented,
@@ -765,8 +768,9 @@ rules:
 The backlog is a set of **stage queues** under `dev/docs/board/`, each named
 for the *next action* an item needs (read `dev/docs/board/README.md` for the
 full flow). **Each item is a DIRECTORY** — `<stage>/<slug>/overview.md`, plus
-optional `spec.md`, `plan.md` and `questions/<q>.md` — and it advances with a
-single `git mv` into the next stage:
+optional `spec.md`, `plan.md`, a second `spec-<topic>.md` where one exists, and
+`questions/<q>.md` — and it advances with a single `git mv` into the next
+stage:
 
 - `inbox/` — raw, **un-triaged** capture; the pre-pipeline pool AND the
   head of stream (not a queue). Everything lands here first: ideas/gaps/

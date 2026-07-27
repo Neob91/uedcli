@@ -6,7 +6,7 @@ Instruction-level evidence: `re-raw-zones/fp-classification-sites.md`,
 `re-raw-zones/bspbuild-splitpolylist-decode.md`, `41-fp-model-x87-vs-sse.md`, `42-bspoptgeom-decode.md`.
 Confidence legend: ✅ uedcli-used/live-verified · 🔬 live-probed (disassembly) · 📖 binary-extracted.
 
-This section converts the four Phase-0 unknowns in `board item `native-bsp-exact-topology-parity-byte-identical` §Phase 0` into
+This section converts the four Phase-0 unknowns in board item `native-bsp-exact-topology-parity-byte-identical`, §Phase 0, into
 verdicts. It does NOT start the port.
 
 ---

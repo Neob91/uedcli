@@ -61,4 +61,4 @@ from stdin.
 
 ## Docs / board
 - `architecture.md` Commands: note `actor order` + `actor add --order` and the `save(ranks=)` seam.
-- Move the board item `board/to-plan/` → `board/done/`.
+- Move the item from `board/to-plan/` to `board/done/`.

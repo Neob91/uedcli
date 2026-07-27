@@ -21,12 +21,12 @@ legitimately rather than dropped:
    faces the build round. Fix: mirror the guard onto moment 1.
 3. **Five forward-looking docs still instruct the OLD gate** (the 2026-07-25 sweep missed them;
    each restates a reviewer count instead of citing `CLAUDE.md`, which the gate now forbids):
-   ``plan.md`:22-23`,
+   `plan.md`:22-23,
    `dev/docs/board/to-plan/:75`,
-   ``spec.md`:319`,
+   `spec.md`:319,
    `Tools/uplayctl/docs/dev/plans/2026-07-12-…-place-ids-plan.md:249-250`,
    `Tools/uplayctl/docs/dev/specs/2026-07-02-navigation-exits-followpath-rooms-design.md:246-247`.
-4. **Contradiction to reconcile:** ``spec.md`:3` says its spec
+4. **Contradiction to reconcile:** `spec.md`:3 says its spec
    gate is "pending" while `board/to-plan/:69` calls the same spec "cold-review-gated +
    revised". One is wrong, and either way it costs or skips a whole spec round.
 5. **Both 2026-07-25 ledger entries were reworded in place after being pushed** (the plan-round

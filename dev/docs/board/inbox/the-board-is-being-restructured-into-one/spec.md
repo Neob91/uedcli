@@ -1,6 +1,6 @@
 # Spec — the board becomes one directory per work item
 
-**Board item:** [`dev/docs/board/to-plan/`](dev/docs/board/to-plan/). **Owner decisions:** §2 (implemented as
+**Belongs to** board item `the-board-becomes-one-directory-per-work-item`. **Owner decisions:** §2 (implemented as
 given). **Agent decisions:** §3, durable home in §6.
 
 **Measurements are pinned to HEAD at writing (`1969b0c`), which includes this spec itself** — so the
@@ -197,8 +197,9 @@ durable doc, a spike, another item's frontmatter all say ``board item `<slug>` `
 - **Exemptions, required.** The docs that *define* the form must write it. `board/README.md`,
   `CLAUDE.md`, `dev/docs/rationale/board.md` and the test module are exempt, as
   `test_doc_links.py`'s `_MAY_NAME_DELETED` already does for the same class of problem. One live
-  counter-example exists: `board item `csg-order-control-actor-order-actor-add-order`:64` writes ``board item `board/to-plan/```
-  — the phrase followed by a backticked *filename*.
+  counter-example existed: the plan in board item `csg-order-control-actor-order-actor-add-order`
+  wrote the phrase followed by a backticked *filename* rather than a slug. It has since been
+  reworded.
 - **Test 9 (§3.7) asserts every reference resolves** — a path citation into `specs/` rots silently
   today; a dangling slug reddens the suite.
 

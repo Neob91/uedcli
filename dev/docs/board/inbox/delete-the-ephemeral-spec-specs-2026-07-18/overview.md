@@ -1,10 +1,10 @@
 +++
 priority = "p3"
 kind = "chore"
-summary = "Delete the ephemeral spec `spec.md` + plan `plan.md`"
+summary = "Delete this item’s own ephemeral spec.md + plan.md — the unify-T3D-trees work landed"
 +++
 
-# Delete the ephemeral spec `spec.md` + plan `plan.md`
+# Delete this item’s own ephemeral `spec.md` + `plan.md`
 
 — the unify-T3D-trees work landed (2026-07-19); the
 durable outcome is folded into `architecture.md`/`usage.md` and `decisions.md`. Kept for now as a

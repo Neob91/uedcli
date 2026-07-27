@@ -638,7 +638,7 @@ cross-cutting axis a single folder hierarchy can't express (a torch is at `castl
 mechanism, same trunk-only scope, same never-emitted-to-the-map rule, but a **sorted set** rather than
 one path. They are **orthogonal** to the folder, the T3D `Group=` prop, and the T3D `Tag=` prop —
 named `label` deliberately, since `tag` would collide with `Engine.Actor.Tag`. Spec
-board item `re-evaluate-whether-reject-nonlevel-target`; plan in board item `re-evaluate-whether-reject-nonlevel-target`; decisions.md
+and plan both in board item `re-evaluate-whether-reject-nonlevel-target`; decisions.md
 2026-07-22 20:49 UTC. This first cut is **trunk + `duplicate` only** — no stash/prefab labels channel
 (deferred), so the label-editing verbs reject `--tree stash|prefab`.
 
@@ -2034,7 +2034,7 @@ port, which never calls `point_in_convex` (though `bspcsg.rs` flags a non-convex
 unhandled case of its convex world-seed shortcut, so a concave brush should not lead a level's
 adds). This joins the already-documented ~11% native solidity
 divergence on walls/steps (KNOWN GAP below); the `csg.rs:61` comment "DX brush builders emit convex
-brushes, so this is exact" is now **falsified for builder output**, with an `board/inbox/` follow-up to
+brushes, so this is exact" is now **falsified for builder output**, with a `board/inbox/` follow-up to
 decompose non-convex builder brushes into convex pieces (or guard+warn) on the native path.
 The convex CSG shapes (cube/cylinder/cone) were validated live
 (paste→rebuild→select) on parallel ephemeral editors — see `parallel-editors.md`; the single-brush

@@ -1,5 +1,6 @@
-"""`level preview --game` — the faithful in-game backend (spec and plan both in
-board item `level-preview-game`; the spec was gate-folded 2026-07-16).
+"""`level preview --game` — the faithful in-game backend. Its spec is
+`spec-ingame-preview-design.md` in board item `level-preview-game` (gate-folded 2026-07-16),
+alongside that item's `plan.md`.
 
 Drives a WARM per-user GAME container (`uedcli-game`, built on demand by
 `uedcli/game/build-image.sh`), whose console-spawned TCP link (`UedPreview.u`) freezes and

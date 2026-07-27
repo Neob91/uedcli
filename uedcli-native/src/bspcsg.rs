@@ -1735,8 +1735,8 @@ fn bsp_build(model: &mut Model, polys: Vec<FPoly>) -> Result<(), BuildError> {
 
 // --- driver: bspBrushCSG ---------------------------------------------------------------------
 
-/// `bspValidateBrush` link phase (`Editor.dll 0x37290`, decoded 2026-07-19 — `specs/2026-07-19-
-/// unatco-dome-csg-divergence.md`): assign each brush poly a surf-link `iLink` so that COPLANAR,
+/// `bspValidateBrush` link phase (`Editor.dll 0x37290`, decoded 2026-07-19 —
+/// board item `92-stage-2-done`): assign each brush poly a surf-link `iLink` so that COPLANAR,
 /// same-facing faces of ONE brush share a single `FBspSurf`.  UnrealEd runs this when a brush is
 /// built/loaded; native's T3D re-ingest never did, so a brush with several coplanar same-plane faces
 /// (e.g. the tessellated dome cap — 9 authored `(0,0,1)` facets) gave each facet its OWN surf, which

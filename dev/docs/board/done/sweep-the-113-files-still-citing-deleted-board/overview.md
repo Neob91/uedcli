@@ -6,9 +6,14 @@ summary = "Done — the tree no longer cites a deleted board file or a deleted s
 
 # Sweep the files still citing deleted board paths
 
-**Done 2026-07-27.** Both censuses in the migration's done-when now return nothing outside the two
-files that may not be touched (`decisions.md`, frozen; `2026-06-20-open-questions-for-andrzej.md`,
-the owner's).
+**Done 2026-07-27.** Both censuses in the migration's done-when now return only files that name a
+deleted board path deliberately:
+
+- `dev/docs/decisions.md` — frozen, may never be edited.
+- `dev/docs/2026-06-20-open-questions-for-andrzej.md` — the owner's, not to be touched.
+- `dev/docs/rationale/board.md` and `uedcli/tests/test_board.py` — both *explain* the old shape
+  ("`_on_deck()` used to read `board/to-build.md`"), which is their job. Naming the old file is the
+  point of the sentence, so neither is rot.
 
 What was repointed: 392 board-file citations became the stage directory (`board/inbox/`), 240
 spec/plan path citations became ``board item `<slug>` `` — or a plain relative filename where the

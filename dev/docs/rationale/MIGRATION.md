@@ -125,9 +125,14 @@ not match, so it is checked in every stage).
 | `specs/2026-07-26-asset-catalog-audio-arm.md` | **no longer checked** — `board/to-spike/sound-corpus-remeasure/spec.md` |
 | `specs/2026-07-26-asset-catalog-class-arm.md` | **no longer checked** — `board/inbox/the-asset-catalog-class-arm-needs-four-changes/spec.md` |
 
-The nine that lost checking did so because the item that owns them is not in the build queue — the
+Eight of the nine lost checking because the item that owns them is not in the build queue — the
 same condition that made them exempt in the old shape, now read off the path instead of off a
 reference. A `git mv` into `to-build/` restores it with nothing to keep in sync.
+
+**The ninth is a real gap, not a consequence.** `plans/2026-07-25-unified-asset-catalog-plan.md` is
+the plan for board item `unified-asset-catalog`, which *is* in `to-build/` — but the plan was filed
+with the least-advanced live item that cited it, which is in `inbox/`, so it is exempt. Tracked as
+board item `a-to-build-item-s-plan-can-sit-outside-the`.
 
 ---
 
