@@ -14,11 +14,15 @@ output — that needs the UnrealEd container as an oracle and is the remaining `
 `dev/docs/board/inbox/`.
 
 Runtime scales with the corpus (a 2000-actor map decodes to megabytes of T3D), so the sweep is capped
-and reports what it skipped rather than silently sampling — set `UEDCLI_CORPUS_MAPS=0` for all of them.
+at `UEDCLI_CORPUS_MAPS` maps (default 6; `all` or `0` for the whole corpus). A cap raises a WARNING
+naming how many maps went uncovered, because pytest hides skip reasons by default and a bounded run
+that looks green otherwise reads as full coverage.
 """
 from __future__ import annotations
 
+import functools
 import os
+import warnings
 from pathlib import Path
 
 import pytest
@@ -29,9 +33,35 @@ from uedcli.tests.conftest import install_root
 from uedcli.upackage import load_package
 
 _UED22 = Path(__file__).resolve().parents[2] / "uned" / "UED22"
-# 0 = no cap. The default keeps a full-suite run to a few seconds per map while still crossing
-# several missions; the corpus is ~100 maps and decoding all of them takes minutes.
-_CAP = int(os.environ.get("UEDCLI_CORPUS_MAPS", "6"))
+# Classes come from the GAME's own `System/` when the corpus is present, not from the committed v69
+# editor packages. They genuinely disagree: `Engine.CameraPoint` is an `Engine.Actor` descendant in
+# the game's v68 `Engine.u` (CameraPoint → Keypoint → Actor → Object) and is UNKNOWN to UED22's v69
+# one, so resolving retail maps against UED22 makes two Endgame maps look like decode failures when
+# the decoder is right. Production resolves against the project's composed path, which includes the
+# game — so using the game here matches it.
+_GAME_SYSTEM = install_root() / "System"
+_CLASSES = _GAME_SYSTEM if (_GAME_SYSTEM / "Engine.u").is_file() else _UED22
+_CAP_ENV = "UEDCLI_CORPUS_MAPS"
+
+
+def _cap() -> int:
+    """How many corpus maps to sweep; `0` means all. Default 6.
+
+    Parsed defensively because this runs at IMPORT time, before any skip can apply: a bad value used
+    to raise `ValueError` during collection and abort the WHOLE session, including every unrelated
+    test file in the same run. `all` is the obvious thing to type given `0` means no cap, so it is
+    accepted rather than punished.
+    """
+    raw = (os.environ.get(_CAP_ENV) or "").strip()
+    if not raw:
+        return 6
+    if raw.casefold() in ("all", "0", "-1"):
+        return 0
+    if raw.isdigit():
+        return int(raw)
+    warnings.warn(f"{_CAP_ENV}={raw!r} is not a number or 'all' — sweeping the default 6 maps",
+                  stacklevel=2)
+    return 6
 
 
 def _corpus() -> list[Path]:
@@ -42,43 +72,71 @@ def _corpus() -> list[Path]:
 
 
 _ALL = _corpus()
-_MAPS = _ALL if _CAP <= 0 else _ALL[:_CAP]
+_CAPPED = _cap()
+_MAPS = _ALL if _CAPPED <= 0 else _ALL[:_CAPPED]
+
+# A capped sweep is announced as a WARNING, not just a skip reason. pytest prints skip reasons only
+# under `-rs`/`-ra`, which `pytest.ini` does not set — so on a 100-map corpus a default `bin/test`
+# showed `6 passed, 1 skipped` and nothing said 94 maps went uncovered. Warnings DO appear in the
+# default summary, which is the point: `CLAUDE.md` forbids a cap that reads as full coverage.
+if _ALL and len(_MAPS) < len(_ALL):
+    warnings.warn(
+        f"retail-corpus sweep covers {len(_MAPS)} of {len(_ALL)} maps — "
+        f"{len(_ALL) - len(_MAPS)} NOT decoded (set {_CAP_ENV}=all for the whole corpus)",
+        stacklevel=1)
 
 pytestmark = [
     pytest.mark.skipif(not _ALL, reason=f"no retail map corpus at {install_root() / 'Maps'} "
                                         "(user-supplied + gitignored; see "
                                         "dev/docs/deusex-assets-setup.md)"),
-    pytest.mark.skipif(not (_UED22 / "Engine.u").is_file(),
-                       reason="committed UED22/Engine.u not present"),
+    pytest.mark.skipif(not (_CLASSES / "Engine.u").is_file(),
+                       reason="no Engine.u in the game System/ or the committed UED22 tree"),
 ]
 
 
 def _resolver(name: str) -> str | None:
-    p = _UED22 / f"{name}.u"
+    p = _CLASSES / f"{name}.u"
     return str(p) if p.is_file() else None
 
 
-@pytest.fixture(scope="module")
-def index() -> ClassIndex:
-    paths = {p.stem.casefold(): str(p) for p in _UED22.glob("*.u")}
+@functools.lru_cache(maxsize=None)
+def _index() -> ClassIndex:
+    paths = {p.stem.casefold(): str(p) for p in _CLASSES.glob("*.u")}
     return ClassIndex(_paths=paths, _stems={k: Path(v).stem for k, v in paths.items()})
 
 
-def test_the_sweep_reports_what_it_left_out():
-    """A capped sweep says so, so a green run is never mistaken for full coverage.
+@functools.lru_cache(maxsize=None)
+def _decode(dx: Path) -> tuple[model.Level, tuple[str, ...], tuple[str, ...], tuple[str, ...]]:
+    """One map decoded → `(level after the scratch drop, dropped names, dropped classes, face
+    labels)`.
 
-    `CLAUDE.md` forbids a silent cap: bounding coverage and not saying it reads as "everything
-    passed". If this is the only signal you have, note the number.
+    Cached so the whole-corpus checks reuse the per-map decode instead of paying for it twice: a
+    retail map is megabytes of T3D and the decode is the expensive part.
     """
-    left_out = len(_ALL) - len(_MAPS)
-    assert _MAPS, "the corpus was found but the cap selected nothing"
-    if left_out:
-        pytest.skip(f"sweeping {len(_MAPS)} of {len(_ALL)} corpus maps "
-                    f"({left_out} not covered; set UEDCLI_CORPUS_MAPS=0 for all)")
+    pkg = load_package(str(dx), name=dx.stem)
+    text = mapimport.import_map(pkg, _index(), mapimport.ImportSchema(resolver=_resolver))
+    level = model.parse_t3d(text)
+    labels = {p.item for a in level.actors.values() if a.brush is not None
+              for p in a.brush.polys if p.item}
+    # Classes are read BEFORE the drop, so what was removed can be asserted rather than assumed.
+    classes = {n: (a.cls or "").rsplit(".", 1)[-1] for n, a in level.actors.items()}
+    dropped = mapimport.drop_editor_scratch(level)
+    return level, tuple(dropped), tuple(classes[n] for n in dropped), tuple(sorted(labels))
+
+
+def test_the_sweep_reports_what_it_left_out():
+    """The cap is announced, so a green run is never mistaken for full coverage.
+
+    The announcement itself is a module-level `warnings.warn` (visible in pytest's default summary,
+    unlike a skip reason). This test only guards the invariant that the cap selected something —
+    a cap of, say, 0 maps would otherwise make every sweep below vacuously absent.
+    """
+    assert _MAPS, f"the corpus holds {len(_ALL)} map(s) but the cap selected none"
+    assert len(_MAPS) <= len(_ALL)
 
 
 @pytest.mark.parametrize("dx", _MAPS, ids=lambda p: p.stem)
-def test_a_retail_map_decodes_and_round_trips(dx, index):
+def test_a_retail_map_decodes_and_round_trips(dx):
     """One shipped mission: decode → parse → drop scratch → re-emit, all clean.
 
     Every assertion here is something a decode can plausibly get wrong on real content while passing
@@ -86,28 +144,35 @@ def test_a_retail_map_decodes_and_round_trips(dx, index):
 
     * it decodes at all — no truncated body, no unhandled property type, no desync;
     * the emitted text parses back, and every actor named by the level's own order array arrives;
+    * only editor apparatus is dropped, and real content survives;
     * re-emitting through the canonical emitter is a fixed point, so an imported tree would not
-      churn on its first unrelated edit;
-    * the editor's scratch objects are gone and real content is not.
+      churn on its first unrelated edit.
     """
     pkg = load_package(str(dx), name=dx.stem)
-    schema = mapimport.ImportSchema(resolver=_resolver)
-
-    text = mapimport.import_map(pkg, index, schema)
-    level = model.parse_t3d(text)
+    text = mapimport.import_map(pkg, _index(), mapimport.ImportSchema(resolver=_resolver))
+    parsed = model.parse_t3d(text)
 
     # The decode's own integrity gates already refuse a partial result, so reaching here means the
     # Actors array and every actor body were fully consumed. Check the text survives the parser too.
     ordered = model.parse_t3d_actors(text)
-    assert len(ordered) == len(level.actors), (
-        f"{dx.name}: {len(ordered) - len(level.actors)} actor name(s) collide, so the level dict "
+    assert len(ordered) == len(parsed.actors), (
+        f"{dx.name}: {len(ordered) - len(parsed.actors)} actor name(s) collide, so the level dict "
         "silently dropped some — import would report success having lost content")
-    assert next(iter(level.actors.values())).cls == "LevelInfo", \
+    assert next(iter(parsed.actors.values())).cls == "LevelInfo", \
         f"{dx.name}: Actors[0] is not the LevelInfo singleton — the order array was misaligned"
 
-    dropped = mapimport.drop_editor_scratch(level)
+    level, dropped, dropped_classes, _labels = _decode(dx)
     assert level.actors, f"{dx.name}: every actor was dropped as editor scratch"
     assert not any(a.cls.rsplit(".", 1)[-1] == "Camera" for a in level.actors.values())
+    # Only apparatus went: every dropped actor was a Camera or a Brush (the builder brush). Without
+    # checking the CLASSES of what was removed, "the scratch drop worked" is satisfied by a map that
+    # simply had no cameras — and a drop that ate real content would pass too.
+    assert set(dropped_classes) <= {"Camera", "Brush"}, (
+        f"{dx.name}: the scratch drop removed {sorted(set(dropped_classes) - {'Camera', 'Brush'})} "
+        "— those are content classes, not editor apparatus")
+    # No assertion on the kept/dropped RATIO: a small map is mostly apparatus (the three committed
+    # fixtures drop 6-7 and keep 3), so "kept > dropped" holds only for real missions and would be a
+    # false invariant. What matters is WHAT went, which the class check above pins.
 
     once = {n: normalize.canonical_actor_t3d(a) for n, a in level.actors.items()}
     again = model.parse_t3d("Begin Map\n" + "\n".join(once.values()) + "\nEnd Map\n")
@@ -121,25 +186,24 @@ def test_a_retail_map_decodes_and_round_trips(dx, index):
     assert brushes, f"{dx.name}: no brush actors at all"
     assert any(a.brush.polys for a in brushes), \
         f"{dx.name}: every brush decoded with an EMPTY polygon list — the UPolys chain is broken"
-    print(f"{dx.name}: {len(level.actors)} actors kept, {len(dropped)} scratch dropped, "
-          f"{sum(len(a.brush.polys) for a in brushes)} polys")
 
 
-def test_named_faces_appear_across_the_corpus(index):
+def test_named_faces_appear_across_the_corpus():
     """`Item=OUTSIDE` — the editor's default face label — survives the decode on real maps.
 
-    This is the corpus-scale form of the name-table trap: `OUTSIDE` sits at name index 0 in these
-    packages, and a decoder that treats index 0 as "unset" deletes every occurrence with no error.
-    On the committed fixtures that is a handful of faces; here it is thousands, and its absence
-    across a whole mission is unmistakable.
+    The corpus-scale form of the name-table trap: `OUTSIDE` sits at name index 0 in these packages,
+    and a decoder that treats index 0 as "unset" deletes every occurrence with no error. On the
+    committed fixtures that is a handful of faces; across a mission it is thousands, so its absence
+    is unmistakable.
+
+    Covers every map the sweep covers (the decode is cached, so this costs nothing extra) — not a
+    silent sub-sample, which would undercut the very point of the cap warning.
     """
     labels: set[str] = set()
-    for dx in _MAPS[:2]:
-        pkg = load_package(str(dx), name=dx.stem)
-        text = mapimport.import_map(pkg, index, mapimport.ImportSchema(resolver=_resolver))
-        for a in model.parse_t3d(text).actors.values():
-            if a.brush is not None:
-                labels.update(p.item for p in a.brush.polys if p.item)
+    for dx in _MAPS:
+        labels.update(_decode(dx)[3])
+
+    assert labels, f"no polygon across {len(_MAPS)} retail map(s) carries ANY Item= label"
     assert "OUTSIDE" in labels, (
-        "no polygon in the sampled retail maps carries Item=OUTSIDE — name-table index 0 is being "
-        "treated as 'unset' again (dev/docs/unrealed/package-format.md)")
+        f"no polygon across {len(_MAPS)} retail map(s) carries Item=OUTSIDE — name-table index 0 is "
+        "being treated as 'unset' again (dev/docs/unrealed/package-format.md)")

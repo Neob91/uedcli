@@ -13,3 +13,10 @@ _scratch/
 # ripgrep hit and pytest collection. Precise, not blanket `.claude/`, so
 # settings.json stays tracked. (CLAUDE.md "Feature worktrees")
 .claude/worktrees/
+
+# The working game copy `dev/scripts/install-deusex-assets.sh` assembles, plus its
+# `.cache/<game>/{download,unpacked}` scratch. All COPYRIGHTED Deus Ex content and
+# multi-gigabyte installer artifacts — user-supplied, never committed. Both the
+# script and dev/docs/deusex-assets-setup.md state this is gitignored; until now
+# nothing enforced it, so a `--url` run left `?? dev/games/` in the tracked tree.
+dev/games/

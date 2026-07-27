@@ -93,6 +93,12 @@ if [[ ${#sums[@]} -gt 0 && ${#sums[@]} -ne ${#urls[@]} ]]; then
     echo "       the same order, or none at all." >&2
     exit 2
 fi
+# Reject a download-only flag alongside a local SOURCE rather than accepting and ignoring it: the
+# operator asked for something this invocation cannot do, and silence reads as "done".
+if [[ -n "$src" && "$redownload" == 1 ]]; then
+    echo "error: --redownload applies to --url downloads; SOURCE ($src) is a local path." >&2
+    exit 2
+fi
 if [[ -n "$src" && ! -d "$src" ]]; then
     echo "error: SOURCE is not a directory: $src" >&2
     exit 2
@@ -122,7 +128,8 @@ find_subdir() {  # <parent> <wanted-name>
     return 1
 }
 
-# Pick the copy engine: rsync (idempotent, shows what changed) if available, else cp -a.
+# Pick the copy engine: rsync (idempotent, shows what changed) if available, else cp -a + an
+# explicit wipe to match rsync's --delete (see sync_tree).
 have_rsync=0; command -v rsync >/dev/null 2>&1 && have_rsync=1
 
 # $DEST_ROOT is commonly a SYMLINK to wherever the operator keeps the game. A symlink whose target
@@ -146,10 +153,20 @@ check_dest_root() {
 
 sync_tree() {  # <src-dir> <dst-dir> [--delete]
     local s="$1" d="$2" del="${3:-}"
-    mkdir -p "$d"
     if [[ "$have_rsync" == 1 ]]; then
+        mkdir -p "$d"
         rsync -a ${del:+--delete} "$s"/ "$d"/
     else
+        # `cp -a` MERGES, so it cannot express --delete on its own. Emptying the destination first
+        # is what makes the no-rsync path mean the same thing as the rsync one. Without this, a
+        # re-run against a DIFFERENT source leaves both sources' files interleaved and exits 0 —
+        # e.g. switching from a wrong download to the right one leaves the wrong `.u` in place, and
+        # a stale package on the search path is exactly the kind of fault that shows up much later
+        # as an inexplicable build.
+        if [[ -n "$del" && -d "$d" ]]; then
+            find "$d" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+        fi
+        mkdir -p "$d"
         cp -a "$s"/. "$d"/
     fi
 }
@@ -176,12 +193,27 @@ url_filename() {  # <url>
 
 download_one() {  # <url> <dest> <expected-sha256-or-empty>
     local url="$1" dest="$2" want="$3" resume=()
-    if [[ -s "$dest" && "$redownload" != 1 ]]; then
+    # A `.part` is only resumable if it is a partial of THIS url. Without that check a leftover
+    # from a different URL (or an aborted redirect-to-HTML body) gets appended to and then promoted
+    # to $dest as a "complete" download — same size, wrong bytes, and every later run happily
+    # reuses it. The url is recorded beside the part; anything else is discarded and refetched.
+    local marker="$dest.url"
+    if [[ "$redownload" == 1 ]]; then
+        rm -f "$dest" "$dest.part" "$marker"
+    fi
+    if [[ -s "$dest" ]]; then
         echo "  reusing $(basename "$dest") (already downloaded; --redownload to refetch)"
     else
-        [[ "$redownload" == 1 ]] && rm -f "$dest" "$dest.part"
-        # Resume only when a partial exists: `-C -` on a fresh file makes some servers 416.
-        [[ -s "$dest.part" ]] && resume=(-C -)
+        if [[ -s "$dest.part" ]]; then
+            if [[ -f "$marker" && "$(cat "$marker")" == "$url" ]]; then
+                resume=(-C -)
+                echo "  resuming $(basename "$dest")"
+            else
+                echo "  discarding an unrelated partial $(basename "$dest").part"
+                rm -f "$dest.part"
+            fi
+        fi
+        printf '%s' "$url" > "$marker"
         echo "  fetching $url"
         curl -fL --retry 3 --retry-delay 2 --progress-bar "${resume[@]}" \
              -o "$dest.part" "$url"
@@ -194,8 +226,9 @@ download_one() {  # <url> <dest> <expected-sha256-or-empty>
             echo "error: $(basename "$dest") failed its --sha256 check." >&2
             echo "       expected $want" >&2
             echo "       got      $got" >&2
-            echo "       The download is corrupt or is not the file you expected; it has been kept" >&2
-            echo "       at $dest for inspection. Delete it and re-run to refetch." >&2
+            echo "       url      $url" >&2
+            echo "       Either the download is corrupt or it is not the file you expected. It is" >&2
+            echo "       kept at $dest for inspection; re-run with --redownload to refetch it." >&2
             exit 2
         fi
         echo "    sha256 ok"
@@ -213,12 +246,32 @@ unpack_one() {  # <file>
     low="$(printf '%s' "$base" | tr '[:upper:]' '[:lower:]')"
     case "$low" in
         *.ace|*.c[0-9][0-9])
-            echo "  $base: ACE volume, left for the ACE step" ;;
+            # Not extracted here — the ACE branch below is the single place `unace` is driven. It is
+            # SYMLINKED into the (freshly emptied) unpack dir so that branch and install-root
+            # discovery see only THIS run's volumes, not every ACE any earlier run fetched.
+            ln -sf "$f" "$UNPACK_DIR/$base"
+            echo "  $base: ACE volume, staged for the ACE step" ;;
+        # A payload volume belonging to ANOTHER artifact: a GOG installer's `setup_x-1.bin`, or a
+        # numbered split part. Its own unpacker reads it directly from the download dir, so it is
+        # not unpacked here — and it must not be an error, or the documented multi-part fetch could
+        # never work (the glob visits `-1.bin` before the `.exe` that consumes it).
+        *.bin|*.[0-9][0-9][0-9]|*.z[0-9][0-9]|*.r[0-9][0-9]|*.part[0-9]*.rar)
+            echo "  $base: companion volume, left for its own unpacker" ;;
         *.tar)        need_tool tar tar "unpack $base";  tar -xf "$f" -C "$UNPACK_DIR" ;;
-        *.tar.gz|*.tgz)   need_tool tar tar "unpack $base";  tar -xzf "$f" -C "$UNPACK_DIR" ;;
-        *.tar.bz2|*.tbz2) need_tool tar tar "unpack $base";  tar -xjf "$f" -C "$UNPACK_DIR" ;;
-        *.tar.xz|*.txz)   need_tool tar tar "unpack $base";  tar -xJf "$f" -C "$UNPACK_DIR" ;;
-        *.tar.zst)    need_tool tar tar "unpack $base";  tar --zstd -xf "$f" -C "$UNPACK_DIR" ;;
+        *.tar.gz|*.tgz)
+            need_tool tar tar "unpack $base"; need_tool gzip gzip "decompress $base"
+            tar -xzf "$f" -C "$UNPACK_DIR" ;;
+        # tar SHELLS OUT to the compressor, so checking only for `tar` lets a missing bzip2/xz/zstd
+        # escape as a raw "tar (child): xz: Cannot exec" instead of a named, actionable error.
+        *.tar.bz2|*.tbz2)
+            need_tool tar tar "unpack $base"; need_tool bzip2 bzip2 "decompress $base"
+            tar -xjf "$f" -C "$UNPACK_DIR" ;;
+        *.tar.xz|*.txz)
+            need_tool tar tar "unpack $base"; need_tool xz xz-utils "decompress $base"
+            tar -xJf "$f" -C "$UNPACK_DIR" ;;
+        *.tar.zst)
+            need_tool tar tar "unpack $base"; need_tool zstd zstd "decompress $base"
+            tar --zstd -xf "$f" -C "$UNPACK_DIR" ;;
         *.zip)        need_tool unzip unzip "unpack $base"; unzip -q -o "$f" -d "$UNPACK_DIR" ;;
         *.7z|*.iso)   need_tool 7z p7zip-full "unpack $base"; 7z x -y -o"$UNPACK_DIR" "$f" >/dev/null ;;
         *.rar)        need_tool unrar unrar "unpack $base"; unrar x -y "$f" "$UNPACK_DIR/" >/dev/null ;;
@@ -243,26 +296,63 @@ unpack_one() {  # <file>
     esac
 }
 
-# The install root inside an unpacked tree: the shallowest dir holding System/ + Textures/, or an
-# ACE volume set. Installers commonly nest one or two levels ("app/", "Deus Ex GOTY/"), so this
-# searches rather than assuming the top.
-discover_source_root() {  # <dir> -> prints the root, or nothing
-    local root="$1" d
-    while IFS= read -r d; do
+# Every candidate install root inside an unpacked tree — a dir holding System/ + Textures/, or an
+# ACE volume set — printed as `depth<TAB>path`, SHALLOWEST first. Installers commonly nest one or two
+# levels ("app/", "Deus Ex GOTY/"), so this searches rather than assuming the top.
+#
+# Depth-ordered, not byte-ordered: an archive can hold a second install-ish tree (a demo, an extras
+# dir), and plain `sort` would pick a DEEP child of an early-sorting directory over the real
+# top-level install.
+discover_source_roots() {  # <dir> -> prints `depth<TAB>path` lines, shallowest first
+    local root="$1" line depth d f
+    while IFS= read -r line; do
+        depth="${line%%	*}"; d="${line#*	}"
         if [[ -n "$(find_subdir "$d" System || true)" && \
               -n "$(find_subdir "$d" Textures || true)" ]]; then
-            printf '%s' "$d"; return 0
+            printf '%s\t%s\n' "$depth" "$d"; continue
         fi
-        # An ACE set anywhere in the tree also counts — the ACE branch takes it from here.
-        local f
         for f in "$d"/*.[aA][cC][eE]; do
-            [[ -e "$f" ]] && { printf '%s' "$d"; return 0; }
+            [[ -e "$f" ]] && { printf '%s\t%s\n' "$depth" "$d"; break; }
         done
-    done < <(find "$root" -maxdepth 4 -type d | sort)
-    return 1
+    done < <(find "$root" -maxdepth 4 -type d -printf '%d\t%p\n' | sort -k1,1n -k2)
 }
 
-[[ "$dry_run" == 1 ]] || check_dest_root
+# The ONE install root to use, or a clean exit. Two candidates at the same depth is genuine
+# ambiguity — two games unpacked side by side — and picking one silently is the "partial result the
+# caller mistakes for a complete one" that `CLAUDE.md` forbids, so it names both and stops. A DEEPER
+# candidate is not ambiguous: it is nested inside or beside the real install (extras, a demo), and
+# the shallowest wins.
+pick_source_root() {  # <dir> -> prints the root, or exits 2
+    local root="$1" roots shallowest matches
+    roots="$(discover_source_roots "$root")"
+    if [[ -z "$roots" ]]; then
+        echo "error: after unpacking, found no Deus Ex install root (a dir holding System/ +" >&2
+        echo "       Textures/) and no ACE volume set under $root." >&2
+        echo "       The download may be an installer this script cannot unpack, or not a complete" >&2
+        echo "       game copy. Inspect that dir (fetched artifacts are kept in $DOWNLOAD_DIR)," >&2
+        echo "       then pass <SOURCE> directly." >&2
+        exit 2
+    fi
+    shallowest="$(printf '%s\n' "$roots" | head -n1 | cut -f1)"
+    matches="$(printf '%s\n' "$roots" | awk -F'\t' -v d="$shallowest" '$1==d {print $2}')"
+    if [[ "$(printf '%s\n' "$matches" | wc -l)" -gt 1 ]]; then
+        echo "error: the unpacked download holds MORE THAN ONE install root at the same level, so" >&2
+        echo "       which one to install is ambiguous:" >&2
+        # Read line by line: a real install dir is often "Deus Ex GOTY", and an unquoted expansion
+        # would split each path across three lines.
+        while IFS= read -r m; do
+            [[ -n "$m" ]] && echo "         $m" >&2
+        done <<< "$matches"
+        echo "       Pass <SOURCE> pointing at the one you want instead of --url." >&2
+        exit 2
+    fi
+    printf '%s' "$matches"
+}
+
+# Checked even under --dry-run: it is a read-only look at the destination, and a dry run whose whole
+# point is "tell me what would happen" must not report success on a machine where the real run will
+# refuse. (A dangling substrate symlink is exactly that case.)
+check_dest_root
 
 if [[ ${#urls[@]} -gt 0 ]]; then
     echo "Fetching ${#urls[@]} artifact(s) into $DOWNLOAD_DIR"
@@ -292,29 +382,35 @@ if [[ ${#urls[@]} -gt 0 ]]; then
                 echo "       Point --url at a FILE (…/setup.exe, …/game.zip), not a directory." >&2
                 exit 2
             fi
+            # Two URLs can end in the SAME filename (…/a/game.zip and …/b/game.zip). Sharing one
+            # destination would make the second "reuse" the first's bytes — one artifact silently
+            # never fetched — so a repeat gets an index prefix and the run says so.
+            for prev in "${names[@]}"; do
+                if [[ "$prev" == "$name" ]]; then
+                    name="$i-$name"
+                    echo "  note: URL $((i + 1)) repeats the filename '$(url_filename "${urls[$i]}")';"
+                    echo "        saving it as '$name' so it does not collide."
+                    break
+                fi
+            done
             names+=("$name")
         done
-        mkdir -p "$DOWNLOAD_DIR" "$UNPACK_DIR"
+        mkdir -p "$DOWNLOAD_DIR"
+        # A fresh unpack area every run. Otherwise an artifact left by a PREVIOUS run stays here,
+        # gets re-unpacked, and can win install-root discovery — installing content from a URL that
+        # was not passed this time, with exit 0 and only the `install root:` line as a hint.
+        rm -rf "$UNPACK_DIR"
+        mkdir -p "$UNPACK_DIR"
         for i in "${!urls[@]}"; do
             download_one "${urls[$i]}" "$DOWNLOAD_DIR/${names[$i]}" "${sums[$i]:-}"
         done
         echo "Unpacking into $UNPACK_DIR"
-        for f in "$DOWNLOAD_DIR"/*; do
-            [[ -f "$f" ]] || continue
-            case "$f" in *.part) continue ;; esac
-            unpack_one "$f"
+        # Only THIS run's artifacts, in the order given — never the whole download dir, which also
+        # holds everything earlier runs fetched.
+        for i in "${!names[@]}"; do
+            unpack_one "$DOWNLOAD_DIR/${names[$i]}"
         done
-        # An ACE set was left in the download dir, so that is where the install root may be.
-        src="$(discover_source_root "$UNPACK_DIR" || discover_source_root "$DOWNLOAD_DIR" || true)"
-        if [[ -z "$src" ]]; then
-            echo "error: after unpacking, found no Deus Ex install root (a dir with System/ +" >&2
-            echo "       Textures/) and no ACE volume set under:" >&2
-            echo "         $UNPACK_DIR" >&2
-            echo "         $DOWNLOAD_DIR" >&2
-            echo "       The download may be an installer this script cannot unpack, or not a" >&2
-            echo "       complete game copy. Inspect those dirs, then pass <SOURCE> directly." >&2
-            exit 2
-        fi
+        src="$(pick_source_root "$UNPACK_DIR")"
         echo "  install root: $src"
     fi
 fi
