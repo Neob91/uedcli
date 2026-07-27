@@ -37,7 +37,7 @@ Every doc has ONE job. Don't mix them up:
 | **[board/inbox.md](board/inbox.md)** | "What's noticed but not yet sorted?" (head of stream — captures ideas/bugs/chores, AI flags for the owner, and their own open questions) | raw capture → triage | living |
 | **[board/to-spec/](board/to-spec/)** · **[to-spike/](board/to-spike/)** · **[to-plan/](board/to-plan/)** | "What's next, by stage?" | one home per item | living |
 | **[board/to-build/](board/to-build/)** | "What's reviewed & ready to build *now*?" | the on-deck **build queue / source of truth** → links a plan | living |
-| **[board/done.md](board/done.md)** | "What landed recently / has deferred remnants?" | short reference tail | living |
+| **[board/done/](board/done/)** | "What landed recently / has deferred remnants?" | short reference tail | living |
 
 A gap between `direction.md` (want) and `architecture.md` (is) is **expected** — it's the work
 not yet done. A gap between a topic doc and the code, or between `direction.md` and the latest
