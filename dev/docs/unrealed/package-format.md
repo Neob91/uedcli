@@ -147,6 +147,55 @@ and meshes use). There is **no re-encoding** — extraction is a straight copy. 
 Tracker `.it`; `USound` parses identically (66 `wav` objects with correct sizes from `MoverSFX.uax`).
 (spike: `../spikes/2026-06-27-uedcli-direction-ideas/15-native-audio.md`, native read 2026-06-27)
 
+### `RF_HasStack` is a per-EXPORT flag, not an "is it an actor?" flag 🔬
+
+An object body may begin with an `FStateFrame` — the UnrealScript execution state (`Node` ref,
+`StateNode` ref, `ProbeMask` u64, `LatentAction` u32, and an `Offset` compact **only when `Node` is
+non-zero**) — and it does so exactly when the export table's flags word for that object carries
+`RF_HasStack` (`0x02000000`). Everything else in the body, including the `None`-terminated
+tagged-property list, follows it.
+
+It is natural to assume only actors are affected, because an actor is the thing that runs
+UnrealScript. **That assumption is wrong and it silently breaks parsers.** In retail Deus Ex maps a
+small number of `Model` and `Polys` exports — plain data objects, not actors — also carry
+`RF_HasStack` and therefore also carry a StateFrame. Measured over the first twelve `DX/Maps/*.dx`
+(2026-07-27, host-native decode with `upackage`):
+
+| map | `Model` exports | with `RF_HasStack` | `Polys` exports | with `RF_HasStack` |
+|--------------------------|----------------:|-------------------:|----------------:|---
+| `00_Intro.dx`            |             948 |                  0 |             948 | 0
+| `00_Training.dx`         |            1018 |                  2 |            1018 | 2
+| `00_TrainingCombat.dx`   |             577 |                 13 |             577 | 13
+| `01_NYC_UNATCOIsland.dx` |            1435 |                  2 |            1435 | 2
+| `02_NYC_Bar.dx`          |             210 |                  1 |             210 | 1
+| `02_NYC_BatteryPark.dx`  |             883 |                  3 |             883 | 3
+| (the other six sampled)  |               — |                  0 |               — | 0
+
+The count always matches between a map's `Model`s and its `Polys` — a flagged brush model and its
+polygon list come as a pair. Skipping the StateFrame on those exports makes
+`native.umodel.parse_model_body` reach EOF on **21 of 21** of them; entering the body at its raw
+`soff` instead desyncs by the StateFrame's length and fails with a truncated read.
+
+**Rule for any body reader: decide on the EXPORT's flags, never on the object's class.** uedcli's
+`mapimport._skip_state_frame` takes the export record for exactly this reason.
+
+### `FPoly.ItemName` — name index 0 is a REAL name, and `None` is not index 0 🔬
+
+A polygon's per-face label (`Begin Polygon Item=Base`) is an `FName`: a compact index into the
+package's own name table. Two things about that table trip up a decoder:
+
+- **Index 0 is an ordinary name, not a sentinel.** In every Deus Ex map sampled (2026-07-27) name
+  index 0 is `OUTSIDE` — the editor's own default face label — and it is genuinely used: 7399 of
+  `02_NYC_Street.dx`'s 10690 authored polygons carry it.
+- **"No label" is the index of the name `None`**, wherever that happens to sit (index 2 in
+  `00_Training.dx`). The name table's order is per package; nothing pins `None` to a fixed slot.
+
+So the test for an unset `Item` is `pkg.names[idx] == "None"`, never `idx == 0`. Treating 0 as unset
+silently deletes every `Item=OUTSIDE` from a decoded map — a data loss that no error reports and
+that only shows up by reading the emitted T3D. The same reasoning applies to any `FName`-valued
+field, including the property-list terminator (`UPolys`' body begins with a compact `None` index,
+which is not `0` either).
+
 **Further raw byte-level detail** (package internals beyond the header and the bodies above) lives in
 these kept evidence spikes:
 

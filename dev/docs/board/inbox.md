@@ -3988,3 +3988,16 @@ throwaway compare view. My repro predated the fix.)_
   `` `test_<module>.test_<name>` `` and `` `..._<name>` `` tokens from the tracked docs and assert
   each resolves to a `def` in `uedcli/tests/` — and it extends an existing test file rather than
   adding a subsystem. Worth doing when something next touches `test_doc_links.py`.
+
+- `p2` `[implement]` **`level import` is STARTED AND PARKED mid-build on the local branch
+  `level-import`** (worktree `.claude/worktrees/level-import`, branched from `master` at `85c88ab`,
+  two unpushed commits `0e22262` + `475f237`). The native decoder `uedcli/mapimport.py` exists and
+  decodes real retail maps end to end, but it has **no tests**, **no CLI verb**, **no write path**,
+  **no goldens**, and **two confirmed defects**; the `to-build.md` entry stays put because the work
+  has not earned removal. **Everything a fresh session needs is in
+  [`HANDOFF-level-import.md`](HANDOFF-level-import.md)** — the slice-by-slice state, the two
+  defects with their fixes, the `schema_golden_fire_v1 → v2` explanation, what was and was not
+  verified, and two questions that need the owner (the builder brush surviving
+  `qualify_and_validate`, and what the Slice-5 committed golden can be given that retail maps are
+  gitignored). Two new on-disk-format facts it uncovered are already durable in
+  `dev/docs/unrealed/package-format.md`. Parked 2026-07-27 at the owner's request, un-gated.
