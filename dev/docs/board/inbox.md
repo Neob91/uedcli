@@ -9,7 +9,7 @@ stage (so no `to-` prefix). See [`README.md`](README.md).
   two of your process rules need your yes before it can land.** Spec:
   [`../specs/2026-07-27-board-per-item-directories.md`](../specs/2026-07-27-board-per-item-directories.md).
   You decided the shape live on 2026-07-27 (every stage the same, `git mv` to advance, blocking
-  questions as files, stale shelved not deleted, references by slug, YAML frontmatter, and no
+  questions as files, stale shelved not deleted, references by slug, TOML frontmatter, and no
   `[spec]`/`[plan]` kinds because "each issue gets a plan"). Those decisions currently exist only in
   an **ephemeral** spec, so they are parked here verbatim.
 
@@ -29,7 +29,7 @@ stage (so no `to-` prefix). See [`README.md`](README.md).
   > deleted to tidy the board** — work judged stale is shelved, and the shelving list is confirmed in
   > bulk rather than applied item by item.
 
-  **(C) Succinctness, your ruling of 2026-07-27.** Already written into `CLAUDE.md`
+  **(B) Succinctness, your ruling of 2026-07-27.** Already written into `CLAUDE.md`
   ("Documentation" and "Review gates"), which an agent maintains; this is the `direction/process.md`
   wording, which needs your yes:
 
@@ -37,14 +37,9 @@ stage (so no `to-` prefix). See [`README.md`](README.md).
   > is earned by what must be explained. A reviewer flags any doc they cannot fully understand, or
   > that is ambiguous.
 
-  **(B) A one-off exception to YOUR worktree rule, for this migration only.** `CLAUDE.md` says a
-  feature is built in a worktree and squash-merged. That is unsafe here: **35% of the last three
-  days' commits touch `inbox.md`**, and a worktree that deletes it and is squash-merged days later
-  hits a modify/delete conflict whose obvious resolution silently discards every item other sessions
-  added meanwhile — including review findings, which your own rules require to be logged there.
-  Proposed instead: run the migration **on the base branch in committed batches, one stage at a
-  time, smallest first, with `inbox.md` last and announced before it starts.** Say the word if you'd
-  rather it ran in a worktree with a board freeze instead. *(2026-07-27.)*
+  *(A third item — a worktree exception for this migration — was here and is now RULED: you chose
+  base-branch committed batches on 2026-07-27. Recorded as spec §2.15, not awaiting anything.)*
+  *(2026-07-27.)*
 
 - `p2` `[OWNER — confirm]` **Could the `--faces` build start before the texture decoder lands?**
   Decision 2.11 says the decoder item builds first, then all of the `--faces` work, and
