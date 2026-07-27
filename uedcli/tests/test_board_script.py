@@ -47,9 +47,11 @@ def _bash_reads(overview: Path) -> dict[str, str]:
         capture_output=True, text=True, cwd=REPO,
     )
     assert proc.returncode == 0, proc.stderr
-    return dict(
-        line.split("\t", 1) for line in proc.stdout.splitlines() if "\t" in line
-    )
+    pairs = (line.split("\t", 1) for line in proc.stdout.splitlines() if "\t" in line)
+    # Arrays are emitted verbatim by the shipped reader (it unquotes basic strings only), so
+    # compare scalars alone — `depends-on`/`spikes` are checked against the tree by test_board.py,
+    # which uses tomllib for both sides and needs no bash agreement.
+    return {k: v for k, v in pairs if not v.startswith("[")}
 
 
 def _reader_shim() -> str:

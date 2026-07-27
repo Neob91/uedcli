@@ -5,7 +5,7 @@ full plan in `../plans/` (ephemeral detail) — this file is the stable "build t
 
 How this relates to the other board docs (see [`README.md`](README.md) for the full flow):
 - The upstream queues — **[inbox.md](inbox.md)** (raw capture) → **[to-spec.md](to-spec.md)** →
-  **[to-spike.md](to-spike.md)** → **[to-plan.md](to-plan.md)** — hold the broader, noisier backlog.
+  **[to-spike/](to-spike/)** → **[to-plan.md](to-plan.md)** — hold the broader, noisier backlog.
 - **to-build.md** (this) — the short list of *reviewed, ready-to-go* work, pointing at the plan.
 - **[inbox.md](inbox.md)** — the capture pool: ideas/gaps/bugs/chores + anything flagged for Andrzej.
 
