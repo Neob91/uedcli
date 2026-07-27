@@ -78,32 +78,37 @@ def _tracked(*suffixes: str) -> list[Path]:
 
 
 def _on_deck() -> frozenset[str]:
-    """Ephemeral files referenced from ``to-build.md`` — by link OR backticked path.
+    """Ephemeral files referenced from the build queue — by link OR backticked path.
 
-    Both forms count: `to-build.md` cites some artifacts as markdown links and at least one as a
+    Both forms count: an on-deck item cites some artifacts as markdown links and at least one as a
     bare backticked path, and an exemption boundary that sees only one form silently skips files
     that are about to be executed.
+
+    The queue is `board/to-build/<slug>/overview.md`, one file per item — it used to be a single
+    `to-build.md`. Sourcing it from the directory is what keeps this exemption alive across the
+    board migration: reading a file that no longer exists would return an empty set and silently
+    un-check EVERY ephemeral doc, which is the failure this boundary exists to prevent.
     """
-    board = REPO / "dev/docs/board/to-build.md"
-    if not board.is_file():
-        return frozenset()
-    text = _prose(board.read_text(encoding="utf-8"))
-    refs = set(_MD_LINK.findall(text)) | set(re.findall(r"`([^`]+\.md)`", board.read_text(encoding="utf-8")))
+    queue = REPO / "dev/docs/board/to-build"
+    overviews = sorted(queue.glob("*/overview.md")) if queue.is_dir() else []
     out = set()
-    for ref in refs:
-        stem = ref.split("#")[0]
-        # A markdown link resolves against `board/`; a backticked path is written from the
-        # dev-docs root (`specs/2026-07-24-docs-command.md`). Try both and keep what exists —
-        # resolving only against `board/` silently drops every backticked ref, which is the
-        # exemption boundary, so the miss shows up as files being checked or skipped wrongly.
-        for base in (board.parent, REPO / "dev/docs", REPO):
-            resolved = (base / stem).resolve()
-            if resolved.exists():
-                try:
-                    out.add(str(resolved.relative_to(REPO)))
-                except ValueError:
-                    pass
-                break
+    for item in overviews:
+        raw = item.read_text(encoding="utf-8")
+        refs = set(_MD_LINK.findall(_prose(raw))) | set(re.findall(r"`([^`]+\.md)`", raw))
+        for ref in refs:
+            stem = ref.split("#")[0]
+            # A markdown link resolves against the item directory; a backticked path is written
+            # from the dev-docs root (`specs/2026-07-24-docs-command.md`). Try both and keep what
+            # exists — resolving against one base only silently drops the other form, and the miss
+            # shows up as files being checked or skipped wrongly.
+            for base in (item.parent, REPO / "dev/docs", REPO):
+                resolved = (base / stem).resolve()
+                if resolved.exists():
+                    try:
+                        out.add(str(resolved.relative_to(REPO)))
+                    except ValueError:
+                        pass
+                    break
     return frozenset(out)
 
 

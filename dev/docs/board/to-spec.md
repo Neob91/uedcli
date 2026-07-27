@@ -7,7 +7,7 @@ once it has a reviewed plan, onto **`to-build.md`** (the on-deck build queue —
 truth for what to build next). See [`README.md`](README.md). Tags: `[spec]`/`[implement]`/
 `[chore]`/`[debug]`; `pN` priority rides each line.
 
-> Items with a reviewed plan already live in [`to-build.md`](to-build.md) — a few are
+> Items with a reviewed plan already live in [`to-build/`](to-build/) — a few are
 > cross-noted "(also in to-build.md #N)" so you can see what's on-deck vs backlog.
 
 ---

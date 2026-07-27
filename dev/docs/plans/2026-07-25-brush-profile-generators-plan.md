@@ -9,7 +9,7 @@ green test, and a documentation-timing violation. Details in `decisions.md` 2026
 [`../specs/2026-07-25-brush-profile-generators.md`](../specs/2026-07-25-brush-profile-generators.md).
 **Decisions:** `decisions.md` 2026-07-25 00:14 UTC (D1–D9), 01:05 UTC (D10), 01:40 UTC (spec review),
 02:30 UTC (this plan's review + D11/D12 below).
-**Board item:** [`to-build.md`](../board/to-build.md) — moved there from `to-plan.md` when this plan
+**Board item:** [`to-build/`](../board/to-build/) — moved there from `to-plan.md` when this plan
 passed its gate (that move is **step B0**, not an assumption).
 
 Section references like `spec §4.5` point into the spec; this plan does not restate it.

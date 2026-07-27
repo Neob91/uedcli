@@ -13,7 +13,7 @@ in the `decisions.md` addendum cited below.
 [2026-07-25 01:05 UTC](../decisions.md) (D10), the 01:40 UTC spec-review addendum, and the 02:30 UTC
 plan-review addendum (D11–D12). D1–D10 are Andrzej's, made in the speccing Q&A; those entries are the durable record of the choices
 *and the alternatives rejected*.
-**Board item:** [`to-build.md`](../board/to-build.md) #12 — on-deck, both gates passed. Triaged
+**Board item:** [`to-build/`](../board/to-build/) #12 — on-deck, both gates passed. Triaged
 forward through `to-plan.md` from [`to-spec.md`](../board/to-spec.md), where it
 was raised by the corpus brush-idiom study
 ([`specs/2026-07-24-corpus-brush-idioms.md`](2026-07-24-corpus-brush-idioms.md) §7 gap 6).

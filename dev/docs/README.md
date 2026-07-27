@@ -36,7 +36,7 @@ Every doc has ONE job. Don't mix them up:
 | **[board/](board/README.md)** | the work-state cluster — flow + stages (see its `README.md`) | living |  |
 | **[board/inbox.md](board/inbox.md)** | "What's noticed but not yet sorted?" (head of stream — captures ideas/bugs/chores, AI flags for the owner, and their own open questions) | raw capture → triage | living |
 | **[board/to-spec.md](board/to-spec.md)** · **[to-spike/](board/to-spike/)** · **[to-plan.md](board/to-plan.md)** | "What's next, by stage?" | one home per item | living |
-| **[board/to-build.md](board/to-build.md)** | "What's reviewed & ready to build *now*?" | the on-deck **build queue / source of truth** → links a plan | living |
+| **[board/to-build/](board/to-build/)** | "What's reviewed & ready to build *now*?" | the on-deck **build queue / source of truth** → links a plan | living |
 | **[board/done.md](board/done.md)** | "What landed recently / has deferred remnants?" | short reference tail | living |
 
 A gap between `direction.md` (want) and `architecture.md` (is) is **expected** — it's the work
@@ -72,7 +72,7 @@ router that says which doc to read when lives in [`CLAUDE.md`](../../CLAUDE.md)
   editors at once (`docker compose run` per work item): per-run wineprefix volume, unique
   export paths, the memory-bound concurrency cap, cleanup.
 - Roadmap / open work: **`board/`** — `inbox.md` (capture pool) → the stage queues
-  (`to-spec`/`to-spike`/`to-plan`) → `to-build.md` (the build queue); + `done.md`; start at
+  (`to-spec`/`to-spike`/`to-plan`) → `to-build/` (the build queue); + `done.md`; start at
   **`board/README.md`**. Spike evidence: **`spikes/`** (canonical).
   Original design spec: `docs/superpowers/specs/2026-06-16-uedcli-design.md` (repo root).
 
