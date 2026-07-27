@@ -58,6 +58,33 @@ behavior is in [`rendering.md`](rendering.md). Evidence: `../../dev/docs/spikes/
   guessing from a fixed sleep. See `qualify.dump_obj_dependencies` and
   `dev/docs/spikes/2026-06-20-obj-dependencies-untextured-poly-correlation.md`.
 
+### The GUI editor cannot run under x86-32 EMULATION; UCC can 🔬
+
+On an **aarch64** host (Apple Silicon), `docker build --platform linux/amd64` of `uned/Dockerfile`
+succeeds and wine runs, but **`unrealed.exe` dies at startup every time**:
+
+```
+General protection fault!
+History: SyntaxHighlighting::AddQuote <- SyntaxHighlighting::Setup
+      <- WCodeFrame::OnCreate <- WM_CREATE
+```
+
+It is deterministic, not the intermittent startup flakiness `editor.ensure_editor` retries around —
+four reap-and-respin attempts all crashed identically. Verified on the **unmodified** image with no
+asset mounts, no ini changes and no console command issued, so nothing about a caller's setup is
+implicated: the fault is in the editor creating its UnrealScript code-editor window
+(`WCodeFrame`) under `qemu-i386`.
+
+**`UCC.exe` is unaffected** — a console app that creates no windows. In the very same container, under
+the same emulation, `xvfb-run -a wine UCC.exe batchexport <map>.dx Level T3D 'Z:\work\out'` exported
+retail maps successfully. That is the control that isolates the fault to GUI window creation rather
+than to wine or the emulation generally.
+
+**Consequence for tooling:** on such a host the **offline/UCC** routes work (native decode, map
+export, `batchexport` textures) and every route needing the live editor does not — `level
+materialize`, `level preview --game`, and any `MAP EXPORT`/`EDIT COPY` oracle. Those need an x86-64
+host. (2026-07-27)
+
 ## Viewport focus & input model (UED22)
 - **UED22's viewport input is a focus-bound "activate-then-operate" model: the first mouse gesture
   in a newly-clicked viewport is spent *activating* it; the operation rides on the *next* gesture.**
