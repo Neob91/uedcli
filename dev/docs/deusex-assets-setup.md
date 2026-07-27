@@ -40,7 +40,14 @@ dev/scripts/install-deusex-assets.sh --with-maps /path/to/DeusEx # also the reta
 dev/scripts/install-deusex-assets.sh --dry-run /path/to/DeusEx   # show what it would do, write nothing
 ```
 
-SOURCE is **required** — the script never downloads anything. From it, the script does two things:
+Or, instead of a local path, give it a **`--url`** to fetch (see
+[Fetching with `--url`](#fetching-with---url) below):
+
+```bash
+dev/scripts/install-deusex-assets.sh --with-maps --url https://example.invalid/DeusEx.zip
+```
+
+Exactly one of SOURCE or `--url` is required. From it, the script does two things:
 
 1. **Assembles a full working game copy** under `Tools/uedcli/dev/games/<game>/` (default
    `<game>=deusex`; override with `--game`). If SOURCE is an ACE installer it extracts it with
@@ -65,6 +72,46 @@ versions: textures are package version 61/68, the code `.u` are version 68. (A p
 standard patched installs are fine.)
 
 You only need the files on disk — uedcli never runs the Deus Ex game.
+
+## Fetching with `--url`
+
+`--url` downloads the artifact **you** name, unpacks it, finds the install root inside, and then
+continues exactly as if you had passed that root as SOURCE. There is **no built-in source**: no
+default URL, no bundled list, no lookup. Deus Ex is still sold commercially, so having the right to
+the copy you point it at is yours to establish — a DRM-free GOG copy you own, or your own mirror of
+one, is the clean case.
+
+```bash
+# one artifact, content-verified
+dev/scripts/install-deusex-assets.sh --with-maps \
+    --url https://example.invalid/DeusEx-GOTY.zip \
+    --sha256 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+
+# a multi-part download: repeat --url; every part lands in one dir before unpacking
+dev/scripts/install-deusex-assets.sh --url https://example.invalid/deusex.ace \
+                                     --url https://example.invalid/deusex.c00
+```
+
+- **`--sha256 SUM`** verifies a download, matched **positionally** to the `--url` of the same index.
+  Give one per URL or none; a mismatch stops the run and keeps the file for inspection. Without it
+  the run says plainly that content was not verified.
+- **`--redownload`** refetches even when the file is already there. By default a completed download
+  is reused and a partial one is resumed, so an interrupted 3 GB fetch costs nothing to retry.
+- **Formats unpacked:** `.ace` volume sets (handed to `unace`), `.tar[.gz|.bz2|.xz|.zst]`, `.zip`,
+  `.7z`, `.iso`, `.rar`, and **Inno Setup** `.exe` (what a GOG offline installer is, via
+  `innoextract`). Anything else — notably InstallShield or NSIS installers — exits 2 naming the file:
+  unpack it yourself and pass SOURCE instead of getting a subtly incomplete tree. A missing unpacker
+  exits 2 naming the tool and the package that provides it.
+- **Where things land:** artifacts in `dev/games/.cache/<game>/download/`, unpacked in
+  `.../unpacked/`. Both sit **outside** the working copy `dev/games/<game>/` on purpose — step 1
+  syncs the install root into the working copy with `--delete`, which would otherwise delete the
+  download cache while reading from it.
+- `--dry-run` with `--url` prints the fetch plan and stops, because what happens next depends on
+  what the download actually contains.
+
+**If `uned/DeusExAssets` is a symlink whose target is missing**, the script says so and names the
+target rather than failing with a bare `mkdir: File exists`. That happens when a checkout carrying
+such a symlink is used on a second machine, where the absolute path does not exist.
 
 ## What gets copied, and why each part matters
 
