@@ -1,7 +1,7 @@
 # Spec: surface a texture's decoded image to the LLM so it can classify
 
 > ⚠️ **SUPERSEDED 2026-07-19** by
-> [`2026-07-19-texture-catalog-redesign.md`](spec.md), which re-designs
+> [`spec.md`](spec.md), which re-designs
 > the whole catalog (lazy native decode, content-addressed pixel-hash cache, sharded git-tracked
 > classifications, `classify clone`, visual-similarity search) rather than adding `show` on top of the
 > current UCC-sync / name-keyed model. The **workflow** half of this spec (batched distinct reads, no

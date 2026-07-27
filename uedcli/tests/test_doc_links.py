@@ -24,6 +24,11 @@ The shape matches those two names EXACTLY. A handful of items carry a second spe
 `spec-<topic>.md`; those are checked in every stage. That is deliberate — it is the conservative
 direction (more checking, never less) and it needs no extra rule — but it does mean two specs in
 one item are not treated alike, so `CLAUDE.md` "Documentation" says so where an author will read it.
+
+KNOWN GAP, deliberately not papered over: a `to-build/` item's spec or plan is only checked if it
+physically sits in that item, and the board's filing rule sometimes puts it in a different one.
+Three of the five current `to-build/` items are affected — see board item
+`a-to-build-item-s-plan-can-sit-outside-the`.
 """
 from __future__ import annotations
 
@@ -161,11 +166,12 @@ _FROZEN_DANGLING = {
     "dev/docs/decisions.md": frozenset({
         # Literal link targets as decisions.md writes them — NOT board-item references. They must
         # stay spelled exactly like the frozen file's text or the exemption stops matching.
-        # SPLIT ON PURPOSE, like `"decisions" + ".md"` below: a tree-wide sweep repointing old
-        # spec paths at board slugs rewrote these two, silently disabling the exemption. The seam
-        # is what stops the next such sweep from matching them.
-        "specs/" "2026-07-25-docs-restructure.md",
-        "specs/" "2026-07-24-docs-command.md",
+        # SPLIT ON PURPOSE, like `"decisions" + ".md"` below, and split INSIDE the date so that
+        # neither half looks like a spec path OR a bare spec filename: a tree-wide sweep
+        # repointing old spec citations at board slugs rewrote these two literals twice, silently
+        # disabling the exemption both times. The seams are what stop the next sweep matching.
+        "specs/2026-" "07-25-docs-restructure" ".md",
+        "specs/2026-" "07-24-docs-command" ".md",
     }),
 }
 

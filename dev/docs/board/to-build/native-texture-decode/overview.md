@@ -7,7 +7,7 @@ spikes = ["dev/docs/spikes/2026-07-26-ucc-texture-fixture/"]
 
 # Native texture decode for any UE1 package
 
-Plan: [`../../../plans/2026-07-25-native-texture-formats-plan.md`](plan.md).
+Plan: [`plan.md`](plan.md).
 Spec: board item `three-design-calls-the-native-texture-formats`.
 
 **These two files are SELF-CONTAINED — read them and build. No other document needs opening.**
@@ -34,7 +34,7 @@ S4 now carries a second byte-exact pin.
 **SCOPE WIDENED 2026-07-26 (owner ruling)** — a new slice `S2b` adds the two accessors
 `actor preview --faces textured` needs (a mip pyramid, and `bMasked` carried on S2's typed result — **not** a `texture_has_bMasked` predicate, which `conventions.md`'s predicate rule forbids), so the texture
 API changes once rather than twice. **The plan therefore re-enters the plan-review round
-before building.** See `../../../specs/2026-07-26-actor-preview-textured-faces.md` §12.
+before building.** See board item `four-actor-preview-faces-rulings-need-a-durable` §12.
 
 **Nine slices:** `S1` CompMips + fixture builder → `S2` typed error results → `S3` layout
 detection → `S4` BC1 → `S5` BC2/BC3 → `S6` integration sweep + engine-fact pins → `S7` docs/board.

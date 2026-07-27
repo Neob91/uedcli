@@ -1,4 +1,4 @@
-"""The delta-write diff MUST include labels — the critical trap (spec 2026-07-22-actor-labels.md §3).
+"""The delta-write diff MUST include labels — the critical trap (spec in board item `re-evaluate-whether-reject-nonlevel-target` §3).
 
 `TrunkLevelSource.save` writes ONLY actors whose body/rank/folder/LABELS differ from its load
 snapshot. Labels are a sidecar (not in the body), so a labels-ONLY change leaves body+rank+folder

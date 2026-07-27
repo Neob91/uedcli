@@ -6,7 +6,7 @@ parts into `architecture.md` (+ any engine facts into `unrealed/*.md`) and keep 
 
 **Decisions captured (Andrzej, 2026-07-16):** see `decisions.md` entry
 `2026-07-16 12:13 UTC — level preview becomes two-backend`. The choices + rejected alternatives live
-there (durable), not here. Companion spec: `2026-07-13-ingame-preview-design.md` (the `--game`
+there (durable), not here. Companion spec: board item `level-preview-game` (the `--game`
 faithful tier — this spec shares its SHOT grammar and retires the same editor backend).
 
 ---
@@ -18,7 +18,7 @@ Every existing way to *see* a level costs a container:
 - The shipped `level preview` boots an ephemeral **UnrealEd** per render mode, can only auto-frame
   a named brush from one canonical angle (free rotation never reaches the pixels — spike
   `2026-07-12-preview-pose-calibration`), and its lighting is unfaithful to the game.
-- The planned `--game` tier (spec `2026-07-13-ingame-preview-design.md`) fixes fidelity and posing,
+- The planned `--game` tier (spec in board item `level-preview-game`) fixes fidelity and posing,
   but each preview still costs: materialize (editor boot, minutes when stale) + a game-container
   boot + travel. Right for hero shots and lighting judgment; too slow for the inner edit loop.
 
@@ -368,6 +368,6 @@ never round-trips through the map file.
 - **`brush preview` texturing** — DROPPED (Andrzej, decisions.md 2026-07-16).
 - **Scaled brushes** — rejected with a named error until the scale-support spec lands (then both
   materialize and preview lift together).
-- **The `--game` tier itself** — its own spec (`2026-07-13-ingame-preview-design.md`); this build
+- **The `--game` tier itself** — its own spec (board item `level-preview-game`); this build
   must leave the shared front half (grammar, pose math, filename rules) in the shape that spec's §7
   expects.

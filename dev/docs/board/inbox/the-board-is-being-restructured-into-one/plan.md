@@ -1,6 +1,6 @@
 # Plan — board to one directory per work item
 
-Spec: [`../specs/2026-07-27-board-per-item-directories.md`](spec.md).
+Spec: [`spec.md`](spec.md).
 The spec fixes the batch order (§4.2) and the rules; this plan adds only what it does not: the slice
 boundaries, the inventory format, and each slice's done-when.
 

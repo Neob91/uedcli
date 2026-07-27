@@ -1,4 +1,4 @@
-"""Live probe (spec 2026-07-18-actor-prop-subcommands.md §9): does the editor's T3D import
+"""Live probe (spec in board item `materialize-post-verify-fails-when-the-trunk` §9): does the editor's T3D import
 treat members UNMENTIONED in a stored-partial struct value (and elements unmentioned in a
 sparse static array) as ZERO or as the CLASS DEFAULT?
 

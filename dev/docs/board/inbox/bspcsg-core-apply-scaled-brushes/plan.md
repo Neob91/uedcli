@@ -6,7 +6,7 @@
 **Specs (spec-review gate PASSED — two cold reviews each, findings resolved, commit `e436423ca`):**
 - Part A: board item `generator-flag-cleanup-folder-label-move`
   (the prerequisite).
-- Part B: [`../specs/2026-07-24-intersect-deintersect-native-brushset.md`](spec.md)
+- Part B: [`spec.md`](spec.md)
   (depends on A's shared flags + emit locus).
 - Ground truth: [`dev/docs/spikes/2026-07-15-native-materialize/re-raw-zones/bspbrushcsg-intersect-deintersect-decode.md`](../../../spikes/2026-07-15-native-materialize/re-raw-zones/bspbrushcsg-intersect-deintersect-decode.md).
 - Decisions: `decisions.md` 2026-07-24 16:32 / 17:04 / 17:56 / 18:12 / 18:33.

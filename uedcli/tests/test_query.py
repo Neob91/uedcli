@@ -159,7 +159,7 @@ def test_list_actors_no_group_actor_excluded():
 
 # ── Step 1: props filter — REMOVED 2026-07-18: `--prop` matching moved out of
 # query.list_actors to the dispatch find handler (EFFECTIVE-value matching over the
-# class schema/defaults — spec 2026-07-18-actor-prop-subcommands.md §7); covered by
+# class schema/defaults — spec in board item `materialize-post-verify-fails-when-the-trunk` §7); covered by
 # test_dispatch.py's test_actor_find_prop_* tests.
 
 

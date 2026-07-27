@@ -1,5 +1,5 @@
 """actor-name composition pipe — `-` (names from stdin) on the name-taking verbs, and
-`actor add`'s Names→stdout output. Spec 2026-07-18-actor-name-compose-pipe.md (§8 authoritative).
+`actor add`'s Names→stdout output. Spec in board item `actor-name-composition-pipe` (§8 authoritative).
 
 Offline: the trunk seam (`_resolve_level_source`) and, for `prop`, the four schema seams are
 mocked, and stdin is a `StringIO`. These are the verb-level pipe contracts; the shared helper's

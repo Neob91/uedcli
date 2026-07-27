@@ -1,6 +1,6 @@
 # `level preview --game` — implementation plan
 
-**Spec:** [`../specs/2026-07-13-ingame-preview-design.md`](spec-ingame-preview-design.md)
+**Spec:** [`spec-ingame-preview-design.md`](spec-ingame-preview-design.md)
 (spec gate RUN 2026-07-16, two cold reviewers, all findings folded as *(gate fold)* notes).
 **Decisions:** `decisions.md` 2026-07-13 (the tier) + 2026-07-16 15:49 UTC (config-driven
 asset/ini wiring — Andrzej). **Status:** draft. Ephemeral — delete once built; durable knowledge

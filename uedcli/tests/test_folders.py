@@ -1,4 +1,4 @@
-"""Actor folders — end-to-end (spec 2026-07-18-actor-folders-hierarchical.md §7).
+"""Actor folders — end-to-end (spec in board item `actor-folders-hierarchical-actor-organization` §7).
 
 Trunk sidecar round-trip (incl. atomic write), the delta-write diff BOTH directions (set + the
 symmetric `"x"`→None unset trap), hash/materialize exclusion, the CLI verbs + guards, the

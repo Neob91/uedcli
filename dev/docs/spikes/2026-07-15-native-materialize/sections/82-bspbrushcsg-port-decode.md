@@ -246,7 +246,7 @@ return best
 
 `bAllNonStructural` = every poly has `PF_NotSolid|PF_Semisolid` (0x28). `find_best_split_exact` uses
 the exact score op-order. **Both param sets are now APPLIED in `bspcsg.rs` and threaded separately**
-(see `../../specs/2026-07-17-findbestsplit-params-fix.md`):
+(see board item `bspcsg-findbestsplit-param-fix-bspoptgeom-wire`):
 - **Repartition** (`bsp_build` → `split_poly_list(..., Opt::Good)`): `BALANCE=12`, `PORTAL_BIAS=0`,
   GOOD stride `Inc = max(NumPolys/10, 1)` on both the candidate and inner loops.
 - **Brush temp BSP** (`build_brush_temp_bsp` → `split_poly_list(..., Opt::Lame)`): `TEMP_BALANCE=0`,

@@ -1,5 +1,5 @@
 """Persistent per-package decoded-schema cache — decode a `.u`'s v1 primitives once and reuse them
-across cold `uedcli` runs (spec in board item `package-schema-cache`).
+across cold `uedcli` runs (`dev/docs/architecture.md` "Package schema cache").
 
 Every `uedcli` command is a fresh host-native process, so all schema decoding otherwise starts from
 zero every invocation — and the dominant cost is `load_package`'s name/import/export TABLE parse

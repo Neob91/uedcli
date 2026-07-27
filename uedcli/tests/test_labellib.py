@@ -2,7 +2,7 @@
 
 Labels mirror the single-valued `folder` dimension but as a flat sorted SET: a per-actor `labels`
 sidecar, `Actor.labels: frozenset[str]`, never emitted to the built map. This pins the pure core
-(spec 2026-07-22-actor-labels.md §2/§4/§6): the single-segment validator shared with folders, the
+(spec in board item `re-evaluate-whether-reject-nonlevel-target` §2/§4/§6): the single-segment validator shared with folders, the
 leading-`-` reject, the `*`-only (no char-class) case-insensitive matcher, and the
 `// uedcli-labels:` interchange carrier.
 """

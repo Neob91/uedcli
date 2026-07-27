@@ -20,7 +20,7 @@ Every entry in both trees carries `Rejected` and `Refs`.
 **Tech stack:** Markdown, plus one new Python checker (Task 3). The only behaviour-neutral code
 edits are retargeted comments in `uedcli/*.py`, `bin/_venv.sh`, `pyproject.toml`.
 
-**Spec:** [`../specs/2026-07-25-docs-restructure.md`](spec.md).
+**Spec:** [`spec.md`](spec.md).
 
 **Build split:** a gate after each of Tasks 3, 4, 5, 6, 7, 8, 9, 10. Tasks 1–2 are batched into
 Task 3's gate (permitted by `CLAUDE.md` "Review gates" — batch small changes into one round).

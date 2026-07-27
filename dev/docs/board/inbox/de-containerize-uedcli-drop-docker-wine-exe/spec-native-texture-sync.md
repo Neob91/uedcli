@@ -1,7 +1,7 @@
 # Native `texture sync` — drop the UCC/PCX/container seam (design)
 
 **Ephemeral spec.** Phase A (item 1) of the de-containerization roadmap
-(`2026-06-27-uedcli-decontainerization-roadmap-design.md`). Q0-INDEPENDENT: doesn't depend
+(`spec.md`). Q0-INDEPENDENT: doesn't depend
 on the offline-BSP (D2) decision, so it can land first. Built on the proven native texture
 decoder (`spikes/2026-06-27-decontainerize-uedcli/01-native-texture-decode.md`, pixel-exact
 vs UCC on the whole corpus). **Revised after two cold reviews** — the load-bearing risk is

@@ -6,7 +6,7 @@ shipped-geometry error (the revolve near-cap hint, §0c), a `TypeError` that wou
 unbuildable (§0d), an import cycle, three incomplete test inventories, a gate that breaks an existing
 green test, and a documentation-timing violation. Details in `decisions.md` 2026-07-25 02:30 UTC.
 **Spec (own gate passed, commit `fe5bdbbdf`):**
-[`../specs/2026-07-25-brush-profile-generators.md`](spec.md).
+[`spec.md`](spec.md).
 **Decisions:** `decisions.md` 2026-07-25 00:14 UTC (D1–D9), 01:05 UTC (D10), 01:40 UTC (spec review),
 02:30 UTC (this plan's review + D11/D12 below).
 **Board item:** [`to-build/`](../../../board/to-build/) — moved there from `board/to-plan/` when this plan

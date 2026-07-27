@@ -11,6 +11,11 @@ deleted when the work lands — this file is what survives.)
 
 ## Inventory at `ae7967e` (2026-07-26)
 
+**The paths in this section are PRE-MIGRATION spellings and stay that way.** It is a dated
+measurement of what the tree looked like on 2026-07-26, when `dev/docs/specs/`, `dev/docs/plans/`
+and the seven per-stage board `.md` files still existed. Rewriting them to today's paths would
+destroy the evidence rather than update it — a later sweep did exactly that and was reverted.
+
 **These numbers govern, not the spec's.** The spec's figures were measured before `6900e34`
 (the profile-generators merge) and have drifted materially — which is why the plan requires a
 re-measurement after the freeze rather than trusting them.
@@ -61,9 +66,8 @@ Definition: matches `\(?[Dd]ecisions?\b[^)]{0,40}[0-9]{4}-[0-9]{2}-[0-9]{2}` and
 literal `decisions.md`, so a filename grep cannot see it.
 
 ```
-dev/docs/board/to-spike/                     uedcli/normalize.py
-board item `game-map-actor-relative-poses-list-actors-query`  (was a spec path)
-uedcli/preview_game.py
+dev/docs/board/to-spike.md                     uedcli/normalize.py
+dev/docs/specs/2026-07-17-game-actor-relative-poses.md   uedcli/preview_game.py
 dev/docs/spikes/levelbuild-friction/README.md   uedcli/rotation.py
   ^^ UNTRACKED (another session's spike) — not in the checker's git ls-files set
 dev/docs/unrealed/commands.md                   uedcli/stash_register.py
@@ -85,7 +89,7 @@ uedcli/editor.py:267              -> dev/docs/rules/background-work.md
 uedcli/tests/test_polyalign.py    -> dev/docs/rules/spikes.md "pin the finding"
 uedcli/tests/test_engine_facts.py -> dev/docs/rules/spikes.md
 uedcli/tests/test_mesh_decode.py  -> dev/docs/rules/spikes.md
-dev/docs/board/to-build/ (one item, line 256) -> dev/docs/rules/spikes.md "Commit the harness"
+dev/docs/board/to-build.md:256    -> dev/docs/rules/spikes.md "Commit the harness"
 ```
 
 `grep -rn 'CLAUDE\.md "' uedcli bin pyproject.toml` now returns exactly one file —
@@ -125,14 +129,22 @@ not match, so it is checked in every stage).
 | `specs/2026-07-26-asset-catalog-audio-arm.md` | **no longer checked** — `board/to-spike/sound-corpus-remeasure/spec.md` |
 | `specs/2026-07-26-asset-catalog-class-arm.md` | **no longer checked** — `board/inbox/the-asset-catalog-class-arm-needs-four-changes/spec.md` |
 
-Eight of the nine lost checking because the item that owns them is not in the build queue — the
-same condition that made them exempt in the old shape, now read off the path instead of off a
-reference. A `git mv` into `to-build/` restores it with nothing to keep in sync.
+**Four of the nine are a real gap, not a consequence.** The least-advanced-live filing rule can put
+a spec or plan in an `inbox/` item while the work it describes sits in the build queue — so the
+file is exempt even though someone is about to execute it. Three of the five `to-build/` items are
+affected:
 
-**The ninth is a real gap, not a consequence.** `plans/2026-07-25-unified-asset-catalog-plan.md` is
-the plan for board item `unified-asset-catalog`, which *is* in `to-build/` — but the plan was filed
-with the least-advanced live item that cited it, which is in `inbox/`, so it is exempt. Tracked as
-board item `a-to-build-item-s-plan-can-sit-outside-the`.
+| `to-build/` item | its spec | its plan |
+|-------------------------|---|---
+| `unified-asset-catalog` | in the item, checked | in board item `the-unified-asset-catalog-spec-revision` (`inbox/`) — **unchecked** |
+| `docs-restructure` | in board item `docs-restructure-is-complete` (`inbox/`) — **unchecked** | same item — **unchecked** |
+| `actor-preview-faces` | in board item `four-actor-preview-faces-rulings-need-a-durable` (`inbox/`) — **unchecked** | in board item `actor-preview-faces-plan-cites-dev-docs` (`inbox/`) — **unchecked** |
+
+Tracked as board item `a-to-build-item-s-plan-can-sit-outside-the`.
+
+The other five lost checking for the ordinary reason: the work itself is not queued to build. That
+is the same condition that made them exempt in the old shape, now read off the path instead of off
+a reference, and a `git mv` into `to-build/` restores it with nothing to keep in sync.
 
 ---
 

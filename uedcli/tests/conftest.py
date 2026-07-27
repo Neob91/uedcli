@@ -40,8 +40,8 @@ def _isolate_uedcli_home(tmp_path, monkeypatch):
 
 @pytest.fixture(autouse=True)
 def _schema_cache_off(monkeypatch):
-    """The offline suite runs with the persistent package-schema cache OFF by default (spec
-    board item `package-schema-cache` §7/§11): a stale dev-written entry must not
+    """The offline suite runs with the persistent package-schema cache OFF by default (`dev/docs/architecture.md`
+    "Package schema cache"): a stale dev-written entry must not
     poison unrelated tests while the `uprops`/`upackage` decoder is being refactored by a concurrent
     session. The dedicated cache tests (`test_schema_cache.py`) opt back IN. Also clear the module's
     in-process memo so a bundle cached by one test can never leak into another (each `uedcli` command

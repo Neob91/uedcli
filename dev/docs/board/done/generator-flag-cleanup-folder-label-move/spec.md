@@ -6,7 +6,7 @@ scratch — now superseded by the shipped code, `docs/usage.md`, and `direction.
 [`dev/docs/decisions.md`](../../../decisions.md) `2026-07-24 17:04 UTC`. **Date:** 2026-07-24.
 
 **Why this spec exists.** It is the **coupled prerequisite** for the native `intersect`/`deintersect`
-spec (`2026-07-24-intersect-deintersect-native-brushset.md` §7b): those verbs share `brush build`'s
+spec (board item `bspcsg-core-apply-scaled-brushes` §7b): those verbs share `brush build`'s
 output-flag set, which forced the question "what *is* that set." This spec pins the cross-cutting CLI
 change to the **generators** so the shared set is well-defined. It touches `brush build`, `actor build`,
 and `actor add` — wider than the intersect/deintersect work — so it stands alone and sequences **first**.

@@ -445,7 +445,7 @@ done 94) — real count from the inventory — plus 2 handoffs, **71 specs**, **
    not left to judgement — e.g. `to-plan.md:68-72` names two blockers for `poly-surface-verbs` and a
    third that "affects step 1", which is **done**, so it does not demote the to-plan item.
 7. **A spec or plan with no board item** gets an item directory. **18 of the 97 have no board
-   mention**, including `2026-07-18-package-schema-cache.md`, cited live from `uedcli/config.py:260`.
+   mention**, including board item `package-schema-cache`, cited live from `uedcli/config.py:260`.
    Where the work already shipped it lands in `done/` and §3.8's deletion applies — **unless a
    source file cites it**, in which case the citation is first repointed to the durable doc that
    owns that fact (`architecture.md`, `unrealed/*.md` or a `rationale/` topic), named per case in

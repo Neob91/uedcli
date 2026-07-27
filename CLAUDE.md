@@ -662,16 +662,23 @@ paragraph above demands: cut the padding, not the explanation. *(Owner ruling, 2
 `dev/docs/board/<stage>/<slug>/spec.md` and `plan.md`, alongside that item's
 `overview.md`. There is no separate specs or plans tree. A few items carry a
 **second** spec, from work that was specced twice or split in two; it is named
-`spec-<topic>.md` and is **not** covered by the ephemeral exemption below — the
-link checker checks it in every stage. **Both are ephemeral**:
-scratch for designing and sequencing one piece of work, expected to go stale or
-get deleted once that work lands, and deleted with the item when it is pruned
-from `done/`. They are NEVER the durable record. Once something is implemented,
-fold what was actually built, any design decision made along the way, and the
-resulting general direction into the global docs (`architecture.md`,
-`unrealed/*.md`, or another `dev/docs/*.md` as fits) — so the knowledge survives
-even if the originating spec/plan is later removed. (`spikes/` is different: it's
-kept as durable evidence, cited from `architecture.md`/`unrealed/quirks.md` etc.)
+`spec-<topic>.md`.
+
+**All of them are ephemeral**: scratch for designing and sequencing one piece of
+work, expected to go stale or get deleted once that work lands, and deleted with
+the item when it is pruned from `done/`. They are NEVER the durable record. Once
+something is implemented, fold what was actually built, any design decision made
+along the way, and the resulting general direction into the global docs
+(`architecture.md`, `unrealed/*.md`, or another `dev/docs/*.md` as fits) — so the
+knowledge survives even if the originating spec/plan is later removed.
+(`spikes/` is different: it's kept as durable evidence, cited from
+`architecture.md`/`unrealed/quirks.md` etc.)
+
+**Being ephemeral is why the link checker skips them** — an item's `spec.md` and
+`plan.md` are not checked for dead links or dead citations, *except* under
+`to-build/`, where someone is about to act on them. A second spec named
+`spec-<topic>.md` does not match that carve-out, so it is checked in every
+stage. (`uedcli/tests/test_doc_links.py`.)
 
 **When speccing, record every decision I make** — the choice, the alternatives
 rejected, and the reason — as I make it. A spec must capture what *I* decided,

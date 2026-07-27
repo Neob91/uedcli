@@ -256,8 +256,8 @@ def texture_images_root() -> Path:
 
 def schema_cache_root(*, create: bool = False) -> Path:
     """The gitignored, regenerable per-package decoded-schema cache: the per-user, cross-project
-    `<user_cache_home>/schema/`, sibling to `stubs/`/`textures/` (spec
-    board item `package-schema-cache`). Holds one marshal blob per `(package
+    `<user_cache_home>/schema/`, sibling to `stubs/`/`textures/`
+    (`dev/docs/architecture.md` "Package schema cache"). Holds one marshal blob per `(package
     realpath, size, mtime_ns)` stat tuple under a `v<N>/` decoder-version subdir; `schema_cache.py`
     owns the layout. `create=True` `mkdir -p`s it; the default is a pure path (a read must not create
     the dir as a side effect)."""

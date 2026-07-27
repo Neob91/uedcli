@@ -1,6 +1,6 @@
 """folderlib — stored-path grammar, query-pattern grammar, and the §3 globstar match algorithm.
 
-Pins the NORMATIVE matching definition (spec 2026-07-18-actor-folders-hierarchical.md §3): the
+Pins the NORMATIVE matching definition (spec in board item `actor-folders-hierarchical-actor-organization` §3): the
 boundary rules the spec calls out (X.** matches X itself, **.roof matches a top-level roof, * is
 exactly one segment / segment-boundary prefix, *.roof ⊂ *.**.roof, case-insensitivity,
 folder=None matches nothing, ?/[/] rejected).

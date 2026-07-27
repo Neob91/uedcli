@@ -7,7 +7,7 @@ deleted). **Revised 2026-07-24** after two cold reviews — the `--exclude` sema
 §7 sub-choices (`--exclude` spelling, `find -` kept, strict unknown-name exit 2, grep/universe model).
 **Motivation source:** board `board/inbox/` `[spec] p1` (raised while speccing actor-labels — `find --label`
 ORs, so "label X AND Y" was inexpressible).
-**Orthogonal to** the actor-labels spec (`2026-07-22-actor-labels.md`) — this is a general `find`
+**Orthogonal to** the actor-labels spec (board item `re-evaluate-whether-reject-nonlevel-target`) — this is a general `find`
 feature that benefits EVERY filter dimension; it does not change any filter's OR-within semantics.
 **NOTE on examples:** `--label` is NOT built yet (it is the separate actor-labels spec). The primary
 examples below use dimensions that exist TODAY (`--folder`/`--group`/`--class-exact`); `--label`

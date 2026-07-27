@@ -918,7 +918,7 @@ and plan both in board item `re-evaluate-whether-reject-nonlevel-target`; decisi
     the esync-fragile boot enumeration never sees it) and POST-boot symlinked into the local Maps
     farm — the SP-R-confirmed reload mechanism (a unique filename forces a fresh load; see
     `spikes/2026-07-17-game-preview-reload-keying/`). **The WHOLE batch runs in ONE `docker exec`
-    of the in-container `preview_batch.py`** (spec `2026-07-17-game-preview-container-daemon.md` —
+    of the in-container `preview_batch.py`** (spec in board item `level-preview-game` —
     the one-exec drive that replaced ~8-10 per-op `docker exec`/`stats`/`cp` round-trips; a
     persistent-daemon alternative was designed then rejected by review as not worth the surface):
     it symlinks the delivered map in, runs the 3-phase travel handshake (possessed link →
@@ -1484,10 +1484,10 @@ in `spikes/2026-06-25-mover-keyframe-basepos-semantics.md`.
     `bare.endswith("Mover")`. It is the CSG-palette + hidden-line classifier on the shared
     `actor preview` / `stash preview` / `prefab preview` path, so threading a `ClassIndex` into it
     would make those three verbs require a project + the games config too — a further verb family —
-    while the open spec item at the top of `board/to-spec/` is asking whether that requirement
-    should be scoped BACK DOWN. Which verbs may ask the mover question is one decision, so
-    `classify_brush` is folded into that item's scope rather than pre-empted here. **Live
-    consequence until it is decided:** in those wireframe previews `CaroneElevatorSet.CEDoor`,
+    while an open spec item — board item `why-do-seven-verbs-now-require-the-games-config` — is
+    asking whether that requirement should be scoped BACK DOWN. Which verbs may ask the mover
+    question is one decision, so `classify_brush` is folded into that item's scope rather than
+    pre-empted here. **Live consequence until it is decided:** in those wireframe previews `CaroneElevatorSet.CEDoor`,
     `DeusEx.BreakableGlass`/`BreakableWall`, `TNM.Barricade` and the lowercase `TNM.fanmover`/
     `platformmover`/`weakmover` fall through to their `CsgOper`/`PolyFlags` instead of reading as
     movers, while `mover key` and `level doctor` call the same actors movers. Usually only the COLOUR

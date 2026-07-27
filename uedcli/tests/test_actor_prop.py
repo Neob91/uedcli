@@ -1,4 +1,4 @@
-"""actor prop set|unset|get — the subcommand surface (spec 2026-07-18-actor-prop-subcommands.md).
+"""actor prop set|unset|get — the subcommand surface (spec in board item `materialize-post-verify-fails-when-the-trunk`).
 
 Each test seeds an in-memory Level, patches the trunk seam (`_resolve_level_source`) and the four
 schema seams (`_class_schema`/`_class_defaults`/`_struct_members`/`_enum_names`), invokes

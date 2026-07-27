@@ -296,12 +296,12 @@ def classify_brush(actor: Actor) -> str:
     Everywhere else mover-ness is decided by the class hierarchy (`decisions.md` 2026-07-25 10:18
     UTC), but that predicate needs a `classindex.ClassIndex`, and this function sits on the shared
     `actor preview` / `stash preview` / `prefab preview` path — so threading one in would make those
-    three verbs require a project + the per-user games config as well. An OPEN spec item
-    (`dev/docs/board/to-spec/`, top) is deciding whether that requirement should shrink from the
-    set of verbs that now have it, and this classifier is explicitly in that item's scope. Until it
-    is answered, a mover whose class name does not end in `Mover` (`CEDoor`, `BreakableGlass`, the
-    lowercase `TNM.*mover` classes) falls through to its `CsgOper`/`PolyFlags` here instead of
-    reading as a mover. Usually that is cosmetic — it lands on `add`, and `is_solid` treats `add` and
+    three verbs require a project + the per-user games config as well. An open spec item — board
+    item `why-do-seven-verbs-now-require-the-games-config` — is deciding whether that requirement
+    should shrink from the set of verbs that now have it, and this classifier is explicitly in
+    that item's scope. Until it is answered, a mover whose class name does not end in `Mover`
+    (`CEDoor`, `BreakableGlass`, the lowercase `TNM.*mover` classes) falls through to its
+    `CsgOper`/`PolyFlags` here instead of reading as a mover. Usually that is cosmetic — it lands on `add`, and `is_solid` treats `add` and
     `mover` alike — but a mover carrying `CsgOper=CSG_Subtract` or `PF_NotSolid` also loses its
     hidden-line solidity."""
     if actor.cls.rpartition(".")[2].endswith("Mover"):

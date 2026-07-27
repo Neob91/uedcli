@@ -10,7 +10,7 @@ Ephemeral — fold into `usage.md` + `architecture.md` if/when built. Revised 20
 reviews (the `parse_coord` reuse, the `@Actor` resolver, and the Decimal/float distance were all wrong
 in the first draft; fixed below). **Code refs symbol-anchored** (lines drift).
 **Decisions ledger:** append on confirmation of the §7 sub-choices.
-**Sibling** of `2026-07-24-find-prop-predicates.md`; **relational** is a deferred board item. Composes
+**Sibling** of `spec.md`; **relational** is a deferred board item. Composes
 with the composable-`find` boolean model — a spatial filter is just another ATOM.
 
 ---

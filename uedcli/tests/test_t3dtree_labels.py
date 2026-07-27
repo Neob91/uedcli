@@ -2,7 +2,7 @@
 
 Labels ride the ONE shared per-actor T3D-tree path beside the `folder` sidecar: `<dir>/labels`, one
 label per line, sorted. Empty labels write NO file, and clearing a previously-labelled actor REMOVES
-the file (mirrors `folder` unset). Pins spec 2026-07-22-actor-labels.md §2.
+the file (mirrors `folder` unset). Pins spec in board item `re-evaluate-whether-reject-nonlevel-target` §2.
 """
 from uedcli import t3dtree
 from uedcli.model import Actor, Level

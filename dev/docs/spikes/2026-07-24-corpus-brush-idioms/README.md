@@ -58,7 +58,7 @@ finding is worth keeping as evidence:
   `2×` its documented distance, and the self-test's fuse constant silently encodes that 2×; unguarded
   file read throws a raw traceback (violates the CLI convention); O(n²) in Decimal will crawl on a
   real map; Movers (brush actors, `cls != "Brush"`) get clustered as "brushes".
-- **Also:** the study spec (`../../specs/2026-07-24-corpus-brush-idioms.md` §7.4) already prescribes
+- **Also:** the study spec (board item `brush-identify-classify-a-real-brush-s-shape` §7.4) already prescribes
   **hand-selection** for the 4-map pilot, and the qualitative wireframe pass is the *secondary*
   deliverable — so this harness automated (badly) a step the spec chose to do by hand.
 

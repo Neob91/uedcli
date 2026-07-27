@@ -1,4 +1,4 @@
-"""`actor order` + `actor add --order` — end-to-end (spec 2026-07-18-csg-order-control.md §5/§7).
+"""`actor order` + `actor add --order` — end-to-end (spec in board item `csg-order-control-actor-order-actor-add-order` §5/§7).
 
 Drives the real argparse parser through `dispatch()` so the mutually-exclusive selector group, the
 `--order` grammar, the pre-resolve trunk-only guards, and the named exit-2 guards are all exercised.

@@ -9,7 +9,7 @@ destroys authored work and cannot be corrected without an explicit migration.
 > **Part of the split asset-catalog spec set** (split 2026-07-26 after two spec-gate rounds returned
 > ~103 findings and the churn proved to be concentrated in the texture and audio arms — see
 > `board/inbox/`). The shared engine, storage layout, verb surface, decisions and prerequisites live in
-> **[`2026-07-26-asset-catalog-engine.md`](spec.md)**, which every arm depends
+> **[`spec.md`](spec.md)**, which every arm depends
 > on and which is built first. Sibling arms:
 > class (board item `the-asset-catalog-class-arm-needs-four-changes`) ·
 > [texture](spec-texture-arm.md) ·

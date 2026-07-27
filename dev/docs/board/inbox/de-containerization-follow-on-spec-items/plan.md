@@ -1,6 +1,6 @@
 # `level preview --native` — implementation plan
 
-**Spec:** [`../specs/2026-07-16-native-preview-design.md`](spec.md)
+**Spec:** [`spec.md`](spec.md)
 (two-cold-reviewer gated, findings folded). **Decisions:** `decisions.md` 2026-07-16 12:13 UTC.
 **Status:** draft (plan gate pending). Ephemeral — delete once built; durable knowledge folds into
 `architecture.md`.

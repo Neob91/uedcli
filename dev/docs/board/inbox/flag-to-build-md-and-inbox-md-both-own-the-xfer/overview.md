@@ -12,5 +12,5 @@ Not my change.
 all three `xfer` subprocesses — `board/README.md` says one home per item. Separately `board/to-build/`
 lists `xfer.cp_in` among zero-caller dead code to DELETE while also scheduling it for a timeout
 bound; whichever builder runs first invalidates the other. Also two `board/to-build/` links point at
-specs that are untracked (`2026-07-25-trunk-write-safety.md`,
-`2026-07-25-decimal-map-coordinates.md`). (2026-07-25, round-4 cold reviews.)
+specs that are untracked (board item `trunk-save-lost-update-detection-aborts`,
+the spec in this item). (2026-07-25, round-4 cold reviews.)

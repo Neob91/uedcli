@@ -377,7 +377,7 @@ behavior is in [`rendering.md`](rendering.md). Evidence: `../../dev/docs/spikes/
 ## Scale & sheer (`MainScale` / `PostScale` / `SheerRate`)
 A brush actor carries two scale transforms plus a sheer. uedcli **applies** scale in its model-side
 measurement, stores it in typed fields, and bakes it (`brush apply-transform`) — see `architecture.md`
-"Scale" and spec `../specs/2026-07-18-scale-support.md`. The substrate's exact behavior is pinned
+"Scale" and spec in board item `scale-support-mainscale-postscale-use-store-bake`. The substrate's exact behavior is pinned
 (`../spikes/2026-06-25-scale-transform-mechanics.md` ✅ live +
 `../spikes/2026-06-25-mainscale-postscale-applytransform.md` 🔬 disassembled):
 - **The world transform is `world = Location + PostScale·R·MainScale·(v − PrePivot)`.** `MainScale`

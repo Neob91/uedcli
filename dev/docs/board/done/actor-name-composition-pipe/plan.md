@@ -1,6 +1,6 @@
 # Plan — actor-name composition pipe (`-` on name-takers + `actor add` name output)
 
-Spec: [`../specs/2026-07-18-actor-name-compose-pipe.md`](spec.md)
+Spec: [`spec.md`](spec.md)
 (§8 review-gate resolutions are authoritative). Ephemeral; fold learnings into the durable docs
 once landed.
 

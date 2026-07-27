@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-01 · **Status:** complete · live-verified against an ephemeral UED22 editor.
 
-**Question.** The global-CLI `paths` design (spec `2026-06-29-uedcli-global-cli-projects-design.md`
+**Question.** The global-CLI `paths` design (spec in board item `uedcli-as-a-global-cli-over-multiple-projects`
 §3.4/§8) relies on *project-shadows-base*: a project package overrides a same-named base one, the way
 the engine's own search path shadows. Verify the two hypotheses it rests on:
 - **H1 — first-match-wins:** if two dirs on `[Core.System] Paths` each hold a same-named package, the

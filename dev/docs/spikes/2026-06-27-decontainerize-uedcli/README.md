@@ -40,7 +40,7 @@ except one already-known long pole:
   **The pivotal decision for Andrzej (Q0 in the roadmap spec):** commit to D2 (promote it
   from the `decisions.md` 12:40 "optional" status to required — the editor-based D0/D1 path
   can't serve an editor-free pipeline), or adopt an editor-`MAP REBUILD`-only-geometry
-  intermediate. Roadmap + open questions: `../../specs/2026-06-27-uedcli-decontainerization-roadmap-design.md`.
+  intermediate. Roadmap + open questions: board item `de-containerize-uedcli-drop-docker-wine-exe`.
 
 ## Why (the ask)
 

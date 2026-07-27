@@ -6,8 +6,8 @@ The design below is review-clean (two cold passes — typed-field seam, `_valida
 parse, `~=` dependency all folded), but it is NOT approved to sequence. Ephemeral — fold into
 `usage.md` + `architecture.md` if/when built. **Code refs symbol-anchored** (lines drift).
 **Decisions ledger:** append on confirmation of the §8 sub-choices.
-**Extends** the `find --prop` EQUALITY matcher (spec `2026-07-18-actor-prop-subcommands.md`, §7).
-Sibling of `2026-07-24-find-spatial.md`; **relational** is a deferred board item. Adds richer ATOMS to
+**Extends** the `find --prop` EQUALITY matcher (spec in board item `materialize-post-verify-fails-when-the-trunk`, §7).
+Sibling of `spec-find-spatial.md`; **relational** is a deferred board item. Adds richer ATOMS to
 the composable-`find` boolean model.
 
 ---
