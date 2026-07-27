@@ -10,10 +10,10 @@ depends-on = ["native-texture-decode"]
 **NOT ON DECK.** A 3-reviewer spec round on 2026-07-26 returned structural findings; the owner's
 rulings were folded and the spec re-entered the gate at round 1, which is where it is now. The plan
 is **stale and needs re-cutting** (it carries its own `RE-CUT REQUIRED` banner listing what no slice
-covers yet). This item sits in `to-spec/` rather than the build queue because **two questions in
-`questions/` are unanswered** — owner decision 2.13: an item that gains a blocking question moves
-back here. It returns to `to-build/` only when both are folded out, the spec passes a round, and the
-plan is re-cut and reviewed.
+covers yet). **Two questions in `questions/` are unanswered.** A question does not move its item — owner
+ruling — so this stays in the build queue with its blockers attached and `bin/board questions`
+lists them. It is startable only when both are folded out, the spec passes a round, and the plan is
+re-cut and reviewed.
 
 Plan: [`../../../plans/2026-07-25-unified-asset-catalog-plan.md`](../../../plans/2026-07-25-unified-asset-catalog-plan.md).
 Spec: SPLIT 2026-07-26 into [`engine`](../../../specs/2026-07-26-asset-catalog-engine.md) + [`class`](../../../specs/2026-07-26-asset-catalog-class-arm.md) + [`texture`](../../../specs/2026-07-26-asset-catalog-texture-arm.md) + [`audio`](../../../specs/2026-07-26-asset-catalog-audio-arm.md).
