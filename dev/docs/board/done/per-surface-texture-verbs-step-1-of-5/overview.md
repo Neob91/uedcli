@@ -7,8 +7,8 @@ summary = "Per-surface texture verbs, STEP 1 of 5 — DONE"
 # Per-surface texture verbs, STEP 1 of 5 — DONE
 
 (2026-07-26, was `p1` on `to-build.md`; plan
-`../plans/2026-07-26-poly-surface-step1-plan.md`, spec
-`../specs/2026-07-26-poly-surface-verbs.md` §2.0–§2.2/§2.5/§3.1). `brush poly set` lost
+`dev/docs/plans/2026-07-26-poly-surface-step1-plan.md`, spec
+`dev/docs/specs/2026-07-26-poly-surface-verbs.md` §2.0–§2.2/§2.5/§3.1). `brush poly set` lost
 `--pan-to`/`--pan-by` (deleted outright, no shim) and now assigns stored ATTRIBUTES only; three new
 verbs transform the texture FRAME: **`brush poly pan (--to|--by) U,V`** (whole texels, writes
 `Pan`, never `Origin`), **`brush poly rotate --by UU`** (unreal rotation units, exact `n̂ ×` path at
@@ -17,7 +17,7 @@ so it divides the stored magnitudes). Both transforms re-anchor on the face cent
 `Origin' = C − R(C − Origin)`, `scale` by a 2×2 Gram solve, which is what keeps a SKEWED frame
 correct under a non-uniform factor. All four per-face verbs now print `BRUSH:idx` selectors on
 stdout instead of brush names (owner ruling: a bare name silently widens the set downstream).
-Durable write-ups: `../architecture.md` "Surface edits" and `../rationale/surface.md`; the
+Durable write-ups: `../architecture.md` "Surface edits" and `dev/docs/rationale/surface.md`; the
 user-facing half is in `docs/usage.md` and `docs/leveldesign/general/textures-and-surfaces.md`.
 **Built in the `poly-surface-step1` worktree; the build gate ran its full two rounds, and both
 found real defects.** Round 1: six findings plus two wording items and an extra pin — an

@@ -232,7 +232,7 @@ docs were measured **on** the retail corpus, on the same date, from a session th
 census over twelve maps and the `02_NYC_Street.dx` polygon-label count. So the blocker is
 environmental, not a property of the project: on a machine with a game copy and the container, the
 gate is runnable as specified. It is logged as an outstanding item on
-[`../board/inbox.md`](../board/inbox.md).
+[`../board/inbox.md`](../board/inbox/).
 
 Be precise about what this means: the decode demonstrably reads real compiled maps and produces
 parseable, stable, correctly-shaped T3D. Whether every value form matches the editor's spelling

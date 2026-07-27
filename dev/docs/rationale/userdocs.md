@@ -15,7 +15,7 @@ addressed by (its path with `.md` dropped, a `README.md` folded onto its directo
 > freely revisable, which is the wrong protection for a ruling he made. The product intent (docs
 > are an asset of the tool; a shipped skill queries the tool instead of bundling copies) and the
 > duplicate-key hard error are his; both are parked as `[OWNER — confirm]` items on
-> [`../board/inbox.md`](../board/inbox.md) with the proposed `direction/` wording, pending his yes.
+> [`../board/inbox.md`](../board/inbox/) with the proposed `direction/` wording, pending his yes.
 > They are restated below because a reader needs them in place to follow the engineering — but
 > **`direction/` is where they will live, and this file must not be treated as their home.**
 
@@ -108,7 +108,7 @@ already imperceptible, and an index is one more artifact that can disagree with 
 ## A duplicate topic key is a hard error, not a precedence rule
 
 **This one is the OWNER's ruling, not an engineering call** — parked as an `[OWNER — confirm]`
-item on [`../board/inbox.md`](../board/inbox.md) for `direction/conventions.md`. What follows is
+item on [`../board/inbox.md`](../board/inbox/) for `direction/conventions.md`. What follows is
 the reasoning behind it, kept here so the code is readable; the ruling itself belongs there.
 
 **Why it is this way:** two files can claim one key — `X/README.md` beside a sibling `X.md`, a

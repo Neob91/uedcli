@@ -10,7 +10,7 @@ Spec written
 + **both cold-review gates passed** (findings resolved inline — the polarity-symmetry claim corrected (ALL
 asymmetric predicates are flip-dependent), `visible_normal` now inverse-transpose(`actor_linear`) so it is
 correct under scale/shear/reflection and unifies `list_polys`+`find_faces`, full test-migration plan):
-[`../specs/2026-07-24-facing-selector-grammar.md`](../../../specs/2026-07-24-facing-selector-grammar.md).
+[`dev/docs/specs/2026-07-24-facing-selector-grammar.md`](../../../specs/2026-07-24-facing-selector-grammar.md).
 Replaces `--facing`'s single geometric axis token (`+X..-Z`/`slant`, polarity-BLIND — returns a subtract
 room's CEILING for `+Z`) with predicates on the face *visible normal* `(nx,ny,nz)` (`;`=AND, `:`=axis:spec,
 `,`=OR, `..`=range; pose-grammar delimiters), presets `flat`/`wall`/`ramp` (polarity-free) + polarity-aware

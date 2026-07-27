@@ -8,7 +8,7 @@ summary = "Composable `actor find` — stdin name-set input for full boolean que
 
 Spec
 written + **two cold reviews folded** (the `--exclude` semantics changed from "subtract the piped set"
-(`M∖P`) to a **grep/universe model**): [`../specs/2026-07-24-composable-find.md`](../../../specs/2026-07-24-composable-find.md).
+(`M∖P`) to a **grep/universe model**): [`dev/docs/specs/2026-07-24-composable-find.md`](../../../specs/2026-07-24-composable-find.md).
 Makes `actor find` accept a name set on stdin (`-`) so filters COMPOSE into full boolean queries —
 today `--label` (and every other dimension) ORs within itself, so "label X AND Y" is inexpressible.
 Model: the piped set is the **universe**, the filters are the **predicate**, `--exclude` negates.

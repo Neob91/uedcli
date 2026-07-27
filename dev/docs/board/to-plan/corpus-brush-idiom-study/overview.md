@@ -12,7 +12,7 @@ consistency gate; three-way reproducibility split (existing-generator / missing-
 `level import` demoted from blocker to convenience — pilot uses the proven `MAP EXPORT`->trunk route;
 new `brush build extrude` prerequisite surfaced; quant-first / wireframes-secondary; pilot delivers
 harness+method only with durable numbers gated on the scaled run; behavioral acceptance eval as the
-done-condition): [`../specs/2026-07-24-corpus-brush-idioms.md`](../../../specs/2026-07-24-corpus-brush-idioms.md).
+done-condition): [`dev/docs/specs/2026-07-24-corpus-brush-idioms.md`](../../../specs/2026-07-24-corpus-brush-idioms.md).
 Extracts ONLY the brush-construction idiom vocabulary (shape alphabet + composition grammar +
 complexity/BSP budget) from the retail DX maps, UE1 (Unreal Gold SP primary; UT99 sparingly) as the
 differential control, output as **generator reverse-mapping**; grounds

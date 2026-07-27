@@ -6,7 +6,7 @@ summary = "Per-surface texture verbs — STEPS 2-5 (the `brush poly align` half)
 
 # Per-surface texture verbs — STEPS 2-5 (the `brush poly align` half)
 
-Spec: [`../specs/2026-07-26-poly-surface-verbs.md`](../../../specs/2026-07-26-poly-surface-verbs.md).
+Spec: [`dev/docs/specs/2026-07-26-poly-surface-verbs.md`](../../../specs/2026-07-26-poly-surface-verbs.md).
 **Spec gate: PASSED** — at its ceiling; every round's findings are folded into the sections
 themselves. **Step 1 is BUILT** (2026-07-26 — `brush poly pan|rotate|scale`; see
 board item `per-surface-texture-verbs-step-1-of-5`); these are the four steps after it, and the spec's §4.4 sequences them under
@@ -40,7 +40,7 @@ they differ in kind, and the review rounds repeatedly found defects at the seams
 which go red, by step. Relaxing one of those to make it pass is how a shipped capability gets lost
 quietly.
 
-**Two `[OWNER — decide]` items are parked on [`inbox.md`](../../inbox.md)** and both change how EXISTING
+**Two `[OWNER — decide]` items are parked on [`inbox.md`](../../inbox/)** and both change how EXISTING
 content renders — a plan should not assume either answer: the `wall`/`floor` guard deletion (a
 double-sided wall that errors today will succeed, mirrored on its back face) and `run`'s V-flip
 (re-aligning any existing cylinder wrap flips its texture vertically). A third, `rotate`'s turn

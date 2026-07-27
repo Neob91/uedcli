@@ -6,7 +6,7 @@ summary = "The board becomes one directory per work item"
 
 # The board becomes one directory per work item
 
-Spec: [`../specs/2026-07-27-board-per-item-directories.md`](../../../specs/2026-07-27-board-per-item-directories.md).
+Spec: [`dev/docs/specs/2026-07-27-board-per-item-directories.md`](../../../specs/2026-07-27-board-per-item-directories.md).
 Every stage (`inbox`, `to-spec`, `to-spike`, `to-plan`, `to-build`, `someday`, `stale`, `done`)
 becomes a directory of item directories; an item is `overview.md` (required) plus optional
 `spec.md`, `plan.md` and `questions/<q>.md`, and advances by one `git mv`. Fixes the three
@@ -28,4 +28,4 @@ Four things a plan must respect: nothing is re-triaged or judged stale during th
 exception to their own rule); `CLAUDE.md`'s round-2 trigger excludes `dev/docs/board/*`, so
 moving specs under the board would silently kill every spec and plan round 2 unless that
 exclusion is narrowed (§4.1); and `direction/process.md` carries a sentence this change makes
-wrong, whose replacement is parked on [`inbox.md`](../../inbox.md).
+wrong, whose replacement is parked on [`inbox.md`](../../inbox/).
