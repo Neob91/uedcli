@@ -5,6 +5,39 @@ lands here first, with no obligation to know its stage yet. This is the *pre-pip
 stage (so no `to-` prefix). See [`README.md`](README.md).
 
 **Triage** routes each item to where its next action lives:
+- `p1` `[OWNER — confirm]` **The board is being restructured into one directory per work item, and
+  two of your process rules need your yes before it can land.** Spec:
+  [`../specs/2026-07-27-board-per-item-directories.md`](../specs/2026-07-27-board-per-item-directories.md).
+  You decided the shape live on 2026-07-27 (every stage the same, `git mv` to advance, blocking
+  questions as files, stale shelved not deleted, references by slug, YAML frontmatter, and no
+  `[spec]`/`[plan]` kinds because "each issue gets a plan"). Those decisions currently exist only in
+  an **ephemeral** spec, so they are parked here verbatim.
+
+  **(A) Proposed replacement for the LAST SENTENCE of the "Nothing load-bearing lives only in chat"
+  bullet in `direction/process.md` (line 53, from "The board is a set…"), staying inside the
+  bullet:**
+
+  > The board is a set of stages named for the *next action* an item needs, and **each work item is
+  > a directory** whose stage is the directory it sits in — including the inbox, the someday shelf,
+  > the stale shelf and the done tail, so advancing an item is a single `git mv`. An item is
+  > referenced by its **slug**, never by its path, because its path encodes the stage and the stage
+  > changes. Its directory holds an `overview.md` — priority, kind, a short description, what it
+  > depends on, then the detail — and may hold the item's `spec.md`, its `plan.md`, and a
+  > `questions/` directory. **A question file is a blocker**: the thing that must be answered before
+  > the item can be planned or built. It is answered by writing into its empty `## Answer` section,
+  > after which an agent folds the decision into its durable home and deletes the file. **Nothing is
+  > deleted to tidy the board** — work judged stale is shelved, and the shelving list is confirmed in
+  > bulk rather than applied item by item.
+
+  **(B) A one-off exception to YOUR worktree rule, for this migration only.** `CLAUDE.md` says a
+  feature is built in a worktree and squash-merged. That is unsafe here: **35% of the last three
+  days' commits touch `inbox.md`**, and a worktree that deletes it and is squash-merged days later
+  hits a modify/delete conflict whose obvious resolution silently discards every item other sessions
+  added meanwhile — including review findings, which your own rules require to be logged there.
+  Proposed instead: run the migration **on the base branch in committed batches, one stage at a
+  time, smallest first, with `inbox.md` last and announced before it starts.** Say the word if you'd
+  rather it ran in a worktree with a board freeze instead. *(2026-07-27.)*
+
 - `p2` `[OWNER — confirm]` **Could the `--faces` build start before the texture decoder lands?**
   Decision 2.11 says the decoder item builds first, then all of the `--faces` work, and
   [`plans/2026-07-27-actor-preview-faces-plan.md`](../plans/2026-07-27-actor-preview-faces-plan.md)
