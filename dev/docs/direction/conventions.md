@@ -40,6 +40,25 @@ caller takes the partial answer for a complete one.
   unreadable ancestor package, an absent games config: each is an error naming what is
   missing, never a degraded answer. There is no `--force` and no `--allow-partial` — a flag
   to opt into a wrong answer is still a wrong answer.
+- **ANY `<package>.<name>` resource that cannot be resolved is an ERROR — expected, and
+  correct.** *(Owner ruling, 2026-07-27.)* This covers every kind alike: **class, texture,
+  sound, music**, and whatever kinds come later. If a verb references a resource by
+  package-qualified name and that resource is unavailable, the verb **exits 2 naming it**.
+  It does not substitute a zero, a default, a placeholder, a nearest match, an empty set,
+  or "the one that is probably meant".
+  - **Erroring here is not a regression to be softened.** A verb that newly needs a package
+    — because it started resolving something it used to assume — is *allowed* to start
+    failing where it used to "work", because what it used to do was guess. Do not add a
+    fallback to keep the old behaviour, and do not water the requirement down to a warning.
+  - **Not needing the resource is different from failing to find it.** Resolving lazily, so
+    a run that never references a resource never needs its package, is fine and encouraged
+    — that is not a fallback, it is not asking a question whose answer does not matter. The
+    rule bites only once the reference is actually made.
+  - **An OPTIONAL resolver parameter is a fallback in disguise.** A function that takes
+    `resolver=None` and quietly answers from a zero/default when the caller omits it has a
+    silent wrong-answer path that no test of the wired-up verb will ever cover. Make it
+    required; let the omission be a `TypeError` at author time rather than a wrong pivot,
+    texture or sound at run time.
 - **A flag that cannot act where it was passed is an error**, not a warn-and-continue: a
   flag that silently succeeds while doing nothing is indistinguishable from a broken one.
 - **A predicate answers or it RAISES.** "Don't know" is never returned as `False` — an

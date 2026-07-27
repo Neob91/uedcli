@@ -277,6 +277,11 @@ def test_uniform_postscale_rotate_does_not_warp_warn(capsys):
 # (build-review finding #6, 2026-07-26: the unit tests pinned `best_grid_pivot` but nothing asserted
 # what a user actually sees — that the verbs leave a lone actor where it was.)
 
+def _never_resolver(actor):
+    """Must not be called — the actor states a Location (see test_rotate_pivot._never)."""
+    raise AssertionError(f"class schema consulted for {actor.name!r}, which states a Location")
+
+
 def _bounds(actor):
     wv = R.world_vertices(actor)
     return (tuple(min(w[i] for w in wv) for i in range(3)),
@@ -299,7 +304,7 @@ def test_rotate_by_pivots_on_a_members_location_not_the_bbox_centre():
     centre at 1064 while the Location stays 1000, so the superseded centre rule and the own-Location
     rule differ by 64 uu."""
     a = make_brush_actor("C", _offset_cube(128, 64.0), location=(D(1000), D(0), D(0)))
-    assert R.best_grid_pivot([a]) == (D(1000), D(0), D(0))     # NOT the centre (1064, 64, 64)
+    assert R.best_grid_pivot([a], _never_resolver) == (D(1000), D(0), D(0))     # NOT the centre (1064, 64, 64)
     args = SimpleNamespace(cmd="actor", sub="rotate", names=["C"], to=None,
                            by=(D(0), D(32768), D(0)), pivot=None, pivot_actor=None,
                            tree=None, container="c")

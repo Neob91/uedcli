@@ -433,7 +433,7 @@ _TIE_EPS = 1e-6            # equidistant-from-centre grouping; symmetric sets ti
 _ORIGIN = (Decimal(0), Decimal(0), Decimal(0))
 
 
-def actor_own_pivot(actor, class_default=None):
+def actor_own_pivot(actor, class_default):
     """The world point that stays fixed when THIS actor turns about itself — its `Location`, because
     `world = Location + PostScale·R·MainScale·(v − PrePivot)` maps `v == PrePivot` to `Location`
     exactly. An AUTHORED coordinate: whatever grid the designer built on, it is already on it.
@@ -448,10 +448,16 @@ def actor_own_pivot(actor, class_default=None):
     So an actor carrying no `Location` is wherever its class puts it — not "missing a pivot". This
     never returns None, and there is no case to fall back from.
 
-    `class_default` is that resolved default (a Decimal triple, or None when the class does not
-    default `Location` — then, and only then, the effective value is the zero vector). It is a
-    parameter rather than a lookup because this module is offline and schema-free; the caller owns
-    the package search path.
+    `class_default` is that resolved default: a Decimal triple, or `None` **only** in the one case
+    that is a real answer rather than a missing one — the class does not default `Location` at all,
+    so the effective value is the property type's zero. It is a parameter rather than a lookup
+    because this module is offline and schema-free; the caller owns the package search path.
+
+    **REQUIRED, deliberately.** As `class_default=None` it read "no resolver supplied → assume the
+    origin", which is a fallback for an unavailable `<package>.<name>` resource and is forbidden
+    (`direction/conventions.md`). It is the worst shape of one: silent, and invisible to every test
+    of the wired-up verb, because the wired-up verb always passes a resolver. Omitting it is now a
+    `TypeError` at author time instead of a wrong pivot at run time.
 
     **"A vector defaults to (0,0,0)" is FALSE and must not be reinstated** — `Engine.Camera` defaults
     `Location=(X=-500,Y=-300,Z=300)` (verified live), and `dev/docs/architecture.md` names assuming
@@ -461,13 +467,16 @@ def actor_own_pivot(actor, class_default=None):
     that says nothing about an imported or hand-written T3D."""
     loc = actor.location
     if loc is None:
+        # `None` here means the CLASS does not default Location — a resolved answer, not a missing
+        # one, so the type zero is correct. An unresolvable class never reaches this: the resolver
+        # raises, and the verb exits 2 naming the actor.
         return _ORIGIN if class_default is None else tuple(class_default)
     # Normalised to Decimal: a caller that built the Actor in memory can hold floats, and the
     # arithmetic downstream is Decimal.
     return tuple(c if isinstance(c, Decimal) else Decimal(str(c)) for c in loc)
 
 
-def best_grid_pivot(actors, class_default=None):
+def best_grid_pivot(actors, class_default):
     """The pivot for `--by`: **the own-pivot (`Location`) of the set member nearest the selection's
     bbox centre**, so rotation turns about an AUTHORED point rather than a synthesized one. Grid
     alignment is therefore inherited — a Location the designer placed on the 16-grid keeps the set on
@@ -485,11 +494,13 @@ def best_grid_pivot(actors, class_default=None):
       brushes (`Location=(0,0,0)`, world-space vertices) therefore pivots about the world origin;
       `--pivot`/`--pivot-actor` is the escape hatch for that.
 
-    `class_default` is an optional `fqcn -> Decimal triple | None` callable supplying a class's
+    `class_default` is a REQUIRED `actor -> Decimal triple | None` callable supplying a class's
     default `Location`, consulted ONLY for an actor that does not state one (`Engine.Camera` defaults
     it to `(-500,-300,300)`, so assuming zero would pivot 655 uu from where the engine puts the
-    actor). Omitted, such an actor falls to the origin — correct for every class that does not
-    default `Location`, which is nearly all of them.
+    actor). It is not optional and has no "good enough" stand-in: guessing the origin for a class
+    whose package could not be loaded is exactly the fallback `direction/conventions.md` forbids for
+    a `<package>.<name>` resource. A set whose actors all state a Location never invokes it, so an
+    ordinary rotate still needs no package.
 
     There is NO fallback rule: every actor has an effective Location, so a non-empty set always has a
     pivot. An empty set is the only other case, and it is the world origin.

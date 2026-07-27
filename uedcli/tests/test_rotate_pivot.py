@@ -1,7 +1,17 @@
 from decimal import Decimal
 
+import pytest
+
 from uedcli.model import parse_t3d
 from uedcli.rotation import best_grid_pivot
+
+
+def _never(actor):
+    """A resolver that must NOT be called: every actor in these sets states a Location, so the class
+    schema is never needed. Passing this instead of omitting the parameter is the point — the
+    resolver is REQUIRED (`direction/conventions.md`, no fallback for an unresolvable
+    `<package>.<name>`), and this pins that these cases never reach for a package."""
+    raise AssertionError(f"class schema consulted for {actor.name!r}, which states a Location")
 
 
 def _lvl(t3d):
@@ -21,9 +31,14 @@ def test_an_unauthored_location_resolves_to_the_CLASS_default():
     assert best_grid_pivot(cam, lambda fq: None) == (Decimal(0), Decimal(0), Decimal(0))
 
 
-def test_an_unauthored_location_without_a_resolver_is_the_origin():
-    """With no `class_default` supplied the origin is used — correct for every class that does not
-    default `Location`, which is nearly all of them."""
+def test_the_resolver_is_required_so_there_is_no_silent_origin_fallback():
+    """Owner ruling, 2026-07-27: an unresolvable `<package>.<name>` resource is an ERROR, never a
+    substituted zero. `class_default` used to be optional and answered "the origin" when omitted —
+    a silent wrong-answer path invisible to every test of the wired-up verb, since the verb always
+    passes a resolver. Omitting it is now a TypeError at author time.
+
+    A resolver reporting `None` is a different thing and still legitimate: it means the class does
+    not default `Location` at all, so the type zero IS the effective value."""
     actors = _lvl(
         "Begin Actor Class=Brush Name=B\n"
         "    Begin Brush Name=M\n       Begin PolyList\n         Begin Polygon\n"
@@ -31,7 +46,9 @@ def test_an_unauthored_location_without_a_resolver_is_the_origin():
         "          Vertex +256.000000,+256.000000,+0.000000\n"
         "          Vertex +260.000000,+0.000000,+0.000000\n         End Polygon\n"
         "       End PolyList\n    End Brush\n    Name=\"B\"\nEnd Actor\n")
-    assert best_grid_pivot(actors) == (Decimal(0), Decimal(0), Decimal(0))
+    with pytest.raises(TypeError):
+        best_grid_pivot(actors)                       # no resolver → cannot answer, will not guess
+    assert best_grid_pivot(actors, lambda a: None) == (Decimal(0), Decimal(0), Decimal(0))
 
 
 def test_fractional_point_locations_are_used_as_authored():
@@ -40,7 +57,7 @@ def test_fractional_point_locations_are_used_as_authored():
     actors = _lvl(
         "Begin Actor Class=Light Name=L1\n    Location=(X=10.500000,Y=0.500000,Z=0.500000)\n    Name=\"L1\"\nEnd Actor\n"
         "Begin Actor Class=Light Name=L2\n    Location=(X=20.500000,Y=0.500000,Z=0.500000)\n    Name=\"L2\"\nEnd Actor\n")
-    assert best_grid_pivot(actors) == (Decimal("10.5"), Decimal("0.5"), Decimal("0.5"))
+    assert best_grid_pivot(actors, _never) == (Decimal("10.5"), Decimal("0.5"), Decimal("0.5"))
 
 
 def _brush(name, loc, verts):
@@ -70,7 +87,7 @@ def test_a_brush_pivots_on_its_own_location():
     """The point that stays fixed when a brush turns about itself IS its Location, so a lone brush
     turns in place — no synthesized coordinate, and the pivot inherits whatever grid it was authored
     on."""
-    assert best_grid_pivot([_cube_at("B", (64, 64, 0))]) == (Decimal(64), Decimal(64), Decimal(0))
+    assert best_grid_pivot([_cube_at("B", (64, 64, 0))], _never) == (Decimal(64), Decimal(64), Decimal(0))
 
 
 def test_a_raw_csg_brush_contributes_its_location_unfiltered():
@@ -82,14 +99,14 @@ def test_a_raw_csg_brush_contributes_its_location_unfiltered():
     surprise."""
     actors = _lvl(_brush("Bore", (0, 0, 0),
                          [(0, 1216, 128), (0, 1248, 272), (64, 1248, 128)]))
-    assert best_grid_pivot(actors) == (Decimal(0), Decimal(0), Decimal(0))
+    assert best_grid_pivot(actors, _never) == (Decimal(0), Decimal(0), Decimal(0))
 
 
 def test_a_lone_point_actor_turns_in_place_and_is_never_snapped():
     """Point actors are usually off-grid, and snapping one would MOVE it. Its Location is the pivot
     verbatim, fraction and all."""
     actors = _lvl(_point("Prop", ("1013.500000", "227.250000", "41.000000")))
-    assert best_grid_pivot(actors) == (Decimal("1013.5"), Decimal("227.25"), Decimal("41"))
+    assert best_grid_pivot(actors, _never) == (Decimal("1013.5"), Decimal("227.25"), Decimal("41"))
 
 
 def test_actors_sharing_one_location_rotate_about_themselves():
@@ -97,14 +114,14 @@ def test_actors_sharing_one_location_rotate_about_themselves():
     rounding, no snapping, whatever fraction the Location carries."""
     loc = ("512.250000", "64.750000", "8.000000")
     actors = _lvl(_point("A", loc) + _point("B", loc) + _point("C", loc))
-    assert best_grid_pivot(actors) == (Decimal("512.25"), Decimal("64.75"), Decimal(8))
+    assert best_grid_pivot(actors, _never) == (Decimal("512.25"), Decimal("64.75"), Decimal(8))
 
 
 def test_the_member_nearest_the_bbox_centre_supplies_the_pivot():
     # bbox spans x -64..576, centre 256 — exactly `Mid`'s own Location, and it is the sole nearest.
     actors = [_cube_at("Left", (0, 0, 0)), _cube_at("Mid", (256, 0, 0)),
               _cube_at("Right", (512, 0, 0))]
-    assert best_grid_pivot(actors) == (Decimal(256), Decimal(0), Decimal(0))
+    assert best_grid_pivot(actors, _never) == (Decimal(256), Decimal(0), Decimal(0))
 
 
 # ── ties: the alphabetically first Name, never an average ────────────────────────────────────────
@@ -113,9 +130,9 @@ def test_a_two_way_tie_takes_the_alphabetically_first_name():
     """Owner ruling, 2026-07-26: equidistant members are NOT averaged — the alphabetically first Name
     wins, so the pivot stays a Location that exists in the trunk."""
     actors = [_cube_at("Bravo", (0, 0, 0)), _cube_at("Alpha", (256, 0, 0))]
-    assert best_grid_pivot(actors) == (Decimal(256), Decimal(0), Decimal(0))    # Alpha's Location
+    assert best_grid_pivot(actors, _never) == (Decimal(256), Decimal(0), Decimal(0))    # Alpha's Location
     # Name decides it, NOT the order the set arrived in — reversing the list changes nothing.
-    assert best_grid_pivot(list(reversed(actors))) == (Decimal(256), Decimal(0), Decimal(0))
+    assert best_grid_pivot(list(reversed(actors)), _never) == (Decimal(256), Decimal(0), Decimal(0))
 
 
 def test_a_three_way_tie_takes_one_name_and_stays_on_grid():
@@ -124,7 +141,7 @@ def test_a_three_way_tie_takes_one_name_and_stays_on_grid():
     first of the tied Names keeps the pivot an authored, on-grid Location."""
     actors = [_cube_at("A", (0, 0, 0)), _cube_at("B", (256, 0, 0)),
               _cube_at("C", (512, 256, 0)), _cube_at("D", (256, 512, 64))]
-    assert best_grid_pivot(actors) == (Decimal(256), Decimal(0), Decimal(0))      # B, not C or D
+    assert best_grid_pivot(actors, _never) == (Decimal(256), Decimal(0), Decimal(0))      # B, not C or D
 
 
 def test_the_containeryard_sheet_flips_in_place():
@@ -133,7 +150,7 @@ def test_the_containeryard_sheet_flips_in_place():
     128 uu onto a gate post; its own Location is the pivot now, so the flip is in place."""
     actors = _lvl(_brush("S", (1056, 228, 112),
                          [(-64, 0, -64), (64, 0, -64), (64, 0, 64), (-64, 0, 64)]))
-    assert best_grid_pivot(actors) == (Decimal(1056), Decimal(228), Decimal(112))
+    assert best_grid_pivot(actors, _never) == (Decimal(1056), Decimal(228), Decimal(112))
 
 
 def test_best_grid_pivot_uses_point_actor_locations():
@@ -141,4 +158,4 @@ def test_best_grid_pivot_uses_point_actor_locations():
         "Begin Actor Class=Light Name=L1\n    Location=(X=128.000000,Y=128.000000,Z=0.000000)\n    Name=\"L1\"\nEnd Actor\n"
         "Begin Actor Class=Light Name=L2\n    Location=(X=130.000000,Y=2.000000,Z=0.000000)\n    Name=\"L2\"\nEnd Actor\n")
     # Both are equidistant from the bbox centre (129,65,0), so the alphabetically first Name wins.
-    assert best_grid_pivot(actors) == (Decimal(128), Decimal(128), Decimal(0))
+    assert best_grid_pivot(actors, _never) == (Decimal(128), Decimal(128), Decimal(0))
