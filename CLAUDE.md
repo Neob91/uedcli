@@ -733,6 +733,25 @@ cannot afford to miss; the doc carries the rest:
 
 New UnrealEd findings go in `dev/docs/unrealed/` (and back-reference them from code comments).
 
+### `bin/board` — how you touch the board while it is being restructured
+
+The board is migrating from seven big markdown files to **one directory per work item**
+(`dev/docs/board/<stage>/<slug>/overview.md`; spec:
+`dev/docs/specs/2026-07-27-board-per-item-directories.md`). During the migration both shapes
+exist. Two rules apply from now on:
+
+- **LOG A FINDING WITH `bin/board new inbox '<title>'`**, not by appending to `inbox.md`. It
+  creates a valid item and prints its path; write the detail into that `overview.md`. Appending
+  to `inbox.md` during the migration risks the append being discarded when that file is
+  converted.
+- **RUN `bin/board answered` AT SESSION START**, and before pulling work off `to-build/`. A
+  question file the owner has answered is invisible otherwise, and the answer is only folded
+  into its durable home (`direction/`/`rationale/`) by an agent who notices it. **The commit that
+  folds an answer out also deletes the question file** — if you find the file already gone,
+  another session has done it; stop.
+
+`bin/board questions|answered|ls|show|new` — `bin/board --help`. It needs no venv.
+
 ### TODOs (`dev/docs/board/` — the stage-queue cluster)
 
 The backlog is a set of **stage queues** under `dev/docs/board/`, each named

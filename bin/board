@@ -1,0 +1,236 @@
+#!/usr/bin/env bash
+# bin/board — query and create work items on the board (dev/docs/board/).
+#
+# The board is one directory per work item; the stage an item is in IS the directory it sits in
+# (inbox, to-spec, to-spike, to-plan, to-build, someday, stale, done). Each item directory holds
+# an overview.md whose TOML frontmatter carries priority, kind and a one-line summary, and may hold
+# spec.md, plan.md and questions/<q>.md. See dev/docs/board/README.md.
+#
+#   bin/board questions            open questions (a question file whose "## Answer" is empty)
+#   bin/board answered             answered, not-reopened questions — the fold-out queue
+#   bin/board ls [stage] [--json]  items, priority order; --json for machine use
+#   bin/board show <slug>          print an item's current path
+#   bin/board new <stage> <title>  create an item with a valid stub overview.md
+#
+# NO venv: bin/_venv.sh hard-fails without python3.12, far too heavy for a board query. The
+# frontmatter reader below therefore handles only the pinned TOML subset the board test enforces
+# (single-line basic strings, one array per line, no comments) — kept honest by the agreement test
+# in uedcli/tests/test_board_script.py, which runs this reader and tomllib over every overview.md.
+set -euo pipefail
+
+BOARD="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../dev/docs/board"
+STAGES="inbox to-spec to-spike to-plan to-build someday stale done"
+
+die() { printf 'bin/board: %s\n' "$1" >&2; exit 2; }
+
+usage() {
+  sed -n '2,16p' "$(readlink -f "${BASH_SOURCE[0]}")" | sed 's/^# \{0,1\}//'
+}
+
+is_stage() { case " $STAGES " in *" $1 "*) return 0;; *) return 1;; esac; }
+
+# --- frontmatter -------------------------------------------------------------------------------
+# Print "key<TAB>value" for each scalar key in the +++ block. Arrays are emitted verbatim. A
+# malformed item is REPORTED and SKIPPED, never fatal: another session may be mid-write, and one
+# half-written file must not take down a query about a different item.
+fm() {
+  awk '
+    NR==1 && $0!="+++" { print "!!malformed"; exit }
+    NR==1 { infm=1; next }
+    infm && $0=="+++" { exit }
+    infm {
+      eq = index($0, "=")
+      if (eq == 0) next
+      k = substr($0, 1, eq-1); v = substr($0, eq+1)
+      gsub(/^[ \t]+|[ \t]+$/, "", k); gsub(/^[ \t]+|[ \t]+$/, "", v)
+      if (v ~ /^".*"$/) {                      # basic string: strip quotes, unescape \" and \\
+        v = substr(v, 2, length(v)-2)
+        gsub(/\\"/, "\"", v); gsub(/\\\\/, "\\", v)
+      }
+      print k "\t" v
+    }
+    END { if (!infm) print "!!malformed" }
+  ' "$1"
+}
+
+fm_get() { fm "$1" | awk -F'\t' -v k="$2" '$1==k {print $2; found=1} END{if(!found) print ""}'; }
+
+# --- questions ---------------------------------------------------------------------------------
+# A question file is OPEN when the text between "## Answer" and the next same-or-higher heading is
+# empty once HTML comments are stripped. It is REOPENED (and so not in the fold-out queue) when a
+# "## Reopened" heading follows the answer.
+answer_state() {
+  awk '
+    /^## Answer[[:space:]]*$/ { ina=1; next }
+    ina && /^#{1,2} / { ina=0 }
+    /^## Reopened[[:space:]]*$/ { reopened=1 }
+    ina {
+      line=$0
+      gsub(/<!--.*-->/, "", line)
+      gsub(/[[:space:]]/, "", line)
+      if (line != "") content=1
+    }
+    END {
+      if (reopened) print "reopened"
+      else if (content) print "answered"
+      else print "open"
+    }
+  ' "$1"
+}
+
+each_question() {  # each_question <wanted-state>
+  local want="$1" stage item q
+  for stage in $STAGES; do
+    [ -d "$BOARD/$stage" ] || continue
+    for item in "$BOARD/$stage"/*/; do
+      [ -d "${item}questions" ] || continue
+      for q in "${item}questions"/*.md; do
+        [ -f "$q" ] || continue
+        if [ "$(answer_state "$q")" = "$want" ]; then
+          printf '%s/%s\t%s\t%s\n' "$stage" "$(basename "$item")" \
+            "$(head -1 "$q" | sed 's/^#[[:space:]]*//')" \
+            "${q#"$BOARD"/}"
+        fi
+      done
+    done
+  done
+}
+
+# --- json --------------------------------------------------------------------------------------
+json_escape() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g; s/\t/\\t/g'; }
+
+# --- subcommands -------------------------------------------------------------------------------
+cmd_questions() {
+  local n=0
+  while IFS=$'\t' read -r item title path; do
+    printf '%-46s %s\n' "$item" "$title"
+    printf '%-46s   %s\n' "" "$path"
+    n=$((n+1))
+  done < <(each_question open)
+  printf '%d open question(s)\n' "$n" >&2
+}
+
+cmd_answered() {
+  local n=0
+  while IFS=$'\t' read -r item title path; do
+    printf '%-46s %s\n' "$item" "$title"
+    printf '%-46s   %s\n' "" "$path"
+    n=$((n+1))
+  done < <(each_question answered)
+  printf '%d answered question(s) awaiting fold-out\n' "$n" >&2
+}
+
+cmd_ls() {
+  local want_stage="" json=0 arg
+  for arg in "$@"; do
+    case "$arg" in
+      --json) json=1 ;;
+      -*) die "unknown option: $arg" ;;
+      *) is_stage "$arg" || die "unknown stage: $arg"; want_stage="$arg" ;;
+    esac
+  done
+  local stage item slug pri kind summary rows=""
+  for stage in ${want_stage:-$STAGES}; do
+    [ -d "$BOARD/$stage" ] || continue
+    for item in "$BOARD/$stage"/*/; do
+      [ -d "$item" ] || continue
+      slug="$(basename "$item")"
+      if [ ! -f "$item/overview.md" ]; then
+        printf 'bin/board: %s/%s has no overview.md — skipped\n' "$stage" "$slug" >&2
+        continue
+      fi
+      pri="$(fm_get "$item/overview.md" priority)"
+      if [ -z "$pri" ]; then
+        printf 'bin/board: %s/%s has unreadable frontmatter — skipped\n' "$stage" "$slug" >&2
+        continue
+      fi
+      kind="$(fm_get "$item/overview.md" kind)"
+      summary="$(fm_get "$item/overview.md" summary)"
+      # p? sorts last: map to p9 for the sort key only.
+      rows+="${pri/p\?/p9}"$'\t'"$stage"$'\t'"$slug"$'\t'"$pri"$'\t'"$kind"$'\t'"$summary"$'\n'
+    done
+  done
+  [ -n "$rows" ] || return 0
+  if [ "$json" -eq 1 ]; then
+    printf '[\n'
+    local first=1
+    while IFS=$'\t' read -r _ stage slug pri kind summary; do
+      [ "$first" -eq 1 ] || printf ',\n'; first=0
+      printf '  {"stage":"%s","slug":"%s","priority":"%s","kind":"%s","summary":"%s"}' \
+        "$(json_escape "$stage")" "$(json_escape "$slug")" "$(json_escape "$pri")" \
+        "$(json_escape "$kind")" "$(json_escape "$summary")"
+    done < <(printf '%s' "$rows" | sort -t$'\t' -k1,1 -k3,3)
+    printf '\n]\n'
+  else
+    while IFS=$'\t' read -r _ stage slug pri kind summary; do
+      printf '%-4s %-14s %-44s %-15s %s\n' "$pri" "$kind" "$slug" "$stage" "$summary"
+    done < <(printf '%s' "$rows" | sort -t$'\t' -k1,1 -k3,3)
+  fi
+}
+
+cmd_show() {
+  [ $# -eq 1 ] || die "show takes exactly one slug"
+  local stage
+  for stage in $STAGES; do
+    if [ -d "$BOARD/$stage/$1" ]; then
+      printf '%s\n' "dev/docs/board/$stage/$1"
+      return 0
+    fi
+  done
+  die "no such board item: $1"
+}
+
+cmd_new() {
+  [ $# -ge 2 ] || die "new takes a stage and a title"
+  local stage="$1"; shift
+  is_stage "$stage" || die "unknown stage: $stage"
+  local title="$*"
+
+  # Slug: strip a leading [tag] and pN, lowercase, keep alphanumerics, collapse to hyphens.
+  local slug
+  slug="$(printf '%s' "$title" \
+    | sed -E 's/^[[:space:]]*\*{0,2}\[[^]]*\][[:space:]]*//; s/^[[:space:]]*`?p[0-9?]`?[[:space:]]+//' \
+    | tr '[:upper:]' '[:lower:]' \
+    | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//' \
+    | cut -c1-48 | sed -E 's/-[^-]*$//; s/-+$//')"
+  [ -n "$slug" ] || die "cannot derive a slug from: $title"
+
+  # Slug uniqueness is BOARD-WIDE (the board test asserts it), so check every stage — a same-stage
+  # mkdir guard alone would let a cross-stage duplicate through and redden the suite for whoever
+  # ran next.
+  local s
+  for s in $STAGES; do
+    [ -d "$BOARD/$s/$slug" ] && die "slug already in use: $s/$slug"
+  done
+
+  # mkdir without -p is atomic: it loses the race rather than clobbering a concurrent session.
+  mkdir "$BOARD/$stage/$slug" || die "could not create $stage/$slug (raced?)"
+
+  # summary is a TOML basic string: escape backslash first, then the quote.
+  local summary
+  summary="$(printf '%s' "$title" | sed 's/\\/\\\\/g; s/"/\\"/g')"
+
+  cat > "$BOARD/$stage/$slug/overview.md" <<EOF
++++
+priority = "p?"
+kind = "unknown"
+summary = "$summary"
++++
+
+# $title
+EOF
+  printf 'dev/docs/board/%s/%s\n' "$stage" "$slug"
+}
+
+# --- dispatch ----------------------------------------------------------------------------------
+[ $# -ge 1 ] || { usage >&2; exit 2; }
+sub="$1"; shift
+case "$sub" in
+  questions) cmd_questions "$@" ;;
+  answered)  cmd_answered "$@" ;;
+  ls)        cmd_ls "$@" ;;
+  show)      cmd_show "$@" ;;
+  new)       cmd_new "$@" ;;
+  -h|--help|help) usage ;;
+  *)         die "unknown command: $sub (try --help)" ;;
+esac
