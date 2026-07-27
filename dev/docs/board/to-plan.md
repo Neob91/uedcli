@@ -5,6 +5,20 @@ Tag: `[plan]`.
 
 ---
 
+- [ ] `p1` `[plan]` **The board becomes one directory per work item.**
+  Spec: [`../specs/2026-07-27-board-per-item-directories.md`](../specs/2026-07-27-board-per-item-directories.md).
+  Every stage (`inbox`, `to-spec`, `to-spike`, `to-plan`, `to-build`, `someday`, `stale`, `done`)
+  becomes a directory of item directories; an item is `overview.md` (required) plus optional
+  `spec.md`, `plan.md` and `questions/<q>.md`, and advances by one `git mv`. Fixes the three
+  problems named in the spec's §1: `inbox.md` is 357 KB / 4,042 lines / 293 items so any read is
+  enormous; every review round appends to that one file so concurrent sessions collide; and a
+  question that blocks an item is invisible inside it. **~581 items migrate**, plus 30 specs and
+  26 plans folding into their items — so this needs a sliced plan, not a single pass. Spec gate:
+  **pending** (spec written 2026-07-27). Two things a plan must respect: nothing is re-triaged or
+  judged stale during the conversion (owner decision 2.7 — the stale list is proposed in bulk at
+  the very END), and `direction/process.md` carries a sentence this change makes wrong, whose
+  replacement text is parked for the owner in the spec's §5.
+
 - [ ] `p1` `[plan]` **Per-surface texture verbs — STEPS 2-5 (the `brush poly align` half).**
   Spec: [`../specs/2026-07-26-poly-surface-verbs.md`](../specs/2026-07-26-poly-surface-verbs.md).
   **Spec gate: PASSED** — at its ceiling; every round's findings are folded into the sections
