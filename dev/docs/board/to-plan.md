@@ -45,40 +45,8 @@ Tag: `[plan]`.
   (re-aligning any existing cylinder wrap flips its texture vertically). A third, `rotate`'s turn
   direction on a subtractive brush, affects step 1 and is filed separately.
 
-> **`actor preview --faces`** — PLANNED 2026-07-27
+> **`actor preview --faces`** — PLANNED 2026-07-27, **moved to `to-build.md`**
 > ([`../plans/2026-07-27-actor-preview-faces-plan.md`](../plans/2026-07-27-actor-preview-faces-plan.md)).
-> Moves to `to-build.md` once its plan gate passes.
-
-- [ ] `p1` `[plan]` ~~**`actor preview --faces {wire,flat,textured}`**~~ — **PLAN WRITTEN**, awaiting
-  its plan-review gate; see the tombstone above.
-  Spec: [`../specs/2026-07-26-actor-preview-textured-faces.md`](../specs/2026-07-26-actor-preview-textured-faces.md).
-  **Spec gate: PASSED.** Multiple cold rounds; no structural finding in any of them, and every round's
-  findings are folded into the sections themselves.
-
-  **What it is.** `actor preview` draws a wireframe schematic today. `flat` fills each brush face in
-  its CSG hue; `textured` paints each face with its real texture through the face's authored UV frame
-  (`Origin`/`TextureU`/`TextureV`/`Pan`). Model-side, host-only, pure Python — no editor, no
-  container, no lighting. It exists because **every** texture-frame defect in
-  `../spikes/levelbuild-friction/agent-reports.md` (mirrored lettering, the half-shifted sheet, the
-  wrapped door trim, a cut-out texture on a solid face) was invisible in `actor preview` and cost a
-  full materialize + render cycle to find.
-
-  **BUILD ORDER IS FIXED — this builds SECOND.** It consumes the mip-pyramid accessor and the
-  `bMasked` flag that `to-build.md`'s **Native texture decode** item delivers in its slice `S2b`.
-  Neither exists until that lands. Do not start a plan that assumes today's `TextureResolver`.
-
-  **What the planner must carry over** (all settled in the spec, none of it re-derivable cheaply):
-  the per-face mip rule (from the face's own screen-space UV gradients — two earlier drafts derived it
-  from a view-global projection gain and both were measured wrong); the masking gate
-  (`poly.flags | actor PolyFlags` OR the texture's `bMasked`) and the corpus measurement behind it —
-  464 of 2,669 textures use palette index 0 while unmasked, and 13 flat colour swatches are 100 %
-  index 0, so an ungated version renders them as nothing; the CSG cull (a subtract shows only its far
-  faces, movers exempt via `movers.is_mover`); the even-odd scanline choice (0.1–0.6 % of real faces
-  are concave, and a triangle fan bleeds outside them); and the refuse-don't-degrade failure table.
-
-  **Owner rulings live in this spec and are ALSO parked on `inbox.md`** as one `[OWNER — confirm]`
-  item, because the spec is ephemeral and deleted on build. Five of them: subtract-far-faces, the
-  class-hierarchy load, refusal semantics, no cost ceiling, and choose-visual-constants-by-render.
 
 - [ ] `p1` `[plan]` **`actor move` over a SET (`-`/stdin), `--by`-only for multi-actor.** Spec written +
   **cold-review gate PASSED** (2 reviewers, no blockers, all findings folded in):
