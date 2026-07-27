@@ -104,11 +104,11 @@ declared done:
 
 1. **After writing a spec** — before planning or implementing.
 2. **After writing a plan** — before building. **Specced pipeline work
-   goes through a plan doc, so it gets a plan round**; only stage-less
-   `[chore]`/`[debug]` work and one-file fixes have no plan and therefore
+   goes through a plan doc, so it gets a plan round**; only one-shot
+   `chore`/`debug` items and one-file fixes have no plan and therefore
    no plan round. Not writing a plan is NOT a way to skip this round —
-   `to-build.md` takes a *reviewed* plan (see **TODOs** below and
-   `dev/docs/board/README.md`).
+   an item reaches `to-build/` with a *reviewed* plan (see **TODOs** below
+   and `dev/docs/board/README.md`).
 3. **After building something** — before declaring done.
 
 **How many reviewers, and which model.** Every reviewer slot outside the
@@ -548,8 +548,11 @@ an audit marker, not a gate.
 - **When direction looks stale, ASK — never edit.**
 - **Confirm proactively.** When working in a topic, ask whether its direction
   doc is still current.
-- **A decision awaiting their yes is parked** as an `[OWNER — confirm]` item on
-  `board/inbox/` carrying the proposed text verbatim.
+- **A decision awaiting their yes is parked** with
+  `bin/board new inbox '[OWNER — confirm] …'`, `kind = "owner-question"`,
+  carrying the proposed text verbatim in the item's `overview.md`. If it blocks
+  an existing item, put it in *that* item's `questions/` instead and leave the
+  item where it is.
 - Commits touching `dev/docs/direction/` carry a `Confirmed: <topic>` trailer,
   so `git log --grep='Confirmed' -- dev/docs/direction/` shows every confirmed
   edit and an unconfirmed one stands out on inspection. (Four commits from
@@ -652,11 +655,15 @@ paragraph above demands: cut the padding, not the explanation. *(Owner ruling, 2
   **revised in place**; agents maintain it freely. Every entry states **Why it is this way**,
   **Rejected** (alternatives killed, so nobody re-proposes them) and **Refs** (spike/code
   pointers). Point a durable doc here for rationale — never at an ephemeral spec.
-- **`specs/` + `plans/`** — ephemeral per-feature scratch (below). **`spikes/`** — durable evidence.
+- **an item's `spec.md` + `plan.md`** — ephemeral per-feature scratch (below). **`spikes/`** —
+  durable evidence.
 
-**`dev/docs/specs/` and `dev/docs/plans/` are ephemeral** — scratch for designing
-and sequencing a piece of work, expected to go stale or get deleted once that
-work lands. They are NEVER the durable record. Once something is implemented,
+**A spec or plan lives INSIDE the board item it belongs to** —
+`dev/docs/board/<stage>/<slug>/spec.md` and `plan.md`, alongside that item's
+`overview.md`. There is no separate specs or plans tree. **Both are ephemeral**:
+scratch for designing and sequencing one piece of work, expected to go stale or
+get deleted once that work lands, and deleted with the item when it is pruned
+from `done/`. They are NEVER the durable record. Once something is implemented,
 fold what was actually built, any design decision made along the way, and the
 resulting general direction into the global docs (`architecture.md`,
 `unrealed/*.md`, or another `dev/docs/*.md` as fits) — so the knowledge survives
@@ -671,8 +678,8 @@ the decision must land in a **durable** doc before the spec is deleted:
 
 - **A decision I made** → `dev/docs/direction/<topic>.md`, **revised in place**
   to state the new current answer. Propose the exact wording and wait for my
-  yes (see **Direction docs** above). While it waits, park it as an
-  `[OWNER — confirm]` item in `board/inbox/` carrying the proposed text
+  yes (see **Direction docs** above). While it waits, park it with
+  `bin/board new inbox '[OWNER — confirm] …'`, carrying the proposed text
   verbatim, so it survives the session ending.
 - **A decision you made** (an implementation choice) →
   `dev/docs/rationale/<topic>.md`, revised in place, with its `Rejected`
@@ -738,15 +745,13 @@ cannot afford to miss; the doc carries the rest:
 
 New UnrealEd findings go in `dev/docs/unrealed/` (and back-reference them from code comments).
 
-### `bin/board` — how you touch the board while it is being restructured
+### `bin/board` — how you touch the board
 
-The board is migrating from seven big markdown files to **one directory per work item**
-(`dev/docs/board/<stage>/<slug>/overview.md`; spec:
-board item `the-board-is-being-restructured-into-one`). During the migration both shapes
-exist. Two rules apply from now on:
+The board is **one directory per work item** (`dev/docs/board/<stage>/<slug>/overview.md`). Two
+rules:
 
 - **LOG A FINDING WITH `bin/board new inbox '<title>'`.** It creates a valid item and prints its
-  path; write the detail into that `overview.md`. There is no `inbox.md` to append to any more.
+  path; write the detail into that `overview.md`. There is no single capture file to append to.
 - **RUN `bin/board answered` AT SESSION START**, and before pulling work off `to-build/`. A
   question file the owner has answered is invisible otherwise, and the answer is only folded
   into its durable home (`direction/`/`rationale/`) by an agent who notices it. **The commit that
@@ -769,28 +774,38 @@ single `git mv` into the next stage:
   assumption, a risk, a deviation from spec/plan, or work you deliberately
   didn't do — put it here INSTEAD of only saying it in chat, which scrolls
   away), and **their own open questions**. Triage moves each entry out to the
-  queue for its next action; a question raised mid-pipeline bounces back
-  here until answered. There is **no separate `flagged`/`to-resolve` lane** —
-  The owner resolves their own items by deleting or triaging them forward
-  (recording any real choice in the owning `dev/docs/direction/` topic).
+  queue for its next action. There is **no separate `flagged`/`to-resolve`
+  lane** — the owner resolves their own items by deleting or triaging them
+  forward (recording any real choice in the owning `dev/docs/direction/`
+  topic).
+
+  **A question raised mid-pipeline does NOT move its item.** Write the
+  question as a file in that item's own `questions/` directory and leave the
+  item exactly where it is, in whatever stage it had reached. Bouncing it
+  backwards would shelve finished spec or plan work to record one unanswered
+  question, and the item's own directory already shows it is blocked.
+  *(Owner ruling, 2026-07-27: "NO, not bounced back to inbox. Just add
+  questions entry for those, don't move em.")*
 - `to-spec/` → `to-spike/` → `to-plan/` → `to-build/` — the
   pipeline. `to-build/` is the reviewed on-deck **build queue / source
   of truth** for what to build next.
 - `someday/` — parked; `stale/` — shelved, never deleted; `done/` — a short
   tail of recently-done + partially-done-with-remnants.
 
-**The stage is the DIRECTORY, so the bracket tag no longer restates it.**
-`[spec]`/`[spike]`/`[plan]` are retired as tags (each issue gets a plan
-anyway); an item's `kind` is what the path cannot say — `implement`, `chore`,
-`debug`, `docs`, `owner-question` or `unknown`. `[chore]`/`[debug]` are one-shot
-and **stage-less**, so they go straight to `to-build.md` with no plan — and
-therefore no plan review round (this is the distinction **Review gates**
-relies on to decide whether that round fires). `[spike]` is used only when a
-spec flags a live unknown (findings fold back into that spec). Use `[a→b]` while
-transitioning. `pN` (`p1`/`p2`/`p3`) priority rides each line.
+**The stage is the DIRECTORY, so nothing else restates it.** The old bracket
+tags are gone: `[spec]`/`[spike]`/`[plan]` said what stage an item was in,
+which the path now says (and every issue gets a plan anyway). What survives is
+the frontmatter `kind`, which is what the path *cannot* say — `implement`,
+`chore`, `debug`, `docs`, `owner-question` or `unknown` — and the frontmatter
+`priority` (`p1`/`p2`/`p3`, or `p?` for not-yet-prioritised).
 
-When a TODO is fully finished, remove it from the list entirely — don't
-leave it ticked `[x]` (`done.md` keeps only a short reference tail). If
-something gets deferred mid-implementation, add a new, separate TODO for it
-rather than letting the original entry quietly cover both the done part and
-the deferred part.
+A `chore` or `debug` item is one-shot: it is filed straight into `to-build/`
+with no plan, and therefore gets no plan review round (this is the distinction
+**Review gates** relies on to decide whether that round fires). An item goes to
+`to-spike/` only when its spec flags a live unknown; the findings fold back
+into that spec.
+
+When an item is fully finished, `git mv` it to `done/` and trim it to a short
+reference line — don't leave a ticked `[x]` behind. If something gets deferred
+mid-implementation, `bin/board new inbox` a separate item for it rather than
+letting the original quietly cover both the done part and the deferred part.
