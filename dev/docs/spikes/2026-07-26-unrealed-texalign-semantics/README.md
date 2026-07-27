@@ -408,7 +408,7 @@ normal — at **unit** density, anchored at the **seed face's centroid**, with `
 | `WALLDIR`     | unit frame along the face        | `brush poly align --wall`            | **closest analogue, still diverges** — different axes, different anchor, and uedcli's V can point UP
 | `WALLX`       | project down world X, stretch    | —                                    | **no equivalent**
 | `WALLY`       | project down world Y, stretch    | —                                    | **no equivalent**
-| `WALLPAN`     | re-anchor the phase to world Z=0 | —                                    | **no equivalent** — `brush poly set --pan-to/--pan-by` moves the *integer texel* pan, a different quantity
+| `WALLPAN`     | re-anchor the phase to world Z=0 | —                                    | **no equivalent** — `brush poly pan --to/--by` moves the *integer texel* pan, a different quantity
 | `DEFAULT`     | frame from the polygon winding   | —                                    | **no equivalent, and none wanted** — winding-order dependent
 | `CLAMP`       | `DEFAULT` + `PanV = VSize − 1`   | —                                    | **no equivalent**; what it is for is undetermined (§7)
 | `ONETILE`     | **nothing**                      | proposed `brush poly align one-tile` | **there is nothing to conform to** — the spec's `one-tile` is a uedcli invention, not a port of an editor mode

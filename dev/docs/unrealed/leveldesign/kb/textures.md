@@ -16,7 +16,9 @@ Texturing is **per-surface**: you pick a texture from a package and set its alig
 change how a surface *renders*, never its geometry.
 
 **uedcli seat** ✅: `brush poly find` prints face selectors → `brush poly set - --texture … --add-flag …
---remove-flag … --pan-to/--pan-by`; `brush poly align --wall|--floor|--ring`; `brush poly list` inspects.
+--remove-flag …` for the stored ATTRIBUTES, and `brush poly pan - --to/--by U,V`,
+`brush poly rotate - --by UU`, `brush poly scale - --by FU,FV` for the texture FRAME;
+`brush poly align --wall|--floor|--ring`; `brush poly list` inspects.
 Flags are always set **by NAME** (`--add-flag Masked`), never by bit value. Faces are targeted by
 `BRUSH:SELECTOR` (`Wall1:3,5` or `Wall2:all`).
 
@@ -71,8 +73,13 @@ Key semantic distinctions to keep straight:
 - **Auto-align:** Floor/Ceiling alignment vs Wall / Wall-Panning alignment (project the texture onto the
   face by its dominant axis). uedcli: `brush poly align --floor|--wall|--ring` (`--ring` wraps a texture
   around a cylinder's side faces).
-- **Manual:** Pan / Rotate / Scale. uedcli: `brush poly set - --pan-to U,V` (absolute) / `--pan-by dU,dV`
-  (relative). Console: `POLY TEXPAN`, `POLY TEXSCALE`, `POLY TEXALIGN`, `POLY TEXINFO`.
+- **Manual:** Pan / Rotate / Scale — one uedcli verb each. `brush poly pan - --to U,V` (absolute) /
+  `--by dU,dV` (relative), in whole texels; `brush poly rotate - --by UU` (unreal rotation units,
+  16384 = 90°, no `--to` — see `rationale/surface.md`); `brush poly scale - --by FU,FV`, which names
+  the APPARENT size (`--by 2,2` looks twice as big, and so HALVES the stored `TextureU`/`TextureV`
+  magnitudes). `rotate`/`scale` re-anchor on the face centroid, so the texture turns or grows in
+  place; neither gives continuity across faces. Console: `POLY TEXPAN`, `POLY TEXSCALE`,
+  `POLY TEXALIGN`, `POLY TEXINFO`.
 - **Re-align after CSG changes** — a rebuild can disturb texturing; re-run alignment after geometry
   edits.
 
@@ -251,6 +258,8 @@ offline-probed 📖). Used for scoreboards, counters, tombstones.
 | Texture faces | `brush poly find Wall1 \| brush poly set - --texture CoreTexMetal.ClenGrayMetal_A` |
 | Add/remove a flag | `brush poly set Wall1:all --add-flag Masked --remove-flag Unlit` |
 | Align | `brush poly align Wall1:all --wall` (or `--floor` / `--ring`) |
-| Pan | `brush poly set Floor1:all --pan-to 64,0` (or `--pan-by 8,0`) |
+| Pan | `brush poly pan Floor1:all --to 64,0` (or `--by 8,0`) |
+| Rotate | `brush poly rotate Sign1:2 --by 16384` (a quarter turn) |
+| Scale | `brush poly scale Floor1:all --by 2,2` (texture looks twice as big) |
 | Inspect | `brush poly list Wall1` |
 | Water surface | `brush build sheet --width W --height H --flag portal --flag translucent \| actor add -` (recipe: [`zones-performance.md`](./zones-performance.md) §1.1) |

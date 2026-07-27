@@ -187,7 +187,7 @@ def emit_polygon(p: Polygon) -> str:
         # difference. Collapsing both spellings HERE — the single serialization choke point behind
         # the trunk, the `MAP IMPORT` payload, the compare view and the identity hash — keeps all
         # four stating exactly what the editor would, whichever write path produced the zero
-        # (`polyalign`, `brush poly set --pan-to 0,0`, `clip`'s caps). `Flags` is already omitted
+        # (`polyalign`, `brush poly pan --to 0,0`, `clip`'s caps). `Flags` is already omitted
         # when zero, in the `Begin Polygon` header above; this is the same rule.
         # rationale/emit.md "A zero polygon Pan is never emitted".
         out.append(f"         Pan      U={p.pan[0]} V={p.pan[1]}")

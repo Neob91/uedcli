@@ -108,13 +108,18 @@ kinds:
   draws that handedness mirrored, so a lettered texture is backwards on every uedcli-built surface.
   `brush poly align --fresh-frame` calls the *same* function and therefore cannot fix it. There is no
   `--flip-u`/`--flip-v`, and no texture **scale** control at all (`--pan-to/--pan-by` and
-  `align --wall|--floor|--ring` are the whole surface toolkit). The only lever found was
+  `align --wall|--floor|--ring` are the whole surface toolkit).
+  > *(Editorial note, 2026-07-27: the scale gap is CLOSED — `brush poly scale --by FU,FV` ships, and
+  > `brush poly rotate --by UU` with it; pan is now `brush poly pan --to/--by`. `--flip-u`/`--flip-v`
+  > still do not exist.)*
+
+  The only lever found was
   `brush scale --by -1,1,1` + `brush apply-transform`, which also re-orients rotated brushes and needs a
   compensating rotate. **This part is justified.**
 - **NOT blocked — fixable with existing verbs, and shipped anyway.** Sheet generators emit `Origin` at
   the sheet's geometric centre, so texel 0 lands in the middle of the panel and each quadrant wraps to
   the opposite side — a visible seam down every sign. One `brush poly set --pan-to <w/2>,<h/2>` fixes
-  it. Same for a texture larger than its face wrapping into a black "+" cross. **This part is a
+  it. *(Editorial note, 2026-07-27: now spelled `brush poly pan --to <w/2>,<h/2>`.)* Same for a texture larger than its face wrapping into a black "+" cross. **This part is a
   quality miss, not a capability gap** — and it is invisible on tiling concrete, which is exactly why
   it survived.
 

@@ -184,6 +184,34 @@ def parse_pan(text: str) -> tuple[int, int]:
         raise argparse.ArgumentTypeError(f"pan has a non-integer component: {text!r}")
 
 
+def parse_factor_pair(text: str) -> tuple[float, float]:
+    """Parse a single `FU,FV` pair of positive scale factors (`brush poly scale --by`).
+
+    Float-valued, unlike `parse_pan`: a texture scale is a ratio, and `--by 1.5,1.5` is an ordinary
+    request. It does NOT go through `parse_decimal` — the texture frame is stored and computed in
+    float throughout (`architecture.md` "Coords": texture vectors stay float; only vertex/Location
+    coords are `Decimal`), so a Decimal here would only be converted back.
+
+    `float()` accepts `nan`/`inf`, so those are rejected explicitly rather than reaching the model
+    as a texture axis of infinite length. The ZERO/NEGATIVE rejection deliberately lives in the
+    model (`surface.apply_scale`) instead, so a programmatic caller is covered by it too; this
+    validates the SHAPE of the token."""
+    parts = [p.strip() for p in text.split(",")]
+    if len(parts) != 2:
+        raise argparse.ArgumentTypeError(
+            f"scale must be FU,FV (2 comma-separated numbers), got {text!r}")
+    out = []
+    for p in parts:
+        try:
+            value = float(p)
+        except ValueError:
+            raise argparse.ArgumentTypeError(f"scale has a non-numeric component: {text!r}")
+        if not math.isfinite(value):
+            raise argparse.ArgumentTypeError(f"scale factor must be finite: {text!r}")
+        out.append(value)
+    return (out[0], out[1])
+
+
 def _preview_opts(pp):
     pp.add_argument("--layout", default="quad", choices=["quad", "single", "breakdown"],
                     help="pane layout (default quad). 'quad' = the UED-style 2x2 grid (Top / Front / "
@@ -1198,14 +1226,21 @@ def build_parser() -> argparse.ArgumentParser:
 
     from .query import PF_NAMES
     flag_names = [name for _, name in PF_NAMES]
-    pset = psub.add_parser("set", help="set flags/texture/pan on one or more surfaces, model-side")
-    pset.add_argument("targets", nargs="+", metavar="BRUSH:SELECTOR",
-                      help="BRUSH:SELECTOR (SELECTOR = 'all' or comma-separated poly indices); "
-                           "repeatable, e.g. Wall1:3,5 Wall2:all. Or the single token - to read the "
-                           "targets from stdin (the BRUSH:idx lines `brush poly find` prints, e.g. "
-                           "`poly find WALL --facing +Z | poly set - --texture …`); - is the sole "
-                           "source, not mixable with BRUSH:SELECTOR args, and empty stdin is a clean "
-                           "no-op (exit 0)")
+    # The per-face target grammar shared by `set`/`pan`/`rotate`/`scale`. Deliberately NARROWER than
+    # `align`'s, which also takes a bare brush Name: a whole brush is a meaningful unit for a mode
+    # ("wrap this cylinder"), whereas a whole-brush pan/rotate/scale is a blanket nudge of every face
+    # including the ones the author never looked at — so `Tower:all` makes "yes, all of them" a
+    # deliberate act rather than a name typed one selector short.
+    _POLY_TARGETS_HELP = (
+        "BRUSH:SELECTOR (SELECTOR = 'all' or comma-separated poly indices); repeatable, e.g. "
+        "Wall1:3,5 Wall2:all. A bare brush name is NOT accepted — say Wall1:all. Or the single "
+        "token - to read the targets from stdin (the BRUSH:idx lines `brush poly find` and every "
+        "per-face verb print); - is the sole source, not mixable with BRUSH:SELECTOR args, and "
+        "empty stdin is a clean no-op (exit 0)")
+
+    pset = psub.add_parser(
+        "set", help="assign stored per-face ATTRIBUTES (texture, surface flags), model-side")
+    pset.add_argument("targets", nargs="+", metavar="BRUSH:SELECTOR", help=_POLY_TARGETS_HELP)
     pset.add_argument("--texture", default=None, metavar="REF",
                       help="qualified Package[.Group].Name (e.g. DeusExDeco.Textures.Wood); "
                            "omit the group unless given one explicitly")
@@ -1215,12 +1250,64 @@ def build_parser() -> argparse.ArgumentParser:
     pset.add_argument("--remove-flag", dest="remove_flags", action="append", default=[],
                       type=str.lower, choices=flag_names, metavar="FLAG",
                       help="repeatable; surface flag by name (case-insensitive), not bit value")
-    pang = pset.add_mutually_exclusive_group()
-    pang.add_argument("--pan-to", dest="pan_to", type=parse_pan, metavar="U,V",
-                      help="absolute integer texel pan")
-    pang.add_argument("--pan-by", dest="pan_by", type=parse_pan, metavar="U,V",
-                      help="relative integer texel pan (relative to 0,0 if unset)")
     _tree_flag(pset)
+
+    # `pan`/`rotate`/`scale`: the texture-FRAME transforms, peers of `align`. They are separate
+    # verbs from `set` because assigning a stored attribute and transforming the frame are different
+    # jobs (dev/docs/rationale/surface.md "The verb split: attributes vs the frame").
+    ppan = psub.add_parser(
+        "pan", help="shift a face's texture by whole texels (the Pan field); never moves the frame")
+    ppan.add_argument("targets", nargs="+", metavar="BRUSH:SELECTOR", help=_POLY_TARGETS_HELP)
+    ppanm = ppan.add_mutually_exclusive_group(required=True)
+    ppanm.add_argument("--to", dest="pan_to", type=parse_pan, metavar="U,V",
+                       help="set the absolute integer texel pan. --to 0,0 CLEARS the pan (that is "
+                            "the unpanned state — `brush poly list` then shows - in the pan column)")
+    ppanm.add_argument("--by", dest="pan_by", type=parse_pan, metavar="U,V",
+                       help="offset the current pan by this many texels (an unset pan counts as "
+                            "0,0); negatives allowed, e.g. --by -5,3")
+    _tree_flag(ppan)
+
+    prot = psub.add_parser(
+        "rotate", help="turn a face's texture within its own plane (no continuity across faces)")
+    prot.add_argument("targets", nargs="+", metavar="BRUSH:SELECTOR", help=_POLY_TARGETS_HELP)
+    prot.add_argument("--by", dest="by", type=int, required=True, metavar="UU",
+                      help="turn angle in UNREAL ROTATION UNITS (16384 = 90 degrees, 65536 = a full "
+                           "turn), matching `brush build --rotate` and `mover key rotate`. Negative "
+                           "turns the other way (--by -16384 == --by 49152). Turn direction follows "
+                           "the VISIBLE surface normal, so it looks the same from where you stand "
+                           "whether the face is the outside of an added pillar or the inside of a "
+                           "subtracted room. That needs the brush's CsgOper to be CSG_Add or "
+                           "CSG_Subtract (absent counts as CSG_Add): ANY other value exits 2 naming "
+                           "it, because a brush with no inside and outside gives the turn no "
+                           "direction to follow. A MIRRORED brush (scale determinant negative, i.e. "
+                           "an odd number of negative components) does still invert it. There is "
+                           "deliberately no --to: an absolute angle could only be measured against "
+                           "an internal canonical frame whose in-plane direction you cannot see or "
+                           "predict, so it would mean something different per face — reaching for a "
+                           "KNOWN orientation is what `brush poly align` is for. The face's own "
+                           "centre keeps its texture coordinate, so the texture spins in place "
+                           "rather than sliding; each face pivots about ITSELF, so this breaks the "
+                           "seams `align` matched")
+
+    _tree_flag(prot)
+
+    pscl = psub.add_parser(
+        "scale", help="resize a face's texture in place (no continuity across faces)")
+    pscl.add_argument("targets", nargs="+", metavar="BRUSH:SELECTOR", help=_POLY_TARGETS_HELP)
+    # A plain required flag, NOT a one-member mutually-exclusive group. `--to` (absolute world units
+    # per tile) needs the texture catalog and does not exist yet, and a group holding one argument
+    # only degrades the error text — "one of the arguments --by is required" where the sibling
+    # `rotate` says "the following arguments are required: --by". The group comes back with `--to`.
+    pscl.add_argument("--by", dest="by", type=parse_factor_pair, metavar="FU,FV", required=True,
+                      help="multiply the texture's APPARENT SIZE: --by 2,2 makes it look twice as "
+                           "big, --by 0.5,1 halves its width only. U and V are independent. "
+                           "(Internally this DIVIDES the stored TextureU/TextureV magnitudes, "
+                           "because T3D density is texels per world unit — the flag is named for "
+                           "what you see.) Factors must be positive. The face's own centre keeps "
+                           "its texture coordinate, so the texture grows in place rather than "
+                           "sliding off; scale BEFORE `brush poly align run`, never after, since "
+                           "the run's seam phases are computed for the density they saw")
+    _tree_flag(pscl)
 
     # `poly find`: a stateless PRODUCER — prints matching `BRUSH:idx` selectors (one per line) that
     # `brush poly align -` / `brush poly set` consume. Narrows a brush's faces by intrinsic labels.

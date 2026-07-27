@@ -68,7 +68,7 @@ def list_polys(actor: Actor) -> list[dict]:
 
 def format_polys(actor: Actor, name: str) -> str:
     """Render list_polys as an aligned text table (the precise index↔face reference). `pan`
-    (the `brush poly set --pan-to`/`--pan-by` target) prints as `U,V`, or `-` when unset."""
+    (the `brush poly pan --to`/`--by` target) prints as `U,V`, or `-` when unset."""
     rows = list_polys(actor)
     out = [f"{name}: {len(rows)} polys",
            f"{'idx':>3}  {'facing':<6} {'texture':<18} {'centroid':<24} {'area':>8}  "

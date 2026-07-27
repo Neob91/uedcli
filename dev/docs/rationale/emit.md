@@ -46,14 +46,14 @@ when at least one component is non-zero.
   function, which has been omitted when zero since the beginning.
 - **Emit is where the fix covers every producer at once.** Three write paths can land a poly on a
   zero pan — `polyalign._write_world_frame` (aligning to a seed with no pan, or `--fresh-frame`,
-  which zeroes it by construction), `surface.set_surface` (`brush poly set --pan-to 0,0`, and
-  `--pan-by` arithmetic that cancels), and `clip.py`'s generated cap faces. Normalizing at the
+  which zeroes it by construction), `surface.apply_pan` (`brush poly pan --to 0,0`, and `--by`
+  arithmetic that cancels), and `clip.py`'s generated cap faces. Normalizing at the
   serialization boundary means a future write path cannot re-open the bug.
 
 **Rejected:**
 
 - **Fix `polyalign` alone** (don't write a zero pan there) — it fixes the one reported repro and
-  leaves `brush poly set --pan-to 0,0` and `brush clip` able to produce the same aborted build. The
+  leaves `brush poly pan --to 0,0` and `brush clip` able to produce the same aborted build. The
   defect is not "align is wrong"; the value align writes is correct. The defect is that one value had
   two spellings on the wire.
 - **Make the COMPARE tolerant instead** (drop a `(0,0)` pan in `normalize._geometry_text`, or
@@ -66,7 +66,7 @@ when at least one component is non-zero.
 - **Make the MODEL canonical instead** — parse an absent `Pan` as `(0, 0)` and drop
   `Polygon.pan`'s `None`, mirroring `Polygon.flags: int = 0`. Defensible, and arguably the tidiest
   model, but it changes the meaning of `pan is None` for every reader (`query.list_polys`'s `--json`
-  and its `-` column, `preview_native`, `surface`'s `--pan-by` base) to fix a defect that lives in
+  and its `-` column, `preview_native`, `surface.apply_pan`'s `--by` base) to fix a defect that lives in
   the text form. The text form is where the two spellings exist, so that is where they collapse.
 - **Emit a zero `Pan` and teach the post-verify to align lines** — a text-diff that can resynchronize
   after an inserted line would hide real geometry differences, which is the one thing the post-verify
@@ -74,7 +74,7 @@ when at least one component is non-zero.
 
 **Two consequences a reader should expect.**
 
-- `brush poly set --pan-to 0,0` removes the surface's `Pan` line rather than writing a zero one, and
+- `brush poly pan --to 0,0` removes the surface's `Pan` line rather than writing a zero one, and
   `brush poly list` then shows `-` (its spelling for "no pan") in the `pan` column. That is the same
   state the surface had before any pan was set, which is correct — `0,0` *is* "no pan".
 - **An existing trunk that already holds `Pan U=0 V=0` is rewritten the next time anything saves that

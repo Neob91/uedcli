@@ -64,7 +64,7 @@ add -` consumes it into the trunk; per-surface edits run model-side via `brush p
 | Movers | `brush build <shape> --mover-class <Package.Name>` \| `actor add -`, then `mover key count`/`move`/`rotate`/`remove`/`list` | *Add Mover*, record keyframes |
 | Zoning | `actor build Engine.ZoneInfo --prop … ` \| `actor add -`; zone-portal sheet via `brush build sheet --flag portal` \| `actor add -` | place `ZoneInfo`; sheet brush + *Add Special → Zone Portal* |
 | Water | `brush build sheet --flag portal --flag translucent` \| `actor add -` (the water surface) **plus** `actor build Engine.ZoneInfo --prop bWaterZone=True` \| `actor add -` (recipe §4.1) | translucent portal surface + `bWaterZone` ZoneInfo |
-| Texturing / surface flags / alignment | `brush poly find` → `brush poly set --texture … --add-flag … --remove-flag … --pan-to/--pan-by` ; `brush poly align --wall\|--floor\|--ring` ; `brush poly list` | select faces in *Surface Properties*, set texture/flags/pan/align |
+| Texturing / surface flags / alignment | `brush poly find` → `brush poly set --texture … --add-flag … --remove-flag …` ; `brush poly pan --to/--by` ; `brush poly rotate --by` ; `brush poly scale --by` ; `brush poly align --wall\|--floor\|--ring` ; `brush poly list` | select faces in *Surface Properties*, set texture/flags/pan/align |
 | Skybox | `actor build Engine.SkyZoneInfo …` in a separate sky box, sky-room faces `--add-flag Unlit`, playable "sky window" faces `--add-flag FakeBackdrop` | `SkyZoneInfo` + *Fake Backdrop* surfaces |
 | Grid discipline | **guidance only — no enforcement verb.** The guide states the on-grid / clean-multiple / 90°-rotation rules and notes uedcli does not snap for you | GUI grid-snap toggle |
 | Class discovery | `class list` (inheritance tree; `--flat`, `--subclass-of`, `--depth`), `class show <Class>` | Actor Class Browser |
@@ -120,7 +120,7 @@ File-by-file:
   the `LightType` vs `LightEffect` split, the `LE_Negative` note, and both Debunked callouts.
 - **`textures-and-surfaces.md`** — surface flags, alignment, `MyLevel`, and skybox rewritten around
   `brush poly find/set/align`. Flag names map to `--add-flag`/`--remove-flag`; alignment maps to
-  `brush poly align --wall|--floor|--ring` and `--pan-to/--pan-by`. Skybox becomes the `SkyZoneInfo` +
+  `brush poly align --wall|--floor|--ring` and `brush poly pan/rotate/scale`. Skybox becomes the `SkyZoneInfo` +
   `FakeBackdrop`/`Unlit` recipe using `actor build` + `brush poly set`. `MyLevel` stays described as
   editor/engine mechanism (note whether uedcli exposes an embed path or it's editor-only — **open
   question Q3**).

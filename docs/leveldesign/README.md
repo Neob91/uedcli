@@ -43,12 +43,12 @@ mover key move <that-name> 1 --from-base --to 0,0,112   # open pose (offset from
 
 The four verb families you compose:
 
-| Family                                                    | What it does                                                                   | Example |
-| --------------------------------------------------------- | ------------------------------------------------------------------------------ | --- |
-| `brush build <shape>`                                     | *generator* — prints a T3D actor (a CSG brush or a mover)                      | `brush build cylinder --height 256 --radius 128 --sides 8` |
-| `actor build <Class>` / `actor add -`                     | *generator* / *writer* — build a point actor; write any snippet into the trunk | `actor build Engine.Light --prop … \| actor add -` |
-| `brush poly find` / `brush poly set` / `brush poly align` | per-surface texture + flag + alignment edits                                   | `brush poly find Room1 --facing +Z \| brush poly set - --texture …` |
-| `actor prop set` / `actor order` / `mover key`            | per-actor property, CSG-order, and mover-keyframe edits                        | `actor prop set Door1 MoveTime=1.5` (`bLocked` etc. are DX `DeusExMover` props — see deusex/) |
+| Family                                                           | What it does                                                                                                        | Example |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | --- |
+| `brush build <shape>`                                            | *generator* — prints a T3D actor (a CSG brush or a mover)                                                           | `brush build cylinder --height 256 --radius 128 --sides 8` |
+| `actor build <Class>` / `actor add -`                            | *generator* / *writer* — build a point actor; write any snippet into the trunk                                      | `actor build Engine.Light --prop … \| actor add -` |
+| `brush poly find` / `set` / `pan` / `rotate` / `scale` / `align` | per-surface edits: pick the faces, set their texture + flags, then move / turn / resize / align the texture on them | `brush poly find Room1 --facing +Z \| brush poly set - --texture …` |
+| `actor prop set` / `actor order` / `mover key`                   | per-actor property, CSG-order, and mover-keyframe edits                                                             | `actor prop set Door1 MoveTime=1.5` (`bLocked` etc. are DX `DeusExMover` props — see deusex/) |
 
 **How it builds.** The T3D trunk is the source of truth (committed to git). `level materialize` drives
 UnrealEd to compile the trunk into the `.dx`/`.unr` map file; `level preview` renders stills. You never

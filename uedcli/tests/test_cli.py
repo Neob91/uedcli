@@ -450,24 +450,26 @@ def test_parser_actor_rotate_pivot_and_pivot_actor_are_mutually_exclusive():
                       "--pivot", "0,0,0", "--pivot-actor", "P"])
 
 
-def test_parser_poly_set_parses_targets_texture_flags_and_pan():
+def test_parser_poly_set_parses_targets_texture_and_flags():
     p = build_parser()
     ns = p.parse_args(["brush", "poly", "set", "Wall1:3,5", "Wall2:all",
                        "--texture", "DeusExDeco.Textures.Wood",
                        "--add-flag", "translucent", "--add-flag", "unlit",
-                       "--remove-flag", "masked", "--pan-to", "0,64"])
+                       "--remove-flag", "masked"])
     assert ns.cmd == "brush" and ns.sub == "poly" and ns.polysub == "set"
     assert ns.targets == ["Wall1:3,5", "Wall2:all"]
     assert ns.texture == "DeusExDeco.Textures.Wood"
     assert ns.add_flags == ["translucent", "unlit"]
     assert ns.remove_flags == ["masked"]
-    assert ns.pan_to == (0, 64) and ns.pan_by is None
 
 
-def test_parser_poly_set_pan_to_and_pan_by_are_mutually_exclusive():
+@pytest.mark.parametrize("flag", ["--pan-to", "--pan-by"])
+def test_parser_poly_set_no_longer_accepts_the_pan_flags(flag):
+    # Pan moved to its own verb (`brush poly pan --to/--by`) and the old spelling was DELETED
+    # outright — no alias, no no-op flag, no rename shim (CLAUDE.md "No back-compat cruft").
     p = build_parser()
     with pytest.raises(SystemExit):
-        p.parse_args(["brush", "poly", "set", "Wall1:all", "--pan-to", "0,0", "--pan-by", "1,1"])
+        p.parse_args(["brush", "poly", "set", "Wall1:all", flag, "0,64"])
 
 
 def test_parser_poly_set_rejects_an_unknown_flag_name():
@@ -476,10 +478,83 @@ def test_parser_poly_set_rejects_an_unknown_flag_name():
         p.parse_args(["brush", "poly", "set", "Wall1:all", "--add-flag", "bogus"])
 
 
-def test_parser_poly_set_pan_by_negative_delta():
+# --- brush poly pan / rotate / scale --------------------------------------------
+
+def test_parser_poly_pan_parses_targets_and_absolute_pan():
     p = build_parser()
-    ns = p.parse_args(["brush", "poly", "set", "Wall1:all", "--pan-by", "-5,3"])
-    assert ns.pan_by == (-5, 3)
+    ns = p.parse_args(["brush", "poly", "pan", "Wall1:3,5", "Wall2:all", "--to", "0,64"])
+    assert ns.cmd == "brush" and ns.sub == "poly" and ns.polysub == "pan"
+    assert ns.targets == ["Wall1:3,5", "Wall2:all"]
+    assert ns.pan_to == (0, 64) and ns.pan_by is None
+
+
+def test_parser_poly_pan_by_takes_a_negative_delta():
+    p = build_parser()
+    ns = p.parse_args(["brush", "poly", "pan", "Wall1:all", "--by", "-5,3"])
+    assert ns.pan_by == (-5, 3) and ns.pan_to is None
+
+
+def test_parser_poly_pan_to_and_by_are_mutually_exclusive():
+    p = build_parser()
+    with pytest.raises(SystemExit):
+        p.parse_args(["brush", "poly", "pan", "Wall1:all", "--to", "0,0", "--by", "1,1"])
+
+
+def test_parser_poly_pan_requires_one_of_to_or_by():
+    p = build_parser()
+    with pytest.raises(SystemExit):
+        p.parse_args(["brush", "poly", "pan", "Wall1:all"])
+
+
+def test_parser_poly_rotate_parses_a_signed_angle_in_rotation_units():
+    p = build_parser()
+    assert p.parse_args(["brush", "poly", "rotate", "Wall1:all", "--by", "16384"]).by == 16384
+    assert p.parse_args(["brush", "poly", "rotate", "Wall1:all", "--by", "-16384"]).by == -16384
+
+
+def test_parser_poly_rotate_requires_by():
+    p = build_parser()
+    with pytest.raises(SystemExit):
+        p.parse_args(["brush", "poly", "rotate", "Wall1:all"])
+
+
+def test_parser_poly_rotate_rejects_a_non_integer_angle():
+    p = build_parser()
+    with pytest.raises(SystemExit):
+        p.parse_args(["brush", "poly", "rotate", "Wall1:all", "--by", "90.5"])
+
+
+def test_parser_poly_scale_parses_a_float_factor_pair():
+    p = build_parser()
+    ns = p.parse_args(["brush", "poly", "scale", "Wall1:all", "--by", "2,0.5"])
+    assert ns.polysub == "scale" and ns.by == (2.0, 0.5)
+
+
+def test_parser_poly_scale_requires_by():
+    p = build_parser()
+    with pytest.raises(SystemExit):
+        p.parse_args(["brush", "poly", "scale", "Wall1:all"])
+
+
+def test_parser_poly_scale_and_rotate_report_a_missing_by_identically(capsys):
+    # `--by` is a plain required flag on both, NOT a one-member mutually-exclusive group holding a
+    # place for `--to` (which needs the texture catalog and does not exist yet). A group of one
+    # only degrades the message to "one of the arguments --by is required".
+    p = build_parser()
+    messages = []
+    for verb in ("scale", "rotate"):
+        with pytest.raises(SystemExit):
+            p.parse_args(["brush", "poly", verb, "Wall1:all"])
+        messages.append(capsys.readouterr().err.splitlines()[-1])
+    assert all("the following arguments are required: --by" in m for m in messages), messages
+
+
+@pytest.mark.parametrize("bad", ["2", "2,2,2", "x,2", "nan,1", "inf,1"])
+def test_parser_poly_scale_rejects_a_malformed_factor_pair(bad):
+    # A malformed --by must be a clean argparse error, never a traceback out of float()/the model.
+    p = build_parser()
+    with pytest.raises(SystemExit):
+        p.parse_args(["brush", "poly", "scale", "Wall1:all", "--by", bad])
 
 
 def test_substrate_stub_parses():

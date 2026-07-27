@@ -3287,6 +3287,10 @@ The posing rewrite landed (POS@ROT → auto-frame; decision 2026-07-12); these a
   `n̂ → −n̂` by construction, so `rotate` was the only one that read differently inside a room.
   Folded into `plans/2026-07-26-poly-surface-step1-plan.md` and `rationale/surface.md`.
 
+---
+
+## From the 2026-07-18 unattended build chain (Andrzej, triage these)
+
 - **RESOLVED (triaged + built 2026-07-19) — CLI consistency & clarity audit** (`../reviews/2026-07-19-cli-consistency-audit.md`, 8 findings, all accepted): **H1** poly-set stdin, **M1** mutator summaries→stderr, **M2** `--json` ×3, **M3** `--prop` on `brush build` (re-scoped to movers — CSG brushes were already fully covered by dedicated flags), **L2** clip/folder-get polish, **L3** unify `--catalog-dir` help (flag KEPT — load-bearing for project-less texture verbs) — all BUILT + committed 2026-07-19. **H2** (`actor move` over a SET) routed to `to-spec` (`--by`-only when moving >1 actor, per Andrzej).
 
 - `p2 [spec-done→plan]` **`config.toml paths` as a TOML list** (Andrzej-requested 2026-07-19). Accept
@@ -3889,3 +3893,98 @@ throwaway compare view. My repro predated the fix.)_
      midpoint stored `X=11999.998951`. Orthogonal to the pivot choice. The obvious fix — an exact
      integer matrix for 90°-multiple deltas — would diverge from what UnrealEd computes for the same
      operation, against the byte-identity goal, so it needs a spike rather than a patch.
+
+- `p3` `[implement]` **`brush poly align` still prints touched brush NAMES while `set`/`pan`/`rotate`/
+  `scale` now print `BRUSH:idx` selectors — the two halves of one verb family disagree.** Step 1
+  (built 2026-07-26) converted the four per-face mutators to per-face stdout, per the owner ruling
+  that a bare brush name would hand the next verb in a pipe a wider set than was edited. `align` is
+  covered by the same ruling but is **out of step 1's scope** — its own restructure (modes →
+  subcommands, `wall`/`floor` world-space, `run`, `one-tile`) is steps 2–5 and is not planned yet.
+
+  **The consequence, measured, is a LOUD break and not a silent widening** — an earlier version of
+  this item claimed the latter and was wrong. Step 1 also narrowed the per-face verbs' target grammar
+  to `BRUSH:SELECTOR` only, so `align`'s bare name is rejected outright:
+  `brush poly align WALL:4 --floor | brush poly rotate -` exits 2 with
+  `surface selector must be BRUSH:SELECTOR, got 'WALL'` (same for `set`/`pan`/`scale`). So the two
+  narrowings cover each other: no wrong face is ever edited, the pipeline simply does not compose.
+
+  **Dropped p2 → p3 on that correction.** It is a composition gap with a working one-verb workaround
+  (`brush poly find` between the two), it fails visibly rather than corrupting anything, and
+  `docs/usage.md` "Output streams for mutators" now states it plainly, so nobody meets it as a trap.
+
+  Fold the conversion into whichever align step lands first rather than doing it standalone — the
+  mechanism already exists (`surface.resolve_targets` + `dispatch._print_poly_selectors`), but
+  `align`'s target grammar also accepts bare brush names, so it needs its own resolver pass.
+
+- `p2` `[OWNER — decide]` **What should `brush poly rotate` do on a brush whose `CsgOper` is neither
+  `CSG_Add` nor `CSG_Subtract`?** Your 2026-07-27 ruling defines the turn against the **visible
+  surface normal** — flip `n̂` on a subtract — and that is built and pinned. But a brush with no
+  defined inside and outside gives "the visible surface normal" no direction to name, so no sign can
+  be derived from the ruling's principle.
+
+  **The set this covers is EVERY value that is not `CSG_Add` or `CSG_Subtract`** — `CSG_Intersect`,
+  `CSG_Deintersect`, `CSG_Active`, and anything unrecognised or malformed. Stating it exactly because
+  the code refuses all of them and an earlier version of this item named only the first two: ruling
+  on the narrower set would leave the wider one undecided.
+
+  **Currently `rotate` exits 2 naming the value.** That is a deliberate fail-closed interim, not a
+  reading of your ruling: guessing a sign would be silent and would look like the author's own
+  mistake, and relaxing an error to a default later is harmless where the reverse is not. The case is
+  close to unreachable — `CSG_Intersect`/`CSG_Deintersect` are live-editor verbs that do not appear
+  in a trunk (`preview_native` says the same and skips them), and no fixture in the repo carries
+  anything but `CSG_Add`/`CSG_Subtract` — so the alternative (treat them all as additive, i.e.
+  unflipped, like an absent `CsgOper`) costs nothing either. **Keep the refusal, or default them to
+  unflipped?**
+
+  (An ABSENT `CsgOper` is *not* part of this question: it already reads as `CSG_Add` in every reader
+  in the codebase, and an unflipped non-subtractive brush follows from your ruling as written. Note
+  that `normalize.py` identifies UnrealEd's transient BUILDER brush by exactly that absence — its op
+  is `CSG_Active`, which the editor writes by omitting the line — so the absent case is the one that
+  actually occurs, and an explicit `CsgOper=CSG_Active` would be unusual.)
+
+  Separately and NOT covered by the ruling: a negative `MainScale` component mirrors the brush and
+  flips the handedness of every face on it, so the turn still inverts there. Documented in
+  `docs/usage.md` rather than corrected.
+
+- `p3` `[debug]` **A doubly-signed poly index (`Wall:--3`) escapes as a raw Python message that names
+  nothing.** `surface.resolve_polys` gates each index with `part.lstrip("-").isdigit()`, which strips
+  *every* leading `-`, so `--3` passes the guard and reaches `int()`:
+
+  ```
+  $ uedcli brush poly rotate ROOM:--3 --by 16384
+  rc=2  invalid literal for int() with base 10: '--3'
+  ```
+
+  It is a clean exit 2 — `dispatch` catches `ValueError` — so no traceback reaches the user, which is
+  why this is `p3` and not higher. But the message names neither the brush nor the verb and does not
+  read as a uedcli error at all, unlike every neighbouring case on the same input:
+
+  ```
+  ROOM:+3   →  'ROOM': bad poly index '+3' (expected an integer)
+  ROOM:-3   →  'ROOM': poly index -3 out of range (brush has 6 polys)
+  ROOM:x    →  'ROOM': bad poly index 'x' (expected an integer)
+  ```
+
+  The fix is to make the guard reject a second sign (e.g. strip at most one leading `-`, or match
+  against a signed-integer pattern) so `--3` lands on the existing `bad poly index` message. Every
+  `BRUSH:SELECTOR` verb inherits it: `brush poly list|find|set|pan|rotate|scale|align`.
+
+  **Deferred deliberately, not missed:** `resolve_polys` is **byte-identical to master's** (verified
+  by diffing the function against `master:uedcli/surface.py`), so this is pre-existing and out of
+  scope for the per-surface step-1 change — that change only added three more verbs through which the
+  same pre-existing guard is reachable. Found by the step-1 build review, 2026-07-27.
+
+- `p3` `[implement]` **Nothing checks that a TEST NAME cited in a doc still exists**, so a rename
+  silently orphans the citation. `test_doc_links.py` already verifies every markdown link and anchor
+  in the tracked tree, but a citation like
+  `` `test_surface.test_apply_rotate_absolute_branch_brackets_...` `` is prose, not a link, and is
+  invisible to it. Live instance, 2026-07-27: renaming a test from `..._accepts_...` to
+  `..._brackets_...` while resolving a review finding left `rationale/surface.md` citing a name that
+  matched nothing — a future agent grepping for it would find no test and could reasonably conclude
+  the behaviour is unpinned. Caught by a reviewer, not by the suite.
+
+  These citations are load-bearing precisely where `rationale/` is: an entry's `Refs` is how a later
+  session checks whether a claim is still pinned. A check would be small — collect
+  `` `test_<module>.test_<name>` `` and `` `..._<name>` `` tokens from the tracked docs and assert
+  each resolves to a `def` in `uedcli/tests/` — and it extends an existing test file rather than
+  adding a subsystem. Worth doing when something next touches `test_doc_links.py`.

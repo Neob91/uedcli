@@ -8,9 +8,10 @@ Tag: `[plan]`.
 - [ ] `p1` `[plan]` **Per-surface texture verbs — STEPS 2-5 (the `brush poly align` half).**
   Spec: [`../specs/2026-07-26-poly-surface-verbs.md`](../specs/2026-07-26-poly-surface-verbs.md).
   **Spec gate: PASSED** — at its ceiling; every round's findings are folded into the sections
-  themselves. **Step 1 is already on [`to-build.md`](to-build.md)** with a reviewed plan; these are the
-  four steps after it, and the spec's §4.4 sequences them under one rule: *no step introduces a flag,
-  a subcommand or a deletion whose behaviour arrives in a later step.*
+  themselves. **Step 1 is BUILT** (2026-07-26 — `brush poly pan|rotate|scale`; see
+  [`done.md`](done.md)); these are the four steps after it, and the spec's §4.4 sequences them under
+  one rule: *no step introduces a flag, a subcommand or a deletion whose behaviour arrives in a later
+  step.*
 
   **Plan them SEPARATELY, in order — do not write one plan for all four.** §4.4 splits them because
   they differ in kind, and the review rounds repeatedly found defects at the seams between them:

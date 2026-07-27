@@ -497,7 +497,6 @@ def test_it_poly_set_records_canonical_brush_name_in_touched(tmp_path, monkeypat
     args = SimpleNamespace(
         cmd="brush", sub="poly", polysub="set", targets=["brush1:all"],
         texture="Engine.DefaultTexture", add_flags=None, remove_flags=None,
-        pan_to=None, pan_by=None,
         container="dx-lum-uned")
     src = _fake_src(_fixture_level())
     with mock.patch("uedcli.dispatch._resolve_level_source", return_value=src):

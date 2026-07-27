@@ -20,6 +20,7 @@ Every recipe uses the same four verb families (full reference in
 | `brush build <shape> --mover-class <Pkg.Class> \| actor add -`                         | build a **mover** (door/lift/breakable) directly — no editor Intersect/Create-Mover ritual |
 | `actor build DeusEx.<Class> --prop K=V --at X,Y,Z \| actor add -`                      | place a point actor (device, pickup, NPC, ZoneInfo) with initial props |
 | `brush poly find … \| brush poly set - --texture …`                                    | per-surface texture + flag edits |
+| `brush poly find … \| brush poly pan\|rotate\|scale - …`                               | move / turn / resize the texture ON a face: `pan --to\|--by U,V` (whole texels), `rotate --by UU` (16384 = 90°), `scale --by FU,FV` (apparent size) |
 | `actor prop set <name> K=V`, `mover key count/move/list`, `actor order --first/--last` | per-actor property, keyframe, and CSG-order edits |
 
 `actor add -` prints the **allocated actor name(s)** to stdout — capture them and feed them to

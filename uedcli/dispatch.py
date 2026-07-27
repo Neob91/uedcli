@@ -337,6 +337,28 @@ def _resolve_target_names(tokens: list[str]) -> list[str]:
     return list(tokens)
 
 
+def _print_poly_selectors(level, targets: list[str], touched: list[str], past_tense: str) -> int:
+    """The stdout/stderr contract shared by every PER-FACE mutator (`brush poly set|pan|rotate|
+    scale`): the faces it touched go to **stdout** as `BRUSH:idx` selectors, one per line, and a
+    human summary to **stderr** so a pipe stays clean.
+
+    Per-FACE selectors, not touched brush NAMES: a bare brush name means *all* of that brush's
+    polys, so piping one into a second per-face verb would silently widen the set from the three
+    faces that were edited to the brush's twelve. The pairs come from `surface.resolve_targets` —
+    the same resolution the mutator itself used, so the printed set is exactly the mutated set,
+    canonically cased, expanded and deduped (`wall:all` in, `Wall:0 … Wall:5` out). Echoing the
+    caller's own tokens back would fail all three of those.
+
+    `touched` stays the brush-name list the model returns: that is the session-store `save(touched=…)`
+    currency, where widening to a whole brush is harmless. Returns 0, so a caller can `return` it."""
+    from . import surface
+    pairs = surface.resolve_targets(level, targets)
+    for brush_name, idx in pairs:
+        print(f"{brush_name}:{idx}")
+    print(f"{past_tense} {len(pairs)} face(s) across {len(touched)} brush(es)", file=sys.stderr)
+    return 0
+
+
 def _reject_nonlevel_target_for_folders(args) -> None:
     """Folder surfaces are TRUNK-ONLY (spec §4): a folder lives only in the per-actor trunk sidecar;
     the flat stash/prefab boxes serialize via `canonical_actor_t3d` (T3D only) and have no per-actor
@@ -3999,8 +4021,7 @@ def _dispatch(args) -> int:
         try:
             touched = surface.apply_surface_edit(
                 level, targets, texture_ref=args.texture,
-                add_flags=args.add_flags, remove_flags=args.remove_flags,
-                pan_to=args.pan_to, pan_by=args.pan_by)
+                add_flags=args.add_flags, remove_flags=args.remove_flags)
         except ValueError as e:
             print(str(e), file=sys.stderr)
             return 2
@@ -4011,15 +4032,57 @@ def _dispatch(args) -> int:
             rec_args["add_flags"] = args.add_flags
         if args.remove_flags:
             rec_args["remove_flags"] = args.remove_flags
+        src.save(verb="poly-set", args=rec_args, level=level, touched=touched)
+        return _print_poly_selectors(level, targets, touched, "set")
+
+    if args.cmd == "brush" and args.sub == "poly" and args.polysub == "pan":
+        from . import surface
+        targets = _resolve_target_names(args.targets)
+        if not targets:
+            return 0
+        level = src.load()
+        try:
+            touched = surface.apply_pan(level, targets, pan_to=args.pan_to, pan_by=args.pan_by)
+        except ValueError as e:
+            print(str(e), file=sys.stderr)
+            return 2
+        rec_args = {"targets": targets}
         if args.pan_to is not None:
             rec_args["pan_to"] = [str(c) for c in args.pan_to]
         if args.pan_by is not None:
             rec_args["pan_by"] = [str(c) for c in args.pan_by]
-        src.save(verb="poly-set", args=rec_args, level=level, touched=touched)
-        for name in touched:                             # PRODUCER: touched brush names → stdout (feed `| verb -`)
-            print(name)
-        print(f"set on {len(touched)} brush(es)", file=sys.stderr)
-        return 0
+        src.save(verb="poly-pan", args=rec_args, level=level, touched=touched)
+        return _print_poly_selectors(level, targets, touched, "panned")
+
+    if args.cmd == "brush" and args.sub == "poly" and args.polysub == "rotate":
+        from . import surface
+        targets = _resolve_target_names(args.targets)
+        if not targets:
+            return 0
+        level = src.load()
+        try:
+            touched = surface.apply_rotate(level, targets, by_uu=args.by)
+        except ValueError as e:
+            print(str(e), file=sys.stderr)
+            return 2
+        src.save(verb="poly-rotate", args={"targets": targets, "by": str(args.by)},
+                 level=level, touched=touched)
+        return _print_poly_selectors(level, targets, touched, "rotated")
+
+    if args.cmd == "brush" and args.sub == "poly" and args.polysub == "scale":
+        from . import surface
+        targets = _resolve_target_names(args.targets)
+        if not targets:
+            return 0
+        level = src.load()
+        try:
+            touched = surface.apply_scale(level, targets, by=args.by)
+        except ValueError as e:
+            print(str(e), file=sys.stderr)
+            return 2
+        src.save(verb="poly-scale", args={"targets": targets, "by": [str(c) for c in args.by]},
+                 level=level, touched=touched)
+        return _print_poly_selectors(level, targets, touched, "scaled")
 
     if args.cmd == "brush" and args.sub == "poly" and args.polysub == "find":
         from . import polyalign

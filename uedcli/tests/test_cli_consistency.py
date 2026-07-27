@@ -435,9 +435,50 @@ def test_move_prints_moved_name_to_stdout(tmp_path, monkeypatch, capsys):
     assert cap.out == "A_1\n" and "moved A_1" in cap.err
 
 
-def test_poly_set_prints_touched_brush_names_to_stdout(tmp_path, monkeypatch, capsys):
+def test_poly_set_prints_the_touched_faces_as_selectors_to_stdout(tmp_path, monkeypatch, capsys):
+    # A PER-FACE verb prints per-face selectors, not the brush name: a bare `WALL` means ALL of that
+    # brush's polys, so piping it into a second per-face verb would silently widen a two-face edit
+    # to the whole brush. (It used to print `WALL`; owner ruling 2026-07-26 inverted that.)
     _brush_project(tmp_path, monkeypatch)
     assert _run(["brush", "poly", "set", "WALL:0", "WALL:2",
                  "--texture", "DeusExDeco.Stone.Block"]) == 0
     cap = capsys.readouterr()
-    assert cap.out == "WALL\n" and "set on 1 brush(es)" in cap.err   # one brush, two polys
+    assert cap.out == "WALL:0\nWALL:2\n"
+    assert "set 2 face(s) across 1 brush(es)" in cap.err
+
+
+@pytest.mark.parametrize("argv,summary", [
+    (["brush", "poly", "pan", "WALL:all", "--by", "0,32"], "panned 6 face(s) across 1 brush(es)"),
+    (["brush", "poly", "rotate", "WALL:all", "--by", "16384"],
+     "rotated 6 face(s) across 1 brush(es)"),
+    (["brush", "poly", "scale", "WALL:all", "--by", "2,2"],
+     "scaled 6 face(s) across 1 brush(es)"),
+])
+def test_per_face_verbs_print_expanded_selectors_to_stdout(tmp_path, monkeypatch, capsys,
+                                                           argv, summary):
+    # `all` must EXPAND on stdout — an implementation that echoed the caller's own token back would
+    # print `WALL:all` and pass a laxer assertion.
+    _brush_project(tmp_path, monkeypatch)
+    assert _run(argv) == 0
+    cap = capsys.readouterr()
+    assert cap.out == "".join(f"WALL:{i}\n" for i in range(6))
+    assert summary in cap.err
+
+
+def test_per_face_verb_stdout_canonicalizes_a_case_folded_input(tmp_path, monkeypatch, capsys):
+    # The other half an echo-the-input implementation gets wrong: brush names resolve
+    # case-insensitively, so the printed selector must carry the CANONICAL name.
+    _brush_project(tmp_path, monkeypatch)
+    assert _run(["brush", "poly", "pan", "wall:3", "--to", "0,0"]) == 0
+    assert capsys.readouterr().out == "WALL:3\n"
+
+
+def test_per_face_verb_stdout_round_trips_through_the_dash_convention(tmp_path, monkeypatch,
+                                                                      capsys):
+    # The contract that makes the verbs compose: one verb's stdout is re-consumable as another's
+    # stdin target set.
+    _brush_project(tmp_path, monkeypatch)
+    assert _run(["brush", "poly", "pan", "WALL:all", "--by", "1,0"]) == 0
+    produced = capsys.readouterr().out
+    assert _run(["brush", "poly", "pan", "-", "--by", "1,0"], stdin=produced) == 0
+    assert capsys.readouterr().out == produced

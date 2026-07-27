@@ -272,10 +272,13 @@ kept current).
 `test_surface.py`'s `touched == ["B1"]` / `["BrushA","BrushB"]` cases and `test_dispatch.py`'s
 `saved["touched"]` all survive. Do not "fix" them.
 
-**`dev/docs/rationale/surface.md`** — created 2026-07-26 with the settled content; extend it with `Why it is this way` / `Rejected` / `Refs`, plus
-an index row in `rationale/README.md`. (The `polyalign` topic is the wrong home: this change is a `surface.py` split and does not
-touch `polyalign.py`.) It records the
-verb split, the re-anchor formula, and the §5 tolerance with its measurement.
+**`dev/docs/rationale/surface.md`** — created 2026-07-26 with the settled content; extend it with
+`Why it is this way` / `Rejected` / `Refs`. (The `polyalign` topic is the wrong home: this change is
+a `surface.py` split and does not touch `polyalign.py`.) It records the verb split, the re-anchor
+formula, and the §5 tolerance with its measurement. **No index row is added to
+`rationale/README.md`** — an earlier draft of this line asked for one on a false premise: that README
+documents the entry shape, the tree's ownership and the ledger migration, and has no topic table at
+all, so there is no row to add and no other topic is indexed there.
 
 **Cite by ANCHOR TEXT, not line number.** Several sessions are editing this tree concurrently and the
 spec's numbers have already drifted. In particular: in `textures-and-surfaces.md` the pan references

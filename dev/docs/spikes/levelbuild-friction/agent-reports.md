@@ -460,6 +460,9 @@ opposite side. `--at` centres the brush (documented) but nothing says the textur
 too.
 **Workaround:** pan by half the sheet, in texels:
 `brush poly find <Sign> | brush poly set - --pan-to <width/2>,<height/2>`.
+> *(Editorial note, 2026-07-27: pan left `brush poly set` and the flag was deleted outright. The
+> workaround is now `brush poly find <Sign> | brush poly pan - --to <width/2>,<height/2>`. The
+> narrative is left as written — it records what this probe hit on the day.)*
 **Cost:** this is invisible on tiling metal/concrete, which is why it survives; it only shows up the
 moment a texture has lettering or a border, and then it looks like the sign is broken. A sheet whose
 texture frame started at a CORNER would need no pan at all.
@@ -571,7 +574,8 @@ is **128x256** on a 128x128 mover leaf; at the default 1 texel/uu the V window i
 puts its trim at top and bottom and a dark panel in the middle, the result is a bright "+" of trim
 with four black quadrants — which reads in-game as a *lighting* bug ("the mover is rendering black"),
 and sent this agent chasing `bDynamicLightMover` and adding lights before spotting it was a wrap.
-`brush poly set --pan-to 64,128` centres the window and fixes it. Rule of thumb: a symmetric
+`brush poly set --pan-to 64,128` centres the window and fixes it.
+> *(Editorial note, 2026-07-27: that spelling is gone — it is `brush poly pan --to 64,128` now.)* Rule of thumb: a symmetric
 `u[-w/2,+w/2]` window on a texture wider/taller than the face always wraps; pan by half the face
 size to get a non-wrapping window.
 
@@ -699,6 +703,9 @@ it is what now blocks landing DiveBar's audio.
   too coarse for the surface) the only lever is *choosing a different texture*. Worth naming in
   `docs/leveldesign/general/textures-and-surfaces.md`, which currently implies alignment can fix
   scale.
+  > *(Editorial note, 2026-07-27: RESOLVED. `brush poly scale --by FU,FV` now exists, and pan moved
+  > to `brush poly pan --to/--by`, so both halves of this sentence are false today. Left as written
+  > because it is the finding that motivated the verb.)*
 - **`brush poly show` does not exist** (it is `brush poly list`); the error is clear, but `list`
   vs `find` vs `show` is the one place the verb naming diverges from `actor`.
 - **There is no ladder/climb class in this DX substrate.** `class list --flat --depth all` (1,345

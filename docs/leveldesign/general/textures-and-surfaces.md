@@ -13,7 +13,9 @@ brush poly find Wall1                               # print ALL faces of brush W
 brush poly find Wall1 --facing +Z                   # or filter by facing: +Z floor / -Z ceiling / +X,±Y wall
 brush poly find Wall1 | brush poly set - --texture CoreTexMetal.ClenGrayMetal_A
 brush poly find Wall1 --facing +X | brush poly set - --add-flag Masked --remove-flag Unlit
-brush poly find Sign | brush poly set - --pan-by 0,32                  # nudge alignment
+brush poly find Sign | brush poly pan - --by 0,32                      # nudge alignment (whole texels)
+brush poly find Sign | brush poly rotate - --by 16384                   # turn the texture a quarter turn
+brush poly find Sign | brush poly scale - --by 2,2                      # make the texture look twice as big
 brush poly find Floor1 --facing +Z | brush poly align - --floor        # auto-align (the `-` reads the piped faces)
 ```
 
@@ -21,7 +23,11 @@ brush poly find Floor1 --facing +Z | brush poly align - --floor        # auto-al
   to consume. The brush Name is **positional**; narrow the set with `--facing +X|-X|+Y|-Y|+Z|-Z|slant`
   (a floor is `--facing +Z`, a ceiling `--facing -Z`, a wall `--facing +X` or `±Y`), `--item NAME`, or
   `--texture REF`.
-- `brush poly set` applies texture / flag / pan changes to the faces on stdin.
+- `brush poly set` assigns a face's stored ATTRIBUTES — its texture and its surface flags.
+- `brush poly pan|rotate|scale` transform the texture FRAME on the faces on stdin: where the pattern
+  sits, which way up it runs, how big it is.
+- All four of `set|pan|rotate|scale` take `BRUSH:SELECTOR` (or `-`) only — unlike `align`, a bare
+  brush name is not accepted, so "every face of this brush" has to be typed `Wall1:all`.
 - `brush poly align --wall|--floor|--ring` auto-aligns (walls, floors/ceilings, or around a cylinder).
 
 ## Surface flags
@@ -56,7 +62,29 @@ Combinations matter: `Fake Backdrop` **+** `Unlit` shows sky; `Mirror` **+** `Un
   choose different in-plane texture directions and pin the pattern's phase to different points, so
   the same face aligned each way does not come out looking the same. Use one or the other on a given
   surface, not both.
-- **Pan / scale** with `--pan-to X,Y`, `--pan-by dX,dY`.
+- **Pan** with `brush poly pan --to U,V` (absolute) or `--by dU,dV` (relative), in whole texels.
+  **Pan AFTER aligning, never before** — every align mode stamps `Pan` on the faces it touches, so a
+  pan applied first is discarded. And pan the WHOLE of an aligned run or none of it: panning a
+  subset shifts those faces relative to their neighbours and breaks the seams (easy to do by
+  accident, since `brush poly find` filters).
+- **Rotate** with `brush poly rotate --by UU`, in unreal rotation units (16384 = a quarter turn).
+  The turn follows the face's **visible** surface normal, so it looks the same from where you stand
+  whether the face is the outside of an added pillar or the inside of a subtracted room — uedcli
+  flips the sign on a subtract for you. ⚠ It still comes out **backwards** on a **mirrored**
+  brush — one whose scale has an **odd** number of negative components, e.g. `MainScale=(-1,1,1)` —
+  because the engine draws its faces with reversed winding, so the visible normal is the opposite of
+  the one uedcli computes; negate the angle there. An **even** number of negative components
+  (`(-1,-1,1)`) is a 180° rotation rather than a mirror and is unaffected. (Geometric argument from
+  the determinant's sign, not measured against the editor.) The verb needs the brush's `CsgOper` to be `CSG_Add` or
+  `CSG_Subtract` (absent counts as `CSG_Add`); **any other value exits 2 naming it** — a brush with
+  no inside and outside gives the turn no direction to follow, so uedcli refuses rather than guessing
+  one.
+- **Scale** with `brush poly scale --by FU,FV`, named for what you SEE: `--by 2,2` makes the texture
+  look twice as big. **Scale BEFORE `align --ring`, never after** — a ring wrap computes its seam
+  phases for the density it saw.
+- ⚠ `rotate` and `scale` give **no continuity** across faces: each pivots or grows about its own
+  centre, so applying either across an aligned set breaks the seams. They are for a one-off face —
+  a sign, a monitor, a light panel.
 - **Scrolling surfaces** (conveyors, flowing water, scrolling signs): set the auto-pan flags on the face
   (`PF_AutoUPan` / `PF_AutoVPan` — the flag just means "this scrolls", with no speed), and set the
   **speed on the zone's `ZoneInfo`** (`TexUPanSpeed` / `TexVPanSpeed`), shared by every auto-pan face in

@@ -379,7 +379,7 @@ Earlier partial findings, kept because each is independently true and separately
    that `brush build sheet` offers no way to un-mirror — it does, via facing.)*
 2. **EVERY sheet is half-shifted.** `brush build sheet` puts the texture Origin at the
    sheet's **centre**, not its corner, so a sign texture is displaced by half its size
-   unless corrected with `--pan-to <w/2>,<h/2>`. This affects every sheet in every level,
+   unless corrected with `brush poly pan --to <w/2>,<h/2>`. This affects every sheet in every level,
    silently.
 3. **Some sheets get a 90°-rotated texture frame** (`TextureU` running vertically), so the
    texture tiles on its side — two signs in one level.

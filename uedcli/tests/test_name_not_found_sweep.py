@@ -98,6 +98,9 @@ _POSITIONAL = [
     ("brush-poly-list", ["brush", "poly", "list", BAD], ""),
     ("brush-poly-find", ["brush", "poly", "find", BAD], ""),
     ("brush-poly-set", ["brush", "poly", "set", f"{BAD}:all", "--add-flag", "Unlit"], ""),
+    ("brush-poly-pan", ["brush", "poly", "pan", f"{BAD}:all", "--by", "0,32"], ""),
+    ("brush-poly-rotate", ["brush", "poly", "rotate", f"{BAD}:all", "--by", "16384"], ""),
+    ("brush-poly-scale", ["brush", "poly", "scale", f"{BAD}:all", "--by", "2,2"], ""),
     ("brush-poly-align", ["brush", "poly", "align", "--wall", f"{BAD}:0"], ""),
     ("mover-key-list", ["mover", "key", "list", BAD], ""),
     ("mover-key-count", ["mover", "key", "count", BAD, "4"], ""),
@@ -123,6 +126,9 @@ _STDIN = [
     ("actor-folder-get-stdin", ["actor", "folder", "get", "-"], f"{BAD}\n"),
     ("actor-folder-unset-stdin", ["actor", "folder", "unset", "-"], f"{BAD}\n"),
     ("brush-poly-set-stdin", ["brush", "poly", "set", "-", "--add-flag", "Unlit"], f"{BAD}:all\n"),
+    ("brush-poly-pan-stdin", ["brush", "poly", "pan", "-", "--by", "0,32"], f"{BAD}:all\n"),
+    ("brush-poly-rotate-stdin", ["brush", "poly", "rotate", "-", "--by", "16384"], f"{BAD}:all\n"),
+    ("brush-poly-scale-stdin", ["brush", "poly", "scale", "-", "--by", "2,2"], f"{BAD}:all\n"),
     ("brush-poly-align-stdin", ["brush", "poly", "align", "--floor", "-"], f"{BAD}:0\n"),
 ]
 

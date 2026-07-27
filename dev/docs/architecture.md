@@ -155,6 +155,9 @@ and [`spikes/2026-07-05-git-merge-t3d-layout/`](spikes/2026-07-05-git-merge-t3d-
   (`typedprops.top_level_eq`) are shared with the compare path, so a quoted comma
   (`(Msg="a,b",Count=1)`) parses identically on both sides; see
   [`rationale/propedit.md`](rationale/propedit.md)),
+  `surface.py` (the per-face verbs `brush poly set|pan|rotate|scale`: the stored-attribute edit plus
+  the pure texture-frame transforms, and the shared `resolve_targets` that turns `BRUSH:SELECTOR`
+  tokens into a deduped `(brush, poly_index)` list — see "Surface edits" below),
   `polyalign.py` (the `brush poly find` producer + `brush poly align` verb: pure texture-vector
   math that makes one texture flow continuously across a face set — coplanar `--wall`/`--floor`
   and cylinder `--ring` wrap; world-space continuity written back per-brush via each brush's own
@@ -1729,10 +1732,54 @@ rewriting **every** copy so the solid stays watertight, then `validate_brush` �
 **Move-only by design** — add/delete would open/over-close the solid and is the easy way to
 crash CSG. `--to` takes a single `--at`; `--by` takes one or many.
 
-**Surface edits** follow the same model-side pattern: mutate poly fields (flags,
-texture, `Pan`, `TextureU/V`) → `validate_brush` → `src.save(...)`. Address a surface by
-`(brush, poly index)` (see `query.list_polys` + `preview`); the CLI should take flag
-**names**, not bit values.
+**Surface edits** (`surface.py`) follow the same model-side pattern: mutate poly fields (flags,
+texture, `Pan`, `Origin`, `TextureU/V`) → `validate_brush` → `src.save(...)`. Address a surface by
+`(brush, poly index)` (see `query.list_polys` + `preview`); the CLI takes flag **names**, not bit
+values. The module splits into two families, and the split is the point (see
+[`rationale/surface.md`](rationale/surface.md)):
+
+- **`brush poly set`** (`apply_surface_edit`) assigns stored per-face ATTRIBUTES — `--texture`,
+  `--add-flag`, `--remove-flag`; at least one is required.
+- **`brush poly pan|rotate|scale`** (`apply_pan`/`apply_rotate`/`apply_scale`) transform the texture
+  FRAME. `pan (--to|--by) U,V` writes the integer `Pan` and nothing else (exactly one form
+  required); `rotate --by UU` turns `TextureU`/`TextureV` in the face plane by unreal rotation units
+  (16384 = 90°, `--by` only — there is no `--to`); `scale --by FU,FV` multiplies the texture's
+  APPARENT size, which divides the stored magnitudes. `rotate`/`scale` write `Origin` and leave
+  `Pan`; `pan` writes `Pan` and leaves `Origin` — that pairing is what lets a uniform pan survive a
+  `brush poly align --ring` continuity offset, which lives in `Origin`. `scale --to` (absolute world
+  units per tile) is **not built**: it needs the texture catalog.
+
+All four resolve their target set through **`surface.resolve_targets`**, which expands `all`,
+canonicalizes the brush name and DEDUPES to a sorted `(brush, poly_index)` pair list. Dedup is
+load-bearing for every relative form (`pan --by`, `rotate --by`, `scale --by`), which would
+otherwise apply twice to a face named twice. The four take `BRUSH:SELECTOR` (or `-`) only —
+deliberately narrower than `brush poly align`, which also accepts a bare brush name.
+
+**The per-face verbs print `BRUSH:idx` SELECTORS on stdout**, not touched brush names
+(`dispatch._print_poly_selectors`), because a bare brush name means *all* of that brush's faces and
+would silently widen the set for a downstream per-face verb. The model functions still **return
+brush names** — that is `src.save(touched=…)`'s currency, where widening to a whole actor is
+harmless — so the CLI calls `resolve_targets` itself for the printed pairs, over the same one
+resolution path the mutator used. `brush poly align` still prints brush names; converting it is part
+of the unbuilt align rework.
+
+`rotate`'s frame math, all in the brush's LOCAL space (the vertex centroid commutes with the actor
+transform, so a world round trip would buy only float dust): the unit normal comes from the
+polygon's own winding via `preview._face_normal` (Newell) — **never `poly.normal`**, which the
+engine ignores and recomputes — and is then **flipped on a SUBTRACTIVE brush**, so the turn follows
+the VISIBLE surface normal and the same `--by` reads the same from where the author stands whether
+the face is the outside of an added pillar or the inside of a subtracted room (owner ruling
+2026-07-27; `surface._visible_normal`). A `CsgOper` that is neither `CSG_Add` nor `CSG_Subtract` has
+no inside or outside for that to mean, so it exits 2 naming the value rather than guessing a sign; an
+absent one reads as `CSG_Add`, as it does in every other reader. A whole number of quarter turns takes an exact `n̂ ×` path so it
+leaves no dust in the trunk; anything else is Rodrigues. Both verbs re-anchor so the face centroid
+keeps its `(U,V)`: `rotate` by `Origin' = C − R(C − Origin)`, `scale` by a 2×2 **Gram solve** (the
+same shortcut does not transfer — scaling covectors scales position by the inverse transpose, so
+the direct-basis version is silently wrong on a skewed frame under a non-uniform factor). `rotate`
+rejects a face whose stored axes point out of the face plane — `max(3e-3, 1e-2·|axis|)`, absolute
+OR relative, in a PRE-PASS naming every offender before anything is written; `scale` needs no such
+guard because it preserves direction. Derivations, measurements and the rejected alternatives are
+in [`rationale/surface.md`](rationale/surface.md).
 
 **Surface texture alignment** (`polyalign.py`, build item 11 — decisions.md 2026-07-18 21:40 UTC)
 makes one texture flow **continuously** across a set of faces instead of restarting at each brush

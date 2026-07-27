@@ -269,7 +269,7 @@ def test_a_pan_with_any_non_zero_component_is_emitted(pan):
 
 def test_a_zero_pan_parsed_back_is_the_same_surface_as_one_never_panned():
     # Round-trip: the emitted trunk for a zero-panned poly re-parses with `pan is None`, which every
-    # reader (the renderer, `--pan-by`'s base, the compare) already treats as zero.
+    # reader (the renderer, `brush poly pan --by`'s base, the compare) already treats as zero.
     p = Polygon(pan=(0, 0), origin=(Decimal(0), Decimal(0), Decimal(0)),
                 vertices=[(Decimal(0), Decimal(0), Decimal(0))])
     a = Actor(name="B", cls="Engine.Brush")

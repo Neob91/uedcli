@@ -891,7 +891,7 @@ def test_actor_rotate_composes_onto_an_already_rotated_actor_by_field_add():
 def test_dispatch_poly_set_records_texture_edit():
     args = SimpleNamespace(
         cmd="brush", sub="poly", polysub="set", targets=["B1:all"], texture="DeusExDeco.Textures.Wood",
-        add_flags=[], remove_flags=[], pan_to=None, pan_by=None)
+        add_flags=[], remove_flags=[])
     src = _fake_src(_brush_level())
     with mock.patch("uedcli.dispatch._resolve_level_source", return_value=src):
         rc = dispatch(args)
@@ -905,28 +905,74 @@ def test_dispatch_poly_set_records_texture_edit():
 
 # The poly-set package-union tests went with the session store's package manifest (slice 4): the
 # trunk has no manifest — the load set derives on demand at build. The texture EDIT itself is still
-# covered by test_dispatch_poly_set_records_texture_edit and _flags_and_pan.
+# covered by test_dispatch_poly_set_records_texture_edit and _flags.
 
 
-def test_dispatch_poly_set_flags_and_pan():
+def test_dispatch_poly_set_flags():
     args = SimpleNamespace(
         cmd="brush", sub="poly", polysub="set", targets=["B1:0"], texture=None,
-        add_flags=["translucent"], remove_flags=[], pan_to=(10, 20), pan_by=None)
+        add_flags=["translucent"], remove_flags=[])
     src = _fake_src(_brush_level())
     with mock.patch("uedcli.dispatch._resolve_level_source", return_value=src):
         rc = dispatch(args)
     assert rc == 0
     saved = src.save.call_args.kwargs
-    poly0 = saved["level"].actors["B1"].brush.polys[0]
-    assert poly0.flags & 0x4 and poly0.pan == (10, 20)
+    assert saved["level"].actors["B1"].brush.polys[0].flags & 0x4
     assert saved["args"]["add_flags"] == ["translucent"]
-    assert saved["args"]["pan_to"] == ["10", "20"]
+
+
+def test_dispatch_poly_pan_records_the_write_and_writes_only_pan():
+    args = SimpleNamespace(cmd="brush", sub="poly", polysub="pan", targets=["B1:0"],
+                           pan_to=(10, 20), pan_by=None)
+    src = _fake_src(_brush_level())
+    with mock.patch("uedcli.dispatch._resolve_level_source", return_value=src):
+        rc = dispatch(args)
+    assert rc == 0
+    saved = src.save.call_args.kwargs
+    assert saved["level"].actors["B1"].brush.polys[0].pan == (10, 20)
+    assert saved["touched"] == ["B1"]
+    assert saved["args"]["pan_to"] == ["10", "20"] and "pan_by" not in saved["args"]
+    assert src.save.call_args.kwargs["verb"] == "poly-pan"
+
+
+def test_dispatch_poly_rotate_records_the_write():
+    args = SimpleNamespace(cmd="brush", sub="poly", polysub="rotate", targets=["B1:all"], by=16384)
+    src = _fake_src(_brush_level())
+    with mock.patch("uedcli.dispatch._resolve_level_source", return_value=src):
+        rc = dispatch(args)
+    assert rc == 0
+    saved = src.save.call_args.kwargs
+    assert saved["verb"] == "poly-rotate" and saved["args"]["by"] == "16384"
+    assert saved["touched"] == ["B1"]
+
+
+def test_dispatch_poly_scale_records_the_write():
+    args = SimpleNamespace(cmd="brush", sub="poly", polysub="scale", targets=["B1:all"],
+                           by=(2.0, 0.5))
+    src = _fake_src(_brush_level())
+    with mock.patch("uedcli.dispatch._resolve_level_source", return_value=src):
+        rc = dispatch(args)
+    assert rc == 0
+    saved = src.save.call_args.kwargs
+    assert saved["verb"] == "poly-scale" and saved["args"]["by"] == ["2.0", "0.5"]
+    assert saved["touched"] == ["B1"]
+
+
+def test_dispatch_poly_scale_bad_factor_returns_2_and_does_not_record(capsys):
+    args = SimpleNamespace(cmd="brush", sub="poly", polysub="scale", targets=["B1:all"],
+                           by=(0.0, 1.0))
+    src = _fake_src(_brush_level())
+    with mock.patch("uedcli.dispatch._resolve_level_source", return_value=src):
+        rc = dispatch(args)
+    assert rc == 2
+    assert "must be a positive number" in capsys.readouterr().err
+    src.save.assert_not_called()
 
 
 def test_dispatch_poly_set_unknown_brush_returns_2_and_does_not_record(capsys):
     args = SimpleNamespace(
         cmd="brush", sub="poly", polysub="set", targets=["NoSuch:all"], texture="Engine.DefaultTexture",
-        add_flags=[], remove_flags=[], pan_to=None, pan_by=None)
+        add_flags=[], remove_flags=[])
     src = _fake_src(_brush_level())
     with mock.patch("uedcli.dispatch._resolve_level_source", return_value=src):
         rc = dispatch(args)
