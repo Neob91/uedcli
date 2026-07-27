@@ -169,23 +169,33 @@ expected. Then state the ceiling in the conversations doc.
 mounted on the wall**.
 **Where:** at least TubePlatform (subway button).
 **Status:** confirmed.
-**Tool/doc state:** **strongly corroborated, and there is a known tool defect behind part of it.**
-`agent-reports.md`:
+**Tool/doc state:** **corroborated — but the rotate half of this analysis was WRONG, and is corrected
+here (2026-07-27).** The observation above is unchanged; only the agent analysis below is revised.
 
-- **`actor rotate` pivots about the bbox MIN CORNER, not the actor's centre.** Flipping a 128×128 sign
-  180° swung it a whole width sideways onto a gate post, and added float dust to a brush that had been
-  exactly on grid. There is no `--about center|origin|X,Y,Z` option. A 90°-off flat light is exactly
-  the shape of defect this produces — and the "fix it with a follow-up `actor move`" workaround is
-  easy to get wrong or forget.
+- ~~**`actor rotate` pivots about the bbox MIN CORNER, not the actor's centre**, and there is no
+  `--about center|origin|X,Y,Z` option.~~ **RETRACTED — it never affected decorations at all.**
+  `best_grid_pivot` scored brush world vertices *and point-actor Locations*, so a lone point actor had
+  exactly one candidate — its own Location — and already rotated **exactly in place** (verified live:
+  `actor rotate BarrelFire --by 0,32768,0` leaves Location byte-identical). A flat light 90° off and a
+  button floating off a wall were never caused by a pivot. They were caused by the next bullet: no way
+  to learn a mesh's facing or footprint. That is the real defect in this finding.
+
+  The min-corner behaviour was real but applied to **brushes**, and only where a symmetric selection
+  made every candidate tie on alignment. The correction appended to `agent-reports.md` also retracts
+  the two supporting claims: `--pivot X,Y,Z`, `--pivot-actor NAME` and `--to` all existed at the time,
+  and the "float dust on an exactly-on-grid brush" was an `actor bbox` readout — the trunk was exact.
+  *(Fixed since: the default pivot is now the `Location` of the member nearest the bbox centre.)*
 - **Nothing tells an agent where a decoration's origin sits.** The spec revision for the asset catalog
   addresses precisely this: *"an agent can see a crate and still has to guess its footprint, and
   whether its origin sits at the base or the centre — so decorations sink into floors and
   interpenetrate."* A button floating off a wall is the same missing fact in the horizontal direction.
   `class show` reporting bbox/collision/`PrePivot` is specced but **not built**.
 
-**Suggested fix:** `--about center|origin|X,Y,Z` on `actor rotate` (small, and named in the friction
-log), plus the already-specced class placement facts. Both are cheaper than the renders needed to catch
-these by eye. Note *detecting* a badly-seated decoration is NOT a `doctor` job — whether a button belongs
+**Suggested fix:** ~~`--about center|origin|X,Y,Z` on `actor rotate`~~ — **dropped**: the flag would
+have been a second spelling of the existing `--pivot`, and the pivot was not this finding's cause. What
+remains is the already-specced **class placement facts** (`class show` reporting mesh bbox as signed
+mesh-local extents, collision, `PrePivot`), which is the whole of it — cheaper than the renders needed
+to catch these by eye. Note *detecting* a badly-seated decoration is NOT a `doctor` job — whether a button belongs
 on that wall is intent — but giving the builder the origin/bbox facts up front prevents it at authoring
 time, which is the better fix anyway.
 

@@ -856,3 +856,37 @@ also **outlive their driving process** — several were still up 4+ hours later 
 failed materialize reliably leaves one behind. A `uedcli` reaper for `uned-*` containers with no live
 parent would recover the box without a human having to work out which container belongs to which
 session, which an agent cannot safely do since it must not kill containers it did not create.
+
+## CORRECTION (2026-07-27) — the `actor rotate` pivot entry above is WRONG on its central claim
+
+Appended, not edited, per this file's append-only rule. It corrects the entry
+**"ContainerYard — `actor rotate` pivots about the bbox MIN CORNER, not the actor's centre"**,
+which `owner-reports.md` finding 7 then cited as a known tool defect. Both are wrong, and the error
+propagated: it was repeated to the owner in conversation before anyone read the code.
+
+**1. "There is no way to choose the pivot" is false — three ways existed at the time.**
+`actor rotate --pivot X,Y,Z`, `--pivot-actor NAME`, and `--to` (absolute, in place, Location never
+moves — the in-place flip the entry actually wanted) were all present in the initial commit. The
+entry says *"`actor rotate --help` gave me no way to choose one"*; the flags are in that `--help`.
+
+**2. "Pivots about the MIN CORNER" was a special case, not the rule.** The rule was "the most
+2-adically grid-aligned candidate, ties → nearest the bbox centre, then lexicographic". For that
+particular sheet — 128×128 in XZ at `Y=228` — `v2(228)=2` capped *every* corner's score equally and
+all four were equidistant from the centre, so the documented tiebreak was a no-op and it fell
+through to lexicographic order, which always yields the minimum corner. For a general box the winner
+is whichever corner is best aligned, which can be any of them.
+
+**3. The float dust was never in the trunk.** `min 928,227.999994,112` is an `actor bbox` readout:
+`actor rotate` writes only `Location` and `Rotation`, never vertices, and the stored values were
+exact. The dust is `actor bbox` applying UE1's GMath rotator (a 180° yaw carries
+`sin = -8.742278e-08`) to compute world corners — the engine computes the same thing at import. It
+is ~6e-06 uu, about 170x below the weld grid.
+
+**What was actually defective**, and is now fixed: the lexicographic tiebreak made a symmetric
+selection pivot on a corner. The default is now the `Location` of the set member nearest the bbox
+centre — see `direction/conventions.md` "PLACEMENT anchors the bbox-min corner; ROTATION pivots a
+member's own Location".
+
+**Method note for whoever mines this file next:** every claim in an agent entry is what that agent
+believed at the time, not a verified fact. This one survived two readings because it was specific,
+measured and plausible. Check the code before acting on an entry.
