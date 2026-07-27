@@ -204,29 +204,6 @@ Andrzej-approved ready items promoted from `inbox.md` into the build queue. Each
 
 ---
 
-## 8. `level import` — native (editor-less) `.dx`/`.unr` → T3D-tree ingestion
-
-**Status:** Spec + plan written, **two cold-review rounds passed** (findings resolved inline).
-**Plan (full detail):** [`../plans/2026-07-24-level-import.md`](../plans/2026-07-24-level-import.md)
-**Spec:** [`../specs/2026-07-24-level-import.md`](../specs/2026-07-24-level-import.md) (v3) ·
-**Decisions:** `../decisions.md` 2026-07-24 16:48 / 16:59 / 17:19 / 18:49 UTC
-
-**What it is.** The inverse of `level materialize`: natively decode a compiled map file (no editor, no
-UCC in the shipping path) into a queryable/diffable/remixable T3D trunk or stash. Decode REUSES the
-production value decoder (`uprops.render_default_tag`); new code is `mapimport.py` + a StateFrame/FPoly
-promotion + dynamic-array schema plumbing + the verb. UCC-fidelity lives at DECODE time (member-stripped
-structs + 6dp floats), so the schema-free hash path is untouched; strict `qualify_and_validate` on
-import.
-
-**Build gate — Slice 0 DONE (2026-07-24), build unblocked.** The actor-ORDER spike resolved the
-`Engine.Level` Actors layout (`[i32 Num][i32 Max]` + `Num` compact refs, `0`=null, `Actors[0]==LevelInfo`;
-export-table order does NOT match, so decode the array). Verified on 3 retail maps; pinned by
-`test_engine_facts.test_level_actors_array_is_int_num_max_then_compact_refs`; folded into spec §5.1.
-Remaining slices: decode primitives (promote + pin) → UCC-exact render → `import_map` → verb/write path
-→ goldens+integration → docs. Now buildable end-to-end.
-
----
-
 ## Promoted from the cheap-item board review (2026-07-24)
 
 Andrzej triaged the ten-item cheap shortlist in chat; his calls are recorded in `../decisions.md`

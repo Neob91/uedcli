@@ -202,3 +202,28 @@ def test_an_out_of_range_type_ref_raises_schema_error_not_traceback():
             assert False, f"expected SchemaError for type_ref={bad_ref}"
         except SchemaError:
             pass
+
+
+def test_a_struct_class_default_renders_from_the_committed_packages():
+    """`resolve_class_defaults` renders STRUCT-valued defaults offline, against real packages.
+
+    Why this exists. Struct defaults are what several production paths compare against: `actor
+    preview`'s placement, typed `actor prop set` validation, and `level materialize`'s post-verify
+    (through `classdefaults`/`normalize.compare_view`). None of those could be exercised offline —
+    `test_uprops_defaults.py` is deselected and `test_classdefaults.py` skips without the gitignored
+    game install — so a signature or refactor mistake inside the struct-rendering path could break
+    every real materialize with a fully green suite. That is not hypothetical: it happened, when a
+    helper this branch introduced was later deleted while `render_default_tag` still called it,
+    turning every struct default into a raw `NameError` traceback.
+
+    `Engine.Brush` is used because it declares `MainScale` — a struct whose first member is ITSELF a
+    struct — so the nested path is covered too, and its values are stable engine constants.
+    """
+    d = uprops.resolve_class_defaults("Engine.Brush", resolver=_ued22_resolver)
+
+    assert d[("mainscale", 0)] == "(Scale=(X=1,Y=1,Z=1),SheerRate=0,SheerAxis=0)", \
+        "a struct default must render EVERY member — it is the value others compare against"
+    assert d[("location", 0)] == "(X=0,Y=0,Z=0)"
+    # Struct defaults are a real, populated category here, not an empty set that would make the
+    # assertions above vacuous if the type were mis-detected.
+    assert sum(1 for v in d.values() if isinstance(v, str) and v.startswith("(")) >= 10

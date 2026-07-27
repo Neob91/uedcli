@@ -56,6 +56,37 @@ edit inside the editor by hand — the verbs write the trunk, the editor only bu
 
 ---
 
+## Learning from a map that already exists
+
+The best reference for how a Deus Ex level is put together is a Deus Ex level. **`level import`** reads
+a compiled `.dx`/`.unr` back into a tree, so a shipped mission becomes something you can query with the
+same verbs you author with:
+
+```
+level import ~/DeusEx/Maps/02_NYC_Street.dx --tree level/nyc-study
+export UEDCLI_LEVEL=nyc-study
+
+level status                                  # how big is it, really
+actor find --class DeusEx.DeusExMover          # every door and elevator
+actor show LevelInfo0                          # zone, ambience, mission setup
+brush poly find <a-brush-name>                 # how a wall is textured
+```
+
+Three things it is good for:
+
+- **Dimensions.** Read real corridor widths, ceiling heights and door sizes instead of guessing.
+  Pairs with [general/human-scale.md](general/human-scale.md) and
+  [deusex/human-scale.md](deusex/human-scale.md).
+- **Wiring.** `event graph` on an imported mission shows how its triggers, doors and alarms are
+  actually connected — see [deusex/gameplay-wiring.md](deusex/gameplay-wiring.md).
+- **Lifting a piece.** Import into a stash (`--tree stash/NAME`) and you have a set of actors to reuse:
+  `stash apply` drops them into the level you are building.
+
+It needs the game's packages on your project's path, and it refuses rather than importing partially if
+something does not resolve. Full flags and caveats: `level import` in the CLI reference.
+
+---
+
 ## Reading the guides
 
 - Terms: **[ENGINE]** = any UnrealEngine-1 game · **[DX]** = Deus Ex only. In this general area

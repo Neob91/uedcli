@@ -2587,6 +2587,154 @@ def _level_create(args) -> int:
     return 0
 
 
+def _resolve_import_dest(args, project) -> tuple[str, object, str]:
+    """Resolve `level import`'s `--tree KIND/NAME` DESTINATION, which the import CREATES.
+
+    Returns `(kind, handle, name)` — `("level", <level dir Path>, name)` or
+    `("stash", <StashRegister>, name)`.
+
+    This is deliberately NOT `_resolve_level_source`: that one resolves a box that must ALREADY
+    exist and errors otherwise, which is the exact opposite of what an import needs. `prefab` is
+    rejected outright — a prefab is a small reusable fragment, not somewhere to put a whole level.
+
+    **The overwrite guard runs here, before the map file is read**, so refusing costs nothing and
+    touches nothing. "Already exists" for a level means its `actors/` directory holds something: an
+    empty or half-created directory does not count, matching `level create`'s rule, so a previous
+    failed run does not need `--overwrite` to retry.
+    """
+    tgt = args.tree
+    kind, sep, name = tgt.partition("/")
+    if not sep or not name or kind not in ("level", "stash"):
+        raise _SelectionExit(
+            f"--tree must be level/NAME or stash/NAME for an import, got {tgt!r}"
+            + (" (a prefab is not a valid import destination — import a level or a stash)"
+               if kind == "prefab" else ""))
+    # MANDATORY before building any path from NAME: neither the register nor the trunk validates
+    # the top-level name, so `stash/../../x` would otherwise escape the project.
+    try:
+        stashlib.validate_member_name(name)
+    except ValueError as e:
+        raise _SelectionExit(str(e))
+    if kind == "stash":
+        reg = _stash_register_for(project)
+        if reg.exists(name) and not args.overwrite:
+            raise _SelectionExit(f"stash already exists: {name!r} — pass --overwrite to replace it")
+        return "stash", reg, name
+    # A level name is a SINGLE safe segment, unlike a nested stash id: `validate_member_name` allows
+    # `/`, so re-check, or a nested name would scatter lock homes / collide with `maps/.locks/`.
+    try:
+        level_select._check_safe_level(name)
+    except level_select.LevelSelectionError as e:
+        raise _SelectionExit(str(e))
+    level_dir = Path(config.project_maps_dir(project)) / name
+    actors_dir = level_dir / "actors"
+    if actors_dir.is_dir() and any(actors_dir.iterdir()) and not args.overwrite:
+        raise _SelectionExit(f"level already exists: {name} (has actors at {actors_dir}) — "
+                             "pass --overwrite to replace it")
+    return "level", level_dir, name
+
+
+def _level_import(args) -> int:
+    """`level import MAPFILE --tree level|stash/NAME [--overwrite]` — decode a COMPILED map file
+    into a new T3D tree, with no editor, no container and no game in the path.
+
+    This is the inverse of `level materialize`. Materialize drives UnrealEd to turn the tracked T3D
+    tree into a compiled `.dx`/`.unr`; import reads such a file's bytes directly and reconstructs
+    the same per-actor T3D the editor's own export would write, so an existing map becomes
+    queryable, diffable and editable with the ordinary verbs.
+
+    The pipeline, in order, and why each step sits where it does:
+
+    1. **Resolve the destination and run the overwrite guard** — before reading anything, so a
+       refusal is free (`_resolve_import_dest`).
+    2. **Load the map package** and decode it to `Begin Map … End Map` text (`mapimport`). Any
+       malformed byte in the file surfaces as a named error, never a traceback out of a binary
+       parser.
+    3. **Parse that text into a level**, reusing the same parser every other ingest path uses, so
+       the import cannot produce a level shape the rest of the tool would not accept.
+    4. **Drop the editor's scratch objects** — the builder brush and the viewport cameras. This
+       MUST precede step 5: both are recognised by their SHORT class name, which step 5 rewrites.
+    5. **Validate strictly** — qualify every class name to its fully-qualified form, confirm each
+       class and each polygon texture really exists on the project's package path, and fail the
+       whole import naming the offender if any does not. An import that quietly kept unresolvable
+       references would produce a tree that cannot be rebuilt.
+    6. **Write the destination** — a level trunk or a stash entry.
+
+    Output follows the producer convention: the imported actor names go to stdout one per line
+    (pipe them onward), the human summary to stderr.
+    """
+    # (1) destination + overwrite guard FIRST — nothing is read until this passes.
+    project = _resolve_project(args)
+    kind, handle, dest_name = _resolve_import_dest(args, project)
+
+    mapfile = Path(args.mapfile)
+    if not mapfile.is_file():
+        raise _SelectionExit(f"map file not found: {args.mapfile}")
+
+    # (2) decode. The class packages are needed for every property's declared type and for the
+    # class defaults the struct member-strip compares against. `_class_index` is the one seam that
+    # reaches the game's `.u` set, and it raises its own clean error when there is no package path —
+    # so this does not repeat the check that step 5's validation already owns.
+    index = _class_index(project)
+    from . import mapimport, upackage
+    try:
+        pkg = upackage.load_package(str(mapfile), name=mapfile.stem)
+    except SchemaError as e:
+        raise _SelectionExit(f"{args.mapfile}: {e}")
+    text = mapimport.import_map(pkg, index, mapimport.ImportSchema(resolver=index.resolver()))
+
+    # (3) parse. Parse to a LIST first: the level dict is keyed by actor Name, so two exports
+    # sharing a name would silently collapse into one and the import would report success while
+    # having dropped content.
+    ordered = parse_t3d_actors(text)
+    seen: set[str] = set()
+    dups = sorted({a.name for a in ordered if a.name in seen or seen.add(a.name)})
+    if dups:
+        raise _SelectionExit(
+            f"{args.mapfile}: {len(dups)} actor name(s) appear more than once and would collapse "
+            f"into a single actor: {', '.join(dups[:10])}" + (" …" if len(dups) > 10 else ""))
+    level = Level(actors={a.name: a for a in ordered}, order=[a.name for a in ordered])
+
+    # (4) the editor's own apparatus, BEFORE qualification (step 5) makes it unrecognisable.
+    dropped = mapimport.drop_editor_scratch(level)
+
+    # (5) strict validation — classes qualified + existence-checked, textures existence-checked.
+    _validate_ingest_actors(list(level.actors.values()), args)
+
+    # (6) write.
+    if kind == "level":
+        level_dir = handle
+        assert isinstance(level_dir, Path)
+        existing, _ranks = trunk.read_level(level_dir)
+        stale = set(existing.actors) - set(level.actors)
+        ranks: dict[str, str] = {}
+        for n in level.order:
+            ranks[n] = trunk.append_rank(ranks)
+        # `write_level` is a DELTA write that leaves unlisted actor dirs alone (per-actor dirs let
+        # concurrent edits compose), so an --overwrite of a level that had OTHER actors must name
+        # them as deletions or they would linger and silently merge into the imported level.
+        trunk.write_level(level_dir, level, ranks, deleted=frozenset(stale))
+    else:
+        reg = handle
+        full = {n: canonical_actor_t3d(level.actors[n]) for n in level.order}
+        reg.write_stash(
+            dest_name, full_level=full, order=list(level.order),
+            packages=sorted(stashlib.referenced_packages(list(level.actors.values()))),
+            meta={"source_map": mapfile.name, "ts": int(time.time() * 1000)},
+            folders={n: None for n in level.order}, force=True)
+
+    for n in level.order:
+        print(n)
+    note = f"imported {len(level.actors)} actor(s) from {mapfile.name} into {kind}: {dest_name}"
+    if dropped:
+        note += f"; dropped {len(dropped)} editor scratch object(s) ({', '.join(dropped[:6])}" \
+                + (" …" if len(dropped) > 6 else "") + ")"
+    print(note, file=sys.stderr)
+    if kind == "level":
+        print(f"to edit it: export UEDCLI_LEVEL={dest_name}", file=sys.stderr)
+    return 0
+
+
 def _level_list(args) -> int:
     """`level list` — enumerate the project's levels (trunk dirs under <maps>), one name per line to
     stdout (the producer convention — pipe-friendly), a count + the ambient `$UEDCLI_LEVEL` to stderr.
@@ -3607,6 +3755,8 @@ def _dispatch(args) -> int:
 
     if args.cmd == "level" and args.sub == "create":
         return _level_create(args)
+    if args.cmd == "level" and args.sub == "import":
+        return _level_import(args)
     if args.cmd == "level" and args.sub == "list":
         return _level_list(args)
     if args.cmd == "level" and args.sub == "status":

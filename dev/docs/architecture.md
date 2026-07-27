@@ -1528,6 +1528,77 @@ container spin-up takes an explicit **`state_dir`** — the resolved project's `
 2026-07-17 20:58) — hosting the crafted/override ini temps (`tmp/`) and the flocks (`locks/`);
 `repo_paths.state_root()` (the CLAUDE.md-marker-derived `<repo>/.uedcli`) is retired.
 
+## Native (editor-free) map IMPORT (`uedcli/mapimport.py`, the `level import` verb)
+
+The inverse of materialize: a **compiled** `.dx`/`.unr` map file → the same per-actor T3D a trunk
+holds, with **no editor, no container and no game** in the path — just the package bytes. It exists
+so an existing map (a retail mission, someone else's level, an older build of your own) becomes
+queryable, diffable and editable with the ordinary model-side verbs.
+
+**What a compiled map holds**, for a reader who has not opened one: a `.dx`/`.unr` is an ordinary UE1
+package (`upackage.py` parses the container) — a name table, an import table, an export table, and
+one serialized *body* per export. One export is the `Engine.Level` object, and it owns an `Actors`
+array naming every actor export **in the order that IS the level's actor order**. Each actor body is
+an optional `StateFrame` (the UnrealScript execution state) followed by a `None`-terminated list of
+*tagged properties* — only those whose value differs from the class default. A brush actor also
+points at a private `UModel` whose `Polys` object is a `UPolys` array of `FPoly` records: the
+authored polygons.
+
+**The pipeline.** `mapimport.import_map(pkg, index, schema) -> str` returns `Begin Map … End Map` text
+for `model.parse_t3d` — through TEXT deliberately, so the decode reuses the tested text→model routing
+(location/scale/brush-ref handling) rather than reimplementing it. In order:
+
+- **`actor_refs`** reads the `Engine.Level` export's `Actors` array — `[i32 Num][i32 Max]` (raw
+  int32s, *not* a compact count) then `Num` signed compact object refs, `0` meaning a null/deleted
+  slot (dropped; retail maps carry 29–329). Export-table order does **not** equal this order on any
+  retail map tested, so the array must be decoded. Evidence:
+  `spikes/2026-07-24-level-import-order/findings.md`.
+- **Two integrity gates** implement "no silent half-answers": every non-null entry must be a local
+  export descending from `Engine.Actor`, and **every actor-classed export must appear in the array**.
+  A decode that dropped an actor would otherwise yield a trunk that looks complete.
+- **`render_actor`** emits the bare class name, skips the StateFrame, reads the tags, renders each,
+  then (for a brush) the inline geometry block followed by the `Brush=` ref and the trailing `Name=`
+  — mirroring `emit.emit_actor`'s ordering, including *why* the model ref trails the geometry.
+- **`render_prop`** renders values through `uprops.render_default_tag` under `uprops.T3D_STYLE`
+  (see below), plus two rules of its own: a struct **drops each member equal to the class default's
+  member, recursively** (the editor's own rule — this produces `Rotation=(Yaw=8192)`, and for a nested
+  struct `MainScale=(Scale=(X=-1.000000),SheerAxis=SHEER_ZX)`), and a dynamic array becomes one
+  indexed line per element (`Foo(0)=…`). The recursion is why the comparison walks a member TREE
+  (`uprops.struct_tag_member_tree` / `zero_struct_tree` / `strip_member_tree` / `render_member_tree`):
+  a pre-joined nested value could only be kept or dropped whole.
+- **`brush_of`** walks `Brush=` ref → private `UModel` → `parse_model_body(...).field_0x54` →
+  `UPolys` → `FPoly`s → `model.Polygon`s, then `emit.emit_brush` renders them — reused deliberately,
+  so the geometry text is guaranteed to parse back.
+
+**`uprops.ValueStyle`** carries the two ways a decoded value is rendered to text. `CLI_STYLE` is the
+default everywhere and is what every pre-existing caller gets; `T3D_STYLE` differs in exactly two
+ways, both required to match the editor: **floats at a fixed six decimals** (`Location=(X=6048.000000
+…)`, where the CLI form trims to `6048`), and **a byte struct MEMBER rendered as its enum value name**
+(`MainScale=(SheerAxis=SHEER_ZX)`, not `5`). `Prop.array_inner` is the other schema addition — an
+`ArrayProperty`'s element property, needed because an array's own `type_ref`/`type_name` point at the
+element property OBJECT, so the element KIND is recorded nowhere else. It is persisted by
+`schema_cache` (which forced `SCHEMA_CACHE_VERSION` 1 → 2): a cache that handed back
+`array_inner=None` would break array decode *only on machines whose cache was warm*.
+
+**The verb** (`dispatch._level_import` + `_resolve_import_dest`) is `level import MAPFILE --tree
+level|stash/NAME [--overwrite]`. `_resolve_import_dest` is a **create-mode** resolver — the opposite
+of `_resolve_level_source`, which requires the box to exist — and it runs the overwrite guard
+**before** the map is read. Order matters twice more in the handler:
+
+- **The editor's scratch objects are dropped BEFORE class qualification.**
+  `mapimport.drop_editor_scratch` removes the builder brush (via the shared
+  `normalize.is_builder_brush` predicate) and the `Camera` viewport actors; both key on the SHORT
+  class name, which `ClassIndex.qualify_and_validate` rewrites to `Engine.Brush`/`Engine.Camera`.
+  Same constraint `_validate_ingest_actors`' docstring already states for `actor add`.
+- **A level `--overwrite` must name the previous actors as deletions.** `trunk.write_level` is a
+  DELTA write that leaves unlisted actor dirs alone (so concurrent per-actor edits compose), so
+  without that the old level's actors would linger and silently merge into the imported one.
+
+Rationale, rejected alternatives and the outstanding verification gap:
+[`rationale/mapimport.md`](rationale/mapimport.md). Format traps:
+[`unrealed/package-format.md`](unrealed/package-format.md) (`RF_HasStack` is a per-EXPORT flag;
+`FPoly.ItemName` index 0 is a real name).
+
 ## Native (editor-free) materialize (`uedcli/native/`, `uedcli-native/`)
 The offline build path that turns the git-tracked T3D trunk into a game-loadable `.dx`/`.unr`
 **with no editor, no wine, no container** — the design is `specs/2026-07-15-native-materialize-design.md`

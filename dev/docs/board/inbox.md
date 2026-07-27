@@ -4030,18 +4030,30 @@ throwaway compare view. My repro predated the fix.)_
   each resolves to a `def` in `uedcli/tests/` — and it extends an existing test file rather than
   adding a subsystem. Worth doing when something next touches `test_doc_links.py`.
 
-- `p2` `[implement]` **`level import` is STARTED AND PARKED mid-build on the local branch
-  `level-import`** (worktree `.claude/worktrees/level-import`, branched from `master` at `85c88ab`,
-  two unpushed commits `0e22262` + `475f237`). The native decoder `uedcli/mapimport.py` exists and
-  decodes real retail maps end to end, but it has **no tests**, **no CLI verb**, **no write path**,
-  **no goldens**, and **two confirmed defects**; the `to-build.md` entry stays put because the work
-  has not earned removal. **Everything a fresh session needs is in
-  [`HANDOFF-level-import.md`](HANDOFF-level-import.md)** — the slice-by-slice state, the two
-  defects with their fixes, the `schema_golden_fire_v1 → v2` explanation, what was and was not
-  verified, and two questions that need the owner (the builder brush surviving
-  `qualify_and_validate`, and what the Slice-5 committed golden can be given that retail maps are
-  gitignored). Two new on-disk-format facts it uncovered are already durable in
-  `dev/docs/unrealed/package-format.md`. Parked 2026-07-27 at the owner's request, un-gated.
+- `p1` `[implement]` **`level import` has NOT been checked against the official exporter — the
+  load-bearing fidelity gate is still unrun.** Everything else of the feature is built, tested and
+  documented (the verb, the write path, the decode, the docs); what is missing is the one check that
+  proves uedcli decodes a map the way the *engine's own tool* would export it. That check compares an
+  import against a UCC `MAP EXPORT` of the SAME retail map through the shared
+  `level_order`+`normalize`+`canonical_level_hash` lens (plan Slice 5.1) plus the live
+  `verify_dx_matches(original, materialize(import(original)))` round trip (Slice 5.2). **It needs two
+  things the 2026-07-27 build machine did not have:** the retail `.dx` corpus (copyrighted, correctly
+  gitignored — `dev/scripts/install-deusex-assets.sh` populates it from a game copy you supply, and
+  it never downloads) and the `dx-lum-uned` editor container. Run it on a machine that has both.
+  Until then the honest claim is: the decoder reads real editor-built maps and produces parseable,
+  round-trip-stable, correctly-shaped T3D, with value FORMS checked only where a committed editor
+  export happened to cover them. Recorded in `rationale/mapimport.md` "What is NOT yet verified".
+  *(2026-07-27.)*
+- `p3` `[debug]` **`test_native_materialize.py::test_dxonly_fbspnode_semantics_pinned` crashes with a
+  bare `IndexError` instead of skipping, when the checkout sits shallow in the filesystem.** Its
+  helper `_dxonly_map_path` does `Path(__file__).resolve().parents[5]` to reach a sibling `Maps/`
+  dir; from `/workspace/uedcli/uedcli/tests/…` there are only five parents, so indexing raises
+  before the "is the map present?" check can skip. Reproduced 2026-07-27 in the main checkout
+  (`bin/test -k dxonly_fbspnode` → `IndexError: 5`); the same test SKIPS cleanly from a deeper path
+  such as a worktree under `.claude/worktrees/`, which is why it is easy to miss. Fix: guard the
+  `parents[…]` index (or build the candidate paths defensively) so an unlocatable map skips like the
+  other retail-corpus tests. **Pre-existing and unrelated to `level import`** — found while
+  establishing a baseline for that work, not caused by it. *(2026-07-27.)*
 
 - **[finding] The asset-catalog class arm needs four changes to actually close the decoration
   findings it cites.** `specs/2026-07-26-asset-catalog-class-arm.md` §6 motivates itself with exactly

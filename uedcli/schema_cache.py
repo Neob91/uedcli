@@ -65,7 +65,7 @@ from .uprops import Package, Prop, SchemaError
 # Bump on ANY change to: a bundle shape/fields (disc OR prop), a feeding decoder in uprops/upackage,
 # the Prop layout, or the serialization format. A bump makes every old entry unreachable (new key +
 # new v<N>/ dir). The committed frozen-golden test trips red to force this human step (spec §4.5/§11).
-SCHEMA_CACHE_VERSION = 1
+SCHEMA_CACHE_VERSION = 2
 
 # Footprint cap for the persistent schema cache (spec follow-up: automatic GC for cache/schema/).
 # Entries are IMMUTABLE / content-keyed, so eviction carries NO correctness pressure — evicting a
@@ -89,8 +89,34 @@ _SWEPT = False
 
 # The Prop fields, in the fixed order used by the on-disk tuple form. A change here is a bundle-shape
 # change ⇒ bump SCHEMA_CACHE_VERSION (and refresh the golden).
+#
+# `array_inner` is a nested `Prop | None` (an ArrayProperty's ELEMENT property), so it cannot ride
+# `getattr` straight into a marshal tuple like the flat fields — `_prop_row`/`_prop_from_row` encode
+# it as a nested row (or None). It MUST be persisted rather than dropped: a warm cache that silently
+# handed back `array_inner=None` would make `mapimport`'s dynamic-array decode fail (or, worse,
+# quietly skip an array) only on machines whose cache happened to be warm.
 _PROP_FIELDS = ("name", "kind", "array_dim", "property_flags", "type_ref", "type_name", "owner",
-                "enum_value_names", "category")
+                "enum_value_names", "category", "array_inner")
+
+
+def _prop_row(p: Prop) -> tuple:
+    """One `Prop` → its on-disk tuple, with the nested `array_inner` encoded recursively."""
+    return tuple(_prop_row(v) if isinstance(v := getattr(p, f), Prop) else v for f in _PROP_FIELDS)
+
+
+def _prop_from_row(row) -> Prop:
+    """The inverse of `_prop_row`."""
+    kw = dict(zip(_PROP_FIELDS, row))
+    if kw.get("array_inner") is not None:
+        kw["array_inner"] = _prop_from_row(kw["array_inner"])
+    return Prop(**kw)
+
+
+def _rebind_owner(p: Prop, owner_fqcn: str) -> Prop:
+    """`p` with its `owner` (and its `array_inner`'s, which must agree — the element property is
+    declared by the same class) rebound to `owner_fqcn`."""
+    inner = None if p.array_inner is None else replace(p.array_inner, owner=owner_fqcn)
+    return replace(p, owner=owner_fqcn, array_inner=inner)
 
 # In-process memos (realpath -> decoded parts), so repeated loads within one command are free and the
 # disk is touched at most once per package per process. Split by blob so a discovery-only load never
@@ -169,7 +195,7 @@ class PackageSchema:
         val = self.own_props[cf]
         if val is None:
             raise SchemaError(f"cannot decode properties of {owner_fqcn} (corrupt package body)")
-        return [replace(p, owner=owner_fqcn) for p in val]
+        return [_rebind_owner(p, owner_fqcn) for p in val]
 
     # -- serialization (marshal; see module docstring / §9 spike) -------------
     def golden_bytes(self) -> bytes:
@@ -198,8 +224,7 @@ def _disc_loads(data: bytes) -> "_Disc | None":
 
 
 def _props_dumps(own_props: dict) -> bytes:
-    own = {cf: (None if props is None
-                else [tuple(getattr(p, f) for f in _PROP_FIELDS) for p in props])
+    own = {cf: (None if props is None else [_prop_row(p) for p in props])
            for cf, props in own_props.items()}
     return marshal.dumps({"v": SCHEMA_CACHE_VERSION, "own_props": own})
 
@@ -209,8 +234,7 @@ def _props_loads(data: bytes) -> "dict | None":
         d = marshal.loads(data)
         if not isinstance(d, dict) or d.get("v") != SCHEMA_CACHE_VERSION:
             return None
-        return {cf: (None if rows is None
-                     else tuple(Prop(**dict(zip(_PROP_FIELDS, r))) for r in rows))
+        return {cf: (None if rows is None else tuple(_prop_from_row(r) for r in rows))
                 for cf, rows in d["own_props"].items()}
     except Exception:
         return None

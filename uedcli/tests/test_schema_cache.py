@@ -23,7 +23,7 @@ from uedcli import config, schema_cache, uprops
 # chain — decoder coverage across class-list, cmap, import-super resolution, abstract-from-ScriptText,
 # and property + local-enum decode. UED22 is baked + committed, so this runs in the OFFLINE suite.
 _FIRE = Path(__file__).resolve().parents[2] / "uned" / "UED22" / "fire.u"
-_GOLDEN = Path(__file__).parent / "fixtures" / "schema_golden_fire_v1.marshal"
+_GOLDEN = Path(__file__).parent / "fixtures" / "schema_golden_fire_v2.marshal"
 
 pytestmark = pytest.mark.skipif(not _FIRE.is_file(), reason="committed UED22/fire.u not present")
 

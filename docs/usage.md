@@ -135,6 +135,7 @@ level.
 | Command | What it does |
 |---|---|
 | `level create <name>` | scaffold a NEW level directory `maps/<name>/` with a `LevelInfo` actor (required by `materialize`); prints `to edit it: export UEDCLI_LEVEL=<name>` |
+| `level import MAPFILE --tree KIND/NAME [--overwrite]` | decode an existing COMPILED map file (`.dx`/`.unr`) into a NEW level or stash — the inverse of `materialize`, and no editor is involved. See [`level import`](#level-import--read-an-existing-map-file) |
 | `level list [--json]` | list the project's levels (trunk dirs under `<maps>`), one name per line to stdout (pipe-friendly); a count + the active `$UEDCLI_LEVEL` go to stderr. `--json` emits `[{name, active}, …]` |
 | `level status [--tree KIND/NAME] [--json]` | thin read-only dashboard for the current level (or a `--tree` box): actor counts, duplicate `order_value`s, git state. `--json` emits a `{kind, name, actors, duplicate_order_values, git, texture_packages}` object (`{"selected": null}` when no level is set) |
 
@@ -1257,6 +1258,79 @@ prefab [--prefab-dir DIR] drop  <name>
 
 - **Unlike `stash apply`, `prefab apply` also defaults to the captured anchor** with no `--at`
   (`--at` overrides). `--group`/`--no-group`/`--folder` behave as in `stash apply`.
+
+---
+
+# `level import` — read an existing map file
+
+**`level import`** goes the opposite way from `materialize`: it takes an already-compiled map file
+(`.dx`/`.unr`) and turns it back into a T3D tree you can query, diff and edit with every ordinary
+verb. Use it to study how an existing map is built, to lift a room or a prop out of one, or to
+compare a map against your own.
+
+It reads the map file's bytes **directly**. No UnrealEd, no container, no game — so it is fast and it
+works anywhere, unlike `materialize`.
+
+```
+level import MAPFILE --tree KIND/NAME [--overwrite]
+```
+
+- **`MAPFILE`** is the compiled map to read, relative to the current directory. A file that is
+  missing, unreadable, or not an Unreal package **exits 2** naming it.
+- **`--tree KIND/NAME`** is the **destination, which import creates** — `level/NAME` writes a new
+  level trunk at `maps/NAME/`, `stash/NAME` writes a new stash entry. `prefab/…` is refused: a
+  prefab is a small reusable fragment, not a home for a whole level.
+- **`--overwrite`** permits replacing an existing destination (default: refuse, exit 2). The check
+  runs **before the map file is read**, so a refusal touches nothing. An existing but *empty* level
+  directory does not count as existing, so retrying a failed import needs no flag.
+- **Output:** the imported actor names go to **stdout**, one per line, so you can pipe them onward;
+  the summary (how many actors, what was dropped) goes to **stderr**.
+
+```
+level import ~/DeusEx/Maps/02_NYC_Street.dx --tree level/nyc-study
+export UEDCLI_LEVEL=nyc-study
+actor find --class Engine.Light            # now query it like any other level
+```
+
+## What import leaves out
+
+A saved map is the editor's **workspace**, not a clean inventory of level content — it also contains
+the tools the designer happened to be holding. Import drops two kinds of those, because they are
+apparatus rather than content, and keeping them would put them in your tree as though you had placed
+them:
+
+- the **builder brush** — the red scratch shape used to sculpt geometry before committing it. Every
+  saved map has exactly one. If it were kept, rebuilding the map later would place it alongside the
+  fresh one the editor makes for itself, and the two would collide over a name.
+- the **viewport cameras** — one `Camera` actor per editor viewport that was open at save time (four
+  to eight in a typical map).
+
+Everything else is imported as it stands, with its properties and its brush geometry.
+
+## Requirements and caveats
+
+- **A project is required**, and its configured package paths must contain the classes the map uses.
+  Import reads each class's definition to know what its stored properties mean, and each class's
+  defaults to know which values were actually changed from them.
+- **Import is strict.** Every class and every polygon texture the map references must exist on the
+  package path; if one does not, the whole import **exits 2 naming it** rather than writing a tree
+  with references that cannot be rebuilt. Importing a map that needs mod packages therefore means
+  installing those packages first.
+- **Folders and labels start empty** — a compiled map has no equivalent of them to recover.
+- **References between actors keep the source map's name.** A property pointing at another actor
+  reads `Class'<sourcemap>.Other'`. That is a faithful record of the original, but it means such a
+  reference is pinned to the old map's name rather than rebinding to your new level's.
+- **Resources embedded inside the map file itself are a rough edge.** Some maps store a texture or a
+  sound *inside* the map file rather than referencing a shared package (the `myLevel` pseudo-package).
+  Such a reference resolves to nothing on your package path, and what happens depends on where it
+  appears: on a **brush face** it is caught by the validation above and the import **exits 2 naming
+  it**; anywhere else — an actor property such as a decoration's `Skin` — it is **imported as written**
+  and left dangling, because validation covers classes and face textures, not every object reference.
+  A dangling reference does no harm until you rebuild the map, which will not find it. Extracting
+  embedded resources into a real package first is the way round it, and is not yet built.
+- **Maps built by uedcli's own native builder import without brush geometry**, because that builder
+  keeps each shape only in the compiled world and leaves the per-brush copy empty. Editor-built maps
+  (all retail content) carry both and import fully.
 
 ---
 

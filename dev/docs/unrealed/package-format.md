@@ -161,7 +161,7 @@ small number of `Model` and `Polys` exports â€” plain data objects, not actors â
 `RF_HasStack` and therefore also carry a StateFrame. Measured over the first twelve `DX/Maps/*.dx`
 (2026-07-27, host-native decode with `upackage`):
 
-| map | `Model` exports | with `RF_HasStack` | `Polys` exports | with `RF_HasStack` |
+| map                      | `Model` exports | with `RF_HasStack` | `Polys` exports | with `RF_HasStack`
 |--------------------------|----------------:|-------------------:|----------------:|---
 | `00_Intro.dx`            |             948 |                  0 |             948 | 0
 | `00_Training.dx`         |            1018 |                  2 |            1018 | 2

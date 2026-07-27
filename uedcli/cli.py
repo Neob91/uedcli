@@ -1360,7 +1360,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     level = sub.add_parser("level",
                            help="level lifecycle verbs "
-                                "(create/list/materialize/preview/status/doctor)")
+                                "(create/import/list/materialize/preview/status/doctor)")
     lsub = level.add_subparsers(dest="sub", required=True)
     llist = lsub.add_parser(
         "list",
@@ -1374,6 +1374,28 @@ def build_parser() -> argparse.ArgumentParser:
         help="scaffold a NEW level (maps/<name>/) with a LevelInfo actor (required by materialize); "
              "to edit it, export UEDCLI_LEVEL=<name>")
     lcreate.add_argument("name", help="the new level's name (used as the maps/<name>/ directory)")
+    limport = lsub.add_parser(
+        "import",
+        help="decode a COMPILED map file (.dx/.unr) into a NEW T3D tree — the inverse of "
+             "materialize. Reads the map's bytes directly: no UnrealEd, no container, no game. Use "
+             "it to study, diff or remix an existing map with the ordinary query/edit verbs. The "
+             "editor's own scratch objects (the red builder brush, the viewport cameras) are left "
+             "out; every content actor is imported with its properties and brush geometry")
+    limport.add_argument(
+        "mapfile",
+        metavar="MAPFILE",
+        help="the compiled map file to read (.dx or .unr), relative to the current directory. A "
+             "file that is missing, unreadable, or not a UE1 package errors (exit 2) naming it")
+    limport.add_argument(
+        "--tree", metavar="KIND/NAME", required=True,
+        help="DESTINATION for the imported level, which this CREATES: KIND/NAME where KIND is "
+             "level|stash (prefab is not a valid import target). e.g. level/m03-study writes a new "
+             "level trunk at maps/m03-study/; stash/import-1337 writes a new stash entry. Refuses "
+             "an existing destination unless --overwrite")
+    limport.add_argument(
+        "--overwrite", action="store_true",
+        help="permit replacing an existing destination level/stash (default: refuse, exit 2). "
+             "Checked BEFORE the map file is read, so a refusal costs nothing and touches nothing")
     lmat = lsub.add_parser(
         "materialize",
         help="build $UEDCLI_LEVEL's trunk into a .dx/.unr map file (pure build; no merge)")
