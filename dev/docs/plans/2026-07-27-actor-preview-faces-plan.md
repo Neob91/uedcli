@@ -57,12 +57,19 @@ once during this feature's life.
 
 Both were found by review on earlier drafts and are cheap to re-break:
 
-1. **`rotation.actor_linear` returns `None` as the identity sentinel** (`rotation.py:297-298`). The
+1. **`rotation.actor_linear` returns `None` as the identity sentinel** (grep `IDENTITY sentinel` — it
+   appears twice in `rotation.py`, for `actor_matrix` and `actor_linear`; the second is this one). The
    mirror predicate is `M = actor_linear(actor); mirrored = M is not None and det(M) < 0`. A bare
    `det(actor_linear(actor)) < 0` raises `TypeError` on nearly every brush.
 2. **`getattr(args, "brush_colors", "csg")` does NOT fire for an existing-but-`None` attribute.**
    Switching the parser to `default=None` therefore needs an explicit `or "csg"` at each of the three
-   consumers, or `None` propagates into `_scene_geometry`.
+   consumers (grep `brush_colors` in `dispatch.py`), or `None` propagates into `_scene_geometry`,
+   whose `brush_colors == "legend"` test then silently falls through to the CSG branch.
+
+**Cite by GREP, not by line, for anything outside this plan.** Two other sessions are active; while
+this plan was being written `cli.py` grew ~46 lines under one of them and every line number in an
+earlier draft went stale. Line numbers appear below only where they were re-verified at the moment of
+writing, and even those are backed by grep text.
 
 ---
 
@@ -77,12 +84,14 @@ Both were found by review on earlier drafts and are cheap to re-break:
 | `uedcli/polyalign.py` | **S1** | two imports re-pointed: `:32` `from .preview import _face_normal`, `:33` `from .preview_native import _world_uv_frame` (used at `:257`, `:330`, `:417`) |
 | `uedcli/query.py` | **S1** | `:13` `from .preview import _face_normal` re-pointed |
 | `uedcli/tests/test_polyalign.py` | **S1** | `:445` imports `_world_uv_frame` from `preview_native`; re-point |
-| `uedcli/tests/test_preview_native.py` | **S1** | three `_world_uv_frame`/`_tex_basis` imports (grep `_world_uv_frame`); re-point |
+| `uedcli/tests/test_preview_native.py` | **S1** | `_world_uv_frame`/`_tex_basis` uses (grep `_world_uv_frame`); re-point |
+| `uedcli/tests/test_preview.py` | **S2** | constructs `render_data` dicts directly; migrates with the seam |
+| **SEVEN committed spike harnesses** | **S1** | `dev/docs/spikes/2026-07-26-unrealed-texalign-semantics/{analyze,verify_pan,guards,verify_model}.py` import **both** symbols (two statements each), and `dev/docs/spikes/2026-07-26-poly-rotate-curved-track/{poly_rotate,run_align,shear_align}.py` import `_world_uv_frame`. **Eleven import statements in total.** `rules/spikes.md` makes a committed harness durable evidence, and no test imports them — so `bin/test` stays green while every one of them raises `ImportError`. Re-point all eleven in the same commit; a re-export alias is forbidden |
 | `uedcli/preview.py` | **S2** | the `PreviewData` seam; the `faces=` parameter on `render_brush_pgm`, `render_brushes_pgm`, `render_quad_pgm`; the scanline fill; the depth buffer; the CSG cull; the `flat` edge rule |
 | `uedcli/dispatch.py` | **S2** | `_preview_render_data` restructured (its `return {}` early exit at `:1038-1039` makes the new work unreachable); mover-ness resolved here via the existing `_mover_index`; `faces=` threaded through `_render_breakdown_grid`'s `_pane` |
-| `uedcli/cli.py` | **S2** | `--faces` added to `_preview_opts` (`:686`, `:1476`, `:1513`); `--brush-colors` `default=None` (`:155`); the `--brush-colors`, `--focus` and `--show` help strings corrected (`:155`, `:190`, `:199-205`) |
-| `uedcli/tests/test_actor_preview.py` | **S2** | `_prev` (`:28`) hardcodes `brush_colors="csg"` and lacks `faces`; migrate |
-| `dev/docs/spikes/2026-07-24-corpus-brush-idioms/render_brushes.py` | **S2** | `:186` calls `dispatch._render_actors_to_out` with a namespace (`_args_for`, `:92-96`) lacking `faces`. A committed harness is durable evidence (`rules/spikes.md`), so it migrates with the seam |
+| `uedcli/cli.py` | **S2** | `--faces` added to `_preview_opts` (grep `def _preview_opts` — it is defined ONCE and called from three parsers, so the flag lands in one place); `--brush-colors` gains `default=None` (grep `"--brush-colors"`); the `--brush-colors`, `--focus` and `--show` help strings corrected (grep each flag name) |
+| `uedcli/tests/test_actor_preview.py` | **S2** | `_prev` (grep `def _prev`) builds a `SimpleNamespace` with no `faces` attribute. **It is not broken by this change** — `getattr(args, "faces", "wire")` covers it, and its hardcoded `brush_colors="csg"` only conflicts under `textured`. It is touched because the new tests need to pass `faces=`, not to repair a break |
+| `dev/docs/spikes/2026-07-24-corpus-brush-idioms/render_brushes.py` | **S2** | calls `dispatch._render_actors_to_out` with a hand-built namespace (grep `_args_for`). **The `getattr` default covers its missing `faces`, so it does not break** — it is listed so a builder checking harness callers finds it already accounted for, and because it is the natural place to smoke-test the new seam against real corpus brushes |
 | `uedcli/preview.py` | **S3** | the `--focus` two-pass and its composite |
 | `uedcli/preview.py`, `uedcli/dispatch.py` | **S4** | the texel path: UV per vertex, mip pick, masking gate, the texture payload on the seam |
 
@@ -90,9 +99,10 @@ Both were found by review on earlier drafts and are cheap to re-break:
 
 | file | what |
 |---|---|
-| `uedcli/texframe.py` | stdlib-only shared home for `world_uv_frame`, `tex_basis_default`, `newell`, `poly_flags_int` (S1) |
+| `uedcli/texframe.py` | shared home for `world_uv_frame`, `tex_basis_default`, `newell`, `poly_flags_int` — stdlib + `uedcli.rotation` + `uedcli.builders` only (S1) |
 | `uedcli/tests/test_preview_faces.py` | the `--faces` behaviour tests (S2–S4) |
-| `dev/docs/rationale/preview.md` | the agent-side choices (S5) |
+| `dev/docs/rationale/preview.md` | the agent-side choices. **Created in S3** (it must hold the dim constant that slice chooses); S5 completes it |
+| `dev/docs/spikes/2026-07-27-preview-focus-dim/` | the committed before/after render decision 2.12 requires as evidence, plus the one-line harness that produced it |
 
 **Deliberately untouched:** `builders._newell` (`builders.py:82`) — `texframe` imports `builders`
 for `_tex_basis`, so making `builders` import from `texframe` would close an import cycle. That is
@@ -127,14 +137,20 @@ Pure move. No user-visible change, no new behaviour, no new test beyond the impo
 **Done when**
 
 - `uedcli/texframe.py` exists holding `world_uv_frame`, `tex_basis_default`, `newell`,
-  `poly_flags_int`, and **imports nothing but stdlib, `uedcli.model` and `uedcli.builders`** — a test
-  asserts this by name, and specifically that it does **not** import `preview_native` or `utexture`
+  `poly_flags_int`, and **imports nothing but stdlib, `uedcli.rotation` and `uedcli.builders`** — a
+  test asserts this by name, and specifically that it does **not** import `preview_native` or
+  `utexture`. **`rotation` is required, not optional**: `world_uv_frame` calls `actor_prepivot`,
+  `actor_matrix` and `matvec` from it. (An earlier draft of this plan said `uedcli.model`, which none
+  of the four functions touches — they are duck-typed over `actor`/`poly`. Do **not** "fix" the
+  failing test by threading the matrices in as parameters: `world_uv_frame`'s signature is what keeps
+  this tier and `--native` from drifting.) The graph is acyclic: `rotation` imports `.emit` only, and
+  `builders` imports `.emit`/`.geometry`/`.model`/`.profile` — none reaches `preview` or `texframe`
   (§1's resolver-free invariant is what this guards; an earlier draft justified the test by the
   no-cargo constraint, which it does not guard at all).
 - `preview._face_normal` and `preview_native._newell` are **deleted**, not aliased, and all six
   importers listed in §1 are re-pointed in this same commit.
-- `bin/test` is green with **no new skips** and the same pass count as the re-measured baseline
-  (this slice adds one test).
+- `bin/test` is green with **no new skips**, and the pass count is the re-measured baseline **+1**
+  (this slice adds exactly the import-hygiene test and changes no behaviour).
 - `architecture.md`'s "Preview internals" names `texframe.py` as the shared home.
 
 ### S2 — the seam, the flag, and `flat` complete
@@ -154,12 +170,19 @@ Read it in dispatch as `getattr(args, "faces", "wire")` — the harness namespac
 
 **Done when**
 
-- `--faces {wire,flat,textured}` parses on `actor`, `stash` and `prefab preview`; `textured` is
-  accepted by the parser and **rejected at dispatch with a clean exit 2 saying it lands in S4**.
-  *(This is the one place a temporary refusal is right: the alternative is shipping a flag value that
-  renders a wrong picture. It is deleted in S4, not kept.)*
+- **`--faces {wire,flat}`** parses on `actor`, `stash` and `prefab preview`. **`textured` is NOT a
+  choice yet — S4 adds it to `choices`.** argparse then gives an unknown value a clean exit 2 naming
+  it, with **no refusal branch to write and none to remember to delete**. *(An earlier draft shipped
+  `textured` in `choices` and refused it at dispatch; that is a flag value whose entire behaviour is
+  an error message — the shim shape `CLAUDE.md` forbids — and it would have made `-h` advertise a
+  mode `docs/usage.md` simultaneously denied. Growing `choices` in S4 keeps help, docs and behaviour
+  consistent at every commit.)*
 - **`--faces wire` output is byte-identical to the pre-slice render** for a fixed scene — the primary
-  regression guard for the whole feature.
+  regression guard for the whole feature. **Capture the golden FIRST**, from the tree *before* any S2
+  code lands, and commit it in the same slice; a golden generated after the rewrite pins the rewrite,
+  not the behaviour. **S3 and S4 both re-assert it** — each touches `preview.py`/`dispatch.py` again,
+  and `wire` shares the `--focus` path S3 restructures, so without a restatement the guard lapses
+  after S2.
 - `flat` fills every face of a non-subtract brush and only the far faces of a subtract; a mover
   carrying `CsgOper=CSG_Subtract` is **not** culled; an add brush inside a subtracted room is visible.
 - Mover-ness comes from `movers.is_mover` via `_mover_index`, **not** from `classify_brush`'s name
@@ -180,9 +203,21 @@ Read it in dispatch as `getattr(args, "faces", "wire")` — the harness namespac
 - `PF_Invisible` faces (actor-OR'd) neither fill nor write depth nor draw line art.
 - Depth buffers are `array("f")`, not `list[float]`; a `MemoryError` at an absurd `--size` is caught
   and reported as exit 2 naming the size.
-- `--faces textured --brush-colors csg` exits 2; bare `--faces textured`… is S4's, but bare
-  `--faces flat --brush-colors legend` works and fills from the per-actor tint.
+- `--faces flat --brush-colors legend` works and fills from the per-actor tint; `--faces flat`
+  with no `--brush-colors` fills from the CSG palette. **These two are what make the `default=None`
+  + `or "csg"` mechanism non-vacuous in this slice** — decision 2.7's exit-2 pairing needs
+  `textured` and is therefore S4's (an earlier draft asserted it here, where the blanket refusal of
+  `textured` made it pass regardless of whether the mechanism was implemented).
 - `--layout quad` and `--layout breakdown` both render under `flat`.
+- **Point sprites and each `--show` overlay survive an opaque fill** — the fills-at-step-2 ordering.
+  Placing them later paints over every sprite and overlay, which is why the order is specified.
+- **`flat` fill RGB on the legacy `color_by_csg=False` path** (`render_brushes_pgm`'s default, which
+  the existing suite drives constantly) — the third of §4.5's three colour cases.
+- **`wire` still renders when the class hierarchy cannot load**, alongside the failing arm above —
+  decision 2.13's accepted cost in both directions, and the promise §0 makes about `wire`.
+- **`prefab preview --prefab-dir X --faces flat` SUCCEEDS from inside a project** — `--prefab-dir`
+  overrides only the prefab library root; it does not imply "no project", and no project does not
+  imply no resolver.
 - The three corrected `help=` strings are in place, including `--show`'s "schema-free (no class
   lookup)" tail scoped to `wire`.
 - `docs/usage.md` documents `--faces` and its `wire`/`flat` values.
@@ -191,14 +226,19 @@ Read it in dispatch as `getattr(args, "faces", "wire")` — the harness namespac
 
 **Done when**
 
+- **`--faces wire` is still byte-identical to S2's committed golden** — `wire` uses the `--focus`
+  path this slice restructures.
 - Two passes with **separate** depth buffers: context resolved opaquely into a scratch buffer
   initialised to `BG`, composited **once**; the focused brush drawn after, never occluded by context.
 - A focused brush fully enclosed by another brush is visible.
 - The composite is **order-independent** — a test that shuffles actor order produces identical bytes.
 - **The dim constant is chosen from a real before/after render, not from arithmetic** (owner decision
-  2.12). The build produces that image, picks the value, and records both the value and the image in
-  `rationale/preview.md`. Starting point ≈ 0.35; the previously-proposed `_DIM_ALPHA = 0.15` was
-  measured to leave a mid-grey texel ~14 levels from `BG` and is almost certainly too faint.
+  2.12). The image **is** the evidence, so it needs a committed home: `_scratch/` is gitignored, so
+  the before/after pair and the harness that made it are committed under
+  `dev/docs/spikes/2026-07-27-preview-focus-dim/` (the tree's existing pattern for durable evidence),
+  and `rationale/preview.md` — **created in this slice** — records the chosen value and cites that
+  directory. Starting point ≈ 0.35; the previously-proposed `_DIM_ALPHA = 0.15` was measured to leave
+  a mid-grey texel ~14 levels from `BG` and is almost certainly too faint.
 - The chosen constant is pinned by a test, so it cannot drift unexamined.
 
 ### S4 — `textured` — **GATED on the decoder item's S2b**
@@ -207,7 +247,9 @@ Do not start until that item has landed and its accessor exists.
 
 **Done when**
 
-- The S2 refusal for `--faces textured` is **deleted** (not left as a branch).
+- **`textured` is added to `--faces`'s `choices`**, and `docs/usage.md` gains it in the same commit,
+  so help and docs never disagree.
+- **`--faces wire` is still byte-identical to S2's committed golden.**
 - UV per vertex from `texframe.world_uv_frame`; `u = (P − base_w)·tu_w + pan`, scale carried in the
   axis magnitude.
 - **Mip level from the face's own screen-space UV gradients**, `max(hypot(du_dx,du_dy),
@@ -223,6 +265,10 @@ Do not start until that item has landed and its accessor exists.
 - A brush with actor-level `PolyFlags=2` masks even though its polys carry no flag.
 - A synthesized fixture carrying `bMasked` exercises the texture-side arm (the decoder item's S2b
   adds the `bmasked=` fixture parameter; this slice consumes it).
+- **`--faces textured --brush-colors csg` exits 2, and bare `--faces textured` succeeds** — the
+  `default=None` + `or "csg"` mechanism, in the one slice where the pairing is meaningful. Check all
+  three consumers: a missing `or "csg"` at the breakdown call site puts `None` into `_scene_geometry`,
+  whose `legend` test falls through silently — a wrong picture under `--layout breakdown` only.
 - Scaled or sheared brushes exit 2 under `textured`, listing every offender.
 - A non-finite UV frame exits 2 naming the actor and poly — never a `DEFAULT_GREY` fallback, which
   would be pixel-identical to a legitimately untextured face.
@@ -231,6 +277,11 @@ Do not start until that item has landed and its accessor exists.
   message says to qualify it as `Package.Name`.
 - A scene referencing **no** texture renders with no texture source at all (decision 2.6's literal
   "needs"); the class index is still required, per 2.13.
+- **`textured` emits no wireframe pixels and `flat` does** — decision 2.5's most visible observable.
+- **§4.1's shade formula and its truncation** asserted on a known normal, separately from the golden:
+  a golden cannot tell a shade error from a UV error.
+- Each of the resolver's **three `None` causes** produces a distinct exit-2 message naming that cause.
+- `--layout quad` and `--layout breakdown` both render under **`textured`**.
 - A golden PNG of a textured cube.
 - **A real fill measurement is taken and recorded** before any doc states a cost number — §7 of the
   spec deliberately refuses to extrapolate its wireframe timing.
@@ -256,11 +307,11 @@ Do not start until that item has landed and its accessor exists.
 
 | risk | mitigation |
 |---|---|
-| The `render_data` reshape breaks a caller not in §1's list | §1's list was verified complete by grep across `uedcli/` and the committed harnesses; S2's Done-when includes the byte-identical `wire` guard, which fails loudly if any pane path regressed |
+| The `render_data` reshape breaks a caller not in §1's list | S2's Done-when includes the byte-identical `wire` guard. **Do not trust the list — re-run the grep.** A first draft of this plan asserted the list was complete and had missed seven committed spike harnesses; the tree also gains files under concurrent sessions. The command is `git ls-files '*.py' \| xargs grep -ln '_face_normal\|_world_uv_frame\|render_data'` |
 | `flat` requires the class index, so a no-game-install user loses a mode they had | ruled by the owner (2.13) with its cost stated; `wire` is unchanged and is the default |
 | The mip rule is re-derived from a view-global gain | two earlier drafts did exactly this and both were measured wrong; S4's Done-when tests at 80° specifically, where the wrong derivation is ~7× off |
 | Pure-Python fill is too slow to be usable | unknown until measured — S4 takes a real measurement. Owner has ruled no cost ceiling (2.4), so the mitigation is information, not a guard |
-| A slice lands with the previous slice's refusal branch left in | S4's first Done-when is the deletion of S2's refusal |
+| A slice grows `--faces`'s `choices` without the matching docs | S4's first two Done-whens pair the `choices` change with `docs/usage.md` in the same commit, so `-h` and the docs never disagree. There is no refusal branch to leave behind — S2 simply does not offer `textured` |
 
 ## 5. Not in this plan
 
