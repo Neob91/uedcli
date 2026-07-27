@@ -29,6 +29,14 @@ stage (so no `to-` prefix). See [`README.md`](README.md).
   > deleted to tidy the board** — work judged stale is shelved, and the shelving list is confirmed in
   > bulk rather than applied item by item.
 
+  **(C) Succinctness, your ruling of 2026-07-27.** Already written into `CLAUDE.md`
+  ("Documentation" and "Review gates"), which an agent maintains; this is the `direction/process.md`
+  wording, which needs your yes:
+
+  > Docs, docstrings and comments are as succinct as the meaning allows — facts, not bloat; length
+  > is earned by what must be explained. A reviewer flags any doc they cannot fully understand, or
+  > that is ambiguous.
+
   **(B) A one-off exception to YOUR worktree rule, for this migration only.** `CLAUDE.md` says a
   feature is built in a worktree and squash-merged. That is unsafe here: **35% of the last three
   days' commits touch `inbox.md`**, and a worktree that deletes it and is squash-merged days later

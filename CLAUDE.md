@@ -237,6 +237,11 @@ real finding down a tier. The test is observability:
 > A finding may be left standing ONLY if fixing it would change nothing
 > anyone would ever observe — pure wording, formatting, or naming taste.
 
+**A REVIEWER FLAGS ANY DOC THEY CANNOT FULLY UNDERSTAND, OR THAT IS AMBIGUOUS.** That is a
+real finding, not wording taste, and the observability test above does not excuse it: a doc a
+cold reader cannot follow is a doc that will be acted on wrongly. Bloat is the same finding
+from the other side — see **Documentation** below. *(Owner ruling, 2026-07-27.)*
+
 Everything else is **fixed**, **logged** to `dev/docs/board/inbox.md` with
 enough detail to act on, **escalated to the owner** as an explicit decision,
 or **refuted** — the reviewer asserted something the code or doc does not
@@ -621,6 +626,12 @@ reader does not know the code, the substrate, the prior conversation, or the jar
 concrete, and very explicit: define terms before using them, spell out the mechanism, and never
 lean on context the reader doesn't have. An explanation that only makes sense if you already
 know how it works is a bug — rewrite it.
+
+**AS SUCCINCT AS THE MEANING ALLOWS — this binds every doc, docstring and comment.** Facts,
+not bloat; no cruft, no restating what the previous sentence said, no throat-clearing. **Length
+is earned by what must be explained** — a doc may be long only when the thing genuinely needs
+that many words, never because more felt safer. This does NOT license dropping the context the
+paragraph above demands: cut the padding, not the explanation. *(Owner ruling, 2026-07-27.)*
 
 **The dev docs split by role — keep each in its lane, and keep each current:**
 - **`architecture.md` + `unrealed/*.md`** — *what IS* (current implementation + verified engine
