@@ -77,7 +77,7 @@ tail, not a permanent archive. When a remnant here becomes active work, promote 
   determinant negative, i.e. an ODD number of negative components — still inverts the turn; outside
   the ruling, documented not corrected, and a geometric argument rather than a measured one.
   **`scale --to`** (absolute world units per tile) is NOT built: it needs the texture catalog, and
-  it is part of step 5 on [`to-plan.md`](to-plan.md).
+  it is part of step 5 on [`to-plan/`](to-plan/).
 
 
 - [~] **`uedcli docs list|show|search` — SHIPPED, with the packaging half deliberately deferred**

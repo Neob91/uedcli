@@ -7,7 +7,7 @@ findings folded** — §2/§3/§7/§8/§9 were revised (classifier-first, three-
 A few review-driven changes need Andrzej's yes before planning — see the chat handoff / §7 gap 6, §8.
 **Decisions ledger:** [`decisions.md` 2026-07-24 19:49 UTC](../decisions.md) (D1–D7 are Andrzej's,
 from the speccing Q&A) + the 2026-07-24 review-refinements addendum.
-**Board item:** [`to-plan.md`](../board/to-plan.md) — "Corpus brush-idiom study" (references this spec).
+**Board item:** [`to-plan/`](../board/to-plan/) — "Corpus brush-idiom study" (references this spec).
 **Key dependency (de-risked, no longer a hard block):** offline `.dx`→T3D import (`level import` /
 [`specs/2026-07-24-level-import.md`](2026-07-24-level-import.md)) — unbuilt; the pilot uses the proven
 `MAP EXPORT`→trunk route instead. See §7.1.

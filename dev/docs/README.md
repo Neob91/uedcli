@@ -35,7 +35,7 @@ Every doc has ONE job. Don't mix them up:
 | **spikes/** | "What did we actually observe in this experiment?" | durable evidence | kept, cited by the docs above |
 | **[board/](board/README.md)** | the work-state cluster — flow + stages (see its `README.md`) | living |  |
 | **[board/inbox.md](board/inbox.md)** | "What's noticed but not yet sorted?" (head of stream — captures ideas/bugs/chores, AI flags for the owner, and their own open questions) | raw capture → triage | living |
-| **[board/to-spec.md](board/to-spec.md)** · **[to-spike/](board/to-spike/)** · **[to-plan.md](board/to-plan.md)** | "What's next, by stage?" | one home per item | living |
+| **[board/to-spec.md](board/to-spec.md)** · **[to-spike/](board/to-spike/)** · **[to-plan/](board/to-plan/)** | "What's next, by stage?" | one home per item | living |
 | **[board/to-build/](board/to-build/)** | "What's reviewed & ready to build *now*?" | the on-deck **build queue / source of truth** → links a plan | living |
 | **[board/done.md](board/done.md)** | "What landed recently / has deferred remnants?" | short reference tail | living |
 
