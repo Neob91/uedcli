@@ -179,6 +179,47 @@ polygon list come as a pair. Skipping the StateFrame on those exports makes
 **Rule for any body reader: decide on the EXPORT's flags, never on the object's class.** uedcli's
 `mapimport._skip_state_frame` takes the export record for exactly this reason.
 
+### The `Actors` array is the AUTHORITY on a level's contents, not the export table 🔬
+
+A map file holds two different answers to "what actors are in this level":
+
+- the `Engine.Level` object's **`Actors` array** — the roster the engine walks; and
+- the **export table** — every object stored in the file.
+
+They are NOT the same, and the array wins. Measured over the 88 retail Deus Ex maps (2026-07-27,
+host-native decode) and checked against UnrealEd's own `UCC batchexport` of the same maps:
+
+| Divergence | Retail incidence | What UnrealEd's exporter does |
+|-------------------------------------|-------------------------------------------|---
+| actor-classed export NOT in `Actors` | 1115 objects across 14 of 88 maps | exports **none** of them
+| an actor listed TWICE in `Actors`    | `DXMP_Cathedral` (`Brush636`), `DXMP_Area51Bunker` (`Light77`) | emits its block **twice**
+| viewport `Camera` actors (on the roster) | 4 per map, every map | omits **all** of them
+
+The off-roster objects are overwhelmingly `PathNode`s (923 of the 1115), plus `PatrolPoint`,
+`Light`, `Spotlight`, `HidePoint`, `Teleporter`, `PlayerStart`, `MapExit`, `ZoneInfo`. They look like
+actors a designer deleted whose export was never reclaimed: dead weight in the file, not level
+content. Confirmed by exporting three of the affected maps (`02_NYC_Warehouse` 3 orphans,
+`DXMP_Cathedral` 14, `DXMP_Area51Bunker` 221): **zero** orphans appeared in the editor's output, and
+nothing outside the roster ever did. The accounting is exact — on `02_NYC_Warehouse`, 2131 roster
+entries minus 4 viewport cameras = 2127 actors exported.
+
+**Rule for any reader: walk the `Actors` array, and treat an off-roster actor object as absent.**
+`mapimport.import_map` does, reporting each skip rather than failing (it used to refuse, which made
+14 retail maps unimportable).
+
+### The v69 editor cannot export every retail map — `Engine.CameraPoint` 🔬
+
+`UCC batchexport` from the committed v69 UED22 substrate **fails outright** on a retail map holding an
+`Engine.CameraPoint` (`00_Intro`): `Failed loading package: Can't find Class in file 'Class
+Engine.CameraPoint'`. The class is real in the game's own v68 `Engine.u` — ancestry
+`CameraPoint → Keypoint → Actor → Object` — and simply absent from the UT-lineage v69 one, another
+instance of the class-graph divergence above.
+
+Two consequences. First, the native decoder handles those maps and the editor route does not, so an
+editor export is not available as an oracle for all 88 maps. Second, **resolve retail classes against
+the GAME's `System/`, never against UED22** — doing the latter makes `Engine.CameraPoint` look like it
+is not an actor at all, and two Endgame maps then look like decode failures when the decode is right.
+
 ### `FPoly.ItemName` — name index 0 is a REAL name, and `None` is not index 0 🔬
 
 A polygon's per-face label (`Begin Polygon Item=Base`) is an `FName`: a compact index into the

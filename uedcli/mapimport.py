@@ -523,22 +523,42 @@ def actor_refs(pkg: Package) -> list[int]:
 
 
 @_decode_guard
-def import_map(pkg: Package, index, schema: ImportSchema) -> str:
+def import_map(pkg: Package, index, schema: ImportSchema, *,
+               notes: list[str] | None = None) -> str:
     """A whole compiled map → the `Begin Map … End Map` T3D text `model.parse_t3d` ingests.
 
     `index` is a `classindex.ClassIndex` over the composed package search path; it answers whether
     a class descends from `Engine.Actor` and, later, requalifies the bare class names this emits.
 
-    All actors are imported verbatim, in the `Actors`-array order. Two integrity gates make a
-    silently partial trunk impossible:
+    **The level's `Actors` array is the authority on what the level contains** — not the set of
+    actor-classed objects stored in the file. The two differ in real maps, and the array wins,
+    because that is what the engine's own exporter walks (measured: see below). Anything the array
+    does not name is skipped, and every skip is APPENDED TO `notes` so the caller can report it —
+    nothing is dropped silently.
 
-    * every non-null `Actors` entry must be a local export whose class descends from `Engine.Actor`;
-    * every actor-classed export in the package must appear in that array — otherwise the decode
-      would drop content the map really holds, and the trunk would look complete while missing it.
+    Two shapes of real-world divergence, both measured against UnrealEd's own `batchexport` of the
+    retail corpus (2026-07-27; `unrealed/package-format.md` "The `Actors` array is the authority"):
+
+    * **Off-roster actor exports.** 14 of the 88 retail maps hold actor-classed objects the array
+      never names — 1115 in total, 923 of them `PathNode`s: leftovers from actors a designer
+      deleted, whose export was never reclaimed. UnrealEd exported **zero** of them, on every map
+      checked. Skipped, and counted in `notes`.
+    * **An actor named TWICE by the array.** `DXMP_Cathedral` lists `Brush636` twice and
+      `DXMP_Area51Bunker` lists `Light77` twice. UnrealEd emits such an actor's block twice; a T3D
+      tree is keyed by actor NAME and cannot hold two, so the second occurrence is skipped. This is
+      a deliberate, reported divergence from the editor's literal output, forced by the target
+      representation.
+
+    Still a hard error, because each means the decode CANNOT be trusted rather than that the map
+    holds junk: an array entry that is an imported object or an out-of-range export, and an array
+    entry whose class does not descend from `Engine.Actor` (usually the wrong class package on the
+    search path).
     """
+    notes = notes if notes is not None else []
     refs = actor_refs(pkg)
     seen: set[int] = set()
     order: list[int] = []
+    repeats: list[str] = []
     for ref in refs:
         if ref < 0:
             raise SchemaError(f"{pkg.name}: the Level Actors array names an IMPORTED object "
@@ -548,18 +568,23 @@ def import_map(pkg: Package, index, schema: ImportSchema) -> str:
                               f"which does not exist ({len(pkg.exports)} exports)")
         idx0 = ref - 1
         if idx0 in seen:
-            raise SchemaError(f"{pkg.name}: actor {pkg.names[pkg.exports[idx0]['nm']]} appears "
-                              "twice in the Level Actors array")
+            repeats.append(pkg.names[pkg.exports[idx0]["nm"]])
+            continue
         seen.add(idx0)
         order.append(idx0)
+    if repeats:
+        notes.append(
+            f"{len(repeats)} actor(s) listed more than once in the level's actor array, imported "
+            f"once each (a T3D tree is keyed by name): {', '.join(sorted(set(repeats))[:10])}"
+            + (" …" if len(set(repeats)) > 10 else ""))
 
-    missing = [pkg.names[e["nm"]] for i, e in enumerate(pkg.exports)
-               if i not in seen and _is_actor_export(pkg, index, i)]
-    if missing:
-        raise SchemaError(
-            f"{pkg.name}: {len(missing)} actor(s) are not listed in the Level Actors array and "
-            f"would be silently dropped: {', '.join(sorted(missing)[:10])}"
-            + (" …" if len(missing) > 10 else ""))
+    unlisted = sorted(pkg.names[e["nm"]] for i, e in enumerate(pkg.exports)
+                      if i not in seen and _is_actor_export(pkg, index, i))
+    if unlisted:
+        notes.append(
+            f"{len(unlisted)} actor object(s) in the file are absent from the level's actor array "
+            f"and were SKIPPED, as UnrealEd's own exporter skips them: "
+            f"{', '.join(unlisted[:10])}" + (" …" if len(unlisted) > 10 else ""))
 
     for idx0 in order:
         if not _is_actor_export(pkg, index, idx0):

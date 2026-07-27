@@ -2681,7 +2681,11 @@ def _level_import(args) -> int:
         pkg = upackage.load_package(str(mapfile), name=mapfile.stem)
     except SchemaError as e:
         raise _SelectionExit(f"{args.mapfile}: {e}")
-    text = mapimport.import_map(pkg, index, mapimport.ImportSchema(resolver=index.resolver()))
+    # `notes` collects what the decode SKIPPED (off-roster actor objects, a doubly-listed
+    # actor). They are reported on stderr below: skipping is only legitimate if it is said.
+    notes: list[str] = []
+    text = mapimport.import_map(pkg, index, mapimport.ImportSchema(resolver=index.resolver()),
+                                notes=notes)
 
     # (3) parse. Parse to a LIST first: the level dict is keyed by actor Name, so two exports
     # sharing a name would silently collapse into one and the import would report success while
@@ -2730,6 +2734,8 @@ def _level_import(args) -> int:
         note += f"; dropped {len(dropped)} editor scratch object(s) ({', '.join(dropped[:6])}" \
                 + (" …" if len(dropped) > 6 else "") + ")"
     print(note, file=sys.stderr)
+    for n in notes:
+        print(f"note: {n}", file=sys.stderr)
     if kind == "level":
         print(f"to edit it: export UEDCLI_LEVEL={dest_name}", file=sys.stderr)
     return 0
