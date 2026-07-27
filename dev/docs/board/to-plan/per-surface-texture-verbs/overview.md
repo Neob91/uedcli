@@ -6,7 +6,7 @@ summary = "Per-surface texture verbs — STEPS 2-5 (the `brush poly align` half)
 
 # Per-surface texture verbs — STEPS 2-5 (the `brush poly align` half)
 
-Spec: [`dev/docs/specs/2026-07-26-poly-surface-verbs.md`](../../../specs/2026-07-26-poly-surface-verbs.md).
+Spec: board item `the-per-surface-verb-split`.
 **Spec gate: PASSED** — at its ceiling; every round's findings are folded into the sections
 themselves. **Step 1 is BUILT** (2026-07-26 — `brush poly pan|rotate|scale`; see
 board item `per-surface-texture-verbs-step-1-of-5`); these are the four steps after it, and the spec's §4.4 sequences them under

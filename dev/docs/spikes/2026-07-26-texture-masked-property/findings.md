@@ -1,7 +1,7 @@
 # Spike — the TEXTURE-side `Masked` property
 
 **Date:** 2026-07-26 · **Status:** complete · **Unblocks:**
-[`specs/2026-07-26-actor-preview-textured-faces.md`](../../specs/2026-07-26-actor-preview-textured-faces.md) §11
+board item `four-actor-preview-faces-rulings-need-a-durable` §11
 
 ## The question
 

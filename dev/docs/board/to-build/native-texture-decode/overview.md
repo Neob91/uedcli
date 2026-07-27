@@ -7,8 +7,8 @@ spikes = ["dev/docs/spikes/2026-07-26-ucc-texture-fixture/"]
 
 # Native texture decode for any UE1 package
 
-Plan: [`../../../plans/2026-07-25-native-texture-formats-plan.md`](../../../plans/2026-07-25-native-texture-formats-plan.md).
-Spec: [`../../../specs/2026-07-25-native-texture-formats.md`](../../../specs/2026-07-25-native-texture-formats.md).
+Plan: [`../../../plans/2026-07-25-native-texture-formats-plan.md`](plan.md).
+Spec: board item `three-design-calls-the-native-texture-formats`.
 
 **These two files are SELF-CONTAINED — read them and build. No other document needs opening.**
 They inline the binding decisions with their rejected alternatives, the on-disk `UTexture`/

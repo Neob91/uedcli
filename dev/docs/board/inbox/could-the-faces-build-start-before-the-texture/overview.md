@@ -7,7 +7,7 @@ summary = "Could the `--faces` build start before the texture decoder lands?"
 # Could the `--faces` build start before the texture decoder lands?
 
 Decision 2.11 says the decoder item builds first, then all of the `--faces` work, and
-[`plans/2026-07-27-actor-preview-faces-plan.md`](../../../plans/2026-07-27-actor-preview-faces-plan.md)
+board item `actor-preview-faces-plan-cites-dev-docs`
 implements that ordering as ruled. **Observation only, not acted on:** of that plan's five
 slices, only **S4** (`textured`) actually consumes the decoder's new accessor. S1 (a pure
 refactor), S2 (`--faces` + the `flat` mode) and S3 (`--focus`) touch no texture code at all —

@@ -1,7 +1,7 @@
 # Corpus brush-idiom study — spike harness
 
 Durable evidence + harness for the study specced in
-[`../../specs/2026-07-24-corpus-brush-idioms.md`](../../specs/2026-07-24-corpus-brush-idioms.md)
+board item `brush-identify-classify-a-real-brush-s-shape`
 (extract brush-construction idioms from real DX/UE1 levels). This dir holds the committed harness
 code; throwaway output (wireframe PNGs, real map T3D exports) stays in `_scratch/`.
 

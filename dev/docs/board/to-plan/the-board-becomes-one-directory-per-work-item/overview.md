@@ -6,7 +6,7 @@ summary = "The board becomes one directory per work item"
 
 # The board becomes one directory per work item
 
-Spec: [`dev/docs/specs/2026-07-27-board-per-item-directories.md`](../../../specs/2026-07-27-board-per-item-directories.md).
+Spec: board item `the-board-is-being-restructured-into-one`.
 Every stage (`inbox`, `to-spec`, `to-spike`, `to-plan`, `to-build`, `someday`, `stale`, `done`)
 becomes a directory of item directories; an item is `overview.md` (required) plus optional
 `spec.md`, `plan.md` and `questions/<q>.md`, and advances by one `git mv`. Fixes the three

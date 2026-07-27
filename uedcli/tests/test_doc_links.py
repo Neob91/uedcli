@@ -13,10 +13,12 @@ It deliberately covers TWO failure modes the restructure introduces:
    revise-in-place `rationale/<topic>.md`, so a heading can be edited away underneath a comment
    that still cites it. A missing anchor is silent otherwise.
 
-EXEMPTIONS. `dev/docs/specs/` and `dev/docs/plans/` are ephemeral scratch, deleted once their work
-lands, so they are not retargeted and not checked — EXCEPT the ones referenced from
-`board/to-build.md`, which are on-deck to be executed and must not carry rot. That carve-out is
-derived live from `to-build.md` rather than hardcoded, so it cannot go stale.
+EXEMPTIONS. A spec or plan now lives inside the board item it belongs to, at
+`dev/docs/board/<stage>/<item>/spec.md` (or `plan.md`). Those are ephemeral scratch, deleted once
+their work lands, so they are not retargeted and not checked — EXCEPT under `to-build/`, whose
+items are on-deck to be executed and must not carry rot. The exemption is therefore a path SHAPE,
+matched against the stage directory the file sits in, so an item advancing into or out of the build
+queue changes its checking with one `git mv` and nothing to keep in sync.
 """
 from __future__ import annotations
 
@@ -40,7 +42,15 @@ _HEADING = re.compile(r"^#{1,6}\s+(.*?)\s*#*$", re.MULTILINE)
 _FENCE = re.compile(r"^(?P<f>```|~~~).*?^(?P=f)", re.MULTILINE | re.DOTALL)
 _INLINE_CODE = re.compile(r"`[^`\n]*`")
 
-_EPHEMERAL = ("dev/docs/specs/", "dev/docs/plans/")
+#: An item's own ephemeral `spec.md`/`plan.md`, in any stage EXCEPT the build queue. The negative
+#: lookahead is what keeps `to-build/` checked: those items are about to be executed, so rot in
+#: their spec or plan is rot someone is about to act on.
+_EPHEMERAL_SHAPE = re.compile(r"dev/docs/board/(?!to-build/)[^/]+/[^/]+/(?:spec|plan)\.md$")
+
+
+def _is_ephemeral(rel: str) -> bool:
+    """Is this repo-relative path an un-checked ephemeral spec or plan?"""
+    return bool(_EPHEMERAL_SHAPE.fullmatch(rel))
 
 
 def _prose(text: str) -> str:
@@ -75,41 +85,6 @@ def _tracked(*suffixes: str) -> list[Path]:
         capture_output=True, text=True, check=True,
     ).stdout
     return [REPO / p for p in out.split("\0") if p and p.endswith(suffixes)]
-
-
-def _on_deck() -> frozenset[str]:
-    """Ephemeral files referenced from the build queue — by link OR backticked path.
-
-    Both forms count: an on-deck item cites some artifacts as markdown links and at least one as a
-    bare backticked path, and an exemption boundary that sees only one form silently skips files
-    that are about to be executed.
-
-    The queue is `board/to-build/<slug>/overview.md`, one file per item — it used to be a single
-    `to-build.md`. Sourcing it from the directory is what keeps this exemption alive across the
-    board migration: reading a file that no longer exists would return an empty set and silently
-    un-check EVERY ephemeral doc, which is the failure this boundary exists to prevent.
-    """
-    queue = REPO / "dev/docs/board/to-build"
-    overviews = sorted(queue.glob("*/overview.md")) if queue.is_dir() else []
-    out = set()
-    for item in overviews:
-        raw = item.read_text(encoding="utf-8")
-        refs = set(_MD_LINK.findall(_prose(raw))) | set(re.findall(r"`([^`]+\.md)`", raw))
-        for ref in refs:
-            stem = ref.split("#")[0]
-            # A markdown link resolves against the item directory; a backticked path is written
-            # from the dev-docs root (`specs/2026-07-24-docs-command.md`). Try both and keep what
-            # exists — resolving against one base only silently drops the other form, and the miss
-            # shows up as files being checked or skipped wrongly.
-            for base in (item.parent, REPO / "dev/docs", REPO):
-                resolved = (base / stem).resolve()
-                if resolved.exists():
-                    try:
-                        out.add(str(resolved.relative_to(REPO)))
-                    except ValueError:
-                        pass
-                    break
-    return frozenset(out)
 
 
 def _slug(heading: str) -> str:
@@ -167,22 +142,33 @@ def _rel(path: Path) -> str:
 
 
 def _checked_docs() -> list[Path]:
-    on_deck = _on_deck()
-    docs = []
-    for p in _tracked(".md"):
-        rel = str(p.relative_to(REPO))
-        if rel.startswith(_EPHEMERAL) and rel not in on_deck:
-            continue
-        docs.append(p)
-    return docs
+    return [p for p in _tracked(".md") if not _is_ephemeral(str(p.relative_to(REPO)))]
+
+
+#: Links that are allowed to dangle, keyed by the doc that writes them.
+#:
+#: `dev/docs/decisions.md` is FROZEN — the retired ledger, kept verbatim as history and never
+#: edited again. It links twice into the old `dev/docs/specs/` tree, which no longer exists: a spec
+#: now lives inside the board item it belongs to. The rule that the file may not be touched wins
+#: over the rule that links resolve, so the two targets are named here instead. Nothing else in the
+#: tree gets this treatment; a dangling link anywhere else is a defect.
+_FROZEN_DANGLING = {
+    "dev/docs/decisions.md": frozenset({
+        "specs/2026-07-25-docs-restructure.md",
+        "specs/2026-07-24-docs-command.md",
+    }),
+}
 
 
 @pytest.mark.parametrize("doc", _checked_docs(), ids=lambda p: str(p.relative_to(REPO)))
 def test_markdown_links_resolve(doc: Path) -> None:
     """Every ``[text](path)`` in a checked doc points at a file that exists."""
+    allowed = _FROZEN_DANGLING.get(_rel(doc), frozenset())
     broken = []
     for target in _links(doc):
         if target.startswith(("http://", "https://", "mailto:")) or target.startswith("#"):
+            continue
+        if target in allowed:
             continue
         resolved = (doc.parent / target.split("#")[0]).resolve()
         if not resolved.exists():
@@ -225,10 +211,9 @@ def test_no_citation_of_a_deleted_doc() -> None:
 
     Skips while either still exists — during the migration they legitimately have citations. The
     moment the restructure removes one, this starts enforcing that nothing points at it. Ephemeral
-    specs/plans are exempt (they are deleted with their work), except the on-deck ones, and
-    `_MAY_NAME_DELETED` is exempt by design.
+    specs/plans are exempt (they are deleted with their work), except the ones queued in
+    `to-build/`, and `_MAY_NAME_DELETED` is exempt by design.
     """
-    on_deck = _on_deck()
     # NOTE: this module DOES contain both literals (see its docstring); it passes only because
     # it is in `_MAY_NAME_DELETED`. Do not remove that entry on the strength of this loop.
     for name in ("decisions" + ".md", "direction" + ".md"):
@@ -239,7 +224,7 @@ def test_no_citation_of_a_deleted_doc() -> None:
             rel = str(p.relative_to(REPO))
             if rel in _MAY_NAME_DELETED:
                 continue
-            if rel.startswith(_EPHEMERAL) and rel not in on_deck:
+            if _is_ephemeral(rel):
                 continue
             if name in p.read_text(encoding="utf-8", errors="replace"):
                 offenders.append(rel)

@@ -15,8 +15,8 @@ ruling — so this stays in the build queue with its blockers attached and `bin/
 lists them. It is startable only when both are folded out, the spec passes a round, and the plan is
 re-cut and reviewed.
 
-Plan: [`../../../plans/2026-07-25-unified-asset-catalog-plan.md`](../../../plans/2026-07-25-unified-asset-catalog-plan.md).
-Spec: SPLIT 2026-07-26 into [`engine`](../../../specs/2026-07-26-asset-catalog-engine.md) + [`class`](../../../specs/2026-07-26-asset-catalog-class-arm.md) + [`texture`](../../../specs/2026-07-26-asset-catalog-texture-arm.md) + [`audio`](../../../specs/2026-07-26-asset-catalog-audio-arm.md).
+Plan: board item `the-unified-asset-catalog-spec-revision`.
+Spec: SPLIT 2026-07-26 into [`engine`](spec.md) + `class` (board item `the-asset-catalog-class-arm-needs-four-changes`) + [`texture`](spec-texture-arm.md) + `audio` (board item `sound-corpus-remeasure`).
 Decisions: [`../../../direction/asset-catalog.md`](../../../direction/asset-catalog.md) (the owner's) and
 `../../../rationale/` (the agent's) — **not** `decisions.md`, which is FROZEN.
 

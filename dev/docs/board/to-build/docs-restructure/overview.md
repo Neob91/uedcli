@@ -6,8 +6,8 @@ summary = "Retire the append-only decisions ledger; replace it and direction.md 
 
 # Docs restructure — `direction/` + `rationale/`, no ledger
 
-Plan: [`../../../plans/2026-07-26-docs-restructure-plan.md`](../../../plans/2026-07-26-docs-restructure-plan.md).
-Spec: [`../../../specs/2026-07-25-docs-restructure.md`](../../../specs/2026-07-25-docs-restructure.md).
+Plan: board item `docs-restructure-is-complete`.
+Spec: board item `docs-restructure-is-complete`.
 Five review rounds total — three on the spec (two of which returned structural findings and were
 resolved by the owner's rulings), two on the plan; all findings folded or logged to the inbox.
 

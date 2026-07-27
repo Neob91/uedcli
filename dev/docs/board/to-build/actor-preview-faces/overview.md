@@ -8,8 +8,8 @@ spikes = ["dev/docs/spikes/levelbuild-friction/"]
 
 # `actor preview --faces {wire,flat,textured}`
 
-Plan: [`../../../plans/2026-07-27-actor-preview-faces-plan.md`](../../../plans/2026-07-27-actor-preview-faces-plan.md).
-Spec: [`../../../specs/2026-07-26-actor-preview-textured-faces.md`](../../../specs/2026-07-26-actor-preview-textured-faces.md).
+Plan: board item `actor-preview-faces-plan-cites-dev-docs`.
+Spec: board item `four-actor-preview-faces-rulings-need-a-durable`.
 
 **Read the PLAN first; it and the spec are self-contained.** The plan carries the slicing, the file
 map, the Done-whens and the two mechanisms that are cheap to re-break; the spec carries the owner's

@@ -3,7 +3,7 @@
 **Date:** 2026-07-17 (live, `uedcli-game` image, DeusEx substrate).
 **Harness:** [`spike_reload.py`](spike_reload.py) (main), [`extend_namesize.py`](extend_namesize.py)
 (NAME_SIZE threshold). Raw log: `_scratch/spike-reload/spike.log` (gitignored).
-**Spec gated:** [`../../specs/2026-07-17-game-preview-warm-container.md`](../../specs/2026-07-17-game-preview-warm-container.md) §8 (SP-R), §5.3 (the gate).
+**Spec gated:** board item `warm-game-remnants` §8 (SP-R), §5.3 (the gate).
 
 ## What was tested and why
 The warm-container design delivers a changed level into an ALREADY-BOOTED game by dropping a

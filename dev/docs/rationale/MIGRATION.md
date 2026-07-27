@@ -4,9 +4,8 @@ This file records what happened to every entry of the retired `dev/docs/decision
 measured scope of the citation migration. **It outlives the migration**: it is the only map from an
 old dated citation (`decisions.md 2026-07-21 12:06 UTC`) to where that reasoning now lives.
 
-Plan: [`../plans/2026-07-26-docs-restructure-plan.md`](../plans/2026-07-26-docs-restructure-plan.md).
-Spec: [`../specs/2026-07-25-docs-restructure.md`](../specs/2026-07-25-docs-restructure.md).
-(Both are ephemeral and get deleted when the work lands — this file is what survives.)
+The spec and plan live in board item `docs-restructure-is-complete`. (Both are ephemeral and get
+deleted when the work lands — this file is what survives.)
 
 ---
 

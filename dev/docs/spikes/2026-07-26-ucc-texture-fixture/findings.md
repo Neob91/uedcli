@@ -1,7 +1,7 @@
 # Spike — building an offline texture fixture with the game's own toolchain (UCC)
 
 **Date:** 2026-07-26 · **Status:** complete · **Unblocks:**
-[`plans/2026-07-25-native-texture-formats-plan.md`](../../plans/2026-07-25-native-texture-formats-plan.md)
+board item `native-texture-decode`
 findings F8/F9 (the fixture's provenance and its decode oracle).
 
 ## The question

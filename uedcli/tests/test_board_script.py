@@ -193,10 +193,17 @@ def test_a_reopened_question_leaves_the_fold_out_queue() -> None:
 
 
 def test_show_resolves_a_real_slug() -> None:
-    """Only `show`'s failure path was tested, so it could have returned the wrong stage unnoticed."""
-    proc = _run("show", "unified-asset-catalog")
+    """Only `show`'s failure path was tested, so it could have returned the wrong stage unnoticed.
+
+    The expected stage is read off the filesystem rather than written in: an item advances by
+    `git mv`, so pinning the stage here would redden the suite every time this item moved, which
+    is exactly the churn the slug-not-path convention exists to avoid.
+    """
+    slug = "unified-asset-catalog"
+    stage = next(d.parent.name for d in (REPO / "dev/docs/board").glob(f"*/{slug}") if d.is_dir())
+    proc = _run("show", slug)
     assert proc.returncode == 0, proc.stderr
-    assert proc.stdout.strip() == "dev/docs/board/to-spec/unified-asset-catalog"
+    assert proc.stdout.strip() == f"dev/docs/board/{stage}/{slug}"
 
 
 def test_ls_filters_by_stage() -> None:

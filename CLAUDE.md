@@ -265,11 +265,16 @@ the trigger is whether the artifact CHANGED:
   unreviewed text to look at, and the gate is passed at round 1. Same when
   round 1 came back clean. On small changes this is the common case and it
   is where most of the gate's cost is saved.
-  - **"The artifact" = the files under review**, excluding
-    `dev/docs/board/*` and the commit message. Logging a finding to the
-    board is therefore never itself the trigger, even when board files are
-    part of the diff; changing a doc or adding a test to resolve a finding
-    IS.
+  - **"The artifact" = the files under review**, excluding the commit
+    message and an item's **own board bookkeeping**:
+    `dev/docs/board/*/*/overview.md` and `dev/docs/board/*/*/questions/`.
+    Logging a finding to the board is therefore never itself the trigger,
+    even when those files are part of the diff; changing a doc or adding a
+    test to resolve a finding IS. **The exclusion is that narrow on
+    purpose**: a `spec.md` or `plan.md` lives inside its board item too, and
+    excluding the whole board would mean every spec and plan review lost its
+    round 2 — editing the spec to resolve a round-1 finding is exactly the
+    unreviewed change round 2 exists for.
 - **This is NOT a licence to log instead of fix.** The disposition rule
   above is unchanged: logging is for a finding that is real but genuinely
   out of scope for *this* change. Choosing to log an in-scope defect so

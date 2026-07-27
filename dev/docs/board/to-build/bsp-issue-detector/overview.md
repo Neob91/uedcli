@@ -8,8 +8,8 @@ spikes = ["dev/docs/spikes/2026-06-25-umodel-serialize-format.md"]
 # BSP-issue detector (D0 + the P0 spike + `level doctor --rebuilt` + D0-b)
 
 **Status:** PARKED mid-spike (2026-06-25). Spec reviewed (6 rounds), plan reviewed (3 rounds).
-**Plan (full detail):** [`../../../plans/2026-06-24-uedcli-bsp-detector-plan.md`](../../../plans/2026-06-24-uedcli-bsp-detector-plan.md)
-**Spec:** [`../../../specs/2026-06-24-uedcli-offline-bsp-engine-design.md`](../../../specs/2026-06-24-uedcli-offline-bsp-engine-design.md) ·
+**Plan (full detail):** [`../../../plans/2026-06-24-uedcli-bsp-detector-plan.md`](plan.md)
+**Spec:** board item `bsp-issue-ground-truth-detector-d0-d1` ·
 **Decision:** `decisions.md` 2026-06-24 12:40 UTC
 
 **What it is.** Catch the *build-emergent* BSP problems (slivers, hall-of-mirrors, invisible walls,
