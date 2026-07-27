@@ -4,7 +4,7 @@
 the tier rules, the observability test, the two-round ceiling. **It is the only place the reviewer
 counts live — never restate them here or anywhere else.** This doc holds the elaborations that do
 not need to be resident in every session. Why the gate is shaped this way:
-[`../direction/process.md`](../direction/process.md).
+[`dev/docs/direction/process.md`](../direction/process.md).
 
 ## Dispatching a round
 
@@ -40,10 +40,10 @@ not need to be resident in every session. Why the gate is shaped this way:
   would otherwise have taken, and neither has a spec or plan round. **A batch takes its
   least-trivial member's row:** nine doc typos plus one code fix is a build review, not a docs-only
   or trivial one.
-- **NO cheap reviewer rides along.** The trivial tier's single Haiku pass is the ONLY place a cheap
-  reviewer appears, and its findings face exactly the same observability test — a finding is never
-  discounted for having come from the cheap reviewer.
-- **If the Haiku pass shows the change was not trivial after all**, it is re-gated from scratch at
+- **NO cheap reviewer rides along.** The trivial tier is the ONLY row whose reviewer is not Opus;
+  everywhere else, every slot is. A cheap reviewer's findings face exactly the same observability
+  test — a finding is never discounted for having come from the cheap tier.
+- **If the trivial pass shows the change was not trivial after all**, it is re-gated from scratch at
   its real tier — the cheap pass does not count as that tier's round 1.
 
 ### What "trivial" excludes
@@ -52,9 +52,9 @@ A trivial change is one that changes no reader's understanding and no tool behav
 formatting fix, a comment, a test rename, a broken link.
 
 - **NOT trivial, at any size:** anything that changes what a rule, doc, spec, plan, or engine-fact
-  note *says* — every change to `CLAUDE.md`, `../direction/*.md`, `../rationale/*.md`, `../rules/*.md`,
-  `../architecture.md`, `../unrealed/*.md`, a spec/plan, or a spike write-up is a real change,
-  because a future agent will act on it.
+  note *says* — every change to `CLAUDE.md`, `dev/docs/direction/*.md`, `dev/docs/rationale/*.md`,
+  `dev/docs/rules/*.md`, `dev/docs/architecture.md`, `dev/docs/unrealed/*.md`, a spec/plan, or a
+  spike write-up is a real change, because a future agent will act on it.
 - **NOT trivial:** anything that changes what the tool does, deletes anything, or changes executable
   behavior — including a one-line change to load-bearing code, exactly the case the cheap tier must
   not swallow. (A comment or a test rename does not change executable behavior; a `help=` string is
@@ -71,7 +71,7 @@ formatting fix, a comment, a test rename, a broken link.
   choice from a defect. Give every reviewer `CLAUDE.md`, and for a **plan** or **build** review the
   spec (and plan) it implements — a build reviewer who has not read the spec cannot check
   conformance to it. **Name by path every doc the reviewer must read before acting**: a subagent
-  does not inherit your reading, and one that has not read `../unrealed/t3d.md` will flag correct
+  does not inherit your reading, and one that has not read `dev/docs/unrealed/t3d.md` will flag correct
   T3D handling as a bug.
 - **Priming is FORBIDDEN.** Never show a reviewer the previous round's findings, never say what you
   expect them to find, never reuse a reviewer from an earlier round. A reviewer told what was
@@ -113,14 +113,17 @@ the code or doc does not actually do.
 Round 2 exists for exactly one reason: **the fixes are themselves unreviewed.** So the trigger is
 whether the artifact CHANGED.
 
+- **The docs-only and trivial tiers get ONE round, maximum — no round 2, even when the round
+  produced fixes.** The artifact-changed trigger below does not apply to them; see the table in
+  `CLAUDE.md` "Review gates". Everything else in this section governs the spec, plan and build rows.
 - **Round 2 runs iff resolving round 1 changed the artifact.** If round 1 came back clean, or its
   findings were all dispositioned WITHOUT touching the artifact — logged, refuted, or escalated —
   there is no new, unreviewed text to look at, and the gate is passed at round 1. On small changes
   this is the common case.
 - **"The artifact" = the files under review**, excluding the commit message and an item's **own
-  board bookkeeping**: `../board/*/*/overview.md` and `../board/*/*/questions/`. Logging a finding to
-  the board is therefore never itself the trigger, even when those files are part of the diff;
-  changing a doc or adding a test to resolve a finding IS. **The exclusion is that narrow on
+  board bookkeeping**: `dev/docs/board/*/*/overview.md` and `dev/docs/board/*/*/questions/`. Logging
+  a finding to the board is therefore never itself the trigger, even when those files are part of
+  the diff; changing a doc or adding a test to resolve a finding IS. **The exclusion is that narrow on
   purpose** — a `spec.md` or `plan.md` lives inside its board item too, so excluding the whole board
   would strip round 2 from every spec and plan review; editing a spec or plan to resolve a round-1
   finding is exactly the unreviewed change round 2 exists for.

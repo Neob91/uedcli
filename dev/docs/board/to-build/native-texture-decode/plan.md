@@ -244,7 +244,7 @@ old path; `dev/docs/` is current and `docs/dev/` no longer exists.
 > **CORRECTED 2026-07-26 (plan review round 1): this section is stale, and the header's "no other
 > document needs to be opened" is no longer safe.** Four current `CLAUDE.md` rules are missing here.
 > **Open `CLAUDE.md`.** In particular:
-> - **Feature worktrees.** This is a NINE-slice feature, so it is built in its own git worktree on
+> - **Feature worktrees** (`dev/docs/rules/worktrees.md`). This is a NINE-slice feature, so it is built in its own git worktree on
 >   its own branch and squash-merged back — the feature branch is **never pushed**. §0b below instead
 >   says "push after committing", which is the *non-feature* path and is wrong for this build.
 > - **The decisions ledger is retired** — see the S7 correction; nothing is appended to
@@ -277,7 +277,7 @@ integration module must therefore move the *deselected* count, not the *skipped*
 by explicit pathspec** (`git commit -- <path> <path>`); never `git add .`, never `git add -A`, never
 `git commit -a` — a concurrent session may have staged its own work. One **short imperative subject
 line**, no `type:` prefix, **no AI attribution**. **Do NOT push the feature branch** — it is squashed
-away on merge (CLAUDE.md "Feature worktrees"); an earlier draft said "push after committing", which is
+away on merge (dev/docs/rules/worktrees.md); an earlier draft said "push after committing", which is
 the non-feature path. **Never rewrite history**,
 locally or on `origin`: no `--amend`, no `rebase` of pushed commits, no force-push in any form.
 Mistakes are fixed with a new commit or a `git revert`.

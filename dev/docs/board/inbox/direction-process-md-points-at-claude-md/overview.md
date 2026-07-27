@@ -18,21 +18,33 @@ reader will not find.
 
 ## Proposed text, verbatim
 
+The replacement paths below are written relative to `dev/docs/direction/`, the directory the edited
+file lives in. They are shown fenced rather than as live links so this item's own link check does not
+try to resolve them against the board directory it sits in.
+
 Line 60, currently:
 
-> branch. Procedure: `CLAUDE.md` "Feature worktrees". **An exception is the
+```
+  branch. Procedure: `CLAUDE.md` "Feature worktrees". **An exception is the
+```
 
 becomes:
 
-> branch. Procedure: [`../rules/worktrees.md`](../rules/worktrees.md). **An exception is the
+```
+  branch. Procedure: [`../rules/worktrees.md`](../rules/worktrees.md). **An exception is the
+```
 
 Line 147, currently:
 
-> `CLAUDE.md` "Direction docs" · "Review gates" · "Feature worktrees" ·
+```
+`CLAUDE.md` "Direction docs" · "Review gates" · "Feature worktrees" ·
+```
 
 becomes:
 
-> `CLAUDE.md` "Direction docs" · "Review gates" ·
-> [`../rules/worktrees.md`](../rules/worktrees.md) ·
+```
+`CLAUDE.md` "Direction docs" · "Review gates" ·
+[`../rules/worktrees.md`](../rules/worktrees.md) ·
+```
 
 Nothing the doc *says* changes — these are pointers only.

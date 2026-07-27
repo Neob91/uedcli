@@ -42,7 +42,7 @@ once during this feature's life.
 
 - **This is a FEATURE: build it in a git worktree** branched from the checked-out branch, commit
   locally per slice, **never push the feature branch**, gate, then squash-merge from the main
-  checkout. `CLAUDE.md` "Feature worktrees".
+  checkout. `dev/docs/rules/worktrees.md`.
 - **Commit only your own hunks.** Several sessions work this repo at once; read `git diff <path>`
   before staging, never `git add -A`.
 - **Run tests via `bin/test`**, never bare `pytest` (`rules/tests.md`). Host-native, in the venv.

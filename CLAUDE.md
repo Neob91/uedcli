@@ -146,7 +146,11 @@ moment opens wide up front** — a spec's defects get built on top of. *(Owner r
 ### The rules that bind every round
 
 - **`build` is the DEFAULT row** for anything non-trivial that is not a spec or a plan. **A batch
-  takes its least-trivial member's row.** **When it is arguable, it is not trivial.**
+  takes its least-trivial member's row.**
+- **Trivial means the change alters no reader's understanding and no tool behavior** — a typo, a
+  formatting fix, a comment, a test rename, a broken link. It is **NEVER** an edit to what a rule,
+  doc, spec, plan or engine-fact note *says*, and never a change to executable behavior, including a
+  one-line change to load-bearing code. **When it is arguable, it is not trivial.**
 - **Reviewers get CONTEXT but never PRIMING.** Give every reviewer this file, the spec/plan under
   implementation, and — by path — every doc they must read before acting; a subagent does not inherit
   your reading. Never show them a previous round's findings, never say what you expect, never reuse a
@@ -191,16 +195,24 @@ The same care applies to `git push` on a shared branch: it publishes every local
 including other sessions'. That is normally fine and is not a reason to skip pushing your own work —
 but never treat a push as "only my change went out".
 
-**Always push your work — never lose it.** **NEVER REWRITE HISTORY, locally OR on `origin`.** No
+**Always push your work — never lose it** — with exactly one exception, a feature branch in a
+worktree, below. **NEVER REWRITE HISTORY, locally OR on `origin`.** No
 `git push --force` (or `--force-with-lease`), no `git commit --amend`, no `git rebase` that rewrites
 already-pushed commits. Only ever add new commits on top; mistakes are corrected with a fresh commit
 or a `git revert`.
 
 **A FEATURE is built in its own git worktree and squash-merged back** — read
-`dev/docs/rules/worktrees.md` before creating one or merging one. Two things there are dangerous to
-get wrong from memory: the `git diff --cached --quiet` check before `git merge --squash` (omitting it
-commits over a concurrent session's staged work), and **asking the owner before `git branch -D`**. A
-change that is not a feature — a doc correction, a chore sweep, a one-file fix — needs no worktree.
+`dev/docs/rules/worktrees.md` before creating one or merging one. Three things there are dangerous to
+get wrong from memory:
+
+- **NEVER push the feature branch** — it is squashed away on merge and a remote branch can never be
+  deleted, so pushing one strands permanent dead weight on `origin`. This is the one exception to
+  "always push your work" above; local commits are what protect the work instead.
+- **Run `git diff --cached --quiet` before `git merge --squash`** — omitting it commits over a
+  concurrent session's staged work.
+- **Ask the owner before `git branch -D`** — deleting a branch is destructive.
+
+A change that is not a feature — a doc correction, a chore sweep, a one-file fix — needs no worktree.
 
 ## Code & CLI conventions
 
