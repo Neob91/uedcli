@@ -17,9 +17,10 @@ WHY THESE ARE TESTS AND NOT PROSE. Three of them guard things that fail silently
 * **The frontmatter SUBSET** (:test_frontmatter). `bin/board` is bash with no venv and hand-rolls its
   reader, so the corpus must stay inside what both it and `tomllib` handle.
 
-Whole-board shape (exactly eight stages, no loose files) is NOT asserted yet: the migration converts
-one stage per commit, so until it finishes `board/` legitimately holds stage directories *and*
-un-migrated `.md` files. Those two assertions land with the final batch.
+Whole-board shape — exactly eight stages, no loose files — is asserted by
+:test_board_holds_only_the_eight_stages and :test_a_stage_holds_only_item_directories. They could
+not exist until the migration finished, because every intermediate commit legitimately held stage
+directories *and* un-migrated `.md` files.
 """
 from __future__ import annotations
 
@@ -104,6 +105,29 @@ def _tracked(*suffixes: str) -> list[Path]:
 
 if not _items():
     pytest.skip("no board items migrated yet", allow_module_level=True)
+
+
+def test_board_holds_only_the_eight_stages() -> None:
+    """`board/` is the eight stage directories plus `README.md`, and nothing else.
+
+    A loose `.md` at the top level is how the old shape comes back one file at a time — someone
+    parks a list somewhere rather than filing items, and the board quietly has two homes again.
+    """
+    entries = {p.name for p in BOARD.iterdir() if not p.name.startswith(".")}
+    assert entries == set(STAGES) | {"README.md"}, (
+        f"unexpected entries in dev/docs/board/: {sorted(entries - set(STAGES) - {'README.md'})}; "
+        f"missing: {sorted(set(STAGES) | {'README.md'} - entries)}"
+    )
+
+
+@pytest.mark.parametrize("stage", STAGES)
+def test_a_stage_holds_only_item_directories(stage: str) -> None:
+    """`ls <stage>/` IS the queue — so a stage may hold item directories and `.gitkeep`, nothing else."""
+    stray = sorted(p.name for p in (BOARD / stage).iterdir() if p.is_file() and p.name != ".gitkeep")
+    assert not stray, f"dev/docs/board/{stage}/ holds loose files: {stray}"
+    assert (BOARD / stage / ".gitkeep").is_file(), (
+        f"dev/docs/board/{stage}/.gitkeep is missing — git cannot track the directory once it empties"
+    )
 
 
 @pytest.mark.parametrize("item", _items(), ids=_rel)

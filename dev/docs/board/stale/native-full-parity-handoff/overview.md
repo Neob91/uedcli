@@ -1,3 +1,20 @@
++++
+priority = "p?"
+kind = "docs"
+summary = "Superseded handoff for native full-parity BSP; its core premise (zones were the blocker) was wrong."
++++
+
+# Native full-parity handoff (SUPERSEDED)
+
+Kept rather than deleted, per owner decision 2.6 — nothing is deleted to tidy the board. It is
+**shelved as stale** because its first line marks it superseded and no board item owns it: the
+premise it was written on (zones being the playability blocker) was disproved live on 2026-07-16.
+Migration rule 7 gives an orphan like this an item directory rather than dropping it.
+
+The body below is the handoff verbatim.
+
+---
+
 > **⚠ SUPERSEDED 2026-07-16 — this handoff's core premise (zones are the playability blocker) was
 > WRONG.** Live diagnosis found the pawn fell through the floor because the native build shipped no
 > **collision hulls** (`LeafHulls`/`iCollisionBound`), not because of zones. Porting the editor's

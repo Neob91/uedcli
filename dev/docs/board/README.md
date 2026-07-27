@@ -1,85 +1,95 @@
 # The board (`dev/docs/board/`)
 
-The work-state cluster for uedcli. Work flows through **stages**; most stage files are **queues**
-named for the *next action* an item needs (`to-<verb>.md`). An item lives in one place at a time and
-advances by moving its line to the next file. When an item is fully done, **delete it** (don't leave
-a ticked entry); `done.md` keeps only a short tail of recently-finished + partially-done work.
-
-## The flow
+The work-state cluster for uedcli. **Each work item is a directory**, and the stage it is in **is
+the directory it sits in**. An item advances with one `git mv`.
 
 ```
-   inbox.md   (raw, un-triaged capture — the pre-pipeline pool + head of the stream)
-"noticed it; not sorted yet" — ideas, gaps, bugs, chores, AI flags for Andrzej, his own open questions
-        │ triage → route to the queue for its next action
-        │  └───────────────▶ someday.md  (parked nice-to-have; NOT surfaced in normal triage;
-        │                                  pulled back to inbox.md when picked up) ─┐
-        ▼                                                                           │
-        ◀───────────────────────────────────────────────────────────────────────────┘
-   to-spec.md  ──────────────┐   some items need a live unknown investigated first
-"needs a spec / design"       │
-        │                     ▼
-        │               to-spike.md
-        │          "needs a live/offline investigation"
-        │                     │   (findings fold back into the spec)
-        ▼                     │
-   to-plan.md  ◀──────────────┘
-"has a spec, needs a plan"
-        │
-        ▼   (plan written + reviewed)
-   to-build.md   ◀── THE BUILD QUEUE / source of truth for what to build next
-"reviewed plan, ready to implement now"
-        │
-        ▼
-   (delete when done → done.md keeps a short tail)
-
-   ▲ a question raised mid-pipeline bounces the item back to inbox.md until it's answered
+board/<stage>/<item-slug>/
+  overview.md          REQUIRED — TOML frontmatter, a title, then the detail
+  spec.md  plan.md     optional
+  questions/<q>.md     optional — one BLOCKING question each
 ```
 
-`inbox.md` is the **head of the stream AND the pre-pipeline capture pool** — not a stage (hence no
-`to-` prefix). Everything lands here first: feature ideas, capability gaps, bugs, chores, anything the
-**AI flags for Andrzej** (a provisional call, assumption, risk, or deviation), and **his own open
-questions**. Triage moves each entry out to the queue for its next action; a question raised
-mid-pipeline bounces back to `inbox.md` until answered. Spike is a **side-loop, not a stage**: per the
-uedcli `CLAUDE.md` flow a spike happens when a spec flags a live unknown, and its findings fold back
-into that spec (`to-spike.md` also holds standalone investigations not tied to one spec).
+Why directories rather than one file per stage: several agent sessions share this repo, and a
+single `inbox.md` meant every session's write collided on one file (35% of commits touched it) while
+every read pulled in 4,000 lines to get one item. Two agents now touch two paths.
 
-## The files
+## The stages
 
-| File | Holds | Next action | Who edits |
-|---|---|---|---|
-| **`inbox.md`** | raw, un-triaged capture (ideas/gaps/bugs/chores) + AI flags for Andrzej + his own open questions | triage → route to a queue (he deletes/decides his own) | AI + human |
-| **`to-spec.md`** | items that need a spec/design written | write a spec (`dev/docs/specs/`) | AI + human |
-| **`to-spike.md`** | open questions blocking a design | run a spike (`dev/docs/spikes/`) | AI + human |
-| **`to-plan.md`** | specced work awaiting a plan | write a plan (`dev/docs/plans/`) | AI + human |
-| **`to-build.md`** | reviewed plans, on-deck — **the build queue / source of truth** | implement it | AI + human |
-| **`someday.md`** | parked nice-to-have / someday — deferred, not in normal triage | pull back to `inbox.md` when picked up | AI + human |
-| **`done.md`** | recently-completed + partially-done (with deferred remnants) | — (reference) | AI + human |
+| Directory | Holds | Next action |
+|--------------|--------------------------------------------------|---|
+| `inbox/` | un-triaged capture; anything flagged for the owner | triage → `git mv` |
+| `to-spec/` | needs a spec | write `spec.md` in the item |
+| `to-spike/` | needs a live/offline investigation first | run a spike → `dev/docs/spikes/` |
+| `to-plan/` | has a reviewed spec | write `plan.md` in the item |
+| `to-build/` | reviewed plan, ready now | implement it |
+| `someday/` | parked; not surfaced in normal triage | `git mv` to `inbox/` when picked up |
+| `stale/` | judged stale, **retained not deleted** | none — revisit |
+| `done/` | recently finished, or finished with remnants | none — reference tail |
 
-> **Transitional:** the general `[implement]`/`[chore]`/`[debug]` backlog still lives in `to-spec.md`
-> (Active vs Deferred) from before `inbox.md` existed. It should migrate to `inbox.md` (raw pool) /
-> `to-build.md` (chores + reviewed plans), leaving `to-spec.md` holding only genuine `[spec]` items.
+A stage holds item directories and a `.gitkeep`, nothing else — so `ls to-build/` **is** the queue.
+`uedcli/tests/test_board.py` enforces that, and everything else below.
 
-## Conventions
+## `overview.md`
 
-- **Untriaged → `inbox.md`.** When in doubt where something goes, drop it in `inbox.md` as a
-  one-liner; triage it forward later. Triage **moves** it out (one home per item).
-- **Bracket tag = roughly the queue.** `[spec]`→`to-spec`, `[spike]`→`to-spike`, `[plan]`→`to-plan`;
-  a reviewed plan or a stage-less `[chore]`/`[debug]` → `to-build`. (`[chore]`/`[debug]` skip
-  spec/plan; a `[debug]` that's really an investigation can sit in `to-spike.md`.) Anything not yet
-  routed sits in `inbox.md`. A transitional `[a→b]` sits in the target (`b`) queue.
-- **Priority is orthogonal to stage.** `pN` tags (`p1`/`p2`/`p3`) ride the item line. The backlog
-  (in `inbox.md`, and `to-spec.md` until the migration above completes) keeps an `## Active` vs
-  `## Deferred (someday)` split.
-- **One home per item.** Don't duplicate an item across files. Work with a reviewed plan lives in
-  `to-build.md`; a few backlog entries cross-note "(also in to-build.md #N)" so on-deck
-  vs backlog is visible, but `to-build.md` is authoritative for those.
-- **Every new spec carries a board item that references it.** When a spec lands in `dev/docs/specs/`,
-  it gets a matching board entry (normally in `to-plan.md` — a spec's next action is a plan; or its
-  current queue) that links the spec path, so no spec is orphaned from the work-state. The spec
-  back-links its board item in turn.
-- **Human-attention items live in `inbox.md` too.** Anything the AI would flag for Andrzej (a
-  provisional call, assumption, risk, deviation, or a question only he can answer) is just an inbox
-  entry — there is no separate human-owned lane. He resolves them by deleting or triaging them forward.
+```markdown
++++
+priority = "p1"                       # p1 p2 p3 p?   — p? = not yet prioritised
+kind = "implement"                    # implement chore debug docs owner-question unknown
+summary = "One line. What this is."
+depends-on = ["other-item-slug"]      # optional — SLUGS, never paths
+spikes = ["dev/docs/spikes/…/"]       # optional — repo-root-relative paths
++++
+
+# Title
+
+The detail.
+```
+
+**TOML, in a pinned subset**: single-line basic strings, one array per line, no comments. `tomllib`
+is stdlib, and `bin/board` reads the same subset in bash — an agreement test runs both over every
+item and requires identical results.
+
+**The stage is the path, so `kind` does not restate it.** `[spec]`/`[spike]`/`[plan]` are retired as
+tags: every issue gets a plan anyway. `kind` is what the path cannot say.
+
+## Referencing an item — by SLUG, never by path
+
+An item's path contains its stage, and the stage changes. So a code comment, a durable doc, a spike
+or another item's `depends-on` all name the **slug**:
+
+```
+# see board item `level-import`
+```
+
+A slug is permanent and unique across the whole board; it is never renamed. `test_board.py` checks
+every such reference resolves, which is what makes this safer than the paths it replaced — a stale
+path citation rots silently, a stale slug reddens the suite.
+
+## Questions block an item
+
+A file under `questions/` is **a blocker**, not a discussion log: the thing that must be answered
+before the item can be planned or built. An item with any question file **may not sit in `to-plan/`
+or `to-build/`** — it goes back to `to-spec/`.
+
+The owner answers by writing into the file's empty `## Answer` section. An agent then folds the
+decision into its durable home (`direction/` for the owner's decisions, `rationale/` for an agent's),
+updates the spec, and **deletes the question file — deleting it, not answering it, is what unblocks
+the item**, so the durable write cannot be skipped. The commit that folds an answer out also deletes
+the file; if you find it already gone, another session did it.
+
+## `bin/board`
+
+```
+bin/board questions            open questions, by item
+bin/board answered             answered, not-yet-folded — the agent's queue
+bin/board ls [stage] [--json]  items by priority; --json for scripts
+bin/board show <slug>          resolve a slug to its current path
+bin/board new <stage> <title>  create an item with a valid stub
+```
+
+**Log a review finding with `bin/board new inbox '<title>'`**, and **run `bin/board answered` at
+session start** — an answer nobody reads is the failure mode this whole shape exists to prevent.
 
 ## Goals (carried from the old `todo.md` header)
 
