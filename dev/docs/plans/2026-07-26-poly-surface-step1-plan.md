@@ -330,10 +330,14 @@ are the `--pan-by 0,32` example and the `**Pan / scale** with --pan-to X,Y` bull
 - **`rotate`'s turn direction on a subtractive brush or a negative `MainScale`.** `n̂` from local
   winding is the *polygon* normal; the visible **surface** normal is reversed on a subtract, and a
   negative scale flips handedness, so `--by 16384` turns the texture the opposite way from what the
-  author sees — on a room interior, i.e. most of a map. **Decision for step 1: keep the polygon-normal
-  convention and document the inversion**, because flipping on solidity would make the verb's sign
-  depend on `CsgOper`, which is invisible at the point of use and worse to reason about. **Logged to
-  `board/inbox.md`** as user-visible semantics the owner may want to revisit — this is not settled by
-  the spec, which pins the sign only on an additive `+Z` face.
-- Steps 2–4 are blocked on the spec rewrite: cap detection, terminal faces on an open run, and
-  connectivity validation were all left genuinely open by the spec's two-round re-gate.
+  author sees — on a room interior, i.e. most of a map. **RESOLVED 2026-07-27 (owner): flip `n̂` on a
+  subtractive brush, so the verb turns against the VISIBLE surface normal.** An author selects a face
+  they can see, and the texture should turn the way that face turns from where they stand. The
+  `CsgOper` dependency is real but is the lesser evil — an author knows whether they are texturing a
+  room or a pillar, whereas a silent inversion indoors is not discoverable at all. It also makes the
+  verb set coherent, since `wall`/`floor` and `run` are invariant under `n̂ → −n̂` by construction.
+  **Pin both cases:** the same `--by 16384` on an additive and on a subtractive face must turn the
+  texture the same way as seen from outside each. See `../rationale/surface.md`.
+- Steps 2–5 are specced and queued on `../board/to-plan.md`; the spec's gate is closed. (An earlier
+  draft said they were "blocked on the spec rewrite" over cap detection, terminal faces and
+  connectivity validation — all three are now decided in the spec.)

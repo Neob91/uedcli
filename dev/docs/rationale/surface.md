@@ -101,6 +101,26 @@ itself wrote, one round trip earlier.
 
 ---
 
+## `rotate` turns against the VISIBLE surface normal
+
+`n̂` is flipped when the brush is subtractive, so `--by 16384` turns the texture the same way as seen
+from outside the face in both cases.
+
+**Why it is this way.** An author selects a face they are looking at. Without the flip the verb turns
+one way on an added solid and the other inside a room — and room interiors are most of a map's visible
+surface. It also makes the verb set coherent: `wall`/`floor` and `run` are invariant under `n̂ → −n̂`
+by construction (`proj()` and `d/N.A` both cancel the sign), so `rotate` was the only verb that read
+differently indoors.
+
+**Rejected.** *The raw polygon normal.* It avoids a `CsgOper` dependency, which is a real cost — the
+sign now depends on a property of the brush rather than of the face. But an author knows whether they
+are texturing a room or a pillar, whereas a silent inversion indoors is not discoverable at all.
+Owner ruling 2026-07-27 ("pick sane defaults").
+
+**Refs.** `plans/2026-07-26-poly-surface-step1-plan.md` §9.
+
+---
+
 ## `n̂` comes from the winding, floated first
 
 The normal is computed from the polygon's own vertex winding via `preview._face_normal` (Newell),
