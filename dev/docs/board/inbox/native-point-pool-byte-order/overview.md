@@ -1,10 +1,10 @@
 +++
 priority = "p2"
 kind = "implement"
-summary = "DONE"
+summary = "The surf/vector-ORDER half is done; the remaining half is the point-pool byte order."
 +++
 
-# DONE
+# Native point-pool byte-ORDER (follow-up to the pBase fix)
 
 native point-pool byte-ORDER (follow-up to pBase fix, §82 §10.18/§10.19, 2026-07-18)` —
 the surf/vector-ORDER half is **DONE** (§10.19): the editor KEEPS the incremental-CSG surf pool (95

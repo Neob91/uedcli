@@ -1,10 +1,10 @@
 +++
 priority = "p3"
 kind = "implement"
-summary = "front-facing"
+summary = "A label filter that hides labels for geometry the camera cannot actually see."
 +++
 
-# front-facing
+# True-occlusion label filter
 
 true-occlusion label filter` — the `--labels` grammar's `poly:vis` ships meaning
 **front-facing** (the cheap backface cull). A stricter "don't label a face whose centroid is hidden

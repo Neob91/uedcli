@@ -1,10 +1,10 @@
 +++
 priority = "p?"
 kind = "docs"
-summary = "all parked here"
+summary = "The uedcli:creative capture, triaged 2026-07-19 and parked here in full."
 +++
 
-# all parked here
+# Brainstorm features (deferred, 2026-07-16 creative session)
 
 Brainstorm features (deferred, 2026-07-16 creative session)
 

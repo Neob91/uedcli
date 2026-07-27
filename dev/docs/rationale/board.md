@@ -24,14 +24,20 @@ times in board prose, and a dependency list reads badly inline.
 
 **Refs.** Spec §2.10, §3.4. `bin/board`, `uedcli/tests/test_board_script.py`.
 
-## Slugs are authored, not derived-and-truncated
+## Slugs — the intent, and what the migration actually produced
 
-**Why it is this way.** A slug is permanent, unique board-wide and never renamed, so it is a name,
-not a hash of a sentence. 359 of 471 titles exceed 48 characters, so mechanical truncation produces
-identities cut mid-phrase (`architecture-md-contradicts`). The migration script therefore prefers
-the part of a title before its first em-dash or parenthesis, strips a leading `[tag]` and `pN`
-(168 titles carry one — without stripping, a permanent name would bake in a priority and a kind the
-board has abolished), and drops trailing filler words.
+**The intent.** A slug is permanent, unique board-wide and never renamed, so it should be a name,
+not a hash of a sentence. The script prefers the part of a title before its first em-dash or
+parenthesis, strips a leading `[tag]` and `pN` (168 titles carried one — without stripping, a
+permanent name bakes in a priority and a kind the board has abolished), and drops trailing filler.
+
+**What shipped is weaker than that, and it is recorded here rather than papered over.** The bulk
+migration derived slugs mechanically and truncated at 48 characters, which spec §3.3 explicitly
+rejects. 285 of 492 slugs are ≥40 characters and `inbox/architecture-md-contradicts-direction`
+is the literal anti-example §3.3 gives. A handful whose derived name was actively wrong
+(`inbox/done`, `inbox/authoring`, `to-spec/zones`) were repaired by hand; the rest stand.
+Renaming later is barred once a slug is referenced, so this is a real, permanent cost of having
+converted ~490 items by script instead of by hand. Tracked as `board item board-migration-remnants`.
 
 **A slug is not reserved forever**, because `done/` is pruned to a short tail. Pruning a done item
 is only legal when nothing cites it, which the slug-reference test enforces; otherwise a citation

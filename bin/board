@@ -35,21 +35,30 @@ is_stage() { case " $STAGES " in *" $1 "*) return 0;; *) return 1;; esac; }
 # half-written file must not take down a query about a different item.
 fm() {
   awk '
-    NR==1 && $0!="+++" { print "!!malformed"; exit }
+    NR==1 && $0!="+++" { bad=1; exit }
     NR==1 { infm=1; next }
-    infm && $0=="+++" { exit }
+    infm && $0=="+++" { closed=1; exit }
     infm {
       eq = index($0, "=")
       if (eq == 0) next
       k = substr($0, 1, eq-1); v = substr($0, eq+1)
       gsub(/^[ \t]+|[ \t]+$/, "", k); gsub(/^[ \t]+|[ \t]+$/, "", v)
+      if (substr(v,1,1) == "[") { print k "\t\001ARRAY\001" v; next }
       if (v ~ /^".*"$/) {                      # basic string: strip quotes, unescape \" and \\
         v = substr(v, 2, length(v)-2)
         gsub(/\\"/, "\"", v); gsub(/\\\\/, "\\", v)
       }
-      print k "\t" v
+      if (index(v, "\t")) { bad=1; exit }      # a TAB would split our own key/value framing
+      out[++n] = k "\t" v                      # BUFFERED — see END
     }
-    END { if (!infm) print "!!malformed" }
+    # An UNCLOSED block is the real half-written shape, and parsing it to EOF turns body prose into
+    # frontmatter keys. Both that and a missing opener report malformed rather than guessing.
+    # Output is buffered because the defect is only knowable at EOF: printing as we went emitted a
+    # usable-looking `priority` first, so the caller saw a valid item and never checked the marker.
+    END {
+      if (bad || !closed) { print "!!malformed"; exit }
+      for (i = 1; i <= n; i++) print out[i]
+    }
   ' "$1"
 }
 
@@ -60,10 +69,14 @@ fm_get() { fm "$1" | awk -F'\t' -v k="$2" '$1==k {print $2; found=1} END{if(!fou
 # empty once HTML comments are stripped. It is REOPENED (and so not in the fold-out queue) when a
 # "## Reopened" heading follows the answer.
 answer_state() {
+  # NOTE: `/^#{1,2} /` does NOT work here. This machine's awk is mawk, which has no ERE intervals,
+  # so that pattern matches the LITERAL text `#{1,2} ` and the answer section never terminates —
+  # every following section counts as answer content, an unanswered question reports as answered,
+  # and the documented fold-out then deletes a live blocker. Use `##?` instead.
   awk '
-    /^## Answer[[:space:]]*$/ { ina=1; next }
-    ina && /^#{1,2} / { ina=0 }
-    /^## Reopened[[:space:]]*$/ { reopened=1 }
+    /^## Answer[[:space:]]*$/ { ina=1; seen=1; next }
+    ina && /^##? / { ina=0 }
+    seen && /^## Reopened[[:space:]]*$/ { reopened=1 }
     ina {
       line=$0
       gsub(/<!--.*-->/, "", line)
@@ -71,7 +84,8 @@ answer_state() {
       if (line != "") content=1
     }
     END {
-      if (reopened) print "reopened"
+      if (!seen) print "malformed"
+      else if (reopened) print "reopened"
       else if (content) print "answered"
       else print "open"
     }
@@ -97,10 +111,17 @@ each_question() {  # each_question <wanted-state>
 }
 
 # --- json --------------------------------------------------------------------------------------
-json_escape() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g; s/\t/\\t/g'; }
+#: Control characters must be escaped or the output is not JSON at all — a lone CR in a summary
+#: produced a JSONDecodeError for every consumer of `ls --json`.
+json_escape() {
+  printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g' \
+    | tr -d '\000' \
+    | sed 's/\x08/\\b/g; s/\x0c/\\f/g; s/\x0a/\\n/g; s/\x0d/\\r/g; s/\x09/\\t/g'
+}
 
 # --- subcommands -------------------------------------------------------------------------------
 cmd_questions() {
+  [ $# -eq 0 ] || die "questions takes no arguments (got: $*)"
   local n=0
   while IFS=$'\t' read -r item title path; do
     printf '%-46s %s\n' "$item" "$title"
@@ -126,7 +147,10 @@ cmd_ls() {
     case "$arg" in
       --json) json=1 ;;
       -*) die "unknown option: $arg" ;;
-      *) is_stage "$arg" || die "unknown stage: $arg"; want_stage="$arg" ;;
+      *)  is_stage "$arg" || die "unknown stage: $arg"
+          # Taking only the last of several silently dropped the others and exited 0.
+          [ -z "$want_stage" ] || die "ls takes at most one stage (got '$want_stage' and '$arg')"
+          want_stage="$arg" ;;
     esac
   done
   local stage item slug pri kind summary rows=""
@@ -150,7 +174,11 @@ cmd_ls() {
       rows+="${pri/p\?/p9}"$'\t'"$stage"$'\t'"$slug"$'\t'"$pri"$'\t'"$kind"$'\t'"$summary"$'\n'
     done
   done
-  [ -n "$rows" ] || return 0
+  if [ -z "$rows" ]; then
+    # An empty stage must still be valid JSON, or every consumer breaks the moment a queue drains.
+    [ "$json" -eq 1 ] && printf '[]\n'
+    return 0
+  fi
   if [ "$json" -eq 1 ]; then
     printf '[\n'
     local first=1
@@ -185,14 +213,24 @@ cmd_new() {
   local stage="$1"; shift
   is_stage "$stage" || die "unknown stage: $stage"
   local title="$*"
+  # A TAB would split `fm`'s own key/value framing and silently truncate the summary at query
+  # time — the data would simply be gone. Refuse at capture, per "no silent half-answers".
+  case "$title" in *"$(printf '\t')"*) die "title contains a TAB: $title" ;; esac
 
   # Slug: strip a leading [tag] and pN, lowercase, keep alphanumerics, collapse to hyphens.
-  local slug
-  slug="$(printf '%s' "$title" \
+  local slug full
+  full="$(printf '%s' "$title" \
     | sed -E 's/^[[:space:]]*\*{0,2}\[[^]]*\][[:space:]]*//; s/^[[:space:]]*`?p[0-9?]`?[[:space:]]+//' \
     | tr '[:upper:]' '[:lower:]' \
-    | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//' \
-    | cut -c1-48 | sed -E 's/-[^-]*$//; s/-+$//')"
+    | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//')"
+  slug="$(printf '%s' "$full" | cut -c1-48)"
+  # Drop a word only when `cut` actually truncated one. Unconditionally stripping the last
+  # segment — which this did — silently shortened EVERY multi-word title, and a slug is a
+  # permanent identity that is never renamed.
+  if [ "$slug" != "$full" ]; then
+    slug="$(printf '%s' "$slug" | sed -E 's/-[^-]*$//')"
+  fi
+  slug="$(printf '%s' "$slug" | sed -E 's/-+$//')"
   [ -n "$slug" ] || die "cannot derive a slug from: $title"
 
   # Slug uniqueness is BOARD-WIDE (the board test asserts it), so check every stage — a same-stage

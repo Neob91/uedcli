@@ -1,10 +1,10 @@
 +++
 priority = "p3"
 kind = "chore"
-summary = "DECISION NEEDED"
+summary = "A usability-probe leftover about where --prefab-dir sits in the argument order; needs a decision."
 +++
 
-# DECISION NEEDED
+# Usability-nit leftover: `--prefab-dir` position
 
 usability-nit leftover: --prefab-dir position` — `prefab` takes `--prefab-dir` on the
 PARENT parser (documented `prefab [--prefab-dir DIR] <sub>`, usage.md:550), so it must come BEFORE the

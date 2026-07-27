@@ -1,10 +1,10 @@
 +++
 priority = "p?"
 kind = "docs"
-summary = "authoring"
+summary = "Three cold subagent stress-tests driving only the offline CLI: authoring is broad, the feedback loop lies or is blind."
 +++
 
-# authoring
+# Level-authoring capability audit — can an agent build DX-quality levels?
 
 Level-authoring capability audit — "can an agent build DX-quality levels?" (2026-07-17)
 

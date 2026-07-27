@@ -48,10 +48,12 @@ def _bash_reads(overview: Path) -> dict[str, str]:
     )
     assert proc.returncode == 0, proc.stderr
     pairs = (line.split("\t", 1) for line in proc.stdout.splitlines() if "\t" in line)
-    # Arrays are emitted verbatim by the shipped reader (it unquotes basic strings only), so
-    # compare scalars alone — `depends-on`/`spikes` are checked against the tree by test_board.py,
-    # which uses tomllib for both sides and needs no bash agreement.
-    return {k: v for k, v in pairs if not v.startswith("[")}
+    # Arrays are emitted verbatim by the shipped reader (it unquotes basic strings only) and are
+    # tagged with a sentinel so they can be told apart from a STRING that merely starts with `[`.
+    # Filtering on a bare leading `[` — which this did — dropped every summary beginning with
+    # `[OWNER — confirm]`, the exact marker `CLAUDE.md` mandates, and reported it as a missing key.
+    # `depends-on`/`spikes` are checked against the tree by test_board.py via tomllib on both sides.
+    return {k: v for k, v in pairs if not v.startswith("\001ARRAY\001")}
 
 
 def _reader_shim() -> str:
@@ -135,6 +137,97 @@ def test_new_refuses_a_slug_already_used_in_another_stage(tmp_path: Path) -> Non
         for f in created.rglob("*"):
             f.unlink()
         created.rmdir()
+
+
+def _question_item(stage: str, slug: str, answer_body: str, extra: str = "") -> Path:
+    d = BOARD / stage / slug
+    (d / "questions").mkdir(parents=True)
+    (d / "overview.md").write_text(
+        f'+++\npriority = "p?"\nkind = "unknown"\nsummary = "probe"\n+++\n\n# {slug}\n', encoding="utf-8")
+    (d / "questions" / "q.md").write_text(
+        f"# Q\n\n## Context\n\nc\n\n## Answer\n{answer_body}{extra}", encoding="utf-8")
+    return d
+
+
+def _rmtree(d: Path) -> None:
+    for f in sorted(d.rglob("*"), reverse=True):
+        f.unlink() if f.is_file() else f.rmdir()
+    d.rmdir()
+
+
+@pytest.mark.parametrize(
+    "answer_body, extra, expect_open",
+    [
+        ("\n<!-- Empty = open. -->\n", "", True),
+        ("\n<!-- Empty = open. -->\n", "\n## Notes\n\ntrailing prose\n", True),
+        ("\n   \n", "", True),
+        ("\nOption B.\n", "", False),
+        ("\nTBD\n", "", False),
+    ],
+    ids=["empty", "empty-then-section", "whitespace", "answered", "placeholder-counts"],
+)
+def test_open_vs_answered(answer_body: str, extra: str, expect_open: bool) -> None:
+    """A question is OPEN until its `## Answer` holds real text — and stays open past a later section.
+
+    The `empty-then-section` case is the regression that matters. `awk` here is mawk, which has no
+    ERE intervals, so a `/^#{1,2} /` terminator matched only the LITERAL text and the answer section
+    ran to EOF: an unanswered blocker was reported as answered, vanished from `bin/board questions`,
+    and `CLAUDE.md` tells an agent to fold answered questions out and DELETE them. A live decision
+    would have been destroyed by following the documented process.
+    """
+    d = _question_item("inbox", "zz-answerstate-probe", answer_body, extra)
+    try:
+        assert ("zz-answerstate-probe" in _run("questions").stdout) is expect_open
+        assert ("zz-answerstate-probe" in _run("answered").stdout) is not expect_open
+    finally:
+        _rmtree(d)
+
+
+def test_a_reopened_question_leaves_the_fold_out_queue() -> None:
+    """An owner reply that is itself a question must not sit in the agent's fold-out queue."""
+    d = _question_item("inbox", "zz-reopened-probe", "\nWhy?\n", "\n## Reopened\n\nagent reply\n")
+    try:
+        assert "zz-reopened-probe" not in _run("answered").stdout
+    finally:
+        _rmtree(d)
+
+
+def test_show_resolves_a_real_slug() -> None:
+    """Only `show`'s failure path was tested, so it could have returned the wrong stage unnoticed."""
+    proc = _run("show", "unified-asset-catalog")
+    assert proc.returncode == 0, proc.stderr
+    assert proc.stdout.strip() == "dev/docs/board/to-spec/unified-asset-catalog"
+
+
+def test_ls_filters_by_stage() -> None:
+    out = _run("ls", "to-spike").stdout
+    assert out.strip() and all(" to-spike " in ln for ln in out.splitlines())
+
+
+def test_ls_rejects_two_stages() -> None:
+    """Taking only the last of several silently dropped the others and exited 0."""
+    proc = _run("ls", "to-spike", "to-build")
+    assert proc.returncode == 2 and "to-spike" in proc.stderr
+
+
+def test_ls_json_on_an_empty_stage_is_an_empty_array() -> None:
+    """`stale/` is empty by owner decision, and a queue drains — consumers must not get no output."""
+    proc = _run("ls", "stale", "--json")
+    assert proc.returncode == 0, proc.stderr
+    assert json.loads(proc.stdout) == []
+
+
+def test_an_unclosed_frontmatter_is_malformed_not_parsed_to_eof() -> None:
+    """The real half-written shape. Parsed to EOF, body prose becomes frontmatter keys."""
+    d = BOARD / "inbox" / "zz-unclosed-probe"
+    d.mkdir(parents=True)
+    try:
+        (d / "overview.md").write_text('+++\npriority = "p1"\nsummary = "half written\n', encoding="utf-8")
+        proc = _run("ls")
+        assert proc.returncode == 0
+        assert "zz-unclosed-probe" in proc.stderr and "zz-unclosed-probe" not in proc.stdout
+    finally:
+        _rmtree(d)
 
 
 def test_unknown_stage_exits_2_naming_the_value() -> None:
