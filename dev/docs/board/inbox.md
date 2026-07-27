@@ -3268,22 +3268,15 @@ The posing rewrite landed (POS@ROT → auto-frame; decision 2026-07-12); these a
   `PanV = VSize−1`; the rendering consequence was not observed), and whether `ONETILE`/`WALLCOLUMN`
   are implemented in non-UED22 UnrealEd builds (not checked — out of scope, we ship UED22).
 
-- `p2` `[OWNER — decide]` **`brush poly rotate`'s turn direction is opposite to what the author sees on
-  a SUBTRACTIVE brush.** `n̂` comes from the polygon's own winding, so it is the *polygon* normal; the
-  visible surface normal is reversed on a subtract, and a negative `MainScale` flips handedness too.
-  So `--by 16384` turns the texture one way on an added solid and the other way inside a room — and
-  room interiors are most of a map's visible surface.
-
-  **Step 1 ships the polygon-normal convention deliberately** (`plans/2026-07-26-poly-surface-step1-plan.md`
-  §9): flipping on solidity would make the verb's sign depend on `CsgOper`, which is invisible at the
-  point of use and harder to reason about than a documented inversion. But it is user-visible
-  semantics and the spec pins the sign only on an *additive* `+Z` face, so it was never actually
-  ruled. Worth a look: keep it, or flip on the visible surface normal and accept the `CsgOper`
-  dependency. The `wall`/`floor`/`one-tile` family is immune either way — `proj()` and `d/N.A` are
-  invariant under `n̂ → −n̂`; only `rotate` (and `run`'s across axis, resolved separately) is affected.
----
-
-## From the 2026-07-18 unattended build chain (Andrzej, triage these)
+- `[resolved 2026-07-27]` **`brush poly rotate` turns against the VISIBLE surface normal.** Owner
+  ruling: pick sane defaults, existing content is not a constraint. So `n̂` is flipped when the brush
+  is subtractive — the author selects a face they can see, and a texture verb should turn the way that
+  face turns from where they are standing. The `CsgOper` dependency was the stated reason to prefer
+  the raw polygon normal; it is the lesser evil, because an author knows whether they are texturing a
+  room interior or a pillar, whereas "the sign silently inverts indoors" is not discoverable at all.
+  This also makes all five verbs consistent: `wall`/`floor` and `run` are already invariant under
+  `n̂ → −n̂` by construction, so `rotate` was the only one that read differently inside a room.
+  Folded into `plans/2026-07-26-poly-surface-step1-plan.md` and `rationale/surface.md`.
 
 - **RESOLVED (triaged + built 2026-07-19) — CLI consistency & clarity audit** (`../reviews/2026-07-19-cli-consistency-audit.md`, 8 findings, all accepted): **H1** poly-set stdin, **M1** mutator summaries→stderr, **M2** `--json` ×3, **M3** `--prop` on `brush build` (re-scoped to movers — CSG brushes were already fully covered by dedicated flags), **L2** clip/folder-get polish, **L3** unify `--catalog-dir` help (flag KEPT — load-bearing for project-less texture verbs) — all BUILT + committed 2026-07-19. **H2** (`actor move` over a SET) routed to `to-spec` (`--by`-only when moving >1 actor, per Andrzej).
 
