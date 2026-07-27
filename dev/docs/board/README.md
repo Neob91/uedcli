@@ -30,6 +30,21 @@ every read pulled in 4,000 lines to get one item. Two agents now touch two paths
 A stage holds item directories and a `.gitkeep`, nothing else — so `ls to-build/` **is** the queue.
 `uedcli/tests/test_board.py` enforces that, and everything else below.
 
+- **`inbox/` is the pre-pipeline pool AND the head of stream**, not a queue. Everything lands here
+  first: ideas, gaps, bugs, chores, anything flagged for the owner (a provisional call, an
+  assumption, a risk, a deviation from spec or plan, or work deliberately not done), and their own
+  open questions. **There is no separate `flagged`/`to-resolve` lane** — the owner resolves their own
+  items by deleting them or triaging them forward, recording any real choice in the owning
+  `../direction/` topic.
+- **A `chore` or `debug` item is one-shot**: it is filed straight into `to-build/` with no plan, and
+  therefore gets no plan review round. (`CLAUDE.md` "Review gates" relies on that distinction.)
+- **An item reaches `to-spike/` only when its spec flags a live unknown**, and the spike's findings
+  fold back into that same spec.
+- **When an item is fully finished, `git mv` it to `done/` and trim it to a short reference line** —
+  never leave a ticked `[x]` behind. If something was deferred mid-implementation, file a separate
+  inbox item for it rather than letting the original quietly cover both the done part and the
+  deferred part.
+
 ## `overview.md`
 
 ```markdown

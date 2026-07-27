@@ -97,7 +97,7 @@ dates ARE kept, per the Documentation rules.
 - Commits touching `dev/docs/direction/` carry a `Confirmed: <topic>`
   trailer — an audit marker, not enforcement.
 
-`dev/docs/andrzej.md` and `dev/docs/2026-06-20-open-questions-for-andrzej.md`
+`dev/docs/owner-notes.md` and `dev/docs/2026-06-20-open-questions-for-owner.md`
 are also theirs — do not touch them at all.
 
 Every other doc under `dev/docs/`, including `rationale/` and `rules/`, an

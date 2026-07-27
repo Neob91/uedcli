@@ -10,7 +10,7 @@ summary = "Done — the tree no longer cites a deleted board file or a deleted s
 deleted board path deliberately:
 
 - `dev/docs/decisions.md` — frozen, may never be edited.
-- `dev/docs/2026-06-20-open-questions-for-andrzej.md` — the owner's, not to be touched.
+- `dev/docs/2026-06-20-open-questions-for-owner.md` — the owner's, not to be touched.
 - `dev/docs/rationale/board.md` and `uedcli/tests/test_board.py` — both *explain* the old shape
   ("`_on_deck()` used to read `board/to-build.md`"), which is their job. Naming the old file is the
   point of the sentence, so neither is rot.

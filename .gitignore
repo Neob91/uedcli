@@ -11,7 +11,7 @@ _scratch/
 # Feature worktrees live here — a worktree is a full second checkout, so leaving
 # it visible would let `git add` stage a duplicate tree and would double every
 # ripgrep hit and pytest collection. Precise, not blanket `.claude/`, so
-# settings.json stays tracked. (CLAUDE.md "Feature worktrees")
+# settings.json stays tracked. (dev/docs/rules/worktrees.md)
 .claude/worktrees/
 
 # The working game copy `dev/scripts/install-deusex-assets.sh` assembles, plus its

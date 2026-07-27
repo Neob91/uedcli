@@ -41,7 +41,7 @@ Prefer a native interpreter? Everything above also works as `python3 -m uedcli �
   (screenshots), `extracting-from-dll.md`. **Read before touching the driver.**
 - [`dev/docs/board/`](dev/docs/board/README.md) — the roadmap, as a stage-queue cluster. Each
   work item is a **directory** and the stage it is in **is** the directory it sits in, so it
-  advances with one `git mv`: `inbox/` (capture pool — also holds AI flags for Andrzej + his open
-  questions) → `to-spec/` → `to-spike/` → `to-plan/` → `to-build/` (the build queue), plus
+  advances with one `git mv`: `inbox/` (capture pool — also holds AI flags for the owner + their
+  open questions) → `to-spec/` → `to-spike/` → `to-plan/` → `to-build/` (the build queue), plus
   `someday/`, `stale/` and `done/`.
 - Original design spec: `docs/superpowers/specs/2026-06-16-uedcli-design.md` (repo root).

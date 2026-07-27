@@ -1,163 +1,127 @@
 ## The repo this tool lives in
 
-`uedcli` is its own repository — this file sits at its root and **is the repo's canonical
-rule file**. There is no rule file above it. (A sibling `uplayctl` mirrors these rules, but
-it lives in a *different* repo and is not reachable from here; changes made here do not
+`uedcli` is its own repository, and this file is its **canonical rule file** — there is no rule file
+above it. (A sibling `uplayctl` mirrors these rules from a *different* repo; changes here do not
 propagate to it.)
 
-- **`_scratch/` (at the repo root, beside this file) is THE place for every temporary,
-  throwaway, or experimental file** — scratch scripts, **every manual `MAP EXPORT`/`BRUSH
-  EXPORT` and preview `.ppm`/`.t3d`**, screenshots, texture dumps, spike output, logs. It is
-  gitignored, so nothing there can be committed by accident; organize into subdirs
-  (`_scratch/shots/`, `_scratch/t3d/`, …). **If a throwaway file is not under `_scratch/`, it
-  is in the wrong place — no exceptions.** Never write throwaway output into the tracked tree —
-  not `Temp/`, not `Maps/`, not the repo root. (The session-scratch dir named in the
-  environment prompt is fine for files that never need to outlive the session; `_scratch/` is
-  the in-repo home.)
-- **`TODO.md` (repo root) holds repo-level, cross-cutting items**; uedcli's own backlog is
-  the board (see **The board** below). When an item is fully done, delete it — never leave it
-  ticked `[x]`.
+- **`_scratch/` (repo root) is THE place for every temporary, throwaway or experimental file** —
+  scratch scripts, **every manual `MAP EXPORT`/`BRUSH EXPORT` and preview `.ppm`/`.t3d`**,
+  screenshots, texture dumps, spike output, logs. It is gitignored; organize into subdirs
+  (`_scratch/shots/`, `_scratch/t3d/`, …). **If a throwaway file is not under `_scratch/`, it is in
+  the wrong place — no exceptions.** Never write throwaway output into the tracked tree — not
+  `Temp/`, not `Maps/`, not the repo root. (The session-scratch dir named in the environment prompt
+  is fine for files that never need to outlive the session.)
+- **`TODO.md` (repo root) holds repo-level, cross-cutting items**; uedcli's own backlog is the board.
+  When an item is fully done, delete it — never leave it ticked `[x]`.
 
 ## Working with the owner
 
-### Asking the owner — ALWAYS via the question widget, and explain it properly
+### Ask via the question widget, and explain it properly
 
-**Every decision that is the owner's to make is put through Claude Code's `AskUserQuestion`
-widget — never as prose in the chat.** A question buried in a wall of text gets skimmed,
-answered partially, or scrolls away; the widget forces the choice to be explicit and records
-the answer next to the options it was chosen from. This covers design forks, rulings on
-`direction/` topics, sequencing calls, and anything a review gate escalates.
+**Every decision that is the owner's to make goes through Claude Code's `AskUserQuestion` widget —
+never as prose in the chat.** A question buried in a wall of text gets skimmed, answered partially,
+or scrolls away. This covers design forks, rulings on `direction/` topics, sequencing calls, and
+anything a review gate escalates.
 
-**Write the question for someone who does NOT have the spec or the code memorised** — the
-owner decides *what we want*, and is not carrying a 400-line spec or the call graph of
-`preview.py` in their head. So:
+**Write it for someone who does NOT have the spec or the code memorised.** The owner decides *what we
+want* and is not carrying a 400-line spec in their head. So:
 
-- **Say what the thing IS before asking about it.** Name the verb, flag, file or behaviour in
-  plain words: "`--faces textured` reads a face's texture from the package and paints it into
-  the preview image" — not "the §4.3 fetch path".
-- **NEVER make a section number, symbol name, or piece of jargon load-bearing.** `§12`,
-  `resolve_mips`, `_DIM_ALPHA`, `PF_Masked` mean nothing without the file open. Use them only
+- **Say what the thing IS before asking about it**, in plain words: "`--faces textured` reads a
+  face's texture from the package and paints it into the preview image" — not "the §4.3 fetch path".
+- **NEVER make a section number, symbol name, or piece of jargon load-bearing.** Use them only
   *after* the plain-English version, never instead of it.
-- **State why it is a decision at all** — what makes it genuinely ambiguous, and why the
-  agent cannot just pick.
-- **Make every option self-contained**, with its concrete consequence: what changes, what it
-  costs, what breaks or gets slower, what it forecloses. The owner should be able to choose
-  without reading anything else.
-- **Give the recommendation first** when there is one, marked as such — a recommendation is
-  not a substitute for laying out the alternatives.
-- **Surface what is genuinely uncertain**, including where the agent's own earlier statement
-  turned out to be wrong. A ruling made on a false premise is worse than no ruling, and has
-  to be re-put.
+- **State why it is a decision at all** — what makes it genuinely ambiguous, and why you cannot just
+  pick.
+- **Make every option self-contained**, with its concrete consequence: what changes, what it costs,
+  what breaks or gets slower, what it forecloses.
+- **Give the recommendation first** when there is one, marked as such — a recommendation does not
+  replace laying out the alternatives.
+- **Surface what is genuinely uncertain**, including where your own earlier statement turned out to
+  be wrong. A ruling made on a false premise is worse than no ruling.
 
-**Never overrule the owner silently, and never downgrade a real question into a board item to
-avoid asking it.** If a rule of theirs (a `direction/` topic, `conventions.md`, a previous
-ruling) points one way and the agent judges otherwise, that is a question for the widget —
-not a deviation to be recorded in a commit message and moved past. Logging is for a real
-finding that is out of scope for the current change; it is not a way to settle a decision on
-the owner's behalf. *(Owner ruling, 2026-07-26.)*
+**Never overrule the owner silently, and never downgrade a real question into a board item to avoid
+asking it.** If a rule of theirs points one way and you judge otherwise, that is a question for the
+widget — not a deviation recorded in a commit message and moved past. Logging is for a real finding
+that is out of scope for the current change. *(Owner ruling, 2026-07-26.)*
 
-### An owner DECISION is implemented as given — NEVER altered without an explicit yes
+### A DECISION is implemented as given — NEVER altered without an explicit yes
 
-This governs the decision itself, wherever it was made: in a spec, in chat, in a one-line
-answer. It is not limited to `direction/`.
+This governs the decision itself, wherever it was made: in a spec, in chat, in a one-line answer.
 
-- **Implement the ruling as stated.** Do not add a guard, a filter, a clamp, a fallback or a
-  special case that changes what it does — not "in the spirit of" it, not to satisfy a
-  different requirement the owner also stated, not because measurement shows it is wrong.
-- **Finding a real flaw does NOT authorise a fix.** Measure it, STOP, report the evidence, and
-  propose the change. Wait for the yes. A defect discovered mid-build is a reason to ask,
-  never a licence to decide.
-- **Telling them afterwards is NOT consent.** Flagging an unrequested change in the report —
-  "here is what I did and why" — is the violation, not the remedy. The owner has to approve it
-  *before* it is written.
-- **An unanswered question is not an answer.** When a decision is needed and no ruling exists,
-  ask again. Do not fill the gap with a default and label it a judgement call.
-- **Same rule for reverting:** once told to drop an unapproved change, restore exactly what
-  was ruled — including its known costs — and pin those costs in a test or doc so they are
-  recorded rather than quietly re-fixed later.
+- **Implement the ruling as stated.** Do not add a guard, filter, clamp, fallback or special case
+  that changes what it does — not "in the spirit of" it, not to satisfy a different requirement they
+  also stated, not because measurement shows it is wrong.
+- **Finding a real flaw does NOT authorise a fix.** Measure it, STOP, report the evidence, propose
+  the change, wait for the yes.
+- **Telling them afterwards is NOT consent.** Flagging an unrequested change in the report is the
+  violation, not the remedy.
+- **An unanswered question is not an answer.** Ask again; do not fill the gap with a default and call
+  it a judgement call.
+- **Same rule for reverting:** once told to drop an unapproved change, restore exactly what was ruled
+  — including its known costs — and pin those costs in a test or doc so they are recorded rather than
+  quietly re-fixed later.
 
 ### Direction docs — NEVER revise without confirmation
 
-`dev/docs/direction/<topic>.md` holds what **the owner** decided — product intent and process
-rulings alike. It is **MUTABLE**: revised in place, no supersession, no dated-entry history
-(git keeps that). Evidence citations and live-finding dates ARE kept, per **Documentation**
-below.
+`dev/docs/direction/<topic>.md` holds what **the owner** decided — product intent and process rulings
+alike. It is **MUTABLE**: revised in place, no supersession, no dated history (git keeps that).
+Evidence citations and live-finding dates are kept.
 
-- **NEVER create, revise, reword, or delete anything under `dev/docs/direction/` — including
-  a single `Rejected` bullet — without asking the owner and getting an explicit yes.** Propose
-  the exact text and wait. "It follows from what he said" does NOT satisfy this.
-- **`direction/README.md` is the exception**: its index rows and its short model statement may
-  be maintained freely. No topic *content* goes there, and it may **never** contain an `@`
-  import.
-- **Moving a topic OUT of `direction/` needs their yes too** — it removes the protection, so
-  it is as much a change as an edit.
-- **When direction looks stale, ASK — never edit.**
-- **Confirm proactively.** When working in a topic, ask whether its direction doc is still
-  current.
-- **A decision awaiting their yes is parked** with `bin/board new inbox '[OWNER — confirm] …'`,
-  `kind = "owner-question"`, carrying the proposed text verbatim in the item's `overview.md`.
-  If it blocks an existing item, put it in *that* item's `questions/` instead and leave the
-  item where it is.
-- Commits touching `dev/docs/direction/` carry a `Confirmed: <topic>` trailer, so
-  `git log --grep='Confirmed' -- dev/docs/direction/` shows every confirmed edit and an
-  unconfirmed one stands out on inspection. (Four commits from 2026-07-26 predate the rename
-  and carry `Andrzej-confirmed:` instead — history is never rewritten, so grep for both when
-  auditing that day.)
+- **NEVER create, revise, reword, or delete anything under `dev/docs/direction/` — including a single
+  `Rejected` bullet — without asking and getting an explicit yes.** Propose the exact text and wait.
+  "It follows from what they said" does NOT satisfy this. Moving a topic OUT needs a yes too — it
+  removes the protection.
+- **When direction looks stale, ASK — never edit.** And **confirm proactively**: when working in a
+  topic, ask whether its direction doc is still current.
+- **`direction/README.md` is the exception**: its index rows and short model statement may be
+  maintained freely. No topic *content* there, and **never** an `@` import.
+- **A decision awaiting a yes is parked** with `bin/board new inbox '[OWNER — confirm] …'`,
+  `kind = "owner-question"`, carrying the proposed text verbatim in the item's `overview.md`. If it
+  blocks an existing item, put it in *that* item's `questions/` instead and leave the item where it is.
+- **Commits touching `dev/docs/direction/` carry a `Confirmed: <topic>` trailer**, so
+  `git log --grep=confirmed -i -- dev/docs/direction/` shows every confirmed edit and an unconfirmed
+  one stands out. (Four commits from 2026-07-26 predate the trailer's rename and use an older
+  spelling — the case-insensitive grep catches both.)
 
-**Nothing mechanical enforces any of this.** The rule is a convention and the trailer is an
-audit marker, not a gate; revise-in-place destroys the prior text, so a bad edit looks exactly
-like a good one. Why it is shaped this way anyway: `dev/docs/direction/process.md`.
+**Nothing mechanical enforces any of this**; revise-in-place destroys the prior text, so a bad edit
+looks exactly like a good one. Why it is shaped this way anyway: `dev/docs/direction/process.md`.
 
-**`dev/docs/andrzej.md` and `dev/docs/2026-06-20-open-questions-for-andrzej.md` are also
-theirs — do not touch them at all.** Every other doc under `dev/docs/`, including `rationale/`
-and `rules/`, an agent maintains on its own.
+**`dev/docs/owner-notes.md` and `dev/docs/2026-06-20-open-questions-for-owner.md` are theirs — do not
+touch them at all.** Every other doc under `dev/docs/`, including `rationale/` and `rules/`, an agent
+maintains on its own.
 
 ## After every change
 
-Without being asked, do each of these that applies (a docs-only edit has no tests to run; a
-code change with no user-facing docs has none to update):
+Without being asked, do each of these that applies (a docs-only edit has no tests to run; a code
+change with no user-facing docs has none to update):
 
-- **Update every doc the change touches** — no doc may be left stale (see **Documentation**
-  below for which doc owns what). **EXCEPT `dev/docs/direction/`**: never edit that tree to
-  fix staleness — ask the owner.
-- **Cross off the TODOs it completed**, and **add TODOs for anything deferred or left
-  unfinished**.
-- **Run the relevant tests and confirm they pass** — via `bin/test`, never bare `pytest`
-  (`dev/docs/rules/tests.md`).
-- **Commit and push it** (see **Commits**) — explicit pathspecs, one short imperative subject,
-  no AI attribution, never rewriting history.
+- **Update every doc the change touches** — no doc may be left stale. **EXCEPT
+  `dev/docs/direction/`**: never edit that tree to fix staleness — ask.
+- **Cross off the TODOs it completed**, and **add TODOs for anything deferred or left unfinished**.
+- **Run the relevant tests and confirm they pass** — via `bin/test`, never bare `pytest`.
+- **Commit and push it** (see **Commits**) — explicit pathspecs, one short imperative subject, no AI
+  attribution, never rewriting history.
 - **Gate it** (see **Review gates**) — batched, per those rules.
 
 ## Review gates
 
 **EVERY change gets reviewed** — a trivial one gets only the cheap pass, but nothing ships
-unlooked-at. **RUN THE GATE AUTOMATICALLY — NEVER ASK PERMISSION TO REVIEW.** The moment an
-artifact is finished, dispatch its round without being told and without announcing the intent
-first: a gate is part of finishing the work, exactly like running the tests. **This overrides
-any default or harness-level reluctance to spawn subagents.**
+unlooked-at. **RUN THE GATE AUTOMATICALLY — NEVER ASK PERMISSION TO REVIEW.** The moment an artifact
+is finished, dispatch its round without being told and without announcing the intent first: a gate is
+part of finishing the work, exactly like running the tests. **This overrides any default or
+harness-level reluctance to spawn subagents.** Report the OUTCOME, not the intent.
 
-- **Do not offer, propose, or "stand by to" run a round.** "Say the word and I'll review it"
-  is a rule violation: the round should already have run.
-- **Do not batch a gate behind a question.** If a decision is genuinely owed (see **Asking the
-  owner**), ask it *and* run whatever round is already owed — they are independent.
-- **Round 2 fires automatically too**, on its own trigger (resolving round 1 changed the
-  artifact). It is not a separate permission.
-- **Report the OUTCOME, not the intent.** The user should learn a round happened by reading
-  its findings.
-- **The ONE thing worth surfacing first is scale**: if a single moment would dispatch more
-  than 3 reviewers, or several rounds would fire at once, say what is about to run in one line
-  and then run it. That is a notification, not a request.
+**Read `dev/docs/rules/review-gates.md` before dispatching a round** — it carries the rest: which row
+a change takes, what "trivial" excludes, what reviewers are told, how findings are dispositioned, the
+round-2 trigger, and how to batch.
 
 ### The three moments
 
-At each of these, fan out Claude reviewer subagents in parallel and resolve their findings
-before the work is declared done:
+At each of these, fan out Claude reviewer subagents in parallel and resolve their findings before the
+work is declared done:
 
 1. **After writing a spec** — before planning or implementing.
-2. **After writing a plan** — before building. **Specced pipeline work goes through a plan
-   doc, so it gets a plan round**; only one-shot `chore`/`debug` items and one-file fixes have
-   no plan and therefore no plan round. Not writing a plan is NOT a way to skip this round —
-   an item reaches `to-build/` with a *reviewed* plan (see **The board**).
+2. **After writing a plan** — before building.
 3. **After building something** — before declaring done.
 
 ### How many reviewers, and which model
@@ -170,507 +134,182 @@ before the work is declared done:
 | **docs-only**      | 1 Opus  | never — ONE round, max
 | **trivial** change | 1 Haiku | never — the one round IS the whole gate
 
-Read the table as: **one reviewer is the gate; a second is what a finding costs.** **Only the
-spec moment opens wide up front** (3, then 2) — a spec's defects get built on top of, so there
-breadth is bought before the fact. *(Owner ruling, 2026-07-25.)*
+Read the table as: **one reviewer is the gate; a second is what a finding costs.** **Only the spec
+moment opens wide up front** — a spec's defects get built on top of. *(Owner ruling, 2026-07-25.)*
+**Every reviewer slot outside the trivial tier is Opus** (`Agent(model: "opus")`). That governs
+*which model fills a slot* — the counts and the two-round ceiling are hard.
 
-- **Every reviewer slot outside the trivial tier is Opus** (`Agent(model: "opus")`): inside a
-  bounded gate, one missed defect costs more than the slot. That governs *which model fills a
-  slot* — it is not a licence to add slots or rounds. The counts above and the two-round
-  ceiling are hard.
-- **A round's headcount IS its parallel width** — every reviewer in a round is dispatched in
-  ONE message. This machine runs only ~2 concurrent subagents before the rest queue, so a
-  wider round serialises.
-- **Headcount buys breadth, not depth.** A one-reviewer round *will* miss what a wider one
-  would have caught, because cold reviewers diverge sharply. When that matters, do **not**
-  quietly re-widen a row: give the work a **spec** moment, or escalate to the owner.
+**NEVER restate the reviewer counts outside this file.** A spec, plan, or board item that spells out
+"two cold reviewers" goes stale the moment the gate changes — and it has, repeatedly. Cite
+**`CLAUDE.md` "Review gates"** instead and let the count live in exactly one place.
 
-**NEVER restate the reviewer counts outside this file.** A spec, plan, or board item that
-spells out "two cold reviewers" goes stale the moment the gate changes — and it has,
-repeatedly. Cite **`CLAUDE.md` "Review gates"** instead and let the count live in exactly one
-place.
+### The rules that bind every round
 
-### Which row a change takes
-
-- **`build` is the DEFAULT row for anything non-trivial that is not a spec or a plan** — a
-  code change, a chore sweep, a board reorganisation. "Build" means *work that is finished*,
-  not *code was written*, so no non-trivial change is ever left without a row.
-- **A DOCS-ONLY change gets ONE round, maximum** — no round 2, even when the round produced
-  fixes. Docs-only means it touches no code and no test: `CLAUDE.md`, `dev/docs/*`, `docs/*`,
-  the board. Its failure mode is a stale sentence, not a silent defect. (A **spec** or **plan**
-  is a doc but keeps its own row — those two moments exist precisely to catch a design before
-  it is built.)
-- **The trivial and docs-only rows are TIERS, not moments** — each replaces whichever row the
-  change would otherwise have taken, and neither has a spec or plan round. **A batch takes its
-  least-trivial member's row:** nine doc typos plus one code fix is a build review, not a
-  docs-only or trivial one.
-- **NO Haiku reviewer rides along.** The trivial tier's single `Agent(model: "haiku")` pass is
-  the ONLY place a cheap reviewer appears. Its findings face exactly the same observability
-  test below — a finding is never discounted for having come from the cheap reviewer.
-- **Round 2 is smaller in HEADCOUNT, not in reading.** Its reviewers get the full updated
-  artifact *plus* the diff since round 1 — they are cold, and a finding anywhere in the updated
-  work counts, not just inside that diff. Handing over the diff is not priming; **what round 1
-  found is never disclosed** (see below).
-
-**A trivial change is one that changes no reader's understanding and no tool behavior**: a
-typo, a formatting fix, a comment, a test rename, a broken link.
-
-- **NOT trivial, at any size:** anything that changes what a rule, doc, spec, plan, or
-  engine-fact note *says* — every change to `CLAUDE.md`, `dev/docs/direction/*.md`,
-  `dev/docs/rationale/*.md`, `dev/docs/rules/*.md`, `dev/docs/architecture.md`,
-  `dev/docs/unrealed/*.md`, a spec/plan, or a spike write-up is a real change, because a
-  future agent will act on it.
-- **NOT trivial:** anything that changes what the tool does, deletes anything, or changes
-  executable behavior — including a one-line change to load-bearing code, exactly the case the
-  cheap tier must not swallow. (A comment or a test rename does not change executable
-  behavior; a `help=` string is user-visible output, so rewording one is **docs-only**, not
-  trivial.)
-- **The two NOT-trivial lists WIN over the examples above.** A typo or a broken link inside
-  one of the rule/doc files named above is not trivial just because typos are listed as
-  trivial.
-- **When it is arguable, it is not trivial.**
-- **If the Haiku pass shows the change was not trivial after all**, it is re-gated from
-  scratch at its real tier — the cheap pass does not count as that tier's round 1.
-
-### What reviewers are told
-
-**Reviewers get CONTEXT but never PRIMING.** Only one of the two is forbidden:
-
-- **Context is REQUIRED.** A reviewer who does not know the conventions cannot tell a
-  deliberate choice from a defect. Give every reviewer this `CLAUDE.md`, and for a **plan** or
-  **build** review the spec (and plan) it implements — a build reviewer who has not read the
-  spec cannot check conformance to it.
-- **Priming is FORBIDDEN.** Never show a reviewer the previous round's findings, never say
-  what you expect them to find, never reuse a reviewer from an earlier round. A reviewer told
-  what was already found stops looking for what wasn't.
-
-### What blocks the gate
-
-There is no severity scale — cold reviewers cannot apply one consistently, and a scale invites
-arguing a real finding down a tier. The test is observability:
-
-> A finding may be left standing ONLY if fixing it would change nothing anyone would ever
-> observe — pure wording, formatting, or naming taste.
-
-**A REVIEWER FLAGS ANY DOC THEY CANNOT FULLY UNDERSTAND, OR THAT IS AMBIGUOUS.** That is a
-real finding, not wording taste, and the observability test above does not excuse it: a doc a
-cold reader cannot follow is a doc that will be acted on wrongly. Bloat is the same finding
-from the other side — see **Documentation** below. *(Owner ruling, 2026-07-27.)*
-
-Everything else is **fixed**, **logged** to the board with `bin/board new inbox` and enough
-detail to act on, **escalated to the owner** as an explicit decision, or **refuted** — the
-reviewer asserted something the code or doc does not actually do. A refutation is admissible
-ONLY with the check that disproves it recorded (commit message or board), and a round whose
-findings were all refuted is still a round that happened, with its evidence written down.
-Never waved through because the round was otherwise clean, or because it is pre-existing. A
-finding that is real but out of scope still blocks the round until it is logged — logging is
-what makes deferring legitimate; "noted in chat" is not, because chat scrolls away. **The same
-standard applies to a finding you leave standing**: its stated reason goes in the commit
-message or on the board, never only in chat.
-
-### Two rounds is the ceiling
-
-**TWO ROUNDS IS THE CEILING, and the second one is conditional.** Round 2 exists for exactly
-one reason: **the fixes are themselves unreviewed.** So the trigger is whether the artifact
-CHANGED.
-
-- **Round 2 runs iff resolving round 1 changed the artifact.** If round 1 came back clean, or
-  its findings were all dispositioned WITHOUT touching the artifact — logged to the board,
-  refuted, or escalated — there is no new, unreviewed text to look at, and the gate is passed
-  at round 1. On small changes this is the common case.
-- **"The artifact" = the files under review**, excluding the commit message and an item's
-  **own board bookkeeping**: `dev/docs/board/*/*/overview.md` and
-  `dev/docs/board/*/*/questions/`. Logging a finding to the board is therefore never itself
-  the trigger, even when those files are part of the diff; changing a doc or adding a test to
-  resolve a finding IS. **The exclusion is that narrow on purpose** — a `spec.md` or `plan.md`
-  lives inside its board item too, so excluding the whole board would strip round 2 from every
-  spec and plan review; editing a spec or plan to resolve a round-1 finding is exactly the
-  unreviewed change round 2 exists for.
-- **This is NOT a licence to log instead of fix.** Logging is for a finding that is real but
-  genuinely out of scope for *this* change. Choosing to log an in-scope defect so that round 2
-  never fires is gaming the gate, and the finding's stated reason (which the rule above
-  requires on the board or in the commit message) is exactly where that shows.
-- **Expect round 2 to find NEW things** — a fix can introduce a defect, and cold reviewers
-  diverge. That is normal, not a signal that the ceiling is wrong.
-- **After round 2, the gate is passed.** Anything still standing is **fixed**, **logged** to
-  the board (`bin/board new inbox`), or **escalated to the owner** — all three outlets stay
-  open — and the work is declared done. **There is no round 3.**
-- **A STRUCTURAL finding STOPS the work, in EITHER round.** If a round's findings say the
-  *design* is wrong rather than that a detail is wrong, stop and escalate to the owner. It
-  **replaces** the remaining round — never licenses a third — and it does **NOT pass the
-  gate**: the work is parked, not declared done and not merged, until the owner rules, after
-  which the artifact re-enters the gate at round 1 of its tier. (So a structural escalation is
-  not a cheap "fix-free round 1".)
-
-### Batch small changes into one round
-
-**Don't gate each change separately.** A round costs real tokens, so the unit of review is a
-coherent batch of work, not an individual edit. Reviewers see *more* this way: a batch diff
-exposes inconsistencies between sibling changes that per-change rounds structurally cannot see.
-
-- **Land the batch, then gate it.** Commit each small change as it is finished (per
-  **Commits**) — **pushing deliberately does NOT wait for the gate.** The gate runs over the
-  accumulated range before the batch is declared done, not before each commit.
-- **Flush the open batch** before ending a session, before switching to unrelated work, or as
-  soon as it is large enough to be worth a round — whichever comes first. A batch is never
-  carried across a context boundary, and a lone trivial change with nothing to batch against
-  is gated at that flush.
-- **Split a batch when it stops being reviewable** — when the diff is large enough that a
-  reviewer would skim, or when one risky change would hide among many safe ones. A subtle
-  change to load-bearing code gets its own round even if it is one line; a hundred lines of
-  mechanical rename does not.
-- **Never batch across the three moments.** A spec review, a plan review and a build review
-  are different questions over different artifacts.
+- **`build` is the DEFAULT row** for anything non-trivial that is not a spec or a plan. **A batch
+  takes its least-trivial member's row.** **When it is arguable, it is not trivial.**
+- **Reviewers get CONTEXT but never PRIMING.** Give every reviewer this file, the spec/plan under
+  implementation, and — by path — every doc they must read before acting; a subagent does not inherit
+  your reading. Never show them a previous round's findings, never say what you expect, never reuse a
+  reviewer.
+- **What blocks the gate is observability, not severity:** a finding may be left standing ONLY if
+  fixing it would change nothing anyone would ever observe — pure wording, formatting, or naming
+  taste. Everything else is **fixed**, **logged** (`bin/board new inbox`), **escalated to the owner**,
+  or **refuted** with the disproving check recorded. Never only in chat.
+- **TWO ROUNDS IS THE CEILING**, and round 2 runs iff resolving round 1 **changed the artifact**. It
+  fires automatically on that trigger. There is no round 3.
+- **A STRUCTURAL finding STOPS the work, in EITHER round** — escalate to the owner; the work is
+  parked, not done.
+- **Batch small changes into one round.** Commit as you go; gate the accumulated range before
+  declaring the batch done. Flush the batch before ending a session or switching work. Never batch
+  across the three moments.
+- **Surface scale, once:** if a single moment would dispatch more than 3 reviewers, or several rounds
+  would fire at once, say what is about to run in one line and then run it.
 
 ## Commits
 
-**Commit after every change.** Once a change is complete — code, docs, TODO updates, all of it
-— commit it before moving on, without waiting to be asked. Short imperative subject, no
-`type:` prefix, no AI attribution.
+**Commit after every change.** Once a change is complete — code, docs, TODO updates, all of it —
+commit it before moving on, without waiting to be asked. Short imperative subject, no `type:` prefix,
+no AI attribution.
 
-**COMMIT ONLY YOUR OWN HUNKS — never another session's, unless told to.** File-level pathspecs
-are NOT sufficient: several agents work this repo at once, so a file you edited may ALSO carry
-hunks you did not write, and `git commit -- <path>` commits the whole file including theirs.
+**COMMIT ONLY YOUR OWN HUNKS — never another session's, unless told to.** File-level pathspecs are
+NOT sufficient: several agents work this repo at once, so a file you edited may ALSO carry hunks you
+did not write, and `git commit -- <path>` commits the whole file including theirs.
 
-- **Read `git diff <path>` for every file before committing it**, and satisfy yourself that
-  every hunk is one you made. A file you never touched is obviously not yours; a file you
-  *did* touch is the dangerous case.
+- **Read `git diff <path>` for every file before committing it**, and satisfy yourself that every
+  hunk is one you made. A file you never touched is obviously not yours; a file you *did* touch is
+  the dangerous case.
 - **If a file carries foreign hunks, stage only yours** — write your hunks to a patch and
-  `git apply --cached` it, then commit the index. (`git add -p` is interactive and unavailable
-  in this environment.) Never commit the file wholesale "because most of it is mine".
+  `git apply --cached` it, then commit the index. (`git add -p` is interactive and unavailable here.)
+  Never commit the file wholesale "because most of it is mine".
 - **Never `git add .`, `git add -A` or `git commit -a`.**
-- **Leave what is not yours alone** — do not revert it, do not stage it, do not tidy it. It
-  belongs to a session still working.
-- **Check the index is clean before you stage** (`git diff --cached --quiet`): a non-empty
-  index is another session mid-commit, and anything already staged will ride along on your
-  `git commit`.
+- **Leave what is not yours alone** — do not revert it, stage it, or tidy it. It belongs to a session
+  still working.
+- **Check the index is clean before you stage** (`git diff --cached --quiet`): a non-empty index is
+  another session mid-commit, and anything already staged will ride along on your `git commit`.
 
-The same care applies to `git push` on a shared branch: it publishes every local commit on
-that branch, including other sessions' commits sitting there. That is normally fine and is not
-a reason to skip pushing your own work — but never treat a push as "only my change went out".
+The same care applies to `git push` on a shared branch: it publishes every local commit there,
+including other sessions'. That is normally fine and is not a reason to skip pushing your own work —
+but never treat a push as "only my change went out".
 
-**Always push your work — never lose it.** After committing, `git push` so the work lands on
-the remote and is never stranded only in a local checkout. **NEVER REWRITE HISTORY, locally OR
-on `origin`.** No `git push --force` (or `--force-with-lease`), no `git commit --amend`, no
-`git rebase` that rewrites already-pushed commits. Only ever add new commits on top; mistakes
-are corrected with a fresh commit or a `git revert`.
+**Always push your work — never lose it.** **NEVER REWRITE HISTORY, locally OR on `origin`.** No
+`git push --force` (or `--force-with-lease`), no `git commit --amend`, no `git rebase` that rewrites
+already-pushed commits. Only ever add new commits on top; mistakes are corrected with a fresh commit
+or a `git revert`.
 
-## Feature worktrees
-
-**A FEATURE is built in its own git WORKTREE and squash-merged back into the branch it was
-branched from.** A *worktree* is a second working directory for the same repository, checked
-out on its own branch: the files are separate on disk, the git history is shared, so nothing
-is cloned and nothing is pushed to move work between them. Several agent sessions work this
-repo at the same time, and `git checkout` in the shared checkout would swap the files under
-every other session mid-edit; a worktree cannot. That is also why this process never switches
-the main checkout's branch.
-
-**The base is the branch the main checkout is already on — do NOT ask which branch, and do NOT
-switch it.** That one branch is both the branch-off point and the merge target.
-
-1. **Create it**, from the main checkout (the repo root — this file's own directory):
-
-   ```
-   base=$(git rev-parse --abbrev-ref HEAD)
-   git worktree add .claude/worktrees/<feature-slug> -b <feature-slug> "$base"
-   ```
-
-   `.claude/worktrees/` is gitignored, so the second checkout is invisible to git, ripgrep and
-   the test runners. Never name a worktree `agent-*` — that prefix belongs to Claude Code's own
-   agent isolation. (The harness equivalent is the `EnterWorktree` tool, which creates a
-   worktree in the same directory and moves the session into it. It branches from
-   `origin/<default-branch>` unless the repo's `.claude/settings.json` sets
-   `worktree.baseRef: "head"` — which this repo does, so `EnterWorktree` also branches from the
-   current branch.)
-
-2. **Build the feature in the worktree, committing locally as you go** — **Commits** above
-   applies inside a worktree exactly as it does in the main checkout. A fresh worktree has no
-   `.venv/` (it is gitignored), so the first `bin/test` there pays the venv-creation cost once.
-
-3. **NEVER push the feature branch.** It is squashed away on merge and a remote branch can
-   never be deleted, so pushing one strands permanent dead weight on `origin`. In-progress work
-   is protected by local commits and by the branch being short-lived. This is the one exception
-   to *always push your work* above.
-
-4. **Gate in the worktree, before merging** (see **Review gates**). Reviewers read the
-   worktree's diff against the base: `git diff "$base"...HEAD`. Only a **passed gate** earns
-   the merge — a clean or fix-free round 1, or a resolved round 2. Never a round 3 hunting for
-   a clean sheet.
-
-5. **Squash-merge from the MAIN checkout** — a squash merge must run where the base branch is
-   checked out, which is the main checkout, one more reason not to switch its branch:
-
-   ```
-   git diff --cached --quiet || echo "index dirty — another session staged something; STOP"
-   git merge --squash <feature-slug>
-   git commit -m "<one short imperative subject>"
-   git push
-   ```
-
-   **Check the index first, as above.** `git merge --squash` stages the whole merged result and
-   the following `git commit` commits *everything* staged — including whatever a concurrent
-   session had staged. If the index is not clean, stop and sort that out rather than committing
-   over another session's staged work.
-
-6. **Clean up — but verify before deleting anything.** Confirm the base now contains the work
-   (`git diff <feature-slug> HEAD` prints nothing), then
-   `git worktree remove .claude/worktrees/<feature-slug>`. The branch itself needs
-   `git branch -D`, because `-d` refuses — a squash merge records no merge — and **deleting a
-   branch is destructive, so ask the owner first.** Leaving the local branch costs nothing;
-   never delete it while that `git diff` is non-empty. (`ExitWorktree` with `action: "remove"`
-   is the harness equivalent and needs `discard_changes: true` after a squash merge, for the
-   same reason `-d` refuses — say so plainly when asking, since that flag is what discards the
-   pre-squash commits.)
-
-**A change that is not a feature** — a doc correction, a chore sweep, a one-file fix — needs no
-worktree: it stays on the checked-out branch and follows the batching rules above.
+**A FEATURE is built in its own git worktree and squash-merged back** — read
+`dev/docs/rules/worktrees.md` before creating one or merging one. Two things there are dangerous to
+get wrong from memory: the `git diff --cached --quiet` check before `git merge --squash` (omitting it
+commits over a concurrent session's staged work), and **asking the owner before `git branch -D`**. A
+change that is not a feature — a doc correction, a chore sweep, a one-file fix — needs no worktree.
 
 ## Code & CLI conventions
 
-- **NO BACK-COMPAT CRUFT — uedcli is UNRELEASED.** There are no external users and no scripts
-  in the wild, so nothing is ever kept for backward compatibility. When you remove or rename a
-  flag, verb, option value, output format, or code path, **delete it outright** in the same
-  change that adds the replacement — the new spelling is the only spelling. Never add or keep:
-  a deprecated alias, a no-op flag "so old invocations still work", a migration-error shim (a
-  flag defined only to `parser.error("X was renamed to Y")`), dual-format support kept to avoid
-  re-writing callers, or an "old way" branch in code/tests/docs. Every shim is permanent
-  maintenance surface and a second thing to keep true in the docs.
-  *(`dev/docs/direction/conventions.md` "No back-compat cruft". Superseded only when uedcli is
-  released.)*
+- **NO BACK-COMPAT CRUFT — uedcli is UNRELEASED.** There are no external users and no scripts in the
+  wild, so nothing is ever kept for backward compatibility. When you remove or rename a flag, verb,
+  option value, output format, or code path, **delete it outright** in the same change that adds the
+  replacement — the new spelling is the only spelling. Never add or keep: a deprecated alias, a no-op
+  flag "so old invocations still work", a migration-error shim (a flag defined only to
+  `parser.error("X was renamed to Y")`), dual-format support kept to avoid re-writing callers, or an
+  "old way" branch in code/tests/docs.
+  *(`dev/docs/direction/conventions.md`. Superseded only when uedcli is released.)*
 - **No silent half-answers.** A command that can't fully satisfy a request exits 2 naming the
-  offending value, rather than emitting a partial result plus a stderr warning — stderr scrolls
-  away and the caller takes the partial answer for a complete one.
-  *(`dev/docs/direction/conventions.md` "No silent half-answers, and no fallbacks".)*
+  offending value, rather than emitting a partial result plus a stderr warning — stderr scrolls away
+  and the caller takes the partial answer for a complete one.
 - **Every command and argument needs a `help=` string** that explains what it actually does, so
   `-h`/`--help` is self-explanatory — never just a restatement of the flag name.
-- **Never let a Python exception reach the CLI user.** A bad actor/entity name must raise a
-  clear error naming the offending value (`Actor not found: Foo`) and exit non-zero — never a
-  bare `KeyError`/`IndexError` traceback. Cover each path with a regression test.
-- **Verbs compose — this is the CORE CLI philosophy.** Build small, single-purpose verbs that
-  pipe together; do NOT grow big verbs with many bespoke flags. Concretely:
+- **Never let a Python exception reach the CLI user.** A bad actor/entity name must raise a clear
+  error naming the offending value (`Actor not found: Foo`) and exit non-zero — never a bare
+  `KeyError`/`IndexError` traceback. Cover each path with a regression test.
+- **Verbs compose — this is the CORE CLI philosophy.** Build small, single-purpose verbs that pipe
+  together; do NOT grow big verbs with many bespoke flags. Concretely:
   - **Producer/query verbs print their result to stdout, one item per line** — pipe-friendly
-    (`actor find` prints matching names; `actor add` prints the allocated names; a generator
-    prints a T3D snippet). Human summaries/counts go to **stderr** so they never pollute the
-    pipe. Add **`--json`** where a script needs structured output rather than lines.
+    (`actor find` prints matching names; `actor add` prints the allocated names; a generator prints a
+    T3D snippet). Human summaries/counts go to **stderr** so they never pollute the pipe. Add
+    **`--json`** where a script needs structured output rather than lines.
   - **Mutating/consuming verbs read their target set from stdin via `-`** — so
-    `actor find --folder castle.tower | actor prop set - Texture=…` and
-    `brush build cube | actor add -` close the loop instead of copy-paste / `$(…)`. `-` is the
-    SOLE names source (mutually exclusive with names as CLI args); empty stdin is a clean no-op
-    (exit 0), not an error.
-  - **Two stdin conventions, disambiguated by verb:** a **name list** (`find → mutate -`) vs a
-    **T3D snippet** (`build → add -`). Keep them distinct; don't blur them.
+    `actor find --folder castle.tower | actor prop set - Texture=…` and `brush build cube | actor add -`
+    close the loop instead of copy-paste / `$(…)`. `-` is the SOLE names source (mutually exclusive
+    with names as CLI args); empty stdin is a clean no-op (exit 0), not an error.
+  - **Two stdin conventions, disambiguated by verb:** a **name list** (`find → mutate -`) vs a **T3D
+    snippet** (`build → add -`). Keep them distinct; don't blur them.
   - **A verb over a SET takes the set, and that IS the operation** — pass names (or `-`); the
-    multi-item behaviour needs no extra flag. E.g. `actor bbox <names…>` returns the box
-    enclosing ALL of them, so there is **no `--union`** — `actor find --folder X | actor bbox -`
-    already gives the union. Never add a flag that merely restates "operate on this set."
-  - **Prefer a stateless `find`/query verb** that prints matching names (by folder, class,
-    property, …) for other verbs to consume, over per-command
-    `--only-groups`/`--only-actors` filter flags sprinkled on every verb.
-  - **`find` vs `search` — name by what's queried, never merge them.** `find` = a deterministic
-    query over concrete **T3D-tree state** (actors/polys/brushes that exist in the trunk),
-    producing an exact name/selector set to pipe onward (`actor find`, `brush poly find`).
-    `search` = ranked/fuzzy **discovery over a catalog or corpus** (textures, the asset
-    catalog, docs) — *what exists* by relevance, not a known set (`texture search`; future
-    `catalog search`/`docs search`). *(`dev/docs/direction/conventions.md` "`find` vs
-    `search`".)*
+    multi-item behaviour needs no extra flag. E.g. `actor bbox <names…>` returns the box enclosing ALL
+    of them, so there is **no `--union`**. Never add a flag that merely restates "operate on this set."
+  - **Prefer a stateless `find`/query verb** that prints matching names (by folder, class, property,
+    …) for other verbs to consume, over per-command `--only-groups`/`--only-actors` filter flags
+    sprinkled on every verb.
+  - **`find` vs `search` — name by what's queried, never merge them.** `find` = a deterministic query
+    over concrete **T3D-tree state** (actors/polys/brushes that exist in the trunk), producing an
+    exact name/selector set to pipe onward (`actor find`, `brush poly find`). `search` = ranked/fuzzy
+    **discovery over a catalog or corpus** (textures, the asset catalog, docs) — *what exists* by
+    relevance, not a known set (`texture search`; future `catalog search`/`docs search`).
+    *(`dev/docs/direction/conventions.md`.)*
 
 ## Documentation
 
-### Write it for a stranger, and as succinctly as the meaning allows
+**Read `dev/docs/rules/documentation.md` before writing or restructuring docs** — it carries the
+markdown-table alignment convention, which developer doc owns what, the specs-and-plans-are-ephemeral
+rules, and how UnrealEd facts are cited and confidence-tagged. The four rules below bind everywhere:
 
-**Write every doc for a reader with NO familiarity with the implementation.** Assume the reader
-does not know the code, the substrate, the prior conversation, or the jargon. Define terms
-before using them, spell out the mechanism, and never lean on context the reader doesn't have.
-An explanation that only makes sense if you already know how it works is a bug — rewrite it.
+- **Write every doc for a reader with NO familiarity with the implementation.** Assume the reader
+  does not know the code, the substrate, the prior conversation, or the jargon. Define terms before
+  using them, spell out the mechanism, and never lean on context the reader doesn't have. An
+  explanation that only makes sense if you already know how it works is a bug — rewrite it.
+- **AS SUCCINCT AS THE MEANING ALLOWS — this binds every doc, docstring and comment.** Facts, not
+  bloat; no restating what the previous sentence said, no throat-clearing. **Length is earned by what
+  must be explained.** This does NOT license dropping the context the rule above demands: cut the
+  padding, not the explanation. *(Owner ruling, 2026-07-27.)*
+- **Keep the user-facing docs current with the CLI — not optional.** Whenever a change alters
+  behavior a user can observe — a new verb, a changed flag, different output, a removed feature —
+  update `docs/usage.md` and `docs/leveldesign/` in the same change.
+- **`docs/` is ALL user-facing and must NEVER reference the developer tree** (`dev/docs/`) — a user
+  cannot open a spike, the board, or `architecture.md` and must not be sent there.
 
-**AS SUCCINCT AS THE MEANING ALLOWS — this binds every doc, docstring and comment.** Facts, not
-bloat; no cruft, no restating what the previous sentence said, no throat-clearing. **Length is
-earned by what must be explained** — a doc may be long only when the thing genuinely needs that
-many words, never because more felt safer. This does NOT license dropping the context the
-paragraph above demands: cut the padding, not the explanation. *(Owner ruling, 2026-07-27.)*
-
-### Markdown tables — align for a plain-text editor (vim)
-
-Pad every column to its widest cell
-so the interior pipes line up vertically, **except the final column**: leave its content
-unpadded so a long prose column doesn't spawn huge trailing-whitespace runs or 200+ char lines.
-Separator dashes fill each padded column's width; the final column's separator stays a short
-`---`. (Applies to all docs, not just `dev/docs`.)
-
-### User-facing docs vs the developer tree
-
-**Keep the user-facing docs current with the CLI — this is not optional.** Whenever a change
-alters behavior a user can observe — a new verb, a changed flag, different output, a new
-capability, a removed feature — update the user-facing docs in the same change so they never
-describe a CLI that no longer exists. The user-facing surface is `docs/usage.md` (the CLI
-reference: verbs, flags, output) and `docs/leveldesign/` (level-design craft mapped onto the
-verbs). Add a new doc (or a new section) when a verb or feature is substantial enough that a
-user would look for it and not find it — err toward documenting.
-
-**`docs/` is ALL user-facing; developer docs are a SEPARATE tree** (`dev/docs/`). Everything
-under `docs/` is written for uedcli *users* — the LLM level-designer driving the CLI. The
-developer docs (architecture, direction, rationale, spikes, board, the `unrealed/` engine
-notes, the dev knowledge base at `dev/docs/unrealed/leveldesign/kb/`) are for uedcli
-*developers*, a different audience. **User-facing docs must
-NEVER reference the developer docs** — no links or paths to spikes, the board, architecture,
-etc.: a user cannot open them and must not be sent there. State the fact plainly in the user
-doc instead (with a confidence marker if it's an engine claim), and put the evidence pointer in
-the *developer* doc. Symmetrically, developer docs freely cite spikes and each other.
-
-The whole-tree "which doc is for what" table — authoritative on which doc owns what — lives in
-`dev/docs/README.md`. (`docs/README.md` is itself just the user-facing index.)
-
-### The developer docs split by role — keep each in its lane, and current
-
-- **`architecture.md` + `unrealed/*.md`** — *what IS* (current implementation + verified engine
-  facts). **MUST be updated to match whenever the implementation changes** — no doc may be left
-  describing code that no longer exists or behavior that changed.
-- **`direction/<topic>.md`** — *what the OWNER decided*: product intent AND process rulings.
-  **Revised in place** to state the current answer — no supersession, no dated-entry history
-  (git keeps that). A gap between `direction/` and `architecture.md` is expected (it's work not
-  yet done). **You may NEVER write this tree without their explicit yes** — see **Direction
-  docs** above.
-- **`rationale/<topic>.md`** — *why the CODE is the way it is*: the engineering decisions an
-  agent made (a tolerance, a scope limit, a format choice), keyed by module or subsystem. Also
-  **revised in place**; agents maintain it freely. Every entry states **Why it is this way**,
-  **Rejected** (alternatives killed, so nobody re-proposes them) and **Refs** (spike/code
-  pointers). Point a durable doc here for rationale — never at an ephemeral spec.
-- **an item's `spec.md` + `plan.md`** — ephemeral per-feature scratch (below).
-  **`spikes/`** — durable evidence.
-
-**There is NO decisions ledger.** Nothing is append-only and nothing is superseded — a doc is
-*edited* to say the current answer, and git holds what it used to say.
-
-### Specs and plans are ephemeral; the knowledge must outlive them
-
-**A spec or plan lives INSIDE the board item it belongs to** —
-`dev/docs/board/<stage>/<slug>/spec.md` and `plan.md`, alongside that item's `overview.md`.
-There is no separate specs or plans tree. A few items carry a **second** spec, from work that
-was specced twice or split in two; it is named `spec-<topic>.md`.
-
-**All of them are ephemeral**: scratch for designing and sequencing one piece of work, expected
-to go stale or get deleted once that work lands, and deleted with the item when it is pruned
-from `done/`. They are NEVER the durable record. Once something is implemented, fold what was
-actually built, any design decision made along the way, and the resulting general direction
-into the global docs (`architecture.md`, `unrealed/*.md`, or another `dev/docs/*.md` as fits) —
-so the knowledge survives even if the originating spec/plan is later removed. (`spikes/` is
-different: it's kept as durable evidence, cited from `architecture.md`/`unrealed/quirks.md`.)
-
-**When speccing, record every decision the owner makes** — the choice, the alternatives
-rejected, and the reason — as they make it. A spec must capture what *they* decided, not just
-your proposal; their answers to the design questions are the load-bearing part and must not be
-lost or silently overridden. Because specs are ephemeral, the decision must land in a
-**durable** doc before the spec is deleted:
-
-- **A decision the owner made** → `dev/docs/direction/<topic>.md`, **revised in place** to
-  state the new current answer. Propose the exact wording and wait for their yes (see
-  **Direction docs**). While it waits, park it with
-  `bin/board new inbox '[OWNER — confirm] …'`, carrying the proposed text verbatim, so it
-  survives the session ending.
-- **A decision you made** (an implementation choice) → `dev/docs/rationale/<topic>.md`, revised
-  in place, with its `Rejected` alternatives and its `Refs`.
-
-Never point a durable doc at a spec for "the rationale and rejected alternatives"; point it at
-the owning `direction/` or `rationale/` topic.
-
-**Being ephemeral is why the link checker skips them** — an item's `spec.md` and `plan.md` are
-not checked for dead links or dead citations, *except* under `to-build/`, where someone is
-about to act on them. A second spec named `spec-<topic>.md` does not match that carve-out, so
-it is checked in every stage. (`uedcli/tests/test_doc_links.py`.)
-
-### UnrealEd knowledge
-
-**Always document new learnings about how UnrealEd functions, what our goals are, or
-architectural choices/changes in `dev/docs`.** UnrealEd knowledge is ESPECIALLY important,
-because the public documentation is very lacking and discovering the knowledge is expensive.
-New findings go in `dev/docs/unrealed/` (and back-reference them from code comments).
-
-**Every claim about how UnrealEd behaves carries its evidence.** Cite the `spikes/` file it
-came from, and date any live finding (`confirmed live 2026-06-20`) — the editor is undocumented
-and crash-prone, so an undated, uncited assertion can't be trusted or re-verified later.
-
-**Tag UnrealEd facts in `unrealed/*.md` with a confidence marker:** ✅ = uedcli-used /
-live-verified, 🔬 = live-probed, 📖 = extracted from the binary string table (vocabulary real,
-semantics inferred). Don't state an extracted fact with the certainty of a verified one.
+**Always document new learnings about how UnrealEd functions, our goals, or architectural
+choices/changes in `dev/docs`** — `dev/docs/unrealed/` for engine findings, back-referenced from code
+comments. The public documentation is very lacking and discovering this knowledge is expensive.
 
 ## The board — the backlog, and where findings go
 
 The board is **one directory per work item** (`dev/docs/board/<stage>/<slug>/overview.md`, plus
-optional `spec.md`, `plan.md`, a second `spec-<topic>.md` where one exists, and
-`questions/<q>.md`). The stage queues are named for the *next action* an item needs, and an
-item advances with a single `git mv` into the next stage. Read
-`dev/docs/board/README.md` for the full flow.
+optional `spec.md`, `plan.md` and `questions/<q>.md`). The stage queues are named for the *next
+action* an item needs — `inbox/` (un-triaged capture, including anything you'd flag for the owner) →
+`to-spec/` → `to-spike/` → `to-plan/` → `to-build/` (the reviewed build queue), plus `someday/`,
+`stale/` and `done/`. An item advances with a single `git mv`. **Read `dev/docs/board/README.md`
+before working the board** — stages, frontmatter, slugs, and the question flow.
 
-Two rules bind every session:
+Three rules bind every session:
 
-- **LOG A FINDING WITH `bin/board new inbox '<title>'`.** It creates a valid item and prints
-  its path; write the detail into that `overview.md`. There is no single capture file to append
-  to.
-- **RUN `bin/board answered` AT SESSION START**, and before pulling work off `to-build/`. A
-  question file the owner has answered is invisible otherwise, and the answer is only folded
-  into its durable home (`direction/`/`rationale/`) by an agent who notices it. **The commit
-  that folds an answer out also deletes the question file** — if you find the file already
-  gone, another session has done it; stop.
+- **LOG A FINDING WITH `bin/board new inbox '<title>'`.** It creates a valid item and prints its
+  path; write the detail into that `overview.md`. There is no capture file to append to. Anything
+  that would otherwise live only in chat goes here: a provisional call, an assumption, a risk, a
+  deviation from spec/plan, work you deliberately didn't do. If something gets deferred
+  mid-implementation, file a *separate* item rather than letting the original cover both halves.
+- **RUN `bin/board answered` AT SESSION START**, and before pulling work off `to-build/`. A question
+  the owner has answered is invisible otherwise. **The commit that folds an answer out also deletes
+  the question file** — if you find it already gone, another session has done it; stop.
+- **A question raised mid-pipeline does NOT move its item.** Write it into that item's own
+  `questions/` directory and leave the item in whatever stage it had reached. *(Owner ruling,
+  2026-07-27.)*
 
 `bin/board questions|answered|ls|show|new` — `bin/board --help`. It needs no venv.
 
-### The stages
-
-- `inbox/` — raw, **un-triaged** capture; the pre-pipeline pool AND the head of stream (not a
-  queue). Everything lands here first: ideas/gaps/bugs/chores, **anything you'd flag for the
-  owner** (a provisional call, an assumption, a risk, a deviation from spec/plan, or work you
-  deliberately didn't do — put it here INSTEAD of only saying it in chat, which scrolls away),
-  and **their own open questions**. Triage moves each entry out to the queue for its next
-  action. There is **no separate `flagged`/`to-resolve` lane** — the owner resolves their own
-  items by deleting or triaging them forward (recording any real choice in the owning
-  `dev/docs/direction/` topic).
-- `to-spec/` → `to-spike/` → `to-plan/` → `to-build/` — the pipeline. `to-build/` is the
-  reviewed on-deck **build queue / source of truth** for what to build next.
-- `someday/` — parked; `stale/` — shelved, never deleted; `done/` — a short tail of
-  recently-done + partially-done-with-remnants.
-
-**A question raised mid-pipeline does NOT move its item.** Write the question as a file in that
-item's own `questions/` directory and leave the item exactly where it is, in whatever stage it
-had reached. Bouncing it backwards would shelve finished spec or plan work to record one
-unanswered question, and the item's own directory already shows it is blocked. *(Owner ruling,
-2026-07-27: "NO, not bounced back to inbox. Just add questions entry for those, don't move
-em.")*
-
-**The stage is the DIRECTORY, so nothing else restates it.** The old bracket tags
-(`[spec]`/`[spike]`/`[plan]`) are gone: they said what stage an item was in, which the path now
-says. What survives is the frontmatter `kind`, which is what the path *cannot* say —
-`implement`, `chore`, `debug`, `docs`, `owner-question` or `unknown` — and the frontmatter
-`priority` (`p1`/`p2`/`p3`, or `p?` for not-yet-prioritised).
-
-A `chore` or `debug` item is one-shot: it is filed straight into `to-build/` with no plan, and
-therefore gets no plan review round (this is the distinction **Review gates** relies on to
-decide whether that round fires). An item goes to `to-spike/` only when its spec flags a live
-unknown; the findings fold back into that spec.
-
-When an item is fully finished, `git mv` it to `done/` and trim it to a short reference line —
-don't leave a ticked `[x]` behind. If something gets deferred mid-implementation,
-`bin/board new inbox` a separate item for it rather than letting the original quietly cover
-both the done part and the deferred part.
-
 ## Read-on-demand docs — the router
 
-Only `direction/README.md` (the topic index) is auto-loaded. **Every doc below is NOT in your
-context — you MUST `Read` the relevant one before the action it names.** These one-liners are a
-*router, not a substitute*: never answer a question about UnrealEd behavior, the T3D format,
-uedcli internals, **or a process rule** from this summary or from training memory — the editor
-is undocumented and crash-prone, and these docs are the only ground truth. If a task touches
-any row below and you have not read that doc **this session**, read it first. (The docs
-cross-link each other, so one read surfaces the rest; `dev/docs/README.md` has the full "which
-doc is for what" table.)
+Only `direction/README.md` (the topic index) is auto-loaded. **Every doc below is NOT in your context
+— you MUST `Read` the relevant one before the action it names.** These one-liners are a *router, not
+a substitute*: never answer a question about UnrealEd behavior, the T3D format, uedcli internals,
+**or a process rule** from this summary or from training memory — the editor is undocumented and
+crash-prone, and these docs are the only ground truth. If a task touches any row below and you have
+not read that doc **this session**, read it first. (`dev/docs/README.md` has the full "which doc is
+for what" table.)
 
 **A dispatched subagent does NOT inherit your reading.** When you hand work to a subagent — a
 reviewer, a spike investigator, anything — its prompt MUST name the docs it has to read before
-acting, by path. A subagent that has not read `unrealed/t3d.md` will flag correct T3D handling
-as a bug; one that has not read this file will flag deliberate conventions as defects. The rule
-above ("read the relevant doc before the action it names") binds the subagent too, and only its
-prompt can tell it so.
+acting, by path. A subagent that has not read `unrealed/t3d.md` will flag correct T3D handling as a
+bug; one that has not read this file will flag deliberate conventions as defects.
 
-- **@dev/docs/direction/README.md** — *(auto-loaded, already in context)* the index of what we WANT. **Read the topic doc itself before any design question, spec or plan** — the index is a router, not the content.
+- **@dev/docs/direction/README.md** — *(auto-loaded)* the index of what we WANT. **Read the topic doc itself before any design question, spec or plan** — the index is a router, not the content.
 - `dev/docs/architecture.md` — **Read BEFORE any uedcli code change or design question**: the layer/module map, the model-side write pattern, invariants D1–D8, the session-store shape.
 - `dev/docs/unrealed/commands.md` — **Read BEFORE driving the editor console**: the exec-verb reference (what to type).
 - `dev/docs/unrealed/t3d.md` — **Read BEFORE authoring/parsing T3D or editing surfaces/geometry**: block nesting, property forms, winding, authored-vs-computed taxonomy.
@@ -678,12 +317,15 @@ prompt can tell it so.
 - `dev/docs/unrealed/rendering.md` — **Read BEFORE taking a screenshot/render**: render modes, `CAMERA OPEN`, the black-viewport traps.
 - `dev/docs/unrealed/extracting-from-dll.md` — **Read BEFORE mining the binaries** for command/behavior facts.
 - `dev/docs/parallel-editors.md` — **Read BEFORE running many ephemeral editors** concurrently.
-- `dev/docs/decisions.md` — **FROZEN, historical reading only — never append.** The retired ledger; its entries migrated into `dev/docs/direction/` (the owner's decisions) **and** `dev/docs/rationale/` (yours). `dev/docs/rationale/MIGRATION.md` records where each one went and is the map from an old dated citation to its new home.
-- `dev/docs/direction.md` — **RETIRED, a stub; never append.** All 12 of its topics have migrated to `dev/docs/direction/`; each section is now just a pointer.
+- `dev/docs/decisions.md` — **FROZEN, historical reading only — never append.** The retired ledger; its entries migrated into `dev/docs/direction/` (the owner's decisions) **and** `dev/docs/rationale/` (yours). `dev/docs/rationale/MIGRATION.md` is the map from an old dated citation to its new home.
+- `dev/docs/direction.md` — **RETIRED, a stub; never append.** All 12 topics migrated to `dev/docs/direction/`.
 
-**Process rules** (`dev/docs/rules/README.md` indexes them). Each line carries the one fact you
-cannot afford to miss; the doc carries the rest:
+**Process rules** (`dev/docs/rules/README.md` indexes them). Each line carries the one fact you cannot
+afford to miss; the doc carries the rest:
 
+- `dev/docs/rules/review-gates.md` — **Read BEFORE dispatching a review round.** Which row a change takes, what "trivial" excludes, priming vs context, how findings are dispositioned, the round-2 trigger, batching. **The counts stay in this file, not there.**
+- `dev/docs/rules/documentation.md` — **Read BEFORE writing or restructuring docs.** Table alignment, which dev doc owns what, ephemeral specs/plans, UnrealEd evidence + confidence markers.
+- `dev/docs/rules/worktrees.md` — **Read BEFORE creating a worktree or squash-merging one.** Never push a feature branch; check the index before `git merge --squash`; ask before `git branch -D`.
 - `dev/docs/rules/tests.md` — **Read BEFORE running tests.** Run them via **`bin/test`**, never bare `pytest`; uedcli and its suite are **host-native, not containerised**.
 - `dev/docs/rules/spikes.md` — **Read BEFORE starting or finishing a spike.** Commit the harness to `dev/docs/spikes/<slug>/`, never leave it in `_scratch/`; **pin every checkable finding with a committed regression test** or it rots.
 - `dev/docs/rules/background-work.md` — **Read BEFORE starting a background job or long wait.** Never leave one on a single open-ended wait — the editor wedges *silently*; pair a tracked job with a ~20-minute hang-detector, and never poll on short wake-ups.

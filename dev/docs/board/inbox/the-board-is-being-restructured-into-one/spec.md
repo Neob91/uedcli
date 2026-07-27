@@ -473,7 +473,7 @@ The bare-name set adds **33 files the first census cannot see**, including the *
 | `test_doc_links.py` `_on_deck()` | Reads `board/to-build/` as a file and **fails open** if absent — every ephemeral doc would go unchecked. Delete it **in the `to-build` batch commit**, not later, or the exemption is silently wide for five batches. It has a **second call site** in `test_no_citation_of_a_deleted_doc`, which must take the same shape-based exemption; that test is currently inert (both docs it names still exist), so a green suite will not catch getting it wrong.
 | `_EPHEMERAL` | Becomes a shape test: `board/*/*/spec.md` and `board/*/*/plan.md` exempt **except** under `to-build/`. **This NARROWS coverage and the spec must say so:** today's boundary is "linked from `board/to-build/`", which covers 15 ephemeral files, and §2.13 moves `unified-asset-catalog` and `actor-preview-faces` out of `to-build/` — so **7 currently-checked files lose checking, invisibly**. §8 pins the before/after list.
 | **`dev/docs/decisions.md`** | FROZEN, and carries two *markdown links* into `dev/docs/specs/` (lines 8, 7286) that rule 9 deletes — the suite reddens and the file may not be edited. Exempt those two links in `test_doc_links.py` (a code change, not a doc edit). Its 26 board-path citations are prose; leave them.
-| **`dev/docs/2026-06-20-open-questions-for-andrzej.md`** | The owner's — *do not touch*. 2 prose refs, no markdown links, so nothing reddens.
+| **`dev/docs/2026-06-20-open-questions-for-owner.md`** | The owner's — *do not touch*. 2 prose refs, no markdown links, so nothing reddens.
 | `dev/docs/rationale/MIGRATION.md` | markdown links into `../plans/` and `../specs/` (lines 7-8) — reddens; repoint.
 | **suite scale** | `_checked_docs()` is **270** docs × 3 parametrized tests = 810 of 822 collected. After: ~820 docs → ~2,460 cases. `_anchors()` re-reads targets uncached — memoise if it slows. Measure before/after.
 | `CLAUDE.md` — **cite by text, not line number**, since this change edits the file | the 7 `board/inbox/` mentions; the tag≈queue rule (§2.11 retires it); the bounce-to-inbox rule (§2.13 replaces it); the **"`specs/` + `plans/`" bullet** and the **"`dev/docs/specs/` and `dev/docs/plans/` are ephemeral"** paragraph; **route logged findings through `bin/board new`**; **tell agents to run `bin/board answered`** (§3.6 — without this the owner's answers are never read); **rewrite the `[OWNER — confirm]` parking rule**, which currently mandates parking on `board/inbox/`
@@ -568,7 +568,7 @@ Mechanics (stage names, frontmatter, `bin/board`) stay in `CLAUDE.md` and `board
 - [ ] `bin/board` works, with tests including the bash↔`tomllib` agreement test over every real
       `overview.md`.
 - [ ] The 401 path citations are slug citations, except `decisions.md` and
-      `2026-06-20-open-questions-for-andrzej.md`.
+      `2026-06-20-open-questions-for-owner.md`.
 - [ ] `CLAUDE.md`: round-2 exclusion narrowed; findings routed through `bin/board new`; agents told
       to run `bin/board answered`; the `[OWNER — confirm]` parking rule rewritten; the two
       `specs/`+`plans/` passages updated.
@@ -577,7 +577,7 @@ Mechanics (stage names, frontmatter, `bin/board`) stay in `CLAUDE.md` and `board
       visible rather than silent.
 - [ ] Every file in BOTH censuses of §4.1 — including the repo-root `README.md` — describes the new
       shape. **No tracked file except `decisions.md` (frozen) and
-      `2026-06-20-open-questions-for-andrzej.md` (the owner's) references a deleted board path**,
+      `2026-06-20-open-questions-for-owner.md` (the owner's) references a deleted board path**,
       checked with both census commands.
 - [ ] `dev/docs/rationale/board.md` exists (§6).
 - [ ] §5's two parked items are confirmed and applied, or still parked.

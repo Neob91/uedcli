@@ -77,7 +77,7 @@ test files. **Every one is also edited by Tasks 8–10**, and `uedcli/builders.p
 - [ ] Add a `### Direction docs — NEVER revise without confirmation` section to `CLAUDE.md`,
       immediately before `### Documentation`. Text is quoted verbatim in the spec §2. It must say
       this is a **convention only** — no hook, the trailer is an audit marker — and must name
-      `andrzej.md` and `2026-06-20-open-questions-for-andrzej.md` as untouchable.
+      `owner-notes.md` and `2026-06-20-open-questions-for-owner.md` as untouchable.
 - [ ] In "After every change", add the `direction/` carve-out to the *"no doc may be left stale"*
       bullet. Without it the resident rules simultaneously order and forbid the edit.
 - [ ] In "The dev docs split by role", replace the `direction.md` and `decisions.md` bullets with
@@ -96,7 +96,7 @@ test files. **Every one is also edited by Tasks 8–10**, and `uedcli/builders.p
 **Verify — mechanical, one per checkbox:**
 ```sh
 grep -q 'NEVER revise without confirmation' CLAUDE.md
-grep -q 'andrzej.md' CLAUDE.md
+grep -q 'owner-notes.md' CLAUDE.md
 grep -q 'There is NO decisions ledger' CLAUDE.md   # the routing rule was rewritten
 grep -c 'wholly.*supersed' CLAUDE.md               # -> 0  (pruning rule gone)
 grep -q 'FROZEN' dev/docs/decisions.md             # plain ASCII: the banner has an em-dash

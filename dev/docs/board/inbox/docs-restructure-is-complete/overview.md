@@ -46,6 +46,6 @@ accept; `stash apply`/`prefab apply` mint no batch label though the new rule say
 `dev/docs/README.md`** — replaced with "the owner", pronouns neutral, parking tag `[OWNER —
 confirm]`, trailer `Confirmed:`. It survives in ~20 files outside that scope (frozen
 `decisions.md`, ephemeral specs/plans, board files, `architecture.md`, root `README.md`) and in
-two FILENAMES (`dev/docs/andrzej.md`, `dev/docs/2026-06-20-open-questions-for-andrzej.md`) —
+two FILENAMES (`dev/docs/owner-notes.md`, `dev/docs/2026-06-20-open-questions-for-owner.md`) —
 untouched because the first reads "My own todolist, don't touch". Four commits carry the
 pre-rename `Andrzej-confirmed:` trailer; history is never rewritten, so audit both spellings.
