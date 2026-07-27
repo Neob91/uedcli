@@ -1,0 +1,13 @@
++++
+priority = "p?"
+kind = "docs"
+summary = "all parked here"
++++
+
+# all parked here
+
+Brainstorm features (deferred, 2026-07-16 creative session)
+
+Feature ideas from the "uedcli:creative" capture, triaged 2026-07-19: **all parked here**
+(parametric prefabs **dropped entirely**; semantic texturing **sequenced after** the
+texture-catalog redesign). Pulled back to `inbox.md` when actively picked up.

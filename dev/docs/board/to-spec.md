@@ -510,4 +510,4 @@ truth for what to build next). See [`README.md`](README.md). Tags: `[spec]`/`[im
   `--prop`, no `--mover-class`. Surfaced 2026-07-21 while exercising the preview verbs.
 
 > The former **Backlog — deferred (someday)** section (stash/prefab v1 remnants + other
-> deferred items) moved to [`someday.md`](someday.md), the dedicated parking lane.
+> deferred items) moved to [`someday/`](someday/), the dedicated parking lane.
