@@ -242,7 +242,7 @@ real finding, not wording taste, and the observability test above does not excus
 cold reader cannot follow is a doc that will be acted on wrongly. Bloat is the same finding
 from the other side — see **Documentation** below. *(Owner ruling, 2026-07-27.)*
 
-Everything else is **fixed**, **logged** to `dev/docs/board/inbox.md` with
+Everything else is **fixed**, **logged** to the board with `bin/board new inbox` and
 enough detail to act on, **escalated to the owner** as an explicit decision,
 or **refuted** — the reviewer asserted something the code or doc does not
 actually do. A refutation is admissible ONLY with the check that disproves
@@ -261,7 +261,7 @@ the trigger is whether the artifact CHANGED:
 
 - **Round 2 runs iff resolving round 1 changed the artifact.** If round 1's
   findings were all dispositioned WITHOUT touching the artifact — logged to
-  `dev/docs/board/inbox.md`, refuted, or escalated — there is no new,
+  the board, refuted, or escalated — there is no new,
   unreviewed text to look at, and the gate is passed at round 1. Same when
   round 1 came back clean. On small changes this is the common case and it
   is where most of the gate's cost is saved.
@@ -277,7 +277,7 @@ the trigger is whether the artifact CHANGED:
   reason (which the rule above requires on the board or in the commit
   message) is exactly where that shows.
 - **After round 2, the gate is passed.** Anything still standing is
-  **fixed**, **logged** to `dev/docs/board/inbox.md`, or **escalated to
+  **fixed**, **logged** to the board (`bin/board new inbox`), or **escalated to
   The owner** — all three outlets of the rule above stay open — and the work
   is declared done. There is no round 3: a third round of cold reviewers
   on a twice-fixed artifact buys less than it costs.
@@ -544,7 +544,7 @@ an audit marker, not a gate.
 - **Confirm proactively.** When working in a topic, ask whether its direction
   doc is still current.
 - **A decision awaiting their yes is parked** as an `[OWNER — confirm]` item on
-  `board/inbox.md` carrying the proposed text verbatim.
+  `board/inbox/` carrying the proposed text verbatim.
 - Commits touching `dev/docs/direction/` carry a `Confirmed: <topic>` trailer,
   so `git log --grep='Confirmed' -- dev/docs/direction/` shows every confirmed
   edit and an unconfirmed one stands out on inspection. (Four commits from
@@ -667,7 +667,7 @@ the decision must land in a **durable** doc before the spec is deleted:
 - **A decision I made** → `dev/docs/direction/<topic>.md`, **revised in place**
   to state the new current answer. Propose the exact wording and wait for my
   yes (see **Direction docs** above). While it waits, park it as an
-  `[OWNER — confirm]` item on `board/inbox.md` carrying the proposed text
+  `[OWNER — confirm]` item in `board/inbox/` carrying the proposed text
   verbatim, so it survives the session ending.
 - **A decision you made** (an implementation choice) →
   `dev/docs/rationale/<topic>.md`, revised in place, with its `Rejected`
@@ -740,10 +740,8 @@ The board is migrating from seven big markdown files to **one directory per work
 `dev/docs/specs/2026-07-27-board-per-item-directories.md`). During the migration both shapes
 exist. Two rules apply from now on:
 
-- **LOG A FINDING WITH `bin/board new inbox '<title>'`**, not by appending to `inbox.md`. It
-  creates a valid item and prints its path; write the detail into that `overview.md`. Appending
-  to `inbox.md` during the migration risks the append being discarded when that file is
-  converted.
+- **LOG A FINDING WITH `bin/board new inbox '<title>'`.** It creates a valid item and prints its
+  path; write the detail into that `overview.md`. There is no `inbox.md` to append to any more.
 - **RUN `bin/board answered` AT SESSION START**, and before pulling work off `to-build/`. A
   question file the owner has answered is invisible otherwise, and the answer is only folded
   into its durable home (`direction/`/`rationale/`) by an agent who notices it. **The commit that
@@ -756,10 +754,11 @@ exist. Two rules apply from now on:
 
 The backlog is a set of **stage queues** under `dev/docs/board/`, each named
 for the *next action* an item needs (read `dev/docs/board/README.md` for the
-full flow). An item lives in exactly ONE queue and advances by moving its
-line to the next file:
+full flow). **Each item is a DIRECTORY** — `<stage>/<slug>/overview.md`, plus
+optional `spec.md`, `plan.md` and `questions/<q>.md` — and it advances with a
+single `git mv` into the next stage:
 
-- `inbox.md` — raw, **un-triaged** capture; the pre-pipeline pool AND the
+- `inbox/` — raw, **un-triaged** capture; the pre-pipeline pool AND the
   head of stream (not a queue). Everything lands here first: ideas/gaps/
   bugs/chores, **anything you'd flag for the owner** (a provisional call, an
   assumption, a risk, a deviation from spec/plan, or work you deliberately
@@ -769,17 +768,16 @@ line to the next file:
   here until answered. There is **no separate `flagged`/`to-resolve` lane** —
   The owner resolves their own items by deleting or triaging them forward
   (recording any real choice in the owning `dev/docs/direction/` topic).
-- `to-spec.md` → `to-spike.md` → `to-plan.md` → `to-build.md` — the
-  pipeline. `to-build.md` is the reviewed on-deck **build queue / source
+- `to-spec/` → `to-spike/` → `to-plan/` → `to-build/` — the
+  pipeline. `to-build/` is the reviewed on-deck **build queue / source
   of truth** for what to build next.
-- `done.md` — a short tail of recently-done + partially-done-with-remnants.
-- *(Transitional: the general `[implement]`/`[chore]`/`[debug]` backlog,
-  Active vs Deferred, still sits in `to-spec.md` pending a move to
-  `inbox.md`.)*
+- `someday/` — parked; `stale/` — shelved, never deleted; `done/` — a short
+  tail of recently-done + partially-done-with-remnants.
 
-The **bracket tag ≈ the queue**: `[spec]`→`to-spec`, `[spike]`→`to-spike`,
-`[plan]`→`to-plan`. `[implement]` sits in `to-spec.md`'s backlog until a
-**reviewed plan** lands it on `to-build.md`; `[chore]`/`[debug]` are one-shot
+**The stage is the DIRECTORY, so the bracket tag no longer restates it.**
+`[spec]`/`[spike]`/`[plan]` are retired as tags (each issue gets a plan
+anyway); an item's `kind` is what the path cannot say — `implement`, `chore`,
+`debug`, `docs`, `owner-question` or `unknown`. `[chore]`/`[debug]` are one-shot
 and **stage-less**, so they go straight to `to-build.md` with no plan — and
 therefore no plan review round (this is the distinction **Review gates**
 relies on to decide whether that round fires). `[spike]` is used only when a
