@@ -9,8 +9,9 @@ propagate to it.)
   throwaway, or experimental file** — scratch scripts, **every manual `MAP EXPORT`/`BRUSH
   EXPORT` and preview `.ppm`/`.t3d`**, screenshots, texture dumps, spike output, logs. It is
   gitignored, so nothing there can be committed by accident; organize into subdirs
-  (`_scratch/shots/`, `_scratch/t3d/`, …). **Never write throwaway output into the tracked
-  tree** — not `Temp/`, not `Maps/`, not the repo root. (The session-scratch dir named in the
+  (`_scratch/shots/`, `_scratch/t3d/`, …). **If a throwaway file is not under `_scratch/`, it
+  is in the wrong place — no exceptions.** Never write throwaway output into the tracked tree —
+  not `Temp/`, not `Maps/`, not the repo root. (The session-scratch dir named in the
   environment prompt is fine for files that never need to outlive the session; `_scratch/` is
   the in-repo home.)
 - **`TODO.md` (repo root) holds repo-level, cross-cutting items**; uedcli's own backlog is
@@ -184,6 +185,11 @@ breadth is bought before the fact. *(Owner ruling, 2026-07-25.)*
   would have caught, because cold reviewers diverge sharply. When that matters, do **not**
   quietly re-widen a row: give the work a **spec** moment, or escalate to the owner.
 
+**NEVER restate the reviewer counts outside this file.** A spec, plan, or board item that
+spells out "two cold reviewers" goes stale the moment the gate changes — and it has,
+repeatedly. Cite **`CLAUDE.md` "Review gates"** instead and let the count live in exactly one
+place.
+
 ### Which row a change takes
 
 - **`build` is the DEFAULT row for anything non-trivial that is not a spec or a plan** — a
@@ -278,27 +284,23 @@ CHANGED.
   the trigger, even when those files are part of the diff; changing a doc or adding a test to
   resolve a finding IS. **The exclusion is that narrow on purpose** — a `spec.md` or `plan.md`
   lives inside its board item too, so excluding the whole board would strip round 2 from every
-  spec and plan review, which is exactly the unreviewed change it exists for.
+  spec and plan review; editing a spec or plan to resolve a round-1 finding is exactly the
+  unreviewed change round 2 exists for.
 - **This is NOT a licence to log instead of fix.** Logging is for a finding that is real but
   genuinely out of scope for *this* change. Choosing to log an in-scope defect so that round 2
   never fires is gaming the gate, and the finding's stated reason (which the rule above
   requires on the board or in the commit message) is exactly where that shows.
 - **Expect round 2 to find NEW things** — a fix can introduce a defect, and cold reviewers
   diverge. That is normal, not a signal that the ceiling is wrong.
-- **After round 2, the gate is passed.** Anything still standing is dispositioned exactly as
-  above — fixed, logged, escalated or refuted — and the work is declared done. **There is no
-  round 3.**
+- **After round 2, the gate is passed.** Anything still standing is **fixed**, **logged** to
+  the board (`bin/board new inbox`), or **escalated to the owner** — all three outlets stay
+  open — and the work is declared done. **There is no round 3.**
 - **A STRUCTURAL finding STOPS the work, in EITHER round.** If a round's findings say the
   *design* is wrong rather than that a detail is wrong, stop and escalate to the owner. It
   **replaces** the remaining round — never licenses a third — and it does **NOT pass the
   gate**: the work is parked, not declared done and not merged, until the owner rules, after
   which the artifact re-enters the gate at round 1 of its tier. (So a structural escalation is
   not a cheap "fix-free round 1".)
-
-**NEVER restate the reviewer counts outside this file.** A spec, plan, or board item that
-spells out "two cold reviewers" goes stale the moment the gate changes — and it has,
-repeatedly. Cite **`CLAUDE.md` "Review gates"** instead and let the count live in exactly one
-place.
 
 ### Batch small changes into one round
 
@@ -438,6 +440,7 @@ worktree: it stays on the checked-out branch and follows the batching rules abov
 - **No silent half-answers.** A command that can't fully satisfy a request exits 2 naming the
   offending value, rather than emitting a partial result plus a stderr warning — stderr scrolls
   away and the caller takes the partial answer for a complete one.
+  *(`dev/docs/direction/conventions.md` "No silent half-answers, and no fallbacks".)*
 - **Every command and argument needs a `help=` string** that explains what it actually does, so
   `-h`/`--help` is self-explanatory — never just a restatement of the flag name.
 - **Never let a Python exception reach the CLI user.** A bad actor/entity name must raise a
@@ -486,7 +489,9 @@ earned by what must be explained** — a doc may be long only when the thing gen
 many words, never because more felt safer. This does NOT license dropping the context the
 paragraph above demands: cut the padding, not the explanation. *(Owner ruling, 2026-07-27.)*
 
-**Markdown tables — align for a plain-text editor (vim).** Pad every column to its widest cell
+### Markdown tables — align for a plain-text editor (vim)
+
+Pad every column to its widest cell
 so the interior pipes line up vertically, **except the final column**: leave its content
 unpadded so a long prose column doesn't spawn huge trailing-whitespace runs or 200+ char lines.
 Separator dashes fill each padded column's width; the final column's separator stays a short
@@ -505,7 +510,8 @@ user would look for it and not find it — err toward documenting.
 **`docs/` is ALL user-facing; developer docs are a SEPARATE tree** (`dev/docs/`). Everything
 under `docs/` is written for uedcli *users* — the LLM level-designer driving the CLI. The
 developer docs (architecture, direction, rationale, spikes, board, the `unrealed/` engine
-notes, the dev `kb/`) are for uedcli *developers*, a different audience. **User-facing docs must
+notes, the dev knowledge base at `dev/docs/unrealed/leveldesign/kb/`) are for uedcli
+*developers*, a different audience. **User-facing docs must
 NEVER reference the developer docs** — no links or paths to spikes, the board, architecture,
 etc.: a user cannot open them and must not be sent there. State the fact plainly in the user
 doc instead (with a confidence marker if it's an engine claim), and put the evidence pointer in
@@ -672,7 +678,8 @@ prompt can tell it so.
 - `dev/docs/unrealed/rendering.md` — **Read BEFORE taking a screenshot/render**: render modes, `CAMERA OPEN`, the black-viewport traps.
 - `dev/docs/unrealed/extracting-from-dll.md` — **Read BEFORE mining the binaries** for command/behavior facts.
 - `dev/docs/parallel-editors.md` — **Read BEFORE running many ephemeral editors** concurrently.
-- `dev/docs/decisions.md` and `dev/docs/direction.md` — **FROZEN, historical only; never append to either.** The retired ledger and its retired compiled-target doc; every topic has migrated to `dev/docs/direction/`. `dev/docs/rationale/MIGRATION.md` maps an old dated citation to its new home.
+- `dev/docs/decisions.md` — **FROZEN, historical reading only — never append.** The retired ledger; its entries migrated into `dev/docs/direction/` (the owner's decisions) **and** `dev/docs/rationale/` (yours). `dev/docs/rationale/MIGRATION.md` records where each one went and is the map from an old dated citation to its new home.
+- `dev/docs/direction.md` — **RETIRED, a stub; never append.** All 12 of its topics have migrated to `dev/docs/direction/`; each section is now just a pointer.
 
 **Process rules** (`dev/docs/rules/README.md` indexes them). Each line carries the one fact you
 cannot afford to miss; the doc carries the rest:

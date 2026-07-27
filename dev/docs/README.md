@@ -21,8 +21,8 @@ Every doc has ONE job. Don't mix them up:
 | **[../../docs/usage.md](../../docs/usage.md)** | "How do I use the CLI?" | current commands | tracks the CLI |
 | **[../../docs/leveldesign/](../../docs/leveldesign/README.md)** | "How do I design a **good, buildable level** (with uedcli)?" | user-facing level-design craft | the curated user cut of the dev knowledge base |
 | **[architecture.md](architecture.md)** | "How is it built **now**?" | what IS (implementation) | updated to match whenever the code changes — never stale |
-| **[direction.md](direction.md)** | "What are we building **toward**?" | what we WANT (the compiled target) | reconciled whenever a decision lands; superseded points dropped |
-| **[decisions.md](decisions.md)** | "**Why** is it this way, and what did we reject?" | the ledger of choices (UTC-timestamped) | active decisions never reworded — supersede, don't edit; fully-superseded & spike-"gate" entries may be pruned (git keeps history) |
+| **[direction.md](direction.md)** | nothing — a **retired stub** | all 12 topics migrated to [`direction/`](direction/README.md) | frozen; never append |
+| **[decisions.md](decisions.md)** | "**Why** was it this way, historically?" | the **retired** ledger of choices (UTC-timestamped) | frozen; never append. Entries migrated into `direction/` (the owner's) and `rationale/` (agents'); [`rationale/MIGRATION.md`](rationale/MIGRATION.md) is the map |
 | **[unrealed/](unrealed/README.md)** | "How does **UnrealEd** (the editor) actually behave?" | verified editor-engine facts (✅/🔬/📖) | updated as findings are verified |
 | **[unrealed/t3d.md](unrealed/t3d.md)** | "What is the T3D on-the-wire text format?" | format reference (block nesting, property forms, winding, what T3D can't carry) | updated as format is verified |
 | **[unrealed/texalign.md](unrealed/texalign.md)** | "What does the editor's own `POLY TEXALIGN` do to a surface's texture frame?" | per-mode formulas/guards/anchors, measured; the uedcli diff | updated if the substrate changes |
@@ -39,13 +39,12 @@ Every doc has ONE job. Don't mix them up:
 | **[board/to-build/](board/to-build/)** | "What's reviewed & ready to build *now*?" | the on-deck **build queue / source of truth** → links a plan | living |
 | **[board/done/](board/done/)** | "What landed recently / has deferred remnants?" | short reference tail | living |
 
-A gap between `direction.md` (want) and `architecture.md` (is) is **expected** — it's the work
-not yet done. A gap between a topic doc and the code, or between `direction.md` and the latest
-decision, is a **bug** in the docs.
+A gap between `direction/` (want) and `architecture.md` (is) is **expected** — it's the work
+not yet done. A gap between a topic doc and the code is a **bug** in the docs.
 
-**Context-loading:** in a uedcli agent session only `direction.md` is auto-loaded into context;
-every other doc here (incl. `architecture.md`, `decisions.md`, all `unrealed/*.md`, and all
-`rules/*.md`) is **read-on-demand** — the agent must `Read` it before the task that needs it. The
+**Context-loading:** in a uedcli agent session only `direction/README.md` is auto-loaded into
+context; every other doc here (incl. `architecture.md`, every `direction/` topic, all
+`unrealed/*.md`, and all `rules/*.md`) is **read-on-demand** — the agent must `Read` it before the task that needs it. The
 router that says which doc to read when lives in [`CLAUDE.md`](../../CLAUDE.md)
 ("Read-on-demand docs — the router").
 

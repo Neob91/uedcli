@@ -345,7 +345,7 @@ Plus every `decisions.md`/`direction.md` mention a plain grep does find.
       Task 6 overrides, the `[debug]` item Task 9 fixes. **Not** the concurrency item unless the
       second worktree has actually merged.
 - [ ] **Delete this plan's entry from `board/to-build/`** (added when the plan gate closed).
-- [ ] **Add the short `board/done/` tail entry** — `CLAUDE.md` "TODOs".
+- [ ] **Add the short `board/done/` tail entry** — `CLAUDE.md` "The board".
 - [ ] Delete this plan and the spec.
 
 **Verify:** link checker clean; `bin/test` passes; `docs/` still references nothing under
