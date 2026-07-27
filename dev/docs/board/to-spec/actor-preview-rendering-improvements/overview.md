@@ -8,4 +8,4 @@ summary = "`actor preview` rendering improvements"
 
 — filled faces (back-to-front
 grey alpha compositing for stacked/concentric geometry), depth-sorted, pane captions in a header
-strip (not overlaid). See `specs/2026-06-22-uedcli-brush-preview-improvements-design.md`.
+strip (not overlaid). See `spec.md`.

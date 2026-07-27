@@ -13,4 +13,4 @@ map appearing mid-session isn't picked up until a reboot; (2) the **boot-time as
 `/resources/preview` never enters `Paths`/`r*` (today it's structurally true — leading `p`, farm
 globs only `r*` — so the assertion is belt-and-suspenders). *(The `--map` same-content-different-
 extension clash was FIXED in the review gate — `copied_map` now carries the ext into the stem.)*
-See `specs/2026-07-17-game-preview-warm-container.md`.
+See `spec.md`.

@@ -6,7 +6,7 @@
 
 **Architecture:** `find` already prints matching names to stdout. Add: when the trailing positional `-` is present, read a newline name-list from stdin, strict-resolve it to canonical names (the piped set `P`, the "universe"), and after the full filter chain produces `names`, keep `names ∩ P` (default) or `names ∖ P` (`--exclude`), preserving in-tree order. Pure read-path change in the `find` handler; no model/trunk change.
 
-**Tech Stack:** Python 3.12, argparse (`_CoordArgumentParser`), pytest via `bin/test`. Spec: `dev/docs/specs/2026-07-24-composable-find.md`.
+**Tech Stack:** Python 3.12, argparse (`_CoordArgumentParser`), pytest via `bin/test`. Spec: `plan.md`.
 
 **Decisions locked (spec §7):** grep/universe model; `--exclude` spelling; keep `find -`; unknown piped names are a STRICT all-or-nothing exit 2.
 

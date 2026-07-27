@@ -10,7 +10,7 @@ summary = "Item #10.3 renamed the annotation SELECTION internals but deliberatel
 `DEFAULT_LABELS` became `AnnotationSpec`/`parse_annotation_spec`/`DEFAULT_ANNOTATIONS`, but
 `_LabelItem`, `_PlacedLabel`, `_place_labels`, `_label_size`, `_LABEL_WEIGHTS`, `poly_labels` keep
 "label", on the reasoning that a label there means one concrete text box laid out on the canvas —
-annotations are decided, labels are placed. The `to-build.md` §10.3 spec listed the drawing
+annotations are decided, labels are placed. The `board/to-build/` §10.3 spec listed the drawing
 machinery's prose too and justified the item with "'label' now means two unrelated things in one
 codebase"; under the split a cold reader still meets "label" in `_place_labels` meaning something
 unrelated to `--label`, and the codebase carries four senses in total (preview drawn text, the

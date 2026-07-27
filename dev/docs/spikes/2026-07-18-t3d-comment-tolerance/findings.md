@@ -52,7 +52,7 @@ Use a **bare `// uedcli-folder: <path>` line** as the on-the-wire form of an act
   in the per-actor `folder` **sidecar**, never in the trunk `actor.t3d` body and never in the built
   map — the comment is purely the `show`/`add` interchange encoding.
 
-Folds into: `specs/2026-07-18-actor-folders-hierarchical.md` (resolves review point R6 — `actor show`
+Folds into: board item `actor-folders-hierarchical-actor-organization` (resolves review point R6 — `actor show`
 default output is both importable and folder-carrying), and the durable engine fact in
 `unrealed/t3d.md` "Comments & unknown properties on import".
 

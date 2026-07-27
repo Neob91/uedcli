@@ -4,7 +4,7 @@
 **Date:** 2026-07-15. **Produced autonomously overnight; cold-reviewed (2 reviewers, findings folded,
 § throughout).** **Decisions PROPOSED, NOT yet ratified** — §9 lists the calls this spec asks Andrzej
 to make; until he signs off they are proposals and are **NOT** written into `decisions.md` (flagged in
-`board/inbox.md`). If accepted, they would supersede the "lighting/paths are the second/third long
+`board/inbox/`). If accepted, they would supersede the "lighting/paths are the second/third long
 pole, defer to an optional editor final-bake" disposition of
 `spikes/2026-06-27-decontainerize-uedcli/05-lighting-and-paths.md` — the lighting bake turned out to
 be **1-bit visibility masks, not a light-transport port**, which collapses that long pole.
@@ -16,7 +16,7 @@ be **1-bit visibility masks, not a light-transport port**, which collapses that 
 - Prior proven pieces it builds on: `spikes/2026-06-27-decontainerize-uedcli/03-native-package-write.md`
   (package container, byte-exact), `spikes/2026-06-28-umodel-serialize-byte-exact.md` (`UModel`
   serialize, byte-exact), `07-native-actor-bodies.md` / `10-native-upolys-fpoly.md`,
-  `specs/2026-06-24-uedcli-offline-bsp-engine-design.md` (the D2 CSG design this completes).
+  board item `bsp-issue-ground-truth-detector-d0-d1` (the D2 CSG design this completes).
 - Harness (all in `spikes/2026-07-15-native-materialize/harness/`, reproducible): `verify_csg_build.py`
   (33/33), `lightmap_reconcile.py` (byte format proof), `level_roundtrip.py` (100/100 ULevel),
   `guid_generations.py` (100/100 GUID/gen).
@@ -534,7 +534,7 @@ dictate that discipline — you can pipe bulk arrays over a sidecar too.)
 *Everything else in this spec — the RE, the byte layouts, the pipeline, the CLI, the verification — is
 language-agnostic and unchanged by this decision.*
 
-## 9. Decisions PROPOSED (pending Andrzej sign-off — flagged in `board/inbox.md`; NOT in `decisions.md`)
+## 9. Decisions PROPOSED (pending Andrzej sign-off — flagged in `board/inbox/`; NOT in `decisions.md`)
 
 These are the calls this spec asks Andrzej to make. Per the repo rule "record every decision *I* make,"
 these are recorded here as **proposals** and will be appended to `decisions.md` (with rejected

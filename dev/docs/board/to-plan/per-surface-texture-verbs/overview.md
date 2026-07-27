@@ -40,7 +40,7 @@ they differ in kind, and the review rounds repeatedly found defects at the seams
 which go red, by step. Relaxing one of those to make it pass is how a shipped capability gets lost
 quietly.
 
-**Two `[OWNER — decide]` items are parked on [`inbox.md`](../../inbox/)** and both change how EXISTING
+**Two `[OWNER — decide]` items are parked on [`board/inbox/`](../../inbox/)** and both change how EXISTING
 content renders — a plan should not assume either answer: the `wall`/`floor` guard deletion (a
 double-sided wall that errors today will succeed, mirrored on its back face) and `run`'s V-flip
 (re-aligning any existing cylinder wrap flips its texture vertically). A third, `rotate`'s turn

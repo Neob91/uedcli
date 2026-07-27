@@ -226,7 +226,7 @@ engine-look parity:
   built surf): skip `PF_Invisible` faces only. **Textured `PF_Portal` sheets RENDER like any other
   face** (opaque, v1) — a blanket portal-skip was reviewed and rejected: a water surface is a
   translucent textured portal sheet and IS visible in-game (the repo's own moat water:
-  `inbox.md` "Zone-portal / water authoring", 2026-07-12), so skipping portals would blank every
+  `board/inbox/` "Zone-portal / water authoring", 2026-07-12), so skipping portals would blank every
   water surface. Translucent/masked/modulated render **opaque** in v1 (draft-tier simplification,
   noted in `--help`). *(AI-proposed defaults — flag for review.)*
 - **Movers** are out of world CSG (architecture.md "Mover support"), so they have no BSP surfs.
@@ -281,7 +281,7 @@ SHOT token (names the token); unknown `@actor` (names it); scaled/sheared brush 
 `PostScale`, **or** `SheerRate` non-identity (names the actor + field + the scale-support
 deferral); `BuildError` from the CSG core (surfaces Rust's message); zero-brush trunk ("nothing to
 render"); unwritable `--out-dir`; `--game` ("in-game tier not built yet — see
-specs/2026-07-13-ingame-preview-design.md"); `--map`/`--rebuild`/`--keep-alive`/`--fov` without
+board item `level-preview-game`"); `--map`/`--rebuild`/`--keep-alive`/`--fov` without
 their backend. **A ROTATED brush is NOT an error** (deliberate divergence from materialize's
 identity-rot gate — §4.2); missing texture is a WARNING + checkerboard, not an error (§4.5).
 

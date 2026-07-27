@@ -7,7 +7,7 @@ summary = "`level preview --game` — WARM reusable container + live map deliver
 # `level preview --game` — WARM reusable container + live map delivery
 
 — BUILT + live-verified
-2026-07-17 (spec `specs/2026-07-17-game-preview-warm-container.md`, 4 review rounds; decisions
+2026-07-17 (spec in board item `warm-game-remnants`, 4 review rounds; decisions
 2026-07-17 06:57/07:30/08:31). `--game` now delivers into ONE warm per-user container
 (`uedcli-game-preview-<uid>`, flock + fingerprint-label reuse + inline idle watchdog); map delivery
 is a hash-named (`materialized__…`/`copied__…`, dot-free/lowercased/capped) build written to

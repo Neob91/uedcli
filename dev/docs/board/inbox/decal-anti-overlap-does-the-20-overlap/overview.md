@@ -21,4 +21,4 @@ equivalence does NOT live in `normalize_actor`, and the trunk does NOT store the
 zero-omitted spelling — the trunk stays faithful and the resolution to class defaults happens on the
 throwaway compare view. My repro predated the fix.)_
 
-<!-- ── small-fixes batch build (to-build.md #9, 2026-07-25) ── -->
+<!-- ── small-fixes batch build (the 2026-07-25 small-fixes batch) ── -->

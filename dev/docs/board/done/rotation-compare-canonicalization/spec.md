@@ -100,7 +100,7 @@ Applied to the exact key `Rotation` and nothing else. `RotationRate`/`DesiredRot
 class defaults on 228 classes; the same fold there is *correct in principle* but is **out of scope**
 because uedcli has no producer that writes them in full-member form — the asymmetry cannot arise
 today, and widening the blast radius of a compare-path change without a driving bug is not worth it.
-Filed to `inbox.md` as the general "member-diff every struct prop at compare time" follow-up.
+Filed to `board/inbox/` as the general "member-diff every struct prop at compare time" follow-up.
 
 ### 4.3 Plumbing
 

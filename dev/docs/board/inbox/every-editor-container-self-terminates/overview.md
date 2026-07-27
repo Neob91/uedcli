@@ -23,7 +23,7 @@ the concurrency story":
 > unattached volumes on the next acquire — keyed on having no container attached, never on age,
 > since a legitimate build can outlive any threshold.
 
-Folded into `specs/2026-07-18-warm-editor-materialize.md` decision 8 + §4.5. *(Rejected: host-side
+Folded into board item `resolved-2026-07-26-was-warm-editor-materialize` decision 8 + §4.5. *(Rejected: host-side
 signal handlers as the mechanism — they cannot cover SIGKILL; an age-based sweep as the primary
 mechanism — two legitimate multi-minute builds were in flight among the 8 stranded containers
 observed, and an age threshold would have killed them.)*

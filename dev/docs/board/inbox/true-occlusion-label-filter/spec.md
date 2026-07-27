@@ -157,7 +157,7 @@ everything anyway) and needs no new machinery. **Nothing is deferred or rejected
 
 *True occlusion* (don't label a face whose centroid is hidden behind other geometry) is a **possible
 future refinement** — either tightening `vis` or a new filter — needing a z-buffer/painter pass. It is
-NOT part of this spec and NOT a blocker. Tracked as an optional `[implement] p3` on `inbox.md`.
+NOT part of this spec and NOT a blocker. Tracked as an optional `[implement] p3` on `board/inbox/`.
 
 ### A5. Error cases (all → clean named error, no traceback, exit non-zero)
 
@@ -319,7 +319,7 @@ convert, all of:
   anchor snap.
 - `dev/docs/unrealed/rendering.md` — reconcile any label-placement note.
 - `docs/leveldesign/` — if a preview/label section references `--labels {none,all,highlighted}`.
-- Board: move this item forward; keep the optional `[implement] p3` true-occlusion TODO in `inbox.md`.
+- Board: move this item forward; keep the optional `[implement] p3` true-occlusion TODO in `board/inbox/`.
 
 ## Out of scope
 

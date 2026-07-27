@@ -372,7 +372,7 @@ breaks that test. **Recommend: relocate the mover-blob canonicalizer to `movers.
 anyway), re-point `test_movers.py`'s import there, then **delete `uedcli/tree_io.py`**, update/remove
 `test_apply.py::test_read_state_dir_round_trips_…`, and drop the `surface.py:30` comment reference.
 If deletion feels too aggressive for one PR, leave `tree_io.py` with a `# DEAD except the mover
-helper` banner and remove in a follow-up noted in `board/inbox.md`.
+helper` banner and remove in a follow-up noted in `board/inbox/`.
 
 ---
 

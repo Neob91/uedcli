@@ -17,9 +17,9 @@ dimensions now rejected by the guard (`<= 0` waves NaN through); the enforcement
 "required float flags" to "every float flag, minus an explicit angle allow-list" (a dimension with
 a DEFAULT was invisible to it) and the three places that overstated it corrected; `README.md`'s
 `--png` quickstart and its retired dev-container claim; five stale test names/comments; dead
-`single=`/`zoom=`/`zoom_region=`/`format=` kwargs in two test files; two `inbox.md` items this
+`single=`/`zoom=`/`zoom_region=`/`format=` kwargs in two test files; two `board/inbox/` items this
 change completed or obsoleted; the 2026-07-22 ledger claim that the annotation internals "stay
-label-named" (superseded, not reworded). **Logged** to `inbox.md`: two ANDRZEJ-decide items (guard
+label-named" (superseded, not reworded). **Logged** to `board/inbox/`: two ANDRZEJ-decide items (guard
 layer placement; the partial 10.3 rename), the pre-existing `test_zoom_does_not_highlight`
 weakness, and the red intermediate commit. The Haiku reviewer returned no findings but misreported
 the suite counts and cited spec line numbers as if read from the file — treated as low-confidence.

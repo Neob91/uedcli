@@ -12,7 +12,7 @@ pitch/yaw/roll maps to which world axis (undocumented; see the orientation doc g
 `--axis x|y|z` builds the cross-section normal along that axis directly, emitting **no `Rotation`
 field** — so the common horizontal-pipe case needs no `--rotate` and the obvious first attempt just
 works.
-**NAMING IS ALREADY SETTLED — adopt it, don't re-litigate:** `specs/2026-07-25-brush-profile-generators.md`
+**NAMING IS ALREADY SETTLED — adopt it, don't re-litigate:** board item `brush-build-cylinder-cone-sides-has-no-upper`
 §2.2 (`decisions.md` 2026-07-25 00:14 UTC D3) defines `--axis x|y|z` on the new `extrude`/`revolve`
 generators as "the axis the profile plane is normal to", with the `(u,v)` → world mapping fixed by
 right-handed cyclic order (`z`→X,Y; `x`→Y,Z; `y`→Z,X). Use that same flag name, semantics and table

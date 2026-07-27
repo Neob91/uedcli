@@ -201,7 +201,7 @@ editing level 'castle' (from $UEDCLI_LEVEL)
   example → `export UEDCLI_LEVEL=…` / `--tree`.
 - **Docstrings** — `_resolve_level_source` (dispatch.py:1261) and `_target_flag`→`_tree_flag`
   (cli.py:154-162) both narrate the pointer model; rewrite both (add to the sweep by name).
-- **`board/`** — driving inbox/to-spec item → `done.md`; any deferred remnant → a new line.
+- **`board/`** — driving inbox/to-spec item → `board/done/`; any deferred remnant → a new line.
 - Stale `plans/`/`specs/`/`reviews/` are ephemeral — not retro-edited except where actively
   misleading.
 

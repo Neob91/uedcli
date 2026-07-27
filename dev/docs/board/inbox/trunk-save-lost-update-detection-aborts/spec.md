@@ -269,7 +269,7 @@ regression — the sequential in-process tests above would also pass a TOCTOU-ou
 ## 6. Out of scope (logged, not done here)
 
 - **Whole-save abort granularity / theoretical livelock** — a large batched pipeline aborts the whole save
-  if one target raced; recoverable (stateless re-run) but coarse. **Logged to `inbox.md`** as a known
+  if one target raced; recoverable (stateless re-run) but coarse. **Logged to `board/inbox/`** as a known
   tradeoff. A finer "write the non-conflicting subset, report conflicts" mode is a possible future refine.
 - Three-way merge (git's job); locking reads (stay lock-free); the other review findings (chore batch +
   Spec C).

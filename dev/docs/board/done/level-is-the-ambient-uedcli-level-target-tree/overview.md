@@ -15,7 +15,7 @@ env > clean exit-2 naming both set-methods). `--target KIND/NAME` renamed `--tre
 everywhere and extended to `level materialize`/`preview` (level-kind only). A **mutating** verb
 resolved from the env echoes `editing level 'X' (from $UEDCLI_LEVEL)` to stderr (at
 `TrunkLevelSource.save`), the visibility guard against a stale export. Spec
-`specs/2026-07-20-tree-flag-and-env-level.md`; decisions 2026-07-20 21:30 UTC (supersedes 2026-07-05
+`spec.md`; decisions 2026-07-20 21:30 UTC (supersedes 2026-07-05
 19:07/19:28). Suite-wide test sweep (`test_tree_flag.py`, env-based `test_level_select.py`,
 `set_selected`→`monkeypatch.setenv`). **Remnant:** the p2 `level delete/rename/clone` spec item
 (to-spec) still references "retarget the selected pointer" — reword to `$UEDCLI_LEVEL` when specced.

@@ -1,10 +1,10 @@
 +++
 priority = "p3"
 kind = "chore"
-summary = "The two zero-caller `canonicalize_mover*` helpers DELETED — two `inbox.md` entries CLOSED 2026-07-25"
+summary = "The two zero-caller `canonicalize_mover*` helpers DELETED — two `board/inbox/` entries CLOSED 2026-07-25"
 +++
 
-# The two zero-caller `canonicalize_mover*` helpers DELETED — two `inbox.md` entries CLOSED 2026-07-25
+# The two zero-caller `canonicalize_mover*` helpers DELETED — two `board/inbox/` entries CLOSED 2026-07-25
 
 (the dedicated one and the older `canonicalize_mover_blob` duplicate).
 `canonicalize_movers_in_level` and `canonicalize_mover_blob` had no production caller — the latter

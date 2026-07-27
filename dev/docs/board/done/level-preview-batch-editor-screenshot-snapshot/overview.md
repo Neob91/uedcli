@@ -13,7 +13,7 @@ rotation presets + `--out-dir`/`--mode`; per-command ephemeral editor grouped by
 per mode via a full-window `[U2Viewport2] RendMap`/ShowFlags ini override); per shot: `CAMERA
 ALIGN` pose → `ACTOR SELECT NONE` → `wmctrl` sweep → click-repaint → `driver.screenshot` → chrome
 crop `(104,92,1596,1104)`. Modes shaded/lit/wire/zones/polys/skybox (radii deferred — ShowActors
-enum value TBD, see the `level preview` modes item in `inbox.md`). **Replaces the old VNC `level preview --rotate` handoff.** Two
+enum value TBD, see the `level preview` modes item in `board/inbox/`). **Replaces the old VNC `level preview --rotate` handoff.** Two
 live-boot bugs found + fixed along the way: the override-ini bind source must be daemon-visible
 (`.uedcli/tmp/`, not the sandbox-private `/tmp`), and `_wait_ready` must require a resolved
 `window=<id>` (not the transient `window=<unresolved>` line). Recipe: `unrealed/rendering.md`

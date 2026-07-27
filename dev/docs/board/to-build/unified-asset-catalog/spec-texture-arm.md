@@ -8,7 +8,7 @@ destroys authored work and cannot be corrected without an explicit migration.
 
 > **Part of the split asset-catalog spec set** (split 2026-07-26 after two spec-gate rounds returned
 > ~103 findings and the churn proved to be concentrated in the texture and audio arms — see
-> `board/inbox.md`). The shared engine, storage layout, verb surface, decisions and prerequisites live in
+> `board/inbox/`). The shared engine, storage layout, verb surface, decisions and prerequisites live in
 > **[`2026-07-26-asset-catalog-engine.md`](spec.md)**, which every arm depends
 > on and which is built first. Sibling arms:
 > class (board item `the-asset-catalog-class-arm-needs-four-changes`) ·
@@ -183,7 +183,7 @@ the same digest doubles as the preview artifact's content address (§3a) with no
 **ONLY PIXELS ARE HASHED.** *(Owner ruling, 2026-07-26, resolving a structural gate finding.)* The
 digest covers `(w, h, RGB)` and **nothing else** — in particular the **transparency mask is NOT part of
 identity**, even though the decode path returns one (`utexture.TextureResolver.resolve_masked()` yields
-`(w, h, rgb, mask)`, and the gated `specs/2026-07-25-native-texture-formats.md` §8-D derives the mask
+`(w, h, rgb, mask)`, and the gated board item `three-design-calls-the-native-texture-formats` §8-D derives the mask
 from pixel data: P8 index-0, BC1 punch-through, BC2/BC3 block alpha).
 
 Two consequences follow, and **both are binding**, because §3a addresses the preview artifact by this
@@ -245,7 +245,7 @@ Two corollaries worth stating, because they are easy to get backwards:
 
 A **procedural** texture stores **no pixels**: measured, every `FireTexture`, `WetTexture`,
 `WaveTexture`, `IceTexture` and `ScriptedTexture` carries mips whose `DataCount == 0`
-(208 + 42 + 14 + 8 + 50 + 4 across the Deus Ex tree — `specs/2026-07-25-native-texture-formats.md`).
+(208 + 42 + 14 + 8 + 50 + 4 across the Deus Ex tree — board item `three-design-calls-the-native-texture-formats`).
 Its pixels are **generated at runtime from its stored parameters**. So the pixel hash of §3b has
 nothing to bite on, and an earlier draft's consequence — that water and fire are enumerable but
 *permanently unclassifiable* — is rejected.
@@ -395,7 +395,7 @@ as holes **on any surface, with no surface flag set at all**.
   cost. It is the only thing that distinguishes a graded-alpha texture (BC2/BC3, 10 measured here) from its
   opaque twin, since identity is pixels-only and they share one identity and one opaque preview. Without it
   they are indistinguishable — and identity is frozen, so it cannot be added to the key later. The sibling
-  `specs/2026-07-25-native-texture-formats.md` §8-D already reports it, so the read is available.
+  board item `three-design-calls-the-native-texture-formats` §8-D already reports it, so the read is available.
 - `texture show` prints it; `--json` carries it; **`texture list --masked` / `search --masked`** filter
   on it (added to §5's per-kind filters).
 - It is a **fact, not a classification**: not LLM-overridable, no tracked shard.

@@ -1,6 +1,6 @@
 # Partial struct/array values: import is MEMBER-WISE onto the CLASS DEFAULT (live 2026-07-18)
 
-**Question** (spec `specs/2026-07-18-actor-prop-subcommands.md` §9): when a stored T3D property
+**Question** (spec in board item `materialize-post-verify-fails-when-the-trunk` §9): when a stored T3D property
 value mentions only SOME members of a struct (`RotationRate=(Yaw=1234)`) or only some elements
 of a static array (`InitialInventory(1)=…`), what do the UNMENTIONED members/elements become
 when the editor imports it — the type's **zero**, or the **class default**?
@@ -36,7 +36,7 @@ Three Rats were `MAP IMPORTADD`ed into an ephemeral editor and `MAP EXPORT`ed ba
 - **Export is member-precise default-diffing**: `MAP EXPORT` omits a whole property equal to
   the class default AND omits individual struct members equal to the default member. This is
   the exact mechanism behind the open p2 item "materialize post-verify fails when the trunk
-  stores a prop equal to its class default" (board/inbox.md) — now pinned to member
+  stores a prop equal to its class default" (board/inbox/) — now pinned to member
   granularity.
 
 Recorded in `unrealed/t3d.md` ("Partial struct/array property values"). Probe harness:

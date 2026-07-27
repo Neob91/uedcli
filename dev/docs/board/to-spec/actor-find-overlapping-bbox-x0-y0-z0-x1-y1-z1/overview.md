@@ -14,5 +14,5 @@ straddles the box edge IS grabbed — better for "show me everything in this are
 `writes.actor_bounds` in the dispatch find handler; reuse `parse_bbox`. Spec: the flag name/semantics,
 whether it and `--within-bbox` can co-exist (they're distinct predicates, both single-valued), and the
 L-brush AABB false-positive caveat (documented, not fixed — that's the `--precise`/`--within-brush`
-follow-up in the parked `specs/2026-07-24-find-spatial.md`). Deferred from the `--within-bbox` build per
+follow-up in the parked board item `find-relational-predicates`). Deferred from the `--within-bbox` build per
 Andrzej. (2026-07-24.)

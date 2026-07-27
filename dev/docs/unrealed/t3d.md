@@ -337,7 +337,7 @@ orientation an actor did not have).
 and that one runs on the map-INGEST path, into the durable trunk), and the not-yet-wired
 `native/materialize.py` (a zero `Location`). Measured harmless today — no `Engine.Mover` subclass
 defaults `NumKeys`/`KeyPos`/`KeyRot`, and the only class defaulting `Rotation` is not a mover — and
-filed on `board/inbox.md` rather than changed here, because rewriting mover keyframe emission would
+filed on `board/inbox/` rather than changed here, because rewriting mover keyframe emission would
 churn every mover trunk on disk for a currently-unreachable case.
 
 **A POLYGON SUB-FIELD is outside this rule, and IS omitted when zero.** The rule above is about

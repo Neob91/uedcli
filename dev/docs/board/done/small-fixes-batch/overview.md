@@ -1,10 +1,10 @@
 +++
 priority = "p?"
 kind = "unknown"
-summary = "Small fixes batch — five of `to-build.md` #9 BUILT 2026-07-25"
+summary = "Small fixes batch — five of `board/to-build/` #9 BUILT 2026-07-25"
 +++
 
-# Small fixes batch — five of `to-build.md` #9 BUILT 2026-07-25
+# Small fixes batch — five of `board/to-build/` #9 BUILT 2026-07-25
 
 (one commit each; 9.4, the
 schema-aware `mover key` gate, landed separately — see the entry above).
@@ -32,4 +32,4 @@ now sits in the spikes tree and self-inserts its sibling harness on `sys.path`. 
 tests skipped would have deleted real coverage of the "pawn falls through the floor" bug, so
 instead `_load_line_check()` now turns a harness-side `ImportError` into a SKIP naming the spike
 env while letting a `uedcli` `ImportError` propagate (a real regression must stay red). Flagged on
-`inbox.md` for Andrzej.
+`board/inbox/` for Andrzej.

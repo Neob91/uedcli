@@ -1,10 +1,10 @@
 +++
 priority = "p3"
 kind = "chore"
-summary = "Three #9.4 documentation claims corrected — `inbox.md` CLOSED 2026-07-25"
+summary = "Three #9.4 documentation claims corrected — `board/inbox/` CLOSED 2026-07-25"
 +++
 
-# Three #9.4 documentation claims corrected — `inbox.md` CLOSED 2026-07-25
+# Three #9.4 documentation claims corrected — `board/inbox/` CLOSED 2026-07-25
 
 (a) `architecture.md` said a bare class name resolves as an OR ("a mover if ANY candidate
 descends"); the code requires the candidates to AGREE and raises `ClassRefError` on a split.

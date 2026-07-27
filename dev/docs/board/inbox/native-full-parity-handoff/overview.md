@@ -20,7 +20,7 @@ The body below is the handoff verbatim.
 > **collision hulls** (`LeafHulls`/`iCollisionBound`), not because of zones. Porting the editor's
 > `bspBuildBounds` made `NativeCastle` PLAYABLE (`phys=1`, `uplayctl shot` renders the castle
 > first-person — `_scratch/shots/native_castle_playable.png`). See `decisions.md` 2026-07-16 15:20
-> UTC, the board entry in `inbox.md`, `sections/70-zones-portalization.md` (zones fully RE'd, now a
+> UTC, the board entry in `board/inbox/`, `sections/70-zones-portalization.md` (zones fully RE'd, now a
 > parity-only slice), and `re-raw-zones/linecheck-oracle.md` (the root-cause decode). Zones/side-pool
 > /render-bounds/node-flags remain for byte-parity but are NOT needed for a walkable map. Read the
 > sections below only for the (still-valid) RE pointers and tooling gotchas, not the diagnosis.
@@ -184,7 +184,7 @@ native `.dx` vs `Test_Castle.dx` for leaf/zone MEMBERSHIP parity.
 - **Assembly:** `uedcli/native/assemble.py` (add a zone-actor-ref patch like `_patch_light_refs`),
   `umodel.py` (Model struct + serialize/parse; zones at `write_model_body`), `materialize.py`
   (`run_materialize_native`, `pkg_dirs`).
-- **RE docs:** design spec `dev/docs/specs/2026-07-15-native-materialize-design.md` §10.8 (zones scope);
+- **RE docs:** design spec in board item `native-level-materialize` §10.8 (zones scope);
   spike `sections/60-leaf-solidity-collision.md` (leaf/collision, engine descent), `50-...` (on-disk
   FBspNode/Leaf/Zone layout), `10-bsp-csg-build.md` (CSG/BSP).
 - **RE harness:** `spikes/2026-07-15-native-materialize/harness/`: `leaf_dump_nodes.py`,

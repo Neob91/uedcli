@@ -1,7 +1,7 @@
 # Spike: extracting a class's property set offline (for prop-name validation)
 
 **Date:** 2026-06-26 · **Status:** RESOLVED — feasible, recommended approach below.
-**Question (board `to-spike.md`):** Can uedcli obtain an actor class's full set of legal
+**Question (board `board/to-spike/`):** Can uedcli obtain an actor class's full set of legal
 properties offline, so `actor prop`/`actor build --prop` can ERROR on an invalid property name
 instead of accepting unknown keys opaquely? We suspected we'd "have to read the packages."
 
@@ -238,6 +238,6 @@ v69), the property-type set is a closed 11. The build effort is: (a) an export-t
 known-type set as hard invariants), (b) a per-package class-property cache + ancestor-chain
 resolution (cross-package via the import table), (c) the **no-fallback** policy — error on an unknown
 prop or an unbuildable schema (no bypass), normalize key casing to the `.u` spelling. The
-UCC decompile is a dev/test oracle only, not required at runtime. **Ready to triage → `to-spec.md`**
+UCC decompile is a dev/test oracle only, not required at runtime. **Ready to triage → `board/to-spec/`**
 (name validation + canonical-casing v1; array-bounds + typed/enum as flagged follow-ups needing
 `UProperty` body decoding).

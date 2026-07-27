@@ -87,7 +87,7 @@ What does it do for point actors vs brushes?
 
 **Implication:** `select_by_name`'s box-trick is dead code for point actors. For point-actor
 delete/identify, prefer `SELECTNAME NAME=<name>` + `ACTOR DELETE`. See the
-`[spike→implement]` TODO in `board/to-spec.md`.
+`[spike→implement]` TODO in `board/to-spec/`.
 
 ---
 
@@ -174,7 +174,7 @@ programmatically?
 **Verdict (partial):** `LSTAT LEVEL` + `MAP REBUILD` warning scraping are the usable feedback
 channels. `LEVEL VALIDATE` is GUI-only and unextractable headlessly. The BSP-error/leak
 surfacing question from the old spike (detecting leaks) was NOT further investigated here —
-deferred as "Skip for now" in `board/to-spec.md`.
+deferred as "Skip for now" in `board/to-spec/`.
 
 ---
 
@@ -279,7 +279,7 @@ here for completeness and for any future live-editor manipulation use.
 
 ## Q6 — Throwaway light for `CAMERA ALIGN`: Group tag + `LightBrightness=0`
 
-**Question (Andrzej — was to-resolve #6, now in `inbox.md`):** The helper light imported for `CAMERA ALIGN` (the
+**Question (Andrzej — was to-resolve #6, now in `board/inbox/`):** The helper light imported for `CAMERA ALIGN` (the
 camera rotation hack) — should it be tagged so we can detect it if it leaks? And does
 `LightBrightness=0` make it invisible?
 
@@ -339,7 +339,7 @@ check that both properties survive round-trip.
 
 ## Q20 — Symlink support for DeusEx assets
 
-**Question (Andrzej — was to-resolve #20, now in `inbox.md`):** Should we support symlinking the DeusEx assets
+**Question (Andrzej — was to-resolve #20, now in `board/inbox/`):** Should we support symlinking the DeusEx assets
 directory?
 
 **Analysis:**
@@ -361,7 +361,7 @@ This is a small `[implement]` task (shell script change), not a spike.
 
 ## p3 — Package version 61 name-table format
 
-**Question (board/to-spec.md):** The five content packages `CoreTexDetail`/`CoreTexWater`/`Palettes`/
+**Question (board/to-spec/):** The five content packages `CoreTexDetail`/`CoreTexWater`/`Palettes`/
 `Render`/`TITAN` are package version 61. `dxpkg.parse_header` rejected them, so
 `transitive_closure` couldn't see their own further deps. What is the actual format? Is it
 parseable, or should it stay a documented blind spot?
@@ -417,7 +417,7 @@ forged v61 headers (now use version 70 as the unsupported stand-in).
 
 ## Spike 9 — ACTOR property-set: is there a console verb?
 
-**Question (board/to-spec.md `[spike→implement]`):** Does `SELECTNAME` + `ACTOR SET` round-trip
+**Question (board/to-spec/ `[spike→implement]`):** Does `SELECTNAME` + `ACTOR SET` round-trip
 for point actors? (The `SELECTNAME` glob/exact-match half of this question is answered by
 **Spike 3** above — exact match only, no globs; independently re-confirmed here. This spike
 covers only the open half: whether any console verb can SET an actor property.)

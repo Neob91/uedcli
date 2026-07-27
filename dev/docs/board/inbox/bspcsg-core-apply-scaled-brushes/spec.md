@@ -254,9 +254,9 @@ integration-gated — `CLAUDE.md` "Background/long-running work", `pytest.ini`):
   placement is generator-side (`--at`) or a later `actor move`.
 - **Scaled source brushes are REJECTED** — inherited from `build_geometry_bspcsg` (`bspcsg.rs:2064`), which
   errors on non-identity `MainScale`/`PostScale`. This is a **pre-existing gap in the bspcsg core**, NOT
-  intersect-specific: the older coarse `build_geometry` core DOES apply scale (built 2026-07-19, `done.md`),
+  intersect-specific: the older coarse `build_geometry` core DOES apply scale (built 2026-07-19, `board/done/`),
   but the port into the incremental bspcsg core is a separate deferred workstream — **tracked as its own
-  prioritized board item** (`inbox.md`, "bspcsg core: apply scaled brushes"). Until then the verb surfaces a
+  prioritized board item** (`board/inbox/`, "bspcsg core: apply scaled brushes"). Until then the verb surfaces a
   clear error naming the offending actor and suggesting `brush apply-transform` to bake the scale first — it
   does NOT silently mis-handle it. (The deferral is legitimate — a cross-cutting core feature that also gates
   bspcsg materialize of scaled maps — hence the board item rather than a silent punt.)

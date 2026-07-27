@@ -4,7 +4,7 @@
 
 **Authorities:** `decisions.md` `2026-07-18 23:01 UTC — INVARIANT: stash, prefab, and trunk MUST
 share ONE T3D tree format` + its `(addendum) — unify-T3D-trees sub-choices`; spec
-`specs/2026-07-18-unify-t3d-trees.md` (the blueprint), overridden on TWO Andrzej-decided points
+`spec.md` (the blueprint), overridden on TWO Andrzej-decided points
 below.
 
 ## Reconciliation of the spec's "Open sub-choices" to the DECIDED answers

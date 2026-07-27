@@ -21,7 +21,7 @@ strip trunk props equal to the default on BOTH sides before hashing. NOT done he
 call on approach, and guessing "looks default" (e.g. any `=0`) risks erasing meaningful explicit
 values. Also: the castle build helper should stop emitting default-valued Light props in the
 first place. **Update 2026-07-18:** the missing class-default-VALUE capability is being built by
-the `actor prop` subcommands work (spec `specs/2026-07-18-actor-prop-subcommands.md` §5 — offline
+the `actor prop` subcommands work (spec `spec.md` §5 — offline
 binary defaults decode, a third route beating both (a) and (b)); Andrzej decided (decisions.md
 2026-07-18 10:02 §11) this verify fix stays a SEPARATE item that consumes that capability once it
 lands.

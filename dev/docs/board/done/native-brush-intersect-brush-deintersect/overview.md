@@ -19,5 +19,5 @@ brushes, nested and disjoint voids, thin/rotated/off-grid geometry). Landing it 
 CORE bug it uncovered: the repartition left every node `NF_IsNew`, so semisolid/nonsolid detail
 brushes were silently dropped from the world (`level materialize` too) — see `decisions.md`
 2026-07-25. Two cold reviews resolved. Spec
-`specs/2026-07-24-intersect-deintersect-native-brushset.md` (its §4 claim that the editor's
+board item `bspcsg-core-apply-scaled-brushes` (its §4 claim that the editor's
 wrap/builder are DIFFERENT boxes is corrected — `decisions.md` 2026-07-25).

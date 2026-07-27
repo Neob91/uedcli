@@ -6,7 +6,7 @@ summary = "`uedcli docs list|show|search` — SHIPPED, with the packaging half d
 
 # `uedcli docs list|show|search` — SHIPPED, with the packaging half deliberately deferred
 
-(2026-07-26, was item 11 on `to-build.md`; spec `dev/docs/specs/2026-07-24-docs-command.md`, which
+(2026-07-26, was item 11 on `board/to-build/`; spec in board item `two-uedcli-docs-decisions-of-yours-are`, which
 doubled as the plan). uedcli now serves its own **user-facing** docs (`docs/usage.md` +
 `docs/leveldesign/**`) from the CLI, so a shipped Claude skill routes a user to a page by
 querying the tool and carries zero doc copies. `show` resolves through the enumerated served set
@@ -19,7 +19,7 @@ naming both files; every failure is a clean exit 2 via the existing `_SelectionE
 fixed** — the round-2 set included an unreadable directory reading back as an empty one
 (`pathlib`'s glob swallows `scandir`'s `OSError`), a missing UTF-8 BOM strip on `docs show -`,
 and two user-doc claims that overstated the search ranking.
-**REMNANTS, both filed separately on `inbox.md` rather than covered by this entry:** (1) the
+**REMNANTS, both filed separately on `board/inbox/` rather than covered by this entry:** (1) the
 wheel/Nuitka `uedcli/_docs` bundle — generation, `.gitignore`, `package-data`, the Nuitka
 `--include-data-dir`, the drift guard — so an installed build ships with no docs today and every
 `docs` verb exits 2 there; (2) two `[OWNER — confirm]` items carrying proposed `direction/`

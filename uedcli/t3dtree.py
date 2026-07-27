@@ -15,7 +15,7 @@ from the dir name on read. Order is a per-actor LexoRank `order_value` sidecar; 
 (order_value, name) sort. Any per-tree EXTRAS (a stash/prefab `meta.json` + `packages` list) sit
 BESIDE the shared `actors/` tree, written/read by `write_sidecars`/`read_sidecars` (the trunk simply
 never calls them). See specs/2026-07-05-uedcli-git-native-model-design.md +
-specs/2026-07-18-unify-t3d-trees.md + decisions.md 2026-07-05 / 2026-07-18. Pure module — no editor,
+board item `delete-the-ephemeral-spec-specs-2026-07-18` + decisions.md 2026-07-05 / 2026-07-18. Pure module — no editor,
 no session store.
 """
 from __future__ import annotations

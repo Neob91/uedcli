@@ -16,6 +16,6 @@ comment at the `actor add` parser records why; (3) `--group` dropped from `brush
 place`'s placement group, `actor find --group`'s engine-prop filter). REVERSES the folder/label-on-`actor
 add` rule; `direction.md` ("Folders"/"Labels"/"Generator pattern") reconciled, `docs/usage.md` updated,
 tests migrated (`test_generators.py`/`test_folders.py`/`test_labels_verbs.py`/`test_cli.py`). Coupled
-prerequisite for the native `intersect`/`deintersect` item (still in `to-plan.md`), which shares
+prerequisite for the native `intersect`/`deintersect` item (still in `board/to-plan/`), which shares
 `brush build`'s output-flag set. Decision `decisions.md` 2026-07-24 17:04 UTC; spec
-`specs/2026-07-24-generator-flag-cleanup.md` (status corrected).
+`spec.md` (status corrected).

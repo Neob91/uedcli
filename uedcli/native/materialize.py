@@ -94,7 +94,7 @@ def _in_world_csg(actor, index) -> bool:
     pre-existing native-build gap (populating a Mover's animated private Model + BSP is unbuilt
     native-mover work), not a regression of the CSG exclusion — excluding movers is still correct
     (the alternative is a solid blob welded into the world that walls the doorway).  Tracked in
-    `board/inbox.md`.
+    `board/inbox/`.
 
     Uses the shared substrate-generic `movers.is_mover` predicate (the same one doctor + dispatch
     use — no per-substrate class list).  Since 2026-07-25 that predicate is SCHEMA-AWARE — it walks

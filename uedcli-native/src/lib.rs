@@ -251,7 +251,7 @@ type FaceTuple = (
 );
 
 /// `intersect_brushset` — the native `BRUSH FROM INTERSECTION` / `DEINTERSECTION` over an in-tree
-/// brush SET (spec `specs/2026-07-24-intersect-deintersect-native-brushset.md`).
+/// brush SET (spec in board item `bspcsg-core-apply-scaled-brushes`).
 ///
 /// `brushes` is the world CSG set in stdin order (for `intersect`, with the caller's synthesized
 /// wrap-subtract cube prepended); `builder` is the synthesized padded-bbox cube whose `oper`

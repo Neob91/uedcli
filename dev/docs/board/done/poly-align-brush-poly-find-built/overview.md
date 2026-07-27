@@ -7,7 +7,7 @@ summary = "`poly align` + `brush poly find` BUILT"
 # `poly align` + `brush poly find` BUILT
 
 (build #5, 2026-07-18; item 11; decisions.md
-2026-07-18 21:40 UTC; spec `specs/2026-07-18-poly-align.md`). `polyalign.py`: a stateless
+2026-07-18 21:40 UTC; spec `spec.md`). `polyalign.py`: a stateless
 `brush poly find <brush> [--item/--facing/--texture/--json]` producer printing `BRUSH:idx`
 selectors, and `brush poly align (--wall|--floor|--ring) [--fresh-frame][--fit-perimeter]
 (targets…|-)` that makes a texture flow continuously across a face set. UV convention

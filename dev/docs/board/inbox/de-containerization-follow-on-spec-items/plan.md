@@ -162,7 +162,7 @@ editor-screenshot `level preview` — is deleted in S6. Capture the reference NO
   preview` (recipe text stays — it documents editor behavior, still true for other drivers).
   (`direction.md` needs nothing — already reconciled to the 2026-07-16 decision and committed;
   verify it still matches at cutover.)
-- Board: strike the built entry from `to-plan.md`; `done.md` tail note; new TODOs for anything
+- Board: strike the built entry from `board/to-plan/`; `board/done/` tail note; new TODOs for anything
   deferred mid-build.
 
 ### S7 — Acceptance + perf

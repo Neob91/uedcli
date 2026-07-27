@@ -1,6 +1,6 @@
 # Plan: uedcli global CLI over multiple projects
 
-Implements `specs/2026-06-29-uedcli-global-cli-projects-design.md`. **Ephemeral** — folds into
+Implements `spec.md`. **Ephemeral** — folds into
 `architecture.md`/`decisions.md` on landing.
 
 ## Strategy: additive, behind a legacy fallback; safe slices first
@@ -45,7 +45,7 @@ Two cold reviews surfaced findings that **shrink the safe-autonomous scope**. Fo
 - **Slice A:** actually run `pip install -e` in a throwaway venv to verify the entry point — don't
   assume.
 - **Doc-upkeep:** landed pieces → `architecture.md`; this is also a `direction.md`-level shift
-  (global-CLI) → note it there when the core lands; mark the `to-plan.md` entry when done.
+  (global-CLI) → note it there when the core lands; mark the `board/to-plan/` entry when done.
 
 **Revised autonomous scope for THIS pass:** build **A (packaging)** + **B (`config.py` standalone +
 tests)** only — both are genuinely safe and unwired. Build **D's pure store module** if budget

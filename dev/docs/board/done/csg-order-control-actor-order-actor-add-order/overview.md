@@ -7,7 +7,7 @@ summary = "CSG-order control — `actor order` + `actor add --order`"
 # CSG-order control — `actor order` + `actor add --order`
 
 — BUILT 2026-07-18 (plan
-`plans/2026-07-18-csg-order-plan.md`; spec `specs/2026-07-18-csg-order-control.md`; decisions same
+`plan.md`; spec `spec.md`; decisions same
 ledger entry). `actor order <names…|-> (--first|--last|--before NAME|--after NAME)` reorders
 existing actors' CSG precedence; `actor add --order (first|last|before=NAME|after=NAME)` places new
 ones (default `last` == append). Multi = block move preserving relative order (incl. non-contiguous).

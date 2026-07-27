@@ -12,4 +12,4 @@ case-sensitive with a bare `print;return 2` on a bad value; `class show --catego
 repeatable-append + case-insensitive + `_SelectionExit`-listing. Two same-named flags that parse/fail
 differently is a wart — migrate `level doctor --category` to the append + case-insensitive + listing
 shape (keep accepting comma-lists for back-compat if cheap). Spec:
-`specs/2026-07-18-class-show-category-filter.md`.
+`spec.md`.

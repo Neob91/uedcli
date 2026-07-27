@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """SP-R — live spike for the warm-container reload-keying GATE (spec
-`specs/2026-07-17-game-preview-warm-container.md` §8).
+board item `warm-game-remnants` §8).
 
 Boots ONE warm game container and drives repeated POST-BOOT, SYMLINKED, Nth
 travels — the two deltas the shipped `--game` tier never exercised (it boots

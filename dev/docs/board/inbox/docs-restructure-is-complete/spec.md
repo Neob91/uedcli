@@ -93,7 +93,7 @@ dates ARE kept, per the Documentation rules.
 - **Confirm proactively.** When working in a topic, ask whether its direction
   doc is still current.
 - **A decision awaiting their yes is parked** as an `[OWNER — confirm]` item
-  on `board/inbox.md` carrying the proposed text verbatim.
+  on `board/inbox/` carrying the proposed text verbatim.
 - Commits touching `dev/docs/direction/` carry a `Confirmed: <topic>`
   trailer — an audit marker, not enforcement.
 
@@ -214,10 +214,10 @@ against a frozen count.
 | bare dated refs | ~17–19 files with no literal `decisions.md`, incl. `unrealed/commands.md:212` (a durable doc) — **count it in the build, don't trust this range** | rewrite to a topic path + anchor |
 | evidence citations | 7 `unrealed/*.md` sites incl. the 🔬 at `package-format.md:65` | retarget to the `spikes/` file, **never** a mutable doc |
 | `spikes/` | **31 files**, incl. two committed harnesses | retarget — durable evidence, not ephemeral |
-| ephemeral `specs/` + `plans/` | 62 of 64 specs, 18 of 23 plans | exempt from retarget **and from all three checks** — **except the 13 files reachable from `to-build.md`**, which are about to be executed |
+| ephemeral `specs/` + `plans/` | 62 of 64 specs, 18 of 23 plans | exempt from retarget **and from all three checks** — **except the 13 files reachable from `board/to-build/`**, which are about to be executed |
 
-Two board sites (`inbox.md:74-83`, `board/README.md:43`) cite sections that now **stay resident**;
-they need *editing*, not retargeting — `inbox.md`'s item even names a worktrees rules file, which is a file
+Two board sites (one `board/inbox/` item and `board/README.md`) cite sections that now **stay resident**;
+they need *editing*, not retargeting — `board/inbox/`'s item even names a worktrees rules file, which is a file
 Part A no longer creates.
 
 **Accepted cost:** these citations move from an immutable dated anchor to a revise-in-place doc, so
@@ -252,7 +252,7 @@ All three are in the diff, so `CLAUDE.md` forbids logging them instead of dealin
 1. **`CLAUDE.md:290` — "`.claude/worktrees/` is gitignored" is FALSE.** `.gitignore` has no
    `.claude` entry; `git check-ignore .claude/worktrees` exits 1; `git status` shows `?? .claude/`.
    An agent trusting it could `git add` an entire second checkout. **Remedy: add `.claude/` to
-   `.gitignore`**, making the sentence true — the owner's call, logged to `board/inbox.md` if he
+   `.gitignore`**, making the sentence true — the owner's call, logged to `board/inbox/` if he
    declines. Note this interacts with (3): a blanket `.claude/` ignore would block committing
    `.claude/settings.json`, so use `.claude/worktrees/` if (3) is resolved by creating that file.
 2. **`CLAUDE.md:3-19` — the `Tools/uedcli/` inside `dx_lum` layout, and "`_scratch/` two levels
@@ -295,7 +295,7 @@ git check-ignore .claude/worktrees                 # exits 1 — CLAUDE.md:290 i
 ```
 
 Gates: repo-wide link + prose + anchor-existence checks (all three exempt `specs/`+`plans/` save the
-13 on `to-build.md`) · `bin/test` passes · the import-syntax `@` gate returns exactly one line ·
+13 on `board/to-build/`) · `bin/test` passes · the import-syntax `@` gate returns exactly one line ·
 `direction/README.md` carries no topic content and no `@` · the position-relative sweep is clean
 across `CLAUDE.md` and `rules/*.md` · no `^## \d{4}-` entry lacks a `MIGRATION.md` row · all 16
 `direction.md` sections **and its preamble's lane model** are accounted for · `docs/` references
@@ -304,8 +304,8 @@ nothing under `dev/docs/`.
 ## 6. Out of scope
 
 `Tools/uplayctl/CLAUDE.md` mirrors these rules and is in a **different repository** — silently
-desynchronised by this work; already on `board/inbox.md`. `dev/docs/README.md`'s table omits ~8
-docs; `board/inbox.md` (2,671 lines) and `done.md` (1,125) are unpruned.
+desynchronised by this work; already on `board/inbox/`. `dev/docs/README.md`'s table omits ~8
+docs; `board/inbox/` (2,671 lines) and `board/done/` (1,125) are unpruned.
 
 ## 7. Sequencing
 
@@ -313,7 +313,7 @@ A **plan round** follows this spec, then a **build round after each part** — t
 what one reviewer can read without skimming.
 
 1. This spec → gated.
-2. Plan doc → gate → `to-build.md`.
+2. Plan doc → gate → `board/to-build/`.
 3. Part 0 → gate. Re-run every inventory grep immediately after.
 4. Part A → gate.
 5. Part B — 13 topics, each confirmed; gate per group of ~4.

@@ -297,7 +297,7 @@ def classify_brush(actor: Actor) -> str:
     UTC), but that predicate needs a `classindex.ClassIndex`, and this function sits on the shared
     `actor preview` / `stash preview` / `prefab preview` path — so threading one in would make those
     three verbs require a project + the per-user games config as well. An OPEN spec item
-    (`dev/docs/board/to-spec.md`, top) is deciding whether that requirement should shrink from the
+    (`dev/docs/board/to-spec/`, top) is deciding whether that requirement should shrink from the
     set of verbs that now have it, and this classifier is explicitly in that item's scope. Until it
     is answered, a mover whose class name does not end in `Mover` (`CEDoor`, `BreakableGlass`, the
     lowercase `TNM.*mover` classes) falls through to its `CsgOper`/`PolyFlags` here instead of

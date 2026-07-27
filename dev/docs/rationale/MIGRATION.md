@@ -61,8 +61,9 @@ Definition: matches `\(?[Dd]ecisions?\b[^)]{0,40}[0-9]{4}-[0-9]{2}-[0-9]{2}` and
 literal `decisions.md`, so a filename grep cannot see it.
 
 ```
-dev/docs/board/to-spike.md                     uedcli/normalize.py
-dev/docs/specs/2026-07-17-game-actor-relative-poses.md   uedcli/preview_game.py
+dev/docs/board/to-spike/                     uedcli/normalize.py
+board item `game-map-actor-relative-poses-list-actors-query`  (was a spec path)
+uedcli/preview_game.py
 dev/docs/spikes/levelbuild-friction/README.md   uedcli/rotation.py
   ^^ UNTRACKED (another session's spike) — not in the checker's git ls-files set
 dev/docs/unrealed/commands.md                   uedcli/stash_register.py
@@ -84,7 +85,7 @@ uedcli/editor.py:267              -> dev/docs/rules/background-work.md
 uedcli/tests/test_polyalign.py    -> dev/docs/rules/spikes.md "pin the finding"
 uedcli/tests/test_engine_facts.py -> dev/docs/rules/spikes.md
 uedcli/tests/test_mesh_decode.py  -> dev/docs/rules/spikes.md
-dev/docs/board/to-build.md:256    -> dev/docs/rules/spikes.md "Commit the harness"
+dev/docs/board/to-build/ (one item, line 256) -> dev/docs/rules/spikes.md "Commit the harness"
 ```
 
 `grep -rn 'CLAUDE\.md "' uedcli bin pyproject.toml` now returns exactly one file —
@@ -95,12 +96,38 @@ dev/docs/board/to-build.md:256    -> dev/docs/rules/spikes.md "Commit the harnes
 `CLAUDE.md "` prefix — two of these four were worded differently and that prefix missed them. The
 spec's count of 4 was right by luck, not by method.
 
-### Files referenced from `to-build.md` — the exemption boundary
+### The link-check exemption boundary — before and after the board move
 
-`specs/`+`plans/` are exempt from retargeting and from the link checks, **except** files referenced
-from `to-build.md` in any form (markdown link *or* backticked path), which are about to be executed.
-Re-derive this list at Task 8 against the live `to-build.md` — it now includes this restructure's own
-spec and plan.
+A spec or plan used to live in `dev/docs/specs/` or `dev/docs/plans/`, and `test_doc_links.py`
+exempted that whole prefix from its checks *except* files an item in the build queue happened to
+reference. Both trees are now gone: a spec or plan lives inside its board item, so the exemption is
+a path shape — `board/*/*/spec.md` and `board/*/*/plan.md`, exempt unless the item sits in
+`to-build/`.
+
+**This narrows coverage, so the change is recorded rather than left to be discovered.** 13
+ephemeral files were link-checked before; 3 are now, plus any file that is *not* named exactly
+`spec.md`/`plan.md` (an item holding a second spec names it `spec-<topic>.md`, which the shape does
+not match, so it is checked in every stage).
+
+| Before — checked because a `to-build/` item referenced it | After |
+|---|---
+| `plans/2026-06-24-uedcli-bsp-detector-plan.md` | still checked, as `board/to-build/bsp-issue-detector/plan.md` |
+| `plans/2026-07-25-native-texture-formats-plan.md` | still checked, as `board/to-build/native-texture-decode/plan.md` |
+| `specs/2026-07-26-asset-catalog-engine.md` | still checked, as `board/to-build/unified-asset-catalog/spec.md` |
+| `specs/2026-07-26-asset-catalog-texture-arm.md` | still checked, as `board/to-build/unified-asset-catalog/spec-texture-arm.md` — not by the exemption, but because the shape does not cover a second spec |
+| `plans/2026-07-25-unified-asset-catalog-plan.md` | **no longer checked** — `board/inbox/the-unified-asset-catalog-spec-revision/plan.md` |
+| `plans/2026-07-26-docs-restructure-plan.md` | **no longer checked** — `board/inbox/docs-restructure-is-complete/plan.md` |
+| `plans/2026-07-27-actor-preview-faces-plan.md` | **no longer checked** — `board/inbox/actor-preview-faces-plan-cites-dev-docs/plan.md` |
+| `specs/2026-06-24-uedcli-offline-bsp-engine-design.md` | **no longer checked** — `board/to-spec/bsp-issue-ground-truth-detector-d0-d1/spec.md` |
+| `specs/2026-07-25-docs-restructure.md` | **no longer checked** — `board/inbox/docs-restructure-is-complete/spec.md` |
+| `specs/2026-07-25-native-texture-formats.md` | **no longer checked** — `board/inbox/three-design-calls-the-native-texture-formats/spec.md` |
+| `specs/2026-07-26-actor-preview-textured-faces.md` | **no longer checked** — `board/inbox/four-actor-preview-faces-rulings-need-a-durable/spec.md` |
+| `specs/2026-07-26-asset-catalog-audio-arm.md` | **no longer checked** — `board/to-spike/sound-corpus-remeasure/spec.md` |
+| `specs/2026-07-26-asset-catalog-class-arm.md` | **no longer checked** — `board/inbox/the-asset-catalog-class-arm-needs-four-changes/spec.md` |
+
+The nine that lost checking did so because the item that owns them is not in the build queue — the
+same condition that made them exempt in the old shape, now read off the path instead of off a
+reference. A `git mv` into `to-build/` restores it with nothing to keep in sync.
 
 ---
 
@@ -142,7 +169,7 @@ either old file is deleted.
 | 2026-06-21 fs isolation + stubbing · 2026-06-22 bake UED22 · 2026-07-14 02:20–19:21 asset wiring · 2026-07-17/07-18 warm containers | `direction/containers.md` | intent. **A dead claim removed**: `direction.md`'s "content is a separate concern" named a code-vs-content *wiring* split whose code (`split_dirs`, `substrate_code_dirs`) was deleted 2026-07-14 19:21. The stub rationale was also corrected — the cause is mesh layout + `Engine`/`Core` divergence, not the package version |
 | 2026-06-24 14:30 generator pattern · 2026-06-25 movers · 2026-07-21 12:06 one-brush-per-shape · 2026-07-24 16:32/17:04/17:56/18:12/18:33 · 2026-07-25 00:14/01:05/02:30 profiles + UU | `direction/generators.md` | intent. Ten live rulings `direction.md` never carried, incl. that generators are **not project-free** (they validate class/texture existence), `--base-name`, `--origin`/`--pivot`, and the non-brush refusal |
 | 2026-06-29/06-30 global CLI · 2026-07-05 in-tree state · 2026-07-14 03:30/12:00/17:35 · 2026-07-17 20:58 layout reorg | `direction/projects-and-config.md` | intent. **CORRECTS the stale load contract**: `direction.md` still claimed materialize wires the whole composed search path with "no per-level derivation", superseded 2026-07-14 17:35 — the explicit preload is O(level) |
-| *(asset-catalog HELD — two arbitration items still `[decide]` on `board/inbox.md`)* | | |
+| *(asset-catalog HELD — two arbitration items still `[decide]` on `board/inbox/`)* | | |
 
 ### Full entry index — 227 entries, machine-assigned by keyword
 
@@ -391,7 +418,7 @@ pre-existing divergences the confirmation surfaced, one is new intent.
    2026-07-23 05:58 #5 ruling already said allow; `dispatch.py:348-358`
    (`_reject_nonlevel_target_for_labels`) rejects, its own docstring calling it "a plan scope-cut
    … deferred". `cli.py:439` advertises "Level-only". **Owner ruled 2026-07-26: the ruling
-   stands, the code is wrong.** The sibling *folder* guard is already parked on `board/inbox.md`;
+   stands, the code is wrong.** The sibling *folder* guard is already parked on `board/inbox/`;
    this label one was not.
 2. **`stash apply` / `prefab apply` mint no batch label.** New ruling, 2026-07-26: they must mint
    `prefab-<name>-<rand>` / `stash-<id>-<rand>`, always, additive with an explicit `--label`,
@@ -399,7 +426,7 @@ pre-existing divergences the confirmation surfaced, one is new intent.
    equivalent (`dispatch.py:4066`); placement does not.
 3. **`actor folder list` / `actor label list` do not exist.** Confirmed as direction anyway —
    direction states intent, not status, and the gap to `architecture.md` is expected by design.
-   On `board/to-spec.md`.
+   On `board/to-spec/`.
 
 Also corrected in passing: `direction.md` documented **`actor label set`**, a sub-verb the owner's
 2026-07-23 ruling explicitly refused and the code has never had. The same error is repeated inside
@@ -431,7 +458,7 @@ rewritten `dev-runtime.md`; and broken relative paths in three files this batch 
   deleted. The narrow version (backticked strings containing `/` **and** a known suffix) is worth
   building **before Task 8**, which retargets ~177 files with no prose check behind it. Until then,
   every downstream "the link checker passes" is weaker than the plan assumes. Tracked as an open
-  `p1` on `board/inbox.md` ("the dominant citation form is prose").
+  `p1` on `board/inbox/` ("the dominant citation form is prose").
 - **Setext headings** (`Title` over `====`) are invisible to the anchor check. Two accidental hits,
   both in a spike doc; latent only.
 - **`_on_deck` over-collects** (~28 entries, including non-ephemeral files). It can only ever

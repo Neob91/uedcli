@@ -6,7 +6,7 @@ unfit for real DX geometry (subtractive CSG → one blob at any --gap). See READ
 Retained as the record of what was tried; a redesign would be op-aware/seeded (see README).
 
 
-Part of the corpus brush-idiom study (`specs/2026-07-24-corpus-brush-idioms.md`, option B for
+Part of the corpus brush-idiom study (board item `brush-identify-classify-a-real-brush-s-shape`, option B for
 per-feature selection). A real imported map has hundreds of opaquely-named brushes; the qualitative
 (composition-grammar) pass needs to look at ONE feature (an arch, a stairwell, a room + its detail)
 as a wireframe. This picks those brush *sets* for you so you can pipe them into `actor preview`:

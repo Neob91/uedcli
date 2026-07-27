@@ -6,7 +6,7 @@ summary = "SPEC REVIEW ROUND 1 (2026-07-26) — the warm-editor spec DID NOT PAS
 
 # SPEC REVIEW ROUND 1 (2026-07-26) — the warm-editor spec DID NOT PASS the gate
 
-Three cold Opus reviewers over `specs/2026-07-18-warm-editor-materialize.md`; ~50 findings, heavy
+Three cold Opus reviewers over board item `resolved-2026-07-26-was-warm-editor-materialize`; ~50 findings, heavy
 independent convergence. **The premise survived** — all three agree a one-shot commandlet
 structurally satisfies `commands.md`'s "fresh editor, exactly one level loaded" precondition that
 warm reuse cannot meet. **The mechanisms did not.** The spec is PARKED, not merged; per CLAUDE.md

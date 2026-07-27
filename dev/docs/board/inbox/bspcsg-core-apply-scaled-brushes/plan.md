@@ -114,7 +114,7 @@ actor add -` → materialize → in-game/preview).
 ## Cross-cutting / risks
 
 - **Scale:** v1 REJECTS scaled source brushes (inherited bspcsg-core gap); the port is a separate prioritized
-  board item (`inbox.md`). Not in this plan.
+  board item (`board/inbox/`). Not in this plan.
 - **Leading-additive `deintersect`** may hit the untested convex-seed path (`bspcsg.rs:1874`) — case (h) is
   the tripwire; if it diverges, seed with a subtract-first reorder (decide against the oracle in B2).
 - **FP determinism** rides the already-characterized bspcsg core (SSE-scalar, bit-exact reachable); no new
@@ -128,5 +128,5 @@ decode, and the Python verbs + flag matrix + the generator-flag migration. Resol
 
 ## Board
 
-The two `to-plan.md` items (`intersect/deintersect`, `generator-flag cleanup`) advance to `to-build.md`
+The two `board/to-plan/` items (`intersect/deintersect`, `generator-flag cleanup`) advance to `board/to-build/`
 referencing this plan; Part A is the head of the build queue (B depends on it).

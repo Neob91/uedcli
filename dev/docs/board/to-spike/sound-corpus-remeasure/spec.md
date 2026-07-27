@@ -7,7 +7,7 @@ directories the tool does not load, and the scope rule built on them is both unn
 
 > **Part of the split asset-catalog spec set** (split 2026-07-26 after two spec-gate rounds returned
 > ~103 findings and the churn proved to be concentrated in the texture and audio arms — see
-> `board/inbox.md`). The shared engine, storage layout, verb surface, decisions and prerequisites live in
+> `board/inbox/`). The shared engine, storage layout, verb surface, decisions and prerequisites live in
 > **board item `unified-asset-catalog`**, which every arm depends
 > on and which is built first. Sibling arms:
 > class (board item `the-asset-catalog-class-arm-needs-four-changes`) ·

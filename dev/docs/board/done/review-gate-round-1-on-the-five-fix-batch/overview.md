@@ -24,6 +24,6 @@ FAILURE into "not there"; `brush scale --pivot-actor` resolves its actor before 
 too; `test_real_class_hierarchy_decides_mover_ness` now covers the case-sensitivity half of the
 re-measurement; the `build_ued_golden` harness dropped its own retired size-only wait; and
 `test_qualify`'s hand-rolled canonicalization loop is deleted (covered by `test_movers` +
-`test_prefab_migration`). Three findings deferred to `inbox.md` with detail: the remaining unbounded
+`test_prefab_migration`). Three findings deferred to `board/inbox/` with detail: the remaining unbounded
 `docker exec` calls (count corrected to 8 across 6 methods + `xfer.py`), the missing `map_save`
 integration test, and the `Save.tmp` collision/leftover.

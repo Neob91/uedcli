@@ -9,7 +9,7 @@ summary = "Bundle the user-facing docs into the wheel/Nuitka build (`uedcli/_doc
 p2.
 **Deliberately not built** with the `docs` command that landed 2026-07-26 — that command is
 complete and shipped, and this is the packaging half it was always specced to wait for (spec
-`specs/2026-07-24-docs-command.md` §8, Andrzej 2026-07-24). Today `uedcli docs list|show|search`
+board item `two-uedcli-docs-decisions-of-yours-are` §8, Andrzej 2026-07-24). Today `uedcli docs list|show|search`
 serves the source checkout's `docs/` tree; `userdocs.docs_root()` already has the third branch
 that reads a packaged `uedcli/_docs/`, and it is **dormant because nothing generates that
 directory**. So an installed wheel or a Nuitka binary built today ships with NO docs and every

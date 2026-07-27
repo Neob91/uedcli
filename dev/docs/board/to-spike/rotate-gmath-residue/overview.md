@@ -36,6 +36,6 @@ two actors 24,000 uu apart rotated 90° about their midpoint store `X=11999.9989
    ContainerYard and 2 in DiveBar (max lever 11392); at 11438, zero. So the band that matters is
    exactly the one a lone-yaw constant cannot see.
 
-Findings fold into `specs/2026-07-26-rotate-pivot-grid-aligned-center.md` §7.4. **Do not write the
+Findings fold into board item `the-rotate-scale-default-pivot-has-three-open` §7.4. **Do not write the
 warning first** — a plan that assumed the lone-yaw constant, per-axis distance, and `brush scale`
 scope was refuted on all three (plan round, 2026-07-26). *(2026-07-26.)*

@@ -67,7 +67,7 @@ For *weird behaviors* see [`quirks.md`](quirks.md); for producing an image see
     no directory, so it is presumably the target's directory (UE1 builds the temp path beside the
     destination) — but the string table does not show it, and it has not been checked live. If it
     is, the fixed name means two saves into one directory collide and a crashed save leaves a stray
-    `Save.tmp` (`board/inbox.md` chore — verify by driving a big `MAP SAVE` and listing `/work`
+    `Save.tmp` (`board/inbox/` chore — verify by driving a big `MAP SAVE` and listing `/work`
     mid-save).
 - GUI menu/dialog driving is fragile (menus paint black) — **prefer console verbs.**
 
@@ -153,7 +153,7 @@ the next command) — never use it** (`2026-06-17-brush-clip.md`).
   globs, no prefix match (🔬). Actionable for **point actors** (`SELECTNAME` + `ACTOR DELETE`
   removes a Light); **IMPORTADD brushes** select-for-read but `ACTOR DELETE` still no-ops on
   them (the missing-`Bound` quirk — brush *mutation* still needs the paste/`BRUSH ADD` path).
-  See the simplification lead in `../board/to-spec.md`.
+  See the simplification lead in `dev/docs/board/to-spec/`.
 - `SELECT MEMORY` / `UNION` / `INTERSECT` / `XOR` / `RECALL` 📖 — selection-set algebra
   ("And/Or/Xor With Memory").
 

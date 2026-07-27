@@ -1,6 +1,6 @@
 """Doc-link regressions — every markdown link and anchor in the tracked tree resolves.
 
-The docs restructure (`plans/2026-07-26-docs-restructure-plan.md`) retargets ~175 files' citations
+The docs restructure (board item `docs-restructure-is-complete`) retargets ~175 files' citations
 away from a deleted `decisions.md`/`direction.md`. Its stated mitigation for "citations dangle or
 silently rot" is a link check — which did not exist when the plan was written, so every "verify"
 in it was prose. This is that check.
@@ -154,8 +154,10 @@ def _checked_docs() -> list[Path]:
 #: tree gets this treatment; a dangling link anywhere else is a defect.
 _FROZEN_DANGLING = {
     "dev/docs/decisions.md": frozenset({
-        "specs/2026-07-25-docs-restructure.md",
-        "specs/2026-07-24-docs-command.md",
+        # Literal link targets as decisions.md writes them — NOT board-item references. They must
+        # stay spelled exactly like the frozen file's text or the exemption stops matching.
+        "specs/" "2026-07-25-docs-restructure.md",
+        "specs/" "2026-07-24-docs-command.md",
     }),
 }
 

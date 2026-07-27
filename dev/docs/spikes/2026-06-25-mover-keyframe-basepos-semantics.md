@@ -82,7 +82,7 @@ same as for any brush.
    mover (which lacks them) and its re-exported form (which has them = `Location`/`Rotation`)
    must canonicalize equal, or H3 post-verify and the canonical hash spuriously differ.
 4. **`KeyPos(N)`/`KeyRot(N)` are the `Foo(N)` indexed-array lines** the model currently drops —
-   the indexed-array round-trip fix (`board/to-spec.md`) is the hard prerequisite; `KeyNum`/`NumKeys`
+   the indexed-array round-trip fix (`board/to-spec/`) is the hard prerequisite; `KeyNum`/`NumKeys`
    are plain scalars and already round-trip.
 5. **`mover key list` resolves a key's world pose** as `Location + KeyPos[i]` /
    `Rotation + KeyRot[i]` (base = `Location`/`Rotation`, since stored `KeyNum=0`).

@@ -41,7 +41,7 @@
 >   `.u` packages. Do not build a writer here.
 >
 > Neither the spec revision nor this plan has been through a review round since
-> (`board/inbox.md`).
+> (`board/inbox/`).
 
 Governing principle this plan must not drift from: **the tool lists, reports file facts, produces
 pictures, and stores the classification it is handed. It never infers meaning.** The single
@@ -158,8 +158,8 @@ bytecode.
 
 ### P1 — full native texture decode
 *Gates S8a only.* **Now specced and review-gated** in its own right:
-`specs/2026-07-25-native-texture-formats.md` (owner-decided; see `rationale/MIGRATION.md` for the old
-2026-07-25 06:30 ledger citation); it sits on `to-plan.md`
+board item `three-design-calls-the-native-texture-formats` (owner-decided; see `rationale/MIGRATION.md` for the old
+2026-07-25 06:30 ledger citation); it sits on `board/to-plan/`
 as a `p1` and needs its own plan before S8a is scheduled. Two things changed since this plan first
 called it "non-P8 decoders": layout is **derived from the data** rather than any per-game format
 table (slot numbers are not portable between engines), and it is **not** DX-irrelevant — the
@@ -382,7 +382,7 @@ slice owns.)* Replace
 `dev/docs/dev-runtime.md` and `dev/docs/deusex-assets-setup.md:95`; sweep the board files
 (`to-spec`/`inbox`/`someday`/`to-build`) for texture-catalog references; add a `leveldesign/` page on
 discovering and placing assets; delete this plan, the spec, and the superseded
-`specs/2026-07-19-texture-catalog-redesign.md` **and `specs/2026-07-19-texture-show-for-llm.md`** (the
+board item `texture-catalog-redesign-superseded` **and board item `texture-catalog-redesign-superseded`** (the
 redesign spec says to delete the two together, and it is banner-superseded by a file that will no longer
 exist).
 

@@ -6,9 +6,9 @@ summary = "Per-surface texture verbs, STEP 1 of 5 — DONE"
 
 # Per-surface texture verbs, STEP 1 of 5 — DONE
 
-(2026-07-26, was `p1` on `to-build.md`; plan
-`dev/docs/plans/2026-07-26-poly-surface-step1-plan.md`, spec
-`dev/docs/specs/2026-07-26-poly-surface-verbs.md` §2.0–§2.2/§2.5/§3.1). `brush poly set` lost
+(2026-07-26, was `p1` on `board/to-build/`; plan
+board item `brush-poly-rotate-turns-against-the-visible`, spec
+board item `the-per-surface-verb-split` §2.0–§2.2/§2.5/§3.1). `brush poly set` lost
 `--pan-to`/`--pan-by` (deleted outright, no shim) and now assigns stored ATTRIBUTES only; three new
 verbs transform the texture FRAME: **`brush poly pan (--to|--by) U,V`** (whole texels, writes
 `Pan`, never `Origin`), **`brush poly rotate --by UU`** (unreal rotation units, exact `n̂ ×` path at
@@ -24,7 +24,7 @@ found real defects.** Round 1: six findings plus two wording items and an extra 
 `OverflowError` traceback on an arbitrary-precision `rotate --by`; `scale` naming the frame
 instead of the factor on an absurd factor; a degraded argparse message from a one-member mutex
 group; a stale CLI spelling in a live spike comparison table; the two level-design doc indexes not
-listing the new verbs; and step 1 missing from this file and misdescribed on `to-plan.md`.
+listing the new verbs; and step 1 missing from this file and misdescribed on `board/to-plan/`.
 Round 2: five findings, including a **data-corruption bug round 1's own fix had introduced** —
 `scale --by` wrote a ZERO-LENGTH texture axis into the trunk at exit 0 with clean stdout, because
 the writability guard restated `emit`'s floor as six decimal places when the real floor is
@@ -43,7 +43,7 @@ surface normal**. Implemented as given (`surface._visible_normal`), with the rul
 acceptance test pinned both ways; the docs were rewritten to describe the new behaviour, so nothing
 still describes the shipped verb as polygon-normal. This change came AFTER the two-round gate and
 therefore takes a fresh build round of its own.
-**REMNANTS, all filed separately on `inbox.md` rather than covered by this entry:** (1)
+**REMNANTS, all filed separately on `board/inbox/` rather than covered by this entry:** (1)
 `brush poly align` still prints touched brush NAMES while its four siblings print per-face
 selectors — the same owner ruling covers it, but the align restructure is steps 2–5; (2) a
 `CsgOper` that is neither `CSG_Add` nor `CSG_Subtract` (`CSG_Intersect`/`CSG_Deintersect`) has no

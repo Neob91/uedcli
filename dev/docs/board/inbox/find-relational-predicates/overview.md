@@ -10,5 +10,5 @@ Cross-actor reference filters, beyond what `--prop Base=X` incidentally catches:
 <actor>` (actors whose object-prop refs point AT the target), mover/trigger pairing by `Tag`/`Event`,
 actors sharing a `Group`. Substrate-specific semantics (which fields are refs; DeusEx vs stock
 Unreal), the most complex of the three families — Andrzej deferred it while the property + spatial
-specs (`specs/2026-07-24-find-prop-predicates.md`, `specs/2026-07-24-find-spatial.md`) go first. Adds
+specs (`spec.md`, `spec-find-spatial.md`) go first. Adds
 ATOMS to the composable-`find` boolean model, orthogonal to it. Spec when the first two land.

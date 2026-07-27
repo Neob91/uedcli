@@ -25,7 +25,7 @@ own fixes — which is the pattern `CLAUDE.md` "Review gates" says to expect, at
 - **Round 1 (8 findings)** — including one real defect in shipped `revolve` geometry (below) and
   one bookkeeping error: the coordinate `[debug]` item had TWO halves, only one was fixed, and
   the whole entry was deleted. The unfixed half (a degenerate-but-positive `--depth`/`--height`
-  naming neither flag nor value) is **re-filed on `inbox.md`**.
+  naming neither flag nor value) is **re-filed on `board/inbox/`**.
 - **Round 2 (13 findings), all in round 1's fixes.** The worst was a REGRESSION those fixes
   introduced: `emit.MAX_COORD` was hand-set to 1e21, a full decade below the real wall, so the
   new guard rejected coordinates `master` emitted fine (5e21 round-tripped before, exited 2
@@ -50,7 +50,7 @@ own fixes — which is the pattern `CLAUDE.md` "Review gates" says to expect, at
   editor-blessed parity fixtures pin its tie-break when `builder_parity.json` carries no texture
   vectors at all, and this very entry contradicting itself on the coordinate guard.
   **Every round found real defects in the previous round's fixes — three for three.** Round 3's
-  own fixes ship unreviewed. Two pre-existing defects found while probing are logged on `inbox.md` rather than
+  own fixes ship unreviewed. Two pre-existing defects found while probing are logged on `board/inbox/` rather than
 fixed: `brush vertex move` escaping as a bare `ValueError` traceback, and a 1-uu revolve
 building a non-manifold brush at exit 0 (identical on `master`). Note also that the
 "State the profile-sweep caveats…" commit additionally rewrote `--rotate`'s help on

@@ -302,7 +302,7 @@ hack's PostScale-pivot / winding-normal approximation, not large-coordinate prec
   hides this whole bug class. The `is_csg_filter` hack can be left as-is (inert) or reverted to the
   faithful `NumVertices>0` clause independently; it is not on this critical path.
 
-**Board (recorded here rather than `board/inbox.md`, which a concurrent session is editing):**
+**Board (recorded here rather than `board/inbox/`, which a concurrent session is editing):**
 ~~p1 `[implement]` Apply brush MainScale/PostScale in `native/materialize._build_brush_input`~~
 **DONE — §10 below** (incl. the mirror winding-reversal the review gate surfaced). p2 follow-ups:
 (1) exclude Mover-class actors from `csg_order` (residual leaf-blob/zone shatter, §9.4); (2) pin the

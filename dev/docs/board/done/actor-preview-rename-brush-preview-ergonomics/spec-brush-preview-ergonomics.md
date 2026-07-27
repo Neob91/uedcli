@@ -4,7 +4,7 @@
 `architecture.md`; load-bearing choices → `decisions.md` (2026-07-21 12:06/12:22, and the 13:42
 confirmations). Goes stale once built.
 
-**Board:** `to-plan.md` (specced + two-cold-reviewer-gated + Andrzej-confirmed 2026-07-21). Overlaps
+**Board:** `board/to-plan/` (specced + two-cold-reviewer-gated + Andrzej-confirmed 2026-07-21). Overlaps
 the `[implement] p3` "brush preview rendering improvements" and "Multi-actor sub-object …
 BRUSH:SELECTOR" backlog items (reconciled below).
 
@@ -13,7 +13,7 @@ capture`); `--zoom-poly` selector-only (drop bare-int); zoom does NOT highlight;
 **dropped**; add `--zoom-factor`.
 
 > **⚠ VERB RENAMED (2026-07-21):** `brush preview` → **`actor preview`** — see
-> `specs/2026-07-21-actor-preview.md` (rename + point-actor rendering + `--show-collision`). Every
+> `spec.md` (rename + point-actor rendering + `--show-collision`). Every
 > `brush preview` below now means `actor preview`; the two specs are built together.
 
 ---

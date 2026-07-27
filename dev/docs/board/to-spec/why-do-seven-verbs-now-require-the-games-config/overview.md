@@ -46,4 +46,4 @@ stays with that written down as a deliberate, documented approximation. `archite
 resolver that silently degrades, and a second divergent predicate. The only sanctioned fix is
 scoping. Outcome is a superseding `decisions.md` entry + `direction.md` reconcile — the current
 "Explicit, discoverable, model-side" bullet names all seven verbs and would need rewriting.
-(Andrzej, 2026-07-25; consequence of `to-build.md` #9.4.)
+(Andrzej, 2026-07-25; consequence of `board/to-build/` #9.4.)

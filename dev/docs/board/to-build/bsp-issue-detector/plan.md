@@ -1,7 +1,7 @@
 # Implementation plan — BSP-issue detector (near-term: the parser spike, D0 capture, the verb, D0-b)
 
 **Status:** plan (ephemeral — sequencing scratch; folds into durable docs as steps land).
-**Spec:** `specs/2026-06-24-uedcli-offline-bsp-engine-design.md` (§6 box). **Decision:** `decisions.md`
+**Spec:** board item `bsp-issue-ground-truth-detector-d0-d1` (§6 box). **Decision:** `decisions.md`
 2026-06-24 12:40 UTC (D0+D1 the detector; D2 deferred). Reviewed: 2 rounds.
 
 ## Scope (and what's OUT)

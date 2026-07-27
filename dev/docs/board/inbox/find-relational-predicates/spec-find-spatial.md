@@ -3,7 +3,7 @@
 **Status: PARTIALLY BUILT (2026-07-24).** `--within-bbox` (full containment, §7.2 resolved to
 containment-only) is **BUILT + tested** — `decisions.md` 2026-07-24 21:44 UTC, `tests/test_find_spatial.py`
 (fold this filter's prose into `usage.md`/`architecture.md` is DONE). The **`--overlapping-bbox`** region-grab
-variant is a NEW `to-spec.md` item. **STILL PARKED:** `--near` (§2/§3), `--overlapping <actor>` (§2/§3), and
+variant is a NEW `board/to-spec/` item. **STILL PARKED:** `--near` (§2/§3), `--overlapping <actor>` (§2/§3), and
 `--within-brush` (§7.6, still being designed); the remaining §7 sub-choices await Andrzej's direction.
 The AABB filters (§2–§6) are review-clean.
 Ephemeral — fold into `usage.md` + `architecture.md` if/when built. Revised 2026-07-24 after two cold

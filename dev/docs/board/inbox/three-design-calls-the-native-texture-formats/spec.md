@@ -4,7 +4,7 @@
 2 more over this spec *and* its plan, then 2 more over the result — every round found load-bearing
 errors, and the third round arrived together with two decisions from Andrzej, **AD1** and **AD2**,
 which removed a whole error case and named a limit; all folded, see §10). A plan exists:
-`plans/2026-07-25-native-texture-formats-plan.md`. **Supporting spike (durable, survives this spec's
+board item `native-texture-decode`. **Supporting spike (durable, survives this spec's
 deletion):** `dev/docs/spikes/2026-07-25-native-texture-formats/pkgfixture_proto.py` — the committed,
 self-verifying from-scratch `.utx` builder every offline test is written against (§5a).
 **Requested by:** Andrzej (2026-07-25, session `uedcli:catalog`) — "We should support all UE1
@@ -36,7 +36,7 @@ which named formats speculatively.
 > today in `LUM_CoreTex.utx`). Owner ruling: a skin that cannot be decoded is an **error**, per
 > `direction/asset-catalog.md` "Produce the picture, or a named error — never a wrong pixel" — so the decoder's
 > typed failure result must carry enough to name the offending skin ref to its caller. This spec was
-> review-gated 2026-07-25; **this addition has not been through a round** (`board/inbox.md`).
+> review-gated 2026-07-25; **this addition has not been through a round** (`board/inbox/`).
 
 ## THE LIMIT ON "reads any texture from any engine" — read this before anything else
 
@@ -631,7 +631,7 @@ plausible **wrong image** (swapped channels) instead of an error — against "ne
 **D3. The remaining layouts get a `p1` board item to spike and implement** (Andrzej) — acquire real
 samples first, verify each layout, then implement. Until it lands, an unsampled slot is a named
 `unverified-format` error that carries its own uncertainty. The item already exists at
-`dev/docs/board/inbox.md` — grep it by its title, **`[spike/implement] p1 The REMAINING UE1 texture
+`dev/docs/board/inbox/` — grep it by its title, **`[spike/implement] p1 The REMAINING UE1 texture
 layouts`** (at `:603` on 2026-07-25; the board moves constantly, so grep, never seek by line).
 
 **D4. The trailing-bytes work is folded in** (§1c/§1d) — same file, same decoder, same goal.
@@ -1222,7 +1222,7 @@ that wants it.
 RGB32/RGB64/RGB24/RGBA8; 227's BGRA8_LM/R5G6B5/RGB8/BGRA8, and BC4+). No samples exist on this
 machine, and the slot numbers are not portable (§1a), so this needs sample acquisition first — a
 UT/227 content set, or a purpose-built export. Until it lands, those slots produce the
-`unverified-format` error. *(Already filed in `dev/docs/board/inbox.md` — grep
+`unverified-format` error. *(Already filed in `dev/docs/board/inbox/` — grep
 `The REMAINING UE1 texture layouts`.)*
 
 ## 10. Review gates
@@ -1267,7 +1267,7 @@ each was a real hole in the design, not a wording problem:
 | Test modules the map never listed (`test_actor_preview.py`'s `_FakeResolver` + its `"not P8-decodable"` string assertion, `test_ingest_validation.py:70`, and `test_utexture.py:115`'s object-identity cache assertion) | **§6** — all three enumerated with the specific edit each needs |
 | Cross-file line anchors stale by 40–135 lines; pinned test baseline stale (2394 vs a measured 2435) | anchors re-derived and converted to grep text (Environment §); the baseline replaced by a re-measure instruction plus its invariants (**§6**) |
 | Self-containment failed at `pkgfixture.py` — a described prototype that was not in the tree | **§5a** — the working prototype is **committed** at `dev/docs/spikes/2026-07-25-native-texture-formats/pkgfixture_proto.py` and is self-verifying |
-| Board instructions obsolete (`to-plan.md` line is a tombstone; `to-build.md` still calls this "an untriaged inbox item") | recorded in the plan's S7, which now deletes the tombstone and fixes the stale prerequisite note |
+| Board instructions obsolete (`board/to-plan/` line is a tombstone; `board/to-build/` still calls this "an untriaged inbox item") | recorded in the plan's S7, which now deletes the tombstone and fixes the stale prerequisite note |
 | "Procedural classes reporting `no-mip-data`" unreachable — `textures()` matches `class == "Texture"` exactly and widening it is a non-goal | **§6/§7** — the sweep gets its own test-local matcher, and asserts in the same test that production stays exact-match |
 
 ### Round 1 (2026-07-25, two cold reviewers over the first draft)

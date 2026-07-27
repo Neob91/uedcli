@@ -1,7 +1,7 @@
 # Plan: project layout reorg — free `uedcli.toml` at the repo root
 
 *2026-07-18. Ephemeral (see docs rules). Implements
-`specs/2026-07-17-project-layout-uedcli-toml.md`; the durable record is `decisions.md`
+`spec.md`; the durable record is `decisions.md`
 2026-07-17 20:58 UTC. Read the spec first — this plan only sequences it.*
 
 ## Ground rules
@@ -10,7 +10,7 @@
   flag-day: after it lands, uedcli only recognizes the new layout, and the LUM repo is migrated in
   the same commit — a concurrent session running *older* code against the migrated repo fails with
   the old code's "no project" error, and older *checkouts* get the new code's explicit old-layout
-  error. Announce the flag-day commit in `board/inbox.md` when it lands (concurrent-session
+  error. Announce the flag-day commit in `board/inbox/` when it lands (concurrent-session
   courtesy), and land slices 1–2 close together.
 - **No behavior change beyond the spec.** Composition/shadowing, mounts, materialize, preview
   mechanics stay untouched; every path below is a *derivation* change.
@@ -180,7 +180,7 @@ verification sweep.)
   read-through.
 - `unrealed/*.md`: no changes expected (engine facts, not layout) — verify by grep.
 - Tool `CLAUDE.md` / `docs/README.md`: any `uedcli/config.toml` mention.
-- Board: remove the item from `to-build.md`; `done.md` gets the short tail entry. The spec+plan
+- Board: remove the item from `board/to-build/`; `board/done/` gets the short tail entry. The spec+plan
   files stay until a later cleanup (ephemeral).
 - Run the full offline suite one last time; then the live check: `level materialize` +
   `level preview --game` against migrated LUM (spec §10.6).

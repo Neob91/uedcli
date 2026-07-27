@@ -7,7 +7,7 @@ summary = "Scale support — `MainScale`/`PostScale` USE/STORE/BAKE"
 # Scale support — `MainScale`/`PostScale` USE/STORE/BAKE
 
 — BUILT 2026-07-18 (plan
-`plans/2026-07-18-scale-plan.md`; spec `specs/2026-07-18-scale-support.md`; decisions 2026-06-25 /
+`plan.md`; spec `spec.md`; decisions 2026-06-25 /
 2026-07-18 14:03; spikes `2026-06-25-scale-transform-mechanics.md` +
 `2026-06-25-mainscale-postscale-applytransform.md`). New `transform.py` algebra module (FScale
 parse/emit, `sheer_coeff` snap, linear matrix, `bake`); scale parsed into typed `model.Actor`

@@ -144,6 +144,6 @@ game content is installed; they are evidence, not a test.
 
 ## What this unblocks
 
-`specs/2026-07-26-actor-preview-textured-faces.md` §4.3a is now implementable as written. The
+board item `four-actor-preview-faces-rulings-need-a-durable` §4.3a is now implementable as written. The
 predicate is a small addition to `utexture` — read the export's property block, return
 `"bMasked" in props` — and needs no new decoding.

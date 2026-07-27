@@ -615,7 +615,7 @@ ported.
   predicate is decoded structurally only (§7.2). A split-minimizing stand-in avoids the trim but
   can't make the editor's "gratuitous" splits (e.g. b's far +X wall split at y=-87.5 by a wedge
   plane), so the per-surf vertex sets diverge. Simple adjacency-based trims were ruled out (they
-  drop b's far-wall split, which no surf is adjacent to). Tracked: `board/inbox.md` [spike].
+  drop b's far-wall split, which no surf is adjacent to). Tracked: `board/inbox/` [spike].
 - **Per-CsgOper keep-sets are now byte-decoded (§4.3), NOT canonical-guessed** — the four FilterFuncs
   and both `cmove`s are read from the binary and byte-verified. The one remaining check is a cheap
   confirmation-only differential `MAP REBUILD` (e.g. an add-in-subtract case) to observe the decoded

@@ -414,7 +414,7 @@ records the chosen value plus the image in the `rationale/` preview topic. Start
 | 6 | **Unresolvable/undecodable refs** — `--native` checkerboards and warns; this tier **exits 2** (§8). `conventions.md` rejects warn-and-continue, so this tier conforms and `--native` does not; that is logged against `--native`, not softened here
 | 7 | **Scaled/sheared brushes** — a **behavioural** difference: `--native` rejects in every mode; this tier rejects them under `textured`, rejects only the **mirrored** (negative-determinant) subset under `flat`, and renders all of them under `wire`
 | 8 | **Pre-CSG vs post-CSG** — the largest divergence, and the reason decision 2.10's cull exists at all: `--native` renders **built BSP node polys**, this tier renders **raw brush polys** with a hand-rolled subtract cull
-| 9 | **Concave faces** — `render.rs` fills by triangle fan (`render.rs:196-206`), which bleeds outside a concave face; this tier uses even-odd scanline (§6) and is correct there. `architecture.md` measures 0.1–0.6 % of real faces as concave, so the difference is real. Not softened here — **logged against `--native` on `board/inbox.md`** (filed 2026-07-26)
+| 9 | **Concave faces** — `render.rs` fills by triangle fan (`render.rs:196-206`), which bleeds outside a concave face; this tier uses even-odd scanline (§6) and is correct there. `architecture.md` measures 0.1–0.6 % of real faces as concave, so the difference is real. Not softened here — **logged against `--native` on `board/inbox/`** (filed 2026-07-26)
 | 10 | **Background** — `render.rs`'s `BACKGROUND` is `[56,56,60]`; this tier's `BG` is 224
 | 11 | **Non-planar faces** — this tier interpolates UV and depth from ONE plane per face (§6, anchored at `verts[0]` with the Newell normal); `render.rs` fan-triangulates, so each triangle carries its own plane. On a face that is not planar the two disagree in both UV and depth. Reachable via `--from-t3d` over arbitrary editor T3D
 
@@ -666,7 +666,7 @@ Pinned by two `test_engine_facts` regressions against committed fixtures.
 **The texture-decoder item builds FIRST, with this spec's texture accessor folded into its scope; then
 all of this.**
 
-`to-build.md`'s **"Native texture decode for any UE1 package"** (`p1`, on deck, spec + plan
+`board/to-build/`'s **"Native texture decode for any UE1 package"** (`p1`, on deck, spec + plan
 self-contained) rewrites the same component this spec depends on: it **deletes
 `TextureResolver.resolve_masked`**, **replaces `resolve`'s `None`-on-miss contract with a typed error
 object naming the case**, and adds **`CompMips`**, a second compressed mip array. It also fixes a live
@@ -687,7 +687,7 @@ folding the accessor in (two API changes); rejected: building now against today'
 
 **Both consequences are already carried into that item** (done 2026-07-26, not outstanding): its plan
 holds slice `S2b` with the accessor and the verbatim "`actor preview --faces textured` REFUSES — do
-not assume every preview caller degrades" contract note, and its `to-build.md` entry is flagged scope-
+not assume every preview caller degrades" contract note, and its `board/to-build/` entry is flagged scope-
 widened so the plan re-enters plan review before building. That plan's own round-1 review is recorded
 at its foot. **Both of that plan's escalations are now RESOLVED** (its `repo_texture_root()`
 propagation, and its decode oracle — the latter by spike `2026-07-26-ucc-texture-fixture`), so the
@@ -752,7 +752,7 @@ name guess one layer down.
 
 ### E2 — RESOLVED 2026-07-26: `--native`'s triangle-fan concave bleed is now filed
 
-§4.9 #9 had claimed a board entry that did not exist. The entry is now on `board/inbox.md` as a `p2`
+§4.9 #9 had claimed a board entry that did not exist. The entry is now on `board/inbox/` as a `p2`
 `[debug]`, carrying the reviewer's scope caveat (`render.rs` rasterizes post-CSG BSP node polys, which
 are convex, so the authored-face measurement reaches it only on the mover path).
 
@@ -771,7 +771,7 @@ are convex, so the authored-face measurement reaches it only on the mover path).
   `CLAUDE.md` requires the decision to land durably first. Several are policy, not implementation:
   2.4 (no cost ceiling), 2.6 ("needs" is literal), 2.10 (subtract visibility), **2.13 (the class
   hierarchy load)** and 2.12 (§4.8's choose-by-render). **DONE 2026-07-26** — all five are parked as
-  one `[OWNER — confirm]` item on `board/inbox.md` carrying the proposed `direction/` text verbatim,
+  one `[OWNER — confirm]` item on `board/inbox/` carrying the proposed `direction/` text verbatim,
   so none is lost when this file is deleted.
 - **`--from-t3d` + point-actor sprite refs** under decision 2.6: does an unresolvable *sprite* count as
   "a texture the render needs"? The existing path degrades it to a marker plus a stderr note. And are

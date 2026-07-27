@@ -228,7 +228,7 @@ and [`spikes/2026-07-05-git-merge-t3d-layout/`](spikes/2026-07-05-git-merge-t3d-
   Without any of this a wedged editor writes nothing and the failure surfaces far downstream as an
   opaque `docker cp` exit 1 blaming the wrong subsystem. (Driver's OTHER `docker exec` calls —
   `_wine_ctl`, `dexec_bash`, `set_clipboard`, `log_size`, `read_log_since`, `dismiss_blocking_dialog`
-  — do NOT go through `_container_probe` and are still unbounded; `board/inbox.md` carries that
+  — do NOT go through `_container_probe` and are still unbounded; `board/inbox/` carries that
   chore.)
 
   **Every docker subprocess OUTSIDE `driver.py` is bounded.** `editor.py`'s container lifecycle
@@ -390,7 +390,7 @@ explicit `--tree`) echoes ONE line to **stderr** — `editing level 'X' (from $U
 (`materializing …`/`capturing from …` per verb). It lives at the mutation seam
 (`TrunkLevelSource.save`, once per save via `_announce_env_level`), so it self-limits to writes with
 no per-verb list; reads never reach `save`, and an explicit `--tree` leaves `from_env` `False`
-(silent). *(spec `specs/2026-07-20-tree-flag-and-env-level.md`; decisions 2026-07-12 03:06 +
+(silent). *(spec in board item `level-is-the-ambient-uedcli-level-target-tree`; decisions 2026-07-12 03:06 +
 2026-07-19 12:30 + 2026-07-20 21:30 UTC.)*
 
 ## Coords: exact Decimal, fractions preserved
@@ -573,7 +573,7 @@ A **folder** is a per-actor, uedcli-side, hierarchical dotted organization path 
 that lets a big build be addressed as a tree ("retexture every `**.roof`"). It is stored in the
 trunk, **never emitted to the built map**, and is a **separate dimension** from the T3D `Group=`
 prop (which is retained, parsed, and emitted exactly as before — the two never interact). Spec
-`specs/2026-07-18-actor-folders-hierarchical.md`; decisions.md 2026-07-18 12:14/12:32/12:45 UTC.
+board item `actor-folders-hierarchical-actor-organization`; decisions.md 2026-07-18 12:14/12:32/12:45 UTC.
 
 - **Model + sidecar.** `Actor.folder: str | None` is a **typed field** (like `location`), NOT a
   `props` entry; `None` = ungrouped. It persists as a per-actor **sidecar file** `folder` beside
@@ -638,7 +638,7 @@ cross-cutting axis a single folder hierarchy can't express (a torch is at `castl
 mechanism, same trunk-only scope, same never-emitted-to-the-map rule, but a **sorted set** rather than
 one path. They are **orthogonal** to the folder, the T3D `Group=` prop, and the T3D `Tag=` prop —
 named `label` deliberately, since `tag` would collide with `Engine.Actor.Tag`. Spec
-`specs/2026-07-22-actor-labels.md`; plan `plans/2026-07-22-actor-labels.md`; decisions.md
+board item `re-evaluate-whether-reject-nonlevel-target`; plan in board item `re-evaluate-whether-reject-nonlevel-target`; decisions.md
 2026-07-22 20:49 UTC. This first cut is **trunk + `duplicate` only** — no stash/prefab labels channel
 (deferred), so the label-editing verbs reject `--tree stash|prefab`.
 
@@ -749,7 +749,7 @@ named `label` deliberately, since `tag` would collide with `Engine.Actor.Tag`. S
     shadow the live tree a developer is editing. The anchor is
     `importlib.resources.files("uedcli")`, not a `parents[N]` count, so moving the module inside
     the package cannot break it. The `_docs` branch is dormant: nothing generates it yet (see the
-    packaging item on `board/inbox.md`). Any failure is a clean exit-2 `_SelectionExit` naming what
+    packaging item on `board/inbox/`). Any failure is a clean exit-2 `_SelectionExit` naming what
     was wrong — never a silently empty listing, which would read as "this build has no docs".
   - **Topic key** — how a page is addressed: its path under the docs root with `.md` dropped, with
     a `README.md` folded onto the directory it documents (`leveldesign/deusex/README.md` →
@@ -870,7 +870,7 @@ named `label` deliberately, since `tag` would collide with `Engine.Actor.Tag`. S
   - `level preview SHOT... --out-dir DIR [--game|--native] [--size WxH] [--fov DEG]` —
     **freely-posed still shots, two backends behind one verb; `--game` is the DEFAULT, `--native`
     is opt-in** (decisions 2026-07-16 12:13 + 2026-07-17 18:46; spec
-    `specs/2026-07-16-native-preview-design.md`). `dispatch._level_preview` resolves the tier as
+    board item `de-containerization-follow-on-spec-items`). `dispatch._level_preview` resolves the tier as
     `use_game = not args.native` (mutually-exclusive flags; neither given ⇒ game). Trunk-only. SHOT tokens are the shared pose
     grammar (`preview_shots.parse_shot`): `at:X,Y,Z;rot:PITCH,YAW` / `at:…;look:X,Y,Z|@Actor` /
     `orbit:@Actor;radius:R;azimuth:A[;elev:B]` (+ `;name:STEM`), unreal rotation units (16384 = 90°), validated up front
@@ -1036,7 +1036,7 @@ named `label` deliberately, since `tag` would collide with `Engine.Actor.Tag`. S
 - **Content verbs are model-side** (no editor): `actor …`, `brush …` (including `brush poly …`
   and `brush vertex …`, the surface/corner sub-editors), **`mover key …`**, `actor preview`
   (wireframe).
-- **The actor-name composition pipe** (spec `specs/2026-07-18-actor-name-compose-pipe.md`) closes
+- **The actor-name composition pipe** (spec in board item `actor-name-composition-pipe`) closes
   `actor find`'s output into the name-taking verbs at both ends. **Producer:** `actor add` prints
   the allocated `<stem>_<rand>` Names to **stdout** (one/line, allocation order) AFTER `src.save()`
   returns — so a live `add - | prop set -` pipe's downstream `load()` can never race the trunk
@@ -1096,7 +1096,7 @@ named `label` deliberately, since `tag` would collide with `Engine.Actor.Tag`. S
   rendered geometry to ~1e-5uu, the float32-table floor (float trig drifts up to ~0.074uu; spike
   `spikes/2026-06-19-group-rotate-exact-parity.md`).
 - **Scale (`MainScale`/`PostScale`) is USED, STORED, and BAKED** (spec
-  `specs/2026-07-18-scale-support.md`; spikes `2026-06-25-scale-transform-mechanics.md` +
+  board item `scale-support-mainscale-postscale-use-store-bake`; spikes `2026-06-25-scale-transform-mechanics.md` +
   `2026-06-25-mainscale-postscale-applytransform.md`; decisions 2026-06-25 / 2026-07-18 14:03). The
   spike-verified world transform is **`world = Location + PostScale·R·MainScale·(v − PrePivot)`** —
   `MainScale` is LOCAL (pre-rotation), `PostScale` is WORLD (post-rotation), each an `FScale` (a
@@ -1136,7 +1136,7 @@ named `label` deliberately, since `tag` would collide with `Engine.Actor.Tag`. S
     Rotation field, in place, excludes `--pivot`).
 - **`actor order <names…|-> (--first|--last|--before NAME|--after NAME)`** and **`actor add --order
   (first|last|before=NAME|after=NAME)`** control **CSG precedence** — the `(order_value, name)` sort —
-  by minting new LexoRanks, purely model-side (spec `specs/2026-07-18-csg-order-control.md`; decisions
+  by minting new LexoRanks, purely model-side (spec in board item `csg-order-control-actor-order-actor-add-order`; decisions
   2026-07-18). `order` reassigns EXISTING actors (a `--first` world-subtract now carves before
   everything else, unblocking in-place resize); `add --order` places NEW actors off the append point
   (default `last` == today's append). A multi-actor set is a **block move**: sorted by its current
@@ -1155,7 +1155,7 @@ named `label` deliberately, since `tag` would collide with `Engine.Actor.Tag`. S
 
 ## Class-property schema, DEFAULTS & the `actor prop` verbs (`upackage.py`, `uprops.py`, `propedit.py`)
 
-**`actor prop set|unset|get <actor> TOKEN…`** (spec `specs/2026-07-18-actor-prop-subcommands.md`;
+**`actor prop set|unset|get <actor> TOKEN…`** (spec in board item `materialize-post-verify-fails-when-the-trunk`;
 decisions.md 2026-07-18 10:02 + 10:30 UTC — every design choice Andrzej's) reads, sets, and clears
 an actor's properties model-side, schema-validated, atomic per invocation (validate-before-mutate:
 a bad token leaves the trunk untouched). It replaced the flag form (`--set/--unset`, removed
@@ -1243,7 +1243,7 @@ zero each invocation — and the dominant cost is `load_package`'s name/import/e
 (38–211 ms per big package), not the property decode. `schema_cache.py` persists each package's
 decoded **discovery primitives** to `~/.uedcli/cache/schema/v<N>/<key>.bin` so a warm cold run skips
 `load_package` entirely (never touches the raw bytes `buf`). *(spec
-`specs/2026-07-18-package-schema-cache.md`; decisions.md 2026-07-18 21:30 UTC.)*
+board item `package-schema-cache`; decisions.md 2026-07-18 21:30 UTC.)*
 
 - **v1 bundle (`PackageSchema`)** — the per-package primitives `class list`/`class show` need, each a
   pure function of ONE package's bytes: class list (`iter_classes`), casefold→export-index map
@@ -1309,7 +1309,7 @@ things: the `class list`/`class show` discovery verbs, bare→FQCN class QUALIFI
 class-existence validation. It is header-only (reuses `uprops.load_package` — name/import/export
 tables, no property decode) except for `class show`'s schema and abstract detection. Built once per
 invocation; a single unparseable `.u` is skipped with a stderr note (never aborts). *(spec
-`specs/2026-07-17-class-discovery-and-author-validation.md`; decisions.md 2026-07-17 19:37 UTC.)*
+board item `offline-class-discovery-qualify-and-validate`; decisions.md 2026-07-17 19:37 UTC.)*
 
 - **`class list [--flat] [--package P] [--subclass-of Package.Class] [--depth N|all] [--include-non-actor] [--include-abstract]`** — by
   DEFAULT an indented inheritance **TREE** (decision 2026-07-18) rooted at `Engine.Actor`: abstract
@@ -1417,7 +1417,7 @@ in `spikes/2026-06-25-mover-keyframe-basepos-semantics.md`.
   (Caveat: `rotation.subtract_uu`/`compose_uu` are per-component FRotator arithmetic, geometrically
   naive for a non-cardinal base — `--from-world`/`--from-base` are not a clean re-basing off a tilted
   base `Rotation`.)
-- **Keyframe verb model (spec `specs/2026-07-20-mover-key-base-relative-frame.md`,
+- **Keyframe verb model (spec in board item `mover-key-keyframe-model-rework`,
   `decisions.md` 2026-07-20):** `NumKeys` is the *authoritative runtime waypoint count* — the engine
   cannot infer it from which `KeyPos` lines exist (a key deliberately at the base pose stores no
   line yet is a real waypoint), and UnrealEd never auto-decrements it (live-verified,
@@ -1484,7 +1484,7 @@ in `spikes/2026-06-25-mover-keyframe-basepos-semantics.md`.
     `bare.endswith("Mover")`. It is the CSG-palette + hidden-line classifier on the shared
     `actor preview` / `stash preview` / `prefab preview` path, so threading a `ClassIndex` into it
     would make those three verbs require a project + the games config too — a further verb family —
-    while the open spec item at the top of `board/to-spec.md` is asking whether that requirement
+    while the open spec item at the top of `board/to-spec/` is asking whether that requirement
     should be scoped BACK DOWN. Which verbs may ask the mover question is one decision, so
     `classify_brush` is folded into that item's scope rather than pre-empted here. **Live
     consequence until it is decided:** in those wireframe previews `CaroneElevatorSet.CEDoor`,
@@ -1502,7 +1502,7 @@ in `spikes/2026-06-25-mover-keyframe-basepos-semantics.md`.
     routes — no games config, and a config that resolves no packages (`index.empty`) — exit 2 naming
     the verb and the requirement. `doctor` treats subclass movers as closed solids (deliberate: it
     widens the watertight check to e.g. `BreakableGlass`, which the glass recipe already flags as a
-    false-positive source — `board/inbox.md` chore).
+    false-positive source — `board/inbox/` chore).
 - **The `mover key` family** (model-side, trunk-level, `src.save`): `add` appends a key at
   an absolute world pose (stores the relative offset); `move`/`rotate <i> (--to|--by)` edit a key
   (`--to` absolute, `--by` delta — `mover key rotate --to` is a NEW absolute-rotation affordance
@@ -1601,7 +1601,7 @@ Rationale, rejected alternatives and the outstanding verification gap:
 
 ## Native (editor-free) materialize (`uedcli/native/`, `uedcli-native/`)
 The offline build path that turns the git-tracked T3D trunk into a game-loadable `.dx`/`.unr`
-**with no editor, no wine, no container** — the design is `specs/2026-07-15-native-materialize-design.md`
+**with no editor, no wine, no container** — the design is board item `native-level-materialize`
 (RE evidence: `spikes/2026-07-15-native-materialize/sections/{10,20,30}`). Two artifacts:
 
 - **Python glue `uedcli/native/`** owns orchestration + the proven byte-exact serializers:
@@ -1628,7 +1628,7 @@ The offline build path that turns the git-tracked T3D trunk into a game-loadable
     the editor golden's own 5), and UNATCO-HQ leaf-blobs 18→7 and zones 20→9 (editor 7); the castle
     (no movers) is byte-unchanged.  **Those counts were measured 2026-07-19 with the OLD name-suffix
     predicate** — i.e. with the `DeusEx.BreakableGlass` brushes still entering CSG — and have not
-    been re-run since; re-measuring is a `board/inbox.md` chore.  The suffix GAP itself (a Mover
+    been re-run since; re-measuring is a `board/inbox/` chore.  The suffix GAP itself (a Mover
     subclass not named `*Mover` leaking into CSG) is CLOSED: `is_mover` is schema-aware since
     2026-07-25, so `_in_world_csg`/`_build_level_model`/`run_materialize_native` take the
     `ClassIndex` (`index=`/`class_index=`) and resolve the hierarchy for real.
@@ -1756,7 +1756,7 @@ UNATCO-150/300, stable across runs) — they cut the O(M²) *constant*, not the 
 
   Reaching the sub-minute target therefore needs a genuine algorithmic change (incremental /
   localised CSG that reproduces the EXACT fragments, or a provable form of the local-tree/lean
-  ideas), tracked in `board/inbox.md` — out of scope for a strictly behavior-preserving pass.
+  ideas), tracked in `board/inbox/` — out of scope for a strictly behavior-preserving pass.
 
 **Status (M0 + toolchain + N-1 CSG core):** the CSG core is ported and wired into
 `build_geometry` (flat-buffer brush API). It is validated by an **editor-golden differential**
@@ -1765,7 +1765,7 @@ ephemeral editor and froze it as `tests/fixtures/csg_golden/*.json`; `tests/test
 differential.py` runs the SAME corpus through the Rust build offline and compares the surf set +
 counts. **Tier-S surf-set parity is reached on cases a (single subtract), c (add-in-subtract),
 d (abutting-subtracts — the known prior-port 11-vs-10 ANNIHILATION bug, proven fixed), e (semisolid
-detail).** Two residuals remain (both N-2, tracked xfail + `board/inbox.md`): **b (off-grid wedge)**
+detail).** Two residuals remain (both N-2, tracked xfail + `board/inbox/`): **b (off-grid wedge)**
 needs `bspMergeCoplanars` coplanar-face union (`build.rs merge_coplanars` is a documented no-op;
 `FindBestSplit` uses a split-minimizing variant that substitutes for the missing merge/opt passes),
 and **f (portal)** needs `TestVisibility` portalization/zones (native is single-zone; leaf-count
@@ -1776,7 +1776,7 @@ pawn stands (`phys=1`) and `uplayctl shot` renders the world first-person — li
 oracle `spikes/2026-07-15-native-materialize/harness/line_check.py` (a downward pawn sweep must HIT
 at `floor+extent`). `bake_lighting`/`build_paths` are N-4/N-5. `apply.run_materialize` still drives the editor; flipping
 it to the native path as its **sole** path awaits full CSG parity (b/f) + N-3 typed-prop
-serialization + editor-mock test migration (flagged in `board/inbox.md`). Build the extension:
+serialization + editor-mock test migration (flagged in `board/inbox/`). Build the extension:
 `cd uedcli-native && maturin develop`; `cargo test` runs the core goldens.
 
 ## Adding a verb (model-side, no editor)
@@ -2034,7 +2034,7 @@ port, which never calls `point_in_convex` (though `bspcsg.rs` flags a non-convex
 unhandled case of its convex world-seed shortcut, so a concave brush should not lead a level's
 adds). This joins the already-documented ~11% native solidity
 divergence on walls/steps (KNOWN GAP below); the `csg.rs:61` comment "DX brush builders emit convex
-brushes, so this is exact" is now **falsified for builder output**, with an `inbox.md` follow-up to
+brushes, so this is exact" is now **falsified for builder output**, with an `board/inbox/` follow-up to
 decompose non-convex builder brushes into convex pieces (or guard+warn) on the native path.
 The convex CSG shapes (cube/cylinder/cone) were validated live
 (paste→rebuild→select) on parallel ephemeral editors — see `parallel-editors.md`; the single-brush
@@ -2287,7 +2287,7 @@ barely moves; the KEYLINE, not repositioning, keeps overlaps legible. Overlap
 minus the set, restricted to near an overlap. Drawing OUTSIDE the strokes (not on their boundary) makes
 it exactly 1px at ANY zoom and never a fill: it does not thicken as a number grows. `_draw_painted_decal`
 returns its `on` set so the loop can collect them for this pass. *(decisions 2026-07-23 anti-overlap +
-2026-07-23 minimal-reshuffle-and-keyline; spec `specs/2026-07-23-decal-anti-overlap.md`)*
+2026-07-23 minimal-reshuffle-and-keyline; spec in board item `actor-preview-on-face-number-overlap-minimal`)*
 
 Each decal's opacity is **graded by how deeply its face is buried**. Every front face is collected into
 `occluders` as `(poly2d, depth, brush_name, is_solid)`; `_occluder_count` counts how many lie in front
@@ -2472,7 +2472,7 @@ exchange is the container-local `/work` dir (see "Container filesystem isolation
 *(Deferred follow-up: the stub-build + `texture sync` mounts are sourced from the host
 `packages.substrate_code_dirs` / `install_system_root` lists, NOT yet from a project's composed
 config `paths` — folding that path onto the config layer, and re-basing `texture sync` discovery +
-catalog dir onto the composed project path, are tracked in `board/inbox.md`.)*
+catalog dir onto the composed project path, are tracked in `board/inbox/`.)*
 
 ## Container filesystem isolation
 **No live container can write into the repo tree.** There is no broad read-write `/repo` bind

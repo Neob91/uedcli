@@ -190,7 +190,7 @@ the wrong side of it. A verify that reads the file with UCC is not on the bounda
   has to resolve bare class and texture names to their packages, which today it does by typing
   `OBJ DEPENDENCIES` / `OBJ LIST` into a live editor. Whether that can be replaced by reading the
   map's own import table is a separate question, designed in
-  `specs/2026-06-27-uedcli-native-dx-read-design.md` and not built. Nothing here settles it.
+  board item `stale-canonicalize-mover-blob-references-in-two` and not built. Nothing here settles it.
 - **Anything about maps this substrate cannot load.** 8 of 120 are simply outside what either
   reader can open here.
 - **Why `MAP LOAD` re-cases a name and `EDIT PASTE` does not.** The boundary is measured; the

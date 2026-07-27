@@ -6,10 +6,10 @@ This is uedcli's OWN alignment, NOT a port of the editor's. UnrealEd's own verb 
 they agree with `_tex_basis` on none of seven face directions, and its `FLOOR`/`WALLX`/`WALLY`
 anchor the texture on a WORLD AXIS where this module anchors on the seed face's centroid. See
 `dev/docs/unrealed/texalign.md`; whether any of that should change is an open product question
-parked on `dev/docs/board/inbox.md`.
+parked on `dev/docs/board/inbox/`.
 
 Design authority: dev/docs/decisions.md 2026-07-18 21:40 UTC (`poly align` v1 scope + face-selection
-grammar) and specs/2026-07-18-poly-align.md (UV math + algorithms).
+grammar) and board item `poly-align-brush-poly-find-built` (UV math + algorithms).
 
 UV convention (verified from `render.rs`/`preview_native.py`, not memory):
     U = (Vertex − Origin) · TextureU + PanU     (V analogously with TextureV/PanV)

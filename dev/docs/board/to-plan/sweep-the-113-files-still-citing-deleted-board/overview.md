@@ -19,14 +19,14 @@ git grep -lE '(^|[^/])`?(inbox|to-spec|to-spike|to-plan|to-build|someday|done)\.
 
 Union: **113 files** — plus **104 references inside 62 board items themselves**, each of which is a
 dangling pointer today. Notable: the repo-root `README.md` describes the whole flow by dead
-filename; `dev/docs/README.md:37` has a label saying `inbox.md` over a target of `board/inbox/`;
-`uedcli/cli.py:383` puts `dev/docs/board/to-spec.md` in a **user-visible** `help=` string;
+filename; `dev/docs/README.md:37` has a label saying `board/inbox/` over a target of `board/inbox/`;
+`uedcli/cli.py:383` puts `dev/docs/board/to-spec/` in a **user-visible** `help=` string;
 `architecture.md` has 9; three `.rs` files have 4, and `.rs` is invisible to the link checker.
 
 **Stale rules in `CLAUDE.md`, which is worse than a stale path** because agents act on it: the
 bounce-to-inbox rule at the `inbox/` bullet contradicts `board/README.md`'s bounce-to-`to-spec/`
 (owner decision 2.13); three sentences still treat `[spike]`/`[chore]`/`[debug]` as routing tags and
-name `to-build.md`; and the `bin/board` section still says the board "is migrating … both shapes
+name `board/to-build/`; and the `bin/board` section still says the board "is migrating … both shapes
 exist".
 
 **`board/README.md`'s own worked example does not resolve** — it writes the reference form with the slug `level-import`

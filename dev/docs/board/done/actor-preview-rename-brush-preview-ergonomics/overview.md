@@ -17,5 +17,5 @@ line, red retired); `--zoom-factor` (default 0.8). Point actors: DT_Sprite billb
 range`/`--show-sound-range` spheres — fields resolved in dispatch via the `_class_defaults` seam +
 a `TextureResolver.resolve_masked`, schema-unavailable degrading to a marker + note (no traceback).
 Engine facts (sprite footprint, `25·(x+1)` radii, 2·CollisionHeight box) pinned in
-`test_engine_facts.py`. Specs `specs/2026-07-21-brush-preview-ergonomics.md` +
-`specs/2026-07-21-actor-preview.md`; UED palette/radii facts folded into `unrealed/rendering.md`.
+`test_engine_facts.py`. Specs `spec-brush-preview-ergonomics.md` +
+`spec.md`; UED palette/radii facts folded into `unrealed/rendering.md`.

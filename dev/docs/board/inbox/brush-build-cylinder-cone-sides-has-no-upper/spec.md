@@ -14,7 +14,7 @@ in the `decisions.md` addendum cited below.
 plan-review addendum (D11–D12). D1–D10 are Andrzej's, made in the speccing Q&A; those entries are the durable record of the choices
 *and the alternatives rejected*.
 **Board item:** [`to-build/`](../../../board/to-build/) #12 — on-deck, both gates passed. Triaged
-forward through `to-plan.md` from [`to-spec/`](../../../board/to-spec/), where it
+forward through `board/to-plan/` from [`to-spec/`](../../../board/to-spec/), where it
 was raised by the corpus brush-idiom study
 (board item `brush-identify-classify-a-real-brush-s-shape` §7 gap 6).
 
@@ -644,7 +644,7 @@ fixtures captured against the real editor. One of those calls is `cone(160, 96, 
 angle_offset=25)` — 25° is *not* a half-segment for a hexagon, so it cannot be expressed as
 `--align-to-side` at all. Renaming or removing the builder parameters would force a needless
 editor re-bless of the parity goldens. *(Established while planning; see
-[`plans/2026-07-25-brush-profile-generators-plan.md`](plan.md)
+[`plan.md`](plan.md)
 §0.)*
 
 **No back-compat shims** (`CLAUDE.md`, `direction.md` "No back-compat cruft"): `--degrees-per-step` is
@@ -695,7 +695,7 @@ overlaps `--rotate`. *Rejected:* deleting the flag outright and telling authors 
   single chamfer plane. The genuine residual is taper **along the sweep axis** — a frustum/loft, which
   neither extrude nor clip nor `brush build cone` (apex-only, no `CapHeight` truncation) can produce.
   That is a one-flag follow-up (`--taper S` scaling the far cap), not spec-sized. The p3
-  `inbox.md` item asking for `cube --taper`/a wedge builder must be **re-scoped to that remnant** once
+  `board/inbox/` item asking for `cube --taper`/a wedge builder must be **re-scoped to that remnant** once
   extrude lands, not closed outright.
 - **Profiles with holes** (an annulus in one brush) — in UE1 a hole is a subtracted brush, not a
   cap topology. Not a gap.
@@ -837,6 +837,6 @@ durable ones and delete the spec):
 - **`dev/docs/architecture.md`** — the generator inventory and the `profile.py` module.
 - **`dev/docs/decisions.md`** — the D1–D10 entries plus the review-refinements addendum; reconcile
   **`direction.md`**'s "Generator pattern" section, which lists the generator shapes.
-- **`dev/docs/board/`** — close this item; re-scope the p3 taper item in `inbox.md` (§8); add
+- **`dev/docs/board/`** — close this item; re-scope the p3 taper item in `board/inbox/` (§8); add
   follow-ups for the axis-touching revolve case, `--taper`, and the `cylinder`/`cone --sides > 16`
   cap defect (§8).

@@ -5,7 +5,7 @@ deleted).
 **Decisions ledger:** APPENDED — [`dev/docs/decisions.md`](../../../decisions.md) `2026-07-25 00:43 UTC` records the
 §4 sub-choices (`--to` requires exactly one actor, `--by` for any count, dedupe, empty-stdin no-op,
 group-anchor `--to` rejected).
-**Motivation source:** board `to-spec.md` `[spec] p1` ("`actor move` over a SET (`-`/stdin), `--by`-only
+**Motivation source:** board `board/to-spec/` `[spec] p1` ("`actor move` over a SET (`-`/stdin), `--by`-only
 for multi-actor"; consistency-audit H2, accepted 2026-07-19; Andrzej: `--by`-only for sets).
 **Sibling verbs:** `actor rotate` (`cli.py:687`) and `brush scale` (`cli.py:731`) already implement the
 `names… | -` set contract this spec brings to `move`; the design mirrors them.
@@ -156,7 +156,7 @@ compat shim, `direction.md` "no back-compat cruft"):
   `test_tree_flag.py:255/444`, `test_trunk_verbs.py:94`. (Grep `sub="move"` / `sub='move'` to catch any
   the review missed.)
 
-## 6. Deferred / follow-ups (→ `inbox.md`)
+## 6. Deferred / follow-ups (→ `board/inbox/`)
 
 - **Group-anchor `--to`** (move a set so its centroid/bbox-min/named-anchor lands at a point). Needs an
   `--anchor` choice; file as a separate `[spec]` if wanted. Not in v1.

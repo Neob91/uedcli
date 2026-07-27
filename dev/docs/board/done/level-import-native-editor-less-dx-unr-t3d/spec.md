@@ -4,7 +4,7 @@
 once built, fold the mechanism into `architecture.md`, `unrealed/t3d.md`, and `docs/usage.md`, then
 this file may be deleted.
 **Decisions ledger:** `decisions.md` 2026-07-24 16:48 / 16:59 / 17:19 / 18:49 UTC — the durable record.
-**Board:** `to-plan.md` (the actor-order `[spike]` at §9 gates BUILD, not planning).
+**Board:** `board/to-plan/` (the actor-order `[spike]` at §9 gates BUILD, not planning).
 **Code refs symbol-anchored** (line numbers drift). v3 folds in review round 2 (two cold reviewers)
 which found the decode was *under*-credited (a production value-decoder already exists) and the struct
 reconciliation mis-placed; Andrzej then locked **decode-time UCC-exact rendering** + **strict

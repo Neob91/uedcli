@@ -12,7 +12,7 @@ sign convention (the fixed axis-priority chain was discontinuous on a gently gra
 column, and promoted the `run` V-flip to an owner narrowing (§7). The previously-open algorithm
 questions — branching, terminal faces, connectivity validation, the derived root and walk direction,
 the across-run axis — are decided in §2.4.1–§2.4.2. **The spec gate is at its ceiling
-(`CLAUDE.md` "Review gates"): what stands after this pass is fixed, parked on `board/inbox.md`, or
+(`CLAUDE.md` "Review gates"): what stands after this pass is fixed, parked on `board/inbox/`, or
 escalated — there is no further round.**
 · **Evidence:** [`dev/docs/spikes/2026-07-26-poly-rotate-curved-track/`](../../../spikes/2026-07-26-poly-rotate-curved-track/README.md)
 (the curved run) and [`dev/docs/spikes/2026-07-26-unrealed-texalign-semantics/`](../../../spikes/2026-07-26-unrealed-texalign-semantics/README.md)
@@ -163,7 +163,7 @@ this in the help so nobody adds `--to` on the strength of the wrong argument.
   batch is all-or-nothing so one noisy face would kill the whole invocation.
 
   **The test is ABSOLUTE-OR-RELATIVE — SETTLED** by the step-1 plan
-  (`plans/2026-07-26-poly-surface-step1-plan.md` §5) and durably recorded in
+  (board item `brush-poly-rotate-turns-against-the-visible` §5) and durably recorded in
   `rationale/surface.md` ("`rotate`'s out-of-plane guard"). It supersedes both the `1e-3` and the
   relative-only `1e-2` that earlier drafts of this spec asserted:
 
@@ -389,7 +389,7 @@ would get this wrong, because today's code anchors at `start[0]`, the *low endpo
   `--ring` renders an asymmetric texture upside-down, and `align wall` and `align run` on the same
   cylinder disagree. The cost is stated plainly: **re-aligning an existing cylinder wrap flips its
   texture vertically.** That is a change to how EXISTING CONTENT renders, so it is an owner narrowing
-  and not an agent choice — **§7 narrowing 2**, parked on `board/inbox.md`, documented per §4.3 and
+  and not an agent choice — **§7 narrowing 2**, parked on `board/inbox/`, documented per §4.3 and
   pinned per §4.2.
   **Which seam the zero is read from is settled below** ("Terminal faces and the across-run zero").
 
@@ -731,7 +731,7 @@ things that make either failure reachable:
 
 - on an **open** run — the flag snaps the density so a whole number of tiles closes the loop, and a run
   with no closing seam has no loop to close. Fitting a texture to an *open* run is a legitimate but
-  **different** operation (and would want a different flag name); filed to `board/inbox.md` rather
+  **different** operation (and would want a different flag name); filed to `board/inbox/` rather
   than folded in here;
 - at a **non-quarter** `--turn` — the advance then splits across both stored axes
   (`ΔU = d_u·S·|cos θ|`, `ΔV = d_v·S·|sin θ|`), so closing the loop would need *both* components to
@@ -927,7 +927,7 @@ doubling of `--segments`. Measured both ways; see finding 5.
 ### 3.1 Owner rulings (all 2026-07-26)
 
 The complete set. Rows 1–6 were made in the first session and are parked verbatim on
-`board/inbox.md` under *"The per-surface verb split"*; rows 7–13 followed and are parked under
+`board/inbox/` under *"The per-surface verb split"*; rows 7–13 followed and are parked under
 *"SEVEN further per-surface rulings"*. (Ruling 3's *resolution* — that the root is derived rather than
 taken from the first input token — is additionally recorded in the board's `[resolved]` pre-walk
 entry; that entry is a resolution record, not the parked ruling text.) **Keep this table and those two
@@ -1276,7 +1276,7 @@ root).
 A rename with no shim, so every occurrence is a broken instruction.
 
 ⚠ **Cited by ANCHOR TEXT, never by line number — THROUGHOUT THIS SPEC, not only in this section.**
-The step-1 plan already ruled this (`plans/2026-07-26-poly-surface-step1-plan.md` §6) and this
+The step-1 plan already ruled this (board item `brush-poly-rotate-turns-against-the-visible` §6) and this
 section is the reason: its numbers were "verified against the working tree" twice and were wrong both
 times, because several sessions edit this tree concurrently and a line number is stale the moment
 someone inserts a paragraph above it. An anchor is grep-able and survives that. §2's citations of
@@ -1318,7 +1318,7 @@ describing a CLI it does not yet have, or omitting one it does. A row spanning s
 | file | step | what breaks |
 |-------------------------------------|------|---
 | `tests/test_name_not_found_sweep.py` | 2 | **two entries drive the deleted flag spellings** — `("brush-poly-align", ["brush","poly","align","--wall", …])` in the positional table and `("brush-poly-align-stdin", [… "--floor","-"])` in the stdin table. Both must become the subcommand form (`align wall …` / `align floor -`). The file's stated purpose is BOTH tables, so covering one is covering half of it |
-| `tests/test_cli.py`, `test_surface.py`, `test_dispatch.py`, `test_actor_name_resolution.py`, `test_cli_consistency.py`, `test_emit.py` | 1 | the `--pan-to`/`--pan-by` split, enumerated with counts in `plans/2026-07-26-poly-surface-step1-plan.md` §6. Listed here so this spec's own picture is complete, not to restate that plan |
+| `tests/test_cli.py`, `test_surface.py`, `test_dispatch.py`, `test_actor_name_resolution.py`, `test_cli_consistency.py`, `test_emit.py` | 1 | the `--pan-to`/`--pan-by` split, enumerated with counts in board item `brush-poly-rotate-turns-against-the-visible` §6. Listed here so this spec's own picture is complete, not to restate that plan |
 | `tests/test_engine_facts.py` | 3 | **grows** rather than breaking — the §4.2 editor-parity pins live beside the existing `test_texalign_*` regressions, which already load the spike's `measured.json` and `texalign_model.py` |
 
 **Leave alone:** in `dev/docs/unrealed/t3d.md`, the two passages anchored on
@@ -1342,7 +1342,7 @@ below ends with a CLI that is internally consistent and fully documented.
 
 1. **`set`/`pan` split + `rotate` + `scale --by`** — mechanical promotions, settled semantics, no
    catalog, no `polyalign` frame math. **Already planned and building**:
-   `plans/2026-07-26-poly-surface-step1-plan.md` (revised after its round-1 plan review; its own
+   board item `brush-poly-rotate-turns-against-the-visible` (revised after its round-1 plan review; its own
    header carries its current gate state). `scale --by` belongs
    here because it needs no catalog; `scale --to` does, so it waits for step 5.
 2. **`align` flags → subcommands** (§2.0), over the modes that **exist**: `align wall`, `align floor`,
@@ -1391,7 +1391,7 @@ below ends with a CLI that is internally consistent and fully documented.
    `scale --to`** — introduces a new cross-module dependency and a project requirement on a verb that
    is pure model-side today. Riskiest *coupling*, so it goes last where it gets its own round.
 
-> ⚠ **Renumbering note for the step-1 plan.** `plans/2026-07-26-poly-surface-step1-plan.md` was
+> ⚠ **Renumbering note for the step-1 plan.** board item `brush-poly-rotate-turns-against-the-visible` was
 > written against the previous **four**-step order and calls the catalog step "step 4"; it is now
 > **step 5**, and step 1's content is unchanged. Nothing in that plan's scope moves.
 
@@ -1461,7 +1461,7 @@ not preference, is why §2.3 takes the projection family.
 | `FLOOR` | `align floor` (§2.3) | **ADOPTED** — same axes, same negation, same world anchor, same `0.05` guard. One deliberate divergence: a face failing the guard **exits 2** here and is silently skipped there (`conventions.md` "No silent half-answers") |
 | `WALLX` / `WALLY` | `align wall` (§2.3) | **ADOPTED, with the axis DERIVED** — the editor makes the author choose `WALLX` vs `WALLY`; `wall` picks the larger `\|N.X\|`/`\|N.Y\|`, ties to X̂. Same divergence on the guard |
 | `WALLDIR` | — | **deliberately NOT adopted** — its sign depends on the CSG surface normal, which a model-side tool does not have; and V-always-down is already supplied by `WALLX`/`WALLY`'s `−proj(Ẑ)` |
-| `WALLPAN` | — | **no equivalent** — re-phasing a wall to world `Z = 0` without touching its axes is cheap and absent; filed to `board/inbox.md`, not folded in here |
+| `WALLPAN` | — | **no equivalent** — re-phasing a wall to world `Z = 0` without touching its axes is cheap and absent; filed to `board/inbox/`, not folded in here |
 | `DEFAULT` | — | **no equivalent, and none wanted** — winding-order dependent, so two coplanar faces come out 90° apart |
 | `CLAMP` | — | **no equivalent**; what it is FOR was not determined (only what it writes) |
 | `ONETILE` / `WALLCOLUMN` | `align one-tile` (§2.6) | **nothing to conform to** — both editor modes do nothing |
@@ -1475,7 +1475,7 @@ model-side whatever it decides about matching the editor's *rules*.
 
 ## 5. Sequencing
 
-`board/to-plan.md` carries `specs/2026-07-24-facing-selector-grammar.md`, **both gates passed**, which
+`board/to-plan/` carries board item `brush-poly-find-facing-component-predicate`, **both gates passed**, which
 drops `--facing +Z` for a predicate grammar and makes `brush poly find` accept a brush **set**. This
 spec's motivating workflow drives everything through `--facing +Z`, and §6 puts multi-brush runs out
 of scope precisely as `find` starts emitting multi-brush sets routinely.
@@ -1493,7 +1493,7 @@ multi-brush set either way.
 - **Non-quad faces in a run — DECIDED, not deferred: exit 2 naming the face.** The quad assumption is
   load-bearing (a terminal face's free edge is found as the opposite edge of the quad); generalising
   needs a different rule for "the far edge" and no shipped builder produces a non-quad swept face.
-  Filed to `board/inbox.md` as its own item rather than guessed at here.
+  Filed to `board/inbox/` as its own item rather than guessed at here.
 - **Runs spanning more than one brush** — exit 2 naming the brushes.
 - ~~`brush poly scale`~~ — **pulled INTO this change** on the owner's 2026-07-26 ruling; see §2.5.
 - Fixing `level preview --native`'s inability to render a revolve (spike finding 6; filed). It makes
@@ -1503,12 +1503,12 @@ multi-brush set either way.
 
 Per `CLAUDE.md` "Direction docs", the durable landing of §3.1 in `direction/conventions.md` needs the
 owner's explicit yes and a `Confirmed: conventions` trailer. Until then the proposed text is parked
-verbatim as an `[OWNER — confirm]` item on `board/inbox.md`, so it survives this session.
+verbatim as an `[OWNER — confirm]` item on `board/inbox/`, so it survives this session.
 
 **Nothing is outstanding on the design.** Every gap the review rounds raised is now closed, and §3.1
 carries the complete ruling set rather than the first six:
 
-- the **owner's** thirteen rulings are §3.1, parked verbatim on `board/inbox.md` in the two
+- the **owner's** thirteen rulings are §3.1, parked verbatim on `board/inbox/` in the two
   `[OWNER — confirm]` items ("The per-surface verb split" — rulings 1–6 — and "SEVEN further
   per-surface rulings" — rulings 7–13). **Keep §3.1 and those two items in step** — the same text is
   awaiting the same yes. (The board's `[resolved]` pre-walk entry records how ruling 3 was *resolved*;
@@ -1524,7 +1524,7 @@ carries the complete ruling set rather than the first six:
 overrule. Both change how **existing content renders**, which is the one thing
 `direction/conventions.md` "No back-compat cruft" singles out as needing thought before it is
 changed ("the T3D trees are the one place to **think** before deleting, because a user's *content*
-lives there"). Both are parked on `board/inbox.md` beside the ruling text, so neither can be lost
+lives there"). Both are parked on `board/inbox/` beside the ruling text, so neither can be lost
 with this spec.
 
 **(1) Deleting the `wall`/`floor` coplanarity and co-orientation guards** (§2.3). **State the

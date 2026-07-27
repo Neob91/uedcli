@@ -24,4 +24,4 @@ suite green (997 passed). Reviewed by two cold subagents; both findings resolved
 **Remnant (low pri):** the older two preview tests still monkeypatch a `no_docker` guard onto
 `dispatch.subprocess.run`, which is now inert (the path makes no subprocess call) — harmless, could
 be dropped on a future pass. The `from PIL import Image` sits lazily in the `--png` branch, aligning
-with the open lazy-import item in `inbox.md`.
+with the open lazy-import item in `board/inbox/`.

@@ -2051,7 +2051,7 @@ fn bsp_brush_csg(model: &mut Model, brush: &build::BrushInput, actor_index: i32,
     //
     // `brush deintersect` no longer trips this — `brushcsg.build_scaffolding` prepends a distant
     // seed-subtract so the user's first brush never meets an empty tree — but `level materialize` and
-    // any other caller still can. Tracked in `dev/docs/board/inbox.md` (`first_add_seed`, p3). Fixing
+    // any other caller still can. Tracked in `dev/docs/board/inbox/` (`first_add_seed`, p3). Fixing
     // it properly means classifying a leading Add the way the editor does WITHOUT regressing the
     // world-shell case the seed was introduced for (§92 §32/§33), not simply deleting the shortcut.
     let first_add_seed = model.nodes.is_empty() && oper == csg::CsgOper::Add;
@@ -2446,7 +2446,7 @@ pub fn build_geometry_bspcsg(brushes: &[build::BrushInput]) -> Result<Model, Bui
 
 /// The `bspBrushCSG` **Intersect/Deintersect tail** (`0x35ab3`) — the whole of the editor's
 /// `BRUSH FROM INTERSECTION` / `BRUSH FROM DEINTERSECTION`, reframed onto a stateless in-tree brush
-/// SET (spec `specs/2026-07-24-intersect-deintersect-native-brushset.md`; RE
+/// SET (spec in board item `bspcsg-core-apply-scaled-brushes`; RE
 /// `re-raw-zones/bspbrushcsg-intersect-deintersect-decode.md`).
 ///
 /// `brushes` is the world CSG set **in stdin order** — for `intersect` the caller prepends the
@@ -3006,7 +3006,7 @@ mod tests {
     }
 
     /// `bspValidateBrush` coplanar-link (Editor.dll 0x37290; §92 stage-2, spec
-    /// `specs/2026-07-19-unatco-dome-csg-divergence.md`): coplanar, same-normal, same-texture,
+    /// board item `92-stage-2-done`): coplanar, same-normal, same-texture,
     /// same-axes, same-flags faces of ONE brush link to a single surf (`links[j] = i`, `i < j`);
     /// a plain box (six DISTINCT normals) links nothing.  This is the dome-cap fix: N `(0,0,1)`
     /// facets at one z collapse to one surf (native kept 9, editor kept 1 — §92 §9 pin).
@@ -3547,7 +3547,7 @@ mod tests {
     /// brush to actually reach the world tree, which the shared core currently does NOT do (Pass-2
     /// detail brushes are dropped: the repartition leaves every node `NF_IsNew`, so the descent
     /// treats them all as non-CSG and the detail faces reach an `F_INSIDE` leaf).  That is a
-    /// pre-existing core gap, tracked in `board/inbox.md`; this half is covered at the golden level
+    /// pre-existing core gap, tracked in `board/inbox/`; this half is covered at the golden level
     /// once it lands.
     #[test]
     fn loop1_strips_solidity_bits_for_intersect_and_deintersect() {

@@ -163,7 +163,7 @@ Without the diff fix both silently no-op — this is the test that would have ca
   stdout"*). **NOTE — this is deliberately NOT a mirror of `actor folder set/unset`, which print
   NOTHING to stdout** (`dispatch.py:242-245`). Making the label verbs producers is the better,
   compose-friendly behavior; the resulting inconsistency with the silent folder verbs is a real wart.
-  *Follow-up (board `inbox.md`): make `folder set/unset` producers too, for consistency.* (First draft
+  *Follow-up (board `board/inbox/`): make `folder set/unset` producers too, for consistency.* (First draft
   wrongly called this "mirroring folder" — corrected.)
 - **Validate-all-then-apply** (invariant D2): resolve every name and validate every label BEFORE any
   write; a bad name or malformed label leaves the whole tree untouched (clean exit 2 naming the value).
@@ -439,7 +439,7 @@ Use artificial label values (`hero`, `flammable`, `dup-1337ab`) and realistic mu
   never emitted — like folder).
 - **Decisions ledger:** append the resolved choices (name `label`; multi-valued set; the freed-via-
   `--annotate` rename; inherit+fresh dup label as a UNION; grammar) to `decisions.md`.
-- **Follow-up chores (board `inbox.md`):** (a) the preview annotation *internals* (`parse_label_spec`,
+- **Follow-up chores (board `board/inbox/`):** (a) the preview annotation *internals* (`parse_label_spec`,
   `DEFAULT_LABELS`, `LabelSpec`) are still "label"-named after the `--annotate` flag rename — rename
   them `annotation*`. (b) make `folder set/unset` producers (echo touched names to stdout) for
   consistency with the label verbs (§4). (c) re-evaluate whether `_reject_nonlevel_target_for_folders`

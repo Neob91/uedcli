@@ -6,7 +6,7 @@ summary = "Docs restructure — spec gate round 1 returned a STRUCTURAL finding;
 
 # Docs restructure — spec gate round 1 returned a STRUCTURAL finding; work is PARKED
 
-Spec: `specs/2026-07-25-docs-restructure.md` (3 cold Opus, 2026-07-25). 2 of 3
+Spec: board item `docs-restructure-is-complete` (3 cold Opus, 2026-07-25). 2 of 3
 reviewers independently: deleting `direction.md` abolishes the **"want" lane** with no
 replacement — after it, nothing answers "what are we building toward" (`architecture.md` may not,
 by house rule; the board is one-line queue items; `decisions.md` is a per-choice ledger, not a

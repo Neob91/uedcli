@@ -8,7 +8,7 @@ summary = "DOCS RESTRUCTURE IS COMPLETE — one issue, everything that needs you
 
 Thirteen `direction/<topic>.md` docs + `rationale/` now replace `direction.md` and the frozen
 `decisions.md`. Resident context **1,063 → 686 lines**. Spec
-`specs/2026-07-25-docs-restructure.md`, plan `plans/2026-07-26-docs-restructure-plan.md`,
+`spec.md`, plan `plan.md`,
 migration record `rationale/MIGRATION.md`.
 
 **1. The thirteen topic docs.** Every decision in them was confirmed in session, but the prose

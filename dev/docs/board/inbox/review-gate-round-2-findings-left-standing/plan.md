@@ -435,14 +435,14 @@ git push origin uedcli-impl
   `parse_label_spec`; the `DensityGrid` cost-minimizing placement; the unified label pass (point
   names no longer in `_draw_point_overlay`); brush-name anchor snap.
 
-- [ ] **Step 4: Board.** Move the spec item to `done.md` tail; keep the optional true-occlusion
-  `[implement] p3` in `inbox.md`.
+- [ ] **Step 4: Board.** Move the spec item to `board/done/` tail; keep the optional true-occlusion
+  `[implement] p3` in `board/inbox/`.
 
 - [ ] **Step 5: Commit + Part-B review gate.**
 
 ```bash
 git commit -m "Tune label placement weights; document --labels grammar + placement" \
-  -- uedcli/preview.py docs/usage.md dev/docs/architecture.md dev/docs/board/done.md
+  -- uedcli/preview.py docs/usage.md dev/docs/architecture.md dev/docs/board/done/
 git push origin uedcli-impl
 ```
 

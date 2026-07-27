@@ -1,6 +1,6 @@
 # Plan: native texture decode for any UE1 package
 
-**Spec:** `specs/2026-07-25-native-texture-formats.md` (review-gated three times, 2026-07-25; rounds
+**Spec:** board item `three-design-calls-the-native-texture-formats` (review-gated three times, 2026-07-25; rounds
 2 and 3 reviewed this plan alongside it, and round 3 arrived together with two decisions from
 Andrzej — **AD1** and **AD2** — that removed an error case and named a limit. Everything is folded
 below; the spec's §10 has the round-by-round record).
@@ -89,7 +89,7 @@ succeeds wrongly:
    branch.
 
 **One thing depends on this work:** the unified asset catalog's texture arm
-(`plans/2026-07-25-unified-asset-catalog-plan.md` slice `S8a`, which that plan gates on this one as
+(board item `the-unified-asset-catalog-spec-revision` slice `S8a`, which that plan gates on this one as
 its `P1`). That arm names every tracked texture-classification shard `sha256(width, height, RGB)` —
 a **frozen, unversioned identity** — so any later change to what this decoder outputs silently
 re-keys every shard, and every classification an LLM has authored reads back as "unclassified".
@@ -362,7 +362,7 @@ on this machine and the slot meanings disagree across installs, so a guess retur
 
 **D4. The remaining layouts get a `p1` board item to spike and implement** (Andrzej) — acquire real
 samples first, verify, then implement. Until then an unsampled slot is a named `unverified-format`
-error carrying its own uncertainty. The item is already filed in `dev/docs/board/inbox.md` — grep it
+error carrying its own uncertainty. The item is already filed in `dev/docs/board/inbox/` — grep it
 by its title, **`[spike/implement] p1 The REMAINING UE1 texture layouts`** (it was at `:603` on
 2026-07-25; the board moves constantly, so grep, never seek by line).
 
@@ -1140,7 +1140,7 @@ names the case; `dispatch.py`'s sprite path (grep `resolver.resolve_masked(bare)
 `is not P8-decodable`) keeps the marker and names the case in its note. **No third disposition is
 implementable in this plan** — see §7.3.
 
-Fold in the standing hostile-input finding — `dev/docs/board/inbox.md`, grep
+Fold in the standing hostile-input finding — `dev/docs/board/inbox/`, grep
 **`utexture` resolver can raise IndexError/MemoryError on hostile mip counts/sizes`** (item 5 of the
 `preview_native` cold-review list; it was at `:1177` on 2026-07-25): cap the mip count and per-mip
 dimensions and turn an over-large or self-inconsistent declaration into `corrupt-body`/
@@ -1659,7 +1659,7 @@ Cross-cutting only (per-slice docs already landed):
   (`rationale/MIGRATION.md` maps old entries to their new homes). Decisions now split by author:
   - **the §5 mask-semantics call is NOT the agent's and NOT re-asked — it is ALREADY RULED.**
     *(Resolved 2026-07-26; §5, S7 and §5's parenthetical previously gave three incompatible
-    dispositions.)* `specs/2026-07-26-actor-preview-textured-faces.md` §4.3a records the owner's
+    dispositions.)* board item `four-actor-preview-faces-rulings-need-a-durable` §4.3a records the owner's
     ruling that **the CALLER ORs `bMasked` with the poly flag** (`masked = bool(flags & 0x2) or
     decoded[ref].b_masked`), which is exactly §5-D: the decoder reports the flags and never applies
     them. S7 **cites that ruling** and writes nothing to `rationale/` or `direction/` for it, and
@@ -1668,7 +1668,7 @@ Cross-cutting only (per-slice docs already landed):
     `ambiguous-alpha` cases behaved in practice → the `rationale/` tree under a **new texture-decode
     topic** (created by this build, so not cited as a path until it exists), revised in place, each entry stating *Why it is this way* / *Rejected* / *Refs*.
   - **the owner's** — AD1/AD2 arbitration and the synthesized-fixture ruling → propose the exact text
-    and park it as an `[OWNER — confirm]` item on `board/inbox.md`; it may only be written into
+    and park it as an `[OWNER — confirm]` item on `board/inbox/`; it may only be written into
     `direction/` with an explicit yes and a `Confirmed:` commit trailer.
 - **`architecture.md`** — the four non-preview texture passages of §0f (grep
   `textures decode natively`, `utexture.TextureResolver.exists`, `the native` +
@@ -1682,23 +1682,23 @@ Cross-cutting only (per-slice docs already landed):
   natively)" is where the compiled target claims universal decoding, and reconciling it with the
   limit *is* a change to the owner's tree — `CLAUDE.md`: "NEVER create, revise, reword, or delete
   anything under `dev/docs/direction/` … without asking the owner and getting an explicit yes."
-  S7 therefore **parks an `[OWNER — confirm]` item on `board/inbox.md` carrying the proposed clause
+  S7 therefore **parks an `[OWNER — confirm]` item on `board/inbox/` carrying the proposed clause
   verbatim** (a code-less BC2/BC3 texture that fits `bc16` uniquely is reported undecodable rather
   than drawn), and does not touch the file.
-- **`plans/2026-07-25-unified-asset-catalog-plan.md`** — mark its `P1` landed; correct its S1 note
+- **board item `the-unified-asset-catalog-spec-revision`** — mark its `P1` landed; correct its S1 note
   that "there is no UE1 package writer in the tree" (§0e2).
-- **board** — the item is **already on `to-build.md`**, not `to-plan.md`: `to-plan.md`'s "Native
-  texture decode" line is a **tombstone** ("PLANNED 2026-07-25, moved to `to-build.md`"), so **delete
-  the tombstone** rather than moving anything, and tick/remove the `to-build.md` item under the
+- **board** — the item is **already on `board/to-build/`**, not `board/to-plan/`: `board/to-plan/`'s "Native
+  texture decode" line is a **tombstone** ("PLANNED 2026-07-25, moved to `board/to-build/`"), so **delete
+  the tombstone** rather than moving anything, and tick/remove the `board/to-build/` item under the
   heading `## Native texture decode for any UE1 package`. Also **fix the stale prerequisite note in
   the asset-catalog item further down the same file** — grep `Blocking prerequisite NOT yet on the
   board`, which still calls this work "an untriaged `inbox` item (`[spike/implement] p2`)" that needs
-  triaging through `to-spec`/`to-plan`; it is neither untriaged nor `p2`. Leave `inbox.md`'s
+  triaging through `to-spec`/`to-plan`; it is neither untriaged nor `p2`. Leave `board/inbox/`'s
   `[spike/implement] p1 The REMAINING UE1 texture layouts` item in place (it is D4's, not this
   build's) but point it at the `unverified-format` case that now exists; close the `utexture`
-  sub-finding of the `preview_native` cold-review list in `inbox.md` (grep
+  sub-finding of the `preview_native` cold-review list in `board/inbox/` (grep
   `utexture` resolver can raise IndexError/MemoryError`).
-- delete `specs/2026-07-25-native-texture-formats.md` and this plan — **but only after S6's spike
+- delete board item `three-design-calls-the-native-texture-formats` and this plan — **but only after S6's spike
   markdown is committed.** The spike dir holds no markdown today, so deleting first would take the
   census, the enum dumps, the stored-code list and the oracle tables with it. **Keep**
   `dev/docs/spikes/2026-07-25-native-texture-formats/` — spikes are durable evidence, not scratch.
@@ -1753,7 +1753,7 @@ green.
 *(Retitled 2026-07-26. §0b's own correction says a call that changes observable behaviour is **asked,
 not derived**, and `CLAUDE.md` "Asking the owner" forbids downgrading a real question into a board
 item to avoid asking it. Parking is for a decision already put and awaiting a yes — not a substitute
-for putting it. **Mitigating, and probably decisive:** `specs/2026-07-26-actor-preview-textured-faces.md`
+for putting it. **Mitigating, and probably decisive:** board item `four-actor-preview-faces-rulings-need-a-durable`
 §4.3a already records the owner's ruling that the CALLER ORs `bMasked` with the poly flag, which is
 consistent with D below. If that is the ruling, cite it here and drop the "builder-decided" framing
 rather than re-asking.)*
@@ -1762,7 +1762,7 @@ It was left open by the spec and it **blocks work**, so it is decided here rathe
 is chosen to fit the documents' own principles — *never a wrong pixel* and *no silent half-answers* —
 **(2026-07-26: §0b's own correction says a call that changes observable behaviour is ASKED, not
 derived — `CLAUDE.md` "An owner DECISION is implemented as given". §5-D changes what a caller sees,
-so before S7 it is parked as an `[OWNER — confirm]` item on `board/inbox.md` carrying the proposed
+so before S7 it is parked as an `[OWNER — confirm]` item on `board/inbox/` carrying the proposed
 text verbatim, not routed to `rationale/` as an agent decision.)**
 and it is **builder-decided under Andrzej's "do whatever it takes" delegation and cheaply
 reversible**, so overruling it costs one small change plus its test.
@@ -1819,7 +1819,7 @@ build changes what a failed skin lookup *returns*, not what a skin *is*.
 - **Encoding** textures. `pkgfixture` is test-only and never ships.
 - **The unsampled linear slots** (Unreal Gold `RGB32`/`RGB64`/`RGB24`/`RGBA8`; 227
   `BGRA8_LM`/`R5G6B5`/`RGB8`/`BGRA8`, `BC4`+) — D4's `p1` board item owns them (grep
-  `inbox.md` for `The REMAINING UE1 texture layouts`); they
+  `board/inbox/` for `The REMAINING UE1 texture layouts`); they
   produce `unverified-format` until it lands.
 - **Any per-game format table**, shipped or derived from a game's `Engine.u` (D1).
 - **Widening `textures()` (`utexture.py:245`) to `Engine.Texture` descendants** — the asset catalog's.

@@ -19,6 +19,6 @@ project's own conversation audio into `sound list` while reporting "excluded: 0"
 much is genuinely conversation VO and how it is identifiable; and whether `sound list` needs any default
 filter at all at that size. **Then** decide whether a per-substrate config key is warranted — do not
 design the rule first. Findings fold into
-`specs/2026-07-26-asset-catalog-audio-arm.md`. Two downstream claims also need re-basing on the result:
+`spec.md`. Two downstream claims also need re-basing on the result:
 the plan's hot-author-path cost criterion, and the engine spec's ObjectProperty-validation worked example.
 *(2026-07-26.)*

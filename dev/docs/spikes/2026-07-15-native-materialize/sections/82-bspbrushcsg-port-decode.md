@@ -646,7 +646,7 @@ divergence in `FilterWorldThroughBrush`/`bspFilterFPoly`/`SplitWithPlane`, not i
 The whole remaining `only-editor` family (`-280`, sloped bastion `-295.7`, `BRoof` planes) is the
 same tower/roof clip-selection shape. **Next divergence to chase = that split selection, decoded to
 instruction level before any change** (do NOT force the merge — it would over-fuse non-adjacent
-fragments and regress). Tracked in `board/inbox.md`.
+fragments and regress). Tracked in `board/inbox/`.
 
 ### 10.5 N=33 clip-selection PINNED to instruction level — it is a LOOP-2 world-tree ORDERING divergence, NOT the temp brush (2026-07-17) 🔬 ✅
 
@@ -697,7 +697,7 @@ stays **0 / 1156** (it is gated on an exact full-castle soup, which this does no
 whole `only-editor` plane family (`-248`, `-280`, sloped bastion `-295.7`, `BRoof`) is the same
 world-tree-order clip-selection shape. **Next: reconcile native's incremental LOOP-2 node insertion
 order with the editor's — a structural `bspBrushCSG` ordering task, not a scalar-param fix.** Do NOT
-force the merge or the clip. Tracked in `board/inbox.md`.
+force the merge or the clip. Tracked in `board/inbox/`.
 
 ### 10.6 N=33 divergence traced to instruction level — it is a MERGE-BLOCKING clip born on a DEAD merlon-east node; NOT any local rule (2026-07-17) 🔬 ✅
 
@@ -781,7 +781,7 @@ path — the standing structural residual. **The editor's incremental tree is no
 final, soup-rebuilt tree is), so pinning the specific earlier order rule that diverges is blocked on
 that; the productive next lever is an editor-tree oracle (e.g. an `MAP REBUILD` build with node-add
 logging, if the editor can be made to emit it), not another blind local tweak. Do NOT force the merge
-or the clip — forcing regressed twice. Tracked in `board/inbox.md`.
+or the clip — forcing regressed twice. Tracked in `board/inbox/`.
 
 ### 10.7 The editor-tree ORACLE built + the first incremental divergence PINNED to leaf-add #184 (2026-07-18) 🔬 ✅
 
@@ -841,7 +841,7 @@ byte-identical, so the N=32 mirror-sliver that negative #2 feared was an artifac
 threshold globally, not present in the faithful incremental stream. Still **do NOT force the merge or
 the clip** — the parity must come from matching `SplitWithPlane`, verified by re-running
 `compare_trees.py 33` to `leaf-add #184: identical`. Harness + the four evidence logs (`oracle-{32,33}`,
-`native-{32,33}`) live in `harness/editor-tree-oracle/`. Tracked in `board/inbox.md`.
+`native-{32,33}`) live in `harness/editor-tree-oracle/`. Tracked in `board/inbox/`.
 
 ### 10.8 The #184 swap is NOT an `ilink=155` split — it is a SYSTEMIC coplanar-chain-head divergence from BRUSH 0 (2026-07-18) 🔬 ✅
 
@@ -915,7 +915,7 @@ routes through different splitters, so a from-scratch `bspRepartition` sees a di
 
 **Status:** hypothesis corrected, root cause pinned to node 4, fix NOT yet implemented (it is a
 coplanar-chain-head parity problem, materially larger than §10.7's framing — flagged for Andrzej in
-`board/inbox.md`). Evidence logs `editor-descent-33`, `editor-struct-33`, `oracle-pp-33`,
+`board/inbox/`). Evidence logs `editor-descent-33`, `editor-struct-33`, `oracle-pp-33`,
 `native-{32,33}` (now PP-augmented) live beside the harness. The `bspcsg.rs` probes
 (`UEDCLI_BSPCSG_DESCENT`, `UEDCLI_BSPCSG_TREE_STRUCT`, and `PP`/`pnv` in `UEDCLI_BSPCSG_TREE_DUMP`) are
 env-gated — the default build path is byte-unchanged (N=32 still `compare_trees.py`-identical; full
@@ -999,7 +999,7 @@ array (the recursive partition reorders it in place), not the pre-`bspBuild` mer
 next probe is an editor oracle that dumps `Model->Polys` at the `bspBuild` entry (right after
 `bspMergeCoplanars`, RVA between `0x49fc0`'s merge and build calls) to compare the true
 `SplitPolyList` input order — then decide whether the remaining delta is soup ORDER (fix the last
-incremental emit-order swaps) or a `FindBestSplit` stride/tie residue. Tracked in `board/inbox.md`.
+incremental emit-order swaps) or a `FindBestSplit` stride/tie residue. Tracked in `board/inbox/`.
 
 ### 10.10 The repartition INPUT ORDER + FindBestSplit stride DECODED + FIXED — node[0] now exact, subset trees plane-identical (2026-07-18) 🔬 ✅
 
@@ -1069,7 +1069,7 @@ zone portalization** that `csgRebuild` appends AFTER the from-scratch repartitio
 which native does not yet replicate; those extra tail nodes perturb `bspRefresh`'s numbering and cap
 the plane-prefix at 51. Separately, the editor sets `node_flags=8` on 598 nodes (spread across the
 whole tree) that native never sets — a node-flag derivation gap, orthogonal to tree shape. Both are
-tracked in `board/inbox.md`; the repartition-order + `FindBestSplit` splitter-choice half (this
+tracked in `board/inbox/`; the repartition-order + `FindBestSplit` splitter-choice half (this
 task) is complete. Harness committed: `editor_polys_oracle.py`, `fbs_stride_oracle.py`,
 `polys_order_diff.py` beside the oracle; `UEDCLI_BSPCSG_SOUP_ORDER` env hook in `bspcsg.rs` (env-gated,
 default path byte-unchanged, mirrors the committed `SOUP_ONLY`/`TREE_STRUCT` hooks).
@@ -1118,7 +1118,7 @@ boundary walls (a `zones.rs` gap, deliberately skipped in §70 §9).** Decomposi
   live-verified 2026-07-18 to fix in-game black frames). **Reproducing the 29 nodes = porting the
   real Pass D fragment-split into `zones.rs`, which reverses that same-day decision** — out of this
   task's stated `bspcsg.rs`-only scope, and a live-render risk that wants a decision + review gate,
-  not a unilateral subagent change. Flagged in `board/inbox.md`.
+  not a unilateral subagent change. Flagged in `board/inbox/`.
 
 **Fact 3 — `node_flags=8` (and `0x10`) are per-frame RENDERER occlusion bits, never set by the
 build; correctly excluded (not a derivation gap).** `0x08 = NF_PolyOccluded`, `0x10 = NF_BoxOccluded`
@@ -1299,7 +1299,7 @@ it (the `clear`+`reclaim`+`keeppool` toggles all tried live) does NOT reproduce 
 2884 with 1313 spurious) and does **not** move the +37 over-weld. **Committed this pass:** the
 tree-safe FWTB bound-pruning fix (`bspcsg.rs`), the `UEDCLI_BSPCSG_POOLDUMP` uncleared-pool
 instrumentation hook, and this decode. **NOT committed:** no `bspoptgeom.rs` change (detector frozen),
-no no-clear/reclaim (would regress or mis-produce the pool). Follow-on flagged in `board/inbox.md`.
+no no-clear/reclaim (would regress or mis-produce the pool). Follow-on flagged in `board/inbox/`.
 
 ### 10.15 The `z=−12/−80` spurious pool cluster RE'd to a THIRD source — the zone-split Pass-D raw point append (FIXED); CSG over-production narrowed to z=0 graze transients (2026-07-18) 🔬 ✅ / ⚠️
 
@@ -1351,7 +1351,7 @@ fragment set to the editor's `0x33250` emission, and binary-verifying the `UMode
 (`BuildBound 0x100cee8c`, still not disassembled — the box push-out may over-graze). **Committed this
 pass:** the `zones.rs` Pass-D dedup fix + this decode. **NOT committed:** no `bspoptgeom.rs` change
 (detector frozen), no no-clear switch (native's CSG pool is still over-produced, so it mis-produces the
-pool — `keeppool→3684`). Follow-on remains `board/inbox.md` [spike] p2, updated.
+pool — `keeppool→3684`). Follow-on remains `board/inbox/` [spike] p2, updated.
 
 ### 10.16 The "CSG over-production" premise is WRONG — bound RE'd to an FSphere; the pool gap is the repartition CLEAR + Pass-D ring re-emit, NOT graze transients (2026-07-18) 🔬 ✅
 
@@ -1430,7 +1430,7 @@ scope ("do not touch `zones.rs`") — and the points lever is a no-clear reparti
 byte-exact tree. **Committed this pass:** the binary-verified FWTB **sphere** prune (`bspcsg.rs`, safe /
 output-invariant), the oracle harness (`repart_pool_oracle.py`, `repart_stage_oracle.py`, `disx.py`
 cross-DLL disassembler), and this decode. **NOT committed:** no no-clear switch, no `zones.rs` change
-(frozen), no `bspoptgeom.rs` change (detector frozen). Follow-on re-scoped in `board/inbox.md`: the
+(frozen), no `bspoptgeom.rs` change (detector frozen). Follow-on re-scoped in `board/inbox/`: the
 remaining body gap is a **Pass-D orphan-ring port in `zones.rs` + a no-clear repartition in `bspcsg.rs`**,
 NOT CSG graze over-production.
 

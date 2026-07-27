@@ -4,7 +4,7 @@
 `architecture.md` (builder module) + `docs/usage.md`; the load-bearing *choice* + rejected
 alternatives go in `decisions.md` (dated entry linked below).
 
-**Board item:** `to-build.md` Geometry #8. **Decision:** `decisions.md` 2026-07-18 20:09 UTC.
+**Board item:** `board/to-build/` Geometry #8. **Decision:** `decisions.md` 2026-07-18 20:09 UTC.
 
 ---
 
@@ -176,7 +176,7 @@ geometry.
   these four entries until then.
 - **Flagged for Andrzej:** a live `python -m uedcli.tests.builder_parity_cases` re-bless should be
   run when the container is available to reconfirm the stair goldens end-to-end (recorded in
-  `board/inbox.md`). For axis-aligned boxes this is expected to be a no-op.
+  `board/inbox/`). For axis-aligned boxes this is expected to be a no-op.
 
 A `level doctor`-clean test (zero error findings over the generated staircase actors) is the
 watertightness gate. Note it is **necessary, not sufficient**: `doctor` rules out single-brush hole
@@ -194,5 +194,5 @@ staircase is the deferred visual confirmation (flagged for Andrzej; no live edit
 
 ## Out of scope
 
-Spiral staircase redo (a separate `to-spec.md` item), any change to the rotated/cyl/cone goldens,
+Spiral staircase redo (a separate `board/to-spec/` item), any change to the rotated/cyl/cone goldens,
 and any change to `--at`/`--rotate`/solidity flag semantics.

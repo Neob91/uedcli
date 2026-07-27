@@ -37,7 +37,7 @@ exception reach the CLI user"). There is no partial result: a map that cannot be
 raises, because a trunk that looks complete but silently dropped an actor is the worst possible
 outcome of this verb.
 
-Spec: `dev/docs/specs/2026-07-24-level-import.md`. Format evidence: the Actors-array layout is
+Spec: board item `level-import-native-editor-less-dx-unr-t3d`. Format evidence: the Actors-array layout is
 `dev/docs/spikes/2026-07-24-level-import-order/findings.md`; the StateFrame and the `UPolys`/`FPoly`
 bodies are `dev/docs/spikes/2026-06-27-decontainerize-uedcli/07-native-actor-bodies.md` (+ its
 `harness/upolys_decode.py`), and both are mirrored by uedcli's own writers in `native/`.

@@ -4,7 +4,7 @@
 Reviewed rounds 1–4 (8 cold reviewers), SP-R gate CONFIRMED live. The durable parts are folded into
 `architecture.md` (§`level preview --game`) + `decisions.md` (2026-07-17 06:57/07:30/08:31) +
 `unrealed/` memory; this ephemeral spec may now be pruned. Remaining/deferred items are on the board
-(`inbox.md`). Below is the as-designed record.
+(`board/inbox/`). Below is the as-designed record.
 
 **SP-R verdicts (2026-07-17 live):** ✅ post-boot **Nth-`open` + symlink** resolution WORKS (gate
 green, no Plan B needed) · ✅ unique names always load fresh content · ✅ RSS **flat** over 11 travels
@@ -13,8 +13,8 @@ length** (resolves ≤180 chars, fails LOUDLY ~250; the "63-char silent truncati
 reproduce) · ✅ mission-map frame **clean** with the no-abort driver (conversation guard confirmed
 unneeded).
 
-**Builds on:** the shipped `--game` tier (`specs/2026-07-13-ingame-preview-design.md`,
-`plans/2026-07-16-ingame-preview-plan.md`; `preview_game.py` + `uedcli/game/`). Changes the
+**Builds on:** the shipped `--game` tier (board item `level-preview-game`,
+board item `level-preview-game`; `preview_game.py` + `uedcli/game/`). Changes the
 CONTAINER LIFECYCLE + MAP-DELIVERY only; SHOT grammar, posing, capture unchanged.
 
 **Decisions:** `decisions.md` `2026-07-17 06:57` + the `07:30` supersession (per-user identity,
@@ -127,7 +127,7 @@ while true:
 mutable case) is caught by the §4.1 fingerprint → a full reboot re-farms from scratch, which is
 correct if heavier than an in-place delta. The only gap is a NEW **base** map appearing mid-session
 (base packages are otherwise immutable) — not picked up until the next reboot. The additive re-farm
-(add new symlinks + sweep dangling, never `rm -rf`) is **deferred** (boarded in `inbox.md`); it was
+(add new symlinks + sweep dangling, never `rm -rf`) is **deferred** (boarded in `board/inbox/`); it was
 not worth the complexity given the fingerprint reboot. The preview symlink still uses `ln -sf`
 (tolerates EEXIST on same-hash re-preview — R4-A L2). Order on reuse: **add preview symlink → travel
 (skipped iff already on `<stem>`) → shots**.

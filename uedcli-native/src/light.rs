@@ -64,7 +64,7 @@ const SELF_SHADOW_BIAS: f32 = 4.0;
 /// ⚠️ Assumes single-sided surfaces (true for every lightmapped surf here). A `PF_TwoSided` sheet
 /// renders its one lightmap from BOTH faces, so the editor could legitimately list a back-side light
 /// on it; this strict cull would drop it. `Test_Castle` has no such case (0/3497), so it is a latent
-/// generic-UE1 gap tracked in `board/inbox.md`, not a regression on the castle.
+/// generic-UE1 gap tracked in `board/inbox/`, not a regression on the castle.
 #[inline]
 fn light_in_front(normal: &Vec3, base: &Vec3, light: &Vec3) -> bool {
     light.sub(base).dot(normal) > 0.0

@@ -7,7 +7,7 @@ summary = "Geometry bundle (unattended build #3)"
 # Geometry bundle (unattended build #3)
 
 — BUILT 2026-07-18 (spec
-`specs/2026-07-18-staircase-redo.md`; plan `plans/2026-07-18-build3-geometry.md`; decisions
+`spec.md`; plan `plan.md`; decisions
 2026-07-18 20:09 UTC). Two offline items: (8) **`brush build staircase` redo** — `builders.staircase`
 now returns `list[Brush]` (one convex box per step, filled floor-to-tread column) instead of one
 non-convex brush; each box passes `level doctor` (the old single brush tripped 60+ phantom

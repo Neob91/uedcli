@@ -17,4 +17,4 @@ unregressed (nodes 1156/1156, soup 853/853, surfs 485, vectors 26, Points 2035, 
 LeafHulls 308/3866/1710, LightMap 484); `optgeom_validate` golden fixpoint holds; offline 1705
 passed; `cargo test bspoptgeom` 4/4. Evidence: `editor-tree-oracle/weld_livetable_diff.py`.
 **Remnant:** Verts still +9 (Pass-D orphan slots) + orphan `iVertex` stale-index bytes — out of lane
-(`zones.rs`/`passes.rs`), tracked in `inbox.md`.
+(`zones.rs`/`passes.rs`), tracked in `board/inbox/`.

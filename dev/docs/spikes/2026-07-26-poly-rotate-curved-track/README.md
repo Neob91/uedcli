@@ -4,7 +4,7 @@
 
 ## What this spike answers
 
-The owner's measured revolve diagnosis (`board/inbox.md`, commit `725af04`) established that a
+The owner's measured revolve diagnosis (`board/inbox/`, commit `725af04`) established that a
 revolved brush's texture restarts at every facet, and left open what feature fixes it. That entry
 measured the **outer curving wall** (`Side1`). This spike measures the **top face** — the surface a
 train track sits on — and answers three questions with numbers rather than opinion:

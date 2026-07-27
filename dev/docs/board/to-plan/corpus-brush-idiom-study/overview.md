@@ -21,7 +21,7 @@ differential control, output as **generator reverse-mapping**; grounds
 before planning** (extrude-generator priority; find-spatial unpark timing; interim-route acceptance).
 Owns the shared `MAP EXPORT`->trunk harness that the `2026-07-19` item (Half B2, dimensions) consumes —
 don't fork. Stands up per-game install scripts + gitignored `dev/games/` for the UE1 control. Surfaces
-uedcli gaps (`brush identify` + reverse-mapping + `brush stats` -> `inbox.md`; `brush build extrude`
--> specced, plan-reviewed, and now **on-deck in `to-build.md` #12** together with `brush build
+uedcli gaps (`brush identify` + reverse-mapping + `brush stats` -> `board/inbox/`; `brush build extrude`
+-> specced, plan-reviewed, and now **on-deck in `board/to-build/` #12** together with `brush build
 revolve`, so this study's bucket-(a) vocabulary must include both).
 (Andrzej, 2026-07-24.)

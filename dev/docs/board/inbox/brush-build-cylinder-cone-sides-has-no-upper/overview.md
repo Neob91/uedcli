@@ -11,4 +11,4 @@ An `FPoly` holds at most 16 vertices (`FPoly::VERTEX_THRESHOLD`; `kb/csg-bsp.md`
 accept any `sides >= 3` (`builders.py:204`, `:227`), so `brush build cylinder --sides 24` silently
 emits a 24-vertex cap. Exactly the defect the new `extrude`/`revolve` cap tiling exists to prevent,
 but in existing code. Fix: reject above 16, or tile the cap the way
-`specs/2026-07-25-brush-profile-generators.md` §6 does. (Cold review, 2026-07-25.)
+`spec.md` §6 does. (Cold review, 2026-07-25.)

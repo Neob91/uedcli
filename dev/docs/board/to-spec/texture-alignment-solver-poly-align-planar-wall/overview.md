@@ -10,7 +10,7 @@ summary = "Texture-alignment solver (`poly align`) — planar wall/floor + curve
 used to read) is no longer a usable goal: there IS no `TEXTURE ALIGN` verb — the editor's is
 `POLY TEXALIGN`, its nine modes were measured 2026-07-26 (`dev/docs/unrealed/texalign.md`), none of them
 changes texel density, `ONETILE` is a no-op, and uedcli's `--wall`/`--floor` match none of them.
-What to do about that is the `[OWNER — decide]` item on `inbox.md`.* The rest of this item stands:
+What to do about that is the `[OWNER — decide]` item on `board/inbox/`.* The rest of this item stands:
 make
 pan/rotation/texture-vectors continuous across adjacent coplanar/wrapped faces (`--wall`/`--floor`)
 so brickwork doesn't seam at every brush boundary — pure offline math on the PolyList texture

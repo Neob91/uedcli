@@ -742,7 +742,7 @@ New UnrealEd findings go in `dev/docs/unrealed/` (and back-reference them from c
 
 The board is migrating from seven big markdown files to **one directory per work item**
 (`dev/docs/board/<stage>/<slug>/overview.md`; spec:
-`dev/docs/specs/2026-07-27-board-per-item-directories.md`). During the migration both shapes
+board item `the-board-is-being-restructured-into-one`). During the migration both shapes
 exist. Two rules apply from now on:
 
 - **LOG A FINDING WITH `bin/board new inbox '<title>'`.** It creates a valid item and prints its

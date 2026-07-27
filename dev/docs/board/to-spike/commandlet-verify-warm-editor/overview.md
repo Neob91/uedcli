@@ -8,7 +8,7 @@ spikes = ["dev/docs/spikes/headless-materialize/"]
 # SP-F — commandlet verify + warm-editor reliability re-test
 
 BLOCKS the warm-editor
-materialize build. Spec: `specs/2026-07-18-warm-editor-materialize.md` §9 (the seven questions, each
+materialize build. Spec: board item `resolved-2026-07-26-was-warm-editor-materialize` §9 (the seven questions, each
 with its falsifier). Context: SP-E (2026-07-19) proved reused builds fail ~50 % because the H3
 post-verify runs against the warm editor; the spec now moves the whole verify into a one-shot
 `UCC.exe Editor.ExecCommandlet` container (`spikes/headless-materialize/findings.md`: no GUI, no X,

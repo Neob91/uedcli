@@ -19,7 +19,7 @@ game install).  The flood is deterministic from geometry, so the count IS a vali
 Coverage boundary (honest): this test pins the ALGORITHM via the committed harness oracle
 (`zone_flood_oracle.blockportal_interior_zones`), a line-for-line Python port of `zones.rs`
 Pass B/B'/C — NOT the shipped Rust directly (feeding an external tree through the Rust flood needs an
-FFI entry point that does not yet exist; filed to `board/inbox.md`).  The Rust `collect_zone_barriers`
+FFI entry point that does not yet exist; filed to `board/inbox/`).  The Rust `collect_zone_barriers`
 is written as a mechanical copy of that same oracle (flat node enumeration + `head_of` chain-head
 resolution), and is CONFIRMED to reproduce it on the discriminating real trees: the native builds
 `NativeUnatco.dx` (45 zones) and `NativeCatacombs.dx` (43 zones) each equal

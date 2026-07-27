@@ -862,7 +862,7 @@ LOS is the whole participation test": **front-side plane test + radius + LOS** i
 `PF_TwoSided` surface renders its one lightmap from *both* faces, so the editor could legitimately
 list a light on the "back" side; the strict plane test would drop it, making that surface darker than
 the editor. `Test_Castle` has zero such cases (the 0/3497 basis), so this is untested for other maps —
-tracked in `board/inbox.md`. Do not add two-sided handling speculatively without an oracle for it.
+tracked in `board/inbox/`. Do not add two-sided handling speculatively without an oracle for it.
 
 **The fix (`uedcli-native/src/light.rs`).** In `bake_surf`, before a light does any per-lumel work,
 skip it unless it is strictly in front of the surface plane:
@@ -1118,7 +1118,7 @@ Earlier §8's pseudo-code that listed `PF_Portal` was wrong. Pinned by the Rust 
 
 The residual `LightBits` gap (1082 B) is now (a) native's strict `light_in_front` backface cull giving
 the **two-sided** portals fewer lights than the editor's two-sided treatment (the latent gap §17 flagged
-in `board/inbox.md`), and (b) surf-order divergence — see (C).
+in `board/inbox/`), and (b) surf-order divergence — see (C).
 
 ### (C) Why NONE of the three sections can reach raw-byte IDENTITY from `light.rs` alone ⚠️
 

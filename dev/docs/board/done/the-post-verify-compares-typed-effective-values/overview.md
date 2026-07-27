@@ -22,4 +22,4 @@ member-diff to EVERY struct prop and normalizes enum name-vs-ordinal. `verify._f
 names the differing PROPERTY and both values (or the class default the omitting side falls
 through to). Decision `decisions.md` 2026-07-25 02:15 UTC; `unrealed/t3d.md` "Partial
 struct/array property values"; `architecture.md` "The compare view vs the identity hash".
-**Remnant** (filed on `inbox.md`, p2): ingest still WRITES a partial `Location` back zero-filled.
+**Remnant** (filed on `board/inbox/`, p2): ingest still WRITES a partial `Location` back zero-filled.

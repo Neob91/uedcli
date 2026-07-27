@@ -11,7 +11,7 @@ several thousand times larger and exercises property types, class variety, brush
 `RF_HasStack` placements the fixtures never touch. Sweeping them proves the decoder survives real
 content and that its own integrity gates hold. It does NOT compare against the official exporter's
 output — that needs the UnrealEd container as an oracle and is the remaining `p1` item on
-`dev/docs/board/inbox.md`.
+`dev/docs/board/inbox/`.
 
 Runtime scales with the corpus (a 2000-actor map decodes to megabytes of T3D), so the sweep is capped
 and reports what it skipped rather than silently sampling — set `UEDCLI_CORPUS_MAPS=0` for all of them.

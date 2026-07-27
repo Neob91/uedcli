@@ -6,7 +6,7 @@ summary = "Four `actor preview --faces` rulings need a durable `direction/` home
 
 # Four `actor preview --faces` rulings need a durable `direction/` home before their spec is deleted
 
-`specs/2026-07-26-actor-preview-textured-faces.md` is ephemeral and
+`spec.md` is ephemeral and
 is deleted on build; `CLAUDE.md` requires a decision you made to land in `direction/` first. These
 four are product policy, not implementation detail. Proposed text (verbatim, awaiting a yes —
 suggested home `direction/trunk-and-editor.md`, since it is about what the preview tiers show):

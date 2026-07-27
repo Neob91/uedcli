@@ -7,7 +7,7 @@ summary = "Two `uedcli docs` decisions of yours are currently recorded only in t
 # Two `uedcli docs` decisions of yours are currently recorded only in the agent-owned `rationale/` tree, where a future session may revise them freely
 
 The `docs`
-command shipped 2026-07-26; its spec (`specs/2026-07-24-docs-command.md`, ephemeral) attributes
+command shipped 2026-07-26; its spec (`spec.md`, ephemeral) attributes
 these two to you, so they need a `direction/` home. Both are implemented and live — this is
 about where the *ruling* is filed, not about changing behaviour. Proposed text, verbatim,
 awaiting a yes:

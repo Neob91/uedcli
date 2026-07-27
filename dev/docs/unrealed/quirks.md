@@ -162,7 +162,7 @@ behavior is in [`rendering.md`](rendering.md). Evidence: `../../dev/docs/spikes/
   just Core/Engine (substrate), so the closure terminates cleanly after recursing into them.
   Measured against the real install: closures over 6 real maps land at 6-65 packages, not the
   whole ~190-file install. See `dev/docs/specs/2026-06-18-uedcli-package-extraction-design.md`
-  and `board/to-spec.md`.
+  and `board/to-spec/`.
 - **`[Core.System] Paths` is first-match-wins, and only `UCC`/the by-name linker honors it — a live
   console `OBJ LOAD` does NOT** (🔬 2026-07-01, `spikes/2026-07-01-paths-precedence/`). Two dirs on
   `Paths` each holding a same-named package: the one listed FIRST resolves (order, not filesystem
@@ -309,7 +309,7 @@ behavior is in [`rendering.md`](rendering.md). Evidence: `../../dev/docs/spikes/
      props (`LightPhase=130`, `LightPeriod=24`) round-trip fine. So it is
      default-VALUE omission, not a computed field — do NOT strip these
      unconditionally. A trunk carrying a redundant default fails post-verify. NOT
-     yet handled (needs class-default awareness); tracked in `board/inbox.md`.
+     yet handled (needs class-default awareness); tracked in `board/inbox/`.
      Work around it by not storing default-valued props in the trunk.
 
 ## Pivots (`PrePivot`) — NEVER rewrite a brush's pivot
@@ -561,7 +561,7 @@ measurement, stores it in typed fields, and bakes it (`brush apply-transform`) �
   2026-07-25, `fixtures/intersect/h_leading_additive_deintersect.t3d`). UnrealEd filter-classifies
   it normally, so a subsequent overlapping `CSG_Subtract` cuts its faces away and the region reads
   as plain void. (uedcli's native core instead SEEDS a leading Add as the convex world shell — right
-  for a real level's first brush, divergent here; tracked in `board/inbox.md`.)
+  for a real level's first brush, divergent here; tracked in `board/inbox/`.)
 
 - **The CSG/BSP build mechanism is disassembled** in
   `../spikes/2026-06-24-bsp-csg-hole-mechanism-from-binary.md` (2026-06-24, from the UED22

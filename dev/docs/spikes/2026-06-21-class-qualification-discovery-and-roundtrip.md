@@ -142,4 +142,4 @@ collision + round-trip test).
   unaffected.
 - [`qualify.py`](../../../uedcli/qualify.py) — `qualify_level_textures`/`dump_obj_dependencies`, the
   existing texture-side implementation this spike found does NOT generalize to classes as-is.
-- `../board/to-spec.md` — Class-package autoload for apply.
+- `dev/docs/board/to-spec/` — Class-package autoload for apply.

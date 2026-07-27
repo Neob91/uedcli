@@ -7,7 +7,7 @@ summary = "The per-surface verb split (`pan`/`rotate`/`align --run`)"
 # The per-surface verb split (`pan`/`rotate`/`align --run`)
 
 Spec:
-`specs/2026-07-26-poly-surface-verbs.md` (revised after review round 1). Six rulings were made in
+`spec.md` (revised after review round 1). Six rulings were made in
 session on 2026-07-26 and live only in that ephemeral spec until confirmed. Proposed addition to
 `direction/conventions.md` under "Verbs compose" (verbatim, awaiting a yes). *(`scale` appears in
 the text below because the later ruling that pulled `brush poly scale` into scope — item above,

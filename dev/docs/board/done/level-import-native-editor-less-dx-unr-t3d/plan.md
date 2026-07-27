@@ -6,7 +6,7 @@
 
 **Architecture:** `mapimport.py` decodes the binary → a `Begin Map … End Map` T3D **text** string, which `model.parse_t3d` ingests (reusing the tested text→model routing); the model is then written via the existing create-mode trunk/stash primitives. The decode REUSES the production value decoder (`uprops.render_default_tag` + `_decode_struct_bin`) and adds only: a StateFrame skip, UCC-exact rendering (member-stripped structs + 6dp floats), dynamic-array decode, and FPoly/UPolys decode. The schema-free hash path (`normalize`/`canonical_level_hash`) is **never touched** — UCC-fidelity is a decode concern (decision 18:49).
 
-**Tech Stack:** Python 3.12, dataclasses, argparse, pytest via `bin/test`. **Spec:** `dev/docs/specs/2026-07-24-level-import.md` v3 (symbol-anchored; read it for rationale + evidence). **Decisions:** `decisions.md` 2026-07-24 16:48/16:59/17:19/18:49 UTC.
+**Tech Stack:** Python 3.12, dataclasses, argparse, pytest via `bin/test`. **Spec:** `plan.md` v3 (symbol-anchored; read it for rationale + evidence). **Decisions:** `decisions.md` 2026-07-24 16:48/16:59/17:19/18:49 UTC.
 
 **Prior art to study before starting** (do NOT reinvent): `uedcli/uprops.py` (`render_default_tag`, `_decode_struct_bin`(`_at`), `resolve_class_defaults`, `Prop`, `_decode_property` array `type_ref`); `uedcli/upackage.py` (`read_property_tags`/`PropertyTag`, `object_path`/`object_class_name`/`name_of_ref`, `read_compact_index`, `Package`); `uedcli/native/actor_write.py` (`state_frame`, `write_prop`, `write_fpoly`/`write_upolys_body` — the encode mirrors); `uedcli/native/umodel.py` (`parse_model_body`, `field_0x54`); `uedcli/classindex.py` (`descends_from`, `ENGINE_ACTOR`, `qualify_and_validate`); `uedcli/dispatch.py` (`_level_create` ~2109, `_resolve_level_source`, `_tree_flag` in `cli.py`); `uedcli/stash_register.py` (`write_stash`), `uedcli/stashlib.py` (`write_tree_box`, `referenced_packages`); `uedcli/trunk.py` (`write_level`/`append_rank`); spikes `dev/docs/spikes/2026-06-27-decontainerize-uedcli/07-native-actor-bodies.md` (+ `harness/native_dx_actors.py`) and `.../harness/upolys_decode.py`.
 
@@ -107,7 +107,7 @@ Each isolated and pinned against its encoder where one exists. `decode∘encode`
 ## SLICE 6 — Docs
 
 ### Task 6.1 — User + dev docs
-**Files:** `docs/usage.md`, `dev/docs/architecture.md`, `dev/docs/unrealed/t3d.md`, `docs/leveldesign/` (a study/remix note). Board: move the item to `done.md` tail.
+**Files:** `docs/usage.md`, `dev/docs/architecture.md`, `dev/docs/unrealed/t3d.md`, `docs/leveldesign/` (a study/remix note). Board: move the item to `board/done/` tail.
 - [ ] `usage.md`: the verb, `--tree level|stash/NAME`, `--overwrite`, project requirement, strict-validation + embedded-resource + cross-actor-ref-stem caveats.
 - [ ] `architecture.md`: the decode pipeline (`mapimport`), UCC-exact render, create-mode resolver, `qualify_and_validate` on import.
 - [ ] `t3d.md`: new decode facts (Actors-array order + null handling from Slice 0, UPolys body, StateFrame) with Spike-07 citations + confidence markers. Commit each doc by explicit path.

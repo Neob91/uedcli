@@ -7,7 +7,7 @@ summary = "De-containerize uedcli (drop Docker/wine/`.exe`) — roadmap specced,
 # De-containerize uedcli (drop Docker/wine/`.exe`) — roadmap specced, awaiting Andrzej's scope decision
 
 `p2` Spike series `dev/docs/spikes/2026-06-27-decontainerize-uedcli/` (texture/mesh/package-
-write/qualify/lighting/stub-elimination) + roadmap `dev/docs/specs/2026-06-27-uedcli-decontainerization-roadmap-design.md`.
+write/qualify/lighting/stub-elimination) + roadmap `spec.md`.
 PROVEN native: texture decode (pixel-exact vs UCC), package-container write (byte-exact), qualification.
 CONFIRMED: stubs exist for mesh-format + Engine/Core divergence (not v68/v69); native write deletes the
 whole stub pipeline. The dominant work is the offline BSP engine (D2) + completing/​inverting the `Model`

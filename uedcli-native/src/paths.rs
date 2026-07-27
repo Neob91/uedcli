@@ -1,4 +1,4 @@
-//! paths — pending native port (see dev/docs/specs/2026-07-15-native-materialize-design.md).
+//! paths — pending native port (see board item `native-level-materialize`).
 //!
 //! UNIMPLEMENTED in this skeleton; the algorithm is decoded in the spike sections and the
 //! port is scoped to N-1..N-5.  Kept as a module so the crate compiles and `cargo test`

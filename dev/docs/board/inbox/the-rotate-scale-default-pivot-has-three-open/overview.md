@@ -6,7 +6,7 @@ summary = "The rotate/scale default pivot has three open points the spec cannot 
 
 # The rotate/scale default pivot has three open points the spec cannot durably hold
 
-`dev/docs/specs/2026-07-26-rotate-pivot-grid-aligned-center.md` §7 is the only home for these, and
+`spec.md` §7 is the only home for these, and
 specs are ephemeral — so they land here.
 1. **Scope was never owner-confirmed.** The own-Location pivot is live on BOTH `actor rotate --by`
    and `brush scale --by` because they share `rotation.best_grid_pivot`. Splitting them would be

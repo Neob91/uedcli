@@ -1,7 +1,7 @@
 # D0 built + validated: editor drop-warning capture (the cheap, complete-on-real-build hole detector half)
 
 **Date:** 2026-06-24
-**Implements:** the D0 half of `decisions.md` 2026-06-24 12:40 UTC / `specs/2026-06-24-uedcli-offline-bsp-engine-design.md` §6 (D0).
+**Implements:** the D0 half of `decisions.md` 2026-06-24 12:40 UTC / board item `bsp-issue-ground-truth-detector-d0-d1` §6 (D0).
 **Code (spike-grade, `_scratch/bspspike/`):** `bsp_editorlog.py` (parser + live capture), `d0_live.py` (live validation).
 **Result:** ✅ D0's parser works on all channels (offline, deterministic) and **caught a real
 injected hole live**, cleanly distinguishing it from a good build.

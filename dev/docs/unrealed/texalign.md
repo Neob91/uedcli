@@ -195,4 +195,4 @@ Plus: uedcli anchors on the seed face's **centroid** where the editor's projecti
 **world axis**, so uedcli's result depends on which face was listed first and two separate
 invocations on one plane need not agree. uedcli has no analogue of `WALLX`/`WALLY`/`WALLPAN`/`CLAMP`,
 and `--ring` (cylinder wrap) has no analogue in the editor. Whether any of this should change is a
-product question, parked on `board/inbox.md` for the `poly-surface-verbs` spec.
+product question, parked on `board/inbox/` for the `poly-surface-verbs` spec.

@@ -26,7 +26,7 @@ gets corrupted. Evidence, so you can just confirm or correct:
   function that is not there.
 
 **Ask:** if both are closed, delete or rewrite the "Two items block the build and are escalated" block
-so `to-build.md` stops disagreeing with it; if PE1's integration-tier move is the accepted answer, say
+so `board/to-build/` stops disagreeing with it; if PE1's integration-tier move is the accepted answer, say
 so there and purge the 10 dead `repo_texture_root` references. Also worth a line either way: that block
 is what a reader checks to decide whether this is buildable, and right now it says "blocked" while the
 commits below it say otherwise.

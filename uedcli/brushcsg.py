@@ -22,7 +22,7 @@ wrap-subtract cube that forces the empty background — and runs the real decode
 (`uedcli_native.intersect_brushset`, the `bspcsg.rs:1845` tail).  The user never sees the
 scaffolding; the operation is a faithful port, not a lookalike.
 
-Spec: `dev/docs/specs/2026-07-24-intersect-deintersect-native-brushset.md`.
+Spec: board item `bspcsg-core-apply-scaled-brushes`.
 RE: `dev/docs/spikes/2026-07-15-native-materialize/re-raw-zones/bspbrushcsg-intersect-deintersect-decode.md`.
 Decisions: `dev/docs/decisions.md` 2026-07-24 16:32 / 17:04 / 17:56 / 18:12 / 18:33 UTC.
 """

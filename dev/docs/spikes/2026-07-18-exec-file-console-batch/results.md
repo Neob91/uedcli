@@ -69,7 +69,7 @@ string table, semantics unverified).
   mid-sequence (`EDIT COPY` → clipboard, readback-and-parse steps) still need per-command
   round-trips; the win is for write-only runs (`OBJ LOAD`s → `MAP IMPORTADD`/`PASTE` → `MAP
   REBUILD` → `LIGHT APPLY` → `MAP SAVE`), which is most of a materialize drive.
-- **Warm-editor interplay** (`specs/2026-07-18-warm-editor-materialize.md`): fewer `wine_ctl`
+- **Warm-editor interplay** (board item `resolved-2026-07-26-was-warm-editor-materialize`): fewer `wine_ctl`
   invocations = fewer idle-marker touches, but the completion-poll loop IS `wine_ctl`/exec-based
   and refreshes the marker throughout — no watchdog conflict.
 

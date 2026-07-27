@@ -7,7 +7,7 @@ summary = "Three design calls the native-texture-formats review round made on An
 # Three design calls the native-texture-formats review round made on Andrzej's behalf — please confirm or overrule
 
 All three are recorded in
-`specs/2026-07-25-native-texture-formats.md` + its plan, and each is cheaply reversible (one
+`spec.md` + its plan, and each is cheaply reversible (one
 branch in the detection function plus its test), but none of them was his call and none is in
 `decisions.md` yet. The build's S7 is supposed to append them; flagging here so they are not
 silently inherited.

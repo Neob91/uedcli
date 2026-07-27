@@ -1,8 +1,8 @@
 # Spec: project layout reorg — a free `uedcli.toml` at the repo root
 
 *2026-07-17. Ephemeral (see docs rules); the durable record is `decisions.md` 2026-07-17 20:58 UTC.
-Origin: board `inbox.md` "Reorganize the project layout" (Andrzej, 2026-07-13); folds in the
-`to-spec.md` "Relocate locks + tmp from `<repo>/.uedcli/` to the project dir" item. Cold-reviewed
+Origin: board `board/inbox/` "Reorganize the project layout" (Andrzej, 2026-07-13); folds in the
+`board/to-spec/` "Relocate locks + tmp from `<repo>/.uedcli/` to the project dir" item. Cold-reviewed
 2026-07-17 (two reviewers); all findings folded in, the two design-level ones resolved by Andrzej
 (decision entry §6/§7).*
 
@@ -205,8 +205,8 @@ out of scope here.
   substrates, and the global CLI" — including its stale "the editor container mounts [the
   project root]" sentence — and the trunk-path mentions), and every `<project>/uedcli/…` path
   mention elsewhere.
-- **Board updated in the same change:** the origin entry leaves `inbox.md`; the folded "Relocate
-  locks + tmp" item leaves `to-spec.md`; `to-plan.md`'s global-CLI item drops its now-false
+- **Board updated in the same change:** the origin entry leaves `board/inbox/`; the folded "Relocate
+  locks + tmp" item leaves `board/to-spec/`; `board/to-plan/`'s global-CLI item drops its now-false
   "`project init` in particular must scaffold the NEW layout" sentence (decision §5: no scaffold
   verb) in favor of a pointer to this spec.
 

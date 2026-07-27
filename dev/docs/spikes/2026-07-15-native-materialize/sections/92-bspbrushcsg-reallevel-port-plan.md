@@ -375,7 +375,7 @@ is **no clean merge-forcing fix** (forcing over-fuses and regressed the castle t
 the exact `FPoly::SplitWithPlane` + `TryToMerge` decisions at the N=104→105 boundary decoded to
 instruction level against `Editor.dll` — the gdb `bspAddNode` ADD-stream oracle (§10.7) applied to the
 `golden104`→`golden105` step. **Per the report-don't-force gate, no `bspcsg.rs` change is made** (the
-decode is Stage 2, spec `specs/2026-07-19-unatco-dome-csg-divergence.md`).
+decode is Stage 2, spec in board item `92-stage-2-done`).
 
 **Reproduce.**
 ```
@@ -402,7 +402,7 @@ Stage 0 (basis) and Stage 1 (first pin) are DONE. What remains is the genuine la
 
 The §9 hypothesis (a `SplitWithPlane`/`TryToMerge` clip-selection divergence) was WRONG for the
 dominant sub-class. The gdb-oracle decode of the N=104→105 boundary against `Editor.dll 0x37290`
-(spec `specs/2026-07-19-unatco-dome-csg-divergence.md`) found the real cause: the editor runs
+(spec in board item `92-stage-2-done`) found the real cause: the editor runs
 **`bspValidateBrush`** when a brush is built — a per-brush pre-pass that assigns each poly an `iLink`
 so that **COPLANAR + same-facing + same-texture + same-axes + same-flags faces of ONE brush share a
 single `FBspSurf`**. `bspMergeCoplanars` then fuses the shared-surf fragments. Native re-ingesting the

@@ -11,7 +11,7 @@ entirely, into a one-shot headless commandlet container.
 > survived**: a one-shot commandlet structurally satisfies the "fresh editor, exactly one level
 > loaded" precondition `commands.md` states for `OBJ DEPENDENCIES`, which warm reuse cannot meet.
 > **The mechanisms did not.** Do not build from this document. The findings are logged in full on
-> `board/inbox.md` ("SPEC REVIEW ROUND 1"); the headlines:
+> `board/inbox/` ("SPEC REVIEW ROUND 1"); the headlines:
 >
 > - The verify container is specified two mutually exclusive ways (`docker exec` into a container
 >   that has exited), boots the full GUI stack (the image `ENTRYPOINT` ignores its args and
@@ -92,7 +92,7 @@ not deferred behind the warm container.
 ## 2. Decisions
 
 Owner decisions 1–5 are from 2026-07-18 (21:52 + 22:18 UTC) and stand unchanged. 6–8 are from
-2026-07-26 and are **parked for confirmation** on `board/inbox.md` as `[OWNER — confirm]` items
+2026-07-26 and are **parked for confirmation** on `board/inbox/` as `[OWNER — confirm]` items
 carrying their proposed `direction/` wording; this spec builds on them, `direction/materialize.md` is
 not edited until they are confirmed.
 
@@ -231,7 +231,7 @@ about editor health — it says the *build* was wrong — and tearing the editor
 healthy warm editor on exactly the occasion the operator is about to re-materialize.
 
 **Until the owner rules, the BUILD follows `direction/containers.md` and tears down on a verify
-failure too.** The proposed change is parked as an `[OWNER — confirm]` item on `board/inbox.md`. Under
+failure too.** The proposed change is parked as an `[OWNER — confirm]` item on `board/inbox/`. Under
 either answer the invocation still exits 2 with the mismatch diagnostic, `--keep-build` still
 preserves the rejected map, and decision 5 (no automatic ephemeral retry) is unchanged.
 

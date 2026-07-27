@@ -23,7 +23,7 @@ rotting. That is now `spikes/2026-07-25-map-save-mechanism/` (two harnesses + wr
 `test_engine_facts.py`, which re-asserts both the string-run order AND the "no `ReadFile` ⇒ the
 import table settles nothing" negative so the retracted inference cannot be re-derived silently.
 **Left standing, with reasons:** `preview.classify_brush`'s name-suffix predicate (logged in
-`to-spec.md` as part of the open scoping decision — pre-empting it is Andrzej's call, not the
+`board/to-spec/` as part of the open scoping decision — pre-empting it is Andrzej's call, not the
 batch's), and the unpushed commits (the orchestrator owns pushing this branch). **A round-3
 finding was dismissed as a false positive:** `--pivot`/`--pivot-actor` are already an argparse
 mutually-exclusive group on both `brush scale` and `actor rotate`, verified by running both.

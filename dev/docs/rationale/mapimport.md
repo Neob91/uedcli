@@ -207,7 +207,7 @@ name guard is a real case rather than a theoretical one: the level dict is keyed
 exports sharing a name would collapse into one and the import would report success.
 
 **Rejected:** a lenient mode that imports anyway and keeps unresolved references — deferred, not
-dismissed; it is on `../board/inbox.md`. It needs its own thinking about how such a tree is marked so
+dismissed; it is on `dev/docs/board/inbox/`. It needs its own thinking about how such a tree is marked so
 it cannot be mistaken for a complete one.
 
 **Refs:** `uedcli/mapimport.py` (`import_map`'s two integrity gates), `uedcli/dispatch.py`
@@ -232,11 +232,11 @@ docs were measured **on** the retail corpus, on the same date, from a session th
 census over twelve maps and the `02_NYC_Street.dx` polygon-label count. So the blocker is
 environmental, not a property of the project: on a machine with a game copy and the container, the
 gate is runnable as specified. It is logged as an outstanding item on
-[`../board/inbox.md`](../board/inbox/).
+[`dev/docs/board/inbox/`](../board/inbox/).
 
 Be precise about what this means: the decode demonstrably reads real compiled maps and produces
 parseable, stable, correctly-shaped T3D. Whether every value form matches the editor's spelling
 exactly is checked only where a committed editor export happened to cover it.
 
 **Refs:** `uedcli/tests/test_mapimport_import.py`, `uedcli/tests/test_mapimport_geometry.py`,
-`uedcli/tests/test_mapimport_array.py`, `../board/inbox.md`.
+`uedcli/tests/test_mapimport_array.py`, `dev/docs/board/inbox/`.

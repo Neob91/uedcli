@@ -31,10 +31,10 @@ Every doc has ONE job. Don't mix them up:
 | **[direction/](direction/README.md)** | "What are we building **toward**?" — what **the owner** decided: product intent AND process rulings | one doc per topic, **revised in place** (no history — git keeps that) | **agents may NEVER write it without their explicit yes** (`CLAUDE.md` "Direction docs") |
 | **[rationale/](rationale/README.md)** | "**Why** is the code this way, and what did we reject?" — engineering decisions an agent made | one doc per module/subsystem, revised in place | agents maintain it freely; every entry carries `Rejected` + `Refs` |
 | **[rules/](rules/README.md)** | "What process rule binds me *right now*?" (tests, spikes, background work) | process rules moved out of the always-loaded `CLAUDE.md` | read-on-demand; `CLAUDE.md`'s router names the moment to read each |
-| **specs/** + **plans/** | "How will we design/sequence this one feature?" | ephemeral per-feature scratch | deleted once the work lands |
+| **an item's `spec.md` / `plan.md`** | "How will we design/sequence this one feature?" | ephemeral per-feature scratch, inside the board item it belongs to | deleted once the work lands |
 | **spikes/** | "What did we actually observe in this experiment?" | durable evidence | kept, cited by the docs above |
 | **[board/](board/README.md)** | the work-state cluster — flow + stages (see its `README.md`) | living |  |
-| **[board/inbox.md](board/inbox/)** | "What's noticed but not yet sorted?" (head of stream — captures ideas/bugs/chores, AI flags for the owner, and their own open questions) | raw capture → triage | living |
+| **[board/inbox/](board/inbox/)** | "What's noticed but not yet sorted?" (head of stream — captures ideas/bugs/chores, AI flags for the owner, and their own open questions) | raw capture → triage | living |
 | **[board/to-spec/](board/to-spec/)** · **[to-spike/](board/to-spike/)** · **[to-plan/](board/to-plan/)** | "What's next, by stage?" | one home per item | living |
 | **[board/to-build/](board/to-build/)** | "What's reviewed & ready to build *now*?" | the on-deck **build queue / source of truth** → links a plan | living |
 | **[board/done/](board/done/)** | "What landed recently / has deferred remnants?" | short reference tail | living |
@@ -71,8 +71,9 @@ router that says which doc to read when lives in [`CLAUDE.md`](../../CLAUDE.md)
 - **[parallel-editors.md](parallel-editors.md)** — how to drive many ephemeral
   editors at once (`docker compose run` per work item): per-run wineprefix volume, unique
   export paths, the memory-bound concurrency cap, cleanup.
-- Roadmap / open work: **`board/`** — `inbox.md` (capture pool) → the stage queues
-  (`to-spec`/`to-spike`/`to-plan`) → `to-build/` (the build queue); + `done.md`; start at
+- Roadmap / open work: **`board/`** — one directory per work item, filed under the stage it is
+  in: `inbox/` (capture pool) → `to-spec/`/`to-spike/`/`to-plan/` → `to-build/` (the build
+  queue); + `someday/`, `stale/`, `done/`; start at
   **`board/README.md`**. Spike evidence: **`spikes/`** (canonical).
   Original design spec: `docs/superpowers/specs/2026-06-16-uedcli-design.md` (repo root).
 

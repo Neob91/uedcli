@@ -6,7 +6,7 @@ Instruction-level evidence: `re-raw-zones/fp-classification-sites.md`,
 `re-raw-zones/bspbuild-splitpolylist-decode.md`, `41-fp-model-x87-vs-sse.md`, `42-bspoptgeom-decode.md`.
 Confidence legend: ✅ uedcli-used/live-verified · 🔬 live-probed (disassembly) · 📖 binary-extracted.
 
-This section converts the four Phase-0 unknowns in `specs/bspbrushcsg-port.md §Phase 0` into
+This section converts the four Phase-0 unknowns in `board item `native-bsp-exact-topology-parity-byte-identical` §Phase 0` into
 verdicts. It does NOT start the port.
 
 ---
@@ -41,7 +41,7 @@ already **rejects** non-identity `Rotation` with a clear `BuildError` ("not yet 
 native transform"). Reproducing rotated input bit-exactly requires porting UnrealEd's
 `Actor::BuildCoords` FRotator→matrix, which uses the engine's **`GMath` sine/cosine LOOKUP TABLE**
 (`FGlobalMath`), *not* libm `sinf` — so calling `f32::sin` would diverge. This is a real precondition
-for UNATCO-class content and is filed in `board/inbox.md`; it does not affect the castle GO.
+for UNATCO-class content and is filed in `board/inbox/`; it does not affect the castle GO.
 
 > **UPDATE 2026-07-17 — rotation is now ENABLED (functional).** The rejection is removed.
 > `_build_brush_input` builds `R` from the URU Pitch/Yaw/Roll via `rotation.actor_matrix`
@@ -147,7 +147,7 @@ a poly — a topology cliff a snap pass cannot fix — so the honest fallback wo
 byte-identity, keep structural + functional parity", NOT a snap. No such site was found on the surf
 path, so this fallback is not triggered for the castle.
 
-**Residual open items (do not block GO; tracked in `board/inbox.md`):**
+**Residual open items (do not block GO; tracked in `board/inbox/`):**
 - Rotated-brush input identity (sine-table `BuildCoords`) — precondition for UNATCO-class content.
 - xref `FVector::Normalize` (core `0x24940`, x87 reciprocal) against the CSG-build call graph.
 - Empirical editor double-build (GUID-masked) as determinism corroboration.

@@ -173,7 +173,7 @@ Deterministic, stdlib-only — unit tests on the helpers + resolver, plus golden
 
 `usage.md` (decal behaviour: now nudges/rotates/shrinks to avoid overlap), `architecture.md` (THE ONE
 RULE block + the new resolver), `decisions.md` (append the choice + rejected alternatives: global
-optimizer, per-face-only shrink w/o move, cross-face moves), `board/done.md`.
+optimizer, per-face-only shrink w/o move, cross-face moves), `board/done/`.
 
 ## Amendments during build (2026-07-23, from Andrzej)
 

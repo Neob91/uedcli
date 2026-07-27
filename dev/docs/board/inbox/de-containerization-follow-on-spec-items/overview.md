@@ -33,7 +33,7 @@ all gated on Andrzej's scope decision Q0 in the roadmap spec). Each is its own f
   proven. `umodel.exe` is no longer needed for a mesh READ — it survives only inside the stub
   pipeline. Remaining: productise the harness into `uedcli/` (rides the asset-catalog build).
 - `[spike]` p3 — **Native textured preview** — **superseded: specced as `level preview --native`
-  (Andrzej 2026-07-16)**; see `specs/2026-07-16-native-preview-design.md` + the `to-plan.md` entry.
+  (Andrzej 2026-07-16)**; see `spec.md` + the `board/to-plan/` entry.
 - `[spec]` p3 — **Native lighting baker** (2nd long pole): per-lumel raytrace producing the
   `FLightMesh` + lumel bytes (~1.7MB/small map); downstream of D2. Plus native pathnode
   reachspec build (moderate).

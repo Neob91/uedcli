@@ -317,7 +317,7 @@ remains is entirely **point-pool bookkeeping**:
 repartition pool (2091 pre-opt) by stopping `bspBrushCSG`'s transient-point leak, NOT by loosening the
 detector. This is deeply entangled with the byte-exact node/surf/vector tree (every `surf.pBase` /
 `vert.iVertex` is a pool index), so it must be done without perturbing that tree — tracked in
-`board/inbox.md`. See §8 for the (now-closed) vectors gap.
+`board/inbox/`. See §8 for the (now-closed) vectors gap.
 
 ## 8. The vectors gap (44 vs 26) is missing authored texture axes, not dedup (2026-07-18)
 
@@ -332,7 +332,7 @@ the T3D and are all world/45°-aligned (`(0,0,1)`, `(0.707,-0.707,0)`, …), i.e
 the editor's 26-normal pool. **Fix = thread authored texture axes** from the trunk (`materialize.py`) →
 Rust `BrushInput`/`FPoly` → `alloc_surf`'s `have_u && have_v` branch. That spans the Python brush-input
 layer + the Rust `FPoly` plumbing (`build.rs`/`csg.rs`/`lib.rs`), OUTSIDE `bspoptgeom.rs`/`bspcsg.rs`
-dedup — tracked in `board/inbox.md`. (No `bspAddVector` change helps; the vectors are mis-*generated*,
+dedup — tracked in `board/inbox/`. (No `bspAddVector` change helps; the vectors are mis-*generated*,
 not under-*merged*.)
 
 **CLOSED 2026-07-18.** Threaded the authored per-poly `TextureU`/`TextureV` end-to-end:
@@ -409,4 +409,4 @@ That orphan-`iVertex` parity is NOT reachable from `bspoptgeom.rs`: the `bspOptG
 (old rings left by `insert_ring_vertex`) already reference the post-compaction live indices and match;
 the stale ones are Pass-D orphans emitted upstream. Closing it needs `zones.rs` (emit Pass-D orphans
 with the editor's pre-compaction indices) + `passes.rs` (simulate the `bspRefresh` renumber) — tracked
-in `board/inbox.md`.
+in `board/inbox/`.

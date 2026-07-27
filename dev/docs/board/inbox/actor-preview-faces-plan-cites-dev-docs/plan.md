@@ -25,7 +25,7 @@ sessions are active in this repo, so re-measure before asserting any count.
 
 ### 0a. BUILD ORDER — this whole plan waits on the decoder item
 
-**Owner decision 2.11: the texture-decoder item builds FIRST, then all of this.** `to-build.md`'s
+**Owner decision 2.11: the texture-decoder item builds FIRST, then all of this.** `board/to-build/`'s
 *Native texture decode* delivers, in its slice **S2b**, the mip-pyramid accessor and the `bMasked`
 flag on its typed result. **Implement the ordering as ruled: do not start S1 until that item has
 landed.**
@@ -33,7 +33,7 @@ landed.**
 *Recorded for the owner, not acted on:* only **S4** has a technical dependency on it. S1–S3 touch no
 texture code at all — `flat` reads no textures — so they could in principle land earlier or in
 parallel. That is an observation, not a licence to reorder; if the sequencing should change, that is
-the owner's call and is parked on `board/inbox.md`.
+the owner's call and is parked on `board/inbox/`.
 
 ### 0b. House rules this build must satisfy
 
@@ -341,9 +341,9 @@ Do not start until that item has landed and its accessor exists.
   *Refs*: even-odd scanline over a fan, `array("f")` buffers, the two-buffer focus, the chosen dim
   constant and its render.
 - **The owner's rulings have a durable home before the spec is deleted.** They are parked on
-  `board/inbox.md` as one `[OWNER — confirm]` item; **this slice does not write `direction/`** — that
+  `board/inbox/` as one `[OWNER — confirm]` item; **this slice does not write `direction/`** — that
   needs the owner's explicit yes and a `Confirmed:` trailer.
-- The spec file is deleted, and `to-build.md`'s entry removed.
+- The spec file is deleted, and `board/to-build/`'s entry removed.
 
 ---
 
@@ -363,4 +363,4 @@ Do not start until that item has landed and its accessor exists.
 The Rust port and making the native extension non-optional; bilinear filtering; real lighting; mesh
 rendering for point actors; the `Translucent` polyflag; supporting scaled/sheared brushes under
 `textured`; and any change to `level preview --native` (its concave-fan defect is filed separately on
-`board/inbox.md`).
+`board/inbox/`).

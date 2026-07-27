@@ -1,10 +1,10 @@
 +++
 priority = "p1"
 kind = "owner-question"
-summary = "`POLY TEXALIGN` is MEASURED; four things in `specs/2026-07-26-poly-surface-verbs.md` §4b now need your call"
+summary = "`POLY TEXALIGN` is MEASURED; four things in board item `the-per-surface-verb-split` §4b now need your call"
 +++
 
-# `POLY TEXALIGN` is MEASURED; four things in `specs/2026-07-26-poly-surface-verbs.md` §4b now need your call
+# `POLY TEXALIGN` is MEASURED; four things in board item `the-per-surface-verb-split` §4b now need your call
 
 The spike ran
 (`dev/docs/spikes/2026-07-26-unrealed-texalign-semantics/`, live 2026-07-26; durable facts in

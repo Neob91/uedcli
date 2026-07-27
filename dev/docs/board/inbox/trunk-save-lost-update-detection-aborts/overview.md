@@ -6,7 +6,7 @@ summary = "Trunk-save lost-update detection aborts at whole-save granularity (kn
 
 # Trunk-save lost-update detection aborts at whole-save granularity (known tradeoff)
 
-The `TrunkLevelSource.save` compare-and-abort (spec `specs/2026-07-25-trunk-write-safety.md`, D3)
+The `TrunkLevelSource.save` compare-and-abort (spec `spec.md`, D3)
 aborts the ENTIRE save if any one actor in `changed ∪ deleted` was touched concurrently — so a large
 batched pipeline (`actor find … | actor prop set -` over hundreds of actors) loses its whole save
 when a single target raced, and a persistent concurrent writer could livelock the retry. This is the

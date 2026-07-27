@@ -1,6 +1,6 @@
 # Build group #2 — three small offline features (ephemeral plan)
 
-Board: `../board/to-build.md` items 5–7 (Small features). Offline, model-side, CI-testable.
+Board: `dev/docs/board/to-build/` items 5–7 (Small features). Offline, model-side, CI-testable.
 Delete this plan once the work lands + is folded into the durable docs.
 
 ## Feature 5 — `actor bbox <names…|->`

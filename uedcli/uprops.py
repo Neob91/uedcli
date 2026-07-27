@@ -97,7 +97,7 @@ class Prop:
     # kind). None for every non-array Prop, and for an array whose Inner ref is 0 or a cross-package
     # import (the UnrealScript compiler always emits Inner as a child export of the ArrayProperty in
     # the SAME package, so an import there means a corrupt/foreign package). Consumed by
-    # `mapimport`'s dynamic-array value decode (`dev/docs/specs/2026-07-24-level-import.md` §5.2d).
+    # `mapimport`'s dynamic-array value decode (board item `level-import-native-editor-less-dx-unr-t3d` §5.2d).
     array_inner: "Prop | None" = None
 
 
@@ -429,7 +429,7 @@ def enum_values(pkg: Package, type_ref: int) -> list[str]:
 
 
 # ══ Class DEFAULT VALUES — the SerializeExpr walker + UClass-tail defaults decoder ═══════════
-# (spec `specs/2026-07-18-actor-prop-subcommands.md` §5.2; decisions.md 2026-07-18 10:02 §5.)
+# (spec in board item `materialize-post-verify-fails-when-the-trunk` §5.2; decisions.md 2026-07-18 10:02 §5.)
 #
 # A UClass export body is:
 #   [UField.SuperField][UField.Next]                       (compacts; NO leading None terminator —

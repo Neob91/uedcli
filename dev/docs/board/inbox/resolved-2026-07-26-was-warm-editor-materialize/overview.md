@@ -7,7 +7,7 @@ summary = "RESOLVED 2026-07-26 — was: Warm-editor materialize spike (SP-E) RAN
 # RESOLVED 2026-07-26 — was: Warm-editor materialize spike (SP-E) RAN 2026-07-19 and FOUND A BLOCKER
 
 The design decision is made (the two `[OWNER — confirm]`
-items above); the spec is revised; the follow-up spike is `to-spike.md` SP-F. Kept below for its
+items above); the spec is revised; the follow-up spike is `board/to-spike/` SP-F. Kept below for its
 evidence until SP-F lands, then delete. Original entry: Spike
 `spikes/2026-07-18-warm-editor-materialize/results.md` (2-reviewer cold-gated; harnesses committed).
 **Editor reuse itself works** (a warm editor builds the castle correctly, and a genuinely-reused
@@ -16,7 +16,7 @@ which today runs AGAINST the warm editor — breaks it: ~50% of reused builds fa
 verify leaves the editor in a state where a later build's `MAP SAVE` silently writes no file
 (`no_verify` reuse is 0/4-clean; isolating only the UCC export does NOT fix it → the disruptor is
 the in-editor qualify dump / editor-mid-verify racing the next fire-and-forget drive; §89 class).
-So `specs/2026-07-18-warm-editor-materialize.md` §4.4's "H3 verify against the same live editor"
+So `spec.md` §4.4's "H3 verify against the same live editor"
 (D-Q3) must change. **DECISION FOR YOU (spec §8 SP-E RESULTS has the detail):** which fix —
 (1) run the WHOLE H3 verify (export+qualify) against a SEPARATE throwaway editor (works regardless
 of cause; but a cold verify editor costs ~15 s ≈ the entire ~16 s warm saving, so it'd need

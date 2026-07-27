@@ -170,11 +170,11 @@ golden, with the reason (all from `bspbuild-splitpolylist-decode.md`):
 its bevel/bounding planes, `FilterFPoly` adding fragment nodes to the world Model) plus the
 **semisolid second incremental layer**, in place of our CSG-surface-list + single from-scratch
 partition. That reproduces both the fragment retention (FVerts) and the extra nodes natively, and
-makes the tree watertight by construction (no synthetic bound nodes). N-2+; see `board/inbox.md`.
+makes the tree watertight by construction (no synthetic bound nodes). N-2+; see `board/inbox/`.
 
 The 95 residual propagation leaks are thin/edge cells whose interior-point seed fails; they are not
 on tested walkable floor. A follow-up could seed the interior point more robustly (Chebyshev center)
-or fall back to the world-face graft for cells the flip misses — tracked in `board/inbox.md`.
+or fall back to the world-face graft for cells the flip misses — tracked in `board/inbox/`.
 
 **Note (2026-07-19):** the leak-repair does **not** contribute to the on-disk `Vectors` array. Its
 bound node carries a flipped parent plane stored **inline** in `FBspNode` (never in `Vectors`) and

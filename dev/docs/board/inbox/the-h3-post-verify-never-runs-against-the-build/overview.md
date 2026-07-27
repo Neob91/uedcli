@@ -8,7 +8,7 @@ summary = "The H3 post-verify never runs against the build editor"
 
 Decided
 2026-07-26 (owner chose "verify in a one-shot commandlet container" over an idle barrier and over a
-separate GUI verify editor). Folded into `specs/2026-07-18-warm-editor-materialize.md` decision 6;
+separate GUI verify editor). Folded into board item `resolved-2026-07-26-was-warm-editor-materialize` decision 6;
 **`direction/materialize.md` is NOT edited until this is confirmed.** Proposed wording, verbatim,
 for `direction/materialize.md` § "The post-build verify":
 
@@ -43,5 +43,5 @@ lock"* — written when the verify ran against the warm editor. **Proposed repla
 > operator is about to rebuild.
 
 **Until you rule on (ii), the build follows the CURRENT direction text and tears down on a verify
-failure too** (`specs/2026-07-18-warm-editor-materialize.md` §4.3 says so explicitly). This is the
+failure too** (board item `resolved-2026-07-26-was-warm-editor-materialize` §4.3 says so explicitly). This is the
 one place the spec knowingly proposes against a direction doc.

@@ -12,7 +12,7 @@ byte-decoded, 33/33 checks), **lighting** (the decisive find: `LIGHT APPLY` stor
 visibility masks, not intensities/colours** — collapses the "2nd long pole" to a per-lumel BSP
 ray test; format double-proven), and the **ULevel body / actor bodies / GUID mint / reachspecs /
 package assembly** (ULevel round-trips **100/100** byte-exact; GUID/gen **100/100**). Spec:
-`specs/2026-07-15-native-materialize-design.md`; evidence: `spikes/2026-07-15-native-materialize/`
+`spec.md`; evidence: `spikes/2026-07-15-native-materialize/`
 (3 sections + reproducible harness). **Two cold reviewers ran; findings folded** (Tier-K LineCheck
 battery reinstated, lighting shadow-correctness gate added, import resolver + `Actors[0]/[1]`
 synthesis owned, zones scoped honestly, Scale/UPolys assigned). **NEEDS ANDRZEJ SIGN-OFF** before

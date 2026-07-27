@@ -87,7 +87,7 @@ So the two "is my level OK?" verbs (`status`, `doctor`) and the wiring inspector
 ### Textures / surfaces (agent 3)
 - **No way to SEE a texture** — no `texture show`, thumbnail, or image export; "sight"
   is name + WxH only across 4791 textures. (Directly relevant to the open
-  `specs/2026-07-19-texture-show-for-llm.md`.) Also 0/4791 are classified, so
+  board item `texture-catalog-redesign-superseded`.) Also 0/4791 are classified, so
   tag/color/description search is dead in practice.
 - **No texture scale, no texture rotate** — two of UnrealEd's four canonical surface
   ops absent (only pan + `poly align` frames exist).

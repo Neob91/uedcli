@@ -1,10 +1,10 @@
 +++
 priority = "p1"
 kind = "debug"
-summary = "`driver.map_save`'s write verification rebuilt — `inbox.md` CLOSED 2026-07-25"
+summary = "`driver.map_save`'s write verification rebuilt — `board/inbox/` CLOSED 2026-07-25"
 +++
 
-# `driver.map_save`'s write verification rebuilt — `inbox.md` CLOSED 2026-07-25
+# `driver.map_save`'s write verification rebuilt — `board/inbox/` CLOSED 2026-07-25
 
 The old rule ("two equal non-zero sizes ⇒ finished"; "`stat` exit 1 ⇒ no file, anything else ⇒
 docker failed") could not tell *finished* from *stalled* (a truncated map's size is just as stable
@@ -18,5 +18,5 @@ equal readings across a settle window; a structural check of the written package
 fail (both passed `timeout=0.0`) and the docker-failure test that mocked an impossible
 `returncode=126` pairing were rebuilt on a fake clock that exercises the real 600 s/1 s/3 s
 defaults. `decisions.md` 2026-07-25 11:31 UTC; `architecture.md` "Editor driver";
-`unrealed/commands.md`. **Remnant → `inbox.md`:** driver's other `docker exec` calls (8 across 6
+`unrealed/commands.md`. **Remnant → `board/inbox/`:** driver's other `docker exec` calls (8 across 6
 methods, plus `xfer.remove`) are still unbounded.

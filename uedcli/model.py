@@ -92,7 +92,7 @@ class Actor:
     # never serialize it (so it stays out of the body, the map, and the level hash); trunk read/write
     # own the sidecar. Its only on-the-wire form is the `// uedcli-folder:` carrier `actor show`
     # emits and `actor add` parses back (see `_FOLDER_CARRIER` below). See dev/docs/architecture.md
-    # "Folders" + specs/2026-07-18-actor-folders-hierarchical.md.
+    # "Folders" + board item `actor-folders-hierarchical-actor-organization`.
     folder: str | None = None
     # A uedcli-side FLAT set of cross-cutting classification labels (e.g. "lighting", "flammable",
     # "dup-a1f"), stored in a per-actor `labels` SIDECAR in the trunk — NEVER in the T3D body, NEVER
@@ -100,7 +100,7 @@ class Actor:
     # prop. The sorted-set analog of `folder`: `emit`/`canonical_actor_t3d` never serialize it (so it
     # stays out of the body, the map, and the level hash); trunk read/write own the sidecar. Its only
     # on-the-wire form is the `// uedcli-labels:` carrier `actor show` emits and `actor add` parses
-    # back (labellib._LABELS_CARRIER). See dev/docs/architecture.md + specs/2026-07-22-actor-labels.md.
+    # back (labellib._LABELS_CARRIER). See dev/docs/architecture.md + board item `re-evaluate-whether-reject-nonlevel-target`.
     labels: frozenset[str] = frozenset()
     # The `Location=` value EXACTLY as it was parsed, or None when the actor had no Location line.
     # A CONTAINED SIDE-CHANNEL for one fact `location` cannot carry: WHICH AXES THE SOURCE STATED.
@@ -143,7 +143,7 @@ def parse_t3d_actors(text: str) -> list[Actor]:
     last — fine for a stored level (Names are unique there), WRONG for user-concatenated T3D where
     several `brush build`/`actor build` snippets may share a Name. Any caller ingesting raw user
     T3D MUST parse via this and uniquify before dict-keying, or all-but-the-last of each duplicate
-    group is dropped without warning (see dev/docs/board/inbox.md dogfooding CRITICAL)."""
+    group is dropped without warning (see dev/docs/board/inbox/ dogfooding CRITICAL)."""
     actors: list[Actor] = []
     lines = text.splitlines()
     i, n = 0, len(lines)

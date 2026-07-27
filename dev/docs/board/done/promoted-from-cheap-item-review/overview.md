@@ -10,4 +10,4 @@ Andrzej triaged the ten-item cheap shortlist in chat; his calls are recorded in 
 2026-07-24 21:58 UTC. Three items changed shape rather than just queue (class-show, the ditched
 stash-`CalledProcessError` item, and `--png`). Two items did NOT come here: the `ensure_editor`
 `CalledProcessError` leak was **ditched** (native intersect/deintersect deletes that code path), and
-nothing was sent to `to-spec.md`.
+nothing was sent to `board/to-spec/`.

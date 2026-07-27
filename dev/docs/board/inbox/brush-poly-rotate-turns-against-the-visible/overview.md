@@ -14,6 +14,6 @@ Owner
   room interior or a pillar, whereas "the sign silently inverts indoors" is not discoverable at all.
   This also makes all five verbs consistent: `wall`/`floor` and `run` are already invariant under
   `n̂ → −n̂` by construction, so `rotate` was the only one that read differently inside a room.
-  Folded into `plans/2026-07-26-poly-surface-step1-plan.md` and `rationale/surface.md`.
+  Folded into `plan.md` and `rationale/surface.md`.
 
 ---

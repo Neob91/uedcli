@@ -126,4 +126,4 @@ reproduce.
 
 Exact node-for-node topology parity therefore requires porting the editor's **incremental
 `bspBrushCSG`** (temp-brush bevel planes + `FilterFPoly` node adds) + the semisolid second layer —
-an N-2+ effort, tracked in `board/inbox.md`.
+an N-2+ effort, tracked in `board/inbox/`.

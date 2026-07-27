@@ -9,7 +9,7 @@ and the committed class packages, into a temporary project. The one thing they p
 that finds the game's class packages (`dispatch._class_index`), pointing it at the committed
 `uned/UED22` tree instead of a game install the offline suite does not have.
 
-Spec: `dev/docs/specs/2026-07-24-level-import.md` §4 (verb surface) and §6 (write path).
+Spec: board item `level-import-native-editor-less-dx-unr-t3d` §4 (verb surface) and §6 (write path).
 """
 from __future__ import annotations
 

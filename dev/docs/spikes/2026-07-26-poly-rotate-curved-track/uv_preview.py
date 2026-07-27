@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """SPIKE — render what each specified surface operation DOES, before any of it is built.
 
-The verbs in `specs/2026-07-26-poly-surface-verbs.md` do not exist yet, so this computes each frame
+The verbs in board item `the-per-surface-verb-split` do not exist yet, so this computes each frame
 straight from the spec's rules and renders the resulting texture mapping. Every face is drawn
 STRAIGHT-ON (viewed down its own normal), so the face outline is undistorted and anything you see
 bent, stretched, sheared or mirrored comes purely from the texture frame.

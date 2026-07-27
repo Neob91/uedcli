@@ -2,7 +2,7 @@
 
 **Status:** BUILT 2026-07-18 (folded into `architecture.md` "class show" bullet + `decisions.md`
 2026-07-18 10:03 UTC; this ephemeral spec may be pruned). A small extension to `class show` (the class-discovery verb,
-`specs/2026-07-17-class-discovery-and-author-validation.md`): let the caller narrow the output to one
+board item `offline-class-discovery-qualify-and-validate`): let the caller narrow the output to one
 or more editor **categories** (`Movement`, `Lighting`, `AI`, …), so "what Movement properties does
 this class have?" is a direct query rather than eyeballing the whole grouped dump.
 
@@ -159,5 +159,5 @@ show the expected focused, expanded sections.
   bullet is optional.)
 - `cli.py` `kshow` help for `--category` (note it expands + defaults to unlimited depth).
 - `decisions.md` — the 2026-07-18 entry this spec links to.
-- `board/inbox.md` — the follow-up to reconcile `level doctor --category` to the append + case-
+- `board/inbox/` — the follow-up to reconcile `level doctor --category` to the append + case-
   insensitive + listing shape.

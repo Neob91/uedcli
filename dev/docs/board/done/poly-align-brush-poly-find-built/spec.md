@@ -6,7 +6,7 @@ Implemented in `uedcli/polyalign.py` (`brush poly find` + `brush poly align`); d
 folded into `architecture.md` ("Surface texture alignment") + `unrealed/t3d.md` (the UV convention).
 This ephemeral spec may be deleted once that fold is confirmed stable.
 
-**Board item:** `dev/docs/board/to-build.md` item 11 (origin: `to-spec.md` "Texture-alignment solver",
+**Board item:** `dev/docs/board/to-build/` item 11 (origin: `board/to-spec/` "Texture-alignment solver",
 AI brainstorm 2026-07-16 endorsed + extended by Andrzej 2026-07-16).
 
 **Ephemeral:** this spec is scratch for designing item 11. Once built, its durable knowledge folds

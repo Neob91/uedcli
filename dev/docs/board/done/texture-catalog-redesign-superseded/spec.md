@@ -3,7 +3,7 @@
 **Status:** specced (awaiting review gate → plan → build).
 **Requested by:** Andrzej (2026-07-19, session `uedcli:board`). A re-design of the whole texture
 catalog, not just the `texture show` add-on. Supersedes the narrower
-[`specs/2026-07-19-texture-show-for-llm.md`](spec-texture-show-for-llm.md).
+[`spec-texture-show-for-llm.md`](spec-texture-show-for-llm.md).
 **Ephemeral:** per the uedcli `CLAUDE.md`, this spec is scratch. The load-bearing decisions +
 rejected alternatives are recorded in the durable append-only
 [`dev/docs/decisions.md`](../../../decisions.md) (entry **2026-07-19 03:58 UTC — texture catalog
@@ -11,9 +11,9 @@ redesign**). On build, fold the outcome into `architecture.md` (replace the curr
 section) + `usage.md`, and delete/stale-mark this file and the `texture-show-for-llm` spec.
 
 **Folds in three previously-separate board items** (all subsumed here):
-- the `texture show` plan item (`to-plan.md`),
-- the "native `texture sync` decode — drop UCC-under-Wine" spec item (`to-spec.md`),
-- the deferred "content-addressed texture-image cache + `texture classify clone`" spec item (`to-spec.md`).
+- the `texture show` plan item (`board/to-plan/`),
+- the "native `texture sync` decode — drop UCC-under-Wine" spec item (`board/to-spec/`),
+- the deferred "content-addressed texture-image cache + `texture classify clone`" spec item (`board/to-spec/`).
 
 ---
 

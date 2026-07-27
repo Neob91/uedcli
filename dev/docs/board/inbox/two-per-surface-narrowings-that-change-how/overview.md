@@ -6,7 +6,7 @@ summary = "TWO per-surface narrowings that change how EXISTING CONTENT RENDERS"
 
 # TWO per-surface narrowings that change how EXISTING CONTENT RENDERS
 
-Spec: `specs/2026-07-26-poly-surface-verbs.md` §7. Both follow from the rulings parked in the two
+Spec: board item `the-per-surface-verb-split` §7. Both follow from the rulings parked in the two
 items above, but each is a separate thing to accept or overrule, and each touches the T3D trees —
 the one place `direction/conventions.md` says to think before changing, because a user's *content*
 lives there. Neither is migrated by anything: a map keeps what it has until someone re-runs the

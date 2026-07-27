@@ -1,7 +1,7 @@
 """Pure, offline shot model for `level preview` — the SHOT-token grammar (`at:…;rot:…` /
 `look:` / `orbit:`), the free-pose trig (`pose_from_lookat` / `pose_from_orbit`), and the
 output-filename rule. No editor, no I/O (fully unit-tested). The grammar is shared verbatim
-with the future `--game` tier (specs/2026-07-13-ingame-preview-design.md §3) so the same
+with the future `--game` tier (board item `level-preview-game` §3) so the same
 tokens pose either backend. (The old `TARGET[:MODE][=NAME]` auto-frame grammar and the
 editor-screenshot backend were deleted at the `--native` cutover, 2026-07-16.)"""
 from __future__ import annotations

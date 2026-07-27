@@ -152,7 +152,7 @@ nonexistent `/opt/UED22/System/UnrealTournament.ini` ini path; a `sed` multi-lin
 syntax bug that only ever manifests with 2+ paths; and resolved package paths being
 host-absolute when the container only has `/repo` bind-mounted. A final clean run against a
 probe using only `Engine.DefaultTexture` (avoiding the separate, still-open transitive-package-
-dependency gap — see `board/to-spec.md`) returned a correctly fully-qualified `Level`.
+dependency gap — see `board/to-spec/`) returned a correctly fully-qualified `Level`.
 
 ## Cross-links
 

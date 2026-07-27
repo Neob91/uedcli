@@ -23,5 +23,5 @@ Spike `spikes/2026-07-25-mover-savedpos-savedrot-engine-stamped/` (harness: `sca
 authored-vs-computed taxonomy; `architecture.md` "Mover support". Pinned by
 `test_engine_facts.py::test_amover_postload_unconditionally_stamps_the_savedpos_savedrot_sentinels`
 plus three `test_normalize.py` regressions.
-**Remnant** (filed on `inbox.md`, `[chore] p2`): `level preview --game`'s internal materialize
+**Remnant** (filed on `board/inbox/`, `[chore] p2`): `level preview --game`'s internal materialize
 still runs the H3 post-verify with no way to skip it, though a preview `.dx` is throwaway.

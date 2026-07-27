@@ -14,8 +14,8 @@ managed-dir keys, defaults `maps/`/`prefabs/`/`texture-catalog/`; `id`/`name` dr
 machine-local state in the self-ignoring `<root>/.uedcli/` (`config.state_dir`, `*` .gitignore
 written on first create); tool-install assets package-relative (`tool_assets.py`); relative CLI
 paths resolve against the cwd; `UEDCLI_REPO_ROOT`/`UEDCLI_PREFAB_DIR`/`UEDCLI_TEXTURE_CATALOG`
-retired. Spec/plan (ephemeral): `specs/2026-07-17-project-layout-uedcli-toml.md`,
-`plans/2026-07-18-project-layout-uedcli-toml-plan.md`; durable record decisions.md 2026-07-17
+retired. Spec/plan (ephemeral): `spec.md`,
+`plan.md`; durable record decisions.md 2026-07-17
 20:58 UTC. The slice-2 `texture classify set` lock deviation was RESOLVED 2026-07-18: texture
 flocks are catalog-adjacent `<catalog>/.locks/` (decisions.md 2026-07-18 07:53). The live
 materialize/preview check PASSED (spec §10.6 — inbox record).

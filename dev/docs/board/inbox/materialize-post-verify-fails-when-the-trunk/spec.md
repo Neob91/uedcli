@@ -1,6 +1,6 @@
 # `actor prop set|unset|get` — subcommand grammar, dot-paths, default-value fallback
 
-**Status: BUILT 2026-07-18** (same day; see `board/done.md` + `architecture.md` "Class-property
+**Status: BUILT 2026-07-18** (same day; see `board/done/` + `architecture.md` "Class-property
 schema, DEFAULTS & the `actor prop` verbs"). The §9 probe RESOLVED: partial values are
 member-wise onto the CLASS DEFAULT (`spikes/2026-07-18-partial-value-import-semantics/`,
 `unrealed/t3d.md`); the §5.2 to-be-RE'd layout landed corpus-verified 1914/1914

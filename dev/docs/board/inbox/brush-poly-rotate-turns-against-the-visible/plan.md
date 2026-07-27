@@ -329,7 +329,7 @@ are the `--pan-by 0,32` example and the `**Pan / scale** with --pan-to X,Y` bull
 - **`poly align` keeps printing brush names** until step 2/3, so `usage.md`'s "Output streams for
   mutators" paragraph must say `set`/`pan`/`rotate`/`scale` and `align` now differ. The whole
   rationale for ruling 2 is that a per-face verb printing a bare brush name silently widens the
-  downstream set — `align` will keep doing that in the interim. **Log to `board/inbox.md`.**
+  downstream set — `align` will keep doing that in the interim. **Log to `board/inbox/`.**
 - **`rotate`'s turn direction on a subtractive brush or a negative `MainScale`.** `n̂` from local
   winding is the *polygon* normal; the visible **surface** normal is reversed on a subtract, and a
   negative scale flips handedness, so `--by 16384` turns the texture the opposite way from what the
@@ -341,6 +341,6 @@ are the `--pan-by 0,32` example and the `**Pan / scale** with --pan-to X,Y` bull
   verb set coherent, since `wall`/`floor` and `run` are invariant under `n̂ → −n̂` by construction.
   **Pin both cases:** the same `--by 16384` on an additive and on a subtractive face must turn the
   texture the same way as seen from outside each. See `dev/docs/rationale/surface.md`.
-- Steps 2–5 are specced and queued on `../board/to-plan.md`; the spec's gate is closed. (An earlier
+- Steps 2–5 are specced and queued on `dev/docs/board/to-plan/`; the spec's gate is closed. (An earlier
   draft said they were "blocked on the spec rewrite" over cap detection, terminal faces and
   connectivity validation — all three are now decided in the spec.)

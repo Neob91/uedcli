@@ -3,7 +3,7 @@
 A **folder** is a uedcli-side hierarchical dotted organization path on an actor (`castle.tower.roof`),
 stored in a per-actor trunk sidecar, never emitted to the built map, independent of the T3D `Group=`
 prop. This module is the pure grammar/validation + the NORMATIVE match algorithm; it has no I/O and
-no editor. See specs/2026-07-18-actor-folders-hierarchical.md §3 (the spec the tests pin) and
+no editor. See board item `actor-folders-hierarchical-actor-organization` §3 (the spec the tests pin) and
 dev/docs/architecture.md "Folders".
 
 Two grammars:

@@ -1,6 +1,6 @@
 # Spec — the board becomes one directory per work item
 
-**Board item:** [`../board/to-plan.md`](../../../board/to-plan.md). **Owner decisions:** §2 (implemented as
+**Board item:** [`dev/docs/board/to-plan/`](dev/docs/board/to-plan/). **Owner decisions:** §2 (implemented as
 given). **Agent decisions:** §3, durable home in §6.
 
 **Measurements are pinned to HEAD at writing (`1969b0c`), which includes this spec itself** — so the
@@ -27,8 +27,8 @@ dev/docs/board/
 
 **Why.** Three measured problems:
 
-1. **Reads.** `inbox.md` is 356,795 bytes / 4,042 lines / 293 bullets; the board is 7,173 lines.
-2. **Write collisions.** 49 of 140 commits in three days touched `inbox.md` (35%). Sessions share
+1. **Reads.** `board/inbox/` is 356,795 bytes / 4,042 lines / 293 bullets; the board is 7,173 lines.
+2. **Write collisions.** 49 of 140 commits in three days touched `board/inbox/` (35%). Sessions share
    this repo and every review round logs findings there.
 3. **Questions are invisible.** 62 entries wait on the owner, in 15 tag spellings (§3.4).
 
@@ -123,7 +123,7 @@ parked (§5).
 
 **2.15 — The migration runs on the base branch in committed batches, not in a worktree.** Ruled
 2026-07-27 with the counter-argument on the table: a worktree's failure is a *loud* modify/delete
-conflict, while the base branch's is *silent* — the commit that removes `inbox.md` cleanly discards
+conflict, while the base branch's is *silent* — the commit that removes `board/inbox/` cleanly discards
 whatever another session committed meanwhile, and destroys their uncommitted on-disk edits, with
 nothing in `git status` afterwards. **That risk is accepted**, and the mitigation offered alongside
 it (a re-diff-before-delete reconciliation step) was declined. Batches keep the window to minutes;
@@ -197,7 +197,7 @@ durable doc, a spike, another item's frontmatter all say ``board item `<slug>` `
 - **Exemptions, required.** The docs that *define* the form must write it. `board/README.md`,
   `CLAUDE.md`, `dev/docs/rationale/board.md` and the test module are exempt, as
   `test_doc_links.py`'s `_MAY_NAME_DELETED` already does for the same class of problem. One live
-  counter-example exists: `plans/2026-07-18-csg-order-plan.md:64` writes ``board item `to-plan.md```
+  counter-example exists: `board item `csg-order-control-actor-order-actor-add-order`:64` writes ``board item `board/to-plan/```
   — the phrase followed by a backticked *filename*.
 - **Test 9 (§3.7) asserts every reference resolves** — a path citation into `specs/` rots silently
   today; a dangling slug reddens the suite.
@@ -360,7 +360,7 @@ commit, because a bullet's history cannot be traced out of a 4,000-line file.
 **On completion** `git mv … done/<slug>`; `spec.md`/`plan.md` are deleted and `overview.md` trimmed,
 preserving the rule that specs and plans are ephemeral and their knowledge folds into durable docs
 first — **unless another live item shares the spec**. That is real:
-`specs/2026-07-26-poly-surface-verbs.md` is cited 11 times and covers a done item, a to-plan item
+board item `the-per-surface-verb-split` is cited 11 times and covers a done item, a to-plan item
 and open questions; four more specs have the same shape. **A shared spec is deleted only when every
 item citing it is in `done/` or `stale/`**; until then it lives with the least-advanced live item
 and the others link it by slug.
@@ -395,23 +395,23 @@ reader and `tomllib` over every real `overview.md` plus a fixture set covering e
 
 | What | Where
 |---|---
-| 14 HTML provenance banners in `inbox.md` | a one-line `**Provenance:**` in each affected item's body
-| headings: 8 `###` + `## From the 2026-07-18 unattended build chain` in `inbox.md`; 6 `###` + 3 `##` in `someday.md`; `## Needs a spec` + `## Backlog — active` in `to-spec.md`; `## Partially done` + `## Done` in `done.md`; 4 prose-only `##` in `to-build.md` | a heading that *is* an item becomes one; a heading carrying prose becomes **its own item** (not merged into a neighbour — `to-build.md:193`'s neighbours are unrelated to it and to each other); a bare category is dropped and recorded in the inventory
-| the 25 `[x]` / 17 `[~]` markers in `done.md` | a `**Remnants:**` body line
+| 14 HTML provenance banners in `board/inbox/` | a one-line `**Provenance:**` in each affected item's body
+| headings: 8 `###` + `## From the 2026-07-18 unattended build chain` in `board/inbox/`; 6 `###` + 3 `##` in `board/someday/`; `## Needs a spec` + `## Backlog — active` in `board/to-spec/`; `## Partially done` + `## Done` in `board/done/`; 4 prose-only `##` in `board/to-build/` | a heading that *is* an item becomes one; a heading carrying prose becomes **its own item** (not merged into a neighbour — `to-build.md:193`'s neighbours are unrelated to it and to each other); a bare category is dropped and recorded in the inventory
+| the 25 `[x]` / 17 `[~]` markers in `board/done/` | a `**Remnants:**` body line
 | **6 top-level blockquotes, 22 lines** — `to-build.md:100-105` (**"DO NOT START THIS"**, the only record that the unified-asset-catalog item is not buildable), `to-plan.md:49, 61, 155`, `to-spec.md:131`, `inbox.md:1934` | the `to-build` banner becomes body text of its item; the three `to-plan` pointers are live cross-notes and become `depends-on`/body slug references
-| positional and cross-file references — "the item above", "see the item in `inbox.md`" | **rule, not a list:** every intra-board reference is repointed to a slug; the inventory enumerates them
+| positional and cross-file references — "the item above", "see the item in `board/inbox/`" | **rule, not a list:** every intra-board reference is repointed to a slug; the inventory enumerates them
 
 The literal `(also in to-build.md #N)` spelling has **zero** live instances, but the *practice* is
-alive in the three `to-plan.md` blockquote pointers above — so the convention is replaced by slug
+alive in the three `board/to-plan/` blockquote pointers above — so the convention is replaced by slug
 references, not simply dropped.
 
-`to-spec.md` has **no Deferred section** (only `## Needs a spec` and `## Backlog — active`); the
+`board/to-spec/` has **no Deferred section** (only `## Needs a spec` and `## Backlog — active`); the
 claim in `board/README.md` and `CLAUDE.md` is stale, and there is no Active/Deferred re-triage.
 
 ### 3.11 What counts as an item
 
-"Each bullet is one item" is false. `to-build.md`: 3 of its 7 bullets are its own navigation list,
-two real items are `##` sections with no bullet, 4 more `##` sections are prose. `inbox.md` carries
+"Each bullet is one item" is false. `board/to-build/`: 3 of its 7 bullets are its own navigation list,
+two real items are `##` sections with no bullet, 4 more `##` sections are prose. `board/inbox/` carries
 a 4-bullet navigation list at **lines 657-660**, orphaned ~650 lines below the sentence at line 7
 that introduces it — cite it by its text, not its coordinates, because lines 690-693 are four `p1`
 owner items that a literal reading would delete.
@@ -469,13 +469,13 @@ The bare-name set adds **33 files the first census cannot see**, including the *
 
 | What | Needs
 |---|---
-| `test_doc_links.py` `_on_deck()` | Reads `to-build.md` as a file and **fails open** if absent — every ephemeral doc would go unchecked. Delete it **in the `to-build` batch commit**, not later, or the exemption is silently wide for five batches. It has a **second call site** in `test_no_citation_of_a_deleted_doc`, which must take the same shape-based exemption; that test is currently inert (both docs it names still exist), so a green suite will not catch getting it wrong.
-| `_EPHEMERAL` | Becomes a shape test: `board/*/*/spec.md` and `board/*/*/plan.md` exempt **except** under `to-build/`. **This NARROWS coverage and the spec must say so:** today's boundary is "linked from `to-build.md`", which covers 15 ephemeral files, and §2.13 moves `unified-asset-catalog` and `actor-preview-faces` out of `to-build/` — so **7 currently-checked files lose checking, invisibly**. §8 pins the before/after list.
+| `test_doc_links.py` `_on_deck()` | Reads `board/to-build/` as a file and **fails open** if absent — every ephemeral doc would go unchecked. Delete it **in the `to-build` batch commit**, not later, or the exemption is silently wide for five batches. It has a **second call site** in `test_no_citation_of_a_deleted_doc`, which must take the same shape-based exemption; that test is currently inert (both docs it names still exist), so a green suite will not catch getting it wrong.
+| `_EPHEMERAL` | Becomes a shape test: `board/*/*/spec.md` and `board/*/*/plan.md` exempt **except** under `to-build/`. **This NARROWS coverage and the spec must say so:** today's boundary is "linked from `board/to-build/`", which covers 15 ephemeral files, and §2.13 moves `unified-asset-catalog` and `actor-preview-faces` out of `to-build/` — so **7 currently-checked files lose checking, invisibly**. §8 pins the before/after list.
 | **`dev/docs/decisions.md`** | FROZEN, and carries two *markdown links* into `dev/docs/specs/` (lines 8, 7286) that rule 9 deletes — the suite reddens and the file may not be edited. Exempt those two links in `test_doc_links.py` (a code change, not a doc edit). Its 26 board-path citations are prose; leave them.
 | **`dev/docs/2026-06-20-open-questions-for-andrzej.md`** | The owner's — *do not touch*. 2 prose refs, no markdown links, so nothing reddens.
 | `dev/docs/rationale/MIGRATION.md` | markdown links into `../plans/` and `../specs/` (lines 7-8) — reddens; repoint.
 | **suite scale** | `_checked_docs()` is **270** docs × 3 parametrized tests = 810 of 822 collected. After: ~820 docs → ~2,460 cases. `_anchors()` re-reads targets uncached — memoise if it slows. Measure before/after.
-| `CLAUDE.md` — **cite by text, not line number**, since this change edits the file | the 7 `inbox.md` mentions; the tag≈queue rule (§2.11 retires it); the bounce-to-inbox rule (§2.13 replaces it); the **"`specs/` + `plans/`" bullet** and the **"`dev/docs/specs/` and `dev/docs/plans/` are ephemeral"** paragraph; **route logged findings through `bin/board new`**; **tell agents to run `bin/board answered`** (§3.6 — without this the owner's answers are never read); **rewrite the `[OWNER — confirm]` parking rule**, which currently mandates parking on `board/inbox.md`
+| `CLAUDE.md` — **cite by text, not line number**, since this change edits the file | the 7 `board/inbox/` mentions; the tag≈queue rule (§2.11 retires it); the bounce-to-inbox rule (§2.13 replaces it); the **"`specs/` + `plans/`" bullet** and the **"`dev/docs/specs/` and `dev/docs/plans/` are ephemeral"** paragraph; **route logged findings through `bin/board new`**; **tell agents to run `bin/board answered`** (§3.6 — without this the owner's answers are never read); **rewrite the `[OWNER — confirm]` parking rule**, which currently mandates parking on `board/inbox/`
 | **`CLAUDE.md` round-2 trigger** | It excludes `dev/docs/board/*` from "the artifact", so once specs live under the board **every spec and plan round loses its round 2**. Narrow the exclusion to `board/*/*/overview.md` and `board/*/*/questions/`; §3.2 keeps findings out of any other file, closing the hole.
 | `dev/docs/README.md` | board rows 36-40; **line 34** (the `specs/`+`plans/` row rule 9 invalidates); **lines 74-77** (the flow described a second time).
 | **repo-root `README.md`** | describes the flow by filename; invisible to the first census.
@@ -495,7 +495,7 @@ Three hard orderings, because other sessions read `CLAUDE.md`, not chat:
 
 - **`bin/board new` ships before the first batch** — otherwise a session that must log a review
   finding has no sanctioned path, and an unlogged finding blocks its round.
-- **`CLAUDE.md` is repointed away from `inbox.md` BEFORE the inbox batch starts**, not in the commit
+- **`CLAUDE.md` is repointed away from `board/inbox/` BEFORE the inbox batch starts**, not in the commit
   that deletes it. Otherwise sessions are told to append to a file that is mid-conversion for the
   whole window, and `git rm` discards their appends with no conflict.
 - **`_on_deck()`/`_EPHEMERAL` change in the `to-build` batch commit** (§4.1).
@@ -512,7 +512,7 @@ behaviour change.
 
 ## 5. Parked for the owner
 
-Two items, both on `board/inbox.md` as `[OWNER — confirm]`, verbatim, because this spec is ephemeral.
+Two items, both on `board/inbox/` as `[OWNER — confirm]`, verbatim, because this spec is ephemeral.
 
 **(A) `direction/process.md`** — replacing only the final sentence of the "Nothing load-bearing lives
 only in chat" bullet (from "The board is a set…" on line 53), staying inside the bullet:

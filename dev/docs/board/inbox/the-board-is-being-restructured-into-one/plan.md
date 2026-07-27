@@ -52,7 +52,7 @@ Slice-specific work:
   `unified-asset-catalog` and `actor-preview-faces`.
 - **S3 `to-plan`** applies §2.13 to `poly-surface-verbs`, using rule 6's attribution rule — the third
   parked question affects step 1, which is **done**, so it does not demote this item.
-- **S7 `inbox`** is preceded by its own commit repointing `CLAUDE.md` away from `inbox.md`. It is the
+- **S7 `inbox`** is preceded by its own commit repointing `CLAUDE.md` away from `board/inbox/`. It is the
   contended file: 35% of recent commits touch it, and §2.15 accepts that a concurrent session's
   uncommitted edits are lost.
 

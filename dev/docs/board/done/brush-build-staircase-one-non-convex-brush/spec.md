@@ -4,7 +4,7 @@
 `architecture.md` (builder module + doctor) and `docs/usage.md`; the load-bearing *choice* + rejected
 alternatives live in `decisions.md` **2026-07-21 12:06 UTC** (linked). Stale once implemented.
 
-**Board:** `to-spec.md` `[spec] p2` "brush build should emit ONE brush actor". Reverses `decisions.md`
+**Board:** `board/to-spec/` `[spec] p2` "brush build should emit ONE brush actor". Reverses `decisions.md`
 2026-07-18 20:09 UTC (box-per-step).
 
 **Revised 2026-07-21 after the two-reviewer gate.** Both cold reviewers converged: A1 (staircase
@@ -227,7 +227,7 @@ non-convex brush; tiled convex sides; interval-parity watertight; the falsified 
 
 - The **spiral** redo (split to its own `[spec]`/`[spike]` — see Scope decision).
 - Real build-emergent **T-junction crack** detection (deferred to the Phase-2 offline BSP engine,
-  `to-build.md` #7). This spec only stops the STATIC check from false-flagging a closed brush.
+  `board/to-build/` #7). This spec only stops the STATIC check from false-flagging a closed brush.
 - Fixing the native CSG core's convex assumption (its own board follow-up).
 
 ## Open questions
@@ -237,4 +237,4 @@ non-convex brush; tiled convex sides; interval-parity watertight; the falsified 
 2. ~~Drop `stair_*` from live parity?~~ **Resolved (Andrzej 2026-07-21): drop from the live suite;
    keep the offline value goldens.**
 3. Native-convex-assumption fix — scope the follow-up board item (decompose-to-convex vs guard+warn).
-   Tracked as an `inbox.md` `[implement]` item.
+   Tracked as an `board/inbox/` `[implement]` item.

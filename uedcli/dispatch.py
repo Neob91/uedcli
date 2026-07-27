@@ -2460,7 +2460,7 @@ def _apply_generator_rotate(actors, rot_uu) -> None:
 # verb changes behaviour: `brush build cylinder --radius 48` has inherently fractional ring
 # vertices and a green test asserting it says nothing (`test_generators.py`), and a 16-step
 # staircase already emits 66 faces. Whether the poly budget should also cover those shapes is an
-# open question filed on `board/inbox.md` rather than decided here.
+# open question filed on `board/inbox/` rather than decided here.
 _SWEPT_SHAPES = frozenset({"extrude", "revolve"})
 _POLY_BUDGET = 64
 

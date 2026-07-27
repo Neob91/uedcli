@@ -141,7 +141,7 @@ No Docker in the authoring loop. Stubbing deleted entirely (S6).
 **Phase C — the long pole (high effort). NOTE: this *promotes* D2 from optional to
 required — a real decision for Andrzej, not a given (see Q0).**
 The offline BSP/CSG engine is already designed in
-`specs/2026-06-24-uedcli-offline-bsp-engine-design.md` ("D2"), but `decisions.md`
+board item `bsp-issue-ground-truth-detector-d0-d1` ("D2"), but `decisions.md`
 2026-06-24 12:40 **deliberately deferred D2 as an optional, measurement-gated upgrade**
 — the *planned* BSP ground-truth path is **D0 (editor drop-warnings) + D1 (parse the
 saved built model)**. Crucially, **D0 and D1 both require the editor**, so they do NOT
@@ -259,7 +259,7 @@ DeusEx-stubbed editor does not. Caveats: the decoders are validated only on Deus
 float32-faithful build is tuned to the UED22/DeusEx engine constants. Treat the native
 work as *advancing* portability, not completing it.
 
-## Open questions for Andrzej (candidates for `inbox.md` — not auto-added)
+## Open questions for Andrzej (candidates for `board/inbox/` — not auto-added)
 0. **The pivotal one — geometry strategy:** commit to building **D2** (promoting it from
    the 12:40 "optional, measurement-gated" status to *required*, since the editor-based
    D0/D1 path can't serve an editor-free pipeline), OR adopt the **editor-`MAP

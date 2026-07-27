@@ -7,7 +7,7 @@ summary = "Offline class discovery + qualify-and-validate on ingest"
 # Offline class discovery + qualify-and-validate on ingest
 
 — BUILT + tested + live-verified
-2026-07-17 (spec `specs/2026-07-17-class-discovery-and-author-validation.md`; decisions.md
+2026-07-17 (spec `spec.md`; decisions.md
 2026-07-17 19:37 UTC). New `class list`/`class show` verbs over an offline `classindex.ClassIndex`;
 bare→FQCN class qualification + existence validation + texture existence validation wired into
 every ingest/emit seam (`actor add`, stash capture/apply, prefab apply, the generators, `brush poly
@@ -24,5 +24,5 @@ canonical no-package-path message, `TextureResolver.exists` cache, ancestry cycl
 RELAXED `uprops` EOF gate (tolerates trailing padding — `CaroneElevatorSet.u` now parses instead of
 skip-noting). Gates green: `bin/test` 1337 passed / 1 skipped / 2 xfailed, 35 cargo. Live: `class
 list`/`show` on real DX; `actor add` of bare `Class=Light` stores `Engine.Light`; unknown
-class/texture → exit 2. **Remnants (boarded in `inbox.md`):** the annotated class catalog (curated
+class/texture → exit 2. **Remnants (boarded in `board/inbox/`):** the annotated class catalog (curated
 placeability/guidance) + the backward-compat exit-status change note.

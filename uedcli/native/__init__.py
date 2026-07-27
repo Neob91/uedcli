@@ -5,7 +5,7 @@ git-tracked T3D trunk and writes a game-loadable UE1 package byte-by-byte, with 
 BSP/CSG compute delegated to the Rust `uedcli_native` extension (when built) and the
 proven byte-exact serializers kept here in Python.
 
-Module map (see dev/docs/specs/2026-07-15-native-materialize-design.md §3):
+Module map (see board item `native-level-materialize` §3):
   codec.py        - FCompactIndex + primitive read/write (shared)
   pkg_write.py    - UE1 package container: header/names/imports/exports/layout/GUID+gen
   umodel.py       - UModel body parse (self-check) + write-from-arrays (Python dev oracle)

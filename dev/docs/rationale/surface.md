@@ -4,7 +4,7 @@ Why the surface-edit code is the way it is. Sibling of [`emit.md`](emit.md) and 
 see [`README.md`](README.md) for the index. Revised in place — agents maintain this freely.
 
 The owner's *product* decisions about these verbs live in `../direction/conventions.md` (once
-confirmed) and are parked meanwhile on `../board/inbox.md`; this file holds only the engineering.
+confirmed) and are parked meanwhile on `dev/docs/board/inbox/`; this file holds only the engineering.
 
 ---
 
@@ -247,7 +247,7 @@ sign now depends on a property of the brush rather than of the face. But an auth
 are texturing a room or a pillar, whereas a silent inversion indoors is not discoverable at all.
 Owner ruling 2026-07-27 ("pick sane defaults").
 
-**Refs.** `plans/2026-07-26-poly-surface-step1-plan.md` §9.
+**Refs.** board item `brush-poly-rotate-turns-against-the-visible` §9.
 
 ### What the ruling left open: a `CsgOper` that is neither add nor subtract
 
@@ -266,7 +266,7 @@ follows (`surface._visible_normal`):
   In practice they are near-unreachable: they are live-editor verbs that do not appear in a trunk
   (`preview_native` says the same and skips them).
 
-  **This is the conservative interim, not a ruling.** It is `[OWNER — decide]` on `../board/inbox.md`:
+  **This is the conservative interim, not a ruling.** It is `[OWNER — decide]` on `dev/docs/board/inbox/`:
   fail-closed was chosen because relaxing an error to a default later is harmless, whereas shipping a
   silent default and tightening it later would have mis-textured content in between.
 
@@ -396,7 +396,7 @@ sign now depends on a property of the brush rather than of the face. But an auth
 are texturing a room or a pillar, whereas a silent inversion indoors is not discoverable at all.
 Owner ruling 2026-07-27 ("pick sane defaults").
 
-**Refs.** `plans/2026-07-26-poly-surface-step1-plan.md` §9.
+**Refs.** board item `brush-poly-rotate-turns-against-the-visible` §9.
 
 ---
 

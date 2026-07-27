@@ -4,7 +4,7 @@
 load-bearing choices → `decisions.md` (2026-07-21 16:41). Goes stale once built.
 
 **Board:** `[spec] p2` (Andrzej 2026-07-21). **Coupled to** and **built after/with**
-`specs/2026-07-21-brush-preview-ergonomics.md` (same verb; sequencing is a hard dependency — see
+`spec-brush-preview-ergonomics.md` (same verb; sequencing is a hard dependency — see
 §Sequencing). **Revised 2026-07-21 after the two-reviewer gate** (blockers folded in).
 
 **Confirmed by Andrzej 2026-07-21:** global `--show-collision` switch (NOT per-name); clean rename

@@ -1,5 +1,5 @@
 """`level preview --native` — the offline draft backend (spec
-`dev/docs/specs/2026-07-16-native-preview-design.md`). Zero docker, zero editor, zero game:
+board item `de-containerization-follow-on-spec-items`). Zero docker, zero editor, zero game:
 the trunk is carved in-process by the Rust CSG core (`uedcli_native.build_geometry`), each
 built surface is joined back to its SOURCE brush poly for texture/Pan/flags (the same
 `i_actor`/`i_brush_poly` provenance `assemble._patch_surf_refs` consumes at materialize),

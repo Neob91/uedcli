@@ -6,7 +6,7 @@ summary = "The asset-catalog class arm needs four changes to actually close the 
 
 # The asset-catalog class arm needs four changes to actually close the decoration findings it cites
 
-`specs/2026-07-26-asset-catalog-class-arm.md` §6 motivates itself with exactly
+`spec.md` §6 motivates itself with exactly
 the owner finding *"an agent can see a crate and still has to guess its footprint, and whether its
 origin sits at the base or the centre"* (`spikes/levelbuild-friction/owner-reports.md` finding 7).
 As specced it closes the *vertical* half only. From the 2026-07-26 review of that finding:

@@ -6,7 +6,7 @@
 > `single_box` (6=6) is truly exact → 1/5, not 2/5.** The port's `merge_coplanars`/`*_nodes` are
 > count-fitting placeholders and the code drifted from the narrative below. Treat §3's `10|10|✅` row
 > and §7's "holds on 2/5" as repudiated; the design spec
-> (`specs/2026-06-24-uedcli-offline-bsp-engine-design.md` §3b) carries the corrected 1/5. The
+> (board item `bsp-issue-ground-truth-detector-d0-d1` §3b) carries the corrected 1/5. The
 > mechanism findings (call graph, `MAP REBUILD` params, located gaps) stand.
 
 **Date:** 2026-06-24

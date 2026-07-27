@@ -16,7 +16,7 @@ working in `Tools/uedcli` reads both and gets opposite instructions on the exemp
 headcount. Suggest the repo file say a per-tool file may impose a stricter gate. (b) **Dangling
 citation:** the tool file cites "in one 2026-07-25 round the two reviewers overlapped on only two
 of eight findings … — see `decisions.md`, 2026-07-25", but no `decisions.md` entry records that
-round or that statistic; the rounds are described in `board/done.md`. Repoint it. (c) **No decision
+round or that statistic; the rounds are described in `board/done/`. Repoint it. (c) **No decision
 entry exists for the gate policy at all** — the headcount ladder, context-vs-priming, the
 observability test, batching, and the feature-branch/squash-merge rule all landed only in a
 convention file, against that file's own rule that choices + rejected alternatives go in the

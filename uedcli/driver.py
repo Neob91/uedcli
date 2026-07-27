@@ -27,7 +27,7 @@ _EDITOR_LOG = "/opt/UED22/Editor.log"
 # method for why the tag — and not the exit code — is what tells "the container is dead" from "the
 # file is not there yet". (The driver's OTHER `docker exec` calls — `_wine_ctl`, `dexec_bash`,
 # `set_clipboard`, `log_size`, `read_log_since`, `dismiss_blocking_dialog` — do NOT go through it
-# and are still unbounded; `board/inbox.md` carries that chore.)
+# and are still unbounded; `board/inbox/` carries that chore.)
 PROBE_TAG = "uedcli-probe"
 # Hard bound on ONE `docker exec` probe. Every probe here is a sub-second `stat`/`od`, so anything
 # near this is dockerd itself not answering — and per the tool's "never an open-ended wait" rule a
@@ -103,7 +103,7 @@ def package_header_problem(header: bytes, size: int) -> str | None:
       this check would compare the NEW header against the OLD, larger size. Unreachable for the two
       production callers (fresh uuid paths, so nothing pre-exists) and unlikely in general — the temp
       file is opened `CreateFileW`-style, which truncates — but it is a real hole for a fixed-path
-      caller. The `board/inbox.md` `Save.tmp` spike settles it while watching the destination.
+      caller. The `board/inbox/` `Save.tmp` spike settles it while watching the destination.
 
     The zero-COUNT branch is defence in depth rather than a format law, and it DOES reject some real
     packages: `uned/UED22/WinDrv.u` and `Window.u` are legitimate 64-byte stubs with all three counts
@@ -297,7 +297,7 @@ class Driver:
            **Scope of the boundedness claim:** it covers the POLL LOOP only. The `MAP SAVE` line
            itself goes out through `_wine_ctl`, which still has no `subprocess` timeout, so a dockerd
            that hangs on *that* call parks this method one line before the bounded loop begins
-           (`board/inbox.md` chore — `_wine_ctl` drives minutes-long editor verbs and needs its own
+           (`board/inbox/` chore — `_wine_ctl` drives minutes-long editor verbs and needs its own
            bound chosen, not this one copied).
 
         Raises `DriverError` naming the path, the last thing observed, and the elapsed time if no

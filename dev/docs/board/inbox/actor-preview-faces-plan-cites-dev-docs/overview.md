@@ -9,7 +9,7 @@ summary = "The on-deck actor-preview-faces plan cites a rationale topic that was
 `bin/test` is **red on master** (2026-07-27), independently of the board migration:
 
 ```
-FAILED uedcli/tests/test_doc_links.py::test_prose_citations_into_the_new_trees_resolve[dev/docs/plans/2026-07-27-actor-preview-faces-plan.md]
+FAILED uedcli/tests/test_doc_links.py::test_prose_citations_into_the_new_trees_resolve[`plan.md`]
   dev/docs/rationale/preview.md   (cited 3 times)
 ```
 
@@ -18,7 +18,7 @@ FAILED uedcli/tests/test_doc_links.py::test_prose_citations_into_the_new_trees_r
 `surface`, `userdocs`.
 
 **Why it is checked at all:** the plan is ephemeral, and ephemeral docs are normally exempt — but
-it is referenced from `to-build.md`, so `_on_deck()` pulls it into the checked set. Working as
+it is referenced from `board/to-build/`, so `_on_deck()` pulls it into the checked set. Working as
 intended: an on-deck plan is about to be executed and must not carry rot.
 
 **Two fixes, and the choice is not obvious.** Either write the missing `preview` topic under

@@ -16,7 +16,7 @@ filters-by-name-first then uniquifies the chosen set. Separately, the generator 
 `--base-name` (a stem — the Name always gets a `_<rand>` suffix at add) on both `brush build`
 (renamed from `--name`, hard break, no alias) and `actor build` (new — previously every point
 actor was named after its class → collapsed on batch add). Spec:
-`specs/2026-07-12-batch-add-unique-names-and-base-name.md`; decisions 2026-07-12 12:15 UTC (both
+`spec.md`; decisions 2026-07-12 12:15 UTC (both
 entries); folded into `architecture.md` (generator verbs + the model-side ingest invariant) and
 `usage.md`. Tests: `parse_t3d_actors` dup-preservation, `actor add` 14-merlon + mixed regressions
 + the count print, `stash capture` dup + filter-then-uniquify, CLI `--base-name`/no-legacy-`--name`.

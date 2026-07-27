@@ -2,7 +2,7 @@
 """SP-E — warm-editor materialize spike harness (reused-editor cleanliness + timing split).
 
 Drives MULTIPLE `level materialize` builds through ONE booted UnrealEd container — the exact
-"warm editor" the spec `specs/2026-07-18-warm-editor-materialize.md` §8 proposes — and instruments
+"warm editor" the spec in board item `resolved-2026-07-26-was-warm-editor-materialize` §8 proposes — and instruments
 the seven SP-E questions live. It does this the FAITHFUL way: it monkeypatches ONLY the container
 lifecycle seams (`apply.ensure_editor` → return the one warm container; `apply.stop_editor` →
 no-op) and then calls the *real* `apply.run_materialize` N times, so every build runs the true

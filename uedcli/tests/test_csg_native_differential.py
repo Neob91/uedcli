@@ -17,7 +17,7 @@ Parity status (after N-2 cleanup passes):
     editor (Balance=50) splits the far wall at y=-87.5 by a wedge plane.  Matching that split
     distribution needs the editor's Balance=50 tree + `bspOptGeom` redundant-node removal
     (Editor.dll 0x36870), NOT decoded to instruction level (spike section 10 7.2/10).  xfail
-    (tracked; board/inbox.md [spike] bspOptGeom).
+    (tracked; board/inbox/ [spike] bspOptGeom).
   * f (portal): FULL surf-set + node/surf/zone/leaf-count parity, asserted.  The last missing
     piece was `TestVisibility` multi-zone portalization: `zones.rs` Pass D now ports UnrealEd's
     `AssignAllZones` fragment-SPLIT (`re-raw-zones/passD-assignzones-7400.md`), so a wall spanning

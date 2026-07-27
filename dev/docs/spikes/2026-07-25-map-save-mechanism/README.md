@@ -40,7 +40,7 @@ table; the control flow is inferred from it. Two things follow that a waiter mus
   complete, still carrying its old mtime. So "a file is there" is not evidence of this save; a wait
   has to compare against a **pre-save stat**.
 - `Save.tmp` is a **fixed name**. Where it is created is *not* in the string table (the literal is a
-  bare filename) — see the open `board/inbox.md` spike.
+  bare filename) — see the open `board/inbox/` spike.
 
 ## Q2 — Is the move a rename or a byte copy? **Unknowable from the binary's imports**
 
@@ -66,7 +66,7 @@ observed** — the one historical report ("a truncated `Leaves` array captured f
 `.dx`") was retracted by `spikes/2026-07-15-native-materialize/sections/91-leaves-overproduction.md`,
 which rebuilt the same golden behind a far more generous idle barrier and got a byte-identical Model
 body. Settling it needs a live probe (watch the destination's size/inode during a big save) — filed
-on `board/inbox.md` together with the `Save.tmp` location question.
+on `board/inbox/` together with the `Save.tmp` location question.
 
 ## Q3 — How much can a header check actually vouch for?
 

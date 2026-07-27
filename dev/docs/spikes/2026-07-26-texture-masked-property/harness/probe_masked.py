@@ -4,7 +4,7 @@
 Background: `unrealed/quirks.md` (2026-07-26) says `Masked` is a property of the TEXTURE, set at
 import, and that a texture's flags are OR'ed into every surface using it — but recorded the property
 as "not yet probed to the stored property name/offset on the export". `--faces textured`
-(`specs/2026-07-26-actor-preview-textured-faces.md`) cannot gate cut-outs without it.
+(board item `four-actor-preview-faces-rulings-need-a-durable`) cannot gate cut-outs without it.
 
 Answer: the property is **`bMasked`** (a UE1 bool, stored PRESENCE-ONLY — see findings.md).
 

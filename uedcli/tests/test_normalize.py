@@ -854,7 +854,7 @@ def test_a_moved_actor_stops_trusting_the_axes_its_source_stated():
     still parses back equal, so the omitted axis keeps reading as the class default. That case can
     only ever produce a spurious ABORT, never a false pass — the built map would carry the moved
     value, the editor would then state it explicitly, and the two sides disagree loudly. Filed with
-    the ingest remnant on `board/inbox.md`."""
+    the ingest remnant on `board/inbox/`."""
     from decimal import Decimal as D
     moved = _one_actor_level("    Location=(X=100.000000,Y=200.000000)\n", cls="Engine.Camera")
     moved.actors["A1"].location = (D(100), D(200), D(50))         # what `actor move` writes

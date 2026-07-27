@@ -14,5 +14,5 @@ colon-filter grammar parsed to a `LabelSpec` (bare kind = ALL, filters narrow, c
 one pass that minimises a cost over a geometry `DensityGrid` (flee dense knots, never cover a point
 icon, moderate drift cap); brush names anchor at the least-dense point on their own wireframe. Spec
 + plan cold-review-gated (spec + Part-A gates); decisions 2026-07-22 09:54 UTC; spec
-`specs/2026-07-22-labels-granularity.md`, plan `plans/2026-07-22-labels-granularity-plan.md`. Tests
+board item `true-occlusion-label-filter`, plan in board item `review-gate-round-2-findings-left-standing`. Tests
 in `test_preview.py`/`test_cli.py`/`test_actor_preview.py`.

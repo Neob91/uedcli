@@ -90,7 +90,7 @@ def parse_decimal(text: str) -> Decimal:
     `1e999999999` is a perfectly finite `Decimal` and passes — then becomes `inf` when a
     computed-geometry module converts it to `float`. That overflow lives at the
     `Decimal`→`float` boundary, not here, and closing it means bounding coordinates to what a
-    float can represent (see `board/inbox.md`, "`parse_decimal` admits an INFINITY by another
+    float can represent (see `board/inbox/`, "`parse_decimal` admits an INFINITY by another
     spelling"). Nothing observable breaks today — such a value ends as a clean no-op or a clean
     `GeometryError` — but do not read this validator as a range check."""
     try:
@@ -379,8 +379,8 @@ def build_parser() -> argparse.ArgumentParser:
              "a point actor (Light, mesh deco, nav point) is its Location point. Single-valued; ANDs "
              "with the other filters. Selects a region's actors to pipe into a set verb (add --kind "
              "brush for geometry only, e.g. `… --within-bbox … --kind brush | actor preview -`). "
-             "(A looser 'also catch straddling brushes' variant, --overlapping-bbox, is a separate "
-             "deferred verb — see dev/docs/board/to-spec.md.)")
+             "(A looser 'also catch straddling brushes' variant, --overlapping-bbox, does not "
+             "exist yet.)")
     find.add_argument(
         "--kind", choices=["point", "brush"], default=None,
         help="Filter by actor kind: 'brush' = actors that carry brush geometry (a PolyList — "

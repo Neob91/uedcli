@@ -6,7 +6,7 @@ summary = "`brush identify` — classify a real brush's shape + reverse-map it t
 
 # `brush identify` — classify a real brush's shape + reverse-map it to a generator (2026-07-24)
 
-Two coupled capabilities surfaced by the corpus brush-idiom study (`specs/2026-07-24-corpus-brush-idioms.md`
+Two coupled capabilities surfaced by the corpus brush-idiom study (`spec.md`
 §7 gaps 2+3): (a) given a brush's polys/verts, **name its shape** against the generator vocabulary
 (`cube`/`cylinder`/`cone`/`sheet`/`staircase`/`spiral`/2D-extrude) or tag it *freeform*; (b) emit the
 **`brush build <shape> --params…` invocation that reproduces it** (or report non-generatable freeform).

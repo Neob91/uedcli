@@ -450,7 +450,7 @@ fn append_ring_verts(model: &mut Model, verts: &[[f32; 3]], create_points: bool)
 /// are ABOVE the threshold, so this leaves every editor-emitted ring untouched.  Applied to orphans
 /// only — the live `OriginalRing`/`Frag` path resolves ADD-style like the editor and carries no
 /// within-threshold corner on this map; making the collapse universal + index-based is flagged in
-/// `board/inbox.md` for a map that puts a grazing-corner dup on a live fragment.
+/// `board/inbox/` for a map that puts a grazing-corner dup on a live fragment.
 fn fix_ring(verts: &[[f32; 3]]) -> Vec<[f32; 3]> {
     let n = verts.len();
     if n == 0 {

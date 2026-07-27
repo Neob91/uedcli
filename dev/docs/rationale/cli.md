@@ -62,7 +62,7 @@ the check; it becomes `inf` only when a computed-geometry module converts it to 
 validator does **not** mean "no infinite value can reach the model": that overflow lives at the
 `Decimal`→`float` boundary, and closing it means bounding coordinates to what a float can represent
 — a decision about where range may be lost, not another `is_finite()` call. Deferred and logged
-(`../board/inbox.md`, "`parse_decimal` admits an INFINITY by another spelling", 2026-07-26);
+(`dev/docs/board/inbox/`, "`parse_decimal` admits an INFINITY by another spelling", 2026-07-26);
 nothing observable breaks today, since such a value ends as a clean no-op or a clean `GeometryError`.
 
 **Rejected:**

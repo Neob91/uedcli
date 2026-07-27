@@ -59,16 +59,16 @@ column except the last.
 | `brush-profile-generators` | content merged at `6900e34`; no hazard |
 | **`profile-generator-fixes`** | **6 commits, unmerged**, branched at `6900e34` |
 
-It touches `dev/docs/board/inbox.md` (−82 lines), `architecture.md`, `board/done.md`,
+It touches `dev/docs/board/inbox/` (−82 lines), `architecture.md`, `board/done/`,
 `docs/leveldesign/*`, `docs/usage.md`, and `uedcli/{cli,dispatch,emit,model,builders}.py` plus two
 test files. **Every one is also edited by Tasks 8–10**, and `uedcli/builders.py` carries
 `decisions.md` citations at lines 25, 28, 504, 578 — so it is squarely in Task 8's scope.
 
 - It introduces **no** new `decisions.md`/`direction.md` citations and does not touch
   `direction.md`, so the delete/modify hazard does not fire.
-- **Merge it before Task 8**, or treat those five `uedcli/*.py` files and `inbox.md` as manual-merge
+- **Merge it before Task 8**, or treat those five `uedcli/*.py` files and `board/inbox/` as manual-merge
   points.
-- **Do NOT retire the `board/inbox.md` concurrency item at Task 10** until this is actually true.
+- **Do NOT retire the `board/inbox/` concurrency item at Task 10** until this is actually true.
 
 ---
 
@@ -131,8 +131,8 @@ Record in `dev/docs/rationale/MIGRATION.md` under `## Inventory at <sha>`:
       `rg -n '\(?[Dd]ecisions?\b[^)]{0,40}[0-9]{4}-[0-9]{2}-[0-9]{2}'` that contains **no** literal
       `decisions.md`. Record the file list, not just a count.
 - [ ] `specs/`+`plans/` citer counts and directory sizes — `plans/` holds **24** files.
-- [ ] **Files referenced from `to-build.md` in ANY form** — markdown link *or* backticked path.
-      **It is 12, not 11**: item 11 cites `specs/2026-07-24-docs-command.md` as a backticked path,
+- [ ] **Files referenced from `board/to-build/` in ANY form** — markdown link *or* backticked path.
+      **It is 12, not 11**: item 11 cites board item `two-uedcli-docs-decisions-of-yours-are` as a backticked path,
       and that file carries a live markdown link to `dev/docs/decisions.md` that would dangle. This is an
       **exemption boundary**, so a wrong number means files are checked or skipped incorrectly.
 
@@ -273,7 +273,7 @@ three parts; link checker and `bin/test` pass.
 ## Task 8: Part D — citation migration
 
 Use **Task 2's** numbers, not the spec's. **Merge `profile-generator-fixes` first**, or treat its
-five `uedcli/*.py` files and `inbox.md` as manual-merge points.
+five `uedcli/*.py` files and `board/inbox/` as manual-merge points.
 
 - [ ] `decisions.md` / `direction.md` by name — retarget per each entry's disposition row.
 - [ ] The 4 `CLAUDE.md "<moved section>"` code sites → `rules/<file>.md`.
@@ -282,9 +282,9 @@ five `uedcli/*.py` files and `inbox.md` as manual-merge points.
       cited entry's own Ref is a deleted spec, there is no spike to point at — drop the pointer and
       keep the claim, or cite the code that demonstrates it.
 - [ ] The 31 `spikes/` files → retarget. Durable evidence, not ephemeral.
-- [ ] `specs/`+`plans/` exempt, **except the 12 referenced from `to-build.md`**.
+- [ ] `specs/`+`plans/` exempt, **except the 12 referenced from `board/to-build/`**.
 - [ ] Two board sites cite sections that now **stay resident** — they need *editing*, not
-      retargeting. Cite them **by item title, not line range** (`inbox.md` is 2,786 lines and the
+      retargeting. Cite them **by item title, not line range** (`board/inbox/` is 2,786 lines and the
       in-flight branch deletes 82): the `[debug]` item about the repo layout and
       `.claude/settings.json`, and `board/README.md`'s "a spike happens when a spec flags a live
       unknown".
@@ -316,7 +316,7 @@ Plus every `decisions.md`/`direction.md` mention a plain grep does find.
 - [ ] Sweep the **≥12 internal cross-references**, both directions. Do not key on `see **X**` — that
       misses six of them.
 - [ ] **F1** — `CLAUDE.md` claims `.claude/worktrees/` is gitignored; it is not. Add
-      `.claude/worktrees/` to `.gitignore`. **the owner's call** — log to `board/inbox.md` if he
+      `.claude/worktrees/` to `.gitignore`. **the owner's call** — log to `board/inbox/` if he
       declines.
 - [ ] **F2** — rewrite the repo-layout paragraph: toplevel is `/home/neob91/Documents/Dev/uedcli`,
       no `Tools/`, `_scratch/` at that root. Same false label in `dev/docs/README.md`.
@@ -341,14 +341,14 @@ Plus every `decisions.md`/`direction.md` mention a plain grep does find.
       "A gap between `direction.md` and `architecture.md`" paragraph, the "See `direction.md` + the
       board" line, and the `Tools/uedcli/CLAUDE.md` label. (`rules/` row and Context-loading were
       done at Task 3.)
-- [ ] Retire the resolved `board/inbox.md` items **by title, not line range** — the `@`-gate item
+- [ ] Retire the resolved `board/inbox/` items **by title, not line range** — the `@`-gate item
       Task 6 overrides, the `[debug]` item Task 9 fixes. **Not** the concurrency item unless the
       second worktree has actually merged.
-- [ ] **Delete this plan's entry from `board/to-build.md`** (added when the plan gate closed).
-- [ ] **Add the short `done.md` tail entry** — `CLAUDE.md` "TODOs".
+- [ ] **Delete this plan's entry from `board/to-build/`** (added when the plan gate closed).
+- [ ] **Add the short `board/done/` tail entry** — `CLAUDE.md` "TODOs".
 - [ ] Delete this plan and the spec.
 
 **Verify:** link checker clean; `bin/test` passes; `docs/` still references nothing under
-`dev/docs/`; `to-build.md` has no docs-restructure entry.
+`dev/docs/`; `board/to-build/` has no docs-restructure entry.
 
 **Commit:** `Delete the decisions ledger and direction.md; the topic trees replace them` **→ gate.**

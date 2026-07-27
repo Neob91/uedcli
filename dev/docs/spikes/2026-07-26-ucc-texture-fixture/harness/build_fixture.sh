@@ -5,7 +5,7 @@
 #
 # Why this matters: the native-texture-decode plan's oracle compares our BC1 decode against
 # a P8 copy of the same image. That is only evidence if something OTHER than us encoded them
-# (dev/docs/plans/2026-07-25-native-texture-formats-plan.md, D7). Lifting the real game
+# (board item `native-texture-decode`, D7). Lifting the real game
 # texture is redistribution; encoding both halves ourselves is circular. UCC is the third way.
 #
 # Usage:  build_fixture.sh [outdir]      (default: <repo>/_scratch/uccfixture)

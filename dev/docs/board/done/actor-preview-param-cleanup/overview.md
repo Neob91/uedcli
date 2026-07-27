@@ -17,4 +17,4 @@ captioned pane (framed via `_point_pane_region`, expanded to at least `Location 
 zero-extent marker centres instead of jamming into a corner — regression-pinned). A **breaking CLI
 change** across the three verbs; each removed spelling errored via `_RemovedFlag` with a migration
 message (matching the `--class`/`--zoom-poly`/`--split` precedents). Decision `decisions.md` 2026-07-24
-19:01 UTC; spec `specs/2026-07-24-preview-params-cleanup.md` (status corrected).
+19:01 UTC; spec `spec.md` (status corrected).

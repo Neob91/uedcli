@@ -1,6 +1,6 @@
 """`brush poly align` + `brush poly find` (build item 11).
 
-Design: decisions.md 2026-07-18 21:40 UTC; specs/2026-07-18-poly-align.md. The load-bearing property
+Design: decisions.md 2026-07-18 21:40 UTC; board item `poly-align-brush-poly-find-built`. The load-bearing property
 under test is UV CONTINUITY across a shared seam: for a world point on the edge two faces share,
 `U=(P−Origin)·TextureU+PanU` computed from BOTH faces must agree.
 """
@@ -433,7 +433,7 @@ def test_dispatch_poly_align_error_exit2_no_save(capsys):
 # --------------------------------------------------------------------- engine-fact regressions
 # Per uedcli dev/docs/rules/spikes.md "pin the finding" — re-assert the two load-bearing facts poly align's
 # math rests on, so a change to the UV convention or the cylinder builder trips a red test.
-# Evidence: specs/2026-07-18-poly-align.md (UV convention §) — render.rs:159-165 +
+# Evidence: board item `poly-align-brush-poly-find-built` (UV convention §) — render.rs:159-165 +
 # preview_native._world_uv_frame; builders.cylinder radius placement (builders.py:206-207).
 
 def test_engine_fact_uv_formula_is_base_relative_plus_pan():

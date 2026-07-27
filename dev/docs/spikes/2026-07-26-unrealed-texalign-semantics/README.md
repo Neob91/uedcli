@@ -456,7 +456,7 @@ rejects a face from `--wall` iff its dominant axis is Z and from `--floor` iff i
 unit density, with `_tex_basis`. The divergence from the editor on a slope is not "we refuse and it
 doesn't"; it is **"we lay an undistorted frame where the editor lays a projected, stretched one"**.
 
-### 6.3 What this means for `dev/docs/specs/2026-07-26-poly-surface-verbs.md` §4b
+### 6.3 What this means for board item `the-per-surface-verb-split` §4b
 
 **Reported, not applied.** The spike was commissioned with an explicit instruction not to edit that
 spec, so nothing below was written into it — including the three plain factual corrections, which
@@ -559,7 +559,7 @@ Throwaway output (the `MAP EXPORT` T3Ds, logs) stayed in `_scratch/texalign/` pe
 - `dev/docs/architecture.md` and `uedcli/polyalign.py`'s module docstring both called `poly align`
   "the offline analogue of UnrealEd's `TEXTURE ALIGN`" — a verb that does not exist, describing a
   rule this spike disproved. Both corrected.
-- `dev/docs/board/` — the `[spike]` item is closed (`done.md`); the four spec decisions the findings
-  raise are filed as an `[OWNER — decide]` item on `inbox.md`.
+- `dev/docs/board/` — the `[spike]` item is closed (`board/done/`); the four spec decisions the findings
+  raise are filed as an `[OWNER — decide]` item on `board/inbox/`.
 - `docs/usage.md` + `docs/leveldesign/general/textures-and-surfaces.md` — both said or implied that
   `brush poly align` reproduces UnrealEd's own auto-align. It does not; corrected.

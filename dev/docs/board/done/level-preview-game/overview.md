@@ -7,7 +7,7 @@ summary = "`level preview --game` — ONE-EXEC batch drive (from ~9s to ~2.2s wa
 # `level preview --game` — ONE-EXEC batch drive (from ~9s to ~2.2s warm)
 
 — BUILT + live-verified
-2026-07-17 (spec `specs/2026-07-17-game-preview-container-daemon.md`; decision 14:42; 2-reviewer
+2026-07-17 (spec `spec.md`; decision 14:42; 2-reviewer
 design gate). Replaced the warm container's ~8-10 per-op `docker exec`/`stats`/`cp` round-trips with
 ONE `docker inspect` (reuse gate) + ONE `docker exec` of the in-container `preview_batch.py`
 (deliver → 3-phase travel/skip → per-shot `PrepareCamera`+settle+X-grab → framed PNGs on stdout).

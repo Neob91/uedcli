@@ -7,7 +7,7 @@ summary = "The board is being restructured into one directory per work item, and
 # The board is being restructured into one directory per work item, and two of your process rules need your yes before it can land
 
 Spec:
-[`dev/docs/specs/2026-07-27-board-per-item-directories.md`](spec.md).
+[`spec.md`](spec.md).
 You decided the shape live on 2026-07-27 (every stage the same, `git mv` to advance, blocking
 questions as files, stale shelved not deleted, references by slug, TOML frontmatter, and no
 `[spec]`/`[plan]` kinds because "each issue gets a plan"). Those decisions currently exist only in

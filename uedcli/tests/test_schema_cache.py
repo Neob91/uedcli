@@ -1,5 +1,5 @@
 """Persistent package-schema cache (`uedcli.schema_cache`) — spec
-`dev/docs/specs/2026-07-18-package-schema-cache.md` §11. Engine-facts-adjacent: pins the stat-tuple
+board item `package-schema-cache` §11. Engine-facts-adjacent: pins the stat-tuple
 key, the marshal serialization + hand-bumped `SCHEMA_CACHE_VERSION`, the discovery/props blob split,
 realpath keying, corrupt=miss, parallel-writer safety, and the accepted `os.utime` staleness caveat,
 so a decoder/format change trips a red test instead of drifting.

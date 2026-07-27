@@ -1,10 +1,10 @@
 # Plan: build group #3 — geometry (items 8 & 9)
 
-Ephemeral build scratch for the two offline geometry items on `to-build.md`. Durable record lands
+Ephemeral build scratch for the two offline geometry items on `board/to-build/`. Durable record lands
 in `architecture.md` / `docs/usage.md` / `decisions.md` per item.
 
 ## Item 8 — `brush build staircase` redo
-Spec + full decision: `specs/2026-07-18-staircase-redo.md`, `decisions.md` 2026-07-18 20:09 UTC.
+Spec + full decision: `spec.md`, `decisions.md` 2026-07-18 20:09 UTC.
 Spec-review gate run (two cold reviewers), all findings resolved in the spec. Built:
 `builders.staircase` now returns `list[Brush]` (one convex box per step), `dispatch._build_brushes`
 unwraps it, goldens re-blessed offline, tests rewritten + doctor-clean test added. DONE.

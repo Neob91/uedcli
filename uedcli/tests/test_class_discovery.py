@@ -1,5 +1,5 @@
 """Offline class discovery + qualify-and-validate on ingest
-(spec `dev/docs/specs/2026-07-17-class-discovery-and-author-validation.md`).
+(spec in board item `offline-class-discovery-qualify-and-validate`).
 
 The `ClassIndex` byte-level readers (`uprops.class_is_abstract`, the TextBuffer decode, `iter_classes`)
 are live-verified against the real v68 `.u`; here we test the offline LOGIC by injecting the index's

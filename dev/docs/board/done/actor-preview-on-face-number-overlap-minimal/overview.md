@@ -14,7 +14,7 @@ WHITE ring just outside the strokes wherever they still overlap, so shapes stay 
 dropped ~20% (`_decal_opacity` 0.70→0.56, floor→0.12). `--breakdown` (per-brush grid) is the default
 preview. Iterated heavily with Andrzej on renders; supersedes the elaborate 20%-tolerance/60%-floor/
 cap-rotation resolver of the same day. Decision `2026-07-23 19:05 UTC` (supersedes `15:22`/`16:03`);
-spec `specs/2026-07-23-decal-anti-overlap.md` now historical. Follow-up `2026-07-23 20:03 UTC`:
+spec `spec.md` now historical. Follow-up `2026-07-23 20:03 UTC`:
 numbers are sized in a fixed 2-digit SLOT (`_text_bitmap` widens+centres a short number to
 `_DECAL_SLOT_DIGITS`=2), so a lone `5` scales like `12`. Follow-up `2026-07-24 05:27`/`06:43 UTC`: breakdown DITCHES the legend
 AND all overview labels — the SCENE pane is a plain CSG map (`labels="none"`), brushes identified by

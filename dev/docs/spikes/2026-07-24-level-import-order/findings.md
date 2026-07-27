@@ -1,6 +1,6 @@
 # Spike — `level import` authoritative actor ORDER (2026-07-24)
 
-**Question (spec `specs/2026-07-24-level-import.md` §9; plan Slice 0 — gated BUILD):** when we decode
+**Question (spec in board item `level-import-native-editor-less-dx-unr-t3d` §9; plan Slice 0 — gated BUILD):** when we decode
 a compiled `.dx`/`.unr` for `level import`, in what ORDER do we emit actors? The order is load-bearing
 twice — brush order = CSG precedence, and `normalize.canonical_level_hash` folds `level.order` into
 the hash — so it must equal UnrealEd/UCC `batchexport`'s order or every acceptance compare fails.

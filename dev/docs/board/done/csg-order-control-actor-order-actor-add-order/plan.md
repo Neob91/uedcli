@@ -1,6 +1,6 @@
 # Plan — CSG-order control (`actor order` + `actor add --order`)
 
-**Spec:** [`specs/2026-07-18-csg-order-control.md`](spec.md)
+**Spec:** [`spec.md`](spec.md)
 (its **§7 review-gate resolutions OVERRIDE conflicting prose**). Ledger: `decisions.md` 2026-07-18.
 Pure model-side, offline, no editor.
 
@@ -61,4 +61,4 @@ from stdin.
 
 ## Docs / board
 - `architecture.md` Commands: note `actor order` + `actor add --order` and the `save(ranks=)` seam.
-- Move the board item `to-plan.md` → `done.md`.
+- Move the board item `board/to-plan/` → `board/done/`.

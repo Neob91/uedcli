@@ -13,4 +13,4 @@ summary = "Lightmap `PF_Portal` over-cull fixed — portals now get records"
 disasm `Editor 0x100a6031`; pinned by Rust test `lightmap_skip_mask_matches_editor_disasm`).
 Raw bytes: `LightMap` 480→**484 recs / 14528 B == editor**; `LightBits` 48015→48431 B (gap
 1498→1082); `Lights` 3928→3955. Remnant: the far-larger `Lights` gap (→11392) is the missing
-per-leaf permeating region — see the `[spec]` item in `inbox.md`.
+per-leaf permeating region — see the `[spec]` item in `board/inbox/`.

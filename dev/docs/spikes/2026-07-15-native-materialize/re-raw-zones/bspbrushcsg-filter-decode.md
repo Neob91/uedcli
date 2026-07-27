@@ -8,7 +8,7 @@ memory operands with float/wide-string literals) + `pefile` for the IAT import d
 
 This is the evidence file for `sections/82-bspbrushcsg-port-decode.md`. It closes the Phase-0
 residual "`FilterFPoly` leaf funcs + bevel-plane generation + `bspBuildFPolys` + `bspMergeCoplanars`
-not yet instruction-exact" (`specs/bspbrushcsg-port.md §2.4`). It builds on
+not yet instruction-exact" (`board item `native-bsp-exact-topology-parity-byte-identical` §2.4`). It builds on
 `bspbuild-splitpolylist-decode.md` (which already nailed `bspBuild`/`SplitPolyList`/`FindBestSplit`/
 `bspAddNode`/`csgRebuild`); those are NOT re-derived here, only the previously-undecoded filter half.
 

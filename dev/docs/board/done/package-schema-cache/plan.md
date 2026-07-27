@@ -1,6 +1,6 @@
 # Plan — package schema cache v1 (build)
 
-Ephemeral build plan for `dev/docs/specs/2026-07-18-package-schema-cache.md` (v1 ONLY; v2 deferred).
+Ephemeral build plan for `spec.md` (v1 ONLY; v2 deferred).
 Once landed, the durable record lives in `architecture.md` / `decisions.md` / `unrealed/class-schema.md`.
 
 ## STEP 0 — serializer spike (DONE)
@@ -56,5 +56,5 @@ keying; corrupt=miss; parallel writers; `cache clear`; `class list` warm-vs-cold
 
 ## STEP 6 — docs + board
 architecture.md subsection + cache-shape overview; direction.md `cache/{textures,stubs}`→`schema`;
-class-schema.md version-bump note; decisions.md 3-decision entry; inbox.md v2 + GC + class-show-seed
+class-schema.md version-bump note; decisions.md 3-decision entry; `board/inbox/` v2 + GC + class-show-seed
 + ancestry-cache follow-ups.

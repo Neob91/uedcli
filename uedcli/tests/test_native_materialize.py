@@ -643,7 +643,7 @@ def test_mover_excluded_from_world_csg_but_emitted_as_actor():
     # NB: this asserts the two invariants of the CSG-exclusion change only (out of world CSG /
     # still emitted as an actor).  Whether the mover's OWN private Model carries its door polys is
     # a SEPARATE, pre-existing native-build gap (assemble writes an empty private Model) tracked in
-    # board/inbox.md — deliberately NOT asserted here.
+    # board/inbox/ — deliberately NOT asserted here.
 
 
 def _class_imports(pkg):

@@ -22,7 +22,7 @@ the rest stand, and renaming is barred once referenced. Also `inbox/composable-a
 collides with `to-plan/composable-actor-find` — the same work, given a `-2` suffix §3.3 forbids.
 
 **3. Markers and structure dropped.** The 25 `[x]` and 13 `[~]` completion markers in the old
-`done.md` are gone, so "finished with remnants" is unrecoverable for all 95 done items. The 14 HTML
+`board/done/` are gone, so "finished with remnants" is unrecoverable for all 95 done items. The 14 HTML
 provenance banners were never converted to the specified one-line `**Provenance:**`; 12 survive raw,
 glued to the *preceding* item, so a banner describing what follows it now sits inside something
 unrelated. 25 items kept their two-space list-continuation indent.

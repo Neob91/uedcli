@@ -18,7 +18,7 @@ findings clustered: the **texture** arm carries every frozen/irreversible decisi
 hashing, alpha, the preview↔identity coupling), the **audio** arm's scope rule was sized by measurements
 taken over directories the tool does not load, and the **class** arm — the capability an agent most lacks —
 was nearly clean and blocked on neither. Splitting lets the class arm ship while the texture decisions get a
-dedicated gate. *(Owner's call, 2026-07-26; `board/inbox.md` carries the round outcome and the escalations.)*
+dedicated gate. *(Owner's call, 2026-07-26; `board/inbox/` carries the round outcome and the escalations.)*
 
 **Build order is the dependency order:** this engine → class arm → texture arm → audio arms.
 
@@ -115,7 +115,7 @@ were found by the 2026-07-26 gate and are fixed below — music's verb family an
    convention** *(ruling 2026-07-26: "it's fine")*. `direction/conventions.md` otherwise says "Exactly
    TWO stdin conventions … never add a third", so the exception is deliberate and must be recorded
    there as a calibrated carve-out rather than left as a silent contradiction — parked as an
-   `[OWNER — confirm]` item on `board/inbox.md`. Within the catalog nouns `-` therefore means a **name
+   `[OWNER — confirm]` item on `board/inbox/`. Within the catalog nouns `-` therefore means a **name
    list** for `show`/`preview`/`classify unset` and a **JSONL row set** for `classify set`, and the
    split is per verb, as the two-convention rule itself already requires.
 9. **Cache eviction goes on the existing `cache` noun** (`cache gc`). *Rejected: a `catalog gc` verb*
@@ -128,7 +128,7 @@ were found by the 2026-07-26 gate and are fixed below — music's verb family an
     That doc says curation is "a description, plus **an override where the file fact is wrong**", while its
     own *Rejected* list kills "a curated-vs-derived override model for `placeable`". The shard payload
     (§3b) carries `tags`/`description`/`colors` and no general override field, so as specced a wrong
-    file-fact cannot be corrected at all. Parked as an `[OWNER — confirm]` question on `board/inbox.md`;
+    file-fact cannot be corrected at all. Parked as an `[OWNER — confirm]` question on `board/inbox/`;
     the colours override (§4b) stays the one existing instance either way.
 11. **`class preview` angles:** `iso` (front-¾) is the default SINGLE shot; `--angles` opts into
     `front, back, left, right, top, bottom, iso`. **"side" is spelled `left`/`right`** — a mesh is
@@ -501,7 +501,7 @@ premise is scoped down to "generalising an existing existence check"; the fixtur
 sibling spec's synthetic `.utx` writer plus the 34 tracked `.u` packages; and every citation of the frozen
 `decisions.md` is repointed.
 
-**Still open, and NOT resolvable by an implementer** — `board/inbox.md` carries each as `[OWNER — confirm]`:
+**Still open, and NOT resolvable by an implementer** — `board/inbox/` carries each as `[OWNER — confirm]`:
 the `conventions.md` carve-out for the third stdin convention, and whether curation gets a general
 file-fact **override** field (decision 10 — `direction/asset-catalog.md` contradicts itself).
 

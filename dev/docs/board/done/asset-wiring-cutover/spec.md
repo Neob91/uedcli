@@ -145,7 +145,7 @@ The v68 CODE path for offline `actor prop` schema (`packages.schema_search_dirs`
 `uned/DeusExAssets/System`) is a DISTINCT concern (v68 code, not v69 content) and is **out of scope**
 here. It keeps working (reads on-disk host dirs, independent of compose mounts) but now diverges from
 the config-driven content path. Action: update its docstring TODO to reference this cutover and add a
-`board/inbox.md` item to re-base it onto the config `paths` layer. Not silently ignored.
+`board/inbox/` item to re-base it onto the config `paths` layer. Not silently ignored.
 
 ## 9. Test plan
 

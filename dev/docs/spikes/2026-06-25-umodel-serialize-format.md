@@ -164,7 +164,7 @@ applied yet, and no end-to-end parse has been run.
 4. **Write a go/no-go spike conclusion** — record whether the parser successfully handles
    real built maps and whether D1 (located-issue tier of `level doctor`) is feasible.
 
-Once the spike is complete, the result feeds back into `to-build.md` item #7.
+Once the spike is complete, the result feeds back into `board/to-build/` item #7.
 
 ---
 

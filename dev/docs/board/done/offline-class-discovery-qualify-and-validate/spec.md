@@ -365,4 +365,4 @@ materializes with H3 passing.
   existence-not-decode + no offline texture qualification; single source-parse abstract path;
   no-catalog + follow-up).
 - `board/` — move the `[implement] p1` class-discovery item to the build queue; add the annotated-
-  class-catalog follow-up + the backward-compat behavior-change note to `inbox.md`.
+  class-catalog follow-up + the backward-compat behavior-change note to `board/inbox/`.

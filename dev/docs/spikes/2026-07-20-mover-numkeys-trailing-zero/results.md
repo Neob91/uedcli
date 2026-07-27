@@ -47,7 +47,7 @@ the GUI keyframe path (`ACTOR KEYFRAME`/`BRUSH ADDMOVER`) is a derived-view reco
 end for authoring — uedcli authors keyframes entirely in T3D. So the materialize-path result is
 the binding one.
 
-## Design consequence (folds into `specs/2026-07-20-mover-key-base-relative-frame.md`)
+## Design consequence (folds into board item `mover-key-keyframe-model-rework`)
 
 uedcli **mirrors the editor: no auto-shrink.** `mover key move`/`rotate` set a key's offset and
 only ever *grow* `NumKeys` (to `index+1`); zeroing a key leaves `NumKeys` unchanged. Reducing the

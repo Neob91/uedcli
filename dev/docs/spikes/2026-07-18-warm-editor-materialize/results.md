@@ -1,7 +1,7 @@
 # Spike SP-E — warm-editor materialize: reused-editor cleanliness + timing split
 
 **Date:** 2026-07-19 (all builds live against fresh `dx-lum-uned` editor containers on this host).
-**Blocks:** the warm-editor materialize build (`specs/2026-07-18-warm-editor-materialize.md` §8).
+**Blocks:** the warm-editor materialize build (board item `resolved-2026-07-26-was-warm-editor-materialize` §8).
 **Question (spec §8):** the whole design assumes *a REUSED editor builds as cleanly as a fresh one*.
 Is that true, and what are the numbers (timing, RSS, resident-package behavior)?
 **Reviewed:** 2-reviewer cold gate run 2026-07-19; findings folded (an over-stated SP-E.1, a
@@ -86,7 +86,7 @@ is fire-and-forget with no wait-for-completion — the editor is driven with no 
 barrier — surfaced here because warm reuse is the first path to drive a *second* build after a
 verify.)
 
-### Design implication (for the spec author — an open decision, flagged in `board/inbox.md`)
+### Design implication (for the spec author — an open decision, flagged in `board/inbox/`)
 The current §4.4 "H3 verify against the same live editor" (D-Q3, inherited from the ephemeral path)
 is exactly what must change. Two candidate fixes — but **the evidence does not yet distinguish a
 transient timing race from a durable bad state** left by a completed verify (the 1.5 s settle not
@@ -187,10 +187,10 @@ live-qualify-dump-across-builds seam that SP-E.2 already flagged a possible posi
 - **quirks.md** (done): the standing engine fact — *a reused editor driven for a second materialize
   after an H3 verify intermittently loses the next `MAP SAVE`; `no_verify` reuse is clean and
   content-identical* (dated, 🔬).
-- **The spec** (`specs/2026-07-18-warm-editor-materialize.md`) §8 (done): SP-E.1/3/5/6 folded; the
+- **The spec** (board item `resolved-2026-07-26-was-warm-editor-materialize`) §8 (done): SP-E.1/3/5/6 folded; the
   blocker + candidate fixes recorded as an open design decision; SP-E.2's possible-positive and
   SP-E.7 deferred behind the fix.
-- **board/inbox.md** (done): the open design decision flagged for Andrzej (which fix; then re-run).
+- **board/inbox/** (done): the open design decision flagged for Andrzej (which fix; then re-run).
 - **Regression:** the full "N reused builds all succeed" assertion waits for the fix (pinning a
   currently-failing behavior as a green test would assert the bug). But the **positive** facts here
   are pinnable now as integration-marked tests when the warm path lands: `no_verify` reused builds

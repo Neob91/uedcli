@@ -12,9 +12,9 @@ need are committed:
 They prove the decoder reads a real compiled map and produces text that parses back into the expected
 level, actors, geometry and value forms. They do NOT prove byte agreement with the official
 exporter's output — that needs the retail maps plus the UnrealEd container, and is tracked as
-outstanding on `dev/docs/board/inbox.md`.
+outstanding on `dev/docs/board/inbox/`.
 
-Spec: `dev/docs/specs/2026-07-24-level-import.md`. Format evidence:
+Spec: board item `level-import-native-editor-less-dx-unr-t3d`. Format evidence:
 `dev/docs/unrealed/package-format.md`, `dev/docs/unrealed/t3d.md`.
 """
 from __future__ import annotations

@@ -20,6 +20,6 @@ stays liveness-based; **read-back steps** (`EDIT COPY`, export-and-parse) keep p
 round-trips. **What the plan must sequence/scope:** which `driver.py`/`writes.py`/`materialize.py`
 seams batch first (the contiguous write-only spans), the marker-poll + liveness-during-poll loop,
 and per-`EXEC` error/GPF handling (no per-command feedback). **Composes with — does not block, and
-is not blocked by — the warm-editor spec** (`specs/2026-07-18-warm-editor-materialize.md` §10): a
+is not blocked by — the warm-editor spec** (board item `resolved-2026-07-26-was-warm-editor-materialize` §10): a
 per-build win on BOTH warm and ephemeral paths; the completion poll is `wine_ctl`-based so it still
 refreshes the §4.5 idle marker. Andrzej-initiated. (Triaged from inbox 2026-07-19.)

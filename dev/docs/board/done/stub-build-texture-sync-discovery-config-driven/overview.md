@@ -26,4 +26,4 @@ flagged the one real risk (one HIGH): an unstubbed v68 code package referenced b
 would demand-load the v68 `.u` and wedge the editor. GUARDED — `ensure_load`'s
 `packages.unloadable_v68_packages` gate refuses it with a clean named error before any `OBJ LOAD`.
 **Deferred remnant (capability):** AUTO-stub referenced packages in `level materialize` so such a
-level actually builds (not just fails cleanly) — `inbox.md`.
+level actually builds (not just fails cleanly) — `board/inbox/`.

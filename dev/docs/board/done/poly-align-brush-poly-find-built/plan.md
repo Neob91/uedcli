@@ -1,7 +1,7 @@
 # Build plan — item 11: `brush poly align` + `brush poly find`
 
 Ephemeral build scratch. Design authority: `dev/docs/decisions.md` 2026-07-18 21:40 UTC
-(`poly align` v1 scope + face-selection grammar) and `specs/2026-07-18-poly-align.md`
+(`poly align` v1 scope + face-selection grammar) and `spec.md`
 (UV math + algorithms). This plan sequences the build; durable knowledge folds into
 `architecture.md` + `unrealed/t3d.md` on landing.
 

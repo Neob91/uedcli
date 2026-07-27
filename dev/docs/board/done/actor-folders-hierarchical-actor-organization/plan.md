@@ -1,6 +1,6 @@
 # Plan — Actor folders (hierarchical organization)
 
-Implements [`specs/2026-07-18-actor-folders-hierarchical.md`](spec.md)
+Implements [`spec.md`](spec.md)
 (cold-review-gated; §8 resolutions binding). Ephemeral scratch — folded into `architecture.md` +
 `unrealed/t3d.md` on build.
 
@@ -76,4 +76,4 @@ CLI guards incl trunk-only target + missing `--to` + bad path; carrier round-tri
 ## Docs on build
 `architecture.md` (a "Folders" subsection: the sidecar, the model field, the delta-write diff, the
 carrier, trunk-only), `unrealed/t3d.md` (already notes the carrier — confirm the "folder is
-uedcli-side, not a T3D construct" line), board `to-plan.md` → `done.md`.
+uedcli-side, not a T3D construct" line), board `board/to-plan/` → `board/done/`.

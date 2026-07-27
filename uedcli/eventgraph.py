@@ -20,7 +20,7 @@ author's intent and would flood the graph with spurious edges. The cost is that 
 *intentionally* leaves Tag unset and fires the class name sees no edge; that pattern is rare and
 the explicit-Tag form is the norm.
 
-Scope limit (see dev/docs/board/inbox.md): the edge model reads the single `Event` property only.
+Scope limit (see dev/docs/board/inbox/): the edge model reads the single `Event` property only.
 Multi-event actors that fire through ARRAY properties (Dispatcher `OutEvents(n)`, Counter, etc.)
 are not modelled here — those extra fired events produce no edges yet.
 """

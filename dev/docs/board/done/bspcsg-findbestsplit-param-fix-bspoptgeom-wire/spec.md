@@ -115,7 +115,7 @@ of one brush's own faces (few/no splits regardless of Balance); leave it as-is. 
   after repartition, tracked separately). `node_diff` `only_native` should collapse from 569 toward
   the low tens.
 
-## Secondary residuals (NOT this fix — separate follow-ups, file to `board/inbox.md`)
+## Secondary residuals (NOT this fix — separate follow-ups, file to `board/inbox/`)
 
 The subset scan shows a small `only_editor` term appearing from N≥4 (2–3 planes) and native carrying a
 few surplus soup faces — i.e. the CSG **soup content/order** still differs slightly from the editor's,

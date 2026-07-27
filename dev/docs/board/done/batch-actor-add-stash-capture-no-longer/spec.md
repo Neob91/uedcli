@@ -113,7 +113,7 @@ Audit by grep, don't trust the line numbers blindly.
   tables/examples): `--name` → `--base-name`, add `actor build --base-name`.
 - `decisions.md`: append the rename + uniquify-on-ingest entries (with rejected alternatives).
 - Move the two resolved inbox items (CRITICAL silent-collapse; `actor build` no-`--name`) to
-  `done.md`.
+  `board/done/`.
 
 ## Flag for Andrzej (post-review)
 

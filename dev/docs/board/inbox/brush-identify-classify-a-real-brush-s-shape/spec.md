@@ -101,7 +101,7 @@ Classify every real brush into exactly one of:
   swept-profile brush is now case (a), not freeform).
 - **(b) reproducible only by a builder `uedcli` lacks** — hollow-cube, hollow/tube cylinder, curved
   stair, and above all **arbitrary-polygon extrude**. This bucket is *capability-gap evidence*, the
-  highest-value output: "DX leans heavily on extrude → build the verb." Route it to `inbox.md`.
+  highest-value output: "DX leans heavily on extrude → build the verb." Route it to `board/inbox/`.
 - **(c) genuinely freehand / vertex-edited** — real non-generatable geometry.
 
 "Freeform frequency" as a single number is **forbidden** — it would conflate (b), a uedcli tooling
@@ -144,7 +144,7 @@ pilot validates *method*; only the scaled run earns durable KB numbers.
    fakes every headline number, so this gate precedes any corpus claim (§8).
 2. **Method write-up + a small pilot dataset** (4 DX maps + control) — per-brush JSON (shape class,
    counts, CSG op, solidity, on-grid, the (a)/(b)/(c) reproducibility class, best-effort params) +
-   the (b)-bucket missing-builder evidence routed to `inbox.md`. Throwaway wireframe PNGs stay in
+   the (b)-bucket missing-builder evidence routed to `board/inbox/`. Throwaway wireframe PNGs stay in
    `_scratch/`. **No durable craft-doc numbers yet.**
 
 **Scaled-run deliverables (gated on the pilot proving the method):**
@@ -216,7 +216,7 @@ validated limit (§1.3). Shape/composition prose stays qualitative unless a spec
 The study both **depends on** and **prototypes** uedcli capabilities. Flagged to the board (§8):
 
 1. **Offline `.dx`→T3D import (`level import`) — LATER CONVENIENCE, not a hard blocker (revised).**
-   Spec'd but unbuilt (`specs/2026-07-24-level-import.md`; no `uedcli/mapimport.py`), and itself gated
+   Spec'd but unbuilt (board item `level-import-native-editor-less-dx-unr-t3d`; no `uedcli/mapimport.py`), and itself gated
    on an actor-order spike — a big, still-moving piece. The pilot does **not** wait on it: the
    **editor `MAP EXPORT` → T3D route is already proven** — it is `level import`'s *own* test oracle
    (`store_export.export_dx_level`) and the sister spec `2026-07-19` (Half B2) already budgets a
@@ -241,7 +241,7 @@ The study both **depends on** and **prototypes** uedcli capabilities. Flagged to
    **replaces** the abandoned auto-clustering approach (global AABB connected-components collapsed a
    subtractive DX interior to one blob — negative result in
    [`spikes/2026-07-24-corpus-brush-idioms/`](../../../spikes/2026-07-24-corpus-brush-idioms/)). The looser
-   `--overlapping-bbox` (grab straddling brushes) is a deferred `to-spec.md` item; `--near`/
+   `--overlapping-bbox` (grab straddling brushes) is a deferred `board/to-spec/` item; `--near`/
    `--overlapping <actor>`/`--within-brush` remain parked. Region-select is no longer a gap.
 5. **Brush complexity stats aggregation — minor.** Per-map poly/vertex + node:poly + on-grid stats.
    Scriptable from `brush poly list`/`model.py`/`native.umodel`; a dedicated `brush stats` verb is a
@@ -256,10 +256,10 @@ The study both **depends on** and **prototypes** uedcli capabilities. Flagged to
 
 ## 8. Board & sequencing
 
-- **This spec's referencing item →** `to-plan.md` ("Corpus brush-idiom study"). (Per the convention
+- **This spec's referencing item →** `board/to-plan/` ("Corpus brush-idiom study"). (Per the convention
   added to `board/README.md`: *every new spec carries a board item that references it.*)
-- **Gaps 2, 3 (+ 5 minor) →** `inbox.md` as raw capture. **Gap 6 (`brush build extrude`) →**
-  `to-spec.md` (triaged forward — it needs its own spec). Gap 1 (`level import`) and gap 4
+- **Gaps 2, 3 (+ 5 minor) →** `board/inbox/` as raw capture. **Gap 6 (`brush build extrude`) →**
+  `board/to-spec/` (triaged forward — it needs its own spec). Gap 1 (`level import`) and gap 4
   (`find-spatial`) stay tracked by their own existing specs.
 - **Shared-harness ownership (resolves the fork risk).** The `MAP EXPORT`→trunk brush-extraction
   harness is shared with `2026-07-19` (Half B2), and both are unbuilt. **This spec owns building the
@@ -298,7 +298,7 @@ distributions. A pilot that emits numbers but doesn't move build behavior has **
 - **Extraction reads geometry, not a rebuild — so the native-core caveats don't bite it.** The
   classifier reads authored polys; `actor preview` also draws polys directly (§2, verified) — so
   scaled/concave brushes are fine for *extraction and wireframing*. The native caveats (concave
-  mis-fill, scaled-brush reject — `board/inbox.md`) only affect `--native` *rebuild* preview, which
+  mis-fill, scaled-brush reject — `board/inbox/`) only affect `--native` *rebuild* preview, which
   this study doesn't rely on.
 - **The (b)/(c) boundary is the correctness-critical call.** A too-eager classifier that forces a
   bucket-(b) missing-builder brush (esp. an extrude) into (a), or a genuine (c) into (b), corrupts the

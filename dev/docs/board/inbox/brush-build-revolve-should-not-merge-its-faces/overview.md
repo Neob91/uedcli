@@ -28,7 +28,7 @@ summary = "`brush build revolve` should NOT merge its faces — leave them separ
   are: is unmerged the DEFAULT or a flag (`--no-merge-caps`, or a general "one face per facet" mode);
   does it apply to `extrude` and the other cap-tiling builders too (same `convex_pieces` seam, so
   they would diverge otherwise); and what happens to the node-count budget on a full-turn revolve,
-  where `inbox.md`'s own poly-budget note already flags a 16-segment revolve of an 8-point profile as
+  where `board/inbox/`'s own poly-budget note already flags a 16-segment revolve of an 8-point profile as
   128 swept faces plus caps.
 
   **MEASURED 2026-07-26 — the goal is a curved TRAIN TRACK whose textures run properly around the

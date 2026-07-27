@@ -4,9 +4,9 @@
 cold ~60s). Pivoted from the persistent-daemon idea after a 2-reviewer design gate — both recommended
 this lighter one-exec path; §§below keep the daemon design as the REJECTED alternative. Durable parts
 folded into `architecture.md` (§`level preview --game`) + `decisions.md` (2026-07-17 14:42) + memory;
-this ephemeral spec may now be pruned. ≤1s (unmet — dev-CLI startup floor) boarded in `inbox.md`.
+this ephemeral spec may now be pruned. ≤1s (unmet — dev-CLI startup floor) boarded in `board/inbox/`.
 Optimizes the docker-drive of the warm container built in
-`specs/2026-07-17-game-preview-warm-container.md`; keeps that spec's per-user identity, flock,
+board item `warm-game-remnants`; keeps that spec's per-user identity, flock,
 fingerprint, post-boot-symlink delivery, fail-closed boot, and the inline bash idle-watchdog.
 
 **Motivation (Andrzej):** a same-map repeat preview took ~9s for ONE screenshot — almost entirely

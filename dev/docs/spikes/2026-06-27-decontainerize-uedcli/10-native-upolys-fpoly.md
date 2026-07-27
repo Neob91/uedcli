@@ -2,7 +2,7 @@
 
 **Status: RESOLVED — the authored brush-polygon format is decoded; parses to EOF on
 6566/6587 (99%) `UPolys` exports across 8 real maps (4 maps at 100%).** This was the hard
-prerequisite the native-`.dx`-read spec (`specs/2026-06-27-uedcli-native-dx-read-design.md`)
+prerequisite the native-`.dx`-read spec (board item `stale-canonicalize-mover-blob-references-in-two`)
 flagged: it carries BOTH authored brush geometry AND per-poly textures.
 
 ## Why it matters

@@ -1,6 +1,6 @@
 # Scale support — implementation plan (ephemeral)
 
-Implements [`specs/2026-07-18-scale-support.md`](spec.md); §10 of the
+Implements [`spec.md`](spec.md); §10 of the
 spec overrides conflicting prose. Grounding spikes: `spikes/2026-06-25-scale-transform-mechanics.md`,
 `spikes/2026-06-25-mainscale-postscale-applytransform.md`. Decisions: `decisions.md` 2026-06-25 +
 2026-07-18 14:03.
@@ -75,4 +75,4 @@ mirror+shear own cases, emission byte-match+de-dup, guards); engine-fact `sheer_
 
 ## Docs
 `architecture.md` model-side scale section (drop "Scale is still NOT applied"); board
-`to-plan.md`→`done.md`.
+`board/to-plan/`→`board/done/`.

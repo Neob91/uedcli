@@ -6,7 +6,7 @@ A **label** is a uedcli-side flat classification token on an actor (e.g. "lighti
 sidecar, never emitted to the built map, orthogonal to `folder`/`Group`/`Tag`. This module is the
 pure grammar/validation + the flat matcher + the `// uedcli-labels:` carrier; it has NO I/O, no
 editor, and MUST stay model-free (imported at the top of `model.py`, so a `model` import here would
-cycle). See specs/2026-07-22-actor-labels.md and dev/docs/architecture.md.
+cycle). See board item `re-evaluate-whether-reject-nonlevel-target` and dev/docs/architecture.md.
 
 Two grammars mirror the folder split, but a label is a single FLAT token (no dotted path):
 - a STORED label (`actor label add`/`actor add --label`): one literal segment, no leading `-`.

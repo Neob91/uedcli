@@ -11,7 +11,7 @@ The directory name is the single source of truth for an actor's identity: `actor
 its Name= header/trailer stripped and its brush model-ref neutralized to a constant, both re-derived
 from the dir name on read. Order is a per-actor LexoRank `order_value` sidecar; the CSG order is the
 (order_value, name) sort. See specs/2026-07-05-uedcli-git-native-model-design.md +
-specs/2026-07-18-unify-t3d-trees.md + decisions.md 2026-07-05 / 2026-07-18. Pure module — no editor,
+board item `delete-the-ephemeral-spec-specs-2026-07-18` + decisions.md 2026-07-05 / 2026-07-18. Pure module — no editor,
 no session store; the primary read/write path for a level's trunk.
 """
 from __future__ import annotations

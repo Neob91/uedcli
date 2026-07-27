@@ -7,7 +7,7 @@ summary = "bspcsg FindBestSplit param fix + `bspOptGeom` wire-in"
 # bspcsg FindBestSplit param fix + `bspOptGeom` wire-in
 
 — BUILT 2026-07-17 (spec
-`specs/2026-07-17-findbestsplit-params-fix.md`). Repartition path now uses Balance=12/PortalBias=0/
+`spec.md`). Repartition path now uses Balance=12/PortalBias=0/
 Opt=GOOD (stride `max(NumPolys/10,1)`), threaded through `split_poly_list` so the temp-brush convex
 partition keeps its invariant OPTIMAL/50/70; `bspOptGeom` runs at the build tail after `bspRefresh`.
 MEASURED effect (full castle vs editor 1156/485/2035/16163/2739): over-fragmentation FIXED, nodes

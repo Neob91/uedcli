@@ -9,7 +9,7 @@ green test, and a documentation-timing violation. Details in `decisions.md` 2026
 [`../specs/2026-07-25-brush-profile-generators.md`](spec.md).
 **Decisions:** `decisions.md` 2026-07-25 00:14 UTC (D1–D9), 01:05 UTC (D10), 01:40 UTC (spec review),
 02:30 UTC (this plan's review + D11/D12 below).
-**Board item:** [`to-build/`](../../../board/to-build/) — moved there from `to-plan.md` when this plan
+**Board item:** [`to-build/`](../../../board/to-build/) — moved there from `board/to-plan/` when this plan
 passed its gate (that move is **step B0**, not an assumption).
 
 Section references like `spec §4.5` point into the spec; this plan does not restate it.
@@ -66,7 +66,7 @@ step, so a bisect never lands mid-feature. **Each commit carries its own doc upd
 `CLAUDE.md` ("update the user-facing docs *in the same change*"); B7 is only the cross-cutting sweep.
 
 ```
-B0  board move            — to-plan.md → to-build.md                        (no code)
+B0  board move            — to-plan/ → to-build/                        (no code)
 B1  profile.py            — parsing + cleanup + validation, CONVEX ONLY     (no CLI, no brush)
 B2  extrude               — geometry, winding, anchor, CLI verb, cap loop   (the shared spine)
 B3  cap tiling            — the ear-clip/merge decomposition + concave tests
@@ -90,10 +90,10 @@ feature commit.
 
 ## 2. B0 — move the board item
 
-Move the `brush build extrude`/`revolve` line from `dev/docs/board/to-plan.md` to
-`dev/docs/board/to-build.md`, restating it in `to-build.md`'s format (a `## N.` heading with
+Move the `brush build extrude`/`revolve` line from `dev/docs/board/to-plan/` to
+`dev/docs/board/to-build/`, restating it in `board/to-build/`'s format (a `## N.` heading with
 **Status / Plan / Spec / Decision** links, matching the existing entries). One home per item
-(`board/README.md`) — delete it from `to-plan.md` in the same commit.
+(`board/README.md`) — delete it from `board/to-plan/` in the same commit.
 
 ---
 
@@ -334,8 +334,8 @@ listed four:
 | `docs/leveldesign/general/README.md`        | `:18`     | six-shape list |
 | `dev/docs/unrealed/leveldesign/kb/csg-bsp.md`| `:25,:328`| six-shape lists |
 | `dev/docs/unrealed/leveldesign/kb/geometry-builders.md` | `:7`, §1, §4, §7 | intro list; Revolve now HAS a verb; `AlignToSide` maps 1:1 |
-| `dev/docs/specs/2026-07-24-corpus-brush-idioms.md` | `:99` | its generator vocabulary (an ephemeral spec, but it is the *input* to the reverse-mapping work — update it) |
-| `dev/docs/specs/2026-07-19-leveldesign-docs-skills.md` | `:59` | same |
+| board item `brush-identify-classify-a-real-brush-s-shape` | `:99` | its generator vocabulary (an ephemeral spec, but it is the *input* to the reverse-mapping work — update it) |
+| board item `review-gate-round-2-findings-left-standing` | `:59` | same |
 | `dev/docs/architecture.md`                  | `:1535-1544` | the staircase native-CSG caveat. **Nuance:** native `materialize` defaults to `core="bspcsg"` (`native/materialize.py:383,:785`), which never calls `point_in_convex` — but the coarse core still does. Reword to "the `--native` preview" (there is no `--core` CLI flag), not a blanket deletion |
 | `uedcli/builders.py`                        | `:305-309`| the same stale claim in the `staircase` docstring |
 | `docs/leveldesign/general/recipes/README.md`| `:21`     | the inline shape-recipe list |
@@ -343,9 +343,9 @@ listed four:
 | `docs/leveldesign/general/recipes/shapes/`  | new       | L-ledge, arch voussoir, curved corridor (**with `--solidity semisolid`**), moulded cornice — the last must **cross-reference or supersede** the existing `ring-cornice.md`, which solves the same problem by copy-rotation, not sit silently beside it |
 | `dev/docs/direction.md`                     | —         | check only: its "Generator pattern" section has **no shape list** (`:260` merely names `brush build spiral` as an example of multi-actor output). Reconcile only if the new verbs change the net target — they do not |
 
-**Board:** delete the item from `to-build.md`; file the three spec §11 verify-live items in
-`inbox.md` (cap merge-back, the full-turn torus — the "one builder brush" question is CLOSED,
-`kb/geometry-builders.md` §4); short tail to `done.md`.
+**Board:** delete the item from `board/to-build/`; file the three spec §11 verify-live items in
+`board/inbox/` (cap merge-back, the full-turn torus — the "one builder brush" question is CLOSED,
+`kb/geometry-builders.md` §4); short tail to `board/done/`.
 
 ---
 
@@ -364,4 +364,4 @@ listed four:
 - **`level doctor` gains no new check** — its per-face convexity and watertight tests already cover
   what these verbs emit.
 - **No `--taper`, no path sweep, no axis-touching revolve, no `cylinder --sides` cap fix** — spec §8
-  and the `inbox.md` items filed 2026-07-25.
+  and the `board/inbox/` items filed 2026-07-25.

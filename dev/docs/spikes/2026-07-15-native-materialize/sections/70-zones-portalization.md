@@ -413,7 +413,7 @@ drop native drops too (it cannot drop a ring the editor keeps). Restricted to `O
 live `OriginalRing`/`Frag` path resolves ADD-style like the editor and carries no within-threshold
 corner on this map, so restricting to orphans is byte-equivalent AND cannot perturb the live ring-sum
 / `NumSharedSides` guards; a universal, index-based collapse in `append_ring_verts` is the faithful
-generalization, flagged in `board/inbox.md`. Orphan emission creates NO node, so this touches neither
+generalization, flagged in `board/inbox/`. Orphan emission creates NO node, so this touches neither
 the node set/order nor the `tail_order` handed to `bspcsg::reorder_nodes_to_tail`.
 
 **RAW result (`ground_truth_bytediff.py`, `NativeCastle.dx` vs `Test_Castle.dx`):**
@@ -538,7 +538,7 @@ classified solid where the editor keeps them open). It lives in the CSG pipeline
 (`bspcsg.rs`/`csg.rs`/`passes.rs`), NOT in `zones.rs`, and no flood change can merge leaves that share
 no detectable face. The BlockPortal fix is correct and necessary (it removes the false barriers and is
 editor-exact on any correct tree), but the dominant real-level over-fragmentation — and therefore the
-UNATCO load-hang suspicion — awaits the CSG-tree cause. Filed to `board/inbox.md`.
+UNATCO load-hang suspicion — awaits the CSG-tree cause. Filed to `board/inbox/`.
 
 **Honest status:** flood-on-editor-tree now editor-exact for all four levels (deterministic gate met);
 real native builds still over-fragment because their trees are shattered upstream. UNATCO native stays

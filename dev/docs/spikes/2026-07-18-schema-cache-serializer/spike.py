@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """§9 serializer-format spike: time json.loads on the ACTUAL v1 PackageSchema bundle shape for a
 big package, deciding JSON-vs-binary BEFORE the serializer is locked (spec
-dev/docs/specs/2026-07-18-package-schema-cache.md §4.4/§9). Run host-native in the dev venv:
+board item `package-schema-cache` §4.4/§9). Run host-native in the dev venv:
 
     .venv/bin/python dev/docs/spikes/2026-07-18-schema-cache-serializer/spike.py [PKG.u]
 
