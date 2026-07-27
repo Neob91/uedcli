@@ -5,6 +5,15 @@ lands here first, with no obligation to know its stage yet. This is the *pre-pip
 stage (so no `to-` prefix). See [`README.md`](README.md).
 
 **Triage** routes each item to where its next action lives:
+- `p2` `[OWNER — confirm]` **Could the `--faces` build start before the texture decoder lands?**
+  Decision 2.11 says the decoder item builds first, then all of the `--faces` work, and
+  [`plans/2026-07-27-actor-preview-faces-plan.md`](../plans/2026-07-27-actor-preview-faces-plan.md)
+  implements that ordering as ruled. **Observation only, not acted on:** of that plan's five
+  slices, only **S4** (`textured`) actually consumes the decoder's new accessor. S1 (a pure
+  refactor), S2 (`--faces` + the `flat` mode) and S3 (`--focus`) touch no texture code at all —
+  `flat` reads no textures. So S1–S3 could land earlier or in parallel, which would get the
+  subtract-cull diagram (the thing that makes a subtracted room's interior visible) into your
+  hands sooner. Reordering is your call, not the agent's. *(2026-07-27.)*
 - `p1` `[OWNER — confirm]` **Four `actor preview --faces` rulings need a durable `direction/` home
   before their spec is deleted.** `specs/2026-07-26-actor-preview-textured-faces.md` is ephemeral and
   is deleted on build; `CLAUDE.md` requires a decision you made to land in `direction/` first. These

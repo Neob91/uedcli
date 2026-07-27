@@ -45,7 +45,12 @@ Tag: `[plan]`.
   (re-aligning any existing cylinder wrap flips its texture vertically). A third, `rotate`'s turn
   direction on a subtractive brush, affects step 1 and is filed separately.
 
-- [ ] `p1` `[plan]` **`actor preview --faces {wire,flat,textured}` — solid and textured brush faces.**
+> **`actor preview --faces`** — PLANNED 2026-07-27
+> ([`../plans/2026-07-27-actor-preview-faces-plan.md`](../plans/2026-07-27-actor-preview-faces-plan.md)).
+> Moves to `to-build.md` once its plan gate passes.
+
+- [ ] `p1` `[plan]` ~~**`actor preview --faces {wire,flat,textured}`**~~ — **PLAN WRITTEN**, awaiting
+  its plan-review gate; see the tombstone above.
   Spec: [`../specs/2026-07-26-actor-preview-textured-faces.md`](../specs/2026-07-26-actor-preview-textured-faces.md).
   **Spec gate: PASSED.** Multiple cold rounds; no structural finding in any of them, and every round's
   findings are folded into the sections themselves.
