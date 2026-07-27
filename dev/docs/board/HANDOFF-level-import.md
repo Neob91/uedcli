@@ -1,7 +1,8 @@
 # HANDOFF — `level import` (native `.dx`/`.unr` → T3D trunk), 2026-07-27
 
 **Status: STARTED AND PARKED, mid-build.** The work was halted by the owner partway through, not
-finished and not gated. Nothing has been reviewed. The branch is local-only and unmerged.
+finished and not gated. Nothing has been reviewed. The branch is unmerged, but it **is** on `origin`
+(see §0) so it can be picked up from another machine.
 
 **Read this before touching anything on the branch.** It is written for someone who has never seen
 this work: it says what exists, what is knowingly broken, and which two traps in the on-disk format
@@ -11,9 +12,18 @@ cost the most time to find.
 
 ## 0. TL;DR
 
-- **Branch `level-import`**, a git worktree at `.claude/worktrees/level-import`, branched from
-  `master` at `85c88ab`. **Two commits, never pushed** (a feature branch is squash-merged, never
-  pushed — `CLAUDE.md` "Feature worktrees").
+- **Branch `level-import`**, branched from `master` at `85c88ab`. **Four commits, and the branch IS
+  pushed to `origin`** — `git fetch origin && git checkout level-import` gets you the work on any
+  machine. It was originally built in a git worktree at `.claude/worktrees/level-import`; that
+  worktree is local to the machine it was built on, so recreate one (`git worktree add
+  .claude/worktrees/level-import level-import`) rather than expecting it to exist.
+  - **This branch is a deliberate exception to `CLAUDE.md` "Feature worktrees", which says a feature
+    branch is NEVER pushed** (it is normally squash-merged and discarded, and under the repo's git
+    rules a remote branch can never be deleted afterwards). **Owner decision, 2026-07-27:** the work
+    is parked indefinitely rather than short-lived, and it was being picked up from another device,
+    so the alternative was a partial decoder existing on exactly one disk. The branch is therefore
+    expected to stay on `origin` permanently. Do not treat it as precedent for pushing other feature
+    branches.
 - **Slice 1 and Slice 2 of the plan are written; Slices 3–6 are not.** More precisely: the decode
   *core* exists and demonstrably decodes real retail maps end to end, but it has **zero tests**, two
   **known defects** (below), and no CLI verb, no write path, no goldens and no docs.
@@ -55,7 +65,8 @@ because nothing tests the new module, not because the new module is right.
 
 ## 2. The commits
 
-Both are local on `level-import`. Neither is pushed. `git log --oneline master..level-import`:
+All four are on `level-import`, which is pushed to `origin` (see §0).
+`git log --oneline master..level-import`:
 
 | SHA | Subject | Contents |
 |-----------|---------------------------------------------------------|---
