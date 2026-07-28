@@ -21,9 +21,13 @@ the wrapped door trim, a cut-out texture on a solid face — was invisible in it
 materialize + render cycle to find. `flat` also makes a subtracted room show its interior instead
 of the outside of a box.
 
-**BUILD ORDER — this builds SECOND.** Slice `S4` consumes the mip-pyramid accessor and the
-`bMasked` flag that board item `native-texture-decode`'s slice `S2b` delivers. Owner decision 2.11 orders
-the whole feature after that item; the plan implements that as ruled. *(Only S4 has a technical
+**Prerequisite LANDED (2026-07-27):** board item `native-texture-decode` is done, so nothing here is
+blocked any more. Slice `S4` consumes two things it shipped, both on the decoder's typed result:
+**`DecodedTexture.mips`** — every mip level as `(w, h, rgb, mask)`, a lazy property rather than the
+`resolve_mips()` accessor an earlier draft named — and **`DecodedTexture.b_masked`**, read as the
+export's tag if present, else the resolved class default, and `None` when the search path carries no
+code package to resolve one from. Owner decision 2.11 ordered the whole feature after that item, and
+it was built that way. *(Only S4 has a technical
 dependency — S1–S3 touch no texture code. That observation is parked on the inbox as the owner's
 call, not the builder's.)*
 

@@ -182,9 +182,11 @@ the same digest doubles as the preview artifact's content address (§3a) with no
 
 **ONLY PIXELS ARE HASHED.** *(Owner ruling, 2026-07-26, resolving a structural gate finding.)* The
 digest covers `(w, h, RGB)` and **nothing else** — in particular the **transparency mask is NOT part of
-identity**, even though the decode path returns one (`utexture.TextureResolver.resolve_masked()` yields
-`(w, h, rgb, mask)`, and the gated board item `three-design-calls-the-native-texture-formats` §8-D derives the mask
-from pixel data: P8 index-0, BC1 punch-through, BC2/BC3 block alpha).
+identity**, even though the decode path returns one. *(Updated 2026-07-27: this cited
+`TextureResolver.resolve_masked()`, which no longer exists — `resolve()` and `resolve_masked()`
+merged into one typed seam.)* `utexture.TextureResolver.resolve(ref)` returns a `DecodedTexture`
+carrying `width`, `height`, `rgb` and `mask`, and the mask is derived from the pixel data alone:
+P8 index-0, BC1 punch-through, BC2/BC3 block alpha (`dev/docs/rationale/texture-decode.md`).
 
 Two consequences follow, and **both are binding**, because §3a addresses the preview artifact by this
 same digest ("for textures the preview hash IS the identity — no second digest"):
@@ -245,7 +247,7 @@ Two corollaries worth stating, because they are easy to get backwards:
 
 A **procedural** texture stores **no pixels**: measured, every `FireTexture`, `WetTexture`,
 `WaveTexture`, `IceTexture` and `ScriptedTexture` carries mips whose `DataCount == 0`
-(208 + 42 + 14 + 8 + 50 + 4 across the Deus Ex tree — board item `three-design-calls-the-native-texture-formats`).
+(208 + 42 + 14 + 8 + 50 + 4 across the Deus Ex tree — board item `native-texture-decode`).
 Its pixels are **generated at runtime from its stored parameters**. So the pixel hash of §3b has
 nothing to bite on, and an earlier draft's consequence — that water and fire are enumerable but
 *permanently unclassifiable* — is rejected.
@@ -394,8 +396,10 @@ as holes **on any surface, with no surface flag set at all**.
 - **`bAlphaTexture` joins `facts` beside `masked`** *(owner ruling 2026-07-26)*, same read rule and same
   cost. It is the only thing that distinguishes a graded-alpha texture (BC2/BC3, 10 measured here) from its
   opaque twin, since identity is pixels-only and they share one identity and one opaque preview. Without it
-  they are indistinguishable — and identity is frozen, so it cannot be added to the key later. The sibling
-  board item `three-design-calls-the-native-texture-formats` §8-D already reports it, so the read is available.
+  they are indistinguishable — and identity is frozen, so it cannot be added to the key later. **The
+  decoder already reports it**: `utexture.TextureResolver.resolve(ref)` returns a `DecodedTexture`
+  carrying `b_masked` — the export's tag if present, else the resolved class default, and `None` when
+  the search path has no code package to resolve one from (`dev/docs/rationale/texture-decode.md`).
 - `texture show` prints it; `--json` carries it; **`texture list --masked` / `search --masked`** filter
   on it (added to §5's per-kind filters).
 - It is a **fact, not a classification**: not LLM-overridable, no tracked shard.
@@ -455,10 +459,9 @@ Not part of identity (§3b): identity is pixels, and the flag lives beside them.
 
 ## Test coverage — texture arm
 
-Read `dev/docs/rules/tests.md` first. Offline fixtures: the sibling
-board item `three-design-calls-the-native-texture-formats` §5a promotes its committed,
-self-verifying `.utx` builder (`spikes/2026-07-25-native-texture-formats/pkgfixture_proto.py`) to
-`uedcli/tests/pkgfixture.py` and makes it "the fixture API every offline test is written against". **This
+Read `dev/docs/rules/tests.md` first. Offline fixtures: **`uedcli/tests/pkgfixture.py` already exists**
+— board item `native-texture-decode` promoted it there from its spike prototype, and it is the fixture
+API every offline texture test is written against. **This
 arm depends on that rather than building a writer.** Note there are **no** tracked `.utx`/`.uax`/`.umx`
 under `uned/`; the two committed `.utx` live in `uedcli/tests/fixtures/`.
 

@@ -1166,8 +1166,13 @@ actor preview [<names…> | --from-t3d <FILE…|->]
     parse.)
   - An invalid token is a clean named error (e.g. `--annotate: unknown filter 'foo' for kind 'poly'`).
 - **Point actors** render as their **DT_Sprite** billboard (footprint `DrawScale·USize × DrawScale·
-  VSize`) or, for DT_Mesh/DT_None (or a missing/undecodable sprite), a small **marker** (a filled
-  diamond in the actor's tint, with a white halo so it stands out) at Location. Its **name is in the
+  VSize`) or, for DT_Mesh/DT_None (or a sprite that does not decode), a small **marker** (a filled
+  diamond in the actor's tint, with a white halo so it stands out) at Location. A sprite that does
+  not decode prints a stderr note **naming why** — `unknown-texture` (nothing of that name on the
+  search path), `unqualified-ref` (write it as `Package.Name`), `unverified-format` (a real texture
+  in a pixel layout uedcli cannot read yet), and so on — so the marker is never unexplained. With
+  **no texture search path configured at all**, the note says so instead of naming a case: nothing
+  was looked for, so there is no case to name — run `project show` to see what is on the path. Its **name is in the
   legend**, not beside the marker.
 - **`--frame TARGET`** frames a target to fill the view (frames only — never highlights), in one of two
   forms. A **selector** — a bare **`BRUSH`** name frames that actor's whole AABB, or **`BRUSH:IDX`**

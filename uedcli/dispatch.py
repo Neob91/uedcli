@@ -1000,6 +1000,7 @@ def _resolve_point_render(actor, project, *, resolver, show_collision, show_ligh
     """Resolve one point actor's render fields (instance prop else class default via the
     `_class_defaults` seam) into a `preview.PointRender` + a list of stderr notes. May raise
     `uprops.SchemaError` (the caller degrades to an unscaled marker)."""
+    from . import utexture
     defaults = _class_defaults(actor.cls, project)
     instance = {k.casefold(): v for k, v in actor.props}
 
@@ -1015,24 +1016,31 @@ def _resolve_point_render(actor, project, *, resolver, show_collision, show_ligh
     sprite = sprite_world = None
     if draw_type == "DT_Sprite":
         bare = _strip_object_ref(field("Texture"))
-        got = resolver.resolve_masked(bare) if (resolver and bare) else None
-        if got is not None:
-            w, h, rgb, mask = got
-            fw, fh = preview.sprite_footprint(draw_scale, w, h)
+        got = resolver.resolve(bare) if (resolver and bare) else None
+        if isinstance(got, utexture.DecodedTexture):
+            fw, fh = preview.sprite_footprint(draw_scale, got.width, got.height)
             if fw > 0 and fh > 0:
-                sprite = (w, h, rgb, mask)
+                sprite = (got.width, got.height, got.rgb, got.mask)
                 sprite_world = (fw, fh)
             else:                                     # DrawScale 0 / zero-size texture → no billboard
                 notes.append(f"point actor {actor.name!r}: sprite {bare} has a zero footprint "
                              f"(DrawScale {draw_scale}) — drawing a marker")
         elif bare is None:
             notes.append(f"point actor {actor.name!r}: DT_Sprite with no Texture — drawing a marker")
-        elif resolver is not None and resolver.exists(bare):
-            notes.append(f"point actor {actor.name!r}: sprite {bare} is not P8-decodable — drawing "
-                         "a marker (tracked: native non-P8 texture decoders)")
+        elif got is None:
+            # NOTHING WAS SEARCHED. `_texture_resolver` returned None — no user config, a
+            # broken games config, or an empty composed file list — so no package was ever
+            # opened. Saying "not found" here would tell a user with no games config that
+            # their texture is missing, which sends them to fix the wrong thing.
+            notes.append(f"point actor {actor.name!r}: no texture search path is configured, so "
+                         f"sprite {bare} was not looked for — drawing a marker (check "
+                         f"`project show`)")
         else:
-            notes.append(f"point actor {actor.name!r}: sprite texture {bare} not found — "
-                         "drawing a marker")
+            # The billboard degrades to a marker rather than failing the whole preview, and the
+            # note carries the decoder's named case so "the ref is wrong" and "we cannot decode
+            # this layout yet" are distinguishable without re-running anything.
+            notes.append(f"point actor {actor.name!r}: sprite {bare} did not decode "
+                         f"[{got.case}] — drawing a marker: {got.detail}")
     collision = None
     if show_collision and str(field("bCollideActors")).strip() == "True":
         collision = (_to_float(field("CollisionRadius"), 0.0),

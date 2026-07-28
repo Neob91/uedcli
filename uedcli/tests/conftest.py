@@ -19,6 +19,31 @@ def install_root() -> Path:
     return Path(__file__).resolve().parents[2] / "uned" / "DeusExAssets"
 
 
+def ued22_root() -> Path:
+    """`<repo>/uned/UED22` — the one package corpus that is GIT-TRACKED, so an offline test may
+    assert exact counts over it. No env pointer: a fresh checkout has it.
+
+    ENUMERATION RULE — state it wherever a count is asserted, or the same tree gives three
+    answers. Measured 2026-07-27: `git ls-files uned/UED22` = 214 files. Counting packages as
+    RECURSIVE + EXTENSION-EXACT `{.u,.utx,.uax,.umx}` gives **34 packages / 1,998 `Texture`
+    exports**, which is what every asserted figure in the suite uses. A loose `*.u*` glob also
+    catches the tracked `DeusEx.u.bak` (35 / 2,002); top-level-only misses
+    `DoNotPlaceInventorySpots/Engine.u` and `PlaceInventorySpots/Engine.u` (32 / 1,934). All
+    three are defensible; only one matches the numbers.
+    """
+    return Path(__file__).resolve().parents[2] / "uned" / "UED22"
+
+
+UED22_PACKAGE_SUFFIXES = (".u", ".utx", ".uax", ".umx")
+
+
+def ued22_packages() -> list[Path]:
+    """Every package under `ued22_root()`, under the enumeration rule above. Sorted, so a
+    failure names the same package on every machine."""
+    return sorted(p for p in ued22_root().rglob("*")
+                  if p.is_file() and p.suffix.lower() in UED22_PACKAGE_SUFFIXES)
+
+
 def install_system_root() -> Path:
     """The install's `System/` (v68 `.u`) — schema/closure integration-test input."""
     return install_root() / "System"

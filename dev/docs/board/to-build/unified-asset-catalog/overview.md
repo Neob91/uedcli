@@ -36,8 +36,12 @@ bug that silently ships broken levels)* → `S5` classification store → `S6` s
 (library-level) → `S8b` repoint the noun + delete the legacy subsystem → `S9` `.umx` title sniffer
 → `S10` lifecycle → `S11` doc sweep.
 
-**Blocking prerequisite:** board item `native-texture-decode` **gates `S8a` only** — everything else
-proceeds without it. (It is now a real board item; it used to be an untriaged inbox entry.)
+**Prerequisite LANDED (2026-07-27):** board item `native-texture-decode` gated `S8a` only, and it is
+done — the decoder now reads P8, BC1, BC2 and BC3 natively and returns a typed result naming its
+failure case. Nothing here is blocked on it any more. Two things `S8a` inherits from it: the ref-level
+error cases (`unqualified-ref`, `unknown-package`, `package-unreadable`, `unknown-texture`) are
+**reused verbatim** rather than re-minted, and this catalog mints only what is genuinely its own
+(`ambiguous-ref`, `cache-unreadable`).
 
 **Two things the builder must NOT decide alone:** (1) `S7` measures whether the existing Rust
 rasterizer can render meshes — if it can, the ~300 ms/render figure underpinning decisions 7

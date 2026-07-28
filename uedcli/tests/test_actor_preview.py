@@ -4,7 +4,7 @@ drive `dispatch.dispatch` against a real trunk level (model-side, host-only — 
 from pathlib import Path
 from types import SimpleNamespace
 
-from uedcli import dispatch, trunk
+from uedcli import dispatch, trunk, utexture
 from uedcli.builders import cube, make_brush_actor
 from uedcli.model import Level
 
@@ -390,14 +390,29 @@ def _project_with_light(tmp_path, monkeypatch, name="lvl"):
 
 
 class _FakeResolver:
-    """A stand-in TextureResolver: `present` maps bare ref → (w,h,rgb,mask); `exists_only` are refs
-    that exist but don't decode (non-P8)."""
+    """A stand-in `TextureResolver` on the TYPED-result seam.
+
+    `present` maps a ref → `(w, h, rgb, mask)` and yields a `DecodedTexture`; `exists_only`
+    are refs that exist on the path but do not decode, and yield the `unverified-format`
+    error. Everything else yields `unknown-texture`. It must never return `None`: the real
+    resolver does not, and a caller written against `None` would take an error object for a
+    picture (the error is deliberately truthy).
+    """
     def __init__(self, present=None, exists_only=()):
         self.present = present or {}
         self.exists_only = set(exists_only)
 
-    def resolve_masked(self, ref):
-        return self.present.get(ref)
+    def resolve(self, ref):
+        got = self.present.get(ref)
+        if got is not None:
+            w, h, rgb, mask = got
+            return utexture.DecodedTexture(ref=ref, width=w, height=h, rgb=rgb, mask=mask,
+                                           layout="linear1", layout_source="data",
+                                           format_code=0, array="mips")
+        if ref in self.exists_only:
+            return utexture.TextureError(ref, "unverified-format",
+                                         f"{ref}: no decoder for this layout")
+        return utexture.TextureError(ref, "unknown-texture", f"{ref}: not on the path")
 
     def exists(self, ref):
         return ref in self.present or ref in self.exists_only
@@ -441,13 +456,32 @@ def test_non_p8_sprite_vs_absent_are_distinguished(tmp_path, monkeypatch, capsys
          mock.patch("uedcli.dispatch._texture_resolver",
                     return_value=_FakeResolver(exists_only={"Pkg.NonP8"})):
         assert dispatch.dispatch(_prev(proj, out, names=["Torch"])) == 0
-    assert "not P8-decodable" in capsys.readouterr().err
+    # The decoder's own case name travels into the note, so "we cannot decode this layout"
+    # reads differently from "that ref is wrong" without re-running anything.
+    assert "unverified-format" in capsys.readouterr().err
     # truly absent → not-found note.
     with mock.patch("uedcli.dispatch._class_defaults",
                     return_value=_defaults_sprite("Pkg.Gone")), \
          mock.patch("uedcli.dispatch._texture_resolver", return_value=_FakeResolver()):
         assert dispatch.dispatch(_prev(proj, out, names=["Torch"])) == 0
-    assert "not found" in capsys.readouterr().err
+    assert "unknown-texture" in capsys.readouterr().err
+
+
+def test_no_search_path_at_all_is_not_reported_as_a_missing_texture(tmp_path, monkeypatch,
+                                                                    capsys):
+    """With `_texture_resolver` returning None — no user config, a broken games config, or an
+    empty composed file list — **no package was ever opened**. Saying "not found" would tell a
+    user with no games configured that their texture is missing, sending them to fix the wrong
+    thing. The note has to name the real condition."""
+    proj = _project_with_light(tmp_path, monkeypatch)
+    out = tmp_path / "o.png"
+    with mock.patch("uedcli.dispatch._class_defaults",
+                    return_value=_defaults_sprite("Pkg.Whatever")), \
+         mock.patch("uedcli.dispatch._texture_resolver", return_value=None):
+        assert dispatch.dispatch(_prev(proj, out, names=["Torch"])) == 0
+    err = capsys.readouterr().err
+    assert "no texture search path is configured" in err
+    assert "not found" not in err
 
 
 def test_zoom_naming_a_point_actor_is_a_clean_error(tmp_path, monkeypatch, capsys):

@@ -89,8 +89,11 @@ def skin_images(pkg, m, search_dirs):
         parts = path.split(".")
         ref = f"{parts[0]}.{parts[-1]}"          # Package.Name (drop any Group segment)
         got = resolver.resolve(ref)
-        if got:
-            out[mi] = got
+        # `resolve` returns a TYPED result and its error object is TRUTHY, so `if got:` would
+        # accept an error as a skin and rasterize it. Fail loudly naming the offending ref.
+        if isinstance(got, utexture.TextureError):
+            raise SystemExit(f"{m.name}: skin {ref} did not decode [{got.case}]: {got.detail}")
+        out[mi] = (got.width, got.height, got.rgb)
     return out
 
 

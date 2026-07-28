@@ -63,11 +63,19 @@ def test_texture_exists_group_and_bare_any_package():
 
 
 def test_texture_exists_is_existence_not_decodability():
-    # `buf=b""` means these exports have NO decodable mip/palette — resolve() would return None, but
-    # exists() must still say True (a real non-P8/undecodable texture must never false-reject).
+    """`exists()` answers "is there a Texture-classed export of this name", and must say True
+    even for one that cannot be decoded — otherwise author-time validation false-rejects a ref
+    the engine itself would render.
+
+    The fixture's exports are built with `soff=0, ssize=0` over `buf=b""`, so their bodies have
+    no property list at all and `decode_texture` raises `IndexError`. The decode case is
+    therefore **`corrupt-body`**, not a format case: despite the `RGBA7Tex` name there is no
+    `Format` byte in there to be unverified, and asserting a format case would assert a fiction.
+    """
     r = _resolver(Weird=_texpkg([("RGBA7Tex", None)]))
     assert r.exists("Weird.RGBA7Tex")
-    assert r.resolve("Weird.RGBA7Tex") is None           # ...and decode genuinely fails
+    got = r.resolve("Weird.RGBA7Tex")
+    assert isinstance(got, utexture.TextureError) and got.case == "corrupt-body"
 
 
 def test_texture_exists_is_cached():

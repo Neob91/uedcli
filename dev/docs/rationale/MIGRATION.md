@@ -116,7 +116,7 @@ not match, so it is checked in every stage).
 | Before — checked because a `to-build/` item referenced it | After |
 |---|---
 | `plans/2026-06-24-uedcli-bsp-detector-plan.md` | still checked, as `board/to-build/bsp-issue-detector/plan.md` |
-| `plans/2026-07-25-native-texture-formats-plan.md` | still checked, as `board/to-build/native-texture-decode/plan.md` |
+| `plans/2026-07-25-native-texture-formats-plan.md` | **DELETED** — that work landed 2026-07-27 and a plan is ephemeral. What outlived it: `board/done/native-texture-decode/`, `dev/docs/rationale/texture-decode.md`, `dev/docs/unrealed/package-format.md`, `dev/docs/spikes/2026-07-25-native-texture-formats/01-texture-layout-census.md` |
 | `specs/2026-07-26-asset-catalog-engine.md` | still checked, as `board/to-build/unified-asset-catalog/spec.md` |
 | `specs/2026-07-26-asset-catalog-texture-arm.md` | still checked, as `board/to-build/unified-asset-catalog/spec-texture-arm.md` — not by the exemption, but because the shape does not cover a second spec |
 | `plans/2026-07-25-unified-asset-catalog-plan.md` | **no longer checked** — `board/inbox/the-unified-asset-catalog-spec-revision/plan.md` |
@@ -124,7 +124,7 @@ not match, so it is checked in every stage).
 | `plans/2026-07-27-actor-preview-faces-plan.md` | **no longer checked** — `board/inbox/actor-preview-faces-plan-cites-dev-docs/plan.md` |
 | `specs/2026-06-24-uedcli-offline-bsp-engine-design.md` | **no longer checked** — `board/to-spec/bsp-issue-ground-truth-detector-d0-d1/spec.md` |
 | `specs/2026-07-25-docs-restructure.md` | **no longer checked** — `board/inbox/docs-restructure-is-complete/spec.md` |
-| `specs/2026-07-25-native-texture-formats.md` | **no longer checked** — `board/inbox/three-design-calls-the-native-texture-formats/spec.md` |
+| `specs/2026-07-25-native-texture-formats.md` | **DELETED** — same work, same date; a spec is ephemeral too. Same four durable homes as the plan row above |
 | `specs/2026-07-26-actor-preview-textured-faces.md` | **no longer checked** — `board/inbox/four-actor-preview-faces-rulings-need-a-durable/spec.md` |
 | `specs/2026-07-26-asset-catalog-audio-arm.md` | **no longer checked** — `board/to-spike/sound-corpus-remeasure/spec.md` |
 | `specs/2026-07-26-asset-catalog-class-arm.md` | **no longer checked** — `board/inbox/the-asset-catalog-class-arm-needs-four-changes/spec.md` |

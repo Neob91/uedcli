@@ -158,7 +158,7 @@ bytecode.
 
 ### P1 — full native texture decode
 *Gates S8a only.* **Now specced and review-gated** in its own right:
-board item `three-design-calls-the-native-texture-formats` (owner-decided; see `rationale/MIGRATION.md` for the old
+board item `native-texture-decode` (owner-decided; see `rationale/MIGRATION.md` for the old
 2026-07-25 06:30 ledger citation); it sits on `board/to-plan/`
 as a `p1` and needs its own plan before S8a is scheduled. Two things changed since this plan first
 called it "non-P8 decoders": layout is **derived from the data** rather than any per-game format

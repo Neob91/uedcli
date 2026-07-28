@@ -882,8 +882,9 @@ and plan both in board item `re-evaluate-whether-reject-nonlevel-target`; decisi
     the per-surf world UV frame is computed Python-side from the AUTHORED
     `Origin`/`TextureU/V`/`Pan` (`base_w = Location + R·(Origin − PrePivot)`, `axes_w = R·axes` —
     the built surf's synthesized texture vectors are never read, and Pan doesn't survive the
-    build), textures decode natively (`utexture.py`; unresolvable ref → magenta/black
-    checkerboard + one stderr warning per distinct ref; no texture → flat grey), movers render
+    build), textures decode natively (`utexture.py`; a ref that does not decode → magenta/black
+    checkerboard + one stderr warning per distinct ref NAMING the decoder's case; no texture →
+    flat grey), movers render
     directly as world-transformed extra polys at their base pose, and `uedcli_native.
     render_frame` rasterizes (camera BASIS passed from Python's `euler_to_matrix_uu` — Rust never
     converts angles; perspective, ~4uu near clip, z-buffer, perspective-correct nearest mip0 UV,
@@ -2143,7 +2144,18 @@ see the `level preview` verb above) is split across four pieces:
 `shot_filename` dedup — shared with the `--game` tier), `preview_native.py` (the
 orchestration described under the `level preview` verb above), `utexture.py` (the native
 UTexture/UPalette decoder + `TextureResolver` over `config.composed_search_files` — promoted
-from the 2026-06-27 decontainerize spike, corpus-validated byte-identical to UCC's export),
+from the 2026-06-27 decontainerize spike, corpus-validated byte-identical to UCC's export;
+`resolve(ref)` returns a TYPED result, either a `DecodedTexture` or a `TextureError` naming
+one of twelve cases and the offending value, never `None`. Four are REF-layer (`unqualified-ref`,
+`unknown-package`, `package-unreadable`, `unknown-texture`) and eight DECODE-layer
+(`corrupt-body`, `missing-palette`, `no-mip-data`, `unverified-format`, `unrecognised-layout`,
+`size-mismatch`, `ambiguous-alpha`, `ambiguous-layout`). The `DecodedTexture` carries mip 0 as
+`width`/`height`/`rgb`/`mask`, the WHOLE pyramid of the selected array as the lazy `mips`
+property (`(w, h, rgb, mask)` per level — decoded on first access, so mip-0-only callers do not
+pay for it), which array it came from (`array`), the effective `format_code`, and the engine's
+`b_masked`/`b_alpha_texture` flags. Those two follow the owner's read rule — **the export's tag
+if present, else the resolved class default** via `uprops.resolve_class_defaults`, and `None`
+when the search path carries no code package to resolve one from, never `False`),
 and `uedcli-native/src/render.rs` (`render_frame` — the pure-Rust rasterizer, `cargo test`-able
 with no Python). The camera FRotator convention is single-sourced: Python builds the basis via
 the GMath `euler_to_matrix_uu` and Rust only projects. Offline test oracles: the pixel-probe
@@ -2353,7 +2365,8 @@ which is retired); `color_by_csg` toggles the palette (off ⇒ the legacy black/
 collision/light/sound overlays). **`preview.py` stays resolver-free** — dispatch computes the
 `PointRender`s in `_preview_render_data`/`_resolve_point_render`, resolving each field instance-else-
 class-default via the `_class_defaults` seam and decoding sprites through a `_texture_resolver`
-(`utexture.TextureResolver.resolve_masked`, index 0 = transparent). Brush-only previews resolve no
+(`utexture.TextureResolver.resolve`, whose `DecodedTexture` carries the mask — palette index 0 =
+transparent; a `TextureError` degrades to a marker with the case name in the stderr note). Brush-only previews resolve no
 schema (a pure-brush preview works with no game install); a point actor whose schema is unresolvable
 degrades to an unscaled labelled marker + a stderr note, never a `SchemaError` traceback.
 `render_quad_pgm` tiles four panes. `_render_actors_to_out` also resolves the `--frame` target

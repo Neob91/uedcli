@@ -426,16 +426,32 @@ def test_utexture_bmasked_is_stored_presence_only_and_never_as_false():
     a stored `bMasked=False` never occurs.
 
     Spike: `dev/docs/spikes/2026-07-26-texture-masked-property/findings.md` §1. Measured over the
-    2,669-texture Deus Ex corpus: 191 carry `bMasked`, **all True**. This test re-asserts the
-    presence-only encoding against the committed fixtures, so a decoder change that started
-    materialising `bMasked=False` (which would invert the gate) trips red.
+    2,669-texture Deus Ex corpus: 191 carry `bMasked`, **all True**.
+
+    **This pin used to run over the two committed `.utx` fixtures alone — 3 textures, none of
+    them masked — so it asserted over an empty set and passed vacuously.** It now sweeps the
+    git-tracked `uned/UED22` corpus, which carries 317 stored `bMasked` properties across 34
+    packages (`conftest.ued22_root()` states the enumeration rule the package count uses). The
+    exact 317 is asserted for one reason only: without it the sweep could silently go vacuous
+    again — a change that stopped reading the property would leave every assertion below
+    unexecuted and the test still green.
     """
     from uedcli import utexture
-    for name in ("CoreTexWater.utx", "LUM_InfoPortraits.utx"):
-        pkg = utexture.load_package(str(Path(__file__).parent / "fixtures" / name))
+    from uedcli.tests.conftest import ued22_packages
+
+    fixtures = Path(__file__).parent / "fixtures"
+    paths = [fixtures / n for n in ("CoreTexWater.utx", "LUM_InfoPortraits.utx",
+                                    "UccCompMips.utx")] + ued22_packages()
+    stored = 0
+    for path in paths:
+        pkg = utexture.load_package(str(path))
         for i in utexture.textures(pkg):
             v = _texture_props(pkg, i).get("bMasked")
-            assert v is None or v[1] is True, f"{name}: bMasked stored as {v!r}"
+            if v is None:
+                continue
+            stored += 1
+            assert v[1] is True, f"{path.name}: bMasked stored as {v!r}"
+    assert stored == 317, stored
 
 
 def test_index_zero_is_an_ordinary_colour_on_an_unmasked_texture():

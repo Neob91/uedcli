@@ -30,7 +30,7 @@ from . import movers
 from .normalize import is_builder_brush
 from .preview_shots import ResolvedShot, Shot, resolve_pose, shot_filename
 from .rotation import (actor_matrix, actor_prepivot, deg_to_uu, euler_to_matrix_uu, matvec)
-from .utexture import TextureResolver
+from .utexture import TextureError, TextureResolver
 
 PF_INVISIBLE = 0x1
 
@@ -298,17 +298,21 @@ class _TextureTable:
         if key in self._by_ref:
             return self._by_ref[key]
         got = self._resolver.resolve(ref)
-        if got is None:
-            print(f"WARNING: texture {ref!r} not resolvable on the composed search path; "
-                  f"rendering a checkerboard (qualify the ref as Package.Name and check "
-                  f"`project show`)", file=sys.stderr)
+        if isinstance(got, TextureError):
+            # A whole-frame render degrades rather than refusing — one odd texture must not
+            # stop a map preview. The named case goes into the warning so the user can tell a
+            # typo (`unknown-package`) from a real decode gap (`unverified-format`) without
+            # re-running anything. A per-ref request exits 2 instead; the decoder reports, the
+            # caller disposes.
+            print(f"WARNING: texture {ref!r} did not decode [{got.case}]: {got.detail}; "
+                  f"rendering a checkerboard", file=sys.stderr)
             if self._checker_index is None:
                 self._checker_index = len(self.table)
                 self.table.append(_checkerboard())
             idx = self._checker_index
         else:
             idx = len(self.table)
-            self.table.append(got)
+            self.table.append((got.width, got.height, got.rgb))
         self._by_ref[key] = idx
         return idx
 

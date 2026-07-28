@@ -663,41 +663,41 @@ Pinned by two `test_engine_facts` regressions against committed fixtures.
 
 ## 12. Build order (owner ruling, 2026-07-26)
 
-**The texture-decoder item builds FIRST, with this spec's texture accessor folded into its scope; then
-all of this.**
+**The texture decoder built FIRST, with this spec's texture accessor folded into its scope. It is
+DONE — landed 2026-07-27, board item `dev/docs/board/done/native-texture-decode/`.** *(Updated
+2026-07-28. This section described it as on deck in `to-build/` with a live spec and plan; all four
+of those are now false, and its spec and plan were ephemeral and are deleted.)*
 
-`board/to-build/`'s **"Native texture decode for any UE1 package"** (`p1`, on deck, spec + plan
-self-contained) rewrites the same component this spec depends on: it **deletes
-`TextureResolver.resolve_masked`**, **replaces `resolve`'s `None`-on-miss contract with a typed error
-object naming the case**, and adds **`CompMips`**, a second compressed mip array. It also fixes a live
-bug — **30 textures in `LUM/Textures/LUM_CoreTex.utx` are unreadable today** — and gates the asset
-catalog, so it lands first regardless.
+It rewrote the same component this spec depends on: it **deleted `TextureResolver.resolve_masked`**,
+**replaced `resolve`'s `None`-on-miss contract with a typed result** — a `DecodedTexture` or a
+`TextureError` naming one of twelve cases — and added **`CompMips`**, the second compressed mip
+array, which is what made 30 unreadable textures in `LUM/Textures/LUM_CoreTex.utx` readable.
 
-**Folded into its scope** (one texture-API change, not two):
+**What it shipped for this spec, and the exact names to write:**
 
-1. **A mip-pyramid accessor** — every mip of a ref as `(w, h, rgb, mask)`, on its typed-result
-   contract, replacing this spec's earlier `resolve_mips(...) -> … | None`.
-2. **`bMasked` on the typed result**, NOT a `texture_has_bMasked(ref)` predicate — §4.3a explains why
+1. **The mip pyramid is `DecodedTexture.mips`** — every level as `(w, h, rgb, mask)`, mip 0 first.
+   A **lazy property on the result**, not the `resolve_mips(...)` accessor an earlier draft of this
+   spec named and not a second `resolve_*` entry point: it would have had to return the same object
+   from the same cache entry, making it a pure alias. Reasoning:
+   `dev/docs/rationale/texture-decode.md`.
+2. **`DecodedTexture.b_masked`**, NOT a `texture_has_bMasked(ref)` predicate — §4.3a explains why
    (a second entry point for one question, and a bool predicate cannot distinguish "unqualified ref"
-   from "unreadable"). *(That plan already carries this correction; recorded here because §12 is the
-   section its builder reads.)*
+   from "unreadable"). It reads as **the export's tag if present, else the resolved class default**,
+   and is **`None`** — never `False` — when the search path carries no code package to resolve a
+   default from. §4.3a's `masked = bool(flags & 0x2) or decoded[ref].b_masked` treats `None` as
+   falsy; board item `bmasked-with-no-reachable-class-default-source` records that cost.
+
+**THE CONTRACT NOTE THAT LIVED IN THE DELETED PLAN, kept here because this is now its only home:**
+a decoder error lets the CALLER choose the disposition, and the callers differ. `level preview
+--native` degrades to a checkerboard and warns; **`actor preview --faces textured` REFUSES** — it
+exits 2 naming the ref (§2.6). Do not assume every preview caller degrades. The typed result carries
+enough to write either message, including telling a **bare (unqualified) ref** apart from a
+package/name miss, since the refusing caller has to tell the user to qualify it.
 
 *Rejected: shipping `wire`/`flat` first and `textured` after; rejected: waiting for that item without
-folding the accessor in (two API changes); rejected: building now against today's decoder.*
+folding the accessor in (two API changes); rejected: building against the pre-decoder API.*
 
-**Both consequences are already carried into that item** (done 2026-07-26, not outstanding): its plan
-holds slice `S2b` with the accessor and the verbatim "`actor preview --faces textured` REFUSES — do
-not assume every preview caller degrades" contract note, and its `board/to-build/` entry is flagged scope-
-widened so the plan re-enters plan review before building. That plan's own round-1 review is recorded
-at its foot. **Both of that plan's escalations are now RESOLVED** (its `repo_texture_root()`
-propagation, and its decode oracle — the latter by spike `2026-07-26-ucc-texture-fixture`), so the
-dependency is not parked. **This spec still builds SECOND**: it consumes S2b's mip-pyramid accessor
-and the `bMasked` flag on S2's typed result, neither of which exists until that item lands.
-*(Superseded text follows for the record — it named findings that were closed by the time it was
-written, which is why the gate is now stated as a slice dependency instead. Per `CLAUDE.md` the
-superseded wording is not preserved — git holds it.)*
-
-For orientation only, the formerly-cited findings: two of them
+For orientation only, the findings this section formerly cited: two of them
 (S2b's missing tests, and the `bMasked` flag's home) are the half this spec consumes.
 
 

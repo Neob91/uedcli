@@ -136,6 +136,141 @@ the record *count* isn't decoded (found as the longest self-validating run) and 
 before the records is undecoded — validate the count against the editor's `PATHS` for production.
 (spike: `../spikes/2026-06-27-uedcli-direction-ideas/02-level-nav-reachability.md`, native read 2026-06-27)
 
+### `UTexture` — TWO mip arrays, the second gated on a PROPERTY ✅
+
+A `UTexture` body is a tagged-property list, the `None` terminator, and then **up to two**
+`TArray<FMipmap>`. The second one, `CompMips`, holds a **block-compressed copy of the same image**
+and is present **iff the body's `bHasComp` property is true**:
+
+```
+UTexture body
+  <tagged property list>        # Format, Palette, bHasComp, CompFormat, bMasked, ...
+  None                          # property-list terminator (a name-table compact index)
+  Mips     : TArray<FMipmap>    # compact-index count, then count x FMipmap
+  [if bHasComp]
+  CompMips : TArray<FMipmap>    # SAME encoding; present iff the bHasComp PROPERTY is true
+
+FMipmap (per mip)
+  WidthOffset : uint32   # TLazyArray skip offset: the ABSOLUTE file offset just past Data.
+                         # PRESENT when Ar.Ver >= 63 (v68/v69); ABSENT in v61.
+  DataCount   : compact index    # number of pixel bytes in this mip
+  Data        : byte[DataCount]  # palette indices (P8) or block bytes
+  USize       : uint32           # mip width
+  VSize       : uint32           # mip height
+  UBits       : uint8
+  VBits       : uint8
+```
+
+**`bHasComp` and `CompFormat` are TAGGED PROPERTIES, not raw bytes after `Mips`.** This is the trap:
+the natural reading of "the body is `Mips`, then `bHasComp`/`CompFormat`/`CompMips`" is wrong, and a
+parser built on it fails on every real sample. Measured over the whole Deus Ex tree (2026-07-25):
+reading two raw bytes after `Mips` and then a second array gives **107 skip-offset mismatches + 100
+non-EOF bodies**; reading the flags out of the property list and parsing `CompMips` **immediately**
+after `Mips` lands exactly on the declared body end for **207 / 207** previously-failing `Texture`
+exports, and consumes **zero** bytes when the flag is absent or false.
+
+**This is the cause of every "trailing bytes" failure on class `Texture`** — a one-array parser stops
+after `Mips` and overruns. Counts: 39 in the Deus Ex `System`+`Textures` roots, 30 in the project's
+own `LUM/Textures/LUM_CoreTex.utx`, 207 over the whole tree — and `CompMips` explains **100 %** of
+them on every root measured. Every `bHasComp` texture measured is `(Format ⇒ 0, CompFormat = 3)`: a
+P8 original with a DXT1 copy. **Prefer `Mips`** — it is the higher-fidelity original; `CompMips` is
+lossy.
+
+**`Format` names the `Mips` array's layout and `CompFormat` the `CompMips` array's.** They are
+different codes for different arrays and judging one array against the other's code is a wrong
+image, not an error: all 69 measured `CompMips` arrays are DXT1 while their `Mips` are P8.
+
+**Two integrity signals, and on v61 there is only one.** For v68/v69 each mip's `WidthOffset` is a
+free per-mip check — after reading `Data` the cursor must equal it. v61 has no skip offsets at all,
+so the only check is that the body ends exactly where the export table says. uedcli's decoder
+therefore records the body's leftover byte count for *every* texture rather than raising, and both
+checks span both arrays.
+
+**An empty mip is not a corrupt body.** Procedural textures serialize mips whose `DataCount` is `0`
+— over the whole Deus Ex tree: 208 `FireTexture`, 42 `WetTexture`, 14 `WaveTexture`, 8 `IceTexture`,
+50 `ScriptedTexture`. Only `FireTexture` *also* trails bytes (a `TArray<FSpark>`, 8 B per spark
+matching `NumSparks`); the others end clean. So "carries no pixels" is detectable from the data
+(`len(mip.data) == 0`) and never from a class name — which matters because a class-name rule would
+miss every modded procedural class.
+
+#### Which pixel layout is it? Read it off the mip chain ✅
+
+**A mip chain is self-describing.** Block-compressed formats store `ceil(w/4) × ceil(h/4)` blocks,
+so their chains **floor at one block** — an 8- or 16-byte tail. Linear formats keep scaling as
+`w·h·N` all the way to 1×1. That is enough to name the layout without any per-game table, which
+matters because **slot numbers are not portable**: `ETextureFormat` dumped from three installs has
+8 slots (Unreal Gold v69), 122 (UED22/227 v69) and 5 (Deus Ex v68), and slot 2 is 8 bytes/px in one
+(`RGB64`) but 2 in another (`R5G6B5`). A hardcoded table mis-slices real data and then reports a
+bogus size mismatch.
+
+**But the data is not always decisive.** A `w × h` mip of `w·h` bytes is byte-identically explained
+by P8 (`w·h·1`) *and* by a 16-byte block layout (`(w/4)(h/4)·16 = w·h`) whenever both dimensions are
+multiples of 4 — the chain only gives itself away once it descends below one block. Measured over
+18,176 texture exports: **45.8 % fit two or more layouts.** So the `Format` code is a **primary**
+path, not an edge case.
+
+**The code breaks ties and vetoes; it never contradicts the data and never sizes a chain.** Four
+slots, and all three dumped enums agree on them (Deus Ex is *silent* on 6 and 7 rather than
+disagreeing — five slots — so it cannot contradict):
+
+| effective code | layout |
+|----------------|--------|
+| `0`            | P8 (palettized, 1 byte/px) |
+| `3`            | BC1 / DXT1 (8-byte blocks) |
+| `6`            | BC2 / DXT3 (16-byte blocks, explicit 4-bit alpha) |
+| `7`            | BC3 / DXT5 (16-byte blocks, interpolated alpha) |
+| anything else  | **vetoes the array** — no pixels, even if the data fits exactly one layout |
+
+**"Effective" means the stored byte if the property is present, else 0.** UE1 omits any property
+equal to its class default, so an absent `Format` is not a missing code — it *is* the byte 0, which
+is P8 in all three enums. Measured: a `Format` property is physically present on **11 of 18,176**
+exports, so the implied 0 is what resolves 8,324 of the 8,327 ambiguous chains.
+
+**The veto is not pedantry.** 227's slot **8** is `TEXF_BC4`, a single-channel **8-byte-block**
+format whose mip chain is byte-for-byte the size of BC1's and fits it uniquely. Without the veto a
+BC4 texture is drawn as BC1 — a confident wrong image on a file whose own code says it is not BC1.
+Slot 9 collides the same way; 10 and 11 collide with the 16-byte class. Measured firing rate on real
+content: **zero** (all 11 stored codes are 3 or 7).
+
+Consequently **an uncoded 8-byte-block chain is taken for BC1 by ASSUMPTION, not deduction** — the
+data cannot separate BC1 from BC4. The assumption is safe because a genuine BC4 export has
+`Format = 8 ≠ 0` and therefore writes the byte, which the veto catches; what is really assumed is
+that no writer emits a non-BC1 8-byte-block chain while omitting `Format`.
+
+**THE STATED LIMIT ON UNIVERSALITY — and it must always be written with its scope.**
+
+> **A BC2 or BC3 texture whose chain fits the 16-byte class UNIQUELY and stores no `Format` code
+> does NOT decode.** It reports `ambiguous-alpha` and no pixels. BC2 and BC3 have byte-identical
+> sizes and mip chains and differ only in how each block's alpha half is encoded; nothing in the
+> data separates them and no future measurement will.
+>
+> **A code-less BC1 file whose chain fits the 8-byte class UNIQUELY DOES decode** — 8-byte blocks
+> are shared with no other layout read here.
+>
+> **Where the chain ALSO fits P8, the implied `Format = 0` decodes it as P8.** Both halves above are
+> false without the word *uniquely*: re-measured 2026-07-26 over `uned/UED22`, of 1,137 ambiguous
+> chains **1,089 fit `{P8, 16-byte}` and 48 fit `{P8, 8-byte}`** — e.g. `uwindow.u:WhiteTexture`
+> (32×32 truncated at 4×4) and `DeusExUI.u:HUDItemsBorder_Center` (64×2).
+
+Where the data leaves a real choice and no code names a fitted candidate, the answer is a named
+error rather than a guess. Measured frequency of that on real content: **zero**, because P8 is a
+fitted candidate in every ambiguous chain that stores no code.
+
+**BC3's alpha half is what identifies it.** All 4,096 blocks of `DmRiot.unr:Poster01`'s mip 0 carry
+`0005ffffffffffff`. As BC3 (`a0 = 0 ≤ a1 = 5`, six-interpolant mode, every index 7) that is
+uniformly opaque; as BC2 the same eight bytes are sixteen explicit nibbles giving alpha 0/85/255
+noise. One distinct value across a whole mip is nonsense for per-texel alpha and exactly what a
+fully-opaque BC3 export looks like.
+
+(uedcli's `utexture.detect_layout` implements this; `utexture.decode_texture` reads the layout
+above. **Every measurement quoted in this section — the census in both units, the three enum dumps,
+the eleven stored codes, the oracle tables and the method behind them — is recorded in
+[`../spikes/2026-07-25-native-texture-formats/01-texture-layout-census.md`](../spikes/2026-07-25-native-texture-formats/01-texture-layout-census.md).**
+Spikes
+`../spikes/2026-07-25-native-texture-formats/` and
+`../spikes/2026-06-27-decontainerize-uedcli/01-native-texture-decode.md`, which proved the P8 path
+pixel-exact against `UCC batchexport` across the whole install. Measured 2026-07-25.)
+
 ### `UMusic` / `USound` — audio object body 🔬
 
 The body of a `UMusic` (`.umx`) or `USound` (`.uax`) object is, in order: **tagged properties**

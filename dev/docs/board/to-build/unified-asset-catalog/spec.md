@@ -393,7 +393,7 @@ unlocks it. *(An earlier draft claimed the catalog "supplies the dependency this
    catalog index own defaults — recreates a second independently-versioned cache over the same `.u`
    and is rejected.)*
 2. **Full native texture decode** — gates the **texture arm only**. Now specced in its own right:
-   board item `three-design-calls-the-native-texture-formats` (review-gated
+   board item `native-texture-decode` (review-gated
    2026-07-25). Note it is **not** the generic-UE1-hygiene-only job this spec first assumed: the
    `bHasComp`/`CompMips` finding means **30 textures in the project's own `LUM_CoreTex.utx` are
    invisible to uedcli today**, so it fixes a live bug on this substrate.

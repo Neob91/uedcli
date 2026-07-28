@@ -182,13 +182,15 @@ need one.
    arm: `DrawType` is default-sourced, so without it every cold `class list --json` re-resolves
    corpus-wide (~14.6 s measured).
 1b. **Prerequisite: FULL NATIVE TEXTURE DECODE** —
-   board item `three-design-calls-the-native-texture-formats`, the texture arm's
+   board item `native-texture-decode`, the texture arm's
    prerequisite 2. **It gates TEXTURED mesh previews in this arm, which the split originally failed to
    declare.** A `DT_Mesh` thumbnail is textured from the class's `MultiSkins[i]`, so it runs the *same*
    texture decoder as the texture arm — the spike's `render_class.py` builds a
-   `utexture.TextureResolver` for exactly this. Today's decoder is P8-only, and that prerequisite exists
-   because non-P8/`CompMips` textures are invisible (**30 in this project's own `LUM_CoreTex.utx`**). So
-   without it, some classes would render with a missing or wrong skin.
+   `utexture.TextureResolver` for exactly this. That prerequisite existed because the decoder **was**
+   P8-only, so non-P8 and `CompMips` textures were invisible (**30 in this project's own
+   `LUM_CoreTex.utx`**) and some classes would have rendered with a missing or wrong skin.
+   **It landed 2026-07-27** — P8, BC1, BC2, BC3 and the second `CompMips` array all decode, and
+   those 30 are readable — so this is no longer a blocker.
 
    **A skin that cannot be decoded is an ERROR, not a degraded picture.** *(Owner ruling 2026-07-26.)*
    `class preview <ref>` is a **per-ref request**, so per `direction/asset-catalog.md` "Produce the

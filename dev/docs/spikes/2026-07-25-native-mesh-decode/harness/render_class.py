@@ -89,10 +89,15 @@ def main(argv):
         if not ref:
             continue
         rp = ref[1].split(".")
-        got = tres.resolve(f"{rp[0]}.{rp[-1]}")
-        if got:
-            skins[idx if prop == "multiskins" else 0] = got
-            overridden += 1
+        skin_ref = f"{rp[0]}.{rp[-1]}"
+        got = tres.resolve(skin_ref)
+        # `resolve` returns a TYPED result and its error object is TRUTHY, so `if got:` would
+        # accept an error as a skin and rasterize it. Fail loudly naming the offending ref.
+        if isinstance(got, utexture.TextureError):
+            raise SystemExit(f"{fqcn}: skin {skin_ref} did not decode "
+                             f"[{got.case}]: {got.detail}")
+        skins[idx if prop == "multiskins" else 0] = (got.width, got.height, got.rgb)
+        overridden += 1
 
     img, ntris, _n = R.render(m, pkg, size=R.arg(argv, "--size", 512, int),
                               yaw=R.arg(argv, "--yaw", 45.0, float),

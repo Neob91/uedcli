@@ -13,8 +13,11 @@ exercises only `_node_polys`, false coverage; (2) HIGH `--size` above 16384 (or 
 raw `BuildError`/`OverflowError` traceback (`render_frame` call not wrapped; no upper bound in
 dispatch); (3) MED `img.save` unwrapped — disk-full / out-dir removed / `shot-01.png` squatted
 by a directory → raw OSError; (4) MED negative `PolyFlags` in a trunk → PyO3 OverflowError
-(materialize masks with `& 0xFFFFFFFF`, preview dropped the mask); (5) MED `utexture` resolver
-can raise IndexError/MemoryError on hostile mip counts/sizes (cap dims, wrap `mip0_to_rgb`);
+(materialize masks with `& 0xFFFFFFFF`, preview dropped the mask); ~~(5) MED `utexture` resolver
+can raise IndexError/MemoryError on hostile mip counts/sizes~~ — **DONE 2026-07-27** by board item
+`native-texture-decode`: the mip count, per-mip dimensions and per-mip byte count are capped and an
+over-large or self-inconsistent declaration returns the typed `corrupt-body` case in bounded time,
+with no `IndexError`/`MemoryError`/`struct.error` escaping;
 (6) MED `--fov`/orbit-`elev` unvalidated (fov 0/nan → NaN garbage frames exit 0; |elev|>90
 silently aims away); (7) LOW u32 overflow in `lib.rs` texture length check (do it in u64);
 (8) LOW scale-gate regex fails OPEN on exponent-notation scales; (9) LOW one-axis-missing

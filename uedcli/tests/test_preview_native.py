@@ -124,10 +124,17 @@ def test_out_of_range_surf_owner_renders_grey_not_indexerror():
 
 
 def test_unresolvable_ref_checkerboards_and_warns_once(capsys):
+    """A whole-frame render DEGRADES: one texture it cannot read must not stop the preview.
+
+    The warning carries the decoder's named case, so a reader can tell a wrong ref from a
+    layout we cannot decode yet without re-running anything — and it is printed ONCE per
+    distinct ref, not once per face.
+    """
     room = _room(texture="Missing.Tex")
     polys, table = pn.build_scene(_level(room), [], IDX)
     err = capsys.readouterr().err
     assert err.count("Missing.Tex") == 1         # ONE warning per distinct ref
+    assert "unknown-package" in err              # the decoder's case, not a generic "missing"
     assert len(table) == 1                       # the shared checkerboard slot
     w, h, data = table[0]
     assert data[:3] == b"\xff\x00\xff"           # magenta/black checks
@@ -135,9 +142,12 @@ def test_unresolvable_ref_checkerboards_and_warns_once(capsys):
 
 
 def test_bare_ref_is_unresolvable(capsys):
+    """A bare ref is refused by name — `unqualified-ref`, not "not found" — because the fix is
+    to qualify it, not to go looking for the texture."""
     room = _room(texture="barename")
     polys, table = pn.build_scene(_level(room), [], IDX)
-    assert "barename" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert "barename" in err and "unqualified-ref" in err
     assert len(table) == 1                       # checkerboard
 
 
