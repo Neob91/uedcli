@@ -103,6 +103,18 @@ change with no user-facing docs has none to update):
   attribution, never rewriting history.
 - **Gate it** (see **Review gates**) — batched, per those rules.
 
+## Dispatching subagents
+
+**This section IS the owner's standing request to dispatch subagents** — a blanket yes for this repo,
+given once here rather than repeated in every message. It covers every subagent an agent hands work
+to: a gate's reviewers, a spike investigator, a wide multi-file search, a long or multi-step task
+briefed to completion. A harness rule that permits subagents only when "the user requested it" is
+therefore *satisfied*, not overridden.
+
+The grant is about **permission, not judgement.** It does not make delegation always correct — a small
+bounded job still belongs inline. What it removes is the need to stop and ask whether dispatching is
+allowed.
+
 ## Review gates
 
 **EVERY change gets reviewed** — a trivial one gets only the cheap pass, but nothing ships
@@ -110,9 +122,8 @@ unlooked-at. **RUN THE GATE AUTOMATICALLY — NEVER ASK PERMISSION TO REVIEW.** 
 is finished, dispatch its round without being told and without announcing the intent first: a gate is
 part of finishing the work, exactly like running the tests. Report the OUTCOME, not the intent.
 
-**This paragraph IS the owner's standing request to spawn those subagents** — one blanket yes, given
-here rather than repeated in every message. A harness rule that permits subagents only when "the user
-requested it" is therefore *satisfied*, not overridden.
+Permission to spawn the reviewers comes from **"Dispatching subagents"** above; this paragraph does
+not restate it.
 
 **Read `dev/docs/rules/review-gates.md` before dispatching a round** — it carries the rest: which row
 a change takes, what "trivial" excludes, what reviewers are told, how findings are dispositioned, the
@@ -262,18 +273,29 @@ A change that is not a feature — a doc correction, a chore sweep, a one-file f
 
 ## Documentation
 
+### MINIMAL. SUCCINCT. AS SHORT AS POSSIBLE WITHOUT LOSING MEANING.
+
+**The first rule of every doc, docstring, comment, commit message and board item — and the one most
+often broken.**
+
+- **The test: delete it. If a reader would still do the same thing, it stays deleted.** Sentence,
+  bullet, heading, example — all of it.
+- **Length is EARNED by what must be explained**, never by importance or by wanting to look thorough.
+- **Cut padding, NOT explanation.** Padding is restatement, throat-clearing, hedging, ceremony.
+  Explanation is mechanism — the cold-reader rule below still binds.
+- **A doc that GREW is a doc to CUT.** Leave a doc you touch shorter than you found it unless the
+  change genuinely added meaning.
+
+*(Owner ruling, 2026-07-27; re-emphasised at the owner's request 2026-07-28.)*
+
 **Read `dev/docs/rules/documentation.md` before writing or restructuring docs** — it carries the
 markdown-table alignment convention, which developer doc owns what, the specs-and-plans-are-ephemeral
-rules, and how UnrealEd facts are cited and confidence-tagged. The four rules below bind everywhere:
+rules, and how UnrealEd facts are cited and confidence-tagged. The three rules below bind everywhere:
 
 - **Write every doc for a reader with NO familiarity with the implementation.** Assume the reader
   does not know the code, the substrate, the prior conversation, or the jargon. Define terms before
   using them, spell out the mechanism, and never lean on context the reader doesn't have. An
   explanation that only makes sense if you already know how it works is a bug — rewrite it.
-- **AS SUCCINCT AS THE MEANING ALLOWS — this binds every doc, docstring and comment.** Facts, not
-  bloat; no restating what the previous sentence said, no throat-clearing. **Length is earned by what
-  must be explained.** This does NOT license dropping the context the rule above demands: cut the
-  padding, not the explanation. *(Owner ruling, 2026-07-27.)*
 - **Keep the user-facing docs current with the CLI — not optional.** Whenever a change alters
   behavior a user can observe — a new verb, a changed flag, different output, a removed feature —
   update `docs/usage.md` and `docs/leveldesign/` in the same change.
