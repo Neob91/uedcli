@@ -105,3 +105,10 @@ confirmation of the actual sentences, not of the intent.
 - The owner declined the `--append-system-prompt-file` wrapper for now. It remains the stronger
   lever if needed, since it lands at system-prompt tier rather than in a project file. This
   declination is recorded only here; if this item is pruned it survives only in git history.
+
+**Left standing from the build review:** "This paragraph IS the owner's standing request to spawn
+*those* subagents" has no local antecedent — the "Review gates" section does not mention subagents
+until three paragraphs later, so a cold reader must read forward to learn what "those" means. Not
+fixed because both readings yield the same operative content (a standing request exists in
+`CLAUDE.md`), and the sentence is owner-confirmed verbatim, so rewording it needs a fresh yes. Fold
+it into the scope ruling above if that reopens the paragraph.
