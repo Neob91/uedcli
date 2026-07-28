@@ -34,19 +34,39 @@ with any announced policy change — there is no changelog entry for it.
 A second, independent mechanism pushes the same way: experiment `tengu_thistle_grebe`
 (`subagent_steer_delegation`) has arms `default`, `no_nudges` and `counter_steer`. The
 `counter_steer` arm injects a full `## Delegating to subagents` section, including *"Do not spawn a
-subagent to review, re-verify, or double-check work you can verify inline."* Its value resolves
-clientData → server flag → per-model default → default. Not active as of this finding, but it can
-flip server-side at any time, and it targets review gates directly.
+subagent to review, re-verify, or double-check work you can verify inline."* Not active as of this
+finding, but it can flip server-side at any time, and it targets review gates directly.
 
-Anthropic's own migration notes, also in the binary: *"Opus 4.7 tends to spawn fewer subagents than
-4.6. This is steerable."* So part of the effect is trained behavior, not only prompting.
+Unlike the injector above, **this one has a working env override**, and it is checked first:
 
-## No client-side override exists
+```js
+function nIg(){
+  let e = Ino(Z.CLAUDE_CODE_THISTLE_GREBE);
+  if (e) return { steer: e, source: "env" };   // then clientData → growthbook → per-model → default
+  ...
+}
+```
+
+`Ino` accepts only `default`, `no_nudges` or `counter_steer`, so `CLAUDE_CODE_THISTLE_GREBE=no_nudges`
+pins the arm and pre-empts `counter_steer` for good. Setting it is the owner's call — harness config
+is not an agent's to change.
+
+Anthropic's migration notes in the same bundle say *"Opus 4.7 tends to spawn fewer subagents than 4.6.
+This is steerable."* Those notes are about 4.7-vs-4.6, not Opus 5, so they are **suggestive only**:
+they show Anthropic treats reduced delegation as a trained disposition rather than purely a prompt
+effect, but nothing here measures Opus 5. Do not cite this as documented Opus 5 behavior.
+
+## The active injector has no client-side override
+
+This section is about `heron_brook`/`fennel_godwit` — the mechanism actually firing. The
+`thistle_grebe` env var above is unaffected by any of it.
 
 - **`CLAUDE_INTERNAL_FC_OVERRIDES` is dead code** in the public build — `f8r()` hits an
   unconditional `return` before the env read. Its neighbours `setGrowthBookConfigOverride` and
   `getGrowthBookConfigOverrides` are stubbed to bare `return`. So `tengu_fennel_godwit` cannot be
   set from this machine.
+- **There is no `CLAUDE_CODE_HERON_BROOK`** — the injector `n1_` reads only clientData and the
+  growthbook value, both server-side.
 - **`settings.json` has no `appendSystemPrompt` key** — that field exists only in the managed
   `policyHelper` output schema.
 - What does exist: `--append-system-prompt` / `--append-system-prompt-file` on the CLI, and the
@@ -71,8 +91,17 @@ confirmation of the actual sentences, not of the intent.
 
 ## Open
 
+- **The standing request covers gate reviewers only** — `CLAUDE.md` "Review gates" grants it for
+  "those subagents", i.e. a gate's own round. But `CLAUDE.md` also tells an agent to brief *any*
+  subagent it dispatches, "a reviewer, a spike investigator, anything", and the injected rule
+  suppresses those equally. **Escalated to the owner; awaiting a ruling** on whether to widen the
+  grant beyond gates. Until then, non-gate delegation still stalls.
+- `never-end-a-turn-on-a-stated-intention` proposes that long or multi-step work run in a subagent
+  briefed to completion. That half of it is defeated by the same injected rule, so it needs the
+  widened grant above to work at all. Whoever folds that item's answer in should read this one first.
 - Whether the wording fix survives the `counter_steer` arm being switched on. That block is longer
   and more specific, and names review-verification explicitly. If gates start stalling again,
-  suspect this.
+  suspect this — and note `CLAUDE_CODE_THISTLE_GREBE=no_nudges` forecloses it.
 - The owner declined the `--append-system-prompt-file` wrapper for now. It remains the stronger
-  lever if needed, since it lands at system-prompt tier rather than in a project file.
+  lever if needed, since it lands at system-prompt tier rather than in a project file. This
+  declination is recorded only here; if this item is pruned it survives only in git history.
