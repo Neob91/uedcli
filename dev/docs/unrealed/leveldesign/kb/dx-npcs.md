@@ -1,10 +1,10 @@
 # Populating levels with NPCs — the DX `ScriptedPawn` system  [DX]
 
-Deus Ex NPCs are **`ScriptedPawn`s**: a large, DX-specific authored dimension
-that stock UnrealEngine 1 / UT99 does not have (UT uses a different bot-AI
+Deus Ex NPCs are `ScriptedPawn`s, a DX-specific system that stock
+UnrealEngine 1 / UT99 does not have (UT uses a different bot-AI
 `Pawn`/`ScriptedPawn` lineage with different property names — see the
-absent-names section at the end). Everything below is **✅🔬 verified present in
-the pristine shipped `DX/System/DeusEx.u`** this session unless noted.
+absent-names section at the end). Everything below is ✅🔬 verified present in
+the pristine shipped `DX/System/DeusEx.u` this session unless noted.
 
 > **Siblings.** [`dx-classes.md`](dx-classes.md) (movers/devices/triggers) ·
 > [`dx-conversations-computers.md`](dx-conversations-computers.md) (wiring NPCs
@@ -17,12 +17,12 @@ Markers: `[DX]` throughout (this whole system is DX). ✅🔬 = decoded from the
 
 ---
 
-## 1. `Orders` is a state NAME, not an enum  [DX] ✅🔬
+## 1. `Orders` is a state name, not an enum  [DX] ✅🔬
 
-The single most important fact. **`FollowOrders()` does `GotoState(Orders)`** —
-`Orders` is a **string naming a state** the pawn enters, default **`Wandering`**.
-You set `Orders` (and usually a companion **`OrderTag`** that names the target
-actor) to program what the NPC does. Mapper-facing order states:
+`FollowOrders()` does `GotoState(Orders)` — `Orders` is a string naming a state
+the pawn enters, default `Wandering`. Set `Orders` (and usually a companion
+`OrderTag` that names the target actor) to program what the NPC does.
+Mapper-facing order states:
 
 | `Orders` | Behaviour | Companion |
 |---|---|---|
@@ -36,17 +36,16 @@ actor) to program what the NPC does. Mapper-facing order states:
 | **Wandering** | roam (default); driven by `Restlessness`/`Wanderlust` | — |
 | **Dancing** | dance in place | — |
 
-**Scripting-only orders** (DX SDK manual — not normally set as an *initial* `Orders`):
+Scripting-only orders (DX SDK manual — not normally set as an initial `Orders`):
 `GoingTo` / `RunningTo` (walk/run to a tagged actor; used by conversation/mission scripting).
 
-**AI-entered states you do NOT author as an `Orders`:** `Seeking`, `Fleeing`, `Attacking`,
+AI-entered states you do not author as an `Orders`: `Seeking`, `Fleeing`, `Attacking`,
 `Alerting` are combat/alert states the AI enters on its own (shape them via Reactions/Fears/
 alliances, §2/§5), plus `StartUp`, `Conversation`, `Burning`, `Stunned`, `Dying`, etc.
 
 Runtime reprogramming: `SetOrders(name, newOrderTag, bImmediate)`. A
-**conversation** reprograms an NPC via **`ConvOrders`** / **`ConvOrderTag`**,
-applied **when the conversation ends** (so a talk can send a guard away or make
-him hostile).
+conversation reprograms an NPC via `ConvOrders` / `ConvOrderTag`, applied when
+the conversation ends (so a talk can send a guard away or make him hostile).
 
 ```
 # a guard whose patrol starts at the point tagged "tower_p1"
@@ -61,34 +60,33 @@ actor build Engine.PatrolPoint --prop Tag=tower_p2 --prop Nextpatrol=tower_p1 --
 
 ## 2. The three stimulus blocks  [DX] ✅🔬
 
-DX splits an NPC's reactivity into **three** property blocks (not two). Each is a
-set of `bool` toggles; the defaults matter because they define the "out of the
-box" temperament.
+DX splits an NPC's reactivity into three property blocks (not two). Each is a
+set of `bool` toggles; the defaults define the out-of-the-box temperament.
 
-**`var(Reactions) bReact*` — do I ENGAGE?**
-- `bReactPresence` (**def True** → attacks on seeing an enemy)
+`var(Reactions) bReact*` — do I engage?
+- `bReactPresence` (def True → attacks on seeing an enemy)
 - `bReactShot`, `bReactAlarm`, `bReactCarcass`, `bReactDistress`
-- `bReactLoudNoise` (→ **seek** the noise)
-- `bReactProjectiles` (**def True**)
+- `bReactLoudNoise` (→ seek the noise)
+- `bReactProjectiles` (def True)
 - `bReactFutz` (reacts to lightswitch/tampering "futzing")
 
-**`var(Stimuli) bHate*` — what turns me HOSTILE?** (feeds agitation)
-- `bHateShot` (**def True**), `bHateInjury` (**def True**)
+`var(Stimuli) bHate*` — what turns me hostile? (feeds agitation)
+- `bHateShot` (def True), `bHateInjury` (def True)
 - `bHateWeapon` (drawn weapon nearby)
 - `bHateHacking` (someone hacking a device)
 - `bHateCarcass` (finding a body)
 
-**`var(Fears) bFear*` — what makes me FLEE?**
+`var(Fears) bFear*` — what makes me flee?
 - `bFearWeapon`, `bFearShot`, `bFearInjury`, `bFearCarcass`, `bFearAlarm`,
   `bFearProjectiles`, `bFearHacking`
 
-> **Note:** `bReactFutz`, `bHateHacking`, `bHateCarcass`, `bFearHacking` **are
-> vanilla DX** (binary-confirmed ✅🔬) — a source fork (Deus-Ex-Plus) flagged a
-> few props "new", but these four are stock. Use them.
+> **Note:** `bReactFutz`, `bHateHacking`, `bHateCarcass`, `bFearHacking` are
+> vanilla DX (binary-confirmed ✅🔬) — a source fork (Deus-Ex-Plus) flagged a
+> few props "new", but these four are stock.
 
-**Alarm broadcast:** `RaiseAlarm` (`ERaiseAlarmType`: `RAISEALARM_Never` / `_BeforeAttacking` /
-`_BeforeFleeing`). **Vanilla default is `RAISEALARM_BeforeFleeing`** on `ScriptedPawn`, with `Animal`
-and `Robot` overriding to `RAISEALARM_Never`. ⚠ The **UED22 editing package** uedcli decodes shows
+Alarm broadcast: `RaiseAlarm` (`ERaiseAlarmType`: `RAISEALARM_Never` / `_BeforeAttacking` /
+`_BeforeFleeing`). Vanilla default is `RAISEALARM_BeforeFleeing` on `ScriptedPawn`, with `Animal`
+and `Robot` overriding to `RAISEALARM_Never`. ⚠ The UED22 editing package uedcli decodes shows
 `_BeforeAttacking` uniformly (the `Animal`/`Robot` `Never` overrides dropped) — a recompile divergence,
 like `Aggressiveness`; the **shipped game uses the vanilla defaults above**. Also `bEmitDistress`,
 `MaxProvocations` (**def 1** — provocations before turning hostile).
@@ -107,7 +105,7 @@ actor build DeusEx.Businessman1 --prop bReactPresence=False --prop bFearWeapon=T
 |---|---|
 | `MaxRange` / `MinRange` | engagement distance band |
 | `MinHealth` | flee/retreat threshold |
-| **`BaseAccuracy`** | **LOWER = BETTER aim** (0.2 is sharp; higher = wilder) |
+| `BaseAccuracy` | lower = better aim (0.2 is sharp; higher = wilder) |
 | `EnemyTimeout` | how long a lost enemy stays "the enemy" |
 | `bDefendHome` | defend the `HomeTag` area rather than chase |
 | `Restlessness` / `Wanderlust` / `Cowardice` | temperament floats (drive Wandering/Fleeing) — **non-editable** plain `var`s (no browser category); the AI reads them, you don't author them |
@@ -117,15 +115,14 @@ actor build DeusEx.Businessman1 --prop bReactPresence=False --prop bFearWeapon=T
 Reference defaults ✅🔬: MJ12Troop `MaxRange` **1000**, `BaseAccuracy` **0.2**,
 `Health` **100**; cylinder **20×47.5** (same as JC Denton).
 
-`InitialInventory` is **8 slots**; each entry is a weapon/item class + count.
-That is the standard way to arm an NPC — set the guns/ammo here, not by dropping
-pickups near them.
+`InitialInventory` is 8 slots; each entry is a weapon/item class + count. Arm an
+NPC here (guns/ammo), not by dropping pickups near them.
 
 ---
 
 ## 4. The class roster  [DX] ✅🔬
 
-Place a **concrete leaf class** — never an `abstract` base. The bases group the
+Place a concrete leaf class, never an `abstract` base. The bases group the
 roster:
 
 - **`HumanMilitary`** → `MJ12Troop`, `MJ12Commando`, `UNATCOTroop`, `Soldier`,
@@ -138,9 +135,9 @@ roster:
 - **`Robot`** → `MilitaryBot`, `SecurityBot2`/`3`/`4`, `SpiderBot`, `CleanerBot`,
   `MedicalBot`
 
-Each killable class has a paired **`<Name>Carcass`** death body, referenced via
-the pawn's **`CarcassType`**. Ambient spawners exist (`PawnGenerator`,
-`FishGenerator`, `FlyGenerator`) for background critters.
+Each killable class has a paired `<Name>Carcass` death body, referenced via the
+pawn's `CarcassType`. Ambient spawners exist (`PawnGenerator`, `FishGenerator`,
+`FlyGenerator`) for background critters.
 
 Discover the live roster:
 ```
@@ -153,13 +150,13 @@ bin/uedcli class list --flat --subclass-of DeusEx.ScriptedPawn
 
 | Property | Meaning |
 |---|---|
-| **`BindName`** | a **space-free** identifier the conversation system + flags key off (e.g. `BindName$"_Dead"`). This is how a con/flag targets *this* NPC. |
+| `BindName` | a space-free identifier the conversation system + flags key off (e.g. `BindName$"_Dead"`). This is how a con/flag targets this NPC. |
 | `FamiliarName` / `UnfamiliarName` | HUD name shown before/after you "know" them |
 | `bCanConverse` | whether the NPC can *currently* be talked to — **engine-managed** (a plain `var` the AI sets in its states, not a mapper `var()`); don't rely on setting it |
 | `bImportant` / `bInvincible` | plot-critical protection |
-| **`InitialAlliances[8]`** | array of `struct { AllianceName; AllianceLevel; bPermanent }`; `AllianceLevel` is **−1 (hostile) .. 0 (neutral) .. +1 (friendly)**; the **player alliance name is `"Player"`** |
+| `InitialAlliances[8]` | array of `struct { AllianceName; AllianceLevel; bPermanent }`; `AllianceLevel` is −1 (hostile) .. 0 (neutral) .. +1 (friendly); the player alliance name is `"Player"` |
 
-**To make an NPC hostile to the player:** add an `InitialAlliances` entry with
+To make an NPC hostile to the player, add an `InitialAlliances` entry with
 `AllianceName="Player"`, `AllianceLevel=-1`. Alliances can be flipped at runtime
 by an `AllianceTrigger`.
 
@@ -175,7 +172,7 @@ actor build DeusEx.MJ12Troop --prop BindName=tower_guard \
 
 ## 6. AI perception internals  [DX] 🔬 (the knobs behind Orders/Reactions/Fears)
 
-Below the mapper-facing surface, the perception model reads these. **Only some are editor-editable**
+Below the mapper-facing surface, the perception model reads these. Only some are editor-editable
 (`var(Category)`, marked ✎); the rest are engine-internal plain `var`s you can't author:
 
 | Property | Default | Editable? | Meaning |
@@ -198,18 +195,18 @@ home/flee toggles: `bDefendHome`, `bEmitDistress`, `bCower`, `bLeaveAfterFleeing
 
 ## 7. End-to-end placement workflow  [DX]
 
-1. **Pathnode the level and Define Paths FIRST.** With no path network an NPC
-   **won't move — silently** (no error). Place `PathNode`s (engine class,
+1. Pathnode the level and Define Paths first. With no path network an NPC
+   won't move, silently (no error). Place `PathNode`s (engine class,
    spacing <700 uu, <350 on stairs) and build paths (`PATHS BUILD` / F8 → Paths
    Define). See [`README.md`](README.md) §8 for pathing.
-2. **Place a concrete class** on the floor (not an abstract base).
-3. Set **`Orders`** + **`OrderTag`** (§1). Add `PatrolPoint`s if Patrolling.
-4. Set **`InitialAlliances`** (hostile-to-player = add `"Player"` at −1) (§5).
-5. Tune **Reactions / Fears / `RaiseAlarm`** (§2).
-6. Fill **`InitialInventory`** (§3).
-7. Set **`BindName`** and wire **conversations / triggers**
+2. Place a concrete class on the floor (not an abstract base).
+3. Set `Orders` + `OrderTag` (§1). Add `PatrolPoint`s if Patrolling.
+4. Set `InitialAlliances` (hostile-to-player = add `"Player"` at −1) (§5).
+5. Tune Reactions / Fears / `RaiseAlarm` (§2).
+6. Fill `InitialInventory` (§3).
+7. Set `BindName` and wire conversations / triggers
    ([`dx-conversations-computers.md`](dx-conversations-computers.md)).
-8. **Rebuild paths, playtest.**
+8. Rebuild paths, playtest.
 
 uedcli performs steps 2–7 as `actor build DeusEx.<Class> --prop … | actor add -`
 plus `actor prop set` for later edits. Paths (step 1/8) are a build-time editor
@@ -217,7 +214,7 @@ operation, not a trunk edit.
 
 ---
 
-## 8. UT names that DO NOT exist in DX  [DX] ✅🔬 (do NOT offer them)
+## 8. UT names that do not exist in DX  [DX] ✅🔬 (do not offer them)
 
 These are stock-Unreal / UT ScriptedPawn-AI names **confirmed absent** from
 `DeusEx.u`. Offering them produces "property not found" errors and wrong mental
@@ -226,21 +223,21 @@ models:
 - **Fears/reactions:** `bFearIndoors`, `bFearDarkness`, `bFearZones`
 - **Hate targeting:** `HateTag`, `HateThreshold`
 - **Combat/aggression:** `IdealRange`
-- **Seeking targeting:** `SeekTag` (but **`AlarmTag` IS a real DX property** — a
+- **Seeking targeting:** `SeekTag` (but `AlarmTag` is a real DX property — a
   `var(Orders) name AlarmTag` declared on the DX-modified `Engine.Pawn` and inherited by
-  `ScriptedPawn`, so it IS editable on a placed NPC; do NOT list it as absent)
+  `ScriptedPawn`, so it is editable on a placed NPC; do not list it as absent)
 - **Gibbing:** `bGenerateFleshFrag`
 - **Mobility:** `bCanClimb`
 - **Spawning:** `ThingFactory` (NPC spawning)
-- **AI marker actors:** `AlarmPoint` (absent from DX). Note `AmbushPoint` **exists**
+- **AI marker actors:** `AlarmPoint` (absent from DX). Note `AmbushPoint` exists
   in `Engine.u` as a stock `NavigationPoint`, but DX drives NPCs via `ScriptedPawn`
   orders (+ `PatrolPoint`), not `AmbushPoint`.
 
 > **Caveat — `Aggressiveness` (and `bAssaultAttack`/`bDefendPosition`/`DefendPoint`):** vanilla DX's
-> `HumanMilitary` has **no** such vars, but the **UED22 editing package** (the `DeusEx.u` recompile uedcli
-> validates against) *added* `var() float Aggressiveness` (and those others) on `HumanMilitary`. So uedcli
-> **accepts** `Aggressiveness` (it won't error), but the **shipped game ignores it** — don't rely on it for
-> behaviour. It is NOT in the truly-absent list above for that reason.
+> `HumanMilitary` has no such vars, but the UED22 editing package (the `DeusEx.u` recompile uedcli
+> validates against) added `var() float Aggressiveness` (and those others) on `HumanMilitary`. So uedcli
+> accepts `Aggressiveness` (it won't error), but the shipped game ignores it — don't rely on it for
+> behaviour. It is not in the truly-absent list above for that reason.
 
 If you want DX behaviour analogous to one of these, the route is: hostility →
 `InitialAlliances`/`bHate*`; ranged tuning → `MaxRange`/`MinRange`/`BaseAccuracy`;

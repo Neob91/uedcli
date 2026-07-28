@@ -16,11 +16,11 @@
 "level" is never used for the file; "map" is never used for the abstract content. See
 [decisions.md](decisions.md) (2026-06-23).
 
-> **Direction (not current breadth):** uedcli *aims* to be a generic UnrealEngine-1 tool with
-> Deus Ex as one baked-in substrate. **Today it targets the Deus Ex substrate and `.dx` map
-> files only.** The intent is that *new* code/naming avoid DeusEx-only framing and that map-file
-> handling grow to accept `.unr`; this is forward-looking guidance, not a description of current
-> capability and not a refactor mandate (see decisions.md + `board/README.md` "Portability goal").
+> **Direction:** uedcli aims to be a generic UnrealEngine-1 tool with
+> Deus Ex as one baked-in substrate. Today it targets the Deus Ex substrate and `.dx` map
+> files only. New code/naming should avoid DeusEx-only framing and map-file handling should
+> grow to accept `.unr`; forward-looking guidance, not current capability and not a refactor
+> mandate (see decisions.md + `board/README.md` "Portability goal").
 
 > **Git-native migration complete.** The durable source of truth is the git-tracked T3D trunk
 > (`<maps-dir>/<level>/`); the session store and its core modules were deleted (git
@@ -52,11 +52,11 @@ mutation is pure model-side compute against the trunk (no `docker exec`, no `MAP
 issues semantic by-name commands; T3D is internal plumbing. Git is the history — `git commit` is
 the user's own, uedcli never wraps version control.
 
-This is a **pivot from the earlier editor-centric model** (where a live UnrealEd held the
-authoritative level and every read was a `MAP EXPORT`), and from the interim session store (slices
-≤3, since deleted). See [decisions.md](decisions.md) (the 2026-07-05 git-native entries). The
-per-actor `.t3d` + `order_value` layout was chosen so disjoint edits merge natively under `git
-merge` — verified in [`spikes/2026-07-01-git-merge-t3d-tree/`](spikes/2026-07-01-git-merge-t3d-tree/findings.md)
+A pivot from the earlier editor-centric model (a live UnrealEd held the authoritative level, every
+read a `MAP EXPORT`) and the interim session store (slices ≤3, since deleted). See
+[decisions.md](decisions.md) (the 2026-07-05 git-native entries). The per-actor `.t3d` +
+`order_value` layout was chosen so disjoint edits merge natively under `git merge` — verified in
+[`spikes/2026-07-01-git-merge-t3d-tree/`](spikes/2026-07-01-git-merge-t3d-tree/findings.md)
 and [`spikes/2026-07-05-git-merge-t3d-layout/`](spikes/2026-07-05-git-merge-t3d-layout/findings.md).
 
 ## Four layers (module map)
@@ -199,7 +199,7 @@ and [`spikes/2026-07-05-git-merge-t3d-layout/`](spikes/2026-07-05-git-merge-t3d-
      installed map anyway. Same 9 little-endian u32s `upackage.py` parses (the driver keeps its own
      copy of the magic to stay container-only; a test pins the two equal); it decodes no table, so it
      judges completeness, not content.
-     **How much of a live failure mode this is, honestly:** the editor serializes into `Save.tmp`,
+     How much of a live failure mode this is: the editor serializes into `Save.tmp`,
      patches the header LAST in the temp, then MOVES it onto the destination (📖 `core.dll` strings,
      2026-07-25 — `unrealed/commands.md` "`MAP SAVE` writes `Save.tmp`" and
      `spikes/2026-07-25-map-save-mechanism/`), and whether that move is a rename or a copy is NOT
@@ -242,7 +242,7 @@ and [`spikes/2026-07-05-git-merge-t3d-layout/`](spikes/2026-07-05-git-merge-t3d-
   `/work/ucc_export-<uuid>` dir in a `finally:`, so a failed export strands nothing. See
   [`rationale/containers.md`](rationale/containers.md).
 
-  **Most `Driver` methods have no uedcli-COMMAND caller, and that is deliberate.** After the
+  **Most `Driver` methods have no uedcli-command caller.** After the
   model-side pivot and the 2026-07-16 deletion of the editor-screenshot preview flow, ~17 of them
   are called only by the committed spike harnesses under `spikes/` and by the
   **default-deselected** integration suite — populations a grep over `uedcli/` does not see, so a
@@ -483,7 +483,7 @@ The canonical level hash is **order-DEPENDENT** (`normalize.canonical_level_hash
 
 ## The compare view vs the identity hash (`normalize.py`)
 
-Two *different* reductions of a `Level` live in `normalize.py`, and conflating them was a live bug
+Two different reductions of a `Level` live in `normalize.py`, and conflating them was a live bug
 class (decisions.md 2026-07-25 00:36 UTC):
 
 - **`canonical_level_hash(level)` — the IDENTITY hash.** Pure and **schema-free**: it hashes exactly
@@ -587,7 +587,7 @@ board item `actor-folders-hierarchical-actor-organization`; decisions.md 2026-07
   `os.replace`, like `actor.t3d`) when set, and **removes** it when `None` — loads take no flock, so
   a bare `write_text` would let a lock-free reader see a truncated first line and misreport the actor
   as ungrouped. `read_level_with_bodies` returns a **4th** element (name→folder) and sets
-  `actor.folder`. **The delta-write trap (the one non-obvious point):** the changed-set diff in
+  `actor.folder`. **The delta-write trap:** the changed-set diff in
   `TrunkLevelSource.save` is a content-diff of body + rank, and a folder-ONLY change leaves both
   byte-identical — so the diff **also compares the folder** against the `_loaded_folders` baseline,
   symmetrically firing on **any** delta INCLUDING `"x"`→`None` (unset); without it `actor folder
@@ -599,7 +599,7 @@ board item `actor-folders-hierarchical-actor-organization`; decisions.md 2026-07
   **normative match** (spec §3): a **wildcard-free** pattern selects the folder AND its whole subtree
   (`folder == X or folder.startswith(X + ".")`); any wildcarded pattern is a pure segment-list glob
   with **no** subtree extension (so `**.roof` matches roof NODES only — the `--folder` help documents
-  this asymmetry loudly). `folder is None` matches no pattern; select the ungrouped set with
+  this asymmetry). `folder is None` matches no pattern; select the ungrouped set with
   `--no-folder`.
 - **The `// uedcli-folder:` carrier (`actor show` ↔ `actor add`).** The interchange form of a folder
   is a **bare `// uedcli-folder: <path>` T3D comment** inside the actor block. `actor show` emits it
@@ -1232,7 +1232,7 @@ walks Super chains cross-package (`resolve_class_properties`), and NEW this chan
   binary route was the only one (live-verified 2026-07-18).
 
 The schema search path is unchanged (`packages.schema_search_dirs` — the whole composed config
-path; never the UED22 substrate or the stub cache). Honest cost unchanged: no game `.u` on the
+path; never the UED22 substrate or the stub cache). Cost unchanged: no game `.u` on the
 config `paths` ⇒ hard `SchemaError`, exit 2, no fallback. Value type-validation keeps the
 deliberately-partial stance (enum membership + Int/Float/Bool/plain-Byte checked, incl. at struct-
 member depth; rich kinds pass on type — name + bounds still enforced). Warn-but-set (computed
@@ -1281,7 +1281,7 @@ board item `package-schema-cache`; decisions.md 2026-07-18 21:30 UTC.)*
 - **Boundary + consumers.** `schema_cache.load_package_schema(path, *, need_props=False) →
   PackageSchema` wraps `uprops.load_package` (miss → decode + atomic write; hit → deserialize, no
   `load_package`). v1 consumers on the cache: `ClassIndex._cmap`/`_all_fqcns`/`is_abstract`/
-  `children_map` (the `class list` TREE path — the biggest measured win, discovery-only), and
+  `children_map` (the `class list` TREE path — discovery-only), and
   `uprops.resolve_class_properties`' schema union (`need_props=True`) — including `class show`'s prop
   walk, which as of 2026-07-20 no longer pre-seeds a live `Package` and takes the cache path (the
   ~2.4× warm win), and `ClassIndex.ancestry` (super refs via `_schema`). The pre-seed capability of
@@ -1536,7 +1536,7 @@ holds, with **no editor, no container and no game** in the path — just the pac
 so an existing map (a retail mission, someone else's level, an older build of your own) becomes
 queryable, diffable and editable with the ordinary model-side verbs.
 
-**What a compiled map holds**, for a reader who has not opened one: a `.dx`/`.unr` is an ordinary UE1
+**What a compiled map holds:** a `.dx`/`.unr` is an ordinary UE1
 package (`upackage.py` parses the container) — a name table, an import table, an export table, and
 one serialized *body* per export. One export is the `Engine.Level` object, and it owns an `Actors`
 array naming every actor export **in the order that IS the level's actor order**. Each actor body is
@@ -1807,7 +1807,7 @@ crash CSG. `--to` takes a single `--at`; `--by` takes one or many.
 **Surface edits** (`surface.py`) follow the same model-side pattern: mutate poly fields (flags,
 texture, `Pan`, `Origin`, `TextureU/V`) → `validate_brush` → `src.save(...)`. Address a surface by
 `(brush, poly index)` (see `query.list_polys` + `preview`); the CLI takes flag **names**, not bit
-values. The module splits into two families, and the split is the point (see
+values. The module splits into two families (see
 [`rationale/surface.md`](rationale/surface.md)):
 
 - **`brush poly set`** (`apply_surface_edit`) assigns stored per-face ATTRIBUTES — `--texture`,
@@ -2047,8 +2047,7 @@ staircase is verified offline (doctor-clean under the T-junction-aware `check_wa
 only builders whose SILHOUETTE the author supplies, rather than choosing sizes for a fixed shape.
 Both take the same closed 2D **profile** — a repeatable `--point U,V`, argument order = ring order,
 implicitly closed, either winding accepted — the same `--axis x|y|z`, and the same `--at`, and
-differ only in the sweep (`--depth` uu vs `--angle` UU / `--segments`). What they close is the
-biggest capability gap the corpus brush-idiom study surfaced: before them, any cross-section that
+differ only in the sweep (`--depth` uu vs `--angle` UU / `--segments`). Before them, any cross-section that
 was not a box, an n-gon or a stair (an arch voussoir, an L-ledge, a moulded cornice, a curved
 corridor) was unbuildable short of hand-authored T3D. Design decisions + rejected alternatives:
 `decisions.md` 2026-07-25 00:14 UTC (D1–D9), 01:05 UTC (D10), 01:40 UTC, 02:30 UTC (D11–D12).
@@ -2187,9 +2186,9 @@ nonsolid green, mover magenta), rasterizes a light-grey-background RGB buffer (P
 in-memory format only; the disk write is always PNG, below), and annotates per an **`AnnotationSpec`**
 (poly indices painted on-face; actor names as de-collided leader boxes).
 
-**Two words, kept apart on purpose.** An **ANNOTATION** is the SELECTION concept — which extra marks
-a render draws, chosen by `--annotate`. A **LABEL** is the DRAWING concept — one concrete text box
-laid out on the canvas (`_LabelItem`/`_place_labels`). Annotations are decided; labels are placed.
+**Annotation vs label.** An **annotation** is the selection concept — which extra marks
+a render draws, chosen by `--annotate`. A **label** is the drawing concept — one concrete text box
+laid out on the canvas (`_LabelItem`/`_place_labels`).
 Neither is the actor **`label` dimension** (`labellib.py`, the per-actor cross-cutting `--label`
 classification) — a third, unrelated sense, and the reason the selection type is no longer named
 `LabelSpec`.

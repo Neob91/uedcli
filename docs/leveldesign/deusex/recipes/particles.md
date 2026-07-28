@@ -1,9 +1,9 @@
 # Recipe: particle emitters  [DX]
 
-Stock UnrealEngine 1 (and UT99) has **no particle system** — its "effects" are sprite/trail hacks.
-**Deus Ex adds a real mapper-placeable particle family** under `Actor → Effects`, built on
-**`ParticleGenerator`**. Use it for steam, dust, dripping water, electric arcs, and fire. These are
-plain point actors: place, set properties, optionally gate on a trigger.
+Stock UnrealEngine 1 (and UT99) has no particle system; its "effects" are sprite/trail hacks. Deus Ex
+adds a mapper-placeable particle family under `Actor → Effects`, built on `ParticleGenerator`. Use it
+for steam, dust, dripping water, electric arcs, and fire. These are point actors: place, set
+properties, optionally gate on a trigger.
 
 ## The family
 
@@ -13,7 +13,7 @@ plain point actors: place, set properties, optionally gate on a trigger.
 | `WaterDrips`          | Ceiling drips — fall straight down under gravity (`bGravity`, on by default); rotation has no effect. |
 | `ElectricityEmitter`  | A damaging electric arc; `bDirectional` aims it; carries its own light. |
 | `Fire`                | A flame sprite plus an `LE_FireWaver` light. |
-| `LaserEmitter`        | The laser **beam visual** (up to 2 reflections; freezes >960 uu from the player). The tripwire is `LaserTrigger`/`BeamTrigger`, which spawns one. |
+| `LaserEmitter`        | The laser beam visual (up to 2 reflections; freezes >960 uu from the player). The tripwire is `LaserTrigger`/`BeamTrigger`, which spawns one. |
 | `ProjectileGenerator` | Periodically spawns a `ProjectileClass`. |
 | `TrashGenerator`      | Wind-blown debris ("paper"/tumbleweeds). |
 
@@ -23,14 +23,14 @@ plain point actors: place, set properties, optionally gate on a trigger.
 
 ### Procedure
 
-1. **Place a `ParticleGenerator`** at the source (a vent, a broken pipe, a corner of dust).
-2. **Set the look** — `particleTexture` (e.g. `Effects.Smoke.Gas_Poison_A`),
+1. Place a `ParticleGenerator` at the source (a vent, a broken pipe, a corner of dust).
+2. Set the look — `particleTexture` (e.g. `Effects.Smoke.Gas_Poison_A`),
    `particleDrawScale`, `riseRate` (upward drift), `particleLifeSpan`, `frequency` /
    `numPerSpawn` / `checkTime` (how often/how many spawn).
-3. **Gate it (optional)** — set `bTriggered=True` **and `bInitiallyOn=False`** so it only emits after
+3. Gate it (optional) — set `bTriggered=True` and `bInitiallyOn=False` so it only emits after
    something fires its `Event` (a DX enhancement over the base emitter). Give it a `Tag` for the trigger
-   to target. **Watch out:** `bInitiallyOn` defaults **True**, so with `bTriggered` alone the generator
-   spews immediately and the first trigger turns it *off* — you must set `bInitiallyOn=False`.
+   to target. `bInitiallyOn` defaults True, so with `bTriggered` alone the generator spews immediately
+   and the first trigger turns it off — set `bInitiallyOn=False`.
 
 ### With uedcli
 
@@ -53,8 +53,8 @@ actor build DeusEx.ParticleGenerator \
 
 ### Procedure
 
-1. **Place a `WaterDrips`** on the **ceiling**. Drips fall straight down under gravity — **rotation has
-   no effect** (`ejectSpeed`=0), so there's no arrow to aim.
+1. Place a `WaterDrips` on the ceiling. Drips fall straight down under gravity — rotation has no effect
+   (`ejectSpeed`=0), so there's no arrow to aim.
 2. Tune `frequency` / `particleTexture` as for the base generator.
 
 ### With uedcli
@@ -67,10 +67,10 @@ actor build DeusEx.WaterDrips --at 0,0,240 | actor add -   # falls by gravity (b
 
 ### Procedure
 
-1. **Place an `ElectricityEmitter`** where the arc originates (a damaged panel, exposed wires).
-2. **Aim it** — set `bDirectional=True` and rotate the actor so its arrow points along the arc. It
-   **damages** the player and carries its **own light**, so no separate light is needed.
-3. Pairs naturally with a `Shocked` [pain zone](water-zone.md#b-pain--gas--hazard-zones).
+1. Place an `ElectricityEmitter` where the arc originates (a damaged panel, exposed wires).
+2. Aim it — set `bDirectional=True` and rotate the actor so its arrow points along the arc. It damages
+   the player and carries its own light, so no separate light is needed.
+3. Pairs with a `Shocked` [pain zone](water-zone.md#b-pain--gas--hazard-zones).
 
 ### With uedcli
 
@@ -84,10 +84,10 @@ actor build DeusEx.ElectricityEmitter \
 
 ### Procedure
 
-1. **Place a `Fire`** where the flame sits. It draws a flame sprite and adds its own `LE_FireWaver`
-   light, so it self-illuminates.
-2. Optionally add a coloured static light nearby for the surrounding glow (a DX `Fire` handles its own
-   waver, but a larger fire scene usually wants extra motivated lighting).
+1. Place a `Fire` where the flame sits. It draws a flame sprite and adds its own `LE_FireWaver` light,
+   so it self-illuminates.
+2. Optionally add a coloured static light nearby for surrounding glow (a `Fire` handles its own waver,
+   but a larger fire scene usually wants extra motivated lighting).
 
 ### With uedcli
 
@@ -112,19 +112,17 @@ actor build DeusEx.Fire --at 0,0,24 | actor add -
 
 ## Caveats and gotchas
 
-- **These are Deus-Ex-only.** Do not expect `ParticleGenerator`/`Fire`/etc. in stock UT99 maps — they
-  live in `DeusEx.u`.
-- **`WaterDrips` fall straight down by gravity** — `ejectSpeed`=0, so **rotation has no effect**; there
-  is no arrow to aim (a common myth).
-- **`ElectricityEmitter` and `Fire` bring their own light** — you don't add a light *for the emitter*,
-  though you may add ambient light for the scene.
-- **`particleTexture` names a real texture** — the DX ones live in the `Effects.Smoke` group (e.g.
+- Deus-Ex-only: `ParticleGenerator`/`Fire`/etc. are not in stock UT99 maps; they live in `DeusEx.u`.
+- `WaterDrips` fall straight down by gravity — `ejectSpeed`=0, so rotation has no effect; there is no
+  arrow to aim (a common myth).
+- `ElectricityEmitter` and `Fire` bring their own light — you don't add a light for the emitter, though
+  you may add ambient light for the scene.
+- `particleTexture` names a real texture — the DX ones live in the `Effects.Smoke` group (e.g.
   `Effects.Smoke.SmokePuff1`, `Effects.Smoke.Gas_Poison_A`, `Effects.Smoke.Gas_Tear_A`); browse the
-  `Effects` package for the exact `Package.Group.Name`. Note `--prop` does
-  **not** validate the ref at author time (unlike `brush build --texture`), so a wrong name fails
-  silently in-game — copy the exact name from the package.
-- **`LaserEmitter` freezes past ~960 uu** from the player — keep tripwires close to where the player
-  walks.
+  `Effects` package for the exact `Package.Group.Name`. `--prop` does not validate the ref at author
+  time (unlike `brush build --texture`), so a wrong name fails silently in-game — copy the exact name
+  from the package.
+- `LaserEmitter` freezes past ~960 uu from the player — keep tripwires close to where the player walks.
 
 ## See also
 

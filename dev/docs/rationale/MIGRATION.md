@@ -1,7 +1,7 @@
 # Ledger migration — inventory and dispositions
 
 This file records what happened to every entry of the retired `dev/docs/decisions.md`, and the
-measured scope of the citation migration. **It outlives the migration**: it is the only map from an
+measured scope of the citation migration. It outlives the migration: it is the only map from an
 old dated citation (`decisions.md 2026-07-21 12:06 UTC`) to where that reasoning now lives.
 
 The spec and plan live in board item `docs-restructure-is-complete`. (Both are ephemeral and get
@@ -11,25 +11,25 @@ deleted when the work lands — this file is what survives.)
 
 ## Inventory at `ae7967e` (2026-07-26)
 
-**The paths in this section are PRE-MIGRATION spellings and stay that way.** It is a dated
+The paths in this section are pre-migration spellings and stay that way. It is a dated
 measurement of what the tree looked like on 2026-07-26, when `dev/docs/specs/`, `dev/docs/plans/`
 and the seven per-stage board `.md` files still existed. Rewriting them to today's paths would
-destroy the evidence rather than update it — a later sweep did exactly that and was reverted.
+destroy the evidence; a later sweep did exactly that and was reverted.
 
-**These numbers govern, not the spec's.** The spec's figures were measured before `6900e34`
-(the profile-generators merge) and have drifted materially — which is why the plan requires a
-re-measurement after the freeze rather than trusting them.
+These numbers govern, not the spec's. The spec's figures were measured before `6900e34`
+(the profile-generators merge) and have drifted, which is why the plan requires re-measurement
+after the freeze rather than trusting them.
 
-**Measure the TRACKED tree, not the working tree.** Use `git ls-files -z | xargs -0 grep -l …`,
+Measure the tracked tree, not the working tree. Use `git ls-files -z | xargs -0 grep -l …`,
 not a bare `grep -r`. The link checker walks `git ls-files`, so a target derived from working-tree
 counts can never be driven to zero — the citation pass would chase files the tooling cannot see.
 Two untracked spike directories (`spikes/headless-materialize/`, `spikes/levelbuild-friction/`)
-inflated the first pass of this table by exactly that mechanism; they belong to another session and
+inflated the first pass of this table that way; they belong to another session and
 `rules/spikes.md` says their harnesses should be committed.
 
-**Expect these to keep moving**, and re-measure at the top of each task rather than trusting a
-number written here: this restructure itself adds citations (the freeze banner, the two tree
-READMEs, this file), so the `decisions.md` count rises before it falls.
+Expect these to keep moving; re-measure at the top of each task rather than trusting a number
+written here. This restructure itself adds citations (the freeze banner, the two tree READMEs,
+this file), so the `decisions.md` count rises before it falls.
 
 | Measure | Spec said | **Measured** |
 |-------------------------------------|-----------|---
@@ -82,7 +82,7 @@ uedcli/tests/test_trunk_verbs.py                uedcli/tests/test_uprops.py
 
 ### `CLAUDE.md "<moved section>"` citations — DONE (retargeted 2026-07-26)
 
-All four citations of the three *moved* sections were retargeted in the rules-split commit:
+All four citations of the three moved sections were retargeted in the rules-split commit:
 
 ```
 uedcli/editor.py:267              -> dev/docs/rules/background-work.md
@@ -96,22 +96,21 @@ dev/docs/board/to-build.md:256    -> dev/docs/rules/spikes.md "Commit the harnes
 `uedcli/editor.py:40`, citing "never let a Python exception reach the CLI user", a section that
 **stays resident**. Citations of resident sections are correct and must not be retargeted.
 
-**Lesson for Task 8:** the class must be re-derived **by section title**, not by grepping the
-`CLAUDE.md "` prefix — two of these four were worded differently and that prefix missed them. The
-spec's count of 4 was right by luck, not by method.
+Lesson for Task 8: re-derive the class by section title, not by grepping the `CLAUDE.md "` prefix
+— two of these four were worded differently and that prefix missed them. The spec's count of 4 was
+right by luck, not by method.
 
 ### The link-check exemption boundary — before and after the board move
 
 A spec or plan used to live in `dev/docs/specs/` or `dev/docs/plans/`, and `test_doc_links.py`
-exempted that whole prefix from its checks *except* files an item in the build queue happened to
+exempted that whole prefix from its checks except files an item in the build queue happened to
 reference. Both trees are now gone: a spec or plan lives inside its board item, so the exemption is
 a path shape — `board/*/*/spec.md` and `board/*/*/plan.md`, exempt unless the item sits in
 `to-build/`.
 
-**This narrows coverage, so the change is recorded rather than left to be discovered.** 13
-ephemeral files were link-checked before; 3 are now, plus any file that is *not* named exactly
-`spec.md`/`plan.md` (an item holding a second spec names it `spec-<topic>.md`, which the shape does
-not match, so it is checked in every stage).
+This narrows coverage, so it is recorded here. 13 ephemeral files were link-checked before; 3 are
+now, plus any file not named exactly `spec.md`/`plan.md` (an item holding a second spec names it
+`spec-<topic>.md`, which the shape does not match, so it is checked in every stage).
 
 | Before — checked because a `to-build/` item referenced it | After |
 |---|---
@@ -129,8 +128,8 @@ not match, so it is checked in every stage).
 | `specs/2026-07-26-asset-catalog-audio-arm.md` | **no longer checked** — `board/to-spike/sound-corpus-remeasure/spec.md` |
 | `specs/2026-07-26-asset-catalog-class-arm.md` | **no longer checked** — `board/inbox/the-asset-catalog-class-arm-needs-four-changes/spec.md` |
 
-**Four of the nine are a real gap, not a consequence.** The least-advanced-live filing rule can put
-a spec or plan in an `inbox/` item while the work it describes sits in the build queue — so the
+Four of the nine are a real gap, not a consequence. The least-advanced-live filing rule can put
+a spec or plan in an `inbox/` item while the work it describes sits in the build queue, so the
 file is exempt even though someone is about to execute it. Three of the five `to-build/` items are
 affected:
 
@@ -176,7 +175,7 @@ either old file is deleted.
 | 2026-07-24 18:50 — an inert flag ERRORS | `direction/conventions.md` | its superseded warn-and-continue recorded as a `Rejected` bullet |
 | 2026-07-18 14:03 — compose-pipe (items 1–4) | `direction/conventions.md` | intent; 3 `Rejected` carried. Items 5–6 are CSG-order, other topic |
 | 2026-06-25 10:36 + 2026-07-11 23:19 — `actor find`; drop `actor list` | `direction/conventions.md` | the one-query-verb rule; find-specific bullets belong to an actor-verbs topic |
-| **2026-07-25 18:15 — `--class-exact` → `--exact-class`** | **`rationale/cli.md`** | **Owner ruled 2026-07-26: NOT direction.** It is an argparse implementation trap (deleting a shim re-opens prefix abbreviation), so it lands in `rationale/` keyed to the CLI module. All three `Rejected` carried there. **Never reconciled into `direction.md`** |
+| 2026-07-25 18:15 — `--class-exact` → `--exact-class` | `rationale/cli.md` | Owner ruled 2026-07-26: not direction. It is an argparse implementation trap (deleting a shim re-opens prefix abbreviation), so it lands in `rationale/` keyed to the CLI module. All three `Rejected` carried there. Never reconciled into `direction.md` |
 | 2026-06-18 store-centric model · 2026-07-05 14:58 git-branches-replace-sessions · 2026-07-18 23:01 T3D-tree invariant · 2026-07-18 08:08/08:26 delta writes · preview tiers (2026-07-13, 07-16 12:13, 07-17 18:46) | `direction/trunk-and-editor.md` | intent. Three sentences `direction.md` left in the FUTURE tense about finished work were rewritten to the present — `session.py`/`replay.py`/`merge.py` no longer exist |
 | 2026-07-24 16:48/16:59/17:19/18:49 — `level import` | `direction/trunk-and-editor.md` (new section) | **had NO home**: no `direction.md` section covered it, so the migration map could not carry it. Owner ruling 2026-07-26 placed it here |
 | 2026-06-18 full re-import · 2026-06-23 drop `--reapply`/`--continue` · 2026-07-05 15:54/16:06/17:11 · 2026-07-14 17:35 · 2026-07-25 02:15 typed compare · 2026-07-25 03:07 mover `Saved*` · 2026-07-17 byte-identity · 2026-07-18 21:52/22:18 warm editor | `direction/materialize.md` | intent. 2026-07-25 00:36's class-default CONTRACTION is stated nowhere — superseded in mechanism by 02:15; only the current answer survives. A "four emitters still test against a constant" caveat was dropped as board status, not intent |
@@ -190,11 +189,11 @@ either old file is deleted.
 
 ### Full entry index — 227 entries, machine-assigned by keyword
 
-**This is a SKELETON, not a verified disposition.** The topic column is a keyword guess, produced
-mechanically so the remaining work is bounded and visible rather than unknown. A row is only
-authoritative once a topic's own sweep has claimed it (the rows above) or a human has checked it.
-`?` means the keyword pass found nothing — those need reading. **No entry may be dropped, and
-neither old file may be deleted, on the strength of this table alone.**
+This is a skeleton, not a verified disposition. The topic column is a keyword guess, produced
+mechanically so the remaining work is bounded and visible. A row is only authoritative once a
+topic's own sweep has claimed it (the rows above) or a human has checked it. `?` means the keyword
+pass found nothing — those need reading. No entry may be dropped, and neither old file may be
+deleted, on the strength of this table alone.
 
 | Date | Entry | Guessed topic |
 |------|-------|---
@@ -431,21 +430,21 @@ neither old file may be deleted, on the strength of this table alone.**
 Three places where confirmed direction now leads the tool. Not bugs introduced here — two are
 pre-existing divergences the confirmation surfaced, one is new intent.
 
-1. **`--tree stash|prefab` is REJECTED for label verbs, but direction says accept.** the owner's
+1. `--tree stash|prefab` is rejected for label verbs, but direction says accept. The owner's
    2026-07-23 05:58 #5 ruling already said allow; `dispatch.py:348-358`
    (`_reject_nonlevel_target_for_labels`) rejects, its own docstring calling it "a plan scope-cut
-   … deferred". `cli.py:439` advertises "Level-only". **Owner ruled 2026-07-26: the ruling
-   stands, the code is wrong.** The sibling *folder* guard is already parked on `board/inbox/`;
-   this label one was not.
-2. **`stash apply` / `prefab apply` mint no batch label.** New ruling, 2026-07-26: they must mint
+   … deferred". `cli.py:439` advertises "Level-only". Owner ruled 2026-07-26: the ruling stands,
+   the code is wrong. The sibling folder guard is already parked on `board/inbox/`; this label one
+   was not.
+2. `stash apply` / `prefab apply` mint no batch label. New ruling, 2026-07-26: they must mint
    `prefab-<name>-<rand>` / `stash-<id>-<rand>`, always, additive with an explicit `--label`,
    with the source name sanitised into `[A-Za-z0-9_+-]`. `actor duplicate` already does the
    equivalent (`dispatch.py:4066`); placement does not.
-3. **`actor folder list` / `actor label list` do not exist.** Confirmed as direction anyway —
+3. `actor folder list` / `actor label list` do not exist. Confirmed as direction anyway —
    direction states intent, not status, and the gap to `architecture.md` is expected by design.
    On `board/to-spec/`.
 
-Also corrected in passing: `direction.md` documented **`actor label set`**, a sub-verb the owner's
+Also corrected in passing: `direction.md` documented `actor label set`, a sub-verb the owner's
 2026-07-23 ruling explicitly refused and the code has never had. The same error is repeated inside
 the frozen ledger's 2026-07-24 17:04 entry — noted so nobody re-copies it.
 
@@ -456,7 +455,7 @@ the frozen ledger's 2026-07-24 17:04 entry — noted so nobody re-copies it.
 `CLAUDE.md` "Review gates" requires every finding's disposition to be recorded somewhere durable
 rather than left in chat. The commit messages are one-liners by house rule, so the record is here.
 
-**Both rounds returned no structural finding.** Findings fixed in the batch: the checker's
+Both rounds returned no structural finding. Findings fixed in the batch: the checker's
 fragment-stripping bug (same-directory `file.md#anchor` links were silently skipped, including a
 live citation into `decisions.md`); `_on_deck`'s wrong resolution base (no backticked reference
 resolved, so the exemption boundary was inert); the deleted-doc check's missing allowlist (it would
@@ -467,16 +466,16 @@ samples); self-tests that re-implemented the assertion logic instead of driving 
 (proven worthless by mutation — gutting the check left 476 tests green); three false claims in the
 rewritten `dev-runtime.md`; and broken relative paths in three files this batch itself created.
 
-**Deferred, with reason:**
+Deferred, with reason:
 
-- **The prose-citation check was not implemented.** Task 3 asked for three failure modes; two
+- The prose-citation check was not implemented. Task 3 asked for three failure modes; two
   shipped. A naive version returns ~2,700 unresolvable backticked strings, most legitimately not
   paths, so it would be a false-positive generator — the one thing that reliably gets a check
-  deleted. The narrow version (backticked strings containing `/` **and** a known suffix) is worth
-  building **before Task 8**, which retargets ~177 files with no prose check behind it. Until then,
+  deleted. The narrow version (backticked strings containing `/` and a known suffix) is worth
+  building before Task 8, which retargets ~177 files with no prose check behind it. Until then,
   every downstream "the link checker passes" is weaker than the plan assumes. Tracked as an open
   `p1` on `board/inbox/` ("the dominant citation form is prose").
-- **Setext headings** (`Title` over `====`) are invisible to the anchor check. Two accidental hits,
+- Setext headings (`Title` over `====`) are invisible to the anchor check. Two accidental hits,
   both in a spike doc; latent only.
-- **`_on_deck` over-collects** (~28 entries, including non-ephemeral files). It can only ever
-  *remove* an exemption, never add one, so the effect is more checking rather than less.
+- `_on_deck` over-collects (~28 entries, including non-ephemeral files). It can only ever remove
+  an exemption, never add one, so the effect is more checking rather than less.

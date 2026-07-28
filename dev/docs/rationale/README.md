@@ -1,12 +1,12 @@
 # rationale/ — why the code is the way it is
 
-One doc per module or subsystem, **revised in place**: no supersession, no dated history, no ledger.
+One doc per module or subsystem, revised in place: no supersession, no dated history, no ledger.
 Git keeps the past.
 
-**Agents maintain this tree on their own** — no confirmation needed. That is the difference from
-`../direction/`, which holds what *the owner* decided and may never be written without his yes
-(`CLAUDE.md` "Direction docs"). The axis is **who decided**, not what it is about: a tolerance, a
-scope limit, a format choice is yours; product intent and process rulings are theirs.
+Agents maintain this tree on their own, no confirmation needed. This differs from `../direction/`,
+which holds what the owner decided and may never be written without his yes (`CLAUDE.md` "Direction
+docs"). The axis is who decided, not what it is about: a tolerance, a scope limit, a format choice is
+yours; product intent and process rulings are theirs.
 
 ## Shape
 
@@ -21,8 +21,8 @@ and dropping it lets a future session re-propose a design that was already kille
 **Refs:** `spikes/<file>`, `uedcli/<module>.py`
 ```
 
-A `Refs` target that no longer exists is **dropped**, or replaced by the code/spike site that does
-— never carried forward dangling. Many old ledger refs pointed at ephemeral specs that were deleted
+A `Refs` target that no longer exists is dropped, or replaced by the code/spike site that does —
+never carried forward dangling. Many old ledger refs pointed at ephemeral specs that were deleted
 when their work landed.
 
 Point a durable doc here for rationale. Never point one at a spec — specs are ephemeral.

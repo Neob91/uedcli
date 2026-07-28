@@ -1,32 +1,26 @@
 # Recipe: a door mover  [ENGINE]
 
-A door that swings (or slides) open. The mechanism: one brush promoted to a **`Mover`**, with **key 0 =
-closed** and **key 1 = open**, triggered by `Tag`/`Event`. Read [../movers.md](../movers.md) first for
-the keyframe model and the inverted-record trap.
+A door that swings or slides open. One brush promoted to a `Mover`, with key 0 = closed and key 1 =
+open, triggered by `Tag`/`Event`. Read [../movers.md](../movers.md) first for the keyframe model and
+the inverted-record trap.
 
-## What you're building
+## Editor procedure
 
-1. A door brush turned into a **mover**.
-2. **Key 0** = the closed pose (the base), **key 1** = the open pose.
-3. A **trigger** (or bump behaviour) that fires the mover's event.
-
-## Editor procedure (the mechanism)
-
-1. **Build the door brush** (e.g. 128×128×16) somewhere clear, texture it, check its alignment.
-2. **Promote it to a mover** ("Add Mover") — it turns purple.
-3. **Set the poses — mind the inverted flow.** With the mover selected:
-   - Select **Key 1** first, then **move/rotate the brush to the OPEN pose** (for a swing door, rotate
+1. Build the door brush (e.g. 128×128×16) somewhere clear, texture it, check its alignment.
+2. Promote it to a mover ("Add Mover") — it turns purple.
+3. Set the poses (mind the inverted flow). With the mover selected:
+   - Select Key 1 first, then move/rotate the brush to the open pose (for a swing door, rotate
      about the hinge edge; for a slide door, translate it).
-   - Then select **Key 0** to return to (and lock in) the CLOSED base pose.
-4. **Wire the trigger** (for an automatic door): place a `Trigger`, set its `Event` (e.g. `frontdoor`),
-   set the **mover's `Tag`** to the same name, and set the mover's `InitialState` to `TriggerOpenTimed`.
+   - Then select Key 0 to return to (and lock in) the closed base pose.
+4. Wire the trigger (for an automatic door): place a `Trigger`, set its `Event` (e.g. `frontdoor`),
+   set the mover's `Tag` to the same name, and set the mover's `InitialState` to `TriggerOpenTimed`.
    Duplicate the trigger on the far side so it opens from either approach. (For a bump-to-open door, skip
    the trigger and leave `InitialState=BumpOpenTimed`.)
-5. **Set the reaction** with `MoverEncroachType` (default `ME_ReturnWhenEncroach` — reopens if it hits
+5. Set the reaction with `MoverEncroachType` (default `ME_ReturnWhenEncroach` — reopens if it hits
    someone).
-6. *(Optional)* Give the mover open/close sounds; **rebuild** and test.
+6. (Optional) Give the mover open/close sounds; rebuild and test.
 
-## uedcli pipeline (what you run)
+## uedcli pipeline
 
 ```
 # 1. build the door as a mover (one brush)
@@ -51,8 +45,8 @@ actor build Engine.Trigger --prop Event=frontdoor --at 256,-96,48 | actor add -
 level materialize --out maps/mylevel.dx
 ```
 
-- **Max 8 keyframes.** For a simple door you use just key 0 and key 1.
-- If the door renders **black** after moving, it's the mover self-lighting quirk — flag its faces
+- Max 8 keyframes. A simple door uses just key 0 and key 1.
+- If the door renders black after moving, it's the mover self-lighting quirk — flag its faces
   `Unlit` or set `bDynamicLightMover=True` ([../movers.md](../movers.md)).
 - Deus Ex doors are the `DeusExMover` family (`bIsDoor`, `bLocked`, `KeyIDNeeded`, …) instead of
   `Engine.Mover` — see [../../deusex/](../../deusex/).

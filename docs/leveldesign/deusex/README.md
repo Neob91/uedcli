@@ -1,11 +1,10 @@
 # Deus Ex level design with uedcli
 
-Deus Ex is **one substrate** running on the generic UnrealEngine 1 core. Everything about carving
-geometry, sealing zones, lighting, texturing, and movers is engine-level craft — it lives in the
-**general guides** ([`../general/`](../general/)) and applies to any UE1 game. **These guides cover only
-what is Deus-Ex-specific**: the classes DX ships, the NPCs, the trigger/flag wiring, conversations and
-computers, the real DX human-scale numbers, and the immersive-sim design philosophy that makes a level
-feel like *Deus Ex*.
+Deus Ex is one substrate running on the generic UnrealEngine 1 core. Carving geometry, sealing
+zones, lighting, texturing, and movers is engine-level craft — it lives in the general guides
+([`../general/`](../general/)) and applies to any UE1 game. These guides cover only what is
+Deus-Ex-specific: the classes DX ships, the NPCs, the trigger/flag wiring, conversations and
+computers, the DX human-scale numbers, and the immersive-sim design philosophy.
 
 You author the same way everywhere — a git-tracked T3D trunk, built with composing verbs:
 
@@ -28,7 +27,7 @@ Terms: **[DX]** = Deus Ex only · **[ENGINE]** = any UnrealEngine 1 game (covere
 | [`gameplay-wiring.md`](gameplay-wiring.md)                         | The DX trigger vocabulary: flags, goals, logic gates, dispatchers, hackable devices, particle emitters, and the camera→computer feed. |
 | [`conversations-and-computers.md`](conversations-and-computers.md) | A user-level overview of wiring conversations, computers, and datacubes. |
 | [`human-scale.md`](human-scale.md)                                 | The real, uedcli-decoded DX numbers: player size, jump/step, door/stair dimensions, device strengths. |
-| [`design-philosophy.md`](design-philosophy.md)                     | The immersive-sim craft — problems-not-puzzles, multiple solutions, systemic consistency, legibility. The highest-value DX knowledge. |
+| [`design-philosophy.md`](design-philosophy.md)                     | The immersive-sim craft — problems-not-puzzles, multiple solutions, systemic consistency, legibility. |
 
 ## Step-by-step recipes
 
@@ -38,5 +37,5 @@ authoring jobs (place a locked door, wire a keypad to it, set up a guard patrol,
 ## See also
 
 - [`../general/`](../general/) — the engine-level craft (geometry, BSP, zones, lighting, textures,
-  movers) that DX inherits. **Read these first** — DX only adds to them.
+  movers) that DX inherits. Read these first — DX only adds to them.
 - [`../README.md`](../README.md) — the top-level level-design index.

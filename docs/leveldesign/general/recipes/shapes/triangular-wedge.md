@@ -1,8 +1,8 @@
 # Recipe: triangular wedge / ramp  [ENGINE]
 
-A right-triangle prism — a ramp, a gusset, angled fill under stairs, a sloped buttress. Same one-clip
-trick as the [chamfered box](chamfered-box.md), but the plane cuts the whole brush corner-to-corner
-instead of nibbling an edge.
+A right-triangle prism — a ramp, a gusset, angled fill under stairs, a sloped buttress. Same single
+clip as the [chamfered box](chamfered-box.md), but the plane cuts the whole brush corner-to-corner
+instead of trimming one edge.
 
 ### What you're building
 
@@ -21,14 +21,14 @@ brush clip Cube_ab12cd --plane 0,0,0 1,0,-2 --keep above
 ```
 
 The result is a triangular prism whose top face ramps from Z=-48 at X=-96 to Z=+48 at X=+96 — a 96-tall
-rise over the 192 run. `brush poly list` shows exactly **5 faces** (2 triangular end-caps + 3 rectangles).
+rise over the 192 run. `brush poly list` shows 5 faces (2 triangular end-caps + 3 rectangles).
 
 ### Notes
 
-- **The normal encodes the slope.** `(1,0,-2)` means "for every +1 in X, the plane drops 2 in Z" — i.e.
+- The normal encodes the slope: `(1,0,-2)` means "for every +1 in X, the plane drops 2 in Z" — i.e.
   the cut goes through corners `(−96,−48)` and `(96,48)` of a 192×96 box. Change the ratio to change the
   ramp angle; the point can stay at the origin.
-- **`--keep above`/`--keep below`** picks which triangle you keep. Wrong one = flip it.
+- `--keep above`/`--keep below` picks which triangle you keep; wrong one, flip it.
 - For a ramp you'll actually walk up, keep the rise ≤ the pawn's step where it meets the floor, or lead
   into it with a step — see [../../human-scale.md](../../human-scale.md).
 - A wedge is just a box + one clip, so it composes: clip twice for a tapered (trapezoidal) block — see

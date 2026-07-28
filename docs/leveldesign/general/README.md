@@ -1,6 +1,6 @@
 # General level design — engine-generic craft
 
-The **engine-generic** craft of building UnrealEngine-1 levels with uedcli. Everything here applies to
+The engine-generic craft of building UnrealEngine-1 levels with uedcli. Everything here applies to
 any UE1 game; the Deus Ex-specific layer (DX classes, NPCs, the `CoreTex*` palette, the immersive-sim
 philosophy) is one level up in [../deusex/](../deusex/). The composing pattern and verb families are in
 the [top README](../README.md).
@@ -9,7 +9,7 @@ the [top README](../README.md).
 
 | Guide                                                | Covers |
 | ---------------------------------------------------- | --- |
-| [geometry-and-bsp.md](geometry-and-bsp.md)           | Subtract-then-add, solidity, brush order, and **avoiding BSP holes / HOM** — the core skill |
+| [geometry-and-bsp.md](geometry-and-bsp.md)           | Subtract-then-add, solidity, brush order, and avoiding BSP holes / HOM |
 | [zones-and-performance.md](zones-and-performance.md) | Zones, zone-portal sheets, the poly/zone/sightline budgets, breaking sightlines |
 | [lighting.md](lighting.md)                           | Placing `Engine.Light`, the key light properties, and lighting craft (motivate, key+fill, radius, guiding) |
 | [textures-and-surfaces.md](textures-and-surfaces.md) | `brush poly` texturing, surface flags, alignment & scrolling, MyLevel, skybox flags |

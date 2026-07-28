@@ -1,23 +1,22 @@
 # Populating a level with NPCs — `ScriptedPawn`  [DX]
 
-Deus Ex NPCs are **`ScriptedPawn`s**. You never place the abstract bases — you place a **concrete leaf**
+Deus Ex NPCs are `ScriptedPawn`s. You never place the abstract bases — you place a concrete leaf
 (a specific troop, civilian, or animal) and configure its orders, alliances, reactions, and inventory.
-This is a large DX-specific authored dimension the engine doesn't have.
 
-## The workflow order (do this in sequence)
+## Workflow order
 
-NPCs move by walking the level's **path network**, so the single most important rule is:
+NPCs move by walking the level's path network, so do this in sequence:
 
-1. **Pathnode the level and rebuild paths FIRST.** With no paths, an NPC will stand still forever and
-   give you no error. Drop `PathNode`s 300–700 uu apart (≤350 on stairs), each visible from the next,
+1. Pathnode the level and rebuild paths first. With no paths, an NPC stands still forever and
+   gives no error. Drop `PathNode`s 300–700 uu apart (≤350 on stairs), each visible from the next,
    then rebuild paths. (Pathing basics are in the [general actors guide](../general/).)
-2. **Place a concrete `ScriptedPawn` leaf** on the floor.
-3. **Set `Orders` + `OrderTag`** — what the NPC does.
-4. **Set `InitialAlliances`** — who it likes and hates.
-5. **Tune reactions / fears / alarm** — usually leave the class defaults.
-6. **Set `InitialInventory`** — weapons and items it carries.
-7. **Set `BindName`** if a conversation, flag, or trigger references this NPC.
-8. **Rebuild paths again and playtest.**
+2. Place a concrete `ScriptedPawn` leaf on the floor.
+3. Set `Orders` + `OrderTag` — what the NPC does.
+4. Set `InitialAlliances` — who it likes and hates.
+5. Tune reactions / fears / alarm — usually leave the class defaults.
+6. Set `InitialInventory` — weapons and items it carries.
+7. Set `BindName` if a conversation, flag, or trigger references this NPC.
+8. Rebuild paths again and playtest.
 
 ```
 actor build DeusEx.MJ12Troop --at 512,256,80 --rotate 0,16384,0 \
@@ -29,22 +28,22 @@ actor build DeusEx.MJ12Troop --at 512,256,80 --rotate 0,16384,0 \
 
 ## Orders — what the NPC does
 
-**`Orders` is a state name** (not an enum): the pawn does `GotoState(Orders)`. The default is
+`Orders` is a state name (not an enum): the pawn does `GotoState(Orders)`. The default is
 `Wandering`. Mapper-set values, most paired with an `OrderTag` that names the target:
 
-- **`Idle`** — stand and do nothing (no wandering).
-- **`Standing`** — hold a post. Leash radius via `HomeTag` / `HomeExtent` (default 800).
-- **`Sitting`** — occupy a seat.
-- **`Patrolling`** — walk a chain of **`Engine.PatrolPoint`** actors: `OrderTag` = the **first** point's
-  `Tag`, and each point's editable **`Nextpatrol`** names the *next* point's `Tag`. (`NextPatrolPoint` is
+- `Idle` — stand and do nothing (no wandering).
+- `Standing` — hold a post. Leash radius via `HomeTag` / `HomeExtent` (default 800).
+- `Sitting` — occupy a seat.
+- `Patrolling` — walk a chain of `Engine.PatrolPoint` actors: `OrderTag` = the first point's
+  `Tag`, and each point's editable `Nextpatrol` names the next point's `Tag`. (`NextPatrolPoint` is
   the runtime-resolved object ref, not the field you set.)
-- **`WaitingFor`**, **`Following`**, **`Shadowing`** (stealth-tail).
-- **`Wandering`** — the roaming default (the NPC roams its area).
-- **`Dancing`**.
+- `WaitingFor`, `Following`, `Shadowing` (stealth-tail).
+- `Wandering` — the roaming default.
+- `Dancing`.
 
-`GoingTo` / `RunningTo` are **scripting-only** (used by conversation/mission scripting, not normally an
-initial `Orders`). `Seeking`, `Fleeing`, `Attacking`, `Alerting` are **combat/alert states the AI enters
-itself** — shape them via the reactions/fears/alliances below; you don't author them as an `Orders`.
+`GoingTo` / `RunningTo` are scripting-only (used by conversation/mission scripting, not normally an
+initial `Orders`). `Seeking`, `Fleeing`, `Attacking`, `Alerting` are combat/alert states the AI enters
+itself — shape them via the reactions/fears/alliances below; you don't author them as an `Orders`.
 
 A conversation can reprogram an NPC by setting `ConvOrders` / `ConvOrderTag`, applied when the
 conversation ends.
@@ -53,42 +52,41 @@ conversation ends.
 
 `InitialAlliances[0..7]` is an array of `(AllianceName, AllianceLevel, bPermanent)`:
 
-- **`AllianceLevel`** runs **−1 (hostile) … 0 (neutral) … +1 (friendly)**.
-- The **player's alliance name is `"Player"`.** To make an NPC hostile to the player, add `"Player"` at
-  level `−1`.
+- `AllianceLevel` runs −1 (hostile) … 0 (neutral) … +1 (friendly).
+- The player's alliance name is `"Player"`. To make an NPC hostile to the player, add `"Player"` at
+  level −1.
 - `bPermanent` locks the relationship so it can't decay or flip.
 
 ## Reactions, hate, and fears — usually leave the defaults
 
-Three stimulus blocks control temperament. The class defaults are already tuned per role (soldiers
+Three stimulus blocks control temperament. The class defaults are tuned per role (soldiers
 engage and raise alarms; civilians flee), so you rarely touch these:
 
-- **Reactions (`bReact*`)** — do I *engage*? `bReactPresence` (default true → attack on sight),
+- Reactions (`bReact*`) — do I engage? `bReactPresence` (default true → attack on sight),
   `bReactShot`, `bReactAlarm`, `bReactCarcass`, `bReactDistress`, `bReactLoudNoise`, `bReactProjectiles`.
-- **Hate (`bHate*`)** — what turns me *hostile*? `bHateShot` / `bHateInjury` (default true), `bHateWeapon`,
+- Hate (`bHate*`) — what turns me hostile? `bHateShot` / `bHateInjury` (default true), `bHateWeapon`,
   `bHateHacking`, `bHateCarcass`.
-- **Fears (`bFear*`)** — what makes me *flee*? `bFearWeapon`, `bFearShot`, `bFearInjury`, `bFearCarcass`,
+- Fears (`bFear*`) — what makes me flee? `bFearWeapon`, `bFearShot`, `bFearInjury`, `bFearCarcass`,
   `bFearAlarm`, `bFearProjectiles`, `bFearHacking`.
 
 Alarm behavior: `RaiseAlarm` (vanilla default `RAISEALARM_BeforeFleeing`; `Animal`/`Robot` = `RAISEALARM_Never`
 — note `actor prop get` returns `BeforeAttacking` from the UED22 editing package, a recompile divergence
 from shipped behaviour), `bEmitDistress`, `MaxProvocations` (default 1).
 
-> **These UT/Unreal knobs do NOT exist in DX** — don't try to set them: `bFearDarkness`, `bFearIndoors`,
+> These UT/Unreal knobs do not exist in DX — don't try to set them: `bFearDarkness`, `bFearIndoors`,
 > `bFearZones`, `HateTag`, `HateThreshold`, `IdealRange`, `SeekTag`,
 > `bCanClimb`, `bGenerateFleshFrag`, `ThingFactory`. DX drives NPCs via ScriptedPawn orders rather
 > than the stock `AmbushPoint` marker; `AlarmPoint` doesn't exist at all.
 
 ## Combat tuning and inventory
 
-- **`InitialInventory[0..7]`** — `(class, Count)` pairs; the weapons/items the NPC spawns with.
+- `InitialInventory[0..7]` — `(class, Count)` pairs; the weapons/items the NPC spawns with.
   `bKeepWeaponDrawn` keeps a weapon out.
-- **`MaxRange` / `MinRange`**, `MinHealth`, `EnemyTimeout`, and **`BaseAccuracy`** (**lower = more
-  accurate**).
+- `MaxRange` / `MinRange`, `MinHealth`, `EnemyTimeout`, and `BaseAccuracy` (lower = more accurate).
 
 ## Binding
 
-- **`BindName`** — a spaces-free identifier that conversations, flags, and triggers key off of (e.g. a
+- `BindName` — a spaces-free identifier that conversations, flags, and triggers key off of (e.g. a
   flag `BindName$"_Dead"` fires when this NPC dies). Set it on any NPC that story logic references.
 - `FamiliarName` / `UnfamiliarName` — the HUD labels before/after you know them.
 - `bImportant` / `bInvincible` — protect a plot-critical NPC.
@@ -99,12 +97,12 @@ from shipped behaviour), `bEmitDistress`, `MaxProvocations` (default 1).
 
 Regenerate the full tree with `class list --subclass-of DeusEx.ScriptedPawn`. The families:
 
-- **`HumanMilitary`** — `MJ12Troop`, `MJ12Commando`, `UNATCOTroop`, `Soldier`, `Terrorist`.
-- **`HumanCivilian`** — `Bartender`, `Businessman1`–`3`, `Doctor`, `Sailor`, `ScientistMale` /
+- `HumanMilitary` — `MJ12Troop`, `MJ12Commando`, `UNATCOTroop`, `Soldier`, `Terrorist`.
+- `HumanCivilian` — `Bartender`, `Businessman1`–`3`, `Doctor`, `Sailor`, `ScientistMale` /
   `ScientistFemale`, …
-- **`HumanThug`** → `TerroristCommander`.
-- **`Animal`** — `Rat`, `Greasel`, `Karkian`, `Gray`, `Doberman`, `Pigeon`, `Fish`.
-- **`Robot`** — `MilitaryBot`, `SecurityBot2`–`4`, `SpiderBot`, `CleanerBot`, `MedicalBot`.
+- `HumanThug` → `TerroristCommander`.
+- `Animal` — `Rat`, `Greasel`, `Karkian`, `Gray`, `Doberman`, `Pigeon`, `Fish`.
+- `Robot` — `MilitaryBot`, `SecurityBot2`–`4`, `SpiderBot`, `CleanerBot`, `MedicalBot`.
 
 Each killable pawn has a paired `<Name>Carcass` (its `CarcassType`) for the death body.
 

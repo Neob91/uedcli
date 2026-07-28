@@ -1,63 +1,62 @@
 # uedcli — usage
 
-`uedcli` is the LLM-facing CLI for authoring **UnrealEngine-1 levels** (Deus Ex `.dx`,
-Unreal/UT `.unr`) without opening the editor by hand. You issue **semantic, by-name commands**
+`uedcli` is the LLM-facing CLI for authoring UnrealEngine-1 levels (Deus Ex `.dx`,
+Unreal/UT `.unr`) without opening the editor by hand. You issue semantic, by-name commands
 (`actor find`, `brush build`, `mover key move`, …); the T3D text format is internal plumbing.
 
-The durable source of truth is a **git-tracked T3D tree** on disk (one directory per actor under
-`maps/<level>/`), NOT a live editor and NOT a bespoke session store — work-in-progress is simply
-an uncommitted / feature-branch state in your own repo, and `git` is the history and the merge
-engine. Reads and edits are **pure model-side compute** against that tree (instant, no container).
-The real editor / headless game is reached **only** for the few commands that must build or render:
-`level materialize` and `level preview --game`. Each such command spins up its own container as needed — there is no persistent session
-and no `--container` flag.
+The source of truth is a git-tracked T3D tree on disk (one directory per actor under
+`maps/<level>/`), not a live editor and not a session store — work-in-progress is an
+uncommitted / feature-branch state in your own repo, and `git` is the history and merge
+engine. Reads and edits are model-side compute against that tree (instant, no container).
+The editor / headless game is reached only for the few commands that must build or render:
+`level materialize` and `level preview --game`. Each spins up its own container as needed — there
+is no persistent session and no `--container` flag.
 
 ```
 uedcli <verb> …                      # if installed on $PATH (pipx)
 bin/uedcli <verb> …                  # from Tools/uedcli, host-native via the dev venv
 ```
 
-**These docs are inside the tool.** `uedcli docs list|show|search` prints this file and the
-level-design guides straight to your terminal, so you never need to locate them on disk — see
+`uedcli docs list|show|search` prints this file and the level-design guides to your terminal, so
+you never need to locate them on disk — see
 [Documentation](#documentation--read-the-docs-from-the-cli) below.
 
-## Composability — the core philosophy
+## Composability
 
 Verbs are small and pipe together instead of growing bespoke flags:
 
-- **Producer / query verbs print their result to stdout, one item per line** (pipe-friendly);
-  human summaries and counts go to **stderr** so they never pollute the pipe. Many add **`--json`**
-  for structured output.
-- **Mutating verbs read their target set from stdin via `-`** — `actor find … | actor delete -`.
-  `-` is the *sole* names source (not mixable with names as CLI args); **empty stdin is a clean
-  no-op (exit 0)**, not an error.
-- **Two stdin conventions, disambiguated by verb:** a **name list** (`find → mutate -`) versus a
-  **T3D snippet** (`build → add -`). Keep them distinct.
-- **A verb over a SET takes the set, and that IS the operation** — e.g. `actor bbox <names…>`
-  returns the box enclosing ALL of them, so there is no `--union` flag.
-- Prefer a stateless **`find` / query** verb whose output feeds another verb over per-command
+- Producer/query verbs print their result to stdout, one item per line (pipe-friendly); human
+  summaries and counts go to stderr so they never pollute the pipe. Many add `--json` for
+  structured output.
+- Mutating verbs read their target set from stdin via `-` — `actor find … | actor delete -`.
+  `-` is the sole names source (not mixable with names as CLI args); empty stdin is a clean
+  no-op (exit 0), not an error.
+- Two stdin conventions, disambiguated by verb: a name list (`find → mutate -`) versus a
+  T3D snippet (`build → add -`). Keep them distinct.
+- A verb over a set takes the set, and that is the operation — e.g. `actor bbox <names…>`
+  returns the box enclosing all of them, so there is no `--union` flag.
+- Prefer a stateless `find`/query verb whose output feeds another verb over per-command
   filter flags.
 
-**Errors never leak a Python traceback.** A bad actor/class/value raises a clear message that names
+Errors never leak a Python traceback: a bad actor/class/value raises a clear message that names
 the offending value and exits non-zero (typically exit 2).
 
-**Output streams for mutators.** Set-mutating verbs are PRODUCERS — they print their touched/allocated
-actor names to **stdout** (one per line) plus a summary to **stderr**, so they chain via `-`
+Set-mutating verbs are producers — they print their touched/allocated actor names to stdout
+(one per line) plus a summary to stderr, so they chain via `-`
 (`actor find | actor rotate - | brush scale -`): `actor add` (allocated names), `actor duplicate`,
 `actor rotate` / `order` / `move` / `delete` / `prop set|unset` / `folder set|unset` /
-`label add|remove|clear`, `brush
-scale` / `brush apply-transform` / `brush poly align` (touched brush names), and `stash apply` /
-`prefab apply`. (For `delete`
-the stdout is the removed names — a log/count, since they no longer exist to pipe into an edit.)
+`label add|remove|clear`, `brush scale` / `brush apply-transform` / `brush poly align`
+(touched brush names), and `stash apply` / `prefab apply`. For `delete` the stdout is the removed
+names — a log/count, since they no longer exist to pipe into an edit.
 
-⚠ **The PER-FACE verbs print faces, not actor names.** `brush poly set` / `pan` / `rotate` / `scale`
-print `BRUSH:idx` **selectors** — one per touched face — because a bare brush name means *all* of
-that brush's faces, so a per-face verb that printed one would hand the next verb in the pipe a wider
+⚠ The per-face verbs print faces, not actor names. `brush poly set` / `pan` / `rotate` / `scale`
+print `BRUSH:idx` selectors — one per touched face — because a bare brush name means all of
+that brush's faces, so a per-face verb that printed one would hand the next verb a wider
 set than it edited. The names are canonical and `all` is expanded, so `brush poly pan wall:all …`
 prints `WALL:0 … WALL:5`, ready to feed the next verb's `-`.
 
-⚠ **`brush poly align` has not been converted and still prints brush NAMES, so its output cannot be
-piped into a per-face verb at all.** It does not quietly widen the set — the per-face verbs take
+⚠ `brush poly align` has not been converted and still prints brush names, so its output cannot be
+piped into a per-face verb. It does not quietly widen the set — the per-face verbs take
 `BRUSH:SELECTOR` only (see below), so a bare name is rejected outright and
 `brush poly align … | brush poly rotate -` exits 2 with
 `surface selector must be BRUSH:SELECTOR, got 'WALL'`. Re-select the faces with `brush poly find`
@@ -210,14 +209,14 @@ carries the uedcli-side sidecars as comments — a `// uedcli-folder:` line for 
 `// uedcli-labels:` line for a labelled one — so `actor show A | actor add -` round-trips both;
 `--t3d-only` suppresses them for a byte-exact editor export.
 
-The T3D that `actor show` prints — and that the trunk stores — is **faithful, not abbreviated**: it
+The T3D that `actor show` prints — and that the trunk stores — is faithful, not abbreviated: it
 states every authored property explicitly, including ones whose value happens to equal the class
 default (`Location=(X=0.000000,Y=0.000000,Z=0.000000)`, `Rotation=(Pitch=0,Yaw=0,Roll=0)`, a `Tag`
 the editor stamped). UnrealEd's own export omits those, so its export of the same level is shorter
-than the trunk — that is expected, and the build's post-verify compares the two by **value, not by
-text**: each property resolves to what it would import as (the stored value, or the class default
-when the line is absent), so the two spellings simply are the same level. Never hand-delete such a
-line to "clean up" the trunk: an omitted property does not mean zero, it means *the class default*,
+than the trunk — that is expected, and the build's post-verify compares the two by value, not by
+text: each property resolves to what it would import as (the stored value, or the class default
+when the line is absent), so the two spellings are the same level. Never hand-delete such a
+line to "clean up" the trunk: an omitted property does not mean zero, it means the class default,
 which is non-zero for some classes.
 
 **`actor prop get`** prints EFFECTIVE property values — the stored value if present, else the class
@@ -277,19 +276,18 @@ mistakes (a portal marked semisolid); gross CSG-order errors (an additive brush 
 subtract, a subtract that carves nothing); and scale issues. Each finding names the brush, poly,
 world coordinate, engine symptom, and fix.
 
-**What `level doctor` WILL and WILL NOT find — read this before relying on a clean report.**
+**What `level doctor` will and will not find.**
 
-`doctor` checks whether the level is **mechanically well-formed**: things that are *objectively broken
-and decidable from the trunk alone*. "Broken" means the engine or the data cannot work as authored — not
+`doctor` checks whether the level is mechanically well-formed: things objectively broken and
+decidable from the trunk alone. "Broken" means the engine or the data cannot work as authored, not
 that a human would judge the result poor.
 
-**The dividing line is INTENT.** `doctor` reports only what is wrong *no matter what the author meant*.
-A dangling `Event` fires into the void whatever it was for; a light inside a solid lights nothing
-whatever it was for. But `doctor` cannot know **what a space is meant to be**, and that is why it does
-not judge passages: it can measure the free gap between two brushes, but it has no way to tell a
-deliberately sealed wall from a doorway someone accidentally blocked. Both are the same geometry. Any
-check that needs to guess the author's intent is out of scope, permanently — not deferred, not "later
-with better heuristics". *(Owner ruling and rationale, 2026-07-26.)*
+The dividing line is intent. `doctor` reports only what is wrong no matter what the author meant. A
+dangling `Event` fires into the void whatever it was for; a light inside a solid lights nothing
+whatever it was for. But `doctor` cannot know what a space is meant to be, which is why it does not
+judge passages: it can measure the free gap between two brushes, but cannot tell a deliberately
+sealed wall from a doorway someone accidentally blocked — both are the same geometry. Any check that
+needs to guess the author's intent is out of scope permanently. *(Owner ruling and rationale, 2026-07-26.)*
 
 In scope:
 
@@ -299,8 +297,8 @@ In scope:
 - **Obvious footguns with an objectively wrong answer** — e.g. an `Event` matching no actor's `Tag`
   (it fires into the void), or a light buried inside solid geometry (it lights nothing).
 
-**It will NOT find gameplay or style problems, and a clean report says nothing about them.** Out of
-scope, permanently and by design:
+It will not find gameplay or style problems, and a clean report says nothing about them. Out of
+scope by design:
 
 - whether a corridor or doorway is comfortable to move through, or whether geometry protrudes into an
   entrance and makes it awkward to pass;
@@ -308,9 +306,8 @@ scope, permanently and by design:
 - whether the level has the trim, edge detail, or finish a real space would have;
 - whether it is well lit, legible, or fun.
 
-These are **level-design quality**, they need a human or an independent reviewing agent looking at
-renders, and no amount of static analysis substitutes. A level can be `no issues found` and still be
-cramped, ugly and half-finished. *(Owner ruling, 2026-07-26.)*
+These are level-design quality; they need a human or an independent reviewing agent looking at
+renders. A level can be `no issues found` and still be cramped, ugly and half-finished. *(Owner ruling, 2026-07-26.)*
 
 - Categories: `degenerate,watertight,convex,planar,solidity,csg_order,scale`.
 - `--severity` / `--category` filter what's **shown**; the **exit code always reflects ALL findings**
@@ -485,12 +482,11 @@ Details that follow from that:
   The class schema is consulted only for an actor that states no Location, so an ordinary rotate
   stays offline.
 
-> **The two reference points differ on purpose.** **Rotation and scale pivot near the CENTER** (you
-> turn a thing about its middle). **Placement anchors the bbox-MIN corner** — `stash`/`prefab apply --at`,
+> The two reference points differ on purpose. Rotation and scale pivot near the center (you
+> turn a thing about its middle). Placement anchors the bbox-min corner — `stash`/`prefab apply --at`,
 > `actor duplicate --at`, and stash capture's normalization all land the set's minimum corner on the
 > target, because you place a prefab by dropping a corner on a grid point you can read off and type.
-> Neither default is changing to match the other; an operation's reference point follows what the
-> operation means.
+> An operation's reference point follows what the operation means.
 
 A zero result is **written out** (`Rotation=(Pitch=0,Yaw=0,Roll=0)`), not omitted: an actor with no
 `Rotation` property takes its *class* default, which is not zero for every class, so
@@ -585,26 +581,26 @@ the texture look twice as big, `--by 0.5,1` halves its width only. U and V are i
 factors must be positive. The face's own centre again keeps its texture coordinate, so the texture
 grows in place rather than sliding off.
 
-⚠ **Ordering rules — these bite.**
+⚠ Ordering rules:
 
-- **Pan comes AFTER align, never before.** Every `brush poly align` mode stamps `Pan` on each face
-  it touches, so a dialled-in pan applied first is simply discarded.
-- **Scale comes BEFORE `align --ring`, never after.** A ring wrap computes each face's phase offset
+- Pan comes after align, never before. Every `brush poly align` mode stamps `Pan` on each face
+  it touches, so a dialled-in pan applied first is discarded.
+- Scale comes before `align --ring`, never after. A ring wrap computes each face's phase offset
   for the density it saw; rescaling afterwards leaves those offsets describing the old size and the
   seams no longer meet.
-- **Panning a SUBSET of an aligned run breaks its continuity**, because those faces shift relative
+- Panning a subset of an aligned run breaks its continuity, because those faces shift relative
   to their neighbours while the rest stay put. This is easy to do by accident — the natural idiom is
-  `brush poly find … | brush poly pan -`, and `find` *filters*. Pan the whole run or none of it.
-- **`rotate` and `scale` give NO continuity guarantee at all**: each face pivots or grows about its
-  *own* centre, so applying either across an aligned set breaks the seams `align` matched — and
+  `brush poly find … | brush poly pan -`, and `find` filters. Pan the whole run or none of it.
+- `rotate` and `scale` give no continuity guarantee: each face pivots or grows about its
+  own centre, so applying either across an aligned set breaks the seams `align` matched — and
   equally breaks a shared wall/floor grid. They are the verbs for a one-off face (a sign, a monitor,
   a soffit). The run-aware turn is a flag on the alignment itself, not this verb.
 
-**`rotate` turns the texture the way you see it turn.** The direction follows the face's *visible*
+`rotate` turns the texture the way you see it turn: the direction follows the face's visible
 surface normal, so the same `--by 16384` looks the same whether you are standing outside an additive
-pillar or inside a subtractive room — uedcli flips the sign for you on a subtract. **`rotate`
-therefore requires the brush's `CsgOper` to be `CSG_Add` or `CSG_Subtract`** (an absent one counts as
-`CSG_Add`) and **exits 2 naming any other value** — `CSG_Intersect`, `CSG_Deintersect`, `CSG_Active`
+pillar or inside a subtractive room — uedcli flips the sign for you on a subtract. So `rotate`
+requires the brush's `CsgOper` to be `CSG_Add` or `CSG_Subtract` (an absent one counts as
+`CSG_Add`) and exits 2 naming any other value — `CSG_Intersect`, `CSG_Deintersect`, `CSG_Active`
 or anything unrecognised — because a brush with no inside and outside gives the turn no direction to
 follow, and guessing one would silently rotate the wrong way.
 
@@ -1299,8 +1295,8 @@ actor find --subclass-of Engine.Light      # now query it like any other level
 
 ## What import leaves out
 
-A saved map is the editor's **workspace**, not a clean inventory of level content — it also contains
-the tools the designer happened to be holding. Import drops two kinds of those, because they are
+A saved map is the editor's workspace, not a clean inventory of level content — it also contains
+the tools the designer happened to be holding. Import drops two kinds, because they are
 apparatus rather than content, and keeping them would put them in your tree as though you had placed
 them:
 
@@ -1492,10 +1488,9 @@ uedcli class show <Package.Class> [--depth N|all] [--category NAME]
 
 # Documentation — read the docs from the CLI
 
-uedcli carries its own user documentation, so the pages you are reading right now are queryable
-from the tool itself — no network, no repo checkout, and always the version that matches the
-binary you are running. There is a pleasing recursion here: `uedcli docs show usage` prints *this
-file*.
+uedcli carries its own user documentation, so these pages are queryable from the tool itself —
+no network, no repo checkout, and always the version matching the binary you are running.
+`uedcli docs show usage` prints this file.
 
 ```bash
 # every page's topic key, one per line

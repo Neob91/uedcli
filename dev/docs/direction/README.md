@@ -1,9 +1,9 @@
 # direction/ — what the owner decided
 
-One doc per topic, **revised in place**: no supersession, no dated history, no ledger. Git keeps the
-past. Each topic states **What we want**, **Rejected**, and **Refs**.
+One doc per topic, revised in place: no supersession, no dated history, no ledger. Git keeps the
+past. Each topic states What we want, Rejected, and Refs.
 
-**Agents may NEVER write this tree without the owner's explicit yes** — see `CLAUDE.md` "Direction
+Agents may never write this tree without the owner's explicit yes — see `CLAUDE.md` "Direction
 docs" for the rule. This README is the exception: index rows only, and never an `@` import.
 
 Siblings: `../rationale/` (why the code is that way — agent-owned), `../architecture.md` (what IS),

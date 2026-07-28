@@ -1,33 +1,33 @@
 # Actors: collision, decorations, spawns, pathing  [ENGINE]
 
-Clean geometry is a space; **actors** make it a playable level — collision, props, spawn points, and the
-navigation network the AI walks. This is the layer beyond CSG.
+Actors make a level playable on top of CSG geometry: collision, props, spawn points, and the
+navigation network the AI walks.
 
 ## Collision is a cylinder
 
-Every actor collides as an **upright cylinder** — `CollisionRadius` and `CollisionHeight` (total height
-= 2 × Height). The cylinder is **always upright regardless of the actor's rotation**, and there is **no
-per-poly or per-box actor collision in UE1** (that's UE2). A mesh's *shape* never collides — only its
+Every actor collides as an upright cylinder — `CollisionRadius` and `CollisionHeight` (total height
+= 2 × Height). The cylinder is always upright regardless of the actor's rotation, and there is no
+per-poly or per-box actor collision in UE1 (that's UE2). A mesh's shape never collides — only its
 cylinder does.
 
 ### Blocking flags
 
-UE1 splits *colliding* from *blocking*:
+UE1 splits colliding from blocking:
 
 - **Colliding** — `bCollideActors` (master switch; required for any `Touch()` event), `bCollideWorld`,
   `bCollideWhenPlacing`.
 - **Blocking** — `bBlockActors`, `bBlockPlayers` (UE1 keeps them separate), and `bProjTarget` (=
-  **shootable** / trace target).
+  shootable / trace target).
 
 Common recipes:
 
 | Want                          | Set |
 | ----------------------------- | --- |
 | Invisible wall (small)        | a `BlockAll` actor, or a 1-unit cube |
-| Invisible wall (large area)   | an **Invisible Collision Hull** (a semisolid, all faces invisible) — must **not** touch walls or zone boundaries |
+| Invisible wall (large area)   | an Invisible Collision Hull (a semisolid, all faces invisible) — must not touch walls or zone boundaries |
 | Non-blocking decoration       | all blocking flags off |
 | Shootable but walk-through    | collide + `bProjTarget` on, blocking off |
-| Glass / grille you can't pass | a visual sheet **+** a collision hull behind it — **sheets never block on their own** ✅ |
+| Glass / grille you can't pass | a visual sheet + a collision hull behind it — sheets never block on their own ✅ |
 
 ```
 brush build cube --csg add --solidity semisolid --width 128 --breadth 8 --height 128 | actor add -    # then flag its faces invisible → an ICH
@@ -38,11 +38,11 @@ actor prop set Crate1 bBlockPlayers=True bProjTarget=True
 
 Prop actors placed into the world:
 
-- **`DrawType`** = `DT_Sprite` / **`DT_Mesh`** / `DT_Brush` / `DT_None`; set `Mesh` for a mesh prop.
-- **`DrawScale`** — a single uniform float (there is no `DrawScale3D` in UE1 — that's UE2).
-- **`Skin`** / `MultiSkins[]` — the prop's textures.
-- **Breakables:** the `contents` / `content2` / `content3` + `EffectWhenDestroyed` loot fields; **`Engine.Decoration`
-  has no `Health`** — damageability in DX is `DeusExDecoration.HitPoints`. `bPushable` makes it shovable.
+- `DrawType` = `DT_Sprite` / `DT_Mesh` / `DT_Brush` / `DT_None`; set `Mesh` for a mesh prop.
+- `DrawScale` — a single uniform float (there is no `DrawScale3D` in UE1 — that's UE2).
+- `Skin` / `MultiSkins[]` — the prop's textures.
+- Breakables: the `contents` / `content2` / `content3` + `EffectWhenDestroyed` loot fields; `Engine.Decoration`
+  has no `Health` — damageability in DX is `DeusExDecoration.HitPoints`. `bPushable` makes it shovable.
 
 ```
 # Engine.Decoration is ABSTRACT — place a concrete subclass (DX props are DeusExDecoration subclasses)
@@ -50,16 +50,16 @@ actor build <ConcreteDecorationSubclass> --prop DrawScale=1.5 --at 256,256,0 | a
 ```
 
 > Deus Ex props are the `DeusExDecoration` family (with a highlight name label and `HitPoints`) — and
-> `bInvincible` (make a decoration indestructible) is a `DeusExDecoration` property, **not** on
+> `bInvincible` (make a decoration indestructible) is a `DeusExDecoration` property, not on
 > `Engine.Decoration` — see [../deusex/](../deusex/).
 
 ## PlayerStart
 
 Where players spawn — a NavigationPoint:
 
-- Place it **40 uu above the floor** (the spawn cylinder sits above the surface). ✅
-- The player spawns **facing the actor's Yaw** — point it where you want them to look.
-- Place **more PlayerStarts than the max simultaneous players**; `bEnabled`,
+- Place it 40 uu above the floor (the spawn cylinder sits above the surface). ✅
+- The player spawns facing the actor's Yaw — point it where you want them to look.
+- Place more PlayerStarts than the max simultaneous players; `bEnabled`,
   `bSinglePlayerStart` / `bCoopStart` gate which get used.
 
 ```
@@ -68,16 +68,16 @@ actor build Engine.PlayerStart --at 256,256,40 --rotate 0,16384,0 | actor add - 
 
 ## Pathing (NavigationPoints)
 
-AI paths are **compiled** into reachspecs — line-of-sight-plus-traversable links that store the width
-and height of each connection so bots know they fit. **NPCs will not move without a path network.**
+AI paths are compiled into reachspecs — line-of-sight-plus-traversable links that store the width
+and height of each connection so bots know they fit. NPCs will not move without a path network.
 
-- Drop **`PathNode`** actors **300–700 uu apart** (≤300–350 on ramps and stairs; keep ≥50 uu apart or
-  you get a "paths too close" error, and ≥50 from corners). Each node must be **visible from its
-  neighbour**.
-- **Rebuild paths** with console **`PATHS BUILD`** (this constructs the reachspecs; `PATHS DEFINE` alone
-  only spawns marker nodes and builds **no** reachspecs). **Note: `level materialize` does NOT currently
-  run the paths pass**, so a materialized map has no reachspecs until paths are built in the editor —
-  until then AI pawns won't move. Debug with **Show Paths**.
+- Drop `PathNode` actors 300–700 uu apart (≤300–350 on ramps and stairs; keep ≥50 uu apart or
+  you get a "paths too close" error, and ≥50 from corners). Each node must be visible from its
+  neighbour.
+- Rebuild paths with console `PATHS BUILD` (this constructs the reachspecs; `PATHS DEFINE` alone
+  only spawns marker nodes and builds no reachspecs). `level materialize` does not currently
+  run the paths pass, so a materialized map has no reachspecs until paths are built in the editor —
+  until then AI pawns won't move. Debug with Show Paths.
 - Per-node tuning: `bOneWayPath`, `ExtraCost`. (The UT/UE2 `bNoAutoConnect` / `ForcedPaths[4]` /
   `ProscribedPaths[4]` do **not** exist on this build's `Engine.PathNode`.)
 - Related NavigationPoints: `PlayerStart`, `InventorySpot` (auto-made at pickups), `LiftCenter` /

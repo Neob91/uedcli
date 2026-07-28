@@ -1,13 +1,12 @@
 # Deus Ex recipes  [DX]
 
-Task-by-task walkthroughs for common Deus Ex authoring jobs. Each recipe is the **complete
-procedure** — numbered steps that explain *what* you are building and why — followed by a **"With
-uedcli"** block that gives the exact verb pipeline. Where a classic UnrealEd tutorial relies on a
-GUI-only gesture (grabbing a brush with Intersect, clicking a pivot vertex, snapping to grid), the
-recipe says so and gives the closest model-side path.
+Task-by-task walkthroughs for common Deus Ex authoring jobs. Each recipe gives numbered steps
+explaining what you build and why, then a "With uedcli" block with the exact verb pipeline. Where a
+classic UnrealEd tutorial relies on a GUI-only gesture (grabbing a brush with Intersect, clicking a
+pivot vertex, snapping to grid), the recipe says so and gives the closest model-side path.
 
-You author the git-tracked **T3D trunk** with small composing verbs; the editor is touched only to
-`level materialize` / `level preview`. Nothing here is done by hand inside the editor.
+You author the git-tracked T3D trunk with small composing verbs; the editor is touched only to
+`level materialize` / `level preview`.
 
 ## How these recipes read
 
@@ -23,19 +22,19 @@ Every recipe uses the same four verb families (full reference in
 | `brush poly find … \| brush poly pan\|rotate\|scale - …`                               | move / turn / resize the texture ON a face: `pan --to\|--by U,V` (whole texels), `rotate --by UU` (16384 = 90°), `scale --by FU,FV` (apparent size) |
 | `actor prop set <name> K=V`, `mover key count/move/list`, `actor order --first/--last` | per-actor property, keyframe, and CSG-order edits |
 
-`actor add -` prints the **allocated actor name(s)** to stdout — capture them and feed them to
+`actor add -` prints the allocated actor name(s) to stdout — capture them and feed them to
 `actor prop set` / `mover key`. Human-readable summaries go to stderr, so the pipe stays clean.
 
-> **Rotation is in unreal rotation units — a full turn is 65536.** So **90° = 16384**, 45° = **8192**,
-> 22.5° = **4096**, 180° = **32768**, 270° = **49152**. This one unit system is what everything uses:
+> Rotation is in unreal rotation units: a full turn is 65536, so 90° = 16384, 45° = 8192,
+> 22.5° = 4096, 180° = 32768, 270° = 49152. Everything uses this one unit system:
 > the `--rotate` flag (`actor build`/`brush build`), `--rot`/`--by`/`--to` on `mover key`, `actor
-> rotate`, the `--prop Rotation=Pitch,Yaw,Roll` sugar, AND stored property values you pass verbatim
+> rotate`, the `--prop Rotation=Pitch,Yaw,Roll` sugar, and stored property values you pass verbatim
 > (a `SecurityCamera`'s `cameraFOV`/`swingAngle`, a literal `Rotation=(Yaw=16384)`). Rotators are
-> `Pitch,Yaw,Roll`. (Note: *mesh-import* `#exec` angles are a different, 8-bit scale where 64 = 90° —
-> that's the asset pipeline, not level authoring.)
+> `Pitch,Yaw,Roll`. Mesh-import `#exec` angles are a different, 8-bit scale where 64 = 90° —
+> the asset pipeline, not level authoring.
 
-> **On-grid by construction.** The editor's "snap to grid" step has no uedcli equivalent because you
-> author coordinates directly — choose integer, power-of-two positions (16/32/64/128/256) and your
+> On-grid by construction. The editor's "snap to grid" step has no uedcli equivalent because you
+> author coordinates directly: choose integer, power-of-two positions (16/32/64/128/256) and your
 > geometry is already on-grid. Off-grid coordinates are the #1 cause of BSP holes (see
 > [`../../general/geometry-and-bsp.md`](../../general/geometry-and-bsp.md)).
 
@@ -62,16 +61,15 @@ actor add - | actor prop get - <Prop>`):
 
 - **Player collision cylinder:** 40 wide × 95 tall (Radius 20, Height 47.5). Eye height ~87 uu above
   the floor; `MaxStepHeight=25`; `JumpZ=300`.
-- **1 ft = 16 uu** (the DX grid unit). A DX door is **144×72 or 128×64**, 1–8 uu thick. Doorway ~128
+- **1 ft = 16 uu** (the DX grid unit). A DX door is 144×72 or 128×64, 1–8 uu thick. Doorway ~128
   tall × 64 wide. Ceiling min 83, recommended 128.
-- **Device strengths (fraction of full):** lockpick doors ~**0.20**, hackable devices ~**0.20**,
-  door blow-up `doorStrength` ~**0.25**, breakable wall ~**0.40**, auto-turret **fixed 0.50** hack.
-- **SecurityCamera:** `cameraFOV` **4096** (22.5°), `cameraRange` **1024**, `swingAngle` **8192**
-  (45°).
+- **Device strengths (fraction of full):** lockpick doors ~0.20, hackable devices ~0.20,
+  door blow-up `doorStrength` ~0.25, breakable wall ~0.40, auto-turret fixed 0.50 hack.
+- **SecurityCamera:** `cameraFOV` 4096 (22.5°), `cameraRange` 1024, `swingAngle` 8192 (45°).
 
 ## See also
 
 - [`../classes.md`](../classes.md) — the DX class catalog these recipes place.
 - [`../npcs.md`](../npcs.md) — the full `ScriptedPawn` reference behind the patrol recipe.
 - [`../../general/`](../../general/) — the engine-generic craft (CSG, zones, lighting, movers) every
-  recipe builds on. **Read the geometry and movers guides first.**
+  recipe builds on. Read the geometry and movers guides first.

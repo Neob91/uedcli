@@ -1,20 +1,19 @@
 # uedcli docs — the whole-tree index (dev + user)
 
-This is the **developer/agent index for the entire uedcli documentation ecosystem** — every doc,
-what it's for, and which is authoritative. The **user-facing cut** (how to drive the CLI and design
-levels) lives one tree over at [`../../docs/`](../../docs/README.md); by house rule that tree never
-references this one, so the cross-tree routing lives **here**.
+The developer/agent index for the whole uedcli documentation tree — every doc, what it's for, and
+which is authoritative. The user-facing cut (how to drive the CLI and design levels) lives one tree
+over at [`../../docs/`](../../docs/README.md); by house rule that tree never references this one, so
+the cross-tree routing lives here.
 
-`uedcli` makes level design a **queryable, scriptable, auditable** text surface an LLM can drive
-entirely as text — no GUI. The **git-tracked T3D trunk is the source of truth**; the `.dx`/`.unr`
-map file is a build artifact; UnrealEd-2.2-under-wine (in the `dx-lum-uned` container) is a
-**build-only** tool — `level materialize` drives it to compile the trunk into a map file. Preview
-renders **in-game** (`--game`, the default) or with the **native** offline rasterizer, not in the
-editor.
+`uedcli` makes level design a queryable, scriptable, auditable text surface an LLM can drive entirely
+as text — no GUI. The git-tracked T3D trunk is the source of truth; the `.dx`/`.unr` map file is a
+build artifact; UnrealEd-2.2-under-wine (in the `dx-lum-uned` container) is build-only — `level
+materialize` drives it to compile the trunk into a map file. Preview renders in-game (`--game`, the
+default) or with the native offline rasterizer, not in the editor.
 
 ## Which doc is for what (read this first)
 
-Every doc has ONE job. Don't mix them up:
+Every doc has one job:
 
 | Doc | Answers | Tense / status | Mutability |
 |---|---|---|---|
@@ -39,14 +38,14 @@ Every doc has ONE job. Don't mix them up:
 | **[board/to-build/](board/to-build/)** | "What's ready to build *now*?" | the on-deck **build queue / source of truth** → links a plan | living |
 | **[board/done/](board/done/)** | "What landed recently / has deferred remnants?" | short reference tail | living |
 
-A gap between `direction/` (want) and `architecture.md` (is) is **expected** — it's the work
-not yet done. A gap between a topic doc and the code is a **bug** in the docs.
+A gap between `direction/` (want) and `architecture.md` (is) is expected — it's the work not yet
+done. A gap between a topic doc and the code is a bug in the docs.
 
-**Context-loading:** in a uedcli agent session only `direction/README.md` is auto-loaded into
-context; every other doc here (incl. `architecture.md`, every `direction/` topic, all
-`unrealed/*.md`, and all `rules/*.md`) is **read-on-demand** — the agent must `Read` it before the task that needs it. The
-router that says which doc to read when lives in [`CLAUDE.md`](../../CLAUDE.md)
-("Read-on-demand docs — the router").
+Context-loading: in a uedcli agent session only `direction/README.md` is auto-loaded; every other
+doc here (incl. `architecture.md`, every `direction/` topic, all `unrealed/*.md`, and all
+`rules/*.md`) is read-on-demand — the agent must `Read` it before the task that needs it. The router
+for which doc to read when lives in [`CLAUDE.md`](../../CLAUDE.md) ("Read-on-demand docs — the
+router").
 
 ## Read these
 - **[../../docs/usage.md](../../docs/usage.md)** — the CLI: query/mutate verbs, the `preview` viewer,
@@ -58,10 +57,9 @@ router that says which doc to read when lives in [`CLAUDE.md`](../../CLAUDE.md)
 - **[architecture.md](architecture.md)** — layers & modules, the
   model→validate→emit→paste write pattern, invariants (D1/D2/D6…), the git-tracked T3D trunk,
   how to add a verb, preview internals, testing, the UED22 substrate.
-- **[unrealed/](unrealed/README.md)** — the hard-won, verified UnrealEd-2-under-wine
+- **[unrealed/](unrealed/README.md)** — the verified UnrealEd-2-under-wine
   knowledge base, split into `commands.md` (exec verbs), `quirks.md` (gotchas), `rendering.md`
-  (screenshots), and `extracting-from-dll.md` (how it's mined). **Read before touching the
-  driver** — the "don't relearn this" reference.
+  (screenshots), and `extracting-from-dll.md` (how it's mined). Read before touching the driver.
 - **[dev-runtime.md](dev-runtime.md)** — how uedcli **runs** during development: the
   `bin/uedcli` / `bin/test` wrappers over the auto-managed host-native `.venv/` (which
   **requires `python3.12` on `PATH`**), the optional `uedcli-native/` Rust extension, and the

@@ -1,44 +1,43 @@
 # Recipe: an elevator  [DX]
 
-An elevator is an **`ElevatorMover`** (a direct `Engine.Mover` subclass) whose keyframes are the floor
-positions, driven by triggers and buttons. There are two levels of ambition:
+An elevator is an `ElevatorMover` (a direct `Engine.Mover` subclass) whose keyframes are the floor
+positions, driven by triggers and buttons. Two levels:
 
-- **A simple platform/shaft lift** — one `ElevatorMover`, one keyframe per floor, a `SequenceTrigger`
-  per floor, and a button per floor. This uses only stock DX classes.
-- **A full Carone elevator** — the community **CaroneElevatorSet** mod adds `CaroneElevator`,
+- A simple platform/shaft lift — one `ElevatorMover`, one keyframe per floor, a `SequenceTrigger`
+  per floor, and a button per floor. Stock DX classes only.
+- A full Carone elevator — the community CaroneElevatorSet mod adds `CaroneElevator`,
   `CESequenceTrigger`, `CEDoor` (auto-managed floor doors), `CEDoorButton`, call buttons, and inner
-  doors that ride with the car. It requires shipping `CaroneElevatorSet.u` with your map; uedcli resolves
-  the classes as long as that package is on the **composed search path** (no `EditPackages` ini edit —
-  that's a `ucc make` / GUI-editor concept, not part of the uedcli flow).
+  doors that ride with the car. Ship `CaroneElevatorSet.u` with your map; uedcli resolves the classes
+  as long as that package is on the composed search path (no `EditPackages` ini edit — that's a
+  `ucc make` / GUI-editor concept, not part of the uedcli flow).
 
-Both are authored the same way in uedcli: build the mover, key the floors, place trigger/button
-actors, wire tags and events.
+Both are authored the same way: build the mover, key the floors, place trigger/button actors, wire
+tags and events.
 
 ## Part 1 — a basic lift
 
 ### Procedure
 
-1. **Carve the shaft.** Subtract a vertical shaft tall enough to span every floor, plus a doorway
-   into it at each floor (line the doorways up vertically). The car needs empty space to travel
-   through.
-2. **Build the car as an `ElevatorMover`** (or `CaroneElevator`), fully textured, at the **bottom
-   floor** — that's key 0.
-3. **Set the floor count, then place each floor.** Set the waypoint count with `mover key count
-   <car> N` (N = number of floors, max 8 — key 0 = floor 1). Then position each higher floor with
+1. Carve the shaft. Subtract a vertical shaft tall enough to span every floor, plus a doorway into
+   it at each floor (line the doorways up vertically). The car needs empty space to travel through.
+2. Build the car as an `ElevatorMover` (or `CaroneElevator`), fully textured, at the bottom floor —
+   that's key 0.
+3. Set the floor count, then place each floor. Set the waypoint count with `mover key count <car> N`
+   (N = number of floors, max 8 — key 0 = floor 1). Position each higher floor with
    `mover key move <car> <i> --to 0,0,<height> --from-base` (key 1 = floor 2, key 2 = floor 3, …),
-   the height measured **from the bottom-floor base pose**. (In the UnrealEd GUI, adding a keyframe
+   the height measured from the bottom-floor base pose. (In the UnrealEd GUI, adding a keyframe
    auto-bumps `NumKeys`; via uedcli you set the count explicitly with `mover key count`, then edit
    each key by index.)
-4. **Give the car a `Tag`** (e.g. `Elevator_A`) so buttons and triggers can address it.
-5. **Add a `SequenceTrigger` per floor** (`CESequenceTrigger` with the Carone mod). Each one's
-   `Event` = the car's `Tag`, its own `Tag` = a floor name (e.g. `ElevatorA_Floor2`), and its
-   `SeqNum` (`seqnum`) = the **keyframe index** for that floor.
-6. **Add a button per floor** inside the car (`Button1`, `ButtonType=BT_1`/`BT_2`/`BT_Up`/`BT_Down`).
+4. Give the car a `Tag` (e.g. `Elevator_A`) so buttons and triggers can address it.
+5. Add a `SequenceTrigger` per floor (`CESequenceTrigger` with the Carone mod). Each one's `Event` =
+   the car's `Tag`, its own `Tag` = a floor name (e.g. `ElevatorA_Floor2`), and its `SeqNum`
+   (`seqnum`) = the keyframe index for that floor.
+6. Add a button per floor inside the car (`Button1`, `ButtonType=BT_1`/`BT_2`/`BT_Up`/`BT_Down`).
    Each button's `Event` = the floor's SequenceTrigger tag; its `AttachTag` = the car's `Tag` so the
-   button **rides with the car**.
-7. **(Optional) elevator sounds** — set the car's mover-sound properties (the *MoverSounds* **category**
-   in the property browser — `OpeningSound`, `ClosingSound`, `MoveAmbientSound`, `ClosedSound`; there is
-   no single property literally named `MoverSounds`) from a sound package such as `MoverSFX`.
+   button rides with the car.
+7. (Optional) elevator sounds — set the car's mover-sound properties (the MoverSounds category in the
+   property browser — `OpeningSound`, `ClosingSound`, `MoveAmbientSound`, `ClosedSound`; there is no
+   single property literally named `MoverSounds`) from a sound package such as `MoverSFX`.
 
 ### With uedcli
 
@@ -81,22 +80,21 @@ actor build DeusEx.Button1 --prop ButtonType=BT_2 --prop Event=ElevatorA_Floor2 
 
 ## Part 2 — floor doors and call buttons (Carone)
 
-> **The car must be a `CaroneElevator` for Parts 2–3.** `CEEvents`, `bCEControlsDoors`, `CESlaveMover`,
-> and `bCEControlsSlave` exist **only** on `CaroneElevatorSet.CaroneElevator` — **not** on
+> The car must be a `CaroneElevator` for Parts 2–3. `CEEvents`, `bCEControlsDoors`, `CESlaveMover`,
+> and `bCEControlsSlave` exist only on `CaroneElevatorSet.CaroneElevator`, not on
 > `DeusEx.ElevatorMover`. `actor prop set` is schema-validated, so setting them on a stock
 > `ElevatorMover` fails. Build the Part-1 car with `--mover-class CaroneElevatorSet.CaroneElevator` (the
 > commands below assume that car, still named `ElevatorMover0`).
 
 ### Procedure
 
-1. **Call buttons** — add a `Button1` on the wall at *each* floor, `Event` = that floor's sequence
-   trigger tag. **Do not** set `AttachTag` (a call button stays on the wall, it must not ride the car).
-2. **Floor doors** — build them as **`CEDoor`** movers (a Carone mover that auto-syncs with the car).
-   A pair of half-width panels that slide inward reads as classic elevator doors. Key 0 = closed,
-   key 1 = open. Give every panel at one floor the **same `Tag`** (e.g. `ElevatorA_floor1_outerdoors`).
-3. **Wire the doors to the car.** On the `CaroneElevator`, set `CEEvents[i]` = the door tag for
-   keyframe `i` (CEEvents[0] = floor-1 doors, CEEvents[1] = floor-2 doors, …), and set
-   `bCEControlsDoors=True`.
+1. Call buttons — add a `Button1` on the wall at each floor, `Event` = that floor's sequence trigger
+   tag. Do not set `AttachTag` (a call button stays on the wall, it must not ride the car).
+2. Floor doors — build them as `CEDoor` movers (a Carone mover that auto-syncs with the car). A pair
+   of half-width panels that slide inward reads as classic elevator doors. Key 0 = closed, key 1 =
+   open. Give every panel at one floor the same `Tag` (e.g. `ElevatorA_floor1_outerdoors`).
+3. Wire the doors to the car. On the `CaroneElevator`, set `CEEvents[i]` = the door tag for keyframe
+   `i` (CEEvents[0] = floor-1 doors, CEEvents[1] = floor-2 doors, …), and set `bCEControlsDoors=True`.
 
 ### With uedcli
 
@@ -123,12 +121,12 @@ actor prop set ElevatorMover0 \
 
 ### Procedure
 
-1. **Inner doors** ride *with* the car — build them as `CEDoor` movers, give them all one `Tag`
+1. Inner doors ride with the car — build them as `CEDoor` movers, give them all one `Tag`
    (e.g. `ElevatorA_innerdoors`), and set their `AttachTag` = the car's `Tag`. They need room to move
-   both open/closed **and** up/down with the car.
-2. **Open/close button** — a `CEDoorButton` inside the car, `Event` = the car's `Tag`, `AttachTag` =
+   both open/closed and up/down with the car.
+2. Open/close button — a `CEDoorButton` inside the car, `Event` = the car's `Tag`, `AttachTag` =
    the car's `Tag`. It opens the doors if closed, closes them if open, whenever the car is at a floor.
-3. **Wire the inner doors** — on the `CaroneElevator`, set `CESlaveMover` = the inner-door tag and
+3. Wire the inner doors — on the `CaroneElevator`, set `CESlaveMover` = the inner-door tag and
    `bCEControlsSlave=True`.
 
 ### With uedcli
@@ -166,16 +164,16 @@ actor prop set ElevatorMover0 CESlaveMover=ElevatorA_innerdoors bCEControlsSlave
 
 ## Caveats and gotchas
 
-- **The Intersect/Create-Mover editor ritual is gone** — `brush build … --mover-class` emits the
-  mover directly. Everything else (keyframes, tags, events) is `actor prop set` / `mover key`.
-- **Texture the car** with `--texture` on `brush build`, or retexture it later with `brush poly set` —
+- The Intersect/Create-Mover editor ritual is gone — `brush build … --mover-class` emits the mover
+  directly. Everything else (keyframes, tags, events) is `actor prop set` / `mover key`.
+- Texture the car with `--texture` on `brush build`, or retexture it later with `brush poly set` —
   uedcli can edit a mover's faces at any time. (The "surfaces frozen after Add Mover" limit is a
   GUI-editor constraint, not a uedcli one.)
-- **Carone classes are a shipped dependency.** They only resolve during `level materialize` if
+- Carone classes are a shipped dependency. They only resolve during `level materialize` if
   `CaroneElevatorSet.u` is on the composed package search path. Distribute it with the map, and
   credit Carone.
-- **Elevators want LiftCenter/LiftExit path nodes** if NPCs are to ride them — see the pathing
-  section of [`../../general/`](../../general/).
+- Elevators want LiftCenter/LiftExit path nodes if NPCs are to ride them — see the pathing section
+  of [`../../general/`](../../general/).
 
 ## See also
 

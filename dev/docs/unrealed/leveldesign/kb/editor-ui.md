@@ -1,16 +1,15 @@
 # Editor GUI & console reference  [ENGINE]
 
-The UnrealEd 2.x **GUI/console** reference — keyboard shortcuts, brush colours,
-2D/3D navigation, the browsers, and prefab `.T3D` import/export. This is
-engine-generic (it applies to UnrealEd 2.x for Unreal/UT/Deus Ex alike), kept
-here for completeness.
+UnrealEd 2.x GUI/console reference: keyboard shortcuts, brush colours, 2D/3D
+navigation, the browsers, and prefab `.T3D` import/export. Engine-generic — it
+applies to UnrealEd 2.x for Unreal/UT/Deus Ex alike.
 
-> **uedcli drives verbs, not this GUI.** uedcli authors the git-tracked T3D trunk
+> uedcli drives verbs, not this GUI. uedcli authors the git-tracked T3D trunk
 > with composing verbs (`brush build … | actor add -`, `brush poly set`,
 > `actor prop set`, `mover key …`) and only touches the editor to
-> `level materialize` / `preview`. This page exists so a GUI-aware reader keeps
-> the mental model, and so headless console verbs are documented — it is **not**
-> the primary authoring interface. For driving the editor console headlessly see
+> `level materialize` / `preview`. The GUI is not the primary authoring
+> interface; this page documents it and the headless console verbs for a
+> GUI-aware reader. For driving the editor console headlessly see
 > [`../../commands.md`](../../commands.md); for the editor's non-obvious traps
 > [`../../quirks.md`](../../quirks.md); for render modes
 > [`../../rendering.md`](../../rendering.md).

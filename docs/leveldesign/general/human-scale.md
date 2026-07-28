@@ -1,23 +1,23 @@
 # Human scale  [ENGINE]
 
-The numbers that make a level feel right to walk through. Build to these and spaces read as human; ignore
-them and rooms feel like dollhouses or aircraft hangars. These are the **engine-generic** UE1 figures.
+The numbers that make a level feel right to walk through. Build to these and spaces read as human. These
+are the engine-generic UE1 figures.
 
 > **Deus Ex player dimensions** (JC Denton's cylinder, eye height, jump, step) differ from stock UE1 and
 > live in [../deusex/human-scale.md](../deusex/human-scale.md). Use those when authoring for DX.
 
 ## Units
 
-**1 unreal unit (uu) ≈ 0.75 inch. `1 foot = 16 uu`.** ✅ (1 m ≈ 52.5 uu; 256 uu = 16 ft.) This is the
-convention authors think in — a 128-uu ceiling is 8 feet. The world maxes out at **65,536 uu per axis**.
+1 unreal unit (uu) ≈ 0.75 inch. `1 foot = 16 uu`. ✅ (1 m ≈ 52.5 uu; 256 uu = 16 ft.) A 128-uu ceiling
+is 8 feet. The world maxes out at 65,536 uu per axis.
 
 ## Grid
 
-Build on a **power-of-two grid**. **16** is the default working grid (= 1 foot = the default stair rise);
-drop to **8 / 4 / 2** for fine detail. **Never build sub-grid** — off-grid coordinates are the main cause
-of BSP holes ([geometry-and-bsp.md](geometry-and-bsp.md)). uedcli does not snap for you.
+Build on a power-of-two grid. 16 is the default working grid (= 1 foot = the default stair rise); drop to
+8 / 4 / 2 for fine detail. Never build sub-grid — off-grid coordinates are the main cause of BSP holes
+([geometry-and-bsp.md](geometry-and-bsp.md)). uedcli does not snap for you.
 
-## The load-bearing dimensions
+## Key dimensions
 
 | Quantity               | Value |
 | ---------------------- | --- |
@@ -42,16 +42,16 @@ Reference limits from the other guides that are really scale numbers:
 
 ## Reading any other default
 
-You don't have to memorise or guess — uedcli decodes a class's default properties **offline, with no
-editor**. An unset property resolves to its class default:
+uedcli decodes a class's default properties offline, with no editor. An unset property resolves to its
+class default:
 
 ```
 bin/uedcli actor build <Package.Class> | actor add - | actor prop get - <Prop>
 ```
 
 For example, `actor build Engine.Light | actor add - | actor prop get - LightRadius` prints `64`. Use
-this route whenever you need a number this page doesn't list. (`class show` prints property *names and
-types* only — the *values* come from `actor prop get` on a built instance.)
+this route whenever you need a number this page doesn't list. (`class show` prints property names and
+types only — the values come from `actor prop get` on a built instance.)
 
 ## Related
 

@@ -14,14 +14,13 @@ it first, place it in a hole you cut. They don't move, so they need no keyframes
 
 ### Procedure
 
-1. **Cut the window opening** through the wall (subtract a hole connecting two spaces).
-2. **Build a thin pane** — a **1-uu-thick** brush filling the opening — as a **`BreakableGlass`**
-   mover. Texture it with a glass texture from **`CoreTexGlass`**.
-3. **Flag every surface `Translucent`** so it reads as glass. (Glass is a sheet-thin translucent
-   mover, all faces translucent.)
-4. **Position it in the opening.** No keyframes — it just shatters in place.
-5. Optionally back it with an **invisible collision hull** if you want it to block movement until
-   broken (a bare sheet doesn't block on its own — see caveats).
+1. Cut the window opening through the wall (subtract a hole connecting two spaces).
+2. Build a thin pane — a 1-uu-thick brush filling the opening — as a `BreakableGlass` mover. Texture
+   it with a glass texture from `CoreTexGlass`.
+3. Flag every surface `Translucent` so it reads as glass.
+4. Position it in the opening. No keyframes — it just shatters in place.
+5. Optionally back it with an invisible collision hull to block movement until broken (a bare sheet
+   doesn't block on its own — see caveats).
 
 ### With uedcli
 
@@ -37,21 +36,21 @@ brush build sheet --plane yz --width 64 --height 96 \
 
 ## B: breakable wall
 
-Same as a door, but a solid-looking wall segment. Once you know breakable glass, you know this.
+Same as a door, but a solid-looking wall segment.
 
 ### Procedure
 
-1. **Cut the hole** in the wall where it will break through (connect two subtracted spaces). A jagged
+1. Cut the hole in the wall where it will break through (connect two subtracted spaces). A jagged
    or slightly rotated opening reads better than a clean square.
-2. **Build the fill brush** as a **`BreakableWall`** mover, textured to match (or nearly match) the
+2. Build the fill brush as a `BreakableWall` mover, textured to match (or nearly match) the
    surrounding wall — a small texture offset hints "this bit is different."
-3. **Set breaking difficulty.** Two knobs gate it: **`minDamageThreshold`** (default **20**) is the
-   smallest single hit that registers at all; `doorStrength` (default **0.40**) is a 0–1 durability pool
-   each registering hit chips away (by `Damage×0.01`), breaking at ~0. A crowbar does only ~6 damage, so a
-   **stock `BreakableWall` can't be crowbarred at *any* `doorStrength`** — to make it crowbar-weak, lower
-   **`minDamageThreshold` to ≤6** (exactly how `BreakableGlass` works: threshold 3). Leave the defaults to
-   demand a LAM/GEP.
-4. **Fit it into the opening** on-grid so there are no gaps.
+3. Set breaking difficulty. Two knobs gate it: `minDamageThreshold` (default 20) is the smallest
+   single hit that registers at all; `doorStrength` (default 0.40) is a 0–1 durability pool each
+   registering hit chips away (by `Damage×0.01`), breaking at ~0. A crowbar does only ~6 damage, so a
+   stock `BreakableWall` can't be crowbarred at any `doorStrength` — to make it crowbar-weak, lower
+   `minDamageThreshold` to ≤6 (same as `BreakableGlass`: threshold 3). Leave the defaults to demand a
+   LAM/GEP.
+4. Fit it into the opening on-grid so there are no gaps.
 
 ### With uedcli
 
@@ -68,18 +67,18 @@ actor prop set BreakableWall0 minDamageThreshold=6
 
 ## C: breakable crates
 
-The simplest of the three — just place a container decoration.
+Just place a container decoration.
 
 ### Procedure
 
-1. **Place a crate.** Pick a `CrateBreakable…` under `DeusExDecoration → Containers`. The medium
+1. Place a crate. Pick a `CrateBreakable…` under `DeusExDecoration → Containers`. The medium
    breakables and their default loot:
    - `CrateBreakableMedCombat` → 10mm ammo
    - `CrateBreakableMedGeneral` → lockpick
    - `CrateBreakableMedMedical` → MedKit
-2. **Customise the loot** (optional) — set `contents` to any `DeusExAmmo`/`DeusExPickup` class.
-3. **Add variety** (optional) — fill `content2` and/or `content3`. When broken the pick is a **weighted
-   cascade**, not a uniform draw: it starts with `contents`, then `content2` overrides it with ~30%
+2. Customise the loot (optional) — set `contents` to any `DeusExAmmo`/`DeusExPickup` class.
+3. Add variety (optional) — fill `content2` and/or `content3`. When broken the pick is a weighted
+   cascade, not a uniform draw: it starts with `contents`, then `content2` overrides it with ~30%
    chance, then `content3` likewise — so `contents` is the most common drop and each later slot ~30%.
    Keep it thematic: ammo in Combat crates, medkits in Medical, misc in General.
 
@@ -109,15 +108,15 @@ actor build DeusEx.CrateBreakableMedCombat \
 
 ## Caveats and gotchas
 
-- **Texture the mover before it exists.** `BreakableGlass`/`BreakableWall` are movers — pass
+- Texture the mover before it exists. `BreakableGlass`/`BreakableWall` are movers — pass
   `--texture` on `brush build` (and, on a `sheet`, `--flag` for the surface flags); you can't
   `brush poly set` them afterwards.
-- **A sheet/thin pane doesn't block on its own.** If a window must stop the player until it breaks,
-  the glass pane provides the *visual + shootable* surface and you add an **invisible collision hull**
+- A sheet/thin pane doesn't block on its own. If a window must stop the player until it breaks,
+  the glass pane provides the visual and shootable surface and you add an invisible collision hull
   behind it for blocking (all-invisible-poly semisolid — see [`../../general/`](../../general/)).
-- **Diegetic teaching.** Put a crowbar near breakable crates — the immersive-sim way to teach the
+- Diegetic teaching. Put a crowbar near breakable crates — the immersive-sim way to teach the
   affordance (see the DX design philosophy under [`../`](../)).
-- **Test with a nearby LAM/GEP** so you can actually verify a high-strength breakable wall blows.
+- Test with a nearby LAM/GEP so you can actually verify a high-strength breakable wall blows.
 
 ## See also
 
