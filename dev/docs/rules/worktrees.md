@@ -14,8 +14,7 @@ process never switches the main checkout's branch. Why it is shaped this way:
 switch it.** That one branch is both the branch-off point and the merge target.
 
 **A change that is not a feature** — a doc correction, a chore sweep, a one-file fix — needs no
-worktree: it stays on the checked-out branch and follows `CLAUDE.md` "Commits" and the batching
-rules in [`review-gates.md`](review-gates.md).
+worktree: it stays on the checked-out branch and follows `CLAUDE.md` "Commits".
 
 ## 1. Create it
 
@@ -47,13 +46,7 @@ It is squashed away on merge and a remote branch can never be deleted, so pushin
 permanent dead weight on `origin`. In-progress work is protected by local commits and by the branch
 being short-lived. **This is the one exception to `CLAUDE.md`'s "always push your work".**
 
-## 4. Gate it in the worktree, before merging
-
-See [`review-gates.md`](review-gates.md). Reviewers read the worktree's diff against the base:
-`git diff "$base"...HEAD`. Only a **passed gate** earns the merge — a clean or fix-free round 1, or
-a resolved round 2. Never a round 3 hunting for a clean sheet.
-
-## 5. Squash-merge from the MAIN checkout
+## 4. Squash-merge from the MAIN checkout
 
 A squash merge must run where the base branch is checked out, which is the main checkout — one more
 reason not to switch its branch:
@@ -70,7 +63,7 @@ following `git commit` commits *everything* staged — including whatever a conc
 staged. If the index is not clean, stop and sort that out rather than committing over another
 session's staged work.
 
-## 6. Clean up — but verify before deleting anything
+## 5. Clean up — but verify before deleting anything
 
 Confirm the base now contains the work (`git diff <feature-slug> HEAD` prints nothing), then
 `git worktree remove .claude/worktrees/<feature-slug>`.

@@ -35,9 +35,8 @@ Four conventions the suite cannot check, because none of them is machine-decidab
   open questions. **There is no separate `flagged`/`to-resolve` lane** — the owner resolves their own
   items by deleting them or triaging them forward, recording any real choice in the owning
   [`../direction/`](../direction/README.md) topic.
-- **A `chore` or `debug` item is one-shot**: it is filed straight into `to-build/` with no plan, and
-  therefore gets no plan review round ([`../rules/review-gates.md`](../rules/review-gates.md)
-  "Which row a change takes" relies on that distinction).
+- **A `chore` or `debug` item is one-shot**: it is filed straight into `to-build/` with no spec or
+  plan.
 - **An item reaches `to-spike/` only when its spec flags a live unknown**, and the spike's findings
   fold back into that same spec.
 - **When an item is fully finished, `git mv` it to `done/` and trim it to a short reference line** —

@@ -30,13 +30,13 @@ Every doc has ONE job. Don't mix them up:
 | **[engine-internals/](engine-internals/README.md)** | "How does the **game runtime** behave, and how do I RE / live-debug it?" | game-DLL facts (`Render.dll`/`Engine.dll`) + RE-workflow & wine-debug **gotchas** | appended to as traps are hit |
 | **[direction/](direction/README.md)** | "What are we building **toward**?" — what **the owner** decided: product intent AND process rulings | one doc per topic, **revised in place** (no history — git keeps that) | **agents may NEVER write it without their explicit yes** (`CLAUDE.md` "Direction docs") |
 | **[rationale/](rationale/README.md)** | "**Why** is the code this way, and what did we reject?" — engineering decisions an agent made | one doc per module/subsystem, revised in place | agents maintain it freely; every entry carries `Rejected` + `Refs` |
-| **[rules/](rules/README.md)** | "What process rule binds me *right now*?" (review gates, documentation, worktrees, tests, spikes, background work) | the *detail* behind `CLAUDE.md`'s resident summaries | read-on-demand; `CLAUDE.md`'s router names the moment to read each |
+| **[rules/](rules/README.md)** | "What process rule binds me *right now*?" (documentation, worktrees, tests, spikes, background work) | the *detail* behind `CLAUDE.md`'s resident summaries | read-on-demand; `CLAUDE.md`'s router names the moment to read each |
 | **an item's `spec.md` / `plan.md`** | "How will we design/sequence this one feature?" | ephemeral per-feature scratch, inside the board item it belongs to | deleted once the work lands |
 | **spikes/** | "What did we actually observe in this experiment?" | durable evidence | kept, cited by the docs above |
 | **[board/](board/README.md)** | the work-state cluster — flow + stages (see its `README.md`) | living |  |
 | **[board/inbox/](board/inbox/)** | "What's noticed but not yet sorted?" (head of stream — captures ideas/bugs/chores, AI flags for the owner, and their own open questions) | raw capture → triage | living |
 | **[board/to-spec/](board/to-spec/)** · **[to-spike/](board/to-spike/)** · **[to-plan/](board/to-plan/)** | "What's next, by stage?" | one home per item | living |
-| **[board/to-build/](board/to-build/)** | "What's reviewed & ready to build *now*?" | the on-deck **build queue / source of truth** → links a plan | living |
+| **[board/to-build/](board/to-build/)** | "What's ready to build *now*?" | the on-deck **build queue / source of truth** → links a plan | living |
 | **[board/done/](board/done/)** | "What landed recently / has deferred remnants?" | short reference tail | living |
 
 A gap between `direction/` (want) and `architecture.md` (is) is **expected** — it's the work

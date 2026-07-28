@@ -1,109 +1,91 @@
 ## Working with the owner
 
-### Ask via the question widget, and explain it properly
-
 **Every decision that is the owner's to make goes through Claude Code's `AskUserQuestion` widget —
-never as prose in the chat.** A question buried in a wall of text gets skimmed, answered partially,
-or scrolls away. This covers design forks, rulings on `direction/` topics, sequencing calls, and
-anything a review gate escalates.
+never as prose in the chat**, where it gets skimmed, half-answered, or scrolls away. This covers
+design forks, `direction/` rulings, sequencing calls, and anything a review escalates.
 
 **Never overrule the owner silently, and never downgrade a real question into a board item to avoid
 asking it.** If a rule of theirs points one way and you judge otherwise, that is a question for the
-widget — not a deviation recorded in a commit message and moved past. Logging is for a real finding
+widget — not a deviation recorded in a commit message and moved past. The board is for a real finding
 that is out of scope for the current change. *(Owner ruling, 2026-07-26.)*
 
-### A DECISION is implemented as given — NEVER altered without an explicit yes
+### A decision is implemented as given — NEVER altered without an explicit yes
 
-This governs the decision itself, wherever it was made: in a spec, in chat, in a one-line answer.
+Wherever the decision was made — a spec, chat, a one-line answer:
 
 - **Implement the ruling as stated.** Do not add a guard, filter, clamp, fallback or special case
   that changes what it does — not "in the spirit of" it, not to satisfy a different requirement they
-  also stated, not because measurement shows it is wrong.
+  also stated, not because measurement shows it wrong.
 - **Finding a real flaw does NOT authorise a fix.** Measure it, STOP, report the evidence, propose
   the change, wait for the yes.
 - **Telling them afterwards is NOT consent.** Flagging an unrequested change in the report is the
   violation, not the remedy.
-- **An unanswered question is not an answer.** Ask again; do not fill the gap with a default and call
+- **An unanswered question is not an answer.** Ask again; never fill the gap with a default and call
   it a judgement call.
-- **Same rule for reverting:** once told to drop an unapproved change, restore exactly what was ruled
-  — including its known costs — and pin those costs in a test or doc so they are recorded rather than
-  quietly re-fixed later.
+- **Reverting works the same way:** once told to drop an unapproved change, restore exactly what was
+  ruled — including its known costs — and pin those costs in a test or doc so they are recorded
+  rather than quietly re-fixed later.
 
 ### Direction docs — NEVER revise without confirmation
 
 `dev/docs/direction/<topic>.md` holds what **the owner** decided — product intent and process rulings
-alike. It is **MUTABLE**: revised in place, no supersession, no dated history (git keeps that).
-Evidence citations and live-finding dates are kept.
+alike. It is **mutable**: revised in place, no supersession, no dated history (git keeps that);
+evidence citations and live-finding dates stay.
 
-- **NEVER create, revise, reword, or delete anything under `dev/docs/direction/` — including a single
+- **NEVER create, revise, reword, or delete anything under `dev/docs/direction/` — down to a single
   `Rejected` bullet — without asking and getting an explicit yes.** Propose the exact text and wait.
-  "It follows from what they said" does NOT satisfy this. Moving a topic OUT needs a yes too — it
+  "It follows from what they said" does NOT satisfy this. Moving a topic *out* needs a yes too — it
   removes the protection.
-- **When direction looks stale, ASK — never edit.** And **confirm proactively**: when working in a
+- **When direction looks stale, ASK — never edit.** And confirm proactively: when working in a
   topic, ask whether its direction doc is still current.
 - **`direction/README.md` is the exception**: its index rows and short model statement may be
-  maintained freely. No topic *content* there, and **never** an `@` import.
-- **A decision awaiting a yes is parked** with `bin/board new inbox '[OWNER — confirm] …'`,
-  `kind = "owner-question"`, carrying the proposed text verbatim in the item's `overview.md`. If it
+  maintained freely. No topic *content* there, and never an `@` import.
+- **A decision awaiting a yes is parked** with `bin/board new inbox '[OWNER — confirm] …'`
+  (`kind = "owner-question"`), carrying the proposed text verbatim in the item's `overview.md`. If it
   blocks an existing item, put it in *that* item's `questions/` instead and leave the item where it is.
 - **Commits touching `dev/docs/direction/` carry a `Confirmed: <topic>` trailer**, so
   `git log --grep=confirmed -i -- dev/docs/direction/` shows every confirmed edit and an unconfirmed
-  one stands out. (Four commits from 2026-07-26 predate the trailer's rename and use an older
-  spelling — the case-insensitive grep catches both.)
+  one stands out.
 
 **Nothing mechanical enforces any of this**; revise-in-place destroys the prior text, so a bad edit
 looks exactly like a good one. Why it is shaped this way anyway: `dev/docs/direction/process.md`.
 
 ## Workflow
 
-Always ask where to implement the change:
-- feature branch on a git worktree
-- current checkout (usually master)
-- somewhere else
-
+Always ask where to implement a change: a feature branch on a git worktree, the current checkout
+(usually master), or somewhere else.
 
 ## Code & CLI conventions
 
-- **NO BACK-COMPAT CRUFT — uedcli is UNRELEASED.** There are no external users and no scripts in the
-  wild, so nothing is ever kept for backward compatibility. When you remove or rename a flag, verb,
-  option value, output format, or code path, **delete it outright** in the same change that adds the
-  replacement — the new spelling is the only spelling. Never add or keep: a deprecated alias, a no-op
-  flag "so old invocations still work", a migration-error shim (a flag defined only to
-  `parser.error("X was renamed to Y")`), dual-format support kept to avoid re-writing callers, or an
-  "old way" branch in code/tests/docs.
-  *(`dev/docs/direction/conventions.md`. Superseded only when uedcli is released.)*
-- **No silent half-answers.** A command that can't fully satisfy a request exits 2 naming the
-  offending value, rather than emitting a partial result plus a stderr warning — stderr scrolls away
-  and the caller takes the partial answer for a complete one.
-- **Every command and argument needs a `help=` string** that explains what it actually does, so
-  `-h`/`--help` is self-explanatory — never just a restatement of the flag name.
-- **Never let a Python exception reach the CLI user.** A bad actor/entity name must raise a clear
-  error naming the offending value (`Actor not found: Foo`) and exit non-zero — never a bare
-  `KeyError`/`IndexError` traceback. Cover each path with a regression test.
-- **Verbs compose — this is the CORE CLI philosophy.** Build small, single-purpose verbs that pipe
-  together; do NOT grow big verbs with many bespoke flags. Concretely:
-  - **Producer/query verbs print their result to stdout, one item per line** — pipe-friendly
-    (`actor find` prints matching names; `actor add` prints the allocated names; a generator prints a
-    T3D snippet). Human summaries/counts go to **stderr** so they never pollute the pipe. Add
-    **`--json`** where a script needs structured output rather than lines.
-  - **Mutating/consuming verbs read their target set from stdin via `-`** — so
-    `actor find --folder castle.tower | actor prop set - Texture=…` and `brush build cube | actor add -`
-    close the loop instead of copy-paste / `$(…)`. `-` is the SOLE names source (mutually exclusive
-    with names as CLI args); empty stdin is a clean no-op (exit 0), not an error.
-  - **Two stdin conventions, disambiguated by verb:** a **name list** (`find → mutate -`) vs a **T3D
-    snippet** (`build → add -`). Keep them distinct; don't blur them.
-  - **A verb over a SET takes the set, and that IS the operation** — pass names (or `-`); the
-    multi-item behaviour needs no extra flag. E.g. `actor bbox <names…>` returns the box enclosing ALL
-    of them, so there is **no `--union`**. Never add a flag that merely restates "operate on this set."
-  - **Prefer a stateless `find`/query verb** that prints matching names (by folder, class, property,
-    …) for other verbs to consume, over per-command `--only-groups`/`--only-actors` filter flags
-    sprinkled on every verb.
-  - **`find` vs `search` — name by what's queried, never merge them.** `find` = a deterministic query
-    over concrete **T3D-tree state** (actors/polys/brushes that exist in the trunk), producing an
-    exact name/selector set to pipe onward (`actor find`, `brush poly find`). `search` = ranked/fuzzy
-    **discovery over a catalog or corpus** (textures, the asset catalog, docs) — *what exists* by
-    relevance, not a known set (`texture search`; future `catalog search`/`docs search`).
-    *(`dev/docs/direction/conventions.md`.)*
+The detail and the rejected alternatives live in `dev/docs/direction/conventions.md`; the core:
+
+- **NO BACK-COMPAT CRUFT — uedcli is UNRELEASED.** No external users, no scripts in the wild, so
+  nothing is kept for backward compatibility. When you remove or rename a flag, verb, option value,
+  output format or code path, **delete it outright** in the change that adds the replacement — the
+  new spelling is the only spelling. Never a deprecated alias, a no-op flag, a migration-error shim,
+  dual-format support, or an "old way" branch. *(Superseded only when uedcli is released.)*
+- **No silent half-answers, no fallbacks.** A command that can't fully satisfy a request **exits 2
+  naming the offending value**, never a partial result plus a stderr warning that scrolls away, and
+  never a substituted default for something it couldn't resolve.
+- **Never let a Python exception reach the user.** A bad actor/entity name exits non-zero with a
+  clear message naming the value (`Actor not found: Foo`), never a bare `KeyError`/`IndexError`
+  traceback. Cover each path with a regression test.
+- **Every command, flag and argument needs a real `help=`** that says what it actually does, so
+  `-h`/`--help` is self-explanatory — never a restatement of the flag's own name.
+- **Verbs compose — the CORE CLI philosophy.** Small, single-purpose verbs that pipe together, never
+  big verbs grown a bespoke flag at a time:
+  - Producer/query verbs print their result to **stdout, one item per line**; human summaries/counts
+    go to **stderr**; add **`--json`** where a script needs structure rather than lines.
+  - Mutating/consuming verbs read their target set from **stdin via `-`** — the sole names source
+    (mutually exclusive with names as CLI args); empty stdin is a clean no-op (exit 0), not an error.
+  - Two stdin conventions, disambiguated by verb: a **name list** (`find → mutate -`) vs a **T3D
+    snippet** (`build → add -`). Keep them distinct.
+  - A verb over a SET takes the set, and that IS the operation — no flag that merely restates
+    "operate on this set" (`actor bbox <names…>` has no `--union`).
+  - Prefer one stateless `find`/query verb feeding the others over per-verb `--only-*` filter flags.
+  - **`find` vs `search` — never merged.** `find` = a deterministic query over concrete **T3D-tree
+    state** producing an exact name/selector set to pipe onward; `search` = ranked/fuzzy
+    **discovery over a catalog or corpus** (textures, the asset catalog, docs).
 
 ## MINIMAL. SUCCINCT. AS SHORT AS POSSIBLE WITHOUT LOSING MEANING.
 
@@ -126,8 +108,7 @@ item — and of THIS FILE — and the one most often broken.**
 markdown-table alignment convention, which developer doc owns what, the specs-and-plans-are-ephemeral
 rules, and how UnrealEd facts are cited and confidence-tagged. The three rules below bind everywhere:
 
-- **Write every doc for a reader with NO familiarity with the implementation.** Assume the reader
-  does not know the code, the substrate, the prior conversation, or the jargon. Define terms before
+- **Write every doc for a reader with NO familiarity with the implementation.** Define terms before
   using them, spell out the mechanism, and never lean on context the reader doesn't have. An
   explanation that only makes sense if you already know how it works is a bug — rewrite it.
 - **Keep the user-facing docs current with the CLI — not optional.** Whenever a change alters
@@ -145,17 +126,17 @@ comments. The public documentation is very lacking and discovering this knowledg
 The board is **one directory per work item** (`dev/docs/board/<stage>/<slug>/overview.md`, plus
 optional `spec.md`, `plan.md` and `questions/<q>.md`). The stage queues are named for the *next
 action* an item needs — `inbox/` (un-triaged capture, including anything you'd flag for the owner) →
-`to-spec/` → `to-spike/` → `to-plan/` → `to-build/` (the reviewed build queue), plus `someday/`,
+`to-spec/` → `to-spike/` → `to-plan/` → `to-build/` (the ready-to-build queue), plus `someday/`,
 `stale/` and `done/`. An item advances with a single `git mv`. **Read `dev/docs/board/README.md`
 before working the board** — stages, frontmatter, slugs, and the question flow.
 
 Three rules bind every session:
 
 - **LOG A FINDING WITH `bin/board new inbox '<title>'`.** It creates a valid item and prints its
-  path; write the detail into that `overview.md`. There is no capture file to append to. Anything
-  that would otherwise live only in chat goes here: a provisional call, an assumption, a risk, a
-  deviation from spec/plan, work you deliberately didn't do. If something gets deferred
-  mid-implementation, file a *separate* item rather than letting the original cover both halves.
+  path; write the detail into that `overview.md`. Anything that would otherwise live only in chat
+  goes here: a provisional call, an assumption, a risk, a deviation from spec/plan, work you
+  deliberately didn't do. If something gets deferred mid-implementation, file a *separate* item
+  rather than letting the original cover both halves.
 - **RUN `bin/board answered` AT SESSION START**, and before pulling work off `to-build/`. A question
   the owner has answered is invisible otherwise. **The commit that folds an answer out also deletes
   the question file** — if you find it already gone, another session has done it; stop.
@@ -175,10 +156,10 @@ crash-prone, and these docs are the only ground truth. If a task touches any row
 not read that doc **this session**, read it first. (`dev/docs/README.md` has the full "which doc is
 for what" table.)
 
-**A dispatched subagent does NOT inherit your reading.** When you hand work to a subagent — a
-reviewer, a spike investigator, anything — its prompt MUST name the docs it has to read before
-acting, by path. A subagent that has not read `unrealed/t3d.md` will flag correct T3D handling as a
-bug; one that has not read this file will flag deliberate conventions as defects.
+**A dispatched subagent does NOT inherit your reading.** When you hand work to a subagent — a spike
+investigator, a wide multi-file search, anything — its prompt MUST name the docs it has to read
+before acting, by path. A subagent that has not read `unrealed/t3d.md` will flag correct T3D
+handling as a bug; one that has not read this file will flag deliberate conventions as defects.
 
 - **@dev/docs/direction/README.md** — *(auto-loaded)* the index of what we WANT. **Read the topic doc itself before any design question, spec or plan** — the index is a router, not the content.
 - `dev/docs/architecture.md` — **Read BEFORE any uedcli code change or design question**: the layer/module map, the model-side write pattern, invariants D1–D8, the session-store shape.
@@ -194,7 +175,6 @@ bug; one that has not read this file will flag deliberate conventions as defects
 **Process rules** (`dev/docs/rules/README.md` indexes them). Each line carries the one fact you cannot
 afford to miss; the doc carries the rest:
 
-- `dev/docs/rules/review-gates.md` — **Read BEFORE dispatching a review round.** Which row a change takes, what "trivial" excludes, priming vs context, how findings are dispositioned, the round-2 trigger, batching. **The counts stay in this file, not there.**
 - `dev/docs/rules/documentation.md` — **Read BEFORE writing or restructuring docs.** Table alignment, which dev doc owns what, ephemeral specs/plans, UnrealEd evidence + confidence markers.
 - `dev/docs/rules/worktrees.md` — **Read BEFORE creating a worktree or squash-merging one.** Never push a feature branch; check the index before `git merge --squash`; ask before `git branch -D`.
 - `dev/docs/rules/tests.md` — **Read BEFORE running tests.** Run them via **`bin/test`**, never bare `pytest`; uedcli and its suite are **host-native, not containerised**.
