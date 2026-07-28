@@ -40,14 +40,6 @@ to put it. This doc is that home.
   text and stood out among pure appends. Revise-in-place destroys the prior text
   and makes a bad edit look exactly like a good one. **Nothing mechanical
   replaces that.**
-- **Every change is read cold before it is declared done** — at the spec, plan
-  and build moments, by reviewers who get context but never priming. The gate
-  buys **coverage, not reassurance**: cold readers diverge sharply from the
-  author and from each other, so what a round adds is a second independent
-  reading, not a second opinion on the same one. It is deliberately **bounded**;
-  the moments, tiers, headcounts and dispositions live in `CLAUDE.md` "Review
-  gates" **and nowhere else**, so the gate can be changed in one place without
-  leaving stale copies behind.
 - **Nothing load-bearing lives only in chat.** A finding left standing, a
   deferral, a refutation, an assumption, a flag for the owner — each goes on the
   board (`../board/`) or into the commit message, because chat scrolls away. The
@@ -96,26 +88,6 @@ to put it. This doc is that home.
   guard that was never more than a marker.
 - **Extending the confirmation rule past `direction/`** — rejected on exposure
   time, not on content.
-- **Reviewing until a round comes back clean, unbounded** (the prior rule) — the
-  tail rounds were the bulk of the cost for the least return, and on small items
-  the review outran the implementation several times over.
-- **Exempting trivial changes from review entirely** — a cheap pass is close to
-  free and occasionally catches something, so "nothing ships unlooked-at"
-  survives rather than being abandoned.
-- **Exempting documentation from review entirely** — docs are where this repo's
-  knowledge lives. Its failure mode being a stale sentence buys it a *cheaper*
-  gate, not no gate.
-- **A separate heavyweight tier for the riskiest changes** (an on-disk format
-  move, a broad deletion sweep, a silent failure mode) — folded into the flat
-  per-moment shape. This is a deliberate reduction of coverage on exactly the
-  riskiest class of change; the compensating controls are the earlier moments and
-  the trivial tier's explicit refusal to swallow a one-line change to
-  load-bearing code.
-- **A later round as broad as the first** — breadth is worth buying on the first
-  cold reading of an artifact, not over a small fix diff.
-- **A severity scale for what blocks the gate** — cold reviewers cannot apply one
-  consistently, and a scale invites arguing a real finding down a tier. The test
-  is observability instead.
 - **A shared rule file sitting above the per-tool ones.** It is the obvious
   de-duplication — one process, not two mirrored copies — and it was rejected
   anyway, because the delegation seam had already produced a stale quotation.
@@ -144,7 +116,7 @@ to put it. This doc is that home.
 
 ## Refs
 
-`CLAUDE.md` "Direction docs" · "Review gates" · "Feature worktrees" ·
+`CLAUDE.md` "Direction docs" · "Feature worktrees" ·
 [`../rules/README.md`](../rules/README.md) ·
 [`../board/README.md`](../board/README.md) ·
 [`../dev-runtime.md`](../dev-runtime.md) ·
