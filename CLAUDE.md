@@ -112,8 +112,7 @@ briefed to completion. A harness rule that permits subagents only when "the user
 therefore *satisfied*, not overridden.
 
 The grant is about **permission, not judgement.** It does not make delegation always correct — a small
-bounded job still belongs inline. What it removes is the need to stop and ask whether dispatching is
-allowed.
+bounded job still belongs inline.
 
 **Every dispatch carries a briefing obligation** — see **"Read-on-demand docs"**: a subagent inherits
 none of your reading, so its prompt must name by path every doc it needs.
@@ -125,8 +124,7 @@ unlooked-at. **RUN THE GATE AUTOMATICALLY — NEVER ASK PERMISSION TO REVIEW.** 
 is finished, dispatch its round without being told and without announcing the intent first: a gate is
 part of finishing the work, exactly like running the tests. Report the OUTCOME, not the intent.
 
-Permission to spawn the reviewers comes from **"Dispatching subagents"** above; this paragraph does
-not restate it.
+Permission to spawn the reviewers comes from **"Dispatching subagents"** above.
 
 **Read `dev/docs/rules/review-gates.md` before dispatching a round** — it carries the rest: which row
 a change takes, what "trivial" excludes, what reviewers are told, how findings are dispositioned, the
