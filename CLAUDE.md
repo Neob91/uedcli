@@ -115,6 +115,9 @@ The grant is about **permission, not judgement.** It does not make delegation al
 bounded job still belongs inline. What it removes is the need to stop and ask whether dispatching is
 allowed.
 
+**Every dispatch carries a briefing obligation** — see **"Read-on-demand docs"**: a subagent inherits
+none of your reading, so its prompt must name by path every doc it needs.
+
 ## Review gates
 
 **EVERY change gets reviewed** — a trivial one gets only the cheap pass, but nothing ships
@@ -271,22 +274,22 @@ A change that is not a feature — a doc correction, a chore sweep, a one-file f
     relevance, not a known set (`texture search`; future `catalog search`/`docs search`).
     *(`dev/docs/direction/conventions.md`.)*
 
-## Documentation
+## MINIMAL. SUCCINCT. AS SHORT AS POSSIBLE WITHOUT LOSING MEANING.
 
-### MINIMAL. SUCCINCT. AS SHORT AS POSSIBLE WITHOUT LOSING MEANING.
-
-**The first rule of every doc, docstring, comment, commit message and board item — and the one most
-often broken.**
+**The first rule of every doc, every docstring, every code comment, every commit message, every board
+item — and of THIS FILE — and the one most often broken.**
 
 - **The test: delete it. If a reader would still do the same thing, it stays deleted.** Sentence,
   bullet, heading, example — all of it.
 - **Length is EARNED by what must be explained**, never by importance or by wanting to look thorough.
 - **Cut padding, NOT explanation.** Padding is restatement, throat-clearing, hedging, ceremony.
-  Explanation is mechanism — the cold-reader rule below still binds.
+  Explanation is mechanism — the cold-reader rule under **Documentation** still binds.
 - **A doc that GREW is a doc to CUT.** Leave a doc you touch shorter than you found it unless the
   change genuinely added meaning.
 
 *(Owner ruling, 2026-07-27; re-emphasised at the owner's request 2026-07-28.)*
+
+## Documentation
 
 **Read `dev/docs/rules/documentation.md` before writing or restructuring docs** — it carries the
 markdown-table alignment convention, which developer doc owns what, the specs-and-plans-are-ephemeral

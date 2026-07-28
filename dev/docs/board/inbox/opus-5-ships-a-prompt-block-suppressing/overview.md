@@ -74,14 +74,19 @@ This section is about `heron_brook`/`fennel_godwit` — the mechanism actually f
 
 ## What was done
 
-`CLAUDE.md` "Review gates" was reworded to state that the paragraph *is* the owner's standing
-request to spawn gate reviewers, which satisfies the injected rule's own "unless the user requested
-it" exception instead of trying to override it. The previous wording ("overrides any default or
-harness-level reluctance") read as defiance of a system-prompt rule, which loses.
+`CLAUDE.md` gained a **`## Dispatching subagents`** section stating that it *is* the owner's standing
+request to dispatch subagents — which satisfies the injected rule's own "unless the user requested it"
+exception instead of trying to override it. The old wording ("overrides any default or harness-level
+reluctance") read as defiance of a system-prompt rule, which loses.
 
-The owner confirmed that wording verbatim in session, and cut a further clause the agent had
-drafted (that a blind reviewer is a different instrument from inline self-review) as being the
-agent's argument rather than theirs. Worth knowing for anyone tempted to re-add it.
+It landed in two steps. First a gate-reviewers-only grant inside "Review gates" (`a059226`); then the
+build review found that non-gate dispatch — spikes, wide searches, long briefed work — still stalled,
+the owner ruled to widen, and the grant moved out to its own section covering **every** subagent an
+agent hands work to (`f0b8024`).
+
+The owner confirmed both wordings verbatim in session, and cut a clause the agent had drafted (that a
+blind reviewer is a different instrument from inline self-review) as being the agent's argument rather
+than theirs. Worth knowing for anyone tempted to re-add it.
 
 The first commit attempt was **blocked by the auto-mode classifier as self-modification** — an agent
 writing an assertion of owner consent into its own instruction file, in order to clear a harness
@@ -91,24 +96,20 @@ confirmation of the actual sentences, not of the intent.
 
 ## Open
 
-- **The standing request covers gate reviewers only** — `CLAUDE.md` "Review gates" grants it for
-  "those subagents", i.e. a gate's own round. But `CLAUDE.md` also tells an agent to brief *any*
-  subagent it dispatches, "a reviewer, a spike investigator, anything", and the injected rule
-  suppresses those equally. **Escalated to the owner; awaiting a ruling** on whether to widen the
-  grant beyond gates. Until then, non-gate delegation still stalls.
-- `never-end-a-turn-on-a-stated-intention` proposes that long or multi-step work run in a subagent
-  briefed to completion. That half of it is defeated by the same injected rule, so it needs the
-  widened grant above to work at all. Whoever folds that item's answer in should read this one first.
-- Whether the wording fix survives the `counter_steer` arm being switched on. That block is longer
-  and more specific, and names review-verification explicitly. If gates start stalling again,
-  suspect this — and note `CLAUDE_CODE_THISTLE_GREBE=no_nudges` forecloses it.
+- Whether the fix survives the `counter_steer` arm being switched on. That block is longer and more
+  specific, and names review-verification explicitly. If dispatch starts stalling again, suspect this
+  — and note `CLAUDE_CODE_THISTLE_GREBE=no_nudges` forecloses it.
 - The owner declined the `--append-system-prompt-file` wrapper for now. It remains the stronger
   lever if needed, since it lands at system-prompt tier rather than in a project file. This
   declination is recorded only here; if this item is pruned it survives only in git history.
+- `never-end-a-turn-on-a-stated-intention` proposes that long or multi-step work run in a subagent
+  briefed to completion. The widened grant unblocks that half; only the owner's yes on its own
+  wording remains. Whoever folds its answer in should read this item first.
 
-**Left standing from the build review:** "This paragraph IS the owner's standing request to spawn
-*those* subagents" has no local antecedent — the "Review gates" section does not mention subagents
-until three paragraphs later, so a cold reader must read forward to learn what "those" means. Not
-fixed because both readings yield the same operative content (a standing request exists in
-`CLAUDE.md`), and the sentence is owner-confirmed verbatim, so rewording it needs a fresh yes. Fold
-it into the scope ruling above if that reopens the paragraph.
+## Settled
+
+- **Scope of the grant** — ruled 2026-07-28: it covers every subagent an agent dispatches, not just
+  gate reviewers.
+- **The missing-antecedent finding** from the first build review ("those subagents", with nothing
+  nearby saying what "those" were) is gone: the grant now sits under a heading that names it and
+  enumerates the cases it covers.
