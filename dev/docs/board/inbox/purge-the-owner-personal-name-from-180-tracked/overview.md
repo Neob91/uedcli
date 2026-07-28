@@ -24,11 +24,11 @@ before anything is edited:
 2. **`dev/docs/architecture.md`** and other live developer docs — mechanical reword.
 3. **`dev/docs/decisions.md`** — the **frozen** retired ledger ("never append"). Rewriting names
    inside a frozen historical record may not be wanted. **Ask.**
-4. **~170 board items** under `dev/docs/board/`, mostly `inbox/`. Two have the name **in their
-   slug** (`andrzej-the-older-gate-contradiction-item-above`,
-   `andrzej-the-two-claude-md-files-now-give`), and a slug is documented as permanent and never
-   renamed (`dev/docs/board/README.md`) — `test_board.py` checks that every slug citation resolves,
-   so renaming means finding and updating every reference. Several other items quote historical tag
+4. **~170 board items** under `dev/docs/board/`, mostly `inbox/`. (Two items that carried the name
+   in their slug were obsolete review-gate captures and were deleted 2026-07-28, so no rename is
+   needed there.) A slug is documented as permanent and never renamed
+   (`dev/docs/board/README.md`) — `test_board.py` checks that every slug citation resolves, so
+   renaming means finding and updating every reference. Several other items quote historical tag
    spellings such as `[FLAG-FOR-<name>]`, where the name **is** the quoted data. **Ask** whether
    historical board capture is in scope at all.
 
