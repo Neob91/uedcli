@@ -11,20 +11,19 @@ A keypad opens or unlocks whatever its `Event` targets when the player enters `v
 
 ### Procedure
 
-1. Make the door lockable. Regular engine movers have no lock, so the target must be a
-   `DeusExMover` with `bIsDoor=True` and `bLocked=True` (see [`deusex-door.md`](deusex-door.md)).
-   Give the door a `Tag` (e.g. `Door_Lab`).
+1. Make the door lockable. Engine movers have no lock, so the target must be a
+   `DeusExMover` with `bIsDoor=True` and `bLocked=True` (see [`deusex-door.md`](deusex-door.md));
+   give it a `Tag` (e.g. `Door_Lab`).
 2. Place the keypad on a wall near the door, ~60–80 uu above the floor (4–5 grid squares). Pick
-   `Keypad1`, `Keypad2`, or `Keypad3` — identical behaviour, different in-game look.
-3. Set `validCode` to a 4–5 digit string. `bToggleLock` (default `True`) controls what a correct
-   code does: `True` toggles the target's lock (unlock a locked door, or lock it again) without
-   opening it. `False` makes the keypad fire its `Event`, opening the wired door via the door's
-   trigger state; that path ignores `bLocked`, so the door opens even though its lock is never
-   cleared. The example below sets `False` to open the door.
-4. Set hackability: `bHackable=True` (usual) with `hackStrength` (0.20 = 20%, two multitools for
-   an untrained player). Set `bHackable=False` to force the code only.
-5. Wire it to the door: set the keypad's `Event` to the door's `Tag`. In the editor this shows as
-   a red line from keypad to door.
+   `Keypad1`, `Keypad2`, or `Keypad3` — identical behaviour, different look.
+3. Set `validCode` to a 4–5 digit string. `bToggleLock` (default `True`): `True` toggles the
+   target's lock without opening it; `False` fires the keypad's `Event`, opening the wired door via
+   its trigger state — that path ignores `bLocked`, so the door opens without clearing its lock. The
+   example uses `False`.
+4. Set hackability: `bHackable=True` with `hackStrength` (0.20 = 20%, two multitools for an
+   untrained player); `bHackable=False` forces code-only.
+5. Wire it to the door: set the keypad's `Event` to the door's `Tag`. The editor shows this as a
+   red line from keypad to door.
 
 ### With uedcli
 
@@ -48,11 +47,11 @@ bypassed, by firing their `UnTriggerEvent`.
 ### Procedure
 
 1. Place the laser triggers. Use `LaserTrigger` for the red beams — breaking one triggers the
-   alarm by default. A set of four from alternating directions reads well. Give them all the same
+   alarm by default. Four from alternating directions reads well. Give them all the same
    `Tag` (e.g. `LaserField1`). The red arrow shows each beam's direction.
 2. Place a `ControlPanel` on a nearby wall.
-3. Wire the panel to the lasers: set `UnTriggerEvent[0]` to the lasers' `Tag`. When the player
-   hacks the panel, it un-triggers (switches off) the beams. Set `hackStrength` for difficulty.
+3. Wire the panel to the lasers: set `UnTriggerEvent[0]` to the lasers' `Tag`. Hacking the panel
+   un-triggers (switches off) the beams. Set `hackStrength` for difficulty.
 
 ### With uedcli
 
@@ -71,8 +70,8 @@ actor build DeusEx.ControlPanel \
 
 - `LaserTrigger` — the red beams. Breaking one auto-triggers the alarm; set `bNoAlarm` to suppress
   that.
-- `BeamTrigger` — the blue beams. Same directional trip mechanism, but no automatic alarm. Used to
-  fire arbitrary events (explosions, gun turrets, opening a door to release a robot). Wire its
+- `BeamTrigger` — the blue beams. Same directional trip mechanism, no automatic alarm. Fires
+  arbitrary events (explosions, gun turrets, opening a door to release a robot). Wire its
   `Event` to whatever `Tag` it should activate.
 
 Both are directional (the arrow is the beam) and both are commonly disabled by a `ControlPanel`.
@@ -107,8 +106,8 @@ Only a `DeusExMover` can be locked (the engine `Mover` cannot). The lock surface
 - Array properties like `UnTriggerEvent` and a console's `Views`/`doorTag` are indexed with the
   dot form: `--prop UnTriggerEvent.0=…` (the CLI rejects the T3D `KEY(N)` parenthesis form —
   write `KEY.N`).
-- The keypad→door "red line" is editorial; model-side, the link is simply `keypad.Event ==
-  door.Tag`. Get the strings identical and it connects.
+- The keypad→door "red line" is editorial; model-side the link is just `keypad.Event ==
+  door.Tag`. Make the strings identical and it connects.
 
 ## See also
 

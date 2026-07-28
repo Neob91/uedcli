@@ -16,11 +16,10 @@
 "level" is never used for the file; "map" is never used for the abstract content. See
 [decisions.md](decisions.md) (2026-06-23).
 
-> **Direction:** uedcli aims to be a generic UnrealEngine-1 tool with
-> Deus Ex as one baked-in substrate. Today it targets the Deus Ex substrate and `.dx` map
-> files only. New code/naming should avoid DeusEx-only framing and map-file handling should
-> grow to accept `.unr`; forward-looking guidance, not current capability and not a refactor
-> mandate (see decisions.md + `board/README.md` "Portability goal").
+> **Direction:** uedcli aims to be a generic UnrealEngine-1 tool with Deus Ex as one baked-in
+> substrate. Today it targets Deus Ex and `.dx` map files only. New code/naming should avoid
+> DeusEx-only framing and map-file handling should grow to accept `.unr`; forward-looking
+> guidance, not a refactor mandate (see decisions.md + `board/README.md` "Portability goal").
 
 > **Git-native migration complete.** The durable source of truth is the git-tracked T3D trunk
 > (`<maps-dir>/<level>/`); the session store and its core modules were deleted (git
@@ -43,17 +42,17 @@
 > writes `.uedcli/.gitignore` containing `*`, so it can never be committed.
 
 ## Premise (git-native trunk)
-The durable source of truth is the **git-tracked T3D trunk** — one directory per actor under
+The durable source of truth is the git-tracked T3D trunk — one directory per actor under
 `<maps-dir>/<level>/`, edited on ordinary git feature branches. The `.dx`/`.unr` map
-file is a **build artifact**, never the merge unit. **UnrealEd is NOT in the read/edit loop** —
+file is a build artifact, never the merge unit. UnrealEd is not in the read/edit loop —
 it is a build/preview tool reached only via a per-command ephemeral spin-up (`level materialize`,
 `level preview`, the `stash` CSG generators). Every `actor`/`brush`/`poly`/`vertex` read and
 mutation is pure model-side compute against the trunk (no `docker exec`, no `MAP EXPORT`); the LLM
 issues semantic by-name commands; T3D is internal plumbing. Git is the history — `git commit` is
 the user's own, uedcli never wraps version control.
 
-A pivot from the earlier editor-centric model (a live UnrealEd held the authoritative level, every
-read a `MAP EXPORT`) and the interim session store (slices ≤3, since deleted). See
+This pivoted from the earlier editor-centric model (a live UnrealEd held the authoritative level,
+every read a `MAP EXPORT`) and the interim session store (slices ≤3, since deleted). See
 [decisions.md](decisions.md) (the 2026-07-05 git-native entries). The per-actor `.t3d` +
 `order_value` layout was chosen so disjoint edits merge natively under `git merge` — verified in
 [`spikes/2026-07-01-git-merge-t3d-tree/`](spikes/2026-07-01-git-merge-t3d-tree/findings.md)
@@ -167,11 +166,11 @@ and [`spikes/2026-07-05-git-merge-t3d-layout/`](spikes/2026-07-05-git-merge-t3d-
   makes a pasted brush selectable), screenshots. Reading the level back is `MAP EXPORT` only —
   the `EDIT COPY`→xclip READ path is gone (`Driver.edit_copy` deleted 2026-07-26 as uncalled).
   `wine_ctl` fast-fails on a dead/crashed editor (see unrealed/commands).
-  **`map_save` WAITS FOR AND VERIFIES its own output** (returning the saved size): driving is
+  **`map_save` waits for and verifies its own output** (returning the saved size). Driving is
   fire-and-forget — `wine_ctl exec` types the line, presses Return, settles 0.3 s and returns, long
   before the editor has written anything — and `MAP SAVE` answers nothing over the console, so the
-  file itself is the only signal. The check must separate **three** outcomes a size poll conflates —
-  *finished*, *stalled* and *container-dead* — so it stacks four independent signals:
+  file is the only signal. The check must separate three outcomes a size poll conflates —
+  finished, stalled and container-dead — so it stacks four independent signals:
   1. **A pre-`MAP SAVE` stat the file must differ from.** `container_stat` is taken before the
      command is typed; a post-save reading with the same `(size, mtime)` proves the editor wrote
      nothing, even when a complete map from an earlier run sits at that path. Both PRODUCTION callers
@@ -183,53 +182,50 @@ and [`spikes/2026-07-05-git-merge-t3d-layout/`](spikes/2026-07-05-git-merge-t3d-
      went quiet for a second. Cost: every save is accepted ≥ `settle` after the file stops growing,
      so `level materialize` pays a few extra seconds.
   3. **A structural check of the written package** (`driver.package_header_problem`, fed by
-     `container_file_head`'s 36-byte `od` read). The only signal that *could* tell *finished* from
-     *stalled*: a part-written map holds a steady size exactly like a finished one, so stability can
+     `container_file_head`'s 36-byte `od` read). The only signal that can tell finished from
+     stalled: a part-written map holds a steady size exactly like a finished one, so stability can
      never distinguish them, while the bytes can. It requires the magic, non-zero table counts, every
      table offset inside the file, and enough bytes after each offset to hold that many entries at
-     their minimum encoded size. **The blind window, measured** over the 264 packages the real
+     their minimum encoded size. The blind window, measured over the 264 packages the real
      composed path resolves (`spikes/2026-07-25-map-save-mechanism/measure_header_window.py`): over
-     the 101 EDITOR-written maps (the 120 `.dx` minus the 19 `Native*.dx` uedcli's own native build
+     the 101 editor-written maps (the 120 `.dx` minus the 19 `Native*.dx` uedcli's own native build
      wrote — not `MAP SAVE` output, so they must not set the bar) the required end lands at
      98.4–99.7 % of the real size (median 99.5 %) versus 93.5–98.9 % (median 98.3 %) for an
      offsets-only rule — so a truncation in the last ~1.6 % of a map still passes; the room rule
-     shrinks the window several-fold rather than closing it. Closing
-     it needs a full table parse on the HOST (`upackage.load_package` after `docker cp`); not done
-     here because the driver checks a container-side file and `apply`'s post-verify re-reads the
-     installed map anyway. Same 9 little-endian u32s `upackage.py` parses (the driver keeps its own
-     copy of the magic to stay container-only; a test pins the two equal); it decodes no table, so it
-     judges completeness, not content.
-     How much of a live failure mode this is: the editor serializes into `Save.tmp`,
-     patches the header LAST in the temp, then MOVES it onto the destination (📖 `core.dll` strings,
-     2026-07-25 — `unrealed/commands.md` "`MAP SAVE` writes `Save.tmp`" and
-     `spikes/2026-07-25-map-save-mechanism/`), and whether that move is a rename or a copy is NOT
-     determined by the evidence, so a truncated destination may not be reachable at all; none has
-     ever been observed (the one report was retracted by
+     shrinks the window several-fold rather than closing it. Closing it needs a full table parse on
+     the host (`upackage.load_package` after `docker cp`); not done here because the driver checks a
+     container-side file and `apply`'s post-verify re-reads the installed map anyway. Same 9
+     little-endian u32s `upackage.py` parses (the driver keeps its own copy of the magic to stay
+     container-only; a test pins the two equal); it decodes no table, so it judges completeness, not
+     content. The editor serializes into `Save.tmp`, patches the header last in the temp, then moves
+     it onto the destination (📖 `core.dll` strings, 2026-07-25 — `unrealed/commands.md`
+     "`MAP SAVE` writes `Save.tmp`" and `spikes/2026-07-25-map-save-mechanism/`); whether that move
+     is a rename or a copy is undetermined, so a truncated destination may not be reachable at all,
+     and none has ever been observed (the one report was retracted by
      `spikes/2026-07-15-native-materialize/sections/91-leaves-overproduction.md`). The check is kept
      because it costs one 36-byte read at the accept point and also rejects a stale non-package at
      that path. A stable-but-incomplete file is not accepted and not an instant error — polling
      continues to `timeout` (default 600 s), re-reading the header at most once per `recheck` (30 s)
-     per size — bounded rather than cached forever, since an undetermined move mechanism means the
-     destination's header cannot be assumed immutable — then `DriverError` names the path, the
-     structural reason and the ELAPSED time.
-  4. **Liveness from a probe SENTINEL, not an exit code.** Every container-side file read *on this
-     verification path* goes through `Driver._container_probe`, which prefixes the in-container
+     per size (bounded, since an undetermined move mechanism means the destination's header cannot be
+     assumed immutable) — then `DriverError` names the path, the structural reason and the elapsed
+     time.
+  4. **Liveness from a probe sentinel, not an exit code.** Every container-side file read on this
+     verification path goes through `Driver._container_probe`, which prefixes the in-container
      `sh -c` snippet with a `printf` of `driver.PROBE_TAG`; the tag can only appear on stdout if
-     docker really started a shell in a live container, so its absence *is* the container failure and
-     the exit code is ignored. Measured live 2026-07-25: a **stopped** container, a **missing**
-     container and a permission error ALL make `docker exec` exit **1** — the same code `stat` uses
-     for "no such file" — so the retired "only exit 1 means no file" rule had an unreachable failure
-     branch and misread every real container death as "not written yet", polling a corpse for the
-     full 600 s before blaming the editor. Each probe is also bounded by `driver.PROBE_TIMEOUT` (60 s)
-     and a `TimeoutExpired` becomes a `DriverError`, so a hung dockerd cannot park a caller forever.
-     The probes answer `missing` / `statfail` / `odfail` distinctly: only genuine absence reads as
-     "no file yet", every other failure raises at once instead of costing a full timeout.
+     docker really started a shell in a live container, so its absence is the container failure and
+     the exit code is ignored. Measured live 2026-07-25: a stopped container, a missing container
+     and a permission error all make `docker exec` exit 1 — the same code `stat` uses for
+     "no such file" — so the retired "only exit 1 means no file" rule had an unreachable failure branch and misread every real container
+     death as "not written yet", polling a corpse for the full 600 s before blaming the editor. Each
+     probe is bounded by `driver.PROBE_TIMEOUT` (60 s) and a `TimeoutExpired` becomes a `DriverError`,
+     so a hung dockerd cannot park a caller forever. The probes answer `missing` / `statfail` /
+     `odfail` distinctly: only genuine absence reads as "no file yet", every other failure raises at
+     once instead of costing a full timeout.
 
-  Without any of this a wedged editor writes nothing and the failure surfaces far downstream as an
-  opaque `docker cp` exit 1 blaming the wrong subsystem. (Driver's OTHER `docker exec` calls —
-  `_wine_ctl`, `dexec_bash`, `set_clipboard`, `log_size`, `read_log_since`, `dismiss_blocking_dialog`
-  — do NOT go through `_container_probe` and are still unbounded; `board/inbox/` carries that
-  chore.)
+  Without this a wedged editor writes nothing and the failure surfaces far downstream as an opaque
+  `docker cp` exit 1 blaming the wrong subsystem. (Driver's other `docker exec` calls — `_wine_ctl`,
+  `dexec_bash`, `set_clipboard`, `log_size`, `read_log_since`, `dismiss_blocking_dialog` — do not go
+  through `_container_probe` and are still unbounded; `board/inbox/` carries that chore.)
 
   **Every docker subprocess OUTSIDE `driver.py` is bounded.** `editor.py`'s container lifecycle
   (`_is_running`, `_reap_container`, `_spin_up`'s `docker compose run`, each `_wait_ready` poll,
@@ -242,15 +238,14 @@ and [`spikes/2026-07-05-git-merge-t3d-layout/`](spikes/2026-07-05-git-merge-t3d-
   `/work/ucc_export-<uuid>` dir in a `finally:`, so a failed export strands nothing. See
   [`rationale/containers.md`](rationale/containers.md).
 
-  **Most `Driver` methods have no uedcli-command caller.** After the
-  model-side pivot and the 2026-07-16 deletion of the editor-screenshot preview flow, ~17 of them
-  are called only by the committed spike harnesses under `spikes/` and by the
-  **default-deselected** integration suite — populations a grep over `uedcli/` does not see, so a
-  green `bin/test` would not catch their removal. They are retained (owner ruling 2026-07-26); only
-  genuinely uncalled symbols were removed (`select_inside`, `edit_copy`, `map_sendto`,
-  `select_by_csg`, `editor.novnc_url`, and the never-raised `EditorBusyError`). Before re-proposing
-  a dead-code sweep here, read [`rationale/driver.md`](rationale/driver.md), which carries the
-  measurement.
+  **Most `Driver` methods have no uedcli-command caller.** After the model-side pivot and the
+  2026-07-16 deletion of the editor-screenshot preview flow, ~17 of them are called only by the
+  committed spike harnesses under `spikes/` and by the default-deselected integration suite —
+  populations a grep over `uedcli/` does not see, so a green `bin/test` would not catch their
+  removal. They are retained (owner ruling 2026-07-26); only genuinely uncalled symbols were removed
+  (`select_inside`, `edit_copy`, `map_sendto`, `select_by_csg`, `editor.novnc_url`, and the
+  never-raised `EditorBusyError`). Before re-proposing a dead-code sweep here, read
+  [`rationale/driver.md`](rationale/driver.md), which carries the measurement.
 - **T3D tree I/O** — `t3dtree.py` is the ONE shared per-actor-tree reader/writer
   (`write_actor_tree`/`read_actor_tree` over `actors/<name>/{actor.t3d, order_value[, folder][, labels]}`, plus
   the LexoRank rank algebra, the coordination-free name allocator, the `actor.t3d` body strip/inject,
@@ -279,11 +274,11 @@ and [`spikes/2026-07-05-git-merge-t3d-layout/`](spikes/2026-07-05-git-merge-t3d-
   `substrate stub` handler in `dispatch.py` catches it unchanged).
 
 ## The core write pattern (model-side; the editor is touched only at `materialize`)
-Every read and mutation is **pure model-side compute against the git-tracked trunk** — no editor
-in the loop:
+Every read and mutation is pure model-side compute against the git-tracked trunk, no editor in the
+loop:
 1. `src.load()` (`TrunkLevelSource.load` → `trunk.read_level`) reconstructs the level from the
-   per-actor trunk dir (`actors/<name>/{actor.t3d, order_value}`). **No `docker exec`, no
-   `MAP EXPORT`, no liveness check.**
+   per-actor trunk dir (`actors/<name>/{actor.t3d, order_value}`). No `docker exec`, no
+   `MAP EXPORT`, no liveness check.
 2. Build/transform the `Actor`/`Brush` in the model (move, clip, set poly fields, …);
    `geometry.validate_brush` rejects coincident/degenerate/non-planar polys (degenerate
    geometry would crash CSG at the eventual materialize).
@@ -303,9 +298,8 @@ in the loop:
    never loaded — or loaded but didn't change — is left alone, so disjoint concurrent
    adds/edits/deletes from parallel sessions compose instead of a stale model stomping them.
    Equal freshly-minted `order_value`s from concurrent adds stay harmless (the name tiebreak,
-   decisions 2026-07-05 15:11). The model IS the source of truth for what this process touched;
-   git is the history (`git commit` is the user's own), and there is no shared `order` file, no
-   `packages` manifest, and no per-command blob log.
+   decisions 2026-07-05 15:11). There is no shared `order` file, no `packages` manifest, and no
+   per-command blob log.
 
 The editor only sees the level at **`level materialize`** (`apply.py` → `materialize.py`), which
 FULL RE-IMPORTs the merged result:
@@ -436,13 +430,12 @@ unrealed/quirks).
   effect of clean/normalize/emit. (See unrealed/quirks "Pivots".)
 
 ## Stash / prefab (captured actor sets)
-A stash, a prefab, and a level trunk are **ONE on-disk format** — the per-actor T3D tree
+A stash, a prefab, and a level trunk are one on-disk format — the per-actor T3D tree
 `actors/<name>/{actor.t3d, order_value[, folder]}`, read/written through the single shared
-`t3dtree` code path (decisions.md 2026-07-18 23:01 UTC). Any per-box EXTRAS (`packages` list +
-`meta.json` capture anchor/timestamp) sit BESIDE `actors/` (via `t3dtree.write_sidecars`/
+`t3dtree` code path (decisions.md 2026-07-18 23:01 UTC). Any per-box extras (`packages` list +
+`meta.json` capture anchor/timestamp) sit beside `actors/` (via `t3dtree.write_sidecars`/
 `read_sidecars`); the trunk has none. The stored `actor.t3d` is byte-identical to the trunk's (the
-`t3dtree` consistency test pins this), so a stash/prefab is structurally the same kind of tree as a
-level.
+`t3dtree` consistency test pins this).
 
 A **stash** is a private, per-project register entry at `<root>/.uedcli/stash/<id>/`.
 `stash_register.FileStashRegister.{write,read,list,drop}_stash` own it (wrapping `stashlib`'s
@@ -468,18 +461,18 @@ error surfaces on use rather than a misleading "not found". Both stash and prefa
 store → read → apply channel; `stash/prefab apply --folder` OVERRIDES the stored folder at placement,
 absent it a member lands in its stored folder.
 
-**Apply is a MODEL-SIDE merge into the trunk — NO editor.** `dispatch._apply_set` (shared by
+**Apply is a model-side merge into the trunk, no editor.** `dispatch._apply_set` (shared by
 `stash apply` and `prefab apply`) reads the captured set via the `LevelSource` seam, translates it
-to the placement anchor (`--at` → bbox-min corner — **kept deliberately**, see
+to the placement anchor (`--at` → bbox-min corner — kept deliberately, see
 `direction/conventions.md` "PLACEMENT anchors the bbox-min corner; ROTATION pivots a member's own
-Location"; else the captured `anchor` for a stash, or the
-world ORIGIN for a prefab), auto-allocates fresh random-suffix names, sets `Group`, appends to
-`order`, and `src.save(...)`s the trunk — validating all geometry up front (all-or-nothing), no
-editor, no paste, no `MAP SENDTO`, no rebuild. The trunk has **no package manifest** (the load set
-derives on demand at `level materialize`), so packages are not recorded; `stashlib` supplies the
-pure value transforms (`translate`/`with_group`/`normalize_for_capture`/`referenced_packages`).
-The canonical level hash is **order-DEPENDENT** (`normalize.canonical_level_hash` folds in
-`level.order`) so a reorder reads as a real CSG state change.
+Location"; else the captured `anchor` for a stash, or the world origin for a prefab),
+auto-allocates fresh random-suffix names, sets `Group`, appends to `order`, and `src.save(...)`s the
+trunk — validating all geometry up front (all-or-nothing), no editor, no paste, no `MAP SENDTO`, no
+rebuild. The trunk has no package manifest (the load set derives on demand at `level materialize`),
+so packages are not recorded; `stashlib` supplies the pure value transforms
+(`translate`/`with_group`/`normalize_for_capture`/`referenced_packages`). The canonical level hash is
+order-dependent (`normalize.canonical_level_hash` folds in `level.order`) so a reorder reads as a real
+CSG state change.
 
 ## The compare view vs the identity hash (`normalize.py`)
 
@@ -538,34 +531,33 @@ costs ~0.1 s and `exit 2` naming the actor and its class rather than failing aft
 `defaults` is a REQUIRED argument of `verify_dx_matches` with **no zero fallback** (assuming "the
 default is zero" is the bug this exists to remove).
 
-**Absent vs zero at INGEST.** UnrealEd omits a `Location` axis equal to the class default member, so
-`Location=(X=100,Y=200)` does not mean Z=0. `model.parse_t3d` is deliberately schema-free (it is also
-the trunk, stash, prefab and generator-snippet reader), so it keeps the 0-filled triple the geometry
-math needs AND records the verbatim text in `Actor.location_text` — a contained side-channel the
-compare seam expands member-wise. It is **self-invalidating**: trusted only while it still parses
-back to the current `location`, so any mutation makes the compare fall back to "all three axes
-stated", and no mutation site has to remember to clear it.
+**Absent vs zero at ingest.** UnrealEd omits a `Location` axis equal to the class default member, so
+`Location=(X=100,Y=200)` does not mean Z=0. `model.parse_t3d` is schema-free (it is also the trunk,
+stash, prefab and generator-snippet reader), so it keeps the 0-filled triple the geometry math needs
+and records the verbatim text in `Actor.location_text` — a contained side-channel the compare seam
+expands member-wise. It is self-invalidating: trusted only while it still parses back to the current
+`location`, so any mutation makes the compare fall back to "all three axes stated", and no mutation
+site has to remember to clear it.
 
-**The typed expansion is compare-only — the write side never omits an ACTOR PROPERTY to mean zero.**
+**The typed expansion is compare-only — the write side never omits an actor property to mean zero.**
 `canonical_actor_t3d` (the durable trunk emit, the `MAP IMPORT` payload and `actor show`) keeps every
 authored property verbatim, so its bytes never depend on which packages are installed. An omitted
 property re-imports as the class default, so omitting one where the default is non-zero silently
-builds a wrong map that post-verify *passes* (both sides share the mistake) — see the three fixed
+builds a wrong map that post-verify passes (both sides share the mistake) — see the three fixed
 instances in `unrealed/t3d.md`.
 
-**A POLYGON SUB-FIELD is the deliberate exception, and is omitted when zero.** `Flags` and `Pan`
-inside a `Begin Polygon` block are `FPoly` fields with no UnrealScript class behind them, so they
-have no class default — absent means a fixed zero, always. `emit_polygon` therefore writes neither
-when zero. For `Pan` that is forced, because it is exactly what `MAP EXPORT` writes back (the editor
-never emits a zero pan; it does sometimes emit `Flags=0`, which is harmless either way since both
-compare sides re-emit through `emit_polygon`). It has to: the geometry half of the
-compare is a **whole-text compare** of `_geometry_text`'s `emit_brush` rendering, so a redundant
-`Pan U=0 V=0` in the intended level is a difference wherever it sits and aborts the build. It does
-not even report as a pan difference: `verify._first_diff` pairs the two texts up by LINE NUMBER to
-describe the mismatch, so the extra line shifts every following one and the message names a *vertex*.
-That shipped: `brush poly align` on a freshly built brush (no prior `Pan` on any face) made every
-subsequent `level materialize` exit 2 with nothing written, until 2026-07-26. See
-`unrealed/t3d.md` "A poly sub-field has NO class default" and
+**A polygon sub-field is the deliberate exception, omitted when zero.** `Flags` and `Pan` inside a
+`Begin Polygon` block are `FPoly` fields with no UnrealScript class behind them, so they have no class
+default — absent means a fixed zero, always. `emit_polygon` therefore writes neither when zero. For
+`Pan` that is forced, because it is exactly what `MAP EXPORT` writes back (the editor never emits a
+zero pan; it does sometimes emit `Flags=0`, harmless either way since both compare sides re-emit
+through `emit_polygon`). The geometry half of the compare is a whole-text compare of
+`_geometry_text`'s `emit_brush` rendering, so a redundant `Pan U=0 V=0` in the intended level is a
+difference wherever it sits and aborts the build. It does not even report as a pan difference:
+`verify._first_diff` pairs the two texts by line number, so the extra line shifts every following one
+and the message names a vertex. That shipped: `brush poly align` on a freshly built brush (no prior
+`Pan` on any face) made every subsequent `level materialize` exit 2 with nothing written, until
+2026-07-26. See `unrealed/t3d.md` "A poly sub-field has NO class default" and
 [`rationale/emit.md`](rationale/emit.md).
 
 ## Folders (uedcli-side actor organization)
@@ -1531,10 +1523,10 @@ container spin-up takes an explicit **`state_dir`** — the resolved project's `
 
 ## Native (editor-free) map IMPORT (`uedcli/mapimport.py`, the `level import` verb)
 
-The inverse of materialize: a **compiled** `.dx`/`.unr` map file → the same per-actor T3D a trunk
-holds, with **no editor, no container and no game** in the path — just the package bytes. It exists
-so an existing map (a retail mission, someone else's level, an older build of your own) becomes
-queryable, diffable and editable with the ordinary model-side verbs.
+The inverse of materialize: a compiled `.dx`/`.unr` map file → the same per-actor T3D a trunk holds,
+with no editor, no container and no game in the path — just the package bytes. It makes an existing
+map (a retail mission, someone else's level, an older build of your own) queryable, diffable and
+editable with the ordinary model-side verbs.
 
 **What a compiled map holds:** a `.dx`/`.unr` is an ordinary UE1
 package (`upackage.py` parses the container) — a name table, an import table, an export table, and
@@ -2239,76 +2231,73 @@ highlighted poly re-lights to its brush's vivid hue with a bolder line ON TOP of
 its index even in a focused-out brush; a highlighted point keeps its selection brackets. All names
 still appear in the legend regardless of focus.
 
-**Poly face indices are painted ON the face — the SOLE poly-label renderer** (there is no leader-box
-poly mode; the leader/arrow/box machinery below serves only actor NAMES). Each face's index is a
-**texture painted flat IN the face's own 3-D plane** (`_plan_onface_texture` → `_DecalPlan`,
-drawn by `_draw_painted_decal`), projected with the SAME `_project` as the wireframe, so it foreshortens
-with the surface and reads as decaled on. `_face_decal_basis` builds the in-plane text frame: on
-**walls/slopes** text-up (Vw) = world +Z projected into the plane (numbers hang by GRAVITY — strokes
-stand up the wall, view-independent); on **horizontal floor/ceiling/cap** faces (normal ≈ ±Z, no in-plane
-gravity-up) the basis is fixed to the WORLD axes (Vw = +Y, Uw = +X), so caps are consistently Y-aligned
-rather than an arbitrary roll; Uw's sign is fixed from the screen projection so the glyph is never
-mirrored (e.g. a ceiling's −Z normal). The glyph is sized in a fixed **`_DECAL_SLOT_DIGITS`-wide (=2)
-SLOT** — `_text_bitmap` widens a short number to the 2-digit aspect and centres the actual digits in it
-(extra columns blank, underline under the digits) — so a lone `5` scales like `12` instead of sizing to
-its own narrow aspect. **Placement + size** come from `_max_inscribed_box`: it finds the
-LARGEST glyph-aspect (the padded slot's) UV-axis-aligned box that fits fully INSIDE the face polygon (not
-its bounding box) and WHERE it sits — on a rectangle that's the centred box limited by the tighter dimension; on a
-triangle/arch/L it's an OFF-centre roomy spot. Convex faces (the norm) solve exactly by eroding the
-polygon by the box (shift each edge inward by the box's support, intersect) under a binary search on the
-per-texel `cell`; concave faces fall back to a bounded grid × binary search (`_box_fits_2d`). Convexity
-is NOT a hard invariant — arbitrary UnrealEd vertex editing CAN make a face concave, and 0.1–0.6% of
-faces in real exported maps are (measured `spikes/concave-faces/`, live 2026-07-23), so the placement
-detects convexity per face (`_poly_is_convex_2d`) rather than assuming it. The decal is drawn at
-`_ONFACE_FILL` (=0.75) of that maximum; a face is **omitted** when its number would be UNREADABLE ON
-SCREEN — the smaller PROJECTED size of a glyph texel below `_ONFACE_MIN_TEXEL_PX` (=2 px). This is a
-**view-dependent** verdict (chosen over the old world-uu one): a face too small, too EDGE-ON to the
-camera, or too zoomed-out to read gets no number, and the SAME face is numbered once it's big enough on
-screen (zoomed in, or in its own `--layout breakdown` pane) — so a crowded overview stays clean while the
-detail panes read. There is **NO fallback** for an omitted face. Numbering is
-**facing-BLIND** (a face is painted if the spec would draw it in EITHER facing, so the default `poly:vis`
-still numbers back faces; `poly:hi`/`none` stay exact — the `--annotate` `poly` selectors still gate
-*whether* numbers draw). The whole glyph — digits AND the `_text_bitmap` 6/9 baseline underline — is one
-bitmap painted in ONE `_draw_painted_decal` pass at a single per-brush tint + `alpha` (so the underline
-can never read as a different brush's colour), with a translucent halo (`_blend_px`). Decals draw AFTER
-the name labels and seed `occupied` so name leaders avoid them. `--focus`/`--highlight` still apply
-(focus paints numbers only on the focused brush; a highlighted poly keeps its number).
+**Poly face indices are painted on the face — the sole poly-label renderer** (there is no leader-box
+poly mode; the leader/arrow/box machinery below serves only actor names). Each face's index is a
+texture painted flat in the face's own 3-D plane (`_plan_onface_texture` → `_DecalPlan`, drawn by
+`_draw_painted_decal`), projected with the same `_project` as the wireframe, so it foreshortens with
+the surface and reads as decaled on. `_face_decal_basis` builds the in-plane text frame: on
+walls/slopes text-up (Vw) = world +Z projected into the plane (numbers hang by gravity, strokes stand
+up the wall, view-independent); on horizontal floor/ceiling/cap faces (normal ≈ ±Z, no in-plane
+gravity-up) the basis is fixed to the world axes (Vw = +Y, Uw = +X), so caps are consistently
+Y-aligned rather than an arbitrary roll; Uw's sign is fixed from the screen projection so the glyph is
+never mirrored (e.g. a ceiling's −Z normal). The glyph is sized in a fixed `_DECAL_SLOT_DIGITS`-wide
+(=2) slot — `_text_bitmap` widens a short number to the 2-digit aspect and centres the digits in it
+(extra columns blank, underline under the digits) — so a lone `5` scales like `12`. Placement and size
+come from `_max_inscribed_box`: the largest glyph-aspect (the padded slot's) UV-axis-aligned box that
+fits fully inside the face polygon (not its bounding box), and where it sits — on a rectangle the
+centred box limited by the tighter dimension; on a triangle/arch/L an off-centre roomy spot. Convex
+faces (the norm) solve exactly by eroding the polygon by the box (shift each edge inward by the box's
+support, intersect) under a binary search on the per-texel `cell`; concave faces fall back to a bounded
+grid × binary search (`_box_fits_2d`). Convexity is not a hard invariant — arbitrary UnrealEd vertex
+editing can make a face concave, and 0.1–0.6% of faces in real exported maps are (measured
+`spikes/concave-faces/`, live 2026-07-23), so placement detects convexity per face
+(`_poly_is_convex_2d`). The decal is drawn at `_ONFACE_FILL` (=0.75) of that maximum; a face is omitted
+when its number would be unreadable on screen — the smaller projected size of a glyph texel below
+`_ONFACE_MIN_TEXEL_PX` (=2 px). This is a view-dependent verdict (chosen over the old world-uu one): a
+face too small, too edge-on, or too zoomed-out gets no number, and the same face is numbered once it's
+big enough on screen (zoomed in, or in its own `--layout breakdown` pane). There is no fallback for an
+omitted face. Numbering is facing-blind (a face is painted if the spec would draw it in either facing,
+so the default `poly:vis` still numbers back faces; `poly:hi`/`none` stay exact — the `--annotate`
+`poly` selectors still gate whether numbers draw). The whole glyph — digits and the `_text_bitmap` 6/9
+baseline underline — is one bitmap painted in one `_draw_painted_decal` pass at a single per-brush tint
++ `alpha` (so the underline can never read as a different brush's colour), with a translucent halo
+(`_blend_px`). Decals draw after the name labels and seed `occupied` so name leaders avoid them.
+`--focus`/`--highlight` still apply (focus paints numbers only on the focused brush; a highlighted poly
+keeps its number).
 
-**Overlapping numbers: a MINIMAL nudge + a white keyline.** The single spot above is
-`_plan_onface_texture` = **candidate 0** of `_onface_candidates`; the render resolves all faces' numbers
-JOINTLY (`_resolve_decals`) so they don't pile up, but the repositioning is deliberately TINY and a
-white outline carries the rest. `_onface_candidates` builds candidate 0 (full-size roomiest spot) FIRST,
-then only NEAR-FULL nudges — `_RESHUFFLE_SCALES` (down to ≤10% smaller), each with its `_feasible_centers`
-so the number can slide slightly. No deep size ladder, no rotation. Every candidate keeps candidate 0's
-`_ONFACE_FILL` edge margin (`_feasible_centers` is called with the **padded** box `cell/fill`, the max
-box the decal is 0.75 of), so a nudged number never sits flush. `_resolve_decals` is **greedy,
-deterministic**: biggest-primary face first; a candidate 0 with ZERO overlap (vs point-actor markers +
-committed decals in `occupied`) is kept VERBATIM, so clean scenes match the single-placement planner
-byte-for-byte. On overlap it restricts to candidates within the reshuffle budget — area ≥
-`(1−_DECAL_MAX_SHRINK)²·area0` (≤10% linear shrink) AND centre within `_DECAL_MAX_MOVE_FRAC` (=10%) of
-candidate 0's screen diagonal — and takes the LEAST overlap, then largest, then earliest. So a number
-barely moves; the KEYLINE, not repositioning, keeps overlaps legible. Overlap
-(`_rect_overlap_area`/`_overlap_fraction`) is SUMMED PER obstacle (stacked patches count N×). The
-`_erode_convex`/`_feasible_centers` erosion is one Minkowski-erosion implementation shared with
-`_max_inscribed_box`.
+**Overlapping numbers: a minimal nudge plus a white keyline.** The single spot above is
+`_plan_onface_texture` = candidate 0 of `_onface_candidates`; the render resolves all faces' numbers
+jointly (`_resolve_decals`) so they don't pile up, but repositioning is tiny and a white outline
+carries the rest. `_onface_candidates` builds candidate 0 (full-size roomiest spot) first, then only
+near-full nudges — `_RESHUFFLE_SCALES` (down to ≤10% smaller), each with its `_feasible_centers` so
+the number can slide slightly. No deep size ladder, no rotation. Every candidate keeps candidate 0's
+`_ONFACE_FILL` edge margin (`_feasible_centers` gets the padded box `cell/fill`, the max box the decal
+is 0.75 of), so a nudged number never sits flush. `_resolve_decals` is greedy and deterministic:
+biggest-primary face first; a candidate 0 with zero overlap (vs point-actor markers + committed decals
+in `occupied`) is kept verbatim, so clean scenes match the single-placement planner byte-for-byte. On
+overlap it restricts to candidates within the reshuffle budget — area ≥ `(1−_DECAL_MAX_SHRINK)²·area0`
+(≤10% linear shrink) AND centre within `_DECAL_MAX_MOVE_FRAC` (=10%) of candidate 0's screen diagonal —
+and takes the least overlap, then largest, then earliest. The keyline, not repositioning, keeps
+overlaps legible. Overlap (`_rect_overlap_area`/`_overlap_fraction`) is summed per obstacle (stacked
+patches count N×). The `_erode_convex`/`_feasible_centers` erosion is one Minkowski-erosion
+implementation shared with `_max_inscribed_box`.
 
 **The keyline** (`_draw_overlap_keyline`, called once after the decal draw loop): wherever two numbers'
-`on` (glyph) pixel-sets overlap on screen, it draws a **constant 1-screen-pixel WHITE ring**
-(`_KEYLINE_RGB`) just OUTSIDE each involved glyph's strokes — the 4-neighbour dilation of the `on` set
-minus the set, restricted to near an overlap. Drawing OUTSIDE the strokes (not on their boundary) makes
-it exactly 1px at ANY zoom and never a fill: it does not thicken as a number grows. `_draw_painted_decal`
+`on` (glyph) pixel-sets overlap on screen, it draws a constant 1-screen-pixel white ring
+(`_KEYLINE_RGB`) just outside each involved glyph's strokes — the 4-neighbour dilation of the `on` set
+minus the set, restricted to near an overlap. Drawing outside the strokes (not on their boundary) keeps
+it exactly 1px at any zoom and never a fill: it does not thicken as a number grows. `_draw_painted_decal`
 returns its `on` set so the loop can collect them for this pass. *(decisions 2026-07-23 anti-overlap +
 2026-07-23 minimal-reshuffle-and-keyline; spec in board item `actor-preview-on-face-number-overlap-minimal`)*
 
-Each decal's opacity is **graded by how deeply its face is buried**. Every front face is collected into
+Each decal's opacity is graded by how deeply its face is buried. Every front face is collected into
 `occluders` as `(poly2d, depth, brush_name, is_solid)`; `_occluder_count` counts how many lie in front
-of a given face (nearer depth, covering its centroid) under the **self-or-solid rule** — a front face G
-occludes face F iff **G's brush is a SOLID CSG op** (add/semisolid/mover) **OR G belongs to the same
-brush as F**. So a subtract/hollow room's near walls dim its OWN far walls (self-occlusion ⇒ depth
-grading inside a room), WITHOUT the room dimming a separate brush sitting inside it (a cube in a room
-stays bold); solids still occlude across brushes as before. `_decal_opacity(n_front) =
-max(0.12, 0.56·0.6ⁿ)` turns that count into the decal's alpha — a visible face 0.56, one layer behind
-0.336, floored at 0.12 — so opacity IS the front/back cue.
+of a given face (nearer depth, covering its centroid) under the self-or-solid rule: a front face G
+occludes face F iff G's brush is a solid CSG op (add/semisolid/mover) or G belongs to the same brush as
+F. So a subtract/hollow room's near walls dim its own far walls (self-occlusion, depth grading inside a
+room) without the room dimming a separate brush sitting inside it (a cube in a room stays bold); solids
+still occlude across brushes. `_decal_opacity(n_front) = max(0.12, 0.56·0.6ⁿ)` turns that count into the
+alpha — a visible face 0.56, one layer behind 0.336, floored at 0.12.
 
 **`--layout breakdown` — a per-actor grid.** On-face numbers get only a
 tiny within-face nudge (`_resolve_decals`: ≤10% shrink / ≤10%-diagonal move, never onto another face)

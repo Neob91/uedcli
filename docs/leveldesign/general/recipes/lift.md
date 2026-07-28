@@ -7,20 +7,20 @@ so it rises when stood on (or triggered). Read [../movers.md](../movers.md) firs
 ## What you're building
 
 1. A platform brush turned into a mover.
-2. Key 0 = the bottom (start) pose, key 1 = the top pose.
+2. Key 0 = bottom (start) pose, key 1 = top pose.
 3. A lift `InitialState` (`StandOpenTimed` = rises when stood on; or a trigger).
 4. For bot navigation: `LiftCenter` / `LiftExit` NavigationPoints so AI rides it.
 
 ## Editor procedure
 
-1. Build the platform brush — a squashed cube "short enough to walk onto", sized to the shaft.
-   Reset scaling on it first so collision behaves.
+1. Build the platform brush — a squashed cube short enough to walk onto, sized to the shaft.
+   Reset scaling first so collision behaves.
 2. Position it at the bottom floor, where the player boards.
 3. Promote it to a mover ("Add Mover") — it turns purple.
-4. Set the poses (inverted flow): select Key 1 first, then translate the mover vertically up
-   to the top floor; then select Key 0 to lock in the bottom start pose.
-5. Choose the behaviour: set `InitialState` to `StandOpenTimed` (rises while stood on, returns after)
-   — or wire a `Trigger` (button) as in the [door recipe](mover-door.md).
+4. Set the poses (inverted flow): select Key 1 first, translate the mover vertically up
+   to the top floor, then select Key 0 to lock in the bottom start pose.
+5. Set `InitialState` to `StandOpenTimed` (rises while stood on, returns after), or wire a
+   `Trigger` (button) as in the [door recipe](mover-door.md).
 6. Rebuild and test (walk on / trigger).
 
 Tip: for bots and DX NPCs to use the lift, add a `LiftCenter` on the platform and a `LiftExit` at

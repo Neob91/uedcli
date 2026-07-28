@@ -1,23 +1,23 @@
 # DX gameplay wiring  [DX]
 
 Deus Ex adds a trigger/flag vocabulary on top of the engine's basic `Trigger` / `Tag` / `Event`
-mechanism, for building reactive, stateful levels — locked doors, alarms, goals, and environmental
-effects. Place each actor and wire it with `Tag`/`Event` like any actor:
+mechanism, for reactive, stateful levels — locked doors, alarms, goals, environmental effects. Wire
+each actor with `Tag`/`Event`:
 
 ```
 actor build DeusEx.FlagTrigger --prop flagName=door_unlocked --prop bSetFlag=True --at X,Y,Z | actor add -
 ```
 
-The generic wiring model (a trigger's `Event` matches a target actor's `Tag`) is covered in the
-[general guides](../general/). This guide covers the DX-specific additions, plus a couple of stock
-engine triggers a DX level leans on, flagged where they're not DX-only.
+The generic wiring model (a trigger's `Event` matches a target actor's `Tag`) is in the
+[general guides](../general/). This guide covers the DX-specific additions plus a few stock engine
+triggers a DX level uses, flagged where not DX-only.
 
 ---
 
 ## Persistent flags — `FlagTrigger`
 
 The flag database is DX's persistent boolean store, surviving across the mission. `FlagTrigger` is the
-mapper's interface to it:
+mapper's interface:
 
 - `flagName` — the flag to read or write.
 - `bSetFlag` — when true, this trigger writes the flag (`flagValue`) when fired.
@@ -27,21 +27,20 @@ mapper's interface to it:
   permanent (the usual setting for story flags).
 - `bWhileStandingOnly` — only holds while the player stands in it.
 
-Use one `FlagTrigger` to set a flag (e.g. `alarm_disabled`) and another as a gate elsewhere that only
+Use one `FlagTrigger` to set a flag (e.g. `alarm_disabled`) and another elsewhere as a gate that only
 opens a door if that flag is set.
 
 ## Mission goals — `GoalCompleteTrigger`
 
 `GoalCompleteTrigger` (`goalName`) marks complete a goal the mission's `MissionScript` created with
-`AddGoal`. Fire it when the player reaches the objective (enters a room, retrieves an item via a wired
-trigger, etc.).
+`AddGoal`. Fire it when the player reaches the objective.
 
 ## Boolean logic — `LogicTrigger`
 
 `LogicTrigger` combines two trigger inputs — matched by each input actor's `Group` against
 `inGroup1`/`inGroup2` — with a gate `Op` (AND / OR / XOR), plus `Not` (invert the output) and
-`OneShot`. Use it to require two conditions before an event fires — e.g. both keypads pressed (group
-them into `inGroup1`/`inGroup2`, `Op=GATE_AND`), or the alarm off and the door hacked.
+`OneShot`. Use it to require two conditions — e.g. both keypads pressed
+(`inGroup1`/`inGroup2`, `Op=GATE_AND`), or the alarm off and the door hacked.
 
 ## Delayed and sequenced events
 
@@ -61,7 +60,7 @@ raises the alarm. Give each a `Tag`, and target it (or have it target) via `Even
 
 ## Particle emitters — steam, sparks, drips, fire
 
-DX ships a particle system (stock UnrealEngine 1 has none). Place these under environmental atmosphere:
+DX ships a particle system (stock UnrealEngine 1 has none):
 
 - `ParticleGenerator` — the general emitter. Key props: `frequency` (1.0), `checkTime` (0.1s),
   `numPerSpawn`, `riseRate` (10), `particleLifeSpan` (4s), `particleDrawScale` (0.1), `particleTexture`.
@@ -81,7 +80,7 @@ actor build DeusEx.ParticleGenerator --prop bTriggered=True --prop particleTextu
 
 ## Security cameras → the hacked-computer feed
 
-DX does not paint a camera feed onto a world monitor surface. The feed is a live render composited into
+DX does not paint a camera feed onto a world monitor surface; the feed is a live render composited into
 the hackable-computer UI. To wire a camera to a screen the player can hack:
 
 1. Place a `SecurityCamera` and give it a `Tag`.
@@ -89,8 +88,8 @@ the hackable-computer UI. To wire a camera to a screen the player can hack:
 3. Set the computer's `Views[i].cameraTag` to the camera's `Tag`. Each view can also take a `turretTag`
    and `doorTag` so the player, once in, can slew turrets and open doors.
 
-The camera's feed then renders inside that computer's console UI when the player hacks or logs into it.
-There is no `ScriptedTexture` monitor and no world-mounted screen showing the camera.
+The feed then renders inside that computer's console UI when the player hacks or logs in. There is no
+`ScriptedTexture` monitor and no world-mounted screen showing the camera.
 
 ---
 

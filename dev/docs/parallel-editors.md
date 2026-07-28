@@ -6,7 +6,7 @@ touching the persistent `dx-lum-uned` editor or serializing through it. Pattern:
 up one ephemeral editor per work item via `docker compose run`, drive it, tear it
 down.
 
-> All `docker compose` commands below run from `Tools/uedcli/uned/` (where
+> Run all `docker compose` commands below from `Tools/uedcli/uned/` (where
 > `docker-compose.yml` lives). No `/repo` bind mount (container-fs isolation, D4): the
 > substrate is baked into the image, and game assets are exposed via per-command
 > config-driven read-only mounts — the composed config dir set at `/resources/<n>` via
@@ -25,7 +25,7 @@ image, same read-only content mounts) but, unlike `up`:
   port, but under `run` ports aren't published, so N instances coexist. (Headless
   drives don't need noVNC — `docker exec … wine_ctl.py` reaches the editor regardless.)
 
-## The isolation requirements
+## Isolation requirements
 
 Two things are still shared and must be isolated per run (in-container scratch is now
 handled by container-fs isolation):
@@ -50,8 +50,8 @@ A bind-mount source must be visible to the docker daemon, not just your shell. `
 preview` boots the editor with a per-boot `UnrealEd.ini` override mounted `-v
 <host-ini>:/opt/UED22/UnrealEd.ini`. If the source path is in the system tempdir
 (`/tmp`) under a sandboxed shell (e.g. `devdawg-shell`), `/tmp` is private to the
-sandbox, so the daemon resolves `/tmp/<c>.preview.ini` against its own tmp, finds
-nothing, auto-creates a directory there, and the file-onto-file mount fails with `not a
+sandbox: the daemon resolves `/tmp/<c>.preview.ini` against its own tmp, finds nothing,
+auto-creates a directory there, and the file-onto-file mount fails with `not a
 directory` — the editor never boots. Write any host→daemon bind source under the repo
 tree (uedcli uses the project state dir `<root>/.uedcli/tmp/`), which the daemon sees at
 an identical real path, like the repo-relative compose asset mount (`./DeusExAssets`).
@@ -87,10 +87,10 @@ the editor). The image is warm, so the handle usually resolves within a few seco
 ## Concurrency is memory-bound — cap it
 
 Each ephemeral editor is a full stack (Xvfb + fluxbox + x11vnc + websockify + wine +
-the editor) and costs ~0.5 GB RSS, more during `MAP REBUILD`. Do not launch an
-unbounded fan-out: on a shared box with little free RAM, 20 simultaneous editors OOM.
-Use a bounded worker pool sized to available memory (`free -g`), and tear each container
-and its volume down before starting the next so memory is reclaimed:
+the editor) costing ~0.5 GB RSS, more during `MAP REBUILD`. Don't launch an unbounded
+fan-out: on a shared box with little free RAM, 20 simultaneous editors OOM. Use a
+bounded worker pool sized to available memory (`free -g`), and tear each container and
+its volume down before starting the next so memory is reclaimed:
 ```bash
 MAXJ=4                      # size to free RAM, not core count
 for i in $(seq 0 19); do
@@ -99,9 +99,8 @@ for i in $(seq 0 19); do
 done
 wait
 ```
-This is still parallel — `MAXJ` items run concurrently — just bounded. State the cap and
-reason when you report results; a silent cap reads as "ran all 20 at once" when it
-didn't.
+`MAXJ` items still run concurrently. State the cap and reason when you report results; a
+silent cap reads as "ran all 20 at once" when it didn't.
 
 ## Bypass the trunk for headless exercises
 
@@ -135,8 +134,8 @@ then `xfer.cp_out(container, container_path, host_path)` to retrieve it.
 
 ## Cleanup
 
-Always reclaim everything on completion, and on failure — tear down in the worker, not
-just at the end:
+Reclaim everything on completion and on failure — tear down in the worker, not just at
+the end:
 ```
 docker rm -f <each container>
 docker volume rm <each uned-wp-* volume>

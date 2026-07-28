@@ -1,17 +1,16 @@
 # Editor GUI & console reference  [ENGINE]
 
 UnrealEd 2.x GUI/console reference: keyboard shortcuts, brush colours, 2D/3D
-navigation, the browsers, and prefab `.T3D` import/export. Engine-generic — it
+navigation, the browsers, and prefab `.T3D` import/export. Engine-generic:
 applies to UnrealEd 2.x for Unreal/UT/Deus Ex alike.
 
-> uedcli drives verbs, not this GUI. uedcli authors the git-tracked T3D trunk
-> with composing verbs (`brush build … | actor add -`, `brush poly set`,
-> `actor prop set`, `mover key …`) and only touches the editor to
-> `level materialize` / `preview`. The GUI is not the primary authoring
-> interface; this page documents it and the headless console verbs for a
-> GUI-aware reader. For driving the editor console headlessly see
-> [`../../commands.md`](../../commands.md); for the editor's non-obvious traps
-> [`../../quirks.md`](../../quirks.md); for render modes
+> uedcli drives verbs, not this GUI. It authors the git-tracked T3D trunk with
+> composing verbs (`brush build … | actor add -`, `brush poly set`,
+> `actor prop set`, `mover key …`) and touches the editor only to
+> `level materialize` / `preview`. This page documents the GUI and the headless
+> console verbs for a GUI-aware reader. Headless console driving:
+> [`../../commands.md`](../../commands.md); editor traps:
+> [`../../quirks.md`](../../quirks.md); render modes:
 > [`../../rendering.md`](../../rendering.md).
 
 > **Siblings.** [`dx-classes.md`](dx-classes.md) · [`dx-npcs.md`](dx-npcs.md) ·
@@ -39,26 +38,26 @@ Markers: `[ENGINE]` throughout. 📖 = tutorial corpus; 🔬 = live-probed.
 
 **Editing modifiers:**
 - **Ctrl-Z** Undo · **Ctrl-Y** Redo. 🔬 (Ctrl-R is *Replace With Selected Class*, not Redo.)
-- **Shift-A / Shift-S / Ctrl-I / Shift-D** = **Add / Subtract / Intersect /
-  Deintersect** (the CSG operations on the builder brush). 🔬 decoded from the UED22
-  `unrealed.exe` accelerator table (`Ctrl-A`/`Ctrl-S` are the standard **Select All** / **Save** —
-  NOT the CSG ops; the community "Ctrl-A/S/N/D" claim is wrong for this build).
+- **Shift-A / Shift-S / Ctrl-I / Shift-D** = Add / Subtract / Intersect /
+  Deintersect CSG ops on the builder brush. 🔬 decoded from the UED22
+  `unrealed.exe` accelerator table. `Ctrl-A`/`Ctrl-S` are the standard Select All /
+  Save, not CSG ops; the community "Ctrl-A/S/N/D" claim is wrong for this build.
 - **Ctrl-B** Build All · **Ctrl-W** (or **Ctrl-D**) duplicate actor. 🔬
 - **A + RMB** add actor here · **L + RMB** add light here · **Alt + RMB** =
-  **grab (pick up) a surface's texture** into the active texture.
+  grab (pick up) a surface's texture into the active texture.
 - **Copy Polygons → To Brush** clones a brush from selected polys.
 
-**Surface-selection hotkeys** (with faces selected in a 3D view):
-**Shift-B / C / F / W / Y / T** = select **brush / coplanar / floors / walls /
-slanted / same-texture** surfaces; **Ctrl-Shift-A** = select **all surfaces**. 🔬
-(**Shift-P** is *Matching PolyFlags* and **Shift-A** is CSG **Add** — neither is "all surfaces";
-select all **actors** is **Ctrl-A**.)
+**Surface-selection hotkeys** (faces selected in a 3D view):
+**Shift-B / C / F / W / Y / T** = select brush / coplanar / floors / walls /
+slanted / same-texture surfaces; **Ctrl-Shift-A** = all surfaces. 🔬
+(**Shift-P** is *Matching PolyFlags* and **Shift-A** is CSG Add — neither is "all
+surfaces"; select all actors is **Ctrl-A**.)
 
 ---
 
 ## 2. Brush & viewport colours  [ENGINE] 📖
 
-The colour code in the 2D/3D viewports:
+Colour code in the 2D/3D viewports:
 
 | Colour | Meaning |
 |---|---|
@@ -70,8 +69,8 @@ The colour code in the 2D/3D viewports:
 | **Purple** | mover (always drawn as wireframe) |
 | **Yellow-green** | zone portal |
 
-(These are the configurable defaults — View → Advanced Options. There is no "brown/orange"
-subtracted tier; subtracted space is **yellow**.)
+(Configurable defaults — View → Advanced Options. There is no "brown/orange"
+subtracted tier; subtracted space is yellow.)
 
 **Black 3D viewport after a rebuild** → *Mode → Textures*, or *Camera → Reset
 All* (see [`../../rendering.md`](../../rendering.md) for the black-viewport traps).
@@ -82,12 +81,12 @@ All* (see [`../../rendering.md`](../../rendering.md) for the black-viewport trap
 
 - **2D viewports** (Top/Front/Side): LMB-drag = select/marquee; RMB-drag = pan;
   Ctrl-LMB = move selected brush; Ctrl-RMB = rotate; Ctrl-LMB+RMB = scale.
-  **Brush clipping markers: Ctrl+RMB in a 2D view** (2 markers = a planar cut; a 3rd only **tilts**
-  that single plane — still ONE planar cut, not a compound cut).
+  **Brush clipping markers: Ctrl+RMB in a 2D view** (2 markers = a planar cut; a 3rd only
+  tilts that single plane — still one planar cut, not a compound cut).
 - **3D viewport:** LMB-drag = look/move; RMB-drag = look in place; both = strafe.
   Camera speed set by the **1 / 2 / 3** keys.
 - **Grid snap** stays on; grid 16 for general work, drop lower for detail.
-  (uedcli does **not** enforce snapping — it is guidance; see
+  (uedcli does not enforce snapping — it is guidance; see
   [`./csg-bsp.md`](./csg-bsp.md).)
 
 ---
@@ -99,7 +98,7 @@ Accessed from the top toolbar / *View → Browsers*:
 - **Actor Class Browser** — the class tree; select a class to place. (uedcli
   equivalent: `class list` / `class show`.)
 - **Texture Browser** — pick a package, then a **Group** to narrow the list
-  (Group is browser-convenience only, **except** the reserved Group `Ladder`
+  (Group is browser-convenience only, except the reserved Group `Ladder`
   which makes a surface climbable — see [`dx-classes.md`](dx-classes.md) §1).
   New/edit procedural textures here (Fire/Water textures — set FX params before
   painting; left-drag paints, right-drag erases).
@@ -114,14 +113,14 @@ Accessed from the top toolbar / *View → Browsers*:
 ## 5. Prefabs — `.T3D` import/export  [ENGINE] 📖
 
 - **Prefab load/save** = *File → Import / Export Level* as a **`.T3D`** file. This
-  keeps actors **and** their texturing.
-- It is **incompatible with Brush → Export `.T3D`** (a single-brush export — a
+  keeps actors and their texturing.
+- Incompatible with **Brush → Export `.T3D`** (a single-brush export, a
   different format). Don't mix them.
 - **Load all texture packages first** before importing a prefab, or its surfaces
   lose their textures.
 - **`.u3d` brush Save/Load is broken** — Export/Import `.T3D` is the reliable
   path (import as "Solid Mesh" + "Keep Original Polygons Intact"). This
-  independently validates uedcli's git-tracked-**T3D**-trunk design
+  independently validates uedcli's git-tracked-T3D-trunk design
   ([`README.md`](README.md)).
 
 ---
@@ -140,7 +139,6 @@ Typed in the editor console (or issued headlessly by uedcli —
 - **Caution:** never run **`texture cull`** with hidden brushes present — it
   wipes their textures.
 
-The render-mode ("rmode") viewport views (wireframe / **Zone-Portal** = the
-optimization view / lighting-only) are in [`../../rendering.md`](../../rendering.md)
-and the optimization workflow in
-[`./zones-performance.md`](./zones-performance.md).
+Render-mode ("rmode") viewport views (wireframe / Zone-Portal optimization view /
+lighting-only) are in [`../../rendering.md`](../../rendering.md); the optimization
+workflow in [`./zones-performance.md`](./zones-performance.md).

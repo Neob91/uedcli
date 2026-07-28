@@ -13,11 +13,10 @@ All facts here were live-verified 2026-07-17 against Deus Ex `Engine.u` (89 clas
 > TextBuffer layout — or to what the discovery decoders (`iter_classes`, `class_index_map`,
 > `super_fqcn_by_index`, `class_is_abstract`, `own_class_properties`) emit — must bump
 > `schema_cache.SCHEMA_CACHE_VERSION` and refresh the committed frozen-golden bundle
-> `tests/fixtures/schema_golden_fire_v1.marshal`, or a post-upgrade uedcli will read stale,
+> `tests/fixtures/schema_golden_fire_v1.marshal`, or a post-upgrade uedcli reads stale,
 > wrongly-shaped cache entries an older build wrote. The `test_schema_cache.py` frozen-golden guard
-> trips red to force this. On a real decoder change, bump the version (making already-written on-disk
-> entries unreachable); refreshing the golden blob alone silences the test but leaves a deployed
-> cache serving stale, wrongly-shaped entries.
+> trips red to force this. Bump the version — don't only refresh the golden blob, which silences the
+> test but leaves a deployed cache serving stale entries.
 
 ## Abstractness: read the source, not `ClassFlags`
 
@@ -37,15 +36,15 @@ But `ClassFlags` is not reliably reachable by an offline byte-seek:
 
 So uedcli reads the class's shipped `.uc` source instead — uniform across all classes, no
 bytecode walker. Every DX class ships its source in a `TextBuffer` referenced by `UStruct.ScriptText`
-(89/89, 1158/1158, 5/5 — ✅). Parse the class declaration for the `abstract` keyword:
+(89/89, 1158/1158, 5/5 — ✅). To parse the class declaration for the `abstract` keyword,
 `abstract_from_source` strips `//` and `/* */` comments first (a `;` inside a comment must not
 truncate the declaration), matches `\bclass\b(.*?);` DOTALL (declarations are routinely multi-line,
 e.g. `class Pawn extends Actor\n\tabstract\n\tnative;`), and tests `\babstract\b` (word-boundary — a
-class or parent whose name contains "abstract", like `AbstractFoo`, must not match). `CLASS_Abstract`
+class or parent named like `AbstractFoo` must not match). `CLASS_Abstract`
 is per-class-declared, not inherited (`Actor` abstract, its concrete subclass `Light` not), so
-reading the class's own declaration is correct — there is no "abstract via an abstract super" case.
+reading the class's own declaration is correct.
 
-A class with no shipped source (a future source-stripped substrate) yields `None`, which the
+A class with no shipped source yields `None`, which the
 placeable filter treats as placeable (fail-open: list a maybe-unplaceable class rather than hide
 a placeable one). DX always ships source, so `None` is a forward-compat concession only.
 
@@ -96,7 +95,7 @@ The `var()` class-name default is written on disk, not applied at load. An edita
 no explicit category (`var() Type P;`) stores its declaring class name as the Category
 (`Engine.Brush.CsgOper` → `Brush`, `Engine.Mover.KeyNum` → `Mover`). An explicit `var(Group)` stores
 `Group` (`Actor.Mass` → `Movement`, `Actor.LightType` → `Lighting`, `Actor.CollisionRadius` →
-`Collision`, `Actor.Mesh` → `Display`). A non-editable `var` stores `None`. Categories are abundant:
+`Collision`, `Actor.Mesh` → `Display`). A non-editable `var` stores `None`. Category counts:
 633 in Engine.u, 534 in DeusEx.u, 20 in Core.u. (The claim "DX has no categories" was a decode
 bug — see below.)
 
@@ -148,7 +147,7 @@ The full UClass export body (v68/v69):
   constants/contexts/iterators/conversions 0x39–0x5F, native calls ≥0x60 with the 2-byte extended
   form 0x60–0x6F, function calls consuming args to `EX_EndFunctionParms` 0x16). An unknown opcode
   or any desync raises `SchemaError` (no-fallback); a class's own script is small (replication
-  conditions), so the exercised subset is modest and the corpus gate is decisive.
+  conditions), so the exercised opcode subset is modest.
 - The defaults block is a sparse diff against the super's defaults (`Engine.Light` re-states
   only what it changes vs `Actor`; a prop absent in the whole chain is the type's zero). Effective
   defaults = overlay every ancestor's block root→leaf (`uprops.resolve_class_defaults`).

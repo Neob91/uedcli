@@ -1,6 +1,6 @@
 # Movers — doors, lifts, and moving brushes  [ENGINE] + [DX]
 
-UE1/DX movers: what a mover is, the engine mover class vs the Deus Ex `DeusExMover` family, keyframe
+UE1/DX movers: the engine mover class vs the Deus Ex `DeusExMover` family, keyframe
 authoring, encroachment behaviour, initial states, the self-lighting "black door" fix, and the uedcli
 `mover key` verbs. Siblings: [`lighting.md`](lighting.md) · [`textures.md`](textures.md)
 · [`actors-collision-pathing.md`](actors-collision-pathing.md). Parent monolith:
@@ -21,9 +21,9 @@ shifts at runtime.
 - A mover does not cut the BSP — converting a detail brush to a mover removes its BSP nodes (a perf
   lever; see [`zones-performance.md`](./zones-performance.md)).
 - A mover always has `Physics = PHYS_MovingBrush` (see [`actors-collision-pathing.md`](actors-collision-pathing.md) §2).
-- For a complex mover shape, intersect it down to one clean single brush first, keeping the builder
-  brush simple. Reset ALL (scale / rotation / pivot) before intersecting the brush destined to become
-  a mover, or the live transform leaks into the result.
+- For a complex mover shape, intersect it down to one clean single brush first, keeping the builder brush simple. Reset ALL (scale /
+  rotation / pivot) before intersecting the brush destined to become a mover, or the live transform
+  leaks into the result.
 
 ---
 
@@ -31,10 +31,10 @@ shifts at runtime.
 
 Engine mover class [ENGINE] 🔬: in this DX build `Engine.u` ships only the base `Mover` — the
 stock-Unreal subclasses (`RotatingMover`, `LoopMover`, `AttachMover`, `GradualMover`, `MixMover`,
-`AssertMover`) are not present. DX supplies its own mover subclasses in `DeusEx.u` (below).
+`AssertMover`) are not present. DX supplies its own mover subclasses in `DeusEx.u` [DX] 🔬 (below).
 
-Deus Ex ships its own mover classes [DX] 🔬 — reach for these, not the raw engine `Mover`, in a DX
-level. Only the door/panel classes extend `DeusExMover`; the lifts extend `Engine.Mover` directly:
+Use these, not the raw engine `Mover`, in a DX level. Only the door/panel classes extend
+`DeusExMover`; the lifts extend `Engine.Mover` directly:
 
 | DX class | Extends | Is |
 |---|---|---|
@@ -76,8 +76,7 @@ authored as T3D offsets via the `mover key` verbs (§6), so the inverted flow ne
 
 ## 4. `MoverEncroachType` — what a mover does when it hits something  🔬
 
-`MoverEncroachType` controls the mover's behaviour when it encroaches (its motion runs into a pawn or
-object):
+`MoverEncroachType` controls behaviour when the mover's motion runs into a pawn or object:
 
 | Value | Behaviour |
 |---|---|
@@ -141,9 +140,9 @@ mover key list   <MoverName>                     # inspect
 mover key remove <MoverName> 1                   # delete a key + compact (NumKeys--)
 ```
 
-- `brush build <shape> --mover-class <Package.Name>` is the generator producing a base Mover (no
-  `CsgOper`, base pose only); it prints a T3D snippet to stdout — the write into the trunk is always
-  `… | actor add -` (name allocation happens at `actor add`).
+- `brush build <shape> --mover-class <Package.Name>` generates a base Mover (no `CsgOper`, base pose
+  only) and prints a T3D snippet to stdout; the write into the trunk is always `… | actor add -`
+  (name allocation happens at `actor add`).
 - Keyframes are then authored with the trunk-editing `mover key` verbs
   (`add` / `move` / `rotate` / `remove` / `list`).
 

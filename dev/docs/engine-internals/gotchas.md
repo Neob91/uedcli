@@ -17,10 +17,8 @@ Two separate substrates — do not mix their addresses:
 | Game `Engine.dll` | game engine (collision, load, `UModel::Serialize`) | `DX/System/Engine.dll` | `0x10300000` |
 | Editor `Engine.dll`/`Editor.dll` | **UnrealEd** (CSG, `LIGHT APPLY` bake) | `uned/UED22/*.dll` | `0x10000000` |
 
-The game's `Render.dll` has no editor counterpart. Rendering a `.dx` in the game is
-`Render.dll @ 0x10b00000`; building geometry/lighting is the editor DLLs @ `0x10000000`.
-`System.bak/`, `Ued2/`, `SystemOk/`, `UED22/` under `DX/` are alternate copies — use
-`DX/System/` for the game runtime.
+The game's `Render.dll` has no editor counterpart. `System.bak/`, `Ued2/`, `SystemOk/`,
+`UED22/` under `DX/` are alternate copies — use `DX/System/` for the game runtime.
 
 ## 2. Disassembly harness (✅)
 
@@ -35,8 +33,8 @@ The game's `Render.dll` has no editor counterpart. Rendering a `.dx` in the game
   1. A naive `'+ 0xNN]'` string match also catches `[esp+0xNN]` / `[ebp+0xNN]` stack locals —
      exclude `esp`/`ebp` to keep only real struct-field derefs.
   2. The destructor / `Empty()` also references every array offset. Distinguish it from
-     `Serialize` by the vtable store at the top (`mov dword ptr [esi], <vtable>` = a ctor/dtor
-     frame, not a serializer).
+     `Serialize` by the vtable store at the top (`mov dword ptr [esi], <vtable>` = ctor/dtor,
+     not a serializer).
 
 ## 3. Wine live-debugging: `WINEDEBUG=+seh` (✅)
 
@@ -45,13 +43,13 @@ The game's `Render.dll` has no editor counterpart. Rendering a `.dx` in the game
   and the code token is `code=c0000005`. A filter matching only `c0000005|eip=` catches
   `__regs_MSVCRT__setjmp` noise (which contains `eip=`) and misses the real exception. Use a
   broad filter: `grep -iE 'code=c[0-9]|first chance|ip=0*10b0|addr=0*10b0'` (and `grep -v setjmp`).
-- `+seh` is verbose → cap it (`| head -300`) and filter to the exception lines only; host
+- `+seh` is verbose → cap it (`| head -300`) and filter to the exception lines; host
   disk is chronically ~96% full (see §5).
 - "Anomalous singularity in URender::DrawWorld" is a catch-all, not a math singularity (✅).
   `URender::DrawWorld` wraps `DrawFrame` in `__try/__except`; the filter (logs the string, xref at
   `Render.dll 0x10b1ced0`) catches any SEH in the subtree and prints that one label. The
   `Critical: <fn>` lines above it are the guard stack at the fault — where it actually
-  faulted. Usually a plain `c0000005` access violation, not FP. Confirm the real code
+  faulted, usually a plain `c0000005` access violation, not FP. Confirm the real code
   with `+seh`, don't infer from the message.
 
 ## 4. Reading a register at a game fault — the working recipe and the dead ends (✅🔬, 2026-07-16)
@@ -66,16 +64,15 @@ Reading a CPU register at a `Render.dll` fault in the headless game is hard. In 
 - `gdb` is absent. `winedbg attach` is broken here — `info process` works (lists DeusEx.exe's
   winpid), but `attach <winpid>; …; info reg` produces zero output even with SYS_PTRACE + stderr
   capture + stdin held open. Don't sink time into `winedbg attach`.
-- The guest AV does not surface as a Linux SIGSEGV. `PTRACE_SEIZE`-ing all threads and running
+- The guest AV does not surface as a Linux SIGSEGV. `PTRACE_SEIZE`-ing all threads
   caught zero signals during a 60/s crash-loop — wine handles the guest page fault internally
   without a tracer-visible signal, so you can't catch the fault by waiting for SIGSEGV.
 - INT3 breakpoint does not work for a fault inside an `__except` guard (❌ 2026-07-16). Planting
   `0xCC` at the fault VA via `/proc/<pid>/mem` and `PTRACE_SEIZE`-ing all threads yielded zero
   SIGTRAPs even though the plant froze rendering — wine's structured-exception dispatch around
   `URender::DrawWorld` catches the guest `INT3` (as `EXCEPTION_BREAKPOINT`) before the host tracer
-  sees a SIGTRAP. Any `Render.dll` render fault is inside that `__except` (why the game logs
-  `Anomalous singularity` and survives), so INT3-via-ptrace is a dead end there.
-  (`game_int3_catch_ebx.py` is kept as the harness but does not land hits for this class of fault.)
+  sees a SIGTRAP. Any `Render.dll` render fault is inside that `__except`, so INT3-via-ptrace is a
+  dead end there. (`game_int3_catch_ebx.py` is kept as the harness but lands no hits for this fault.)
 - What works: binary-patch the faulting instruction to store a register to a scratch
   global, then early-return before the fault (✅ 2026-07-16). No guest exception is raised (so
   `__except` never fires), and you read the captured value straight out of process memory. Recipe:
@@ -92,8 +89,8 @@ Reading a CPU register at a `Render.dll` fault in the headless game is hard. In 
 - Burst timing. The headless game renders only a short burst after travel, then double-faults
   (`Exit: Double fault in object ShutdownAfterError`) and the console link dies — you can't drive
   frames post-crash. Patch/attach while on the clean boot map (`DX_MAP=DX`, link alive), then travel
-  to the lit map. Detect the crash by `grep -c "Anomalous singularity" DeusEx.log` (no screenshot
-  needed). `boot_watch_singularities.sh` reproduces reliably in ~90 s.
+  to the lit map. Detect the crash by `grep -c "Anomalous singularity" DeusEx.log`.
+  `boot_watch_singularities.sh` reproduces reliably in ~90 s.
 - Two pid/readiness gotchas: (1) `pgrep -f DeusEx.exe` early in boot returns a launcher pid
   where Render.dll isn't mapped (reading `0x10b08b4a` → `EIO`); select the pid whose byte at the fault
   VA reads `0x8a`. (2) That render byte `0x8a` appears before `UPlayCtlLink` binds `:7777` — gate
@@ -114,13 +111,13 @@ Reading a CPU register at a `Render.dll` fault in the headless game is hard. In 
     empty (0 bytes); a live boot fills it within ~60–90s. Loop: boot → wait 90s → if log empty,
     kill+retry; else proceed.
 - `Tools/uplayctl/game/game-entrypoint.sh` (~line 66) is the wine launch line. To inject
-  `WINEDEBUG=…`, edit it and `bin/uplayctl session start` (which rebuilds the image from
-  source, picking up the edit). Revert the entrypoint after — it's a tracked file.
+  `WINEDEBUG=…`, edit it and `bin/uplayctl session start` (rebuilds the image from
+  source, picking up the edit). Revert after — it's a tracked file.
 - Boot sequence: the game always boots to the custom `DX.dx` first (renders clean), then the
   entrypoint travels to `DX_MAP` via a console `open`. The console link self-establishes from
   `DeusEx.ini`'s `Console=` — a manual `wine DeusEx.exe` relaunch does not re-establish the
-  link (it needs the entrypoint's whole `DeusEx.ini`/`User.ini` orchestration). So you can't just
-  `pkill DeusEx; wine DeusEx.exe` to re-capture with different flags and expect the TCP link.
+  link (it needs the entrypoint's whole `DeusEx.ini`/`User.ini` orchestration), so
+  `pkill DeusEx; wine DeusEx.exe` won't re-capture with different flags over the TCP link.
 - `uplayctl send "open <map>"` times out when the game is crash-looping (the wedged renderer
   starves the console thread). The command still dispatches (the travel happens) — don't read the
   `TimeoutError` as failure; check the log.
@@ -140,7 +137,7 @@ From the native-materialize lit-render investigation (spike `sections/20-lightin
 - The software renderer re-raytraces lightmaps every frame; it does not read the baked
   `Model.LightBits`. It computes `bytesPerLight = ceil(USize/8)*VSize` (`0x10b06ea2..0x10b06ed5`)
   and advances a bit-plane pointer it never reads back. So the on-disk `LightBits` format is
-  irrelevant to render (it matters only if you feed a hardware path). This is why a
+  irrelevant to render (it matters only for a hardware path). This is why a
   lightmapped surface faults per-frame — it re-lights every frame.
 - The lit path never reads geometry-completeness fields. `FLightManager::SetupForSurf`
   (`0x10b06c90`), `AddLight` (`0x10b08b30`), `Illuminate` (`0x10b05fa0`) read only the surf's
@@ -170,6 +167,6 @@ From the native-materialize lit-render investigation (spike `sections/20-lightin
   parse→re-serialize→byte-compare of a real Model will not be byte-exact — a parser
   limitation, not a real difference. Compare field-by-field (counts, refs, flags) instead.
 - Good control maps: `DX/Maps/DX.dx` / `Entry.dx` are small lit real maps (26 surfs, 3 lit
-  records, 37 `Model.Lights`) that render clean headless — the ideal A/B target for a synthesized
+  records, 37 `Model.Lights`) that render clean headless — the A/B target for a synthesized
   lit map. `DXOnly.dx` is a real dark-record single box (renders, but doesn't exercise the lit
   light loop). Decode any of them with `native/pkg_write.parse_package` + `native/umodel`.

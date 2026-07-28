@@ -1,8 +1,8 @@
 # Actors, collision, physics & pathing  [ENGINE] (+ DX)
 
-Part of the level-design knowledge base. Dev reference for the non-geometry actor layer: the cylinder
-collision model, the physics enum, decorations, effects (and why UE1 has no particle emitters),
-`PlayerStart`, the KeyPoint family, and NavigationPoint pathing.
+Dev reference for the non-geometry actor layer: the cylinder collision model, the physics enum,
+decorations, effects (and why UE1 has no particle emitters), `PlayerStart`, the KeyPoint family, and
+NavigationPoint pathing.
 Siblings: [`lighting.md`](lighting.md) · [`textures.md`](textures.md)
 · [`movers.md`](movers.md). Parent monolith: [`README.md`](README.md).
 Engine-driving: [`../../commands.md`](../../commands.md).
@@ -23,9 +23,8 @@ default; `class show` prints names/types only, not values).
 UE1 actor collision is cylinder-based. Every actor has one upright collision cylinder:
 
 - `CollisionRadius` — half-width. `CollisionHeight` — half-height (total height = 2 × `CollisionHeight`).
-- The cylinder is always upright regardless of the actor's rotation.
-- There is no per-poly, box, or capsule actor collision in UE1 (that is UE2). A rotated crate still
-  collides as an upright cylinder.
+- No per-poly, box, or capsule actor collision in UE1 (that is UE2); the cylinder stays upright
+  regardless of rotation — a rotated crate still collides as an upright cylinder.
 
 ### 1.1 The flag families  🔬
 
@@ -50,8 +49,7 @@ physically stop movement):
 | **Shootable but walk-through** | `bCollideActors` + `bProjTarget` on, block flags off (a switch/panel you shoot but pass). |
 | **Glass / grille** | A visual sheet (see [`textures.md`](textures.md)) + an ICH behind it to block — sheets never block on their own. For breakable glass use [DX] `BreakableGlass` ([`movers.md`](movers.md)). |
 
-A sheet is purely visual and never collides on its own — to make it block, pair it with an Invisible
-Collision Hull or a 1-unit blocking cube.
+To make a sheet block, pair it with an Invisible Collision Hull or a 1-unit blocking cube.
 
 `bBlockZeroExtentTraces` / `BlockingVolume` are UE2 — out of scope.
 
@@ -98,7 +96,7 @@ Place a concrete `Decoration` subclass for props (crates, furniture, debris, dri
 - `DrawScale` — single uniform float (`DrawScale3D` is UE2).
 - `Skin` / `MultiSkins[8]` — the mesh's skin textures.
 - **Gameplay:** `bPushable` (+ `PushSound`), the `contents`/`content2`/`content3` + `EffectWhenDestroyed`
-  loot-spill fields (a breakable that spills loot when destroyed), `bBobbing` + `Buoyancy` (floats/bobs on
+  loot-spill fields (breakable spills loot when destroyed), `bBobbing` + `Buoyancy` (floats/bobs on
   water). Damageability in DX is `DeusExDecoration.HitPoints` — `Engine.Decoration` has no `Health`
   property (Health is a pawn field, not a decoration one in this build).
 - **[DX]** uses its own `DeusExDecoration` family — adds a highlight Name label, `HitPoints`, and
@@ -110,8 +108,7 @@ Place a concrete `Decoration` subclass for props (crates, furniture, debris, dri
 
 ## 4. Effects — UE1 has NO particle emitters  [ENGINE] 🔬 ❌ **Debunked**
 
-UE1/UT has no particle `Emitter`s — they are UE2+. Do not reach for an `Emitter` class in a DX level;
-it does not exist.
+UE1/UT has no particle `Emitter`s — they are UE2+; the class does not exist in DX.
 
 UE1 effects are sprite/trail-based: `AnimatedSprite`, explosions, `SmokeTrail`, blood/sparks
 (`BloodSpurt` / `Spark`), and trails driven by `PHYS_Trailer`. (All extend `Engine.Effects`.)
@@ -179,10 +176,10 @@ whose `Orders=Patrolling` and whose `OrderTag` = the first point's `Tag`; see NP
 [`README.md`](README.md) §10.3).
 
 > **[DX] nuance** 🔬: `PatrolPoint` is `Engine.PatrolPoint` — there is no `DeusEx.PatrolPoint` (a
-> bare-name lookup resolves to the Engine class). `AmbushPoint` does exist as a stock `Engine.u`
-> NavigationPoint, but DX drives NPCs through `ScriptedPawn` orders rather than the Unreal-AI ambush
-> system, so it is effectively unused; `AlarmPoint` does not exist in this build at all. Prefer the
-> `ScriptedPawn` / `PatrolPoint` workflow over `AmbushPoint` in a DX level.
+> bare-name lookup resolves to the Engine class). `AmbushPoint` exists as a stock `Engine.u`
+> NavigationPoint but is effectively unused (DX drives NPCs through `ScriptedPawn` orders, not the
+> Unreal-AI ambush system); `AlarmPoint` does not exist in this build. Prefer the `ScriptedPawn` /
+> `PatrolPoint` workflow.
 
 ### 7.1 Spacing  🔬📖
 

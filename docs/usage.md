@@ -1,24 +1,23 @@
 # uedcli — usage
 
 `uedcli` is the LLM-facing CLI for authoring UnrealEngine-1 levels (Deus Ex `.dx`,
-Unreal/UT `.unr`) without opening the editor by hand. You issue semantic, by-name commands
+Unreal/UT `.unr`) without opening the editor. You issue semantic, by-name commands
 (`actor find`, `brush build`, `mover key move`, …); the T3D text format is internal plumbing.
 
 The source of truth is a git-tracked T3D tree on disk (one directory per actor under
-`maps/<level>/`), not a live editor and not a session store — work-in-progress is an
-uncommitted / feature-branch state in your own repo, and `git` is the history and merge
-engine. Reads and edits are model-side compute against that tree (instant, no container).
-The editor / headless game is reached only for the few commands that must build or render:
-`level materialize` and `level preview --game`. Each spins up its own container as needed — there
-is no persistent session and no `--container` flag.
+`maps/<level>/`), not a live editor or session store — work-in-progress is uncommitted /
+feature-branch state in your own repo, and `git` is the history and merge engine. Reads and
+edits are model-side compute against that tree (instant, no container). The editor / headless
+game is reached only for commands that must build or render: `level materialize` and
+`level preview --game`. Each spins up its own container as needed — no persistent session, no
+`--container` flag.
 
 ```
 uedcli <verb> …                      # if installed on $PATH (pipx)
 bin/uedcli <verb> …                  # from Tools/uedcli, host-native via the dev venv
 ```
 
-`uedcli docs list|show|search` prints this file and the level-design guides to your terminal, so
-you never need to locate them on disk — see
+`uedcli docs list|show|search` prints this file and the level-design guides to your terminal — see
 [Documentation](#documentation--read-the-docs-from-the-cli) below.
 
 ## Composability
@@ -26,8 +25,7 @@ you never need to locate them on disk — see
 Verbs are small and pipe together instead of growing bespoke flags:
 
 - Producer/query verbs print their result to stdout, one item per line (pipe-friendly); human
-  summaries and counts go to stderr so they never pollute the pipe. Many add `--json` for
-  structured output.
+  summaries and counts go to stderr. Many add `--json` for structured output.
 - Mutating verbs read their target set from stdin via `-` — `actor find … | actor delete -`.
   `-` is the sole names source (not mixable with names as CLI args); empty stdin is a clean
   no-op (exit 0), not an error.
@@ -35,11 +33,10 @@ Verbs are small and pipe together instead of growing bespoke flags:
   T3D snippet (`build → add -`). Keep them distinct.
 - A verb over a set takes the set, and that is the operation — e.g. `actor bbox <names…>`
   returns the box enclosing all of them, so there is no `--union` flag.
-- Prefer a stateless `find`/query verb whose output feeds another verb over per-command
-  filter flags.
+- Prefer a stateless `find`/query verb feeding another verb over per-command filter flags.
 
-Errors never leak a Python traceback: a bad actor/class/value raises a clear message that names
-the offending value and exits non-zero (typically exit 2).
+Errors never leak a Python traceback: a bad actor/class/value raises a clear message naming the
+offending value and exits non-zero (typically exit 2).
 
 Set-mutating verbs are producers — they print their touched/allocated actor names to stdout
 (one per line) plus a summary to stderr, so they chain via `-`
@@ -47,17 +44,17 @@ Set-mutating verbs are producers — they print their touched/allocated actor na
 `actor rotate` / `order` / `move` / `delete` / `prop set|unset` / `folder set|unset` /
 `label add|remove|clear`, `brush scale` / `brush apply-transform` / `brush poly align`
 (touched brush names), and `stash apply` / `prefab apply`. For `delete` the stdout is the removed
-names — a log/count, since they no longer exist to pipe into an edit.
+names — a log, since they no longer exist to pipe into an edit.
 
 ⚠ The per-face verbs print faces, not actor names. `brush poly set` / `pan` / `rotate` / `scale`
 print `BRUSH:idx` selectors — one per touched face — because a bare brush name means all of
-that brush's faces, so a per-face verb that printed one would hand the next verb a wider
-set than it edited. The names are canonical and `all` is expanded, so `brush poly pan wall:all …`
-prints `WALL:0 … WALL:5`, ready to feed the next verb's `-`.
+that brush's faces, so printing one would hand the next verb a wider set than it edited. The names
+are canonical and `all` is expanded, so `brush poly pan wall:all …` prints `WALL:0 … WALL:5`,
+ready to feed the next verb's `-`.
 
 ⚠ `brush poly align` has not been converted and still prints brush names, so its output cannot be
 piped into a per-face verb. It does not quietly widen the set — the per-face verbs take
-`BRUSH:SELECTOR` only (see below), so a bare name is rejected outright and
+`BRUSH:SELECTOR` only (see below), so a bare name is rejected and
 `brush poly align … | brush poly rotate -` exits 2 with
 `surface selector must be BRUSH:SELECTOR, got 'WALL'`. Re-select the faces with `brush poly find`
 between the two verbs.
@@ -66,7 +63,7 @@ between the two verbs.
 
 A **project** is any repo with a free-standing **`uedcli.toml`** at its root (found by walking up
 from cwd; nearest wins — or point `--project` / `$UEDCLI_PROJECT` at the root dir or the file). The
-file is hand-written (there is no `project init`):
+file is hand-written (no `project init`):
 
 ```toml
 game = "deusex"                 # required: selects [games.deusex] in ~/.uedcli/config.toml
@@ -80,8 +77,8 @@ All dir keys are relative to the project root (absolute allowed), so uedcli can 
 **existing** dirs rather than force a parallel tree.
 
 - **Machine-local throwaway state** (stash register, locks, staging temps, delivered preview maps)
-  lives in a gitignored, **self-ignoring** `.uedcli/` beside the file —
-  uedcli creates it (writing its own `.gitignore` of `*`) on first use; safe to delete.
+  lives in a gitignored, **self-ignoring** `.uedcli/` beside the file — uedcli creates it (writing
+  its own `.gitignore` of `*`) on first use; safe to delete.
 - **The per-user `~/.uedcli/`** holds only `config.toml` (the `[games.*]` blocks — where each game's
   base asset packages live) and the derivable, content-addressed `cache/{textures,stubs,schema}`
   shared across projects. There is no central per-project bucket and no project `id`.
@@ -90,25 +87,24 @@ All dir keys are relative to the project root (absolute allowed), so uedcli can 
 the selected game's base dirs, deduped project-shadows-base. `paths` are **bare directories**,
 colon-separated — uedcli owns the five package extensions (`.u .dx .utx .uax .umx`) and scans the
 dirs itself. Because `:` is the list separator, a pasted **Windows path** (`C:\DX\System`) cannot be
-a dir: uedcli names it as such and exits 2, in both the project and the `[games.*]` config. Use the
-POSIX path the dirs are actually at.
+a dir: uedcli names it and exits 2, in both the project and the `[games.*]` config. Use the POSIX
+path the dirs are actually at.
 
 **Mover detection reads the class hierarchy, so it needs the packages.** Whether an actor is a
 **mover** (an animated brush — see [Movers](#movers--animated-brush-actors-doors--lifts--gears)) is
-decided by resolving its class against `Engine.Mover` in the game's own code packages, *not* by
-guessing from the class name. So every verb that has to know — `mover key *`, `level doctor`,
-`event graph`, `brush scale`, `brush apply-transform`, `brush intersect`/`deintersect`,
-`stash capture`, `level preview --native` — needs a resolvable package search path: a project
-**and** `~/.uedcli/config.toml`. Without one the verb exits 2 naming itself and what is missing; it
-never falls back to a name guess, because that would silently report a real mover as a static brush.
-(`level materialize` and `level preview --game` need the same config for an unrelated reason — they
-load the game's packages to build and to render — so in practice every verb on this page that
-touches packages at all wants it configured.)
+decided by resolving its class against `Engine.Mover` in the game's code packages, *not* by guessing
+from the class name. So every verb that has to know — `mover key *`, `level doctor`, `event graph`,
+`brush scale`, `brush apply-transform`, `brush intersect`/`deintersect`, `stash capture`,
+`level preview --native` — needs a resolvable package search path: a project **and**
+`~/.uedcli/config.toml`. Without one the verb exits 2 naming itself and what is missing; it never
+falls back to a name guess, since that would silently report a real mover as a static brush.
+(`level materialize` and `level preview --game` need the same config to load the game's packages to
+build and render, so in practice every verb on this page that touches packages wants it configured.)
 
 The same rule applies **per actor**: if an actor's class — or any class on its ancestor chain — is
-not on the composed search path, the verbs listed above exit 2 naming that class instead of quietly
-deciding it is not a mover. If you hit that, the package holding the class is missing from your
-project `paths` or the game's base dirs (`uedcli project show` prints the resolved path).
+not on the composed search path, the verbs above exit 2 naming that class instead of quietly
+deciding it is not a mover. The package holding the class is then missing from your project `paths`
+or the game's base dirs (`uedcli project show` prints the resolved path).
 
 **`project show [--json]`** prints the resolved root, game, managed dirs, and composed package search
 path (each entry tagged `project`/`base`); `--json` emits
@@ -117,7 +113,7 @@ path (each entry tagged `project`/`base`); `--json` emits
 ## Choosing a level
 
 Most verbs operate on the **current level**, named by the **`UEDCLI_LEVEL` environment variable** (a
-bare level name; a level's identity is its `maps/<name>/` directory). Set it once per shell:
+bare level name; a level's identity is its `maps/<name>/` directory). Set once per shell:
 
 ```
 export UEDCLI_LEVEL=20_AireGardens
@@ -128,8 +124,7 @@ A verb with no `UEDCLI_LEVEL` and no explicit `--tree` exits 2 with `no level: s
 variable (export UEDCLI_LEVEL=<name>) or pass a level explicitly (--tree level/<name>)`. There is no
 `level select` verb — the level is the env var (a child process can't set the parent shell's env).
 When a **mutating** verb resolves the level from `UEDCLI_LEVEL` (not an explicit `--tree`), it echoes
-`editing level 'X' (from $UEDCLI_LEVEL)` to stderr, so a stale export can't silently edit the wrong
-level.
+`editing level 'X' (from $UEDCLI_LEVEL)` to stderr, so a stale export can't silently edit the wrong level.
 
 | Command | What it does |
 |---|---|
@@ -174,12 +169,11 @@ level.
 - `--within-bbox X0,Y0,Z0,X1,Y1,Z1` — match actors whose **world bounding box is fully inside** the
   given axis-aligned box (two opposite corners in any order, unreal units — same space as `--at` —
   **edge-inclusive**). Honours each actor's full transform (a scaled/rotated brush's TRUE world box
-  is tested); a point actor is its `Location` point. **Single-valued** (not repeatable). Selects a
-  region's actors — it matches **every** contained actor (lights, nav points, decorations too), so
-  add `--kind brush` when you want geometry only. Because it's full **containment**, a brush that
-  straddles the box edge (a room shell poking past a tight box) is **not** matched — size the box to
-  enclose the whole feature. (A looser "also catch straddling brushes" variant, `--overlapping-bbox`,
-  is not yet implemented.)
+  is tested); a point actor is its `Location` point. **Single-valued** (not repeatable). Matches
+  **every** contained actor (lights, nav points, decorations too), so add `--kind brush` for geometry
+  only. Being full **containment**, a brush straddling the box edge (a room shell poking past a tight
+  box) is **not** matched — size the box to enclose the whole feature. (A looser variant,
+  `--overlapping-bbox`, is not yet implemented.)
 - `--folder PATTERN` / `--no-folder` — see **Folders** below.
 - `--label GLOB` / `--no-label` — see **Labels** below.
 - `--json` — emit the names as a JSON array.
@@ -191,8 +185,8 @@ uedcli actor find --within-bbox -512,0,-256,512,768,256 --kind brush | uedcli ac
 ```
 
 **Boolean queries — `find <filters> -`:** with a trailing `-`, `find` reads a newline actor-name list
-from stdin and searches ONLY that set (the "universe"); the filters are the predicate. `--exclude`
-keeps the non-matches instead. This composes into full boolean logic:
+from stdin and searches ONLY that set; the filters are the predicate. `--exclude` keeps the
+non-matches instead. This composes into full boolean logic:
 
     actor find --group A | actor find --group B -            # A AND B
     actor find --group A | actor find --group B --exclude -  # A but NOT B
@@ -204,20 +198,19 @@ validator).
 `actor show <name>` takes ONE actor name (case-insensitive) — **not a glob**: patterns belong to
 `actor find`, and `actor find 'Light*' | actor show -` prints the whole matched set. A name that
 matches no actor errors (exit 2). Reads a stdin name list with `-` (empty stdin is a clean no-op,
-exit 0). By default each block also
-carries the uedcli-side sidecars as comments — a `// uedcli-folder:` line for a foldered actor and a
-`// uedcli-labels:` line for a labelled one — so `actor show A | actor add -` round-trips both;
-`--t3d-only` suppresses them for a byte-exact editor export.
+exit 0). By default each block carries the uedcli-side sidecars as comments — a `// uedcli-folder:`
+line for a foldered actor and a `// uedcli-labels:` line for a labelled one — so
+`actor show A | actor add -` round-trips both; `--t3d-only` suppresses them for a byte-exact editor
+export.
 
-The T3D that `actor show` prints — and that the trunk stores — is faithful, not abbreviated: it
-states every authored property explicitly, including ones whose value happens to equal the class
-default (`Location=(X=0.000000,Y=0.000000,Z=0.000000)`, `Rotation=(Pitch=0,Yaw=0,Roll=0)`, a `Tag`
-the editor stamped). UnrealEd's own export omits those, so its export of the same level is shorter
-than the trunk — that is expected, and the build's post-verify compares the two by value, not by
-text: each property resolves to what it would import as (the stored value, or the class default
-when the line is absent), so the two spellings are the same level. Never hand-delete such a
-line to "clean up" the trunk: an omitted property does not mean zero, it means the class default,
-which is non-zero for some classes.
+The T3D that `actor show` prints — and the trunk stores — is faithful, not abbreviated: it states
+every authored property explicitly, including ones equal to the class default
+(`Location=(X=0.000000,Y=0.000000,Z=0.000000)`, `Rotation=(Pitch=0,Yaw=0,Roll=0)`, a `Tag` the
+editor stamped). UnrealEd's own export omits those, so its export is shorter than the trunk — the
+build's post-verify compares the two by value, not text: each property resolves to what it would
+import as (the stored value, or the class default when the line is absent), so the two spellings are
+the same level. Never hand-delete such a line to "clean up" the trunk: an omitted property means the
+class default, which is non-zero for some classes.
 
 **`actor prop get`** prints EFFECTIVE property values — the stored value if present, else the class
 default decoded offline from the game packages, else the type's zero — one line per KEY in argument
@@ -225,7 +218,7 @@ order (a whole static array prints as one `(0=V,1=W,…)` line; a whole struct p
 With **no KEYs**, dumps the actor's STORED props (plus `Location`). `--kv` prints round-trippable
 `KEY=VALUE` lines (feeds back into `actor prop set`); `--json` emits a `{key: value}` object (values
 as strings). The name may be `-` to read a stdin name list and dump every piped actor (output is then
-`<name>\t<key>=<value>` so a multi-actor dump stays parseable).
+`<name>\t<key>=<value>`).
 
 **`actor bbox`** honours each actor's rotation/scale/location; a point actor contributes a zero-size
 box at its Location. Default prints four labeled `min`/`max`/`size`/`center` lines; `--field
@@ -234,14 +227,14 @@ each `{x,y,z}`. The count summary goes to stderr.
 
 The reported numbers are **tolerance-snapped** to within 0.001 uu of a whole number: UE1's rotator
 table is not exact — a 180° yaw carries `sin = -8.742278e-08`, so a ±64 vertex offset leaks ~6e-06
-into the cross axis and a brush sitting exactly on `Y=228` would otherwise report `227.999994`. That
-reads as "off-grid" for geometry whose trunk is exact, so it snaps. A **genuine** fraction (a 2.5-uu
-semisolid, an odd-span center) is preserved — the snap only fires inside that band. `brush vertex
-list` and the stash summary snap the same way, so every report of a given world coordinate agrees.
-The snap is confined to reporting: `doctor`, the CSG core and the preview cameras still see raw
-values, because a cleaned coordinate feeding a geometric *decision* would mask the faults those
-tolerances exist to catch. `actor find --within-bbox` compares within the same tolerance, so a box
-piped from `actor bbox --field min/max` contains the actor it came from.
+into the cross axis and a brush exactly on `Y=228` would otherwise report `227.999994`, reading as
+"off-grid" for geometry whose trunk is exact. A **genuine** fraction (a 2.5-uu semisolid, an
+odd-span center) is preserved — the snap only fires inside that band. `brush vertex list` and the
+stash summary snap the same way, so every report of a world coordinate agrees. The snap is confined
+to reporting: `doctor`, the CSG core and the preview cameras see raw values, because a cleaned
+coordinate feeding a geometric *decision* would mask the faults those tolerances exist to catch.
+`actor find --within-bbox` compares within the same tolerance, so a box piped from
+`actor bbox --field min/max` contains the actor it came from.
 
 ## Brush surfaces & geometry
 
@@ -279,15 +272,15 @@ world coordinate, engine symptom, and fix.
 **What `level doctor` will and will not find.**
 
 `doctor` checks whether the level is mechanically well-formed: things objectively broken and
-decidable from the trunk alone. "Broken" means the engine or the data cannot work as authored, not
-that a human would judge the result poor.
+decidable from the trunk alone. "Broken" means the engine or data cannot work as authored, not that
+a human would judge the result poor.
 
-The dividing line is intent. `doctor` reports only what is wrong no matter what the author meant. A
-dangling `Event` fires into the void whatever it was for; a light inside a solid lights nothing
-whatever it was for. But `doctor` cannot know what a space is meant to be, which is why it does not
-judge passages: it can measure the free gap between two brushes, but cannot tell a deliberately
-sealed wall from a doorway someone accidentally blocked — both are the same geometry. Any check that
-needs to guess the author's intent is out of scope permanently. *(Owner ruling and rationale, 2026-07-26.)*
+The dividing line is intent: `doctor` reports only what is wrong no matter what the author meant. A
+dangling `Event` fires into the void; a light inside a solid lights nothing. But `doctor` cannot
+know what a space is meant to be, so it does not judge passages: it can measure the free gap between
+two brushes, but cannot tell a deliberately sealed wall from an accidentally blocked doorway — both
+are the same geometry. Any check that needs to guess the author's intent is out of scope
+permanently. *(Owner ruling and rationale, 2026-07-26.)*
 
 In scope:
 
@@ -300,8 +293,8 @@ In scope:
 It will not find gameplay or style problems, and a clean report says nothing about them. Out of
 scope by design:
 
-- whether a corridor or doorway is comfortable to move through, or whether geometry protrudes into an
-  entrance and makes it awkward to pass;
+- whether a corridor or doorway is comfortable to move through, or geometry protrudes into an
+  entrance;
 - whether a decoration is well placed, correctly oriented, or seated on its surface;
 - whether the level has the trim, edge detail, or finish a real space would have;
 - whether it is well lit, legible, or fun.
@@ -322,9 +315,9 @@ renders. A level can be `no issues found` and still be cramped, ugly and half-fi
 
 **`event graph [--dot | --json]`** reports how the level's actors are wired to trigger each other —
 **offline, model-side** (no editor; it does read the game's `.u` packages, because a Mover is a node
-even with no eventing props — see [Projects](#projects-uedclitoml)).
-An actor's **`Event`** property is the event it *fires*; another actor's
-**`Tag`** property is its *receiver* identity. A directed edge **A → B** means `A.Event == B.Tag`.
+even with no eventing props — see [Projects](#projects-uedclitoml)). An actor's **`Event`** property
+is the event it *fires*; another's **`Tag`** property is its *receiver* identity. A directed edge
+**A → B** means `A.Event == B.Tag`.
 
 - **Default (text):** one wiring per line to **stdout** —
   `Trig (Engine.Trigger) --OpenDoor--> Door (Engine.Mover)`; the summary + lint go to **stderr**.
@@ -340,10 +333,10 @@ explicitly-set, non-empty `Tag` counts as a receiver.
 Actors are organized into a **tree of folders** — a per-actor dotted **path** (`castle.tower.roof`),
 so logical subsets are addressable. A folder is **uedcli-side only**: it lives in a trunk sidecar
 beside the actor, is **never emitted to the built map**, and is a **separate dimension** from the T3D
-`Group=` property (which is retained unchanged). One folder per actor.
+`Group=` property (retained unchanged). One folder per actor.
 
 - **Set at creation:** on the **generator** — `brush build … --folder <path>` / `actor build … --folder
-  <path>` — which emits a `// uedcli-folder:` carrier the T3D carries; `actor add` persists it (it has no
+  <path>` — which emits a `// uedcli-folder:` carrier in the T3D; `actor add` persists it (it has no
   `--folder` of its own). `actor show` emits the same carrier, so `actor show A | actor add -` round-trips.
 - **Manage:** `actor folder set --to <path> <names…|->`, `actor folder unset <names…|->`,
   `actor folder get <names…|->`. `set`/`unset` are PRODUCERS (touched Names → stdout, a summary →
@@ -366,9 +359,9 @@ Alongside the single-path folder, each actor carries a **set of labels** — fla
 hierarchy can't express (a torch is at `castle.tower` AND is `lighting` AND `interactive`). Like
 folders, labels are **uedcli-side only**: they live in a per-actor trunk sidecar, are **never emitted
 to the built map**, and are **orthogonal** to the folder, the T3D `Group=` prop, and the T3D `Tag=`
-prop (named `label`, not `tag`, precisely to avoid colliding with `Engine.Actor.Tag`). An actor may
-carry any number of labels. A label token is `[A-Za-z0-9_+-]`, no `.`, no leading `-`; stored as
-authored (case preserved) and matched case-insensitively.
+prop (named `label`, not `tag`, to avoid colliding with `Engine.Actor.Tag`). An actor may carry any
+number of labels. A label token is `[A-Za-z0-9_+-]`, no `.`, no leading `-`; stored as authored
+(case preserved) and matched case-insensitively.
 
 - **Set at creation:** on the **generator** — `brush build … --label L` / `actor build … --label L`
   (repeatable) — which emits a `// uedcli-labels:` carrier; `actor add` persists it (no `--label` of its
@@ -384,7 +377,7 @@ Matching is a **flat `*`-glob** (no path structure): an actor matches if ANY of 
 the pattern; `*` is the ONLY wildcard (`dup-*` finds a duplicate batch, `lighting` matches that exact
 label), and `?`/`[`/`]` are rejected. Repeat `--label` to OR patterns; it ANDs across the other
 `find` dimensions. `--no-label` (mutually exclusive with `--label`) matches only unlabelled actors —
-the only way to query them, since an unlabelled actor matches no `--label` pattern.
+the only way to query them.
 
 ```bash
 uedcli actor find --subclass-of Engine.Light | uedcli actor label add --label lighting -
@@ -400,8 +393,8 @@ below.
 
 # Mutating verbs — model-side, rewrite the trunk
 
-These transform the in-memory level and rewrite the T3D trunk. Committing is your own `git`. Every
-one of them also accepts `--tree KIND/NAME` (see below) to edit a different box.
+These transform the in-memory level and rewrite the T3D trunk. Committing is your own `git`. Each
+also accepts `--tree KIND/NAME` (see below) to edit a different box.
 
 ## Actors
 
@@ -431,12 +424,12 @@ in CSG order; multiple actors land as a block preserving input order (level targ
 
 **`actor duplicate`** copies actors under fresh names, requiring **exactly one** of `--by DX,DY,DZ`
 (a relative per-actor offset) or `--at X,Y,Z` (anchor the copied set's bounding-box minimum corner);
-a bare `duplicate` with neither is an error (exit 2), and `--by 0,0,0` is the explicit way to overlap
-the originals in place. Copies **inherit their source's labels** and additionally all receive **one
-fresh `dup-<rand>` batch label**, so `actor find --label dup-<rand>` re-addresses the whole batch
-after the pipeline ends (the token is echoed to stderr). `--label L` (repeatable) is **additive** —
-stamped on top of the inherited labels and the `dup-<rand>` token, not instead of them. `--folder
-PATH` overrides each original's folder. Duplicate is trunk-only (rejects `--tree stash|prefab`).
+neither is an error (exit 2), and `--by 0,0,0` overlaps the originals in place. Copies **inherit
+their source's labels** plus **one fresh `dup-<rand>` batch label**, so `actor find --label
+dup-<rand>` re-addresses the whole batch after the pipeline ends (the token is echoed to stderr).
+`--label L` (repeatable) is **additive** — stamped on top of the inherited labels and the
+`dup-<rand>` token. `--folder PATH` overrides each original's folder. Trunk-only (rejects
+`--tree stash|prefab`).
 
 **`actor order`** re-mints `order_value`s to change CSG precedence without touching geometry (CSG
 order is the `(order_value, name)` sort). `--first` makes an actor carve/add before everything else.
@@ -456,13 +449,11 @@ resets to the origin.
 the pivot and composes each orientation into the actor `Rotation` field, **the way UnrealEd stores a
 rotated brush** (the PolyList stays local; the engine applies `Rotation` at CSG build). `--by` is a
 **relative** rotation in **unreal rotation units** (16384 = 90°) `PITCH,YAW,ROLL` (negatives allowed);
-`--to` sets the field **absolutely in
-place** (Location never moves; excludes `--pivot`). The pivot is `--pivot X,Y,Z`, or
-`--pivot-actor NAME`'s Location, or (default) **the `Location` of the set member nearest the
-selection's bbox center**. A brush's `Location` is the point that stays fixed when it turns about
-itself, and it is an **authored** coordinate — so the pivot inherits whatever grid you built on rather
-than being computed and rounded onto a different one, which is what previously left a rotated set
-misaligned. A lone brush therefore turns in place.
+`--to` sets the field **absolutely in place** (Location never moves; excludes `--pivot`). The pivot
+is `--pivot X,Y,Z`, or `--pivot-actor NAME`'s Location, or (default) **the `Location` of the set
+member nearest the selection's bbox center**. A brush's `Location` is the point that stays fixed when
+it turns about itself, and it is an **authored** coordinate — so the pivot inherits whatever grid you
+built on rather than being computed and rounded onto a different one. A lone brush turns in place.
 
 Details that follow from that:
 
@@ -470,42 +461,37 @@ Details that follow from that:
   lone decoration — or several sharing one Location — turns about **exactly** its own Location, and an
   off-grid prop is never dragged onto the grid by turning it.
 - **Equidistant members take the alphabetically first Name** — the pivot is always a Location that
-  exists in the trunk, never an average of several (which would divide by the number tied and land off
-  the grid its inputs were on). It does not depend on the order names arrive in the pipe. Use
-  `--pivot X,Y,Z` or `--pivot-actor` to pick a different one.
+  exists in the trunk, never an average of several (which would land off-grid). It does not depend on
+  the order names arrive in the pipe. Use `--pivot X,Y,Z` or `--pivot-actor` to pick a different one.
 - **Locations are used as authored**, with no filtering. A brush in the raw CSG form
-  (`Location=(0,0,0)` with world-space vertices) therefore contributes the world origin, and a set of
-  only those turns about the origin — `--pivot`/`--pivot-actor` is the way to override it.
+  (`Location=(0,0,0)` with world-space vertices) contributes the world origin, and a set of only
+  those turns about the origin — `--pivot`/`--pivot-actor` overrides it.
 - **There is no fallback rule**: every actor has an *effective* Location — an unauthored property
   takes its **class default** — so a non-empty selection always has a pivot. The default is resolved
-  from the class, not assumed to be zero: `Engine.Camera` defaults `Location=(X=-500,Y=-300,Z=300)`.
-  The class schema is consulted only for an actor that states no Location, so an ordinary rotate
-  stays offline.
+  from the class, not assumed zero: `Engine.Camera` defaults `Location=(X=-500,Y=-300,Z=300)`. The
+  class schema is consulted only for an actor that states no Location, so an ordinary rotate stays offline.
 
-> The two reference points differ on purpose. Rotation and scale pivot near the center (you
-> turn a thing about its middle). Placement anchors the bbox-min corner — `stash`/`prefab apply --at`,
+> The two reference points differ on purpose. Rotation and scale pivot near the center (you turn a
+> thing about its middle). Placement anchors the bbox-min corner — `stash`/`prefab apply --at`,
 > `actor duplicate --at`, and stash capture's normalization all land the set's minimum corner on the
 > target, because you place a prefab by dropping a corner on a grid point you can read off and type.
-> An operation's reference point follows what the operation means.
 
 A zero result is **written out** (`Rotation=(Pitch=0,Yaw=0,Roll=0)`), not omitted: an actor with no
-`Rotation` property takes its *class* default, which is not zero for every class, so
-`--to 0,0,0` really does mean "unrotated" only when the rotator is there to say so.
+`Rotation` property takes its *class* default, which is not zero for every class, so `--to 0,0,0`
+means "unrotated" only when the rotator is there to say so.
 
 **`brush scale`** (renamed from `actor scale` 2026-07-20 — MainScale is a brush-family property; a
 mesh uses `DrawScale`) sets MainScale on BRUSH actors — `--to` absolute in place, `--by` a per-axis
 factor that also orbits each Location about the pivot (`Loc' = P + S·(Loc−P)`). A negative axis
 mirrors; there is no separate `mirror` verb (`mirror` = `brush scale --by -1,1,1`). It shares
-`actor rotate`'s default pivot, so a lone brush mirrors **about its own `Location`** — in place,
-rather than reflecting across a corner and landing a full width away. A point actor is
-rejected.
+`actor rotate`'s default pivot, so a lone brush mirrors **about its own `Location`** — in place. A
+point actor is rejected.
 
 **`brush apply-transform`** (renamed from `actor apply-transform`) bakes MainScale + Rotation +
-PostScale permanently into the brush
-vertices and resets those fields (the offline `ACTOR APPLYTRANSFORM`): reverses winding on a
-mirror/negative determinant, rewrites PrePivot, leaves Location, rejects movers. `--lock-textures`
-(the DEFAULT) transforms the texture axes with the geometry; `--no-lock-textures` leaves the mapping
-fixed.
+PostScale permanently into the brush vertices and resets those fields (the offline
+`ACTOR APPLYTRANSFORM`): reverses winding on a mirror/negative determinant, rewrites PrePivot, leaves
+Location, rejects movers. `--lock-textures` (the DEFAULT) transforms the texture axes with the
+geometry; `--no-lock-textures` leaves the mapping fixed.
 
 ## Brush shape & surfaces
 
@@ -533,25 +519,25 @@ but its **per-surface attributes come with it** — reapply any `brush poly set`
 stdin is a clean no-op; input with no brush geometry, or more than one brush, is a clean error
 (exit 2). E.g. `brush build cube --width 512 … | brush replace WALL -`.
 
+
 **`brush vertex move`** moves one or more welded corners selected by their current world coordinate
 (`--at`, repeatable). `--to` needs exactly one `--at`; `--by` applies a delta to every `--at` corner.
 `brush clip` and `brush vertex move` are **rotation-aware** — a world plane/coord is mapped into the
-brush's local frame, so they edit a rotated brush correctly and preserve its `Rotation`.
+brush's local frame, so they edit a rotated brush correctly and preserve `Rotation`.
 
-There are two different jobs here, and they are different verbs. **`brush poly set`** assigns a
-face's stored **attributes** — which texture is on it, which surface flags it carries. **`brush poly
-pan` / `rotate` / `scale`** transform the face's **texture frame** — where the texture sits on the
-face, which way up it runs, how big it is. **`brush poly align`** (next section) derives a whole
-frame from geometry.
+Two different jobs, two verbs. **`brush poly set`** assigns a face's stored **attributes** — which
+texture is on it, which surface flags it carries. **`brush poly pan` / `rotate` / `scale`** transform
+the face's **texture frame** — where the texture sits, which way up it runs, how big it is.
+**`brush poly align`** (next section) derives a whole frame from geometry.
 
 **Targets, for all four.** `BRUSH:SELECTOR` positionals (SELECTOR = `all` or comma-separated poly
 indices; repeatable, e.g. `Wall1:3,5 Wall2:all`), **or `-`** to read `BRUSH:idx` lines from stdin
 (empty stdin = clean no-op, exit 0; `-` is the sole source and cannot be mixed with positionals).
-A face named twice is edited **once**. Note the deliberate asymmetry with `align`, which *also*
-accepts a bare brush name meaning all its faces: **`set`/`pan`/`rotate`/`scale` do not** — say
-`Tower:all`. A whole brush is a meaningful unit for an alignment mode ("wrap this cylinder"), but a
-whole-brush pan or rotate is a blanket nudge of every face including the ones you never looked at,
-and the relative forms compound it silently, so "yes, all of them" has to be typed out.
+A face named twice is edited **once**. Unlike `align`, which *also* accepts a bare brush name meaning
+all its faces, **`set`/`pan`/`rotate`/`scale` do not** — say `Tower:all`. A whole brush is a
+meaningful unit for an alignment mode ("wrap this cylinder"), but a whole-brush pan or rotate is a
+blanket nudge of every face including ones you never looked at, and the relative forms compound it
+silently, so "yes, all of them" has to be typed out.
 
 **`brush poly set`** takes `--texture REF` (qualified `Package[.Group].Name`) and
 `--add-flag`/`--remove-flag` (flag by **name**, case-insensitive — `Unlit`, `unlit`, `MASKED` all
@@ -570,11 +556,10 @@ clears the pan and `brush poly list` then shows `-` in the `pan` column — ther
 **`brush poly rotate --by UU`** turns the texture within the face's own plane. `UU` is in **unreal
 rotation units** — 16384 = 90°, 65536 = a full turn — the same units as `brush build --rotate` and
 `mover key rotate`; negative turns the other way (`--by -16384` ≡ `--by 49152`). The face's own
-centre keeps its texture coordinate, so the texture **spins in place** instead of sliding.
-There is deliberately **no `--to`**: an absolute angle could only be measured against an internal
-canonical frame whose in-plane direction you cannot see or predict, so the same `--to` would mean
-something different on every face normal. Reaching for a *known* orientation is `brush poly align`'s
-job.
+centre keeps its texture coordinate, so the texture **spins in place** instead of sliding. There is
+**no `--to`**: an absolute angle could only be measured against an internal canonical frame whose
+in-plane direction you cannot see or predict, so it would mean something different on every face
+normal. A *known* orientation is `brush poly align`'s job.
 
 **`brush poly scale --by FU,FV`** resizes the texture. It names what you **see**: `--by 2,2` makes
 the texture look twice as big, `--by 0.5,1` halves its width only. U and V are independent, and both
@@ -588,29 +573,27 @@ grows in place rather than sliding off.
 - Scale comes before `align --ring`, never after. A ring wrap computes each face's phase offset
   for the density it saw; rescaling afterwards leaves those offsets describing the old size and the
   seams no longer meet.
-- Panning a subset of an aligned run breaks its continuity, because those faces shift relative
-  to their neighbours while the rest stay put. This is easy to do by accident — the natural idiom is
+- Panning a subset of an aligned run breaks its continuity, since those faces shift relative to
+  their neighbours while the rest stay put. Easy to do by accident — the natural idiom is
   `brush poly find … | brush poly pan -`, and `find` filters. Pan the whole run or none of it.
-- `rotate` and `scale` give no continuity guarantee: each face pivots or grows about its
-  own centre, so applying either across an aligned set breaks the seams `align` matched — and
-  equally breaks a shared wall/floor grid. They are the verbs for a one-off face (a sign, a monitor,
-  a soffit). The run-aware turn is a flag on the alignment itself, not this verb.
+- `rotate` and `scale` give no continuity guarantee: each face pivots or grows about its own centre,
+  so applying either across an aligned set breaks the seams `align` matched — and a shared wall/floor
+  grid. They are for a one-off face (a sign, a monitor, a soffit). The run-aware turn is a flag on the
+  alignment itself, not this verb.
 
-`rotate` turns the texture the way you see it turn: the direction follows the face's visible
-surface normal, so the same `--by 16384` looks the same whether you are standing outside an additive
-pillar or inside a subtractive room — uedcli flips the sign for you on a subtract. So `rotate`
-requires the brush's `CsgOper` to be `CSG_Add` or `CSG_Subtract` (an absent one counts as
-`CSG_Add`) and exits 2 naming any other value — `CSG_Intersect`, `CSG_Deintersect`, `CSG_Active`
-or anything unrecognised — because a brush with no inside and outside gives the turn no direction to
-follow, and guessing one would silently rotate the wrong way.
+`rotate` turns the texture the way you see it turn: the direction follows the face's visible surface
+normal, so the same `--by 16384` looks the same whether you stand outside an additive pillar or
+inside a subtractive room — uedcli flips the sign on a subtract. So `rotate` requires the brush's
+`CsgOper` to be `CSG_Add` or `CSG_Subtract` (an absent one counts as `CSG_Add`) and exits 2 naming
+any other value — `CSG_Intersect`, `CSG_Deintersect`, `CSG_Active` or anything unrecognised — because
+a brush with no inside and outside gives the turn no direction to follow.
 
 ⚠ One case is still backwards: a **mirrored** brush — one whose scale has an **odd** number of
 negative components, e.g. `MainScale=(-1,1,1)` — has its faces' winding reversed as the engine draws
-them, so the visible normal is the opposite of the one uedcli computes and the turn inverts again.
-Negate the angle there. An **even** number of negative components (`(-1,-1,1)`) is a 180° rotation,
-not a mirror, and is **not** affected. (That is a geometric argument from the sign of the scale
-matrix's determinant — uedcli's own frame math ignores scale entirely — and has not been checked
-against the running editor.)
+them, so the visible normal is opposite the one uedcli computes and the turn inverts again. Negate
+the angle there. An **even** number of negative components (`(-1,-1,1)`) is a 180° rotation, not a
+mirror, and is **not** affected. (A geometric argument from the sign of the scale matrix's
+determinant — uedcli's own frame math ignores scale entirely — not checked against the running editor.)
 
 **Identifying a surface to edit:** `brush poly list <brush>` for the exact index/facing/texture,
 then `actor preview <brush> --highlight <brush>:N` (below) to see it emphasised (or
@@ -633,12 +616,12 @@ names → stdout, a summary → stderr.
   chord (`2·r·sin(π/N)`) around the ring, V runs along the axis. Exclude the two caps.
 - **Frame source:** default **adopt-seed** (continue the seed face's already-dialled-in
   `TextureU/V` + `Pan`); `--fresh-frame` synthesizes a canonical frame from the face normal instead.
-  ⚠ That canonical frame is **uedcli's own convention, not a reproduction of UnrealEd's own
+  ⚠ That canonical frame is **uedcli's own convention, not a reproduction of UnrealEd's
   "align to floor / wall direction"** — measured against the editor 2026-07-26, the two pick
-  different in-plane axis directions (a mirror, a 180° turn, or on a wall that is not axis-aligned a
-  full 90°) and pin the texture's phase to a different point (uedcli to the seed face's centre, the
-  editor to a world axis). So a face aligned here and the same face aligned in the editor's GUI will
-  not look the same; pick one tool per surface rather than mixing them.
+  different in-plane axis directions (a mirror, a 180° turn, or on a non-axis-aligned wall a full 90°)
+  and pin the texture's phase to a different point (uedcli to the seed face's centre, the editor to a
+  world axis). A face aligned here and in the editor's GUI will not look the same; pick one tool per
+  surface.
 - **`--fit-perimeter`** (`--ring` only) snaps the scale so an integer number of texels fits the
   perimeter (an exact meet at the closing seam).
 
@@ -653,26 +636,26 @@ Every content mutating/query verb above takes **`--tree KIND/NAME`** (KIND ∈ `
 to operate on a named tree instead of `$UEDCLI_LEVEL`: `--tree level/<other>` another level,
 `--tree stash/<id>` a captured stash, `--tree prefab/<name>` a library prefab **in place**
 (the one-command prefab-template edit — no apply / re-capture / promote roundtrip). NAME may be
-nested (`stash/hangar/arch`). Omit it for the ambient `$UEDCLI_LEVEL` (the default). It rides
+nested (`stash/hangar/arch`). Omit it for the default ambient `$UEDCLI_LEVEL`. It rides
 `actor find/show/add/delete/move/prop/rotate/scale/order/bbox/folder/label`, `brush clip/replace/vertex/poly`,
 `mover key *`, the read verbs `actor show`/`level status`/`level doctor`/`event graph` and `stash
 capture`'s SOURCE (`stash capture --tree level/<name>`; rejected together with `--from-t3d`),
 **and — level-kind only — `level materialize`/`level preview`** (`--tree level/<name>`
 builds/previews that level; `--tree stash|prefab` is rejected there, since a captured set has no world
 — use `stash`/`prefab preview`). Passing `--tree` explicitly suppresses the `editing level '…' (from
-$UEDCLI_LEVEL)` echo (you named the target). For a stash/prefab box, `level status`/`level doctor`
-label it by kind and skip the git hint. It is **not** on the generators (`brush build`/`actor build` —
-they read no box) or `actor preview` (use `stash`/`prefab preview`).
+$UEDCLI_LEVEL)` echo. For a stash/prefab box, `level status`/`level doctor` label it by kind and skip
+the git hint. It is **not** on the generators (`brush build`/`actor build` — they read no box) or
+`actor preview` (use `stash`/`prefab preview`).
 
 ---
 
 # Generators — stateless T3D producers
 
-These write a T3D snippet to **stdout** and never touch the trunk or the stash. The caller decides
-what to do with the output. **Name allocation and the write into the trunk happen at `actor add`,
-not at generation time** — so `--base-name` is a *stem/prefix*, and `actor add` appends a unique
-`_<rand>` suffix (the spiral writes a central column plus one wedge-tread actor per step, each with a
-per-brush index; the staircase is one actor). Duplicate base names are safe.
+These write a T3D snippet to **stdout** and never touch the trunk or stash. The caller decides what
+to do with the output. **Name allocation and the write into the trunk happen at `actor add`, not at
+generation time** — so `--base-name` is a *stem/prefix*, and `actor add` appends a unique `_<rand>`
+suffix (the spiral writes a central column plus one wedge-tread actor per step, each with a per-brush
+index; the staircase is one actor). Duplicate base names are safe.
 
 ```bash
 uedcli brush build cube --width 256 --breadth 256 --height 128 | uedcli actor add -
@@ -702,21 +685,20 @@ Common options on **every** shape: `--at X,Y,Z` (world Location; see Pivots), `-
 `--group` flag — the engine `Group` property is set with `--prop Group=<name>`.)
 
 **Every dimension must be greater than zero.** A width, breadth, height, radius, depth, rise, inner
-radius or step width that is negative or zero is rejected up front — exit 2, naming the flag and the
+radius or step width that is negative or zero is rejected up front — exit 2, naming the flag and
 value (`brush build staircase: --depth must be greater than 0, got -32.0`). A negative length would
 otherwise build a self-overlapping, inside-out brush that looks fine until the map build fails with
-an unrelated-looking BSP error. Counts and angles keep their own, tighter rules instead: `--steps`
-needs at least 1, `--sides` at least 3, `--angle-per-step` must be between 0 and 32768 unreal
-rotation units (a half turn), and `--angle` between 0 and 65536.
+an unrelated-looking BSP error. Counts and angles keep tighter rules: `--steps` needs at least 1,
+`--sides` at least 3, `--angle-per-step` between 0 and 32768 unreal rotation units (a half turn), and
+`--angle` between 0 and 65536.
 
 **Builder angles are unreal rotation units, like `--rotate`** — `16384` = 90°, `65536` = a full
-turn — never degrees. `spiral --angle-per-step` defaults to `8192` (45°). Note that thirds are not
-exactly representable (`65536` is a power of two), so a 60° sweep is `10923` uu = 60.002°; degrees
-divide by three exactly and UU does not. `cylinder`/`cone` take no angle at all: the one thing an
-author ever wanted there is the **`--align-to-side`** flag, which offsets the cross-section by half
-a segment (`180/--sides` degrees) so a flat FACE, rather than a vertex, meets an axis-aligned wall
-— the same parameter as UnrealEd's own `AlignToSide` checkbox. For any other cross-section angle
-use `--rotate`, which is whole-actor placement.
+turn — never degrees. `spiral --angle-per-step` defaults to `8192` (45°). Thirds are not exactly
+representable (`65536` is a power of two), so a 60° sweep is `10923` uu = 60.002°. `cylinder`/`cone`
+take no angle at all: the useful control there is the **`--align-to-side`** flag, which offsets the
+cross-section by half a segment (`180/--sides` degrees) so a flat FACE, rather than a vertex, meets
+an axis-aligned wall — the same as UnrealEd's own `AlignToSide` checkbox. For any other cross-section
+angle use `--rotate`, whole-actor placement.
 
 - **`--rotate PITCH,YAW,ROLL`** (unreal rotation units — 16384 = 90°, 65536 = a full turn) **SETS** the emitted actor's `Rotation` field absolutely (a
   fresh actor is at identity, so no add-vs-override ambiguity). The rotation is **stored on the
@@ -728,7 +710,7 @@ use `--rotate`, which is whole-actor placement.
 - **`--prop KEY[.PATH]=VALUE`** (repeatable) bakes a property into the T3D, **schema-validated against
   the emitted actor's class** (`Engine.Brush`, or `--mover-class`) before emit — same grammar as
   `actor prop set`. Overrides compose over the generator's own fields (incl.
-  `CsgOper`/`PolyFlags`/`Group`/`Rotation`), so a `--prop` can override a dedicated flag's value.
+  `CsgOper`/`PolyFlags`/`Group`/`Rotation`), so a `--prop` can override a dedicated flag.
 - **Pivots:** cube/cylinder/cone/**sheet** are **centered on the origin** (`--at` sets the geometric
   center on every axis, including Z); the **staircase uses a front-bottom-corner pivot** — its
   geometry spans `0..steps·depth` in X, `0..breadth` in Y, `0..steps·rise` in Z (entirely at/above the
@@ -749,13 +731,13 @@ use `--rotate`, which is whole-actor placement.
   strips, `2 + 4·steps` faces. Its per-step boundaries are watertight T-junctions that `level doctor`
   accepts. **Native caveat:** UnrealEd (the default `level materialize`) and the real engine (the
   default `level preview --game`) build this non-convex brush correctly, but the experimental native
-  CSG core assumes convex brushes, so `level preview --native` mis-builds its
-  concave notches — use `--game`/UnrealEd for staircases. **Spiral is currently rough** (rectangular
-  slabs, gaps) — prefer a cylinder column + per-step wedges until it's redone.
+  CSG core assumes convex brushes, so `level preview --native` mis-builds its concave notches — use
+  `--game`/UnrealEd for staircases. **Spiral is currently rough** (rectangular slabs, gaps) — prefer
+  a cylinder column + per-step wedges until it's redone.
 
 ### `extrude` — sweep a profile you draw
 
-Every other shape is *fixed parametric*: you choose sizes, never a silhouette. `extrude` takes the
+Every other shape is *fixed parametric*: you choose sizes, never a silhouette. `extrude` takes a
 **profile** — a closed 2D polygon you draw point by point — and sweeps it in a straight line, so an
 L-shaped ledge, an arch voussoir, a moulded cornice or a chamfered pillar is one command instead of
 hand-written T3D or a chain of `brush clip` planes.
@@ -784,22 +766,22 @@ uedcli brush build extrude --axis y --depth 16 --at 0,0,0 \
 - **`--at` is the world point profile coordinate `(0,0)` lands on.** The local vertices are the
   coordinates you drew, verbatim — nothing is re-centred — and the sweep runs `0..depth` from there.
   So a ring of voussoirs drawn at known offsets stays laid out as drawn. **Consequence:** `--rotate`
-  turns an actor about its local origin, which here is profile `(0,0)`, not the brush's centre — a
-  profile drawn away from `(0,0)` therefore *swings through an arc* instead of turning in place.
+  turns an actor about its local origin, here profile `(0,0)`, not the brush's centre — a profile
+  drawn away from `(0,0)` *swings through an arc* instead of turning in place.
 - **The profile must be a simple ring.** Duplicate and collinear points are cleaned away silently
   (the engine drops them at build time anyway); a ring that crosses itself, touches itself, revisits
   a vertex, or encloses zero area is rejected with exit 2 naming the offending points — such a
-  profile has no consistent inside, and the brush built from it would be a self-intersecting solid
-  (a guaranteed BSP defect).
+  profile has no consistent inside, and the brush would be a self-intersecting solid (a guaranteed
+  BSP defect).
 - **Faces:** `Cap` at each end plus one `Side<k>` per profile edge, numbered in ring order — so
-  `brush poly find --item Side0` selects "the face swept by my first profile edge". Note the
-  numbering follows the *cleaned, counter-clockwise* ring: giving the same shape starting at a
-  different vertex renumbers the sides.
+  `brush poly find --item Side0` selects "the face swept by my first profile edge". The numbering
+  follows the *cleaned, counter-clockwise* ring: the same shape starting at a different vertex
+  renumbers the sides.
 - **Concave profiles are fully supported, as ONE brush.** The engine's polygon must be convex and
   holds at most 16 vertices, so a concave profile (an L, a notched cornice) or one longer than 16
   points has each of its two **caps tiled into several convex faces** — the brush itself stays
-  single and non-convex, exactly like `brush build staircase`. The tiling only adds *diagonals* of
-  your profile, never a new point on its outline, so the solid stays watertight. Face count is
+  single and non-convex, like `brush build staircase`. The tiling only adds *diagonals* of your
+  profile, never a new point on its outline, so the solid stays watertight. Face count is
   therefore `points + 2 × cap-pieces`. **Native caveat:** UnrealEd (the default `level
   materialize`) and the real engine (the default `level preview --game`) build a concave brush
   correctly, but the offline draft renderer `level preview --native` assumes convex solids, so it
@@ -808,11 +790,10 @@ uedcli brush build extrude --axis y --depth 16 --at 0,0,0 \
 ### `revolve` — sweep a profile around an axis
 
 Same profile, same `--axis`, same `--at`; instead of a straight `--depth` it sweeps the profile
-**around the profile plane's own `V` axis** — the line `U = 0`, which passes through profile
-coordinate `(0,0)`. So `--at` is the world position of the **bend centre**, and how far the shape
-sits from that centre is written in the profile itself: a profile drawn at `U ∈ [64, 192]` revolves
-at radii 64 to 192. (That is why there is no `--pivot` flag — moving the profile and moving the
-axis are the same operation.)
+**around the profile plane's own `V` axis** — the line `U = 0`, through profile coordinate `(0,0)`.
+So `--at` is the world position of the **bend centre**, and how far the shape sits from it is written
+in the profile: a profile drawn at `U ∈ [64, 192]` revolves at radii 64 to 192. (Hence no `--pivot`
+flag — moving the profile and moving the axis are the same operation.)
 
 ```bash
 # a 90° curved corridor, 128 uu wide and tall, bending around the world origin
@@ -824,9 +805,9 @@ uedcli brush build revolve --axis x --angle 16384 --csg subtract --solidity semi
 - **`--angle UU`** is the total sweep in **unreal rotation units**, the same units as `--rotate`:
   `16384` = 90°, `65536` = a full turn. It must satisfy `0 < angle <= 65536`. Thirds are not
   exactly representable (`65536` is a power of two), so a 60° bend is `--angle 10923` = 60.002°.
-- **`--segments N`** is how many flat facets the sweep is cut into. The default is **one facet per
-  22.5°** — 4 for a 90° bend, 16 for a full turn, matching UnrealEd's own density. A facet of 180°
-  or more is flat (zero volume) and is rejected.
+- **`--segments N`** is how many flat facets the sweep is cut into. Default is **one facet per
+  22.5°** — 4 for a 90° bend, 16 for a full turn, matching UnrealEd's density. A facet of 180° or
+  more is flat (zero volume) and is rejected.
 - **`--angle 65536` is a CLOSED turn:** the two caps would coincide, so both are omitted and the
   last facet's far ring is the first facet's near ring. It needs at least 3 segments.
 - **The profile must sit strictly on the positive-`U` side of the axis** — every point's `U` > 0.
@@ -835,20 +816,20 @@ uedcli brush build revolve --axis x --angle 16384 --csg subtract --solidity semi
   profile's `U` values. (Solids of revolution, which need the touching case, are not supported.)
 - **Faces:** a tiled `Cap` at each end (absent on a full turn) plus `points × segments` swept
   quads. Every quad of profile edge `k` is `Side<k>` **in every segment**, so
-  `brush poly find --item Side0` selects the whole strip swept by your first profile edge — the
-  handle you actually think in ("the inner wall of the corridor").
+  `brush poly find --item Side0` selects the whole strip swept by your first profile edge ("the inner
+  wall of the corridor").
 - **A revolve is off the integer grid by construction** (every vertex away from `θ=0` lands on
-  `radius · cos/sin θ`), and uedcli never snaps coordinates for you. An off-grid **solid** brush
-  throws its BSP partition planes off-grid too, which is the primary cause of slivers, T-junctions
-  and holes in the built map. Prefer **`--solidity semisolid`** wherever the swept shape is detail
-  rather than structure: a semisolid receives cuts but emits no world-splitting planes.
+  `radius · cos/sin θ`), and uedcli never snaps coordinates. An off-grid **solid** brush throws its
+  BSP partition planes off-grid too, the primary cause of slivers, T-junctions and holes in the built
+  map. Prefer **`--solidity semisolid`** where the swept shape is detail rather than structure: a
+  semisolid receives cuts but emits no world-splitting planes.
 
-**Two stderr advisories** fire on `extrude`/`revolve` (never on stdout, and they never change the
-exit status — the brush is emitted either way):
+**Two stderr advisories** fire on `extrude`/`revolve` (never on stdout, never changing exit status —
+the brush is emitted either way):
 
 - when the emitted brush has **off-grid vertices AND is solid** (the case above; not on a
-  semisolid/nonsolid brush, where it is already handled, and not on a `--mover-class` brush, which
-  never partitions the world);
+  semisolid/nonsolid brush, where it is already handled, nor a `--mover-class` brush, which never
+  partitions the world);
 - when it has **more than 64 faces** — `points × segments` grows fast, and every face is BSP nodes
   and rendering cost. Use a simpler profile, fewer `--segments`, or `--solidity semisolid`.
 
@@ -884,9 +865,9 @@ model-side: a generator builds the base mover, then `mover key` verbs author its
 the **base pose** (the ordinary `Location`/`Rotation`); keys 1..`NumKeys`-1 are stored as offsets
 from base. A mover has **2..8 keys** (`NumKeys` — the KeyPos/KeyRot arrays are a fixed `[8]`).
 
-The workflow is **raise the count, then edit the keys** (mirroring the editor's own authoring flow):
-`mover key count` sets how many keys exist; `mover key move`/`rotate` then edit an existing key by
-index (they never grow the count).
+The workflow is **raise the count, then edit the keys** (mirroring the editor): `mover key count`
+sets how many keys exist; `mover key move`/`rotate` edit an existing key by index (never growing the
+count).
 
 ```bash
 # 1. build the base mover (no CsgOper — a mover is out of world CSG) and add it
@@ -919,10 +900,10 @@ uedcli mover key remove ElevatorMover0 1                    # delete + compact i
   `--csg`/`--solidity`** (a mover carries neither); `--at`/`--texture`/`--group`/`--base-name` apply
   normally.
 - **`mover key count <name> [<n>]`** gets (no `n`) or sets (`n` in 2..8) `NumKeys`. Setting is
-  **non-destructive** — it only changes the count, never the stored key values; lowering the count
-  leaves the now-inactive keys' offsets dormant, so raising it again restores them. Out of range is a
-  clean error naming the value. It is **exactly equivalent to `actor prop set <name> NumKeys=<n>`**
-  (`NumKeys` is a first-class settable prop; `KeyPos`/`KeyRot`/`KeyNum` remain `mover key`-only).
+  **non-destructive** — it only changes the count; lowering it leaves the now-inactive keys' offsets
+  dormant, so raising it again restores them. Out of range is a clean error naming the value. It is
+  **exactly equivalent to `actor prop set <name> NumKeys=<n>`** (`NumKeys` is a first-class settable
+  prop; `KeyPos`/`KeyRot`/`KeyNum` remain `mover key`-only).
 - **`mover key move`/`rotate <index>` are edit-only** (`1 <= index < NumKeys`); they do NOT grow
   `NumKeys` — raise it first with `mover key count`. Index 0 is the base pose (edit it with `actor
   move`/`actor rotate`, which rigidly shift/rotate the whole animation).
@@ -946,8 +927,8 @@ uedcli mover key remove ElevatorMover0 1                    # delete + compact i
 
 Two **generators** that take their shape from a piped brush set instead of parameters: they read a
 T3D brush set on **stdin** (`-`) and write **one** brush (or Mover) actor T3D to stdout. Model-side
-and instant — no editor, no container. (They do need the game's `.u` packages: a Mover in the piped
-set is refused, and that is a class-hierarchy question — see [Projects](#projects-uedclitoml).)
+and instant — no editor, no container. (They need the game's `.u` packages: a Mover in the piped set
+is refused, a class-hierarchy question — see [Projects](#projects-uedclitoml).)
 
 ```
 brush intersect   - [<brush build output flags>] [--origin …] [--pivot …]
@@ -962,8 +943,8 @@ They differ only in the background the set is merged against:
 | `deintersect` | **solid**    | subtractives carve **voids** out of solid    | the **void** as a solid — the "negative"/plug  | ≥1 subtractive brush |
 
 So `intersect` welds a cluster: an additive block with a subtractive notch becomes one brush shaped
-like block-minus-notch. `deintersect` gives you the solid that exactly fills what the set carves —
-the door **plug** that fits a subtracted doorway, which is why it pairs with `--mover-class`.
+like block-minus-notch. `deintersect` gives the solid that exactly fills what the set carves — the
+door **plug** that fits a subtracted doorway, which is why it pairs with `--mover-class`.
 
 ```bash
 uedcli actor find --folder castle.door | uedcli actor show - | uedcli brush intersect - | uedcli actor add -
@@ -976,15 +957,14 @@ intersect verbs.
 
 ## Input rules
 
-- **Stdin order IS the CSG order**, and is never re-sorted. A mixed add/subtract set is
-  order-dependent (the last operation on a region wins): `add block, subtract notch` carves the
-  block, the reverse order subtracts into empty space and leaves the block whole. You control the
-  order through the pipe.
+- **Stdin order IS the CSG order**, never re-sorted. A mixed add/subtract set is order-dependent
+  (the last operation on a region wins): `add block, subtract notch` carves the block, the reverse
+  order subtracts into empty space and leaves the block whole. You control order through the pipe.
 - **Empty stdin is a clean no-op** (exit 0), like every generator.
 - **Non-brush actors and Movers are refused** (exit 2, naming them) rather than skipped — a merge
   quietly missing a piece reads as a complete answer. Narrow the pipe (`actor find --kind brush …`).
 - **Scaled source brushes are refused**, naming the brush: bake the scale first with
-  `brush apply-transform <name>`. (A gap in the CSG core, not in these verbs.)
+  `brush apply-transform <name>`. (A gap in the CSG core, not these verbs.)
 
 ## Output flags
 
@@ -1000,14 +980,13 @@ verb-specific defaults**:
   solid; only *nonsolid* is walk-through), so a semisolid-paned door is fine. The gotcha is a
   **nonsolid** additive: its faces come out walk-through — pass **`--solidity solid`** to scrub the
   per-face bits to plain solid. **`--solidity` is INVALID with `--mover-class`** (every value,
-  `solid` included): a mover always keeps the source per-face solidity, so there is nothing to
-  override — allowing it would be a footgun.
+  `solid` included): a mover always keeps the source per-face solidity, so there is nothing to override.
 
 ## Placement — `--origin` and `--pivot`
 
-A brush's world geometry is `world = Location + R·(vertex − PrePivot)`, so it is moved by
-`Location` and rotates about `PrePivot`. The raw CSG output has `Location=(0,0,0)` and world-space
-vertices, which would make a mover rotate about the *world origin*. So the result is **re-centred**:
+A brush's world geometry is `world = Location + R·(vertex − PrePivot)`, so it is moved by `Location`
+and rotates about `PrePivot`. The raw CSG output has `Location=(0,0,0)` and world-space vertices,
+which would make a mover rotate about the *world origin*. So the result is **re-centred**:
 
 - **`--origin center|min|max|X,Y,Z|keep`** — where the result's local origin sits. Default
   `center`. `keep` emits the raw faithful form (`Location=0`, world vertices) for diffing against
@@ -1034,9 +1013,9 @@ Empty stdin is the one silent case: a clean no-op, exit 0, like every generator.
 ## Disjoint results
 
 A set can merge into several disconnected solids (two far-apart clusters). They stay **one actor**
-(as in UnrealEd) and the verb says so on stderr with the component count. There is deliberately no
-`--split`: run the verb per subset for independently movable pieces — the input is a set, so that
-is already a natural pipe.
+(as in UnrealEd) and the verb says so on stderr with the component count. There is no `--split`: run
+the verb per subset for independently movable pieces — the input is a set, so that is already a
+natural pipe.
 
 ## The door-mover flow
 
@@ -1054,8 +1033,8 @@ uedcli mover key rotate Mover0 1 --by 0,16384,0        # swings about the hinge,
 # `actor preview` — the wireframe viewer
 
 A self-rendered **color wireframe** image (no editor) so you can see geometry and map **poly index ↔
-face**. Reads named actors from the current level, model-side. (Renamed from `brush preview`; the
-`stash preview`/`prefab preview` variants keep their names.)
+face**. Reads named actors from the current level, model-side. (Renamed from `brush preview`;
+`stash preview`/`prefab preview` keep their names.)
 
 ```
 actor preview [<names…> | --from-t3d <FILE…|->]
@@ -1080,69 +1059,62 @@ actor preview [<names…> | --from-t3d <FILE…|->]
   following pane is **one actor**: a **brush** is `--focus`ed and zoomed to its own AABB with all its
   faces numbered; a **point actor** is zoomed to a box around its Location with its marker/sprite drawn
   (no face numbers — a point has none). Every pane is captioned with the actor name. Panes follow the
-  actor-set order (brushes and point actors intermixed as they appear) and are square cells laid out in
-  `ceil(sqrt(N))` columns (a near-square grid, slightly wider than tall). It is one view (uses `--view`);
-  composes with `--annotate` (the per-brush number set), `--brush-colors`, `--highlight` (a highlighted
-  poly re-lights in every pane), `--show`, `--size`. It sets its own focus and zoom per pane,
-  so **`--focus`/`--frame` are ignored** under it. The brush + point-actor counts are reported on stderr;
+  actor-set order (brushes and point actors intermixed) and are square cells laid out in
+  `ceil(sqrt(N))` columns (near-square, slightly wider than tall). One view (uses `--view`); composes
+  with `--annotate` (the per-brush number set), `--brush-colors`, `--highlight` (a highlighted poly
+  re-lights in every pane), `--show`, `--size`. It sets its own focus and zoom per pane, so
+  **`--focus`/`--frame` are ignored** under it. Brush + point-actor counts are reported on stderr;
   breakdown is a small-selection inspector (it warns past ~16 panes — a whole level makes an unusably
-  large grid, and point actors now add panes too, so subset first).
+  large grid, and point actors add panes too, so subset first).
 - **The wireframe is coloured by CSG op** (UnrealEd's legend): added-solid **blue**, subtracted
   **gold/yellow**, semi-solid **pink**, non-solid **green**, mover **magenta**; front faces darker,
-  obscured/back faces lighter. This is the CSG cue — it says what each brush *does*.
+  obscured/back faces lighter. This says what each brush *does*.
 - **`--brush-colors {csg,legend}`** picks the wireframe's colour source. `csg` (default) is the CSG-op
   colouring above. **`legend`** instead draws each brush's wireframe in *its own per-actor legend tint*
-  — so every brush is a distinct colour matching its legend swatch (you trade the CSG cue for telling
-  same-op brushes apart at a glance without reading numbers).
+  — every brush a distinct colour matching its legend swatch (you trade the CSG cue for telling same-op
+  brushes apart at a glance).
 - **The legend never overlaps the geometry.** A top band is reserved for the legend panel and the
   geometry is framed below it. This applies to `quad`/`single`; **`breakdown` draws no legend at all**
-  (every pane, including the overview, is legend-free — actors are identified by their captioned panes).
+  (actors are identified by their captioned panes).
 - **Labels use a HYBRID per-actor TINT + a LEGEND.** The CSG palette has only ~5 hues, so two brushes
   with the SAME CSG op share ONE wireframe colour; to tell them apart, each **actor** is assigned a
   distinct **tint** from a categorical palette (~10 hues, cycled). A brush's **on-face poly-index
-  decal** (both the painted digits and their 6/9 baseline underline) carries that tint; a point actor's
-  **marker** is drawn in it. A **legend** in the top-left maps each tint → actor **NAME** (a filled
-  square for a brush, a filled diamond for a point actor). **Actor names live in the legend, not on
-  the geometry** (to declutter) — so a number shared across brushes (every brush has a face `1`) is
-  disambiguated by its tint + the legend, and you read *which brush* from the legend rather than a
-  label crowding the wireframe. If a scene has more labelled actors than fit the legend's height, the
-  overflow collapses into a final `+N MORE` row rather than spilling off the frame.
+  decal** (the painted digits and their 6/9 baseline underline) carries that tint; a point actor's
+  **marker** is drawn in it. A **legend** top-left maps each tint → actor **NAME** (a filled square
+  for a brush, a filled diamond for a point actor). **Actor names live in the legend, not on the
+  geometry** — so a number shared across brushes (every brush has a face `1`) is disambiguated by its
+  tint + the legend. If a scene has more labelled actors than fit the legend's height, the overflow
+  collapses into a final `+N MORE` row rather than spilling off the frame.
 - **Poly face indices are painted ON the face (on-face numbers).** Each face's index is a **number
   texture lying flat in the face's own 3-D plane** — it foreshortens with the surface under the
-  projection, so it reads as decaled onto the geometry (not a callout off to the side). It is placed at
-  the **roomiest spot on the face** (the largest spot where it fits *inside* the face polygon — off to
-  a side on a triangle/arch, not centred over a narrow point) and sized to **75% of the largest number
-  that would fit there**, so it's as big as the face comfortably allows. Sizing always assumes a
-  **2-digit width** and centres the actual number in that slot, so a single digit (`5`) renders at the
-  same scale as a two-digit one (`12`) — a consistent look across a scene rather than lone digits
-  ballooning. Numbers **hang by gravity** on
-  walls and slopes (the strokes run straight up the surface) and align to the **world Y axis** on
-  floors/ceilings/caps (a consistent orientation, not an arbitrary roll), with a short underline as a
-  `6`/`9` cue. This is the only way poly faces are labelled — there is no leader-box
-  mode.
-- **Overlapping numbers: a tiny nudge, then a white outline.** Because two faces can project close
-  together on screen — including two faces of the **same brush** — numbers can overlap. Two things keep
-  them legible. First, a **deliberately tiny reshuffle**: a number that overlaps another (or a
-  point-actor marker) may **shrink by at most 10%** and **move by at most 10% of its own diagonal** to
-  reduce the overlap; it never makes a big jump or shrinks to a speck, so numbers stay big and roughly
-  where you'd expect. A number with no overlap doesn't move at all. Second, wherever two numbers still
-  overlap, a thin **white outline (1 screen pixel, constant width at any zoom)** is drawn just outside
-  the strokes in the overlap, so you can still trace each number's shape apart from the other. Numbering
-  is **facing-blind**: front AND back faces get a number (so the front/back distinction is carried by
-  opacity, below, not by hiding back faces), and `--annotate`'s `poly` selectors still choose *whether*
-  poly numbers draw at all (e.g. `none`, `poly:hi`). (Under `--layout breakdown` each brush is alone in
-  its pane, so cross-brush overlap disappears and the outline only marks the occasional same-brush
-  overlap.)
+  projection, so it reads as decaled onto the geometry. It is placed at the **roomiest spot on the
+  face** (the largest spot where it fits *inside* the face polygon — off to a side on a triangle/arch,
+  not centred over a narrow point) and sized to **75% of the largest number that would fit there**.
+  Sizing always assumes a **2-digit width** and centres the actual number in that slot, so a single
+  digit (`5`) renders at the same scale as a two-digit one (`12`) rather than ballooning. Numbers
+  **hang by gravity** on walls and slopes (strokes run straight up the surface) and align to the
+  **world Y axis** on floors/ceilings/caps, with a short underline as a `6`/`9` cue. This is the only
+  way poly faces are labelled — there is no leader-box mode.
+- **Overlapping numbers: a tiny nudge, then a white outline.** Two faces can project close together on
+  screen — including two faces of the **same brush** — so numbers can overlap. First, a **tiny
+  reshuffle**: a number overlapping another (or a point-actor marker) may **shrink by at most 10%**
+  and **move by at most 10% of its own diagonal**; it never makes a big jump or shrinks to a speck. A
+  number with no overlap doesn't move. Second, wherever two numbers still overlap, a thin **white
+  outline (1 screen pixel, constant width at any zoom)** is drawn just outside the strokes in the
+  overlap, so you can trace each number apart. Numbering is **facing-blind**: front AND back faces get
+  a number (the front/back distinction is carried by opacity, below, not by hiding back faces), and
+  `--annotate`'s `poly` selectors still choose *whether* poly numbers draw at all (e.g. `none`,
+  `poly:hi`). (Under `--layout breakdown` each brush is alone in its pane, so cross-brush overlap
+  disappears and the outline only marks the occasional same-brush overlap.)
 - **On-face numbers are graded translucent by depth.** A visible face is drawn at 56% opacity, and each
   face in front of it keeps 60% of that (near faces clear, buried faces faint), so the nearer faces'
   numbers stand out. A face counts as "in front" under the **self-or-solid** rule: a nearer front face
   that covers it dims it **iff** that occluder is a **solid** CSG op (added/semi-solid/mover) **or**
-  belongs to the **same brush**. So a subtract/hollow room's near walls dim its own far walls (depth
-  grading), while a solid brush sitting **inside** a room is **not** dimmed by the room's walls; solid
-  brushes still dim across brushes. A number that would be **unreadable on screen** is omitted — a
-  **view-dependent** verdict: a face too small, too edge-on, or too zoomed-out to read gets no number,
-  and the same face is numbered once it's big enough on screen (zoomed in, or in its `--layout
-  breakdown` pane). There is no fallback for an omitted face.
+  belongs to the **same brush**. So a hollow room's near walls dim its own far walls, while a solid
+  brush sitting **inside** a room is **not** dimmed by the room's walls; solid brushes still dim across
+  brushes. A number **unreadable on screen** is omitted — a **view-dependent** verdict: a face too
+  small, too edge-on, or too zoomed-out gets no number, and the same face is numbered once it's big
+  enough (zoomed in, or in its `--layout breakdown` pane). There is no fallback for an omitted face.
 - **`--annotate`** takes a **comma-set of selectors** (the drawn labels are their **union**). A bare
   **kind** means ALL of that kind; each colon **filter** narrows; multiple filters on one selector
   intersect; commas union. Tokens are case/whitespace-insensitive.
@@ -1163,12 +1135,11 @@ actor preview [<names…> | --from-t3d <FILE…|->]
   - An invalid token is a clean named error (e.g. `--annotate: unknown filter 'foo' for kind 'poly'`).
 - **Point actors** render as their **DT_Sprite** billboard (footprint `DrawScale·USize × DrawScale·
   VSize`) or, for DT_Mesh/DT_None (or a sprite that does not decode), a small **marker** (a filled
-  diamond in the actor's tint, with a white halo so it stands out) at Location. A sprite that does
-  not decode prints a stderr note **naming why** — `unknown-texture` (nothing of that name on the
-  search path), `unqualified-ref` (write it as `Package.Name`), `unverified-format` (a real texture
-  in a pixel layout uedcli cannot read yet), and so on — so the marker is never unexplained. With
-  **no texture search path configured at all**, the note says so instead of naming a case: nothing
-  was looked for, so there is no case to name — run `project show` to see what is on the path. Its **name is in the
+  diamond in the actor's tint, with a white halo) at Location. A sprite that does not decode prints a
+  stderr note **naming why** — `unknown-texture` (nothing of that name on the search path),
+  `unqualified-ref` (write it as `Package.Name`), `unverified-format` (a real texture in a pixel
+  layout uedcli cannot read yet), and so on. With **no texture search path configured**, the note says
+  so instead of naming a case — run `project show` to see what is on the path. Its **name is in the
   legend**, not beside the marker.
 - **`--frame TARGET`** frames a target to fill the view (frames only — never highlights), in one of two
   forms. A **selector** — a bare **`BRUSH`** name frames that actor's whole AABB, or **`BRUSH:IDX`**
@@ -1177,31 +1148,29 @@ actor preview [<names…> | --from-t3d <FILE…|->]
   tightness N`** (default `0.8`, must be in `[0, 1]`) sets framing tightness toward a **selector**
   target only: `0` = whole-set frame, `1` = tightest (target + margin); no `--frame` ⇒ no-op. An
   explicit-AABB `--frame` is always framed exactly — `--frame-tightness` does NOT modulate it.
-- **`--highlight POLY|NAME`** emphasises a poly or an actor; repeatable, no effect on framing. A
-  token **with a colon** is a poly selector `BRUSH:IDX` (set form `BRUSH:1,2` / `BRUSH:all` too) — those
+- **`--highlight POLY|NAME`** emphasises a poly or actor; repeatable, no effect on framing. A token
+  **with a colon** is a poly selector `BRUSH:IDX` (set form `BRUSH:1,2` / `BRUSH:all` too) — those
   polys draw in their brush's vivid CSG hue + a bolder line. A token **without a colon** is an
   **actor name**: a brush actor highlights **all** its polys; a point actor gets **corner brackets**
   (a selection reticle) framing its sprite/marker. An unknown name / a selector on a non-brush → clean
   exit 2.
-- **`--focus BRUSH`** spotlights ONE brush: only it shows face indices (in its tint), and
-  every OTHER brush recedes to a **faint (dimmed)** wireframe — for reading a single brush's faces in a
-  busy scene. All actor names still appear in the legend. **`--highlight` overrides `--focus`**: a
-  highlighted poly/actor still draws vivid+bold on top and keeps its index even when its brush is not
-  the focus (focus dims; highlight re-lights specific elements). An unknown name / a point actor →
-  clean exit 2.
-- **`--show SET`** is a **comma-set (union)** of range overlays to draw for **POINT** actors (default:
-  none). Members: **`collision`** — a faint light-red collision cylinder for every colliding point actor
+- **`--focus BRUSH`** spotlights ONE brush: only it shows face indices (in its tint), and every OTHER
+  brush recedes to a **faint (dimmed)** wireframe — for reading one brush's faces in a busy scene. All
+  actor names still appear in the legend. **`--highlight` overrides `--focus`**: a highlighted
+  poly/actor still draws vivid+bold on top and keeps its index even when its brush is not the focus.
+  An unknown name / a point actor → clean exit 2.
+- **`--show SET`** is a **comma-set (union)** of range overlays for **POINT** actors (default: none).
+  Members: **`collision`** — a faint light-red collision cylinder for every colliding point actor
   (`bCollideActors`): a circle in TOP, a `2·CollisionRadius × 2·CollisionHeight` rect in FRONT/SIDE, an
   8-sided wire cylinder in ISO (`CollisionHeight` is a HALF-height); **`light-range`** — a faint orange
   sphere of a light's reach (`25·(LightRadius+1)` UU); **`sound-range`** — a faint blue sphere of an
   AmbientSound's reach (`25·(SoundRadius+1)` UU). Brush actors (including movers) are excluded, so a
   brush preview needs no class schema. An unknown member is a clean named error.
 - `--out PATH` is the host image path. **A preview is always a PNG** (written via **Pillow**, the
-  LLM-viewable form — there is no flag and no other way to get raw PPM out of the CLI). Whatever
-  extension you pass is **replaced** by `.png`, so `--out shot.jpg` writes `shot.png`, and an
-  extensionless `--out shot` writes `shot.png`. `--out` is **optional**: with no `--out`, a unique
-  temp file is minted (`uedcli-preview-*.png`). Either way the **absolute path actually written is
-  always printed to stdout**.
+  LLM-viewable form — no flag and no other way to get raw PPM out). Whatever extension you pass is
+  **replaced** by `.png`, so `--out shot.jpg` writes `shot.png` and `--out shot` writes `shot.png`.
+  `--out` is **optional**: with no `--out`, a unique temp file is minted (`uedcli-preview-*.png`).
+  Either way the **absolute path actually written is always printed to stdout**.
 
 ---
 
@@ -1231,14 +1200,14 @@ stash promote <id> --as <name> [--force] [--prefab-dir DIR]
   `-` is the sole value; `names` still selects a subset of the source). `--id` defaults to an
   auto-slug from the first actor name; `--force` overwrites an existing id. Capture normalizes the set
   to its bbox-min corner and records the original world anchor. It reads the game's `.u` packages
-  (an ingested Mover is folded to its base pose, which needs the class hierarchy — see
+  (an ingested Mover is folded to its base pose, needing the class hierarchy — see
   [Projects](#projects-uedclitoml)).
 - **`stash apply`** is a **model-side merge into the current level** (no editor): it translates to
   the placement anchor, auto-allocates fresh names, sets Group, appends order, and unions the set's
   packages. **Without `--at`, it applies at the captured world anchor.** `--group` defaults to the id;
   `--no-group` strips it; `--folder PATH` also stamps a uedcli-side folder (independent of `--group`).
 - **`stash promote`** copies a register entry into the durable prefab library (the sharing step).
-- **CSG-combining a stash** is not a stash verb: pipe it into the generator instead —
+- **CSG-combining a stash** is not a stash verb: pipe it into the generator —
   `uedcli stash show arch | uedcli brush intersect - | uedcli actor add -` (see
   [`brush intersect` / `brush deintersect`](#brush-intersect--brush-deintersect--csg-merge-a-brush-set-into-one-brush)).
 
@@ -1269,8 +1238,8 @@ prefab [--prefab-dir DIR] drop  <name>
 verb. Use it to study how an existing map is built, to lift a room or a prop out of one, or to
 compare a map against your own.
 
-It reads the map file's bytes **directly**. No UnrealEd, no container, no game — so it is fast and it
-works anywhere, unlike `materialize`.
+It reads the map file's bytes **directly**. No UnrealEd, no container, no game — fast and works
+anywhere, unlike `materialize`.
 
 ```
 level import MAPFILE --tree KIND/NAME [--overwrite]
@@ -1295,40 +1264,38 @@ actor find --subclass-of Engine.Light      # now query it like any other level
 
 ## What import leaves out
 
-A saved map is the editor's workspace, not a clean inventory of level content — it also contains
-the tools the designer happened to be holding. Import drops two kinds, because they are
-apparatus rather than content, and keeping them would put them in your tree as though you had placed
-them:
+A saved map is the editor's workspace, not a clean inventory of level content — it also contains the
+tools the designer happened to be holding. Import drops two kinds as apparatus rather than content:
 
 - the **builder brush** — the red scratch shape used to sculpt geometry before committing it. Every
-  saved map has exactly one. If it were kept, rebuilding the map later would place it alongside the
-  fresh one the editor makes for itself, and the two would collide over a name.
-- the **viewport cameras** — one `Camera` actor per editor viewport that was open at save time (four
-  to eight in a typical map).
+  saved map has exactly one. If kept, rebuilding the map later would place it alongside the fresh one
+  the editor makes for itself, and the two would collide over a name.
+- the **viewport cameras** — one `Camera` actor per editor viewport open at save time (four to eight
+  in a typical map).
 
-Everything else is imported as it stands, with its properties and its brush geometry.
+Everything else is imported as it stands, with its properties and brush geometry.
 
 ## Requirements and caveats
 
 - **A project is required**, and its configured package paths must contain the classes the map uses.
   Import reads each class's definition to know what its stored properties mean, and each class's
-  defaults to know which values were actually changed from them.
+  defaults to know which values were changed from them.
 - **Import is strict.** Every class and every polygon texture the map references must exist on the
   package path; if one does not, the whole import **exits 2 naming it** rather than writing a tree
-  with references that cannot be rebuilt. Importing a map that needs mod packages therefore means
-  installing those packages first.
-- **Folders and labels start empty** — a compiled map has no equivalent of them to recover.
+  with references that cannot be rebuilt. Importing a map that needs mod packages means installing
+  those packages first.
+- **Folders and labels start empty** — a compiled map has no equivalent to recover.
 - **References between actors keep the source map's name.** A property pointing at another actor
-  reads `Class'<sourcemap>.Other'`. That is a faithful record of the original, but it means such a
-  reference is pinned to the old map's name rather than rebinding to your new level's.
+  reads `Class'<sourcemap>.Other'` — a faithful record of the original, but pinned to the old map's
+  name rather than rebinding to your new level's.
 - **Resources embedded inside the map file itself are a rough edge.** Some maps store a texture or a
   sound *inside* the map file rather than referencing a shared package (the `myLevel` pseudo-package).
-  Such a reference resolves to nothing on your package path, and what happens depends on where it
-  appears: on a **brush face** it is caught by the validation above and the import **exits 2 naming
-  it**; anywhere else — an actor property such as a decoration's `Skin` — it is **imported as written**
-  and left dangling, because validation covers classes and face textures, not every object reference.
-  A dangling reference does no harm until you rebuild the map, which will not find it. Extracting
-  embedded resources into a real package first is the way round it, and is not yet built.
+  Such a reference resolves to nothing on your package path: on a **brush face** it is caught by the
+  validation above and the import **exits 2 naming it**; anywhere else — an actor property such as a
+  decoration's `Skin` — it is **imported as written** and left dangling, since validation covers
+  classes and face textures, not every object reference. A dangling reference does no harm until you
+  rebuild the map, which will not find it. Extracting embedded resources into a real package first is
+  the way round it, and is not yet built.
 - **Maps built by uedcli's own native builder import without brush geometry**, because that builder
   keeps each shape only in the compiled world and leaves the per-brush copy empty. Editor-built maps
   (all retail content) carry both and import fully.
@@ -1350,11 +1317,11 @@ level materialize [--out OUT] [--overwrite] [--no-verify] [--keep-build]
 - A **post-build verify** (H3) confirms the rebuilt map matches the intended trunk; **`--no-verify`**
   skips it (debugging / known-buggy verify), and **`--keep-build`** copies the built map to the
   project's `.uedcli/tmp/` on a verify FAILURE instead of discarding it.
-- The verify compares the built map against the trunk in UnrealEd's own terms, which means it needs
-  each actor class's **defaults** out of the game's `.u` packages. They are resolved *before* the
-  editor starts, so an actor whose `Class=` is not fully qualified (`Package.Class`) — or whose
-  package is missing from the configured paths — **exits 2 in about a second**, naming the actor and
-  the class, instead of failing after a full build. `--no-verify` does not need them.
+- The verify compares the built map against the trunk in UnrealEd's own terms, so it needs each actor
+  class's **defaults** out of the game's `.u` packages. They are resolved *before* the editor starts,
+  so an actor whose `Class=` is not fully qualified (`Package.Class`) — or whose package is missing
+  from the configured paths — **exits 2 in about a second**, naming the actor and class, instead of
+  failing after a full build. `--no-verify` does not need them.
 - Committing is your own `git`. Lightmaps and rebuilt BSP are **regenerable build output**, never
   part of the level's identity.
 
@@ -1366,8 +1333,8 @@ of the same trunk; the editor path above remains the current one.)*
 # `level preview` — freely-posed still shots
 
 **`level preview`** renders **still first-person shots** of the current level from arbitrary camera
-poses. It is a **two-tier** command behind one verb, sharing one batched **pose grammar**. It is
-read-only — it never writes the trunk or a committed map.
+poses. A **two-tier** command behind one verb, sharing one batched **pose grammar**. Read-only — it
+never writes the trunk or a committed map.
 
 ```
 level preview SHOT… --out-dir DIR [--game | --native] [--size WxH] [--fov DEG]
@@ -1394,18 +1361,17 @@ One shot per positional token, fields `;`-separated (angles in **unreal rotation
   headless game container** (booted once ~90s, then REUSED across previews; self-terminates after
   10 min idle) and captures **truly-lit first-person frames** (real lighting/sky/textures). Pitch is
   clamped host-side to ±89.9°; movers render at rest pose. First batch ~1–3 min (boot + travel);
-  later batches skip the boot. It is the default because it shows lighting/meshes/sky and because the
-  offline draft mis-renders overlapping-subtract geometry silently.
+  later batches skip the boot. It is the default because it shows lighting/meshes/sky and the offline
+  draft mis-renders overlapping-subtract geometry silently.
   - **`--map PATH`** previews a **prebuilt** map file instead of the selected trunk (skips the
     materialize cache); actor-relative shots resolve against the running game.
-  - **`--rebuild`** forces a fresh materialize under a new unique name (guarantees the game reloads
-    it).
+  - **`--rebuild`** forces a fresh materialize under a new unique name (guarantees the game reloads it).
   - **`--keep-alive`** PINs the warm container (disables idle death) and prints its **noVNC URL** for
     live inspection (dev-debug; release the pin with `docker rm -f`).
-  - Without `--map`, this tier **materializes the trunk internally** — post-verify included, and
-    with no `--no-verify` escape here — so it inherits `level materialize`'s requirement that every
-    actor class be fully qualified and its package present on the search paths. An unresolvable
-    class exits 2 naming the actor, before anything is built.
+  - Without `--map`, this tier **materializes the trunk internally** — post-verify included, with no
+    `--no-verify` escape — so it inherits `level materialize`'s requirement that every actor class be
+    fully qualified and its package present on the search paths. An unresolvable class exits 2 naming
+    the actor, before anything is built.
 - **`--native`** — the opt-in offline draft. **No container at all**: the native CSG core carves the
   trunk in-process and a software rasterizer renders **textured, flat-shaded** perspective stills in
   seconds. Movers render at base pose; point actors, meshes, sky, lighting, and translucency do NOT
@@ -1418,9 +1384,9 @@ One shot per positional token, fields `;`-separated (angles in **unreal rotation
 ## Discovery mode
 
 **`--list-actors Package.Class`** (with `--game --map`) prints the running map's actors of that class
-as `Name x y z` instead of shooting (e.g. `Engine.PathNode` blankets every walkable spot) — so you
-can discover `@Actor` refs to compose into shots. `--sample N` prints N evenly-spread; no screenshots,
-`--out-dir` not needed.
+as `Name x y z` instead of shooting (e.g. `Engine.PathNode` blankets every walkable spot) — to
+discover `@Actor` refs for shots. `--sample N` prints N evenly-spread; no screenshots, `--out-dir`
+not needed.
 
 ---
 
@@ -1428,7 +1394,7 @@ can discover `@Actor` refs to compose into shots. `--sample N` prints N evenly-s
 
 The `texture` verbs maintain a tracked, hash-versioned catalog of every texture package on the
 substrate path. Classification (`tags[]`, `description`, named colors) accretes onto each entry and is
-never clobbered by a re-sync. Every verb takes `--catalog-dir DIR` (default: the resolved project's
+never clobbered by re-sync. Every verb takes `--catalog-dir DIR` (default: the resolved project's
 catalog dir — the `uedcli.toml` `catalog` key, or `<root>/texture-catalog/`).
 
 ```bash
@@ -1488,9 +1454,9 @@ uedcli class show <Package.Class> [--depth N|all] [--category NAME]
 
 # Documentation — read the docs from the CLI
 
-uedcli carries its own user documentation, so these pages are queryable from the tool itself —
-no network, no repo checkout, and always the version matching the binary you are running.
-`uedcli docs show usage` prints this file.
+uedcli carries its own user documentation, queryable from the tool itself — no network, no repo
+checkout, always the version matching the binary you are running. `uedcli docs show usage` prints
+this file.
 
 ```bash
 # every page's topic key, one per line
@@ -1509,36 +1475,35 @@ uedcli docs search voussoir | uedcli docs show -
 **A topic key** is how a page is addressed: its path with the `.md` dropped, so
 `leveldesign/general/lighting` (a trailing `.md` is accepted too, and matching is
 case-insensitive). A directory's overview page is addressed by the **directory's own name** —
-`uedcli docs show leveldesign/deusex` gives you that section's overview — and this usage reference
-is `usage`, with the docs landing page at `index`.
+`uedcli docs show leveldesign/deusex` gives that section's overview — and this usage reference is
+`usage`, with the docs landing page at `index`.
 
 - **`docs list`** prints every topic key to stdout, sorted, with the count on stderr. `--json`
   gives `[{"path": <topic key>, "title": …}]` — `path` holds the topic key, not a filesystem path.
 - **`docs show <topic>`** writes the page's markdown to stdout byte-for-byte and nothing to
   stderr. `docs show -` instead reads topic keys from stdin, one per line, and prints them all,
-  each preceded by a `<!-- topic: <key> -->` marker line naming it. That form is **all-or-nothing**:
-  if any key is unknown, nothing is printed at all and it exits 2 naming the offending keys — you
-  never get a partial dump that looks complete. Empty stdin is a clean no-op (exit 0).
-- **`docs search <query>`** matches a literal, case-insensitive substring against every page's
-  title and body lines, and prints the matching topic keys best-first. The ranking is worth knowing
-  exactly, because it is simple: **a title match is worth ten matching body lines**, and matching
-  body lines are worth one each. So a page *about* your query usually leads — but a long page that
-  mentions it eleven times will outrank a short page that has it in the title, and that is working
-  as intended rather than a bug. No matches is a normal, empty success (exit 0); an empty query is
-  refused (exit 2), since a blank substring would "match" every page. `--json` adds a `snippet` —
-  the first matching **body** line, up to 120 characters. The page's heading is its `title`, not a
-  body line, so a snippet never just repeats it.
+  each preceded by a `<!-- topic: <key> -->` marker line. That form is **all-or-nothing**: if any
+  key is unknown, nothing is printed and it exits 2 naming the offending keys. Empty stdin is a clean
+  no-op (exit 0).
+- **`docs search <query>`** matches a literal, case-insensitive substring against every page's title
+  and body lines, and prints the matching topic keys best-first. The ranking is simple: **a title
+  match is worth ten matching body lines**, matching body lines one each. So a page *about* your
+  query usually leads — but a long page that mentions it eleven times outranks a short page with it
+  in the title, working as intended. No matches is a normal empty success (exit 0); an empty query is
+  refused (exit 2), since a blank substring would "match" every page. `--json` adds a `snippet` — the
+  first matching **body** line, up to 120 characters. The page's heading is its `title`, not a body
+  line, so a snippet never just repeats it.
 
 An unknown topic exits 2 with `Doc not found: <topic>` and, where there is an obvious near miss, a
-`did you mean:` hint. A bare page name that exists in two places (`human-scale`) deliberately does
-*not* resolve — the hint lists both candidates so you pick the one you meant.
+`did you mean:` hint. A bare page name that exists in two places (`human-scale`) does *not* resolve —
+the hint lists both candidates.
 
 There are no partial answers. If any part of the docs tree cannot be read — a permission problem on
 a directory, say — every `docs` verb exits 2 naming that directory, rather than quietly serving the
-pages it *could* read and leaving you to believe that is all of them.
+pages it *could* read.
 
-Every `docs` verb is read-only and fully offline: it needs no project, no selected level and no
-game install, so it works in a bare checkout or a bare install.
+Every `docs` verb is read-only and fully offline: no project, no selected level, no game install, so
+it works in a bare checkout or install.
 
 ---
 
@@ -1551,8 +1516,7 @@ game install, so it works in a bare checkout or a bare install.
   pure derivable throwaway and rebuilds on the next command (escape-hatch / reclaim old
   decoder-version dirs).
 - **`cache gc [--max-bytes N] [--max-entries N]`** — *shrink* that cache instead of emptying it:
-  delete the orphaned old decoder-version (`v<N>/`) dirs, then evict entries least-recently-used
-  until the cache fits its cap (default 256 MiB, no count cap; `N=0` evicts everything). Cached
-  entries are derivable, so an evicted one just re-decodes the next time it is needed. A GC already
-  runs automatically after a cache write — reach for this verb only to reclaim disk on demand. Prints
-  a one-line summary; a negative cap exits 2.
+  delete orphaned old decoder-version (`v<N>/`) dirs, then evict least-recently-used entries until
+  the cache fits its cap (default 256 MiB, no count cap; `N=0` evicts everything). Evicted entries
+  just re-decode when next needed. A GC runs automatically after a cache write — reach for this verb
+  only to reclaim disk on demand. Prints a one-line summary; a negative cap exits 2.

@@ -1,12 +1,11 @@
 # Reported coordinates — why a printed number is not the stored one
 
 Engineering decisions about the coordinates uedcli reports (`actor bbox`, `brush vertex list`,
-`stash`/`prefab` summaries, the `rotate`/`scale` pivot lines), as distinct from the ones it stores
+`stash`/`prefab` summaries, the `rotate`/`scale` pivot lines), versus the ones it stores
 (`uedcli/emit.py`, the trunk) and the ones it decides on (`doctor`, the CSG core, preview cameras).
-Owner rulings about the pivot live in [`../direction/conventions.md`](../direction/conventions.md);
-this file is the engineering half.
+Owner rulings about the pivot live in [`../direction/conventions.md`](../direction/conventions.md).
 
-UE1's GMath rotator table is not exact. A 180° yaw carries `sin = -8.742278e-08` rather than 0
+UE1's GMath rotator table is not exact: a 180° yaw carries `sin = -8.742278e-08` rather than 0
 (`uedcli/rotation.py`, `uedcli/tests/test_rotation.py`), so a ±64 vertex offset leaks ~6e-06 into the
 cross axis. A brush whose trunk says exactly `Y=228` computes to `227.999994`.
 
@@ -17,15 +16,14 @@ cross axis. A brush whose trunk says exactly `Y=228` computes to `227.999994`.
 and `rotation.world_vertices` do not — every consumer that makes a geometric judgement reads raw.
 
 **Why:** printing `227.999994` for geometry whose trunk is exact reads as "the rotate pushed my
-geometry off-grid", a false alarm about the one property level authors care most about; the noise is
-~170x below `doctor.WELD` (1e-3), so snapping hides nothing real. But `doctor`'s and the CSG core's
-tolerances exist to catch near-degenerate geometry, and feeding them pre-cleaned values would mask
-the faults they are there to find. The split is along display vs decision, not module boundaries.
+geometry off-grid", a false alarm; the noise is ~170x below `doctor.WELD` (1e-3), so snapping hides
+nothing real. But `doctor`'s and the CSG core's tolerances exist to catch near-degenerate geometry,
+and feeding them pre-cleaned values would mask the faults they detect. The split is display vs
+decision, not module boundaries.
 
 **Rejected:** snapping inside `union_bounds`/`world_vertices` — one line instead of three, but it
-puts the cleaned value in front of `doctor`, `preview_native` and the Rust CSG core, the masking
-above.
-**Rejected:** not snapping at all, and documenting the noise — measured cost: an agent building
+puts the cleaned value in front of `doctor`, `preview_native` and the Rust CSG core.
+**Rejected:** not snapping and documenting the noise — measured cost: an agent building
 `TubePlatform` read the raw numbers as evidence its rotate had gone wrong.
 **Refs:** `uedcli/dispatch.py` (`_bbox_of`) · `uedcli/query.py` (`_coord_component`) ·
 `uedcli/stashlib.py` (`format_summary`) · `uedcli/emit.py` (`clean`, `CLEAN_EPS`) ·
@@ -41,11 +39,10 @@ rotator noise); `outer` is authored — typed by a user, or piped from `actor bb
 which reports snapped values. An exact compare makes a rotated actor fail to be contained in its own
 reported bounding box, so the documented `bbox --field min | find --within-bbox` composition returns
 an empty set at exit 0. That regression shipped 2026-07-26 (`5d4506e`) and was caught by the build
-gate; `architecture.md`'s claim that the two use the same bounds holds only with this tolerance.
+gate; `architecture.md`'s same-bounds claim holds only with this tolerance.
 
 **Rejected:** reporting raw values from `--field`/`--json` and snapping only the human text — it
-makes the machine-readable output the noisy one, which is backwards, and leaves two spellings of the
-same box.
+makes the machine-readable output the noisy one, and leaves two spellings of the same box.
 **Refs:** `uedcli/writes.py` (`aabb_within`) · `uedcli/tests/test_bbox.py`
 (`test_a_rotated_actor_is_within_its_own_reported_bbox`) · `uedcli/tests/test_find_spatial.py` ·
 [`../architecture.md`](../architecture.md) "Spatial filtering"
@@ -59,9 +56,9 @@ T3D's fixed 6-dp form because a file is their destination.
 
 **Why:** four independent copies of "int when integral, else decimal" had already drifted —
 `query._coord_component` used `str(d)` (so `2.500000` kept its zeros) and was unsnapped, so
-`brush vertex list` and `actor bbox` printed different numbers for the same corner. Tolerance
-snapping is not folded into `fmt_coord`: a caller reporting a derived coordinate pairs it with
-`clean`, while one echoing an authored value formats it as given.
+`brush vertex list` and `actor bbox` printed different numbers for the same corner. Snapping is not
+folded into `fmt_coord`: a caller reporting a derived coordinate pairs it with `clean`, while one
+echoing an authored value formats it as given.
 
 **Rejected:** `fmt_coord` cleaning internally — it would silently snap authored input, so
 `--pivot 227.9999` would echo as `228` while the code used the real value.
@@ -94,7 +91,7 @@ truncates toward zero, so rotator noise at `227.999994` printed as `227` (a whol
 genuine `-2.5` min corner printed as `-2`, under-reporting the box.
 
 **Rejected:** keeping `int()` and documenting the truncation — a reported box smaller than the real
-one is the dangerous direction: it reads as "contained" when it is not.
+one reads as "contained" when it is not.
 **Refs:** `uedcli/dispatch.py` (the `rotate`/`scale` pivot lines) · `uedcli/stashlib.py`
 (`format_summary`) · `uedcli/tests/test_stashlib.py`
 (`test_summary_bbox_does_not_truncate_a_fraction`, `test_summary_bbox_snaps_rotator_noise`)

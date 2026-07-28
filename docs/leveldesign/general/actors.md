@@ -6,9 +6,8 @@ navigation network the AI walks.
 ## Collision is a cylinder
 
 Every actor collides as an upright cylinder — `CollisionRadius` and `CollisionHeight` (total height
-= 2 × Height). The cylinder is always upright regardless of the actor's rotation, and there is no
-per-poly or per-box actor collision in UE1 (that's UE2). A mesh's shape never collides — only its
-cylinder does.
+= 2 × Height), always upright regardless of the actor's rotation. There is no per-poly or per-box
+actor collision in UE1 (that's UE2); a mesh's shape never collides, only its cylinder.
 
 ### Blocking flags
 
@@ -41,15 +40,16 @@ Prop actors placed into the world:
 - `DrawType` = `DT_Sprite` / `DT_Mesh` / `DT_Brush` / `DT_None`; set `Mesh` for a mesh prop.
 - `DrawScale` — a single uniform float (there is no `DrawScale3D` in UE1 — that's UE2).
 - `Skin` / `MultiSkins[]` — the prop's textures.
-- Breakables: the `contents` / `content2` / `content3` + `EffectWhenDestroyed` loot fields; `Engine.Decoration`
-  has no `Health` — damageability in DX is `DeusExDecoration.HitPoints`. `bPushable` makes it shovable.
+- Breakables: the `contents` / `content2` / `content3` + `EffectWhenDestroyed` loot fields.
+  `Engine.Decoration` has no `Health`; damageability in DX is `DeusExDecoration.HitPoints`.
+  `bPushable` makes it shovable.
 
 ```
 # Engine.Decoration is ABSTRACT — place a concrete subclass (DX props are DeusExDecoration subclasses)
 actor build <ConcreteDecorationSubclass> --prop DrawScale=1.5 --at 256,256,0 | actor add -
 ```
 
-> Deus Ex props are the `DeusExDecoration` family (with a highlight name label and `HitPoints`) — and
+> Deus Ex props are the `DeusExDecoration` family (with a highlight name label and `HitPoints`).
 > `bInvincible` (make a decoration indestructible) is a `DeusExDecoration` property, not on
 > `Engine.Decoration` — see [../deusex/](../deusex/).
 
@@ -68,16 +68,16 @@ actor build Engine.PlayerStart --at 256,256,40 --rotate 0,16384,0 | actor add - 
 
 ## Pathing (NavigationPoints)
 
-AI paths are compiled into reachspecs — line-of-sight-plus-traversable links that store the width
-and height of each connection so bots know they fit. NPCs will not move without a path network.
+AI paths compile into reachspecs — line-of-sight-plus-traversable links storing each connection's
+width and height so bots know they fit. NPCs will not move without a path network.
 
 - Drop `PathNode` actors 300–700 uu apart (≤300–350 on ramps and stairs; keep ≥50 uu apart or
   you get a "paths too close" error, and ≥50 from corners). Each node must be visible from its
   neighbour.
-- Rebuild paths with console `PATHS BUILD` (this constructs the reachspecs; `PATHS DEFINE` alone
-  only spawns marker nodes and builds no reachspecs). `level materialize` does not currently
-  run the paths pass, so a materialized map has no reachspecs until paths are built in the editor —
-  until then AI pawns won't move. Debug with Show Paths.
+- Rebuild paths with console `PATHS BUILD` (constructs the reachspecs; `PATHS DEFINE` alone only
+  spawns marker nodes, no reachspecs). `level materialize` does not run the paths pass, so a
+  materialized map has no reachspecs and AI pawns won't move until paths are built in the editor.
+  Debug with Show Paths.
 - Per-node tuning: `bOneWayPath`, `ExtraCost`. (The UT/UE2 `bNoAutoConnect` / `ForcedPaths[4]` /
   `ProscribedPaths[4]` do **not** exist on this build's `Engine.PathNode`.)
 - Related NavigationPoints: `PlayerStart`, `InventorySpot` (auto-made at pickups), `LiftCenter` /

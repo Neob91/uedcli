@@ -7,15 +7,14 @@ container's lifecycle), `uedcli/xfer.py` (host↔container file copies), and `ue
 
 ## Every `subprocess.run` that talks to docker carries a `timeout=`
 
-`subprocess.run` with no `timeout=` waits forever. A docker daemon that stops answering — not
-hypothetical on this machine — then parked the whole verb with no output, indistinguishable from a
-slow editor, until the operator killed it. The bound turns that into a named failure in bounded
-time.
+`subprocess.run` with no `timeout=` waits forever. A docker daemon that stops answering parked the
+whole verb with no output, indistinguishable from a slow editor, until the operator killed it. The
+bound turns that into a named failure in bounded time.
 
-One case is worse than slow: `editor._wait_ready` polls `docker exec … wine_ctl status` inside a
-`deadline` loop. With the exec unbounded, a single hung poll blocked inside one iteration, so the
-loop's own deadline could never be reached — the readiness timeout was decorative and
-`ensure_editor`'s crash-retry (`start_attempts`) never fired on exactly the failure it exists for.
+`editor._wait_ready` polls `docker exec … wine_ctl status` inside a `deadline` loop. With the exec
+unbounded, one hung poll blocks inside a single iteration, so the loop's deadline is never reached:
+the readiness timeout was decorative and `ensure_editor`'s crash-retry (`start_attempts`) never
+fired on exactly the failure it exists for.
 
 The bounds are per kind of call, not one global number, because the calls do different work:
 
@@ -30,15 +29,14 @@ The bounds are per kind of call, not one global number, because the calls do dif
 
 A timeout on a teardown path is swallowed; anywhere else it raises. `_reap_container`, `stop_editor`
 and `xfer.remove` run from failure paths and `finally:` blocks, where raising would replace the real
-error with a cleanup error — the same call the sibling `preview_game.stop_game` already made.
-Everywhere else a `TimeoutExpired` becomes a `DriverError` naming the operation and the bound.
-`DriverError` is deliberate rather than letting `subprocess.TimeoutExpired` escape:
-`apply.run_materialize` catches `RuntimeError`/`DriverError`/`CalledProcessError` but not
-`TimeoutExpired` (a `SubprocessError`, which is not a `RuntimeError`), so a raw timeout would have
-reached the user as a traceback.
+error with a cleanup error — as sibling `preview_game.stop_game` already does. Everywhere else
+`TimeoutExpired` becomes a `DriverError` naming the operation and the bound. `DriverError` rather
+than letting `subprocess.TimeoutExpired` escape because `apply.run_materialize` catches
+`RuntimeError`/`DriverError`/`CalledProcessError` but not `TimeoutExpired` (a `SubprocessError`, not
+a `RuntimeError`), so a raw timeout would reach the user as a traceback.
 
-A bound is not a retry budget. `ensure_editor`'s `ready_timeout` and `start_attempts` still govern
-how long the editor may take to come up; these bounds only stop docker itself hanging.
+A bound is not a retry budget: `ensure_editor`'s `ready_timeout` and `start_attempts` govern how
+long the editor may take to come up; these bounds only stop docker itself hanging.
 
 **Rejected:**
 
@@ -47,18 +45,17 @@ how long the editor may take to come up; these bounds only stop docker itself ha
 - **Raising on a teardown timeout** — it masks the failure the caller was already reporting.
 - **Letting `subprocess.TimeoutExpired` propagate** — it is not a `RuntimeError`, so it slips past
   the materialize guard and reaches the user as a traceback.
-- **Making `_wait_ready` fail on a hung poll** — a poll is allowed to be slow; the readiness
-  deadline is the thing that decides the editor is dead, and treating one wedged probe as fatal
-  would abort starts that the next poll would have accepted.
+- **Making `_wait_ready` fail on a hung poll** — a poll may be slow; the readiness deadline decides
+  the editor is dead, and treating one wedged probe as fatal would abort starts the next poll would
+  have accepted.
 
 ## The UCC export's work dir is removed in a `finally:`
 
 `store_export.export_dx_t3d` creates `/work/ucc_export-<uuid>` in the container, runs the export
-into it, reads the result, and deletes it. With the delete after the last call, any failure — a
-non-zero UCC exit, a wedged wine, a missing output file — skipped it and stranded the tree for the
-container's lifetime. Its sibling `texture.batchexport_textures` already used `try/finally`; this
-now matches. The `mkdir` stays outside the `try:` on purpose: if creating the dir failed there is
-nothing to clean up.
+into it, reads the result, and deletes it. With the delete after the last call, any failure —
+non-zero UCC exit, wedged wine, missing output file — skipped it and stranded the tree for the
+container's lifetime; `try/finally` fixes this, matching sibling `texture.batchexport_textures`. The
+`mkdir` stays outside the `try:`: if creating the dir failed there is nothing to clean up.
 
 **Rejected:**
 

@@ -1,9 +1,8 @@
 # Lighting — the bake pipeline, light properties, and lighting craft  [ENGINE] (+ DX enums)
 
-Part of the level-design knowledge base. Dev reference for how UnrealEngine 1 / Deus Ex lighting is
-computed, every light property with its byte semantics and default, the two animation/shape enums,
-and how to light a level well. Siblings:
-[`textures.md`](textures.md) · [`movers.md`](movers.md) ·
+Part of the level-design knowledge base. How UnrealEngine 1 / Deus Ex lighting is computed, every
+light property with its byte semantics and default, the two animation/shape enums, and how to light a
+level. Siblings: [`textures.md`](textures.md) · [`movers.md`](movers.md) ·
 [`actors-collision-pathing.md`](actors-collision-pathing.md). Parent monolith:
 [`README.md`](README.md). Engine-driving mechanics: [`../../commands.md`](../../commands.md),
 [`../../rendering.md`](../../rendering.md).
@@ -16,14 +15,14 @@ confirm). **[ENGINE]** = generic UnrealEngine 1 · **[DX]** = Deus-Ex-specific.
 
 ## 1. The bake pipeline — where lighting is computed  [ENGINE]
 
-UnrealEngine 1 lighting has two halves computed at different times:
+UE1 lighting has two halves computed at different times:
 
-- **BSP surfaces** (world geometry — floors, walls, ceilings) are lit at build time into per-surface
-  lightmaps, one small light-texture per surface, computed once and stored in the map file. At render
-  time the GPU just samples the baked lightmap, so they are free.
-- **Actors** (the player, movers, decorations, pawns, pickups) are lit at runtime by sampling the
-  level's lights each frame. A mover is an actor, so its self-lighting follows this second path — the
-  source of the "black door" trap (see [`movers.md`](movers.md) §7).
+- **BSP surfaces** (floors, walls, ceilings) are lit at build time into per-surface lightmaps, one
+  small light-texture per surface, computed once and stored in the map file. At render time the GPU
+  samples the baked lightmap, so they are free.
+- **Actors** (player, movers, decorations, pawns, pickups) are lit at runtime by sampling the level's
+  lights each frame. A mover is an actor, so its self-lighting follows this second path — the source
+  of the "black door" trap (see [`movers.md`](movers.md) §7).
 
 ### 1.1 The console verbs and what each does  🔬✅
 
@@ -47,13 +46,11 @@ Verified by the native-materialize spike
   one bit: "does this light reach this point, unobstructed?" It is a shadow map, not a colour map.
 - Brightness, hue, saturation, and attenuation are applied at render time from the light's own
   properties; they are not baked into the mask. So re-tinting a light (`LightHue`, `LightSaturation`,
-  `LightBrightness`) does not strictly require re-running the visibility bake: the mask says where the
-  light reaches, and the colour/falloff maths run per-frame from the live property values. (From the
-  uedcli seat you re-`materialize`/`preview` to see the change regardless — there is no partial-bake
-  verb.)
+  `LightBrightness`) does not require re-running the visibility bake: the colour/falloff maths run
+  per-frame from the live property values. (From the uedcli seat you re-`materialize`/`preview` to see
+  the change regardless — there is no partial-bake verb.)
 - **Radius → world reach** ≈ **(LightRadius + 1) × 25 uu**. A default `LightRadius=64` reaches
-  ≈ 1625 uu. This converts the abstract 0–255 radius byte into world units so you can size light pools
-  against the geometry.
+  ≈ 1625 uu.
 
 ### 1.3 The uedcli seat: there is NO standalone bake verb  ✅
 
@@ -65,9 +62,8 @@ actor find --subclass-of Engine.Light | actor prop set - LightHue=28 LightSatura
 ```
 
 There is no `uedcli light bake` / `uedcli relight` verb. The lightmap bake happens inside
-`level materialize` and `level preview` — you author lights as actors, then materialize/preview to see
-the result. The old GUI advice "run `LIGHT APPLY` after retinting" becomes, at the uedcli seat:
-re-`materialize`/`preview` to see lighting; authoring lights is just `actor` edits.
+`level materialize` and `level preview` — author lights as actors, then materialize/preview to see the
+result. The old GUI advice "run `LIGHT APPLY` after retinting" becomes: re-`materialize`/`preview`.
 
 > **UnrealEd GUI equivalent:** place a `Light` actor (L+RMB), edit its *Lighting* property category, then
 > Build Lighting (or F8's lighting pass).
@@ -131,8 +127,7 @@ names/types only, not values).
 | `LT_TexturePaletteLoop` | Drives an animated-texture palette cycle **on a loop**. |
 
 Animation speed is `LightPeriod` (lower = faster); `LightPhase` staggers multiple animated lights.
-DX includes `LT_Pulse`/`LT_Blink` (confirmed in the embedded enum source) — that is not a UT-only
-set.
+DX includes `LT_Pulse`/`LT_Blink` (confirmed in the embedded enum source) — not a UT-only set.
 
 ---
 
@@ -152,11 +147,11 @@ decoration, see [`textures.md`](textures.md)); `LE_WateryShimmer` (caustics unde
 
 ### 4.1 Deus Ex has no `LE_Negative`  ✅ ❌ **Debunked**
 
-`LE_Negative` is a UE2-era (UT2003+) value; it is absent from this engine build's `Engine.u`
-(verified — the 20 members above are the complete set, and include `LE_Shock` / `LE_Disco` /
-`LE_Shell` / `LE_Rotor`). Other UE2 effects DX also lacks, so `LE_Negative` isn't uniquely absent —
-it's just the one the old guide wrongly told mappers to use. Any older guide that says "place a
-negative light to carve shadow" is describing a later engine.
+`LE_Negative` is a UE2-era (UT2003+) value, absent from this engine build's `Engine.u` (verified — the
+20 members above are the complete set, and include `LE_Shock` / `LE_Disco` / `LE_Shell` / `LE_Rotor`).
+DX lacks other UE2 effects too, so `LE_Negative` isn't uniquely absent — it's just the one the old
+guide wrongly told mappers to use. Any older guide that says "place a negative light to carve shadow"
+is describing a later engine.
 
 To darken an area in DX you do not subtract light — you:
 - place fewer or dimmer lights (lower `LightBrightness`, smaller `LightRadius`), and/or
@@ -169,28 +164,28 @@ This was a live doc bug in the old lighting guide (it claimed "`LE_Negative` sub
 
 ## 5. Lighting craft — how to light a level well  [ENGINE] 📖
 
-Craft rules distilled from the tutorial corpus.
+From the tutorial corpus.
 
-- **Motivate every light.** Each light should have a visible in-world fixture (a lamp, torch, window,
+- **Motivate every light.** Each light should have a visible in-world fixture (lamp, torch, window,
   screen) — a glow with no source reads as a bug. Arch doorways and detail surfaces to mount motivated
   lights.
 - **Never light flat.** Use a minimum of two lights per space: a key (the bright hotspot) plus a fill
   (a dimmer light filling the falloff). A single even light kills depth and shape.
 - **Radius shapes distinct pools of light.** The default `LightRadius=64` often bleeds across a whole
-  room — drop to ~5 for a tight tunnel/alcove, raise to ~175 for an outdoor expanse. Sizing pools with
-  radius, not just brightness, is what makes lighting read as designed.
+  room — drop to ~5 for a tight tunnel/alcove, raise to ~175 for an outdoor expanse. Size pools with
+  radius, not just brightness.
 - **Use light and shadow to guide the eye.** A crisp, high-contrast pattern (see the
   `PF_HighShadowDetail` surface flag in [`textures.md`](textures.md)) pulls attention; a spotlight
-  beacons toward a goal or a route. Use shadow to hide (secrets, lurking enemies) — in DX, shadow is a
+  beacons toward a goal or route. Use shadow to hide (secrets, lurking enemies) — in DX, shadow is a
   stealth mechanic, not just mood (see [`README.md`](README.md) §12 immersive-sim craft).
 - **Colour for zone identity.** Give each zone a subtle colour signature so the player can navigate by
   it. Drop `LightSaturation` from 255 to ~64 for a visible tint (lower = more saturated).
-- **Keep ambient low.** Zone `AmbientBrightness` ≤ ~32 — high ambient flattens everything into a
-  uniform grey and destroys the contrast the key/fill work created. Prefer darkness broken by motivated
-  pools over a floodlit room.
+- **Keep ambient low.** Zone `AmbientBrightness` ≤ ~32 — high ambient flattens everything into uniform
+  grey and destroys the key/fill contrast. Prefer darkness broken by motivated pools over a floodlit
+  room.
 - **Cost model:** light cost scales roughly with r² (lumels live on 2-D surfaces, so a bigger radius
-  touches a surface area that grows with the square of the radius). Prefer many small-radius lights
-  over a few enormous ones — cheaper to bake and more controllable.
+  touches surface area growing with the square of the radius). Prefer many small-radius lights over a
+  few enormous ones — cheaper to bake and more controllable.
 - **Break up your innovations.** Don't stack a strobe + fog + high-shadow-detail + a big fight in one
   wide-open view — keep the most complex lighting in enclosed, short-sightline areas (also a perf win;
   see [`zones-performance.md`](./zones-performance.md)).

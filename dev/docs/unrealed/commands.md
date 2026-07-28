@@ -5,9 +5,8 @@ extracted from the binaries. Setup: the `dx-lum-uned` container runs UED22 under
 `:99` + fluxbox, driven by `wine_ctl.py` over `docker exec`. Substrate is committed
 `Tools/uedcli/uned/UED22` (EditPackages stripped to the engine/builder set; `DeusEx*`/LUM commented out).
 
-For weird behaviors see [`quirks.md`](quirks.md); for producing an image see
-[`rendering.md`](rendering.md); for how this catalog was extracted see
-[`extracting-from-dll.md`](extracting-from-dll.md).
+See [`quirks.md`](quirks.md) for weird behaviors, [`rendering.md`](rendering.md) for producing an
+image, [`extracting-from-dll.md`](extracting-from-dll.md) for how this catalog was extracted.
 
 > **Confidence:** ✅ = uedcli-used / live-verified · 🔬 = live-probed this session · 📖 =
 > extracted from the binary string table (token + arg keys real; exact semantics inferred).
@@ -20,52 +19,48 @@ For weird behaviors see [`quirks.md`](quirks.md); for producing an image see
 - Reads: `MAP EXPORT` (whole-level T3D) and `EDIT COPY` → X clipboard via `xclip`
   (selection-scoped, no coordinate offset).
 - The log window is a separate engine console (`>` prompt) reaching `GET`/`SET`/`OBJ`.
-- Liveness/crash check on every command (`_assert_alive`) → `DriverError`, never a silent
-  no-op. Recover a wedged editor: `docker compose up -d --force-recreate` (~60–90 s).
+- Liveness/crash check on every command (`_assert_alive`) → `DriverError`, never a silent no-op.
+  Recover a wedged editor: `docker compose up -d --force-recreate` (~60–90 s).
 - Driving is fire-and-forget: a returned `exec` does not mean the verb finished. ✅ `wine_ctl
   exec` types the line, presses Return, sleeps 0.3 s (only to catch a crash dialog) and returns,
   so it is back while a `MAP REBUILD` / `MAP SAVE` is still running; no console verb reports
-  completion or a result to the caller. To observe a verb's output, wait for that output itself.
-  For a file-producing verb, poll the file until its size is non-zero and has stopped changing for
-  several reads, and — because a part-written file's size holds as steady as a finished one's —
-  until the bytes say it is complete (`driver.map_save` checks the written package's header via
-  `driver.package_header_problem`; see "`MAP SAVE` writes `Save.tmp`" below for what a part-written
-  `.dx` can look like). For a log-producing verb, read `Editor.log` forward past a
+  completion or a result. To observe output, wait for the output itself. For a file-producing verb,
+  poll the file until its size is non-zero and unchanged for several reads, and — because a
+  part-written file's size holds as steady as a finished one's — until the bytes say it is complete
+  (`driver.map_save` checks the written package's header via `driver.package_header_problem`; see
+  "`MAP SAVE` writes `Save.tmp`" below). For a log-producing verb, read `Editor.log` forward past a
   guaranteed-noisy settle command (`qualify.dump_obj_dependencies`), never a fixed sleep. Ignoring
   this produced a live failure: "`MAP SAVE`/`docker cp` … fail 'nothing written'" (2026-07-18
-  UnrealEd-golden spike). (A second alleged instance — "a truncated `Leaves` array captured from a
-  half-written `.dx`" — was retracted: `spikes/2026-07-15-native-materialize/sections/91-leaves-overproduction.md`
+  UnrealEd-golden spike). (A second alleged instance — a truncated `Leaves` array from a
+  half-written `.dx` — was retracted: `spikes/2026-07-15-native-materialize/sections/91-leaves-overproduction.md`
   re-built the same golden behind a more generous idle barrier and got a byte-identical Model body,
   so the 762-leaf array is a deterministic property of the headless `IMPORT→REBUILD→SAVE`, not a
-  truncation. The wait rule stands on the first failure and on the save mechanism below; it never
-  had two instances.) See `quirks.md` §"a reused editor … loses the next `MAP SAVE`" and the 4 KB
+  truncation.) See `quirks.md` §"a reused editor … loses the next `MAP SAVE`" and the 4 KB
   log-buffering entry.
 - `MAP SAVE` writes `Save.tmp` and moves it onto the destination; the header is patched last.
-  📖 Extracted 2026-07-25 from the editor's own `core.dll` string table
+  📖 Extracted 2026-07-25 from `core.dll` string table
   (`spikes/2026-07-25-map-save-mechanism/`, `extracting-from-dll.md` method): the
   `UObject::SavePackage` literals `SaveExports → SaveImportMap → SaveExportMap → RewriteSummary`,
-  then `Save.tmp`, then `Moving '%s' to '%s'`, sit at consecutive offsets in that order in the string
-  table, from which the phase sequence is inferred — the package is serialized into
-  a temp file, its summary (the 36-byte header carrying every table's count+offset) is rewritten last
-  inside that temp, and only then is the temp moved onto the target path. Consequence for anyone
-  waiting on a save: a crash mid-serialize leaves the destination absent, or the previous file
-  untouched — still complete, still carrying its old mtime — which is why a wait must compare
-  against a pre-save stat and not merely check that a file is there.
-  - Not known: whether that move is a rename or a byte copy, and therefore whether a truncated
-    file can ever appear at the destination at all. The import table settles nothing: `core.dll`
-    imports no `MoveFile*`/`CopyFile*`, but it also imports no `ReadFile` and no file-mapping
-    API, while it demonstrably reads packages — so its file I/O does not go through the import table
-    (it imports `GetProcAddress`/`LoadLibrary*`) and the absence of `MoveFile*` proves nothing. (Its
-    file-API imports are `CreateFileW`, `WriteFile`, `SetFilePointerEx`,
-    `FlushFileBuffers`, `GetFileInformationByHandle`, `GetFileType`, plus the
-    `FindFirstFileExW`/`FindNextFileW` directory walk — no read, move or copy among them.)
-    `driver.map_save` therefore treats its header check as insurance, not a known-live failure
-    mode; no truncated destination has ever been observed (the one report was retracted — see
-    above). Both halves are pinned by `test_engine_facts.py`.
-  - Inferred, not extracted: where `Save.tmp` is created. The string is a bare `Save.tmp` with
-    no directory, so presumably the target's directory (UE1 builds the temp path beside the
-    destination), but the string table does not show it and it has not been checked live. If it
-    is, the fixed name means two saves into one directory collide and a crashed save leaves a stray
+  then `Save.tmp`, then `Moving '%s' to '%s'`, sit at consecutive offsets in that order, giving the
+  phase sequence — the package is serialized into a temp file, its summary (the 36-byte header
+  carrying every table's count+offset) is rewritten last inside that temp, and only then is the temp
+  moved onto the target. So a crash mid-serialize leaves the destination absent or the previous file
+  untouched (still complete, still its old mtime) — which is why a wait must compare against a
+  pre-save stat, not merely check that a file exists.
+  - Not known: whether that move is a rename or a byte copy, hence whether a truncated file can
+    appear at the destination at all. The import table settles nothing: `core.dll` imports no
+    `MoveFile*`/`CopyFile*`, but also no `ReadFile` and no file-mapping API while it demonstrably
+    reads packages — so its file I/O does not go through the import table (it imports
+    `GetProcAddress`/`LoadLibrary*`) and the absence of `MoveFile*` proves nothing. (Its file-API
+    imports are `CreateFileW`, `WriteFile`, `SetFilePointerEx`, `FlushFileBuffers`,
+    `GetFileInformationByHandle`, `GetFileType`, plus the `FindFirstFileExW`/`FindNextFileW`
+    directory walk — no read, move or copy.) `driver.map_save` treats its header check as insurance,
+    not a known-live failure mode; no truncated destination has ever been observed. Both halves
+    pinned by `test_engine_facts.py`.
+  - Inferred, not extracted: where `Save.tmp` is created. The string is a bare `Save.tmp` with no
+    directory, so presumably the target's directory (UE1 builds the temp path beside the
+    destination), but the string table does not show it and it has not been checked live. If so, the
+    fixed name means two saves into one directory collide and a crashed save leaves a stray
     `Save.tmp` (`board/inbox/` chore — verify by driving a big `MAP SAVE` and listing `/work`
     mid-save).
 - GUI menu/dialog driving is fragile (menus paint black); prefer console verbs.
@@ -122,48 +117,45 @@ the next command) — never use it (`2026-06-17-brush-clip.md`).
   `Rotation` + `PostScale` — into world-space vertex coordinates and resets all three to identity
   (verified 2026-06-25, `../spikes/2026-06-25-mainscale-postscale-applytransform.md`: MainScale is
   local/pre-rotation, PostScale is world/post-rotation, `world = Location + PostScale·R·MainScale·
-  (v−PrePivot)`; corrects the earlier "MainScale only" claim). The bake is
-  `v' = T·v`, `PrePivot' = T·PrePivot` (transformed, not zeroed), `Location` unchanged
+  (v−PrePivot)`; corrects the earlier "MainScale only" claim). The bake is `v' = T·v`,
+  `PrePivot' = T·PrePivot` (transformed, not zeroed), `Location` unchanged
   (`T = PostScale·R·MainScale`; verified live, `../spikes/2026-06-25-scale-transform-mechanics.md`).
-  Because it rewrites `PrePivot`, it must not be run on a `Mover` implicitly — the PrePivot is
-  the swing axis (D8); and it bakes geometry but leaves `KeyPos`/`KeyRot`, so scaling a mover
-  this way desyncs its travel from its brush. Works on selected brush actors,
-  including `MAP IMPORTADD` ones (unlike `ACTOR DELETE`). For a negative scale axis (mirror)
-  it reverses polygon winding so the baked brush stays CSG-valid. Log: "Apply brush transform".
-  Use after `ACTOR MIRROR X=-1` to produce a properly-wound mirrored brush with neutral transform.
+  Because it rewrites `PrePivot` it must not run on a `Mover` implicitly — the PrePivot is the swing
+  axis (D8); and it bakes geometry but leaves `KeyPos`/`KeyRot`, so scaling a mover this way desyncs
+  its travel from its brush. Works on selected brush actors, including `MAP IMPORTADD` ones (unlike
+  `ACTOR DELETE`). For a negative scale axis (mirror) it reverses polygon winding so the baked brush
+  stays CSG-valid. Log: "Apply brush transform". Use after `ACTOR MIRROR X=-1` for a properly-wound
+  mirrored brush with neutral transform.
 - `ACTOR RESET` 📖 · `ALIGN SNAPTOGRID` 📖 · `HIDE`/`UNHIDE` 📖 ·
   `ACTOR KEYFRAME NUM=#` 🔬 (sets editing keyframe index `KeyNum=N` on a selected Mover;
   recomputes that mover's `Location`/`Rotation` to `BasePos + KeyPos[KeyNum]` — the derived-view
   model, spike `../spikes/2026-06-25-mover-keyframe-basepos-semantics.md`. Not a uedcli authoring
   path: keyframe poses are authored in T3D, so uedcli sets them model-side via `mover key`) ·
   `BAKEPREPIVOT` 📖.
-- There is no console verb for setting individual actor properties directly (🔬 2026-06-24).
-  Neither `ACTOR SET Location=...` nor `ACTOR Name=<n> <prop>=<value>` nor any other syntax
-  moved an actor via the console. The only mutation paths are (a) `ACTOR DELETE` to remove
-  a selected point actor (confirmed working via `SELECTNAME`+`ACTOR DELETE`) and (b) delete
-  + `MAP IMPORTADD` re-add at the new position. There is no `ImportActorProperties` console
-  equivalent — it is an internal editor function, not a console verb.
-- `SELECTNAME NAME=<name>` 🔬 — select-by-name (corrects the old "no select-by-name").
-  It sets the editor selection to exactly the named actor (read back via `EDIT
-  COPY`); works for point actors and brushes, including `MAP IMPORTADD` brushes that
-  `SELECT INSIDE` can't reach. It replaces the selection (not additive) and no-ops on a
-  missing name. Case-insensitive (🔬 2026-06-23): `NAME=helperlight0` and `NAME=HELPERLIGHT0`
-  both select `HelperLight0`; the canonical stored name is unchanged. Exact match only — no
-  globs, no prefix match (🔬). Actionable for point actors (`SELECTNAME` + `ACTOR DELETE`
-  removes a Light); IMPORTADD brushes select-for-read but `ACTOR DELETE` still no-ops on
-  them (the missing-`Bound` quirk — brush mutation still needs the paste/`BRUSH ADD` path).
-  See the simplification lead in `dev/docs/board/to-spec/`.
+- No console verb sets individual actor properties directly (🔬 2026-06-24). Neither
+  `ACTOR SET Location=...` nor `ACTOR Name=<n> <prop>=<value>` nor any other syntax moved an actor
+  via the console. The only mutation paths are (a) `ACTOR DELETE` on a selected point actor
+  (confirmed via `SELECTNAME`+`ACTOR DELETE`) and (b) delete + `MAP IMPORTADD` re-add at the new
+  position. `ImportActorProperties` is an internal editor function, not a console verb.
+- `SELECTNAME NAME=<name>` 🔬 — select-by-name. Sets the selection to exactly the named actor
+  (read back via `EDIT COPY`); works for point actors and brushes, including `MAP IMPORTADD` brushes
+  that `SELECT INSIDE` can't reach. Replaces the selection (not additive) and no-ops on a missing
+  name. Case-insensitive (🔬 2026-06-23): `NAME=helperlight0` and `NAME=HELPERLIGHT0` both select
+  `HelperLight0`; the stored name is unchanged. Exact match only — no globs, no prefix match (🔬).
+  Actionable for point actors (`SELECTNAME` + `ACTOR DELETE` removes a Light); IMPORTADD brushes
+  select-for-read but `ACTOR DELETE` still no-ops on them (the missing-`Bound` quirk — brush
+  mutation still needs the paste/`BRUSH ADD` path). See the simplification lead in
+  `dev/docs/board/to-spec/`.
 - `SELECT MEMORY` / `UNION` / `INTERSECT` / `XOR` / `RECALL` 📖 — selection-set algebra
   ("And/Or/Xor With Memory").
 
 ## `POLY` / surfaces 📖 ✅
 Surface (BSP-poly) ops. They act on the built `Model`'s surfaces, so they need a `MAP REBUILD`
-first. ⚠ Only `POLY TEXALIGN` has been disassembled and driven: it walks `Model->Surfs`, acts
-only on the ones carrying `PF_Selected`, and writes each result back down into the originating brush
-polygon via `polyUpdateMaster` — which is why a `MAP EXPORT` reads it back. Do not assume the same
-of the other `POLY` verbs: `SELECT` does not (it sets the selection), and nothing here
-establishes the selection-scoping or the master write-back for `TEXPAN`/`TEXSCALE`/`SETFLAGS=`/the
-detail verbs.
+first. ⚠ Only `POLY TEXALIGN` has been disassembled and driven: it walks `Model->Surfs`, acts only
+on those carrying `PF_Selected`, and writes each result back into the originating brush polygon via
+`polyUpdateMaster` — which is why a `MAP EXPORT` reads it back. Don't assume the same of the other
+`POLY` verbs: `SELECT` sets the selection, and nothing here establishes the selection-scoping or
+master write-back for `TEXPAN`/`TEXSCALE`/`SETFLAGS=`/the detail verbs.
 - Selection — `POLY SELECT NONE` ✅ / `ALL` ✅ (both driven live 2026-07-26) · `REVERSE` 📖 ·
   `MATCHING GROUPS|ITEMS|BRUSH|TEXTURE|POLYFLAGS` 📖 ·
   `ADJACENT ALL|COPLANARS|WALLS|FLOORS|CEILINGS|SLANTS` 📖 ·
@@ -175,12 +167,11 @@ detail verbs.
   `TEXMULT`.
 - Texture alignment ✅ — `POLY TEXALIGN
   DEFAULT|FLOOR|WALLDIR|WALLPAN|WALLCOLUMN|ONETILE|WALLX|WALLY|CLAMP [TEXELS=<n>]`. Nine mode
-  tokens (this entry used to list six — `DEFAULT`, `WALLPAN` and `WALLCOLUMN` were missing), and
-  `TEXELS=` is parsed but never read. `ONETILE` and `WALLCOLUMN` are no-ops in UED22 —
-  there is no fit-a-tile-to-a-face operation in this editor. The measured per-mode semantics
-  (formulas, guard thresholds, anchors, and how they differ from uedcli's `brush poly align`) are in
-  [`texalign.md`](texalign.md); evidence
-  `../spikes/2026-07-26-unrealed-texalign-semantics/`, live 2026-07-26.
+  tokens; `TEXELS=` is parsed but never read. `ONETILE` and `WALLCOLUMN` are no-ops in UED22 —
+  there is no fit-a-tile-to-a-face operation in this editor. Measured per-mode semantics (formulas,
+  guard thresholds, anchors, and how they differ from uedcli's `brush poly align`) are in
+  [`texalign.md`](texalign.md); evidence `../spikes/2026-07-26-unrealed-texalign-semantics/`, live
+  2026-07-26.
 - Detail textures 📖 `SETDETAIL`/`CLEARDETAIL`/`APPLYDETAIL`/`REPLACEDETAIL`/`BATCHAPPLY` ·
   `REMIP` · `CULL`.
 
@@ -199,18 +190,17 @@ lines execute in order, synchronously:
   or `/work` — always pass an absolute `Z:\work\...` path. LF and CRLF both work (the
   CRLF-only trap is the ini parser, not this).
 - Errors do not abort: an unrecognized verb or a failing command (bad `OBJ LOAD`, garbage
-  `MAP IMPORTADD`) is skipped and the script continues, and there is no per-command feedback,
-  so completion/errors are detected by effects (marker files, log, liveness), exactly like the
-  typed console. Pattern: make the last line a marker write (e.g. `MAP EXPORT
-  FILE=Z:\work\<uuid>-done.t3d`) and poll for it.
-- The GC "Cleaning up..." `xmessage` dialog does not stall a script — a `MAP NEW` mid-script
-  pops it, and the following script lines still execute while it's up (it blocks the Command-box
-  input path, not the engine's exec loop; dismiss it before the next typed submission as usual —
-  see `quirks.md` Stability). A script drive is thus more dialog-robust than typing
-  the same commands one at a time.
+  `MAP IMPORTADD`) is skipped and the script continues, with no per-command feedback, so
+  completion/errors are detected by effects (marker files, log, liveness), like the typed console.
+  Pattern: make the last line a marker write (e.g. `MAP EXPORT FILE=Z:\work\<uuid>-done.t3d`) and
+  poll for it.
+- The GC "Cleaning up..." `xmessage` dialog does not stall a script — a `MAP NEW` mid-script pops
+  it and following lines still execute (it blocks the Command-box input path, not the engine's exec
+  loop; dismiss it before the next typed submission — see `quirks.md` Stability). So a script drive
+  is more dialog-robust than typing the same commands one at a time.
 - Nested `EXEC` works (inner script runs, outer continues).
-- ~6× less drive overhead than per-command typing (6 cmds: 7.05s typed vs 1.20s scripted,
-  incl. file write + completion poll) — the focus/type/settle pantomime is paid once.
+- ~6× less drive overhead than per-command typing (6 cmds: 7.05s typed vs 1.20s scripted, incl.
+  file write + completion poll) — the focus/type/settle pantomime is paid once.
 - Untested: script lines with spaces in paths, very long lines, hundreds-of-line scripts, true
   modal (non-`xmessage`) dialogs mid-script.
 
@@ -229,21 +219,19 @@ Parser in `Editor.dll`; frontend `printf` usages in `unrealed.exe`.
   `CAMERA UPDATE FLAGS=%d MISC1=%d MISC2=%d REN=%d NAME=TextureBrowser PACKAGE="…" GROUP="…" NAMEFILTER="…"`
   and `CAMERA UPDATE NAME=MeshBrowser MESH="…" FLAGS=%d REN=%d MISC1=%d MISC2=%d`.
 - `CAMERA ALIGN [NAME=…]` ✅ re-centers all viewports on the selection (or named object).
-  ⛔ For a point actor it sets camera position only — it stores the actor's `Rotation` on the
-  camera but that rotation never reaches the headless render (calibration spike 2026-07-12,
+  ⛔ For a point actor it sets camera position only — it stores the actor's `Rotation` on the camera
+  but that rotation never reaches the headless render (calibration spike 2026-07-12,
   `spikes/2026-07-12-preview-pose-calibration/`; decision 2026-07-12 07:37). The earlier "adopts the
   full FRotator" claim (live 2026-06-20, `Pitch=-4096,Yaw=49152,Roll=8192` round-tripped through a
   `MAP SAVE` readback) was true of the stored value but not of pixels — a 9-pose sweep rendered the
   identical view every time. So there is no console rotation-pose for a headless shot; the removed
   `level preview --rotate` / `dispatch._camera_rotation_helper` wiring is gone.
-  ✅ For a brush actor it does a look-at/frame — repositions and aims the camera to frame that
-  brush, and the render reflects it (distance ∝ the brush's size, canonical angle). This is the
-  only console aiming primitive that works headless, and is what `level preview` auto-frames with:
-  `SELECTNAME` a brush → `CAMERA ALIGN NAME=` it. Result/error strings: "Aligned camera on the current
-  target." / "…on named object."; errors "Missing name" / "Can't find target (viewport or selected
-  actor)". (Old note, inverted by the finding: the builder brush "does NOT work" as a rotation
-  target — correct, because brushes frame instead of adopting rotation; framing is what we
-  now use.) See `specs/2026-06-18-uedcli-camera-rotation-no-mouse-design.md` (superseded notice) and the
+  ✅ For a brush actor it does a look-at/frame — repositions and aims the camera to frame that brush,
+  and the render reflects it (distance ∝ brush size, canonical angle). This is the only console
+  aiming primitive that works headless, and is what `level preview` auto-frames with: `SELECTNAME` a
+  brush → `CAMERA ALIGN NAME=` it. Result/error strings: "Aligned camera on the current target." /
+  "…on named object."; errors "Missing name" / "Can't find target (viewport or selected actor)".
+  See `specs/2026-06-18-uedcli-camera-rotation-no-mouse-design.md` (superseded notice) and the
   `uned-camera-rotate-via-align` memory note for the full recipe and caveats.
 - `CAMERA CLOSE NAME=…` — reliably closes only the frontend-managed browser cameras
   (`TextureBrowser`, `MeshBrowser`, `MeshViewer`, `TEXREPLACE1/2`), opened with an `HWND=`
@@ -256,24 +244,23 @@ Parser in `Editor.dll`; frontend `printf` usages in `unrealed.exe`.
   registered). This is the clean no-mouse shaded-shot path — see [`rendering.md`](rendering.md).
 - Window title encodes the view 🔬: `REN=6`→"Viewport", `REN=1`→"Perspective map",
   `REN=13`→"Overhead map" (so `wmctrl -l | grep` for the right title per mode).
-- ⚠️ `CAMERA UPDATE` blanks the window to black under headless SoftDrv 🔬. A `CAMERA OPEN`
-  window paints correctly only on initial creation; any re-render — `CAMERA UPDATE NAME=`,
-  or a show-flag toggle like `SHOWACTORRADII` on the current viewport — repaints it solid black
-  (the software re-paint isn't produced offscreen). Proven by control: fresh ortho cam mean=169
-  (grid) → `CAMERA UPDATE` alone → mean=0. So open the camera in its final mode/flags and
-  capture once; don't `UPDATE`. To change mode/flags, open a new camera.
+- ⚠️ `CAMERA UPDATE` blanks the window to black under headless SoftDrv 🔬. A `CAMERA OPEN` window
+  paints correctly only on initial creation; any re-render — `CAMERA UPDATE NAME=`, or a show-flag
+  toggle like `SHOWACTORRADII` on the current viewport — repaints it solid black (the software
+  re-paint isn't produced offscreen). Proven by control: fresh ortho cam mean=169 (grid) →
+  `CAMERA UPDATE` alone → mean=0. So open the camera in its final mode/flags and capture once; to
+  change mode/flags, open a new camera.
 
 ## `RMODE` ✅ — current viewport's render mode (`REN=` enum)
 `RMODE <n>`. The console can't make the perspective pane current (needs a mouse click) →
 prefer `CAMERA OPEN REN=<n>`. See [`rendering.md`](rendering.md).
 
 ## Camera position
-`JUMPTO X,Y,Z` ✅ centers viewports on a coord (position only, no repaint). Setting live
-camera rotation by a direct verb is still not possible — `SET`/`GET Camera
-Rotation` touch the class default, `CAMERAMOVE`/`CAMERAZOOM` are mode switches, and
-`MyLevel.Camera0–5` isn't in `MAP EXPORT`. But `CAMERA ALIGN` (above) reaches the same
-end pose-by-proxy and is console-only: pose a `Light` point actor with the desired
-`Rotation=`, `SELECTNAME` it, `CAMERA ALIGN NAME=` it.
+`JUMPTO X,Y,Z` ✅ centers viewports on a coord (position only, no repaint). No direct verb sets
+live camera rotation — `SET`/`GET Camera Rotation` touch the class default,
+`CAMERAMOVE`/`CAMERAZOOM` are mode switches, and `MyLevel.Camera0–5` isn't in `MAP EXPORT`. But
+`CAMERA ALIGN` (above) reaches the same end pose-by-proxy, console-only: pose a `Light` point actor
+with the desired `Rotation=`, `SELECTNAME` it, `CAMERA ALIGN NAME=` it.
 
 ## `MODE` 📖 — editor edit-mode + tool settings
 `MODE` switches the active tool — `CAMERAMOVE`, `CAMERAZOOM`, `BRUSHROTATE`, `BRUSHSHEER`,
@@ -302,18 +289,17 @@ end pose-by-proxy and is console-only: pose a `Light` point actor with the desir
   wipes it). `LIGHT` actors: `LightBrightness`/`LightRadius`/`LightHue`/`LightSaturation`
   (saturation inverted — see `rendering.md`). `LightBrightness=0` emits zero light 🔬 —
   safe value for a throwaway helper `Light` used by `CAMERA ALIGN`.
-- `PATHS` 🔬 (verbs confirmed live 2026-06-23; the DEFINE-vs-BUILD split corrected by
-  disassembly 2026-07-15): `PATHS BUILD` constructs the reachspec graph — its
-  `FPathBuilder::buildPaths` runs `definePaths` (place markers) → `createPaths` (build all
-  `FReachSpec`s) → `Prune`; `LOWOPT`/`HIGHOPT` set the optimization level (opt 0/2, default 1).
-  `PATHS DEFINE` (`FPathBuilder::definePaths`) only spawns auto-marker NavigationPoints (an
-  `InventorySpot` under each `Inventory`, a `WarpZoneMarker` under each `WarpZoneInfo`) and touches
-  no reachspecs; it logs `DevPath: Defining paths.`. (The earlier "PATHS DEFINE builds the
-  reachspec graph" conflated the two — DEFINE alone yields no edges; BUILD is the reachspec build.
-  See `spikes/2026-07-15-native-materialize/sections/30-ulevel-paths-assembly.md` §4.) Reachspecs
-  are the `ULevel.ReachSpecs` array; per-node `Paths`/`upstreamPaths`/`prunedPaths` index into it.
-  Paths are not wiped by `MAP REBUILD` (unlike lighting). Also: `PATHS UNDEFINE`/`SHOW`/`HIDE`/
-  `REMOVE` 📖.
+- `PATHS` 🔬 (verbs confirmed live 2026-06-23; DEFINE-vs-BUILD split corrected by disassembly
+  2026-07-15): `PATHS BUILD` constructs the reachspec graph — its `FPathBuilder::buildPaths` runs
+  `definePaths` (place markers) → `createPaths` (build all `FReachSpec`s) → `Prune`;
+  `LOWOPT`/`HIGHOPT` set the optimization level (opt 0/2, default 1). `PATHS DEFINE`
+  (`FPathBuilder::definePaths`) only spawns auto-marker NavigationPoints (an `InventorySpot` under
+  each `Inventory`, a `WarpZoneMarker` under each `WarpZoneInfo`) and touches no reachspecs; it logs
+  `DevPath: Defining paths.` (DEFINE alone yields no edges; BUILD is the reachspec build. See
+  `spikes/2026-07-15-native-materialize/sections/30-ulevel-paths-assembly.md` §4.) Reachspecs are
+  the `ULevel.ReachSpecs` array; per-node `Paths`/`upstreamPaths`/`prunedPaths` index into it. Paths
+  are not wiped by `MAP REBUILD` (unlike lighting). Also: `PATHS UNDEFINE`/`SHOW`/`HIDE`/`REMOVE`
+  📖.
 
 ## `TRANSACTION` 📖
 `TRANSACTION UNDO` / `TRANSACTION REDO`.
@@ -321,14 +307,14 @@ end pose-by-proxy and is console-only: pose a `Light` point actor with the desir
 ## Objects / packages / assets 📖
 - `OBJ LIST CLASS=Texture` ✅ → `Package.Group.Name` (to the log window). Also `OBJ
   LOAD`/`SAVE`/`IMPORT`/`EXPORT`/`DELETE`/`GETPROPERTIES` with `CLASS=`/`PACKAGE=`/`FILE=`/`NAME=`.
-- `OBJ DEPENDENCIES PACKAGE=MyLevel` 🔬 — reads a surface's bound texture package. Walks the
-  loaded level's object graph and prints every referenced object fully qualified
+- `OBJ DEPENDENCIES PACKAGE=MyLevel` 🔬 — reads a surface's bound texture package. Walks the loaded
+  level's object graph and prints every referenced object fully qualified
   (`Texture CoreTexMetal.Metal.Area51Wall_A`). One `Class Engine.Polys` block per brush, each
-  listing that brush's per-poly textures in poly order — so it recovers the package even when
-  the bare `Texture=` name collides across packages (`MAP EXPORT`/`EDIT COPY` only emit the
-  bare name). Run in a fresh editor with exactly one level loaded — `MAP NEW`/`MAP LOAD` don't
-  purge the prior level's objects, so a reused editor accumulates stale textures. Don't narrow with
-  `CLASS=Model` (that hits the BSP Model default, not the per-poly bindings). Other `OBJ` reflection
+  listing that brush's per-poly textures in poly order — so it recovers the package even when the
+  bare `Texture=` name collides across packages (`MAP EXPORT`/`EDIT COPY` emit only the bare name).
+  Run in a fresh editor with exactly one level loaded — `MAP NEW`/`MAP LOAD` don't purge the prior
+  level's objects, so a reused editor accumulates stale textures. Don't narrow with `CLASS=Model`
+  (hits the BSP Model default, not the per-poly bindings). Other `OBJ` reflection
   (`REFS`/`LINKERS`/`CLASSES`) does not surface per-surface textures. See
   `../spikes/2026-06-19-read-surface-texture-package.md`.
 - Mesh/anim import (UCC-style): `MESH MODELIMPORT MESH= MODELFILE= LODSTYLE= …`, `MESHMAP
@@ -340,17 +326,16 @@ end pose-by-proxy and is console-only: pose a `Light` point actor with the desir
   "Z:\<dir>"` (outdir must be `Z:\`) → `convert *.pcx *.png`. `Engine.DefaultTexture` is the
   brightest surface texture in the stripped substrate.
 - Level → T3D (recipe): `wine /opt/UED22/UCC.exe batchexport <map>.dx Level T3D "Z:\<dir>"`.
-  ✅ Content-equivalent to `MAP EXPORT`. ⚠️ Output file is named after the Level object, not the
-  package stem — a `spike13.dx` writes `<dir>/MyLevel.T3D` (the level object is always
-  `MyLevel`); read `<outdir>/MyLevel.T3D`, never `<stem>.T3D`. Package prefix in
-  self-referential refs differs from `MAP EXPORT` (`spike13.LevelInfo0` vs `MyLevel.LevelInfo0`)
-  — normalize it away before hashing (✅ `spikes/2026-06-18-ucc-level-export.md`).
-  ⚠️ `Commandlet batchexport not found` means that editor's UCC didn't load `Editor` from
-  its `EditPackages` (so the commandlet class never registered — `ucc help` then lists only
-  `HelloWorld`). Not a syntax problem: run it in a clean substrate container, not a
-  repurposed/mis-configured one. Seen 2026-06-28 against a standing `dx-lum-uned` that another
-  agent had replaced with an OldUnreal `469c` build; a fresh `docker compose run uned` exported
-  the same `.dx` cleanly (🔬 2026-06-28).
+  ✅ Content-equivalent to `MAP EXPORT`. ⚠️ Output is named after the Level object, not the package
+  stem — a `spike13.dx` writes `<dir>/MyLevel.T3D` (the level object is always `MyLevel`); read
+  `<outdir>/MyLevel.T3D`, never `<stem>.T3D`. Package prefix in self-referential refs differs from
+  `MAP EXPORT` (`spike13.LevelInfo0` vs `MyLevel.LevelInfo0`) — normalize it away before hashing
+  (✅ `spikes/2026-06-18-ucc-level-export.md`). ⚠️ `Commandlet batchexport not found` means that
+  editor's UCC didn't load `Editor` from its `EditPackages` (the commandlet class never registered —
+  `ucc help` then lists only `HelloWorld`). Not a syntax problem: run in a clean substrate
+  container, not a repurposed one. Seen 2026-06-28 against a standing `dx-lum-uned` another agent had
+  replaced with an OldUnreal `469c` build; a fresh `docker compose run uned` exported the same `.dx`
+  cleanly (🔬 2026-06-28).
 
 ## `APP` / properties dialogs / misc 📖
 - `APP SET`, `APP BROWSECLASS`, `APP NOTECURRENT`/`USECURRENT`, progress (`PROGRESSBAR=`,
@@ -370,22 +355,21 @@ Reachable in the editor where relevant; most are game-runtime. Useful ones:
   `SHOWALL`, `EXEC <file>` ✅ (run a command script — semantics verified, see the dedicated
   `EXEC <file>` section above), `GETPING`/`GETLOSS`/`FPS`,
   `DEMOREC`/`DEMOPLAY`/`STOPDEMO`, `OBJ`/`OBJCLEAN`, `SAVEGAME`, `DEBUG`.
-- Actor-display toggles 🔬 (`UViewport::Exec`/`ExecMacro`, no args): `SHOWACTORS`/
-  `HIDEACTORS` and `SHOWACTORRADII`/`HIDEACTORRADII` — the View → Actors menu family
-  (Full Actor View / Icon View / Radii View / Hide Actors). `SHOWACTORRADII` flips the
-  current viewport's show-flags to draw each actor's collision radius/height + light radius
-  as wireframe overlays; `HIDEACTORRADII` reverts. Caveats (both verified live): (1) it
-  targets `GCurrentViewport` — like `RMODE`, the console can't aim it at a chosen `CAMERA OPEN`
-  window, and a fresh camera opens with default flags (no radii inheritance); (2) toggling it is
-  a re-render, which blanks the headless SoftDrv camera to black (see the `CAMERA UPDATE`
-  caveat above) — so toggle-then-recapture can't show the radii. What works: open a
-  camera with the radii bit already in `FLAGS=` so it's on at first paint — `SHOW_ActorRadii =
-  0x02` (confirmed by parallel bit-knockout); use `CAMERA OPEN … FLAGS=127` (a fully-chromed
-  view) or minimally `FLAGS=0x0A` (`SHOW_ActorRadii|SHOW_Actors`). Selected actors then draw a
-  red collision cylinder. See the ShowFlags table in [`rendering.md`](rendering.md).
+- Actor-display toggles 🔬 (`UViewport::Exec`/`ExecMacro`, no args): `SHOWACTORS`/`HIDEACTORS` and
+  `SHOWACTORRADII`/`HIDEACTORRADII` — the View → Actors menu family (Full Actor View / Icon View /
+  Radii View / Hide Actors). `SHOWACTORRADII` flips the current viewport's show-flags to draw each
+  actor's collision radius/height + light radius as wireframe overlays; `HIDEACTORRADII` reverts.
+  Caveats (both verified live): (1) it targets `GCurrentViewport` — like `RMODE`, the console can't
+  aim it at a chosen `CAMERA OPEN` window, and a fresh camera opens with default flags (no radii
+  inheritance); (2) toggling it is a re-render, which blanks the headless SoftDrv camera to black
+  (see the `CAMERA UPDATE` caveat above), so toggle-then-recapture can't show the radii. What works:
+  open a camera with the radii bit already in `FLAGS=` so it's on at first paint — `SHOW_ActorRadii =
+  0x02` (confirmed by parallel bit-knockout); use `CAMERA OPEN … FLAGS=127` (fully-chromed) or
+  minimally `FLAGS=0x0A` (`SHOW_ActorRadii|SHOW_Actors`). Selected actors then draw a red collision
+  cylinder. See the ShowFlags table in [`rendering.md`](rendering.md).
 - Game/network (not editor): `OPEN`, `START`, `SERVER`, `SERVERTRAVEL`, `SAY`, `DISCONNECT`,
   `RECONNECT`, `JOIN`, `LOGIN`, `EXIT`/`QUIT` (`URL=`, `GAME=`, `CLASS=`, `PASSWORD=`, …).
 
 ## BrushBuilders are not console commands ✅
-GUI-dialog-driven (`WDlgBrushBuilder::OnBuild` → builder `Build()`) → uedcli replicates them
+GUI-dialog-driven (`WDlgBrushBuilder::OnBuild` → builder `Build()`); uedcli replicates them
 model-side (`builders.py`). See `../architecture.md` "Builders".

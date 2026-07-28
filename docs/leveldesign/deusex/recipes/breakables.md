@@ -7,8 +7,8 @@ Three mechanisms:
 - **BreakableWall** — a `DeusExMover` wall segment destroyable with the right tool.
 - **Breakable crates** — `DeusExDecoration` containers that spill `contents` when broken.
 
-The two movers are authored exactly like a [door](deusex-door.md): build the brush as a mover, texture
-it first, place it in a hole you cut. They don't move, so they need no keyframes.
+Author the two movers like a [door](deusex-door.md): build the brush as a mover, texture it first,
+place it in a hole you cut. They don't move, so they need no keyframes.
 
 ## A: breakable glass
 
@@ -17,8 +17,8 @@ it first, place it in a hole you cut. They don't move, so they need no keyframes
 1. Cut the window opening through the wall (subtract a hole connecting two spaces).
 2. Build a thin pane — a 1-uu-thick brush filling the opening — as a `BreakableGlass` mover. Texture
    it with a glass texture from `CoreTexGlass`.
-3. Flag every surface `Translucent` so it reads as glass.
-4. Position it in the opening. No keyframes — it just shatters in place.
+3. Flag every surface `Translucent`.
+4. Position it in the opening. No keyframes.
 5. Optionally back it with an invisible collision hull to block movement until broken (a bare sheet
    doesn't block on its own — see caveats).
 
@@ -67,7 +67,7 @@ actor prop set BreakableWall0 minDamageThreshold=6
 
 ## C: breakable crates
 
-Just place a container decoration.
+Place a container decoration.
 
 ### Procedure
 
@@ -78,9 +78,9 @@ Just place a container decoration.
    - `CrateBreakableMedMedical` → MedKit
 2. Customise the loot (optional) — set `contents` to any `DeusExAmmo`/`DeusExPickup` class.
 3. Add variety (optional) — fill `content2` and/or `content3`. When broken the pick is a weighted
-   cascade, not a uniform draw: it starts with `contents`, then `content2` overrides it with ~30%
-   chance, then `content3` likewise — so `contents` is the most common drop and each later slot ~30%.
-   Keep it thematic: ammo in Combat crates, medkits in Medical, misc in General.
+   cascade: it starts with `contents`, then `content2` overrides it with ~30% chance, then `content3`
+   likewise — so `contents` is the most common drop and each later slot ~30%. Keep it thematic: ammo
+   in Combat crates, medkits in Medical, misc in General.
 
 ### With uedcli
 
@@ -111,12 +111,12 @@ actor build DeusEx.CrateBreakableMedCombat \
 - Texture the mover before it exists. `BreakableGlass`/`BreakableWall` are movers — pass
   `--texture` on `brush build` (and, on a `sheet`, `--flag` for the surface flags); you can't
   `brush poly set` them afterwards.
-- A sheet/thin pane doesn't block on its own. If a window must stop the player until it breaks,
-  the glass pane provides the visual and shootable surface and you add an invisible collision hull
-  behind it for blocking (all-invisible-poly semisolid — see [`../../general/`](../../general/)).
-- Diegetic teaching. Put a crowbar near breakable crates — the immersive-sim way to teach the
-  affordance (see the DX design philosophy under [`../`](../)).
-- Test with a nearby LAM/GEP so you can actually verify a high-strength breakable wall blows.
+- A sheet/thin pane doesn't block on its own. To stop the player until the window breaks, add an
+  invisible collision hull behind the pane (all-invisible-poly semisolid — see
+  [`../../general/`](../../general/)).
+- Put a crowbar near breakable crates to teach the affordance (see the DX design philosophy under
+  [`../`](../)).
+- Test with a nearby LAM/GEP to verify a high-strength breakable wall blows.
 
 ## See also
 

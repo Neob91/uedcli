@@ -1,10 +1,9 @@
 # Movers — doors, lifts, crushers  [ENGINE]
 
 A mover is a single brush promoted to an actor that animates between keyframed poses: doors, lifts,
-crushers, drawbridges, rotating fans. In UE1 the base class is `Engine.Mover` (`class Mover extends
-Brush`). Games subclass it (Deus Ex's `ElevatorMover`, the `DeusExMover` door family, …). This DX
-build's `Engine.u` ships only the base `Mover` — stock Unreal/UT99's `Engine` also ships
-`RotatingMover`/`LoopMover`/etc., but those are absent in the DX substrate. 🔬
+crushers, drawbridges, rotating fans. The UE1 base class is `Engine.Mover` (`class Mover extends
+Brush`); games subclass it. This DX build's `Engine.u` ships only the base `Mover`; stock Unreal/UT99
+also ships `RotatingMover`/`LoopMover`/etc., absent in the DX substrate. 🔬
 
 > Deus Ex uses its own `DeusExMover` door/panel family (`BreakableGlass`, `BreakableWall`, doors with
 > `bIsDoor`/`bLocked`/`KeyIDNeeded`); `ElevatorMover` and `MultiMover` are separate `Engine.Mover`
@@ -12,8 +11,7 @@ build's `Engine.u` ships only the base `Mover` — stock Unreal/UT99's `Engine` 
 
 ## Building a mover
 
-A mover is one brush. Build the brush with `--mover-class` and add it, then author its keyframes
-model-side:
+Build the brush with `--mover-class` and add it, then author keyframes model-side:
 
 ```
 brush build cube --mover-class Engine.Mover --width 64 --breadth 8 --height 112 | actor add -   # prints the mover's name
@@ -22,11 +20,11 @@ mover key move <that-name> 1 --from-base --to 0,0,112        # key 1 = open pose
 
 `mover key` is a family of model-side verbs: `count`, `move`, `rotate`, `remove`, `list`.
 
-> A mover is one brush, but that brush can be a composite. A door with a window, a grate with a
-> frame, any mover that isn't a plain box: build the pieces (solid frame + subtracted openings +
-> semisolid glass/detail panes) and `brush intersect` them into the single mover brush, which keeps
-> each face's own solidity (solid frame, semisolid+translucent glass). This is the only way to get
-> glass in a mover — a separate glass actor can't ride it. Full recipe:
+> The one brush can be a composite. For a door with a window, a grate with a frame, any non-box
+> mover: build the pieces (solid frame + subtracted openings + semisolid glass/detail panes) and
+> `brush intersect` them into the single mover brush, which keeps each face's own solidity (solid
+> frame, semisolid+translucent glass). This is the only way to get glass in a mover — a separate
+> glass actor can't ride it. Full recipe:
 > [recipes/glass.md](recipes/glass.md#glass-in-one-brush-the-intersect-composite-window).
 
 ## Keyframes
@@ -39,10 +37,9 @@ mover key move <that-name> 1 --from-base --to 0,0,112        # key 1 = open pose
   move`/`rotate <i>` edit an existing key `1 ≤ i < NumKeys` (raise the count first with `mover key
   count`); `--to` needs a frame — `--from-base` (coords are the offset from base) or `--from-world`
   (an absolute world pose, uedcli subtracts the base). `--by` takes a frame-agnostic delta.
-- The editor's "record" flow is inverted. In the GUI you add the mover (which becomes key 0), then
-  select the target key first and only then move the brush to set that pose. Get the order backwards
-  and you move the base instead of the target. uedcli's `mover key move …` avoids this by naming the
-  target key + pose directly.
+- The editor's GUI "record" flow is inverted: you add the mover (key 0), then select the target key
+  before moving the brush — get the order backwards and you move the base. uedcli's `mover key
+  move …` names the target key + pose directly.
 
 ```
 # a two-pose door: closed (key 0, implicit) then open by sliding UP (a portcullis)
@@ -52,7 +49,7 @@ mover key move <that-name> 1 --from-base --to 0,0,112        # open pose as an o
 
 ## Triggering
 
-Movers use the standard `Tag` / `Event` wiring:
+Movers use standard `Tag` / `Event` wiring:
 
 - Give the mover a `Tag`; give a `Trigger` (or button, or another mover) an `Event` with the same
   name — firing the event moves the mover.
@@ -69,8 +66,8 @@ actor build Engine.Trigger --prop Event=frontdoor --at 0,-64,32 | actor add -
 
 ## Encroachment
 
-`MoverEncroachType` sets the reaction when the mover runs into a pawn — a distinct setting from
-return-groups (don't conflate them):
+`MoverEncroachType` sets the reaction when the mover runs into a pawn — distinct from
+return-groups, don't conflate them:
 
 | Value                             | Behaviour |
 | --------------------------------- | --- |
@@ -81,7 +78,7 @@ return-groups (don't conflate them):
 
 ## The "black door" fix
 
-A mover is lit from its key-0 pose only, so a door that swings into a differently-lit spot can render
+A mover is lit from its key-0 pose only, so a door swinging into a differently-lit spot can render
 solid black. Fixes:
 
 - Flag the mover's surfaces `Unlit` (simplest), or use Special-Lit rings around it.

@@ -1,9 +1,8 @@
 # Zones, portals, occlusion & performance  [ENGINE]
 
-How UE1 seals a level into visibility regions, its occlusion model, the hard limits you design
-against, and the optimization/finishing workflow. Sibling of [csg-bsp.md](./csg-bsp.md) (a
-leak/zone-merge is a BSP failure on a portal face) and [lighting.md](./lighting.md) (fog and ambient
-live on the `ZoneInfo`).
+How UE1 seals a level into visibility regions, its occlusion model, the hard limits, and the
+optimization/finishing workflow. Sibling of [csg-bsp.md](./csg-bsp.md) (a leak/zone-merge is a BSP
+failure on a portal face) and [lighting.md](./lighting.md) (fog and ambient live on the `ZoneInfo`).
 
 ---
 
@@ -14,8 +13,7 @@ live on the `ZoneInfo`).
   rebuild. Verify zones in Zone/Portal view (one colour per zone).
   - **uedcli:** `actor build Engine.ZoneInfo --prop … | actor add -`; portal sheet via `brush build
     sheet --width 128 --height 128 --flag portal --flag invisible | actor add -` (invisible so the
-    portal plane itself doesn't render; a water surface is the visible exception — it's
-    `portal`+`translucent`).
+    portal plane doesn't render; a water surface is the visible exception — `portal`+`translucent`).
   - *(GUI equivalent: place a `ZoneInfo`; build a Sheet brush over the opening → Add Special → Zone
     Portal.)*
 
@@ -24,22 +22,21 @@ live on the `ZoneInfo`).
 Corrected (Steve Tack, Wolf, tactical-ops all agree):
 
 - The zone-portal SHEET is non-solid (a `brush build sheet` is already NotSolid by default).
-- It is the zone-BOUNDARY geometry that must be solid — a semisolid on a boundary won't seal, and a
-  semisolid abutting a portal/boundary is the real BSP-wrecker ([csg-bsp.md](./csg-bsp.md) §4).
+- The zone-BOUNDARY geometry must be solid — a semisolid on a boundary won't seal, and a semisolid
+  abutting a portal/boundary is the real BSP-wrecker ([csg-bsp.md](./csg-bsp.md) §4).
 - Size the portal to cover the opening (a doorway). Excess sheet buried in solid is clipped by BSP
   and harmless — you can oversize a portal into a wall (see §1.1's oversized simple square water
-  sheet). Do not leave portal area exposed in open air: a portal fragment hanging in open space stays
-  visible and keeps its zone from culling. For culling, fit portals near the opening — "buried is
-  harmless" is about sealing; an oversized portal can cull less well than a snug one (visibility is
-  tested against the portal's own geometry), so tight beats oversized. 🔬-verify in this DX build if
-  it matters.
+  sheet). Do not leave portal area exposed in open air: a portal fragment hanging in open space
+  stays visible and keeps its zone from culling. For culling, fit portals near the opening; "buried
+  is harmless" is about sealing, and visibility is tested against the portal's own geometry, so a
+  snug portal culls better than an oversized one. 🔬-verify in this DX build if it matters.
 
 ### 1.1 The water recipe
 
-A water volume is a zone whose `ZoneInfo` has `bWaterZone=True`, with the water's top surface being a
+A water volume is a zone whose `ZoneInfo` has `bWaterZone=True`, with the water's top surface a
 translucent sheet that also acts as the zone portal between the water zone and the air zone above. A
-`brush build sheet` is already NotSolid, and its surface flags are set at build time with `--flag`,
-so the whole thing is two one-step commands (no separate `brush poly` pass):
+`brush build sheet` is already NotSolid and its surface flags are set at build time with `--flag`, so
+it's two one-step commands (no separate `brush poly` pass):
 
 ```
 # 1. the water surface: a portal + translucent sheet spanning the opening between air and water.
@@ -53,14 +50,13 @@ actor build Engine.ZoneInfo --prop bWaterZone=True --at <x,y,z-inside-water> | a
 
 Recipe notes (📖 Steve Tack / Wolf): subtract a pool → build a Sheet (Floor/Ceiling, U/V matched,
 placed just below the rim) → Add Special → Water → place the water `ZoneInfo` under the sheet. Keep
-the water sheet an oversized simple square (don't intersect it to odd shapes — BSP tip). Protruding
-objects must be added before the water sheet. Rising/falling water needs scripting (zone portals are
+the water sheet an oversized simple square (don't intersect it to odd shapes — BSP tip). Add
+protruding objects before the water sheet. Rising/falling water needs scripting (zone portals are
 immovable).
 
-The flag names (`portal`, `translucent`) are settled (in `query.py PF_NAMES`). Not yet live-verified
-is the semantics in this specific UED22/DeusEx build — whether a `portal`+`translucent` NotSolid
-sheet plus a `bWaterZone` actor actually yields a swimmable water zone. That is a build-gate probe
-(open question Q1), not a settled fact.
+The flag names (`portal`, `translucent`) are settled (in `query.py PF_NAMES`). Not yet live-verified:
+whether a `portal`+`translucent` NotSolid sheet plus a `bWaterZone` actor yields a swimmable water
+zone in this UED22/DeusEx build — a build-gate probe (open question Q1), not a settled fact.
 
 See [textures.md](./textures.md) for the wider water/fog/fire/skybox recipe set.
 
@@ -70,15 +66,15 @@ See [textures.md](./textures.md) for the wider water/fog/fire/skybox recipe set.
 
 UE1's occlusion is solid BSP + zones only.
 
-- There are no antiportals. *(Debunked:* antiportal occlusion is UE2+; in UE1 "portal" means zone
-  portal only.) Do not design around occluder brushes — they don't exist here.
-- Zone culling: if no part of a zone's sealing portal is visible, the whole zone is culled (its polys
-  are rejected before rendering).
+- No antiportals. *(Debunked:* antiportal occlusion is UE2+; in UE1 "portal" means zone portal
+  only.) Don't design around occluder brushes — they don't exist here.
+- Zone culling: if no part of a zone's sealing portal is visible, the whole zone is culled (its
+  polys are rejected before rendering).
 - Long sightlines defeat zone culling (many zones stay visible at once) and blow the poly budget.
-  Break them with structure — bends, doorways, level changes.
-- Zone culling in practice: put portals at both ends of a hallway; keep portal sheets simple (a flat
-  quad, not an intersected odd shape) and order them To Last; maximise the number of non-adjacent
-  zones so more can be rejected at once.
+  Break them with bends, doorways, level changes.
+- In practice: put portals at both ends of a hallway; keep portal sheets simple (a flat quad, not an
+  intersected odd shape) and order them To Last; maximise non-adjacent zones so more can be rejected
+  at once.
 
 ---
 
@@ -128,11 +124,10 @@ Fog is engine-generic and lives on the `ZoneInfo`:
 - Rebuild with Optimal BSP + geometry optimization (never "Lame"). The optimization level sets how
   many candidate splitter polys the builder evaluates (`uedcli-native/src/bspcsg.rs`: LAME strides
   `NumPolys/4` → ~4 candidates, GOOD strides `NumPolys/20` → ~20, Optimal every poly) — more
-  candidates → better splitters → fewer nodes, so Lame (fewest candidates) leaves the most nodes.
-  Coplanar-merge is a separate pass, not gated by this level. A full geometry rebuild is
-  deterministic from the brush list and does not accumulate splits pass-over-pass, so "always rebuild
-  3×" is cargo-cult for a full rebuild (repeated BSP-only rebuilds can shave the node ratio slightly,
-  plateauing after ~3).
+  candidates → better splitters → fewer nodes, so Lame leaves the most nodes. Coplanar-merge is a
+  separate pass, not gated by this level. A full geometry rebuild is deterministic from the brush
+  list and does not accumulate splits pass-over-pass, so "always rebuild 3×" is cargo-cult for a full
+  rebuild (repeated BSP-only rebuilds can shave the node ratio slightly, plateauing after ~3).
 
 ### 5.2 Readout commands  [ENGINE]
 
@@ -150,8 +145,8 @@ Fog is engine-generic and lives on the `ZoneInfo`:
 
 Geometry → BSP → Lighting → Paths. Two traps:
 
-- Rebuilding Geometry+BSP erases lighting → you must relight after any geometry change. (From the
-  uedcli seat there is no standalone bake verb — re-`materialize`/`preview` re-bakes; see
+- Rebuilding Geometry+BSP erases lighting → relight after any geometry change. (From the uedcli seat
+  there is no standalone bake verb — re-`materialize`/`preview` re-bakes; see
   [lighting.md](./lighting.md).)
 - Keep "Build Visibility Zones" checked — unchecking it wipes zones.
 

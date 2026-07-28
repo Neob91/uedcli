@@ -1,24 +1,23 @@
 # CSG, brushes & the BSP  [ENGINE]
 
 Constructive Solid Geometry (CSG) and the Binary Space Partition (BSP) it builds are the substrate every
-level sits on. On BSP problems, the community reliably gets the fixes right and the mechanism wrong.
+level sits on. On BSP problems the community gets the fixes right and the mechanism wrong.
 
-The deep section below reconciles ~40 community sources against the disassembly spike
+The deep section reconciles ~40 community sources against the disassembly spike
 [`../../../spikes/2026-06-24-bsp-csg-hole-mechanism-from-binary.md`](../../../spikes/2026-06-24-bsp-csg-hole-mechanism-from-binary.md)
-— static disassembly of the shipped UED22 DLLs, the ground truth wherever code and folklore disagree.
-Facts from that spike are decompiled facts (read from the compiled instructions and the float constants in
-`.rdata`), a tier stronger than 📖.
+— static disassembly of the shipped UED22 DLLs, ground truth wherever code and folklore disagree. Facts
+from that spike are read from compiled instructions and `.rdata` float constants, a tier stronger than 📖.
 
 ---
 
 ## 1. The CSG mental model  [ENGINE]
 
 - The world starts as infinite solid void. You subtract rooms out of the solid, then add detail brushes
-  back inside the empty space you carved — the opposite of "additive-first" engines. In UE1, empty space
-  must be cut out before anything can exist in it.
+  back inside the carved empty space — the opposite of "additive-first" engines. In UE1, empty space must
+  be cut out before anything can exist in it.
 - A single builder brush (the red "cookie-cutter" wireframe) is shaped, positioned, then committed as a
-  Subtract or Add operation. The builder brush is a stamp, never itself part of the level; committing
-  copies its current shape into a new CSG brush actor.
+  Subtract or Add. The builder brush is a stamp, never itself part of the level; committing copies its
+  current shape into a new CSG brush actor.
 - uedcli verb: `brush build {cube,cylinder,cone,sheet,staircase,spiral,extrude,revolve} --csg {add,subtract} | actor
   add -`. The generator (`brush build …`) prints a T3D snippet to stdout; it does not write the trunk. The
   write is always `… | actor add -` — show the full pipe, never `brush build` alone.
@@ -29,18 +28,18 @@ Facts from that spike are decompiled facts (read from the compiled instructions 
 
 UnrealEd's brush `.u3d` Save/Load is broken; Export/Import `.t3d` is the reliable path (import as "Solid
 Mesh" + "Keep Original Polygons Intact"). 📖 Wolf. This validates uedcli's git-tracked-T3D-trunk design:
-the community's own reliable interchange format is the T3D text uedcli treats as the source of truth.
+the community's own reliable interchange format is the T3D text uedcli treats as source of truth.
 
 ---
 
 ## 2. Brush order determines the final geometry  [ENGINE]  ✅ binary-confirmed
 
-Brushes resolve in placement order at rebuild. On an overlap, the last operation touching that region
-wins. So: carve first, furnish after — send subtractive / structural brushes To First, additive / detail
-brushes To Last.
+Brushes resolve in placement order at rebuild; on an overlap the last operation touching that region wins.
+So carve first, furnish after — send subtractive / structural brushes To First, additive / detail brushes
+To Last.
 
-Binary confirmation (disassembly spike §2): `UEditorEngine::csgRebuild` (Editor.dll `0x4a650`) is the top
-of the F8 / `MAP REBUILD` pipeline. It:
+Binary confirmation (spike §2): `UEditorEngine::csgRebuild` (Editor.dll `0x4a650`) is the top of the F8 /
+`MAP REBUILD` pipeline. It:
 1. `EmptyModel` — clears the world `UModel`.
 2. Iterates the level's brushes in actor order (`ULevel::Brush()`, `AActor::IsStaticBrush`).
 3. Applies each brush's CSG to the accumulated world via `bspBrushCSG` (Editor.dll `0x355e0`).
@@ -49,22 +48,22 @@ of the F8 / `MAP REBUILD` pipeline. It:
 Each `bspBrushCSG` mutates the accumulated world model, so the last operation touching a region wins.
 `MAP SENDTO FIRST/LAST` merely reorders the actor list the loop walks; no heuristic re-sorts them.
 
-- uedcli mapping: CSG precedence is the trunk's `(order_value, name)` sort. `actor order --first` is the
-  analog of "To First"; `actor order --last` of "To Last". There is no live editor state to reorder — the
-  sort key is the order.
+- uedcli mapping: CSG precedence is the trunk's `(order_value, name)` sort. `actor order --first` is "To
+  First"; `actor order --last` is "To Last". There is no live editor state to reorder — the sort key is
+  the order.
   - *(GUI equivalent: select brush → Order → To First / To Last.)*
 
 ---
 
 ## 3. Intersect vs Deintersect — complex-brush authoring  [ENGINE]  📖 Wolf
 
-These two operations trim the builder brush against the existing world, so you can fabricate a complex
-convex shape (typically a mover, or a shape to add):
+These two operations trim the builder brush against the existing world, to fabricate a complex convex
+shape (typically a mover, or a shape to add):
 
-- Intersect reshapes the builder brush to only the parts of it that lie in solid space — the un-carved
-  void or any added solid. It is aware of prior subtractions (a part inside a subtracted room counts as
-  open space and is trimmed away), so "Intersect ignores subtractions" is wrong. Use it to shape a convex
-  brush that exactly fills a solid region.
+- Intersect reshapes the builder brush to only the parts lying in solid space — the un-carved void or any
+  added solid. It is aware of prior subtractions (a part inside a subtracted room counts as open space and
+  is trimmed away), so "Intersect ignores subtractions" is wrong. Use it to shape a convex brush that
+  exactly fills a solid region.
 - Deintersect is the complement: it reshapes the builder brush to only the parts lying in empty space
   (open / already-subtracted regions), discarding the parts buried in solid.
 
@@ -72,15 +71,15 @@ Hotkeys Ctrl-I (Intersect) / Shift-D (Deintersect) 🔬 (UED22 accelerator table
 Duplicate — not these). Reset All (scale/rotation/pivot) on the builder before intersecting a brush
 destined to become a mover, or the live transform leaks into the result.
 
-Do not over-use these (see §8 contradictions): on-grid brushes join exactly with no intersect, and
-intersect makes complex multi-face brushes — more splits and more float error. Use intersect only to
-fabricate a mover/detail shape, never as a routine "make brushes fit" step.
+Do not over-use these (see §8): on-grid brushes join exactly with no intersect, and intersect makes
+complex multi-face brushes — more splits and more float error. Use it only to fabricate a mover/detail
+shape, never as a routine "make brushes fit" step.
 
 ---
 
 ## 4. Solidity  [ENGINE]  *(Settled)*
 
-Every CSG brush has a solidity that decides whether it cuts the world BSP and whether it can be
+Every CSG brush has a solidity deciding whether it cuts the world BSP and whether it can be
 subtracted-from / seal a zone.
 
 | Solidity | Cuts world BSP? | Can be subtracted-from / close a zone? | Use |
@@ -92,16 +91,16 @@ subtracted-from / seal a zone.
 - uedcli verb: `--solidity solid|semisolid|nonsolid` on `brush build`.
   - *(GUI equivalent: Add Special solidity, or the brush's Solidity flags.)*
 - Semisolids are fully walkable: complete, reliable collision, so floors, ramps, and platforms built from
-  semisolids are fine. Their only special trait is that they do not cut the world BSP (they cut only
+  them are fine. Their only special trait is that they do not cut the world BSP (they cut only
   themselves → fewer nodes).
 - A semisolid must not touch another semisolid, a nonsolid, or a zone portal. This reliably wrecks the
   local BSP (invisible polys / HOM / zone merge). *(Folklore, but consistently real across sources.)*
 - Flipping a nearby semisolid ↔ solid re-cuts the local BSP a different way — a standard hole fix (see §7).
-  Mechanistically it changes whether the brush partitions the world at all, re-partitioning the region and
-  dodging a bad split (spike §5).
+  It changes whether the brush partitions the world at all, re-partitioning the region and dodging a bad
+  split (spike §5).
 
 Semisolid is the workhorse for awkward geometry: it receives cuts but emits no world-splitting planes, so
-off-grid / curved / high-facet detail can live on it without seeding float error into the whole tree or
+off-grid / curved / high-facet detail can live on it without seeding float error into the tree or
 exploding the node count — provided it stays clear of other semisolids/nonsolids/portals.
 
 ---
@@ -109,35 +108,35 @@ exploding the node count — provided it stays clear of other semisolids/nonsoli
 ## 5. BSP problems (deep)  [ENGINE]
 
 Engine-generic: the code is the UT (`UnFPoly.cpp` / `UnBsp.cpp` / `UnEdCsg.cpp`) lineage that DeusEx
-shares — an `appFailAssert` in `SplitWithPlane` embeds the original source path
+shares — an `appFailAssert` in `SplitWithPlane` embeds the source path
 `C:\GameDev\UnrealTournament\Engine\Src\UnFPoly.cpp`, confirming UED22's geometry code is the
-Unreal-Tournament-era engine (spike §1 Provenance).
+Unreal-Tournament-era engine (spike §1).
 
 ### 5.1 The core finding
 
-The dominant folk explanation — "off-grid geometry causes a floating-point overflow and the engine gives
-up on the maths" — is false. No value exceeds the double range. 🔬
+The folk explanation — "off-grid geometry causes a floating-point overflow and the engine gives up on the
+maths" — is false; no value exceeds the double range. 🔬
 
 The true cause is a small set of discrete numeric validity tests with specific tolerance bands. Off-grid
 coordinates land inside those bands, so faces get mis-classified as coplanar, collapsed below 3 vertices,
-or rejected as zero-area — and a discarded `FPoly` is the hole. The rule ("stay on grid") is right; the
-reason ("overflow") is wrong.
+or rejected as zero-area — and a discarded `FPoly` is the hole. Rule ("stay on grid") right, reason
+("overflow") wrong.
 
 ### 5.2 Where faces die — the engine code (spike §3–§6)
 
-A `FPoly` is the engine's in-memory convex polygon (up to 16 vertices, a `Normal`, texture vectors,
+An `FPoly` is the engine's in-memory convex polygon (up to 16 vertices, a `Normal`, texture vectors,
 flags). Brushes are lists of `FPoly`s; the BSP build chops them against planes. Every world face passes
-through `FPoly::Finalize` (Engine.dll `0x150ac0`), the survival gate. It can reject a poly three ways:
+through `FPoly::Finalize` (Engine.dll `0x150ac0`), the survival gate, which can reject a poly three ways:
 
 1. `Fix` / `RemoveColinears` collapse (`0x151090`) — two passes over the vertex ring:
    - Pass 1, coincident vertices: forms `Side = V[i] − V[i−1]`, crosses with the poly `Normal`, and tries
      to normalize via `FVector::NormalizeSlow` (Core.dll `0x249d0`), which returns false when length² <
-     `SMALL_NUMBER` = 1e-8 (i.e. length < ~1e-4 uu). So two consecutive vertices closer than ~1e-4 uu are
-     treated as the same point and one is deleted.
+     `SMALL_NUMBER` = 1e-8 (length < ~1e-4 uu). Two consecutive vertices closer than ~1e-4 uu are treated
+     as the same point and one is deleted.
    - Pass 2, colinear vertices: compares adjacent side-plane normals component-wise with threshold
      `9.999999e-05` (≈1e-4) (the immediate `0x38d1b717`). A vertex on a straight edge is redundant and
      removed.
-   - After either removal, if `NumVertices < 3` it sets `NumVertices = 0`, and the caller discards the
+   - After either removal, if `NumVertices < 3` it sets `NumVertices = 0` and the caller discards the
      poly. A face thinned below a triangle vanishes.
 2. `NumVertices < 3` → reject — logs `"FPoly::Finalize: Not enough vertices (%i)"` (a warning if the
    `NoError` flag is set, else `appErrorf` → Critical Error crash) and returns `-1`.
@@ -145,36 +144,35 @@ through `FPoly::Finalize` (Engine.dll `0x150ac0`), the survival gate. It can rej
    `length² < 1e-8` the poly has effectively zero area → logs `"FPoly::CalcNormal: Zero-area polygon"` and
    is dropped. A sliver (a long thin fragment from a near-miss split) dies here.
 
-A `-1` from `Finalize` means this face does not exist in the world → a hole. The two Critical-Error
-variants are why a bad enough brush doesn't just leave a hole but crashes the rebuild (matches `quirks.md`:
+A `-1` from `Finalize` means the face does not exist in the world → a hole. The two Critical-Error variants
+are why a bad enough brush crashes the rebuild instead of just leaving a hole (matches `quirks.md`:
 degenerate geometry GPFs CSG).
 
-The upstream cause — the 0.25 uu split band (`FPoly::SplitWithPlane`, Engine.dll `0x1518b0`, spike §5).
+The upstream cause is the 0.25 uu split band (`FPoly::SplitWithPlane`, Engine.dll `0x1518b0`, spike §5).
 For every vertex it computes the signed distance to the partition plane `d = (V[i] − Base) · Normal`, then:
 - `d > +T` → front · `d < −T` → back · `−T ≤ d ≤ +T` → on the plane (within the band),
 where `T` is 0.25 uu for a normal split (the 5th arg `VeryPrecise` selects 0.01 instead). If every vertex
 is within ±T the whole poly is classified `SP_Coplanar` rather than cleanly split.
 
-`T = 0.25 uu` is a wide band. Any face lying within a quarter-unit of a partitioning plane is treated as
-coplanar with it instead of split by it — exactly what off-grid geometry creates:
-- A brush rotated by a non-90° angle, vertex-edited off grid, or fed through CSG with a live
-  (non-permanent) float transform produces planes that are almost but not exactly aligned with neighbours.
+`T = 0.25 uu` is wide: any face within a quarter-unit of a partitioning plane is treated as coplanar with
+it instead of split by it — exactly what off-grid geometry creates:
+- A brush rotated non-90°, vertex-edited off grid, or fed through CSG with a live (non-permanent) float
+  transform produces planes almost but not exactly aligned with neighbours.
 - Faces that should split cleanly get mis-classified as coplanar, or split with a vertex landing inside the
   band, producing a sliver (→ killed by the zero-area test) or a T-junction (a vertex on one face with no
   matching vertex on the abutting face → a crack the renderer leaks through).
 - Each split generates new vertices by interpolation; on a non-grid plane those land on irrational coords,
   so the next split accumulates more error. This is "off-grid diagonal cuts spray through everything behind
-  them," seen from the numeric side.
+  them," from the numeric side.
 
-A second collapse point — the coplanar/merge tail (`bspMergeCoplanars`, Editor.dll `0x36200`, spike §6):
+A second collapse point is the coplanar/merge tail (`bspMergeCoplanars`, Editor.dll `0x36200`, spike §6):
 it merges adjacent coplanar surfaces (using `THRESH_NORMALS_ARE_SAME = 2e-5`) and re-runs `RemoveColinears`
-on the merged result. So even a face that survived initial CSG can be collapsed during the merge pass if
-merging produces colinear vertices that thin it below 3. `bspMergeCoplanars` runs at every optimization
-level — `LAME`/`GOOD`/`OPTIMAL` differ only in `FindBestSplit`'s splitter-candidate stride, not in whether
-coplanars merge (verified: the `BSP REBUILD` handler calls `bspBuildFPolys → bspMergeCoplanars → bspBuild`
-unconditionally; the level is passed only to `bspBuild`). Different stride → different splits → different
-coplanar adjacencies, so `LAME` and `OPTIMAL` can yield different geometry — just not because one skips the
-merge.
+on the merged result, so a face that survived initial CSG can still collapse if merging produces colinear
+vertices that thin it below 3. `bspMergeCoplanars` runs at every optimization level — `LAME`/`GOOD`/`OPTIMAL`
+differ only in `FindBestSplit`'s splitter-candidate stride, not in whether coplanars merge (verified: the
+`BSP REBUILD` handler calls `bspBuildFPolys → bspMergeCoplanars → bspBuild` unconditionally; the level is
+passed only to `bspBuild`). Different stride → different splits → different coplanar adjacencies, so `LAME`
+and `OPTIMAL` can yield different geometry — just not because one skips the merge.
 
 ### 5.3 The tolerance-band table (all read from `.rdata`)
 
@@ -198,15 +196,15 @@ merge.
   usually because `RemoveColinears` collapsed vertices that drifted < ~1e-4 uu apart / near-colinear, or
   `SplitWithPlane`'s ±0.25 uu band mis-handled an almost-aligned plane (→ slivers + T-junctions).
 - **HOM (Hall of Mirrors)** — a rendering symptom: the framebuffer isn't cleared where a face should be,
-  so you see smeared garbage. Three causes, only one is BSP:
+  so you see smeared garbage. Three causes, only one BSP:
   1. a BSP hole exposing the void (the geometry case above);
   2. a transparent / masked / invisible texture with nothing behind it;
   3. an open view to the far clip plane with nothing to fill it — no skybox (a FakeBackdrop surface +
      `SkyZoneInfo`) and no distance fog, so the far plane shows the un-cleared buffer.
-  A solid brush's discarded face → HOM; a semisolid's discarded face → an invisible polygon instead (it
-  doesn't occlude, so it doesn't smear).
+  A solid brush's discarded face → HOM; a semisolid's → an invisible polygon instead (it doesn't occlude,
+  so it doesn't smear).
 - **Leak** — two intended zones merge ("whole level full of water"). Cause: portals not watertight, or a
-  hole on a portal face (the same `FPoly` mechanism applied to the portal). Diagnose in Zone/Portal view.
+  hole on a portal face (the same `FPoly` mechanism on the portal). Diagnose in Zone/Portal view.
   (See [zones-performance.md](./zones-performance.md).)
 - **Non-planar poly / "invalid brush"** — a vertex pulled off its face's plane, or two coincident verts.
   Mappers observed the exact crash string `FPoly::Finalize<-FPoly: Not enough Vertices (0)`. An `FPoly`
@@ -234,8 +232,8 @@ merge.
      coordinates for you. The generators emit exactly the coords you pass; keeping them on-grid is the
      author's responsibility.
 2. **Rotate solid (world-cutting) brushes only in 90° increments.** Off-90° solid brushes throw their
-   partition planes off-grid (§5). Semisolids, nonsolids, and decoration can be rotated to any angle — a
-   rotated box built as a semisolid is fine and often necessary, because a semisolid doesn't partition the
+   partition planes off-grid (§5). Semisolids, nonsolids, and decoration can rotate to any angle — a
+   rotated box built as a semisolid is fine and often necessary, since a semisolid doesn't partition the
    world BSP (its off-grid planes only cut itself). Transform Permanently does not rescue a 45°-rotated
    solid — the coords stay irrational.
 3. **Keep every face planar and convex; never two coincident verts** (crashes Finalize).
@@ -250,9 +248,9 @@ merge.
 
 These work, but the popular explanation is wrong — recorded so the advice survives without the myth:
 
-- **Transform Permanently after any rotate/scale/vertex-edit.** Real win: it bakes the float transform
-  into vertices once, so CSG sees stable snappable coords instead of re-deriving drifting ones every
-  rebuild — not "less runtime maths."
+- **Transform Permanently after any rotate/scale/vertex-edit.** Bakes the float transform into vertices
+  once, so CSG sees stable snappable coords instead of re-deriving drifting ones every rebuild — not "less
+  runtime maths."
 - **Keep node count low.** A real lever, but "the engine gives up at high node count" is folklore — the
   link is more splits → more float error (shared cause), plus the hard node/point ceilings (§5.4:
   static-node overflow blocks the save; the ~128,000-point limit crashes).
@@ -283,31 +281,31 @@ Reconciled to the disassembly (spike §5 repair table):
 ### 5.8 Source contradictions — verdicts
 
 - **"Always intersect/deintersect brushes that meet."** → Reject. On-grid brushes join exactly with no
-  intersect; intersect makes complex multi-face brushes = more splits and error. Use intersect only to
-  fabricate a mover shape.
+  intersect; intersect makes complex multi-face brushes = more splits and error. Use it only to fabricate
+  a mover shape.
 - **"Overlapping brushes cause holes."** → False (explicitly, in multiple UE1 sources). Volumetric overlap
   is fine (last-op-wins); only coplanar-coincident and off-grid geometry cause holes.
 - **"Brush sinking (add a face coplanar with a subtract to trim it)."** → works only inside the 0.25 uu
   band; fragile (HOM/collision when it drifts). Prefer surface-flag trim or a real detail brush.
-- **"Semisolids must touch a subtract" (Red_Fist).** → that's UT2004 / UE2 advice; in UE1 keep them clear
-  of solids/subtracts/portals.
+- **"Semisolids must touch a subtract" (Red_Fist).** → UT2004 / UE2 advice; in UE1 keep them clear of
+  solids/subtracts/portals.
 - **"Use semisolids only where players can't reach."** → Myth. Semisolids have full, reliable collision —
-  you can walk and stand on them, so floors/ramps/platforms built from semisolids are fine. The real
-  constraint is only that a semisolid must not be coincident with / touch another semisolid, a nonsolid, or
-  a zone portal (§4). Heavy use is correct and lowers node count.
+  you can walk and stand on them, so floors/ramps/platforms built from them are fine. The only real
+  constraint is that a semisolid must not touch/be coincident with another semisolid, a nonsolid, or a zone
+  portal (§4). Heavy use is correct and lowers node count.
 
 ### 5.9 Myths to reject (with correction)
 
 1. **"Floating-point overflow / the engine gives up on the maths."** → the discrete tolerance bands (0.25
    uu split, <1e-4 colinear, <3-verts / zero-area). Rule right, reason wrong.
 2. **"High node count itself causes holes."** → correlation via a shared cause (more off-grid splits → more
-   error). The only hard node effect is that overflowing the ~65,536 static-node count blocks the save (the
-   crash is the separate ~128,000-point limit).
+   error). The only hard node effect: overflowing the ~65,536 static-node count blocks the save (the crash
+   is the separate ~128,000-point limit).
 3. **Static-mesh round-trip repair** → UE2+, unavailable in UE1/DeusEx.
 4. **Antiportals / antiportal occlusion** → UE2+; in UE1 "portal" means zone portal only (see
    [zones-performance.md](./zones-performance.md)).
 5. **The "Basic Level Design BSP (Unreal Tournament)" nerivec/michaeljcole wiki page** is actually UE4
-   content ("Geometry mode", "Details panel", clip tool). The concepts carry back; the tools/UI do not
+   content ("Geometry mode", "Details panel", clip tool). The concepts carry back; the tools/UI don't
    exist in UE1. Do not cite its UI steps.
 6. **227j node/bounds limits** → OldUnreal-patch-specific; stock DeusEx keeps the 65,536 ceiling.
 
@@ -324,4 +322,4 @@ Reconciled to the disassembly (spike §5 repair table):
 
 The disassembly-grounded facts here (the 0.25 split band, the ~1e-4 collapse threshold, the <3-verts /
 zero-area rejection, brush-order = actor-order) are pinned by the `2026-06-24` spike's committed evidence;
-a change that violates them should trip a red test rather than drift unnoticed.
+a change that violates them should trip a red test, not drift unnoticed.

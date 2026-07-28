@@ -1,8 +1,8 @@
 # Lighting  [ENGINE]
 
-In UE1 lights are just actors — you place `Engine.Light` actors into the trunk and they light the
-level. There is no separate light-editing mode and no standalone bake verb: lighting is baked
-automatically when you `level materialize` or `level preview`.
+In UE1 lights are actors: place `Engine.Light` actors into the trunk to light the level. There is no
+light-editing mode and no bake verb — lighting bakes automatically on `level materialize` or
+`level preview`.
 
 ## How UE1 lighting works
 
@@ -12,9 +12,9 @@ Two halves that behave differently:
   runtime.
 - **Actors** (players, movers, decorations) are lit at runtime from the level's lights.
 
-The baked lightmap is only a 1-bit-per-lumel visibility mask (does this spot see the light or not);
-brightness, hue, saturation, and falloff are applied at render time from the light's own properties.
-A light's world reach ≈ (LightRadius + 1) × 25 uu. ✅
+The baked lightmap is a 1-bit-per-lumel visibility mask (does this spot see the light); brightness,
+hue, saturation, and falloff are applied at render time from the light's properties. A light's world
+reach ≈ (LightRadius + 1) × 25 uu. ✅
 
 ## Placing a light
 
@@ -22,7 +22,7 @@ A light's world reach ≈ (LightRadius + 1) × 25 uu. ✅
 actor build Engine.Light --prop LightRadius=8 --prop LightBrightness=200 --at 128,128,200 | actor add -
 ```
 
-Everything is a plain property edit — no editor round-trip.
+A plain property edit — no editor round-trip.
 
 ## Key properties
 
@@ -50,20 +50,20 @@ LE_TorchWaver, LE_FireWaver, LE_WateryShimmer, LE_Searchlight, LE_SlowWave, LE_F
 LE_StaticSpot, LE_Shock, LE_Disco, LE_Warp, LE_Spotlight, LE_NonIncidence, LE_Shell, LE_OmniBumpMap,
 LE_Interference, LE_Cylinder, LE_Rotor, LE_Unused`. ✅
 
-> There is no negative light in this engine build. `LE_Negative` (a later UE2-era value, UT2003+) does
-> not exist here — you cannot place a light that subtracts. Darken an area by placing fewer or dimmer
-> lights, or by lowering the zone's `AmbientBrightness` (keep it ≤ ~32 so surfaces don't go flat). ✅
+> No negative light in this build. `LE_Negative` (a later UE2-era value, UT2003+) does not exist —
+> you cannot subtract light. Darken by placing fewer or dimmer lights, or by lowering the zone's
+> `AmbientBrightness` (keep it ≤ ~32 so surfaces don't go flat). ✅
 
 ## Lighting craft
 
 - **Motivate every light.** A pool of light with no visible source reads as fake. Put a lamp, window,
-  fire, or glowing panel where the light comes from.
-- **Never light flat.** A single fill light makes everything look like a rendered box. Use at least
-  two lights per space — a bright key plus a dim fill — so there's a hotspot and a falloff.
-- **Radius is your main tool.** The default radius of 64 usually bleeds and washes a room out. Shrink
-  it for distinct pools — ~5 for a tight tunnel, up to ~175 for an outdoor wash.
-- **Light to guide and to hide.** Crisp bright patterns pull the eye toward where you want the player
-  to go; a spotlight beacons a landmark. Shadow hides a secret or a dull surface just as usefully.
+  fire, or glowing panel at the source.
+- **Don't light flat.** A single fill light looks like a rendered box. Use at least two lights per
+  space — a bright key plus a dim fill — for a hotspot and falloff.
+- **Radius is your main tool.** The default 64 usually bleeds and washes a room out. Shrink it for
+  distinct pools — ~5 for a tight tunnel, up to ~175 for an outdoor wash.
+- **Guide and hide.** Crisp bright patterns pull the eye toward where the player should go; a
+  spotlight beacons a landmark; shadow hides a secret or a dull surface.
 - **Colour for zone identity.** Drop `LightSaturation` toward ~64 for a visible tint and give each
   zone its own hue — players navigate by colour without noticing.
 - **Prefer many small lights over few huge ones.** Cost scales roughly with radius² (lumels sit on

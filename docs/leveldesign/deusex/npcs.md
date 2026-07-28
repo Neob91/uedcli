@@ -1,6 +1,6 @@
 # Populating a level with NPCs — `ScriptedPawn`  [DX]
 
-Deus Ex NPCs are `ScriptedPawn`s. You never place the abstract bases — you place a concrete leaf
+Deus Ex NPCs are `ScriptedPawn`s. Never place the abstract bases — place a concrete leaf
 (a specific troop, civilian, or animal) and configure its orders, alliances, reactions, and inventory.
 
 ## Workflow order
@@ -28,8 +28,8 @@ actor build DeusEx.MJ12Troop --at 512,256,80 --rotate 0,16384,0 \
 
 ## Orders — what the NPC does
 
-`Orders` is a state name (not an enum): the pawn does `GotoState(Orders)`. The default is
-`Wandering`. Mapper-set values, most paired with an `OrderTag` that names the target:
+`Orders` is a state name (not an enum): the pawn does `GotoState(Orders)`. Default is
+`Wandering`. Mapper-set values, most paired with an `OrderTag` naming the target:
 
 - `Idle` — stand and do nothing (no wandering).
 - `Standing` — hold a post. Leash radius via `HomeTag` / `HomeExtent` (default 800).
@@ -41,11 +41,11 @@ actor build DeusEx.MJ12Troop --at 512,256,80 --rotate 0,16384,0 \
 - `Wandering` — the roaming default.
 - `Dancing`.
 
-`GoingTo` / `RunningTo` are scripting-only (used by conversation/mission scripting, not normally an
-initial `Orders`). `Seeking`, `Fleeing`, `Attacking`, `Alerting` are combat/alert states the AI enters
-itself — shape them via the reactions/fears/alliances below; you don't author them as an `Orders`.
+`GoingTo` / `RunningTo` are scripting-only (conversation/mission scripting, not an initial `Orders`).
+`Seeking`, `Fleeing`, `Attacking`, `Alerting` are combat/alert states the AI enters
+itself — shape them via the reactions/fears/alliances below; don't author them as an `Orders`.
 
-A conversation can reprogram an NPC by setting `ConvOrders` / `ConvOrderTag`, applied when the
+A conversation can reprogram an NPC via `ConvOrders` / `ConvOrderTag`, applied when the
 conversation ends.
 
 ## Alliances — who is friend or foe
@@ -59,7 +59,7 @@ conversation ends.
 
 ## Reactions, hate, and fears — usually leave the defaults
 
-Three stimulus blocks control temperament. The class defaults are tuned per role (soldiers
+Three stimulus blocks control temperament. Class defaults are tuned per role (soldiers
 engage and raise alarms; civilians flee), so you rarely touch these:
 
 - Reactions (`bReact*`) — do I engage? `bReactPresence` (default true → attack on sight),
@@ -69,11 +69,11 @@ engage and raise alarms; civilians flee), so you rarely touch these:
 - Fears (`bFear*`) — what makes me flee? `bFearWeapon`, `bFearShot`, `bFearInjury`, `bFearCarcass`,
   `bFearAlarm`, `bFearProjectiles`, `bFearHacking`.
 
-Alarm behavior: `RaiseAlarm` (vanilla default `RAISEALARM_BeforeFleeing`; `Animal`/`Robot` = `RAISEALARM_Never`
-— note `actor prop get` returns `BeforeAttacking` from the UED22 editing package, a recompile divergence
+Alarm: `RaiseAlarm` (vanilla default `RAISEALARM_BeforeFleeing`; `Animal`/`Robot` = `RAISEALARM_Never`
+— `actor prop get` returns `BeforeAttacking` from the UED22 editing package, a recompile divergence
 from shipped behaviour), `bEmitDistress`, `MaxProvocations` (default 1).
 
-> These UT/Unreal knobs do not exist in DX — don't try to set them: `bFearDarkness`, `bFearIndoors`,
+> These UT/Unreal knobs do not exist in DX — don't set them: `bFearDarkness`, `bFearIndoors`,
 > `bFearZones`, `HateTag`, `HateThreshold`, `IdealRange`, `SeekTag`,
 > `bCanClimb`, `bGenerateFleshFrag`, `ThingFactory`. DX drives NPCs via ScriptedPawn orders rather
 > than the stock `AmbushPoint` marker; `AlarmPoint` doesn't exist at all.
@@ -87,7 +87,7 @@ from shipped behaviour), `bEmitDistress`, `MaxProvocations` (default 1).
 ## Binding
 
 - `BindName` — a spaces-free identifier that conversations, flags, and triggers key off of (e.g. a
-  flag `BindName$"_Dead"` fires when this NPC dies). Set it on any NPC that story logic references.
+  flag `BindName$"_Dead"` fires when this NPC dies). Set it on any NPC story logic references.
 - `FamiliarName` / `UnfamiliarName` — the HUD labels before/after you know them.
 - `bImportant` / `bInvincible` — protect a plot-critical NPC.
 

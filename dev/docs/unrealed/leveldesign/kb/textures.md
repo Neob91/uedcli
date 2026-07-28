@@ -1,26 +1,23 @@
 # Textures & surfaces — flags, alignment, procedural textures, the DX catalog  [ENGINE] (+ DX)
 
-Part of the level-design knowledge base. Dev reference for UE1/DX surface texturing:
-the surface poly-flag catalog with hex values, alignment and scrolling, `MyLevel` embedding, detail/
-environment mapping, the procedural `Fire.u` texture family internals, and the Deus Ex `CoreTex*`
-catalog. Siblings: [`lighting.md`](lighting.md) · [`movers.md`](movers.md) ·
-[`actors-collision-pathing.md`](actors-collision-pathing.md). Parent monolith:
-[`README.md`](README.md). Engine-driving: [`../../commands.md`](../../commands.md),
-[`../../t3d.md`](../../t3d.md).
+Dev reference for UE1/DX surface texturing: the poly-flag catalog with hex values, alignment and
+scrolling, `MyLevel` embedding, detail/environment mapping, the procedural `Fire.u` texture family,
+and the Deus Ex `CoreTex*` catalog. Siblings: [`lighting.md`](lighting.md) · [`movers.md`](movers.md) ·
+[`actors-collision-pathing.md`](actors-collision-pathing.md). Parent: [`README.md`](README.md).
+Engine-driving: [`../../commands.md`](../../commands.md), [`../../t3d.md`](../../t3d.md).
 
 **Confidence markers:** ✅ uedcli-used / live-verified · 🔬 live-probed against the real DX binary/editor ·
 📖 tutorial-corpus (vocabulary real, semantics to confirm). **[ENGINE]** = generic UE1 · **[DX]** =
 Deus-Ex-specific.
 
-Texturing is per-surface: you pick a texture from a package and set its alignment and flags. Flags
-change how a surface renders, never its geometry.
+Texturing is per-surface: pick a texture from a package and set its alignment and flags. Flags change
+how a surface renders, never its geometry.
 
 **uedcli seat** ✅: `brush poly find` prints face selectors → `brush poly set - --texture … --add-flag …
---remove-flag …` for the stored attributes, and `brush poly pan - --to/--by U,V`,
-`brush poly rotate - --by UU`, `brush poly scale - --by FU,FV` for the texture frame;
-`brush poly align --wall|--floor|--ring`; `brush poly list` inspects.
-Flags are always set by name (`--add-flag Masked`), never by bit value. Faces are targeted by
-`BRUSH:SELECTOR` (`Wall1:3,5` or `Wall2:all`).
+--remove-flag …` for stored attributes, and `brush poly pan - --to/--by U,V`, `brush poly rotate - --by
+UU`, `brush poly scale - --by FU,FV` for the texture frame; `brush poly align --wall|--floor|--ring`;
+`brush poly list` inspects. Flags are set by name (`--add-flag Masked`), never by bit value. Faces are
+targeted by `BRUSH:SELECTOR` (`Wall1:3,5` or `Wall2:all`).
 
 > **UnrealEd GUI equivalent:** select faces, open *Surface Properties* (F5), set texture / flags / pan /
 > align.
@@ -29,11 +26,10 @@ Flags are always set by name (`--add-flag Masked`), never by bit value. Faces ar
 
 ## 1. Surface flags — the poly-flag catalog  🔬
 
-Surface flags are a bitmask on each poly. Sum the hex values to combine. Hex values are 🔬 binary-verified
-(they match UE1's `EPolyFlags` and uedcli's `query.py PF_NAMES`). Not every flag is settable via
-`--add-flag`: uedcli exposes 16 names; `Bright Corners`, `Small/Big Wavy`, and `High/Low Shadow Detail`
-are real poly-flags but are **not** in that set (they would need a raw bit write) — listed here for
-completeness and tagged *(no `--add-flag`)*.
+Surface flags are a bitmask on each poly; sum the hex values to combine. Hex values are 🔬 binary-verified
+(they match UE1's `EPolyFlags` and uedcli's `query.py PF_NAMES`). uedcli exposes 16 flag names via
+`--add-flag`; `Bright Corners`, `Small/Big Wavy`, and `High/Low Shadow Detail` are real poly-flags not
+in that set (they need a raw bit write), tagged *(no `--add-flag`)*.
 
 | Flag (F5 name / uedcli) | Hex | Effect |
 |---|---|---|
@@ -57,9 +53,8 @@ completeness and tagged *(no `--add-flag`)*.
 | **Environment** | `0x10` (`PF_Environment`) | Environment/reflection mapping (gated by the renderer `ShinySurfaces` ini). |
 
 Key distinctions:
-- `Masked` = palette index 0 is transparent (binary cut-out); `Translucent` (additive) masks
-  dark (black → invisible); `Modulated` (2× multiply) treats 50% grey as neutral — darker
-  darkens the backdrop, lighter brightens it. Three different transparency models, not synonyms.
+- `Masked`, `Translucent`, and `Modulated` are three different transparency models, not synonyms
+  (see the table for each).
 - Shadow detail is a pair of flags, not a number — `PF_HighShadowDetail` / `PF_LowShadowDetail`
   control per-surface lightmap resolution; there is no numeric "lightmap resolution" field on a UE1
   surface.
@@ -75,53 +70,48 @@ Key distinctions:
   around a cylinder's side faces).
 - **Manual:** Pan / Rotate / Scale — one uedcli verb each. `brush poly pan - --to U,V` (absolute) /
   `--by dU,dV` (relative), in whole texels; `brush poly rotate - --by UU` (unreal rotation units,
-  16384 = 90°, no `--to` — see `rationale/surface.md`); `brush poly scale - --by FU,FV`, which names
-  the apparent size (`--by 2,2` looks twice as big, and so halves the stored `TextureU`/`TextureV`
+  16384 = 90°, no `--to` — see `rationale/surface.md`); `brush poly scale - --by FU,FV` names the
+  apparent size (`--by 2,2` looks twice as big, so halves the stored `TextureU`/`TextureV`
   magnitudes). `rotate`/`scale` re-anchor on the face centroid, so the texture turns or grows in
   place; neither gives continuity across faces. Console: `POLY TEXPAN`, `POLY TEXSCALE`,
   `POLY TEXALIGN`, `POLY TEXINFO`.
-- Re-align after CSG changes: a rebuild can disturb texturing, so re-run alignment after geometry
-  edits.
+- Re-run alignment after CSG/geometry edits: a rebuild can disturb texturing.
 
 ### 2.1 Scrolling surfaces — flag on the face, speed on the zone  🔬
 
-A scrolling surface is not configured with a per-surface speed. Instead:
-1. Set the poly flag `PF_AutoUPan` (0x200) and/or `PF_AutoVPan` (0x400) on the face — the flag means
+Scrolling has no per-surface speed:
+1. Set poly flag `PF_AutoUPan` (0x200) and/or `PF_AutoVPan` (0x400) on the face — the flag means
    "this face scrolls," with no speed of its own.
-2. The speed lives on the `ZoneInfo` / `LevelInfo` as `TexUPanSpeed` / `TexVPanSpeed`, shared by
-   every auto-pan face in that zone.
+2. Speed lives on the `ZoneInfo` / `LevelInfo` as `TexUPanSpeed` / `TexVPanSpeed`, shared by every
+   auto-pan face in that zone.
 
-This drives conveyors, flowing water, scrolling signs. Because the speed is zone-wide, group faces that
-should scroll at the same rate into the same zone.
+Drives conveyors, flowing water, scrolling signs. Since speed is zone-wide, group faces that should
+scroll at the same rate into one zone.
 
 ---
 
 ## 3. `MyLevel` — embedding assets in the map file  [ENGINE]
 
-Importing a resource (texture/sound) into the pseudo-package **`MyLevel`** embeds it directly in the
-`.dx`/`.unr` map file, making the map self-contained (no external package dependency).
+Importing a resource (texture/sound) into the pseudo-package **`MyLevel`** embeds it in the `.dx`/`.unr`
+map file, making the map self-contained (no external package dependency).
 
-- A `MyLevel` resource is discarded when the map is saved (or the editor is closed) unless it is applied
-  to a surface first — a save serializes only reachable objects, so an unreferenced embed is dropped.
-  Apply it to at least one poly before saving, or it silently vanishes. (The trigger is save/close, not
-  a geometry rebuild.)
-- A level screenshot texture must be named exactly `ScreenShot` (256×256, P8), mipmaps off. Set
-  it plus `LevelInfo` Title/Author to finish a level (see [`README.md`](README.md) §13).
-- Open question for uedcli: whether uedcli exposes a `MyLevel`-embed path or it stays editor-only is
-  tracked as spec Q3 — treat `MyLevel` as an editor/engine mechanism until the `texture`/materialize
-  verb surface confirms an embed path.
+- A `MyLevel` resource is discarded on save/close (not on rebuild) unless applied to a surface first —
+  a save serializes only reachable objects, so an unreferenced embed is dropped. Apply it to at least
+  one poly before saving.
+- A level screenshot texture must be named exactly `ScreenShot` (256×256, P8), mipmaps off. Set it plus
+  `LevelInfo` Title/Author to finish a level (see [`README.md`](README.md) §13).
+- Whether uedcli exposes a `MyLevel`-embed path is tracked as spec Q3; treat `MyLevel` as an
+  editor/engine mechanism until the `texture`/materialize verb surface confirms one.
 
 ---
 
 ## 4. Detail, macro & environment mapping  🔬
 
-- `DetailTexture` is a Texture-class property — set once on the base texture, and it applies to
-  every surface using that base texture (you do not set it per-surface). It modulates a fine texture
-  in up close for near-field detail. There is no `DetailScale` in UE1 (that value-8 figure is UE2) —
-  the detail tiling comes from the detail texture's own import Scale (~0.25). DX feeds these from
-  `CoreTexDetail` (`DMetal_A`, `DScanline`).
-- `MacroTexture` exists on the Texture class but is engine-commented "not currently used" in this
-  build.
+- `DetailTexture` is a Texture-class property — set once on the base texture, applying to every
+  surface using it (not per-surface). It modulates a fine texture in up close for near-field detail.
+  There is no `DetailScale` in UE1 (that value-8 figure is UE2); detail tiling comes from the detail
+  texture's own import Scale (~0.25). DX feeds these from `CoreTexDetail` (`DMetal_A`, `DScanline`).
+- `MacroTexture` exists on the Texture class but is engine-commented "not currently used" in this build.
 - Environment mapping = poly flag `PF_Environment` (world surfaces) or `bMeshEnviroMap` + `Skin`
   (meshes), gated by the renderer `ShinySurfaces` ini setting.
 - `MultiSkins[8]` is an actor mesh-skin array, unrelated to BSP surface texturing (see
@@ -143,17 +133,16 @@ Add Special (a GUI convenience that commits a builder brush with a preset flag+s
 | **Semi-Solid Pillar** | A semisolid detail brush. |
 
 uedcli reaches these via `brush build … --flag …` at build time (a sheet is NotSolid by default), so
-most presets are a one-line pipe: e.g. `brush build sheet --width 256 --height 256 --flag portal --flag
-translucent | actor add -` for the water surface.
+most presets are a one-line pipe, e.g. water: `brush build sheet --width 256 --height 256 --flag portal
+--flag translucent | actor add -`.
 
 ---
 
 ## 6. The procedural `Fire.u` texture family  🔬 (internals — dev-only)
 
-Deus Ex ships animated fire and water surface textures in a separate `Fire.u` package (not
-`Engine.u`). For level authoring: these appear in the Texture Browser and are applied like any other
-texture to give animated fire/water surfaces. The painting internals below are dev-only (the user
-subset drops them).
+Deus Ex ships animated fire and water surface textures in a separate `Fire.u` package (not `Engine.u`).
+For level authoring, they appear in the Texture Browser and are applied like any other texture. The
+painting internals below are dev-only (the user subset drops them).
 
 Class tree 🔬: `FractalTexture extends Texture`; `FireTexture` / `WaterTexture` / `IceTexture extends
 FractalTexture`; `WaveTexture` / `WetTexture extends WaterTexture`. `PaletteModifier` does not exist in
@@ -189,11 +178,11 @@ Both distort a `SourceTexture` by the wave field. `IceTexture` adds `GlassTextur
 ### 6.4 Native defaults & painting  🔬
 
 - Numeric defaults are `native` C++ — the classes have empty script `defaultproperties`, so those
-  specific values are not recoverable offline from the package (the one residual gap for uedcli's
-  decode route; everything script-defaulted reads cleanly).
-- Painting is a Texture-Browser GUI task with no uedcli verb: Texture Browser → New → set Class +
-  Size (locked at creation) → set `FX_*` / `RenderHeat` / `WaveAmp` before painting → left-drag
-  paints, right-drag erases (lightning is click-drag-release).
+  values are not recoverable offline from the package (the one residual gap for uedcli's decode route;
+  everything script-defaulted reads cleanly).
+- Painting is a Texture-Browser GUI task with no uedcli verb: Texture Browser → New → set Class + Size
+  (locked at creation) → set `FX_*` / `RenderHeat` / `WaveAmp` before painting → left-drag paints,
+  right-drag erases (lightning is click-drag-release).
 
 ---
 
@@ -205,8 +194,8 @@ CoreTexGlass, CoreTexMetal, CoreTexMisc, CoreTexPaper, CoreTexSky, CoreTexStone,
 CoreTexTextile, CoreTexTiles, CoreTexWallObj, CoreTexWater, CoreTexWood`.
 
 - Level-named packages are one-offs — `UNATCO`, `Paris`, `NewYorkCity`, the `HK_*` family (there is
-  no single "HongKong" package). Reach for `CoreTex*` for reusable material; use level-named packages
-  only for their specific level.
+  no single "HongKong" package). Use `CoreTex*` for reusable material; level-named packages only for
+  their specific level.
 - Naming: `<condition><descriptor>_<variant>` with condition prefixes `Clen` (clean) / `Drty`
   (dirty) / `Damg` (damaged) / `Corg` (corroded) / `Olde` (old) / `Fros` (frosted) — e.g.
   `ClenGrayMetal_A`, `DrtyGrayMetal_A`. The `_A/_B/_C` suffix is the variant.
@@ -216,7 +205,7 @@ CoreTexTextile, CoreTexTiles, CoreTexWallObj, CoreTexWater, CoreTexWood`.
 ### 7.1 The reserved `Ladder` texture group  📖 (DX SDK / community)
 
 In the Texture Browser you pick a package, then a `Group` to narrow the list. `Group=` is
-browser-convenience only for every group except one:
+browser-convenience only, except one:
 
 > A texture whose Group is `Ladder` makes the surface a climbable ladder in-game. This is a native
 > (C++) `case 'Ladder':` group check in the DeusEx player movement — a texture-driven ladder.
@@ -224,7 +213,7 @@ browser-convenience only for every group except one:
 > the switch is in native engine code, not script we can probe offline.)
 
 - Ladders are not a `bIsLadder` actor or flag — there is no ladder actor and no ladder zone in DX.
-  You make a wall climbable by texturing it with a `Ladder`-group texture. (This corrects an earlier
+  You make a wall climbable by texturing it with a `Ladder`-group texture. (Corrects an earlier
   tentative `bIsLadder`/`LadderZone` assumption wherever it appears.)
 - Built-in ladder textures: `ladder_a`, `LadrBrwnMetal` (in `CoreTexMetal`).
 
@@ -237,13 +226,13 @@ terminology.)*
 
 ## 8. `ScriptedTexture` — a draw-on surface, not a camera feed  🔬
 
-`ScriptedTexture` (chain `Bitmap → Texture →
-ScriptedTexture`) is a draw-on surface. Each frame it resets to `SourceTexture`, then calls
-`NotifyActor.RenderTexture()` where script draws `DrawTile` / `DrawText` / `DrawColoredText` /
-`ReplaceTexture`. Renderer-dependent — renders under D3D; software/other renderers vary (a runtime concern, not
-offline-probed 📖). Used for scoreboards, counters, tombstones.
+`ScriptedTexture` (chain `Bitmap → Texture → ScriptedTexture`) is a draw-on surface. Each frame it
+resets to `SourceTexture`, then calls `NotifyActor.RenderTexture()` where script draws `DrawTile` /
+`DrawText` / `DrawColoredText` / `ReplaceTexture`. Renderer-dependent — renders under D3D, others vary
+(a runtime concern, not offline-probed 📖). Used for scoreboards, counters, tombstones.
 
-- Camera-view-to-surface (`DrawPortal`) is a UE1 `Canvas` native that DX never calls — do not attribute DX monitors to it (it exists in `Engine.u`, but `DeusEx.u` has 0 refs).
+- Camera-view-to-surface (`DrawPortal`) is a UE1 `Canvas` native that DX never calls — do not attribute
+  DX monitors to it (it exists in `Engine.u`, but `DeusEx.u` has 0 refs).
 - DX security-camera monitors do not use `ScriptedTexture` 🔬 (no `ScriptedTexture` ref in
   `DeusEx.u`). The camera feed is a live 3D render composited into the **hackable-computer UI**, not a
   world-mounted monitor surface (see the security-camera→console recipe in

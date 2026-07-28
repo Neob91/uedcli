@@ -1,10 +1,10 @@
 # Human scale — DX numbers  [DX]
 
-Build to the player's actual size, not by eye. These figures were decoded by uedcli from the
-shipped `DeusEx.u` — the game's real defaults.
+Build to the player's actual size. These figures were decoded by uedcli from the shipped
+`DeusEx.u`.
 
-16 units = 1 foot. DX authors size everything — doors, steps, panels, ceilings — in this
-convention. (1 uu = 0.75 in; 1 m ≈ 52.5 uu; 256 uu = 16 ft; world max 65536 uu per axis.)
+16 units = 1 foot; DX sizes everything (doors, steps, panels, ceilings) in this convention.
+(1 uu = 0.75 in; 1 m ≈ 52.5 uu; 256 uu = 16 ft; world max 65536 uu per axis.)
 
 ---
 
@@ -34,7 +34,7 @@ corridors for it too.
 
 ## DX device strengths & camera
 
-These govern how hard the player's skills/tools have to work — tune obstacles against them:
+Tune obstacles against these:
 
 | Device                          | Strength |
 | ------------------------------- | --- |
@@ -58,10 +58,10 @@ default (a pawn's health, a decoration's collision extent, a light's radius):
 bin/uedcli actor build DeusEx.<Class> | actor add - | actor prop get - <Prop>
 ```
 
-An unset property resolves to its class default, which is the shipped value. `class show <Class>`
-prints only property names and types — the values come from the `actor prop get` route above.
+An unset property resolves to its class default, the shipped value. `class show <Class>` prints
+only property names and types; values come from the `actor prop get` route above.
 
-A few more decoded this session, for reference: `Engine.Light` defaults `LightRadius` 64 / `LightBrightness`
+A few more decoded, for reference: `Engine.Light` defaults `LightRadius` 64 / `LightBrightness`
 64 / `LightHue` 0 / `LightSaturation` 255 / `LT_Steady` / `LE_None`; `NanoKey` cylinder 2.05×3.11;
 `ParticleGenerator` `frequency` 1 / `checkTime` 0.1 / `particleLifeSpan` 4 / `riseRate` 10 /
 `particleDrawScale` 0.1.

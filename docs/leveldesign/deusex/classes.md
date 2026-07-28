@@ -1,14 +1,13 @@
 # DX class catalog  [DX]
 
-The Deus-Ex-specific classes a mapper reaches for. These are substrate classes: they exist in
-`DeusEx.u`, not in stock UnrealEngine 1. Generic actors (`Engine.Light`, `Engine.ZoneInfo`,
+Deus-Ex-specific classes for mappers. These substrate classes live in
+`DeusEx.u`, not stock UnrealEngine 1. Generic actors (`Engine.Light`, `Engine.ZoneInfo`,
 `Engine.PlayerStart`, `Engine.SkyZoneInfo`, plain `Trigger`) are covered in the [general
 guides](../general/).
 
 ## Placing and discovering classes
 
-Every class is placed the same way — build an instance (optionally with initial properties and a pose),
-then pipe it into the trunk:
+Place any class by building an instance (optionally with properties and a pose) and piping it into the trunk:
 
 ```
 actor build DeusEx.<Class> --prop KEY=VALUE --at X,Y,Z --rotate Pitch,Yaw,Roll | actor add -
@@ -24,17 +23,17 @@ class show DeusEx.NanoKey                          # property names + types (NOT
 
 `class show` prints names and types only. To read a default value, decode it offline:
 `actor build DeusEx.<Class> | actor add - | actor prop get - <Prop>` (an unset property resolves to its
-class default). See [`human-scale.md`](human-scale.md) for the numbers this reveals.
+class default). See [`human-scale.md`](human-scale.md).
 
 ---
 
 ## Doors, glass, walls, lifts — the DX mover family
 
-DX doesn't place a bare `Engine.Mover` for doors and panels — it ships its own
-`Engine.Mover` subclasses. `DeusExMover` (with its `BreakableGlass` / `BreakableWall` children) is
-the door/panel branch; `ElevatorMover` and `MultiMover` are separate `Engine.Mover` subclasses for
-lifts and sequenced travel (not `DeusExMover` descendants). Build any of them as movers and key them
-with the `mover key` verbs (see [`../general/`](../general/) movers guide):
+DX ships its own `Engine.Mover` subclasses instead of a bare `Engine.Mover` for doors and panels.
+`DeusExMover` (with its `BreakableGlass` / `BreakableWall` children) is the door/panel branch;
+`ElevatorMover` and `MultiMover` are separate `Engine.Mover` subclasses for lifts and sequenced
+travel (not `DeusExMover` descendants). Build any as movers and key them with the `mover key` verbs
+(see [`../general/`](../general/) movers guide):
 
 ```
 brush build cube --mover-class DeusEx.DeusExMover | actor add -
@@ -51,9 +50,9 @@ brush build cube --mover-class DeusEx.DeusExMover | actor add -
 
 ## Ladders — a texture, not an actor
 
-There is no ladder actor and no ladder flag in DX. A ladder is any surface textured with a texture
-whose `Group` is `Ladder` — the engine treats that reserved group as climbable. Built-in ladder
-textures include `ladder_a` and `LadrBrwnMetal` in `CoreTexMetal`. Texture the wall with one of those
+DX has no ladder actor and no ladder flag. A ladder is any surface textured with a texture whose
+`Group` is `Ladder` — the engine treats that reserved group as climbable. Built-in ladder textures
+include `ladder_a` and `LadrBrwnMetal` in `CoreTexMetal`. Texture the wall with one
 (`brush poly set - --texture CoreTexMetal.LadrBrwnMetal`) and it becomes climbable in-game.
 
 ## Zones — water and pain
@@ -62,8 +61,8 @@ DX uses `ZoneInfo` presets, not bespoke zone classes:
 
 - **Water** — `DeusEx.WaterZone` is exactly `Engine.ZoneInfo` with `bWaterZone=True`. Place either.
 - **Pain** — an ordinary `ZoneInfo` with `bPainZone=True` + `DamagePerSec` (an int) + a `DamageType`
-  name (`TearGas`, `Radiation`, `Flamed`, `Drowned`, …). There is no `PainZone` class in any UE1
-  game, and `LavaZone`/`SlimeZone` are stock-Unreal `UnrealShare` classes DX doesn't ship — pain is a
+  name (`TearGas`, `Radiation`, `Flamed`, `Drowned`, …). No UE1 game has a `PainZone` class, and
+  `LavaZone`/`SlimeZone` are stock-Unreal `UnrealShare` classes DX doesn't ship — pain is a
   `ZoneInfo` flag, not a class.
 
 ```
@@ -71,8 +70,7 @@ actor build DeusEx.WaterZone --at <inside-the-pool> | actor add -
 actor build Engine.ZoneInfo --prop bPainZone=True --prop DamagePerSec=5 --prop DamageType=Radiation --at <inside> | actor add -
 ```
 
-(The water surface is a translucent portal sheet — a geometry recipe covered in the general zoning
-guide.)
+(The water surface is a translucent portal sheet — a geometry recipe in the general zoning guide.)
 
 ## Hackable devices
 
@@ -83,10 +81,10 @@ device, give it a `Tag` if something wires to it:
 - **`SecurityCamera`** — a swinging camera; its feed shows up in a hacked `ComputerSecurity` UI (see
   [`gameplay-wiring.md`](gameplay-wiring.md)), not on a world monitor. 20% hack.
 - **`AutoTurret` / `AutoTurretSmall`** — ceiling/wall turrets. Place these, not the `…Gun` variants.
-  The turret body is itself a `DeusExDecoration` (not a `HackableDevices`); the hackable part is its
+  The turret body is a `DeusExDecoration` (not a `HackableDevices`); the hackable part is its
   attached gun (`AutoTurretGun`, a `HackableDevices`), fixed at 50% hack strength.
-- **`AlarmUnit`** — raises the level alarm when triggered (it has no sight of its own; alerted NPCs
-  run to it to sound it). Hackable to disable. 20% hack.
+- **`AlarmUnit`** — raises the level alarm when triggered (no sight of its own; alerted NPCs run to
+  it to sound it). Hackable to disable. 20% hack.
 
 ## Pickups and keys
 
@@ -97,8 +95,8 @@ device, give it a `Tag` if something wires to it:
 
 ## Decorations and info devices — the `DeusExDecoration` family
 
-DX props extend `DeusExDecoration` (adds a highlight Name label the player sees on frob, and
-`HitPoints`). Two groups a mapper reaches for:
+DX props extend `DeusExDecoration` (adds a highlight Name label shown on frob, and `HitPoints`).
+Two groups mappers use:
 
 - **Containers** — `CrateBreakableMedCombat`, `CrateBreakableMedGeneral`, `CrateBreakableMedMedical`,
   etc. Break them to spill their `contents`. Good for diegetically teaching the crowbar affordance.
@@ -110,13 +108,13 @@ DX props extend `DeusExDecoration` (adds a highlight Name label the player sees 
 
 Every DX map needs exactly one `DeusExLevelInfo` (alongside the engine's `LevelInfo`). Key props:
 
-- **`missionNumber`** — the mission this map belongs to (must match its conversation package's mission
-  number, or conversation state won't bind).
+- **`missionNumber`** — the mission this map belongs to (must match its conversation package's
+  mission number, or conversation state won't bind).
 - **`Script`** — the `MissionScript` subclass driving the mission's goals and logic.
 - **`ConversationPackage`** — the compiled conversation package (default `"DeusExConversations"`).
 - **`TrueNorth`** — a single yaw angle (an `int` in rotator units, 0–65535) defining world-north for
   the in-HUD compass (DX-specific; not a 3-component rotator).
-- **`MapName`**, `MapAuthor`, `MissionLocation`, `startupMessage[4]` (the text shown on level entry).
+- **`MapName`**, `MapAuthor`, `MissionLocation`, `startupMessage[4]` (text shown on level entry).
 
 ```
 actor build DeusEx.DeusExLevelInfo --prop missionNumber=16 --prop MapName="Warehouse District" | actor add -

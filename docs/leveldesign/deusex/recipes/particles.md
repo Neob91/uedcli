@@ -1,9 +1,9 @@
 # Recipe: particle emitters  [DX]
 
 Stock UnrealEngine 1 (and UT99) has no particle system; its "effects" are sprite/trail hacks. Deus Ex
-adds a mapper-placeable particle family under `Actor → Effects`, built on `ParticleGenerator`. Use it
-for steam, dust, dripping water, electric arcs, and fire. These are point actors: place, set
-properties, optionally gate on a trigger.
+adds a mapper-placeable particle family under `Actor → Effects`, built on `ParticleGenerator`, for
+steam, dust, dripping water, electric arcs, and fire. These are point actors: place, set properties,
+optionally gate on a trigger.
 
 ## The family
 
@@ -28,9 +28,8 @@ properties, optionally gate on a trigger.
    `particleDrawScale`, `riseRate` (upward drift), `particleLifeSpan`, `frequency` /
    `numPerSpawn` / `checkTime` (how often/how many spawn).
 3. Gate it (optional) — set `bTriggered=True` and `bInitiallyOn=False` so it only emits after
-   something fires its `Event` (a DX enhancement over the base emitter). Give it a `Tag` for the trigger
-   to target. `bInitiallyOn` defaults True, so with `bTriggered` alone the generator spews immediately
-   and the first trigger turns it off — set `bInitiallyOn=False`.
+   something fires its `Event`, and give it a `Tag` for the trigger to target. `bInitiallyOn` defaults
+   True, so with `bTriggered` alone the generator spews immediately and the first trigger turns it off.
 
 ### With uedcli
 
@@ -54,7 +53,7 @@ actor build DeusEx.ParticleGenerator \
 ### Procedure
 
 1. Place a `WaterDrips` on the ceiling. Drips fall straight down under gravity — rotation has no effect
-   (`ejectSpeed`=0), so there's no arrow to aim.
+   (`ejectSpeed`=0), no arrow to aim.
 2. Tune `frequency` / `particleTexture` as for the base generator.
 
 ### With uedcli
@@ -86,8 +85,8 @@ actor build DeusEx.ElectricityEmitter \
 
 1. Place a `Fire` where the flame sits. It draws a flame sprite and adds its own `LE_FireWaver` light,
    so it self-illuminates.
-2. Optionally add a coloured static light nearby for surrounding glow (a `Fire` handles its own waver,
-   but a larger fire scene usually wants extra motivated lighting).
+2. Optionally add a coloured static light nearby for surrounding glow — a larger fire scene usually
+   wants extra motivated lighting.
 
 ### With uedcli
 
@@ -112,13 +111,12 @@ actor build DeusEx.Fire --at 0,0,24 | actor add -
 
 ## Caveats and gotchas
 
-- Deus-Ex-only: `ParticleGenerator`/`Fire`/etc. are not in stock UT99 maps; they live in `DeusEx.u`.
-- `WaterDrips` fall straight down by gravity — `ejectSpeed`=0, so rotation has no effect; there is no
-  arrow to aim (a common myth).
-- `ElectricityEmitter` and `Fire` bring their own light — you don't add a light for the emitter, though
+- Deus-Ex-only: `ParticleGenerator`/`Fire`/etc. live in `DeusEx.u`, not stock UT99 maps.
+- `WaterDrips` fall straight down by gravity — `ejectSpeed`=0, so rotation has no effect; no arrow to aim.
+- `ElectricityEmitter` and `Fire` bring their own light — don't add a light for the emitter, though
   you may add ambient light for the scene.
-- `particleTexture` names a real texture — the DX ones live in the `Effects.Smoke` group (e.g.
-  `Effects.Smoke.SmokePuff1`, `Effects.Smoke.Gas_Poison_A`, `Effects.Smoke.Gas_Tear_A`); browse the
+- `particleTexture` names a real texture; DX ones live in the `Effects.Smoke` group (e.g.
+  `Effects.Smoke.SmokePuff1`, `Effects.Smoke.Gas_Poison_A`, `Effects.Smoke.Gas_Tear_A`). Browse the
   `Effects` package for the exact `Package.Group.Name`. `--prop` does not validate the ref at author
   time (unlike `brush build --texture`), so a wrong name fails silently in-game — copy the exact name
   from the package.

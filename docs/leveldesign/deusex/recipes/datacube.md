@@ -1,16 +1,14 @@
 # Recipe: datacubes, books, and newspapers  [DX]
 
-Deus Ex environmental storytelling uses in-world text: datacubes, books, newspapers, and emails.
 Datacubes, books, and newspapers are placed `DeusExDecoration` information devices, set up the same
-way; they point at a named text resource compiled into a package. (Emails are computer content, not a
-placed decoration.) A datacube's text is copied into the player's Notes when read; books and
+way: they point at a named text resource compiled into a package. (Emails are computer content, not a
+placed decoration.) A datacube copies its text into the player's Notes when read; books and
 newspapers are read-and-forget. Use a datacube to hand out a door code or a story beat with a
 mechanical payoff.
 
 > Authoring the text is a package-build step, not a uedcli verb. The text lives in `.txt` files
-> compiled into a `.u` package with `ucc make` (`#exec DEUSEXTEXT IMPORT FILE=…`), an asset-pipeline
-> task outside uedcli. uedcli places the device and points it at the already-compiled text via
-> `textTag` + `TextPackage`.
+> compiled into a `.u` package with `ucc make` (`#exec DEUSEXTEXT IMPORT FILE=…`), outside uedcli.
+> uedcli places the device and points it at the compiled text via `textTag` + `TextPackage`.
 
 ## Procedure
 
@@ -20,8 +18,7 @@ mechanical payoff.
 2. Place the device — a `DataCube`, book, or newspaper under `DeusExDecoration → InformationDevices`.
 3. Point it at the text — set `textTag` to the filename without `.txt` (e.g. `16_DataCube01`) and
    `TextPackage` to your package name.
-4. Optional: attach a DataVault image — set `imageClass` to a `DataVaultImage` subclass to show a
-   picture alongside the text.
+4. Optional: set `imageClass` to a `DataVaultImage` subclass to show a picture alongside the text.
 
 ## With uedcli
 
@@ -37,14 +34,13 @@ actor build DeusEx.BookOpen --prop textTag=16_Book01 --prop TextPackage=MyMissio
 actor build DeusEx.Newspaper --prop textTag=16_Newspaper01 --prop TextPackage=MyMissionText --at 340,256,4 | actor add -
 ```
 
-> Discover the exact info-device class names with
-> `class list --subclass-of DeusEx.DeusExDecoration` (the book/newspaper meshes vary — `BookOpen`,
-> `BookClosed`, `Newspaper`, `NewspaperOpen`, etc.).
+> List the info-device class names with
+> `class list --subclass-of DeusEx.DeusExDecoration` (meshes vary — `BookOpen`, `BookClosed`,
+> `Newspaper`, `NewspaperOpen`, etc.).
 
 ## DX text markup
 
-Plain text with a few HTML-like tags. The formatting tags `<B>`, `<I>`, `<U>` do nothing — don't use
-them. What works:
+Plain text with a few HTML-like tags. The formatting tags `<B>`, `<I>`, `<U>` do nothing. What works:
 
 | Tag                    | Effect                                                 | Where |
 | ---------------------- | ------------------------------------------------------ | --- |
@@ -81,11 +77,11 @@ Example newspaper with a centred red headline:
 ## Caveats and gotchas
 
 - `textTag` omits the extension — `16_DataCube01`, not `16_DataCube01.txt`.
-- The mission number in the filename matters — the convention ties text to a mission; keep it
-  consistent with your `DeusExLevelInfo.missionNumber`.
+- Keep the mission number in the filename consistent with your `DeusExLevelInfo.missionNumber` — the
+  convention ties text to a mission.
 - Only datacubes write to Notes. Use a datacube (not a book) when the text is a clue the player should
   re-read, e.g. a keypad code.
-- `<DC>` on everything reads as noise; reserve colour for headlines.
+- Reserve `<DC>` colour for headlines; on everything it reads as noise.
 
 ## See also
 

@@ -2,9 +2,8 @@
 
 Deus Ex tells its story through conversations (NPC dialogue), computers (email, bulletins,
 security), and datacubes (readable text that lands in the player's Notes). This guide covers how a
-level wires to that content. The authoring pipeline — writing conversations in the external ConEdit
-tool, compiling text packages with `ucc make` — is mission-scripting work outside the scope of these
-user guides.
+level wires to that content. Authoring the content — writing conversations in the external ConEdit
+tool, compiling text packages with `ucc make` — is mission-scripting work outside these user guides.
 
 ---
 
@@ -13,7 +12,7 @@ user guides.
 A conversation is owned by a character and triggered when the player interacts with them.
 
 - Binding. Each `ScriptedPawn` carries a `BindName` (spaces-free — the player's is `JCDenton`).
-  The conversation system and the flag database key off this name, so an NPC that talks needs one set
+  The conversation system and the flag database key off this name, so a talking NPC needs one set
   (see [`npcs.md`](npcs.md)).
 - Level binding. The map's `DeusExLevelInfo` names the compiled `ConversationPackage` and a
   `missionNumber`; the mission number must match the one the conversation was authored for, or its
@@ -39,8 +38,8 @@ Computers are placed actors the player hacks or logs into. Three kinds:
   so a hacker can slew turrets and open doors. See [`gameplay-wiring.md`](gameplay-wiring.md) for the
   camera→computer recipe — the feed renders inside this UI, never on a world monitor.
 
-The account/email/bulletin text is authored as external text files compiled into the mission's
-packages; the level author places the computer and sets its tags and login details.
+Account/email/bulletin text is authored as external text files compiled into the mission's packages;
+the level author places the computer and sets its tags and login details.
 
 ## Datacubes and readable info devices
 
@@ -51,9 +50,9 @@ DataCubes, books, and newspapers are `DeusExDecoration` info devices (see [`clas
   handing out door codes and hints that reward exploration.
 
 Place a datacube near what it's about, point its `textTag` at the authored text, and it becomes a
-persistent note the player can re-read. The text markup — `<P>`, `<COMMENT>`, datacube colour/centre
-tags — and how the text packages are built are part of the external text-authoring pipeline, outside
-the scope of these user guides.
+persistent note the player can re-read. The text markup (`<P>`, `<COMMENT>`, datacube colour/centre
+tags) and how text packages are built are part of the external text-authoring pipeline, outside
+these user guides.
 
 ---
 

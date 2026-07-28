@@ -1,14 +1,14 @@
 # Custom-content / asset pipeline  [DX]
 
-The pipeline for getting custom content into Deus Ex — packages and `ucc make`,
-meshes, textures, sounds, music, custom pickups/augs, and the credits screen. A
-uedcli user authoring geometry through verbs touches little of this; it is the
-reference for when a level needs a bespoke mesh, texture, sound or item.
+Getting custom content into Deus Ex — packages and `ucc make`, meshes,
+textures, sounds, music, custom pickups/augs, the credits screen. Reference for
+when a level needs a bespoke mesh, texture, sound or item; authoring geometry
+through verbs touches little of this.
 
 Everything here is `[DX]` (the `ucc`/package/`#exec` mechanics are UE1-generic
-but the class names, flag values and constraints below are the DX build).
-Confidence is mostly 📖 (SDK manual / tutorial corpus) with ⟨bin⟩ where a fact
-was verified against the shipped packages this session.
+but the class names, flag values and constraints are the DX build). Confidence
+is mostly 📖 (SDK manual / tutorial corpus) with ⟨bin⟩ where verified against
+the shipped packages this session.
 
 > Siblings. [`dx-classes.md`](dx-classes.md) (`DeusExPickup`, `DeusExDecoration`,
 > the texture-Group `Ladder` rule) · [`dx-conversations-computers.md`](dx-conversations-computers.md)
@@ -28,8 +28,8 @@ was verified against the shipped packages this session.
 - Post-Mar-2001 SDK: build your text into your own package instead of
   overwriting stock `DeusExText.u`.
 
-All the `#exec` directives below go inside a `.uc` class's header and run at
-compile time (`ucc make`) to import external assets into the package.
+The `#exec` directives below go inside a `.uc` class's header and run at compile
+time (`ucc make`) to import external assets into the package.
 
 ---
 
@@ -53,10 +53,9 @@ DX characters/props are vertex meshes (not skeletal).
   paired `<Name>Carcass` mesh for its death body (referenced via the pawn's
   `CarcassType` — see [`dx-npcs.md`](dx-npcs.md) §4).
 
-External tool: MeshMaker converts a brush/prefab `.t3d` into a mesh
-`Decoration` (cheaper many-face render, no BSP holes) — at the cost of ≤8
-textures, no tiling, cylinder-only collision. See
-[`README.md`](README.md).
+External tool MeshMaker converts a brush/prefab `.t3d` into a mesh `Decoration`
+(cheaper many-face render, no BSP holes) at the cost of ≤8 textures, no tiling,
+cylinder-only collision. See [`README.md`](README.md).
 
 ---
 
@@ -81,23 +80,21 @@ textures, no tiling, cylinder-only collision. See
   | BigWavy | **4096** (0x1000) | large wavy distortion |
   | SmallWavy | **8192** (0x2000) | small wavy distortion |
 
-- Masked transparency: whatever colour sits at palette slot 0 becomes the
-  transparent colour.
+- Masked transparency: the colour at palette slot 0 becomes transparent.
 - Animated textures chain via numbered names + `AnimNext` (and `MinFrameRate` /
   `MaxFrameRate`), so `flame1 → flame2 → …` loops.
 - Detail textures: `Texture → DetailTexture` points at a fine texture
   (`CoreTexDetail` supplies `DMetal_A`, `DScanline`) that modulates up close.
   It is a Texture-class property, shared by every surface using the base
-  texture. There is no `DetailScale` in UE1 — tiling comes from the detail
-  texture's own import Scale (~0.25). ⟨bin⟩
+  texture. No `DetailScale` in UE1 — tiling comes from the detail texture's own
+  import Scale (~0.25). ⟨bin⟩
 
 Level screenshot / `MyLevel`. A texture imported into the pseudo-package
 `MyLevel` embeds in the map file; it is discarded on rebuild unless applied to a
 surface first, and a level-screenshot texture must be named exactly
-`ScreenShot`, mipmaps off. (Engine mechanism — see
-[`./textures.md`](./textures.md).)
+`ScreenShot`, mipmaps off. See [`./textures.md`](./textures.md).
 
-The reusable in-game material palette is the `CoreTex*` set (18 packages) —
+The reusable in-game material palette is the `CoreTex*` set (18 packages),
 catalogued in [`textures.md`](textures.md). The reserved texture Group `Ladder`
 makes a surface a climbable ladder ⟨bin⟩
 ([`dx-classes.md`](dx-classes.md) §1).
@@ -135,13 +132,12 @@ actor build Engine.MusicEvent --prop Song=… --prop Transition=MTRAN_Fade \
 - Pickups: subclass `DeusExPickup` — fields `ItemName`, `Description`,
   `Mesh`, `Icon`, and the inventory-slot dimensions. Compile with `ucc make`,
   then place the class like any actor.
-- Augmentations: define them via `AugmentationCannister → AddAugs`, a 2-element
-  array of augmentation names (`var() travel Name AddAugs[2]`, not class
-  references); the canister offers those two and the player installs one.
-  Standard vanilla pairs (one-or-the-other per slot): Cloak / RadarTrans,
-  Speed / Stealth, Muscle / Combat, EMP / Ballistic, Healing / Shield, … Set
-  each element with the dot index (`KEY.N`; the CLI rejects the T3D `KEY(N)`
-  form):
+- Augmentations: define via `AugmentationCannister → AddAugs`, a 2-element array
+  of augmentation names (`var() travel Name AddAugs[2]`, not class references);
+  the canister offers those two and the player installs one. Standard vanilla
+  pairs (one per slot): Cloak / RadarTrans, Speed / Stealth, Muscle / Combat,
+  EMP / Ballistic, Healing / Shield, … Set each element with the dot index
+  (`KEY.N`; the CLI rejects the T3D `KEY(N)` form):
 
 ```
 actor build DeusEx.AugmentationCannister --prop AddAugs.0=AugSpeed --prop AddAugs.1=AugStealth \

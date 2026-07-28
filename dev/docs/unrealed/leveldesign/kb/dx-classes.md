@@ -1,32 +1,29 @@
 # Deus Ex class catalog  [DX]
 
-The Deus Ex actor classes an author places — those that either don't exist in
-stock UnrealEngine 1 / UT99 or that DX replaces with its own subclass. Which
-class to place, and its knobs. The NPC classes (`ScriptedPawn` and roster) have
-their own page ([`dx-npcs.md`](dx-npcs.md)), and the
-conversation/computer/info-device classes theirs
-([`dx-conversations-computers.md`](dx-conversations-computers.md)).
+Deus Ex actor classes an author places — those that don't exist in stock
+UnrealEngine 1 / UT99 or that DX replaces with its own subclass. Which class to
+place, and its knobs. NPC classes (`ScriptedPawn` and roster) are in
+[`dx-npcs.md`](dx-npcs.md); conversation/computer/info-device classes in
+[`dx-conversations-computers.md`](dx-conversations-computers.md).
 
-Markers. `[DX]` = Deus-Ex-specific (does not apply to raw UE1);
-`[ENGINE]` = generic UnrealEngine 1 (flagged where a DX author leans on it).
-Confidence: ✅ uedcli-used / live-verified · 🔬 live-probed against the real
-`DeusEx.u` this session · 📖 from the DX SDK manual / tutorial corpus (vocabulary
-real, semantics to confirm). Everything below marked 🔬 was grepped/decoded out
-of the pristine shipped `DX/System/DeusEx.u`.
+Markers. `[DX]` = Deus-Ex-specific (not raw UE1); `[ENGINE]` = generic
+UnrealEngine 1 (flagged where a DX author leans on it). Confidence: ✅ uedcli-used
+/ live-verified · 🔬 live-probed against the real `DeusEx.u` this session · 📖
+from the DX SDK manual / tutorial corpus (vocabulary real, semantics to confirm).
+Everything marked 🔬 was grepped/decoded out of the shipped `DX/System/DeusEx.u`.
 
 > Siblings. [`dx-npcs.md`](dx-npcs.md) · [`dx-conversations-computers.md`](dx-conversations-computers.md)
 > · [`asset-pipeline.md`](asset-pipeline.md) · [`editor-ui.md`](editor-ui.md). The
 > engine-generic actor layer (collision/physics/decoration/pathing base classes)
-> and the full compiled reference live one level up in
-> [`README.md`](README.md) (§8, §10). Movers overview:
-> [`movers.md`](movers.md).
+> and the full compiled reference live one level up in [`README.md`](README.md)
+> (§8, §10). Movers overview: [`movers.md`](movers.md).
 
 ---
 
 ## How to discover and read any class
 
-The catalog below is a curated top-N of the classes worth naming; the live
-tree is the source of truth. Regenerate / verify with uedcli:
+The catalog below is a curated subset; the live tree is the source of truth.
+Regenerate / verify with uedcli:
 
 ```
 bin/uedcli class list --subclass-of DeusEx.HackableDevices   # inheritance tree
@@ -34,9 +31,9 @@ bin/uedcli class list --flat --subclass-of DeusEx.ScriptedPawn
 bin/uedcli class show DeusEx.SecurityCamera                  # property NAMES + TYPES only
 ```
 
-`class show` prints names and types, not default values. To read a default,
-build a throwaway instance and query the resolved property (an unset property
-resolves to its class default):
+`class show` prints names and types, not defaults. To read a default, build a
+throwaway instance and query the resolved property (an unset property resolves
+to its class default):
 
 ```
 bin/uedcli actor build DeusEx.SecurityCamera | actor add - | actor prop get - cameraFOV
@@ -52,11 +49,11 @@ bin/uedcli actor build DeusEx.NanoKey --prop KeyID=tower_door --at 128,256,64 | 
 
 ## 1. Movers & doors  [DX] 🔬
 
-DX does not use the engine `Mover` family directly. It ships its own
-`DeusExMover` subtree; place these instead of `Engine.Mover`.
+DX does not use the engine `Mover` family directly; it ships its own
+`DeusExMover` subtree. Place these instead of `Engine.Mover`.
 
-`DeusExMover` — the DX base door/mover, adding the door/lock fields the
-engine mover lacks:
+`DeusExMover` — the DX base door/mover, adding door/lock fields the engine mover
+lacks:
 
 | Property | Meaning |
 |---|---|
@@ -78,41 +75,40 @@ Related lift mover (not a `DeusExMover` — it `expands Mover` directly 🔬):
 - `ElevatorMover` — a lift; combine with the sequencing actors (§8) for
   multi-stop lifts (`bFollowKeyframes`).
 
-Authoring (uedcli). A mover is one brush promoted to an actor. Author
-model-side:
+Authoring (uedcli). A mover is one brush promoted to an actor:
 ```
 brush build cube --width 72 --height 144 --breadth 8 --mover-class DeusEx.DeusExMover \
   --prop bIsDoor=True --prop bLocked=True --prop KeyIDNeeded=tower_door | actor add -
 mover key count … / mover key move … / mover key rotate …   # keyframes 0..7 (count sets NumKeys)
 ```
-(UnrealEd GUI equivalent: Add Mover, then record keyframes — but the GUI
-record flow is inverted; see [`movers.md`](movers.md) and the keyframe trap
-in [`README.md`](README.md) §7.) DX doors are typically
-144×72 or 128×64, 1–8 uu thick.
+(UnrealEd GUI equivalent: Add Mover, then record keyframes — but the GUI record
+flow is inverted; see [`movers.md`](movers.md) and the keyframe trap in
+[`README.md`](README.md) §7.) DX doors are typically 144×72 or 128×64, 1–8 uu
+thick.
 
 Ladders are not a mover or an actor — they are texture-driven: any surface
 whose texture's Group name is `Ladder` is climbable in-game (built-ins
 `ladder_a`, `LadrBrwnMetal` in `CoreTexMetal`). 📖 (a native `case 'Ladder':`
-group check in the DX player movement — DX-SDK/community-documented; the token is
+group check in DX player movement — DX-SDK/community-documented; the token is
 native C++, absent from `DeusEx.u`'s script name table, so not offline-probable).
-See [`asset-pipeline.md`](asset-pipeline.md) and the DX texture
-catalog in [`README.md`](README.md) §4.1. There is no
-`bIsLadder` prop and no `LadderZone` class.
+See [`asset-pipeline.md`](asset-pipeline.md) and the DX texture catalog in
+[`README.md`](README.md) §4.1. There is no `bIsLadder` prop and no `LadderZone`
+class.
 
 ---
 
 ## 2. Zones  [DX] 🔬
 
 DX zoning uses the engine `ZoneInfo` with DX-relevant flags. There are no
-`LavaZone`/`SlimeZone` classes in DX (those are stock-Unreal `UnrealShare` classes DX
-doesn't ship), and no `PainZone` class in any UE1 game — pain is a `ZoneInfo` flag,
-not a class.
+`LavaZone`/`SlimeZone` classes in DX (those are stock-Unreal `UnrealShare`
+classes DX doesn't ship), and no `PainZone` class in any UE1 game — pain is a
+`ZoneInfo` flag, not a class.
 
 - Water = `WaterZone` (a `ZoneInfo` preset with `bWaterZone=True`) — or a
   plain `Engine.ZoneInfo --prop bWaterZone=True`. ✅🔬
 - Pain/damage = an ordinary `ZoneInfo` with `bPainZone=True` +
   `DamagePerSec` + a `DamageType` name (a `name` property on `Engine.ZoneInfo`, not a class):
-  `TearGas`, `Radiation`, `Flamed`, `Drowned`, … 🔬 So a tear-gas room is a normal
+  `TearGas`, `Radiation`, `Flamed`, `Drowned`, … 🔬 A tear-gas room is a normal
   zone with `DamageType="TearGas"`, not a bespoke class.
 
 ```
@@ -174,19 +170,18 @@ actor build DeusEx.NanoKey --prop KeyID=tower_door --at 200,140,48 | actor add -
 
 ## 5. Decorations, containers & info-devices  [DX] 🔬
 
-DX replaces engine `Decoration` with `DeusExDecoration` — adds a highlight
-Name label (the frob-target text) and `HitPoints` (destructibility). The
-family includes:
+DX replaces engine `Decoration` with `DeusExDecoration` — adds a highlight Name
+label (the frob-target text) and `HitPoints` (destructibility). Family:
 
 - Breakable containers — `CrateBreakableMedCombat`, `CrateBreakableMedGeneral`,
-  `CrateBreakableMedMedical` (and other sizes). They spill loot on destruction via the
-  `contents`/`content2`/`content3` + `EffectWhenDestroyed` fields, gated by
+  `CrateBreakableMedMedical` (and other sizes). They spill loot on destruction via
+  `contents`/`content2`/`content3` + `EffectWhenDestroyed`, gated by
   `DeusExDecoration.HitPoints` — `Engine.Decoration` has no `Health`
-  ([`README.md`](README.md) §8). The `content2`/`content3` pick is a weighted cascade
-  (each ~30% chance to override `contents`), not a uniform random draw.
-- Info devices — `DataCube`, books, newspapers. Carry `textTag` +
-  `TextPackage` (there is no inline `Text` property); DataCube text goes into the
-  player's Notes. Markup and the full info-device authoring live in
+  ([`README.md`](README.md) §8). The `content2`/`content3` pick is a weighted
+  cascade (each ~30% chance to override `contents`), not a uniform random draw.
+- Info devices — `DataCube`, books, newspapers. Carry `textTag` + `TextPackage`
+  (no inline `Text` property); DataCube text goes into the player's Notes. Markup
+  and full info-device authoring in
   [`dx-conversations-computers.md`](dx-conversations-computers.md).
 - `WaterFountain` — a drinkable `DeusExDecoration` (not an effect/emitter,
   despite the name).
@@ -200,8 +195,8 @@ actor build DeusEx.CrateBreakableMedMedical --at 320,64,16 | actor add -
 ## 6. Level info  [DX] 🔬
 
 `DeusExLevelInfo` — the DX level header (one per map). It `extends Info` (a plain
-metadata actor placed into the level) — not a `LevelInfo` subclass, which is why it
-sits alongside the engine `LevelInfo` rather than replacing it:
+metadata actor), not a `LevelInfo` subclass, so it sits alongside the engine
+`LevelInfo` rather than replacing it:
 
 | Property | Meaning |
 |---|---|
@@ -215,8 +210,8 @@ sits alongside the engine `LevelInfo` rather than replacing it:
 | `startupMessage[4]` | the four intro strings shown on level entry |
 | `bMultiPlayerMap` | flags an MP map (see [`README.md`](README.md) §18) |
 
-`TrueNorth` has no UE1 analogue; set it once per level (a scalar yaw, e.g.
-`16384` = 90°).
+`TrueNorth` has no UE1 analogue; set it once per level (a scalar yaw, e.g. `16384`
+= 90°).
 
 ```
 actor build DeusEx.DeusExLevelInfo --prop missionNumber=16 --prop MapName="Castle" \
@@ -227,8 +222,8 @@ actor build DeusEx.DeusExLevelInfo --prop missionNumber=16 --prop MapName="Castl
 
 ## 7. The DX particle / effects family  [DX] 🔬
 
-Stock UT99 has no particle emitters (UE1 effects are sprite/trail-based).
-DeusEx adds a mapper-placeable particle system under Actor → Effects.
+Stock UT99 has no particle emitters (UE1 effects are sprite/trail-based). DeusEx
+adds a mapper-placeable particle system under Actor → Effects.
 
 `ParticleGenerator` ✅🔬 — the base emitter (`extends Effects`). Defaults:
 
@@ -246,10 +241,10 @@ DeusEx adds a mapper-placeable particle system under Actor → Effects.
 | `bScale`/`bFade`/`bTranslucent`/`bGravity`/`bRandomEject` | — | behaviour toggles |
 | `bTriggered` | False | DX enhancement: spawn only after a Trigger (Unreal's system is always-on) |
 
-Concrete emitters in the DX effects family — only some subclass
-`ParticleGenerator`; the laser/electricity/fire ones are separate `Effects`-family classes:
+Concrete emitters — only some subclass `ParticleGenerator`; the
+laser/electricity/fire ones are separate `Effects`-family classes:
 - `WaterDrips` — a `ParticleGenerator` subclass: ceiling drips that fall by gravity
-  (`bGravity=True`, the default). Rotation has no effect (`ejectSpeed=0`) — there's no arrow to aim.
+  (`bGravity=True`, the default). Rotation has no effect (`ejectSpeed=0`).
 - `LaserEmitter` — the laser beam visual (`extends Effects`, not a
   `ParticleGenerator`); up to 2 reflection points; freezes its calc when the player
   is >960 uu away. It trips nothing by itself — the gameplay tripwires are
@@ -279,8 +274,8 @@ The triggers that connect devices, flags, goals and movers into gameplay logic.
 
 ### FlagTrigger — the flag-database interface
 
-`FlagTrigger` is the mapper interface to the DX flag database — the
-persistent boolean/expiring-flag store on the player
+`FlagTrigger` is the mapper interface to the DX flag database — the persistent
+boolean/expiring-flag store on the player
 (`player.flagBase.SetBool/GetBool/GetExpiration/DeleteFlag` ✅🔬).
 
 | Property | Meaning |
@@ -292,19 +287,19 @@ persistent boolean/expiring-flag store on the player
 | `bWhileStandingOnly` | only while the player stands in it |
 | `flagExpiration` | when the flag auto-clears; `-1` = permanent |
 
-So one `FlagTrigger` in write mode records state (a door was opened, an NPC
-died), and another in gate mode reads it later to branch.
+One `FlagTrigger` in write mode records state (a door was opened, an NPC died);
+another in gate mode reads it later to branch.
 
 ### The rest of the wiring set
 
 - `GoalCompleteTrigger` (`goalName`) — completes a goal the `MissionScript`
   created via `AddGoal`. Wire it to the world event that finishes an objective.
-- `LogicTrigger` — a boolean combiner of two trigger inputs. The two inputs are
-  matched by the instigating actor's `Group` against `inGroup1`/`inGroup2` (each a
-  `var() name`); the gate is `Op` (a `var() ELogicType`: `GATE_AND` / `GATE_OR` /
-  `GATE_XOR`), with `Not` (invert the output) and `OneShot`. Fire `Event` only when
-  the combination holds. (E.g. "both cameras disabled" = `GATE_AND` with the two cameras'
-  triggers grouped into `inGroup1`/`inGroup2`.)
+- `LogicTrigger` — a boolean combiner of two trigger inputs, matched by the
+  instigating actor's `Group` against `inGroup1`/`inGroup2` (each a `var() name`);
+  the gate is `Op` (a `var() ELogicType`: `GATE_AND` / `GATE_OR` / `GATE_XOR`),
+  with `Not` (invert the output) and `OneShot`. Fire `Event` only when the
+  combination holds. (E.g. "both cameras disabled" = `GATE_AND` with the two
+  cameras' triggers grouped into `inGroup1`/`inGroup2`.)
 - `SequenceTrigger` (`SeqNum`) + `MultiMover` (`SeqKey1..4` / `SeqTime1..4`,
   `bReverseKeyframes`) + `ElevatorMover` (`bFollowKeyframes`) — the multi-stop
   elevator/mover sequencing set. A `SequenceTrigger` advances a `MultiMover`
@@ -330,8 +325,8 @@ actor build DeusEx.LogicTrigger --prop Op=GATE_AND --prop inGroup1=cam1 --prop i
 
 ### Security-camera → console (no world monitor)
 
-DX does not paint a camera feed onto a world monitor surface. The feed
-renders inside the hackable-computer UI. Place `SecurityCamera` (Tag it), place
+DX does not paint a camera feed onto a world monitor surface; the feed renders
+inside the hackable-computer UI. Place `SecurityCamera` (Tag it), place
 `ComputerSecurity`, set `Views[i].cameraTag=<tag>`. Full recipe (and why
 `ScriptedTexture` is not a camera feed) in
 [`dx-conversations-computers.md`](dx-conversations-computers.md).
@@ -341,7 +336,7 @@ renders inside the hackable-computer UI. Place `SecurityCamera` (Tag it), place
 ## What does not exist in DX (don't offer it)
 
 - Zone classes `LavaZone` / `SlimeZone` — stock-Unreal `UnrealShare` classes DX
-  doesn't ship (and there is no `PainZone` class in any UE1 game); DX does pain via
+  doesn't ship (and no `PainZone` class in any UE1 game); DX does pain via
   `ZoneInfo bPainZone` + `DamageType` name (§2).
 - `LE_Negative` light effect — a UT2004-era value, absent from DX
   `Engine.u` ✅🔬. Darken with fewer/dimmer lights or lower zone

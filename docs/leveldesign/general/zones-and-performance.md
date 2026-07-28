@@ -1,21 +1,20 @@
 # Zones & performance  [ENGINE]
 
-UE1 has no occlusion beyond zones. Rendering performance comes from zones — sealing the map into
-airtight regions the engine culls whole. Wrong zoning (one merged mega-zone) draws everything at once.
+UE1 has no occlusion beyond zones. Performance comes from zones — sealing the map into airtight
+regions the engine culls whole. Wrong zoning (one merged mega-zone) draws everything at once.
 
 ## What a zone is
 
 A zone is a watertight region — any solid brush shape — sealed off from its neighbours by zone-portal
-sheets. Each zone carries a `ZoneInfo` actor placed inside it, resolved at build time. The engine culls
-per zone: if no part of a zone's sealing portal is visible to the camera, the whole zone and its
-contents is skipped.
+sheets. Each zone carries a `ZoneInfo` actor placed inside it, resolved at build time. If no part of a
+zone's sealing portal is visible to the camera, the whole zone and its contents is skipped.
 
 ## Building a zone
 
-1. Seal the region with solid geometry. The zone boundary — the walls, floor, ceiling around it — must
-   be solid. A semisolid on a boundary won't seal, and a semisolid abutting a portal wrecks the BSP.
-2. Split it from neighbours with a zone-portal sheet. A portal is a nonsolid sheet brush placed across
-   the opening (a doorway), flagged as a zone portal:
+1. Seal the region with solid geometry. The boundary walls, floor, and ceiling must be solid. A
+   semisolid on a boundary won't seal, and a semisolid abutting a portal wrecks the BSP.
+2. Split it from neighbours with a zone-portal sheet: a nonsolid sheet brush placed across the opening
+   (a doorway), flagged as a zone portal:
 
 ```
 brush build sheet --width 256 --height 128 --flag portal --flag invisible | actor add -
@@ -27,8 +26,8 @@ brush build sheet --width 256 --height 128 --flag portal --flag invisible | acto
 actor build Engine.ZoneInfo --at 512,512,128 | actor add -
 ```
 
-Verify zoning in the editor's Zone/Portal view — one flat colour per zone. Two rooms sharing a colour
-means the portal isn't watertight (a leak): a gap, or a hole on the portal face, merged them.
+Verify in the editor's Zone/Portal view — one flat colour per zone. Two rooms sharing a colour mean
+the portal isn't watertight (a leak): a gap or a hole on the portal face merged them.
 
 ### The portal-solidity rule
 
@@ -40,20 +39,18 @@ Often mis-stated as "portals must be solid". The truth:
 
 ### Size the portal to the opening, not the room
 
-Visibility is tested against the portal geometry. Cover the doorway (the opening between the zones)
-fully. You can safely oversize a portal into the surrounding wall — excess sheet buried in solid is
-clipped by BSP and harmless for sealing. What breaks culling is portal area left exposed in open air:
-any fragment hanging in open space stays visible and keeps its zone from ever culling. For best culling,
-keep portals snug to the opening — an oversized portal, even buried, can cull a bit less well than a
-tight one.
+Visibility is tested against the portal geometry, so cover the doorway fully. You can oversize a portal
+into the surrounding wall — excess sheet buried in solid is clipped by BSP and harmless. What breaks
+culling is portal area left exposed in open air: any fragment hanging in open space stays visible and
+keeps its zone from ever culling. Keep portals snug to the opening — an oversized portal, even buried,
+can cull a bit less well than a tight one.
 
 ## No antiportals
 
-UE1's occlusion model is solid BSP plus zones only. There are no antiportals (occluder brushes) —
-that's a UE2+ feature. You cannot drop a box to block a sightline; the only way to hide a zone is to
-break the line of sight to its portal with structure. Long sightlines are the enemy — bend corridors,
-offset doorways, add pillars and level changes so the camera can't see straight through many zones at
-once.
+UE1's occlusion is solid BSP plus zones only. There are no antiportals (occluder brushes) — that's a
+UE2+ feature. You cannot drop a box to block a sightline; the only way to hide a zone is to break the
+line of sight to its portal with structure. Bend corridors, offset doorways, add pillars and level
+changes so the camera can't see straight through many zones at once.
 
 ## The budgets
 
@@ -64,7 +61,7 @@ once.
 | See-through depth | ~3 (practical)                         | plan for ~3 zones deep through portals before a far portal shows its own texture — a rule of thumb, not a hardcoded cap (often conflated with the separate mirror/warp recursion limit) |
 | Node:poly ratio   | ~2:1                                   | see [geometry-and-bsp.md](geometry-and-bsp.md); high ratio = over-split BSP |
 
-Check the busy views in-game with `STAT FPS` (frame time / fps) and `STAT ZONE` (visible vs rejected
+Check busy views in-game with `STAT FPS` (frame time / fps) and `STAT ZONE` (visible vs rejected
 zones — confirms culling is working).
 
 ## Zone properties live on the ZoneInfo
@@ -78,17 +75,17 @@ actor prop set MyZone ZoneGravity=(X=0,Y=0,Z=-320)         # per-zone gravity
 actor prop set MyZone bFogZone=True                          # distance fog (see recipes/fire-and-fog.md)
 ```
 
-- Distance fog is `FogDistance` (float) + `FogColor` on the ZoneInfo, gated by `bFogZone=True` (as
-  above). Fog is invisible across zone boundaries — build an L-bend so a foggy zone doesn't pop in
-  suddenly as you round a corner.
-- Give every ZoneInfo an `AmbientSound` (the actor's own ambient-sound field, emitted from the
-  ZoneInfo) — silence reads as unfinished.
+- Distance fog is `FogDistance` (float) + `FogColor` on the ZoneInfo, gated by `bFogZone=True`. Fog is
+  invisible across zone boundaries — build an L-bend so a foggy zone doesn't pop in as you round a
+  corner.
+- Give every ZoneInfo an `AmbientSound` (the actor's own ambient-sound field) — silence reads as
+  unfinished.
 
 ## Build order
 
-The editor rebuilds in the order Geometry → BSP → Lighting → Paths. Rebuilding Geometry+BSP erases
-lighting, so relight after any geometry change (uedcli bakes lighting inside `materialize`, so this is
-automatic there). Keep Build Visibility Zones on during a rebuild — unchecking it wipes your zones.
+The editor rebuilds Geometry → BSP → Lighting → Paths. Rebuilding Geometry+BSP erases lighting, so
+relight after any geometry change (uedcli bakes lighting inside `materialize`, so this is automatic
+there). Keep Build Visibility Zones on during a rebuild — unchecking it wipes your zones.
 
 ## Related
 

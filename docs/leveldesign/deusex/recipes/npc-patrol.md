@@ -1,25 +1,23 @@
 # Recipe: an NPC on patrol  [DX]
 
-A patrolling guard is a `ScriptedPawn` with `Orders=Patrolling`, walking a chain of `PatrolPoint`
-navigation actors. This recipe places one guard, routes it on a loop, and makes it hostile to the
-player. The full NPC reference (roster, reactions, inventory, binding) is in
-[`../npcs.md`](../npcs.md).
+A patrolling guard is a `ScriptedPawn` with `Orders=Patrolling` walking a chain of `PatrolPoint`
+navigation actors. This recipe places one guard, loops it, and makes it hostile to the player. Full
+NPC reference (roster, reactions, inventory, binding): [`../npcs.md`](../npcs.md).
 
-> NPCs move only along the level's compiled path network. If paths aren't built, the guard stands
-> still forever with no error. Build paths as the last step, and rebuild after any geometry change.
-> `PatrolPoint`s are themselves navigation points, so a simple patrol can rely on them, but a guard
-> that must also cross open floor needs `PathNode`s too.
+> NPCs move only along the level's compiled path network. Unbuilt paths mean the guard stands still
+> forever with no error. Build paths last, and rebuild after any geometry change. `PatrolPoint`s are
+> themselves navigation points, so a simple patrol can rely on them; a guard that also crosses open
+> floor needs `PathNode`s too.
 
 ## Procedure
 
-1. Lay the patrol route: place `PatrolPoint` actors along the path you want walked, each within
-   line-of-sight and <700 uu of the next (≤350 on stairs), all at the same height above the floor.
-   The actor's yaw is the facing the NPC takes at that point.
-2. Chain them. Give each `PatrolPoint` a `Tag`, and set its `Nextpatrol` (a `name`) to the `Tag`
-   of the following point. To loop, point the last one's `Nextpatrol` back at the first's `Tag`. Two
-   points is enough for a there-and-back beat. Set `PauseTime` (seconds) if the guard should halt at a
-   point. `NextPatrolPoint` is a runtime-resolved object reference, not the editable field — the
-   mapper-set one is `Nextpatrol`.
+1. Lay the route: place `PatrolPoint` actors, each within line-of-sight and <700 uu of the next
+   (≤350 on stairs), all at the same height above the floor. The actor's yaw is the NPC's facing at
+   that point.
+2. Chain them. Give each `PatrolPoint` a `Tag`; set its `Nextpatrol` (a `name`) to the next point's
+   `Tag`. To loop, point the last one's `Nextpatrol` at the first's `Tag`. Two points give a
+   there-and-back beat. Set `PauseTime` (seconds) to halt the guard at a point. `NextPatrolPoint` is
+   the runtime-resolved object reference, not the editable field — the mapper-set one is `Nextpatrol`.
 3. Place the guard: any concrete `ScriptedPawn` leaf (e.g. `Soldier` or `MJ12Troop` from
    `HumanMilitary`) near the first patrol point.
 4. Order it to patrol: `Orders=Patrolling`, `OrderTag` = the first patrol point's `Tag`.
@@ -27,7 +25,7 @@ player. The full NPC reference (roster, reactions, inventory, binding) is in
    `bPermanent=True` in `InitialAlliances[0]`. Levels: −1 hostile, 0 neutral, +1 friendly.
 6. Optional inventory / binding: `InitialInventory` for its weapon, `BindName` if story logic
    references it. Usually leave reactions/fears at the class defaults.
-7. Build paths and playtest. Rebuild the path network (the `Paths Define` step), then run the map.
+7. Build paths and playtest: rebuild the path network (the `Paths Define` step), then run the map.
 
 ## With uedcli
 
@@ -49,9 +47,9 @@ actor build DeusEx.MJ12Troop \
 ```
 
 > Paths must be built in the editor (`PATHS BUILD` / F8 → Paths Define). `level materialize` does not
-> currently run the paths pass, so a materialized map has no reachspecs and the guard won't move until
-> paths are built in the editor. (Known gap; uedcli has no standalone "define paths" verb yet.) Verify
-> by playing that the guard walks its loop.
+> run the paths pass, so a materialized map has no reachspecs and the guard won't move until paths are
+> built in the editor. (Known gap; uedcli has no standalone "define paths" verb yet.) Verify by
+> playing that the guard walks its loop.
 
 ## Making an NPC hostile to other NPCs
 
@@ -66,8 +64,8 @@ actor build DeusEx.Greasel \
 ```
 
 Many classes ship with a default `Alliance` name (a Greasel's is `"Greasel"`, already friendly to
-Karkians). Give an NPC a custom `Alliance` name if a trigger will flip its allegiance later (via an
-`AllianceTrigger`).
+Karkians). Give an NPC a custom `Alliance` name if a trigger (an `AllianceTrigger`) will flip its
+allegiance later.
 
 ## Properties reference
 

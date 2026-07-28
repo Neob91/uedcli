@@ -1,24 +1,23 @@
 # CLI mechanics — why the argument surface is built this way
 
-Engineering decisions about `uedcli/cli.py` and `uedcli/dispatch.py`. The conventions these
-serve are the owner's and live in [`../direction/conventions.md`](../direction/conventions.md);
-this doc is the machinery.
+Engineering decisions about `uedcli/cli.py` and `uedcli/dispatch.py`. The conventions they serve are
+the owner's, in [`../direction/conventions.md`](../direction/conventions.md); this doc is the
+machinery.
 
 ## Deleting a migration shim can silently re-open a prefix-abbreviation hole
 
-`argparse` expands any unambiguous prefix of a defined option, so a migration-error shim does a
-second, unadvertised job: it occupies its own name, blocking that name from abbreviating into a
-surviving flag. Delete the shim and the abbreviation resolves somewhere else.
+`argparse` expands any unambiguous prefix of a defined option. A migration-error shim therefore also
+occupies its own name, blocking that name from abbreviating into a surviving flag. Delete the shim
+and the abbreviation resolves elsewhere.
 
-While a `--class` shim existed, `--class` was defined and errored helpfully. Deleting it — correct
+While the `--class` shim existed, `--class` was defined and errored helpfully. Deleting it — correct
 under the no-back-compat rule — let `--class` abbreviate into `--class-exact`, so an invocation that
-used to fail loudly began silently meaning exact-match only.
+used to fail loudly silently meant exact-match only.
 
-The fix: rename the survivor (`--class-exact` → `--exact-class`) so the prefix no longer collides.
-Keeping the shim to hold the name would trade a silent bug for permanent maintenance surface.
+Fix: rename the survivor (`--class-exact` → `--exact-class`) so the prefix no longer collides.
 
 After deleting any option, check the built parser, not the reasoning: whether a prefix is ambiguous
-depends on the full set of options registered on that subparser, which the diff does not show.
+depends on the full set of options on that subparser, which the diff does not show.
 
 **Rejected:**
 
@@ -53,12 +52,11 @@ argparse converts cleanly. A test pins this.
 
 The validator guarantees the spelling, not the range. `Decimal` has arbitrary exponent range, so
 `1e999999999` is a finite `Decimal` that passes the check; it becomes `inf` only when a
-computed-geometry module converts it to `float`. So the validator does not mean "no infinite value
-can reach the model": that overflow lives at the `Decimal`→`float` boundary, and closing it means
-bounding coordinates to what a float can represent — a decision about where range may be lost, not
-another `is_finite()` call. Deferred and logged (`dev/docs/board/inbox/`, "`parse_decimal` admits an
-INFINITY by another spelling", 2026-07-26); nothing observable breaks today, since such a value ends
-as a clean no-op or a clean `GeometryError`.
+computed-geometry module converts it to `float`. Closing that overflow means bounding coordinates to
+what a float can represent — a decision about where range may be lost, not another `is_finite()`
+call. Deferred and logged (`dev/docs/board/inbox/`, "`parse_decimal` admits an INFINITY by another
+spelling", 2026-07-26); nothing observable breaks today, since such a value ends as a clean no-op or
+a clean `GeometryError`.
 
 **Rejected:**
 

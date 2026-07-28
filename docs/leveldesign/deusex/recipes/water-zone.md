@@ -5,25 +5,22 @@ the surface. DX ships the `WaterZone` class — a `ZoneInfo` presetting `bWaterZ
 `EntrySound`/`ExitSound`, an underwater `ViewFog` tint, and an ambient underwater sound. A plain
 `bWaterZone` `ZoneInfo` is swimmable but loses those cues, so prefer `WaterZone`.
 
-> There is no `LavaZone`/`SlimeZone` class in DX (those are stock-Unreal `UnrealShare` classes DX
-> doesn't ship), and there is no `PainZone` class in any UE1 game — a hazard volume is just an
-> ordinary `ZoneInfo` with `bPainZone=True` (covered at the end).
+> DX ships no `LavaZone`/`SlimeZone` class (those are stock-Unreal `UnrealShare` classes it doesn't
+> ship), and no UE1 game has a `PainZone` class — a hazard volume is an ordinary `ZoneInfo` with
+> `bPainZone=True` (covered at the end).
 
 ## A: a swimmable water volume
 
 ### Procedure
 
-1. Subtract the pool. Carve the empty basin out of the floor. Align it to the 16-uu grid — an
-   off-grid pool is a classic BSP-hole source.
-2. Build the surface sheet. Make a Sheet brush lying flat (horizontal, `--plane xy`) sized to
-   exactly cover the pool opening, and place it just below the rim (a surface flush with the very
-   top looks wrong).
-3. Make the sheet a translucent zone portal — a nonsolid translucent portal the player passes
-   through (the `portal` + `translucent` surface flags). Texture it from `CoreTexWater` (static or
-   animated).
-4. Place the water `ZoneInfo` below the surface. Add a `WaterZone` (or a plain `ZoneInfo` with
-   `bWaterZone=True`) inside the pool, under the sheet. Everything in that zone below the sheet now
-   behaves as water.
+1. Subtract the pool from the floor. Align it to the 16-uu grid — an off-grid pool is a classic
+   BSP-hole source.
+2. Build a flat Sheet brush (horizontal, `--plane xy`) sized to exactly cover the pool opening, and
+   place it just below the rim (flush with the very top looks wrong).
+3. Make the sheet a nonsolid translucent zone portal the player passes through (`portal` +
+   `translucent` surface flags). Texture it from `CoreTexWater` (static or animated).
+4. Add a `WaterZone` (or plain `ZoneInfo` with `bWaterZone=True`) inside the pool, under the sheet.
+   Everything below the sheet now behaves as water.
 5. Rebuild.
 
 ### With uedcli
@@ -45,27 +42,26 @@ actor build DeusEx.WaterZone --at 0,0,-48 | actor add -
 ```
 
 > BSP tip: keep the water sheet a single oversized simple square — don't intersect it to an odd
-> shape. Add any protruding objects (pillars, ladders) before the water sheet. For a large body of
+> shape. Add protruding objects (pillars, ladders) before the water sheet. For a large body of
 > water, one big brush works: everything below its waterline is underwater (as in
 > `01_NYC_UNATCOIsland.dx`).
 
 ## B: pain / gas / hazard zones
 
-A pain zone damages anyone inside it. It is a normal sealed zone whose `ZoneInfo` has `bPainZone=True`.
+A pain zone damages anyone inside it: a sealed zone whose `ZoneInfo` has `bPainZone=True`.
 
 ### Procedure
 
-1. Seal the room as its own zone. Put Zone Portal sheets across every opening (doorways) so the room
-   is a distinct zone. (Zoning openings is good practice regardless — it aids culling.)
-2. Verify the zone exists — after a rebuild, Zone/Portal view should show the room a different colour
-   from its neighbours (the zone count went up).
+1. Seal the room as its own zone with Zone Portal sheets across every opening (doorways). Zoning
+   openings aids culling regardless.
+2. Verify: after a rebuild, Zone/Portal view should show the room a different colour from its
+   neighbours (the zone count went up).
 3. Add a `ZoneInfo` inside and set `bPainZone=True` + `DamagePerSec` (higher = more damage) +
    `DamageType`. The `DamageType` name sets the HUD damage icon: `Shot`, `TearGas`, `PoisonGas`,
    `HalonGas`, `Radiation`, `Flamed` (catches fire), `Burned`, `Shocked`, `EMP`, `Drowned`, `Stunned`.
    (`NanoVirus` exists but has no effect.)
-4. (Optional) cosmetics — add a `ParticleGenerator` (e.g. `particleTexture=Effects.Gas_Poison`) or
-   `ElectricityEmitter` for a visible/audible cue matching the damage type (see
-   [`particles.md`](particles.md)).
+4. Optional cosmetics — a `ParticleGenerator` (e.g. `particleTexture=Effects.Gas_Poison`) or
+   `ElectricityEmitter` for a cue matching the damage type (see [`particles.md`](particles.md)).
 
 ### With uedcli
 
@@ -99,11 +95,11 @@ actor build Engine.ZoneInfo \
 ## Caveats and gotchas
 
 - Grid-align the pool and keep the surface sheet simple — the two biggest water BSP pitfalls.
-- `DamageType` is a Name — matched by name, so spelling matters.
+- `DamageType` is a Name, matched by name, so spelling matters.
 - No `LavaZone`/`SlimeZone`/`PainZone` class — always a `ZoneInfo` (or `WaterZone`) with the right bool.
 - Rising/falling water needs scripting — zone portals are immovable geometry.
-- A zone needs its portals watertight — a gap merges the zone with its neighbour ("whole level full
-  of water"). Diagnose in Zone/Portal view.
+- Keep a zone's portals watertight — a gap merges the zone with its neighbour ("whole level full of
+  water"). Diagnose in Zone/Portal view.
 
 ## See also
 

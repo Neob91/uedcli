@@ -1,26 +1,25 @@
 # Human-scale numbers  [ENGINE] + [DX] 🔬
 
-The figures an author needs to build playable geometry: how big the player is, how high a step, how
-tall a ceiling, how wide a doorway, where a `PlayerStart` sits, how far apart path nodes go. Get
-these wrong and the map builds but is unwalkable: steps too tall, ceilings too low, doorways the
-collision cylinder can't fit through.
+Figures for building playable geometry: player size, step height, ceiling height, doorway width,
+`PlayerStart` position, path-node spacing. Get these wrong and the map builds but is unwalkable —
+steps too tall, ceilings too low, doorways the collision cylinder can't fit through.
 
 Two tiers of confidence:
 
-- ✅🔬 real Deus Ex figures, uedcli-decoded. Read from the shipped `DX/System/DeusEx.u` by building a
-  throwaway instance of the class and reading the resolved property default — no editor, no UT proxy.
-  An unset property resolves to its class default (the offline decode-read semantics — see
-  `direction.md` "One package-format core"), which is the number an author wants. These are
-  authoritative and supersede any tutorial figure.
-- [ENGINE] conventions — engine-generic sizing rules (unit scale, stair/ceiling/doorway/grid
-  guidance) drawn from the Legacy wikis, Steve Tack, and Wolf. These are design conventions, not
-  binary constants; treat them as recommended bands, not hard engine limits (the hard limits — zone
-  count, poly budget, node ceiling — are called out separately).
+- ✅🔬 real Deus Ex figures, uedcli-decoded. Read from shipped `DX/System/DeusEx.u` by building a
+  throwaway class instance and reading the resolved property default — no editor, no UT proxy. An
+  unset property resolves to its class default (offline decode-read semantics — see `direction.md`
+  "One package-format core"), the number an author wants. Authoritative; supersede any tutorial
+  figure.
+- [ENGINE] conventions — engine-generic sizing rules (unit scale, stair/ceiling/doorway/grid) from
+  the Legacy wikis, Steve Tack, and Wolf. Design conventions, not binary constants; recommended
+  bands, not hard limits (the hard limits — zone count, poly budget, node ceiling — are called out
+  separately).
 
-> Scope discipline. DX numbers are not stock UnrealEngine-1 numbers. Deus Ex is an earlier engine
-> build than UT99, and its player pawn is a different size. Historical UT99 proxy values are listed at
-> the bottom only so an author who finds them in a UT tutorial knows they are the wrong substrate —
-> never build DX geometry to them.
+> Scope discipline. DX numbers are not stock UnrealEngine-1 numbers — Deus Ex is an earlier engine
+> build than UT99 with a different-sized player pawn. UT99 proxy values are listed at the bottom only
+> so an author who finds them in a UT tutorial recognises the wrong substrate — never build DX
+> geometry to them.
 
 ---
 
@@ -71,7 +70,7 @@ Confirms the human NPC shares the player's footprint, so a corridor sized for th
 | `NanoKey` — cylinder | **2.05 × 3.11** | a tiny pickup — illustrates how small collision extents get for hand items. |
 
 (Not recoverable this way: truly `native` C++ classes with empty script `defaultproperties` — e.g.
-the `Fire.u` fractal-texture `FX_*`/`RenderHeat` values — have no default in the package; see
+`Fire.u` fractal-texture `FX_*`/`RenderHeat` values — have no default in the package; see
 [`sources.md`](./sources.md). Everything script-defaulted — pawns, lights, movers, particles,
 decorations, cameras — reads cleanly.)
 
@@ -87,9 +86,9 @@ decorations, cameras — reads cleanly.)
 | 256 uu | **16 ft** (a common room-module size) |
 | Max world extent | **65536 uu (2¹⁶) per axis** |
 
-The `16 uu = 1 ft` convention is cross-confirmed: Steve Tack's DX tutorials and the OldUnreal Legacy
-wiki agree on it. It is an engine convention DX inherits; DX authors size doors, steps, and panels in
-feet-as-16-uu. It is also why the default grid is 16 (§4) — one grid square is one foot and one stair
+The `16 uu = 1 ft` convention is cross-confirmed by Steve Tack's DX tutorials and the OldUnreal
+Legacy wiki. An engine convention DX inherits; DX authors size doors, steps, and panels in
+feet-as-16-uu. It is why the default grid is 16 (§4) — one grid square is one foot and one stair
 rise.
 
 ---
@@ -105,8 +104,8 @@ rise.
 | Doorway | ~**128 tall × 64 wide** (generic); **[DX]** doors **144×72** or **128×64**, 1–8 uu thick | must clear the 40-wide × 95-tall player cylinder with margin. |
 | Duck / crouch passage | ~52 w × 66 t (UT99 figure — verify for DX) | ⚠ this 52×66 is the UT99 Legacy-wiki crouch minimum, sized for UT's smaller 34-wide/78-tall pawn. DX's crouched cylinder dimensions are not established here — treat 52×66 as a rough lower bound and verify against the DX pawn before relying on it. |
 
-Prefer clean multiples: 96 / 112 / 128 over 100 — see grid discipline (§4) and the BSP-hole mechanism
-in [`csg-bsp.md`](./csg-bsp.md) (off-grid coordinates land inside the CSG tolerance bands and get
+Prefer clean multiples: 96 / 112 / 128 over 100 — see §4 and the BSP-hole mechanism in
+[`csg-bsp.md`](./csg-bsp.md) (off-grid coordinates land inside the CSG tolerance bands and get
 mis-classified into holes).
 
 ---
@@ -120,8 +119,8 @@ mis-classified into holes).
 | Detail grid | 8 / 4 / 2 for trim and fine detail |
 | Rotation | **solid brushes: 90° increments** (off-90° → irrational coords → BSP holes); **semisolid/nonsolid/decoration: any angle** (they don't cut the world) |
 
-uedcli does not snap for you — grid discipline is authoring guidance, not an enforced operation. The
-off-grid failure signature is a coordinate reading `15.999976` where `16` belongs (see
+uedcli does not snap for you — grid discipline is authoring guidance, not enforced. The off-grid
+failure signature is a coordinate reading `15.999976` where `16` belongs (see
 [`csg-bsp.md`](./csg-bsp.md)).
 
 ---
@@ -162,7 +161,7 @@ See [`dx-classes.md`](./dx-classes.md) for the device classes these strengths be
 
 ## 7. UT99 proxy values — historical only, do not build to these  ⚠
 
-If you find these in a UT / Unreal tutorial, they are the wrong substrate. Deus Ex is an earlier
+If you find these in a UT / Unreal tutorial, they are the wrong substrate — Deus Ex is an earlier
 engine build with a differently-sized pawn. Listed only so an author recognises and rejects them:
 
 | Quantity | UT99 (wrong for DX) | DX (correct, §1) |
@@ -191,13 +190,13 @@ bin/uedcli actor build DeusEx.MJ12Troop    | actor add - | actor prop get - MaxR
 bin/uedcli actor build Engine.Light        | actor add - | actor prop get - LightRadius         # → 64
 ```
 
-`class show <Class>` prints property names and types only, never the default values. The values come
-from the `actor build … | actor prop get` route above; do not source numbers from `class show`.
+`class show <Class>` prints property names and types only, never default values — source numbers
+from the `actor build … | actor prop get` route above, not `class show`.
 
-(Architectural dimensions of shipped maps — the real room/corridor extents an author might want to
-copy — are not class defaults; they live in the map geometry and can only be measured by exporting a
-shipped `.dx` to a T3D corpus and measuring it model-side with `actor bbox` / `brush poly list`. That
-is the one genuinely editor-bound measurement; see the residual gaps in [`sources.md`](./sources.md).)
+(Architectural dimensions of shipped maps — real room/corridor extents an author might copy — are
+not class defaults; they live in map geometry and can only be measured by exporting a shipped `.dx`
+to a T3D corpus and measuring model-side with `actor bbox` / `brush poly list`. The one genuinely
+editor-bound measurement; see residual gaps in [`sources.md`](./sources.md).)
 
 ---
 
