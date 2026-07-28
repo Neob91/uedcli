@@ -1,19 +1,3 @@
-## The repo this tool lives in
-
-`uedcli` is its own repository, and this file is its **canonical rule file** — there is no rule file
-above it. (A sibling `uplayctl` mirrors these rules from a *different* repo; changes here do not
-propagate to it.)
-
-- **`_scratch/` (repo root) is THE place for every temporary, throwaway or experimental file** —
-  scratch scripts, **every manual `MAP EXPORT`/`BRUSH EXPORT` and preview `.ppm`/`.t3d`**,
-  screenshots, texture dumps, spike output, logs. It is gitignored; organize into subdirs
-  (`_scratch/shots/`, `_scratch/t3d/`, …). **If a throwaway file is not under `_scratch/`, it is in
-  the wrong place — no exceptions.** Never write throwaway output into the tracked tree — not
-  `Temp/`, not `Maps/`, not the repo root. (The session-scratch dir named in the environment prompt
-  is fine for files that never need to outlive the session.)
-- **`TODO.md` (repo root) holds repo-level, cross-cutting items**; uedcli's own backlog is the board.
-  When an item is fully done, delete it — never leave it ticked `[x]`.
-
 ## Working with the owner
 
 ### Ask via the question widget, and explain it properly
@@ -22,22 +6,6 @@ propagate to it.)
 never as prose in the chat.** A question buried in a wall of text gets skimmed, answered partially,
 or scrolls away. This covers design forks, rulings on `direction/` topics, sequencing calls, and
 anything a review gate escalates.
-
-**Write it for someone who does NOT have the spec or the code memorised.** The owner decides *what we
-want* and is not carrying a 400-line spec in their head. So:
-
-- **Say what the thing IS before asking about it**, in plain words: "`--faces textured` reads a
-  face's texture from the package and paints it into the preview image" — not "the §4.3 fetch path".
-- **NEVER make a section number, symbol name, or piece of jargon load-bearing.** Use them only
-  *after* the plain-English version, never instead of it.
-- **State why it is a decision at all** — what makes it genuinely ambiguous, and why you cannot just
-  pick.
-- **Make every option self-contained**, with its concrete consequence: what changes, what it costs,
-  what breaks or gets slower, what it forecloses.
-- **Give the recommendation first** when there is one, marked as such — a recommendation does not
-  replace laying out the alternatives.
-- **Surface what is genuinely uncertain**, including where your own earlier statement turned out to
-  be wrong. A ruling made on a false premise is worse than no ruling.
 
 **Never overrule the owner silently, and never downgrade a real question into a board item to avoid
 asking it.** If a rule of theirs points one way and you judge otherwise, that is a question for the
@@ -86,148 +54,13 @@ Evidence citations and live-finding dates are kept.
 **Nothing mechanical enforces any of this**; revise-in-place destroys the prior text, so a bad edit
 looks exactly like a good one. Why it is shaped this way anyway: `dev/docs/direction/process.md`.
 
-**`dev/docs/owner-notes.md` and `dev/docs/2026-06-20-open-questions-for-owner.md` are theirs — do not
-touch them at all.** Every other doc under `dev/docs/`, including `rationale/` and `rules/`, an agent
-maintains on its own.
+## Workflow
 
-## After every change
+Always ask where to implement the change:
+- feature branch on a git worktree
+- current checkout (usually master)
+- somewhere else
 
-Without being asked, do each of these that applies (a docs-only edit has no tests to run; a code
-change with no user-facing docs has none to update):
-
-- **Update every doc the change touches** — no doc may be left stale. **EXCEPT
-  `dev/docs/direction/`**: never edit that tree to fix staleness — ask.
-- **Cross off the TODOs it completed**, and **add TODOs for anything deferred or left unfinished**.
-- **Run the relevant tests and confirm they pass** — via `bin/test`, never bare `pytest`.
-- **Commit and push it** (see **Commits**) — explicit pathspecs, one short imperative subject, no AI
-  attribution, never rewriting history.
-- **Gate it** (see **Review gates**) — batched, per those rules.
-
-## Dispatching subagents
-
-**This section IS the owner's standing request to dispatch subagents** — a blanket yes for this repo,
-given once here rather than repeated in every message. It covers every subagent an agent hands work
-to: a gate's reviewers, a spike investigator, a wide multi-file search, a long or multi-step task
-briefed to completion. A harness rule that permits subagents only when "the user requested it" is
-therefore *satisfied*, not overridden.
-
-The grant is about **permission, not judgement.** It does not make delegation always correct — a small
-bounded job still belongs inline.
-
-**Every dispatch carries a briefing obligation** — see **"Read-on-demand docs"**: a subagent inherits
-none of your reading, so its prompt must name by path every doc it needs.
-
-## Review gates
-
-**EVERY change gets reviewed** — a trivial one gets only the cheap pass, but nothing ships
-unlooked-at. **RUN THE GATE AUTOMATICALLY — NEVER ASK PERMISSION TO REVIEW.** The moment an artifact
-is finished, dispatch its round without being told and without announcing the intent first: a gate is
-part of finishing the work, exactly like running the tests. Report the OUTCOME, not the intent.
-
-Permission to spawn the reviewers comes from **"Dispatching subagents"** above.
-
-**Read `dev/docs/rules/review-gates.md` before dispatching a round** — it carries the rest: which row
-a change takes, what "trivial" excludes, what reviewers are told, how findings are dispositioned, the
-round-2 trigger, and how to batch.
-
-### The three moments
-
-At each of these, fan out Claude reviewer subagents in parallel and resolve their findings before the
-work is declared done:
-
-1. **After writing a spec** — before planning or implementing.
-2. **After writing a plan** — before building.
-3. **After building something** — before declaring done.
-
-### How many reviewers, and which model
-
-| Moment / tier      | Round 1 | Round 2 — only if resolving round 1 changed the artifact
-|--------------------|---------|---
-| **spec** review    | 3 Opus  | 2 Opus
-| **plan** review    | 1 Opus  | 1 Opus
-| **build** review   | 1 Opus  | 1 Opus
-| **docs-only**      | 1 Opus  | never — ONE round, max
-| **trivial** change | 1 Haiku | never — the one round IS the whole gate
-
-Read the table as: **one reviewer is the gate; a second is what a finding costs.** **Only the spec
-moment opens wide up front** — a spec's defects get built on top of. *(Owner ruling, 2026-07-25.)*
-**Every reviewer slot outside the trivial tier is Opus** (`Agent(model: "opus")`). That governs
-*which model fills a slot* — the counts and the two-round ceiling are hard.
-
-**NEVER restate the reviewer counts outside this file.** A spec, plan, or board item that spells out
-"two cold reviewers" goes stale the moment the gate changes — and it has, repeatedly. Cite
-**`CLAUDE.md` "Review gates"** instead and let the count live in exactly one place.
-
-### The rules that bind every round
-
-- **`build` is the DEFAULT row** for anything non-trivial that is not a spec or a plan. **A batch
-  takes its least-trivial member's row.**
-- **Trivial means the change alters no reader's understanding and no tool behavior** — a typo, a
-  formatting fix, a comment, a test rename, a broken link. It is **NEVER** an edit to what a rule,
-  doc, spec, plan or engine-fact note *says*, and never a change to executable behavior, including a
-  one-line change to load-bearing code. **When it is arguable, it is not trivial.**
-- **Reviewers get CONTEXT but never PRIMING.** Give every reviewer this file, the spec/plan under
-  implementation, and — by path — every doc they must read before acting; a subagent does not inherit
-  your reading. Never show them a previous round's findings, never say what you expect, never reuse a
-  reviewer.
-- **What blocks the gate is observability, not severity:** a finding may be left standing ONLY if
-  fixing it would change nothing anyone would ever observe — pure wording, formatting, or naming
-  taste. Everything else is **fixed**, **logged** (`bin/board new inbox`), **escalated to the owner**,
-  or **refuted** with the disproving check recorded. Never only in chat.
-- **TWO ROUNDS IS THE CEILING**, and round 2 runs iff resolving round 1 **changed the artifact**. It
-  fires automatically on that trigger. There is no round 3.
-- **A STRUCTURAL finding STOPS the work, in EITHER round** — escalate to the owner; the work is
-  parked, not done.
-- **Batch small changes into one round.** Commit as you go; gate the accumulated range before
-  declaring the batch done. Flush the batch before ending a session or switching work. Never batch
-  across the three moments.
-- **Surface scale, once:** if a single moment would dispatch more than 3 reviewers, or several rounds
-  would fire at once, say what is about to run in one line and then run it.
-
-## Commits
-
-**Commit after every change.** Once a change is complete — code, docs, TODO updates, all of it —
-commit it before moving on, without waiting to be asked. Short imperative subject, no `type:` prefix,
-no AI attribution.
-
-**COMMIT ONLY YOUR OWN HUNKS — never another session's, unless told to.** File-level pathspecs are
-NOT sufficient: several agents work this repo at once, so a file you edited may ALSO carry hunks you
-did not write, and `git commit -- <path>` commits the whole file including theirs.
-
-- **Read `git diff <path>` for every file before committing it**, and satisfy yourself that every
-  hunk is one you made. A file you never touched is obviously not yours; a file you *did* touch is
-  the dangerous case.
-- **If a file carries foreign hunks, stage only yours** — write your hunks to a patch and
-  `git apply --cached` it, then commit the index. (`git add -p` is interactive and unavailable here.)
-  Never commit the file wholesale "because most of it is mine".
-- **Never `git add .`, `git add -A` or `git commit -a`.**
-- **Leave what is not yours alone** — do not revert it, stage it, or tidy it. It belongs to a session
-  still working.
-- **Check the index is clean before you stage** (`git diff --cached --quiet`): a non-empty index is
-  another session mid-commit, and anything already staged will ride along on your `git commit`.
-
-The same care applies to `git push` on a shared branch: it publishes every local commit there,
-including other sessions'. That is normally fine and is not a reason to skip pushing your own work —
-but never treat a push as "only my change went out".
-
-**Always push your work — never lose it** — with exactly one exception, a feature branch in a
-worktree, below. **NEVER REWRITE HISTORY, locally OR on `origin`.** No
-`git push --force` (or `--force-with-lease`), no `git commit --amend`, no `git rebase` that rewrites
-already-pushed commits. Only ever add new commits on top; mistakes are corrected with a fresh commit
-or a `git revert`.
-
-**A FEATURE is built in its own git worktree and squash-merged back** — read
-`dev/docs/rules/worktrees.md` before creating one or merging one. Three things there are dangerous to
-get wrong from memory:
-
-- **NEVER push the feature branch** — it is squashed away on merge and a remote branch can never be
-  deleted, so pushing one strands permanent dead weight on `origin`. This is the one exception to
-  "always push your work" above; local commits are what protect the work instead.
-- **Run `git diff --cached --quiet` before `git merge --squash`** — omitting it commits over a
-  concurrent session's staged work.
-- **Ask the owner before `git branch -D`** — deleting a branch is destructive.
-
-A change that is not a feature — a doc correction, a chore sweep, a one-file fix — needs no worktree.
 
 ## Code & CLI conventions
 
