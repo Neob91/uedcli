@@ -8,5 +8,5 @@ ship it as one merged commit. Worktree and merge commands: [`worktrees.md`](work
    run the new behavior and watch it work (the `verify` skill).
 3. One subagent reviews the worktree's diff (`git diff base...HEAD`); fix the findings it confirms,
    re-test, and re-review if the fixes were large.
-4. `git mv` the item into `done/` and cut its `overview.md` to a one-line record; then squash-merge
-   the worktree into the base as one commit and delete the worktree.
+4. `git mv` the item into `done/` and cut its `overview.md` to a one-line record; then pull the base
+   up to `origin`, squash-merge the worktree into it as one commit, and delete the worktree.
