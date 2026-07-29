@@ -23,12 +23,10 @@ to put it. This doc is that home.
   citations and live-finding dates are kept, because they are facts, not history.
 - **A gap between `direction/` and `../architecture.md` is expected** — it is
   work not yet done. Two docs in the *same* lane disagreeing is a bug.
-- **`direction/` may never be written without the owner's explicit yes** — the
-  rule is `CLAUDE.md` "Direction docs". It covers `direction/` and nothing else.
-  Not because everything else is mere fact — `../rules/` carries their normative
-  text too — but because of **exposure time**: `../rules/` is exercised every
-  session, so a corruption surfaces fast, while `direction/` governs work that
-  may not start for months.
+- **No `dev/docs/` doc may be written without the owner's explicit yes**, except
+  `dev/docs/board/` — the rule is `CLAUDE.md` "dev/docs — never edit without the
+  owner's approval". `direction/` is the strictest case: it governs work that may
+  not start for months, so a corruption there surfaces slowest.
 - **The `Confirmed:` trailer is an audit marker, not a gate, and there is NO
   enforcement hook.** A `pre-commit` hook provably cannot see the message it
   would have to check: it runs before the message exists and takes no arguments,
@@ -86,8 +84,6 @@ to put it. This doc is that home.
 - **Enforcing the confirmation rule with a git hook** — demonstrated unworkable,
   and the `core.hooksPath` override would put a real safety rule at risk for a
   guard that was never more than a marker.
-- **Extending the confirmation rule past `direction/`** — rejected on exposure
-  time, not on content.
 - **A shared rule file sitting above the per-tool ones.** It is the obvious
   de-duplication — one process, not two mirrored copies — and it was rejected
   anyway, because the delegation seam had already produced a stale quotation.
