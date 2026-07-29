@@ -23,6 +23,9 @@ for a different audience.
 The user-facing surface is `docs/usage.md` (the CLI reference: verbs, flags, output) and
 `docs/leveldesign/` (level-design craft mapped onto the verbs). Add a doc or section when a verb or
 feature is substantial enough that a user would look for it and not find it; err toward documenting.
+New level-design knowledge — best practices, recipes, craft or engine claims, human-scale numbers —
+needs the owner's approval before it lands (`CLAUDE.md` "Documentation"); rephrasing and tool-behavior
+docs do not.
 
 User-facing docs must never reference the developer docs — no links or paths to spikes, the board,
 architecture, etc.: a user cannot open them. State the fact plainly in the user doc (with a

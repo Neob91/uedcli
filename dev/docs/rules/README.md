@@ -23,5 +23,5 @@ moved rule is dangerous to get wrong from memory, the router line carries the ha
 worktrees, the `git diff --cached --quiet` check before `git merge --squash` (whose omission commits
 over a concurrent session's staged work) and "ask before `git branch -D`".
 
-Agents maintain this tree on their own — no confirmation needed, unlike `../direction/`
-(`CLAUDE.md` "Direction docs").
+Editing these rule docs needs the owner's approval, like the rest of `dev/docs/` (`CLAUDE.md`
+"dev/docs — never edit without the owner's approval"). Only `dev/docs/board/` stays agent-operated.
