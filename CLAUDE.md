@@ -26,29 +26,27 @@ Wherever the decision was made — a spec, chat, a one-line answer:
   ruled, including its known costs, and pin those costs in a test or doc so they are recorded rather
   than quietly re-fixed later.
 
-### Direction docs: never revise without confirmation
+### dev/docs — never edit without the owner's approval, except the board
 
-`dev/docs/direction/<topic>.md` holds what the owner decided — product intent and process rulings
-alike. It is mutable: revised in place, no supersession, no dated history (git keeps that); evidence
-citations and live-finding dates stay.
+Get the owner's explicit yes before you create, edit, reword, or delete anything under `dev/docs/` —
+`architecture.md`, `rationale/`, `rules/`, `unrealed/`, `spikes/`, `direction/`, and the rest. Propose
+the exact text and wait; "it follows from what they said" does not satisfy this. When a doc looks
+stale, ask — do not edit.
 
-- Never create, revise, reword, or delete anything under `dev/docs/direction/`, down to a single
-  `Rejected` bullet, without asking and getting an explicit yes. Propose the exact text and wait.
-  "It follows from what they said" does not satisfy this. Moving a topic out needs a yes too, since
-  it removes the protection.
-- When direction looks stale, ask — do not edit. Confirm proactively: when working in a topic, ask
-  whether its direction doc is still current.
-- `direction/README.md` is the exception: its index rows and short model statement may be maintained
-  freely. No topic content there, and never an `@` import.
-- A decision awaiting a yes is parked with `bin/board new inbox '[OWNER — confirm] …'`
-  (`kind = "owner-question"`), carrying the proposed text verbatim in the item's `overview.md`. If it
-  blocks an existing item, put it in that item's `questions/` instead and leave the item where it is.
-- Commits touching `dev/docs/direction/` carry a `Confirmed: <topic>` trailer, so
-  `git log --grep=confirmed -i -- dev/docs/direction/` shows every confirmed edit and an unconfirmed
-  one stands out.
+The one exception is `dev/docs/board/`, which stays agent-operated: log findings
+(`bin/board new inbox`), move items between stages, and trim `done/` entries without asking.
 
-Nothing mechanical enforces any of this; revise-in-place destroys the prior text, so a bad edit looks
-exactly like a good one. Why it is shaped this way: `dev/docs/direction/process.md`.
+`dev/docs/direction/<topic>.md` is the strictest case and carries extra handling. It holds what the
+owner decided — product intent and process rulings alike — revised in place, no supersession, no
+dated history (git keeps that); evidence citations and live-finding dates stay. Down to a single
+`Rejected` bullet, do not touch it without a yes; moving a topic out needs a yes too.
+`direction/README.md` is the exception within the exception: its index rows and short model statement
+may be maintained freely (no topic content, never an `@` import). Park a decision awaiting a yes with
+`bin/board new inbox '[OWNER — confirm] …'` (`kind = "owner-question"`), the proposed text verbatim in
+its `overview.md`; if it blocks an existing item, put it in that item's `questions/` instead. Commits
+touching `dev/docs/direction/` carry a `Confirmed: <topic>` trailer.
+
+Nothing mechanical enforces any of this. Why it is shaped this way: `dev/docs/direction/process.md`.
 
 ## Workflow
 
