@@ -69,7 +69,7 @@ is stdlib, and `bin/board` reads the same subset in bash — an agreement test r
 item and requires identical results.
 
 **The stage is the path, so `kind` does not restate it.** `[spec]`/`[spike]`/`[plan]` are retired as
-tags: every issue gets a plan anyway. `kind` is what the path cannot say.
+tags: the path already says which stage an item is in. `kind` is what the path cannot say.
 
 ## Referencing an item — by SLUG, never by path
 
