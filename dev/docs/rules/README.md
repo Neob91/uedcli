@@ -4,10 +4,11 @@ Rules that bind the work but do not need to be in every session's context. Each 
 moment that triggers reading it; `CLAUDE.md`'s router names that moment and carries the one fact you
 can't miss.
 
-| Rule                 | Read it before |
-|----------------------|---
-| `documentation.md`   | writing or restructuring docs |
-| `worktrees.md`       | creating a worktree or squash-merging one |
+| Rule                  | Read it before |
+|-----------------------|---
+| `building-features.md`| building a `to-build/` item and merging it |
+| `documentation.md`    | writing or restructuring docs |
+| `worktrees.md`        | creating a worktree or squash-merging one |
 | `tests.md`           | running tests |
 | `spikes.md`          | starting or finishing a spike |
 | `background-work.md` | starting a background job or long wait |

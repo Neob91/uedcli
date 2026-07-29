@@ -175,6 +175,7 @@ as a bug; one that has not read this file will flag deliberate conventions as de
 Process rules (`dev/docs/rules/README.md` indexes them). Each line carries the one fact you cannot
 afford to miss; the doc carries the rest:
 
+- `dev/docs/rules/building-features.md` — read before building a `to-build/` item and merging it. The runbook: build in a worktree, verify (checks + tests + exercise it), one subagent review, move the item to `done/`, squash-merge as one commit.
 - `dev/docs/rules/documentation.md` — read before writing or restructuring docs. Table alignment, which dev doc owns what, ephemeral specs/plans, UnrealEd evidence and confidence markers.
 - `dev/docs/rules/worktrees.md` — read before creating a worktree or squash-merging one. Never push a feature branch; check the index before `git merge --squash`; ask before `git branch -D`.
 - `dev/docs/rules/tests.md` — read before running tests. Run them via `bin/test`, never bare `pytest`; uedcli and its suite are host-native, not containerised.
