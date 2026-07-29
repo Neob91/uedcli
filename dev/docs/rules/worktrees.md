@@ -61,8 +61,8 @@ Check the index first, as above. `git merge --squash` stages the whole merged re
 following `git commit` commits everything staged, including whatever a concurrent session had staged.
 If the index is not clean, stop and sort that out rather than committing over another session's work.
 
-Pull the base up to `origin` before merging — the shared origin moves under you, so merging onto a
-stale local base risks clobbering or conflicting with work another session already pushed.
+Update the base to `origin`'s latest before merging — the shared origin moves under you, so merging
+onto a stale local base risks clobbering or conflicting with work another session already pushed.
 
 ## 5. Clean up — but verify before deleting anything
 
