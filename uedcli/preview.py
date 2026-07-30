@@ -1,5 +1,7 @@
-"""Self-rendered wireframe preview — a low-noise COLOR image from the model alone (no
-editor), so the LLM can SEE a brush's geometry and which poly INDEX is which face.
+"""Self-rendered orthographic preview — a low-noise COLOR image from the model alone (no
+editor), so the LLM can SEE a brush's geometry and which poly INDEX is which face. `--faces wire`
+(the default) draws outlines only; `--faces flat` fills each surviving face solid through a depth
+buffer and keeps the wireframe over it (see `_scene_geometry` for the cull and the edge rule).
 Rendering is stdlib only (no PIL/numpy), so every function here returns raw **PPM/P6
 bytes IN MEMORY**. That is an internal format only: the CLI's disk-write boundary
 (`dispatch._render_actors_to_out`) encodes those bytes to **PNG** with Pillow before
@@ -38,9 +40,10 @@ Rendering choices (all to make poly numbers readable):
     marker use its tint. A top-left LEGEND (`_draw_legend`) maps each tint → actor NAME (brush = filled
     square, point = filled diamond), and actor names live there, OFF the geometry (declutter). The
     legacy black/grey path keeps black accents, on-geometry names, no legend.
-  - `focus` (an actor name) recedes every OTHER brush to a faint wireframe and paints face numbers only
-    for the focused brush; `highlight` OVERRIDES focus (a highlighted poly/actor stays vivid+bold on top
-    and keeps its number). All names still appear in the legend regardless of focus.
+  - `focus` (an actor name) recedes every OTHER brush — its wireframe to faint lines, and under a FILLED
+    mode its fills to a faint tint of themselves — and paints face numbers only for the focused brush;
+    `highlight` OVERRIDES focus (a highlighted poly/actor stays vivid+bold on top, at FULL fill
+    strength, and keeps its number). All names still appear in the legend regardless of focus.
   - an `AnnotationSpec` (parsed from `--annotate`) selects WHICH annotations draw, per kind, by element
     category:
     e.g. `name:brush` = brush names only (⇒ their legend rows), `poly:hi` = highlighted faces only,
@@ -65,10 +68,20 @@ opposite faces). render_quad_pgm tiles Top/Front/Iso/Side like UnrealEd.
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from array import array
+from dataclasses import dataclass, field
 from decimal import Decimal
 
 from .model import Actor
+from .texframe import newell, poly_flags_int
+
+
+class PreviewAbort(Exception):
+    """A refusal the renderer can only reach mid-render, carried out to `dispatch`, which turns it into
+    a clean exit 2. Everything a `--faces` render can validate is validated in `dispatch` BEFORE any
+    pixel is drawn; this exists for the cases that cannot be — an out-of-memory buffer at an uncapped
+    `--size`. So a `--faces` render is NOT fully validated before it starts."""
+
 
 _ORTHO_AXES: dict[str, tuple[int, int]] = {"top": (0, 1), "front": (0, 2), "side": (1, 2)}
 _DEPTH: dict[str, tuple[float, float, float]] = {
@@ -96,6 +109,7 @@ MARKER = (90, 90, 90)     # point-actor marker + label — neutral grey (NOT a C
 # semisolid and mover are both red/purple and are told apart only by saturation against its black
 # viewport — a cue that dies on our light bg (they conflated). Coral (warm) vs magenta (cool) stays
 # distinct on any background; see spikes/2026-07-22-unrealed-brush-wire-colors.md.
+PF_INVISIBLE = 0x00000001
 PF_SEMISOLID = 0x00000020
 PF_NOTSOLID = 0x00000008
 _CSG_PALETTE: dict[str, tuple[tuple[int, int, int], tuple[int, int, int]]] = {
@@ -266,6 +280,43 @@ class PointRender:
     sound_radius: float | None = None                 # world units
 
 
+@dataclass(frozen=True, kw_only=True)
+class TextureData:
+    """The decoded texture payload a `--faces textured` render draws from. `by_ref` maps a
+    **casefolded** texture ref (FName semantics) to that texture's whole mip pyramid, each level as
+    `(w, h, rgb, mask)`; every ref the scene uses is present, since an unreadable one refuses in
+    `dispatch` before rendering. `masked` answers "does this face draw palette index 0 as a hole?" per
+    `(actor_name, poly_idx)`."""
+    by_ref: dict[str, list[tuple[int, int, bytes, bytes]]]
+    masked: dict[tuple[str, int], bool]
+
+
+@dataclass(frozen=True, kw_only=True)
+class FaceData:
+    """What a FILLED render needs about faces that `preview.py` cannot work out for itself, resolved in
+    `dispatch` and passed across as data.
+
+    `movers` is the set of actor Names that `movers.is_mover` said yes to — the schema-aware predicate,
+    read off the game's class hierarchy. The fill needs it because a MOVER is never carved into the
+    world whatever `CsgOper` it carries, so it escapes the subtract cull and fills in mover colour.
+
+    **`movers` and `textures` are separate fields on purpose.** `flat` needs the mover set and no
+    textures at all; a single texture-named payload would invite passing `None` for `flat`, which drops
+    the mover set and makes the cull render a `CsgOper=CSG_Subtract` door inside-out."""
+    movers: frozenset[str]
+    textures: TextureData | None = None
+
+
+@dataclass(frozen=True, kw_only=True)
+class PreviewData:
+    """Everything `dispatch` resolves for one preview and `preview.py` only draws — the resolver-free
+    seam. `points` maps a point actor's Name to its `PointRender`; a point actor absent from it draws
+    nothing. `faces` is `None` under `--faces wire` (which resolves nothing) and carries a `FaceData`
+    under every filled mode."""
+    points: dict[str, PointRender] = field(default_factory=dict)
+    faces: FaceData | None = None
+
+
 def world_light_radius(light_radius: int) -> float:
     """UE1 `AActor::WorldLightRadius`: byte `LightRadius` → world units, `25*(LightRadius+1)`. The
     `+1` is real (LightRadius=0 still reaches 25 UU). Spike 2026-07-21-unrealed-sprite-radii-rendering
@@ -285,26 +336,28 @@ def sprite_footprint(draw_scale: float, usize: int, vsize: int) -> tuple[float, 
     return (draw_scale * usize, draw_scale * vsize)
 
 
-def classify_brush(actor: Actor) -> str:
-    """A brush actor's CSG palette key (`add`/`subtract`/`semisolid`/`nonsolid`/`mover`). A Mover
-    (class basename ends in `Mover` — tested FIRST, before `CsgOper`) → magenta; else `CsgOper`
-    (subtract → gold) is
-    refined by the actor-level solidity `PolyFlags` on the additive side (PF_Semisolid → coral,
-    PF_NotSolid → green). See the ergonomics spec §4 legend.
+def classify_brush(actor: Actor, *, is_mover: bool | None = None) -> str:
+    """A brush actor's CSG palette key (`add`/`subtract`/`semisolid`/`nonsolid`/`mover`). A Mover →
+    magenta, tested FIRST; else `CsgOper` (subtract → gold) is refined by the actor-level solidity
+    `PolyFlags` on the additive side (PF_Semisolid → coral, PF_NotSolid → green). See the ergonomics
+    spec §4 legend.
 
-    **The mover test here is a NAME GUESS on purpose — do not swap in `movers.is_mover` casually.**
-    Everywhere else mover-ness is decided by the class hierarchy (`decisions.md` 2026-07-25 10:18
-    UTC), but that predicate needs a `classindex.ClassIndex`, and this function sits on the shared
-    `actor preview` / `stash preview` / `prefab preview` path — so threading one in would make those
-    three verbs require a project + the per-user games config as well. An open spec item — board
-    item `why-do-seven-verbs-now-require-the-games-config` — is deciding whether that requirement
-    should shrink from the set of verbs that now have it, and this classifier is explicitly in
-    that item's scope. Until it is answered, a mover whose class name does not end in `Mover`
-    (`CEDoor`, `BreakableGlass`, the lowercase `TNM.*mover` classes) falls through to its
-    `CsgOper`/`PolyFlags` here instead of reading as a mover. Usually that is cosmetic — it lands on `add`, and `is_solid` treats `add` and
-    `mover` alike — but a mover carrying `CsgOper=CSG_Subtract` or `PF_NotSolid` also loses its
-    hidden-line solidity."""
-    if actor.cls.rpartition(".")[2].endswith("Mover"):
+    **`is_mover` decides HOW mover-ness is answered, and the two answers are not interchangeable.**
+
+    - `is_mover=None` (`--faces wire`, the default) → a NAME GUESS, `cls` basename ends in `Mover`.
+      That is deliberate: the real predicate (`movers.is_mover`) needs a `classindex.ClassIndex`, and
+      `wire` is the mode that must keep working with no game install at all. The cost is that a mover
+      whose class name does not end in `Mover` (`CEDoor`, `BreakableGlass`, the lowercase `TNM.*mover`
+      classes) falls through to its `CsgOper`/`PolyFlags` and reads as a static brush. Under `wire`
+      that costs a wire shade and `is_solid`'s hidden-line grading — cosmetic.
+    - `is_mover=True/False` (every FILLED mode) → the caller's authoritative answer, which
+      `dispatch` obtains from `movers.is_mover` off the game's class hierarchy. A filled render MUST
+      pass it: there the name guess does not cost a shade, it deletes faces. For a `CEDoor` carrying
+      `CsgOper=CSG_Subtract` the guess says `subtract`, so the subtract cull would drop every
+      camera-facing face and draw the door inside-out. One render never mixes the two answers — the
+      key returned here feeds the fill colour, `is_solid` (hence `occluders`) and the cull alike."""
+    mover = actor.cls.rpartition(".")[2].endswith("Mover") if is_mover is None else is_mover
+    if mover:
         return "mover"
     oper = next((v for k, v in actor.props if k == "CsgOper"), "CSG_Add")
     if oper == "CSG_Subtract":
@@ -396,22 +449,33 @@ def _point_in_poly(pt, poly) -> bool:
     return inside
 
 
-def _face_normal(verts3d) -> tuple[float, float, float]:
-    """Outward normal via Newell's method (also used by query.py for facing/area)."""
-    nx = ny = nz = 0.0
-    m = len(verts3d)
-    for i in range(m):
-        a, b = verts3d[i], verts3d[(i + 1) % m]
-        nx += (a[1] - b[1]) * (a[2] + b[2])
-        ny += (a[2] - b[2]) * (a[0] + b[0])
-        nz += (a[0] - b[0]) * (a[1] + b[1])
-    return (nx, ny, nz)
-
-
 def _is_front(verts3d, view: str, iso_angle: float = 30.0) -> bool:
+    """Does this face point at the camera, per its own WINDING (the Newell normal — not the stored
+    `Normal`, which the engine recomputes from winding anyway)? Vertices are wound CCW-from-outside, so an
+    outward normal pointing against the into-screen direction is camera-facing.
+
+    **This answer is INVERTED on a mirrored brush** — see `_is_front_corrected`, which every filled
+    render goes through instead."""
     d = _iso_depth(iso_angle) if view == "iso" else _DEPTH[view]
-    n = _face_normal(verts3d)
+    n = newell(verts3d)
     return (n[0] * d[0] + n[1] * d[1] + n[2] * d[2]) < 0
+
+
+def _is_front_corrected(verts3d, view: str, iso_angle: float = 30.0, *, mirrored: bool) -> bool:
+    """`_is_front`, with a MIRRORED brush's answer put back the right way round.
+
+    A negative-determinant linear part (`brush scale --by -1,1,1` — a negative axis mirrors) is a
+    REFLECTION: it reverses every ring's handedness, so a transformed face's Newell normal comes out as
+    the NEGATIVE of its true outward normal and `_is_front` answers the opposite of the truth for every
+    face of that brush. One sign flip here fixes the subtract cull, the three colour roles, the `flat`
+    edge rule and `occluders` together, because all four are expressed in terms of this boolean.
+
+    **An EVEN number of negative axes is NOT a mirror** — `Scale=(X=-1,Y=-1)` is a 180° rotation,
+    determinant +1, normals correct — so the discriminator is the determinant's SIGN, not "has a negative
+    component"; a sheer leaves the determinant at the scale product. The caller computes `mirrored`: it is
+    a per-BRUSH property and this is asked per face."""
+    front = _is_front(verts3d, view, iso_angle)
+    return not front if mirrored else front
 
 
 # ----- raster primitives (RGB buffer, 3 bytes/pixel) -------------------------
@@ -424,19 +488,65 @@ def _new_buf(size: int) -> bytearray:
     return bytearray(bytes((BG, BG, BG)) * (size * size))
 
 
-def _px(buf, size, x, y, rgb) -> None:
+def _alloc_buffers(size: int, *, depth: bool):
+    """The RGB canvas, plus a depth buffer when the render fills faces. `--size` is UNCAPPED (owner
+    ruling: no size guard, no cost ceiling), so an absurd value is a genuine `MemoryError` — caught
+    here and re-raised as a `PreviewAbort` naming the size, never a traceback.
+
+    The depth buffer is an `array("f")`, not a `list[float]`: at `--size 4096` a list of Python floats
+    is ~0.5 GB against ~67 MB. `inf` = nothing drawn yet, and smaller = nearer.
+
+    **BOTH exceptions are load-bearing.** `MemoryError` is the one an allocation that merely does not fit
+    raises; past `3·size² > sys.maxsize` the same expression raises **`OverflowError`** instead ("repeated
+    bytes are too long", or "cannot fit 'int' into an index-sized integer" further out). Catching only
+    `MemoryError` left the largest sizes — the ones most likely to be typed by accident — tracebacking,
+    on `wire` as well as the filled modes, since every canvas is allocated here."""
+    try:
+        buf = _new_buf(size)
+        zbuf = array("f", [math.inf]) * (size * size) if depth else None
+    except (MemoryError, OverflowError):
+        raise PreviewAbort(f"--size {size} is too large: a {size}x{size} render buffer does not fit "
+                           f"in memory (--size is uncapped, so pick a smaller one)") from None
+    return buf, zbuf
+
+
+def _alloc_dim_mask(size: int) -> bytearray:
+    """The per-pixel `--focus` brightness mask (see `_fill_face`/`_fade_dimmed`).
+
+    The guard is **defence in depth behind `_alloc_buffers`**, not a reachable path on `--size` alone: this
+    mask is `size²` bytes and the canvas plus depth buffer are `7·size²`, allocated first, so any `--size`
+    that fails here has already failed there. It stays because the two calls are not atomic — memory
+    pressure or fragmentation between them is not a size question — and because a bare traceback out of a
+    preview is the one outcome `--size` handling may never produce."""
+    try:
+        return bytearray(size * size)
+    except (MemoryError, OverflowError):
+        raise PreviewAbort(f"--size {size} is too large: a {size}x{size} render buffer does not fit "
+                           f"in memory (--size is uncapped, so pick a smaller one)") from None
+
+
+def _px(buf, size, x, y, rgb) -> bool:
+    """Plot one pixel, clipped to the frame. Returns whether it LANDED, which `_line` sums so a caller can
+    tell "I drew this" from "this was clipped away entirely"."""
     if 0 <= x < size and 0 <= y < size:
         i = (y * size + x) * 3
         buf[i], buf[i + 1], buf[i + 2] = rgb
+        return True
+    return False
 
 
-def _line(buf, size, p0, p1, rgb, weight: int = 1, alpha: float = 1.0) -> None:
+def _line(buf, size, p0, p1, rgb, weight: int = 1, alpha: float = 1.0) -> int:
     """Bresenham line. `weight` > 1 thickens it (each plotted point becomes a weight×weight block,
     toward +x/+y) — used to make a highlighted poly's edges bolder without changing hue. `alpha` < 1
     COMPOSITES the line over whatever's behind it (via `_blend_px`) instead of painting opaquely — used
     to DIM a `--focus`/`--breakdown` non-focused brush so its faint wireframe shows crossed edges and
-    numbers THROUGH it rather than covering them. Bresenham visits each pixel once, so no double-blend."""
+    numbers THROUGH it rather than covering them. Bresenham visits each pixel once, so no double-blend.
+
+    **Returns the number of pixels that actually LANDED** inside the frame — 0 when the segment is clipped
+    away entirely. `--highlight` needs that to tell "this face is not visible" from "this face is outside
+    the frame", both of which draw nothing but only one of which is about depth."""
     plot = _px if alpha >= 1.0 else (lambda b, s, x, y, c: _blend_px(b, s, x, y, c, alpha))
+    drawn = 0
     x0, y0 = p0
     x1, y1 = p1
     dx, dy = abs(x1 - x0), -abs(y1 - y0)
@@ -445,11 +555,11 @@ def _line(buf, size, p0, p1, rgb, weight: int = 1, alpha: float = 1.0) -> None:
     err = dx + dy
     while True:
         if weight <= 1:
-            plot(buf, size, x0, y0, rgb)
+            drawn += plot(buf, size, x0, y0, rgb)
         else:
             for wy in range(weight):
                 for wx in range(weight):
-                    plot(buf, size, x0 + wx, y0 + wy, rgb)
+                    drawn += plot(buf, size, x0 + wx, y0 + wy, rgb)
         if x0 == x1 and y0 == y1:
             break
         e2 = 2 * err
@@ -457,6 +567,7 @@ def _line(buf, size, p0, p1, rgb, weight: int = 1, alpha: float = 1.0) -> None:
             err += dy; x0 += sx
         if e2 <= dx:
             err += dx; y0 += sy
+    return drawn
 
 
 def _circle(buf, size, cx, cy, r_px, rgb) -> None:
@@ -509,6 +620,176 @@ def _blit(buf, size, cx, cy, pw, ph, tex, mask, tw, th) -> None:
             si = sy * tw + sx
             if mask[si]:
                 _px(buf, size, x0 + dx, y0 + dy, (tex[si * 3], tex[si * 3 + 1], tex[si * 3 + 2]))
+
+
+# ----- solid face fills (`--faces flat`) -------------------------------------
+# A filled face is rasterized ONCE, into the RGB canvas plus a depth buffer, before any line art. The
+# two rules that make it correct are both spelled out on the functions below: EVEN-ODD scanline
+# coverage (a triangle fan bleeds outside the 0.1-0.6 % of real faces that are concave), and depth
+# interpolated affinely off the face's OWN plane (exact under an orthographic projection).
+
+
+def _face_depth_affine(v3, world_to_pxf, d_vec):
+    """This face's depth as an affine function of the screen pixel: `(A, B, C)` with
+    `depth = A*x + B*y + C`, or None for a face with no screen area to fill.
+
+    `depth(P) = dot(P, d_vec)` orders points front-to-back (SMALLER = nearer). Both that and the
+    projection are linear in world space, so on ONE plane depth is affine in screen space and
+    interpolates EXACTLY — an orthographic camera needs no per-pixel divide. Solved from three points
+    on the plane rather than from three vertices, because the plane is chosen and the vertices are not:
+    it is anchored at `v3[0]` with the NEWELL normal (winding, not the stored `Normal`), which is
+    observable on a face that is not planar — reachable from arbitrary editor T3D via `--from-t3d`.
+
+    None means the solve is singular, i.e. the face projects to zero area (edge-on), or the face's own
+    normal is degenerate. Either way it is skipped."""
+    n = newell(v3)
+    nl = math.sqrt(n[0] * n[0] + n[1] * n[1] + n[2] * n[2])
+    if nl < 1e-12:                             # guards the EXACT zero (collinear/coincident vertices):
+        return None                            # normalising below would divide by zero. The threshold's
+                                               # value is not separately observable — anything above it
+                                               # and below ~1e-12 is caught by the `det` test instead.
+    n = (n[0] / nl, n[1] / nl, n[2] / nl)
+    seed = [0.0, 0.0, 0.0]
+    seed[min(range(3), key=lambda i: abs(n[i]))] = 1.0     # the world axis least aligned with N
+    t1 = _cross(n, seed)
+    t1l = math.sqrt(sum(c * c for c in t1))
+    if t1l < 1e-12:
+        return None
+    t1 = tuple(c / t1l for c in t1)
+    t2 = _cross(n, t1)
+    # Step the in-plane probes out by the face's OWN size, which is what makes the singular test below a
+    # statement about the FACE rather than about the probe length. With a fixed step (say 1 world unit)
+    # the determinant scales with the pixels-per-world-unit of the current framing, so a zoomed-out pane
+    # would read a perfectly good 4096-UU floor as edge-on (det ~1e-10 at 1e-5 px/UU) and skip it. It buys
+    # no float precision — measured identical to 1e15-scale faces either way — only that meaning.
+    span = max((math.dist(p, v3[0]) for p in v3[1:]), default=0.0) or 1.0
+    probes = [v3[0]] + [tuple(v3[0][i] + t[i] * span for i in range(3)) for t in (t1, t2)]
+    (x0, y0), (x1, y1), (x2, y2) = (world_to_pxf(p) for p in probes)
+    d0, d1, d2 = (sum(p[i] * d_vec[i] for i in range(3)) for p in probes)
+    ux, uy, vx, vy = x1 - x0, y1 - y0, x2 - x0, y2 - y0
+    det = ux * vy - vx * uy
+    if abs(det) < 1e-9:
+        return None
+    a = ((d1 - d0) * vy - (d2 - d0) * uy) / det
+    b = ((d2 - d0) * ux - (d1 - d0) * vx) / det
+    return (a, b, d0 - a * x0 - b * y0)
+
+
+def _cross(a, b):
+    return (a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0])
+
+
+def _fill_face(buf, zbuf, size, poly_px, depth, rgb, dim=None, dimmed: int = 0) -> None:
+    """Fill one projected face into `buf`, depth-testing every pixel against `zbuf`.
+
+    **EVEN-ODD SCANLINE, not a triangle fan.** 0.1-0.6 % of faces in real exported maps are concave
+    (measured, `spikes/concave-faces/`), and a fan fills OUTSIDE those; even-odd parity handles convex
+    and concave in one path. Coverage is sampled at the PIXEL CENTRE (`x+0.5`, `y+0.5`).
+
+    **The depth test is strictly `<`, so a coplanar tie goes to whichever face was drawn FIRST** —
+    iteration is scene order, which is already stable. No epsilon bias: a flush add/subtract pair is
+    common pre-CSG and a bias would only move the arbitrariness. **Every filled face therefore goes
+    through ONE loop in scene order**, whatever `--focus` says, or the tie-break would depend on it.
+
+    `dim`, when given, is a per-pixel byte set to `dimmed` on each write: it remembers whether the surface
+    that WON this pixel belongs to a `--focus`-de-emphasised brush, so `_fade_dimmed` can fade exactly
+    those pixels afterwards without a second pass over the geometry."""
+    a, b, c = depth
+    ys = [p[1] for p in poly_px]
+    n = len(poly_px)
+    for y in range(max(0, math.ceil(min(ys) - 0.5)), min(size - 1, math.floor(max(ys) - 0.5)) + 1):
+        yc = y + 0.5
+        xs: list[float] = []
+        for i in range(n):
+            (ax, ay), (bx, by) = poly_px[i], poly_px[(i + 1) % n]
+            if (ay <= yc) != (by <= yc):       # half-open in y: a shared vertex is counted once
+                xs.append(ax + (yc - ay) * (bx - ax) / (by - ay))
+        xs.sort()
+        row, base = b * yc + c, y * size
+        for k in range(0, len(xs) - 1, 2):     # even-odd: fill between crossing pairs
+            for x in range(max(0, math.ceil(xs[k] - 0.5)),
+                           min(size - 1, math.floor(xs[k + 1] - 0.5)) + 1):
+                d = a * (x + 0.5) + row
+                if d < zbuf[base + x]:
+                    zbuf[base + x] = d
+                    if dim is not None:
+                        dim[base + x] = dimmed
+                    i3 = (base + x) * 3
+                    buf[i3], buf[i3 + 1], buf[i3 + 2] = rgb
+
+
+_F32 = array("f", [0.0])          # scratch: quantise a float64 depth exactly as `zbuf` stores it
+
+
+def _face_is_occluded(zbuf, size, poly_px, depth) -> bool:
+    """Did DEPTH hide this face — is it covered by pixels of which NONE is its own frontmost surface?
+
+    Called once every fill is down, so `zbuf` is final. The comparison is exact rather than epsilon'd:
+    `zbuf` is an `array("f")`, so the value it stored is the float32 rounding of the same float64
+    expression, and `_F32` reproduces that rounding. A coplanar sibling that rounds to the same depth
+    counts as frontmost too, which is right — a tie means this face is at the front as well.
+
+    **"Covers no pixel at all" is NOT occluded, and the distinction is the whole point of the name.**
+    A face thinner than a pixel centre — 4-UU trim at `--size 128`, a 16-UU cube beside an 8192-UU one —
+    fills nothing, but nothing is in front of it either. Reporting it as occluded makes the caller drop its
+    edges as well. Coverage loss costs a FILL; only occlusion may cost the outline too.
+
+    **This is one HALF of the rule; the caller holds the other** (an EDGE-ON face, `plane is None`, is also
+    not occluded). Neither half alone reproduces the symptom that motivated it, so each needs its own test:
+    on the 4096 × 4 × 4 trim in `top` every face is either a coverage-losing cap or an edge-on side, and
+    those project to the SAME 2-D lines — so the outline survives if either half is right, and the brush
+    vanished only because the original single condition got both wrong at once.
+
+    **Per FACE, not per pixel** — a partly-covered face still counts as visible. Same granularity as the
+    subtract cull, and deliberately not hidden-line removal, which is a much larger renderer.
+
+    Coverage repeats `_fill_face`'s even-odd scanline: the two must agree about which pixels a face owns,
+    so the shapes are kept identical on purpose."""
+    a, b, c = depth
+    ys = [q[1] for q in poly_px]
+    n = len(poly_px)
+    covered = False
+    for y in range(max(0, math.ceil(min(ys) - 0.5)), min(size - 1, math.floor(max(ys) - 0.5)) + 1):
+        yc = y + 0.5
+        xs: list[float] = []
+        for i in range(n):
+            (ax, ay), (bx, by) = poly_px[i], poly_px[(i + 1) % n]
+            if (ay <= yc) != (by <= yc):
+                xs.append(ax + (yc - ay) * (bx - ax) / (by - ay))
+        xs.sort()
+        row, base = b * yc + c, y * size
+        for k in range(0, len(xs) - 1, 2):
+            for x in range(max(0, math.ceil(xs[k] - 0.5)),
+                           min(size - 1, math.floor(xs[k + 1] - 0.5)) + 1):
+                covered = True
+                _F32[0] = a * (x + 0.5) + row
+                if _F32[0] == zbuf[base + x]:
+                    return False                   # frontmost somewhere ⇒ visible
+    return covered                                 # covered, never frontmost ⇒ depth hid it
+
+
+def _fade_dimmed(buf, dim, size, alpha: float) -> None:
+    """Fade every pixel `dim` marks toward `BG` at `alpha` — the `--focus` de-emphasis, applied ONCE per
+    pixel after the whole scene is rasterized.
+
+    `dim[i]` says whether the surface that WON pixel `i` belongs to a de-emphasised brush, so this is one
+    blend of one resolved colour: `alpha*colour + (1-alpha)*BG`. Blending as each face rasterizes instead
+    would blend once per face that passes the depth test, fading a pixel N times where N context faces
+    overlap and making the result depend on face iteration order.
+
+    **Why a mask and not two passes.** Resolving the context separately and compositing it first also gets
+    one blend per pixel, but it rasterizes the de-emphasised faces BEFORE the lit ones, so a coplanar tie
+    went to whichever list a face was in — i.e. `--focus` decided which of two flush surfaces you saw.
+    One scene-order loop plus this mask keeps the blend single AND leaves visibility completely
+    independent of what is focused. Reasoning: `dev/docs/rationale/preview.md`."""
+    beta = 1.0 - alpha
+    faded = BG * beta
+    for i in range(size * size):
+        if dim[i]:
+            j = i * 3
+            buf[j] = round(alpha * buf[j] + faded)
+            buf[j + 1] = round(alpha * buf[j + 1] + faded)
+            buf[j + 2] = round(alpha * buf[j + 2] + faded)
 
 
 def _fill(buf, size, x0, y0, x1, y1, rgb) -> None:
@@ -693,6 +974,12 @@ _DIM_ALPHA = 0.15   # `--focus`/`--breakdown` draw a non-focused brush's wirefra
                     # (COMPOSITED, so crossed edges/numbers show through) — 0.15 over the light bg
                     # matches the old fade-toward-bg look but no longer hard-overwrites at crossings.
 
+# A filled mode's non-focused FILLS composite at this opacity — separate from `_DIM_ALPHA`, which dims
+# thin LINES, where a faint stroke still reads as a stroke. THE OWNER'S VALUE, picked from a ladder of
+# real renders rather than arithmetic: do NOT retune it from a contrast formula, re-run the ladder
+# (`dev/docs/spikes/2026-07-27-preview-focus-dim/`). Why, and why not 0.15: `rationale/preview.md`.
+_DIM_FILL_ALPHA = 0.35
+
 
 def _fade(rgb: tuple[int, int, int], amount: float = 0.6) -> tuple[int, int, int]:
     """Blend a colour `amount` of the way toward the background — a dimmed SHADE (still opaque). Used for
@@ -825,7 +1112,7 @@ def _face_decal_basis(v3, world_to_pxf):
 
     In BOTH cases Uw's sign is fixed from the SCREEN projection so the `(Uw, Vw)` frame is right-reading
     (screen cross < 0, pixel-y down) — never mirrored (e.g. a ceiling normal −Z). None if degenerate."""
-    nx, ny, nz = _face_normal(v3)
+    nx, ny, nz = newell(v3)
     nl = math.sqrt(nx * nx + ny * ny + nz * nz)
     if nl < 1e-9:
         return None
@@ -1227,7 +1514,7 @@ def _resolve_decals(entries, obstacles):
     return chosen
 
 
-def _blend_px(buf, size, x, y, rgb, alpha: float = 0.5) -> None:
+def _blend_px(buf, size, x, y, rgb, alpha: float = 0.5) -> bool:
     """Alpha-blend `rgb` OVER the pixel already in the buffer, i.e.
     `new = round(alpha*rgb + (1-alpha)*existing)`. Lets an on-face digit read as a TRANSLUCENT overlay —
     the surface/wireframe under it shows through, like a real decal — instead of an opaque knockout."""
@@ -1237,6 +1524,8 @@ def _blend_px(buf, size, x, y, rgb, alpha: float = 0.5) -> None:
         buf[i] = round(alpha * rgb[0] + beta * buf[i])
         buf[i + 1] = round(alpha * rgb[1] + beta * buf[i + 1])
         buf[i + 2] = round(alpha * rgb[2] + beta * buf[i + 2])
+        return True
+    return False
 
 
 def _draw_painted_decal(buf, size, plan: "_DecalPlan", tint, *,
@@ -1417,8 +1706,14 @@ class _SceneGeom:
     """The projected geometry of a preview scene, BEFORE framing/drawing — the shared output of the
     projection loop, so `render_brushes_pgm` computes the projection once and every `--breakdown` pane
     reuses the identical framing."""
-    edges: list          # (front, (a2,b2), front_rgb, back_rgb, alpha) — alpha<1 dims (composited)
-    hi_edges: list       # ((a2,b2), vivid_rgb)
+    edges: list          # (front, (a2,b2), front_rgb, back_rgb, alpha, face_key) — alpha<1 dims
+    fills: list          # (v3, poly2d, rgb, dimmed) in SCENE ORDER — ONE list, so the coplanar tie-break
+                         # cannot depend on `--focus`; `dimmed`=1 marks a de-emphasised brush's face
+    hi_edges: list       # ((a2,b2), vivid_rgb, face_key)
+    vis_faces: list      # (face_key, v3, poly2d) per surviving face, FILLED MODES ONLY — the faces whose
+                         # visibility `render_brushes_pgm` resolves against the finished depth buffer.
+                         # Empty under `wire`, which is the structural reason `wire` cannot be affected
+    hi_only_labels: set   # face_keys whose index is owed SOLELY to being highlighted
     poly_labels: list    # (centroid2d, idx_str, accent, depth, v3, brush_name) — participant faces
     brush_names: list    # (cands_2d, TEXT, color) — legacy on-geometry names
     occluders: list      # (poly2d, depth, brush_name, is_solid)
@@ -1427,13 +1722,51 @@ class _SceneGeom:
 
 
 def _scene_geometry(actors, *, view, iso_angle, annotations, highlight_polys, focus_cf, hybrid, tints,
-                    color_by_csg, render_data, brush_colors="csg") -> _SceneGeom:
+                    color_by_csg, render_data, brush_colors="csg", faces="wire") -> _SceneGeom:
     """Run the per-actor projection loop and return `_SceneGeom`. Pure (no drawing); reproduces
     exactly what `render_brushes_pgm`'s inline loop used to build, so the two callers share one
-    projection. See `render_brushes_pgm` for the semantics of each accumulated list."""
+    projection. See `render_brushes_pgm` for the semantics of each accumulated list.
+
+    `faces` is the `--faces` MODE. Under `wire` nothing below changes: every face contributes an edge
+    pair regardless of facing, and `fills` stays empty. Under a FILLED mode three rules apply, in this
+    order, and each of them removes a face ENTIRELY — no fill, no depth, no edge, no `--highlight`
+    outline, no on-face index decal, and no entry in `occluders`:
+
+    1. `PF_Invisible` (the poly's flags OR'd with the ACTOR's own `PolyFlags`, as the engine does).
+    2. A SUBTRACT brush's camera-facing polys. Vertices are wound CCW-from-outside, so a subtract's
+       near faces are exactly its `_is_front` set — and a subtract's polys looked at from outside the
+       carved volume render neither in UnrealEd nor in game. What is left is the far/interior surfaces,
+       which is what keeps geometry inside a subtracted room visible instead of hidden by a solid box.
+       Mover-ness comes from `FaceData.movers`, never from a name guess: a mover is never carved into
+       the world whatever `CsgOper` it carries, so it is not culled.
+    3. Nothing else is back-face culled — a `nonsolid` sheet is a single face and must read from both
+       sides — so a non-subtract brush fills every face and the depth buffer resolves what shows.
+
+    **EVERY face emits an edge pair here; `render_brushes_pgm` then drops the ones DEPTH HID.** So the rule
+    is "visible", never "front-facing" — two owner rulings, and mixing them up re-breaks one or the other.
+    A facing condition (spec §4.6) left an away-facing single-sided sheet filled with no outline at all;
+    making outlines unconditional then let a brush sealed inside a solid show its wireframe through it. A
+    face with no cover is frontmost where it sits, so it keeps its outline under the visibility test but
+    would lose it under a facing test — **do not reintroduce one.** Both directions are pinned, and
+    `architecture.md` "Preview internals" carries the full history.
+
+    Three more filled-mode rules are commented at their point of use below: which member of the brush's
+    colour pair each of fill / edge / `--highlight` takes, the `--focus` split between `fills` and
+    `dimmed` flag (the `--focus` brightness split `_fade_dimmed` applies), and the mirror correction
+    (`_is_front_corrected`) that makes all of the above right on a reflected brush."""
     from .rotation import actor_linear, actor_prepivot, local_offset
+    from .transform import det3
+    filled = faces != "wire"
+    face_data = render_data.faces
+    if filled and face_data is None:
+        raise PreviewAbort(f"--faces {faces} needs the resolved face data (the mover set) on the "
+                           f"preview seam, and it arrived empty")
+    mover_names = face_data.movers if face_data is not None else frozenset()
     edges: list = []
+    fills: list = []
     hi_edges: list = []
+    vis_faces: list = []
+    hi_only_labels: set = set()
     poly_labels: list = []
     brush_names: list = []
     occluders: list = []
@@ -1443,7 +1776,7 @@ def _scene_geometry(actors, *, view, iso_angle, annotations, highlight_polys, fo
     for actor in actors:
         loc = actor.location or (Decimal(0), Decimal(0), Decimal(0))
         if actor.brush is None:
-            pr = render_data.get(actor.name)
+            pr = render_data.points.get(actor.name)
             if pr is None:
                 continue
             lp = (float(loc[0]), float(loc[1]), float(loc[2]))
@@ -1456,13 +1789,17 @@ def _scene_geometry(actors, *, view, iso_angle, annotations, highlight_polys, fo
                         pts.append(_project(tuple(d), view, iso_angle))
             points.append((actor, pr))
             continue
+        # ONE CSG key per actor, and it decides three things that must agree: the fill/wire colour,
+        # `is_solid` (hence `occluders`, hence decal grading) and the subtract cull. A filled render
+        # hands `classify_brush` the authoritative mover answer; `wire` leaves it on the name guess.
+        csg_key = classify_brush(actor, is_mover=(actor.name in mover_names) if filled else None)
         if color_by_csg and brush_colors == "legend":
             # colour the wireframe by the actor's own legend TINT (not the CSG op) — drops the CSG
             # cue but tells same-op brushes apart at a glance without reading numbers.
             base = tints[actor.name]
             front_rgb, back_rgb, vivid = base, _fade(base), base
         else:
-            csg_front, csg_back = _CSG_PALETTE[classify_brush(actor)]
+            csg_front, csg_back = _CSG_PALETTE[csg_key]
             vivid = csg_front
             front_rgb, back_rgb = (csg_front, csg_back) if color_by_csg else (FRONT, BACK)
         is_focus_brush = focus_cf is not None and actor.name.casefold() == focus_cf
@@ -1470,8 +1807,16 @@ def _scene_geometry(actors, *, view, iso_angle, annotations, highlight_polys, fo
         # colour + opaque paint), so its faint lines let crossed edges/numbers show through.
         edge_alpha = _DIM_ALPHA if (focus_cf is not None and not is_focus_brush) else 1.0
         label_accent = tints[actor.name] if hybrid else FRONT
-        is_solid = classify_brush(actor) not in ("subtract", "nonsolid")
+        is_solid = csg_key not in ("subtract", "nonsolid")
+        # A subtract's camera-facing polys are culled; every other brush keeps all of them. `csg_key`
+        # is already mover-aware, so a mover carrying `CsgOper=CSG_Subtract` never reaches this.
+        cull_front = filled and csg_key == "subtract"
+        actor_flags = poly_flags_int(dict(actor.props)) if filled else 0
         R = actor_linear(actor)
+        # `actor_linear` returns None as its IDENTITY sentinel (no rotation, no scale — the common
+        # case), so the mirror test MUST guard it: `det3(actor_linear(a)) < 0` alone raises TypeError on
+        # nearly every brush in existence.
+        mirrored = filled and R is not None and det3(R) < 0
         prepivot = actor_prepivot(actor)
         brush_cands_2d: list = []
         brush_hi = False
@@ -1481,7 +1826,10 @@ def _scene_geometry(actors, *, view, iso_angle, annotations, highlight_polys, fo
             vs = [_project(p, view, iso_angle) for p in v3]
             if not vs:
                 continue
-            front = _is_front(v3, view, iso_angle)
+            front = _is_front_corrected(v3, view, iso_angle, mirrored=mirrored)
+            if filled and (((poly.flags or 0) | actor_flags) & PF_INVISIBLE
+                           or (cull_front and front)):
+                continue          # removed entirely — fill, depth, edge, outline, decal, occluder
             is_hi = (actor.name, idx) in highlight_polys
             brush_hi = brush_hi or is_hi
             pts.extend(vs)
@@ -1491,21 +1839,72 @@ def _scene_geometry(actors, *, view, iso_angle, annotations, highlight_polys, fo
                 (sum(p[0] for p in v3) / n, sum(p[1] for p in v3) / n, sum(p[2] for p in v3) / n), d_vec))
             if front:
                 occluders.append((vs, depth, actor.name, is_solid))
+            # THE FILLED-MODE COLOUR ROLES, all three off ONE two-member pair. `own` is the member this
+            # facing fills with, `partner` its opposite — SAME HUE, different luminance, so the CSG cue
+            # ("this exact blue means additive") survives every assignment below.
+            own, partner = (front_rgb, back_rgb) if front else (back_rgb, front_rgb)
+            if filled:
+                # FILL: `own`, with NO key-light shade (multiplying the hue would break the cue the
+                # legend is read against). A subtract can therefore only ever show its BACK colour,
+                # since its camera-facing polys are gone. A HIGHLIGHTED face INVERTS to `partner`, which
+                # is what makes it stand out from its neighbours at all — see the edge note below.
+                # `dimmed` is a BRIGHTNESS flag and nothing more. Every filled face goes into ONE list in
+                # SCENE ORDER and through one rasterizing loop, so what is visible — including which of
+                # two coplanar faces wins the strict-`<` tie — is identical whatever `--focus` says
+                # (owner ruling: focus dims, it never changes visibility or occlusion). A HIGHLIGHTED face
+                # is undimmed wherever its brush is, so `--highlight` still beats `--focus`'s dimming; it
+                # does not beat depth, and a hidden highlighted face shows nothing — see the edge note.
+                lit = focus_cf is None or is_focus_brush or is_hi
+                fills.append((v3, vs, partner if is_hi else own, 0 if lit else 1))
+            # EDGE: under a filled mode `partner`, NOT `own`. `own` is by definition the colour the fill
+            # underneath it already is, so an edge drawn in it is INVISIBLE — which is how `flat` first
+            # shipped, and it made decision 2.5's "keep the wireframe" promise vacuous (a room + two
+            # adds rendered in exactly three colours, with no interior creases and no boundary between
+            # two abutting adds). Owner ruling: draw it in the other member of the pair.
+            # `wire` is untouched — it fills nothing, so `own` is the historical, visible choice.
+            # It is drawn for EVERY surviving face, front-facing or not (second owner ruling — see the
+            # docstring): the same colour-matching that makes an `own` edge invisible is what makes a
+            # closed brush's back-face edges cost nothing, and a single-sided face has no front face to
+            # borrow an outline from.
+            edge_pair = (back_rgb, front_rgb) if filled else (front_rgb, back_rgb)
+            # HIGHLIGHT: `own` under a filled mode. The highlighted face already inverted its fill to
+            # `partner`, so `own` contrasts with it, AND it differs from every neighbour's `partner`
+            # edge — a highlight that only doubled the stroke width in the ordinary edge colour would be
+            # a second invisible cue of the same root cause.
+            hi_rgb = own if filled else vivid
+            # An edge is EMITTED for every surviving face; `render_brushes_pgm` then drops the ones depth
+            # hid, which is what makes a solid brush opaque. The two owner rulings that shaped that, and
+            # why the narrowing does not undo the one it narrows, are in this function's docstring — not
+            # repeated here. A HIGHLIGHT rides the same test: it re-colours what is visible, never x-rays.
+            face_key = (actor.name, idx)
+            if filled:
+                vis_faces.append((face_key, v3, vs))
             for i in range(n):
                 a2, b2 = vs[i], vs[(i + 1) % n]
-                edges.append((front, (a2, b2), front_rgb, back_rgb, edge_alpha))
+                edges.append((front, (a2, b2)) + edge_pair + (edge_alpha, face_key))
                 if is_hi:
-                    hi_edges.append(((a2, b2), vivid))
+                    hi_edges.append(((a2, b2), hi_rgb, face_key))
             show_idx = (annotations.draws_poly(is_front=True, is_highlighted=is_hi)
                         or annotations.draws_poly(is_front=False, is_highlighted=is_hi))
+            plain_idx = (annotations.draws_poly(is_front=True, is_highlighted=False)
+                         or annotations.draws_poly(is_front=False, is_highlighted=False))
             if focus_cf is not None:
                 show_idx = show_idx and (is_focus_brush or is_hi)
+                plain_idx = plain_idx and is_focus_brush
+            if filled and is_hi and show_idx and not plain_idx:
+                # This face would carry NO index if it were not highlighted (`--annotate poly:hi`, or a
+                # highlight outside the focused brush), so the index is part of the highlight and goes
+                # with it when depth hides the face. An index the spec would have drawn anyway STAYS —
+                # on-face numbering is facing-blind by design and grades hidden faces down rather than
+                # dropping them, and a highlight must not start deleting numbers.
+                hi_only_labels.add(face_key)
             if show_idx:
                 poly_labels.append(
                     (_poly_centroid_2d(vs), str(idx), label_accent, depth, v3, actor.name))
         if not hybrid and brush_cands_2d and annotations.draws_name(is_brush=True, is_highlighted=brush_hi):
             brush_names.append((brush_cands_2d, actor.name.upper(), label_accent))
-    return _SceneGeom(edges=edges, hi_edges=hi_edges, poly_labels=poly_labels,
+    return _SceneGeom(edges=edges, fills=fills, hi_edges=hi_edges,
+                      vis_faces=vis_faces, hi_only_labels=hi_only_labels, poly_labels=poly_labels,
                       brush_names=brush_names, occluders=occluders, points=points, pts=pts)
 
 
@@ -1566,12 +1965,13 @@ def render_brush_pgm(actor: Actor, *, view: str = "top", size: int = 256,
                      highlight_polys=None, highlight_points=None,
                      color_by_csg: bool = False, render_data=None,
                      focus: str | None = None, draw_legend: bool = True,
-                     brush_colors: str = "csg") -> bytes:
+                     brush_colors: str = "csg", faces: str = "wire") -> bytes:
     return render_brushes_pgm([actor], view=view, size=size, annotations=annotations,
                               iso_angle=iso_angle, region=region, highlight_polys=highlight_polys,
                               highlight_points=highlight_points,
                               color_by_csg=color_by_csg, render_data=render_data,
-                              focus=focus, draw_legend=draw_legend, brush_colors=brush_colors)
+                              focus=focus, draw_legend=draw_legend, brush_colors=brush_colors,
+                              faces=faces)
 
 
 def render_brushes_pgm(actors: list[Actor], *, view: str = "top", size: int = 256,
@@ -1581,12 +1981,20 @@ def render_brushes_pgm(actors: list[Actor], *, view: str = "top", size: int = 25
                        color_by_csg: bool = False, render_data=None,
                        focus: str | None = None, draw_legend: bool = True,
                        brush_colors: str = "csg", reserve_legend: bool = True,
-                       frame_pad: int = _FRAME_PAD) -> bytes:
-    """Render a set of actors as a wireframe PPM (P6) on a light-grey background (BG).
+                       frame_pad: int = _FRAME_PAD, faces: str = "wire",
+                       shown_highlights: set | None = None) -> bytes:
+    """Render a set of actors as a PPM (P6) on a light-grey background (BG).
+
+    `faces` is the `--faces` MODE, and it is a parameter rather than something read off `render_data`
+    because `render_data.faces is None` would be both `wire` and a filled mode. `wire` (the default)
+    draws outlines only. `flat` additionally fills every surviving face solid in its brush's colour
+    through a depth buffer — a diagram of what occludes what — and KEEPS the wireframe over the fills;
+    it needs `render_data.faces` populated (see `_scene_geometry` for the cull and the edge rule).
 
     Brush actors draw as a wireframe: front faces darker, obscured/back faces lighter. When
     `color_by_csg` the shade pair is the brush's CSG hue (`classify_brush` → `_CSG_PALETTE`);
-    otherwise black/grey. `highlight_polys` is a set of `(actor_name, poly_idx)` — those polys draw
+    otherwise black/grey. A `flat` fill uses that SAME pair, unshaded, picked by facing.
+    `highlight_polys` is a set of `(actor_name, poly_idx)` — those polys draw
     in their brush's vivid front hue with a bolder line (facing dim ignored). `highlight_points` is a
     set of point-actor names — each gets corner brackets (a selection reticle) under its sprite/marker.
 
@@ -1597,10 +2005,12 @@ def render_brushes_pgm(actors: list[Actor], *, view: str = "top", size: int = 25
     actor names move OFF the geometry into it. The legacy black/grey path (unit tests) keeps black
     accents, on-geometry names, and no legend.
 
-    `focus` (an actor NAME, case-insensitive) recedes every OTHER brush to a faint wireframe and paints
-    face numbers only for the focused brush; `highlight_polys`/`highlight_points` OVERRIDE focus — a
-    highlighted poly/actor still draws vivid+bold on top and keeps its number. All names still appear in
-    the legend regardless of focus.
+    `focus` (an actor NAME, case-insensitive) recedes every OTHER brush — its wireframe to faint lines,
+    and under a filled mode its fills to a single dimmed fade of whatever survived the depth test (the
+    `dim` mask below) — and paints face numbers only for the focused brush;
+    `highlight_polys`/`highlight_points` OVERRIDE focus — a highlighted poly/actor still draws vivid+bold
+    on top, at full fill strength, and keeps its number. All names still appear in the legend regardless
+    of focus.
 
     `annotations` is an `AnnotationSpec` (see `parse_annotation_spec`): per kind, the set of element categories that
     get a label — `draws_poly` decides WHETHER a face is numbered (on-face numbering is facing-blind, so
@@ -1614,24 +2024,29 @@ def render_brushes_pgm(actors: list[Actor], *, view: str = "top", size: int = 25
     (view-dependent; no leader fallback). Actor names
     go to the legend (hybrid path); `focus`/`highlight` still apply.
 
-    Point (non-brush) actors are drawn from `render_data` (name → `PointRender`): a DT_Sprite
+    `shown_highlights`, when a set is passed, collects the `(actor_name, poly_idx)` key of every
+    highlighted face that actually DREW. It reports what landed rather than what did not, which is what
+    makes it correct across panes: a face hidden in one pane and visible in another is still a highlight
+    that landed, so a multi-pane caller passes ONE set through every pane and subtracts at the end.
+
+    Point (non-brush) actors are drawn from `render_data.points` (name → `PointRender`): a DT_Sprite
     billboard, else a marker; plus faint collision/light/sound overlays when populated.
     Empty input → blank grey PPM."""
     highlight_polys = set(highlight_polys or ())
     highlight_points = set(highlight_points or ())
-    render_data = render_data or {}
+    render_data = render_data or PreviewData()
     hybrid = color_by_csg                     # the real preview: per-actor tints + legend + names-in-legend
     tints = assign_tints(actors) if hybrid else {}
     focus_cf = focus.casefold() if focus else None
     geom = _scene_geometry(actors, view=view, iso_angle=iso_angle, annotations=annotations,
                            highlight_polys=highlight_polys, focus_cf=focus_cf, hybrid=hybrid,
                            tints=tints, color_by_csg=color_by_csg, render_data=render_data,
-                           brush_colors=brush_colors)
+                           brush_colors=brush_colors, faces=faces)
     edges, hi_edges, poly_labels = geom.edges, geom.hi_edges, geom.poly_labels
     brush_names, occluders, points = geom.brush_names, geom.occluders, geom.points
 
     if not geom.pts:
-        return _ppm(_new_buf(size), size)
+        return _ppm(_alloc_buffers(size, depth=False)[0], size)
     # Legend rows are computed BEFORE framing (they don't depend on it) so the legend's top band can be
     # RESERVED — geometry is inset below it so the panel overlaps nothing. `reserve_legend` (inset the
     # band) and `draw_legend` (paint the panel) are independent flags: a caller can reserve WITHOUT
@@ -1642,24 +2057,65 @@ def render_brushes_pgm(actors: list[Actor], *, view: str = "top", size: int = 25
                                drawn_points={a.name for a, _ in points}) if hybrid else []
     # Drawing the legend ALWAYS reserves its band (never paint the panel over un-inset geometry).
     inset_top = _legend_reserve(legend_rows, name_scale, size) if (reserve_legend or draw_legend) else 0
-    scale, to_px, _, world_to_pxf = _framing(geom.pts, region, size, view, iso_angle, inset_top,
-                                             pad=frame_pad)
+    scale, to_px, to_pxf, world_to_pxf = _framing(geom.pts, region, size, view, iso_angle, inset_top,
+                                                  pad=frame_pad)
 
-    buf = _new_buf(size)
+    hidden: set = set()             # faces depth hid — their edges, outline and highlight index go
+    buf, zbuf = _alloc_buffers(size, depth=bool(geom.fills))
+    # Face fills sit here, immediately after the background and AHEAD of the point layer: they are
+    # brush geometry, and drawing them later would paint over every sprite and every `--show` overlay.
+    if zbuf is not None:
+        d_vec = _view_depth(iso_angle, view)
+
+        # ONE loop over every filled face in SCENE ORDER, dimmed or not. `--focus` is a brightness filter
+        # and must not touch visibility, and the strict-`<` depth test hands a coplanar tie to whichever
+        # face is rasterized FIRST — so splitting the de-emphasised faces into a pass of their own let
+        # `--focus` decide which of two flush surfaces you saw, exactly what it may never do. `dim` records
+        # whether a DE-EMPHASISED face won each pixel, and `_fade_dimmed` fades those pixels once at the
+        # end: one blend per pixel with no second rasterizing pass and no scratch canvas.
+        dim = _alloc_dim_mask(size) if any(f[3] for f in geom.fills) else None
+        for v3, vs, rgb, dimmed in geom.fills:
+            plane = _face_depth_affine(v3, world_to_pxf, d_vec)
+            if plane is not None:                   # None = edge-on, no screen area to fill
+                _fill_face(buf, zbuf, size, [to_pxf(p) for p in vs], plane, rgb, dim, dimmed)
+        if dim is not None:
+            _fade_dimmed(buf, dim, size, _DIM_FILL_ALPHA)
+        # Every fill is down, so `zbuf` is FINAL and each face can be asked whether DEPTH hid it. Those
+        # draw no outline, no `--highlight` outline and no highlight-owed index below — a solid brush is
+        # opaque and a highlight is not an x-ray. One extra scanline walk per filled face, so the fill
+        # stage roughly doubles; accepted (no cost ceiling, decision 2.4).
+        #
+        # An EDGE-ON face (`plane is None`, the guard here) or one too thin to cover a pixel centre
+        # (`_face_is_occluded`'s own `covered` result) is deliberately NOT in `hidden`: nothing is in front
+        # of it, so it keeps its outline. The two are SEPARATE halves of one rule and are pinned separately
+        # — on a sliver brush in `top` the coverage-losing caps and the edge-on sides project to the same
+        # 2-D lines, so getting either half right still draws the outline, and the fully visible brush
+        # vanished from a filled render only because the original single condition got both wrong.
+        for face_key, v3, vs in geom.vis_faces:
+            plane = _face_depth_affine(v3, world_to_pxf, d_vec)
+            if plane is not None and _face_is_occluded(zbuf, size, [to_pxf(q) for q in vs], plane):
+                hidden.add(face_key)
     grid = DensityGrid.build(size)                  # occupancy of the wireframe → labels flee dense knots
-    for f, (a, b), fr, bk, al in edges:
-        grid.add_segment(to_px(a), to_px(b))
+    for f, (a, b), fr, bk, al, fk in edges:
+        if fk not in hidden:                        # a hidden edge paints nothing, so it must not pull
+            grid.add_segment(to_px(a), to_px(b))    # labels away from a region that reads as empty
     for actor, pr in points:                        # under-layer: selection brackets + sprites + overlays
         _draw_point_underlay(buf, size, actor, pr, view, iso_angle, to_px, scale,
                              highlighted=actor.name in highlight_points)
-    for f, (a, b), fr, bk, al in edges:             # back (lighter) then front (darker)
-        if not f:
+    for f, (a, b), fr, bk, al, fk in edges:         # back (lighter) then front (darker)
+        if not f and fk not in hidden:
             _line(buf, size, to_px(a), to_px(b), bk, alpha=al)
-    for f, (a, b), fr, bk, al in edges:
-        if f:
+    for f, (a, b), fr, bk, al, fk in edges:
+        if f and fk not in hidden:
             _line(buf, size, to_px(a), to_px(b), fr, alpha=al)
-    for (a, b), vivid in hi_edges:                  # highlighted poly: vivid hue + bold, on top
-        _line(buf, size, to_px(a), to_px(b), vivid, weight=2)
+    for (a, b), vivid, face_key in hi_edges:         # highlighted poly: vivid hue + bold, on top
+        if face_key not in hidden:                  # ...unless depth hid the face (filled modes only)
+            landed = _line(buf, size, to_px(a), to_px(b), vivid, weight=2)
+            # Record only a stroke that put PIXELS ON THE CANVAS. Counting the call instead made a
+            # highlight clipped entirely outside the frame — ordinary with `--frame <other brush>` —
+            # look drawn, so the note stayed silent on exactly the case it exists for.
+            if landed and shown_highlights is not None:
+                shown_highlights.add(face_key)
     for actor, pr in points:                        # over-layer: markers (names → legend/placement below)
         _draw_point_marker(buf, size, actor, pr, view, iso_angle, to_px,
                            color=tints.get(actor.name, MARKER) if hybrid else MARKER, hybrid=hybrid)
@@ -1704,11 +2160,14 @@ def render_brushes_pgm(actors: list[Actor], *, view: str = "top", size: int = 25
     # ≤10%-diagonal move) WITHIN ITS OWN FACE off another decal or a point-actor marker (obstacles already
     # in `occupied`); a zero-overlap decal keeps its roomiest spot verbatim (opacity is placement-
     # independent, face-centroid based). `_draw_overlap_keyline` then rings any residual overlap in white.
+    dropped_labels = hidden & geom.hi_only_labels    # hoisted: constant over the loop below
     painted_draws: list = []         # (_DecalPlan, tint, opacity)
     decal_entries: list = []         # (order_key, candidates)
     decal_meta: list = []            # (tint, opacity) aligned to decal_entries
     for c, t, accent, dep, v3face, brush_name in poly_labels:
-        cands = _onface_candidates(v3face, world_to_pxf, t)
+        if (brush_name, int(t)) in dropped_labels:
+            continue                                 # an index the highlight alone asked for, on a face
+        cands = _onface_candidates(v3face, world_to_pxf, t)   # depth hid — it goes with the highlight
         primary_area = _plan_px_area(cands[0]) if cands else 0.0
         decal_entries.append(((-primary_area, brush_name, t), cands))       # biggest, hardest-to-move first
         decal_meta.append((accent, _decal_opacity(_occluder_count(c, dep, occluders, own_brush=brush_name))))
@@ -1850,7 +2309,8 @@ def render_quad_pgm(actors, *, size: int = 512,
                     annotations: AnnotationSpec = AnnotationSpec.all(),
                     iso_angle: float = 30.0, region=None, highlight_polys=None,
                     highlight_points=None, color_by_csg: bool = False, render_data=None,
-                    focus: str | None = None, brush_colors: str = "csg") -> bytes:
+                    focus: str | None = None, brush_colors: str = "csg",
+                    faces: str = "wire", shown_highlights: set | None = None) -> bytes:
     """UED-style 2×2: Top (TL), Front (TR), Iso (BL), Side (BR). On the hybrid (`color_by_csg`) path the
     per-actor tints are identical across panes (`assign_tints` is deterministic), so the legend is drawn
     ONCE — only the TOP-left pane renders it (`draw_legend=True`) and RESERVES a top band for it
@@ -1860,14 +2320,14 @@ def render_quad_pgm(actors, *, size: int = 512,
         actors = [actors]
     half = size // 2
     hdr = f"P6\n{half} {half}\n255\n".encode()
-    buf = _new_buf(size)
+    buf, _ = _alloc_buffers(size, depth=False)
     # The legend lives in the TOP pane's corner (pane-local (2,2) == full-image (2,2) since TOP is at
     # offset (0,0)); recompute its rect at the pane's size/scale to place the caption clear of it.
     legend_rect = None
     if color_by_csg:
-        rd = render_data or {}
+        rd = render_data or PreviewData()
         tints = assign_tints(actors)
-        drawn_points = {a.name for a in actors if a.brush is None and a.name in rd}
+        drawn_points = {a.name for a in actors if a.brush is None and a.name in rd.points}
         rows = _legend_rows(actors, annotations, tints, highlight_polys=highlight_polys,
                             highlight_points=highlight_points, drawn_points=drawn_points)
         legend_rect = _legend_panel_rect(rows, max(2, half // 256), half)
@@ -1880,7 +2340,8 @@ def render_quad_pgm(actors, *, size: int = 512,
                                  highlight_polys=highlight_polys, highlight_points=highlight_points,
                                  color_by_csg=color_by_csg, render_data=render_data,
                                  focus=focus, draw_legend=top_legend, reserve_legend=top_legend,
-                                 brush_colors=brush_colors)
+                                 brush_colors=brush_colors, faces=faces,
+                                 shown_highlights=shown_highlights)
         body = sub[len(hdr):]
         for j in range(half):
             dst = ((oy + j) * size + ox) * 3

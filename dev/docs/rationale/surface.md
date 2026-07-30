@@ -271,7 +271,7 @@ solidity only, so this is documented rather than corrected.
 
 ## `n̂` comes from the winding, floated first
 
-The normal is computed from the polygon's own vertex winding via `preview._face_normal` (Newell),
+The normal is computed from the polygon's own vertex winding via `texframe.newell`,
 normalised — never `poly.normal`.
 
 **Why it is this way.** `../unrealed/t3d.md` "Winding defines the face": the importer ignores the
@@ -280,7 +280,7 @@ stored normal and the engine recomputes it, so an authored `(0.707,0.707,0)` re-
 
 Two traps, both measured:
 
-- Float the vertices first. `Polygon.vertices` are `Decimal` triples and `_face_normal` seeds its
+- Float the vertices first. `Polygon.vertices` are `Decimal` triples and `newell` seeds its
   accumulators at `0.0`, so passing them raw raises `TypeError`. `polyalign` avoids this only because
   `_world_verts` floats them through.
 - Not a naive 3-vertex cross product. On a face whose first three vertices are near-collinear it
@@ -348,7 +348,7 @@ after `--by 8,8` a unit axis is `0.125` long and the same absolute noise is 1.13
 earlier.
 
 **Measured floor:** `max |axis·n̂|/|axis|` over 942 axes in `../../uedcli/tests/fixtures/**/*.t3d`
-(normals via `preview._face_normal`) is 4.135e-07, on `builder_revolve.t3d` poly 15; 876 of the 942 are
+(normals via `texframe.newell`) is 4.135e-07, on `builder_revolve.t3d` poly 15; 876 of the 942 are
 exactly zero.
 
 **Rejected.**

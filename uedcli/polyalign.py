@@ -11,7 +11,7 @@ parked on `dev/docs/board/inbox/`.
 Design authority: dev/docs/decisions.md 2026-07-18 21:40 UTC (`poly align` v1 scope + face-selection
 grammar) and board item `poly-align-brush-poly-find-built` (UV math + algorithms).
 
-UV convention (verified from `render.rs`/`preview_native.py`, not memory):
+UV convention (verified from `render.rs`/`texframe.py`, not memory):
     U = (Vertex − Origin) · TextureU + PanU     (V analogously with TextureV/PanV)
 with the texel scale carried in `|TextureU|` (a UNIT TextureU = 1 texel per world unit). The frame is
 WORLD-space: two faces are seamlessly aligned when a shared-edge world point maps to the same (U,V)
@@ -29,10 +29,9 @@ from decimal import Decimal
 from . import rotation
 from .builders import _tex_basis
 from .model import Actor, Level
-from .preview import _face_normal
-from .preview_native import _world_uv_frame
 from .query import _poly_facing, resolve_actor_name
 from .surface import parse_poly_selector, resolve_polys
+from .texframe import newell, world_uv_frame
 
 # World-space tolerances (uu). Coplanarity/plane-offset and edge-coincidence checks run on world
 # vertices at map scale, where sub-uu float noise is expected; these are generous relative to real
@@ -92,9 +91,9 @@ def _centroid(verts):
 
 def _world_verts(actor: Actor, poly) -> list[tuple[float, float, float]]:
     """A poly's vertices in WORLD space, using the SAME rotation-only transform as
-    `preview_native._world_uv_frame` (`Location + R·(v − PrePivot)`), so the UV frame and the
+    `texframe.world_uv_frame` (`Location + R·(v − PrePivot)`), so the UV frame and the
     vertices it is measured against stay mutually consistent. (Scale is not applied — matching
-    `_world_uv_frame`; a scaled textured brush is a known out-of-scope edge case, see the module
+    `world_uv_frame`; a scaled textured brush is a known out-of-scope edge case, see the module
     doc + inbox follow-up.)"""
     R = rotation.actor_matrix(actor)
     pp = rotation.actor_prepivot(actor)
@@ -112,7 +111,7 @@ def _world_verts(actor: Actor, poly) -> list[tuple[float, float, float]]:
 def _world_normal(actor: Actor, poly, ref: str) -> tuple[float, float, float]:
     """Unit outward world normal of a poly; raises naming `ref` for a zero-area face."""
     wv = _world_verts(actor, poly)
-    n = _face_normal(wv)
+    n = newell(wv)
     if _len(n) < 1e-9:
         raise PolyAlignError(f"brush poly align: face {ref} is degenerate (zero area)")
     return _unit(n)
@@ -120,7 +119,7 @@ def _world_normal(actor: Actor, poly, ref: str) -> tuple[float, float, float]:
 
 def _write_world_frame(actor: Actor, poly, base_w, tu_w, tv_w, pan) -> None:
     """Write a WORLD texture frame `(base_w, tu_w, tv_w, pan)` into `poly` by inverse-transforming
-    through `actor`'s own rotation — the exact inverse of `_world_uv_frame`
+    through `actor`'s own rotation — the exact inverse of `world_uv_frame`
     (`Origin = R⁻¹·(base_w − Location) + PrePivot`, `TextureU/V = R⁻¹·axes_w`). For an unrotated
     brush R is identity and this is a direct copy. `Pan` is written as the seed's integer."""
     R = rotation.actor_matrix(actor)
@@ -254,7 +253,7 @@ def _coplanar_align(level: Level, targets, mode: str, fresh_frame: bool) -> list
         base_w = _centroid(_world_verts(seed_actor, seed_poly))
         pan = (0, 0)
     else:
-        base_w, tu_w, tv_w, pan = _world_uv_frame(seed_actor, seed_poly)
+        base_w, tu_w, tv_w, pan = world_uv_frame(seed_actor, seed_poly)
     for bn, i, a, p in faces:
         _write_world_frame(a, p, base_w, tu_w, tv_w, pan)
     return sorted({bn for bn, _ in targets})
@@ -327,7 +326,7 @@ def _ring_align(level: Level, targets, fresh_frame: bool, fit_perimeter: bool) -
         pan = (0, 0)
         tv_w = axis
     else:
-        base0, tu0, tv0, pan = _world_uv_frame(actor, faces[0][1])
+        base0, tu0, tv0, pan = world_uv_frame(actor, faces[0][1])
         t_hat = _unit(_cross(axis, normals[0]))          # seed's in-plane tangent (⊥ axis)
         density_u = math.hypot(_dot(tu0, t_hat), _dot(tv0, t_hat)) or 1.0
         density_v = math.hypot(_dot(tu0, axis), _dot(tv0, axis)) or 1.0
@@ -412,9 +411,9 @@ def align(level: Level, tokens: list[str], mode: str, *, fresh_frame: bool = Fal
 
 def face_uv(actor: Actor, poly, world_point) -> tuple[float, float]:
     """The (U,V) texel coordinate a world point maps to under `poly`'s stored frame, via the canonical
-    convention `U=(P−Origin)·TextureU+PanU`. Reuses `_world_uv_frame` (the renderer's frame), so a
+    convention `U=(P−Origin)·TextureU+PanU`. Reuses `world_uv_frame` (the renderer's frame), so a
     test can assert seam continuity by comparing this across the two faces sharing an edge."""
-    base_w, tu_w, tv_w, pan = _world_uv_frame(actor, poly)
+    base_w, tu_w, tv_w, pan = world_uv_frame(actor, poly)
     p = tuple(float(c) for c in world_point)
     rel = _sub(p, base_w)
     return (_dot(rel, tu_w) + pan[0], _dot(rel, tv_w) + pan[1])

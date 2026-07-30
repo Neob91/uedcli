@@ -16,7 +16,7 @@ from uedcli.builders import cube, make_brush_actor
 from uedcli.model import Actor, Level
 from uedcli.preview_shots import Shot, parse_shot
 from uedcli.rotation import world_vertices
-from uedcli.tests.conftest import StubClassIndex
+from uedcli.tests.conftest import StubClassIndex, cube_room, set_prop
 
 IDX = StubClassIndex()          # the offline class resolver `movers.is_mover` needs
 
@@ -33,46 +33,32 @@ def _level(*actors: Actor) -> Level:
     return lvl
 
 
-def _room(name="Room", size=512.0, height=256.0, texture=None) -> Actor:
-    return make_brush_actor(name, cube(size, size, height, texture=texture), csg="subtract")
-
-
-def _set_prop(actor: Actor, key: str, value: str) -> None:
-    # MainScale/PostScale are typed model fields (spec §10), no longer props — route them there so
-    # the native scale-reject gate (which reads the typed field) sees them.
-    if key in ("MainScale", "PostScale"):
-        from uedcli.transform import parse_fscale
-        setattr(actor, "main_scale" if key == "MainScale" else "post_scale", parse_fscale(value))
-        return
-    actor.props = [(k, v) for k, v in actor.props if k != key] + [(key, value)]
-
-
 # --------------------------------------------------------------- scale/sheer rejections
 
 
 def test_mainscale_rejected_named():
-    room = _room()
-    _set_prop(room, "MainScale", "(Scale=(X=2.000000),SheerAxis=SHEER_ZX)")
+    room = cube_room()
+    set_prop(room, "MainScale", "(Scale=(X=2.000000),SheerAxis=SHEER_ZX)")
     with pytest.raises(pn.NativePreviewError, match="Room.*MainScale.*X=2"):
         pn.build_scene(_level(room), [], IDX)
 
 
 def test_postscale_rejected_named():
-    room = _room()
-    _set_prop(room, "PostScale", "(Scale=(Z=0.500000),SheerAxis=SHEER_ZX)")
+    room = cube_room()
+    set_prop(room, "PostScale", "(Scale=(Z=0.500000),SheerAxis=SHEER_ZX)")
     with pytest.raises(pn.NativePreviewError, match="Room.*PostScale.*Z=0.5"):
         pn.build_scene(_level(room), [], IDX)
 
 
 def test_sheerrate_rejected_named():
-    room = _room()
-    _set_prop(room, "MainScale", "(SheerRate=0.250000,SheerAxis=SHEER_ZX)")
+    room = cube_room()
+    set_prop(room, "MainScale", "(SheerRate=0.250000,SheerAxis=SHEER_ZX)")
     with pytest.raises(pn.NativePreviewError, match="Room.*MainScale.*SheerRate=0.25"):
         pn.build_scene(_level(room), [], IDX)
 
 
 def test_identity_scale_props_accepted():
-    room = _room()                       # make_brush_actor writes (SheerAxis=SHEER_ZX) both
+    room = cube_room()                   # make_brush_actor writes (SheerAxis=SHEER_ZX) both
     polys, _ = pn.build_scene(_level(room), [], IDX)
     assert len(polys) == 6               # a carved box renders its 6 interior faces
 
@@ -87,7 +73,7 @@ def test_zero_brush_trunk_is_named_error():
 
 
 def test_build_error_surfaces_cleanly():
-    bad = _room()
+    bad = cube_room()
     bad.brush.polys = bad.brush.polys[:1]        # an open solid: CSG core rejects/degenerates
     lvl = _level(bad)
     try:
@@ -101,7 +87,7 @@ def test_build_error_surfaces_cleanly():
 
 
 def test_out_of_range_surf_owner_renders_grey_not_indexerror():
-    room = _room()
+    room = cube_room()
     polys, table = pn.build_scene(_level(room), [], IDX)
     # Forge the guard input directly: node polys with hostile indices via _node_polys.
     from uedcli.native.umodel import BspNode, BspSurf, BspVert, Model
@@ -130,7 +116,7 @@ def test_unresolvable_ref_checkerboards_and_warns_once(capsys):
     layout we cannot decode yet without re-running anything — and it is printed ONCE per
     distinct ref, not once per face.
     """
-    room = _room(texture="Missing.Tex")
+    room = cube_room(texture="Missing.Tex")
     polys, table = pn.build_scene(_level(room), [], IDX)
     err = capsys.readouterr().err
     assert err.count("Missing.Tex") == 1         # ONE warning per distinct ref
@@ -144,7 +130,7 @@ def test_unresolvable_ref_checkerboards_and_warns_once(capsys):
 def test_bare_ref_is_unresolvable(capsys):
     """A bare ref is refused by name — `unqualified-ref`, not "not found" — because the fix is
     to qualify it, not to go looking for the texture."""
-    room = _room(texture="barename")
+    room = cube_room(texture="barename")
     polys, table = pn.build_scene(_level(room), [], IDX)
     err = capsys.readouterr().err
     assert "barename" in err and "unqualified-ref" in err
@@ -152,62 +138,11 @@ def test_bare_ref_is_unresolvable(capsys):
 
 
 def test_real_fixture_texture_resolves():
-    room = _room(texture="LUM_InfoPortraits.ArthurCallaway")
+    room = cube_room(texture="LUM_InfoPortraits.ArthurCallaway")
     polys, table = pn.build_scene(_level(room), [str(FIXTURES / "LUM_InfoPortraits.utx")], IDX)
     assert len(table) == 1
     w, h, _ = table[0]
     assert (w, h) == (64, 64)
-
-
-# --------------------------------------------------------------- UV frames (§5)
-
-
-def _quad_poly(actor_name="B"):
-    """The +X face poly of a unit-ish cube brush, with authored axes."""
-    room = _room(actor_name, 64, 64)
-    return room, room.brush.polys[0]
-
-
-def test_uv_frame_authored_axes_identity_actor():
-    actor, poly = _quad_poly()
-    poly.origin = (1.0, 2.0, 3.0)
-    poly.texture_u = (0.0, 1.0, 0.0)
-    poly.texture_v = (0.0, 0.0, -1.0)
-    poly.pan = (7, 9)
-    base, tu, tv, pan = pn._world_uv_frame(actor, poly)
-    assert base == (1.0, 2.0, 3.0)               # Location 0, no PrePivot, no rotation
-    assert tu == (0.0, 1.0, 0.0) and tv == (0.0, 0.0, -1.0)
-    assert pan == (7.0, 9.0)
-
-
-def test_uv_frame_rotated_prepivoted_matches_hand_derived():
-    actor, poly = _quad_poly()
-    actor.location = (Decimal(100), Decimal(200), Decimal(50))
-    _set_prop(actor, "Rotation", "(Yaw=16384)")   # 90°: x̂→ŷ, ŷ→−x̂ (GMath exact at 90°)
-    _set_prop(actor, "PrePivot", "(X=10.000000,Y=20.000000,Z=30.000000)")
-    poly.origin = (12.0, 24.0, 36.0)
-    poly.texture_u = (1.0, 0.0, 0.0)
-    poly.texture_v = (0.0, 0.0, 1.0)
-    base, tu, tv, pan = pn._world_uv_frame(actor, poly)
-    # base = Loc + R·(Origin − PrePivot); R(yaw 90°)·(2,4,6) = (−4,2,6)
-    assert base == pytest.approx((96.0, 202.0, 56.0), abs=1e-3)
-    assert tu == pytest.approx((0.0, 1.0, 0.0), abs=1e-5)    # x̂ rotates to ŷ
-    assert tv == pytest.approx((0.0, 0.0, 1.0), abs=1e-5)    # ẑ unchanged by yaw
-    assert pan == (0.0, 0.0)                                  # missing Pan → (0,0)
-
-
-def test_uv_frame_missing_origin_and_axes_fall_back():
-    actor, poly = _quad_poly()
-    actor.location = (Decimal(5), Decimal(6), Decimal(7))
-    poly.origin = None
-    poly.texture_u = (0.0, 0.0, 0.0)             # zero axes → _tex_basis default
-    poly.texture_v = None
-    base, tu, tv, pan = pn._world_uv_frame(actor, poly)
-    assert base == (5.0, 6.0, 7.0)               # local zero origin
-    from uedcli.builders import _tex_basis
-    n = tuple(float(c) for c in poly.normal)
-    exp_u, exp_v = _tex_basis(n)
-    assert tu == pytest.approx(exp_u) and tv == pytest.approx(exp_v)
 
 
 # --------------------------------------------------------------- transform cross-checks
@@ -216,10 +151,10 @@ def test_uv_frame_missing_origin_and_axes_fall_back():
 def test_rotated_brush_rust_transform_matches_world_vertices():
     """The §9 rotated-brush oracle: Rust's FPoly::Transform (rot3x3 through build_geometry)
     lands vertices where the GMath-verified Python `rotation.world_vertices` puts them."""
-    room = _room("Rot", 256, 128)
+    room = cube_room("Rot", 256, 128)
     room.location = (Decimal(64), Decimal(-32), Decimal(16))
-    _set_prop(room, "Rotation", "(Pitch=4096,Yaw=12288,Roll=2048)")
-    _set_prop(room, "PrePivot", "(X=8.000000,Y=4.000000,Z=2.000000)")
+    set_prop(room, "Rotation", "(Pitch=4096,Yaw=12288,Roll=2048)")
+    set_prop(room, "PrePivot", "(X=8.000000,Y=4.000000,Z=2.000000)")
     lvl = _level(room)
     polys, _ = pn.build_scene(lvl, [], IDX)
     got = {tuple(round(polys_c, 2) for polys_c in p[0][i:i + 3])
@@ -233,9 +168,9 @@ def test_rotated_brush_rust_transform_matches_world_vertices():
 def test_mover_world_polys_match_world_vertices():
     mover = make_brush_actor("Door", cube(64, 8, 96), location=(10.0, 20.0, 30.0),
                              mover_class="Engine.Mover")
-    _set_prop(mover, "Rotation", "(Yaw=8192)")
-    _set_prop(mover, "PrePivot", "(X=32.000000)")
-    lvl = _level(_room(), mover)
+    set_prop(mover, "Rotation", "(Yaw=8192)")
+    set_prop(mover, "PrePivot", "(X=32.000000)")
+    lvl = _level(cube_room(), mover)
     got = pn._mover_world_polys(lvl, IDX)
     assert got and all(a.name == "Door" for _, a, _ in got)
     flat = {tuple(round(c, 3) for c in v) for verts, _, _ in got for v in verts}
@@ -245,7 +180,7 @@ def test_mover_world_polys_match_world_vertices():
 
 def test_movers_are_out_of_world_csg_but_rendered():
     mover = make_brush_actor("Door", cube(64, 8, 96), mover_class="Engine.Mover")
-    lvl = _level(_room(), mover)
+    lvl = _level(cube_room(), mover)
     brushes, join = pn._brush_inputs(lvl, IDX)
     assert [n for n, _ in join] == ["Room"]      # mover NOT in the CSG input
     polys, _ = pn.build_scene(lvl, [], IDX)
@@ -256,7 +191,7 @@ def test_movers_are_out_of_world_csg_but_rendered():
 
 
 def test_pf_invisible_faces_dropped():
-    room = _room()
+    room = cube_room()
     room.brush.polys[0].flags = pn.PF_INVISIBLE
     polys, _ = pn.build_scene(_level(room), [], IDX)
     assert len(polys) == 5
@@ -266,7 +201,7 @@ def test_pf_invisible_faces_dropped():
 
 
 def test_aim_point_brush_is_aabb_centre():
-    room = _room()
+    room = cube_room()
     room.location = (Decimal(100), Decimal(0), Decimal(0))
     lvl = _level(room)
     assert pn.actor_aim_point(lvl, "room") == pytest.approx((100.0, 0.0, 0.0))
@@ -279,14 +214,14 @@ def test_aim_point_point_actor_is_location():
 
 def test_aim_point_unknown_actor_named_error():
     with pytest.raises(pn.NativePreviewError, match="actor not found: Ghost"):
-        pn.actor_aim_point(_level(_room()), "Ghost")
+        pn.actor_aim_point(_level(cube_room()), "Ghost")
 
 
 # --------------------------------------------------------------- render_shots E2E
 
 
 def test_render_shots_writes_pngs(tmp_path):
-    lvl = _level(_room())
+    lvl = _level(cube_room())
     shots = [parse_shot("at:0,0,0;rot:0,0"), parse_shot("at:0,0,0;rot:0,90;name:east")]
     n = pn.render_shots(level=lvl, shots=shots, out_dir=tmp_path / "out", size=(160, 120),
                         index=IDX)
@@ -303,14 +238,14 @@ def test_render_shots_unwritable_out_dir(tmp_path):
         pytest.skip("cannot create an unwritable dir here")
     try:
         with pytest.raises(pn.NativePreviewError, match="out-dir"):
-            pn.render_shots(level=_level(_room()), shots=[parse_shot("at:0,0,0;rot:0,0")], index=IDX,
-                            out_dir=ro / "sub", size=(32, 32))
+            pn.render_shots(level=_level(cube_room()), index=IDX, out_dir=ro / "sub",
+                            shots=[parse_shot("at:0,0,0;rot:0,0")], size=(32, 32))
     finally:
         ro.chmod(0o755)
 
 
 def test_render_shots_all_or_nothing_actor_resolution(tmp_path):
-    lvl = _level(_room())
+    lvl = _level(cube_room())
     shots = [parse_shot("at:0,0,0;rot:0,0"), parse_shot("at:0,0,0;look:@Nope")]
     with pytest.raises(pn.NativePreviewError, match="actor not found: Nope"):
         pn.render_shots(level=lvl, shots=shots, out_dir=tmp_path, size=(32, 32), index=IDX)
@@ -323,7 +258,7 @@ def test_render_shots_all_or_nothing_actor_resolution(tmp_path):
 def test_pixel_probe_marker_quad_lands_at_oracle_pixel():
     """Place a small marker at a known world point, render, and assert the ORACLE-projected
     pixel is hit (guards the projection + the Python-side camera basis end to end)."""
-    room = _room("Room", 1024, 512)
+    room = cube_room("Room", 1024, 512)
     lvl = _level(room)
     polys, table = pn.build_scene(lvl, [], IDX)
     # marker quad: 8uu square centred at (200, 60, -40), facing the camera at origin

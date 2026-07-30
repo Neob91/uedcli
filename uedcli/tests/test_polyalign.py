@@ -434,7 +434,7 @@ def test_dispatch_poly_align_error_exit2_no_save(capsys):
 # Per uedcli dev/docs/rules/spikes.md "pin the finding" — re-assert the two load-bearing facts poly align's
 # math rests on, so a change to the UV convention or the cylinder builder trips a red test.
 # Evidence: board item `poly-align-brush-poly-find-built` (UV convention §) — render.rs:159-165 +
-# preview_native._world_uv_frame; builders.cylinder radius placement (builders.py:206-207).
+# texframe.world_uv_frame; builders.cylinder radius placement (builders.py:206-207).
 
 def test_engine_fact_uv_formula_is_base_relative_plus_pan():
     """The canonical UV is `U=(Vertex−Origin)·TextureU+PanU` (V analogously), scale in |TextureU|.
@@ -442,7 +442,7 @@ def test_engine_fact_uv_formula_is_base_relative_plus_pan():
     PanU is an additive texel offset. Anchored to render.rs:159-165 (the renderer uses the authored
     Origin as uv_base and adds the surface Pan)."""
     from uedcli.model import Polygon
-    from uedcli.preview_native import _world_uv_frame
+    from uedcli.texframe import world_uv_frame
     p = Polygon()
     p.origin = (10.0, 20.0, 0.0)
     p.texture_u = (1.0, 0.0, 0.0)         # unit ⇒ 1 texel per world unit along +X
@@ -451,7 +451,7 @@ def test_engine_fact_uv_formula_is_base_relative_plus_pan():
     p.vertices = [_D(10, 20, 0), _D(74, 20, 0), _D(74, 84, 0), _D(10, 84, 0)]
     a = _brush("F", cube(8, 8, 8))        # a carrier actor (identity transform)
     a.brush.polys = [p]
-    base, tu, tv, pan = _world_uv_frame(a, p)
+    base, tu, tv, pan = world_uv_frame(a, p)
     assert base == (10.0, 20.0, 0.0) and tu == (1.0, 0.0, 0.0) and pan == (5.0, 7.0)
     # hand-computed: vertex (74,20) is 64 world units along +X from Origin ⇒ U = 64*1 + 5 = 69.
     u, v = polyalign.face_uv(a, p, (74.0, 84.0, 0.0))

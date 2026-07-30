@@ -28,8 +28,8 @@ from decimal import Decimal
 from .emit import fmt_vertex
 from .geometry import validate_brush
 from .model import Actor, CoordinateError, Level
-from .preview import _face_normal
 from .query import PF_NAMES, resolve_actor_name
+from .texframe import newell
 
 _FLAG_BY_NAME = {name: bit for bit, name in PF_NAMES}
 
@@ -287,7 +287,7 @@ def _unit_normal(verts, ref: str, verb: str) -> tuple[float, float, float]:
     the stored `poly.normal`, which the engine ignores and recomputes (`unrealed/t3d.md` "Winding
     defines the face"), so an authored one is routinely wrong. Newell rather than a cross product of
     the first three vertices, which produces garbage when those three are near-collinear."""
-    n = _face_normal(verts)
+    n = newell(verts)
     m = _len3(n)
     if m < _TINY:
         raise ValueError(f"{verb}: face {ref} is degenerate (zero area) — it has no face plane")

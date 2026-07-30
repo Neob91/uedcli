@@ -54,7 +54,7 @@ def unit(a):
 
 
 def face_normal(vs):
-    """Newell — the same rule `preview._face_normal` uses."""
+    """Newell — the same rule `texframe.newell` uses."""
     n = [0.0, 0.0, 0.0]
     for i in range(len(vs)):
         a, b = vs[i], vs[(i + 1) % len(vs)]

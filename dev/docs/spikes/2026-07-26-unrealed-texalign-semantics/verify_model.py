@@ -18,8 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import texalign_model as M                                            # noqa: E402
 from uedcli.model import parse_t3d                                    # noqa: E402
 from uedcli.polyalign import _world_verts                             # noqa: E402
-from uedcli.preview import _face_normal                               # noqa: E402
-from uedcli.preview_native import _world_uv_frame                     # noqa: E402
+from uedcli.texframe import newell, world_uv_frame                    # noqa: E402
 
 # bound texture -> VSize (needed only by CLAMP)
 VSIZE = {"ex_bricks": 256, "aircount_a00": 64, "calendar_2": 256}
@@ -43,13 +42,13 @@ def collect(path: Path):
             wv = _world_verts(a, p)
             if len(wv) < 3:
                 continue
-            n = _face_normal(wv)
+            n = newell(wv)
             m = math.sqrt(sum(c * c for c in n))
             if m < 1e-9:
                 continue
             n_poly = tuple(c / m for c in n)
             sign = -1.0 if oper == "CSG_Subtract" else 1.0
-            base, tu, tv, pan = _world_uv_frame(a, p)
+            base, tu, tv, pan = world_uv_frame(a, p)
             out[(name, i)] = dict(n_poly=n_poly,
                                   n_surf=tuple(sign * c for c in n_poly),
                                   verts=[tuple(float(c) for c in v) for v in wv],

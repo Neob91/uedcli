@@ -135,6 +135,28 @@ def read_fixture(name: str) -> str:
     return (FIXTURES / name).read_text(encoding="latin1")
 
 
+# ------------------------------------------------------------------- brush actors, offline
+# One copy, shared by `test_preview_native.py` and `test_texframe.py` — the UV-frame pins live in
+# the second and the scale-reject pins in the first, and both drive the same fixture shape.
+
+def cube_room(name="Room", size=512.0, height=256.0, texture=None):
+    """A subtract cube brush actor — the stand-in room the preview/UV tests frame."""
+    from uedcli.builders import cube, make_brush_actor
+    return make_brush_actor(name, cube(size, size, height, texture=texture), csg="subtract")
+
+
+def set_prop(actor, key: str, value: str) -> None:
+    """Set one actor property from its T3D text. `MainScale`/`PostScale` are TYPED model fields
+    rather than props, so they route to the field: written into `props` they would be read by
+    nothing, and the gate that consumes them (`preview_native._reject_scaled`) would pass
+    vacuously."""
+    if key in ("MainScale", "PostScale"):
+        from uedcli.transform import parse_fscale
+        setattr(actor, "main_scale" if key == "MainScale" else "post_scale", parse_fscale(value))
+        return
+    actor.props = [(k, v) for k, v in actor.props if k != key] + [(key, value)]
+
+
 # ------------------------------------------------------ the mover class resolver, offline
 # `movers.is_mover` is SCHEMA-AWARE (decisions.md 2026-07-25 10:18 UTC): it asks a
 # `classindex.ClassIndex` whether the actor's class descends from `Engine.Mover`, so every

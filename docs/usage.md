@@ -181,7 +181,7 @@ When a **mutating** verb resolves the level from `UEDCLI_LEVEL` (not an explicit
 ```bash
 uedcli actor find --group cells | uedcli actor delete -
 uedcli actor find --folder castle.tower.** | uedcli actor bbox -   # enclosing box of a subtree
-uedcli actor find --within-bbox -512,0,-256,512,768,256 --kind brush | uedcli actor preview -   # wireframe a region
+uedcli actor find --within-bbox -512,0,-256,512,768,256 --kind brush | uedcli actor preview -   # render a region
 ```
 
 **Boolean queries — `find <filters> -`:** with a trailing `-`, `find` reads a newline actor-name list
@@ -1030,15 +1030,18 @@ uedcli mover key rotate Mover0 1 --by 0,16384,0        # swings about the hinge,
 
 ---
 
-# `actor preview` — the wireframe viewer
+# `actor preview` — the brush viewer
 
-A self-rendered **color wireframe** image (no editor) so you can see geometry and map **poly index ↔
-face**. Reads named actors from the current level, model-side. (Renamed from `brush preview`;
-`stash preview`/`prefab preview` keep their names.)
+A self-rendered **colour** image (no editor) so you can see geometry and map **poly index ↔
+face**. Reads named actors from the current level, model-side. **`--faces`** picks how faces are drawn:
+`wire` (the default) is outlines only; `flat` also fills every face solid through a depth buffer, so you
+can read what occludes what. (Renamed from `brush preview`; `stash preview`/`prefab preview` keep their
+names.)
 
 ```
 actor preview [<names…> | --from-t3d <FILE…|->]
               [--layout quad|single|breakdown] [--view top|front|side|iso]
+              [--faces wire|flat]
               [--brush-colors csg|legend] [--annotate SELECTORS]
               [--frame BRUSH[:IDX] | X0,Y0,Z0,X1,Y1,Z1] [--frame-tightness N]
               [--highlight POLY|NAME ...] [--focus BRUSH]
@@ -1066,13 +1069,36 @@ actor preview [<names…> | --from-t3d <FILE…|->]
   **`--focus`/`--frame` are ignored** under it. Brush + point-actor counts are reported on stderr;
   breakdown is a small-selection inspector (it warns past ~16 panes — a whole level makes an unusably
   large grid, and point actors add panes too, so subset first).
-- **The wireframe is coloured by CSG op** (UnrealEd's legend): added-solid **blue**, subtracted
+- **`--faces {wire,flat}`** picks how faces are drawn.
+  - **`wire`** (default) draws outlines only — the schematic. It needs no game content at all.
+  - **`flat`** additionally **fills** every face solid in its brush's colour, the nearest face winning
+    per pixel, and keeps the outlines over the fills. Use it to read **what occludes what**: which brush
+    is in front, what a room actually contains, whether a detail brush pokes through a wall. Every
+    visible face is outlined in the **partner shade of its own brush's colour** — the paler one over a
+    camera-facing fill, the darker one over a subtract's interior — so the outline reads against the fill
+    beneath it while keeping the brush's CSG hue. A single-sided brush (a `nonsolid` sheet) is outlined
+    whichever way it faces. A face you cannot see draws nothing: a solid brush is **opaque**, so a brush
+    sealed inside one does not show its wireframe through it.
+  - Under `flat` a **subtract** brush shows only its **far (interior)** faces. A subtract's polys seen
+    from outside the carved volume render neither in the editor nor in game, so drawing them would turn
+    a room into a solid box hiding everything inside it. A **mover** is exempt — it is never carved into
+    the world, whatever `CsgOper` it carries — so it shows every face.
+  - **`flat` reads the game's class hierarchy** (that is how it tells a mover from a real subtraction),
+    so unlike `wire` it needs **both a resolved project and the per-user games config**. Missing either
+    is a clean exit 2 naming which, and `wire` still works. That includes the generator pipe: `brush
+    build cube | uedcli actor preview --from-t3d - --faces flat` must run from inside a project (or with
+    `--project`), while the same pipe under `wire` runs from anywhere.
+  - Scaled, sheared and **mirrored** brushes all render — a mirror reverses which way a brush's faces
+    point, and `flat` accounts for that, so a mirrored subtracted room still shows its interior the
+    right way round.
+  - `flat` composes with every other option here, `--focus` and `--layout breakdown` included.
+- **Brushes are coloured by CSG op** (UnrealEd's legend): added-solid **blue**, subtracted
   **gold/yellow**, semi-solid **pink**, non-solid **green**, mover **magenta**; front faces darker,
   obscured/back faces lighter. This says what each brush *does*.
-- **`--brush-colors {csg,legend}`** picks the wireframe's colour source. `csg` (default) is the CSG-op
-  colouring above. **`legend`** instead draws each brush's wireframe in *its own per-actor legend tint*
-  — every brush a distinct colour matching its legend swatch (you trade the CSG cue for telling same-op
-  brushes apart at a glance).
+- **`--brush-colors {csg,legend}`** picks the colour source, outlines and fills alike. `csg` (default)
+  is the CSG-op colouring above. **`legend`** instead draws each brush in *its own per-actor legend
+  tint* — every brush a distinct colour matching its legend swatch (you trade the CSG cue for telling
+  same-op brushes apart at a glance).
 - **The legend never overlaps the geometry.** A top band is reserved for the legend panel and the
   geometry is framed below it. This applies to `quad`/`single`; **`breakdown` draws no legend at all**
   (actors are identified by their captioned panes).
@@ -1115,6 +1141,10 @@ actor preview [<names…> | --from-t3d <FILE…|->]
   brushes. A number **unreadable on screen** is omitted — a **view-dependent** verdict: a face too
   small, too edge-on, or too zoomed-out gets no number, and the same face is numbered once it's big
   enough (zoomed in, or in its `--layout breakdown` pane). There is no fallback for an omitted face.
+  Under **`--faces flat`** the fills are opaque but the numbers are not hidden by them: a face you
+  cannot see still shows its index, at 60% of a visible face's opacity, so a number can sit on a wall
+  in front of the face it belongs to. Read indices off `--faces wire`, or pass `--annotate none` for a
+  clean filled picture.
 - **`--annotate`** takes a **comma-set of selectors** (the drawn labels are their **union**). A bare
   **kind** means ALL of that kind; each colon **filter** narrows; multiple filters on one selector
   intersect; commas union. Tokens are case/whitespace-insensitive.
@@ -1150,14 +1180,22 @@ actor preview [<names…> | --from-t3d <FILE…|->]
   explicit-AABB `--frame` is always framed exactly — `--frame-tightness` does NOT modulate it.
 - **`--highlight POLY|NAME`** emphasises a poly or actor; repeatable, no effect on framing. A token
   **with a colon** is a poly selector `BRUSH:IDX` (set form `BRUSH:1,2` / `BRUSH:all` too) — those
-  polys draw in their brush's vivid CSG hue + a bolder line. A token **without a colon** is an
+  polys draw with a **bolder line**, in their brush's vivid CSG hue under `--faces wire`. Under
+  `--faces flat` a highlighted face also **swaps its fill** to the partner shade of its brush's colour,
+  which is what makes it stand out across an opaque fill. A token **without a colon** is an
   **actor name**: a brush actor highlights **all** its polys; a point actor gets **corner brackets**
   (a selection reticle) framing its sprite/marker. An unknown name / a selector on a non-brush → clean
-  exit 2.
+  exit 2. Under a filled mode a highlight re-colours **what is visible** and never x-rays: a
+  highlighted face that something in front of it hides shows nothing, and a **stderr note** names any
+  selector that landed on nothing visible for any reason (hidden, culled, invisible, or off-frame) —
+  under `--layout quad` that means no pane showed it.
 - **`--focus BRUSH`** spotlights ONE brush: only it shows face indices (in its tint), and every OTHER
-  brush recedes to a **faint (dimmed)** wireframe — for reading one brush's faces in a busy scene. All
-  actor names still appear in the legend. **`--highlight` overrides `--focus`**: a highlighted
-  poly/actor still draws vivid+bold on top and keeps its index even when its brush is not the focus.
+  brush recedes — for reading one brush's faces in a busy scene. Under `--faces wire` those brushes
+  recede to a **faint (dimmed)** wireframe; under `--faces flat` their **fills** fade too, to a faint
+  wash of their own colour. **`--focus` changes brightness only — never what is visible or what hides
+  what**, so the picture stays physically honest either way: a crate inside a subtracted room stands in
+  front of the room's far wall, a brush between the camera and the focused one still covers it, and a
+  brush sealed inside a solid *added* brush stays hidden. All actor names still appear in the legend.
   An unknown name / a point actor → clean exit 2.
 - **`--show SET`** is a **comma-set (union)** of range overlays for **POINT** actors (default: none).
   Members: **`collision`** — a faint light-red collision cylinder for every colliding point actor
@@ -1189,7 +1227,7 @@ shared code path, with any per-box extras (`meta.json` capture anchor, `packages
 stash capture [--id ID] [--force] [--from-t3d <FILE…|->] [<names…>]
 stash show    <id> [<names…>] [--summary]        # T3D dump (default), or a bbox/class/poly summary
 stash list                                        # register ids
-stash preview <id> [<names…>] <preview opts>      # composite wireframe (like actor preview)
+stash preview <id> [<names…>] <preview opts>      # composite render (like actor preview)
 stash drop    <id>
 stash apply   <id> [--at X,Y,Z] [--group NAME | --no-group] [--folder PATH]
 stash promote <id> --as <name> [--force] [--prefab-dir DIR]

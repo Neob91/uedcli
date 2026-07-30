@@ -38,6 +38,9 @@ Commit locally as you go — `CLAUDE.md` "Commits" applies inside a worktree exa
 checkout. A fresh worktree has no `.venv/` (gitignored), so the first `bin/test` there pays the
 venv-creation cost once.
 
+Never commit to the main checkout without an explicit yes from the owner — everything you produce goes
+on the worktree's branch, board items included.
+
 ## 3. Never push the feature branch
 
 It is squashed away on merge and a remote branch can never be deleted, so pushing one strands

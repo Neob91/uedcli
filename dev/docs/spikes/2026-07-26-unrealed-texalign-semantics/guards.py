@@ -19,8 +19,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import fixture2                                                    # noqa: E402
 from uedcli.model import parse_t3d                                 # noqa: E402
 from uedcli.polyalign import _world_verts                          # noqa: E402
-from uedcli.preview import _face_normal                            # noqa: E402
-from uedcli.preview_native import _world_uv_frame                  # noqa: E402
+from uedcli.texframe import newell, world_uv_frame                 # noqa: E402
 
 
 def frames(path: Path):
@@ -33,9 +32,9 @@ def frames(path: Path):
             wv = _world_verts(a, p)
             if len(wv) < 3:
                 continue
-            n = _face_normal(wv)
+            n = newell(wv)
             m = sum(c * c for c in n) ** 0.5
-            base, tu, tv, pan = _world_uv_frame(a, p)
+            base, tu, tv, pan = world_uv_frame(a, p)
             out[(name, i)] = (tuple(c / m for c in n), base, tu, tv, (pan[0], pan[1]))
     return out
 

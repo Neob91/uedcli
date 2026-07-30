@@ -51,17 +51,25 @@ The lighting mechanics are in [lighting.md](lighting.md); the craft is:
 
 ## The build loop — see the geometry without the editor
 
-Iterate model-side with `actor preview` (the offline wireframe viewer — no editor, no container):
+Iterate model-side with `actor preview` (the offline geometry viewer — no editor, no container):
 render a quad or single view of the actors you're working on, judge it, adjust, repeat. It reads
 names from the level (or a stdin name list — `actor find --folder castle.stairs | actor preview -`),
 or a T3D snippet from a generator (`brush build spiral | actor preview --from-t3d -`).
 
 - Brushes are coloured by CSG op (added blue / subtracted gold / semisolid pink / nonsolid green /
   mover magenta), so a doorway subtract reads distinctly from the wall it carves.
+- `--faces {wire,flat}` picks how faces are drawn. `wire` (the default) is outlines only — the
+  schematic. `flat` fills every face solid, nearest first, so you read what occludes what: a
+  subtracted room shows its interior, with anything added inside it standing in front. Reach for it to
+  answer "does this fit inside that", "is this pillar actually in the room", "does this detail brush
+  poke through the wall". It needs a project and the game content available; `wire` needs neither, so a
+  bare `brush build … | actor preview --from-t3d -` renders from anywhere. `--focus` fades the other
+  brushes' fills as well as their outlines, and fades them only — what hides what never changes.
 - `--highlight BRUSH:idx` emphasises the exact face you're about to retexture or align (a bare actor
   name highlights a whole brush, or brackets a point actor); `--frame BRUSH` frames a whole brush and
   `--frame BRUSH:idx` one face tight (with `--frame-tightness`). `--frame` also takes an explicit
-  world box `X0,Y0,Z0,X1,Y1,Z1`.
+  world box `X0,Y0,Z0,X1,Y1,Z1`. Under `flat` a highlight re-colours what is visible; when it is not
+  visible at all a stderr note names it (under `--layout quad`, that means no pane showed it).
 - `--layout breakdown` walks a selection actor by actor: an overview pane (whole scene, CSG, no
   labels) then one zoomed pane per actor — a brush with its faces numbered and its name on top, a
   point actor with its marker/sprite — so you read which face each index is without numbers piling

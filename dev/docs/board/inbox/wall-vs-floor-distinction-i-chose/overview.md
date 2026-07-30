@@ -20,7 +20,7 @@ from `polyalign.py` (design: decisions.md 2026-07-18 21:40 UTC). Flagging for yo
    needs. A true pixel-tile-seamless meet (period = texture width) is a follow-up once the catalog
    can supply dimensions to the aligner.
 3. **Scaled textured brushes:** continuity math uses the rotation-only frame transform (matching
-   `preview_native._world_uv_frame`), NOT `actor_linear` (which includes MainScale/PostScale). For
+   `texframe.world_uv_frame`), NOT `actor_linear` (which includes MainScale/PostScale). For
    a SCALED textured brush the written frame will be slightly off. Out of v1 scope (builders emit
    unscaled brushes); follow-up if scaled-brush texturing becomes a real need.
 4. **DEFERRED modes (v2, per the decision):** `--face` fit-one-texture-to-a-surface (single-poly,

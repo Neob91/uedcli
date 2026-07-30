@@ -226,11 +226,25 @@ def _preview_opts(pp):
                          "shows all four); 'iso' separates opposite faces so index labels don't overlap")
     pp.add_argument("--iso-angle", type=float, default=30.0,
                     help="iso receding-edge angle from horizontal (default 30°)")
-    pp.add_argument("--brush-colors", dest="brush_colors", default="csg", choices=["csg", "legend"],
-                    help="how to colour the wireframe: 'csg' (default) = by CSG op (added blue, "
-                         "subtracted gold, semisolid pink, nonsolid green, mover magenta); 'legend' = "
-                         "each brush in its own per-actor legend tint (drops the CSG cue but tells "
-                         "same-op brushes apart at a glance, matching the legend swatches)")
+    pp.add_argument("--faces", default="wire", choices=["wire", "flat"],
+                    help="how brush faces are drawn (default 'wire'). 'wire' = outlines only, the "
+                         "schematic — needs no game content. 'flat' = every face also filled solid in "
+                         "its brush's colour, the nearest face winning per pixel, with the wireframe "
+                         "kept over it in the paler/darker partner of that same brush colour so the "
+                         "outlines read against their own fills: a diagram of what occludes what. "
+                         "Under 'flat' a SUBTRACT brush "
+                         "shows only its far (interior) faces, so geometry inside a subtracted room "
+                         "stays visible instead of being hidden by a solid box. 'flat' LOADS the game's "
+                         "class hierarchy (to tell a mover, which is never carved into the world, from "
+                         "a real subtraction), so unlike 'wire' it needs BOTH a resolved project and the "
+                         "per-user games config — 'wire' needs neither and works on --from-t3d from "
+                         "anywhere")
+    pp.add_argument("--brush-colors", dest="brush_colors", default=None, choices=["csg", "legend"],
+                    help="how to colour brushes — both the wireframe and the '--faces flat' fills: "
+                         "'csg' (the default) = by CSG op (added blue, subtracted gold, semisolid pink, "
+                         "nonsolid green, mover magenta); 'legend' = each brush in its own per-actor "
+                         "legend tint (drops the CSG cue but tells same-op brushes apart at a glance, "
+                         "matching the legend swatches)")
     pp.add_argument("--annotate", dest="annotate", default=DEFAULT_ANNOTATIONS,
                     help="comma-set of annotation selectors (union). A bare KIND = ALL of it; colon "
                          "FILTERs narrow; commas union. Kinds: poly (face indices), name (actor "
@@ -257,18 +271,31 @@ def _preview_opts(pp):
                     action="append", default=None,
                     help="emphasise a poly or an actor; repeatable, no effect on framing. A token "
                          "WITH a colon is a poly selector BRUSH:IDX (the set form BRUSH:1,2 and "
-                         "BRUSH:all work too) — those polys draw in their brush's vivid CSG hue + a "
-                         "bolder line. A token WITHOUT a colon is an ACTOR NAME: a brush actor "
+                         "BRUSH:all work too) — those polys draw with a bolder line, in their brush's "
+                         "vivid CSG hue under --faces wire; under --faces flat the highlighted face "
+                         "also swaps its fill for the other member of its brush's colour pair, which is "
+                         "what makes it stand out from its neighbours over an opaque fill. Under flat it "
+                         "re-colours what is VISIBLE and never x-rays: a face hidden behind something at "
+                         "this --view draws nothing. A stderr note names any selector that ended up not "
+                         "visible for ANY reason — hidden, culled, or outside the frame. A token "
+                         "WITHOUT a colon is an ACTOR NAME: a brush actor "
                          "highlights ALL its polys; a point actor gets corner brackets (a selection "
                          "reticle) framing its sprite/marker")
     pp.add_argument("--focus", metavar="BRUSH", default=None,
                     help="spotlight ONE brush: only it shows face indices (in its label tint); "
-                         "every OTHER brush recedes to a faint (dimmed) wireframe. All actor names "
-                         "still appear in the legend. --highlight OVERRIDES this — a highlighted "
-                         "poly/actor stays vivid+bold on top and keeps its index even when its brush is "
-                         "not the focus. An unknown name / a point actor → clean exit 2. Not applied "
-                         "under --layout breakdown, which focuses each pane itself (a value is still "
-                         "validated)")
+                         "every OTHER brush recedes — its wireframe to faint (dimmed) lines, and under "
+                         "--faces flat its fills to a faint wash of their own colour. It changes "
+                         "BRIGHTNESS ONLY, never what is visible or what hides what: a crate inside a "
+                         "subtracted room stands in front of the room's far wall, a brush between the "
+                         "camera and the focused one still covers it, and a brush sealed inside a solid "
+                         "added brush stays hidden. All "
+                         "actor names still appear in the legend. --highlight OVERRIDES this — a "
+                         "highlighted poly/actor stays vivid+bold and undimmed and keeps its index even "
+                         "when its brush is not the focus — but under --faces flat it does not x-ray: a "
+                         "highlighted face that something in front of it hides draws nothing. "
+                         "An unknown name / a point actor → clean exit 2. "
+                         "Not applied under --layout breakdown, which focuses each pane itself (a value "
+                         "is still validated)")
     pp.add_argument("--show", default="", metavar="SET",
                     help="comma-set (union) of range overlays to draw for POINT actors (default none): "
                          "'collision' = a faint light-red collision cylinder for every colliding point "
@@ -276,7 +303,10 @@ def _preview_opts(pp):
                          "FRONT/SIDE, an 8-sided wire cylinder in ISO; 'light-range' = a faint orange "
                          "sphere of a light's reach (25·(LightRadius+1) UU); 'sound-range' = a faint "
                          "blue sphere of an AmbientSound's reach (25·(SoundRadius+1) UU). Brush actors "
-                         "(incl. movers) are excluded — their preview stays schema-free (no class lookup)")
+                         "(incl. movers) are excluded, so under --faces wire their preview stays "
+                         "schema-free (no class lookup). --faces flat does look classes up, but only to "
+                         "tell a mover from a real subtraction for its face cull — it draws no extra "
+                         "overlay")
     pp.add_argument("--size", type=int, default=1024, metavar="PX",
                     help="output image edge length in pixels (default 1024)")
     pp.add_argument("--out", default=None, metavar="PATH",

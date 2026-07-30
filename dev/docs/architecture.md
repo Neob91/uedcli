@@ -1829,7 +1829,7 @@ of the unbuilt align rework.
 
 `rotate`'s frame math, all in the brush's LOCAL space (the vertex centroid commutes with the actor
 transform, so a world round trip would buy only float dust): the unit normal comes from the
-polygon's own winding via `preview._face_normal` (Newell) — **never `poly.normal`**, which the
+polygon's own winding via `texframe.newell` — **never `poly.normal`**, which the
 engine ignores and recomputes — and is then **flipped on a SUBTRACTIVE brush**, so the turn follows
 the VISIBLE surface normal and the same `--by` reads the same from where the author stands whether
 the face is the outside of an added pillar or the inside of a subtracted room (owner ruling
@@ -1859,9 +1859,9 @@ anchors on the seed face's centroid — see [`unrealed/texalign.md`](unrealed/te
   reads its face set from `BRUSH:SELECTOR`/bare-name positionals or stdin `-` (bare names or the
   producer's `BRUSH:idx` lines; empty stdin → clean no-op). The **UV convention** it implements is
   `U = (Vertex − Origin)·TextureU + PanU` (texel scale in `|TextureU|`; verified against
-  `render.rs`/`preview_native._world_uv_frame`, pinned by `unrealed/t3d.md` + a `test_polyalign`
+  `render.rs`/`texframe.world_uv_frame`, pinned by `unrealed/t3d.md` + a `test_polyalign`
   engine-fact). Continuity is defined in **world space**: the seed/first face's world frame
-  (`preview_native._world_uv_frame`) is written into each face by **inverse-transforming it through
+  (`texframe.world_uv_frame`) is written into each face by **inverse-transforming it through
   that face's own brush rotation** (`rotation.actor_matrix` + `rotation.inverse`) — NOT by copying
   identical stored fields, which would only align faces of one brush. The continuity offset lives in
   the float `Origin`, so `Pan` stays the seed's integer. `--wall`/`--floor` demand a strictly
@@ -2178,6 +2178,90 @@ nonsolid green, mover magenta), rasterizes a light-grey-background RGB buffer (P
 in-memory format only; the disk write is always PNG, below), and annotates per an **`AnnotationSpec`**
 (poly indices painted on-face; actor names as de-collided leader boxes).
 
+**`--faces {wire,flat}`** picks whether faces are also FILLED. It is an explicit `faces=` parameter on
+`render_brush_pgm`/`render_brushes_pgm`/`render_quad_pgm` and on `_render_breakdown_grid`'s `_pane` —
+it cannot be inferred from the seam, since `PreviewData.faces is None` would mean both `wire` and a
+filled mode.
+
+- **`wire`** is the historical render, unchanged and byte-identical (pinned by the golden pair
+  `tests/fixtures/preview_wire_golden_{iso,quad}.png`, captured BEFORE the rasterizer existed so it
+  pins the behaviour rather than the rewrite; re-bless with `UEDCLI_BLESS_GOLDEN=1`).
+- **`flat`** fills each surviving face solid — from the brush's `(front, back)` CSG/tint pair, picked by
+  `_is_front`, **unshaded** (multiplying the hue would break the "this blue means additive" cue the
+  legend is read against) — through an `array("f")` depth buffer (`_alloc_buffers`; a `list[float]` is
+  ~0.5 GB at `--size 4096` against ~67 MB, and `--size` is uncapped). Fills draw at step 2 of the pane,
+  ahead of the point layer, so no sprite or `--show` overlay is painted over.
+- **A filled mode assigns THREE roles from that ONE two-member pair** (owner ruling; the first
+  assignment gave two of them the same value as the fill and both were invisible — the renders that
+  measured it are in `board/inbox/faces-flat-keeps-a-wireframe-that-is-provably`). Per face, `own` = the
+  member its facing fills with, `partner` = the other; both carry the same hue, so the CSG cue survives.
+  **Fill** = `own`; **ordinary edge** = `partner` (an edge in `own` is by definition the colour of the
+  fill under it); **`--highlight`** inverts the face — fill `partner`, outline `own`. `wire` fills
+  nothing, so none of it applies there and its highlight keeps the plain `vivid` hue.
+- **The cull, in `_scene_geometry`.** Under a filled mode a face is dropped ENTIRELY — fill, depth,
+  edge, `--highlight` outline, on-face decal and `occluders` entry — when it is `PF_Invisible` (poly
+  flags OR'd with the ACTOR's own `PolyFlags`, as the engine reads them) or when it is a **subtract**
+  brush's camera-facing poly. Nothing else is back-face culled (a `nonsolid` sheet is one face and must
+  read from both sides). Excluding culled faces from `occluders` deliberately RAISES the opacity of
+  decals they used to dim — the sole observable of that rule, and pinned as such.
+- **Mover-ness is `movers.is_mover`, not a name guess, and it crosses the seam as data.**
+  `classify_brush` grew an `is_mover=` parameter: `None` keeps the `endswith("Mover")` name guess for
+  `wire` (which loads no class index), a bool is the authoritative answer `dispatch._preview_movers` reads
+  off the class hierarchy, and a filled render MUST pass it — its docstring has the case that makes the
+  guess unsafe. One key drives the fill colour, `is_solid` and the cull, so a render never mixes two
+  mover answers. **Accepted cost: `flat` needs a project + the game content; `wire` needs neither.**
+- **EVERY VISIBLE face draws its edges — visible, NOT front-facing.** The rule reached this shape through
+  two owner rulings in sequence, and reading only the first will get it wrong. (a) Spec §4.6's
+  *front-facing* condition was dropped: a `nonsolid` sheet wound away from the camera has no front face to
+  borrow an outline from, so that condition left it filled and unoutlined. (b) The resulting
+  *unconditional* rule was narrowed to visible faces, because it let a brush sealed inside a solid show its
+  entire wireframe through it (measured 421 px → **0**). A solid brush is opaque. The two agree: what (a)
+  protects is a face with no cover, which is frontmost where it sits and so still draws (pinned, **657 px**
+  on two abutting away-facing sheets). The test is `_face_is_occluded`, per FACE, on the finished depth buffer —
+  **never a facing test**, which is what (a) deleted. (b) also erased the ≤1 px silhouette fattening (a)
+  had cost on faceted geometry: a 16-segment cylinder loses the 5 px it gained, since an edge that
+  overhung a silhouette was by definition on a hidden face.
+- **The rasterizer is EVEN-ODD SCANLINE** (`_fill_face`), sampling the PIXEL CENTRE: 0.1–0.6 % of real
+  faces are concave (`spikes/concave-faces/`) and a triangle fan fills outside those. Depth is affine
+  in screen space under an orthographic camera, solved once per face off the face's OWN plane —
+  anchored at `verts[0]` with the **Newell** normal (`_face_depth_affine`), which is observable on the
+  non-planar faces `--from-t3d` can carry. A singular solve = an edge-on face, skipped. The depth test
+  is strictly `<`, so a **coplanar tie goes to scene order** (no epsilon bias: a flush add/subtract
+  pair is common pre-CSG and a bias would only relocate the arbitrariness).
+- **A MIRRORED brush is CORRECTED, not refused** (owner ruling: "mirrored brushes SHOULD WORK
+  CORRECTLY"). A negative-determinant linear part is a reflection, so every transformed face's Newell
+  normal comes out as the NEGATIVE of its true outward normal and `_is_front` answers the opposite of the
+  truth. `_is_front_corrected` flips it back — `mirrored = M is not None and det3(M) < 0`, guarding
+  `actor_linear`'s **`None`** identity sentinel — and since the cull, the three colour roles, the edge rule
+  and `occluders` are all expressed in terms of that one boolean, correcting it fixes all four at once. An
+  EVEN number of negative axes is a 180° rotation (determinant +1) and is deliberately untouched; a sheer
+  leaves the determinant at the scale product. **`wire` is deliberately NOT corrected** — it culls
+  nothing, so the inversion costs it only the front/back shade, and the ruling was about the filled modes
+  (`board/inbox/wire-renders-a-mirrored-brush-with-its-front`). *(Unrelated to
+  `preview_native._reject_scaled`, which still rejects ALL scale in the `--native` tier — the two tiers do
+  NOT agree on scaled brushes.)*
+- **Refusals, all naming the offender**: unresolvable mover-ness (grouped by cause), and no project (the
+  re-raise names `--faces` and why a preview wants one — the bare house "not in a uedcli project" names
+  neither, and `--from-t3d` makes being outside one ordinary). **NOT
+  refused:** a set with no BRUSH actors, whose mover answer is the empty set, so it needs no class index
+  ("needs" is literal, as decision 2.6 ruled for textures) — a point-only selection renders and an empty
+  one stays a clean no-op. An out-of-memory buffer (`MemoryError` **or** `OverflowError`, which is what a
+  huge `--size` actually raises) can only surface mid-render: `preview.PreviewAbort` carries it out and
+  `dispatch` maps it to exit 2, so a `--faces` render is NOT fully validated before it starts.
+
+**`texframe.py` — the shared home for the face math, plus ONE deliberate second copy.** `newell` (a
+face's outward normal from its own vertex winding) is read by `preview.py`, `query.py`, `surface.py`
+and `polyalign.py`; `world_uv_frame` (where the authored texture sits on a face — the engine
+convention, with its evidence, is `unrealed/t3d.md` "The UV convention"; `tex_basis_default` supplies
+a missing/zero axis) by `preview_native.py` and `polyalign.py`; `poly_flags_int` (an actor's own
+`PolyFlags` prop as an int) by `preview_native.py`. It is a **leaf** — stdlib, `rotation` and
+`builders` only, pinned by two import tests — so `preview.py` keeps working with no Rust extension and
+no game install, which taking `newell` from `preview_native.py` would have cost it.
+**`builders._newell` stays a byte-identical second copy on purpose:** `texframe` imports `builders`
+for `_tex_basis`, so re-pointing it at `texframe.newell` makes the two modules import each other —
+survivable only because that import is function-local, and an `ImportError` on `import
+uedcli.builders`, breaking every `brush build` verb, the moment anyone hoists it to module scope.
+
 **Annotation vs label.** An **annotation** is the selection concept — which extra marks
 a render draws, chosen by `--annotate`. A **label** is the drawing concept — one concrete text box
 laid out on the canvas (`_LabelItem`/`_place_labels`).
@@ -2231,6 +2315,56 @@ highlighted poly re-lights to its brush's vivid hue with a bolder line ON TOP of
 its index even in a focused-out brush; a highlighted point keeps its selection brackets. All names
 still appear in the legend regardless of focus.
 
+**`--focus` is a BRIGHTNESS filter, and that is all it is** (owner ruling, 2026-07-29): it never changes
+what is visible or what occludes what. Visibility is settled entirely by the cull — **a subtract's faces
+are visible INWARD, an additive's OUTWARD** — and everything past the cull is ordinary physical depth,
+nearest surface per pixel, with no brush privileged. So a box inside a room is not hidden by the room's
+far wall whether the room is focused or not; a brush standing between the camera and the focused brush
+DOES cover it; and a brush sealed inside a solid add is invisible, focused or not.
+
+**Under a filled mode that costs ONE rasterizing pass, one depth buffer and a per-pixel mask.**
+`_scene_geometry` puts every surviving face into a single `fills` list in **scene order** with a `dimmed`
+flag — 1 when its brush is neither the focus nor `--highlight`ed, a BRIGHTNESS flag only — and
+`render_brushes_pgm` rasterizes that one list, `_fill_face` recording `dimmed` into a `dim` byte per pixel
+as each face wins the depth test. `_fade_dimmed` then fades every marked pixel toward `BG` at
+`_DIM_FILL_ALPHA` (=0.35), **once per pixel, not once per face**. **The single scene-order loop is
+load-bearing, not tidiness:** the depth test is strictly `<`, so a coplanar tie goes to whichever face is
+drawn FIRST, and an earlier design that resolved the de-emphasised faces in a pass of their own therefore
+let `--focus` choose which of two flush surfaces was visible — focusing a room lost its own floor to a
+flush slab, and `--layout breakdown` focuses every brush pane in turn, so it was the common case.
+`_DIM_FILL_ALPHA` is SEPARATE from `_DIM_ALPHA` (still the edge value, `wire` included) and is the owner's
+value, picked from a ladder of renders (`spikes/2026-07-27-preview-focus-dim/`) and pinned by a test; why
+it is a second constant, and why one blend: `rationale/preview.md`. With no `--focus` nothing is dimmed, so
+no mask is allocated and no fade runs. `occluders` spans every brush, so decal grading is unaffected by
+focus — consistent, since occlusion is too.
+
+**Under a filled mode `--highlight` RE-COLOURS WHAT IS VISIBLE and is never an x-ray** (owner ruling,
+2026-07-29, superseding the earlier "`--highlight` overrides `--focus`" ruling for the filled modes). It
+still overrides `--focus`'s DIMMING — a highlighted face is full strength wherever its brush is, so it
+never fades into the context — but it does not override depth. A highlighted face that depth hides
+contributes **nothing at all**: no fill (it loses the depth test like any other), no outline, and no index
+that the highlight alone asked for. Highlighting a sealed-in face changes the render byte-for-byte not at
+all, which is what the test asserts.
+
+`render_brushes_pgm` asks `_face_is_occluded` — after every fill is down, so `zbuf` is final — whether each
+`vis_faces` entry is covered by pixels of which NONE is its own frontmost surface, comparing depths EXACTLY
+(the float64 expression quantised to the `array("f")` the buffer stores). **Neither covering no pixel NOR being
+edge-on is occlusion:** such a face keeps its outline, since nothing is in front of it. Those are two
+separate halves — `_face_is_occluded`'s `covered` result and the caller's `plane is not None` guard — and
+each is pinned on its own, because on a sliver brush the coverage-losing and edge-on faces project to the
+same 2-D lines, so either half alone still draws the outline. The fully visible brush vanished from a
+filled render only when one condition got both wrong. It is a **per-FACE** verdict, the same granularity as the subtract
+cull, and deliberately not hidden-line removal. **`wire` is untouched and byte-identical**: `vis_faces` is
+populated only under a filled mode, so nothing is ever in the hidden set there.
+An index the `--annotate` spec would have drawn anyway is KEPT (`hi_only_labels` is exactly the set the
+highlight alone owes) — on-face numbering is facing-blind by design and grades hidden faces down rather
+than dropping them, and a highlight must never start deleting numbers.
+
+**Full-strength and NUMBERED share only their focus half, and the implication runs ONE WAY.** Both test
+"focused brush or highlighted face", but the index ALSO passes `--annotate`'s `AnnotationSpec`. So **a
+numbered face is always full strength** — a number never lands on a dimmed fill — while the converse is
+false: under `--annotate none` a focused brush's faces are all full strength and none is numbered. Do not
+collapse the two into one flag. Both directions are pinned.
 **Poly face indices are painted on the face — the sole poly-label renderer** (there is no leader-box
 poly mode; the leader/arrow/box machinery below serves only actor names). Each face's index is a
 texture painted flat in the face's own 3-D plane (`_plan_onface_texture` → `_DecalPlan`, drawn by
@@ -2348,14 +2482,19 @@ brush.
 The renderer signature carries the preview state: `highlight` is a **set of `(actor_name,
 poly_idx)`** (a highlighted poly draws in its brush's vivid front hue + a bolder line — NOT red,
 which is retired); `color_by_csg` toggles the palette (off ⇒ the legacy black/grey, still the
-`render_*_pgm` default for unit tests); `render_data` maps a point actor's Name → a frozen
+`render_*_pgm` default for unit tests); `render_data` is a frozen **`PreviewData`** — everything
+dispatch resolved for this render. `.points` maps a point actor's Name → a frozen
 **`PointRender`** (decoded masked sprite `(w,h,rgb,mask)` + world footprint, or a marker, plus faint
-collision/light/sound overlays). **`preview.py` stays resolver-free** — dispatch computes the
-`PointRender`s in `_preview_render_data`/`_resolve_point_render`, resolving each field instance-else-
+collision/light/sound overlays). `.faces` is `None` under `wire` (which resolves nothing) and a
+**`FaceData`** under a filled mode, carrying `movers: frozenset[str]` and `textures: TextureData | None`.
+**Those two fields are separate on purpose:** `flat` needs the mover set and no textures at all, and a
+single texture-named payload would invite passing `None` for `flat` — which drops the mover set and
+makes the cull render a `CsgOper=CSG_Subtract` door inside-out. **`preview.py` stays resolver-free** — dispatch computes the
+`PointRender`s in `_preview_render_data`/`_preview_point_data`/`_resolve_point_render`, resolving each field instance-else-
 class-default via the `_class_defaults` seam and decoding sprites through a `_texture_resolver`
 (`utexture.TextureResolver.resolve`, whose `DecodedTexture` carries the mask — palette index 0 =
 transparent; a `TextureError` degrades to a marker with the case name in the stderr note). Brush-only previews resolve no
-schema (a pure-brush preview works with no game install); a point actor whose schema is unresolvable
+schema (a pure-brush `--faces wire` preview works with no game install); a point actor whose schema is unresolvable
 degrades to an unscaled labelled marker + a stderr note, never a `SchemaError` traceback.
 `render_quad_pgm` tiles four panes. `_render_actors_to_out` also resolves the `--frame` target
 (`_parse_frame` splits an explicit six-field `X0,Y0,Z0,X1,Y1,Z1` AABB from a selector; the selector goes

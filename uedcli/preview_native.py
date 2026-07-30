@@ -16,12 +16,13 @@ The per-surf UV frame is computed HERE, Python-side, from the source poly's auth
 `Origin`/`TextureU`/`TextureV`/`Pan` (`base_w = Location + R·(Origin − PrePivot)`,
 `axes_w = R·axes`) — the built surf's texture vectors are NEVER read (the build synthesizes
 default axes that ignore authored alignment, and Pan doesn't survive the build at all;
-spec §5). Movers are out of world CSG, so they render directly as world-transformed
+spec §5). The function is `texframe.world_uv_frame`, shared with the `brush poly align` verbs
+(`polyalign.py`), so the two cannot disagree about where a texture sits.
+Movers are out of world CSG, so they render directly as world-transformed
 `extra_polys` at the base pose (`rotation.actor_matrix` — the same math every measurement
 verb uses)."""
 from __future__ import annotations
 
-import math
 import re
 import sys
 from pathlib import Path
@@ -30,6 +31,7 @@ from . import movers
 from .normalize import is_builder_brush
 from .preview_shots import ResolvedShot, Shot, resolve_pose, shot_filename
 from .rotation import (actor_matrix, actor_prepivot, deg_to_uu, euler_to_matrix_uu, matvec)
+from .texframe import poly_flags_int, world_uv_frame
 from .utexture import TextureError, TextureResolver
 
 PF_INVISIBLE = 0x1
@@ -102,13 +104,6 @@ def _reject_scaled(name: str, actor) -> None:
 
 # --------------------------------------------------------------------- brush inputs
 
-def _poly_flags_int(raw: dict) -> int:
-    try:
-        return int(raw.get("PolyFlags", "0"))
-    except ValueError:
-        return 0
-
-
 def _rot3x3(actor):
     R = actor_matrix(actor)                  # None == renders-as-identity (low-bit fields)
     return _IDENTITY_ROT if R is None else R
@@ -164,61 +159,11 @@ def _brush_inputs(level, index) -> tuple[list, list[tuple[str, list]]]:
         # (preview derives UV frames from the join polys separately, its built geometry is
         # pBase-agnostic so base stays verts[0], and preview rejects scaled brushes so no covariant
         # normal map is needed).  The triple keeps the marshalled arity at 12 (PyO3 tuple cap).
-        brushes.append((verts_flat, poly_sizes, normals_flat, oper, _poly_flags_int(raw),
+        brushes.append((verts_flat, poly_sizes, normals_flat, oper, poly_flags_int(raw),
                         list(loc), _rot3x3(actor), list(prepivot), [1.0, 1.0, 1.0],
                         poly_flags_flat, [], ([], [], [])))
         join.append((name, actor.brush.polys))
     return brushes, join
-
-
-# --------------------------------------------------------------------- UV frames
-
-def _tex_basis_default(normal):
-    """The Python default matching `builders._tex_basis` (spec §5 fallback): unit in-plane
-    axes seeded from the world axis least aligned with the normal."""
-    from .builders import _tex_basis
-    return _tex_basis(normal)
-
-
-def _newell(verts) -> tuple[float, float, float]:
-    n = [0.0, 0.0, 0.0]
-    for i in range(len(verts)):
-        a, b = verts[i], verts[(i + 1) % len(verts)]
-        n[0] += (a[1] - b[1]) * (a[2] + b[2])
-        n[1] += (a[2] - b[2]) * (a[0] + b[0])
-        n[2] += (a[0] - b[0]) * (a[1] + b[1])
-    return tuple(n)
-
-
-def _world_uv_frame(actor, poly):
-    """The source poly's authored texture frame, transformed to world space:
-    `base_w = Location + R·(Origin − PrePivot)`, `axes_w = R·axes`. Missing Origin → local
-    zero; missing/zero axes → the `_tex_basis`-matching default (spec §5)."""
-    loc = tuple(float(c) for c in (actor.location or (0, 0, 0)))
-    pp = tuple(float(c) for c in actor_prepivot(actor))
-    R = actor_matrix(actor)
-
-    origin = tuple(float(c) for c in poly.origin) if poly.origin is not None else (0.0, 0.0, 0.0)
-    rel = (origin[0] - pp[0], origin[1] - pp[1], origin[2] - pp[2])
-    if R is not None:
-        rel = matvec(R, rel)
-    base_w = (loc[0] + rel[0], loc[1] + rel[1], loc[2] + rel[2])
-
-    tu = tuple(float(c) for c in poly.texture_u) if poly.texture_u is not None else None
-    tv = tuple(float(c) for c in poly.texture_v) if poly.texture_v is not None else None
-
-    def _zero(v):
-        return v is None or (abs(v[0]) + abs(v[1]) + abs(v[2])) < 1e-12
-
-    if _zero(tu) or _zero(tv):
-        n = tuple(float(c) for c in poly.normal) if poly.normal is not None \
-            else _newell([tuple(float(c) for c in v) for v in poly.vertices])
-        size = math.sqrt(sum(c * c for c in n)) or 1.0
-        tu, tv = _tex_basis_default(tuple(c / size for c in n))
-    if R is not None:
-        tu, tv = tuple(matvec(R, tu)), tuple(matvec(R, tv))
-    pan = (float(poly.pan[0]), float(poly.pan[1])) if poly.pan else (0.0, 0.0)
-    return base_w, tu, tv, pan
 
 
 # --------------------------------------------------------------------- geometry extract
@@ -383,11 +328,11 @@ def build_scene(level, search_files, index) -> tuple[list, list]:
     polys = []
 
     def add_poly(world_verts, actor, poly):
-        flags = (poly.flags or 0) | (_poly_flags_int(dict(actor.props)) if actor else 0)
+        flags = (poly.flags or 0) | (poly_flags_int(dict(actor.props)) if actor else 0)
         if flags & PF_INVISIBLE:
             return                                       # dropped Python-side (spec §5)
         if actor is not None and poly is not None:
-            base_w, tu, tv, pan = _world_uv_frame(actor, poly)
+            base_w, tu, tv, pan = world_uv_frame(actor, poly)
             tex_index = textures.index_for(poly.texture)
         else:
             base_w, tu, tv, pan = (0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0)

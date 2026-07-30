@@ -519,7 +519,7 @@ folds it into the magnitude). The stored `Origin`/`TextureU`/`TextureV` are in t
 frame; the renderer maps them to world via `base_w = Location + R·(Origin − PrePivot)`,
 `axes_w = R·axes` — so two faces on differently-placed/rotated brushes are seamlessly aligned only
 when they share the same world frame, not the same stored fields. ✅ uedcli-used: the convention
-`brush poly align` computes against and `render.rs`/`preview_native._world_uv_frame` render with;
+`brush poly align` computes against and `render.rs`/`texframe.world_uv_frame` render with;
 pinned by `test_polyalign.test_engine_fact_uv_formula_is_base_relative_plus_pan`. (Uses the authored
 `Origin` as `uv_base` and adds the surface `Pan` — evidence `render.rs:159-165`; do not anchor it to
 `light.rs`, whose base is the BSP surf point and whose pan is the lightmap-grid pan, a different

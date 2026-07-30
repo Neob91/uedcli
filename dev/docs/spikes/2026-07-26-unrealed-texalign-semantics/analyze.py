@@ -16,8 +16,7 @@ sys.path.insert(0, str(_REPO))
 
 from uedcli.model import parse_t3d                                        # noqa: E402
 from uedcli.polyalign import _cross, _dot, _len, _sub, _world_verts       # noqa: E402
-from uedcli.preview import _face_normal                                   # noqa: E402
-from uedcli.preview_native import _world_uv_frame                         # noqa: E402
+from uedcli.texframe import newell, world_uv_frame                        # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from fixture import TEXTURES                                              # noqa: E402
@@ -34,12 +33,12 @@ def faces(path: Path):
             wv = _world_verts(a, p)
             if len(wv) < 3:
                 continue
-            n = _face_normal(wv)
+            n = newell(wv)
             m = _len(n)
             if m < 1e-9:
                 continue
             n = (n[0] / m, n[1] / m, n[2] / m)
-            base, tu, tv, pan = _world_uv_frame(a, p)
+            base, tu, tv, pan = world_uv_frame(a, p)
             yield name, i, n, wv, base, tu, tv, pan, (p.texture or "")
 
 

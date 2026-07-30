@@ -628,7 +628,7 @@ def _poly_world_aabb(actor, indices) -> tuple[float, float, float, float, float,
             max(p[0] for p in pts), max(p[1] for p in pts), max(p[2] for p in pts))
 
 
-def _world_aabb(actors, render_data) -> tuple | None:
+def _world_aabb(actors, render_data: "preview.PreviewData") -> tuple | None:
     """World AABB of the whole rendered set (brush vertices + point Locations ± decoration extent),
     or None if nothing has extent — the reference frame `--frame-tightness` interpolates FROM."""
     xs: list[float] = []
@@ -641,7 +641,8 @@ def _world_aabb(actors, render_data) -> tuple | None:
         else:
             loc = a.location or (Decimal(0), Decimal(0), Decimal(0))
             lx, ly, lz = float(loc[0]), float(loc[1]), float(loc[2])
-            e = preview.point_extent(render_data[a.name]) if a.name in render_data else 0.0
+            e = (preview.point_extent(render_data.points[a.name])
+                 if a.name in render_data.points else 0.0)
             xs += [lx - e, lx + e]; ys += [ly - e, ly + e]; zs += [lz - e, lz + e]
     if not xs:
         return None
@@ -706,29 +707,83 @@ def _parse_show_set(text: str) -> set[str]:
     return members
 
 
-def _resolve_highlights(actors, args) -> tuple[set, set]:
-    """`--highlight POLY|NAME` (repeatable) → `(highlight_polys, highlight_points)`. A token WITH a
-    colon is a poly selector BRUSH:idx (set form) → `(actor_name, poly_idx)` pairs; a token WITHOUT a
-    colon is an ACTOR NAME → resolved case-insensitively in the previewed set: a brush actor
+def _resolve_highlights(actors, args) -> tuple[set, set, list]:
+    """`--highlight POLY|NAME` (repeatable) → `(highlight_polys, highlight_points, requests)`. A token
+    WITH a colon is a poly selector BRUSH:idx (set form) → `(actor_name, poly_idx)` pairs; a token
+    WITHOUT a colon is an ACTOR NAME → resolved case-insensitively in the previewed set: a brush actor
     contributes ALL its poly indices (whole-brush highlight), a point actor its name. A selector
-    naming a point actor, or any name/brush not in the set → clean named error, never a traceback."""
+    naming a point actor, or any name/brush not in the set → clean named error, never a traceback.
+
+    `requests` groups the poly keys BY TOKEN — `(actor_name, keys, whole)` per brush token — so a caller
+    can report a highlight that landed on nothing at the granularity the USER asked at
+    (`_note_invisible_highlights`). `whole` is read off the token FORM, not the resulting count: a bare
+    name and `BRUSH:all` mean "this brush", while `BRUSH:1,2` names faces even if the list happens to
+    cover all of them. The form is what says which granularity the user was thinking in."""
     polys: set = set()
     points: set = set()
+    requests: list = []
     for token in getattr(args, "highlight", None) or []:
         if ":" in token:                                 # BRUSH:idx poly selector
             brush_name, sel = surface.parse_poly_selector(token)
             actor = _find_actor_in_set(actors, brush_name)
             if actor.brush is None:
                 raise _SelectionExit(f"--highlight: {actor.name!r} is a point actor (no polys)")
-            for idx in surface.resolve_polys(sel, actor, brush_name=actor.name):
-                polys.add((actor.name, idx))
+            keys = {(actor.name, idx) for idx in surface.resolve_polys(sel, actor,
+                                                                      brush_name=actor.name)}
+            whole = sel.strip().casefold() == "all"
         else:                                            # bare actor name
             actor = _find_actor_in_set(actors, token)
-            if actor.brush is not None:                  # whole-brush highlight = all its polys
-                polys.update((actor.name, idx) for idx in range(len(actor.brush.polys)))
-            else:
+            if actor.brush is None:
                 points.add(actor.name)
-    return polys, points
+                continue
+            keys = {(actor.name, idx) for idx in range(len(actor.brush.polys))}
+            whole = True
+        polys |= keys
+        requests.append((actor.name, keys, whole))
+    return polys, points, requests
+
+
+def _note_invisible_highlights(requests: list, shown: set) -> None:
+    """Say on STDERR when a `--highlight` landed on nothing visible, naming the selectors.
+
+    Under a filled mode a highlighted face that other geometry hides draws nothing at all (owner ruling:
+    a highlight re-colours what is visible and is never an x-ray). That is a correct render, so it is NOT
+    an error — but silence would leave the user unable to tell "that face is not shown" from "I mistyped
+    the index" or "the flag did not take". **stderr, never stdout**: a preview writes its image to
+    `--out`, and human-facing remarks must never enter a pipe (`direction/conventions.md`).
+
+    **It names no CAUSE, deliberately.** Several different things make a highlight draw nothing and they are
+    not distinguishable from `shown`: depth hid the face, the subtract cull dropped a camera-facing poly (no
+    view will ever reveal that one), `PF_Invisible` removed it, the framing clipped it off-canvas, or the
+    poly has no vertices to project at all. An earlier wording said "hidden behind other geometry at this
+    `--view`", which is false for most of those and misleading under `--layout quad`, where the note fires
+    only if NO pane saw the face.
+
+    **Granularity follows the TOKEN FORM, not the face.** A whole-brush highlight (`--highlight Wall` or
+    `Wall:all`) is reported only if the WHOLE brush came out invisible, because a closed brush ALWAYS has
+    hidden back faces — per-face reporting there would fire on every such run, noise that would train the
+    reader to ignore the note. A token naming faces (`Wall:3`, `Wall:1,2,3`) reports exactly the ones that
+    drew nothing, which is actionable and is the granularity that user was already thinking in.
+
+    **Nearly, but not quite, unreachable under `--faces wire`.** Nothing is ever hidden by depth there, so
+    a face that survives projection always draws — but a poly with NO projectable vertices is dropped
+    before the edge loop in either mode, so a degenerate `--from-t3d` poly can trip the note under `wire`
+    too. Reporting that is correct; the earlier claim that `wire` was structurally exempt was not."""
+    missing: list[str] = []
+    for name, keys, whole in requests:
+        if whole:
+            if not keys & shown:                         # the entire brush came out invisible
+                missing.append(name)
+        else:
+            missing += [f"{n}:{i}" for n, i in sorted(keys - shown)]
+    seen: set = set()                                    # a repeated token must not be listed twice
+    unique = [m for m in missing if not (m in seen or seen.add(m))]
+    if unique:
+        # "no HIGHLIGHT was drawn", not "nothing was drawn": an index `--annotate` asked for is
+        # deliberately kept on a hidden face (numbering is facing-blind and grades hidden faces down), so
+        # on the default `--annotate` that face's number IS on the image — measured at 349 px.
+        print(f"note: --highlight {', '.join(unique)} is not visible in this render, so no highlight was "
+              f"drawn for it", file=sys.stderr)
 
 
 def _resolve_focus(actors, args) -> str | None:
@@ -765,7 +820,7 @@ def _point_pane_region(point, render_data) -> tuple:
             max(y1, ly + _BREAKDOWN_POINT_MARGIN), max(z1, lz + _BREAKDOWN_POINT_MARGIN))
 
 
-def _render_breakdown_grid(actors, args, *, render_data) -> bytes:
+def _render_breakdown_grid(actors, args, *, render_data, shown_highlights=None) -> bytes:
     """`--layout breakdown`: a near-square GRID of panes, returned as a Pillow **Image** (the panes
     themselves are PPM bytes from the stdlib renderer; the stitch is already Pillow, so the caller
     writes this Image straight to PNG instead of re-encoding it through PPM). Pane 0 is the whole scene in CSG
@@ -777,9 +832,14 @@ def _render_breakdown_grid(actors, args, *, render_data) -> bytes:
     its own focus/zoom per pane, so it ignores `--frame`/`--focus`; it honours
     `--view`/`--size`/`--annotate`/`--brush-colors`/`--highlight`/`--show`."""
     size, view = args.size, args.view
-    brush_colors = getattr(args, "brush_colors", "csg")
+    # `--brush-colors` parses with `default=None` so an EXPLICIT value is distinguishable from a
+    # defaulted one; `getattr`'s own default does NOT fire for an existing-but-None attribute, so the
+    # `or "csg"` is what keeps None out of `preview`, where the `legend` test would silently fall
+    # through to the CSG branch. Every consumer needs it — this is one of three.
+    brush_colors = getattr(args, "brush_colors", "csg") or "csg"
+    faces = _preview_faces_mode(args)
     annotation_spec = preview.parse_annotation_spec(args.annotate)
-    highlight_polys, highlight_points = _resolve_highlights(actors, args)
+    highlight_polys, highlight_points, _requests = _resolve_highlights(actors, args)
     try:
         from io import BytesIO
         from PIL import Image, ImageDraw
@@ -794,7 +854,8 @@ def _render_breakdown_grid(actors, args, *, render_data) -> bytes:
             actors, view=view, size=size, annotations=annotations, iso_angle=args.iso_angle, region=region,
             highlight_polys=highlight_polys, highlight_points=highlight_points, color_by_csg=True,
             render_data=render_data, focus=focus, draw_legend=False, reserve_legend=False,
-            brush_colors=brush_colors, frame_pad=_BREAKDOWN_PAD)
+            brush_colors=brush_colors, faces=faces, frame_pad=_BREAKDOWN_PAD,
+            shown_highlights=shown_highlights)
 
     # Pane 0: the whole scene in CSG — a plain spatial map, NO labels (actors are identified by their
     # own captioned panes below).
@@ -840,13 +901,15 @@ def _render_actors_to_out(actors, args) -> int:
     m = 16.0                                             # keep the target off the frame edge
     try:
         annotation_spec = preview.parse_annotation_spec(args.annotate)
-        highlight_polys, highlight_points = _resolve_highlights(actors, args)
+        highlight_polys, highlight_points, hi_requests = _resolve_highlights(actors, args)
         focus = _resolve_focus(actors, args)
         explicit_region, frame_selector = _parse_frame(getattr(args, "frame", None))
         zoom_target = (_resolve_zoom(actors, frame_selector, render_data)
                        if frame_selector else None)
     except ValueError as e:                              # surface --annotate / selector parse failure
         raise _SelectionExit(str(e))
+    faces = _preview_faces_mode(args)
+    layout = getattr(args, "layout", "quad")
     if explicit_region is not None:
         # An explicit --frame AABB frames EXACTLY the given world box (+ the standard margin): it is
         # a box the user chose, so --frame-tightness does NOT modulate it (tightness tunes only the
@@ -869,23 +932,35 @@ def _render_actors_to_out(actors, args) -> int:
         region = None
     if not actors:
         print("warning: nothing to render (empty actor set)", file=sys.stderr)
-    layout = getattr(args, "layout", "quad")
-    if layout == "breakdown":
-        data = _render_breakdown_grid(actors, args, render_data=render_data)
-    elif layout == "single":
-        data = preview.render_brushes_pgm(actors, view=args.view, size=args.size,
-                                          annotations=annotation_spec, iso_angle=args.iso_angle,
-                                          region=region, highlight_polys=highlight_polys,
-                                          highlight_points=highlight_points,
-                                          color_by_csg=True, render_data=render_data, focus=focus,
-                                          brush_colors=getattr(args, "brush_colors", "csg"))
-    else:                                                # quad (default)
-        data = preview.render_quad_pgm(actors, size=args.size, annotations=annotation_spec,
-                                       iso_angle=args.iso_angle, region=region,
-                                       highlight_polys=highlight_polys,
-                                       highlight_points=highlight_points,
-                                       color_by_csg=True, render_data=render_data, focus=focus,
-                                       brush_colors=getattr(args, "brush_colors", "csg"))
+    # `or "csg"` at each consumer: see `_render_breakdown_grid` for why `getattr`'s default is not
+    # enough once `--brush-colors` parses with `default=None`. These are the other two.
+    # ONE set across every pane: a face hidden in the Top pane but visible in the Iso pane is a highlight
+    # that landed, so the note must subtract the union of what drew, not decide per pane (which would emit
+    # up to four copies of a wrong answer under `--layout quad`).
+    shown_highlights: set = set()
+    try:
+        if layout == "breakdown":
+            data = _render_breakdown_grid(actors, args, render_data=render_data,
+                                          shown_highlights=shown_highlights)
+        elif layout == "single":
+            data = preview.render_brushes_pgm(actors, view=args.view, size=args.size,
+                                              annotations=annotation_spec, iso_angle=args.iso_angle,
+                                              region=region, highlight_polys=highlight_polys,
+                                              highlight_points=highlight_points,
+                                              color_by_csg=True, render_data=render_data, focus=focus,
+                                              brush_colors=getattr(args, "brush_colors", "csg") or "csg",
+                                              faces=faces, shown_highlights=shown_highlights)
+        else:                                            # quad (default)
+            data = preview.render_quad_pgm(actors, size=args.size, annotations=annotation_spec,
+                                           iso_angle=args.iso_angle, region=region,
+                                           highlight_polys=highlight_polys,
+                                           highlight_points=highlight_points,
+                                           color_by_csg=True, render_data=render_data, focus=focus,
+                                           brush_colors=getattr(args, "brush_colors", "csg") or "csg",
+                                           faces=faces, shown_highlights=shown_highlights)
+    except preview.PreviewAbort as e:                    # a refusal only reachable mid-render
+        raise _SelectionExit(str(e)) from None
+    _note_invisible_highlights(hi_requests, shown_highlights)
     # Pure host-side write, no container/UnrealEd. `data` is EITHER raw PPM/P6 bytes from
     # `preview.py` (the stdlib-only renderer) OR an already-decoded Pillow Image from the breakdown
     # stitcher, which is a Pillow function already — an Image is written straight out rather than
@@ -1062,12 +1137,88 @@ def _resolve_point_render(actor, project, *, resolver, show_collision, show_ligh
                                sound_radius=sound_radius), notes
 
 
-def _preview_render_data(actors, args, show: set[str]) -> dict:
-    """Resolve per-point-actor render data for the preview (dispatch owns schema/texture resolution;
-    preview.py stays resolver-free). `show` is the validated `--show` member set. Brush actors are
-    skipped (geometry needs no schema — a pure-brush preview works with no game install). A point actor
-    whose schema is unresolvable degrades to an unscaled labelled marker + a one-line stderr note,
-    NEVER a traceback."""
+def _preview_faces_mode(args) -> str:
+    """The `--faces` mode for this render. Read with a default because the committed spike harnesses
+    build their own arg namespaces and carry no `faces` attribute."""
+    return getattr(args, "faces", "wire")
+
+
+def _preview_verb(args, mode: str) -> str:
+    """`actor preview --faces flat` and friends — the verb+flag a `--faces` refusal names."""
+    return f"{getattr(args, 'cmd', 'actor')} {getattr(args, 'sub', 'preview')} --faces {mode}"
+
+
+def _preview_movers(actors, args, mode: str) -> frozenset[str]:
+    """Which of these brush actors ARE Movers, per `movers.is_mover` over the game's class hierarchy.
+
+    A filled render needs this and cannot guess it: a mover is never carved into the world whatever
+    `CsgOper` it carries, so it must escape the subtract cull, and it fills in mover colour. Both
+    index-free rules are wrong — the raw `CsgOper` marker renders a `SomethingMover` door inside-out,
+    and `preview.classify_brush`'s name guess additionally misses `CEDoor`/`BreakableGlass`, real movers
+    whose class names do not end in `Mover`. This is why `flat` loads the class hierarchy and so, unlike
+    `wire`, needs the game content available.
+
+    `is_mover` ANSWERS OR RAISES — it never reports an unresolvable class as "not a mover", because
+    nothing downstream re-checks. Every unresolvable actor is collected and refused together, grouped by
+    cause so each distinct cause is stated once and every offending actor is named.
+
+    **"Needs" is literal here, exactly as it is for textures (decision 2.6).** A set with NO brush actors
+    has a trivially known answer — the empty set — so it needs no class index and must not be refused for
+    lacking one. Without this, a point-actor-only selection refuses, and an EMPTY selection stops being
+    the clean no-op it is under `wire` and becomes exit 2."""
+    from . import movers
+    brushes = [a for a in actors if a.brush is not None]
+    if not brushes:
+        return frozenset()
+    verb = _preview_verb(args, mode)
+    try:
+        index = _mover_index(args, verb)
+    except _ProjectError as e:
+        # `_mover_index` resolves the project itself, so OUTSIDE one this surfaces as the house "not in
+        # a uedcli project" — naming neither the flag that caused it nor why a preview wants a project.
+        # On `--from-t3d`, where being outside a project is ordinary and `wire` works fully, that bare
+        # message is all the user gets, so it is re-raised naming both.
+        raise _SelectionExit(
+            f"{verb}: {e} — a filled render resolves every brush's class against Engine.Mover (a mover "
+            f"is never carved into the world, so it escapes the subtract cull), and composing the game's "
+            f"package search path needs a project. --faces wire needs neither") from None
+    out: set[str] = set()
+    by_cause: dict[str, list[str]] = {}
+    for a in brushes:
+        try:
+            if movers.is_mover(a, index):
+                out.add(a.name)
+        except ClassRefError as e:
+            by_cause.setdefault(str(e), []).append(a.name)
+    if by_cause:
+        detail = "\n  ".join(f"{', '.join(names)} — {cause}" for cause, names in by_cause.items())
+        raise _SelectionExit(
+            f"{verb}: cannot tell a mover from a real subtraction for "
+            f"{sum(len(n) for n in by_cause.values())} actor(s), so the fill would be wrong:\n  "
+            f"{detail}\n(--faces wire needs no class hierarchy)")
+    return frozenset(out)
+
+
+def _preview_render_data(actors, args, show: set[str]) -> "preview.PreviewData":
+    """Everything the preview needs resolved before a pixel is drawn — dispatch owns schema, texture
+    and class-hierarchy resolution so `preview.py` stays resolver-free.
+
+    `points` is the per-point-actor render data. `faces` is None under `--faces wire`, which resolves
+    nothing and so still works with no game install; under a FILLED mode it carries the mover set,
+    which needs the game's class hierarchy (an accepted cost of those modes). It runs FIRST, so a scene
+    that cannot resolve mover-ness does not first emit point-actor notes about it."""
+    mode = _preview_faces_mode(args)
+    faces = None
+    if mode != "wire":
+        faces = preview.FaceData(movers=_preview_movers(actors, args, mode))
+    return preview.PreviewData(points=_preview_point_data(actors, args, show), faces=faces)
+
+
+def _preview_point_data(actors, args, show: set[str]) -> dict:
+    """Resolve per-point-actor render data for the preview. `show` is the validated `--show` member set.
+    Brush actors are skipped (their geometry needs no schema — which is why a pure-brush `--faces wire`
+    preview works with no game install). A point actor whose schema is unresolvable degrades to an
+    unscaled labelled marker + a one-line stderr note, NEVER a traceback."""
     point_actors = [a for a in actors if a.brush is None]
     if not point_actors:
         return {}

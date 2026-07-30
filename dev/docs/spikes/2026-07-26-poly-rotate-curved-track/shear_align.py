@@ -48,7 +48,7 @@ from uedcli import rotation                                     # noqa: E402
 from uedcli.dispatch import TrunkLevelSource                    # noqa: E402
 from uedcli.polyalign import (_cross, _dot, _len, _scale, _sub, _unit,   # noqa: E402
                               _world_verts, resolve_actor_name, find_faces)
-from uedcli.preview_native import _world_uv_frame               # noqa: E402
+from uedcli.texframe import world_uv_frame                      # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from run_align import _edges, order_run                         # noqa: E402
@@ -73,7 +73,7 @@ def main(argv=None) -> int:
     faces = [(i, _world_verts(actor, actor.brush.polys[i])) for i in idxs]
     run = order_run(faces)
 
-    _, tu0, tv0, _ = _world_uv_frame(actor, actor.brush.polys[run[0][0]])
+    _, tu0, tv0, _ = world_uv_frame(actor, actor.brush.polys[run[0][0]])
     du = args.density_u if args.density_u is not None else (_len(tu0) or 1.0)
     dv = args.density_v if args.density_v is not None else (_len(tv0) or 1.0)
 

@@ -51,7 +51,7 @@ from uedcli import rotation                                     # noqa: E402
 from uedcli.dispatch import TrunkLevelSource                    # noqa: E402
 from uedcli.polyalign import (_cross, _dot, _len, _scale, _sub, _unit,   # noqa: E402
                               _world_verts, resolve_actor_name, find_faces)
-from uedcli.preview_native import _world_uv_frame               # noqa: E402
+from uedcli.texframe import world_uv_frame                      # noqa: E402
 
 _WELD = 0.5             # world points closer than this are the same point
 UU = 65536.0            # unreal rotation units in a full turn
@@ -161,7 +161,7 @@ def main(argv=None) -> int:
     run = order_run(faces)
 
     # Texel density: adopt the seed face's, unless overridden.
-    _, tu0, tv0, _ = _world_uv_frame(actor, actor.brush.polys[run[0][0]])
+    _, tu0, tv0, _ = world_uv_frame(actor, actor.brush.polys[run[0][0]])
     du = args.density_u if args.density_u is not None else (_len(tu0) or 1.0)
     dv = args.density_v if args.density_v is not None else (_len(tv0) or 1.0)
     theta = args.turn / UU * 2.0 * math.pi

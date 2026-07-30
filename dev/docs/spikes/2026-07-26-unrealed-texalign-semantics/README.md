@@ -115,7 +115,7 @@ face and every brush polygon maps to exactly one surface.
 
 **The analysis** (`analyze.py`, `summarize.py`). Each exported polygon's stored
 `Origin`/`TextureU`/`TextureV`/`Pan` is lifted to world space with the same transform the renderer
-uses (`preview_native._world_uv_frame`), then reported with `|TextureU|`, `|TextureV|`, the face's
+uses (`texframe.world_uv_frame`), then reported with `|TextureU|`, `|TextureV|`, the face's
 world normal, and the `(U, V)` range the face spans under the canonical convention
 `U = (Vertex − Origin)·TextureU + PanU` (`dev/docs/unrealed/t3d.md`).
 

@@ -51,7 +51,7 @@ from uedcli import polyalign                                    # noqa: E402
 from uedcli.dispatch import TrunkLevelSource                    # noqa: E402
 from uedcli.polyalign import (_centroid, _dot, _scale, _sub, _world_normal,  # noqa: E402
                               _world_verts, _write_world_frame)
-from uedcli.preview_native import _world_uv_frame               # noqa: E402
+from uedcli.texframe import world_uv_frame                      # noqa: E402
 
 
 def _rodrigues(v, n, theta):
@@ -65,7 +65,7 @@ def _rodrigues(v, n, theta):
 def rotate_face(actor, poly, ref: str, degrees: float, about: str) -> None:
     """Rotate one face's texture frame in place by `degrees` about its normal, re-anchoring so the
     pivot named by `about` keeps its (U,V)."""
-    base_w, tu_w, tv_w, pan = _world_uv_frame(actor, poly)
+    base_w, tu_w, tv_w, pan = world_uv_frame(actor, poly)
     n = _world_normal(actor, poly, ref)
 
     pivot = _centroid(_world_verts(actor, poly)) if about == "centroid" else base_w

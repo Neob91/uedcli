@@ -6,7 +6,8 @@ from uedcli.model import parse_t3d
 import pytest
 
 from uedcli.preview import (
-    BG, FRONT, WHITE, DensityGrid, AnnotationSpec, _DIM_ALPHA, _DecalPlan, _FRAME_PAD, _LabelItem,
+    BG, FRONT, WHITE, DensityGrid, AnnotationSpec, PreviewData,
+    _DIM_ALPHA, _DecalPlan, _FRAME_PAD, _LabelItem,
     _ONFACE_FILL, _ONFACE_MIN_TEXEL_PX,
     _box_fits_2d, _feasible_centers, _new_buf, _line, _point_in_poly,
     _decal_opacity, _draw_overlap_keyline, _draw_painted_decal, _face_decal_basis, _framing,
@@ -187,7 +188,7 @@ def test_point_actor_without_render_data_is_skipped():
 
 def test_point_marker_renders_and_label_is_toggleable():
     from uedcli.preview import PointRender
-    rd = {"L": PointRender(label="Torch")}
+    rd = PreviewData(points={"L": PointRender(label="Torch")})
     a = _point("L", "Engine.Light", (0, 0, 0))
     labeled = render_brushes_pgm([a], view="top", size=128, annotations=AnnotationSpec.all(), render_data=rd)
     plain = render_brushes_pgm([a], view="top", size=128, annotations=AnnotationSpec.none(), render_data=rd)
@@ -201,7 +202,7 @@ def test_point_actor_is_not_painted_csg_additive_blue():
     # tint must. (Legacy black/grey mode keeps the neutral (90,90,90) marker — see the tests above.)
     from uedcli.preview import PointRender, _CSG_PALETTE, assign_tints
     a = _point("L", "Engine.Light", (0, 0, 0))
-    rd = {"L": PointRender(label="L")}
+    rd = PreviewData(points={"L": PointRender(label="L")})
     cols = _colors(render_brushes_pgm([a], view="top", size=128, render_data=rd, color_by_csg=True))
     assert _CSG_PALETTE["add"][0] not in cols              # NOT painted as an additive-solid brush
     assert assign_tints([a])["L"] in cols                  # drawn in its per-actor label tint
@@ -212,7 +213,7 @@ def test_sprite_billboard_blits_masked():
     # A 2x2 sprite: index-0 (transparent) top row, an opaque red bottom row.
     rgb = bytes([0, 0, 0, 0, 0, 0, 200, 10, 10, 200, 10, 10])
     mask = bytes([0, 0, 1, 1])
-    rd = {"S": PointRender(label="S", sprite=(2, 2, rgb, mask), sprite_world=(80.0, 80.0))}
+    rd = PreviewData(points={"S": PointRender(label="S", sprite=(2, 2, rgb, mask), sprite_world=(80.0, 80.0))})
     cols = _colors(render_brushes_pgm([_point("S", "Engine.Light", (0, 0, 0))], view="top",
                                       size=128, annotations=AnnotationSpec.none(), render_data=rd))
     assert (200, 10, 10) in cols                           # opaque sprite pixels drew
@@ -221,7 +222,7 @@ def test_sprite_billboard_blits_masked():
 
 def test_show_collision_front_rect_is_twice_the_half_height():
     from uedcli.preview import PointRender, COL_COLLISION
-    rd = {"P": PointRender(label="P", collision=(30.0, 50.0))}
+    rd = PreviewData(points={"P": PointRender(label="P", collision=(30.0, 50.0))})
     a = _point("P", "Engine.Pawn", (0, 0, 0))
     front = render_brushes_pgm([a], view="front", size=256, annotations=AnnotationSpec.none(), render_data=rd)
     assert COL_COLLISION in _colors(front)                 # the cylinder rect drew in FRONT
@@ -229,7 +230,7 @@ def test_show_collision_front_rect_is_twice_the_half_height():
 
 def test_point_actor_contributes_to_framing():
     from uedcli.preview import PointRender
-    rd = {"A": PointRender(label="A"), "B": PointRender(label="B")}
+    rd = PreviewData(points={"A": PointRender(label="A"), "B": PointRender(label="B")})
     scene = render_brushes_pgm([_point("A", "X", (0, 0, 0)), _point("B", "X", (500, 0, 0))],
                                view="top", size=128, render_data=rd)
     assert _nonbg(scene) > 0                             # a point-only scene frames + draws
@@ -261,7 +262,7 @@ def test_point_actors_differing_only_in_z_separate_in_front_and_iso():
     size = 128
     a = _point("A", "Engine.Light", (0, 0, 0))
     b = _point("B", "Engine.Light", (0, 0, 200))
-    rd = {"A": PointRender(label="A"), "B": PointRender(label="B")}
+    rd = PreviewData(points={"A": PointRender(label="A"), "B": PointRender(label="B")})
     for view in ("front", "iso"):
         ppm = render_brushes_pgm([a, b], view=view, size=size, annotations=AnnotationSpec.none(), render_data=rd)
         rows = _marker_rows(ppm, size)
@@ -287,7 +288,7 @@ def test_iso_light_range_is_a_circle_not_an_octagon():
     # explicit region so the reach circle sits well inside (unclipped), then assert its bbox is
     # ~square (a circle) in iso.
     from uedcli.preview import PointRender, COL_LIGHT
-    rd = {"L": PointRender(label="L", light_radius=120.0)}
+    rd = PreviewData(points={"L": PointRender(label="L", light_radius=120.0)})
     a = _point("L", "Engine.Light", (0, 0, 0))
     px = _pixels(render_brushes_pgm([a], view="iso", size=256, annotations=AnnotationSpec.none(), render_data=rd,
                                     region=(-400, -400, -400, 400, 400, 400)))
@@ -454,7 +455,7 @@ def test_name_brush_filter_omits_point_names():
 def test_name_point_filter_omits_brush_names():
     from uedcli.preview import PointRender
     a = _point("Lamp", "Engine.Light", (0, 0, 0))
-    rd = {"Lamp": PointRender(label="Lamp")}
+    rd = PreviewData(points={"Lamp": PointRender(label="Lamp")})
     point = render_brushes_pgm([a], view="top", size=128, annotations=parse_annotation_spec("name:point"),
                                render_data=rd)
     brush = render_brushes_pgm([a], view="top", size=128, annotations=parse_annotation_spec("name:brush"),

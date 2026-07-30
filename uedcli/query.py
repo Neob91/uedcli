@@ -10,7 +10,7 @@ from typing import Literal
 
 from .model import Actor, Level
 from .normalize import canonical_actor_t3d
-from .preview import _face_normal
+from .texframe import newell
 
 # PolyFlags bit → name (verify against the editor's Surface-Flags ref before relying on
 # the higher bits). The CLI uses these names so the LLM never sees raw bit values.
@@ -33,7 +33,7 @@ def decode_flags(flags: int) -> list[str]:
 
 def _poly_facing(verts3d) -> str:
     """Snap a face's outward normal to ±X/±Y/±Z, or 'slant' if not near an axis."""
-    n = _face_normal(verts3d)
+    n = newell(verts3d)
     m = math.sqrt(sum(c * c for c in n)) or 1.0
     u = [c / m for c in n]
     axes = [("+X", (1, 0, 0)), ("-X", (-1, 0, 0)), ("+Y", (0, 1, 0)),
@@ -59,7 +59,7 @@ def list_polys(actor: Actor) -> list[dict]:
         v3 = [(float(loc[0] + w[0]), float(loc[1] + w[1]), float(loc[2] + w[2])) for w in wv]
         nv = len(v3)
         cen = tuple(round(sum(p[i] for p in v3) / nv) for i in range(3)) if nv else (0, 0, 0)
-        area = round(0.5 * math.sqrt(sum(c * c for c in _face_normal(v3)))) if nv >= 3 else 0
+        area = round(0.5 * math.sqrt(sum(c * c for c in newell(v3)))) if nv >= 3 else 0
         rows.append({"idx": idx, "facing": _poly_facing(v3) if nv >= 3 else "?",
                      "texture": poly.texture or "-", "flags": decode_flags(poly.flags),
                      "pan": poly.pan, "centroid": cen, "area": area, "nverts": nv})

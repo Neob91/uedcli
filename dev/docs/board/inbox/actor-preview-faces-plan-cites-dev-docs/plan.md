@@ -268,9 +268,16 @@ Read it in dispatch as `getattr(args, "faces", "wire")` — the harness namespac
 - **`docs/usage.md`'s `--focus` description is corrected in THIS slice** — it says other brushes
   "recede to a faint (dimmed) **wireframe**", which this slice falsifies. §0b requires docs to move
   with the slice that changes behaviour; S5 is the cross-cutting sweep, not a dumping ground.
-- Two passes with **separate** depth buffers: context resolved opaquely into a scratch buffer
-  initialised to `BG`, composited **once**; the focused brush drawn after, never occluded by context.
-- A focused brush fully enclosed by another brush is visible.
+- ~~Two passes with **separate** depth buffers: context resolved opaquely into a scratch buffer
+  initialised to `BG`, composited **once**; the focused brush drawn after, never occluded by context.~~
+  **SUPERSEDED** — built, then removed. Separate depth buffers made `--focus` decide which of two COPLANAR
+  faces was visible, because the de-emphasised pass rasterized first and the depth test is strictly `<`.
+  Delivered instead as ONE scene-order pass with a per-pixel dim mask, which keeps the composite single
+  AND leaves visibility independent of focus. "Composited once" survives; "separate depth buffers" and
+  "never occluded by context" do not. See board item
+  `four-actor-preview-faces-rulings-need-a-durable`.
+- ~~A focused brush fully enclosed by another brush is visible.~~ **SUPERSEDED** by the same ruling —
+  `--focus` is a brightness filter, not x-ray vision.
 - The context composite is applied **once per pixel**, not once per face — assert it on a scene where
   several non-focused faces overlap, checking the result equals a single blend of the resolved buffer.
   **Do NOT assert this by shuffling actor order:** `assign_tints` is documented as *"cycled by scene
