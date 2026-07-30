@@ -1196,6 +1196,9 @@ actor preview [<names…> | --from-t3d <FILE…|->]
   what**, so the picture stays physically honest either way: a crate inside a subtracted room stands in
   front of the room's far wall, a brush between the camera and the focused one still covers it, and a
   brush sealed inside a solid *added* brush stays hidden. All actor names still appear in the legend.
+  **`--highlight` overrides `--focus`'s dimming**: a highlighted poly/actor draws at full strength and
+  keeps its index even when its brush is not the focus. It does **not** override depth — a highlighted
+  face something hides is still hidden (focus dims; highlight re-lights what is visible).
   An unknown name / a point actor → clean exit 2.
 - **`--show SET`** is a **comma-set (union)** of range overlays for **POINT** actors (default: none).
   Members: **`collision`** — a faint light-red collision cylinder for every colliding point actor
