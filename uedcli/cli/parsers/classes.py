@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import argparse
 
-from ._arguments import depth_value, _nonempty_class
+from ._arguments import depth_value, parse_coord, _nonempty_class
 
 
 def register(sub) -> None:
@@ -75,3 +75,31 @@ def register(sub) -> None:
                             "category exits 2, listing the class's categories.")
     # `--all` was renamed to `--depth all` (2026-07-18). Hidden so it errors with a pointer.
     kshow.add_argument("--all", dest="legacy_all", action="store_true", help=argparse.SUPPRESS)
+
+    kprev = ksub.add_parser(
+        "preview",
+        help="render a class's default Mesh as an orthographic PNG thumbnail (native software "
+             "raster: decodes the mesh + P8 skins from the game .u — no editor, no game). The shot is "
+             "in the SAME mesh-local frame as `class show`'s extents (Scale applied, pre-Origin/"
+             "RotOrigin), iso (front-3/4) by default. Prints `<ref><TAB><path>` to stdout. A non-mesh "
+             "class has nothing to render (a stderr note, exit 0); an unresolvable Mesh or an "
+             "undecodable skin exits 2 naming it.")
+    kprev.add_argument("fqcn", metavar="Package.Class", type=_nonempty_class,
+                       help="fully-qualified class to preview, e.g. DeusEx.CrateUnbreakableLarge")
+    kprev.add_argument("--rotate", type=parse_coord, default=None, metavar="PITCH,YAW,ROLL",
+                       help="pose the mesh at this mesh-local FRotator (unreal rotator units, "
+                            "16384 = 90deg, 65536 = a full turn) BEFORE the iso camera shoots it — the "
+                            "pose oracle: preview a CANDIDATE placement rotation before committing it. "
+                            "The reported azimuth reflects --rotate's yaw. Default: no pose (the "
+                            "extents frame). Does NOT claim world facing (RotOrigin unreconciled).")
+    kprev.add_argument("--size", type=int, default=512, metavar="PX",
+                       help="output image edge length in pixels (default 512)")
+    kprev.add_argument("--out", default=None, metavar="PATH",
+                       help="host path to write the PNG to (relative -> cwd). Always a PNG: whatever "
+                            "extension you give is replaced by .png. Optional: with no --out a unique "
+                            "temp file (uedcli-class-preview-*.png) is created. The path is printed to "
+                            "stdout after the ref.")
+    kprev.add_argument("--json", action="store_true",
+                       help="print one JSON object {ref, path, azimuth, rotate} instead of the "
+                            "`<ref><TAB><path>` line — azimuth is the camera's mesh-local yaw in "
+                            "unreal rotator units (65536 = 360deg), rotate the applied pose or null.")

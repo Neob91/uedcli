@@ -78,6 +78,12 @@ class ClassIndex:
         `uprops.resolve_class_properties`' cross-package Super walk."""
         return lambda pkg_name: self._paths.get(pkg_name.casefold())
 
+    def package_paths(self) -> list[str]:
+        """Every indexed `.u` file path — the composed package set the class arm operates over.
+        `class preview` builds a `utexture.TextureResolver` over these to decode a mesh's skins from
+        the SAME path the mesh itself decoded from (DX deco skins live in the deco `.u`)."""
+        return list(self._paths.values())
+
     # -- package loading -------------------------------------------------------
     # There is NO live full-`Package` load here any more. `_package` (a memoized `uprops.load_package`)
     # existed only for `class show`'s own-props degrade fallback; that fallback was deleted 2026-07-25

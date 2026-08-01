@@ -8,9 +8,9 @@ from __future__ import annotations
 import json
 import sys
 
-from ... import classindex, meshfacts, rotation, uprops
+from ... import classindex, meshfacts, meshrender, rotation, uprops
 from ...classindex import ClassRefError
-from .. import resources
+from .. import rendering, resources
 from ..errors import CommandError
 
 # `class show` (without --all) shows the class's own props + as many ancestor sections as fit in this
@@ -173,13 +173,66 @@ def _print_facts(facts: dict) -> None:
     print(f"  parent:    {facts['parent'] if facts['parent'] is not None else 'none'}")
 
 
+# ── `class preview` (asset-catalog class arm C2) ─────────────────────────────────────────────────
+# Renders a class's default Mesh as an orthographic PNG thumbnail via the promoted native rasterizer
+# (`meshrender`), in the SAME mesh-local frame `class show`'s extents use. `--rotate P,Y,R` poses the
+# mesh (the pose oracle); the reported `azimuth` is the camera's mesh-local yaw (`meshrender`). Error
+# dispositions per spec §4: a non-mesh class is NOT an error (nothing to render); an unresolvable Mesh
+# or an undecodable skin exits 2 naming it; no package path exits 2. Infers nothing.
+
+
+def _run_preview(args, idx, project) -> int:
+    """`class preview <ref>` — the render. `idx` is the built (non-empty) `ClassIndex`, `project` the
+    resolved project (both from `run`)."""
+    fqcn = args.fqcn
+    if not idx.class_exists(fqcn):
+        raise CommandError(f"unknown class: {fqcn} (package not on the path, or the package "
+                           f"does not define that class)")
+    defaults = resources.class_defaults(fqcn, project)
+    drawtype = defaults.get(("drawtype", 0))
+    if drawtype != "DT_Mesh":
+        # A non-mesh class (DT_Sprite/DT_Brush/DT_None) has no mesh to render — NOT an error (spec §4,
+        # matching `class show`'s null extents). A stderr note keeps it from being a silent no-output.
+        print(f"{fqcn}: {drawtype or 'no DrawType'} class has no mesh to preview "
+              f"(only DT_Mesh classes render a thumbnail)", file=sys.stderr)
+        return 0
+    ref = meshfacts.parse_mesh_ref(defaults.get(("mesh", 0)))
+    if ref is None:
+        raise CommandError(f"cannot preview {fqcn}: DrawType is DT_Mesh but the Mesh default "
+                           f"({defaults.get(('mesh', 0))!r}) is unresolvable")
+    rotate_uu = ((rotation.uu_field(args.rotate[0]), rotation.uu_field(args.rotate[1]),
+                  rotation.uu_field(args.rotate[2])) if args.rotate is not None else (0, 0, 0))
+    try:
+        _display, mesh, pkg = meshfacts.decode_mesh(ref, class_fqcn=fqcn, resolver=idx.resolver())
+        skins = meshrender.resolve_skins(mesh, pkg, defaults, idx.package_paths(), class_fqcn=fqcn)
+        img, azimuth = meshrender.render_class(mesh, skins, rotate_uu=rotate_uu, size=args.size)
+    except meshfacts.MeshFactError as e:
+        raise CommandError(str(e))
+    except meshrender.PreviewError as e:
+        raise CommandError(str(e))
+    host_out = rendering.write_png(img, args.out)
+    if getattr(args, "json", False):
+        print(json.dumps({"ref": fqcn, "path": host_out, "azimuth": azimuth,
+                          "rotate": list(rotate_uu) if args.rotate is not None else None}))
+    else:
+        # stdout: pipe-clean `<ref>\t<path>`. The azimuth/pose are a human summary → stderr, so a
+        # script reading paths is never polluted (CLI convention).
+        print(f"{fqcn}\t{host_out}")
+        posed = "" if args.rotate is None else f", posed at rotate {rotate_uu[0]},{rotate_uu[1]},{rotate_uu[2]}"
+        print(f"azimuth {azimuth} uu (mesh-local yaw, 65536=360deg; not world facing){posed}",
+              file=sys.stderr)
+    return 0
+
+
 def run(args) -> int:
-    """`class list` / `class show` — offline class discovery over the composed `.u` path (no editor,
-    no level). Builds the `ClassIndex` from the resolved project."""
+    """`class list` / `class show` / `class preview` — offline class discovery + thumbnails over the
+    composed `.u` path (no editor, no level). Builds the `ClassIndex` from the resolved project."""
     project = resources.resolve_project(args)
     idx = resources.class_index(project)
     if idx.empty:
         raise CommandError(resources.NO_PACKAGE_PATH)
+    if args.sub == "preview":
+        return _run_preview(args, idx, project)
     if args.sub == "list":
         if getattr(args, "legacy_all", False):       # `--all` was split (2026-07-18): targeted pointer
             raise CommandError(

@@ -409,6 +409,28 @@ def render_actors_to_out(actors, args) -> int:
     return 0
 
 
+def write_png(img, out) -> str:
+    """Write a Pillow `Image` to `out` as PNG and return the host path actually written — the shared
+    `--out` semantics (matching `render_actors_to_out`'s write): a relative `--out` joins the cwd; the
+    caller's extension is REPLACED by `.png` (the bytes are PNG, so the name must say so); an existing
+    directory is a clean error, never a silent sibling `.png`; with no `--out` a unique temp file is
+    minted. Used by `class preview`."""
+    if out is not None:
+        requested = os.path.abspath(out)
+        if os.path.isdir(requested):
+            raise CommandError(f"--out must name a file, not an existing directory: {requested}")
+        host_out = os.path.splitext(requested)[0] + ".png"
+    else:
+        fd, host_out = tempfile.mkstemp(prefix="uedcli-class-preview-", suffix=".png")
+        os.close(fd)
+    try:
+        Path(host_out).parent.mkdir(parents=True, exist_ok=True)
+        img.save(host_out)
+    except OSError as e:
+        raise CommandError(f"could not write preview to {host_out}: {e}")
+    return host_out
+
+
 def brush_actors_from(actors_t3d: dict, order: list[str], names: list[str], *,
                        brushes_only: bool = True):
     """The chosen actors parsed out of a stash/prefab T3D blob. `brushes_only` (the historical

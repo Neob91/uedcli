@@ -8491,11 +8491,13 @@
           "mutex_group": null,
           "subparser_choices": [
             "list",
-            "show"
+            "show",
+            "preview"
           ],
           "subparser_help": {
             "list": "browse actor classes as an indented inheritance TREE (rooted at Engine.Actor; abstract classes marked *; a collapsed node shows its hidden direct-subclass count as (N)). Depth auto-fits ~60 lines; --depth to go deeper, --subclass-of to reroot, --flat for a pipeable one-per-line list.",
-            "show": "print a class's OWN editable properties grouped by editor category (the UnrealEd property-browser view: Movement/Display/Lighting/…) + super chain + abstract/placeable, then a Facts block (DrawType, default Mesh, signed mesh-local extents, collision cylinder, PrePivot, parent). Non-editable internals hidden; inherited props collapse to per-category counts; --depth all lists every inherited prop too."
+            "show": "print a class's OWN editable properties grouped by editor category (the UnrealEd property-browser view: Movement/Display/Lighting/…) + super chain + abstract/placeable, then a Facts block (DrawType, default Mesh, signed mesh-local extents, collision cylinder, PrePivot, parent). Non-editable internals hidden; inherited props collapse to per-category counts; --depth all lists every inherited prop too.",
+            "preview": "render a class's default Mesh as an orthographic PNG thumbnail (native software raster: decodes the mesh + P8 skins from the game .u — no editor, no game). The shot is in the SAME mesh-local frame as `class show`'s extents (Scale applied, pre-Origin/RotOrigin), iso (front-3/4) by default. Prints `<ref><TAB><path>` to stdout. A non-mesh class has nothing to render (a stderr note, exit 0); an unresolvable Mesh or an undecodable skin exits 2 naming it."
           }
         }
       ],
@@ -8739,6 +8741,111 @@
               "metavar": null,
               "converter": null,
               "help": "==SUPPRESS==",
+              "mutex_group": null
+            }
+          ],
+          "subparsers": {}
+        },
+        "preview": {
+          "class": "_CoordArgumentParser",
+          "prog": "uedcli class preview",
+          "mutex_groups": [],
+          "actions": [
+            {
+              "class": "_HelpAction",
+              "option_strings": [
+                "-h",
+                "--help"
+              ],
+              "dest": "help",
+              "nargs": 0,
+              "const": null,
+              "default": {
+                "__suppress__": true
+              },
+              "required": false,
+              "choices": null,
+              "metavar": null,
+              "converter": null,
+              "help": "show this help message and exit",
+              "mutex_group": null
+            },
+            {
+              "class": "_StoreAction",
+              "option_strings": [],
+              "dest": "fqcn",
+              "nargs": null,
+              "const": null,
+              "default": null,
+              "required": true,
+              "choices": null,
+              "metavar": "Package.Class",
+              "converter": "_nonempty_class",
+              "help": "fully-qualified class to preview, e.g. DeusEx.CrateUnbreakableLarge",
+              "mutex_group": null
+            },
+            {
+              "class": "_StoreAction",
+              "option_strings": [
+                "--rotate"
+              ],
+              "dest": "rotate",
+              "nargs": null,
+              "const": null,
+              "default": null,
+              "required": false,
+              "choices": null,
+              "metavar": "PITCH,YAW,ROLL",
+              "converter": "parse_coord",
+              "help": "pose the mesh at this mesh-local FRotator (unreal rotator units, 16384 = 90deg, 65536 = a full turn) BEFORE the iso camera shoots it — the pose oracle: preview a CANDIDATE placement rotation before committing it. The reported azimuth reflects --rotate's yaw. Default: no pose (the extents frame). Does NOT claim world facing (RotOrigin unreconciled).",
+              "mutex_group": null
+            },
+            {
+              "class": "_StoreAction",
+              "option_strings": [
+                "--size"
+              ],
+              "dest": "size",
+              "nargs": null,
+              "const": null,
+              "default": 512,
+              "required": false,
+              "choices": null,
+              "metavar": "PX",
+              "converter": "int",
+              "help": "output image edge length in pixels (default 512)",
+              "mutex_group": null
+            },
+            {
+              "class": "_StoreAction",
+              "option_strings": [
+                "--out"
+              ],
+              "dest": "out",
+              "nargs": null,
+              "const": null,
+              "default": null,
+              "required": false,
+              "choices": null,
+              "metavar": "PATH",
+              "converter": null,
+              "help": "host path to write the PNG to (relative -> cwd). Always a PNG: whatever extension you give is replaced by .png. Optional: with no --out a unique temp file (uedcli-class-preview-*.png) is created. The path is printed to stdout after the ref.",
+              "mutex_group": null
+            },
+            {
+              "class": "_StoreTrueAction",
+              "option_strings": [
+                "--json"
+              ],
+              "dest": "json",
+              "nargs": 0,
+              "const": true,
+              "default": false,
+              "required": false,
+              "choices": null,
+              "metavar": null,
+              "converter": null,
+              "help": "print one JSON object {ref, path, azimuth, rotate} instead of the `<ref><TAB><path>` line — azimuth is the camera's mesh-local yaw in unreal rotator units (65536 = 360deg), rotate the applied pose or null.",
               "mutex_group": null
             }
           ],

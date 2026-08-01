@@ -64,12 +64,15 @@ def signed_extents(box, scale) -> dict[str, list[int]]:
     return out
 
 
-def decode_mesh_box(mesh_ref: tuple[str, str], *, class_fqcn: str, resolver):
-    """Decode the mesh named by `mesh_ref` (`(package, name)`) and return `(display_ref, box, scale)`
-    — `display_ref` is `"Package.Name"`, `box`/`scale` the decoder outputs `signed_extents` reads.
+def decode_mesh(mesh_ref: tuple[str, str], *, class_fqcn: str, resolver):
+    """Decode the mesh named by `mesh_ref` (`(package, name)`) fully and return
+    `(display_ref, mesh, pkg)` — `display_ref` is `"Package.Name"`, `mesh` the whole decoded
+    `umesh.Mesh` (box/scale plus verts/faces/wedges/materials/textures the rasterizer needs), `pkg`
+    the loaded package (its `object_path` turns the mesh's texture refs into resolver keys).
     `resolver(package_name) -> .u path | None` locates the mesh's package on the composed path.
     Raises `MeshFactError` (naming `class_fqcn` and the mesh) on any failure — a missing package, a
-    mesh not in it, or a decode desync."""
+    mesh not in it, or a decode desync. Shared by `class show` facts (extents) and `class preview`
+    (the render), so the picture and the extents read the SAME decoded body."""
     pkg_stem, mesh_name = mesh_ref
     display = f"{pkg_stem}.{mesh_name}"
     path = resolver(pkg_stem)
@@ -89,4 +92,11 @@ def decode_mesh_box(mesh_ref: tuple[str, str], *, class_fqcn: str, resolver):
     except Exception as e:                              # any decode desync/bad package → named error
         raise MeshFactError(f"cannot read mesh facts for {class_fqcn}: mesh {display} failed to "
                             f"decode ({type(e).__name__}: {e})") from e
+    return display, mesh, pkg
+
+
+def decode_mesh_box(mesh_ref: tuple[str, str], *, class_fqcn: str, resolver):
+    """`decode_mesh`, returning only `(display_ref, box, scale)` — what `signed_extents` reads for
+    the `class show` Facts block. Same decode, same error disposition."""
+    display, mesh, _pkg = decode_mesh(mesh_ref, class_fqcn=class_fqcn, resolver=resolver)
     return display, mesh.box, mesh.scale
