@@ -51,7 +51,7 @@ session-store channel over actors (widening a save set is harmless where widenin
 not), and it would break every assertion on the return value across four test files for no
 user-visible gain — the printed output is identical either way.
 
-**Refs.** `uedcli/surface.py` `resolve_targets`; `uedcli/dispatch.py` `_print_poly_selectors`.
+**Refs.** `uedcli/surface.py` `resolve_targets`; `uedcli/cli/commands/brush/poly.py` `_print_poly_selectors`.
 
 ---
 
@@ -381,8 +381,8 @@ axis is harmless there; do not "unify" the two verbs' validation.
 ## Refs
 
 Code: [`uedcli/surface.py`](../../../uedcli/surface.py) (the verbs and the frame math),
-[`uedcli/dispatch.py`](../../../uedcli/dispatch.py) `_print_poly_selectors` (the `BRUSH:idx` stdout
-contract), [`uedcli/cli.py`](../../../uedcli/cli.py) `parse_pan`/`parse_factor_pair`.
+[`uedcli/cli/commands/brush/poly.py`](../../../uedcli/cli/commands/brush/poly.py) `_print_poly_selectors` (the `BRUSH:idx` stdout
+contract), [`uedcli/cli/parsers/_arguments.py`](../../../uedcli/cli/parsers/_arguments.py) `parse_pan`/`parse_factor_pair`.
 Tests: `uedcli/tests/test_surface.py`, `uedcli/tests/test_cli_consistency.py`.
 
 Evidence: [`../spikes/2026-07-26-poly-rotate-curved-track/`](../spikes/2026-07-26-poly-rotate-curved-track/README.md)

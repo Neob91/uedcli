@@ -26,9 +26,10 @@ from unittest import mock
 
 import pytest
 
-from uedcli import dispatch as dispatch_mod
+from uedcli.cli import dispatch as dispatch_mod
+from uedcli.cli import level_sources
 from uedcli.builders import cube, make_brush_actor
-from uedcli.cli import build_parser
+from uedcli.cli.main import build_parser
 from uedcli.model import Level, parse_t3d_actors
 
 BAD = "NoSuchActor"
@@ -137,7 +138,7 @@ _PARSER = build_parser()
 
 def _run(argv, stdin):
     args = _PARSER.parse_args(argv)              # real grammar → faithful Namespace
-    with mock.patch.object(dispatch_mod, "_resolve_level_source", return_value=_fake_src()), \
+    with mock.patch.object(level_sources, "resolve_level_source", return_value=_fake_src()), \
             mock.patch("sys.stdin", io.StringIO(stdin)):
         # If a bad-name lookup regresses to a bare KeyError/IndexError/StopIteration, it escapes
         # `dispatch` here and pytest reports the traceback — exactly the failure we guard against.

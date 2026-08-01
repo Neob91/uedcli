@@ -12,7 +12,8 @@ from unittest import mock
 import pytest
 
 from uedcli import apply as applymod
-from uedcli import dispatch, trunk
+from uedcli import trunk
+from uedcli.cli import dispatch
 from uedcli.apply import ApplyResult, run_materialize
 from uedcli.model import Actor, Level
 from uedcli import xfer
@@ -226,8 +227,8 @@ def test_materialize_resolves_the_trunk(tmp_path, monkeypatch):
         return ApplyResult(rc=0, message="materialized out.dx")
 
     monkeypatch.setattr("uedcli.apply.run_materialize", fake_run)
-    monkeypatch.setattr("uedcli.dispatch._composed_load_set", lambda p: ["Engine", "DeusExDeco"])
-    monkeypatch.setattr("uedcli.dispatch._composed_dirs", lambda p: ["/g/Textures"])
+    monkeypatch.setattr("uedcli.cli.resources.composed_load_set", lambda p: ["Engine", "DeusExDeco"])
+    monkeypatch.setattr("uedcli.cli.resources.composed_dirs", lambda p: ["/g/Textures"])
     rc = dispatch.dispatch(_ns(cmd="level", sub="materialize", project=str(proj),
                                out=str(tmp_path / "out.dx"), overwrite=False))
     assert rc == 0
@@ -246,8 +247,8 @@ def test_materialize_warns_on_duplicate_order_value(tmp_path, monkeypatch, capsy
     monkeypatch.setenv("UEDCLI_LEVEL", "lvl")
     monkeypatch.setattr("uedcli.apply.run_materialize",
                         lambda **kw: ApplyResult(rc=0, message="ok"))
-    monkeypatch.setattr("uedcli.dispatch._composed_load_set", lambda p: [])
-    monkeypatch.setattr("uedcli.dispatch._composed_dirs", lambda p: [])
+    monkeypatch.setattr("uedcli.cli.resources.composed_load_set", lambda p: [])
+    monkeypatch.setattr("uedcli.cli.resources.composed_dirs", lambda p: [])
     rc = dispatch.dispatch(_ns(cmd="level", sub="materialize", project=str(proj),
                                out=str(tmp_path / "out.dx"), overwrite=False))
     assert rc == 0
@@ -278,7 +279,7 @@ def test_doctor_no_project_errors_cleanly(tmp_path, monkeypatch, capsys):
 def test_materialize_missing_out_errors_before_the_load_set(tmp_path, monkeypatch, capsys):
     proj, _ = _project_with_level(tmp_path, monkeypatch)
     # _composed_load_set must NOT be reached (it would hard-error on no games config first otherwise)
-    monkeypatch.setattr("uedcli.dispatch._composed_load_set",
+    monkeypatch.setattr("uedcli.cli.resources.composed_load_set",
                         lambda p: (_ for _ in ()).throw(AssertionError("load set computed too early")))
     rc = dispatch.dispatch(_ns(cmd="level", sub="materialize", project=str(proj),
                                out=None, overwrite=False))

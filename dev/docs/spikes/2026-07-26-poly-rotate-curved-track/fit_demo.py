@@ -33,7 +33,7 @@ _REPO = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(_REPO))
 
 from uedcli import polyalign                                    # noqa: E402
-from uedcli.dispatch import TrunkLevelSource                    # noqa: E402
+from uedcli.cli.level_sources import TrunkLevelSource                    # noqa: E402
 
 
 def main(argv=None) -> int:

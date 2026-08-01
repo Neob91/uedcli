@@ -3,7 +3,8 @@ from decimal import Decimal
 
 import pytest
 
-from uedcli.cli import build_parser, parse_bbox, parse_coord, parse_decimal, parse_pan
+from uedcli.cli.main import build_parser
+from uedcli.cli.parsers._arguments import parse_bbox, parse_coord, parse_decimal, parse_pan
 
 
 def test_parse_decimal_returns_exact_decimal():
@@ -558,14 +559,14 @@ def test_parser_poly_scale_rejects_a_malformed_factor_pair(bad):
 
 
 def test_substrate_stub_parses():
-    from uedcli.cli import build_parser
+    from uedcli.cli.main import build_parser
     args = build_parser().parse_args(["substrate", "stub", "DeusExItems", "--force"])
     assert args.cmd == "substrate" and args.sub == "stub"
     assert args.package == "DeusExItems" and args.force is True
 
 
 def test_substrate_stub_list_parses():
-    from uedcli.cli import build_parser
+    from uedcli.cli.main import build_parser
     args = build_parser().parse_args(["substrate", "stub", "--list"])
     assert args.cmd == "substrate" and args.list is True
 

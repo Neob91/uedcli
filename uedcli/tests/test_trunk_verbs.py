@@ -2,7 +2,8 @@
 `src` is a `TrunkLevelSource`): these prove the verbs edit the on-disk trunk."""
 import argparse
 
-from uedcli import dispatch, trunk
+from uedcli import trunk
+from uedcli.cli import dispatch
 from uedcli.model import Actor, Brush, Level, Polygon
 
 

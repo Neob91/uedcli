@@ -16,7 +16,7 @@ import pytest
 
 from uedcli import polyalign
 from uedcli.builders import cube, cylinder, make_brush_actor
-from uedcli.dispatch import dispatch
+from uedcli.cli.dispatch import dispatch
 from uedcli.model import Level
 
 
@@ -340,8 +340,7 @@ def _run(args, level, stdin=None):
     import contextlib
     src = _fake_src(level)
     with contextlib.ExitStack() as stack:
-        stack.enter_context(mock.patch("uedcli.dispatch.Driver"))
-        stack.enter_context(mock.patch("uedcli.dispatch._resolve_level_source", return_value=src))
+        stack.enter_context(mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src))
         if stdin is not None:
             stack.enter_context(mock.patch("sys.stdin", io.StringIO(stdin)))
         rc = dispatch(args)

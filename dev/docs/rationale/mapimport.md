@@ -135,7 +135,7 @@ index 0 is a REAL name", `uedcli/tests/test_mapimport_geometry.py`.
 ## Import drops the editor's scratch objects — and must do so before qualification
 
 `drop_editor_scratch` removes the builder brush and the `Camera` viewport actors, and the verb calls
-it before `_validate_ingest_actors` qualifies class names.
+it before `ingest.validate_ingest_actors` qualifies class names.
 
 **Why it is this way:** an owner ruling (2026-07-27), narrowing the spec's earlier "all actors
 imported verbatim" to all content actors. A saved map carries the apparatus the designer was holding:
@@ -147,7 +147,7 @@ beside the fresh one the editor creates for itself, colliding over `Brush0`.
 
 The ordering is load-bearing: both tests key on the SHORT class name — the builder-brush predicate
 requires `Class=Brush` — and qualification rewrites those to `Engine.Brush`/`Engine.Camera`, after
-which neither can match. Same constraint `_validate_ingest_actors` already documents for `actor add`.
+which neither can match. Same constraint `ingest.validate_ingest_actors` already documents for `actor add`.
 
 `Camera` is matched as an exact class. It has no subclasses at all in the composed Deus Ex class set,
 so an exact match cannot take real content with it; and although `Engine.Camera` derives from
@@ -173,7 +173,7 @@ about alone, so concurrent edits to different actors compose instead of stomping
 naming the old actors, the previous level's content would survive and silently merge into the imported
 level, producing a tree that is neither map.
 
-**Refs:** `uedcli/dispatch.py` (`_level_import`), `uedcli/t3dtree.py` (`write_actor_tree`),
+**Refs:** `uedcli/cli/commands/level.py` (`_level_import`), `uedcli/t3dtree.py` (`write_actor_tree`),
 `uedcli/tests/test_import_verb.py`.
 
 ## An empty destination directory does not count as "already exists"
@@ -184,7 +184,7 @@ The overwrite guard treats a level as existing only when its `actors/` directory
 leaves a bare directory behind, and treating that as existing would permanently demand `--overwrite`
 to retry past it — for no benefit, since there is nothing there to lose.
 
-**Refs:** `uedcli/dispatch.py` (`_resolve_import_dest`), `uedcli/tests/test_import_verb.py`.
+**Refs:** `uedcli/cli/commands/level.py` (`_resolve_import_dest`), `uedcli/tests/test_import_verb.py`.
 
 ## Import is strict, and refuses rather than importing partially
 
@@ -203,7 +203,7 @@ one and the import would report success.
 dismissed; it is on `dev/docs/board/inbox/`. It needs its own thinking about how such a tree is marked
 so it cannot be mistaken for a complete one.
 
-**Refs:** `uedcli/mapimport.py` (`import_map`'s two integrity gates), `uedcli/dispatch.py`
+**Refs:** `uedcli/mapimport.py` (`import_map`'s two integrity gates), `uedcli/cli/commands/level.py`
 (`_level_import`), `uedcli/tests/test_import_verb.py`.
 
 ## What is not yet verified — the engine-faithfulness gap

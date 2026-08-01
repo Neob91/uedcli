@@ -198,7 +198,7 @@ def test_a_non_finite_coordinate_is_rejected_at_the_front_door(value):
 @pytest.mark.parametrize("value", [float("inf"), float("-inf"), float("nan"), Decimal("Infinity"),
                                    Decimal("NaN")])
 def test_fmt_coord_rejects_a_non_finite_instead_of_tracebacking(value):
-    # `cli.parse_coord` builds coordinates with `Decimal(p)`, which ACCEPTS inf/nan, and
+    # `parse_coord` builds coordinates with `Decimal(p)`, which ACCEPTS inf/nan, and
     # `int(Decimal("Infinity"))` raises OverflowError — which `dispatch()` does not catch, so
     # `brush scale --to inf,1,1` printed a traceback. `fmt_coord` guards like every sibling emitter.
     from uedcli.emit import fmt_coord

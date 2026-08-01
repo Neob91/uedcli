@@ -339,12 +339,12 @@ def _doctor_args(**kw):
 
 def _run_dispatch(args, level):
     from unittest import mock
-    from uedcli.dispatch import dispatch
+    from uedcli.cli.dispatch import dispatch
     src = mock.Mock()                                 # the trunk seam
     src.load.return_value = level
     src._ranks = {}                                   # _level_doctor reads it for the dup-order check
     src.display_name = "AireGardens.dx"               # _level_doctor uses src.display_name as header
-    with mock.patch("uedcli.dispatch._resolve_level_source", return_value=src):
+    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src):
         return dispatch(args)
 
 

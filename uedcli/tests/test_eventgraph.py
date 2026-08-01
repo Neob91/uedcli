@@ -7,7 +7,8 @@ plus the error paths (no project → exit 2)."""
 import argparse
 import json
 
-from uedcli import dispatch, eventgraph, trunk
+from uedcli import eventgraph, trunk
+from uedcli.cli import dispatch
 from uedcli.model import Actor, Level
 from uedcli.tests.conftest import StubClassIndex
 

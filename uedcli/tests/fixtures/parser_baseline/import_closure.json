@@ -1,0 +1,13 @@
+[
+  "uedcli",
+  "uedcli.emit",
+  "uedcli.folderlib",
+  "uedcli.labellib",
+  "uedcli.model",
+  "uedcli.normalize",
+  "uedcli.preview",
+  "uedcli.query",
+  "uedcli.rotation",
+  "uedcli.texframe",
+  "uedcli.typedprops"
+]

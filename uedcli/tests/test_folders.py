@@ -14,7 +14,9 @@ from unittest import mock
 
 import pytest
 
-from uedcli import cli, dispatch, trunk
+from uedcli import trunk
+from uedcli.cli import level_sources
+from uedcli.cli import main as cli, dispatch
 from uedcli.model import Actor, Level
 from uedcli.normalize import canonical_actor_t3d, canonical_level_hash
 
@@ -107,7 +109,7 @@ def test_folder_only_change_persists_via_delta_write(tmp_path):
     """A body-identical, folder-CHANGED actor IS in the written set (the §2 diff trap)."""
     lvl = Level(actors={"A_1": _light("A_1")}, order=["A_1"])
     trunk.write_level(tmp_path, lvl, {"A_1": "m"})
-    src = dispatch.TrunkLevelSource(tmp_path)
+    src = level_sources.TrunkLevelSource(tmp_path)
     loaded = src.load()
     loaded.actors["A_1"].folder = "act2.wip"              # ONLY the folder changes (body+rank same)
     src.save(verb="folder", args={}, level=loaded, touched=["A_1"])
@@ -119,7 +121,7 @@ def test_folder_unset_persists_via_delta_write(tmp_path):
     """The SYMMETRIC trap: `"x"`→None on an otherwise byte-identical actor also fires the delta."""
     lvl = Level(actors={"A_1": _light("A_1", folder="x")}, order=["A_1"])
     trunk.write_level(tmp_path, lvl, {"A_1": "m"})
-    src = dispatch.TrunkLevelSource(tmp_path)
+    src = level_sources.TrunkLevelSource(tmp_path)
     loaded = src.load()
     assert loaded.actors["A_1"].folder == "x"
     loaded.actors["A_1"].folder = None                   # unset — body+rank unchanged
@@ -136,7 +138,7 @@ def test_folder_only_save_leaves_a_disjoint_actor_untouched(tmp_path):
     trunk.write_level(tmp_path, lvl, {"A_1": "m", "B_2": "t"})
     body_b = tmp_path / "actors" / "B_2" / "actor.t3d"
     before = os.stat(body_b)
-    src = dispatch.TrunkLevelSource(tmp_path)
+    src = level_sources.TrunkLevelSource(tmp_path)
     loaded = src.load()
     loaded.actors["A_1"].folder = "z"
     src.save(verb="folder", args={}, level=loaded, touched=["A_1"])

@@ -1,7 +1,7 @@
 """Editor driver — wraps wine_ctl.py over `docker exec`. Every console verb goes
 through `wine_ctl exec`.
 
-**Reading the level back goes through `MAP EXPORT` alone** (`dispatch._export_editor_level`),
+**Reading the level back goes through `MAP EXPORT` alone** (`Driver.map_export`),
 and even that is rare: the git-tracked T3D trunk is authoritative, so only the build/snapshot
 path (materialize/preview) ever reads from the editor at all. The old `EDIT COPY` → X-clipboard
 read path is GONE — `Driver.edit_copy` was deleted 2026-07-26 as uncalled. The clipboard is

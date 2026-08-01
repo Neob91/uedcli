@@ -324,7 +324,7 @@ def _atomic_write(out_path: Path, data: bytes) -> None:
 
 def default_schema_lookup(level=None):
     """A cached `fqcn -> {casefold(name): uprops.Prop}` schema lookup over the resolved project's
-    real game `.u` files (the same seam `dispatch._class_schema` uses).  A bare (unqualified)
+    real game `.u` files (the same seam `resources.class_schema` uses).  A bare (unqualified)
     class or an unresolvable package yields an EMPTY schema (every prop then skips with a warning)
     rather than a hard failure — a level still materializes, just with un-typed props dropped."""
     import os

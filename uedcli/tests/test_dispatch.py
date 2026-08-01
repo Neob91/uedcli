@@ -5,9 +5,10 @@ from decimal import Decimal
 from types import SimpleNamespace
 from unittest import mock
 
-from uedcli import dispatch as dispatch_mod
+from uedcli.cli import dispatch as dispatch_mod
+from uedcli.cli import resources
 from uedcli.builders import cube, make_brush_actor
-from uedcli.dispatch import dispatch
+from uedcli.cli.dispatch import dispatch
 from uedcli.model import Actor, Level, parse_t3d
 from uedcli.uprops import Prop
 from uedcli.vertex import weld_vertices
@@ -48,9 +49,9 @@ def _light_level():
 
 
 def _run_find(args, level, hierarchy=_LIGHT_H):
-    with mock.patch("uedcli.dispatch._resolve_level_source", return_value=_fake_src(level)), \
-            mock.patch("uedcli.dispatch._class_index", return_value=_fake_class_index(hierarchy)), \
-            mock.patch("uedcli.dispatch._resolve_project", return_value=object()):
+    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=_fake_src(level)), \
+            mock.patch("uedcli.cli.resources.class_index", return_value=_fake_class_index(hierarchy)), \
+            mock.patch("uedcli.cli.resources.resolve_project", return_value=object()):
         return dispatch(args)
 
 
@@ -98,8 +99,7 @@ def _fake_src(level):
 
 def test_dispatch_vertex_list_prints_table(capsys):
     args = SimpleNamespace(cmd="brush", sub="vertex", vsub="list", name="B1", container="c")
-    with mock.patch("uedcli.dispatch.Driver"), \
-         mock.patch("uedcli.dispatch._resolve_level_source", return_value=_fake_src(_brush_level())):
+    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=_fake_src(_brush_level())):
         rc = dispatch(args)
     assert rc == 0
     assert "B1: 8 vertices" in capsys.readouterr().out
@@ -114,8 +114,7 @@ def test_dispatch_vertex_move_by_converts_world_to_local_model_side():
             (Decimal(32), Decimal(-32), Decimal(32))],
         to=None, by=(Decimal(0), Decimal(0), Decimal(16)))
     src = _fake_src(_brush_level())
-    with mock.patch("uedcli.dispatch.Driver"), \
-         mock.patch("uedcli.dispatch._resolve_level_source", return_value=src):
+    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src):
         rc = dispatch(args)
     assert rc == 0
     moved = src.save.call_args.kwargs["level"].actors["B1"]
@@ -188,17 +187,13 @@ def test_add_skips_the_builder_brush_via_is_builder_brush(tmp_path):
     snippet_file = tmp_path / "actors.t3d"
     snippet_file.write_text(snippet)
 
-    drv = mock.Mock()
     src = _fake_src(parse_t3d("Begin Map\nEnd Map"))
 
     args = Namespace(cmd="actor", sub="add", file=str(snippet_file), container="dx-lum-uned")
 
-    with mock.patch("uedcli.dispatch._resolve_level_source", return_value=src), \
-         mock.patch("uedcli.dispatch.Driver", return_value=drv), \
-         mock.patch("uedcli.dispatch.writes.add_actor", autospec=True) as add:
+    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src):
         dispatch(args)
 
-    add.assert_not_called()                          # model-side: no editor
     actors = src.save.call_args.kwargs["level"].actors
     # Builder brush (model_name=Brush, no CsgOper) skipped; content brush Brush0123
     # (model_name=Model5, CsgOper=CSG_Add) + Light1 are added (2 actors, not 3). Trailing digits in
@@ -218,7 +213,7 @@ def _actor_add_dispatch(src, t3d_text, monkeypatch):
     import io
     monkeypatch.setattr("sys.stdin", io.StringIO(t3d_text))
     args = Namespace(cmd="actor", sub="add", file="-", container="dx-lum-uned")
-    with mock.patch("uedcli.dispatch._resolve_level_source", return_value=src):
+    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src):
         rc = dispatch(args)
     return rc, src
 
@@ -344,7 +339,7 @@ def test_actor_add_file_also_uses_name_allocation(tmp_path):
     t3d_file.write_text(_light_t3d("Light"))
     src = _fake_src(parse_t3d("Begin Map\nEnd Map"))
     args = Namespace(cmd="actor", sub="add", file=str(t3d_file), container="dx-lum-uned")
-    with mock.patch("uedcli.dispatch._resolve_level_source", return_value=src):
+    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src):
         rc = dispatch(args)
     assert rc == 0
     _added_with_stem(src.save.call_args.kwargs["level"], "Light")
@@ -419,8 +414,7 @@ def test_reads_require_a_project_and_error_without_one(tmp_path, capsys, monkeyp
     monkeypatch.chdir(tmp_path)                    # control cwd: walk-up must find NO ambient project
     args = SimpleNamespace(cmd="actor", sub="find", name=[], cls=[], group=[], prop=[], kind=None,
                            container="c")
-    with mock.patch("uedcli.dispatch.Driver", autospec=True), \
-         mock.patch.dict(_os.environ, {"UEDCLI_PROJECT": ""}, clear=False):
+    with mock.patch.dict(_os.environ, {"UEDCLI_PROJECT": ""}, clear=False):
         rc = dispatch(args)
     # Git-native trunk: a read outside any uedcli project is a clean exit 2, not a traceback.
     err = capsys.readouterr().err
@@ -451,13 +445,11 @@ def test_actor_add_is_model_side_and_appends_order():
         cmd="actor", sub="add",
         file="-", container="ct")
     import io
-    with mock.patch("uedcli.dispatch._resolve_level_source", return_value=src), \
+    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src), \
          mock.patch("sys.stdin",
                     io.StringIO("Begin Map\nBegin Actor Class=Light Name=NewLight\n"
-                                "    Name=\"NewLight\"\nEnd Actor\nEnd Map")), \
-         mock.patch("uedcli.dispatch.writes.add_actor", autospec=True) as add:
+                                "    Name=\"NewLight\"\nEnd Actor\nEnd Map")):
         assert dispatch_mod._dispatch(args) == 0
-        add.assert_not_called()             # model-side: add never touches the editor
     saved = src.save.call_args.kwargs["level"]
     name = _added_with_stem(saved, "NewLight")      # git-native random-suffix name
     assert saved.order == [name]                    # the add appended to order
@@ -489,13 +481,14 @@ def _preview_args(proj, tmp_path, **over):
 
 
 def _patch_user_config(monkeypatch):
-    from uedcli import dispatch as D
-    monkeypatch.setattr(D.config, "load_user_config", lambda override=None: object())
-    monkeypatch.setattr(D.config, "composed_search_files", lambda p, uc: [])
+    from uedcli import config
+    monkeypatch.setattr(config, "load_user_config", lambda override=None: object())
+    monkeypatch.setattr(config, "composed_search_files", lambda p, uc: [])
 
 
 def test_level_preview_native_routes_shots_to_render(tmp_path, monkeypatch):
-    from uedcli import dispatch as D, builders
+    from uedcli import builders
+    from uedcli.cli import dispatch as D
     room = builders.make_brush_actor("Room", builders.cube(600, 600, 300, "T"),
                                      location=(0, 0, 0), csg="subtract")
     proj = _preview_proj(tmp_path, {"Room": room}, ["Room"], monkeypatch)
@@ -514,7 +507,7 @@ def test_level_preview_native_routes_shots_to_render(tmp_path, monkeypatch):
 
 
 def test_level_preview_bad_token_errors_before_any_work(tmp_path, monkeypatch, capsys):
-    from uedcli import dispatch as D
+    from uedcli.cli import dispatch as D
     monkeypatch.setattr("uedcli.preview_native.render_shots",
                         lambda **kw: (_ for _ in ()).throw(AssertionError("worked on bad shot")))
     args = _preview_args(tmp_path, tmp_path, shots=["Keep:wire=hero"])   # OLD grammar
@@ -523,7 +516,7 @@ def test_level_preview_bad_token_errors_before_any_work(tmp_path, monkeypatch, c
 
 
 def test_level_preview_game_routes_to_preview_game(tmp_path, monkeypatch):
-    from uedcli import dispatch as D
+    from uedcli.cli import dispatch as D
     seen = {}
     monkeypatch.setattr("uedcli.preview_game.render_shots",
                         lambda **kw: (seen.update(kw), 3)[1])
@@ -539,7 +532,8 @@ def test_level_preview_bare_defaults_to_game_backend(tmp_path, monkeypatch):
     # THE default flip (2026-07-17): a bare `level preview` (neither --native nor --game) routes to
     # the in-game tier, NOT the offline rasterizer. Without this, reverting `use_game = not
     # args.native` back to `args.game` would still pass every other preview test.
-    from uedcli import dispatch as D, builders
+    from uedcli import builders
+    from uedcli.cli import dispatch as D
     room = builders.make_brush_actor("Room", builders.cube(600, 600, 300, "T"),
                                      location=(0, 0, 0), csg="subtract")
     proj = _preview_proj(tmp_path, {"Room": room}, ["Room"], monkeypatch)
@@ -557,7 +551,7 @@ def test_level_preview_bare_defaults_to_game_backend(tmp_path, monkeypatch):
 
 
 def test_level_preview_fov_with_game_rejected(tmp_path, capsys):
-    from uedcli import dispatch as D
+    from uedcli.cli import dispatch as D
     args = _preview_args(tmp_path, tmp_path, game=True, fov=90.0)
     assert D.dispatch(args) == 2
     assert "--fov requires --native" in capsys.readouterr().err
@@ -566,7 +560,7 @@ def test_level_preview_fov_with_game_rejected(tmp_path, capsys):
 def test_level_preview_game_only_flags_rejected_with_native(tmp_path, capsys):
     # --game is the default, so --map/--rebuild/--keep-alive are only rejected when --native is
     # explicitly opted into (they belong to the in-game tier, which --native turns off).
-    from uedcli import dispatch as D
+    from uedcli.cli import dispatch as D
     for over, flag in ((dict(map="x.dx"), "--map"), (dict(rebuild=True), "--rebuild"),
                        (dict(keep_alive=True), "--keep-alive")):
         args = _preview_args(tmp_path, tmp_path, native=True, **over)
@@ -575,14 +569,15 @@ def test_level_preview_game_only_flags_rejected_with_native(tmp_path, capsys):
 
 
 def test_level_preview_bad_size_named(tmp_path, capsys):
-    from uedcli import dispatch as D
+    from uedcli.cli import dispatch as D
     args = _preview_args(tmp_path, tmp_path, size="huge")
     assert D.dispatch(args) == 2
     assert "invalid --size 'huge'" in capsys.readouterr().err
 
 
 def test_level_preview_native_error_is_clean_exit_2(tmp_path, monkeypatch, capsys):
-    from uedcli import dispatch as D, builders
+    from uedcli import builders
+    from uedcli.cli import dispatch as D
     from uedcli.preview_native import NativePreviewError
     room = builders.make_brush_actor("Room", builders.cube(600, 600, 300, "T"),
                                      location=(0, 0, 0), csg="subtract")
@@ -617,7 +612,7 @@ def test_brush_clip_handles_a_rotated_brush():
         axis="z", offset=Decimal(0), plane=None, keep="below")
     lv = _rotated_brush_level()
     src = _fake_src(lv)
-    with mock.patch("uedcli.dispatch._resolve_level_source", return_value=src):
+    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src):
         rc = dispatch(args)
     assert rc == 0
     src.save.assert_called_once()
@@ -639,7 +634,7 @@ def test_brush_clip_succeeds_on_a_model_brush_axis():
         axis="z", offset=Decimal(0), plane=None, keep="below")
     lv = _plain_brush_level()
     src = _fake_src(lv)
-    with mock.patch("uedcli.dispatch._resolve_level_source", return_value=src):
+    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src):
         rc = dispatch(args)
     assert rc == 0
     src.save.assert_called_once()
@@ -657,7 +652,7 @@ def test_brush_clip_plane_records_decimal_coords_without_serialization_error():
         cmd="brush", sub="clip", name="B1", container="c",
         axis=None, offset=None, keep="below",
         plane=[(Decimal(0), Decimal(0), Decimal(0)), (Decimal(0), Decimal(0), Decimal(1))])
-    with mock.patch("uedcli.dispatch._resolve_level_source", return_value=src):
+    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src):
         assert dispatch(args) == 0
     saved = src.save.call_args.kwargs
     assert all(isinstance(c, str) for c in saved["args"]["plane"])   # no raw Decimal reaches the record
@@ -685,7 +680,7 @@ def test_brush_vertex_move_allows_a_low_bit_rotation_brush():
         by=(Decimal(0), Decimal(0), Decimal(16)))
     lv = _low_bit_rotated_brush_level()
     src = _fake_src(lv)
-    with mock.patch("uedcli.dispatch._resolve_level_source", return_value=src), \
+    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src), \
          mock.patch("uedcli.vertex.move_vertices",
                     return_value=lv.actors["B1"].brush) as mv:
         rc = dispatch(args)
@@ -708,7 +703,7 @@ def test_brush_vertex_move_at_round_trips_through_prepivot():
     args = SimpleNamespace(cmd="brush", sub="vertex", vsub="move", name="B1",
                            container="c",
                            at=[world], to=None, by=(Decimal(0), Decimal(0), Decimal(8)))
-    with mock.patch("uedcli.dispatch._resolve_level_source", return_value=_fake_src(lv)), \
+    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=_fake_src(lv)), \
          mock.patch("uedcli.vertex.move_vertices", return_value=a.brush) as mv:
         assert dispatch(args) == 0
     assert tuple(mv.call_args.args[1][0]) == tuple(local_corner)   # --at → original local corner
@@ -728,7 +723,7 @@ def test_brush_vertex_move_handles_a_rotated_brush():
     args = SimpleNamespace(cmd="brush", sub="vertex", vsub="move", name="B1",
                            container="c",
                            at=[world], to=None, by=(Decimal(0), Decimal(0), Decimal(8)))
-    with mock.patch("uedcli.dispatch._resolve_level_source", return_value=_fake_src(lv)), \
+    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=_fake_src(lv)), \
          mock.patch("uedcli.vertex.move_vertices", return_value=a.brush) as mv:
         assert dispatch(args) == 0
     passed = mv.call_args.args[1][0]                  # world --at inverted to the local corner
@@ -748,7 +743,7 @@ def _run_rotate(args, actors_t3d: dict[str, str], order: list[str]):
     to keep the original string assertions (`X=64.000000`, `Yaw=16384`, …) verbatim."""
     from uedcli.normalize import canonical_actor_t3d
     src = _fake_src(_rotate_level(actors_t3d, order))
-    with mock.patch("uedcli.dispatch._resolve_level_source", return_value=src):
+    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src):
         rc = dispatch_mod._dispatch(args)
     if not src.save.call_args:
         return rc, {}
@@ -893,7 +888,7 @@ def test_dispatch_poly_set_records_texture_edit():
         cmd="brush", sub="poly", polysub="set", targets=["B1:all"], texture="DeusExDeco.Textures.Wood",
         add_flags=[], remove_flags=[])
     src = _fake_src(_brush_level())
-    with mock.patch("uedcli.dispatch._resolve_level_source", return_value=src):
+    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src):
         rc = dispatch(args)
     assert rc == 0
     saved = src.save.call_args.kwargs
@@ -913,7 +908,7 @@ def test_dispatch_poly_set_flags():
         cmd="brush", sub="poly", polysub="set", targets=["B1:0"], texture=None,
         add_flags=["translucent"], remove_flags=[])
     src = _fake_src(_brush_level())
-    with mock.patch("uedcli.dispatch._resolve_level_source", return_value=src):
+    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src):
         rc = dispatch(args)
     assert rc == 0
     saved = src.save.call_args.kwargs
@@ -925,7 +920,7 @@ def test_dispatch_poly_pan_records_the_write_and_writes_only_pan():
     args = SimpleNamespace(cmd="brush", sub="poly", polysub="pan", targets=["B1:0"],
                            pan_to=(10, 20), pan_by=None)
     src = _fake_src(_brush_level())
-    with mock.patch("uedcli.dispatch._resolve_level_source", return_value=src):
+    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src):
         rc = dispatch(args)
     assert rc == 0
     saved = src.save.call_args.kwargs
@@ -938,7 +933,7 @@ def test_dispatch_poly_pan_records_the_write_and_writes_only_pan():
 def test_dispatch_poly_rotate_records_the_write():
     args = SimpleNamespace(cmd="brush", sub="poly", polysub="rotate", targets=["B1:all"], by=16384)
     src = _fake_src(_brush_level())
-    with mock.patch("uedcli.dispatch._resolve_level_source", return_value=src):
+    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src):
         rc = dispatch(args)
     assert rc == 0
     saved = src.save.call_args.kwargs
@@ -950,7 +945,7 @@ def test_dispatch_poly_scale_records_the_write():
     args = SimpleNamespace(cmd="brush", sub="poly", polysub="scale", targets=["B1:all"],
                            by=(2.0, 0.5))
     src = _fake_src(_brush_level())
-    with mock.patch("uedcli.dispatch._resolve_level_source", return_value=src):
+    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src):
         rc = dispatch(args)
     assert rc == 0
     saved = src.save.call_args.kwargs
@@ -962,7 +957,7 @@ def test_dispatch_poly_scale_bad_factor_returns_2_and_does_not_record(capsys):
     args = SimpleNamespace(cmd="brush", sub="poly", polysub="scale", targets=["B1:all"],
                            by=(0.0, 1.0))
     src = _fake_src(_brush_level())
-    with mock.patch("uedcli.dispatch._resolve_level_source", return_value=src):
+    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src):
         rc = dispatch(args)
     assert rc == 2
     assert "must be a positive number" in capsys.readouterr().err
@@ -974,7 +969,7 @@ def test_dispatch_poly_set_unknown_brush_returns_2_and_does_not_record(capsys):
         cmd="brush", sub="poly", polysub="set", targets=["NoSuch:all"], texture="Engine.DefaultTexture",
         add_flags=[], remove_flags=[])
     src = _fake_src(_brush_level())
-    with mock.patch("uedcli.dispatch._resolve_level_source", return_value=src):
+    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src):
         rc = dispatch(args)
     assert rc == 2
     assert "unknown brush" in capsys.readouterr().err
@@ -1014,7 +1009,7 @@ def test_dispatch_texture_sync_loops_content_packages_from_the_composed_path(tmp
         assert ms and [Path(m.host_dir).name for m in ms] == ["Textures"]   # the base content dir
         yield "uned-stub-fake"                    # no real docker; ad-hoc ephemeral container
 
-    with mock.patch("uedcli.dispatch._resolve_level_source") as resolve, \
+    with mock.patch("uedcli.cli.level_sources.resolve_level_source") as resolve, \
          mock.patch("uedcli.stub.ephemeral_build_container", fake_container), \
          mock.patch("uedcli.texture_catalog.sync_package", return_value=fake_m) as syncp:
         rc = dispatch(args)
@@ -1092,7 +1087,7 @@ def test_dispatch_texture_read_verb_with_explicit_catalog_dir_needs_no_project(t
     # A READ verb (`list`) with an explicit --catalog-dir must NOT resolve a project — the project is
     # resolved LAZILY, only to DEFAULT the catalog dir. So `_resolve_project` must never be called
     # here; make it explode if it is.
-    monkeypatch.setattr("uedcli.dispatch._resolve_project",
+    monkeypatch.setattr("uedcli.cli.resources.resolve_project",
                         lambda args: (_ for _ in ()).throw(AssertionError("resolved a project!")))
     (tmp_path / "MyPkg.json").write_text(
         '{"package":"MyPkg","package_file":"MyPkg.utx","package_hash":"sha256:x","textures":{}}')
@@ -1112,7 +1107,7 @@ def test_dispatch_texture_classify_set_with_explicit_catalog_dir_needs_no_projec
     # (decision 2026-07-18): its per-package flock is CATALOG-adjacent (`<catalog>/.locks/`,
     # self-ignoring), not project-derived — restoring spec §6's override contract that the
     # layout reorg's slice 2 had broken for this one verb.
-    monkeypatch.setattr("uedcli.dispatch._resolve_project",
+    monkeypatch.setattr("uedcli.cli.resources.resolve_project",
                         lambda args: (_ for _ in ()).throw(AssertionError("resolved a project!")))
     entry = tc.TextureEntry(name="Wood", group="Skins", ref="MyPkg.Wood", width=64, height=64,
                             image_hash="sha256:aa", colors=["brown"], colors_source="auto",
@@ -1140,7 +1135,7 @@ def _find_setup(tmp_path, monkeypatch, actors: dict, order: list[str]) -> tuple:
     verb ignores, kept so `_find_args(branch, …)` calls read unchanged."""
     lv = parse_t3d("Begin Map\n" + "\n".join(actors[n] for n in order) + "\nEnd Map\n")
     lv.order = order
-    monkeypatch.setattr("uedcli.dispatch._resolve_level_source",
+    monkeypatch.setattr("uedcli.cli.level_sources.resolve_level_source",
                         lambda args: _fake_src(lv))
     return lv, "session/x"
 
@@ -1174,12 +1169,12 @@ def _find_seams(monkeypatch):
         "location": _p("Location", "StructProperty", type_ref=3, type_name="Vector"),
     }
     defaults = {("lightbrightness", 0): "64", ("bhidden", 0): "True"}
-    monkeypatch.setattr("uedcli.dispatch._class_schema",
+    monkeypatch.setattr("uedcli.cli.resources.class_schema",
                         lambda cls, project=None: dict(schema))
-    monkeypatch.setattr("uedcli.dispatch._class_defaults",
+    monkeypatch.setattr("uedcli.cli.resources.class_defaults",
                         lambda cls, project=None: dict(defaults))
-    monkeypatch.setattr("uedcli.dispatch._struct_members", lambda p, project=None: [])
-    monkeypatch.setattr("uedcli.dispatch._enum_names",
+    monkeypatch.setattr("uedcli.cli.resources.struct_members", lambda p, project=None: [])
+    monkeypatch.setattr("uedcli.cli.resources.enum_names",
                         lambda p, project=None: p.enum_value_names)
 
 
@@ -1480,7 +1475,7 @@ def test_actor_find_prop_unbuildable_schema_errors(tmp_path, monkeypatch, capsys
     from uedcli.uprops import SchemaError
     actors = {"L1": _light_t3d("L1")}
     _, branch = _find_setup(tmp_path, monkeypatch, actors, ["L1"])
-    monkeypatch.setattr("uedcli.dispatch._class_schema",
+    monkeypatch.setattr("uedcli.cli.resources.class_schema",
                         mock.Mock(side_effect=SchemaError("package Engine not found")))
     args = _find_args(branch, prop=["LightBrightness=64"])
     rc = dispatch_mod._dispatch(args)
@@ -1492,7 +1487,7 @@ def test_actor_find_without_prop_never_touches_schema(tmp_path, monkeypatch, cap
     actors = {"L1": _light_t3d("L1", group="cells")}
     _, branch = _find_setup(tmp_path, monkeypatch, actors, ["L1"])
     boom = mock.Mock(side_effect=AssertionError("schema must not be resolved"))
-    monkeypatch.setattr("uedcli.dispatch._class_schema", boom)
+    monkeypatch.setattr("uedcli.cli.resources.class_schema", boom)
     args = _find_args(branch, group=["cells"])
     rc = dispatch_mod._dispatch(args)
     assert rc == 0 and capsys.readouterr().out == "L1\n"
@@ -1607,7 +1602,7 @@ def _run_mover_key(args_ns, level):
     """Dispatch a mover key verb through the trunk seam; return (rc, captured_level_or_None).
     The written level is captured on `src.save`; a read-only op (or a rejected op) leaves it unset."""
     src = _fake_src(level)
-    with mock.patch("uedcli.dispatch._resolve_level_source", return_value=src):
+    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src):
         rc = dispatch(args_ns)
     captured = src.save.call_args.kwargs["level"] if src.save.call_args else None
     return rc, captured
@@ -1681,9 +1676,9 @@ def test_mover_index_returns_the_resolved_class_index():
     from uedcli.tests.conftest import StubClassIndex
     idx = StubClassIndex()
     args = SimpleNamespace(cmd="level", sub="doctor")
-    with mock.patch("uedcli.dispatch._resolve_project", return_value=object()), \
-            mock.patch("uedcli.dispatch._class_index", return_value=idx) as ci:
-        assert dispatch_mod._mover_index(args, "level doctor") is idx
+    with mock.patch("uedcli.cli.resources.resolve_project", return_value=object()), \
+            mock.patch("uedcli.cli.resources.class_index", return_value=idx) as ci:
+        assert resources.mover_index(args, "level doctor") is idx
     assert ci.call_count == 1
 
 
@@ -1693,11 +1688,11 @@ def test_mover_index_names_the_verb_when_the_path_carries_no_packages(capsys):
     # returns an EMPTY index instead of raising. Without this check the failure surfaced later,
     # from the library, with no verb in the message.
     from uedcli.tests.conftest import StubClassIndex
-    with mock.patch("uedcli.dispatch._resolve_project", return_value=object()), \
-            mock.patch("uedcli.dispatch._class_index",
+    with mock.patch("uedcli.cli.resources.resolve_project", return_value=object()), \
+            mock.patch("uedcli.cli.resources.class_index",
                        return_value=StubClassIndex(resolves=False)):
-        with pytest.raises(dispatch_mod._SelectionExit) as e:
-            dispatch_mod._mover_index(SimpleNamespace(), "event graph")
+        with pytest.raises(dispatch_mod.CommandError) as e:
+            resources.mover_index(SimpleNamespace(), "event graph")
     assert e.value.message.startswith("event graph: ")
     assert "no package search path" in e.value.message
     assert "class resolver is required" in e.value.message
@@ -1718,7 +1713,7 @@ def test_a_mover_aware_verb_without_a_class_resolver_fails_clearly(capsys, tmp_p
     src = _fake_src(lv)
     src._ranks = {}
     src.display_name = "L"
-    with mock.patch("uedcli.dispatch._resolve_level_source", return_value=src):
+    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src):
         rc = dispatch(ns)
     err = capsys.readouterr().err
     assert rc == 2
@@ -1733,10 +1728,10 @@ def _run_prop_set(level, tokens, schema):
     args = SimpleNamespace(cmd="actor", sub="prop", propsub="set", name="lift",
                            tokens=list(tokens), kv=False)
     src = _fake_src(level)
-    with mock.patch("uedcli.dispatch._resolve_level_source", return_value=src), \
-            mock.patch("uedcli.dispatch._resolve_project",
-                       side_effect=dispatch_mod._ProjectError("no project")), \
-            mock.patch("uedcli.dispatch._class_schema", lambda cls, project=None: dict(schema)):
+    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src), \
+            mock.patch("uedcli.cli.resources.resolve_project",
+                       side_effect=dispatch_mod.ProjectError("no project")), \
+            mock.patch("uedcli.cli.resources.class_schema", lambda cls, project=None: dict(schema)):
         return dispatch(args), src
 
 
@@ -1928,7 +1923,7 @@ def test_mover_key_remove_index_zero_rejected(capsys):
 def test_mover_key_list_prints_world_and_offset(capsys):
     lv = _two_key_lift()
     src = _fake_src(lv)
-    with mock.patch("uedcli.dispatch._resolve_level_source", return_value=src):
+    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src):
         rc = dispatch(_mk_args("list", "Lift"))
     assert rc == 0
     src.save.assert_not_called()                # list is read-only — nothing written
@@ -1938,7 +1933,7 @@ def test_mover_key_list_prints_world_and_offset(capsys):
 
 def test_mover_key_list_rejects_non_mover(capsys):
     src = _fake_src(_brush_level())
-    with mock.patch("uedcli.dispatch._resolve_level_source", return_value=src):
+    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src):
         rc = dispatch(_mk_args("list", "B1"))
     assert rc == 2
     assert "is not a Mover" in capsys.readouterr().err
@@ -1948,7 +1943,7 @@ def test_mover_key_list_rejects_non_mover(capsys):
 
 def test_it_no_longer_offers_a_mover_key_add_verb():
     import pytest
-    from uedcli import cli
+    from uedcli.cli import main as cli
     with pytest.raises(SystemExit):              # argparse rejects the retired subcommand
         cli.build_parser().parse_args(["mover", "key", "add", "Lift", "--at", "0,0,64"])
 
@@ -2011,7 +2006,7 @@ def _add_args(file):
 
 
 def test_actor_add_missing_file_is_clean_exit2(capsys):
-    with mock.patch("uedcli.dispatch._resolve_level_source", return_value=_fake_src(Level())):
+    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=_fake_src(Level())):
         rc = dispatch(_add_args("/no/such/file.t3d"))
     assert rc == 2
     err = capsys.readouterr().err
@@ -2021,7 +2016,7 @@ def test_actor_add_missing_file_is_clean_exit2(capsys):
 def test_actor_add_input_with_no_actors_is_clean_exit2(capsys, monkeypatch):
     import io
     monkeypatch.setattr("sys.stdin", io.StringIO("not a T3D block {{{"))
-    with mock.patch("uedcli.dispatch._resolve_level_source", return_value=_fake_src(Level())):
+    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=_fake_src(Level())):
         rc = dispatch(_add_args("-"))
     assert rc == 2
     assert "no actors found" in capsys.readouterr().err
@@ -2033,7 +2028,7 @@ def test_actor_add_degenerate_brush_is_clean_exit2(capsys, monkeypatch):
              " Begin Polygon\n Vertex +0,+0,+0\n Vertex +0,+0,+0\n Vertex +0,+0,+0\n"
              " End Polygon\n End PolyList\n End Brush\n End Actor\n")
     monkeypatch.setattr("sys.stdin", io.StringIO(degen))
-    with mock.patch("uedcli.dispatch._resolve_level_source", return_value=_fake_src(Level())):
+    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=_fake_src(Level())):
         rc = dispatch(_add_args("-"))
     assert rc == 2
     assert "invalid brush geometry" in capsys.readouterr().err        # GeometryError → clean
@@ -2045,14 +2040,14 @@ def test_stash_capture_missing_from_t3d_is_clean_exit2(capsys):
     # with "not in a uedcli project" instead of the file error we're asserting).
     args = SimpleNamespace(cmd="stash", sub="capture", from_t3d=["/no/such/x.t3d"],
                            names=[], id=None, force=False, project=None)
-    with mock.patch("uedcli.dispatch._resolve_stash_register", return_value=mock.Mock()):
+    with mock.patch("uedcli.cli.commands.stash._resolve_stash_register", return_value=mock.Mock()):
         rc = dispatch(args)
     assert rc == 2
     assert "cannot read T3D file" in capsys.readouterr().err
 
 
 def test_level_preview_list_actors_requires_game_and_map(tmp_path, monkeypatch, capsys):
-    from uedcli import dispatch as D
+    from uedcli.cli import dispatch as D
     proj = _preview_proj(tmp_path, {}, [], monkeypatch)
     # --list-actors without --game (or without --map) → exit 2, before any work
     assert D.dispatch(_preview_args(proj, tmp_path, shots=[], list_actors="Engine.PathNode")) == 2
@@ -2060,7 +2055,7 @@ def test_level_preview_list_actors_requires_game_and_map(tmp_path, monkeypatch, 
 
 
 def test_level_preview_list_actors_routes_and_prints(tmp_path, monkeypatch, capsys):
-    from uedcli import dispatch as D
+    from uedcli.cli import dispatch as D
     seen = {}
     monkeypatch.setattr("uedcli.preview_game.list_actors",
                         lambda **kw: (seen.update(kw), "PathNode0 1 2 3\n")[1])
@@ -2074,7 +2069,7 @@ def test_level_preview_list_actors_routes_and_prints(tmp_path, monkeypatch, caps
 
 
 def test_level_preview_negative_sample_rejected(tmp_path, monkeypatch, capsys):
-    from uedcli import dispatch as D
+    from uedcli.cli import dispatch as D
     proj = _preview_proj(tmp_path, {}, [], monkeypatch)
     args = _preview_args(proj, tmp_path, game=True, map="/x/y.dx", out_dir=None,
                          shots=[], list_actors="Engine.PathNode", sample=-1)
@@ -2086,7 +2081,7 @@ def test_maps_key_pointing_at_a_file_is_a_clean_filesystem_error(tmp_path, capsy
     """A `maps` key aimed at an existing FILE must exit 2 with the dispatch filesystem-error
     backstop, never a NotADirectoryError traceback (round-3 adversarial review, 2026-07-18)."""
     import argparse
-    from uedcli import dispatch
+    from uedcli.cli import dispatch
     proj = tmp_path / "repo"
     proj.mkdir()
     (proj / "uedcli.toml").write_text('game = "dx"\nmaps = "mapsf"\n')
@@ -2103,9 +2098,9 @@ def test_actor_show_miss_is_a_clean_exit_2(tmp_path, monkeypatch, capsys):
     never a KeyError traceback. `show` does NOT glob (owner ruling 2026-07-25), so a pattern is
     just another name that matches nothing: exit 2 too, and no blank line on stdout."""
     import argparse
-    from uedcli import dispatch
+    from uedcli.cli import dispatch
     from uedcli.model import Level
-    monkeypatch.setattr("uedcli.dispatch._resolve_level_source",
+    monkeypatch.setattr("uedcli.cli.level_sources.resolve_level_source",
                         lambda args: mock.Mock(load=lambda: Level(actors={})))
     ns = lambda name: argparse.Namespace(cmd="actor", sub="show", name=name, project=None,
                                          tree=None)
@@ -2134,7 +2129,7 @@ def _git_init(path, branch="work"):
 
 
 def test_git_hint_reports_the_projects_own_branch(tmp_path):
-    from uedcli.dispatch import _git_hint
+    from uedcli.cli.commands.level import _git_hint
     proj = tmp_path / "proj"
     _git_init(proj, branch="feature")
     hint = _git_hint(proj, proj / "maps", tool_repo_root=None)      # no tool repo in play
@@ -2144,7 +2139,7 @@ def test_git_hint_reports_the_projects_own_branch(tmp_path):
 def test_git_hint_does_not_leak_the_tool_repo_branch(tmp_path):
     # A scratch project living INSIDE uedcli's own source tree: git walks up to the tool repo. We
     # must report "not a git repo" instead of the tool repo's branch (the reported bug).
-    from uedcli.dispatch import _git_hint
+    from uedcli.cli.commands.level import _git_hint
     tool = tmp_path / "toolrepo"
     tool_top = _git_init(tool, branch="uedcli-impl")
     proj = tool / "_scratch" / "proj"
@@ -2155,7 +2150,7 @@ def test_git_hint_does_not_leak_the_tool_repo_branch(tmp_path):
 
 
 def test_git_hint_reports_not_a_repo_outside_git(tmp_path):
-    from uedcli.dispatch import _git_hint
+    from uedcli.cli.commands.level import _git_hint
     proj = tmp_path / "loose"
     proj.mkdir()
     assert _git_hint(proj, proj / "maps", tool_repo_root=None) == "project is not a git repo"
@@ -2171,7 +2166,7 @@ def _point(name, loc):
 
 
 def test_warn_duplicate_point_locations_fires_on_shared_spot(capsys):
-    from uedcli.dispatch import _warn_duplicate_point_locations
+    from uedcli.cli.commands.actor.edit import _warn_duplicate_point_locations
     lvl = Level()
     for a in (_point("A_x", (10, 20, 30)), _point("B_y", (10, 20, 30)), _point("C_z", (0, 0, 0))):
         lvl.actors[a.name] = a
@@ -2183,7 +2178,7 @@ def test_warn_duplicate_point_locations_fires_on_shared_spot(capsys):
 
 
 def test_warn_duplicate_point_locations_silent_when_distinct(capsys):
-    from uedcli.dispatch import _warn_duplicate_point_locations
+    from uedcli.cli.commands.actor.edit import _warn_duplicate_point_locations
     lvl = Level()
     for a in (_point("A_x", (1, 2, 3)), _point("B_y", (4, 5, 6))):
         lvl.actors[a.name] = a
@@ -2193,7 +2188,7 @@ def test_warn_duplicate_point_locations_silent_when_distinct(capsys):
 
 def test_warn_duplicate_point_locations_ignores_brushes(capsys):
     # Two brushes at the same Location are a normal CSG pattern, not a silent point-actor collision.
-    from uedcli.dispatch import _warn_duplicate_point_locations
+    from uedcli.cli.commands.actor.edit import _warn_duplicate_point_locations
     b1 = make_brush_actor("Box_a", cube(64, 64, 64), location=(Decimal(0), Decimal(0), Decimal(0)))
     b2 = make_brush_actor("Box_b", cube(64, 64, 64), location=(Decimal(0), Decimal(0), Decimal(0)))
     lvl = Level()
@@ -2207,7 +2202,7 @@ def test_warn_duplicate_point_locations_ignores_brushes(capsys):
 
 
 def test_brush_build_at_help_says_center_on_all_axes():
-    from uedcli.cli import build_parser
+    from uedcli.cli.main import build_parser
     parser = build_parser()
     help_text = parser.format_help()
     # Find the box builder's --at help via the subparser tree.
@@ -2236,7 +2231,7 @@ def _replace_dispatch(src, stdin_text, name="WALL", shape="-"):
     """Drive `brush replace <name> <shape>` with `stdin_text` on stdin, `src` as the trunk seam."""
     import io
     args = SimpleNamespace(cmd="brush", sub="replace", name=name, shape=shape, container="c")
-    with mock.patch("uedcli.dispatch._resolve_level_source", return_value=src), \
+    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src), \
          mock.patch("sys.stdin", io.StringIO(stdin_text)):
         return dispatch(args)
 

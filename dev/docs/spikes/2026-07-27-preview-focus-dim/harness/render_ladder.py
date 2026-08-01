@@ -22,7 +22,8 @@ import os
 from collections import Counter
 from types import SimpleNamespace
 
-from uedcli import dispatch, preview
+from uedcli import preview
+from uedcli.cli import dispatch
 
 DEFAULT_ALPHAS = "0.15,0.25,0.30,0.35,0.40,0.45,0.50,0.70"
 

@@ -10,7 +10,8 @@ import math
 
 import pytest
 
-from uedcli import builders, cli, dispatch, doctor
+from uedcli import builders, doctor
+from uedcli.cli import main as cli, dispatch
 from uedcli.builders import make_brush_actor, translate_brush
 from uedcli.model import parse_t3d
 from uedcli.tests.conftest import StubClassIndex

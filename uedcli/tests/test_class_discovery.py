@@ -36,7 +36,7 @@ def test_depth_value_parses_ints_and_all_and_rejects_bad():
     a negative or non-numeric token is a clean ArgumentTypeError naming it (decision 2026-07-18)."""
     import argparse
     import math
-    from uedcli.cli import depth_value
+    from uedcli.cli.parsers._arguments import depth_value
     assert depth_value("0") == 0 and depth_value("5") == 5
     assert depth_value("all") == math.inf and depth_value("  ALL ") == math.inf
     for bad in ("-1", "foo", "3.5", ""):
@@ -275,11 +275,13 @@ def test_actor_add_validates_the_filtered_set_after_builder_filter(tmp_path, mon
     would let the transient builder brush escape the filter) — the reviewer's ordering constraint."""
     import argparse
     import io
-    from uedcli import dispatch, trunk
+    from uedcli import trunk
+    from uedcli.cli import dispatch
     from uedcli.normalize import is_builder_brush
     proj = _project_with_level(tmp_path, monkeypatch)
+    from uedcli.cli import ingest
     seen: list = []
-    monkeypatch.setattr(dispatch, "_validate_ingest_actors",
+    monkeypatch.setattr(ingest, "validate_ingest_actors",
                         lambda actors, args: seen.append(list(actors)))
     monkeypatch.setattr("sys.stdin", io.StringIO(_builder_plus_light_t3d()))
     rc = dispatch.dispatch(argparse.Namespace(cmd="actor", sub="add", project=str(proj), file="-"))
@@ -296,11 +298,13 @@ def test_actor_add_validates_the_filtered_set_after_builder_filter(tmp_path, mon
 def test_actor_add_rejecting_validator_exits_2_and_stores_nothing(tmp_path, monkeypatch):
     import argparse
     import io
-    from uedcli import dispatch, trunk
+    from uedcli import trunk
+    from uedcli.cli import dispatch
+    from uedcli.cli import ingest
     proj = _project_with_level(tmp_path, monkeypatch)
-    monkeypatch.setattr(dispatch, "_validate_ingest_actors",
+    monkeypatch.setattr(ingest, "validate_ingest_actors",
                         lambda actors, args: (_ for _ in ()).throw(
-                            dispatch._SelectionExit("unknown class: Foo.Bogus")))
+                            dispatch.CommandError("unknown class: Foo.Bogus")))
     monkeypatch.setattr("sys.stdin",
                         io.StringIO('Begin Actor Class=Bogus Name=X\n    Name="X"\nEnd Actor\n'))
     rc = dispatch.dispatch(argparse.Namespace(cmd="actor", sub="add", project=str(proj), file="-"))
@@ -311,10 +315,10 @@ def test_actor_add_rejecting_validator_exits_2_and_stores_nothing(tmp_path, monk
 
 def test_actor_build_generator_invokes_validation(tmp_path, monkeypatch, capsys):
     import argparse
-    from uedcli import dispatch
-    monkeypatch.setattr(dispatch, "_validate_ingest_actors",
+    from uedcli.cli import dispatch, ingest
+    monkeypatch.setattr(ingest, "validate_ingest_actors",
                         lambda actors, args: (_ for _ in ()).throw(
-                            dispatch._SelectionExit("unknown class: Engine.Bogus")))
+                            dispatch.CommandError("unknown class: Engine.Bogus")))
     rc = dispatch.dispatch(argparse.Namespace(
         cmd="actor", sub="build", project=str(tmp_path), aclass="Engine.Bogus",
         at=(0, 0, 0), base_name=None, prop=[]))
@@ -329,7 +333,7 @@ def test_class_list_without_games_config_is_clean_exit_2(tmp_path, capsys):
     a clean 'no per-user games config' exit 2 on `class list` — never the raw
     `AttributeError: 'NoneType' … .games` traceback a cold review reproduced here (2026-07-18)."""
     import argparse
-    from uedcli import dispatch
+    from uedcli.cli import dispatch
     proj = tmp_path / "repo"
     proj.mkdir()
     (proj / "uedcli.toml").write_text('game = "deusex"\n')
@@ -342,14 +346,15 @@ def test_class_list_without_games_config_is_clean_exit_2(tmp_path, capsys):
 
 
 def test_package_path_seam_without_games_config_raises_clean(tmp_path):
-    """`_package_path_or_exit` (the seam every author-time ingest validation goes through) raises
-    the canonical no-games-config `_SelectionExit` when `~/.uedcli/config.toml` is absent — the
+    """`resources.package_path_or_exit` (the seam every author-time ingest validation goes through)
+    raises the canonical no-games-config `CommandError` when `~/.uedcli/config.toml` is absent — the
     generator/`actor add` twin of the `class list` regression above."""
     import argparse
     import pytest as _pytest
-    from uedcli import dispatch
+    from uedcli.cli import resources
+    from uedcli.cli.errors import CommandError
     proj = tmp_path / "repo"
     proj.mkdir()
     (proj / "uedcli.toml").write_text('game = "deusex"\n')
-    with _pytest.raises(dispatch._SelectionExit, match="no per-user games config"):
-        dispatch._package_path_or_exit(argparse.Namespace(project=str(proj)))
+    with _pytest.raises(CommandError, match="no per-user games config"):
+        resources.package_path_or_exit(argparse.Namespace(project=str(proj)))

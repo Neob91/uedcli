@@ -12,7 +12,8 @@ from unittest import mock
 
 import pytest
 
-from uedcli import cli, dispatch, trunk
+from uedcli import trunk
+from uedcli.cli import main as cli, dispatch
 from uedcli.builders import cube
 from uedcli.model import Actor, Level
 

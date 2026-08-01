@@ -41,7 +41,7 @@ def _project(tmp_path, *, overlay=False):
 
 
 def test_project_show_prints_project_game_maps_and_composed_search_path(tmp_path, monkeypatch, capsys):
-    from uedcli import dispatch
+    from uedcli.cli import dispatch
 
     base = _base_packages(tmp_path)
     _user_config(tmp_path, base, monkeypatch)
@@ -67,7 +67,7 @@ def test_project_show_prints_project_game_maps_and_composed_search_path(tmp_path
 
 def test_project_show_json(tmp_path, monkeypatch, capsys):
     import json
-    from uedcli import dispatch
+    from uedcli.cli import dispatch
 
     base = _base_packages(tmp_path)
     _user_config(tmp_path, base, monkeypatch)
@@ -86,7 +86,7 @@ def test_project_show_json(tmp_path, monkeypatch, capsys):
 
 
 def test_project_show_no_project_exits_2(tmp_path, monkeypatch):
-    from uedcli import dispatch
+    from uedcli.cli import dispatch
 
     monkeypatch.delenv("UEDCLI_PROJECT", raising=False)
     monkeypatch.chdir(tmp_path)
@@ -94,7 +94,7 @@ def test_project_show_no_project_exits_2(tmp_path, monkeypatch):
 
 
 def test_project_show_no_user_config_exits_2(tmp_path, monkeypatch, capsys):
-    from uedcli import dispatch
+    from uedcli.cli import dispatch
 
     monkeypatch.setenv("UEDCLI_HOME", str(tmp_path / "empty"))   # no config.toml there
     proj = _project(tmp_path)
@@ -103,7 +103,7 @@ def test_project_show_no_user_config_exits_2(tmp_path, monkeypatch, capsys):
 
 
 def test_project_show_missing_game_exits_2(tmp_path, monkeypatch, capsys):
-    from uedcli import dispatch
+    from uedcli.cli import dispatch
 
     base = _base_packages(tmp_path)
     home = tmp_path / "uedhome"

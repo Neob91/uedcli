@@ -66,7 +66,7 @@ def parse_point(token: str) -> tuple[Decimal, Decimal]:
 
     Called from the dispatch handler, NOT as an argparse `type=`: argparse catches `ValueError`
     and replaces the message with its own `invalid parse_point value: '128'`, which would destroy
-    the wording below (`cli.parse_coord` sidesteps that by raising `ArgumentTypeError`; here the
+    the wording below (`parse_coord` sidesteps that by raising `ArgumentTypeError`; here the
     exact message is the contract).
     """
     fields = token.split(",")

@@ -1,8 +1,10 @@
+import subprocess
 from decimal import Decimal
 from pathlib import Path
 from types import SimpleNamespace
 
-from uedcli import dispatch, stash_register, trunk
+from uedcli import stash_register, trunk
+from uedcli.cli import dispatch
 from uedcli.model import Actor, Level
 
 _PNG_MAGIC = b"\x89PNG\r\n\x1a\n"     # every preview write is a PNG (there is no PPM route)
@@ -75,7 +77,7 @@ def test_it_errors_on_a_missing_requested_actor(tmp_path, monkeypatch):
     t3d = tmp_path / "arch.t3d"; t3d.write_text("Begin Map\n" + _ARCH_T3D + "End Map\n")
     rc = dispatch.dispatch(_args(proj, sub="capture", names=["Nope"], id="x",
                                  from_t3d=[str(t3d)], force=False))
-    assert rc == 2          # _SelectionExit -> exit 2
+    assert rc == 2          # CommandError -> exit 2
 
 
 def _tri(name, x):
@@ -212,7 +214,7 @@ def test_it_previews_a_stash_to_png(tmp_path, monkeypatch):
             raise AssertionError(f"stash preview shelled out to docker: {cmd}")
         from unittest import mock
         return mock.Mock(returncode=0)
-    monkeypatch.setattr(dispatch.subprocess, "run", no_docker)
+    monkeypatch.setattr(subprocess, "run", no_docker)
 
     rc = dispatch.dispatch(_args(proj, sub="preview", id="archway", names=[],
                                  view="iso", annotate="all", iso_angle=30.0,
@@ -233,16 +235,12 @@ def test_it_routes_actor_preview_from_the_trunk_not_the_editor(tmp_path, monkeyp
     lvl = Level(actors={"Arch": arch}); lvl.order = ["Arch"]
     trunk.write_level(proj / "maps" / name, lvl, {"Arch": "m"})
 
-    def boom(*a, **k):                                  # editor read must NOT happen
-        raise AssertionError("actor preview drove the editor (MAP EXPORT)")
-    monkeypatch.setattr(dispatch, "_export_editor_level", boom)
-
     def no_docker(cmd, *a, **kw):                        # host-side only: no container either
         if cmd and cmd[0] == "docker":
             raise AssertionError(f"actor preview shelled out to docker: {cmd}")
         from unittest import mock
         return mock.Mock(returncode=0)
-    monkeypatch.setattr(dispatch.subprocess, "run", no_docker)
+    monkeypatch.setattr(subprocess, "run", no_docker)
 
     host_out = str(tmp_path / "out" / "b.png")
     rc = dispatch.dispatch(_args(proj, cmd="actor", sub="preview",
@@ -348,7 +346,7 @@ def test_prefab_drop_rejects_escaping_name(tmp_path, monkeypatch):
     victim.write_text("precious")
     args = SimpleNamespace(cmd="prefab", sub="drop", name="../victim", container="ct",
                            prefab_dir=str(tmp_path / "Prefabs"))
-    assert dispatch.dispatch(args) == 2     # wrapper turns _SelectionExit into exit 2
+    assert dispatch.dispatch(args) == 2     # wrapper turns CommandError into exit 2
     assert victim.exists()                  # nothing unlinked outside Prefabs/
 
 
@@ -370,7 +368,7 @@ def test_prefab_drop_removes_a_new_format_dir(tmp_path):
 
 def test_prefab_apply_without_a_project_errors(tmp_path, monkeypatch, capsys):
     # With no project, prefab apply resolves no trunk level source and rejects cleanly (exit 2)
-    # via `_ProjectError`, not a traceback — there is no `--no-session` scratch path anymore.
+    # via `ProjectError`, not a traceback — there is no `--no-session` scratch path anymore.
     # chdir to an isolated dir so the walk-up project resolver can't discover an ambient project
     # (e.g. when the suite runs from inside a checkout that has one) — matches the no-project tests
     # in test_project_show.py.
@@ -393,7 +391,7 @@ def test_preview_prints_the_rendered_path(tmp_path, monkeypatch, capsys):
     def fake_run(cmd, input=None, **kw):
         from unittest import mock
         return mock.Mock(returncode=0)
-    monkeypatch.setattr(dispatch.subprocess, "run", fake_run)
+    monkeypatch.setattr(subprocess, "run", fake_run)
 
     asked = str(tmp_path / "out" / "p.ppm")
     rc = dispatch.dispatch(_args(proj, sub="preview", id="arch", names=[],

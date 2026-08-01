@@ -338,8 +338,8 @@ def test_clear_removes_the_dir_and_is_a_noop_when_absent(cache_on, fire_copy):
 
 
 def test_cache_clear_verb(cache_on, fire_copy, capsys):
-    from uedcli import cli
-    from uedcli.dispatch import dispatch
+    from uedcli.cli import main as cli
+    from uedcli.cli.dispatch import dispatch
     schema_cache.load_package_schema(str(fire_copy))
     assert config.schema_cache_root().is_dir()
     rc = dispatch(cli.build_parser().parse_args(["cache", "clear"]))
@@ -472,8 +472,8 @@ def test_default_cap_env_parsing_and_fallback(monkeypatch):
 
 
 def _run_cli(*argv) -> int:
-    from uedcli import cli
-    from uedcli.dispatch import dispatch
+    from uedcli.cli import main as cli
+    from uedcli.cli.dispatch import dispatch
     return dispatch(cli.build_parser().parse_args(list(argv)))
 
 

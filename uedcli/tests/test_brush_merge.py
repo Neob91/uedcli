@@ -15,7 +15,7 @@ from decimal import Decimal
 import pytest
 
 from uedcli import brushcsg, builders
-from uedcli.dispatch import dispatch
+from uedcli.cli.dispatch import dispatch
 from uedcli.model import parse_t3d
 from uedcli.tests import intersect_cases
 from uedcli.tests.merge_compare import (assert_same_faces, load_golden,

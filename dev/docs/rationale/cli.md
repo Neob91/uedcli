@@ -1,6 +1,6 @@
 # CLI mechanics — why the argument surface is built this way
 
-Engineering decisions about `uedcli/cli.py` and `uedcli/dispatch.py`. The conventions they serve are
+Engineering decisions about `uedcli/cli/main.py` and `uedcli/cli/dispatch.py`. The conventions they serve are
 the owner's, in [`../direction/conventions.md`](../direction/conventions.md); this doc is the
 machinery.
 
@@ -28,7 +28,7 @@ depends on the full set of options on that subparser, which the diff does not sh
 - **Accepting the new abbreviation** and documenting it — it silently changes what an existing
   invocation means, the one outcome the no-back-compat rule prevents.
 
-**Refs:** `../direction/conventions.md` "No back-compat cruft" · `uedcli/cli.py`
+**Refs:** `../direction/conventions.md` "No back-compat cruft" · `uedcli/cli/main.py`
 
 ## `Decimal` is never an argparse `type=`; one `parse_decimal` validator owns every scalar number
 
@@ -40,7 +40,7 @@ misbehave downstream (a NaN coordinate compares false against everything, an inf
 every actor on an axis, a signaling NaN raises from inside later arithmetic instead of at parse
 time).
 
-So `cli.parse_decimal` is the single scalar-number validator: it wraps the construction and rejects
+So `parse_decimal` is the single scalar-number validator: it wraps the construction and rejects
 both the non-numeric and the non-finite spelling with `ArgumentTypeError` (clean message naming the
 value, exit 2). Every Decimal-valued argument routes through it — `brush clip --offset` directly,
 and `parse_coord` / `parse_bbox` per component, so the finite check cannot be present in one
@@ -69,5 +69,5 @@ a clean `GeometryError`.
   spelling is the only spelling (`../direction/conventions.md`).
 
 **Refs:** `../direction/conventions.md` "No silent half-answers, and no fallbacks" ·
-`uedcli/cli.py` (`parse_decimal`/`parse_coord`/`parse_bbox`/`parse_pan`) ·
+`uedcli/cli/parsers/_arguments.py` (`parse_decimal`/`parse_coord`/`parse_bbox`/`parse_pan`) ·
 `uedcli/tests/test_cli.py`

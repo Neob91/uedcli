@@ -151,7 +151,7 @@ the title line off once, so the two cannot disagree about which line it was.
 
 An empty or whitespace-only query is refused by name: a blank substring is inside every line of every
 page and would "match" the entire corpus in score order. `texture search`, the other ranked-discovery
-verb, refuses a contentless query the same way (`dispatch.py`, "search needs a query or
+verb, refuses a contentless query the same way (`cli/commands/texture.py`, "search needs a query or
 --tag/--color"), so the two siblings behave alike.
 
 The verb is `search`, not `find`, per `../direction/conventions.md`: this is ranked discovery over a
@@ -164,7 +164,7 @@ reading, while these are long prose documents where a literal phrase is what a r
 filename, already reflected in the title of every page that has a heading, so it would mostly
 double-count.
 
-**Refs:** `uedcli/userdocs.py` (`search`, `_split_title`), `uedcli/dispatch.py` (`_dispatch_docs`).
+**Refs:** `uedcli/userdocs.py` (`search`, `_split_title`), `uedcli/cli/commands/docs.py` (`run`).
 
 ## The stderr counts use the house `(s)` spelling
 
@@ -177,25 +177,27 @@ alternative prints the ungrammatical `1 matches` and `1 topics` on a one-hit que
 the only verb in the CLI doing it, and consistency across sibling verbs is what makes output
 skimmable.
 
-**Refs:** `uedcli/dispatch.py` (`_dispatch_docs`, and the `actor(s)` summaries it mirrors).
+**Refs:** `uedcli/cli/commands/docs.py` (`run`, and the `actor(s)` summaries it mirrors).
 
-## The module is `userdocs.py`, and it raises `dispatch._SelectionExit`
+## The module is `userdocs.py`, and it raises its own `UserDocsError`
 
 `docs.py` would be the obvious name and is exactly the problem — this repo has a `docs/` tree
 (user-facing), a `dev/docs/` tree (developer), and a `docs` verb, so a module called `docs` makes
 every grep and import line ambiguous about which is meant. `userdocs` says which corpus it serves.
 
-Errors use the existing `_SelectionExit` rather than a new exception class, so the top-level
-`dispatch()` guard already turns them into a clean stderr message and exit 2 with no new wiring.
-`_SelectionExit` lives in `dispatch.py`, which imports this module, so the import is done inside the
-raising helper (`userdocs._selection_exit`): a module-level import would be a cycle, a function-level
-one cannot be, since `dispatch` is fully loaded before any docs verb runs.
+`userdocs` is a service, so it raises a service-local `UserDocsError` (bad/missing docs root,
+unreadable tree, duplicate key) instead of importing the CLI boundary. The `docs` handler
+(`cli/commands/docs.py`, `run`) catches it and translates it to `CommandError`, which the central
+`dispatch()` guard prints to stderr as a clean exit 2.
 
-**Rejected:** a dedicated `DocsError` caught in `dispatch()` — a second exception type and a second
-`except` arm for exactly the behaviour `_SelectionExit` already has. **Rejected:** moving
-`_SelectionExit` to its own module to break the direction of the dependency — a worthwhile cleanup in
-its own right, but it touches every raise site in `dispatch.py` and does not belong in this change;
-the one-line lazy import is the local cost of not doing it.
+The earlier design reused a private `dispatch` exception through a function-local import to avoid a
+new exception type. That import was a reverse edge — a service reaching back into the CLI — and part
+of the `userdocs`/`preview_game` → `dispatch` cycle the reorg deletes; the lazy import that dodged the
+cycle is gone with it.
 
-**Refs:** `uedcli/userdocs.py`, `uedcli/dispatch.py` (`_dispatch_docs`), `uedcli/cli.py` (the `docs`
-parser), `uedcli/tests/test_docs_command.py`.
+**Rejected:** keeping the reverse import into `dispatch` — it is the edge the reorg exists to remove.
+**Rejected:** a new `except` arm in the central `dispatch()` guard for `UserDocsError` — the docs
+handler translates its own error locally, like the other family-local translations.
+
+**Refs:** `uedcli/userdocs.py` (`UserDocsError`), `uedcli/cli/commands/docs.py` (`run`),
+`uedcli/cli/parsers/docs.py` (the `docs` parser), `uedcli/tests/test_docs_command.py`.

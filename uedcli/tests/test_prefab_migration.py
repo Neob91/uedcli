@@ -7,7 +7,8 @@ from decimal import Decimal
 
 import pytest
 
-from uedcli import dispatch, stashlib, stash_register
+from uedcli import stashlib, stash_register
+from uedcli.cli import dispatch
 from uedcli.model import Actor
 from uedcli.normalize import canonical_actor_t3d
 

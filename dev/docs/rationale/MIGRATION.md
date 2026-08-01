@@ -71,7 +71,7 @@ dev/docs/specs/2026-07-17-game-actor-relative-poses.md   uedcli/preview_game.py
 dev/docs/spikes/levelbuild-friction/README.md   uedcli/rotation.py
   ^^ UNTRACKED (another session's spike) — not in the checker's git ls-files set
 dev/docs/unrealed/commands.md                   uedcli/stash_register.py
-uedcli/cli.py                                   uedcli/tests/test_apply.py
+uedcli/cli/main.py                                   uedcli/tests/test_apply.py
 uedcli/level_select.py                          uedcli/tests/test_brush_merge.py
 uedcli/native/materialize.py                    uedcli/tests/test_class_discovery.py
 uedcli/tests/test_env_level_and_echo.py         uedcli/tests/test_generators.py

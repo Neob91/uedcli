@@ -20,7 +20,7 @@ from pathlib import Path
 _REPO = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(_REPO))
 
-from uedcli.dispatch import TrunkLevelSource                    # noqa: E402
+from uedcli.cli.level_sources import TrunkLevelSource                    # noqa: E402
 from uedcli.polyalign import (_world_verts, face_uv,            # noqa: E402
                               resolve_actor_name, find_faces)
 

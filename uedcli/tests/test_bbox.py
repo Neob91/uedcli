@@ -7,7 +7,8 @@ import json
 
 import pytest
 
-from uedcli import dispatch, trunk
+from uedcli import trunk
+from uedcli.cli import dispatch
 from uedcli.builders import cube, make_brush_actor
 from uedcli.model import Actor, Level
 

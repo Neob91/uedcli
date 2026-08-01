@@ -48,8 +48,31 @@ def _proj(tmp_path):
     return SimpleNamespace(root=str(tmp_path), game="deusex", paths="")
 
 
+def _resources(*, load=(), dirs=(), schema=None):
+    return pg.MaterializeResources(composed_dirs=list(dirs), load_set=list(load),
+                                   schema_resolver=schema)
+
+
+class _Provider:
+    """A counting zero-argument resource provider — records whether the cache-miss materialize
+    path actually resolved the project inputs (a cache hit / `--map` must leave `calls == 0`)."""
+
+    def __init__(self, res=None):
+        self.res = res if res is not None else _resources()
+        self.calls = 0
+
+    def __call__(self):
+        self.calls += 1
+        return self.res
+
+
+def _never_provider():
+    raise AssertionError("resource provider must not be invoked")
+
+
 def _mat_ok(monkeypatch, body=b"m"):
-    """Wire a fake run_materialize (+ its composed-dir helpers) that writes `body`."""
+    """Wire a fake run_materialize that writes `body`; the composed dirs/load set/schema now arrive
+    through the provider, so nothing here patches `dispatch`."""
     hits = []
 
     def fake(**kw):
@@ -58,8 +81,6 @@ def _mat_ok(monkeypatch, body=b"m"):
         return SimpleNamespace(rc=0, message="ok")
 
     monkeypatch.setattr("uedcli.apply.run_materialize", fake)
-    monkeypatch.setattr("uedcli.dispatch._composed_load_set", lambda p: [])
-    monkeypatch.setattr("uedcli.dispatch._composed_dirs", lambda p: [])
     return hits
 
 
@@ -80,22 +101,26 @@ def test_materialized_dx_hash_named_and_reuses_fresh(tmp_path, monkeypatch):
     lvl = _level(_start("Start"))
     proj = _proj(tmp_path)
     _mat_ok(monkeypatch)
-    first = pg.materialized_dx(proj, "lvl", lvl, rebuild=False)
+    miss = _Provider()
+    first = pg.materialized_dx(proj, "lvl", lvl, rebuild=False, provide_resources=miss)
     assert first.name.startswith("materialized__lvl__") and first.suffix == ".dx"
     assert "." not in first.stem                            # dot-free stem
-    # a second call reuses (materialize must NOT run again)
+    assert miss.calls == 1                                  # cache MISS resolved the inputs once
+    # a second call reuses (materialize must NOT run again, and the provider stays untouched)
     monkeypatch.setattr("uedcli.apply.run_materialize",
                         lambda **kw: (_ for _ in ()).throw(AssertionError("rebuilt!")))
-    assert pg.materialized_dx(proj, "lvl", lvl, rebuild=False) == first
+    hit = _Provider()
+    assert pg.materialized_dx(proj, "lvl", lvl, rebuild=False, provide_resources=hit) == first
+    assert hit.calls == 0                                   # cache HIT never invokes the provider
 
 
 def test_materialized_dx_rebuild_forces_fresh_nonced_name(tmp_path, monkeypatch):
     lvl = _level(_start("Start"))
     proj = _proj(tmp_path)
     _mat_ok(monkeypatch)
-    first = pg.materialized_dx(proj, "lvl", lvl, rebuild=False)
+    first = pg.materialized_dx(proj, "lvl", lvl, rebuild=False, provide_resources=_Provider())
     hits = _mat_ok(monkeypatch, b"fresh")
-    second = pg.materialized_dx(proj, "lvl", lvl, rebuild=True)
+    second = pg.materialized_dx(proj, "lvl", lvl, rebuild=True, provide_resources=_Provider())
     assert hits                                             # materialized despite the cache
     assert second != first and second.read_bytes() == b"fresh"   # nonce'd distinct name
 
@@ -110,7 +135,7 @@ def test_materialized_dx_prunes_to_keep(tmp_path, monkeypatch):
         f = d / f"materialized__old{i}__000000000000.dx"
         f.write_bytes(b"x")
         os.utime(f, (1000 + i, 1000 + i))                  # the fresh materialize is unambiguously newest
-    pg.materialized_dx(proj, "lvl", lvl, rebuild=True)
+    pg.materialized_dx(proj, "lvl", lvl, rebuild=True, provide_resources=_Provider())
     assert len(list(d.glob("materialized__*"))) <= pg.PREVIEW_KEEP
 
 
@@ -137,10 +162,9 @@ def test_materialize_failure_is_named(tmp_path, monkeypatch):
     lvl = _level(_start("Start"))
     monkeypatch.setattr("uedcli.apply.run_materialize",
                         lambda **kw: SimpleNamespace(rc=2, message="editor wedge"))
-    monkeypatch.setattr("uedcli.dispatch._composed_load_set", lambda p: [])
-    monkeypatch.setattr("uedcli.dispatch._composed_dirs", lambda p: [])
     with pytest.raises(pg.GamePreviewError, match="editor wedge"):
-        pg.materialized_dx(_proj(tmp_path), "lvl", lvl, rebuild=False)
+        pg.materialized_dx(_proj(tmp_path), "lvl", lvl, rebuild=False,
+                           provide_resources=_Provider())
 
 
 # ----------------------------------------------------------------- D8 pre-check
@@ -163,7 +187,8 @@ def test_render_shots_no_playerstart_errors_before_any_boot(tmp_path, monkeypatc
     with pytest.raises(pg.GamePreviewError, match="no PlayerStart"):
         pg.render_shots(shots=[parse_shot("at:0,0,0;rot:0,0")], out_dir=tmp_path,
                         size=(320, 240), project=_proj(tmp_path), user_config=object(),
-                        game="deusex", level=_level(room), level_name="lvl")
+                        game="deusex", provide_resources=_never_provider,   # refused before any resolve
+                        level=_level(room), level_name="lvl")
 
 
 # ----------------------------------------------------------------- @actor with --map (game-resolved)
@@ -179,7 +204,7 @@ def test_map_actor_shots_go_unresolved_to_batch(monkeypatch, tmp_path):
     n = pg.render_shots(
         shots=[parse_shot("at:@PathNode3;rot:0,90"), parse_shot("orbit:@K;radius:5;azimuth:0")],
         out_dir=tmp_path / "o", size=(320, 240), project=_proj(tmp_path), user_config=object(),
-        game="deusex", map_path=str(dx))
+        game="deusex", provide_resources=_never_provider, map_path=str(dx))   # --map: never resolves
     assert n == 2 and "unresolved" in cap["req"] and "shots" not in cap["req"]
     assert cap["req"]["unresolved"][0]["at"] == "PathNode3"      # @actor forwarded, not resolved host-side
     assert cap["req"]["unresolved"][1]["orbit"] == "K"
@@ -189,14 +214,15 @@ def test_missing_map_file_named(tmp_path, monkeypatch):
     with pytest.raises(pg.GamePreviewError, match="--map file not found"):
         pg.render_shots(shots=[parse_shot("at:0,0,0;rot:0,0")], out_dir=tmp_path,
                         size=(320, 240), project=_proj(tmp_path), user_config=object(),
-                        game="deusex", map_path=str(tmp_path / "nope.dx"))
+                        game="deusex", provide_resources=_never_provider,
+                        map_path=str(tmp_path / "nope.dx"))
 
 
 def test_no_trunk_and_no_map_named(tmp_path):
     with pytest.raises(pg.GamePreviewError, match="no trunk level"):
         pg.render_shots(shots=[parse_shot("at:0,0,0;rot:0,0")], out_dir=tmp_path,
                         size=(320, 240), project=_proj(tmp_path), user_config=object(),
-                        game="deusex")
+                        game="deusex", provide_resources=_never_provider)
 
 
 # ----------------------------------------------------------------- toolchain / image
@@ -413,7 +439,8 @@ def test_render_shots_pitch_clamped_and_uu_in_request(monkeypatch, tmp_path):
     _install_render(monkeypatch, cap)
     n = pg.render_shots(shots=[parse_shot("at:10,20,30;rot:-17294,32768")], out_dir=tmp_path / "o",  # UU in → -95° (clamps), 180°
                         size=(320, 240), project=_proj(tmp_path), user_config=object(),
-                        game="deusex", level=lvl, level_name="lvl")
+                        game="deusex", provide_resources=_never_provider,   # materialized_dx is mocked
+                        level=lvl, level_name="lvl")
     from uedcli.rotation import deg_to_uu
     assert n == 1
     x, y, z, pitch, yaw = cap["req"]["shots"][0]
@@ -422,13 +449,29 @@ def test_render_shots_pitch_clamped_and_uu_in_request(monkeypatch, tmp_path):
     assert cap["req"]["deliver"] == dxfile.name and cap["req"]["stem"] == dxfile.stem
 
 
+def test_render_shots_trunk_cache_miss_invokes_provider(monkeypatch, tmp_path):
+    """A trunk preview with no cached map resolves the project inputs THROUGH the threaded provider
+    (never a reach-back into dispatch) and feeds them to run_materialize."""
+    lvl = _level(_start("Start"))
+    hits = _mat_ok(monkeypatch)                              # real materialized_dx → run_materialize
+    cap = {}
+    _install_render(monkeypatch, cap)
+    prov = _Provider(_resources(load=["Engine"], dirs=["/g/Textures"], schema="RESOLVER"))
+    n = pg.render_shots(shots=[parse_shot("at:0,0,0;rot:0,0")], out_dir=tmp_path / "o",
+                        size=(320, 240), project=_proj(tmp_path), user_config=object(),
+                        game="deusex", provide_resources=prov, level=lvl, level_name="lvl")
+    assert n == 1 and prov.calls == 1                        # cache miss → provider invoked once
+    assert hits[0]["packages"] == ["Engine"] and hits[0]["search_dirs"] == ["/g/Textures"]
+    assert hits[0]["schema_resolver"] == "RESOLVER"          # threaded straight into materialize
+
+
 def test_render_shots_unr_map_end_to_end(monkeypatch, tmp_path):
     unr = tmp_path / "m.unr"; unr.write_bytes(b"UNR")
     cap = {}
     _install_render(monkeypatch, cap)
     n = pg.render_shots(shots=[parse_shot("at:0,0,0;rot:0,0")], out_dir=tmp_path / "o",
                         size=(320, 240), project=_proj(tmp_path), user_config=object(),
-                        game="deusex", map_path=str(unr))
+                        game="deusex", provide_resources=_never_provider, map_path=str(unr))
     assert n == 1 and cap["req"]["deliver"].endswith(".unr") and (tmp_path / "o" / "shot-01.png").exists()
 
 
@@ -449,7 +492,7 @@ def test_render_shots_reboot_retry_then_succeeds(monkeypatch, tmp_path):
     monkeypatch.setattr(pg, "run_batch", run_batch)
     n = pg.render_shots(shots=[parse_shot("at:0,0,0;rot:0,0")], out_dir=tmp_path / "o",
                         size=(320, 240), project=_proj(tmp_path), user_config=object(),
-                        game="deusex", map_path=str(dx))
+                        game="deusex", provide_resources=_never_provider, map_path=str(dx))
     assert n == 1 and calls["n"] == 2 and calls["stopped"] == 1     # rebooted once, then ok
 
 
@@ -490,7 +533,7 @@ def test_render_shots_actor_not_found_does_not_reboot(monkeypatch, tmp_path):
     with pytest.raises(pg.GamePreviewError, match="actor not found"):
         pg.render_shots(shots=[parse_shot("at:@Ghost;rot:0,0")], out_dir=tmp_path / "o",
                         size=(320, 240), project=_proj(tmp_path), user_config=object(),
-                        game="deusex", map_path=str(dx))
+                        game="deusex", provide_resources=_never_provider, map_path=str(dx))
     assert calls["n"] == 1 and calls["stopped"] == 0            # failed once, NO reboot
 
 

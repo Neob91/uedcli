@@ -1,0 +1,541 @@
+"""`brush` command-family parser registrar (build/edit/poly/vertex)."""
+from __future__ import annotations
+
+from decimal import Decimal
+
+from ._arguments import (
+    _nonempty,
+    parse_coord,
+    parse_decimal,
+    parse_factor_pair,
+    parse_pan,
+    _tree_flag,
+)
+
+
+def register(sub) -> None:
+    brush = sub.add_parser("brush", help="brush geometry verbs")
+    bsub = brush.add_subparsers(dest="sub", required=True)
+
+    # `scale` + `apply-transform` set/bake MainScale/PostScale — brush-family properties (ABrush; a
+    # mesh uses DrawScale), so they live under `brush`, not `actor` (renamed 2026-07-19). `brush`
+    # verbs act on a brush actor (movers included — they carry a PolyList); a point actor is rejected.
+    scl = bsub.add_parser(
+        "scale",
+        help="scale a group of BRUSH actors: set their MainScale (a negative axis mirrors). `mirror` "
+             "is `brush scale --by -1,1,1` (no separate verb). A non-brush (point) actor is rejected")
+    scl.add_argument("names", nargs="+",
+                     help="brush actor Names to scale (case-insensitive), or the single token - to read "
+                          "a newline-separated name list from stdin; - is the sole source, not mixable")
+    stg = scl.add_mutually_exclusive_group(required=True)
+    stg.add_argument("--to", type=parse_coord, default=None, metavar="SX,SY,SZ",
+                     help="ABSOLUTE MainScale target (sets the field IN PLACE; Location never moves; "
+                          "excludes --pivot/--pivot-actor). On a brush with a non-identity PostScale "
+                          "the previewed world scale is PostScale*MainScale, not this value (rare, "
+                          "ingested only)")
+    stg.add_argument("--by", type=parse_coord, default=None, metavar="SX,SY,SZ",
+                     help="RELATIVE scale factor: multiplies the current MainScale per-axis AND "
+                          "orbits each Location about the pivot (Loc' = P + S*(Loc-P))")
+    sg = scl.add_mutually_exclusive_group()
+    sg.add_argument("--pivot", type=parse_coord, default=None, metavar="X,Y,Z",
+                    help="explicit world pivot (with --by only; default: the LOCATION of the set "
+                         "member nearest the bbox center — an authored point, so the pivot keeps "
+                         "the grid you built on and a lone brush mirrors/scales in place)")
+    sg.add_argument("--pivot-actor", dest="pivot_actor", default=None,
+                    help="use this actor's Location as the pivot (with --by only)")
+    _tree_flag(scl)
+
+    axf = bsub.add_parser(
+        "apply-transform",
+        help="bake MainScale + Rotation + PostScale permanently into the brush vertices and reset "
+             "the fields (the offline ACTOR APPLYTRANSFORM). Reverses winding on a mirror/negative "
+             "determinant; rewrites PrePivot; leaves Location. Rejects movers and non-brush actors")
+    axf.add_argument("names", nargs="+",
+                     help="brush actor Names to bake (case-insensitive), or the single token - to read "
+                          "a newline-separated name list from stdin; - is the sole source, not mixable")
+    ltg = axf.add_mutually_exclusive_group()
+    ltg.add_argument("--lock-textures", dest="lock_textures", action="store_true", default=True,
+                     help="transform the texture axes with the geometry so textures stay glued "
+                          "(TEXTURELOCK; the DEFAULT)")
+    ltg.add_argument("--no-lock-textures", dest="lock_textures", action="store_false",
+                     help="leave the texture mapping fixed (the texture slides as the surface moves)")
+    _tree_flag(axf)
+    clip = bsub.add_parser("clip", help="clip a brush by a plane, keeping one half")
+    clip.add_argument("name", help="brush actor Name to clip (case-insensitive)")
+    clip.add_argument("--axis", choices=["x", "y", "z"],
+                      help="axis-aligned plane; use with --offset")
+    clip.add_argument("--offset", type=parse_decimal,
+                      help="plane offset along --axis (world)")
+    clip.add_argument("--plane", type=parse_coord, nargs=2,
+                      metavar=("PX,PY,PZ", "NX,NY,NZ"),
+                      help="general plane: world point + normal")
+    clip.add_argument("--keep", choices=["below", "above"], default="below",
+                      help="keep the half below (opposite normal) or above (normal side)")
+    _tree_flag(clip)
+
+    replace = bsub.add_parser(
+        "replace",
+        help="swap a brush's shape from a piped generator T3D on stdin, keeping its identity")
+    replace.add_argument("name", help="brush actor Name whose shape to replace (case-insensitive)")
+    replace.add_argument(
+        "shape", metavar="-",
+        help="the literal `-`: read the new shape as a T3D snippet from stdin (e.g. `brush build "
+             "cube … | brush replace WALL -`). Only the incoming PolyList is used; its own "
+             "Location/PrePivot/Name are ignored. Empty stdin is a clean no-op.")
+    _tree_flag(replace)
+
+    # Model-side parametric brush builders (replicate UnrealEd's GUI BrushBuilders).
+    def _common_build_opts(bp):
+        bp.add_argument("--at", type=parse_coord, default=(Decimal(0), Decimal(0), Decimal(0)),
+                        metavar="X,Y,Z", help="world Location for the emitted actor(s) (default "
+                             "origin). For cube/cylinder/cone/sheet it is the brush's geometric "
+                             "CENTER on EVERY axis, including Z. THE OTHER SHAPES anchor elsewhere: "
+                             "the staircase at its front-bottom corner (min X/Y/Z); the spiral at "
+                             "the base of its column axis (centred in XY, BOTTOM in Z); "
+                             "extrude/revolve at the point profile coordinate (0,0) lands on — "
+                             "for a revolve that is the bend centre, since the sweep axis passes "
+                             "through it.")
+        bp.add_argument("--base-name", dest="base_name",
+                        help="base Name (stem) for the emitted actor(s); a unique `_<rand>` suffix "
+                             "is appended at `actor add`, so this is a prefix, not the final Name "
+                             "(default: the shape/mover-class name). The spiral, which emits one "
+                             "actor per step, appends a per-step index; the staircase is one actor.")
+        bp.add_argument("--csg", choices=["add", "subtract"], default=None,
+                        help="CSG operation (default add; invalid with --mover-class)")
+        bp.add_argument("--solidity", choices=["solid", "semisolid", "nonsolid"],
+                        default=None,
+                        help="brush solidity (default solid; invalid with --mover-class)")
+        bp.add_argument("--folder", default=None, metavar="PATH",
+                        help="hierarchical organization PATH (dotted, e.g. castle.tower.roof) for the "
+                             "emitted actor(s) — a uedcli-side sidecar, INDEPENDENT of the engine Group "
+                             "prop, NEVER emitted to the built map. Rides the T3D as a `// uedcli-folder:` "
+                             "carrier that `actor add` persists to the trunk. No default = unfoldered.")
+        bp.add_argument("--label", action="append", default=[], type=_nonempty, metavar="L",
+                        help="cross-cutting classification label for the emitted actor(s) (repeat to add "
+                             "several). A uedcli-side sidecar (flat set), NEVER emitted to the built map; "
+                             "rides the T3D as a `// uedcli-labels:` carrier `actor add` persists. "
+                             "The engine Group is a regular prop: use --prop Group=<name>.")
+        bp.add_argument("--texture", help="texture for every face (default editor default)")
+        bp.add_argument("--mover-class", dest="mover_class", default=None,
+                        help="make a Mover of this fully-qualified class (e.g. "
+                             "DeusEx.ElevatorMover); base pose only — author keyframes with "
+                             "'mover key count' then 'mover key move'/'rotate'. Rejects "
+                             "--csg/--solidity (a mover is not CSG).")
+        bp.add_argument("--prop", action="append", default=[],
+                        metavar="KEY[.PATH]=VALUE",
+                        help="extra actor property (repeat for multiple), schema-validated against "
+                             "the emitted actor's class (Engine.Brush, or --mover-class) before "
+                             "emit — same grammar as `actor build --prop`/`actor prop set` "
+                             "(dot-paths, array tuple form, Vector/Rotator comma sugar). Applied to "
+                             "every emitted brush/mover actor; the way to set open-ended mover "
+                             "config (MoverEncroachType, MoveTime, Tag/Event, collision flags) with "
+                             "no dedicated flag. Composes onto the class default. Overrides compose "
+                             "over the generator's own fields (incl. CsgOper/PolyFlags/Group/"
+                             "Rotation), so a --prop can override a dedicated flag's value")
+        bp.add_argument("--rotate", type=parse_coord, default=None, metavar="PITCH,YAW,ROLL",
+                        help="SET the emitted actor's Rotation field to this ABSOLUTE orientation "
+                             "in unreal rotation units (16384 = 90°, 65536 = a full turn; a fresh "
+                             "generated actor starts at identity, so no add-vs-override ambiguity). "
+                             "Rotation is stored on the actor, NOT "
+                             "baked into the vertices; warns on stderr if it pushes any brush "
+                             "vertex off the integer grid (overrides any --prop Rotation=…). "
+                             "It turns the brush about the actor's LOCAL ORIGIN — the SAME point "
+                             "--at anchors, so see --at for exactly where that is per shape: "
+                             "cube/cylinder/cone/sheet centre it, while the staircase, the spiral "
+                             "and extrude/revolve each anchor elsewhere. A shape whose origin is "
+                             "not its centre SWINGS through an arc instead of turning in place")
+
+    bbuild = bsub.add_parser("build",
+                             help="build a parametric shape and write T3D to stdout (stateless; no level needed)")
+    bshape = bbuild.add_subparsers(dest="shape", required=True)
+
+    bcube = bshape.add_parser("cube", help="axis-aligned box (width X, breadth Y, height Z)")
+    bcube.add_argument("--width", type=float, required=True,
+                       help="box size along the X axis, in world units (uu)")
+    bcube.add_argument("--breadth", type=float, required=True,
+                       help="box size along the Y axis, in world units (uu)")
+    bcube.add_argument("--height", type=float, required=True,
+                       help="box size along the Z axis, in world units (uu)")
+    _common_build_opts(bcube)
+
+    bcyl = bshape.add_parser("cylinder", help="n-gon prism (height, radius, sides)")
+    bcyl.add_argument("--height", type=float, required=True,
+                      help="prism height along the Z axis, in world units (uu)")
+    bcyl.add_argument("--radius", type=float, required=True, help="circumscribed radius")
+    bcyl.add_argument("--sides", type=int, default=8, help="polygon side count (default 8)")
+    bcyl.add_argument("--align-to-side", dest="align_to_side", action="store_true",
+                      help="turn a FACE rather than a vertex toward the axes, by offsetting the "
+                           "cross-section half a segment (180/--sides degrees). Without it vertex "
+                           "0 sits on +X, so an octagonal pillar meets an axis-aligned wall on a "
+                           "CORNER, leaving two thin wedge gaps; with it a flat face sits flush. "
+                           "Same parameter as UnrealEd's own CylinderBuilder AlignToSide checkbox. "
+                           "For any other cross-section angle use --rotate, which is whole-actor "
+                           "placement")
+    _common_build_opts(bcyl)
+
+    bcone = bshape.add_parser("cone", help="n-faced cone (height, base radius, sides)")
+    bcone.add_argument("--height", type=float, required=True,
+                       help="cone height (base to apex) along the Z axis, in world units (uu)")
+    bcone.add_argument("--radius", type=float, required=True, help="base circumscribed radius")
+    bcone.add_argument("--sides", type=int, default=8, help="polygon side count (default 8)")
+    bcone.add_argument("--align-to-side", dest="align_to_side", action="store_true",
+                       help="turn a FACE of the base ring rather than a vertex toward the axes, "
+                            "by offsetting it half a segment (180/--sides degrees), so the cone "
+                            "sits flush against an axis-aligned wall instead of meeting it on a "
+                            "corner. Same parameter as UnrealEd's own AlignToSide checkbox; for "
+                            "any other angle use --rotate")
+    _common_build_opts(bcone)
+
+    bsheet = bshape.add_parser("sheet", help="flat two-sided non-solid panel (width, height)")
+    bsheet.add_argument("--width", type=float, required=True,
+                        help="panel size along the plane's first axis, in world units (uu)")
+    bsheet.add_argument("--height", type=float, required=True,
+                        help="panel size along the plane's second axis, in world units (uu)")
+    bsheet.add_argument("--plane", choices=["xy", "xz", "yz"], default="xz",
+                        help="world plane the sheet lies in (default xz)")
+    from ...query import PF_NAMES as _PF_NAMES
+    bsheet.add_argument("--flag", dest="flags", action="append", default=[],
+                        type=str.lower, choices=[name for _, name in _PF_NAMES], metavar="NAME",
+                        help="repeatable; OR an extra surface/poly flag (by name, case-insensitive) "
+                             "onto the sheet's face AT BUILD TIME, on top of its default "
+                             "twosided|notsolid — e.g. --flag portal --flag translucent for a zone "
+                             "portal, in one step instead of a follow-up 'brush poly set --add-flag'")
+    _common_build_opts(bsheet)
+
+    bstair = bshape.add_parser("staircase",
+                               help="linear staircase — ONE non-convex brush (Base/back/Step/"
+                                    "Rise/tiled Side), ascends +X, front-bottom-corner anchored")
+    bstair.add_argument("--steps", type=int, required=True, help="number of steps")
+    bstair.add_argument("--depth", type=float, required=True, help="step depth (X) per step")
+    bstair.add_argument("--rise", type=float, required=True, help="step rise (Z) per step")
+    bstair.add_argument("--breadth", type=float, required=True, help="step width (Y)")
+    _common_build_opts(bstair)
+
+    bspiral = bshape.add_parser("spiral",
+                                help="spiral staircase — a central column plus one wedge tread "
+                                     "per step climbing around it (prints N+1 actors)")
+    bspiral.add_argument("--steps", type=int, required=True, help="number of steps")
+    bspiral.add_argument("--inner-radius", dest="inner_radius", type=float, required=True,
+                         help="inner column radius")
+    bspiral.add_argument("--step-width", dest="step_width", type=float, required=True,
+                         help="radial tread depth")
+    bspiral.add_argument("--rise", type=float, required=True, help="rise (Z) per step")
+    bspiral.add_argument("--angle-per-step", dest="angle_per_step", type=int, default=8192,
+                         metavar="UU",
+                         help="how far each tread turns around the column, in unreal rotation "
+                              "units — 16384 = 90 degrees, 8192 = 45 degrees (the default), and "
+                              "the whole stair climbs --steps of these. Must satisfy "
+                              "0 < angle-per-step < 32768 (a half turn or more per tread would "
+                              "make the wedge non-convex)")
+    _common_build_opts(bspiral)
+
+    # --- swept 2D profiles: the shapes whose cross-section the author DRAWS -----------------
+    # UnrealEd's 2D shape editor, as two generators: draw a closed profile, then sweep it in a
+    # straight line (extrude) or around an in-plane axis (revolve). Both take the same profile
+    # grammar, the same --axis orientation and the same --at anchor; they differ only in the sweep.
+    _PROFILE_POINT_HELP = (
+        "one profile vertex as `U,V` in the profile's own 2D coordinates — REPEAT the flag once "
+        "per vertex, in ring order (at least 3). The ring is closed implicitly, so do not repeat "
+        "the first point last (harmless if you do — it is welded away). Either winding is "
+        "accepted. `U,V` map onto world axes per --axis")
+    _PROFILE_AXIS_HELP = (
+        "the world axis the profile PLANE IS NORMAL TO — equivalently the direction the sweep "
+        "grows (default z). The profile's (U,V) then map onto the other two world axes in "
+        "right-handed cyclic order: z → U=X,V=Y; x → U=Y,V=Z; y → U=Z,V=X")
+
+    # The two caveats spec §4.5 and §6 require in the verb's own --help. They belong to the
+    # SHAPE, not to any one flag, so they ride the subparser description rather than being
+    # bolted onto an unrelated flag's help.
+    _PROFILE_CONCAVE_NOTE = (
+        "CONCAVE PROFILES are fully supported, as ONE brush: the engine's polygon must be convex "
+        "and holds at most 16 vertices, so a concave profile (an L, a notched cornice) or one "
+        "longer than 16 points has each of its two caps tiled into several convex faces, adding "
+        "only diagonals of your own outline. CAVEAT: UnrealEd (`level materialize`) and the real "
+        "engine (`level preview --game`) build such a brush correctly, but the offline draft "
+        "renderer `level preview --native` assumes convex solids and draws a concave notch FILLED "
+        "IN — a preview artefact, not a geometry bug."
+    )
+    _REVOLVE_OFFGRID_NOTE = (
+        "OFF-GRID BY CONSTRUCTION: every vertex away from theta=0 lands on radius*cos/sin theta, "
+        "and uedcli never snaps coordinates for you. An off-grid SOLID brush throws its BSP "
+        "partition planes off-grid too — the primary cause of slivers, T-junctions and holes in "
+        "the built map. Prefer --solidity semisolid wherever the swept shape is detail rather "
+        "than structure: a semisolid receives cuts but emits no world-splitting planes. uedcli "
+        "warns on stderr when it emits an off-grid solid."
+    )
+
+    bextrude = bshape.add_parser(
+        "extrude",
+        help="sweep a drawn 2D profile in a straight line — the shape for an L-ledge, an arch "
+             "voussoir, a cornice or any other non-box cross-section",
+        description="Sweep a drawn 2D profile in a straight line along --axis. " + _PROFILE_CONCAVE_NOTE)
+    bextrude.add_argument("--point", action="append", metavar="U,V", help=_PROFILE_POINT_HELP)
+    bextrude.add_argument("--depth", type=float, required=True,
+                          help="sweep length along +--axis, in world units (uu); must be > 0")
+    bextrude.add_argument("--axis", choices=["x", "y", "z"], default="z", help=_PROFILE_AXIS_HELP)
+    _common_build_opts(bextrude)
+
+    brevolve = bshape.add_parser(
+        "revolve",
+        help="sweep a drawn 2D profile around an in-plane axis, in flat facets — a curved "
+             "corridor, an arch ring, a turned column",
+        description=("Sweep a drawn 2D profile around the profile plane's own V axis (the line "
+                     "U=0, through profile coordinate (0,0), so --at is the bend centre). "
+                     + _REVOLVE_OFFGRID_NOTE + " " + _PROFILE_CONCAVE_NOTE))
+    brevolve.add_argument("--point", action="append", metavar="U,V", help=_PROFILE_POINT_HELP)
+    brevolve.add_argument("--angle", type=int, required=True, metavar="UU",
+                          help="total sweep in unreal rotation units — 16384 = 90°, 65536 = a "
+                               "CLOSED full turn (which omits both caps); must satisfy "
+                               "0 < angle <= 65536. Thirds are not exact in UU, so a 60° bend is "
+                               "--angle 10923 (60.002°)")
+    brevolve.add_argument("--segments", type=int, default=None, metavar="N",
+                          help="how many flat facets the sweep is divided into (default: one per "
+                               "22.5° — 4 for a 90° bend, 16 for a full turn, UnrealEd's own "
+                               "density). Each segment costs one face per profile edge, so a high "
+                               "count is a heavy brush for the BSP")
+    brevolve.add_argument("--axis", choices=["x", "y", "z"], default="z", help=_PROFILE_AXIS_HELP)
+    _common_build_opts(brevolve)
+
+    # --- CSG set merge: intersect / deintersect ------------------------------------------------
+    # Generators like `brush build`, but their SHAPE comes from a piped brush set rather than
+    # parameters, so they share `_common_build_opts` — with two VERB-SPECIFIC default overrides
+    # (`--at`, `--solidity`) plus the placement pair `--origin`/`--pivot`.
+    def _merge_opts(mp, verb: str):
+        mp.add_argument(
+            "set", metavar="-|FILE",
+            help="`-` reads the brush SET as a T3D snippet from stdin (e.g. "
+                 f"`actor find --folder castle.door | actor show - | brush {verb} -`); a FILE path "
+                 "is also accepted, for a set you saved earlier. Every tier "
+                 "feeds it through its own `show` verb (actor/stash/prefab). STDIN ORDER IS THE "
+                 "CSG ORDER and is never re-sorted — a mixed add/subtract set is order-dependent. "
+                 "Non-brush actors and Movers are REFUSED (exit 2, naming them) rather than "
+                 "skipped — a merge quietly missing a brush reads as a complete answer; narrow "
+                 "the pipe with `actor find --kind brush`. Empty stdin is a clean no-op (exit 0)")
+        _common_build_opts(mp)
+        # `--at`: KEEP the carved position by default. `_common_build_opts` defaults it to (0,0,0),
+        # which would silently teleport the merged result to the world origin.
+        # `--solidity`: the faithful per-face rule, not `_common_build_opts`' blanket `solid`.
+        # `--at` is the one default that genuinely differs from `_common_build_opts` (which places
+        # a generated shape at the origin); `--solidity` already defaults to None there, so only
+        # its HELP is overridden below — the flag means something different on these verbs.
+        mp.set_defaults(at=None)
+        for a in mp._actions:
+            if a.dest == "at":
+                a.default = None
+                a.help = ("world Location for the result: the merged brush is placed so its PIVOT "
+                          "sits here. DEFAULT (omitted) = keep the position it was carved at. "
+                          "Rejected with --origin keep, which is already an absolute form")
+            elif a.dest == "rotate":
+                # `_common_build_opts`' text ends on the extrude/revolve local-origin caveat,
+                # which is meaningless here — these verbs cannot build a swept profile, and
+                # their local origin is set by --origin, not by a profile's (0,0).
+                a.help = ("SET the emitted actor's Rotation field to this ABSOLUTE orientation "
+                          "in unreal rotation units (16384 = 90°, 65536 = a full turn; a fresh "
+                          "generated actor starts at identity, so no add-vs-override ambiguity). "
+                          "Rotation is stored on the actor, NOT baked into the vertices; warns on "
+                          "stderr if it pushes any brush vertex off the integer grid (overrides "
+                          "any --prop Rotation=…). It turns the brush about the actor's LOCAL "
+                          "ORIGIN, which on this verb is wherever --origin put it")
+            elif a.dest == "solidity":
+                a.help = ("override the result's solidity — world-brush result ONLY; INVALID with "
+                          "--mover-class (a mover always keeps the source per-face solidity, since a "
+                          "semisolid face blocks just like solid — only nonsolid is walk-through — so "
+                          "there is nothing to override). DEFAULT (omitted) = the FAITHFUL per-face "
+                          "rule: a face keeps the solidity of the ADDITIVE it came from, a face from a "
+                          "subtractive is forced solid. `solid` clears the per-face solidity bits on "
+                          "every face — use it to scrub a weld that pulled in a NONSOLID additive "
+                          "(nonsolid faces are walk-through). `semisolid`/`nonsolid` set the "
+                          "actor-level solidity instead.")
+        mp.add_argument("--origin", default="center", metavar="center|min|max|keep|X,Y,Z",
+                        help="where the result's LOCAL origin sits: `center` (DEFAULT) re-centres "
+                             "on the result's bounding-box centre so the brush is trivially "
+                             "relocatable; `min`/`max` use a bbox corner; `X,Y,Z` an explicit "
+                             "world point; `keep` emits the raw faithful form (Location=0, "
+                             "world-space vertices) for a direct compare against an editor "
+                             "export — `keep` rejects --at")
+        mp.add_argument("--pivot", default=None, metavar="center|min|max|X,Y,Z",
+                        help="world point the result ROTATES about, written as its PrePivot "
+                             "(default: the --origin anchor). For a door plug pass the hinge, e.g. "
+                             "`--pivot min`, so `mover key rotate` swings it about the hinge "
+                             "instead of the brush centre")
+
+    bint = bsub.add_parser(
+        "intersect",
+        help="CSG-merge a piped brush SET into ONE brush against an EMPTY background: additives "
+             "make solid, subtractives carve it, and the resulting solid's boundary is written as "
+             "a single welded brush T3D to stdout. Needs at least one additive brush")
+    _merge_opts(bint, "intersect")
+
+    bdeint = bsub.add_parser(
+        "deintersect",
+        help="CSG-merge a piped brush SET into ONE brush against a SOLID background: the set's "
+             "subtractives define voids and the VOID is written as a solid — the 'negative'/plug "
+             "that exactly fills a carved doorway (pair with --mover-class for a door). Needs at "
+             "least one subtractive brush")
+    _merge_opts(bdeint, "deintersect")
+
+    # Vertex editing — MOVE ONLY (add/delete are illegal: they'd break the closed
+    # solid). Corners are addressed by coordinate; moving one moves every poly-vertex
+    # sharing it so the brush stays watertight.
+    vertex = bsub.add_parser("vertex", help="vertex query/edit (move-only; never add/delete)")
+    vsub = vertex.add_subparsers(dest="vsub", required=True)
+    vl = vsub.add_parser("list", help="welded brush corners: world coord + the polys sharing each")
+    vl.add_argument("name", help="brush actor Name to list corners of (case-insensitive)")
+    vl.add_argument("--json", action="store_true",
+                    help="emit the corners as JSON ({actor, vertices:[…]}, each vertex with "
+                         "coord {x,y,z}/polys/nrefs) instead of the aligned text table")
+    _tree_flag(vl)
+    vm = vsub.add_parser("move", help="move one or more corners (selected by coordinate)")
+    vm.add_argument("name", help="brush actor Name whose corners to move (case-insensitive)")
+    vm.add_argument("--at", type=parse_coord, action="append", required=True, metavar="X,Y,Z",
+                    help="world coordinate of a corner to move; repeat to move several")
+    vmg = vm.add_mutually_exclusive_group(required=True)
+    vmg.add_argument("--to", type=parse_coord, metavar="X,Y,Z",
+                     help="absolute world target (requires exactly one --at)")
+    vmg.add_argument("--by", type=parse_coord, metavar="DX,DY,DZ",
+                     help="world delta applied to every --at corner")
+    _tree_flag(vm)
+
+    # poly lives UNDER brush (a brush sub-element editor, peer to `brush vertex`).
+    poly = bsub.add_parser("poly", help="per-surface (polygon) query/edit verbs")
+    psub = poly.add_subparsers(dest="polysub", required=True)
+    pl = psub.add_parser("list", help="list a brush's polys: facing/texture/flags/pan/centroid/area")
+    pl.add_argument("name", help="brush actor Name to list polys of (case-insensitive)")
+    pl.add_argument("--json", action="store_true",
+                    help="emit the polys as JSON ({actor, polys:[…]}, each poly with idx/facing/"
+                         "texture/flags/pan/centroid/area/nverts) instead of the aligned text table")
+    _tree_flag(pl)
+
+    from ...query import PF_NAMES
+    flag_names = [name for _, name in PF_NAMES]
+    # The per-face target grammar shared by `set`/`pan`/`rotate`/`scale`. Deliberately NARROWER than
+    # `align`'s, which also takes a bare brush Name: a whole brush is a meaningful unit for a mode
+    # ("wrap this cylinder"), whereas a whole-brush pan/rotate/scale is a blanket nudge of every face
+    # including the ones the author never looked at — so `Tower:all` makes "yes, all of them" a
+    # deliberate act rather than a name typed one selector short.
+    _POLY_TARGETS_HELP = (
+        "BRUSH:SELECTOR (SELECTOR = 'all' or comma-separated poly indices); repeatable, e.g. "
+        "Wall1:3,5 Wall2:all. A bare brush name is NOT accepted — say Wall1:all. Or the single "
+        "token - to read the targets from stdin (the BRUSH:idx lines `brush poly find` and every "
+        "per-face verb print); - is the sole source, not mixable with BRUSH:SELECTOR args, and "
+        "empty stdin is a clean no-op (exit 0)")
+
+    pset = psub.add_parser(
+        "set", help="assign stored per-face ATTRIBUTES (texture, surface flags), model-side")
+    pset.add_argument("targets", nargs="+", metavar="BRUSH:SELECTOR", help=_POLY_TARGETS_HELP)
+    pset.add_argument("--texture", default=None, metavar="REF",
+                      help="qualified Package[.Group].Name (e.g. DeusExDeco.Textures.Wood); "
+                           "omit the group unless given one explicitly")
+    pset.add_argument("--add-flag", dest="add_flags", action="append", default=[],
+                      type=str.lower, choices=flag_names, metavar="FLAG",
+                      help="repeatable; surface flag by name (case-insensitive), not bit value")
+    pset.add_argument("--remove-flag", dest="remove_flags", action="append", default=[],
+                      type=str.lower, choices=flag_names, metavar="FLAG",
+                      help="repeatable; surface flag by name (case-insensitive), not bit value")
+    _tree_flag(pset)
+
+    # `pan`/`rotate`/`scale`: the texture-FRAME transforms, peers of `align`. They are separate
+    # verbs from `set` because assigning a stored attribute and transforming the frame are different
+    # jobs (dev/docs/rationale/surface.md "The verb split: attributes vs the frame").
+    ppan = psub.add_parser(
+        "pan", help="shift a face's texture by whole texels (the Pan field); never moves the frame")
+    ppan.add_argument("targets", nargs="+", metavar="BRUSH:SELECTOR", help=_POLY_TARGETS_HELP)
+    ppanm = ppan.add_mutually_exclusive_group(required=True)
+    ppanm.add_argument("--to", dest="pan_to", type=parse_pan, metavar="U,V",
+                       help="set the absolute integer texel pan. --to 0,0 CLEARS the pan (that is "
+                            "the unpanned state — `brush poly list` then shows - in the pan column)")
+    ppanm.add_argument("--by", dest="pan_by", type=parse_pan, metavar="U,V",
+                       help="offset the current pan by this many texels (an unset pan counts as "
+                            "0,0); negatives allowed, e.g. --by -5,3")
+    _tree_flag(ppan)
+
+    prot = psub.add_parser(
+        "rotate", help="turn a face's texture within its own plane (no continuity across faces)")
+    prot.add_argument("targets", nargs="+", metavar="BRUSH:SELECTOR", help=_POLY_TARGETS_HELP)
+    prot.add_argument("--by", dest="by", type=int, required=True, metavar="UU",
+                      help="turn angle in UNREAL ROTATION UNITS (16384 = 90 degrees, 65536 = a full "
+                           "turn), matching `brush build --rotate` and `mover key rotate`. Negative "
+                           "turns the other way (--by -16384 == --by 49152). Turn direction follows "
+                           "the VISIBLE surface normal, so it looks the same from where you stand "
+                           "whether the face is the outside of an added pillar or the inside of a "
+                           "subtracted room. That needs the brush's CsgOper to be CSG_Add or "
+                           "CSG_Subtract (absent counts as CSG_Add): ANY other value exits 2 naming "
+                           "it, because a brush with no inside and outside gives the turn no "
+                           "direction to follow. A MIRRORED brush (scale determinant negative, i.e. "
+                           "an odd number of negative components) does still invert it. There is "
+                           "deliberately no --to: an absolute angle could only be measured against "
+                           "an internal canonical frame whose in-plane direction you cannot see or "
+                           "predict, so it would mean something different per face — reaching for a "
+                           "KNOWN orientation is what `brush poly align` is for. The face's own "
+                           "centre keeps its texture coordinate, so the texture spins in place "
+                           "rather than sliding; each face pivots about ITSELF, so this breaks the "
+                           "seams `align` matched")
+
+    _tree_flag(prot)
+
+    pscl = psub.add_parser(
+        "scale", help="resize a face's texture in place (no continuity across faces)")
+    pscl.add_argument("targets", nargs="+", metavar="BRUSH:SELECTOR", help=_POLY_TARGETS_HELP)
+    # A plain required flag, NOT a one-member mutually-exclusive group. `--to` (absolute world units
+    # per tile) needs the texture catalog and does not exist yet, and a group holding one argument
+    # only degrades the error text — "one of the arguments --by is required" where the sibling
+    # `rotate` says "the following arguments are required: --by". The group comes back with `--to`.
+    pscl.add_argument("--by", dest="by", type=parse_factor_pair, metavar="FU,FV", required=True,
+                      help="multiply the texture's APPARENT SIZE: --by 2,2 makes it look twice as "
+                           "big, --by 0.5,1 halves its width only. U and V are independent. "
+                           "(Internally this DIVIDES the stored TextureU/TextureV magnitudes, "
+                           "because T3D density is texels per world unit — the flag is named for "
+                           "what you see.) Factors must be positive. The face's own centre keeps "
+                           "its texture coordinate, so the texture grows in place rather than "
+                           "sliding off; scale BEFORE `brush poly align run`, never after, since "
+                           "the run's seam phases are computed for the density they saw")
+    _tree_flag(pscl)
+
+    # `poly find`: a stateless PRODUCER — prints matching `BRUSH:idx` selectors (one per line) that
+    # `brush poly align -` / `brush poly set` consume. Narrows a brush's faces by intrinsic labels.
+    pfind = psub.add_parser(
+        "find", help="print a brush's matching faces as BRUSH:idx selectors (feed to poly align/set)")
+    pfind.add_argument("name", help="brush actor Name to search the polys of (case-insensitive)")
+    pfind.add_argument("--item", default=None, metavar="NAME",
+                       help="keep only faces whose builder ItemName equals NAME (case-insensitive; "
+                            "e.g. Side to drop a cylinder's Cap faces)")
+    pfind.add_argument("--facing", default=None, metavar="DIR",
+                       help="keep only faces snapping to this outward facing: "
+                            "+X|-X|+Y|-Y|+Z|-Z|slant")
+    pfind.add_argument("--texture", default=None, metavar="REF",
+                       help="keep only faces textured with REF (case-insensitive; exact ref or its "
+                            "last dot-component)")
+    pfind.add_argument("--json", action="store_true",
+                       help="emit the matches as a JSON array of {brush,poly,item,facing,texture} "
+                            "objects instead of BRUSH:idx lines")
+    _tree_flag(pfind)
+
+    # `poly align`: make a texture flow continuously across a face set (model-side). Exactly one
+    # geometry mode; targets are BRUSH:SELECTOR positionals OR `-` (stdin, bare names or the
+    # BRUSH:idx lines `poly find` prints).
+    palign = psub.add_parser(
+        "align", help="align faces so a texture flows continuously across them (wall/floor/ring)")
+    pamode = palign.add_mutually_exclusive_group(required=True)
+    pamode.add_argument("--wall", dest="mode", action="store_const", const="wall",
+                        help="one shared texture frame across a set of strictly COPLANAR VERTICAL "
+                             "faces (brickwork does not reset at each brush edge)")
+    pamode.add_argument("--floor", dest="mode", action="store_const", const="floor",
+                        help="one shared texture frame across a set of strictly COPLANAR HORIZONTAL "
+                             "faces (floor/ceiling)")
+    pamode.add_argument("--ring", dest="mode", action="store_const", const="ring",
+                        help="wrap a texture around a cylinder's side faces: U advances by each "
+                             "facet's chord around the ring, V runs along the axis")
+    palign.add_argument("targets", nargs="*", metavar="BRUSH:SELECTOR",
+                        help="faces to align: BRUSH:SELECTOR (SELECTOR = 'all' or comma indices) or "
+                             "a bare brush Name (= all its polys). Use `-` to read the set from "
+                             "stdin instead (bare names, or the BRUSH:idx lines `poly find` prints; "
+                             "empty stdin is a clean no-op). The first face is the seam/seed.")
+    palign.add_argument("--fresh-frame", dest="fresh_frame", action="store_true",
+                        help="synthesize a canonical texture frame from the face normal instead of "
+                             "adopting the seed face's frame (default). Adopt means: --wall/--floor "
+                             "continue the seed's exact TextureU/V+Pan; --ring keeps the seed's texel "
+                             "SCALE+Pan but re-derives U along the ring tangent and V along the axis")
+    palign.add_argument("--fit-perimeter", dest="fit_perimeter", action="store_true",
+                        help="--ring only: snap the texture scale so an integer number of texels "
+                             "fits the perimeter (exact seam meet); default leaves the closing seam")
+    _tree_flag(palign)

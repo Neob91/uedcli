@@ -1,0 +1,457 @@
+[
+  {
+    "argv": [
+      "actor",
+      "move",
+      "L1",
+      "--to",
+      "-100,-200,-300"
+    ],
+    "outcome": "parsed",
+    "exit_code": null,
+    "namespace": {
+      "by": null,
+      "cmd": "actor",
+      "name": "L1",
+      "project": null,
+      "sub": "move",
+      "to": [
+        {
+          "__decimal__": "-100"
+        },
+        {
+          "__decimal__": "-200"
+        },
+        {
+          "__decimal__": "-300"
+        }
+      ],
+      "tree": null
+    },
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "argv": [
+      "brush",
+      "vertex",
+      "move",
+      "B1",
+      "--at",
+      "-32,-32,32",
+      "--by",
+      "0,0,-16"
+    ],
+    "outcome": "parsed",
+    "exit_code": null,
+    "namespace": {
+      "at": [
+        [
+          {
+            "__decimal__": "-32"
+          },
+          {
+            "__decimal__": "-32"
+          },
+          {
+            "__decimal__": "32"
+          }
+        ]
+      ],
+      "by": [
+        {
+          "__decimal__": "0"
+        },
+        {
+          "__decimal__": "0"
+        },
+        {
+          "__decimal__": "-16"
+        }
+      ],
+      "cmd": "brush",
+      "name": "B1",
+      "project": null,
+      "sub": "vertex",
+      "to": null,
+      "tree": null,
+      "vsub": "move"
+    },
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "argv": [
+      "actor",
+      "build",
+      "Engine.Light",
+      "--at",
+      "-16,-16,-16"
+    ],
+    "outcome": "parsed",
+    "exit_code": null,
+    "namespace": {
+      "aclass": "Engine.Light",
+      "at": [
+        {
+          "__decimal__": "-16"
+        },
+        {
+          "__decimal__": "-16"
+        },
+        {
+          "__decimal__": "-16"
+        }
+      ],
+      "base_name": null,
+      "cmd": "actor",
+      "folder": null,
+      "label": [],
+      "project": null,
+      "prop": [],
+      "rotate": null,
+      "sub": "build"
+    },
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "argv": [
+      "brush",
+      "build",
+      "cube",
+      "--at",
+      "-128,-64,-32"
+    ],
+    "outcome": "exit",
+    "exit_code": 2,
+    "namespace": null,
+    "stdout": "",
+    "stderr": "usage: uedcli brush build cube [-h] --width WIDTH --breadth BREADTH --height\n                               HEIGHT [--at X,Y,Z] [--base-name BASE_NAME]\n                               [--csg {add,subtract}]\n                               [--solidity {solid,semisolid,nonsolid}]\n                               [--folder PATH] [--label L] [--texture TEXTURE]\n                               [--mover-class MOVER_CLASS]\n                               [--prop KEY[.PATH]=VALUE]\n                               [--rotate PITCH,YAW,ROLL]\nuedcli brush build cube: error: the following arguments are required: --width, --breadth, --height\n"
+  },
+  {
+    "argv": [
+      "brush",
+      "poly",
+      "find",
+      "B1",
+      "--facing",
+      "-Z"
+    ],
+    "outcome": "parsed",
+    "exit_code": null,
+    "namespace": {
+      "cmd": "brush",
+      "facing": "-Z",
+      "item": null,
+      "json": false,
+      "name": "B1",
+      "polysub": "find",
+      "project": null,
+      "sub": "poly",
+      "texture": null,
+      "tree": null
+    },
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "argv": [
+      "brush",
+      "poly",
+      "find",
+      "B1",
+      "--facing",
+      "-X"
+    ],
+    "outcome": "parsed",
+    "exit_code": null,
+    "namespace": {
+      "cmd": "brush",
+      "facing": "-X",
+      "item": null,
+      "json": false,
+      "name": "B1",
+      "polysub": "find",
+      "project": null,
+      "sub": "poly",
+      "texture": null,
+      "tree": null
+    },
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "argv": [
+      "brush",
+      "poly",
+      "find",
+      "B1",
+      "--facing",
+      "+Y"
+    ],
+    "outcome": "parsed",
+    "exit_code": null,
+    "namespace": {
+      "cmd": "brush",
+      "facing": "+Y",
+      "item": null,
+      "json": false,
+      "name": "B1",
+      "polysub": "find",
+      "project": null,
+      "sub": "poly",
+      "texture": null,
+      "tree": null
+    },
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "argv": [
+      "actor",
+      "find",
+      "--exact",
+      "Light"
+    ],
+    "outcome": "parsed",
+    "exit_code": null,
+    "namespace": {
+      "cls": [
+        "Light"
+      ],
+      "cmd": "actor",
+      "exclude": false,
+      "folder": [],
+      "group": [],
+      "json": false,
+      "kind": null,
+      "label": [],
+      "name": [],
+      "no_folder": false,
+      "no_label": false,
+      "project": null,
+      "prop": [],
+      "restrict": null,
+      "sub": "find",
+      "subclass_of": [],
+      "tree": null,
+      "within_bbox": null
+    },
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "argv": [
+      "actor",
+      "find",
+      "--subclass",
+      "Engine.Light"
+    ],
+    "outcome": "parsed",
+    "exit_code": null,
+    "namespace": {
+      "cls": [],
+      "cmd": "actor",
+      "exclude": false,
+      "folder": [],
+      "group": [],
+      "json": false,
+      "kind": null,
+      "label": [],
+      "name": [],
+      "no_folder": false,
+      "no_label": false,
+      "project": null,
+      "prop": [],
+      "restrict": null,
+      "sub": "find",
+      "subclass_of": [
+        "Engine.Light"
+      ],
+      "tree": null,
+      "within_bbox": null
+    },
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "argv": [
+      "level",
+      "prev",
+      "at:0,0,0;rot:0,0",
+      "--out-dir",
+      "s"
+    ],
+    "outcome": "exit",
+    "exit_code": 2,
+    "namespace": null,
+    "stdout": "",
+    "stderr": "usage: uedcli level [-h]\n                    {list,create,import,materialize,preview,status,doctor} ...\nuedcli level: error: argument sub: invalid choice: 'prev' (choose from list, create, import, materialize, preview, status, doctor)\n"
+  },
+  {
+    "argv": [
+      "actor",
+      "duplicate",
+      "X"
+    ],
+    "outcome": "exit",
+    "exit_code": 2,
+    "namespace": null,
+    "stdout": "",
+    "stderr": "usage: uedcli actor duplicate [-h] (--by DX,DY,DZ | --at X,Y,Z) [--label L]\n                              [--folder PATH] [--tree KIND/NAME]\n                              names [names ...]\nuedcli actor duplicate: error: one of the arguments --by --at is required\n"
+  },
+  {
+    "argv": [
+      "actor",
+      "duplicate",
+      "X",
+      "--by",
+      "0,0,0",
+      "--at",
+      "0,0,0"
+    ],
+    "outcome": "exit",
+    "exit_code": 2,
+    "namespace": null,
+    "stdout": "",
+    "stderr": "usage: uedcli actor duplicate [-h] (--by DX,DY,DZ | --at X,Y,Z) [--label L]\n                              [--folder PATH] [--tree KIND/NAME]\n                              names [names ...]\nuedcli actor duplicate: error: argument --at: not allowed with argument --by\n"
+  },
+  {
+    "argv": [
+      "actor",
+      "order",
+      "X"
+    ],
+    "outcome": "exit",
+    "exit_code": 2,
+    "namespace": null,
+    "stdout": "",
+    "stderr": "usage: uedcli actor order [-h]\n                          (--first | --last | --before NAME | --after NAME)\n                          [--tree KIND/NAME]\n                          names [names ...]\nuedcli actor order: error: one of the arguments --first --last --before --after is required\n"
+  },
+  {
+    "argv": [
+      "actor",
+      "order",
+      "X",
+      "--first",
+      "--last"
+    ],
+    "outcome": "exit",
+    "exit_code": 2,
+    "namespace": null,
+    "stdout": "",
+    "stderr": "usage: uedcli actor order [-h]\n                          (--first | --last | --before NAME | --after NAME)\n                          [--tree KIND/NAME]\n                          names [names ...]\nuedcli actor order: error: argument --last: not allowed with argument --first\n"
+  },
+  {
+    "argv": [
+      "actor",
+      "rotate",
+      "X"
+    ],
+    "outcome": "exit",
+    "exit_code": 2,
+    "namespace": null,
+    "stdout": "",
+    "stderr": "usage: uedcli actor rotate [-h] (--by PITCH,YAW,ROLL | --to PITCH,YAW,ROLL)\n                           [--pivot X,Y,Z | --pivot-actor PIVOT_ACTOR]\n                           [--tree KIND/NAME]\n                           names [names ...]\nuedcli actor rotate: error: one of the arguments --by --to is required\n"
+  },
+  {
+    "argv": [
+      "brush",
+      "scale",
+      "B",
+      "--to",
+      "1,1,1",
+      "--by",
+      "2,2,2"
+    ],
+    "outcome": "exit",
+    "exit_code": 2,
+    "namespace": null,
+    "stdout": "",
+    "stderr": "usage: uedcli brush scale [-h] (--to SX,SY,SZ | --by SX,SY,SZ)\n                          [--pivot X,Y,Z | --pivot-actor PIVOT_ACTOR]\n                          [--tree KIND/NAME]\n                          names [names ...]\nuedcli brush scale: error: argument --by: not allowed with argument --to\n"
+  },
+  {
+    "argv": [
+      "level",
+      "preview",
+      "at:0,0,0;rot:0,0",
+      "--out-dir",
+      "s",
+      "--native",
+      "--game"
+    ],
+    "outcome": "exit",
+    "exit_code": 2,
+    "namespace": null,
+    "stdout": "",
+    "stderr": "usage: uedcli level preview [-h] [--out-dir DIR] [--list-actors Package.Class]\n                            [--sample N] [--native | --game] [--size WxH]\n                            [--fov DEG] [--map PATH] [--rebuild]\n                            [--keep-alive] [--tree level/NAME]\n                            [SHOT ...]\nuedcli level preview: error: argument --game: not allowed with argument --native\n"
+  },
+  {
+    "argv": [
+      "actor",
+      "find",
+      "--folder",
+      "F",
+      "--no-folder"
+    ],
+    "outcome": "exit",
+    "exit_code": 2,
+    "namespace": null,
+    "stdout": "",
+    "stderr": "usage: uedcli actor find [-h] [--exact-class C] [--subclass-of C] [--group G]\n                         [--name GLOB] [--prop KEY[.PATH]=VALUE]\n                         [--within-bbox X0,Y0,Z0,X1,Y1,Z1]\n                         [--kind {point,brush}]\n                         [--folder PATTERN | --no-folder]\n                         [--label GLOB | --no-label] [--json] [--exclude]\n                         [--tree KIND/NAME]\n                         [-]\nuedcli actor find: error: argument --no-folder: not allowed with argument --folder\n"
+  },
+  {
+    "argv": [
+      "actor",
+      "bogus",
+      "--nope"
+    ],
+    "outcome": "exit",
+    "exit_code": 2,
+    "namespace": null,
+    "stdout": "",
+    "stderr": "usage: uedcli actor [-h]\n                    {find,show,duplicate,folder,label,build,add,order,delete,bbox,move,prop,rotate,preview}\n                    ...\nuedcli actor: error: argument sub: invalid choice: 'bogus' (choose from find, show, duplicate, folder, label, build, add, order, delete, bbox, move, prop, rotate, preview)\n"
+  },
+  {
+    "argv": [
+      "brush",
+      "clip",
+      "W",
+      "--axis",
+      "q",
+      "--offset",
+      "abc"
+    ],
+    "outcome": "exit",
+    "exit_code": 2,
+    "namespace": null,
+    "stdout": "",
+    "stderr": "usage: uedcli brush clip [-h] [--axis {x,y,z}] [--offset OFFSET]\n                         [--plane PX,PY,PZ NX,NY,NZ] [--keep {below,above}]\n                         [--tree KIND/NAME]\n                         name\nuedcli brush clip: error: argument --axis: invalid choice: 'q' (choose from x, y, z)\n"
+  },
+  {
+    "argv": [
+      "actor",
+      "build",
+      "Engine.Light",
+      "--at",
+      "nan,0,0"
+    ],
+    "outcome": "exit",
+    "exit_code": 2,
+    "namespace": null,
+    "stdout": "",
+    "stderr": "usage: uedcli actor build [-h] [--at X,Y,Z] [--base-name BASE_NAME]\n                          [--prop KEY[.PATH]=VALUE] [--rotate PITCH,YAW,ROLL]\n                          [--folder PATH] [--label L]\n                          Package.Class\nuedcli actor build: error: argument --at: coordinate 'nan,0,0': number must be finite, got 'nan'\n"
+  },
+  {
+    "argv": [
+      "actor",
+      "-h"
+    ],
+    "outcome": "exit",
+    "exit_code": 0,
+    "namespace": null,
+    "stdout": "usage: uedcli actor [-h]\n                    {find,show,duplicate,folder,label,build,add,order,delete,bbox,move,prop,rotate,preview}\n                    ...\n\npositional arguments:\n  {find,show,duplicate,folder,label,build,add,order,delete,bbox,move,prop,rotate,preview}\n    find                print names of matching actors (one per line) for\n                        piping into name-taking verbs; with no filters, prints\n                        every actor\n    show                print named actors' full T3D blocks\n    duplicate           copy one or more actors (sugar for `actor show <names>\n                        | actor add -`): each copy gets a fresh Name, is\n                        appended last in CSG order, INHERITS its source's\n                        labels, and additionally gets one fresh `dup-<rand>`\n                        batch label (so the whole copied batch is re-\n                        addressable via `actor find --label dup-<rand>`). A\n                        placement is REQUIRED (--by or --at) so copies never\n                        silently overlap their originals. Prints the allocated\n                        Names to stdout (one per line); the count + batch\n                        label go to stderr\n    folder              manage an actor's uedcli-side FOLDER: a hierarchical\n                        dotted organization path (castle.tower.roof) stored in\n                        a trunk sidecar — NOT the T3D Group prop, never\n                        emitted to the built map. Sub-verbs: set / unset / get\n    label               manage an actor's uedcli-side LABELS: a flat, multi-\n                        valued set of classification tokens (lighting,\n                        flammable, dup-a1f) stored in a trunk sidecar —\n                        orthogonal to the FOLDER path, the T3D Group prop, and\n                        the T3D Tag prop, never emitted to the built map. Sub-\n                        verbs: add / remove / clear / get. Level-only (rejects\n                        --tree stash|prefab)\n    build               build a point actor T3D and write to stdout\n                        (stateless; no level needed)\n    add                 add actors from a T3D file (or - for stdin) to the\n                        $UEDCLI_LEVEL's trunk\n    order               reorder EXISTING actors' CSG precedence by minting new\n                        order_values (no geometry change). CSG order is the\n                        (order_value, name) sort; --first makes an actor\n                        carve/add BEFORE everything else. Multiple actors move\n                        as a block preserving their relative order\n    delete              delete one or more actors from $UEDCLI_LEVEL\n    bbox                print the world axis-aligned bounding box\n                        (min/max/size/center) enclosing the given actors — ONE\n                        box over the whole set (a single actor prints its own\n                        box; the multi-actor case IS the union, so there is no\n                        --union flag: `actor find --folder castle.* | actor\n                        bbox -` gives the union). Honours each actor's\n                        rotation/scale/location; a point actor contributes a\n                        zero-size box at its Location\n    move                move a single actor to/by a world coordinate\n    prop                read, set, or clear an actor's properties model-side,\n                        validated against the actor's class schema (no\n                        editor). Sub-verbs: set / unset / get\n    rotate              rotate a group of actors around a pivot\n                        (PITCH,YAW,ROLL in unreal rotation units, 16384 = 90°)\n    preview             self-rendered orthographic wireframe of actors from\n                        $UEDCLI_LEVEL (brushes coloured by CSG op; point\n                        actors as sprites/markers). Model-side, host-only — no\n                        editor\n\noptions:\n  -h, --help            show this help message and exit\n",
+    "stderr": ""
+  }
+]

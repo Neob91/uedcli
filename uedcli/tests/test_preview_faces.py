@@ -13,7 +13,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from uedcli import cli, dispatch, preview
+from uedcli import preview
+from uedcli.cli import main as cli, dispatch
+from uedcli.cli import resources
 from uedcli.builders import cube, make_brush_actor, sheet
 from uedcli.model import Actor, Brush, Polygon
 from uedcli.preview import (
@@ -605,7 +607,7 @@ def test_point_sprites_and_every_show_overlay_survive_an_opaque_fill():
 
 # ── what dispatch resolves, and what it refuses ────────────────────────────────────────────────
 # These drive the real CLI path: `dispatch.dispatch` over a `--from-t3d` snippet, so exit codes and
-# messages are the ones a user sees. `conftest` autouse-stubs `dispatch._mover_index` with a
+# messages are the ones a user sees. `conftest` autouse-stubs `resources.mover_index` with a
 # `StubClassIndex`, which models all four ways the real index fails to answer.
 
 def _snippet(tmp_path, actors, name="scene.t3d") -> str:
@@ -760,7 +762,7 @@ def test_flat_refuses_when_mover_ness_cannot_be_resolved(tmp_path, monkeypatch, 
                                                          offenders):
     """`movers.is_mover` ANSWERS OR RAISES: reporting an unresolvable class as "not a mover" would render
     a real mover inside-out with nothing downstream to re-check. Every offender is named."""
-    monkeypatch.setattr(dispatch, "_mover_index",
+    monkeypatch.setattr(resources, "mover_index",
                         lambda args, verb, project=None: StubClassIndex(**stub))
     assert _run(tmp_path, [_room(), _box("Crate")], faces="flat") == 2
     err = capsys.readouterr().err
@@ -770,7 +772,7 @@ def test_flat_refuses_when_mover_ness_cannot_be_resolved(tmp_path, monkeypatch, 
 
 def test_a_bare_class_whose_candidates_disagree_names_that_cause(tmp_path, monkeypatch, capsys):
     """Cause 4: a cross-package bare-name collision where one candidate is a mover and one is not."""
-    monkeypatch.setattr(dispatch, "_mover_index", lambda args, verb, project=None: StubClassIndex(
+    monkeypatch.setattr(resources, "mover_index", lambda args, verb, project=None: StubClassIndex(
         ambiguous={"Brush": ("Engine.Brush", "CaroneElevatorSet.CEDoor")}))
     box = _box("Ambiguous")
     box.cls = "Brush"                                            # unqualified, as MAP EXPORT writes it

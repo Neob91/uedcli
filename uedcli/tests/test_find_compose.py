@@ -3,8 +3,8 @@ import io
 from types import SimpleNamespace
 from unittest import mock
 
-from uedcli.cli import build_parser
-from uedcli.dispatch import dispatch
+from uedcli.cli.main import build_parser
+from uedcli.cli.dispatch import dispatch
 from uedcli.model import Actor, Level
 
 
@@ -27,7 +27,7 @@ def _find_args(**over):
 def _run(args, level, stdin=""):
     src = mock.Mock(); src.load.return_value = level
     out = io.StringIO()
-    with mock.patch("uedcli.dispatch._resolve_level_source", return_value=src), \
+    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src), \
             mock.patch("sys.stdin", io.StringIO(stdin)), \
             mock.patch("sys.stdout", out):
         rc = dispatch(args)

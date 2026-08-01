@@ -390,7 +390,7 @@ def _write_blob(path: str, data: bytes) -> None:
 #      first, so the just-written (newest-atime) live blobs are the LAST candidates and survive.
 # It runs two ways, over the same `sweep()`: automatically (once per process, best-effort) after a
 # blob write, and on demand via `uedcli cache gc [--max-bytes N] [--max-entries N]`, whose flags
-# override the env-or-constant caps for that run (`dispatch._dispatch_cache`).
+# override the env-or-constant caps for that run (`cli.commands.cache`).
 
 
 def _env_int(name: str, default: int | None) -> int | None:

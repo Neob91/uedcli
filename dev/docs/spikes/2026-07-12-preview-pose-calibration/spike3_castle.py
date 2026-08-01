@@ -20,7 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[4]))  # Tools/uedcli
 
 from uedcli import builders, writes                           # noqa: E402
 from uedcli.apply import _materialize, _materialized_order    # noqa: E402
-from uedcli.dispatch import TrunkLevelSource                  # noqa: E402
+from uedcli.cli.level_sources import TrunkLevelSource                  # noqa: E402
 from uedcli.driver import Driver                              # noqa: E402
 from uedcli.editor import ensure_editor, stop_editor          # noqa: E402
 from uedcli.normalize import canonical_actor_t3d              # noqa: E402

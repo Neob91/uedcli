@@ -230,7 +230,7 @@ def run_materialize(*, level, packages, out_path, overwrite, state_dir, schema_r
     no session, no 3-way merge, no backup, no git wrapping. Refuses to overwrite unless `overwrite`.
     `packages` is the whole composed-search-path load set (decision 2026-07-05 23:00), resolved and
     remapped by `ensure_load` to the container-visible substrate subset. `search_dirs` is the whole
-    composed config dir set (`dispatch._composed_dirs`); the `mounts` (`/resources/<n>` bind mounts)
+    composed config dir set (`resources.composed_dirs`); the `mounts` (`/resources/<n>` bind mounts)
     and the HOST resolution list are computed ONCE here from it and threaded to `ensure_editor` +
     `ensure_load` — the single mount list drives the ini `Paths`, the docker `-v` args, and the
     host→container remap (decisions.md 2026-07-14 — one uniform dir set; `/stubs` first on Paths so a

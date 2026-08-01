@@ -27,6 +27,7 @@ import struct
 import subprocess
 import sys
 import time
+from dataclasses import dataclass
 from pathlib import Path
 
 from . import config
@@ -47,6 +48,17 @@ TRAVEL_TIMEOUT_S = 480          # cold big-map travel can take minutes (game-boo
 
 class GamePreviewError(Exception):
     """User-facing --game preview failure (→ stderr + exit 2)."""
+
+
+@dataclass(frozen=True, kw_only=True)
+class MaterializeResources:
+    """The project-resolved inputs a trunk materialize needs: the composed search dirs, the package
+    load set, and the schema resolver. Built lazily by a caller-supplied provider so this service
+    never reaches back into the CLI to resolve them — and so the work happens ONLY on a
+    preview-cache miss (never for `--map`, never on a cache hit)."""
+    composed_dirs: list[str]
+    load_set: list[str]
+    schema_resolver: object
 
 
 # The host-side per-substrate table (spec §5 gate fold — the .uc driver seam can't cover
@@ -136,12 +148,16 @@ def _prune_prefix(d: Path, prefix: str, *, protect: Path) -> None:
             p.unlink(missing_ok=True)
 
 
-def materialized_dx(project, level_name: str, level, *, rebuild: bool) -> Path:
+def materialized_dx(project, level_name: str, level, *, rebuild: bool,
+                    provide_resources) -> Path:
     """Materialize the trunk into `materialized__<level>__<hash12>[__<nonce>].dx` under
     .uedcli/preview/. Reuse the hash-named file iff current AND not --rebuild (--rebuild
-    always mints a fresh nonce'd name → guaranteed reload)."""
+    always mints a fresh nonce'd name → guaranteed reload).
+
+    `provide_resources` is a zero-argument provider returning a `MaterializeResources`. It is
+    invoked ONLY on a cache MISS — a reused hash-named file needs no composed dirs, load set or
+    schema resolver, so nothing resolves them on the hot path."""
     from .apply import run_materialize
-    from .dispatch import _composed_dirs, _composed_load_set, _schema_resolver_for
     from .normalize import canonical_level_hash
 
     d = _preview_dir(project)
@@ -152,9 +168,10 @@ def materialized_dx(project, level_name: str, level, *, rebuild: bool) -> Path:
         target.touch()                            # keep the stable cache newest vs --rebuild nonces (B-L4)
         _prune_prefix(d, "materialized", protect=target)
         return target
-    result = run_materialize(level=level, packages=_composed_load_set(project),
-                             search_dirs=_composed_dirs(project),
-                             schema_resolver=_schema_resolver_for(project),
+    res = provide_resources()                     # cache MISS: resolve the project inputs now
+    result = run_materialize(level=level, packages=res.load_set,
+                             search_dirs=res.composed_dirs,
+                             schema_resolver=res.schema_resolver,
                              state_dir=config.state_dir(project.root, create=True),
                              out_path=str(target), overwrite=True)
     if result.rc != 0:
@@ -611,13 +628,17 @@ def _resolve_all(shots: list[Shot], level) -> list[ResolvedShot]:
 
 
 def render_shots(*, shots: list[Shot], out_dir: Path, size: tuple[int, int],
-                 project, user_config, game: str,
+                 project, user_config, game: str, provide_resources,
                  level=None, level_name: str | None = None,
                  map_path: str | None = None, rebuild: bool = False,
                  keep_alive: bool = False) -> int:
     """Render every SHOT via the game engine, into the WARM per-user container (reused across
     invocations; spec §4). Trunk mode (`level`+`level_name`) materializes into the hash-named
-    preview cache; `--map` copies a prebuilt `.dx`/`.unr` in. Returns shots written."""
+    preview cache; `--map` copies a prebuilt `.dx`/`.unr` in. Returns shots written.
+
+    `provide_resources` is a required zero-argument provider returning a `MaterializeResources`;
+    it is threaded to `materialized_dx` and invoked only on a trunk cache miss — never for `--map`,
+    and never before shot/PlayerStart validation."""
     from .preview_native import NativePreviewError  # noqa: F401 (parallel taxonomy)
 
     import dataclasses
@@ -639,7 +660,8 @@ def render_shots(*, shots: list[Shot], out_dir: Path, size: tuple[int, int],
                 raise GamePreviewError(
                     f"level {level_name!r} has no PlayerStart — the game cannot spawn a pawn "
                     "(spec D8); add one (actor build Engine.PlayerStart ... | actor add -)")
-            dx = materialized_dx(project, level_name, level, rebuild=rebuild)
+            dx = materialized_dx(project, level_name, level, rebuild=rebuild,
+                                 provide_resources=provide_resources)
             resolved = _resolve_all(shots, level)       # host owns deg->uu + the ±89.9° pitch clamp
             shot_field = {"shots": [
                 [int(round(rs.eye[0])), int(round(rs.eye[1])), int(round(rs.eye[2])),

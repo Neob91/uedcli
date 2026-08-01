@@ -6,7 +6,7 @@ container — it reads the map's bytes.
 
 These tests run the real verb through `dispatch`, against the committed editor-built map fixtures
 and the committed class packages, into a temporary project. The one thing they patch is the seam
-that finds the game's class packages (`dispatch._class_index`), pointing it at the committed
+that finds the game's class packages (`resources.class_index`), pointing it at the committed
 `uned/UED22` tree instead of a game install the offline suite does not have.
 
 Spec: board item `level-import-native-editor-less-dx-unr-t3d` §4 (verb surface) and §6 (write path).
@@ -19,7 +19,8 @@ from unittest import mock
 
 import pytest
 
-from uedcli import dispatch, trunk
+from uedcli import stash_register, trunk
+from uedcli.cli import dispatch
 from uedcli.classindex import ClassIndex
 
 _ROOT = Path(__file__).resolve().parent.parent.parent
@@ -43,7 +44,7 @@ def _ns(mapfile, tree, *, project, overwrite=False) -> argparse.Namespace:
 
 def _run(mapfile, tree, *, project, overwrite=False) -> int:
     """Run the verb with the class-package seam pointed at the committed UED22 tree."""
-    with mock.patch("uedcli.dispatch._class_index", _real_index):
+    with mock.patch("uedcli.cli.resources.class_index", _real_index):
         return dispatch.dispatch(_ns(mapfile, tree, project=project, overwrite=overwrite))
 
 
@@ -97,8 +98,9 @@ def test_importing_into_a_stash_writes_a_readable_stash_entry(capsys, tmp_projec
     assert rc == 0
     assert out.split() == ["LevelInfo0", "ProbeRoom", "ProbePillar"]
 
-    reg = dispatch._stash_register_for(
-        dispatch.config.resolve_project(env_project=str(tmp_project), cwd=str(tmp_project)))
+    from uedcli import config
+    reg = stash_register.for_project(
+        config.resolve_project(env_project=str(tmp_project), cwd=str(tmp_project)))
     assert reg.exists("import-1337")
     actors_t3d, order, _packages, meta, _folders = reg.read_stash("import-1337")
     assert order == ["LevelInfo0", "ProbeRoom", "ProbePillar"]

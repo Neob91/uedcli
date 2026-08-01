@@ -6,8 +6,8 @@ Spec in board item `materialize-post-verify-fails-when-the-trunk`; decisions.md 
 10:30 UTC. Everything here is model-side and schema-driven; the class schema / defaults /
 struct-member / enum lookups arrive through a lazy `ClassCtx` bundle so that tokens which never
 need the schema (hard-rejects, typed-field-only invocations) run without the v68 install
-(spec §2.4), and dispatch owns the FOUR seams (`_class_schema` / `_class_defaults` /
-`_struct_members` / `_enum_names`) that tests mock.
+(spec §2.4), and `cli.resources` owns the FOUR seams (`class_schema` / `class_defaults` /
+`struct_members` / `enum_names`) that tests mock.
 
 Grammar (spec §3):
     TOKEN   := KEY [PATH] ("=" VALUE)?

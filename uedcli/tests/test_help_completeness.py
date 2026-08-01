@@ -16,7 +16,7 @@ from __future__ import annotations
 import argparse
 import re
 
-from uedcli import cli
+from uedcli.cli import main as cli
 
 _MIN_LEN = 10   # chars, after strip — a real explanation clears this; "X extent" (8) did not
 

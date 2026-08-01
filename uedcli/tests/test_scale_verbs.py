@@ -7,7 +7,9 @@ from decimal import Decimal
 from types import SimpleNamespace
 from unittest import mock
 
-from uedcli import dispatch as dispatch_mod, rotation as R, transform as T
+from uedcli import rotation as R, transform as T
+from uedcli.cli import dispatch as dispatch_mod
+from uedcli.cli import resources
 from uedcli.builders import cube, make_brush_actor
 from uedcli.model import Actor, Level
 
@@ -30,7 +32,7 @@ def _level(*actors) -> Level:
 
 def _run(args, level):
     src = _fake_src(level)
-    with mock.patch("uedcli.dispatch._resolve_level_source", return_value=src):
+    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src):
         rc = dispatch_mod._dispatch(args)
     saved = src.save.call_args.kwargs["level"] if src.save.call_args else None
     return rc, saved
@@ -63,8 +65,8 @@ def test_scale_to_reports_the_pivot_conflict_before_it_needs_a_class_resolver(ca
     the games config) and the mutual-exclusion check used to sit BELOW that, so `--to … --pivot …`
     on a machine with no games config blamed the missing config for the user's typo."""
     def _no_resolver(args, verb, project=None):
-        raise dispatch_mod._SelectionExit(f"{verb}: no games config found (~/.uedcli/config.toml)")
-    monkeypatch.setattr(dispatch_mod, "_mover_index", _no_resolver)
+        raise dispatch_mod.CommandError(f"{verb}: no games config found (~/.uedcli/config.toml)")
+    monkeypatch.setattr(resources, "mover_index", _no_resolver)
     a = make_brush_actor("C", cube(64, 64, 64))
     rc, _ = _run(_scale_args(["C"], to=(D(2), D(1), D(1)), pivot=(D(0), D(0), D(0))), _level(a))
     assert rc == 2
@@ -78,8 +80,8 @@ def test_scale_by_reports_an_unknown_pivot_actor_before_it_needs_a_class_resolve
     """The twin of the check above: `--pivot-actor` names an actor in the already-loaded level, so a
     typo must say so rather than blaming the games config the verb happens to need later."""
     def _no_resolver(args, verb, project=None):
-        raise dispatch_mod._SelectionExit(f"{verb}: no games config found (~/.uedcli/config.toml)")
-    monkeypatch.setattr(dispatch_mod, "_mover_index", _no_resolver)
+        raise dispatch_mod.CommandError(f"{verb}: no games config found (~/.uedcli/config.toml)")
+    monkeypatch.setattr(resources, "mover_index", _no_resolver)
     a = make_brush_actor("C", cube(64, 64, 64))
     rc, _ = _run(_scale_args(["C"], by=(D(2), D(1), D(1)), pivot_actor="Typo"), _level(a))
     assert rc == 2
@@ -352,7 +354,7 @@ def test_an_unstated_location_orbits_from_its_CLASS_default_not_zero():
     args = SimpleNamespace(cmd="actor", sub="rotate", names=["Cam1"], to=None,
                            by=(D(0), D(16384), D(0)), pivot=None, pivot_actor=None,
                            tree=None, container="c", project=None)
-    with mock.patch.object(dispatch_mod, "_default_location_for",
+    with mock.patch.object(resources, "default_location_for",
                            return_value=lambda fq: (D(-500), D(-300), D(300))):
         rc, saved = _run(args, _level(a))
     assert rc == 0
@@ -389,8 +391,8 @@ def test_the_class_default_lookup_is_memoized_per_class():
     args = SimpleNamespace(cmd="actor", sub="rotate", names=[a.name for a in actors], to=None,
                            by=(D(0), D(16384), D(0)), pivot=None, pivot_actor=None,
                            tree=None, container="c", project=None)
-    with mock.patch.object(dispatch_mod, "_class_defaults", _fake_defaults), \
-            mock.patch.object(dispatch_mod, "_resolve_project", lambda a: None):
+    with mock.patch.object(resources, "class_defaults", _fake_defaults), \
+            mock.patch.object(resources, "resolve_project", lambda a: None):
         rc, _ = _run(args, _level(*actors))
     assert rc == 0
     assert calls == ["Engine.Camera"], f"resolved {len(calls)}x for 20 actors of ONE class"

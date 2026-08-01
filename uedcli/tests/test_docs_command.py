@@ -26,7 +26,8 @@ from pathlib import Path
 
 import pytest
 
-from uedcli import cli, userdocs
+from uedcli import userdocs
+from uedcli.cli import main as cli
 
 
 def _write(root: Path, rel: str, text: str) -> Path:
@@ -429,7 +430,7 @@ def test_the_real_docs_tree_has_no_duplicate_topic_keys(monkeypatch):
     """The standing authoring gate: adding a `X.md` beside an existing `X/README.md` turns every
     `uedcli docs` invocation into an error, so the suite has to catch it first.
 
-    **The `load_docs()` call below IS the assertion** — a duplicate key raises `_SelectionExit`
+    **The `load_docs()` call below IS the assertion** — a duplicate key raises `UserDocsError`
     from inside it, before any list comes back. The comparison after it can therefore never fail;
     it is kept only so the property being guarded is written down next to the call that guards it.
     """

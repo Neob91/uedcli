@@ -4,7 +4,10 @@ from pathlib import Path
 
 import pytest
 
-from uedcli import dispatch, level_select, trunk
+from uedcli import trunk
+from uedcli.cli import errors, level_sources
+from uedcli.cli import dispatch
+from uedcli.cli import resources
 from uedcli.model import Actor, Brush, Level
 
 
@@ -24,20 +27,20 @@ def _ns(**kw):
 
 def test_resolve_project_from_the_project_flag(tmp_path):
     proj, _ = _project(tmp_path)
-    got = dispatch._resolve_project(_ns(project=str(proj)))
+    got = resources.resolve_project(_ns(project=str(proj)))
     assert got.root == str(proj)
 
 
 def test_resolve_project_errors_when_none_found(tmp_path, monkeypatch):
     monkeypatch.delenv("UEDCLI_PROJECT", raising=False)
     monkeypatch.chdir(tmp_path)
-    with pytest.raises(dispatch._ProjectError):
-        dispatch._resolve_project(_ns(project=None))
+    with pytest.raises(dispatch.ProjectError):
+        resources.resolve_project(_ns(project=None))
 
 
 def test_resolve_project_accepts_a_uedcli_toml_file(tmp_path):
     proj, _ = _project(tmp_path)
-    got = dispatch._resolve_project(_ns(project=str(proj / "uedcli.toml")))
+    got = resources.resolve_project(_ns(project=str(proj / "uedcli.toml")))
     assert got.root == str(proj)
 
 
@@ -57,8 +60,8 @@ def test_resolve_project_names_the_old_layout_in_the_error(tmp_path, monkeypatch
     (tmp_path / "uedcli" / "config.toml").write_text('game = "deusex"\n')
     monkeypatch.delenv("UEDCLI_PROJECT", raising=False)
     monkeypatch.chdir(tmp_path)
-    with pytest.raises(dispatch._ProjectError) as e:
-        dispatch._resolve_project(_ns(project=None))
+    with pytest.raises(dispatch.ProjectError) as e:
+        resources.resolve_project(_ns(project=None))
     msg = str(e.value)
     assert "old-layout" in msg and "retired" in msg
     assert str(tmp_path / "uedcli.toml") in msg            # names the migration target
@@ -66,24 +69,24 @@ def test_resolve_project_names_the_old_layout_in_the_error(tmp_path, monkeypatch
 
 # --- Task B: the ambient level ($UEDCLI_LEVEL), resolved by resolve_level ---
 # `level select` was removed (decisions 2026-07-20): the current level is now an ambient
-# environment variable, resolved by `level_select.resolve_level(env_level=…, maps_dir=…)`.
+# environment variable, resolved by `level_sources.resolve_level(env_level=…, maps_dir=…)`.
 
 def test_resolve_level_returns_the_env_level(tmp_path):
     proj, name = _project(tmp_path)
-    got = level_select.resolve_level(env_level=name, maps_dir=proj / "maps")
+    got = level_sources.resolve_level(env_level=name, maps_dir=proj / "maps")
     assert got == name
 
 
 def test_resolve_level_unset_env_errors(tmp_path):
     proj, _ = _project(tmp_path)
-    with pytest.raises(level_select.LevelSelectionError):
-        level_select.resolve_level(env_level=None, maps_dir=proj / "maps")
+    with pytest.raises(errors.LevelSelectionError):
+        level_sources.resolve_level(env_level=None, maps_dir=proj / "maps")
 
 
 def test_resolve_level_nonexistent_errors(tmp_path):
     proj, _ = _project(tmp_path)
-    with pytest.raises(level_select.LevelSelectionError):
-        level_select.resolve_level(env_level="ghost", maps_dir=proj / "maps")
+    with pytest.raises(errors.LevelSelectionError):
+        level_sources.resolve_level(env_level="ghost", maps_dir=proj / "maps")
 
 
 # --- level create (scaffold a LevelInfo so materialize/verify works) ---
@@ -168,7 +171,7 @@ def test_level_status_prints_hint_when_nothing_selected(tmp_path, capsys, monkey
     proj, _ = _project(tmp_path)
     assert dispatch.dispatch(_ns(cmd="level", sub="status", tree=None, project=str(proj))) == 0
     # the "no level" hint now names the env var (NO_LEVEL_MSG), not the removed pointer
-    assert level_select.NO_LEVEL_MSG in capsys.readouterr().out
+    assert level_sources.NO_LEVEL_MSG in capsys.readouterr().out
 
 
 def test_level_status_git_hint_appears_in_a_repo(tmp_path, capsys, monkeypatch):
@@ -197,17 +200,17 @@ def test_list_levels_helper_skips_non_levels_and_sorts(tmp_path):
     (maps / "stray").mkdir()                           # a bare dir, no actors/ — not a level
     (maps / "afile.txt").write_text("x")               # a file — skipped
     # case-insensitive sort, ties by exact name; non-levels (incl. the dotted-with-actors/) excluded
-    assert level_select.list_levels(maps) == ["alpha", "Beta", "Zeta"]
+    assert level_sources.list_levels(maps) == ["alpha", "Beta", "Zeta"]
 
 
 def test_list_levels_helper_empty_when_maps_is_a_file(tmp_path):
     f = tmp_path / "maps"
     f.write_text("not a dir")
-    assert level_select.list_levels(f) == []
+    assert level_sources.list_levels(f) == []
 
 
 def test_list_levels_helper_empty_when_maps_absent(tmp_path):
-    assert level_select.list_levels(tmp_path / "nope") == []
+    assert level_sources.list_levels(tmp_path / "nope") == []
 
 
 def test_level_list_prints_names_to_stdout_count_to_stderr(tmp_path, capsys, monkeypatch):
@@ -302,5 +305,5 @@ def test_level_create_and_resolve_reject_dotted_names(tmp_path):
     proj, _ = _project(tmp_path)
     assert dispatch.dispatch(_ns(cmd="level", sub="create", name=".locks",
                                  project=str(proj))) == 2
-    with pytest.raises(level_select.LevelSelectionError):
-        level_select.resolve_level(env_level=".locks", maps_dir=proj / "maps")
+    with pytest.raises(errors.LevelSelectionError):
+        level_sources.resolve_level(env_level=".locks", maps_dir=proj / "maps")

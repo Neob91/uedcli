@@ -11,7 +11,7 @@ cross axis. A brush whose trunk says exactly `Y=228` computes to `227.999994`.
 
 ## A derived coordinate is tolerance-snapped for reporting, never for deciding
 
-`dispatch._bbox_of`, `query._coord_component` and `stashlib.format_summary` run their values through
+`commands.actor.query._bbox_of`, `query._coord_component` and `stashlib.format_summary` run their values through
 `emit.clean` (`CLEAN_EPS` = 0.001) before formatting. `writes.union_bounds`, `writes.actor_bounds`
 and `rotation.world_vertices` do not — every consumer that makes a geometric judgement reads raw.
 
@@ -25,7 +25,7 @@ decision, not module boundaries.
 puts the cleaned value in front of `doctor`, `preview_native` and the Rust CSG core.
 **Rejected:** not snapping and documenting the noise — measured cost: an agent building
 `TubePlatform` read the raw numbers as evidence its rotate had gone wrong.
-**Refs:** `uedcli/dispatch.py` (`_bbox_of`) · `uedcli/query.py` (`_coord_component`) ·
+**Refs:** `uedcli/cli/commands/actor/query.py` (`_bbox_of`) · `uedcli/query.py` (`_coord_component`) ·
 `uedcli/stashlib.py` (`format_summary`) · `uedcli/emit.py` (`clean`, `CLEAN_EPS`) ·
 `uedcli/tests/test_bbox.py` (`test_bbox_snaps_gmath_rotator_noise_to_the_grid`,
 `test_bbox_snap_preserves_a_genuine_fraction`)
@@ -50,8 +50,8 @@ makes the machine-readable output the noisy one, and leaves two spellings of the
 ## One formatter for reporting, one for files
 
 `emit.fmt_coord` (string) and `emit.num_coord` (JSON number) are the single definitions;
-`dispatch._fmt_coord_component`, `dispatch._num_coord_component`, `query._coord_component` and
-`query.list_mover_keys` all delegate. They are separate from `fmt_vertex`/`fmt_loc`, which pad to
+`commands.brush.edit._fmt_coord_component`, `commands.brush.vertex._num_coord_component`,
+`query._coord_component` and `query.list_mover_keys` all delegate. They are separate from `fmt_vertex`/`fmt_loc`, which pad to
 T3D's fixed 6-dp form because a file is their destination.
 
 **Why:** four independent copies of "int when integral, else decimal" had already drifted —
@@ -62,15 +62,16 @@ echoing an authored value formats it as given.
 
 **Rejected:** `fmt_coord` cleaning internally — it would silently snap authored input, so
 `--pivot 227.9999` would echo as `228` while the code used the real value.
-**Refs:** `uedcli/emit.py` (`fmt_coord`, `num_coord`) · `uedcli/dispatch.py`
-(`_fmt_coord_component`, `_num_coord_component`) · `uedcli/query.py` (`_coord_component`,
-`list_mover_keys`) · `uedcli/tests/test_bbox.py` (`test_vertex_list_and_bbox_report_the_same_corner`)
+**Refs:** `uedcli/emit.py` (`fmt_coord`, `num_coord`) · `uedcli/cli/commands/brush/edit.py`
+(`_fmt_coord_component`) · `uedcli/cli/commands/brush/vertex.py` (`_num_coord_component`) ·
+`uedcli/query.py` (`_coord_component`, `list_mover_keys`) · `uedcli/tests/test_bbox.py`
+(`test_vertex_list_and_bbox_report_the_same_corner`)
 
 ## Every reporting formatter guards its input
 
 `fmt_coord`/`num_coord` take `_guard`, not a bare `Decimal()`.
 
-**Why:** `cli.parse_coord` builds coordinates with `Decimal(p)`, which accepts `inf` and `nan`, and
+**Why:** `parse_coord` builds coordinates with `Decimal(p)`, which accepts `inf` and `nan`, and
 `int(Decimal("Infinity"))` raises `OverflowError` — which `dispatch()` does not catch, so
 `brush scale --to inf,1,1` printed a traceback. `_guard` converts it to `CoordinateError` and the
 named exit 2 that `direction/conventions.md` "No Python exception ever reaches the user" requires.
@@ -82,7 +83,7 @@ catch that would swallow unrelated overflows elsewhere.
 
 ## A tuple repr is never user-facing output
 
-Pivot and target lines format through `_fmt_coord_component`, not `f"{tuple(...)}"`.
+Pivot and target lines format through the coordinate formatter (`emit.fmt_coord`), not `f"{tuple(...)}"`.
 
 **Why:** `rotated 1 actor(s) about ('1056.0', '228.0', '112.0')` leaked Python's repr — quotes,
 brackets, trailing `.0` — into an interface whose every other coordinate is `X,Y,Z`.
@@ -92,6 +93,6 @@ genuine `-2.5` min corner printed as `-2`, under-reporting the box.
 
 **Rejected:** keeping `int()` and documenting the truncation — a reported box smaller than the real
 one reads as "contained" when it is not.
-**Refs:** `uedcli/dispatch.py` (the `rotate`/`scale` pivot lines) · `uedcli/stashlib.py`
+**Refs:** `uedcli/cli/commands/actor/edit.py` (the `rotate` pivot lines) · `uedcli/cli/commands/brush/edit.py` (the `scale` pivot lines) · `uedcli/stashlib.py`
 (`format_summary`) · `uedcli/tests/test_stashlib.py`
 (`test_summary_bbox_does_not_truncate_a_fraction`, `test_summary_bbox_snaps_rotator_noise`)

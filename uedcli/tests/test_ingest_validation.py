@@ -1,6 +1,6 @@
 """Exercises the REAL bodies the autouse `_stub_author_validation` no-ops elsewhere:
 `utexture.TextureResolver.exists`, the `class list`/`class show` dispatch handler, and the
-`_validate_ingest_actors` ingest gate driven through `actor add`. A fake substrate (an injected
+`ingest.validate_ingest_actors` ingest gate driven through `actor add`. A fake substrate (an injected
 `ClassIndex` + a fake `TextureResolver`) stands in for the gitignored v68 install.
 """
 import argparse
@@ -8,7 +8,8 @@ import io
 
 import pytest
 
-from uedcli import classindex, config, dispatch, trunk, uprops, utexture
+from uedcli import classindex, config, trunk, uprops, utexture
+from uedcli.cli import dispatch
 from uedcli.classindex import ClassIndex
 from uedcli.model import Actor, Level
 from uedcli.uprops import Prop

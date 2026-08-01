@@ -13,7 +13,9 @@ from decimal import Decimal
 
 import pytest
 
-from uedcli import builders, cli, dispatch, stash_register, stashlib, trunk
+from uedcli import builders, stash_register, stashlib, trunk
+from uedcli.cli import errors, level_sources
+from uedcli.cli import main as cli, dispatch
 from uedcli.model import Actor, Level
 from uedcli.normalize import canonical_actor_t3d
 
@@ -75,72 +77,72 @@ def test_valid_tree_parses_and_routes(tmp_path, monkeypatch, tree):
                     packages=["DeusExDeco"], meta={"anchor": ["0", "0", "0"]})
     _seed_prefab(tmp_path / "Prefabs", "door")
 
-    src = dispatch._resolve_level_source(_ns(project=str(proj), tree=tree))
+    src = level_sources.resolve_level_source(_ns(project=str(proj), tree=tree))
     kind = tree.split("/", 1)[0]
-    expect = {"level": dispatch.TrunkLevelSource, "stash": dispatch.StashLevelSource,
-              "prefab": dispatch.PrefabLevelSource}[kind]
+    expect = {"level": level_sources.TrunkLevelSource, "stash": level_sources.StashLevelSource,
+              "prefab": level_sources.PrefabLevelSource}[kind]
     assert isinstance(src, expect)
     assert src.from_env is False                          # explicit --tree → silent (no echo)
 
 
 def test_default_no_flag_is_the_env_level(tmp_path, monkeypatch):
     proj, name = _project(tmp_path, monkeypatch)
-    src = dispatch._resolve_level_source(_ns(project=str(proj)))
-    assert isinstance(src, dispatch.TrunkLevelSource)
+    src = level_sources.resolve_level_source(_ns(project=str(proj)))
+    assert isinstance(src, level_sources.TrunkLevelSource)
     assert src.trunk_dir.name == name
     assert src.from_env is True                           # ambient → a mutation would announce it
 
 
 def test_no_flag_and_no_env_is_a_clean_no_level(tmp_path, monkeypatch):
     proj, _ = _project(tmp_path, monkeypatch, env=False)  # nothing exported
-    with pytest.raises(dispatch.level_select.LevelSelectionError, match="no level"):
-        dispatch._resolve_level_source(_ns(project=str(proj)))
+    with pytest.raises(errors.LevelSelectionError, match="no level"):
+        level_sources.resolve_level_source(_ns(project=str(proj)))
 
 
 def test_malformed_no_slash_is_clean_exit(tmp_path, monkeypatch):
     proj, _ = _project(tmp_path, monkeypatch)
-    with pytest.raises(dispatch._SelectionExit, match="KIND/NAME"):
-        dispatch._resolve_level_source(_ns(project=str(proj), tree="bogus"))
+    with pytest.raises(dispatch.CommandError, match="KIND/NAME"):
+        level_sources.resolve_level_source(_ns(project=str(proj), tree="bogus"))
 
 
 def test_unknown_kind_is_clean_exit(tmp_path, monkeypatch):
     proj, _ = _project(tmp_path, monkeypatch)
-    with pytest.raises(dispatch._SelectionExit, match="KIND/NAME"):
-        dispatch._resolve_level_source(_ns(project=str(proj), tree="widget/foo"))
+    with pytest.raises(dispatch.CommandError, match="KIND/NAME"):
+        level_sources.resolve_level_source(_ns(project=str(proj), tree="widget/foo"))
 
 
 def test_empty_name_is_clean_exit(tmp_path, monkeypatch):
     proj, _ = _project(tmp_path, monkeypatch)
-    with pytest.raises(dispatch._SelectionExit, match="KIND/NAME"):
-        dispatch._resolve_level_source(_ns(project=str(proj), tree="stash/"))
+    with pytest.raises(dispatch.CommandError, match="KIND/NAME"):
+        level_sources.resolve_level_source(_ns(project=str(proj), tree="stash/"))
 
 
 # ── Not-found per kind ─────────────────────────────────────────────────────────────────────
 
 def test_stash_not_found(tmp_path, monkeypatch):
     proj, _ = _project(tmp_path, monkeypatch)
-    with pytest.raises(dispatch._SelectionExit, match="stash not found: 'nope'"):
-        dispatch._resolve_level_source(_ns(project=str(proj), tree="stash/nope"))
+    with pytest.raises(dispatch.CommandError, match="stash not found: 'nope'"):
+        level_sources.resolve_level_source(_ns(project=str(proj), tree="stash/nope"))
 
 
 def test_prefab_not_found(tmp_path, monkeypatch):
     proj, _ = _project(tmp_path, monkeypatch)
-    with pytest.raises(dispatch._SelectionExit, match="prefab not found: 'nope'"):
-        dispatch._resolve_level_source(_ns(project=str(proj), tree="prefab/nope"))
+    with pytest.raises(dispatch.CommandError, match="prefab not found: 'nope'"):
+        level_sources.resolve_level_source(_ns(project=str(proj), tree="prefab/nope"))
 
 
 def test_level_not_found(tmp_path, monkeypatch):
     proj, _ = _project(tmp_path, monkeypatch)
-    with pytest.raises(dispatch._SelectionExit, match="level not found: 'ghost'"):
-        dispatch._resolve_level_source(_ns(project=str(proj), tree="level/ghost"))
+    with pytest.raises(dispatch.CommandError, match="level not found: 'ghost'"):
+        level_sources.resolve_level_source(_ns(project=str(proj), tree="level/ghost"))
 
 
 def test_prefab_tree_works_with_no_env_level(tmp_path, monkeypatch):
     # A prefab edit must NOT require an ambient level (that's the whole point of the flag).
     proj, _ = _project(tmp_path, monkeypatch, env=False)
     _seed_prefab(tmp_path / "Prefabs", "door")
-    src = dispatch._resolve_level_source(_ns(project=str(proj), tree="prefab/door"))
-    assert isinstance(src, dispatch.PrefabLevelSource)
+    src = level_sources.resolve_level_source(_ns(project=str(proj), tree="prefab/door"))
+    assert isinstance(src, level_sources.PrefabLevelSource)
 
 
 # ── [SR-#2] path traversal ─────────────────────────────────────────────────────────────────
@@ -150,8 +152,8 @@ def test_path_traversal_is_refused_before_any_source(tmp_path, monkeypatch, tree
     proj, _ = _project(tmp_path, monkeypatch)
     escape = tmp_path / "x.t3d"
     escape.write_text("precious")
-    with pytest.raises(dispatch._SelectionExit):
-        dispatch._resolve_level_source(_ns(project=str(proj), tree=tree))
+    with pytest.raises(dispatch.CommandError):
+        level_sources.resolve_level_source(_ns(project=str(proj), tree=tree))
     assert escape.read_text() == "precious"    # nothing read/written outside the box root
 
 
@@ -160,21 +162,21 @@ def test_path_traversal_is_refused_before_any_source(tmp_path, monkeypatch, tree
 def test_stash_source_roundtrips_a_move(tmp_path, monkeypatch):
     proj, _ = _project(tmp_path, monkeypatch)
     _seed_stash(proj, "bay")
-    src = dispatch._resolve_level_source(_ns(project=str(proj), tree="stash/bay"))
+    src = level_sources.resolve_level_source(_ns(project=str(proj), tree="stash/bay"))
     level = src.load()
     assert level.order == ["Box"]
     level.actors["Box"].location = (Decimal(100), Decimal(0), Decimal(0))
     src.save(verb="move", args={}, level=level, touched=["Box"])
     blobs, order, pkgs, _meta, _folders = _register(proj).read_stash("bay")
     assert order == ["Box"]
-    reread = dispatch.StashLevelSource(_register(proj), "bay").load()
+    reread = level_sources.StashLevelSource(_register(proj), "bay").load()
     assert reread.actors["Box"].location == (Decimal(100), Decimal(0), Decimal(0))
 
 
 def test_prefab_source_roundtrips_and_texture_edit_updates_packages(tmp_path, monkeypatch):
     proj, _ = _project(tmp_path, monkeypatch)
     _seed_prefab(tmp_path / "Prefabs", "door")
-    src = dispatch._resolve_level_source(_ns(project=str(proj), tree="prefab/door"))
+    src = level_sources.resolve_level_source(_ns(project=str(proj), tree="prefab/door"))
     level = src.load()
     for poly in level.actors["Panel"].brush.polys:
         poly.texture = "NewPkg.Wood"
@@ -223,7 +225,7 @@ def test_stash_order_with_missing_blob_loads_cleanly(tmp_path, monkeypatch):
     # A stash whose order lists a name with no actor blob (a corrupt/partial write).
     reg.write_stash("bay", full_level={"Box": _cube_t3d("Box")}, order=["Box", "Ghost"],
                     packages=["DeusExDeco"], meta={"anchor": ["0", "0", "0"]})
-    src = dispatch.StashLevelSource(reg, "bay")
+    src = level_sources.StashLevelSource(reg, "bay")
     level = src.load()                                     # must not raise KeyError
     assert level.order == ["Box"]                          # missing name skipped
 
@@ -239,7 +241,7 @@ def test_prefab_partial_tree_loads_cleanly(tmp_path):
     ghost.mkdir()
     (ghost / "actor.t3d").write_text("")                   # torn write
     (ghost / "order_value").write_text("zzz\n")
-    src = dispatch.PrefabLevelSource(root, "door")
+    src = level_sources.PrefabLevelSource(root, "door")
     level = src.load()
     assert level.order == ["Panel"]                        # the torn actor is skipped
 
@@ -391,8 +393,8 @@ def test_corrupt_prefab_sidecar_is_clean_not_a_traceback(tmp_path, monkeypatch):
     proj, _ = _project(tmp_path, monkeypatch)
     _seed_prefab(tmp_path / "Prefabs", "door")
     (tmp_path / "Prefabs" / "door" / "meta.json").write_text("{ not valid json")
-    src = dispatch._resolve_level_source(_ns(project=str(proj), tree="prefab/door"))
-    with pytest.raises(dispatch._SelectionExit, match="cannot read prefab 'door'"):
+    src = level_sources.resolve_level_source(_ns(project=str(proj), tree="prefab/door"))
+    with pytest.raises(dispatch.CommandError, match="cannot read prefab 'door'"):
         src.load()
 
 
@@ -400,8 +402,8 @@ def test_corrupt_stash_meta_is_clean_not_a_traceback(tmp_path, monkeypatch):
     proj, _ = _project(tmp_path, monkeypatch)
     _seed_stash(proj, "bay")
     (proj / ".uedcli" / "stash" / "bay" / "meta.json").write_text("{ not valid json")
-    src = dispatch._resolve_level_source(_ns(project=str(proj), tree="stash/bay"))
-    with pytest.raises(dispatch._SelectionExit, match="cannot read stash 'bay'"):
+    src = level_sources.resolve_level_source(_ns(project=str(proj), tree="stash/bay"))
+    with pytest.raises(dispatch.CommandError, match="cannot read stash 'bay'"):
         src.load()
 
 
@@ -415,7 +417,7 @@ def test_emptied_stash_stays_targetable(tmp_path, monkeypatch):
     assert dispatch.dispatch(d) == 0
     assert _register(proj).exists("bay")                     # still a real stash, not a phantom
     # re-resolvable (no false "stash not found"), and an add lands back in it
-    src = dispatch._resolve_level_source(_ns(project=str(proj), tree="stash/bay"))
+    src = level_sources.resolve_level_source(_ns(project=str(proj), tree="stash/bay"))
     assert src.load().order == []                            # empty, but loads cleanly
     import io
     a = _ns(cmd="actor", sub="add", file="-", tree="stash/bay", project=str(proj))
@@ -444,8 +446,8 @@ def test_stash_edit_end_to_end_through_dispatch(tmp_path, monkeypatch):
     args = _ns(cmd="actor", sub="move", name="Box", to=(Decimal(5), Decimal(0), Decimal(0)),
                by=None, tree="stash/bay", project=str(proj))
     assert dispatch.dispatch(args) == 0
-    reread = dispatch.StashLevelSource(_register(proj), "bay").load()
+    reread = level_sources.StashLevelSource(_register(proj), "bay").load()
     assert reread.actors["Box"].location == (Decimal(5), Decimal(0), Decimal(0))
     # the ambient level is untouched (edit went to the stash, not the level)
-    sel = dispatch._resolve_level_source(_ns(project=str(proj))).load()
+    sel = level_sources.resolve_level_source(_ns(project=str(proj))).load()
     assert "Box" not in sel.actors

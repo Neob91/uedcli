@@ -27,7 +27,9 @@ from unittest import mock
 
 import pytest
 
-from uedcli import cli, dispatch, trunk
+from uedcli import trunk
+from uedcli.cli import main as cli, dispatch, generators
+from uedcli.cli.parsers._arguments import parse_coord
 from uedcli.builders import cube, make_brush_actor
 from uedcli.model import Actor, Level
 from uedcli.uprops import Prop
@@ -212,14 +214,14 @@ def _prop_get_json(tokens):
                            tokens=list(tokens), kv=False, json=True)
     src = mock.Mock()
     src.load.return_value = level
-    with mock.patch("uedcli.dispatch._resolve_level_source", return_value=src), \
-            mock.patch("uedcli.dispatch._resolve_project",
-                       side_effect=dispatch._ProjectError("no project")), \
-            mock.patch("uedcli.dispatch._class_schema",
+    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src), \
+            mock.patch("uedcli.cli.resources.resolve_project",
+                       side_effect=dispatch.ProjectError("no project")), \
+            mock.patch("uedcli.cli.resources.class_schema",
                        lambda cls, project=None: dict(_PROP_SCHEMA)), \
-            mock.patch("uedcli.dispatch._class_defaults", lambda cls, project=None: {}), \
-            mock.patch("uedcli.dispatch._struct_members", lambda p, project=None: []), \
-            mock.patch("uedcli.dispatch._enum_names", lambda p, project=None: ()):
+            mock.patch("uedcli.cli.resources.class_defaults", lambda cls, project=None: {}), \
+            mock.patch("uedcli.cli.resources.struct_members", lambda p, project=None: []), \
+            mock.patch("uedcli.cli.resources.enum_names", lambda p, project=None: ()):
         rc = dispatch._dispatch(args)
     return rc
 
@@ -245,14 +247,14 @@ def _prop_get_json_piped(names_stdin, tokens):
     src = mock.Mock()
     src.load.return_value = level
     with mock.patch("sys.stdin", io.StringIO(names_stdin)), \
-            mock.patch("uedcli.dispatch._resolve_level_source", return_value=src), \
-            mock.patch("uedcli.dispatch._resolve_project",
-                       side_effect=dispatch._ProjectError("no project")), \
-            mock.patch("uedcli.dispatch._class_schema",
+            mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src), \
+            mock.patch("uedcli.cli.resources.resolve_project",
+                       side_effect=dispatch.ProjectError("no project")), \
+            mock.patch("uedcli.cli.resources.class_schema",
                        lambda cls, project=None: dict(_PROP_SCHEMA)), \
-            mock.patch("uedcli.dispatch._class_defaults", lambda cls, project=None: {}), \
-            mock.patch("uedcli.dispatch._struct_members", lambda p, project=None: []), \
-            mock.patch("uedcli.dispatch._enum_names", lambda p, project=None: ()):
+            mock.patch("uedcli.cli.resources.class_defaults", lambda cls, project=None: {}), \
+            mock.patch("uedcli.cli.resources.struct_members", lambda p, project=None: []), \
+            mock.patch("uedcli.cli.resources.enum_names", lambda p, project=None: ()):
         return dispatch._dispatch(args)
 
 
@@ -284,7 +286,7 @@ def test_brush_build_prop_bakes_props_onto_the_mover(capsys):
     argv = ["brush", "build", "cube", "--width", "64", "--breadth", "64", "--height", "96",
             "--mover-class", "Engine.Mover",
             "--prop", "MoverEncroachType=2", "--prop", "Tag=Lift1"]
-    with mock.patch("uedcli.dispatch._class_schema",
+    with mock.patch("uedcli.cli.resources.class_schema",
                     lambda cls, project=None: dict(_BRUSH_PROP_SCHEMA)):
         rc = _run(argv)
     assert rc == 0
@@ -301,7 +303,7 @@ def test_brush_build_prop_on_plain_brush_carries_the_prop(capsys):
     from uedcli.model import parse_t3d
     argv = ["brush", "build", "cube", "--width", "64", "--breadth", "64", "--height", "64",
             "--prop", "Tag=WallTag"]
-    with mock.patch("uedcli.dispatch._class_schema",
+    with mock.patch("uedcli.cli.resources.class_schema",
                     lambda cls, project=None: dict(_BRUSH_PROP_SCHEMA)):
         rc = _run(argv)
     assert rc == 0
@@ -316,7 +318,7 @@ def test_brush_build_rotate_wins_over_prop_rotation(capsys):
     from uedcli.model import parse_t3d
     argv = ["brush", "build", "cube", "--width", "64", "--breadth", "64", "--height", "64",
             "--prop", "Rotation=(Pitch=1,Yaw=2,Roll=3)", "--rotate", "0,16384,0"]  # 16384 UU = 90°
-    with mock.patch("uedcli.dispatch._class_schema",
+    with mock.patch("uedcli.cli.resources.class_schema",
                     lambda cls, project=None: dict(_BRUSH_PROP_SCHEMA)):
         rc = _run(argv)
     assert rc == 0
@@ -325,7 +327,7 @@ def test_brush_build_rotate_wins_over_prop_rotation(capsys):
     rotations = [v for k, v in a.props if k == "Rotation"]
     assert len(rotations) == 1                              # exactly one Rotation — no duplicate
     # ...and it is the --rotate-derived value, NOT the --prop one that it overrode.
-    uu = dispatch._rotation_prop_uu(cli.parse_coord("0,16384,0"))
+    uu = generators.rotation_prop_uu(parse_coord("0,16384,0"))
     assert rotations[0] == f"(Pitch={uu[0]},Yaw={uu[1]},Roll={uu[2]})"
     assert rotations[0] != "(Pitch=1,Yaw=2,Roll=3)"
 

@@ -1,13 +1,14 @@
 """Regressions for the ambient-`$UEDCLI_LEVEL` model (decisions 2026-07-20; spec
 board item `level-is-the-ambient-uedcli-level-target-tree` §8): the mutation visibility echo, `level list` never
 crashing on a bad env, and the `--tree`+`--map` preview contradiction. The `--tree`/env precedence and
-the malformed-value errors are covered in `test_tree_flag.py` / `test_level_select.py`."""
+the malformed-value errors are covered in `test_tree_flag.py` / `test_level_sources.py`."""
 import argparse
 from decimal import Decimal
 
 import pytest
 
-from uedcli import dispatch, trunk
+from uedcli import trunk
+from uedcli.cli import dispatch
 from uedcli.model import Actor, Level
 
 

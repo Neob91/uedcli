@@ -61,15 +61,11 @@ _H1 = re.compile(r"^#[ \t]+(.+?)[ \t]*#*[ \t]*$", re.MULTILINE)
 SNIPPET_MAX = 120
 
 
-def _selection_exit(message: str):
-    """Build the CLI's standard clean-exit-2 error.
-
-    Imported inside the function on purpose: `_SelectionExit` lives in `dispatch.py`, which imports
-    this module. A module-level import would be a cycle; a function-level one cannot be, because
-    `dispatch` is always fully loaded by the time any docs verb runs.
-    """
-    from .dispatch import _SelectionExit
-    return _SelectionExit(message)
+class UserDocsError(Exception):
+    """A user-facing docs failure — a broken/misconfigured docs root, an unreadable tree, or a
+    duplicate topic key. This module is a service, not the CLI boundary, so it raises its own error
+    rather than reaching into `dispatch`; the docs command turns it into a clean stderr message and
+    exit 2."""
 
 
 @dataclass(frozen=True)
@@ -113,7 +109,7 @@ def docs_root() -> Path:
     if override:
         root = Path(override)
         if not root.is_dir():
-            raise _selection_exit(
+            raise UserDocsError(
                 f"UEDCLI_DOCS_DIR is not a directory: {override}")
         return root
     pkg = Path(str(importlib.resources.files("uedcli")))
@@ -123,7 +119,7 @@ def docs_root() -> Path:
     bundled = pkg / "_docs"
     if bundled.is_dir():
         return bundled
-    raise _selection_exit(
+    raise UserDocsError(
         f"uedcli docs unavailable (broken install): no docs directory at {source} or {bundled} "
         f"— set UEDCLI_DOCS_DIR to a docs tree to override")
 
@@ -180,7 +176,7 @@ def _read(path: Path) -> str:
     try:
         return path.read_bytes().decode("utf-8", errors="replace")
     except OSError as e:
-        raise _selection_exit(f"cannot read doc file {path}: {e.strerror or e}") from None
+        raise UserDocsError(f"cannot read doc file {path}: {e.strerror or e}") from None
 
 
 def _in_dev_tree(rel: PurePosixPath) -> bool:
@@ -212,14 +208,14 @@ def _markdown_files(root: Path) -> list[Path]:
             with os.scandir(directory) as it:
                 entries = list(it)
         except OSError as e:
-            raise _selection_exit(
+            raise UserDocsError(
                 f"cannot read docs directory {directory}: {e.strerror or e}") from None
         for entry in entries:
             path = Path(entry.path)
             try:
                 is_dir = entry.is_dir(follow_symlinks=False)
             except OSError as e:                       # a stat that fails mid-walk, same rule
-                raise _selection_exit(
+                raise UserDocsError(
                     f"cannot read docs entry {path}: {e.strerror or e}") from None
             if is_dir:
                 if not _in_dev_tree(PurePosixPath(path.relative_to(root).as_posix())):
@@ -267,7 +263,7 @@ def load_docs(root: Path | None = None) -> list[Doc]:
         key = topic_key(rel)
         if (clash := seen.get(key.casefold())) is not None:
             first, second = sorted([clash.path.relative_to(root).as_posix(), rel.as_posix()])
-            raise _selection_exit(
+            raise UserDocsError(
                 f"docs: two files claim the topic key {key!r}: {first} and {second} "
                 f"— rename one (a README.md takes its directory's name; the root README.md takes "
                 f"{ROOT_KEY!r})")
@@ -280,7 +276,7 @@ def load_docs(root: Path | None = None) -> list[Doc]:
         # legitimate state — uedcli always ships pages. Answering `0 topic(s)` at exit 0 would tell
         # a user "this build has no documentation" in the exact words it would use if that were
         # true, so the one thing they need to know (WHERE it looked) never reaches them.
-        raise _selection_exit(
+        raise UserDocsError(
             f"uedcli docs unavailable: no documentation pages under {root} "
             f"— set UEDCLI_DOCS_DIR to a docs tree to override")
     # Sorted the way lookup compares — case-insensitively — so the printed order and the resolution

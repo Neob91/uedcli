@@ -4,7 +4,7 @@ self-ignoring state dir `<root>/.uedcli/stash/` (decisions 2026-07-05 14:58, rel
 23:01 UTC) a stash entry is the SAME per-actor T3D tree as the trunk and a prefab:
 `<id>/{actors/<name>/{actor.t3d, order_value[, folder]}, packages, meta.json}` — read/written through
 the ONE shared `t3dtree` code path (`stashlib.write_tree_box`/`read_tree_box`).
-`dispatch._dispatch_stash` drives it via `write_stash`/`read_stash`/`list_stashes`/`drop_stash`.
+`cli.commands.stash` drives it via `write_stash`/`read_stash`/`list_stashes`/`drop_stash`.
 
 An unknown id reads back as empties (never raises), a drop of an unknown id is a no-op, and `list`
 reports only real stash dirs (keyed on `meta.json`). Stash is machine-local throwaway, so an old
@@ -29,6 +29,15 @@ def _is_stale_flat_stash(dest: Path) -> bool:
     if not adir.is_dir():
         return False
     return any(p.is_file() and p.suffix == ".t3d" for p in adir.iterdir())
+
+
+def for_project(project) -> "FileStashRegister":
+    """The project's stash register at `<root>/.uedcli/stash/` — machine-local scratch in the
+    self-ignoring state dir (created, with its `*` .gitignore, on first use). The ONE builder both
+    stash-register consumers (`cli.commands.stash._resolve_stash_register` and `cli.level_sources`'s
+    `--tree stash/NAME` branch) go through."""
+    from . import config
+    return FileStashRegister(config.state_subdir(project.root, "stash", create=True))
 
 
 class FileStashRegister:

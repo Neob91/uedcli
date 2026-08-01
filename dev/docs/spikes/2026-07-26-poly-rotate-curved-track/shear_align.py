@@ -45,7 +45,7 @@ _REPO = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(_REPO))
 
 from uedcli import rotation                                     # noqa: E402
-from uedcli.dispatch import TrunkLevelSource                    # noqa: E402
+from uedcli.cli.level_sources import TrunkLevelSource                    # noqa: E402
 from uedcli.polyalign import (_cross, _dot, _len, _scale, _sub, _unit,   # noqa: E402
                               _world_verts, resolve_actor_name, find_faces)
 from uedcli.texframe import world_uv_frame                      # noqa: E402

@@ -1,6 +1,6 @@
 """Dispatch-layer actor-name resolution tests: case-insensitive lookup, clear errors,
 canonical recording. Each test builds an in-memory fixture Level and re-points the trunk seam
-(`dispatch._resolve_level_source`) at a Mock `TrunkLevelSource` whose `load()` returns it, then
+(`level_sources.resolve_level_source`) at a Mock `TrunkLevelSource` whose `load()` returns it, then
 invokes `dispatch._dispatch` directly with a SimpleNamespace args object.
 
 Name resolution and canonical-name behaviour are pure model-side transforms (unchanged by the
@@ -16,7 +16,8 @@ from decimal import Decimal
 from types import SimpleNamespace
 from unittest import mock
 
-from uedcli import dispatch as dispatch_mod
+from uedcli.cli import dispatch as dispatch_mod
+from uedcli.cli import level_sources
 from uedcli.builders import cube, make_brush_actor
 from uedcli.emit import emit_actor_t3d
 from uedcli.model import Actor, parse_t3d
@@ -66,7 +67,7 @@ def test_it_actor_move_resolves_case_insensitively(tmp_path, monkeypatch, capsys
         to=None, by=(Decimal(0), Decimal(0), Decimal(10)),
         container="dx-lum-uned")
     src = _fake_src(_fixture_level())
-    with mock.patch("uedcli.dispatch._resolve_level_source", return_value=src):
+    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src):
         rc = dispatch_mod._dispatch(args)
     assert rc == 0
 
@@ -77,7 +78,7 @@ def test_it_actor_move_errors_on_missing(tmp_path, monkeypatch, capsys):
         to=None, by=(Decimal(0), Decimal(0), Decimal(10)),
         container="dx-lum-uned")
     src = _fake_src(_fixture_level())
-    with mock.patch("uedcli.dispatch._resolve_level_source", return_value=src):
+    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src):
         rc = dispatch_mod._dispatch(args)
     assert rc == 2
     err = capsys.readouterr().err
@@ -91,7 +92,7 @@ def test_it_actor_move_records_canonical_name(tmp_path, monkeypatch):
         to=None, by=(Decimal(0), Decimal(0), Decimal(10)),
         container="dx-lum-uned")
     src = _fake_src(_fixture_level())
-    with mock.patch("uedcli.dispatch._resolve_level_source", return_value=src):
+    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src):
         dispatch_mod._dispatch(args)
     saved = src.save.call_args.kwargs
     assert saved["args"]["name"] == "Brush1"
@@ -107,7 +108,7 @@ def test_it_actor_move_records_canonical_name_in_touched(tmp_path, monkeypatch):
         to=None, by=(Decimal(0), Decimal(0), Decimal(10)),
         container="dx-lum-uned")
     src = _fake_src(_fixture_level())
-    with mock.patch("uedcli.dispatch._resolve_level_source", return_value=src):
+    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src):
         dispatch_mod._dispatch(args)
     saved = src.save.call_args.kwargs
     assert saved["args"]["name"] == "Brush1"
@@ -121,7 +122,7 @@ def test_it_actor_move_records_canonical_name_in_touched(tmp_path, monkeypatch):
 
 def _group_schema(cls=None, project=None):
     """A one-property schema (Actor.Group, a NameProperty) so `--set Group=…` validates without the
-    v68 install. Patched over `dispatch._class_schema` (the schema seam)."""
+    v68 install. Patched over `resources.class_schema` (the schema seam)."""
     from uedcli.uprops import Prop
     return {"group": Prop(name="Group", kind="NameProperty", array_dim=1, property_flags=0,
                           type_ref=0, type_name=None, owner="Engine.Actor")}
@@ -131,8 +132,8 @@ def test_it_actor_prop_resolves_case_insensitively(tmp_path, monkeypatch):
     args = SimpleNamespace(cmd="actor", sub="prop", propsub="set", name="brush1",
                            tokens=["Group=walls"], kv=False)
     src = _fake_src(_fixture_level())
-    with mock.patch("uedcli.dispatch._resolve_level_source", return_value=src), \
-            mock.patch("uedcli.dispatch._class_schema", _group_schema):
+    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src), \
+            mock.patch("uedcli.cli.resources.class_schema", _group_schema):
         assert dispatch_mod._dispatch(args) == 0
 
 
@@ -140,8 +141,8 @@ def test_it_actor_prop_errors_on_missing(tmp_path, monkeypatch, capsys):
     args = SimpleNamespace(cmd="actor", sub="prop", propsub="set", name="NoSuch",
                            tokens=["Group=walls"], kv=False)
     src = _fake_src(_fixture_level())
-    with mock.patch("uedcli.dispatch._resolve_level_source", return_value=src), \
-            mock.patch("uedcli.dispatch._class_schema", _group_schema):
+    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src), \
+            mock.patch("uedcli.cli.resources.class_schema", _group_schema):
         rc = dispatch_mod._dispatch(args)
     assert rc == 2
     err = capsys.readouterr().err
@@ -153,8 +154,8 @@ def test_it_actor_prop_records_canonical_name(tmp_path, monkeypatch):
     args = SimpleNamespace(cmd="actor", sub="prop", propsub="set", name="brush1",
                            tokens=["Group=walls"], kv=False)
     src = _fake_src(_fixture_level())
-    with mock.patch("uedcli.dispatch._resolve_level_source", return_value=src), \
-            mock.patch("uedcli.dispatch._class_schema", _group_schema):
+    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src), \
+            mock.patch("uedcli.cli.resources.class_schema", _group_schema):
         dispatch_mod._dispatch(args)
     assert src.save.call_args.kwargs["args"]["name"] == "Brush1"
 
@@ -168,7 +169,7 @@ def test_it_actor_delete_resolves_case_insensitively(tmp_path, monkeypatch):
         cmd="actor", sub="delete", names=["brush1", "helperlight0"],
         container="dx-lum-uned")
     src = _fake_src(_fixture_level())
-    with mock.patch("uedcli.dispatch._resolve_level_source", return_value=src):
+    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src):
         rc = dispatch_mod._dispatch(args)
     assert rc == 0
     actors = src.save.call_args.kwargs["level"].actors
@@ -181,7 +182,7 @@ def test_it_actor_delete_errors_on_missing(tmp_path, monkeypatch, capsys):
         cmd="actor", sub="delete", names=["NoSuch"],
         container="dx-lum-uned")
     src = _fake_src(_fixture_level())
-    with mock.patch("uedcli.dispatch._resolve_level_source", return_value=src):
+    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src):
         rc = dispatch_mod._dispatch(args)
     assert rc == 2
     err = capsys.readouterr().err
@@ -194,7 +195,7 @@ def test_it_actor_delete_records_canonical_names(tmp_path, monkeypatch):
         cmd="actor", sub="delete", names=["brush1", "helperlight0"],
         container="dx-lum-uned")
     src = _fake_src(_fixture_level())
-    with mock.patch("uedcli.dispatch._resolve_level_source", return_value=src):
+    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src):
         dispatch_mod._dispatch(args)
     assert src.save.call_args.kwargs["args"]["names"] == ["Brush1", "HelperLight0"]
 
@@ -209,7 +210,7 @@ def test_it_actor_rotate_resolves_case_insensitively(tmp_path, monkeypatch):
         pivot=None, pivot_actor=None,
         container="dx-lum-uned")
     src = _fake_src(_fixture_level())
-    with mock.patch("uedcli.dispatch._resolve_level_source", return_value=src):
+    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src):
         assert dispatch_mod._dispatch(args) == 0
 
 
@@ -220,7 +221,7 @@ def test_it_actor_rotate_deduplicates_mixed_case(tmp_path, monkeypatch):
         pivot=(Decimal(0), Decimal(0), Decimal(0)), pivot_actor=None,
         container="dx-lum-uned")
     src = _fake_src(_fixture_level())
-    with mock.patch("uedcli.dispatch._resolve_level_source", return_value=src):
+    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src):
         rc = dispatch_mod._dispatch(args)
     assert rc == 0
     # A 90° yaw rotation is applied exactly once — deduped to one canonical name.
@@ -234,7 +235,7 @@ def test_it_actor_rotate_pivot_actor_resolves_case_insensitively(tmp_path, monke
         pivot=None, pivot_actor="helperlight0",  # wrong case
         container="dx-lum-uned")
     src = _fake_src(_fixture_level())
-    with mock.patch("uedcli.dispatch._resolve_level_source", return_value=src):
+    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src):
         assert dispatch_mod._dispatch(args) == 0
 
 
@@ -245,7 +246,7 @@ def test_it_actor_rotate_errors_on_all_missing(tmp_path, monkeypatch, capsys):
         pivot=None, pivot_actor=None,
         container="dx-lum-uned")
     src = _fake_src(_fixture_level())
-    with mock.patch("uedcli.dispatch._resolve_level_source", return_value=src):
+    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src):
         rc = dispatch_mod._dispatch(args)
     assert rc == 2
     err = capsys.readouterr().err
@@ -260,7 +261,7 @@ def test_it_actor_rotate_records_canonical_names(tmp_path, monkeypatch):
         pivot=None, pivot_actor=None,
         container="dx-lum-uned")
     src = _fake_src(_fixture_level())
-    with mock.patch("uedcli.dispatch._resolve_level_source", return_value=src):
+    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src):
         dispatch_mod._dispatch(args)
     saved = src.save.call_args.kwargs
     assert saved["args"]["names"] == ["Brush1"]
@@ -275,7 +276,7 @@ def test_it_actor_rotate_pivot_actor_records_pivot_coords(tmp_path, monkeypatch)
         pivot=None, pivot_actor="helperlight0",
         container="dx-lum-uned")
     src = _fake_src(_fixture_level())
-    with mock.patch("uedcli.dispatch._resolve_level_source", return_value=src):
+    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src):
         dispatch_mod._dispatch(args)
     recorded_pivot = src.save.call_args.kwargs["args"]["pivot"]
     # HelperLight0 is at (100, 200, 300) — pivot coords must appear, not the actor name
@@ -293,7 +294,7 @@ def test_it_brush_clip_resolves_case_insensitively(tmp_path, monkeypatch):
         axis="z", offset=Decimal(0), plane=None, keep="above",
         container="dx-lum-uned")
     src = _fake_src(_fixture_level())
-    with mock.patch("uedcli.dispatch._resolve_level_source", return_value=src):
+    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src):
         assert dispatch_mod._dispatch(args) == 0
 
 
@@ -303,7 +304,7 @@ def test_it_brush_clip_errors_on_missing(tmp_path, monkeypatch, capsys):
         axis="z", offset=Decimal(0), plane=None, keep="above",
         container="dx-lum-uned")
     src = _fake_src(_fixture_level())
-    with mock.patch("uedcli.dispatch._resolve_level_source", return_value=src):
+    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src):
         rc = dispatch_mod._dispatch(args)
     assert rc == 2
     err = capsys.readouterr().err
@@ -317,7 +318,7 @@ def test_it_brush_clip_records_canonical_name(tmp_path, monkeypatch):
         axis="z", offset=Decimal(0), plane=None, keep="above",
         container="dx-lum-uned")
     src = _fake_src(_fixture_level())
-    with mock.patch("uedcli.dispatch._resolve_level_source", return_value=src):
+    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src):
         dispatch_mod._dispatch(args)
     assert src.save.call_args.kwargs["args"]["name"] == "Brush1"
 
@@ -333,7 +334,7 @@ def test_it_brush_vertex_move_resolves_case_insensitively(tmp_path, monkeypatch)
         to=None, by=(Decimal(0), Decimal(0), Decimal(0)),  # no-op move
         container="dx-lum-uned")
     src = _fake_src(_fixture_level())
-    with mock.patch("uedcli.dispatch._resolve_level_source", return_value=src):
+    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src):
         assert dispatch_mod._dispatch(args) == 0
 
 
@@ -344,7 +345,7 @@ def test_it_brush_vertex_move_errors_on_missing(tmp_path, monkeypatch, capsys):
         to=None, by=(Decimal(0), Decimal(0), Decimal(10)),
         container="dx-lum-uned")
     src = _fake_src(_fixture_level())
-    with mock.patch("uedcli.dispatch._resolve_level_source", return_value=src):
+    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src):
         rc = dispatch_mod._dispatch(args)
     assert rc == 2
     err = capsys.readouterr().err
@@ -360,7 +361,7 @@ def test_it_brush_vertex_move_records_canonical_name(tmp_path, monkeypatch):
         to=None, by=(Decimal(0), Decimal(0), Decimal(0)),
         container="dx-lum-uned")
     src = _fake_src(_fixture_level())
-    with mock.patch("uedcli.dispatch._resolve_level_source", return_value=src):
+    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src):
         dispatch_mod._dispatch(args)
     assert src.save.call_args.kwargs["args"]["name"] == "Brush1"
 
@@ -374,8 +375,8 @@ def test_it_actor_preview_resolves_case_insensitively(tmp_path, monkeypatch, cap
         out=None,
         container="dx-lum-uned")
     src = _fake_src(_fixture_level())
-    with mock.patch("uedcli.dispatch._resolve_level_source", return_value=src), \
-         mock.patch("uedcli.dispatch._render_actors_to_out", return_value=0) as render:
+    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src), \
+         mock.patch("uedcli.cli.rendering.render_actors_to_out", return_value=0) as render:
         rc = dispatch_mod._dispatch(args)
     assert rc == 0
     assert render.called
@@ -387,8 +388,8 @@ def test_it_actor_preview_errors_on_missing(tmp_path, monkeypatch, capsys):
         out=None,
         container="dx-lum-uned")
     src = _fake_src(_fixture_level())
-    with mock.patch("uedcli.dispatch._resolve_level_source", return_value=src), \
-         mock.patch("uedcli.dispatch._render_actors_to_out", return_value=0):
+    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src), \
+         mock.patch("uedcli.cli.rendering.render_actors_to_out", return_value=0):
         rc = dispatch_mod._dispatch(args)
     assert rc == 2
     err = capsys.readouterr().err
@@ -403,8 +404,8 @@ def test_it_actor_preview_errors_when_one_valid_one_invalid(tmp_path, monkeypatc
         out=None,
         container="dx-lum-uned")
     src = _fake_src(_fixture_level())
-    with mock.patch("uedcli.dispatch._resolve_level_source", return_value=src), \
-         mock.patch("uedcli.dispatch._render_actors_to_out", return_value=0):
+    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src), \
+         mock.patch("uedcli.cli.rendering.render_actors_to_out", return_value=0):
         rc = dispatch_mod._dispatch(args)
     assert rc == 2
 
@@ -417,7 +418,7 @@ def test_it_poly_list_resolves_case_insensitively(tmp_path, monkeypatch, capsys)
         cmd="brush", sub="poly", polysub="list", name="brush1",
         container="dx-lum-uned")
     src = _fake_src(_fixture_level())
-    with mock.patch("uedcli.dispatch._resolve_level_source", return_value=src):
+    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src):
         assert dispatch_mod._dispatch(args) == 0
     out = capsys.readouterr().out
     assert "Brush1" in out
@@ -428,7 +429,7 @@ def test_it_poly_list_errors_on_missing(tmp_path, monkeypatch, capsys):
         cmd="brush", sub="poly", polysub="list", name="NoSuch",
         container="dx-lum-uned")
     src = _fake_src(_fixture_level())
-    with mock.patch("uedcli.dispatch._resolve_level_source", return_value=src):
+    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src):
         rc = dispatch_mod._dispatch(args)
     assert rc == 2
     err = capsys.readouterr().err
@@ -444,7 +445,7 @@ def test_it_brush_vertex_list_resolves_case_insensitively(tmp_path, monkeypatch,
         cmd="brush", sub="vertex", vsub="list", name="brush1",
         container="dx-lum-uned")
     src = _fake_src(_fixture_level())
-    with mock.patch("uedcli.dispatch._resolve_level_source", return_value=src):
+    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src):
         assert dispatch_mod._dispatch(args) == 0
 
 
@@ -453,7 +454,7 @@ def test_it_brush_vertex_list_errors_on_missing(tmp_path, monkeypatch, capsys):
         cmd="brush", sub="vertex", vsub="list", name="NoSuch",
         container="dx-lum-uned")
     src = _fake_src(_fixture_level())
-    with mock.patch("uedcli.dispatch._resolve_level_source", return_value=src):
+    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src):
         rc = dispatch_mod._dispatch(args)
     assert rc == 2
     err = capsys.readouterr().err
@@ -469,8 +470,8 @@ def test_it_actor_prop_get_resolves_case_insensitively(tmp_path, monkeypatch, ca
         cmd="actor", sub="prop", propsub="get", name="brush1", tokens=["Group"], kv=False,
         container="dx-lum-uned")
     src = _fake_src(_fixture_level())
-    with mock.patch("uedcli.dispatch._resolve_level_source", return_value=src), \
-            mock.patch("uedcli.dispatch._class_schema", _group_schema):
+    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src), \
+            mock.patch("uedcli.cli.resources.class_schema", _group_schema):
         rc = dispatch_mod._dispatch(args)
     assert rc == 0
     assert "cells" in capsys.readouterr().out
@@ -481,7 +482,7 @@ def test_it_actor_prop_get_errors_on_missing(tmp_path, monkeypatch, capsys):
         cmd="actor", sub="prop", propsub="get", name="NoSuch", tokens=["Group"], kv=False,
         container="dx-lum-uned")
     src = _fake_src(_fixture_level())
-    with mock.patch("uedcli.dispatch._resolve_level_source", return_value=src):
+    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src):
         rc = dispatch_mod._dispatch(args)
     assert rc == 2
     err = capsys.readouterr().err
@@ -499,7 +500,7 @@ def test_it_poly_set_records_canonical_brush_name_in_touched(tmp_path, monkeypat
         texture="Engine.DefaultTexture", add_flags=None, remove_flags=None,
         container="dx-lum-uned")
     src = _fake_src(_fixture_level())
-    with mock.patch("uedcli.dispatch._resolve_level_source", return_value=src):
+    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src):
         rc = dispatch_mod._dispatch(args)
     assert rc == 0
     saved = src.save.call_args.kwargs

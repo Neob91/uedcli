@@ -4,7 +4,7 @@ editor), so the LLM can SEE a brush's geometry and which poly INDEX is which fac
 buffer and keeps the wireframe over it (see `_scene_geometry` for the cull and the edge rule).
 Rendering is stdlib only (no PIL/numpy), so every function here returns raw **PPM/P6
 bytes IN MEMORY**. That is an internal format only: the CLI's disk-write boundary
-(`dispatch._render_actors_to_out`) encodes those bytes to **PNG** with Pillow before
+(`rendering.render_actors_to_out`) encodes those bytes to **PNG** with Pillow before
 writing, and PNG is the only form a preview ever takes on disk (no container/UnrealEd
 involved either way).
 

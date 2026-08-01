@@ -4,7 +4,8 @@ drive `dispatch.dispatch` against a real trunk level (model-side, host-only — 
 from pathlib import Path
 from types import SimpleNamespace
 
-from uedcli import dispatch, trunk, utexture
+from uedcli import trunk, utexture
+from uedcli.cli import dispatch
 from uedcli.builders import cube, make_brush_actor
 from uedcli.model import Level
 
@@ -354,7 +355,7 @@ def test_labels_mode_gates_which_labels_draw(tmp_path, monkeypatch):
 
 def test_old_highlight_poly_flag_is_gone():
     import pytest
-    from uedcli import cli
+    from uedcli.cli import main as cli
     parser = cli.build_parser()
     with pytest.raises(SystemExit):                        # --highlight-poly was cleanly removed
         parser.parse_args(["actor", "preview", "--out", "x.png", "--highlight-poly", "WallA:0"])
@@ -428,9 +429,9 @@ def test_point_light_renders_as_sprite_from_the_trunk(tmp_path, monkeypatch):
     rgb = bytes([200, 10, 10]) * 4
     resolver = _FakeResolver(present={"Engine.S_Light": (2, 2, rgb, bytes([1, 1, 1, 1]))})
     out = tmp_path / "o.png"
-    with mock.patch("uedcli.dispatch._class_defaults",
+    with mock.patch("uedcli.cli.resources.class_defaults",
                     return_value=_defaults_sprite("Engine.S_Light")), \
-         mock.patch("uedcli.dispatch._texture_resolver", return_value=resolver):
+         mock.patch("uedcli.cli.resources.texture_resolver", return_value=resolver):
         assert dispatch.dispatch(_prev(proj, out, names=["Torch"], layout="single", view="top")) == 0
     assert (200, 10, 10) in _colors(_img(out))                                 # sprite drew
 
@@ -439,8 +440,8 @@ def test_schema_unavailable_point_actor_degrades_to_marker(tmp_path, monkeypatch
     from uedcli.uprops import SchemaError
     proj = _project_with_light(tmp_path, monkeypatch)
     out = tmp_path / "o.png"
-    with mock.patch("uedcli.dispatch._class_defaults", side_effect=SchemaError("no .u")), \
-         mock.patch("uedcli.dispatch._texture_resolver", return_value=None):
+    with mock.patch("uedcli.cli.resources.class_defaults", side_effect=SchemaError("no .u")), \
+         mock.patch("uedcli.cli.resources.texture_resolver", return_value=None):
         assert dispatch.dispatch(_prev(proj, out, names=["Torch"])) == 0
     err = capsys.readouterr().err
     assert "schema unavailable" in err and "Traceback" not in err
@@ -451,18 +452,18 @@ def test_non_p8_sprite_vs_absent_are_distinguished(tmp_path, monkeypatch, capsys
     proj = _project_with_light(tmp_path, monkeypatch)
     out = tmp_path / "o.png"
     # exists but doesn't decode → non-P8 note.
-    with mock.patch("uedcli.dispatch._class_defaults",
+    with mock.patch("uedcli.cli.resources.class_defaults",
                     return_value=_defaults_sprite("Pkg.NonP8")), \
-         mock.patch("uedcli.dispatch._texture_resolver",
+         mock.patch("uedcli.cli.resources.texture_resolver",
                     return_value=_FakeResolver(exists_only={"Pkg.NonP8"})):
         assert dispatch.dispatch(_prev(proj, out, names=["Torch"])) == 0
     # The decoder's own case name travels into the note, so "we cannot decode this layout"
     # reads differently from "that ref is wrong" without re-running anything.
     assert "unverified-format" in capsys.readouterr().err
     # truly absent → not-found note.
-    with mock.patch("uedcli.dispatch._class_defaults",
+    with mock.patch("uedcli.cli.resources.class_defaults",
                     return_value=_defaults_sprite("Pkg.Gone")), \
-         mock.patch("uedcli.dispatch._texture_resolver", return_value=_FakeResolver()):
+         mock.patch("uedcli.cli.resources.texture_resolver", return_value=_FakeResolver()):
         assert dispatch.dispatch(_prev(proj, out, names=["Torch"])) == 0
     assert "unknown-texture" in capsys.readouterr().err
 
@@ -475,9 +476,9 @@ def test_no_search_path_at_all_is_not_reported_as_a_missing_texture(tmp_path, mo
     thing. The note has to name the real condition."""
     proj = _project_with_light(tmp_path, monkeypatch)
     out = tmp_path / "o.png"
-    with mock.patch("uedcli.dispatch._class_defaults",
+    with mock.patch("uedcli.cli.resources.class_defaults",
                     return_value=_defaults_sprite("Pkg.Whatever")), \
-         mock.patch("uedcli.dispatch._texture_resolver", return_value=None):
+         mock.patch("uedcli.cli.resources.texture_resolver", return_value=None):
         assert dispatch.dispatch(_prev(proj, out, names=["Torch"])) == 0
     err = capsys.readouterr().err
     assert "no texture search path is configured" in err
@@ -486,8 +487,8 @@ def test_no_search_path_at_all_is_not_reported_as_a_missing_texture(tmp_path, mo
 
 def test_zoom_naming_a_point_actor_is_a_clean_error(tmp_path, monkeypatch, capsys):
     proj = _project_with_light(tmp_path, monkeypatch)
-    with mock.patch("uedcli.dispatch._class_defaults", return_value={}), \
-         mock.patch("uedcli.dispatch._texture_resolver", return_value=None):
+    with mock.patch("uedcli.cli.resources.class_defaults", return_value={}), \
+         mock.patch("uedcli.cli.resources.texture_resolver", return_value=None):
         rc = dispatch.dispatch(_prev(proj, tmp_path / "o.png", names=["Torch"], frame="Torch:0"))
     assert rc == 2
     err = capsys.readouterr().err
@@ -500,15 +501,15 @@ def test_show_collision_draws_for_a_colliding_point_actor(tmp_path, monkeypatch)
     defaults = {("drawtype", 0): "DT_None", ("bcollideactors", 0): "True",
                 ("collisionradius", 0): "40.000000", ("collisionheight", 0): "60.000000"}
     out = tmp_path / "o.png"
-    with mock.patch("uedcli.dispatch._class_defaults", return_value=defaults), \
-         mock.patch("uedcli.dispatch._texture_resolver", return_value=None):
+    with mock.patch("uedcli.cli.resources.class_defaults", return_value=defaults), \
+         mock.patch("uedcli.cli.resources.texture_resolver", return_value=None):
         assert dispatch.dispatch(_prev(proj, out, names=["Torch"], layout="single", view="front",
                                        show="collision")) == 0
     assert COL_COLLISION in _colors(_img(out))
 
 
 def test_point_actor_in_a_stash_renders(tmp_path, monkeypatch):
-    # Pins the `_brush_actors_from` relaxation: a stash's point actor must not be dropped pre-render.
+    # Pins the `rendering.brush_actors_from` relaxation: a stash's point actor must not be dropped pre-render.
     from uedcli import stash_register
     from uedcli.normalize import canonical_actor_t3d
     proj = _project_with_light(tmp_path, monkeypatch)
@@ -521,8 +522,8 @@ def test_point_actor_in_a_stash_renders(tmp_path, monkeypatch):
                            view="top", layout="single", annotate="all", iso_angle=30.0, frame=None,
                            highlight=None, focus=None, frame_tightness=0.8, show="",
                            size=128, out=str(out), container="c")
-    with mock.patch("uedcli.dispatch._class_defaults", return_value={}), \
-         mock.patch("uedcli.dispatch._texture_resolver", return_value=None):
+    with mock.patch("uedcli.cli.resources.class_defaults", return_value={}), \
+         mock.patch("uedcli.cli.resources.texture_resolver", return_value=None):
         assert dispatch.dispatch(args) == 0
     assert _nonbg(_img(out)) > 0             # the point actor drew (a marker)
 
@@ -536,8 +537,8 @@ def test_drawscale_zero_sprite_falls_back_to_a_marker(tmp_path, monkeypatch, cap
     defaults = {("drawtype", 0): "DT_Sprite", ("drawscale", 0): "0.000000",
                 ("texture", 0): "Texture'Engine.S_Light'"}
     out = tmp_path / "o.png"
-    with mock.patch("uedcli.dispatch._class_defaults", return_value=defaults), \
-         mock.patch("uedcli.dispatch._texture_resolver", return_value=resolver):
+    with mock.patch("uedcli.cli.resources.class_defaults", return_value=defaults), \
+         mock.patch("uedcli.cli.resources.texture_resolver", return_value=resolver):
         assert dispatch.dispatch(_prev(proj, out, names=["Torch"], layout="single", view="top")) == 0
     assert "zero footprint" in capsys.readouterr().err
     cols = _colors(_img(out))
@@ -562,8 +563,8 @@ def test_point_actor_in_a_prefab_renders(tmp_path, monkeypatch):
                            prefab_dir=None, view="top", layout="single", annotate="all", iso_angle=30.0,
                            frame=None, highlight=None, focus=None, frame_tightness=0.8, show="",
                            size=128, out=str(out))
-    with mock.patch("uedcli.dispatch._class_defaults", return_value={}), \
-         mock.patch("uedcli.dispatch._texture_resolver", return_value=None):
+    with mock.patch("uedcli.cli.resources.class_defaults", return_value={}), \
+         mock.patch("uedcli.cli.resources.texture_resolver", return_value=None):
         assert dispatch.dispatch(args) == 0
     assert _nonbg(_img(out)) > 0             # the point actor drew (a marker)
 
@@ -592,8 +593,8 @@ def test_highlight_point_actor_draws_selection_brackets(tmp_path, monkeypatch):
 
     def has_black(path):
         return (0, 0, 0) in _colors(_img(path))
-    with mock.patch("uedcli.dispatch._class_defaults", return_value={}), \
-         mock.patch("uedcli.dispatch._texture_resolver", return_value=None):
+    with mock.patch("uedcli.cli.resources.class_defaults", return_value={}), \
+         mock.patch("uedcli.cli.resources.texture_resolver", return_value=None):
         assert dispatch.dispatch(_prev(proj, plain, names=["Torch"], layout="single", view="top",
                                        annotate="none")) == 0
         assert dispatch.dispatch(_prev(proj, out, names=["Torch"], layout="single", view="top",
@@ -708,8 +709,8 @@ def test_it_zooms_by_point_actor_name(tmp_path, monkeypatch):
     # A bare --frame NAME on a POINT actor frames its Location ± extent (no polys) — a clean render.
     proj = _project_with_light(tmp_path, monkeypatch)
     out = tmp_path / "o.png"
-    with mock.patch("uedcli.dispatch._class_defaults", return_value={}), \
-         mock.patch("uedcli.dispatch._texture_resolver", return_value=None):
+    with mock.patch("uedcli.cli.resources.class_defaults", return_value={}), \
+         mock.patch("uedcli.cli.resources.texture_resolver", return_value=None):
         assert dispatch.dispatch(_prev(proj, out, names=["Torch"], layout="single", frame="Torch")) == 0
     assert _is_png(out)
 
@@ -721,8 +722,8 @@ def test_it_gives_each_point_actor_a_breakdown_pane(tmp_path, monkeypatch):
     proj = _project_with_light(tmp_path, monkeypatch)
     out = tmp_path / "b.png"
     size = 256
-    with mock.patch("uedcli.dispatch._class_defaults", return_value={}), \
-         mock.patch("uedcli.dispatch._texture_resolver", return_value=None):
+    with mock.patch("uedcli.cli.resources.class_defaults", return_value={}), \
+         mock.patch("uedcli.cli.resources.texture_resolver", return_value=None):
         assert dispatch.dispatch(_prev(proj, out, names=["Torch"], layout="breakdown", size=size)) == 0
     assert _dims(out) == (2 * size + 8, size + 16)     # SCENE + the Torch point pane
 
@@ -736,8 +737,8 @@ def test_a_lone_point_breakdown_pane_centers_its_marker(tmp_path, monkeypatch):
     proj = _project_with_light(tmp_path, monkeypatch)
     out = tmp_path / "b.png"
     size = 256
-    with mock.patch("uedcli.dispatch._class_defaults", return_value={}), \
-         mock.patch("uedcli.dispatch._texture_resolver", return_value=None):
+    with mock.patch("uedcli.cli.resources.class_defaults", return_value={}), \
+         mock.patch("uedcli.cli.resources.texture_resolver", return_value=None):
         assert dispatch.dispatch(_prev(proj, out, names=["Torch"], layout="breakdown", size=size)) == 0
     img = _img(out)
     px0, py0 = size + 8, 16                                 # the point pane is the 2nd cell (col 1, row 0)

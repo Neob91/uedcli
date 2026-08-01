@@ -3,7 +3,9 @@ from unittest import mock
 
 import pytest
 
-from uedcli import dispatch, level_select, trunk
+from uedcli import trunk
+from uedcli.cli import errors, level_sources
+from uedcli.cli import dispatch
 from uedcli.model import Actor, Level
 
 
@@ -29,7 +31,7 @@ def test_trunk_source_roundtrips_and_ranks_a_new_actor(tmp_path):
                          "B_2": Actor(name="B_2", cls="Light")})
     trunk.write_level(tmp_path, seed, {"A_1": "m", "B_2": "t"})
 
-    src = dispatch.TrunkLevelSource(tmp_path)
+    src = level_sources.TrunkLevelSource(tmp_path)
     level = src.load()
     assert level.order == ["A_1", "B_2"]
 
@@ -47,7 +49,7 @@ def test_trunk_source_drops_a_removed_actor(tmp_path):
     seed = Level(actors={"A_1": Actor(name="A_1", cls="Light"),
                          "B_2": Actor(name="B_2", cls="Light")})
     trunk.write_level(tmp_path, seed, {"A_1": "m", "B_2": "t"})
-    src = dispatch.TrunkLevelSource(tmp_path)
+    src = level_sources.TrunkLevelSource(tmp_path)
     level = src.load()
     del level.actors["B_2"]
     level.order.remove("B_2")
@@ -62,7 +64,7 @@ def test_trunk_source_interleaved_new_actor_does_not_collide(tmp_path):
     seed = Level(actors={"A_1": Actor(name="A_1", cls="Light"),
                          "B_2": Actor(name="B_2", cls="Light")})
     trunk.write_level(tmp_path, seed, {"A_1": "m", "B_2": "t"})
-    src = dispatch.TrunkLevelSource(tmp_path)
+    src = level_sources.TrunkLevelSource(tmp_path)
     level = src.load()
     level.actors["C_3"] = Actor(name="C_3", cls="Light")
     level.order = ["A_1", "C_3", "B_2"]
@@ -76,7 +78,7 @@ def test_trunk_source_preserves_an_empty_stored_rank(tmp_path):
     seed = Level(actors={"A_1": Actor(name="A_1", cls="Light"),
                          "B_2": Actor(name="B_2", cls="Light")})
     trunk.write_level(tmp_path, seed, {"A_1": "", "B_2": "t"})   # A_1's rank is a (degenerate) empty string
-    src = dispatch.TrunkLevelSource(tmp_path)
+    src = level_sources.TrunkLevelSource(tmp_path)
     level = src.load()
     level.actors["C_3"] = Actor(name="C_3", cls="Light")
     level.order.append("C_3")
@@ -87,7 +89,7 @@ def test_trunk_source_preserves_an_empty_stored_rank(tmp_path):
 
 def test_trunk_source_save_without_load_raises(tmp_path):
     with pytest.raises(RuntimeError, match="prior load"):
-        dispatch.TrunkLevelSource(tmp_path).save(level=Level(), verb="add", args={}, touched=[])
+        level_sources.TrunkLevelSource(tmp_path).save(level=Level(), verb="add", args={}, touched=[])
 
 
 def test_trunk_source_ranks_override_reorders_an_existing_actor(tmp_path):
@@ -96,7 +98,7 @@ def test_trunk_source_ranks_override_reorders_an_existing_actor(tmp_path):
     seed = Level(actors={"A_1": Actor(name="A_1", cls="Light"),
                          "B_2": Actor(name="B_2", cls="Light")})
     trunk.write_level(tmp_path, seed, {"A_1": "m", "B_2": "t"})
-    src = dispatch.TrunkLevelSource(tmp_path)
+    src = level_sources.TrunkLevelSource(tmp_path)
     level = src.load()
     src.save(level=level, verb="order", args={}, touched=["B_2"], ranks={"B_2": "a"})
     got, ranks = trunk.read_level(tmp_path)
@@ -109,22 +111,22 @@ def test_trunk_source_ranks_override_reorders_an_existing_actor(tmp_path):
 def test_resolve_source_uses_the_trunk_for_a_project_and_selection(tmp_path, monkeypatch):
     proj, name = _proj(tmp_path)
     monkeypatch.setenv("UEDCLI_LEVEL", name)
-    src = dispatch._resolve_level_source(_ns(project=str(proj)))
-    assert isinstance(src, dispatch.TrunkLevelSource)
+    src = level_sources.resolve_level_source(_ns(project=str(proj)))
+    assert isinstance(src, level_sources.TrunkLevelSource)
     assert src.trunk_dir.name == name
 
 
 def test_resolve_source_errors_with_no_project(tmp_path, monkeypatch):
     monkeypatch.delenv("UEDCLI_PROJECT", raising=False)
     monkeypatch.chdir(tmp_path)
-    with pytest.raises(dispatch._ProjectError):
-        dispatch._resolve_level_source(_ns(project=None))
+    with pytest.raises(dispatch.ProjectError):
+        level_sources.resolve_level_source(_ns(project=None))
 
 
 def test_resolve_source_errors_with_a_project_but_no_selection(tmp_path):
     proj, _ = _proj(tmp_path)
-    with pytest.raises(level_select.LevelSelectionError):
-        dispatch._resolve_level_source(_ns(project=str(proj)))
+    with pytest.raises(errors.LevelSelectionError):
+        level_sources.resolve_level_source(_ns(project=str(proj)))
 
 
 # --- concurrent-writer delta saves (decisions.md 2026-07-18 — trunk delta writes) ---
@@ -135,7 +137,7 @@ def test_interleaved_saves_compose_disjoint_adds(tmp_path):
     delete the first's actor (the reproduced 8-parallel-adds → +1 lost-update, round-3 review)."""
     seed = Level(actors={"Base_1": Actor(name="Base_1", cls="Light")})
     trunk.write_level(tmp_path, seed, {"Base_1": "m"})
-    a, b = dispatch.TrunkLevelSource(tmp_path), dispatch.TrunkLevelSource(tmp_path)
+    a, b = level_sources.TrunkLevelSource(tmp_path), level_sources.TrunkLevelSource(tmp_path)
     la, lb = a.load(), b.load()                        # both see only Base_1
     lb.actors["FromB_2"] = Actor(name="FromB_2", cls="Light")
     lb.order = ["Base_1", "FromB_2"]
@@ -155,10 +157,10 @@ def test_save_prunes_only_its_own_deletions(tmp_path):
     seed = Level(actors={"Keep_1": Actor(name="Keep_1", cls="Light"),
                          "Gone_2": Actor(name="Gone_2", cls="Light")})
     trunk.write_level(tmp_path, seed, {"Keep_1": "m", "Gone_2": "t"})
-    src = dispatch.TrunkLevelSource(tmp_path)
+    src = level_sources.TrunkLevelSource(tmp_path)
     lv = src.load()
     # a concurrent writer lands a new actor AFTER our load
-    other = dispatch.TrunkLevelSource(tmp_path)
+    other = level_sources.TrunkLevelSource(tmp_path)
     lo = other.load()
     lo.actors["Late_3"] = Actor(name="Late_3", cls="Light")
     lo.order = ["Keep_1", "Gone_2", "Late_3"]
@@ -176,7 +178,7 @@ def test_save_takes_a_per_level_flock_in_maps_locks(tmp_path):
     self-ignoring, like the catalog locks (decisions.md 2026-07-18)."""
     proj, name = _proj(tmp_path)
     trunk_dir = proj / "maps" / name
-    src = dispatch.TrunkLevelSource(trunk_dir)
+    src = level_sources.TrunkLevelSource(trunk_dir)
     lv = src.load()
     lv.actors["A_1"] = Actor(name="A_1", cls="Light")
     lv.order = ["A_1"]
@@ -193,7 +195,7 @@ def test_interleaved_save_does_not_revert_a_concurrent_edit(tmp_path):
     delete from the stale model)."""
     seed = Level(actors={"Base_1": Actor(name="Base_1", cls="Light")})
     trunk.write_level(tmp_path, seed, {"Base_1": "m"})
-    a, b = dispatch.TrunkLevelSource(tmp_path), dispatch.TrunkLevelSource(tmp_path)
+    a, b = level_sources.TrunkLevelSource(tmp_path), level_sources.TrunkLevelSource(tmp_path)
     la, lb = a.load(), b.load()
     # B edits Base_1 and saves
     lb.actors["Base_1"].props = [("LightBrightness", "200")]
@@ -212,7 +214,7 @@ def test_interleaved_save_does_not_resurrect_a_concurrent_delete(tmp_path):
     seed = Level(actors={"Base_1": Actor(name="Base_1", cls="Light"),
                          "Victim_2": Actor(name="Victim_2", cls="Light")})
     trunk.write_level(tmp_path, seed, {"Base_1": "m", "Victim_2": "t"})
-    a, b = dispatch.TrunkLevelSource(tmp_path), dispatch.TrunkLevelSource(tmp_path)
+    a, b = level_sources.TrunkLevelSource(tmp_path), level_sources.TrunkLevelSource(tmp_path)
     la, lb = a.load(), b.load()
     del lb.actors["Victim_2"]
     lb.order = ["Base_1"]
@@ -232,7 +234,7 @@ def test_unchanged_actor_files_are_not_rewritten(tmp_path):
     trunk.write_level(tmp_path, seed, {"Base_1": "m"})
     body = tmp_path / "actors" / "Base_1" / "actor.t3d"
     before = _os.stat(body)
-    src = dispatch.TrunkLevelSource(tmp_path)
+    src = level_sources.TrunkLevelSource(tmp_path)
     lv = src.load()
     lv.actors["New_2"] = Actor(name="New_2", cls="Light")
     lv.order = ["Base_1", "New_2"]

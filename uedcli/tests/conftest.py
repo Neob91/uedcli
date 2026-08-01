@@ -99,18 +99,19 @@ def _isolate_project_resolution(tmp_path_factory, monkeypatch):
 
 @pytest.fixture(autouse=True)
 def _stub_author_validation(request, monkeypatch):
-    """Author-time class/texture ingest validation (`_validate_ingest_actors` / `_validate_texture_
-    ref`) resolves the project's games config + scans the game `.u` packages — neither present in the
+    """Author-time class/texture ingest validation (`ingest.validate_ingest_actors` /
+    `_validate_texture_ref`) resolves the project's games config + scans the game `.u` packages — neither present in the
     offline suite. Stub both to NO-OPs by default so pre-existing ingest/generator tests stay offline
     and green (they predate validation). A test marked `@pytest.mark.real_validation`
     (`test_ingest_validation.py`) opts OUT — it patches `ClassIndex.from_project` /
     `config.composed_search_files` to a fake substrate and exercises the REAL gate. Mirrors the
-    `_class_schema` mockable-seam pattern."""
+    `resources.class_schema` mockable-seam pattern."""
     if request.node.get_closest_marker("real_validation"):
         return
-    from uedcli import dispatch
-    monkeypatch.setattr(dispatch, "_validate_ingest_actors", lambda actors, args: None)
-    monkeypatch.setattr(dispatch, "_validate_texture_ref", lambda ref, args: None)
+    from uedcli.cli import ingest
+    from uedcli.cli.commands.brush import poly as brush_poly
+    monkeypatch.setattr(ingest, "validate_ingest_actors", lambda actors, args: None)
+    monkeypatch.setattr(brush_poly, "_validate_texture_ref", lambda ref, args: None)
 
 
 @pytest.fixture
@@ -241,13 +242,13 @@ class StubClassIndex:
 def _stub_mover_class_index(request, monkeypatch):
     """Hand every dispatch verb that asks "is this a Mover?" a `StubClassIndex`, so the offline
     suite keeps running without the gitignored game install. Mirrors `_stub_author_validation`:
-    it stubs the ONE mockable seam (`dispatch._mover_index`), so the predicate itself and every
+    it stubs the ONE mockable seam (`resources.mover_index`), so the predicate itself and every
     module under it run for real. A test marked `@pytest.mark.real_mover_index` opts OUT and gets
     the genuine seam (`test_dispatch.py`'s resolver-required tests)."""
     if request.node.get_closest_marker("real_mover_index"):
         return
-    from uedcli import dispatch
-    monkeypatch.setattr(dispatch, "_mover_index",
+    from uedcli.cli import resources
+    monkeypatch.setattr(resources, "mover_index",
                         lambda args, verb, project=None: StubClassIndex())
 
 

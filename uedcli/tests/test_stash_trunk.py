@@ -4,7 +4,8 @@ through `dispatch()` with a project + selected level and NO session."""
 import argparse
 from pathlib import Path
 
-from uedcli import dispatch, trunk
+from uedcli import trunk
+from uedcli.cli import dispatch
 from uedcli.model import Actor, Level
 
 

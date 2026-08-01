@@ -450,7 +450,7 @@ def composed_search_dirs(project: Project | None, user_config: UserConfig) -> li
 def composed_search_files(project: Project | None,
                           user_config: UserConfig) -> list[tuple[str, str]]:
     """The effective package FILE list — the load-set source consumed by
-    `packages.search_path_package_names` / `dispatch._composed_load_set` and printed by
+    `packages.search_path_package_names` / `resources.composed_load_set` and printed by
     `project show`. Each composed dir (`composed_search_dirs`, project-before-base) is SCANNED flat
     (non-recursive, case-INSENSITIVE extension match) for the five package extensions; the resolved
     files are returned as `(host_file, provenance)` tuples, **stem-deduped keep-first** so an

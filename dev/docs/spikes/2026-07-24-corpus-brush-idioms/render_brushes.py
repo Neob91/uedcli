@@ -13,7 +13,7 @@ Neighborhood = every brush whose world AABB overlaps the focus brush's AABB expa
     render_brushes.py <level-dir> <out-dir> [--start N] [--count N] [--margin UU]
                       [--tightness F] [--size PX] [--sheet]
 
-Loads the trunk ONCE and renders in-process via the real preview path (dispatch._render_actors_to_out).
+Loads the trunk ONCE and renders in-process via the real preview path (rendering.render_actors_to_out).
 `--sheet` also writes contact sheets (≤12 per sheet) batching the chunk's images.
 """
 from __future__ import annotations
@@ -30,7 +30,8 @@ _PKG_ROOT = Path(__file__).resolve().parents[4]
 if str(_PKG_ROOT) not in sys.path:
     sys.path.insert(0, str(_PKG_ROOT))
 
-from uedcli import dispatch, trunk, writes   # noqa: E402
+from uedcli import trunk, writes   # noqa: E402
+from uedcli.cli import rendering
 
 
 def _is_axis_aligned_box(actor, tol=1e-3):
@@ -183,7 +184,7 @@ def main(argv=None):
         out_path = str(outdir / f"{args.start + i:04d}_{name}.png")
         a = _args_for(name, out_path, args.tightness, args.size, layout="quad" if args.quad else "single")
         with redirect_stdout(open(os.devnull, "w")):
-            dispatch._render_actors_to_out(neigh, a)
+            rendering.render_actors_to_out(neigh, a)
         written.append(out_path)
         print(f"[render] {args.start + i:04d} {name}  ({len(neigh)} in context)", file=sys.stderr)
 

@@ -36,7 +36,7 @@ from unittest import mock
 
 import pytest
 
-from uedcli.dispatch import dispatch
+from uedcli.cli.dispatch import dispatch
 from uedcli.model import parse_t3d
 
 
@@ -204,14 +204,14 @@ def test_brush_build_sheet_no_flag_keeps_bare_defaults(capsys):
 
 def test_brush_build_sheet_bad_flag_rejected_by_parser():
     # argparse `choices` rejects an unknown flag name cleanly (SystemExit, no traceback).
-    from uedcli.cli import build_parser
+    from uedcli.cli.main import build_parser
     with pytest.raises(SystemExit):
         build_parser().parse_args(
             ["brush", "build", "sheet", "--width", "256", "--height", "128", "--flag", "bogus"])
 
 
 def test_brush_build_sheet_good_flag_accepted_by_parser():
-    from uedcli.cli import build_parser
+    from uedcli.cli.main import build_parser
     ns = build_parser().parse_args(
         ["brush", "build", "sheet", "--width", "256", "--height", "128",
          "--flag", "Portal", "--flag", "translucent"])
@@ -314,7 +314,7 @@ def test_it_outputs_t3d_for_actor_build_light(capsys):
                                       owner="Engine.Light")}
     args = Namespace(cmd="actor", sub="build", aclass="Engine.Light",
                      at=(0.0, 0.0, 128.0), base_name=None, prop=["LightBrightness=80"])
-    with mock.patch("uedcli.dispatch._class_schema", lambda cls, project=None: dict(schema)):
+    with mock.patch("uedcli.cli.resources.class_schema", lambda cls, project=None: dict(schema)):
         rc = dispatch(args)
     assert rc == 0
     out = capsys.readouterr().out
@@ -509,8 +509,8 @@ def test_every_builder_shape_declares_its_positive_dimensions():
     # The allow-list is the escape hatch for a float that is legitimately signed or has a tighter
     # rule of its own; adding to it is a visible, reviewable act.
     from argparse import _SubParsersAction
-    from uedcli.cli import build_parser
-    from uedcli.dispatch import _POSITIVE_BUILD_DIMS
+    from uedcli.cli.main import build_parser
+    from uedcli.cli.commands.brush.build import _POSITIVE_BUILD_DIMS
 
     # Currently EMPTY, and that is the point: since the builder-angle units retrofit, every
     # builder angle is either a bool (--align-to-side) or an integer count of unreal rotation
@@ -548,8 +548,8 @@ def test_every_builder_shape_declares_its_positive_dimensions():
 def _cli_brush(argv):
     """Run the REAL parser + dispatch and return the emitted brush of the first actor."""
     import io
-    from uedcli.cli import build_parser
-    from uedcli.dispatch import dispatch as _dispatch
+    from uedcli.cli.main import build_parser
+    from uedcli.cli.dispatch import dispatch as _dispatch
     import contextlib
     buf = io.StringIO()
     with contextlib.redirect_stdout(buf):
@@ -622,7 +622,7 @@ def test_the_spiral_library_guard_still_refuses_a_half_turn_tread():
 ])
 def test_the_replaced_degree_flags_no_longer_parse(argv):
     # No back-compat cruft: the old spellings are DELETED, not aliased — argparse refuses them.
-    from uedcli.cli import build_parser
+    from uedcli.cli.main import build_parser
     with pytest.raises(SystemExit):
         build_parser().parse_args(argv)
 

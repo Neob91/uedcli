@@ -12,7 +12,8 @@ from decimal import Decimal
 
 import pytest
 
-from uedcli import cli, dispatch, t3dtree, trunk
+from uedcli import t3dtree, trunk
+from uedcli.cli import main as cli, dispatch
 from uedcli.model import Actor, Level
 
 

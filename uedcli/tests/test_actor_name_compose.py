@@ -12,8 +12,8 @@ from decimal import Decimal
 from types import SimpleNamespace
 from unittest import mock
 
-from uedcli import dispatch as dispatch_mod
-from uedcli.dispatch import dispatch
+from uedcli.cli import dispatch as dispatch_mod
+from uedcli.cli.dispatch import dispatch
 from uedcli.model import Actor, Level, parse_t3d
 from uedcli.uprops import Prop
 
@@ -64,7 +64,7 @@ def _drive(args, level=None, stdin="", *, src=None):
     """Drive the top-level `dispatch` with `stdin` as fake stdin. Returns (rc, src)."""
     if src is None:
         src = _fake_src(level)
-    with mock.patch("uedcli.dispatch._resolve_level_source", return_value=src), \
+    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src), \
             mock.patch("sys.stdin", io.StringIO(stdin)):
         rc = dispatch(args)
     return rc, src
@@ -74,14 +74,14 @@ def _drive_prop(args, level, stdin="", *, src=None):
     """`dispatch` with stdin AND the four prop schema seams mocked (offline)."""
     if src is None:
         src = _fake_src(level)
-    with mock.patch("uedcli.dispatch._resolve_level_source", return_value=src), \
+    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src), \
             mock.patch("sys.stdin", io.StringIO(stdin)), \
-            mock.patch("uedcli.dispatch._resolve_project",
-                       side_effect=dispatch_mod._ProjectError("no project")), \
-            mock.patch("uedcli.dispatch._class_schema", _schema), \
-            mock.patch("uedcli.dispatch._class_defaults", lambda cls, project=None: {}), \
-            mock.patch("uedcli.dispatch._struct_members", lambda p, project=None: []), \
-            mock.patch("uedcli.dispatch._enum_names", lambda p, project=None: p.enum_value_names):
+            mock.patch("uedcli.cli.resources.resolve_project",
+                       side_effect=dispatch_mod.ProjectError("no project")), \
+            mock.patch("uedcli.cli.resources.class_schema", _schema), \
+            mock.patch("uedcli.cli.resources.class_defaults", lambda cls, project=None: {}), \
+            mock.patch("uedcli.cli.resources.struct_members", lambda p, project=None: []), \
+            mock.patch("uedcli.cli.resources.enum_names", lambda p, project=None: p.enum_value_names):
         rc = dispatch(args)
     return rc, src
 
@@ -424,8 +424,8 @@ def test_build_add_prop_pipe_end_to_end(capsys):
 
     # Stage 2 — add -: ingest the T3D, print the allocated Name(s) to stdout (count → stderr).
     add_args = SimpleNamespace(cmd="actor", sub="add", file="-", container="x")
-    with mock.patch("uedcli.dispatch._resolve_level_source", return_value=src), \
-            mock.patch("uedcli.dispatch._validate_ingest_actors", lambda actors, args: None), \
+    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src), \
+            mock.patch("uedcli.cli.ingest.validate_ingest_actors", lambda actors, args: None), \
             mock.patch("sys.stdin", io.StringIO(t3d)):
         assert dispatch(add_args) == 0
     add_cap = capsys.readouterr()
@@ -444,7 +444,7 @@ def test_build_add_prop_pipe_end_to_end(capsys):
 # ── argparse pins: the real parser accepts a bare `-` in every `-` positional ─────────
 
 def test_real_parser_accepts_dash_in_name_positionals():
-    from uedcli.cli import build_parser
+    from uedcli.cli.main import build_parser
     p = build_parser()
     assert p.parse_args(["actor", "delete", "-"]).names == ["-"]
     assert p.parse_args(["actor", "rotate", "-", "--by", "0,90,0"]).names == ["-"]

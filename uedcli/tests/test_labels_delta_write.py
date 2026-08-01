@@ -5,7 +5,9 @@ snapshot. Labels are a sidecar (not in the body), so a labels-ONLY change leaves
 byte-identical; without the 4th `changed` clause + the `_loaded_labels` baseline, the write is
 silently dropped. This pins BOTH directions: adding a label, and clearing back to empty.
 """
-from uedcli import dispatch, trunk
+from uedcli import trunk
+from uedcli.cli import level_sources
+from uedcli.cli import dispatch
 from uedcli.model import Actor, Level
 
 
@@ -17,7 +19,7 @@ def test_label_only_change_persists_via_delta_write(tmp_path):
     """A body/rank/folder-identical, labels-CHANGED actor IS in the written set (the §3 trap)."""
     lvl = Level(actors={"A_1": _light("A_1")}, order=["A_1"])
     trunk.write_level(tmp_path, lvl, {"A_1": "m"})
-    src = dispatch.TrunkLevelSource(tmp_path)
+    src = level_sources.TrunkLevelSource(tmp_path)
     loaded = src.load()
     assert loaded.actors["A_1"].labels == frozenset()    # precondition: baseline has no labels
 
@@ -33,7 +35,7 @@ def test_label_clear_persists_via_delta_write(tmp_path):
     """The SYMMETRIC trap: clearing to empty on an otherwise byte-identical actor also fires."""
     lvl = Level(actors={"A_1": _light("A_1", labels=frozenset({"hero"}))}, order=["A_1"])
     trunk.write_level(tmp_path, lvl, {"A_1": "m"})
-    src = dispatch.TrunkLevelSource(tmp_path)
+    src = level_sources.TrunkLevelSource(tmp_path)
     loaded = src.load()
     assert loaded.actors["A_1"].labels == frozenset({"hero"})  # precondition: baseline has the label
 

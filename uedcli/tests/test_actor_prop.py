@@ -15,7 +15,7 @@ from unittest import mock
 
 import pytest
 
-from uedcli import dispatch as dispatch_mod
+from uedcli.cli import dispatch as dispatch_mod
 from uedcli.model import Actor, Level
 from uedcli.uprops import Prop
 
@@ -90,17 +90,17 @@ def _run(level, propsub, tokens=(), *, kv=False, schema=None, defaults=None):
                            tokens=list(tokens), kv=kv)
     src = mock.Mock()
     src.load.return_value = level
-    with mock.patch("uedcli.dispatch._resolve_level_source", return_value=src), \
-            mock.patch("uedcli.dispatch._resolve_project",
-                       side_effect=dispatch_mod._ProjectError("no project")), \
-            mock.patch("uedcli.dispatch._class_schema",
+    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src), \
+            mock.patch("uedcli.cli.resources.resolve_project",
+                       side_effect=dispatch_mod.ProjectError("no project")), \
+            mock.patch("uedcli.cli.resources.class_schema",
                        lambda cls, project=None: dict(schema or _SCHEMA)), \
-            mock.patch("uedcli.dispatch._class_defaults",
+            mock.patch("uedcli.cli.resources.class_defaults",
                        lambda cls, project=None: dict(defaults if defaults is not None
                                                       else _DEFAULTS)), \
-            mock.patch("uedcli.dispatch._struct_members",
+            mock.patch("uedcli.cli.resources.struct_members",
                        lambda p, project=None: _members_for(p)), \
-            mock.patch("uedcli.dispatch._enum_names",
+            mock.patch("uedcli.cli.resources.enum_names",
                        lambda p, project=None: p.enum_value_names):
         rc = dispatch_mod._dispatch(args)
     saved = src.save.call_args.kwargs if src.save.called else None
@@ -342,10 +342,10 @@ def test_schema_error_surfaces_cleanly(capsys):
                            tokens=["Group=x"], kv=False)
     src = mock.Mock()
     src.load.return_value = level
-    with mock.patch("uedcli.dispatch._resolve_level_source", return_value=src), \
-            mock.patch("uedcli.dispatch._resolve_project",
-                       side_effect=dispatch_mod._ProjectError("no project")), \
-            mock.patch("uedcli.dispatch._class_schema",
+    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src), \
+            mock.patch("uedcli.cli.resources.resolve_project",
+                       side_effect=dispatch_mod.ProjectError("no project")), \
+            mock.patch("uedcli.cli.resources.class_schema",
                        side_effect=SchemaError("package Engine not found")):
         rc = dispatch_mod._dispatch(args)
     assert rc == 2 and not src.save.called
@@ -359,10 +359,10 @@ def test_hard_reject_never_resolves_the_schema():
     src = mock.Mock()
     src.load.return_value = level
     schema = mock.Mock(side_effect=AssertionError("schema must not be resolved"))
-    with mock.patch("uedcli.dispatch._resolve_level_source", return_value=src), \
-            mock.patch("uedcli.dispatch._resolve_project",
-                       side_effect=dispatch_mod._ProjectError("no project")), \
-            mock.patch("uedcli.dispatch._class_schema", schema):
+    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src), \
+            mock.patch("uedcli.cli.resources.resolve_project",
+                       side_effect=dispatch_mod.ProjectError("no project")), \
+            mock.patch("uedcli.cli.resources.class_schema", schema):
         rc = dispatch_mod._dispatch(args)
     assert rc == 2
     assert not schema.called
@@ -409,10 +409,10 @@ def test_typed_location_never_resolves_the_schema():
     src = mock.Mock()
     src.load.return_value = level
     schema = mock.Mock(side_effect=AssertionError("schema must not be resolved"))
-    with mock.patch("uedcli.dispatch._resolve_level_source", return_value=src), \
-            mock.patch("uedcli.dispatch._resolve_project",
-                       side_effect=dispatch_mod._ProjectError("no project")), \
-            mock.patch("uedcli.dispatch._class_schema", schema):
+    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src), \
+            mock.patch("uedcli.cli.resources.resolve_project",
+                       side_effect=dispatch_mod.ProjectError("no project")), \
+            mock.patch("uedcli.cli.resources.class_schema", schema):
         rc = dispatch_mod._dispatch(args)
     assert rc == 0
     assert not schema.called
@@ -612,7 +612,7 @@ def test_unknown_actor_errors(capsys):
                            tokens=[], kv=False)
     src = mock.Mock()
     src.load.return_value = level
-    with mock.patch("uedcli.dispatch._resolve_level_source", return_value=src):
+    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src):
         rc = dispatch_mod._dispatch(args)
     assert rc == 2
     assert "Actor not found: nosuch" in capsys.readouterr().err
@@ -647,15 +647,15 @@ def _run_nest(level, propsub, tokens=(), *, kv=False):
                            tokens=list(tokens), kv=kv)
     src = mock.Mock()
     src.load.return_value = level
-    with mock.patch("uedcli.dispatch._resolve_level_source", return_value=src), \
-            mock.patch("uedcli.dispatch._resolve_project",
-                       side_effect=dispatch_mod._ProjectError("no project")), \
-            mock.patch("uedcli.dispatch._class_schema", lambda cls, project=None: dict(schema)), \
-            mock.patch("uedcli.dispatch._class_defaults",
+    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src), \
+            mock.patch("uedcli.cli.resources.resolve_project",
+                       side_effect=dispatch_mod.ProjectError("no project")), \
+            mock.patch("uedcli.cli.resources.class_schema", lambda cls, project=None: dict(schema)), \
+            mock.patch("uedcli.cli.resources.class_defaults",
                        lambda cls, project=None: dict(defaults)), \
-            mock.patch("uedcli.dispatch._struct_members",
+            mock.patch("uedcli.cli.resources.struct_members",
                        lambda p, project=None: members_for(p)), \
-            mock.patch("uedcli.dispatch._enum_names",
+            mock.patch("uedcli.cli.resources.enum_names",
                        lambda p, project=None: p.enum_value_names):
         rc = dispatch_mod._dispatch(args)
     return rc, level.actors["Widget0"]
@@ -806,10 +806,10 @@ def test_get_location_never_resolves_schema():
     src = mock.Mock()
     src.load.return_value = level
     schema = mock.Mock(side_effect=AssertionError("schema must not be resolved"))
-    with mock.patch("uedcli.dispatch._resolve_level_source", return_value=src), \
-            mock.patch("uedcli.dispatch._resolve_project",
-                       side_effect=dispatch_mod._ProjectError("no project")), \
-            mock.patch("uedcli.dispatch._class_schema", schema):
+    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src), \
+            mock.patch("uedcli.cli.resources.resolve_project",
+                       side_effect=dispatch_mod.ProjectError("no project")), \
+            mock.patch("uedcli.cli.resources.class_schema", schema):
         rc = dispatch_mod._dispatch(args)
     assert rc == 0
     assert not schema.called
