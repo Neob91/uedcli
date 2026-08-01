@@ -19,9 +19,9 @@ from uedcli.cli import resources
 from uedcli.builders import cube, make_brush_actor, sheet
 from uedcli.model import Actor, Brush, Polygon
 from uedcli.preview import (
-    BACK, BG, DEFAULT_ANNOTATIONS, FRONT, _CSG_PALETTE, _FRAME_PAD, AnnotationSpec, FaceData,
-    PointRender, PreviewAbort, PreviewData, _decal_opacity, _fade, _framing, _occluder_count,
-    _scene_geometry, assign_tints, render_brushes_pgm,
+    BACK, BG, DEFAULT_ANNOTATIONS, DEFAULT_GREY, FRONT, _CSG_PALETTE, _FRAME_PAD, AnnotationSpec,
+    FaceData, PointRender, PreviewAbort, PreviewData, TextureData, _decal_opacity, _fade, _framing,
+    _occluder_count, _scene_geometry, assign_tints, render_brushes_pgm,
 )
 from uedcli.tests.conftest import StubClassIndex
 
@@ -215,16 +215,23 @@ def test_faces_parses_on_all_three_preview_verbs(argv):
     p = cli.build_parser()
     assert p.parse_args(argv).faces == "wire"                      # default
     assert p.parse_args(argv + ["--faces", "flat"]).faces == "flat"
+    assert p.parse_args(argv + ["--faces", "textured"]).faces == "textured"
 
 
-def test_textured_is_not_a_choice_yet_and_argparse_names_it(capsys):
-    """`textured` is absent from `choices` rather than present-and-refused: argparse then gives an
-    unknown value a clean exit 2 NAMING it, with no refusal branch to write and none to delete later —
-    and `-h` never advertises a mode the docs deny."""
+def test_an_unknown_faces_value_is_a_clean_exit_2_naming_it(capsys):
+    """The three choices are `wire`/`flat`/`textured`; anything else is argparse's own choice error,
+    exit 2 naming the bad value — no bespoke refusal branch."""
     with pytest.raises(SystemExit) as e:
-        cli.build_parser().parse_args(["actor", "preview", "A", "--faces", "textured"])
+        cli.build_parser().parse_args(["actor", "preview", "A", "--faces", "shaded"])
     assert e.value.code == 2
-    assert "textured" in capsys.readouterr().err
+    assert "shaded" in capsys.readouterr().err
+
+
+def test_faces_help_describes_textured():
+    """`-h` and the docs must agree the moment `textured` is a choice."""
+    actions = {a.dest: (a.help or "") for a in cli.build_parser()._subparsers._group_actions[0]
+               .choices["actor"]._subparsers._group_actions[0].choices["preview"]._actions}
+    assert "textured" in actions["faces"] and "UV frame" in actions["faces"]
 
 
 def test_corrected_help_strings_say_what_the_flags_now_do():
@@ -1740,3 +1747,419 @@ def test_the_depth_plane_is_anchored_at_verts_0_not_the_centroid():
     cx, cy, cz = (sum(v[k] for v in bent) / len(bent) for k in range(3))
     c_centroid = -cz - a * cx - b * cy
     assert at(bent[0], c_centroid) != pytest.approx(-bent[0][2], abs=1.0)
+
+
+# ── `--faces textured`: the texel path (renderer level) ─────────────────────────────────────────
+# These drive `render_brushes_pgm`/the fill helpers directly with a hand-built `TextureData`, so the
+# shade, mip pick, texel addressing and masking are pinned with NO project, games config or real
+# content. What dispatch RESOLVES (ref resolution, the scaled/brush-colors refusals, the actor-OR'd
+# mask flag, the bMasked fixture arm) is covered in the dispatch section further down.
+
+def _solid_mip(w, h, rgb, *, hole=()):
+    """One `(w, h, rgb, mask)` mip filled with `rgb`; `hole` indices get mask 0 (a masked hole)."""
+    holes = set(hole)
+    return (w, h, bytes(rgb) * (w * h),
+            bytes(0 if i in holes else 1 for i in range(w * h)))
+
+
+def _cols_mip(colors):
+    """A `len(colors)`×1 mip whose i-th texel is `colors[i]` — so a rendered pixel names the texel it
+    sampled, which is how the wrap + `/2**level` addressing is read back."""
+    w = len(colors)
+    return (w, 1, b"".join(bytes(c) for c in colors), bytes([1]) * w)
+
+
+def _tex(by_ref=None, masked=None, movers=()):
+    return PreviewData(faces=FaceData(movers=frozenset(movers),
+                                      textures=TextureData(by_ref=by_ref or {}, masked=masked or {})))
+
+
+def _tbox(name="Box", ref="Fix.T", **kw):
+    """An add cube whose every face carries `ref` (or None for a no-texture face)."""
+    return make_brush_actor(name, cube(128.0, 128.0, 128.0, texture=ref), **kw)
+
+
+# -- shade (§4.1) --------------------------------------------------------------------------------
+
+def test_shade_matches_the_native_formula_and_skips_degenerate_faces():
+    """`0.55 + 0.45*|N·L|/|N|` with the world Newell normal (§4.1), matching `render.rs`. A face with
+    fewer than 3 vertices or a zero-length normal is skipped (None), exactly as `render.rs` skips it —
+    a golden PNG cannot separate a shade error from a UV error, so the formula is pinned on its own."""
+    from uedcli.preview import _face_shade, _KEY_LIGHT, newell
+    wall = [(0.0, 0.0, 0.0), (0.0, 100.0, 0.0), (0.0, 100.0, 100.0), (0.0, 0.0, 100.0)]  # +X normal
+    n = newell(wall)
+    nl = sum(c * c for c in n) ** 0.5
+    dot = sum(a * b for a, b in zip(n, _KEY_LIGHT))
+    assert _face_shade(wall) == pytest.approx(0.55 + 0.45 * abs(dot) / nl)
+    assert _face_shade(wall[:2]) is None                                  # < 3 vertices
+    assert _face_shade([(0.0, 0.0, 0.0)] * 3) is None                     # zero-length normal
+
+
+# -- texel addressing: wrap + the /2**level rescale (§4.3) ---------------------------------------
+
+def test_texel_fetch_wraps_and_the_mip_level_rescales_the_uv():
+    """`tx = floor(u / 2**level) % mip_w`. The `/2**level` is load-bearing: `u` is in MIP-0 units, so a
+    level-1 (half-size) mip must map the SAME world span once, not tile twice. A test of level SELECTION
+    alone passes the buggy version, so this pins the sampling arithmetic directly."""
+    from uedcli.preview import _fill_face_textured
+    cols = [(10, 0, 0), (20, 0, 0), (30, 0, 0), (40, 0, 0)]              # 4 texels, distinct
+    mip = _cols_mip(cols)
+    size = 8
+    # u = x (au=1), depth 0 everywhere; a one-row strip over x∈[0,8).
+    poly = [(0.0, 0.0), (8.0, 0.0), (8.0, 1.0), (0.0, 1.0)]
+    uv = ((1.0, 0.0, 0.0), (0.0, 0.0, 0.0))
+
+    def render(inv):
+        buf = bytearray((BG, BG, BG) * (size * size))
+        zbuf = __import__("array").array("f", [float("inf")]) * (size * size)
+        _fill_face_textured(buf, zbuf, size, poly, (0.0, 0.0, 0.0), uv, mip, False, 1.0, inv)
+        return [tuple(buf[(x) * 3:(x) * 3 + 3]) for x in range(size)]
+
+    lvl0 = render(1.0)                                          # mip-0 units: tx = floor(x+0.5) % 4
+    assert lvl0[4] == (10, 0, 0)                                # x=4 WRAPS to texel 0
+    lvl1 = render(0.5)                                          # a level-1 sample: tx = floor((x+0.5)/2) % 4
+    assert lvl1[4] == (30, 0, 0)                                # x=4 → texel 2, NOT the wrapped texel 0
+    assert lvl0[4] != lvl1[4], "the /2**level rescale had no effect — u was not in mip-0 units"
+
+
+def test_the_shade_multiply_truncates_and_clamps_like_render_rs():
+    """`(texel*shade).min(255) as u8` — truncation (`int`), not rounding, and a hard 255 clamp."""
+    from uedcli.preview import _fill_face_textured
+    mip = (1, 1, bytes((100, 200, 200)), bytes([1]))
+    size = 2
+    poly = [(0.0, 0.0), (2.0, 0.0), (2.0, 1.0), (0.0, 1.0)]
+    uv = ((0.0, 0.0, 0.0), (0.0, 0.0, 0.0))
+    buf = bytearray((BG, BG, BG) * (size * size))
+    zbuf = __import__("array").array("f", [float("inf")]) * (size * size)
+    _fill_face_textured(buf, zbuf, size, poly, (0.0, 0.0, 0.0), uv, mip, False, 1.5, 1.0)
+    assert tuple(buf[0:3]) == (150, 255, 255)                  # 100*1.5=150; 200*1.5=300 → clamp 255
+
+
+# -- masking (§4.3, decision 2.3) ----------------------------------------------------------------
+
+def test_a_masked_hole_writes_neither_colour_nor_depth_and_index0_draws_when_unmasked():
+    """Decision 2.3, both directions AND the depth half. On a MASKED face a `mask==0` texel leaves the
+    pixel at `BG` and does NOT write depth, so a face behind shows through; on an UNMASKED face the same
+    index-0 texel is an ordinary colour and draws normally (the 464/2669 flat-swatch case the spike
+    measured)."""
+    from uedcli.preview import _fill_face_textured
+    import array as _arr
+    mip = (2, 1, bytes((50, 50, 50, 200, 200, 200)), bytes((0, 1)))     # texel 0 hole, texel 1 opaque
+    size = 8
+    poly = [(0.0, 0.0), (8.0, 0.0), (8.0, 1.0), (0.0, 1.0)]
+    uv = ((1.0, 0.0, 0.0), (0.0, 0.0, 0.0))                    # u=x → even x → texel 0, odd x → texel 1
+
+    def render(masked):
+        buf = bytearray((BG, BG, BG) * (size * size))
+        zbuf = _arr.array("f", [float("inf")]) * (size * size)
+        _fill_face_textured(buf, zbuf, size, poly, (0.0, 0.0, 5.0), uv, mip, masked, 1.0, 1.0)
+        return buf, zbuf
+
+    buf, zbuf = render(True)
+    assert tuple(buf[0:3]) == (BG, BG, BG) and zbuf[0] == float("inf")    # hole: no colour, no depth
+    assert tuple(buf[3:6]) == (200, 200, 200) and zbuf[1] == 5.0          # opaque texel drew + wrote depth
+    buf, zbuf = render(False)
+    assert tuple(buf[0:3]) == (50, 50, 50) and zbuf[0] == 5.0             # unmasked: index 0 draws
+
+
+def test_a_masked_hole_lets_a_face_behind_show_through_end_to_end():
+    """The point of skipping the depth write: a hole is see-through. A front sheet textured with a
+    half-hole texture over a solid back sheet shows the back where the front is holed."""
+    front = make_brush_actor("Front", sheet(256.0, 256.0, plane="xy", texture="Fix.Hole"),
+                             location=(0.0, 0.0, 128.0), csg="add")
+    back = make_brush_actor("Back", sheet(256.0, 256.0, plane="xy", texture="Fix.Solid"),
+                            location=(0.0, 0.0, 0.0), csg="add")
+    by_ref = {"fix.hole": [(2, 1, bytes((90, 0, 0, 0, 90, 0)), bytes((0, 1)))],   # texel0 hole
+              "fix.solid": [_solid_mip(1, 1, (0, 0, 200))]}
+    masked = {("Front", 0): True, ("Back", 0): False}
+    ppm = render_brushes_pgm([front, back], view="top", size=96, annotations=AnnotationSpec.none(),
+                             color_by_csg=True, render_data=_tex(by_ref, masked), faces="textured")
+    got = _colors(ppm)                                        # texture colours come out × per-face shade
+    assert any(r == 0 and g == 0 and b > 0 for r, g, b in got), "the back (blue) did not show through"
+    assert any(r == 0 and g > 0 and b == 0 for r, g, b in got), "the front's opaque (green) half is gone"
+
+
+# -- no texture, and non-finite frames (§4.3) ----------------------------------------------------
+
+def test_a_poly_with_no_texture_renders_default_grey_times_shade():
+    """A generated brush (no `Texture` on any face) is the most common `textured` render in practice. It
+    is NOT an error — each face fills `DEFAULT_GREY × shade`, a neutral grey, matching `render.rs`'s
+    `tex_index < 0` path."""
+    box = _tbox("Plain", ref=None)
+    ppm = render_brushes_pgm([box], view="iso", size=96, annotations=AnnotationSpec.none(),
+                             color_by_csg=True, render_data=_tex(), faces="textured")
+    fills = [px for px in _pixels(ppm) if px != (BG, BG, BG)]
+    assert fills, "the untextured box drew nothing"
+    for r, g, b in fills:
+        assert r == g == b, f"a grey fill must have equal channels, got {(r, g, b)}"
+        assert 0 < r <= DEFAULT_GREY[0]                       # 128 × shade, shade ≤ 1
+
+
+@pytest.mark.parametrize("bad", [float("inf"), float("nan")])
+def test_a_non_finite_uv_frame_refuses_naming_the_actor_and_poly(bad):
+    """A corrupt authored frame (`inf`/`nan`, reachable via `--from-t3d`) is a clean `PreviewAbort`
+    naming the actor and poly — NEVER a `DEFAULT_GREY` fallback, which would be pixel-identical to the
+    legitimate no-`Texture` face above, i.e. a half-answer that looks like a full one."""
+    box = _tbox("Bad")
+    box.brush.polys[2].texture_u = (bad, 0.0, 0.0)           # a corrupt authored TextureU on poly 2
+    with pytest.raises(PreviewAbort) as e:
+        render_brushes_pgm([box], view="iso", size=48, annotations=AnnotationSpec.none(),
+                           color_by_csg=True, faces="textured",
+                           render_data=_tex({"fix.t": [_solid_mip(1, 1, (200, 0, 0))]},
+                                            {("Bad", i): False for i in range(6)}))
+    assert "Bad" in str(e.value) and "poly 2" in str(e.value)
+
+
+# -- mip selection is per face from its own gradients (§4.4) -------------------------------------
+
+def test_mip_level_is_clamped_log2_of_the_max_axis_gradient():
+    from uedcli.preview import _mip_level
+    assert _mip_level(1.0, 0.0, 0.0, 1.0, 8) == 0             # tpp=1 → floor(log2 1)=0
+    assert _mip_level(4.0, 0.0, 0.0, 1.0, 8) == 2             # tpp=4 → 2
+    assert _mip_level(0.1, 0.0, 0.0, 0.1, 8) == 0             # tpp<1 clamps up to 1.0 → 0
+    assert _mip_level(9999.0, 0.0, 0.0, 0.0, 3) == 2          # clamped to len-1
+
+
+def test_the_mip_pick_uses_the_faces_own_screen_gradients_not_a_view_global_gain():
+    """§4.4 at a NON-default `--iso-angle 80`. The quantity is the least screen gain WITHIN the face's
+    own plane, which a view-global projection number cannot see: a +X wall and a +Z floor of the SAME
+    texel scale project with different in-plane gain, so they take DIFFERENT mip levels — a global gain
+    would tie them, and a test that only checked "iso differs from ortho" would pass the buggy version."""
+    from uedcli.preview import _face_uv_affine, _mip_level
+    wall = [(0.0, 0.0, 0.0), (0.0, 512.0, 0.0), (0.0, 512.0, 512.0), (0.0, 0.0, 512.0)]  # +X
+    floor = [(0.0, 0.0, 0.0), (512.0, 0.0, 0.0), (512.0, 512.0, 0.0), (0.0, 512.0, 0.0)]  # +Z
+    wall_frame = ((0.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0), (0.0, 0.0))
+    floor_frame = ((0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0))
+    # A framing at iso 80 over both faces, shared scale (so any level difference is the in-plane gain).
+    geom = _scene_geometry([_u_shape()], view="iso", iso_angle=80.0, annotations=AnnotationSpec.none(),
+                           highlight_polys=set(), focus_cf=None, hybrid=False, tints={},
+                           color_by_csg=False, render_data=_flat(), faces="flat")
+    pts = [preview._project(p, "iso", 80.0) for f in (wall, floor) for p in f]
+    _s, _tp, _to, w2p = _framing(pts, None, 256, "iso", 80.0, 0, pad=_FRAME_PAD)
+
+    def level(v3, frame):
+        (au, bu, _c1), (av, bv, _c2) = _face_uv_affine(v3, frame, w2p)
+        return _mip_level(au, bu, av, bv, 10)
+
+    assert level(wall, wall_frame) != level(floor, floor_frame)
+
+
+# -- textured draws NO wireframe (decision 2.5) -------------------------------------------------
+
+def test_textured_emits_no_wireframe_pixels_while_flat_does():
+    """Decision 2.5's most visible observable. Under `color_by_csg`, `flat` outlines every visible face
+    in a CSG hue; `textured` draws none of that line art (only `--highlight`, absent here). The texture
+    is pure green, so ANY blue/violet CSG-hue pixel would be a leaked wireframe edge."""
+    box = _tbox("Add")
+    by_ref = {"fix.t": [_solid_mip(1, 1, (0, 200, 0))]}
+    masked = {("Add", i): False for i in range(6)}
+    kw = dict(view="iso", size=96, annotations=AnnotationSpec.none(), color_by_csg=True)
+    tex = render_brushes_pgm([box], render_data=_tex(by_ref, masked), faces="textured", **kw)
+    flat = render_brushes_pgm([box], render_data=_flat(), faces="flat", **kw)
+    assert _count(flat, ADD_B) > 0, "flat must keep its wireframe (the control)"
+    assert _count(tex, ADD_F) == 0 and _count(tex, ADD_B) == 0, "textured leaked a CSG wireframe edge"
+    for r, g, b in (px for px in _pixels(tex) if px != (BG, BG, BG)):
+        assert r == 0 and b == 0, f"a non-green pixel means line art leaked: {(r, g, b)}"
+
+
+def test_a_highlight_outline_is_the_only_line_art_textured_keeps():
+    """§4.6/§5: `textured` keeps the `--highlight` vivid outline, and the highlighted face still shows
+    its TEXTURE (its fill is not inverted). So the render carries the texture colour AND the vivid hue."""
+    box = _tbox("Add")
+    by_ref = {"fix.t": [_solid_mip(1, 1, (0, 200, 0))]}
+    masked = {("Add", i): False for i in range(6)}
+    hi = {("Add", 0), ("Add", 1), ("Add", 2), ("Add", 3), ("Add", 4), ("Add", 5)}
+    ppm = render_brushes_pgm([box], view="iso", size=96, annotations=AnnotationSpec.none(),
+                             color_by_csg=True, render_data=_tex(by_ref, masked), faces="textured",
+                             highlight_polys=hi)
+    got = _colors(ppm)
+    assert any(g > 0 and r == 0 and b == 0 for r, g, b in got), "the texture is gone"
+    assert ADD_F in got, "the highlight outline (vivid CSG hue) is missing"
+
+
+# -- the golden ----------------------------------------------------------------------------------
+
+GOLDEN_TEXTURED = FIXTURES / "preview_textured_golden_iso.png"
+
+
+def _checker_mip(w, h):
+    """A 2-colour checker mip so the golden shows tiling, UV orientation and per-face shade at once."""
+    px = bytearray()
+    for y in range(h):
+        for x in range(w):
+            px += bytes((200, 60, 60) if (x // 2 + y // 2) % 2 else (60, 60, 200))
+    return (w, h, bytes(px), bytes([1]) * (w * h))
+
+
+def test_textured_golden_cube(tmp_path):
+    """End-to-end pixel stability of a textured cube. Offline: a synthesized checker texture over the
+    shared render path. Bless with `UEDCLI_BLESS_GOLDEN=1 bin/test -k textured_golden`."""
+    box = _tbox("Cube")
+    by_ref = {"fix.t": [_checker_mip(16, 16)]}
+    masked = {("Cube", i): False for i in range(6)}
+    ppm = render_brushes_pgm([box], view="iso", size=128, annotations=AnnotationSpec.none(),
+                             color_by_csg=True, render_data=_tex(by_ref, masked), faces="textured")
+    from PIL import Image
+    from io import BytesIO
+    out = tmp_path / "textured.png"
+    Image.open(BytesIO(ppm)).convert("RGB").save(out)
+    got = _rgb(out)
+    if os.environ.get("UEDCLI_BLESS_GOLDEN"):
+        Image.open(out).convert("RGB").save(GOLDEN_TEXTURED)
+        pytest.skip(f"golden blessed → {GOLDEN_TEXTURED}")
+    assert GOLDEN_TEXTURED.is_file(), f"golden fixture missing: {GOLDEN_TEXTURED}"
+    want = _rgb(GOLDEN_TEXTURED)
+    if got != want:
+        diff = sum(1 for a, b in zip(got, want) if a != b) + abs(len(got) - len(want))
+        pytest.fail(f"--faces textured cube diverged from its golden: {diff} bytes")
+
+
+# ── `--faces textured`: what dispatch resolves and refuses ─────────────────────────────────────
+# The real CLI path over `--from-t3d`, so exit codes and messages are the ones a user sees. The
+# texture resolver is the mockable `resources.texture_resolver` seam; the mover index is autouse-stubbed.
+
+def _utx(tmp_path, stem="Fix", name="T", **kw):
+    """A synthesized `<stem>.utx` with an 8x8 texture named `name` — the STEM is the ref stem."""
+    from uedcli.tests import pkgfixture
+    p = tmp_path / f"{stem}.utx"
+    p.write_bytes(pkgfixture.texture_package(name=name, mips=pkgfixture.linear_chain(8, 8), **kw))
+    return str(p)
+
+
+def _patch_resolver(monkeypatch, *paths):
+    from uedcli import utexture
+    monkeypatch.setattr(resources, "texture_resolver",
+                        lambda project: utexture.TextureResolver(list(paths)))
+
+
+def test_textured_renders_through_the_cli_over_from_t3d(tmp_path, monkeypatch):
+    _patch_resolver(monkeypatch, _utx(tmp_path))
+    assert _run(tmp_path, [_tbox("Box", ref="Fix.T")], faces="textured", size=96) == 0
+    assert (tmp_path / "o.png").is_file()
+
+
+@pytest.mark.parametrize("layout", ["single", "quad", "breakdown"])
+def test_every_layout_renders_under_textured(tmp_path, monkeypatch, layout, capsys):
+    _patch_resolver(monkeypatch, _utx(tmp_path))
+    assert _run(tmp_path, [_tbox("Box", ref="Fix.T")], faces="textured", layout=layout, size=96) == 0
+    capsys.readouterr()
+
+
+def test_textured_with_explicit_brush_colors_exits_2(tmp_path, monkeypatch, capsys):
+    """Decision 2.7. Bare `--faces textured` succeeds; passing `--brush-colors` is a clean exit 2 —
+    the flag colours the wireframe/flat fills, and textured draws neither."""
+    _patch_resolver(monkeypatch, _utx(tmp_path))
+    assert _run(tmp_path, [_tbox("Box", ref="Fix.T")], faces="textured", brush_colors=None,
+                size=96) == 0
+    capsys.readouterr()
+    assert _run(tmp_path, [_tbox("Box", ref="Fix.T")], faces="textured", brush_colors="csg") == 2
+    assert "--brush-colors" in capsys.readouterr().err
+
+
+def test_textured_rejects_scaled_and_sheared_brushes_listing_every_offender(tmp_path, monkeypatch,
+                                                                           capsys):
+    """§4.2/§8: a positive-determinant scale, a shear and a mirror are ALL refused under textured (the
+    UV frame is rotation-only), naming every offender with its field — while `wire` and `flat` render
+    them (that scope is pinned elsewhere)."""
+    from uedcli.transform import FScale
+    _patch_resolver(monkeypatch, _utx(tmp_path))
+    scaled = _tbox("Scaled", ref="Fix.T")
+    scaled.main_scale = FScale(scale=(Decimal(2), Decimal(3), Decimal(1)))
+    sheared = _tbox("Sheared", ref="Fix.T", location=(600.0, 0.0, 0.0))
+    sheared.post_scale = FScale(scale=(Decimal(1), Decimal(1), Decimal(1)),
+                                sheer_rate=Decimal("0.5"), sheer_axis="SHEER_ZX")
+    assert _run(tmp_path, [scaled, sheared], faces="textured") == 2
+    err = capsys.readouterr().err
+    assert "Scaled" in err and "Sheared" in err and "MainScale" in err and "SheerRate" in err
+    # ...but wire and flat still render the same scaled/sheared set.
+    assert _run(tmp_path, [scaled, sheared], faces="wire") == 0
+    capsys.readouterr()
+
+
+def test_textured_renders_a_scene_that_references_no_texture(tmp_path, monkeypatch, capsys):
+    """Decision 2.6's literal "needs": a generated brush with no `Texture` on any face needs no texture
+    source, so it renders (as DEFAULT_GREY) even with NO resolver at all. The class index is still
+    required (that is the mover gate, stubbed here)."""
+    # No _patch_resolver: the real seam returns None with no games config — and must not be consulted.
+    monkeypatch.setattr(resources, "texture_resolver",
+                        lambda project: pytest.fail("resolver consulted for a no-texture scene"))
+    assert _run(tmp_path, [_tbox("Plain", ref=None)], faces="textured", size=96) == 0
+    capsys.readouterr()
+
+
+def test_textured_refuses_when_a_referenced_texture_has_no_resolver(tmp_path, capsys, tmp_project):
+    """A scene that DOES reference a texture and has no resolver exits 2 naming the cause — here, no
+    per-user games config (conftest isolates `UEDCLI_HOME`, so the genuine seam returns None)."""
+    assert _run(tmp_path, [_tbox("Box", ref="Fix.T")], faces="textured",
+                project=str(tmp_project)) == 2
+    err = capsys.readouterr().err
+    assert "games config" in err and "actor preview --faces textured" in err
+
+
+def test_the_three_no_resolver_causes_name_distinct_reasons(monkeypatch, tmp_path):
+    """§8: no games config, a broken games config, and an empty composed file list are DISTINCT
+    messages — all three are reachable WITH a valid project, so a generic "no project" would misname
+    two of them."""
+    from uedcli import config
+    from uedcli.cli import rendering
+    verb = "actor preview --faces textured"
+    monkeypatch.setattr(config, "load_user_config", lambda: None)
+    assert "no per-user games config" in rendering._texture_resolver_cause(object(), verb)
+
+    def boom():
+        raise config.ConfigError("bad toml")
+    monkeypatch.setattr(config, "load_user_config", boom)
+    assert "games config is broken" in rendering._texture_resolver_cause(object(), verb)
+
+    monkeypatch.setattr(config, "load_user_config", lambda: {"games": {}})
+    monkeypatch.setattr(config, "composed_search_files", lambda project, uc: [])
+    assert "resolves no game packages" in rendering._texture_resolver_cause(object(), verb)
+
+
+def test_textured_lists_every_unreadable_ref_with_its_case(tmp_path, monkeypatch, capsys):
+    """§8: unreadable/bare/undecodable refs exit 2 listing EVERY offender (not just the first) with the
+    decoder's case, and a BARE ref's message says to qualify it as `Package.Name`."""
+    _patch_resolver(monkeypatch)                               # an EMPTY search path: every ref misses
+    good = _tbox("A", ref="NoSuchPackage.Tex")                 # a qualified miss → unknown-package
+    bare = _tbox("B", ref="BareName")                          # unqualified → the qualify hint
+    assert _run(tmp_path, [good, bare], faces="textured") == 2
+    err = capsys.readouterr().err
+    assert "NoSuchPackage.Tex" in err and "BareName" in err
+    assert "unknown-package" in err and "unqualified-ref" in err
+    assert "Package.Name" in err
+
+
+# -- masking is resolved in dispatch (§4.3a) -----------------------------------------------------
+
+def _preview_textures(actors, monkeypatch, tmp_path, *paths):
+    from uedcli.cli import rendering
+    _patch_resolver(monkeypatch, *paths)
+    args = _preview_args(tmp_path / "o.png", faces="textured")
+    return rendering.preview_textures(actors, args)
+
+
+def test_actor_level_polyflags_2_masks_even_when_the_polys_are_clean(tmp_path, monkeypatch):
+    """§4.3a's actor OR: a brush authored `PolyFlags=2` masks in the engine and in --native, so it must
+    here too, even though its polys carry no flag and the texture is untagged."""
+    box = make_brush_actor("Masked", cube(128.0, 128.0, 128.0, texture="Fix.T"), csg="add",
+                           poly_flags=preview.PF_MASKED)
+    td = _preview_textures([box], monkeypatch, tmp_path, _utx(tmp_path))
+    assert all(td.masked[("Masked", i)] for i in range(6))
+
+
+def test_a_clean_brush_over_an_untagged_texture_is_not_masked(tmp_path, monkeypatch):
+    """The control for the row above and for bMasked below: no poly flag, no actor flag, no tag ⇒ not
+    masked, so index 0 draws as an ordinary colour."""
+    box = _tbox("Clean", ref="Fix.T")
+    td = _preview_textures([box], monkeypatch, tmp_path, _utx(tmp_path))
+    assert not any(td.masked[("Clean", i)] for i in range(6))
+
+
+def test_a_bmasked_fixture_texture_masks_via_the_decoder(tmp_path, monkeypatch):
+    """§4.3a's texture arm: a synthesized package carrying `bMasked` masks the face through the
+    decoder's typed result, with clean polys and no actor flag — the arm neither committed fixture nor
+    the gitignored corpus can otherwise exercise."""
+    box = _tbox("Deco", ref="MaskFix.T")
+    td = _preview_textures([box], monkeypatch, tmp_path,
+                           _utx(tmp_path, stem="MaskFix", bmasked=True))
+    assert all(td.masked[("Deco", i)] for i in range(6))

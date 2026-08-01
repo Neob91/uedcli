@@ -216,19 +216,24 @@ def _preview_opts(pp):
                          "shows all four); 'iso' separates opposite faces so index labels don't overlap")
     pp.add_argument("--iso-angle", type=float, default=30.0,
                     help="iso receding-edge angle from horizontal (default 30°)")
-    pp.add_argument("--faces", default="wire", choices=["wire", "flat"],
+    pp.add_argument("--faces", default="wire", choices=["wire", "flat", "textured"],
                     help="how brush faces are drawn (default 'wire'). 'wire' = outlines only, the "
                          "schematic — needs no game content. 'flat' = every face also filled solid in "
                          "its brush's colour, the nearest face winning per pixel, with the wireframe "
                          "kept over it in the paler/darker partner of that same brush colour so the "
                          "outlines read against their own fills: a diagram of what occludes what. "
-                         "Under 'flat' a SUBTRACT brush "
+                         "'textured' = each face filled by sampling its OWN texture through its authored "
+                         "UV frame (Origin/TextureU/TextureV/Pan), NO wireframe — so alignment, panning, "
+                         "mirroring and tiling are visible offline (no editor, no container, no "
+                         "lighting). Under BOTH 'flat' and 'textured' a SUBTRACT brush "
                          "shows only its far (interior) faces, so geometry inside a subtracted room "
-                         "stays visible instead of being hidden by a solid box. 'flat' LOADS the game's "
-                         "class hierarchy (to tell a mover, which is never carved into the world, from "
-                         "a real subtraction), so unlike 'wire' it needs BOTH a resolved project and the "
-                         "per-user games config — 'wire' needs neither and works on --from-t3d from "
-                         "anywhere")
+                         "stays visible instead of being hidden by a solid box. 'flat' and 'textured' "
+                         "both LOAD the game's class hierarchy (to tell a mover, which is never carved "
+                         "into the world, from a real subtraction), so unlike 'wire' they need BOTH a "
+                         "resolved project and the per-user games config — 'wire' needs neither and "
+                         "works on --from-t3d from anywhere. 'textured' additionally needs every texture "
+                         "the scene references to be readable, and rejects --brush-colors and any scaled "
+                         "or sheared brush")
     pp.add_argument("--brush-colors", dest="brush_colors", default=None, choices=["csg", "legend"],
                     help="how to colour brushes — both the wireframe and the '--faces flat' fills: "
                          "'csg' (the default) = by CSG op (added blue, subtracted gold, semisolid pink, "

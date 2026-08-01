@@ -579,14 +579,149 @@ def _preview_render_data(actors, args, show: set[str]) -> "preview.PreviewData":
     and class-hierarchy resolution so `preview.py` stays resolver-free.
 
     `points` is the per-point-actor render data. `faces` is None under `--faces wire`, which resolves
-    nothing and so still works with no game install; under a FILLED mode it carries the mover set,
-    which needs the game's class hierarchy (an accepted cost of those modes). It runs FIRST, so a scene
-    that cannot resolve mover-ness does not first emit point-actor notes about it."""
+    nothing and so still works with no game install; under a FILLED mode it carries the mover set (which
+    needs the game's class hierarchy) and, under `textured`, the decoded texture payload. The
+    mover/texture resolution runs FIRST, so a scene that cannot resolve them does not first emit
+    point-actor notes about it."""
     mode = _preview_faces_mode(args)
     faces = None
     if mode != "wire":
-        faces = preview.FaceData(movers=preview_movers(actors, args, mode))
+        if mode == "textured":
+            # Cheap arg/geometry refusals first (§2.7, §4.2), before touching any resolver.
+            _reject_explicit_brush_colors(args)
+            _reject_transformed_brushes(actors, args)
+        movers = preview_movers(actors, args, mode)
+        textures = preview_textures(actors, args) if mode == "textured" else None
+        faces = preview.FaceData(movers=movers, textures=textures)
     return preview.PreviewData(points=_preview_point_data(actors, args, show), faces=faces)
+
+
+def _reject_explicit_brush_colors(args) -> None:
+    """`--faces textured --brush-colors X` is a clean exit 2 (decision 2.7). `--brush-colors` parses
+    with `default=None`, so a non-None value is an EXPLICIT one; textured colours nothing from it (it
+    samples each face's own texture), and giving one flag two jobs is refused rather than ignored."""
+    chosen = getattr(args, "brush_colors", None)
+    if chosen is not None:
+        verb = _preview_verb(args, "textured")
+        raise CommandError(f"{verb}: --brush-colors {chosen} conflicts with --faces textured. That flag "
+                           f"colours the wireframe and the flat fills; textured draws neither — it "
+                           f"samples each face's OWN texture. Drop --brush-colors, or use --faces flat")
+
+
+def _nonidentity_scale_part(fs) -> str:
+    """The first non-identity component of an `FScale` (`Scale.X=..` / `SheerRate=..`), or "" for the
+    identity transform — for naming which field made a brush ineligible for `textured`."""
+    if fs is None or fs.is_identity():
+        return ""
+    from decimal import Decimal
+    for axis, val in zip("XYZ", fs.scale):
+        if Decimal(str(val)) != Decimal(1):
+            return f"Scale.{axis}={val}"
+    return f"SheerRate={fs.sheer_rate}"
+
+
+def _reject_transformed_brushes(actors, args) -> None:
+    """`--faces textured` refuses ANY scaled or sheared brush (§4.2), listing every offender with its
+    field (a batch is all-or-nothing). Its geometry is built with the full linear transform
+    (`PostScale·R·MainScale`, sheer folded in) while the UV frame uses rotation ONLY, so a texture would
+    sit on untransformed axes over transformed geometry — a wrong answer in the one tool meant to be
+    authoritative about UV. `wire`/`flat` render these; supporting them under `textured` is deferred."""
+    offenders: list[str] = []
+    for a in actors:
+        if a.brush is None:
+            continue
+        for field, fs in (("MainScale", a.main_scale), ("PostScale", a.post_scale)):
+            part = _nonidentity_scale_part(fs)
+            if part:
+                offenders.append(f"{a.name} ({field} {part})")
+    if offenders:
+        verb = _preview_verb(args, "textured")
+        raise CommandError(
+            f"{verb}: cannot texture {len(offenders)} scaled or sheared brush(es) — the UV frame uses "
+            f"rotation only, so the texture would not follow the transformed geometry: "
+            f"{', '.join(offenders)}. Remove the scale/sheer, or use --faces wire/flat")
+
+
+def _texture_resolver_cause(project, verb: str) -> str:
+    """Why no texture resolver is available, as one of `_texture_resolver`'s three `None` causes (§8),
+    so a scene that NEEDS a texture and has no resolver refuses naming the actual cause — never a
+    generic "no project", since all three are reachable WITH a valid project."""
+    lead = (f"{verb}: the scene references a texture but no texture search path is available")
+    try:
+        user_config = config.load_user_config()
+    except config.ConfigError as e:
+        return f"{lead}: the games config is broken — {e}. (--faces wire/flat need no textures)"
+    if user_config is None:
+        return (f"{lead}: no per-user games config (~/.uedcli/config.toml) — create it with a "
+                f"[games.<name>] paths dir list. (--faces wire/flat need no textures)")
+    try:
+        files = config.composed_search_files(project, user_config) if project is not None else []
+    except config.ConfigError as e:
+        return f"{lead}: the games config is broken — {e}. (--faces wire/flat need no textures)"
+    if not files:
+        return (f"{lead}: this project resolves no game packages (check the games config `paths` and "
+                f"that the project targets a game). (--faces wire/flat need no textures)")
+    return f"{lead}."                                    # unreachable: a real resolver would have built
+
+
+def preview_textures(actors, args) -> "preview.TextureData":
+    """Resolve every texture the brush faces reference into the decoded seam a `--faces textured` render
+    draws from — dispatch owns this so `preview.py` stays resolver-free.
+
+    "Needs" is literal (decision 2.6): the scene's face refs are collected first, and a scene
+    referencing NONE renders with no texture source at all. Otherwise every distinct ref is decoded and
+    any the render NEEDS and cannot get is a clean exit 2 naming the cause (§8) — an unreadable/bare/
+    undecodable ref lists EVERY offender with its case (a bare one says to qualify it as `Package.Name`),
+    and no resolver at all names which of the three `None` causes applies. On success: a `TextureData`
+    with every ref's mip pyramid (casefolded key, FName semantics) and every textured face's masked
+    answer, `(poly.flags | actor PolyFlags) & PF_Masked` OR the decoder's `bMasked` (§4.3a)."""
+    from .. import utexture
+    brushes = [a for a in actors if a.brush is not None]
+    face_ref: dict[tuple[str, int], str] = {}          # (actor, poly) → casefolded ref (faces WITH one)
+    refs: dict[str, str] = {}                           # casefold → original spelling (for messages)
+    for a in brushes:
+        for idx, poly in enumerate(a.brush.polys):
+            ref = preview._poly_texture_ref(poly)
+            if ref is None:
+                continue
+            cf = ref.casefold()
+            face_ref[(a.name, idx)] = cf
+            refs.setdefault(cf, ref)
+    if not refs:                                        # decision 2.6: nothing needed, nothing resolved
+        return preview.TextureData(by_ref={}, masked={})
+    verb = _preview_verb(args, "textured")
+    try:
+        project = resources.resolve_project(args)
+    except ProjectError:
+        project = None
+    resolver = resources.texture_resolver(project)
+    if resolver is None:
+        raise CommandError(_texture_resolver_cause(project, verb))
+    by_ref: dict[str, list] = {}
+    decoded: dict[str, "utexture.DecodedTexture"] = {}
+    fails: list[str] = []
+    for cf, ref in refs.items():
+        got = resolver.resolve(ref)
+        if isinstance(got, utexture.DecodedTexture):
+            by_ref[cf] = list(got.mips)
+            decoded[cf] = got
+        else:                                           # a TextureError — collect, refuse the batch
+            hint = " — qualify it as Package.Name" if got.case == "unqualified-ref" else ""
+            fails.append(f"{ref} [{got.case}] {got.detail}{hint}")
+    if fails:
+        raise CommandError(
+            f"{verb}: {len(fails)} texture(s) the render needs could not be read, so a textured face "
+            f"would silently be a checkerboard — refusing instead:\n  " + "\n  ".join(fails))
+    masked: dict[tuple[str, int], bool] = {}
+    for a in brushes:
+        actor_flags = preview.poly_flags_int(dict(a.props))
+        for idx, poly in enumerate(a.brush.polys):
+            cf = face_ref.get((a.name, idx))
+            if cf is None:
+                continue
+            flag_masked = bool(((poly.flags or 0) | actor_flags) & preview.PF_MASKED)
+            masked[(a.name, idx)] = flag_masked or bool(decoded[cf].b_masked)
+    return preview.TextureData(by_ref=by_ref, masked=masked)
 
 
 def _preview_point_data(actors, args, show: set[str]) -> dict:

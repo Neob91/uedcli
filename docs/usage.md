@@ -1035,13 +1035,13 @@ uedcli mover key rotate Mover0 1 --by 0,16384,0        # swings about the hinge,
 A self-rendered **colour** image (no editor) so you can see geometry and map **poly index ↔
 face**. Reads named actors from the current level, model-side. **`--faces`** picks how faces are drawn:
 `wire` (the default) is outlines only; `flat` also fills every face solid through a depth buffer, so you
-can read what occludes what. (Renamed from `brush preview`; `stash preview`/`prefab preview` keep their
-names.)
+can read what occludes what; `textured` fills each face with its own game texture, so you can check
+alignment offline. (Renamed from `brush preview`; `stash preview`/`prefab preview` keep their names.)
 
 ```
 actor preview [<names…> | --from-t3d <FILE…|->]
               [--layout quad|single|breakdown] [--view top|front|side|iso]
-              [--faces wire|flat]
+              [--faces wire|flat|textured]
               [--brush-colors csg|legend] [--annotate SELECTORS]
               [--frame BRUSH[:IDX] | X0,Y0,Z0,X1,Y1,Z1] [--frame-tightness N]
               [--highlight POLY|NAME ...] [--focus BRUSH]
@@ -1069,7 +1069,7 @@ actor preview [<names…> | --from-t3d <FILE…|->]
   **`--focus`/`--frame` are ignored** under it. Brush + point-actor counts are reported on stderr;
   breakdown is a small-selection inspector (it warns past ~16 panes — a whole level makes an unusably
   large grid, and point actors add panes too, so subset first).
-- **`--faces {wire,flat}`** picks how faces are drawn.
+- **`--faces {wire,flat,textured}`** picks how faces are drawn.
   - **`wire`** (default) draws outlines only — the schematic. It needs no game content at all.
   - **`flat`** additionally **fills** every face solid in its brush's colour, the nearest face winning
     per pixel, and keeps the outlines over the fills. Use it to read **what occludes what**: which brush
@@ -1092,13 +1092,29 @@ actor preview [<names…> | --from-t3d <FILE…|->]
     point, and `flat` accounts for that, so a mirrored subtracted room still shows its interior the
     right way round.
   - `flat` composes with every other option here, `--focus` and `--layout breakdown` included.
+  - **`textured`** fills each face by **sampling its own texture** through the face's authored UV frame
+    (`Origin`/`TextureU`/`TextureV`/`Pan`) and draws **no wireframe** — so texture **alignment,
+    panning, mirroring and tiling** are visible offline, without a materialize + render cycle. It shades
+    each face by a fixed key light (no scene lighting), picks a mip level per face from how densely the
+    texture lands on screen, and honours a **masked** texture's cut-out holes (a hole shows whatever is
+    behind it). A face with no `Texture` set fills a neutral grey; that is normal, not an error.
+  - `textured` shares `flat`'s subtract cull and depth, so the same mover/subtraction rules apply, and
+    it **loads the class hierarchy** the same way. On top of that it needs **every texture the scene
+    references to be readable** — miss one and it exits 2 naming the ref (a bare `Texture=Name` is
+    rejected; qualify it as `Package.Name`). A scene that references no texture at all needs no texture
+    source. It also **rejects `--brush-colors`** (textured colours nothing from it) and any **scaled or
+    sheared brush** (its UV frame is rotation-only, so a texture would not follow the transformed
+    geometry) — both a clean exit 2; use `wire`/`flat` for those. `textured` composes with every other
+    option here, `--focus`, `--highlight` (its vivid outline is the only line art it keeps) and
+    `--layout breakdown` included.
 - **Brushes are coloured by CSG op** (UnrealEd's legend): added-solid **blue**, subtracted
   **gold/yellow**, semi-solid **pink**, non-solid **green**, mover **magenta**; front faces darker,
   obscured/back faces lighter. This says what each brush *does*.
-- **`--brush-colors {csg,legend}`** picks the colour source, outlines and fills alike. `csg` (default)
-  is the CSG-op colouring above. **`legend`** instead draws each brush in *its own per-actor legend
-  tint* — every brush a distinct colour matching its legend swatch (you trade the CSG cue for telling
-  same-op brushes apart at a glance).
+- **`--brush-colors {csg,legend}`** picks the colour source for the wireframe and the `flat` fills.
+  `csg` (default) is the CSG-op colouring above. **`legend`** instead draws each brush in *its own
+  per-actor legend tint* — every brush a distinct colour matching its legend swatch (you trade the CSG
+  cue for telling same-op brushes apart at a glance). It has no meaning under `--faces textured`, which
+  colours nothing from it, so passing it there is a clean exit 2.
 - **The legend never overlaps the geometry.** A top band is reserved for the legend panel and the
   geometry is framed below it. This applies to `quad`/`single`; **`breakdown` draws no legend at all**
   (actors are identified by their captioned panes).

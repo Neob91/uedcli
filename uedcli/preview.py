@@ -68,12 +68,13 @@ opposite faces). render_quad_pgm tiles Top/Front/Iso/Side like UnrealEd.
 from __future__ import annotations
 
 import math
+import re
 from array import array
 from dataclasses import dataclass, field
 from decimal import Decimal
 
 from .model import Actor
-from .texframe import newell, poly_flags_int
+from .texframe import newell, poly_flags_int, world_uv_frame
 
 
 class PreviewAbort(Exception):
@@ -110,6 +111,7 @@ MARKER = (90, 90, 90)     # point-actor marker + label — neutral grey (NOT a C
 # viewport — a cue that dies on our light bg (they conflated). Coral (warm) vs magenta (cool) stays
 # distinct on any background; see spikes/2026-07-22-unrealed-brush-wire-colors.md.
 PF_INVISIBLE = 0x00000001
+PF_MASKED = 0x00000002
 PF_SEMISOLID = 0x00000020
 PF_NOTSOLID = 0x00000008
 _CSG_PALETTE: dict[str, tuple[tuple[int, int, int], tuple[int, int, int]]] = {
@@ -642,6 +644,30 @@ def _face_depth_affine(v3, world_to_pxf, d_vec):
 
     None means the solve is singular, i.e. the face projects to zero area (edge-on), or the face's own
     normal is degenerate. Either way it is skipped."""
+    solved = _plane_screen_probes(v3, world_to_pxf)
+    if solved is None:
+        return None
+    probes, (x0, y0), (ux, uy, vx, vy), det = solved
+    d0, d1, d2 = (sum(p[i] * d_vec[i] for i in range(3)) for p in probes)
+    return _affine_on_plane(d0, d1, d2, x0, y0, ux, uy, vx, vy, det)
+
+
+def _cross(a, b):
+    return (a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0])
+
+
+def _plane_screen_probes(v3, world_to_pxf):
+    """Three world probes ON THE FACE'S OWN PLANE and their screen positions — the shared machinery
+    that solves any quantity affine in world space (depth, U, V) exactly under an orthographic camera.
+    Returns `(probes, (x0, y0), (ux, uy, vx, vy), det)`, or None when the face has no screen area to
+    fill (edge-on) or its normal is degenerate.
+
+    The plane is anchored at `v3[0]` with the NEWELL normal (winding, not the stored `Normal`), which is
+    observable on a non-planar face reachable via `--from-t3d`. The in-plane probes step out by the
+    face's OWN size (`span`), so the singular `det` test is a statement about the FACE rather than the
+    probe length: a fixed 1-UU step would scale `det` with the framing's pixels-per-world-unit and read
+    a perfectly good 4096-UU floor as edge-on in a zoomed-out pane. Measured to buy no float precision
+    over a fixed step — only that meaning."""
     n = newell(v3)
     nl = math.sqrt(n[0] * n[0] + n[1] * n[1] + n[2] * n[2])
     if nl < 1e-12:                             # guards the EXACT zero (collinear/coincident vertices):
@@ -657,26 +683,141 @@ def _face_depth_affine(v3, world_to_pxf, d_vec):
         return None
     t1 = tuple(c / t1l for c in t1)
     t2 = _cross(n, t1)
-    # Step the in-plane probes out by the face's OWN size, which is what makes the singular test below a
-    # statement about the FACE rather than about the probe length. With a fixed step (say 1 world unit)
-    # the determinant scales with the pixels-per-world-unit of the current framing, so a zoomed-out pane
-    # would read a perfectly good 4096-UU floor as edge-on (det ~1e-10 at 1e-5 px/UU) and skip it. It buys
-    # no float precision — measured identical to 1e15-scale faces either way — only that meaning.
     span = max((math.dist(p, v3[0]) for p in v3[1:]), default=0.0) or 1.0
     probes = [v3[0]] + [tuple(v3[0][i] + t[i] * span for i in range(3)) for t in (t1, t2)]
     (x0, y0), (x1, y1), (x2, y2) = (world_to_pxf(p) for p in probes)
-    d0, d1, d2 = (sum(p[i] * d_vec[i] for i in range(3)) for p in probes)
     ux, uy, vx, vy = x1 - x0, y1 - y0, x2 - x0, y2 - y0
     det = ux * vy - vx * uy
     if abs(det) < 1e-9:
         return None
-    a = ((d1 - d0) * vy - (d2 - d0) * uy) / det
-    b = ((d2 - d0) * ux - (d1 - d0) * vx) / det
-    return (a, b, d0 - a * x0 - b * y0)
+    return probes, (x0, y0), (ux, uy, vx, vy), det
 
 
-def _cross(a, b):
-    return (a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0])
+def _affine_on_plane(f0, f1, f2, x0, y0, ux, uy, vx, vy, det):
+    """Solve `f = a*x + b*y + c` from a quantity's three probe values (`f0..f2`, at the probes
+    `_plane_screen_probes` returned) and that face's screen basis. `depth`, `u` and `v` all go through
+    this, so their screen gradients (`a`, `b`) are consistent — which is why §4.4's mip term is free."""
+    a = ((f1 - f0) * vy - (f2 - f0) * uy) / det
+    b = ((f2 - f0) * ux - (f1 - f0) * vx) / det
+    return (a, b, f0 - a * x0 - b * y0)
+
+
+# ----- textured face fills (`--faces textured`) ------------------------------
+# The texel path builds on the SAME cull, depth buffer and occlusion `flat` uses; only the fill differs:
+# each pixel samples the face's own decoded texture through its authored UV frame instead of a flat hue.
+# Shade, key light, mip pick and the DEFAULT_GREY no-texture colour all match `render.rs` (`level
+# preview --native`) so the two tiers agree up to f32-vs-f64 (spec §4.9): the divergences are declared,
+# never accidental.
+
+_KEY_LIGHT = (-0.408, -0.577, 0.707)   # render.rs KEY_LIGHT — un-normalized (|L| = 0.99962), abs() below
+DEFAULT_GREY = (128, 128, 128)         # a poly with no `Texture` — matches render.rs's `tex_index < 0`
+
+
+def _face_shade(v3) -> float | None:
+    """Per-face key-light brightness for `textured`, `0.55 + 0.45*|N·L|/|N|` with `N` the world Newell
+    normal (§4.1), matching `render.rs`. None for a face `render.rs` also skips — fewer than 3 vertices
+    or a degenerate (zero-length) normal — which the render loop drops with no fill."""
+    if len(v3) < 3:
+        return None
+    n = newell(v3)
+    nl = math.sqrt(n[0] * n[0] + n[1] * n[1] + n[2] * n[2])
+    if nl <= 1e-12:
+        return None
+    dot = n[0] * _KEY_LIGHT[0] + n[1] * _KEY_LIGHT[1] + n[2] * _KEY_LIGHT[2]
+    return 0.55 + 0.45 * abs(dot) / nl
+
+
+def _mip_level(du_dx, du_dy, dv_dx, dv_dy, n_mips: int) -> int:
+    """The mip index for one face from its OWN screen-space UV gradients (§4.4): the larger axis'
+    texels-per-pixel, `log2`'d and clamped to the pyramid. A per-FACE quantity — a view-global
+    projection gain understates it on an oblique wall (~1.7x at the default iso angle, unbounded near
+    edge-on), so it is derived from these gradients, which already account for the projection."""
+    texels_per_px = max(math.hypot(du_dx, du_dy), math.hypot(dv_dx, dv_dy))
+    return max(0, min(n_mips - 1, int(math.floor(math.log2(max(texels_per_px, 1.0))))))
+
+
+def _poly_texture_ref(poly) -> str | None:
+    """A brush poly's texture ref as a bare `Package[.Group].Name`, or None when it carries no
+    `Texture`. Strips a `Texture'…'` object wrapper and drops the `None` sentinel. Pure string work —
+    the resolve/decode stays in dispatch; this only names the key `TextureData.by_ref` is casefolded on,
+    so dispatch (building the map) and `_scene_geometry` (reading it) agree by sharing this one helper."""
+    t = getattr(poly, "texture", None)
+    if not t:
+        return None
+    m = re.search(r"'([^']*)'", t)
+    ref = (m.group(1) if m else t).strip()
+    return ref if ref and ref != "None" else None
+
+
+def _face_uv_affine(v3, frame, world_to_pxf):
+    """This face's per-pixel UV as two affine maps `(au, bu, cu)`, `(av, bv, cv)` with
+    `u = au*x + bu*y + cu` (and `v` likewise), exact under ortho — no per-pixel perspective divide.
+    `frame` is `(base_w, tu_w, tv_w, pan)` from `texframe.world_uv_frame`; `u(P) = dot(P-base_w, tu_w) +
+    pan[0]` is affine in world P, so it solves from the SAME plane probes the depth map uses, and the
+    gradients `(au, bu)`/`(av, bv)` are exactly §4.4's mip term. None when the face is edge-on. The UV is
+    in MIP-0 texel units; the render loop divides by `2**level` for the chosen mip."""
+    solved = _plane_screen_probes(v3, world_to_pxf)
+    if solved is None:
+        return None
+    probes, (x0, y0), (ux, uy, vx, vy), det = solved
+    base_w, tu_w, tv_w, pan = frame
+
+    def _u(p):
+        return ((p[0] - base_w[0]) * tu_w[0] + (p[1] - base_w[1]) * tu_w[1]
+                + (p[2] - base_w[2]) * tu_w[2] + pan[0])
+
+    def _v(p):
+        return ((p[0] - base_w[0]) * tv_w[0] + (p[1] - base_w[1]) * tv_w[1]
+                + (p[2] - base_w[2]) * tv_w[2] + pan[1])
+
+    us = [_u(p) for p in probes]
+    vs = [_v(p) for p in probes]
+    return (_affine_on_plane(us[0], us[1], us[2], x0, y0, ux, uy, vx, vy, det),
+            _affine_on_plane(vs[0], vs[1], vs[2], x0, y0, ux, uy, vx, vy, det))
+
+
+def _fill_face_textured(buf, zbuf, size, poly_px, depth, uv, mip, masked: bool, shade: float,
+                        inv: float, dim=None, dimmed: int = 0) -> None:
+    """Fill one face by sampling its texture per pixel (§4.3), depth-tested exactly like `_fill_face`
+    (same even-odd scanline, same strict-`<` test, same `dim` mask). `uv` is `_face_uv_affine`'s two
+    affine maps in MIP-0 texel units; `inv = 1/2**level` rescales them onto the chosen `mip`
+    `(w, h, rgb, mask)`. Nearest-neighbour with Euclidean wrap (Python `%` on ints). A MASKED face's
+    hole texels (`mask == 0`) write neither colour nor depth, so a face behind shows through; an
+    unmasked face draws index 0 as an ordinary colour. Colour is `texel * shade`, truncated as
+    `render.rs`'s `(c*shade).min(255) as u8`."""
+    a, b, c = depth
+    (au, bu, cu), (av, bv, cv) = uv
+    mw, mh, mrgb, mmask = mip
+    ys = [p[1] for p in poly_px]
+    n = len(poly_px)
+    for y in range(max(0, math.ceil(min(ys) - 0.5)), min(size - 1, math.floor(max(ys) - 0.5)) + 1):
+        yc = y + 0.5
+        xs: list[float] = []
+        for i in range(n):
+            (ax, ay), (bx, by) = poly_px[i], poly_px[(i + 1) % n]
+            if (ay <= yc) != (by <= yc):       # half-open in y: a shared vertex is counted once
+                xs.append(ax + (yc - ay) * (bx - ax) / (by - ay))
+        xs.sort()
+        row, ru, rv, base = b * yc + c, bu * yc + cu, bv * yc + cv, y * size
+        for k in range(0, len(xs) - 1, 2):     # even-odd: fill between crossing pairs
+            for x in range(max(0, math.ceil(xs[k] - 0.5)),
+                           min(size - 1, math.floor(xs[k + 1] - 0.5)) + 1):
+                xc = x + 0.5
+                d = a * xc + row
+                if d < zbuf[base + x]:
+                    tx = int(math.floor((au * xc + ru) * inv)) % mw
+                    ty = int(math.floor((av * xc + rv) * inv)) % mh
+                    mi = ty * mw + tx
+                    if masked and mmask[mi] == 0:
+                        continue               # a hole writes no colour AND no depth (§4.3)
+                    zbuf[base + x] = d
+                    if dim is not None:
+                        dim[base + x] = dimmed
+                    t3 = mi * 3
+                    i3 = (base + x) * 3
+                    buf[i3] = min(int(mrgb[t3] * shade), 255)
+                    buf[i3 + 1] = min(int(mrgb[t3 + 1] * shade), 255)
+                    buf[i3 + 2] = min(int(mrgb[t3 + 2] * shade), 255)
 
 
 def _fill_face(buf, zbuf, size, poly_px, depth, rgb, dim=None, dimmed: int = 0) -> None:
@@ -1709,6 +1850,8 @@ class _SceneGeom:
     edges: list          # (front, (a2,b2), front_rgb, back_rgb, alpha, face_key) — alpha<1 dims
     fills: list          # (v3, poly2d, rgb, dimmed) in SCENE ORDER — ONE list, so the coplanar tie-break
                          # cannot depend on `--focus`; `dimmed`=1 marks a de-emphasised brush's face
+    tex_faces: list      # (frame, mips|None, masked, shade|None) per `fills` entry, `textured` ONLY —
+                         # index-aligned with `fills` so the texel loop pairs them; empty otherwise
     hi_edges: list       # ((a2,b2), vivid_rgb, face_key)
     vis_faces: list      # (face_key, v3, poly2d) per surviving face, FILLED MODES ONLY — the faces whose
                          # visibility `render_brushes_pgm` resolves against the finished depth buffer.
@@ -1757,13 +1900,19 @@ def _scene_geometry(actors, *, view, iso_angle, annotations, highlight_polys, fo
     from .rotation import actor_linear, actor_prepivot, local_offset
     from .transform import det3
     filled = faces != "wire"
+    textured = faces == "textured"
     face_data = render_data.faces
     if filled and face_data is None:
         raise PreviewAbort(f"--faces {faces} needs the resolved face data (the mover set) on the "
                            f"preview seam, and it arrived empty")
     mover_names = face_data.movers if face_data is not None else frozenset()
+    tex_data = face_data.textures if face_data is not None else None
+    if textured and tex_data is None:
+        raise PreviewAbort("--faces textured needs the decoded texture payload on the preview seam, "
+                           "and it arrived empty")
     edges: list = []
     fills: list = []
+    tex_faces: list = []
     hi_edges: list = []
     vis_faces: list = []
     hi_only_labels: set = set()
@@ -1856,6 +2005,21 @@ def _scene_geometry(actors, *, view, iso_angle, annotations, highlight_polys, fo
                 # does not beat depth, and a hidden highlighted face shows nothing — see the edge note.
                 lit = focus_cf is None or is_focus_brush or is_hi
                 fills.append((v3, vs, partner if is_hi else own, 0 if lit else 1))
+                if textured:
+                    # Index-aligned with `fills`: the resolver-free texel data this face draws from.
+                    # The UV frame comes from `texframe` (pure); the mip pyramid + masked answer ride
+                    # `TextureData`, resolved in dispatch. A highlighted face is NOT inverted here —
+                    # `textured` keeps its texture and takes only a highlight OUTLINE (§4.6/§5).
+                    frame = world_uv_frame(actor, poly)
+                    if not all(math.isfinite(c) for pt in frame for c in pt):
+                        raise PreviewAbort(
+                            f"--faces textured: actor {actor.name!r} poly {idx} has a non-finite "
+                            f"texture frame (Origin/TextureU/TextureV/Pan), so its UV cannot be "
+                            f"sampled")
+                    ref = _poly_texture_ref(poly)
+                    mips = tex_data.by_ref[ref.casefold()] if ref is not None else None
+                    masked = tex_data.masked.get((actor.name, idx), False)
+                    tex_faces.append((frame, mips, masked, _face_shade(v3)))
             # EDGE: under a filled mode `partner`, NOT `own`. `own` is by definition the colour the fill
             # underneath it already is, so an edge drawn in it is INVISIBLE — which is how `flat` first
             # shipped, and it made decision 2.5's "keep the wireframe" promise vacuous (a room + two
@@ -1903,7 +2067,7 @@ def _scene_geometry(actors, *, view, iso_angle, annotations, highlight_polys, fo
                     (_poly_centroid_2d(vs), str(idx), label_accent, depth, v3, actor.name))
         if not hybrid and brush_cands_2d and annotations.draws_name(is_brush=True, is_highlighted=brush_hi):
             brush_names.append((brush_cands_2d, actor.name.upper(), label_accent))
-    return _SceneGeom(edges=edges, fills=fills, hi_edges=hi_edges,
+    return _SceneGeom(edges=edges, fills=fills, tex_faces=tex_faces, hi_edges=hi_edges,
                       vis_faces=vis_faces, hi_only_labels=hi_only_labels, poly_labels=poly_labels,
                       brush_names=brush_names, occluders=occluders, points=points, pts=pts)
 
@@ -2074,10 +2238,29 @@ def render_brushes_pgm(actors: list[Actor], *, view: str = "top", size: int = 25
         # whether a DE-EMPHASISED face won each pixel, and `_fade_dimmed` fades those pixels once at the
         # end: one blend per pixel with no second rasterizing pass and no scratch canvas.
         dim = _alloc_dim_mask(size) if any(f[3] for f in geom.fills) else None
-        for v3, vs, rgb, dimmed in geom.fills:
+        textured = faces == "textured"
+        for i, (v3, vs, rgb, dimmed) in enumerate(geom.fills):
             plane = _face_depth_affine(v3, world_to_pxf, d_vec)
-            if plane is not None:                   # None = edge-on, no screen area to fill
-                _fill_face(buf, zbuf, size, [to_pxf(p) for p in vs], plane, rgb, dim, dimmed)
+            if plane is None:                       # edge-on: no screen area to fill
+                continue
+            poly_px = [to_pxf(p) for p in vs]
+            if not textured:
+                _fill_face(buf, zbuf, size, poly_px, plane, rgb, dim, dimmed)
+                continue
+            frame, mips, masked, shade = geom.tex_faces[i]
+            if shade is None:                       # <3 verts / degenerate normal — render.rs skips it
+                continue
+            if mips is None:                        # poly has no Texture → DEFAULT_GREY × shade (§4.3)
+                grey = tuple(min(int(DEFAULT_GREY[c] * shade), 255) for c in range(3))
+                _fill_face(buf, zbuf, size, poly_px, plane, grey, dim, dimmed)
+                continue
+            uv = _face_uv_affine(v3, frame, world_to_pxf)
+            if uv is None:                          # edge-on in the UV solve too
+                continue
+            (au, bu, _cu), (av, bv, _cv) = uv
+            level = _mip_level(au, bu, av, bv, len(mips))
+            _fill_face_textured(buf, zbuf, size, poly_px, plane, uv, mips[level], masked, shade,
+                                1.0 / (1 << level), dim, dimmed)
         if dim is not None:
             _fade_dimmed(buf, dim, size, _DIM_FILL_ALPHA)
         # Every fill is down, so `zbuf` is FINAL and each face can be asked whether DEPTH hid it. Those
@@ -2102,11 +2285,14 @@ def render_brushes_pgm(actors: list[Actor], *, view: str = "top", size: int = 25
     for actor, pr in points:                        # under-layer: selection brackets + sprites + overlays
         _draw_point_underlay(buf, size, actor, pr, view, iso_angle, to_px, scale,
                              highlighted=actor.name in highlight_points)
+    # `textured` draws NO wireframe (decision 2.5): only `--highlight` outlines below are line art.
+    # `wire`/`flat` draw the back (lighter) then front (darker) edges of every non-depth-hidden face.
+    draw_wire = faces != "textured"
     for f, (a, b), fr, bk, al, fk in edges:         # back (lighter) then front (darker)
-        if not f and fk not in hidden:
+        if draw_wire and not f and fk not in hidden:
             _line(buf, size, to_px(a), to_px(b), bk, alpha=al)
     for f, (a, b), fr, bk, al, fk in edges:
-        if f and fk not in hidden:
+        if draw_wire and f and fk not in hidden:
             _line(buf, size, to_px(a), to_px(b), fr, alpha=al)
     for (a, b), vivid, face_key in hi_edges:         # highlighted poly: vivid hue + bold, on top
         if face_key not in hidden:                  # ...unless depth hid the face (filled modes only)
