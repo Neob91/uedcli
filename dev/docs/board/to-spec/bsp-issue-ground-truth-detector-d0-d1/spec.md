@@ -439,3 +439,43 @@ explicitly:**
 
 Everything else (module layout, slice order, corpus size) is plan detail. Until Andrzej signs off,
 all of the above are proposals in this (ephemeral) spec.
+
+---
+
+## Pre-spec audit notes (2026-08-01)
+
+This spec is dated 2026-06-24 and is substantially overtaken by a native Rust CSG/BSP/collision
+engine built since ~2026-07-15. Read before planning — several load-bearing premises are now false.
+Owner forks are filed in `questions/`.
+
+1. **The D2 "engine" it treats as an unbuilt multi-week pure-Python port largely EXISTS, in Rust.**
+   §4's planned pure-Python `uedcli/bsp/*.py` modules are shipped as `uedcli-native/src/`:
+   `bspcsg.rs` (incremental `bspBrushCSG` port, `bspcsg.rs:1`), `build.rs` (bspBuild / SplitPolyList /
+   FindBestSplit), `csg.rs`, `passes.rs` (bspOptGeom, merge-coplanars), `fpoly.rs`, `f32.rs`,
+   `zones.rs` (leaves/zones), `linecheck.rs` (LineCheck/PointCheck collision, `linecheck.rs:62`),
+   `model.rs`/`model_write.rs` (UModel). Exposed to Python as `uedcli_native.build_geometry` /
+   `build_geometry_bspcsg` (`uedcli-native/src/lib.rs:503-504`), consumed by `preview_native.py:320`.
+
+2. **§3b parity ("only `single_box` is exact"; `_scratch/bspspike/corpus_result.json`) is stale.**
+   `_scratch/bspspike/` no longer exists. `uedcli/tests/test_csg_native_differential.py` asserts full
+   Tier-S surf-set parity vs frozen editor goldens on cases a/c/d/e/f — incl. the abutting-subtract
+   ANNIHILATION (the old 11-vs-10 bug, proven fixed) and portal node/surf/zone/leaf counts. Off-grid
+   case b is a tracked xfail (Balance=50 split distribution + bspOptGeom, boarded). Native collision
+   parity is validated (`test_native_collision.py`: castle floor box-drop matches editor).
+
+3. **P0-a is ANSWERED — the load-bearing "is a binary `UModel` parser feasible? never spiked" gate
+   is closed.** A UModel reader exists (`uedcli/native/umodel.py`) plus a writer (`model_write.rs`);
+   the differential test round-trips the built Model through it. So §1/§8's headline risk ("the
+   project's value is contingent on P0-a") no longer holds; D1's blocking uncertainty is resolved.
+
+4. **The decision-of-record citations are dead.** Both this spec and the D2 overview cite
+   `decisions.md <timestamp>`; `decisions.md` is retired/frozen (see `../../../direction/README.md`,
+   `CLAUDE.md`). Owner decisions now live in `dev/docs/direction/`; §9's "fold the sign-off into a
+   `decisions.md` ledger entry" no longer applies. `direction/materialize.md` and
+   `direction/trunk-and-editor.md` already record the native build/preview intent.
+
+**Net.** The expensive part (the offline engine) is built; the DETECTOR/diff layer is NOT, on any
+tier: no `uedcli/bsp/editorlog.py` (D0 never promoted from the spike), no
+`level doctor --rebuilt/--built/--deep` verb (only the static `level doctor`, `doctor.py`), and no
+"should-vs-did" absence diff. The open work — and what the owner is now choosing between — is the
+detector surface over the existing native build, not a new engine. See `questions/`.

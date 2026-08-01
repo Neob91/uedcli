@@ -367,3 +367,25 @@ committed `.u` fixtures and `uedcli/tests/pkgfixture.py` back the offline suite.
 - **Replacing `preview --game`** — the in-game path stays for real-lighting hero shots.
 - **A curated role/category taxonomy** — the superclass and `--subclass-of` already say what a class is for
   (`direction/asset-catalog.md`).
+
+---
+
+## Pre-spec audit notes
+
+Added by a pre-gate audit (2026-08-01). Two concrete gaps found; the rest of the spec is grounded (the
+mesh decoder returns `box`/`scale`/`origin`/`rot_origin`, spike `2026-07-25-native-mesh-decode`
+`umesh.py`; `classindex.is_placeable` and `texture_catalog._norm_tags` exist as cited). These are notes,
+not edits to the spec above.
+
+- **`is_placeable` fail-open vs `conventions.md` "a predicate answers or it RAISES" is dropped from §8.**
+  §1's reuse table reuses `classindex.is_placeable` labelled "(fail-open)" — a class of undeterminable
+  abstractness counts as placeable, a "don't know" answered as a confident yes, which
+  `direction/conventions.md` (lines 64, 193) forbids. The earlier class spec flagged this as an open
+  call (state fail-open in `--help`, or make the undeterminable case raise); the standalone spec reuses
+  the predicate silently. Surfaced as question `is-placeable-fail-open-vs-predicate-raises`.
+
+- **`class classify clone` is absent from the §7 verb surface.** `direction/asset-catalog.md` lists
+  `classify clone --from <catalog|project>` as classification machinery for every kind (fills only
+  locally-unclassified identities, never overwrites, reports skips). §7 omits it and §12 does not scope
+  it out, so an implementer building from §7 would not build it. Decide whether the class arm ships
+  `clone` in v1 or explicitly scopes it out.
