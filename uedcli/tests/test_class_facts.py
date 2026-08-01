@@ -30,13 +30,15 @@ def _ued22_index() -> ClassIndex:
 
 
 @pytest.fixture
-def show(monkeypatch, capsys):
+def show(monkeypatch, capsys, tmp_path):
     """Run `class show …` against the committed UED22 corpus and return `(rc, stdout, stderr)`.
     Tests that need a different substrate re-patch the seams via their own `monkeypatch` (same
-    instance, applied after this fixture, so it wins)."""
+    instance, applied after this fixture, so it wins). The catalog dir points at an empty tmp dir,
+    so classes read as unclassified unless a test writes a shard first."""
     idx = _ued22_index()
     monkeypatch.setattr(resources, "resolve_project", lambda args: object())
     monkeypatch.setattr(resources, "class_index", lambda project=None: idx)
+    monkeypatch.setattr(resources, "catalog_dir", lambda project=None: str(tmp_path / "catalog"))
     monkeypatch.setattr(resources, "class_defaults",
                         lambda fqcn, project=None: uprops.resolve_class_defaults(
                             fqcn, resolver=idx.resolver()))
@@ -96,12 +98,13 @@ def test_json_shape_matches_the_spec(show):
     rc, out, _ = show("DeusEx.CrateUnbreakableLarge", "--json")
     obj = json.loads(out)
     assert set(obj) == {"ref", "drawtype", "mesh", "extents", "collision", "prepivot",
-                        "parent", "abstract", "placeable"}
+                        "parent", "abstract", "placeable", "classification"}
     assert obj["ref"] == "DeusEx.CrateUnbreakableLarge"
     assert obj["collision"] == {"radius": 56.5, "height": 56}   # 56.5 float, 56 integral -> int
     assert obj["prepivot"] == [0, 0, 0]
     assert obj["parent"] == "DeusEx.Containers"
     assert obj["abstract"] is False and obj["placeable"] is True
+    assert obj["classification"] is None                        # unclassified → null, not omitted
 
 
 def test_text_facts_block_is_appended(show):

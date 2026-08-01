@@ -7,10 +7,12 @@ from __future__ import annotations
 
 import json
 import sys
+from pathlib import Path
 
-from ... import classindex, meshfacts, meshrender, rotation, uprops
+from ... import class_catalog, classindex, config, meshfacts, meshrender, rotation, uprops
+from ...class_catalog import ClassCatalogError
 from ...classindex import ClassRefError
-from .. import rendering, resources
+from .. import rendering, resources, targets
 from ..errors import CommandError
 
 # `class show` (without --all) shows the class's own props + as many ancestor sections as fit in this
@@ -224,6 +226,209 @@ def _run_preview(args, idx, project) -> int:
     return 0
 
 
+# ── `class classify` (asset-catalog class arm C3) ────────────────────────────────────────────────
+# Records what a class IS — the LLM's classification, handed to the tool and stored one git-tracked
+# shard per class (tags + description only; no override field, owner ruling §8.4). The tool never
+# infers meaning (`direction/asset-catalog.md`): it validates the SHAPE of a `mount:`/`faces:` tag,
+# never what it means, and stores exactly what it is handed. The store engine is `class_catalog`.
+
+
+def _catalog_and_locks(project):
+    """The catalog dir (via the mockable `resources.catalog_dir` seam) and its self-ignoring
+    per-shard lock dir `<catalog>/.locks/` — mirrors the texture catalog's lock home so every writer
+    to one catalog shares a lock domain, and lock litter can never be committed from a tracked dir."""
+    cat = resources.catalog_dir(project)
+    locks = str(config.self_ignoring_dir(Path(cat) / ".locks", create=True, what="catalog lock dir"))
+    return cat, locks
+
+
+def _require_class(idx, ref: str) -> str:
+    """Validate a `classify set` ref: SHAPE (`Package.Class`, two non-empty parts) then EXISTENCE on
+    the composed path. A bad ref exits 2 naming it (never a traceback). Returns the authored ref."""
+    class_catalog.parse_ref(ref)                          # ClassCatalogError → caught by _run_classify
+    if not idx.class_exists(ref):
+        raise CommandError(f"unknown class: {ref} (package not on the path, or the package "
+                           f"does not define that class)")
+    return ref
+
+
+def _classify_set(args, idx, cat_dir, lock_dir) -> int:
+    if args.ref == "-":
+        return _classify_set_batch(args, idx, cat_dir, lock_dir)
+    if args.ref is None:
+        raise CommandError("classify set needs a class ref (Package.Class), or - to read JSONL "
+                           "rows {ref, tags, description} from stdin")
+    if args.tags is None and args.description is None:
+        raise CommandError(f"classify set {args.ref}: nothing to set — pass --tags and/or "
+                           "--description")
+    ref = _require_class(idx, args.ref)
+    with class_catalog.shard_lock(lock_dir, ref):
+        path = class_catalog.shard_path(cat_dir, ref)
+        shard = class_catalog.merge_set(class_catalog.load_shard(path), ref,
+                                        tags=args.tags, description=args.description,
+                                        replace=args.replace)
+        class_catalog.save_shard(path, shard)
+    print(ref)
+    return 0
+
+
+def _classify_set_batch(args, idx, cat_dir, lock_dir) -> int:
+    """`classify set -` — JSONL rows {ref, tags?, description?}, one shard write per row. ALL-OR-
+    NOTHING: every row is validated (ref shape+existence, tag shape, description conflict) and its
+    merged shard staged in memory FIRST; a single bad row exits 2 naming it and writes nothing (per
+    `CLAUDE.md` "no partial result plus a warning"). Only the final write loop is non-transactional
+    across shards — a disk failure mid-loop is the sole partial-failure window. Empty stdin is a
+    clean no-op (exit 0)."""
+    data = sys.stdin.read()
+    rows: list[tuple[int, dict]] = []
+    for lineno, line in enumerate(data.splitlines(), 1):
+        if not line.strip():
+            continue
+        try:
+            obj = json.loads(line)
+        except json.JSONDecodeError as e:
+            raise CommandError(f"classify set -: line {lineno}: not valid JSON ({e})")
+        if not isinstance(obj, dict) or not isinstance(obj.get("ref"), str):
+            raise CommandError(f"classify set -: line {lineno}: each row must be a JSON object "
+                               "with a string `ref`")
+        rows.append((lineno, obj))
+    if not rows:                                          # empty stdin (or all blank) → clean no-op
+        return 0
+    staged: dict[str, tuple] = {}                          # casefold path -> (path, ClassShard)
+    for lineno, obj in rows:
+        ref = _require_class(idx, obj["ref"])
+        tags = obj.get("tags")
+        if tags is not None and not (isinstance(tags, list) and all(isinstance(t, str) for t in tags)):
+            raise CommandError(f"classify set -: line {lineno}: `tags` must be an array of strings")
+        desc = obj.get("description")
+        if desc is not None and not isinstance(desc, str):
+            raise CommandError(f"classify set -: line {lineno}: `description` must be a string")
+        path = class_catalog.shard_path(cat_dir, ref)
+        key = str(path)
+        prior = staged[key][1] if key in staged else class_catalog.load_shard(path)
+        try:
+            shard = class_catalog.merge_set(prior, ref, tags=tags, description=desc,
+                                            replace=args.replace)
+        except ClassCatalogError as e:
+            raise CommandError(f"classify set -: line {lineno}: {e}")
+        staged[key] = (path, shard)
+    for path, shard in staged.values():                   # all valid — write now
+        with class_catalog.shard_lock(lock_dir, shard.ref):
+            class_catalog.save_shard(path, shard)
+        print(shard.ref)
+    return 0
+
+
+def _classify_unset(args, cat_dir, lock_dir) -> int:
+    """`classify unset <ref>… | -` — undo classification. Operates on SHARDS (not the live class
+    set), so a shard whose class has since left the path can still be cleared. Reads a newline ref
+    list on `-`; empty stdin is a clean no-op. All-or-nothing: every ref must have a shard, else
+    exit 2 naming it, nothing changed."""
+    refs = targets.resolve_target_names(args.refs)
+    if not refs:                                          # empty stdin / no refs → clean no-op
+        return 0
+    if args.tags is None:
+        remove_tags, clear_tags = None, False
+    elif args.tags == []:                                 # BARE --tags: clear the whole field
+        remove_tags, clear_tags = None, True
+    else:
+        remove_tags, clear_tags = args.tags, False
+    plans: list[tuple] = []
+    for ref in refs:
+        class_catalog.parse_ref(ref)                      # shape only — a shard can outlive its class
+        path = class_catalog.shard_path(cat_dir, ref)
+        prior = class_catalog.load_shard(path)
+        if prior is None:
+            raise CommandError(f"not classified: {ref} (no shard to unset)")
+        if args.clear_all:
+            plans.append((ref, path, None))
+        else:
+            plans.append((ref, path, class_catalog.unset(
+                prior, remove_tags=remove_tags, clear_tags=clear_tags,
+                clear_description=args.description)))
+    for ref, path, shard in plans:
+        with class_catalog.shard_lock(lock_dir, ref):
+            if shard is None:
+                path.unlink(missing_ok=True)
+            else:
+                class_catalog.save_shard(path, shard)
+        print(ref)
+    return 0
+
+
+def _classify_status(args, idx, cat_dir) -> int:
+    """Progress: of the classes on the composed path, how many have a shard. Counts the INTERSECTION
+    (an outdated shard whose class left the path is not counted — that is `list-outdated`'s job), so
+    the ratio never exceeds the total. → stdout."""
+    on_path = {c.casefold() for c in idx.all_classes()}
+    classified = len(class_catalog.classified_refs(cat_dir) & on_path)
+    total = len(on_path)
+    if args.json:
+        print(json.dumps({"classified": classified, "total": total}))
+    else:
+        print(f"classified {classified} / {total} classes")
+    return 0
+
+
+def _classify_tags(args, cat_dir) -> int:
+    """The tag vocabulary across all shards, with counts (curbs drift). → stdout."""
+    shards, bad = class_catalog.load_all_shards(cat_dir)
+    for p in bad:
+        print(f"skipping unreadable shard {p}", file=sys.stderr)
+    vocab = class_catalog.tag_vocabulary(shards)
+    if args.json:
+        print(json.dumps({tag: n for tag, n in vocab}))
+    else:
+        for tag, n in vocab:
+            print(f"{tag}\t{n}")
+    return 0
+
+
+def _run_classify(args, idx, project) -> int:
+    """`class classify set|unset|status|tags`. One conversion point turns every `ClassCatalogError`
+    (bad ref shape, malformed mount:/faces: tag, description conflict) into a clean exit 2 — the
+    engine's ValueError subclass must never reach the user as a traceback."""
+    cat_dir, lock_dir = _catalog_and_locks(project)
+    try:
+        if args.csub == "set":
+            return _classify_set(args, idx, cat_dir, lock_dir)
+        if args.csub == "unset":
+            return _classify_unset(args, cat_dir, lock_dir)
+        if args.csub == "status":
+            return _classify_status(args, idx, cat_dir)
+        if args.csub == "tags":
+            return _classify_tags(args, cat_dir)
+    except ClassCatalogError as e:
+        raise CommandError(str(e))
+    raise CommandError(f"unimplemented class classify sub-verb: {args.csub}")
+
+
+def _classification_of(fqcn: str, project) -> dict | None:
+    """The stored {tags, description} for `fqcn`, or None when unclassified — the block `class show`
+    appends. Reads one shard; never renders, never infers."""
+    shard = class_catalog.load_shard(
+        class_catalog.shard_path(resources.catalog_dir(project), fqcn))
+    return None if shard is None else {"tags": shard.tags, "description": shard.description}
+
+
+def _cached_preview(fqcn: str, project) -> str | None:
+    """The path of an ALREADY-CACHED preview thumbnail for `fqcn`, or None. `class list --json`
+    reports this and NEVER renders (an exploratory command must not trigger a long render). C2
+    shipped `class preview` without the content-addressed catalog preview cache the spec's §2/§9
+    describe, so this is null for every class until that cache lands (board:
+    `class-arm-c2-preview-cache-not-built`)."""
+    return None
+
+
+def _print_classification(cls: dict | None) -> None:
+    print("\nClassification:")
+    if cls is None:
+        print("  (unclassified)")
+        return
+    print(f"  tags:        {', '.join(cls['tags']) if cls['tags'] else '(none)'}")
+    print(f"  description: {cls['description'] if cls['description'] else '(none)'}")
+
+
 def run(args) -> int:
     """`class list` / `class show` / `class preview` — offline class discovery + thumbnails over the
     composed `.u` path (no editor, no level). Builds the `ClassIndex` from the resolved project."""
@@ -231,6 +436,8 @@ def run(args) -> int:
     idx = resources.class_index(project)
     if idx.empty:
         raise CommandError(resources.NO_PACKAGE_PATH)
+    if args.sub == "classify":
+        return _run_classify(args, idx, project)
     if args.sub == "preview":
         return _run_preview(args, idx, project)
     if args.sub == "list":
@@ -253,12 +460,34 @@ def run(args) -> int:
                 "drill and the --package flat list. The tree, the bare category view, and any --depth "
                 "browse already show abstract classes (branch-points marked *). Drop the flag, or pair "
                 "--flat with --subclass-of/--package.")
+        classified = getattr(args, "classified", False)
+        unclassified = getattr(args, "unclassified", False)
+        want_json = getattr(args, "json", False)
+        # `--classified`/`--unclassified` filter one flat enumeration by shard presence, so they
+        # need --flat (a tree can't be per-node filtered this way) — exit 2, never a silent ignore.
+        if (classified or unclassified) and not flat:
+            raise CommandError("class list --classified/--unclassified require --flat (they filter "
+                               "the flat one-per-line list, not the tree)")
         try:
-            if flat:                                 # --flat: the pipeable one-per-line list
-                for fqcn in idx.list_classes(package=args.package, subclass_of=subclass_of,
-                                             include_non_actor=include_non_actor,
-                                             include_abstract=include_abstract, depth=depth):
-                    print(fqcn)
+            if flat or want_json:                    # --flat / --json: the pipeable per-line list
+                fqcns = idx.list_classes(package=args.package, subclass_of=subclass_of,
+                                         include_non_actor=include_non_actor,
+                                         include_abstract=include_abstract, depth=depth)
+                cat_dir = None
+                if classified or unclassified or want_json:
+                    cat_dir = resources.catalog_dir(project)
+                    have = class_catalog.classified_refs(cat_dir)
+                for fqcn in fqcns:
+                    is_cls = fqcn.casefold() in have if cat_dir is not None else False
+                    if classified and not is_cls:
+                        continue
+                    if unclassified and is_cls:
+                        continue
+                    if want_json:
+                        print(json.dumps({"ref": fqcn, "classified": is_cls,
+                                          "preview": _cached_preview(fqcn, project)}))
+                    else:
+                        print(fqcn)
             else:                                    # DEFAULT: the indented inheritance tree
                 lines = _class_tree(idx, subclass_of=subclass_of,
                                     include_non_actor=include_non_actor,
@@ -286,7 +515,9 @@ def run(args) -> int:
         except meshfacts.MeshFactError as e:
             raise CommandError(str(e))
         if getattr(args, "json", False):                 # `--json`: the facts object only (no schema)
-            print(json.dumps(_facts_json(facts)))
+            obj = _facts_json(facts)
+            obj["classification"] = _classification_of(fqcn, project)   # {tags, description} | null
+            print(json.dumps(obj))
             return 0
         chain = idx.ancestry(fqcn)
         abstract = idx.is_abstract(fqcn)
@@ -389,6 +620,7 @@ def run(args) -> int:
                 print(f"\n(+{max_hop - eff} more superclass level(s) omitted — --depth all "
                       f"{scope})")
             _print_facts(facts)
+            _print_classification(_classification_of(fqcn, project))
             return 0
 
         # DEFAULT: this class's OWN props grouped by category; inherited props of that category are
@@ -434,5 +666,6 @@ def run(args) -> int:
             noun = "category" if len(only_inh) == 1 else "categories"
             print(f"\n(+{tot} inherited, in {len(only_inh)} more {noun}: {', '.join(only_inh)})")
         _print_facts(facts)
+        _print_classification(_classification_of(fqcn, project))
         return 0
     raise CommandError(f"unimplemented class sub-verb: {args.sub}")

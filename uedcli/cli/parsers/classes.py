@@ -42,6 +42,18 @@ def register(sub) -> None:
                             "abstract / non-placeable classes (hidden there by default). REJECTED "
                             "(exit 2) anywhere it can't act — the tree, the bare category view, or a "
                             "--depth browse — which already show abstract (branch-points marked *).")
+    kcls = klist.add_mutually_exclusive_group()
+    kcls.add_argument("--classified", action="store_true",
+                      help="in the --flat list, keep ONLY classes that have a stored classification "
+                           "shard (requires --flat — a tree can't be filtered this way; exit 2 "
+                           "otherwise)")
+    kcls.add_argument("--unclassified", action="store_true",
+                      help="in the --flat list, keep ONLY classes with NO classification shard yet — "
+                           "the worklist (requires --flat; exit 2 otherwise)")
+    klist.add_argument("--json", action="store_true",
+                       help="emit one JSON object per class (JSONL) instead of bare lines: "
+                            "{ref, classified, preview} where preview is a cached thumbnail path or "
+                            "null (list NEVER renders — it reports only an already-cached preview)")
     # `--all` was split (2026-07-18): --include-non-actor / --include-abstract / --depth all. Kept
     # hidden so it errors with a targeted pointer instead of an opaque argparse "unrecognized argument".
     klist.add_argument("--all", dest="legacy_all", action="store_true", help=argparse.SUPPRESS)
@@ -60,7 +72,8 @@ def register(sub) -> None:
                             "the property schema. Extents are the default Mesh's signed mesh-local "
                             "bounding box in integer uu (Scale applied, pre-Origin/RotOrigin, "
                             "DrawScale not) — a SEATING/footprint fact; it does not assert world "
-                            "facing. A non-mesh class reports mesh/extents as null.")
+                            "facing. A non-mesh class reports mesh/extents as null. Also carries the "
+                            "stored classification ({tags, description}) or null if unclassified.")
     kshow.add_argument("--depth", type=depth_value, default=None, metavar="N|all",
                        help="how many superclass levels of inherited props to include: N (1 = the "
                             "immediate parent; 0 = own props only) or `all` for the WHOLE super chain. "
@@ -103,3 +116,62 @@ def register(sub) -> None:
                        help="print one JSON object {ref, path, azimuth, rotate} instead of the "
                             "`<ref><TAB><path>` line — azimuth is the camera's mesh-local yaw in "
                             "unreal rotator units (65536 = 360deg), rotate the applied pose or null.")
+
+    _register_classify(ksub)
+
+
+def _csv(text: str) -> list[str]:
+    return [s.strip() for s in text.split(",") if s.strip()]
+
+
+# The stored classification is what an LLM decides a class IS, handed back to the tool (the tool
+# never infers it). One shard per class, git-tracked; tags + description only (no override field).
+def _register_classify(ksub) -> None:
+    kclass = ksub.add_parser(
+        "classify",
+        help="record / inspect what a class IS — the LLM's classification, stored one git-tracked "
+             "shard per class (tags + description). The tool stores it, never infers it.")
+    csub = kclass.add_subparsers(dest="csub", required=True)
+
+    cset = csub.add_parser(
+        "set",
+        help="record a class's classification. tags UNION-merge on re-set (through a strip/lowercase/"
+             "de-dupe normalizer); a DIFFERENT non-empty description exits 2 (pass --replace). The "
+             "single token - reads JSONL rows {ref, tags, description} from stdin (validate-all-then-"
+             "write; empty stdin is a clean no-op, exit 0).")
+    cset.add_argument("ref", nargs="?", default=None, metavar="Package.Class",
+                      help="the class to classify (fully qualified), or - to read JSONL rows from stdin")
+    cset.add_argument("--tags", type=_csv, default=None, metavar="A,B",
+                      help="comma list, UNION-merged onto the stored tags. A tag matching "
+                           "`faces:AXIS` needs an axis token (+x -x +y -y +z -z); `mount:VALUE` needs "
+                           "a non-empty value — shape is checked, meaning never is.")
+    cset.add_argument("--description", default=None,
+                      help="prose description. A DIFFERENT non-empty description exits 2 printing the "
+                           "stored text unless --replace; identical text is a no-op.")
+    cset.add_argument("--replace", action="store_true",
+                      help="overwrite a conflicting stored description instead of exiting 2 "
+                           "(also governs each JSONL row under -).")
+
+    cunset = csub.add_parser(
+        "unset",
+        help="undo classification on one or more classes. Exactly one of --tags[=A,B] / --description "
+             "/ --all. The single token - reads a newline-separated ref list from stdin (empty stdin "
+             "is a clean no-op, exit 0).")
+    cunset.add_argument("refs", nargs="*", metavar="Package.Class",
+                        help="class(es) to unset, or - to read a newline ref list from stdin")
+    cg = cunset.add_mutually_exclusive_group(required=True)
+    cg.add_argument("--tags", type=_csv, nargs="?", const=[], default=None, metavar="A,B",
+                    help="remove the named tags (comma list); BARE --tags clears the whole tags field")
+    cg.add_argument("--description", action="store_true", help="clear the description field")
+    cg.add_argument("--all", dest="clear_all", action="store_true",
+                    help="delete the whole shard (the only full clear)")
+
+    cstat = csub.add_parser(
+        "status", help="classification progress: how many classes on the path have a shard, of the "
+                       "total. --json for a machine object.")
+    cstat.add_argument("--json", action="store_true", help="emit one JSON object instead of a line")
+
+    ctags = csub.add_parser(
+        "tags", help="the tag vocabulary in use across all shards, with occurrence counts (curbs "
+                     "drift). --json for a machine object.")
+    ctags.add_argument("--json", action="store_true", help="emit one JSON object instead of lines")

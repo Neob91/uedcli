@@ -228,6 +228,14 @@ def class_index(project=None) -> "classindex.ClassIndex":
         raise CommandError(NO_GAMES_CONFIG)
     return classindex.ClassIndex.from_project(project, user_config)
 
+def catalog_dir(project) -> str:
+    """The tracked asset-catalog dir for `project` (`config.project_catalog_dir` —
+    the `uedcli.toml` `catalog` key, default `<root>/texture-catalog/`). The class
+    classification store shards live under `<catalog>/classified/class/`. A
+    MOCKABLE seam so `class classify`/`show`/`list` tests point it at a tmp dir
+    without a full project on disk."""
+    return config.project_catalog_dir(project)
+
 def mover_index(args, verb: str, project=None) -> "classindex.ClassIndex":
     """The class resolver the schema-aware mover gate needs. `movers.is_mover` decides mover-ness by
     walking the class hierarchy to `Engine.Mover` (decisions.md 2026-07-25 10:18 UTC), so EVERY verb

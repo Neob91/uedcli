@@ -8492,12 +8492,14 @@
           "subparser_choices": [
             "list",
             "show",
-            "preview"
+            "preview",
+            "classify"
           ],
           "subparser_help": {
             "list": "browse actor classes as an indented inheritance TREE (rooted at Engine.Actor; abstract classes marked *; a collapsed node shows its hidden direct-subclass count as (N)). Depth auto-fits ~60 lines; --depth to go deeper, --subclass-of to reroot, --flat for a pipeable one-per-line list.",
             "show": "print a class's OWN editable properties grouped by editor category (the UnrealEd property-browser view: Movement/Display/Lighting/…) + super chain + abstract/placeable, then a Facts block (DrawType, default Mesh, signed mesh-local extents, collision cylinder, PrePivot, parent). Non-editable internals hidden; inherited props collapse to per-category counts; --depth all lists every inherited prop too.",
-            "preview": "render a class's default Mesh as an orthographic PNG thumbnail (native software raster: decodes the mesh + P8 skins from the game .u — no editor, no game). The shot is in the SAME mesh-local frame as `class show`'s extents (Scale applied, pre-Origin/RotOrigin), iso (front-3/4) by default. Prints `<ref><TAB><path>` to stdout. A non-mesh class has nothing to render (a stderr note, exit 0); an unresolvable Mesh or an undecodable skin exits 2 naming it."
+            "preview": "render a class's default Mesh as an orthographic PNG thumbnail (native software raster: decodes the mesh + P8 skins from the game .u — no editor, no game). The shot is in the SAME mesh-local frame as `class show`'s extents (Scale applied, pre-Origin/RotOrigin), iso (front-3/4) by default. Prints `<ref><TAB><path>` to stdout. A non-mesh class has nothing to render (a stderr note, exit 0); an unresolvable Mesh or an undecodable skin exits 2 naming it.",
+            "classify": "record / inspect what a class IS — the LLM's classification, stored one git-tracked shard per class (tags + description). The tool stores it, never infers it."
           }
         }
       ],
@@ -8505,7 +8507,15 @@
         "list": {
           "class": "_CoordArgumentParser",
           "prog": "uedcli class list",
-          "mutex_groups": [],
+          "mutex_groups": [
+            {
+              "required": false,
+              "members": [
+                "classified",
+                "unclassified"
+              ]
+            }
+          ],
           "actions": [
             {
               "class": "_HelpAction",
@@ -8625,6 +8635,60 @@
             {
               "class": "_StoreTrueAction",
               "option_strings": [
+                "--classified"
+              ],
+              "dest": "classified",
+              "nargs": 0,
+              "const": true,
+              "default": false,
+              "required": false,
+              "choices": null,
+              "metavar": null,
+              "converter": null,
+              "help": "in the --flat list, keep ONLY classes that have a stored classification shard (requires --flat — a tree can't be filtered this way; exit 2 otherwise)",
+              "mutex_group": [
+                0,
+                0
+              ]
+            },
+            {
+              "class": "_StoreTrueAction",
+              "option_strings": [
+                "--unclassified"
+              ],
+              "dest": "unclassified",
+              "nargs": 0,
+              "const": true,
+              "default": false,
+              "required": false,
+              "choices": null,
+              "metavar": null,
+              "converter": null,
+              "help": "in the --flat list, keep ONLY classes with NO classification shard yet — the worklist (requires --flat; exit 2 otherwise)",
+              "mutex_group": [
+                0,
+                1
+              ]
+            },
+            {
+              "class": "_StoreTrueAction",
+              "option_strings": [
+                "--json"
+              ],
+              "dest": "json",
+              "nargs": 0,
+              "const": true,
+              "default": false,
+              "required": false,
+              "choices": null,
+              "metavar": null,
+              "converter": null,
+              "help": "emit one JSON object per class (JSONL) instead of bare lines: {ref, classified, preview} where preview is a cached thumbnail path or null (list NEVER renders — it reports only an already-cached preview)",
+              "mutex_group": null
+            },
+            {
+              "class": "_StoreTrueAction",
+              "option_strings": [
                 "--all"
               ],
               "dest": "legacy_all",
@@ -8692,7 +8756,7 @@
               "choices": null,
               "metavar": null,
               "converter": null,
-              "help": "print ONLY the file-facts as one JSON object (ref, drawtype, mesh, extents, collision, prepivot, parent, abstract, placeable) instead of the property schema. Extents are the default Mesh's signed mesh-local bounding box in integer uu (Scale applied, pre-Origin/RotOrigin, DrawScale not) — a SEATING/footprint fact; it does not assert world facing. A non-mesh class reports mesh/extents as null.",
+              "help": "print ONLY the file-facts as one JSON object (ref, drawtype, mesh, extents, collision, prepivot, parent, abstract, placeable) instead of the property schema. Extents are the default Mesh's signed mesh-local bounding box in integer uu (Scale applied, pre-Origin/RotOrigin, DrawScale not) — a SEATING/footprint fact; it does not assert world facing. A non-mesh class reports mesh/extents as null. Also carries the stored classification ({tags, description}) or null if unclassified.",
               "mutex_group": null
             },
             {
@@ -8850,6 +8914,342 @@
             }
           ],
           "subparsers": {}
+        },
+        "classify": {
+          "class": "_CoordArgumentParser",
+          "prog": "uedcli class classify",
+          "mutex_groups": [],
+          "actions": [
+            {
+              "class": "_HelpAction",
+              "option_strings": [
+                "-h",
+                "--help"
+              ],
+              "dest": "help",
+              "nargs": 0,
+              "const": null,
+              "default": {
+                "__suppress__": true
+              },
+              "required": false,
+              "choices": null,
+              "metavar": null,
+              "converter": null,
+              "help": "show this help message and exit",
+              "mutex_group": null
+            },
+            {
+              "class": "_SubParsersAction",
+              "option_strings": [],
+              "dest": "csub",
+              "nargs": "A...",
+              "const": null,
+              "default": null,
+              "required": true,
+              "choices": null,
+              "metavar": null,
+              "converter": null,
+              "help": null,
+              "mutex_group": null,
+              "subparser_choices": [
+                "set",
+                "unset",
+                "status",
+                "tags"
+              ],
+              "subparser_help": {
+                "set": "record a class's classification. tags UNION-merge on re-set (through a strip/lowercase/de-dupe normalizer); a DIFFERENT non-empty description exits 2 (pass --replace). The single token - reads JSONL rows {ref, tags, description} from stdin (validate-all-then-write; empty stdin is a clean no-op, exit 0).",
+                "unset": "undo classification on one or more classes. Exactly one of --tags[=A,B] / --description / --all. The single token - reads a newline-separated ref list from stdin (empty stdin is a clean no-op, exit 0).",
+                "status": "classification progress: how many classes on the path have a shard, of the total. --json for a machine object.",
+                "tags": "the tag vocabulary in use across all shards, with occurrence counts (curbs drift). --json for a machine object."
+              }
+            }
+          ],
+          "subparsers": {
+            "set": {
+              "class": "_CoordArgumentParser",
+              "prog": "uedcli class classify set",
+              "mutex_groups": [],
+              "actions": [
+                {
+                  "class": "_HelpAction",
+                  "option_strings": [
+                    "-h",
+                    "--help"
+                  ],
+                  "dest": "help",
+                  "nargs": 0,
+                  "const": null,
+                  "default": {
+                    "__suppress__": true
+                  },
+                  "required": false,
+                  "choices": null,
+                  "metavar": null,
+                  "converter": null,
+                  "help": "show this help message and exit",
+                  "mutex_group": null
+                },
+                {
+                  "class": "_StoreAction",
+                  "option_strings": [],
+                  "dest": "ref",
+                  "nargs": "?",
+                  "const": null,
+                  "default": null,
+                  "required": false,
+                  "choices": null,
+                  "metavar": "Package.Class",
+                  "converter": null,
+                  "help": "the class to classify (fully qualified), or - to read JSONL rows from stdin",
+                  "mutex_group": null
+                },
+                {
+                  "class": "_StoreAction",
+                  "option_strings": [
+                    "--tags"
+                  ],
+                  "dest": "tags",
+                  "nargs": null,
+                  "const": null,
+                  "default": null,
+                  "required": false,
+                  "choices": null,
+                  "metavar": "A,B",
+                  "converter": "_csv",
+                  "help": "comma list, UNION-merged onto the stored tags. A tag matching `faces:AXIS` needs an axis token (+x -x +y -y +z -z); `mount:VALUE` needs a non-empty value — shape is checked, meaning never is.",
+                  "mutex_group": null
+                },
+                {
+                  "class": "_StoreAction",
+                  "option_strings": [
+                    "--description"
+                  ],
+                  "dest": "description",
+                  "nargs": null,
+                  "const": null,
+                  "default": null,
+                  "required": false,
+                  "choices": null,
+                  "metavar": null,
+                  "converter": null,
+                  "help": "prose description. A DIFFERENT non-empty description exits 2 printing the stored text unless --replace; identical text is a no-op.",
+                  "mutex_group": null
+                },
+                {
+                  "class": "_StoreTrueAction",
+                  "option_strings": [
+                    "--replace"
+                  ],
+                  "dest": "replace",
+                  "nargs": 0,
+                  "const": true,
+                  "default": false,
+                  "required": false,
+                  "choices": null,
+                  "metavar": null,
+                  "converter": null,
+                  "help": "overwrite a conflicting stored description instead of exiting 2 (also governs each JSONL row under -).",
+                  "mutex_group": null
+                }
+              ],
+              "subparsers": {}
+            },
+            "unset": {
+              "class": "_CoordArgumentParser",
+              "prog": "uedcli class classify unset",
+              "mutex_groups": [
+                {
+                  "required": true,
+                  "members": [
+                    "tags",
+                    "description",
+                    "clear_all"
+                  ]
+                }
+              ],
+              "actions": [
+                {
+                  "class": "_HelpAction",
+                  "option_strings": [
+                    "-h",
+                    "--help"
+                  ],
+                  "dest": "help",
+                  "nargs": 0,
+                  "const": null,
+                  "default": {
+                    "__suppress__": true
+                  },
+                  "required": false,
+                  "choices": null,
+                  "metavar": null,
+                  "converter": null,
+                  "help": "show this help message and exit",
+                  "mutex_group": null
+                },
+                {
+                  "class": "_StoreAction",
+                  "option_strings": [],
+                  "dest": "refs",
+                  "nargs": "*",
+                  "const": null,
+                  "default": null,
+                  "required": false,
+                  "choices": null,
+                  "metavar": "Package.Class",
+                  "converter": null,
+                  "help": "class(es) to unset, or - to read a newline ref list from stdin",
+                  "mutex_group": null
+                },
+                {
+                  "class": "_StoreAction",
+                  "option_strings": [
+                    "--tags"
+                  ],
+                  "dest": "tags",
+                  "nargs": "?",
+                  "const": [],
+                  "default": null,
+                  "required": false,
+                  "choices": null,
+                  "metavar": "A,B",
+                  "converter": "_csv",
+                  "help": "remove the named tags (comma list); BARE --tags clears the whole tags field",
+                  "mutex_group": [
+                    0,
+                    0
+                  ]
+                },
+                {
+                  "class": "_StoreTrueAction",
+                  "option_strings": [
+                    "--description"
+                  ],
+                  "dest": "description",
+                  "nargs": 0,
+                  "const": true,
+                  "default": false,
+                  "required": false,
+                  "choices": null,
+                  "metavar": null,
+                  "converter": null,
+                  "help": "clear the description field",
+                  "mutex_group": [
+                    0,
+                    1
+                  ]
+                },
+                {
+                  "class": "_StoreTrueAction",
+                  "option_strings": [
+                    "--all"
+                  ],
+                  "dest": "clear_all",
+                  "nargs": 0,
+                  "const": true,
+                  "default": false,
+                  "required": false,
+                  "choices": null,
+                  "metavar": null,
+                  "converter": null,
+                  "help": "delete the whole shard (the only full clear)",
+                  "mutex_group": [
+                    0,
+                    2
+                  ]
+                }
+              ],
+              "subparsers": {}
+            },
+            "status": {
+              "class": "_CoordArgumentParser",
+              "prog": "uedcli class classify status",
+              "mutex_groups": [],
+              "actions": [
+                {
+                  "class": "_HelpAction",
+                  "option_strings": [
+                    "-h",
+                    "--help"
+                  ],
+                  "dest": "help",
+                  "nargs": 0,
+                  "const": null,
+                  "default": {
+                    "__suppress__": true
+                  },
+                  "required": false,
+                  "choices": null,
+                  "metavar": null,
+                  "converter": null,
+                  "help": "show this help message and exit",
+                  "mutex_group": null
+                },
+                {
+                  "class": "_StoreTrueAction",
+                  "option_strings": [
+                    "--json"
+                  ],
+                  "dest": "json",
+                  "nargs": 0,
+                  "const": true,
+                  "default": false,
+                  "required": false,
+                  "choices": null,
+                  "metavar": null,
+                  "converter": null,
+                  "help": "emit one JSON object instead of a line",
+                  "mutex_group": null
+                }
+              ],
+              "subparsers": {}
+            },
+            "tags": {
+              "class": "_CoordArgumentParser",
+              "prog": "uedcli class classify tags",
+              "mutex_groups": [],
+              "actions": [
+                {
+                  "class": "_HelpAction",
+                  "option_strings": [
+                    "-h",
+                    "--help"
+                  ],
+                  "dest": "help",
+                  "nargs": 0,
+                  "const": null,
+                  "default": {
+                    "__suppress__": true
+                  },
+                  "required": false,
+                  "choices": null,
+                  "metavar": null,
+                  "converter": null,
+                  "help": "show this help message and exit",
+                  "mutex_group": null
+                },
+                {
+                  "class": "_StoreTrueAction",
+                  "option_strings": [
+                    "--json"
+                  ],
+                  "dest": "json",
+                  "nargs": 0,
+                  "const": true,
+                  "default": false,
+                  "required": false,
+                  "choices": null,
+                  "metavar": null,
+                  "converter": null,
+                  "help": "emit one JSON object instead of lines",
+                  "mutex_group": null
+                }
+              ],
+              "subparsers": {}
+            }
+          }
         }
       }
     },

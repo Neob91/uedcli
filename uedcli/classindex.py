@@ -132,6 +132,11 @@ class ClassIndex:
             self._all = out
         return self._all
 
+    def all_classes(self) -> list[str]:
+        """Every class (FQCN) defined on the composed path, in package/table order. The
+        denominator `class classify status` reports classified progress against."""
+        return list(self._all_fqcns())
+
     def bare_to_fqcn(self) -> dict[str, set[str]]:
         """`casefold(bare class name) -> {Package.Class}` over the whole path. A 2+ set is a
         cross-package name collision. Built once (loads every `.u`) — the acknowledged per-ingest tax

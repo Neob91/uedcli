@@ -1489,18 +1489,31 @@ per-user cache `~/.uedcli/cache/textures/<package>/` (never the in-repo `.uedcli
 # browse actor classes as an indented inheritance TREE (rooted at Engine.Actor)
 uedcli class list [--depth N|all] [--subclass-of Package.Class] [--package P]
                   [--flat] [--include-non-actor] [--include-abstract]
+                  [--classified | --unclassified] [--json]
 
 # a class's OWN editable props grouped by editor category + super chain + placeable/abstract flags,
-# then a Facts block (DrawType, default Mesh, mesh extents, collision, PrePivot, parent)
+# then a Facts block (DrawType, default Mesh, mesh extents, collision, PrePivot, parent), then any
+# stored classification
 uedcli class show <Package.Class> [--depth N|all] [--category NAME] [--json]
 
 # render the class's default Mesh as an orthographic PNG thumbnail (no editor, no game)
 uedcli class preview <Package.Class> [--rotate PITCH,YAW,ROLL] [--out FILE] [--size PX] [--json]
+
+# record / inspect what a class IS — one git-tracked shard per class (tags + description)
+uedcli class classify set <Package.Class> --tags chair,mount:floor --description "a bar stool"
+uedcli class classify set -           # read JSONL rows {ref, tags, description} from stdin
+uedcli class classify unset <Package.Class> [--tags[=A,B] | --description | --all]
+uedcli class classify status [--json]     # how many classes on the path are classified, of the total
+uedcli class classify tags [--json]       # the tag vocabulary in use, with counts
 ```
 
 - **`class list`** auto-fits ~60 lines; abstract classes are marked `*`, a collapsed node shows its
   hidden direct-subclass count as `(N)`. `--flat` gives a pipeable one-`Package.Class`-per-line list;
   `--subclass-of` reroots (e.g. `--subclass-of Engine.Mover`); `--depth all` for the whole tree.
+  `--classified` / `--unclassified` filter the `--flat` list to classes that do / don't have a stored
+  classification shard (they **require** `--flat` — a tree can't be per-node filtered — else exit 2).
+  `--json` emits one object per class (`{ref, classified, preview}`); `preview` is an already-cached
+  thumbnail path or `null` (`list` never renders — only `class preview` does).
 - **`class show`** is the UnrealEd property-browser view (Movement/Display/Lighting/…): own editable
   props by category, non-editable internals hidden, inherited props collapsed to per-category counts.
   `--depth N|all` expands inherited props (tagged with their source class); `--category NAME`
@@ -1528,9 +1541,12 @@ uedcli class preview <Package.Class> [--rotate PITCH,YAW,ROLL] [--out FILE] [--s
   - A **non-mesh** class (`DrawType` `DT_Sprite`/`DT_Brush`/`DT_None`) has no mesh, so `mesh` and
     `extents` are `none` (`null` in `--json`) — not an error. A `DT_Mesh` class whose `Mesh` is
     missing or fails to decode **exits 2** naming the class and mesh.
+- After the Facts block, `class show` prints the stored **Classification** (the `tags` and
+  `description` an LLM recorded via `class classify`), or `(unclassified)` when there is none.
 - **`--json`** prints only the facts as one JSON object — `{"ref", "drawtype", "mesh", "extents":
   {"x":[lo,hi],…}|null, "collision":{"radius","height"}, "prepivot":[x,y,z], "parent", "abstract",
-  "placeable"}` — instead of the property schema.
+  "placeable", "classification": {"tags":[…], "description":…}|null}` — instead of the property
+  schema.
 - Reading a class means reading its whole **super chain**, so if an ANCESTOR's package is missing
   from the search path (or unreadable), `class show` **fails with exit 2 naming that package** —
   `cannot read schema for DeusEx.Flare: package 'Engine' (needed for Engine.Actor) not found on the
@@ -1569,6 +1585,44 @@ uedcli class preview DeusEx.CrateUnbreakableLarge --out crate.png
   whose `Mesh` default is unresolvable, or a skin that fails to decode, **exits 2** naming it — never
   a wrong picture. With no composed package path, `class preview` **exits 2** (`no package search
   path`).
+
+### `class classify` — record what a class is
+
+The tool stores the classification an LLM hands it; it never infers meaning. Each class gets one
+git-tracked shard under the catalog dir (`classified/class/<package>/<class>.json`, path casefolded),
+holding exactly `{kind, ref, tags, description}`. Concurrent agents classifying different classes
+never touch the same file.
+
+```bash
+# record tags + a description (the class must be on the composed package path)
+uedcli class classify set DeusEx.BarStool --tags chair,mount:floor,faces:+z \
+    --description "bar stool; DX places these along the DiveBar counter"
+
+# batch: one JSON object per line on stdin, one shard write per row
+printf '%s\n' '{"ref":"DeusEx.BarStool","tags":["chair"],"description":"a stool"}' \
+    | uedcli class classify set -
+```
+
+- **`set`** merges: on re-set, `--tags` **union** onto the stored tags through a strip / lowercase /
+  de-dupe normalizer, so re-running never loses a tag. A **different non-empty** `--description`
+  **exits 2** printing the stored text; pass `--replace` to overwrite; identical text is a no-op. An
+  unknown class, or a ref that is not `Package.Class`, **exits 2** naming it.
+- **`mount:` and `faces:` are reserved tag namespaces.** A `faces:` tag needs an axis token —
+  `+x -x +y -y +z -z` (case-normalized, so `faces:+X` is fine); any other value **exits 2** naming
+  it. A `mount:` tag needs a non-empty value (free text, e.g. `mount:wall`). Only the **shape** is
+  checked — what the value *means* is authored, never computed. They are ordinary tags otherwise
+  (they show up in `classify tags` and filter via search).
+- **`set -`** reads JSONL rows `{ref, tags, description}` from stdin, one shard write per row. It is
+  **all-or-nothing**: every row is validated first, and a single bad row **exits 2** naming it with
+  nothing written. Empty stdin is a clean no-op (exit 0).
+- **`unset <Package.Class>… | -`** undoes classification: `--tags A,B` removes those tags, bare
+  `--tags` clears the whole tags field, `--description` clears the description, and `--all` deletes
+  the shard. `-` reads a newline ref list from stdin (empty stdin is a clean no-op). A ref with no
+  shard **exits 2** naming it.
+- **`status [--json]`** reports how many classes on the path have a shard, of the total.
+  **`tags [--json]`** lists the tag vocabulary in use with occurrence counts, to curb drift.
+- Every `classify` verb needs the composed package path (to know the class exists); with none it
+  **exits 2** (`no package search path`).
 
 ---
 
