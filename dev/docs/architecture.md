@@ -2178,10 +2178,10 @@ nonsolid green, mover magenta), rasterizes a light-grey-background RGB buffer (P
 in-memory format only; the disk write is always PNG, below), and annotates per an **`AnnotationSpec`**
 (poly indices painted on-face; actor names as de-collided leader boxes).
 
-**`--faces {wire,flat}`** picks whether faces are also FILLED. It is an explicit `faces=` parameter on
-`render_brush_pgm`/`render_brushes_pgm`/`render_quad_pgm` and on `_render_breakdown_grid`'s `_pane` —
-it cannot be inferred from the seam, since `PreviewData.faces is None` would mean both `wire` and a
-filled mode.
+**`--faces {wire,flat,textured}`** picks whether faces are also FILLED. It is an explicit `faces=`
+parameter on `render_brush_pgm`/`render_brushes_pgm`/`render_quad_pgm` and on
+`_render_breakdown_grid`'s `_pane` — it cannot be inferred from the seam, since
+`PreviewData.faces is None` would mean both `wire` and a filled mode.
 
 - **`wire`** is the historical render, unchanged and byte-identical (pinned by the golden pair
   `tests/fixtures/preview_wire_golden_{iso,quad}.png`, captured BEFORE the rasterizer existed so it
@@ -2191,6 +2191,21 @@ filled mode.
   legend is read against) — through an `array("f")` depth buffer (`_alloc_buffers`; a `list[float]` is
   ~0.5 GB at `--size 4096` against ~67 MB, and `--size` is uncapped). Fills draw at step 2 of the pane,
   ahead of the point layer, so no sprite or `--show` overlay is painted over.
+- **`textured`** fills each surviving face by sampling its OWN decoded texture through its authored UV
+  frame instead of a flat hue (`_fill_face_textured`), reusing `flat`'s cull, depth buffer and
+  occlusion test unchanged. UV is affine in screen space, solved once per face off the same plane
+  probes as depth (`_face_uv_affine`/`_plane_screen_probes`); the mip level is per face from that
+  face's own screen-space UV gradients (`_mip_level`), never a view-global gain; the fetch is
+  nearest-neighbour with wrap; and a masked face's index-0 texels write neither colour nor depth
+  (`(poly.flags | actor PolyFlags) & PF_Masked` OR the decoder's `bMasked`). Colour is `texel·shade`
+  truncated as `render.rs`'s key light (`_face_shade` = `0.55 + 0.45·|N·L|/|N|`), so it agrees with
+  `--native` up to f32-vs-f64. **`textured` emits NO wireframe** (a highlighted face takes only an
+  outline); a poly with no `Texture` fills `DEFAULT_GREY·shade`. Its resolution and refusals live in
+  dispatch (`cli/rendering.py` `preview_textures`): a scaled or sheared brush, `--brush-colors` given
+  with `textured`, a non-finite UV frame, and any unreadable/bare/undecodable ref each exit 2 naming
+  the offender (a bare ref says to qualify it `Package.Name`); no resolver names which of three causes
+  applies; a scene referencing NO texture needs — and resolves — none. **Accepted cost, as `flat`:
+  `textured` needs the project's game content; `wire` needs neither.**
 - **A filled mode assigns THREE roles from that ONE two-member pair** (owner ruling; the first
   assignment gave two of them the same value as the fill and both were invisible — the renders that
   measured it are in `board/inbox/faces-flat-keeps-a-wireframe-that-is-provably`). Per face, `own` = the

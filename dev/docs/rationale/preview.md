@@ -74,3 +74,57 @@ call, not a regression — but it is the owner's call, and it needs new renders.
 
 **Refs.** `dev/docs/spikes/2026-07-27-preview-focus-dim/` (the ladder, the before/after pair and the
 harness); `uedcli/preview.py` `_DIM_FILL_ALPHA`; `uedcli/tests/test_preview_faces.py` pins the value.
+
+## `textured` — the texel path over the SAME cull and depth buffer
+
+`textured` reuses `flat`'s cull, `array("f")` depth buffer and occlusion test unchanged; only the
+fill differs — each pixel samples the face's decoded texture through its authored UV frame instead
+of one flat hue (`_fill_face_textured`).
+
+**Why it is this way.**
+
+- **UV is affine in screen space, solved once per face — no per-pixel perspective divide.** Under
+  the orthographic preview camera `u(P) = dot(P − base_w, tu_w) + pan` is affine in world `P`, so it
+  solves from the SAME three plane probes the depth map already uses (`_face_uv_affine` shares
+  `_plane_screen_probes` with `_face_depth_affine`). One consequence pays for another: the screen
+  gradients `(au, bu)`/`(av, bv)` the UV solve produces ARE the mip term below, computed for free.
+- **The mip level is per FACE, from that face's own screen-space UV gradients**
+  (`_mip_level` = `log2(max(hypot(du_dx,du_dy), hypot(dv_dx,dv_dy)))`, clamped to the pyramid). A
+  single view-global projection gain understates the rate on an oblique wall — ~1.7× at the default
+  iso angle, unbounded near edge-on — and would alias exactly the grazing surfaces a texture check
+  most needs to read.
+- **Nearest-neighbour with Euclidean wrap** (`int` `%` on the mip's `w`/`h`). Matches `render.rs`;
+  no filtering, so a texel edge is a texel edge in the preview.
+- **A masked hole writes neither colour NOR depth.** When the face is masked and the sampled texel's
+  `mask == 0`, the pixel is skipped entirely, so a face BEHIND the hole shows through; an unmasked
+  face draws palette index 0 as an ordinary colour. The masked answer is resolved in dispatch as
+  `(poly.flags | actor PolyFlags) & PF_Masked` **OR** the decoder's `bMasked`, off the typed result —
+  one gate, no separate predicate.
+- **Shade matches the native tier.** `_face_shade` = `0.55 + 0.45·|N·L|/|N|` on the world Newell
+  normal, and the colour is `min(int(texel·shade), 255)` per channel — byte-for-byte `render.rs`'s
+  key light and truncation, so `--native` and this tier agree up to f32-vs-f64 (spec §4.9). A face
+  `render.rs` also skips (< 3 vertices, zero-length normal) shades `None` and is dropped.
+
+**Rejected.**
+
+- **A view-global projection gain for the mip** — two earlier drafts of the feature derived it this
+  way and both were measured wrong; the per-face gradient is the correction, tested at a non-default
+  `--iso-angle` where the wrong derivation is ~7× off.
+- **`DEFAULT_GREY` as a fallback for a texture the render cannot produce** — a non-finite UV frame,
+  or an unreadable/bare/undecodable ref. Grey is pixel-identical to a legitimately untextured face
+  (`tex_index < 0`), so a fallback would hide the very defect this mode exists to surface. Each such
+  case is a clean exit 2 naming the actor/poly or listing every offending ref (a bare ref says to
+  qualify it `Package.Name`); a missing resolver names which of its three causes applies; a scene
+  that references NO texture renders with no texture source at all (the owner's literal "needs").
+  The refusals themselves are the owner's product ruling (board item
+  `four-actor-preview-faces-rulings-need-a-durable`), recorded here only for the engineering reason
+  grey cannot stand in.
+- **Bilinear filtering, and scaled/sheared brushes under `textured`** — both deferred (plan §5). A
+  scaled or sheared brush exits 2 listing every offender, because its geometry is built with the full
+  linear transform while the UV frame uses rotation only, so the texture would not follow the
+  geometry — a wrong answer in the one tool meant to be authoritative about UV.
+
+**Refs.** `uedcli/preview.py` `_fill_face_textured`, `_face_uv_affine`, `_mip_level`, `_face_shade`,
+`_plane_screen_probes`, `DEFAULT_GREY`; `uedcli/cli/rendering.py` `preview_textures`,
+`_reject_transformed_brushes`, `_reject_explicit_brush_colors`, `_texture_resolver_cause`;
+`uedcli/tests/test_preview_faces.py` and the golden `tests/fixtures/preview_textured_golden_iso.png`.
