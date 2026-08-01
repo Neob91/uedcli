@@ -8495,7 +8495,7 @@
           ],
           "subparser_help": {
             "list": "browse actor classes as an indented inheritance TREE (rooted at Engine.Actor; abstract classes marked *; a collapsed node shows its hidden direct-subclass count as (N)). Depth auto-fits ~60 lines; --depth to go deeper, --subclass-of to reroot, --flat for a pipeable one-per-line list.",
-            "show": "print a class's OWN editable properties grouped by editor category (the UnrealEd property-browser view: Movement/Display/Lighting/…) + super chain + abstract/placeable. Non-editable internals hidden; inherited props collapse to per-category counts; --depth all lists every inherited prop too."
+            "show": "print a class's OWN editable properties grouped by editor category (the UnrealEd property-browser view: Movement/Display/Lighting/…) + super chain + abstract/placeable, then a Facts block (DrawType, default Mesh, signed mesh-local extents, collision cylinder, PrePivot, parent). Non-editable internals hidden; inherited props collapse to per-category counts; --depth all lists every inherited prop too."
           }
         }
       ],
@@ -8675,6 +8675,22 @@
               "metavar": "Package.Class",
               "converter": "_nonempty_class",
               "help": "fully-qualified class to describe, e.g. DeusEx.ammocrate",
+              "mutex_group": null
+            },
+            {
+              "class": "_StoreTrueAction",
+              "option_strings": [
+                "--json"
+              ],
+              "dest": "json",
+              "nargs": 0,
+              "const": true,
+              "default": false,
+              "required": false,
+              "choices": null,
+              "metavar": null,
+              "converter": null,
+              "help": "print ONLY the file-facts as one JSON object (ref, drawtype, mesh, extents, collision, prepivot, parent, abstract, placeable) instead of the property schema. Extents are the default Mesh's signed mesh-local bounding box in integer uu (Scale applied, pre-Origin/RotOrigin, DrawScale not) — a SEATING/footprint fact; it does not assert world facing. A non-mesh class reports mesh/extents as null.",
               "mutex_group": null
             },
             {

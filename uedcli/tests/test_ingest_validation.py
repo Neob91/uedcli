@@ -9,7 +9,7 @@ import io
 import pytest
 
 from uedcli import classindex, config, trunk, uprops, utexture
-from uedcli.cli import dispatch
+from uedcli.cli import dispatch, resources
 from uedcli.classindex import ClassIndex
 from uedcli.model import Actor, Level
 from uedcli.uprops import Prop
@@ -262,13 +262,16 @@ def _prop(name, owner, kind="ByteProperty", category=None):
                 type_name=None, owner=owner, category=category)
 
 
-def _show_setup(monkeypatch, union):
+def _show_setup(monkeypatch, union, defaults=None):
     # The `_cache=None` param is kept in the stub signature only to match resolve_class_properties'
     # real signature; `class show` no longer seeds it (the seed was dropped 2026-07-20 so the prop
-    # walk uses the persistent schema cache). Nothing else needs stubbing: every class fact the
-    # header prints comes off the fake index below.
+    # walk uses the persistent schema cache). The header's abstract/placeable facts come off the fake
+    # index; the Facts block additionally reads the class defaults, so stub that seam too (a non-mesh
+    # DrawType by default, so no mesh decode is attempted).
     monkeypatch.setattr(uprops, "resolve_class_properties",
                         lambda fqcn, resolver, _cache=None: union)
+    monkeypatch.setattr(resources, "class_defaults",
+                        lambda fqcn, project=None: defaults or {("drawtype", 0): "DT_None"})
 
 
 def test_class_show_default_own_by_category_with_inherited_counts(tmp_path, monkeypatch, capsys):
@@ -405,6 +408,10 @@ def test_class_show_errors_when_an_ancestor_package_is_unreadable(tmp_path, monk
     def _boom(fqcn, resolver, _cache=None):
         raise uprops.SchemaError("package 'Engine' not found on the schema search path")
     monkeypatch.setattr(uprops, "resolve_class_properties", _boom)
+    # The Facts block resolves defaults FIRST; give it a clean non-mesh result so the schema-read
+    # error below is what surfaces (this test is about the property-walk no-fallback contract).
+    monkeypatch.setattr(resources, "class_defaults",
+                        lambda fqcn, project=None: {("drawtype", 0): "DT_None"})
     monkeypatch.setattr(uprops, "own_class_properties",   # must NOT be consulted — no fallback
                         lambda pkg, cname, owner_fqcn: pytest.fail("own-only degrade fired"))
     for kw in ({}, {"categories": ["Lighting"]}, {"depth": float("inf")}):   # every render mode errors
@@ -427,6 +434,8 @@ def test_class_show_prop_walk_uses_the_schema_cache_not_a_seed(tmp_path, monkeyp
         seen["cache"] = _cache
         return [_prop("X", "Engine.Light", category="Lighting")]
     monkeypatch.setattr(uprops, "resolve_class_properties", _spy)
+    monkeypatch.setattr(resources, "class_defaults",         # the Facts block reads defaults, not props
+                        lambda fqcn, project=None: {("drawtype", 0): "DT_None"})
     _run_class(monkeypatch, capsys, proj, sub="show", fqcn="Engine.Light")   # chain = Light -> Actor
     assert seen.get("called"), "resolve_class_properties was not called"
     assert seen["cache"] is None, "prop walk must not seed _cache — it should use the schema cache"

@@ -5,9 +5,10 @@ Module is `classes` because `class` is a Python keyword (the sole spelling excep
 """
 from __future__ import annotations
 
+import json
 import sys
 
-from ... import classindex, uprops
+from ... import classindex, meshfacts, rotation, uprops
 from ...classindex import ClassRefError
 from .. import resources
 from ..errors import CommandError
@@ -78,6 +79,100 @@ def _class_tree(idx, *, subclass_of, include_non_actor, depth, package) -> list[
     return render(eff)
 
 
+# ── `class show` FACTS block (asset-catalog class arm C1) ────────────────────────────────────────
+# `class show` reports a class's file-facts: DrawType, the default Mesh, its signed mesh-local
+# extents, collision cylinder, PrePivot, and parent. Everything but the extents comes straight from
+# the resolved class defaults; the extents come from decoding the default Mesh (see `meshfacts`).
+# These are FACTS read from the package — the tool infers nothing (`direction/asset-catalog.md`).
+
+
+def _num(text: str | None) -> float:
+    """A class default's numeric text (`"56.5"`, `"22"`) → float; an absent default is the type's
+    zero (a class with no CollisionRadius default effectively has 0)."""
+    return float(text) if text else 0.0
+
+
+def _fvec(text: str | None) -> list[float]:
+    """A struct default like `(X=0,Y=0,Z=0)` → `[x, y, z]` floats; an absent default → zeros."""
+    if not text:
+        return [0.0, 0.0, 0.0]
+    return [float(v) for v in rotation.parse_fvector(text)]
+
+
+def _json_num(v: float):
+    """A number JSON-rendered as an int when integral (`56.0` → `56`), else the float (`56.5`)."""
+    return int(v) if float(v).is_integer() else v
+
+
+def _build_facts(fqcn: str, idx, project) -> dict:
+    """The class's file-facts for `class show`. `drawtype`/`mesh`/`collision`/`prepivot` come from the
+    resolved class defaults; `extents` is the default Mesh's signed mesh-local bounding box (`Scale`
+    applied, pre-Origin/RotOrigin, DrawScale not — `meshfacts`). A `DT_Mesh` class whose Mesh is
+    unresolvable or fails to decode raises `meshfacts.MeshFactError`; a non-mesh class
+    (DT_Sprite/DT_Brush/DT_None) reports `mesh`/`extents` as None, not an error."""
+    defaults = resources.class_defaults(fqcn, project)
+    drawtype = defaults.get(("drawtype", 0))
+    chain = idx.ancestry(fqcn)
+    mesh = extents = None
+    if drawtype == "DT_Mesh":
+        ref = meshfacts.parse_mesh_ref(defaults.get(("mesh", 0)))
+        if ref is None:
+            raise meshfacts.MeshFactError(
+                f"cannot read mesh facts for {fqcn}: DrawType is DT_Mesh but the Mesh default "
+                f"({defaults.get(('mesh', 0))!r}) is unresolvable")
+        mesh, box, scale = meshfacts.decode_mesh_box(ref, class_fqcn=fqcn, resolver=idx.resolver())
+        extents = meshfacts.signed_extents(box, scale)
+    return {
+        "ref": fqcn,
+        "drawtype": drawtype,
+        "mesh": mesh,
+        "extents": extents,
+        "collision": {"radius": _num(defaults.get(("collisionradius", 0))),
+                      "height": _num(defaults.get(("collisionheight", 0)))},
+        "prepivot": _fvec(defaults.get(("prepivot", 0))),
+        "parent": chain[1] if len(chain) > 1 else None,
+        "abstract": idx.is_abstract(fqcn),
+        "placeable": idx.is_placeable(fqcn),
+    }
+
+
+def _facts_json(facts: dict) -> dict:
+    """`_build_facts` → the §3 `--json` object: extents `[lo, hi]` per axis (or null), collision/
+    prepivot as plain numbers."""
+    c = facts["collision"]
+    return {
+        "ref": facts["ref"],
+        "drawtype": facts["drawtype"],
+        "mesh": facts["mesh"],
+        "extents": facts["extents"],
+        "collision": {"radius": _json_num(c["radius"]), "height": _json_num(c["height"])},
+        "prepivot": [_json_num(v) for v in facts["prepivot"]],
+        "parent": facts["parent"],
+        "abstract": facts["abstract"],
+        "placeable": facts["placeable"],
+    }
+
+
+def _print_facts(facts: dict) -> None:
+    """The human `Facts:` block appended to `class show` (spec §3). Extents are mesh-local seating
+    facts (`Scale` applied, pre-Origin/RotOrigin, DrawScale not); they do NOT assert world facing."""
+    print("\nFacts:")
+    print(f"  drawtype:  {facts['drawtype'] if facts['drawtype'] is not None else 'none'}")
+    print(f"  mesh:      {facts['mesh'] if facts['mesh'] is not None else 'none'}")
+    ext = facts["extents"]
+    if ext is None:
+        print("  extents:   none (not a mesh class)")
+    else:
+        axes = "  ".join(f"{ax} {ext[ax][0]}..{ext[ax][1]}" for ax in "xyz")
+        print(f"  extents:   {axes}   (mesh-local uu; Scale applied, "
+              "pre-Origin/RotOrigin, DrawScale not)")
+    c = facts["collision"]
+    print(f"  collision: radius {uprops.format_float(c['radius'])}  "
+          f"height {uprops.format_float(c['height'])}")
+    print(f"  prepivot:  {','.join(uprops.format_float(v) for v in facts['prepivot'])}")
+    print(f"  parent:    {facts['parent'] if facts['parent'] is not None else 'none'}")
+
+
 def run(args) -> int:
     """`class list` / `class show` — offline class discovery over the composed `.u` path (no editor,
     no level). Builds the `ClassIndex` from the resolved project."""
@@ -131,6 +226,15 @@ def run(args) -> int:
         if not idx.class_exists(fqcn):
             raise CommandError(f"unknown class: {fqcn} (package not on the path, or the package "
                                  f"does not define that class)")
+        # FACTS (asset-catalog class arm C1). Built before any output so a bad Mesh fails cleanly
+        # with stdout still empty (a redirecting script gets nothing on the exit-2 path).
+        try:
+            facts = _build_facts(fqcn, idx, project)
+        except meshfacts.MeshFactError as e:
+            raise CommandError(str(e))
+        if getattr(args, "json", False):                 # `--json`: the facts object only (no schema)
+            print(json.dumps(_facts_json(facts)))
+            return 0
         chain = idx.ancestry(fqcn)
         abstract = idx.is_abstract(fqcn)
         abs_word = {True: "abstract", False: "concrete", None: "abstract=unknown"}[abstract]
@@ -231,6 +335,7 @@ def run(args) -> int:
                 scope = "for the whole chain" if wanted is None else "to see every matched superclass level"
                 print(f"\n(+{max_hop - eff} more superclass level(s) omitted — --depth all "
                       f"{scope})")
+            _print_facts(facts)
             return 0
 
         # DEFAULT: this class's OWN props grouped by category; inherited props of that category are
@@ -275,5 +380,6 @@ def run(args) -> int:
             tot = sum(inh_by_cat[c][0] for c in only_inh)
             noun = "category" if len(only_inh) == 1 else "categories"
             print(f"\n(+{tot} inherited, in {len(only_inh)} more {noun}: {', '.join(only_inh)})")
+        _print_facts(facts)
         return 0
     raise CommandError(f"unimplemented class sub-verb: {args.sub}")

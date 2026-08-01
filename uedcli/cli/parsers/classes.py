@@ -48,11 +48,19 @@ def register(sub) -> None:
     kshow = ksub.add_parser(
         "show",
         help="print a class's OWN editable properties grouped by editor category (the UnrealEd "
-             "property-browser view: Movement/Display/Lighting/…) + super chain + abstract/placeable. "
-             "Non-editable internals hidden; inherited props collapse to per-category counts; "
-             "--depth all lists every inherited prop too.")
+             "property-browser view: Movement/Display/Lighting/…) + super chain + abstract/placeable, "
+             "then a Facts block (DrawType, default Mesh, signed mesh-local extents, collision "
+             "cylinder, PrePivot, parent). Non-editable internals hidden; inherited props collapse "
+             "to per-category counts; --depth all lists every inherited prop too.")
     kshow.add_argument("fqcn", metavar="Package.Class", type=_nonempty_class,
                        help="fully-qualified class to describe, e.g. DeusEx.ammocrate")
+    kshow.add_argument("--json", action="store_true",
+                       help="print ONLY the file-facts as one JSON object (ref, drawtype, mesh, "
+                            "extents, collision, prepivot, parent, abstract, placeable) instead of "
+                            "the property schema. Extents are the default Mesh's signed mesh-local "
+                            "bounding box in integer uu (Scale applied, pre-Origin/RotOrigin, "
+                            "DrawScale not) — a SEATING/footprint fact; it does not assert world "
+                            "facing. A non-mesh class reports mesh/extents as null.")
     kshow.add_argument("--depth", type=depth_value, default=None, metavar="N|all",
                        help="how many superclass levels of inherited props to include: N (1 = the "
                             "immediate parent; 0 = own props only) or `all` for the WHOLE super chain. "

@@ -2,6 +2,9 @@
 to the decoder (or a package swap) trips a red test instead of drifting unnoticed (uedcli
 `dev/docs/rules/spikes.md` "pin the finding, or it rots").
 
+The decoder was promoted out of the spike into `uedcli/umesh.py` (the class arm's mesh facts read
+it); these tests now keep the PRODUCTION module honest.
+
 The OFFLINE tests run against the **committed** UED22 v69 packages (`uned/UED22/*.u`), which carry
 stock-Unreal 4-byte packed vertices. The Deus Ex v68 side (8-byte vertices) lives in the
 user-supplied, gitignored install, so those tests skip when it is absent.
@@ -11,38 +14,21 @@ The load-bearing oracle in every test is **consume-to-exact-end**: an export bod
 """
 from __future__ import annotations
 
-import importlib.util
-import sys
 from pathlib import Path
 
 import pytest
 
+from uedcli import umesh as _umesh_module
 from uedcli.upackage import load_package
 
 from .conftest import install_system_root
 
-_HARNESS = (Path(__file__).resolve().parents[2] / "dev" / "docs" / "spikes"
-            / "2026-07-25-native-mesh-decode" / "harness" / "umesh.py")
 UED22 = Path(__file__).resolve().parents[2] / "uned" / "UED22"
 
 
 def _umesh():
-    """Import the spike harness by path — the decoder lives in the spike until it is productised,
-    and this test is what keeps it honest in the meantime.
-
-    The module must be registered in `sys.modules` BEFORE it executes: it uses
-    `from __future__ import annotations`, so `@dataclass` resolves its string annotations by
-    looking its own module up by name.
-    """
-    if "_spike_umesh" in sys.modules:
-        return sys.modules["_spike_umesh"]
-    if not _HARNESS.exists():
-        pytest.skip(f"spike harness missing: {_HARNESS}")
-    spec = importlib.util.spec_from_file_location("_spike_umesh", _HARNESS)
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules["_spike_umesh"] = mod
-    spec.loader.exec_module(mod)
-    return mod
+    """The promoted production decoder (`uedcli/umesh.py`)."""
+    return _umesh_module
 
 
 def _pkg_or_skip(path: Path):
