@@ -250,3 +250,42 @@ def tag_vocabulary(shards: list[ClassShard]) -> list[tuple[str, int]]:
         for t in s.tags:
             counts[t] = counts.get(t, 0) + 1
     return sorted(counts.items(), key=lambda tc: (-tc[1], tc[0]))
+
+
+# --------------------------------------------------------------------------- search (ranked discovery)
+
+def score(ref: str, tags: list[str], description: str, terms: list[str]) -> int | None:
+    """Relevance of one class corpus entry against ALREADY-LOWERCASED `terms`, for `class search`.
+
+    AND across terms: every term must match something, else the whole entry is dropped (return
+    None). Each matched term contributes the score of its BEST tier — highest first:
+
+      5  the term equals the leaf class name  (exact `Class`)
+      4  the term equals a stored tag         (exact tag)
+      3  the term is a substring of the `Package.Class` ref
+      2  the term is a substring of a stored tag
+      1  the term is a substring of the description
+
+    The score is the sum of the per-term best tiers; the caller sorts by score DESCENDING then ref
+    ascending. Deterministic — the class arm's own ranking, mirroring `texture_catalog._score` and
+    pinned by tests. `tags` are already normalized (lowercased) on the shard; `description` is prose.
+    """
+    ref_l = ref.lower()
+    leaf_l = ref.split(".", 1)[-1].lower()
+    tags_l = [t.lower() for t in tags]
+    desc_l = description.lower()
+    total = 0
+    for term in terms:
+        if term == leaf_l:
+            total += 5
+        elif term in tags_l:
+            total += 4
+        elif term in ref_l:
+            total += 3
+        elif any(term in t for t in tags_l):
+            total += 2
+        elif term in desc_l:
+            total += 1
+        else:
+            return None
+    return total

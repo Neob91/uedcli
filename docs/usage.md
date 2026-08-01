@@ -1499,6 +1499,13 @@ uedcli class show <Package.Class> [--depth N|all] [--category NAME] [--json]
 # render the class's default Mesh as an orthographic PNG thumbnail (no editor, no game)
 uedcli class preview <Package.Class> [--rotate PITCH,YAW,ROLL] [--out FILE] [--size PX] [--json]
 
+# RANKED discovery: classes whose name / stored tags / description match the terms, best first
+uedcli class search <term>… [--tag T] [--subclass-of Package.Class] [--drawtype DT]
+                    [--include-abstract] [--json]
+
+# eagerly warm the package schema cache so a later offline list/search/show starts warm
+uedcli class prewarm [--package P] [--force]
+
 # record / inspect what a class IS — one git-tracked shard per class (tags + description)
 uedcli class classify set <Package.Class> --tags chair,mount:floor --description "a bar stool"
 uedcli class classify set -           # read JSONL rows {ref, tags, description} from stdin
@@ -1623,6 +1630,56 @@ printf '%s\n' '{"ref":"DeusEx.BarStool","tags":["chair"],"description":"a stool"
   **`tags [--json]`** lists the tag vocabulary in use with occurrence counts, to curb drift.
 - Every `classify` verb needs the composed package path (to know the class exists); with none it
   **exits 2** (`no package search path`).
+
+### `class search` — ranked discovery
+
+`class list` **enumerates** the class tree deterministically; `class search` **ranks** it by
+relevance. Give it one or more terms and it prints the matching classes best-first, matching each
+term against the class's leaf name, its stored classification tags, and its description.
+
+```bash
+uedcli class search chair                              # anything named/tagged/described "chair"
+uedcli class search crate --tag storage --drawtype DT_Mesh
+uedcli class search lamp --subclass-of Engine.Light --json
+```
+
+- **Terms are required.** A term-less `class search` **exits 2** pointing at `class list` (the
+  enumerator). A class must match **every** term (AND); a term matching nothing drops the class.
+- **Ranking** is a fixed tier order per term, summed across terms: exact leaf class name (5) > exact
+  tag (4) > substring of the `Package.Class` ref (3) > substring of a tag (2) > substring of the
+  description (1). Ties break by ref ascending, so output is deterministic.
+- **Corpus** is every placeable Actor subclass. `--subclass-of Package.Class` restricts it to that
+  base's descendants (an unknown base **exits 2** naming it); `--include-abstract` also searches
+  abstract / non-placeable classes.
+- **`--tag T`** (repeatable) keeps only classes carrying that exact stored tag — reserved
+  `mount:`/`faces:` tags filter here like any other (`--tag faces:+x`). **`--drawtype DT`** keeps
+  only classes whose resolved `DrawType` default equals `DT` (case-insensitive; an unknown token
+  **exits 2** listing the valid ones). `--drawtype` reads each surviving class's defaults, so it
+  costs more than a name/tag match.
+- Plain output is one `Package.Class` per line to stdout (the match count on stderr); **no match** is
+  a clean exit 0 with empty stdout. **`--json`** emits one object per match:
+  `{ref, score, classified, tags, description}`. With no composed package path, `search` **exits 2**
+  (`no package search path`).
+
+### `class prewarm` — warm the cache before an offline session
+
+Building the class index and resolving property schemas decodes every `.u` on the path the first
+time. `class prewarm` does that decode ahead of time and persists it, so a later **offline**
+`class list` / `search` / `show` starts warm instead of cold.
+
+```bash
+uedcli class prewarm                    # warm every package on the path
+uedcli class prewarm --package DeusEx    # just one package
+uedcli class prewarm --force             # re-decode even entries that are already warm
+```
+
+- It warms the **package schema cache** (class discovery + property schemas). It does **not** render
+  previews or resolve mesh facts — those have no persistent cache yet, so a cold `class preview` or
+  `class show`'s extents still pay their own cost.
+- Prints each warmed package stem to stdout, one per line, with a count on stderr. `--package P`
+  warms only `P` (an unknown package **exits 2** naming it); `--force` re-decodes and rewrites each
+  entry even when a valid one exists (the default fills only misses). With no composed package path
+  it **exits 2** (`no package search path`).
 
 ---
 

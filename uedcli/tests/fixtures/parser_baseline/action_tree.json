@@ -8493,12 +8493,16 @@
             "list",
             "show",
             "preview",
+            "search",
+            "prewarm",
             "classify"
           ],
           "subparser_help": {
             "list": "browse actor classes as an indented inheritance TREE (rooted at Engine.Actor; abstract classes marked *; a collapsed node shows its hidden direct-subclass count as (N)). Depth auto-fits ~60 lines; --depth to go deeper, --subclass-of to reroot, --flat for a pipeable one-per-line list.",
             "show": "print a class's OWN editable properties grouped by editor category (the UnrealEd property-browser view: Movement/Display/Lighting/…) + super chain + abstract/placeable, then a Facts block (DrawType, default Mesh, signed mesh-local extents, collision cylinder, PrePivot, parent). Non-editable internals hidden; inherited props collapse to per-category counts; --depth all lists every inherited prop too.",
             "preview": "render a class's default Mesh as an orthographic PNG thumbnail (native software raster: decodes the mesh + P8 skins from the game .u — no editor, no game). The shot is in the SAME mesh-local frame as `class show`'s extents (Scale applied, pre-Origin/RotOrigin), iso (front-3/4) by default. Prints `<ref><TAB><path>` to stdout. A non-mesh class has nothing to render (a stderr note, exit 0); an unresolvable Mesh or an undecodable skin exits 2 naming it.",
+            "search": "RANKED discovery over the class corpus: given one or more terms, print the classes whose name / stored tags / description match, best first. Ranking (per term, best tier): exact leaf class name > exact tag > substring of the Package.Class ref > substring of a tag > substring of the description; a class must match EVERY term (AND). Terms are REQUIRED — to enumerate every class without ranking use `class list`. Prints one Package.Class per line (best first); no match is a clean exit 0 (empty stdout).",
+            "prewarm": "eagerly warm the persistent package SCHEMA cache (class discovery + property schemas) for the composed .u path, so a later OFFLINE `class list`/`search`/`show` starts warm instead of decoding every package cold. Prints each warmed package stem to stdout. It does NOT render previews or resolve mesh facts (those have no persistent cache yet).",
             "classify": "record / inspect what a class IS — the LLM's classification, stored one git-tracked shard per class (tags + description). The tool stores it, never infers it."
           }
         }
@@ -8910,6 +8914,186 @@
               "metavar": null,
               "converter": null,
               "help": "print one JSON object {ref, path, azimuth, rotate} instead of the `<ref><TAB><path>` line — azimuth is the camera's mesh-local yaw in unreal rotator units (65536 = 360deg), rotate the applied pose or null.",
+              "mutex_group": null
+            }
+          ],
+          "subparsers": {}
+        },
+        "search": {
+          "class": "_CoordArgumentParser",
+          "prog": "uedcli class search",
+          "mutex_groups": [],
+          "actions": [
+            {
+              "class": "_HelpAction",
+              "option_strings": [
+                "-h",
+                "--help"
+              ],
+              "dest": "help",
+              "nargs": 0,
+              "const": null,
+              "default": {
+                "__suppress__": true
+              },
+              "required": false,
+              "choices": null,
+              "metavar": null,
+              "converter": null,
+              "help": "show this help message and exit",
+              "mutex_group": null
+            },
+            {
+              "class": "_StoreAction",
+              "option_strings": [],
+              "dest": "terms",
+              "nargs": "*",
+              "const": null,
+              "default": null,
+              "required": false,
+              "choices": null,
+              "metavar": "TERM",
+              "converter": null,
+              "help": "one or more search terms (case-insensitive), matched against each class's leaf name, stored classification tags, and description. A class must match EVERY term. At least one term is required (a term-less search exits 2 pointing at `class list`).",
+              "mutex_group": null
+            },
+            {
+              "class": "_AppendAction",
+              "option_strings": [
+                "--tag"
+              ],
+              "dest": "tag",
+              "nargs": null,
+              "const": null,
+              "default": [],
+              "required": false,
+              "choices": null,
+              "metavar": "TAG",
+              "converter": null,
+              "help": "keep only classes carrying this exact stored tag (repeat to require several — AND). Applied before ranking. A reserved `mount:`/`faces:` tag filters here like any other, e.g. --tag faces:+x.",
+              "mutex_group": null
+            },
+            {
+              "class": "_StoreAction",
+              "option_strings": [
+                "--subclass-of"
+              ],
+              "dest": "subclass_of",
+              "nargs": null,
+              "const": null,
+              "default": null,
+              "required": false,
+              "choices": null,
+              "metavar": "Package.Class",
+              "converter": null,
+              "help": "restrict the corpus to classes that ARE, or descend from, this base (e.g. --subclass-of Engine.Decoration). An unknown base exits 2 naming it. Default corpus: every placeable Actor subclass.",
+              "mutex_group": null
+            },
+            {
+              "class": "_StoreAction",
+              "option_strings": [
+                "--drawtype"
+              ],
+              "dest": "drawtype",
+              "nargs": null,
+              "const": null,
+              "default": null,
+              "required": false,
+              "choices": null,
+              "metavar": "DT",
+              "converter": null,
+              "help": "keep only classes whose resolved DrawType default equals this (e.g. DT_Mesh); case-insensitive. An unknown DrawType token exits 2 listing the valid ones. Resolving DrawType reads each surviving class's defaults, so this filter costs more than a name/tag match.",
+              "mutex_group": null
+            },
+            {
+              "class": "_StoreTrueAction",
+              "option_strings": [
+                "--include-abstract"
+              ],
+              "dest": "include_abstract",
+              "nargs": 0,
+              "const": true,
+              "default": false,
+              "required": false,
+              "choices": null,
+              "metavar": null,
+              "converter": null,
+              "help": "also search abstract / non-placeable classes (excluded by default, matching `class list`'s placeable-only drill).",
+              "mutex_group": null
+            },
+            {
+              "class": "_StoreTrueAction",
+              "option_strings": [
+                "--json"
+              ],
+              "dest": "json",
+              "nargs": 0,
+              "const": true,
+              "default": false,
+              "required": false,
+              "choices": null,
+              "metavar": null,
+              "converter": null,
+              "help": "emit one JSON object per match (JSONL), best first: {ref, score, classified, tags, description}. score is the summed ranking tiers; classified is whether a shard exists.",
+              "mutex_group": null
+            }
+          ],
+          "subparsers": {}
+        },
+        "prewarm": {
+          "class": "_CoordArgumentParser",
+          "prog": "uedcli class prewarm",
+          "mutex_groups": [],
+          "actions": [
+            {
+              "class": "_HelpAction",
+              "option_strings": [
+                "-h",
+                "--help"
+              ],
+              "dest": "help",
+              "nargs": 0,
+              "const": null,
+              "default": {
+                "__suppress__": true
+              },
+              "required": false,
+              "choices": null,
+              "metavar": null,
+              "converter": null,
+              "help": "show this help message and exit",
+              "mutex_group": null
+            },
+            {
+              "class": "_StoreAction",
+              "option_strings": [
+                "--package"
+              ],
+              "dest": "package",
+              "nargs": null,
+              "const": null,
+              "default": null,
+              "required": false,
+              "choices": null,
+              "metavar": "P",
+              "converter": null,
+              "help": "warm only this package (bare stem, e.g. DeusEx) instead of every package on the path. An unknown package exits 2 naming it.",
+              "mutex_group": null
+            },
+            {
+              "class": "_StoreTrueAction",
+              "option_strings": [
+                "--force"
+              ],
+              "dest": "force",
+              "nargs": 0,
+              "const": true,
+              "default": false,
+              "required": false,
+              "choices": null,
+              "metavar": null,
+              "converter": null,
+              "help": "re-decode and rewrite each package's cache entry even if already warm (the default reuses a valid stat-keyed entry and only fills misses).",
               "mutex_group": null
             }
           ],

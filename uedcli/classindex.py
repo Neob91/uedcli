@@ -84,6 +84,16 @@ class ClassIndex:
         the SAME path the mesh itself decoded from (DX deco skins live in the deco `.u`)."""
         return list(self._paths.values())
 
+    def packages(self) -> list[tuple[str, str]]:
+        """`(canonical stem, .u path)` for every indexed package — what `class prewarm` iterates to
+        warm each package's persistent schema cache."""
+        return [(self._stems[k], p) for k, p in self._paths.items()]
+
+    def package_stem(self, stem: str) -> str | None:
+        """The canonical spelling of `stem` if it is on the path (case-insensitive), else None — the
+        `--package` validator for `class prewarm`/`list`."""
+        return self._stems.get(stem.casefold())
+
     # -- package loading -------------------------------------------------------
     # There is NO live full-`Package` load here any more. `_package` (a memoized `uprops.load_package`)
     # existed only for `class show`'s own-props degrade fallback; that fallback was deleted 2026-07-25

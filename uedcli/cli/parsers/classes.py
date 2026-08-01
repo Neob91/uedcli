@@ -117,6 +117,53 @@ def register(sub) -> None:
                             "`<ref><TAB><path>` line — azimuth is the camera's mesh-local yaw in "
                             "unreal rotator units (65536 = 360deg), rotate the applied pose or null.")
 
+    ksearch = ksub.add_parser(
+        "search",
+        help="RANKED discovery over the class corpus: given one or more terms, print the classes "
+             "whose name / stored tags / description match, best first. Ranking (per term, best "
+             "tier): exact leaf class name > exact tag > substring of the Package.Class ref > "
+             "substring of a tag > substring of the description; a class must match EVERY term (AND). "
+             "Terms are REQUIRED — to enumerate every class without ranking use `class list`. Prints "
+             "one Package.Class per line (best first); no match is a clean exit 0 (empty stdout).")
+    ksearch.add_argument("terms", nargs="*", metavar="TERM",
+                         help="one or more search terms (case-insensitive), matched against each "
+                              "class's leaf name, stored classification tags, and description. A "
+                              "class must match EVERY term. At least one term is required (a term-"
+                              "less search exits 2 pointing at `class list`).")
+    ksearch.add_argument("--tag", action="append", default=[], metavar="TAG",
+                         help="keep only classes carrying this exact stored tag (repeat to require "
+                              "several — AND). Applied before ranking. A reserved `mount:`/`faces:` "
+                              "tag filters here like any other, e.g. --tag faces:+x.")
+    ksearch.add_argument("--subclass-of", dest="subclass_of", default=None, metavar="Package.Class",
+                         help="restrict the corpus to classes that ARE, or descend from, this base "
+                              "(e.g. --subclass-of Engine.Decoration). An unknown base exits 2 naming "
+                              "it. Default corpus: every placeable Actor subclass.")
+    ksearch.add_argument("--drawtype", default=None, metavar="DT",
+                         help="keep only classes whose resolved DrawType default equals this (e.g. "
+                              "DT_Mesh); case-insensitive. An unknown DrawType token exits 2 listing "
+                              "the valid ones. Resolving DrawType reads each surviving class's "
+                              "defaults, so this filter costs more than a name/tag match.")
+    ksearch.add_argument("--include-abstract", dest="include_abstract", action="store_true",
+                         help="also search abstract / non-placeable classes (excluded by default, "
+                              "matching `class list`'s placeable-only drill).")
+    ksearch.add_argument("--json", action="store_true",
+                         help="emit one JSON object per match (JSONL), best first: "
+                              "{ref, score, classified, tags, description}. score is the summed "
+                              "ranking tiers; classified is whether a shard exists.")
+
+    kwarm = ksub.add_parser(
+        "prewarm",
+        help="eagerly warm the persistent package SCHEMA cache (class discovery + property schemas) "
+             "for the composed .u path, so a later OFFLINE `class list`/`search`/`show` starts warm "
+             "instead of decoding every package cold. Prints each warmed package stem to stdout. It "
+             "does NOT render previews or resolve mesh facts (those have no persistent cache yet).")
+    kwarm.add_argument("--package", default=None, metavar="P",
+                       help="warm only this package (bare stem, e.g. DeusEx) instead of every package "
+                            "on the path. An unknown package exits 2 naming it.")
+    kwarm.add_argument("--force", action="store_true",
+                       help="re-decode and rewrite each package's cache entry even if already warm "
+                            "(the default reuses a valid stat-keyed entry and only fills misses).")
+
     _register_classify(ksub)
 
 

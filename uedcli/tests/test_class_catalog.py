@@ -177,3 +177,33 @@ def test_save_shard_is_json_stable_on_disk(tmp_path):
     cc.save_shard(p, cc.ClassShard(ref="P.C", tags=["b", "a"], description="d"))
     assert json.loads(p.read_text()) == {"kind": "class", "ref": "P.C",
                                          "tags": ["b", "a"], "description": "d"}
+
+
+# --------------------------------------------------------------------------- search ranking (C4)
+
+def test_score_tiers_exact_name_beats_tag_beats_substrings():
+    """The per-term tier order: exact leaf name 5 > exact tag 4 > ref substring 3 > tag substring 2
+    > description substring 1 (`class search`'s deterministic ranking). Terms are ALREADY lowercased
+    by the caller."""
+    assert cc.score("DeusEx.OfficeChair", ["chair"], "", ["officechair"]) == 5   # exact leaf
+    assert cc.score("DeusEx.BarStool", ["chair"], "", ["chair"]) == 4            # exact tag
+    assert cc.score("DeusEx.BarStool", [], "", ["deusex"]) == 3                  # ref substring (pkg)
+    assert cc.score("DeusEx.BarStool", ["seating"], "", ["seat"]) == 2          # tag substring
+    assert cc.score("DeusEx.BarStool", [], "a wooden stool", ["wooden"]) == 1   # desc substring
+
+
+def test_score_lowercases_the_ref_and_tags_not_the_terms():
+    """The ref, tags and description are lowercased inside `score`; the TERMS arrive lowercased (the
+    CLI lowercases them). A mixed-case ref/tag still matches a lowercased term."""
+    assert cc.score("DeusEx.OfficeChair", ["Chair"], "", ["chair"]) == 4         # tag lowercased in
+    assert cc.score("DeusEx.OfficeChair", [], "", ["officechair"]) == 5          # leaf lowercased in
+
+
+def test_score_sums_best_tier_per_term():
+    # "chair" exact tag (4) + "office" ref substring (3) = 7
+    assert cc.score("DeusEx.OfficeChair", ["chair"], "", ["chair", "office"]) == 7
+
+
+def test_score_is_none_when_any_term_matches_nothing():
+    # AND: "chair" matches, "lamp" matches nothing → the whole entry drops
+    assert cc.score("DeusEx.OfficeChair", ["chair"], "a seat", ["chair", "lamp"]) is None

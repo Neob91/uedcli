@@ -304,14 +304,16 @@ def _read_blob(path: str, loader):
 
 
 def load_package_schema(path: str, *, name: str | None = None,
-                        need_props: bool = False) -> PackageSchema:
+                        need_props: bool = False, force: bool = False) -> PackageSchema:
     """The cache boundary (spec §4.6): the v1 bundle for the `.u` at `path`, WITHOUT a `load_package`
     on a warm hit. `need_props=False` (the default — `class list`) loads only the cheap DISCOVERY
     blob; `need_props=True` (`resolve_class_properties`) also loads/decodes the own-property blob.
     `name` sets `pkg.name` on a miss-decode (defaults to the file stem, what the composed search path
     uses); it only matters when THIS process writes the entry (the accepted casefolded writer-spelling
     caveat, §4.3). Misses/corrupt/version-mismatched entries re-decode; a genuinely unparseable
-    package still raises `SchemaError` (no fallback)."""
+    package still raises `SchemaError` (no fallback). `force` (for `class prewarm --force`) bypasses
+    both the process memo and the on-disk read, so the blob is re-decoded and rewritten even when a
+    valid entry exists."""
     realpath = os.path.realpath(path)
     load_name = name if name is not None else _stem(realpath)
 
@@ -331,10 +333,10 @@ def load_package_schema(path: str, *, name: str | None = None,
 
     pkg: Package | None = None                      # loaded at most ONCE, reused across both blobs
 
-    disc = _DISC_MEMO.get(realpath)
+    disc = None if force else _DISC_MEMO.get(realpath)
     if disc is None:
-        disc = _read_blob(_blob_path(key, "disc"), _disc_loads)
-        if disc is None:                            # miss / corrupt / wrong version → decode + write
+        disc = None if force else _read_blob(_blob_path(key, "disc"), _disc_loads)
+        if disc is None:                            # miss / corrupt / wrong version / force → decode + write
             pkg = uprops.load_package(realpath, name=load_name)
             disc = _decode_discovery(pkg)
             _write_blob(_blob_path(key, "disc"), _disc_dumps(disc))
@@ -342,10 +344,10 @@ def load_package_schema(path: str, *, name: str | None = None,
 
     own = None
     if need_props:
-        own = _PROP_MEMO.get(realpath)
+        own = None if force else _PROP_MEMO.get(realpath)
         if own is None:
-            own = _read_blob(_blob_path(key, "prop"), _props_loads)
-            if own is None:                         # miss → decode (reusing a package we already loaded)
+            own = None if force else _read_blob(_blob_path(key, "prop"), _props_loads)
+            if own is None:                         # miss / force → decode (reusing a package we already loaded)
                 if pkg is None:
                     pkg = uprops.load_package(realpath, name=load_name)
                 own = _decode_props(pkg)

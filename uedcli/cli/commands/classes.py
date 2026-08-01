@@ -9,7 +9,8 @@ import json
 import sys
 from pathlib import Path
 
-from ... import class_catalog, classindex, config, meshfacts, meshrender, rotation, uprops
+from ... import (class_catalog, classindex, config, meshfacts, meshrender, rotation,
+                 schema_cache, uprops)
 from ...class_catalog import ClassCatalogError
 from ...classindex import ClassRefError
 from .. import rendering, resources, targets
@@ -226,6 +227,122 @@ def _run_preview(args, idx, project) -> int:
     return 0
 
 
+# ── `class search` (asset-catalog class arm C4) ──────────────────────────────────────────────────
+# RANKED discovery over the class corpus (name + stored classification tags/description), distinct
+# from `class list`'s deterministic enumeration (`conventions.md` "find vs search"). Ranking is
+# `class_catalog.score` — a fixed tier order, so results are deterministic. `search` reports facts
+# and stored classifications only; it infers nothing (`direction/asset-catalog.md`).
+
+
+def _valid_drawtypes(idx) -> list[str]:
+    """The EDrawType enum value names (`DT_None`, `DT_Sprite`, `DT_Mesh`, …), read off Engine.Actor's
+    `DrawType` property schema — the set `--drawtype` validates against. Read from the package, never
+    hardcoded, so it tracks the actual engine enum. Empty if the schema can't be resolved."""
+    try:
+        props = uprops.resolve_class_properties(classindex.ENGINE_ACTOR, resolver=idx.resolver())
+    except uprops.SchemaError:
+        return []
+    for p in props:
+        if p.name.casefold() == "drawtype":
+            return list(p.enum_value_names)
+    return []
+
+
+def _run_search(args, idx, project) -> int:
+    """`class search <terms…>` — ranked discovery. Terms are REQUIRED; a term-less invocation exits 2
+    pointing at `class list` (the enumerator). Corpus = the placeable Actor subclasses (or, with
+    --subclass-of, that base's descendants; --include-abstract widens both), each joined with its
+    stored classification shard. Filters (--tag, --drawtype) narrow before/after ranking; the result
+    is sorted by score desc then ref asc."""
+    terms = [t.lower() for t in args.terms if t.strip()]
+    if not terms:
+        raise CommandError(
+            "class search needs at least one term (it ranks classes by name + stored tags/"
+            "description). To list every class without ranking, use `class list`.")
+    base = args.subclass_of or classindex.ENGINE_ACTOR
+    try:
+        corpus = idx.list_classes(subclass_of=base, include_abstract=args.include_abstract)
+    except ClassRefError as e:
+        raise CommandError(str(e))                       # unknown --subclass-of → exit 2 naming it
+
+    cat_dir = resources.catalog_dir(project)
+    have = class_catalog.classified_refs(cat_dir)        # casefolded refs that own a shard (one glob)
+    require_tags = [t.lower() for t in args.tag]
+    scored: list[tuple[int, str, bool, list[str], str]] = []
+    for fqcn in corpus:
+        classified = fqcn.casefold() in have
+        if classified:
+            shard = class_catalog.load_shard(class_catalog.shard_path(cat_dir, fqcn))
+            tags, desc = (shard.tags, shard.description) if shard else ([], "")
+        else:
+            tags, desc = [], ""
+        if require_tags and not all(t in tags for t in require_tags):
+            continue
+        s = class_catalog.score(fqcn, tags, desc, terms)
+        if s is None:
+            continue
+        scored.append((s, fqcn, classified, tags, desc))
+
+    if args.drawtype:                                    # DrawType filter: validate the token, then
+        valid = _valid_drawtypes(idx)                    # resolve defaults for the SURVIVORS only
+        want = next((v for v in valid if v.casefold() == args.drawtype.casefold()), None)
+        if want is None:
+            raise CommandError(f"unknown --drawtype {args.drawtype!r}"
+                               + (f"; valid: {', '.join(valid)}" if valid else ""))
+        kept = []
+        for row in scored:
+            dt = resources.class_defaults(row[1], project).get(("drawtype", 0))
+            if dt is not None and dt.casefold() == want.casefold():
+                kept.append(row)
+        scored = kept
+
+    scored.sort(key=lambda r: (-r[0], r[1]))             # score desc, then ref asc — deterministic
+    for s, fqcn, classified, tags, desc in scored:
+        if args.json:
+            print(json.dumps({"ref": fqcn, "score": s, "classified": classified,
+                              "tags": tags, "description": desc}))
+        else:
+            print(fqcn)
+    if not scored:                                       # no match is a NORMAL outcome (exit 0):
+        print("no matches", file=sys.stderr)             # stdout stays empty for a clean pipe
+    else:
+        print(f"{len(scored)} match{'es' if len(scored) != 1 else ''}", file=sys.stderr)
+    return 0
+
+
+# ── `class prewarm` (asset-catalog class arm C4) ─────────────────────────────────────────────────
+# Eagerly warms the persistent per-package SCHEMA cache (class discovery + property schemas) for the
+# composed path, so a later offline `class list`/`search`/`show` starts warm. This is the ONE
+# persistent derived cache the class arm reads today; the spec's catalog derived-row cache and the
+# preview pool are not built yet (board: class-arm-c4-prewarm-warms-schema-cache-only), so prewarm
+# does not render previews or resolve mesh facts.
+
+
+def _run_prewarm(args, idx, project) -> int:
+    """`class prewarm [--package P] [--force]` — warm the schema cache for every package on the path
+    (or just P). Each package's discovery + property blobs are decoded and persisted; --force
+    re-decodes even a valid entry. Prints each warmed package stem to stdout (producer convention)."""
+    packages = idx.packages()                            # [(canonical stem, .u path)]
+    if args.package is not None:
+        stem = idx.package_stem(args.package)
+        if stem is None:
+            raise CommandError(f"package not found on the path: {args.package}")
+        packages = [(s, p) for s, p in packages if s.casefold() == stem.casefold()]
+    warmed = 0
+    for stem, path in packages:
+        try:
+            schema_cache.load_package_schema(path, name=stem, need_props=True, force=args.force)
+        except uprops.SchemaError as e:                  # an unparseable package is named, not fatal
+            print(f"class prewarm: skipping unparseable package {stem!r}: {e}", file=sys.stderr)
+            continue
+        print(stem)
+        warmed += 1
+    verb = "re-warmed" if args.force else "warmed"
+    print(f"{verb} {warmed} package{'s' if warmed != 1 else ''} "
+          "(schema discovery + properties)", file=sys.stderr)
+    return 0
+
+
 # ── `class classify` (asset-catalog class arm C3) ────────────────────────────────────────────────
 # Records what a class IS — the LLM's classification, handed to the tool and stored one git-tracked
 # shard per class (tags + description only; no override field, owner ruling §8.4). The tool never
@@ -438,6 +555,10 @@ def run(args) -> int:
         raise CommandError(resources.NO_PACKAGE_PATH)
     if args.sub == "classify":
         return _run_classify(args, idx, project)
+    if args.sub == "search":
+        return _run_search(args, idx, project)
+    if args.sub == "prewarm":
+        return _run_prewarm(args, idx, project)
     if args.sub == "preview":
         return _run_preview(args, idx, project)
     if args.sub == "list":
