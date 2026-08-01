@@ -107,6 +107,14 @@ time.
 - **Exactly TWO stdin conventions, disambiguated by verb** — a newline **name list**
   (`find → mutate -`) and a **T3D snippet** (`build → add -`). Keep them distinct; never
   add a third, which would blur what `-` means per verb.
+- **Calibrated exception — `classify set -` reads JSONL.** The asset catalog's `classify set`
+  accepts a JSONL row set on stdin (`{ref, tags, description[, colors]}`), a THIRD `-` convention
+  beside the name list and the T3D snippet. It is approved because a classification write carries
+  per-item *fields*, which a bare name list cannot express, and because a per-ref process start
+  (~0.3 s) would make classifying a corpus turn-bound. The two-convention rule's actual requirement —
+  that `-` means exactly one thing *per verb* — still holds: within the catalog nouns `-` is a name
+  list for `show`/`preview`/`classify unset` and JSONL for `classify set`. No further convention is
+  added without the same explicit approval.
 - **A verb over a SET takes the set, and that IS the operation.** No flag may merely
   restate "operate on this set" — `actor bbox` has no `--union`, because
   `actor find … | actor bbox -` already is the union.
