@@ -7,7 +7,14 @@ depends-on = ["native-texture-decode"]
 
 # Unified asset catalog — one engine, four kinds
 
-**NOT ON DECK.** A 3-reviewer spec round on 2026-07-26 returned structural findings; the owner's
+**OWNER RULING 2026-08-01: SPLIT (not a third re-gate).** Build the near-clean CLASS arm now
+(`the-asset-catalog-class-arm-needs-four-changes`); re-spec texture identity behind its own dedicated
+gate — the four `four-open-catalog-decisions` texture rulings (incl. the IRREVERSIBLE identity/mask
+one) belong there, not to the class arm; re-measure the sound corpus on the composed path before
+speccing audio (`sound-corpus-remeasure`). The `four-open-catalog-decisions.md` question stays parked
+against the texture arm, not the class build.
+
+**NOT ON DECK (engine/texture/audio).** A 3-reviewer spec round on 2026-07-26 returned structural findings; the owner's
 rulings were folded and the spec re-entered the gate at round 1, which is where it is now. The plan
 is **stale and needs re-cutting** (it carries its own `RE-CUT REQUIRED` banner listing what no slice
 covers yet). **Two questions in `questions/` are unanswered.** A question does not move its item — owner
