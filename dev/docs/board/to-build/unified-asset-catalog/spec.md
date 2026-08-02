@@ -36,7 +36,7 @@ The plan builds only the **texture-new** column. The left column is shipped and 
 
 | Already provided (reuse) | Where | Texture-new (build) |
 |---|---|---|
-| Decode seam: ref → typed `DecodedTexture` \| `TextureError` (12 named cases incl. `no-mip-data`, `ambiguous-alpha`) | `utexture.TextureResolver.resolve` | Enumerate `Engine.Texture` **descendants** per package → refs |
+| Decode seam: ref → typed `DecodedTexture` \| `TextureError` (12 named cases incl. `no-mip-data`, `ambiguous-alpha`) | `utexture.TextureResolver.resolve` | Enumerate `Engine.Texture` **descendants** per package → refs; **widen the seam** to match those descendants, not just the exact `Texture` class — a real `utexture.py` edit (plan T0b), not verbatim reuse |
 | Shard-store shape: git-tracked one-file-per-asset, atomic write, per-shard flock, tag normalize + `tag_vocabulary`, ranked `score`, `load_all`/`classified_refs` | `class_catalog.py` | Rewrite `texture_catalog.py` as this store, **keyed by identity** not ref; payload adds `identity` + `colors` |
 | CLI verb wiring: set/unset/status/tags, JSONL batch `-`, search, prewarm, show, `list --classified/--unclassified/--json` | `cli/commands/classes.py` | Rewrite `cli/commands/texture.py` + `cli/parsers/texture.py` to mirror it for `texture`; delete `sync`/`--stale`/`--removed` |
 | Seams: `resources.texture_resolver`, `resources.catalog_dir`, `resources.class_index`, `config.composed_search_files`, `rendering.write_png`, `config.self_ignoring_dir` | `cli/resources.py` | Layer-1 identity `sha256(w,h,RGB)`; Layer-2 facts (group, masked); colour pre-fill; PNG preview |
@@ -58,7 +58,10 @@ alongside.**
   identical pixels resolve to one identity, one preview, one shard (cross-package dedup).
 - **A procedural texture has no pixels and is name-keyed instead.** `FireTexture`/`WetTexture`/
   `WaveTexture`/`IceTexture`/`ScriptedTexture` serialize mips with `DataCount == 0`; the decoder returns
-  `TextureError(case="no-mip-data")`. Its identity is its **name** (`Package.Name`, casefolded), per
+  `TextureError(case="no-mip-data")` — but only once the seam matches `Engine.Texture` **descendants**
+  (plan T0b). The shipped seam matches the exact `Texture` class, so these subclasses resolve to
+  `unknown-texture` and the name-key path never fires until the seam is widened. Its identity is its
+  **name** (`Package.Name`, casefolded), per
   `asset-catalog.md` "content hash where content exists, name where it does not". So water and fire are
   enumerable, referenceable, and classifiable — the old "permanently unclassifiable" defect is gone.
 - The preview (§5) **is this bitmap** — opaque RGB, mip 0, native size, mask not applied.
@@ -160,7 +163,8 @@ It earns the exception because it reads only the texture's own pixels, never the
 ## 7. Edge cases & errors
 
 - **Bad ref** (bare/over-dotted, unknown package/texture) → the `TextureError` ref-layer case, exit 2
-  naming it. Reused verbatim; the arm mints no new decode case.
+  naming it. The arm mints no new decode case; the seam widens which classes it matches (T0b) but adds
+  no error case.
 - **Undecodable but real** texture (`unverified-format`, `ambiguous-alpha`, `size-mismatch`, …) stays
   **enumerable** in `list` (recorded, not dropped) and its identity is unavailable, so it reads
   unclassified; a per-ref `show`/`preview`/`classify` on it exits 2 naming the case.
