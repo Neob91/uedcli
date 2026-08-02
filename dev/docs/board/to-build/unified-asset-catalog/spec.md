@@ -11,10 +11,10 @@ deferred (derived per-`(kind,package)` index, the content-addressed preview pool
 roll-up, `classify prune`/`list-outdated`) stay tracked as their own engine board items and are **not**
 texture-arm work. `spec-texture-arm.md` (2026-07-28) is superseded by this file and should be dropped.
 
-**Source of the identity model:** `questions/four-open-catalog-decisions.md` `## Answer` (owner ruled
-2026-08-02). This spec folds every ruling there as settled. The one part that answer defers — re-keying
-a classification across a pixel edit — is `questions/texture-rekey-across-a-pixel-edit.md`, open, and
-blocks only the lifecycle slice.
+**Source of the identity model:** `direction/asset-catalog.md` "Two layers" / "Identity" (owner ruled
+2026-08-02). This spec folds every ruling there as settled. The one deferred part — re-keying a
+classification across a pixel edit — moved to board item `texture-classify-rekey-and-prune`
+(`questions/rekey-across-a-pixel-edit.md`), open, and blocks only the lifecycle slice.
 
 ---
 
@@ -42,7 +42,7 @@ The plan builds only the **texture-new** column. The left column is shipped and 
 | Seams: `resources.texture_resolver`, `resources.catalog_dir`, `resources.class_index`, `config.composed_search_files`, `rendering.write_png`, `config.self_ignoring_dir` | `cli/resources.py` | Layer-1 identity `sha256(w,h,RGB)`; Layer-2 facts (group, masked); colour pre-fill; PNG preview |
 | The `conventions.md` third-stdin (JSONL) carve-out | landed | — |
 
-## 2. The two-layer identity model (settled, four-open `## Answer` §1–2)
+## 2. The two-layer identity model (settled, `direction/asset-catalog.md` "Two layers" / "Identity")
 
 A texture splits into two layers. **Layer 1 is the classification key; Layer 2 is ref-scoped info shown
 alongside.**
@@ -78,7 +78,7 @@ Layer 2 is **not part of identity and not stored in the shard**. `show` prints i
 filter on it. So a masked grille and its opaque-pixel twin share one Layer-1 classification while their
 masked-ness shows as distinct Layer-2 facts.
 
-**Editor-icon sprites are ordinary textures** (four-open `## Answer` §4) — no icon-group detection,
+**Editor-icon sprites are ordinary textures** (owner ruled 2026-08-02) — no icon-group detection,
 counted honestly as unclassified until classified.
 
 ## 3. The shard store
@@ -118,7 +118,7 @@ request it cannot fully satisfy exits 2 naming the value; no Python exception re
 | `texture show <ref>… \| -` | Layer-2 facts (w, h, format, group, masked) + Layer-1 identity + stored classification (tags, description, colors), one block per ref; `--json`. `-` reads a newline ref list. |
 | `texture preview <ref>… \| - [--out DIR]` | The sole image producer (§5). `<ref>\t<path>` lines; `--skeleton` switches the stream to JSONL `{ref, preview, tags:[], description:"", colors:[…]}` (the ready-to-fill row; colours pre-filled). |
 | `texture search <terms…> [--tag T] [--package P] [--classified\|--unclassified] [--group G] [--masked] [--color C] [--json]` | Ranked discovery (`class_catalog.score`, reused). **Terms required**; term-less exits 2 pointing at `list`. `--color` filters (§6). |
-| `texture classify set <ref> --tags … --description … [--colors …] \| - [--force]` | Record classification against the ref's **identity**. Over an existing shard **refuses, exit 2 naming it; `--force` replaces** (four-open `## Answer`; `safety.md`). `-` reads JSONL `{ref, tags?, description?, colors?}`, one shard per row, all-or-nothing validation like the class batch. |
+| `texture classify set <ref> --tags … --description … [--colors …] \| - [--force]` | Record classification against the ref's **identity**. Over an existing shard **refuses, exit 2 naming it; `--force` replaces** (owner ruled 2026-08-02; `safety.md`). `-` reads JSONL `{ref, tags?, description?, colors?}`, one shard per row, all-or-nothing validation like the class batch. |
 | `texture classify unset <ref>… \| - [--tags[=T,…]\|--description\|--colors\|--all]` | Undo, operating on the ref's identity shard. Field clears mirror `class classify unset`; `--colors` clears the colour override (search falls back to live-derive). |
 | `texture classify status [--json]` | Of the textures on the path, how many have a shard (intersection, so the ratio never exceeds the total). Decodes to map ref→identity. → stdout. |
 | `texture classify tags [--json]` | The tag vocabulary in use (reused `tag_vocabulary`). → stdout. |
@@ -208,16 +208,16 @@ plus `-m integration` for the real corpus. Cover:
 - **Migration** of the legacy catalog (deleted; `conventions.md`).
 - **Mask-applied / RGBA previews** — the preview is the Layer-1 opaque bitmap; masked-ness is a fact.
 
-## 10. Direction folds still owner-gated
+## 10. Direction folds (landed)
 
-These are **approved** (four-open `## Answer`, 2026-08-02) but land in `direction/` only with the
-owner's `Confirmed:` trailer — a separate fold, not this build, and **not** done by the builder:
+These approved folds **landed** in `direction/asset-catalog.md` + `packages.md` on 2026-08-02
+(commit 630b6cd):
 
-- `texture-group-is-a-first-class-fact` — group as a Layer-2 fact, `--group`, not identity.
-- `texture-masked-is-a-stored-fact` — `masked` (read from the export), `--masked`, not identity.
-- `direction-asset-catalog-md-reword-the-class` — the line-34 no-override reword.
-- `asset-catalog-says-the-tool-produces-the` — the `packages.md` correction: a code-less compressed
-  chain is ambiguous BC1-vs-P8 → named error, never a wrong pixel.
+- group as a Layer-2 fact, `--group`, not identity.
+- `masked` (read from the export), `--masked`, not identity.
+- the line-34 no-override reword.
+- the `packages.md` correction: a code-less compressed chain is ambiguous BC1-vs-P8 → named error,
+  never a wrong pixel.
 
 ## 11. Open owner decision
 

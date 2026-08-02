@@ -2,10 +2,9 @@
 
 ## Context
 
-The two-layer identity ruling (2026-08-02, `questions/four-open-catalog-decisions.md` `## Answer`)
-keys a texture's classification on `sha256(w,h,RGB)` — the pixels. It explicitly leaves one part of
-the cluster unfolded: **"Remaining for the texture-arm re-spec to fold: the pixel-hash-dedup /
-no-re-key-across-edit cluster."** The dedup half is now covered (identical pixels are one shard;
+The two-layer identity ruling (2026-08-02, `direction/asset-catalog.md` "Two layers" / "Identity")
+keys a texture's classification on `sha256(w,h,RGB)` — the pixels. It leaves one part of the cluster
+unfolded: the re-key-across-edit case. The dedup half is now covered (identical pixels are one shard;
 `classify set` over an existing shard refuses, `--force` replaces). The re-key half is not, and it is
 not an implementer's call.
 

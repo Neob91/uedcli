@@ -9,18 +9,16 @@ depends-on = ["native-texture-decode"]
 
 **OWNER RULING 2026-08-01: SPLIT (not a third re-gate).** Build the near-clean CLASS arm now
 (`the-asset-catalog-class-arm-needs-four-changes`); re-spec texture identity behind its own dedicated
-gate — the four `four-open-catalog-decisions` texture rulings (incl. the IRREVERSIBLE identity/mask
-one) belong there, not to the class arm; re-measure the sound corpus on the composed path before
-speccing audio (`sound-corpus-remeasure`). The `four-open-catalog-decisions` question stays parked
-against the texture arm, not the class build.
+gate. The four texture rulings (incl. the IRREVERSIBLE identity/mask one) were folded into
+`direction/asset-catalog.md` on 2026-08-02 (commit 630b6cd); the one deferred piece — re-keying across
+a pixel edit — split into board item `texture-classify-rekey-and-prune`. Re-measure the sound corpus
+on the composed path before speccing audio (`sound-corpus-remeasure`).
 
 **NOT ON DECK (engine/texture/audio).** A 3-reviewer spec round on 2026-07-26 returned structural findings; the owner's
 rulings were folded and the spec re-entered the gate at round 1, which is where it is now. The plan
 is **stale and needs re-cutting** (it carries its own `RE-CUT REQUIRED` banner listing what no slice
-covers yet). **Two questions in `questions/` are unanswered.** A question does not move its item — owner
-ruling — so this stays in the build queue with its blockers attached and `bin/board questions`
-lists them. It is startable only when both are folded out, the spec passes a round, and the plan is
-re-cut and reviewed.
+covers yet). The texture arm's `questions/` blockers are cleared (four-open folded 2026-08-02, rekey
+split out), so it is startable once the spec passes a round and the plan is re-cut and reviewed.
 
 Plan: board item `the-unified-asset-catalog-spec-revision`.
 Spec: SPLIT 2026-07-26 into [`engine`](spec.md) + `class` (board item `the-asset-catalog-class-arm-needs-four-changes`) + [`texture`](spec-texture-arm.md) + `audio` (board item `sound-corpus-remeasure`).
