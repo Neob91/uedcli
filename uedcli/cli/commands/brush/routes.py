@@ -9,7 +9,7 @@ rules").
 
 Two source guarantees this route owns:
 
-- `build`, `intersect`/`deintersect`, and `clip` are STATELESS generators (T3D to stdout, no trunk):
+- `build`, `intersect`/`deintersect`, `clip`, and `snap` are STATELESS generators (T3D to stdout, no trunk):
   they are routed before any source resolution, matching their pre-move position ahead of the eager
   resolve in `cli.dispatch`.
 - The other verbs consume the trunk source. The pre-move dispatch resolved it ONCE, before each
@@ -37,6 +37,9 @@ def run(args):
     if sub == "clip":
         from . import edit
         return edit.clip(args)
+    if sub == "snap":
+        from . import edit
+        return edit.snap(args)
     if sub == "poly":
         from . import poly as feature
     elif sub == "vertex":

@@ -83,6 +83,28 @@ def register(sub) -> None:
                       help="keep the half below the plane (opposite the normal — DEFAULT) or "
                            "above (the normal side)")
 
+    snap = bsub.add_parser(
+        "snap",
+        help="round every brush's near-grid LOCAL vertices in a piped T3D SET to a grid; T3D to "
+             "stdout (stateless; no level). Cleans float noise / slop that causes BSP holes while "
+             "preserving intentional off-grid angles. To snap a placed actor: `actor show X | brush "
+             "snap - … | brush replace X -`")
+    snap.add_argument(
+        "set", metavar="-|FILE",
+        help="read the brush SET as a T3D snippet from stdin (`-`) or from a saved FILE. `-` is the "
+             "sole names source. A non-brush (point) actor is refused (exit 2). Empty stdin is a "
+             "clean no-op (exit 0)")
+    snap.add_argument("--grid", type=parse_decimal, required=True, metavar="N",
+                      help="grid size in world units to round each LOCAL vertex component to "
+                           "(e.g. 16, 8, 1). Required — no default grid")
+    snap.add_argument("--tolerance", type=parse_decimal, required=True, metavar="T",
+                      help="max distance in world units from the nearest grid line to snap. A "
+                           "component farther than T from the grid is LEFT IN PLACE, so intentional "
+                           "off-grid geometry (angled, rotated, curved) is preserved and only "
+                           "near-grid float noise is cleaned. Snapping is per-axis: a slant vertex "
+                           "keeps its off-grid axis and snaps the others. Rounds half toward "
+                           "+infinity. Required — no default tolerance")
+
     replace = bsub.add_parser(
         "replace",
         help="swap a brush's shape from a piped generator T3D on stdin, keeping its identity")

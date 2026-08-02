@@ -99,8 +99,11 @@ band; a ~1e-4 uu vertex-merge band). Off-grid coordinates land inside those band
 mis-classified, collapsed, or thrown away. The fix: stay out of the bands by building on clean
 coordinates.
 
-uedcli does not snap geometry to grid for you — on-grid discipline is yours to keep, and nothing in
-the pipeline rescues an off-grid brush.
+uedcli does not snap geometry to grid as you build — on-grid discipline is yours to keep. When a
+brush has drifted (a corner reading `15.997` where `16` belongs), `brush snap - --grid N --tolerance
+T` rounds each near-grid vertex back to the grid while leaving intentional off-grid angles alone (see
+[usage.md](../../usage.md) "Brush shape & surfaces"); it cleans float noise, not a brush that is
+genuinely off-grid by design.
 
 ### Defenses
 
@@ -132,7 +135,7 @@ the pipeline rescues an off-grid brush.
 Work through these repair moves (`materialize` again after each to check):
 
 - Reorder the offending brush — `actor order --first` / `--last`.
-- Snap it back on-grid and rebuild.
+- Snap it back on-grid and rebuild (`brush snap` for near-grid drift).
 - Flip a nearby semisolid ↔ solid — re-cuts the local BSP a different way (a standard fix).
 - Split the room into smaller, simpler brushes.
 - Nudge the culprit brush slightly and rebuild.

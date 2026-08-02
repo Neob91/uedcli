@@ -504,6 +504,7 @@ geometry; `--no-lock-textures` leaves the mapping fixed.
 | Command | What it does |
 |---|---|
 | `<generator> \| brush clip - (--axis A --offset N \| --plane PX,PY,PZ NX,NY,NZ) [--keep below\|above]` | clip every brush in a piped T3D set by one world plane; T3D to stdout |
+| `<generator> \| brush snap - --grid N --tolerance T` | round every brush's near-grid local vertices to a grid; T3D to stdout |
 | `<generator> \| brush replace <name> -` | in-place shape swap, keeping the target's identity |
 | `brush vertex move <name> --at X,Y,Z (--to X,Y,Z \| --by DX,DY,DZ)` | move welded corners (selected by coordinate; repeat `--at`) |
 | `brush poly move BRUSH:SELECTOR… \| - --by DX,DY,DZ` | translate whole faces: move every vertex of each face by a world delta |
@@ -524,6 +525,21 @@ or a plane that would discard a whole brush, is a clean error (exit 2 naming it)
 brush's interior passes that brush through unchanged with a `did not intersect brush <name>` note on
 stderr. To clip a **placed** actor, compose with `replace`:
 `actor show WALL | brush clip - --plane … | brush replace WALL -`.
+
+**`brush snap -|FILE --grid N --tolerance T`** is a stateless T3D **filter** that cleans off-grid
+float noise: it reads a brush set on stdin (`-`) or a FILE, and for every brush rounds each **local**
+vertex component to the nearest multiple of `--grid` **when it is within `--tolerance`** of it,
+leaving a component farther than the tolerance in place. So a corner that drifted to `x=15.997`
+snaps to `16`, while a genuinely off-grid `x=8.5` (nowhere near a 16-grid line) is preserved —
+intentional angles survive, only slop is corrected. Snapping is per-axis and per-vertex, so a slant
+vertex keeps its off-grid axis and cleans the others. Off-grid coordinates are the main cause of BSP
+holes, so this is the tool for cleaning imported or drifted geometry before a build. Both flags are
+**required** (no default grid/tolerance would be a silent guess); rounding is half toward +∞. A
+`--tolerance` at or above half the grid snaps every component to a grid line — allowed, with a note on
+stderr that it will destroy angles. Empty stdin is a clean no-op (exit 0); a non-brush (point) actor,
+a non-positive grid, a negative tolerance, or a snap that would push a face non-planar is a clean
+error (exit 2 naming it). To snap a **placed** actor, compose with `replace`:
+`actor show WALL | brush snap - --grid 16 --tolerance 0.05 | brush replace WALL -`.
 
 **`brush replace <name> -`** swaps a brush's **shape in place** from a piped generator T3D on stdin
 (`-` is the sole shape source — the `build → replace -` convention, not a name list), **keeping** the

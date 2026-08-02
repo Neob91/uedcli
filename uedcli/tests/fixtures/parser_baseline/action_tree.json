@@ -2674,6 +2674,7 @@
             "scale",
             "apply-transform",
             "clip",
+            "snap",
             "replace",
             "build",
             "intersect",
@@ -2685,6 +2686,7 @@
             "scale": "scale a group of BRUSH actors: set their MainScale (a negative axis mirrors). `mirror` is `brush scale --by -1,1,1` (no separate verb). A non-brush (point) actor is rejected",
             "apply-transform": "bake MainScale + Rotation + PostScale permanently into the brush vertices and reset the fields (the offline ACTOR APPLYTRANSFORM). Reverses winding on a mirror/negative determinant; rewrites PrePivot; leaves Location. Rejects movers and non-brush actors",
             "clip": "clip every brush in a piped T3D SET by one world plane, keeping one half; T3D to stdout (stateless; no level). To clip a placed actor: `actor show X | brush clip - … | brush replace X -`",
+            "snap": "round every brush's near-grid LOCAL vertices in a piped T3D SET to a grid; T3D to stdout (stateless; no level). Cleans float noise / slop that causes BSP holes while preserving intentional off-grid angles. To snap a placed actor: `actor show X | brush snap - … | brush replace X -`",
             "replace": "swap a brush's shape from a piped generator T3D on stdin, keeping its identity",
             "build": "build a parametric shape and write T3D to stdout (stateless; no level needed)",
             "intersect": "CSG-merge a piped brush SET into ONE brush against an EMPTY background: additives make solid, subtractives carve it, and the resulting solid's boundary is written as a single welded brush T3D to stdout. Needs at least one additive brush",
@@ -3056,6 +3058,79 @@
               "metavar": null,
               "converter": null,
               "help": "keep the half below the plane (opposite the normal — DEFAULT) or above (the normal side)",
+              "mutex_group": null
+            }
+          ],
+          "subparsers": {}
+        },
+        "snap": {
+          "class": "_CoordArgumentParser",
+          "prog": "uedcli brush snap",
+          "mutex_groups": [],
+          "actions": [
+            {
+              "class": "_HelpAction",
+              "option_strings": [
+                "-h",
+                "--help"
+              ],
+              "dest": "help",
+              "nargs": 0,
+              "const": null,
+              "default": {
+                "__suppress__": true
+              },
+              "required": false,
+              "choices": null,
+              "metavar": null,
+              "converter": null,
+              "help": "show this help message and exit",
+              "mutex_group": null
+            },
+            {
+              "class": "_StoreAction",
+              "option_strings": [],
+              "dest": "set",
+              "nargs": null,
+              "const": null,
+              "default": null,
+              "required": true,
+              "choices": null,
+              "metavar": "-|FILE",
+              "converter": null,
+              "help": "read the brush SET as a T3D snippet from stdin (`-`) or from a saved FILE. `-` is the sole names source. A non-brush (point) actor is refused (exit 2). Empty stdin is a clean no-op (exit 0)",
+              "mutex_group": null
+            },
+            {
+              "class": "_StoreAction",
+              "option_strings": [
+                "--grid"
+              ],
+              "dest": "grid",
+              "nargs": null,
+              "const": null,
+              "default": null,
+              "required": true,
+              "choices": null,
+              "metavar": "N",
+              "converter": "parse_decimal",
+              "help": "grid size in world units to round each LOCAL vertex component to (e.g. 16, 8, 1). Required — no default grid",
+              "mutex_group": null
+            },
+            {
+              "class": "_StoreAction",
+              "option_strings": [
+                "--tolerance"
+              ],
+              "dest": "tolerance",
+              "nargs": null,
+              "const": null,
+              "default": null,
+              "required": true,
+              "choices": null,
+              "metavar": "T",
+              "converter": "parse_decimal",
+              "help": "max distance in world units from the nearest grid line to snap. A component farther than T from the grid is LEFT IN PLACE, so intentional off-grid geometry (angled, rotated, curved) is preserved and only near-grid float noise is cleaned. Snapping is per-axis: a slant vertex keeps its off-grid axis and snaps the others. Rounds half toward +infinity. Required — no default tolerance",
               "mutex_group": null
             }
           ],

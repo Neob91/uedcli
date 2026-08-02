@@ -1,11 +1,12 @@
 """Brush whole-actor edits and CSG/clip set filters: `scale`, `apply-transform`, `replace`
-(source-consuming, model-side) and `intersect`/`deintersect`/`clip` (stateless filters over a piped
+(source-consuming, model-side) and `intersect`/`deintersect`/`clip`/`snap` (stateless filters over a piped
 brush set).
 
 `scale`/`apply-transform`/`replace` transform the trunk level the route resolved and write it back;
-`intersect`/`deintersect` consume T3D on stdin and emit one merged brush/mover actor to stdout, and
-`clip` clips every brush in a piped set by one world plane and emits them to stdout — all three touch
-neither trunk nor stash. This module uses `cli.generators`/`cli.ingest`/`cli.resources`/
+`intersect`/`deintersect` consume T3D on stdin and emit one merged brush/mover actor to stdout,
+`clip` clips every brush in a piped set by one world plane, and `snap` rounds each brush's near-grid
+local vertices to a grid — all emit to stdout, touching neither trunk nor stash. This module uses
+`cli.generators`/`cli.ingest`/`cli.resources`/
 `cli.targets` and the model-side services (`brushcsg`/`movers`/`transform`/`clip`/`query`/`rotation`/
 `emit`); it never imports another command family or the router.
 """
@@ -255,6 +256,65 @@ def clip(args) -> int:
     for name in whole:
         print(f"brush clip: plane did not intersect brush {name} — emitted unchanged",
               file=sys.stderr)
+    for actor in actors:
+        sys.stdout.write(emit_actor_t3d(actor))
+    return 0
+
+
+def snap(args) -> int:
+    """`brush snap` — round each near-grid LOCAL vertex component of every brush in a piped T3D SET
+    to a grid, and emit the snapped actors to stdout, touching neither trunk nor stash.
+
+    A stateless filter in the `brush clip`/`intersect` mould. Each vertex component within
+    `--tolerance` of a `--grid` multiple is rounded to it (round half toward +inf); a component
+    farther than the tolerance is left in place, so intentional off-grid angles survive and only
+    near-grid float noise is cleaned. Per-axis, per-vertex. Both flags are REQUIRED — any default
+    grid/tolerance would be a silent guess.
+    """
+    from .... import snap as snapmod
+    from ....emit import emit_actor_t3d
+
+    grid, tolerance = args.grid, args.tolerance
+    # `--grid`/`--tolerance` parse through `parse_decimal`, which already rejects the non-finite
+    # spellings (nan/inf), so only sign is left to check here.
+    if grid <= 0:
+        print(f"brush snap: --grid must be positive, got {grid}", file=sys.stderr)
+        return 2
+    if tolerance < 0:
+        print(f"brush snap: --tolerance must be >= 0, got {tolerance}", file=sys.stderr)
+        return 2
+    if tolerance >= grid / 2:
+        print(f"brush snap: --tolerance {tolerance} is >= half the grid ({grid / 2}) — every "
+              f"component within reach of a grid line will snap, destroying any angle",
+              file=sys.stderr)
+
+    text = ingest.read_t3d_input(args.set)
+    if not text.strip():
+        return 0                                  # empty stdin: clean no-op (exit 0)
+    actors = [a for a in parse_t3d_actors(text) if not is_builder_brush(a)]
+    if not actors:
+        raise CommandError(
+            "brush snap: stdin held no brush actors — this reads a T3D SNIPPET (the output of "
+            "`actor show` / `stash show` / `brush build`), not the newline-separated NAME list that "
+            "`actor find` prints and the mutating verbs take")
+    nonbrush = [a.name for a in actors if a.brush is None]
+    if nonbrush:
+        print(f"brush snap: not a brush: {', '.join(nonbrush)} — snap rounds brush vertices; a "
+              f"point actor has none. Narrow the pipe with `actor find --kind brush`",
+              file=sys.stderr)
+        return 2
+
+    # All-or-nothing across the set: collect every brush the snap pushes non-planar/degenerate
+    # before any stdout, so a later failure cannot leave a half-written result.
+    failed: list[str] = []
+    for actor in actors:
+        try:
+            actor.brush = snapmod.snap_brush(actor.brush, grid=grid, tolerance=tolerance)
+        except GeometryError as e:
+            failed.append(f"{actor.name}: {e}")
+    if failed:
+        raise CommandError(
+            f"brush snap: snapping pushed a face non-planar/degenerate for: {'; '.join(failed)}")
     for actor in actors:
         sys.stdout.write(emit_actor_t3d(actor))
     return 0
