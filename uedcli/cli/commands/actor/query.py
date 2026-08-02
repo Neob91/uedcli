@@ -130,6 +130,13 @@ def _find(args, src) -> int:
     if bbox is not None:
         names = [n for n in names
                  if writes.aabb_within(writes.actor_bounds(level.actors[n]), bbox)]
+    # `--overlapping-bbox`: keep actors whose world AABB INTERSECTS the box (edge-inclusive) — the
+    # looser companion that also grabs straddling brushes. ANDs with the other filters, `--within-bbox`
+    # included (both single-valued, no exclusion; owner 2026-08-02).
+    obox = getattr(args, "overlapping_bbox", None)
+    if obox is not None:
+        names = [n for n in names
+                 if writes.aabb_intersects(writes.actor_bounds(level.actors[n]), obox)]
     # Composable-find grep/universe model (spec 2026-07-24-composable-find): `-` makes the piped
     # name-set the universe; the filters above are the predicate; --exclude negates it. Applied to
     # the FINAL `names` (post --prop), in-tree order preserved.

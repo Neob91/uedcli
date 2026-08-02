@@ -154,3 +154,16 @@ def aabb_within(inner, outer) -> bool:
     (ilo, ihi), (olo, ohi) = inner, outer
     return all(olo[i] - CLEAN_EPS <= ilo[i] and ihi[i] <= ohi[i] + CLEAN_EPS for i in range(3))
 
+
+def aabb_intersects(a, b) -> bool:
+    """True when AABBs `a`=(lo, hi) and `b`=(lo, hi) OVERLAP, edge-inclusive (a shared face, edge, or
+    corner counts). Per-axis `a.lo ≤ b.hi AND b.lo ≤ a.hi`, within `emit.CLEAN_EPS`. Symmetric in its
+    arguments. The looser companion to `aabb_within`: an actor straddling the box edge intersects it
+    but is not contained.
+
+    Same `CLEAN_EPS` slack as `aabb_within`, for the same reason: one side is raw `actor_bounds`
+    carrying UE1 GMath rotator noise, the other an authored box, so an actor exactly touching the box
+    edge must still count."""
+    (alo, ahi), (blo, bhi) = a, b
+    return all(alo[i] <= bhi[i] + CLEAN_EPS and blo[i] <= ahi[i] + CLEAN_EPS for i in range(3))
+

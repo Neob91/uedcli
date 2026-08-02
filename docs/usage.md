@@ -172,8 +172,14 @@ When a **mutating** verb resolves the level from `UEDCLI_LEVEL` (not an explicit
   is tested); a point actor is its `Location` point. **Single-valued** (not repeatable). Matches
   **every** contained actor (lights, nav points, decorations too), so add `--kind brush` for geometry
   only. Being full **containment**, a brush straddling the box edge (a room shell poking past a tight
-  box) is **not** matched — size the box to enclose the whole feature. (A looser variant,
-  `--overlapping-bbox`, is not yet implemented.)
+  box) is **not** matched — size the box to enclose the whole feature, or use `--overlapping-bbox`.
+- `--overlapping-bbox X0,Y0,Z0,X1,Y1,Z1` — the looser companion: match actors whose **world bounding
+  box overlaps** the given box (same arguments, transform-honoured, **edge-inclusive**). Contained vs
+  straddling: `--within-bbox` drops a room shell / wall poking past the box edge, `--overlapping-bbox`
+  grabs it — better for "everything in this area." **Single-valued**; ANDs with the other filters
+  (passing both degenerates to `--within-bbox`, since contained ⊆ overlapping). Caveat: it tests the
+  **world AABB**, so a diagonal or L-shaped brush can match on its bounding box with no solid geometry
+  actually inside the box.
 - `--folder PATTERN` / `--no-folder` — see **Folders** below.
 - `--label GLOB` / `--no-label` — see **Labels** below.
 - `--json` — emit the names as a JSON array.

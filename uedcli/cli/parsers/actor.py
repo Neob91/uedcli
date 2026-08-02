@@ -62,9 +62,17 @@ def register(sub) -> None:
              "Honours each actor's full transform (a scaled/rotated brush's TRUE world box is tested); "
              "a point actor (Light, mesh deco, nav point) is its Location point. Single-valued; ANDs "
              "with the other filters. Selects a region's actors to pipe into a set verb (add --kind "
-             "brush for geometry only, e.g. `… --within-bbox … --kind brush | actor preview -`). "
-             "(A looser 'also catch straddling brushes' variant, --overlapping-bbox, does not "
-             "exist yet.)")
+             "brush for geometry only, e.g. `… --within-bbox … --kind brush | actor preview -`).")
+    find.add_argument(
+        "--overlapping-bbox", dest="overlapping_bbox", default=None, type=parse_bbox,
+        metavar="X0,Y0,Z0,X1,Y1,Z1",
+        help="match actors whose world bounding box OVERLAPS the given axis-aligned box (a "
+             "straddling brush that poked out of --within-bbox IS caught) — two opposite corners in "
+             "any order, unreal units, edge-inclusive. Honours each actor's full transform; a point "
+             "actor is its Location point. Single-valued; ANDs with the other filters. NOTE this "
+             "tests the world AABB, so a diagonal/L-shaped brush can match on its bounding box "
+             "without any solid geometry actually inside the box (a precise per-poly variant is not "
+             "implemented — board item find-relational-predicates).")
     find.add_argument(
         "--kind", choices=["point", "brush"], default=None,
         help="Filter by actor kind: 'brush' = actors that carry brush geometry (a PolyList — "

@@ -162,12 +162,90 @@ def test_within_bbox_zero_volume_box_matches_only_a_point_on_it(tmp_path, monkey
     assert _names(capsys) == ["At"]
 
 
+@pytest.mark.parametrize("flag", ["--within-bbox", "--overlapping-bbox"])
 @pytest.mark.parametrize("bad", [
     "1,2,3", "1,2,3,4,5", "1,2,3,4,5,6,7", "a,b,c,d,e,f", "1,2,3,4,5,x",
     "nan,0,0,1,1,1", "snan,0,0,1,1,1", "inf,0,0,1,1,1", "-inf,0,0,1,1,1",   # Decimal accepts these
 ])
-def test_within_bbox_malformed_exits_2_not_traceback(bad):
+def test_bbox_malformed_exits_2_not_traceback(flag, bad):
     # argparse turns the ArgumentTypeError into a clean SystemExit(2) — never a raw traceback
     with pytest.raises(SystemExit) as e:
-        cli.build_parser().parse_args(["actor", "find", "--within-bbox", bad])
+        cli.build_parser().parse_args(["actor", "find", flag, bad])
     assert e.value.code == 2
+
+
+# ── --overlapping-bbox: the intersection filter ──────────────────────────────────────
+
+def test_overlapping_bbox_catches_straddler_that_within_drops(tmp_path, monkeypatch, capsys):
+    _fixture(tmp_path, monkeypatch)
+    assert _run(["actor", "find", "--overlapping-bbox", BOX]) == 0
+    got = _names(capsys)
+    # everything within is still in, PLUS the straddler that --within-bbox dropped; Outside stays out
+    assert sorted(got) == ["BrushIn", "BrushStraddle", "Edge", "Inside"]
+
+
+def test_overlapping_bbox_corner_order_is_free(tmp_path, monkeypatch, capsys):
+    _fixture(tmp_path, monkeypatch)
+    _run(["actor", "find", "--overlapping-bbox", "100,100,100,0,0,0"])   # opposite corner order
+    assert sorted(_names(capsys)) == ["BrushIn", "BrushStraddle", "Edge", "Inside"]
+
+
+def test_overlapping_bbox_edge_touch_counts(tmp_path, monkeypatch, capsys):
+    # a size-20 cube at x=110 spans 100..120: its min FACE sits exactly on the box max edge → overlaps
+    # (edge-inclusive shared face); one unit further out (x=111 → 101..121) is disjoint.
+    _mkproject(tmp_path, monkeypatch, [
+        _brush("Touch", (110, 50, 50), size=20),
+        _brush("Clear", (111, 50, 50), size=20),
+    ])
+    _run(["actor", "find", "--overlapping-bbox", BOX])
+    assert _names(capsys) == ["Touch"]
+
+
+def test_overlapping_bbox_ands_with_kind_brush(tmp_path, monkeypatch, capsys):
+    _fixture(tmp_path, monkeypatch)
+    _run(["actor", "find", "--overlapping-bbox", BOX, "--kind", "brush"])
+    # the two brushes that overlap; the point lights are dropped by --kind
+    assert sorted(_names(capsys)) == ["BrushIn", "BrushStraddle"]
+
+
+def test_overlapping_bbox_composes_with_stdin_universe(tmp_path, monkeypatch, capsys):
+    _fixture(tmp_path, monkeypatch)
+    _run(["actor", "find", "--overlapping-bbox", BOX, "-"], stdin="BrushStraddle\nOutside\n")
+    assert _names(capsys) == ["BrushStraddle"]
+
+
+def test_overlapping_bbox_exclude_negates_over_universe(tmp_path, monkeypatch, capsys):
+    _fixture(tmp_path, monkeypatch)
+    _run(["actor", "find", "--overlapping-bbox", BOX, "--exclude", "-"],
+         stdin="BrushStraddle\nOutside\n")
+    assert _names(capsys) == ["Outside"]
+
+
+def test_both_bbox_flags_and_to_within_result(tmp_path, monkeypatch, capsys):
+    # no exclusion group (owner 2026-08-02): both flags are accepted and AND together; since
+    # within ⊆ overlapping, the straddler is dropped and the result is the --within-bbox set.
+    _fixture(tmp_path, monkeypatch)
+    assert _run(["actor", "find", "--within-bbox", BOX, "--overlapping-bbox", BOX]) == 0
+    assert sorted(_names(capsys)) == ["BrushIn", "Edge", "Inside"]
+
+
+# ── writes.aabb_intersects unit ──────────────────────────────────────────────────────
+
+def _box(lo, hi):
+    return (tuple(Decimal(str(v)) for v in lo), tuple(Decimal(str(v)) for v in hi))
+
+
+def test_aabb_intersects_overlap_edge_disjoint_and_containment():
+    from uedcli import writes
+    a = _box((0, 0, 0), (10, 10, 10))
+    overlap = _box((5, 5, 5), (15, 15, 15))
+    edge = _box((10, 0, 0), (20, 10, 10))       # shared face on x=10
+    disjoint = _box((11, 0, 0), (20, 10, 10))
+    inside = _box((2, 2, 2), (8, 8, 8))          # within ⇒ intersects
+    assert writes.aabb_intersects(a, overlap) is True
+    assert writes.aabb_intersects(a, edge) is True
+    assert writes.aabb_intersects(a, disjoint) is False
+    assert writes.aabb_intersects(a, inside) is True
+    # symmetric in its arguments
+    for other in (overlap, edge, disjoint, inside):
+        assert writes.aabb_intersects(a, other) == writes.aabb_intersects(other, a)

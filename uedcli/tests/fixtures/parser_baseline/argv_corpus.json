@@ -230,6 +230,7 @@
       "name": [],
       "no_folder": false,
       "no_label": false,
+      "overlapping_bbox": null,
       "project": null,
       "prop": [],
       "restrict": null,
@@ -262,6 +263,7 @@
       "name": [],
       "no_folder": false,
       "no_label": false,
+      "overlapping_bbox": null,
       "project": null,
       "prop": [],
       "restrict": null,
@@ -399,7 +401,7 @@
     "exit_code": 2,
     "namespace": null,
     "stdout": "",
-    "stderr": "usage: uedcli actor find [-h] [--exact-class C] [--subclass-of C] [--group G]\n                         [--name GLOB] [--prop KEY[.PATH]=VALUE]\n                         [--within-bbox X0,Y0,Z0,X1,Y1,Z1]\n                         [--kind {point,brush}]\n                         [--folder PATTERN | --no-folder]\n                         [--label GLOB | --no-label] [--json] [--exclude]\n                         [--tree KIND/NAME]\n                         [-]\nuedcli actor find: error: argument --no-folder: not allowed with argument --folder\n"
+    "stderr": "usage: uedcli actor find [-h] [--exact-class C] [--subclass-of C] [--group G]\n                         [--name GLOB] [--prop KEY[.PATH]=VALUE]\n                         [--within-bbox X0,Y0,Z0,X1,Y1,Z1]\n                         [--overlapping-bbox X0,Y0,Z0,X1,Y1,Z1]\n                         [--kind {point,brush}]\n                         [--folder PATTERN | --no-folder]\n                         [--label GLOB | --no-label] [--json] [--exclude]\n                         [--tree KIND/NAME]\n                         [-]\nuedcli actor find: error: argument --no-folder: not allowed with argument --folder\n"
   },
   {
     "argv": [

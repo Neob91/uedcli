@@ -288,7 +288,23 @@
               "choices": null,
               "metavar": "X0,Y0,Z0,X1,Y1,Z1",
               "converter": "parse_bbox",
-              "help": "match actors whose world bounding box is FULLY INSIDE the given axis-aligned box — two opposite corners in any order, unreal units (same space as --at), edge-inclusive. Honours each actor's full transform (a scaled/rotated brush's TRUE world box is tested); a point actor (Light, mesh deco, nav point) is its Location point. Single-valued; ANDs with the other filters. Selects a region's actors to pipe into a set verb (add --kind brush for geometry only, e.g. `… --within-bbox … --kind brush | actor preview -`). (A looser 'also catch straddling brushes' variant, --overlapping-bbox, does not exist yet.)",
+              "help": "match actors whose world bounding box is FULLY INSIDE the given axis-aligned box — two opposite corners in any order, unreal units (same space as --at), edge-inclusive. Honours each actor's full transform (a scaled/rotated brush's TRUE world box is tested); a point actor (Light, mesh deco, nav point) is its Location point. Single-valued; ANDs with the other filters. Selects a region's actors to pipe into a set verb (add --kind brush for geometry only, e.g. `… --within-bbox … --kind brush | actor preview -`).",
+              "mutex_group": null
+            },
+            {
+              "class": "_StoreAction",
+              "option_strings": [
+                "--overlapping-bbox"
+              ],
+              "dest": "overlapping_bbox",
+              "nargs": null,
+              "const": null,
+              "default": null,
+              "required": false,
+              "choices": null,
+              "metavar": "X0,Y0,Z0,X1,Y1,Z1",
+              "converter": "parse_bbox",
+              "help": "match actors whose world bounding box OVERLAPS the given axis-aligned box (a straddling brush that poked out of --within-bbox IS caught) — two opposite corners in any order, unreal units, edge-inclusive. Honours each actor's full transform; a point actor is its Location point. Single-valued; ANDs with the other filters. NOTE this tests the world AABB, so a diagonal/L-shaped brush can match on its bounding box without any solid geometry actually inside the box (a precise per-poly variant is not implemented — board item find-relational-predicates).",
               "mutex_group": null
             },
             {
