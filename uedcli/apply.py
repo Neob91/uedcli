@@ -223,15 +223,14 @@ def _save_and_swap_verified(ed, dx_path: str, expected, *, defaults, state_dir,
 _MAP_EXTS = (".dx", ".unr")
 
 
-def run_materialize(*, level, packages, out_path, overwrite, state_dir, schema_resolver,
+def run_materialize(*, level, out_path, overwrite, state_dir, schema_resolver,
                     search_dirs=None, no_verify=False, keep_build=False) -> ApplyResult:
     """Materialize a TRUNK Level into `out_path` (.dx/.unr) via a PER-COMMAND EPHEMERAL editor, H3-
     post-verify it offline in that same container, and swap it in. PURE BUILD (git-native slice 3):
     no session, no 3-way merge, no backup, no git wrapping. Refuses to overwrite unless `overwrite`.
-    `packages` is the whole composed-search-path load set (decision 2026-07-05 23:00), resolved and
-    remapped by `ensure_load` to the container-visible substrate subset. `search_dirs` is the whole
-    composed config dir set (`resources.composed_dirs`); the `mounts` (`/resources/<n>` bind mounts)
-    and the HOST resolution list are computed ONCE here from it and threaded to `ensure_editor` +
+    `search_dirs` is the whole composed config dir set (`resources.composed_dirs`); the `mounts`
+    (`/resources/<n>` bind mounts) and the HOST resolution list are computed ONCE here from it and
+    threaded to `ensure_editor` +
     `ensure_load` — the single mount list drives the ini `Paths`, the docker `-v` args, and the
     host→container remap (direction/containers.md 2026-07-14 — one uniform dir set; `/stubs` first on Paths so a
     v69 stub shadows any same-named v68 `.u`). `state_dir` is the resolved project's `.uedcli/`
@@ -272,10 +271,20 @@ def run_materialize(*, level, packages, out_path, overwrite, state_dir, schema_r
     # set — direction/containers.md 2026-07-14). `/stubs` stays first on Paths, so a v69 stub shadows any
     # same-named v68 `.u` a code dir puts on the editor's Paths.
     from .container_assets import resource_mounts
-    from .packages import editor_search_dirs
+    from .packages import editor_search_dirs, missing_packages, ensure_load_message, _ALWAYS_LOADED
     search_dirs = search_dirs or []
     mounts = resource_mounts(search_dirs)
     host_search_dirs = editor_search_dirs(search_dirs)
+    # Fail-fast BEFORE the ~100 s editor build: a package the level REFERENCES but that is absent from
+    # the host search path would otherwise be silently dropped (every face's `Texture=` / actor's
+    # `Class=` gone) and surface only as an opaque post-verify mismatch — or, under `--no-verify`, ship
+    # a wrong map with no signal. So the gate is verify-INDEPENDENT. `_ALWAYS_LOADED` is substrate code
+    # always resident, excluded exactly as `obj_load_entries` excludes it, so a level referencing
+    # `Engine.Light` does not false-miss.
+    referenced = [p for p in _level_referenced_packages(level) if p not in _ALWAYS_LOADED]
+    if missing := missing_packages(referenced, host_search_dirs):
+        return ApplyResult(rc=2, message="materialize failed (nothing written): "
+                                         f"{ensure_load_message(missing)}")
     ed_id = uuid7()                                    # bare uuid → editor_container keeps all groups
     try:
         ed = Driver(container=ensure_editor(ed_id, mounts=mounts, state_dir=state_dir))

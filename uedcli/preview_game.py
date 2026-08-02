@@ -52,12 +52,11 @@ class GamePreviewError(Exception):
 
 @dataclass(frozen=True, kw_only=True)
 class MaterializeResources:
-    """The project-resolved inputs a trunk materialize needs: the composed search dirs, the package
-    load set, and the schema resolver. Built lazily by a caller-supplied provider so this service
-    never reaches back into the CLI to resolve them — and so the work happens ONLY on a
-    preview-cache miss (never for `--map`, never on a cache hit)."""
+    """The project-resolved inputs a trunk materialize needs: the composed search dirs and the schema
+    resolver. Built lazily by a caller-supplied provider so this service never reaches back into the
+    CLI to resolve them — and so the work happens ONLY on a preview-cache miss (never for `--map`,
+    never on a cache hit)."""
     composed_dirs: list[str]
-    load_set: list[str]
     schema_resolver: object
 
 
@@ -169,8 +168,7 @@ def materialized_dx(project, level_name: str, level, *, rebuild: bool,
         _prune_prefix(d, "materialized", protect=target)
         return target
     res = provide_resources()                     # cache MISS: resolve the project inputs now
-    result = run_materialize(level=level, packages=res.load_set,
-                             search_dirs=res.composed_dirs,
+    result = run_materialize(level=level, search_dirs=res.composed_dirs,
                              schema_resolver=res.schema_resolver,
                              state_dir=config.state_dir(project.root, create=True),
                              out_path=str(target), overwrite=True)

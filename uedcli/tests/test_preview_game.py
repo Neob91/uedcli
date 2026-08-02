@@ -48,9 +48,8 @@ def _proj(tmp_path):
     return SimpleNamespace(root=str(tmp_path), game="deusex", paths="")
 
 
-def _resources(*, load=(), dirs=(), schema=None):
-    return pg.MaterializeResources(composed_dirs=list(dirs), load_set=list(load),
-                                   schema_resolver=schema)
+def _resources(*, dirs=(), schema=None):
+    return pg.MaterializeResources(composed_dirs=list(dirs), schema_resolver=schema)
 
 
 class _Provider:
@@ -71,8 +70,8 @@ def _never_provider():
 
 
 def _mat_ok(monkeypatch, body=b"m"):
-    """Wire a fake run_materialize that writes `body`; the composed dirs/load set/schema now arrive
-    through the provider, so nothing here patches `dispatch`."""
+    """Wire a fake run_materialize that writes `body`; the composed dirs/schema now arrive through the
+    provider, so nothing here patches `dispatch`."""
     hits = []
 
     def fake(**kw):
@@ -456,12 +455,12 @@ def test_render_shots_trunk_cache_miss_invokes_provider(monkeypatch, tmp_path):
     hits = _mat_ok(monkeypatch)                              # real materialized_dx → run_materialize
     cap = {}
     _install_render(monkeypatch, cap)
-    prov = _Provider(_resources(load=["Engine"], dirs=["/g/Textures"], schema="RESOLVER"))
+    prov = _Provider(_resources(dirs=["/g/Textures"], schema="RESOLVER"))
     n = pg.render_shots(shots=[parse_shot("at:0,0,0;rot:0,0")], out_dir=tmp_path / "o",
                         size=(320, 240), project=_proj(tmp_path), user_config=object(),
                         game="deusex", provide_resources=prov, level=lvl, level_name="lvl")
     assert n == 1 and prov.calls == 1                        # cache miss → provider invoked once
-    assert hits[0]["packages"] == ["Engine"] and hits[0]["search_dirs"] == ["/g/Textures"]
+    assert hits[0]["search_dirs"] == ["/g/Textures"]
     assert hits[0]["schema_resolver"] == "RESOLVER"          # threaded straight into materialize
 
 

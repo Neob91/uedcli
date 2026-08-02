@@ -1425,6 +1425,11 @@ level materialize [--out OUT] [--overwrite] [--no-verify] [--keep-build]
 - A **post-build verify** (H3) confirms the rebuilt map matches the intended trunk; **`--no-verify`**
   skips it (debugging / known-buggy verify), and **`--keep-build`** copies the built map to the
   project's `.uedcli/tmp/` on a verify FAILURE instead of discarding it.
+- Before any editor work, materialize checks that every package the level **references** (via a
+  qualified `Class=` or a face's `Texture=`) is present on the configured package path. If any is
+  missing it **exits 2 naming the complete set** and writes nothing, rather than silently dropping
+  those references. This gate runs even under `--no-verify`. A composed package path that resolves to
+  **0 packages** prints one advisory line but does not block a level that references nothing.
 - The verify compares the built map against the trunk in UnrealEd's own terms, so it needs each actor
   class's **defaults** out of the game's `.u` packages. They are resolved *before* the editor starts,
   so an actor whose `Class=` is not fully qualified (`Package.Class`) — or whose package is missing

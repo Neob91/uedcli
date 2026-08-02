@@ -51,7 +51,7 @@ def _one_actor_level(cls="Engine.Light"):
 def test_it_refuses_to_overwrite_an_existing_out(tmp_path, _stub_editor):
     out = tmp_path / "Map.dx"
     out.write_text("hand-placed")
-    r = run_materialize(level=_one_actor_level(), packages=[],
+    r = run_materialize(level=_one_actor_level(),
                         schema_resolver=_NO_PACKAGES,
                         state_dir=tmp_path / '.uedcli', out_path=str(out), overwrite=False)
     assert r.rc == 2 and str(out) in r.message
@@ -61,7 +61,7 @@ def test_it_refuses_to_overwrite_an_existing_out(tmp_path, _stub_editor):
 def test_it_allows_overwrite_with_the_flag(tmp_path, _stub_editor):
     out = tmp_path / "Map.dx"
     out.write_text("old")
-    r = run_materialize(level=_one_actor_level(), packages=[],
+    r = run_materialize(level=_one_actor_level(),
                         schema_resolver=_NO_PACKAGES,
                         state_dir=tmp_path / '.uedcli', out_path=str(out), overwrite=True)
     assert r.rc == 0
@@ -75,7 +75,7 @@ def test_relative_out_resolves_against_the_cwd(tmp_path, monkeypatch, _stub_edit
     sub.mkdir(parents=True)
     monkeypatch.chdir(sub)
     (sub / "Map.dx").write_text("hand-placed")
-    r = run_materialize(level=_one_actor_level(), packages=[],
+    r = run_materialize(level=_one_actor_level(),
                         schema_resolver=_NO_PACKAGES,
                         state_dir=tmp_path / ".uedcli",
                         out_path="Map.dx", overwrite=False)
@@ -84,7 +84,7 @@ def test_relative_out_resolves_against_the_cwd(tmp_path, monkeypatch, _stub_edit
 
 
 def test_it_rejects_a_non_map_extension(tmp_path, _stub_editor):
-    r = run_materialize(level=_one_actor_level(), packages=[],
+    r = run_materialize(level=_one_actor_level(),
                         schema_resolver=_NO_PACKAGES,
                         state_dir=tmp_path / '.uedcli',
                         out_path=str(tmp_path / "Map.txt"), overwrite=False)
@@ -92,7 +92,7 @@ def test_it_rejects_a_non_map_extension(tmp_path, _stub_editor):
 
 
 def test_it_rejects_a_directory_out(tmp_path, _stub_editor):
-    r = run_materialize(level=_one_actor_level(), packages=[],
+    r = run_materialize(level=_one_actor_level(),
                         schema_resolver=_NO_PACKAGES,
                         state_dir=tmp_path / '.uedcli',
                         out_path=str(tmp_path), overwrite=False)
@@ -107,7 +107,7 @@ def test_it_tears_the_ephemeral_container_down_even_on_a_build_error(tmp_path, m
     monkeypatch.setattr(applymod, "_materialize",
                         lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")))
     monkeypatch.setattr(applymod, "_level_defaults", lambda level, *, resolver: StubDefaults())
-    r = run_materialize(level=_one_actor_level(), packages=[],
+    r = run_materialize(level=_one_actor_level(),
                         schema_resolver=_NO_PACKAGES,
                         state_dir=tmp_path / '.uedcli',
                         out_path=str(tmp_path / "New.dx"), overwrite=False)
@@ -130,7 +130,7 @@ def test_an_unresolvable_class_exits_2_naming_the_actor_and_never_starts_the_edi
                         lambda ed_id, **kw: started.append(ed_id) or "uned-stub")
     monkeypatch.setattr(applymod, "stop_editor", lambda ed_id, sd: None)
     monkeypatch.setattr(applymod, "Driver", lambda container=None: mock.Mock())
-    r = run_materialize(level=_one_actor_level(cls="Camera"), packages=[],
+    r = run_materialize(level=_one_actor_level(cls="Camera"),
                         schema_resolver=_NO_PACKAGES,
                         state_dir=tmp_path / ".uedcli",
                         out_path=str(tmp_path / "New.dx"), overwrite=False)
@@ -148,7 +148,7 @@ def test_no_verify_does_not_require_resolvable_class_defaults(tmp_path, monkeypa
     monkeypatch.setattr(applymod, "Driver", lambda container=None: mock.Mock())
     monkeypatch.setattr(applymod, "_materialize", lambda *a, **k: None)
     monkeypatch.setattr(applymod, "_save_and_swap_verified", lambda *a, **k: None)
-    r = run_materialize(level=_one_actor_level(cls="Camera"), packages=[],
+    r = run_materialize(level=_one_actor_level(cls="Camera"),
                         schema_resolver=_NO_PACKAGES, no_verify=True,
                         state_dir=tmp_path / ".uedcli",
                         out_path=str(tmp_path / "New.dx"), overwrite=False)
@@ -171,7 +171,7 @@ def test_the_resolved_defaults_reach_the_post_verify(tmp_path, monkeypatch):
                         lambda **kw: seen.update(kw) or VerifyResult(ok=True))
     monkeypatch.setattr(xfer, "cp_out", lambda c, src, dst: Path(dst).write_bytes(b"dx"))
     monkeypatch.setattr(xfer, "remove", lambda *a, **k: None)
-    r = run_materialize(level=_one_actor_level(), packages=[], schema_resolver=_NO_PACKAGES,
+    r = run_materialize(level=_one_actor_level(), schema_resolver=_NO_PACKAGES,
                         state_dir=tmp_path / ".uedcli",
                         out_path=str(tmp_path / "New.dx"), overwrite=False)
     assert r.rc == 0
@@ -194,11 +194,77 @@ def test_an_unresolvable_class_in_the_BUILT_map_is_a_clean_exit_2(tmp_path, monk
                                 "(Package.Class): 'Camera'")))
     monkeypatch.setattr(xfer, "remove", lambda *a, **k: None)
     out = tmp_path / "New.dx"
-    r = run_materialize(level=_one_actor_level(), packages=[], schema_resolver=_NO_PACKAGES,
+    r = run_materialize(level=_one_actor_level(), schema_resolver=_NO_PACKAGES,
                         state_dir=tmp_path / ".uedcli", out_path=str(out), overwrite=False)
     assert r.rc == 2
     assert "'Cam_x'" in r.message and "Camera" in r.message
     assert not out.exists()
+
+
+# ── Referenced-package fail-fast: a package the level references but the path lacks → exit 2 ──
+
+def test_a_referenced_package_absent_from_the_path_exits_2_before_the_editor(tmp_path, monkeypatch):
+    """The load-bearing gate. A package the level REFERENCES (here a qualified `Class=`) but that is
+    absent from the host search path is silently dropped by the editor and surfaces only as an opaque
+    post-verify mismatch. Fail fast instead — exit 2 naming the package, before any container."""
+    started = []
+    monkeypatch.setattr(applymod, "ensure_editor",
+                        lambda ed_id, **kw: started.append(ed_id) or "uned-stub")
+    monkeypatch.setattr(applymod, "stop_editor", lambda ed_id, sd: None)
+    monkeypatch.setattr(applymod, "Driver", lambda container=None: mock.Mock())
+    monkeypatch.setattr(applymod, "_level_defaults", lambda level, *, resolver: StubDefaults())
+    out = tmp_path / "New.dx"
+    r = run_materialize(level=_one_actor_level(cls="Krq7Content.Crate"),
+                        schema_resolver=_NO_PACKAGES, search_dirs=[],
+                        state_dir=tmp_path / ".uedcli", out_path=str(out), overwrite=False)
+    assert r.rc == 2 and "Krq7Content" in r.message and "nothing written" in r.message
+    assert not started                                   # gate fired before the editor
+    assert not out.exists()                              # and nothing was written
+
+
+def test_the_referenced_package_gate_is_independent_of_no_verify(tmp_path, monkeypatch):
+    """`--no-verify` turns off the post-verify — the very thing that would (late) catch a dropped
+    package — so the gate that PREVENTS the silent drop must still run under it."""
+    started = []
+    monkeypatch.setattr(applymod, "ensure_editor",
+                        lambda ed_id, **kw: started.append(ed_id) or "uned-stub")
+    monkeypatch.setattr(applymod, "stop_editor", lambda ed_id, sd: None)
+    monkeypatch.setattr(applymod, "Driver", lambda container=None: mock.Mock())
+    r = run_materialize(level=_one_actor_level(cls="Krq7Content.Crate"),
+                        schema_resolver=_NO_PACKAGES, search_dirs=[], no_verify=True,
+                        state_dir=tmp_path / ".uedcli",
+                        out_path=str(tmp_path / "New.dx"), overwrite=False)
+    assert r.rc == 2 and "Krq7Content" in r.message
+    assert not started
+
+
+def test_only_always_loaded_packages_pass_the_gate(tmp_path, _stub_editor):
+    """Engine/Core/Editor are substrate code always resident (never OBJ LOADed), so a level that
+    references only them (here `Engine.Light`) must NOT trip the missing-package gate."""
+    r = run_materialize(level=_one_actor_level(), schema_resolver=_NO_PACKAGES, search_dirs=[],
+                        state_dir=tmp_path / ".uedcli",
+                        out_path=str(tmp_path / "New.dx"), overwrite=False)
+    assert r.rc == 0
+
+
+def test_several_missing_referenced_packages_report_as_one_sorted_set(tmp_path, monkeypatch):
+    """UCC aborts on the FIRST unresolved package; the gate reports the COMPLETE set, sorted, in one
+    message so the operator sees the whole list at once."""
+    started = []
+    monkeypatch.setattr(applymod, "ensure_editor",
+                        lambda ed_id, **kw: started.append(ed_id) or "uned-stub")
+    monkeypatch.setattr(applymod, "stop_editor", lambda ed_id, sd: None)
+    monkeypatch.setattr(applymod, "Driver", lambda container=None: mock.Mock())
+    monkeypatch.setattr(applymod, "_level_defaults", lambda level, *, resolver: StubDefaults())
+    lvl = Level(actors={"A_1": Actor(name="A_1", cls="Zeta9.Deco", location=(1, 2, 3)),
+                        "B_2": Actor(name="B_2", cls="Alpha3.Deco", location=(4, 5, 6))},
+                order=["A_1", "B_2"])
+    r = run_materialize(level=lvl, schema_resolver=_NO_PACKAGES, search_dirs=[],
+                        state_dir=tmp_path / ".uedcli",
+                        out_path=str(tmp_path / "New.dx"), overwrite=False)
+    assert r.rc == 2 and not started
+    assert "Alpha3" in r.message and "Zeta9" in r.message
+    assert r.message.index("Alpha3") < r.message.index("Zeta9")   # complete + sorted
 
 
 # ── Task 4: dispatch routing (mock run_materialize + the composed load set — no editor) ──
@@ -233,7 +299,6 @@ def test_materialize_resolves_the_trunk(tmp_path, monkeypatch):
                                out=str(tmp_path / "out.dx"), overwrite=False))
     assert rc == 0
     assert set(captured["level"].actors) == {"A_1", "B_2"}     # read from the trunk
-    assert captured["packages"] == ["Engine", "DeusExDeco"]    # composed-search-path load set
     assert captured["search_dirs"] == ["/g/Textures"]          # whole composed set → /resources
 
 
@@ -253,6 +318,32 @@ def test_materialize_warns_on_duplicate_order_value(tmp_path, monkeypatch, capsy
                                out=str(tmp_path / "out.dx"), overwrite=False))
     assert rc == 0
     assert "shared by 2+ actors" in capsys.readouterr().err
+
+
+def test_materialize_advises_when_the_composed_path_resolves_zero_packages(tmp_path, monkeypatch,
+                                                                           capsys):
+    """Owner 2026-08-02: a reference-free level whose composed path resolves 0 packages still builds
+    (rc 0) but prints one advisory line — a likely games-config misconfiguration worth surfacing."""
+    proj, _ = _project_with_level(tmp_path, monkeypatch)     # actors are bare `Light` → 0 references
+    monkeypatch.setattr("uedcli.apply.run_materialize", lambda **kw: ApplyResult(rc=0, message="ok"))
+    monkeypatch.setattr("uedcli.cli.resources.composed_load_set", lambda p: [])
+    monkeypatch.setattr("uedcli.cli.resources.composed_dirs", lambda p: [])
+    rc = dispatch.dispatch(_ns(cmd="level", sub="materialize", project=str(proj),
+                               out=str(tmp_path / "out.dx"), overwrite=False))
+    assert rc == 0
+    assert "resolved 0 packages" in capsys.readouterr().err
+
+
+def test_materialize_prints_no_advisory_when_the_composed_path_is_non_empty(tmp_path, monkeypatch,
+                                                                            capsys):
+    proj, _ = _project_with_level(tmp_path, monkeypatch)
+    monkeypatch.setattr("uedcli.apply.run_materialize", lambda **kw: ApplyResult(rc=0, message="ok"))
+    monkeypatch.setattr("uedcli.cli.resources.composed_load_set", lambda p: ["Engine", "DeusExDeco"])
+    monkeypatch.setattr("uedcli.cli.resources.composed_dirs", lambda p: ["/g/Textures"])
+    rc = dispatch.dispatch(_ns(cmd="level", sub="materialize", project=str(proj),
+                               out=str(tmp_path / "out.dx"), overwrite=False))
+    assert rc == 0
+    assert "resolved 0 packages" not in capsys.readouterr().err
 
 
 # ── Task 5: level doctor reads the trunk (fully offline — no editor) ──
@@ -302,7 +393,7 @@ def test_run_materialize_threads_search_dirs_into_mounts_and_ensure_load(tmp_pat
     monkeypatch.setattr(applymod, "_materialize", fake_materialize)
     monkeypatch.setattr(applymod, "_level_defaults", lambda level, *, resolver: StubDefaults())
 
-    r = run_materialize(level=_one_actor_level(), packages=["CoreTexMetal"],
+    r = run_materialize(level=_one_actor_level(),
                         schema_resolver=_NO_PACKAGES,
                         state_dir=tmp_path / '.uedcli',
                         search_dirs=["/g/Textures", "/g/System"],

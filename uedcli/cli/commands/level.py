@@ -376,7 +376,7 @@ def _level_status(args) -> int:
 
 
 def _level_materialize(args) -> int:
-    from ...apply import run_materialize
+    from ... import apply, packages
     if not args.out:                                    # check before computing the load set
         print("level materialize requires --out <path>", file=sys.stderr)
         return 2
@@ -390,17 +390,26 @@ def _level_materialize(args) -> int:
         level_sources.announce_env_level(name, action="materializing")
     src = level_sources.TrunkLevelSource(maps_dir / name)
     level = src.load()
+    # Advisory (owner 2026-08-02): a level that references no loadable package AND composes 0 packages
+    # is a likely games-config misconfiguration — but a valid reference-free greybox still builds, so
+    # note it and continue (rc unaffected). The hard guarantee is `run_materialize`'s referenced-package
+    # gate; this fires only when there is genuinely nothing to drop.
+    referenced = [p for p in apply._level_referenced_packages(level)
+                  if p not in packages._ALWAYS_LOADED]
+    if not referenced and not resources.composed_load_set(project):
+        print("note: composed package search path resolved 0 packages — check the games config "
+              "paths", file=sys.stderr)
     dups = trunk.duplicate_ranks(src._ranks)
     if dups:
         print(f"WARNING: {len(dups)} order_value(s) shared by 2+ actors — arbitrary CSG order; "
               "run `level doctor`", file=sys.stderr)
-    result = run_materialize(level=level, packages=resources.composed_load_set(project),
-                             search_dirs=resources.composed_dirs(project),
-                             schema_resolver=resources.schema_resolver_for(project),
-                             out_path=args.out, overwrite=args.overwrite,
-                             state_dir=config.state_dir(project.root, create=True),
-                             no_verify=getattr(args, "no_verify", False),
-                             keep_build=getattr(args, "keep_build", False))
+    result = apply.run_materialize(level=level,
+                                   search_dirs=resources.composed_dirs(project),
+                                   schema_resolver=resources.schema_resolver_for(project),
+                                   out_path=args.out, overwrite=args.overwrite,
+                                   state_dir=config.state_dir(project.root, create=True),
+                                   no_verify=getattr(args, "no_verify", False),
+                                   keep_build=getattr(args, "keep_build", False))
     if result.rc != 0:
         print(result.message, file=sys.stderr)
         return result.rc
@@ -505,13 +514,10 @@ def _level_preview(args) -> int:
 
         def _provide_resources():
             # The project-resolved materialize inputs, built ONLY when the preview backend actually
-            # needs them (a trunk cache miss) — never for `--map` or a cache hit. Evaluated in the
-            # same order the old direct call used: load set, then dirs, then schema resolver.
-            load_set = resources.composed_load_set(project)
+            # needs them (a trunk cache miss) — never for `--map` or a cache hit.
             dirs = resources.composed_dirs(project)
             schema = resources.schema_resolver_for(project)
-            return preview_game.MaterializeResources(
-                composed_dirs=dirs, load_set=load_set, schema_resolver=schema)
+            return preview_game.MaterializeResources(composed_dirs=dirs, schema_resolver=schema)
 
         try:
             n = preview_game.render_shots(
