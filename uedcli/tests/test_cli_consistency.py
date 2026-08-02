@@ -6,7 +6,7 @@ Mostly one section per finding (L3 is the exception — help-only, no test):
   M1 — mutator success-summaries go to STDERR (stdout stays pipe-clean)
   M2 — `--json` on `brush vertex list`, `actor prop get`, `mover key list`
   M3 — `--prop KEY=VALUE` on `brush build` (generator-surface parity with `actor build`)
-  L2 — `brush clip` no-op notice → stderr; `actor folder get --json` (null, not `(none)`)
+  L2 — `brush clip` miss notice → stderr; `actor folder get --json` (null, not `(none)`)
   L3 — help-only clarifications (no test section): the `brush build --prop` override-semantics
        sentence, the `--rotate` precedence note, and the `actor prop get --json` string-values
        note. Their observable behaviour IS exercised, though — by the M2/M3 sections below
@@ -340,18 +340,20 @@ def test_brush_build_bad_prop_errors_cleanly(capsys):
 
 
 # ─────────────────────────────────────────────────────────────────────────────────────
-# L2 — `brush clip` no-op → stderr; `actor folder get --json`
+# L2 — `brush clip` miss → stderr; `actor folder get --json`
 # ─────────────────────────────────────────────────────────────────────────────────────
 
-def test_brush_clip_noop_message_goes_to_stderr(tmp_path, monkeypatch, capsys):
+def test_brush_clip_miss_message_goes_to_stderr(tmp_path, monkeypatch, capsys):
+    from uedcli.emit import emit_actor_t3d
     a = make_brush_actor("WALL", cube(64, 64, 64), location=(Decimal(0), Decimal(0), Decimal(0)))
-    _write_project(tmp_path, monkeypatch, [a])
-    # a plane far above the cube misses its interior → the "left unchanged" no-op notice
-    rc = _run(["brush", "clip", "WALL", "--axis", "z", "--offset", "100000", "--keep", "below"])
+    # `brush clip` is a stateless filter: a plane far above the cube misses its interior → the
+    # brush passes through on stdout unchanged and the notice goes to stderr, not stdout.
+    rc = _run(["brush", "clip", "-", "--axis", "z", "--offset", "100000", "--keep", "below"],
+              stdin=emit_actor_t3d(a))
     assert rc == 0
     cap = capsys.readouterr()
-    assert cap.out == ""                                    # no stdout chatter on a no-op mutator
-    assert "left unchanged" in cap.err
+    assert "WALL" in cap.out                                # the brush is emitted (passed through)
+    assert "did not intersect brush WALL" in cap.err        # human notice → stderr only
 
 
 def test_folder_get_json_maps_unfoldered_to_null(tmp_path, monkeypatch, capsys):

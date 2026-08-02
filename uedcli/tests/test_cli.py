@@ -68,10 +68,10 @@ def test_clip_offset_flag_rejects_bad_values_cleanly(capsys):
     # parse_decimal, so a non-numeric/non-finite value is a clean parser error (SystemExit 2),
     # never the decimal.InvalidOperation traceback the bare `Decimal` type used to leak.
     p = build_parser()
-    assert p.parse_args(["brush", "clip", "W", "--axis", "z", "--offset", "128"]).offset == Decimal(128)
+    assert p.parse_args(["brush", "clip", "-", "--axis", "z", "--offset", "128"]).offset == Decimal(128)
     for bad in ("abc", "inf"):
         with pytest.raises(SystemExit):
-            p.parse_args(["brush", "clip", "W", "--axis", "z", "--offset", bad])
+            p.parse_args(["brush", "clip", "-", "--axis", "z", "--offset", bad])
         assert "--offset" in capsys.readouterr().err
 
 
@@ -79,7 +79,7 @@ def test_clip_coord_flag_is_gone():
     # The old spelling is DELETED outright (no back-compat cruft), and shares no unambiguous
     # argparse prefix with a surviving option, so it is genuinely unrecognized.
     with pytest.raises(SystemExit):
-        build_parser().parse_args(["brush", "clip", "W", "--axis", "z", "--coord", "128"])
+        build_parser().parse_args(["brush", "clip", "-", "--axis", "z", "--coord", "128"])
 
 
 def test_parse_coord_returns_decimal_triple():

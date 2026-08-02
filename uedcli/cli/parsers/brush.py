@@ -60,18 +60,28 @@ def register(sub) -> None:
     ltg.add_argument("--no-lock-textures", dest="lock_textures", action="store_false",
                      help="leave the texture mapping fixed (the texture slides as the surface moves)")
     _tree_flag(axf)
-    clip = bsub.add_parser("clip", help="clip a brush by a plane, keeping one half")
-    clip.add_argument("name", help="brush actor Name to clip (case-insensitive)")
+    clip = bsub.add_parser(
+        "clip",
+        help="clip every brush in a piped T3D SET by one world plane, keeping one half; T3D to "
+             "stdout (stateless; no level). To clip a placed actor: `actor show X | brush clip - "
+             "… | brush replace X -`")
+    clip.add_argument(
+        "set", metavar="-|FILE",
+        help="read the brush SET as a T3D snippet from stdin (`-`) or from a saved FILE (the "
+             "`brush build … | brush clip - | actor add -` convention). `-` is the sole names "
+             "source. A non-brush (point) actor is refused (exit 2). Empty stdin is a clean no-op "
+             "(exit 0)")
     clip.add_argument("--axis", choices=["x", "y", "z"],
                       help="axis-aligned plane; use with --offset")
     clip.add_argument("--offset", type=parse_decimal,
-                      help="plane offset along --axis (world)")
+                      help="plane offset along --axis, in world units")
     clip.add_argument("--plane", type=parse_coord, nargs=2,
                       metavar=("PX,PY,PZ", "NX,NY,NZ"),
-                      help="general plane: world point + normal")
+                      help="general plane: a world point on it (PX,PY,PZ) plus its normal "
+                           "(NX,NY,NZ); need not be unit")
     clip.add_argument("--keep", choices=["below", "above"], default="below",
-                      help="keep the half below (opposite normal) or above (normal side)")
-    _tree_flag(clip)
+                      help="keep the half below the plane (opposite the normal — DEFAULT) or "
+                           "above (the normal side)")
 
     replace = bsub.add_parser(
         "replace",

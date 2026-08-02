@@ -13,11 +13,11 @@ that ramps from 0 up to full height. One brush.
 
 ```
 # a 192(X) x 64(Y) x 96(Z) box, origin-centred -> X:-96..96, Y:-32..32, Z:-48..48
-brush build cube --width 192 --breadth 64 --height 96 | actor add -       # prints e.g. Cube_ab12cd
-
 # diagonal plane through the origin, cutting the XZ cross-section corner-to-corner (parallel to Y):
 #   normal (1,0,-2) passes through opposite corners (-96,-48) and (96,48); keep the lower triangle
-brush clip Cube_ab12cd --plane 0,0,0 1,0,-2 --keep above
+brush build cube --width 192 --breadth 64 --height 96 \
+  | brush clip - --plane 0,0,0 1,0,-2 --keep above \
+  | actor add -                                                 # prints e.g. Cube_ab12cd
 ```
 
 The result is a triangular prism whose top face ramps from Z=-48 at X=-96 to Z=+48 at X=+96 — a 96-tall

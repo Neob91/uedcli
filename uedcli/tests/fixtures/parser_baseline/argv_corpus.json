@@ -429,7 +429,7 @@
     "exit_code": 2,
     "namespace": null,
     "stdout": "",
-    "stderr": "usage: uedcli brush clip [-h] [--axis {x,y,z}] [--offset OFFSET]\n                         [--plane PX,PY,PZ NX,NY,NZ] [--keep {below,above}]\n                         [--tree KIND/NAME]\n                         name\nuedcli brush clip: error: argument --axis: invalid choice: 'q' (choose from x, y, z)\n"
+    "stderr": "usage: uedcli brush clip [-h] [--axis {x,y,z}] [--offset OFFSET]\n                         [--plane PX,PY,PZ NX,NY,NZ] [--keep {below,above}]\n                         -|FILE\nuedcli brush clip: error: argument --axis: invalid choice: 'q' (choose from x, y, z)\n"
   },
   {
     "argv": [

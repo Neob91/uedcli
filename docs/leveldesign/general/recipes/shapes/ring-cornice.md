@@ -11,12 +11,12 @@ rotated to face the centre — a voussoir/cornice ring.
 ### uedcli pipeline (what you run)
 
 ```
-# 1. one block out at the ring radius (+X), 40 radial x 64 tangential x 24 tall
-brush build cube --width 40 --breadth 64 --height 24 --at 128,0,0 | actor add -     # -> wedge_ab12cd
-
-# 2. taper its two tangential sides into a trapezoid (narrow edge toward the centre) — two clips
-brush clip wedge_ab12cd --plane 148,32,0  -16,40,0  --keep below
-brush clip wedge_ab12cd --plane 148,-32,0 -16,-40,0 --keep below
+# 1+2. one block out at the ring radius (+X), 40 radial x 64 tangential x 24 tall, with its two
+#       tangential sides tapered into a trapezoid (narrow edge toward the centre) by two clips in-pipe
+brush build cube --width 40 --breadth 64 --height 24 --at 128,0,0 \
+  | brush clip - --plane 148,32,0  -16,40,0  --keep below \
+  | brush clip - --plane 148,-32,0 -16,-40,0 --keep below \
+  | actor add -                                                      # -> wedge_ab12cd
 
 # 3. replicate 7 more at 45° steps about the Z axis (16384 UU = 90°, so 8192 = 45°)
 for i in 1 2 3 4 5 6 7; do

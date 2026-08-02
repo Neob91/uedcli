@@ -285,42 +285,9 @@ def test_it_actor_rotate_pivot_actor_records_pivot_coords(tmp_path, monkeypatch)
     assert "HelperLight0" not in str(recorded_pivot)
 
 
-# ── brush clip ────────────────────────────────────────────────────────────────
-
-
-def test_it_brush_clip_resolves_case_insensitively(tmp_path, monkeypatch):
-    args = SimpleNamespace(
-        cmd="brush", sub="clip", name="brush1",
-        axis="z", offset=Decimal(0), plane=None, keep="above",
-        container="dx-lum-uned")
-    src = _fake_src(_fixture_level())
-    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src):
-        assert dispatch_mod._dispatch(args) == 0
-
-
-def test_it_brush_clip_errors_on_missing(tmp_path, monkeypatch, capsys):
-    args = SimpleNamespace(
-        cmd="brush", sub="clip", name="NoSuch",
-        axis="z", offset=Decimal(0), plane=None, keep="above",
-        container="dx-lum-uned")
-    src = _fake_src(_fixture_level())
-    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src):
-        rc = dispatch_mod._dispatch(args)
-    assert rc == 2
-    err = capsys.readouterr().err
-    assert "Actor not found: NoSuch" in err
-    assert "Traceback" not in err
-
-
-def test_it_brush_clip_records_canonical_name(tmp_path, monkeypatch):
-    args = SimpleNamespace(
-        cmd="brush", sub="clip", name="brush1",
-        axis="z", offset=Decimal(0), plane=None, keep="above",
-        container="dx-lum-uned")
-    src = _fake_src(_fixture_level())
-    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src):
-        dispatch_mod._dispatch(args)
-    assert src.save.call_args.kwargs["args"]["name"] == "Brush1"
+# ── brush clip is no longer a by-name trunk edit ──────────────────────────────
+# It became a stateless T3D-stdin filter (owner 2026-08-02); it resolves no actor name. Its
+# behaviour, including the non-brush refusal, lives in `test_brush_clip.py`.
 
 
 # ── brush vertex move ─────────────────────────────────────────────────────────

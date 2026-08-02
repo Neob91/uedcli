@@ -9,9 +9,9 @@ rules").
 
 Two source guarantees this route owns:
 
-- `build` and `intersect`/`deintersect` are STATELESS generators (T3D to stdout, no trunk): they are
-  routed before any source resolution, matching their pre-move position ahead of the eager resolve
-  in `cli.dispatch`.
+- `build`, `intersect`/`deintersect`, and `clip` are STATELESS generators (T3D to stdout, no trunk):
+  they are routed before any source resolution, matching their pre-move position ahead of the eager
+  resolve in `cli.dispatch`.
 - The other verbs consume the trunk source. The pre-move dispatch resolved it ONCE, before each
   verb's empty-stdin no-op and cheap argument checks; that order is behaviour, so this route owns
   the single `resolve_level_source` call and hands the source to the feature module. The owning
@@ -34,11 +34,14 @@ def run(args):
     if sub in ("intersect", "deintersect"):
         from . import edit
         return edit.merge(args)
+    if sub == "clip":
+        from . import edit
+        return edit.clip(args)
     if sub == "poly":
         from . import poly as feature
     elif sub == "vertex":
         from . import vertex as feature
-    elif sub in ("scale", "apply-transform", "clip", "replace"):
+    elif sub in ("scale", "apply-transform", "replace"):
         from . import edit as feature
     else:
         return None

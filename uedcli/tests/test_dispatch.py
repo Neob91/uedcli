@@ -604,61 +604,6 @@ def _rotated_brush_level():
     return lv
 
 
-def test_brush_clip_handles_a_rotated_brush():
-    # Rotation-aware: clip a yaw-90 cube by world plane z=0. Yaw is about Z, so the world plane maps
-    # to local z=0 → the cube halves (5 faces + cap) and the Rotation field is preserved.
-    args = SimpleNamespace(
-        cmd="brush", sub="clip", name="B1", container="c",
-        axis="z", offset=Decimal(0), plane=None, keep="below")
-    lv = _rotated_brush_level()
-    src = _fake_src(lv)
-    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src):
-        rc = dispatch(args)
-    assert rc == 0
-    src.save.assert_called_once()
-    assert len(lv.actors["B1"].brush.polys) == 6
-    assert any(k == "Rotation" for k, _ in lv.actors["B1"].props)     # Rotation preserved
-
-
-def _plain_brush_level():
-    a = make_brush_actor("B1", cube(64, 64, 64), location=(Decimal(0), Decimal(0), Decimal(0)))
-    lv = Level()
-    lv.actors["B1"] = a
-    return lv
-
-
-def test_brush_clip_succeeds_on_a_model_brush_axis():
-    # brush clip via dispatch on a real (Decimal-vertex) brush used to TypeError; --axis path.
-    args = SimpleNamespace(
-        cmd="brush", sub="clip", name="B1", container="c",
-        axis="z", offset=Decimal(0), plane=None, keep="below")
-    lv = _plain_brush_level()
-    src = _fake_src(lv)
-    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src):
-        rc = dispatch(args)
-    assert rc == 0
-    src.save.assert_called_once()
-    assert len(lv.actors["B1"].brush.polys) == 6          # cube split in half: 5 faces + cap
-
-
-def test_brush_clip_plane_records_decimal_coords_without_serialization_error():
-    # --plane gives Decimal point/normal (parse_coord). The clip must stringify those before handing
-    # them to the seam's `save` args — a regression where it passed raw Decimals through would break
-    # the JSON command record downstream. Assert the recorded `plane` args are all `str`, and the cube
-    # is halved.
-    lv = _plain_brush_level()
-    src = _fake_src(lv)
-    args = SimpleNamespace(
-        cmd="brush", sub="clip", name="B1", container="c",
-        axis=None, offset=None, keep="below",
-        plane=[(Decimal(0), Decimal(0), Decimal(0)), (Decimal(0), Decimal(0), Decimal(1))])
-    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src):
-        assert dispatch(args) == 0
-    saved = src.save.call_args.kwargs
-    assert all(isinstance(c, str) for c in saved["args"]["plane"])   # no raw Decimal reaches the record
-    assert len(saved["level"].actors["B1"].brush.polys) == 6         # cube halved: 5 + cap
-
-
 def _low_bit_rotated_brush_level():
     """A cube with Yaw=2 — a low-bit field the GMath table truncates to identity, so the editor
     renders it unrotated and the clip/vertex-move guard must NOT trip (is_identity_uu is True)."""

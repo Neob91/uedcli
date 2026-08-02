@@ -1,7 +1,8 @@
 # Recipe: chamfered box  [ENGINE]
 
 A box with one edge cut off at 45° (or any angle). Used for awning hoods, angled bays, beveled
-ledges, troughs, and mitered beam ends. Build a cube, then `brush clip` the edge away.
+ledges, troughs, and mitered beam ends. Build a cube and pipe it through `brush clip` to slice the
+edge away, all in one pipeline.
 
 ### What you're building
 
@@ -10,22 +11,24 @@ cross-section). One brush, one clip.
 
 ### The CSG mechanism
 
-`brush clip` cuts the brush by an infinite plane and keeps one half. A plane is a point on it plus a
-normal (which side is "above"). To bevel an edge at 45°, put the plane through the two points where
-you want the cut to start, with a normal that points diagonally out of the corner you're removing.
+`brush clip` reads a brush T3D on stdin, cuts it by an infinite plane, keeps one half, and writes the
+result on stdout — so it goes in the middle of the pipe, before `actor add`. A plane is a point on it
+plus a normal (which side is "above"). To bevel an edge at 45°, put the plane through the two points
+where you want the cut to start, with a normal that points diagonally out of the corner you're
+removing.
 
 ### uedcli pipeline (what you run)
 
 ```
-# a 192(X) x 128(Y) x 96(Z) cube, centred on the origin -> X:-96..96, Y:-64..64, Z:-48..48
-brush build cube --width 192 --breadth 128 --height 96 | actor add -      # prints e.g. Cube_ab12cd
-
-# slice the top-front (+X,+Z) edge at 45°: plane through (96,0,0) with normal (1,0,1); keep the inside
-brush clip Cube_ab12cd --plane 96,0,0 1,0,1 --keep below
+# a 192(X) x 128(Y) x 96(Z) cube, centred on the origin -> X:-96..96, Y:-64..64, Z:-48..48;
+# slice the top-front (+X,+Z) edge at 45°: plane through (96,0,0) with normal (1,0,1), keep the inside
+brush build cube --width 192 --breadth 128 --height 96 \
+  | brush clip - --plane 96,0,0 1,0,1 --keep below \
+  | actor add -                                            # prints e.g. Cube_ab12cd
 ```
 
 That clip removes a 48×48 right-triangle prism from the top-front edge, leaving a 45° slant face — a
-7-face chamfered box.
+7-face chamfered box, added in one pass.
 
 ### Notes
 
@@ -34,6 +37,8 @@ That clip removes a 48×48 right-triangle prism from the top-front edge, leaving
   direction matters.
 - `--keep below` vs `--keep above` selects which half survives (below = the normal's negative side).
   If the wrong half vanishes, flip it.
-- Verify the cut with `brush poly list <name>` — a 45° chamfer on a W×H edge adds one `slant` face
-  whose area is `edge · √2 · depth`. `brush clip` prints nothing on success, so inspect to confirm.
-- Miter a beam end the same way: build the long box, clip the end with an angled plane.
+- Verify the cut with `brush poly list <name>` after adding — a 45° chamfer on a W×H edge adds one
+  `slant` face whose area is `edge · √2 · depth`.
+- Miter a beam end the same way: build the long box, clip the end with an angled plane, add.
+- To clip a brush already placed in the level, feed it through the same filter:
+  `actor show <name> | brush clip - --plane … | brush replace <name> -`.

@@ -15,9 +15,10 @@ matching recess into the wall.
 # 1. the wall mass
 brush build cube --width 512 --breadth 256 --height 256 --csg add | actor add -           # Wall_ab12cd
 
-# 2. the additive trim: a beveled block sitting proud of the wall
-brush build cube --width 128 --breadth 64 --height 64 --csg add --at 0,320,0 | actor add - # Trim_cd34ef
-brush clip Trim_cd34ef --plane 64,0,0 1,0,1 --keep below         # 45° bevel on the +X/+Z edge
+# 2. the additive trim: a beveled block sitting proud of the wall (bevel the +X/+Z edge in one pipe)
+brush build cube --width 128 --breadth 64 --height 64 --csg add --at 0,320,0 \
+  | brush clip - --plane 64,0,0 1,0,1 --keep below \
+  | actor add -                                                  # Trim_cd34ef
 
 # 3. the SUBTRACT twin: duplicate the trim, move it into the wall, flip its CSG op
 actor duplicate Trim_cd34ef --by 0,-320,96                        # copy, translated into the wall mass

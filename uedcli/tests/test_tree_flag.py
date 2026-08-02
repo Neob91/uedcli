@@ -279,7 +279,6 @@ def _parses(argv):
     ["actor", "delete", "X", "--tree", "prefab/door"],
     ["actor", "prop", "set", "X", "bStatic=True", "--tree", "level/other"],
     ["brush", "poly", "set", "W:all", "--texture", "P.Q", "--tree", "prefab/d"],
-    ["brush", "clip", "W", "--axis", "x", "--offset", "0", "--tree", "stash/s"],
     ["mover", "key", "list", "M", "--tree", "prefab/d"],
     # Read verbs that would otherwise be stuck on the ambient level.
     ["actor", "show", "X", "--tree", "stash/s"],
@@ -301,6 +300,8 @@ def test_tree_flag_present_on_content_and_build_verbs(argv):
      "--tree", "stash/s"],
     ["actor", "build", "Engine.Light", "--at", "0,0,0", "--tree", "stash/s"],
     ["actor", "preview", "X", "--tree", "stash/s"],   # a per-kind stash|prefab preview exists
+    # `brush clip` is a stateless T3D filter (it reads a piped set, targets no box).
+    ["brush", "clip", "-", "--axis", "x", "--offset", "0", "--tree", "stash/s"],
 ])
 def test_tree_flag_absent_on_excluded_verbs(argv):
     assert not _parses(argv)

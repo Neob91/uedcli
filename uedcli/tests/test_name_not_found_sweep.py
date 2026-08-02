@@ -92,7 +92,7 @@ _POSITIONAL = [
     ("actor-folder-set", ["actor", "folder", "set", BAD, "--to", "a.b"], ""),
     ("actor-folder-get", ["actor", "folder", "get", BAD], ""),
     ("actor-folder-unset", ["actor", "folder", "unset", BAD], ""),
-    ("brush-clip", ["brush", "clip", BAD, "--axis", "x", "--offset", "0"], ""),
+    # `brush clip` is a stateless T3D filter (no by-name resolution) — not in this sweep.
     ("brush-replace", ["brush", "replace", BAD, "-"], _REPLACE_T3D),
     ("brush-vertex-list", ["brush", "vertex", "list", BAD], ""),
     ("brush-vertex-move", ["brush", "vertex", "move", BAD, "--at", "0,0,0", "--by", "0,0,1"], ""),

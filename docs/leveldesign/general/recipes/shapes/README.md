@@ -8,7 +8,8 @@ from the feature recipes in the parent dir (water, doors, lifts). All are engine
 > hand-authored T3D) and the result checked against the target.
 
 > **Names are placeholders.** `actor add` allocates a random-suffixed name (e.g. `Cube_ab12cd`); feed
-> the actual name it prints to any follow-up `brush clip`/`actor prop set`/`actor rotate`.
+> the actual name it prints to any follow-up `actor prop set`/`actor rotate`. (`brush clip` runs
+> earlier, as a filter in the build pipe before `actor add`, so it needs no name.)
 
 | Recipe                                         | Builds |
 | ---------------------------------------------- | --- |
@@ -22,8 +23,9 @@ from the feature recipes in the parent dir (water, doors, lifts). All are engine
 | [curved-corridor.md](curved-corridor.md)       | A passage that bends — a cross-section revolved around the bend centre |
 | [moulded-cornice.md](moulded-cornice.md)       | Stepped/chamfered trim swept along a wall (supersedes copy-rotate for straight runs) |
 
-The verbs almost every shape recipe leans on: `brush clip` (cut a brush by an arbitrary plane, keep
-one half — how you bevel, taper, and miter), `brush build cylinder --sides N` (a faceted round
+The verbs almost every shape recipe leans on: `brush clip` (a filter piped between `brush build` and
+`actor add` that cuts a brush by an arbitrary plane and keeps one half — how you bevel, taper, and
+miter), `brush build cylinder --sides N` (a faceted round
 pillar), and `brush build extrude` / `brush build revolve`, which sweep a silhouette you draw
 yourself and are the general answer to "this cross-section is not a box". Read
 [../../brush-shapes.md](../../brush-shapes.md) and [../../geometry-and-bsp.md](../../geometry-and-bsp.md)

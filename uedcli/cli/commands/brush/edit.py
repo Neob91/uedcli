@@ -1,10 +1,11 @@
-"""Brush whole-actor edits and CSG set-merge: `scale`, `apply-transform`, `clip`, `replace`
-(source-consuming, model-side) and `intersect`/`deintersect` (stateless generators over a piped
+"""Brush whole-actor edits and CSG/clip set filters: `scale`, `apply-transform`, `replace`
+(source-consuming, model-side) and `intersect`/`deintersect`/`clip` (stateless filters over a piped
 brush set).
 
-`scale`/`apply-transform`/`clip`/`replace` transform the trunk level the route resolved and write it
-back; `intersect`/`deintersect` consume T3D on stdin and emit one merged brush/mover actor to stdout,
-touching neither trunk nor stash. This module uses `cli.generators`/`cli.ingest`/`cli.resources`/
+`scale`/`apply-transform`/`replace` transform the trunk level the route resolved and write it back;
+`intersect`/`deintersect` consume T3D on stdin and emit one merged brush/mover actor to stdout, and
+`clip` clips every brush in a piped set by one world plane and emits them to stdout — all three touch
+neither trunk nor stash. This module uses `cli.generators`/`cli.ingest`/`cli.resources`/
 `cli.targets` and the model-side services (`brushcsg`/`movers`/`transform`/`clip`/`query`/`rotation`/
 `emit`); it never imports another command family or the router.
 """
@@ -17,7 +18,7 @@ from ... import generators, ingest, resources
 from ... import targets as target_names
 from ...errors import CommandError
 from .... import emit, propedit, query, rotation
-from ....geometry import validate_brush
+from ....geometry import GeometryError, validate_brush
 from ....model import parse_t3d_actors
 from ....normalize import is_builder_brush
 from ....uprops import SchemaError
@@ -176,15 +177,96 @@ def merge(args) -> int:
     return 0
 
 
+def clip(args) -> int:
+    """`brush clip` — clip every brush in a piped T3D SET by one world plane, keeping one half.
+
+    A stateless filter in the `brush intersect`/`deintersect` mould: reads a brush T3D snippet on
+    stdin (`-`) or a FILE, clips each brush actor by the same world plane, emits the clipped actors
+    to stdout, touching neither trunk nor stash. The plane is mapped into EACH actor's own local
+    frame (`rotation.world_to_local_*`) from the `Location`/`Rotation`/`PrePivot` the snippet
+    carries, so it is as rotation-aware as a placed edit. To clip a PLACED actor, compose with
+    `replace`: `actor show X | brush clip - … | brush replace X -`.
+    """
+    from .... import clip as clipmod
+    from ....emit import emit_actor_t3d
+
+    has_plane = args.plane is not None
+    has_axis = args.axis is not None or args.offset is not None
+    if has_plane and has_axis:
+        print("brush clip: give EITHER --plane PX,PY,PZ NX,NY,NZ OR --axis AXIS --offset N, "
+              "not both", file=sys.stderr)
+        return 2
+    if has_plane:
+        point, normal = args.plane                # two X,Y,Z triples
+    elif args.axis is not None and args.offset is not None:
+        point, normal = clipmod.axis_plane(args.axis, args.offset)
+    else:
+        print("brush clip needs --axis AXIS --offset N, or --plane PX,PY,PZ NX,NY,NZ",
+              file=sys.stderr)
+        return 2
+
+    text = ingest.read_t3d_input(args.set)
+    if not text.strip():
+        return 0                                  # empty stdin: clean no-op (exit 0)
+    actors = [a for a in parse_t3d_actors(text) if not is_builder_brush(a)]
+    if not actors:
+        raise CommandError(
+            "brush clip: stdin held no brush actors — this reads a T3D SNIPPET (the output of "
+            "`actor show` / `stash show` / `brush build`), not the newline-separated NAME list that "
+            "`actor find` prints and the mutating verbs take")
+    nonbrush = [a.name for a in actors if a.brush is None]
+    if nonbrush:
+        print(f"brush clip: not a brush: {', '.join(nonbrush)} — clip transforms brush geometry; a "
+              f"point actor has none. Narrow the pipe with `actor find --kind brush`",
+              file=sys.stderr)
+        return 2
+
+    keep_negative = args.keep == "below"          # below = opposite the normal (orientation kept)
+    # All-or-nothing across the set: a plane that DISCARDS a whole brush fails the run naming every
+    # such brush and writes nothing; a plane that MISSES a brush interior passes it through with a
+    # stderr note. Both decisions are made over the whole set before any stdout, so a later discard
+    # cannot leave a half-written result or a stale "unchanged" note on a run that exits 2.
+    discarded: list[str] = []
+    whole: list[str] = []
+    for actor in actors:
+        # The plane is world-space; map it into this brush's LOCAL frame (vertices are local). For a
+        # rotated/scaled brush this clips the local PolyList by the pulled-back plane and preserves
+        # the Rotation/scale fields, so it materializes as the intended world clip.
+        local_point = rotation.world_to_local_point(actor, point)
+        local_normal = rotation.world_to_local_normal(actor, normal)
+        kind = clipmod.classify_clip(actor.brush, local_point, local_normal,
+                                     keep_negative=keep_negative)
+        if kind == "empty":
+            discarded.append(actor.name)
+            continue
+        if kind == "whole":
+            whole.append(actor.name)
+            continue
+        try:
+            actor.brush = clipmod.clip_brush(actor.brush, local_point, local_normal,
+                                             keep_negative=keep_negative)
+            validate_brush(actor.brush)
+        except GeometryError as e:
+            raise CommandError(f"brush clip: {actor.name}: {e}") from None
+    if discarded:
+        raise CommandError(
+            f"brush clip: plane discards the whole brush for: {', '.join(discarded)} — the clip "
+            f"would remove every face (nothing kept on the --keep {args.keep} side)")
+    for name in whole:
+        print(f"brush clip: plane did not intersect brush {name} — emitted unchanged",
+              file=sys.stderr)
+    for actor in actors:
+        sys.stdout.write(emit_actor_t3d(actor))
+    return 0
+
+
 def run(args, src) -> int:
-    """Route one source-consuming brush edit (`scale`, `apply-transform`, `clip`, `replace`) against
+    """Route one source-consuming brush edit (`scale`, `apply-transform`, `replace`) against
     the trunk source the route already resolved."""
     if args.sub == "scale":
         return _scale(args, src)
     if args.sub == "apply-transform":
         return _apply_transform(args, src)
-    if args.sub == "clip":
-        return _clip(args, src)
     if args.sub == "replace":
         return _replace(args, src)
     raise CommandError(f"unimplemented brush edit sub-verb: {args.sub}")
@@ -350,52 +432,6 @@ def _apply_transform(args, src) -> int:
     src.save(verb="apply-transform",
              args={"names": names, "lock_textures": bool(args.lock_textures)},
              level=level, touched=names)
-    return 0
-
-
-def _clip(args, src) -> int:
-    from .... import clip as clipmod
-    level = src.load()
-    try:
-        canonical = query.resolve_actor_name(level, args.name)
-    except KeyError as e:
-        print(e.args[0], file=sys.stderr)
-        return 2
-    actor = level.actors[canonical]
-    if actor.brush is None:
-        print(f"{canonical} is not a brush", file=sys.stderr)
-        return 2
-    if args.plane is not None:
-        point, normal = args.plane                # two X,Y,Z triples
-    elif args.axis is not None and args.offset is not None:
-        point, normal = clipmod.axis_plane(args.axis, args.offset)
-    else:
-        print("brush clip needs --axis AXIS --offset N, or --plane PX PY PZ NX NY NZ",
-              file=sys.stderr)
-        return 2
-    # The plane is world-space; map it into the brush's LOCAL frame (vertices are local):
-    # point via `Rᵀ·(point − Location) + PrePivot`, normal via `Rᵀ·normal`. For a rotated brush
-    # this clips the local PolyList by the de-rotated plane and the Rotation field is preserved,
-    # so it materializes as the intended world clip. clip computes in float; world_to_local_*
-    # handle the rotated/PrePivot inverse (and avoid the --axis float-minus-Decimal TypeError).
-    local_point = rotation.world_to_local_point(actor, point)
-    local_normal = rotation.world_to_local_normal(actor, normal)
-    keep_negative = args.keep == "below"     # below = opposite the normal (orientation preserved)
-    if clipmod.classify_clip(actor.brush, local_point, local_normal,
-                             keep_negative=keep_negative) == "whole":
-        # Plane misses the brush interior (whole brush on the kept side) → a silent no-op before.
-        print(f"clip plane did not intersect brush {canonical} — left unchanged",
-              file=sys.stderr)
-        return 0
-    actor.brush = clipmod.clip_brush(actor.brush, local_point, local_normal,
-                                     keep_negative=keep_negative)
-    validate_brush(actor.brush)
-    # Stringify coords for the JSON command log (Decimal isn't JSON-serializable; --plane gives
-    # Decimal point/normal). Matches `actor rotate`/`vertex move` recording.
-    src.save(verb="clip",
-                    args={"name": canonical,
-                          "plane": [str(c) for c in (*point, *normal)], "keep": args.keep},
-                    level=level, touched=[canonical])
     return 0
 
 

@@ -503,7 +503,7 @@ geometry; `--no-lock-textures` leaves the mapping fixed.
 
 | Command | What it does |
 |---|---|
-| `brush clip <name> (--axis A --offset N \| --plane PX,PY,PZ NX,NY,NZ) [--keep below\|above]` | model-side Sutherland-Hodgman halfspace clip |
+| `<generator> \| brush clip - (--axis A --offset N \| --plane PX,PY,PZ NX,NY,NZ) [--keep below\|above]` | clip every brush in a piped T3D set by one world plane; T3D to stdout |
 | `<generator> \| brush replace <name> -` | in-place shape swap, keeping the target's identity |
 | `brush vertex move <name> --at X,Y,Z (--to X,Y,Z \| --by DX,DY,DZ)` | move welded corners (selected by coordinate; repeat `--at`) |
 | `brush poly set BRUSH:SELECTOR… \| -` | set the texture / surface flags on one or more faces |
@@ -512,10 +512,17 @@ geometry; `--no-lock-textures` leaves the mapping fixed.
 | `brush poly scale BRUSH:SELECTOR… \| - --by FU,FV` | resize a face's texture in place |
 | `brush poly align (--wall\|--floor\|--ring) targets…\|-` | flow one texture continuously across faces |
 
-**`brush clip`** plane is world-space (`--axis` + `--offset`, or point+normal); `--keep below` keeps the side
-opposite the normal. It clips the model, validates, then re-adds via paste so the clipped brush stays
-selectable. If the plane misses the brush interior it is a no-op and prints
-`clip plane did not intersect brush <name> — left unchanged`.
+**`brush clip -|FILE`** is a stateless T3D **filter**: it reads a brush set as a T3D snippet on stdin
+(`-`) or from a saved FILE, clips **every** brush in it by one world plane, and writes the clipped
+brushes to stdout — so a chamfered box is one pipe:
+`brush build cube … | brush clip - --plane 96,0,0 1,0,1 --keep below | actor add -`. The plane is
+world-space (`--axis` + `--offset`, or point+normal) and is mapped into each brush's own local frame,
+so a rotated/scaled brush clips correctly and keeps its `Rotation`. `--keep below` (default) keeps the
+side opposite the normal. Empty stdin is a clean no-op (exit 0); a non-brush (point) actor in the set,
+or a plane that would discard a whole brush, is a clean error (exit 2 naming it). A plane that misses a
+brush's interior passes that brush through unchanged with a `did not intersect brush <name>` note on
+stderr. To clip a **placed** actor, compose with `replace`:
+`actor show WALL | brush clip - --plane … | brush replace WALL -`.
 
 **`brush replace <name> -`** swaps a brush's **shape in place** from a piped generator T3D on stdin
 (`-` is the sole shape source — the `build → replace -` convention, not a name list), **keeping** the
@@ -528,8 +535,8 @@ stdin is a clean no-op; input with no brush geometry, or more than one brush, is
 
 **`brush vertex move`** moves one or more welded corners selected by their current world coordinate
 (`--at`, repeatable). `--to` needs exactly one `--at`; `--by` applies a delta to every `--at` corner.
-`brush clip` and `brush vertex move` are **rotation-aware** — a world plane/coord is mapped into the
-brush's local frame, so they edit a rotated brush correctly and preserve `Rotation`.
+`brush vertex move` is **rotation-aware** — a world coord is mapped into the brush's local frame, so
+it edits a rotated brush correctly and preserves `Rotation` (as does the `brush clip` filter above).
 
 Two different jobs, two verbs. **`brush poly set`** assigns a face's stored **attributes** — which
 texture is on it, which surface flags it carries. **`brush poly pan` / `rotate` / `scale`** transform
@@ -643,7 +650,7 @@ to operate on a named tree instead of `$UEDCLI_LEVEL`: `--tree level/<other>` an
 `--tree stash/<id>` a captured stash, `--tree prefab/<name>` a library prefab **in place**
 (the one-command prefab-template edit — no apply / re-capture / promote roundtrip). NAME may be
 nested (`stash/hangar/arch`). Omit it for the default ambient `$UEDCLI_LEVEL`. It rides
-`actor find/show/add/delete/move/prop/rotate/scale/order/bbox/folder/label`, `brush clip/replace/vertex/poly`,
+`actor find/show/add/delete/move/prop/rotate/scale/order/bbox/folder/label`, `brush replace/vertex/poly`,
 `mover key *`, the read verbs `actor show`/`level status`/`level doctor`/`event graph` and `stash
 capture`'s SOURCE (`stash capture --tree level/<name>`; rejected together with `--from-t3d`),
 **and — level-kind only — `level materialize`/`level preview`** (`--tree level/<name>`

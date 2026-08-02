@@ -2684,7 +2684,7 @@
           "subparser_help": {
             "scale": "scale a group of BRUSH actors: set their MainScale (a negative axis mirrors). `mirror` is `brush scale --by -1,1,1` (no separate verb). A non-brush (point) actor is rejected",
             "apply-transform": "bake MainScale + Rotation + PostScale permanently into the brush vertices and reset the fields (the offline ACTOR APPLYTRANSFORM). Reverses winding on a mirror/negative determinant; rewrites PrePivot; leaves Location. Rejects movers and non-brush actors",
-            "clip": "clip a brush by a plane, keeping one half",
+            "clip": "clip every brush in a piped T3D SET by one world plane, keeping one half; T3D to stdout (stateless; no level). To clip a placed actor: `actor show X | brush clip - … | brush replace X -`",
             "replace": "swap a brush's shape from a piped generator T3D on stdin, keeping its identity",
             "build": "build a parametric shape and write T3D to stdout (stateless; no level needed)",
             "intersect": "CSG-merge a piped brush SET into ONE brush against an EMPTY background: additives make solid, subtractives carve it, and the resulting solid's boundary is written as a single welded brush T3D to stdout. Needs at least one additive brush",
@@ -2973,15 +2973,15 @@
             {
               "class": "_StoreAction",
               "option_strings": [],
-              "dest": "name",
+              "dest": "set",
               "nargs": null,
               "const": null,
               "default": null,
               "required": true,
               "choices": null,
-              "metavar": null,
+              "metavar": "-|FILE",
               "converter": null,
-              "help": "brush actor Name to clip (case-insensitive)",
+              "help": "read the brush SET as a T3D snippet from stdin (`-`) or from a saved FILE (the `brush build … | brush clip - | actor add -` convention). `-` is the sole names source. A non-brush (point) actor is refused (exit 2). Empty stdin is a clean no-op (exit 0)",
               "mutex_group": null
             },
             {
@@ -3017,7 +3017,7 @@
               "choices": null,
               "metavar": null,
               "converter": "parse_decimal",
-              "help": "plane offset along --axis (world)",
+              "help": "plane offset along --axis, in world units",
               "mutex_group": null
             },
             {
@@ -3036,7 +3036,7 @@
                 "NX,NY,NZ"
               ],
               "converter": "parse_coord",
-              "help": "general plane: world point + normal",
+              "help": "general plane: a world point on it (PX,PY,PZ) plus its normal (NX,NY,NZ); need not be unit",
               "mutex_group": null
             },
             {
@@ -3055,23 +3055,7 @@
               ],
               "metavar": null,
               "converter": null,
-              "help": "keep the half below (opposite normal) or above (normal side)",
-              "mutex_group": null
-            },
-            {
-              "class": "_StoreAction",
-              "option_strings": [
-                "--tree"
-              ],
-              "dest": "tree",
-              "nargs": null,
-              "const": null,
-              "default": null,
-              "required": false,
-              "choices": null,
-              "metavar": "KIND/NAME",
-              "converter": null,
-              "help": "operate on this tree instead of $UEDCLI_LEVEL: KIND/NAME where KIND is level|stash|prefab and NAME is the level/stash/prefab name (may be nested, e.g. stash/hangar/arch). Default: the level named by $UEDCLI_LEVEL.",
+              "help": "keep the half below the plane (opposite the normal — DEFAULT) or above (the normal side)",
               "mutex_group": null
             }
           ],
