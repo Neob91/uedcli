@@ -99,17 +99,33 @@ def _auto_slug(reg, order: list[str]) -> str:
 
 def _dispatch_stash(args, reg) -> int:
     if args.sub == "capture":
-        # `--tree` names the SOURCE box (explicit alternative to the ambient $UEDCLI_LEVEL); it is
-        # only consulted in the trunk branch below, so combining it with an explicit --from-* source
-        # would silently ignore one — reject that up front instead of guessing.
+        # A leading `-` positional reads the T3D SOURCE from stdin; remaining names still subset it.
+        # Actor Names are never `-`, so a leading `-` is unambiguous.
+        stdin_source = bool(args.names) and args.names[0] == "-"
+        subset = args.names[1:] if stdin_source else args.names
+        # `-`, `--from-t3d`, and `--tree` each name a distinct capture SOURCE; combining two would
+        # silently ignore one — reject up front instead of guessing.
+        if stdin_source and args.from_t3d:
+            raise CommandError("a leading - reads the capture SOURCE from stdin; it cannot be "
+                                 "combined with --from-t3d")
+        if stdin_source and getattr(args, "tree", None):
+            raise CommandError("a leading - reads the capture SOURCE from stdin; it cannot be "
+                                 "combined with --tree")
         if getattr(args, "tree", None) and args.from_t3d:
             raise CommandError("--tree names the capture SOURCE box; it cannot be combined with "
                                  "--from-t3d")
+        # --from-t3d is files-only; the stdin spelling is the leading - (no `--from-t3d -`).
+        if args.from_t3d and "-" in args.from_t3d:
+            raise CommandError("--from-t3d takes T3D file(s) only; to read a T3D snippet from stdin "
+                                 "use a leading - (`… | stash capture -`), not `--from-t3d -`")
         # Validate only an EXTERNAL T3D source; capturing from the trunk is already qualified/valid.
         validate = None
         src_folders: dict[str, str | None] = {}          # per-member folders (trunk parity); external → none
-        if args.from_t3d:
-            text = ingest.read_t3d_files(args.from_t3d)         # <FILE…|-> (multiple concatenate; `-` = stdin)
+        if stdin_source:
+            text = ingest.read_t3d_input("-")
+            validate = lambda actors: ingest.validate_ingest_actors(actors, args)
+        elif args.from_t3d:
+            text = ingest.read_t3d_files(args.from_t3d)         # FILE… (multiple concatenate in order)
             validate = lambda actors: ingest.validate_ingest_actors(actors, args)
         else:
             # trunk default = the ambient $UEDCLI_LEVEL (no package manifest; the load set derives at
@@ -125,7 +141,7 @@ def _dispatch_stash(args, reg) -> int:
             src_folders = {n: level.actors[n].folder for n in level.order if n in level.actors}
             text = emit_map([level.actors[n] for n in level.order if n in level.actors])
         full, order, anchor, tex_pkgs, folders = _capture_from_t3d(
-            text, args.names, index=resources.mover_index(args, "stash capture"),
+            text, subset, index=resources.mover_index(args, "stash capture"),
             validate=validate, folders=src_folders)
         packages = sorted(tex_pkgs)
         sid = args.id or _auto_slug(reg, order)

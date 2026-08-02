@@ -63,13 +63,16 @@ def test_it_captures_a_t3d_file_into_a_session_register(tmp_path, monkeypatch):
     assert hi != lo
 
 
-def test_it_captures_from_stdin(tmp_path, monkeypatch):
+def test_it_captures_from_stdin(tmp_path, monkeypatch, capsys):
     proj, _ = _project_with_level(tmp_path, monkeypatch)
     import io
     monkeypatch.setattr("sys.stdin", io.StringIO("Begin Map\n" + _ARCH_T3D + "End Map\n"))
-    rc = dispatch.dispatch(_args(proj, sub="capture", names=[], id="a",
-                                 from_t3d=["-"], force=False))
+    rc = dispatch.dispatch(_args(proj, sub="capture", names=["-"], id="a",
+                                 from_t3d=None, force=False))
     assert rc == 0
+    assert capsys.readouterr().out.strip() == "a"          # prints the stored id
+    actors, order, _pkgs, _meta, _folders = _register(proj).read_stash("a")
+    assert "Arch" in actors and order == ["Arch"]           # the piped actor is stored
 
 
 def test_it_errors_on_a_missing_requested_actor(tmp_path, monkeypatch):
@@ -98,8 +101,8 @@ def test_capture_from_stdin_duplicate_named_actors_all_survive(tmp_path, monkeyp
     import io
     monkeypatch.setattr("sys.stdin",
                         io.StringIO("Begin Map\n" + _tri("Merlon", 0) + _tri("Merlon", 128) + "End Map\n"))
-    rc = dispatch.dispatch(_args(proj, sub="capture", names=[], id="wall",
-                                 from_t3d=["-"], force=False))
+    rc = dispatch.dispatch(_args(proj, sub="capture", names=["-"], id="wall",
+                                 from_t3d=None, force=False))
     assert rc == 0
     actors, order, _pkgs, _meta, _folders = _register(proj).read_stash("wall")
     assert len(actors) == 2 and len(order) == 2                     # both survived, distinct
@@ -113,11 +116,64 @@ def test_capture_filter_then_uniquify_keeps_all_matches(tmp_path, monkeypatch):
     import io
     monkeypatch.setattr("sys.stdin",
                         io.StringIO("Begin Map\n" + _tri("Merlon", 0) + _tri("Merlon", 128) + "End Map\n"))
-    rc = dispatch.dispatch(_args(proj, sub="capture", names=["Merlon"], id="w2",
-                                 from_t3d=["-"], force=False))
+    rc = dispatch.dispatch(_args(proj, sub="capture", names=["-", "Merlon"], id="w2",
+                                 from_t3d=None, force=False))
     assert rc == 0
     actors, order, _pkgs, _meta, _folders = _register(proj).read_stash("w2")
     assert len(actors) == 2                                         # both matches captured, not 1
+
+
+def test_stdin_source_with_from_t3d_is_a_two_source_error(tmp_path, monkeypatch, capsys):
+    proj, _ = _project_with_level(tmp_path, monkeypatch)
+    t3d = tmp_path / "arch.t3d"; t3d.write_text("Begin Map\n" + _ARCH_T3D + "End Map\n")
+    rc = dispatch.dispatch(_args(proj, sub="capture", names=["-"], id="x",
+                                 from_t3d=[str(t3d)], force=False))
+    assert rc == 2
+    assert "cannot be combined with --from-t3d" in capsys.readouterr().err
+
+
+def test_stdin_source_with_tree_is_a_two_source_error(tmp_path, monkeypatch, capsys):
+    proj, name = _project_with_level(tmp_path, monkeypatch)
+    rc = dispatch.dispatch(_args(proj, sub="capture", names=["-"], id="x",
+                                 tree=f"level/{name}", from_t3d=None, force=False))
+    assert rc == 2
+    assert "cannot be combined with --tree" in capsys.readouterr().err
+
+
+def test_from_t3d_dash_the_removed_spelling_is_rejected(tmp_path, monkeypatch, capsys):
+    # Pin the removal: `--from-t3d -` no longer reads stdin; the sole stdin spelling is a leading -.
+    proj, _ = _project_with_level(tmp_path, monkeypatch)
+    rc = dispatch.dispatch(_args(proj, sub="capture", names=[], id="x",
+                                 from_t3d=["-"], force=False))
+    assert rc == 2
+    err = capsys.readouterr().err
+    assert "--from-t3d takes T3D file(s) only" in err and "stash capture -" in err
+
+
+def test_empty_stdin_source_is_a_clean_error_not_a_no_op(tmp_path, monkeypatch, capsys):
+    # A T3D-snippet source yielding no actors is exit 2 (matching `actor add -`), NOT the name-list
+    # no-op — regression for the "never a bare exception" rule.
+    proj, _ = _project_with_level(tmp_path, monkeypatch)
+    import io
+    monkeypatch.setattr("sys.stdin", io.StringIO("   \n"))
+    rc = dispatch.dispatch(_args(proj, sub="capture", names=["-"], id="x",
+                                 from_t3d=None, force=False))
+    assert rc == 2
+    err = capsys.readouterr().err
+    assert "capture source has no actors" in err and "Traceback" not in err
+
+
+def test_stdin_source_round_trips_through_show(tmp_path, monkeypatch, capsys):
+    # `… | stash capture - --id baked` then `stash show baked` returns the captured actor.
+    proj, _ = _project_with_level(tmp_path, monkeypatch)
+    import io
+    monkeypatch.setattr("sys.stdin",
+                        io.StringIO("Begin Map\n" + _cube_actor_t3d("Baked") + "End Map\n"))
+    assert dispatch.dispatch(_args(proj, sub="capture", names=["-"], id="baked",
+                                   from_t3d=None, force=False)) == 0
+    assert capsys.readouterr().out.strip() == "baked"
+    assert dispatch.dispatch(_args(proj, sub="show", id="baked", names=[], summary=False)) == 0
+    assert "Baked" in capsys.readouterr().out
 
 
 def test_it_shows_dumps_t3d_and_summary_and_lists_and_drops(tmp_path, monkeypatch, capsys):

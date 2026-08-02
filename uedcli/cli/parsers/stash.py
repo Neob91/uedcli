@@ -12,15 +12,18 @@ def register(sub) -> None:
     stsub = stash.add_subparsers(dest="sub", required=True)
 
     cap = stsub.add_parser("capture", help="capture actors into a register entry")
-    cap.add_argument("names", nargs="*", help="actors to capture; empty with --from-* = all")
+    cap.add_argument("names", nargs="*",
+                     help="actors to capture; empty = the whole source. A leading - reads a T3D "
+                          "snippet from stdin as the SOURCE (`… | stash capture -`); any remaining "
+                          "names still subset it")
     cap.add_argument("--id", default=None, help="register id (default: auto-slug)")
     cap.add_argument("--force", action="store_true", help="overwrite an existing --id")
     cap.add_argument("--from-t3d", dest="from_t3d", nargs="+", default=None, metavar="FILE",
-                     help="capture from these T3D file(s) instead of $UEDCLI_LEVEL, or - for a T3D "
-                          "stream on stdin. Multiple files concatenate in order; - is the sole value "
-                          "if present. (`names` still selects a subset of the source)")
+                     help="capture from these T3D file(s) instead of $UEDCLI_LEVEL. Multiple files "
+                          "concatenate in order. (`names` still selects a subset of the source; to "
+                          "read the T3D from stdin use a leading - instead)")
     _tree_flag(cap)       # name the SOURCE tree explicitly instead of $UEDCLI_LEVEL;
-                            # only consulted when --from-t3d is not given
+                            # only consulted when neither a leading - nor --from-t3d is given
 
     stshow = stsub.add_parser("show", help="dump a register entry's T3D (default) or --summary")
     stshow.add_argument("id", help="register id to show")

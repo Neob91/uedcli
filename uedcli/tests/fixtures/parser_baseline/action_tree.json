@@ -9808,7 +9808,7 @@
               "choices": null,
               "metavar": null,
               "converter": null,
-              "help": "actors to capture; empty with --from-* = all",
+              "help": "actors to capture; empty = the whole source. A leading - reads a T3D snippet from stdin as the SOURCE (`… | stash capture -`); any remaining names still subset it",
               "mutex_group": null
             },
             {
@@ -9856,7 +9856,7 @@
               "choices": null,
               "metavar": "FILE",
               "converter": null,
-              "help": "capture from these T3D file(s) instead of $UEDCLI_LEVEL, or - for a T3D stream on stdin. Multiple files concatenate in order; - is the sole value if present. (`names` still selects a subset of the source)",
+              "help": "capture from these T3D file(s) instead of $UEDCLI_LEVEL. Multiple files concatenate in order. (`names` still selects a subset of the source; to read the T3D from stdin use a leading - instead)",
               "mutex_group": null
             },
             {

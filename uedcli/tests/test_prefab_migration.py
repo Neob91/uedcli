@@ -130,8 +130,8 @@ def test_external_mover_captured_at_nonzero_keynum_stores_canonical(tmp_path, mo
              "    Location=(X=0.000000,Y=0.000000,Z=356.000000)\n    Name=\"M\"\nEnd Actor\n")
     import io
     monkeypatch.setattr("sys.stdin", io.StringIO("Begin Map\n" + mover + "End Map\n"))
-    cap = argparse.Namespace(cmd="stash", sub="capture", id="mv", force=False, names=[],
-                             from_t3d=["-"], project=str(proj))
+    cap = argparse.Namespace(cmd="stash", sub="capture", id="mv", force=False, names=["-"],
+                             from_t3d=None, project=str(proj))
     assert dispatch.dispatch(cap) == 0
     stored = (reg.root / "mv" / "actors" / "M" / "actor.t3d").read_text()
     # Canonicalized at CAPTURE: KeyNum folded away (the read path no longer does this). The base pose

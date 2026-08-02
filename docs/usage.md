@@ -1296,7 +1296,7 @@ shared code path, with any per-box extras (`meta.json` capture anchor, `packages
 ## Stash
 
 ```
-stash capture [--id ID] [--force] [--from-t3d <FILE…|->] [<names…>]
+stash capture [- [<names…>] | <names…>] [--id ID] [--force] [--from-t3d <FILE…>]
 stash show    <id> [<names…>] [--summary]        # T3D dump (default), or a bbox/class/poly summary
 stash list                                        # register ids
 stash preview <id> [<names…>] <preview opts>      # composite render (like actor preview)
@@ -1305,9 +1305,11 @@ stash apply   <id> [--at X,Y,Z] [--group NAME | --no-group] [--folder PATH]
 stash promote <id> --as <name> [--force] [--prefab-dir DIR]
 ```
 
-- **`stash capture`** takes actors from the current level (empty names + `--from-t3d` = all), or from
-  one-or-more T3D files (or a `-` stdin snippet) via **`--from-t3d <FILE…|->`** (multiple concatenate;
-  `-` is the sole value; `names` still selects a subset of the source). `--id` defaults to an
+- **`stash capture`** takes actors from the current level (empty names = all), from one-or-more T3D
+  files via **`--from-t3d <FILE…>`** (multiple concatenate), or from a **`-` stdin T3D snippet**
+  (`brush build cube | stash capture -`). A leading `-` reads the T3D from stdin as the source; any
+  remaining names still select a subset. `-` is mutually exclusive with `--from-t3d` and `--tree`
+  (each names a source); empty/whitespace-only stdin exits 2. `--id` defaults to an
   auto-slug from the first actor name; `--force` overwrites an existing id. Capture normalizes the set
   to its bbox-min corner and records the original world anchor. It reads the game's `.u` packages
   (an ingested Mover is folded to its base pose, needing the class hierarchy — see
