@@ -6161,6 +6161,7 @@
                 "pan",
                 "rotate",
                 "scale",
+                "move",
                 "find",
                 "align"
               ],
@@ -6170,6 +6171,7 @@
                 "pan": "shift a face's texture by whole texels (the Pan field); never moves the frame",
                 "rotate": "turn a face's texture within its own plane (no continuity across faces)",
                 "scale": "resize a face's texture in place (no continuity across faces)",
+                "move": "translate whole faces: move every vertex of each face by a world delta",
                 "find": "print a brush's matching faces as BRUSH:idx selectors (feed to poly align/set)",
                 "align": "align faces so a texture flows continuously across them (wall/floor/ring)"
               }
@@ -6626,6 +6628,79 @@
                   "metavar": "FU,FV",
                   "converter": "parse_factor_pair",
                   "help": "multiply the texture's APPARENT SIZE: --by 2,2 makes it look twice as big, --by 0.5,1 halves its width only. U and V are independent. (Internally this DIVIDES the stored TextureU/TextureV magnitudes, because T3D density is texels per world unit — the flag is named for what you see.) Factors must be positive. The face's own centre keeps its texture coordinate, so the texture grows in place rather than sliding off; scale BEFORE `brush poly align run`, never after, since the run's seam phases are computed for the density they saw",
+                  "mutex_group": null
+                },
+                {
+                  "class": "_StoreAction",
+                  "option_strings": [
+                    "--tree"
+                  ],
+                  "dest": "tree",
+                  "nargs": null,
+                  "const": null,
+                  "default": null,
+                  "required": false,
+                  "choices": null,
+                  "metavar": "KIND/NAME",
+                  "converter": null,
+                  "help": "operate on this tree instead of $UEDCLI_LEVEL: KIND/NAME where KIND is level|stash|prefab and NAME is the level/stash/prefab name (may be nested, e.g. stash/hangar/arch). Default: the level named by $UEDCLI_LEVEL.",
+                  "mutex_group": null
+                }
+              ],
+              "subparsers": {}
+            },
+            "move": {
+              "class": "_CoordArgumentParser",
+              "prog": "uedcli brush poly move",
+              "mutex_groups": [],
+              "actions": [
+                {
+                  "class": "_HelpAction",
+                  "option_strings": [
+                    "-h",
+                    "--help"
+                  ],
+                  "dest": "help",
+                  "nargs": 0,
+                  "const": null,
+                  "default": {
+                    "__suppress__": true
+                  },
+                  "required": false,
+                  "choices": null,
+                  "metavar": null,
+                  "converter": null,
+                  "help": "show this help message and exit",
+                  "mutex_group": null
+                },
+                {
+                  "class": "_StoreAction",
+                  "option_strings": [],
+                  "dest": "targets",
+                  "nargs": "+",
+                  "const": null,
+                  "default": null,
+                  "required": true,
+                  "choices": null,
+                  "metavar": "BRUSH:SELECTOR",
+                  "converter": null,
+                  "help": "BRUSH:SELECTOR (SELECTOR = 'all' or comma-separated poly indices); repeatable, e.g. Wall1:3,5 Wall2:all. A bare brush name is NOT accepted — say Wall1:all. Or the single token - to read the targets from stdin (the BRUSH:idx lines `brush poly find` and every per-face verb print); - is the sole source, not mixable with BRUSH:SELECTOR args, and empty stdin is a clean no-op (exit 0)",
+                  "mutex_group": null
+                },
+                {
+                  "class": "_StoreAction",
+                  "option_strings": [
+                    "--by"
+                  ],
+                  "dest": "by",
+                  "nargs": null,
+                  "const": null,
+                  "default": null,
+                  "required": true,
+                  "choices": null,
+                  "metavar": "DX,DY,DZ",
+                  "converter": "parse_coord",
+                  "help": "world delta added to every vertex of each selected face. Moves the brush's WELDED corners, so a corner shared with an UNSELECTED face moves too and that neighbour deforms. Most non-axis-aligned moves push a neighbour non-planar and are REJECTED (exit 2); moving a face along its own normal is the safe case. Rotation/PrePivot/scale-aware, per brush",
                   "mutex_group": null
                 },
                 {

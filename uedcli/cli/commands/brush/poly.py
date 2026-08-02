@@ -1,5 +1,5 @@
-"""`brush poly list|set|pan|rotate|scale|find|align` — per-surface (polygon) query and edit. Pure,
-model-side (no editor).
+"""`brush poly list|set|pan|rotate|scale|move|find|align` — per-surface (polygon) query and edit.
+Pure, model-side (no editor).
 
 The query verbs read the trunk level the route resolved; the mutators transform it and write it
 back. `set`/`pan`/`rotate`/`scale` print the faces they touched as `BRUSH:idx` selectors (stdout) so
@@ -63,6 +63,8 @@ def run(args, src) -> int:
         return _rotate(args, src)
     if args.polysub == "scale":
         return _scale(args, src)
+    if args.polysub == "move":
+        return _move(args, src)
     if args.polysub == "find":
         return _find(args, src)
     if args.polysub == "align":
@@ -161,6 +163,22 @@ def _scale(args, src) -> int:
     src.save(verb="poly-scale", args={"targets": targets, "by": [str(c) for c in args.by]},
              level=level, touched=touched)
     return _print_poly_selectors(level, targets, touched, "scaled")
+
+
+def _move(args, src) -> int:
+    from .... import surface
+    targets = target_names.resolve_target_names(args.targets)
+    if not targets:
+        return 0
+    level = src.load()
+    try:
+        touched = surface.apply_move(level, targets, by=args.by)
+    except ValueError as e:                          # incl. GeometryError (a non-planar neighbour)
+        print(str(e), file=sys.stderr)
+        return 2
+    src.save(verb="poly-move", args={"targets": targets, "by": [str(c) for c in args.by]},
+             level=level, touched=touched)
+    return _print_poly_selectors(level, targets, touched, "moved")
 
 
 def _find(args, src) -> int:

@@ -25,6 +25,7 @@ from __future__ import annotations
 import math
 from decimal import Decimal
 
+from . import rotation, vertex
 from .emit import fmt_vertex
 from .geometry import validate_brush
 from .model import Actor, CoordinateError, Level
@@ -204,6 +205,32 @@ def apply_pan(level: Level, targets: list[str], *, pan_to: tuple[int, int] | Non
     for brush_name in touched:
         validate_brush(level.actors[brush_name].brush)
     return touched
+
+
+def apply_move(level: Level, targets: list[str], *, by) -> list[str]:
+    """`brush poly move --by DX,DY,DZ` — translate whole faces model-side, via `vertex.move_vertices`.
+
+    Per brush: collect the WELDED corners any selected poly touches (welding dedupes a corner two
+    selected adjacent faces share, so `move_vertices` never sees a repeated selector), map the world
+    `by` into that brush's local frame (`world_to_local_delta`, per-actor), and move those corners.
+    Every copy of a moved corner shifts together, so the brush stays watertight and a face sharing it
+    DEFORMS — including a neighbour that was not selected, but NOT one in a different brush (welding is
+    per-brush). `move_vertices` validates each result, so a degenerate/non-planar outcome raises
+    `GeometryError`. All-or-nothing: `resolve_targets` names the first offender before any mutation.
+
+    (The `--by` help calls most non-axis moves rejected; inaccurate for quad brushes, where a
+    whole-face constant-delta move keeps neighbours planar — board `brush-poly-move-spec-help-...`.)"""
+    pairs = resolve_targets(level, targets)
+    selected: dict[str, set[int]] = {}
+    for brush_name, idx in pairs:
+        selected.setdefault(brush_name, set()).add(idx)
+    for brush_name, idxs in selected.items():
+        actor = level.actors[brush_name]
+        corners = [w.coord for w in vertex.weld_vertices(actor.brush)
+                   if any(pi in idxs for pi, _ in w.refs)]
+        local_delta = rotation.world_to_local_delta(actor, by)
+        actor.brush = vertex.move_vertices(actor.brush, corners, by=local_delta)
+    return _touched_brushes(pairs)
 
 
 # --------------------------------------------------------- the texture frame: rotate and scale

@@ -506,6 +506,7 @@ geometry; `--no-lock-textures` leaves the mapping fixed.
 | `<generator> \| brush clip - (--axis A --offset N \| --plane PX,PY,PZ NX,NY,NZ) [--keep below\|above]` | clip every brush in a piped T3D set by one world plane; T3D to stdout |
 | `<generator> \| brush replace <name> -` | in-place shape swap, keeping the target's identity |
 | `brush vertex move <name> --at X,Y,Z (--to X,Y,Z \| --by DX,DY,DZ)` | move welded corners (selected by coordinate; repeat `--at`) |
+| `brush poly move BRUSH:SELECTOR… \| - --by DX,DY,DZ` | translate whole faces: move every vertex of each face by a world delta |
 | `brush poly set BRUSH:SELECTOR… \| -` | set the texture / surface flags on one or more faces |
 | `brush poly pan BRUSH:SELECTOR… \| - (--to\|--by) U,V` | shift a face's texture by whole texels |
 | `brush poly rotate BRUSH:SELECTOR… \| - --by UU` | turn a face's texture within its own plane |
@@ -537,6 +538,13 @@ stdin is a clean no-op; input with no brush geometry, or more than one brush, is
 (`--at`, repeatable). `--to` needs exactly one `--at`; `--by` applies a delta to every `--at` corner.
 `brush vertex move` is **rotation-aware** — a world coord is mapped into the brush's local frame, so
 it edits a rotated brush correctly and preserves `Rotation` (as does the `brush clip` filter above).
+
+**`brush poly move --by DX,DY,DZ`** is the whole-face counterpart: it translates every vertex of each
+selected face by a world delta, model-side and rotation-aware like `brush vertex move`. It takes the
+same `BRUSH:SELECTOR` targets as the poly texture verbs below (`-` for stdin). Because a brush stores
+welded corners, a corner shared with an unselected face moves too and that neighbour deforms — the
+solid stays watertight. Most non-axis-aligned moves push a neighbour off its plane and are rejected
+(exit 2 naming the face); moving a face along its own normal is the safe case.
 
 Two different jobs, two verbs. **`brush poly set`** assigns a face's stored **attributes** — which
 texture is on it, which surface flags it carries. **`brush poly pan` / `rotate` / `scale`** transform

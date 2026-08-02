@@ -516,6 +516,20 @@ def register(sub) -> None:
                            "the run's seam phases are computed for the density they saw")
     _tree_flag(pscl)
 
+    # `poly move`: a GEOMETRY verb (not a texture-frame transform) — translate whole faces. Peer of
+    # `brush vertex move`, sharing the poly texture verbs' BRUSH:SELECTOR grammar. Plain required
+    # `--by`, not a one-member group (mirrors `scale`; `--to` centroid-target is deferred to v2).
+    pmove = psub.add_parser(
+        "move", help="translate whole faces: move every vertex of each face by a world delta")
+    pmove.add_argument("targets", nargs="+", metavar="BRUSH:SELECTOR", help=_POLY_TARGETS_HELP)
+    pmove.add_argument("--by", dest="by", type=parse_coord, required=True, metavar="DX,DY,DZ",
+                       help="world delta added to every vertex of each selected face. Moves the "
+                            "brush's WELDED corners, so a corner shared with an UNSELECTED face moves "
+                            "too and that neighbour deforms. Most non-axis-aligned moves push a "
+                            "neighbour non-planar and are REJECTED (exit 2); moving a face along its "
+                            "own normal is the safe case. Rotation/PrePivot/scale-aware, per brush")
+    _tree_flag(pmove)
+
     # `poly find`: a stateless PRODUCER — prints matching `BRUSH:idx` selectors (one per line) that
     # `brush poly align -` / `brush poly set` consume. Narrows a brush's faces by intrinsic labels.
     pfind = psub.add_parser(
