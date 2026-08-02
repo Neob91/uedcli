@@ -16,7 +16,9 @@ descendants (T0b).
 Add a texture enumerator: per package on `config.composed_search_files`, every export whose class
 descends from `Engine.Texture` → its ref `Package[.Group].Name` (group = export Outer). Use
 `utexture.class_fqcn_of_export` + `resources.class_index(project).descends_from(fqcn, "Engine.Texture")`.
-Add an `ENGINE_TEXTURE` constant beside `ENGINE_ACTOR` in `classindex`.
+A `None` fqcn (locally-defined class, `class_fqcn_of_export` `:353-354`) is not a texture — skip it,
+never pass `None` to `descends_from` (`None.casefold()` crashes). Add an `ENGINE_TEXTURE` constant
+beside `ENGINE_ACTOR` in `classindex`.
 
 - **Tests:** a synthetic package with a `Texture`, a `FireTexture` (descendant), and a non-texture
   export → the first two enumerate, the third does not; refs are `Package.Name` / `Package.Group.Name`;
@@ -25,13 +27,17 @@ Add an `ENGINE_TEXTURE` constant beside `ENGINE_ACTOR` in `classindex`.
 
 ## T0b — Widen the decode seam to `Engine.Texture` descendants
 
-`TextureResolver` matches `pkg.class_of_export(i) == "Texture"` exactly (`utexture.textures`,
-`_texture_named`, `_decode_ref`), so a `FireTexture`/`ScriptedTexture` subclass returns
-`unknown-texture`, never `no-mip-data` — killing the procedural name-key path and making
-show/preview/classify/`exists` on any `Engine.Texture` descendant exit 2. Give `TextureResolver` the
-class index and replace the exact `== "Texture"` test with
-`descends_from(class_fqcn_of_export(pkg, i), "Engine.Texture")` in `textures`, `_texture_named`, and
-`_decode_ref`. A real `utexture.py` edit, not reuse; do it before T1 so the procedural path exists.
+The exact `pkg.class_of_export(i) == "Texture"` test lives only in `utexture.textures` (`:341`);
+`_texture_named` (`:875`) and `_decode_ref` (`:952`) hold no class test — both delegate via
+`for i in textures(pkg)`. So a `FireTexture`/`ScriptedTexture` subclass returns `unknown-texture`,
+never `no-mip-data` — killing the procedural name-key path and making show/preview/classify/`exists`
+on any `Engine.Texture` descendant exit 2. Widen `textures()` alone: its signature gains the class
+index, replacing the `== "Texture"` test with
+`descends_from(class_fqcn_of_export(pkg, i), "Engine.Texture")`. That cascades to both delegating
+callers (they pass the index through); `textures()` has no other callers, so the change is contained.
+Skip a `None` fqcn (`class_fqcn_of_export` returns `None` for a locally-defined class, `:353-354`) —
+treat it as not a texture, never feed `None` to `descends_from` (`None.casefold()` crashes). A real
+`utexture.py` edit, not reuse; do it before T1 so the procedural path exists.
 
 - **Tests:** `_decode_ref`/`exists` resolve a `FireTexture` export (→ `no-mip-data`, not
   `unknown-texture`); a non-texture export still misses; a plain `Texture` still resolves.
@@ -81,7 +87,8 @@ Deleting `sync` orphans the container-export module — only the `sync` handler 
 `texture.batchexport_textures` (`cli/commands/texture.py:102`). Per no-back-compat-cruft, delete
 `uedcli/texture.py`, `uedcli/tests/test_texture.py`, and `uedcli/tests/test_texture_integration.py`
 in this same change. Rewrite/remove the legacy `texture sync`/`classify`/`Manifest`/`TextureEntry`
-cases in `uedcli/tests/test_dispatch.py` (~:1014-1115) so `bin/test` stays green.
+cases in `uedcli/tests/test_dispatch.py` (~:924-1072 — the `_tex_project` fixture, the `sync` tests
+from ~941, and the `classify`/`Manifest`/`TextureEntry` cases) so `bin/test` stays green.
 
 - **Tests:** `list` refs one-per-line; `--json` row shape `{ref, identity, classified, group, masked, preview:null}`;
   `--group`/`--masked`/`--classified` filter; `show` human + `--json` shapes; a bad ref exits 2 naming
@@ -137,8 +144,8 @@ reviews `git diff base...HEAD` (prompt it to read `dev/docs/unrealed/t3d.md`, `d
 ## Deferred (own board items, not this plan)
 
 `--similar`/phash; the content-addressed preview pool; the derived per-`(kind,package)` index; the
-shard-index roll-up; `classify prune`/`list-outdated` (blocked on
-`questions/texture-rekey-across-a-pixel-edit.md`). Not started here.
+shard-index roll-up; `classify prune`/`list-outdated` (blocked on board item
+`texture-classify-rekey-and-prune`, `questions/rekey-across-a-pixel-edit.md`). Not started here.
 
 ## Sequencing note
 

@@ -221,6 +221,6 @@ These approved folds **landed** in `direction/asset-catalog.md` + `packages.md` 
 
 ## 11. Open owner decision
 
-`questions/texture-rekey-across-a-pixel-edit.md` — a pixel edit re-keys the classification and
+Board item `texture-classify-rekey-and-prune` (`questions/rekey-across-a-pixel-edit.md`) — a pixel edit re-keys the classification and
 `prune --outdated` would delete a still-accurate description, with no re-key path. Blocks only the
 lifecycle work (which is a deferred engine item anyway), so the first texture slices proceed without it.

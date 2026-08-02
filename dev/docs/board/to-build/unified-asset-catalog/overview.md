@@ -21,7 +21,7 @@ covers yet). The texture arm's `questions/` blockers are cleared (four-open fold
 split out), so it is startable once the spec passes a round and the plan is re-cut and reviewed.
 
 Plan: board item `the-unified-asset-catalog-spec-revision`.
-Spec: SPLIT 2026-07-26 into [`engine`](spec.md) + `class` (board item `the-asset-catalog-class-arm-needs-four-changes`) + [`texture`](spec-texture-arm.md) + `audio` (board item `sound-corpus-remeasure`).
+Spec: SPLIT 2026-07-26 into [`texture`](spec.md) + `class` (board item `the-asset-catalog-class-arm-needs-four-changes`) + `audio` (board item `sound-corpus-remeasure`); the shared-engine pieces stay tracked as their own board items.
 Decisions: [`../../../direction/asset-catalog.md`](../../../direction/asset-catalog.md) (the owner's) and
 `../../../rationale/` (the agent's) — **not** the retired decisions ledger.
 
