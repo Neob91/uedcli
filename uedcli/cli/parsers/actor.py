@@ -171,7 +171,7 @@ def register(sub) -> None:
         "folder",
         help="manage an actor's uedcli-side FOLDER: a hierarchical dotted organization path "
              "(castle.tower.roof) stored in a trunk sidecar — NOT the T3D Group prop, never emitted "
-             "to the built map. Sub-verbs: set / unset / get")
+             "to the built map. Sub-verbs: set / unset / get / rename")
     fsub = folder.add_subparsers(dest="foldersub", required=True)
     _NAMES_OR_STDIN = ("actor Names (case-insensitive), or the single token - to read a "
                        "newline-separated name list from stdin (e.g. `actor find … | actor folder "
@@ -197,6 +197,19 @@ def register(sub) -> None:
                            "(an unfoldered actor maps to null, not the literal `(none)` string) — "
                            "for scripts that would otherwise choke on the sentinel")
     _tree_flag(fget)
+    frn = fsub.add_parser("rename",
+        help="re-parent/rename a whole folder subtree: rewrite every actor filed at OLD or under it "
+             "(OLD and OLD.*) so its OLD prefix becomes NEW. `castle.tower` also moves "
+             "`castle.tower.roof`. Folders have no existence apart from the actors filed in them, so "
+             "this is purely a bulk sidecar rewrite. Prints the touched actor Names to stdout, the "
+             "count to stderr. Trunk-only (rejects --tree stash|prefab).")
+    frn.add_argument("old", metavar="OLD-PATH",
+        help="the literal source folder path to move (its whole subtree comes with it); "
+             "case-insensitive. A path no actor is filed under is an error (exit 2).")
+    frn.add_argument("new", metavar="NEW-PATH",
+        help="the literal destination folder path; the matched actors' OLD prefix is replaced with "
+             "it (segments [A-Za-z0-9_+-], stored as authored).")
+    _tree_flag(frn)
 
     label = asub.add_parser(
         "label",

@@ -241,6 +241,105 @@ def test_folder_verbs_reject_stash_target(tmp_path, monkeypatch, capsys, sub, ex
     assert "folders apply only to a level" in capsys.readouterr().err
 
 
+# ── CLI: actor folder rename ─────────────────────────────────────────────────────────
+
+def test_folder_rename_moves_the_whole_subtree(tmp_path, monkeypatch, capsys):
+    root = _mkproject(tmp_path, monkeypatch, [
+        _light("Tower_1", folder="castle.tower"),
+        _light("Roof_2", folder="castle.tower.roof"),
+        _light("Barn_3", folder="barn"),
+    ])
+    capsys.readouterr()
+    assert _run(["actor", "folder", "rename", "castle.tower", "keep.spire"]) == 0
+    cap = capsys.readouterr()
+    assert set(cap.out.splitlines()) == {"Tower_1", "Roof_2"}     # touched names to stdout
+    assert "2 actor(s)" in cap.err
+    lvl = _read(root)
+    assert lvl.actors["Tower_1"].folder == "keep.spire"
+    assert lvl.actors["Roof_2"].folder == "keep.spire.roof"
+    assert lvl.actors["Barn_3"].folder == "barn"                 # unrelated, untouched
+
+
+def test_folder_rename_respects_segment_boundary(tmp_path, monkeypatch, capsys):
+    """`rename castle.tower …` must not move `castle.towerhouse` — the match is at a segment
+    boundary (`old` or `old + '.'`), not a raw string prefix."""
+    root = _mkproject(tmp_path, monkeypatch, [
+        _light("Tower_1", folder="castle.tower"),
+        _light("House_2", folder="castle.towerhouse"),
+    ])
+    capsys.readouterr()
+    assert _run(["actor", "folder", "rename", "castle.tower", "keep"]) == 0
+    assert capsys.readouterr().out.splitlines() == ["Tower_1"]
+    lvl = _read(root)
+    assert lvl.actors["Tower_1"].folder == "keep"
+    assert lvl.actors["House_2"].folder == "castle.towerhouse"    # NOT moved
+
+
+def test_folder_rename_old_is_case_insensitive_new_stored_as_authored(tmp_path, monkeypatch, capsys):
+    root = _mkproject(tmp_path, monkeypatch, [
+        _light("Tower_1", folder="Castle.Tower"),
+        _light("Roof_2", folder="castle.tower.Roof"),
+    ])
+    capsys.readouterr()
+    assert _run(["actor", "folder", "rename", "CASTLE.tower", "Keep.Spire"]) == 0
+    lvl = _read(root)
+    assert lvl.actors["Tower_1"].folder == "Keep.Spire"          # new stored as authored
+    assert lvl.actors["Roof_2"].folder == "Keep.Spire.Roof"      # tail keeps its authored case
+
+
+def test_folder_rename_into_own_subtree_is_one_pass(tmp_path, monkeypatch, capsys):
+    """`a` → `a.b`: the single pass rewrites the originals only (`a`→`a.b`, existing `a.b`→`a.b.b`),
+    never re-visiting a value it just wrote."""
+    root = _mkproject(tmp_path, monkeypatch, [
+        _light("Root_1", folder="a"),
+        _light("Child_2", folder="a.b"),
+    ])
+    capsys.readouterr()
+    assert _run(["actor", "folder", "rename", "a", "a.b"]) == 0
+    lvl = _read(root)
+    assert lvl.actors["Root_1"].folder == "a.b"
+    assert lvl.actors["Child_2"].folder == "a.b.b"
+
+
+@pytest.mark.parametrize("old,new", [("a..b", "keep"), ("keep", "x*y")])
+def test_folder_rename_bad_grammar_errors_exit2(tmp_path, monkeypatch, capsys, old, new):
+    root = _mkproject(tmp_path, monkeypatch, [_light("Tower_1", folder="keep")])
+    assert _run(["actor", "folder", "rename", old, new]) == 2
+    err = capsys.readouterr().err
+    assert (old if ".." in old else new) in err
+    assert _read(root).actors["Tower_1"].folder == "keep"        # no write on a bad path
+
+
+def test_folder_rename_old_matching_nothing_errors_exit2(tmp_path, monkeypatch, capsys):
+    """`old` is an exact typed path, not a glob — a path no actor is filed under fails loudly
+    (exit 2 naming `old`, owner 2026-08-02), never a silent no-op. No mutation, empty stdout."""
+    root = _mkproject(tmp_path, monkeypatch, [_light("Tower_1", folder="castle.tower")])
+    capsys.readouterr()
+    assert _run(["actor", "folder", "rename", "castle.twoer", "keep"]) == 2
+    cap = capsys.readouterr()
+    assert "castle.twoer" in cap.err
+    assert cap.out == ""                                         # nothing on stdout
+    assert _read(root).actors["Tower_1"].folder == "castle.tower"   # unchanged
+
+
+def test_folder_rename_rejects_stash_target(tmp_path, monkeypatch, capsys):
+    _mkproject(tmp_path, monkeypatch, [_light("A_1", folder="a")])
+    assert _run(["actor", "folder", "rename", "a", "b", "--tree", "stash/foo"]) == 2
+    assert "folders apply only to a level" in capsys.readouterr().err
+
+
+def test_folder_rename_persists_via_delta_write(tmp_path, monkeypatch):
+    """The rewritten folders survive a reload (delta-write path, mirrors the set case)."""
+    root = _mkproject(tmp_path, monkeypatch, [
+        _light("Tower_1", folder="castle.tower"),
+        _light("Roof_2", folder="castle.tower.roof"),
+    ])
+    assert _run(["actor", "folder", "rename", "castle.tower", "keep.spire"]) == 0
+    lvl = _read(root)
+    assert lvl.actors["Tower_1"].folder == "keep.spire"
+    assert lvl.actors["Roof_2"].folder == "keep.spire.roof"
+
+
 # ── CLI: actor add --folder + the carrier ───────────────────────────────────────────
 
 _LIGHT_T3D = ("Begin Actor Class=Engine.Light Name=Src\n"

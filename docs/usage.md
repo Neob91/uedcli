@@ -41,7 +41,7 @@ offending value and exits non-zero (typically exit 2).
 Set-mutating verbs are producers — they print their touched/allocated actor names to stdout
 (one per line) plus a summary to stderr, so they chain via `-`
 (`actor find | actor rotate - | brush scale -`): `actor add` (allocated names), `actor duplicate`,
-`actor rotate` / `order` / `move` / `delete` / `prop set|unset` / `folder set|unset` /
+`actor rotate` / `order` / `move` / `delete` / `prop set|unset` / `folder set|unset|rename` /
 `label add|remove|clear`, `brush scale` / `brush apply-transform` / `brush poly align`
 (touched brush names), and `stash apply` / `prefab apply`. For `delete` the stdout is the removed
 names — a log, since they no longer exist to pipe into an edit.
@@ -345,7 +345,9 @@ beside the actor, is **never emitted to the built map**, and is a **separate dim
   <path>` — which emits a `// uedcli-folder:` carrier in the T3D; `actor add` persists it (it has no
   `--folder` of its own). `actor show` emits the same carrier, so `actor show A | actor add -` round-trips.
 - **Manage:** `actor folder set --to <path> <names…|->`, `actor folder unset <names…|->`,
-  `actor folder get <names…|->`. `set`/`unset` are PRODUCERS (touched Names → stdout, a summary →
+  `actor folder get <names…|->`, `actor folder rename <old-path> <new-path>` (re-parent/rename a whole
+  subtree: rewrites the `old` prefix to `new` on every actor filed at `old` or under it; `old`
+  matching no actor is an error). `set`/`unset`/`rename` are PRODUCERS (touched Names → stdout, a summary →
   stderr), so they chain: `uedcli actor find --subclass-of Engine.Light | uedcli actor folder set
   --to castle.lights - | uedcli actor prop set - LightBrightness=200`.
 - **Query:** `actor find --folder <pattern>`.
@@ -416,7 +418,7 @@ also accepts `--tree KIND/NAME` (see below) to edit a different box.
 | `actor order <names…\|-> (--first \| --last \| --before NAME \| --after NAME)` | reorder EXISTING actors' CSG precedence (no geometry change) |
 | `actor prop set <name> KEY[.PATH]=VALUE…` | set properties in one atomic, schema-validated edit |
 | `actor prop unset <name> KEY[.PATH]…` | clear properties (revert to class default) |
-| `actor folder set/unset` | manage the uedcli-side folder (see Folders); prints the touched names |
+| `actor folder set/unset/rename` | manage the uedcli-side folder (see Folders); prints the touched names |
 | `actor label add/remove/clear` | manage the uedcli-side labels (see Labels) |
 
 **`actor add`** — a point actor enters via `MAP IMPORTADD`, a brush via `EDIT PASTE` (only

@@ -141,7 +141,7 @@
             "find": "print names of matching actors (one per line) for piping into name-taking verbs; with no filters, prints every actor",
             "show": "print named actors' full T3D blocks",
             "duplicate": "copy one or more actors (sugar for `actor show <names> | actor add -`): each copy gets a fresh Name, is appended last in CSG order, INHERITS its source's labels, and additionally gets one fresh `dup-<rand>` batch label (so the whole copied batch is re-addressable via `actor find --label dup-<rand>`). A placement is REQUIRED (--by or --at) so copies never silently overlap their originals. Prints the allocated Names to stdout (one per line); the count + batch label go to stderr",
-            "folder": "manage an actor's uedcli-side FOLDER: a hierarchical dotted organization path (castle.tower.roof) stored in a trunk sidecar — NOT the T3D Group prop, never emitted to the built map. Sub-verbs: set / unset / get",
+            "folder": "manage an actor's uedcli-side FOLDER: a hierarchical dotted organization path (castle.tower.roof) stored in a trunk sidecar — NOT the T3D Group prop, never emitted to the built map. Sub-verbs: set / unset / get / rename",
             "label": "manage an actor's uedcli-side LABELS: a flat, multi-valued set of classification tokens (lighting, flammable, dup-a1f) stored in a trunk sidecar — orthogonal to the FOLDER path, the T3D Group prop, and the T3D Tag prop, never emitted to the built map. Sub-verbs: add / remove / clear / get. Level-only (rejects --tree stash|prefab)",
             "build": "build a point actor T3D and write to stdout (stateless; no level needed)",
             "add": "add actors from a T3D file (or - for stdin) to the $UEDCLI_LEVEL's trunk",
@@ -715,12 +715,14 @@
               "subparser_choices": [
                 "set",
                 "unset",
-                "get"
+                "get",
+                "rename"
               ],
               "subparser_help": {
                 "set": "assign a folder path to one or more actors (validate-all before any write; all sidecars land or none do). Echoes touched Names to stdout",
                 "unset": "clear the folder (remove the sidecar file) on one or more actors. Echoes touched Names to stdout",
-                "get": "print each actor's folder path, one line per actor in argument order; an unfoldered actor prints `(none)`"
+                "get": "print each actor's folder path, one line per actor in argument order; an unfoldered actor prints `(none)`",
+                "rename": "re-parent/rename a whole folder subtree: rewrite every actor filed at OLD or under it (OLD and OLD.*) so its OLD prefix becomes NEW. `castle.tower` also moves `castle.tower.roof`. Folders have no existence apart from the actors filed in them, so this is purely a bulk sidecar rewrite. Prints the touched actor Names to stdout, the count to stderr. Trunk-only (rejects --tree stash|prefab)."
               }
             }
           ],
@@ -907,6 +909,77 @@
                   "metavar": null,
                   "converter": null,
                   "help": "emit a JSON object mapping each canonical actor Name to its folder path (an unfoldered actor maps to null, not the literal `(none)` string) — for scripts that would otherwise choke on the sentinel",
+                  "mutex_group": null
+                },
+                {
+                  "class": "_StoreAction",
+                  "option_strings": [
+                    "--tree"
+                  ],
+                  "dest": "tree",
+                  "nargs": null,
+                  "const": null,
+                  "default": null,
+                  "required": false,
+                  "choices": null,
+                  "metavar": "KIND/NAME",
+                  "converter": null,
+                  "help": "operate on this tree instead of $UEDCLI_LEVEL: KIND/NAME where KIND is level|stash|prefab and NAME is the level/stash/prefab name (may be nested, e.g. stash/hangar/arch). Default: the level named by $UEDCLI_LEVEL.",
+                  "mutex_group": null
+                }
+              ],
+              "subparsers": {}
+            },
+            "rename": {
+              "class": "_CoordArgumentParser",
+              "prog": "uedcli actor folder rename",
+              "mutex_groups": [],
+              "actions": [
+                {
+                  "class": "_HelpAction",
+                  "option_strings": [
+                    "-h",
+                    "--help"
+                  ],
+                  "dest": "help",
+                  "nargs": 0,
+                  "const": null,
+                  "default": {
+                    "__suppress__": true
+                  },
+                  "required": false,
+                  "choices": null,
+                  "metavar": null,
+                  "converter": null,
+                  "help": "show this help message and exit",
+                  "mutex_group": null
+                },
+                {
+                  "class": "_StoreAction",
+                  "option_strings": [],
+                  "dest": "old",
+                  "nargs": null,
+                  "const": null,
+                  "default": null,
+                  "required": true,
+                  "choices": null,
+                  "metavar": "OLD-PATH",
+                  "converter": null,
+                  "help": "the literal source folder path to move (its whole subtree comes with it); case-insensitive. A path no actor is filed under is an error (exit 2).",
+                  "mutex_group": null
+                },
+                {
+                  "class": "_StoreAction",
+                  "option_strings": [],
+                  "dest": "new",
+                  "nargs": null,
+                  "const": null,
+                  "default": null,
+                  "required": true,
+                  "choices": null,
+                  "metavar": "NEW-PATH",
+                  "converter": null,
+                  "help": "the literal destination folder path; the matched actors' OLD prefix is replaced with it (segments [A-Za-z0-9_+-], stored as authored).",
                   "mutex_group": null
                 },
                 {
