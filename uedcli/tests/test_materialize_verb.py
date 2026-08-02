@@ -351,7 +351,7 @@ def test_materialize_prints_no_advisory_when_the_composed_path_is_non_empty(tmp_
 def test_doctor_reads_the_trunk(tmp_path, monkeypatch, capsys):
     proj, name = _project_with_level(tmp_path, monkeypatch)
     rc = dispatch.dispatch(_ns(cmd="level", sub="doctor", project=str(proj),
-                               json=False, severity=None, category=None))
+                               json=False, severity=None, categories=[]))
     assert rc in (0, 1)                                  # findings-dependent, but it ran on the trunk
     assert name in capsys.readouterr().out              # report header uses the trunk level name
 
@@ -361,7 +361,7 @@ def test_doctor_no_project_errors_cleanly(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("UEDCLI_PROJECT", "")
     rc = dispatch.dispatch(_ns(cmd="level", sub="doctor", project=None,
-                               json=False, severity=None, category=None))
+                               json=False, severity=None, categories=[]))
     assert rc == 2
     err = capsys.readouterr().err
     assert "not in a uedcli project" in err and "Traceback" not in err

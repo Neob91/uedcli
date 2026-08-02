@@ -350,7 +350,7 @@ def test_level_doctor_tree_stash_uses_display_name_not_trunk_dir(tmp_path, monke
     _seed_stash(proj, "bay")
     # Before the display_name fix this AttributeError'd on src.trunk_dir for a stash source.
     assert dispatch.dispatch(_ns(cmd="level", sub="doctor", project=str(proj),
-                                 tree="stash/bay", json=False, severity=None, category=None)) == 0
+                                 tree="stash/bay", json=False, severity=None, categories=[])) == 0
     assert "bay" in capsys.readouterr().out
 
 

@@ -8466,19 +8466,19 @@
               "mutex_group": null
             },
             {
-              "class": "_StoreAction",
+              "class": "_AppendAction",
               "option_strings": [
                 "--category"
               ],
-              "dest": "category",
+              "dest": "categories",
               "nargs": null,
               "const": null,
-              "default": null,
+              "default": [],
               "required": false,
               "choices": null,
-              "metavar": null,
+              "metavar": "NAME",
               "converter": null,
-              "help": "comma-separated categories to show (degenerate,watertight,convex,planar,solidity,csg_order,scale); others are hidden",
+              "help": "show ONLY findings in this category (degenerate, watertight, convex, planar, solidity, csg_order, scale); repeat to OR several. Exact, case-insensitive. Filters DISPLAY only — the exit code always reflects all findings. An unknown category exits 2, listing the valid categories.",
               "mutex_group": null
             },
             {

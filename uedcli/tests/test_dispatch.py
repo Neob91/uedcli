@@ -1645,7 +1645,7 @@ def test_mover_index_names_the_verb_when_the_path_carries_no_packages(capsys):
 
 @pytest.mark.real_mover_index
 @pytest.mark.parametrize("verb, args", [
-    ("level doctor", dict(cmd="level", sub="doctor", json=False, severity=None, category=None)),
+    ("level doctor", dict(cmd="level", sub="doctor", json=False, severity=None, categories=[])),
     ("event graph", dict(cmd="event", sub="graph", json=False, dot=False)),
 ])
 def test_a_mover_aware_verb_without_a_class_resolver_fails_clearly(capsys, tmp_project, verb, args):

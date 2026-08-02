@@ -332,7 +332,7 @@ def _open_box_level():
 
 def _doctor_args(**kw):
     base = dict(cmd="level", sub="doctor", project=None,
-                container="c", json=False, severity=None, category=None)
+                container="c", json=False, severity=None, categories=[])
     base.update(kw)
     return __import__("types").SimpleNamespace(**base)
 
@@ -368,10 +368,70 @@ def test_dispatch_doctor_clean_level_exits_zero(capsys):
     assert "no issues found" in capsys.readouterr().out
 
 
+def _watertight_and_scale_level():
+    """Open box → watertight ERROR; a non-identity-scaled cube → scale INFO. Two categories."""
+    open_box = _solid_cube("OpenBox")
+    open_box.brush.polys.pop()
+    scaled = _solid_cube("Scaled")
+    scaled.props = [(k, v) for k, v in scaled.props if k != "MainScale"]
+    scaled.props.append(("MainScale", "(Scale=(X=2.000000,Y=1.000000,Z=1.000000),SheerAxis=SHEER_ZX)"))
+    return _level(open_box, scaled)
+
+
 def test_dispatch_doctor_rejects_unknown_category(capsys):
-    rc = _run_dispatch(_doctor_args(category="bogus"), _open_box_level())
+    rc = _run_dispatch(_doctor_args(categories=["bogus"]), _open_box_level())
+    out, err = capsys.readouterr()
     assert rc == 2
-    assert "unknown --category: bogus" in capsys.readouterr().err
+    assert err.strip() == "no category 'bogus'; valid: convex, csg_order, degenerate, planar, " \
+                          "scale, solidity, watertight"
+    assert out == ""
+
+
+def test_dispatch_doctor_category_shows_only_that_category(capsys):
+    rc = _run_dispatch(_doctor_args(categories=["watertight"]), _watertight_and_scale_level())
+    out = capsys.readouterr().out
+    assert rc == 1                                  # exit still reflects the watertight ERROR
+    assert "open edge" in out and "scale" not in out.lower()
+
+
+def test_dispatch_doctor_category_or_combines(capsys):
+    rc = _run_dispatch(_doctor_args(categories=["watertight", "scale"]),
+                       _watertight_and_scale_level())
+    out = capsys.readouterr().out
+    assert rc == 1
+    assert "open edge" in out and "scale" in out.lower()
+
+
+def test_dispatch_doctor_category_is_case_insensitive(capsys):
+    rc = _run_dispatch(_doctor_args(categories=["WATERTIGHT"]), _watertight_and_scale_level())
+    out = capsys.readouterr().out
+    assert rc == 1
+    assert "open edge" in out and "scale" not in out.lower()
+
+
+def test_dispatch_doctor_category_good_then_bad_names_first_bad(capsys):
+    rc = _run_dispatch(_doctor_args(categories=["watertight", "bogus"]), _open_box_level())
+    out, err = capsys.readouterr()
+    assert rc == 2
+    assert "no category 'bogus'" in err
+    assert out == ""
+
+
+def test_dispatch_doctor_category_comma_token_is_not_split(capsys):
+    # comma-split is gone: the whole token is one category name and fails validation.
+    rc = _run_dispatch(_doctor_args(categories=["watertight,convex"]), _open_box_level())
+    out, err = capsys.readouterr()
+    assert rc == 2
+    assert "no category 'watertight,convex'" in err
+    assert out == ""
+
+
+def test_dispatch_doctor_valid_category_with_zero_findings_is_clean(capsys):
+    # `convex` is a valid category but this level has no convex finding: clean report, not an error.
+    rc = _run_dispatch(_doctor_args(categories=["convex"]), _open_box_level())
+    out = capsys.readouterr().out
+    assert rc == 1                                  # exit STILL reflects the hidden watertight ERROR
+    assert "no issues found" in out
 
 
 def test_dispatch_doctor_json_output(capsys):

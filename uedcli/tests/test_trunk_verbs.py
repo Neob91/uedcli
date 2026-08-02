@@ -171,7 +171,7 @@ def test_it_shows_duplicate_order_in_doctor_but_keeps_exit_zero(tmp_path, capsys
 
     rc = dispatch.dispatch(argparse.Namespace(
         cmd="level", sub="doctor", project=str(proj),
-        json=False, severity=None, category=None))
+        json=False, severity=None, categories=[]))
 
     out = capsys.readouterr().out
     assert rc == 0                                      # a WARN never flips the exit code

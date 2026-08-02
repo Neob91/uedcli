@@ -149,7 +149,9 @@ def register(sub) -> None:
     ldoc.add_argument("--severity", choices=["info", "warn", "error"], default=None,
                       help="show only findings at or above this severity (does NOT affect the "
                            "exit code, which always reflects all findings)")
-    ldoc.add_argument("--category", default=None,
-                      help="comma-separated categories to show (degenerate,watertight,convex,"
-                           "planar,solidity,csg_order,scale); others are hidden")
+    ldoc.add_argument("--category", dest="categories", action="append", default=[], metavar="NAME",
+                      help="show ONLY findings in this category (degenerate, watertight, convex, "
+                           "planar, solidity, csg_order, scale); repeat to OR several. Exact, "
+                           "case-insensitive. Filters DISPLAY only — the exit code always reflects "
+                           "all findings. An unknown category exits 2, listing the valid categories.")
     _tree_flag(ldoc)      # lint a named tree explicitly instead of $UEDCLI_LEVEL

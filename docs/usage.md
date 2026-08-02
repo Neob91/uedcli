@@ -267,7 +267,7 @@ per-face verbs print the same `BRUSH:idx` form, so they chain into each other di
 
 ## Level lint & trigger wiring
 
-**`level doctor [--json] [--severity {info,warn,error}] [--category C,…]`** statically checks the
+**`level doctor [--json] [--severity {info,warn,error}] [--category NAME]…`** statically checks the
 level for the BSP/geometry problems that cause holes, HOMs, and invisible walls — **fully offline,
 no editor.** It flags: degenerate faces UnrealEd will silently drop (too few vertices, zero area,
 non-convex, non-planar); brushes that aren't watertight (open/duplicated/back-wound edges); solidity
@@ -308,7 +308,9 @@ scope by design:
 These are level-design quality; they need a human or an independent reviewing agent looking at
 renders. A level can be `no issues found` and still be cramped, ugly and half-finished. *(Owner ruling, 2026-07-26.)*
 
-- Categories: `degenerate,watertight,convex,planar,solidity,csg_order,scale`.
+- Categories: `degenerate, watertight, convex, planar, solidity, csg_order, scale`. `--category`
+  takes one; repeat it to OR several (`--category watertight --category convex`). Exact,
+  case-insensitive; an unknown category exits 2 listing the valid ones.
 - `--severity` / `--category` filter what's **shown**; the **exit code always reflects ALL findings**
   (non-zero if any ERROR exists, regardless of the filter), so it works as a CI gate.
 - It is a **high-recall per-brush predictor**, not a completeness guarantee: holes that only emerge

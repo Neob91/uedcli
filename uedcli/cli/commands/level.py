@@ -566,13 +566,13 @@ def _level_doctor(args, src) -> int:
         + doctor.check_duplicate_order(src._ranks))
     exit_severity = doctor.worst(findings)        # over ALL findings, before display filtering
 
-    if args.category:
-        wanted = {c.strip() for c in args.category.split(",")}
-        if unknown := (wanted - set(doctor.CATEGORIES)):
-            print(f"unknown --category: {', '.join(sorted(unknown))}; valid: "
-                  f"{', '.join(doctor.CATEGORIES)}", file=sys.stderr)
-            return 2
-        shown = [f for f in findings if f.category in wanted]
+    if args.categories:
+        valid_cf = {c.casefold(): c for c in doctor.CATEGORIES}
+        for v in args.categories:                 # first value matching nothing is named (all-or-nothing)
+            if v.casefold() not in valid_cf:
+                raise CommandError(f"no category {v!r}; valid: {', '.join(sorted(doctor.CATEGORIES))}")
+        wanted = {v.casefold() for v in args.categories}
+        shown = [f for f in findings if f.category.casefold() in wanted]
     else:
         shown = findings
     if args.severity:
