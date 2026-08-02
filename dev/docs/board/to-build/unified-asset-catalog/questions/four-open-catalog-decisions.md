@@ -74,4 +74,25 @@ depends on how you resolve it.
 
 ## Answer
 
-<!-- Empty = open. Write the decision here. -->
+*(Owner ruled 2026-08-02 via AskUserQuestion. Fold into the texture-arm re-spec and, with owner-approved
+text, `direction/asset-catalog.md`.)*
+
+**1. Identity + mask (IRREVERSIBLE):** identity = `sha256(w, h, RGB, mask)` — the transparency mask is
+part of identity, and the preview file IS the identity (one digest). A masked texture and its opaque
+twin are distinct catalogue entries. Frozen.
+
+**2. Procedural textures:** name-keyed — a texture with no pixel content (`DataCount==0`:
+Fire/Wet/Wave/Ice/ScriptedTexture) uses its NAME as identity, per `asset-catalog.md` "content hash where
+content exists, name where it does not". This also resolves `scriptedtexture-s-identity-is-unresolved`
+(each `ScriptedTexture` keys on its name — no collapse).
+
+**3. `classify set -` JSONL (third stdin convention):** already resolved — the `conventions.md` carve-out
+landed with the class-arm build.
+
+**4. Editor-icon sprites:** NOT special-cased — sprites are ordinary textures; §6's icon-group detection
+is dropped. Coverage/`prewarm` honestly counts them as unclassified.
+
+**`classify set` over an existing shard:** REFUSE, exit 2 naming it; `--force` to replace — never a silent
+overwrite (`direction/safety.md`).
+
+Remaining for the texture-arm re-spec to fold: the pixel-hash-dedup / no-re-key-across-edit cluster.
