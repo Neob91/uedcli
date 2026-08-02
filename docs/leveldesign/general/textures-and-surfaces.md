@@ -43,10 +43,10 @@ The flags (editor: F5 Surface Properties → Flags):
 | **Mirror**        | reflective; editor-invisible; not a portal |
 | **Special Lit**   | lit only by lights with `bSpecialLit` |
 
-> Bright Corners (and Small/Big Wavy, High/Low Shadow Detail) exist in the F5 GUI but are not values
-> uedcli's `--add-flag` / `--remove-flag` accept. The 16 flags uedcli can set by name: `invisible`,
-> `masked`, `translucent`, `notsolid`, `environment`, `semisolid`, `modulated`, `fakebackdrop`,
-> `twosided`, `autoupan`, `autovpan`, `nosmooth`, `speciallit`, `unlit`, `portal`, `mirror`.
+> The 21 flags uedcli's `--add-flag` / `--remove-flag` accept by name: `invisible`, `masked`,
+> `translucent`, `notsolid`, `environment`, `semisolid`, `modulated`, `fakebackdrop`, `twosided`,
+> `autoupan`, `autovpan`, `nosmooth`, `speciallit`, `unlit`, `portal`, `mirror`, `bigwavy`,
+> `smallwavy`, `lowshadowdetail`, `brightcorners`, `highshadowdetail`.
 
 Combinations: `Fake Backdrop` + `Unlit` shows sky; `Mirror` + `Unlit`; a glass sheet is
 `Translucent` + `2-Sided`.

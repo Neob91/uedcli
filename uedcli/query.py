@@ -19,6 +19,8 @@ PF_NAMES: list[tuple[int, str]] = [
     (0x10, "environment"), (0x20, "semisolid"), (0x40, "modulated"), (0x80, "fakebackdrop"),
     (0x100, "twosided"), (0x200, "autoupan"), (0x400, "autovpan"), (0x800, "nosmooth"),
     (0x100000, "speciallit"), (0x400000, "unlit"), (0x4000000, "portal"), (0x8000000, "mirror"),
+    (0x1000, "bigwavy"), (0x2000, "smallwavy"), (0x8000, "lowshadowdetail"),
+    (0x80000, "brightcorners"), (0x800000, "highshadowdetail"),
 ]
 
 

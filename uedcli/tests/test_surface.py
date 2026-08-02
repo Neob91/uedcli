@@ -2,6 +2,7 @@ import pytest
 
 from uedcli.geometry import GeometryError
 from uedcli.model import Actor, Brush, Level, Polygon
+from uedcli.query import PF_NAMES, decode_flags
 from uedcli.surface import (apply_pan, apply_rotate, apply_scale, apply_surface_edit, encode_flags,
                             parse_poly_selector, parse_texture_ref, resolve_polys,
                             resolve_targets)
@@ -57,6 +58,23 @@ def test_encode_flags_rejects_none_and_hex_literal():
         encode_flags(["none"])
     with pytest.raises(ValueError, match="unknown flag name"):
         encode_flags(["0x4"])
+
+
+@pytest.mark.parametrize("name,bit", [
+    ("bigwavy", 0x1000), ("smallwavy", 0x2000), ("lowshadowdetail", 0x8000),
+    ("brightcorners", 0x80000), ("highshadowdetail", 0x800000),
+])
+def test_encode_flags_maps_the_new_names_to_their_bits(name, bit):
+    assert encode_flags([name]) == bit
+
+
+@pytest.mark.parametrize("bit,name", PF_NAMES)
+def test_single_flag_round_trips_name_to_bit_to_name(bit, name):
+    # Every settable name encodes to a single bit that decodes back to exactly that name — so the
+    # five newly-added flags decode as a name, not a hex tail. Each bit is a distinct power of two.
+    assert bin(bit).count("1") == 1
+    assert encode_flags([name]) == bit
+    assert decode_flags(bit) == [name]
 
 
 # --- parse_poly_selector ------------------------------------------------------

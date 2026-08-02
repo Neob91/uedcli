@@ -4098,7 +4098,12 @@
                     "speciallit",
                     "unlit",
                     "portal",
-                    "mirror"
+                    "mirror",
+                    "bigwavy",
+                    "smallwavy",
+                    "lowshadowdetail",
+                    "brightcorners",
+                    "highshadowdetail"
                   ],
                   "metavar": "NAME",
                   "converter": "lower",
@@ -6300,7 +6305,12 @@
                     "speciallit",
                     "unlit",
                     "portal",
-                    "mirror"
+                    "mirror",
+                    "bigwavy",
+                    "smallwavy",
+                    "lowshadowdetail",
+                    "brightcorners",
+                    "highshadowdetail"
                   ],
                   "metavar": "FLAG",
                   "converter": "lower",
@@ -6333,7 +6343,12 @@
                     "speciallit",
                     "unlit",
                     "portal",
-                    "mirror"
+                    "mirror",
+                    "bigwavy",
+                    "smallwavy",
+                    "lowshadowdetail",
+                    "brightcorners",
+                    "highshadowdetail"
                   ],
                   "metavar": "FLAG",
                   "converter": "lower",
