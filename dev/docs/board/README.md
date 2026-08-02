@@ -87,7 +87,9 @@ path citation rots silently, a stale slug reddens the suite.
 ## Questions
 
 A file under `questions/` is **a blocker**, not a discussion log: the thing that must be answered
-before the item can be planned or built.
+before the item can be planned or built. **An owner-question — any decision awaiting the owner's yes —
+is added here, to the item it concerns, not logged as a standalone board item** (only a decision no
+item owns gets its own `owner-question` item; see `CLAUDE.md`).
 
 **The item does not move.** A question raised against an item is filed in that item's own
 `questions/` directory and the item stays in whatever stage it is in. It is not bounced to the
