@@ -77,9 +77,16 @@ depends on how you resolve it.
 *(Owner ruled 2026-08-02 via AskUserQuestion. Fold into the texture-arm re-spec and, with owner-approved
 text, `direction/asset-catalog.md`.)*
 
-**1. Identity + mask (IRREVERSIBLE):** identity = `sha256(w, h, RGB, mask)` — the transparency mask is
-part of identity, and the preview file IS the identity (one digest). A masked texture and its opaque
-twin are distinct catalogue entries. Frozen.
+**1. Identity + the TWO-LAYER model (REVISED 2026-08-02, supersedes the earlier same-day
+mask-in-identity answer — safe, no shards exist):** texture data splits into two layers.
+- **Layer 1 — bitmap/content (the classification layer):** identity = `sha256(w, h, RGB)`, pixel content
+  ONLY. The mask is NOT in identity. The stored classification (tags/description) attaches to this
+  identity; identical pixels are deliberately one classifiable thing; the preview is this bitmap.
+- **Layer 2 — per-`Package.Name` facts:** `masked` (the import flag) and `group` are read LIVE from the
+  package for a given ref, shown by `show`, filterable (`--masked`/`--group`), cached for speed — NOT part
+  of identity, NOT stored in the classification.
+So a masked grille and its opaque-pixel twin share ONE classification (Layer 1); their masked-ness is
+Layer-2 ref info shown alongside, not baked into identity.
 
 **2. Procedural textures:** name-keyed — a texture with no pixel content (`DataCount==0`:
 Fire/Wet/Wave/Ice/ScriptedTexture) uses its NAME as identity, per `asset-catalog.md` "content hash where
@@ -96,3 +103,14 @@ is dropped. Coverage/`prewarm` honestly counts them as unclassified.
 overwrite (`direction/safety.md`).
 
 Remaining for the texture-arm re-spec to fold: the pixel-hash-dedup / no-re-key-across-edit cluster.
+
+**Related direction/doc approvals (2026-08-02, via AskUserQuestion) — ready to fold with `Confirmed:`
+trailers, then close each item:**
+- `texture-group-is-a-first-class-fact` — proposed text APPROVED as written (a Layer-2 package-read fact;
+  `--group` filter; not identity).
+- `texture-masked-is-a-stored-fact` — proposed text APPROVED as written (Layer-2; the `masked` flag is
+  read from the export, `--masked` filter, not identity — consistent with the two-layer model above).
+- `direction-asset-catalog-md-reword-the-class` — line-34 no-override reword APPROVED as proposed.
+- `asset-catalog-says-the-tool-produces-the` — the `packages.md` "a code-less BC1 file decodes"
+  correction APPROVED (a code-less compressed chain is ambiguous BC1-vs-P8 → named error, never a wrong
+  pixel).
