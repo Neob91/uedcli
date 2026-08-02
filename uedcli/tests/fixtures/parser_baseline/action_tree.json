@@ -3497,7 +3497,7 @@
                   "choices": null,
                   "metavar": null,
                   "converter": "float",
-                  "help": "prism height along the Z axis, in world units (uu)",
+                  "help": "prism height along its long axis (--axis, Z by default), in world units (uu)",
                   "mutex_group": null
                 },
                 {
@@ -3545,7 +3545,27 @@
                   "choices": null,
                   "metavar": null,
                   "converter": null,
-                  "help": "turn a FACE rather than a vertex toward the axes, by offsetting the cross-section half a segment (180/--sides degrees). Without it vertex 0 sits on +X, so an octagonal pillar meets an axis-aligned wall on a CORNER, leaving two thin wedge gaps; with it a flat face sits flush. Same parameter as UnrealEd's own CylinderBuilder AlignToSide checkbox. For any other cross-section angle use --rotate, which is whole-actor placement",
+                  "help": "turn a FACE rather than a vertex toward the axes, by offsetting the cross-section half a segment (180/--sides degrees). Without it vertex 0 sits on the cross-section's first axis (+X at --axis z), so an octagonal pillar meets an axis-aligned wall on a CORNER, leaving two thin wedge gaps; with it a flat face sits flush. Same parameter as UnrealEd's own CylinderBuilder AlignToSide checkbox. For any other cross-section angle use --rotate, which is whole-actor placement",
+                  "mutex_group": null
+                },
+                {
+                  "class": "_StoreAction",
+                  "option_strings": [
+                    "--axis"
+                  ],
+                  "dest": "axis",
+                  "nargs": null,
+                  "const": null,
+                  "default": "z",
+                  "required": false,
+                  "choices": [
+                    "x",
+                    "y",
+                    "z"
+                  ],
+                  "metavar": null,
+                  "converter": null,
+                  "help": "world axis the prism's long axis runs along — the axis its n-gon cross-section is NORMAL to (default z, the current +Z prism). Builds the vertices oriented directly and emits NO Rotation field, so a horizontal pipe/beam needs no --rotate. The (u,v) map onto the other two world axes in right-handed cyclic order, matching extrude/revolve: z -> cross-section in X,Y; x -> Y,Z; y -> Z,X. For any other orientation use --rotate",
                   "mutex_group": null
                 },
                 {
@@ -3765,7 +3785,7 @@
                   "choices": null,
                   "metavar": null,
                   "converter": "float",
-                  "help": "cone height (base to apex) along the Z axis, in world units (uu)",
+                  "help": "cone height (base to apex) along its long axis (--axis, Z by default), in world units (uu)",
                   "mutex_group": null
                 },
                 {
@@ -3814,6 +3834,26 @@
                   "metavar": null,
                   "converter": null,
                   "help": "turn a FACE of the base ring rather than a vertex toward the axes, by offsetting it half a segment (180/--sides degrees), so the cone sits flush against an axis-aligned wall instead of meeting it on a corner. Same parameter as UnrealEd's own AlignToSide checkbox; for any other angle use --rotate",
+                  "mutex_group": null
+                },
+                {
+                  "class": "_StoreAction",
+                  "option_strings": [
+                    "--axis"
+                  ],
+                  "dest": "axis",
+                  "nargs": null,
+                  "const": null,
+                  "default": "z",
+                  "required": false,
+                  "choices": [
+                    "x",
+                    "y",
+                    "z"
+                  ],
+                  "metavar": null,
+                  "converter": null,
+                  "help": "world axis the cone's long axis runs along — the axis its base-ring cross-section is NORMAL to (default z, the current +Z cone). Builds the vertices oriented directly and emits NO Rotation field, so a horizontal cone needs no --rotate. The (u,v) map onto the other two world axes in right-handed cyclic order, matching extrude/revolve: z -> cross-section in X,Y; x -> Y,Z; y -> Z,X. For any other orientation use --rotate",
                   "mutex_group": null
                 },
                 {

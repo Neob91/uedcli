@@ -676,8 +676,8 @@ ascending monotonically around the column; the **staircase** is a single non-con
 
 ```
 brush build cube      --width W --breadth B --height H
-brush build cylinder  --height H --radius R [--sides 8] [--align-to-side]
-brush build cone      --height H --radius R [--sides 8] [--align-to-side]
+brush build cylinder  --height H --radius R [--sides 8] [--align-to-side] [--axis x|y|z]
+brush build cone      --height H --radius R [--sides 8] [--align-to-side] [--axis x|y|z]
 brush build sheet     --width W --height H [--plane xy|xz|yz] [--flag NAME …]
 brush build staircase --steps N --depth D --rise R --breadth B
 brush build spiral    --steps N --inner-radius R --step-width W --rise H [--angle-per-step 8192]
@@ -707,6 +707,14 @@ an axis-aligned wall — the same as UnrealEd's own `AlignToSide` checkbox. For 
 angle use `--rotate`, whole-actor placement. `--sides` has no upper bound: above 16 a round cap is
 split into several convex `Cap`/`Base` faces (an engine face holds at most 16 vertices), so the brush
 stays one solid built from valid faces.
+
+**`cylinder`/`cone --axis x|y|z` (default `z`)** orients the prism's long axis along that world axis
+directly — the vertices are built rotated, so **no `Rotation` field is emitted** and a horizontal
+pipe or beam needs no `--rotate`. It is the axis the n-gon cross-section is normal to; the `(U,V)`
+map onto the other two world axes in right-handed cyclic order, the same meaning as
+`extrude`/`revolve --axis`: `z` → cross-section in X,Y; `x` → Y,Z; `y` → Z,X. For any other
+orientation use `--rotate`, which stacks on top. `sheet` keeps `--plane` (the plane it lies in),
+`cube` takes neither.
 
 - **`--rotate PITCH,YAW,ROLL`** (unreal rotation units — 16384 = 90°, 65536 = a full turn) **SETS** the emitted actor's `Rotation` field absolutely (a
   fresh actor is at identity, so no add-vs-override ambiguity). The rotation is **stored on the

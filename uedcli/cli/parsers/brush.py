@@ -160,22 +160,30 @@ def register(sub) -> None:
 
     bcyl = bshape.add_parser("cylinder", help="n-gon prism (height, radius, sides)")
     bcyl.add_argument("--height", type=float, required=True,
-                      help="prism height along the Z axis, in world units (uu)")
+                      help="prism height along its long axis (--axis, Z by default), in world units (uu)")
     bcyl.add_argument("--radius", type=float, required=True, help="circumscribed radius")
     bcyl.add_argument("--sides", type=int, default=8, help="polygon side count (default 8)")
     bcyl.add_argument("--align-to-side", dest="align_to_side", action="store_true",
                       help="turn a FACE rather than a vertex toward the axes, by offsetting the "
                            "cross-section half a segment (180/--sides degrees). Without it vertex "
-                           "0 sits on +X, so an octagonal pillar meets an axis-aligned wall on a "
+                           "0 sits on the cross-section's first axis (+X at --axis z), so an "
+                           "octagonal pillar meets an axis-aligned wall on a "
                            "CORNER, leaving two thin wedge gaps; with it a flat face sits flush. "
                            "Same parameter as UnrealEd's own CylinderBuilder AlignToSide checkbox. "
                            "For any other cross-section angle use --rotate, which is whole-actor "
                            "placement")
+    bcyl.add_argument(
+        "--axis", choices=["x", "y", "z"], default="z",
+        help="world axis the prism's long axis runs along — the axis its n-gon cross-section is "
+             "NORMAL to (default z, the current +Z prism). Builds the vertices oriented directly and "
+             "emits NO Rotation field, so a horizontal pipe/beam needs no --rotate. The (u,v) map "
+             "onto the other two world axes in right-handed cyclic order, matching extrude/revolve: "
+             "z -> cross-section in X,Y; x -> Y,Z; y -> Z,X. For any other orientation use --rotate")
     _common_build_opts(bcyl)
 
     bcone = bshape.add_parser("cone", help="n-faced cone (height, base radius, sides)")
     bcone.add_argument("--height", type=float, required=True,
-                       help="cone height (base to apex) along the Z axis, in world units (uu)")
+                       help="cone height (base to apex) along its long axis (--axis, Z by default), in world units (uu)")
     bcone.add_argument("--radius", type=float, required=True, help="base circumscribed radius")
     bcone.add_argument("--sides", type=int, default=8, help="polygon side count (default 8)")
     bcone.add_argument("--align-to-side", dest="align_to_side", action="store_true",
@@ -184,6 +192,13 @@ def register(sub) -> None:
                             "sits flush against an axis-aligned wall instead of meeting it on a "
                             "corner. Same parameter as UnrealEd's own AlignToSide checkbox; for "
                             "any other angle use --rotate")
+    bcone.add_argument(
+        "--axis", choices=["x", "y", "z"], default="z",
+        help="world axis the cone's long axis runs along — the axis its base-ring cross-section is "
+             "NORMAL to (default z, the current +Z cone). Builds the vertices oriented directly and "
+             "emits NO Rotation field, so a horizontal cone needs no --rotate. The (u,v) map onto "
+             "the other two world axes in right-handed cyclic order, matching extrude/revolve: "
+             "z -> cross-section in X,Y; x -> Y,Z; y -> Z,X. For any other orientation use --rotate")
     _common_build_opts(bcone)
 
     bsheet = bshape.add_parser("sheet", help="flat two-sided non-solid panel (width, height)")

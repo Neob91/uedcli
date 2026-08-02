@@ -28,12 +28,16 @@ A prism / round pillar. Requires `--height` and `--radius`.
   (`180/--sides` degrees) so a flat face, not a vertex, meets an axis — the same as UED's
   `AlignToSide` checkbox. For any other angle use `--rotate`. The cylinder is a solid prism only —
   no inner-radius/hollow tube option; build a tube by subtracting a smaller cylinder from a larger one.
+- `--axis x|y|z` (default `z`) lays the prism's long axis along that world axis directly, so a
+  horizontal pipe or beam needs no `--rotate` and emits no `Rotation` — same `--axis` meaning as
+  `extrude`/`revolve`. For any other orientation use `--rotate`, which stacks on top.
 - Round geometry is off-grid by nature — prefer semisolid for cylindrical detail so it doesn't seed
   BSP holes (see [geometry-and-bsp.md](geometry-and-bsp.md)).
 
 ### `cone` — `ConeBuilder`
 A pyramid or frustum (truncated cone) — spires, tent roofs, tapered pillars. Requires `--height` and
-`--radius`; `--sides` (default 8) and `--align-to-side` are optional.
+`--radius`; `--sides` (default 8), `--align-to-side` and `--axis x|y|z` (default `z`, orients the
+cone's long axis — a horizontal cone needs no `--rotate`) are optional.
 
 ### `sheet` — `SheetBuilder`
 A single flat poly, the basis of most special surfaces:

@@ -172,10 +172,10 @@ def _build_brushes(builders, shape, args):
     # UTC, D11), while the user-facing surface is UU or a bool, never degrees.
     if shape == "cylinder":
         return [builders.cylinder(args.height, args.radius, args.sides, args.texture,
-                                  angle_offset=_align_offset_degrees(args))]
+                                  angle_offset=_align_offset_degrees(args), axis=args.axis)]
     if shape == "cone":
         return [builders.cone(args.height, args.radius, args.sides, args.texture,
-                              angle_offset=_align_offset_degrees(args))]
+                              angle_offset=_align_offset_degrees(args), axis=args.axis)]
     if shape == "sheet":
         return [builders.sheet(args.width, args.height, args.plane, args.texture,
                                extra_flags=getattr(args, "flags", None))]

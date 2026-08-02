@@ -276,7 +276,7 @@ def test_brush_build_rotate_subquantum_stores_the_field_but_does_not_warn(capsys
 def _brush_build_cyl_args(**overrides):
     defaults = dict(
         cmd="brush", sub="build", shape="cylinder",
-        height=64.0, radius=48.0, sides=8, align_to_side=False,
+        height=64.0, radius=48.0, sides=8, align_to_side=False, axis="z",
         at=(0.0, 0.0, 0.0), base_name=None, csg="add", solidity="solid",
         group=None, texture=None, mover_class=None, rotate=None)
     defaults.update(overrides)
@@ -425,8 +425,8 @@ def _build_args(shape, **overrides):
                   label=[], mover_class=None, rotate=None)
     per_shape = {
         "cube": dict(width=256.0, breadth=128.0, height=64.0),
-        "cylinder": dict(height=64.0, radius=48.0, sides=8, align_to_side=False),
-        "cone": dict(height=64.0, radius=48.0, sides=8, align_to_side=False),
+        "cylinder": dict(height=64.0, radius=48.0, sides=8, align_to_side=False, axis="z"),
+        "cone": dict(height=64.0, radius=48.0, sides=8, align_to_side=False, axis="z"),
         "sheet": dict(width=256.0, height=128.0, plane="xz", flags=[]),
         "staircase": dict(steps=6, depth=32.0, rise=16.0, breadth=128.0),
         "spiral": dict(steps=4, inner_radius=48.0, step_width=32.0, rise=16.0,
@@ -560,6 +560,77 @@ def _cli_brush(argv):
 
 def _verts(brush):
     return [tuple(round(float(c), 6) for c in v) for p in brush.polys for v in p.vertices]
+
+
+def _cli_t3d(argv):
+    """Run the REAL parser + dispatch and return the raw emitted T3D text."""
+    import io
+    import contextlib
+    from uedcli.cli.main import build_parser
+    from uedcli.cli.dispatch import dispatch as _dispatch
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        rc = _dispatch(build_parser().parse_args(argv))
+    assert rc == 0, buf.getvalue()
+    return buf.getvalue()
+
+
+def _cli_spans(brush):
+    def span(i):
+        cs = [float(v[i]) for p in brush.polys for v in p.vertices]
+        return max(cs) - min(cs)
+    return (span(0), span(1), span(2))
+
+
+def test_cylinder_axis_z_matches_the_default_and_emits_no_rotation():
+    base = ["brush", "build", "cylinder", "--height", "64", "--radius", "48"]
+    assert _cli_t3d(base + ["--axis", "z"]) == _cli_t3d(base)
+    assert "Rotation" not in _cli_t3d(base + ["--axis", "z"])
+
+
+def test_cone_axis_z_matches_the_default_and_emits_no_rotation():
+    base = ["brush", "build", "cone", "--height", "64", "--radius", "48"]
+    assert _cli_t3d(base + ["--axis", "z"]) == _cli_t3d(base)
+    assert "Rotation" not in _cli_t3d(base + ["--axis", "z"])
+
+
+@pytest.mark.parametrize("shape", ["cylinder", "cone"])
+@pytest.mark.parametrize("axis,want", [
+    ("x", (200.0, 100.0, 100.0)),
+    ("y", (100.0, 200.0, 100.0)),
+])
+def test_axis_orients_the_prism_and_emits_no_rotation(shape, axis, want):
+    argv = ["brush", "build", shape, "--height", "200", "--radius", "50", "--sides", "8",
+            "--axis", axis]
+    assert _cli_spans(_cli_brush(argv)) == want
+    assert "Rotation" not in _cli_t3d(argv)
+
+
+def test_axis_composes_with_align_to_side_within_the_cross_section_plane():
+    # --align-to-side offsets the cross-section angle in the (u,v) plane, defined relative to the
+    # shape's own axis, so it is independent of --axis: the CLI x-prism equals the library x-prism
+    # built with the half-segment offset the flag stands for (180/8 = 22.5°).
+    from uedcli.builders import cylinder, make_brush_actor
+    built = _cli_brush(["brush", "build", "cylinder", "--height", "64", "--radius", "48",
+                        "--sides", "8", "--axis", "x", "--align-to-side"])
+    expect = make_brush_actor("Cylinder", cylinder(64, 48, 8, angle_offset=22.5, axis="x")).brush
+    assert _verts(built) == _verts(expect)
+
+
+def test_axis_composes_with_rotate_which_stacks_on_the_oriented_vertices():
+    # --rotate stores an absolute Rotation on top of the axis-oriented vertices: the geometry is the
+    # plain --axis y prism (vertices unchanged) plus a Rotation field the vertex-only compare ignores.
+    argv = ["brush", "build", "cylinder", "--height", "64", "--radius", "48", "--axis", "y"]
+    assert _verts(_cli_brush(argv + ["--rotate", "0,8192,0"])) == _verts(_cli_brush(argv))
+    assert "Rotation=(Pitch=0,Yaw=8192,Roll=0)" in _cli_t3d(argv + ["--rotate", "0,8192,0"])
+
+
+@pytest.mark.parametrize("shape", ["cylinder", "cone"])
+def test_a_bad_axis_choice_exits_2(shape):
+    from uedcli.cli.main import build_parser
+    with pytest.raises(SystemExit):
+        build_parser().parse_args(["brush", "build", shape, "--height", "64", "--radius", "48",
+                                   "--axis", "w"])
 
 
 def test_align_to_side_offsets_an_octagon_by_half_a_segment():

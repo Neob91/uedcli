@@ -105,6 +105,88 @@ def test_cone_has_single_apex():
     assert apexes == {(0.0, 0.0, 50.0)}
 
 
+# --- cylinder/cone --axis orientation ----------------------------------------
+
+def _spans(brush):
+    """(x, y, z) bounding-box extents of a brush's vertices."""
+    def span(i):
+        cs = [float(v[i]) for p in brush.polys for v in p.vertices]
+        return max(cs) - min(cs)
+    return (span(0), span(1), span(2))
+
+
+def test_cylinder_default_axis_is_a_plus_z_prism():
+    # sides=8 gives a symmetric cross-section (100×100), so the +Z prism spans (100, 100, height).
+    assert _spans(cylinder(200, 50, sides=8)) == (100.0, 100.0, 200.0)
+
+
+@pytest.mark.parametrize("axis,want", [
+    ("z", (100.0, 100.0, 200.0)),
+    ("x", (200.0, 100.0, 100.0)),
+    ("y", (100.0, 200.0, 100.0)),
+])
+def test_cylinder_axis_runs_the_long_axis_along_that_world_axis(axis, want):
+    assert _spans(cylinder(200, 50, sides=8, axis=axis)) == want
+
+
+@pytest.mark.parametrize("axis,want", [
+    ("z", (100.0, 100.0, 200.0)),
+    ("x", (200.0, 100.0, 100.0)),
+    ("y", (100.0, 200.0, 100.0)),
+])
+def test_cone_axis_runs_the_long_axis_along_that_world_axis(axis, want):
+    assert _spans(cone(200, 50, sides=8, axis=axis)) == want
+
+
+def test_cylinder_axis_remaps_every_vertex_through_the_sweep_frame():
+    # The right-handed frame: z is identity (u,v,w)→(X,Y,Z); x maps (u,v,w)→(w,u,v) and y→(v,w,u).
+    # So each x-prism vertex is its z-prism vertex rolled (X,Y,Z)→(Z,X,Y), and each y-prism vertex
+    # (X,Y,Z)→(Y,Z,X) — exact, since only multiplies by 1.0/0.0 are involved. Full-geometry pin.
+    zb = cylinder(128, 64, sides=8)
+    xb = cylinder(128, 64, sides=8, axis="x")
+    yb = cylinder(128, 64, sides=8, axis="y")
+    for pz, px, py in zip(zb.polys, xb.polys, yb.polys):
+        for (vx, vy, vz), vex, vey in zip(pz.vertices, px.vertices, py.vertices):
+            assert vex == (vz, vx, vy)
+            assert vey == (vy, vz, vx)
+
+
+def test_cone_axis_remaps_every_vertex_through_the_sweep_frame():
+    zb = cone(160, 96, sides=6)
+    xb = cone(160, 96, sides=6, axis="x")
+    yb = cone(160, 96, sides=6, axis="y")
+    for pz, px, py in zip(zb.polys, xb.polys, yb.polys):
+        for (vx, vy, vz), vex, vey in zip(pz.vertices, px.vertices, py.vertices):
+            assert vex == (vz, vx, vy)
+            assert vey == (vy, vz, vx)
+
+
+@pytest.mark.parametrize("axis", ["x", "y", "z"])
+def test_cylinder_axis_stays_closed_and_outward(axis):
+    b = cylinder(128, 64, sides=8, axis=axis)
+    validate_brush(b)
+    assert _is_closed(b)
+    assert _winds_outward(b)
+
+
+@pytest.mark.parametrize("axis", ["x", "y", "z"])
+def test_cone_axis_stays_closed_and_outward(axis):
+    b = cone(128, 64, sides=6, axis=axis)
+    validate_brush(b)
+    assert _is_closed(b)
+    assert _winds_outward(b)
+
+
+def test_cylinder_rejects_a_bad_axis_naming_it():
+    with pytest.raises(GeometryError, match="q"):
+        cylinder(100, 50, sides=8, axis="q")
+
+
+def test_cone_rejects_a_bad_axis_naming_it():
+    with pytest.raises(GeometryError, match="q"):
+        cone(100, 50, sides=8, axis="q")
+
+
 # --- sheet -------------------------------------------------------------------
 
 def test_sheet_single_face_twosided_nonsolid():
