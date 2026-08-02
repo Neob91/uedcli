@@ -61,7 +61,8 @@ Rewrite algorithm (single pass over current values, model-side):
             a.folder = new;                touched.append(n)
         elif ff.startswith(oldf + "."):
             a.folder = new + f[len(old):]; touched.append(n)   # preserve the tail's authored case
-    # not-found handling: see open question
+    if not touched:
+        raise CommandError(f"no actor is filed under folder {old!r}")   # exit 2 (owner, 2026-08-02)
     save + echo touched (mirrors folder.py:52-58)
 
 Case: match is case-insensitive (folder matching always is); `new` is stored as authored, and the
@@ -76,9 +77,10 @@ lands two subtrees on the same path is fine, it is just re-filing.
 
 - `old`/`new` fails grammar (empty, `a..b`, bad char, wildcard) → `validate_folder_path` raises →
   exit 2 naming the value. Both validated before any mutation.
-- **`old` matches no actor** → recommend **exit 2** naming `old` (conventions: "an exact name
-  matching nothing is an error" — `old` is an exact path, not a glob, so a typo should not pass
-  silently). This is the one genuine owner call → `questions/`.
+- **`old` matches no actor** → **exit 2** naming `old` (owner, 2026-08-02). `old` is an exact typed
+  path, not a glob, so a typo (`rename castle.twoer keep`) fails loudly rather than reporting a
+  silent success. This differs from `actor folder set --to X -` reading empty stdin — a clean no-op,
+  because there the empty set came from an upstream query, here the path is typed directly.
 - Empty level / stash|prefab target: `--tree stash|prefab` already rejected in `routes.py`.
 - `new == old` (case-insensitive): rewrites in place to the authored `new` casing; touched set
   non-empty; effectively a case-normalize. Harmless.
@@ -95,14 +97,9 @@ New cases in `uedcli/tests/test_folders.py`:
 - Case-insensitive `old`; `new` stored as authored.
 - Nest-into-self (`a` → `a.b`) rewrites one pass as specified.
 - Bad `old`/`new` grammar → exit 2, no traceback.
-- `old` matching nothing → per the answered open question (exit 2 by recommendation).
+- `old` matching nothing → exit 2 naming `old`, no mutation, nothing on stdout.
 - `--tree stash` rejected.
 - Persisted via the delta save (reload shows new folders) — mirror
   `test_folder_only_change_persists_via_delta_write`.
 
 `docs/usage.md` Folders "Manage" bullet (~line 341): add `actor folder rename <old> <new>`.
-
-## Open questions
-
-- `questions/old-path-not-found.md` — is `rename OLD NEW` where no actor is filed under OLD an error
-  (exit 2) or a clean no-op (exit 0)?

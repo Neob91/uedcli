@@ -52,10 +52,11 @@ Handler in `query.py`, right after the `--within-bbox` block:
         names = [n for n in names
                  if writes.aabb_intersects(writes.actor_bounds(level.actors[n]), obox)]
 
-`--within-bbox` and `--overlapping-bbox` are distinct single-valued predicates. Whether both may
-appear together is an **open question** (see `questions/`); the recommendation is to let them AND
-like every other filter (no special mutual-exclusion), since `within ⊆ overlapping` makes the
-combination degenerate to `within` rather than an error.
+`--within-bbox` and `--overlapping-bbox` are distinct single-valued predicates that **AND like every
+other `find` filter** — no mutual-exclusion group (owner, 2026-08-02). Since `within ⊆ overlapping`,
+passing both degenerates to `--within-bbox` (harmless, not an error). Add `--overlapping-bbox` as a
+plain `add_argument` beside `--within-bbox` (both sit outside the `--folder`/`--no-folder`
+mutually-exclusive group at `actor.py:77`).
 
 The L-/diagonal-brush AABB false-positive is **documented, not fixed** — the precise per-poly test is
 the parked `find-relational-predicates` item. Say so in `--help` and `docs/usage.md`.
@@ -81,13 +82,10 @@ world 85..105 poking past x=100):
 - Corner order free; edge-touching actor counts (shared face).
 - Malformed `--overlapping-bbox` exits 2, no traceback.
 - Composes with another filter (`--kind brush`) and with the `-` universe / `--exclude`.
+- Both flags together: `--within-bbox B --overlapping-bbox B` is accepted (no exclusion error) and
+  yields the `--within-bbox` result (degenerate AND, `within ⊆ overlapping`).
 - Unit test for `writes.aabb_intersects`: overlap, edge-touch, disjoint, containment (within ⇒
   intersects).
 
 `docs/usage.md:169-176`: document `--overlapping-bbox`, remove the "not yet implemented" note, and
 add a within-vs-overlapping one-liner (contained vs straddling) plus the AABB caveat.
-
-## Open questions
-
-- `questions/coexist-with-within-bbox.md` — may `--within-bbox` and `--overlapping-bbox` appear in
-  the same invocation (AND), or are they a mutually-exclusive group?

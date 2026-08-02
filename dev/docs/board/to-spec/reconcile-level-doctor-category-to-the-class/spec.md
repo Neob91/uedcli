@@ -77,13 +77,11 @@ else:
 
 `--severity` filtering and the exit-code-over-all-findings rule are untouched.
 
-**Recommendation — drop comma-split outright, no alias.** The overview floated "keep accepting
-comma-lists for back-compat if cheap." Per `direction/conventions.md` ("No back-compat cruft —
-uedcli is unreleased"), there is no external caller to keep working: the append spelling is the only
-spelling, and a comma inside a value (`--category watertight,convex`) simply fails validation naming
-`'watertight,convex'`. Keeping a comma-splitter would be exactly the dual-format support the
-convention forbids. See Open questions — this contradicts the overview's wording, so it is the
-owner's call.
+**Drop comma-split outright, no alias** (owner, 2026-08-02). The overview floated "keep accepting
+comma-lists for back-compat if cheap"; the ruling overrides it. Per `direction/conventions.md` ("No
+back-compat cruft — uedcli is unreleased") the append spelling is the only spelling: `--category A
+--category B`, and a comma inside a value (`--category watertight,convex`) fails validation naming the
+token `'watertight,convex'`. No dual-format comma-splitter.
 
 ## Edge cases
 
@@ -103,8 +101,8 @@ In the doctor CLI test module (alongside the existing `level doctor` tests — c
 - `--category WATERTIGHT` (wrong case) filters the same as lowercase.
 - unknown `--category bogus` → exit 2 naming `'bogus'` + the sorted valid list; nothing on stdout.
 - good + bad mix → the FIRST bad value named, exit 2.
-- a comma value `--category watertight,convex` → exit 2 naming the whole token (proves comma-split
-  is gone), unless Open question resolves otherwise.
+- a comma value `--category watertight,convex` → exit 2 naming the whole token `'watertight,convex'`
+  (proves comma-split is gone).
 - exit code still reflects ALL findings even when `--category` hides the ERROR ones (the existing
   invariant, re-pinned under the new flag).
 
@@ -113,10 +111,3 @@ In the doctor CLI test module (alongside the existing `level doctor` tests — c
 - `docs/usage.md` — the `level doctor --category` line (now repeatable + case-insensitive).
 - No `architecture.md`/`direction/` change: the grammar is already documented for `class show`; this
   only removes a divergence.
-
-## Open questions
-
-- **Comma-split back-compat.** The overview says keep comma-lists "if cheap"; conventions say delete
-  the old spelling outright since uedcli is unreleased. Recommendation: drop it (append-only). This
-  is a direct tension with the overview's own wording, so surfaced for the owner — see
-  `questions/keep-comma-split-back-compat.md`.
