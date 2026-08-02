@@ -1052,7 +1052,9 @@ actor preview [<names…> | --from-t3d <FILE…|->]
 - **Target set** — actor names, or `-` to read a newline name list from stdin (`actor find … | actor
   preview -`), or **`--from-t3d <FILE…|->`** to render the actors in one-or-more T3D files (or a `-`
   stdin snippet: `brush build spiral | actor preview --from-t3d -`). Multiple files concatenate in
-  order; `-` is the sole value. `--from-t3d` is mutually exclusive with names.
+  order; `-` is the sole value. `--from-t3d` is mutually exclusive with names. Giving no target set
+  at all (no names, no `-`, no `--from-t3d`) is an error (exit 2); an empty `-` stdin stays a clean
+  no-op (exit 0).
 - **`--layout {quad,single,breakdown}`** (default `quad`) picks the pane layout. **`quad`** is the
   UED-style 2×2 grid (Top / Front / Iso / Side). **`single`** renders one `--view`. **`breakdown`** is
   described next.

@@ -27,9 +27,12 @@ def run(args) -> int:
     # Every non-T3D preview resolves the trunk level source first — before the empty-stdin no-op, so
     # the resolution order matches the pre-move dispatch flow (no project ⇒ clean exit 2).
     src = level_sources.resolve_level_source(args)
+    if not args.names:                                      # no names AND no `-`: nothing to render
+        raise CommandError(
+            "actor preview: no actors to render — pass names or - (a piped set)")
     raw = targets.resolve_target_names(args.names)         # `-` → names from stdin (spec §1)
     if not raw:
-        return 0                                            # empty stdin: no-op, exit 0
+        return 0                                            # `-` with empty stdin: no-op, exit 0
     level = src.load()
     try:
         names = query.resolve_actor_names(level, raw)

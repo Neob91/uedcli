@@ -73,12 +73,18 @@ def _move(args, src) -> int:
     # world delta → local via `Rᵀ·delta` (rotation only). For a rotated brush the corner match
     # relies on emit.clean snapping the float-inverted coord to its grid corner.
     local_at = [rotation.world_to_local_point(actor, at) for at in args.at]
-    if args.to is not None:
-        local_to = rotation.world_to_local_point(actor, args.to)
-        actor.brush = vertexmod.move_vertices(actor.brush, local_at, to=local_to)
-    else:
-        actor.brush = vertexmod.move_vertices(
-            actor.brush, local_at, by=rotation.world_to_local_delta(actor, args.by))
+    # `move_vertices` raises a plain ValueError for a selector matching no corner (and other bad
+    # selector/arg cases). The central guard does NOT catch ValueError, so re-wrap as CommandError —
+    # a clean exit-2 message naming the offending coordinate, never a traceback (matches brush/edit).
+    try:
+        if args.to is not None:
+            local_to = rotation.world_to_local_point(actor, args.to)
+            actor.brush = vertexmod.move_vertices(actor.brush, local_at, to=local_to)
+        else:
+            actor.brush = vertexmod.move_vertices(
+                actor.brush, local_at, by=rotation.world_to_local_delta(actor, args.by))
+    except ValueError as e:
+        raise CommandError(str(e)) from None
     validate_brush(actor.brush)
     rec_args = {"name": canonical, "at": [[str(c) for c in at] for at in args.at]}
     if args.to is not None:

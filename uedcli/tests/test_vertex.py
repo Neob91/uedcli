@@ -75,3 +75,30 @@ def test_move_requires_exactly_one_of_to_by():
         move_vertices(cube(64, 64, 64), [_D(-32, -32, 32)])
     with pytest.raises(ValueError):
         move_vertices(cube(64, 64, 64), [_D(-32, -32, 32)], to=_D(0, 0, 0), by=_D(0, 0, 1))
+
+
+def test_cli_move_no_matching_corner_is_clean_exit2(capsys):
+    """CLI regression: `brush vertex move` with an `--at` matching no corner must exit 2 with a
+    named message, NEVER the bare `ValueError: no brush vertex at …` traceback (the central guard
+    does not catch a plain ValueError, so `_move` must re-wrap it as a CommandError)."""
+    from unittest import mock
+    from uedcli.cli import dispatch as dispatch_mod
+    from uedcli.cli import level_sources
+    from uedcli.cli.main import build_parser
+    from uedcli.builders import make_brush_actor
+    from uedcli.model import Level
+
+    lv = Level()
+    lv.actors["B1"] = make_brush_actor(
+        "B1", cube(64, 64, 64), location=(Decimal(0), Decimal(0), Decimal(0)))
+    lv.order = ["B1"]
+    src = mock.Mock()
+    src.load.return_value = lv
+    args = build_parser().parse_args(
+        ["brush", "vertex", "move", "B1", "--at", "0,0,0", "--to", "1e30,0,0"])
+    with mock.patch.object(level_sources, "resolve_level_source", return_value=src):
+        rc = dispatch_mod.dispatch(args)
+    err = capsys.readouterr().err
+    assert rc == 2, f"expected exit 2, got {rc}; stderr={err!r}"
+    assert "no brush vertex at" in err
+    assert "Traceback" not in err

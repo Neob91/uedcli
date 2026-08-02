@@ -103,6 +103,27 @@ def test_empty_stdin_is_a_clean_no_op(tmp_path, monkeypatch):
     assert not out.exists()                                # no render on empty stdin
 
 
+def test_no_target_set_at_all_is_a_clean_error(tmp_path, monkeypatch, capsys):
+    # No positional names AND no `-`: nothing to render. This must ERROR (exit 2, named), not
+    # silently render nothing and return 0. The empty-`-`-stdin no-op above stays exit 0.
+    proj = _project_with_two_brushes(tmp_path, monkeypatch)
+    out = tmp_path / "o.png"
+    rc = dispatch.dispatch(_prev(proj, out, names=[]))
+    assert rc == 2
+    err = capsys.readouterr().err
+    assert "no actors to render" in err and "Traceback" not in err
+    assert not out.exists()
+
+
+def test_from_t3d_does_not_require_names(tmp_path, monkeypatch):
+    # `--from-t3d` is a different actor source, so the no-names guard must NOT fire for it.
+    proj = _project_with_two_brushes(tmp_path, monkeypatch)
+    f1 = tmp_path / "a.t3d"; f1.write_text("Begin Map\n" + _brush_t3d("Tri1", 0) + "End Map\n")
+    out = tmp_path / "o.png"
+    assert dispatch.dispatch(_prev(proj, out, from_t3d=[str(f1)])) == 0
+    assert _is_png(out)
+
+
 def _brush_t3d(name, x):
     return (f"Begin Actor Class=Engine.Brush Name={name}\n    Begin Brush Name=Model_{name}\n"
             "       Begin PolyList\n         Begin Polygon Texture=X.Y\n"

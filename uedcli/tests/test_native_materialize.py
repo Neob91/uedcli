@@ -568,7 +568,10 @@ def _dxonly_map_path():
     env = os.environ.get("UEDCLI_TEST_REALMAP")
     if env and Path(env).is_file():
         return Path(env)
-    cand = Path(__file__).resolve().parents[5] / "Maps" / "DXOnly.dx"  # .../DX/Maps/DXOnly.dx
+    try:
+        cand = Path(__file__).resolve().parents[5] / "Maps" / "DXOnly.dx"  # .../DX/Maps/DXOnly.dx
+    except IndexError:
+        return None  # checkout not nested >=5 levels below root: absent-asset path → skip
     return cand if cand.is_file() else None
 
 
