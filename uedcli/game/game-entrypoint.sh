@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # game-entrypoint.sh — baked into uedcli-game; runs as the container CMD after the base
 # brings up Xvfb/noVNC (LAUNCH_UED=0). Assembles a minimal game root, wires the package
-# search path FROM THE COMPOSED CONFIG MOUNTS (decisions.md 2026-07-16 15:49 UTC — the
+# search path FROM THE COMPOSED CONFIG MOUNTS (dev/docs/direction/containers.md, 2026-07-16 15:49 UTC — the
 # /resources/<n> mounts ARE the composed ~/.uedcli + project paths, project first), boots
 # the staged boot map, and leaves the travel to the HOST (the 3-phase handshake lives in
 # preview_game.py — unlike uplayctl's entrypoint, which travels itself).
@@ -30,7 +30,7 @@ cp "$PKG/BootMap.dx" "$R/Maps/UedPreviewBoot.dx"
 # before the 2026-07-14 asset-wiring cutover) enumerates in microseconds and almost never loses
 # the wakeup.  The COMPOSED CONFIG still decides WHAT gets farmed — every /resources/<n> mount is
 # a composed dir (project first), so `ln -s` first-wins = project shadows base by stem
-# (decisions.md 2026-07-16 15:49).  A stray file in a raw mount can't hang the glob either.
+# (dev/docs/direction/containers.md, 2026-07-16 15:49).  A stray file in a raw mount can't hang the glob either.
 # The farmed link NAME is LOWERCASED: UE1 package names are case-insensitive (FName), but Linux
 # is case-sensitive, so `CoreTex.utx` (project) and `coretex.utx` (base) would otherwise farm as
 # two distinct files and the project shadow would SILENTLY MISS.  Lowercasing collapses

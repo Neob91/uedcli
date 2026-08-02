@@ -19,7 +19,7 @@ optional editor final-bake now, native bake later.**
   human, but **AI can't navigate**.
 
 Both are **regenerable build output** — not authored, never in `canonical_level_hash`
-(decisions.md 2026-06-23; `t3d.md` "What T3D cannot carry"). Losing/rebuilding them is
+(direction/materialize.md 2026-06-23; `t3d.md` "What T3D cannot carry"). Losing/rebuilding them is
 explicitly a non-concern for the model. They are *final-bake* concerns, not part of
 the edit loop.
 

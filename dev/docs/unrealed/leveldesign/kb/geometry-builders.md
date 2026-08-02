@@ -69,12 +69,12 @@ The clip tool cuts an existing brush against a plane:
 - Every 2D-shape-editor operation yields one brush ✅ — extrude, revolve and sheet all produce the
   single red builder brush, faceted, which you Add/Subtract once, not one brush per facet or segment.
   *(Andrzej, from direct UnrealEd use, 2026-07-25.)* `brush build revolve` mirrors this: one
-  non-convex brush per sweep, not one per segment — `decisions.md` 2026-07-25 00:14 UTC (D5).
+  non-convex brush per sweep, not one per segment.
 - **Curved corridors** — 2D-editor Revolve: move the green pivot away from the cross-section, then
   revolve. 16 pieces = 360°; `Use`=4 → a 90° bend. Revolve has a uedcli verb since 2026-07-25:
   `brush build revolve --point U,V … --angle UU [--segments N]`. Its axis is fixed at the profile's
   own `u = 0` line, so "move the pivot away from the cross-section" means drawing the profile away
-  from `u = 0` (`decisions.md` 2026-07-25 01:05 UTC, D10). The `--segments` default is one facet per
+  from `u = 0`. The `--segments` default is one facet per
   22.5°, the 16-pieces-per-turn density above 📖 — inferred semantics, not a measurement. The
   straight case is `brush build extrude --point U,V … --depth D`.
 - **Curved arches** — 2D-editor Bézier segments traced on a reference BMP.

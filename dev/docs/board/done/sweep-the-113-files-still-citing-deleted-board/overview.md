@@ -9,7 +9,7 @@ summary = "Done — the tree no longer cites a deleted board file or a deleted s
 **Done 2026-07-27.** Both censuses in the migration's done-when now return only files that name a
 deleted board path deliberately:
 
-- `dev/docs/decisions.md` — frozen, may never be edited.
+- The retired ledger, now `dev/docs/rationale/MIGRATION.md` — frozen, may never be edited.
 - `dev/docs/2026-06-20-open-questions-for-owner.md` — the owner's, not to be touched.
 - `dev/docs/rationale/board.md` and `uedcli/tests/test_board.py` — both *explain* the old shape
   ("`_on_deck()` used to read `board/to-build.md`"), which is their job. Naming the old file is the

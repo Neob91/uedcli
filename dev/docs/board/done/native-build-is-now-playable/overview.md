@@ -15,7 +15,7 @@ whose ONLY hit clips the swept box against `LeafHulls[iCollisionBound]`; `iColl=
 node-plane fallback. Fixed by porting `bspBuildBounds` (`uedcli-native/src/passes.rs::bsp_build_bounds`
 → `LeafHulls` + `iCollisionBound`); `Bounds`/`iRenderBound` stay empty/`-1` (render, separate).
 Offline oracle: `harness/line_check.py` (box sweep HITs at `floor+extent`). Decision:
-`decisions.md` 2026-07-16 15:20 UTC; full decode `re-raw-zones/linecheck-oracle.md`. Supersedes
+`rationale/MIGRATION.md`, 2026-07-16 15:20 UTC; full decode `re-raw-zones/linecheck-oracle.md`. Supersedes
 section 60's "bounds optional" (true only for a zero-extent line trace).
 **REMAINING for full byte-parity (NOT playability — deferred):** real multi-zone `TestVisibility`
 portalization (leaves/zones/`FZoneProperties`/`ZoneInfo` refs — fully RE'd this session, passes A–G in
@@ -24,4 +24,4 @@ portalization (leaves/zones/`FZoneProperties`/`ZoneInfo` refs — fully RE'd thi
 gravity/water/sound/`ZoneInfo` + byte parity; the map is walkable without them (single interior zone).
 `_multizone_warning` still fires for multi-room maps. `zones.rs` is still a stub. (Revert the scratch
 `DeusExLevelInfo` injection if any remains — Test_Castle has none, not the fix.) Handoff doc
-`HANDOFF-native-full-parity.md` is now superseded by this entry + `decisions.md`.
+`HANDOFF-native-full-parity.md` is now superseded by this entry + `rationale/MIGRATION.md`.

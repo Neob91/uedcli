@@ -10,7 +10,7 @@ spikes = ["dev/docs/spikes/2026-06-25-umodel-serialize-format.md"]
 **Status:** PARKED mid-spike (2026-06-25). Spec reviewed (6 rounds), plan reviewed (3 rounds).
 **Plan (full detail):** [`plan.md`](plan.md)
 **Spec:** board item `bsp-issue-ground-truth-detector-d0-d1` ·
-**Decision:** `decisions.md` 2026-06-24 12:40 UTC
+**Decision:** `rationale/MIGRATION.md` (2026-06-24 12:40 UTC)
 
 **What it is.** Catch the *build-emergent* BSP problems (slivers, hall-of-mirrors, invisible walls,
 fall-through) that the already-shipped static `level doctor` structurally can't.

@@ -208,7 +208,7 @@ def _save_and_swap_verified(ed, dx_path: str, expected, *, defaults, state_dir,
         tmp_dir = Path(state_dir) / "tmp"
         tmp_dir.mkdir(parents=True, exist_ok=True)
         staging = tmp_dir / f"{uuid.uuid4().hex}.dx"
-        # A relative --out resolves against the CWD (standard CLI semantics — decisions.md
+        # A relative --out resolves against the CWD (standard CLI semantics — direction/projects-and-config.md
         # 2026-07-17 20:58; the repo-root join + legacy `/repo/` remap died with repo_paths).
         target_host = os.path.abspath(dx_path)
         xfer.cp_out(ed.container, work_out, str(staging))
@@ -233,7 +233,7 @@ def run_materialize(*, level, packages, out_path, overwrite, state_dir, schema_r
     composed config dir set (`resources.composed_dirs`); the `mounts` (`/resources/<n>` bind mounts)
     and the HOST resolution list are computed ONCE here from it and threaded to `ensure_editor` +
     `ensure_load` — the single mount list drives the ini `Paths`, the docker `-v` args, and the
-    host→container remap (decisions.md 2026-07-14 — one uniform dir set; `/stubs` first on Paths so a
+    host→container remap (direction/containers.md 2026-07-14 — one uniform dir set; `/stubs` first on Paths so a
     v69 stub shadows any same-named v68 `.u`). `state_dir` is the resolved project's `.uedcli/`
     state dir (`config.state_dir(project.root, create=True)`, threaded from dispatch/preview) —
     hosts the ephemeral editor's crafted inis and the staging temps. `schema_resolver` is the
@@ -269,7 +269,7 @@ def run_materialize(*, level, packages, out_path, overwrite, state_dir, schema_r
             return ApplyResult(rc=2, message=f"materialize failed (nothing written): {e}")
     # The whole composed config dir set drives the mounts (bind mounts + ini Paths) and the HOST
     # resolution list, computed ONCE and threaded to ensure_editor + ensure_load (one uniform dir
-    # set — decisions.md 2026-07-14). `/stubs` stays first on Paths, so a v69 stub shadows any
+    # set — direction/containers.md 2026-07-14). `/stubs` stays first on Paths, so a v69 stub shadows any
     # same-named v68 `.u` a code dir puts on the editor's Paths.
     from .container_assets import resource_mounts
     from .packages import editor_search_dirs

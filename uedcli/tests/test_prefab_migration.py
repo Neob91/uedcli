@@ -1,5 +1,5 @@
 """Hard-cutover migration + folder persistence + capture-normalization for the unified T3D trees
-(decisions.md 2026-07-18 23:01 UTC addendum). Migration is a HARD CUTOVER: an old single-blob prefab
+(dev/docs/direction/trunk-and-editor.md 2026-07-18 23:01 UTC addendum). Migration is a HARD CUTOVER: an old single-blob prefab
 is NOT auto-converted — reading one is a clean, actionable error; the user re-captures it.
 """
 import argparse

@@ -10,7 +10,7 @@ down.
 > `docker-compose.yml` lives). No `/repo` bind mount (container-fs isolation, D4): the
 > substrate is baked into the image, and game assets are exposed via per-command
 > config-driven read-only mounts — the composed config dir set at `/resources/<n>` via
-> the one `resource_mounts` scheme (decisions.md 2026-07-14 19:21, was the static
+> the one `resource_mounts` scheme (`direction/containers.md`, 2026-07-14 19:21, was the static
 > `/deusex`+`/content` plus a separate `/install-system` code mount). The only mutable
 > space is the container-local `/work` dir, which dies with the container.
 

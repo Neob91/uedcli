@@ -10,7 +10,7 @@ encoded size. `required_end / size` is therefore the fraction of the file the ch
 Run:  python3 measure_header_window.py         (from Tools/uedcli, with a project + games config)
 
 Feeds the numbers quoted in `driver.package_header_problem`, `architecture.md` "Editor driver" and
-`decisions.md` 2026-07-25 11:31 UTC. Re-run it before re-quoting them.
+`rationale/driver.md` 2026-07-25 11:31 UTC. Re-run it before re-quoting them.
 """
 import os
 import statistics

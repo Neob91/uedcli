@@ -18,7 +18,7 @@ REQUIRED no-fallback argument of `verify_dx_matches`, and an unresolvable class 
 actor; (4) four write paths stopped omitting a property to mean zero — `actor rotate --to/--by`,
 `brush build --rotate`, `normalize_actor`'s all-zero `Location` clear and its `Tag` strip, and
 `transform.bake`'s `PrePivot` drop. Three of those were SILENT wrong-map bugs that post-verify
-passed. Two cold reviews resolved. Decision `decisions.md` 2026-07-25 00:36 UTC; `unrealed/t3d.md`
+passed. Two cold reviews resolved. Decision `rationale/MIGRATION.md`, 2026-07-25 00:36 UTC; `unrealed/t3d.md`
 "Partial struct/array property values"; `architecture.md` "The compare view vs the identity hash".
 **SUPERSEDED 2026-07-25 02:15 UTC** — the contraction MECHANISM (parts 1's `contract_actor` and
 its helpers) was replaced by the typed effective-value compare above, which also closed both of

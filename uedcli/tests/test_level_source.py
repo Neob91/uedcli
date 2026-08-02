@@ -129,7 +129,7 @@ def test_resolve_source_errors_with_a_project_but_no_selection(tmp_path):
         level_sources.resolve_level_source(_ns(project=str(proj)))
 
 
-# --- concurrent-writer delta saves (decisions.md 2026-07-18 — trunk delta writes) ---
+# --- concurrent-writer delta saves (dev/docs/direction/trunk-and-editor.md 2026-07-18 — trunk delta writes) ---
 
 def test_interleaved_saves_compose_disjoint_adds(tmp_path):
     """Two sources loaded from the same snapshot, each adding a DIFFERENT actor: both adds must
@@ -175,7 +175,7 @@ def test_save_prunes_only_its_own_deletions(tmp_path):
 
 def test_save_takes_a_per_level_flock_in_maps_locks(tmp_path):
     """The save serializes under `<maps-dir>/.locks/level-<name>.lock` — resource-adjacent and
-    self-ignoring, like the catalog locks (decisions.md 2026-07-18)."""
+    self-ignoring, like the catalog locks (dev/docs/direction/safety.md 2026-07-18)."""
     proj, name = _proj(tmp_path)
     trunk_dir = proj / "maps" / name
     src = level_sources.TrunkLevelSource(trunk_dir)

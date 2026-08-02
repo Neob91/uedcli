@@ -19,7 +19,7 @@ The body below is the handoff verbatim.
 > WRONG.** Live diagnosis found the pawn fell through the floor because the native build shipped no
 > **collision hulls** (`LeafHulls`/`iCollisionBound`), not because of zones. Porting the editor's
 > `bspBuildBounds` made `NativeCastle` PLAYABLE (`phys=1`, `uplayctl shot` renders the castle
-> first-person — `_scratch/shots/native_castle_playable.png`). See `decisions.md` 2026-07-16 15:20
+> first-person — `_scratch/shots/native_castle_playable.png`). See `rationale/MIGRATION.md` 2026-07-16 15:20
 > UTC, the board entry in `board/inbox/`, `sections/70-zones-portalization.md` (zones fully RE'd, now a
 > parity-only slice), and `re-raw-zones/linecheck-oracle.md` (the root-cause decode). Zones/side-pool
 > /render-bounds/node-flags remain for byte-parity but are NOT needed for a walkable map. Read the
@@ -204,5 +204,5 @@ native `.dx` vs `Test_Castle.dx` for leaf/zone MEMBERSHIP parity.
 2. Wire ZoneInfo→zone actor refs through assembly (`_patch_zone_refs`).
 3. Boot NativeCastle → confirm `phys=1`, stays, `uplayctl shot` shows the castle. (This is the gate.)
 4. Add side pool (#5), bounds (#6), node flags (#7) for full byte-ish parity + render-bound culling.
-5. Fold the learnings into `sections/60` (or a new `70-zones.md`), `architecture.md`, `direction.md`;
+5. Fold the learnings into `sections/60` (or a new `70-zones.md`), `architecture.md`, `direction/materialize.md`;
    flip board items; commit + push per the tool `CLAUDE.md`.

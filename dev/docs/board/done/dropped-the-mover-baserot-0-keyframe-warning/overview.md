@@ -13,4 +13,4 @@ field-adds to `BaseRot` — confirmed by a live measurement (90°-yaw base, `Key
 +X) and the disassembled editor transform, folded into
 `spikes/2026-06-25-mover-keyframe-basepos-semantics.md`. Removed `_warn_base_rot` + its 3 call sites
 (`dispatch.py`); regression test `test_it_does_not_warn_on_a_base_rotated_mover_key_op`; docs made
-confirmed-fact (`architecture.md` "Mover support", `decisions.md` 2026-07-07 12:11 UTC).
+confirmed-fact (`architecture.md` "Mover support", `rationale/MIGRATION.md` 2026-07-07 12:11 UTC).

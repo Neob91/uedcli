@@ -1,6 +1,6 @@
 # Spike: `git merge` on the git-native per-actor-dir trunk layout
 
-**Date:** 2026-07-05. **Gates:** the git-native model (decisions.md 2026-07-05; spec
+**Date:** 2026-07-05. **Gates:** the git-native model (direction/trunk-and-editor.md 2026-07-05; spec
 `specs/2026-07-05-uedcli-git-native-model-design.md` §10, build step 0). **Harness:** `run_spike.sh`
 (pure git, throwaway repo — reproducible) + `encoding_test.py`. **Verdict: GO.** The layout merges as
 designed; one accepted-friction constraint surfaced (intra-file adjacent-line edits); encoding

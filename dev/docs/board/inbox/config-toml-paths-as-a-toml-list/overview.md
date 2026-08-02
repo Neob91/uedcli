@@ -13,4 +13,4 @@ summary = "`config.toml paths` as a TOML list"
 recommended in the spec): accept-both-forms (not list-only); apply to both loaders; leave
 `catalog`/`prefabs`/`maps` as single strings; headline benefit is a colon-containing POSIX dir
 (Windows drive letters do NOT work on the Linux host — corrected in review). On confirmation this
-goes to `board/to-build/` and the durable choice gets a `decisions.md` entry.
+goes to `board/to-build/` and the durable choice gets a `direction/projects-and-config.md` entry.

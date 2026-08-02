@@ -2,7 +2,7 @@
 targeted-edit planning, effective-value reads (stored → class default → type zero), dump-all,
 and the `find --prop` effective-value matcher.
 
-Spec in board item `materialize-post-verify-fails-when-the-trunk`; decisions.md 2026-07-18 10:02 +
+Spec in board item `materialize-post-verify-fails-when-the-trunk`; direction/packages.md 2026-07-18 10:02 +
 10:30 UTC. Everything here is model-side and schema-driven; the class schema / defaults /
 struct-member / enum lookups arrive through a lazy `ClassCtx` bundle so that tokens which never
 need the schema (hard-rejects, typed-field-only invocations) run without the v68 install

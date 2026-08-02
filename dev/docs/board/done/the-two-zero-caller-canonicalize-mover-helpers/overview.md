@@ -8,7 +8,7 @@ summary = "The two zero-caller `canonicalize_mover*` helpers DELETED — two `bo
 
 (the dedicated one and the older `canonicalize_mover_blob` duplicate).
 `canonicalize_movers_in_level` and `canonicalize_mover_blob` had no production caller — the latter
-explicitly "retained for callers/tests", the shim pattern `direction.md` "No back-compat cruft"
+explicitly "retained for callers/tests", the shim pattern `direction/conventions.md` "No back-compat cruft"
 forbids — so both are gone, with the two blob tests. `test_qualify.py`'s level-granularity test was
 first rewritten to loop `canonicalize_mover` itself and then, in the review round below, deleted
 outright — it exercised a loop the test had written, and the real funnel is covered by

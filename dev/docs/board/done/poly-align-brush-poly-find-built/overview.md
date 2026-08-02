@@ -6,7 +6,7 @@ summary = "`poly align` + `brush poly find` BUILT"
 
 # `poly align` + `brush poly find` BUILT
 
-(build #5, 2026-07-18; item 11; decisions.md
+(build #5, 2026-07-18; item 11; `direction/conventions.md`,
 2026-07-18 21:40 UTC; spec `spec.md`). `polyalign.py`: a stateless
 `brush poly find <brush> [--item/--facing/--texture/--json]` producer printing `BRUSH:idx`
 selectors, and `brush poly align (--wall|--floor|--ring) [--fresh-frame][--fit-perimeter]

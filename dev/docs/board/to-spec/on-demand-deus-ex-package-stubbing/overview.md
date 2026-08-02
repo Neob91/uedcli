@@ -9,4 +9,4 @@ summary = "On-demand Deus Ex package stubbing (v68→v69) — IMPLEMENTED, REMNA
 DONE end-to-end 2026-06-22 (live-validated against `DeusExItems`). **REMAINING (small):** `--deps`
 recursive-stub flag (unused today — closure bottoms out on substrate); broader cross-package asset
 resolution (deferred, flagged). See `spikes/2026-06-21-deusex-package-stubbing-roundtrip.md` +
-`decisions.md` (2026-06-21, 2026-06-22).
+`direction/containers.md` (2026-06-21, 2026-06-22).

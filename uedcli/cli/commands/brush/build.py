@@ -168,7 +168,7 @@ def _build_brushes(builders, shape, args):
         return [builders.cube(args.width, args.breadth, args.height, args.texture)]
     # `--align-to-side` is a BOOL at the CLI and half a segment in DEGREES at the builder: the
     # builders stay a degrees-valued internal API (four direct callers produce editor-blessed
-    # parity goldens from angles that are not half-segments at all — decisions.md 2026-07-25 02:30
+    # parity goldens from angles that are not half-segments at all — dev/docs/direction/generators.md 2026-07-25 02:30
     # UTC, D11), while the user-facing surface is UU or a bool, never degrees.
     if shape == "cylinder":
         return [builders.cylinder(args.height, args.radius, args.sides, args.texture,
@@ -183,7 +183,7 @@ def _build_brushes(builders, shape, args):
         return builders.staircase(args.steps, args.depth, args.rise, args.breadth, args.texture)
     if shape == "spiral":
         # The USER-FACING range check, in the units the user typed and naming the flag they typed,
-        # BEFORE any conversion (decisions.md 2026-07-25 02:30 UTC, D12). `builders` keeps its own
+        # BEFORE any conversion (dev/docs/direction/generators.md 2026-07-25 02:30 UTC, D12). `builders` keeps its own
         # guard for its non-CLI callers, in degrees and naming the parameter.
         per_step = args.angle_per_step
         if not (0 < per_step < 32768):

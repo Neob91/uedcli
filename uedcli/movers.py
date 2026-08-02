@@ -58,7 +58,7 @@ def is_mover(actor: Actor, index) -> bool:
     SCHEMA-AWARE rather than a name guess: the old `bare.endswith("Mover")` test rejected real
     movers whose class name doesn't end in `Mover` (`CaroneElevatorSet.CEDoor`,
     `CaroneElevatorSet.CaroneElevator`, `DeusEx.BreakableGlass`, `DeusEx.BreakableWall`) and would
-    have accepted any unrelated class that happened to end in it. *(decisions.md 2026-07-25 10:18
+    have accepted any unrelated class that happened to end in it. *(direction/conventions.md 2026-07-25 10:18
     UTC.)*
 
     A BARE class name (an unqualified `Class=Mover`, as UnrealEd's own `MAP EXPORT` writes and as an

@@ -22,8 +22,8 @@ Scope limits worth stating plainly (the comparison is an unlabelled vertex SET):
   exercised live, where an inverted solid makes CSG reject/mis-carve it; offline can never
   catch it. (There is no longer an offline face-for-face winding guard: the old
   `test_staircase_matches_ued_reference` fixture-diff test was removed when the linear staircase
-  was redone — decisions.md 2026-07-18 20:09 UTC. **UPDATE 2026-07-21:** the staircase reverted to
-  ONE non-convex brush (decisions.md 2026-07-21 12:06 UTC); it is now `OFFLINE_ONLY` in the parity
+  was redone — rationale/MIGRATION.md 2026-07-18 20:09 UTC. **UPDATE 2026-07-21:** the staircase reverted to
+  ONE non-convex brush (direction/generators.md, 2026-07-21 12:06 UTC); it is now `OFFLINE_ONLY` in the parity
   suite — NOT live-re-blessed — so its winding rests on reuse of the live-blessed `_face` helper plus
   the offline taxonomy guard `test_builder_matches_ued_linear_stair_taxonomy` and the T-junction-aware
   `check_watertight` reporting clean.)

@@ -26,7 +26,7 @@ _STAGING_DIR = ".staging"
 
 class OldFormatPrefab(Exception):
     """Raised by `read_prefab` for a pre-per-actor-tree prefab (a single `Begin Map` blob `<name>.t3d`
-    + `<name>.json`). Migration is a HARD CUTOVER (decisions.md 2026-07-18 23:01 UTC addendum, sub-choice
+    + `<name>.json`). Migration is a HARD CUTOVER (direction/trunk-and-editor.md 2026-07-18 23:01 UTC addendum, sub-choice
     1): there is NO dual-read of the old format — the user re-captures the prefab under the new layout.
     Dispatch surfaces this as a clean exit-2 message naming the prefab, never a traceback."""
 
@@ -102,7 +102,7 @@ def with_group(actor: Actor, group: str | None) -> Actor:
 def with_folder(actor: Actor, folder: str | None) -> Actor:
     """Copy with the uedcli-side `folder` field set (or cleared if None). Independent of `with_group`
     (the T3D `Group` prop) — the two are orthogonal placement dimensions. Since the unify-T3D-trees
-    change (decisions.md 2026-07-18 23:01 UTC addendum, sub-choice 2) a captured stash/prefab member
+    change (direction/trunk-and-editor.md 2026-07-18 23:01 UTC addendum, sub-choice 2) a captured stash/prefab member
     DOES persist its own `folder` sidecar (full trunk parity), so a placed actor defaults to its
     STORED folder; `stash/prefab apply --folder` OVERRIDES that at placement, and absent both the
     actor is unfoldered (folder=None)."""
@@ -250,7 +250,7 @@ def write_prefab(root, name: str, *, full_level: dict[str, str], order: list[str
 def read_prefab(root, name: str) -> tuple[dict[str, str], list[str], list[str], dict, dict[str, str | None]]:
     """Read a prefab → (full, order, packages, meta, folders). Migration is a HARD CUTOVER: an
     OLD-format prefab (a `<name>.t3d` FILE with no new `<name>/` dir) raises `OldFormatPrefab` (the
-    user re-captures it) rather than being auto-converted (decisions.md 2026-07-18 addendum,
+    user re-captures it) rather than being auto-converted (direction/trunk-and-editor.md 2026-07-18 addendum,
     sub-choice 1)."""
     root = Path(root)
     dest = root / name

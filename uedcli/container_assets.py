@@ -2,7 +2,7 @@
 editor / game / build container needs. Host-fs reads only (it scans dir filenames for the present
 extensions); NO docker/subprocess — those live in `editor.py`/`preview_game.py`.
 
-The model (ONE uniform scheme — decisions.md 2026-07-14):
+The model (ONE uniform scheme — direction/containers.md 2026-07-14):
 - The CALLER passes the **whole composed config dir set** (there is no code-vs-content dir split —
   `.u`/`.utx`/`.uax`/`.umx`/`.dx` are all the same Unreal package format, differing only by
   convention). Every dir is bind-mounted read-only at `/resources/<n>` via `resource_mounts`.
@@ -49,7 +49,7 @@ def resource_mounts(dirs: list[str]) -> list[Mount]:
 
 def container_search_dirs(mounts: list[Mount]) -> list[str]:
     """The ordered container-dir list the `Paths` generator emits over: stubs first, then the baked
-    UED22 substrate, then the content mounts (decisions.md 2026-07-14, stubs-first)."""
+    UED22 substrate, then the content mounts (direction/containers.md 2026-07-14, stubs-first)."""
     return [STUBS_CONTAINER_DIR, UED22_CONTAINER_DIR, *(m.container_dir for m in mounts)]
 
 
@@ -103,7 +103,7 @@ def docker_mount_args(mounts: list[Mount]) -> list[str]:
 
 def remap(host_path: str, mounts: list[Mount]) -> str | None:
     """Translate a HOST file path to the path the container sees, using the SAME `mounts` list the
-    caller mounted (never recomputed — decisions.md 2026-07-14). Returns the `/resources/<n>/…` path
+    caller mounted (never recomputed — direction/containers.md 2026-07-14). Returns the `/resources/<n>/…` path
     if `host_path` is under a mount's host dir, else `None` (the caller decides — e.g. a stub-cache or
     UED22 file is remapped by its own fixed root elsewhere). Longest host-dir match wins so a nested
     mount can't be shadowed by its parent."""

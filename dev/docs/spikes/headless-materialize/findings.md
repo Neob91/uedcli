@@ -273,7 +273,7 @@ MAP SETBRUSH SETFLAGS=<PolyFlags>              ← solidity, on the just-added b
 add paths were known to be geometrically equivalent; what is new is that one of them needs no
 clipboard and therefore no GUI. Note ⚠️ **`BRUSH IMPORT` does NOT drift by +32 uu** the way
 `EDIT PASTE` does, so the −32 uu pre-shift `writes._shift_for_paste` applies must **not** be
-carried over to this path (the same trap that bit the intersect/deintersect spec — `decisions.md`
+carried over to this path (the same trap that bit the intersect/deintersect spec — `direction/generators.md`
 2026-07-25).
 
 `headless_build.py` in this directory implements the whole trunk → script translation.
@@ -382,7 +382,7 @@ What it still lacks:
   **repartition over-split** in `bsp_build`. See
   `spikes/2026-07-15-native-materialize/PARITY-STATUS.md`. On basement the native build emitted 465
   BSP nodes where the editor emitted 305 — divergent, though both are 2-zone and both valid.
-- **Byte-parity is a fidelity target, not a functional one** (`direction.md`): the native build is
+- **Byte-parity is a fidelity target, not a functional one** (`direction/materialize.md`): the native build is
   already playable, and this spike's own measurement is that it is *complete* (lighting, movers,
   names, paths) where the headless-editor route is not.
 

@@ -12,7 +12,7 @@ def run(args) -> int:
     """Substrate build utilities. `substrate stub <pkg>` converts a v68 code package into a v69
     stub `.u` (explicit escape hatch; the lazy auto-trigger is the resolution hook). STATELESS.
     Project-scoped: the v68 SOURCE + content deps come from the composed config CODE/CONTENT dirs
-    (decisions.md 2026-07-14 — config-drive stub source), so it needs a resolved project + games
+    (dev/docs/direction/containers.md 2026-07-14 — config-drive stub source), so it needs a resolved project + games
     config, exactly like `level materialize`."""
     if args.sub != "stub":
         raise CommandError(f"unimplemented substrate sub-verb: {args.sub}")

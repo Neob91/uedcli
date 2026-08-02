@@ -28,7 +28,7 @@ dedicated gate. *(Owner's call, 2026-07-26; `board/inbox/` carries the round out
 write it without an explicit yes) **and [`rationale/`](../../../rationale/)** (the agent's choices). Fold the
 outcome into `architecture.md` + `usage.md` on build, then delete.
 
-> **Do not cite `dev/docs/decisions.md`** — it is FROZEN, and `CLAUDE.md` states there is no decisions
+> **Do not cite the retired decisions ledger** — it is FROZEN, and `CLAUDE.md` states there is no decisions
 > ledger. [`rationale/MIGRATION.md`](../../../rationale/MIGRATION.md) maps every old dated citation to its home.
 
 
@@ -499,7 +499,7 @@ dispatches on magic instead of assuming Impulse Tracker; **`.unr` is dropped** f
 set (global blast radius, no rationale, and it would have invalidated every measurement here); `§8`'s
 premise is scoped down to "generalising an existing existence check"; the fixture story is split into the
 sibling spec's synthetic `.utx` writer plus the 34 tracked `.u` packages; and every citation of the frozen
-`decisions.md` is repointed.
+decisions ledger is repointed.
 
 **Still open, and NOT resolvable by an implementer** — `board/inbox/` carries each as `[OWNER — confirm]`:
 the `conventions.md` carve-out for the third stdin convention, and whether curation gets a general

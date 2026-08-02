@@ -11,7 +11,7 @@ Today
   existence; `geometry.validate_brush` runs when geometry ENTERS THE TRUNK (`actor add`,
   `dispatch.py:1995`) and on `clip`/`replace`/`vertex move`/`bake`. So a generator's output that never
   reaches `actor add` — `brush build … > shape.t3d`, or piped into `brush intersect` — is never
-  geometry-checked. Uniform today, and `decisions.md` 2026-07-25 10:20 UTC deliberately kept it that
+  geometry-checked. Uniform today, and `direction/generators.md` (2026-07-25 10:20 UTC) deliberately kept it that
   way rather than let the two new profile verbs become a two-verb exception. If early validation IS
   wanted, do it family-wide: one call in the shared `brush build` tail plus the intersect tail. Weigh
   the gain (an error at the step that owns the input) against the cost (a behaviour change to four

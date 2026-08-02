@@ -175,7 +175,7 @@ so it can't inflate the array-dim stats), run 2026-06-26:
   identical body layout (the only version branch is the name-table read already in `dxpkg`), so the
   decoder runs unchanged on both. But the SAME class differs between the v68 install and the v69
   substrate (e.g. `Engine.Actor` 210 vs 192 own props; `DeusEx.DeusExPlayer` 127 vs 223; casing
-  splits like `OldRot`/`oldRot`) — so WHICH package you parse is load-bearing. Per `decisions.md`
+  splits like `OldRot`/`oldRot`) — so WHICH package you parse is load-bearing. Per `direction/packages.md`
   2026-06-26 14:10 UTC the validator parses the **game's real `.u`**, not the editor's UT-lineage
   substrate or stubs; this spike's "identical" claim is about the decoder, not the schema source.
 - **Cross-package type refs resolve** via the import table (negative refs): `DeusEx.u`'s
@@ -250,9 +250,9 @@ ByteProperty, reject a value not in the enum tag set and normalize its casing, (
 key `Foo(N)`, reject `N ≥ array_dim`. Type-shape checking (1) is a nice-to-have that can land in the
 same pass since the kind is already in hand.
 
-This stays within the no-fallback contract (`decisions.md` 2026-06-26 12:41 UTC): an unknown
+This stays within the no-fallback contract (`direction/conventions.md` 2026-06-26 12:41 UTC): an unknown
 enum value / out-of-bounds index is a hard ERROR, no opaque-accept. It reads the **game's real
-`.u`** (not the stub cache — `decisions.md` 2026-06-26 14:10 UTC); the enum/type/dim live in the
+`.u`** (not the stub cache — `direction/packages.md` 2026-06-26 14:10 UTC); the enum/type/dim live in the
 same packages the name validation already parses, so no new search path.
 
 ---
@@ -273,7 +273,7 @@ as confirmed scope** (type + enum + array-bounds on top of name-only), reusing t
 ## Refs
 
 - Grounding: `2026-06-26-class-property-extraction.md` (name-only export-table reader; the 11-type
-  closed set; cursor-to-EOF integrity check), `decisions.md` 2026-06-26 12:41 UTC (no-fallback,
+  closed set; cursor-to-EOF integrity check), `direction/conventions.md` 2026-06-26 12:41 UTC (no-fallback,
   error-not-accept, normalize-casing) + 2026-06-26 14:10 UTC (parse the game's real `.u`, not
   stubs).
 - Production primitives reused: `uedcli/dxpkg.py` (`_read_compact_index`, header/name/import/export

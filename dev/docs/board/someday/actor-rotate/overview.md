@@ -10,4 +10,4 @@ summary = "`actor rotate --to` (absolute base rotation)"
 `--by`-only; `mover key rotate --to` introduced absolute keyframe rotation. A symmetric
 `actor rotate --to` would let `mover key rotate 0`'s redirect point at an absolute base verb (it
 currently points at `actor rotate --by` / a manual delta). Deferred from mover support
-(decisions.md 2026-06-25, Decision 10).
+(`direction/generators.md`, 2026-06-25, Decision 10).

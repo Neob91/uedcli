@@ -38,7 +38,7 @@ except one already-known long pole:
 - **Net:** the day-to-day authoring loop can be container-free with Phase A/B (native
   reads + writer) + D2; 100% editor elimination additionally needs native lighting/paths.
   **The pivotal decision for Andrzej (Q0 in the roadmap spec):** commit to D2 (promote it
-  from the `decisions.md` 12:40 "optional" status to required — the editor-based D0/D1 path
+  from the `rationale/MIGRATION.md` 2026-06-24 12:40 "optional" status to required — the editor-based D0/D1 path
   can't serve an editor-free pipeline), or adopt an editor-`MAP REBUILD`-only-geometry
   intermediate. Roadmap + open questions: board item `de-containerize-uedcli-drop-docker-wine-exe`.
 
@@ -48,7 +48,7 @@ The directive: *stop needing Docker / containers overall*, and specifically
 *reverse-engineer texture (and mesh) extraction natively so we minimize dependency
 on any `.exe` file*. Plus a hypothesis to test: the reason DeusEx packages need
 "stubbing" is **not** the Unreal package version (v68 vs v69) — UED22's `UCC.exe`
-already reads v68 fine (proven, decisions.md 2026-06-22). The real reasons are
+already reads v68 fine (proven, direction/containers.md 2026-06-22). The real reasons are
 (a) DeusEx stores a **different mesh format** than stock Unreal, and (b) DeusEx
 depends on a **different `Engine.u`/`Core.u`** than the UT-lineage editor.
 
@@ -73,7 +73,7 @@ materialize loop (native CSG build + native package serializer) and:
 - We never load DeusEx code into UED22 → **no stubs** (decompile/umodel/make all die).
 - We read DeusEx packages (classes, properties, textures, meshes, BSP) **natively**
   from the real v68 install — already the established direction for property schema
-  (decisions.md 2026-06-26 14:10: "parse the game's real `.u`, never the stub").
+  (direction/packages.md 2026-06-26 14:10: "parse the game's real `.u`, never the stub").
 - `UCC.exe` (offline export) and `umodel.exe` (mesh) are replaced by native readers.
 - Docker/wine/X11/VNC vanish (they exist only to host the GUI editor).
 

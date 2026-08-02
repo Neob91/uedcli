@@ -60,7 +60,7 @@ Deus Ex install (real game):              version 68: 17
 
 So "v69 tooling can't load v68" is false. Independently, UED22's v469 UCC was forced to a
 genuine `Ver: 68` load (by hiding the v69 copy) and decompiled v68 classes + textures fine
-(🔬 `decisions.md` 2026-06-22).
+(🔬 [`../spikes/2026-06-21-deusex-package-stubbing-roundtrip.md`](../spikes/2026-06-21-deusex-package-stubbing-roundtrip.md)).
 
 ---
 
@@ -83,7 +83,7 @@ Two contributing facts:
 
 Both are class-graph problems, not version problems. The stubbing subsystem exists to
 bridge these for the editor; a native read/write path deletes it — there was never a
-version "conversion" to do. See `decisions.md` 2026-06-27 and `architecture.md` "Package
+version "conversion" to do. See [`../spikes/2026-06-27-decontainerize-uedcli/`](../spikes/2026-06-27-decontainerize-uedcli/) and `architecture.md` "Package
 stubbing".
 
 ---
@@ -393,5 +393,6 @@ these kept evidence spikes:
 - [`quirks.md`](quirks.md) "How brushes enter the level" — the CSG-not-version spawn proof;
   "Containers / package resolution" — the version-tolerant closure reader.
 - [`../architecture.md`](../architecture.md) "Package stubbing" / "Code vs. content split".
-- `decisions.md` 2026-06-21 / 2026-06-22 / 2026-06-27 — the stubbing rationale and its
+- [`../spikes/2026-06-21-deusex-package-stubbing-roundtrip.md`](../spikes/2026-06-21-deusex-package-stubbing-roundtrip.md)
+  and [`../spikes/2026-06-27-decontainerize-uedcli/`](../spikes/2026-06-27-decontainerize-uedcli/) — the stubbing rationale and its
   correction (version is not the reason).

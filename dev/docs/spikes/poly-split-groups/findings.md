@@ -1,7 +1,7 @@
 # Spike: non-shadowing poly-number groups for on-face labeling
 
 > **SUPERSEDED 2026-07-23.** This spike drove the `--split` feature, which was replaced by
-> `--breakdown` (per-brush zoomed panes) the same week — see `decisions.md` 2026-07-23 10:00 UTC.
+> `--breakdown` (per-brush zoomed panes) the same week — see `rationale/MIGRATION.md` 2026-07-23 10:00 UTC.
 > The decal-overlap finding below is still true engine behaviour, but no shipped feature depends on
 > it now. Kept as history.
 

@@ -333,7 +333,7 @@ properties and geometry, never for the level's completeness.
   rule: never correlate dump blocks to brushes by position or count — bind each
   brush to the block whose per-poly object-names match its own, and drop the
   unclaimed aggregate (`qualify.qualify_level_textures`, content matching,
-  2026-07-14; see `decisions.md` same date).
+  2026-07-14).
 - ✅ A `--solidity semisolid` brush does not break `LIGHT APPLY` or `MAP
   SAVE`. A one-shot failure once looked semisolid-specific, but the exact
   conjunction (full castle + 16 semisolids + `LIGHT APPLY` + `MAP SAVE`) saved
@@ -530,7 +530,7 @@ measurement, stores it in typed fields, and bakes it (`brush apply-transform`) �
   editor-driving code is a cube that lands at `(cx, …)` in world space. Reading such an offset
   as authored geometry and reproducing it on a non-paste path (e.g. a native port, or
   `BRUSH IMPORT`, which does not drift) misplaces the brush by 32uu — this actually happened
-  to the intersect/deintersect spec, see `decisions.md` 2026-07-25.
+  to the intersect/deintersect spec.
 - Emit ordering (fixed bug): the actor's `Brush=Model'..'` reference must be emitted
   after the `Begin Brush…End Brush` block (the editor's own order). Before the block → the
   actor binds to an undefined model → unbound, unselectable brush. Omitting it entirely

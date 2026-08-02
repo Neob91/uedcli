@@ -13,7 +13,7 @@ REPLACED by `.png`, and `--png` was deleted outright. **10.2** the `_RemovedFlag
 shims are gone (so the two older entries below that describe `_RemovedFlag` behaviour are
 historical — the action no longer exists); deleting them re-opened a prefix-abbreviation hole (`--class` abbreviated into the
 surviving `--class-exact`, silently restoring the exact-only footgun), so the SURVIVOR was renamed
-`--class-exact` → **`--exact-class`** — load-bearing, not taste (`decisions.md` 2026-07-25 18:15
+`--class-exact` → **`--exact-class`** — load-bearing, not taste (`rationale/cli.md`, 2026-07-25 18:15
 UTC; pinned by `test_parser_find_rejects_bare_class_as_unrecognized`). **10.3** the
 preview-annotation internals renamed `label` → `annotation` (`AnnotationSpec`,
 `parse_annotation_spec`, `DEFAULT_ANNOTATIONS`, the `annotations=` render kwarg); the drawn-text

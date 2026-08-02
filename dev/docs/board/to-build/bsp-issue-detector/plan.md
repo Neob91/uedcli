@@ -1,8 +1,8 @@
 # Implementation plan — BSP-issue detector (near-term: the parser spike, D0 capture, the verb, D0-b)
 
 **Status:** plan (ephemeral — sequencing scratch; folds into durable docs as steps land).
-**Spec:** board item `bsp-issue-ground-truth-detector-d0-d1` (§6 box). **Decision:** `decisions.md`
-2026-06-24 12:40 UTC (D0+D1 the detector; D2 deferred). Reviewed: 2 rounds.
+**Spec:** board item `bsp-issue-ground-truth-detector-d0-d1` (§6 box). **Decision:** `rationale/MIGRATION.md`
+(2026-06-24 12:40 UTC — D0+D1 the detector; D2 deferred). Reviewed: 2 rounds.
 
 ## Scope (and what's OUT)
 
@@ -42,7 +42,7 @@ Run this before committing effort to steps 2–3: its go/no-go decides whether D
   (near-zero-area nodes) and **fall-through** (built floor surf with `PF_NotSolid/Semisolid/Portal`)
   need only P0-a — those are D1's viable rows.
 - **Output:** `spikes/2026-06-24-…-d1-umodel-feasibility.md` (go/no-go, the layout if go, the viable
-  rows) + a `decisions.md` entry. **Acceptance:** a recorded go/no-go + viable-row list. **Time box:
+  rows) + a `rationale/` note. **Acceptance:** a recorded go/no-go + viable-row list. **Time box:
   1 session.**
 
 ## Step 2 — D0: promote the parser + the capture/severity/report helpers (offline, pure, safe)
@@ -126,7 +126,7 @@ measurement is better served by `--rebuilt` alone.
   offline; D2 is a judgment call — state it).
 - **Content-blocked fallback:** if the install content is absent here, step 4 is a tracked TODO;
   steps 1–3 stand alone. Don't fake it.
-- **Output:** a findings doc + a `decisions.md` note. **Acceptance:** measurement recorded, OR noted
+- **Output:** a findings doc + a `rationale/` note. **Acceptance:** measurement recorded, OR noted
   content-blocked with a TODO.
 
 ---
@@ -138,11 +138,11 @@ measurement is better served by `--rebuilt` alone.
   non-flushed log (no `Nodes:` line) is a hard failure, never a pass (step 2).
 - **Dependencies:** **Step 1 first (the gate).** Steps 2 and 3 follow; step 3's `--built` arm exists
   only if step 1 is go. Step 4 needs step 2 + real-map content.
-- **Citations:** cite `decisions.md` by UTC timestamp (durable), not ephemeral spec sections (R2-I2)
+- **Citations:** cite `rationale/MIGRATION.md` by UTC timestamp (durable), not ephemeral spec sections (R2-I2)
   — the spec folds into durable docs and is deleted.
 
 ## Done — near-term effort
-**DONE =** step 1 go/no-go recorded (`spikes/`+`decisions.md`); step 2 landed (`bsp/editorlog.py` +
+**DONE =** step 1 go/no-go recorded (`spikes/`+`rationale/`); step 2 landed (`bsp/editorlog.py` +
 the materialize capture + no-flush hard-fail + tests, suite green); step 3 shipped per the spike
 answer (`--rebuilt` always; `+--built` iff go; docs current, arm-aware); step 4 measurement recorded
 OR content-blocked TODO. **Branches:** spike no-go → `--rebuilt` only, D1-b/`--built` deferred;

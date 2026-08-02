@@ -17,7 +17,7 @@ Python: `brushcsg.py` + the two generator verbs sharing `brush build`'s output f
 no xfails** (`fixtures/intersect/` — ordered add/subtract/re-add, overlapping and abutting
 brushes, nested and disjoint voids, thin/rotated/off-grid geometry). Landing it also fixed a
 CORE bug it uncovered: the repartition left every node `NF_IsNew`, so semisolid/nonsolid detail
-brushes were silently dropped from the world (`level materialize` too) — see `decisions.md`
+brushes were silently dropped from the world (`level materialize` too) — see `rationale/MIGRATION.md`,
 2026-07-25. Two cold reviews resolved. Spec
 board item `bspcsg-core-apply-scaled-brushes` (its §4 claim that the editor's
-wrap/builder are DIFFERENT boxes is corrected — `decisions.md` 2026-07-25).
+wrap/builder are DIFFERENT boxes is corrected — `rationale/MIGRATION.md`, 2026-07-25).

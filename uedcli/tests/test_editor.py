@@ -162,7 +162,7 @@ def test_write_engine_ini_crafts_paths_from_mounts_over_the_base_ini(tmp_path, m
     base.write_bytes(b"[Core.System]\r\nPaths=../UED22/*.u\r\nSavePath=../Save\r\n")
     monkeypatch.setattr(editormod, "_base_engine_ini_path", lambda: base)
     # A real content dir holding a .utx: per-ext Paths emit one line per (dir × present ext), so the
-    # r000 line only appears because the dir actually holds a .utx (decisions.md 2026-07-14 12:00).
+    # r000 line only appears because the dir actually holds a .utx (dev/docs/direction/containers.md 2026-07-14 12:00).
     tex = tmp_path / "Textures"
     tex.mkdir()
     (tex / "Foo.utx").write_bytes(b"x")

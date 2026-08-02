@@ -22,10 +22,10 @@ the ring may be supplied in either order.
 The linear `staircase` is ONE non-convex brush (the UED `LinearStairBuilder`
 stepped-wedge outer hull: Base + back + per-step Step/Rise + tiled convex Side
 strips) — its per-step boundaries are watertight T-junctions that `level doctor`'s
-T-junction-aware `check_watertight` accepts (decisions.md 2026-07-21 12:06 UTC). The
+T-junction-aware `check_watertight` accepts (direction/generators.md 2026-07-21 12:06 UTC). The
 `spiral_staircase` is a LIST of convex brushes — a central column plus one wedge
 (pie-slice) tread per step, ascending monotonically around the column
-(decisions.md 2026-07-22); each brush is a clean convex solid and separate step
+(direction/generators.md 2026-07-22); each brush is a clean convex solid and separate step
 brushes are standard for CSG.
 
 Coordinates are the brush's own local vertex space, centered on the origin; the
@@ -574,7 +574,7 @@ def staircase(steps: int, depth: float, rise: float, breadth: float,
     neighbour's / the base's long edge opposed by the chain of strip-bottom edges);
     `level doctor`'s T-junction-aware `check_watertight` reports zero findings on them.
     Matches UED's own `LinearStairBuilder` face taxonomy (`2 + 4n`; Base/back/Step/
-    Rise/tiled-Side) — decisions.md 2026-07-21 12:06 UTC.
+    Rise/tiled-Side) — direction/generators.md 2026-07-21 12:06 UTC.
 
     NATIVE-CSG CAVEAT: this non-convex brush is built correctly by UnrealEd (the
     default `level materialize`) and the real engine (the default `--game` preview),
@@ -648,7 +648,7 @@ def spiral_staircase(steps: int, inner_radius: float, step_width: float, rise: f
         raise GeometryError("spiral staircase needs >= 1 step")
     # An INTERNAL-API guard, naming the PARAMETER in its own units. The CLI can no longer reach it:
     # `brush build spiral --angle-per-step` is checked in unreal rotation units at the dispatch
-    # boundary, naming that flag and the value the user typed (decisions.md 2026-07-25 02:30 UTC,
+    # boundary, naming that flag and the value the user typed (direction/generators.md 2026-07-25 02:30 UTC,
     # D12). It stays for the direct callers D11 keeps — `tests/builder_parity_cases.py` and
     # `native/csg_golden.py` — and is exercised directly by `test_profile_generators.py`.
     if not (0 < degrees_per_step < 180):

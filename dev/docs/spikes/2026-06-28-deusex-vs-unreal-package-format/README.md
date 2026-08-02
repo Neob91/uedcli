@@ -79,9 +79,9 @@ The version number is a red herring in **both** directions, but for different ar
 
 - `spikes/2026-06-27-decontainerize-uedcli/06-stub-elimination.md` — "the two real
   reasons — neither is v68/v69": Engine/Core divergence + mesh format.
-- `decisions.md` 2026-06-22 — UED22's v469 UCC was forced to a genuine `Ver: 68` load
+- `direction/containers.md` 2026-06-22 — UED22's v469 UCC was forced to a genuine `Ver: 68` load
   (by hiding the v69 substrate copy) and exported v68 classes + textures fine.
-- `decisions.md` 2026-06-27 — "The stub rationale is mesh-format + `Engine.u`/`Core.u`
+- `direction/containers.md` 2026-06-27 — "The stub rationale is mesh-format + `Engine.u`/`Core.u`
   divergence, NOT package version v68-vs-v69."
 - `unrealed/quirks.md` "How brushes enter the level" — the v69 `.dx` loaded in the v68
   game; the spawn failure was missing CSG, "the v68/v69 version gap is a red herring".

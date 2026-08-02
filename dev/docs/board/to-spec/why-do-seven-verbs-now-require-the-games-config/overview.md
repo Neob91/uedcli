@@ -7,7 +7,7 @@ summary = "Why do SEVEN verbs now require the games config? Investigate what eac
 # Why do SEVEN verbs now require the games config? Investigate what each one actually needs mover-ness FOR, then scope the requirement back
 
 Making `movers.is_mover`
-schema-aware (`decisions.md` 2026-07-25 10:18 UTC — "one predicate, no split") propagated the
+schema-aware (`direction/conventions.md`, 2026-07-25 10:18 UTC — "one predicate, no split") propagated the
 class-resolver requirement to every call site: **`mover key`, `level doctor`, `event graph`,
 `stash capture`, `brush scale`, `brush apply-transform`, `brush intersect`/`deintersect`** now
 exit 2 without a project + `~/.uedcli/config.toml`. (`level materialize` and both `level preview`
@@ -42,8 +42,8 @@ function must come out of it with ONE answer: either it takes the index (and `*p
 resolver-requiring set), or preview is ruled a class-(c) "cosmetic only" caller and the name test
 stays with that written down as a deliberate, documented approximation. `architecture.md`
 "Mover support" and the `classify_brush` docstring both record it as pending this item.
-**Ruled out in advance** (`decisions.md` 2026-07-25 10:18): a name-suffix fallback, an optional
+**Ruled out in advance** (`direction/conventions.md`, 2026-07-25 10:18): a name-suffix fallback, an optional
 resolver that silently degrades, and a second divergent predicate. The only sanctioned fix is
-scoping. Outcome is a superseding `decisions.md` entry + `direction.md` reconcile — the current
+scoping. Outcome is a superseding entry in `direction/conventions.md` — the current
 "Explicit, discoverable, model-side" bullet names all seven verbs and would need rewriting.
 (Andrzej, 2026-07-25; consequence of `board/to-build/` #9.4.)

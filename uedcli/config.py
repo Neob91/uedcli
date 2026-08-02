@@ -1,5 +1,5 @@
-"""Global-CLI config + package-path resolution (project layout: decisions.md 2026-07-17 20:58;
-directory model: decisions.md 2026-07-14 03:30).
+"""Global-CLI config + package-path resolution (project layout: direction/projects-and-config.md 2026-07-17 20:58;
+directory model: direction/containers.md 2026-07-14 03:30).
 
 Pure, side-effect-light (the one side effect is `state_dir(create=True)`'s mkdir + self-ignore).
 Loads the two config files and resolves package paths. `paths` are bare **directories**
@@ -27,7 +27,7 @@ regardless of extension) — so a project dir/package shadows a same-named base 
 
 Deliberately does **NOT** import `packages.py` (dependency direction — packages.py imports this).
 
-Deferred/on-hold (decisions.md 2026-07-01): name-based `--project` needs a project registry (dead
+Deferred/on-hold (direction/projects-and-config.md 2026-07-01): name-based `--project` needs a project registry (dead
 since 2026-07-05) — `resolve_project` handles only path-based + walk-up resolution (a bare name
 errors unless a `resolve_name` hook is injected). The internal term stays `substrate` (`Substrate`,
 `select_substrate`) though the user-facing TOML key is `game`.
@@ -47,7 +47,7 @@ PKG_EXTS = (".u", ".dx", ".utx", ".uax", ".umx")
 
 # Top-level keys that mark a PROJECT config (vs the per-user games config). Used both to reject
 # unknown project keys and to classify a config by schema. (`id`/`name` were DROPPED with the
-# registry — decisions.md 2026-07-17 20:58 §2; a file carrying them gets the unknown-key error.)
+# registry — direction/projects-and-config.md 2026-07-17 20:58 §2; a file carrying them gets the unknown-key error.)
 _PROJECT_KEYS = {"game", "paths", "catalog", "prefabs", "maps"}
 
 # A Windows drive-letter colon (`Z:\` / `Z:/`) inside a value — the `:` is our list separator, so a
@@ -158,7 +158,7 @@ def reject_windows_drive(paths_str: str, where: str = "") -> None:
 
 
 def resolve_dirs(paths_str: str, base: str, *, require_absolute: bool = False) -> list[str]:
-    """Resolve a colon-separated DIRECTORY list to absolute host dirs, in order (decisions.md
+    """Resolve a colon-separated DIRECTORY list to absolute host dirs, in order (direction/containers.md
     2026-07-14 03:30 — `paths` are bare dirs now, NOT globs). No file globbing: uedcli scans each
     dir itself for the five package extensions elsewhere.
 
@@ -317,7 +317,7 @@ def load_project(dir_or_toml: str) -> Project:
     """Load a project `uedcli.toml` (given the project ROOT dir or the file itself). Validates
     schema + keys; the dir containing the file IS the project root. `game` is required; `paths`
     stays relative (resolved against `root` later); `catalog`/`prefabs`/`maps` are relative to the
-    root (defaults `texture-catalog`/`prefabs`/`maps` — decisions.md 2026-07-17 20:58 §2)."""
+    root (defaults `texture-catalog`/`prefabs`/`maps` — direction/projects-and-config.md 2026-07-17 20:58 §2)."""
     toml_path = _project_toml_path(dir_or_toml)
     if not os.path.isfile(toml_path):
         raise ConfigError(f"no uedcli.toml at {toml_path}")
@@ -369,14 +369,14 @@ def state_dir(root: str | os.PathLike, *, create: bool = False) -> Path:
     locks, staging/tmp. Derivable, throwaway, never tracked. With
     `create=True` the dir is made and, IFF it was absent at the start of THIS call, a
     self-ignoring `.gitignore` containing `*` is written into it (the cargo/direnv pattern —
-    decisions.md 2026-07-17 20:58 §3). Detection is `mkdir` catching `FileExistsError` (never a
+    direction/projects-and-config.md 2026-07-17 20:58 §3). Detection is `mkdir` catching `FileExistsError` (never a
     blind `exist_ok=True`), so an existing dir is left alone — a user who deliberately deleted
     the ignore file isn't fought."""
     return self_ignoring_dir(Path(root) / ".uedcli", create=create, what="state dir")
 
 
 def self_ignoring_dir(d: Path, *, create: bool = False, what: str = "dir") -> Path:
-    """The shared make-a-self-ignoring-dir mechanic (the cargo/direnv pattern — decisions.md
+    """The shared make-a-self-ignoring-dir mechanic (the cargo/direnv pattern — direction/projects-and-config.md
     2026-07-17 20:58 §3): with `create=True` the dir is made and, IFF it was absent at the start
     of THIS call, a `.gitignore` containing `*` is written into it. Used by `state_dir`
     (`<root>/.uedcli/`) and the catalog-adjacent texture-lock dir (`<catalog>/.locks/`). Every
@@ -442,7 +442,7 @@ def _composed_dirs_with_provenance(project: Project | None,
 def composed_search_dirs(project: Project | None, user_config: UserConfig) -> list[str]:
     """The composed search directories (project overlay first, then the game's base), deduped by
     directory keep-first — the absolute HOST dirs that drive the editor/game container mounts
-    (decisions.md 2026-07-14 03:30). Distinct from `composed_search_files`'s stem-dedup: this is
+    (direction/containers.md 2026-07-14 03:30). Distinct from `composed_search_files`'s stem-dedup: this is
     directory-dedup (for the mounts), that is package-name-dedup (for the load set)."""
     return [d for d, _prov in _composed_dirs_with_provenance(project, user_config)]
 

@@ -7,7 +7,7 @@ summary = "Unset `Tag` treated as NOT a matchable receiver"
 # Unset `Tag` treated as NOT a matchable receiver
 
 follow-ups from build #4 (event graph, item 10)` — three things I decided and want
-your eyes on (all recorded in decisions.md 2026-07-18 20:54 UTC):
+your eyes on (all recorded in `direction/conventions.md`, 2026-07-18 20:54 UTC):
 1. **Unset `Tag` treated as NOT a matchable receiver.** UE1 defaults an unset Tag to the class
    name at runtime; I only wire an edge on an EXPLICIT non-empty Tag (a class-name-default Tag
    never receives). Assumption per the task; flagging it in case you want the class-name-default

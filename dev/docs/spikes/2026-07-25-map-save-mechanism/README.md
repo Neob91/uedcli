@@ -5,7 +5,7 @@
 [`measure_header_window.py`](measure_header_window.py)
 · **Pinned by:** `uedcli/tests/test_engine_facts.py::test_save_package_writes_a_temp_and_moves_it_and_never_reads_a_file_through_its_imports`
 · **Consumers:** `driver.map_save` / `driver.package_header_problem`, `unrealed/commands.md`
-"`MAP SAVE` writes `Save.tmp`", `decisions.md` 2026-07-25 11:31 UTC (+ its two corrections)
+"`MAP SAVE` writes `Save.tmp`", `rationale/driver.md` 2026-07-25 11:31 UTC (+ its two corrections)
 
 ## Why the question came up
 
@@ -47,7 +47,7 @@ table; the control flow is inferred from it. Two things follow that a waiter mus
 This is the half that produced a retraction, so it is written out in full.
 
 `core.dll` imports **no** `MoveFileW`/`MoveFileExW`/`CopyFileW`/`CopyFileExW`. It is tempting — and
-an earlier revision of `decisions.md` did exactly this — to conclude "therefore the move must be a
+an earlier revision of the choice ledger did exactly this — to conclude "therefore the move must be a
 hand-rolled read/write copy, therefore a truncated destination is reachable, therefore the header
 check has a demonstrated failure mode to catch."
 

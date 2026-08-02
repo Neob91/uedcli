@@ -669,7 +669,7 @@ def run(args) -> int:
         # is a HARD ERROR: exit 2 naming the package that failed. There is NO own-only degrade — printing
         # the class's own props with a stderr note is a silent half-answer (the note scrolls away and the
         # caller reads a truncated property set as a complete one). Per `dev/docs/direction/conventions.md` "No silent
-        # half-answers" / decisions.md 2026-07-24 21:58 UTC.
+        # half-answers" / dev/docs/direction/conventions.md 2026-07-24 21:58 UTC.
         try:
             allp = uprops.resolve_class_properties(fqcn, resolver=idx.resolver())
         except uprops.SchemaError as e:

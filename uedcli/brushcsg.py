@@ -24,7 +24,7 @@ scaffolding; the operation is a faithful port, not a lookalike.
 
 Spec: board item `bspcsg-core-apply-scaled-brushes`.
 RE: `dev/docs/spikes/2026-07-15-native-materialize/re-raw-zones/bspbrushcsg-intersect-deintersect-decode.md`.
-Decisions: `dev/docs/decisions.md` 2026-07-24 16:32 / 17:04 / 17:56 / 18:12 / 18:33 UTC.
+Decisions: `dev/docs/direction/generators.md` (2026-07-24 16:32 / 17:04 / 17:56 / 18:12 / 18:33 UTC).
 """
 from __future__ import annotations
 

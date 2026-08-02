@@ -93,7 +93,7 @@ class TrunkLevelSource:
                 resolved[name] = (self._ranks[name] if name in self._ranks
                                   else trunk.append_rank({**self._ranks, **resolved}))
         ranks = resolved
-        # DELTA write under a short per-level flock (decisions.md 2026-07-18 — concurrent trunk
+        # DELTA write under a short per-level flock (dev/docs/direction/trunk-and-editor.md 2026-07-18 — concurrent trunk
         # writers): write ONLY the actors whose body or rank differs from THIS process's load
         # snapshot (content-diff, not `touched` — robust to any verb under-reporting), and prune
         # ONLY this process's own deletions (loaded set minus current set). An actor another

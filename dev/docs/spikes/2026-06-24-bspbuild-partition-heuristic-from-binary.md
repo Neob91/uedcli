@@ -3,7 +3,7 @@
 **Date:** 2026-06-24
 **Method:** static disassembly of `Editor.dll` (the `capstone`+`pefile` harness in
 `_scratch/bspspike/`).
-**Why:** the offline-BSP-engine decision (`decisions.md` 2026-06-24 09:07 UTC) named **one gating
+**Why:** the offline-BSP-engine decision (`rationale/MIGRATION.md` 2026-06-24 09:07 UTC) named **one gating
 unknown** — `bspBuild`'s partition-plane selection (`FindBestSplit`), the piece the render-hole
 spike left out of scope and on which the whole tree (hence which faces split/survive) hinges.
 This spike decodes it and answers: **is a faithful Python port realistic? Yes.**
@@ -113,7 +113,7 @@ as possibly infeasible; it is not. The remaining engine-port work is **volume, n
 
 ## 5. Implication for the plan
 
-Proceed with the offline BSP engine (`decisions.md` 2026-06-24 09:07 UTC). The heuristic gate is
+Proceed with the offline BSP engine (`rationale/MIGRATION.md` 2026-06-24 09:07 UTC). The heuristic gate is
 cleared; the project is now a (large but mechanical) faithful port + the differential harness
 (editor as test oracle). Suggested first implementation slice: port `FPoly` + `SplitWithPlaneFast`
 + `FindBestSplit` + a minimal `SplitPolyList`, build a few hand brushes, and diff the resulting

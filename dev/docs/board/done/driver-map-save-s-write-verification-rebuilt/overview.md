@@ -17,6 +17,6 @@ equal readings across a settle window; a structural check of the written package
 `container_file_head` / `package_problem` over one `_container_probe`. The two tests that could not
 fail (both passed `timeout=0.0`) and the docker-failure test that mocked an impossible
 `returncode=126` pairing were rebuilt on a fake clock that exercises the real 600 s/1 s/3 s
-defaults. `decisions.md` 2026-07-25 11:31 UTC; `architecture.md` "Editor driver";
+defaults. `rationale/driver.md` (2026-07-25 11:31 UTC); `architecture.md` "Editor driver";
 `unrealed/commands.md`. **Remnant → `board/inbox/`:** driver's other `docker exec` calls (8 across 6
 methods, plus `xfer.remove`) are still unbounded.

@@ -1,7 +1,7 @@
 # `find` spatial predicates — `--near`, `--within-bbox`, `--overlapping`
 
 **Status: PARTIALLY BUILT (2026-07-24).** `--within-bbox` (full containment, §7.2 resolved to
-containment-only) is **BUILT + tested** — `decisions.md` 2026-07-24 21:44 UTC, `tests/test_find_spatial.py`
+containment-only) is **BUILT + tested** — `rationale/reported-coordinates.md` 2026-07-24 21:44 UTC, `tests/test_find_spatial.py`
 (fold this filter's prose into `usage.md`/`architecture.md` is DONE). The **`--overlapping-bbox`** region-grab
 variant is a NEW `board/to-spec/` item. **STILL PARKED:** `--near` (§2/§3), `--overlapping <actor>` (§2/§3), and
 `--within-brush` (§7.6, still being designed); the remaining §7 sub-choices await Andrzej's direction.
@@ -163,4 +163,4 @@ The exact-volume counterpart to `--within-bbox` (box = fast approximation; brush
 - **`docs/leveldesign/`** — a "select by region" note.
 - **`architecture.md`** — spatial filtering as Decimal AABB predicates over `writes.actor_bounds`, in
   the find handler; the new `writes` AABB helpers.
-- **`decisions.md`** — append the resolved §7 sub-choices.
+- **`direction/`** — record the resolved §7 sub-choices.

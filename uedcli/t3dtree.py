@@ -2,7 +2,7 @@
 `<tree_dir>/actors/<name>/{actor.t3d, order_value[, folder]}`, plus the LexoRank order-value algebra,
 the coordination-free name allocator, and the actor-body strip/inject.
 
-This is the single implementation used by ALL THREE T3D trees (decisions.md 2026-07-18 23:01 UTC —
+This is the single implementation used by ALL THREE T3D trees (direction/trunk-and-editor.md 2026-07-18 23:01 UTC —
 "stash, prefab, and trunk MUST share ONE T3D tree format"):
 
 - the git **trunk** (`maps/<level>/`) — via `trunk.py`'s thin re-exports,
@@ -15,7 +15,7 @@ from the dir name on read. Order is a per-actor LexoRank `order_value` sidecar; 
 (order_value, name) sort. Any per-tree EXTRAS (a stash/prefab `meta.json` + `packages` list) sit
 BESIDE the shared `actors/` tree, written/read by `write_sidecars`/`read_sidecars` (the trunk simply
 never calls them). See specs/2026-07-05-uedcli-git-native-model-design.md +
-board item `delete-the-ephemeral-spec-specs-2026-07-18` + decisions.md 2026-07-05 / 2026-07-18. Pure module — no editor,
+board item `delete-the-ephemeral-spec-specs-2026-07-18` + direction/trunk-and-editor.md (2026-07-05 / 2026-07-18). Pure module — no editor,
 no session store.
 """
 from __future__ import annotations
@@ -167,7 +167,7 @@ def write_actor_tree(tree_dir: Path, level: Level, ranks: dict[str, str],
     deletions (its loaded set minus its current set) — are pruned. An on-disk actor dir neither
     (re)written nor in `deleted` is LEFT ALONE: it belongs to a concurrent writer (per-actor dirs
     make disjoint edits compose), and the old make-disk-match-memory full rewrite silently
-    destroyed concurrent adds/edits/deletes (decisions.md 2026-07-18 — trunk delta writes).
+    destroyed concurrent adds/edits/deletes (direction/trunk-and-editor.md 2026-07-18 — trunk delta writes).
 
     Per-actor writes are ATOMIC and ordered: `order_value` lands first, then `actor.t3d` via
     tmp + `os.replace` — a lock-free reader (loads take no flock) sees either the old or the new
@@ -249,7 +249,7 @@ def read_actor_tree(
     """Read the per-actor-dir tree → (Level, name→order_value, name→raw stored body text,
     name→folder). `level.order` is the (order_value, name) sort. A missing/empty tree → an empty
     level. The raw-body map is the load-time snapshot `TrunkLevelSource.save` content-diffs against
-    so it writes only what its process actually changed (decisions.md 2026-07-18 — trunk delta
+    so it writes only what its process actually changed (direction/trunk-and-editor.md 2026-07-18 — trunk delta
     writes). The name→folder map is the folder half of that snapshot: a folder-ONLY change leaves
     body+rank byte-identical, so the delta diff MUST compare it too or the write is silently dropped.
     An EMPTY `actor.t3d` is skipped like a missing one: it can only be a crashed pre-atomic-write

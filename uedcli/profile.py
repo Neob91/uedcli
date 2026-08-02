@@ -31,7 +31,7 @@ from .geometry import GeometryError
 # Two profile points closer than WELD collapse to one (a zero-length ring edge). This constant
 # LIVES HERE and `builders.py` imports it — never the other way round: `builders.WELD` is defined
 # BELOW that module's import block, so a `profile` → `builders` import while `builders` imports
-# `profile` is a load-time cycle that breaks every uedcli invocation (decisions.md 2026-07-25
+# `profile` is a load-time cycle that breaks every uedcli invocation (direction/generators.md 2026-07-25
 # 02:30 UTC). Same value/meaning as the tolerance `builders._dedup_ring` has always used.
 WELD = 1e-3
 
@@ -53,7 +53,7 @@ class ProfileError(GeometryError):
 
     Subclassing `geometry.GeometryError` is what buys the clean CLI exit: `dispatch()` already
     catches `GeometryError` and prints it without a traceback, while it has no bare `ValueError`
-    arm — so a plain `ValueError` subclass would traceback at the user (decisions.md 2026-07-25
+    arm — so a plain `ValueError` subclass would traceback at the user (direction/generators.md 2026-07-25
     02:30 UTC).
     """
 

@@ -7,7 +7,7 @@ summary = "`--wall` vs `--floor` distinction I chose:"
 # `--wall` vs `--floor` distinction I chose:
 
 follow-ups from build #5 (poly align, item 11)` — DEFERRED pieces + interpretations
-from `polyalign.py` (design: decisions.md 2026-07-18 21:40 UTC). Flagging for your eyes:
+from `polyalign.py` (design: `direction/conventions.md`, 2026-07-18 21:40 UTC). Flagging for your eyes:
 1. **`--wall` vs `--floor` distinction I chose:** the two flags are mathematically identical
    (adopt-seed is axis-agnostic; `_tex_basis` handles both fresh cases), so I gave each a concrete
    ORIENTATION GUARD — `--wall` requires the coplanar set to be vertical (normal ≈ ±X/±Y),

@@ -12,7 +12,7 @@ crossing package boundaries via the import table and a caller-supplied `resolver
 `.u` path on the schema search path). Child props override parents on a case-folded name collision.
 
 Pure: parses bytes, never runs the editor. The low-level container parsing (header, tables,
-compact index, tagged-property lists) lives in the unified core `upackage.py` (decisions.md
+compact index, tagged-property lists) lives in the unified core `upackage.py` (direction/packages.md
 2026-07-18 10:02 §5) — `Package`/`load_package`/`SchemaError` are re-exported from there, so
 every existing `uprops.Package`/`uprops.SchemaError` caller keeps working unchanged. The
 cursor-to-EOF integrity check on every record is the no-fallback contract — a layout error
@@ -429,7 +429,7 @@ def enum_values(pkg: Package, type_ref: int) -> list[str]:
 
 
 # ══ Class DEFAULT VALUES — the SerializeExpr walker + UClass-tail defaults decoder ═══════════
-# (spec in board item `materialize-post-verify-fails-when-the-trunk` §5.2; decisions.md 2026-07-18 10:02 §5.)
+# (spec in board item `materialize-post-verify-fails-when-the-trunk` §5.2; direction/packages.md 2026-07-18 10:02 §5.)
 #
 # A UClass export body is:
 #   [UField.SuperField][UField.Next]                       (compacts; NO leading None terminator —

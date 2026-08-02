@@ -20,7 +20,7 @@ _ALWAYS_LOADED = {"Engine", "Core", "Editor"}
 
 def editor_search_dirs(search_dirs) -> list[str]:
     """The HOST package search path the editor/game load path resolves manifest packages against,
-    in `[Core.System] Paths` precedence order (decisions.md 2026-07-14, stubs-first):
+    in `[Core.System] Paths` precedence order (direction/containers.md 2026-07-14, stubs-first):
 
         [ built-stub cache (host), UED22 substrate (host), *composed search dirs (host) ]
 
@@ -35,7 +35,7 @@ def editor_search_dirs(search_dirs) -> list[str]:
     directories. The CONTAINER view (`/stubs`, `/opt/UED22`, `/resources/<n>`) is reached ONLY at
     the one translation boundary `_remap_to_container`, driven by the SAME `mounts` list the caller
     bind-mounted (never recomputed). The stub cache is per-user (`config.stub_cache_root`); UED22
-    is the committed substrate, PACKAGE-RELATIVE (`tool_assets.uned_dir()/UED22` — decisions.md
+    is the committed substrate, PACKAGE-RELATIVE (`tool_assets.uned_dir()/UED22` — direction/projects-and-config.md
     2026-07-17 20:58 §6, no repo-root walk)."""
     from . import config, tool_assets
     ued22 = tool_assets.uned_dir() / "UED22"
@@ -46,7 +46,7 @@ def editor_search_dirs(search_dirs) -> list[str]:
 def schema_search_dirs(project, user_config) -> list[str]:
     """The dirs for offline class-property SCHEMA extraction (`actor prop` validation, decision
     2026-06-26 14:10) — the WHOLE composed config search path (`config.composed_search_dirs`, one
-    uniform set — decisions.md 2026-07-14). `schema_resolver` resolves `<pkg>.u` by extension within
+    uniform set — direction/containers.md 2026-07-14). `schema_resolver` resolves `<pkg>.u` by extension within
     these, so it finds the game's REAL v68 `.u` (a content dir simply has no `.u` for the name); it is
     NEVER pointed at the v69 stub cache or the UED22 (UT-lineage) substrate, whose `.u` would
     mis-answer inherited `Engine`/`Core` properties. Honest cost: buildability depends on the game's
@@ -114,7 +114,7 @@ def unloadable_v68_packages(entries: list[tuple[str, str]], mounts) -> list[str]
     substrate (those resolve under `/stubs` / `/opt/UED22`, which are never `mounts`). `OBJ LOAD`ing a
     v68 `.u` into the v69 editor GPFs / silently wedges it (the substrate-split incompatibility), so
     the editor-load path must REFUSE these with a clean, named error rather than attempt the load
-    (decisions.md 2026-07-14 19:21 — uniform mounts put the game's v68 `.u` on the editor's resolution
+    (direction/containers.md 2026-07-14 19:21 — uniform mounts put the game's v68 `.u` on the editor's resolution
     path, guarded only by the v69 stub that shadows it; an UNstubbed one lands here). A resolver
     `remap(file, mounts) is not None` means the file is under a mounted config dir; combined with a
     `.u` extension, that is exactly a game v68 code package with no stub. Returns the offending package
@@ -213,7 +213,7 @@ def _is_relative_to(p: Path, base: Path) -> bool:
 
 def _remap_to_container(host_path: str, mounts) -> str:
     """Map a HOST-resolved package file path to where it is visible INSIDE the container, using the
-    SAME `mounts` list the caller bind-mounted (never recomputed — decisions.md 2026-07-14). Three
+    SAME `mounts` list the caller bind-mounted (never recomputed — direction/containers.md 2026-07-14). Three
     container-visible roots, in this order:
       - a file under a config CONTENT mount → its `/resources/<n>/…` (`container_assets.remap`);
       - a built-stub-cache file → `/stubs/…`;
@@ -254,7 +254,7 @@ def ensure_load(driver, manifest: list[str], *, search_dirs: list[str], mounts) 
     container-facing call."""
     from . import container_assets
     entries = obj_load_entries(manifest, search_dirs)
-    # GATE (decisions.md 2026-07-14 19:21): with the uniform mounts the game's v68 `.u` is on the
+    # GATE (direction/containers.md 2026-07-14 19:21): with the uniform mounts the game's v68 `.u` is on the
     # editor's resolution path, safe ONLY where a v69 stub shadows it. Refuse to `OBJ LOAD` any
     # package that resolves to a v68 `.u` under a config-mount with no stub — a clean named error
     # BEFORE any editor command, never a silent v69-loads-v68 wedge.

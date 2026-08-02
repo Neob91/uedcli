@@ -52,7 +52,7 @@ The engine stamps `Base` onto an actor resting in the level. The trunk never aut
 `Base`, so the typed effective-value compare sees a difference and **discards a perfectly
 good map**. Occurred with several actor names (`BarrelFire`, `Barrel1`, …) across agents.
 
-`Base` is an engine-injected runtime field of exactly the kind `direction.md` already
+`Base` is an engine-injected runtime field of exactly the kind `direction/materialize.md` already
 describes as "build output, not authored state" (alongside `Region`, `BasePos`/`BaseRot`,
 `bSelected`, mover `Saved*`) — but it is **missing from `normalize.COMPUTED_PROPS`**.
 
@@ -247,7 +247,7 @@ failures across all three agents.
 
 There is **no warm-editor path in the code at all** — grep finds warm-container logic only
 in `preview_game.py` (the game-preview container, which *is* correctly reused: exactly one
-`uedcli-game-preview-1000` existed throughout). `direction.md` describes a
+`uedcli-game-preview-1000` existed throughout). `direction/materialize.md` describes a
 "warm per-user editor container for materialize"; that is the *target*, not the
 implementation, and the gap is invisible from the docs.
 
@@ -300,7 +300,7 @@ Each of these is uedcli behaving as designed, but repeatedly mis-guessed:
 | Guessed | Reality | Note |
 | ------- | ------- | --- |
 | `actor find --class X` | `--exact-class` / `--subclass-of` | Both an agent **and the orchestrator** reached for `--class` first. Two independent readers guessing the same wrong flag is a naming signal. |
-| `texture show` | `texture` has only `sync,list,search,tags,classify` | `direction.md` describes `show`/`preview` for the asset catalog; the noun doesn't have them yet. Docs describe the target, users type the target. |
+| `texture show` | `texture` has only `sync,list,search,tags,classify` | `direction/asset-catalog.md` describes `show`/`preview` for the asset catalog; the noun doesn't have them yet. Docs describe the target, users type the target. |
 | `actor add --folder …` | `--folder` lives on the **generators** | `uedcli: error: unrecognized arguments: --folder light.plant`. A deliberate decision (2026-07-24) that users keep tripping on. |
 | `texture search --color teal` / `cyan` | 12-word vocabulary: black white grey red orange yellow green blue purple pink brown tan | Hit while building a **cyan neon** level — the one colour it needed. The error does list valid values (good). |
 

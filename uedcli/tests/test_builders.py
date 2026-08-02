@@ -213,7 +213,7 @@ def test_builder_matches_ued_linear_stair_taxonomy(fixtures):
     `LinearStairBuilder` face taxonomy — one brush of Base + back + per-step Step/Rise + tiled
     Side strips, `2 + 4n` faces — captured as Brush5 in level_small.t3d (12 steps, depth 32,
     rise 16, breadth 384). Pins BOTH the reference engine fact (the native bspBrushCSG port must
-    reproduce UED builds) AND that our builder now equals it (decisions.md 2026-07-21 12:06 UTC)."""
+    reproduce UED builds) AND that our builder now equals it (dev/docs/direction/generators.md 2026-07-21 12:06 UTC)."""
     n = 12
     ued = parse_t3d((fixtures / "level_small.t3d").read_text(encoding="latin1"))
     ued_stair = ued.actors["Brush5"].brush

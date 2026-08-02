@@ -99,7 +99,7 @@ def test_real_class_hierarchy_decides_mover_ness():
     Without this, every mover assertion in this file only proves the stub was told the answer."""
     from uedcli.classindex import ClassIndex
     idx = ClassIndex.from_files([(p.stem, str(p)) for p in sorted(_INSTALL.glob("*.u"))])
-    # Real movers the retired `bare.endswith("Mover")` guess REJECTED (decisions.md 2026-07-25 10:18
+    # Real movers the retired `bare.endswith("Mover")` guess REJECTED (dev/docs/direction/conventions.md 2026-07-25 10:18
     # UTC + its 11:31 UTC measurement note). (`CaroneElevatorSet.CEDoor`/`CaroneElevator`, the two the
     # item was filed for, live in a PROJECT overlay package rather than the game install, so they are
     # out of this index's reach.)
@@ -117,7 +117,7 @@ def test_real_class_hierarchy_decides_mover_ness():
     # files happen to sit in this install: strictly more classes descend from `Engine.Mover` than
     # match the name, and no name match is a non-mover — the two halves of "the retired guess was
     # wrong in one direction only, on this substrate". (The absolute figures behind the
-    # `decisions.md` 2026-07-25 11:31 UTC note are over the full composed path, which also carries
+    # `dev/docs/rationale/driver.md` 2026-07-25 11:31 UTC note are over the full composed path, which also carries
     # this project's overlay packages.)
     fqcns = idx._all_fqcns()
     descendants = {c for c in fqcns if idx.descends_from(c, "Engine.Mover")}

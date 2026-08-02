@@ -18,5 +18,5 @@ battery reinstated, lighting shadow-correctness gate added, import resolver + `A
 synthesis owned, zones scoped honestly, Scale/UPolys assigned). **NEEDS ANDRZEJ SIGN-OFF** before
 the port: it PROPOSES decisions that revise the "lighting/paths = defer to optional editor
 final-bake" disposition (`spikes/2026-06-27-decontainerize-uedcli/05-lighting-and-paths.md`) — see
-spec §9. Until sign-off these are proposals, NOT in `decisions.md`. The port itself is a scoped
+spec §9. Until sign-off these are proposals, NOT in `direction/`. The port itself is a scoped
 multi-slice build (N-1..N-5, spec §7), not overnight work.

@@ -15,7 +15,7 @@ machine-local state in the self-ignoring `<root>/.uedcli/` (`config.state_dir`, 
 written on first create); tool-install assets package-relative (`tool_assets.py`); relative CLI
 paths resolve against the cwd; `UEDCLI_REPO_ROOT`/`UEDCLI_PREFAB_DIR`/`UEDCLI_TEXTURE_CATALOG`
 retired. Spec/plan (ephemeral): `spec.md`,
-`plan.md`; durable record decisions.md 2026-07-17
+`plan.md`; durable record `direction/projects-and-config.md`, 2026-07-17
 20:58 UTC. The slice-2 `texture classify set` lock deviation was RESOLVED 2026-07-18: texture
-flocks are catalog-adjacent `<catalog>/.locks/` (decisions.md 2026-07-18 07:53). The live
+flocks are catalog-adjacent `<catalog>/.locks/` (`direction/safety.md`, 2026-07-18 07:53). The live
 materialize/preview check PASSED (spec §10.6 — inbox record).

@@ -151,7 +151,7 @@ def test_write_level_rejects_an_unsafe_actor_name(tmp_path):
 
 
 def test_write_level_prunes_only_explicit_deletions(tmp_path):
-    """`write_level` is a DELTA write (decisions.md 2026-07-18): a dropped actor's dir is pruned
+    """`write_level` is a DELTA write (dev/docs/direction/trunk-and-editor.md 2026-07-18): a dropped actor's dir is pruned
     only when named in `deleted` — an on-disk dir absent from the model but NOT in `deleted`
     belongs to a concurrent writer and is left alone."""
     lvl = Level(actors={"A_1": Actor(name="A_1", cls="Light"),

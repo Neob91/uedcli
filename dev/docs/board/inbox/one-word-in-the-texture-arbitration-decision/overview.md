@@ -20,6 +20,6 @@ UE1's serialization rule (a property is written only when it differs from the cl
 three enums measured, so it breaks ties exactly as a written 0 would. Under that reading the only
 files that stop decoding are the ones AD2 names (a code-less BC2/BC3), which matches AD2's framing
 of *the* limit. The strict reading is a one-line change in the detection function plus its tests if
-you meant it. `decisions.md` 2026-07-25 17:45 UTC records both the reading and this flag; spec §0b
+you meant it. `direction/packages.md` 2026-07-25 17:45 UTC records both the reading and this flag; spec §0b
 / plan §0d are written to the recorded reading. *(Measured 2026-07-25 by sweeping all four
 corpora.)*

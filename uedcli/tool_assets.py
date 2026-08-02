@@ -1,4 +1,4 @@
-"""Tool-INSTALL asset anchors (decisions.md 2026-07-17 20:58 §6).
+"""Tool-INSTALL asset anchors (direction/projects-and-config.md 2026-07-17 20:58 §6).
 
 The uedcli *installation* owns assets that belong to no project: the docker-compose dir + the
 committed UED22 editor substrate (`Tools/uedcli/uned/`) and the umodel mesh extractor

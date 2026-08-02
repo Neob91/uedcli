@@ -42,3 +42,27 @@ instead of a dict of half-parsed members. That was already `propedit`'s behaviou
 **Refs:** `uedcli/typedprops.py` (`split_struct_members`, `top_level_eq`, `parse_struct_text`) ·
 `uedcli/propedit.py` (`split_struct_text`) · `uedcli/tests/test_propedit.py` ·
 `uedcli/tests/test_actor_prop.py` (the quoted-comma verb-level regression)
+
+## `actor prop` blocks only genuinely-unsettable props, because the edits are reversible
+
+**Why it is this way:** `actor prop set|unset|get` edits the model, not the editor, so any edit is
+reversible and there is no safety case for broadly guarding authored props. So the verb hard-rejects
+only the properties a plain props write genuinely cannot express (`HARD_REJECT`): the actor `Name`
+(identity — a props line doesn't rename), the internal `Brush=Model'…'` geometry binding, and the
+mover-keyframe arrays `KeyPos`/`KeyRot`/`KeyNum` (they carry invariants only the `mover key` verbs
+maintain). `Location` and `MainScale`/`PostScale` route to their typed model fields (`TYPED_FIELDS`) —
+a plain props write on them is ignored by emit. Computed/derived props (`Region`, `bSelected`, …) are
+set but warned: `normalize` strips them on save, so the edit won't persist as authored content.
+Everything else validates against the class schema and sets. Validation fully precedes mutation —
+`plan_edit` builds the new prop list on a copy and the caller commits only on full success, so a failed
+multi-token invocation leaves the trunk untouched.
+
+**Rejected:**
+
+- *Reusing `normalize`'s case-sensitive computed-key check directly* — it would miss a lower-cased
+  `set region=…`; the shared `is_computed_key` helper case-folds, so `normalize`'s strip and this
+  warning agree on what is computed.
+
+**Refs:** `uedcli/propedit.py` (`HARD_REJECT`, `plan_edit`, `TYPED_FIELDS`) · `uedcli/normalize.py`
+(`is_computed_key`) · `uedcli/dispatch.py` (the `actor prop set|unset|get` handlers) ·
+`uedcli/tests/test_propedit.py` · `uedcli/tests/test_actor_prop.py`

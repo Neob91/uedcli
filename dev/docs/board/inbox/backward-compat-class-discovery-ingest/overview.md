@@ -12,5 +12,5 @@ isn't on the composed path) will **exit 2** where they silently passed. Intended
 honest cost `actor prop` pays) and Andrzej-chosen (generators-AND-boundaries), but it IS a visible
 behavior change — flagged so it's a deliberate break, not a surprise. Also: the generators
 (`actor build`/`brush build`) stop being stateless context-free producers (they now resolve a
-project to validate the class) — a documented contract change to `direction.md`'s "Generator
+project to validate the class) — a documented contract change to `direction/generators.md`'s "Generator
 pattern: stateless T3D producers".

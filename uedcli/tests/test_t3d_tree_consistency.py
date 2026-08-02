@@ -1,4 +1,4 @@
-"""The INVARIANT's teeth (decisions.md 2026-07-18 23:01 UTC): the trunk, a stash, and a prefab MUST
+"""The INVARIANT's teeth (dev/docs/direction/trunk-and-editor.md 2026-07-18 23:01 UTC): the trunk, a stash, and a prefab MUST
 be the SAME on-disk per-actor T3D tree, written through ONE shared code path. This test writes ONE
 fixed actor set three ways and asserts the three `actors/` subtrees are BYTE-IDENTICAL — a violation
 (a divergent writer creeping back in) trips a red test.

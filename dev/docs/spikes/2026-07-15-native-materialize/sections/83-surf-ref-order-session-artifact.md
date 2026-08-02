@@ -103,7 +103,7 @@ is the pBase tail (§1), owned by the point-pool port.
 
 Everything in §3–§4 is measured against the **hand-authored** `Test_Castle.dx`, whose object-table
 order is *that map's authoring-session history* (many CSG rebuilds, moves, paste-duplications). But
-`direction.md`'s fidelity bar is **"byte-identity with UnrealEd's build of the same trunk"** — what
+`direction/materialize.md`'s fidelity bar is **"byte-identity with UnrealEd's build of the same trunk"** — what
 UnrealEd emits when it **imports our T3D trunk fresh**. A clean `MAP IMPORT` might create actors (and
 number exports) in **T3D/trunk order**, which is deterministic and which native could then match — in
 which case candidate C1's 39.9 % is the wrong number and true reachable parity could be far higher

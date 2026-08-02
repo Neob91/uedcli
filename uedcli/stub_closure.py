@@ -64,7 +64,7 @@ def _classify(name: str, *, v69_code_dirs: list[str], search_dirs: list[str]) ->
 
     Precedence: always-loaded > v69 code (substrate ≻ cache, both in `v69_code_dirs`) > v68 code >
     content. Discrimination is by EXTENSION within the SAME `search_dirs` (the whole composed config
-    set, decisions.md 2026-07-14 — one uniform dir set): a name present as `.u` there is v68 code
+    set, direction/containers.md 2026-07-14 — one uniform dir set): a name present as `.u` there is v68 code
     (must-stub); present as a content ext is content. `.u` wins over a same-named content ext (a code
     dep by reference); `.dx` is excluded (a level is never a code/content dependency)."""
     if name in _ALWAYS_LOADED:

@@ -14,7 +14,7 @@ stdout. See [`../../docs/usage.md`](../../docs/usage.md) for the user-facing ref
 > stash-shaped interface are gone: the merge is native (`brushcsg.py` →
 > `uedcli_native.intersect_brushset`, the decoded `bspBrushCSG` intersect tail), and the input is a
 > pipe, so every tier feeds it through its own `show` verb. The verbs were deleted, not aliased
-> (`CLAUDE.md` "no back-compat cruft"). *(decisions.md 2026-07-24 16:32 / 17:04, 2026-07-25.)*
+> (`CLAUDE.md` "no back-compat cruft"). *(`direction/generators.md`, 2026-07-24 16:32 / 17:04, 2026-07-25.)*
 
 ## The recipe
 

@@ -138,7 +138,7 @@ def build_stub(
     Drives the build `container` (ephemeral, `LAUNCH_UED=0`, `/umodel` mounted). Integration-only.
 
     `source_u_dir` is the CONTAINER path of the mount holding `<name>.u` — a `/resources/<n>`
-    read-only bind mount (config-driven, decisions.md 2026-07-14): the SAME uniform `resource_mounts`
+    read-only bind mount (config-driven, direction/containers.md 2026-07-14): the SAME uniform `resource_mounts`
     scheme the editor uses, over the full composed set (content + code) for this build container. The
     v68 `.u` SOURCE is read from it by explicit path (`batchexport`/`umodel -path`), NOT resolved via
     `[Core.System] Paths`. The caller remaps `<name>`'s host code dir to this container path
@@ -221,7 +221,7 @@ def _substrate_id() -> str:
     symbol set (the thing that makes a body fail to link) must invalidate, which a version label
     wouldn't catch. Memoized per process — it hashes ~80 MB of fixed committed inputs, and
     `cached_stub` recomputes the key (even on a hit) to compare. UED22 is PACKAGE-RELATIVE
-    (`tool_assets.uned_dir()` — decisions.md 2026-07-17 20:58 §6)."""
+    (`tool_assets.uned_dir()` — direction/projects-and-config.md 2026-07-17 20:58 §6)."""
     from . import tool_assets
     return _combined_sha(list((tool_assets.uned_dir() / "UED22").glob("*.u")))
 
@@ -326,7 +326,7 @@ def stub_missing_packages(missing: list[str], *, search_dirs: list[str], state_d
     caller recomputes its closure afterward (the stub cache is a permanent v69 search-dir member).
 
     `search_dirs` is the whole composed config dir set
-    (`config.composed_search_dirs(project, user_config)`, decisions.md 2026-07-14 — one uniform dir
+    (`config.composed_search_dirs(project, user_config)`, direction/containers.md 2026-07-14 — one uniform dir
     set). Used by every `.dx`-resolution site (`qualify.export_and_qualify`, and the
     package-resolution pre-passes before an editor spin-up). `state_dir` is the project's
     `.uedcli/` state dir, threaded to the build container's crafted-ini temp."""
@@ -354,7 +354,7 @@ def ephemeral_build_container(*, state_dir, mounts=None, ready_timeout: float = 
 
     This container wires its own asset mounts + `[Core.System] Paths` exactly like the GUI editor
     (`editor.ensure_editor`), via the ONE uniform `container_assets.resource_mounts` scheme
-    (decisions.md 2026-07-14 — config-drive stub source, single mount way):
+    (direction/containers.md 2026-07-14 — config-drive stub source, single mount way):
       - `mounts` (`container_assets.Mount` list) are the caller's `/resources/<n>` read-only bind
         mounts over the FULL composed dir set — CONTENT dirs (whose packages `make`/`texture sync`
         resolve via Paths) AND v68 CODE dirs (whose `.u` `build_stub`'s `batchexport`/umodel read by
@@ -367,7 +367,7 @@ def ephemeral_build_container(*, state_dir, mounts=None, ready_timeout: float = 
     caller (`stub_missing_packages`, `dispatch` substrate/texture verbs) computes `mounts` once from
     the composed config and threads the SAME list here and to `ensure_stub` (never recomputed).
     `state_dir` (required) is the resolved project's `.uedcli/` state dir (`config.state_dir`) —
-    hosts the crafted-ini temp, cleaned up on teardown (decisions.md 2026-07-17 20:58)."""
+    hosts the crafted-ini temp, cleaned up on teardown (direction/projects-and-config.md 2026-07-17 20:58)."""
     import os
     from . import config, container_assets, tool_assets
     from .editor import _compose_dir, engine_ini_mount, _engine_ini_path

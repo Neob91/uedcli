@@ -8,7 +8,7 @@ anchor the texture on a WORLD AXIS where this module anchors on the seed face's 
 `dev/docs/unrealed/texalign.md`; whether any of that should change is an open product question
 parked on `dev/docs/board/inbox/`.
 
-Design authority: dev/docs/decisions.md 2026-07-18 21:40 UTC (`poly align` v1 scope + face-selection
+Design authority: dev/docs/direction/conventions.md 2026-07-18 21:40 UTC (`poly align` v1 scope + face-selection
 grammar) and board item `poly-align-brush-poly-find-built` (UV math + algorithms).
 
 UV convention (verified from `render.rs`/`texframe.py`, not memory):

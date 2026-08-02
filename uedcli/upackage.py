@@ -4,7 +4,7 @@
 name/import/export tables; object bodies addressed by the export table). This module owns the
 low-level parsing every use-case decoder builds on — the class schema + defaults (`uprops`),
 and (follow-up migrations) the texture decoder (`utexture`) and the import-closure extractor
-(`dxpkg`) — so no use-case or extension reimplements it (decisions.md 2026-07-18 10:02 §5,
+(`dxpkg`) — so no use-case or extension reimplements it (direction/packages.md 2026-07-18 10:02 §5,
 "unified package core"; dev/docs/direction/packages.md).
 
 Owns:

@@ -13,13 +13,11 @@ act on.
 
 That reasoning assumes an item's spec and plan live in that item. They do not always. When several
 items cited one file before the migration, it was filed with the *least-advanced live* citer — the
-rule that stops it being deleted while a live item still needs it. Three of the five `to-build/`
+rule that stops it being deleted while a live item still needs it. Two of the `to-build/`
 items are affected:
 
 - board item `unified-asset-catalog` — plan is in board item `the-unified-asset-catalog-spec-revision`
   (`inbox/`).
-- board item `docs-restructure` — spec **and** plan are both in board item
-  `docs-restructure-is-complete` (`inbox/`).
 - board item `actor-preview-faces` — spec is in board item
   `four-actor-preview-faces-rulings-need-a-durable`, plan in board item
   `actor-preview-faces-plan-cites-dev-docs` (both `inbox/`).

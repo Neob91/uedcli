@@ -44,7 +44,7 @@ DeusEx code package's meshes into UED22 fails / corrupts — which is why the st
 pipeline runs `umodel` to re-encode meshes into the packed format UED22 accepts.
 This is the mesh half of "why stub"; the code half is the `Engine.u`/`Core.u`
 divergence (Spike 6). **Neither is a package-version (v68/v69) problem** — UED22's
-UCC reads v68 fine (decisions.md 2026-06-22); it's a *content-format* + *class-graph*
+UCC reads v68 fine (direction/containers.md 2026-06-22); it's a *content-format* + *class-graph*
 problem. Both are sidestepped by never loading DeusEx packages into UED22 (the
 native-write thesis).
 

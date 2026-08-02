@@ -159,7 +159,7 @@ def set_prop(actor, key: str, value: str) -> None:
 
 
 # ------------------------------------------------------ the mover class resolver, offline
-# `movers.is_mover` is SCHEMA-AWARE (decisions.md 2026-07-25 10:18 UTC): it asks a
+# `movers.is_mover` is SCHEMA-AWARE (dev/docs/direction/conventions.md 2026-07-25 10:18 UTC): it asks a
 # `classindex.ClassIndex` whether the actor's class descends from `Engine.Mover`, so every
 # mover-aware verb needs the game's `.u` packages — which the offline suite has none of.
 

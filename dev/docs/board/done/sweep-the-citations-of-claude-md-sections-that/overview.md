@@ -17,11 +17,11 @@ git grep -l 'CLAUDE\.md.*"Feature worktrees"\|CLAUDE\.md.*"Review gates"\|CLAUDE
     -- . ':!dev/docs/rules'
 ```
 
-Heaviest: `dev/docs/decisions.md` (5 — **FROZEN, do not edit**), `direction/process.md` (2 — the
+Heaviest: the retired decisions ledger (5 — **FROZEN, do not edit**), `direction/process.md` (2 — the
 owner's tree), then board items and specs at 1–2 each.
 
 **Two are already handled and must not be swept blindly:** `direction/process.md`'s two pointers are
-board item `direction-process-md-points-at-claude-md`, awaiting an explicit yes; and `decisions.md`
+board item `direction-process-md-points-at-claude-md`, awaiting an explicit yes; and the decisions ledger
 is frozen, so its five stay as historical text.
 
 That leaves **13 files** tracked by nothing. None of them reddens `bin/test` — the citations are

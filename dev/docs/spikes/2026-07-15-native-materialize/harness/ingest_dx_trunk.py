@@ -18,7 +18,7 @@ maps). Two pieces:
 The result is a trunk for RENDERING/study — actor classes stay as exported (bare); `preview_native`
 copes (its brush detection is bare-name, and the schema-aware `movers.is_mover` resolves a bare
 class through the class index). NOT a materialize-grade ingest
-(that is the future `level import` verb — decisions.md `--from-dx` note).
+(that is the future `level import` verb — direction/trunk-and-editor.md `--from-dx` note).
 
 Usage:
     .venv/bin/python ingest_dx_trunk.py <map.dx> <trunk-dir> [--search DIR ...]
@@ -111,7 +111,7 @@ def main() -> int:
     search = [str(Path(d).resolve()) for d in args.search]
     mounts = resource_mounts(search)
     from uedcli import xfer
-    # `ephemeral_build_container` now takes a `state_dir` (project `.uedcli/`, decisions.md
+    # `ephemeral_build_container` now takes a `state_dir` (project `.uedcli/`, direction/projects-and-config.md
     # 2026-07-17 20:58) instead of the old `repo_root`; for an offline scratch ingest any
     # writable dir suffices (it only hosts the crafted-ini temp), so use the trunk's own scratch.
     state_dir = out.parent.parent / ".uedcli"
@@ -120,7 +120,7 @@ def main() -> int:
         c_dx = xfer.cp_in(container, str(dx), ext="dx")
         level = export_dx_level(container, c_dx)
 
-    # `movers.is_mover` is schema-aware since 2026-07-25 (decisions.md 2026-07-25 10:18 UTC): the
+    # `movers.is_mover` is schema-aware since 2026-07-25 (direction/conventions.md 2026-07-25 10:18 UTC): the
     # mover canonicalization gate resolves the class hierarchy against `Engine.Mover`, so it needs a
     # ClassIndex over the game's `.u` packages (project + ~/.uedcli/config.toml). `class_index()`
     # raises naming what is missing rather than letting the harness mis-ingest movers silently.

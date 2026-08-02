@@ -15,7 +15,7 @@ watertight errors and hung one `rise` below the floor); `_build_brushes` unwraps
 `Staircase0…`); parity goldens re-blessed offline (`stair_*` only); the UED single-brush reference
 preserved as engine-fact guard. **[SUPERSEDED 2026-07-21: staircase reverts to ONE non-convex brush
 (T-junctions handled by the now T-junction-aware `check_watertight`); the guard test is now
-`test_builder_matches_ued_linear_stair_taxonomy`. See the 2026-07-21 entry above / decisions.md
+`test_builder_matches_ued_linear_stair_taxonomy`. See the 2026-07-21 entry above / `direction/generators.md`
 12:06 UTC.]** (9)
 **`brush replace <name> -`** — in-place shape swap taking only the piped generator's PolyList while
 keeping the target's Name/`order_value`/Group/CsgOper/actor-level PolyFlags/Location/PrePivot (7

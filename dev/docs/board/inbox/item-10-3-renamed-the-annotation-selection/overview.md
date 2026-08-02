@@ -15,4 +15,4 @@ machinery's prose too and justified the item with "'label' now means two unrelat
 codebase"; under the split a cold reader still meets "label" in `_place_labels` meaning something
 unrelated to `--label`, and the codebase carries four senses in total (preview drawn text, the
 actor dimension, Docker container labels in `preview_game.py`, the legend). Recorded in
-`decisions.md` 2026-07-25 18:40 UTC. **Confirm the split or ask for the full rename.**
+`direction/terminology.md` 2026-07-25 18:40 UTC. **Confirm the split or ask for the full rename.**

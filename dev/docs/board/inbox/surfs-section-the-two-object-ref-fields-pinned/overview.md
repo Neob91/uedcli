@@ -20,7 +20,7 @@ compacted, reaches **92.1 %**; editor-EXACT indices 93.3 %, +texture 98.7 %. So 
 **ORDER**, worth ~+19 pts deterministically and ~+71 at the editor's order. I did **NOT** land an assembly
 reorder — it's premature (see oracle below) and touches ref-bearing sections whose editor bytes are
 themselves session-ordered. **TWO decisions for you:** (a) **Oracle (gating)** — the golden used everywhere
-is the *hand-authored* `Test_Castle.dx`; `direction.md`'s bar is "UnrealEd's build of the **same trunk**".
+is the *hand-authored* `Test_Castle.dx`; `direction/materialize.md`'s bar is "UnrealEd's build of the **same trunk**".
 A clean editor `MAP IMPORT` of our trunk might number exports in deterministic T3D/trunk order, which would
 make the ~40 % deterministic ceiling the WRONG number (true reachable could approach 92 %). Want a `[spike]`
 to `level materialize` the castle trunk through the editor and re-run `surf_ref_order_analysis.py` against

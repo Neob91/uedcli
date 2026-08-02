@@ -31,10 +31,10 @@ resolution + `uedcli.toml`/`config.toml`, (c) content-addressed texture store, (
 **⚠ STALE — re-spec before building.** The 2026-06-29 spec behind this predates three superseding
 decisions and must be reconciled first, not built as-written: (1) **no project `id`, no central
 `~/.uedcli/projects/<id>/` state, no session store** (2026-07-05 in-tree-state / git-trunk / no-id
-decisions — `direction.md`); (2) **`project init/ls/rm` reduce to `project show`** (name→id
+decisions — `direction/trunk-and-editor.md`); (2) **`project init/ls/rm` reduce to `project show`** (name→id
 registry + uuid minting are gone); (3) the **project-layout reorg** — free `uedcli.toml` at the repo
 root + in-repo gitignored `.uedcli/` for throwaway state + free relative tracked dirs — now BUILT
-and closed out (2026-07-18; `board/done/` tail): decisions.md 2026-07-17 20:58 UTC (no scaffold verb —
+and closed out (2026-07-18; `board/done/` tail): `direction/projects-and-config.md` (2026-07-17 20:58 UTC) (no scaffold verb —
 `project` stays `project show` only; tool-install assets go package-relative, and how they ship
-under pipx/Nuitka belongs to THIS item's re-spec). Re-spec against current `direction.md` +
+under pipx/Nuitka belongs to THIS item's re-spec). Re-spec against current `direction/` +
 `architecture.md` before planning.

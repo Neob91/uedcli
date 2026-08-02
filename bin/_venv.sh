@@ -3,8 +3,8 @@
 # uedcli runs on the HOST (like the eventual Nuitka release binary), NOT inside a
 # container — so it has native filesystem access to the game's asset dirs wherever
 # they live, with no bind-mounting of arbitrary host roots into a dev container
-# (which could shadow/clobber the container's own dirs — see decisions.md
-# 2026-07-14 "venv for dev"). The editor/build containers uedcli DRIVES still run
+# (which could shadow/clobber the container's own dirs — see
+# dev/docs/direction/process.md, 2026-07-14 "venv for dev"). The editor/build containers uedcli DRIVES still run
 # via docker (host daemon); only uedcli itself is native.
 #
 # Requires python3.12 on PATH (pyenv provides it here). Sourced by bin/uedcli and

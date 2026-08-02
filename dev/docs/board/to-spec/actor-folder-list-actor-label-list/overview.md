@@ -9,7 +9,7 @@ summary = "`actor folder list` + `actor label list` — enumerate the folders/la
 p2.
 Today you can find actors BY a folder/label (`actor find --folder/--label`) but cannot ask *what
 folders/labels exist*. Add two read verbs UNDER `actor` (the top-level-promotion question is CLOSED —
-keep everything under `actor`, `decisions.md` 2026-07-25 00:43 UTC): `folder list` prints the distinct
+keep everything under `actor`, `direction/organization.md`, 2026-07-25 00:43 UTC): `folder list` prints the distinct
 folder paths in use (one per line, sorted — the pipe-friendly producer form); `label list` prints the
 distinct labels (flat, so no tree). Spec the exact output: per-path/per-label actor COUNTS (to stderr,
 or a `--count` column?); a `folder tree` view rendering the hierarchy indented (labels have none); do

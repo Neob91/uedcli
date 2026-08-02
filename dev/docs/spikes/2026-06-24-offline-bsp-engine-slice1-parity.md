@@ -7,7 +7,7 @@ pieces, diffed against a real UnrealEd build via an automated harness
 **Result:** ✅ the approach works end-to-end; node-count parity confirmed on the canonical box;
 the oracle-extraction unknown (cost-driver #4) is retired.
 
-This is the first executable step of the offline BSP engine (`decisions.md` 2026-06-24 09:07
+This is the first executable step of the offline BSP engine (`rationale/MIGRATION.md` 2026-06-24 09:07
 UTC; doctor spec §7). It de-risks the project: the heuristic was decoded in
 [`2026-06-24-bspbuild-partition-heuristic-from-binary.md`](2026-06-24-bspbuild-partition-heuristic-from-binary.md);
 this proves a faithful port runs and matches the editor on a small input, and pins how the
@@ -50,7 +50,7 @@ The harness parses the final `Nodes:`/`Portalized:` value.
 **Trap learned (cost a re-run):** a brush added via `MAP IMPORTADD` does **not** participate in
 CSG — `MAP REBUILD` produced `0 nodes`. Brushes must enter via **EDIT PASTE**
 (`writes.add_actor`), the same finding behind the FULL RE-IMPORT decision
-(`decisions.md` 2026-06-18, `quirks.md` "How brushes enter the level"). Point actors IMPORTADD;
+(`direction/materialize.md` 2026-06-18, `quirks.md` "How brushes enter the level"). Point actors IMPORTADD;
 brushes paste.
 
 ## 3. Parity result

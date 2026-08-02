@@ -26,4 +26,4 @@ not inside a container — mirroring the eventual Nuitka release binary, so it
 has native filesystem access to the game's asset dirs and needs no
 bind-mounting of external roots into a dev container. Only the editor/build
 containers it drives run under Docker. (The old Python-3.12 dev image +
-`_dev-run.sh` were retired 2026-07-14 — decisions.md "venv for dev".)
+`_dev-run.sh` were retired 2026-07-14 — `../direction/process.md` "venv for dev".)

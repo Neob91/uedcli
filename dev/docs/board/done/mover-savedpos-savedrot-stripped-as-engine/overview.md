@@ -19,7 +19,7 @@ is excluded FOR CAUSE — `Engine.TriggerLight` declares its own, and the set is
 across all classes. Two adjacent suspicions from the bug report (`bDynamicLightMover`, `KeyPos[]`
 echoes) were live-checked and DISPROVED — both re-export verbatim, so they are authored content.
 Spike `spikes/2026-07-25-mover-savedpos-savedrot-engine-stamped/` (harness: `scan_corpus.py`,
-`disasm_postload.py`); decision `decisions.md` 2026-07-25 03:07 UTC; `unrealed/t3d.md`
+`disasm_postload.py`); decision `direction/materialize.md` (2026-07-25 03:07 UTC); `unrealed/t3d.md`
 authored-vs-computed taxonomy; `architecture.md` "Mover support". Pinned by
 `test_engine_facts.py::test_amover_postload_unconditionally_stamps_the_savedpos_savedrot_sentinels`
 plus three `test_normalize.py` regressions.

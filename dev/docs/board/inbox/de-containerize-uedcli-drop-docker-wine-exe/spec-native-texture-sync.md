@@ -93,7 +93,7 @@ an implementation invariant, asserted by test, not assumed.)
 
 DeusEx content is 100% `P8` (corpus sweep), so this is dead code on the DeusEx substrate and
 only matters for the generic-UE1/UT direction. Two constraints the spec must honor:
-- **`format` was deliberately DROPPED from the manifest** (decisions.md 2026-06-22, "a
+- **`format` was deliberately DROPPED from the manifest** (direction/asset-catalog.md, 2026-06-22, "a
   constant carrying nothing"). So we do NOT re-add a `format` field without a NEW recorded
   decision. A non-P8 texture is **skipped with a warning during `sync`** (named:
   ``"Texture `Pkg.Name` format RGBA7 not yet decodable (only P8) — skipped"``) and is
@@ -150,7 +150,7 @@ file set, but the choice becomes load-bearing — state it.
   native decode).
 - `texture.py` docstring (it asserts "UCC batchexport is the only working path" — now false;
   module removed/emptied).
-- New `decisions.md` entry: the seam-swap + the non-P8/`format` resolution + the `--container`
+- New `direction/` entry: the seam-swap + the non-P8/`format` resolution + the `--container`
   staging.
 - Promote the spike's `UTexture`/`FMipmap`/`UPalette`/`FPropertyTag` format facts into a
   durable topic doc (`unrealed/` or `architecture.md`), cited from the spike.
@@ -160,5 +160,5 @@ file set, but the choice becomes load-bearing — state it.
 `harness/{utexture_decode,tex_compare}.py`; `uedcli/texture_catalog.py` (`sync_package`,
 `_decode_exported`, `parse_pcx_stem`, `assign_refs`, `image_hash`, `derive_colors`,
 `reconcile`); `uedcli/texture.py` (seam removed); `dispatch.py:555`; `packages.py`
-(`enumerate_substrate_packages`); `decisions.md` 2026-06-22 (texture-catalog: stem identity,
+(`enumerate_substrate_packages`); `direction/asset-catalog.md` 2026-06-22 (texture-catalog: stem identity,
 `colors_source`, `image_hash`-over-pixels, `format`-dropped, atomic/flock).

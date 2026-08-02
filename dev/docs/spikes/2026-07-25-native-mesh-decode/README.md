@@ -121,7 +121,7 @@ stride = (skip_offset - first_element_offset) / count
 ```
 
 reads the format straight off the data. ✅ The same decoder handles Deus Ex `.u` and stock
-Unreal/UT `.u` with no flag and no guessing — which is what `direction.md`'s generic-UE1 goal needs.
+Unreal/UT `.u` with no flag and no guessing — which is what `direction/scope.md`'s generic-UE1 goal needs.
 (The 4th int16 of the Deus Ex vertex is 0 across every vertex sampled — confirming Spike 2's
 "likely true padding" on a much larger sample.)
 

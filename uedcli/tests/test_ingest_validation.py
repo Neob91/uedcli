@@ -403,7 +403,7 @@ def test_class_show_category_no_editable_categories(tmp_path, monkeypatch, capsy
 def test_class_show_errors_when_an_ancestor_package_is_unreadable(tmp_path, monkeypatch, capsys):
     # An unreadable/missing ANCESTOR package is a HARD error naming that package — there is no
     # own-only degrade (which would print a truncated prop set as if it were complete; the stderr
-    # note scrolls away). `dev/docs/direction/conventions.md` "No silent half-answers" / decisions.md 2026-07-24 21:58.
+    # note scrolls away). `dev/docs/direction/conventions.md` "No silent half-answers" (2026-07-24 21:58).
     proj = _project(tmp_path, monkeypatch)
     def _boom(fqcn, resolver, _cache=None):
         raise uprops.SchemaError("package 'Engine' not found on the schema search path")

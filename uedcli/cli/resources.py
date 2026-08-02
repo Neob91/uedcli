@@ -61,7 +61,7 @@ def composed_load_set(project) -> list[str]:
 
 def composed_dirs(project) -> list[str]:
     """The WHOLE composed config dir set (host) that becomes the editor/game/build `/resources/<n>`
-    mounts for materialize/preview (one uniform set — decisions.md 2026-07-14, no content-vs-code
+    mounts for materialize/preview (one uniform set — dev/docs/direction/containers.md 2026-07-14, no content-vs-code
     split). `/stubs` is first on the crafted Paths, so a v69 stub shadows any same-named v68 `.u` a
     code dir contributes. Hard-errors without a per-user games config (decision 2026-07-06 05:12)."""
     user_config = config.load_user_config()
@@ -91,7 +91,7 @@ def class_schema(cls: str, project=None) -> dict:
     `uprops.SchemaError` on an unbuildable/unknown schema — no fallback (decision 2026-06-26 14:10).
     The schema SEAM: tests patch this to run offline without the gitignored v68 install.
 
-    The schema code path is the config-driven code dirs (decisions.md 2026-07-14 03:30 — same
+    The schema code path is the config-driven code dirs (dev/docs/direction/containers.md 2026-07-14 03:30 — same
     source stubs come from). `project` is the invocation's RESOLVED project, threaded from the
     `actor prop` handler so a `--project <dir>` override reaches the schema path (asset-wiring Part
     B); if omitted it is re-resolved from cwd/env (any direct/legacy caller). A `None` project or
@@ -238,7 +238,7 @@ def catalog_dir(project) -> str:
 
 def mover_index(args, verb: str, project=None) -> "classindex.ClassIndex":
     """The class resolver the schema-aware mover gate needs. `movers.is_mover` decides mover-ness by
-    walking the class hierarchy to `Engine.Mover` (decisions.md 2026-07-25 10:18 UTC), so EVERY verb
+    walking the class hierarchy to `Engine.Mover` (dev/docs/direction/conventions.md 2026-07-25 10:18 UTC), so EVERY verb
     that asks "is this actor a Mover?" — `mover key`, `level doctor`, `event graph`, `brush
     scale`/`apply-transform`/`intersect`/`deintersect`, `stash capture`, the native preview/build —
     now needs the game's `.u` packages, hence a project and the per-user games config. A missing

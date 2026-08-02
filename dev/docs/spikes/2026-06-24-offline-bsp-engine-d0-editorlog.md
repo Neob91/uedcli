@@ -1,7 +1,7 @@
 # D0 built + validated: editor drop-warning capture (the cheap, complete-on-real-build hole detector half)
 
 **Date:** 2026-06-24
-**Implements:** the D0 half of `decisions.md` 2026-06-24 12:40 UTC / board item `bsp-issue-ground-truth-detector-d0-d1` §6 (D0).
+**Implements:** the D0 half of `rationale/MIGRATION.md` 2026-06-24 12:40 UTC / board item `bsp-issue-ground-truth-detector-d0-d1` §6 (D0).
 **Code (spike-grade, `_scratch/bspspike/`):** `bsp_editorlog.py` (parser + live capture), `d0_live.py` (live validation).
 **Result:** ✅ D0's parser works on all channels (offline, deterministic) and **caught a real
 injected hole live**, cleanly distinguishing it from a good build.
@@ -53,7 +53,7 @@ clean geometry live.**
   faces / leaks / HoM cracks / phantom nodes, on a live build, with no port.
 - D0 is the **dropped-face/absence + existence half** of the complete detector; **D1** (parse the
   saved built model) is the **located-issue half** (HoM/T-junction/invisible-wall/fall-through
-  *locations*). Together = complete on the real build (`decisions.md` 12:40, spec §1 table).
+  *locations*). Together = complete on the real build (`rationale/MIGRATION.md` 2026-06-24 12:40, spec §1 table).
 
 ## Next
 

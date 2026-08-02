@@ -1,10 +1,10 @@
 +++
 priority = "p1"
 kind = "owner-question"
-summary = "Docs restructure: shard axis for `decisions.md`"
+summary = "Docs restructure: shard axis for the retired ledger"
 +++
 
-# Docs restructure: shard axis for `decisions.md`
+# Docs restructure: shard axis for the retired ledger
 
 All 3 reviewers:
 entries are 46 in 2026-06 / 181 in 2026-07, so a monthly shard leaves `2026-07.md` at ~7,030

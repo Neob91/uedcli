@@ -86,8 +86,8 @@ All five steps use only the proven encoders. **No editor, no wine.**
   *playable* native `.dx` must contain a correctly built level `Model`.
 - Building that natively is the **offline BSP/CSG engine (D2)** — already the subject of
   extensive prior work: the partition-heuristic feasibility gate is CLEARED
-  (`decisions.md` 2026-06-26), with the remaining `SplitPolyList`/coplanar-merge/leaf-
-  zone build scoped as a bounded-but-multi-week faithful port (`decisions.md`
+  (`rationale/MIGRATION.md` 2026-06-26), with the remaining `SplitPolyList`/coplanar-merge/leaf-
+  zone build scoped as a bounded-but-multi-week faithful port (`rationale/MIGRATION.md`
   2026-06-24 12:40, the D2 design). **D2 is the long pole of de-containerization** —
   and now demonstrably the *only* hard one: container write, actor bodies, and Model
   *serialization* are all proven or mechanical around it.

@@ -106,7 +106,7 @@ def test_ensure_load_with_no_mounts_still_writes_the_stubs_and_ued22_paths(tmp_p
     driver = mock.Mock(container="c")
     with mock.patch("uedcli.packages.write_paths_and_reload", autospec=True) as wpr:
         ensure_load(driver, [], search_dirs=[], mounts=[])       # must not raise
-    # Per-ext Paths (decisions.md 2026-07-14 12:00 — bare `*` stalls boot; code roots are `*.u`).
+    # Per-ext Paths (dev/docs/direction/containers.md 2026-07-14 12:00 — bare `*` stalls boot; code roots are `*.u`).
     wpr.assert_called_once_with("c", ["Paths=/stubs/*.u", "Paths=/opt/UED22/*.u"])
 
 
@@ -176,7 +176,7 @@ def test_remap_rejects_a_non_container_visible_path(tmp_path):
 
 
 # ── schema_search_dirs / schema_resolver (actor-prop schema source) ─────────────
-# Config-driven (decisions.md 2026-07-14): the schema path = the WHOLE composed config search path.
+# Config-driven (dev/docs/direction/containers.md 2026-07-14): the schema path = the WHOLE composed config search path.
 # `schema_resolver` resolves `<pkg>.u` by EXTENSION within it, so it finds the game's real v68 `.u`
 # (a content dir simply has no `.u` for the name); never UED22 or the stub cache.
 

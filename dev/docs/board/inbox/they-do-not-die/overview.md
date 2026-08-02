@@ -7,7 +7,7 @@ summary = "They do not die — both PASS at HEAD"
 # They do not die — both PASS at HEAD
 
 to-build #9.5's premise was FALSE — I did NOT mark the two tests skipped, and here is
-what I did instead.` The item (and `decisions.md` 2026-07-24 21:58 UTC item 5) says
+what I did instead.` The item (and `direction/process.md`, 2026-07-24 21:58 UTC item 5) says
 `test_native_materialize.py`'s `test_box_sweep_lands_on_native_floor` and
 `test_point_below_floor_is_solid_after_hulls` die importing the spike harness, so mark them
 SKIPPED. **They do not die — both PASS at HEAD** (verified on a clean `bin/test`: 2389 passed, 1

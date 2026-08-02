@@ -19,7 +19,7 @@ pre-approved updating "any `uedcli/cli.py`/`uedcli/dispatch.py` path mentions in
   covers "any path mentions in rationale/*.md". Flagging in case the owner would rather it stay as
   the historical name.
 - Left old-path references in OTHER board items' plans/specs and in frozen docs
-  (`decisions.md`, `reviews/*`) untouched (out of scope). The stale-reference sweep over
+  (the decisions ledger, `reviews/*`) untouched (out of scope). The stale-reference sweep over
   production/tests/scripts is clean.
 - `parser_baseline.py` import-closure snippet: dropped the now-dead
   `not m.startswith('uedcli.dispatch')` exclusion (the boundary is entirely under `uedcli.cli` now).

@@ -18,7 +18,7 @@ def run(args) -> int:
     Project-scoped: the catalog dir defaults to the resolved project's `catalog` dir
     (`config.project_catalog_dir`, default `<root>/texture-catalog/`) and `sync` discovers
     packages from the composed config search path (project overlay shadows game base), NOT the
-    retired hardcoded `substrate_code_dirs`/`texture_catalog_root` (Andrzej's directive, decisions.md
+    retired hardcoded `substrate_code_dirs`/`texture_catalog_root` (Andrzej's directive, dev/docs/direction/containers.md
     2026-07-14 — texture sync onto the composed project+game path). The project is resolved LAZILY:
     `sync` always needs it (for discovery); every OTHER verb — reads AND `classify set` — needs it
     only to default the catalog dir, so an explicit `--catalog-dir` runs OUTSIDE a project (the
@@ -56,7 +56,7 @@ def run(args) -> int:
         return out
 
     if args.sub == "sync":
-        # Discovery is config-driven (Andrzej's directive, decisions.md 2026-07-14): EVERY package on
+        # Discovery is config-driven (Andrzej's directive, dev/docs/direction/containers.md 2026-07-14): EVERY package on
         # the composed project+game search path (project overlay shadows game base, stem-deduped by
         # `composed_search_files`) — including `.u` code packages, because a `.u` is the same Unreal
         # package format and can hold textures too (DeusEx skins live in `DeusExItems.u`). A package

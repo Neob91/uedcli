@@ -25,7 +25,7 @@ Findings (2026-07-18, `NativeCastle.dx` vs `Test_Castle.dx`):
     artifact, not a deterministic lever, against this golden.
 
 CAVEAT: the golden here is the HAND-AUTHORED Test_Castle.dx, not an UnrealEd re-import of our T3D
-trunk (the fidelity bar direction.md actually names).  A clean editor re-import MIGHT emit exports
+trunk (the fidelity bar direction/materialize.md actually names).  A clean editor re-import MIGHT emit exports
 in deterministic T3D order; settling that needs an editor-materialize (follow-up spike).
 
 Usage:  .venv/bin/python .../harness/surf_ref_order_analysis.py [NATIVE.dx] [EDITOR.dx]

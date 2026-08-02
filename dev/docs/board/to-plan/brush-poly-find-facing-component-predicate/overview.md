@@ -19,4 +19,4 @@ non-brush) — addresses the single-brush note at `board/inbox/` item 5 (the geo
 find stays a separate spec). Ships a committed engine-facts regression pinning the verified subtract
 normal-flip (`tests/fixtures/brush_subtract.t3d`). Drops the old axis tokens (hard break; migrates
 `test_query.py`/`test_polyalign.py`/`test_cli.py`, removes the now-dead `_FACING_NEG`). Decisions:
-`decisions.md` 2026-07-24 16:27/16:28 UTC. (Andrzej, 2026-07-24.)
+`rationale/MIGRATION.md` (2026-07-24 16:27/16:28 UTC). (Andrzej, 2026-07-24.)

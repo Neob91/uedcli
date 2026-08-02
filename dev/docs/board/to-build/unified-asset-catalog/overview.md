@@ -11,7 +11,7 @@ depends-on = ["native-texture-decode"]
 (`the-asset-catalog-class-arm-needs-four-changes`); re-spec texture identity behind its own dedicated
 gate — the four `four-open-catalog-decisions` texture rulings (incl. the IRREVERSIBLE identity/mask
 one) belong there, not to the class arm; re-measure the sound corpus on the composed path before
-speccing audio (`sound-corpus-remeasure`). The `four-open-catalog-decisions.md` question stays parked
+speccing audio (`sound-corpus-remeasure`). The `four-open-catalog-decisions` question stays parked
 against the texture arm, not the class build.
 
 **NOT ON DECK (engine/texture/audio).** A 3-reviewer spec round on 2026-07-26 returned structural findings; the owner's
@@ -25,7 +25,7 @@ re-cut and reviewed.
 Plan: board item `the-unified-asset-catalog-spec-revision`.
 Spec: SPLIT 2026-07-26 into [`engine`](spec.md) + `class` (board item `the-asset-catalog-class-arm-needs-four-changes`) + [`texture`](spec-texture-arm.md) + `audio` (board item `sound-corpus-remeasure`).
 Decisions: [`../../../direction/asset-catalog.md`](../../../direction/asset-catalog.md) (the owner's) and
-`../../../rationale/` (the agent's) — **not** `decisions.md`, which is FROZEN.
+`../../../rationale/` (the agent's) — **not** the retired decisions ledger.
 
 **Governing principle:** the tool **lists, reports file facts, produces pictures, and stores the
 classification it is handed — it never infers meaning.** The LLM works out what an asset is and

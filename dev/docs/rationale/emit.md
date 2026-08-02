@@ -90,3 +90,36 @@ against the editor-exported goldens) · `uedcli/tests/test_emit.py`
 (`test_align_emits_no_zero_pan_so_materialize_can_verify_the_built_map`) ·
 [`../unrealed/t3d.md`](../unrealed/t3d.md) "Polygon sub-fields reference" ·
 [`../architecture.md`](../architecture.md) "The compare view vs the identity hash"
+
+## `Location` lives in the typed field only, never mirrored into `props`
+
+**Why it is this way:** an actor's `Location` is stored once — the typed `Actor.location` field, what
+`move`/`rotate`/`translate`/bounds mutate. `model._parse_actor` keeps `Location` (and `Name`) out of
+`actor.props`; `emit_actor` emits the line solely from `a.location` and skips any stray `Location`
+props entry so a legacy one can never double-emit.
+
+Field-canonical, not props-canonical, for two reasons. A props-canonical design (a `location`
+property derived over `props`) needs a setter that formats `Decimal → (X=…)` with `emit`'s
+formatter — but `emit` imports `model`, so `model` can't import `emit` (circular) — and it would
+text-quantize `location` on every assignment. And it kills the whole field/`props` drift class:
+`move`/`rotate`/`translate` already update only the field, so a props mirror is perpetually stale.
+
+The bug this fixed: with `Location` dual-stored, `normalize_actor` nulled the field for an origin
+actor, but `emit_actor` then fell through to the generic `{key}={val}` on the stale props string and
+re-emitted the line the editor omits — a from-scratch materialize failed post-verify on origin actors
+carrying `Location=(0,0,0)`.
+
+**Rejected:**
+
+- *Props-canonical, `actor.location` derived over `props`* — the setter needs `emit`'s formatter but
+  `emit` imports `model` (circular); text-quantizes on every assignment; and doesn't preserve the
+  source line position without extra in-place-replace logic.
+- *Keep the dual-store, fix only `normalize_actor`* — treats the one symptom while leaving the
+  field/`props` drift footgun live for every other write path. Removing the denormalization removes
+  the whole class.
+
+**Refs:** `uedcli/emit.py` (`emit_actor`) · `uedcli/model.py` (`_parse_actor`) ·
+`uedcli/normalize.py` (`normalize_actor`) · `uedcli/tests/test_emit.py`
+(`test_the_location_text_side_channel_is_never_emitted`) · `uedcli/tests/test_normalize.py`
+(`test_normalize_actor_keeps_an_all_zero_location_in_the_trunk`,
+`test_a_camera_authored_at_the_origin_keeps_its_location_in_the_durable_emit`)

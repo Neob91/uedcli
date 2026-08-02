@@ -36,7 +36,7 @@ NOT in the LIVE capture suite (and why):
     wedge coords are NOT axis-aligned integers, so the DEINTERSECTION capture invents
     vertices on them (same regime as the non-convex staircase). `spiral_*` keeps its
     OFFLINE value golden (blessed from the builder) and is dropped from the LIVE suite
-    — see OFFLINE_ONLY (decisions.md 2026-07-22).
+    — see OFFLINE_ONLY (dev/docs/direction/generators.md 2026-07-22).
 """
 from __future__ import annotations
 
@@ -105,9 +105,9 @@ CASES: dict[str, Callable[[], Brush | list[Brush]]] = {
 #   - stair_* — the single non-convex staircase brush: a combined non-convex cavity makes the
 #     editor invent interior vertices at the notches, so `capture_world_verts` cannot reconstruct
 #     it. Its axis-aligned integer coords reconstruct identically to the builder (same basis as
-#     `cube_*`), so the offline VALUE golden is legitimate. (Spec 2026-07-21; decisions.md 12:06 UTC.)
+#     `cube_*`), so the offline VALUE golden is legitimate. (Spec 2026-07-21; dev/docs/direction/generators.md 2026-07-21 12:06 UTC.)
 #   - spiral_* — the column + rotated wedge treads: the wedge coords are NOT axis-aligned integers,
-#     so the DEINTERSECTION capture invents vertices on them the same way. (decisions.md 2026-07-22.)
+#     so the DEINTERSECTION capture invents vertices on them the same way. (dev/docs/direction/generators.md 2026-07-22.)
 # For both, the offline golden is the builder's own world-vertex set — a winding-blind change-detector
 # — and the case is dropped from the LIVE capture suite. A non-convex/rotated capture mode is separate
 # work; the re-bless path refuses to bless on builder/editor disagreement, which is why these are

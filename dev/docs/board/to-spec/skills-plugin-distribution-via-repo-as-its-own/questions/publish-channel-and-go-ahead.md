@@ -4,7 +4,7 @@
 
 The plugin's install path is `/plugin marketplace add <repo-url>` — a public, outward-facing
 distribution act, which the box rules put behind an explicit owner yes. Everything else about the
-plugin is already decided (decisions.md 2026-07-19); this is the one open owner-only fork.
+plugin is already decided (`rationale/MIGRATION.md`, 2026-07-19); this is the one open owner-only fork.
 
 Blocked behind `extract-uedcli-into-its-own-standalone-git-repo`, so it cannot be actioned yet, but the
 answer shapes the extraction's remote setup:

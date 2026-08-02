@@ -158,7 +158,7 @@ catalog.** (The UCC decompile of §1–§3 becomes a fallback/cross-check oracle
 3. **Resolve a class's FULL set:** walk `Super` to the root, resolving a cross-package `Super`
    (an import) to its package and recursing. Union the own-sets. Cache per package keyed by file
    sha256 (no toolchain id needed — there's no compile step). **Read the GAME's real `.u`, NOT the
-   stub cache** (`decisions.md` 2026-06-26 14:10 UTC): stubs exist only so the UT-lineage UED22
+   stub cache** (`direction/packages.md` 2026-06-26 14:10 UTC): stubs exist only so the UT-lineage UED22
    *editor* can load DeusEx packages (different `Engine.u`/`Core.u`) — we parse bytes ourselves, so we
    read the originals. The schema search path is therefore **its own** (the substrate's real game
    packages — for DeusEx, the v68 install code via `repo_paths.install_system_root()` + repo-authored

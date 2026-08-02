@@ -1,6 +1,6 @@
 """Doc-link regressions — every markdown link and anchor in the tracked tree resolves.
 
-The docs restructure (board item `docs-restructure-is-complete`) retargets ~175 files' citations
+The docs restructure retargets ~175 files' citations
 away from a deleted `decisions.md`/`direction.md`. Its stated mitigation for "citations dangle or
 silently rot" is a link check — which did not exist when the plan was written, so every "verify"
 in it was prose. This is that check.

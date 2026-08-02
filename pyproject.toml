@@ -9,7 +9,7 @@ description = "Editor-automation CLI for UnrealEngine-1 games (Deus Ex substrate
 requires-python = ">=3.12"
 # Pillow is the ONLY third-party runtime dependency (texture-catalog decode); everything else
 # uedcli imports is stdlib. Pinned to a floor for the deterministic NEAREST-resample color
-# derivation (decisions.md 2026-06-22).
+# derivation (dev/docs/direction/asset-catalog.md, 2026-06-22).
 dependencies = ["Pillow>=11"]
 
 [project.scripts]

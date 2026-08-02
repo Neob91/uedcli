@@ -12,9 +12,9 @@ written + **two cold reviews folded** (the `--exclude` semantics changed from "s
 Makes `actor find` accept a name set on stdin (`-`) so filters COMPOSE into full boolean queries —
 today `--label` (and every other dimension) ORs within itself, so "label X AND Y" is inexpressible.
 Model: the piped set is the **universe**, the filters are the **predicate**, `--exclude` negates.
-Sub-choices resolved in `decisions.md` 2026-07-24 10:02 UTC: negation spelled `--exclude`; the
+Sub-choices resolved in `direction/conventions.md` (2026-07-24 10:02 UTC): negation spelled `--exclude`; the
 no-filter `find -` identity/validator form KEPT (base of the union re-normalization
 `… | sort -u | find -`); an unknown piped name is a **strict all-or-nothing exit 2**. Orthogonal to
 actor-labels — it benefits every filter dimension and changes no filter's OR-within semantics.
 **One soft confirm outstanding:** the grep/universe model is recorded as the working model pending
-Andrzej's final yes (`decisions.md` 10:02). Otherwise ready to plan. (Andrzej, 2026-07-24.)
+Andrzej's final yes (`direction/conventions.md`, 2026-07-24 10:02). Otherwise ready to plan. (Andrzej, 2026-07-24.)

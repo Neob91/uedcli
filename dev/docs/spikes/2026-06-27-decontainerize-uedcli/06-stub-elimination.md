@@ -14,12 +14,12 @@ code**. The two things that make raw DeusEx code unloadable by that editor:
 1. **`Engine.u`/`Core.u` divergence** — DeusEx classes inherit from / call into a
    DeusEx-flavored Engine & Core whose class graph and natives differ from UT's; the
    v469 UCC can't link decompiled DeusEx bodies against UT's DLLs (hence body
-   stripping). *(decisions.md 2026-06-21/22; confirmed there.)*
+   stripping). *(direction/containers.md 2026-06-21/22; confirmed there.)*
 2. **Mesh format** — DeusEx `FMeshVert` is 8-byte int16, UT expects 4-byte packed
    (**Spike 2**), so meshes must be re-encoded (umodel).
 
 Both are *content/class-graph* problems, **not** a package-version problem — UED22's
-UCC reads v68 fine (decisions.md 2026-06-22). Andrzej's hypothesis: confirmed.
+UCC reads v68 fine (direction/containers.md 2026-06-22). Andrzej's hypothesis: confirmed.
 
 ## Why native write removes all of it
 
@@ -31,7 +31,7 @@ loads DeusEx code into any editor:
 - **The `.dx` is serialized natively** (Spike 3) — no editor `MAP SAVE`.
 - **Reading DeusEx classes/props/textures/meshes** is done from the **real v68
   install** natively (Spikes 1, 2; property schema already mandated to read the real
-  `.u`, never a stub — decisions.md 2026-06-26 14:10).
+  `.u`, never a stub — direction/packages.md 2026-06-26 14:10).
 
 With no editor in the materialize loop, **nothing ever needs a v69 DeusEx package.**
 So:

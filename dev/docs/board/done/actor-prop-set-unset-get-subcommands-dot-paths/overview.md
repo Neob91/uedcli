@@ -16,7 +16,7 @@ registry with Location zero-fill), retirement of `actor get` + the `--set/--unse
 probe result (partial values are member-wise onto the CLASS DEFAULT —
 `spikes/2026-07-18-partial-value-import-semantics/`, `unrealed/t3d.md`). Live E2E against the
 real v68 install ran green (set/get/unset/find + real enum errors). Spec (ephemeral):
-board item `materialize-post-verify-fails-when-the-trunk`; durable record decisions.md 2026-07-18 10:02 +
+board item `materialize-post-verify-fails-when-the-trunk`; durable record `direction/packages.md`, 2026-07-18 10:02 +
 10:30 UTC; folded into `architecture.md` "Class-property schema, DEFAULTS & the actor prop
 verbs". **Remnant flags (inbox):** store-explicit struct edits + `--kv` round-trips manufacture
 the explicit-default shapes the two open H3 post-verify items trip on — their practical

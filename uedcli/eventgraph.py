@@ -11,7 +11,7 @@ So a directed edge **A → B** exists when `A.Event == B.Tag` (both non-empty). 
 that graph from a parsed `Level` and lints it (dangling wires, unreachable movers, cycles). It is
 100% string/property scanning over the model — no editor, no container, no CSG.
 
-Unset-`Tag` convention (load-bearing — see dev/docs/decisions.md 2026-07-18 20:54 UTC):
+Unset-`Tag` convention (load-bearing — see dev/docs/rationale/eventgraph.md — 2026-07-18 20:54 UTC):
 UnrealEngine defaults an unset `Tag` to the actor's class name at runtime. We deliberately treat
 ONLY an explicitly-set, non-empty `Tag` as a matchable receiver — a default/class-name Tag is NOT
 an edge target. Reason: relying on the class-name default would wire together every same-class

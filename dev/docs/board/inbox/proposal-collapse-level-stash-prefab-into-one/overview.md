@@ -21,7 +21,7 @@ doesn't erase the kinds — only the word for them — so you'd trade named kind
 "not valid for this kind" errors (worse). **(2) "tree" is already taken:** terminology (2026-06-23)
 fixes **T3D tree** = the on-disk directory FORM shared by all three, and **level** = the playable
 domain object; renaming level→tree collapses the content/container distinction and makes "tree" mean
-both. **(3) moving stash into `Trees/Stash/` erodes the `.uedcli/` safety invariant** (direction.md:
+both. **(3) moving stash into `Trees/Stash/` erodes the `.uedcli/` safety invariant** (direction/safety.md:
 ALL machine-local throwaway — stash, flocks, staging temps, delivered preview maps — sits in ONE
 self-ignoring gitignored `.uedcli/`); it splits throwaway state across two homes and swaps a
 self-ignoring dir for a tracked dir + carve-out `.gitignore` (more fragile — a mis-edit commits
@@ -34,4 +34,4 @@ editing"; you never ambiently edit a stash/prefab (those are always explicit `--
 `$UEDCLI_TREE` (implying `KIND/NAME`) is meaningless as an editing default. SALVAGEABLE: a single
 `Trees/` root with an auto-created `.gitignore` is a genuinely nice ergonomic *default* IF decoupled
 from forcing the layout AND from moving stash out of `.uedcli/` — but given (3)/(4) probably not worth
-the churn. DECIDE-OR-DROP: your call; record in `decisions.md` if you pursue any of it.
+the churn. DECIDE-OR-DROP: your call; record in `direction/` if you pursue any of it.

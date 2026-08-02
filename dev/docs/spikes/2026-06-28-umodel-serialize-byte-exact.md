@@ -166,7 +166,7 @@ Everything else: **0 mismatches, 0 exceptions** across 72419 v68 Model exports.
    `Model` must emit the right one; the standard 42-byte (uncomputed-bounds)
    prefix is the natural choice for a freshly built level Model, matching every
    v69 *level* Model in the corpus.
-5. **The decisive remaining game-side gate** (per `decisions.md` 2026-06-28) — does
+5. **The decisive remaining game-side gate** (per `rationale/MIGRATION.md` 2026-06-28) — does
    a `Model` written *natively by uedcli* (not via the editor's `EDIT PASTE`) load
    and spawn in the actual game? — is now unblocked on the serialization side: the
    body bytes are reproducible exactly, so a hand-built minimal carved-room `Model`

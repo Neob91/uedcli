@@ -61,7 +61,7 @@ Every container (GUI editor + the build container `stub.ephemeral_build_containe
 bind-mounts the whole composed config dir set at `/resources/<n>` via the one
 `container_assets.resource_mounts` scheme, with a crafted `[Core.System] Paths`
 (`/stubs`+`/opt/UED22` first, then the mounts) — no `docker-compose.yml` `/deusex`
-mount or boot-time entrypoint Paths wiring (decisions.md 2026-07-14 19:21). `--dry-run`
+mount or boot-time entrypoint Paths wiring (`direction/containers.md`, 2026-07-14 19:21). `--dry-run`
 shows what it would do; re-running only syncs changes.
 
 ## What you need

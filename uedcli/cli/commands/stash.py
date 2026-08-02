@@ -40,7 +40,7 @@ def _capture_from_t3d(text: str, names: list[str], *, index, validate=None,
 
     `folders` is the SOURCE per-name folder map (trunk capture supplies each actor's stored folder;
     an external T3D source has none → all None). Because a T3D blob carries no folder (folder is a
-    uedcli-side sidecar), it must be threaded separately (decisions.md 2026-07-18 addendum, sub-choice
+    uedcli-side sidecar), it must be threaded separately (dev/docs/direction/trunk-and-editor.md 2026-07-18 addendum, sub-choice
     2 — persist folder per member). Trunk actor names are unique so the map keys survive uniquify; an
     external source's None-folders are unaffected by the (dup-only) rename below.
 

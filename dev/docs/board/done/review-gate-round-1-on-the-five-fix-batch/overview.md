@@ -14,7 +14,7 @@ UnrealEd fact in `unrealed/commands.md` + `spikes/2026-07-25-map-save-mechanism/
 follow-up correction, recorded here because this entry first got it wrong too:** whether that move
 is a rename or a byte COPY is NOT determined — `core.dll` imports no `ReadFile` either, so its file
 I/O bypasses the import table entirely and the missing `MoveFile*` proves nothing. The check stands
-as insurance; the rationale, `architecture.md`, the `map_save` docstring and the `decisions.md`
+as insurance; the rationale, `architecture.md`, the `map_save` docstring and the `rationale/driver.md`
 entry were corrected, and `commands.md`'s "truncated `Leaves` array" example was retracted (spike
 §91 disproved it). Also: `settle`/`stable_reads`, the per-probe `timeout=`,
 the elapsed-time message, the empty-file guard, the offset lower bound, the probe scripts and the

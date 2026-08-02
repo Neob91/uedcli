@@ -6,7 +6,7 @@ summary = "Extract uedcli into its own standalone git repo (out of the `dx_lum` 
 
 # Extract uedcli into its own standalone git repo (out of the `dx_lum` mod tree)
 
-`direction.md` already frames uedcli as a **globally-installed, generic-UE1 CLI that operates on many
+`direction/projects-and-config.md` already frames uedcli as a **globally-installed, generic-UE1 CLI that operates on many
 independent projects, not a tool living inside one content repo** (project = any repo with a
 `uedcli.toml`; tool-install assets resolve package-relative, never from a project). Its home should match
 that identity — independent of the mod. Spec scope: which dirs travel (the `uedcli/` package, `bin/`,
@@ -16,4 +16,4 @@ global "never rewrite published history" rule applies to the EXISTING repo, so t
 a copy, never a rewrite of `dx_lum`); how the mod repo consumes the CLI afterward (pipx install / pinned
 dependency / submodule — decide); the pipx/Nuitka release story; and cutover mechanics (CI/tests, the
 `dev/docs/board` pipeline, cross-repo references in `LUM/CLAUDE.md`). Prerequisite for the skills-plugin
-distribution entry below. (Andrzej, 2026-07-19; decisions.md addendum.)
+distribution entry below. (Andrzej, 2026-07-19; `rationale/MIGRATION.md` addendum.)

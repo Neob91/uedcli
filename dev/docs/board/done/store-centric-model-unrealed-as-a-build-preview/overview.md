@@ -12,4 +12,4 @@ reads THEIRS offline, ensure-loads the manifest, materializes (full re-import), 
 against the INTENDED result (H3); `level open`/`create`/the open-gate are gone, replaced by
 `session start [<dx>]` + `package load`. Folds in `export_and_qualify` and
 `dxpkg.transitive_closure`, live-verified 2026-06-20. See `architecture.md`,
-`unrealed/quirks.md`, `decisions.md` 2026-06-18. (Open follow-ups tracked in `board/to-spec/`.)
+`unrealed/quirks.md`, `direction/trunk-and-editor.md` (2026-06-18). (Open follow-ups tracked in `board/to-spec/`.)

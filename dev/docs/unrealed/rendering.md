@@ -123,7 +123,7 @@ pre-load frame). Prefer `CAMERA OPEN`.
 > `CAMERA ALIGN NAME=<BRUSH>` — aligning to a brush repositions and aims the camera to frame it
 > (distance ∝ the brush's size, canonical angle). `level preview` uses this: it auto-frames a named
 > brush, or the largest `CSG_Subtract` (the enclosing room) for `all`, a wide interior overview. See
-> `decisions.md` 2026-07-12. The rest of this section (ALIGN mechanics, wmctrl sweep, chrome crop,
+> `spikes/2026-07-12-preview-pose-calibration/`. The rest of this section (ALIGN mechanics, wmctrl sweep, chrome crop,
 > per-viewport ini) is still accurate for position and the render plumbing; only the claim that
 > rotation yields arbitrary posed shots is wrong.
 

@@ -3,7 +3,7 @@
 Investigation of: a `--solidity semisolid` brush makes `level materialize` fail
 (reported as "the editor's MAP SAVE produces no `.dx`"). This dir holds the
 **harness**; the durable engine facts are folded into `dev/docs/unrealed/quirks.md`
-and the choice into `dev/docs/decisions.md` (2026-07-14).
+and the choice into `dev/docs/rationale/qualify.md` (2026-07-14).
 
 ## Conclusion (2026-07-14) — the report was TWO separate things, only one a real bug
 

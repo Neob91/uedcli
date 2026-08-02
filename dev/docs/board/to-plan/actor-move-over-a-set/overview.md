@@ -10,7 +10,7 @@ Spec written +
 **cold-review gate PASSED** (2 reviewers, no blockers, all findings folded in):
 [`spec.md`](spec.md). Brings `move` to the
 `actor rotate`/`brush scale` set contract (`names… | -`); `--by` any count, `--to` rejects >1 (exit 2),
-dedupe, empty-stdin no-op, no `--pivot`. Decisions: `decisions.md` 2026-07-25 00:43 UTC. Breaking:
+dedupe, empty-stdin no-op, no `--pivot`. Decisions: `direction/conventions.md` (2026-07-25 00:43 UTC). Breaking:
 positional `name`→`names` + `args["name"]`→`args["names"]` save shape (unreleased, no shim) — the spec
 §5 lists the existing tests to migrate/remove (incl. the "move does NOT accept `-`" test). Small, well-
 scoped; next action is a plan (or build directly given the sibling-mirror is so close).

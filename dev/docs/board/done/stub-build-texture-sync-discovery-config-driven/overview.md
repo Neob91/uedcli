@@ -20,7 +20,7 @@ order: `/stubs` (v69) first, so a stub shadows any v68 `.u` on the editor's Path
 `install_content_dirs` kept only as test install pointers. Live-verified: `foobar` materialize
 (editor unaffected with 45 v68 `.u` now on Paths — inert via demand-load + stubs-first), stub source
 → `/resources/r002/DXOgg.u`, `texture sync --package Airfield` → 108 textures → project catalog.
-Decisions: decisions.md 2026-07-14 17:40 then 19:21 (the uniform-mount supersession); docs reconciled
+Decisions: `direction/containers.md` (2026-07-14 17:40 then 19:21, the uniform-mount supersession); docs reconciled
 (`architecture.md` texture-catalog + schema + stubbing + container sections). Two cold reviewers
 flagged the one real risk (one HIGH): an unstubbed v68 code package referenced by materialize/preview
 would demand-load the v68 `.u` and wedge the editor. GUARDED — `ensure_load`'s

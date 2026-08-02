@@ -20,8 +20,6 @@ Every doc has one job:
 | **[../../docs/usage.md](../../docs/usage.md)** | "How do I use the CLI?" | current commands | tracks the CLI |
 | **[../../docs/leveldesign/](../../docs/leveldesign/README.md)** | "How do I design a **good, buildable level** (with uedcli)?" | user-facing level-design craft | the curated user cut of the dev knowledge base |
 | **[architecture.md](architecture.md)** | "How is it built **now**?" | what IS (implementation) | updated to match whenever the code changes — never stale |
-| **[direction.md](direction.md)** | nothing — a **retired stub** | all 12 topics migrated to [`direction/`](direction/README.md) | frozen; never append |
-| **[decisions.md](decisions.md)** | "**Why** was it this way, historically?" | the **retired** ledger of choices (UTC-timestamped) | frozen; never append. Entries migrated into `direction/` (the owner's) and `rationale/` (agents'); [`rationale/MIGRATION.md`](rationale/MIGRATION.md) is the map |
 | **[unrealed/](unrealed/README.md)** | "How does **UnrealEd** (the editor) actually behave?" | verified editor-engine facts (✅/🔬/📖) | updated as findings are verified |
 | **[unrealed/t3d.md](unrealed/t3d.md)** | "What is the T3D on-the-wire text format?" | format reference (block nesting, property forms, winding, what T3D can't carry) | updated as format is verified |
 | **[unrealed/texalign.md](unrealed/texalign.md)** | "What does the editor's own `POLY TEXALIGN` do to a surface's texture frame?" | per-mode formulas/guards/anchors, measured; the uedcli diff | updated if the substrate changes |
@@ -104,5 +102,5 @@ router").
 - **Open:** the rest of the global-CLI/projects work (content-addressed caches, pipx/Nuitka
   packaging); the de-containerization roadmap (native `.dx`/texture read); the offline BSP-build
   engine (build-emergent hole detection, parked mid-spike); zones + AI pathing; camera-rotation
-  READ (parse from `MAP SAVE`). See `direction.md` + the board.
+  READ (parse from `MAP SAVE`). See [`direction/`](direction/README.md) + the board.
 - **Deferred:** level-validation text feedback; duplicate/mirror.

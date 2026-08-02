@@ -1,6 +1,6 @@
 """Tests for the global-CLI config + path-resolution module (`uedcli/config.py`).
 
-Covers the reconciled design (decisions.md 2026-06-29 → 2026-07-01; directory model 2026-07-14
+Covers the reconciled design (dev/docs/direction/projects-and-config.md 2026-06-29 → 2026-07-01; directory model 2026-07-14
 03:30; project layout 2026-07-17 20:58): per-user `[games.*]` config, per-project `<root>/
 uedcli.toml` (the dir containing the file IS the project root), required `game`, root-relative
 managed-dir defaults (`maps/`, `prefabs/`, `texture-catalog/`), dropped `id`/`name` keys, schema
@@ -165,7 +165,7 @@ def test_it_errors_on_an_unknown_project_key(tmp_path):
 
 
 def test_it_rejects_the_dropped_id_and_name_keys(tmp_path):
-    # `id`/`name` were dropped with the registry (decisions.md 2026-07-17 20:58 §2) — a file
+    # `id`/`name` were dropped with the registry (dev/docs/direction/projects-and-config.md 2026-07-17 20:58 §2) — a file
     # still carrying them gets the standard unknown-key error naming them.
     root = tmp_path / "p"
     _write(str(root / "uedcli.toml"), 'game = "deusex"\nname = "lum"\nid = "x"\n')

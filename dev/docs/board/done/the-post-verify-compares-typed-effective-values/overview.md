@@ -20,6 +20,6 @@ schema-free); and an explicit zero SCALAR/bool compares equal to an omitted line
 zero from the schema, while a `StrProperty` reading `0` still does not. Also generalizes the
 member-diff to EVERY struct prop and normalizes enum name-vs-ordinal. `verify._first_diff` now
 names the differing PROPERTY and both values (or the class default the omitting side falls
-through to). Decision `decisions.md` 2026-07-25 02:15 UTC; `unrealed/t3d.md` "Partial
+through to). Decision `direction/materialize.md` (2026-07-25 02:15 UTC); `unrealed/t3d.md` "Partial
 struct/array property values"; `architecture.md` "The compare view vs the identity hash".
 **Remnant** (filed on `board/inbox/`, p2): ingest still WRITES a partial `Location` back zero-filled.

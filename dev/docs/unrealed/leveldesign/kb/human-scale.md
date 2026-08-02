@@ -8,8 +8,7 @@ Two tiers of confidence:
 
 - ✅🔬 real Deus Ex figures, uedcli-decoded. Read from shipped `DX/System/DeusEx.u` by building a
   throwaway class instance and reading the resolved property default — no editor, no UT proxy. An
-  unset property resolves to its class default (offline decode-read semantics — see `direction.md`
-  "One package-format core"), the number an author wants. Authoritative; supersede any tutorial
+  unset property resolves to its class default (offline decode-read semantics), the number an author wants. Authoritative; supersede any tutorial
   figure.
 - [ENGINE] conventions — engine-generic sizing rules (unit scale, stair/ceiling/doorway/grid) from
   the Legacy wikis, Steve Tack, and Wolf. Design conventions, not binary constants; recommended

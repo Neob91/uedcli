@@ -14,18 +14,18 @@
   the `<level>` directory name.
 
 "level" is never used for the file; "map" is never used for the abstract content. See
-[decisions.md](decisions.md) (2026-06-23).
+[`direction/terminology.md`](direction/terminology.md) (2026-06-23).
 
 > **Direction:** uedcli aims to be a generic UnrealEngine-1 tool with Deus Ex as one baked-in
 > substrate. Today it targets Deus Ex and `.dx` map files only. New code/naming should avoid
 > DeusEx-only framing and map-file handling should grow to accept `.unr`; forward-looking
-> guidance, not a refactor mandate (see decisions.md + `board/README.md` "Portability goal").
+> guidance, not a refactor mandate (see `direction/scope.md` + `board/README.md` "Portability goal").
 
 > **Git-native migration complete.** The durable source of truth is the git-tracked T3D trunk
 > (`<maps-dir>/<level>/`); the session store and its core modules were deleted (git
-> history holds them). See [`direction.md`](direction.md) for the net target.
+> history holds them). See [`direction/trunk-and-editor.md`](direction/trunk-and-editor.md) for the net target.
 >
-> **Project layout (decisions.md 2026-07-17 20:58):** a project is a repo with a free-standing
+> **Project layout (`direction/projects-and-config.md`, 2026-07-17 20:58):** a project is a repo with a free-standing
 > **`uedcli.toml` at its root** (à la `pyproject.toml`) — the dir containing it IS the project
 > root. The file declares `game` (required) + optional `paths`/`maps`/`prefabs`/`catalog`, all
 > root-relative (defaults `maps/`, `prefabs/`, `texture-catalog/`). Discovery is a walk-up to the
@@ -53,7 +53,7 @@ the user's own, uedcli never wraps version control.
 
 This pivoted from the earlier editor-centric model (a live UnrealEd held the authoritative level,
 every read a `MAP EXPORT`) and the interim session store (slices ≤3, since deleted). See
-[decisions.md](decisions.md) (the 2026-07-05 git-native entries). The per-actor `.t3d` +
+[`direction/trunk-and-editor.md`](direction/trunk-and-editor.md) (the 2026-07-05 git-native entries). The per-actor `.t3d` +
 `order_value` layout was chosen so disjoint edits merge natively under `git merge` — verified in
 [`spikes/2026-07-01-git-merge-t3d-tree/`](spikes/2026-07-01-git-merge-t3d-tree/findings.md)
 and [`spikes/2026-07-05-git-merge-t3d-layout/`](spikes/2026-07-05-git-merge-t3d-layout/findings.md).
@@ -87,7 +87,7 @@ and [`spikes/2026-07-05-git-merge-t3d-layout/`](spikes/2026-07-05-git-merge-t3d-
 - **Level model** — `model.py` (parse `MAP EXPORT` T3D → actors keyed by unique `Name`;
   brushes carry a `PolyList`; **vertex/Location coords are exact `Decimal`** — see "Coords";
   an actor's `Location`/`Name` live ONLY in their typed fields, never mirrored into `props` —
-  `emit_actor` re-emits `Location` from the field, see `decisions.md` 2026-06-28),
+  `emit_actor` re-emits `Location` from the field, see `rationale/emit.md`, 2026-06-28),
   `emit.py` (the single write path: `clean` near-integer **noise** to the grid while
   **preserving genuine fractions**, multi-group quoting, **`Brush=` ref emitted after the
   brush block**), `normalize.py` (strip computed/volatile fields so diffs are authored-only; the
@@ -144,7 +144,7 @@ and [`spikes/2026-07-05-git-merge-t3d-layout/`](spikes/2026-07-05-git-merge-t3d-
   `eventgraph.py` (pure Tag↔Event trigger-wiring analysis — `build_graph`/`lint_graph` + text/DOT/
   JSON formatters, the `event graph` verb; no editor, see "Commands" below),
   `upackage.py` (the ONE low-level UE1 package reader — header/tables/compact-index/tagged-
-  property lists — every package decoder builds on; decisions.md 2026-07-18 10:02 §5),
+  property lists — every package decoder builds on; `direction/packages.md`, 2026-07-18 10:02 §5),
   `uprops.py` (offline class-property SCHEMA + class-DEFAULT extraction from the game's own
   `.u` — the source of truth for `actor prop` validation and effective-value reads),
   `propedit.py` (the pure `actor prop set|unset|get` verb logic: dot-path grammar, planner,
@@ -250,7 +250,7 @@ and [`spikes/2026-07-05-git-merge-t3d-layout/`](spikes/2026-07-05-git-merge-t3d-
   (`write_actor_tree`/`read_actor_tree` over `actors/<name>/{actor.t3d, order_value[, folder][, labels]}`, plus
   the LexoRank rank algebra, the coordination-free name allocator, the `actor.t3d` body strip/inject,
   `check_safe_segment`, and `write_sidecars`/`read_sidecars` for the beside-`actors/` extras). ALL
-  THREE T3D trees go through it (decisions.md 2026-07-18 23:01 UTC — "stash, prefab, and trunk MUST
+  THREE T3D trees go through it (`direction/trunk-and-editor.md`, 2026-07-18 23:01 UTC — "stash, prefab, and trunk MUST
   share ONE T3D tree format"): `trunk.py` re-exports it under the level-facing names
   (`read_level`/`write_level`), `stash_register.py` and `stashlib.py` wrap it for the stash/prefab
   boxes. (The old `tree_io.py` flat-tree reader + its `safe_name` URL-quoting are GONE — the dir name
@@ -288,7 +288,7 @@ loop:
 4. `src.save(verb=…, args=…, level=level, touched=…)` (`TrunkLevelSource.save` →
    `trunk.write_level`) writes the per-actor trunk from the already-transformed in-memory model as
    a **DELTA under a short per-level flock** (`<maps-dir>/.locks/level-<name>.lock`,
-   resource-adjacent + self-ignoring like the catalog locks; decisions.md 2026-07-18 08:08 +
+   resource-adjacent + self-ignoring like the catalog locks; `direction/trunk-and-editor.md`, 2026-07-18 08:08 +
    the same-day follow-up): only actors whose **body or rank differs from this process's load
    snapshot** are written (content-diff via `read_level_with_bodies` — not the `touched` hint),
    each per-actor write is **atomic** (rank first, then `actor.t3d` via tmp + `os.replace`, so a
@@ -335,7 +335,7 @@ seam (all in `dispatch.py`):
   `write_stash`, atomic swap, `force=True`).
 - **`PrefabLevelSource(root, name)`** — a durable prefab (`stashlib.read_prefab`/`write_prefab`).
 
-Stash/prefab are now the **same per-actor T3D tree** as the trunk (decisions.md 2026-07-18 23:01
+Stash/prefab are now the **same per-actor T3D tree** as the trunk (`direction/trunk-and-editor.md`, 2026-07-18 23:01
 UTC), so their on-disk `order` is derived from the per-actor `order_value` sort (not a flat `order`
 file). The wrappers still speak a flat `order` **list** as their public currency — an internal
 detail derived on write (`stashlib._ranks_for`: preserve a surviving actor's rank, append a new one)
@@ -353,7 +353,7 @@ cannot clobber structural state.
 **The default level is the ambient `$UEDCLI_LEVEL`** (a bare level name), read by
 `level_select.resolve_level(env_level=os.environ.get("UEDCLI_LEVEL"), maps_dir=…)` — per-process, so
 there is no shared mutable pointer to race on (it replaced the old `.uedcli/current-level` pointer +
-`level select` verb; decisions.md 2026-07-20 21:30 UTC). The env value is `strip`ped, blank ⇒ unset,
+`level select` verb; `rationale/MIGRATION.md`, 2026-07-20 21:30 UTC). The env value is `strip`ped, blank ⇒ unset,
 `_check_safe_level`d, and existence-checked; unset/malformed/nonexistent → a clean exit-2
 `LevelSelectionError` naming BOTH set-methods, never a silent empty level. When the env fallback is
 used, `_resolve_level_source` sets `src.from_env = True`.
@@ -432,7 +432,7 @@ unrealed/quirks).
 ## Stash / prefab (captured actor sets)
 A stash, a prefab, and a level trunk are one on-disk format — the per-actor T3D tree
 `actors/<name>/{actor.t3d, order_value[, folder]}`, read/written through the single shared
-`t3dtree` code path (decisions.md 2026-07-18 23:01 UTC). Any per-box extras (`packages` list +
+`t3dtree` code path (`direction/trunk-and-editor.md`, 2026-07-18 23:01 UTC). Any per-box extras (`packages` list +
 `meta.json` capture anchor/timestamp) sit beside `actors/` (via `t3dtree.write_sidecars`/
 `read_sidecars`); the trunk has none. The stored `actor.t3d` is byte-identical to the trunk's (the
 `t3dtree` consistency test pins this).
@@ -452,7 +452,7 @@ LUM repo `Prefabs/`), overridable per-invocation via `--prefab-dir` (with the fl
 needed; with neither a project nor the flag → clean exit 2). `stash promote` copies a register entry
 there; `stashlib.{write,read,list}_prefab` are the pure file I/O. `prefab` reads
 (`list`/`show`/`preview`/`drop`) touch only the tracked dir; only `prefab apply` resolves the
-selected trunk level. **Migration is a HARD CUTOVER** (decisions.md 2026-07-18 addendum, sub-choice
+selected trunk level. **Migration is a HARD CUTOVER** (`direction/trunk-and-editor.md`, 2026-07-18 addendum, sub-choice
 1): there is NO dual-read of the pre-per-actor-tree single-blob prefab (`<name>.t3d` + `<name>.json`)
 — reading one raises `stashlib.OldFormatPrefab`, surfaced as a clean exit-2 message naming the
 prefab (`old-format prefab 'X' — re-capture it`), never a traceback; the name still LISTS so the
@@ -477,7 +477,7 @@ CSG state change.
 ## The compare view vs the identity hash (`normalize.py`)
 
 Two different reductions of a `Level` live in `normalize.py`, and conflating them was a live bug
-class (decisions.md 2026-07-25 00:36 UTC):
+class (`rationale/MIGRATION.md`, 2026-07-25 00:36 UTC):
 
 - **`canonical_level_hash(level)` — the IDENTITY hash.** Pure and **schema-free**: it hashes exactly
   `canonical_actor_t3d` per actor (Name-sorted) plus `level.order`, with nothing folded away. Its
@@ -565,7 +565,7 @@ A **folder** is a per-actor, uedcli-side, hierarchical dotted organization path 
 that lets a big build be addressed as a tree ("retexture every `**.roof`"). It is stored in the
 trunk, **never emitted to the built map**, and is a **separate dimension** from the T3D `Group=`
 prop (which is retained, parsed, and emitted exactly as before — the two never interact). Spec
-board item `actor-folders-hierarchical-actor-organization`; decisions.md 2026-07-18 12:14/12:32/12:45 UTC.
+board item `actor-folders-hierarchical-actor-organization`; `direction/organization.md`, 2026-07-18 12:14/12:32/12:45 UTC.
 
 - **Model + sidecar.** `Actor.folder: str | None` is a **typed field** (like `location`), NOT a
   `props` entry; `None` = ungrouped. It persists as a per-actor **sidecar file** `folder` beside
@@ -630,7 +630,7 @@ cross-cutting axis a single folder hierarchy can't express (a torch is at `castl
 mechanism, same trunk-only scope, same never-emitted-to-the-map rule, but a **sorted set** rather than
 one path. They are **orthogonal** to the folder, the T3D `Group=` prop, and the T3D `Tag=` prop —
 named `label` deliberately, since `tag` would collide with `Engine.Actor.Tag`. Spec
-and plan both in board item `re-evaluate-whether-reject-nonlevel-target`; decisions.md
+and plan both in board item `re-evaluate-whether-reject-nonlevel-target`; `direction/organization.md`,
 2026-07-22 20:49 UTC. This first cut is **trunk + `duplicate` only** — no stash/prefab labels channel
 (deferred), so the label-editing verbs reject `--tree stash|prefab`.
 
@@ -695,7 +695,7 @@ and plan both in board item `re-evaluate-whether-reject-nonlevel-target`; decisi
 - **Texture catalog** (`texture_catalog.py`, `texture.py`) — fully offline:
   - **`texture sync [--package P]`** is project-scoped: it discovers EVERY package on the composed
     config search path (`config.composed_search_files(project, user_config)` — project overlay shadows
-    game base; ALL extensions incl `.u`, since a `.u` can hold textures too — decisions.md 2026-07-14
+    game base; ALL extensions incl `.u`, since a `.u` can hold textures too — `direction/containers.md`, 2026-07-14
     19:21), UCC-batchexports each package's textures to PNG under the gitignored, per-user,
     cross-project cache
     `~/.uedcli/cache/textures/<package>/` (`config.texture_images_root` — per-user cache home)
@@ -727,7 +727,7 @@ and plan both in board item `re-evaluate-whether-reject-nonlevel-target`; decisi
     histogram → keep names ≥12% share, cap 3. Pillow pinned to a version floor for stability.
   - Image path is derived by convention (never stored in the manifest — would dangle vs the
     gitignored image tree). Consumers check existence and error "run `texture sync`".
-  - See [decisions.md](decisions.md) 2026-06-22 entries for the full design rationale and
+  - See [`direction/asset-catalog.md`](direction/asset-catalog.md) 2026-06-22 entries for the full design rationale and
     rejected alternatives.
 - **`docs list|show|search`** (`userdocs.py`, `dispatch._dispatch_docs`) — uedcli serves its own
   **user-facing** documentation, so a consumer reads the pages baked into the binary it has rather
@@ -830,7 +830,7 @@ and plan both in board item `re-evaluate-whether-reject-nonlevel-target`; decisi
     rotates about a chosen pivot rather than the world origin (`--origin`/`--pivot`/`--at`, see
     `usage.md`). They replaced the editor-driven `stash intersect`/`deintersect`, which are DELETED;
     that editor path survives only as the golden regenerator (`tests/editor_oracle.py`,
-    `-m integration`) behind the committed `tests/fixtures/intersect/` goldens. See `decisions.md`
+    `-m integration`) behind the committed `tests/fixtures/intersect/` goldens. See `direction/generators.md`,
     2026-06-24 14:30 UTC (the generator pattern) and 2026-07-24 16:32 / 2026-07-25 (the merge
     itself and the corrections).
 - **`level`** (the primary editor-driving verbs):
@@ -856,7 +856,7 @@ and plan both in board item `re-evaluate-whether-reject-nonlevel-target`; decisi
     class schema + defaults, and compare against the intended trunk — `verify.verify_dx_matches`
     over `normalize.compare_view`)
     → atomic swap (`_install_atomic`). The editor is a **per-command ephemeral container** (minted
-    per invocation, torn down in a `finally`; no session, no shared lock — decisions.md 2026-07-06
+    per invocation, torn down in a `finally`; no session, no shared lock — `direction/containers.md`, 2026-07-06
     05:12). **Refuses to overwrite an existing `--out`** (exit 2, naming the file) unless
     `--overwrite`; H3 catches a silent `MAP SAVE` failure.
   - `level preview SHOT... --out-dir DIR [--game|--native] [--size WxH] [--fov DEG]` —
@@ -975,7 +975,7 @@ and plan both in board item `re-evaluate-whether-reject-nonlevel-target`; decisi
     write-path tolerances are unchanged. Exit non-zero on any ERROR (over ALL findings, regardless
     of `--severity`/`--category` display filter — CI-usable). It does NOT enumerate build-emergent
     holes (slivers/T-junctions/phantom collision nodes); that is the planned **offline BSP-build
-    engine** (decisions.md 2026-06-24 09:07 UTC — a faithful Python port verified differentially
+    engine** (`rationale/MIGRATION.md`, 2026-06-24 09:07 UTC — a faithful Python port verified differentially
     against the editor, editor = test oracle only) which will upgrade `doctor` from *predict* to
     offline *ground truth*.
   - `level list [--json]` — enumerate the project's levels (`dispatch._level_list` →
@@ -1149,7 +1149,7 @@ and plan both in board item `re-evaluate-whether-reject-nonlevel-target`; decisi
 ## Class-property schema, DEFAULTS & the `actor prop` verbs (`upackage.py`, `uprops.py`, `propedit.py`)
 
 **`actor prop set|unset|get <actor> TOKEN…`** (spec in board item `materialize-post-verify-fails-when-the-trunk`;
-decisions.md 2026-07-18 10:02 + 10:30 UTC — every design choice Andrzej's) reads, sets, and clears
+`direction/packages.md`, 2026-07-18 10:02 + 10:30 UTC — every design choice Andrzej's) reads, sets, and clears
 an actor's properties model-side, schema-validated, atomic per invocation (validate-before-mutate:
 a bad token leaves the trunk untouched). It replaced the flag form (`--set/--unset`, removed
 outright) and the retired `actor get`. The old stored-only reader warts (case-sensitive key,
@@ -1236,7 +1236,7 @@ zero each invocation — and the dominant cost is `load_package`'s name/import/e
 (38–211 ms per big package), not the property decode. `schema_cache.py` persists each package's
 decoded **discovery primitives** to `~/.uedcli/cache/schema/v<N>/<key>.bin` so a warm cold run skips
 `load_package` entirely (never touches the raw bytes `buf`). *(spec
-board item `package-schema-cache`; decisions.md 2026-07-18 21:30 UTC.)*
+board item `package-schema-cache`; `direction/packages.md`, 2026-07-18 21:30 UTC.)*
 
 - **v1 bundle (`PackageSchema`)** — the per-package primitives `class list`/`class show` need, each a
   pure function of ONE package's bytes: class list (`iter_classes`), casefold→export-index map
@@ -1302,7 +1302,7 @@ things: the `class list`/`class show` discovery verbs, bare→FQCN class QUALIFI
 class-existence validation. It is header-only (reuses `uprops.load_package` — name/import/export
 tables, no property decode) except for `class show`'s schema and abstract detection. Built once per
 invocation; a single unparseable `.u` is skipped with a stderr note (never aborts). *(spec
-board item `offline-class-discovery-qualify-and-validate`; decisions.md 2026-07-17 19:37 UTC.)*
+board item `offline-class-discovery-qualify-and-validate`; `rationale/MIGRATION.md`, 2026-07-17 19:37 UTC.)*
 
 - **`class list [--flat] [--package P] [--subclass-of Package.Class] [--depth N|all] [--include-non-actor] [--include-abstract]`** — by
   DEFAULT an indented inheritance **TREE** (decision 2026-07-18) rooted at `Engine.Actor`: abstract
@@ -1349,7 +1349,7 @@ board item `offline-class-discovery-qualify-and-validate`; decisions.md 2026-07-
   left empty. There is no own-only fallback (it was deleted 2026-07-25 along with the `--category`
   special case that had to reject it): printing the class's own props with a "inherited props
   unavailable" stderr note is a **silent half-answer** — the note scrolls away and the caller reads a
-  truncated property set as a complete one. *(`dev/docs/direction/conventions.md` "No silent half-answers"; decisions.md
+  truncated property set as a complete one. *(`dev/docs/direction/conventions.md` "No silent half-answers"; `direction/conventions.md`,
   2026-07-24 21:58 UTC.)*
 - **Abstract detection is offline** via `uprops.class_is_abstract` → the shipped ScriptText `.uc`
   source (all DX classes ship it), NOT `ClassFlags` (unreachable past the variable-length script body
@@ -1406,12 +1406,12 @@ in `spikes/2026-06-25-mover-keyframe-basepos-semantics.md`.
   `--from-base` key writes the offset straight in (no subtraction). The offset is added in
   **world axes even when `BaseRot≠0`** (`KeyPos[i]` is NOT rotated by `BaseRot`); rotation composes
   the same way (`KeyRot[i]` field-added to `BaseRot`). Confirmed live + from the disassembled editor
-  transform (`decisions.md` 2026-07-07 12:11 UTC) — so no base-rotation special-casing is needed.
+  transform (`rationale/MIGRATION.md`, 2026-07-07 12:11 UTC) — so no base-rotation special-casing is needed.
   (Caveat: `rotation.subtract_uu`/`compose_uu` are per-component FRotator arithmetic, geometrically
   naive for a non-cardinal base — `--from-world`/`--from-base` are not a clean re-basing off a tilted
   base `Rotation`.)
 - **Keyframe verb model (spec in board item `mover-key-keyframe-model-rework`,
-  `decisions.md` 2026-07-20):** `NumKeys` is the *authoritative runtime waypoint count* — the engine
+  `direction/generators.md`, 2026-07-20):** `NumKeys` is the *authoritative runtime waypoint count* — the engine
   cannot infer it from which `KeyPos` lines exist (a key deliberately at the base pose stores no
   line yet is a real waypoint), and UnrealEd never auto-decrements it (live-verified,
   `spikes/2026-07-20-mover-numkeys-trailing-zero/`; pinned by
@@ -1439,10 +1439,10 @@ in `spikes/2026-06-25-mover-keyframe-basepos-semantics.md`.
   candidate actor as the stash/prefab ingest gate, since the unified T3D-tree read path no longer
   canonicalizes on read (the retired `tree_io` did). There is no per-Level and no raw-blob variant:
   `canonicalize_movers_in_level`/`canonicalize_mover_blob` were deleted 2026-07-25 as zero-caller
-  API surface (`decisions.md` "No back-compat cruft"), and `qualify.export_and_qualify` — once
+  API surface (`direction/conventions.md` "No back-compat cruft"), and `qualify.export_and_qualify` — once
   described here as a second funnel — never called either. Without the fold the next `EDIT PASTE`
   materialize would re-derive `BasePos` from the offset pose and drift.
-- **`is_mover(actor, index)` — the single shared, SCHEMA-AWARE predicate** (decisions.md
+- **`is_mover(actor, index)` — the single shared, SCHEMA-AWARE predicate** (`direction/conventions.md`,
   2026-07-25 10:18 UTC). It answers "does this actor's class descend from `Engine.Mover`?" by
   walking the class hierarchy in a `classindex.ClassIndex` (the offline index over the composed
   `.u` search path), *not* by testing the class name. A bare (unqualified) class resolves through
@@ -1502,7 +1502,7 @@ in `spikes/2026-06-25-mover-keyframe-basepos-semantics.md`.
   `actor rotate` lacks); `remove <i>` deletes and compacts indices; `list` prints each key's world
   pose + stored offset (read-only). Index 0 is rejected (it is the base — use `actor move`/`rotate`
   or delete the actor). Saving stores the resolved relative offset so the key is base-independent.
-  See `decisions.md` (2026-06-25) for the full rationale + rejected alternatives.
+  See `direction/generators.md` (2026-06-25) for the full rationale + rejected alternatives.
 
 ## The editor is a per-command ephemeral resource (`editor.py`)
 The editor is a build/preview tool, not the source of truth — and every editor-driving verb spins
@@ -1515,9 +1515,9 @@ a container named `uned-<uuid7>` (its own WINEPREFIX volume + an **ephemeral** n
 container + volume). Because each container is unshared, concurrent invocations never touch each
 other's editor state — parallel-safe by construction, no drive lock needed; `preview` boots one
 editor per distinct render mode. The container is **derived per command, never a `--container`
-flag.** *(decisions.md 2026-07-06 05:12 — per-command editor identity.)* Every editor/build-
+flag.** *(`direction/containers.md`, 2026-07-06 05:12 — per-command editor identity.)* Every editor/build-
 container spin-up takes an explicit **`state_dir`** — the resolved project's `<root>/.uedcli/`
-(`config.state_dir(project.root, create=True)`, threaded from the dispatching verb; decisions.md
+(`config.state_dir(project.root, create=True)`, threaded from the dispatching verb; `direction/projects-and-config.md`,
 2026-07-17 20:58) — hosting the crafted/override ini temps (`tmp/`) and the flocks (`locks/`);
 `repo_paths.state_root()` (the CLAUDE.md-marker-derived `<repo>/.uedcli`) is retired.
 
@@ -1638,7 +1638,7 @@ The offline build path that turns the git-tracked T3D trunk into a game-loadable
     per-CsgOper keep/discard/reverse leaf funcs (§4.3). Formulated as an FPoly-list filter (a
     fragment kept unless a leaf discards it → un-clipped faces stay whole). A fresh world is SOLID
     (`root_outside=false`): a Subtract carves, an Add fills. **Classification is POINT-IN-SOLID, not
-    BSP propagation** (decisions.md 2026-07-16 native CSG point-in-solid classifier): the old code
+    BSP propagation** (`rationale/MIGRATION.md`, 2026-07-16 native CSG point-in-solid classifier): the old code
     rebuilt a classify BSP from the accumulated world SURFACE list each brush step and trusted its
     propagated `outside`; for complex non-axis-aligned geometry (an octagonal tower's diagonal
     planes) that intermediate surface set is not watertight, so the rebuilt tree misclassified empty
@@ -1679,7 +1679,7 @@ The offline build path that turns the git-tracked T3D trunk into a game-loadable
     that emits `Model.leaf_hulls` + per-node `i_collision_bound` so the **pawn stands on the floor**.
     Without hulls a native map is non-solid to any box sweep and the pawn falls through — the game's
     `FBoxLineCheckInfo::BoxLineCheck` produces a collision hit ONLY by clipping the swept box against
-    `LeafHulls[iCollisionBound]` (decisions.md 2026-07-16 15:20 UTC; `re-raw-zones/linecheck-oracle.md`).
+    `LeafHulls[iCollisionBound]` (`rationale/MIGRATION.md`, 2026-07-16 15:20 UTC; `re-raw-zones/linecheck-oracle.md`).
     `Bounds`/`i_render_bound` stay empty/`-1` (render bound, separate).
   - `zones.rs` — the native `TestVisibility` port (section 70): real leaves (Pass A), a
     leaf-adjacency PORTAL graph (infinite node-plane quad clipped to the cell, filtered down both
@@ -1845,7 +1845,7 @@ OR relative, in a PRE-PASS naming every offender before anything is written; `sc
 guard because it preserves direction. Derivations, measurements and the rejected alternatives are
 in [`rationale/surface.md`](rationale/surface.md).
 
-**Surface texture alignment** (`polyalign.py`, build item 11 — decisions.md 2026-07-18 21:40 UTC)
+**Surface texture alignment** (`polyalign.py`, build item 11 — `direction/conventions.md`, 2026-07-18 21:40 UTC)
 makes one texture flow **continuously** across a set of faces instead of restarting at each brush
 edge. It is uedcli's OWN alignment, **not** a port of the editor's: UnrealEd's own verb is
 `POLY TEXALIGN` (there is no `TEXTURE ALIGN`), and its rules were measured on 2026-07-26 and agree
@@ -1934,7 +1934,7 @@ auto-stubs dependencies without any explicit user step.
 ### v68 inputs
 The stubber's input source is the v68 `.u` on the **whole composed config search path**
 (`config.composed_search_dirs(project, user_config)` — ONE uniform dir set, no code-vs-content split;
-decisions.md 2026-07-14 19:21), threaded as a single `search_dirs` through
+`direction/containers.md`, 2026-07-14 19:21), threaded as a single `search_dirs` through
 `stub_missing_packages`/`ensure_stub`/`compute_cache_key` and `stub_closure.resolve`. A package's v68
 `.u` resolves first-`.u`-wins across the composed dirs (`stub_closure._find_code`, project overlay
 before game base = config shadowing). The build container mounts the whole composed set via the ONE
@@ -1949,7 +1949,7 @@ integration tests live in `tests/conftest.py` — `install_system_root`/`install
 Decompile failures for stripped engine symbols (e.g. `Engine.PlayerPawn.PostRenderFlash`) fail
 loudly — a broken stub is never emitted. First-party `LUM_Core.u` (compiled from repo source)
 and cinematics' stripped engine symbols are out of scope. See
-[decisions.md](decisions.md) 2026-06-21 and 2026-06-22 for the full design rationale.
+[`direction/containers.md`](direction/containers.md) 2026-06-21 and 2026-06-22 for the full design rationale.
 
 ## Builders (`builders.py`)
 
@@ -1989,7 +1989,7 @@ actor; `stash capture` filters by the requested names first, then uniquifies the
 (first keeps its bare Name, later collisions get suffixed). `translate_brush(brush, dx, dy, dz)` shifts all vertices by a world-space delta (used by the
 intersect/deintersect scaffolding to place the builder cube on the set's bbox centre; the editor
 ORACLE additionally pre-subtracts 32 uu on the pasted wrap cube to cancel the `EDIT PASTE` drift —
-the native path has no paste and so no offset, see `decisions.md` 2026-07-25). Geometry helpers mirror `clip.py`
+the native path has no paste and so no offset, see `rationale/MIGRATION.md`, 2026-07-25). Geometry helpers mirror `clip.py`
 (`_face` orders a ring CCW-from-out from a rough outward direction; winding, not the emitted
 Normal, is what the importer uses).
 Each face carries an **`Item` (`ItemName`)** label — UED's per-face semantic tag (Base/back/
@@ -2002,7 +2002,7 @@ step a `Step` tread (+Z) + `Rise` riser (−X), with the two sides **tiled into 
 the BRUSH is non-convex). Face count `2 + 4·steps`; it sits entirely at/above the floor with a
 front-bottom **corner pivot**. Its per-step Side/tread/base boundaries are watertight
 **T-junctions**, which `level doctor`'s T-junction-aware `check_watertight` (below) accepts —
-that rework is why the staircase could return to one brush (decisions.md 2026-07-21 12:06 UTC,
+that rework is why the staircase could return to one brush (`direction/generators.md`, 2026-07-21 12:06 UTC,
 reversing the 2026-07-18 20:09 box-per-step). The builder now MATCHES UED's `LinearStairBuilder`
 taxonomy, pinned as a builder-vs-UED equivalence test (`test_builder_matches_ued_linear_stair_taxonomy`
 over the `Brush5` fixture). The **spiral** is a `list[Brush]` of `steps+1` convex brushes — a central
@@ -2011,7 +2011,7 @@ over the `Brush5` fixture). The **spiral** is a `list[Brush]` of `steps+1` conve
 chord, two radial sides) built via `_face`, then rotated `k·degrees_per_step` about Z with `_rotate_z`
 (about the world origin / column axis). Consecutive treads climb one `rise` (top `k` at `(k+1)·rise`),
 so the tops ascend strictly monotonically — a single helix, replacing the old rectangular-slab shape
-whose 360°+ wrap read as a mirrored-V (decisions.md 2026-07-22). Rotation is orientation-preserving and
+whose 360°+ wrap read as a mirrored-V (`direction/generators.md`, 2026-07-22). Rotation is orientation-preserving and
 keeps each face planar (trapezoids stay at constant z; the verticals stay 2-point extrusions), so every
 wedge passes `validate_brush` and `_face`'s Newell flip still lands the winding outward after rotation.
 `--at` anchors the base of the column axis. Convex primitives (cube/cylinder/cone) are origin-centered;
@@ -2032,7 +2032,7 @@ decompose non-convex builder brushes into convex pieces (or guard+warn) on the n
 The convex CSG shapes (cube/cylinder/cone) were validated live
 (paste→rebuild→select) on parallel ephemeral editors — see `parallel-editors.md`; the single-brush
 staircase is verified offline (doctor-clean under the T-junction-aware `check_watertight` + the
-`actor preview` wireframe render), NOT live paste→rebuild→select (deferred — decisions.md
+`actor preview` wireframe render), NOT live paste→rebuild→select (deferred — `direction/generators.md`,
 2026-07-21 12:22 UTC).
 
 **Swept profile generators — `brush build extrude` / `brush build revolve`.** These two are the
@@ -2042,7 +2042,7 @@ implicitly closed, either winding accepted — the same `--axis x|y|z`, and the 
 differ only in the sweep (`--depth` uu vs `--angle` UU / `--segments`). Before them, any cross-section that
 was not a box, an n-gon or a stair (an arch voussoir, an L-ledge, a moulded cornice, a curved
 corridor) was unbuildable short of hand-authored T3D. Design decisions + rejected alternatives:
-`decisions.md` 2026-07-25 00:14 UTC (D1–D9), 01:05 UTC (D10), 01:40 UTC, 02:30 UTC (D11–D12).
+`direction/generators.md`, 2026-07-25 00:14 UTC (D1–D9), 01:05 UTC (D10), 01:40 UTC, 02:30 UTC (D11–D12).
 
 - **The 2D layer is `profile.py`** (no brush, no world coordinates, no T3D), applied by dispatch in
   ONE fixed order before any geometry exists: `parse_point` per token → arity ≥3 → `clean_profile`
@@ -2121,7 +2121,7 @@ families are **dropped from the LIVE capture suite** and blessed **OFFLINE** fro
 (`OFFLINE_ONLY` in `builder_parity_cases.py`): the `stair_*` single non-convex brush (a combined
 non-convex cavity makes the editor invent interior vertices at the notches) and the `spiral_*`
 column + rotated wedge treads (the wedge coords are NOT axis-aligned integers, so the DEINTERSECTION
-capture invents vertices on them the same way — decisions.md 2026-07-22). For both, `regenerate`
+capture invents vertices on them the same way — `direction/generators.md`, 2026-07-22). For both, `regenerate`
 refuses to bless on builder/editor disagreement, so the offline value golden is the builder's own
 world-vertex set — a legitimate (winding-blind) change-detector. `sheet` is excluded (zero-volume
 `NotSolid`, never carves CSG). See
@@ -2553,7 +2553,7 @@ asset-wiring cutover (2026-07-14) it no longer wires any `Paths=` (the host comp
 container's `[Core.System] Paths` + bind-mounts the crafted ini pre-launch). The Python side
 already treats `/opt/UED22` as canonical (`packages._BAKED_UED22`,
 `packages._EDITOR_INI`, `driver.py`/`store_export.py`/`texture.py`). See
-[the decision](decisions.md#2026-06-22--bake-ued22-directly-to-optued22-drop-the-boot-time-assembly).
+[the decision](direction/containers.md).
 The image must include `xclip` (clipboard read/write) and `imagemagick` (editor-screenshot
 capture + crop for `level preview`/rendering — `wine_ctl.py`'s `import`/`convert`; NOT brush
 `preview`, which is host-side Pillow).
@@ -2576,7 +2576,7 @@ dependency. **To populate it from a Deus Ex install, see the runbook
 [deusex-assets-setup.md](deusex-assets-setup.md)** (one command:
 `dev/scripts/install-deusex-assets.sh <source>`, which also stages a full working game copy under the
 gitignored `dev/games/<game>/` and populates this tree from it). The `System/*.u` (v68 code) are no longer merely
-"inert kept for completeness" — they are the inputs to package stubbing. See `decisions.md`
+"inert kept for completeness" — they are the inputs to package stubbing. See `direction/containers.md`
 (2026-06-21/22) for the stubbing + asset-layout rationale and the (rejected) alternatives.
 
 The raw **installer** the content is extracted FROM lives at `Tools/uedcli/uned/deusex-installer/`
@@ -2596,12 +2596,12 @@ either. The old static asset mounts (`DeusExAssets/ → /deusex:ro`, `Textures/`
 `sed` block are **gone**. Instead every editor-driving command composes its OWN asset mounts:
 
 - The **WHOLE composed config dir set** (per-user `[games.*]` base ⊕ per-project overlay — ONE
-  uniform set, no code-vs-content split; decisions.md 2026-07-14 19:21) becomes **read-only bind
+  uniform set, no code-vs-content split; `direction/containers.md`, 2026-07-14 19:21) becomes **read-only bind
   mounts at `/resources/<n>`** (`container_assets.resource_mounts` → `docker_mount_args`), computed
   ONCE per command and threaded.
 - A **crafted `unrealtournament.ini`** whose `[Core.System] Paths` is regenerated wholesale over
   `[/stubs, /opt/UED22, /resources/<n>…]` (one line per dir × present extension — bare `*` stalls
-  boot, decisions.md 2026-07-14 12:00) by `container_assets.paths_ini_lines` is **bind-mounted over
+  boot, `direction/containers.md`, 2026-07-14 12:00) by `container_assets.paths_ini_lines` is **bind-mounted over
   the baked ini PRE-LAUNCH, read-write** (`editor.engine_ini_mount`; wine + `UCC make`'s `cat >`
   rewrite it). `/stubs` (v69 stub cache) and `/opt/UED22` come FIRST, so a v69 stub SHADOWS any
   same-named v68 `.u` a composed code dir puts on Paths — the editor never loads a v68 package it has
@@ -2637,7 +2637,7 @@ disjoint domains:
   "Substrate"). Read-only as far as the repo is concerned; the editor runs straight from the
   baked `/opt/UED22` and any writes land on the per-container COW overlay.
 - **Assets — READ-ONLY, config-driven per-command mounts** at `/resources/<n>` (the WHOLE composed
-  config dir set — one uniform scheme, decisions.md 2026-07-14 19:21) plus the `/stubs` v69 cache.
+  config dir set — one uniform scheme, `direction/containers.md`, 2026-07-14 19:21) plus the `/stubs` v69 cache.
   The build container reads a v68 `.u` decompile source from its `/resources/<n>` path by explicit
   path; the editor reads content the same way and cannot write it. (Replaced the old static `/deusex`
   + `/content/*` compose mounts and the earlier `/install-system` code mount.)

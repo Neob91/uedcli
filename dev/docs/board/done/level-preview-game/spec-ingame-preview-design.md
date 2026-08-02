@@ -3,15 +3,15 @@
 **Status:** spec gate RUN 2026-07-16 (two cold reviewers; all findings folded below — the
 reconciliation notes are marked *(gate fold, 2026-07-16)*). Ephemeral per-feature scratch — once
 built, fold the durable parts into `architecture.md` + `unrealed/*.md` and the decisions into
-`decisions.md` (see below).
+`direction/trunk-and-editor.md` (see below).
 
-**Decisions captured (Andrzej, 2026-07-13):** see `decisions.md` entry
+**Decisions captured (Andrzej, 2026-07-13):** see `direction/trunk-and-editor.md`, entry
 `2026-07-13 … — level preview renders in-game via a uplayctl-style TCP link`. This spec links to it;
 the decision + rejected alternatives live there (durable), not here. **Plus (Andrzej, 2026-07-16
 15:49 UTC):** the game container's packages/ini are wired from the COMPOSED UEDCLI CONFIG PATHS
 (`~/.uedcli/config.toml` `[games.*].paths` + the project `uedcli/config.toml` `paths`,
 project-shadows-base) — NOT an uplayctl-style `/deusex` asset root + `/overlay` pair; see that
-decisions.md entry and §5 "Asset & map wiring".
+`direction/containers.md` entry and §5 "Asset & map wiring".
 
 > **Context shift (gate fold, 2026-07-16).** The sibling `--native` tier SHIPPED 2026-07-16: the
 > editor-screenshot backend and its `TARGET[:MODE][=NAME]` grammar are already DELETED, the shared
@@ -174,7 +174,7 @@ below into its own tree, using uplayctl's implementation only as the reference d
   bake makes it a 2–4 s no-op*). A game entrypoint assembles the game root (below), patches the ini,
   launches wine `<Game>.exe -log -nosound`, boots the fast boot-map, then **travels to the target
   map over the link**.
-- **Asset & map wiring is CONFIG-DRIVEN (Andrzej, 2026-07-16 15:49 UTC — decisions.md):** the
+- **Asset & map wiring is CONFIG-DRIVEN (Andrzej, 2026-07-16 15:49 UTC — `direction/containers.md`):** the
   container's package mounts come from `container_assets.resource_mounts` over
   `config.composed_search_dirs` (per-user `[games.*].paths` + project overlay,
   project-shadows-base) — the SAME uniform scheme every other uedcli container uses — and the game

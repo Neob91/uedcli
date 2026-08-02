@@ -1,5 +1,5 @@
 """Tests for `uedcli.tool_assets` — the PACKAGE-RELATIVE tool-install asset anchors
-(decisions.md 2026-07-17 20:58 §6; replaced the deleted `repo_paths.py` repo-root machinery)."""
+(dev/docs/direction/projects-and-config.md 2026-07-17 20:58 §6; replaced the deleted `repo_paths.py` repo-root machinery)."""
 from pathlib import Path
 
 from uedcli import tool_assets

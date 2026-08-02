@@ -320,7 +320,7 @@ def test_amover_postload_unconditionally_stamps_the_savedpos_savedrot_sentinels(
 def test_save_package_writes_a_temp_and_moves_it_and_never_reads_a_file_through_its_imports():
     """`MAP SAVE`'s write mechanism — the fact `driver.map_save`'s completeness check is reasoned
     about (`spikes/2026-07-25-map-save-mechanism/`, `unrealed/commands.md` "`MAP SAVE` writes
-    `Save.tmp`"; `decisions.md` 2026-07-25 11:31 UTC + its two corrections).
+    `Save.tmp`"; `dev/docs/rationale/driver.md` 2026-07-25 11:31 UTC + its two corrections).
 
     Two halves, both re-checked here because the SECOND one is what forced a published retraction:
 

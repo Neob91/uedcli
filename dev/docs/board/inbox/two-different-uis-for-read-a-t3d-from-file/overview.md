@@ -18,5 +18,5 @@ p3. `actor add`
      DOGFOODING FINDINGS (2026-07-12) — surfaced building, previewing, and expanding
      a castle end-to-end (brush build → actor add → doctor → level preview → texture →
      materialize → concentric-bailey expansion). Grouped by subsystem; deduplicated;
-     CRITICAL/HIGH severity called out inline. See decisions.md 2026-07-12 (preview).
+     CRITICAL/HIGH severity called out inline. See `rationale/MIGRATION.md` (2026-07-12, preview).
      ═══════════════════════════════════════════════════════════════════════════════ -->

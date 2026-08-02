@@ -6,7 +6,7 @@ summary = "`actor find --overlapping-bbox X0,Y0,Z0,X1,Y1,Z1` — region-grab (AA
 
 # `actor find --overlapping-bbox X0,Y0,Z0,X1,Y1,Z1` — region-grab (AABB INTERSECTS a box)
 
-The looser companion to the built `--within-bbox` (full containment, `decisions.md` 2026-07-24
+The looser companion to the built `--within-bbox` (full containment, `rationale/reported-coordinates.md`, 2026-07-24
 21:44 UTC): match actors whose world AABB **intersects** the box, so a room shell / floor / wall that
 straddles the box edge IS grabbed — better for "show me everything in this area" (feeding
 `actor preview -`) than strict containment, which drops straddling brushes. Same machinery as

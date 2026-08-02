@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# De-risk spike for the git-native model (decisions.md 2026-07-05; spec 2026-07-05-uedcli-git-native-model-design).
+# De-risk spike for the git-native model (direction/trunk-and-editor.md 2026-07-05; spec 2026-07-05-uedcli-git-native-model-design).
 # Validates `git merge` on the EXACT trunk layout:  uedcli/maps/<lvl>/actors/<name>/{actor.t3d, order_value}
 # across the scenarios the two cold reviewers flagged. Pure git — no editor, no uedcli code.
 # Creates a throwaway repo in a mktemp dir (nothing touches the real tree). Prints PASS/FAIL vs expectation.

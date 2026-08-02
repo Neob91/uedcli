@@ -16,5 +16,5 @@ is minted and its absolute path printed). `--layout breakdown` now gives each **
 captioned pane (framed via `_point_pane_region`, expanded to at least `Location ± 32 UU` so a
 zero-extent marker centres instead of jamming into a corner — regression-pinned). A **breaking CLI
 change** across the three verbs; each removed spelling errored via `_RemovedFlag` with a migration
-message (matching the `--class`/`--zoom-poly`/`--split` precedents). Decision `decisions.md` 2026-07-24
+message (matching the `--class`/`--zoom-poly`/`--split` precedents). Decision `rationale/MIGRATION.md`, 2026-07-24
 19:01 UTC; spec `spec.md` (status corrected).

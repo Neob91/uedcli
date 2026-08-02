@@ -88,7 +88,7 @@ same as for any brush.
    `Rotation + KeyRot[i]` (base = `Location`/`Rotation`, since stored `KeyNum=0`).
 6. **Reading existing maps (THEIRS):** a mapper may leave a mover at `KeyNum≠0`, so `Location`
    for that actor is `base + offset`, not the base. **uedcli canonicalizes such a mover back to
-   `KeyNum=0` on ingest** (`movers.canonicalize_mover`; rationale in `decisions.md` 2026-06-25 mover
+   `KeyNum=0` on ingest** (`movers.canonicalize_mover`; rationale in `direction/generators.md` 2026-06-25 mover
    entry) — folding the selected-key offset
    out of `Location`/`Rotation` and dropping `KeyNum` — rather than preserving `KeyNum≠0`
    verbatim. (An earlier draft of this note said "preserve verbatim"; that round-trips WRONG: on
@@ -127,4 +127,4 @@ offsets stored plainly, no `BaseRot` special-casing) was correct on both axes.
 
 **Consequence:** the interim `mover key add/move/rotate` stderr caution on a base-rotated mover was
 pure noise and has been removed (`dispatch.py`; regression test
-`test_it_does_not_warn_on_a_base_rotated_mover_key_op`). See `decisions.md` 2026-07-07 12:11 UTC.
+`test_it_does_not_warn_on_a_base_rotated_mover_key_op`). See `rationale/MIGRATION.md` 2026-07-07 12:11 UTC.

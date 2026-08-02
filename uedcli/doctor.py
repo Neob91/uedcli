@@ -5,12 +5,12 @@ thresholds are the engine's own, reverse-engineered in
 `dev/docs/spikes/2026-06-24-bsp-csg-hole-mechanism-from-binary.md` and
 `...-bsp-collision-solidity-movers-from-binary.md`.
 
-STATIC scope (decisions.md 2026-06-24 08:50): high-recall on the *single-brush-decidable* hole
+STATIC scope (rationale/MIGRATION.md, 2026-06-24 08:50): high-recall on the *single-brush-decidable* hole
 causes — degenerate faces the engine drops at `FPoly::Finalize`, open/non-manifold solids
 (`bspValidateBrush`'s "linked X of Y"), solidity misuse (the semisolid+portal strip), and gross
 CSG-order mistakes. It does NOT enumerate build-emergent holes (slivers,
 T-junction cracks, phantom collision nodes) — those need the build; that is the Phase-2 offline
-BSP engine (decisions.md 2026-06-24 09:07, spec §7). The report footer says so.
+BSP engine (rationale/MIGRATION.md, 2026-06-24 09:07, spec §7). The report footer says so.
 
 Thresholds here are doctor-owned and engine-faithful; `geometry.py` (the hot write-path validator)
 is deliberately NOT changed — it keeps its conservative tolerances. Only `geometry`'s stateless
@@ -332,7 +332,7 @@ def check_watertight(actor: Actor, index) -> list[Finding]:
     collinear chain P→M→Q, so all three read as "open". Instead group directed edges by their
     SUPPORTING LINE and check directed-interval parity along it, so a T-junction (P→Q forward,
     P→M + M→Q backward) is 1/1 on every sub-interval — while a genuine hole collinear with a
-    healthy seam is still flagged on its uncovered sub-segment. See decisions.md 2026-07-21.
+    healthy seam is still flagged on its uncovered sub-segment. See direction/generators.md (2026-07-21).
 
     LIMITATION (accepted): parity counts direction, not adjacency, so a real hole whose missing
     half-edge is coincidentally cancelled by an UNRELATED opposing edge on the same collinear
@@ -472,7 +472,7 @@ def run_doctor(level: Level, index) -> list[Finding]:
     """Every static check over `level`. `index` is a `classindex.ClassIndex` (the game's `.u` class
     hierarchy): the watertight check must know which brushes are Movers, and mover-ness is decided
     schema-aware by `movers.is_mover`, so `level doctor` REQUIRES a class resolver — an absent games
-    config is a clean exit 2 at the dispatch seam, never a degraded report (decisions.md 2026-07-25
+    config is a clean exit 2 at the dispatch seam, never a degraded report (direction/conventions.md 2026-07-25
     10:18 UTC)."""
     findings: list[Finding] = []
     for a in level.actors.values():

@@ -1,6 +1,6 @@
 """The class resolver every mover-aware uedcli entry point now takes — for the spike harnesses.
 
-Since 2026-07-25 (`decisions.md` 2026-07-25 10:18 UTC) `movers.is_mover` is SCHEMA-AWARE: it asks
+Since 2026-07-25 (`direction/conventions.md` 2026-07-25 10:18 UTC) `movers.is_mover` is SCHEMA-AWARE: it asks
 whether the actor's class descends from `Engine.Mover` by walking the class hierarchy in a
 `classindex.ClassIndex` built over the game's own `.u` packages, instead of guessing from the class
 name. So `native.materialize._in_world_csg`, `_build_level_model` and `run_materialize_native`

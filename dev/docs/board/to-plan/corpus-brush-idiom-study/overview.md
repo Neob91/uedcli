@@ -16,8 +16,8 @@ done-condition): board item `brush-identify-classify-a-real-brush-s-shape`.
 Extracts ONLY the brush-construction idiom vocabulary (shape alphabet + composition grammar +
 complexity/BSP budget) from the retail DX maps, UE1 (Unreal Gold SP primary; UT99 sparingly) as the
 differential control, output as **generator reverse-mapping**; grounds
-`leveldesign/general/brush-shapes.md`/`geometry-and-bsp.md`/`design-craft.md`. Decisions: `decisions.md`
-2026-07-24 19:49 UTC + review-refinements addendum. **A few review-driven changes await Andrzej's yes
+`leveldesign/general/brush-shapes.md`/`geometry-and-bsp.md`/`design-craft.md`. Decisions: `rationale/MIGRATION.md`
+(2026-07-24 19:49 UTC) + review-refinements addendum. **A few review-driven changes await Andrzej's yes
 before planning** (extrude-generator priority; find-spatial unpark timing; interim-route acceptance).
 Owns the shared `MAP EXPORT`->trunk harness that the `2026-07-19` item (Half B2, dimensions) consumes —
 don't fork. Stands up per-game install scripts + gitignored `dev/games/` for the UE1 control. Surfaces

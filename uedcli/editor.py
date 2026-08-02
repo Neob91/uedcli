@@ -1,7 +1,7 @@
 """The editor is a per-command EPHEMERAL resource: every editor-driving verb (`level
 materialize`/`preview`, the `stash` CSG generators) mints its own throwaway container from a fresh
 `uuid7` id, drives it, and tears it down — there is no session and no standing per-project editor
-(decisions.md 2026-07-06 05:12; architecture.md "The editor is a per-command ephemeral resource").
+(direction/containers.md 2026-07-06 05:12; architecture.md "The editor is a per-command ephemeral resource").
 This module owns the container naming + lifecycle (`ensure_editor`/`stop_editor`).
 The docker/editor calls are integration-only and mocked in unit tests."""
 from __future__ import annotations
@@ -54,7 +54,7 @@ class EditorNotReadyError(TimeoutError):
 
 def _compose_dir() -> str:
     """Absolute path to the dir holding docker-compose.yml (parallel-editors.md). PACKAGE-RELATIVE
-    (`tool_assets.uned_dir()` — decisions.md 2026-07-17 20:58 §6): a tool-install asset, found from
+    (`tool_assets.uned_dir()` — direction/projects-and-config.md 2026-07-17 20:58 §6): a tool-install asset, found from
     any cwd with no repo-root walk and no env var."""
     return str(tool_assets.uned_dir())
 
@@ -149,7 +149,7 @@ def replace_core_system_paths(base_bytes: bytes, path_lines: list[str]) -> bytes
     existing `Paths=` line sat (dropping the rest); if `[Core.System]` has no `Paths=` line, it is
     inserted at the section's end. `path_lines` come from `container_assets.paths_ini_lines(mounts)`
     (the FULL set incl. `/stubs`+`/opt/UED22`), so the baked substrate Paths are regenerated, not
-    preserved (decisions.md 2026-07-14 02:55)."""
+    preserved (direction/containers.md 2026-07-14 02:55)."""
     new_block = [ln.encode() + b"\r" for ln in path_lines]
 
     def _token(line: bytes) -> bytes:
@@ -274,7 +274,7 @@ def ensure_editor(editor_id: str, *, state_dir: Path, mounts=None, ready_timeout
     (`docker port`).
 
     `mounts`: the `container_assets.resource_mounts(<whole composed dir set>)` list (one uniform
-    scheme — decisions.md 2026-07-14 19:21) — bind-mount each composed config dir read-only at
+    scheme — direction/containers.md 2026-07-14 19:21) — bind-mount each composed config dir read-only at
     `/resources/<n>` AND craft the engine ini so `[Core.System] Paths` covers
     `/stubs`+`/opt/UED22`+those mounts (`/stubs` first, so a v69 stub shadows any v68 `.u`). The crafted ini is written
     BYTE-EXACT (CRLF preserved) and bind-mounted over `/opt/UED22/unrealtournament.ini` PRE-LAUNCH,

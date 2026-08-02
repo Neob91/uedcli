@@ -1638,7 +1638,7 @@ def test_it_omits_num_keys_at_the_default_of_two(capsys):
     assert "NumKeys" not in dict(cap.actors["Lift"].props)   # 2 is the editor default — omitted
 
 
-# ── the schema-aware mover gate (board 9.4; decisions.md 2026-07-25 10:18 UTC) ────────────────
+# ── the schema-aware mover gate (board 9.4; dev/docs/direction/conventions.md 2026-07-25 10:18 UTC) ────────────────
 
 def _named_mover_level(cls: str):
     """A one-actor level holding a mover-shaped brush actor (no CsgOper) re-labelled with `cls` —

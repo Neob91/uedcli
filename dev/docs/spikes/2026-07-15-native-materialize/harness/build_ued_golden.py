@@ -254,7 +254,7 @@ def main() -> int:
         work_out = xfer.work_path("dx")
         print("  MAP SAVE ...", flush=True)
         # `map_save` itself waits for a stable, structurally COMPLETE package and returns the size
-        # (driver.map_save; decisions.md 2026-07-25 11:31 UTC), so the harness's own duplicate wait
+        # (driver.map_save; rationale/driver.md 2026-07-25 11:31 UTC), so the harness's own duplicate wait
         # (`_wait_file_stable`, the weaker "size stopped growing" rule) is gone. NB this pipeline
         # produced the §91 golden — whose leaf array is now known to be DETERMINISTIC, not truncated.
         size = ed.map_save(work_out)

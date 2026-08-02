@@ -1,7 +1,7 @@
 # Spec: `actor preview` ergonomics (was `brush preview`)
 
 **Status:** ephemeral design scratch. Durable record → `docs/usage.md` (CLI reference) +
-`architecture.md`; load-bearing choices → `decisions.md` (2026-07-21 12:06/12:22, and the 13:42
+`architecture.md`; load-bearing choices → `rationale/MIGRATION.md` (2026-07-21 12:06/12:22, and the 13:42
 confirmations). Goes stale once built.
 
 **Board:** `board/to-plan/` (specced + two-cold-reviewer-gated + Andrzej-confirmed 2026-07-21). Overlaps
@@ -188,7 +188,7 @@ and unmotivated.)*
 
 ## Docs to update
 
-- **`decisions.md`** — the confirmed calls (unified `--from-t3d`, selector-only, zoom≠highlight, §5
+- **`rationale/MIGRATION.md`** — the confirmed calls (unified `--from-t3d`, selector-only, zoom≠highlight, §5
   dropped, `--zoom-factor`, `stash capture` migration).
 - `docs/usage.md`: `actor preview` names/`--from-t3d`/`--zoom-poly`/`--highlight-poly`/CSG
   color/`--zoom-factor`; and `stash capture`'s new `--from-t3d <FILE…|->`.

@@ -15,7 +15,7 @@ texture **classification is blind**: the write path works but nothing in the `te
 lets the classifier *see* the texture it is naming. Andrzej decided to build the viewing capability
 and made the load-bearing calls below.
 **Ephemeral:** per the uedcli `CLAUDE.md`, this spec is scratch. The load-bearing decisions +
-rejected alternatives are in the durable append-only [`dev/docs/decisions.md`](../../../decisions.md)
+rejected alternatives are in the durable append-only [`dev/docs/rationale/MIGRATION.md`](../../../rationale/MIGRATION.md)
 (entry **2026-07-18 22:25 UTC — surface texture image to the LLM…**); on build, fold the outcome
 into `docs/usage.md` + `architecture.md` and delete/stale-mark this file.
 **Review gate:** two cold reviewers ran on the first draft; their findings are folded in (see
@@ -75,7 +75,7 @@ From `texture_catalog.py`:
 collision-safe, handles 3-part refs and groupless textures automatically, and couples nothing by
 string-reconstruction (the `stem` that names the file is the same `stem` that keys the manifest).
 
-## Decisions (Andrzej, this session) — see `decisions.md`
+## Decisions (Andrzej, this session) — see `rationale/MIGRATION.md`
 
 1. **No composite montage; batched *distinct-file* reads are the blessed path.** The efficient loop is
    a query that returns many refs+paths at once (below); the harness reads them as separate image

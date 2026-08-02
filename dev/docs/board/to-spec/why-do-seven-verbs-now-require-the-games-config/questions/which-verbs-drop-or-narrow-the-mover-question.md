@@ -20,11 +20,11 @@ Recommended scoping set:
 - **Keep (correctness):** `mover key`, `level doctor`, `brush apply-transform`.
 
 Rejected throughout: a name-suffix fallback, an optional silently-degrading resolver, a second
-predicate, and reordering `is_mover` itself (decisions.md 2026-07-25 10:18). All changes are at the
+predicate, and reordering `is_mover` itself (`direction/conventions.md`, 2026-07-25 10:18). All changes are at the
 call site.
 
 Confirming this set also authorises the follow-on: reword `direction/conventions.md` lines 88-93 to
-the kept set, and a superseding `decisions.md` entry (exact text proposed after this answer). Adjust
+the kept set, and a superseding `direction/conventions.md` entry (exact text proposed after this answer). Adjust
 any row.
 
 ## Answer

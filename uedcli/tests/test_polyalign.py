@@ -1,6 +1,6 @@
 """`brush poly align` + `brush poly find` (build item 11).
 
-Design: decisions.md 2026-07-18 21:40 UTC; board item `poly-align-brush-poly-find-built`. The load-bearing property
+Design: dev/docs/direction/conventions.md 2026-07-18 21:40 UTC; board item `poly-align-brush-poly-find-built`. The load-bearing property
 under test is UV CONTINUITY across a shared seam: for a world point on the edge two faces share,
 `U=(P−Origin)·TextureU+PanU` computed from BOTH faces must agree.
 """
@@ -460,7 +460,7 @@ def test_engine_fact_uv_formula_is_base_relative_plus_pan():
 
 def test_engine_fact_cylinder_facet_chord_is_2r_sin_pi_over_n():
     """A `cylinder` side facet's flat width is the chord `2r·sin(π/N)` — the density unit the ring
-    U-advance uses (decisions.md 2026-07-18 21:40 UTC). Measured from the builder's own geometry,
+    U-advance uses (dev/docs/direction/conventions.md 2026-07-18 21:40 UTC). Measured from the builder's own geometry,
     so a change to `builders.cylinder`'s vertex placement trips this."""
     for r, n in [(128.0, 8), (100.0, 7), (256.0, 12)]:
         a = _brush("C", cylinder(200.0, r, n))

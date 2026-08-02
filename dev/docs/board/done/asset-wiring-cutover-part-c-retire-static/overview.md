@@ -12,5 +12,5 @@ deleted `entrypoint.sh`'s `$DEUSEX_ASSETS_DIR` `Paths` `sed` block, and dropped 
 `UED_DEUSEX_ASSETS_DIR=/nonexistent` stopgap. The no-GUI build container
 (`stub.ephemeral_build_container`) self-wires its assets like the GUI editor (crafted
 `[Core.System] Paths` ini bind-mounted pre-launch, shared `editor.engine_ini_mount`). Decision:
-decisions.md 2026-07-14 13:30. Its **deferred remnant is now RESOLVED** by the config-drive
+`direction/containers.md` (2026-07-14 13:30). Its **deferred remnant is now RESOLVED** by the config-drive
 finalization below.

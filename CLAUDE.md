@@ -173,8 +173,6 @@ as a bug; one that has not read this file will flag deliberate conventions as de
 - `dev/docs/unrealed/rendering.md` — read before taking a screenshot/render: render modes, `CAMERA OPEN`, the black-viewport traps.
 - `dev/docs/unrealed/extracting-from-dll.md` — read before mining the binaries for command/behavior facts.
 - `dev/docs/parallel-editors.md` — read before running many ephemeral editors concurrently.
-- `dev/docs/decisions.md` — frozen, historical reading only; never append. The retired ledger; its entries migrated into `dev/docs/direction/` (the owner's decisions) and `dev/docs/rationale/` (yours). `dev/docs/rationale/MIGRATION.md` maps an old dated citation to its new home.
-- `dev/docs/direction.md` — retired, a stub; never append. All 12 topics migrated to `dev/docs/direction/`.
 
 Process rules (`dev/docs/rules/README.md` indexes them). Each line carries the one fact you cannot
 afford to miss; the doc carries the rest:

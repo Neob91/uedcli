@@ -98,7 +98,7 @@ def test_pinned_light_and_greasel_oracles():
 def test_scripttext_has_no_defaultproperties_block():
     """Negative fact, live-verified 2026-07-18: the shipped v68 `.uc` ScriptText ENDS at the
     `#exec` directives — it carries NO defaultproperties block (checked across Engine + DeusEx
-    classes). This empirically vindicates the decisions.md 2026-07-18 10:02 §5 choice of the
+    classes). This empirically vindicates the dev/docs/direction/packages.md 2026-07-18 10:02 §5 choice of the
     BINARY route: the rejected ScriptText-parsing route was not merely second-best, it was
     impossible. (The remaining value oracles are the pinned editor-export fixtures above and
     the live partial-value probe — spikes/2026-07-18-partial-value-import-semantics/ — whose

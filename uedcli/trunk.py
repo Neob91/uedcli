@@ -1,7 +1,7 @@
 """Git-native T3D trunk: read/write a level as maps/<level>/actors/<name>/{actor.t3d, order_value}.
 
 Thin, level-facing veneer over `t3dtree` — the ONE shared per-actor tree implementation used by the
-trunk, the stash, and prefabs alike (decisions.md 2026-07-18 23:01 UTC — "stash, prefab, and trunk
+trunk, the stash, and prefabs alike (direction/trunk-and-editor.md 2026-07-18 23:01 UTC — "stash, prefab, and trunk
 MUST share ONE T3D tree format"). This module keeps the historical LEVEL names (`read_level`,
 `write_level`, `read_level_with_bodies`, …) so a level's ~20 caller/test sites don't churn; the
 actual code lives in `t3dtree` (which speaks tree-neutral `write_actor_tree`/`read_actor_tree`
@@ -11,7 +11,7 @@ The directory name is the single source of truth for an actor's identity: `actor
 its Name= header/trailer stripped and its brush model-ref neutralized to a constant, both re-derived
 from the dir name on read. Order is a per-actor LexoRank `order_value` sidecar; the CSG order is the
 (order_value, name) sort. See specs/2026-07-05-uedcli-git-native-model-design.md +
-board item `delete-the-ephemeral-spec-specs-2026-07-18` + decisions.md 2026-07-05 / 2026-07-18. Pure module — no editor,
+board item `delete-the-ephemeral-spec-specs-2026-07-18` + direction/trunk-and-editor.md (2026-07-05 / 2026-07-18). Pure module — no editor,
 no session store; the primary read/write path for a level's trunk.
 """
 from __future__ import annotations

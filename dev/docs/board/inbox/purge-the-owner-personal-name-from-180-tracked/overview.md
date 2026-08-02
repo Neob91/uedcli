@@ -22,7 +22,7 @@ before anything is edited:
    `uedcli/game/uscript/dxdriver/Classes/UedPreviewDeusExDriver.uc` (1). Mechanical; reword to "the
    owner". This is a code change, so it takes a **build** review row, not docs-only.
 2. **`dev/docs/architecture.md`** and other live developer docs — mechanical reword.
-3. **`dev/docs/decisions.md`** — the **frozen** retired ledger ("never append"). Rewriting names
+3. **The frozen retired ledger** ("never append"). Rewriting names
    inside a frozen historical record may not be wanted. **Ask.**
 4. **~170 board items** under `dev/docs/board/`, mostly `inbox/`. (Two items that carried the name
    in their slug were obsolete review-gate captures and were deleted 2026-07-28, so no rename is
