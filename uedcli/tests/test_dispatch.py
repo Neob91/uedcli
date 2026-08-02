@@ -1416,6 +1416,60 @@ def test_actor_find_prop_location_path(tmp_path, monkeypatch, capsys):
     assert rc == 0 and capsys.readouterr().out == "L1\n"
 
 
+def _csg_brush_t3d(actor_name, oper):
+    """A content brush actor carrying an explicit CsgOper (CSG_Add / CSG_Subtract)."""
+    return (f"Begin Actor Class=Engine.Brush Name={actor_name}\n"
+            f"    Name=\"{actor_name}\"\n    CsgOper={oper}\n"
+            f"    Begin Brush Name=Model{actor_name}\n"
+            f"    Begin PolyList\n    End PolyList\nEnd Brush\n"
+            f"    Brush=Model'Model{actor_name}'\nEnd Actor\n")
+
+
+def _csg_seams(monkeypatch):
+    """Schema seam for the CsgOper --prop pinning test: Engine.Brush's CsgOper enum, class default
+    CSG_Active — the real ECsgOper declaration."""
+    from uedcli.uprops import Prop
+    csgoper = Prop(name="CsgOper", kind="ByteProperty", array_dim=1, property_flags=0, type_ref=1,
+                   type_name=None, owner="Engine.Brush",
+                   enum_value_names=("CSG_Active", "CSG_Add", "CSG_Subtract", "CSG_Intersect",
+                                     "CSG_Deintersect"))
+    monkeypatch.setattr("uedcli.cli.resources.class_schema",
+                        lambda cls, project=None: {"csgoper": csgoper})
+    monkeypatch.setattr("uedcli.cli.resources.class_defaults",
+                        lambda cls, project=None: {("csgoper", 0): "CSG_Active"})
+    monkeypatch.setattr("uedcli.cli.resources.struct_members", lambda p, project=None: [])
+    monkeypatch.setattr("uedcli.cli.resources.enum_names",
+                        lambda p, project=None: p.enum_value_names)
+
+
+def test_actor_find_prop_csgoper_discovers_subtractive_and_additive(tmp_path, monkeypatch, capsys):
+    """Pins the documented CSG-type discovery workflow: `actor find --prop CsgOper=…` selects
+    subtractive vs additive brushes with no dedicated verb/flag (owner ruling 2026-08-02). If this
+    breaks, the workflow that replaces a `brush find`/`--csg` surface has silently rotted."""
+    actors = {
+        "Carve": _csg_brush_t3d("Carve", "CSG_Subtract"),
+        "Fill": _csg_brush_t3d("Fill", "CSG_Add"),
+        "Info": "Begin Actor Class=Engine.LevelInfo Name=Info\n    Name=\"Info\"\nEnd Actor\n",
+    }
+    _, branch = _find_setup(tmp_path, monkeypatch, actors, ["Carve", "Fill", "Info"])
+    _csg_seams(monkeypatch)
+
+    rc = dispatch_mod._dispatch(_find_args(branch, prop=["CsgOper=CSG_Subtract"]))
+    assert rc == 0 and capsys.readouterr().out.splitlines() == ["Carve"]
+
+    rc = dispatch_mod._dispatch(_find_args(branch, prop=["CsgOper=CSG_Add"]))
+    assert rc == 0 and capsys.readouterr().out.splitlines() == ["Fill"]
+
+    # ANDs with --kind brush (the canonical spelling — a point-only set with no brush would exit 2).
+    rc = dispatch_mod._dispatch(_find_args(branch, kind="brush", prop=["CsgOper=CSG_Subtract"]))
+    assert rc == 0 and capsys.readouterr().out.splitlines() == ["Carve"]
+
+    # A bogus enum value is a typo → exit 2 naming the offending value, not a silent empty result.
+    rc = dispatch_mod._dispatch(_find_args(branch, prop=["CsgOper=CSG_Bogus"]))
+    cap = capsys.readouterr()
+    assert rc == 2 and cap.out == "" and "CSG_Bogus" in cap.err
+
+
 def test_actor_find_prop_unbuildable_schema_errors(tmp_path, monkeypatch, capsys):
     from uedcli.uprops import SchemaError
     actors = {"L1": _light_t3d("L1")}

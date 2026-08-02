@@ -190,6 +190,20 @@ uedcli actor find --folder castle.tower.** | uedcli actor bbox -   # enclosing b
 uedcli actor find --within-bbox -512,0,-256,512,768,256 --kind brush | uedcli actor preview -   # render a region
 ```
 
+**Discover brushes by CSG type** (additive vs subtractive) uses the existing `--prop` — there is no
+`brush find`/`brush list` verb and no `--csg` filter:
+
+```bash
+uedcli actor find --kind brush --prop CsgOper=CSG_Subtract   # every carve
+uedcli actor find --kind brush --prop CsgOper=CSG_Add         # every additive
+```
+
+`CsgOper` is a declared enum, matched type-aware. Keep `--kind brush`: an unset `CsgOper` reads the
+class default `CSG_Active`, not `CSG_Add` — only the transient builder brush omits it, so every placed
+world brush carries an explicit `CSG_Add`/`CSG_Subtract`; and `--prop CsgOper=` over a set with no
+brush exits 2. To author CSG sets use `brush intersect`/`brush deintersect`; to change CSG precedence
+use `actor order`.
+
 **Boolean queries — `find <filters> -`:** with a trailing `-`, `find` reads a newline actor-name list
 from stdin and searches ONLY that set; the filters are the predicate. `--exclude` keeps the
 non-matches instead. This composes into full boolean logic:
