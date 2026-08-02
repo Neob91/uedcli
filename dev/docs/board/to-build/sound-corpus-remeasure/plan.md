@@ -42,14 +42,21 @@ dotted ref or the 2-part identity and resolve to the same shard.
 Each slice: the change, the tests (offline, synthetic `.uax`/`.umx`/`.u` fixtures written by the test —
 the class/texture-arm approach; real-corpus checks marked `-m integration`), and a by-hand verify.
 
+These `-m integration` corpus checks depend on a **filesystem install** (`dev/games/dxreal`), NOT the
+`dx-lum-uned` container the marker normally denotes (`rules/tests.md`) — gate them on the install's
+presence (skip when absent), so the marker's meaning here is "needs the mounted install", not the container.
+
 ### A1 — audio enumeration index (name-keyed identity + group)
 
 New `uedcli/audioindex.py`: enumerate over `config.composed_search_files` (config.py:450) the exports of
 class **`Sound`** (kind `sound`) and class **`Music`** (kind `music`), via `upackage.load_package`
 (upackage.py:177) + `Package.object_class_name` (upackage.py:159); ref = `Package.object_path`
 (upackage.py:117); group = the middle dotted segment(s). This is `measure.py:_sound_exports`
-(lines 65-80) promoted into the tool, generalised over the class name. Apply the collision rule above to
-compute each ref's identity. Add a mockable `resources.audio_index(project, kind)` seam mirroring
+(lines 65-80) promoted into the tool, generalised over the class name. **The `Music` half is an unmeasured
+extrapolation:** the spike enumerates only class `Sound` (`_sound_exports`) and sniffs `.umx` by file
+extension (`measure.py:194`) — it never enumerates `Music`-class exports. Generalising over the class name
+is assumed to work identically; it rests on the A5 by-hand verify, not a spike measurement (see Honest
+gaps). Apply the collision rule above to compute each ref's identity. Add a mockable `resources.audio_index(project, kind)` seam mirroring
 `resources.class_index` (resources.py:218), so CLI tests run offline.
 
 - **Tests:** a synthetic `.uax` with two `Sound` exports in different groups → both enumerated with
@@ -85,22 +92,42 @@ fixture- or integration-only (honest gap, spike "What could NOT be measured").
 ### A3 — the audio classification store (refuse + `--force`)
 
 New `uedcli/audio_catalog.py`, mirroring `class_catalog.py`'s shard / per-shard flock / temp+`os.replace`
-shape (`shard_path` :92, `ClassShard` :103, `save_shard` :126, `shard_lock` :138, `unset` :189,
-`classified_refs` :231, `tag_vocabulary` :245, `score` :257) — a **private copy**, not an import (the
-class module's own rule). Shards under `<catalog>/classified/<kind>/…` where `kind ∈ {sound, music}`;
-payload `{kind, ref, tags, description}` keyed by the identity (A1). `resources.catalog_dir`
+shape (`ClassShard` :103, `save_shard` :126, `shard_lock` :138, `unset` :189, `tag_vocabulary` :245) — a
+**private copy**, not an import (the class module's own rule). Shards under `<catalog>/classified/<kind>/…`
+where `kind ∈ {sound, music}`; payload `{kind, ref, tags, description}`. `resources.catalog_dir`
 (resources.py:231) is reused unchanged.
 
-The one deliberate divergence from the class engine: **`set` REFUSES an existing shard; `--force`
-replaces it** (spec §7; `direction/safety.md`). So instead of `class_catalog.merge_set`'s tag
-union-merge (class_catalog.py:153), write `set_shard(prior, ref, *, tags, description, force) -> Shard`
-that raises (exit 2 naming the ref, printing the stored payload) when `prior is not None and not force`,
-and otherwise writes exactly the supplied tags/description. No union, no per-field merge.
+**The ref/identity handling is NOT copied from the class engine — it cannot be.** `class_catalog.parse_ref`
+(:80-89) hard-rejects any non-2-part ref, and `shard_path` (:92) and `classified_refs` (:231, rebuilds the
+key from a fixed 2-segment path at :237) route through it. But audio identity is **variable-arity** — 2-part
+`Package.Name`, or the full `Package.Group.Name` on a bare-name collision (A1) — so a mirrored 2-part store
+would REJECT the 3-part identities A1 mints. This arm therefore writes its own:
 
-- **Tests:** round-trip `{kind,ref,tags,description}`; a second `set` over an existing shard **raises**
-  (→ exit 2) and leaves the shard unchanged; `--force` replaces it wholesale (tags NOT unioned);
-  `unset` field clears mirror `class_catalog.unset` (`--tags`, bare `--tags`, `--description`, `--all`
-  deletes the shard); `tag_vocabulary` counts; `classified_refs` globs the identity set; the write-once
+- **Own ref parser** accepting BOTH `Package.Name` and `Package.Group.Name` (≥2 non-empty dotted
+  components); a bare name or empty component exits 2 naming the ref.
+- **Shard layout that encodes the full key** — e.g. `<catalog>/classified/<kind>/<package>/<group…>/<name>.json`,
+  or a flattened `<package>.<group…>.<name>.json` leaf (builder's call), casefolded. `classified_refs` /
+  `load_all_shards` glob and rebuild the dotted identity from that layout, not from a fixed 2-segment path.
+- **Identity resolution before every store op:** a supplied 2-/3-part ref is REDUCED to the one stored
+  identity via `resources.audio_index(project, kind)` (A1) — a 2-part ref resolving to a 3-part identity
+  when that bare name collided, and back — so `show`/`classify` on either spelling hit one shard. This
+  reconciles `list` printing the full dotted `object_path` (A1) with a possibly-2-part stored key. An
+  unresolvable ref exits 2 naming it.
+
+The one deliberate divergence from the class engine's WRITE rule: **`set` REFUSES an existing shard;
+`--force` replaces it** (spec §7; `direction/safety.md`). Instead of `class_catalog.merge_set`'s tag
+union-merge (:153), write `set_shard(prior, ref, *, tags, description, force) -> Shard` that raises (exit 2
+naming the ref, printing the stored payload) when `prior is not None and not force`, and otherwise writes
+exactly the supplied tags/description. No union, no per-field merge — so `--force` is a **wholesale shard
+replace** that drops any stored description a forcing `set` omits.
+
+- **Tests:** round-trip `{kind,ref,tags,description}`, including a **3-part identity** through the own parser
+  + shard layout; a supplied 2-part ref resolves (mocked `audio_index`) to a stored 3-part identity and
+  back; a second `set` over an existing shard **raises** (→ exit 2), shard unchanged; `--force` replaces
+  wholesale — assert it **wipes a previously-stored description** when the forcing `set` gives none, and
+  does NOT union tags (the known `--force` cost, pinned here); `unset` field clears mirror
+  `class_catalog.unset` (`--tags`, bare `--tags`, `--description`, `--all` deletes the shard);
+  `tag_vocabulary` counts; `classified_refs` globs the identity set for both 2- and 3-part keys; write-once
   `ref` keeps its authored spelling.
 - **Verify:** covered via A4 by-hand.
 
@@ -114,7 +141,7 @@ lines 44/48) and route in `cli/dispatch.py` (mirroring `class` at :87). Verbs mi
 |-------------------|---
 | `list` | enumerate every sound ref, one dotted ref per line, count → stderr. `--package NAME` (**exact, repeatable**, unknown → exit 2 naming it), `--classified`/`--unclassified` (shard presence), `--json` (`{ref, identity, group, classified}`). NO default filter. |
 | `show <ref>… \| -` | facts (package, group, identity) + stored classification (tags, description), one block per ref; `--json`; `-` reads a newline ref list. |
-| `search <terms…>` | ranked discovery over ref + stored tags/description (reused `score`, class_catalog.py:257); terms REQUIRED, term-less → exit 2 pointing at `list`; `--tag`, `--json`. |
+| `search <terms…>` | ranked discovery over ref + stored tags/description (private `score` copy of class_catalog.py:257, but with **`rsplit(".",1)[-1]`** for the leaf — the class copy's `split(".",1)[-1]` at :274 yields `group.name` on a 3-part ref and mis-ranks exact-name matches; the shared command module means A5 `music search` inherits the fix); terms REQUIRED, term-less → exit 2 pointing at `list`; `--tag`, `--json`. |
 | `classify set <ref> --tags … --description … \| - [--force]` | record against identity; refuse-or-`--force` (A3); `-` reads JSONL `{ref, tags?, description?}`, all-or-nothing (mirror `_classify_set_batch`, classes.py:392). |
 | `classify unset <ref>… \| - [--tags[=…]\|--description\|--all]` | mirror `_classify_unset` (classes.py:439). |
 | `classify status [--json]` | classified / total on the path (intersection, classes.py:476). |
@@ -128,7 +155,8 @@ exits 2 naming it, never a traceback (every path regression-tested, `CLAUDE.md`)
   nothing → exit 2, not a fuzzy match) and repeatable (union of two); unknown `--package` exits 2;
   `--classified/--unclassified/--json` shapes; `set` then a second `set` exits 2, `--force` replaces;
   JSONL `-` writes N shards all-or-nothing (one bad row writes nothing); empty stdin → exit 0; `search`
-  term-less exits 2; a bad ref exits 2 naming it (no traceback).
+  term-less exits 2; a bad ref exits 2 naming it (no traceback); **`sound preview` is absent from the
+  parser** (exit 2 "invalid choice"), as `music`'s permanently is (spec §7 / test-coverage).
 - **Verify:** on `dev/games/dxreal`: `sound list | wc -l` = the full corpus (not a filtered subset);
   `sound list --package DeusExSounds --package Ambient` unions the two; classify a ref, re-classify →
   refused, `--force` → replaced; `sound show` on that ref shows the stored tags.
@@ -170,6 +198,10 @@ stored). Assert `music` has no `preview` sub-parser (as the class arm asserts it
   no test asserts their counts.
 - **S3M / XM / MOD `.umx`** are not reachable — only IT is live-verified. Their sniffer offsets (A2) are
   pinned by **hand-built fixtures**, flagged in the test as fixture-only, exactly as the spike states.
+- **`Music`-class enumeration** is not spike-grounded. `measure.py` enumerates only `Sound` and sniffs
+  `.umx` by extension (`measure.py:194`); no `Music` export was ever enumerated. A1's generalisation over
+  the class name is an assumption resting on the A5 by-hand verify (like the S3M/XM gap), not a measured
+  fact.
 
 ## Deferred — phase (b), behind a separate `.uax`-decode spike (listed, NOT planned)
 

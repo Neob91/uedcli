@@ -8,9 +8,11 @@ re-measured by the `sound-corpus-remeasure` spike (`dev/docs/spikes/sound-corpus
 
 > **Part of the split asset-catalog spec set** (split 2026-07-26 after two spec-gate rounds returned
 > ~103 findings and the churn proved to be concentrated in the texture and audio arms — see
-> `board/inbox/`). The shared engine, storage layout, verb surface, decisions and prerequisites live in
-> **board item `unified-asset-catalog`**, which every arm depends
-> on and which is built first. Sibling arms:
+> `board/inbox/`). The shared engine, storage layout, verb surface, decisions and prerequisites are
+> documented in **board item `unified-asset-catalog`**. But this audio arm grounds on the **shipped class
+> arm** (private copies of its shard store and CLI; `resources.class_index` for the enumeration seam), so
+> it is NOT build-order-blocked on the unbuilt `unified-asset-catalog` texture arm — that dependency is a
+> design reference, not a build gate. Sibling arms:
 > class (board item `the-asset-catalog-class-arm-needs-four-changes`) ·
 > texture (board item `unified-asset-catalog`) ·
 > [audio](spec.md).
