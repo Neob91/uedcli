@@ -26,4 +26,6 @@ Do NOT assert "measured on three shipped levels" — no before/after exists yet.
 
 ## Answer
 
-<!-- owner: yes (as-is / hedged) / none needed -->
+Owner ruled 2026-08-02: **none — decline the craft line.** Consistent with declining the analogous
+actor-preview leveldesign line, and it avoids publishing the UNVERIFIED world-facing claim. The class
+arm ships without it; `usage.md` already documents the verbs. Closed.
