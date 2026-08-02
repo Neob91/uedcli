@@ -11,7 +11,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from .. import classindex, config, packages, propedit, rotation, uprops, utexture
+from .. import audioindex, classindex, config, packages, propedit, rotation, uprops, utexture
 from ..uprops import SchemaError
 from .errors import CommandError, ProjectError
 
@@ -227,6 +227,19 @@ def class_index(project=None) -> "classindex.ClassIndex":
     if user_config is None:                 # absent games config → clean exit 2, never AttributeError
         raise CommandError(NO_GAMES_CONFIG)
     return classindex.ClassIndex.from_project(project, user_config)
+
+def audio_index(project, kind: str) -> "audioindex.AudioIndex":
+    """Build the offline `AudioIndex` for `project` and `kind` ('sound'|'music') over the composed
+    package path. The MOCKABLE seam (tests patch it to run offline without a game install), mirroring
+    `class_index`. An absent games config or an empty composed path exits 2 cleanly (never an
+    AttributeError / a silent empty result)."""
+    user_config = config.load_user_config()
+    if user_config is None:                 # absent games config → clean exit 2, never AttributeError
+        raise CommandError(NO_GAMES_CONFIG)
+    files = config.composed_search_files(project, user_config)
+    if not files:
+        raise CommandError(NO_PACKAGE_PATH)
+    return audioindex.AudioIndex.from_files(files, kind)
 
 def catalog_dir(project) -> str:
     """The tracked asset-catalog dir for `project` (`config.project_catalog_dir` —

@@ -88,6 +88,11 @@ def _dispatch(args) -> int:
         from .commands import classes as classes_cmd
         return classes_cmd.run(args)
 
+    # --- sound / music groups: offline audio discovery + classification (no editor, no level) ---
+    if args.cmd in ("sound", "music"):
+        from .commands import audio as audio_cmd
+        return audio_cmd.run(args)
+
     # --- docs group: uedcli's own user documentation (no editor, no project, no level) ---
     if args.cmd == "docs":
         from .commands import docs as docs_cmd

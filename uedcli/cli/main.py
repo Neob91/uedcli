@@ -19,8 +19,10 @@ from .parsers import (
     event,
     level,
     mover,
+    music,
     prefab,
     project,
+    sound,
     stash,
     substrate,
     texture,
@@ -42,6 +44,8 @@ def build_parser() -> argparse.ArgumentParser:
     event.register(sub)
     project.register(sub)
     classes.register(sub)
+    sound.register(sub)
+    music.register(sub)
     stash.register(sub)
     prefab.register(sub)
     docs.register(sub)

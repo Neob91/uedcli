@@ -59,6 +59,8 @@
         "event",
         "project",
         "class",
+        "sound",
+        "music",
         "stash",
         "prefab",
         "docs",
@@ -74,6 +76,8 @@
         "event": "analyse the level's Tag<->Event trigger wiring (who-triggers-whom). Offline, model-side, no editor. Sub-verbs: graph",
         "project": "inspect the resolved uedcli project",
         "class": "discover the substrate's actor classes and their property schemas (offline; reads the game's own .u packages — no editor, no level needed)",
+        "sound": "discover and classify the substrate's sound objects (offline; reads the game's own packages — no editor, no level needed)",
+        "music": "discover and classify the substrate's music objects (offline; reads the game's own packages — no editor, no level needed)",
         "stash": "capture/replay named actor sets (private register); edit a stored one in place with any content verb + --tree stash/<id>",
         "prefab": "the durable shared prefab library (tier 2); edit a stored one in place with any content verb + --tree prefab/<name>",
         "docs": "read uedcli's own user documentation (the CLI reference and the level-design guides) without leaving the terminal",
@@ -9703,6 +9707,1256 @@
             "tags": {
               "class": "_CoordArgumentParser",
               "prog": "uedcli class classify tags",
+              "mutex_groups": [],
+              "actions": [
+                {
+                  "class": "_HelpAction",
+                  "option_strings": [
+                    "-h",
+                    "--help"
+                  ],
+                  "dest": "help",
+                  "nargs": 0,
+                  "const": null,
+                  "default": {
+                    "__suppress__": true
+                  },
+                  "required": false,
+                  "choices": null,
+                  "metavar": null,
+                  "converter": null,
+                  "help": "show this help message and exit",
+                  "mutex_group": null
+                },
+                {
+                  "class": "_StoreTrueAction",
+                  "option_strings": [
+                    "--json"
+                  ],
+                  "dest": "json",
+                  "nargs": 0,
+                  "const": true,
+                  "default": false,
+                  "required": false,
+                  "choices": null,
+                  "metavar": null,
+                  "converter": null,
+                  "help": "emit one JSON object instead of lines",
+                  "mutex_group": null
+                }
+              ],
+              "subparsers": {}
+            }
+          }
+        }
+      }
+    },
+    "sound": {
+      "class": "_CoordArgumentParser",
+      "prog": "uedcli sound",
+      "mutex_groups": [],
+      "actions": [
+        {
+          "class": "_HelpAction",
+          "option_strings": [
+            "-h",
+            "--help"
+          ],
+          "dest": "help",
+          "nargs": 0,
+          "const": null,
+          "default": {
+            "__suppress__": true
+          },
+          "required": false,
+          "choices": null,
+          "metavar": null,
+          "converter": null,
+          "help": "show this help message and exit",
+          "mutex_group": null
+        },
+        {
+          "class": "_SubParsersAction",
+          "option_strings": [],
+          "dest": "sub",
+          "nargs": "A...",
+          "const": null,
+          "default": null,
+          "required": true,
+          "choices": null,
+          "metavar": null,
+          "converter": null,
+          "help": null,
+          "mutex_group": null,
+          "subparser_choices": [
+            "list",
+            "show",
+            "search",
+            "classify"
+          ],
+          "subparser_help": {
+            "list": "enumerate every sound object, one full dotted ref (Package[.Group].Name) per line; count to stderr. No default filter — narrow with --package or a pipe.",
+            "show": "print each sound's facts (package, group, identity) and stored classification. Takes one or more refs, or - to read a newline ref list from stdin.",
+            "search": "RANKED discovery over the sound corpus: given one or more terms, print the objects whose name / stored tags / description match, best first. Ranking (per term, best tier): exact leaf name > exact tag > substring of the ref > substring of a tag > substring of the description; an object must match EVERY term (AND). Terms are REQUIRED — to enumerate without ranking use `sound list`.",
+            "classify": "record / inspect what a sound object IS — the LLM's classification, stored one git-tracked shard per object (tags + description). The tool stores it, never infers it."
+          }
+        }
+      ],
+      "subparsers": {
+        "list": {
+          "class": "_CoordArgumentParser",
+          "prog": "uedcli sound list",
+          "mutex_groups": [
+            {
+              "required": false,
+              "members": [
+                "only_classified",
+                "only_unclassified"
+              ]
+            }
+          ],
+          "actions": [
+            {
+              "class": "_HelpAction",
+              "option_strings": [
+                "-h",
+                "--help"
+              ],
+              "dest": "help",
+              "nargs": 0,
+              "const": null,
+              "default": {
+                "__suppress__": true
+              },
+              "required": false,
+              "choices": null,
+              "metavar": null,
+              "converter": null,
+              "help": "show this help message and exit",
+              "mutex_group": null
+            },
+            {
+              "class": "_AppendAction",
+              "option_strings": [
+                "--package"
+              ],
+              "dest": "package",
+              "nargs": null,
+              "const": null,
+              "default": null,
+              "required": false,
+              "choices": null,
+              "metavar": "NAME",
+              "converter": null,
+              "help": "restrict to this EXACT package (bare stem, e.g. DeusExSounds); repeat for the union. Not a glob. An unknown package exits 2 naming it.",
+              "mutex_group": null
+            },
+            {
+              "class": "_StoreTrueAction",
+              "option_strings": [
+                "--classified"
+              ],
+              "dest": "only_classified",
+              "nargs": 0,
+              "const": true,
+              "default": false,
+              "required": false,
+              "choices": null,
+              "metavar": null,
+              "converter": null,
+              "help": "keep ONLY objects that have a stored classification shard",
+              "mutex_group": [
+                0,
+                0
+              ]
+            },
+            {
+              "class": "_StoreTrueAction",
+              "option_strings": [
+                "--unclassified"
+              ],
+              "dest": "only_unclassified",
+              "nargs": 0,
+              "const": true,
+              "default": false,
+              "required": false,
+              "choices": null,
+              "metavar": null,
+              "converter": null,
+              "help": "keep ONLY objects with NO classification shard yet — the worklist",
+              "mutex_group": [
+                0,
+                1
+              ]
+            },
+            {
+              "class": "_StoreTrueAction",
+              "option_strings": [
+                "--json"
+              ],
+              "dest": "json",
+              "nargs": 0,
+              "const": true,
+              "default": false,
+              "required": false,
+              "choices": null,
+              "metavar": null,
+              "converter": null,
+              "help": "emit one JSON object per line (JSONL): {ref, identity, group, classified}",
+              "mutex_group": null
+            }
+          ],
+          "subparsers": {}
+        },
+        "show": {
+          "class": "_CoordArgumentParser",
+          "prog": "uedcli sound show",
+          "mutex_groups": [],
+          "actions": [
+            {
+              "class": "_HelpAction",
+              "option_strings": [
+                "-h",
+                "--help"
+              ],
+              "dest": "help",
+              "nargs": 0,
+              "const": null,
+              "default": {
+                "__suppress__": true
+              },
+              "required": false,
+              "choices": null,
+              "metavar": null,
+              "converter": null,
+              "help": "show this help message and exit",
+              "mutex_group": null
+            },
+            {
+              "class": "_StoreAction",
+              "option_strings": [],
+              "dest": "refs",
+              "nargs": "*",
+              "const": null,
+              "default": null,
+              "required": false,
+              "choices": null,
+              "metavar": "REF",
+              "converter": null,
+              "help": "sound ref(s) — the full dotted Package.Group.Name or the 2-part Package.Name identity (either resolves to the same object); or - to read a newline ref list from stdin",
+              "mutex_group": null
+            },
+            {
+              "class": "_StoreTrueAction",
+              "option_strings": [
+                "--json"
+              ],
+              "dest": "json",
+              "nargs": 0,
+              "const": true,
+              "default": false,
+              "required": false,
+              "choices": null,
+              "metavar": null,
+              "converter": null,
+              "help": "emit one JSON object per ref instead of the human block",
+              "mutex_group": null
+            }
+          ],
+          "subparsers": {}
+        },
+        "search": {
+          "class": "_CoordArgumentParser",
+          "prog": "uedcli sound search",
+          "mutex_groups": [],
+          "actions": [
+            {
+              "class": "_HelpAction",
+              "option_strings": [
+                "-h",
+                "--help"
+              ],
+              "dest": "help",
+              "nargs": 0,
+              "const": null,
+              "default": {
+                "__suppress__": true
+              },
+              "required": false,
+              "choices": null,
+              "metavar": null,
+              "converter": null,
+              "help": "show this help message and exit",
+              "mutex_group": null
+            },
+            {
+              "class": "_StoreAction",
+              "option_strings": [],
+              "dest": "terms",
+              "nargs": "*",
+              "const": null,
+              "default": null,
+              "required": false,
+              "choices": null,
+              "metavar": "TERM",
+              "converter": null,
+              "help": "one or more search terms (case-insensitive); an object must match EVERY term. At least one is required (term-less exits 2).",
+              "mutex_group": null
+            },
+            {
+              "class": "_AppendAction",
+              "option_strings": [
+                "--tag"
+              ],
+              "dest": "tag",
+              "nargs": null,
+              "const": null,
+              "default": [],
+              "required": false,
+              "choices": null,
+              "metavar": "TAG",
+              "converter": null,
+              "help": "keep only objects carrying this exact stored tag (repeat to require several — AND). Applied before ranking.",
+              "mutex_group": null
+            },
+            {
+              "class": "_StoreTrueAction",
+              "option_strings": [
+                "--json"
+              ],
+              "dest": "json",
+              "nargs": 0,
+              "const": true,
+              "default": false,
+              "required": false,
+              "choices": null,
+              "metavar": null,
+              "converter": null,
+              "help": "emit one JSON object per match (JSONL), best first: {ref, score, classified, tags, description}",
+              "mutex_group": null
+            }
+          ],
+          "subparsers": {}
+        },
+        "classify": {
+          "class": "_CoordArgumentParser",
+          "prog": "uedcli sound classify",
+          "mutex_groups": [],
+          "actions": [
+            {
+              "class": "_HelpAction",
+              "option_strings": [
+                "-h",
+                "--help"
+              ],
+              "dest": "help",
+              "nargs": 0,
+              "const": null,
+              "default": {
+                "__suppress__": true
+              },
+              "required": false,
+              "choices": null,
+              "metavar": null,
+              "converter": null,
+              "help": "show this help message and exit",
+              "mutex_group": null
+            },
+            {
+              "class": "_SubParsersAction",
+              "option_strings": [],
+              "dest": "csub",
+              "nargs": "A...",
+              "const": null,
+              "default": null,
+              "required": true,
+              "choices": null,
+              "metavar": null,
+              "converter": null,
+              "help": null,
+              "mutex_group": null,
+              "subparser_choices": [
+                "set",
+                "unset",
+                "status",
+                "tags"
+              ],
+              "subparser_help": {
+                "set": "record a sound's classification against its identity. A `set` over an ALREADY-classified object REFUSES (exit 2 naming the ref); --force replaces it WHOLESALE (dropping any field the forcing set omits — no merge). The single token - reads JSONL rows {ref, tags, description} from stdin (validate-all-then-write; empty stdin is a clean no-op, exit 0; --force governs every row).",
+                "unset": "undo classification on one or more sound objects. Exactly one of --tags[=A,B] / --description / --all. The single token - reads a newline ref list from stdin (empty stdin is a clean no-op, exit 0).",
+                "status": "classification progress: how many sound objects on the path have a shard, of the total. --json for a machine object.",
+                "tags": "the tag vocabulary in use across all shards, with occurrence counts (curbs drift). --json for a machine object."
+              }
+            }
+          ],
+          "subparsers": {
+            "set": {
+              "class": "_CoordArgumentParser",
+              "prog": "uedcli sound classify set",
+              "mutex_groups": [],
+              "actions": [
+                {
+                  "class": "_HelpAction",
+                  "option_strings": [
+                    "-h",
+                    "--help"
+                  ],
+                  "dest": "help",
+                  "nargs": 0,
+                  "const": null,
+                  "default": {
+                    "__suppress__": true
+                  },
+                  "required": false,
+                  "choices": null,
+                  "metavar": null,
+                  "converter": null,
+                  "help": "show this help message and exit",
+                  "mutex_group": null
+                },
+                {
+                  "class": "_StoreAction",
+                  "option_strings": [],
+                  "dest": "ref",
+                  "nargs": "?",
+                  "const": null,
+                  "default": null,
+                  "required": false,
+                  "choices": null,
+                  "metavar": "REF",
+                  "converter": null,
+                  "help": "the sound to classify (the dotted ref or the 2-part identity), or - to read JSONL rows from stdin",
+                  "mutex_group": null
+                },
+                {
+                  "class": "_StoreAction",
+                  "option_strings": [
+                    "--tags"
+                  ],
+                  "dest": "tags",
+                  "nargs": null,
+                  "const": null,
+                  "default": null,
+                  "required": false,
+                  "choices": null,
+                  "metavar": "A,B",
+                  "converter": "_csv",
+                  "help": "comma list of tags (strip/lowercase/de-dupe). Replaces the stored tags on a --force re-set — not merged.",
+                  "mutex_group": null
+                },
+                {
+                  "class": "_StoreAction",
+                  "option_strings": [
+                    "--description"
+                  ],
+                  "dest": "description",
+                  "nargs": null,
+                  "const": null,
+                  "default": null,
+                  "required": false,
+                  "choices": null,
+                  "metavar": null,
+                  "converter": null,
+                  "help": "prose description",
+                  "mutex_group": null
+                },
+                {
+                  "class": "_StoreTrueAction",
+                  "option_strings": [
+                    "--force"
+                  ],
+                  "dest": "force",
+                  "nargs": 0,
+                  "const": true,
+                  "default": false,
+                  "required": false,
+                  "choices": null,
+                  "metavar": null,
+                  "converter": null,
+                  "help": "replace an existing shard WHOLESALE instead of exiting 2 (also governs each JSONL row under -)",
+                  "mutex_group": null
+                }
+              ],
+              "subparsers": {}
+            },
+            "unset": {
+              "class": "_CoordArgumentParser",
+              "prog": "uedcli sound classify unset",
+              "mutex_groups": [
+                {
+                  "required": true,
+                  "members": [
+                    "tags",
+                    "description",
+                    "clear_all"
+                  ]
+                }
+              ],
+              "actions": [
+                {
+                  "class": "_HelpAction",
+                  "option_strings": [
+                    "-h",
+                    "--help"
+                  ],
+                  "dest": "help",
+                  "nargs": 0,
+                  "const": null,
+                  "default": {
+                    "__suppress__": true
+                  },
+                  "required": false,
+                  "choices": null,
+                  "metavar": null,
+                  "converter": null,
+                  "help": "show this help message and exit",
+                  "mutex_group": null
+                },
+                {
+                  "class": "_StoreAction",
+                  "option_strings": [],
+                  "dest": "refs",
+                  "nargs": "*",
+                  "const": null,
+                  "default": null,
+                  "required": false,
+                  "choices": null,
+                  "metavar": "REF",
+                  "converter": null,
+                  "help": "sound(s) to unset, or - to read a newline ref list from stdin",
+                  "mutex_group": null
+                },
+                {
+                  "class": "_StoreAction",
+                  "option_strings": [
+                    "--tags"
+                  ],
+                  "dest": "tags",
+                  "nargs": "?",
+                  "const": [],
+                  "default": null,
+                  "required": false,
+                  "choices": null,
+                  "metavar": "A,B",
+                  "converter": "_csv",
+                  "help": "remove the named tags (comma list); BARE --tags clears the whole tags field",
+                  "mutex_group": [
+                    0,
+                    0
+                  ]
+                },
+                {
+                  "class": "_StoreTrueAction",
+                  "option_strings": [
+                    "--description"
+                  ],
+                  "dest": "description",
+                  "nargs": 0,
+                  "const": true,
+                  "default": false,
+                  "required": false,
+                  "choices": null,
+                  "metavar": null,
+                  "converter": null,
+                  "help": "clear the description field",
+                  "mutex_group": [
+                    0,
+                    1
+                  ]
+                },
+                {
+                  "class": "_StoreTrueAction",
+                  "option_strings": [
+                    "--all"
+                  ],
+                  "dest": "clear_all",
+                  "nargs": 0,
+                  "const": true,
+                  "default": false,
+                  "required": false,
+                  "choices": null,
+                  "metavar": null,
+                  "converter": null,
+                  "help": "delete the whole shard (the only full clear)",
+                  "mutex_group": [
+                    0,
+                    2
+                  ]
+                }
+              ],
+              "subparsers": {}
+            },
+            "status": {
+              "class": "_CoordArgumentParser",
+              "prog": "uedcli sound classify status",
+              "mutex_groups": [],
+              "actions": [
+                {
+                  "class": "_HelpAction",
+                  "option_strings": [
+                    "-h",
+                    "--help"
+                  ],
+                  "dest": "help",
+                  "nargs": 0,
+                  "const": null,
+                  "default": {
+                    "__suppress__": true
+                  },
+                  "required": false,
+                  "choices": null,
+                  "metavar": null,
+                  "converter": null,
+                  "help": "show this help message and exit",
+                  "mutex_group": null
+                },
+                {
+                  "class": "_StoreTrueAction",
+                  "option_strings": [
+                    "--json"
+                  ],
+                  "dest": "json",
+                  "nargs": 0,
+                  "const": true,
+                  "default": false,
+                  "required": false,
+                  "choices": null,
+                  "metavar": null,
+                  "converter": null,
+                  "help": "emit one JSON object instead of a line",
+                  "mutex_group": null
+                }
+              ],
+              "subparsers": {}
+            },
+            "tags": {
+              "class": "_CoordArgumentParser",
+              "prog": "uedcli sound classify tags",
+              "mutex_groups": [],
+              "actions": [
+                {
+                  "class": "_HelpAction",
+                  "option_strings": [
+                    "-h",
+                    "--help"
+                  ],
+                  "dest": "help",
+                  "nargs": 0,
+                  "const": null,
+                  "default": {
+                    "__suppress__": true
+                  },
+                  "required": false,
+                  "choices": null,
+                  "metavar": null,
+                  "converter": null,
+                  "help": "show this help message and exit",
+                  "mutex_group": null
+                },
+                {
+                  "class": "_StoreTrueAction",
+                  "option_strings": [
+                    "--json"
+                  ],
+                  "dest": "json",
+                  "nargs": 0,
+                  "const": true,
+                  "default": false,
+                  "required": false,
+                  "choices": null,
+                  "metavar": null,
+                  "converter": null,
+                  "help": "emit one JSON object instead of lines",
+                  "mutex_group": null
+                }
+              ],
+              "subparsers": {}
+            }
+          }
+        }
+      }
+    },
+    "music": {
+      "class": "_CoordArgumentParser",
+      "prog": "uedcli music",
+      "mutex_groups": [],
+      "actions": [
+        {
+          "class": "_HelpAction",
+          "option_strings": [
+            "-h",
+            "--help"
+          ],
+          "dest": "help",
+          "nargs": 0,
+          "const": null,
+          "default": {
+            "__suppress__": true
+          },
+          "required": false,
+          "choices": null,
+          "metavar": null,
+          "converter": null,
+          "help": "show this help message and exit",
+          "mutex_group": null
+        },
+        {
+          "class": "_SubParsersAction",
+          "option_strings": [],
+          "dest": "sub",
+          "nargs": "A...",
+          "const": null,
+          "default": null,
+          "required": true,
+          "choices": null,
+          "metavar": null,
+          "converter": null,
+          "help": null,
+          "mutex_group": null,
+          "subparser_choices": [
+            "list",
+            "show",
+            "search",
+            "classify"
+          ],
+          "subparser_help": {
+            "list": "enumerate every music object, one full dotted ref (Package[.Group].Name) per line; count to stderr. No default filter — narrow with --package or a pipe.",
+            "show": "print each music's facts (package, group, identity, embedded module title + format) and stored classification. Takes one or more refs, or - to read a newline ref list from stdin.",
+            "search": "RANKED discovery over the music corpus: given one or more terms, print the objects whose name / stored tags / description match, best first. Ranking (per term, best tier): exact leaf name > exact tag > substring of the ref > substring of a tag > substring of the description; an object must match EVERY term (AND). Terms are REQUIRED — to enumerate without ranking use `music list`.",
+            "classify": "record / inspect what a music object IS — the LLM's classification, stored one git-tracked shard per object (tags + description). The tool stores it, never infers it."
+          }
+        }
+      ],
+      "subparsers": {
+        "list": {
+          "class": "_CoordArgumentParser",
+          "prog": "uedcli music list",
+          "mutex_groups": [
+            {
+              "required": false,
+              "members": [
+                "only_classified",
+                "only_unclassified"
+              ]
+            }
+          ],
+          "actions": [
+            {
+              "class": "_HelpAction",
+              "option_strings": [
+                "-h",
+                "--help"
+              ],
+              "dest": "help",
+              "nargs": 0,
+              "const": null,
+              "default": {
+                "__suppress__": true
+              },
+              "required": false,
+              "choices": null,
+              "metavar": null,
+              "converter": null,
+              "help": "show this help message and exit",
+              "mutex_group": null
+            },
+            {
+              "class": "_AppendAction",
+              "option_strings": [
+                "--package"
+              ],
+              "dest": "package",
+              "nargs": null,
+              "const": null,
+              "default": null,
+              "required": false,
+              "choices": null,
+              "metavar": "NAME",
+              "converter": null,
+              "help": "restrict to this EXACT package (bare stem, e.g. DeusExSounds); repeat for the union. Not a glob. An unknown package exits 2 naming it.",
+              "mutex_group": null
+            },
+            {
+              "class": "_StoreTrueAction",
+              "option_strings": [
+                "--classified"
+              ],
+              "dest": "only_classified",
+              "nargs": 0,
+              "const": true,
+              "default": false,
+              "required": false,
+              "choices": null,
+              "metavar": null,
+              "converter": null,
+              "help": "keep ONLY objects that have a stored classification shard",
+              "mutex_group": [
+                0,
+                0
+              ]
+            },
+            {
+              "class": "_StoreTrueAction",
+              "option_strings": [
+                "--unclassified"
+              ],
+              "dest": "only_unclassified",
+              "nargs": 0,
+              "const": true,
+              "default": false,
+              "required": false,
+              "choices": null,
+              "metavar": null,
+              "converter": null,
+              "help": "keep ONLY objects with NO classification shard yet — the worklist",
+              "mutex_group": [
+                0,
+                1
+              ]
+            },
+            {
+              "class": "_StoreTrueAction",
+              "option_strings": [
+                "--json"
+              ],
+              "dest": "json",
+              "nargs": 0,
+              "const": true,
+              "default": false,
+              "required": false,
+              "choices": null,
+              "metavar": null,
+              "converter": null,
+              "help": "emit one JSON object per line (JSONL): {ref, identity, group, classified, title, format}",
+              "mutex_group": null
+            }
+          ],
+          "subparsers": {}
+        },
+        "show": {
+          "class": "_CoordArgumentParser",
+          "prog": "uedcli music show",
+          "mutex_groups": [],
+          "actions": [
+            {
+              "class": "_HelpAction",
+              "option_strings": [
+                "-h",
+                "--help"
+              ],
+              "dest": "help",
+              "nargs": 0,
+              "const": null,
+              "default": {
+                "__suppress__": true
+              },
+              "required": false,
+              "choices": null,
+              "metavar": null,
+              "converter": null,
+              "help": "show this help message and exit",
+              "mutex_group": null
+            },
+            {
+              "class": "_StoreAction",
+              "option_strings": [],
+              "dest": "refs",
+              "nargs": "*",
+              "const": null,
+              "default": null,
+              "required": false,
+              "choices": null,
+              "metavar": "REF",
+              "converter": null,
+              "help": "music ref(s) — the full dotted Package.Group.Name or the 2-part Package.Name identity (either resolves to the same object); or - to read a newline ref list from stdin",
+              "mutex_group": null
+            },
+            {
+              "class": "_StoreTrueAction",
+              "option_strings": [
+                "--json"
+              ],
+              "dest": "json",
+              "nargs": 0,
+              "const": true,
+              "default": false,
+              "required": false,
+              "choices": null,
+              "metavar": null,
+              "converter": null,
+              "help": "emit one JSON object per ref instead of the human block",
+              "mutex_group": null
+            }
+          ],
+          "subparsers": {}
+        },
+        "search": {
+          "class": "_CoordArgumentParser",
+          "prog": "uedcli music search",
+          "mutex_groups": [],
+          "actions": [
+            {
+              "class": "_HelpAction",
+              "option_strings": [
+                "-h",
+                "--help"
+              ],
+              "dest": "help",
+              "nargs": 0,
+              "const": null,
+              "default": {
+                "__suppress__": true
+              },
+              "required": false,
+              "choices": null,
+              "metavar": null,
+              "converter": null,
+              "help": "show this help message and exit",
+              "mutex_group": null
+            },
+            {
+              "class": "_StoreAction",
+              "option_strings": [],
+              "dest": "terms",
+              "nargs": "*",
+              "const": null,
+              "default": null,
+              "required": false,
+              "choices": null,
+              "metavar": "TERM",
+              "converter": null,
+              "help": "one or more search terms (case-insensitive); an object must match EVERY term. At least one is required (term-less exits 2).",
+              "mutex_group": null
+            },
+            {
+              "class": "_AppendAction",
+              "option_strings": [
+                "--tag"
+              ],
+              "dest": "tag",
+              "nargs": null,
+              "const": null,
+              "default": [],
+              "required": false,
+              "choices": null,
+              "metavar": "TAG",
+              "converter": null,
+              "help": "keep only objects carrying this exact stored tag (repeat to require several — AND). Applied before ranking.",
+              "mutex_group": null
+            },
+            {
+              "class": "_StoreTrueAction",
+              "option_strings": [
+                "--json"
+              ],
+              "dest": "json",
+              "nargs": 0,
+              "const": true,
+              "default": false,
+              "required": false,
+              "choices": null,
+              "metavar": null,
+              "converter": null,
+              "help": "emit one JSON object per match (JSONL), best first: {ref, score, classified, tags, description}",
+              "mutex_group": null
+            }
+          ],
+          "subparsers": {}
+        },
+        "classify": {
+          "class": "_CoordArgumentParser",
+          "prog": "uedcli music classify",
+          "mutex_groups": [],
+          "actions": [
+            {
+              "class": "_HelpAction",
+              "option_strings": [
+                "-h",
+                "--help"
+              ],
+              "dest": "help",
+              "nargs": 0,
+              "const": null,
+              "default": {
+                "__suppress__": true
+              },
+              "required": false,
+              "choices": null,
+              "metavar": null,
+              "converter": null,
+              "help": "show this help message and exit",
+              "mutex_group": null
+            },
+            {
+              "class": "_SubParsersAction",
+              "option_strings": [],
+              "dest": "csub",
+              "nargs": "A...",
+              "const": null,
+              "default": null,
+              "required": true,
+              "choices": null,
+              "metavar": null,
+              "converter": null,
+              "help": null,
+              "mutex_group": null,
+              "subparser_choices": [
+                "set",
+                "unset",
+                "status",
+                "tags"
+              ],
+              "subparser_help": {
+                "set": "record a music's classification against its identity. A `set` over an ALREADY-classified object REFUSES (exit 2 naming the ref); --force replaces it WHOLESALE (dropping any field the forcing set omits — no merge). The single token - reads JSONL rows {ref, tags, description} from stdin (validate-all-then-write; empty stdin is a clean no-op, exit 0; --force governs every row).",
+                "unset": "undo classification on one or more music objects. Exactly one of --tags[=A,B] / --description / --all. The single token - reads a newline ref list from stdin (empty stdin is a clean no-op, exit 0).",
+                "status": "classification progress: how many music objects on the path have a shard, of the total. --json for a machine object.",
+                "tags": "the tag vocabulary in use across all shards, with occurrence counts (curbs drift). --json for a machine object."
+              }
+            }
+          ],
+          "subparsers": {
+            "set": {
+              "class": "_CoordArgumentParser",
+              "prog": "uedcli music classify set",
+              "mutex_groups": [],
+              "actions": [
+                {
+                  "class": "_HelpAction",
+                  "option_strings": [
+                    "-h",
+                    "--help"
+                  ],
+                  "dest": "help",
+                  "nargs": 0,
+                  "const": null,
+                  "default": {
+                    "__suppress__": true
+                  },
+                  "required": false,
+                  "choices": null,
+                  "metavar": null,
+                  "converter": null,
+                  "help": "show this help message and exit",
+                  "mutex_group": null
+                },
+                {
+                  "class": "_StoreAction",
+                  "option_strings": [],
+                  "dest": "ref",
+                  "nargs": "?",
+                  "const": null,
+                  "default": null,
+                  "required": false,
+                  "choices": null,
+                  "metavar": "REF",
+                  "converter": null,
+                  "help": "the music to classify (the dotted ref or the 2-part identity), or - to read JSONL rows from stdin",
+                  "mutex_group": null
+                },
+                {
+                  "class": "_StoreAction",
+                  "option_strings": [
+                    "--tags"
+                  ],
+                  "dest": "tags",
+                  "nargs": null,
+                  "const": null,
+                  "default": null,
+                  "required": false,
+                  "choices": null,
+                  "metavar": "A,B",
+                  "converter": "_csv",
+                  "help": "comma list of tags (strip/lowercase/de-dupe). Replaces the stored tags on a --force re-set — not merged.",
+                  "mutex_group": null
+                },
+                {
+                  "class": "_StoreAction",
+                  "option_strings": [
+                    "--description"
+                  ],
+                  "dest": "description",
+                  "nargs": null,
+                  "const": null,
+                  "default": null,
+                  "required": false,
+                  "choices": null,
+                  "metavar": null,
+                  "converter": null,
+                  "help": "prose description",
+                  "mutex_group": null
+                },
+                {
+                  "class": "_StoreTrueAction",
+                  "option_strings": [
+                    "--force"
+                  ],
+                  "dest": "force",
+                  "nargs": 0,
+                  "const": true,
+                  "default": false,
+                  "required": false,
+                  "choices": null,
+                  "metavar": null,
+                  "converter": null,
+                  "help": "replace an existing shard WHOLESALE instead of exiting 2 (also governs each JSONL row under -)",
+                  "mutex_group": null
+                }
+              ],
+              "subparsers": {}
+            },
+            "unset": {
+              "class": "_CoordArgumentParser",
+              "prog": "uedcli music classify unset",
+              "mutex_groups": [
+                {
+                  "required": true,
+                  "members": [
+                    "tags",
+                    "description",
+                    "clear_all"
+                  ]
+                }
+              ],
+              "actions": [
+                {
+                  "class": "_HelpAction",
+                  "option_strings": [
+                    "-h",
+                    "--help"
+                  ],
+                  "dest": "help",
+                  "nargs": 0,
+                  "const": null,
+                  "default": {
+                    "__suppress__": true
+                  },
+                  "required": false,
+                  "choices": null,
+                  "metavar": null,
+                  "converter": null,
+                  "help": "show this help message and exit",
+                  "mutex_group": null
+                },
+                {
+                  "class": "_StoreAction",
+                  "option_strings": [],
+                  "dest": "refs",
+                  "nargs": "*",
+                  "const": null,
+                  "default": null,
+                  "required": false,
+                  "choices": null,
+                  "metavar": "REF",
+                  "converter": null,
+                  "help": "music(s) to unset, or - to read a newline ref list from stdin",
+                  "mutex_group": null
+                },
+                {
+                  "class": "_StoreAction",
+                  "option_strings": [
+                    "--tags"
+                  ],
+                  "dest": "tags",
+                  "nargs": "?",
+                  "const": [],
+                  "default": null,
+                  "required": false,
+                  "choices": null,
+                  "metavar": "A,B",
+                  "converter": "_csv",
+                  "help": "remove the named tags (comma list); BARE --tags clears the whole tags field",
+                  "mutex_group": [
+                    0,
+                    0
+                  ]
+                },
+                {
+                  "class": "_StoreTrueAction",
+                  "option_strings": [
+                    "--description"
+                  ],
+                  "dest": "description",
+                  "nargs": 0,
+                  "const": true,
+                  "default": false,
+                  "required": false,
+                  "choices": null,
+                  "metavar": null,
+                  "converter": null,
+                  "help": "clear the description field",
+                  "mutex_group": [
+                    0,
+                    1
+                  ]
+                },
+                {
+                  "class": "_StoreTrueAction",
+                  "option_strings": [
+                    "--all"
+                  ],
+                  "dest": "clear_all",
+                  "nargs": 0,
+                  "const": true,
+                  "default": false,
+                  "required": false,
+                  "choices": null,
+                  "metavar": null,
+                  "converter": null,
+                  "help": "delete the whole shard (the only full clear)",
+                  "mutex_group": [
+                    0,
+                    2
+                  ]
+                }
+              ],
+              "subparsers": {}
+            },
+            "status": {
+              "class": "_CoordArgumentParser",
+              "prog": "uedcli music classify status",
+              "mutex_groups": [],
+              "actions": [
+                {
+                  "class": "_HelpAction",
+                  "option_strings": [
+                    "-h",
+                    "--help"
+                  ],
+                  "dest": "help",
+                  "nargs": 0,
+                  "const": null,
+                  "default": {
+                    "__suppress__": true
+                  },
+                  "required": false,
+                  "choices": null,
+                  "metavar": null,
+                  "converter": null,
+                  "help": "show this help message and exit",
+                  "mutex_group": null
+                },
+                {
+                  "class": "_StoreTrueAction",
+                  "option_strings": [
+                    "--json"
+                  ],
+                  "dest": "json",
+                  "nargs": 0,
+                  "const": true,
+                  "default": false,
+                  "required": false,
+                  "choices": null,
+                  "metavar": null,
+                  "converter": null,
+                  "help": "emit one JSON object instead of a line",
+                  "mutex_group": null
+                }
+              ],
+              "subparsers": {}
+            },
+            "tags": {
+              "class": "_CoordArgumentParser",
+              "prog": "uedcli music classify tags",
               "mutex_groups": [],
               "actions": [
                 {

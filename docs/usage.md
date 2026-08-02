@@ -1774,6 +1774,63 @@ uedcli class prewarm --force             # re-decode even entries that are alrea
 
 ---
 
+# Sound & music catalog (offline, reads the game packages)
+
+Two nouns, `sound` and `music`, catalog the substrate's audio the way `class` catalogs its actor
+classes — enumerate, inspect, search, and record a classification — offline, reading the game's own
+packages (`.uax`/`.u` for `Sound`, `.umx` for `Music`), no editor or level. `music` additionally
+reports each module's **embedded title**. Both are **phase (a)**: no sample decoding yet, so there is
+no `sound preview` (spectrogram), duration, or export.
+
+```bash
+# enumerate every object, one full dotted ref per line (count to stderr); NO default filter
+uedcli sound list [--package NAME]… [--classified | --unclassified] [--json]
+uedcli music list [--package NAME]… [--classified | --unclassified] [--json]
+
+# facts (package, group, identity) + stored classification; music also prints title + format
+uedcli sound show <ref>… | -   [--json]
+uedcli music show <ref>… | -   [--json]
+
+# RANKED discovery: objects whose name / stored tags / description match the terms, best first
+uedcli sound search <term>… [--tag T] [--json]
+uedcli music search <term>… [--tag T] [--json]
+
+# record / inspect what an object IS — one git-tracked shard per object (tags + description)
+uedcli sound classify set <ref> --tags a,b --description "…"   # refuses if already set; --force replaces
+uedcli sound classify set -            # read JSONL rows {ref, tags, description} from stdin
+uedcli sound classify unset <ref>… | -  [--tags[=A,B] | --description | --all]
+uedcli sound classify status [--json]   # how many objects on the path are classified, of the total
+uedcli sound classify tags [--json]     # the tag vocabulary in use, with counts
+```
+
+- **Ref and identity.** `list` prints each object's full dotted ref (`Package.Group.Name`, or
+  `Package.Name` for a root object). An object's **identity** — the shard key — is `Package.Name` when
+  that bare name is unique in its package, else the full dotted `Package.Group.Name` (one package can
+  hold the same bare name in two groups). `show`/`classify` accept **either** spelling; both resolve to
+  the same object. A ref that is unknown, or a 2-part name that is ambiguous because it collides across
+  groups, **exits 2** naming it (use the full dotted ref).
+- **`list` prints its whole set** — one ref per line, count to stderr — with **no default filter**.
+  Narrow with a pipe (`sound list | grep -v '^DeusExConAudio'`) or **`--package NAME`**, which takes an
+  **exact** package stem (not a glob) and is **repeatable** (`--package A --package B` = the union); an
+  unknown package **exits 2** naming it. `--classified` / `--unclassified` keep only objects that do /
+  don't have a shard. `--json` emits one object per line: `{ref, identity, group, classified}` (music
+  also carries `title`, `format`).
+- **`music show` / `music list --json`** carry the module's **embedded title** and **format**, read
+  live from the `.umx`. The format is `IT`, `S3M`, `XM`, or `unknown`; a module with no readable title
+  reports `title: null` with the format still named, never a blank that reads as "no module".
+- **`classify set` refuses to overwrite.** A `set` over an already-classified object **exits 2** naming
+  the ref and printing the stored payload; **`--force`** replaces the shard **wholesale** — it does not
+  merge, so a `--force` that omits `--tags`/`--description` drops the stored value. `set -` reads JSONL
+  rows `{ref, tags?, description?}` from stdin, all-or-nothing (one bad row writes nothing; `--force`
+  governs every row); empty stdin is a clean no-op. Shards live under `classified/<sound|music>/…`,
+  holding exactly `{kind, ref, tags, description}`.
+- **`unset`**, **`status`**, **`tags`**, and **`search`** mirror `class classify` / `class search`:
+  `search` requires at least one term (term-less **exits 2** pointing at `list`) and ranks by exact
+  leaf name > exact tag > ref substring > tag substring > description substring. With no composed
+  package path, every verb **exits 2** (`no package search path`).
+
+---
+
 # Documentation — read the docs from the CLI
 
 uedcli carries its own user documentation, queryable from the tool itself — no network, no repo
