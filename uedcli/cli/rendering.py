@@ -12,6 +12,7 @@ module-qualified lookup so an owner-module patch reaches them). Imports only ear
 """
 from __future__ import annotations
 
+import json
 import math
 import os
 import re
@@ -232,7 +233,8 @@ def _point_pane_region(point, render_data) -> tuple:
             max(y1, ly + _BREAKDOWN_POINT_MARGIN), max(z1, lz + _BREAKDOWN_POINT_MARGIN))
 
 
-def _render_breakdown_grid(actors, args, *, render_data, shown_highlights=None) -> bytes:
+def _render_breakdown_grid(actors, args, *, render_data, shown_highlights=None,
+                           grid=None, cells_out=None) -> bytes:
     """`--layout breakdown`: a near-square GRID of panes, returned as a Pillow **Image** (the panes
     themselves are PPM bytes from the stdlib renderer; the stitch is already Pillow, so the caller
     writes this Image straight to PNG instead of re-encoding it through PPM). Pane 0 is the whole scene in CSG
@@ -258,20 +260,22 @@ def _render_breakdown_grid(actors, args, *, render_data, shown_highlights=None) 
     except ImportError as e:                             # Pillow absent (broken install)
         raise CommandError(f"--layout breakdown needs Pillow, which failed to import: {e}")
 
-    def _pane(*, annotations, focus, region) -> bytes:
+    def _pane(*, annotations, focus, region, grid=None, cells_out=None) -> bytes:
         # No legend or overview names anywhere in the breakdown — the SCENE pane is a plain CSG map and
         # the per-actor panes are captioned. A tight `_BREAKDOWN_PAD`-px frame border keeps padding
         # minimal and CONSISTENT across panes (a fixed screen border, not a per-actor world margin).
+        # The addressable grid rides ONLY the SCENE pane (pane 0); per-actor panes render as before.
         return preview.render_brushes_pgm(
             actors, view=view, size=size, annotations=annotations, iso_angle=args.iso_angle, region=region,
             highlight_polys=highlight_polys, highlight_points=highlight_points, color_by_csg=True,
             render_data=render_data, focus=focus, draw_legend=False, reserve_legend=False,
             brush_colors=brush_colors, faces=faces, frame_pad=_BREAKDOWN_PAD,
-            shown_highlights=shown_highlights)
+            shown_highlights=shown_highlights, grid=grid, cells_out=cells_out)
 
     # Pane 0: the whole scene in CSG — a plain spatial map, NO labels (actors are identified by their
-    # own captioned panes below).
-    panes = [("SCENE", _pane(annotations=preview.parse_annotation_spec("none"), focus=None, region=None))]
+    # own captioned panes below). It alone carries the grid gutter + cell legend (single-view).
+    panes = [("SCENE", _pane(annotations=preview.parse_annotation_spec("none"), focus=None, region=None,
+                             grid=grid, cells_out=cells_out))]
     for a in actors:                                     # one focused + zoomed pane per actor, in order
         if a.brush is not None:                          # brush: focus + frame its own vertex AABB
             panes.append((a.name.upper(),
@@ -286,13 +290,13 @@ def _render_breakdown_grid(actors, args, *, render_data, shown_highlights=None) 
     cell_h = size + _BREAKDOWN_CAPTION_H                 # each cell = caption band + square pane
     grid_w = cols * size + (cols - 1) * _BREAKDOWN_GAP
     grid_h = rows * cell_h + (rows - 1) * _BREAKDOWN_GAP
-    grid = Image.new("RGB", (grid_w, grid_h), (245, 245, 245))
-    draw = ImageDraw.Draw(grid)
+    grid_img = Image.new("RGB", (grid_w, grid_h), (245, 245, 245))
+    draw = ImageDraw.Draw(grid_img)
     for i, (caption, ppm) in enumerate(panes):
         r, c = divmod(i, cols)
         x = c * (size + _BREAKDOWN_GAP)
         y = r * (cell_h + _BREAKDOWN_GAP)
-        grid.paste(Image.open(BytesIO(ppm)).convert("RGB"), (x, y + _BREAKDOWN_CAPTION_H))
+        grid_img.paste(Image.open(BytesIO(ppm)).convert("RGB"), (x, y + _BREAKDOWN_CAPTION_H))
         draw.text((x + 4, y + 3), caption, fill=(0, 0, 0))
     n_brushes = sum(1 for a in actors if a.brush is not None)
     n_points = len(actors) - n_brushes
@@ -301,7 +305,56 @@ def _render_breakdown_grid(actors, args, *, render_data, shown_highlights=None) 
     if n > _BREAKDOWN_WARN_PANES:
         print(f"warning: --layout breakdown produced {n} panes — a large selection; consider a subset",
               file=sys.stderr)
-    return grid          # a Pillow Image — the write boundary encodes it to PNG directly
+    return grid_img          # a Pillow Image — the write boundary encodes it to PNG directly
+
+
+_GRID_MAX = 52                       # cap so single-letter/short column addresses stay legible
+_QUAD_PANE_ORDER = ("Top", "Front", "Side", "Iso")   # legend/JSON pane order (see spec)
+
+
+def _view_pane_key(view: str) -> str:
+    """A single-view render's one pane key — its `--view`, capitalized to match the quad pane names."""
+    return view.capitalize()
+
+
+def _grid_legend_lines(actors, panes: dict, n: int) -> list[str]:
+    """The always-on stderr legend: a density header, then one line per actor in SCENE order. A single
+    pane (single/breakdown) is unqualified (`Pillar  D4  (C3–E5)`); multiple panes (quad) are
+    pane-qualified (`Pillar  Top:D4 Front:B7 …`). An actor hidden in every pane appends `(hidden)`.
+    Same-cell collisions each keep their own line."""
+    lines = [f"grid: {n}×{n} columns A–{preview._col_label(n - 1)}, rows 1–{n}"]
+    quad = len(panes) > 1
+    for a in actors:
+        cells = {p: c[a.name] for p, c in panes.items() if a.name in c}
+        if not cells:
+            continue                                     # degenerate — noted separately, not listed
+        if quad:
+            body = " ".join(f"{p}:{cells[p].cell}" for p in _QUAD_PANE_ORDER if p in cells)
+        else:
+            only = next(iter(cells.values()))
+            body = only.cell + (f"  ({only.span})" if only.span else "")
+        line = f"{a.name}  {body}"
+        if all(c.hidden for c in cells.values()):        # invisible in every pane
+            line += "  (hidden)"
+        lines.append(line)
+    return lines
+
+
+def _grid_json(image_path: str, actors, panes: dict, n: int) -> dict:
+    """The `--json` object: `{image, grid:{cols,rows}, actors:{name:{panes:{Pane:{cell,span}}, hidden}}}`.
+    Uniform pane-keyed shape across every layout, so a script reads them all the same way."""
+    order = _QUAD_PANE_ORDER if len(panes) > 1 else list(panes)
+    out_actors: dict = {}
+    for a in actors:
+        cells = {p: c[a.name] for p, c in panes.items() if a.name in c}
+        if not cells:
+            continue
+        out_actors[a.name] = {
+            "panes": {p: {"cell": cells[p].cell, "span": cells[p].span}
+                      for p in order if p in cells},
+            "hidden": all(c.hidden for c in cells.values()),
+        }
+    return {"image": image_path, "grid": {"cols": n, "rows": n}, "actors": out_actors}
 
 
 def render_actors_to_out(actors, args) -> int:
@@ -310,6 +363,9 @@ def render_actors_to_out(actors, args) -> int:
     factor = getattr(args, "frame_tightness", 0.8)
     if not 0.0 <= factor <= 1.0:                         # errors name the offending value (CLI rule)
         raise CommandError(f"--frame-tightness must be in [0, 1], got {factor}")
+    grid = getattr(args, "grid", 12)                     # the always-on addressable grid density
+    if not 1 <= grid <= _GRID_MAX:
+        raise CommandError(f"--grid must be in [1, {_GRID_MAX}], got {grid}")
     m = 16.0                                             # keep the target off the frame edge
     try:
         annotation_spec = preview.parse_annotation_spec(args.annotate)
@@ -350,18 +406,26 @@ def render_actors_to_out(actors, args) -> int:
     # that landed, so the note must subtract the union of what drew, not decide per pane (which would emit
     # up to four copies of a wrong answer under `--layout quad`).
     shown_highlights: set = set()
+    # The addressable grid is ALWAYS ON (owner-ruled). `panes` collects each pane's `{actor: ActorCell}`
+    # map — keyed by pane name for quad, by the single `--view` otherwise (breakdown reads off pane 0).
+    panes: dict = {}
     try:
         if layout == "breakdown":
+            single = {}
             data = _render_breakdown_grid(actors, args, render_data=render_data,
-                                          shown_highlights=shown_highlights)
+                                          shown_highlights=shown_highlights, grid=grid, cells_out=single)
+            panes[_view_pane_key(args.view)] = single
         elif layout == "single":
+            single = {}
             data = preview.render_brushes_pgm(actors, view=args.view, size=args.size,
                                               annotations=annotation_spec, iso_angle=args.iso_angle,
                                               region=region, highlight_polys=highlight_polys,
                                               highlight_points=highlight_points,
                                               color_by_csg=True, render_data=render_data, focus=focus,
                                               brush_colors=getattr(args, "brush_colors", "csg") or "csg",
-                                              faces=faces, shown_highlights=shown_highlights)
+                                              faces=faces, shown_highlights=shown_highlights,
+                                              grid=grid, cells_out=single)
+            panes[_view_pane_key(args.view)] = single
         else:                                            # quad (default)
             data = preview.render_quad_pgm(actors, size=args.size, annotations=annotation_spec,
                                            iso_angle=args.iso_angle, region=region,
@@ -369,7 +433,8 @@ def render_actors_to_out(actors, args) -> int:
                                            highlight_points=highlight_points,
                                            color_by_csg=True, render_data=render_data, focus=focus,
                                            brush_colors=getattr(args, "brush_colors", "csg") or "csg",
-                                           faces=faces, shown_highlights=shown_highlights)
+                                           faces=faces, shown_highlights=shown_highlights,
+                                           grid=grid, cells_out=panes)
     except preview.PreviewAbort as e:                    # a refusal only reachable mid-render
         raise CommandError(str(e)) from None
     _note_invisible_highlights(hi_requests, shown_highlights)
@@ -405,7 +470,18 @@ def render_actors_to_out(actors, args) -> int:
         raise CommandError(f"writing the preview PNG needs Pillow, which failed to import: {e}")
     except OSError as e:                                     # unwritable path, decode failure, ...
         raise CommandError(f"could not write preview to {host_out}: {e}")
-    print(host_out)                     # the rendered HOST file path
+    # Addressable-grid output: the legend ALWAYS to stderr; a degenerate actor with no cell is noted,
+    # not listed. stdout is the machine form (--json) OR the bare path — one form, never both.
+    addressed = {name for pane in panes.values() for name in pane}
+    if unaddressed := [a.name for a in actors if a.name not in addressed]:
+        print(f"note: no grid cell for {', '.join(unaddressed)} (no projectable geometry)",
+              file=sys.stderr)
+    for line in _grid_legend_lines(actors, panes, grid):
+        print(line, file=sys.stderr)
+    if getattr(args, "json", False):
+        print(json.dumps(_grid_json(host_out, actors, panes, grid), indent=2))
+    else:
+        print(host_out)                 # the rendered HOST file path
     return 0
 
 

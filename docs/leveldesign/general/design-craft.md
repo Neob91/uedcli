@@ -75,6 +75,11 @@ or a T3D snippet from a generator (`brush build spiral | actor preview --from-t3
   point actor with its marker/sprite — so you read which face each index is without numbers piling
   up. It's a small-selection inspector (point actors get their own panes too, so subset first on a
   big scene).
+- Every preview carries an **addressable grid**: a gutter of column letters (top) and row numbers
+  (sides), plus a `name → cell` legend on stderr (`Pillar  D4  (C3–E5)`, pane-qualified under `quad`).
+  When you see a problem at `D4`, that cell is a text handle on the pixels — carry it back into a name
+  set. It is a region of the image, not a world coordinate. `--grid N` sets the density; `--json` emits
+  the cell map for a script.
 - Point actors (lights, triggers, decorations) show their editor sprite or a labelled marker at
   Location, so you can judge placement. `--show collision,light-range,sound-range` (a comma-set)
   overlays an actor's collision cylinder and its light/sound reach for spacing decisions, as

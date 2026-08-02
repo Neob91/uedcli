@@ -2163,3 +2163,25 @@ def test_a_bmasked_fixture_texture_masks_via_the_decoder(tmp_path, monkeypatch):
     td = _preview_textures([box], monkeypatch, tmp_path,
                            _utx(tmp_path, stem="MaskFix", bmasked=True))
     assert all(td.masked[("Deco", i)] for i in range(6))
+
+
+# ── addressable grid: the hidden-actor flag (drew-nothing per pane) ─────────────────────────────
+
+def test_grid_flags_a_fully_occluded_actor_hidden_but_wire_never_does():
+    # A tiny add sealed inside a big solid add draws NO pixel under flat (every face depth-hidden) →
+    # the grid flags it hidden, yet still gives it a cell from its projected centroid. Under wire
+    # nothing is ever culled or depth-hidden, so the same actor is never hidden.
+    from uedcli.builders import cube, make_brush_actor
+    big = make_brush_actor("Big", cube(256, 256, 256), location=(0, 0, 0), csg="add")
+    tiny = make_brush_actor("Tiny", cube(24, 24, 24), location=(0, 0, 0), csg="add")
+    flat_cells: dict = {}
+    render_brushes_pgm([big, tiny], view="iso", size=256, color_by_csg=True,
+                       render_data=_flat(), faces="flat", grid=12, cells_out=flat_cells)
+    assert flat_cells["Tiny"].hidden is True
+    assert flat_cells["Big"].hidden is False
+    assert flat_cells["Tiny"].cell                      # a cell regardless of drawing nothing
+    wire_cells: dict = {}
+    render_brushes_pgm([big, tiny], view="iso", size=256, color_by_csg=True, grid=12,
+                       cells_out=wire_cells)
+    assert wire_cells["Tiny"].hidden is False
+    assert wire_cells["Big"].hidden is False

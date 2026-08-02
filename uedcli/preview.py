@@ -1862,6 +1862,9 @@ class _SceneGeom:
     occluders: list      # (poly2d, depth, brush_name, is_solid)
     points: list         # (actor, PointRender)
     pts: list            # every projected point (verts + point footprints) — the framing source
+    actor_points: dict   # actor_name → its projected 2-D points (brush: surviving verts; point: its
+                         # Location) — the addressable-grid cell source, kept even on the hybrid path
+                         # where `brush_names` is empty
 
 
 def _scene_geometry(actors, *, view, iso_angle, annotations, highlight_polys, focus_cf, hybrid, tints,
@@ -1921,6 +1924,7 @@ def _scene_geometry(actors, *, view, iso_angle, annotations, highlight_polys, fo
     occluders: list = []
     points: list = []
     pts: list = []
+    actor_points: dict = {}
     d_vec = _view_depth(iso_angle, view)
     for actor in actors:
         loc = actor.location or (Decimal(0), Decimal(0), Decimal(0))
@@ -1930,7 +1934,9 @@ def _scene_geometry(actors, *, view, iso_angle, annotations, highlight_polys, fo
                 continue
             lp = (float(loc[0]), float(loc[1]), float(loc[2]))
             e = point_extent(pr)
-            pts.append(_project(lp, view, iso_angle))
+            loc_2d = _project(lp, view, iso_angle)
+            pts.append(loc_2d)
+            actor_points[actor.name] = [loc_2d]     # cell from the Location alone → a single cell, no span
             if e:
                 for ax in range(3):
                     for s in (-e, e):
@@ -2065,24 +2071,30 @@ def _scene_geometry(actors, *, view, iso_angle, annotations, highlight_polys, fo
             if show_idx:
                 poly_labels.append(
                     (_poly_centroid_2d(vs), str(idx), label_accent, depth, v3, actor.name))
+        if brush_cands_2d:
+            actor_points[actor.name] = brush_cands_2d   # kept on EVERY path — the grid-cell source
         if not hybrid and brush_cands_2d and annotations.draws_name(is_brush=True, is_highlighted=brush_hi):
             brush_names.append((brush_cands_2d, actor.name.upper(), label_accent))
     return _SceneGeom(edges=edges, fills=fills, tex_faces=tex_faces, hi_edges=hi_edges,
                       vis_faces=vis_faces, hi_only_labels=hi_only_labels, poly_labels=poly_labels,
-                      brush_names=brush_names, occluders=occluders, points=points, pts=pts)
+                      brush_names=brush_names, occluders=occluders, points=points, pts=pts,
+                      actor_points=actor_points)
 
 
 _FRAME_PAD = 6         # px border kept clear of the geometry on every side (shared by framing + reserve)
 
 
-def _framing(pts, region, size, view, iso_angle, inset_top: int = 0, pad: int = _FRAME_PAD):
+def _framing(pts, region, size, view, iso_angle, inset_top: int = 0, pad: int = _FRAME_PAD,
+             *, gutter: int = 0):
     """World→pixel framing for a scene. Returns `(scale, to_px, to_pxf, world_to_pxf)`, computed from
     the projected `pts` (or an explicit `region` AABB). Shared so every filmstrip pane and the
     grouping pass frame IDENTICALLY (same `minx/span`), keeping geometry registered across panes.
     `pad` is the px border kept clear of the geometry on every side. `inset_top` reserves that many
     extra pixels at the TOP of the frame (for the legend panel) — the geometry is scaled down and pushed
-    below the band so nothing draws under the legend. `inset_top=0` is byte-identical to the un-reserved
-    framing (`draw == size - 2*pad`)."""
+    below the band so nothing draws under the legend. `gutter` reserves that many pixels on the top and
+    BOTH sides for the addressable-grid label band — a SYMMETRIC left/right inset (unlike `inset_top`,
+    which insets top+right only), so the x-mapping gains its own left offset. `inset_top=0` and
+    `gutter=0` is byte-identical to the un-reserved framing (`draw == size - 2*pad`)."""
     if region is not None:
         x0, y0, z0, x1, y1, z1 = (float(c) for c in region)
         rp = [_project((x, y, z), view, iso_angle)
@@ -2093,17 +2105,17 @@ def _framing(pts, region, size, view, iso_angle, inset_top: int = 0, pad: int = 
         minx, maxx = min(p[0] for p in pts), max(p[0] for p in pts)
         miny, maxy = min(p[1] for p in pts), max(p[1] for p in pts)
     span = max(maxx - minx, maxy - miny) or 1.0
-    draw = max(1, size - 2 * pad - inset_top)     # uniform-scale budget after the reserved top band
+    draw = max(1, size - 2 * pad - 2 * gutter - inset_top)   # uniform-scale budget after the reserves
     scale = draw / span
 
     def to_px(p):
-        x = int((p[0] - minx) / span * draw) + pad
-        y = size - 1 - (int((p[1] - miny) / span * draw) + pad)
+        x = int((p[0] - minx) / span * draw) + pad + gutter
+        y = size - 1 - gutter - (int((p[1] - miny) / span * draw) + pad)
         return x, y
 
     def to_pxf(p):
-        x = (p[0] - minx) / span * draw + pad
-        y = size - 1 - ((p[1] - miny) / span * draw + pad)
+        x = (p[0] - minx) / span * draw + pad + gutter
+        y = size - 1 - gutter - ((p[1] - miny) / span * draw + pad)
         return (x, y)
 
     def world_to_pxf(p3):
@@ -2123,19 +2135,123 @@ def _legend_reserve(rows: list, name_scale: int, size: int) -> int:
     return max(0, rect[3] + 4 - _FRAME_PAD)      # rect[3] = panel bottom; +4 margin; −pad (already in _framing)
 
 
+# ----- addressable coordinate grid -------------------------------------------
+# Every preview overlays a label gutter (columns A,B,C… across the top, rows 1,2,3… down both sides)
+# and reports each actor's grid cell as a `name → cell` legend on stderr + a `--json` map. The address
+# is a region of the IMAGE/PROJECTION, never a world coordinate. Owner-ruled 2026-08-02, LOCKED.
+
+GRID_LABEL = (70, 70, 70)   # gutter letters/numbers — darker than the wireframe grey, never WHITE
+
+
+@dataclass(frozen=True, kw_only=True)
+class ActorCell:
+    """One actor's grid address within a single pane (image-space, not world)."""
+    cell: str            # the primary (centroid) cell, e.g. "D4"
+    span: str | None     # covered range "C3–E5", or None when the AABB is a single cell
+    hidden: bool         # the actor drew no pixel in this pane (culled/depth-hidden)
+
+
+def _col_label(index: int) -> str:
+    """Column index → its letter label, bijective base-26: 0→A, 25→Z, 26→AA, 701→ZZ, 702→AAA."""
+    out = ""
+    index += 1
+    while index > 0:
+        index, rem = divmod(index - 1, 26)
+        out = chr(ord("A") + rem) + out
+    return out
+
+
+def _cell_address(col: int, row: int) -> str:
+    """A (0-based col, 0-based row) cell → its address: a letter column + a 1-based row number (`D4`)."""
+    return f"{_col_label(col)}{row + 1}"
+
+
+def _cell_of_pixel(px: float, py: float, rect: tuple[int, int, int, int], n: int) -> tuple[int, int]:
+    """Pixel → (col, row), 0-based, clamped to [0, n-1]. `rect` is the drawable canvas `(x0, x1, y0, y1)`;
+    the top row (smallest py) is row 0 (shown as 1)."""
+    x0, x1, y0, y1 = rect
+    col = _clamp(math.floor((px - x0) / ((x1 - x0) / n)), 0, n - 1)
+    row = _clamp(math.floor((py - y0) / ((y1 - y0) / n)), 0, n - 1)
+    return col, row
+
+
+def _actor_cells(points_px, rect: tuple[int, int, int, int], n: int) -> tuple[str, str | None]:
+    """(centroid cell, span) for an actor's projected PIXEL points. Centroid = the mean pixel's cell;
+    span = the AABB's `min–max` cell range, or None when that AABB is a single cell (a point actor, or a
+    brush small enough to sit in one cell — no parens)."""
+    xs = [p[0] for p in points_px]
+    ys = [p[1] for p in points_px]
+    cell = _cell_address(*_cell_of_pixel(sum(xs) / len(xs), sum(ys) / len(ys), rect, n))
+    lo = _cell_of_pixel(min(xs), min(ys), rect, n)     # min col, min (top) row
+    hi = _cell_of_pixel(max(xs), max(ys), rect, n)
+    if lo == hi:
+        return cell, None
+    return cell, f"{_cell_address(*lo)}–{_cell_address(*hi)}"
+
+
+def _grid_gutter_px(name_scale: int) -> int:
+    """Width of the reserved label band on each gutter side — the glyph height plus a small margin."""
+    return 5 * name_scale + 4
+
+
+def _drawable_rect(size: int, pad: int, gutter: int, inset_top: int) -> tuple[int, int, int, int]:
+    """The pane's drawable canvas `(x0, x1, y0, y1)` the grid divides — inset by `pad` (frame border),
+    `gutter` (label band, all four sides) and, at the top, the legend `inset_top`."""
+    return (pad + gutter, size - 1 - pad - gutter, pad + gutter + inset_top, size - 1 - pad - gutter)
+
+
+def _draw_grid_gutter(buf, size, rect, n, name_scale, pad, gutter, inset_top) -> None:
+    """Draw the column letters (top band) and row numbers (both side bands) — no gridlines. Labels sit
+    in the reserved gutter band, clear of the geometry (which `_framing`'s `gutter` inset pushed in)."""
+    x0, x1, y0, y1 = rect
+    col_w = (x1 - x0) / n
+    row_h = (y1 - y0) / n
+    top_y = pad + inset_top + gutter // 2                 # column-label band, below any legend band
+    left_x = pad + gutter // 2
+    right_x = size - 1 - pad - gutter // 2
+    for j in range(n):
+        _draw_text(buf, size, int(x0 + (j + 0.5) * col_w), top_y, _col_label(j), name_scale, GRID_LABEL)
+    for i in range(n):
+        cy = int(y0 + (i + 0.5) * row_h)
+        _draw_text(buf, size, left_x, cy, str(i + 1), name_scale, GRID_LABEL)
+        _draw_text(buf, size, right_x, cy, str(i + 1), name_scale, GRID_LABEL)
+
+
+def _collect_cells(geom, hidden, faces, points, to_pxf, rect, n, cells_out) -> None:
+    """Fill `cells_out` `{actor_name: ActorCell}` from the scene's per-actor projected points, mapped
+    through THIS pane's `to_pxf` + drawable `rect` — the same map the image draws from, so the cell and
+    the pixels cannot drift. An actor is `hidden` when none of its faces put a pixel down: a point
+    actor's marker always draws, a `wire` face is never culled or depth-hidden, and a filled face is
+    hidden when the cull dropped it (absent from `vis_faces`) or depth hid it (`hidden`).
+
+    The drew-nothing mechanism is built here against the CURRENT textured/flat world; the precise
+    "outside subtracted space" cause sharpens when the CSG-solved textured world lands (board item
+    `actor-preview-unrealed-render-parity-new-csg`). Either way the actor still gets its cell from its
+    projected centroid whether or not it drew."""
+    if faces == "wire":
+        drew = set(geom.actor_points)                # nothing is culled/depth-hidden under wire
+    else:
+        drew = {fk[0] for fk, _v3, _vs in geom.vis_faces if fk not in hidden}
+    drew |= {a.name for a, _pr in points}            # a point actor's marker always draws
+    for name, pts_proj in geom.actor_points.items():
+        cell, span = _actor_cells([to_pxf(p) for p in pts_proj], rect, n)
+        cells_out[name] = ActorCell(cell=cell, span=span, hidden=name not in drew)
+
+
 def render_brush_pgm(actor: Actor, *, view: str = "top", size: int = 256,
                      annotations: AnnotationSpec = AnnotationSpec.all(),
                      iso_angle: float = 30.0, region=None,
                      highlight_polys=None, highlight_points=None,
                      color_by_csg: bool = False, render_data=None,
                      focus: str | None = None, draw_legend: bool = True,
-                     brush_colors: str = "csg", faces: str = "wire") -> bytes:
+                     brush_colors: str = "csg", faces: str = "wire",
+                     grid: int | None = None, cells_out: dict | None = None) -> bytes:
     return render_brushes_pgm([actor], view=view, size=size, annotations=annotations,
                               iso_angle=iso_angle, region=region, highlight_polys=highlight_polys,
                               highlight_points=highlight_points,
                               color_by_csg=color_by_csg, render_data=render_data,
                               focus=focus, draw_legend=draw_legend, brush_colors=brush_colors,
-                              faces=faces)
+                              faces=faces, grid=grid, cells_out=cells_out)
 
 
 def render_brushes_pgm(actors: list[Actor], *, view: str = "top", size: int = 256,
@@ -2146,7 +2262,8 @@ def render_brushes_pgm(actors: list[Actor], *, view: str = "top", size: int = 25
                        focus: str | None = None, draw_legend: bool = True,
                        brush_colors: str = "csg", reserve_legend: bool = True,
                        frame_pad: int = _FRAME_PAD, faces: str = "wire",
-                       shown_highlights: set | None = None) -> bytes:
+                       shown_highlights: set | None = None,
+                       grid: int | None = None, cells_out: dict | None = None) -> bytes:
     """Render a set of actors as a PPM (P6) on a light-grey background (BG).
 
     `faces` is the `--faces` MODE, and it is a parameter rather than something read off `render_data`
@@ -2195,7 +2312,16 @@ def render_brushes_pgm(actors: list[Actor], *, view: str = "top", size: int = 25
 
     Point (non-brush) actors are drawn from `render_data.points` (name → `PointRender`): a DT_Sprite
     billboard, else a marker; plus faint collision/light/sound overlays when populated.
-    Empty input → blank grey PPM."""
+    Empty input → blank grey PPM.
+
+    `grid` (or None = off) turns on the addressable coordinate grid: `grid` columns × `grid` rows, drawn
+    as a LABEL GUTTER (letters across the top, numbers down both sides — no gridlines) in a reserved band
+    the geometry is inset clear of. Gated by a parameter, NOT drawn unconditionally, because
+    `_render_breakdown_grid` renders per pane and only pane 0 carries a grid. Independent of `--annotate`.
+    `cells_out`, when a dict is passed WITH `grid`, is filled `{actor_name: ActorCell}` — each actor's
+    centroid cell + span + hidden flag, from THIS pane's own `world_to_pxf`/drawable rect, so the legend
+    and image cannot drift. Each pane needs its OWN `cells_out` (cells are per-pane, unlike the shared
+    `shown_highlights`)."""
     highlight_polys = set(highlight_polys or ())
     highlight_points = set(highlight_points or ())
     render_data = render_data or PreviewData()
@@ -2221,8 +2347,9 @@ def render_brushes_pgm(actors: list[Actor], *, view: str = "top", size: int = 25
                                drawn_points={a.name for a, _ in points}) if hybrid else []
     # Drawing the legend ALWAYS reserves its band (never paint the panel over un-inset geometry).
     inset_top = _legend_reserve(legend_rows, name_scale, size) if (reserve_legend or draw_legend) else 0
+    gutter = _grid_gutter_px(name_scale) if grid is not None else 0
     scale, to_px, to_pxf, world_to_pxf = _framing(geom.pts, region, size, view, iso_angle, inset_top,
-                                                  pad=frame_pad)
+                                                  pad=frame_pad, gutter=gutter)
 
     hidden: set = set()             # faces depth hid — their edges, outline and highlight index go
     buf, zbuf = _alloc_buffers(size, depth=bool(geom.fills))
@@ -2278,10 +2405,10 @@ def render_brushes_pgm(actors: list[Actor], *, view: str = "top", size: int = 25
             plane = _face_depth_affine(v3, world_to_pxf, d_vec)
             if plane is not None and _face_is_occluded(zbuf, size, [to_pxf(q) for q in vs], plane):
                 hidden.add(face_key)
-    grid = DensityGrid.build(size)                  # occupancy of the wireframe → labels flee dense knots
+    density_grid = DensityGrid.build(size)          # occupancy of the wireframe → labels flee dense knots
     for f, (a, b), fr, bk, al, fk in edges:
         if fk not in hidden:                        # a hidden edge paints nothing, so it must not pull
-            grid.add_segment(to_px(a), to_px(b))    # labels away from a region that reads as empty
+            density_grid.add_segment(to_px(a), to_px(b))  # labels away from a region that reads as empty
     for actor, pr in points:                        # under-layer: selection brackets + sprites + overlays
         _draw_point_underlay(buf, size, actor, pr, view, iso_angle, to_px, scale,
                              highlighted=actor.name in highlight_points)
@@ -2319,7 +2446,7 @@ def render_brushes_pgm(actors: list[Actor], *, view: str = "top", size: int = 25
         r = max(6, int(max(pr.sprite_world) / 2 * scale)) if pr.sprite_world else 7
         rect = (px[0] - r, px[1] - r, px[0] + r, px[1] + r)
         occupied.append(rect)
-        grid.add_box(rect, weight=4)
+        density_grid.add_box(rect, weight=4)
         if not hybrid and pr.label and annotations.draws_name(
                 is_brush=False, is_highlighted=actor.name in highlight_points):
             point_name_items.append(_LabelItem(anchor=px, text=pr.label.upper(), scale=name_scale,
@@ -2330,7 +2457,7 @@ def render_brushes_pgm(actors: list[Actor], *, view: str = "top", size: int = 25
     legend_rect = _legend_panel_rect(legend_rows, name_scale, size)
     if legend_rect is not None:
         occupied.append(legend_rect)
-        grid.add_box(legend_rect, weight=8)
+        density_grid.add_box(legend_rect, weight=8)
 
     # Poly indices: THE ONE RULE — a face's INDEX is a painted number texture (`_plan_onface_texture`)
     # lying in the face's own 3-D plane at its ROOMIEST spot (largest glyph-box inside the face, ×0.75;
@@ -2367,10 +2494,10 @@ def render_brushes_pgm(actors: list[Actor], *, view: str = "top", size: int = 25
     items: list = []
     hb = name_scale * 4                              # density-sample box half-size for anchor choice
     for cands_2d, text, color in brush_names:
-        anchor = _least_dense_anchor(grid, [to_px(p) for p in cands_2d], hb)
+        anchor = _least_dense_anchor(density_grid, [to_px(p) for p in cands_2d], hb)
         items.append(_LabelItem(anchor=anchor, text=text, scale=name_scale, color=color))
     items += point_name_items
-    for placed in _place_labels(items, size, grid=grid, occupied=occupied):
+    for placed in _place_labels(items, size, grid=density_grid, occupied=occupied):
         (ax, ay), (lx, ly), accent = placed.anchor, placed.pos, placed.color
         # Tie the name to its target with a leader ending in an ARROWHEAD pointing at the exact spot (its
         # actor/wireframe corner); the leader/arrow/box border are the owning actor's accent (grey in
@@ -2390,6 +2517,11 @@ def render_brushes_pgm(actors: list[Actor], *, view: str = "top", size: int = 25
         # caps), tinted per brush, blended at the face's graded `opacity` over a proportional halo.
         painted_on.append(_draw_painted_decal(buf, size, plan, tint, alpha=opacity))
     _draw_overlap_keyline(buf, size, painted_on)     # 1px white ring wherever two numbers overlap
+    if grid is not None:                             # addressable-grid gutter + per-actor cell map
+        rect = _drawable_rect(size, frame_pad, gutter, inset_top)
+        _draw_grid_gutter(buf, size, rect, grid, name_scale, frame_pad, gutter, inset_top)
+        if cells_out is not None:
+            _collect_cells(geom, hidden, faces, points, to_pxf, rect, grid, cells_out)
     if draw_legend and legend_rect is not None:      # rows/band are always reserved; only pane 0 draws
         _draw_legend(buf, size, legend_rows, name_scale)
     return _ppm(buf, size)
@@ -2496,7 +2628,8 @@ def render_quad_pgm(actors, *, size: int = 512,
                     iso_angle: float = 30.0, region=None, highlight_polys=None,
                     highlight_points=None, color_by_csg: bool = False, render_data=None,
                     focus: str | None = None, brush_colors: str = "csg",
-                    faces: str = "wire", shown_highlights: set | None = None) -> bytes:
+                    faces: str = "wire", shown_highlights: set | None = None,
+                    grid: int | None = None, cells_out: dict | None = None) -> bytes:
     """UED-style 2×2: Top (TL), Front (TR), Iso (BL), Side (BR). On the hybrid (`color_by_csg`) path the
     per-actor tints are identical across panes (`assign_tints` is deterministic), so the legend is drawn
     ONCE — only the TOP-left pane renders it (`draw_legend=True`) and RESERVES a top band for it
@@ -2521,21 +2654,27 @@ def render_quad_pgm(actors, *, size: int = 512,
              ("ISO", "iso", 0, half), ("SIDE", "side", half, half)]
     for name, view, ox, oy in panes:
         top_legend = color_by_csg and name == "TOP"
+        pane_cells: dict = {}                            # each pane's OWN cell map (cells are per-pane)
         sub = render_brushes_pgm(actors, view=view, size=half, annotations=annotations,
                                  iso_angle=iso_angle, region=region,
                                  highlight_polys=highlight_polys, highlight_points=highlight_points,
                                  color_by_csg=color_by_csg, render_data=render_data,
                                  focus=focus, draw_legend=top_legend, reserve_legend=top_legend,
                                  brush_colors=brush_colors, faces=faces,
-                                 shown_highlights=shown_highlights)
+                                 shown_highlights=shown_highlights, grid=grid,
+                                 cells_out=pane_cells if cells_out is not None else None)
+        if cells_out is not None:
+            cells_out[name.capitalize()] = pane_cells    # tag by pane name: Top/Front/Iso/Side
         body = sub[len(hdr):]
         for j in range(half):
             dst = ((oy + j) * size + ox) * 3
             src = j * half * 3
             buf[dst:dst + half * 3] = body[src:src + half * 3]
         cap_y = oy + 12
-        if name == "TOP" and legend_rect is not None:    # keep the caption below the legend, never under it
-            cap_y = legend_rect[3] + 8
+        if grid is not None:                             # keep it below the grid's top column-label band
+            cap_y = oy + _FRAME_PAD + _grid_gutter_px(max(2, half // 256)) + 10
+        if name == "TOP" and legend_rect is not None:    # ...and, on the legend pane, below the legend
+            cap_y = max(cap_y, legend_rect[3] + 8)
         _draw_text(buf, size, ox + 4 + len(name) * 8, cap_y, name, 2, CAPTION)
     for k in range(size):
         _px(buf, size, half, k, DIVIDER)

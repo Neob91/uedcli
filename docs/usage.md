@@ -1111,7 +1111,7 @@ actor preview [<names…> | --from-t3d <FILE…|->]
               [--frame BRUSH[:IDX] | X0,Y0,Z0,X1,Y1,Z1] [--frame-tightness N]
               [--highlight POLY|NAME ...] [--focus BRUSH]
               [--show collision,light-range,sound-range]
-              [--iso-angle 30] [--size 1024] [--out PATH]
+              [--iso-angle 30] [--size 1024] [--grid 12] [--json] [--out PATH]
 ```
 
 - **Target set** — actor names, or `-` to read a newline name list from stdin (`actor find … | actor
@@ -1290,11 +1290,28 @@ actor preview [<names…> | --from-t3d <FILE…|->]
   sphere of a light's reach (`25·(LightRadius+1)` UU); **`sound-range`** — a faint blue sphere of an
   AmbientSound's reach (`25·(SoundRadius+1)` UU). Brush actors (including movers) are excluded, so a
   brush preview needs no class schema. An unknown member is a clean named error.
+- **An addressable coordinate grid is drawn on every preview** — a **label gutter** with columns
+  `A,B,C…` across the top and rows `1,2,3…` down both sides (no gridlines), so every region of the image
+  has a text address like `D4` (a letter is always a column, a number always a row). It is **always on**
+  (there is no flag to turn it off) and orthogonal to `--annotate`, so `--annotate none` still carries
+  the gutter. Each actor's cell is reported as a **legend on stderr**: a density header, then one line
+  per actor — `Pillar  D4  (C3–E5)` (the centroid cell, plus the covered range in parens) under
+  `single`/`breakdown`, or pane-qualified `Pillar  Top:D4 Front:B7 Side:C7 Iso:E5` under `quad`. An actor
+  that draws no pixel (e.g. one hidden behind solid geometry under `--faces flat`) still gets a cell,
+  flagged `(hidden)`. Two actors in the same cell each keep their own line. **The address is a region of
+  the image/projection, never a world coordinate** — carry a cell back into a name set with `actor find`.
+- **`--grid N`** (default `12`) sets the density: `N` columns × `N` rows. Must be in `[1, 52]` (else a
+  clean exit 2 naming the value). Under `breakdown` the grid + legend ride pane 0 (the whole-scene pane)
+  only.
+- **`--json`** prints a JSON object to stdout **instead of** the bare image path — the machine form of
+  the legend: `{image, grid:{cols,rows}, actors:{<name>:{panes:{<Pane>:{cell,span}}, hidden}}}`,
+  pane-keyed for every layout (a `single` render has one pane keyed by its `--view`). The stderr legend
+  is unchanged.
 - `--out PATH` is the host image path. **A preview is always a PNG** (written via **Pillow**, the
   LLM-viewable form — no flag and no other way to get raw PPM out). Whatever extension you pass is
   **replaced** by `.png`, so `--out shot.jpg` writes `shot.png` and `--out shot` writes `shot.png`.
   `--out` is **optional**: with no `--out`, a unique temp file is minted (`uedcli-preview-*.png`).
-  Either way the **absolute path actually written is always printed to stdout**.
+  Either way, unless `--json` is given, the **absolute path actually written is printed to stdout**.
 
 ---
 

@@ -1175,3 +1175,150 @@ def test_line_dim_alpha_composites_over_content_instead_of_overwriting():
     assert px(10, 10) == over_blue        # at the crossing: red composited OVER the blue line
     assert px(10, 10) != over_bg          # NOT a hard overwrite / not blended with the background
     assert px(5, 10) == over_bg           # away from the crossing: composited over the background
+
+
+# ── addressable coordinate grid: pure cell math ────────────────────────────────────────────────
+from uedcli.preview import (  # noqa: E402
+    ActorCell, _actor_cells, _cell_address, _cell_of_pixel, _col_label, _drawable_rect,
+)
+
+
+def test_it_labels_columns_bijective_base26():
+    assert [_col_label(i) for i in (0, 25, 26, 701, 702)] == ["A", "Z", "AA", "ZZ", "AAA"]
+
+
+def test_it_addresses_a_cell_as_letter_column_plus_1based_row():
+    assert _cell_address(3, 3) == "D4"       # col 3 → D, row 3 → 4
+    assert _cell_address(0, 0) == "A1"
+    assert _cell_address(27, 11) == "AB12"
+
+
+def test_it_maps_a_pixel_to_its_cell_within_the_drawable_rect():
+    rect = (10, 130, 10, 130)                # 120x120 drawable, n=12 → 10px cells
+    assert _cell_of_pixel(15, 15, rect, 12) == (0, 0)      # top-left cell → A1
+    assert _cell_of_pixel(125, 125, rect, 12) == (11, 11)  # bottom-right cell → L12
+    assert _cell_of_pixel(65, 65, rect, 12) == (5, 5)      # centre → F6
+
+
+def test_it_clamps_a_pixel_outside_the_rect_to_the_edge_cell():
+    rect = (10, 130, 10, 130)
+    assert _cell_of_pixel(-50, -50, rect, 12) == (0, 0)    # far above-left → first cell
+    assert _cell_of_pixel(999, 999, rect, 12) == (11, 11)  # far below-right → last cell
+
+
+def test_it_takes_centroid_and_span_from_a_projected_point_set():
+    rect = (10, 130, 10, 130)                # 10px cells at n=12
+    # A box spanning cols C..E (px 35..55) and rows 3..5 (px 35..55); centroid ~ D4.
+    pts = [(35.0, 35.0), (55.0, 55.0), (45.0, 45.0)]
+    assert _actor_cells(pts, rect, 12) == ("D4", "C3–E5")
+
+
+def test_a_single_cell_footprint_has_no_span():
+    rect = (10, 130, 10, 130)
+    assert _actor_cells([(65.0, 65.0)], rect, 12) == ("F6", None)          # a point actor
+    assert _actor_cells([(62.0, 62.0), (68.0, 68.0)], rect, 12) == ("F6", None)  # tiny, one cell
+
+
+def test_it_computes_the_drawable_rect_from_pad_gutter_and_inset():
+    assert _drawable_rect(128, 6, 14, 0) == (20, 107, 20, 107)     # pad+gutter .. size-1-pad-gutter
+    assert _drawable_rect(128, 6, 14, 8) == (20, 107, 28, 107)     # inset_top lowers the top edge only
+
+
+def test_actor_cell_is_a_frozen_value():
+    c = ActorCell(cell="D4", span="C3–E5", hidden=False)
+    assert (c.cell, c.span, c.hidden) == ("D4", "C3–E5", False)
+    with pytest.raises(Exception):
+        c.cell = "A1"
+
+
+# ── addressable coordinate grid: gutter render + per-pane cell collection ───────────────────────
+from uedcli.preview import GRID_LABEL, _grid_gutter_px  # noqa: E402
+
+
+def _two_brushes():
+    from uedcli.builders import cube, make_brush_actor
+    a = make_brush_actor("Room", cube(256, 256, 256), location=(0, 0, 0), csg="subtract")
+    b = make_brush_actor("Box", cube(96, 96, 96), location=(300, 100, 0), csg="add")
+    return [a, b]
+
+
+def test_grid_none_renders_byte_identically_to_no_grid():
+    actors = _two_brushes()
+    kw = dict(view="iso", size=256, color_by_csg=True)
+    assert render_brushes_pgm(actors, grid=None, **kw) == render_brushes_pgm(actors, **kw)
+
+
+def test_grid_gutter_draws_and_changes_the_image():
+    actors = _two_brushes()
+    kw = dict(view="iso", size=256, color_by_csg=True)
+    with_grid = render_brushes_pgm(actors, grid=12, **kw)
+    assert with_grid != render_brushes_pgm(actors, **kw)
+    assert GRID_LABEL in _colors(with_grid)          # the gutter letters/numbers landed
+
+
+def test_grid_gutter_is_independent_of_annotate_none():
+    # --annotate none clears on-geometry labels but the gutter still draws (grid is orthogonal).
+    actors = _two_brushes()
+    img = render_brushes_pgm(actors, view="iso", size=256, color_by_csg=True, grid=12,
+                             annotations=AnnotationSpec.none())
+    assert GRID_LABEL in _colors(img)
+
+
+def test_geometry_does_not_draw_in_the_gutter_band():
+    # The top gutter band (below the frame pad, above the drawable rect) holds only the grey column
+    # letters — never brush geometry, which _framing insets clear of the band.
+    actors = _two_brushes()
+    size = 256
+    ppm = render_brushes_pgm(actors, view="iso", size=size, color_by_csg=True, grid=12,
+                             annotations=AnnotationSpec.none())
+    px = _pixels(ppm)
+    gutter = _grid_gutter_px(max(2, size // 256))
+    # a horizontal strip inside the left row-number band, below the top band: only BG or grey labels
+    band_cols = range(_FRAME_PAD, _FRAME_PAD + gutter)
+    for y in range(_FRAME_PAD + gutter + 20, size - _FRAME_PAD - gutter - 20):
+        for x in band_cols:
+            assert px[y * size + x] in ((BG, BG, BG), GRID_LABEL)
+
+
+def test_per_pane_cells_collect_centroid_and_span():
+    actors = _two_brushes()
+    cells = {}
+    render_brushes_pgm(actors, view="top", size=256, color_by_csg=True, grid=12, cells_out=cells)
+    assert set(cells) == {"Room", "Box"}
+    assert cells["Room"].span is not None          # a big brush spans several cells
+    assert cells["Room"].hidden is False
+
+
+def test_quad_tags_cells_by_pane_name():
+    actors = _two_brushes()
+    qcells = {}
+    render_quad_pgm(actors, size=512, color_by_csg=True, grid=12, cells_out=qcells)
+    assert set(qcells) == {"Top", "Front", "Iso", "Side"}
+    assert set(qcells["Top"]) == {"Room", "Box"}
+
+
+def test_cell_matches_where_the_label_would_land_on_the_image():
+    # Consistency probe: the collector's cell for an actor is exactly the cell its projected-point
+    # centroid falls in under the SAME framing (gutter inset) + drawable rect the image uses. Reproduce
+    # via _scene_geometry.actor_points — the very source the collector reads — so the two cannot drift.
+    from uedcli.preview import (_drawable_rect, _cell_of_pixel, _cell_address, _framing,
+                                _grid_gutter_px, _scene_geometry)
+    from uedcli.builders import cube, make_brush_actor
+    box = make_brush_actor("Only", cube(128, 128, 128), location=(50, -30, 10), csg="add")
+    size, n = 256, 12
+    cells = {}
+    render_brushes_pgm([box], view="top", size=size, color_by_csg=True, grid=n, cells_out=cells)
+    geom = _scene_geometry([box], view="top", iso_angle=30.0, annotations=AnnotationSpec.all(),
+                           highlight_polys=set(), focus_cf=None, hybrid=True,
+                           tints=assign_tints([box]), color_by_csg=True, render_data=PreviewData())
+    name_scale = max(2, size // 256)
+    rows = _legend_rows([box], AnnotationSpec.all(), assign_tints([box]), highlight_polys=set(),
+                        highlight_points=set(), drawn_points=set())
+    inset_top = _legend_reserve(rows, name_scale, size)
+    gutter = _grid_gutter_px(name_scale)
+    _s, _tp, to_pxf, _w = _framing(geom.pts, None, size, "top", 30.0, inset_top, gutter=gutter)
+    rect = _drawable_rect(size, _FRAME_PAD, gutter, inset_top)
+    proj = [to_pxf(p) for p in geom.actor_points["Only"]]
+    xs = [p[0] for p in proj]; ys = [p[1] for p in proj]
+    want = _cell_address(*_cell_of_pixel(sum(xs) / len(xs), sum(ys) / len(ys), rect, n))
+    assert cells["Only"].cell == want

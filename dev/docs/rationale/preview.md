@@ -75,6 +75,31 @@ call, not a regression — but it is the owner's call, and it needs new renders.
 **Refs.** `dev/docs/spikes/2026-07-27-preview-focus-dim/` (the ladder, the before/after pair and the
 harness); `uedcli/preview.py` `_DIM_FILL_ALPHA`; `uedcli/tests/test_preview_faces.py` pins the value.
 
+## The addressable grid's default density is `--grid 12` (agent choice)
+
+The always-on coordinate grid (owner-ruled 2026-08-02) leaves the DEFAULT cell count to us. `12` — a
+12×12 grid, columns `A–L`, rows `1–12`. It divides the pane's drawable rect, not the geometry, so a
+cell is a fixed region of the projection (`_drawable_rect`, `_cell_of_pixel`); the address is
+image-space, never world.
+
+**Why 12.** Single-letter columns (`≤26` keeps every column one glyph, so no `AA` to parse), a cell
+big enough to hold a font glyph in the gutter at the default `--size 1024` (~80 px/cell), and fine
+enough that a cell names a small region rather than a quadrant. Above ~26 the columns need two letters
+and the gutter labels crowd; the owner-set bound is `[1, 52]` (`_GRID_MAX`), and past 52 the addresses
+stop being short.
+
+**Rejected.** *8* — coarse; a cell spans a large area, so `D4` barely narrows a busy scene. *16/26* —
+finer, but at 256-px panes (quad, breakdown) the gutter letters abut, and 26 reaches the last
+single-letter column so any bump needs `AA`. *A world-space cell* — rejected in the spec: geometry
+lands anywhere, so a fixed world grid would not divide the IMAGE evenly and `D4` would move with the
+camera. The number is not load-bearing — `--grid N` overrides it — so 12 is a legibility default, not
+a measured constant.
+
+**Refs.** `uedcli/preview.py` `_col_label`/`_cell_of_pixel`/`_actor_cells`/`_draw_grid_gutter`;
+`uedcli/cli/rendering.py` `_GRID_MAX`/`_grid_legend_lines`/`_grid_json`; `uedcli/tests/test_preview.py`
+(the cell-math unit tests) and `test_actor_preview.py` (the legend/JSON/`--grid` dispatch tests).
+
+
 ## `textured` — the texel path over the SAME cull and depth buffer
 
 `textured` reuses `flat`'s cull, `array("f")` depth buffer and occlusion test unchanged; only the

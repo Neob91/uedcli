@@ -784,3 +784,111 @@ def test_it_renders_brush_colors_legend_differently_from_csg(tmp_path, monkeypat
     # Assert: recolouring the wireframe by tint yields a different image (and still a valid PNG).
     assert legend_out.read_bytes() != csg_out.read_bytes()
     assert _is_png(legend_out)
+
+
+# ── addressable coordinate grid (always on): stderr legend, --json, --grid ──────────────────────
+import json as _json
+import re as _re
+
+
+def test_it_always_prints_the_grid_legend_to_stderr_single(tmp_path, monkeypatch, capsys):
+    proj = _project_with_two_brushes(tmp_path, monkeypatch)
+    out = tmp_path / "o.png"
+    assert dispatch.dispatch(_prev(proj, out, names=["WallA", "WallB"], layout="single")) == 0
+    cap = capsys.readouterr()
+    assert cap.out.strip() == str(out.with_suffix(".png"))          # stdout stays the bare path
+    assert "grid: 12×12 columns A–L, rows 1–12" in cap.err          # density header
+    # each actor gets an unqualified letter+number cell (single view)
+    assert _re.search(r"^WallA  [A-Z]+\d+", cap.err, _re.M)
+    assert _re.search(r"^WallB  [A-Z]+\d+", cap.err, _re.M)
+
+
+def test_it_pane_qualifies_the_legend_under_quad(tmp_path, monkeypatch, capsys):
+    proj = _project_with_two_brushes(tmp_path, monkeypatch)
+    out = tmp_path / "o.png"
+    assert dispatch.dispatch(_prev(proj, out, names=["WallA", "WallB"], layout="quad")) == 0
+    err = capsys.readouterr().err
+    line = next(ln for ln in err.splitlines() if ln.startswith("WallA"))
+    assert _re.search(r"Top:[A-Z]+\d+ Front:[A-Z]+\d+ Side:[A-Z]+\d+ Iso:[A-Z]+\d+", line)
+
+
+def test_json_emits_the_grid_object_to_stdout(tmp_path, monkeypatch, capsys):
+    proj = _project_with_two_brushes(tmp_path, monkeypatch)
+    out = tmp_path / "o.png"
+    assert dispatch.dispatch(_prev(proj, out, names=["WallA", "WallB"], layout="single",
+                                   view="top", json=True)) == 0
+    cap = capsys.readouterr()
+    obj = _json.loads(cap.out)                                       # stdout is the JSON, not the path
+    assert obj["image"] == str(out.with_suffix(".png"))
+    assert obj["grid"] == {"cols": 12, "rows": 12}
+    assert set(obj["actors"]) == {"WallA", "WallB"}
+    wa = obj["actors"]["WallA"]
+    assert set(wa["panes"]) == {"Top"}                              # single view keyed by --view
+    assert _re.fullmatch(r"[A-Z]+\d+", wa["panes"]["Top"]["cell"])
+    assert wa["hidden"] is False
+    assert "grid: 12×12" in cap.err                                 # legend still on stderr
+
+
+def test_without_json_stdout_is_the_bare_path(tmp_path, monkeypatch, capsys):
+    proj = _project_with_two_brushes(tmp_path, monkeypatch)
+    out = tmp_path / "o.png"
+    assert dispatch.dispatch(_prev(proj, out, names=["WallA"], layout="single")) == 0
+    assert capsys.readouterr().out.strip() == str(out.with_suffix(".png"))
+
+
+def test_grid_density_override_changes_the_addresses(tmp_path, monkeypatch, capsys):
+    proj = _project_with_two_brushes(tmp_path, monkeypatch)
+    out = tmp_path / "o.png"
+    assert dispatch.dispatch(_prev(proj, out, names=["WallA", "WallB"], layout="single", grid=4)) == 0
+    err4 = capsys.readouterr().err
+    assert "grid: 4×4 columns A–D, rows 1–4" in err4
+    assert dispatch.dispatch(_prev(proj, out, names=["WallA", "WallB"], layout="single", grid=12)) == 0
+    err12 = capsys.readouterr().err
+    assert err4 != err12                                            # different density → different cells
+
+
+def test_grid_zero_is_a_clean_named_error(tmp_path, monkeypatch, capsys):
+    proj = _project_with_two_brushes(tmp_path, monkeypatch)
+    rc = dispatch.dispatch(_prev(proj, tmp_path / "o.png", names=["WallA"], grid=0))
+    err = capsys.readouterr().err
+    assert rc == 2 and "--grid must be in [1, 52], got 0" in err and "Traceback" not in err
+
+
+def test_grid_too_large_is_a_clean_named_error(tmp_path, monkeypatch, capsys):
+    proj = _project_with_two_brushes(tmp_path, monkeypatch)
+    rc = dispatch.dispatch(_prev(proj, tmp_path / "o.png", names=["WallA"], grid=999))
+    err = capsys.readouterr().err
+    assert rc == 2 and "--grid must be in [1, 52], got 999" in err and "Traceback" not in err
+
+
+def test_same_cell_collision_co_lists_both_actors(tmp_path, monkeypatch, capsys):
+    # --grid 1 collapses the whole image to one cell (A1): both actors land there and each keeps its
+    # own legend line (a collision is not an error).
+    proj = _project_with_two_brushes(tmp_path, monkeypatch)
+    out = tmp_path / "o.png"
+    assert dispatch.dispatch(_prev(proj, out, names=["WallA", "WallB"], layout="single", grid=1)) == 0
+    err = capsys.readouterr().err
+    assert _re.search(r"^WallA  A1", err, _re.M) and _re.search(r"^WallB  A1", err, _re.M)
+
+
+def test_empty_actor_set_is_exit_0_with_no_cells(tmp_path, monkeypatch, capsys):
+    from uedcli.cli import rendering
+    proj = _project_with_two_brushes(tmp_path, monkeypatch)
+    out = tmp_path / "o.png"
+    rc = rendering.render_actors_to_out([], _prev(proj, out, layout="single", json=True))
+    assert rc == 0
+    obj = _json.loads(capsys.readouterr().out)
+    assert obj["actors"] == {}
+
+
+def test_breakdown_emits_the_pane0_legend_single_view_unqualified(tmp_path, monkeypatch, capsys):
+    # Under --layout breakdown the gutter + legend ride pane 0 only; the legend reads off that single
+    # whole-scene view, so it is unqualified (no Top:/Front: prefixes) like a `single` render.
+    proj = _project_room_pillar(tmp_path, monkeypatch)
+    out = tmp_path / "b.png"
+    assert dispatch.dispatch(_prev(proj, out, names=["Room", "Pillar"], layout="breakdown",
+                                   size=256)) == 0
+    err = capsys.readouterr().err
+    assert "grid: 12×12 columns A–L, rows 1–12" in err
+    assert _re.search(r"^Room  [A-Z]+\d+", err, _re.M)
+    assert "Top:" not in err and "Iso:" not in err                 # single-view, not pane-qualified
