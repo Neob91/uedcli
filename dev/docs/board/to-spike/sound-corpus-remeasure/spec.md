@@ -1,8 +1,9 @@
 # Spec: asset catalog — the AUDIO arms (sound + music)
 
-**Status:** split out of the unified spec 2026-07-26. **BLOCKED — the corpus must be re-measured on the
-composed search path before any of this is designed.** Every number the old §4a/§7 used came from walking
-directories the tool does not load, and the scope rule built on them is both unnecessary and wrong.
+**Status:** split out of the unified spec 2026-07-26. **BUILDABLE (phase a)** — the corpus was
+re-measured by the `sound-corpus-remeasure` spike (`dev/docs/spikes/sound-corpus-remeasure/`,
+2026-08-02) and the scope rule is settled: `sound list` takes NO default filter. Phase (b)
+(sound preview / spectrograms) still waits on a separate `.uax`-decode spike.
 **Ephemeral:** fold into `architecture.md` + `usage.md` on build, then delete.
 
 > **Part of the split asset-catalog spec set** (split 2026-07-26 after two spec-gate rounds returned
@@ -16,41 +17,57 @@ directories the tool does not load, and the scope rule built on them is both unn
 
 ---
 
-## BLOCKER: the sound-corpus measurements do not hold on the composed path
+## RESOLVED: the corpus size is INSTALL-LAYOUT-dependent; the scope rule does not turn on it
 
-Re-measured 2026-07-26 against the real configured path (`~/.uedcli/config.toml` →
-`.../DX/{System,Textures,Sounds,Music}`, **119 package stems**):
+Re-measured 2026-08-02 by the `sound-corpus-remeasure` spike, driving the tool's own resolver
+(`config.composed_search_files`) over a **stock GOG "DeusEx GOTY"** install
+(`dev/games/dxreal`, `{System,Sounds,Music,Textures}`, **131 package stems**):
 
-| claim | on the composed path |
-|-------------------------------------------------|---
-| "**10,826** Sound exports on the composed path" | **747** |
-| "~**10,200** conversation VO in `DeusExConAudio*.u`" | **0** — those packages exist only under `System.bak/` (18) and `SystemOk/` (18) |
-| "Expected corpus ≈ **550** after exclusion" | **747** with no exclusion at all |
-| `DeusExSounds.u` = 399 SFX | **399** ✅ (this one holds) |
+| metric | measured (stock GOG) |
+|-----------------------------------------------|---------:|
+| TOTAL `Sound` exports on the composed path | **10,629** |
+| in 18 `DeusExConAudio*.u` packages (VO) | **10,079** |
+| `DeusExSounds.u` (SFX, 10 groups) | **399** |
+| `Ambient.uax` + `MoverSFX.uax` (SFX) | 85 + 66 |
+| **non-VO total** | **550** |
+| full cold enumeration of all 131 packages | **481 ms** |
 
-A whole-install walk (mods included) gives 31,059 — which is where 10,826 came from.
+**Both prior measurements were real; they came from different install layouts.** The 747/zero-VO
+re-measurement was taken on an install whose `DeusExConAudio*.u` had been relocated to `System.bak/`
+and `SystemOk/` — OFF the composed path. On a **stock retail install those packages sit in
+`System/`**, so the VO IS on the path and the corpus is ~10.6k, matching the OLD design's numbers
+(10,629 ≈ 10,826; 10,079 ≈ ~10,200 VO; **550 = the "≈550 after exclusion" exactly**). So:
 
-**Three consequences, all of which invalidate the old design:**
+1. **The old design's exclusion MOTIVATION was correct** — a stock `sound list` would print ~10k VO
+   rows. The spec's earlier claim that "747 is an ordinary listing, so the exclusion is unnecessary"
+   is FALSE on a stock install.
+2. **VO is identifiable only by PACKAGE NAME** (stock: the `DeusExConAudio*` packages, flat/root
+   group, 10,079 sounds), not by a per-sound name pattern and not by group. A mod ships VO in its own
+   packages (`LUM_ConversationsAudioMission20`, `TNM` on the re-measurer's install — not reachable in
+   the spike environment, so their counts are unverified here). No single hardcoded prefix covers
+   every substrate.
+3. **Two downstream arguments KEEP their basis on a stock install:** plan S4's hot-path cost
+   criterion (the ~10k VO exports ARE on the path here — enumerated in 481 ms), and the engine spec's
+   ObjectProperty-validation worked example (a VO ref resolves against those export tables, which are
+   present).
 
-1. **The VO exclusion is unnecessary.** It existed to prevent a 10k-line `sound list` dump. 747 rows is an
-   ordinary listing. So the new per-substrate config key, `--include-vo`, and the excluded-count reporting
-   were all surface bought with a number that does not occur on the path.
-2. **The exclusion pattern is also WRONG.** The VO that *is* on the path is
-   `LUM_ConversationsAudioMission20` (109 exports) and `TNM` (84). A `DeusExConAudio*` pattern matches
-   neither, so the project's own conversation audio would leak into `sound list` while the machinery
-   reported "excluded: 0".
-3. **Two downstream arguments lose their basis:** plan S4's hot-path cost criterion ("a composed path that
-   includes ~10,200 `DeusExConAudio*` exports", held to sub-100 ms), and the engine spec's
-   ObjectProperty-validation worked example (validate against raw export tables *because* a VO ref would
-   otherwise fail).
+### Scope rule — SETTLED: `sound list` takes NO default filter
 
-**RULED 2026-07-26 — spike first, then spec.** The owner's call: re-measure before designing any scope
-rule, rather than dropping the exclusion outright or patching the pattern. So this arm stays blocked and the
-next artifact is a spike, not a slice.
+Decided on the **CLI conventions**, not on a corpus size (which is install-dependent and cannot found
+a rule):
 
-**Next action: a `[spike]`, not a spec.** Re-measure on the composed path — Sound export counts per
-package, the group structure, how much is VO, and whether `sound list` needs any default filter at all.
-Only then decide whether a config key is warranted. Do not design the scope rule first.
+- A **producer verb prints its whole set** to stdout, one item per line, count to stderr
+  ([`direction/conventions.md`](../../../direction/conventions.md)). A default filter hiding 10,079
+  rows is exactly the "partial result plus a warning that scrolls away" the no-silent-half-answers
+  rule forbids.
+- **Narrowing is composition, not a per-verb flag.** SFX-only is `sound list | grep -v
+  '^DeusExConAudio'`, or a structured `sound list --package <glob>` selector — never a hidden default.
+- Cost is not a reason to filter: the full corpus enumerates in **481 ms cold**.
+
+So the old audio surface **dies as the spec always wanted — but for the corrected reason.** Drop the
+per-substrate VO config key, `--include-vo`, and the excluded-count reporting. Because there is no
+hardcoded VO pattern at all, the "the `DeusExConAudio*` pattern misses `LUM_`/`TNM`" objection is moot
+— there is no pattern to be wrong.
 
 ---
 
