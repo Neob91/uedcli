@@ -60,8 +60,13 @@ a rule):
   ([`direction/conventions.md`](../../../direction/conventions.md)). A default filter hiding 10,079
   rows is exactly the "partial result plus a warning that scrolls away" the no-silent-half-answers
   rule forbids.
-- **Narrowing is composition, not a per-verb flag.** SFX-only is `sound list | grep -v
-  '^DeusExConAudio'`, or a structured `sound list --package <glob>` selector — never a hidden default.
+- **Narrowing is composition, not a hidden default.** SFX-only is `sound list | grep -v
+  '^DeusExConAudio'`, or the structured `sound list --package NAME` selector — never a filter the tool
+  applies for you.
+- **`--package NAME` takes an EXACT package name, not a glob, and is repeatable** (`--package A
+  --package B` = the union). This mirrors [`conventions.md`](../../../direction/conventions.md) "`find`
+  = deterministic selector, not fuzzy": the verb prints its whole set by default; a `--package` narrows
+  it deterministically to named packages. An unknown package exits 2 naming it (no silent empty result).
 - Cost is not a reason to filter: the full corpus enumerates in **481 ms cold**.
 
 So the old audio surface **dies as the spec always wanted — but for the corrected reason.** Drop the
@@ -91,6 +96,18 @@ IT/S3M/XM by magic and read each one's title field; on an unrecognised container
 "this module has no title". A wrong or silently-absent title is a half-answer.
 Because identity is name-based, **phase (a) ships the classify verbs for both audio kinds** — there
 is no key to invent later and nothing to re-key.
+
+**`classify set` over an existing shard REFUSES (exit 2 naming the ref); `--force` replaces it.** This
+holds for both audio kinds and applies to every field (tags and description alike): a `set` on an
+already-classified sound/music does not union-merge — it stops and names the ref, and only `--force`
+overwrites the stored shard. Rationale: never silently overwrite authored classification
+([`direction/safety.md`](../../../direction/safety.md); owner ruling 2026-08-02, one rule across
+texture/class/sound/music). This is the aligned behaviour, so the audio arm does NOT reuse the shipped
+class arm's union-merge `merge_set`; it reuses the store's shard/lock/atomic-write shape but writes with
+refuse-or-`--force` semantics. The class arm is being brought to the same rule under board item
+`align-class-classify-set-to-refuse` (separate work — do not touch it here). Under the JSONL batch `-`,
+`--force` governs every row; without it, the first row hitting an existing shard fails the whole batch
+(all-or-nothing validation, like the class batch), writing nothing.
 
 **Phase (b) — after the `.uax` decode spike.** Duration, rate, channels, loopability, spectrogram
 previews, and an opt-in `sound export <ref> --out X.wav` for human audition. Purely additive.
@@ -124,7 +141,7 @@ Read `dev/docs/rules/tests.md` and `dev/docs/rules/spikes.md` first. **`rules/sp
 finding to be pinned by a committed regression or it rots** — the `.umx` title read is the one live-verified
 audio finding and currently has no test anywhere.
 
-- **`.umx` titles:** an IT module's title is read at `IMPM`+26 (live-verified: `Area51_Music` → "Area 51",
+- **`.umx` titles:** an IT module's title is the 26-byte name field at `IMPM`+4 (live-verified: `Area51_Music` → "Area 51",
   `Credits_Music` → "The Illuminati", `Area51Bunker_Music` → "Begin the End"); an S3M's and an XM's from
   their own header fields; an unrecognised container reports `title: null` **plus** a `format` fact naming
   what was found, never a blank that reads as "no title". Only IT is reachable here (35 `.umx`, all DX), so
