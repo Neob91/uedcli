@@ -241,6 +241,7 @@ def cylinder(height: float, radius: float, sides: int = 8,
     """An `sides`-gon prism of `height` (Z) and circumscribed `radius`, centered
     on the origin. `angle_offset` (deg) rotates the cross-section (e.g. to put a
     flat face on an axis)."""
+    from . import profile as profile2d          # function-local: see the WELD note at the imports
     if sides < 3:
         raise GeometryError("cylinder needs >= 3 sides")
     hz = height / 2.0
@@ -255,8 +256,15 @@ def cylinder(height: float, radius: float, sides: int = 8,
         quad = [bot[i], bot[j], top[j], top[i]]
         outward = ((ring[i][0] + ring[j][0]) / 2, (ring[i][1] + ring[j][1]) / 2, 0.0)
         polys.append(_face(quad, outward, texture, flags, item="Side"))
-    polys.append(_face(top, (0, 0, 1), texture, flags, item="Cap"))
-    polys.append(_face(bot, (0, 0, -1), texture, flags, item="Cap"))
+    # Tile each end cap into convex ≤16-vertex pieces, exactly as `extrude` does — the engine's
+    # `FPoly` is convex and holds at most 16 vertices, so a `--sides > 16` ring cannot be one face.
+    # A convex ≤16-vertex ring comes back as ONE piece, so `--sides ≤ 16` is unchanged (one cap face
+    # per end); above 16 the ring is decomposed into convex pieces that tile it (kb/csg-bsp.md §5.2).
+    pieces = profile2d.convex_pieces(profile2d.normalize_winding(ring))
+    polys += [_face([(x, y, hz) for x, y in piece], (0, 0, 1), texture, flags, item="Cap")
+              for piece in pieces]
+    polys += [_face([(x, y, -hz) for x, y in piece], (0, 0, -1), texture, flags, item="Cap")
+              for piece in pieces]
     return Brush(model_name="Model", polys=polys)
 
 
@@ -264,12 +272,14 @@ def cone(height: float, radius: float, sides: int = 8,
          texture=None, flags: int = 0, angle_offset: float = 0.0) -> Brush:
     """An `sides`-faced cone: base ring of `radius` at the bottom, apex at the
     top, total `height` (Z), centered on the origin."""
+    from . import profile as profile2d          # function-local: see the WELD note at the imports
     if sides < 3:
         raise GeometryError("cone needs >= 3 sides")
     hz = height / 2.0
     off = math.radians(angle_offset)
-    base = [(radius * math.cos(off + 2 * math.pi * i / sides),
-             radius * math.sin(off + 2 * math.pi * i / sides), -hz) for i in range(sides)]
+    ring = [(radius * math.cos(off + 2 * math.pi * i / sides),
+             radius * math.sin(off + 2 * math.pi * i / sides)) for i in range(sides)]
+    base = [(x, y, -hz) for x, y in ring]
     apex = (0.0, 0.0, hz)
     polys = []
     for i in range(sides):
@@ -277,7 +287,12 @@ def cone(height: float, radius: float, sides: int = 8,
         tri = [base[i], base[j], apex]
         outward = ((base[i][0] + base[j][0]) / 2, (base[i][1] + base[j][1]) / 2, 0.0)
         polys.append(_face(tri, outward, texture, flags, item="Side"))
-    polys.append(_face(base, (0, 0, -1), texture, flags, item="Base"))
+    # The apex is a point, so only the base cap tiles — into convex ≤16-vertex pieces, as `extrude`
+    # caps do. A convex ≤16-vertex ring is ONE piece, so `--sides ≤ 16` is unchanged (one base face);
+    # above 16 the base is decomposed into convex pieces that tile it (kb/csg-bsp.md §5.2).
+    pieces = profile2d.convex_pieces(profile2d.normalize_winding(ring))
+    polys += [_face([(x, y, -hz) for x, y in piece], (0, 0, -1), texture, flags, item="Base")
+              for piece in pieces]
     return Brush(model_name="Model", polys=polys)
 
 

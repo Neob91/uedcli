@@ -674,3 +674,94 @@ def test_revolve_facets_are_evenly_spaced_by_angle_over_segments(angle_deg, segm
         f"{got}")
     for want, have in zip(expected, got):
         assert abs(have - want) < 1e-4, f"facet angle {have} is not the expected {want}"
+
+
+# ---------------------------------------------------------------------------
+# cylinder/cone cap tiling above 16 sides
+# (board: brush-build-cylinder-cone-sides-has-no-upper)
+#
+# An engine `FPoly` is convex and holds at most 16 vertices, so a `--sides > 16`
+# end cap cannot be one N-gon face. cylinder/cone tile the cap into convex
+# ≤16-vertex pieces via `profile.convex_pieces`, exactly like `extrude` — one
+# cap face per end when the ring is convex and ≤16, else one face per piece.
+# ---------------------------------------------------------------------------
+
+from uedcli import profile as _profile
+from uedcli.builders import cylinder, cone
+from uedcli.geometry import validate_brush
+
+
+def _cap_pieces(brush, item):
+    """The vertex rings of the faces tagged `item` (Cap/Base)."""
+    return [p.vertices for p in brush.polys if p.item == item]
+
+
+def _side_count(brush):
+    return sum(1 for p in brush.polys if p.item == "Side")
+
+
+@pytest.mark.parametrize("sides", [8, 16])
+def test_cylinder_le16_emits_exactly_one_cap_face_per_end(sides):
+    # The convex invariant: a convex ≤16-vertex ring is ONE piece, so a plain prism still emits
+    # exactly two cap faces (one Cap per end) and the ≤16 case is byte-identical to before tiling.
+    b = cylinder(64, 48, sides=sides)
+    assert len(_cap_pieces(b, "Cap")) == 2
+    assert _side_count(b) == sides
+    assert len(b.polys) == sides + 2
+
+
+@pytest.mark.parametrize("sides", [8, 16])
+def test_cone_le16_emits_exactly_one_base_face(sides):
+    b = cone(64, 48, sides=sides)
+    assert len(_cap_pieces(b, "Base")) == 1
+    assert _side_count(b) == sides
+    assert len(b.polys) == sides + 1
+
+
+def _assert_pieces_tile_ring(pieces, sides):
+    """Each piece is convex and ≤16 vertices, and the union of the pieces' (x,y) vertex sets is the
+    full `sides`-vertex ring (tiling adds only diagonals — no new boundary vertices)."""
+    union = set()
+    for ring in pieces:
+        assert 3 <= len(ring) <= 16, f"cap piece has {len(ring)} vertices, must be 3..16"
+        ring2d = [(round(float(x), 6), round(float(y), 6)) for x, y, _z in ring]
+        assert _profile.is_convex(ring2d), f"cap piece is not convex: {ring2d}"
+        union |= set(ring2d)
+    assert len(union) == sides, f"pieces cover {len(union)} distinct ring vertices, want {sides}"
+    # And more than one piece — tiling actually happened above 16.
+    assert len(pieces) > 1
+
+
+@pytest.mark.parametrize("sides", [17, 24])
+def test_cylinder_above16_tiles_both_caps(sides):
+    b = cylinder(64, 48, sides=sides)
+    validate_brush(b)
+    assert _side_count(b) == sides
+    caps = _cap_pieces(b, "Cap")
+    # Two caps (top + bottom), each tiled into the same number of pieces.
+    top = [r for r in caps if float(r[0][2]) > 0]
+    bot = [r for r in caps if float(r[0][2]) < 0]
+    assert len(top) == len(bot) == len(caps) // 2
+    _assert_pieces_tile_ring(top, sides)
+    _assert_pieces_tile_ring(bot, sides)
+    # No face anywhere exceeds the FPoly bound.
+    assert max(len(p.vertices) for p in b.polys) <= 16
+
+
+@pytest.mark.parametrize("sides", [17, 24])
+def test_cone_above16_tiles_the_base_cap(sides):
+    b = cone(64, 48, sides=sides)
+    validate_brush(b)
+    assert _side_count(b) == sides
+    _assert_pieces_tile_ring(_cap_pieces(b, "Base"), sides)
+    # The apex end is a point, not a cap: no Cap/Base face lives at +z.
+    assert all(float(v[2]) < 0 for r in _cap_pieces(b, "Base") for v in r)
+    assert max(len(p.vertices) for p in b.polys) <= 16
+
+
+def test_no_builder_face_exceeds_the_fpoly_16_vertex_bound():
+    # The invariant the whole change exists to hold, swept across the boundary and well past it.
+    for sides in (16, 17, 20, 24, 32, 64):
+        for b in (cylinder(64, 48, sides=sides), cone(64, 48, sides=sides)):
+            validate_brush(b)
+            assert max(len(p.vertices) for p in b.polys) <= 16, f"sides={sides}"

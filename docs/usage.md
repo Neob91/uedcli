@@ -698,7 +698,9 @@ representable (`65536` is a power of two), so a 60° sweep is `10923` uu = 60.00
 take no angle at all: the useful control there is the **`--align-to-side`** flag, which offsets the
 cross-section by half a segment (`180/--sides` degrees) so a flat FACE, rather than a vertex, meets
 an axis-aligned wall — the same as UnrealEd's own `AlignToSide` checkbox. For any other cross-section
-angle use `--rotate`, whole-actor placement.
+angle use `--rotate`, whole-actor placement. `--sides` has no upper bound: above 16 a round cap is
+split into several convex `Cap`/`Base` faces (an engine face holds at most 16 vertices), so the brush
+stays one solid built from valid faces.
 
 - **`--rotate PITCH,YAW,ROLL`** (unreal rotation units — 16384 = 90°, 65536 = a full turn) **SETS** the emitted actor's `Rotation` field absolutely (a
   fresh actor is at identity, so no add-vs-override ambiguity). The rotation is **stored on the
