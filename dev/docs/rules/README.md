@@ -8,6 +8,7 @@ can't miss.
 |-----------------------|---
 | `building-features.md`| building a `to-build/` item and merging it |
 | `build-run.md`        | running a batch of `to-build/` items in one pass |
+| `reviewer-brief.md`   | handing context to a review subagent |
 | `documentation.md`    | writing or restructuring docs |
 | `worktrees.md`        | creating a worktree or squash-merging one |
 | `tests.md`           | running tests |
