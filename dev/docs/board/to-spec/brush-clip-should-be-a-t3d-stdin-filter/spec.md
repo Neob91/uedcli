@@ -24,8 +24,10 @@ by-name in-place trunk edit.
 
 ## Design
 
-**Replace** the by-name in-place form with the filter (recommended; owner question below), per
-no-back-compat-cruft — the new spelling is the only spelling.
+**Replace** the by-name in-place form with the filter (owner ruling 2026-08-02), per
+no-back-compat-cruft — the new spelling is the only spelling. A placed actor is clipped via
+`actor show X | brush clip - … | brush replace X -`. The by-name parser, `_clip`'s trunk load/save,
+and its dispatch route are all deleted in the same change.
 
 - `brush clip -|FILE (--axis A --offset N | --plane PX,PY,PZ NX,NY,NZ) [--keep below|above]` reads a
   brush T3D snippet and clips **every** brush actor in it by the same world plane, mapping that plane
@@ -77,14 +79,18 @@ brush clip -|FILE (--axis x|y|z --offset N | --plane PX,PY,PZ NX,NY,NZ) [--keep 
   interior miss → passthrough + note; a 2-brush set clipped by one plane.
 - `brush build cube | brush clip - … | brush replace WALL -` round-trips (the placed-actor recipe).
 
+## Decisions
+
+- **Replace the by-name in-place `brush clip <name>` with the filter `brush clip -|FILE`** (owner,
+  2026-08-02). One spelling, per no-back-compat-cruft. A placed actor is clipped via
+  `actor show X | brush clip - … | brush replace X -` — the same rotation-aware result, since
+  `actor show` carries the full transform. The by-name form is deleted in the same change.
+
 ## Docs to update in the same change
 
 - `docs/usage.md`: clip becomes a filter (`brush clip -|FILE …`); delete the by-name row and its
   rotation-aware note's by-name framing.
-- `docs/leveldesign/general/recipes/shapes/` — `chamfered-box.md`, `l-ledge.md`, `moulded-cornice.md`,
-  and the others that show the two-step add-then-clip-by-name form → the one-pipe filter form.
-
-## Open questions
-
-- **Replace the by-name in-place clip, or keep both forms?**
-  (`questions/keep-by-name-clip-or-replace.md` — recommend replace.)
+- `docs/leveldesign/general/recipes/shapes/` — `chamfered-box.md`, `add-subtract-twin.md`,
+  `triangular-wedge.md`, `ring-cornice.md` show the two-step add-then-clip-by-name form
+  (`brush clip <name> --plane …`); `l-ledge.md` and `moulded-cornice.md`, plus `README.md`, reference
+  it. Convert the worked examples to the one-pipe filter form and fix the cross-references.

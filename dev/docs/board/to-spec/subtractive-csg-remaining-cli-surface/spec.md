@@ -1,11 +1,9 @@
 # Spec — subtractive CSG: the remaining CLI surface
 
-DRAFT. Surfaces the owner decision(s); do not build past an unanswered question.
-
 ## Goal
 
-Enumerate what CSG-authoring CLI surface is still missing, reconcile the stale board note with what
-actually shipped, and propose the one real remaining verb/flag.
+Reconcile the stale board note with what actually shipped, and confirm that CSG-type discovery needs
+**no new CLI surface** — it lives on the existing `actor find --prop CsgOper=…`.
 
 ## Current state — reconciling the overview with reality
 
@@ -23,56 +21,66 @@ The overview predates the `generators.md` rulings and is stale on three points:
 - **(3a) "expose CSG order as a CLI verb"** — DONE: `actor order` (`cli/commands/actor/edit.py:72`,
   `order_ops.py`), trunk-only LexoRank reorder. Doc note only.
 
-What is genuinely missing:
+Nothing new is genuinely missing. **Select-by-type (additive vs subtractive) already works** through
+the existing `actor find --prop` (verified live 2026-08-02, see Decisions):
 
-- **Select-by-type (additive vs subtractive).** `actor find` filters by `--kind point|brush`
-  (`cli/parsers/brush.py`… `query.list_actors`, `query.py:179-240`) but has **no `--csg add|subtract`
-  filter**, though `query._csg_oper` (`query.py:276-282`) already computes it. "find all subtractive
-  brushes" (to reorder, retexture, or preview rooms) has no verb.
-- **`brush find` / `brush list`** (the overview's "unify the fragmented brush namespace") do not
-  exist. Whether they SHOULD is a convention call — see the question.
+    actor find --kind brush --prop CsgOper=CSG_Subtract    # every carve
+    actor find --kind brush --prop CsgOper=CSG_Add         # every additive
 
-## Design — CLI surface
+`CsgOper` is a declared `ECsgOper` enum on `Engine.Brush`, and `--prop` matches it type-aware
+(enum name == ordinal). So no `--csg` flag is added, and `brush find`/`brush list` are not added
+(owner ruling 2026-08-02) — a second discovery surface duplicating `actor find` is what
+`conventions.md` "one stateless query verb" rejects.
 
-### 1. `actor find --csg add|subtract` (recommended, the one real gap)
+## Design — no new CLI surface
 
-Add a `--csg {add,subtract}` filter to `actor find`, ANDing with the other filters, matching on
-`query._csg_oper` (`CsgOper` prop; absent counts as `CSG_Add`).
+This item is **verify + document + close**. There is no code to add.
 
-    --csg {add,subtract}
-        keep only brush actors whose CSG operation is add / subtract (CsgOper; an unset CsgOper
-        counts as add). A point actor, or a base Mover (no CsgOper), never matches. ANDs with the
-        other filters, e.g. `actor find --kind brush --csg subtract` selects every carve.
+### 1. Reconcile docs
 
-Plumb a `csg` param into `query.list_actors` alongside `kind` (`query.py:191`), filtering in
-`_passes` (`query.py:236-239`). Point actors and movers (no `CsgOper`) do not match either value.
+State plainly in `docs/usage.md`/`docs/leveldesign/` that:
+- CSG-set authoring is `brush intersect`/`brush deintersect` (on `brush`), fed a T3D set on stdin.
+- CSG reorder (precedence) is `actor order` (trunk-only LexoRank).
+- **Brush/CSG-type discovery is `actor find --kind brush [--prop CsgOper=CSG_Add|CSG_Subtract]`** —
+  there is no `brush find`/`brush list` and no `--csg` flag.
 
-### 2. Reconcile docs (no new verb)
+### 2. `--solidity` live verification → separate spike
 
-State plainly that CSG-set authoring is `brush intersect`/`brush deintersect` (on `brush`), CSG
-reorder is `actor order`, and brush discovery is `actor find --kind brush [--csg …]`. Update
-`docs/usage.md`/`docs/leveldesign/` where they imply otherwise.
+`brush intersect/deintersect --solidity` is implemented (`brushcsg.apply_solidity`); only a live
+spike confirming the built map's collision matches the per-face rule remains. That is a `to-spike`
+task, filed as its own board item — out of scope here.
 
-### 3. `--solidity` live verification → separate spike
+## Decisions
 
-`--solidity` is implemented; only a live confirming spike remains. It belongs in its own `to-spike`
-item, not this one (I cannot file board items from here — flag it for the owner/next session).
+- **No `brush find`/`brush list`, and no new `actor find --csg` flag** (owner, 2026-08-02).
+  CSG-type discovery uses the existing `actor find --prop CsgOper=…`.
+- **Verified live (2026-08-02)** on a trunk with one `CSG_Subtract` cube, one `CSG_Add` cube, and a
+  `LevelInfo`, resolved against the Deus Ex `.u` at `uned/UED22`:
+  - `actor find --prop CsgOper=CSG_Subtract` → the subtractive only, exit 0.
+  - `actor find --prop CsgOper=CSG_Add` → the additive only, exit 0.
+  - `actor find --kind brush --prop CsgOper=CSG_Subtract` → ANDs correctly.
+  - `--prop CsgOper=CSG_Bogus` → exit 2, `'CSG_Bogus' is not a value of ECsgOper (…)`.
+  - Schema: `CsgOper` declared on `Engine.Brush`, enum `ECsgOper`
+    `(CSG_Active, CSG_Add, CSG_Subtract, CSG_Intersect, CSG_Deintersect)`, class default `CSG_Active`.
+  - Handler: `cli/commands/actor/query.py:68-119` (`--prop` → `propedit.effective_match`); the enum
+    comparison is `propedit`'s designed behaviour (`--prop` help, `cli/parsers/actor.py:51-56`).
 
-## Edge cases & errors
-
-- `actor find --csg subtract` with no matching actors → empty stdout, exit 0 (a filter matching
-  nothing is not an error — existing `find` behaviour).
-- `--csg` combined with `--kind point` → matches nothing (a point actor has no CsgOper); allowed, not
-  an error.
-- Unknown `--csg` value → argparse `choices=` rejects, exit 2.
+Two caveats to note in the doc, both correct:
+- **A `CsgOper`-absent brush matches `CSG_Active`, not `CSG_Add`.** `--prop` reads the *class default*
+  (`CSG_Active`) when the prop is unset, whereas uedcli's internal `query._csg_oper` treats absent as
+  `CSG_Add`. This diverges only for the red builder brush (the sole brush that omits `CsgOper`); every
+  placed world brush carries an explicit `CSG_Add`/`CSG_Subtract` (`normalize.py:145-146`), so
+  `--prop CsgOper=…` classifies all real world brushes correctly.
+- **A considered set with no brush errors.** `actor find --kind point --prop CsgOper=CSG_Add` exits 2
+  (`no considered actor's class declares CsgOper`) — `--prop`'s typo-protection, not an empty result.
+  The canonical spelling `actor find --kind brush --prop CsgOper=…` always includes brushes when any
+  exist. (This differs from the rejected `--csg` design, which would have returned empty here.)
 
 ## Tests
 
-- `test_find_compose.py` / `test_cli.py`: a trunk with additive + subtractive brushes + a light —
-  `--csg subtract` returns only carves; `--csg add` returns additives (incl. `CsgOper`-absent);
-  `--kind point --csg add` returns nothing; ANDs with `--within-bbox`.
-- Refresh `tests/fixtures/parser_baseline/*` — new `--csg` choice.
-
-## Open questions
-
-See `questions/add-brush-find-list-or-keep-on-actor-find.md`.
+- `test_find_compose.py` (or `test_cli.py`): a trunk with additive + subtractive brushes + a light,
+  built against the game `.u` (integration-marked if the offline suite has no schema) —
+  `--prop CsgOper=CSG_Subtract` returns only carves, `--prop CsgOper=CSG_Add` only additives,
+  `--kind brush --prop CsgOper=CSG_Subtract` ANDs, invalid enum value exits 2. One test pins that
+  `--prop CsgOper=` discovers CSG type, so the documented workflow cannot silently rot.
+- No parser-baseline refresh (no flag added).

@@ -1,7 +1,5 @@
 # Spec — add the missing surface poly-flags to the settable set
 
-DRAFT. Surfaces the owner decision(s); do not build past an unanswered question.
-
 ## Goal
 
 Make the five real `PolyFlags` bits that `kb/textures.md` documents but no verb can set settable via
@@ -48,9 +46,12 @@ Append the five pairs to `PF_NAMES`. No new flags, no help rewrite: `--add-flag`
 
 Ordering in `PF_NAMES`: append by ascending bit, matching the existing rough order.
 
-Recommendation: add ALL five (see the question). They are plain bits, round-trip-clean, CSG-neutral;
-the guiding goal is to expose every UnrealEd surface attribute as text. The "distortion / lightmap
-memory" side effects are deliberate author choices documented in the kb, not correctness risks.
+## Decisions
+
+- **Add ALL five** — `bigwavy`, `smallwavy`, `lowshadowdetail`, `highshadowdetail`, `brightcorners`
+  (owner, 2026-08-02). They are plain bits, round-trip-clean, CSG-neutral; the guiding goal is to
+  expose every UnrealEd surface attribute as text. The "distortion / lightmap memory" side effects
+  are deliberate author choices documented in the kb, not correctness risks. No subset held back.
 
 ## Edge cases & errors
 
@@ -72,8 +73,5 @@ memory" side effects are deliberate author choices documented in the kb, not cor
   "exposes 16 flag names" → 21. **This is a `dev/docs` edit → needs the owner's explicit yes** (propose
   the exact diff; do not edit unasked).
 - Check `docs/leveldesign/` and `docs/usage.md` (user-facing) for any "16 flags" / settable-set claim
-  and update it in the same change (CLAUDE.md "Documentation").
-
-## Open questions
-
-See `questions/expose-all-five-or-a-subset.md`.
+  and update it in the same change (CLAUDE.md "Documentation"). Found:
+  `docs/leveldesign/general/textures-and-surfaces.md:47` ("The 16 flags uedcli can set by name: …").

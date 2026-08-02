@@ -63,7 +63,7 @@ editor — the same seam `test_packages.py` already exercises.
 catches the drop late); with the verify off, the silent-wrong-map is exactly the outcome. The
 referenced-package gate is independent of verification and always runs.
 
-### (i) 0-package / dangling-glob diagnostic
+### (i) 0-package / dangling-glob diagnostic — DECIDED (owner, 2026-08-02): advisory only
 
 Two sub-cases:
 
@@ -71,25 +71,19 @@ Two sub-cases:
   every referenced package is missing, so exit 2 names the complete set. No separate code needed.
 - **Level references no packages at all (bare classes, no textures), composed path is empty:** (ii)
   finds nothing missing and materialize proceeds correctly (nothing to load). A genuinely empty
-  composed path is still a likely-misconfiguration worth surfacing. Options below.
+  composed path is still a likely-misconfiguration worth surfacing.
 
-**Option A (recommended): rely on (ii); add a stderr note only for the empty-composed-path smell.**
-When `composed_load_set(project)` is empty, emit one stderr line
+**Owner ruling: advisory stderr line, build continues (rc 0).** When the composed path resolves to 0
+packages **and** the level references no loadable packages, emit one stderr line
 (`note: composed package search path resolved 0 packages — check the games config paths`) and
-continue. The correctness guarantee is (ii); this is advisory only, and only fires when the path is
-empty, so it never scrolls under normal builds.
+continue. Nothing is silently dropped — there is nothing to drop — and a valid reference-free greybox
+still materializes. The hard guarantee is (ii); this is advisory only, firing only when the path is
+empty, so it never scrolls under normal builds. A hard exit 2 on any empty composed path was rejected
+(it would refuse a correct no-texture build).
 
-**Option B: make an empty composed path a hard exit 2** regardless of what the level references.
-Strictly conventions-pure, but it blocks the legitimate reference-free level (a pure-BSP greybox with
-no textures materializes fine with 0 content packages), so it would reject correct input.
-
-**Option C: turn a dangling config dir into a `ConfigError`** at `composed_search_files` (don't swallow
-`OSError` for a configured dir that does not exist). This catches a typo'd `paths` entry at its source
-for *every* verb, not just materialize — a broader change than this item, and it interacts with the
-config walk-up rules. Out of scope here; file separately if wanted.
-
-Recommend Option A. The hard guarantee lives in (ii); (i) stays a non-blocking smell so a valid
-reference-free build is never rejected.
+The broader fix — turning a *dangling configured dir* into a `ConfigError` at
+`config.composed_search_files` (stop swallowing `OSError` for a dir that does not exist), tool-wide —
+is **out of scope here** and filed as a separate board item.
 
 ## Edge cases & errors
 
@@ -101,7 +95,7 @@ reference-free build is never rejected.
 | Missing pkg + `--no-verify` | still exit 2 — the gate is verify-independent | 2 |
 | Only `Engine`/`Core`/`Editor` referenced | pass (excluded, always resident) | 0 |
 | Level references nothing, path non-empty | pass, silent | 0 |
-| Level references nothing, path empty (Opt A) | pass, one stderr advisory line | 0 |
+| Level references nothing, path empty | pass, one stderr advisory line | 0 |
 | No games config at all | existing `composed_load_set` hard error | 2 |
 
 All exits are `ApplyResult(rc=2, message=…)` surfaced by `_level_materialize` to stderr — never a
@@ -119,10 +113,10 @@ schema-resolve and driver guards, so the "nothing was written" promise is consis
 - `missing_packages`/`ensure_load_message` unit coverage already exists — extend to assert the
   materialize path calls them (the wiring is what was missing).
 
-## Open questions
+## Implementation notes
 
-- (i) disposition: Option A vs B vs C — an owner fork on whether an empty/partial composed path warns
-  or blocks. See `questions/zero-package-path-warn-or-fail.md`.
-- The dead `run_materialize(packages=…)` parameter: recommend removing it in this change (no
-  back-compat cruft). Low-risk, no owner call needed, but noted so the reviewer expects the signature
-  change and the `_level_materialize` call-site edit.
+- The dead `run_materialize(packages=…)` parameter (`apply.py:226`) is removed in this change (no
+  back-compat cruft). `_materialize` already re-derives the preload from `_level_referenced_packages`
+  (`apply.py:287`), so the param feeds nothing; the caller edit is at `level.py:397`. The advisory (i)
+  still needs `composed_load_set(project)` to detect emptiness — compute it in `_level_materialize`
+  (which already resolves `project` and `level`), not via the removed param.

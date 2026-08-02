@@ -88,8 +88,9 @@ brush snap -|FILE --grid N --tolerance T
 - Cross-reference from `docs/leveldesign/general/geometry-and-bsp.md` (off-grid coords cause BSP
   holes) to `brush snap` as the noise-cleaning tool.
 
-## Open questions
+## Decided (owner, 2026-08-02)
 
-- **Should `level doctor` also FLAG near-grid slop** (a vertex within a small band of a grid line but
-  not on it), pointing at `brush snap`? (`questions/doctor-flag-near-grid-slop.md` — recommend
-  deferring to a separate item; keep this one to the filter.)
+Ship the `brush snap` filter **only**. The `level doctor` near-grid-slop detection (flag a vertex
+within a small band of a grid line, advise `brush snap`) is **deferred to its own board item** — it
+needs its own grid/band definition (doctor has no `--grid`), a severity, and care not to flood
+already-off-grid retail imports. Do not add it here.

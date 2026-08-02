@@ -24,10 +24,11 @@ is an error, exit 2 `no actors found in the T3D input` (`edit.py:375-376`) — N
 
 So the item is an ergonomics + spelling change, not new capability.
 
-## Design — the verb surface (recommended)
+## Design — the verb surface — DECIDED (owner, 2026-08-02)
 
-Add a bare `-` stdin-T3D source token and DROP `-` from `--from-t3d` (files only). One spelling per
-`conventions.md` (no back-compat alias):
+Adopt the bare `stash capture - [names…]` form and **DROP `--from-t3d -`** (so `--from-t3d` is
+files-only) per no-back-compat — one stdin spelling, not two. Empty stdin **exits 2** (matching
+`actor add -`), not the name-list no-op. `conventions.md` (no back-compat alias):
 
 ```
 stash capture [- [names…] | names…] [--from-t3d FILE…] [--tree KIND/NAME] [--id ID] [--force]
@@ -46,8 +47,7 @@ Reuse `ingest.read_t3d_input("-")` for the read and the existing `_capture_from_
 parse/subset/uniquify/normalize — the source token only decides where `text` comes from.
 
 Empty stdin → exit 2 (existing `capture source has no actors`, `stash.py:69-70`), matching
-`actor add -`. A T3D-snippet source that yields no actors is an error, not the name-list no-op. See
-Open question if the owner prefers a clean no-op.
+`actor add -`. A T3D-snippet source that yields no actors is an error, not the name-list no-op.
 
 ## Edge cases & errors
 
@@ -68,10 +68,10 @@ Open question if the owner prefers a clean no-op.
 - `stash capture - Name1` subsets the stream.
 - `-` + `--from-t3d` → exit 2; `-` + `--tree` → exit 2.
 - empty stdin → exit 2, no traceback (regression for the CLI "never a bare exception" rule).
-- `--from-t3d -` (the removed spelling) is rejected by argparse — pin the removal so it can't creep
-  back as a dual spelling.
+- `--from-t3d -` (the removed spelling) is rejected — pin the removal so it can't creep back as a
+  dual spelling.
 
-## Open questions
+## Docs to update in the same change
 
-- `questions/bare-dash-vs-from-t3d.md` — is the bare `-` spelling wanted at all (vs closing the item
-  as already served by `--from-t3d -`), and does it replace `--from-t3d -`? Blocks the surface.
+- `docs/usage.md` (`stash capture`): the bare `- [names…]` stdin-T3D source, `-` mutually exclusive
+  with `--from-t3d`/`--tree`, `--from-t3d` now files-only, empty stdin exits 2.

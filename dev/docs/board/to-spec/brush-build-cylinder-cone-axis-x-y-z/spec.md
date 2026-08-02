@@ -43,7 +43,7 @@ Composition:
 - **`cube`**: no `--axis` (symmetric, N/A).
 - **`sheet`**: keep its existing `--plane xy|xz|yz`; do **not** add `--axis` — a flat panel's natural
   orientation parameter is the plane it lies *in*, not an axis it is normal to, and `--plane` already
-  does this job. (Owner question below.)
+  does this job. (Owner ruling 2026-08-02: keep `--plane`, `--axis` on `cylinder`/`cone` only.)
 - **A free direction vector**: out of scope. `--rotate` covers any non-axis orientation, matching
   `extrude`/`revolve`, which also offer only `x|y|z`.
 
@@ -83,7 +83,8 @@ adding one flag to each (all other flags unchanged):
 - `--axis y --rotate …` composes (rotation on top of the oriented vertices).
 - Help text present and self-explanatory (covered by `test_help_completeness`).
 
-## Open questions
+## Decisions
 
-- **`sheet`**: add `--axis`, or keep `--plane xy|xz|yz`? (`questions/sheet-axis-or-plane.md` —
-  recommend keep `--plane`.)
+- **`sheet` keeps `--plane xy|xz|yz`; `--axis` goes on `cylinder`/`cone` only** (owner, 2026-08-02).
+  A flat panel's natural orientation parameter is the plane it lies in; a prism's is the axis it runs
+  along. Two spellings across the family is the accepted cost. `cube` takes neither (symmetric).
