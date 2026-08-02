@@ -1,7 +1,7 @@
 +++
 priority = "p1"
 kind = "implement"
-summary = "actor preview: UnrealEd render parity — new CSG-solved `world` face mode + black bg for all --faces modes."
+summary = "actor preview: UnrealEd render parity — redefine `--faces textured` as the CSG-solved world (bspcsg core); collapse modes to wire+textured; black bg."
 depends-on = ["incremental-bspbrushcsg-core"]
 +++
 
