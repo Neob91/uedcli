@@ -47,10 +47,18 @@ New cases in `uedcli/tests/test_folders.py`:
 - `--tree stash` rejected.
 - persists via delta save (reload shows new folders) — mirror
   `test_folder_only_change_persists_via_delta_write`.
+- Regenerate the parser-baseline fixtures with `python -m uedcli.tests.parser_baseline` and commit
+  `tests/fixtures/parser_baseline/{action_tree.json,help.json,argv_corpus.json}` — any parser-surface
+  change (here the new `rename` sub-parser) reddens `test_action_tree_matches_baseline` /
+  `test_help_screens_match_baseline` (`test_parser_baseline.py`) otherwise.
 
 ## Slice 4 — docs
 
-`docs/usage.md` Folders "Manage" bullet (~line 341): add `actor folder rename <old> <new>`.
+Add `actor folder rename <old> <new>` in three places that list the folder verbs, all currently
+`set`/`unset` only:
+- the Folders "Manage" bullet (`usage.md:341`);
+- the command-table row (`usage.md:413`, currently `actor folder set/unset`);
+- the chainable-producer verb list (`usage.md:44`, currently `folder set|unset`).
 
 ## Verify
 

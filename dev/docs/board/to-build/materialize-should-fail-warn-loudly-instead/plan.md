@@ -23,7 +23,9 @@ editor) — the whole gate runs before the editor is created.
     only thing standing between a missing package and a silently wrong map.
 - Remove the dead `packages=` param from `run_materialize` (`apply.py:226`) and its call site
   (`level.py:397`) — no back-compat cruft. `_materialize` already uses
-  `_level_referenced_packages(level)` directly (`apply.py:287`), so nothing else depends on it.
+  `_level_referenced_packages(level)` directly (`apply.py:287`), so nothing else depends on it. Also
+  update the `run_materialize` docstring, which still documents `packages` in detail
+  (`apply.py:231-236`), so it doesn't describe a removed param.
 - Tests (`tests/test_materialize*` / mocked editor, via `bin/test`):
   - `run_materialize` with `host_search_dirs` missing a referenced texture pkg → rc 2, message names
     the pkg; assert the editor container was **never created** (fail-fast is before `ensure_editor`).

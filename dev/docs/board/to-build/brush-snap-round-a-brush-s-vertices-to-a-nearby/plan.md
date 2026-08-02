@@ -5,10 +5,12 @@ doctor` tie-in is a separate item (owner ruling).
 
 ## Slice 1 — model-side snap (pure, testable)
 
-- New `uedcli/snap.py`: `snap_brush(brush, *, grid, tolerance) -> Brush` (peer of `vertex.py`/
-  `clip.py`). For each poly, each vertex, each axis component `c` (as `Decimal`):
-  `g = grid * floor(c/grid + 0.5)`; if `abs(c - g) <= tolerance` set the component to `g`, else keep
-  `c`. Per-axis, per-vertex independent.
+- New `uedcli/snap.py`: `snap_brush(brush, *, grid: Decimal, tolerance: Decimal) -> Brush` (peer of
+  `vertex.py`/`clip.py`). `grid`/`tolerance` are **`Decimal`, not `float`** — brush vertices are
+  `Decimal` (`vertex._dec`, `vertex.py:40-41`), so an exact/idempotent snap needs Decimal arithmetic
+  throughout; a float grid reintroduces the binary-float noise the verb removes. For each poly, each
+  vertex, each axis component `c` (as `Decimal`): `g = grid * floor(c/grid + 0.5)`; if
+  `abs(c - g) <= tolerance` set the component to `g`, else keep `c`. Per-axis, per-vertex independent.
   - Round half toward +∞ via `floor(x + 0.5)`, matching the deliberate non-banker's rule in
     `cli/commands/brush/build.py:124-134` (do **not** use `round()`).
   - Copies of a corner get the identical rule, so near-grid drifted copies snap to the same `g` —
@@ -31,7 +33,9 @@ doctor` tie-in is a separate item (owner ruling).
 - Parser: new `bsub.add_parser("snap", …)` in `uedcli/cli/parsers/brush.py`, beside
   `intersect`/`deintersect` (`:362-375`). `set` positional (`-|FILE`, the shared help wording),
   `--grid` (required, no default) and `--tolerance` (required, no default), with the spec's help
-  text. Both required so no silent default grid/tolerance guess (conventions.md).
+  text. Both required so no silent default grid/tolerance guess (conventions.md). **Parse both as
+  `Decimal`, not `float`** (e.g. `type=Decimal`/a Decimal-parsing helper), so the snap stays exact and
+  idempotent against the Decimal vertices.
 - Command: `snap(args)` in `uedcli/cli/commands/brush/edit.py`, modelled on `merge` (`edit.py:32`):
   - `text = ingest.read_t3d_input(args.set)`; empty/whitespace stdin → return 0 (no-op), like
     `edit.py:88-90`.
@@ -54,6 +58,10 @@ doctor` tie-in is a separate item (owner ruling).
   - Non-brush member → exit 2 naming it; empty stdin → exit 0; name-list stdin → exit 2.
   - `--grid 0` → exit 2; missing `--grid`/`--tolerance` → argparse exit 2.
   - Face-non-planar snap → exit 2, no stdout.
+- Regenerate the parser-baseline fixtures with `python -m uedcli.tests.parser_baseline` and commit
+  `tests/fixtures/parser_baseline/{action_tree.json,help.json,argv_corpus.json}` — any parser-surface
+  change (here the new `snap` verb) reddens `test_action_tree_matches_baseline` /
+  `test_help_screens_match_baseline` (`test_parser_baseline.py`) otherwise.
 
 ## Slice 3 — docs
 

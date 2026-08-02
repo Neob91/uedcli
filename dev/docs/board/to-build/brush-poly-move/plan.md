@@ -7,9 +7,12 @@ Build in a feature worktree (`worktrees.md`), one squash-merge commit. `--by` on
 - Add `apply_move(level, targets, *, by)` to `uedcli/surface.py`, peer of `apply_pan`/`apply_rotate`
   (`surface.py:176`, `:424`). Body:
   - `pairs = resolve_targets(level, targets)` (all-or-nothing resolution, `surface.py:163`).
-  - Group `pairs` by brush. For each brush, collect the union of its selected polys' corner coords
-    from the welded set, map `by` (world) → local via `rotation.world_to_local_delta(actor, by)`,
-    then `actor.brush = vertex.move_vertices(actor.brush, coords, by=local_delta)`.
+  - Group `pairs` by brush. For each brush, collect its selected polys' corner coords from the welded
+    set and **dedupe on the cleaned coord key** — two selected adjacent faces share a corner, and
+    `move_vertices` rejects a repeated selector (`vertex.py:84-85`, `duplicate --at selector`), so an
+    un-deduped list would exit 2 on a valid move. Map `by` (world) → local via
+    `rotation.world_to_local_delta(actor, by)`, then
+    `actor.brush = vertex.move_vertices(actor.brush, coords, by=local_delta)`.
   - Return `_touched_brushes(pairs)` (`surface.py:137`).
 - `move_vertices` already validates each result brush (`vertex.py:97`), so no extra `validate_brush`
   loop is needed; a degenerate/non-planar result raises `GeometryError` out of `apply_move`.
@@ -18,6 +21,8 @@ Build in a feature worktree (`worktrees.md`), one squash-merge commit. `--by` on
   - In-plane `--by 32,0,0` on a cube face → `GeometryError` (neighbour non-planar).
   - Rotated brush: world `--by` maps through `world_to_local_delta` (assert local delta ≠ world).
   - Multi-brush target set: each brush translated independently.
+  - Two selected adjacent faces of one brush sharing a corner `--by 0,0,64`: shared corner deduped,
+    no `duplicate --at selector` error, result watertight.
 
 ## Slice 2 — CLI verb + parser
 
@@ -35,6 +40,10 @@ Build in a feature worktree (`worktrees.md`), one squash-merge commit. `--by` on
   - Empty stdin (`brush poly move -` with empty stdin) → exit 0, no write.
   - `brush poly find --facing +Z | brush poly move - --by 0,0,64` end-to-end (stdout = touched
     `BRUSH:idx` selectors).
+- Regenerate the parser-baseline fixtures with `python -m uedcli.tests.parser_baseline` and commit
+  `tests/fixtures/parser_baseline/{action_tree.json,help.json,argv_corpus.json}` — any parser-surface
+  change (here the new `move` sub-verb) reddens `test_action_tree_matches_baseline` /
+  `test_help_screens_match_baseline` (`test_parser_baseline.py`) otherwise.
 
 ## Slice 3 — docs
 

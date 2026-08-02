@@ -57,6 +57,12 @@ Mechanism, per brush in the resolved set: collect the union of the selected poly
 that brush, then `vertex.move_vertices(brush, corner_coords, by=local_delta)`. Each brush is resolved
 and welded independently, so the delta is mapped per-actor.
 
+**DEDUPE the collected corners before the call.** `move_vertices` rejects a repeated selector
+(`vertex.py:84-85`, `duplicate --at selector for corner …`), and two selected adjacent faces of one
+brush share a corner, so the naive concatenation lists that corner twice and would exit 2 on a valid
+move. Deduplicate on the cleaned coord key (the `_clean3` form `move_vertices` compares) so each
+welded corner is passed exactly once.
+
 ## Edge cases & errors
 
 - Non-brush actor in a target / unknown brush / poly index out of range / bad index → exit 2 naming
@@ -77,6 +83,8 @@ New `test_poly_move.py` (or extend `test_surface.py`):
 - Cube face `--by 32,0,0` (in-plane, non-normal) → side faces non-planar → exit 2.
 - Out-of-range poly index → exit 2 naming the brush; non-brush actor → exit 2.
 - Multi-actor `--by` across two brushes applies per brush.
+- Two selected adjacent faces of one brush that share a corner `--by 0,0,64` → the shared corner is
+  moved once (dedupe), no `duplicate --at selector` error, watertight result.
 - `brush poly find --facing +Z | brush poly move - --by 0,0,64` end-to-end.
 - Rotated/PrePivot brush: world `--by` maps through `world_to_local_delta` correctly.
 

@@ -40,7 +40,10 @@ Tests (`tests/test_generators.py`/`test_cli.py`):
 - `--axis x --align-to-side` → a flat cross-section face lies on an axis in the `(u,v)` plane.
 - `--axis y --rotate 0,8192,0` → rotation composes on top of the oriented vertices.
 - Bad `--axis w` → argparse `choices` error, exit 2.
-- Refresh `tests/fixtures/parser_baseline/{help.json,action_tree.json}` (the two new `--axis` flags).
+- Regenerate the parser-baseline fixtures with `python -m uedcli.tests.parser_baseline` and commit
+  `tests/fixtures/parser_baseline/{action_tree.json,help.json,argv_corpus.json}` — any parser-surface
+  change (here the two new `--axis` flags) reddens `test_action_tree_matches_baseline` /
+  `test_help_screens_match_baseline` (`test_parser_baseline.py`) otherwise.
 
 ## Slice 3 — user docs
 

@@ -21,15 +21,19 @@ moves clip from a by-name trunk edit to a T3D-in/T3D-out generator and deletes t
   - Emit clipped actors to stdout via `emit_actor_t3d`.
   - Plane-argument validation (`--plane` xor `--axis`+`--offset`, else exit 2) stays as in `_clip`.
 - No `src.load()`/`src.save()` — the filter touches no trunk.
+- Delete the two remaining `clip` references that outlive `_clip`:
+  - the `if args.sub == "clip": return _clip(args, src)` dispatch branch in `edit.run`
+    (`edit.py:186-187`);
+  - `clip` from the module docstring listing the source-consuming verbs (`edit.py:1-9`).
 
 ## Slice 2 — parser + route
 
 - `cli/parsers/brush.py:63-74`: drop the `name` positional; add the `-|FILE` positional (`dest="set"`,
   the `merge`/intersect spelling) and keep `--axis`/`--offset`/`--plane`/`--keep`. Remove `_tree_flag`
   (a filter reads no trunk). Help per spec §"Proposed CLI surface".
-- `routes.py:34`: move `clip` into the stateless-generator branch beside `intersect`/`deintersect`
-  (routed **before** `resolve_level_source`), and remove `clip` from the source-consuming group at
-  `routes.py:41`.
+- `routes.py:34`: give `clip` its **own** stateless route, `return edit.clip(args)`, alongside the
+  `intersect`/`deintersect` branch (which routes to `edit.merge`, not `edit.clip`) and, like it,
+  **before** `resolve_level_source`. Remove `clip` from the source-consuming group at `routes.py:41`.
 
 Tests (`tests/test_cli.py`/`test_brush_merge.py` neighbours, new `test_brush_clip.py`):
 - `brush build cube | brush clip - --plane 96,0,0 1,0,1 --keep below | actor add -` → the 7-face
@@ -40,7 +44,10 @@ Tests (`tests/test_cli.py`/`test_brush_merge.py` neighbours, new `test_brush_cli
 - Whole-brush discard → exit 2 naming the actor; interior miss → passthrough + stderr note.
 - 2-brush set clipped by one plane; degenerate result → `validate_brush` → exit 2 naming the actor.
 - Both/neither of `--plane` and `--axis/--offset` → exit 2.
-- Refresh `tests/fixtures/parser_baseline/{help.json,action_tree.json}` (positional + route change).
+- Regenerate the parser-baseline fixtures with `python -m uedcli.tests.parser_baseline` and commit
+  `tests/fixtures/parser_baseline/{action_tree.json,help.json,argv_corpus.json}` — any parser-surface
+  change (here the positional + route change) reddens `test_action_tree_matches_baseline` /
+  `test_help_screens_match_baseline` (`test_parser_baseline.py`) otherwise.
 - Confirm no test still exercises `brush clip <name>` in-place; delete/convert any that do.
 
 ## Slice 3 — user docs (same change)

@@ -75,3 +75,10 @@ Empty stdin → exit 2 (existing `capture source has no actors`, `stash.py:69-70
 
 - `docs/usage.md` (`stash capture`): the bare `- [names…]` stdin-T3D source, `-` mutually exclusive
   with `--from-t3d`/`--tree`, `--from-t3d` now files-only, empty stdin exits 2.
+
+## Notes
+
+- Cross-verb asymmetry (accepted, out of scope here): after this change `stash capture` reads stdin
+  T3D via a bare `-` and no longer via `--from-t3d -`, but `actor preview` still takes stdin T3D as
+  `--from-t3d -` (`preview.py:52`). A tool-wide reconcile of the stdin spelling is filed as a SEPARATE
+  follow-on board item; do not resolve it in this change.

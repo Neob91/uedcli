@@ -44,6 +44,10 @@ stdin capture already works as `stash capture --from-t3d -`; this adds the bare 
 - Empty stdin → exit 2 `capture source has no actors`, no traceback (regression for the "never a bare
   exception" rule).
 - Duplicate Names in the stream → uniquified, none dropped (existing behavior, `stash.py:71-77`).
+- Regenerate the parser-baseline fixtures with `python -m uedcli.tests.parser_baseline` and commit
+  `tests/fixtures/parser_baseline/{action_tree.json,help.json,argv_corpus.json}` — any parser-surface
+  change (here the reworded `names`/`--from-t3d` help) reddens `test_action_tree_matches_baseline` /
+  `test_help_screens_match_baseline` (`test_parser_baseline.py`) otherwise.
 
 ## Slice 3 — docs
 

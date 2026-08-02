@@ -11,11 +11,11 @@ onto Y. The `--axis` name, semantics and `(u,v)`→world mapping are already set
 
 ## Current state
 
-- `cylinder`/`cone` always build along `+Z`: `builders.py:239` (`cylinder`) and `:263` (`cone`) put
+- `cylinder`/`cone` always build along `+Z`: `builders.py:239` (`cylinder`) and `:271` (`cone`) put
   the ring in XY at `z=±hz`, apex/height along Z.
 - `extrude`/`revolve` already carry `--axis x|y|z` meaning "the world axis the profile plane is
-  normal to" (`parsers/brush.py:275,296`), mapped by `_SWEEP_FRAMES` (`builders.py:327`) via
-  `_uv_axes` (`:335`): `z → u=X,v=Y`; `x → u=Y,v=Z`; `y → u=Z,v=X`, cycled right-handed so one
+  normal to" (`parsers/brush.py:275,296`), mapped by `_SWEEP_FRAMES` (`builders.py:342`) via
+  `_uv_axes` (`:350`): `z → u=X,v=Y`; `x → u=Y,v=Z`; `y → u=Z,v=X`, cycled right-handed so one
   winding rule serves all three.
 - `cylinder`/`cone` carry `--align-to-side` (`parsers/brush.py:166,181`), a bool converted to a
   half-segment `angle_offset` in degrees by `_align_offset_degrees` (`build.py:71`) and passed to the

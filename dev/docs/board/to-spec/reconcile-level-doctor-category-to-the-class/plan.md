@@ -9,7 +9,7 @@ Replace `uedcli/cli/parsers/level.py:152-154` (`--category` single string) with 
 `action="append"`, `dest="categories"`, `default=[]`, `metavar="NAME"`, help per spec (repeat to OR;
 exact, case-insensitive; display-only, exit code always reflects all findings; unknown → exit 2
 listing valid categories). Matches the `class show --category` grammar
-(`uedcli/cli/parsers/classes.py:62-67`).
+(`uedcli/cli/parsers/classes.py:83-88`).
 
 ## Slice 2 — handler
 
@@ -42,9 +42,13 @@ Uses `CommandError` (exit-2 carrier, `uedcli/cli/errors.py`) in place of the bar
 - new: valid category matching zero findings → clean empty report, exit still reflects all findings.
 
 `uedcli/tests/test_dispatch.py:1703` parser-baseline row: `category=None` → `categories=[]` in the
-expected namespace (append default). Check the parser_baseline fixture
-(`tests/fixtures/parser_baseline/action_tree.json`) for a `--category` entry and regenerate if it
-pins the flag shape.
+expected namespace (append default).
+
+Regenerate the parser-baseline fixtures with `python -m uedcli.tests.parser_baseline` and commit
+`tests/fixtures/parser_baseline/{action_tree.json,help.json,argv_corpus.json}` — any parser-surface
+change (here `--category` moving to `action="append"`, `dest="categories"`) reddens
+`test_action_tree_matches_baseline` / `test_help_screens_match_baseline` (`test_parser_baseline.py`)
+otherwise.
 
 ## Slice 4 — docs
 

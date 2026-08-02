@@ -43,10 +43,16 @@ not a transformed view of it.
   non-planar or degenerate; that is refused (exit 2 naming the actor), never emitted.
 - **SET on stdin**: accept a set; snap each brush; all-or-nothing. Builder brushes dropped. A
   non-brush (point) actor is refused, exit 2 naming it (matches `clip`/`intersect`). Movers carry a
-  PolyList, so they are snapped.
+  PolyList, so they are snapped. *(Owner ruled 2026-08-02: exit 2, for family consistency with the
+  other brush T3D filters — not pass-through.)*
 - `--grid` and `--tolerance` are both **required, no default** — any default grid or tolerance is a
   silent guess: too large a tolerance snaps everything and destroys angles, too small cleans nothing.
   The author states the grid they built on and the noise band they mean to correct.
+- **Parse and carry `--grid`/`--tolerance` as `Decimal`, not `float`.** Brush vertices are `Decimal`
+  (`vertex._dec`, `vertex.py:40-41`); the snap must be exact and idempotent, so a component that lands
+  on `g` becomes that exact `Decimal` grid value and re-emits unchanged. A `float` grid reintroduces
+  the binary-float noise the verb exists to remove. Signature:
+  `snap_brush(brush, *, grid: Decimal, tolerance: Decimal)`.
 
 ### Proposed CLI surface
 

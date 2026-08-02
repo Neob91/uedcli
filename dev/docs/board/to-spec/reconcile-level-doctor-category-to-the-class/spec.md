@@ -16,9 +16,9 @@ how the display-filter flag is spelled and validated.
 Two same-named flags, opposite on every axis.
 
 **`class show --category` (the target shape):**
-- parser `uedcli/cli/parsers/classes.py:62-67` — `action="append"`, `dest="categories"`,
+- parser `uedcli/cli/parsers/classes.py:83-88` — `action="append"`, `dest="categories"`,
   `default=[]`, `metavar="NAME"`; help says "repeat to OR several. Exact, case-insensitive."
-- handler `uedcli/cli/commands/classes.py:170-184` — casefolds; validates each value against the
+- handler `uedcli/cli/commands/classes.py:684-693` — casefolds; validates each value against the
   available set; the FIRST value matching nothing raises `CommandError` (exit 2) naming it and
   listing what is available: `no category 'X' on <fqcn>; available: A, B, …`.
 - Its available set is DERIVED per class (the class's own editable categories).

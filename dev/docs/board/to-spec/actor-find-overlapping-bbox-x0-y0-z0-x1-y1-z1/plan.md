@@ -48,6 +48,11 @@ operate on the final `names`, so no extra work.
 - both flags together (`--within-bbox B --overlapping-bbox B`) accepted, yields the `--within-bbox`
   set (degenerate AND) — pins the no-exclusion ruling.
 
+Regenerate the parser-baseline fixtures with `python -m uedcli.tests.parser_baseline` and commit
+`tests/fixtures/parser_baseline/{action_tree.json,help.json,argv_corpus.json}` — any parser-surface
+change (here the new `--overlapping-bbox` flag) reddens `test_action_tree_matches_baseline` /
+`test_help_screens_match_baseline` (`test_parser_baseline.py`) otherwise.
+
 `docs/usage.md:169-176`: document `--overlapping-bbox`, remove the "not yet implemented" note, add
 the contained-vs-straddling one-liner and the AABB caveat.
 

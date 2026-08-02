@@ -63,15 +63,23 @@ Ordering in `PF_NAMES`: append by ascending bit, matching the existing rough ord
 
 - `test_surface.py` — extend the encode/decode round-trip: every `PF_NAMES` name must
   `encode_flags` → `decode_flags` back to itself; assert the five new names set the expected bits.
-- Catalog-agreement regression (overview asks for it): a test that the `PF_NAMES` name set equals the
-  set of flag rows in `kb/textures.md` (parse the table's bits), so the two cannot drift again.
+- Catalog-agreement regression (overview asks for it), **directional, not equality**: parse the
+  flag-bit rows of `kb/textures.md` and assert every kb-table bit is in `query.PF_NAMES` (subset), so
+  a flag the doc documents is always settable. **Not** equality — `PF_NAMES` legitimately carries
+  bits the kb table omits (`invisible` 0x1, `notsolid` 0x8, `semisolid` 0x20), so equality can never
+  hold, and adding the five must not depend on the owner-gated doc edit to make the test pass.
 - Refresh `tests/fixtures/parser_baseline/{help.json,action_tree.json}` — `choices` widen.
 
 ## Docs
 
 - `dev/docs/unrealed/leveldesign/kb/textures.md` — drop the five *(no `--add-flag`)* tags and change
-  "exposes 16 flag names" → 21. **This is a `dev/docs` edit → needs the owner's explicit yes** (propose
-  the exact diff; do not edit unasked).
+  "exposes 16 flag names" → 21. **This is a `dev/docs` (craft) edit → needs the owner's explicit yes**
+  (propose the exact diff; do not edit unasked). **It is no longer a test dependency**: the
+  directional agreement test above passes with the code alone, so this doc edit is a correctness
+  follow-up, not a merge blocker.
+- NOTE: a stale, conflicting `PF_*` flag table lives at `dev/docs/spikes/bspspike/flags.py:29-31` with
+  different bit values (e.g. `PF_HighShadowDetail=0x10000`, `PF_BrightCorners=0x4000000`). It is a grep
+  hazard, not read by the agreement test — do not treat it as the source of truth or edit it here.
 - Check `docs/leveldesign/` and `docs/usage.md` (user-facing) for any "16 flags" / settable-set claim
   and update it in the same change (CLAUDE.md "Documentation"). Found:
   `docs/leveldesign/general/textures-and-surfaces.md:47` ("The 16 flags uedcli can set by name: …").
