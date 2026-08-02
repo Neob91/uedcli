@@ -31,7 +31,9 @@ Two consequences worth stating outright:
   `class list` offline, map-free and fast.
 - **Classes get no curated role/category taxonomy.** The superclass already says what a class is for
   (`ScriptedPawn`, `Decoration`, `Weapon`, `Mover`), and `--subclass-of` already queries it.
-  Curation collapses to **a description, plus an override where the file fact is wrong.**
+  Curation collapses to **tags plus a description**; the decoded file facts stand as read — there is
+  no general override of a class's file fact. *(The texture-colours pre-fill below is the one
+  exception, and it is texture-only.)*
 
 **The single deliberate exception is texture colours.** The tool pre-fills a small fixed palette of
 base colour names per texture, **ordered by importance** (descending share of the image). It earns
@@ -78,7 +80,9 @@ human the bottleneck.
 
 ### Identity: content hash where content exists, name where it does not
 
-- **texture** → the exact pixel hash (`sha256` over width, height and raw RGB);
+- **texture** → the exact pixel hash (`sha256` over width, height and raw RGB); a **procedural**
+  texture with no stored pixels (`FireTexture`/`WetTexture`/`WaveTexture`/`ScriptedTexture`) → its
+  name, per the rule above (name where content does not exist);
 - **class** → `Package.Class`; **sound** and **music** → `Package.Name`.
 
 The pixel hash earns its keep for textures: identical pixels dedupe **across packages**, and
@@ -92,6 +96,34 @@ state: repaint a texture and its new pixels are a new identity that simply reads
 while the old classification becomes an **outdated entry** — a shard whose identity resolves to
 nothing on the current search path. `classify list-outdated` surfaces it (by the **write-once `ref`**
 the shard stores for exactly this purpose) and `classify prune` removes it.
+
+### Two layers: content identity, and per-ref facts
+
+A texture splits into two layers. **Layer 1 — content:** the identity above (the pixel hash, or the
+name for a procedural texture) keys the classification; identical pixels are deliberately one
+classifiable thing, and the preview is that bitmap. **Layer 2 — per-`Package.Name` facts:** attributes
+that belong to a particular ref — read live from the package and cached in the derived index, shown by
+`show` and filterable, but never part of identity and never written into the classification.
+
+**A texture's GROUP is a stored fact, not just a ref component.** UE1 subdivides a package with an
+optional Group, so a texture is addressed `Package.Name` or fully `Package.Group.Name`. Ref assignment
+emits the 2-part form unless there is an intra-package name collision, which means the group vanishes
+from the output for most textures — including `CoreTexMetal.LadrBrwnMetal`, whose group is the reserved
+`Ladder`. In Deus Ex the group is what decides whether a surface is climbable, so the catalog must be
+able to answer "which textures are ladders" directly: the group is stored as a per-texture fact,
+printed by `show`, and filterable with `--group` on `list`/`search`. It is a fact read from the
+package, never a classification, so it is not LLM-overridable — and it is **not** part identity, since
+identical pixels in two groups are deliberately one classifiable thing.
+
+**`masked` is a texture fact, read from the package.** `Masked` is a property of the *texture object*,
+set by the `Masked` checkbox when the texture is imported into UnrealEd; UE1 then ORs a texture's own
+flags into every surface it is applied to. So a masked texture punches its palette-index-0 pixels into
+see-through holes on any surface, with no surface polyflag set — which makes it invisible to any audit
+of surface flags, and a hole into unbuilt space wherever it lands on a solid face. The catalog
+therefore stores `masked` as a per-texture fact **read from the export's stored flag, never inferred**
+from the palette or from derived colours: inference is forbidden by the governing principle, and a
+texture may carry an index-0 colour without being imported masked. Filterable with `--masked`; not
+part of identity.
 
 ### Classification is the product, not a side feature
 

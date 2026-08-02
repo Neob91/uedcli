@@ -33,8 +33,11 @@ engine we have never seen.
 **The limit this leaves is stated wherever the universality claim is made** — in the docs, in the
 error text, in the code comment — and never buried as a corner case: **a block-compressed 16-byte
 chain that no code resolves does not decode.** BC2 and BC3 have identical block sizes and identical
-chains and differ only inside the alpha half; nothing in the data separates them. A code-less BC1
-file decodes, and so does P8, and so does any chain fitting exactly one layout. Never a wrong pixel.
+chains and differ only inside the alpha half; nothing in the data separates them. A chain that fits
+**exactly one** layout decodes — P8, or a block-compressed chain no other layout fits. But a
+**code-less** chain that several layouts fit is itself ambiguous: a 16-byte BC1 chain is
+indistinguishable from P8 (48 of 1137 in `uned/UED22` resolve as P8), so it is a named error, not a
+guessed BC1. Never a wrong pixel.
 
 ### A package READ has the engine's semantics
 
