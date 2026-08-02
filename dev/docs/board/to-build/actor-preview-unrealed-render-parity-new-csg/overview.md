@@ -2,10 +2,14 @@
 priority = "p1"
 kind = "implement"
 summary = "actor preview: UnrealEd render parity — redefine `--faces textured` as the CSG-solved world (bspcsg core); collapse modes to wire+textured; black bg."
-depends-on = ["incremental-bspbrushcsg-core"]
 +++
 
 # actor preview: UnrealEd render parity
+
+Uses `build_geometry_bspcsg` (`uedcli-native/src/lib.rs:220`), already the default core for `native
+materialize`. Not blocked on board item `incremental-bspbrushcsg-core` (byte-parity residuals, which
+the owner ruled irrelevant for a visual preview) — that item chases byte-identical `UModel`; this needs
+only the function as it stands, whose containment/visibility is already correct.
 
 ## Owner ruling (2026-08-01, revised 2026-08-02)
 
