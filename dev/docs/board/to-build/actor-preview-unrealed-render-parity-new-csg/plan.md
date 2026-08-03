@@ -31,15 +31,18 @@ wiring yet.
   renders ONE carved room through the existing ortho projection to a PNG; open it and confirm the
   interior shows and a buried add is hidden. This is the go/no-go for the whole approach — if the ortho
   pipeline cannot draw world-space fragments faithfully, stop and re-plan before slice 2.
+  *(2026-08-03: this gate first FAILED — the no-cull rule drew a solid box; the owner ruled a per-view
+  backface cull, spec item 3 as amended, which passes it. Slice 2 uses that cull.)*
 
 ## Slice 2 — feed solved surfaces into `_scene_geometry` (the B3 plumbing)
 
 - Add the solved-payload field to `FaceData` (`preview.py:297`) and build it in `_preview_render_data`
   (`rendering.py:617`).
 - In `_scene_geometry` (`preview.py:1867`), under `textured`, iterate `world_surfaces` instead of the
-  per-actor/per-poly loop: **skip `local_offset`** (`:1973-1974`, verts are world-space), **force
-  `cull_front = False` and `mirrored = False`** (`:1962`, `:1968` — the solve already resolved
-  visibility), emit `fills` + `tex_faces` off the SOURCE poly (`world_uv_frame`, `_poly_texture_ref`,
+  per-actor/per-poly loop: **skip `local_offset`** (`:1973-1974`, verts are world-space), **apply a
+  per-view backface cull** of the solved fragments by post-CSG normal (drop fragments facing away from
+  the camera; the per-brush `cull_front`/`mirrored` heuristics at `:1962`/`:1968` stay OFF) — spec item
+  3 as amended 2026-08-03, emit `fills` + `tex_faces` off the SOURCE poly (`world_uv_frame`, `_poly_texture_ref`,
   `masked`), and draw the per-poly index **once per `(actor, source_poly_idx)`** on the largest-area
   fragment (spec B3.4). `wire` path unchanged.
 - Grey path for `(None, None)` fragments (M5): `mips = None` → the existing `DEFAULT_GREY` branch
@@ -47,7 +50,8 @@ wiring yet.
 
 - **Tests:** `_scene_geometry` over a solved set produces the expected `fills`/`tex_faces` count and
   world verts (no `local_offset` applied — assert a known world coordinate); a subtract room's interior
-  walls are PRESENT (regression against re-culling); one source poly split into N fragments yields ONE
+  walls are PRESENT and its camera-facing-away near wall is CULLED (backface cull shows the interior,
+  not a solid box); one source poly split into N fragments yields ONE
   index label.
 - **Verify:** render the slice-1 carved room through `actor preview --faces textured --from-t3d` (still
   on grey bg / old palette here) and confirm interior walls and correct add visibility in the real CLI

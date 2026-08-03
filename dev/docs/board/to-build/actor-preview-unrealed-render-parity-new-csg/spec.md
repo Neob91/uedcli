@@ -134,12 +134,15 @@ world-space fragments with no owning brush transform. So:
    `tex_faces` entries (`:2007`, `:2022`): `world_uv_frame(actor, source_poly)`, `_poly_texture_ref`,
    `tex_data.by_ref`, `masked` — all keyed off the SOURCE poly, so alignment survives the split. Point
    actors keep their existing handling (`:1927-1940`); it is orthogonal to the geometry source.
-3. **DISABLE the subtract-front cull and the mirror correction on the solved path.** `cull_front`
-   (`:1962`, applied `:1980`) and `mirrored`/`_is_front_corrected` (`:1968`, `:1978`) are per-brush
-   visibility heuristics; the solve has ALREADY resolved visibility globally. Re-culling would delete a
-   subtracted room's interior walls, which MUST show. On the solved path, `cull_front = False`,
-   `mirrored = False`; `front` is still computed (from world verts, for occluder/depth ordering and the
-   edge/label machinery) but never used to remove a face.
+3. **Per-view backface cull on the solved path.** *(Owner ruling 2026-08-03, amending the earlier
+   "front never removes a face".)* The solve resolves CONTAINMENT (which surfaces exist), not per-view
+   FACING: a subtracted room's near walls still occlude its interior if drawn, so drawing every fragment
+   renders the room as a solid box. Instead, drop each solved fragment whose post-CSG normal faces away
+   from the camera — one uniform backface cull, valid because bspcsg orients every surviving normal into
+   the empty space. The interior then shows (matching UnrealEd's textured view) while a fully-buried add
+   stays hidden (containment already removed it). This REPLACES the per-brush `cull_front`
+   (`:1962`/`:1980`) and `mirrored`/`_is_front_corrected` (`:1968`/`:1978`) heuristics, which stay OFF;
+   `front` is still computed from world verts for occluder/depth ordering and the edge/label machinery.
 4. **Per-poly index decal when one source poly becomes N fragments.** The decal loop draws one label per
    poly (`:2065-2067`); with the solve, one source poly can survive as several fragments, which would
    N-plicate the number. Rule: draw the index **once per `(actor, source_poly_idx)`**, on the
