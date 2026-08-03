@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import re
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 from . import movers
@@ -109,13 +110,61 @@ def _rot3x3(actor):
     return _IDENTITY_ROT if R is None else R
 
 
+def _marshal_brush(actor) -> tuple:
+    """One CSG brush actor → the flat `BrushTuple` `build_geometry`/`build_geometry_bspcsg` take.
+    Shared by the trunk `_brush_inputs` (over `level.order`) and the ad-hoc `solve_world_surfaces`
+    (over an actor list) — same algorithm, two input types. The caller has already resolved
+    `CsgOper` (`_CSG_OPER`) and rejected scaled brushes."""
+    from .native.materialize import _parse_vec3
+
+    raw = dict(actor.props)
+    oper = _CSG_OPER[raw.get("CsgOper", "CSG_Add")]
+    loc = tuple(float(c) for c in actor.location) if actor.location else (0.0, 0.0, 0.0)
+    prepivot = _parse_vec3(raw.get("PrePivot"))
+
+    verts_flat: list[float] = []
+    poly_sizes: list[int] = []
+    normals_flat: list[float] = []
+    poly_flags_flat: list[int] = []
+    have_all_normals = True
+    for poly in actor.brush.polys:
+        poly_sizes.append(len(poly.vertices))
+        for v in poly.vertices:
+            verts_flat += [float(v[0]), float(v[1]), float(v[2])]
+        if poly.normal is not None:
+            normals_flat += [float(poly.normal[0]), float(poly.normal[1]), float(poly.normal[2])]
+        else:
+            have_all_normals = False
+        poly_flags_flat.append(poly.flags or 0)
+    if not have_all_normals:
+        normals_flat = []                        # Rust CalcNormal from winding
+    # Empty per-poly texture-axis lists: preview derives its UV frames from the join polys'
+    # authored axes separately, so the built model's surf axes are unused here — leaving them
+    # empty keeps the built geometry byte-for-byte as before. Trailing empties: tex_u, then the
+    # (tex_v, origins, vec_xform) triple — all defaulted (preview derives UV frames from the join
+    # polys separately, its built geometry is pBase-agnostic so base stays verts[0], and preview
+    # rejects scaled brushes so no covariant normal map is needed). The triple keeps the marshalled
+    # arity at 12 (PyO3 tuple cap).
+    return (verts_flat, poly_sizes, normals_flat, oper, poly_flags_int(raw),
+            list(loc), _rot3x3(actor), list(prepivot), [1.0, 1.0, 1.0],
+            poly_flags_flat, [], ([], [], []))
+
+
+def _csg_oper_or_skip(name: str, raw: dict) -> int | None:
+    """The `_CSG_OPER` code for a brush, or None (with a warning) for a non-world op — Intersect/
+    Deintersect never appear in a trunk (live-editor verbs); anything unknown renders nothing."""
+    oper = _CSG_OPER.get(raw.get("CsgOper", "CSG_Add"))
+    if oper is None:
+        print(f"WARNING: brush {name}: CsgOper {raw.get('CsgOper')!r} is not a world CSG op; "
+              f"skipped", file=sys.stderr)
+    return oper
+
+
 def _brush_inputs(level, index) -> tuple[list, list[tuple[str, list]]]:
     """CSG brush actors (trunk order) → the `BrushTuple` flat buffers `build_geometry`
     takes, plus the `(actor_name, polys)` join list indexed by the surf `i_actor` tag.
     Movers and the transient builder brush are EXCLUDED from world CSG (movers render as
     extra_polys; the builder brush is editor scratch)."""
-    from .native.materialize import _parse_vec3
-
     brushes, join = [], []
     for name in level.order:
         actor = level.actors.get(name)
@@ -123,45 +172,10 @@ def _brush_inputs(level, index) -> tuple[list, list[tuple[str, list]]]:
             continue
         if movers.is_mover(actor, index) or is_builder_brush(actor):
             continue
-        raw = dict(actor.props)
-        oper = _CSG_OPER.get(raw.get("CsgOper", "CSG_Add"))
-        if oper is None:
-            # Intersect/Deintersect never appear in a trunk (they are live-editor verbs);
-            # anything unknown renders nothing — skip loudly rather than mis-build.
-            print(f"WARNING: brush {name}: CsgOper {raw.get('CsgOper')!r} is not a world CSG "
-                  f"op; skipped", file=sys.stderr)
+        if _csg_oper_or_skip(name, dict(actor.props)) is None:
             continue
         _reject_scaled(name, actor)
-        loc = tuple(float(c) for c in actor.location) if actor.location else (0.0, 0.0, 0.0)
-        prepivot = _parse_vec3(raw.get("PrePivot"))
-
-        verts_flat: list[float] = []
-        poly_sizes: list[int] = []
-        normals_flat: list[float] = []
-        poly_flags_flat: list[int] = []
-        have_all_normals = True
-        for poly in actor.brush.polys:
-            poly_sizes.append(len(poly.vertices))
-            for v in poly.vertices:
-                verts_flat += [float(v[0]), float(v[1]), float(v[2])]
-            if poly.normal is not None:
-                normals_flat += [float(poly.normal[0]), float(poly.normal[1]),
-                                 float(poly.normal[2])]
-            else:
-                have_all_normals = False
-            poly_flags_flat.append(poly.flags or 0)
-        if not have_all_normals:
-            normals_flat = []                        # Rust CalcNormal from winding
-        # Empty per-poly texture-axis lists: preview derives its UV frames from the join polys'
-        # authored axes separately (see `# UV frames` below), so the built model's surf axes are
-        # unused here — leaving them empty keeps the built geometry byte-for-byte as before.
-        # Trailing empties: tex_u, then the (tex_v, origins, vec_xform) triple — all defaulted here
-        # (preview derives UV frames from the join polys separately, its built geometry is
-        # pBase-agnostic so base stays verts[0], and preview rejects scaled brushes so no covariant
-        # normal map is needed).  The triple keeps the marshalled arity at 12 (PyO3 tuple cap).
-        brushes.append((verts_flat, poly_sizes, normals_flat, oper, poly_flags_int(raw),
-                        list(loc), _rot3x3(actor), list(prepivot), [1.0, 1.0, 1.0],
-                        poly_flags_flat, [], ([], [], [])))
+        brushes.append(_marshal_brush(actor))
         join.append((name, actor.brush.polys))
     return brushes, join
 
@@ -188,28 +202,35 @@ def _node_polys(model) -> list[tuple[list[tuple[float, float, float]], int, int]
     return out
 
 
+def _mover_actor_world_polys(actor) -> list[tuple[list, object, object]]:
+    """One mover actor's brush polys world-transformed at the BASE pose
+    (`Location + R·(v − PrePivot)` — `rotation.actor_matrix` path). Returns `(world_verts, actor,
+    poly)` so the UV frame comes from the same authored fields."""
+    _reject_scaled(actor.name, actor)
+    loc = tuple(float(c) for c in (actor.location or (0, 0, 0)))
+    pp = tuple(float(c) for c in actor_prepivot(actor))
+    R = actor_matrix(actor)
+    out = []
+    for poly in actor.brush.polys:
+        world = []
+        for v in poly.vertices:
+            rel = (float(v[0]) - pp[0], float(v[1]) - pp[1], float(v[2]) - pp[2])
+            if R is not None:
+                rel = matvec(R, rel)
+            world.append((loc[0] + rel[0], loc[1] + rel[1], loc[2] + rel[2]))
+        out.append((world, actor, poly))
+    return out
+
+
 def _mover_world_polys(level, index) -> list[tuple[list, object, object]]:
     """Movers render directly (no BSP surfs): each brush poly world-transformed at the BASE
-    pose (`Location + R·(v − PrePivot)` — `rotation.actor_matrix` path). Returns
-    `(world_verts, actor, poly)` so the UV frame comes from the same authored fields.
-    A draft preview without doors would be actively misleading (spec §5)."""
+    pose. A draft preview without doors would be actively misleading (spec §5)."""
     out = []
     for name in level.order:
         actor = level.actors.get(name)
         if actor is None or actor.brush is None or not movers.is_mover(actor, index):
             continue
-        _reject_scaled(name, actor)
-        loc = tuple(float(c) for c in (actor.location or (0, 0, 0)))
-        pp = tuple(float(c) for c in actor_prepivot(actor))
-        R = actor_matrix(actor)
-        for poly in actor.brush.polys:
-            world = []
-            for v in poly.vertices:
-                rel = (float(v[0]) - pp[0], float(v[1]) - pp[1], float(v[2]) - pp[2])
-                if R is not None:
-                    rel = matvec(R, rel)
-                world.append((loc[0] + rel[0], loc[1] + rel[1], loc[2] + rel[2]))
-            out.append((world, actor, poly))
+        out += _mover_actor_world_polys(actor)
     return out
 
 
@@ -355,6 +376,78 @@ def build_scene(level, search_files, index) -> tuple[list, list]:
         add_poly(world_verts, actor, poly)
 
     return polys, textures.table
+
+
+@dataclass(frozen=True)
+class SolvedSurface:
+    """One surviving world-space surface from the CSG solve. `actor`/`poly_index` identify the
+    SOURCE brush poly (for texture/UV frame and the per-poly index decal), or both are None for a
+    BSP node that joined to no source poly (renders flat grey). `world_verts` is the fragment's
+    ring, already in world space — NO local→world transform is applied again downstream."""
+    actor: object | None
+    poly_index: int | None
+    world_verts: list
+
+
+@dataclass(frozen=True)
+class SolvedWorld:
+    """The CSG solve output `actor preview --faces textured` draws: the surviving world surfaces
+    plus the movers (excluded from world CSG, drawn as a separate overlay)."""
+    world_surfaces: list  # list[SolvedSurface]
+    mover_polys: list     # list[(world_verts, actor, poly)]
+
+
+def solve_world_surfaces(actors, index, search_files=None) -> SolvedWorld:
+    """Run the native CSG solve over an ad-hoc actor list (in the order given — the actor-set order
+    IS the CSG evaluation order) through the FAITHFUL `build_geometry_bspcsg` core, and return the
+    surviving world surfaces + the movers. This is the `actor preview --faces textured` engine: the
+    world is solved in isolation from a SOLID world, so an add not inside subtracted space leaves no
+    surface. `index` is a `classindex.ClassIndex`; movers are excluded from world CSG (raising
+    `classindex.ClassRefError` straight through on an unresolvable class). Raises `NativePreviewError`
+    if the native extension is not built."""
+    try:
+        import uedcli_native
+    except ImportError:
+        raise NativePreviewError(
+            "the uedcli_native extension is not built — `actor preview --faces textured` needs it "
+            "(build with `maturin develop`, or run bin/test once)") from None
+
+    brushes, join = [], []
+    for actor in actors:
+        if actor.brush is None:
+            continue
+        if movers.is_mover(actor, index) or is_builder_brush(actor):
+            continue
+        if _csg_oper_or_skip(actor.name, dict(actor.props)) is None:
+            continue
+        _reject_scaled(actor.name, actor)
+        brushes.append(_marshal_brush(actor))
+        join.append(actor)
+
+    world_surfaces: list[SolvedSurface] = []
+    if brushes:
+        try:
+            built = uedcli_native.build_geometry_bspcsg(brushes)
+            body = uedcli_native.serialize_model(built)
+        except uedcli_native.BuildError as ex:
+            raise NativePreviewError(f"native CSG solve failed: {ex}") from ex
+        from .native.umodel import parse_model_body
+        model = parse_model_body(body, 0, len(body))
+        for world_verts, i_actor, i_brush_poly in _node_polys(model):
+            if 0 <= i_actor < len(join):
+                actor = join[i_actor]
+                if 0 <= i_brush_poly < len(actor.brush.polys):
+                    world_surfaces.append(SolvedSurface(actor, i_brush_poly, world_verts))
+                else:                                    # out-of-range poly → grey (M5)
+                    world_surfaces.append(SolvedSurface(None, None, world_verts))
+            else:                                        # out-of-range owner → grey (M5)
+                world_surfaces.append(SolvedSurface(None, None, world_verts))
+
+    mover_polys = []
+    for actor in actors:
+        if actor.brush is not None and movers.is_mover(actor, index):
+            mover_polys += _mover_actor_world_polys(actor)
+    return SolvedWorld(world_surfaces=world_surfaces, mover_polys=mover_polys)
 
 
 def render_shots(*, level, shots: list[Shot], out_dir: Path, index,

@@ -21,7 +21,7 @@ import tempfile
 from decimal import Decimal
 from pathlib import Path
 
-from .. import config, preview, rotation, surface
+from .. import config, preview, preview_native, rotation, surface
 from ..classindex import ClassRefError
 from ..model import parse_t3d
 from ..uprops import SchemaError
@@ -617,18 +617,34 @@ def _preview_faces_mode(args) -> str:
 
 
 def _preview_verb(args, mode: str) -> str:
-    """`actor preview --faces flat` and friends — the verb+flag a `--faces` refusal names."""
+    """`actor preview --faces textured` and friends — the verb+flag a `--faces` refusal names."""
     return f"{getattr(args, 'cmd', 'actor')} {getattr(args, 'sub', 'preview')} --faces {mode}"
 
 
-def preview_movers(actors, args, mode: str) -> frozenset[str]:
+def _mover_index_or_exit(args, verb: str):
+    """The game class index a filled render needs, or a clean exit 2 naming the verb + why. A missing
+    PROJECT surfaces via `resources.mover_index` as the house message re-worded here (on `--from-t3d`,
+    where being outside a project is ordinary and `wire` works fully, the bare message would name
+    neither the flag nor why a preview wants a project)."""
+    try:
+        return resources.mover_index(args, verb)
+    except ProjectError as e:
+        raise CommandError(
+            f"{verb}: {e} — a filled render resolves every brush's class against Engine.Mover (a mover "
+            f"is never carved into the world, so it escapes the subtract cull), and composing the game's "
+            f"package search path needs a project. --faces wire needs neither") from None
+
+
+def preview_movers(actors, args, mode: str, *, index=None) -> frozenset[str]:
     """Which of these brush actors ARE Movers, per `movers.is_mover` over the game's class hierarchy.
+    `index` (a pre-resolved `classindex.ClassIndex`) is reused when the caller already has one — the
+    textured path resolves it once and shares it with the CSG solve.
 
     A filled render needs this and cannot guess it: a mover is never carved into the world whatever
     `CsgOper` it carries, so it must escape the subtract cull, and it fills in mover colour. Both
     index-free rules are wrong — the raw `CsgOper` marker renders a `SomethingMover` door inside-out,
     and `preview.classify_brush`'s name guess additionally misses `CEDoor`/`BreakableGlass`, real movers
-    whose class names do not end in `Mover`. This is why `flat` loads the class hierarchy and so, unlike
+    whose class names do not end in `Mover`. This is why `textured` loads the class hierarchy and so, unlike
     `wire`, needs the game content available.
 
     `is_mover` ANSWERS OR RAISES — it never reports an unresolvable class as "not a mover", because
@@ -644,17 +660,8 @@ def preview_movers(actors, args, mode: str) -> frozenset[str]:
     if not brushes:
         return frozenset()
     verb = _preview_verb(args, mode)
-    try:
-        index = resources.mover_index(args, verb)
-    except ProjectError as e:
-        # `resources.mover_index` resolves the project itself, so OUTSIDE one this surfaces as the house "not in
-        # a uedcli project" — naming neither the flag that caused it nor why a preview wants a project.
-        # On `--from-t3d`, where being outside a project is ordinary and `wire` works fully, that bare
-        # message is all the user gets, so it is re-raised naming both.
-        raise CommandError(
-            f"{verb}: {e} — a filled render resolves every brush's class against Engine.Mover (a mover "
-            f"is never carved into the world, so it escapes the subtract cull), and composing the game's "
-            f"package search path needs a project. --faces wire needs neither") from None
+    if index is None:
+        index = _mover_index_or_exit(args, verb)
     out: set[str] = set()
     by_cause: dict[str, list[str]] = {}
     for a in brushes:
@@ -683,14 +690,32 @@ def _preview_render_data(actors, args, show: set[str]) -> "preview.PreviewData":
     point-actor notes about it."""
     mode = _preview_faces_mode(args)
     faces = None
-    if mode != "wire":
-        if mode == "textured":
-            # Cheap arg/geometry refusals first (§2.7, §4.2), before touching any resolver.
-            _reject_explicit_brush_colors(args)
-            _reject_transformed_brushes(actors, args)
-        movers = preview_movers(actors, args, mode)
-        textures = preview_textures(actors, args) if mode == "textured" else None
-        faces = preview.FaceData(movers=movers, textures=textures)
+    if mode == "textured":
+        # Cheap arg/geometry refusals first (§2.7, §4.2), before touching any resolver.
+        _reject_explicit_brush_colors(args)
+        _reject_transformed_brushes(actors, args)
+        verb = _preview_verb(args, mode)
+        index = (_mover_index_or_exit(args, verb)
+                 if any(a.brush is not None for a in actors) else None)
+        movers = preview_movers(actors, args, mode, index=index)
+        try:
+            solved = (preview_native.solve_world_surfaces(actors, index) if index is not None
+                      else preview_native.SolvedWorld(world_surfaces=[], mover_polys=[]))
+        except preview_native.NativePreviewError as e:   # ext not built / build failure → clean exit 2
+            raise CommandError(str(e)) from None
+        # Pre-render guard (§B4): a set with world-CSG brushes that solves to ZERO surviving surfaces is
+        # exit 2 naming the cause — never a blank frame. A point/mover-only set (no world brush) is NOT
+        # that error: its solved world is legitimately empty and its overlays draw over black at exit 0.
+        world_brushes = [a for a in actors if a.brush is not None and a.name not in movers]
+        if world_brushes and not solved.world_surfaces:
+            raise CommandError(
+                f"{verb}: nothing survives the CSG solve — the set's {len(world_brushes)} world brush(es) "
+                f"carve no visible surface (an additive brush needs subtracted space around it to show). "
+                f"Use --faces wire for a content-free schematic")
+        # Texture resolution follows the solve (§M2): resolve/refuse only refs a SURVIVING surface needs,
+        # so an unreadable texture on a culled/absent face never blocks a render that never draws it.
+        textures = preview_textures(actors, args, solved)
+        faces = preview.FaceData(movers=movers, textures=textures, solved=solved)
     return preview.PreviewData(points=_preview_point_data(actors, args, show), faces=faces)
 
 
@@ -702,8 +727,8 @@ def _reject_explicit_brush_colors(args) -> None:
     if chosen is not None:
         verb = _preview_verb(args, "textured")
         raise CommandError(f"{verb}: --brush-colors {chosen} conflicts with --faces textured. That flag "
-                           f"colours the wireframe and the flat fills; textured draws neither — it "
-                           f"samples each face's OWN texture. Drop --brush-colors, or use --faces flat")
+                           f"colours the wireframe; textured draws none — it "
+                           f"samples each face's OWN texture. Drop --brush-colors, or use --faces wire")
 
 
 def _nonidentity_scale_part(fs) -> str:
@@ -723,7 +748,7 @@ def _reject_transformed_brushes(actors, args) -> None:
     field (a batch is all-or-nothing). Its geometry is built with the full linear transform
     (`PostScale·R·MainScale`, sheer folded in) while the UV frame uses rotation ONLY, so a texture would
     sit on untransformed axes over transformed geometry — a wrong answer in the one tool meant to be
-    authoritative about UV. `wire`/`flat` render these; supporting them under `textured` is deferred."""
+    authoritative about UV. `wire` renders these; supporting them under `textured` is deferred."""
     offenders: list[str] = []
     for a in actors:
         if a.brush is None:
@@ -737,7 +762,7 @@ def _reject_transformed_brushes(actors, args) -> None:
         raise CommandError(
             f"{verb}: cannot texture {len(offenders)} scaled or sheared brush(es) — the UV frame uses "
             f"rotation only, so the texture would not follow the transformed geometry: "
-            f"{', '.join(offenders)}. Remove the scale/sheer, or use --faces wire/flat")
+            f"{', '.join(offenders)}. Remove the scale/sheer, or use --faces wire")
 
 
 def _texture_resolver_cause(project, verb: str) -> str:
@@ -748,43 +773,48 @@ def _texture_resolver_cause(project, verb: str) -> str:
     try:
         user_config = config.load_user_config()
     except config.ConfigError as e:
-        return f"{lead}: the games config is broken — {e}. (--faces wire/flat need no textures)"
+        return f"{lead}: the games config is broken — {e}. (--faces wire needs no textures)"
     if user_config is None:
         return (f"{lead}: no per-user games config (~/.uedcli/config.toml) — create it with a "
-                f"[games.<name>] paths dir list. (--faces wire/flat need no textures)")
+                f"[games.<name>] paths dir list. (--faces wire needs no textures)")
     try:
         files = config.composed_search_files(project, user_config) if project is not None else []
     except config.ConfigError as e:
-        return f"{lead}: the games config is broken — {e}. (--faces wire/flat need no textures)"
+        return f"{lead}: the games config is broken — {e}. (--faces wire needs no textures)"
     if not files:
         return (f"{lead}: this project resolves no game packages (check the games config `paths` and "
-                f"that the project targets a game). (--faces wire/flat need no textures)")
+                f"that the project targets a game). (--faces wire needs no textures)")
     return f"{lead}."                                    # unreachable: a real resolver would have built
 
 
-def preview_textures(actors, args) -> "preview.TextureData":
-    """Resolve every texture the brush faces reference into the decoded seam a `--faces textured` render
-    draws from — dispatch owns this so `preview.py` stays resolver-free.
+def preview_textures(actors, args, solved) -> "preview.TextureData":
+    """Resolve the textures a `--faces textured` render draws from — dispatch owns this so `preview.py`
+    stays resolver-free.
 
-    "Needs" is literal (decision 2.6): the scene's face refs are collected first, and a scene
-    referencing NONE renders with no texture source at all. Otherwise every distinct ref is decoded and
-    any the render NEEDS and cannot get is a clean exit 2 naming the cause (§8) — an unreadable/bare/
-    undecodable ref lists EVERY offender with its case (a bare one says to qualify it as `Package.Name`),
-    and no resolver at all names which of the three `None` causes applies. On success: a `TextureData`
-    with every ref's mip pyramid (casefolded key, FName semantics) and every textured face's masked
-    answer, `(poly.flags | actor PolyFlags) & PF_Masked` OR the decoder's `bMasked` (§4.3a)."""
+    "Needs" is literal (decision 2.6) and, per §M2, scoped to the SOLVE: only the source polys of the
+    SURVIVING `solved.world_surfaces` are consulted, so an unreadable texture on a culled or buried face
+    the render never draws does not block it. A scene whose surviving surfaces reference NO texture
+    renders with no texture source at all. Otherwise every distinct ref is decoded and any the render
+    NEEDS and cannot get is a clean exit 2 naming the cause (§8) — an unreadable/bare/undecodable ref
+    lists EVERY offender with its case (a bare one says to qualify it as `Package.Name`), and no resolver
+    at all names which of the three `None` causes applies. On success: a `TextureData` with every ref's
+    mip pyramid (casefolded key, FName semantics) and every surviving face's masked answer,
+    `(poly.flags | actor PolyFlags) & PF_Masked` OR the decoder's `bMasked` (§4.3a)."""
     from .. import utexture
-    brushes = [a for a in actors if a.brush is not None]
+    # dedup the surviving (actor, poly) pairs — one source poly can survive as several fragments.
+    # `Actor` is unhashable, so key by its name and keep a name→actor map for the poly/flag lookups.
+    surviving = {(s.actor.name, s.poly_index) for s in solved.world_surfaces
+                 if s.actor is not None and s.poly_index is not None}
+    actor_by_name = {s.actor.name: s.actor for s in solved.world_surfaces if s.actor is not None}
     face_ref: dict[tuple[str, int], str] = {}          # (actor, poly) → casefolded ref (faces WITH one)
     refs: dict[str, str] = {}                           # casefold → original spelling (for messages)
-    for a in brushes:
-        for idx, poly in enumerate(a.brush.polys):
-            ref = preview._poly_texture_ref(poly)
-            if ref is None:
-                continue
-            cf = ref.casefold()
-            face_ref[(a.name, idx)] = cf
-            refs.setdefault(cf, ref)
+    for name, idx in surviving:
+        ref = preview._poly_texture_ref(actor_by_name[name].brush.polys[idx])
+        if ref is None:
+            continue
+        cf = ref.casefold()
+        face_ref[(name, idx)] = cf
+        refs.setdefault(cf, ref)
     if not refs:                                        # decision 2.6: nothing needed, nothing resolved
         return preview.TextureData(by_ref={}, masked={})
     verb = _preview_verb(args, "textured")
@@ -811,14 +841,15 @@ def preview_textures(actors, args) -> "preview.TextureData":
             f"{verb}: {len(fails)} texture(s) the render needs could not be read, so a textured face "
             f"would silently be a checkerboard — refusing instead:\n  " + "\n  ".join(fails))
     masked: dict[tuple[str, int], bool] = {}
-    for a in brushes:
-        actor_flags = preview.poly_flags_int(dict(a.props))
-        for idx, poly in enumerate(a.brush.polys):
-            cf = face_ref.get((a.name, idx))
-            if cf is None:
-                continue
-            flag_masked = bool(((poly.flags or 0) | actor_flags) & preview.PF_MASKED)
-            masked[(a.name, idx)] = flag_masked or bool(decoded[cf].b_masked)
+    actor_flags: dict[str, int] = {}
+    for name, idx in surviving:
+        cf = face_ref.get((name, idx))
+        if cf is None:
+            continue
+        actor = actor_by_name[name]
+        af = actor_flags.setdefault(name, preview.poly_flags_int(dict(actor.props)))
+        flag_masked = bool(((actor.brush.polys[idx].flags or 0) | af) & preview.PF_MASKED)
+        masked[(name, idx)] = flag_masked or bool(decoded[cf].b_masked)
     return preview.TextureData(by_ref=by_ref, masked=masked)
 
 

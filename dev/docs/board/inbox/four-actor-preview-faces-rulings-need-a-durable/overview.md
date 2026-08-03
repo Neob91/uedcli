@@ -86,3 +86,20 @@ If you would rather these stay agent-side, say so and they go to `rationale/` in
 cannot stay only in an ephemeral spec. *(2026-07-26; the visibility model, the `--focus` and
 `--highlight` sentences and the consequences added 2026-07-29, as the owner ruled them during S3 — the
 slug's "four" is its permanent identity, not a count.)*
+
+## ⚠ SUPERSEDED by the parity change (2026-08-03)
+
+`actor-preview-unrealed-render-parity-new-csg` (now in `done/`) landed and **redefined the whole
+`--faces` model**, so most of the proposed text above is now stale and must NOT be filed as written:
+
+- `flat` is **deleted** (choices are `wire` + `textured` only; no alias).
+- `textured` is now the **CSG-solved world** (native solve, only surviving surfaces drawn), not a
+  per-brush painter. Visibility is spatial CONTAINMENT (an add not inside subtracted space is invisible)
+  and a subtracted room shows its interior via a **per-view backface cull** — not the old per-brush
+  "subtract far-faces" rule.
+- The preview renders on a **BLACK** background, so the grey-ground tuning premise is gone.
+
+The `--focus` / `--highlight` / opacity / "solid brush is opaque" rulings still hold in spirit under
+`textured`. The direction home for the NEW model is proposed in the standalone `[OWNER — confirm]`
+item `actor-preview-parity-direction-home`. Rework this proposal against the shipped behavior (or fold
+it into that item) before filing to `direction/`.

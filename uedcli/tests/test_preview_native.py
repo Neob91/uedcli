@@ -338,3 +338,63 @@ def test_golden_image_byte_exact(capsys):
         pytest.fail(f"native-preview golden mismatch: {diff} differing bytes "
                     f"(re-bless with UEDCLI_BLESS_GOLDEN=1 only after re-verifying the "
                     f"anchor — spec §9)")
+
+
+# --------------------------------------------------------- solve_world_surfaces (parity engine)
+
+
+def _solve(actors, monkeypatch=None):
+    return pn.solve_world_surfaces(actors, IDX)
+
+
+def test_solve_carves_room_shows_interior_add_and_hides_buried_add():
+    """The parity engine: a subtracted room keeps its interior walls, an add INSIDE it survives
+    where it borders empty, and an add BURIED in solid space (outside the subtraction) leaves no
+    surface at all — the containment result a per-brush cull cannot produce."""
+    room = make_brush_actor("Room", cube(1024, 1024, 1024), location=(0, 0, 0), csg="subtract")
+    inner = make_brush_actor("Inner", cube(256, 256, 256), location=(0, 0, 0), csg="add")
+    buried = make_brush_actor("Buried", cube(128, 128, 128), location=(4000, 0, 0), csg="add")
+    solved = _solve([room, inner, buried])
+    by_actor: dict = {}
+    for s in solved.world_surfaces:
+        key = s.actor.name if s.actor is not None else None
+        by_actor[key] = by_actor.get(key, 0) + 1
+    assert by_actor == {"Room": 6, "Inner": 6}         # Buried absent — no surviving surface
+    assert solved.mover_polys == []
+
+
+def test_solve_routes_through_bspcsg_core(monkeypatch):
+    """The solve MUST call `build_geometry_bspcsg`, never the default `build_geometry` — the default
+    mis-renders overlapping subtracts (the exact geometry parity exists to show). Guards the core
+    choice against a silent revert."""
+    import uedcli_native
+    calls: list = []
+    real = uedcli_native.build_geometry_bspcsg
+    monkeypatch.setattr(uedcli_native, "build_geometry_bspcsg",
+                        lambda b: calls.append("bspcsg") or real(b))
+    monkeypatch.setattr(uedcli_native, "build_geometry",
+                        lambda b: pytest.fail("default core must not be called"))
+    room = make_brush_actor("Room", cube(1024, 1024, 1024), csg="subtract")
+    _solve([room])
+    assert calls == ["bspcsg"]
+
+
+def test_solve_world_verts_are_already_world_space():
+    """A solved fragment's verts are world-space (offset by Location): a room built at a non-origin
+    Location has fragments around that Location, with NO second local→world transform owed."""
+    room = make_brush_actor("Room", cube(512, 512, 512), location=(1000, 2000, 3000),
+                            csg="subtract")
+    solved = _solve([room])
+    xs = [float(p[0]) for s in solved.world_surfaces for p in s.world_verts]
+    assert xs and min(xs) >= 700 and max(xs) <= 1300   # 1000 ± 256, never near the local origin
+
+
+def test_solve_movers_excluded_from_csg_and_returned_separately():
+    """A mover is not carved into the world (it never subtracts/adds), so the room solves as if the
+    mover were absent; the mover comes back as a world-transformed overlay poly set."""
+    room = make_brush_actor("Room", cube(1024, 1024, 1024), csg="subtract")
+    door = make_brush_actor("Door", cube(128, 16, 256), location=(0, 512, 0),
+                            mover_class="Engine.Mover")
+    solved = _solve([room, door])
+    assert {s.actor.name for s in solved.world_surfaces if s.actor} == {"Room"}
+    assert {a.name for _v, a, _p in solved.mover_polys} == {"Door"}

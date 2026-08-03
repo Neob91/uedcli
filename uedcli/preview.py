@@ -1,7 +1,7 @@
 """Self-rendered orthographic preview — a low-noise COLOR image from the model alone (no
 editor), so the LLM can SEE a brush's geometry and which poly INDEX is which face. `--faces wire`
-(the default) draws outlines only; `--faces flat` fills each surviving face solid through a depth
-buffer and keeps the wireframe over it (see `_scene_geometry` for the cull and the edge rule).
+(the default) draws outlines only; `--faces textured` draws the CSG-SOLVED world (only surviving
+surfaces, each through its texture), with a per-view backface cull (see `_scene_geometry`).
 Rendering is stdlib only (no PIL/numpy), so every function here returns raw **PPM/P6
 bytes IN MEMORY**. That is an internal format only: the CLI's disk-write boundary
 (`rendering.render_actors_to_out`) encodes those bytes to **PNG** with Pillow before
@@ -20,9 +20,10 @@ unrelated sense living outside this module, and it is why the selection concept 
 longer called "label".
 
 Rendering choices (all to make poly numbers readable):
-  - dark-on-light-grey (display-ready, no negate): front edges darker, obscured/back edges
-    lighter (face distinction by shade). Uncoloured brushes are black/grey; on the shared
-    preview path each brush is coloured by its CSG classification (`_CSG_PALETTE`).
+  - light-on-BLACK, matching UnrealEd's viewport (owner ruling 2026-08-02): front edges brighter,
+    obscured/back edges dimmer (face distinction by shade). Uncoloured brushes use the light FRONT /
+    dimmer BACK pair; on the shared preview path each brush is coloured by its CSG classification
+    (`_CSG_PALETTE`).
   - a highlighted poly (`--highlight`) is drawn in its brush's vivid front hue with a
     bolder line (the facing dim is ignored on it); `--zoom` only frames, never highlights.
   - point (non-brush) actors draw as a DT_Sprite billboard or a labelled marker, with
@@ -89,37 +90,38 @@ _DEPTH: dict[str, tuple[float, float, float]] = {
     "top": (0, 0, -1), "front": (0, 1, 0), "side": (1, 0, 0),
 }
 
-# Colours (RGB), tuned for a light-grey background (see BG).
+# Colours (RGB), tuned for the BLACK background (see BG). On black the facing cue inverts from the old
+# grey-bg tuning: the uncoloured FRONT is a light default (black lines would vanish) and BACK its dimmer
+# partner; captions/markers/gutter labels lift to a mid grey legible on black.
 WHITE = (255, 255, 255)
-FRONT = (0, 0, 0)         # visible faces — black (uncoloured default)
-BACK = (165, 165, 165)    # obscured faces — light grey (uncoloured default)
-DIVIDER = (110, 110, 110)
-CAPTION = (90, 90, 90)
-MARKER = (90, 90, 90)     # point-actor marker + label — neutral grey (NOT a CSG hue)
+FRONT = (235, 235, 235)   # visible faces — near-white (uncoloured default, legible on black)
+BACK = (120, 120, 120)    # obscured faces — dimmer grey partner of FRONT
+DIVIDER = (130, 130, 130)
+CAPTION = (170, 170, 170)
+MARKER = (185, 185, 185)  # point-actor marker + label — neutral grey (NOT a CSG hue)
 
 # CSG-op wire palette — each brush's wireframe is coloured by its CSG classification when
 # `color_by_csg=True` (the shared `actor`/`stash`/`prefab preview` path). Each entry is a
-# (front, back) shade pair: front = viewer-facing / vivid (max-saturation), back = obscured /
-# lighter — so the facing cue (front darker, back lighter) survives on the light-grey background, and
-# `front` doubles as the vivid highlight hue. Adapted from UnrealEd's own brush-wire legend (hue
-# preserved, luminance re-tuned for our light-grey bg — UED tunes for a near-black viewport); see
+# (front, back) shade pair: front = viewer-facing / vivid, back = obscured / DIMMER — so the facing
+# cue (front brighter, back dimmer) reads on the BLACK background, and `front` doubles as the vivid
+# highlight hue. Adapted from UnrealEd's own brush-wire legend (hue preserved, luminance tuned for our
+# black bg — as UED's viewport is); see
 # dev/docs/unrealed/rendering.md. Red is deliberately NOT used (it's UED's builder brush, which we
 # don't render). test_preview.py pins the classify→palette→render WIRING (a subtracted brush renders
 # in the `subtract` pair; a point actor is never painted CSG-additive), not these literal RGB values.
 # NOTE: `semisolid` deliberately DIVERGES from UED's rose (223,149,157) to a warm CORAL. UED's
-# semisolid and mover are both red/purple and are told apart only by saturation against its black
-# viewport — a cue that dies on our light bg (they conflated). Coral (warm) vs magenta (cool) stays
-# distinct on any background; see spikes/2026-07-22-unrealed-brush-wire-colors.md.
+# semisolid and mover are both red/purple, told apart only by saturation — a fragile cue. Coral (warm)
+# vs magenta (cool) stays distinct regardless; see spikes/2026-07-22-unrealed-brush-wire-colors.md.
 PF_INVISIBLE = 0x00000001
 PF_MASKED = 0x00000002
 PF_SEMISOLID = 0x00000020
 PF_NOTSOLID = 0x00000008
 _CSG_PALETTE: dict[str, tuple[tuple[int, int, int], tuple[int, int, int]]] = {
-    "add":       ((0, 0, 200),    (120, 120, 225)),   # additive solid — blue
-    "subtract":  ((150, 110, 0),  (205, 180, 110)),   # subtracted — yellow / gold
-    "semisolid": ((205, 95, 60),  (232, 165, 140)),   # semi-solid — warm coral (distinct from mover)
-    "nonsolid":  ((0, 140, 0),    (120, 200, 120)),   # non-solid — green
-    "mover":     ((150, 0, 190),  (205, 130, 225)),   # mover — magenta / purple
+    "add":       ((70, 110, 255),  (35, 55, 130)),    # additive solid — blue (front lifted for black)
+    "subtract":  ((225, 170, 40),  (120, 90, 20)),    # subtracted — yellow / gold
+    "semisolid": ((235, 120, 80),  (125, 62, 40)),    # semi-solid — warm coral (distinct from mover)
+    "nonsolid":  ((60, 200, 60),   (30, 100, 30)),    # non-solid — green
+    "mover":     ((205, 70, 235),  (105, 35, 120)),   # mover — magenta / purple
 }
 
 # Overlay colours (faint, solid — the renderer has no alpha blend buffer). Collision = red and
@@ -137,7 +139,7 @@ COL_LIGHT = (245, 175, 80)        # faint orange — light reach (deviated from 
 # a distinct per-brush tint tells them apart while the CSG wireframe cue is preserved. Tints are assigned
 # per actor in scene order (drawn or not — brushes AND point actors alike; an undrawn point actor with no
 # render data still consumes an index), cycling when the scene has more actors than entries. Chosen for
-# contrast on the light-grey bg (BG=224) and mutual separation, and kept clear of the two most common CSG
+# contrast on the black bg (BG=0) and mutual separation, and kept clear of the two most common CSG
 # wireframe hues (add=blue, subtract=gold) so a tint never reads as a CSG cue. The on-face number (digits
 # AND its underline) is painted in the tint; a legacy NAME label keeps black digits with a tinted box.
 # Used ONLY on the CSG-coloured preview path (`color_by_csg`); the legacy black/grey path keeps black
@@ -302,11 +304,13 @@ class FaceData:
     read off the game's class hierarchy. The fill needs it because a MOVER is never carved into the
     world whatever `CsgOper` it carries, so it escapes the subtract cull and fills in mover colour.
 
-    **`movers` and `textures` are separate fields on purpose.** `flat` needs the mover set and no
-    textures at all; a single texture-named payload would invite passing `None` for `flat`, which drops
-    the mover set and makes the cull render a `CsgOper=CSG_Subtract` door inside-out."""
+    `solved` is the CSG solve output (`preview_native.SolvedWorld`) under `--faces textured`: the
+    surviving world-space surfaces + the mover overlay polys. `textured` draws THOSE, not each brush's
+    own faces, so an additive brush not inside subtracted space is invisible (containment, not a
+    per-brush cull). It is `None` under any non-textured filled mode."""
     movers: frozenset[str]
     textures: TextureData | None = None
+    solved: object | None = None      # preview_native.SolvedWorld (kept opaque — no import cycle)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -453,37 +457,19 @@ def _point_in_poly(pt, poly) -> bool:
 
 def _is_front(verts3d, view: str, iso_angle: float = 30.0) -> bool:
     """Does this face point at the camera, per its own WINDING (the Newell normal — not the stored
-    `Normal`, which the engine recomputes from winding anyway)? Vertices are wound CCW-from-outside, so an
-    outward normal pointing against the into-screen direction is camera-facing.
-
-    **This answer is INVERTED on a mirrored brush** — see `_is_front_corrected`, which every filled
-    render goes through instead."""
+    `Normal`, which the engine recomputes from winding anyway)? Vertices are wound CCW-from-outside, so
+    an outward normal pointing against the into-screen direction is camera-facing. On the solved
+    `textured` path this is the per-view backface cull; on `wire` it picks the front/back shade."""
     d = _iso_depth(iso_angle) if view == "iso" else _DEPTH[view]
     n = newell(verts3d)
     return (n[0] * d[0] + n[1] * d[1] + n[2] * d[2]) < 0
 
 
-def _is_front_corrected(verts3d, view: str, iso_angle: float = 30.0, *, mirrored: bool) -> bool:
-    """`_is_front`, with a MIRRORED brush's answer put back the right way round.
-
-    A negative-determinant linear part (`brush scale --by -1,1,1` — a negative axis mirrors) is a
-    REFLECTION: it reverses every ring's handedness, so a transformed face's Newell normal comes out as
-    the NEGATIVE of its true outward normal and `_is_front` answers the opposite of the truth for every
-    face of that brush. One sign flip here fixes the subtract cull, the three colour roles, the `flat`
-    edge rule and `occluders` together, because all four are expressed in terms of this boolean.
-
-    **An EVEN number of negative axes is NOT a mirror** — `Scale=(X=-1,Y=-1)` is a 180° rotation,
-    determinant +1, normals correct — so the discriminator is the determinant's SIGN, not "has a negative
-    component"; a sheer leaves the determinant at the scale product. The caller computes `mirrored`: it is
-    a per-BRUSH property and this is asked per face."""
-    front = _is_front(verts3d, view, iso_angle)
-    return not front if mirrored else front
-
-
 # ----- raster primitives (RGB buffer, 3 bytes/pixel) -------------------------
 
-BG = 224   # light-grey background: lifts the low-contrast subtract-gold vs a white bg while keeping
-           # the black FRONT lines, light-grey BACK lines, and white label boxes all legible.
+BG = 0     # black background — matches UnrealEd's viewport (owner ruling 2026-08-02). The wire palette
+           # and captions/markers/gutter labels are luminance-tuned for black; `_fade_dimmed`'s fade
+           # toward BG now darkens toward black (a `--focus` de-emphasis, intended).
 
 
 def _new_buf(size: int) -> bytearray:
@@ -595,7 +581,7 @@ def _filled_diamond(buf, size, cx, cy, r, rgb) -> None:
 
 
 def _draw_selection_brackets(buf, size, cx, cy, r_px) -> None:
-    """Point-actor highlight = four black corner brackets (a selection reticle) framing the actor.
+    """Point-actor highlight = four corner brackets (a selection reticle, in the uncoloured FRONT hue) framing the actor.
     Deliberately NOT a circle or rectangle: circles here already mean light/sound radius and the
     top-view collision cylinder, and a rectangle is the side-view cylinder — a selection mark must
     not reuse that vocabulary. Frames from `r_px*1.5` out so it never obscures the sprite/marker."""
@@ -624,7 +610,7 @@ def _blit(buf, size, cx, cy, pw, ph, tex, mask, tw, th) -> None:
                 _px(buf, size, x0 + dx, y0 + dy, (tex[si * 3], tex[si * 3 + 1], tex[si * 3 + 2]))
 
 
-# ----- solid face fills (`--faces flat`) -------------------------------------
+# ----- solid face fills (untextured/mover fills under `--faces textured`) -----
 # A filled face is rasterized ONCE, into the RGB canvas plus a depth buffer, before any line art. The
 # two rules that make it correct are both spelled out on the functions below: EVEN-ODD scanline
 # coverage (a triangle fan bleeds outside the 0.1-0.6 % of real faces that are concave), and depth
@@ -703,8 +689,8 @@ def _affine_on_plane(f0, f1, f2, x0, y0, ux, uy, vx, vy, det):
 
 
 # ----- textured face fills (`--faces textured`) ------------------------------
-# The texel path builds on the SAME cull, depth buffer and occlusion `flat` uses; only the fill differs:
-# each pixel samples the face's own decoded texture through its authored UV frame instead of a flat hue.
+# The texel path shares the depth buffer and occlusion of the untextured/mover fills; only the fill
+# differs: each pixel samples the face's own decoded texture through its authored UV frame.
 # Shade, key light, mip pick and the DEFAULT_GREY no-texture colour all match `render.rs` (`level
 # preview --native`) so the two tiers agree up to f32-vs-f64 (spec §4.9): the divergences are declared,
 # never accidental.
@@ -1112,8 +1098,8 @@ def _decal_opacity(n_front: int) -> float:
 
 
 _DIM_ALPHA = 0.15   # `--focus`/`--breakdown` draw a non-focused brush's wireframe at this opacity
-                    # (COMPOSITED, so crossed edges/numbers show through) — 0.15 over the light bg
-                    # matches the old fade-toward-bg look but no longer hard-overwrites at crossings.
+                    # (COMPOSITED, so crossed edges/numbers show through) — a fade-toward-bg (now
+                    # black) look that no longer hard-overwrites at crossings.
 
 # A filled mode's non-focused FILLS composite at this opacity — separate from `_DIM_ALPHA`, which dims
 # thin LINES, where a faint stroke still reads as a stroke. THE OWNER'S VALUE, picked from a ladder of
@@ -1867,41 +1853,149 @@ class _SceneGeom:
                          # where `brush_names` is empty
 
 
+@dataclass(frozen=True, kw_only=True)
+class _SolvedOut:
+    """The `_scene_geometry` accumulators the solved (`--faces textured`) branch appends into. Held
+    as one object so the branch cannot silently skip a channel; every list is the SAME object
+    `_SceneGeom` returns, appended in place."""
+    edges: list
+    fills: list
+    tex_faces: list
+    hi_edges: list
+    vis_faces: list
+    hi_only_labels: set
+    poly_labels: list
+    brush_names: list
+    occluders: list
+    pts: list
+    actor_points: dict
+
+
+def _poly_area_2d(vs) -> float:
+    """Shoelace area of a projected ring — picks which surviving fragment of one source poly carries
+    that poly's index decal (the largest, so the number lands on a visible piece)."""
+    n = len(vs)
+    return abs(sum(vs[i][0] * vs[(i + 1) % n][1] - vs[(i + 1) % n][0] * vs[i][1]
+                   for i in range(n))) / 2.0
+
+
+def _solved_scene(solved, *, view, iso_angle, d_vec, annotations, highlight_polys, focus_cf,
+                  hybrid, tints, mover_names, tex_data, out: _SolvedOut) -> None:
+    """Draw the CSG-solved world into the shared `_scene_geometry` accumulators for `--faces
+    textured`. Each surviving fragment carries its own WORLD-space verts (NO local→world transform)
+    and its SOURCE poly's authored UV frame, so a texture stays continuous and aligned across BSP
+    splits. A per-view BACKFACE CULL drops each fragment whose post-CSG normal faces away from the
+    camera (owner ruling 2026-08-03): bspcsg orients every surviving normal into empty space, so this
+    shows a subtracted room's interior (like UnrealEd's textured view) while a fully-buried add stays
+    hidden (containment already removed it). `textured` draws NO wireframe, so `edges` here only feed
+    label placement; the sole line art is the `--highlight` outline. Movers draw as a filled magenta
+    overlay against the same depth buffer (occluded by / occluding the solved world), no cull, no
+    labels. A source poly split into N fragments gets ONE index decal, on its largest fragment."""
+    best_decal: dict = {}     # (name, idx) -> (area, centroid2d, depth, v3, accent)
+    brush_cands: dict = {}    # name -> projected 2d points (framing + grid cell + legend anchor)
+    brush_hi: dict = {}       # name -> any highlighted poly on this actor
+
+    for surf in solved.world_surfaces:
+        actor = surf.actor
+        v3 = [(float(p[0]), float(p[1]), float(p[2])) for p in surf.world_verts]
+        vs = [_project(p, view, iso_angle) for p in v3]
+        if len(vs) < 3:
+            continue
+        if not _is_front(v3, view, iso_angle):     # backface cull by post-CSG normal
+            continue
+        name = actor.name if actor is not None else None
+        idx = surf.poly_index
+        n = len(vs)
+        centroid = (sum(p[0] for p in v3) / n, sum(p[1] for p in v3) / n, sum(p[2] for p in v3) / n)
+        depth = sum(c * dc for c, dc in zip(centroid, d_vec))
+        if actor is not None and idx is not None:
+            poly = actor.brush.polys[idx]
+            frame = world_uv_frame(actor, poly)
+            if not all(math.isfinite(c) for pt in frame for c in pt):
+                raise PreviewAbort(
+                    f"--faces textured: actor {name!r} poly {idx} has a non-finite texture frame "
+                    f"(Origin/TextureU/TextureV/Pan), so its UV cannot be sampled")
+            ref = _poly_texture_ref(poly)
+            mips = tex_data.by_ref[ref.casefold()] if ref is not None else None
+            masked = tex_data.masked.get((name, idx), False)
+        else:                                       # unjoined BSP node → flat grey (M5)
+            frame = ((0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0))
+            mips, masked = None, False
+        is_hi = name is not None and idx is not None and (name, idx) in highlight_polys
+        is_focus_brush = focus_cf is not None and name is not None and name.casefold() == focus_cf
+        lit = focus_cf is None or is_focus_brush or is_hi
+        face_key = (name, idx)
+        out.pts.extend(vs)
+        # fill rgb is DEFAULT_GREY: it is used only when the fragment is untextured (mips is None);
+        # a textured fragment samples its mip and ignores it.
+        out.fills.append((v3, vs, DEFAULT_GREY, 0 if lit else 1))
+        out.tex_faces.append((frame, mips, masked, _face_shade(v3)))
+        out.vis_faces.append((face_key, v3, vs))
+        out.occluders.append((vs, depth, name or "", True))
+        for i in range(n):
+            out.edges.append((True, (vs[i], vs[(i + 1) % n]), FRONT, BACK, 1.0, face_key))
+        if name is not None:
+            brush_cands.setdefault(name, []).extend(vs)
+            brush_hi[name] = brush_hi.get(name, False) or is_hi
+        if is_hi:
+            hi_rgb = _CSG_PALETTE[classify_brush(actor, is_mover=name in mover_names)][0]
+            for i in range(n):
+                out.hi_edges.append(((vs[i], vs[(i + 1) % n]), hi_rgb, face_key))
+        if name is not None and idx is not None:
+            show_idx = (annotations.draws_poly(is_front=True, is_highlighted=is_hi)
+                        or annotations.draws_poly(is_front=False, is_highlighted=is_hi))
+            plain_idx = (annotations.draws_poly(is_front=True, is_highlighted=False)
+                         or annotations.draws_poly(is_front=False, is_highlighted=False))
+            if focus_cf is not None:
+                show_idx = show_idx and (is_focus_brush or is_hi)
+                plain_idx = plain_idx and is_focus_brush
+            if show_idx:
+                area = _poly_area_2d(vs)
+                prev = best_decal.get((name, idx))
+                if prev is None or area > prev[0]:
+                    accent = tints[name] if hybrid else FRONT
+                    best_decal[(name, idx)] = (area, _poly_centroid_2d(vs), depth, v3, accent)
+                if is_hi and not plain_idx:
+                    out.hi_only_labels.add(face_key)
+
+    mover_rgb = _CSG_PALETTE["mover"][0]
+    for world_verts, actor, _poly in solved.mover_polys:
+        v3 = [(float(p[0]), float(p[1]), float(p[2])) for p in world_verts]
+        vs = [_project(p, view, iso_angle) for p in v3]
+        if len(vs) < 3:
+            continue
+        n = len(vs)
+        centroid = (sum(p[0] for p in v3) / n, sum(p[1] for p in v3) / n, sum(p[2] for p in v3) / n)
+        depth = sum(c * dc for c, dc in zip(centroid, d_vec))
+        out.pts.extend(vs)
+        out.fills.append((v3, vs, mover_rgb, 0))
+        out.tex_faces.append((None, None, False, _face_shade(v3)))   # untextured → mover_rgb × shade
+        out.occluders.append((vs, depth, actor.name, True))
+        brush_cands.setdefault(actor.name, []).extend(vs)
+
+    for name, cands in brush_cands.items():
+        out.actor_points[name] = cands
+        if not hybrid and annotations.draws_name(is_brush=True, is_highlighted=brush_hi.get(name, False)):
+            out.brush_names.append((cands, name.upper(), FRONT))
+    for (name, idx), (_area, centroid2d, depth, v3, accent) in best_decal.items():
+        out.poly_labels.append((centroid2d, str(idx), accent, depth, v3, name))
+
+
 def _scene_geometry(actors, *, view, iso_angle, annotations, highlight_polys, focus_cf, hybrid, tints,
                     color_by_csg, render_data, brush_colors="csg", faces="wire") -> _SceneGeom:
-    """Run the per-actor projection loop and return `_SceneGeom`. Pure (no drawing); reproduces
-    exactly what `render_brushes_pgm`'s inline loop used to build, so the two callers share one
-    projection. See `render_brushes_pgm` for the semantics of each accumulated list.
+    """Run the per-actor projection loop and return `_SceneGeom`. Pure (no drawing). See
+    `render_brushes_pgm` for the semantics of each accumulated list.
 
-    `faces` is the `--faces` MODE. Under `wire` nothing below changes: every face contributes an edge
-    pair regardless of facing, and `fills` stays empty. Under a FILLED mode three rules apply, in this
-    order, and each of them removes a face ENTIRELY — no fill, no depth, no edge, no `--highlight`
-    outline, no on-face index decal, and no entry in `occluders`:
+    `faces` is the `--faces` MODE, one of two:
 
-    1. `PF_Invisible` (the poly's flags OR'd with the ACTOR's own `PolyFlags`, as the engine does).
-    2. A SUBTRACT brush's camera-facing polys. Vertices are wound CCW-from-outside, so a subtract's
-       near faces are exactly its `_is_front` set — and a subtract's polys looked at from outside the
-       carved volume render neither in UnrealEd nor in game. What is left is the far/interior surfaces,
-       which is what keeps geometry inside a subtracted room visible instead of hidden by a solid box.
-       Mover-ness comes from `FaceData.movers`, never from a name guess: a mover is never carved into
-       the world whatever `CsgOper` it carries, so it is not culled.
-    3. Nothing else is back-face culled — a `nonsolid` sheet is a single face and must read from both
-       sides — so a non-subtract brush fills every face and the depth buffer resolves what shows.
-
-    **EVERY face emits an edge pair here; `render_brushes_pgm` then drops the ones DEPTH HID.** So the rule
-    is "visible", never "front-facing" — two owner rulings, and mixing them up re-breaks one or the other.
-    A facing condition (spec §4.6) left an away-facing single-sided sheet filled with no outline at all;
-    making outlines unconditional then let a brush sealed inside a solid show its wireframe through it. A
-    face with no cover is frontmost where it sits, so it keeps its outline under the visibility test but
-    would lose it under a facing test — **do not reintroduce one.** Both directions are pinned, and
-    `architecture.md` "Preview internals" carries the full history.
-
-    Three more filled-mode rules are commented at their point of use below: which member of the brush's
-    colour pair each of fill / edge / `--highlight` takes, the `--focus` split between `fills` and
-    `dimmed` flag (the `--focus` brightness split `_fade_dimmed` applies), and the mirror correction
-    (`_is_front_corrected`) that makes all of the above right on a reflected brush."""
+    - **`wire`** — the per-actor loop below projects EVERY face of every brush to an edge pair (no
+      facing cull, `fills` empty); `_is_front` only picks the front/back wire shade. Needs no game
+      content.
+    - **`textured`** — brush geometry is NOT drawn per actor: the loop SKIPS brush actors and
+      `_solved_scene` draws the CSG-solved world (`FaceData.solved`) instead — the surviving surfaces
+      with their source polys' textures + UV frames, a per-view backface cull, and the mover overlay.
+      Point actors go through the loop on both modes."""
     from .rotation import actor_linear, actor_prepivot, local_offset
-    from .transform import det3
     filled = faces != "wire"
     textured = faces == "textured"
     face_data = render_data.faces
@@ -1913,6 +2007,10 @@ def _scene_geometry(actors, *, view, iso_angle, annotations, highlight_polys, fo
     if textured and tex_data is None:
         raise PreviewAbort("--faces textured needs the decoded texture payload on the preview seam, "
                            "and it arrived empty")
+    solved = face_data.solved if face_data is not None else None
+    if textured and solved is None:
+        raise PreviewAbort("--faces textured needs the CSG solve output on the preview seam, and it "
+                           "arrived empty")
     edges: list = []
     fills: list = []
     tex_faces: list = []
@@ -1944,10 +2042,12 @@ def _scene_geometry(actors, *, view, iso_angle, annotations, highlight_polys, fo
                         pts.append(_project(tuple(d), view, iso_angle))
             points.append((actor, pr))
             continue
-        # ONE CSG key per actor, and it decides three things that must agree: the fill/wire colour,
-        # `is_solid` (hence `occluders`, hence decal grading) and the subtract cull. A filled render
-        # hands `classify_brush` the authoritative mover answer; `wire` leaves it on the name guess.
-        csg_key = classify_brush(actor, is_mover=(actor.name in mover_names) if filled else None)
+        if textured:
+            continue        # brush geometry comes from the CSG solve, drawn in the solved branch below
+        # `wire` is the only per-actor brush path now (`textured` draws the solved world above). ONE CSG
+        # key per actor decides the wire colour AND `is_solid` (occluders → decal grading). `wire`
+        # answers mover-ness by the name guess — it must work with no game install (`classify_brush`).
+        csg_key = classify_brush(actor)
         if color_by_csg and brush_colors == "legend":
             # colour the wireframe by the actor's own legend TINT (not the CSG op) — drops the CSG
             # cue but tells same-op brushes apart at a glance without reading numbers.
@@ -1958,20 +2058,12 @@ def _scene_geometry(actors, *, view, iso_angle, annotations, highlight_polys, fo
             vivid = csg_front
             front_rgb, back_rgb = (csg_front, csg_back) if color_by_csg else (FRONT, BACK)
         is_focus_brush = focus_cf is not None and actor.name.casefold() == focus_cf
-        # A non-focused brush is DIMMED by compositing its wireframe at _DIM_ALPHA (not by fading its
-        # colour + opaque paint), so its faint lines let crossed edges/numbers show through.
+        # A non-focused brush is DIMMED by compositing its wireframe at _DIM_ALPHA, so its faint lines
+        # let crossed edges/numbers show through.
         edge_alpha = _DIM_ALPHA if (focus_cf is not None and not is_focus_brush) else 1.0
         label_accent = tints[actor.name] if hybrid else FRONT
         is_solid = csg_key not in ("subtract", "nonsolid")
-        # A subtract's camera-facing polys are culled; every other brush keeps all of them. `csg_key`
-        # is already mover-aware, so a mover carrying `CsgOper=CSG_Subtract` never reaches this.
-        cull_front = filled and csg_key == "subtract"
-        actor_flags = poly_flags_int(dict(actor.props)) if filled else 0
         R = actor_linear(actor)
-        # `actor_linear` returns None as its IDENTITY sentinel (no rotation, no scale — the common
-        # case), so the mirror test MUST guard it: `det3(actor_linear(a)) < 0` alone raises TypeError on
-        # nearly every brush in existence.
-        mirrored = filled and R is not None and det3(R) < 0
         prepivot = actor_prepivot(actor)
         brush_cands_2d: list = []
         brush_hi = False
@@ -1981,10 +2073,7 @@ def _scene_geometry(actors, *, view, iso_angle, annotations, highlight_polys, fo
             vs = [_project(p, view, iso_angle) for p in v3]
             if not vs:
                 continue
-            front = _is_front_corrected(v3, view, iso_angle, mirrored=mirrored)
-            if filled and (((poly.flags or 0) | actor_flags) & PF_INVISIBLE
-                           or (cull_front and front)):
-                continue          # removed entirely — fill, depth, edge, outline, decal, occluder
+            front = _is_front(v3, view, iso_angle)
             is_hi = (actor.name, idx) in highlight_polys
             brush_hi = brush_hi or is_hi
             pts.extend(vs)
@@ -1994,80 +2083,16 @@ def _scene_geometry(actors, *, view, iso_angle, annotations, highlight_polys, fo
                 (sum(p[0] for p in v3) / n, sum(p[1] for p in v3) / n, sum(p[2] for p in v3) / n), d_vec))
             if front:
                 occluders.append((vs, depth, actor.name, is_solid))
-            # THE FILLED-MODE COLOUR ROLES, all three off ONE two-member pair. `own` is the member this
-            # facing fills with, `partner` its opposite — SAME HUE, different luminance, so the CSG cue
-            # ("this exact blue means additive") survives every assignment below.
-            own, partner = (front_rgb, back_rgb) if front else (back_rgb, front_rgb)
-            if filled:
-                # FILL: `own`, with NO key-light shade (multiplying the hue would break the cue the
-                # legend is read against). A subtract can therefore only ever show its BACK colour,
-                # since its camera-facing polys are gone. A HIGHLIGHTED face INVERTS to `partner`, which
-                # is what makes it stand out from its neighbours at all — see the edge note below.
-                # `dimmed` is a BRIGHTNESS flag and nothing more. Every filled face goes into ONE list in
-                # SCENE ORDER and through one rasterizing loop, so what is visible — including which of
-                # two coplanar faces wins the strict-`<` tie — is identical whatever `--focus` says
-                # (owner ruling: focus dims, it never changes visibility or occlusion). A HIGHLIGHTED face
-                # is undimmed wherever its brush is, so `--highlight` still beats `--focus`'s dimming; it
-                # does not beat depth, and a hidden highlighted face shows nothing — see the edge note.
-                lit = focus_cf is None or is_focus_brush or is_hi
-                fills.append((v3, vs, partner if is_hi else own, 0 if lit else 1))
-                if textured:
-                    # Index-aligned with `fills`: the resolver-free texel data this face draws from.
-                    # The UV frame comes from `texframe` (pure); the mip pyramid + masked answer ride
-                    # `TextureData`, resolved in dispatch. A highlighted face is NOT inverted here —
-                    # `textured` keeps its texture and takes only a highlight OUTLINE (§4.6/§5).
-                    frame = world_uv_frame(actor, poly)
-                    if not all(math.isfinite(c) for pt in frame for c in pt):
-                        raise PreviewAbort(
-                            f"--faces textured: actor {actor.name!r} poly {idx} has a non-finite "
-                            f"texture frame (Origin/TextureU/TextureV/Pan), so its UV cannot be "
-                            f"sampled")
-                    ref = _poly_texture_ref(poly)
-                    mips = tex_data.by_ref[ref.casefold()] if ref is not None else None
-                    masked = tex_data.masked.get((actor.name, idx), False)
-                    tex_faces.append((frame, mips, masked, _face_shade(v3)))
-            # EDGE: under a filled mode `partner`, NOT `own`. `own` is by definition the colour the fill
-            # underneath it already is, so an edge drawn in it is INVISIBLE — which is how `flat` first
-            # shipped, and it made decision 2.5's "keep the wireframe" promise vacuous (a room + two
-            # adds rendered in exactly three colours, with no interior creases and no boundary between
-            # two abutting adds). Owner ruling: draw it in the other member of the pair.
-            # `wire` is untouched — it fills nothing, so `own` is the historical, visible choice.
-            # It is drawn for EVERY surviving face, front-facing or not (second owner ruling — see the
-            # docstring): the same colour-matching that makes an `own` edge invisible is what makes a
-            # closed brush's back-face edges cost nothing, and a single-sided face has no front face to
-            # borrow an outline from.
-            edge_pair = (back_rgb, front_rgb) if filled else (front_rgb, back_rgb)
-            # HIGHLIGHT: `own` under a filled mode. The highlighted face already inverted its fill to
-            # `partner`, so `own` contrasts with it, AND it differs from every neighbour's `partner`
-            # edge — a highlight that only doubled the stroke width in the ordinary edge colour would be
-            # a second invisible cue of the same root cause.
-            hi_rgb = own if filled else vivid
-            # An edge is EMITTED for every surviving face; `render_brushes_pgm` then drops the ones depth
-            # hid, which is what makes a solid brush opaque. The two owner rulings that shaped that, and
-            # why the narrowing does not undo the one it narrows, are in this function's docstring — not
-            # repeated here. A HIGHLIGHT rides the same test: it re-colours what is visible, never x-rays.
             face_key = (actor.name, idx)
-            if filled:
-                vis_faces.append((face_key, v3, vs))
             for i in range(n):
                 a2, b2 = vs[i], vs[(i + 1) % n]
-                edges.append((front, (a2, b2)) + edge_pair + (edge_alpha, face_key))
+                edges.append((front, (a2, b2), front_rgb, back_rgb, edge_alpha, face_key))
                 if is_hi:
-                    hi_edges.append(((a2, b2), hi_rgb, face_key))
+                    hi_edges.append(((a2, b2), vivid, face_key))
             show_idx = (annotations.draws_poly(is_front=True, is_highlighted=is_hi)
                         or annotations.draws_poly(is_front=False, is_highlighted=is_hi))
-            plain_idx = (annotations.draws_poly(is_front=True, is_highlighted=False)
-                         or annotations.draws_poly(is_front=False, is_highlighted=False))
             if focus_cf is not None:
                 show_idx = show_idx and (is_focus_brush or is_hi)
-                plain_idx = plain_idx and is_focus_brush
-            if filled and is_hi and show_idx and not plain_idx:
-                # This face would carry NO index if it were not highlighted (`--annotate poly:hi`, or a
-                # highlight outside the focused brush), so the index is part of the highlight and goes
-                # with it when depth hides the face. An index the spec would have drawn anyway STAYS —
-                # on-face numbering is facing-blind by design and grades hidden faces down rather than
-                # dropping them, and a highlight must not start deleting numbers.
-                hi_only_labels.add(face_key)
             if show_idx:
                 poly_labels.append(
                     (_poly_centroid_2d(vs), str(idx), label_accent, depth, v3, actor.name))
@@ -2075,6 +2100,14 @@ def _scene_geometry(actors, *, view, iso_angle, annotations, highlight_polys, fo
             actor_points[actor.name] = brush_cands_2d   # kept on EVERY path — the grid-cell source
         if not hybrid and brush_cands_2d and annotations.draws_name(is_brush=True, is_highlighted=brush_hi):
             brush_names.append((brush_cands_2d, actor.name.upper(), label_accent))
+    if textured:
+        _solved_scene(solved, view=view, iso_angle=iso_angle, d_vec=d_vec, annotations=annotations,
+                      highlight_polys=highlight_polys, focus_cf=focus_cf, hybrid=hybrid, tints=tints,
+                      mover_names=mover_names, tex_data=tex_data,
+                      out=_SolvedOut(edges=edges, fills=fills, tex_faces=tex_faces, hi_edges=hi_edges,
+                                     vis_faces=vis_faces, hi_only_labels=hi_only_labels,
+                                     poly_labels=poly_labels, brush_names=brush_names,
+                                     occluders=occluders, pts=pts, actor_points=actor_points))
     return _SceneGeom(edges=edges, fills=fills, tex_faces=tex_faces, hi_edges=hi_edges,
                       vis_faces=vis_faces, hi_only_labels=hi_only_labels, poly_labels=poly_labels,
                       brush_names=brush_names, occluders=occluders, points=points, pts=pts,
@@ -2140,7 +2173,7 @@ def _legend_reserve(rows: list, name_scale: int, size: int) -> int:
 # and reports each actor's grid cell as a `name → cell` legend on stderr + a `--json` map. The address
 # is a region of the IMAGE/PROJECTION, never a world coordinate. Owner-ruled 2026-08-02, LOCKED.
 
-GRID_LABEL = (70, 70, 70)   # gutter letters/numbers — darker than the wireframe grey, never WHITE
+GRID_LABEL = (140, 140, 140)   # gutter letters/numbers — mid grey, legible on black, never WHITE
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -2224,10 +2257,9 @@ def _collect_cells(geom, hidden, faces, points, to_pxf, rect, n, cells_out) -> N
     actor's marker always draws, a `wire` face is never culled or depth-hidden, and a filled face is
     hidden when the cull dropped it (absent from `vis_faces`) or depth hid it (`hidden`).
 
-    The drew-nothing mechanism is built here against the CURRENT textured/flat world; the precise
-    "outside subtracted space" cause sharpens when the CSG-solved textured world lands (board item
-    `actor-preview-unrealed-render-parity-new-csg`). Either way the actor still gets its cell from its
-    projected centroid whether or not it drew."""
+    Under `textured` a surface is absent because containment removed it (buried add) or the backface
+    cull / depth dropped it; either way the actor still gets its cell from its projected centroid
+    whether or not it drew."""
     if faces == "wire":
         drew = set(geom.actor_points)                # nothing is culled/depth-hidden under wire
     else:
@@ -2264,17 +2296,17 @@ def render_brushes_pgm(actors: list[Actor], *, view: str = "top", size: int = 25
                        frame_pad: int = _FRAME_PAD, faces: str = "wire",
                        shown_highlights: set | None = None,
                        grid: int | None = None, cells_out: dict | None = None) -> bytes:
-    """Render a set of actors as a PPM (P6) on a light-grey background (BG).
+    """Render a set of actors as a PPM (P6) on a black background (BG).
 
     `faces` is the `--faces` MODE, and it is a parameter rather than something read off `render_data`
-    because `render_data.faces is None` would be both `wire` and a filled mode. `wire` (the default)
-    draws outlines only. `flat` additionally fills every surviving face solid in its brush's colour
-    through a depth buffer — a diagram of what occludes what — and KEEPS the wireframe over the fills;
-    it needs `render_data.faces` populated (see `_scene_geometry` for the cull and the edge rule).
+    because `render_data.faces is None` would be both `wire` and `textured`. `wire` (the default)
+    draws outlines only. `textured` instead draws the CSG-SOLVED world (`render_data.faces.solved`):
+    only surviving surfaces, each through its texture + authored UV frame, with a per-view backface
+    cull and NO wireframe; it needs `render_data.faces` populated (see `_scene_geometry`/`_solved_scene`).
 
-    Brush actors draw as a wireframe: front faces darker, obscured/back faces lighter. When
+    Under `wire` brush actors draw as a wireframe: front faces darker, obscured/back faces lighter. When
     `color_by_csg` the shade pair is the brush's CSG hue (`classify_brush` → `_CSG_PALETTE`);
-    otherwise black/grey. A `flat` fill uses that SAME pair, unshaded, picked by facing.
+    otherwise the uncoloured FRONT/BACK pair.
     `highlight_polys` is a set of `(actor_name, poly_idx)` — those polys draw
     in their brush's vivid front hue with a bolder line (facing dim ignored). `highlight_points` is a
     set of point-actor names — each gets corner brackets (a selection reticle) under its sprite/marker.
@@ -2365,21 +2397,21 @@ def render_brushes_pgm(actors: list[Actor], *, view: str = "top", size: int = 25
         # whether a DE-EMPHASISED face won each pixel, and `_fade_dimmed` fades those pixels once at the
         # end: one blend per pixel with no second rasterizing pass and no scratch canvas.
         dim = _alloc_dim_mask(size) if any(f[3] for f in geom.fills) else None
-        textured = faces == "textured"
+        # `fills` is populated only on the `textured` path (the solved world + mover overlay), so every
+        # fill has an index-aligned `tex_faces` entry; `wire` fills nothing and never reaches here.
         for i, (v3, vs, rgb, dimmed) in enumerate(geom.fills):
             plane = _face_depth_affine(v3, world_to_pxf, d_vec)
             if plane is None:                       # edge-on: no screen area to fill
                 continue
             poly_px = [to_pxf(p) for p in vs]
-            if not textured:
-                _fill_face(buf, zbuf, size, poly_px, plane, rgb, dim, dimmed)
-                continue
             frame, mips, masked, shade = geom.tex_faces[i]
             if shade is None:                       # <3 verts / degenerate normal — render.rs skips it
                 continue
-            if mips is None:                        # poly has no Texture → DEFAULT_GREY × shade (§4.3)
-                grey = tuple(min(int(DEFAULT_GREY[c] * shade), 255) for c in range(3))
-                _fill_face(buf, zbuf, size, poly_px, plane, grey, dim, dimmed)
+            if mips is None:                        # untextured fragment → its fill rgb × shade
+                # rgb is DEFAULT_GREY for a textureless world surface (§4.3) and the mover hue for a
+                # mover overlay poly — both draw as their flat colour shaded, no texture sample.
+                flat = tuple(min(int(rgb[c] * shade), 255) for c in range(3))
+                _fill_face(buf, zbuf, size, poly_px, plane, flat, dim, dimmed)
                 continue
             uv = _face_uv_affine(v3, frame, world_to_pxf)
             if uv is None:                          # edge-on in the UV solve too
@@ -2413,7 +2445,7 @@ def render_brushes_pgm(actors: list[Actor], *, view: str = "top", size: int = 25
         _draw_point_underlay(buf, size, actor, pr, view, iso_angle, to_px, scale,
                              highlighted=actor.name in highlight_points)
     # `textured` draws NO wireframe (decision 2.5): only `--highlight` outlines below are line art.
-    # `wire`/`flat` draw the back (lighter) then front (darker) edges of every non-depth-hidden face.
+    # `wire` draws the back (lighter) then front (darker) edges of every non-depth-hidden face.
     draw_wire = faces != "textured"
     for f, (a, b), fr, bk, al, fk in edges:         # back (lighter) then front (darker)
         if draw_wire and not f and fk not in hidden:

@@ -57,10 +57,11 @@ def test_render_draws_some_edges():
     assert _nonbg(render_brush_pgm(_brush(), view="top", size=128)) > 0
 
 
-def test_front_black_back_grey():
+def test_front_light_back_dimmer():
+    from uedcli.preview import BACK
     cols = _colors(render_brush_pgm(_brush(), view="iso", size=256, annotations=AnnotationSpec.all()))
-    assert (0, 0, 0) in cols          # front-facing edges black
-    assert (165, 165, 165) in cols    # obscured (back) edges light grey
+    assert FRONT in cols              # front-facing edges — the light uncoloured default (on black)
+    assert BACK in cols               # obscured (back) edges — its dimmer partner
 
 
 def test_poly_index_labels_add_pixels():
@@ -86,8 +87,8 @@ def test_csg_color_paints_subtracted_brush_gold():
     from uedcli.preview import _CSG_PALETTE
     front, back = _CSG_PALETTE["subtract"]
     cols = _colors(render_brush_pgm(_brush(), view="iso", size=256, annotations=AnnotationSpec.none(), color_by_csg=True))
-    assert front in cols and back in cols     # facing shade pair survives; brush is gold not black
-    assert (0, 0, 0) not in cols              # no black wireframe when coloured by CSG
+    assert front in cols and back in cols     # facing shade pair survives; brush is gold not uncoloured
+    assert FRONT not in cols                  # no uncoloured wireframe when coloured by CSG
 
 
 def test_zoom_region_reframes():
@@ -103,9 +104,10 @@ def test_zoom_region_reframes():
 
 
 def test_quad_view_renders_four_panes():
+    from uedcli.preview import DIVIDER
     pgm = render_quad_pgm(_brush(), size=256)
     assert pgm.startswith(b"P6\n256 256\n255\n")
-    assert (110, 110, 110) in _colors(pgm) and _nonbg(pgm) > 0   # divider + content
+    assert DIVIDER in _colors(pgm) and _nonbg(pgm) > 0   # divider + content
 
 
 def test_iso_view_renders():
@@ -247,11 +249,12 @@ def test_multi_brush_render_overlays_both():
 
 
 def _marker_rows(ppm, size):
-    # y-rows carrying the neutral point-actor MARKER grey (90,90,90) — a single-view render has no
+    # y-rows carrying the neutral point-actor MARKER grey — a single-view render has no
     # CAPTION/DIVIDER, so this colour comes only from point markers.
+    from uedcli.preview import MARKER
     b = _body(ppm)
     return {(k // 3) // size for k in range(0, len(b), 3)
-            if (b[k], b[k + 1], b[k + 2]) == (90, 90, 90)}
+            if (b[k], b[k + 1], b[k + 2]) == MARKER}
 
 
 def test_point_actors_differing_only_in_z_separate_in_front_and_iso():

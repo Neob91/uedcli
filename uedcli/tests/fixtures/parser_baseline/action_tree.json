@@ -2550,12 +2550,11 @@
               "required": false,
               "choices": [
                 "wire",
-                "flat",
                 "textured"
               ],
               "metavar": null,
               "converter": null,
-              "help": "how brush faces are drawn (default 'wire'). 'wire' = outlines only, the schematic — needs no game content. 'flat' = every face also filled solid in its brush's colour, the nearest face winning per pixel, with the wireframe kept over it in the paler/darker partner of that same brush colour so the outlines read against their own fills: a diagram of what occludes what. 'textured' = each face filled by sampling its OWN texture through its authored UV frame (Origin/TextureU/TextureV/Pan), NO wireframe — so alignment, panning, mirroring and tiling are visible offline (no editor, no container, no lighting). Under BOTH 'flat' and 'textured' a SUBTRACT brush shows only its far (interior) faces, so geometry inside a subtracted room stays visible instead of being hidden by a solid box. 'flat' and 'textured' both LOAD the game's class hierarchy (to tell a mover, which is never carved into the world, from a real subtraction), so unlike 'wire' they need BOTH a resolved project and the per-user games config — 'wire' needs neither and works on --from-t3d from anywhere. 'textured' additionally needs every texture the scene references to be readable, and rejects --brush-colors and any scaled or sheared brush",
+              "help": "how brush faces are drawn (default 'wire'). 'wire' = outlines only, the content-free schematic — CSG-coloured (added blue, subtracted gold, …), needs no game install. 'textured' = the CSG-solved textured world, as UnrealEd's 3D viewport draws it: runs the native CSG solve over the set and fills only the surfaces that survive, each through its real texture and authored UV frame (Origin/TextureU/TextureV/Pan), NO wireframe — so alignment, panning and tiling are visible offline (no editor, no lighting). An additive brush not inside subtracted space is invisible; a solve that leaves nothing exits 2. 'textured' needs a resolved project, the per-user games config and every referenced texture readable, and rejects --brush-colors and any scaled or sheared brush; 'wire' needs none of that and works on --from-t3d from anywhere",
               "mutex_group": null
             },
             {
@@ -2574,7 +2573,7 @@
               ],
               "metavar": null,
               "converter": null,
-              "help": "how to colour brushes — both the wireframe and the '--faces flat' fills: 'csg' (the default) = by CSG op (added blue, subtracted gold, semisolid pink, nonsolid green, mover magenta); 'legend' = each brush in its own per-actor legend tint (drops the CSG cue but tells same-op brushes apart at a glance, matching the legend swatches)",
+              "help": "how to colour the '--faces wire' wireframe: 'csg' (the default) = by CSG op (added blue, subtracted gold, semisolid pink, nonsolid green, mover magenta); 'legend' = each brush in its own per-actor legend tint (drops the CSG cue but tells same-op brushes apart at a glance, matching the legend swatches). Rejected under --faces textured (which samples real textures, colouring nothing from this flag)",
               "mutex_group": null
             },
             {
@@ -2638,7 +2637,7 @@
               "choices": null,
               "metavar": "POLY|NAME",
               "converter": null,
-              "help": "emphasise a poly or an actor; repeatable, no effect on framing. A token WITH a colon is a poly selector BRUSH:IDX (the set form BRUSH:1,2 and BRUSH:all work too) — those polys draw with a bolder line, in their brush's vivid CSG hue under --faces wire; under --faces flat the highlighted face also swaps its fill for the other member of its brush's colour pair, which is what makes it stand out from its neighbours over an opaque fill. Under flat it re-colours what is VISIBLE and never x-rays: a face hidden behind something at this --view draws nothing. A stderr note names any selector that ended up not visible for ANY reason — hidden, culled, or outside the frame. A token WITHOUT a colon is an ACTOR NAME: a brush actor highlights ALL its polys; a point actor gets corner brackets (a selection reticle) framing its sprite/marker",
+              "help": "emphasise a poly or an actor; repeatable, no effect on framing. A token WITH a colon is a poly selector BRUSH:IDX (the set form BRUSH:1,2 and BRUSH:all work too) — those polys draw with a bolder line in their brush's vivid CSG hue; under --faces textured the highlighted face keeps its texture and takes only that vivid outline. It re-colours what is VISIBLE and never x-rays: a face hidden behind something at this --view draws nothing. A stderr note names any selector that ended up not visible for ANY reason — hidden, culled, or outside the frame. A token WITHOUT a colon is an ACTOR NAME: a brush actor highlights ALL its polys; a point actor gets corner brackets (a selection reticle) framing its sprite/marker",
               "mutex_group": null
             },
             {
@@ -2654,7 +2653,7 @@
               "choices": null,
               "metavar": "BRUSH",
               "converter": null,
-              "help": "spotlight ONE brush: only it shows face indices (in its label tint); every OTHER brush recedes — its wireframe to faint (dimmed) lines, and under --faces flat its fills to a faint wash of their own colour. It changes BRIGHTNESS ONLY, never what is visible or what hides what: a crate inside a subtracted room stands in front of the room's far wall, a brush between the camera and the focused one still covers it, and a brush sealed inside a solid added brush stays hidden. All actor names still appear in the legend. --highlight OVERRIDES this — a highlighted poly/actor stays vivid+bold and undimmed and keeps its index even when its brush is not the focus — but under --faces flat it does not x-ray: a highlighted face that something in front of it hides draws nothing. An unknown name / a point actor → clean exit 2. Not applied under --layout breakdown, which focuses each pane itself (a value is still validated)",
+              "help": "spotlight ONE brush: only it shows face indices (in its label tint); every OTHER brush recedes — its wireframe to faint (dimmed) lines, and under --faces textured its solved fills to a faint wash of their own colour. It changes BRIGHTNESS ONLY, never what is visible or what hides what: a brush between the camera and the focused one still covers it. All actor names still appear in the legend. --highlight OVERRIDES this — a highlighted poly/actor stays vivid+bold and undimmed and keeps its index even when its brush is not the focus — but it does not x-ray: a highlighted face that something in front of it hides draws nothing. An unknown name / a point actor → clean exit 2. Not applied under --layout breakdown, which focuses each pane itself (a value is still validated)",
               "mutex_group": null
             },
             {
@@ -2670,7 +2669,7 @@
               "choices": null,
               "metavar": "SET",
               "converter": null,
-              "help": "comma-set (union) of range overlays to draw for POINT actors (default none): 'collision' = a faint light-red collision cylinder for every colliding point actor (bCollideActors true) — a circle in TOP, a 2·radius × 2·height rect in FRONT/SIDE, an 8-sided wire cylinder in ISO; 'light-range' = a faint orange sphere of a light's reach (25·(LightRadius+1) UU); 'sound-range' = a faint blue sphere of an AmbientSound's reach (25·(SoundRadius+1) UU). Brush actors (incl. movers) are excluded, so under --faces wire their preview stays schema-free (no class lookup). --faces flat does look classes up, but only to tell a mover from a real subtraction for its face cull — it draws no extra overlay",
+              "help": "comma-set (union) of range overlays to draw for POINT actors (default none): 'collision' = a faint light-red collision cylinder for every colliding point actor (bCollideActors true) — a circle in TOP, a 2·radius × 2·height rect in FRONT/SIDE, an 8-sided wire cylinder in ISO; 'light-range' = a faint orange sphere of a light's reach (25·(LightRadius+1) UU); 'sound-range' = a faint blue sphere of an AmbientSound's reach (25·(SoundRadius+1) UU). Brush actors (incl. movers) are excluded, so under --faces wire their preview stays schema-free (no class lookup). --faces textured does look classes up, but only to tell a mover (drawn as a magenta overlay) from a world brush — it draws no extra overlay",
               "mutex_group": null
             },
             {
@@ -11383,12 +11382,11 @@
               "required": false,
               "choices": [
                 "wire",
-                "flat",
                 "textured"
               ],
               "metavar": null,
               "converter": null,
-              "help": "how brush faces are drawn (default 'wire'). 'wire' = outlines only, the schematic — needs no game content. 'flat' = every face also filled solid in its brush's colour, the nearest face winning per pixel, with the wireframe kept over it in the paler/darker partner of that same brush colour so the outlines read against their own fills: a diagram of what occludes what. 'textured' = each face filled by sampling its OWN texture through its authored UV frame (Origin/TextureU/TextureV/Pan), NO wireframe — so alignment, panning, mirroring and tiling are visible offline (no editor, no container, no lighting). Under BOTH 'flat' and 'textured' a SUBTRACT brush shows only its far (interior) faces, so geometry inside a subtracted room stays visible instead of being hidden by a solid box. 'flat' and 'textured' both LOAD the game's class hierarchy (to tell a mover, which is never carved into the world, from a real subtraction), so unlike 'wire' they need BOTH a resolved project and the per-user games config — 'wire' needs neither and works on --from-t3d from anywhere. 'textured' additionally needs every texture the scene references to be readable, and rejects --brush-colors and any scaled or sheared brush",
+              "help": "how brush faces are drawn (default 'wire'). 'wire' = outlines only, the content-free schematic — CSG-coloured (added blue, subtracted gold, …), needs no game install. 'textured' = the CSG-solved textured world, as UnrealEd's 3D viewport draws it: runs the native CSG solve over the set and fills only the surfaces that survive, each through its real texture and authored UV frame (Origin/TextureU/TextureV/Pan), NO wireframe — so alignment, panning and tiling are visible offline (no editor, no lighting). An additive brush not inside subtracted space is invisible; a solve that leaves nothing exits 2. 'textured' needs a resolved project, the per-user games config and every referenced texture readable, and rejects --brush-colors and any scaled or sheared brush; 'wire' needs none of that and works on --from-t3d from anywhere",
               "mutex_group": null
             },
             {
@@ -11407,7 +11405,7 @@
               ],
               "metavar": null,
               "converter": null,
-              "help": "how to colour brushes — both the wireframe and the '--faces flat' fills: 'csg' (the default) = by CSG op (added blue, subtracted gold, semisolid pink, nonsolid green, mover magenta); 'legend' = each brush in its own per-actor legend tint (drops the CSG cue but tells same-op brushes apart at a glance, matching the legend swatches)",
+              "help": "how to colour the '--faces wire' wireframe: 'csg' (the default) = by CSG op (added blue, subtracted gold, semisolid pink, nonsolid green, mover magenta); 'legend' = each brush in its own per-actor legend tint (drops the CSG cue but tells same-op brushes apart at a glance, matching the legend swatches). Rejected under --faces textured (which samples real textures, colouring nothing from this flag)",
               "mutex_group": null
             },
             {
@@ -11471,7 +11469,7 @@
               "choices": null,
               "metavar": "POLY|NAME",
               "converter": null,
-              "help": "emphasise a poly or an actor; repeatable, no effect on framing. A token WITH a colon is a poly selector BRUSH:IDX (the set form BRUSH:1,2 and BRUSH:all work too) — those polys draw with a bolder line, in their brush's vivid CSG hue under --faces wire; under --faces flat the highlighted face also swaps its fill for the other member of its brush's colour pair, which is what makes it stand out from its neighbours over an opaque fill. Under flat it re-colours what is VISIBLE and never x-rays: a face hidden behind something at this --view draws nothing. A stderr note names any selector that ended up not visible for ANY reason — hidden, culled, or outside the frame. A token WITHOUT a colon is an ACTOR NAME: a brush actor highlights ALL its polys; a point actor gets corner brackets (a selection reticle) framing its sprite/marker",
+              "help": "emphasise a poly or an actor; repeatable, no effect on framing. A token WITH a colon is a poly selector BRUSH:IDX (the set form BRUSH:1,2 and BRUSH:all work too) — those polys draw with a bolder line in their brush's vivid CSG hue; under --faces textured the highlighted face keeps its texture and takes only that vivid outline. It re-colours what is VISIBLE and never x-rays: a face hidden behind something at this --view draws nothing. A stderr note names any selector that ended up not visible for ANY reason — hidden, culled, or outside the frame. A token WITHOUT a colon is an ACTOR NAME: a brush actor highlights ALL its polys; a point actor gets corner brackets (a selection reticle) framing its sprite/marker",
               "mutex_group": null
             },
             {
@@ -11487,7 +11485,7 @@
               "choices": null,
               "metavar": "BRUSH",
               "converter": null,
-              "help": "spotlight ONE brush: only it shows face indices (in its label tint); every OTHER brush recedes — its wireframe to faint (dimmed) lines, and under --faces flat its fills to a faint wash of their own colour. It changes BRIGHTNESS ONLY, never what is visible or what hides what: a crate inside a subtracted room stands in front of the room's far wall, a brush between the camera and the focused one still covers it, and a brush sealed inside a solid added brush stays hidden. All actor names still appear in the legend. --highlight OVERRIDES this — a highlighted poly/actor stays vivid+bold and undimmed and keeps its index even when its brush is not the focus — but under --faces flat it does not x-ray: a highlighted face that something in front of it hides draws nothing. An unknown name / a point actor → clean exit 2. Not applied under --layout breakdown, which focuses each pane itself (a value is still validated)",
+              "help": "spotlight ONE brush: only it shows face indices (in its label tint); every OTHER brush recedes — its wireframe to faint (dimmed) lines, and under --faces textured its solved fills to a faint wash of their own colour. It changes BRIGHTNESS ONLY, never what is visible or what hides what: a brush between the camera and the focused one still covers it. All actor names still appear in the legend. --highlight OVERRIDES this — a highlighted poly/actor stays vivid+bold and undimmed and keeps its index even when its brush is not the focus — but it does not x-ray: a highlighted face that something in front of it hides draws nothing. An unknown name / a point actor → clean exit 2. Not applied under --layout breakdown, which focuses each pane itself (a value is still validated)",
               "mutex_group": null
             },
             {
@@ -11503,7 +11501,7 @@
               "choices": null,
               "metavar": "SET",
               "converter": null,
-              "help": "comma-set (union) of range overlays to draw for POINT actors (default none): 'collision' = a faint light-red collision cylinder for every colliding point actor (bCollideActors true) — a circle in TOP, a 2·radius × 2·height rect in FRONT/SIDE, an 8-sided wire cylinder in ISO; 'light-range' = a faint orange sphere of a light's reach (25·(LightRadius+1) UU); 'sound-range' = a faint blue sphere of an AmbientSound's reach (25·(SoundRadius+1) UU). Brush actors (incl. movers) are excluded, so under --faces wire their preview stays schema-free (no class lookup). --faces flat does look classes up, but only to tell a mover from a real subtraction for its face cull — it draws no extra overlay",
+              "help": "comma-set (union) of range overlays to draw for POINT actors (default none): 'collision' = a faint light-red collision cylinder for every colliding point actor (bCollideActors true) — a circle in TOP, a 2·radius × 2·height rect in FRONT/SIDE, an 8-sided wire cylinder in ISO; 'light-range' = a faint orange sphere of a light's reach (25·(LightRadius+1) UU); 'sound-range' = a faint blue sphere of an AmbientSound's reach (25·(SoundRadius+1) UU). Brush actors (incl. movers) are excluded, so under --faces wire their preview stays schema-free (no class lookup). --faces textured does look classes up, but only to tell a mover (drawn as a magenta overlay) from a world brush — it draws no extra overlay",
               "mutex_group": null
             },
             {
@@ -12113,12 +12111,11 @@
               "required": false,
               "choices": [
                 "wire",
-                "flat",
                 "textured"
               ],
               "metavar": null,
               "converter": null,
-              "help": "how brush faces are drawn (default 'wire'). 'wire' = outlines only, the schematic — needs no game content. 'flat' = every face also filled solid in its brush's colour, the nearest face winning per pixel, with the wireframe kept over it in the paler/darker partner of that same brush colour so the outlines read against their own fills: a diagram of what occludes what. 'textured' = each face filled by sampling its OWN texture through its authored UV frame (Origin/TextureU/TextureV/Pan), NO wireframe — so alignment, panning, mirroring and tiling are visible offline (no editor, no container, no lighting). Under BOTH 'flat' and 'textured' a SUBTRACT brush shows only its far (interior) faces, so geometry inside a subtracted room stays visible instead of being hidden by a solid box. 'flat' and 'textured' both LOAD the game's class hierarchy (to tell a mover, which is never carved into the world, from a real subtraction), so unlike 'wire' they need BOTH a resolved project and the per-user games config — 'wire' needs neither and works on --from-t3d from anywhere. 'textured' additionally needs every texture the scene references to be readable, and rejects --brush-colors and any scaled or sheared brush",
+              "help": "how brush faces are drawn (default 'wire'). 'wire' = outlines only, the content-free schematic — CSG-coloured (added blue, subtracted gold, …), needs no game install. 'textured' = the CSG-solved textured world, as UnrealEd's 3D viewport draws it: runs the native CSG solve over the set and fills only the surfaces that survive, each through its real texture and authored UV frame (Origin/TextureU/TextureV/Pan), NO wireframe — so alignment, panning and tiling are visible offline (no editor, no lighting). An additive brush not inside subtracted space is invisible; a solve that leaves nothing exits 2. 'textured' needs a resolved project, the per-user games config and every referenced texture readable, and rejects --brush-colors and any scaled or sheared brush; 'wire' needs none of that and works on --from-t3d from anywhere",
               "mutex_group": null
             },
             {
@@ -12137,7 +12134,7 @@
               ],
               "metavar": null,
               "converter": null,
-              "help": "how to colour brushes — both the wireframe and the '--faces flat' fills: 'csg' (the default) = by CSG op (added blue, subtracted gold, semisolid pink, nonsolid green, mover magenta); 'legend' = each brush in its own per-actor legend tint (drops the CSG cue but tells same-op brushes apart at a glance, matching the legend swatches)",
+              "help": "how to colour the '--faces wire' wireframe: 'csg' (the default) = by CSG op (added blue, subtracted gold, semisolid pink, nonsolid green, mover magenta); 'legend' = each brush in its own per-actor legend tint (drops the CSG cue but tells same-op brushes apart at a glance, matching the legend swatches). Rejected under --faces textured (which samples real textures, colouring nothing from this flag)",
               "mutex_group": null
             },
             {
@@ -12201,7 +12198,7 @@
               "choices": null,
               "metavar": "POLY|NAME",
               "converter": null,
-              "help": "emphasise a poly or an actor; repeatable, no effect on framing. A token WITH a colon is a poly selector BRUSH:IDX (the set form BRUSH:1,2 and BRUSH:all work too) — those polys draw with a bolder line, in their brush's vivid CSG hue under --faces wire; under --faces flat the highlighted face also swaps its fill for the other member of its brush's colour pair, which is what makes it stand out from its neighbours over an opaque fill. Under flat it re-colours what is VISIBLE and never x-rays: a face hidden behind something at this --view draws nothing. A stderr note names any selector that ended up not visible for ANY reason — hidden, culled, or outside the frame. A token WITHOUT a colon is an ACTOR NAME: a brush actor highlights ALL its polys; a point actor gets corner brackets (a selection reticle) framing its sprite/marker",
+              "help": "emphasise a poly or an actor; repeatable, no effect on framing. A token WITH a colon is a poly selector BRUSH:IDX (the set form BRUSH:1,2 and BRUSH:all work too) — those polys draw with a bolder line in their brush's vivid CSG hue; under --faces textured the highlighted face keeps its texture and takes only that vivid outline. It re-colours what is VISIBLE and never x-rays: a face hidden behind something at this --view draws nothing. A stderr note names any selector that ended up not visible for ANY reason — hidden, culled, or outside the frame. A token WITHOUT a colon is an ACTOR NAME: a brush actor highlights ALL its polys; a point actor gets corner brackets (a selection reticle) framing its sprite/marker",
               "mutex_group": null
             },
             {
@@ -12217,7 +12214,7 @@
               "choices": null,
               "metavar": "BRUSH",
               "converter": null,
-              "help": "spotlight ONE brush: only it shows face indices (in its label tint); every OTHER brush recedes — its wireframe to faint (dimmed) lines, and under --faces flat its fills to a faint wash of their own colour. It changes BRIGHTNESS ONLY, never what is visible or what hides what: a crate inside a subtracted room stands in front of the room's far wall, a brush between the camera and the focused one still covers it, and a brush sealed inside a solid added brush stays hidden. All actor names still appear in the legend. --highlight OVERRIDES this — a highlighted poly/actor stays vivid+bold and undimmed and keeps its index even when its brush is not the focus — but under --faces flat it does not x-ray: a highlighted face that something in front of it hides draws nothing. An unknown name / a point actor → clean exit 2. Not applied under --layout breakdown, which focuses each pane itself (a value is still validated)",
+              "help": "spotlight ONE brush: only it shows face indices (in its label tint); every OTHER brush recedes — its wireframe to faint (dimmed) lines, and under --faces textured its solved fills to a faint wash of their own colour. It changes BRIGHTNESS ONLY, never what is visible or what hides what: a brush between the camera and the focused one still covers it. All actor names still appear in the legend. --highlight OVERRIDES this — a highlighted poly/actor stays vivid+bold and undimmed and keeps its index even when its brush is not the focus — but it does not x-ray: a highlighted face that something in front of it hides draws nothing. An unknown name / a point actor → clean exit 2. Not applied under --layout breakdown, which focuses each pane itself (a value is still validated)",
               "mutex_group": null
             },
             {
@@ -12233,7 +12230,7 @@
               "choices": null,
               "metavar": "SET",
               "converter": null,
-              "help": "comma-set (union) of range overlays to draw for POINT actors (default none): 'collision' = a faint light-red collision cylinder for every colliding point actor (bCollideActors true) — a circle in TOP, a 2·radius × 2·height rect in FRONT/SIDE, an 8-sided wire cylinder in ISO; 'light-range' = a faint orange sphere of a light's reach (25·(LightRadius+1) UU); 'sound-range' = a faint blue sphere of an AmbientSound's reach (25·(SoundRadius+1) UU). Brush actors (incl. movers) are excluded, so under --faces wire their preview stays schema-free (no class lookup). --faces flat does look classes up, but only to tell a mover from a real subtraction for its face cull — it draws no extra overlay",
+              "help": "comma-set (union) of range overlays to draw for POINT actors (default none): 'collision' = a faint light-red collision cylinder for every colliding point actor (bCollideActors true) — a circle in TOP, a 2·radius × 2·height rect in FRONT/SIDE, an 8-sided wire cylinder in ISO; 'light-range' = a faint orange sphere of a light's reach (25·(LightRadius+1) UU); 'sound-range' = a faint blue sphere of an AmbientSound's reach (25·(SoundRadius+1) UU). Brush actors (incl. movers) are excluded, so under --faces wire their preview stays schema-free (no class lookup). --faces textured does look classes up, but only to tell a mover (drawn as a magenta overlay) from a world brush — it draws no extra overlay",
               "mutex_group": null
             },
             {

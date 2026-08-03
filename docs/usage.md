@@ -1099,14 +1099,14 @@ uedcli mover key rotate Mover0 1 --by 0,16384,0        # swings about the hinge,
 
 A self-rendered **colour** image (no editor) so you can see geometry and map **poly index ↔
 face**. Reads named actors from the current level, model-side. **`--faces`** picks how faces are drawn:
-`wire` (the default) is outlines only; `flat` also fills every face solid through a depth buffer, so you
-can read what occludes what; `textured` fills each face with its own game texture, so you can check
-alignment offline. (Renamed from `brush preview`; `stash preview`/`prefab preview` keep their names.)
+`wire` (the default) is a content-free schematic of outlines; `textured` is the **CSG-solved textured
+world**, as UnrealEd's 3D viewport draws it. (Renamed from `brush preview`; `stash preview`/`prefab
+preview` keep their names.)
 
 ```
 actor preview [<names…> | --from-t3d <FILE…|->]
               [--layout quad|single|breakdown] [--view top|front|side|iso]
-              [--faces wire|flat|textured]
+              [--faces wire|textured]
               [--brush-colors csg|legend] [--annotate SELECTORS]
               [--frame BRUSH[:IDX] | X0,Y0,Z0,X1,Y1,Z1] [--frame-tightness N]
               [--highlight POLY|NAME ...] [--focus BRUSH]
@@ -1136,48 +1136,37 @@ actor preview [<names…> | --from-t3d <FILE…|->]
   **`--focus`/`--frame` are ignored** under it. Brush + point-actor counts are reported on stderr;
   breakdown is a small-selection inspector (it warns past ~16 panes — a whole level makes an unusably
   large grid, and point actors add panes too, so subset first).
-- **`--faces {wire,flat,textured}`** picks how faces are drawn.
-  - **`wire`** (default) draws outlines only — the schematic. It needs no game content at all.
-  - **`flat`** additionally **fills** every face solid in its brush's colour, the nearest face winning
-    per pixel, and keeps the outlines over the fills. Use it to read **what occludes what**: which brush
-    is in front, what a room actually contains, whether a detail brush pokes through a wall. Every
-    visible face is outlined in the **partner shade of its own brush's colour** — the paler one over a
-    camera-facing fill, the darker one over a subtract's interior — so the outline reads against the fill
-    beneath it while keeping the brush's CSG hue. A single-sided brush (a `nonsolid` sheet) is outlined
-    whichever way it faces. A face you cannot see draws nothing: a solid brush is **opaque**, so a brush
-    sealed inside one does not show its wireframe through it.
-  - Under `flat` a **subtract** brush shows only its **far (interior)** faces. A subtract's polys seen
-    from outside the carved volume render neither in the editor nor in game, so drawing them would turn
-    a room into a solid box hiding everything inside it. A **mover** is exempt — it is never carved into
-    the world, whatever `CsgOper` it carries — so it shows every face.
-  - **`flat` reads the game's class hierarchy** (that is how it tells a mover from a real subtraction),
-    so unlike `wire` it needs **both a resolved project and the per-user games config**. Missing either
-    is a clean exit 2 naming which, and `wire` still works. That includes the generator pipe: `brush
-    build cube | uedcli actor preview --from-t3d - --faces flat` must run from inside a project (or with
-    `--project`), while the same pipe under `wire` runs from anywhere.
-  - Scaled, sheared and **mirrored** brushes all render — a mirror reverses which way a brush's faces
-    point, and `flat` accounts for that, so a mirrored subtracted room still shows its interior the
-    right way round.
-  - `flat` composes with every other option here, `--focus` and `--layout breakdown` included.
-  - **`textured`** fills each face by **sampling its own texture** through the face's authored UV frame
-    (`Origin`/`TextureU`/`TextureV`/`Pan`) and draws **no wireframe** — so texture **alignment,
-    panning, mirroring and tiling** are visible offline, without a materialize + render cycle. It shades
-    each face by a fixed key light (no scene lighting), picks a mip level per face from how densely the
-    texture lands on screen, and honours a **masked** texture's cut-out holes (a hole shows whatever is
-    behind it). A face with no `Texture` set fills a neutral grey; that is normal, not an error.
-  - `textured` shares `flat`'s subtract cull and depth, so the same mover/subtraction rules apply, and
-    it **loads the class hierarchy** the same way. On top of that it needs **every texture the scene
-    references to be readable** — miss one and it exits 2 naming the ref (a bare `Texture=Name` is
-    rejected; qualify it as `Package.Name`). A scene that references no texture at all needs no texture
-    source. It also **rejects `--brush-colors`** (textured colours nothing from it) and any **scaled or
-    sheared brush** (its UV frame is rotation-only, so a texture would not follow the transformed
-    geometry) — both a clean exit 2; use `wire`/`flat` for those. `textured` composes with every other
-    option here, `--focus`, `--highlight` (its vivid outline is the only line art it keeps) and
-    `--layout breakdown` included.
+- **`--faces {wire,textured}`** picks how faces are drawn.
+  - **`wire`** (default) draws outlines only — the schematic, CSG-coloured (added blue, subtracted gold,
+    …). It needs no game content at all and works on `--from-t3d` from anywhere.
+  - **`textured`** is the **CSG-solved textured world**, exactly what UnrealEd's 3D viewport shows: the
+    set is run through the native CSG **solve** and only the surfaces that **survive** are drawn, each
+    filled by **sampling its own texture** through the face's authored UV frame
+    (`Origin`/`TextureU`/`TextureV`/`Pan`), with **no wireframe**. Because it is a real solve, an
+    additive brush that is **not inside subtracted (empty) space is invisible** — visibility is spatial
+    containment, not a per-brush rule — and a subtracted **room shows its interior** (its camera-facing
+    near walls are dropped, so you see in) instead of a solid box. Texture **alignment, panning and
+    tiling** stay correct **across CSG splits**, so a wall cut by a doorway keeps one continuous texture.
+  - It shades each face by a fixed key light (no scene lighting), picks a mip level per face from how
+    densely the texture lands on screen, and honours a **masked** texture's cut-out holes. A surviving
+    surface with no `Texture` fills a neutral grey; that is normal, not an error.
+  - **Movers** are excluded from the world solve (a mover carries no world `CsgOper`) and draw as a
+    **magenta overlay** against the same depth buffer, so a mover behind a wall is hidden and one in
+    front occludes. **Point actors** keep their sprite/marker overlay.
+  - **`textured` reads the game's class hierarchy** (to tell a mover from a world brush), so unlike
+    `wire` it needs **both a resolved project and the per-user games config**, plus **every texture a
+    surviving surface references to be readable** — miss one and it exits 2 naming the ref (a bare
+    `Texture=Name` is rejected; qualify it as `Package.Name`). A scene that references no texture needs
+    no texture source. It also **rejects `--brush-colors`** (it samples real textures) and any **scaled
+    or sheared brush** (its UV frame is rotation-only) — both a clean exit 2; use `wire` for those.
+  - A solve that leaves **no surface** (e.g. adds with nothing to carve empty space around them) is a
+    clean exit 2 naming the cause; a set of only point actors and/or movers (no world brushes) draws its
+    overlays over black at exit 0. `textured` composes with every other option here — `--focus`,
+    `--highlight` (its vivid outline is the only line art it keeps) and `--layout breakdown` included.
 - **Brushes are coloured by CSG op** (UnrealEd's legend): added-solid **blue**, subtracted
   **gold/yellow**, semi-solid **pink**, non-solid **green**, mover **magenta**; front faces darker,
   obscured/back faces lighter. This says what each brush *does*.
-- **`--brush-colors {csg,legend}`** picks the colour source for the wireframe and the `flat` fills.
+- **`--brush-colors {csg,legend}`** picks the colour source for the `--faces wire` wireframe.
   `csg` (default) is the CSG-op colouring above. **`legend`** instead draws each brush in *its own
   per-actor legend tint* — every brush a distinct colour matching its legend swatch (you trade the CSG
   cue for telling same-op brushes apart at a glance). It has no meaning under `--faces textured`, which
@@ -1224,7 +1213,7 @@ actor preview [<names…> | --from-t3d <FILE…|->]
   brushes. A number **unreadable on screen** is omitted — a **view-dependent** verdict: a face too
   small, too edge-on, or too zoomed-out gets no number, and the same face is numbered once it's big
   enough (zoomed in, or in its `--layout breakdown` pane). There is no fallback for an omitted face.
-  Under **`--faces flat`** the fills are opaque but the numbers are not hidden by them: a face you
+  Under **`--faces textured`** the fills are opaque but the numbers are not hidden by them: a face you
   cannot see still shows its index, at 60% of a visible face's opacity, so a number can sit on a wall
   in front of the face it belongs to. Read indices off `--faces wire`, or pass `--annotate none` for a
   clean filled picture.
@@ -1263,9 +1252,8 @@ actor preview [<names…> | --from-t3d <FILE…|->]
   explicit-AABB `--frame` is always framed exactly — `--frame-tightness` does NOT modulate it.
 - **`--highlight POLY|NAME`** emphasises a poly or actor; repeatable, no effect on framing. A token
   **with a colon** is a poly selector `BRUSH:IDX` (set form `BRUSH:1,2` / `BRUSH:all` too) — those
-  polys draw with a **bolder line**, in their brush's vivid CSG hue under `--faces wire`. Under
-  `--faces flat` a highlighted face also **swaps its fill** to the partner shade of its brush's colour,
-  which is what makes it stand out across an opaque fill. A token **without a colon** is an
+  polys draw with a **bolder line** in their brush's vivid CSG hue. Under `--faces textured` a
+  highlighted face keeps its texture and takes only that vivid outline. A token **without a colon** is an
   **actor name**: a brush actor highlights **all** its polys; a point actor gets **corner brackets**
   (a selection reticle) framing its sprite/marker. An unknown name / a selector on a non-brush → clean
   exit 2. Under a filled mode a highlight re-colours **what is visible** and never x-rays: a
@@ -1274,9 +1262,9 @@ actor preview [<names…> | --from-t3d <FILE…|->]
   under `--layout quad` that means no pane showed it.
 - **`--focus BRUSH`** spotlights ONE brush: only it shows face indices (in its tint), and every OTHER
   brush recedes — for reading one brush's faces in a busy scene. Under `--faces wire` those brushes
-  recede to a **faint (dimmed)** wireframe; under `--faces flat` their **fills** fade too, to a faint
-  wash of their own colour. **`--focus` changes brightness only — never what is visible or what hides
-  what**, so the picture stays physically honest either way: a crate inside a subtracted room stands in
+  recede to a **faint (dimmed)** wireframe; under `--faces textured` their solved **fills** fade too, to
+  a faint wash of their own colour. **`--focus` changes brightness only — never what is visible or what
+  hides what**, so the picture stays physically honest either way: a crate inside a subtracted room stands in
   front of the room's far wall, a brush between the camera and the focused one still covers it, and a
   brush sealed inside a solid *added* brush stays hidden. All actor names still appear in the legend.
   **`--highlight` overrides `--focus`'s dimming**: a highlighted poly/actor draws at full strength and
@@ -1297,7 +1285,7 @@ actor preview [<names…> | --from-t3d <FILE…|->]
   the gutter. Each actor's cell is reported as a **legend on stderr**: a density header, then one line
   per actor — `Pillar  D4  (C3–E5)` (the centroid cell, plus the covered range in parens) under
   `single`/`breakdown`, or pane-qualified `Pillar  Top:D4 Front:B7 Side:C7 Iso:E5` under `quad`. An actor
-  that draws no pixel (e.g. one hidden behind solid geometry under `--faces flat`) still gets a cell,
+  that draws no pixel (e.g. one hidden behind solid geometry under `--faces textured`) still gets a cell,
   flagged `(hidden)`. Two actors in the same cell each keep their own line. **The address is a region of
   the image/projection, never a world coordinate** — carry a cell back into a name set with `actor find`.
 - **`--grid N`** (default `12`) sets the density: `N` columns × `N` rows. Must be in `[1, 52]` (else a

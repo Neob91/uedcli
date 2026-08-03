@@ -604,24 +604,25 @@ def test_from_t3d_needs_no_ambient_level(tmp_path, monkeypatch):
 
 
 def test_highlight_point_actor_draws_selection_brackets(tmp_path, monkeypatch):
-    # A bare (colon-less) name that resolves to a POINT actor gets black corner brackets (a selection
+    # A bare (colon-less) name that resolves to a POINT actor gets corner brackets (a selection
     # reticle) framing it — NOT a circle/disc (circles mean radius/collision here). Rendered with
-    # annotate="none" and no sprite (resolver mocked None → grey MARKER=(90,90,90)), so pure black
-    # (0,0,0) can ONLY come from the brackets.
+    # annotate="none" and no sprite (resolver mocked None → grey MARKER), so the brackets' FRONT hue
+    # (the uncoloured light default, distinct from MARKER and the WHITE halo) can ONLY come from them.
+    from uedcli.preview import FRONT
     proj = _project_with_light(tmp_path, monkeypatch)
     plain = tmp_path / "p.png"
     out = tmp_path / "o.png"
 
-    def has_black(path):
-        return (0, 0, 0) in _colors(_img(path))
+    def has_brackets(path):
+        return FRONT in _colors(_img(path))
     with mock.patch("uedcli.cli.resources.class_defaults", return_value={}), \
          mock.patch("uedcli.cli.resources.texture_resolver", return_value=None):
         assert dispatch.dispatch(_prev(proj, plain, names=["Torch"], layout="single", view="top",
                                        annotate="none")) == 0
         assert dispatch.dispatch(_prev(proj, out, names=["Torch"], layout="single", view="top",
                                        annotate="none", highlight=["Torch"])) == 0
-    assert not has_black(plain)                            # no brackets without --highlight
-    assert has_black(out)                                  # brackets framed the point actor
+    assert not has_brackets(plain)                         # no brackets without --highlight
+    assert has_brackets(out)                               # brackets framed the point actor
 
 
 def _nonbg(img):
