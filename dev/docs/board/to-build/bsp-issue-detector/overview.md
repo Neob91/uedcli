@@ -2,7 +2,7 @@
 priority = "p2"
 kind = "implement"
 summary = "Catch build-emergent BSP problems the static level doctor structurally cannot; PARKED mid-spike."
-spikes = ["dev/docs/spikes/2026-06-25-umodel-serialize-format.md"]
+spikes = ["dev/docs/spikes/2026-06-25-umodel-serialize-format.md", "dev/docs/spikes/2026-08-03-ucc-log-bsp-warnings/"]
 +++
 
 # BSP-issue detector (D0 + the P0 spike + `level doctor --rebuilt` + D0-b)
@@ -21,6 +21,20 @@ unblocked; the D1-b located analyses are their own plan. Evidence + verdict:
 **Plan (full detail):** [`plan.md`](plan.md)
 **Spec:** board item `bsp-issue-ground-truth-detector-d0-d1` ·
 **Decision:** `rationale/MIGRATION.md` (2026-06-24 12:40 UTC)
+
+**D0 log source — UCC, not the GUI editor (spike GO, 2026-08-03).** A spike
+([`../../../spikes/2026-08-03-ucc-log-bsp-warnings/`](../../../spikes/2026-08-03-ucc-log-bsp-warnings/),
+pinned by its `test_ucc_log_d0_channels.py`) confirmed `wine UCC.exe Editor.ExecCommandlet <script>`
+rebuilds geometry headless and streams every D0 warning channel to **stdout**, parsed by
+`parse_build_log` unchanged. Live-confirmed on real UCC stdout: `Processed 4 T-points, linked: 16/20
+sides` (the HoM crack, open box), `FPoly::Finalize: Not enough vertices (0)` (a dropped face),
+`Nodes:`/`Portalized:`. This is a cleaner source than step 3's GUI-editor
+`flush_and_parse_since` — no 4 KB buffer, no `OBJ LIST CLASS=Class` flush hack, no
+`assert_flushed` clean-vs-unflushed ambiguity, no leak/wedge — for a ~2–4 s self-exiting
+`docker run --rm`. **Recommendation:** step 3 sources `--rebuilt`'s `BuildLog` from UCC stdout;
+`parse_build_log` (step 2) is already source-agnostic, so only step 3's capture mechanism changes.
+Builds on `../../inbox/the-headless-materialize-and-levelbuild` / `spikes/headless-materialize/`.
+(Owner call before adopting — the current plan text still describes the GUI-editor path.)
 
 **What it is.** Catch the *build-emergent* BSP problems (slivers, hall-of-mirrors, invisible walls,
 fall-through) that the already-shipped static `level doctor` structurally can't.

@@ -81,6 +81,12 @@ Offline-only, zero editor, zero risk to shared code — the schema-stable founda
 
 ## Step 3 — `level doctor --rebuilt`: the apply-free rebuild-health check (the MVP)
 
+**Log source — see the overview's "D0 log source" note (spike GO, 2026-08-03).** The UCC
+`Editor.ExecCommandlet` route (`spikes/2026-08-03-ucc-log-bsp-warnings/`) streams every D0 channel to
+stdout, dropping this section's whole `flush_and_parse_since`/`OBJ LIST`/`assert_flushed` discipline.
+The capture mechanism below (wrap the injected GUI `rebuild` callable + flush) is the pre-spike
+design; adopting UCC changes only the capture, not `parse_build_log`. Owner call before the switch.
+
 **This is the guaranteed-value deliverable.** Named use case (R2-C2): check `main/`'s rebuild health
 **without** a terminal `level apply` (which writes/swaps the map). It is **self-contained — it does
 NOT modify the shared `materialize()`/`apply` path** (R3 blocker): capture happens by wrapping the

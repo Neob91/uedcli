@@ -1,0 +1,103 @@
+=======================================
+ucc.exe: UnrealOS execution environment
+Copyright 1999 Epic Games Inc
+=======================================
+
+Executing Class Editor.ExecCommandlet
+Unreal engine initialized
+Transaction tracking system initialized
+Loading EditPackage Core...
+Loading EditPackage Engine...
+Loading EditPackage Editor...
+Loading EditPackage Fire...
+Bound to Fire.dll
+Loading EditPackage IpDrv...
+Bound to IpDrv.dll
+Loading EditPackage Extension...
+Loading EditPackage DavesBrushBuilders...
+Loading EditPackage FrameBuilder...
+Loading EditPackage RahnemBrushBuilders...
+Loading EditPackage ExtendedBuilders...
+Loading EditPackage TarquinBrushBuilders...
+Loading EditPackage UnrealEdEx...
+Loading EditPackage TarquinExtrudeBuilder...
+Bound to WinDrv.dll
+Enhanced Pointer Precision Disabled
+Initializing DirectDraw
+DirectDraw drivers detected:
+   display (DirectDraw HAL)
+DirectDraw: Enumerated Display Modes:
+DirectDraw: Mode 640x480x32
+DirectDraw: Mode 800x600x32
+DirectDraw: Mode 1024x768x32
+DirectDraw: Mode 640x480x16
+DirectDraw: Mode 800x600x16
+DirectDraw: Mode 1024x768x16
+DirectDraw initialized successfully
+Client initialized
+Lighting subsystem initialized
+Rendering initialized
+Constructing brush builder CubeBuilder
+Constructing brush builder SheetBuilder
+Constructing brush builder CylinderBuilder
+Constructing brush builder ConeBuilder
+Constructing brush builder TetrahedronBuilder
+Constructing brush builder CurvedStairBuilder
+Constructing brush builder SpiralStairBuilder
+Constructing brush builder LinearStairBuilder
+Constructing brush builder TerrainBuilder
+Constructing brush builder VolumetricBuilder
+Constructing brush builder PlatonicsBuilder
+Constructing brush builder FrameBuilder
+Constructing brush builder LandscapeBuilder
+Constructing brush builder ExtParallelepiped
+Constructing brush builder ExtWave
+Constructing brush builder TarquinSpiralStairBuilder
+Constructing brush builder TarquinTorusBuilder
+Constructing brush builder TarquinCylinderBuilder
+Constructing brush builder TarquinPanoramaBuilder
+Constructing brush builder UnrealExTunnel
+Constructing brush builder UnrealExTerrain
+Constructing brush builder UnrealExCylinderSheet
+Constructing brush builder TarquinExtrudeBuilder
+Editor engine initialized
+FactoryCreateText: TextBuffer with TextBufferFactory (0 1 Z:\work\degen.txt)
+Execing Z:\work\degen.txt
+FactoryCreateText: Polys with PolysFactory (0 1 Z:\work\cube_degen.polys.t3d)
+FPoly::Fix: Collapsed a point
+FPoly::Finalize: Not enough vertices (0)
+bspBuildBounds: Generated 5 bounds, 60 hulls
+Found 0 coplanar sets in 6
+BspMergeCoplanars reduced 6->6
+Polys: 6 -> 6
+Nodes: 6 -> 6
+Points: 8 -> 5
+Vectors: 6 -> 6
+Polys: 6 -> 6
+Nodes: 6 -> 6
+Points: 11 -> 11
+Vectors: 6 -> 6
+bspBuildBounds: Generated 5 bounds, 60 hulls
+Polys: 6 -> 6
+Nodes: 6 -> 6
+Points: 11 -> 11
+Vectors: 6 -> 6
+Found 1 zones
+Polys: 6 -> 6
+Nodes: 12 -> 6
+Points: 11 -> 11
+Vectors: 6 -> 6
+bspBuildBounds: Generated 5 bounds, 60 hulls
+BuildZoneInfo: 0 ZoneInfo actors, 0 duplicates, 0 zoneless
+Portalized: 0 portals, 0 zone portals (0 fragments), 1 leaves, 6 nodes
+BspOptGeom begin
+MergeNearPoints merged 3/11, collapsed 0
+Polys: 6 -> 6
+Nodes: 6 -> 6
+Points: 11 -> 8
+Vectors: 6 -> 6
+BspOptGeom building sidelinks
+BspOptGeom end
+Processed 0 T-points, linked: 24/24 sides
+bspBuildBounds: Generated 5 bounds, 60 hulls
+Success - 0 error(s), 2 warnings
