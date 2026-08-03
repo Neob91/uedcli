@@ -6,6 +6,9 @@ summary = "brush clip filter clips a Mover in the set; intersect/deintersect ref
 
 # brush clip filter clips a Mover in the set; intersect/deintersect refuse one
 
+> Migrated to `brush-clip-should-be-a-t3d-stdin-filter`'s `questions/clip-a-mover-in-the-set.md`.
+> Kept here because this slug is cited from that item's `overview.md`.
+
 The new `brush clip` filter (item `brush-clip-should-be-a-t3d-stdin-filter`) refuses only non-brush
 (point) actors. A Mover carries a brush, so a Mover in the piped set gets clipped like any brush —
 matching the deleted by-name form and the clip spec, which calls out only point actors.

@@ -7,6 +7,9 @@ depends-on = ["native-texture-decode"]
 
 # `bMasked` with no reachable class-default source
 
+> Migrated to `native-texture-decode`'s `questions/b-masked-no-class-default-source.md`. Kept here
+> because this slug is cited from code, `rationale/`, and other board items.
+
 **A provisional call made while building board item `native-texture-decode`, recorded so it is not
 silently derived.** The owner may overrule it; the cost is one field.
 

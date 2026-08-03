@@ -6,6 +6,10 @@ summary = "RULED + DONE: --faces flat's invisible wireframe — edges take the o
 
 # RULED and IMPLEMENTED: `--faces flat` drew a wireframe that was provably invisible
 
+> Migrated to `four-actor-preview-faces-rulings-need-a-durable`'s
+> `questions/flat-edge-colour-uses-partner-member.md`. Kept here because this slug is cited from
+> `architecture.md`.
+
 **RULED by the owner: take the proposed fix — under `flat` only, each surviving face's edges draw in
 the OTHER member of its brush's colour pair. Implemented in S2 of `actor preview --faces` (board item
 `four-actor-preview-faces-rulings-need-a-durable`), with the final choice confirmed from real renders
