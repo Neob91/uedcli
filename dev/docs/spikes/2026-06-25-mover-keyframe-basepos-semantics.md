@@ -127,4 +127,4 @@ offsets stored plainly, no `BaseRot` special-casing) was correct on both axes.
 
 **Consequence:** the interim `mover key add/move/rotate` stderr caution on a base-rotated mover was
 pure noise and has been removed (`dispatch.py`; regression test
-`test_it_does_not_warn_on_a_base_rotated_mover_key_op`). See `rationale/MIGRATION.md` 2026-07-07 12:11 UTC.
+`test_it_does_not_warn_on_a_base_rotated_mover_key_op`).

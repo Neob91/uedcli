@@ -14,10 +14,6 @@ pre-approved updating "any `uedcli/cli.py`/`uedcli/dispatch.py` path mentions in
   link targets) in rationale docs. Left bare colloquial module-name prose ("`dispatch.py` already
   carries...", "in `dispatch.py`...") in `driver.md`/`userdocs.md`/`reported-coordinates.md`
   unchanged — those name the module conceptually, and rewriting them exceeds the approved scope.
-- Updated `rationale/MIGRATION.md` line 74's `uedcli/cli.py` -> `uedcli/cli/main.py`. It is a
-  historical migration ledger, but the entry is a plain file-path token and the brief's pre-approval
-  covers "any path mentions in rationale/*.md". Flagging in case the owner would rather it stay as
-  the historical name.
 - Left old-path references in OTHER board items' plans/specs and in frozen docs
   (the decisions ledger, `reviews/*`) untouched (out of scope). The stale-reference sweep over
   production/tests/scripts is clean.

@@ -24,7 +24,7 @@ entries automatically).
 **The load-bearing design question the spec must resolve:** class-scoped matching needs the actor's
 ANCESTRY, i.e. a class resolver — but `normalize_actor` must stay schema-free, because
 `canonical_actor_t3d`'s bytes may not depend on which packages happen to be installed (same trunk,
-same bytes, every machine — `rationale/MIGRATION.md`, 2026-07-25). The likely answer is the one the rest of the
+same bytes, every machine). The likely answer is the one the rest of the
 2026-07-25 work converged on: move the computed-strip OFF the durable emit and onto the THROWAWAY
 COMPARE COPY, where the schema is already available and `typedprops`/`ClassDefaults` already run —
 which also stops the strip from mutating authored data at all. Spec should confirm that, or justify a

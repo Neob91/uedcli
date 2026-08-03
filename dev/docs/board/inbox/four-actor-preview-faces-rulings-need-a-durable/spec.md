@@ -11,7 +11,7 @@ The only gate is the build-order dependency in §12.
 [`architecture.md`](../../../architecture.md) "Preview internals", [`docs/usage.md`](../../../../../docs/usage.md)
 and [`docs/leveldesign/general/textures-and-surfaces.md`](../../../../../docs/leveldesign/general/textures-and-surfaces.md),
 record the agent-side choices in the `rationale/` tree under a **new preview topic** (that tree
-currently holds `cli.md`, `emit.md`, `reported-coordinates.md`, `surface.md`, `MIGRATION.md`, `README.md` — the file is created by this
+currently holds `cli.md`, `emit.md`, `reported-coordinates.md`, `surface.md`, `README.md` — the file is created by this
 build, so it is deliberately not cited as a path yet), and delete this file.
 
 ---

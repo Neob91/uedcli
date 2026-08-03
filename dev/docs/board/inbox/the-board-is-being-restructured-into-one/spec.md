@@ -474,7 +474,6 @@ The bare-name set adds **33 files the first census cannot see**, including the *
 | `_EPHEMERAL` | Becomes a shape test: `board/*/*/spec.md` and `board/*/*/plan.md` exempt **except** under `to-build/`. **This NARROWS coverage and the spec must say so:** today's boundary is "linked from `board/to-build/`", which covers 15 ephemeral files, and §2.13 moves `unified-asset-catalog` and `actor-preview-faces` out of `to-build/` — so **7 currently-checked files lose checking, invisibly**. §8 pins the before/after list.
 | **`dev/docs/decisions.md`** | FROZEN, and carries two *markdown links* into `dev/docs/specs/` (lines 8, 7286) that rule 9 deletes — the suite reddens and the file may not be edited. Exempt those two links in `test_doc_links.py` (a code change, not a doc edit). Its 26 board-path citations are prose; leave them.
 | **`dev/docs/2026-06-20-open-questions-for-owner.md`** | The owner's — *do not touch*. 2 prose refs, no markdown links, so nothing reddens.
-| `dev/docs/rationale/MIGRATION.md` | markdown links into `../plans/` and `../specs/` (lines 7-8) — reddens; repoint.
 | **suite scale** | `_checked_docs()` is **270** docs × 3 parametrized tests = 810 of 822 collected. After: ~820 docs → ~2,460 cases. `_anchors()` re-reads targets uncached — memoise if it slows. Measure before/after.
 | `CLAUDE.md` — **cite by text, not line number**, since this change edits the file | the 7 `board/inbox/` mentions; the tag≈queue rule (§2.11 retires it); the bounce-to-inbox rule (§2.13 replaces it); the **"`specs/` + `plans/`" bullet** and the **"`dev/docs/specs/` and `dev/docs/plans/` are ephemeral"** paragraph; **route logged findings through `bin/board new`**; **tell agents to run `bin/board answered`** (§3.6 — without this the owner's answers are never read); **rewrite the `[OWNER — confirm]` parking rule**, which currently mandates parking on `board/inbox/`
 | **`CLAUDE.md` round-2 trigger** | It excludes `dev/docs/board/*` from "the artifact", so once specs live under the board **every spec and plan round loses its round 2**. Narrow the exclusion to `board/*/*/overview.md` and `board/*/*/questions/`; §3.2 keeps findings out of any other file, closing the hole.
@@ -572,7 +571,7 @@ Mechanics (stage names, frontmatter, `bin/board`) stay in `CLAUDE.md` and `board
 - [ ] `CLAUDE.md`: round-2 exclusion narrowed; findings routed through `bin/board new`; agents told
       to run `bin/board answered`; the `[OWNER — confirm]` parking rule rewritten; the two
       `specs/`+`plans/` passages updated.
-- [ ] The two `decisions.md` markdown links and `rationale/MIGRATION.md`'s are handled.
+- [ ] The two `decisions.md` markdown links are handled.
 - [ ] **The before/after list of link-checked ephemeral files is recorded**, so §4.1's narrowing is
       visible rather than silent.
 - [ ] Every file in BOTH censuses of §4.1 — including the repo-root `README.md` — describes the new

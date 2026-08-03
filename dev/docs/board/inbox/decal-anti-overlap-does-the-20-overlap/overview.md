@@ -11,10 +11,10 @@ decal anti-overlap: does the 20% overlap tolerance apply to point-actor MARKERS 
   `_DECAL_OVERLAP_TOLERANCE` uniformly to ALL obstacles in the resolver's set, which includes point-actor
   marker footprints (they share the `occupied` obstacle list). So a number may currently sit up to 20%
   over a marker. Provisional reading; confirm or split the tolerance (0 for markers, 20% for decals).
-  Recorded in `rationale/MIGRATION.md` 2026-07-23 15:22 UTC + spec amendments. Flagged by the build-review gate.
+  Recorded in spec amendments. Flagged by the build-review gate.
 
 _(removed 2026-07-24: this `[debug]` rotation post-verify item was a duplicate — the fix landed as
-the `Rotation` compare-time fold, `rationale/MIGRATION.md` 2026-07-25, was generalized to every property by
+the `Rotation` compare-time fold was generalized to every property by
 the class-default contraction of 2026-07-25 00:36 UTC, and now falls out of the TYPED compare of
 2026-07-25 02:15 UTC. Both halves of the original note are now wrong and are corrected here: the
 equivalence does NOT live in `normalize_actor`, and the trunk does NOT store the editor's

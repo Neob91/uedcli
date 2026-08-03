@@ -9,8 +9,6 @@ docs" for the rule. This README is the exception: index rows only, and never an 
 Siblings: `../rationale/` (why the code is that way — agent-owned), `../architecture.md` (what IS),
 `../rules/` + `CLAUDE.md` (process).
 
-All topics migrated. [`../rationale/MIGRATION.md`](../rationale/MIGRATION.md) records where every old ledger entry went.
-
 | Topic | Covers | |
 |--------------------------|--------------------------------------------------------|---
 | [`scope.md`](scope.md) | a generic UnrealEngine-1 tool; Deus Ex as one substrate | ✅ |

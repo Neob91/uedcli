@@ -7,8 +7,8 @@ pieces, diffed against a real UnrealEd build via an automated harness
 **Result:** ✅ the approach works end-to-end; node-count parity confirmed on the canonical box;
 the oracle-extraction unknown (cost-driver #4) is retired.
 
-This is the first executable step of the offline BSP engine (`rationale/MIGRATION.md` 2026-06-24 09:07
-UTC; doctor spec §7). It de-risks the project: the heuristic was decoded in
+This is the first executable step of the offline BSP engine (board item `bsp-issue-detector`;
+doctor spec §7). It de-risks the project: the heuristic was decoded in
 [`2026-06-24-bspbuild-partition-heuristic-from-binary.md`](2026-06-24-bspbuild-partition-heuristic-from-binary.md);
 this proves a faithful port runs and matches the editor on a small input, and pins how the
 differential harness works.

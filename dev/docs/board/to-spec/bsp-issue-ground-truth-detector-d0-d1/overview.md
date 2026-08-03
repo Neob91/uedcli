@@ -7,8 +7,7 @@ summary = "BSP-issue ground-truth detector = D0 + D1 (the complete detector on t
 # BSP-issue ground-truth detector = D0 + D1 (the complete detector on the real editor build); D2 = optional fully-offline upgrade
 
 Full design (3-round-reviewed):
-`spec.md`; decision: `rationale/MIGRATION.md` (2026-06-24 12:40
-UTC, revises 09:07). Five grounding spikes (`spikes/2026-06-24-*bsp*` / `*offline-bsp-engine*`)
+`spec.md`; decision: board item `bsp-issue-detector`. Five grounding spikes (`spikes/2026-06-24-*bsp*` / `*offline-bsp-engine*`)
 hold the decoded substrate. **(Also in `board/to-build/` #1.)**
 - **D0 DONE + validated** (`spikes/2026-06-24-offline-bsp-engine-d0-editorlog.md`): `bsp_editorlog.py`
   parses the editor's `MAP REBUILD` drop-warnings — caught an injected open-box hole live.

@@ -23,7 +23,7 @@ all gated on Andrzej's scope decision Q0 in the roadmap spec). Each is its own f
 - `[spike]` p2 — **Native `Model` GAME-load gate** (the cheap D2 de-risk, now unblocked):
   hand-author a minimal carved-room `Model`'s arrays, emit natively via `umodel_serialize`
   + the package writer, load in `dx-game`, confirm player spawns. Serialization is proven
-  byte-exact (`rationale/MIGRATION.md` 2026-06-28); this tests a *natively-emitted* (vs editor-built)
+  byte-exact (`spikes/2026-06-28-umodel-serialize-byte-exact.md`); this tests a *natively-emitted* (vs editor-built)
   Model end-to-end. Gates Q0's D2 commitment.
 - `[spec]` p2 — **Native qualification** in `qualify.py` (import-table read + manifest
   name→package index w/ load-order collision policy), replacing OBJ DEPENDENCIES/OBJ LIST.

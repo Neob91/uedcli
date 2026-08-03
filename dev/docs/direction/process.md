@@ -116,5 +116,4 @@ to put it. This doc is that home.
 [`../rules/README.md`](../rules/README.md) ·
 [`../board/README.md`](../board/README.md) ·
 [`../dev-runtime.md`](../dev-runtime.md) ·
-[`../README.md`](../README.md) "Which doc is for what" ·
-[`../rationale/MIGRATION.md`](../rationale/MIGRATION.md)
+[`../README.md`](../README.md) "Which doc is for what"

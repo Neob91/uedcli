@@ -16,7 +16,7 @@ gate), so this item proposes the exact text and waits.
 
 This is the ONLY reorg doc deliberately deferred. The reorg's own commit already updated the
 rationale docs (`rationale/cli.md`, `mapimport.md`, `reported-coordinates.md`, `surface.md`,
-`userdocs.md`, `MIGRATION.md`) and the code comments; no spike or unrealed doc referenced the old
+`userdocs.md`) and the code comments; no spike or unrealed doc referenced the old
 layout. `architecture.md` is the last stale doc.
 
 Every mapping below was verified against the code, not the reorg plan, and no old `uedcli/cli.py` /

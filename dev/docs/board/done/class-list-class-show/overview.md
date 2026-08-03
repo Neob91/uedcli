@@ -12,5 +12,4 @@ spec header was stale at "draft"). `--all` split into `--include-non-actor` (E1 
 `Engine.Actor`→`Core.Object`), `--include-abstract` (E2 show abstract/non-placeable), and `--depth N|all`
 (E3 depth, unified spelling on both verbs; `all`→`math.inf`, uncapped); hidden `--all` emits a targeted
 split-hint. Defaults unchanged; tests migrated (`test_class_discovery.py`/`test_ingest_validation.py`,
-green). Spec `spec.md` (status corrected), decision
-`rationale/MIGRATION.md`, 2026-07-19.
+green). Spec `spec.md` (status corrected).

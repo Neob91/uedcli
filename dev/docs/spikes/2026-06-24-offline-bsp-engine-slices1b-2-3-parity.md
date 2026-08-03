@@ -22,7 +22,7 @@ UnrealEd build captured in ONE fresh ephemeral editor (`_scratch/bspspike/corpus
 
 **Bottom line (feasibility verdict):** A fully **differentially-verified, count-exact** offline
 BSP engine is **feasible but is genuinely the multi-week faithful-port effort the engine
-decision scoped** (`rationale/MIGRATION.md` 2026-06-24 09:07 UTC) — it is *not* reachable with the
+decision scoped** (board item `bsp-issue-detector`) — it is *not* reachable with the
 textbook BSP recursion. This session got **exact node + leaf parity on the convex single-volume
 cases (single box, two abutting subtracts → one room)** and **bounded, well-understood
 divergence (4–8 nodes) on cases with genuine straddling splits or additive-in-subtractive

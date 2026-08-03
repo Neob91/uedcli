@@ -34,5 +34,4 @@ So four of the nine files that lost link checking in the move are this case, not
   the other item still needs it.
 - Accept it and record it. Cheapest; the gap stays real.
 
-Evidence and the full before/after list: `dev/docs/rationale/MIGRATION.md`, "The link-check
-exemption boundary".
+Evidence and the full before/after list: recoverable from git history.

@@ -19,8 +19,7 @@ The body below is the handoff verbatim.
 > WRONG.** Live diagnosis found the pawn fell through the floor because the native build shipped no
 > **collision hulls** (`LeafHulls`/`iCollisionBound`), not because of zones. Porting the editor's
 > `bspBuildBounds` made `NativeCastle` PLAYABLE (`phys=1`, `uplayctl shot` renders the castle
-> first-person — `_scratch/shots/native_castle_playable.png`). See `rationale/MIGRATION.md` 2026-07-16 15:20
-> UTC, the board entry in `board/inbox/`, `sections/70-zones-portalization.md` (zones fully RE'd, now a
+> first-person — `_scratch/shots/native_castle_playable.png`). See the board entry in `board/inbox/`, `sections/70-zones-portalization.md` (zones fully RE'd, now a
 > parity-only slice), and `re-raw-zones/linecheck-oracle.md` (the root-cause decode). Zones/side-pool
 > /render-bounds/node-flags remain for byte-parity but are NOT needed for a walkable map. Read the
 > sections below only for the (still-valid) RE pointers and tooling gotchas, not the diagnosis.

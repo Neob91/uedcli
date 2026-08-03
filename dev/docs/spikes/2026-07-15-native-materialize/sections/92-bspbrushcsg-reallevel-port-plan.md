@@ -420,7 +420,7 @@ UNCHANGED (485 surf / 1156 node / 26 vec / soup 853/853 / 43.04%); N=104 still c
 still clean below 105. Regression `bspcsg::tests::validate_brush_links_fuses_coplanar_same_facing_faces`
 (the coplanar-link fact re-asserted against a hand-built dome-cap brush). Two cold reviewers resolved
 (an index-space desync when LOOP 1 drops a face + the pre-finalize-normal gate — both fixed before
-commit). Durable choice: `rationale/MIGRATION.md` 2026-07-19 08:58 UTC.
+commit).
 
 **Remaining at N=105 — NOT over-production (corrected 2026-07-19, two-agent verified §12).** The 20
 residual `only-native` at N=105 are the dome's sloped facets but they are **precision twins, not extra

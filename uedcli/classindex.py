@@ -1,7 +1,6 @@
 """Offline class index over the composed package search path — the single structure that powers
 `class list`/`class show` discovery, bare→FQCN qualification on ingest, and class-existence
-validation (spec in board item `offline-class-discovery-qualify-and-validate`; rationale/MIGRATION.md
-2026-07-17 19:37 UTC).
+validation (spec in board item `offline-class-discovery-qualify-and-validate`).
 
 Header-only: it reuses `uprops.load_package`, which parses a `.u` package's name/import/export
 TABLES and decodes NO property bodies — so enumeration, existence, and qualification never pay the

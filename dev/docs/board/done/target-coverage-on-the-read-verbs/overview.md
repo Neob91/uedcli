@@ -12,5 +12,6 @@ summary = "`--target` coverage on the read verbs"
 DELIBERATELY SKIPPED (Andrzej 2026-07-19: a generator reads no box; the race is on `actor add`).
 Added uniform `display_name`/`kind` to the three `LevelSource` classes; rewrote `_level_status`
 through the seam (kind-labelled header, git hint only for a trunk); capture rejects `--target` +
-`--from-*`. Decision `rationale/MIGRATION.md`, 2026-07-19 12:30 UTC; architecture/usage reconciled; regressions
+`--from-*`. Decision superseded by board item `level-is-the-ambient-uedcli-level-target-tree`;
+architecture/usage reconciled; regressions
 in `test_target_flag.py`. Commit `73d952536`.

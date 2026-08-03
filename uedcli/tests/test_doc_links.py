@@ -43,7 +43,9 @@ REPO = Path(__file__).resolve().parents[2]
 #: ``[text](target)`` — captures the target, minus any title. Skips images (``![...]``).
 _MD_LINK = re.compile(r"(?<!!)\[[^\]]*\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)")
 
-#: A markdown heading, for building the anchor set of a link target.
+#: A markdown heading, for building the anchor set of a link target. ATX only (``# …``): LATENT GAP —
+#: setext headings (a line over ``===``/``---``) are invisible, so an anchor into one reads as
+#: missing. Harmless today (the only instances are in spike docs).
 _HEADING = re.compile(r"^#{1,6}\s+(.*?)\s*#*$", re.MULTILINE)
 
 #: Fenced blocks and inline code, stripped before link matching. These docs are full of
@@ -90,6 +92,9 @@ def _links(path: Path) -> list[str]:
 
 
 def _tracked(*suffixes: str) -> list[Path]:
+    # Walk `git ls-files`, not the working tree: the checker's scope is the TRACKED tree, so a
+    # citation target measured with a working-tree `grep -r` (which sees ignored/untracked files)
+    # can never be driven to zero.
     out = subprocess.run(
         ["git", "-C", str(REPO), "ls-files", "-z"],
         capture_output=True, text=True, check=True,
@@ -155,36 +160,12 @@ def _checked_docs() -> list[Path]:
     return [p for p in _tracked(".md") if not _is_ephemeral(str(p.relative_to(REPO)))]
 
 
-#: Links that are allowed to dangle, keyed by the doc that writes them.
-#:
-#: `dev/docs/decisions.md` is FROZEN — the retired ledger, kept verbatim as history and never
-#: edited again. It links twice into the old `dev/docs/specs/` tree, which no longer exists: a spec
-#: now lives inside the board item it belongs to. The rule that the file may not be touched wins
-#: over the rule that links resolve, so the two targets are named here instead. Nothing else in the
-#: tree gets this treatment; a dangling link anywhere else is a defect.
-_FROZEN_DANGLING = {
-    "dev/docs/decisions.md": frozenset({
-        # Literal link targets as decisions.md writes them — NOT board-item references. They must
-        # stay spelled exactly like the frozen file's text or the exemption stops matching.
-        # SPLIT ON PURPOSE, like `"decisions" + ".md"` below, and split INSIDE the date so that
-        # neither half looks like a spec path OR a bare spec filename: a tree-wide sweep
-        # repointing old spec citations at board slugs rewrote these two literals twice, silently
-        # disabling the exemption both times. The seams are what stop the next sweep matching.
-        "specs/2026-" "07-25-docs-restructure" ".md",
-        "specs/2026-" "07-24-docs-command" ".md",
-    }),
-}
-
-
 @pytest.mark.parametrize("doc", _checked_docs(), ids=lambda p: str(p.relative_to(REPO)))
 def test_markdown_links_resolve(doc: Path) -> None:
     """Every ``[text](path)`` in a checked doc points at a file that exists."""
-    allowed = _FROZEN_DANGLING.get(_rel(doc), frozenset())
     broken = []
     for target in _links(doc):
         if target.startswith(("http://", "https://", "mailto:")) or target.startswith("#"):
-            continue
-        if target in allowed:
             continue
         resolved = (doc.parent / target.split("#")[0]).resolve()
         if not resolved.exists():
@@ -212,12 +193,11 @@ def test_markdown_anchors_resolve(doc: Path) -> None:
     assert not broken, f"{_rel(doc)} cites missing anchors:\n  " + "\n  ".join(broken)
 
 
-#: Files that MAY name a deleted doc, because naming it is their job. Without these the check
-#: below makes the migration's own end state unreachable: the signpost and the disposition map
-#: exist precisely to say where `decisions.md` went, and this module names both docs to check them.
+#: Files that MAY name a deleted doc, because naming it is their job. Without this the check below
+#: makes its own end state unreachable: the signpost exists precisely to say where `decisions.md`
+#: went, and this module names it to check it.
 _MAY_NAME_DELETED = frozenset({
     "dev/docs/rationale/README.md",     # the "git log --follow -- dev/docs/decisions.md" signpost
-    "dev/docs/rationale/MIGRATION.md",  # the durable date -> topic map, which is *about* the ledger
     "uedcli/tests/test_doc_links.py",   # this file
 })
 

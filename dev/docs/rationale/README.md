@@ -29,13 +29,10 @@ Point a durable doc here for rationale. Never point one at a spec — specs are 
 
 ## Where the history went
 
-Decisions made before 2026-07-26 lived in an append-only ledger at `dev/docs/decisions.md`, which
-this tree replaces. It is frozen and being retired topic by topic. Once removed:
+Decisions made before 2026-07-26 lived in an append-only ledger at `dev/docs/decisions.md`, now
+deleted; this tree replaces it. To resolve an old dated citation
+(`decisions.md 2026-07-21 12:06 UTC`) — read the entry, then find its current topic home:
 
 ```sh
 git log --follow -- dev/docs/decisions.md
 ```
-
-`MIGRATION.md` in this directory records what happened to every one of its 227 entries — which topic
-it folded into, or why it was dropped. It outlives the migration, because it is the only map from an
-old dated citation (`decisions.md 2026-07-21 12:06 UTC`) to where that reasoning now lives.

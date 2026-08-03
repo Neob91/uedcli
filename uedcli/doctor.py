@@ -5,12 +5,12 @@ thresholds are the engine's own, reverse-engineered in
 `dev/docs/spikes/2026-06-24-bsp-csg-hole-mechanism-from-binary.md` and
 `...-bsp-collision-solidity-movers-from-binary.md`.
 
-STATIC scope (rationale/MIGRATION.md, 2026-06-24 08:50): high-recall on the *single-brush-decidable* hole
+STATIC scope (board item `bsp-issue-ground-truth-detector-d0-d1`): high-recall on the *single-brush-decidable* hole
 causes — degenerate faces the engine drops at `FPoly::Finalize`, open/non-manifold solids
 (`bspValidateBrush`'s "linked X of Y"), solidity misuse (the semisolid+portal strip), and gross
 CSG-order mistakes. It does NOT enumerate build-emergent holes (slivers,
 T-junction cracks, phantom collision nodes) — those need the build; that is the Phase-2 offline
-BSP engine (rationale/MIGRATION.md, 2026-06-24 09:07, spec §7). The report footer says so.
+BSP engine (board item `bsp-issue-ground-truth-detector-d0-d1`). The report footer says so.
 
 Thresholds here are doctor-owned and engine-faithful; `geometry.py` (the hot write-path validator)
 is deliberately NOT changed — it keeps its conservative tolerances. Only `geometry`'s stateless

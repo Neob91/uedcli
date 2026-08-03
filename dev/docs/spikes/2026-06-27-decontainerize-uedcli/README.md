@@ -38,7 +38,7 @@ except one already-known long pole:
 - **Net:** the day-to-day authoring loop can be container-free with Phase A/B (native
   reads + writer) + D2; 100% editor elimination additionally needs native lighting/paths.
   **The pivotal decision for Andrzej (Q0 in the roadmap spec):** commit to D2 (promote it
-  from the `rationale/MIGRATION.md` 2026-06-24 12:40 "optional" status to required — the editor-based D0/D1 path
+  from the board item `bsp-issue-detector` "optional" status to required — the editor-based D0/D1 path
   can't serve an editor-free pipeline), or adopt an editor-`MAP REBUILD`-only-geometry
   intermediate. Roadmap + open questions: board item `de-containerize-uedcli-drop-docker-wine-exe`.
 

@@ -10,8 +10,8 @@ binary so the doc can't silently go stale.
 code, and every numeric/threshold/branch claim is backed by a passing byte-level assertion in
 `harness/verify_heuristic.py` (24/24 checks pass against the committed UED22 DLLs).
 
-> **Why this spike exists.** The offline-BSP-engine decision (`rationale/MIGRATION.md` 2026-06-24
-> 09:07 UTC, reframed 12:40 UTC) named **one gating unknown**: `bspBuild`'s partition-plane
+> **Why this spike exists.** The offline-BSP-engine decision (board item `bsp-issue-detector`) named
+> **one gating unknown**: `bspBuild`'s partition-plane
 > selection — `FindBestSplit`, the `Balance`/`PortalBias` scorer that decides which polygon
 > plane splits each BSP node. The whole BSP tree — hence which faces split, survive, or drop —
 > hinges on this one heuristic, and it was flagged as the piece NOT yet disassembled. An earlier
@@ -306,7 +306,7 @@ retired — a faithful offline port of `FindBestSplit` is feasible with HIGH con
 **Verdict: BUILD-GATE CLEARED for the heuristic.** The offline BSP engine's feasibility was
 gated on this one piece; it is decoded, verified, and ported. The remaining engine work is the
 faithful `SplitPolyList` recursion and the CSG filter — both mechanical, both with the differential
-editor harness as the oracle (`rationale/MIGRATION.md` 2026-06-24 12:40 UTC). The single point where the
+editor harness as the oracle (board item `bsp-issue-detector`). The single point where the
 disassembly cannot self-resolve is **node-plane parity**, which needs a `UModel` binary parser
 (out of scope here, flagged); counts + leaves remain a sufficient gate and already discriminate the
 known divergences.

@@ -16,4 +16,4 @@ global "never rewrite published history" rule applies to the EXISTING repo, so t
 a copy, never a rewrite of `dx_lum`); how the mod repo consumes the CLI afterward (pipx install / pinned
 dependency / submodule — decide); the pipx/Nuitka release story; and cutover mechanics (CI/tests, the
 `dev/docs/board` pipeline, cross-repo references in `LUM/CLAUDE.md`). Prerequisite for the skills-plugin
-distribution entry below. (Andrzej, 2026-07-19; `rationale/MIGRATION.md` addendum.)
+distribution entry below. (Andrzej, 2026-07-19.)

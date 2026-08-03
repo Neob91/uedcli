@@ -353,7 +353,7 @@ cannot clobber structural state.
 **The default level is the ambient `$UEDCLI_LEVEL`** (a bare level name), read by
 `level_select.resolve_level(env_level=os.environ.get("UEDCLI_LEVEL"), maps_dir=…)` — per-process, so
 there is no shared mutable pointer to race on (it replaced the old `.uedcli/current-level` pointer +
-`level select` verb; `rationale/MIGRATION.md`, 2026-07-20 21:30 UTC). The env value is `strip`ped, blank ⇒ unset,
+`level select` verb; `direction/trunk-and-editor.md`). The env value is `strip`ped, blank ⇒ unset,
 `_check_safe_level`d, and existence-checked; unset/malformed/nonexistent → a clean exit-2
 `LevelSelectionError` naming BOTH set-methods, never a silent empty level. When the env fallback is
 used, `_resolve_level_source` sets `src.from_env = True`.
@@ -477,7 +477,7 @@ CSG state change.
 ## The compare view vs the identity hash (`normalize.py`)
 
 Two different reductions of a `Level` live in `normalize.py`, and conflating them was a live bug
-class (`rationale/MIGRATION.md`, 2026-07-25 00:36 UTC):
+class (`direction/materialize.md`):
 
 - **`canonical_level_hash(level)` — the IDENTITY hash.** Pure and **schema-free**: it hashes exactly
   `canonical_actor_t3d` per actor (Name-sorted) plus `level.order`, with nothing folded away. Its
@@ -975,7 +975,7 @@ and plan both in board item `re-evaluate-whether-reject-nonlevel-target`; `direc
     write-path tolerances are unchanged. Exit non-zero on any ERROR (over ALL findings, regardless
     of `--severity`/`--category` display filter — CI-usable). It does NOT enumerate build-emergent
     holes (slivers/T-junctions/phantom collision nodes); that is the planned **offline BSP-build
-    engine** (`rationale/MIGRATION.md`, 2026-06-24 09:07 UTC — a faithful Python port verified differentially
+    engine** (board item `bsp-issue-ground-truth-detector-d0-d1` — a faithful Python port verified differentially
     against the editor, editor = test oracle only) which will upgrade `doctor` from *predict* to
     offline *ground truth*.
   - `level list [--json]` — enumerate the project's levels (`dispatch._level_list` →
@@ -1302,7 +1302,7 @@ things: the `class list`/`class show` discovery verbs, bare→FQCN class QUALIFI
 class-existence validation. It is header-only (reuses `uprops.load_package` — name/import/export
 tables, no property decode) except for `class show`'s schema and abstract detection. Built once per
 invocation; a single unparseable `.u` is skipped with a stderr note (never aborts). *(spec
-board item `offline-class-discovery-qualify-and-validate`; `rationale/MIGRATION.md`, 2026-07-17 19:37 UTC.)*
+board item `offline-class-discovery-qualify-and-validate`; `rationale/qualify.md`.)*
 
 - **`class list [--flat] [--package P] [--subclass-of Package.Class] [--depth N|all] [--include-non-actor] [--include-abstract]`** — by
   DEFAULT an indented inheritance **TREE** (decision 2026-07-18) rooted at `Engine.Actor`: abstract
@@ -1406,7 +1406,7 @@ in `spikes/2026-06-25-mover-keyframe-basepos-semantics.md`.
   `--from-base` key writes the offset straight in (no subtraction). The offset is added in
   **world axes even when `BaseRot≠0`** (`KeyPos[i]` is NOT rotated by `BaseRot`); rotation composes
   the same way (`KeyRot[i]` field-added to `BaseRot`). Confirmed live + from the disassembled editor
-  transform (`rationale/MIGRATION.md`, 2026-07-07 12:11 UTC) — so no base-rotation special-casing is needed.
+  transform (`spikes/2026-06-25-mover-keyframe-basepos-semantics.md`) — so no base-rotation special-casing is needed.
   (Caveat: `rotation.subtract_uu`/`compose_uu` are per-component FRotator arithmetic, geometrically
   naive for a non-cardinal base — `--from-world`/`--from-base` are not a clean re-basing off a tilted
   base `Rotation`.)
@@ -1638,7 +1638,7 @@ The offline build path that turns the git-tracked T3D trunk into a game-loadable
     per-CsgOper keep/discard/reverse leaf funcs (§4.3). Formulated as an FPoly-list filter (a
     fragment kept unless a leaf discards it → un-clipped faces stay whole). A fresh world is SOLID
     (`root_outside=false`): a Subtract carves, an Add fills. **Classification is POINT-IN-SOLID, not
-    BSP propagation** (`rationale/MIGRATION.md`, 2026-07-16 native CSG point-in-solid classifier): the old code
+    BSP propagation** (`direction/materialize.md`): the old code
     rebuilt a classify BSP from the accumulated world SURFACE list each brush step and trusted its
     propagated `outside`; for complex non-axis-aligned geometry (an octagonal tower's diagonal
     planes) that intermediate surface set is not watertight, so the rebuilt tree misclassified empty
@@ -1679,7 +1679,7 @@ The offline build path that turns the git-tracked T3D trunk into a game-loadable
     that emits `Model.leaf_hulls` + per-node `i_collision_bound` so the **pawn stands on the floor**.
     Without hulls a native map is non-solid to any box sweep and the pawn falls through — the game's
     `FBoxLineCheckInfo::BoxLineCheck` produces a collision hit ONLY by clipping the swept box against
-    `LeafHulls[iCollisionBound]` (`rationale/MIGRATION.md`, 2026-07-16 15:20 UTC; `re-raw-zones/linecheck-oracle.md`).
+    `LeafHulls[iCollisionBound]` (`direction/materialize.md`; `re-raw-zones/linecheck-oracle.md`).
     `Bounds`/`i_render_bound` stay empty/`-1` (render bound, separate).
   - `zones.rs` — the native `TestVisibility` port (section 70): real leaves (Pass A), a
     leaf-adjacency PORTAL graph (infinite node-plane quad clipped to the cell, filtered down both
@@ -1989,7 +1989,7 @@ actor; `stash capture` filters by the requested names first, then uniquifies the
 (first keeps its bare Name, later collisions get suffixed). `translate_brush(brush, dx, dy, dz)` shifts all vertices by a world-space delta (used by the
 intersect/deintersect scaffolding to place the builder cube on the set's bbox centre; the editor
 ORACLE additionally pre-subtracts 32 uu on the pasted wrap cube to cancel the `EDIT PASTE` drift —
-the native path has no paste and so no offset, see `rationale/MIGRATION.md`, 2026-07-25). Geometry helpers mirror `clip.py`
+the native path has no paste and so no offset, see `direction/materialize.md`). Geometry helpers mirror `clip.py`
 (`_face` orders a ring CCW-from-out from a rough outward direction; winding, not the emitted
 Normal, is what the importer uses).
 Each face carries an **`Item` (`ItemName`)** label — UED's per-face semantic tag (Base/back/

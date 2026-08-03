@@ -223,7 +223,8 @@ def test_it_flags_semisolid_portal_brush():
 
 def test_it_does_not_flag_nonsolid_walkable_floor():
     # A nonsolid brush with an upward-facing face is a legitimate authoring choice (water,
-    # decoration, a deliberate trap) — doctor must not flag it (dev/docs/rationale/MIGRATION.md 2026-07-19).
+    # decoration, a deliberate trap) — doctor must not flag it (board item
+    # `doctor-fallthrough-warns-on-every-upward-facing`).
     actor = _solid_cube("Floor1", poly_flags=PF_NOTSOLID)
 
     assert doctor.check_solidity(actor) == []

@@ -15,4 +15,4 @@ gives **3609 surfs vs golden 3616 = −7 (slight UNDER-production)**, two native
 of gdb-grind for coplanar over-production" plan is retired. Open questions for Andrzej: is the −7 a real hole
 or the subtract-into-void baseline; what is the real remaining byte residual (compiled parity is only 19.07%,
 mass in Nodes/Verts/LeafHulls — `_scratch/baseline-reconcile/`); the +146 VECTOR delta is NOT stale (all
-texture axes, 745 vs 599); the golden-node-basis question is now less critical. Docs reconciled: `PARITY-STATUS.md`, §92 §2/§3/§12 banners, `rationale/MIGRATION.md` bspValidateBrush note.
+texture axes, 745 vs 599); the golden-node-basis question is now less critical. Docs reconciled: `PARITY-STATUS.md`, §92 §2/§3/§12 banners.

@@ -2,7 +2,7 @@
 
 *Checkpoint 2026-07-20. Read this FIRST on resume, then the cited `sections/92-*.md` entries for detail.
 This file is the durable resume pointer; the blow-by-blow lives in `sections/92-bspbrushcsg-reallevel-port-plan.md`
-(§11–§54) and the ledger map in `rationale/MIGRATION.md`.*
+(§11–§54).*
 
 ---
 
@@ -113,5 +113,5 @@ explicit pathspec (never `git add -A`); leave the concurrent session's files unt
 
 ## Where the detail lives
 - `sections/92-bspbrushcsg-reallevel-port-plan.md` §11–§54 — the full decode/fix/refutation trail.
-- `direction/materialize.md` + `rationale/MIGRATION.md` — the byte-identity target, bspValidateBrush, and where the retired ledger's entries went.
+- `direction/materialize.md` — the byte-identity target and bspValidateBrush.
 - Auto-memory `native-parity-effort-state.md` — compressed state + this resume pointer.

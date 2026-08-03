@@ -68,7 +68,7 @@ authored slug and summary.
    `architecture.md`, `unrealed/*`, `rationale/*`, `reviews/*`, the spikes, the Python/shell/Rust
    sources.
 5. `dev/docs/rationale/board.md` (spec §6).
-6. `decisions.md`'s two markdown links and `rationale/MIGRATION.md`'s exempted or repointed.
+6. `decisions.md`'s two markdown links exempted or repointed.
 7. Suite runtime measured before/after.
 8. **The stale list proposed to the owner in bulk** (§2.7) — last, as ruled.
 

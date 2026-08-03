@@ -2,8 +2,8 @@
 
 **Spec:** the split set — `engine` (board item `unified-asset-catalog`), `class` (board item `the-asset-catalog-class-arm-needs-four-changes`), `texture` (board item `unified-asset-catalog`), `audio` (board item `sound-corpus-remeasure`).
 **Decisions:** [`direction/asset-catalog.md`](../../../direction/asset-catalog.md) (the owner's) and
-[`rationale/`](../../../rationale/) (the agent's). **Not `decisions.md`** — that ledger is FROZEN;
-[`rationale/MIGRATION.md`](../../../rationale/MIGRATION.md) maps the old dated citations.
+[`rationale/`](../../../rationale/) (the agent's). **Not `decisions.md`** — that ledger is FROZEN and
+since deleted; old dated citations are recoverable via `git log --follow -- dev/docs/decisions.md`.
 **Review:** two rounds on this plan (4 cold reviewers, 2026-07-25) — all findings folded; §5 records them.
 **Ephemeral:** scratch for sequencing this build; delete when the work lands.
 
@@ -158,8 +158,8 @@ bytecode.
 
 ### P1 — full native texture decode
 *Gates S8a only.* **Now specced and review-gated** in its own right:
-board item `native-texture-decode` (owner-decided; see `rationale/MIGRATION.md` for the old
-2026-07-25 06:30 ledger citation); it sits on `board/to-plan/`
+board item `native-texture-decode` (owner-decided; see `direction/packages.md` for the ruling);
+it sits on `board/to-plan/`
 as a `p1` and needs its own plan before S8a is scheduled. Two things changed since this plan first
 called it "non-P8 decoders": layout is **derived from the data** rather than any per-game format
 table (slot numbers are not portable between engines), and it is **not** DX-irrelevant — the

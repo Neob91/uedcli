@@ -8,5 +8,5 @@ summary = "Retired the append-only decisions ledger and the single-file directio
 
 The append-only decisions ledger and the derived single-file direction doc are deleted. Owner
 decisions live in `dev/docs/direction/<topic>.md`, engineering rationale in
-`dev/docs/rationale/<module>.md`, both revised in place. `dev/docs/rationale/MIGRATION.md` maps every
-one of the 227 old ledger entries to its new home.
+`dev/docs/rationale/<module>.md`, both revised in place. The mapping from each old ledger entry to
+its new home is recoverable from git history.

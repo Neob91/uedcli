@@ -19,10 +19,10 @@ The three things that had to land in the same change all did:
    is deleted.
 2. `CLAUDE.md`'s round-2 trigger is narrowed to an item's own `overview.md` and `questions/`, so a
    spec or plan under the board still earns its round 2.
-3. The retired ledger (now `dev/docs/rationale/MIGRATION.md`) was frozen, so its two now-dangling links are exempted in the link test
+3. The retired ledger was frozen, so its two now-dangling links are exempted in the link test
    rather than edited.
 
-**Remnant:** the exemption narrowed link coverage from 13 ephemeral files to 3. The before/after
-list is in `dev/docs/rationale/MIGRATION.md`, "The link-check exemption boundary". One row there is
-a genuine gap rather than a consequence — see board item
+**Remnant:** the exemption narrowed link coverage from 13 ephemeral files to 3, per the retired
+ledger's before/after table (recoverable from git history). One row
+there is a genuine gap rather than a consequence — see board item
 `a-to-build-item-s-plan-can-sit-outside-the`.

@@ -157,7 +157,7 @@ ground-truth signal a detection tool can capture from the live editor (§ in the
 
 The mechanisms above are *predictable from the authored model* for the common cases, and
 *confirmable live* for the rest. The companion spec
-`specs/2026-06-24-uedcli-bsp-doctor-design.md` (landed; spec deleted, see `rationale/MIGRATION.md` 2026-06-24)
+`specs/2026-06-24-uedcli-bsp-doctor-design.md` (landed; spec deleted, see board item `bsp-issue-detector`)
 turns this into a command. The load-bearing detection inputs this spike establishes:
 
 - **Dropped-face prediction (fall-through + render hole):** replicate `Finalize`/`RemoveColinears`/
