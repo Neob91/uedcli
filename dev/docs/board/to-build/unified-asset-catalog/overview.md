@@ -14,13 +14,12 @@ gate. The four texture rulings (incl. the IRREVERSIBLE identity/mask one) were f
 a pixel edit — split into board item `texture-classify-rekey-and-prune`. Re-measure the sound corpus
 on the composed path before speccing audio (`sound-corpus-remeasure`).
 
-**NOT ON DECK (engine/texture/audio).** A 3-reviewer spec round on 2026-07-26 returned structural findings; the owner's
-rulings were folded and the spec re-entered the gate at round 1, which is where it is now. The plan
-is **stale and needs re-cutting** (it carries its own `RE-CUT REQUIRED` banner listing what no slice
-covers yet). The texture arm's `questions/` blockers are cleared (four-open folded 2026-08-02, rekey
-split out), so it is startable once the spec passes a round and the plan is re-cut and reviewed.
+**Build-ready.** Reviewed spec + plan ([`spec.md`](spec.md), [`plan.md`](plan.md) — a clean T0–T7 cut),
+no open questions. A 3-reviewer spec round on 2026-07-26 returned structural findings; the owner's
+rulings were folded, and the texture arm's `questions/` blockers are cleared (four-open folded
+2026-08-02, rekey split out to board item `texture-classify-rekey-and-prune`).
 
-Plan: board item `the-unified-asset-catalog-spec-revision`.
+Plan: [`plan.md`](plan.md).
 Spec: SPLIT 2026-07-26 into [`texture`](spec.md) + `class` (board item `the-asset-catalog-class-arm-needs-four-changes`) + `audio` (board item `sound-corpus-remeasure`); the shared-engine pieces stay tracked as their own board items.
 Decisions: [`../../../direction/asset-catalog.md`](../../../direction/asset-catalog.md) (the owner's) and
 `../../../rationale/` (the agent's) — **not** the retired decisions ledger.

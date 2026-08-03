@@ -31,16 +31,24 @@ The exact `pkg.class_of_export(i) == "Texture"` test lives only in `utexture.tex
 `_texture_named` (`:875`) and `_decode_ref` (`:952`) hold no class test — both delegate via
 `for i in textures(pkg)`. So a `FireTexture`/`ScriptedTexture` subclass returns `unknown-texture`,
 never `no-mip-data` — killing the procedural name-key path and making show/preview/classify/`exists`
-on any `Engine.Texture` descendant exit 2. Widen `textures()` alone: its signature gains the class
-index, replacing the `== "Texture"` test with
-`descends_from(class_fqcn_of_export(pkg, i), "Engine.Texture")`. That cascades to both delegating
-callers (they pass the index through); `textures()` has no other callers, so the change is contained.
+on any `Engine.Texture` descendant exit 2. Widen `textures()` with an OPTIONAL class-index
+parameter — `textures(pkg, class_index=None)`: `None` keeps today's exact `== "Texture"` match, so
+every existing caller and the tests that assert it (e.g. `test_utexture_corpus.py:190` "production's
+exact match must NOT see it") stay unchanged and green; a class index replaces the test with
+`descends_from(class_fqcn_of_export(pkg, i), "Engine.Texture")`. `TextureResolver` gains the class
+index and threads it into `_texture_named` (`:875`) / `_decode_ref` (`:952`), so the resolver sees
+descendants while the low-level `textures(pkg)` test call sites need no change. Make it OPTIONAL
+deliberately: a REQUIRED arg would break all ~23 one-arg call sites (`test_utexture*.py`,
+`test_engine_facts.py`, `build_uccfixture.py`) and force flipping the exact-match assertions — the
+optional default avoids both.
 Skip a `None` fqcn (`class_fqcn_of_export` returns `None` for a locally-defined class, `:353-354`) —
 treat it as not a texture, never feed `None` to `descends_from` (`None.casefold()` crashes). A real
 `utexture.py` edit, not reuse; do it before T1 so the procedural path exists.
 
 - **Tests:** `_decode_ref`/`exists` resolve a `FireTexture` export (→ `no-mip-data`, not
-  `unknown-texture`); a non-texture export still misses; a plain `Texture` still resolves.
+  `unknown-texture`) via the resolver's class-index path; a non-texture export still misses; a plain
+  `Texture` still resolves. The existing exact-match `textures(pkg)` tests stay green (the optional
+  arg defaults to exact), so no call-site flips are needed.
 - **Verify:** `texture show <FireTexture ref>` reports the no-bitmap note, not exit 2.
 
 ## T1 — Layer-1 identity + Layer-2 facts (library)
@@ -134,7 +142,14 @@ filters. `prewarm` decodes every texture (warms ref→identity), `--package`/`--
 ## T7 — Docs + review
 
 Update `docs/usage.md` (the new `texture` verbs; remove `sync`/`--stale`/`--removed`) in the touching
-commits. Sweep `docs/leveldesign/` only if a user-facing recipe references the old catalog. One subagent
+commits. Sweep `docs/leveldesign/` only if a user-facing recipe references the old catalog.
+
+Durable-record task (no code): the ruling "editor-icon sprites are ordinary textures — no icon-group
+detection" (a do-nothing default) lives only in `spec.md`, which is deleted at build-end. Fold that one
+line into a durable doc — `direction/asset-catalog.md` (owner-gated: propose the exact text and wait for
+the owner's yes) or `architecture.md` (needs owner approval) — so it survives the spec's deletion.
+
+One subagent
 reviews `git diff base...HEAD` (prompt it to read `dev/docs/unrealed/t3d.md`, `direction/asset-catalog.md`,
 `direction/conventions.md`, and this spec first); fix confirmed findings, re-test.
 
