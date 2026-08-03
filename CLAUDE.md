@@ -36,7 +36,13 @@ stale, ask — do not edit.
 The one exception is `dev/docs/board/`, which stays agent-operated: log findings
 (`bin/board new inbox`), move items between stages, and trim `done/` entries without asking.
 
-`dev/docs/direction/<topic>.md` is the strictest case and carries extra handling. It holds what the
+`dev/docs/direction/<topic>.md` is the strictest case and carries extra handling. **Default to
+leaving it alone.** It records a genuinely new or changed *direction* — a shift in what the product
+is or how the project is run — not the routine rulings that fall out of building. How one verb
+behaves, a render rule, an exit code, a data shape: that folds into the item's `spec.md` (ephemeral)
+and, for the why, `rationale/` — never a new or widened `direction/` topic. Touch `direction/` only
+when the decision changes the topic-level intent itself; unsure it rises to that, keep it out and
+ask. It holds what the
 owner decided — product intent and process rulings alike — revised in place, no supersession, no
 dated history (git keeps that); evidence citations and live-finding dates stay. Down to a single
 `Rejected` bullet, do not touch it without a yes; moving a topic out needs a yes too.

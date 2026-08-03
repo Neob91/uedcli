@@ -33,8 +33,9 @@ Four conventions the suite cannot check, because none of them is machine-decidab
   first: ideas, gaps, bugs, chores, anything flagged for the owner (a provisional call, an
   assumption, a risk, a deviation from spec or plan, or work deliberately not done), and their own
   open questions. **There is no separate `flagged`/`to-resolve` lane** — the owner resolves their own
-  items by deleting them or triaging them forward, recording any real choice in the owning
-  [`../direction/`](../direction/README.md) topic.
+  items by deleting them or triaging them forward. A real change of *direction* is recorded in the
+  owning [`../direction/`](../direction/README.md) topic; a routine feature or implementation ruling
+  stays in the item's `spec.md` and, for the why, `rationale/`.
 - **A `chore` or `debug` item is one-shot**: it is filed straight into `to-build/` with no spec or
   plan.
 - **An item reaches `to-spike/` only when its spec flags a live unknown**, and the spike's findings
