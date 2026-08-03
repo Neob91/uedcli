@@ -17,6 +17,54 @@ larger pool than the bare `Points` array — to pin for the issue-detector, not 
 (Original status — now historical — was "SPIKE IN PROGRESS"; the next-steps below are
 done.)
 
+## P0 feasibility-gate verdict (2026-08-03): GO
+
+The board item `bsp-issue-detector` gates its located tier (`level doctor --built`) on one question:
+can the six arrays be parsed from a BUILT `.dx` well enough to locate build-emergent BSP issues?
+Re-verified this session on the retail built maps (in a sibling worktree's gitignored `Maps/`).
+
+**P0-a: GO.** The read parser extracts all six required arrays from a built `.dx` — Vectors,
+Points, Nodes (plane + `iVertPool` + `numVertices`), Surfs (incl. `PolyFlags`), Verts
+(`iVertex`/`iSide`), Leaves — populated and correct. `01_NYC_UNATCOHQ` Model99: 575 / 9701 / 5174
+/ 3570 / 82375 / 2293. Node polygons reconstruct from `Nodes[].iVertPool → Verts[].iVertex →
+Points[]` and lie on the node's own plane to within float precision (max deviation 0.19 uu on
+UNATCOHQ; exactly 0 on the 8.6 KB `99_Endgame4` Model1). Node area, node plane, and per-surf
+`PolyFlags` are all available offline. This is the same read proven byte-exact to EOF (below) and
+byte-exact on the write (`2026-06-28-…`).
+
+**P0-b1 (located T-junction): confirmed negative, as the plan expected.** Geometry reconstructs
+losslessly, but the built Model no longer carries the CSG-time T-junction event: the optimizer has
+already resolved it (welded → gone, or left unlinked → already a D0 `T-points` count).
+Reconstruction gives exact polygons, not a way to re-derive which welds the builder skipped. So HoM
+stays a D0-count row, not a D1-located row.
+
+**Two interpretation notes (pinned by `bspspike/test_umodel_p0_gate.py`):**
+- `FBspVert.iVertex` exceeds the `Points` count on large maps (14096/82375 verts on UNATCOHQ), but
+  every such vert is in the UNUSED tail of the Verts pool; every vert reachable from a node's
+  `iVertPool` range indexes a real Point (0% out-of-bounds across 3 maps). Harmless for
+  reconstruction.
+- The harness constant `PF_PORTAL = 0x0080` (used only in `report_model`'s diagnostic) is wrong —
+  real UE1 `PF_Portal = 0x04000000` (`uedcli/doctor.py`); `0x0080` is `PF_FakeBackdrop`. The raw
+  `poly_flags` u32 parses correctly; only the convenience constant is wrong. Filed as a board
+  finding; the promotion uses `doctor.py`'s constants.
+
+**Viable D1 (`level doctor --built`) rows:**
+- Invisible walls — near-zero-area nodes (compute node poly area; needs only P0-a).
+- Fall-through — built floor surf with `PF_NotSolid`/`PF_SemiSolid`/`PF_Portal` (filter
+  `Surfs[].poly_flags`; needs only P0-a).
+- HoM (T-junction) — NOT a new located row; stays a D0 `T-points` count.
+
+Pinned offline by `bspspike/test_umodel_p0_gate.py` against a committed 8.6 KB golden
+(`bspspike/fixtures/endgame4_model1.bin`) — no install content needed. The retail-corpus sweep
+(`test_umodel_serialize.py`) needs the gitignored maps and its hardcoded `_MAPS_DIR` is absent in
+this checkout (filed).
+
+**Next step:** gate is GO — board-plan steps 2–3 (`bsp/editorlog.py` promotion, `level doctor
+--rebuilt`, and the `--built` arm routing to the D1-b located analyses) are unblocked. Building the
+D1-b rows is its own plan.
+
+---
+
 This is a durable record of binary-format findings from disassembling `Engine.dll` and probing
 real map files. The working harness lives in `_scratch/bspspike/` (`umodel_parser.py`,
 `pe.py`). The goal is to parse the `UModel` section of a built `.dx` to support `level doctor

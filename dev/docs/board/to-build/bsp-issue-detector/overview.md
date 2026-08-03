@@ -7,7 +7,17 @@ spikes = ["dev/docs/spikes/2026-06-25-umodel-serialize-format.md"]
 
 # BSP-issue detector (D0 + the P0 spike + `level doctor --rebuilt` + D0-b)
 
-**Status:** PARKED mid-spike (2026-06-25). Spec reviewed (6 rounds), plan reviewed (3 rounds).
+**Status:** Step 1 (P0 spike) DONE — verdict **GO** (2026-08-03). Steps 2–4 remain. Spec reviewed
+(6 rounds), plan reviewed (3 rounds).
+
+**Step 1 P0 verdict — GO.** All six arrays (Vectors/Points/Nodes/Surfs incl. `PolyFlags`/Verts/Leaves)
+parse from a built `.dx`; node polys reconstruct planar-exact from `iVertPool→Verts→Points`. P0-b1
+(located T-junction) confirmed negative as expected — HoM stays a D0 `T-points` count, not a D1
+located row. Viable `--built` rows: invisible walls (near-zero-area nodes) + fall-through
+(`PF_NotSolid`/`PF_SemiSolid`/`PF_Portal` surfs). So steps 2–3 (incl. the `--built` arm) are
+unblocked; the D1-b located analyses are their own plan. Evidence + verdict:
+[`../../../spikes/2026-06-25-umodel-serialize-format.md`](../../../spikes/2026-06-25-umodel-serialize-format.md)
+(P0 section), pinned by `spikes/bspspike/test_umodel_p0_gate.py`.
 **Plan (full detail):** [`plan.md`](plan.md)
 **Spec:** board item `bsp-issue-ground-truth-detector-d0-d1` ·
 **Decision:** `rationale/MIGRATION.md` (2026-06-24 12:40 UTC)
@@ -34,12 +44,10 @@ stale-string fix. The one change that would touch a load-bearing feature (surfac
 `level apply`, step 3b) is **deferred, optional, warn-only, and never alters `apply`/`materialize`
 behavior**.
 
-**Where the spike is parked:** See
-[`../../../spikes/2026-06-25-umodel-serialize-format.md`](../../../spikes/2026-06-25-umodel-serialize-format.md)
-for findings and next steps. The working harness is `_scratch/bspspike/umodel_parser.py`.
-The parser handles everything up through the zone data. The next blocker is `_skip_array_0xa8`:
-`0x1010c160` reads 3 × 4 raw bytes (not 1 ci) — fix is one line; downstream arrays may need
-further verification.
+**Spike outcome:** The parser is complete and validated — it reads the `Model` body byte-exact to
+EOF and re-serializes byte-exact across the whole retail corpus (`spikes/2026-06-25-…` and
+`spikes/2026-06-28-…`). The `0xa8` blocker is long resolved. The committed harness lives in
+`dev/docs/spikes/bspspike/` (not `_scratch/`). The P0 gate is **GO** — see the status block above.
 
 **Done when:** step 1 go/no-go recorded; step 2 landed (suite green); step 3 shipped per the spike
 answer (docs current); step 4 measurement recorded or content-blocked TODO. D1-b proceeds only on a

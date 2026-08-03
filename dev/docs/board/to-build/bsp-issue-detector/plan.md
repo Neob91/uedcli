@@ -23,7 +23,14 @@ gated on step 1 / an owner judgment call.
 
 ---
 
-## Step 1 — P0-a/P0-b1 `UModel`-parser feasibility spike (FIRST, ALONE; the value gate)
+## Step 1 — P0-a/P0-b1 `UModel`-parser feasibility spike (FIRST, ALONE; the value gate) — DONE: GO (2026-08-03)
+
+**Verdict: GO.** P0-a passes (all six arrays parse from a built `.dx`; node polys reconstruct
+planar-exact). P0-b1 confirmed negative as expected (HoM stays a D0 `T-points` count, not a located
+row). Viable `--built` rows: invisible walls (near-zero-area nodes) + fall-through
+(`PF_NotSolid`/`PF_SemiSolid`/`PF_Portal` surfs). Evidence: `spikes/2026-06-25-…` (P0 section),
+pinned by `spikes/bspspike/test_umodel_p0_gate.py`. So step 3's `--built` arm is unblocked; the
+D1-b located analyses are their own plan.
 
 Run this before committing effort to steps 2–3: its go/no-go decides whether D1 (`--built`) is real.
 
