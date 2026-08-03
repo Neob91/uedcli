@@ -1,6 +1,6 @@
 +++
 priority = "p3"
-kind = "bug"
+kind = "debug"
 summary = "umodel_parser harness PF_PORTAL constant is wrong (0x0080 = FakeBackdrop)"
 +++
 

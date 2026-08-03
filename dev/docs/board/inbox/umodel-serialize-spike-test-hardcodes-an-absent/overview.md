@@ -1,6 +1,6 @@
 +++
 priority = "p3"
-kind = "bug"
+kind = "debug"
 summary = "umodel serialize spike test hardcodes an absent corpus path"
 +++
 
