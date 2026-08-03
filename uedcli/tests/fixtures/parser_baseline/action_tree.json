@@ -8132,6 +8132,22 @@
               "mutex_group": null
             },
             {
+              "class": "_StoreTrueAction",
+              "option_strings": [
+                "--no-bsp-check"
+              ],
+              "dest": "no_bsp_check",
+              "nargs": 0,
+              "const": true,
+              "default": false,
+              "required": false,
+              "choices": null,
+              "metavar": null,
+              "converter": null,
+              "help": "skip the advisory BSP health checks a successful build runs (editor rebuild-warning counts + built-model invisible-wall/fall-through detection). Those go to stderr and never change the exit code",
+              "mutex_group": null
+            },
+            {
               "class": "_StoreAction",
               "option_strings": [
                 "--tree"

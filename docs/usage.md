@@ -1440,7 +1440,7 @@ level's T3D trunk into the `.dx`/`.unr` **build artifact** — map-file output o
 source, reached via git, not a build target).
 
 ```
-level materialize [--out OUT] [--overwrite] [--no-verify] [--keep-build]
+level materialize [--out OUT] [--overwrite] [--no-verify] [--keep-build] [--no-bsp-check]
 ```
 
 - **`--out OUT`** names the destination map file (`.dx` or `.unr`). It **refuses to overwrite an
@@ -1458,6 +1458,14 @@ level materialize [--out OUT] [--overwrite] [--no-verify] [--keep-build]
   so an actor whose `Class=` is not fully qualified (`Package.Class`) — or whose package is missing
   from the configured paths — **exits 2 in about a second**, naming the actor and class, instead of
   failing after a full build. `--no-verify` does not need them.
+- After a successful build+save, materialize runs two **advisory BSP health checks** and prints any
+  findings to **stderr** — the exit code stays **0** (these report on an already-good build; they
+  never fail it). The **build-output** check parses UnrealEd's own rebuild warnings (dropped faces,
+  unlinked T-junction sides, sliver nodes) into counts; the **built-model** check reads the saved map
+  and locates two defects the static `level doctor` cannot: **invisible walls** (near-zero-area BSP
+  nodes) and **fall-through** (a floor surface built non-collidable — `PF_NotSolid`/`PF_SemiSolid`/
+  `PF_Portal`). A check that cannot run (editor wedged, unreadable map) prints one "skipped" line and
+  the build still succeeds. **`--no-bsp-check`** turns both off.
 - Committing is your own `git`. Lightmaps and rebuilt BSP are **regenerable build output**, never
   part of the level's identity.
 

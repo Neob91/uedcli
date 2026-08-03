@@ -423,3 +423,62 @@ def test_composed_dirs_hard_errors_without_a_games_config(tmp_path, monkeypatch)
 def test_materialize_builds_and_verifies_live(tmp_path):
     # requires dx-lum-uned: builds a one-actor trunk into a .dx, H3 verifies, the file exists.
     pytest.skip("integration: requires the dx-lum-uned container")
+
+
+# ── Advisory BSP health checks: findings on stderr at rc 0; never fail the build ──
+
+def test_a_successful_build_runs_the_bsp_checks_and_returns_their_notes_at_rc0(tmp_path,
+                                                                              monkeypatch,
+                                                                              _stub_editor):
+    import uedcli.bsp.checks as checksmod
+    notes = ["materialize: BSP health check (advisory; build succeeded):",
+             "  built-model defects:",
+             "  [ERROR] solidity @(1.0, 2.0, 3.0): floor surf 7 is non-collidable (PF_NotSolid)"]
+    monkeypatch.setattr(checksmod, "run_bsp_checks",
+                        lambda driver, *, log_offset, dx_path: notes)
+    r = run_materialize(level=_one_actor_level(), schema_resolver=_NO_PACKAGES,
+                        state_dir=tmp_path / ".uedcli",
+                        out_path=str(tmp_path / "New.dx"), overwrite=False)
+    assert r.rc == 0                                  # advisory: findings never change the exit code
+    assert r.bsp_notes == "\n".join(notes)
+
+
+def test_no_bsp_check_suppresses_both_checks(tmp_path, monkeypatch, _stub_editor):
+    import uedcli.bsp.checks as checksmod
+    monkeypatch.setattr(checksmod, "run_bsp_checks",
+                        lambda *a, **k: pytest.fail("run_bsp_checks must not be called under --no-bsp-check"))
+    r = run_materialize(level=_one_actor_level(), schema_resolver=_NO_PACKAGES,
+                        state_dir=tmp_path / ".uedcli", no_bsp_check=True,
+                        out_path=str(tmp_path / "New.dx"), overwrite=False)
+    assert r.rc == 0
+    assert r.bsp_notes == ""
+
+
+def test_a_bsp_check_that_raises_does_not_fail_the_build(tmp_path, monkeypatch, _stub_editor):
+    """The robustness contract: the map is already built+saved when the checks run, so a check that
+    blows up must not turn a good build into a failure — rc stays 0 and a skip note is recorded."""
+    import uedcli.bsp.checks as checksmod
+    monkeypatch.setattr(checksmod, "run_bsp_checks",
+                        lambda *a, **k: (_ for _ in ()).throw(RuntimeError("parser exploded")))
+    r = run_materialize(level=_one_actor_level(), schema_resolver=_NO_PACKAGES,
+                        state_dir=tmp_path / ".uedcli",
+                        out_path=str(tmp_path / "New.dx"), overwrite=False)
+    assert r.rc == 0                                  # NOT "materialize failed (nothing written)"
+    assert "BSP health check skipped" in r.bsp_notes and "parser exploded" in r.bsp_notes
+
+
+def test_dispatch_prints_bsp_notes_to_stderr(tmp_path, monkeypatch, capsys):
+    proj, _ = _project_with_level(tmp_path, monkeypatch)
+    monkeypatch.setattr("uedcli.apply.run_materialize",
+                        lambda **kw: ApplyResult(rc=0, message="materialized out.dx",
+                                                 bsp_notes="materialize: BSP health check (advisory; "
+                                                           "build succeeded):\n  built-model defects:"))
+    monkeypatch.setattr("uedcli.cli.resources.composed_load_set", lambda p: ["Engine"])
+    monkeypatch.setattr("uedcli.cli.resources.composed_dirs", lambda p: ["/g/Textures"])
+    rc = dispatch.dispatch(_ns(cmd="level", sub="materialize", project=str(proj),
+                               out=str(tmp_path / "out.dx"), overwrite=False, no_bsp_check=False))
+    assert rc == 0
+    captured = capsys.readouterr()
+    assert "materialized out.dx" in captured.out            # result → stdout
+    assert "BSP health check (advisory" in captured.err     # findings → stderr
+    assert "built-model defects" in captured.err

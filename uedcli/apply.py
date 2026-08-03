@@ -30,6 +30,7 @@ class ApplyResult:
     blocked: bool = False
     message: str = ""
     apply_uuid: str | None = None
+    bsp_notes: str = ""        # advisory BSP-health stderr text (never affects rc; see run_materialize)
 
 
 def _materialized_order(result: dict[str, str], result_order: list[str]) -> list[str]:
@@ -224,7 +225,8 @@ _MAP_EXTS = (".dx", ".unr")
 
 
 def run_materialize(*, level, out_path, overwrite, state_dir, schema_resolver,
-                    search_dirs=None, no_verify=False, keep_build=False) -> ApplyResult:
+                    search_dirs=None, no_verify=False, keep_build=False,
+                    no_bsp_check=False) -> ApplyResult:
     """Materialize a TRUNK Level into `out_path` (.dx/.unr) via a PER-COMMAND EPHEMERAL editor, H3-
     post-verify it offline in that same container, and swap it in. PURE BUILD (git-native slice 3):
     no session, no 3-way merge, no backup, no git wrapping. Refuses to overwrite unless `overwrite`.
@@ -286,12 +288,21 @@ def run_materialize(*, level, out_path, overwrite, state_dir, schema_resolver,
         return ApplyResult(rc=2, message="materialize failed (nothing written): "
                                          f"{ensure_load_message(missing)}")
     ed_id = uuid7()                                    # bare uuid → editor_container keeps all groups
+    bsp_notes = ""
     try:
         ed = Driver(container=ensure_editor(ed_id, mounts=mounts, state_dir=state_dir))
         # OBJ LOAD only the packages the level REFERENCES (not the whole composed `packages` set —
         # `_level_referenced_packages`, decision 2026-07-14): the whole set still lands in `Paths`
         # via `mounts`, so indirect demand-loads resolve, but the explicit preload shrinks from
         # ~240 to what the level uses — O(level), and far fewer chances for the editor to wedge.
+        # Record the log offset BEFORE the build so the BSP build-output check can read the
+        # MAP REBUILD warnings out of the slice (guarded: a failure here just skips that check).
+        bsp_log_off = None
+        if not no_bsp_check:
+            try:
+                bsp_log_off = ed.log_size()
+            except Exception:
+                bsp_log_off = None
         _materialize(ed, result=result, materialized_order=mo,
                      packages=_level_referenced_packages(level),
                      search_dirs=host_search_dirs, mounts=mounts)
@@ -299,6 +310,16 @@ def run_materialize(*, level, out_path, overwrite, state_dir, schema_resolver,
         host_out.parent.mkdir(parents=True, exist_ok=True)
         _save_and_swap_verified(ed, out_path, _expected_level(result, mo), defaults=defaults,
                                 state_dir=state_dir, no_verify=no_verify, keep_build=keep_build)
+        # Build+save succeeded: run the two advisory BSP health checks (owner design 2026-08-03).
+        # ADVISORY ONLY — the map is already written; these must never turn a good build into a
+        # failure, so the whole block is guarded and the rc stays 0 no matter what they find/raise.
+        if not no_bsp_check:
+            try:
+                from .bsp.checks import run_bsp_checks
+                bsp_notes = "\n".join(run_bsp_checks(ed, log_offset=bsp_log_off,
+                                                     dx_path=str(host_out)))
+            except Exception as e:
+                bsp_notes = f"materialize: BSP health check skipped ({type(e).__name__}: {e})"
     except (DriverError, RuntimeError, TimeoutError, ValueError, OSError,
             subprocess.CalledProcessError) as e:
         # OSError covers the crafted-ini write in ensure_editor (`_write_engine_ini`) and any
@@ -310,4 +331,4 @@ def run_materialize(*, level, out_path, overwrite, state_dir, schema_resolver,
         return ApplyResult(rc=2, message=f"materialize failed (nothing written): {e}")
     finally:
         stop_editor(ed_id, state_dir)                  # always tear the ephemeral container down
-    return ApplyResult(rc=0, message=f"materialized {out_path}")
+    return ApplyResult(rc=0, message=f"materialized {out_path}", bsp_notes=bsp_notes)

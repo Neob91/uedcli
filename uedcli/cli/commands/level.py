@@ -409,11 +409,14 @@ def _level_materialize(args) -> int:
                                    out_path=args.out, overwrite=args.overwrite,
                                    state_dir=config.state_dir(project.root, create=True),
                                    no_verify=getattr(args, "no_verify", False),
-                                   keep_build=getattr(args, "keep_build", False))
+                                   keep_build=getattr(args, "keep_build", False),
+                                   no_bsp_check=getattr(args, "no_bsp_check", False))
     if result.rc != 0:
         print(result.message, file=sys.stderr)
         return result.rc
     print(result.message)
+    if result.bsp_notes:                                # advisory BSP health → stderr, rc unchanged
+        print(result.bsp_notes, file=sys.stderr)
     return 0
 
 

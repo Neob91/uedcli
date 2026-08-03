@@ -57,6 +57,10 @@ def register(sub) -> None:
                       help="on a verify FAILURE, cp the built map out to the project's "
                            ".uedcli/tmp/ for inspection instead of discarding it "
                            "(default: discard on failure)")
+    lmat.add_argument("--no-bsp-check", action="store_true",
+                      help="skip the advisory BSP health checks a successful build runs (editor "
+                           "rebuild-warning counts + built-model invisible-wall/fall-through "
+                           "detection). Those go to stderr and never change the exit code")
     _tree_flag(lmat, level_only=True)   # build a named level explicitly instead of $UEDCLI_LEVEL
 
     lprev = lsub.add_parser(
