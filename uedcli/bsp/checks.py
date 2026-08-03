@@ -30,7 +30,7 @@ def _build_output_check(driver, log_offset: int) -> list[str]:
 
 
 def _built_model_check(dx_path: str) -> list[str]:
-    """Located defects in the saved built `.dx`: invisible walls + fall-through floors."""
+    """Located defects in the saved built `.dx`: invisible walls (near-zero-area BSP nodes)."""
     try:
         from pathlib import Path
         model = builtmodel.load_model_from_dx(Path(dx_path).read_bytes())

@@ -34,14 +34,14 @@ def test_run_bsp_checks_reports_both_findings_under_a_header(monkeypatch, dx):
                         lambda *a, **k: BuildLog(unlinked_tpoints=4))
     monkeypatch.setattr(C.builtmodel, "load_model_from_dx", _clean_model)
     monkeypatch.setattr(C.builtmodel, "analyze_built", lambda m: [doctor.Finding(
-        severity=doctor.Severity.ERROR, category="solidity", brush="(built BSP)",
-        coord=(1.0, 2.0, 3.0), message="floor surf 7 is non-collidable (PF_NotSolid)",
-        symptom="fall-through", fix="make it solid")])
+        severity=doctor.Severity.WARN, category="degenerate", brush="(built BSP)",
+        coord=(1.0, 2.0, 3.0), message="BSP node 7 (surf 3) has ~zero area",
+        symptom="phantom/sliver node — an invisible wall", fix="give it real area")])
     lines = C.run_bsp_checks(mock.Mock(), log_offset=100, dx_path=dx)
     assert lines[0] == "materialize: BSP health check (advisory; build succeeded):"
     joined = "\n".join(lines)
     assert "4 unlinked T-junction side(s) (HoM crack)" in joined
-    assert "[ERROR] solidity @(1.0, 2.0, 3.0): floor surf 7 is non-collidable" in joined
+    assert "[WARN ] degenerate @(1.0, 2.0, 3.0): BSP node 7 (surf 3) has ~zero area" in joined
 
 
 def test_a_raising_build_output_check_yields_a_skip_note_not_an_exception(monkeypatch, dx):

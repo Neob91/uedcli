@@ -433,7 +433,7 @@ def test_a_successful_build_runs_the_bsp_checks_and_returns_their_notes_at_rc0(t
     import uedcli.bsp.checks as checksmod
     notes = ["materialize: BSP health check (advisory; build succeeded):",
              "  built-model defects:",
-             "  [ERROR] solidity @(1.0, 2.0, 3.0): floor surf 7 is non-collidable (PF_NotSolid)"]
+             "  [WARN ] degenerate @(1.0, 2.0, 3.0): BSP node 7 (surf 3) has ~zero area"]
     monkeypatch.setattr(checksmod, "run_bsp_checks",
                         lambda driver, *, log_offset, dx_path: notes)
     r = run_materialize(level=_one_actor_level(), schema_resolver=_NO_PACKAGES,

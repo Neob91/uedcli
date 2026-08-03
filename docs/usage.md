@@ -1462,9 +1462,8 @@ level materialize [--out OUT] [--overwrite] [--no-verify] [--keep-build] [--no-b
   findings to **stderr** — the exit code stays **0** (these report on an already-good build; they
   never fail it). The **build-output** check parses UnrealEd's own rebuild warnings (dropped faces,
   unlinked T-junction sides, sliver nodes) into counts; the **built-model** check reads the saved map
-  and locates two defects the static `level doctor` cannot: **invisible walls** (near-zero-area BSP
-  nodes) and **fall-through** (a floor surface built non-collidable — `PF_NotSolid`/`PF_SemiSolid`/
-  `PF_Portal`). A check that cannot run (editor wedged, unreadable map) prints one "skipped" line and
+  and locates a defect the static `level doctor` cannot: **invisible walls** (near-zero-area BSP
+  nodes). A check that cannot run (editor wedged, unreadable map) prints one "skipped" line and
   the build still succeeds. **`--no-bsp-check`** turns both off.
 - Committing is your own `git`. Lightmaps and rebuilt BSP are **regenerable build output**, never
   part of the level's identity.

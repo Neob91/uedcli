@@ -1,8 +1,7 @@
 """Locate BSP defects in the built `Model` of a saved `.dx` — the built-model health check.
 
-Two located defect classes (spec `bsp-issue-ground-truth-detector-d0-d1` §1, P0 spike GO 2026-08-03):
-  - invisible wall  = a near-zero-area BSP node (a phantom/sliver node the build kept),
-  - fall-through    = a built FLOOR surf carrying `PF_NotSolid`/`PF_SemiSolid`/`PF_Portal`.
+One located defect class (spec `bsp-issue-ground-truth-detector-d0-d1` §1, P0 spike GO 2026-08-03):
+  - invisible wall  = a near-zero-area BSP node (a phantom/sliver node the build kept).
 
 The built `Model` is parsed by the shipping byte-exact reader `native.umodel.parse_model_body`
 (itself promoted from the same spike). The located analysis reuses `doctor`'s `Finding`/`Severity`
@@ -12,13 +11,8 @@ from __future__ import annotations
 
 from .. import doctor
 from ..doctor import Finding, Severity
-from ..builders import PF_NOTSOLID, PF_SEMISOLID
 from ..native import pkg_write, umodel
 from ..native.codec import read_ci
-
-PF_PORTAL = doctor.PF_PORTAL                       # 0x04000000 (the real UE1 bit)
-_SOLIDITY_BITS = PF_NOTSOLID | PF_SEMISOLID | PF_PORTAL
-_FLOOR_NORMAL_Z = 0.7                              # unit-normal z above this ⇒ a walkable floor (~45°)
 
 _RF_HAS_STACK = 0x02000000                         # export carries an FStateFrame before its body
 
@@ -89,31 +83,6 @@ def _invisible_walls(model: umodel.Model) -> list[Finding]:
     return out
 
 
-def _fall_through_floors(model: umodel.Model) -> list[Finding]:
-    """Built floor surfs (upward normal) carrying a non-collidable solidity bit — a pawn falls
-    through them (spec §1: fall-through = built floor surf with PF_NotSolid/SemiSolid/Portal)."""
-    out: list[Finding] = []
-    named_bits = ((PF_NOTSOLID, "PF_NotSolid"), (PF_SEMISOLID, "PF_SemiSolid"), (PF_PORTAL, "PF_Portal"))
-    for si, surf in enumerate(model.surfs):
-        if not surf.poly_flags & _SOLIDITY_BITS:
-            continue
-        if not 0 <= surf.v_normal < len(model.vectors):
-            continue
-        nx, ny, nz = model.vectors[surf.v_normal]
-        length = (nx * nx + ny * ny + nz * nz) ** 0.5
-        if length == 0 or nz / length < _FLOOR_NORMAL_Z:   # not a floor (normal not pointing up)
-            continue
-        coord = tuple(float(c) for c in model.points[surf.p_base]) \
-            if 0 <= surf.p_base < len(model.points) else None
-        flags = "/".join(name for bit, name in named_bits if surf.poly_flags & bit)
-        out.append(Finding(
-            severity=Severity.ERROR, category="solidity", brush="(built BSP)", coord=coord,
-            message=f"floor surf {si} is non-collidable ({flags}; PolyFlags={surf.poly_flags:#010x})",
-            symptom="a floor with these flags stops no pawn → fall-through",
-            fix="make the floor brush Solid — clear NotSolid/SemiSolid/Portal on the floor surface"))
-    return out
-
-
 def analyze_built(model: umodel.Model) -> list[Finding]:
     """Every located built-model defect, in `doctor`'s stable report order."""
-    return doctor.sort_findings(_invisible_walls(model) + _fall_through_floors(model))
+    return doctor.sort_findings(_invisible_walls(model))
