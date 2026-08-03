@@ -7,6 +7,7 @@ can't miss.
 | Rule                  | Read it before |
 |-----------------------|---
 | `building-features.md`| building a `to-build/` item and merging it |
+| `build-run.md`        | running a batch of `to-build/` items in one pass |
 | `documentation.md`    | writing or restructuring docs |
 | `worktrees.md`        | creating a worktree or squash-merging one |
 | `tests.md`           | running tests |
