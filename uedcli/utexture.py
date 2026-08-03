@@ -27,6 +27,7 @@ UPalette it is a TArray of 256 RGBA.
 """
 from __future__ import annotations
 
+import hashlib
 import os
 import struct
 from dataclasses import dataclass, field
@@ -336,9 +337,27 @@ def export_index_of_ref(pkg: Package, ref: int) -> int | None:
     return ref - 1 if ref > 0 else None
 
 
-def textures(pkg: Package) -> list[int]:
-    """0-based export indices of every Texture-classed export in the package."""
-    return [i for i, e in enumerate(pkg.exports) if pkg.class_of_export(i) == "Texture"]
+ENGINE_TEXTURE = "Engine.Texture"        # the descendant-match base (mirrors classindex.ENGINE_TEXTURE)
+
+
+def textures(pkg: Package, class_index=None) -> list[int]:
+    """0-based export indices of the package's texture exports.
+
+    `class_index=None` (the low-level default) matches the EXACT `Texture` class by
+    unqualified name — every existing caller and the tests that assert it stay unchanged.
+    A `ClassIndex` WIDENS the match to every `Engine.Texture` DESCENDANT (`FireTexture`,
+    `ScriptedTexture`, …) via `descends_from(class_fqcn_of_export(pkg, i), "Engine.Texture")`.
+    A `None` fqcn (a class defined locally in this package, `class_fqcn_of_export` returns
+    None) is not a texture and is skipped — never fed to `descends_from`, whose
+    `None.casefold()` would crash."""
+    if class_index is None:
+        return [i for i, e in enumerate(pkg.exports) if pkg.class_of_export(i) == "Texture"]
+    out = []
+    for i in range(len(pkg.exports)):
+        fqcn = class_fqcn_of_export(pkg, i)
+        if fqcn is not None and class_index.descends_from(fqcn, ENGINE_TEXTURE):
+            out.append(i)
+    return out
 
 
 def class_fqcn_of_export(pkg: Package, i0: int) -> str | None:
@@ -796,6 +815,65 @@ class TextureError:
 TextureResult = DecodedTexture | TextureError
 
 
+# --- catalog-facing identity, Layer-2 facts, enumeration -----------------------
+
+def texture_identity(decoded: DecodedTexture) -> str:
+    """The FROZEN Layer-1 content identity: `sha256(uint32_le(w) ‖ uint32_le(h) ‖ rgb)` over mip 0's
+    pixels. The mask is deliberately NOT hashed — identical pixels behind different masks are ONE
+    classifiable thing. This hex is every tracked shard's filename, so a decode change silently
+    re-keys the whole store; it is pinned by a committed golden (never change it without a ruling)."""
+    h = hashlib.sha256()
+    h.update(struct.pack("<II", decoded.width, decoded.height))
+    h.update(decoded.rgb)
+    return h.hexdigest()
+
+
+def procedural_identity(package: str, name: str) -> str:
+    """The name identity for a texture with no stored pixels (a procedural: `FireTexture` and
+    friends, whose decode returns `no-mip-data`): casefolded `Package.Name`
+    (`direction/asset-catalog.md` — name where content does not exist)."""
+    return f"{package}.{name}".casefold()
+
+
+def group_of_export(pkg: Package, i0: int) -> str | None:
+    """A texture export's GROUP (Layer-2 fact): its Outer object's name — `Ladder` for a ladder
+    texture — or None for a group-less top-level export (Outer ref 0). Never part of identity."""
+    if not 0 <= i0 < len(pkg.exports):
+        return None
+    return pkg.name_of_ref(pkg.exports[i0]["outer"])
+
+
+def package_texture_refs(package: str, entries: list[tuple[str, str | None]]) -> list[str]:
+    """Assign each `(name, group)` its catalog ref within `package`: the 2-part `Package.Name`
+    normally, or the 3-part `Package.Group.Name` when the Name COLLIDES with another entry in the
+    same package (and this one has a group). A 2-part ref binds regardless of group, so the group
+    stays a Layer-2 fact for the common case and only surfaces in the ref to disambiguate a
+    collision (`direction/asset-catalog.md`: `CoreTexMetal.LadrBrwnMetal`)."""
+    counts: dict[str, int] = {}
+    for nm, _g in entries:
+        counts[nm.casefold()] = counts.get(nm.casefold(), 0) + 1
+    out = []
+    for nm, group in entries:
+        if counts[nm.casefold()] > 1 and group is not None:
+            out.append(f"{package}.{group}.{nm}")
+        else:
+            out.append(f"{package}.{nm}")
+    return out
+
+
+@dataclass(frozen=True, kw_only=True)
+class TextureRef:
+    """One enumerated texture on the search path. `ref` is the collision-aware address
+    (`Package.Name`, or the 3-part `Package.Group.Name` on an intra-package Name collision) that
+    `texture list` prints and that decodes; `group` is the Outer fact (Layer 2), null when the
+    export is group-less. `export_index` lets `show`/`list --json` recover Layer-2 facts without
+    re-searching."""
+    ref: str
+    package: str
+    export_index: int
+    group: str | None
+
+
 # --- ref resolution over the composed search path ------------------------------
 
 class TextureResolver:
@@ -817,12 +895,20 @@ class TextureResolver:
     Results — errors included — are cached per resolver instance and returned by IDENTITY, so
     asking twice hands back the same object. Per-invocation caching only; no on-disk cache."""
 
-    def __init__(self, search_files) -> None:
+    def __init__(self, search_files, class_index=None) -> None:
         self._by_stem: dict[str, str] = {}
+        self._stem_spelling: dict[str, str] = {}     # casefold(stem) -> the ref's Package casing
         for entry in search_files:
             path = entry[0] if isinstance(entry, tuple) else entry
-            stem = os.path.splitext(os.path.basename(path))[0].casefold()
+            spelling = os.path.splitext(os.path.basename(path))[0]
+            stem = spelling.casefold()
             self._by_stem.setdefault(stem, path)
+            self._stem_spelling.setdefault(stem, spelling)
+        # A ClassIndex widens which exports count as textures from the exact `Texture` class to
+        # every `Engine.Texture` DESCENDANT (`textures(pkg, class_index)`). None (the seam's
+        # default) keeps the exact match, so author-time `exists()` and every non-catalog caller
+        # are unchanged; only the asset-catalog builds a resolver carrying the index.
+        self._class_index = class_index
         self._pkg_cache: dict[str, Package | None] = {}
         self._pkg_unreadable: set[str] = set()
         self._ref_cache: dict[str, TextureResult] = {}
@@ -869,10 +955,61 @@ class TextureResolver:
                     f"read ({type(exc).__name__}: {exc})")
         return self._ref_cache[key]
 
+    def package_for_ref(self, ref: str) -> tuple[Package, int] | None:
+        """`(package, export_index)` for a `Package[.Group].Name` ref, or None if it does not
+        resolve to a texture export — the seam `show`/`list --json` use to read Layer-2 facts
+        (group needs the export, which `DecodedTexture` does not carry). Uses the SAME widened
+        matcher and package cache as `resolve`."""
+        parts = ref.split(".")
+        if len(parts) == 2:
+            pkg_stem, group, name = parts[0], None, parts[1]
+        elif len(parts) == 3:
+            pkg_stem, group, name = parts
+        else:
+            return None
+        pkg = self._package(pkg_stem)
+        if pkg is None:
+            return None
+        want = name.casefold()
+        want_group = group.casefold() if group else None
+        for i in textures(pkg, self._class_index):
+            e = pkg.exports[i]
+            if (pkg.name(e["nm"]) or "").casefold() != want:
+                continue
+            if want_group is not None:
+                outer = pkg.name_of_ref(e["outer"])
+                if outer is None or outer.casefold() != want_group:
+                    continue
+            return pkg, i
+        return None
+
+    def texture_refs(self) -> list[TextureRef]:
+        """Every `Engine.Texture`-DESCENDANT export across the whole search path, as `TextureRef`s
+        sorted by ref (case-insensitively). Requires the class index the catalog builds the resolver
+        with; without one there is nothing to widen the match, so it returns []. Reads only the
+        header tables — an undecodable-but-real texture still enumerates, and no pixels are decoded
+        here."""
+        if self._class_index is None:
+            return []
+        out: list[TextureRef] = []
+        for stem_cf in self._by_stem:
+            pkg = self._package(stem_cf)
+            if pkg is None:
+                continue
+            spelling = self._stem_spelling.get(stem_cf, stem_cf)
+            idxs = textures(pkg, self._class_index)
+            names_groups = [(pkg.name(pkg.exports[i]["nm"]) or "",
+                             pkg.name_of_ref(pkg.exports[i]["outer"])) for i in idxs]
+            refs = package_texture_refs(spelling, names_groups)
+            for i, ref, (_name, group) in zip(idxs, refs, names_groups):
+                out.append(TextureRef(ref=ref, package=spelling, export_index=i, group=group))
+        out.sort(key=lambda t: t.ref.casefold())
+        return out
+
     def _texture_named(self, pkg: Package, name: str, group: str | None) -> bool:
         want = name.casefold()
         want_group = group.casefold() if group else None
-        for i in textures(pkg):
+        for i in textures(pkg, self._class_index):
             e = pkg.exports[i]
             if (pkg.name(e["nm"]) or "").casefold() != want:
                 continue
@@ -949,7 +1086,7 @@ class TextureResolver:
                                 f"no package named {pkg_stem!r} on the composed search path")
         want = name.casefold()
         want_group = group.casefold() if group else None
-        for i in textures(pkg):
+        for i in textures(pkg, self._class_index):
             e = pkg.exports[i]
             if (pkg.name(e["nm"]) or "").casefold() != want:
                 continue

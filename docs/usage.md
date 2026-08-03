@@ -1526,39 +1526,61 @@ not needed.
 
 ---
 
-# Texture catalog (offline, no level needed)
+# Texture catalog (offline, reads the game `.utx`/`.u`)
 
-The `texture` verbs maintain a tracked, hash-versioned catalog of every texture package on the
-substrate path. Classification (`tags[]`, `description`, named colors) accretes onto each entry and is
-never clobbered by re-sync. Every verb takes `--catalog-dir DIR` (default: the resolved project's
-catalog dir — the `uedcli.toml` `catalog` key, or `<root>/texture-catalog/`).
+The `texture` verbs carry the same family as `class` — `list`, `show`, `preview`, `search`,
+`classify`, `prewarm` — over every texture on the composed package path (`Engine.Texture` and its
+descendants: `FireTexture`, sprites, and the rest). The tool enumerates, reports the file facts,
+produces the picture, and stores the classification it is handed; it never infers meaning — the one
+exception is colours, pre-filled from the texture's own pixels. Every verb takes `--catalog-dir DIR`
+(default: the resolved project's catalog dir — the `uedcli.toml` `catalog` key, or
+`<root>/texture-catalog/`).
 
 ```bash
-# discover + export packages; build/refresh the per-package manifests
-uedcli texture sync [--package CoreTexMetal] [--force]
+# enumerate every texture, one ref per line (sorted); filter and shape as needed
+uedcli texture list [--package P] [--group G] [--masked]
+                    [--classified | --unclassified] [--json]
 
-# list catalog entries (offline, manifest-only), optionally filtered by state
-uedcli texture list [--package P] [--unclassified | --classified | --stale | --removed]
+# a texture's facts (size, format, group, masked) + content identity + stored classification
+uedcli texture show <Package[.Group].Name>… | -  [--json]
 
-# search refs by text/tag/color (ranked)
-uedcli texture search wall --tag metal --color grey
+# write a texture's mip-0 bitmap as a PNG (native P8/BC1/BC2/BC3 decode, mask NOT applied)
+uedcli texture preview <Package[.Group].Name>… | -  [--out FILE] [--skeleton]
 
-# the tag vocabulary + occurrence counts (curbs drift)
-uedcli texture tags [--package P]
+# RANKED discovery: textures whose name / stored tags / description match the terms, best first
+uedcli texture search <term>… [--tag T] [--color C] [--package P] [--group G] [--masked]
+                      [--classified | --unclassified] [--json]
 
-# classification progress + worklist
-uedcli texture classify status [--full] [--package P]
+# record / inspect what a texture IS — one git-tracked shard per content identity
+uedcli texture classify set <Package[.Group].Name> --tags metal,wall \
+    --description "riveted metal wall panel" [--colors grey] [--force]
+uedcli texture classify set -             # read JSONL rows {ref, tags?, description?, colors?} from stdin
+uedcli texture classify unset <ref>… | - (--tags[=A,B] | --description | --colors | --all)
+uedcli texture classify status [--json]   # how many textures on the path are classified, of the total
+uedcli texture classify tags [--json]     # the tag vocabulary in use, with counts
 
-# record LLM/human classification (replaces the provided fields)
-uedcli texture classify set CoreTexMetal.Area51Wall_A \
-    --tags metal,wall --description "riveted metal wall panel" --colors grey
+# decode every texture ahead of an offline session
+uedcli texture prewarm [--package P]
 ```
 
-Each entry carries: `ref` (the address for `brush poly set --texture`, e.g.
-`CoreTexMetal.Area51Wall_A`), `image_hash` (sha256 of the decoded pixels — tracks identity across
-renames), auto-derived dominant `colors` (overridable), open `tags[]` / `description`, and the
-`stale`/`removed` flags. Manifests live in the tracked `catalog` dir; viewable PNGs land under the
-per-user cache `~/.uedcli/cache/textures/<package>/` (never the in-repo `.uedcli/`).
+- **Identity is the content, not the ref.** A texture's classification is keyed by
+  `sha256(width, height, RGB)` over its mip-0 pixels — so two identically-pixelled textures (even in
+  different packages, or one masked and one not) are one classifiable thing, sharing one shard. A
+  procedural texture (`FireTexture` and friends) has no pixels, so it is keyed by its casefolded
+  `Package.Name` instead. `show` and `list --json` print the identity.
+- **`group` and `masked` are per-ref facts**, read live from the package, not part of identity:
+  `group` is the texture's Outer (e.g. `Ladder`), `masked` its effective `bMasked` flag. Filter on
+  them with `--group`/`--masked`.
+- **`set` refuses over an existing classification** (exit 2); `--force` replaces it wholesale (no tag
+  union, an omitted description is wiped). The stored `ref` is write-once — the first classifier's
+  spelling.
+- **Colours are pre-filled** from a fixed palette by descending share, so `search --color brown`
+  works on a fresh clone before anything is classified; an LLM-supplied `--colors` overrides them.
+- **`preview --skeleton`** emits a ready-to-fill JSONL row per ref (the preview path + pre-filled
+  colours) — pipe it straight into `classify set -`. `list` and `search --json` never render; they
+  report only an already-cached preview (null until the preview cache lands).
+
+The classification shards live under the tracked `catalog` dir (`classified/texture/`).
 
 ---
 

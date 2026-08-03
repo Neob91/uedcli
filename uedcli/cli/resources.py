@@ -71,10 +71,15 @@ def composed_dirs(project) -> list[str]:
             "package paths; create it with a [games.<name>] paths dir list")
     return config.composed_search_dirs(project, user_config)
 
-def texture_resolver(project):
+def texture_resolver(project, class_index=None):
     """A `utexture.TextureResolver` over the project's composed package files, or None when no
     config / no packages (a sprite then can't resolve → its actor degrades to a marker). MOCKABLE
-    seam (tests patch it offline). Tolerant of a broken/absent games config (returns None)."""
+    seam (tests patch it offline). Tolerant of a broken/absent games config (returns None).
+
+    `class_index` WIDENS which exports the resolver treats as textures from the exact `Texture`
+    class to every `Engine.Texture` descendant — the asset catalog passes it (so procedurals and
+    subclasses resolve and enumerate); every other caller (actor/sprite preview) leaves it None and
+    keeps the exact match."""
     try:
         user_config = config.load_user_config()
         if user_config is None:
@@ -84,7 +89,7 @@ def texture_resolver(project):
         return None
     if not files:
         return None
-    return utexture.TextureResolver(files)
+    return utexture.TextureResolver(files, class_index=class_index)
 
 def class_schema(cls: str, project=None) -> dict:
     """{casefold(name): Prop} for `cls`, extracted offline from the real game `.u` (P1). Raises

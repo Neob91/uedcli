@@ -21,6 +21,7 @@ from dataclasses import dataclass, field
 from . import config, schema_cache, uprops
 
 ENGINE_ACTOR = "Engine.Actor"
+ENGINE_TEXTURE = "Engine.Texture"  # the base the texture catalog enumerates descendants of
 CORE_OBJECT = "Core.Object"      # the ultimate UE1 root — the `--all` class-tree root
 
 

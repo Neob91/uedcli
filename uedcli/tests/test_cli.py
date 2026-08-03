@@ -573,15 +573,21 @@ def test_substrate_stub_list_parses():
 
 def test_texture_verb_tree_parses():
     p = build_parser()
-    assert p.parse_args(["texture", "sync", "--package", "P", "--force"]).sub == "sync"
+    a = p.parse_args(["texture", "list", "--package", "P", "--group", "Ladder", "--masked",
+                      "--unclassified", "--json"])
+    assert a.sub == "list" and a.group == "Ladder" and a.masked is True and a.unclassified is True
     a = p.parse_args(["texture", "search", "rusty", "--tag", "metal", "--color", "grey"])
-    assert a.query == "rusty" and a.tag == ["metal"] and a.color == ["grey"]
-    a = p.parse_args(["texture", "search", "--color", "grey"])          # query optional
-    assert a.query is None
-    a = p.parse_args(["texture", "classify", "set", "P.Wall", "--tags", "a,b", "--colors", "grey"])
-    assert a.ref == "P.Wall" and a.tags == ["a", "b"] and a.colors == ["grey"]
-    assert p.parse_args(["texture", "classify", "status", "--full"]).full is True
-    assert p.parse_args(["texture", "list", "--unclassified"]).unclassified is True
+    assert a.terms == ["rusty"] and a.tag == ["metal"] and a.color == ["grey"]
+    a = p.parse_args(["texture", "show", "P.Wall", "--json"])
+    assert a.refs == ["P.Wall"] and a.json is True
+    a = p.parse_args(["texture", "preview", "P.Wall", "--skeleton", "--out", "x.png"])
+    assert a.refs == ["P.Wall"] and a.skeleton is True
+    a = p.parse_args(["texture", "classify", "set", "P.Wall", "--tags", "a,b", "--colors", "grey",
+                      "--force"])
+    assert a.ref == "P.Wall" and a.tags == ["a", "b"] and a.colors == ["grey"] and a.force is True
+    assert p.parse_args(["texture", "classify", "status", "--json"]).csub == "status"
+    assert p.parse_args(["texture", "classify", "tags"]).csub == "tags"
+    assert p.parse_args(["texture", "prewarm", "--package", "P"]).sub == "prewarm"
 
 
 def test_materialize_parses_out():

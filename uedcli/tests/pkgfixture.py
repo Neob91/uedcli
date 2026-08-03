@@ -139,7 +139,8 @@ def texture_package(*, name: str = "Fixture", mips=None, palette=None,
                     fmt: int | None = None, comp_mips=None, comp_format: int = 3,
                     palette_ref: int | None = None, trailing: bytes = b"",
                     declared_mip_count: int | None = None, bmasked: bool | None = None,
-                    version: int = 69, licensee: int = 0) -> bytes:
+                    class_package: str = "Engine", class_name: str = "Texture",
+                    group: str | None = None, version: int = 69, licensee: int = 0) -> bytes:
     """Build a whole synthetic `.utx` carrying one Palette export + one Texture export.
 
     `mips` / `comp_mips` are `[(w, h, data), ...]`; `comp_mips=None` means no `bHasComp`
@@ -149,6 +150,11 @@ def texture_package(*, name: str = "Fixture", mips=None, palette=None,
     overrides the emitted `Palette` object ref (pass an out-of-range export ref
     to reproduce the missing-palette shape). `trailing` is appended after the mip array(s)
     (the `FireTexture` `TArray<FSpark>` shape).
+
+    `class_package`/`class_name` set the texture export's class import — the default
+    `Engine.Texture`, or e.g. `fire`/`FireTexture` for a DESCENDANT the catalog's widened
+    enumerator must still see. `group` gives the texture an Outer named that (the Layer-2
+    group fact); None leaves it a group-less top-level export.
     """
     if mips is None:
         mips = [(2, 2, bytes([0, 1, 2, 3]))]
@@ -159,15 +165,29 @@ def texture_package(*, name: str = "Fixture", mips=None, palette=None,
     # Every name must exist BEFORE the table is encoded, because the mip skip offsets are
     # absolute and `dataoff` depends on the encoded table's length.
     for n in ("Core", "Package", "Class", "Engine", "Texture", "Palette", "None",
-              "Format", "bHasComp", "CompFormat", "bMasked", name, name + "Pal"):
+              "Format", "bHasComp", "CompFormat", "bMasked", class_package, class_name,
+              name, name + "Pal", *([group] if group is not None else [])):
         names.index(n)
 
-    imports = [
-        ImportRec(names.index("Core"), names.index("Package"), 0, names.index("Engine")),
-        ImportRec(names.index("Core"), names.index("Class"), -1, names.index("Texture")),
-        ImportRec(names.index("Core"), names.index("Class"), -1, names.index("Palette")),
-    ]
-    tex_class, pal_class = -2, -3                    # import i (0-based) => -(i + 1)
+    imports = [ImportRec(names.index("Core"), names.index("Package"), 0, names.index("Engine"))]
+    engine_ref = -1                                  # import 0 (0-based) => ref -1
+    if class_package.casefold() == "engine":         # default: the class lives in Engine
+        cls_pkg_ref = engine_ref
+    else:                                            # a subclass package (e.g. fire.FireTexture)
+        imports.append(ImportRec(names.index("Core"), names.index("Package"), 0,
+                                 names.index(class_package)))
+        cls_pkg_ref = -len(imports)
+    imports.append(ImportRec(names.index("Core"), names.index("Class"), cls_pkg_ref,
+                             names.index(class_name)))
+    tex_class = -len(imports)
+    imports.append(ImportRec(names.index("Core"), names.index("Class"), engine_ref,
+                             names.index("Palette")))
+    pal_class = -len(imports)
+    tex_outer = 0
+    if group is not None:                            # the Outer object supplies the group fact
+        imports.append(ImportRec(names.index("Core"), names.index("Package"), 0,
+                                 names.index(group)))
+        tex_outer = -len(imports)
 
     # export 0 => object ref 1 (the palette), export 1 => ref 2 (the texture)
     pal_body = bytearray(_props_end(names))
@@ -199,7 +219,7 @@ def texture_package(*, name: str = "Fixture", mips=None, palette=None,
 
     exports = [
         ExportRec(pal_class, 0, 0, names.index(name + "Pal"), RF_TEXTURE, bytes(pal_body)),
-        ExportRec(tex_class, 0, 0, names.index(name), RF_TEXTURE, bytes(tex_body)),
+        ExportRec(tex_class, 0, tex_outer, names.index(name), RF_TEXTURE, bytes(tex_body)),
     ]
     return build_package(version=version, licensee=licensee, package_flags=0,
                          names=names, imports=imports, exports=exports, guid=FIXTURE_GUID)

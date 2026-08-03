@@ -45,7 +45,7 @@ _ALL_FAMILIES = {
     "cache": ["cache", "clear"],
     "project": ["project", "show"],
     "classes": ["class", "list"],
-    "texture": ["texture", "tags"],
+    "texture": ["texture", "classify", "tags"],
     "substrate": ["substrate", "stub", "--list"],
     "actor": ["actor", "preview"],
     "brush": ["brush", "build", "cube", "--width", "1", "--breadth", "1", "--height", "1"],

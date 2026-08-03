@@ -135,8 +135,8 @@ def _dispatch(args) -> int:
         from .commands import prefab as prefab_cmd
         return prefab_cmd.run(args)
 
-    # --- texture group: substrate utility — pure offline UCC batchexport, no live editor,
-    # no model touch. ---
+    # --- texture group: the offline texture catalog — enumerate/decode/classify over the composed
+    # package path, no live editor, no model touch. ---
     if args.cmd == "texture":
         from .commands import texture as texture_cmd
         return texture_cmd.run(args)

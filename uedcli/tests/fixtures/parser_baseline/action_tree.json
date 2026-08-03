@@ -81,7 +81,7 @@
         "stash": "capture/replay named actor sets (private register); edit a stored one in place with any content verb + --tree stash/<id>",
         "prefab": "the durable shared prefab library (tier 2); edit a stored one in place with any content verb + --tree prefab/<name>",
         "docs": "read uedcli's own user documentation (the CLI reference and the level-design guides) without leaving the terminal",
-        "texture": "offline texture catalog (no level needed)",
+        "texture": "discover, view and classify the substrate's textures (offline; decodes the game's own .utx/.u packages — no editor, no level needed)",
         "substrate": "substrate build utilities (package stubbing)",
         "cache": "manage the per-user derivable caches under ~/.uedcli/cache"
       }
@@ -12693,97 +12693,24 @@
           "help": null,
           "mutex_group": null,
           "subparser_choices": [
-            "sync",
             "list",
+            "show",
+            "preview",
             "search",
-            "tags",
+            "prewarm",
             "classify"
           ],
           "subparser_help": {
-            "sync": "discover substrate packages, export textures, (re)build the per-package manifest",
-            "list": "list catalog entries (offline, manifest-only)",
-            "search": "find texture refs by text/tag/color (ranked)",
-            "tags": "list the tag vocabulary + counts",
-            "classify": "record/inspect texture classification"
+            "list": "enumerate every texture on the composed path (Engine.Texture and its descendants — FireTexture, sprites, …), one ref per line, sorted. Filter with --package/--group/--masked/--classified/--unclassified; --json for a machine row per texture.",
+            "show": "print a texture's Layer-2 facts (size, format, group, masked) + its Layer-1 content identity + any stored classification (tags, description, colors). A procedural texture shows no bitmap size; a bad/undecodable ref exits 2 naming the case.",
+            "preview": "write a texture's mip-0 bitmap as a PNG (native decode: P8/BC1/BC2/BC3 from the game .utx — no editor). The bitmap is the opaque Layer-1 image (mask NOT applied). Prints `<ref><TAB><path>`. A procedural or undecodable ref exits 2 naming the case.",
+            "search": "RANKED discovery over the texture corpus: given one or more terms, print the textures whose name / stored tags / description match, best first (exact Name > exact tag > ref substring > tag substring > description substring; a texture must match EVERY term). Terms are REQUIRED — to enumerate without ranking use `texture list`.",
+            "prewarm": "decode every texture on the path ahead of an offline session, so a later list/show/search/classify starts with the ref→identity map warm. Progress → stderr.",
+            "classify": "record / inspect what a texture IS — the LLM's classification, stored one git-tracked shard per content identity (tags + description + colours). The tool stores it, never infers it (colours are pre-filled from the pixels as the one exception)."
           }
         }
       ],
       "subparsers": {
-        "sync": {
-          "class": "_CoordArgumentParser",
-          "prog": "uedcli texture sync",
-          "mutex_groups": [],
-          "actions": [
-            {
-              "class": "_HelpAction",
-              "option_strings": [
-                "-h",
-                "--help"
-              ],
-              "dest": "help",
-              "nargs": 0,
-              "const": null,
-              "default": {
-                "__suppress__": true
-              },
-              "required": false,
-              "choices": null,
-              "metavar": null,
-              "converter": null,
-              "help": "show this help message and exit",
-              "mutex_group": null
-            },
-            {
-              "class": "_StoreAction",
-              "option_strings": [
-                "--package"
-              ],
-              "dest": "package",
-              "nargs": null,
-              "const": null,
-              "default": null,
-              "required": false,
-              "choices": null,
-              "metavar": null,
-              "converter": null,
-              "help": "sync only this package (bare name); else all packages",
-              "mutex_group": null
-            },
-            {
-              "class": "_StoreTrueAction",
-              "option_strings": [
-                "--force"
-              ],
-              "dest": "force",
-              "nargs": 0,
-              "const": true,
-              "default": false,
-              "required": false,
-              "choices": null,
-              "metavar": null,
-              "converter": null,
-              "help": "re-export even if the package file hash is unchanged",
-              "mutex_group": null
-            },
-            {
-              "class": "_StoreAction",
-              "option_strings": [
-                "--catalog-dir"
-              ],
-              "dest": "catalog_dir",
-              "nargs": null,
-              "const": null,
-              "default": null,
-              "required": false,
-              "choices": null,
-              "metavar": null,
-              "converter": null,
-              "help": "tracked manifest dir (default: the resolved project's catalog dir — the uedcli.toml `catalog` key, or <root>/texture-catalog/)",
-              "mutex_group": null
-            }
-          ],
-          "subparsers": {}
-        },
         "list": {
           "class": "_CoordArgumentParser",
           "prog": "uedcli texture list",
@@ -12791,10 +12718,8 @@
             {
               "required": false,
               "members": [
-                "unclassified",
                 "classified",
-                "stale",
-                "removed"
+                "unclassified"
               ]
             }
           ],
@@ -12831,15 +12756,31 @@
               "choices": null,
               "metavar": null,
               "converter": null,
-              "help": "restrict to one package",
+              "help": "restrict to this package (bare stem)",
+              "mutex_group": null
+            },
+            {
+              "class": "_StoreAction",
+              "option_strings": [
+                "--group"
+              ],
+              "dest": "group",
+              "nargs": null,
+              "const": null,
+              "default": null,
+              "required": false,
+              "choices": null,
+              "metavar": "G",
+              "converter": null,
+              "help": "keep only textures whose group (Outer) is G, e.g. Ladder",
               "mutex_group": null
             },
             {
               "class": "_StoreTrueAction",
               "option_strings": [
-                "--unclassified"
+                "--masked"
               ],
-              "dest": "unclassified",
+              "dest": "masked",
               "nargs": 0,
               "const": true,
               "default": false,
@@ -12847,11 +12788,8 @@
               "choices": null,
               "metavar": null,
               "converter": null,
-              "help": "only entries never classified",
-              "mutex_group": [
-                0,
-                0
-              ]
+              "help": "keep only textures whose effective bMasked flag is true (decodes each to read the flag)",
+              "mutex_group": null
             },
             {
               "class": "_StoreTrueAction",
@@ -12866,7 +12804,26 @@
               "choices": null,
               "metavar": null,
               "converter": null,
-              "help": "only classified entries",
+              "help": "keep only textures whose content identity has a classification shard",
+              "mutex_group": [
+                0,
+                0
+              ]
+            },
+            {
+              "class": "_StoreTrueAction",
+              "option_strings": [
+                "--unclassified"
+              ],
+              "dest": "unclassified",
+              "nargs": 0,
+              "const": true,
+              "default": false,
+              "required": false,
+              "choices": null,
+              "metavar": null,
+              "converter": null,
+              "help": "keep only textures with NO shard yet — the worklist",
               "mutex_group": [
                 0,
                 1
@@ -12875,9 +12832,9 @@
             {
               "class": "_StoreTrueAction",
               "option_strings": [
-                "--stale"
+                "--json"
               ],
-              "dest": "stale",
+              "dest": "json",
               "nargs": 0,
               "const": true,
               "default": false,
@@ -12885,30 +12842,8 @@
               "choices": null,
               "metavar": null,
               "converter": null,
-              "help": "only entries flagged for reclassification",
-              "mutex_group": [
-                0,
-                2
-              ]
-            },
-            {
-              "class": "_StoreTrueAction",
-              "option_strings": [
-                "--removed"
-              ],
-              "dest": "removed",
-              "nargs": 0,
-              "const": true,
-              "default": false,
-              "required": false,
-              "choices": null,
-              "metavar": null,
-              "converter": null,
-              "help": "only entries gone from their package",
-              "mutex_group": [
-                0,
-                3
-              ]
+              "help": "emit one JSON object per texture (JSONL): {ref, identity, classified, group, masked, preview} where preview is a cached path or null (list NEVER renders)",
+              "mutex_group": null
             },
             {
               "class": "_StoreAction",
@@ -12923,15 +12858,15 @@
               "choices": null,
               "metavar": null,
               "converter": null,
-              "help": "tracked manifest dir (default: the resolved project's catalog dir — the uedcli.toml `catalog` key, or <root>/texture-catalog/)",
+              "help": "tracked classification-shard dir (default: the resolved project's catalog dir — the uedcli.toml `catalog` key, or <root>/texture-catalog/)",
               "mutex_group": null
             }
           ],
           "subparsers": {}
         },
-        "search": {
+        "show": {
           "class": "_CoordArgumentParser",
-          "prog": "uedcli texture search",
+          "prog": "uedcli texture show",
           "mutex_groups": [],
           "actions": [
             {
@@ -12956,63 +12891,31 @@
             {
               "class": "_StoreAction",
               "option_strings": [],
-              "dest": "query",
-              "nargs": "?",
+              "dest": "refs",
+              "nargs": "*",
               "const": null,
               "default": null,
               "required": false,
               "choices": null,
-              "metavar": null,
+              "metavar": "Package[.Group].Name",
               "converter": null,
-              "help": "text matched (AND) over name/tags/description; optional if --tag/--color given",
+              "help": "texture ref(s) to describe, or - to read a newline ref list from stdin",
               "mutex_group": null
             },
             {
-              "class": "_AppendAction",
+              "class": "_StoreTrueAction",
               "option_strings": [
-                "--tag"
+                "--json"
               ],
-              "dest": "tag",
-              "nargs": null,
-              "const": null,
-              "default": [],
+              "dest": "json",
+              "nargs": 0,
+              "const": true,
+              "default": false,
               "required": false,
               "choices": null,
               "metavar": null,
               "converter": null,
-              "help": "exact tag filter (repeatable)",
-              "mutex_group": null
-            },
-            {
-              "class": "_AppendAction",
-              "option_strings": [
-                "--color"
-              ],
-              "dest": "color",
-              "nargs": null,
-              "const": null,
-              "default": [],
-              "required": false,
-              "choices": null,
-              "metavar": null,
-              "converter": null,
-              "help": "palette-name color filter (repeatable, OR)",
-              "mutex_group": null
-            },
-            {
-              "class": "_StoreAction",
-              "option_strings": [
-                "--package"
-              ],
-              "dest": "package",
-              "nargs": null,
-              "const": null,
-              "default": null,
-              "required": false,
-              "choices": null,
-              "metavar": null,
-              "converter": null,
-              "help": "restrict to one package",
+              "help": "print one JSON object per ref {ref, width, height, format, group, masked, identity, colors, classification} instead of the text block",
               "mutex_group": null
             },
             {
@@ -13028,15 +12931,303 @@
               "choices": null,
               "metavar": null,
               "converter": null,
-              "help": "tracked manifest dir (default: the resolved project's catalog dir — the uedcli.toml `catalog` key, or <root>/texture-catalog/)",
+              "help": "tracked classification-shard dir (default: the resolved project's catalog dir — the uedcli.toml `catalog` key, or <root>/texture-catalog/)",
               "mutex_group": null
             }
           ],
           "subparsers": {}
         },
-        "tags": {
+        "preview": {
           "class": "_CoordArgumentParser",
-          "prog": "uedcli texture tags",
+          "prog": "uedcli texture preview",
+          "mutex_groups": [],
+          "actions": [
+            {
+              "class": "_HelpAction",
+              "option_strings": [
+                "-h",
+                "--help"
+              ],
+              "dest": "help",
+              "nargs": 0,
+              "const": null,
+              "default": {
+                "__suppress__": true
+              },
+              "required": false,
+              "choices": null,
+              "metavar": null,
+              "converter": null,
+              "help": "show this help message and exit",
+              "mutex_group": null
+            },
+            {
+              "class": "_StoreAction",
+              "option_strings": [],
+              "dest": "refs",
+              "nargs": "*",
+              "const": null,
+              "default": null,
+              "required": false,
+              "choices": null,
+              "metavar": "Package[.Group].Name",
+              "converter": null,
+              "help": "texture ref(s) to render, or - to read a newline ref list from stdin",
+              "mutex_group": null
+            },
+            {
+              "class": "_StoreAction",
+              "option_strings": [
+                "--out"
+              ],
+              "dest": "out",
+              "nargs": null,
+              "const": null,
+              "default": null,
+              "required": false,
+              "choices": null,
+              "metavar": "PATH",
+              "converter": null,
+              "help": "host path to write the PNG to (relative → cwd); the extension is replaced by .png. With no --out a unique temp file is minted. With several refs the LAST written path wins a fixed --out.",
+              "mutex_group": null
+            },
+            {
+              "class": "_StoreTrueAction",
+              "option_strings": [
+                "--skeleton"
+              ],
+              "dest": "skeleton",
+              "nargs": 0,
+              "const": true,
+              "default": false,
+              "required": false,
+              "choices": null,
+              "metavar": null,
+              "converter": null,
+              "help": "stream a ready-to-fill JSONL row per ref {ref, preview, tags:[], description:'', colors:[…]} (colours pre-filled from the pixels) instead of the `<ref><TAB><path>` line — pipe it into `classify set -`",
+              "mutex_group": null
+            },
+            {
+              "class": "_StoreAction",
+              "option_strings": [
+                "--catalog-dir"
+              ],
+              "dest": "catalog_dir",
+              "nargs": null,
+              "const": null,
+              "default": null,
+              "required": false,
+              "choices": null,
+              "metavar": null,
+              "converter": null,
+              "help": "tracked classification-shard dir (default: the resolved project's catalog dir — the uedcli.toml `catalog` key, or <root>/texture-catalog/)",
+              "mutex_group": null
+            }
+          ],
+          "subparsers": {}
+        },
+        "search": {
+          "class": "_CoordArgumentParser",
+          "prog": "uedcli texture search",
+          "mutex_groups": [
+            {
+              "required": false,
+              "members": [
+                "classified",
+                "unclassified"
+              ]
+            }
+          ],
+          "actions": [
+            {
+              "class": "_HelpAction",
+              "option_strings": [
+                "-h",
+                "--help"
+              ],
+              "dest": "help",
+              "nargs": 0,
+              "const": null,
+              "default": {
+                "__suppress__": true
+              },
+              "required": false,
+              "choices": null,
+              "metavar": null,
+              "converter": null,
+              "help": "show this help message and exit",
+              "mutex_group": null
+            },
+            {
+              "class": "_StoreAction",
+              "option_strings": [],
+              "dest": "terms",
+              "nargs": "*",
+              "const": null,
+              "default": null,
+              "required": false,
+              "choices": null,
+              "metavar": "TERM",
+              "converter": null,
+              "help": "one or more search terms (case-insensitive); a texture must match EVERY term. At least one is required (term-less exits 2 → `list`).",
+              "mutex_group": null
+            },
+            {
+              "class": "_AppendAction",
+              "option_strings": [
+                "--tag"
+              ],
+              "dest": "tag",
+              "nargs": null,
+              "const": null,
+              "default": [],
+              "required": false,
+              "choices": null,
+              "metavar": "TAG",
+              "converter": null,
+              "help": "keep only textures carrying this exact stored tag (repeat to AND)",
+              "mutex_group": null
+            },
+            {
+              "class": "_AppendAction",
+              "option_strings": [
+                "--color"
+              ],
+              "dest": "color",
+              "nargs": null,
+              "const": null,
+              "default": [],
+              "required": false,
+              "choices": null,
+              "metavar": "C",
+              "converter": null,
+              "help": "keep only textures whose colours include C — stored colours for a classified texture, else derived live from pixels (repeat to OR). Must be a palette name.",
+              "mutex_group": null
+            },
+            {
+              "class": "_StoreAction",
+              "option_strings": [
+                "--package"
+              ],
+              "dest": "package",
+              "nargs": null,
+              "const": null,
+              "default": null,
+              "required": false,
+              "choices": null,
+              "metavar": null,
+              "converter": null,
+              "help": "restrict to this package (bare stem)",
+              "mutex_group": null
+            },
+            {
+              "class": "_StoreAction",
+              "option_strings": [
+                "--group"
+              ],
+              "dest": "group",
+              "nargs": null,
+              "const": null,
+              "default": null,
+              "required": false,
+              "choices": null,
+              "metavar": "G",
+              "converter": null,
+              "help": "restrict to group G",
+              "mutex_group": null
+            },
+            {
+              "class": "_StoreTrueAction",
+              "option_strings": [
+                "--masked"
+              ],
+              "dest": "masked",
+              "nargs": 0,
+              "const": true,
+              "default": false,
+              "required": false,
+              "choices": null,
+              "metavar": null,
+              "converter": null,
+              "help": "keep only masked textures",
+              "mutex_group": null
+            },
+            {
+              "class": "_StoreTrueAction",
+              "option_strings": [
+                "--classified"
+              ],
+              "dest": "classified",
+              "nargs": 0,
+              "const": true,
+              "default": false,
+              "required": false,
+              "choices": null,
+              "metavar": null,
+              "converter": null,
+              "help": "keep only classified textures",
+              "mutex_group": [
+                0,
+                0
+              ]
+            },
+            {
+              "class": "_StoreTrueAction",
+              "option_strings": [
+                "--unclassified"
+              ],
+              "dest": "unclassified",
+              "nargs": 0,
+              "const": true,
+              "default": false,
+              "required": false,
+              "choices": null,
+              "metavar": null,
+              "converter": null,
+              "help": "keep only unclassified textures",
+              "mutex_group": [
+                0,
+                1
+              ]
+            },
+            {
+              "class": "_StoreTrueAction",
+              "option_strings": [
+                "--json"
+              ],
+              "dest": "json",
+              "nargs": 0,
+              "const": true,
+              "default": false,
+              "required": false,
+              "choices": null,
+              "metavar": null,
+              "converter": null,
+              "help": "emit one JSON object per match (JSONL), best first: {ref, score, classified, tags, description, colors}",
+              "mutex_group": null
+            },
+            {
+              "class": "_StoreAction",
+              "option_strings": [
+                "--catalog-dir"
+              ],
+              "dest": "catalog_dir",
+              "nargs": null,
+              "const": null,
+              "default": null,
+              "required": false,
+              "choices": null,
+              "metavar": null,
+              "converter": null,
+              "help": "tracked classification-shard dir (default: the resolved project's catalog dir — the uedcli.toml `catalog` key, or <root>/texture-catalog/)",
+              "mutex_group": null
+            }
+          ],
+          "subparsers": {}
+        },
+        "prewarm": {
+          "class": "_CoordArgumentParser",
+          "prog": "uedcli texture prewarm",
           "mutex_groups": [],
           "actions": [
             {
@@ -13071,7 +13262,23 @@
               "choices": null,
               "metavar": null,
               "converter": null,
-              "help": "restrict to one package",
+              "help": "warm only this package (bare stem)",
+              "mutex_group": null
+            },
+            {
+              "class": "_StoreTrueAction",
+              "option_strings": [
+                "--force"
+              ],
+              "dest": "force",
+              "nargs": 0,
+              "const": true,
+              "default": false,
+              "required": false,
+              "choices": null,
+              "metavar": null,
+              "converter": null,
+              "help": "re-decode even a texture already warmed this run (reserved; decode is per-invocation today)",
               "mutex_group": null
             },
             {
@@ -13087,7 +13294,7 @@
               "choices": null,
               "metavar": null,
               "converter": null,
-              "help": "tracked manifest dir (default: the resolved project's catalog dir — the uedcli.toml `catalog` key, or <root>/texture-catalog/)",
+              "help": "tracked classification-shard dir (default: the resolved project's catalog dir — the uedcli.toml `catalog` key, or <root>/texture-catalog/)",
               "mutex_group": null
             }
           ],
@@ -13131,91 +13338,20 @@
               "help": null,
               "mutex_group": null,
               "subparser_choices": [
+                "set",
+                "unset",
                 "status",
-                "set"
+                "tags"
               ],
               "subparser_help": {
-                "status": "classified/unclassified/stale/removed counts",
-                "set": "set one texture's classification (replaces given fields)"
+                "set": "record a texture's classification against its content identity. Over an EXISTING shard it REFUSES (exit 2 naming it); --force REPLACES it wholesale (no tag union). The single token - reads JSONL rows {ref, tags?, description?, colors?} from stdin (validate-all-then-write; empty stdin is a clean no-op, exit 0).",
+                "unset": "undo classification on one or more textures (by their content identity). Any of --tags[=A,B] / --description / --colors / --all (combine field clears; --all deletes the whole shard). The single token - reads a newline ref list from stdin (empty stdin is a clean no-op, exit 0).",
+                "status": "classification progress: how many textures on the path have a shard, of the total. --json for a machine object.",
+                "tags": "the tag vocabulary in use across all shards, with occurrence counts (curbs drift). Reads only the shard tree, so --catalog-dir runs it outside a project."
               }
             }
           ],
           "subparsers": {
-            "status": {
-              "class": "_CoordArgumentParser",
-              "prog": "uedcli texture classify status",
-              "mutex_groups": [],
-              "actions": [
-                {
-                  "class": "_HelpAction",
-                  "option_strings": [
-                    "-h",
-                    "--help"
-                  ],
-                  "dest": "help",
-                  "nargs": 0,
-                  "const": null,
-                  "default": {
-                    "__suppress__": true
-                  },
-                  "required": false,
-                  "choices": null,
-                  "metavar": null,
-                  "converter": null,
-                  "help": "show this help message and exit",
-                  "mutex_group": null
-                },
-                {
-                  "class": "_StoreTrueAction",
-                  "option_strings": [
-                    "--full"
-                  ],
-                  "dest": "full",
-                  "nargs": 0,
-                  "const": true,
-                  "default": false,
-                  "required": false,
-                  "choices": null,
-                  "metavar": null,
-                  "converter": null,
-                  "help": "also list the unclassified+stale worklist",
-                  "mutex_group": null
-                },
-                {
-                  "class": "_StoreAction",
-                  "option_strings": [
-                    "--package"
-                  ],
-                  "dest": "package",
-                  "nargs": null,
-                  "const": null,
-                  "default": null,
-                  "required": false,
-                  "choices": null,
-                  "metavar": null,
-                  "converter": null,
-                  "help": "restrict to one package",
-                  "mutex_group": null
-                },
-                {
-                  "class": "_StoreAction",
-                  "option_strings": [
-                    "--catalog-dir"
-                  ],
-                  "dest": "catalog_dir",
-                  "nargs": null,
-                  "const": null,
-                  "default": null,
-                  "required": false,
-                  "choices": null,
-                  "metavar": null,
-                  "converter": null,
-                  "help": "tracked manifest dir (default: the resolved project's catalog dir — the uedcli.toml `catalog` key, or <root>/texture-catalog/)",
-                  "mutex_group": null
-                }
-              ],
-              "subparsers": {}
-            },
             "set": {
               "class": "_CoordArgumentParser",
               "prog": "uedcli texture classify set",
@@ -13244,14 +13380,14 @@
                   "class": "_StoreAction",
                   "option_strings": [],
                   "dest": "ref",
-                  "nargs": null,
+                  "nargs": "?",
                   "const": null,
                   "default": null,
-                  "required": true,
+                  "required": false,
                   "choices": null,
-                  "metavar": null,
+                  "metavar": "Package[.Group].Name",
                   "converter": null,
-                  "help": "texture ref, e.g. DeusExDeco.Wood (3-part on collision)",
+                  "help": "the texture to classify, or - to read JSONL rows from stdin",
                   "mutex_group": null
                 },
                 {
@@ -13265,9 +13401,9 @@
                   "default": null,
                   "required": false,
                   "choices": null,
-                  "metavar": null,
+                  "metavar": "A,B",
                   "converter": "_csv",
-                  "help": "comma list; replaces all tags",
+                  "help": "comma list of tags (strip/lowercase/de-dupe normalized)",
                   "mutex_group": null
                 },
                 {
@@ -13283,7 +13419,7 @@
                   "choices": null,
                   "metavar": null,
                   "converter": null,
-                  "help": "replaces the description",
+                  "help": "prose description",
                   "mutex_group": null
                 },
                 {
@@ -13297,9 +13433,25 @@
                   "default": null,
                   "required": false,
                   "choices": null,
-                  "metavar": null,
+                  "metavar": "A,B",
                   "converter": "_csv",
-                  "help": "comma list of palette names; replaces the colors (sets source=set)",
+                  "help": "comma list of palette colour names, OVERRIDING the pixel pre-fill (unknown names exit 2). Omit to keep the derived colours.",
+                  "mutex_group": null
+                },
+                {
+                  "class": "_StoreTrueAction",
+                  "option_strings": [
+                    "--force"
+                  ],
+                  "dest": "force",
+                  "nargs": 0,
+                  "const": true,
+                  "default": false,
+                  "required": false,
+                  "choices": null,
+                  "metavar": null,
+                  "converter": null,
+                  "help": "replace an existing classification for this identity instead of exiting 2 (wholesale — no tag union; also governs each JSONL row under -)",
                   "mutex_group": null
                 },
                 {
@@ -13315,7 +13467,268 @@
                   "choices": null,
                   "metavar": null,
                   "converter": null,
-                  "help": "tracked manifest dir (default: the resolved project's catalog dir — the uedcli.toml `catalog` key, or <root>/texture-catalog/)",
+                  "help": "tracked classification-shard dir (default: the resolved project's catalog dir — the uedcli.toml `catalog` key, or <root>/texture-catalog/)",
+                  "mutex_group": null
+                }
+              ],
+              "subparsers": {}
+            },
+            "unset": {
+              "class": "_CoordArgumentParser",
+              "prog": "uedcli texture classify unset",
+              "mutex_groups": [
+                {
+                  "required": true,
+                  "members": [
+                    "tags",
+                    "description",
+                    "colors",
+                    "clear_all"
+                  ]
+                }
+              ],
+              "actions": [
+                {
+                  "class": "_HelpAction",
+                  "option_strings": [
+                    "-h",
+                    "--help"
+                  ],
+                  "dest": "help",
+                  "nargs": 0,
+                  "const": null,
+                  "default": {
+                    "__suppress__": true
+                  },
+                  "required": false,
+                  "choices": null,
+                  "metavar": null,
+                  "converter": null,
+                  "help": "show this help message and exit",
+                  "mutex_group": null
+                },
+                {
+                  "class": "_StoreAction",
+                  "option_strings": [],
+                  "dest": "refs",
+                  "nargs": "*",
+                  "const": null,
+                  "default": null,
+                  "required": false,
+                  "choices": null,
+                  "metavar": "Package[.Group].Name",
+                  "converter": null,
+                  "help": "texture(s) to unset, or - to read a newline ref list from stdin",
+                  "mutex_group": null
+                },
+                {
+                  "class": "_StoreAction",
+                  "option_strings": [
+                    "--tags"
+                  ],
+                  "dest": "tags",
+                  "nargs": "?",
+                  "const": [],
+                  "default": null,
+                  "required": false,
+                  "choices": null,
+                  "metavar": "A,B",
+                  "converter": "_csv",
+                  "help": "remove the named tags (comma list); BARE --tags clears the whole field",
+                  "mutex_group": [
+                    0,
+                    0
+                  ]
+                },
+                {
+                  "class": "_StoreTrueAction",
+                  "option_strings": [
+                    "--description"
+                  ],
+                  "dest": "description",
+                  "nargs": 0,
+                  "const": true,
+                  "default": false,
+                  "required": false,
+                  "choices": null,
+                  "metavar": null,
+                  "converter": null,
+                  "help": "clear the description field",
+                  "mutex_group": [
+                    0,
+                    1
+                  ]
+                },
+                {
+                  "class": "_StoreTrueAction",
+                  "option_strings": [
+                    "--colors"
+                  ],
+                  "dest": "colors",
+                  "nargs": 0,
+                  "const": true,
+                  "default": false,
+                  "required": false,
+                  "choices": null,
+                  "metavar": null,
+                  "converter": null,
+                  "help": "clear the colour override (search falls back to live-derive)",
+                  "mutex_group": [
+                    0,
+                    2
+                  ]
+                },
+                {
+                  "class": "_StoreTrueAction",
+                  "option_strings": [
+                    "--all"
+                  ],
+                  "dest": "clear_all",
+                  "nargs": 0,
+                  "const": true,
+                  "default": false,
+                  "required": false,
+                  "choices": null,
+                  "metavar": null,
+                  "converter": null,
+                  "help": "delete the whole shard (the only full clear)",
+                  "mutex_group": [
+                    0,
+                    3
+                  ]
+                },
+                {
+                  "class": "_StoreAction",
+                  "option_strings": [
+                    "--catalog-dir"
+                  ],
+                  "dest": "catalog_dir",
+                  "nargs": null,
+                  "const": null,
+                  "default": null,
+                  "required": false,
+                  "choices": null,
+                  "metavar": null,
+                  "converter": null,
+                  "help": "tracked classification-shard dir (default: the resolved project's catalog dir — the uedcli.toml `catalog` key, or <root>/texture-catalog/)",
+                  "mutex_group": null
+                }
+              ],
+              "subparsers": {}
+            },
+            "status": {
+              "class": "_CoordArgumentParser",
+              "prog": "uedcli texture classify status",
+              "mutex_groups": [],
+              "actions": [
+                {
+                  "class": "_HelpAction",
+                  "option_strings": [
+                    "-h",
+                    "--help"
+                  ],
+                  "dest": "help",
+                  "nargs": 0,
+                  "const": null,
+                  "default": {
+                    "__suppress__": true
+                  },
+                  "required": false,
+                  "choices": null,
+                  "metavar": null,
+                  "converter": null,
+                  "help": "show this help message and exit",
+                  "mutex_group": null
+                },
+                {
+                  "class": "_StoreTrueAction",
+                  "option_strings": [
+                    "--json"
+                  ],
+                  "dest": "json",
+                  "nargs": 0,
+                  "const": true,
+                  "default": false,
+                  "required": false,
+                  "choices": null,
+                  "metavar": null,
+                  "converter": null,
+                  "help": "emit one JSON object instead of a line",
+                  "mutex_group": null
+                },
+                {
+                  "class": "_StoreAction",
+                  "option_strings": [
+                    "--catalog-dir"
+                  ],
+                  "dest": "catalog_dir",
+                  "nargs": null,
+                  "const": null,
+                  "default": null,
+                  "required": false,
+                  "choices": null,
+                  "metavar": null,
+                  "converter": null,
+                  "help": "tracked classification-shard dir (default: the resolved project's catalog dir — the uedcli.toml `catalog` key, or <root>/texture-catalog/)",
+                  "mutex_group": null
+                }
+              ],
+              "subparsers": {}
+            },
+            "tags": {
+              "class": "_CoordArgumentParser",
+              "prog": "uedcli texture classify tags",
+              "mutex_groups": [],
+              "actions": [
+                {
+                  "class": "_HelpAction",
+                  "option_strings": [
+                    "-h",
+                    "--help"
+                  ],
+                  "dest": "help",
+                  "nargs": 0,
+                  "const": null,
+                  "default": {
+                    "__suppress__": true
+                  },
+                  "required": false,
+                  "choices": null,
+                  "metavar": null,
+                  "converter": null,
+                  "help": "show this help message and exit",
+                  "mutex_group": null
+                },
+                {
+                  "class": "_StoreTrueAction",
+                  "option_strings": [
+                    "--json"
+                  ],
+                  "dest": "json",
+                  "nargs": 0,
+                  "const": true,
+                  "default": false,
+                  "required": false,
+                  "choices": null,
+                  "metavar": null,
+                  "converter": null,
+                  "help": "emit one JSON object instead of lines",
+                  "mutex_group": null
+                },
+                {
+                  "class": "_StoreAction",
+                  "option_strings": [
+                    "--catalog-dir"
+                  ],
+                  "dest": "catalog_dir",
+                  "nargs": null,
+                  "const": null,
+                  "default": null,
+                  "required": false,
+                  "choices": null,
+                  "metavar": null,
+                  "converter": null,
+                  "help": "tracked classification-shard dir (default: the resolved project's catalog dir — the uedcli.toml `catalog` key, or <root>/texture-catalog/)",
                   "mutex_group": null
                 }
               ],
