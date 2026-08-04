@@ -20,9 +20,17 @@ game-boot path can't render.
 This blocks the in-game (`--game`) preview via `DeusEx.exe` regardless of FEX/CD/memory. It was never
 seen before because prior spikes wedged on memory first; the game-boot render path is thus unvalidated.
 
-Open questions for whoever picks this up:
-- Why is the `Entry`->`DX.dx` browse rejected pre-`LoadMap` (empty error)? Suspect the game-travel from
-  a stock `GameInfo`/`Engine.Camera` standalone; needs `UGameEngine::Browse` RE (Engine.dll).
-- Would the DeusEx engine (`dx`) + real menu maps (`Entry.dx`, `DX.dx`, `Index.dx`) + DeusEx content
-  boot to the menu, bind `:7777`, then `TravelToLevel(room)` on the link? Heavier — OOM risk on the
-  6 GiB cap; the real menu maps + deps weren't staged in this spike.
+Two fixes tested and disproven (spike follow-up):
+- **Rename room->`DX.dx`** (make the forced-travel target our room): does NOT work. `UGameEngine::Browse`
+  rejects the travel BEFORE `LoadMap` (no `Loading: Package DX` line), so our map is never loaded —
+  content/filename/case is irrelevant. `Browse` disasm (`Engine.dll` @ `0x1038b0fb`): a local map with a
+  level already "up for play" takes the server/network-travel dispatch, not a direct `LoadMap`.
+- **Real DeusEx engine** (`DeusExGameEngine`): needs the full content graph — dies at `InitEngine` with
+  `Can't find file for package 'Effects'` (`DeusExItems`->`Effects.utx`, not staged). Memory still fit
+  (peak 6.08 GiB). And `DX.dx` is then the real menu map, so it can't also be our room.
+
+Open path for whoever picks this up:
+- Either RE `UGameEngine::Browse`/`Init` to make the `Entry`->`DX.dx` travel load a fresh local map (or
+  patch the engine to stay in `Entry`, where the room is already "up for play" with the console), OR
+  stage the full DeusEx content (Textures/Sounds the graph pulls) so the `dx` engine reaches its real
+  menu and `:7777` binds, then `TravelToLevel(room)` on the link. Both are larger than a config tweak.

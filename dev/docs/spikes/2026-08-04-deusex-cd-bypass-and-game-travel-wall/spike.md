@@ -29,6 +29,20 @@ reach the UedPreview `:7777` link, and render `game_preview_here.png`.
   spawn the link, so **`:7777` never binds and no frame renders.** This is a DeusEx boot-sequence quirk,
   not a CD or memory wall; prior spikes never reached it (they wedged on memory first), so the
   `render_frame`/minimal-boot game-boot path was never actually validated end-to-end.
+- **Two follow-up fixes tested and disproven:**
+  - *Rename the room to `DX.dx`* (make the forced-travel target be our room): **does not work.** With
+    `Maps\DX.dx` = our room (byte-identical to the `Entry.dx` that loads fine), the browse still fails
+    with **no `LoadMap: DX.dx` / `Loading: Package DX` line** — `UGameEngine::Browse` rejects the travel
+    *before* loading our map, so the map content is irrelevant. Disassembly of `Browse`
+    (`Engine.dll` @ `0x1038b0fb`) shows a local map with a level already "up for play" takes the
+    server/network-travel dispatch, not a direct `LoadMap`. Not a filename/case/path issue: `DX.dx` is
+    found by the same resolver that found `Entry.dx`.
+  - *Use the real DeusEx engine* (`DeusEx.DeusExGameEngine`, a real `GameInfo`): **needs the full
+    content graph.** Init dies at `StaticLoadClass`/`InitEngine` with `Can't find file for package
+    'Effects'` — `DeusExItems`→`Effects.utx` (a texture package) isn't staged; the real boot pulls the
+    whole DeusEx content tree, and `DX.dx` is then the real menu map (overwriting it with our room
+    defeats the menu boot). Memory still fit (peak 6.08 GiB). Evidence:
+    `evidence/boot-dxengine-effects-missing.log`.
 
 ## The bypass chain (each step pinned by an error the previous one produced)
 

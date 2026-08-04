@@ -1,0 +1,46 @@
+Log: Log file open, 08/04/26 16:44:56
+Init: Name subsystem initialized
+Init: Detected: Microsoft Windows NT 6.2 (Build: 9200)
+Init: Version: 1100
+Init: Compiled: Jan 29 2001 16:45:52
+Init: Command line: -log=boot.log -nosound
+Init: Base directory: Z:\game\System\
+Init: Character set: Unicode
+Log: Bound to Engine.dll
+Log: Bound to Core.dll
+Log: Bound to Window.dll
+Init: Object subsystem initialized
+Log: Cd Path: ..\
+Init: Computer: FBFB0D8C40D9
+Init: User: root
+Init: Memory total: Phys=2097151K Pagef=4193791K Virt=2097024K
+Init: Working set: 2000000 / 2000000
+Init: CPU Speed=1536.015815 MHz
+Init: CPU Page size=4096, Processors=10
+Init: CPU Detected: PentiumPro-class processor (GenuineIntel)
+Init: CPU Features: CMov FPU RDTSC PAE MMX KNI 3DNow!
+Log: Bound to DeusEx.dll
+Log: Bound to Extension.dll
+Log: Bound to ConSys.dll
+Log: Loading: Package DeusEx
+Log: Loading: Package Core
+Log: Loading: Package Engine
+Log: Loading: Package Extension
+Log: Loading: Package DeusExCharacters
+Log: Loading: Package DeusExUI
+Log: Loading: Package DeusExItems
+Warning: Failed to load 'Effects': Can't find file for package 'Effects'
+Warning: Failed to load 'DeusExItems': Can't find file for package 'Effects'
+Warning: Failed to load 'DeusEx': Can't find file for package 'Effects'
+Warning: Failed to load 'Class DeusEx.DeusExGameEngine': Can't find file for package 'Effects'
+Warning: Can't find file for package 'Effects'
+Critical: appError called:
+Critical: Can't find file for package 'Effects'
+Critical: Windows GetLastError: Success. (0)
+Exit: Executing UObject::StaticShutdownAfterError
+Critical: UObject::SafeLoadError
+Critical: UObject::StaticLoadClass
+Critical: InitEngine
+Exit: Exiting.
+Uninitialized: Name subsystem shut down
+Uninitialized: Log file closed, 08/04/26 16:45:52
