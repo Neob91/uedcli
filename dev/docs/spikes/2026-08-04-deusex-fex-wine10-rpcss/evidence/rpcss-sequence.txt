@@ -1,0 +1,101 @@
+004c:trace:ole:DllMain 790B0000, 0x1, 00000000.
+004c:trace:ole:CoInitializeEx 00000000, 0x2
+004c:trace:ole:CoInitializeEx Initializing the COM libraries
+004c:trace:ole:apartment_construct creating new apartment, model 2
+004c:trace:ole:apartment_construct Created apartment on OXID 480000004c
+004c:trace:ole:apartment_get_or_create Created main-threaded apartment with OXID 480000004c
+004c:trace:ole:CoRegisterClassObject {9ba05972-f6a8-11cf-a442-00a0c90a8f39}, 00412018, 0x4, 0x1, 0041201C
+004c:trace:ole:apartment_addref 480000004c: before = 1
+004c:trace:ole:CoMarshalInterface 0024A0C0, {6d5140c1-7436-11ce-8034-00aa006009fa}, 0024A0A0, 0, 00000000,  MSHLFLAGS_TABLESTRONG
+004c:trace:ole:local_server_QueryInterface 0024A0A0, {00000003-0000-0000-c000-000000000046}, 0069F16C
+004c:trace:ole:CoGetStandardMarshal {6d5140c1-7436-11ce-8034-00aa006009fa}, 0024A0A0, 0, 00000000, 1, 0069F16C
+004c:trace:ole:CoMarshalInterface Using standard marshaling
+004c:trace:ole:CoMarshalInterface Calling IMarshal::MarshalInterface
+004c:trace:ole:StdMarshalImpl_MarshalInterface (...,{6d5140c1-7436-11ce-8034-00aa006009fa},...)
+004c:trace:ole:apartment_addref 480000004c: before = 2
+004c:trace:ole:RemUnknown_QueryInterface 0024A120, {00000000-0000-0000-c000-000000000046}, 0069EF88
+004c:trace:ole:RemUnknown_AddRef 0024A120 before: 1
+004c:trace:ole:get_stub_manager_from_object not found, creating new stub manager...
+004c:trace:ole:RemUnknown_AddRef 0024A120 before: 2
+004c:trace:ole:RemUnknown_QueryInterface 0024A120, {00000019-0000-0000-c000-000000000046}, 0024AAD0
+004c:trace:ole:new_stub_manager Created new stub manager (oid=1) at 0024AA68 for object with IUnknown 0024A120
+004c:trace:ole:RemUnknown_Release 0024A120 after: 2
+004c:trace:ole:CoGetPSClsid {00000131-0000-0000-c000-000000000046}, 0069EFE0
+004c:trace:ole:apartment_addref 480000004c: before = 3
+004c:trace:ole:apartment_release 480000004c: after = 3
+004c:trace:ole:create_classes_root_hkey L"\\Registry\\Machine\\Software\\Classes" -> 00000098
+004c:warn:ole:CoGetPSClsid No PSFactoryBuffer object is registered for IID {00000131-0000-0000-c000-000000000046}
+004c:warn:ole:marshal_object couldn't get IPSFactory buffer for interface {00000131-0000-0000-c000-000000000046}
+004c:trace:ole:stub_manager_int_release after 1
+004c:trace:ole:stub_manager_ext_release removed 0 refs from 0024AA68 (oid 1), rc is now 0
+004c:trace:ole:stub_manager_int_release after 0
+004c:trace:ole:stub_manager_delete destroying 0024AA68 (oid=1)
+004c:trace:ole:RemUnknown_Release 0024A120 after: 1
+004c:trace:ole:RemUnknown_Release 0024A120 after: 0
+004c:trace:ole:local_server_QueryInterface 0024A0A0, {00000000-0000-0000-c000-000000000046}, 0069EFF4
+004c:trace:ole:local_server_AddRef 0024A0A0, refcount 2
+004c:trace:ole:get_stub_manager_from_object not found, creating new stub manager...
+004c:trace:ole:local_server_AddRef 0024A0A0, refcount 3
+004c:trace:ole:local_server_QueryInterface 0024A0A0, {00000019-0000-0000-c000-000000000046}, 0024AAD0
+004c:trace:ole:new_stub_manager Created new stub manager (oid=2) at 0024AA68 for object with IUnknown 0024A0A0
+004c:trace:ole:local_server_Release 0024A0A0, refcount 2
+004c:trace:ole:CoGetPSClsid {6d5140c1-7436-11ce-8034-00aa006009fa}, 0069F04C
+004c:trace:ole:apartment_addref 480000004c: before = 3
+004c:trace:ole:apartment_release 480000004c: after = 3
+004c:warn:ole:CoGetPSClsid No PSFactoryBuffer object is registered for IID {6d5140c1-7436-11ce-8034-00aa006009fa}
+004c:warn:ole:marshal_object couldn't get IPSFactory buffer for interface {6d5140c1-7436-11ce-8034-00aa006009fa}
+004c:trace:ole:stub_manager_int_release after 1
+004c:trace:ole:stub_manager_ext_release removed 0 refs from 0024AA68 (oid 2), rc is now 0
+004c:trace:ole:stub_manager_int_release after 0
+004c:trace:ole:stub_manager_delete destroying 0024AA68 (oid=2)
+004c:trace:ole:local_server_Release 0024A0A0, refcount 1
+004c:trace:ole:apartment_release 480000004c: after = 2
+004c:err:ole:StdMarshalImpl_MarshalInterface Failed to create ifstub, hr 0x80004002
+004c:err:ole:CoMarshalInterface Failed to marshal the interface {6d5140c1-7436-11ce-8034-00aa006009fa}, hr 0x80004002
+004c:trace:ole:CoMarshalInterface completed with hr 0x80004002
+004c:err:ole:apartment_get_local_server_stream Failed: 0x80004002
+004c:trace:ole:apartment_release 480000004c: after = 1
+0054:trace:ole:DllMain 78F50000, 0x1, 00000000
+0054:trace:ole:DllMain 790B0000, 0x1, 00000000.
+0054:trace:ole:CoInitializeEx 00000000, 0x2
+0054:trace:ole:CoInitializeEx Initializing the COM libraries
+0054:trace:ole:apartment_construct creating new apartment, model 2
+0054:trace:ole:apartment_construct Created apartment on OXID 5000000054
+0054:trace:ole:apartment_get_or_create Created main-threaded apartment with OXID 5000000054
+002c:err:winediag:nodrv_CreateWindow Application tried to create a window, but no driver could be loaded.
+002c:err:winediag:nodrv_CreateWindow L"Make sure that your display server is running and that its variables are set."
+0054:err:winediag:nodrv_CreateWindow Application tried to create a window, but no driver could be loaded.
+0054:err:winediag:nodrv_CreateWindow L"Make sure that your display server is running and that its variables are set."
+0054:err:ole:apartment_createwindowifneeded CreateWindow failed with error 1400
+0054:trace:ole:CoRegisterClassObject {9ba05972-f6a8-11cf-a442-00a0c90a8f39}, 00412018, 0x4, 0x1, 0041201C
+0054:trace:ole:apartment_addref 5000000054: before = 1
+0054:trace:ole:CoMarshalInterface 002468A0, {6d5140c1-7436-11ce-8034-00aa006009fa}, 002466A0, 0, 00000000,  MSHLFLAGS_TABLESTRONG
+0054:trace:ole:local_server_QueryInterface 002466A0, {00000003-0000-0000-c000-000000000046}, 0069F16C
+0054:trace:ole:CoGetStandardMarshal {6d5140c1-7436-11ce-8034-00aa006009fa}, 002466A0, 0, 00000000, 1, 0069F16C
+0054:trace:ole:CoMarshalInterface Using standard marshaling
+0054:trace:ole:CoMarshalInterface Calling IMarshal::MarshalInterface
+0054:trace:ole:StdMarshalImpl_MarshalInterface (...,{6d5140c1-7436-11ce-8034-00aa006009fa},...)
+0054:trace:ole:apartment_addref 5000000054: before = 2
+0054:err:ole:apartment_createwindowifneeded CreateWindow failed with error 1400
+0054:trace:ole:RemUnknown_Release 00246900 after: 0
+0054:err:ole:apartment_createwindowifneeded CreateWindow failed with error 1400
+0054:trace:ole:apartment_release 5000000054: after = 2
+0054:err:ole:StdMarshalImpl_MarshalInterface Failed to create ifstub, hr 0x80070578
+0054:err:ole:CoMarshalInterface Failed to marshal the interface {6d5140c1-7436-11ce-8034-00aa006009fa}, hr 0x80070578
+0054:trace:ole:CoMarshalInterface completed with hr 0x80070578
+0054:err:ole:apartment_get_local_server_stream Failed: 0x80070578
+0054:trace:ole:apartment_release 5000000054: after = 1
+0054:trace:ole:DllMain 790B0000, 0, 00000001.
+0054:trace:ole:DllMain 78F50000, 0, 00000001
+0054:trace:ole:NdrCorrelationInitialize (0069E918, 0069E41C, 1024, 0x0)
+0054:trace:ole:NdrBaseTypeBufferSize pStubMsg 0069E918, pMemory 0069F02C, type 0x08
+0054:trace:ole:start_rpcss 
+0054:trace:ole:NdrCorrelationInitialize (0069E828, 0069E32C, 1024, 0x0)
+0054:trace:ole:NdrPointerBufferSize (0069E828,00000000,7B21377C)
+0054:trace:ole:PointerBufferSize (0069E828,00000000,7B21377C)
+0054:trace:ole:PointerBufferSize type=0x12, attr= FC_SIMPLE_POINTER
+0054:trace:ole:NdrPointerBufferSize (0069E828,00000000,7B213780)
+0054:trace:ole:PointerBufferSize (0069E828,00000000,7B213780)
+0054:trace:ole:PointerBufferSize type=0x12, attr= FC_SIMPLE_POINTER
+0054:trace:ole:NdrBaseTypeBufferSize pStubMsg 0069E828, pMemory 0069EF40, type 0x08
+0054:trace:ole:NdrPointerMarshall (0069E828,00000000,7B21377C)

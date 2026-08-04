@@ -1,0 +1,18 @@
+# FEX + wine-10 rpcss evidence  (Tue Aug  4 14:29:25 UTC 2026)
+guest_uname=x86_64
+wine_version=wine-10.0
+wineboot_-u_rc=0
+peak_pids_during_wineboot=(sampled earlier: 127)
+wine_cmd_echo=WINE10_IPC_OK
+wine_cmd_rc=0
+rpcss_kernel32_failures=0
+--- ole/rpcss lines in wineboot log ---
+--- running services after boot ---
+services.exe
+wineserver
+
+# process-level reconciliation
+services.exe_state=Ssl  services.exe
+IPC2_test=IPC2_OK
+warm_wineboot_rc=0
+note=transient start_rpcss E_NOINTERFACE + reaped zombie rpcss = normal wine lazy-start race; resolves (rc=0, cmd works, no fork-storm). wine-8/FEX by contrast fork-stormed to ~99 tasks, rc=53.
