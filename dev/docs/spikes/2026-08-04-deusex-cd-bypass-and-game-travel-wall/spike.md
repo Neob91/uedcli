@@ -25,9 +25,15 @@ raw access violation, no message) while a **real** DeusEx map (`Entry.dx`) loads
 aren't DeusEx-engine-native (need a real DeusEx-editor build + real textures, not uedcli `Amark`);
 (2) with `Class=DeusEx.JCDentonMale` the travel spawns JCDenton's inventory, and SoftDrv crashes
 rendering `FireTexture Effects.Electricity.Nano_SFX` on `LodMesh DeusExItems.LaserBeam`
-(`TravelPostAccept` → `SpawnPlayActor`, `evidence/travel-firetexture-crash-stack.png`) — travelling as
-`Class=Engine.Camera` should avoid this. Both are compounded by the ~98% memory cap. So the menu frame
-renders; the room frame needs a DeusEx-native map and a camera-class travel.
+(`TravelPostAccept` → `SpawnPlayActor`, `evidence/travel-firetexture-crash-stack.png`). Setting
+`[DefaultPlayer] Class=Engine.Camera` does **not** help — `DeusExGameInfo` forces `JCDentonMale`
+regardless (`Possessed PlayerPawn: JCDentonMale`). In the menu the same FireTexture error is caught by
+the guarded render loop and recovered; during a travel it fires in an unguarded `ProcessEvent` path and
+is fatal. So under the DeusEx engine the **menu is the only stable render state**; rendering our
+textured room needs a DeusEx-editor-native map AND a way past the JCDenton FireTexture crash (a game
+whose `GameInfo` allows a spectator, or a renderer that survives `Effects.Electricity.Nano_SFX`).
+Note the stock engine loads our room fine but is blocked by the Entry→DX travel (binary patch,
+permission-denied) — so neither engine currently renders our own room.
 
 ## (Prior finding, superseded by the above for the dx engine) — both named walls cleared; DeusEx's own Entry→DX boot travel blocks `:7777` under the STOCK engine.
 
