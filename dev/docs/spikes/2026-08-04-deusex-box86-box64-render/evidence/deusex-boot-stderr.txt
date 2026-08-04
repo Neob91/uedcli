@@ -1,0 +1,25 @@
+[BOX32] Error initializing native libdbus-1.so.3 (last dlerror is libdbus-1.so.3: cannot open shared object file: No such file or directory)
+[BOX32] Error: Symbol __openat64_2 not found, cannot apply R_386_JMP_SLOT 0x401f6960 (0xe306) in /lib/i386-linux-gnu/libsystemd.so.0
+[BOX32] Error: relocating Plt symbols in elf libsystemd.so.0
+[BOX32] Error initializing native libSDL2-2.0.so.0 (last dlerror is libSDL2-2.0.so.0: cannot open shared object file: No such file or directory)
+[BOX32] Error initializing native libasound.so.2 (last dlerror is libasound.so.2: cannot open shared object file: No such file or directory)
+[BOX32] Error initializing native libXss.so.1 (last dlerror is libXss.so.1: cannot open shared object file: No such file or directory)
+[BOX32] Error initializing native libgbm.so.1 (last dlerror is libgbm.so.1: cannot open shared object file: No such file or directory)
+[BOX32] Error: Symbol drmGetDevice2 not found, cannot apply R_386_JMP_SLOT 0x405ed080 (0x2236) in /lib/i386-linux-gnu/libgbm.so.1
+[BOX32] Error: Symbol drmFreeDevice not found, cannot apply R_386_JMP_SLOT 0x405ed0f8 (0x2416) in /lib/i386-linux-gnu/libgbm.so.1
+[BOX32] Error: relocating Plt symbols in elf libgbm.so.1
+[BOX32] Error initializing native libdbus-1.so.3 (last dlerror is libdbus-1.so.3: cannot open shared object file: No such file or directory)
+[BOX32] Error: Symbol __openat64_2 not found, cannot apply R_386_JMP_SLOT 0x4084c960 (0xe306) in /lib/i386-linux-gnu/libsystemd.so.0
+[BOX32] Error: relocating Plt symbols in elf libsystemd.so.0
+[BOX32] Error initializing native libvorbis.so.0 (last dlerror is libvorbis.so: cannot open shared object file: No such file or directory)
+[BOX32] Error initializing native libogg.so.0 (last dlerror is libogg.so: cannot open shared object file: No such file or directory)
+[BOX32] Error: Global Symbol versionsort64 not found, cannot apply R_386_GLOB_DAT @0x40405fd0 ((nil)) in /lib/i386-linux-gnu/libasound.so.2
+[BOX32] Error: Symbol if_nameindex not found, cannot apply R_386_JMP_SLOT 0x400ce01c (0x10a6) in /usr/lib/i386-linux-gnu/wine/i386-unix/nsiproxy.so
+[BOX32] Error: Symbol if_freenameindex not found, cannot apply R_386_JMP_SLOT 0x400ce084 (0x1246) in /usr/lib/i386-linux-gnu/wine/i386-unix/nsiproxy.so
+[BOX32] Error: relocating Plt symbols in elf nsiproxy.so
+[BOX32] Error initializing native libcups.so.2 (last dlerror is libcups.so: cannot open shared object file: No such file or directory)
+[BOX32] Error initializing native libdbus-1.so.3 (last dlerror is libdbus-1.so.3: cannot open shared object file: No such file or directory)
+[BOX32] Error: Symbol __openat64_2 not found, cannot apply R_386_JMP_SLOT 0x4053c960 (0xe306) in /lib/i386-linux-gnu/libsystemd.so.0
+[BOX32] Error: relocating Plt symbols in elf libsystemd.so.0
+[BOX32] Error: Symbol res_nsearch not found, cannot apply R_386_JMP_SLOT 0x408773d8 (0x12f96) in /lib/i386-linux-gnu/libkrb5.so.3
+[BOX32] Error: relocating Plt symbols in elf libkrb5.so.3

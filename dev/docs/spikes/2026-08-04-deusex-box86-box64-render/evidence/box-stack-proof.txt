@@ -1,0 +1,12 @@
+# box64 --version:
+Box64 arm64 v0.4.5 5656dec with Dynarec built on Aug  4 2026 11:50:49
+# box64 ELF machine:
+AArch64 
+# box64 runs x86_64 (dynamic):
+HELLO from x86 under box, sizeof(long)=8
+# box32 runs i386 (dynamic):
+HELLO from x86 under box, sizeof(long)=4
+# box64 runs x86 wine loader:
+wine-8.0 (Debian 8.0~repack-4)
+# box64 wine cmd /c echo (wineserver IPC roundtrip):
+BOX64_WINE_IPC_OK

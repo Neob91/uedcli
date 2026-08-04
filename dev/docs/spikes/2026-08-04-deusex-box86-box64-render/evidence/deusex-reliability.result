@@ -1,0 +1,4 @@
+trial=1 maxlog=0 bound=0 proc_alive_at_end=1 t~80s
+trial=2 maxlog=0 bound=0 proc_alive_at_end=1 t~80s
+trial=3 maxlog=0 bound=0 proc_alive_at_end=1 t~80s
+RELIAB-DONE
