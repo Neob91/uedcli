@@ -35,6 +35,34 @@ whose `GameInfo` allows a spectator, or a renderer that survives `Effects.Electr
 Note the stock engine loads our room fine but is blocked by the Entry→DX travel (binary patch,
 permission-denied) — so neither engine currently renders our own room.
 
+## Follow-up: can the dx engine travel to ANY preview level? No — the travel-load wall
+
+After the menu binds `:7777`, `TravelToLevel <map>` over the link crashes for every fresh target,
+each differently, while only the pre-cached intro `Entry.dx` survives PostLoad:
+
+| Travel target                     | Result |
+|-----------------------------------|--------|
+| our synthetic `room.dx`           | `ULevel::PostLoad` access violation (no message) |
+| tiny **native** `DXOnly.dx` (has `DeusExLevelInfo`, deps already menu-loaded) | **also** `ULevel::PostLoad` — so it's not the LevelInfo class, and not new-content volume |
+| real mission `08_NYC_Bar.dx` (pulls NewYorkCity/UNATCO/FreeClinic/…) | `Assertion GObjAvailable … StaticAllocateObject (Class PathNode)` — object-alloc exhaustion |
+| `Entry.dx` (intro, content pre-cached from boot) | PostLoad OK ("up for play"), then the JCDenton FireTexture render crash |
+
+At the menu, `memory.stat` is **anon 822 MiB / file 4983 MiB, oom_kill=0** — so it is **not** the cgroup
+OOM-killer. It's process-internal allocation failure: the 32-bit `DeusEx.exe` sits near its ~2 GiB
+virtual address space (banner `Virt=2097024K`) after mmapping the ~25 menu packages + wine DLLs under
+FEX, so a travel's load/`StaticAllocateObject` fails and corrupts the object system. `Entry.dx` escapes
+only because its content is already resident. Evidence: `evidence/boot-dxengine-travel-crashes.log`.
+(The 2026-08-03 recipe rendered a room under **qemu** with **minimal** content staged and game **v68**
+— our `dxreal` reports **v1.112fm** in-game and ignores `LocalMap=room.dx` at boot, always going
+Entry→DX; harness `harness/recipe_ini.py`/`fex_recipe.sh` reproduce the recipe config faithfully and
+still land in the menu.)
+
+**Net:** under FEX+wine-10 the dx engine binds `:7777` and renders the **menu** (delivered frame), but
+cannot travel to any preview level here — travel-load hits the 32-bit address-space / 6 GiB-cap wall.
+Rendering **our** textured room needs the stock engine (loads our room fine) past its Entry→DX travel
+(the permission-denied binary patch), or a from-scratch DeusEx-native room built so it loads without a
+fresh content pull — neither reachable in this session without the patch grant or a much larger build.
+
 ## (Prior finding, superseded by the above for the dx engine) — both named walls cleared; DeusEx's own Entry→DX boot travel blocks `:7777` under the STOCK engine.
 
 - **CD check (Wall 1): cracked and bypassed.** The retail `DeusEx.exe` (engine v1100, Jan 2001 build —
