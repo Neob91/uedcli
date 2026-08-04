@@ -5,7 +5,31 @@ FEX+wine-10 to the engine banner, then blocked on the retail **CD check** (minim
 memory cap** (full set). Bypass the CD check on a right-sized package set, hold memory under the cap,
 reach the UedPreview `:7777` link, and render `game_preview_here.png`.
 
-## TL;DR — both named walls cleared; a third wall (DeusEx's own Entry→DX boot travel) blocks `:7777`. No frame — not faked.
+## TL;DR — a real DeusEx frame RENDERS under FEX+wine-10 (no patch). Both named walls cleared; the room-specific in-game preview is still blocked (map + FireTexture).
+
+**Real frame captured — `evidence/game_preview_deusex_menu.png`** (deterministic, md5 `4fe486ca`, 3/3
+identical grabs): the Deus Ex main-menu 3D logo (wing + Earth globe), SoftDrv-rendered by retail
+`DeusEx.exe` (game **v1.112fm**) booting its **real menu** under FEX+wine-10, with the
+`UedPreview.UedPreviewConsole` link bound on `:7777`. Route (matches the 2026-08-03 recipe, no binary
+patch): stage the **full** DeusEx content graph (System + Textures + Sounds + Music + real `Entry.dx`/
+`DX.dx` menu maps), `ENGINE=dx` (`DeusExGameEngine`), `CacheSizeMegs=4`, `-nosound`; the forced
+`Entry`→`DX` travel now **succeeds** into the real menu (both levels "up for play"), the console spawns
+`UedPreviewLink: listening on 7777`, `GetCurrentLevelName`/`Clean generic` work, and `import` X-grabs
+the SoftDrv viewport. Peak `memory.current` **~6.10 GiB / 6.144 GiB cap, oom_kill=0**. The
+`Anomalous singularity`/FireTexture render warnings are non-fatal for the menu.
+
+**Still blocked: travelling to OUR textured preview room.** `TravelToLevel room.dx` over the link is a
+real `ClientTravel` that *does* `LoadMap` our map (unlike the startup browse) but then dies two ways:
+(1) our uedcli/editor-built maps crash the DeusEx engine in `ULevel::PostLoad` (`(Level room.MyLevel)`,
+raw access violation, no message) while a **real** DeusEx map (`Entry.dx`) loads fine — so our maps
+aren't DeusEx-engine-native (need a real DeusEx-editor build + real textures, not uedcli `Amark`);
+(2) with `Class=DeusEx.JCDentonMale` the travel spawns JCDenton's inventory, and SoftDrv crashes
+rendering `FireTexture Effects.Electricity.Nano_SFX` on `LodMesh DeusExItems.LaserBeam`
+(`TravelPostAccept` → `SpawnPlayActor`, `evidence/travel-firetexture-crash-stack.png`) — travelling as
+`Class=Engine.Camera` should avoid this. Both are compounded by the ~98% memory cap. So the menu frame
+renders; the room frame needs a DeusEx-native map and a camera-class travel.
+
+## (Prior finding, superseded by the above for the dx engine) — both named walls cleared; DeusEx's own Entry→DX boot travel blocks `:7777` under the STOCK engine.
 
 - **CD check (Wall 1): cracked and bypassed.** The retail `DeusEx.exe` (engine v1100, Jan 2001 build —
   **not** GOG/no-CD; `dxreal` is retail) CD check is a single `GFileManager->FileSize` probe for

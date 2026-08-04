@@ -16,7 +16,7 @@ for l in lines:
     if s.startswith("[") and s.endswith("]"): section=s.lower(); out.append(l); continue
     k=l.split("=",1)[0].strip().lower()
     if k=="paths":
-        if not saw_paths: out+=["Paths=../System/*.u","Paths=../Maps/*.dx","Paths=../Textures/*.utx"]; saw_paths=True
+        if not saw_paths: out+=["Paths=../System/*.u","Paths=../Maps/*.dx","Paths=../Textures/*.utx","Paths=../Sounds/*.uax","Paths=../Music/*.umx"]; saw_paths=True
         continue
     if k=="firstrun": out.append(firstrun_val); continue
     if section=="[engine.engine]" and k in eng_fix:
