@@ -1,0 +1,51 @@
+=== DeusEx.exe retail v1100 CD-check (imgbase 0x10900000) ===
+Marker string @0x1092d5d0: 'Textures\\Palettes.utx'
+GIsEditor flag ptr @0x10957c04 (nonzero => CD check skipped)
+
+Retry target 0x1090ba39: cmp [GIsEditor],0; jne skip. Else build
+path CdPath+'Textures\\Palettes.utx', GFileManager->FileSize (vtbl+8);
+if size>0 -> continue (jg 0x1090baf3), else MessageBox InsertCd + loop.
+
+0x1090ba39  mov     ecx, dword ptr [0x10957c04]
+0x1090ba3f  cmp     dword ptr [ecx], 0
+0x1090ba42  jne     0x1090baf3
+0x1090ba48  lea     ecx, [ebp - 0x35c]
+0x1090ba4e  call    dword ptr [0x10957bdc]
+0x1090ba54  mov     dword ptr [ebp - 0x6dc], eax
+0x1090ba5a  mov     edx, dword ptr [ebp - 0x6dc]
+0x1090ba60  push    edx
+0x1090ba61  mov     eax, dword ptr [0x10957c54]
+0x1090ba66  mov     ecx, dword ptr [eax]
+0x1090ba68  mov     edx, dword ptr [0x10957c54]
+0x1090ba6e  mov     eax, dword ptr [edx]
+0x1090ba70  mov     edx, dword ptr [eax]
+0x1090ba72  call    dword ptr [edx + 8]
+0x1090ba75  mov     dword ptr [ebp - 0x6e0], eax
+0x1090ba7b  cmp     dword ptr [ebp - 0x6e0], 0
+0x1090ba82  jg      0x1090baf3
+0x1090ba84  push    0
+0x1090ba86  push    0x1092ce28 ; 'Window'
+0x1090ba8b  push    0x1092d5c0 ; '湉敳瑲摃楔汴e'
+0x1090ba90  call    dword ptr [0x10957b60]
+0x1090ba96  add     esp, 0xc
+0x1090ba99  mov     dword ptr [ebp - 0x6e4], eax
+0x1090ba9f  push    0
+0x1090baa1  push    0x1092ce28 ; 'Window'
+0x1090baa6  push    0x1092d5b0 ; '湉敳瑲摃敔瑸'
+0x1090baab  call    dword ptr [0x10957b60]
+0x1090bab1  add     esp, 0xc
+0x1090bab4  mov     dword ptr [ebp - 0x6e8], eax
+0x1090baba  push    0x52001
+0x1090babf  mov     eax, dword ptr [ebp - 0x6e4]
+0x1090bac5  push    eax
+0x1090bac6  mov     ecx, dword ptr [ebp - 0x6e8]
+0x1090bacc  push    ecx
+0x1090bacd  push    0
+0x1090bacf  call    dword ptr [0x10957fc0]
+0x1090bad5  cmp     eax, 2
+0x1090bad8  jne     0x1090baee
+0x1090bada  mov     edx, dword ptr [0x10957c34]
+0x1090bae0  mov     dword ptr [edx], 1
+0x1090bae6  push    0
+0x1090bae8  call    dword ptr [0x10957dbc]
+0x1090baee  jmp     0x1090ba39

@@ -1,0 +1,53 @@
+Log: Log file open, 08/04/26 16:25:16
+Init: Name subsystem initialized
+Init: Detected: Microsoft Windows NT 6.2 (Build: 9200)
+Init: Version: 1100
+Init: Compiled: Jan 29 2001 16:45:52
+Init: Command line: room.dx -log=boot.log -nosound
+Init: Base directory: Z:\game\System\
+Init: Character set: Unicode
+Log: Bound to Engine.dll
+Log: Bound to Core.dll
+Log: Bound to Window.dll
+Init: Object subsystem initialized
+Log: Cd Path: ..\
+Init: Computer: F729A3860C32
+Init: User: root
+Init: Memory total: Phys=2097151K Pagef=4193791K Virt=2097024K
+Init: Working set: 2000000 / 2000000
+Init: CPU Speed=1536.004266 MHz
+Init: CPU Page size=4096, Processors=10
+Init: CPU Detected: PentiumPro-class processor (GenuineIntel)
+Init: CPU Features: CMov FPU RDTSC PAE MMX KNI 3DNow!
+Log: Loading: Package Engine
+Log: Loading: Package Core
+Init: Unreal engine initialized
+Log: Bound to WinDrv.dll
+Init: Mouse info: 6 10 1
+Init: Initializing DirectDraw
+Log: DirectDraw drivers:
+Log:    display (DirectDraw HAL)
+Init: DirectDraw initialized successfully
+Init: Client initialized
+Log: Bound to Render.dll
+Init: Lighting subsystem initialized
+Init: Rendering initialized
+Log: LoadMap: entry.dx
+Log: Loading: Package Entry
+Log: Loading: Package Amark
+Log: Game class is 'GameInfo'
+Log: Bringing Level Entry.MyLevel up for play (0)...
+ScriptLog: InitGame: 
+ScriptLog: Base Mutator is Entry.Mutator0
+Log: Browse: DX.dx?Name=Player?Class=Engine.Camera
+Critical: appError called:
+Critical: Failed to enter DX.dx: 
+Critical: Windows GetLastError: Success. (0)
+Exit: Executing UObject::StaticShutdownAfterError
+Exit: Executing UWindowsClient::ShutdownAfterError
+Log: DirectDraw End Mode
+Critical: UGameEngine::Init
+Critical: InitEngine
+Exit: Exiting.
+Uninitialized: Name subsystem shut down
+Uninitialized: Log file closed, 08/04/26 16:26:42

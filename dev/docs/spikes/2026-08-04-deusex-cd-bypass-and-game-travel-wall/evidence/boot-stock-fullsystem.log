@@ -1,0 +1,55 @@
+ini: GameEngine=Engine.GameEngine DefaultGame=Engine.GameInfo Class=Engine.Camera cache=4 root=(none)
+[fex] launch DeusEx.exe ENGINE=stock CACHE=4
+[t=0s] mem=5206MiB peak=5206MiB loglines=0 oom_kill=0
+[t=4s] mem=5870MiB peak=5870MiB loglines=21 oom_kill=0
+[t=8s] mem=5860MiB peak=5870MiB loglines=21 oom_kill=0
+[t=12s] mem=5860MiB peak=5870MiB loglines=21 oom_kill=0
+[t=16s] mem=5860MiB peak=5870MiB loglines=21 oom_kill=0
+[t=20s] mem=5861MiB peak=5870MiB loglines=21 oom_kill=0
+[t=24s] mem=5860MiB peak=5870MiB loglines=21 oom_kill=0
+[t=28s] mem=5859MiB peak=5870MiB loglines=21 oom_kill=0
+[t=32s] mem=5861MiB peak=5870MiB loglines=21 oom_kill=0
+[t=36s] mem=5862MiB peak=5870MiB loglines=21 oom_kill=0
+[t=40s] mem=5862MiB peak=5870MiB loglines=21 oom_kill=0
+[t=44s] mem=5862MiB peak=5870MiB loglines=21 oom_kill=0
+[t=48s] mem=5861MiB peak=5870MiB loglines=21 oom_kill=0
+[t=52s] mem=5862MiB peak=5870MiB loglines=21 oom_kill=0
+[t=56s] mem=5861MiB peak=5870MiB loglines=21 oom_kill=0
+[t=60s] mem=5862MiB peak=5870MiB loglines=21 oom_kill=0
+[t=64s] mem=5862MiB peak=5870MiB loglines=21 oom_kill=0
+[t=68s] mem=5861MiB peak=5870MiB loglines=21 oom_kill=0
+[t=72s] mem=5862MiB peak=5870MiB loglines=21 oom_kill=0
+[t=76s] mem=5861MiB peak=5870MiB loglines=21 oom_kill=0
+[t=80s] mem=5862MiB peak=5870MiB loglines=21 oom_kill=0
+[t=84s] mem=5862MiB peak=5870MiB loglines=21 oom_kill=0
+[t=88s] mem=5861MiB peak=5870MiB loglines=21 oom_kill=0
+[t=92s] mem=5862MiB peak=5870MiB loglines=21 oom_kill=0
+[t=96s] mem=5861MiB peak=5870MiB loglines=21 oom_kill=0
+[t=100s] mem=5862MiB peak=5870MiB loglines=21 oom_kill=0
+[t=104s] mem=5862MiB peak=5870MiB loglines=21 oom_kill=0
+[t=108s] mem=5861MiB peak=5870MiB loglines=21 oom_kill=0
+[t=112s] mem=5861MiB peak=5870MiB loglines=21 oom_kill=0
+[t=116s] mem=5861MiB peak=5870MiB loglines=21 oom_kill=0
+[fex] DONE LINKED=0 peak=5870MiB cap=6144MiB
+[fex] --- boot.log tail ---
+Log: Log file open, 08/04/26 16:01:04
+Init: Name subsystem initialized
+Init: Detected: Microsoft Windows NT 6.2 (Build: 9200)
+Init: Version: 1100
+Init: Compiled: Jan 29 2001 16:45:52
+Init: Command line: -log=boot.log -nosound
+Init: Base directory: Z:\game\System\
+Init: Character set: Unicode
+Log: Bound to Engine.dll
+Log: Bound to Core.dll
+Log: Bound to Window.dll
+Init: Object subsystem initialized
+Log: Cd Path: ..\
+Init: Computer: 7FB031862490
+Init: User: root
+Init: Memory total: Phys=2097151K Pagef=4193791K Virt=2097024K
+Init: Working set: 2000000 / 2000000
+Init: CPU Speed=1535.983779 MHz
+Init: CPU Page size=4096, Processors=10
+Init: CPU Detected: PentiumPro-class processor (GenuineIntel)
+Init: CPU Features: CMov FPU RDTSC PAE MMX KNI 3DNow!
