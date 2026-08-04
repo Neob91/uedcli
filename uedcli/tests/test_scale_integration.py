@@ -8,19 +8,23 @@ The offline bake (`transform.bake`) must reproduce the editor's own `ACTOR APPLY
 Main+Post combos — this: IMPORTADDs the brush, `SELECTNAME` + `ACTOR APPLYTRANSFORM` (the editor
 bakes it), `MAP EXPORT`s the result, and asserts the editor's baked world vertices match
 `transform.bake(actor)`'s. It also asserts `emit_fscale` byte-matches the editor's re-export of an
-un-baked scaled brush. Grounding: dev/docs/spikes/2026-06-25-scale-transform-mechanics.md.
+un-baked scaled brush. Grounding: dev/docs/spikes/2026-06-25-scale-transform-mechanics.md; the
+complex-brush (16-gon / staircase) and all-SheerAxis extension:
+dev/docs/spikes/2026-08-04-sheer-bake-byte-parity/spike.md.
 """
 import re
 import subprocess
 import uuid
+from dataclasses import dataclass
 from decimal import Decimal
+from typing import Callable
 
 import pytest
 
 from uedcli import rotation as R, transform as T
-from uedcli.builders import cube, make_brush_actor
+from uedcli.builders import cube, cylinder, make_brush_actor, staircase
 from uedcli.emit import emit_map
-from uedcli.model import parse_t3d
+from uedcli.model import Brush, parse_t3d
 
 pytestmark = pytest.mark.integration
 
@@ -28,22 +32,82 @@ CONTAINER = "dx-lum-uned"
 PARITY_TOL = 1e-4
 D = Decimal
 
-# name -> (scale-field setter). Each is one differential case (spec §8 corpus).
-_CASES = {
-    "main_x2": lambda a: setattr(a, "main_scale", T.FScale((D(2), D(1), D(1)))),
-    "main_uniform2": lambda a: setattr(a, "main_scale", T.FScale((D(2), D(2), D(2)))),
-    "mirror_x": lambda a: setattr(a, "main_scale", T.FScale((D(-1), D(1), D(1)))),
-    "main_x2_yaw90": lambda a: (setattr(a, "main_scale", T.FScale((D(2), D(1), D(1)))),
-                                a.props.append(("Rotation", "(Yaw=16384)"))),
-    "post_x2_yaw90": lambda a: (setattr(a, "post_scale", T.FScale((D(2), D(1), D(1)))),
-                                a.props.append(("Rotation", "(Yaw=16384)"))),
-    "sheer_xy_03": lambda a: setattr(a, "main_scale",
-                                     T.FScale((D(1), D(1), D(1)), D("0.3"), "SHEER_XY")),
-    "main_x2_prepivot": lambda a: (setattr(a, "main_scale", T.FScale((D(2), D(1), D(1)))),
-                                   a.props.append(("PrePivot", "(X=16.000000)"))),
-    "main_post_yaw": lambda a: (setattr(a, "main_scale", T.FScale((D(2), D(1), D(1)))),
-                                setattr(a, "post_scale", T.FScale((D(1), D(3), D(1)))),
-                                a.props.append(("Rotation", "(Yaw=8192)"))),
+_ALL_AXES = ("SHEER_XY", "SHEER_XZ", "SHEER_YX", "SHEER_YZ", "SHEER_ZX", "SHEER_ZY")
+
+
+@dataclass(frozen=True)
+class Case:
+    """One differential case: a builder brush plus the scale-field mutation to apply to its actor."""
+    make_brush: Callable[[], Brush]
+    setup: Callable[[object], None]
+
+
+def _cube() -> Brush:
+    return cube(128, 64, 32, texture="DefaultTexture")
+
+
+def _cyl16() -> Brush:
+    # 16-gon prism: 16 side quads + tiled caps → many non-axis-aligned faces (bad-matrix bait).
+    return cylinder(128, 48, sides=16, texture="DefaultTexture")
+
+
+def _stair() -> Brush:
+    # One non-convex brush, 6 steps: 2 + 4*6 = 26 faces at assorted orientations.
+    return staircase(6, 32, 16, 96, texture="DefaultTexture")
+
+
+def _set_main(fs: T.FScale) -> Callable[[object], None]:
+    return lambda a: setattr(a, "main_scale", fs)
+
+
+def _sheer_main(axis: str, rate: str) -> Callable[[object], None]:
+    return lambda a: setattr(a, "main_scale", T.FScale((D(1), D(1), D(1)), D(rate), axis))
+
+
+def _sheer_post(axis: str, rate: str) -> Callable[[object], None]:
+    return lambda a: setattr(a, "post_scale", T.FScale((D(1), D(1), D(1)), D(rate), axis))
+
+
+def _sheer_and_prop(axis: str, rate: str, prop: tuple[str, str]) -> Callable[[object], None]:
+    def setup(a):
+        a.main_scale = T.FScale((D(1), D(1), D(1)), D(rate), axis)
+        a.props.append(prop)
+    return setup
+
+
+# name -> Case. The cube block is the original spec §8 corpus; the cylinder/staircase and combo
+# blocks below extend it to COMPLEX multi-poly brushes and every SheerAxis (spike
+# 2026-08-04-sheer-bake-byte-parity).
+_CASES: dict[str, Case] = {
+    "main_x2": Case(_cube, _set_main(T.FScale((D(2), D(1), D(1))))),
+    "main_uniform2": Case(_cube, _set_main(T.FScale((D(2), D(2), D(2))))),
+    "mirror_x": Case(_cube, _set_main(T.FScale((D(-1), D(1), D(1))))),
+    "main_x2_yaw90": Case(_cube, lambda a: (setattr(a, "main_scale", T.FScale((D(2), D(1), D(1)))),
+                                            a.props.append(("Rotation", "(Yaw=16384)")))),
+    "post_x2_yaw90": Case(_cube, lambda a: (setattr(a, "post_scale", T.FScale((D(2), D(1), D(1)))),
+                                            a.props.append(("Rotation", "(Yaw=16384)")))),
+    "sheer_xy_03": Case(_cube, _sheer_main("SHEER_XY", "0.3")),
+    "main_x2_prepivot": Case(_cube, lambda a: (setattr(a, "main_scale", T.FScale((D(2), D(1), D(1)))),
+                                               a.props.append(("PrePivot", "(X=16.000000)")))),
+    "main_post_yaw": Case(_cube, lambda a: (setattr(a, "main_scale", T.FScale((D(2), D(1), D(1)))),
+                                            setattr(a, "post_scale", T.FScale((D(1), D(3), D(1)))),
+                                            a.props.append(("Rotation", "(Yaw=8192)")))),
+    # All six SheerAxis pairs on a 16-gon and a staircase — the shapes most likely to expose a bad
+    # sheer matrix/order (non-axis-aligned faces). Rate 0.3 → sheer_coeff k = 0.25.
+    **{f"cyl_{ax.split('_')[1].lower()}": Case(_cyl16, _sheer_main(ax, "0.3")) for ax in _ALL_AXES},
+    **{f"stair_{ax.split('_')[1].lower()}": Case(_stair, _sheer_main(ax, "0.3")) for ax in _ALL_AXES},
+    # sheer × non-uniform Scale — nails the Sheer·Scale ORDER (the gap the scale work flagged).
+    "cyl_sheer_scale": Case(_cyl16, _set_main(T.FScale((D(2), D(3), D(1)), D("0.3"), "SHEER_XY"))),
+    "stair_sheer_scale": Case(_stair, _set_main(T.FScale((D(2), D(3), D(1)), D("0.3"), "SHEER_YZ"))),
+    # sheer × Rotation (yaw), sheer × PrePivot, and PostScale-sheer vs MainScale-sheer.
+    "cyl_sheer_yaw": Case(_cyl16, _sheer_and_prop("SHEER_XY", "0.3", ("Rotation", "(Yaw=8192)"))),
+    "cyl_sheer_prepivot": Case(_cyl16,
+                               _sheer_and_prop("SHEER_XY", "0.3", ("PrePivot", "(X=16.000000)"))),
+    "cyl_sheer_post": Case(_cyl16, _sheer_post("SHEER_XY", "0.3")),
+    # sheer_coeff snap boundaries: deadzone |r|≤0.05 → k=0 (scaled to keep a real transform), and the
+    # ~0.6 notch → k=0.5.
+    "cyl_sheer_deadzone": Case(_cyl16, _set_main(T.FScale((D(2), D(1), D(1)), D("0.05"), "SHEER_XY"))),
+    "cyl_sheer_notch": Case(_cyl16, _sheer_main("SHEER_XY", "0.6")),
 }
 
 
@@ -84,9 +148,9 @@ def _worst(pred, obs) -> float:
 
 @pytest.mark.parametrize("name", sorted(_CASES))
 def test_offline_bake_matches_editor_applytransform(driver, name):
-    a = make_brush_actor("ScaleIT", cube(128, 64, 32, texture="DefaultTexture"),
-                         location=(D(0), D(0), D(0)))
-    _CASES[name](a)
+    case = _CASES[name]
+    a = make_brush_actor("ScaleIT", case.make_brush(), location=(D(0), D(0), D(0)))
+    case.setup(a)
     baked_offline = T.bake(a)
     predicted = sorted({tuple(round(c, 6) for c in w) for w in R.world_vertices(baked_offline)})
 
@@ -113,9 +177,9 @@ def test_offline_bake_matches_editor_applytransform(driver, name):
 @pytest.mark.parametrize("name", sorted(_CASES))
 def test_emission_byte_matches_editor_reexport(driver, name):
     """An un-baked scaled brush's MainScale/PostScale must re-export byte-identically (H3)."""
-    a = make_brush_actor("ScaleEmit", cube(128, 64, 32, texture="DefaultTexture"),
-                         location=(D(0), D(0), D(0)))
-    _CASES[name](a)
+    case = _CASES[name]
+    a = make_brush_actor("ScaleEmit", case.make_brush(), location=(D(0), D(0), D(0)))
+    case.setup(a)
     ipath, opath = _cpath(name + "_ein"), _cpath(name + "_eout")
     _write(ipath, emit_map([a]))
     driver.map_new()

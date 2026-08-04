@@ -1,0 +1,27 @@
+# ENV-BLOCKED evidence — 2026-08-04T11:58:11Z
+Fresh ephemeral editor (uned-sheer3-1785844591-89999), image dx-lum-uned. Editor BOOTED (answered wine_ctl status,
+window resolved) but GPF'd on the FIRST driven console command (MAP NEW), before any
+geometry was imported — so NOT a sheer-bake bug.
+
+At the crash:
+  pids.current=480  pids.max=512      # hit the 512 PID cap during MAP NEW's GC thread spawn
+  mem.current=4.42 GiB  mem.max=6.0 GiB
+  memory.events: max=70752 oom=0 oom_kill=0   # heavy reclaim, no OOM-kill (pressure, not OOM)
+  host MemAvailable=43.6 GiB           # host is fine; the caps are the rootless-VM slice's
+
+Open X windows at crash: 'Critical Error' (UnrealEd GPF dialog) + stuck 'xmessage' (GC modal).
+Editor.log frozen at the OpenGL boot banner — no console command ever produced output.
+
+Repeated 'docker exec' failures during the run:
+  OCI runtime exec failed: ... fork/exec /proc/self/fd/6: resource temporarily unavailable
+  (EAGAIN — the 512 PID cap left no room to fork the exec'd process).
+
+Caps are unraisable from here (matches spikes/2026-08-04-deusex-boot-wedge):
+  - compose 'pids_limit: 16384' override IGNORED — pids.max stayed 512.
+  - docker info Cgroup Driver: none (below); --memory/--pids-limit write no cgroup limit.
+   Cgroup Driver: none
+   Cgroup Version: 2
+    /home/rootless/.config/cdi
+    rootless
+    cgroupns
+   Docker Root Dir: /home/rootless/.local/share/docker
