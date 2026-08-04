@@ -1,0 +1,40 @@
+# FEX + wine + DeusEx pids/boot measurements, 2026-08-04. Shared arm64 dind host.
+
+## FEX runs x86 wine natively (no qemu)
+FEXInterpreter guest uname -m         => x86_64
+FEXBash `wine --version`              => wine-8.0 (Debian 8.0~repack-4)
+(RootFS = /root/dtools-rootfs, an exported Debian x86 userland baked into fextest-img:latest)
+
+## pids.max is 512, SHARED across every container, and --pids-limit is IGNORED
+fresh `alpine`  --pids-limit=4096     => pids.max=512   (limit not honored)
+every running container reads the SAME pids.current (one shared cgroup pids controller)
+on the daemon recreated mid-session, `docker run` now ERRORS at create when the slice is full:
+  "can't get final child's PID from pipe: EOF"
+
+## idle costs (my container's own pid-namespace task count)
+idle FEX container (sleep infinity)   => 4 tasks
++ one idle FEXBash                    => ~8-9 tasks
+
+## wine on the PRE-BUILT /wineprefix: wineboot.exe fork-storm (OLE E_NOINTERFACE)
+`wine cmd /c echo`  and  `wine wineboot -u`:
+  my tasks climb 4 -> ~99 in ~1.5s (a storm of wineboot.exe, ppid=1), rc=53, no output.
+  errors: ole:CoMarshalInterface hr 0x80004002 (E_NOINTERFACE);
+          ole:start_rpcss Failed to open service manager; nodrv_CreateWindow (explorer fails)
+  reproduced: (a) no DISPLAY, (b) DISPLAY=<Xvfb-IP>:99, (c) persistent `wineserver -p -w` first,
+              (d) WINEDLLOVERRIDES disabling mscoree,mshtml,winemenubuilder,plugplay.
+  -> the OLE/rpcss failure is in wine's own prefix bring-up, upstream of any app.
+
+## wine on a FRESH prefix: no storm, but kernel32 won't load
+`wine wineboot -i`, WINEPREFIX=/tmp/wpfresh (fresh):
+  single wineboot.exe (no storm), then: "could not load kernel32.dll, status c0000135", rc=53.
+
+## DeusEx.exe launch under FEX (minimal UedPreview ini, SoftDrv, services trimmed)
+launch #1: pids.current=501/512 at launch  => wine's first fork fails immediately;
+           my wine stuck at 8 tasks, DeusEx.log 0 lines, :7777 never bound.
+launch #2: pids.current=425/512 at launch  => wine process started but the shared slice
+           re-saturated to 512/512 (a co-tenant `dxboot17` qemu-DeusEx storm) before it
+           progressed; DeusEx.log never created, :7777 never bound.
+sustained 512/512 for >7 min blocked even `docker exec` into my own container
+  ("setns ... resource temporarily unavailable").
+
+## No frame. DeusEx never initialized far enough to bind 127.0.0.1:7777. Not faked.

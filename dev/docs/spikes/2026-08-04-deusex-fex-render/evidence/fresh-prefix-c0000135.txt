@@ -1,0 +1,5 @@
+# `wine wineboot -i` on a FRESH WINEPREFIX under FEX (WINEDLLPATH set to the guest
+# x86 PE dirs /usr/lib/{i386,x86_64}-linux-gnu/wine/*-windows). No fork-storm; fails to load kernel32.
+wine: created the configuration directory '/tmp/wpfresh'
+wine: could not load kernel32.dll, status c0000135
+wine: could not load kernel32.dll, status c0000135

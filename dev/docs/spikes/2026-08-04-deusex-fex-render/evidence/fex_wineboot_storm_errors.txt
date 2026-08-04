@@ -1,0 +1,11 @@
+# Captured under FEX, WINEPREFIX=/wineprefix (pre-built), `wine wineboot -u`, WINEDEBUG=err+all,fixme-all
+# my_tasks climbed 4 -> 88 in ~1.5s (fork-storm of wineboot.exe), guard-killed. rc=53.
+004c:err:winediag:nodrv_CreateWindow Application tried to create a window, but no driver could be loaded.
+004c:err:winediag:nodrv_CreateWindow L"The explorer process failed to start."
+004c:err:systray:initialize_systray Could not create tray window
+004c:err:ole:StdMarshalImpl_MarshalInterface Failed to create ifstub, hr 0x80004002
+004c:err:ole:CoMarshalInterface Failed to marshal the interface {6d5140c1-7436-11ce-8034-00aa006009fa}, hr 0x80004002
+004c:err:ole:apartment_get_local_server_stream Failed: 0x80004002
+003c:err:winediag:nodrv_CreateWindow Application tried to create a window, but no driver could be loaded.
+003c:err:winediag:nodrv_CreateWindow L"Make sure that your X server is running and that $DISPLAY is set correctly."
+004c:err:ole:start_rpcss Failed to open service manager
