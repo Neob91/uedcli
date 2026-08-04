@@ -1,0 +1,16 @@
+[esync-fsync] trial 1/3: WEDGE (log=21)   (env: WINEESYNC=1 WINEFSYNC=1 task:none)
+[esync-fsync] trial 2/3: WEDGE (log=21)   (env: WINEESYNC=1 WINEFSYNC=1 task:none)
+[esync-fsync] trial 3/3: WEDGE (log=21)   (env: WINEESYNC=1 WINEFSYNC=1 task:none)
+=== [esync-fsync] LINK 0/3 ===
+[fsync-only] trial 1/3: WEDGE (log=21)   (env: WINEESYNC=0 WINEFSYNC=1 task:none)
+[fsync-only] trial 2/3: WEDGE (log=21)   (env: WINEESYNC=0 WINEFSYNC=1 task:none)
+[fsync-only] trial 3/3: WEDGE (log=21)   (env: WINEESYNC=0 WINEFSYNC=1 task:none)
+=== [fsync-only] LINK 0/3 ===
+[server-side] trial 1/3: WEDGE (log=21)   (env: WINEESYNC=0 WINEFSYNC=0 task:none)
+[server-side] trial 2/3: WEDGE (log=21)   (env: WINEESYNC=0 WINEFSYNC=0 task:none)
+[server-side] trial 3/3: WEDGE (log=21)   (env: WINEESYNC=0 WINEFSYNC=0 task:none)
+=== [server-side] LINK 0/3 ===
+[cpuset1] trial 1/3: WEDGE (log=21)   (env: WINEESYNC=1 WINEFSYNC=1 task:taskset -c 0)
+[cpuset1] trial 2/3: WEDGE (log=21)   (env: WINEESYNC=1 WINEFSYNC=1 task:taskset -c 0)
+[cpuset1] trial 3/3: WEDGE (log=21)   (env: WINEESYNC=1 WINEFSYNC=1 task:taskset -c 0)
+=== [cpuset1] LINK 0/3 ===

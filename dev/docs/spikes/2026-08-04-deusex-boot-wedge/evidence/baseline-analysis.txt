@@ -1,0 +1,15 @@
+samples=50 window=98s
+mem cap        = 6.00 GiB
+mem peak       = 5.91 GiB  (98% of cap)
+mem final      = 5.91 GiB
+events: oom_kill=0 oom=0 max(hit-limit)=68715
+loglines final = 21 (banner wedge if ~21-22)
+pgmajfault     = 905511 -> 905578  (+67, 1/s)
+
+--- final tick: threads (delta cputicks over last 2s) ---
+
+Total active cputicks last interval = 0
+
+--- VERDICT HINTS ---
+MEMORY-BOUND: peak reached 98% of cap.
+WEDGED at boot banner (log frozen).
