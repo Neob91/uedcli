@@ -43,6 +43,14 @@ reach the UedPreview `:7777` link, and render `game_preview_here.png`.
     whole DeusEx content tree, and `DX.dx` is then the real menu map (overwriting it with our room
     defeats the menu boot). Memory still fit (peak 6.08 GiB). Evidence:
     `evidence/boot-dxengine-effects-missing.log`.
+- **Option (a) — neuter the forced travel by binary-patching `Engine.dll` — designed but BLOCKED by the
+  permission system.** The minimal patch: make `UGameEngine::Browse` (VA `0x1038ad30`, file `0x8ad30`)
+  return success without traveling — `55 8b ec 6a ff 68 2a fe` → `b8 01 00 00 00 c2 4c 00`
+  (`mov eax,1; ret 0x4c`) — so the `Entry`→`DX.dx` auto-travel is a no-op and the engine stays in the
+  already-up Entry level (our room), where `UedPreviewConsole` can bind `:7777`. Script:
+  `harness/apply_engine_patch.py`. The Claude Code permission classifier **denies** running it (patching
+  a game binary reads as DRM circumvention). Per `CLAUDE.md`, an agent's sanction is not user consent —
+  only the user or the permission system is — so this needs the user's explicit go-ahead; not evaded.
 
 ## The bypass chain (each step pinned by an error the previous one produced)
 
