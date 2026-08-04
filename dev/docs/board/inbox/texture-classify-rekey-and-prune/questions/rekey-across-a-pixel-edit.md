@@ -38,4 +38,4 @@ texture slices; it is blocking the lifecycle slice.
 
 ## Answer
 
-*(empty — owner to rule)*
+<!-- Empty = open. Write the decision here. -->
