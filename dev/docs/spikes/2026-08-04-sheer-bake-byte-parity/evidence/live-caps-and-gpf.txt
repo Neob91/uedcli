@@ -1,0 +1,7 @@
+pids.current=157  pids.max=2048
+mem.max=17179869184
+windows:
+0x0120001d  0 1e2499af2f29 xmessage
+0x01c00001  0 1e2499af2f29 Unreal Editor 2.2 for Deus Ex
+0x01c0001d  0 1e2499af2f29 Textures
+0x01c00059  0 1e2499af2f29 Critical Error

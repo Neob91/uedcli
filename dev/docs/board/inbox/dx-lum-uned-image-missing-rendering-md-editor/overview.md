@@ -19,6 +19,12 @@ render is unobtainable on this arm64/wine/Mesa host as shipped. The headless `Ed
 path (no GUI, no `WCodeFrame`) works fine — that's how the byte-exact texture-frame parity was
 obtained. GPF dialog was captured live via `import -window`.
 
+Second reproduction (2026-08-05, `spikes/2026-08-04-sheer-bake-byte-parity`): the sheer-parity harness
+hit the identical GPF on the first console command with **pids at 157/2048** (the old 512 cap lifted
+to 2048, mem to 16 GiB) — so it is **not** resource-related, disproving that spike's earlier PID-cap
+diagnosis. Relaunching **without `-log`** reproduces the same GPF, so the `WCodeFrame` is built at
+startup regardless of the Log Window.
+
 Fix candidate: rebuild the image with rendering.md's fixes actually baked in, then retry the harness.
 UNTESTED whether that clears the GPF — the `SyntaxHighlighting`/`WCodeFrame` fault may be deeper in
 this image's wine/Mesa build than the ini fixes reach. Either way, rendering.md's "permanent fix"

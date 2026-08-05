@@ -5,42 +5,39 @@ reproduce the real editor's `ACTOR APPLYTRANSFORM` + `MAP EXPORT` for COMPLEX mu
 every `SheerAxis` — not just the single cube already covered? The scale work flagged the gap: the
 combined scale+sheer matrix ORDER (`Sheer·Scale`) was validated only for the cube differential.
 
-## Status: ENV-BLOCKED — could not boot-and-drive a live editor on this box.
+## Status: STILL BLOCKED — but NOT by the resource cap. The sheer question stays OPEN.
 
-The editor image (`dx-lum-uned`) **boots** (window resolves, `wine_ctl status` answers) but **GPFs on
-the first driven console command, `MAP NEW`**, before any geometry is imported — so the crash is
-environmental, not a sheer-bake defect. Three fresh ephemeral containers, same result. **No parity
-numbers were produced and none are fabricated.**
+The resource cap the first run blamed is gone: a fresh ephemeral container now reports
+`pids.max=2048`, `mem.max=16 GiB` (was 512 / 6 GiB). The full live run
+(`harness.py --container …`, 2026-08-05) was re-attempted anyway and **all 27 cases errored** —
+`parity=ERROR emit=ERROR` on every case. **No parity numbers were produced and none are fabricated.**
 
-### Evidence (`evidence/env-blocked.txt`)
+The crash is a GUI GPF, not a resource cap and not a sheer-bake defect. At the first driven console
+command the editor pops a `Critical Error` dialog (captured live, `evidence/gpf-syntaxhighlighting.png`):
 
-At the crash on a fresh container:
 ```
-pids.current=480  pids.max=512        # hit the 512 PID cap during MAP NEW's GC thread spawn
-mem.current=4.42 GiB  mem.max=6.0 GiB
-memory.events: max=70752 oom=0 oom_kill=0   # heavy reclaim, NO oom-kill (pressure, not OOM)
-host MemAvailable=43.6 GiB            # host is fine; the caps are the rootless-VM slice's
+General protection fault!
+History: SyntaxHighlighting::AddQuote <- SyntaxHighlighting::Setup <- WCodeFrame::OnCreate <- WM_CREATE
 ```
-- Open X windows at the crash: `Critical Error` (UnrealEd GPF dialog) + a stuck `xmessage` (the GC
-  "Cleaning up" modal). `Editor.log` frozen at the OpenGL boot banner — no console command ever
-  produced output.
-- Repeated `docker exec` failures during the run: `fork/exec … resource temporarily unavailable`
-  (EAGAIN — the 512 PID cap left no room to fork the exec'd process). Idle-after-boot the editor
-  already sits at ~450/512 PIDs; `MAP NEW`'s garbage-collection thread spawn tips it over.
 
-### Caps are unraisable from here
+pids at the crash were **157 / 2048** — nowhere near a cap (`evidence/live-caps-and-gpf.txt`). So the
+first run's "hit the 512 PID cap on `MAP NEW`" diagnosis was **wrong**: lifting the cap changed
+nothing. `WCodeFrame` is UnrealEd's syntax-highlighted code/log window; the fault is in its creation.
 
-Same class of blocker as `spikes/2026-08-04-deusex-boot-wedge` (that one is the *game* wedging at
-boot; this is the *editor* GPFing on first command — both are rootless-VM resource caps):
-- A compose `pids_limit: 16384` override was **ignored** — `pids.max` stayed 512.
-- `docker info` reports `Cgroup Driver: none`, rootless; `--memory`/`--pids-limit` write no cgroup
-  limit (the 6 GiB / 512-PID caps come from a parent slice in the rootless daemon VM, unreachable).
+Relaunching the editor **without `-log`** (no Log Window) reproduces the *identical* GPF, so the code
+frame is built at startup regardless. This is the same fault already filed in
+`board/inbox/dx-lum-uned-image-missing-rendering-md-editor` — the shipped `dx-lum-uned` image GPFs in
+`SyntaxHighlighting`/`WCodeFrame` on any window-creating op under this arm64/qemu/wine/Mesa host. The
+documented ini fixes are untested against it and "may be deeper than the ini fixes reach".
 
-The harness is sound: it builds + bakes all 27 cases offline with no error (`harness.py --offline`).
-Given headroom (a lower-pressure moment, as the box had on 2026-08-03), the same invocation drives the
-editor and prints the parity table.
+The harness itself is sound: it builds + bakes all 27 cases offline with no error
+(`harness.py --offline`). It will produce the parity table only once the image's GUI GPF is fixed
+(rebuild per `unrealed/rendering.md`) — or the harness is reworked onto the headless
+`Editor.ExecCommandlet` path (no GUI, no `WCodeFrame`), the path that already yields byte-exact
+texture parity. **Whether uedcli's sheer bake matches the editor for complex brushes remains
+unanswered.**
 
-## What was built (ready to run when the box has headroom)
+## What was built (ready to run once the image's GUI GPF is fixed)
 
 - `harness.py` — spins the corpus through a named editor container, per case checking (a) world-vertex
   parity `transform.bake` vs editor `ACTOR APPLYTRANSFORM` (worst |Δ| ≤ 1e-4, same corner count) and
@@ -72,4 +69,6 @@ against a live editor.
 ## Files
 
 - `harness.py` — the runnable corpus driver (offline + live modes).
-- `evidence/env-blocked.txt` — the crash-state cgroup/PID/memory snapshot.
+- `evidence/gpf-syntaxhighlighting.png` — the live `SyntaxHighlighting`/`WCodeFrame` GPF dialog (2026-08-05).
+- `evidence/live-caps-and-gpf.txt` — the lifted caps (2048 PIDs / 16 GiB) + 157/2048 pids at the crash.
+- `evidence/env-blocked.txt` — the first run's (wrong) PID-cap snapshot, kept for the record.
