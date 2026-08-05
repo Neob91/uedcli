@@ -1,7 +1,6 @@
 # `event link` / `unlink` — spec (DRAFT)
 
-Status: draft for owner review. Open decisions are in `questions/`; nothing here is built until they
-are answered.
+Status: decisions recorded (2026-08-04); ready for spec review.
 
 ## Goal
 
@@ -42,7 +41,7 @@ instead of hand-editing `Event`/`Tag` props. The natural completion of `event gr
 An edge `A → B` is created by setting `A.Event := B.Tag`, minting `B.Tag` if B has no explicit one.
 `link` is directional (source fires, target receives); `unlink` removes the wire the source fires.
 
-### CLI surface (proposed — see `questions/cli-shape-and-fan-out.md`)
+### CLI surface (decided — see Decisions)
 
 Mirror `actor folder set`: the piped/positional set is the SOURCES (the actors whose `Event`
 changes); the single target is on `--to`. This makes fan-in (many sources → one target) the natural
@@ -86,8 +85,7 @@ Per source S and the single target T:
    - if T has an explicit, non-empty `Tag`, reuse it (so a second source linked to T shares the
      same receiver identity);
    - else mint E and store it as `T.Tag` (an explicit write on T — the one actor outside the piped
-     set this verb mutates). Mint scheme is an open decision — see
-     `questions/tag-minting-scheme.md`. Proposed default: E = T's Name (unique, readable, explicit,
+     set this verb mutates). Mint scheme (see Decisions): E = T's Name (unique, readable, explicit,
      never the class-name default).
 2. Set `S.Event := E` (replace-or-append in `S.props`, `movers._set` pattern).
 
@@ -99,11 +97,11 @@ tag, or an unresolvable target leaves ALL actors untouched), matching `actor/lab
 
 Clear `Event` on each source (remove the prop). Never touches any Tag. `save`, echo, count.
 
-### Scope: scalar `Event` only (proposed)
+### Scope: scalar `Event` only (decided)
 
 Match `event graph`'s scope (`eventgraph.py:22-26`): the single scalar `Event` prop. Multi-event
-ARRAY firers (Dispatcher `OutEvents(n)`, Counter) are NOT authored here in v1. Whether to include
-them is an open decision — see `questions/array-prop-firing-scope.md`.
+ARRAY firers (Dispatcher `OutEvents(n)`, Counter) are NOT authored here in v1; including them is
+deferred (see Decisions).
 
 ## Edge cases & errors
 
@@ -143,14 +141,18 @@ Mirror `tests/test_eventgraph.py` + the command-isolation/dispatch tests. Cover:
 - Round-trip: `link` then `event graph` shows the wire; `unlink` then it is gone.
 - Producer contract: touched names to stdout, count to stderr (both verbs).
 
-## Open questions (owner)
+## Decisions (2026-08-04)
 
-1. `questions/cli-shape-and-fan-out.md` — sources-as-set with `--to TARGET` (recommended) vs. an
-   alternative; and how/whether to support fan-out (one source → many targets sharing a tag).
-2. `questions/tag-minting-scheme.md` — what value to mint for a tagless target (target Name,
-   recommended, vs. a random token), and whether to add a `--tag NAME` override.
-3. `questions/array-prop-firing-scope.md` — v1 scalar `Event` only (recommended) vs. also authoring
-   Dispatcher `OutEvents(n)` / Counter array firers now.
+- **CLI shape** — `event link --to TARGET SOURCE…|-`, mirroring `actor folder set`; `-` stays the
+  sole names slot so `actor find … | event link` composes. Two-positional `link SOURCE TARGET`
+  rejected (cannot use `-`). Fan-out (one source → many targets) is NOT built in v1 (a scalar `Event`
+  holds one tag); a `--tag`/shared-bus form is deferred, filed if wanted.
+- **Tag minting** — a tagless target gets an explicit `Tag` minted from its own Name (unique,
+  readable, never the class-name default, never whitespace-only). No `--tag` override in v1 (revisit
+  with fan-out).
+- **Scope** — v1 authors the scalar `Event` only, matching what `event graph` reads. Dispatcher
+  `OutEvents(n)` / Counter array firers are deferred; extend reader + author together so `graph` and
+  `link` can never disagree.
 
 ## Docs
 

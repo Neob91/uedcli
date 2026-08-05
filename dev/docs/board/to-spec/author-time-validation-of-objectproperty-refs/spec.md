@@ -1,6 +1,6 @@
 # Spec — author-time validation of ObjectProperty refs
 
-Status: DRAFT for owner review. Blocking forks in `questions/`.
+Status: decisions recorded (2026-08-04); ready for spec review.
 
 ## Goal
 
@@ -34,7 +34,7 @@ a broken ref exits 2 naming it instead of exiting 0 and shipping a silently-brok
 
 ## Design
 
-### The ref set to validate (fork — `questions/schema-driven-vs-curated.md`)
+### The ref set to validate (decided — see Decisions)
 
 An object ref carries its kind in its class token: `Sound'A.B'`, `Music'A.B'`, `StaticMesh'A.B'`,
 `Texture'A.B'`. Two ways to decide which property values to check:
@@ -55,9 +55,10 @@ Recommendation: **schema-driven**.
 Add a generic `ObjectResolver` (new, model-side, over the composed package files — same input as
 `TextureResolver`), with `exists(ref, *, expect_class=None) -> bool` scanning exports via
 `pkg.class_of_export`. It subsumes texture existence (a `TextureResolver` becomes
-`ObjectResolver` filtered to `Texture`), so the two do not diverge. Existence keys off the **ref's
-own class token** (`Sound'A.B'` → a `Sound`-classed export named `A.B` on the path), which also lets
-the check confirm the ref's declared kind, not just that *something* of that name exists.
+`ObjectResolver` filtered to `Texture`), so the two do not diverge. Existence is confirmed by object
+**NAME** on the path (see Decisions: a class-token gate would false-reject a base-class ref that
+resolves to a subclass export, e.g. `Texture'X'` → a `FireTexture`); the ref's class token routes
+null and serves as a non-rejecting hint, never a hard gate.
 
 Wire it into `validate_ingest_actors` after the class/texture passes: for each actor, for each
 OBJECT-typed stated property, parse the ref and call `resolver.exists`. All-or-nothing, collecting
@@ -68,9 +69,8 @@ every miss (batch rule, `conventions.md`).
 - **Null / unset** — `None`, `""`, `Sound'None'` → skip (an unset ref is legitimate).
 - **`MyLevel.*` / embedded refs** — not offline-checkable and not materializable as external refs
   (`surface.parse_texture_ref` already rejects `MyLevel.*` for textures, `surface.py:103`); skip with
-  no error, since some sound/mesh refs into the level's own embedded resources are legitimate. (Fork
-  `questions/unresolvable-ref-disposition.md` covers whether a bare/unqualified or unresolvable-kind
-  ref is an error or a skip.)
+  no error, since some sound/mesh refs into the level's own embedded resources are legitimate. (See
+  Decisions (Disposition) for bare/unqualified refs.)
 - **Structural self-refs** (`Brush=Model'MyLevel.…'`, `Level=…`) — these are computed/self fields,
   not authored object refs; the OBJECT-field filter plus the `MyLevel` skip already excludes them.
 
@@ -96,12 +96,24 @@ every miss (batch rule, `conventions.md`).
 - Batch reports ALL misses across several actors, not just the first.
 - Regression: a corrupt package on the path does not crash the gate or false-reject a good ref.
 
-## Open questions
+## Decisions (2026-08-04)
 
-- `questions/schema-driven-vs-curated.md` — validate every schema-OBJECT-typed prop, or a curated
-  name list.
-- `questions/unresolvable-ref-disposition.md` — a bare/unqualified object ref, or a ref whose kind
-  cannot be checked: exit 2 (house rule) or skip.
+- **Ref set** — schema-driven: validate every property whose `field.kind == OBJECT`. No curated
+  per-substrate list.
+- **Coverage — BOTH loci.** (1) the `validate_ingest_actors` gate (covers `actor add`/`duplicate`,
+  `actor build`/`brush build --prop`, `stash`/`prefab apply`, `level import`); AND (2) **`actor prop
+  set`**, which BYPASSES that gate today (`actor/prop.py` → `propedit.plan_edit`) yet is the primary
+  way these props are authored — so leaving it out would defeat the "author time, not materialize"
+  premise. Add an inline spot-check there on the `brush poly set --texture` precedent
+  (`brush/poly.py:42`): the schema is already resolved to type the leaf, so existence adds only a
+  content-package scan, injected via a `resources` seam so tests can mock it.
+- **Match strategy** — confirm existence by object **NAME**, not exact class-token equality (a
+  base-class ref onto a subclass export must not false-reject). Gated on a small spike: how often do
+  retail levels spell an object ref with a base-class token onto a subclassed export? (`spike:
+  object-ref class-token vs export-class in retail levels`.)
+- **Disposition** — mirror `TextureResolver`: a bare unqualified name = tolerant any-package
+  existence; a qualified-but-absent ref = hard exit 2 naming it; `None`/`""`/`MyLevel.*` always
+  skipped.
 
 Note on sequencing: this item is **not** blocked on the unified-asset-catalog enumeration layer —
 existence needs only `pkg.class_of_export`. If the owner prefers to build `ObjectResolver` as the

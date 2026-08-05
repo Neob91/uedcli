@@ -1,0 +1,4 @@
+[min] MINSET=stock ENGINE=stock CACHE=4
+[min] game root: 6.2M, System files: 22
+[min] ini: GameEngine=Engine.GameEngine DefaultGame=Engine.GameInfo Class=Engine.Camera cache=4 root=(none)
+[min] launch wine DeusEx.exe
