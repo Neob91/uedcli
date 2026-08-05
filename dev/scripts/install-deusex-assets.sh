@@ -66,7 +66,7 @@ sums=()
 # the header's rights note). The archive.org GOTY offline installer (Inno Setup `.exe`, ~398 MB) with
 # a pinned checksum so the built-in download is verified, not blind. Override with <SOURCE> or --url.
 DEFAULT_URL='https://archive.org/download/deus_ex_goty_16231/setup_deus_ex_goty_1.112fm%28revision_1.3.0.1%29_%2816231%29.exe'
-DEFAULT_SHA256=''   # pinned below once computed from the fetched artifact
+DEFAULT_SHA256='e964cb441474a6d08a3d0d65a30e06e009ff2d33a527ef10391f257a760e3aa6'
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
