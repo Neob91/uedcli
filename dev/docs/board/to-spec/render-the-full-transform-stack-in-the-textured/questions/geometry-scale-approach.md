@@ -1,5 +1,7 @@
 # How does the CSG solve see a scaled brush — bake `L` upstream, or teach the core?
 
+## Context
+
 The textured/solve preview refuses scaled brushes because the Rust CSG core rejects non-identity
 scale. Two ways to fix it:
 

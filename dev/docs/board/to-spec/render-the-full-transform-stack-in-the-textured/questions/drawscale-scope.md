@@ -1,5 +1,7 @@
 # Is non-brush `DrawScale`/`DrawScale3D` in scope, or its own item?
 
+## Context
+
 "Render all the transforms" — but `DrawScale`/`DrawScale3D` (the scale on NON-brush actors: sprites,
 meshes, point actors) is a different mechanism from brush `MainScale`/`PostScale`, and it is **not
 modeled at all** today: no typed field in `model.py`, and the sprite footprint takes a bare
