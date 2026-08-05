@@ -1,10 +1,10 @@
 # Spec — consolidate the offline preview onto one renderer
 
-Status: full spec; owner rulings recorded; **spike resolved** — both gated assumptions confirmed
-(`2026-08-05-perspective-in-preview-py`). One open owner question (offline flag name). Requested by
-the owner 2026-08-05. File:line anchors vs `master`. Ephemeral (`CLAUDE.md`): on build, fold into
-`architecture.md` "Preview internals", the `actor-preview-parity` `direction/` home, and
-`docs/usage.md`, then delete this file.
+Status: full spec; all owner rulings recorded; **spike resolved** — both gated assumptions confirmed
+(`2026-08-05-perspective-in-preview-py`). No open questions. Requested by the owner 2026-08-05.
+File:line anchors vs `master`. Ephemeral (`CLAUDE.md`): on build, fold into `architecture.md`
+"Preview internals", the `actor-preview-parity` `direction/` home, and `docs/usage.md`, then delete
+this file.
 
 ## Decisions (2026-08-05, owner)
 
@@ -15,9 +15,10 @@ the owner 2026-08-05. File:line anchors vs `master`. Ephemeral (`CLAUDE.md`): on
   (`rust-rasterizer-for-the-consolidated-offline`), not a gate.
 - **Missing texture = batch-report then refuse** (collect all undecodable surviving-surface refs,
   exit 2 once naming the set). Closes `level-preview-native-checkerboards`.
-- **CLI flag = `--offline`** (2026-08-05). `level preview --native` becomes `level preview
-  --offline`; the only spelling, no alias (`conventions.md`). `--game` stays default and mutually
-  exclusive; `--fov` stays gated to `--offline`.
+- **Offline is now the DEFAULT; `--game` opts in; there is NO `--offline` flag** (2026-08-05,
+  revised). `level preview` with no flag renders the fast offline tier (the consolidated `preview.py`
+  path); `level preview --game` selects the faithful in-game tier. The `--native` flag is deleted with
+  no replacement (`conventions.md` — one spelling). This FLIPS today's default (which is `--game`).
 
 ## Goal
 
@@ -78,9 +79,22 @@ Both verbs build the same `PreviewData` and call one renderer with a projection:
 - `level preview` (offline): a new branch in `_level_preview` builds `PreviewData` over **all** the
   level's actors with `--faces textured` semantics (the solve), then renders one PNG per
   `ResolvedShot` with a `PerspectiveProjection(shot.eye, basis(shot.pitch,shot.yaw), fov, near,
-  size)`. It replaces the `render_shots` import; `preview_shots`/pose resolution and the `--out-dir`/
-  `--size`/`--fov` arg surface (`level.py:453–553`) stay, with the tier flag renamed `--native` →
-  `--offline`.
+  size)`. It replaces the `render_shots` import; `preview_shots`/pose resolution and the
+  `--out-dir`/`--size`/`--fov` arg surface (`level.py:453–553`) stay.
+
+### 2a. Arg-surface flip (the new default)
+
+- Tier select becomes `use_game = args.game` (was `use_game = not args.native`, `level.py:435`); the
+  `--native` flag is removed and `--game` becomes a plain opt-in (no longer a mutually-exclusive pair —
+  there is only one flag).
+- `--fov` is valid by default (the offline tier) and **rejected with `--game`** — the inverse of
+  today's `--fov requires --native` guard (`level.py:437–440`).
+- `--map`/`--rebuild`/`--keep-alive`/`--list-actors` still require `--game`; their existing
+  `if not use_game` guards (`level.py:441–464`) are unchanged in effect once `use_game = args.game`.
+- **Behaviour change to call out:** `level preview` now defaults to the offline draft (fast, no
+  container) instead of the faithful in-game render, and the offline default can exit 2 on an
+  undecodable texture (batch-refuse) where `--game` renders through the engine. Both follow from the
+  owner's rulings; the docs must state the new default prominently.
 
 ### 3. CSG core — adopt the faithful one (resolves §3)
 
@@ -178,8 +192,9 @@ during build to confirm the whole-level budget; nothing in the design depends on
 
 ## Sequencing / docs
 
-- Independent of the unified-asset-catalog work; gated only on the spike's two answers.
-- On build: fold into `architecture.md` "Preview internals" and the `actor-preview-parity`
-  `direction/` home (`actor-preview-parity-direction-home`), extended to the offline `level preview`
-  tier; update `docs/usage.md`'s `level preview` section. Owner approval required for any `direction/`
-  or `docs/leveldesign/` edit.
+- Independent of the unified-asset-catalog work; the spike is resolved, so nothing else gates it.
+- On build: fold into `architecture.md` "Preview internals" (which currently states "`--game` (the
+  DEFAULT)", `architecture.md:889` — that wording flips) and the `actor-preview-parity` `direction/`
+  home (`actor-preview-parity-direction-home`), extended to the offline `level preview` tier; update
+  `docs/usage.md`'s `level preview` section (the default flip is user-visible). Owner approval
+  required for any `direction/` or `docs/leveldesign/` edit.
