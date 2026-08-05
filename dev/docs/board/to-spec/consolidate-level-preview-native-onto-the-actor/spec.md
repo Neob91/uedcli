@@ -1,8 +1,26 @@
 # Pre-spec — consolidate `level preview --native` onto the `actor preview` renderer
 
-Status: PRE-SPEC. Options + owner questions only; nothing decided or built. Requested by the owner
-2026-08-05: merge the two offline renderers, **keep `actor preview`'s logic, ditch `level preview
---native`'s** (it's buggy). File:line anchors are against `master`.
+Status: decisions recorded (2026-08-05); ready for spec review. Requested by the owner 2026-08-05:
+merge the two offline renderers, **keep `actor preview`'s logic, ditch `level preview --native`'s**
+(it's buggy). File:line anchors are against `master`.
+
+## Decisions (2026-08-05, owner)
+
+- **Projection = one shared renderer, perspective added to `preview.py`.** Add a perspective camera +
+  the SHOT pose grammar to `preview.py`, and wire `level preview --native` to the SAME render path
+  `actor preview` uses — one renderer serves both verbs, not two implementations. `render.rs` and the
+  camera/scene half of `preview_native.py` retire. (Option (a) below, plus the explicit "share the
+  rendering logic" constraint.)
+- **Perf = ship pure-Python now; Rust rasterizer refactor is a planned, separate follow-on.** The
+  consolidated whole-level tier ships on `preview.py` even if slower over a whole level; it is NOT
+  gated on a speed lever. The planned Rust rasterizer is filed as
+  `rust-rasterizer-for-the-consolidated-offline` (depends on this landing first).
+- **Missing texture = batch-report then refuse.** Collect ALL surviving-surface refs that don't
+  decode across the whole level, exit 2 once naming the set (the `conventions.md` batch rule) — no
+  checkerboard, no silent exit 0. Closes `level-preview-native-checkerboards`.
+
+The three sections below (fork + dependent decisions 1–2) are the analysis these rulings resolve;
+kept for the mechanism, not still open.
 
 ## What "the two offline renderers" are
 
@@ -38,10 +56,11 @@ fov, or basis code anywhere in `preview.py`.
 --native` **only** (`render::render` called only at `lib.rs:414`; the `render_frame` binding only at
 `preview_native.py:482` ← `level.py:545`).
 
-## The central fork — projection (see `questions/projection-fork-perspective-vs-orthographic.md`)
+## The central fork — projection (DECIDED: option (a) + shared renderer)
 
 `preview.py` is orthographic; `level preview --native` is freely-posed perspective. "Keep actor
-preview's logic" is therefore not a drop-in swap. Three futures:
+preview's logic" is therefore not a drop-in swap. Three futures were on the table; the owner chose
+**(a)**, with `level preview --native` wired to the same render path `actor preview` uses:
 
 - **(a) Teach `preview.py` a perspective camera** + the SHOT pose grammar, so the offline
   `level preview` tier keeps posed whole-level perspective shots drawn by `preview.py`. Most work
@@ -78,14 +97,11 @@ render (the fork), not in the removal.
 
 ## Dependent decisions (each its own question or a spec §)
 
-1. **Whole-level Python-rasterizer perf** — `questions/whole-level-python-rasterizer-perf.md`. A
-   retail level is far bigger than an actor set; the CSG carve (~8 s, `native-preview-perf…`) is the
-   *shared* core and unchanged by this, but `preview.py`'s pure-Python fill over a whole level may
-   need `make-actor-preview-faster` first. Under (a)/(b) this must be answered.
-2. **Missing-texture strictness** — `questions/missing-texture-strictness-for-a-whole-level.md`.
-   `preview.py` exits 2 on a missing texture; `--native` checkerboards. Adopting actor-preview logic
-   makes the whole-level tier refuse if any surviving surface's texture doesn't decode — plausibly
-   often on real maps. Owner call.
+1. **Whole-level Python-rasterizer perf** — DECIDED: ship pure-Python; the Rust rasterizer is a
+   planned follow-on (`rust-rasterizer-for-the-consolidated-offline`), not a gate. The CSG carve
+   (~8 s, `native-preview-perf…`) is the *shared* core and unchanged by this.
+2. **Missing-texture strictness** — DECIDED: batch-report then refuse (collect all missing refs,
+   exit 2 once naming the set). Closes `level-preview-native-checkerboards`.
 3. **CSG-core upgrade is automatic and desirable.** Moving the offline tier onto
    `build_geometry_bspcsg` (the faithful core) is what fixes `native-preview-mis-renders-overlapping`
    (p1 doorway magenta) — the coarse core's defect. Confirm the offline tier adopts the faithful

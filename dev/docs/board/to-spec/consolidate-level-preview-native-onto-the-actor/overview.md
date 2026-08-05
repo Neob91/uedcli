@@ -23,10 +23,10 @@ The two renderers are not the same shape:
   core (the buggy one) and the Rust rasterizer.
 
 So "keep actor preview's logic" cannot be a straight swap: `preview.py` has no perspective camera and
-no SHOT-pose projection. The central fork is whether to **(a)** give `preview.py` a perspective
-camera so it can serve `level preview` poses, **(b)** drop perspective and make the offline tier
-orthographic-only, or **(c)** delete `--native` entirely and rely on `--game` + `actor preview`. See
-`spec.md`.
+no SHOT-pose projection. **Owner decision (2026-08-05): add a perspective camera to `preview.py` and
+wire `level preview --native` to the same render path `actor preview` uses — one shared renderer.**
+Ship pure-Python (a Rust rasterizer is a planned follow-on); a missing texture batch-reports then
+exits 2. See `spec.md` "Decisions".
 
 ## Why this is wanted
 
