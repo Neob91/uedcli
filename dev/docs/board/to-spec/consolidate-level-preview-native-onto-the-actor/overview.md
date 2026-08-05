@@ -9,8 +9,9 @@ summary = "Consolidate `level preview --native` onto the `actor preview` rendere
 Owner intent (2026-08-05): the two offline renderers should become one. **Keep `actor preview`'s
 logic (`preview.py` + the faithful `build_geometry_bspcsg` CSG core); retire `level preview
 --native`'s logic (`preview_native.py`'s Rust `render.rs` rasterizer + the default `build_geometry`
-core), which is buggy.** Pre-spec only — options and owner questions in `spec.md` + `questions/`;
-nothing decided or built.
+core), which is buggy.** Full spec written (`spec.md`), owner rulings folded; one open question
+(the offline tier's flag name) and two points gated on the running spike
+`2026-08-05-perspective-in-preview-py`.
 
 ## The catch the spec has to resolve
 
