@@ -5,7 +5,33 @@ FEX+wine-10 to the engine banner, then blocked on the retail **CD check** (minim
 memory cap** (full set). Bypass the CD check on a right-sized package set, hold memory under the cap,
 reach the UedPreview `:7777` link, and render `game_preview_here.png`.
 
-## TL;DR — a real DeusEx frame RENDERS under FEX+wine-10 (no patch). Both named walls cleared; the room-specific in-game preview is still blocked (map + FireTexture).
+## RESOLVED (2026-08-05) — OUR textured room renders in-game, plus real OG maps. No patch.
+
+Once the box caps were **raised to 16 GiB / 2048 pids**, the blocker turned out to be the **FEX+wine-10
+`ClientTravel` path**, not memory. Switching to **wine-8 under qemu** (the `dx-lum-uned` image, the
+2026-08-03 environment) — same dxreal content, same `UedPreview.u` link — the travel works and renders:
+
+- **`evidence/game_preview_here_room.png`** — OUR textured room (the Amark/FMark alignment wall),
+  in-game DeusEx SoftDrv, **deterministic 3/3** (md5 `00b31d5d`), byte-identical (35 834 B) to the
+  2026-08-03 `real_engine_wall.png`. Boot dx engine → menu binds `:7777` (~16 s, peak ~2 GiB) →
+  `TravelToLevel room.dx` over the link → pose + `Clean generic` + X-grab the 640×480 viewport.
+- **Real OG maps** (`evidence/og_08_NYC_Bar.png`, `og_02_NYC_Bar.png`, `og_02_NYC_BatteryPark.png`) —
+  `TravelToLevel` to each retail level, then grab: the 'Ton bar interior, Battery Park under the bridge.
+
+Two facts that had masked this under FEX+wine-10:
+1. **wine-10/FEX corrupts the object system on any content-loading travel** (`ULevel::PostLoad` access
+   violation for our room; `Assertion GObjAvailable … StaticAllocateObject` for OG maps — "Error
+   reentered", so a masked primary crash). wine-8/qemu handles the exact same travels cleanly. Not
+   memory: it crashed at <900 MiB with the 16 GiB cap.
+2. Our `room.dx` needs its **`Amark.utx`** texture staged; wine-8 *warns and reverts* on the missing
+   package, wine-10 *crashes*. With `Amark.utx` present the room loads and renders.
+
+dxreal is **v1.112fm** (verified: `FM_*` flags, single exe) — it ignores `LocalMap` and always boots
+Entry→DX, so the room is reached by link `TravelToLevel`, not a direct boot. Harness: `harness/qboot.sh`
+(qemu/wine-8 boot) + `harness/drive_render.py`. **The delivered preview frame is
+`evidence/game_preview_here_room.png`.**
+
+## (Superseded) TL;DR — a real DeusEx frame RENDERS under FEX+wine-10 (no patch); room blocked there by the wine-10 travel bug.
 
 **Real frame captured — `evidence/game_preview_deusex_menu.png`** (deterministic, md5 `4fe486ca`, 3/3
 identical grabs): the Deus Ex main-menu 3D logo (wing + Earth globe), SoftDrv-rendered by retail

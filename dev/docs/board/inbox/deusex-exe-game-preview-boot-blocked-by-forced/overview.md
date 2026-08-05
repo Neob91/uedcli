@@ -1,8 +1,16 @@
 +++
 priority = "p2"
 kind = "finding"
-summary = "DeusEx.exe game-preview boot blocked by forced Entry->DX.dx auto-travel (:7777 never binds)"
+summary = "RESOLVED: in-game room preview renders under wine-8/qemu + 16 GiB caps (FEX+wine-10 ClientTravel corrupts)"
 +++
+
+**RESOLVED 2026-08-05** (spike `2026-08-04-deusex-cd-bypass-and-game-travel-wall`). With caps raised to
+16 GiB, the wall was the **FEX+wine-10 `ClientTravel`** (object-system corruption on content-loading
+travel — not memory, not the map). Under **wine-8/qemu** (`dx-lum-uned`) the menu binds `:7777`, then
+`TravelToLevel room.dx` renders OUR textured room (`game_preview_here_room.png`, deterministic) and OG
+retail maps. Our room also needs `Amark.utx` staged (wine-8 warns+reverts if missing; wine-10 crashes).
+Below is the original (obsolete) finding.
+
 
 # DeusEx.exe game-preview boot blocked by forced Entry->DX.dx auto-travel (:7777 never binds)
 
