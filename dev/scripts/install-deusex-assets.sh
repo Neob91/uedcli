@@ -13,24 +13,27 @@
 # Everything written is copyrighted Deus Ex content. BOTH dev/games/ and uned/DeusExAssets/ are
 # gitignored and NEVER committed.
 #
-# NO SOURCE IS BUILT IN. `--url` fetches whatever URL YOU pass and nothing else; there is no default,
-# no bundled list, and no lookup. Deus Ex is a commercial game still sold today, so YOU are
-# responsible for having the right to the copy you point this at — a DRM-free GOG copy you own, or
-# your own mirror of it, is the clean case. See dev/docs/deusex-assets-setup.md ("Where to get
-# Deus Ex") for the options and what is known about each.
+# Run with NO ARGUMENTS to install fully autonomously: with neither a <SOURCE> nor a --url, it
+# defaults to the archive.org GOTY installer (DEFAULT_URL below) verified against a pinned checksum
+# (DEFAULT_SHA256). That archive.org copy is an UNOFFICIAL redistribution of a game still sold: Deus
+# Ex is commercial, so YOU are responsible for having the right to the copy you install — a DRM-free
+# GOG copy you own, or your own mirror, is the clean case. Override the default by passing a local
+# <SOURCE> or your own --url. See dev/docs/deusex-assets-setup.md ("Where to get Deus Ex").
 #
 # The baseline you want is 1.112fm, the final official build. GOG/Steam and the GOTY Edition already
 # ship at 1.112fm, so there is normally nothing to patch — hence no patch step here. If your source
 # is an old unpatched retail disc, apply the official patcher to the working copy and re-run.
 #
 # Usage:
+#   dev/scripts/install-deusex-assets.sh [--game <name>] [--with-maps] [--dry-run]
+#       (no SOURCE/--url -> the built-in DEFAULT_URL, autonomous)
 #   dev/scripts/install-deusex-assets.sh [--game <name>] [--with-maps] [--dry-run] <SOURCE>
 #   dev/scripts/install-deusex-assets.sh [--game <name>] [--with-maps] [--dry-run] \
 #       --url <URL> [--url <URL>…] [--sha256 <SUM>…] [--redownload]
 #
 # <SOURCE> is the install ROOT (dir CONTAINING System/, Textures/, …) or the ACE installer dir
 # (CONTAINING deusex.ace). Subdir names are matched case-insensitively (Windows installs vary).
-# SOURCE and --url are mutually exclusive; exactly one is required.
+# SOURCE and --url are mutually exclusive; with NEITHER, the built-in DEFAULT_URL fires.
 #
 # --url may be repeated (a multi-part download; ALL parts land in one dir before unpacking).
 # --sha256 verifies a download, positionally matched to the --url of the same index; give it for
@@ -58,6 +61,13 @@ src=""
 redownload=0
 urls=()
 sums=()
+
+# Built-in default source — fires only when NO <SOURCE> and NO --url are given (autonomous run; see
+# the header's rights note). The archive.org GOTY offline installer (Inno Setup `.exe`, ~398 MB) with
+# a pinned checksum so the built-in download is verified, not blind. Override with <SOURCE> or --url.
+DEFAULT_URL='https://archive.org/download/deus_ex_goty_16231/setup_deus_ex_goty_1.112fm%28revision_1.3.0.1%29_%2816231%29.exe'
+DEFAULT_SHA256=''   # pinned below once computed from the fetched artifact
+
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --game)      shift; [[ $# -ge 1 ]] || { echo "error: --game needs a value" >&2; exit 2; }
@@ -84,9 +94,10 @@ if [[ ${#urls[@]} -gt 0 && -n "$src" ]]; then
     exit 2
 fi
 if [[ ${#urls[@]} -eq 0 && -z "$src" ]]; then
-    echo "error: missing source — give a <SOURCE> directory (an installed Deus Ex or a raw ACE" >&2
-    echo "       installer) or one or more --url downloads. Run with --help." >&2
-    exit 2
+    # Autonomous run: no source supplied, so use the built-in default (see the header's rights note).
+    echo "no <SOURCE> or --url given — using the built-in default: $DEFAULT_URL" >&2
+    urls=("$DEFAULT_URL")
+    [[ -n "$DEFAULT_SHA256" ]] && sums=("$DEFAULT_SHA256")
 fi
 if [[ ${#sums[@]} -gt 0 && ${#sums[@]} -ne ${#urls[@]} ]]; then
     echo "error: --sha256 given ${#sums[@]} time(s) for ${#urls[@]} --url(s) — give one per URL, in" >&2
