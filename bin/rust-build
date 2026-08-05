@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# bin/rust-build — build the uedcli_native extension in Docker and install it into the dev
+# venv. For hosts with NO Rust toolchain: bin/test's ensure_native_ext skips the native
+# build when cargo is absent, so `level materialize` and the gate-5 cross-checks are
+# unavailable there. This builds the abi3 wheel in a container (the pyo3/maturin manylinux
+# image) and pip-installs it into .venv, giving a cargo-less host the extension.
+#     bin/rust-build                       # build + install into .venv
+#     UEDCLI_MATURIN_IMAGE=<img> bin/rust-build   # override the builder image
+# Requires docker (host daemon). On a host WITH cargo, prefer bin/test (ensure_native_ext).
+set -euo pipefail
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/_venv.sh"
+ensure_venv
+
+command -v docker >/dev/null 2>&1 || { echo "bin/rust-build: docker not found on PATH" >&2; exit 1; }
+
+NATIVE_DIR="$UEDCLI_DIR/uedcli-native"
+[ -d "$NATIVE_DIR" ] || { echo "bin/rust-build: no crate at $NATIVE_DIR" >&2; exit 1; }
+IMAGE="${UEDCLI_MATURIN_IMAGE:-ghcr.io/pyo3/maturin}"
+WHEELS="$NATIVE_DIR/target/wheels"
+
+# The pyo3/maturin image ships its Rust toolchain root-owned, so the build must run as root
+# (a -u uid can't exec cargo). Cache the crate registry under the gitignored target/, then
+# chown everything the root build wrote back to the invoking user so the repo isn't left
+# root-owned.
+echo "bin/rust-build: building uedcli_native (abi3) in $IMAGE" >&2
+docker run --rm \
+  -e CARGO_HOME=/io/target/.cargo \
+  -v "$NATIVE_DIR":/io -w /io \
+  "$IMAGE" build --release --out target/wheels
+docker run --rm --entrypoint chown \
+  -v "$NATIVE_DIR":/io \
+  "$IMAGE" -R "$(id -u):$(id -g)" /io/target
+
+whl="$(ls -t "$WHEELS"/uedcli_native-*.whl 2>/dev/null | head -1 || true)"
+[ -n "$whl" ] || { echo "bin/rust-build: no wheel produced in $WHEELS" >&2; exit 1; }
+
+echo "bin/rust-build: installing $(basename "$whl") into $VENV" >&2
+"$VENV/bin/pip" install --quiet --force-reinstall --no-deps "$whl"
+"$PY" -c "import uedcli_native" \
+  && echo "bin/rust-build: uedcli_native import OK" >&2 \
+  || { echo "bin/rust-build: import uedcli_native FAILED after install" >&2; exit 1; }
