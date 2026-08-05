@@ -1,10 +1,10 @@
 # Spec — consolidate the offline preview onto one renderer
 
-Status: full spec; owner rulings recorded. **Two points are gated on the running spike**
-`2026-08-05-perspective-in-preview-py` (perspective feasibility in `preview.py`, and whole-level
-pure-Python perf) — see "Spike gate". Requested by the owner 2026-08-05. File:line anchors vs
-`master`. Ephemeral (`CLAUDE.md`): on build, fold into `architecture.md` "Preview internals", the
-`actor-preview-parity` `direction/` home, and `docs/usage.md`, then delete this file.
+Status: full spec; owner rulings recorded; **spike resolved** — both gated assumptions confirmed
+(`2026-08-05-perspective-in-preview-py`). One open owner question (offline flag name). Requested by
+the owner 2026-08-05. File:line anchors vs `master`. Ephemeral (`CLAUDE.md`): on build, fold into
+`architecture.md` "Preview internals", the `actor-preview-parity` `direction/` home, and
+`docs/usage.md`, then delete this file.
 
 ## Decisions (2026-08-05, owner)
 
@@ -63,8 +63,9 @@ vertex to `(screen_x, screen_y, depth)` and declares whether faces must be near-
 
 The scanline fill (`_fill_face`/`_fill_face_textured`, `preview.py:809`/765) consumes screen-space
 polys + per-vertex depth and is reused. The new interpolation work is **perspective-correct** depth
-and UV (divide by w), where ortho uses the affine on-plane solve; this is the part the spike proves
-fits cleanly (see gate). Both projections feed one z-buffer and one texture/shade path.
+and UV (divide by w), where ortho uses the affine on-plane solve; the spike confirmed this is a
+localized fill-loop change reusing `_affine_on_plane` (see "Spike results"). Both projections feed one
+z-buffer and one texture/shade path.
 
 ### 2. Where each verb plugs in
 
@@ -120,18 +121,31 @@ Match `actor preview` parity: **black** background (the `actor-preview-parity` r
   `native/materialize.py` core="coarse" (`materialize.py:807,828`); only its `preview_native` caller
   goes.
 
-## Spike gate (`dev/docs/spikes/2026-08-05-perspective-in-preview-py`)
+## Spike results (`dev/docs/spikes/2026-08-05-perspective-in-preview-py`, resolved 2026-08-05)
 
-Two assumptions the spec rests on are being measured before build:
+Both assumptions confirmed; the design above holds.
 
-1. **Perspective fits `preview.py` cleanly** — the near-clip + perspective-correct interpolation is a
-   localized addition to the fill, not an invasive rewrite. If the spike finds it invasive, revisit
-   the seam (§1).
-2. **Whole-level pure-Python rasterization is acceptable** — the perf ruling ("ship pure-Python")
-   assumes a whole retail level renders in single-digit seconds/frame. If the spike measures tens of
-   seconds+, escalate: either pull the Rust-rasterizer follow-on forward, or reconsider.
+1. **Perspective fits `preview.py` as a localized addition.** On a planar face, `1/d`, `u/d`, `v/d`
+   are affine in screen space, so `preview.py`'s existing `_affine_on_plane` solver and even-odd
+   scanline fill carry over unchanged in structure. Perspective adds: a ~20-line self-contained
+   near-plane Sutherland–Hodgman clip, a ~10-line camera-space transform, and a fill inner-loop change
+   (one per-pixel divide + z-buffer storing `1/d`, larger = nearer). The one helper that does NOT
+   carry over is `_plane_screen_probes` (`preview.py:645`) — its world-space probes can fall behind
+   the near plane; the perspective path instead solves the affine maps from the CLIPPED polygon's own
+   projected verts. An added mode, not a rewrite; the ortho path is untouched.
+2. **Whole-level pure-Python raster is low single-digit seconds** — ~1.1 s (424 surfaces) to ~4.1 s
+   (100% frame coverage) at `--size 1024`; ~25–40× slower than Rust but within the offline-draft
+   budget, matching the owner's ruling. **CSG dominates, not raster** (~13.8 s CSG vs ~2.0 s raster at
+   401 brushes), so retiring `render.rs` does not touch the bottleneck — consistent with
+   `native-preview-perf-an-8-shot-castle-batch`.
+3. **Correctness:** the Python prototype matches the Rust `render.rs` to mean-abs **0.000–0.001/255**
+   across scenes (the residual is f32-vs-f64), and the near clip cross-checks exactly (behind→0 px,
+   straddle→partial, front→full, mad 0.0). So the port is faithful, not an approximation.
 
-Fold the spike's numbers into this spec before it leaves `to-plan`.
+**Caveat carried forward:** retail Deus Ex content sat behind dead `neob91` symlinks on the spike
+host, so the CSG figure is on synthetic scenes and the castle's 8 s is cited, not reproduced; the
+castle frame *extrapolates* to ~6–10 s @1024 at the high-overdraw end. Re-measure on real content
+during build to confirm the whole-level budget; nothing in the design depends on the exact number.
 
 ## Edge cases
 
