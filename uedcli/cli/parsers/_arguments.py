@@ -231,19 +231,19 @@ def _preview_opts(pp):
     pp.add_argument("--brush-colors", dest="brush_colors", default=None, choices=["csg", "legend"],
                     help="how to colour the '--faces wire' wireframe: 'csg' (the default) = by CSG op "
                          "(added blue, subtracted gold, semisolid pink, nonsolid green, mover magenta); "
-                         "'legend' = each brush in its own per-actor legend tint (drops the CSG cue but "
-                         "tells same-op brushes apart at a glance, matching the legend swatches). "
+                         "'legend' = each brush in its own per-actor tint (drops the CSG cue but "
+                         "tells same-op brushes apart at a glance). "
                          "Rejected under --faces textured (which samples real textures, colouring "
                          "nothing from this flag)")
     pp.add_argument("--annotate", dest="annotate", default=DEFAULT_ANNOTATIONS,
-                    help="comma-set of annotation selectors (union). A bare KIND = ALL of it; colon "
-                         "FILTERs narrow; commas union. Kinds: poly (face indices), name (actor "
-                         "names). poly filters: vis (inert alias of bare poly — on-face numbering is "
-                         "facing-blind), hi (highlighted; 'highlighted' is an accepted synonym). name "
-                         "filters: brush, point, hi. e.g. 'name:brush' = brush names only; 'poly:vis' "
-                         "= every face index (same as bare poly). Keywords (stand alone): none, all "
-                         "(=poly,name), highlighted (=poly:hi,name:hi). Default: all face indices + "
-                         "all names")
+                    help="comma-set of poly-index selectors (union). Bare 'poly' = every face index; "
+                         "colon FILTERs narrow; commas union. poly filters: vis (inert alias of bare "
+                         "poly — on-face numbering is facing-blind), hi (highlighted faces only; "
+                         "'highlighted' is an accepted synonym). e.g. 'poly:hi' = highlighted faces "
+                         "only; 'poly:vis' = every face index (same as bare poly). Keywords (stand "
+                         "alone): none, all (=poly), highlighted (=poly:hi). Default: all face "
+                         "indices. Actor names are never drawn — locate a brush by its grid cell "
+                         "(printed on stderr)")
     pp.add_argument("--frame", default=None, metavar="TARGET",
                     help="frame a target to fill the view; frames ONLY, does NOT highlight. Two forms: "
                          "a SELECTOR — a bare BRUSH name frames that actor's whole AABB, or BRUSH:IDX "

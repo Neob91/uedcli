@@ -76,13 +76,13 @@ def test_it_renames_brush_preview_to_actor_preview(tmp_path, monkeypatch):
 
 def test_default_preview_paints_onface_poly_numbers(tmp_path, monkeypatch):
     # The default `actor preview` (no flag) paints on-face poly numbers: a subtract room's face decals
-    # add content over a names-only render of the same actor.
+    # add content over an un-annotated render of the same actor.
     proj = _project_with_two_brushes(tmp_path, monkeypatch)
     from uedcli.preview import DEFAULT_ANNOTATIONS
-    labelled, names_only = tmp_path / "l.png", tmp_path / "n.png"
+    labelled, plain = tmp_path / "l.png", tmp_path / "n.png"
     assert dispatch.dispatch(_prev(proj, labelled, names=["WallA"], annotate=DEFAULT_ANNOTATIONS)) == 0
-    assert dispatch.dispatch(_prev(proj, names_only, names=["WallA"], annotate="name")) == 0
-    assert _nonbg(_img(labelled)) > _nonbg(_img(names_only))
+    assert dispatch.dispatch(_prev(proj, plain, names=["WallA"], annotate="none")) == 0
+    assert _nonbg(_img(labelled)) > _nonbg(_img(plain))
 
 
 def test_names_from_stdin(tmp_path, monkeypatch):
@@ -671,8 +671,8 @@ def test_it_renders_one_breakdown_pane_per_brush_plus_an_overview(tmp_path, monk
 
 
 def test_it_draws_no_legend_panel_in_any_breakdown_pane(tmp_path, monkeypatch):
-    # The breakdown ditched the legend entirely — the SCENE pane self-labels with on-face names — so no
-    # solid WHITE legend panel is drawn in any cell's top-left corner (where the legend used to sit).
+    # No layout draws a legend panel — so no solid WHITE legend panel appears in any cell's top-left
+    # corner (where the legend used to sit).
     from uedcli.preview import WHITE
     proj = _project_room_pillar(tmp_path, monkeypatch)
     out = tmp_path / "b.png"

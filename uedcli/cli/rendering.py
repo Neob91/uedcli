@@ -268,7 +268,7 @@ def _render_breakdown_grid(actors, args, *, render_data, shown_highlights=None,
         return preview.render_brushes_pgm(
             actors, view=view, size=size, annotations=annotations, iso_angle=args.iso_angle, region=region,
             highlight_polys=highlight_polys, highlight_points=highlight_points, color_by_csg=True,
-            render_data=render_data, focus=focus, draw_legend=False, reserve_legend=False,
+            render_data=render_data, focus=focus,
             brush_colors=brush_colors, faces=faces, frame_pad=_BREAKDOWN_PAD,
             shown_highlights=shown_highlights, grid=grid, cells_out=cells_out)
 

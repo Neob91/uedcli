@@ -8,16 +8,11 @@ bytes IN MEMORY**. That is an internal format only: the CLI's disk-write boundar
 writing, and PNG is the only form a preview ever takes on disk (no container/UnrealEd
 involved either way).
 
-**Two words, deliberately distinct — "annotation" vs "label".** An **ANNOTATION** is the
-*selection* concept: WHICH extra marks a render draws (face indices, actor names), chosen by
-the `--annotate` flag and carried by an `AnnotationSpec` (`parse_annotation_spec`,
-`DEFAULT_ANNOTATIONS`). A **LABEL** is the *drawing* concept: one concrete piece of text laid
-out on the canvas (`_LabelItem`, `_place_labels`, `poly_labels`) — the mechanism that renders
-an annotation without colliding with the wireframe. So annotations are decided, labels are
-placed. Neither has anything to do with the **actor `label` DIMENSION** (`labellib.py` — the
-flat, cross-cutting `--label` classification stored per actor in the trunk); that is a third,
-unrelated sense living outside this module, and it is why the selection concept here is no
-longer called "label".
+The `--annotate` flag selects WHICH poly-index marks a render draws, carried by an `AnnotationSpec`
+(`parse_annotation_spec`, `DEFAULT_ANNOTATIONS`). Actor names are never drawn — the addressable grid
+(a stderr `name → cell` map) is how a brush is located. The **actor `label` DIMENSION** (`labellib.py`
+— the flat `--label` classification stored per actor in the trunk) is a separate, unrelated sense
+living outside this module.
 
 Rendering choices (all to make poly numbers readable):
   - light-on-BLACK, matching UnrealEd's viewport (owner ruling 2026-08-02): front edges brighter,
@@ -26,30 +21,23 @@ Rendering choices (all to make poly numbers readable):
     (`_CSG_PALETTE`).
   - a highlighted poly (`--highlight`) is drawn in its brush's vivid front hue with a
     bolder line (the facing dim is ignored on it); `--zoom` only frames, never highlights.
-  - point (non-brush) actors draw as a DT_Sprite billboard or a labelled marker, with
+  - point (non-brush) actors draw as a DT_Sprite billboard or a marker, with
     optional faint collision/light/sound overlays (see PointRender). A highlighted point
     actor (`--highlight <name>`) gets corner brackets (a selection reticle) drawn UNDER its
     sprite/marker.
-  - a NAME label (legacy path only — see below) sits in a knockout (white) box so the wireframe never
-    runs through it, tied to its anchor dot by a leader line when nudged. Placement is density-aware
-    (`DensityGrid` + `_place_labels`): names flee crowded regions and never cover a point-actor icon,
-    the legend, or an on-face number.
-  - HYBRID per-brush tint + legend (the CSG-coloured `color_by_csg` path, i.e. the real preview): the
+  - HYBRID per-brush tint (the CSG-coloured `color_by_csg` path, i.e. the real preview): the
     wireframe stays CSG-coloured, but each actor's LABELS carry a distinct categorical TINT
     (`assign_tints` → `_TINT_PALETTE`) — so two brushes with the SAME CSG op (one wireframe hue) are
     still told apart by their label colour. A brush's on-face poly-index decal and a point actor's
-    marker use its tint. A top-left LEGEND (`_draw_legend`) maps each tint → actor NAME (brush = filled
-    square, point = filled diamond), and actor names live there, OFF the geometry (declutter). The
-    legacy black/grey path keeps black accents, on-geometry names, no legend.
+    marker use its tint. The legacy black/grey path keeps black accents.
   - `focus` (an actor name) recedes every OTHER brush — its wireframe to faint lines, and under a FILLED
     mode its fills to a faint tint of themselves — and paints face numbers only for the focused brush;
     `highlight` OVERRIDES focus (a highlighted poly/actor stays vivid+bold on top, at FULL fill
-    strength, and keeps its number). All names still appear in the legend regardless of focus.
-  - an `AnnotationSpec` (parsed from `--annotate`) selects WHICH annotations draw, per kind, by element
-    category:
-    e.g. `name:brush` = brush names only (⇒ their legend rows), `poly:hi` = highlighted faces only,
-    `poly:vis,poly:hi,name` (the default) = face numbers + all names. On-face numbering is facing-blind,
-    so `poly:vis` numbers every face (front/back shown by opacity); `poly:hi`/`none` stay exact.
+    strength, and keeps its number).
+  - an `AnnotationSpec` (parsed from `--annotate`) selects WHICH face indices draw, by category:
+    e.g. `poly:hi` = highlighted faces only, `poly:vis,poly:hi` (the default) = all face numbers.
+    On-face numbering is facing-blind, so `poly:vis` numbers every face (front/back shown by opacity);
+    `poly:hi`/`none` stay exact.
   - poly face indices are the SOLE thing painted ON the geometry: each index is a CENTERED texture flat
     IN its face plane (`_plan_onface_texture`/`_draw_painted_decal`) — gravity-hung on walls/slopes,
     world-Y-aligned on floors/ceilings/caps, per-brush tinted, translucent with a 6/9 underline + halo,
@@ -133,8 +121,8 @@ COL_SOUND = (150, 165, 235)       # faint blue — sound reach
 COL_LIGHT = (245, 175, 80)        # faint orange — light reach (deviated from UED's red)
 
 # Categorical per-ACTOR label tints. The wireframe stays CSG-coloured (blue=add, gold=subtract, …); an
-# actor's LABELS use its own tint instead — a brush's on-face poly-index decals + its legend swatch, and
-# a point actor's on-geometry marker + its legend glyph. This is the fix for the CSG palette's
+# actor's LABELS use its own tint instead — a brush's on-face poly-index decals, and
+# a point actor's on-geometry marker. This is the fix for the CSG palette's
 # cap: two brushes with the SAME CSG op share ONE wireframe hue, so their labels were indistinguishable;
 # a distinct per-brush tint tells them apart while the CSG wireframe cue is preserved. Tints are assigned
 # per actor in scene order (drawn or not — brushes AND point actors alike; an undrawn point actor with no
@@ -143,7 +131,7 @@ COL_LIGHT = (245, 175, 80)        # faint orange — light reach (deviated from 
 # wireframe hues (add=blue, subtract=gold) so a tint never reads as a CSG cue. The on-face number (digits
 # AND its underline) is painted in the tint; a legacy NAME label keeps black digits with a tinted box.
 # Used ONLY on the CSG-coloured preview path (`color_by_csg`); the legacy black/grey path keeps black
-# accents + on-geometry names and draws no legend. test_preview.py pins the tint→label/legend WIRING (a
+# accents + on-geometry names. test_preview.py pins the tint→label WIRING (a
 # brush's index labels carry its assigned tint; a point marker is tinted, not CSG-additive), not the
 # literal RGB values.
 _TINT_PALETTE: list[tuple[int, int, int]] = [
@@ -164,25 +152,20 @@ def assign_tints(actors: list[Actor]) -> dict[str, tuple[int, int, int]]:
     """Map each actor's Name to a categorical label tint (`_TINT_PALETTE`, cycled by scene position),
     one per actor in scene order (drawn or not — brushes AND point actors alike; an undrawn point actor
     still consumes an index), so a brush's poly-index labels and a point actor's marker each carry the
-    actor's own tint and the legend can key tint→name. Deterministic given actor order, so the same actor
-    gets the same tint in every quad pane and the legend."""
+    actor's own tint. Deterministic given actor order, so the same actor
+    gets the same tint in every quad pane."""
     return {a.name: _TINT_PALETTE[i % len(_TINT_PALETTE)] for i, a in enumerate(actors)}
 
 
 @dataclass(frozen=True, kw_only=True)
 class AnnotationSpec:
-    """Which ANNOTATIONS to draw, as a set of element CATEGORIES per kind. A poly face has category
-    `(is_front, is_highlighted)`; an actor name has `(is_brush, is_highlighted)`. The `--annotate`
-    grammar (see `parse_annotation_spec`) is: a bare kind = ALL of it; each filter narrows; commas union.
-    So membership is plain set algebra and the renderer just asks `draws_poly`/`draws_name`."""
+    """Which poly-index ANNOTATIONS to draw, as a set of face CATEGORIES `(is_front, is_highlighted)`.
+    The `--annotate` grammar (see `parse_annotation_spec`) is: a bare kind = ALL of it; each filter
+    narrows; commas union. So membership is plain set algebra and the renderer just asks `draws_poly`."""
     poly: frozenset[tuple[bool, bool]]   # selected (is_front, is_highlighted)
-    name: frozenset[tuple[bool, bool]]   # selected (is_brush, is_highlighted)
 
     def draws_poly(self, *, is_front: bool, is_highlighted: bool) -> bool:
         return (is_front, is_highlighted) in self.poly
-
-    def draws_name(self, *, is_brush: bool, is_highlighted: bool) -> bool:
-        return (is_brush, is_highlighted) in self.name
 
     @classmethod
     def all(cls) -> "AnnotationSpec":
@@ -197,74 +180,53 @@ class AnnotationSpec:
         return parse_annotation_spec(DEFAULT_ANNOTATIONS)
 
 
-DEFAULT_ANNOTATIONS = "poly:vis,poly:hi,name"          # all face indices (vis is facing-blind) + all names
+DEFAULT_ANNOTATIONS = "poly:vis,poly:hi"          # all face indices (vis is facing-blind)
 _ALL_POLY = frozenset((f, h) for f in (False, True) for h in (False, True))
-_ALL_NAME = frozenset((b, h) for b in (False, True) for h in (False, True))
 _POLY_FILTERS = {"vis", "hi", "highlighted"}       # `highlighted` is a synonym for `hi`
-_NAME_FILTERS = {"brush", "point", "hi", "highlighted"}
 _KEYWORDS = {"all", "none", "highlighted"}
 
 
 def parse_annotation_spec(text: str) -> AnnotationSpec:
-    """Parse a `--annotate` value into a `AnnotationSpec`. Grammar: a comma-set of selectors `KIND[:FILTER…]`,
-    unioned. Bare kind = ALL of that kind; each colon filter narrows (intersecting within one
-    selector); tokens are whitespace-stripped + lower-cased. Kinds `poly`/`name`; poly filters `vis`
-    (an INERT alias of bare `poly` — on-face numbering is facing-blind, so it no longer means
-    front-only; kept only so pre-facing-blind specs still parse) / `hi`; name filters `brush`/`point`/`hi`
-    (`highlighted` = `hi`). Whole-value
-    keywords `none` / `all` (=`poly,name`) / `highlighted` (=`poly:hi,name:hi`) must stand alone. Zero
-    effective tokens ⇒ `none`. Raises `ValueError` naming the offending token on any invalid input."""
+    """Parse a `--annotate` value into an `AnnotationSpec`. Grammar: a comma-set of `poly[:FILTER…]`
+    selectors, unioned. Bare `poly` = ALL faces; each colon filter narrows (intersecting within one
+    selector); tokens are whitespace-stripped + lower-cased. poly filters `vis` (an INERT alias of bare
+    `poly` — on-face numbering is facing-blind, so it no longer means front-only; kept only so
+    pre-facing-blind specs still parse) / `hi` (`highlighted` = `hi`). Whole-value keywords
+    `none` / `all` (=`poly`) / `highlighted` (=`poly:hi`) must stand alone. Zero effective tokens ⇒
+    `none`. Raises `ValueError` naming the offending token on any invalid input."""
     tokens = [t for t in (raw.strip().lower() for raw in text.split(",")) if t]
     if not tokens:
-        return AnnotationSpec(poly=frozenset(), name=frozenset())
+        return AnnotationSpec(poly=frozenset())
     if keyword := next((t for t in tokens if t in _KEYWORDS), None):
         if len(tokens) != 1:
             raise ValueError(
                 f"--annotate: {keyword!r} is a whole-value keyword and cannot be combined with "
                 f"other tokens (got {text!r})")
         if keyword == "all":
-            return AnnotationSpec(poly=_ALL_POLY, name=_ALL_NAME)
+            return AnnotationSpec(poly=_ALL_POLY)
         if keyword == "none":
-            return AnnotationSpec(poly=frozenset(), name=frozenset())
-        return _union_selectors(["poly:hi", "name:hi"])       # highlighted
+            return AnnotationSpec(poly=frozenset())
+        return _union_selectors(["poly:hi"])       # highlighted
     return _union_selectors(tokens)
 
 
 def _union_selectors(tokens: list[str]) -> AnnotationSpec:
     poly: set[tuple[bool, bool]] = set()
-    name: set[tuple[bool, bool]] = set()
     for token in tokens:
-        p, n = _selector_categories(token)
-        poly |= p
-        name |= n
-    return AnnotationSpec(poly=frozenset(poly), name=frozenset(name))
+        poly |= _selector_categories(token)
+    return AnnotationSpec(poly=frozenset(poly))
 
 
-def _selector_categories(token: str) -> tuple[set[tuple[bool, bool]], set[tuple[bool, bool]]]:
+def _selector_categories(token: str) -> set[tuple[bool, bool]]:
     kind, *filters = token.split(":")
-    if kind == "poly":
-        cats = set(_ALL_POLY)
-        for f in filters:
-            if f not in _POLY_FILTERS:
-                raise ValueError(f"--annotate: unknown filter {f!r} for kind 'poly' (in {token!r})")
-            cats = {c for c in cats if c[0]} if f == "vis" else {c for c in cats if c[1]}
-        return cats, set()
-    if kind == "name":
-        cats = set(_ALL_NAME)
-        subkind: str | None = None
-        for f in filters:
-            if f not in _NAME_FILTERS:
-                raise ValueError(f"--annotate: unknown filter {f!r} for kind 'name' (in {token!r})")
-            if f in ("brush", "point"):
-                if subkind and subkind != f:
-                    raise ValueError(
-                        f"--annotate: {token!r} names both 'brush' and 'point' (empty intersection)")
-                subkind = f
-                cats = {c for c in cats if c[0] == (f == "brush")}
-            else:
-                cats = {c for c in cats if c[1]}
-        return set(), cats
-    raise ValueError(f"--annotate: unknown kind {kind!r} (in {token!r})")
+    if kind != "poly":
+        raise ValueError(f"--annotate: unknown kind {kind!r} (in {token!r})")
+    cats = set(_ALL_POLY)
+    for f in filters:
+        if f not in _POLY_FILTERS:
+            raise ValueError(f"--annotate: unknown filter {f!r} for kind 'poly' (in {token!r})")
+        cats = {c for c in cats if c[0]} if f == "vis" else {c for c in cats if c[1]}
+    return cats
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -573,7 +535,7 @@ def _circle(buf, size, cx, cy, r_px, rgb) -> None:
 
 def _filled_diamond(buf, size, cx, cy, r, rgb) -> None:
     """A solid diamond of pixel radius `r` centred at (cx, cy) — the point-actor marker glyph on the
-    CSG-coloured preview (tinted per actor), and its matching legend glyph."""
+    CSG-coloured preview (tinted per actor)."""
     for dy in range(-r, r + 1):
         span = r - abs(dy)
         for dx in range(-span, span + 1):
@@ -932,35 +894,6 @@ def _box(buf, size, x0, y0, x1, y1, rgb) -> None:
     _line(buf, size, (x0, y1), (x0, y0), rgb)
 
 
-def _arrowhead(buf, size, tip, from_pt, rgb, length: int = 6) -> None:
-    """A small filled `>` arrowhead whose point is AT `tip`, opening back toward `from_pt`. Even a
-    short leader reads unambiguously as "this label points HERE" once it ends in an arrowhead — cold
-    readers reliably traced arrow-tipped leaders but read plain short stubs as mere proximity."""
-    tx, ty = tip
-    base_ang = math.atan2(ty - from_pt[1], tx - from_pt[0])   # direction leader→tip
-    for barb in (base_ang + math.pi - 0.5, base_ang + math.pi + 0.5):   # two barbs back from the tip
-        bx, by = tx + math.cos(barb) * length, ty + math.sin(barb) * length
-        _line(buf, size, tip, (int(round(bx)), int(round(by))), rgb, weight=2)
-
-
-def _rect_edge_toward(center, halfw: int, halfh: int, target):
-    """The point on the border of a `2·halfw × 2·halfh` box (centred at `center`) that lies on the ray
-    toward `target` — so a leader line starts at the box EDGE, not its centre (never running under the
-    label text)."""
-    cx, cy = center
-    dx, dy = target[0] - cx, target[1] - cy
-    if dx == 0 and dy == 0:
-        return center
-    sx = halfw / abs(dx) if dx else float("inf")
-    sy = halfh / abs(dy) if dy else float("inf")
-    s = min(sx, sy)
-    return int(cx + dx * s), int(cy + dy * s)
-
-
-def _label_size(text: str, scale: int) -> tuple[int, int]:
-    return len(text) * (4 * scale) - scale, 5 * scale
-
-
 def _draw_text(buf, size, cx, cy, text, scale, rgb) -> None:
     """Draw `text` centred at (cx, cy) in the 3×5 bitmap font."""
     gw, gh = 3 * scale, 5 * scale
@@ -982,96 +915,10 @@ def _ppm(buf: bytearray, size: int) -> bytes:
     return f"P6\n{size} {size}\n255\n".encode() + bytes(buf)
 
 
-# ----- label de-collision ----------------------------------------------------
-
-def _rects_overlap(a, b) -> bool:
-    return not (a[2] < b[0] or b[2] < a[0] or a[3] < b[1] or b[3] < a[1])
-
-
 def _clamp(v: int, lo: int, hi: int) -> int:
-    if lo > hi:           # label wider/taller than the frame — degenerate, just center it
+    if lo > hi:           # target wider/taller than the frame — degenerate, just center it
         lo, hi = hi, lo
     return max(lo, min(v, hi))
-
-
-@dataclass(kw_only=True)
-class DensityGrid:
-    """A coarse pixel-occupancy grid of the drawn wireframe, so label placement can flee dense regions
-    (a knot where many faces overlap = high cell counts). `cells` is row-major counts; `cell_px` is the
-    cell side in pixels. A mutable accumulator: built empty, then `add_segment`d per wireframe edge
-    before placement. NOT fed the labels or markers themselves (label-vs-label and label-vs-marker are
-    the placer's `occupied`/overlap concern)."""
-    cells: list[int]
-    n_cols: int
-    n_rows: int
-    cell_px: int
-
-    @classmethod
-    def build(cls, size: int, cell_px: int = 8) -> "DensityGrid":
-        n = (size + cell_px - 1) // cell_px
-        return cls(cells=[0] * (n * n), n_cols=n, n_rows=n, cell_px=cell_px)
-
-    def _col(self, x: int) -> int:
-        return min(max(x // self.cell_px, 0), self.n_cols - 1)
-
-    def _row(self, y: int) -> int:
-        return min(max(y // self.cell_px, 0), self.n_rows - 1)
-
-    def add_segment(self, p0, p1) -> None:
-        (x0, y0), (x1, y1) = p0, p1
-        steps = max(abs(x1 - x0), abs(y1 - y0)) // self.cell_px + 1
-        for i in range(steps + 1):
-            t = i / steps
-            x, y = int(x0 + (x1 - x0) * t), int(y0 + (y1 - y0) * t)
-            self.cells[self._row(y) * self.n_cols + self._col(x)] += 1
-
-    def add_box(self, rect, weight: int = 1) -> None:
-        """Add a filled footprint (a point-actor marker/sprite) so labels — including brush-name
-        anchors chosen by `_least_dense_anchor` — flee actor icons, not just wireframe."""
-        x0, y0, x1, y1 = rect
-        for row in range(self._row(y0), self._row(y1) + 1):
-            for col in range(self._col(x0), self._col(x1) + 1):
-                self.cells[row * self.n_cols + col] += weight
-
-    def avg_density_in_box(self, rect) -> float:
-        x0, y0, x1, y1 = rect
-        c0, c1 = self._col(x0), self._col(x1)
-        r0, r1 = self._row(y0), self._row(y1)
-        total = count = 0
-        for row in range(r0, r1 + 1):
-            for col in range(c0, c1 + 1):
-                total += self.cells[row * self.n_cols + col]
-                count += 1
-        return total / count if count else 0.0
-
-
-@dataclass(frozen=True, kw_only=True)
-class _LabelItem:
-    """One label to place: its `anchor` (the true PIXEL point it belongs to), `text`, font `scale`,
-    and draw `color`. Used ONLY for actor NAMES on the legacy (non-hybrid) on-geometry path — poly
-    indices are painted on-face (`_plan_onface_texture`), never placed here."""
-    anchor: tuple[int, int]
-    text: str
-    scale: int
-    color: tuple[int, int, int]
-
-
-@dataclass(frozen=True, kw_only=True)
-class _PlacedLabel:
-    """A `_LabelItem` after de-collision: `pos` is the nudged box centre where the text is drawn;
-    `anchor` is the original (unclamped) point the leader/arrow points back at."""
-    anchor: tuple[int, int]
-    pos: tuple[int, int]
-    text: str
-    scale: int
-    color: tuple[int, int, int]
-
-
-# Cost weights (k1 geometry density, k2 label overlap, k3 leader length). k2 dominates so labels
-# effectively never stack; k3 keeps them near their anchor (a moderate drift cap) so they cross into
-# clear space only when the local geometry cost outweighs a short leader. Validated by eye on
-# representative scenes (rooms, pillar halls, the showcase archetypes); not auto-tuned.
-_LABEL_WEIGHTS = (1.0, 50.0, 3.0)
 
 
 def _occluder_count(centroid2d, depth: float, occluders: list, *, own_brush: str) -> int:
@@ -1113,74 +960,6 @@ def _fade(rgb: tuple[int, int, int], amount: float = 0.6) -> tuple[int, int, int
     the `brush_colors=legend` back-face tint; the `--focus` dimming is now a composite `_DIM_ALPHA`
     instead (see `_scene_geometry`), so a faint brush no longer covers the edges/numbers it crosses."""
     return tuple(round(c + (BG - c) * amount) for c in rgb)
-
-
-def _least_dense_anchor(grid: "DensityGrid", cands_px: list, halfbox: int):
-    """Of candidate PIXEL points (a brush's own projected wireframe VERTICES), the one sitting in the
-    least-dense grid region. Anchoring a brush's name at a clear outer CORNER (rather than an edge
-    midpoint or the centroid) reads as "this whole shape" and keeps it off the crowded centre — and,
-    since every candidate is a real vertex, never in the hollow interior of a concave/subtract brush.
-    Ties resolve to the first candidate (deterministic given candidate order)."""
-    return min(cands_px, key=lambda q: grid.avg_density_in_box(
-        (q[0] - halfbox, q[1] - halfbox, q[0] + halfbox, q[1] + halfbox)))
-
-
-def _place_labels(items: list[_LabelItem], size: int, *, grid=None, occupied=(),
-                  weights=_LABEL_WEIGHTS) -> list[_PlacedLabel]:
-    """De-collide a mixed set of LABELS — drawn text boxes, the placement half of an annotation (see
-    the module docstring). Each label's box centre is nudged off its anchor onto a ring
-    position; the anchor stays the true (unclamped) spot so the leader points at it, and positions are
-    clamped inside `[0, size)`. `occupied` seeds the placed-rect set with non-label footprints (point
-    markers / sprites) so labels don't land on top of them.
-
-    Placement minimises a cost per candidate. With no `grid` it is pure occupancy de-collision (first
-    collision-free ring slot, else least-overlapping — the historical behaviour). With a `grid` (an
-    occupancy grid of the wireframe only — markers are handled via `occupied`) the cost also flees
-    dense geometry and penalises leader length: `k1·avg_density + k2·overlap + k3·(leader_px/cell)`."""
-    k1, k2, k3 = weights
-    placed: list = list(occupied)
-    out: list[_PlacedLabel] = []
-    # Deterministic order: with a grid, place the most-crowded anchors first (while clear space is
-    # still plentiful); tie-break by text then anchor so the result is reproducible. Without a grid,
-    # keep input order (the historical greedy behaviour).
-    order = items
-    if grid is not None:
-        order = sorted(items, key=lambda it: (
-            -grid.avg_density_in_box((it.anchor[0], it.anchor[1], it.anchor[0], it.anchor[1])),
-            it.text, it.anchor))
-    for item in order:
-        (ax, ay) = item.anchor
-        w, h = _label_size(item.text, item.scale)
-        hw, hh = w // 2 + 3, h // 2 + 3
-        step = max(10, 6 * item.scale)
-        # No (0,0): every label is nudged at least one step off its anchor, so a dot-on-target + leader
-        # line ALWAYS draw (cold readers could not attach an un-leadered label — it read as proximity
-        # guesswork). The box floats above its anchor by default (first ring position), fanning out only
-        # to de-collide / flee density.
-        rings = [(0, -step)]
-        for rad in (1, 2, 3, 4, 5):
-            d = rad * step
-            rings += [(0, -d), (d, -d), (-d, -d), (d, 0), (-d, 0), (d, d), (-d, d), (0, d)]
-        best_cost = best_rect = best_pos = None
-        for ox, oy in rings:
-            lx = _clamp(ax + ox, hw, size - 1 - hw)
-            ly = _clamp(ay + oy, hh, size - 1 - hh)
-            rect = (lx - hw, ly - hh, lx + hw, ly + hh)
-            overlaps = sum(1 for r in placed if _rects_overlap(rect, r))
-            if grid is None:
-                if overlaps == 0:                      # greedy fast path: first free slot wins
-                    best_rect, best_pos = rect, (lx, ly)
-                    break
-                cost = float(overlaps)
-            else:
-                leader = ((lx - ax) ** 2 + (ly - ay) ** 2) ** 0.5 / grid.cell_px
-                cost = k1 * grid.avg_density_in_box(rect) + k2 * overlaps + k3 * leader
-            if best_cost is None or cost < best_cost:
-                best_cost, best_rect, best_pos = cost, rect, (lx, ly)
-        placed.append(best_rect)
-        out.append(_PlacedLabel(anchor=(ax, ay), pos=best_pos, text=item.text, scale=item.scale,
-                                color=item.color))
-    return out
 
 
 # ----- on-face PAINTED ("decal") poly-index rendering --------------------------
@@ -1607,7 +1386,7 @@ def _overlap_fraction(box, others) -> float:
 def _resolve_decals(entries, obstacles):
     """Greedy deterministic placement with a TRULY MINIMAL anti-overlap nudge. `entries` is a list of
     `(order_key, candidates)` where `candidates[0]` is the full-size roomiest placement; `obstacles` are
-    fixed rects (point-actor markers, legend). Returns the chosen `_DecalPlan` per entry (aligned to input
+    fixed rects (point-actor markers). Returns the chosen `_DecalPlan` per entry (aligned to input
     order; None when an entry has no candidates). Biggest-primary entries place first. A candidate 0 with
     NO overlap is kept VERBATIM (so clean scenes render exactly as the single-placement planner would).
     On overlap, the pick is restricted to candidates within the reshuffle budget — no more than
@@ -1709,108 +1488,6 @@ def _draw_overlap_keyline(buf, size, on_sets) -> None:
                 buf[i], buf[i + 1], buf[i + 2] = _KEYLINE_RGB
 
 
-# ----- legend ----------------------------------------------------------------
-
-
-@dataclass(frozen=True, kw_only=True)
-class _LegendRow:
-    """One legend entry mapping a label tint → an actor NAME. `kind` picks the swatch glyph (a brush is
-    a filled square, a point actor a filled diamond — matching its on-geometry marker); `color` is the
-    actor's tint; `text` is the (upper-cased) name."""
-    kind: str                       # "brush" | "point"
-    color: tuple[int, int, int]
-    text: str
-
-
-def _legend_rows(actors, annotations: "AnnotationSpec", tints, *, highlight_polys, highlight_points,
-                 drawn_points) -> list[_LegendRow]:
-    """The legend rows for a scene: one per LABELLED brush (gated by the `name:brush[:hi]` selectors)
-    and one per LABELLED, DRAWN point actor (gated by `name:point[:hi]`; a point with no render data is
-    not drawn, so it is never listed). A brush counts as "highlighted" iff any of its polys is in
-    `highlight_polys`; a point iff its name is in `highlight_points`. Focus does NOT filter the legend —
-    every labelled name appears regardless of which brush is focused."""
-    hp = set(highlight_polys or ())
-    hpts = set(highlight_points or ())
-    rows: list[_LegendRow] = []
-    for a in actors:
-        if a.brush is not None:
-            hi = any((a.name, idx) in hp for idx in range(len(a.brush.polys)))
-            if annotations.draws_name(is_brush=True, is_highlighted=hi):
-                rows.append(_LegendRow(kind="brush", color=tints[a.name], text=a.name.upper()))
-        elif a.name in drawn_points:
-            hi = a.name in hpts
-            if annotations.draws_name(is_brush=False, is_highlighted=hi):
-                rows.append(_LegendRow(kind="point", color=tints[a.name], text=a.name.upper()))
-    return rows
-
-
-_LEGEND_PAD = 3
-_LEGEND_BAND_DIV = 3       # the legend panel is capped to size/this so its RESERVED top band can't crush
-                          # the geometry (overflow rows collapse into `+N MORE`); see `_legend_reserve`.
-
-
-def _legend_metrics(scale: int) -> tuple[int, int, int, int]:
-    """(swatch side, swatch↔text gap, glyph/text height, row pitch) in pixels — shared by the panel-rect
-    calc and the draw so they never drift."""
-    return 5 * scale, 2 * scale, 5 * scale, 5 * scale + 3 * scale
-
-
-def _fit_legend_rows(rows: list[_LegendRow], scale: int, size: int) -> list[_LegendRow]:
-    """Cap the legend to the rows that fit a BAND of `size / _LEGEND_BAND_DIV` px, replacing the
-    overflow with a final `+N MORE` row. The band cap (not the full frame) is load-bearing: the panel's
-    height is RESERVED as a top inset (`_legend_reserve`), so letting it grow to the full frame would
-    crush — or, at some sizes, invert — the geometry. Shared by the panel-rect calc and the draw so both
-    agree on how many rows show. `+N MORE`'s glyph slot is a plain `more` row (no swatch)."""
-    if not rows:
-        return rows
-    _, _, gh, row_h = _legend_metrics(scale)
-    band = size // _LEGEND_BAND_DIV
-    avail = band - 1 - 2 - _LEGEND_PAD * 2 - gh          # panel top is at y=2; leave room for the border
-    n_max = max(1, avail // row_h + 1)
-    if len(rows) <= n_max:
-        return rows
-    kept = rows[:n_max - 1]                               # last slot goes to the "+N more" summary
-    return kept + [_LegendRow(kind="more", color=DIVIDER, text=f"+{len(rows) - len(kept)} MORE")]
-
-
-def _legend_panel_rect(rows: list[_LegendRow], scale: int, size: int):
-    """The top-left legend panel's pixel box `(x0, y0, x1, y1)`, or None when there are no rows. Sized to
-    the widest row and the rows that FIT the frame (`_fit_legend_rows`); clamped inside the frame. Seeded
-    into label placement so poly-index labels flee it."""
-    rows = _fit_legend_rows(rows, scale, size)
-    if not rows:
-        return None
-    sw, gap, gh, row_h = _legend_metrics(scale)
-    text_w = max(len(r.text) * (4 * scale) - scale for r in rows)
-    w = _LEGEND_PAD * 2 + sw + gap + text_w
-    h = _LEGEND_PAD * 2 + row_h * len(rows) - (row_h - gh)
-    return (2, 2, min(2 + w, size - 1), min(2 + h, size - 1))
-
-
-def _draw_legend(buf, size, rows: list[_LegendRow], scale: int) -> None:
-    """Draw the top-left legend: a white panel (grey border) with one row per entry — a filled tint
-    swatch (brush = square, point = diamond) + the NAME in black. A tall legend is capped to what fits
-    the frame with a `+N MORE` tail (`_fit_legend_rows`). Sits in its RESERVED top band (the geometry is
-    framed below it — see `_legend_reserve`), and is drawn LAST. No rows → nothing."""
-    rect = _legend_panel_rect(rows, scale, size)
-    if rect is None:
-        return
-    x0, y0, x1, y1 = rect
-    _fill(buf, size, x0, y0, x1, y1, WHITE)
-    _box(buf, size, x0, y0, x1, y1, DIVIDER)
-    sw, gap, gh, row_h = _legend_metrics(scale)
-    cy = y0 + _LEGEND_PAD + gh // 2
-    for r in _fit_legend_rows(rows, scale, size):
-        cx = x0 + _LEGEND_PAD + sw // 2
-        if r.kind == "brush":
-            _fill(buf, size, cx - sw // 2, cy - sw // 2, cx + sw // 2, cy + sw // 2, r.color)
-        elif r.kind == "point":
-            _filled_diamond(buf, size, cx, cy, sw // 2, r.color)
-        tw = len(r.text) * (4 * scale) - scale
-        _draw_text(buf, size, x0 + _LEGEND_PAD + sw + gap + tw // 2, cy, r.text, scale, FRONT)
-        cy += row_h
-
-
 # ----- renderers -------------------------------------------------------------
 
 
@@ -1844,13 +1521,11 @@ class _SceneGeom:
                          # Empty under `wire`, which is the structural reason `wire` cannot be affected
     hi_only_labels: set   # face_keys whose index is owed SOLELY to being highlighted
     poly_labels: list    # (centroid2d, idx_str, accent, depth, v3, brush_name) — participant faces
-    brush_names: list    # (cands_2d, TEXT, color) — legacy on-geometry names
     occluders: list      # (poly2d, depth, brush_name, is_solid)
     points: list         # (actor, PointRender)
     pts: list            # every projected point (verts + point footprints) — the framing source
     actor_points: dict   # actor_name → its projected 2-D points (brush: surviving verts; point: its
-                         # Location) — the addressable-grid cell source, kept even on the hybrid path
-                         # where `brush_names` is empty
+                         # Location) — the addressable-grid cell source
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -1865,7 +1540,6 @@ class _SolvedOut:
     vis_faces: list
     hi_only_labels: set
     poly_labels: list
-    brush_names: list
     occluders: list
     pts: list
     actor_points: dict
@@ -1892,8 +1566,7 @@ def _solved_scene(solved, *, view, iso_angle, d_vec, annotations, highlight_poly
     overlay against the same depth buffer (occluded by / occluding the solved world), no cull, no
     labels. A source poly split into N fragments gets ONE index decal, on its largest fragment."""
     best_decal: dict = {}     # (name, idx) -> (area, centroid2d, depth, v3, accent)
-    brush_cands: dict = {}    # name -> projected 2d points (framing + grid cell + legend anchor)
-    brush_hi: dict = {}       # name -> any highlighted poly on this actor
+    brush_cands: dict = {}    # name -> projected 2d points (framing + grid cell)
 
     for surf in solved.world_surfaces:
         actor = surf.actor
@@ -1936,7 +1609,6 @@ def _solved_scene(solved, *, view, iso_angle, d_vec, annotations, highlight_poly
             out.edges.append((True, (vs[i], vs[(i + 1) % n]), FRONT, BACK, 1.0, face_key))
         if name is not None:
             brush_cands.setdefault(name, []).extend(vs)
-            brush_hi[name] = brush_hi.get(name, False) or is_hi
         if is_hi:
             hi_rgb = _CSG_PALETTE[classify_brush(actor, is_mover=name in mover_names)][0]
             for i in range(n):
@@ -1975,8 +1647,6 @@ def _solved_scene(solved, *, view, iso_angle, d_vec, annotations, highlight_poly
 
     for name, cands in brush_cands.items():
         out.actor_points[name] = cands
-        if not hybrid and annotations.draws_name(is_brush=True, is_highlighted=brush_hi.get(name, False)):
-            out.brush_names.append((cands, name.upper(), FRONT))
     for (name, idx), (_area, centroid2d, depth, v3, accent) in best_decal.items():
         out.poly_labels.append((centroid2d, str(idx), accent, depth, v3, name))
 
@@ -2018,7 +1688,6 @@ def _scene_geometry(actors, *, view, iso_angle, annotations, highlight_polys, fo
     vis_faces: list = []
     hi_only_labels: set = set()
     poly_labels: list = []
-    brush_names: list = []
     occluders: list = []
     points: list = []
     pts: list = []
@@ -2049,7 +1718,7 @@ def _scene_geometry(actors, *, view, iso_angle, annotations, highlight_polys, fo
         # answers mover-ness by the name guess — it must work with no game install (`classify_brush`).
         csg_key = classify_brush(actor)
         if color_by_csg and brush_colors == "legend":
-            # colour the wireframe by the actor's own legend TINT (not the CSG op) — drops the CSG
+            # colour the wireframe by the actor's own per-actor TINT (not the CSG op) — drops the CSG
             # cue but tells same-op brushes apart at a glance without reading numbers.
             base = tints[actor.name]
             front_rgb, back_rgb, vivid = base, _fade(base), base
@@ -2066,7 +1735,6 @@ def _scene_geometry(actors, *, view, iso_angle, annotations, highlight_polys, fo
         R = actor_linear(actor)
         prepivot = actor_prepivot(actor)
         brush_cands_2d: list = []
-        brush_hi = False
         for idx, poly in enumerate(actor.brush.polys):
             v3 = [(float(loc[0] + w[0]), float(loc[1] + w[1]), float(loc[2] + w[2]))
                   for w in (local_offset(R, prepivot, v) for v in poly.vertices)]
@@ -2075,7 +1743,6 @@ def _scene_geometry(actors, *, view, iso_angle, annotations, highlight_polys, fo
                 continue
             front = _is_front(v3, view, iso_angle)
             is_hi = (actor.name, idx) in highlight_polys
-            brush_hi = brush_hi or is_hi
             pts.extend(vs)
             brush_cands_2d.extend(vs)
             n = len(vs)
@@ -2098,36 +1765,31 @@ def _scene_geometry(actors, *, view, iso_angle, annotations, highlight_polys, fo
                     (_poly_centroid_2d(vs), str(idx), label_accent, depth, v3, actor.name))
         if brush_cands_2d:
             actor_points[actor.name] = brush_cands_2d   # kept on EVERY path — the grid-cell source
-        if not hybrid and brush_cands_2d and annotations.draws_name(is_brush=True, is_highlighted=brush_hi):
-            brush_names.append((brush_cands_2d, actor.name.upper(), label_accent))
     if textured:
         _solved_scene(solved, view=view, iso_angle=iso_angle, d_vec=d_vec, annotations=annotations,
                       highlight_polys=highlight_polys, focus_cf=focus_cf, hybrid=hybrid, tints=tints,
                       mover_names=mover_names, tex_data=tex_data,
                       out=_SolvedOut(edges=edges, fills=fills, tex_faces=tex_faces, hi_edges=hi_edges,
                                      vis_faces=vis_faces, hi_only_labels=hi_only_labels,
-                                     poly_labels=poly_labels, brush_names=brush_names,
+                                     poly_labels=poly_labels,
                                      occluders=occluders, pts=pts, actor_points=actor_points))
     return _SceneGeom(edges=edges, fills=fills, tex_faces=tex_faces, hi_edges=hi_edges,
                       vis_faces=vis_faces, hi_only_labels=hi_only_labels, poly_labels=poly_labels,
-                      brush_names=brush_names, occluders=occluders, points=points, pts=pts,
+                      occluders=occluders, points=points, pts=pts,
                       actor_points=actor_points)
 
 
 _FRAME_PAD = 6         # px border kept clear of the geometry on every side (shared by framing + reserve)
 
 
-def _framing(pts, region, size, view, iso_angle, inset_top: int = 0, pad: int = _FRAME_PAD,
-             *, gutter: int = 0):
+def _framing(pts, region, size, view, iso_angle, pad: int = _FRAME_PAD, *, gutter: int = 0):
     """World→pixel framing for a scene. Returns `(scale, to_px, to_pxf, world_to_pxf)`, computed from
     the projected `pts` (or an explicit `region` AABB). Shared so every filmstrip pane and the
     grouping pass frame IDENTICALLY (same `minx/span`), keeping geometry registered across panes.
-    `pad` is the px border kept clear of the geometry on every side. `inset_top` reserves that many
-    extra pixels at the TOP of the frame (for the legend panel) — the geometry is scaled down and pushed
-    below the band so nothing draws under the legend. `gutter` reserves that many pixels on the top and
-    BOTH sides for the addressable-grid label band — a SYMMETRIC left/right inset (unlike `inset_top`,
-    which insets top+right only), so the x-mapping gains its own left offset. `inset_top=0` and
-    `gutter=0` is byte-identical to the un-reserved framing (`draw == size - 2*pad`)."""
+    `pad` is the px border kept clear of the geometry on every side. `gutter` reserves that many pixels
+    on the top and BOTH sides for the addressable-grid label band — a SYMMETRIC left/right inset, so the
+    x-mapping gains its own left offset. `gutter=0` is byte-identical to the un-reserved framing
+    (`draw == size - 2*pad`)."""
     if region is not None:
         x0, y0, z0, x1, y1, z1 = (float(c) for c in region)
         rp = [_project((x, y, z), view, iso_angle)
@@ -2138,7 +1800,7 @@ def _framing(pts, region, size, view, iso_angle, inset_top: int = 0, pad: int = 
         minx, maxx = min(p[0] for p in pts), max(p[0] for p in pts)
         miny, maxy = min(p[1] for p in pts), max(p[1] for p in pts)
     span = max(maxx - minx, maxy - miny) or 1.0
-    draw = max(1, size - 2 * pad - 2 * gutter - inset_top)   # uniform-scale budget after the reserves
+    draw = max(1, size - 2 * pad - 2 * gutter)   # uniform-scale budget after the reserves
     scale = draw / span
 
     def to_px(p):
@@ -2155,17 +1817,6 @@ def _framing(pts, region, size, view, iso_angle, inset_top: int = 0, pad: int = 
         return to_pxf(_project(p3, view, iso_angle))
 
     return scale, to_px, to_pxf, world_to_pxf
-
-
-def _legend_reserve(rows: list, name_scale: int, size: int) -> int:
-    """Pixels to reserve at the top of the frame for the legend panel (0 if no rows): the panel's
-    bottom edge + a small margin, above the normal frame `pad`, so `_framing(inset_top=…)` pushes the
-    geometry clear of the panel and it overlaps nothing. The panel is band-capped (`_fit_legend_rows`),
-    so this stays a fraction of the frame and never crushes the geometry."""
-    rect = _legend_panel_rect(rows, name_scale, size)
-    if rect is None:
-        return 0
-    return max(0, rect[3] + 4 - _FRAME_PAD)      # rect[3] = panel bottom; +4 margin; −pad (already in _framing)
 
 
 # ----- addressable coordinate grid -------------------------------------------
@@ -2227,19 +1878,19 @@ def _grid_gutter_px(name_scale: int) -> int:
     return 5 * name_scale + 4
 
 
-def _drawable_rect(size: int, pad: int, gutter: int, inset_top: int) -> tuple[int, int, int, int]:
-    """The pane's drawable canvas `(x0, x1, y0, y1)` the grid divides — inset by `pad` (frame border),
-    `gutter` (label band, all four sides) and, at the top, the legend `inset_top`."""
-    return (pad + gutter, size - 1 - pad - gutter, pad + gutter + inset_top, size - 1 - pad - gutter)
+def _drawable_rect(size: int, pad: int, gutter: int) -> tuple[int, int, int, int]:
+    """The pane's drawable canvas `(x0, x1, y0, y1)` the grid divides — inset by `pad` (frame border)
+    and `gutter` (label band, all four sides)."""
+    return (pad + gutter, size - 1 - pad - gutter, pad + gutter, size - 1 - pad - gutter)
 
 
-def _draw_grid_gutter(buf, size, rect, n, name_scale, pad, gutter, inset_top) -> None:
+def _draw_grid_gutter(buf, size, rect, n, name_scale, pad, gutter) -> None:
     """Draw the column letters (top band) and row numbers (both side bands) — no gridlines. Labels sit
     in the reserved gutter band, clear of the geometry (which `_framing`'s `gutter` inset pushed in)."""
     x0, x1, y0, y1 = rect
     col_w = (x1 - x0) / n
     row_h = (y1 - y0) / n
-    top_y = pad + inset_top + gutter // 2                 # column-label band, below any legend band
+    top_y = pad + gutter // 2                             # column-label band
     left_x = pad + gutter // 2
     right_x = size - 1 - pad - gutter // 2
     for j in range(n):
@@ -2275,14 +1926,14 @@ def render_brush_pgm(actor: Actor, *, view: str = "top", size: int = 256,
                      iso_angle: float = 30.0, region=None,
                      highlight_polys=None, highlight_points=None,
                      color_by_csg: bool = False, render_data=None,
-                     focus: str | None = None, draw_legend: bool = True,
+                     focus: str | None = None,
                      brush_colors: str = "csg", faces: str = "wire",
                      grid: int | None = None, cells_out: dict | None = None) -> bytes:
     return render_brushes_pgm([actor], view=view, size=size, annotations=annotations,
                               iso_angle=iso_angle, region=region, highlight_polys=highlight_polys,
                               highlight_points=highlight_points,
                               color_by_csg=color_by_csg, render_data=render_data,
-                              focus=focus, draw_legend=draw_legend, brush_colors=brush_colors,
+                              focus=focus, brush_colors=brush_colors,
                               faces=faces, grid=grid, cells_out=cells_out)
 
 
@@ -2291,8 +1942,8 @@ def render_brushes_pgm(actors: list[Actor], *, view: str = "top", size: int = 25
                        iso_angle: float = 30.0,
                        region=None, highlight_polys=None, highlight_points=None,
                        color_by_csg: bool = False, render_data=None,
-                       focus: str | None = None, draw_legend: bool = True,
-                       brush_colors: str = "csg", reserve_legend: bool = True,
+                       focus: str | None = None,
+                       brush_colors: str = "csg",
                        frame_pad: int = _FRAME_PAD, faces: str = "wire",
                        shown_highlights: set | None = None,
                        grid: int | None = None, cells_out: dict | None = None) -> bytes:
@@ -2314,28 +1965,23 @@ def render_brushes_pgm(actors: list[Actor], *, view: str = "top", size: int = 25
     On the CSG-coloured path (`color_by_csg`, the real preview) the labels use the HYBRID scheme: the
     wireframe keeps its CSG hue, but each actor's LABELS carry a distinct per-actor TINT
     (`assign_tints`) — a brush's on-face poly-index decals + its point marker — so two same-CSG
-    brushes are told apart; a top-left LEGEND (drawn when `draw_legend`) maps each tint → actor NAME, and
-    actor names move OFF the geometry into it. The legacy black/grey path (unit tests) keeps black
-    accents, on-geometry names, and no legend.
+    brushes are told apart. The legacy black/grey path (unit tests) keeps black accents.
 
     `focus` (an actor NAME, case-insensitive) recedes every OTHER brush — its wireframe to faint lines,
     and under a filled mode its fills to a single dimmed fade of whatever survived the depth test (the
     `dim` mask below) — and paints face numbers only for the focused brush;
     `highlight_polys`/`highlight_points` OVERRIDE focus — a highlighted poly/actor still draws vivid+bold
-    on top, at full fill strength, and keeps its number. All names still appear in the legend regardless
-    of focus.
+    on top, at full fill strength, and keeps its number.
 
-    `annotations` is an `AnnotationSpec` (see `parse_annotation_spec`): per kind, the set of element categories that
-    get a label — `draws_poly` decides WHETHER a face is numbered (on-face numbering is facing-blind, so
-    `poly:vis` numbers every face; `poly:hi`/`none` stay exact), `draws_name(is_brush, is_highlighted)`
-    decides each actor name (⇒ its legend row on the hybrid path).
+    `annotations` is an `AnnotationSpec` (see `parse_annotation_spec`): the set of face categories that
+    get a number — `draws_poly` decides WHETHER a face is numbered (on-face numbering is facing-blind, so
+    `poly:vis` numbers every face; `poly:hi`/`none` stay exact).
 
     Poly face indices ALWAYS render ON-FACE: each face's index is a texture painted flat IN
     the face's own 3-D plane at its roomiest spot (`_plan_onface_texture` / `_draw_painted_decal`) —
     front AND back faces (facing-blind), graded translucent by depth (`_decal_opacity` of the
     self-or-solid `_occluder_count`), omitted when the number would be unreadable ON SCREEN
-    (view-dependent; no leader fallback). Actor names
-    go to the legend (hybrid path); `focus`/`highlight` still apply.
+    (view-dependent; no leader fallback). `focus`/`highlight` still apply.
 
     `shown_highlights`, when a set is passed, collects the `(actor_name, poly_idx)` key of every
     highlighted face that actually DREW. It reports what landed rather than what did not, which is what
@@ -2357,7 +2003,7 @@ def render_brushes_pgm(actors: list[Actor], *, view: str = "top", size: int = 25
     highlight_polys = set(highlight_polys or ())
     highlight_points = set(highlight_points or ())
     render_data = render_data or PreviewData()
-    hybrid = color_by_csg                     # the real preview: per-actor tints + legend + names-in-legend
+    hybrid = color_by_csg                     # the real preview: per-actor tints (names not drawn)
     tints = assign_tints(actors) if hybrid else {}
     focus_cf = focus.casefold() if focus else None
     geom = _scene_geometry(actors, view=view, iso_angle=iso_angle, annotations=annotations,
@@ -2365,22 +2011,13 @@ def render_brushes_pgm(actors: list[Actor], *, view: str = "top", size: int = 25
                            tints=tints, color_by_csg=color_by_csg, render_data=render_data,
                            brush_colors=brush_colors, faces=faces)
     edges, hi_edges, poly_labels = geom.edges, geom.hi_edges, geom.poly_labels
-    brush_names, occluders, points = geom.brush_names, geom.occluders, geom.points
+    occluders, points = geom.occluders, geom.points
 
     if not geom.pts:
         return _ppm(_alloc_buffers(size, depth=False)[0], size)
-    # Legend rows are computed BEFORE framing (they don't depend on it) so the legend's top band can be
-    # RESERVED — geometry is inset below it so the panel overlaps nothing. `reserve_legend` (inset the
-    # band) and `draw_legend` (paint the panel) are independent flags: a caller can reserve WITHOUT
-    # drawing (e.g. to keep framing identical across panes that share a region) — see `render_quad_pgm`.
     name_scale = max(2, size // 256)
-    legend_rows = _legend_rows(actors, annotations, tints, highlight_polys=highlight_polys,
-                               highlight_points=highlight_points,
-                               drawn_points={a.name for a, _ in points}) if hybrid else []
-    # Drawing the legend ALWAYS reserves its band (never paint the panel over un-inset geometry).
-    inset_top = _legend_reserve(legend_rows, name_scale, size) if (reserve_legend or draw_legend) else 0
     gutter = _grid_gutter_px(name_scale) if grid is not None else 0
-    scale, to_px, to_pxf, world_to_pxf = _framing(geom.pts, region, size, view, iso_angle, inset_top,
+    scale, to_px, to_pxf, world_to_pxf = _framing(geom.pts, region, size, view, iso_angle,
                                                   pad=frame_pad, gutter=gutter)
 
     hidden: set = set()             # faces depth hid — their edges, outline and highlight index go
@@ -2437,10 +2074,6 @@ def render_brushes_pgm(actors: list[Actor], *, view: str = "top", size: int = 25
             plane = _face_depth_affine(v3, world_to_pxf, d_vec)
             if plane is not None and _face_is_occluded(zbuf, size, [to_pxf(q) for q in vs], plane):
                 hidden.add(face_key)
-    density_grid = DensityGrid.build(size)          # occupancy of the wireframe → labels flee dense knots
-    for f, (a, b), fr, bk, al, fk in edges:
-        if fk not in hidden:                        # a hidden edge paints nothing, so it must not pull
-            density_grid.add_segment(to_px(a), to_px(b))  # labels away from a region that reads as empty
     for actor, pr in points:                        # under-layer: selection brackets + sprites + overlays
         _draw_point_underlay(buf, size, actor, pr, view, iso_angle, to_px, scale,
                              highlighted=actor.name in highlight_points)
@@ -2461,35 +2094,19 @@ def render_brushes_pgm(actors: list[Actor], *, view: str = "top", size: int = 25
             # look drawn, so the note stayed silent on exactly the case it exists for.
             if landed and shown_highlights is not None:
                 shown_highlights.add(face_key)
-    for actor, pr in points:                        # over-layer: markers (names → legend/placement below)
+    for actor, pr in points:                        # over-layer: markers
         _draw_point_marker(buf, size, actor, pr, view, iso_angle, to_px,
                            color=tints.get(actor.name, MARKER) if hybrid else MARKER, hybrid=hybrid)
 
-    # Point-actor footprints: seed `occupied` (so a label never covers an icon) AND the density grid
-    # (so a brush-name anchor, chosen next, flees actor icons — not just wireframe). Must precede the
-    # brush-name anchor choice below. (`name_scale`/`legend_rows` were computed above for the reserve.)
+    # Point-actor footprints seed `occupied` so a poly-index decal never lands on an actor icon.
     occupied: list = []
-    point_name_items: list = []          # LEGACY (non-hybrid) on-geometry point names
     for actor, pr in points:
         loc = actor.location or (Decimal(0), Decimal(0), Decimal(0))
         px = to_px(_project((float(loc[0]), float(loc[1]), float(loc[2])), view, iso_angle))
         # A marker-only point draws a radius-7 WHITE halo (see `_draw_point_marker`), so reserve >=7 or a
-        # label could clip it; a sprite point reserves its half-footprint (min 6).
+        # decal could clip it; a sprite point reserves its half-footprint (min 6).
         r = max(6, int(max(pr.sprite_world) / 2 * scale)) if pr.sprite_world else 7
-        rect = (px[0] - r, px[1] - r, px[0] + r, px[1] + r)
-        occupied.append(rect)
-        density_grid.add_box(rect, weight=4)
-        if not hybrid and pr.label and annotations.draws_name(
-                is_brush=False, is_highlighted=actor.name in highlight_points):
-            point_name_items.append(_LabelItem(anchor=px, text=pr.label.upper(), scale=name_scale,
-                                               color=MARKER))
-
-    # HYBRID legend (rows computed above): reserve its footprint in `occupied` + the density grid so
-    # any legacy name label flees it; it sits in the reserved top band and is drawn LAST.
-    legend_rect = _legend_panel_rect(legend_rows, name_scale, size)
-    if legend_rect is not None:
-        occupied.append(legend_rect)
-        density_grid.add_box(legend_rect, weight=8)
+        occupied.append((px[0] - r, px[1] - r, px[0] + r, px[1] + r))
 
     # Poly indices: THE ONE RULE — a face's INDEX is a painted number texture (`_plan_onface_texture`)
     # lying in the face's own 3-D plane at its ROOMIEST spot (largest glyph-box inside the face, ×0.75;
@@ -2498,9 +2115,9 @@ def render_brushes_pgm(actors: list[Actor], *, view: str = "top", size: int = 25
     # 0.56, one layer behind 0.336, floored at 0.12 (opacity IS the front/back cue) — with the 6/9 baseline
     # underline and a translucent halo. A face is OMITTED when its number would be UNREADABLE ON SCREEN
     # (projected texels below a min pixel size — VIEW-DEPENDENT, so a tiny/edge-on/zoomed-out face drops
-    # out and reappears when big enough). Decals draw AFTER any name labels and seed `occupied` so name leaders avoid
-    # them. The tint (`accent`) is the owning actor's per-brush tint on the hybrid path, so a face number
-    # shared across brushes (every brush has a face `1`) is distinguishable by tint + the legend.
+    # out and reappears when big enough). Decals seed `occupied` so they avoid point-actor icons and each
+    # other. The tint (`accent`) is the owning actor's per-brush tint on the hybrid path, so a face number
+    # shared across brushes (every brush has a face `1`) is distinguishable by tint.
     # Overlap handling: resolve all faces' numbers JOINTLY so a decal MINIMALLY nudges (≤10% shrink,
     # ≤10%-diagonal move) WITHIN ITS OWN FACE off another decal or a point-actor marker (obstacles already
     # in `occupied`); a zero-overlap decal keeps its roomiest spot verbatim (opacity is placement-
@@ -2519,30 +2136,7 @@ def render_brushes_pgm(actors: list[Actor], *, view: str = "top", size: int = 25
     for plan, (accent, opacity) in zip(_resolve_decals(decal_entries, occupied), decal_meta):
         if plan is not None:
             painted_draws.append((plan, accent, opacity))
-            occupied.append(plan.bbox())             # so name leaders avoid the decal
-
-    # One placement pass over the LEGACY (non-hybrid) on-geometry NAMES only — poly indices are painted
-    # on-face above, never placed here; on the hybrid path names live in the legend so this is empty.
-    items: list = []
-    hb = name_scale * 4                              # density-sample box half-size for anchor choice
-    for cands_2d, text, color in brush_names:
-        anchor = _least_dense_anchor(density_grid, [to_px(p) for p in cands_2d], hb)
-        items.append(_LabelItem(anchor=anchor, text=text, scale=name_scale, color=color))
-    items += point_name_items
-    for placed in _place_labels(items, size, grid=density_grid, occupied=occupied):
-        (ax, ay), (lx, ly), accent = placed.anchor, placed.pos, placed.color
-        # Tie the name to its target with a leader ending in an ARROWHEAD pointing at the exact spot (its
-        # actor/wireframe corner); the leader/arrow/box border are the owning actor's accent (grey in
-        # legacy) and the text stays black. The leader starts at the box edge (not its centre) so it
-        # never runs under the text.
-        box_fill = WHITE                              # this loop runs only for legacy (non-hybrid) names
-        w, h = _label_size(placed.text, placed.scale)
-        edge = _rect_edge_toward((lx, ly), w // 2 + 2, h // 2 + 2, (ax, ay))
-        _line(buf, size, edge, (ax, ay), accent)
-        _arrowhead(buf, size, (ax, ay), edge, accent)
-        _fill(buf, size, lx - w // 2 - 2, ly - h // 2 - 2, lx + w // 2 + 2, ly + h // 2 + 2, box_fill)
-        _box(buf, size, lx - w // 2 - 2, ly - h // 2 - 2, lx + w // 2 + 2, ly + h // 2 + 2, accent)
-        _draw_text(buf, size, lx, ly, placed.text, placed.scale, FRONT)
+            occupied.append(plan.bbox())             # so later decals avoid this one
     painted_on: list = []
     for plan, tint, opacity in painted_draws:
         # Painted index: the digit lying flat in the face's plane (world-up-anchored on walls, world-Y on
@@ -2550,12 +2144,10 @@ def render_brushes_pgm(actors: list[Actor], *, view: str = "top", size: int = 25
         painted_on.append(_draw_painted_decal(buf, size, plan, tint, alpha=opacity))
     _draw_overlap_keyline(buf, size, painted_on)     # 1px white ring wherever two numbers overlap
     if grid is not None:                             # addressable-grid gutter + per-actor cell map
-        rect = _drawable_rect(size, frame_pad, gutter, inset_top)
-        _draw_grid_gutter(buf, size, rect, grid, name_scale, frame_pad, gutter, inset_top)
+        rect = _drawable_rect(size, frame_pad, gutter)
+        _draw_grid_gutter(buf, size, rect, grid, name_scale, frame_pad, gutter)
         if cells_out is not None:
             _collect_cells(geom, hidden, faces, points, to_pxf, rect, grid, cells_out)
-    if draw_legend and legend_rect is not None:      # rows/band are always reserved; only pane 0 draws
-        _draw_legend(buf, size, legend_rows, name_scale)
     return _ppm(buf, size)
 
 
@@ -2591,9 +2183,9 @@ def _draw_point_underlay(buf, size, actor, pr: PointRender, view, iso_angle, to_
 def _draw_point_marker(buf, size, actor, pr: PointRender, view, iso_angle, to_px,
                        *, color=MARKER, hybrid: bool = False) -> None:
     """The point actor's marker (only when there is no sprite) at its Location, drawn OVER the wireframe.
-    On the hybrid path it is a small FILLED DIAMOND in the actor's tint (matching its legend glyph, so a
-    reader can key marker→name); on the legacy path a neutral-grey `+`. The actor's NAME is not drawn
-    here — on the hybrid path it lives in the legend; on the legacy path it joins the unified label pass."""
+    On the hybrid path it is a small FILLED DIAMOND in the actor's tint; on the legacy path a
+    neutral-grey `+`. The actor's NAME is not drawn here — the hybrid path draws no names; on the legacy
+    path it joins the unified label pass."""
     if pr.sprite is not None:                       # DT_Sprite draws its own billboard (underlay)
         return
     loc = actor.location or (Decimal(0), Decimal(0), Decimal(0))
@@ -2663,35 +2255,21 @@ def render_quad_pgm(actors, *, size: int = 512,
                     faces: str = "wire", shown_highlights: set | None = None,
                     grid: int | None = None, cells_out: dict | None = None) -> bytes:
     """UED-style 2×2: Top (TL), Front (TR), Iso (BL), Side (BR). On the hybrid (`color_by_csg`) path the
-    per-actor tints are identical across panes (`assign_tints` is deterministic), so the legend is drawn
-    ONCE — only the TOP-left pane renders it (`draw_legend=True`) and RESERVES a top band for it
-    (`reserve_legend=True`, so its geometry is inset clear of the panel); the other three panes pass
-    both False and use their full area. The TOP pane's "TOP" caption is dropped below the legend."""
+    per-actor tints are identical across panes (`assign_tints` is deterministic)."""
     if isinstance(actors, Actor):
         actors = [actors]
     half = size // 2
     hdr = f"P6\n{half} {half}\n255\n".encode()
     buf, _ = _alloc_buffers(size, depth=False)
-    # The legend lives in the TOP pane's corner (pane-local (2,2) == full-image (2,2) since TOP is at
-    # offset (0,0)); recompute its rect at the pane's size/scale to place the caption clear of it.
-    legend_rect = None
-    if color_by_csg:
-        rd = render_data or PreviewData()
-        tints = assign_tints(actors)
-        drawn_points = {a.name for a in actors if a.brush is None and a.name in rd.points}
-        rows = _legend_rows(actors, annotations, tints, highlight_polys=highlight_polys,
-                            highlight_points=highlight_points, drawn_points=drawn_points)
-        legend_rect = _legend_panel_rect(rows, max(2, half // 256), half)
     panes = [("TOP", "top", 0, 0), ("FRONT", "front", half, 0),
              ("ISO", "iso", 0, half), ("SIDE", "side", half, half)]
     for name, view, ox, oy in panes:
-        top_legend = color_by_csg and name == "TOP"
         pane_cells: dict = {}                            # each pane's OWN cell map (cells are per-pane)
         sub = render_brushes_pgm(actors, view=view, size=half, annotations=annotations,
                                  iso_angle=iso_angle, region=region,
                                  highlight_polys=highlight_polys, highlight_points=highlight_points,
                                  color_by_csg=color_by_csg, render_data=render_data,
-                                 focus=focus, draw_legend=top_legend, reserve_legend=top_legend,
+                                 focus=focus,
                                  brush_colors=brush_colors, faces=faces,
                                  shown_highlights=shown_highlights, grid=grid,
                                  cells_out=pane_cells if cells_out is not None else None)
@@ -2705,8 +2283,6 @@ def render_quad_pgm(actors, *, size: int = 512,
         cap_y = oy + 12
         if grid is not None:                             # keep it below the grid's top column-label band
             cap_y = oy + _FRAME_PAD + _grid_gutter_px(max(2, half // 256)) + 10
-        if name == "TOP" and legend_rect is not None:    # ...and, on the legend pane, below the legend
-            cap_y = max(cap_y, legend_rect[3] + 8)
         _draw_text(buf, size, ox + 4 + len(name) * 8, cap_y, name, 2, CAPTION)
     for k in range(size):
         _px(buf, size, half, k, DIVIDER)
