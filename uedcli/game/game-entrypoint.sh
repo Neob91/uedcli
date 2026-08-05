@@ -17,18 +17,19 @@ listening(){ netstat -ltn 2>/dev/null | grep -q ':7777 '; }
 echo "[uedcli-game] assembling game root (system=$UED_GAME_SYSTEM exe=$GEXE)"
 rm -rf "$R" && mkdir -p "$R/Maps" "$R/Textures" "$R/Sounds" "$R/Music"
 cp -r "$UED_GAME_SYSTEM" "$R/System"           # writable copy: inis, logs, our .u
-cp "$PKG/pkg/UedPreview.u" "$PKG/pkg/UedPreviewDX.u" "$R/System/"
+cp "$PKG/pkg/UedPreview.u" "$R/System/"
 cp "$PKG/BootMap.dx" "$R/Maps/UedPreviewBoot.dx"
 # The TARGET map is docker-cp'd into $R/Maps by the host before it travels there.
 
 # SYMLINK-FARM the composed content into LOCAL game-root dirs, then use STOCK RELATIVE Paths
-# (../Textures/*.utx …) — do NOT glob the raw /resources bind mounts from Paths.  WHY (both
-# cold reviewers, 2026-07-16): wine 8.0 on this 5.15 kernel runs on esync (WINEFSYNC is inert —
-# futex_waitv is 5.16+), whose startup has an intermittent lost-wakeup `pipe_read` deadlock.
-# Globbing 7-9 RAW overlay/bind-mount dirs at the first-package-bind moment stretches that race
-# window to ~90% wedge; a small LOCAL symlink-farm dir (what uplayctl does, and what uedcli did
-# before the 2026-07-14 asset-wiring cutover) enumerates in microseconds and almost never loses
-# the wakeup.  The COMPOSED CONFIG still decides WHAT gets farmed — every /resources/<n> mount is
+# (../Textures/*.utx …) — do NOT glob the raw /resources bind mounts from Paths.  WHY (both cold
+# reviewers, 2026-07-16; cause corrected 2026-08-04): amd64 wine under arm64 qemu emulation has an
+# intermittent boot-time wineserver-IPC race that wedges the launch — memory-pressure-amplified,
+# NOT an esync/futex lost-wakeup (spike 2026-08-04-generic-hud-hide).  Globbing 7-9 RAW
+# overlay/bind-mount dirs at the first-package-bind moment widens that window; a small LOCAL
+# symlink-farm dir (what uplayctl does, and what uedcli did before the 2026-07-14 asset-wiring
+# cutover) enumerates in microseconds and almost never triggers it.  The COMPOSED CONFIG still
+# decides WHAT gets farmed — every /resources/<n> mount is
 # a composed dir (project first), so `ln -s` first-wins = project shadows base by stem
 # (dev/docs/direction/containers.md, 2026-07-16 15:49).  A stray file in a raw mount can't hang the glob either.
 # The farmed link NAME is LOWERCASED: UE1 package names are case-insensitive (FName), but Linux
@@ -61,6 +62,7 @@ python3 - "$R/System/DeusEx.ini" <<'PY'
 import os, sys
 ini = sys.argv[1]
 sx, sy = os.environ.get("UED_SIZE_X", "1280"), os.environ.get("UED_SIZE_Y", "960")
+hud = os.environ.get("UED_HUD_HIDE", "")       # base-driver HudHideCommands (per-substrate HUD hide)
 fix = {"localmap": "LocalMap=UedPreviewBoot.dx",
        "console": "Console=UedPreview.UedPreviewConsole",
        "gamerenderdevice": "GameRenderDevice=SoftDrv.SoftwareRenderDevice",
@@ -87,6 +89,11 @@ if not seen_paths:                                 # no stock Paths at all → p
     i = out.index("[Core.System]")
     out[i + 1:i + 1] = ["Paths=../System/*.u", "Paths=../Maps/*.dx", "Paths=../Maps/*.unr",
                         "Paths=../Textures/*.utx", "Paths=../Sounds/*.uax", "Paths=../Music/*.umx"]
+# Per-substrate HUD-hide: the base driver reads HudHideCommands from its own config section
+# (no config group -> the active game ini). "ShowHud 0" for DeusEx; empty on games the stock
+# clean covers. A fresh root is assembled each boot, so this section is never duplicated.
+if hud:
+    out += ["[UedPreview.UedPreviewBaseDriver]", "HudHideCommands=" + hud]
 open(ini, "wb").write(("\r\n".join(out)).encode("latin-1"))
 print("ini patched; relative farm Paths (CRLF preserved)")
 PY
@@ -95,9 +102,11 @@ PY
 # ⇒ the idle watchdog never fires). The host surfaces the error from the boot-death.
 [ $? -eq 0 ] || { echo "[uedcli-game] FATAL: ini patch failed" >&2; exit 1; }
 
-# Launch under esync/fsync + the relaunch-on-deadlock loop (spec §5 gate fold: the wine
-# server-side-sync startup wedge still fires frequently; retry instead of hanging the
-# host's guard on one wedged instance). Readiness = the link's port, never the log.
+# Launch + the relaunch-on-wedge loop (spec §5 gate fold): the boot-time qemu/wineserver-IPC
+# race (see the farm comment above) still fires; each relaunch re-rolls it rather than hanging
+# the host's guard on one wedged instance. Readiness = the link's port, never the log. (The
+# separate modal first-run wizard hang is already skipped by FirstRun=400 in the ini patch —
+# board engine-only-uedpreview-via-regular-ucc-renders.)
 export WINEESYNC="${WINEESYNC:-1}" WINEFSYNC="${WINEFSYNC:-1}"
 DISPLAY=$D wineserver -k 2>/dev/null || true
 DISPLAY=$D timeout 30 wineboot -u >/dev/null 2>&1 || true
@@ -109,7 +118,7 @@ _launch() {
   setsid bash -c "DISPLAY=$D WINEESYNC=$WINEESYNC WINEFSYNC=$WINEFSYNC WINEDLLOVERRIDES=winealsa.drv=d exec wine $GEXE -log -nosound" \
     >/work/launch.log 2>/work/launch-err.log &
 }
-# SMART relaunch: the wine `pipe_read` startup deadlock (0% CPU, log frozen at the ~21-line
+# SMART relaunch: the boot-time qemu/wineserver-IPC race (0% CPU, log frozen at the ~21-line
 # CPU-detect banner) is intermittent — retry it FAST.  But a HEALTHY boot on a loaded box is
 # merely slow (it loads ~20 packages then the map), so once the log grows past the banner we
 # WAIT patiently instead of killing progress.  Wedge-detect: log still ≤22 lines after

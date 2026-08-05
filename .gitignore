@@ -1,5 +1,4 @@
 
-uedcli/game/inputs/edit/
 uedcli/game/staging/
 
 .venv/
@@ -20,3 +19,7 @@ _scratch/
 # script and dev/docs/deusex-assets-setup.md state this is gitignored; until now
 # nothing enforced it, so a `--url` run left `?? dev/games/` in the tracked tree.
 dev/games/
+
+# Per-machine project selection `dev/scripts/setup-game-preview.sh` writes at the repo root
+# (`game = "<name>"` + local paths). Machine-local, not shared state — never committed.
+/uedcli.toml

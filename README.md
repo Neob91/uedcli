@@ -30,6 +30,35 @@ bin/test          # path-qualified: `test` alone is a shell builtin
 Prefer a native interpreter? Everything above also works as `python3 -m uedcli …` /
 `python -m pytest uedcli -q` from a Python **3.12** environment with `Pillow>=11`.
 
+## In-game preview setup (`level preview --game`)
+
+`level preview --game` (the default preview backend) renders truly-lit in-game frames by booting the
+real game engine headless in a container. It needs Docker and the game's own files (copyrighted,
+user-supplied). One script provisions everything from a Deus Ex copy you supply — a local install or
+ACE-installer directory, or a download `--url`:
+
+```bash
+dev/scripts/setup-game-preview.sh /path/to/DeusEx     # or: --url https://…/DeusEx-installer.exe
+```
+
+It builds the `dx-lum-uned` base image, installs the game files (`install-deusex-assets.sh
+--with-maps`), writes `~/.uedcli/config.toml` `[games.deusex]` and a project `uedcli.toml`, then
+renders one frame to prove it works (`--no-verify` skips that; `--dry-run` shows the plan). The
+`uedcli-game` image and the preview package compile automatically on first use — no UnrealEd/UCC
+toolchain to install. Where to get a Deus Ex copy:
+[`dev/docs/deusex-assets-setup.md`](dev/docs/deusex-assets-setup.md).
+
+Once set up (from a project — the repo root is one):
+
+```bash
+uedcli level preview --game 'at:0,0,64;rot:0,0' --out-dir /tmp/shots   # a lit still of the trunk level
+# or point at a prebuilt map instead of the trunk:
+uedcli level preview --game --map dev/games/deusex/Maps/00_Training.dx 'at:0,0,64;rot:0,0' --out-dir /tmp/shots
+```
+
+The pose grammar and both backends (`--game`, offline `--native`) are in
+[`docs/usage.md`](docs/usage.md) under `level preview`.
+
 ## Documentation — see [`docs/`](docs/)
 
 - [`docs/usage.md`](docs/usage.md) — the CLI: query/mutate verbs, the `actor preview` viewer,

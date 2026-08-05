@@ -26,12 +26,15 @@
 // rendering OR stops this link answering, flip _FreezeWorld to the
 // TimeDilation~0 variant and recompile — no runtime fallback.
 //
-// Generic: names only Engine.* (NB `bCheatsEnabled` is a Deus-Ex-added field on
-// this install's Engine.PlayerPawn — spec D7 gate-fold caveat for other games).
+// Generic: names only Engine.* fields. `bCheatsEnabled` is stock — own-declared by
+// Engine.PlayerPawn in both UED22 (v69) and retail DeusEx (v68) — so the noclip path
+// (bCheatsEnabled=True; Ghost()) is generic (spike 2026-08-04-generic-hud-hide §1).
 //=============================================================================
 class UedPreviewLink extends TcpLink;
 
 var UedPreviewBaseDriver Driver;
+// Optional generic driver override (Package.Class). Empty -> spawn the base driver,
+// whose stock-field + HudHideCommands clean is sufficient for every shipped substrate.
 var config string SubstrateDriverClass;
 var int CurReqId;
 
@@ -58,7 +61,11 @@ function PostBeginPlay()
 function UedPreviewBaseDriver SpawnDriver()
 {
     local class<Actor> dc;
-    if (SubstrateDriverClass == "") return None;
+    // No override -> the generic base driver (stock-field + HudHideCommands clean).
+    // Spawn with a concrete class literal already returns that type — an explicit cast is a
+    // hard error in UED22 UCC ("Cast … is unnecessary"), unlike the class<Actor> case below.
+    if (SubstrateDriverClass == "")
+        return Spawn(class'UedPreview.UedPreviewBaseDriver');
     dc = class<Actor>(DynamicLoadObject(SubstrateDriverClass, class'Class', True));
     if (dc == None) return None;
     return UedPreviewBaseDriver(Spawn(dc));
@@ -172,5 +179,4 @@ event ReceivedLine(string Line)
 defaultproperties
 {
     AcceptClass=class'UedPreview.UedPreviewLink'
-    SubstrateDriverClass="UedPreviewDX.UedPreviewDeusExDriver"
 }

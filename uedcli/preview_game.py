@@ -62,12 +62,18 @@ class MaterializeResources:
 
 # The host-side per-substrate table (spec §5 gate fold — the .uc driver seam can't cover
 # host concerns: exe/ini names, the boot map, the X-grab window-title pattern).
+# `hud_hide` is the base driver's HudHideCommands: semicolon-separated console commands
+# the generic clean runs on the pawn to hide a HUD the stock levers miss (DeusEx draws
+# its HUD outside Pawn.myHUD — spike 2026-08-04-generic-hud-hide). The image is always the
+# generic engine-only build (base image's regular UCC, no game files); every substrate uses
+# the base driver spawned directly.
 SUBSTRATES = {
     "deusex": dict(
         exe="DeusEx.exe",
         boot_map="00_Training.dx",           # staged from the game's own Maps dir
         window_title="deus ex",
         window_exclude=("running", "starting", "recovery", "config"),
+        hud_hide="ShowHud 0",
     ),
 }
 
@@ -213,8 +219,8 @@ def trunk_has_playerstart(level) -> bool:
 
 def _game_source_hash(game_dir: Path) -> str:
     """Hash the image-affecting sources (uscript, Dockerfile, entrypoint, preview_batch.py,
-    build-image.sh) — NOT staging/ (build output) or inputs/ (the large, stable toolchain).
-    A match means a rebuild would be a no-op, so we can skip `build-image.sh` on the hot path."""
+    build-image.sh) — NOT staging/ (build output). A match means a rebuild would be a no-op,
+    so we can skip `build-image.sh` on the hot path."""
     h = hashlib.sha256()
     files = []
     for sub in ("uscript",):
@@ -233,13 +239,11 @@ def ensure_image(project, user_config, row: dict) -> None:
     """Build/refresh the uedcli-game image. FAST-PATH: if the image exists AND the game sources
     are byte-unchanged since the last successful build (host-side hash marker), skip
     `build-image.sh` entirely — a full `docker build` even fully cached costs ~1-2s, which would
-    blow the ≤1s warm-preview budget. Named errors for missing toolchain / docker / build failure."""
-    game_dir = Path(__file__).parent / "game"
-    if not (game_dir / "inputs" / "edit" / "hUCC.exe").is_file():
-        raise GamePreviewError(
-            f"the v469 UCC toolchain is not provisioned at {game_dir / 'inputs' / 'edit'} — "
-            "see uedcli/game/inputs/README.md (user-supplied, gitignored)")
+    blow the ≤1s warm-preview budget. Named errors for missing docker / build failure.
 
+    The image always compiles the engine-only `UedPreview.u` with the base image's own regular UCC
+    — no game files, no user-supplied toolchain."""
+    game_dir = Path(__file__).parent / "game"
     src = _game_source_hash(game_dir)
     marker = config.user_cache_home() / "game-image.sha256"   # honors $UEDCLI_HOME (review fix)
     if marker.is_file() and marker.read_text().strip() == src:
@@ -247,13 +251,12 @@ def ensure_image(project, user_config, row: dict) -> None:
         # (no `docker image inspect` here — it costs a ~0.3s round-trip on every warm preview; an
         #  externally-deleted image surfaces at boot as a named `docker run` error, which is rare.)
 
+    # The engine-only compile needs only the base image's UED22 Core/Engine/IpDrv (no game System,
+    # no content mounts) — build-image.sh just stages the boot map + docker-builds.
     dirs = config.composed_search_dirs(project, user_config)
-    gsys = _game_system_dir(dirs, row)
     boot = _find_boot_map(dirs, row)
-    content = [d for d in dirs if d != gsys]
     try:
-        r = _run(["bash", str(game_dir / "build-image.sh"), gsys, boot, *content],
-                 timeout=1800)
+        r = _run(["bash", str(game_dir / "build-image.sh"), boot], timeout=1800)
     except FileNotFoundError:
         raise GamePreviewError("docker/bash unavailable — --game needs the container "
                                "toolchain") from None
@@ -341,9 +344,10 @@ def _run_game_container(*, name: str, project, user_config, row: dict,
     preview_args = (["-v", f"{os.path.realpath(preview_src)}:{PREVIEW_MOUNT}:ro"]
                     if preview_src else [])
     idle_args = ["-e", f"UED_IDLE_S={idle_s}"] if idle_s else []
+    hud_args = ["-e", f"UED_HUD_HIDE={row['hud_hide']}"] if row.get("hud_hide") else []
     cmd = ["docker", "run", "-d", "--name", name, *label_args, "-e", "LAUNCH_UED=0",
            "-e", f"UED_GAME_SYSTEM={gsys_container}", "-e", f"UED_GAME_EXE={row['exe']}",
-           "-e", f"UED_SIZE_X={size[0]}", "-e", f"UED_SIZE_Y={size[1]}", *idle_args,
+           "-e", f"UED_SIZE_X={size[0]}", "-e", f"UED_SIZE_Y={size[1]}", *idle_args, *hud_args,
            "-p", "127.0.0.1::6080", *docker_mount_args(mounts), *preview_args, GAME_IMAGE]
     r = _run(cmd, timeout=120)
     if r.returncode != 0:

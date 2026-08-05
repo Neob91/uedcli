@@ -41,6 +41,11 @@ def test_deusex_row_present():
     assert row["exe"] == "DeusEx.exe" and row["boot_map"]
 
 
+def test_deusex_row_hud_hide():
+    row = pg._substrate_row("deusex")
+    assert row["hud_hide"] == "ShowHud 0"      # base-driver HudHideCommands (generic HUD hide)
+
+
 # ----------------------------------------------------------------- delivered-map naming (D5)
 
 
@@ -227,10 +232,14 @@ def test_no_trunk_and_no_map_named(tmp_path):
 # ----------------------------------------------------------------- toolchain / image
 
 
-def test_missing_toolchain_named(tmp_path, monkeypatch):
-    monkeypatch.setattr(pg.Path, "is_file", lambda self: False)
-    with pytest.raises(pg.GamePreviewError, match="UCC toolchain is not provisioned"):
-        pg.ensure_image(_proj(tmp_path), object(), pg.SUBSTRATES["deusex"])
+def test_ensure_image_needs_no_toolchain(tmp_path, monkeypatch):
+    # No substrate requires a user-supplied toolchain: ensure_image never gates on one. With the
+    # source-hash marker matching, it returns via the fast-path without touching docker.
+    monkeypatch.setattr(pg, "_game_source_hash", lambda _dir: "HASH7")
+    monkeypatch.setattr(pg.config, "user_cache_home", lambda: tmp_path)
+    (tmp_path / "game-image.sha256").write_text("HASH7")
+    for name in pg.SUBSTRATES:
+        assert pg.ensure_image(_proj(tmp_path), object(), pg.SUBSTRATES[name]) is None
 
 
 def test_game_system_dir_requires_exe(tmp_path):
