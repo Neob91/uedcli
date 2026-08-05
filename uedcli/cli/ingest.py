@@ -49,12 +49,16 @@ def validate_ingest_actors(actors, args) -> None:
     if not actors:
         return
     project, user_config, files = resources.package_path_or_exit(args)
+    class_index = classindex.ClassIndex.from_project(project, user_config)
     try:
-        classindex.ClassIndex.from_project(project, user_config).qualify_and_validate(actors)
+        class_index.qualify_and_validate(actors)
     except ClassRefError as e:
         raise CommandError(str(e))
     from .. import utexture
-    resolver = utexture.TextureResolver(files)
+    # Pass the class index so exists() counts substrate subclasses of Texture (WetTexture,
+    # FireTexture, ScriptedTexture, …) as textures — else every retail map's water/effect faces
+    # false-reject. Mirrors resources.build_texture_resolver, which already threads it.
+    resolver = utexture.TextureResolver(files, class_index=class_index)
     for a in actors:
         if a.brush is None:
             continue

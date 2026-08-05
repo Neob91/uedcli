@@ -113,8 +113,9 @@ def _fake_index():
 
 
 class _FakeResolver:
-    """A TextureResolver stand-in: only `CoreTex.Stone`/bare `Stone` exist."""
-    def __init__(self, _files):
+    """A TextureResolver stand-in: only `CoreTex.Stone`/bare `Stone` exist. Accepts `class_index`
+    to match the real signature (the ingest gate now threads it — see the subclass test below)."""
+    def __init__(self, _files, class_index=None):
         pass
 
     def exists(self, ref):
@@ -523,6 +524,41 @@ def test_actor_add_brush_texture_validated(tmp_path, monkeypatch, substrate):
     monkeypatch.setattr("sys.stdin", io.StringIO(emit_actor_t3d(a)))
     rc = dispatch.dispatch(argparse.Namespace(cmd="actor", sub="add", project=str(proj), file="-"))
     assert rc == 0
+
+
+@pytest.mark.real_validation
+def test_actor_add_brush_texture_subclass_needs_class_index(tmp_path, monkeypatch):
+    """A `Texture` SUBCLASS (DeusEx's `WetTexture` on water faces) is only counted as a texture
+    when the ingest gate hands its `ClassIndex` to the `TextureResolver`. Regression for the
+    false-reject that blocked importing every retail map — `ingest` built the resolver without the
+    class index, so `WetTexture` refs failed `exists()` and import exited 2."""
+    from uedcli.builders import cube, make_brush_actor
+    from uedcli.emit import emit_actor_t3d
+
+    class _ClassIndexResolver:
+        # exists() is True only for the subclass texture AND only when a class index was supplied —
+        # models the real gap: without the hierarchy, `WetTexture` is not recognized as a Texture.
+        def __init__(self, _files, class_index=None):
+            self._ci = class_index
+
+        def exists(self, ref):
+            return self._ci is not None and ref.casefold() == "effects.water.drtywater_a"
+
+    monkeypatch.setattr(ClassIndex, "from_project",
+                        classmethod(lambda cls, project, user_config: _fake_index()))
+    monkeypatch.setattr(config, "composed_search_files", lambda project, user_config: [("x.utx", "base")])
+    monkeypatch.setattr(config, "load_user_config", lambda: object())
+    monkeypatch.setattr(utexture, "TextureResolver", _ClassIndexResolver)
+
+    proj = _project(tmp_path, monkeypatch)
+    a = make_brush_actor("Water", cube(64, 64, 64), location=(0, 0, 0), csg="add",
+                         group=None, poly_flags=0)
+    for p in a.brush.polys:
+        p.texture = "Effects.water.drtywater_a"
+    monkeypatch.setattr("sys.stdin", io.StringIO(emit_actor_t3d(a)))
+    rc = dispatch.dispatch(argparse.Namespace(cmd="actor", sub="add", project=str(proj), file="-"))
+    assert rc == 0                                        # passes only because ingest threads the class index
+    assert len(trunk.read_level(proj / "maps" / "lvl")[0].actors) == 1
 
 
 @pytest.mark.real_validation
