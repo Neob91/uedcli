@@ -15,7 +15,9 @@ the owner 2026-08-05. File:line anchors vs `master`. Ephemeral (`CLAUDE.md`): on
   (`rust-rasterizer-for-the-consolidated-offline`), not a gate.
 - **Missing texture = batch-report then refuse** (collect all undecodable surviving-surface refs,
   exit 2 once naming the set). Closes `level-preview-native-checkerboards`.
-- **CLI flag name** is the one open owner question — `questions/offline-tier-flag-name.md`.
+- **CLI flag = `--offline`** (2026-08-05). `level preview --native` becomes `level preview
+  --offline`; the only spelling, no alias (`conventions.md`). `--game` stays default and mutually
+  exclusive; `--fov` stays gated to `--offline`.
 
 ## Goal
 
@@ -77,7 +79,8 @@ Both verbs build the same `PreviewData` and call one renderer with a projection:
   level's actors with `--faces textured` semantics (the solve), then renders one PNG per
   `ResolvedShot` with a `PerspectiveProjection(shot.eye, basis(shot.pitch,shot.yaw), fov, near,
   size)`. It replaces the `render_shots` import; `preview_shots`/pose resolution and the `--out-dir`/
-  `--size`/`--fov`/`--list-actors`-free arg surface (`level.py:453–553`) stay.
+  `--size`/`--fov` arg surface (`level.py:453–553`) stay, with the tier flag renamed `--native` →
+  `--offline`.
 
 ### 3. CSG core — adopt the faithful one (resolves §3)
 
