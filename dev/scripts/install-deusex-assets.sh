@@ -194,6 +194,26 @@ need_tool() {  # <command> <apt-package> <what-for>
     exit 2
 }
 
+# Unpack an Inno Setup installer into $UNPACK_DIR. Uses host innoextract when present; otherwise, for
+# a SEAMLESS run on a host without it (and no root to apt-install it), runs innoextract in a throwaway
+# Docker container — the same host-tool-in-Docker fallback as bin/rust-build. Runs as root in the
+# container (apt needs it) then chowns the extracted tree back to the invoking user.
+run_innoextract() {  # <exe-path>
+    local f="$1" base; base="$(basename "$f")"
+    if command -v innoextract >/dev/null 2>&1; then
+        ( cd "$UNPACK_DIR" && innoextract -e -s -q "$f" ); return $?
+    fi
+    command -v docker >/dev/null 2>&1 || need_tool innoextract innoextract "unpack the Windows installer $base"
+    local img="${UEDCLI_INNOEXTRACT_IMAGE:-debian:bookworm-slim}"
+    echo "  (innoextract not on host — running it in Docker: $img)"
+    docker run --rm \
+        -v "$(cd "$(dirname "$f")" && pwd)":/dl:ro -v "$UNPACK_DIR":/out \
+        "$img" bash -c "set -e
+            command -v innoextract >/dev/null 2>&1 || { apt-get update -qq && apt-get install -y -qq innoextract >/dev/null; }
+            cd /out && innoextract -e -s -q '/dl/$base'
+            chown -R $(id -u):$(id -g) /out"
+}
+
 # The filename to save a URL under: its last path segment, with any ?query/#fragment stripped.
 # A URL that yields no usable name (a bare directory URL) is rejected rather than guessed at.
 url_filename() {  # <url>
@@ -290,9 +310,8 @@ unpack_one() {  # <file>
             # A GOG offline installer is Inno Setup, which innoextract unpacks natively. Other
             # Windows installers (InstallShield, NSIS) are NOT handled — say so rather than
             # producing a subtly incomplete tree.
-            need_tool innoextract innoextract "unpack the Windows installer $base"
             echo "  $base: unpacking as an Inno Setup installer"
-            ( cd "$UNPACK_DIR" && innoextract -e -s -q "$f" ) || {
+            run_innoextract "$f" || {
                 echo "error: innoextract could not unpack $base." >&2
                 echo "       Only Inno Setup installers (e.g. GOG offline installers) are supported" >&2
                 echo "       here. For any other installer, run it (or unpack it) yourself and point" >&2
