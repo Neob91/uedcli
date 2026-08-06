@@ -1,0 +1,30 @@
+# Primary crash: runtime ClientTravel (menu DX.dx -> room.dx) under FEX+wine-10, dx engine, SoftDrv.
+# Captured from DeusEx boot.log, the block immediately BEFORE the "Double fault in object
+# ShutdownAfterError" flood (the flood is the masked reentrant secondary; this is the primary).
+# Reproduced identically with LIBGL_ALWAYS_SOFTWARE=1 and with FEX VectorTSO/Multiblock=0.
+
+Log: Browse: room.dx?Name=Player?Class=DeusEx.JCDentonMale
+Log: Unloading: Package DX
+Log: LoadMap: room.dx?Name=Player?Class=DeusEx.JCDentonMale
+Log: Loading: Package room
+Log: Loading: Package Amark
+Init: Shut down moving brush tracker for Level DX.MyLevel
+Critical: ULevel::PostLoad          <-- raw fault, no access-violation text
+Critical: UObject::ConditionalPostLoad
+Critical: (Level room.MyLevel)
+Critical: PostLoadObjects
+Critical: UObject::EndLoad
+Critical: UObject::StaticLoadObject
+Critical: (Engine.Level None.MyLevel room.dx)
+Critical: LoadLevel
+Critical: UGameEngine::LoadMap
+Critical: LoadURL
+Critical: UGameEngine::Browse
+Critical: ClientTravel
+Critical: UGameEngine::Tick
+Critical: XGameEngineExt::Tick
+Critical: UpdateWorld
+Critical: MainLoop
+Exit: Executing UObject::StaticShutdownAfterError
+Exit: Executing UWindowsClient::ShutdownAfterError
+Exit: Double fault in object ShutdownAfterError   (x thousands -> masks primary)

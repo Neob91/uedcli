@@ -1,0 +1,24 @@
+[t1-libgl] boot ENGINE=dx CACHE=4 LIBGL=1 TARGET=room.dx FEXcfg={ "Config": { "RootFS": "wine10" } }
+[t1-libgl] LINK up t=8s anon=3308MiB — traveling to room.dx
+  travel: b'#2 OK TravelToLevel room.dx\r\n'
+  link-dead: timed out
+  RESULT CRASHED last= b''
+[t1-libgl] --- primary crash stack ---
+Critical: ULevel::PostLoad
+Critical: UObject::ConditionalPostLoad
+Critical: (Level room.MyLevel)
+Critical: PostLoadObjects
+Critical: UObject::EndLoad
+Critical: UObject::StaticLoadObject
+Critical: (Engine.Level None.MyLevel room.dx)
+Critical: LoadLevel
+Critical: UGameEngine::LoadMap
+Critical: LoadURL
+Critical: UGameEngine::Browse
+Critical: ClientTravel
+Critical: UGameEngine::Tick
+Critical: XGameEngineExt::Tick
+Critical: UpdateWorld
+Critical: MainLoop
+Exit: Executing UObject::StaticShutdownAfterError
+Exit: Executing UWindowsClient::ShutdownAfterError
