@@ -1,29 +1,30 @@
 # Tests
 
-Run the offline suite through the `bin/test` wrapper. It runs pytest
-host-native in the auto-managed dev venv (`bin/_venv.sh`, `.venv/`,
-Python 3.12 + `Pillow`/`pytest`), the same runtime `bin/uedcli` uses. It
-needs `python3.12` on PATH (pyenv provides it here); the venv self-creates
-on first run. Extra args pass through (invoke it path-qualified —
+Run the offline suite through the `bin/test` wrapper. It runs pytest, then
+`cargo test` in `uedcli-native/` (the Rust PyO3 extension), INSIDE the
+long-running dev container (Rust + Python + deps), `docker exec`'d into — the
+same container `bin/uedcli` uses. The container builds on first run and the repo
+is identity-mounted, so the host needs only Docker (no `python3.12`, cargo, or
+`libpython` on PATH). Extra args pass through (invoke it path-qualified —
 `test` alone is a shell builtin):
 ```
-bin/test                 # whole offline suite, from the repo root
+bin/test                 # whole offline suite (pytest + cargo test), in the container
 bin/test -k preview -x
 ```
-Integration tests (`-m integration`) require the live `dx-lum-uned`
-container and are deselected by default (`pytest.ini`).
+Integration tests (`-m integration`) require the live editor RUNTIME container
+and are deselected by default (`pytest.ini`).
 
-`bin/test` runs two suites: pytest, then `cargo test` in `uedcli-native/`
-(the Rust PyO3 extension). The Rust half is optional — if `cargo` is
-missing, or `UEDCLI_SKIP_NATIVE=1` is set, it warns and skips, and the Python
-tests that need the extension `importorskip("uedcli_native")` themselves. So a
-green run on a machine without cargo tested less than it looks:
-`level materialize --native` and `preview --native` were not exercised. See
-`../dev-runtime.md` for the build gating and the `UEDCLI_VENV*` knobs.
+The Rust goldens run every time (cargo is in the container), so a green run
+exercises the native `uedcli_native` core — including `level materialize` and
+`preview` native paths — not just the Python. `UEDCLI_SKIP_NATIVE=1` skips the
+extension build + `cargo test` for a pytest-only run (the native pytest tests
+`importorskip("uedcli_native")`). `UEDCLI_DEV_REBUILD=1` forces an image rebuild;
+`UEDCLI_DEV_MOUNTS="/a /b"` identity-mounts extra host dirs (asset roots) into the
+container. See `../dev-runtime.md` for the container mechanics and knobs.
 
-uedcli itself runs host-native too (via `bin/uedcli` → the same venv),
-not inside a container — mirroring the eventual Nuitka release binary, so it
-has native filesystem access to the game's asset dirs and needs no
-bind-mounting of external roots into a dev container. Only the editor/build
-containers it drives run under Docker. (The old Python-3.12 dev image +
-`_dev-run.sh` were retired 2026-07-14 — `../direction/process.md` "venv for dev".)
+uedcli itself runs in the same dev container (via `bin/uedcli`, as the invoking
+uid so its outputs are yours, not root's). The repo is identity-mounted, so
+uedcli's paths are the same inside the container as on the host — it never
+branches on "am I in a container?". The editor/game RUNTIME containers it drives
+run on the host via the mounted docker socket. `../direction/process.md`
+"dev container".

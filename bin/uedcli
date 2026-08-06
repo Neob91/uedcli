@@ -1,13 +1,16 @@
 #!/usr/bin/env bash
-# uedcli — HOST-NATIVE dev launcher. Runs the uedcli CLI on the host in a Python
-# 3.12 venv (mirroring the eventual Nuitka release binary), with native access to
-# asset dirs and no dev-container path/mount juggling. Editor/build containers it
-# drives still run via docker. See bin/_venv.sh + dev/docs/dev-runtime.md.
+# uedcli — dev launcher. Runs the uedcli CLI INSIDE the long-running dev container (Rust+Python+deps),
+# docker-exec'd into (owner ruling 2026-08-06; dev/docs/direction/process.md, dev/docs/dev-runtime.md).
+# Runs as the invoking uid so any maps/exports it writes are yours, not root's. The editor/game
+# RUNTIME containers it drives run on the host via the mounted docker socket.
 #
-# Put this dir on PATH (or symlink into ~/.local/bin), then: `uedcli level status`,
-# `printf '%s' "$t3d" | uedcli actor add -`. The venv auto-creates on first run;
-# `UEDCLI_VENV_REBUILD=1 uedcli …` forces a dep refresh.
+# Put this dir on PATH, then: `uedcli level status`, `printf '%s' "$t3d" | uedcli actor add -`.
+# The CLI sees paths that are mounted into the container: the repo (identity-mounted) and anything in
+# `UEDCLI_DEV_MOUNTS="/game/assets …"` (identity-mounted too). Run from a mounted path.
 set -euo pipefail
-source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/_venv.sh"
-ensure_venv
-exec env PYTHONPATH="$UEDCLI_DIR" "$PY" -m uedcli "$@"
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/_dev-container.sh"
+ensure_dev_container
+tty=(); [ -t 0 ] && tty=(-t)   # -i always (stdin piping: `… | uedcli actor add -`); -t only on a real terminal
+exec docker exec -i "${tty[@]}" --user "$(id -u):$(id -g)" \
+  -e HOME=/tmp -e "PYTHONPATH=$UEDCLI_DIR" \
+  -w "$PWD" "$DEV_CONTAINER" python -m uedcli "$@"
