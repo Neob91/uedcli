@@ -74,6 +74,12 @@ The detail and the rejected alternatives live in `dev/docs/direction/conventions
 - No silent half-answers, no fallbacks. A command that can't fully satisfy a request exits 2 naming
   the offending value, never a partial result plus a stderr warning that scrolls away, and never a
   substituted default for something it couldn't resolve.
+- Never switch behavior based on the environment. A verb does the SAME thing on every host — same
+  code path, same engine, same output — or it exits 2 naming what's wrong. Never branch on CPU arch,
+  OS, an env var, or the presence/absence of a tool to pick a different implementation or a
+  "fallback" (e.g. editor here, native builder there). If something can't run on a host, that's a
+  broken host to FIX, surfaced as a clear error — not a second code path the tool silently takes.
+  *(Owner ruling, 2026-08-06.)*
 - Never let a Python exception reach the user. A bad actor/entity name exits non-zero with a clear
   message naming the value (`Actor not found: Foo`), never a bare `KeyError`/`IndexError` traceback.
   Cover each path with a regression test.
