@@ -58,3 +58,32 @@ package 'Core'`.
 Environmental/tooling result (like the parent FEX spikes) — needs FEX + a 6 GB container + an X host,
 can't run in CI. Pin the checkable half in the build phase: an H3 byte-parity golden of a real
 materialized level.
+
+## Integration progress toward the real `level materialize` path (2026-08-06)
+
+Working toward running the actual `run_materialize` → `Driver` (docker exec `wine_ctl`) code against
+a FEX editor. `Driver` assumes editor + Xvfb + `xdotool` + `wine_ctl` + files all in ONE container
+(`self.container`), so the real runtime is a single self-contained FEX editor container.
+
+- **Arm64 X tools into the FEX image (solved).** `fextest-wine10-ready`'s apt is broken for new
+  installs — the wine-10 userland was `dpkg-deb -x`'d in raw, so the resolver refuses every install
+  (even already-present base libs; the held mesa packages poison it). Fix that works: `apt-mark
+  unhold` the mesa holds, then **download the deb set and `dpkg -i --force-depends`** (bypass the
+  resolver — the runtime libs are actually present). Installed `xvfb xdotool fluxbox wmctrl xclip
+  x11-utils x11-xkb-utils xauth` this way. The real runtime image should install X tools cleanly in a
+  layer BEFORE the raw wine extraction.
+- **Single self-contained container boots + renders** (native arm64 `Xvfb :99` local, FEX editor →
+  `:99`), no Critical Error with the SoftDrv ini.
+- **`wine_ctl` needs title-based window resolution under FEX (review finding #4, confirmed).** The
+  editor window's `_NET_WM_PID` is a FEX/wine internal pid (e.g. 2627), NOT the launcher pid, and the
+  `unrealed.exe` PE process shows `<defunct>` while `FEXInterpreter` runs it. So `xdotool search
+  --pid` (and the `/run/uned.pid` liveness check) fail. Manual **title-based** driving works and
+  already materialized the 79 KB `.dx` above. `_resolve_window`/`_assert_alive` must fall back to
+  `xdotool search --name "Unreal"` + window-existence when the pid path yields nothing.
+- **Open wrinkle:** in a single container the local `fluxbox` didn't advertise `_NET_ACTIVE_WINDOW`
+  (windowactivate failed; frame not maximized), whereas `fluxbox` in a separate driver container
+  worked. The `uned` entrypoint runs `fluxbox` successfully in-container, so the recipe exists — a
+  startup/config detail to port.
+
+Remaining to a real H3-verified `.dx` under FEX: port the title-based `wine_ctl` + the in-container
+`fluxbox`, point `ensure_editor` at the FEX container, run `run_materialize` end-to-end.
