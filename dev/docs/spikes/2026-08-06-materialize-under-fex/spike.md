@@ -87,3 +87,23 @@ a FEX editor. `Driver` assumes editor + Xvfb + `xdotool` + `wine_ctl` + files al
 
 Remaining to a real H3-verified `.dx` under FEX: port the title-based `wine_ctl` + the in-container
 `fluxbox`, point `ensure_editor` at the FEX container, run `run_materialize` end-to-end.
+
+## Update: the real `Driver`/`wine_ctl` interface materializes under FEX (2026-08-06)
+
+Drove `MAP NEW → MAP IMPORTADD (79 KB level) → MAP REBUILD → MAP SAVE` entirely through the real
+`wine_ctl exec` (the exact `Driver` interface, not raw xdotool) in a single self-contained FEX
+container → a valid 79,516-byte `.dx`, no crash. So `Driver` is a drop-in against a FEX editor.
+
+- **The wine_ctl fix is the PID, not a title patch.** Standard PID-based window resolution works once
+  `/run/uned.pid` holds the **live `FEXInterpreter` pid** (the process actually running the editor),
+  NOT the `unrealed.exe` PE stub — which shows `<defunct>` under FEX and whose descendants don't own
+  the window. The FEX editor entrypoint must write that live pid. (Supersedes the earlier
+  "needs title fallback" note — a title fallback is a harmless backup, but the pid is the real fix.)
+- **WM libs:** fluxbox/wmctrl need `libXft2`/`libXpm4`/`libXmu6`/`libXt6` etc.; the
+  download+`dpkg-deb -x` set must include them or fluxbox silently fails to start (no EWMH →
+  `windowactivate` fails). With fluxbox up, `_NET_ACTIVE_WINDOW` is advertised and driving works.
+- Working container snapshotted as image `fex-editor-ready:latest` (X tools + libs + `UED22run` +
+  SoftDrv ini + `wine_ctl`).
+
+Remaining to a literal `run_materialize` H3 pass: point `ensure_editor` at the FEX container (writing
+the live pid), construct a trunk `Level`, run `run_materialize` + its offline H3 verify.
