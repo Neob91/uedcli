@@ -1,0 +1,50 @@
+# arm64 FEX + wine-10 variant of the x86-Windows editor runtime (docker-compose `ued-x86-runtime`).
+# Same substrate (/opt/UED22) and scripts (/opt/uned) as the x86 `Dockerfile`; only the base differs
+# — here a FEX + pinned wine-10 x86 userland + native arm64 X tools, which runs the x86 editor
+# without qemu. Building that base reproducibly (pinned wine-10 deb shas; X tools installed BEFORE
+# the raw wine-userland `dpkg-deb -x`, which otherwise breaks apt) is the remaining `ued-x86-runtime`
+# board piece; here it is the `ued-x86-wine10-base` image the build passes in.
+ARG BASE=ued-x86-wine10-base:latest
+
+# The base's native arm64 `wmctrl` (used to dismiss the editor's GC dialog — driver.dismiss_blocking_
+# dialog) is missing its `libXt.so.6` runtime dep, and the base's apt is broken for new installs
+# (the raw wine-userland extraction poisoned the resolver). Supply the one arm64 lib from a clean
+# ubuntu layer. The reproducible base build (the `ued-x86-runtime` board item) should install it in
+# the base instead, dropping this stage.
+FROM ubuntu:24.04 AS xtlibs
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends libxt6 \
+ && rm -rf /var/lib/apt/lists/*
+
+FROM ${BASE}
+COPY --from=xtlibs /usr/lib/aarch64-linux-gnu/libXt.so.6.0.0 /usr/lib/aarch64-linux-gnu/libXt.so.6.0.0
+RUN ln -sf libXt.so.6.0.0 /usr/lib/aarch64-linux-gnu/libXt.so.6
+
+# The FEX x86 wine-10 environment, in ENV so both the entrypoint's editor launch and any `docker exec
+# … wine …` (the H3-verify UCC batchexport) inherit it. WINEPREFIX is the base's pre-initialised
+# win32 prefix, used in place — copy-up per container keeps runtime writes ephemeral, no 600 MB
+# volume-init copy per materialize; the compose `/wineprefix` volume is unused on this substrate.
+ENV WINEPREFIX=/wineprefix32c \
+    WINEARCH=win32 \
+    WINELOADER=/opt/wine-stable/bin/wine \
+    WINEDLLPATH=/opt/wine-stable/lib/wine/i386-windows \
+    WINEESYNC=1 \
+    WINEFSYNC=1 \
+    WINEDLLOVERRIDES="winealsa.drv=d;mscoree=d;mshtml=d" \
+    WINEDEBUG=-all \
+    XDG_RUNTIME_DIR=/run/user/0 \
+    DISPLAY=:99 \
+    LIBGL_ALWAYS_SOFTWARE=1
+
+# The run_x86 shim: `wine` on PATH runs the x86 userland under FEX (see wine-fex-shim.sh). Installed
+# at /usr/local/bin (ahead of /opt/wine-stable/bin on PATH) so every `wine` invocation is emulated.
+COPY wine-fex-shim.sh /usr/local/bin/wine
+RUN chmod +x /usr/local/bin/wine
+
+# Substrate first (re-baked rarely), then the scripts (edited most often) so a wine_ctl/entrypoint
+# tweak reuses the layer above.
+COPY UED22/ /opt/UED22/
+COPY entrypoint.sh wine_ctl.py vnc_input_bridge.py /opt/uned/
+
+WORKDIR /opt/uned
+ENTRYPOINT ["bash", "/opt/uned/entrypoint.sh"]

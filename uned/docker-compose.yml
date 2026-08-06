@@ -1,8 +1,14 @@
 services:
   uned:
+    # The x86-Windows editor RUNTIME. One tag, host-appropriate x86 substrate: on x86_64 the
+    # `build:` below produces the native-wine image; on arm64 the tag is the FEX + wine-10 variant
+    # built out-of-band (its reproducible build is the `ued-x86-runtime` board item's remaining
+    # piece — the `build:` Dockerfile here is the x86 variant only). `docker compose run` uses the
+    # present tag without rebuilding, so uedcli invokes it identically on either arch (the entrypoint
+    # picks the substrate — see entrypoint.sh).
     build:
       context: .
-    image: dx-lum-uned:latest
+    image: ued-x86-runtime:latest
     container_name: dx-lum-uned
     # Substrate is BAKED into the image (no /repo mount). Game CONTENT is NO LONGER mounted
     # statically here: the asset-wiring cutover (Part C, 2026-07-14) config-drives every asset mount

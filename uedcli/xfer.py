@@ -46,6 +46,11 @@ def _cp(args: list[str], what: str) -> None:
     except subprocess.TimeoutExpired:
         raise DriverError(f"docker cp did not finish within {CP_TIMEOUT:.0f}s ({what}) — "
                           f"dockerd or the container is not answering") from None
+    except subprocess.CalledProcessError as e:
+        # Surface docker's own stderr (else the caller sees only "exit status N" and can't tell a
+        # vanished container from a bad path — CLAUDE.md "error messages include the offending value").
+        raise DriverError(f"docker cp failed ({what}): {(e.stderr or '').strip() or 'no stderr'}") \
+            from None
 
 
 def cp_in(container: str, host_path: str, *, ext: str) -> str:

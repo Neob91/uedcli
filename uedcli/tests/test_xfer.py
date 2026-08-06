@@ -72,6 +72,20 @@ def test_a_hung_cp_raises_a_named_driver_error_not_a_subprocess_timeout():
             raise AssertionError("expected DriverError")
 
 
+def test_a_failed_cp_surfaces_dockers_stderr_in_a_named_driver_error():
+    import subprocess
+    from uedcli.driver import DriverError
+    err = subprocess.CalledProcessError(1, "docker cp", stderr="remount-ro /stubs: operation not permitted")
+    with mock.patch("uedcli.xfer.subprocess.run", autospec=True) as run:
+        run.side_effect = err
+        try:
+            xfer.cp_out("c1", "/work/x.dx", "/host/out.dx")
+        except DriverError as e:
+            assert "docker cp failed" in str(e) and "remount-ro /stubs: operation not permitted" in str(e)
+        else:
+            raise AssertionError("expected DriverError")
+
+
 def test_a_hung_remove_is_swallowed_because_cleanup_must_never_hang_the_caller():
     import subprocess
     with mock.patch("uedcli.xfer.subprocess.run", autospec=True) as run:
