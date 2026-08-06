@@ -76,6 +76,7 @@ def cp_out(container: str, container_path: str, host_path: str) -> None:
             subprocess.run(["docker", "exec", container, "cat", container_path],
                            check=True, stdout=out, stderr=subprocess.PIPE, timeout=CP_TIMEOUT)
     except subprocess.TimeoutExpired:
+        Path(host_path).unlink(missing_ok=True)   # a truncated stream must not be left at the dest
         raise DriverError(f"docker exec cat did not finish within {CP_TIMEOUT:.0f}s ({what}) — "
                           f"dockerd or the container is not answering") from None
     except subprocess.CalledProcessError as e:

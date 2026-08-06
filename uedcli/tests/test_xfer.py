@@ -91,6 +91,34 @@ def test_a_failed_cp_out_surfaces_dockers_stderr_in_a_named_driver_error(tmp_pat
             raise AssertionError("expected DriverError")
 
 
+def test_cp_out_unlinks_the_partial_host_file_when_cat_fails(tmp_path):
+    # `open(host_path, "wb")` truncates the dest before the stream; a failed cat must not leave that
+    # empty/partial file at the destination the caller asked for.
+    import subprocess
+    from uedcli.driver import DriverError
+    dest = tmp_path / "out.dx"
+    with mock.patch("uedcli.xfer.subprocess.run", autospec=True) as run:
+        run.side_effect = subprocess.CalledProcessError(1, "docker exec", stderr=b"boom")
+        try:
+            xfer.cp_out("c1", "/work/x.dx", str(dest))
+        except DriverError:
+            pass
+    assert not dest.exists()
+
+
+def test_cp_out_unlinks_the_partial_host_file_on_timeout(tmp_path):
+    import subprocess
+    from uedcli.driver import DriverError
+    dest = tmp_path / "out.dx"
+    with mock.patch("uedcli.xfer.subprocess.run", autospec=True) as run:
+        run.side_effect = subprocess.TimeoutExpired(cmd="docker exec", timeout=xfer.CP_TIMEOUT)
+        try:
+            xfer.cp_out("c1", "/work/x.dx", str(dest))
+        except DriverError:
+            pass
+    assert not dest.exists()
+
+
 def test_a_hung_remove_is_swallowed_because_cleanup_must_never_hang_the_caller():
     import subprocess
     with mock.patch("uedcli.xfer.subprocess.run", autospec=True) as run:
