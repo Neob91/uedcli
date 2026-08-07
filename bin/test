@@ -1,15 +1,23 @@
 #!/usr/bin/env bash
-# bin/test — run uedcli's OFFLINE unit suite (pytest) + the Rust `cargo test` goldens INSIDE the
-# long-running dev container (Rust + Python + deps), docker-exec'd into (owner ruling 2026-08-06;
-# dev/docs/direction/process.md, dev/docs/rules/tests.md). Integration tests (-m integration) stay
-# deselected by pytest.ini. Extra args pass straight through to pytest.
-#     bin/test                 # whole offline suite (pytest + cargo test), in the container
+# bin/test — run uedcli's OFFLINE unit suite (pytest, HOST-NATIVE) + the Rust `cargo test` goldens
+# (in a container — no host Rust needed). uedcli's own CLI runs host-native too (bin/uedcli); only the
+# Rust build/test is containerized. Integration tests (-m integration) stay deselected by pytest.ini.
+# Extra args pass straight through to pytest. Invoke path-qualified (`bin/test`) — `test` is a builtin.
+#     bin/test                 # whole offline suite (pytest + cargo test)
 #     bin/test -k texture -x   # extra args -> pytest
 #     UEDCLI_SKIP_NATIVE=1 bin/test <file>   # pytest only (skip the Rust ext build + cargo test)
 set -euo pipefail
-source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/_dev-container.sh"
-ensure_dev_container
-exec docker exec $([ -t 0 ] && printf %s\\n -it) \
-  -e "UEDCLI_SKIP_NATIVE=${UEDCLI_SKIP_NATIVE:-}" \
-  -w "$UEDCLI_DIR" "$DEV_CONTAINER" \
-  bash "$UEDCLI_DIR/dev-container/run-tests.sh" "$@"
+source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/_venv.sh"
+ensure_venv
+ensure_native_ext                      # builds uedcli_native (abi3 wheel) in a container, into the venv
+cd "$UEDCLI_DIR"                       # pytest rootdir/testpaths resolve here
+
+rc=0
+if [ "$#" -eq 0 ]; then
+  env PYTHONPATH="$UEDCLI_DIR" "$PY" -m pytest uedcli -q || rc=$?
+else
+  env PYTHONPATH="$UEDCLI_DIR" "$PY" -m pytest "$@" -q || rc=$?
+fi
+
+run_cargo_test || rc=$?                # Rust goldens, in the build container
+exit "$rc"
