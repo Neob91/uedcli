@@ -2573,7 +2573,7 @@
               ],
               "metavar": null,
               "converter": null,
-              "help": "how to colour the '--faces wire' wireframe: 'csg' (the default) = by CSG op (added blue, subtracted gold, semisolid pink, nonsolid green, mover magenta); 'legend' = each brush in its own per-actor legend tint (drops the CSG cue but tells same-op brushes apart at a glance, matching the legend swatches). Rejected under --faces textured (which samples real textures, colouring nothing from this flag)",
+              "help": "how to colour the '--faces wire' wireframe: 'csg' (the default) = by CSG op (added blue, subtracted gold, semisolid pink, nonsolid green, mover magenta); 'legend' = each brush in its own per-actor tint (drops the CSG cue but tells same-op brushes apart at a glance). Rejected under --faces textured (which samples real textures, colouring nothing from this flag)",
               "mutex_group": null
             },
             {
@@ -2584,12 +2584,12 @@
               "dest": "annotate",
               "nargs": null,
               "const": null,
-              "default": "poly:vis,poly:hi,name",
+              "default": "poly:vis,poly:hi",
               "required": false,
               "choices": null,
               "metavar": null,
               "converter": null,
-              "help": "comma-set of annotation selectors (union). A bare KIND = ALL of it; colon FILTERs narrow; commas union. Kinds: poly (face indices), name (actor names). poly filters: vis (inert alias of bare poly — on-face numbering is facing-blind), hi (highlighted; 'highlighted' is an accepted synonym). name filters: brush, point, hi. e.g. 'name:brush' = brush names only; 'poly:vis' = every face index (same as bare poly). Keywords (stand alone): none, all (=poly,name), highlighted (=poly:hi,name:hi). Default: all face indices + all names",
+              "help": "comma-set of poly-index selectors (union). Bare 'poly' = every face index; colon FILTERs narrow; commas union. poly filters: vis (inert alias of bare poly — on-face numbering is facing-blind), hi (highlighted faces only; 'highlighted' is an accepted synonym). e.g. 'poly:hi' = highlighted faces only; 'poly:vis' = every face index (same as bare poly). Keywords (stand alone): none, all (=poly), highlighted (=poly:hi). Default: all face indices. Actor names are never drawn — locate a brush by its grid cell (printed on stderr)",
               "mutex_group": null
             },
             {
@@ -11421,7 +11421,7 @@
               ],
               "metavar": null,
               "converter": null,
-              "help": "how to colour the '--faces wire' wireframe: 'csg' (the default) = by CSG op (added blue, subtracted gold, semisolid pink, nonsolid green, mover magenta); 'legend' = each brush in its own per-actor legend tint (drops the CSG cue but tells same-op brushes apart at a glance, matching the legend swatches). Rejected under --faces textured (which samples real textures, colouring nothing from this flag)",
+              "help": "how to colour the '--faces wire' wireframe: 'csg' (the default) = by CSG op (added blue, subtracted gold, semisolid pink, nonsolid green, mover magenta); 'legend' = each brush in its own per-actor tint (drops the CSG cue but tells same-op brushes apart at a glance). Rejected under --faces textured (which samples real textures, colouring nothing from this flag)",
               "mutex_group": null
             },
             {
@@ -11432,12 +11432,12 @@
               "dest": "annotate",
               "nargs": null,
               "const": null,
-              "default": "poly:vis,poly:hi,name",
+              "default": "poly:vis,poly:hi",
               "required": false,
               "choices": null,
               "metavar": null,
               "converter": null,
-              "help": "comma-set of annotation selectors (union). A bare KIND = ALL of it; colon FILTERs narrow; commas union. Kinds: poly (face indices), name (actor names). poly filters: vis (inert alias of bare poly — on-face numbering is facing-blind), hi (highlighted; 'highlighted' is an accepted synonym). name filters: brush, point, hi. e.g. 'name:brush' = brush names only; 'poly:vis' = every face index (same as bare poly). Keywords (stand alone): none, all (=poly,name), highlighted (=poly:hi,name:hi). Default: all face indices + all names",
+              "help": "comma-set of poly-index selectors (union). Bare 'poly' = every face index; colon FILTERs narrow; commas union. poly filters: vis (inert alias of bare poly — on-face numbering is facing-blind), hi (highlighted faces only; 'highlighted' is an accepted synonym). e.g. 'poly:hi' = highlighted faces only; 'poly:vis' = every face index (same as bare poly). Keywords (stand alone): none, all (=poly), highlighted (=poly:hi). Default: all face indices. Actor names are never drawn — locate a brush by its grid cell (printed on stderr)",
               "mutex_group": null
             },
             {
@@ -12150,7 +12150,7 @@
               ],
               "metavar": null,
               "converter": null,
-              "help": "how to colour the '--faces wire' wireframe: 'csg' (the default) = by CSG op (added blue, subtracted gold, semisolid pink, nonsolid green, mover magenta); 'legend' = each brush in its own per-actor legend tint (drops the CSG cue but tells same-op brushes apart at a glance, matching the legend swatches). Rejected under --faces textured (which samples real textures, colouring nothing from this flag)",
+              "help": "how to colour the '--faces wire' wireframe: 'csg' (the default) = by CSG op (added blue, subtracted gold, semisolid pink, nonsolid green, mover magenta); 'legend' = each brush in its own per-actor tint (drops the CSG cue but tells same-op brushes apart at a glance). Rejected under --faces textured (which samples real textures, colouring nothing from this flag)",
               "mutex_group": null
             },
             {
@@ -12161,12 +12161,12 @@
               "dest": "annotate",
               "nargs": null,
               "const": null,
-              "default": "poly:vis,poly:hi,name",
+              "default": "poly:vis,poly:hi",
               "required": false,
               "choices": null,
               "metavar": null,
               "converter": null,
-              "help": "comma-set of annotation selectors (union). A bare KIND = ALL of it; colon FILTERs narrow; commas union. Kinds: poly (face indices), name (actor names). poly filters: vis (inert alias of bare poly — on-face numbering is facing-blind), hi (highlighted; 'highlighted' is an accepted synonym). name filters: brush, point, hi. e.g. 'name:brush' = brush names only; 'poly:vis' = every face index (same as bare poly). Keywords (stand alone): none, all (=poly,name), highlighted (=poly:hi,name:hi). Default: all face indices + all names",
+              "help": "comma-set of poly-index selectors (union). Bare 'poly' = every face index; colon FILTERs narrow; commas union. poly filters: vis (inert alias of bare poly — on-face numbering is facing-blind), hi (highlighted faces only; 'highlighted' is an accepted synonym). e.g. 'poly:hi' = highlighted faces only; 'poly:vis' = every face index (same as bare poly). Keywords (stand alone): none, all (=poly), highlighted (=poly:hi). Default: all face indices. Actor names are never drawn — locate a brush by its grid cell (printed on stderr)",
               "mutex_group": null
             },
             {

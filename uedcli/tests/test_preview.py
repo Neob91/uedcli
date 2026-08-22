@@ -6,15 +6,14 @@ from uedcli.model import parse_t3d
 import pytest
 
 from uedcli.preview import (
-    BG, FRONT, WHITE, DensityGrid, AnnotationSpec, PreviewData,
-    _DIM_ALPHA, _DecalPlan, _FRAME_PAD, _LabelItem,
+    BG, FRONT, WHITE, AnnotationSpec, PreviewData,
+    _DIM_ALPHA, _DecalPlan, _FRAME_PAD,
     _ONFACE_FILL, _ONFACE_MIN_TEXEL_PX,
     _box_fits_2d, _feasible_centers, _new_buf, _line, _point_in_poly,
     _decal_opacity, _draw_overlap_keyline, _draw_painted_decal, _face_decal_basis, _framing,
-    _label_size, _least_dense_anchor,
-    _legend_reserve, _legend_rows, _max_inscribed_box, _occluder_count, _onface_candidates,
-    _place_labels, _plan_onface_texture, _plan_px_area, _poly_is_convex_2d, _rect_overlap_area,
-    _resolve_decals, _rects_overlap, _text_bitmap, assign_tints,
+    _max_inscribed_box, _occluder_count, _onface_candidates,
+    _plan_onface_texture, _plan_px_area, _poly_is_convex_2d, _rect_overlap_area,
+    _resolve_decals, _text_bitmap, assign_tints,
     parse_annotation_spec, render_brush_pgm, render_brushes_pgm, render_quad_pgm,
 )
 from uedcli.tests.conftest import read_fixture
@@ -116,67 +115,6 @@ def test_iso_view_renders():
     assert _nonbg(pgm) > 0
 
 
-def test_place_labels_clamps_a_near_edge_anchor_inside_the_frame():
-    size, scale = 256, 2
-    items = [_LabelItem(anchor=(2, 2), text="12", scale=scale, color=FRONT)]   # at the top-left corner
-    [placed] = _place_labels(items, size)
-    (lx, ly), text = placed.pos, placed.text
-    w, h = _label_size(text, scale)
-    x0, y0, x1, y1 = lx - w // 2 - 2, ly - h // 2 - 2, lx + w // 2 + 2, ly + h // 2 + 2
-    assert x0 >= 0 and y0 >= 0 and x1 < size and y1 < size
-    assert placed.anchor == (2, 2)               # leader still points at the TRUE centroid
-
-
-def test_place_labels_clamps_a_near_far_edge_anchor_inside_the_frame():
-    size, scale = 256, 2
-    items = [_LabelItem(anchor=(254, 254), text="7", scale=scale, color=FRONT)]  # bottom-right corner
-    [placed] = _place_labels(items, size)
-    (lx, ly), text = placed.pos, placed.text
-    w, h = _label_size(text, scale)
-    x0, y0, x1, y1 = lx - w // 2 - 2, ly - h // 2 - 2, lx + w // 2 + 2, ly + h // 2 + 2
-    assert x0 >= 0 and y0 >= 0 and x1 < size and y1 < size
-
-
-def test_place_labels_avoids_overlap_for_several_close_anchors():
-    size, scale = 256, 2
-    items = [_LabelItem(anchor=(128, 128), text=str(i), scale=scale, color=FRONT) for i in range(5)]
-    placed = _place_labels(items, size)
-    rects = []
-    for p in placed:
-        lx, ly = p.pos
-        w, h = _label_size(p.text, scale)
-        rects.append((lx - w // 2 - 3, ly - h // 2 - 3, lx + w // 2 + 3, ly + h // 2 + 3))
-    for i in range(len(rects)):
-        for j in range(i + 1, len(rects)):
-            assert not _rects_overlap(rects[i], rects[j]), (i, j, rects[i], rects[j])
-
-
-def test_place_labels_keeps_a_label_off_an_occupied_marker_rect():
-    size, scale = 256, 2
-    marker = (120, 120, 136, 136)                          # a pre-occupied footprint at the anchor
-    items = [_LabelItem(anchor=(128, 128), text="7", scale=scale, color=FRONT)]
-    [placed] = _place_labels(items, size, occupied=[marker])
-    lx, ly = placed.pos
-    w, h = _label_size("7", scale)
-    box = (lx - w // 2 - 3, ly - h // 2 - 3, lx + w // 2 + 3, ly + h // 2 + 3)
-    assert not _rects_overlap(box, marker)                 # label nudged off the marker
-    assert placed.pos != placed.anchor                     # so a leader/dot is drawn
-
-
-def test_place_labels_saturated_cluster_still_places_all_in_frame():
-    # Force the least-cost fallback: many labels at one anchor in a tiny frame → all still placed,
-    # boxes clamped in-frame, no crash (pins the for-loop fallback the greedy fast path skips).
-    size, scale = 40, 2
-    items = [_LabelItem(anchor=(20, 20), text=str(i), scale=scale, color=FRONT) for i in range(12)]
-    placed = _place_labels(items, size)
-    assert len(placed) == 12
-    for p in placed:
-        lx, ly = p.pos
-        w, h = _label_size(p.text, scale)
-        assert 0 <= lx - w // 2 - 2 and lx + w // 2 + 2 < size
-        assert 0 <= ly - h // 2 - 2 and ly + h // 2 + 2 < size
-
-
 def _point(name, cls, loc):
     from uedcli.model import Actor
     return Actor(name=name, cls=cls, location=(Decimal(loc[0]), Decimal(loc[1]), Decimal(loc[2])))
@@ -188,14 +126,12 @@ def test_point_actor_without_render_data_is_skipped():
     assert _nonbg(ppm) == 0
 
 
-def test_point_marker_renders_and_label_is_toggleable():
+def test_point_marker_renders():
     from uedcli.preview import PointRender
     rd = PreviewData(points={"L": PointRender(label="Torch")})
     a = _point("L", "Engine.Light", (0, 0, 0))
-    labeled = render_brushes_pgm([a], view="top", size=128, annotations=AnnotationSpec.all(), render_data=rd)
-    plain = render_brushes_pgm([a], view="top", size=128, annotations=AnnotationSpec.none(), render_data=rd)
-    assert _nonbg(labeled) > 0                          # the marker draws
-    assert _nonbg(labeled) > _nonbg(plain)           # annotations=AnnotationSpec.none() drops the label text
+    drawn = render_brushes_pgm([a], view="top", size=128, annotations=AnnotationSpec.none(), render_data=rd)
+    assert _nonbg(drawn) > 0                            # the marker draws
 
 
 def test_point_actor_is_not_painted_csg_additive_blue():
@@ -303,13 +239,12 @@ def test_iso_light_range_is_a_circle_not_an_octagon():
 
 
 # ---- AnnotationSpec / parse_annotation_spec (grammar) --------------------------------------------------
-# poly categories are (is_front, is_highlighted); name categories are (is_brush, is_highlighted).
+# poly categories are (is_front, is_highlighted).
 _FULL = frozenset({(False, False), (False, True), (True, False), (True, True)})
 
 
-def test_it_parses_bare_kinds_as_everything():
-    s = parse_annotation_spec("poly,name")
-    assert s == AnnotationSpec(poly=_FULL, name=_FULL)
+def test_it_parses_bare_poly_as_everything():
+    assert parse_annotation_spec("poly") == AnnotationSpec(poly=_FULL)
 
 
 def test_it_narrows_poly_with_vis_and_hi_filters():
@@ -323,60 +258,49 @@ def test_it_unions_comma_selectors():
         {(True, False), (True, True), (False, True)})
 
 
-def test_it_narrows_names_by_subkind_and_hi():
-    assert parse_annotation_spec("name:brush").name == frozenset({(True, False), (True, True)})
-    assert parse_annotation_spec("name:point").name == frozenset({(False, False), (False, True)})
-    assert parse_annotation_spec("name:hi").name == frozenset({(True, True), (False, True)})
-    assert parse_annotation_spec("name:brush:hi").name == frozenset({(True, True)})
-
-
 def test_it_treats_filters_as_an_order_independent_set():
-    assert parse_annotation_spec("name:hi:brush") == parse_annotation_spec("name:brush:hi")
+    assert parse_annotation_spec("poly:hi:vis") == parse_annotation_spec("poly:vis:hi")
 
 
 def test_it_accepts_highlighted_as_a_synonym_for_hi():
     assert parse_annotation_spec("poly:highlighted") == parse_annotation_spec("poly:hi")
-    assert parse_annotation_spec("name:brush:highlighted") == parse_annotation_spec("name:brush:hi")
 
 
 def test_it_normalizes_case_and_whitespace():
-    assert parse_annotation_spec("poly, NAME") == parse_annotation_spec("poly,name")
+    assert parse_annotation_spec("POLY") == parse_annotation_spec("poly")
     assert parse_annotation_spec("  POLY:VIS  ") == parse_annotation_spec("poly:vis")
 
 
 def test_it_expands_the_whole_value_keywords():
-    assert parse_annotation_spec("all") == AnnotationSpec(poly=_FULL, name=_FULL)
-    assert parse_annotation_spec("none") == AnnotationSpec(poly=frozenset(), name=frozenset())
-    assert parse_annotation_spec("highlighted") == parse_annotation_spec("poly:hi,name:hi")
+    assert parse_annotation_spec("all") == AnnotationSpec(poly=_FULL)
+    assert parse_annotation_spec("none") == AnnotationSpec(poly=frozenset())
+    assert parse_annotation_spec("highlighted") == parse_annotation_spec("poly:hi")
 
 
 def test_it_maps_the_default_value_to_todays_poly_behavior():
-    s = parse_annotation_spec("poly:vis,poly:hi,name")
+    s = parse_annotation_spec("poly:vis,poly:hi")
     assert s.poly == frozenset({(True, False), (True, True), (False, True)})   # front OR highlighted
-    assert s.name == _FULL
 
 
 def test_it_treats_zero_effective_tokens_as_none():
-    none = AnnotationSpec(poly=frozenset(), name=frozenset())
+    none = AnnotationSpec(poly=frozenset())
     for text in ("", ",", "  ", " , "):
         assert parse_annotation_spec(text) == none
 
 
-def test_it_keeps_a_kind_when_other_tokens_are_empty():
+def test_it_keeps_poly_when_other_tokens_are_empty():
     assert parse_annotation_spec("poly,,").poly == _FULL
 
 
 def test_annotationspec_predicates_answer_membership():
-    s = parse_annotation_spec("poly:vis,name:brush")
+    s = parse_annotation_spec("poly:vis")
     assert s.draws_poly(is_front=True, is_highlighted=False)
     assert not s.draws_poly(is_front=False, is_highlighted=True)
-    assert s.draws_name(is_brush=True, is_highlighted=True)
-    assert not s.draws_name(is_brush=False, is_highlighted=True)
 
 
 @pytest.mark.parametrize("text,bad", [
-    ("foo", "foo"), ("poly:brush", "brush"), ("name:vis", "vis"), ("poly:xyz", "xyz"),
-    ("name:brush:point", "point"), ("all,poly", "all"), ("none,name", "none"),
+    ("foo", "foo"), ("poly:brush", "brush"), ("name", "name"), ("poly:xyz", "xyz"),
+    ("name:brush", "name"), ("all,poly", "all"), ("none,poly", "none"),
 ])
 def test_it_rejects_invalid_tokens_naming_the_offender(text, bad):
     with pytest.raises(ValueError) as excinfo:
@@ -399,119 +323,6 @@ def test_default_labels_front_facing_indices_and_none_is_blank():
     dflt = render_brush_pgm(_brush(), view="iso", size=256, annotations=AnnotationSpec.default())
     none = render_brush_pgm(_brush(), view="iso", size=256, annotations=AnnotationSpec.none())
     assert _nonbg(dflt) > _nonbg(none)                 # default draws indices; none draws no text
-
-
-# ---- brush-name labels + unified placement (Task 3) ------------------------------------------
-
-def test_it_draws_a_brush_name_label():
-    named = render_brush_pgm(_brush(), view="iso", size=256, annotations=parse_annotation_spec("name:brush"))
-    blank = render_brush_pgm(_brush(), view="iso", size=256, annotations=AnnotationSpec.none())
-    assert _nonbg(named) > _nonbg(blank)                 # the brush NAME text adds pixels over bare wireframe
-
-
-def test_name_only_labels_omit_poly_indices():
-    name_only = render_brush_pgm(_brush(), view="iso", size=256, annotations=parse_annotation_spec("name:brush"))
-    with_polys = render_brush_pgm(_brush(), view="iso", size=256,
-                                  annotations=parse_annotation_spec("name:brush,poly:vis"))
-    assert _nonbg(with_polys) > _nonbg(name_only)        # adding the index labels adds pixels
-
-
-def test_brush_name_drawn_when_a_poly_is_highlighted_under_hi_filter():
-    hp = {("Brush938", 2)}                               # highlight one poly → the brush is "highlighted"
-    with_name = render_brush_pgm(_brush(), view="iso", size=256,
-                                 annotations=parse_annotation_spec("name:brush:hi"), highlight_polys=hp)
-    no_name = render_brush_pgm(_brush(), view="iso", size=256, annotations=AnnotationSpec.none(),
-                               highlight_polys=hp)
-    # same highlight (same bold edges) in both — the only difference is the brush name, so it must add pixels
-    assert _nonbg(with_name) > _nonbg(no_name)
-
-
-def test_brush_name_suppressed_when_not_highlighted_under_hi_filter():
-    no_hi = render_brush_pgm(_brush(), view="iso", size=256, annotations=parse_annotation_spec("name:brush:hi"))
-    blank = render_brush_pgm(_brush(), view="iso", size=256, annotations=AnnotationSpec.none())
-    assert _nonbg(no_hi) == _nonbg(blank)                # brush not highlighted → name:brush:hi draws nothing
-
-
-def test_density_grid_counts_geometry_and_reads_back_higher_where_edges_lie():
-    g = DensityGrid.build(64, cell_px=8)                 # 8x8 cells
-    g.add_segment((0, 0), (63, 0))                       # top row of cells
-    assert g.avg_density_in_box((0, 0, 63, 7)) > 0       # top row got hits
-    assert g.avg_density_in_box((0, 56, 63, 63)) == 0.0  # bottom row empty
-
-
-def test_density_grid_avg_is_per_cell_not_a_raw_sum():
-    g = DensityGrid.build(64, cell_px=8)
-    g.add_segment((0, 0), (0, 63))                        # left column, one hit per row
-    left_col = g.avg_density_in_box((0, 0, 7, 63))        # 8 cells, each ~1
-    assert 0.5 <= left_col <= 2.0                         # a MEAN, not a growing sum
-
-
-def test_name_brush_filter_omits_point_names():
-    b = _brush()                                          # brush-only scene
-    brush = render_brush_pgm(b, view="iso", size=256, annotations=parse_annotation_spec("name:brush"))
-    point = render_brush_pgm(b, view="iso", size=256, annotations=parse_annotation_spec("name:point"))
-    blank = render_brush_pgm(b, view="iso", size=256, annotations=AnnotationSpec.none())
-    assert _nonbg(brush) > _nonbg(blank)                  # name:brush draws the brush name
-    assert _nonbg(point) == _nonbg(blank)                 # name:point draws no brush name
-
-
-def test_name_point_filter_omits_brush_names():
-    from uedcli.preview import PointRender
-    a = _point("Lamp", "Engine.Light", (0, 0, 0))
-    rd = PreviewData(points={"Lamp": PointRender(label="Lamp")})
-    point = render_brushes_pgm([a], view="top", size=128, annotations=parse_annotation_spec("name:point"),
-                               render_data=rd)
-    brush = render_brushes_pgm([a], view="top", size=128, annotations=parse_annotation_spec("name:brush"),
-                               render_data=rd)
-    none = render_brushes_pgm([a], view="top", size=128, annotations=AnnotationSpec.none(), render_data=rd)
-    assert _nonbg(point) > _nonbg(none)                   # name:point draws the point name
-    assert _nonbg(brush) == _nonbg(none)                  # name:brush draws no point name
-
-
-def test_place_labels_moves_a_label_out_of_a_dense_region():
-    size = 128
-    g = DensityGrid.build(size, cell_px=8)
-    for _ in range(30):                                  # a hot blob of geometry around (64,64)
-        g.add_segment((40, 64), (88, 64))
-        g.add_segment((64, 40), (64, 88))
-    anchor_density = g.avg_density_in_box((64 - 8, 64 - 8, 64 + 8, 64 + 8))
-    [placed] = _place_labels([_LabelItem(anchor=(64, 64), text="7", scale=2, color=FRONT)],
-                             size, grid=g)
-    lx, ly = placed.pos
-    w, h = _label_size("7", 2)
-    chosen = g.avg_density_in_box((lx - w // 2, ly - h // 2, lx + w // 2, ly + h // 2))
-    assert chosen < anchor_density                       # the label fled toward clearer space
-
-
-def test_placement_is_order_independent_with_a_grid():
-    # Feeding the SAME labels in different input orders must yield the same placement — this exercises
-    # the deterministic density-sort + tie-break, which a same-order-twice test would not.
-    size = 128
-    g = DensityGrid.build(size)
-    g.add_segment((10, 10), (110, 110))
-    items = [_LabelItem(anchor=(40 + 10 * i, 40 + 10 * i), text=str(i), scale=2, color=FRONT)
-             for i in range(4)]
-    forward = {p.text: p.pos for p in _place_labels(items, size, grid=g)}
-    reverse = {p.text: p.pos for p in _place_labels(list(reversed(items)), size, grid=g)}
-    assert forward == reverse
-
-
-def test_least_dense_anchor_picks_the_clear_wireframe_point():
-    # A ring/hollow brush's candidates: some in a dense zone, one in a clear zone. The chosen anchor
-    # must be the clear one (the Part-B win: name on a clear wall, never the crowded centre/hollow).
-    size = 128
-    g = DensityGrid.build(size, cell_px=8)
-    for _ in range(30):
-        g.add_segment((90, 20), (90, 100))                 # a dense vertical wall at x~90
-    crowded, clear = (90, 60), (20, 60)                    # two wireframe candidates
-    assert _least_dense_anchor(g, [crowded, clear], halfbox=8) == clear
-
-
-def test_avg_density_in_box_clamps_negative_and_oversized_rects():
-    g = DensityGrid.build(64, cell_px=8)
-    g.add_segment((0, 0), (63, 0))
-    assert g.avg_density_in_box((-20, -20, 5, 5)) >= 0.0    # negative corner clamped, no crash
-    assert g.avg_density_in_box((-99, -99, 999, 999)) >= 0.0  # oversized clamped to the whole grid
 
 
 def test_point_in_poly_basic():
@@ -546,7 +357,7 @@ def test_occluder_count_hollow_occludes_only_its_own_brush_not_a_solid_inside():
     assert _occluder_count((10, 10), 20.0, [solid_near], own_brush="CUBE") == 1
 
 
-# ---- HYBRID per-brush tint + legend + --focus -----------------------------------------------
+# ---- HYBRID per-brush tint + --focus -----------------------------------------------
 
 
 def _add_cube(name, at, size=128):
@@ -566,17 +377,6 @@ def test_it_assigns_a_distinct_tint_per_actor_and_cycles():
     # First N actors get N distinct palette entries; the (N+1)-th wraps back to the first.
     assert len(set(tints[a.name] for a in actors[:len(_TINT_PALETTE)])) == len(_TINT_PALETTE)
     assert tints[actors[-1].name] == tints[actors[0].name] == _TINT_PALETTE[0]
-
-
-def test_hybrid_legend_draws_a_swatch_in_each_brushs_tint():
-    from uedcli.preview import assign_tints
-    a, b = _sub_cube("QIX", (0, 0, 0)), _add_cube("JYR", (600, 0, 0))
-    tints = assign_tints([a, b])
-    # name:brush ⇒ no on-geometry indices; on the hybrid path the tint appears ONLY as the legend
-    # swatch, so finding both tints proves the legend maps tint→name.
-    cols = _colors(render_brushes_pgm([a, b], view="iso", size=256,
-                                      annotations=parse_annotation_spec("name:brush"), color_by_csg=True))
-    assert tints["QIX"] in cols and tints["JYR"] in cols
 
 
 def test_focus_dims_other_brushes_and_keeps_the_focused_one_vivid():
@@ -623,22 +423,21 @@ def test_highlight_retains_its_poly_index_in_a_focused_out_brush():
     assert _nonbg(with_idx) > _nonbg(edges_only)          # the retained index adds content pixels
 
 
-def test_quad_hybrid_legend_is_drawn_once_in_the_top_pane():
-    # The hybrid legend is drawn ONCE (TOP-left pane only), never repeated per pane. With name:brush the
-    # only WHITE fill anywhere is the legend panel (names live in it, no on-geometry knockout boxes), so
-    # the TOP pane's corner carries a white panel while the FRONT pane's matching corner has none.
+def test_quad_draws_no_legend_panel():
+    # The hybrid path no longer draws a legend panel: no WHITE fill appears in any pane's top-left
+    # corner, where the legend used to sit.
     size = 256
     half = size // 2
     a, b = _sub_cube("QIX", (0, 0, 0)), _add_cube("JYR", (600, 0, 0))
-    px = _pixels(render_quad_pgm([a, b], size=size, annotations=parse_annotation_spec("name:brush"),
+    px = _pixels(render_quad_pgm([a, b], size=size, annotations=AnnotationSpec.default(),
                                  color_by_csg=True))
 
     def white_in_corner(ox):
         return sum(1 for j in range(2, 16) for i in range(2, 16)
                    if px[j * size + (ox + i)] == WHITE)
 
-    assert white_in_corner(0) > 20                        # TOP pane corner: the one legend panel
-    assert white_in_corner(half) == 0                     # FRONT pane corner: no repeated legend
+    assert white_in_corner(0) == 0                        # TOP pane corner: no legend panel
+    assert white_in_corner(half) == 0                     # FRONT pane corner: no legend panel
 
 
 def test_poly_centroid_2d_is_area_weighted_center():
@@ -805,60 +604,37 @@ def test_onface_paints_back_faces_dimmer_via_self_occlusion():
 
 def test_onface_labels_a_big_face_even_in_a_tiny_render():
     # A big-world-size brush keeps its on-face numbers even in a tiny (downscaled) render — drawn small
-    # but present, never omitted per-view. The painted render has more content than a names-only one.
+    # but present, never omitted per-view. The painted render has more content than an un-annotated one.
     a = _brush()
     painted = render_brush_pgm(a, view="iso", size=128, annotations=AnnotationSpec.all(), color_by_csg=True)
-    names_only = render_brush_pgm(a, view="iso", size=128, annotations=parse_annotation_spec("name"),
-                                  color_by_csg=True)
-    assert _nonbg(painted) > _nonbg(names_only)   # decals drawn even downscaled (big faces present)
+    plain = render_brush_pgm(a, view="iso", size=128, annotations=AnnotationSpec.none(),
+                             color_by_csg=True)
+    assert _nonbg(painted) > _nonbg(plain)   # decals drawn even downscaled (big faces present)
 
 
 def test_onface_omits_only_tiny_faces_with_no_leader_fallback(monkeypatch):
     # A face omitted for being too small is NOT drawn as a leader box. Force every plan to fail (as if
-    # every face were sub-threshold); the painted render must equal a names-only render — omission, not
-    # a leader fallback.
+    # every face were sub-threshold); the painted render must equal an un-annotated render — omission,
+    # not a leader fallback.
     a = _brush()
     monkeypatch.setattr("uedcli.preview._onface_candidates", lambda *args, **kwargs: [])
     omitted = render_brush_pgm(a, view="iso", size=256, annotations=AnnotationSpec.default(), color_by_csg=True)
-    names_only = render_brush_pgm(a, view="iso", size=256, annotations=parse_annotation_spec("name"),
-                                  color_by_csg=True)
-    assert omitted == names_only          # un-paintable polys vanish (no leader box), leaving names/legend
+    plain = render_brush_pgm(a, view="iso", size=256, annotations=AnnotationSpec.none(),
+                             color_by_csg=True)
+    assert omitted == plain          # un-paintable polys vanish (no leader box), leaving no numbers
 
 
-# --- legend reserve (#1) + --brush-colors (#3) ---
-
-def test_legend_reserve_is_zero_without_rows_and_positive_with_rows():
-    from uedcli.preview import _LegendRow
-    # Arrange: no rows vs a couple of brush rows.
-    rows = [_LegendRow(kind="brush", color=(1, 2, 3), text="ALPHA"),
-            _LegendRow(kind="brush", color=(4, 5, 6), text="BRAVO")]
-    # Act / Assert
-    assert _legend_reserve([], name_scale=2, size=256) == 0
-    assert _legend_reserve(rows, name_scale=2, size=256) > 0
-
-
-def test_framing_inset_top_pushes_geometry_below_the_reserved_band():
-    # Arrange: one world point; frame it with no reserve and with a 40px top reserve.
-    pts = [(0.0, 0.0), (100.0, 100.0)]
-    _, to_px0, _, _ = _framing(pts, None, 256, "iso", 30.0, 0)
-    _, to_px1, _, _ = _framing(pts, None, 256, "iso", 30.0, 40)
-    # Act: the topmost world point (max y) projects nearest the top edge.
-    top0 = to_px0((100.0, 100.0))[1]
-    top1 = to_px1((100.0, 100.0))[1]
-    # Assert: with a reserve, the top of the geometry sits LOWER (larger screen-y) — below the band.
-    assert top1 > top0
-    assert top1 >= 40
-
+# --- --brush-colors (#3) ---
 
 def test_it_colors_the_wireframe_by_legend_tint_when_asked():
     from uedcli.builders import cube, make_brush_actor
     from uedcli.preview import _CSG_PALETTE
-    # Arrange: a lone subtract cube. In csg mode its wireframe is subtract-gold; its legend tint is
-    # a distinct categorical hue. (draw_legend off so only the WIREFRAME contributes colours.)
+    # Arrange: a lone subtract cube. In csg mode its wireframe is subtract-gold; its per-actor tint is
+    # a distinct categorical hue. (annotate none so only the WIREFRAME contributes colours.)
     room = make_brush_actor("Room", cube(256, 256, 256), csg="subtract")
     gold = _CSG_PALETTE["subtract"][0]
     tint = assign_tints([room])["Room"]
-    kw = dict(view="iso", size=256, annotations=AnnotationSpec.none(), color_by_csg=True, draw_legend=False)
+    kw = dict(view="iso", size=256, annotations=AnnotationSpec.none(), color_by_csg=True)
     # Act
     csg_cols = _colors(render_brushes_pgm([room], brush_colors="csg", **kw))
     legend_cols = _colors(render_brushes_pgm([room], brush_colors="legend", **kw))
@@ -867,35 +643,19 @@ def test_it_colors_the_wireframe_by_legend_tint_when_asked():
     assert tint in legend_cols and gold not in legend_cols
 
 
-def test_framing_inset_top_zero_matches_the_unreserved_formula():
-    # inset_top=0 must reproduce the pre-reserve framing bit-for-bit (the on-face goldens rely on it).
+def test_framing_maps_world_points_to_pixels():
+    # The framing formula (the on-face goldens rely on it): x/y scaled into the drawable budget, offset
+    # by the frame pad, y flipped.
     pts = [(-30.0, 12.5), (170.0, 240.0), (5.0, -8.0)]
     minx, miny = min(p[0] for p in pts), min(p[1] for p in pts)
     span = max(max(p[0] for p in pts) - minx, max(p[1] for p in pts) - miny)
     for size in (128, 131, 256, 384):
-        _, to_px, _, _ = _framing(pts, None, size, "iso", 30.0, 0)
+        _, to_px, _, _ = _framing(pts, None, size, "iso", 30.0)
         draw = size - 2 * _FRAME_PAD
         for p in pts:
             expected = (int((p[0] - minx) / span * draw) + _FRAME_PAD,
                         size - 1 - (int((p[1] - miny) / span * draw) + _FRAME_PAD))
             assert to_px(p) == expected
-
-
-def test_it_caps_the_legend_reserve_so_a_tall_legend_never_crushes_the_geometry():
-    from uedcli.builders import cube, make_brush_actor
-    # Arrange: 40 labelled brushes → 40 legend rows. Reserving the full panel height would eat the whole
-    # frame (and at size 131 flip the scale negative); the band cap must keep the reserve bounded.
-    actors = [make_brush_actor(f"B{i}", cube(64, 64, 64), location=(i * 80, 0, 0), csg="add")
-              for i in range(40)]
-    tints = assign_tints(actors)
-    for size in (128, 131, 256, 512):                        # 131: the reviewer's negative-scale case
-        rows = _legend_rows(actors, AnnotationSpec.all(), tints, highlight_polys=set(),
-                            highlight_points=set(), drawn_points=set())
-        reserve = _legend_reserve(rows, max(2, size // 256), size)
-        # Assert: bounded well under the frame, so the geometry keeps a real budget (draw > 0).
-        assert 0 < reserve <= size // 2
-        assert _nonbg(render_brushes_pgm(actors, view="iso", size=size,
-                                         annotations=AnnotationSpec.none(), color_by_csg=True)) > 0
 
 
 # --- on-face decal placement: largest inscribed glyph-box, at the roomiest spot, ×0.75 ---
@@ -1154,11 +914,11 @@ def test_onface_omit_is_view_dependent_on_projected_scale():
 
 def test_onface_decal_paints_substantial_content():
     # A subtract cube's face numbers (now 0.75 of the largest inscribed box) paint substantially more
-    # than a names-only render. (Size vs the retired 0.2-fill is pinned by the _max_inscribed_box unit
-    # tests; this only asserts a decal is drawn end-to-end.)
+    # than an un-annotated render. (Size vs the retired 0.2-fill is pinned by the _max_inscribed_box
+    # unit tests; this only asserts a decal is drawn end-to-end.)
     a = _sub_cube("Room", (0, 0, 0))
     numbered = render_brushes_pgm([a], view="iso", size=256, annotations=AnnotationSpec.all(), color_by_csg=True)
-    plain = render_brushes_pgm([a], view="iso", size=256, annotations=parse_annotation_spec("name"),
+    plain = render_brushes_pgm([a], view="iso", size=256, annotations=AnnotationSpec.none(),
                                color_by_csg=True)
     assert _nonbg(numbered) > _nonbg(plain) + 200          # substantially more painted content
 
@@ -1222,9 +982,8 @@ def test_a_single_cell_footprint_has_no_span():
     assert _actor_cells([(62.0, 62.0), (68.0, 68.0)], rect, 12) == ("F6", None)  # tiny, one cell
 
 
-def test_it_computes_the_drawable_rect_from_pad_gutter_and_inset():
-    assert _drawable_rect(128, 6, 14, 0) == (20, 107, 20, 107)     # pad+gutter .. size-1-pad-gutter
-    assert _drawable_rect(128, 6, 14, 8) == (20, 107, 28, 107)     # inset_top lowers the top edge only
+def test_it_computes_the_drawable_rect_from_pad_and_gutter():
+    assert _drawable_rect(128, 6, 14) == (20, 107, 20, 107)        # pad+gutter .. size-1-pad-gutter
 
 
 def test_actor_cell_is_a_frozen_value():
@@ -1315,12 +1074,9 @@ def test_cell_matches_where_the_label_would_land_on_the_image():
                            highlight_polys=set(), focus_cf=None, hybrid=True,
                            tints=assign_tints([box]), color_by_csg=True, render_data=PreviewData())
     name_scale = max(2, size // 256)
-    rows = _legend_rows([box], AnnotationSpec.all(), assign_tints([box]), highlight_polys=set(),
-                        highlight_points=set(), drawn_points=set())
-    inset_top = _legend_reserve(rows, name_scale, size)
     gutter = _grid_gutter_px(name_scale)
-    _s, _tp, to_pxf, _w = _framing(geom.pts, None, size, "top", 30.0, inset_top, gutter=gutter)
-    rect = _drawable_rect(size, _FRAME_PAD, gutter, inset_top)
+    _s, _tp, to_pxf, _w = _framing(geom.pts, None, size, "top", 30.0, gutter=gutter)
+    rect = _drawable_rect(size, _FRAME_PAD, gutter)
     proj = [to_pxf(p) for p in geom.actor_points["Only"]]
     xs = [p[0] for p in proj]; ys = [p[1] for p in proj]
     want = _cell_address(*_cell_of_pixel(sum(xs) / len(xs), sum(ys) / len(ys), rect, n))

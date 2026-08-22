@@ -1168,21 +1168,16 @@ actor preview [<names…> | --from-t3d <FILE…|->]
   obscured/back faces lighter. This says what each brush *does*.
 - **`--brush-colors {csg,legend}`** picks the colour source for the `--faces wire` wireframe.
   `csg` (default) is the CSG-op colouring above. **`legend`** instead draws each brush in *its own
-  per-actor legend tint* — every brush a distinct colour matching its legend swatch (you trade the CSG
-  cue for telling same-op brushes apart at a glance). It has no meaning under `--faces textured`, which
-  colours nothing from it, so passing it there is a clean exit 2.
-- **The legend never overlaps the geometry.** A top band is reserved for the legend panel and the
-  geometry is framed below it. This applies to `quad`/`single`; **`breakdown` draws no legend at all**
-  (actors are identified by their captioned panes).
-- **Labels use a HYBRID per-actor TINT + a LEGEND.** The CSG palette has only ~5 hues, so two brushes
-  with the SAME CSG op share ONE wireframe colour; to tell them apart, each **actor** is assigned a
-  distinct **tint** from a categorical palette (~10 hues, cycled). A brush's **on-face poly-index
-  decal** (the painted digits and their 6/9 baseline underline) carries that tint; a point actor's
-  **marker** is drawn in it. A **legend** top-left maps each tint → actor **NAME** (a filled square
-  for a brush, a filled diamond for a point actor). **Actor names live in the legend, not on the
-  geometry** — so a number shared across brushes (every brush has a face `1`) is disambiguated by its
-  tint + the legend. If a scene has more labelled actors than fit the legend's height, the overflow
-  collapses into a final `+N MORE` row rather than spilling off the frame.
+  per-actor tint* — every brush a distinct colour (you trade the CSG cue for telling same-op brushes
+  apart at a glance). It has no meaning under `--faces textured`, which colours nothing from it, so
+  passing it there is a clean exit 2.
+- **Labels use a HYBRID per-actor TINT.** The CSG palette has only ~5 hues, so two brushes with the
+  SAME CSG op share ONE wireframe colour; to tell them apart, each **actor** is assigned a distinct
+  **tint** from a categorical palette (~10 hues, cycled). A brush's **on-face poly-index decal** (the
+  painted digits and their 6/9 baseline underline) carries that tint; a point actor's **marker** is
+  drawn in it — so a number shared across brushes (every brush has a face `1`) is disambiguated by its
+  tint. **Actor names are not drawn on the preview**; identify each actor from its addressable-grid
+  cell reported on stderr (below).
 - **Poly face indices are painted ON the face (on-face numbers).** Each face's index is a **number
   texture lying flat in the face's own 3-D plane** — it foreshortens with the surface under the
   projection, so it reads as decaled onto the geometry. It is placed at the **roomiest spot on the
@@ -1217,20 +1212,16 @@ actor preview [<names…> | --from-t3d <FILE…|->]
   cannot see still shows its index, at 60% of a visible face's opacity, so a number can sit on a wall
   in front of the face it belongs to. Read indices off `--faces wire`, or pass `--annotate none` for a
   clean filled picture.
-- **`--annotate`** takes a **comma-set of selectors** (the drawn labels are their **union**). A bare
-  **kind** means ALL of that kind; each colon **filter** narrows; multiple filters on one selector
-  intersect; commas union. Tokens are case/whitespace-insensitive.
-  - Kinds: **`poly`** (on-geometry face indices), **`name`** (actor names — i.e. their **legend rows**).
+- **`--annotate`** takes a **comma-set of `poly` selectors** (the drawn numbers are their **union**).
+  Bare **`poly`** means every face index; each colon **filter** narrows; multiple filters on one
+  selector intersect; commas union. Tokens are case/whitespace-insensitive. **Actor names are never
+  drawn** — locate a brush by its grid cell (printed on stderr, below).
   - `poly` filters: **`vis`** (retained as an inert alias of bare `poly` — see the note below),
-    **`hi`** (highlighted faces only).
-  - `name` filters: **`brush`** (brush names), **`point`** (point-actor names), **`hi`**
-    (highlighted actors). (`highlighted` is accepted as a synonym for `hi`.) A `name:*` selector now
-    controls whether an actor is **listed in the legend**; `poly:*` controls on-geometry indices.
-  - Examples: `name:brush` = brush names only, no indices; `poly:vis` = every face (same as bare
-    `poly`); `name:brush:hi,name:point` = highlighted brush names ∪ all point names.
-  - Whole-value keywords (stand alone): **`none`** = nothing; **`all`** = `poly,name` (every face
-    incl. back-facing + every name); **`highlighted`** = `poly:hi,name:hi`.
-  - **Default:** `poly:vis,poly:hi,name` — face indices (painted on-face) + all names. (On-face
+    **`hi`** (highlighted faces only). (`highlighted` is accepted as a synonym for `hi`.)
+  - Examples: `poly:vis` = every face (same as bare `poly`); `poly:hi` = highlighted faces only.
+  - Whole-value keywords (stand alone): **`none`** = nothing; **`all`** = `poly`;
+    **`highlighted`** = `poly:hi`.
+  - **Default:** `poly:vis,poly:hi` — face indices (painted on-face). (On-face
     numbering is facing-blind, so `poly:vis` — now an inert alias of bare `poly` — numbers every face;
     opacity, not presence, is the front/back cue. `vis` is kept only so pre-facing-blind specs still
     parse.)
@@ -1241,8 +1232,8 @@ actor preview [<names…> | --from-t3d <FILE…|->]
   stderr note **naming why** — `unknown-texture` (nothing of that name on the search path),
   `unqualified-ref` (write it as `Package.Name`), `unverified-format` (a real texture in a pixel
   layout uedcli cannot read yet), and so on. With **no texture search path configured**, the note says
-  so instead of naming a case — run `project show` to see what is on the path. Its **name is in the
-  legend**, not beside the marker.
+  so instead of naming a case — run `project show` to see what is on the path. Its **name is not
+  drawn**; find it by the grid cell reported on stderr.
 - **`--frame TARGET`** frames a target to fill the view (frames only — never highlights), in one of two
   forms. A **selector** — a bare **`BRUSH`** name frames that actor's whole AABB, or **`BRUSH:IDX`**
   frames ONE poly (a multi-index / `:all` value is an error). OR an **explicit world AABB** — six
@@ -1266,7 +1257,7 @@ actor preview [<names…> | --from-t3d <FILE…|->]
   a faint wash of their own colour. **`--focus` changes brightness only — never what is visible or what
   hides what**, so the picture stays physically honest either way: a crate inside a subtracted room stands in
   front of the room's far wall, a brush between the camera and the focused one still covers it, and a
-  brush sealed inside a solid *added* brush stays hidden. All actor names still appear in the legend.
+  brush sealed inside a solid *added* brush stays hidden.
   **`--highlight` overrides `--focus`'s dimming**: a highlighted poly/actor draws at full strength and
   keeps its index even when its brush is not the focus. It does **not** override depth — a highlighted
   face something hides is still hidden (focus dims; highlight re-lights what is visible).

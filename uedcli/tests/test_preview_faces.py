@@ -32,7 +32,7 @@ SEMI_F = _CSG_PALETTE["semisolid"][0]
 NON_F = _CSG_PALETTE["nonsolid"][0]
 
 # `level_small.t3d` is a real 13-brush editor export (adds, subtracts, a rotated brush, fractional
-# vertices) plus two point actors — so one scene covers the CSG palette, the legend's `+N MORE` tail,
+# vertices) plus two point actors — so one scene covers the CSG palette,
 # on-face decals and the point layer. Its LevelInfo0 carries no Location and so sits at the world
 # origin, thousands of units from the geometry; the explicit `--frame` AABB (the brushes' own extent)
 # keeps the framing on the brushes instead of collapsing them to a corner.
@@ -608,7 +608,7 @@ def test_the_mip_pick_uses_the_faces_own_screen_gradients_not_a_view_global_gain
     floor_frame = ((0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0))
     # A framing at iso 80 over both faces, shared scale (so any level difference is the in-plane gain).
     pts = [preview._project(p, "iso", 80.0) for f in (wall, floor) for p in f]
-    _s, _tp, _to, w2p = _framing(pts, None, 256, "iso", 80.0, 0, pad=_FRAME_PAD)
+    _s, _tp, _to, w2p = _framing(pts, None, 256, "iso", 80.0, pad=_FRAME_PAD)
 
     def level(v3, frame):
         (au, bu, _c1), (av, bv, _c2) = _face_uv_affine(v3, frame, w2p)
