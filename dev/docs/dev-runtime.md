@@ -1,68 +1,48 @@
 # Dev runtime: how uedcli runs during development
 
-uedcli runs host-native, in an auto-managed Python 3.12 virtualenv. It is not containerised.
-Only the editor/build containers it drives run under Docker.
-
-> Superseded 2026-07-14. This doc previously described a `uedcli-dev` Docker image, a
-> `bin/_dev-run.sh` launcher, docker-out-of-docker socket mounting, and a persistent container
-> driven by `docker exec`. That runtime was retired; `docker/Dockerfile` and `bin/_dev-run.sh`
-> exist only in git history. Reason: uedcli needs native filesystem access to the game's asset
-> dirs wherever they live, and bind-mounting arbitrary host roots into a dev container could
-> shadow or clobber the container's own dirs. Host-native also mirrors the eventual release
-> binary.
+uedcli — the CLI and its pytest suite — runs HOST-NATIVE in an auto-managed `python3.12` venv. Python
+3 is on most hosts; what isn't is Rust, so the ONE thing that needs a container is building the
+`uedcli_native` extension: it is built as an abi3 wheel in a Rust+`libpython` image and `pip`-installed
+into the venv, and the `cargo test` goldens run in that image too. Host-native means the CLI has native
+access to asset dirs and reaches the docker daemon directly to drive the editor/game RUNTIME
+containers. Host needs only `python3.12` on PATH + Docker (no Rust). Owner ruling 2026-08-06;
+[`direction/process.md`](direction/process.md).
 
 ## The pieces
 
 | Path | Role |
-|------------------|---
-| `bin/_venv.sh` | sourced helper: finds `python3.12`, creates `.venv/` on first use, installs `Pillow` + `pytest`. Defines `ensure_native_ext` but does not call it. |
-| `bin/uedcli` | runs the CLI through that venv. Calls `ensure_venv` only — it does not build the Rust extension. |
-| `bin/test` | calls `ensure_native_ext`, runs pytest through the same venv, then `cargo test` in `uedcli-native/` — see [`rules/tests.md`](rules/tests.md). |
-| `uedcli-native/` | the Rust PyO3 extension (`uedcli_native`), built into the venv with `maturin develop --release`. |
-| `.venv/` | gitignored; self-creates, so a fresh checkout needs no setup step. |
+|------------------------------|---
+| `bin/_venv.sh` | sourced helper: `ensure_venv` finds `python3.12`, creates `.venv/`, installs `Pillow`+`pytest`. `ensure_native_ext` builds `uedcli_native` in the container and pip-installs the wheel (source-hash-gated). `run_cargo_test` runs the goldens in the container. |
+| `bin/uedcli` | runs the CLI host-native through the venv (`ensure_venv` + `ensure_native_ext`). |
+| `bin/test` | host-native pytest through the venv, then `run_cargo_test` — see [`rules/tests.md`](rules/tests.md). |
+| `dev-container/Dockerfile` | the Rust-BUILD image `uedcli-rust-build`: `python:3.12` + Rust (rustup) + `build-essential` + maturin. Not a run env; builds the wheel + runs cargo test. |
+| `uedcli-native/` | the Rust PyO3 extension; built with `maturin build` → wheel → pip-installed. |
+| `.venv/` | gitignored; self-creates. |
 
-Requirements: `python3.12` on `PATH` (pyenv provides it here), and `cargo` for the native paths.
-The Python side has one third-party runtime dependency, Pillow (texture-catalog PCX decode), and
-carries no compatibility shims — no `tomllib`→`tomli` fallback, no 3.10 support. It targets one
-interpreter version.
+The container build runs as the invoking uid with `CARGO_HOME` + the target dir under the
+bind-mounted crate, so caches persist and nothing is left root-owned in the tree.
 
-`bin/test` is the only thing that builds the extension. On a fresh checkout,
-`bin/uedcli level materialize --native` will not compile it first — `uedcli/native/materialize.py`
-swallows the `ImportError` and falls back. Run `bin/test` once before expecting a native path to
-work.
-
-The Rust extension is optional. `ensure_native_ext` is source-hash-gated on `Cargo.toml` +
-`src/*.rs`; if `cargo` is absent it warns and returns success, so a docs-only or pure-Python
-change still runs the suite. The native tests `importorskip("uedcli_native")` and `bin/test`
-skips `cargo test` with a message. Without cargo, `level materialize --native` and
-`preview --native` and their tests silently do not run.
+The native ext builds automatically on `bin/test`/`bin/uedcli`, so `level materialize` native and the
+`cargo test` goldens run on every host with Docker — no "cargo absent, silently skipped" gap.
+`UEDCLI_SKIP_NATIVE=1` skips the build + `cargo test`. The Python side has one third-party runtime
+dependency, Pillow (texture-catalog PCX decode), and targets one interpreter version (3.12).
 
 | Env knob | Effect |
-|-----------------------|---
+|-------------------------------|---
 | `UEDCLI_VENV=<dir>` | put the venv somewhere other than `.venv/` |
-| `UEDCLI_VENV_REBUILD=1` | force a dependency reinstall |
-| `UEDCLI_SKIP_NATIVE=1` | skip the Rust build *and* `cargo test` entirely |
+| `UEDCLI_VENV_REBUILD=1` | force a venv dependency reinstall |
+| `UEDCLI_SKIP_NATIVE=1` | skip the Rust build *and* `cargo test` |
 
 ## Usage
 
 ```bash
 bin/uedcli level status
-printf '%s' "$t3d" | bin/uedcli actor add -    # stdin piping works (raw, no TTY mangling)
+printf '%s' "$t3d" | bin/uedcli actor add -    # stdin piping works
 
-bin/test                                       # whole offline suite
+bin/test                                       # whole offline suite (pytest + cargo)
 bin/test -k texture -x                         # args pass through to pytest
 ```
 
-Invoke both path-qualified from the repo root — `test` alone is a shell builtin, so `bin/test` is
-required. To put the CLI on `PATH`: `ln -s "$PWD/bin/uedcli" ~/.local/bin/uedcli`.
-
-A fresh worktree has no `.venv/` (gitignored), so its first `bin/test` pays the venv-creation
-cost once.
-
-## Releases (deferred)
-
-The release artifact is intended to be a Nuitka-compiled standalone binary: one executable with
-the Python runtime, Pillow, and the compiled `uedcli_native` extension baked in, so an end user
-runs `uedcli` with nothing installed — no Docker, no Python, no cargo. Building it (and how the
-editor-driving verbs' Docker dependency is handled) is an open board item. The host-native venv
-stands in for that binary during development.
+Invoke both path-qualified from the repo root — `test` alone is a shell builtin. To put the CLI on
+`PATH`: `ln -s "$PWD/bin/uedcli" ~/.local/bin/uedcli`. A fresh checkout's first `bin/test` pays the
+one-time venv + Rust-build-image + native-extension build.

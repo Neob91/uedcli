@@ -189,6 +189,37 @@ def replace_core_system_paths(base_bytes: bytes, path_lines: list[str]) -> bytes
     return b"\n".join(out)
 
 
+def _force_headless_render_device(base_bytes: bytes) -> bytes:
+    """Return the engine ini with `[Engine.Engine]`'s three render-device keys set to the software
+    rasteriser (`SoftDrv`), every other byte preserved (CRLF intact — a bare-LF ini GPFs wine at
+    boot). Section-scoped: a like-named `GameRenderDevice=None` under a device's own
+    `[*.…RenderDevice]` section is left alone.
+
+    Why SoftDrv, uniformly on every host: the materialize / CSG-generator editors drive the console
+    headless (no visible viewport), so the device only has to satisfy the editor's own startup. Under
+    FEX+wine-10 on arm64 the baked `OpenGLDrv` makes the Mesh browser's startup viewport assert
+    `RenDev` and the editor drops to Recovery Mode, which cannot `MAP SAVE`; SoftDrv removes the
+    assertion (spike `dev/docs/spikes/2026-08-06-materialize-under-fex/`). It is equally correct on
+    native x86, so the device is the SAME on every host — not an arch branch (owner ruling
+    2026-08-06)."""
+    want = b"SoftDrv.SoftwareRenderDevice"
+    keys = {b"GameRenderDevice", b"WindowedRenderDevice", b"RenderDevice"}
+    out: list[bytes] = []
+    in_engine = False
+    for raw in base_bytes.split(b"\n"):
+        token = raw.rstrip(b"\r").strip()
+        if token.startswith(b"[") and token.endswith(b"]"):
+            in_engine = token.lower() == b"[engine.engine]"
+            out.append(raw)
+            continue
+        if in_engine and b"=" in token and token.split(b"=", 1)[0].strip() in keys:
+            eol = b"\r" if raw.endswith(b"\r") else b""
+            out.append(token.split(b"=", 1)[0].strip() + b"=" + want + eol)
+            continue
+        out.append(raw)
+    return b"\n".join(out)
+
+
 def _engine_ini_path(container: str, state_dir: Path) -> Path:
     """Deterministic host path for a container's crafted engine ini (so `stop_editor` cleans it up).
     Under `<state_dir>/tmp/` for the same host<->daemon-visibility reason as `_override_ini_path`."""
@@ -198,12 +229,13 @@ def _engine_ini_path(container: str, state_dir: Path) -> Path:
 
 
 def _write_engine_ini(container: str, mounts, state_dir: Path) -> str:
-    """Write the crafted engine ini (baked ini, `[Core.System] Paths` regenerated from
-    `mounts`) BYTE-EXACT and return its ABSOLUTE host path. `mounts=None` → just `/stubs`+`/opt/UED22`
-    on Paths (no `/resources`)."""
+    """Write the crafted engine ini (baked ini, `[Core.System] Paths` regenerated from `mounts`, the
+    render device forced to headless `SoftDrv`) BYTE-EXACT and return its ABSOLUTE host path.
+    `mounts=None` → just `/stubs`+`/opt/UED22` on Paths (no `/resources`)."""
     path = _engine_ini_path(container, state_dir)
-    crafted = replace_core_system_paths(_base_engine_ini_path().read_bytes(),
-                                        container_assets.paths_ini_lines(mounts or []))
+    crafted = _force_headless_render_device(
+        replace_core_system_paths(_base_engine_ini_path().read_bytes(),
+                                  container_assets.paths_ini_lines(mounts or [])))
     path.write_bytes(crafted)
     return str(path)
 

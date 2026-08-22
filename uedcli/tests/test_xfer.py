@@ -24,12 +24,17 @@ def test_cp_in_copies_host_to_a_minted_work_path_and_returns_raw_posix():
         check=True, capture_output=True, text=True, timeout=xfer.CP_TIMEOUT)
 
 
-def test_cp_out_copies_container_path_to_host():
+def test_cp_out_streams_container_file_to_host_via_docker_exec_cat(tmp_path):
+    # `docker cp`-out remounts the container's mounts :ro, which rootless docker cannot do — so
+    # cp_out streams the bytes with `docker exec … cat` (stdout redirected to the host file) instead.
+    import subprocess
+    dest = tmp_path / "dest.dx"
     with mock.patch("uedcli.xfer.subprocess.run", autospec=True) as run:
-        xfer.cp_out("c1", "/work/out.dx", "/host/abs/dest.dx")
+        run.return_value = mock.Mock(returncode=0)
+        xfer.cp_out("c1", "/work/out.dx", str(dest))
     run.assert_called_once_with(
-        ["docker", "cp", "c1:/work/out.dx", "/host/abs/dest.dx"],
-        check=True, capture_output=True, text=True, timeout=xfer.CP_TIMEOUT)
+        ["docker", "exec", "c1", "cat", "/work/out.dx"],
+        check=True, stdout=mock.ANY, stderr=subprocess.PIPE, timeout=xfer.CP_TIMEOUT)
 
 
 def test_remove_is_best_effort_rm_rf_and_never_raises():
@@ -44,15 +49,14 @@ def test_remove_is_best_effort_rm_rf_and_never_raises():
 # ── every docker call is BOUNDED (dev/docs/rules/background-work.md) ──────────────
 
 
-def test_every_subprocess_call_here_passes_a_timeout():
+def test_every_subprocess_call_here_passes_a_timeout(tmp_path):
     """A `docker cp`/`docker exec` with no `timeout=` parks the caller forever when dockerd hangs.
     Pinned as a property of the module rather than per-call, so a new call site cannot slip through
     unbounded."""
-    import subprocess
     with mock.patch("uedcli.xfer.subprocess.run", autospec=True) as run:
         run.return_value = mock.Mock(returncode=0)
         xfer.cp_in("c1", "/host/x.dx", ext="dx")
-        xfer.cp_out("c1", "/work/x.dx", "/host/y.dx")
+        xfer.cp_out("c1", "/work/x.dx", str(tmp_path / "y.dx"))
         xfer.remove("c1", "/work/x.dx")
     assert run.call_count == 3
     for call in run.call_args_list:
@@ -70,6 +74,49 @@ def test_a_hung_cp_raises_a_named_driver_error_not_a_subprocess_timeout():
             assert "docker cp did not finish" in str(e) and "/host/x.dx" in str(e)
         else:
             raise AssertionError("expected DriverError")
+
+
+def test_a_failed_cp_out_surfaces_dockers_stderr_in_a_named_driver_error(tmp_path):
+    import subprocess
+    from uedcli.driver import DriverError
+    # `docker exec cat` gives bytes stderr (no text=True, since stdout is redirected to the host file).
+    err = subprocess.CalledProcessError(1, "docker exec", stderr=b"cat: /work/x.dx: No such file")
+    with mock.patch("uedcli.xfer.subprocess.run", autospec=True) as run:
+        run.side_effect = err
+        try:
+            xfer.cp_out("c1", "/work/x.dx", str(tmp_path / "out.dx"))
+        except DriverError as e:
+            assert "docker exec cat failed" in str(e) and "No such file" in str(e)
+        else:
+            raise AssertionError("expected DriverError")
+
+
+def test_cp_out_unlinks_the_partial_host_file_when_cat_fails(tmp_path):
+    # `open(host_path, "wb")` truncates the dest before the stream; a failed cat must not leave that
+    # empty/partial file at the destination the caller asked for.
+    import subprocess
+    from uedcli.driver import DriverError
+    dest = tmp_path / "out.dx"
+    with mock.patch("uedcli.xfer.subprocess.run", autospec=True) as run:
+        run.side_effect = subprocess.CalledProcessError(1, "docker exec", stderr=b"boom")
+        try:
+            xfer.cp_out("c1", "/work/x.dx", str(dest))
+        except DriverError:
+            pass
+    assert not dest.exists()
+
+
+def test_cp_out_unlinks_the_partial_host_file_on_timeout(tmp_path):
+    import subprocess
+    from uedcli.driver import DriverError
+    dest = tmp_path / "out.dx"
+    with mock.patch("uedcli.xfer.subprocess.run", autospec=True) as run:
+        run.side_effect = subprocess.TimeoutExpired(cmd="docker exec", timeout=xfer.CP_TIMEOUT)
+        try:
+            xfer.cp_out("c1", "/work/x.dx", str(dest))
+        except DriverError:
+            pass
+    assert not dest.exists()
 
 
 def test_a_hung_remove_is_swallowed_because_cleanup_must_never_hang_the_caller():

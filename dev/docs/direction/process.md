@@ -52,15 +52,18 @@ to put it. This doc is that home.
 - **Exactly ONE canonical rule file**, with no second rule file above it
   delegating to it. A session that loads two rule files loads a seam, and the
   seam invites the two to disagree.
-- **uedcli and its test suite run HOST-NATIVE**, in an auto-managed Python venv —
-  never inside a dev container. Only the editor/build containers uedcli *drives*
-  run under Docker. The reason is asset access: a game's asset dirs live outside
-  the repo, and reaching them from a dev container would mean bind-mounting
-  arbitrary host roots at identity paths, which can shadow or clobber the
-  container's own dirs. Host-native also mirrors the eventual release binary, so
-  dev path handling is prod path handling — uedcli never branches on "am I in a
-  container?". Accepted cost: `python3.12` on `PATH`. Mechanics:
-  `../dev-runtime.md`, `../rules/tests.md`.
+- **uedcli and its pytest suite run HOST-NATIVE; only the Rust build is
+  containerized.** Python 3 is on most hosts, Rust is not — so the CLI and pytest
+  run on the host in a `python3.12` venv (native asset access, and the CLI reaches
+  the docker daemon directly to drive the editor/game RUNTIME containers), and the
+  ONE thing that needs a container is building `uedcli_native`: `ensure_native_ext`
+  builds the abi3 wheel in a Rust+`libpython` image and `pip`-installs it into the
+  venv, and the `cargo test` goldens run there too. So the toolchain is
+  out-of-box (host needs only `python3.12` + Docker; no Rust install, and the
+  `-lpython3.12` link a bare host lacked is supplied by the image), while dev path
+  handling stays prod path handling — uedcli never branches on "am I in a
+  container?". Mechanics: `../dev-runtime.md`, `../rules/tests.md`. *(Owner ruling
+  2026-08-06.)*
 - **A permanently-red test is repaired or skipped, never left red** — a suite
   that is always red trains everyone to ignore red, which costs more than the
   coverage the red test represents.
@@ -102,11 +105,13 @@ to put it. This doc is that home.
 - **Letting the harness's worktree tool keep its default base** — it branches
   from `origin/<default-branch>`, contradicting "branch off the branch we are
   on". The repo commits `.claude/settings.json` with `worktree.baseRef: "head"`.
-- **Running uedcli itself in a dev container**, in either workable variant:
-  identity-mounting external roots under a `$HOME` allowlist (still mounts
-  arbitrary user paths into a container — a stopgap), or mounting at a sandboxed
-  prefix and translating (reintroduces the host-vs-container path branch that
-  host-native removes).
+- **Running uedcli (and pytest) inside a dev container**, not just the Rust build.
+  It removes the `python3.12`-on-host need, but the CLI in a container then can't
+  reach the docker daemon to drive the editor/game RUNTIME containers wherever the
+  daemon isn't a plain local socket (here a `tcp://dind` daemon a dind-managed
+  container has no route to), and external asset roots would have to be bind-mounted
+  in. Host-native Python keeps both free; only the Rust build — the one dependency
+  hosts lack — is containerized.
 - **Repairing the spike-harness-dependent tests rather than skipping them** —
   the repair meant putting a spike harness directory on the test `sys.path`.
 

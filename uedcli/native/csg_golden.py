@@ -211,8 +211,10 @@ def _dexec_write(container: str, path: str, content: str) -> None:
 
 
 def _cp_out(container: str, cpath: str, host_path: Path) -> None:
-    subprocess.run(["docker", "cp", f"{container}:{cpath}", str(host_path)],
-                   capture_output=True, text=True, check=True)
+    # Stream via `docker exec cat` (xfer.cp_out), not `docker cp`: the golden-capture container carries
+    # the same `:ro /stubs` mount whose remount `docker cp` cannot do under rootless docker.
+    from .. import xfer
+    xfer.cp_out(container, cpath, str(host_path))
 
 
 def _preshift(actors: list[Actor]) -> list[Actor]:

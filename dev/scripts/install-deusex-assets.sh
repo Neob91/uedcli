@@ -13,24 +13,27 @@
 # Everything written is copyrighted Deus Ex content. BOTH dev/games/ and uned/DeusExAssets/ are
 # gitignored and NEVER committed.
 #
-# NO SOURCE IS BUILT IN. `--url` fetches whatever URL YOU pass and nothing else; there is no default,
-# no bundled list, and no lookup. Deus Ex is a commercial game still sold today, so YOU are
-# responsible for having the right to the copy you point this at — a DRM-free GOG copy you own, or
-# your own mirror of it, is the clean case. See dev/docs/deusex-assets-setup.md ("Where to get
-# Deus Ex") for the options and what is known about each.
+# Run with NO ARGUMENTS to install fully autonomously: with neither a <SOURCE> nor a --url, it
+# defaults to the archive.org GOTY installer (DEFAULT_URL below) verified against a pinned checksum
+# (DEFAULT_SHA256). That archive.org copy is an UNOFFICIAL redistribution of a game still sold: Deus
+# Ex is commercial, so YOU are responsible for having the right to the copy you install — a DRM-free
+# GOG copy you own, or your own mirror, is the clean case. Override the default by passing a local
+# <SOURCE> or your own --url. See dev/docs/deusex-assets-setup.md ("Where to get Deus Ex").
 #
 # The baseline you want is 1.112fm, the final official build. GOG/Steam and the GOTY Edition already
 # ship at 1.112fm, so there is normally nothing to patch — hence no patch step here. If your source
 # is an old unpatched retail disc, apply the official patcher to the working copy and re-run.
 #
 # Usage:
+#   dev/scripts/install-deusex-assets.sh [--game <name>] [--with-maps] [--dry-run]
+#       (no SOURCE/--url -> the built-in DEFAULT_URL, autonomous)
 #   dev/scripts/install-deusex-assets.sh [--game <name>] [--with-maps] [--dry-run] <SOURCE>
 #   dev/scripts/install-deusex-assets.sh [--game <name>] [--with-maps] [--dry-run] \
 #       --url <URL> [--url <URL>…] [--sha256 <SUM>…] [--redownload]
 #
 # <SOURCE> is the install ROOT (dir CONTAINING System/, Textures/, …) or the ACE installer dir
 # (CONTAINING deusex.ace). Subdir names are matched case-insensitively (Windows installs vary).
-# SOURCE and --url are mutually exclusive; exactly one is required.
+# SOURCE and --url are mutually exclusive; with NEITHER, the built-in DEFAULT_URL fires.
 #
 # --url may be repeated (a multi-part download; ALL parts land in one dir before unpacking).
 # --sha256 verifies a download, positionally matched to the --url of the same index; give it for
@@ -58,6 +61,13 @@ src=""
 redownload=0
 urls=()
 sums=()
+
+# Built-in default source — fires only when NO <SOURCE> and NO --url are given (autonomous run; see
+# the header's rights note). The archive.org GOTY offline installer (Inno Setup `.exe`, ~398 MB) with
+# a pinned checksum so the built-in download is verified, not blind. Override with <SOURCE> or --url.
+DEFAULT_URL='https://archive.org/download/deus_ex_goty_16231/setup_deus_ex_goty_1.112fm%28revision_1.3.0.1%29_%2816231%29.exe'
+DEFAULT_SHA256='e964cb441474a6d08a3d0d65a30e06e009ff2d33a527ef10391f257a760e3aa6'
+
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --game)      shift; [[ $# -ge 1 ]] || { echo "error: --game needs a value" >&2; exit 2; }
@@ -84,9 +94,10 @@ if [[ ${#urls[@]} -gt 0 && -n "$src" ]]; then
     exit 2
 fi
 if [[ ${#urls[@]} -eq 0 && -z "$src" ]]; then
-    echo "error: missing source — give a <SOURCE> directory (an installed Deus Ex or a raw ACE" >&2
-    echo "       installer) or one or more --url downloads. Run with --help." >&2
-    exit 2
+    # Autonomous run: no source supplied, so use the built-in default (see the header's rights note).
+    echo "no <SOURCE> or --url given — using the built-in default: $DEFAULT_URL" >&2
+    urls=("$DEFAULT_URL")
+    [[ -n "$DEFAULT_SHA256" ]] && sums=("$DEFAULT_SHA256")
 fi
 if [[ ${#sums[@]} -gt 0 && ${#sums[@]} -ne ${#urls[@]} ]]; then
     echo "error: --sha256 given ${#sums[@]} time(s) for ${#urls[@]} --url(s) — give one per URL, in" >&2
@@ -181,6 +192,26 @@ need_tool() {  # <command> <apt-package> <what-for>
     echo "       Install it (e.g. 'apt-get install $2') and re-run, or unpack the download" >&2
     echo "       yourself and point <SOURCE> at the resulting install root instead." >&2
     exit 2
+}
+
+# Unpack an Inno Setup installer into $UNPACK_DIR. Uses host innoextract when present; otherwise, for
+# a SEAMLESS run on a host without it (and no root to apt-install it), runs innoextract in a throwaway
+# Docker container — the same host-tool-in-Docker fallback as bin/rust-build. Runs as root in the
+# container (apt needs it) then chowns the extracted tree back to the invoking user.
+run_innoextract() {  # <exe-path>
+    local f="$1" base; base="$(basename "$f")"
+    if command -v innoextract >/dev/null 2>&1; then
+        ( cd "$UNPACK_DIR" && innoextract -e -s -q "$f" ); return $?
+    fi
+    command -v docker >/dev/null 2>&1 || need_tool innoextract innoextract "unpack the Windows installer $base"
+    local img="${UEDCLI_INNOEXTRACT_IMAGE:-debian:bookworm-slim}"
+    echo "  (innoextract not on host — running it in Docker: $img)"
+    docker run --rm \
+        -v "$(cd "$(dirname "$f")" && pwd)":/dl:ro -v "$UNPACK_DIR":/out \
+        "$img" bash -c "set -e
+            command -v innoextract >/dev/null 2>&1 || { apt-get update -qq && apt-get install -y -qq innoextract >/dev/null; }
+            cd /out && innoextract -e -s -q '/dl/$base'
+            chown -R $(id -u):$(id -g) /out"
 }
 
 # The filename to save a URL under: its last path segment, with any ?query/#fragment stripped.
@@ -279,9 +310,8 @@ unpack_one() {  # <file>
             # A GOG offline installer is Inno Setup, which innoextract unpacks natively. Other
             # Windows installers (InstallShield, NSIS) are NOT handled — say so rather than
             # producing a subtly incomplete tree.
-            need_tool innoextract innoextract "unpack the Windows installer $base"
             echo "  $base: unpacking as an Inno Setup installer"
-            ( cd "$UNPACK_DIR" && innoextract -e -s -q "$f" ) || {
+            run_innoextract "$f" || {
                 echo "error: innoextract could not unpack $base." >&2
                 echo "       Only Inno Setup installers (e.g. GOG offline installers) are supported" >&2
                 echo "       here. For any other installer, run it (or unpack it) yourself and point" >&2

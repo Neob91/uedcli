@@ -123,14 +123,11 @@ have_install=0
 [[ -n "$(find "$WORKING_COPY/System" -maxdepth 1 -iname 'DeusEx.exe' 2>/dev/null)" ]] && have_install=1
 if [[ "$have_install" == 1 && ${#urls[@]} -eq 0 && -z "$src" ]]; then
     echo "  reusing the install already at $WORKING_COPY"
-elif [[ ${#urls[@]} -eq 0 && -z "$src" ]]; then
-    echo "error: no game files at $WORKING_COPY and no <SOURCE>/--url given." >&2
-    echo "       Supply your Deus Ex copy — a local install/ACE dir as <SOURCE>, or --url <installer>." >&2
-    echo "       Where to get it: dev/docs/deusex-assets-setup.md." >&2
-    exit 2
 elif [[ "$dry_run" == 1 ]]; then
-    would "run install-deusex-assets.sh --with-maps --game $game ${src:-${urls[*]}}"
+    would "run install-deusex-assets.sh --with-maps --game $game ${src:-${urls[*]:-<built-in default URL>}}"
 else
+    # No <SOURCE>/--url and no install: install-deusex-assets.sh falls back to its built-in default
+    # URL (autonomous), so a bare `setup-game-preview.sh` provisions everything with no inputs.
     # --with-maps is required: the boot map lives in the game's Maps/, and a preview cannot boot
     # without it (preview_game._find_boot_map). ${urls[@]+…} keeps `set -u` happy when urls is empty
     # (a plain SOURCE run) on bash < 4.4.

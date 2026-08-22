@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
-# bin/test — run uedcli's OFFLINE unit suite host-native in the dev venv (bin/_venv.sh),
-# then the Rust `cargo test` goldens.  Integration tests (-m integration) stay deselected
-# by pytest.ini. Extra args pass straight through to pytest. Invoke path-qualified
-# (`bin/test`) — `test` is a builtin.
+# bin/test — run uedcli's OFFLINE unit suite (pytest, HOST-NATIVE) + the Rust `cargo test` goldens
+# (in a container — no host Rust needed). uedcli's own CLI runs host-native too (bin/uedcli); only the
+# Rust build/test is containerized. Integration tests (-m integration) stay deselected by pytest.ini.
+# Extra args pass straight through to pytest. Invoke path-qualified (`bin/test`) — `test` is a builtin.
 #     bin/test                 # whole offline suite (pytest + cargo test)
-#     bin/test -k texture -x   # extra args -> pytest (cargo test still runs unless UEDCLI_SKIP_NATIVE)
+#     bin/test -k texture -x   # extra args -> pytest
+#     UEDCLI_SKIP_NATIVE=1 bin/test <file>   # pytest only (skip the Rust ext build + cargo test)
 set -euo pipefail
 source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/_venv.sh"
 ensure_venv
-ensure_native_ext                      # OPTIONAL: builds uedcli_native if cargo is present
+ensure_native_ext                      # builds uedcli_native (abi3 wheel) in a container, into the venv
 cd "$UEDCLI_DIR"                       # pytest rootdir/testpaths resolve here
 
 rc=0
@@ -18,14 +19,5 @@ else
   env PYTHONPATH="$UEDCLI_DIR" "$PY" -m pytest "$@" -q || rc=$?
 fi
 
-# Rust goldens — only when cargo is available and not explicitly skipped (spec §6 runner).
-if [ -z "${UEDCLI_SKIP_NATIVE:-}" ] && [ -d "$UEDCLI_DIR/uedcli-native" ]; then
-  [ -f "$HOME/.cargo/env" ] && . "$HOME/.cargo/env"
-  if command -v cargo >/dev/null 2>&1; then
-    ( cd "$UEDCLI_DIR/uedcli-native" && PYO3_PYTHON="$PY" cargo test -q ) || rc=$?
-  else
-    echo "bin/test: cargo not found — skipped cargo test (uedcli_native goldens)" >&2
-  fi
-fi
-
+run_cargo_test || rc=$?                # Rust goldens, in the build container
 exit "$rc"

@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# uedcli — HOST-NATIVE dev launcher. Runs the uedcli CLI on the host in a Python
-# 3.12 venv (mirroring the eventual Nuitka release binary), with native access to
-# asset dirs and no dev-container path/mount juggling. Editor/build containers it
-# drives still run via docker. See bin/_venv.sh + dev/docs/dev-runtime.md.
+# uedcli — HOST-NATIVE dev launcher. Runs the uedcli CLI on the host in a Python 3.12 venv (Python 3
+# is on most hosts), so it has native access to asset dirs and reaches the docker daemon directly to
+# drive the editor/game RUNTIME containers. Only the Rust extension it uses is built in a container
+# (bin/_venv.sh, out-of-box, no host Rust). See dev/docs/dev-runtime.md.
 #
 # Put this dir on PATH (or symlink into ~/.local/bin), then: `uedcli level status`,
-# `printf '%s' "$t3d" | uedcli actor add -`. The venv auto-creates on first run;
-# `UEDCLI_VENV_REBUILD=1 uedcli …` forces a dep refresh.
+# `printf '%s' "$t3d" | uedcli actor add -`. The venv + native ext self-provision on first run.
 set -euo pipefail
 source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/_venv.sh"
 ensure_venv
+ensure_native_ext                      # builds uedcli_native in a container if stale (no host Rust)
 exec env PYTHONPATH="$UEDCLI_DIR" "$PY" -m uedcli "$@"

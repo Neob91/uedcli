@@ -1,0 +1,532 @@
+﻿Log: Log file open, 08/06/26 10:51:15
+Init: Name subsystem initialized
+Init: Version: 469
+Init: Revision: c (Release)
+Init: Compiled: Oct 29 2022 10:10:27
+Init: Command line: -log=Editor.log
+Init: Base directory: Z:\root\UED22run\
+Init: Character set: Unicode
+Log: Bound to Editor.dll
+Log: Bound to Core.dll
+Log: Bound to Engine.dll
+Log: Bound to Window.dll
+Log: Bound to Render.dll
+Init: Object subsystem initialized
+Log: Cd Path: 
+Init: Detected: Microsoft Windows NT 6.2 (Build: 9200)
+Log: Enabling Data Executing Prevention
+Init: Computer: B02D9392FA9D
+Init: User: root
+Init: Memory total: Phys=4194303K Pagef=4193791K Virt=4190656K
+Init: Working set: 2000000 / 2000000
+Init: CPU Page size=4096, Processors=10
+Init: CPU Detected: Apple Silicon (GenuineIntel)
+Init: CPU Features: INVARIANT_TSC 3DNow! CMov FPU RDTSC PAE MMX SSE SSE2 SSE3 SSSE3 SSE4_1 SSE4_2 AVX AVX2
+Init: Timer Frequency=1536.000193 MHz - Timing Source = RDTSC
+Init: Unreal engine initialized
+Log: Bound to Galaxy.dll
+Init: Galaxy is using WinMM
+Init: Galaxy initialized
+Init: Transaction tracking system initialized
+Init: Loading EditPackage Core...
+Init: Loading EditPackage Engine...
+Init: Loading EditPackage Editor...
+Init: Loading EditPackage Fire...
+Log: Bound to Fire.dll
+Init: Loading EditPackage IpDrv...
+Log: Bound to IpDrv.dll
+Init: Loading EditPackage Extension...
+Init: Loading EditPackage DavesBrushBuilders...
+Init: Loading EditPackage FrameBuilder...
+Init: Loading EditPackage RahnemBrushBuilders...
+Init: Loading EditPackage ExtendedBuilders...
+Init: Loading EditPackage TarquinBrushBuilders...
+Init: Loading EditPackage UnrealEdEx...
+Init: Loading EditPackage TarquinExtrudeBuilder...
+Log: Bound to WinDrv.dll
+Init: Enhanced Pointer Precision Disabled
+Init: Initializing DirectDraw
+Init: DirectDraw drivers detected:
+Init:    display (DirectDraw HAL)
+Init: DirectDraw: Enumerated Display Modes:
+Init: DirectDraw: Mode 320x200x32
+Init: DirectDraw: Mode 320x240x32
+Init: DirectDraw: Mode 400x300x32
+Init: DirectDraw: Mode 512x384x32
+Init: DirectDraw: Mode 640x400x32
+Init: DirectDraw: Mode 640x480x32
+Init: DirectDraw: Mode 768x576x32
+Init: DirectDraw: Mode 800x600x32
+Init: DirectDraw: Mode 1024x768x32
+Init: DirectDraw: Mode 1152x864x32
+Init: DirectDraw: Mode 1280x720x32
+Init: DirectDraw: Mode 1280x800x32
+Init: DirectDraw: Mode 1280x960x32
+Init: DirectDraw: Mode 1280x1024x32
+Init: DirectDraw: Mode 1366x768x32
+Init: DirectDraw: Mode 1400x1050x32
+Init: DirectDraw: Mode 1440x900x32
+Init: DirectDraw: Mode 1600x900x32
+Init: DirectDraw: Mode 1600x1200x32
+Init: DirectDraw: Mode 320x200x16
+Init: DirectDraw: Mode 320x240x16
+Init: DirectDraw: Mode 400x300x16
+Init: DirectDraw: Mode 512x384x16
+Init: DirectDraw: Mode 640x400x16
+Init: DirectDraw: Mode 640x480x16
+Init: DirectDraw: Mode 768x576x16
+Init: DirectDraw: Mode 800x600x16
+Init: DirectDraw: Mode 1024x768x16
+Init: DirectDraw: Mode 1152x864x16
+Init: DirectDraw: Mode 1280x720x16
+Init: DirectDraw: Mode 1280x800x16
+Init: DirectDraw: Mode 1280x960x16
+Init: DirectDraw: Mode 1280x1024x16
+Init: DirectDraw: Mode 1366x768x16
+Init: DirectDraw: Mode 1400x1050x16
+Init: DirectDraw: Mode 1440x900x16
+Init: DirectDraw: Mode 1600x900x16
+Init: DirectDraw: Mode 1600x1200x16
+Init: DirectDraw: Mode 320x200x8
+Init: DirectDraw: Mode 320x240x8
+Init: DirectDraw: Mode 400x300x8
+Init: DirectDraw: Mode 512x384x8
+Init: DirectDraw: Mode 640x400x8
+Init: DirectDraw: Mode 640x480x8
+Init: DirectDraw: Mode 768x576x8
+Init: DirectDraw: Mode 800x600x8
+Init: DirectDraw: Mode 1024x768x8
+Init: DirectDraw: Mode 1152x864x8
+Init: DirectDraw: Mode 1280x720x8
+Init: DirectDraw: Mode 1280x800x8
+Init: DirectDraw: Mode 1280x960x8
+Init: DirectDraw: Mode 1280x1024x8
+Init: DirectDraw: Mode 1366x768x8
+Init: DirectDraw: Mode 1400x1050x8
+Init: DirectDraw: Mode 1440x900x8
+Init: DirectDraw: Mode 1600x900x8
+Init: DirectDraw: Mode 1600x1200x8
+Init: DirectDraw initialized successfully
+Init: Client initialized
+Init: Lighting subsystem initialized
+Init: Rendering initialized
+Init: Constructing brush builder CubeBuilder
+Init: Constructing brush builder SheetBuilder
+Init: Constructing brush builder CylinderBuilder
+Init: Constructing brush builder ConeBuilder
+Init: Constructing brush builder TetrahedronBuilder
+Init: Constructing brush builder CurvedStairBuilder
+Init: Constructing brush builder SpiralStairBuilder
+Init: Constructing brush builder LinearStairBuilder
+Init: Constructing brush builder TerrainBuilder
+Init: Constructing brush builder VolumetricBuilder
+Init: Constructing brush builder PlatonicsBuilder
+Init: Constructing brush builder FrameBuilder
+Init: Constructing brush builder LandscapeBuilder
+Init: Constructing brush builder ExtParallelepiped
+Init: Constructing brush builder ExtWave
+Init: Constructing brush builder TarquinSpiralStairBuilder
+Init: Constructing brush builder TarquinTorusBuilder
+Init: Constructing brush builder TarquinCylinderBuilder
+Init: Constructing brush builder TarquinPanoramaBuilder
+Init: Constructing brush builder UnrealExTunnel
+Init: Constructing brush builder UnrealExTerrain
+Init: Constructing brush builder UnrealExCylinderSheet
+Init: Constructing brush builder TarquinExtrudeBuilder
+Init: Editor engine initialized
+Log: Startup time: 1.189279 seconds
+Log: Testing supported renderers for level Viewports
+Init: Input system initialized for U2Viewport0
+Log: Opened viewport
+Log: Bound to SoftDrv.dll
+Log: Transient.WindowsClient0.U2Viewport0.SoftwareRenderDevice0 is a legacy render device.
+Init: Input system initialized for U2Viewport1
+Log: Opened viewport
+Log: Transient.WindowsClient0.U2Viewport1.SoftwareRenderDevice1 is a legacy render device.
+Init: Input system initialized for U2Viewport2
+Log: Opened viewport
+Log: Transient.WindowsClient0.U2Viewport2.SoftwareRenderDevice2 is a legacy render device.
+DevAudio: Galaxy SetViewport: U2Viewport2
+Init: Safely failed to initialize Galaxy: 15
+DevAudio: Galaxy SetViewport: U2Viewport2
+Init: Safely failed to initialize Galaxy: 15
+DevAudio: Galaxy SetViewport: U2Viewport2
+Init: Safely failed to initialize Galaxy: 15
+Init: Input system initialized for U2Viewport3
+Log: Opened viewport
+Log: Transient.WindowsClient0.U2Viewport3.SoftwareRenderDevice3 is a legacy render device.
+DevAudio: Galaxy SetViewport: U2Viewport2
+Init: Safely failed to initialize Galaxy: 15
+DevAudio: Galaxy SetViewport: U2Viewport2
+Init: Safely failed to initialize Galaxy: 15
+Init: Input system initialized for MeshBrowser
+Log: Opened viewport
+Log: Transient.WindowsClient0.MeshBrowser.SoftwareRenderDevice4 is a legacy render device.
+DevAudio: Galaxy SetViewport: MeshBrowser
+Init: Safely failed to initialize Galaxy: 15
+DevAudio: Galaxy SetViewport: MeshBrowser
+Init: Safely failed to initialize Galaxy: 15
+DevAudio: Galaxy SetViewport: MeshBrowser
+Init: Safely failed to initialize Galaxy: 15
+DevAudio: Galaxy SetViewport: MeshBrowser
+Init: Safely failed to initialize Galaxy: 15
+DevAudio: Galaxy SetViewport: MeshBrowser
+Init: Safely failed to initialize Galaxy: 15
+DevAudio: Galaxy SetViewport: MeshBrowser
+Init: Safely failed to initialize Galaxy: 15
+DevAudio: Galaxy SetViewport: MeshBrowser
+Init: Safely failed to initialize Galaxy: 15
+DevAudio: Galaxy SetViewport: MeshBrowser
+Init: Safely failed to initialize Galaxy: 15
+DevAudio: Galaxy SetViewport: MeshBrowser
+Init: Safely failed to initialize Galaxy: 15
+DevAudio: Galaxy SetViewport: MeshBrowser
+Init: Safely failed to initialize Galaxy: 15
+DevAudio: Galaxy SetViewport: MeshBrowser
+Init: Safely failed to initialize Galaxy: 15
+DevAudio: Galaxy SetViewport: MeshBrowser
+Init: Safely failed to initialize Galaxy: 15
+DevAudio: Galaxy SetViewport: MeshBrowser
+Init: Safely failed to initialize Galaxy: 15
+Log: 4.00 272.00 628.00 132.00
+Log: 4.00 272.00 628.00 132.00
+Log: 4.00 272.00 628.00 132.00
+Log: 4.00 268.00 628.00 130.00
+Log: 4.00 268.00 628.00 130.00
+Init: Input system initialized for TextureBrowser
+Log: Opened viewport
+Log: Transient.WindowsClient0.TextureBrowser.SoftwareRenderDevice5 is a legacy render device.
+DevAudio: Galaxy SetViewport: TextureBrowser
+Init: Safely failed to initialize Galaxy: 15
+DevAudio: Galaxy SetViewport: TextureBrowser
+Init: Safely failed to initialize Galaxy: 15
+DevAudio: Galaxy SetViewport: TextureBrowser
+Init: Safely failed to initialize Galaxy: 15
+DevAudio: Galaxy SetViewport: TextureBrowser
+Init: Safely failed to initialize Galaxy: 15
+DevAudio: Galaxy SetViewport: TextureBrowser
+Init: Safely failed to initialize Galaxy: 15
+DevAudio: Galaxy SetViewport: TextureBrowser
+Init: Safely failed to initialize Galaxy: 15
+DevAudio: Galaxy SetViewport: TextureBrowser
+Init: Safely failed to initialize Galaxy: 15
+DevAudio: Galaxy SetViewport: TextureBrowser
+Init: Safely failed to initialize Galaxy: 15
+DevAudio: Galaxy SetViewport: TextureBrowser
+Init: Safely failed to initialize Galaxy: 15
+DevAudio: Galaxy SetViewport: TextureBrowser
+Init: Safely failed to initialize Galaxy: 15
+Log: WCodeFrame::OpenWindow - Creating Window - W: 384, H: 512
+Log: WCodeFrame::OnCreate - Moving Window - X: 0, Y: 0, W: 640, H: 480
+DevAudio: Galaxy SetViewport: U2Viewport2
+Init: Safely failed to initialize Galaxy: 15
+DevAudio: Galaxy SetViewport: U2Viewport2
+Init: Safely failed to initialize Galaxy: 15
+DevAudio: Galaxy SetViewport: U2Viewport2
+Init: Safely failed to initialize Galaxy: 15
+DevAudio: Galaxy SetViewport: U2Viewport2
+Init: Safely failed to initialize Galaxy: 15
+DevAudio: Galaxy SetViewport: U2Viewport2
+Init: Safely failed to initialize Galaxy: 15
+DevAudio: Galaxy SetViewport: MeshBrowser
+Init: Safely failed to initialize Galaxy: 15
+DevAudio: Galaxy SetViewport: TextureBrowser
+Init: Safely failed to initialize Galaxy: 15
+DevAudio: Galaxy SetViewport: U2Viewport2
+Init: Safely failed to initialize Galaxy: 15
+DevAudio: Galaxy SetViewport: MeshBrowser
+Init: Safely failed to initialize Galaxy: 15
+DevAudio: Galaxy SetViewport: TextureBrowser
+Init: Safely failed to initialize Galaxy: 15
+Log: Autosaving 'MAP SAVE AUTOSAVE=1 FILE=Z:\root\UED22run\..\Maps\Auto9.dx'
+Warning: Error opening file
+Log: Save=11.548768
+DevAudio: Galaxy SetViewport: U2Viewport2
+Init: Safely failed to initialize Galaxy: 15
+DevAudio: Galaxy SetViewport: MeshBrowser
+Init: Safely failed to initialize Galaxy: 15
+DevAudio: Galaxy SetViewport: TextureBrowser
+Init: Safely failed to initialize Galaxy: 15
+DevAudio: Galaxy SetViewport: U2Viewport2
+Init: Safely failed to initialize Galaxy: 15
+Log: Collecting garbage
+Log: Purging garbage
+Log: Unloading: Package WinDrv
+Log: Garbage: objects: 10628->10612; refs: 92738
+DevAudio: Galaxy SetViewport: U2Viewport2
+Init: Safely failed to initialize Galaxy: 15
+DevAudio: Galaxy SetViewport: MeshBrowser
+Init: Safely failed to initialize Galaxy: 15
+DevAudio: Galaxy SetViewport: TextureBrowser
+Init: Safely failed to initialize Galaxy: 15
+DevAudio: Galaxy SetViewport: U2Viewport2
+Init: Safely failed to initialize Galaxy: 15
+DevAudio: Galaxy SetViewport: MeshBrowser
+Init: Safely failed to initialize Galaxy: 15
+DevAudio: Galaxy SetViewport: TextureBrowser
+Init: Safely failed to initialize Galaxy: 15
+Log: Found 0 coplanar sets in 0
+Log: BspMergeCoplanars reduced 0->0
+Log: Polys: 0 -> 0
+Log: Nodes: 0 -> 0
+Log: Points: 0 -> 0
+Log: Vectors: 0 -> 0
+Log: Polys: 0 -> 0
+Log: Nodes: 0 -> 0
+Log: Points: 0 -> 0
+Log: Vectors: 0 -> 0
+Log: BspOptGeom begin
+Log: MergeNearPoints merged 0/0, collapsed 0
+Log: Polys: 0 -> 0
+Log: Nodes: 0 -> 0
+Log: Points: 0 -> 0
+Log: Vectors: 0 -> 0
+Log: BspOptGeom building sidelinks
+Log: BspOptGeom end
+Log: Processed 0 T-points, linked: 0/0 sides
+DevAudio: Galaxy SetViewport: U2Viewport2
+Init: Safely failed to initialize Galaxy: 15
+DevAudio: Galaxy SetViewport: MeshBrowser
+Init: Safely failed to initialize Galaxy: 15
+DevAudio: Galaxy SetViewport: TextureBrowser
+Init: Safely failed to initialize Galaxy: 15
+Log: Save=5.469394
+Log: Moving 'Z:\root\UED22run\Save.tmp' to 'Z:\root\UED22run\spike_test.dx'
+DevAudio: Galaxy SetViewport: U2Viewport2
+Init: Safely failed to initialize Galaxy: 15
+DevAudio: Galaxy SetViewport: MeshBrowser
+Init: Safely failed to initialize Galaxy: 15
+DevAudio: Galaxy SetViewport: TextureBrowser
+Init: Safely failed to initialize Galaxy: 15
+Log: New File, Existing Package (Package MyLevel, Package spike_test)
+DevAudio: Galaxy SetViewport: U2Viewport2
+Init: Safely failed to initialize Galaxy: 15
+Log: Collecting garbage
+Log: Purging garbage
+Log: Garbage: objects: 10622->10614; refs: 92759
+DevAudio: Galaxy SetViewport: U2Viewport2
+Init: Safely failed to initialize Galaxy: 15
+DevAudio: Galaxy SetViewport: MeshBrowser
+Init: Safely failed to initialize Galaxy: 15
+DevAudio: Galaxy SetViewport: TextureBrowser
+Init: Safely failed to initialize Galaxy: 15
+DevAudio: Galaxy SetViewport: U2Viewport2
+Init: Safely failed to initialize Galaxy: 15
+DevAudio: Galaxy SetViewport: MeshBrowser
+Init: Safely failed to initialize Galaxy: 15
+DevAudio: Galaxy SetViewport: TextureBrowser
+Init: Safely failed to initialize Galaxy: 15
+Log: Unloading: Package MyLevel
+DevAudio: Galaxy SetViewport: U2Viewport2
+Init: Safely failed to initialize Galaxy: 15
+Log: Collecting garbage
+Log: Purging garbage
+Log: Garbage: objects: 10624->10612; refs: 92738
+DevAudio: Galaxy SetViewport: U2Viewport2
+Init: Safely failed to initialize Galaxy: 15
+DevAudio: Galaxy SetViewport: MeshBrowser
+Init: Safely failed to initialize Galaxy: 15
+DevAudio: Galaxy SetViewport: TextureBrowser
+Init: Safely failed to initialize Galaxy: 15
+Log: Save=4.780061
+Log: Moving 'Z:\root\UED22run\Save.tmp' to 'Z:\root\UED22run\empty.dx'
+DevAudio: Galaxy SetViewport: U2Viewport2
+Init: Safely failed to initialize Galaxy: 15
+DevAudio: Galaxy SetViewport: MeshBrowser
+Init: Safely failed to initialize Galaxy: 15
+DevAudio: Galaxy SetViewport: TextureBrowser
+Init: Safely failed to initialize Galaxy: 15
+DevAudio: Galaxy SetViewport: U2Viewport2
+Init: Safely failed to initialize Galaxy: 15
+Log: Collecting garbage
+Log: Purging garbage
+Log: Garbage: objects: 10624->10612; refs: 92738
+DevAudio: Galaxy SetViewport: U2Viewport2
+Init: Safely failed to initialize Galaxy: 15
+DevAudio: Galaxy SetViewport: MeshBrowser
+Init: Safely failed to initialize Galaxy: 15
+DevAudio: Galaxy SetViewport: TextureBrowser
+Init: Safely failed to initialize Galaxy: 15
+DevAudio: Galaxy SetViewport: U2Viewport2
+Init: Safely failed to initialize Galaxy: 15
+DevAudio: Galaxy SetViewport: MeshBrowser
+Init: Safely failed to initialize Galaxy: 15
+DevAudio: Galaxy SetViewport: TextureBrowser
+Init: Safely failed to initialize Galaxy: 15
+Log: Autosaving 'MAP SAVE AUTOSAVE=1 FILE=Z:\root\UED22run\..\Maps\Auto0.dx'
+Warning: Error opening file
+Log: Save=16.815643
+DevAudio: Galaxy SetViewport: U2Viewport2
+Init: Safely failed to initialize Galaxy: 15
+DevAudio: Galaxy SetViewport: MeshBrowser
+Init: Safely failed to initialize Galaxy: 15
+DevAudio: Galaxy SetViewport: TextureBrowser
+Init: Safely failed to initialize Galaxy: 15
+Log: BRUSHCLIP : You don't have enough ClipMarkers to perform this operation.
+DevAudio: Galaxy SetViewport: U2Viewport2
+Init: Safely failed to initialize Galaxy: 15
+DevAudio: Galaxy SetViewport: MeshBrowser
+Init: Safely failed to initialize Galaxy: 15
+DevAudio: Galaxy SetViewport: TextureBrowser
+Init: Safely failed to initialize Galaxy: 15
+Log: Found 0 coplanar sets in 0
+Log: BspMergeCoplanars reduced 0->0
+Log: Polys: 0 -> 0
+Log: Nodes: 0 -> 0
+Log: Points: 0 -> 0
+Log: Vectors: 0 -> 0
+Log: Polys: 0 -> 0
+Log: Nodes: 0 -> 0
+Log: Points: 0 -> 0
+Log: Vectors: 0 -> 0
+Log: BspOptGeom begin
+Log: MergeNearPoints merged 0/0, collapsed 0
+Log: Polys: 0 -> 0
+Log: Nodes: 0 -> 0
+Log: Points: 0 -> 0
+Log: Vectors: 0 -> 0
+Log: BspOptGeom building sidelinks
+Log: BspOptGeom end
+Log: Processed 0 T-points, linked: 0/0 sides
+DevAudio: Galaxy SetViewport: U2Viewport2
+Init: Safely failed to initialize Galaxy: 15
+DevAudio: Galaxy SetViewport: MeshBrowser
+Init: Safely failed to initialize Galaxy: 15
+DevAudio: Galaxy SetViewport: TextureBrowser
+Init: Safely failed to initialize Galaxy: 15
+Log: Save=6.719935
+Log: Moving 'Z:\root\UED22run\Save.tmp' to 'Z:\root\UED22run\cube.dx'
+DevAudio: Galaxy SetViewport: U2Viewport2
+Init: Safely failed to initialize Galaxy: 15
+DevAudio: Galaxy SetViewport: MeshBrowser
+Init: Safely failed to initialize Galaxy: 15
+DevAudio: Galaxy SetViewport: TextureBrowser
+Init: Safely failed to initialize Galaxy: 15
+DevAudio: Galaxy SetViewport: U2Viewport2
+Init: Safely failed to initialize Galaxy: 15
+Log: Collecting garbage
+Log: Purging garbage
+Log: Garbage: objects: 10626->10612; refs: 92738
+DevAudio: Galaxy SetViewport: U2Viewport2
+Init: Safely failed to initialize Galaxy: 15
+DevAudio: Galaxy SetViewport: MeshBrowser
+Init: Safely failed to initialize Galaxy: 15
+DevAudio: Galaxy SetViewport: TextureBrowser
+Init: Safely failed to initialize Galaxy: 15
+Log: FactoryCreateText: Level with LevelFactory (0 1 Z:\root\UED22run\small.t3d)
+Log: Usurped LevelInfo
+Log: Usurped LevelInfo
+Log: Usurped LevelInfo
+Log: Usurped LevelInfo
+Log: Usurped LevelInfo
+Log: Usurped LevelInfo
+Log: Usurped LevelInfo
+Log: Usurped LevelInfo
+Log: Usurped LevelInfo
+Log: Usurped LevelInfo
+Log: Usurped LevelInfo
+Log: Usurped LevelInfo
+Log: Usurped LevelInfo
+Log: Usurped LevelInfo
+Log: Usurped LevelInfo
+Log: Usurped LevelInfo
+Log: Usurped LevelInfo
+Log: Usurped LevelInfo
+Log: Matched Viewport U2Viewport0
+Log: Matched Viewport U2Viewport1
+Log: Matched Viewport U2Viewport2
+Log: Matched Viewport U2Viewport3
+Log: Matched Viewport MeshBrowser
+Log: Matched Viewport TextureBrowser
+DevAudio: Galaxy SetViewport: U2Viewport2
+Init: Safely failed to initialize Galaxy: 15
+Log: Collecting garbage
+Log: Purging garbage
+Log: Garbage: objects: 10692->10649; refs: 93703
+DevAudio: Galaxy SetViewport: U2Viewport2
+Init: Safely failed to initialize Galaxy: 15
+DevAudio: Galaxy SetViewport: MeshBrowser
+Init: Safely failed to initialize Galaxy: 15
+DevAudio: Galaxy SetViewport: TextureBrowser
+Init: Safely failed to initialize Galaxy: 15
+Log: Found 20 coplanar sets in 213
+Log: BspMergeCoplanars reduced 213->174
+Log: Polys: 112 -> 112
+Log: Nodes: 244 -> 216
+Log: Points: 552 -> 103
+Log: Vectors: 35 -> 35
+Log: Polys: 112 -> 112
+Log: Nodes: 202 -> 202
+Log: Points: 437 -> 437
+Log: Vectors: 35 -> 35
+Log: bspBuildBounds: Generated 96 bounds, 1106 hulls
+Log: Polys: 112 -> 112
+Log: Nodes: 202 -> 202
+Log: Points: 437 -> 437
+Log: Vectors: 35 -> 35
+Log: Found 1 zones
+Warning: bspAddNode: Infinitesimal polygon 2 (4)
+Warning: bspAddNode: Infinitesimal polygon 2 (4)
+Warning: bspAddNode: Infinitesimal polygon 2 (3)
+Warning: bspAddNode: Infinitesimal polygon 2 (4)
+Log: Polys: 112 -> 112
+Log: Nodes: 493 -> 202
+Log: Points: 572 -> 437
+Log: Vectors: 35 -> 35
+Log: bspBuildBounds: Generated 96 bounds, 1106 hulls
+Log: BuildZoneInfo: 0 ZoneInfo actors, 0 duplicates, 0 zoneless
+Log: Portalized: 93 portals, 0 zone portals (0 fragments), 48 leaves, 202 nodes
+Log: Time = 2.056875 msec per light
+Log: BspOptGeom begin
+Log: MergeNearPoints merged 75/437, collapsed 0
+Log: Polys: 112 -> 101
+Log: Nodes: 202 -> 202
+Log: Points: 437 -> 358
+Log: Vectors: 35 -> 30
+Warning: Node side limit reached
+Warning: Node side limit reached
+Warning: Node side limit reached
+Warning: Node side limit reached
+Log: BspOptGeom building sidelinks
+Log: BspOptGeom end
+Log: Processed 146 T-points, linked: 932/938 sides
+Log: bspBuildBounds: Generated 96 bounds, 1106 hulls
+DevAudio: Galaxy SetViewport: U2Viewport2
+Init: Safely failed to initialize Galaxy: 15
+DevAudio: Galaxy SetViewport: MeshBrowser
+Init: Safely failed to initialize Galaxy: 15
+DevAudio: Galaxy SetViewport: TextureBrowser
+Init: Safely failed to initialize Galaxy: 15
+Log: Save=11.842352
+Log: Moving 'Z:\root\UED22run\Save.tmp' to 'Z:\root\UED22run\small.dx'
+DevAudio: Galaxy SetViewport: U2Viewport2
+Init: Safely failed to initialize Galaxy: 15
+DevAudio: Galaxy SetViewport: MeshBrowser
+Init: Safely failed to initialize Galaxy: 15
+DevAudio: Galaxy SetViewport: TextureBrowser
+Init: Safely failed to initialize Galaxy: 15
+Log: New File, Existing Package (Package MyLevel, Package small)
+DevAudio: Galaxy SetViewport: U2Viewport2
+Init: Safely failed to initialize Galaxy: 15
+Log: Collecting garbage
+Log: Purging garbage
+Log: Garbage: objects: 10683->10651; refs: 94351
+DevAudio: Galaxy SetViewport: U2Viewport2
+Init: Safely failed to initialize Galaxy: 15
+DevAudio: Galaxy SetViewport: MeshBrowser
+Init: Safely failed to initialize Galaxy: 15
+DevAudio: Galaxy SetViewport: TextureBrowser
+Init: Safely failed to initialize Galaxy: 15
+DevAudio: Galaxy SetViewport: U2Viewport2
+Init: Safely failed to initialize Galaxy: 15
+DevAudio: Galaxy SetViewport: MeshBrowser
+Init: Safely failed to initialize Galaxy: 15
+DevAudio: Galaxy SetViewport: TextureBrowser
+Init: Safely failed to initialize Galaxy: 15
+Log: Autosaving 'MAP SAVE AUTOSAVE=1 FILE=Z:\root\UED22run\..\Maps\Auto1.dx'
+Log: Unloading: Package MyLevel
+Warning: Error opening file
+Log: Save=23.236935
+DevAudio: Galaxy SetViewport: U2Viewport2
+Init: Safely failed to initialize Galaxy: 15
+DevAudio: Galaxy SetViewport: MeshB
