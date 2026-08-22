@@ -1,6 +1,6 @@
 +++
 priority = "p3"
-kind = "bug"
+kind = "debug"
 summary = "UedPreviewLink header wrongly calls bCheatsEnabled a DeusEx-added field"
 +++
 

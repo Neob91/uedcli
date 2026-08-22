@@ -1,6 +1,6 @@
 +++
 priority = "p2"
-kind = "finding"
+kind = "debug"
 summary = "DeusEx boot wedge is memory-pressure deadlock, not esync — game-entrypoint.sh comment is stale"
 +++
 

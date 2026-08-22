@@ -1,6 +1,6 @@
 +++
 priority = "p2"
-kind = "verify"
+kind = "debug"
 summary = "Confirm the base driver's `var config string HudHideCommands` actually reads the value the entrypoint writes into DeusEx.ini — the one unverified link in the generic --game HUD-hide."
 +++
 

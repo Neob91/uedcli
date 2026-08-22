@@ -1,6 +1,6 @@
 +++
 priority = "p3"
-kind = "refactor"
+kind = "implement"
 summary = "Refactor god modules into cohesive units"
 +++
 

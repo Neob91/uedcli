@@ -1,6 +1,6 @@
 +++
 priority = "p2"
-kind = "finding"
+kind = "debug"
 summary = "Generic base-driver clean cannot hide the DeusEx HUD; ShowHud exec is a no-hUCC seam"
 +++
 

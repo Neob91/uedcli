@@ -1,6 +1,6 @@
 +++
 priority = "p2"
-kind = "finding"
+kind = "debug"
 summary = "RESOLVED: in-game room preview renders under wine-8/qemu + 16 GiB caps (FEX+wine-10 ClientTravel corrupts)"
 +++
 

@@ -1,6 +1,6 @@
 +++
 priority = "p2"
-kind = "spike"
+kind = "debug"
 summary = "Spike FEX (fextest-img) to run x86 DeusEx.exe on arm64 without qemu"
 +++
 
