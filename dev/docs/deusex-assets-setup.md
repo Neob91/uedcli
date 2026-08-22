@@ -101,8 +101,13 @@ dev/scripts/install-deusex-assets.sh --url https://example.invalid/deusex.ace \
 - Formats unpacked: `.ace` volume sets (via `unace`), `.tar[.gz|.bz2|.xz|.zst]`,
   `.zip`, `.7z`, `.iso`, `.rar`, and Inno Setup `.exe` (what a GOG offline installer is,
   via `innoextract`). Anything else — notably InstallShield or NSIS installers — exits
-  2 naming the file: unpack it yourself and pass SOURCE. A missing unpacker exits 2
-  naming the tool and the package that provides it.
+  2 naming the file: unpack it yourself and pass SOURCE.
+- **Unpacking always runs in a container**, on every host, whether or not the host has
+  the tool — one code path and one set of tool versions everywhere. The run builds a
+  small `uedcli-unpack` image on first use (cached after) and invokes the unpacker
+  inside it, so nothing needs installing on the host. Docker is therefore required to
+  unpack a download; without it the run exits 2 saying so. An already-extracted SOURCE
+  is copied as-is and needs neither.
 - Where things land: artifacts in `dev/games/.cache/<game>/download/`, unpacked in
   `.../unpacked/`. Both sit outside the working copy `dev/games/<game>/` on purpose —
   step 1 syncs the install root into the working copy with `--delete`, which would

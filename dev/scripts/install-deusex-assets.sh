@@ -20,6 +20,10 @@
 # GOG copy you own, or your own mirror, is the clean case. Override the default by passing a local
 # <SOURCE> or your own --url. See dev/docs/deusex-assets-setup.md ("Where to get Deus Ex").
 #
+# Unpacking a download ALWAYS runs in the `uedcli-unpack` container (built once, on demand), on
+# every host, whether or not the host has the tool — one code path, one set of tool versions. So
+# Docker is required to unpack a download; an already-extracted <SOURCE> needs neither.
+#
 # The baseline you want is 1.112fm, the final official build. GOG/Steam and the GOTY Edition already
 # ship at 1.112fm, so there is normally nothing to patch — hence no patch step here. If your source
 # is an old unpatched retail disc, apply the official patcher to the working copy and re-run.
@@ -194,24 +198,48 @@ need_tool() {  # <command> <apt-package> <what-for>
     exit 2
 }
 
-# Unpack an Inno Setup installer into $UNPACK_DIR. Uses host innoextract when present; otherwise, for
-# a SEAMLESS run on a host without it (and no root to apt-install it), runs innoextract in a throwaway
-# Docker container — the same host-tool-in-Docker fallback as bin/rust-build. Runs as root in the
-# container (apt needs it) then chowns the extracted tree back to the invoking user.
-run_innoextract() {  # <exe-path>
-    local f="$1" base; base="$(basename "$f")"
-    if command -v innoextract >/dev/null 2>&1; then
-        ( cd "$UNPACK_DIR" && innoextract -e -s -q "$f" ); return $?
-    fi
-    command -v docker >/dev/null 2>&1 || need_tool innoextract innoextract "unpack the Windows installer $base"
-    local img="${UEDCLI_INNOEXTRACT_IMAGE:-debian:bookworm-slim}"
-    echo "  (innoextract not on host — running it in Docker: $img)"
-    docker run --rm \
-        -v "$(cd "$(dirname "$f")" && pwd)":/dl:ro -v "$UNPACK_DIR":/out \
-        "$img" bash -c "set -e
-            command -v innoextract >/dev/null 2>&1 || { apt-get update -qq && apt-get install -y -qq innoextract >/dev/null; }
-            cd /out && innoextract -e -s -q '/dl/$base'
-            chown -R $(id -u):$(id -g) /out"
+# Every unpack runs in this image — always, on every host, whether or not the host has the tool.
+# One code path, one set of tool versions: a host-tool branch would mean the same artifact unpacked
+# by different binaries on different machines, which is the environment-switching this project
+# forbids. Docker is therefore required to unpack a download; an already-extracted <SOURCE> needs
+# neither. Built on first use, then cached.
+UNPACK_IMAGE="uedcli-unpack:latest"
+unpack_image_ready=0
+ensure_unpack_image() {
+    [[ "$unpack_image_ready" == 1 ]] && return 0
+    command -v docker >/dev/null 2>&1 || {
+        echo "error: Docker is required to unpack a download — every unpacker runs in the" >&2
+        echo "       $UNPACK_IMAGE container, so there is nothing to install on the host." >&2
+        echo "       Install Docker and re-run, or unpack the artifact yourself and point" >&2
+        echo "       <SOURCE> at the resulting install root instead." >&2
+        exit 2
+    }
+    if docker image inspect "$UNPACK_IMAGE" >/dev/null 2>&1; then unpack_image_ready=1; return 0; fi
+    echo "  building $UNPACK_IMAGE (one-off, then cached)…"
+    # amd64 to match the rest of the stack; on arm64 it runs emulated, fine for decompression.
+    # unace is non-free, hence the extra components.
+    DOCKER_DEFAULT_PLATFORM=linux/amd64 docker build --platform=linux/amd64 -q -t "$UNPACK_IMAGE" - >/dev/null <<'DOCKERFILE'
+FROM debian:stable-slim
+RUN echo 'deb http://deb.debian.org/debian stable main contrib non-free non-free-firmware' \
+        > /etc/apt/sources.list.d/nonfree.list \
+    && apt-get update && apt-get install -y --no-install-recommends \
+        innoextract p7zip-full unzip unrar-free unace tar gzip bzip2 xz-utils zstd \
+    && rm -rf /var/lib/apt/lists/*
+DOCKERFILE
+    unpack_image_ready=1
+}
+
+# Run one unpacker in $UNPACK_IMAGE. Each <mount-dir> is bind-mounted at its OWN absolute path and
+# the workdir set to match, so the argv — which names host paths — means the same inside the
+# container as out. --user keeps the extracted tree owned by the invoking user, so no chown-back
+# pass is needed and the later rsync can read it.
+run_unpacker() {  # <workdir> <mount-dir>… -- <command> [args…]
+    local wd="$1" mounts=(); shift
+    while [[ $# -gt 0 && "$1" != "--" ]]; do mounts+=(-v "$1:$1"); shift; done
+    shift  # the --
+    ensure_unpack_image
+    docker run --rm --platform=linux/amd64 --user "$(id -u):$(id -g)" \
+               "${mounts[@]}" -w "$wd" "$UNPACK_IMAGE" "$@"
 }
 
 # The filename to save a URL under: its last path segment, with any ?query/#fragment stripped.
@@ -288,30 +316,24 @@ unpack_one() {  # <file>
         # never work (the glob visits `-1.bin` before the `.exe` that consumes it).
         *.bin|*.[0-9][0-9][0-9]|*.z[0-9][0-9]|*.r[0-9][0-9]|*.part[0-9]*.rar)
             echo "  $base: companion volume, left for its own unpacker" ;;
-        *.tar)        need_tool tar tar "unpack $base";  tar -xf "$f" -C "$UNPACK_DIR" ;;
+        *.tar)        run_unpacker "$UNPACK_DIR" "$CACHE_DIR" -- tar -xf "$f" -C "$UNPACK_DIR" ;;
         *.tar.gz|*.tgz)
-            need_tool tar tar "unpack $base"; need_tool gzip gzip "decompress $base"
-            tar -xzf "$f" -C "$UNPACK_DIR" ;;
-        # tar SHELLS OUT to the compressor, so checking only for `tar` lets a missing bzip2/xz/zstd
-        # escape as a raw "tar (child): xz: Cannot exec" instead of a named, actionable error.
+            run_unpacker "$UNPACK_DIR" "$CACHE_DIR" -- tar -xzf "$f" -C "$UNPACK_DIR" ;;
         *.tar.bz2|*.tbz2)
-            need_tool tar tar "unpack $base"; need_tool bzip2 bzip2 "decompress $base"
-            tar -xjf "$f" -C "$UNPACK_DIR" ;;
+            run_unpacker "$UNPACK_DIR" "$CACHE_DIR" -- tar -xjf "$f" -C "$UNPACK_DIR" ;;
         *.tar.xz|*.txz)
-            need_tool tar tar "unpack $base"; need_tool xz xz-utils "decompress $base"
-            tar -xJf "$f" -C "$UNPACK_DIR" ;;
+            run_unpacker "$UNPACK_DIR" "$CACHE_DIR" -- tar -xJf "$f" -C "$UNPACK_DIR" ;;
         *.tar.zst)
-            need_tool tar tar "unpack $base"; need_tool zstd zstd "decompress $base"
-            tar --zstd -xf "$f" -C "$UNPACK_DIR" ;;
-        *.zip)        need_tool unzip unzip "unpack $base"; unzip -q -o "$f" -d "$UNPACK_DIR" ;;
-        *.7z|*.iso)   need_tool 7z p7zip-full "unpack $base"; 7z x -y -o"$UNPACK_DIR" "$f" >/dev/null ;;
-        *.rar)        need_tool unrar unrar "unpack $base"; unrar x -y "$f" "$UNPACK_DIR/" >/dev/null ;;
+            run_unpacker "$UNPACK_DIR" "$CACHE_DIR" -- tar --zstd -xf "$f" -C "$UNPACK_DIR" ;;
+        *.zip)        run_unpacker "$UNPACK_DIR" "$CACHE_DIR" -- unzip -q -o "$f" -d "$UNPACK_DIR" ;;
+        *.7z|*.iso)   run_unpacker "$UNPACK_DIR" "$CACHE_DIR" -- 7z x -y -o"$UNPACK_DIR" "$f" >/dev/null ;;
+        *.rar)        run_unpacker "$UNPACK_DIR" "$CACHE_DIR" -- unrar x -y "$f" "$UNPACK_DIR/" >/dev/null ;;
         *.exe)
-            # A GOG offline installer is Inno Setup, which innoextract unpacks natively. Other
-            # Windows installers (InstallShield, NSIS) are NOT handled — say so rather than
-            # producing a subtly incomplete tree.
+            # A GOG offline installer is Inno Setup, which innoextract unpacks. Other Windows
+            # installers (InstallShield, NSIS) are NOT handled — say so rather than producing a
+            # subtly incomplete tree.
             echo "  $base: unpacking as an Inno Setup installer"
-            run_innoextract "$f" || {
+            run_unpacker "$UNPACK_DIR" "$CACHE_DIR" -- innoextract -e -s -q "$f" || {
                 echo "error: innoextract could not unpack $base." >&2
                 echo "       Only Inno Setup installers (e.g. GOG offline installers) are supported" >&2
                 echo "       here. For any other installer, run it (or unpack it) yourself and point" >&2
@@ -459,22 +481,14 @@ echo "Source              : $src   (rsync=$have_rsync, dry_run=$dry_run, with_ma
 
 if [[ -n "$ace_src" ]]; then
     echo "SOURCE looks like a raw ACE installer ($(basename "$ace_src"))."
-    if ! command -v unace >/dev/null 2>&1; then
-        if [[ "$dry_run" == 1 ]]; then
-            echo "  would extract $ace_src -> $WORKING_COPY, but 'unace' is NOT installed" >&2
-        else
-            echo "error: SOURCE is an ACE archive but 'unace' is not installed." >&2
-            echo "       Install it (e.g. 'apt-get install unace') and re-run, or extract the ACE" >&2
-            echo "       yourself and point SOURCE at the extracted install root." >&2
-            exit 2
-        fi
-    fi
     if [[ "$dry_run" == 1 ]]; then
-        echo "  would extract $ace_src  ->  $WORKING_COPY  (unace x)"
+        echo "  would extract $ace_src  ->  $WORKING_COPY  (unace x, in $UNPACK_IMAGE)"
     else
         mkdir -p "$WORKING_COPY"
-        # unace extracts the whole deusex.c00..c52 volume set automatically from deusex.ace.
-        ( cd "$src" && unace x -y "$(basename "$ace_src")" "$WORKING_COPY"/ )
+        # unace extracts the whole deusex.c00..c52 volume set automatically from deusex.ace. Both
+        # ends are mounted: the volumes live under SOURCE, the extracted tree under the working copy.
+        run_unpacker "$src" "$src" "$WORKING_COPY" -- \
+                     unace x -y "$(basename "$ace_src")" "$WORKING_COPY"/
         echo "  extracted ACE -> $WORKING_COPY"
     fi
 elif [[ -n "$install_sys" && -n "$install_tex" ]]; then
