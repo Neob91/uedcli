@@ -17,6 +17,7 @@ from decimal import Decimal
 from ... import ingest, level_sources, resources
 from ... import targets as target_names
 from ...errors import CommandError
+from ._guards import reject_nonlevel_target_for_folders, reject_nonlevel_target_for_labels
 from .... import (emit, folderlib, labellib, order_ops, query, rotation, stashlib,
                   t3dtree, trunk, writes)
 from ....geometry import validate_brush
@@ -331,26 +332,6 @@ def _parse_add_order(spec: str) -> tuple[str, str | None]:
         f"actor add --order: expected first|last|before=NAME|after=NAME, got {spec!r}")
 
 
-def _reject_nonlevel_target_for_folders(args) -> None:
-    """Carrier-check copy of the source-free folder guard `routes.py` owns: a `// uedcli-folder:`
-    carrier in ingested T3D is a folder surface too, and folders are TRUNK-ONLY (spec §4), so it
-    rejects `--tree stash|prefab` (else the box save would drop the folder silently). Kept local
-    rather than imported from `routes` because a feature module never imports the family route."""
-    tgt = getattr(args, "tree", None)
-    if tgt and tgt.partition("/")[0] in ("stash", "prefab"):
-        raise CommandError("folders apply only to a level (not --tree stash|prefab)")
-
-
-def _reject_nonlevel_target_for_labels(args) -> None:
-    """Carrier-check copy of the source-free label guard `routes.py` owns: a `// uedcli-labels:`
-    carrier in ingested T3D is a label surface too, and labels are TRUNK-ONLY this slice, so it
-    rejects `--tree stash|prefab` (else the box save would drop the label silently). Kept local
-    rather than imported from `routes` because a feature module never imports the family route."""
-    tgt = getattr(args, "tree", None)
-    if tgt and tgt.partition("/")[0] in ("stash", "prefab"):
-        raise CommandError("labels apply only to a level (not --tree stash|prefab)")
-
-
 def _ingest_actor_t3d(args, src, level, text, *, verb: str,
                       labels_override: frozenset[str] | None = None,
                       labels_add: frozenset[str] | None = None) -> int:
@@ -379,12 +360,12 @@ def _ingest_actor_t3d(args, src, level, text, *, verb: str,
     # DROP it silently — the exact outcome the guard exists to prevent; the explicit-`--folder`
     # case is already caught pre-resolve). Fires only when a folder is actually present.
     if any(a.folder is not None for a in incoming_actors):
-        _reject_nonlevel_target_for_folders(args)
+        reject_nonlevel_target_for_folders(args)
     # Same for a `// uedcli-labels:` carrier — labels are trunk-only this slice (no stash/prefab
     # channel), so a carrier into a box would drop silently on save; reject it (the explicit
     # `--label` case is already caught pre-resolve). Fires only when a label is actually present.
     if any(a.labels for a in incoming_actors):
-        _reject_nonlevel_target_for_labels(args)
+        reject_nonlevel_target_for_labels(args)
     # Folder precedence (spec §4): an explicit `--folder` OVERRIDES any `// uedcli-folder:`
     # carrier the parser read into `actor.folder`; absent it, the carrier (from `actor show`)
     # stands; absent both, the actor is unfoldered. Validate every resulting folder BEFORE the

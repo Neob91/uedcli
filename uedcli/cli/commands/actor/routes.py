@@ -21,7 +21,8 @@ tests). `actor build` is a stateless generator, routed first so it never runs th
 """
 from __future__ import annotations
 
-from ...errors import CommandError
+from ._guards import (reject_nonlevel_target_for_folders, reject_nonlevel_target_for_labels,
+                      reject_nonlevel_target_for_order)
 
 
 def run(args):
@@ -63,68 +64,31 @@ def _apply_source_free_guards(args) -> None:
     # Folders are trunk-only (spec §4): `actor folder …` always; `actor find --folder/--no-folder`
     # when a folder surface is used.
     if sub == "folder":
-        _reject_nonlevel_target_for_folders(args)
+        reject_nonlevel_target_for_folders(args)
     if sub == "find" and (getattr(args, "folder", None) or getattr(args, "no_folder", False)):
-        _reject_nonlevel_target_for_folders(args)
+        reject_nonlevel_target_for_folders(args)
     # Labels are trunk-only this slice (plan scope-cut): `actor label …` always; `actor find
     # --label/--no-label` and `actor add --label` when a label surface is actually used.
     if sub == "label":
-        _reject_nonlevel_target_for_labels(args)
+        reject_nonlevel_target_for_labels(args)
     if sub == "find" and (getattr(args, "label", None) or getattr(args, "no_label", False)):
-        _reject_nonlevel_target_for_labels(args)
+        reject_nonlevel_target_for_labels(args)
     if sub == "add" and getattr(args, "label", None):
-        _reject_nonlevel_target_for_labels(args)
+        reject_nonlevel_target_for_labels(args)
     # `duplicate` ALWAYS mints a fresh dup-<rand> batch label, and the stash/prefab box save carries
     # no labels channel (deferred scope-cut) — so it rejects stash/prefab UNCONDITIONALLY (not only
     # with an explicit --label), else the batch label would silently vanish on a box save.
     if sub == "duplicate":
-        _reject_nonlevel_target_for_labels(args)
+        reject_nonlevel_target_for_labels(args)
     # `is not None` (not truthiness) so `--folder ""` still routes to the folder-guard message on a
     # stash/prefab target (it's still an invalid path — validate_folder_path rejects it later). The
     # CARRIER path (an incoming `// uedcli-folder:` with no explicit --folder) is guarded separately
     # in the add/duplicate ingest, where the parsed folders are known (review 2026-07-18).
     if sub in ("add", "duplicate") and getattr(args, "folder", None) is not None:
-        _reject_nonlevel_target_for_folders(args)
+        reject_nonlevel_target_for_folders(args)
     # CSG ordering is trunk-only too (spec §7). `actor order` always; `actor add --order` only when a
     # non-default placement is requested (`last` == today's append, valid on any target).
     if sub == "order":
-        _reject_nonlevel_target_for_order(args)
+        reject_nonlevel_target_for_order(args)
     if sub == "add" and (getattr(args, "order", "last") or "last").strip().casefold() != "last":
-        _reject_nonlevel_target_for_order(args)
-
-
-def _reject_nonlevel_target_for_folders(args) -> None:
-    """Folder surfaces are TRUNK-ONLY (spec §4): a folder lives only in the per-actor trunk sidecar;
-    the flat stash/prefab boxes serialize via `canonical_actor_t3d` (T3D only) and have no per-actor
-    sidecar slot. So every folder surface (`actor folder set/unset/get`, `actor add --folder`,
-    `actor find --folder/--no-folder`) rejects `--tree stash|prefab` with a clear exit 2, rather
-    than silently writing a sidecar that's dropped on save or querying a dimension that's always
-    None. `--tree level/NAME` (a named level's trunk) is fine — the guard fires ONLY on
-    stash/prefab. Called BEFORE the source is resolved so the message is the right one."""
-    tgt = getattr(args, "tree", None)
-    if tgt and tgt.partition("/")[0] in ("stash", "prefab"):
-        raise CommandError("folders apply only to a level (not --tree stash|prefab)")
-
-
-def _reject_nonlevel_target_for_labels(args) -> None:
-    """Label surfaces are TRUNK-ONLY this slice (plan scope-cut): labels live in the per-actor trunk
-    `labels` sidecar; the stash/prefab box channel is deferred to the copy-between-trees spec. So
-    every label surface (`actor label add/remove/clear/get`, `actor add --label`, `actor find
-    --label/--no-label`) rejects `--tree stash|prefab` with a clear exit 2 rather than silently
-    dropping a label on a box save. `--tree level/NAME` (a named level's trunk) is fine — the guard
-    fires ONLY on stash/prefab. Called BEFORE the source is resolved so the message is the right one.
-    Mirrors `_reject_nonlevel_target_for_folders`."""
-    tgt = getattr(args, "tree", None)
-    if tgt and tgt.partition("/")[0] in ("stash", "prefab"):
-        raise CommandError("labels apply only to a level (not --tree stash|prefab)")
-
-
-def _reject_nonlevel_target_for_order(args) -> None:
-    """CSG ordering is TRUNK-ONLY (spec §7): the `order_value` sidecar the ordering verbs rewrite
-    lives only in the per-actor trunk layout — stash/prefab boxes use a flat `order` list. So
-    `actor order` and `actor add --order <non-last>` reject `--tree stash|prefab` with a clean
-    exit 2 rather than silently no-op'ing. Called BEFORE the source is resolved so the message is
-    the right one; `--tree level/NAME` (a named level's trunk) is fine."""
-    tgt = getattr(args, "tree", None)
-    if tgt and tgt.partition("/")[0] in ("stash", "prefab"):
-        raise CommandError("ordering applies only to a level (not --tree stash|prefab)")
+        reject_nonlevel_target_for_order(args)
