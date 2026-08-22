@@ -34,10 +34,12 @@ Prefer a native interpreter? Everything above also works as `python3 -m uedcli �
 
 `level preview --game` (the default preview backend) renders truly-lit in-game frames by booting the
 real game engine headless in a container. It needs Docker and the game's own files (copyrighted,
-user-supplied). One script provisions everything from a Deus Ex copy you supply — a local install or
-ACE-installer directory, or a download `--url`:
+user-supplied). One script provisions everything from a Deus Ex copy — a local install or
+ACE-installer directory, a download `--url`, or, with no argument at all, a built-in default
+download (the archive.org GOTY installer, checksum-pinned):
 
 ```bash
+dev/scripts/setup-game-preview.sh                     # fully autonomous: the built-in default
 dev/scripts/setup-game-preview.sh /path/to/DeusEx     # or: --url https://…/DeusEx-installer.exe
 ```
 

@@ -1499,11 +1499,12 @@ One shot per positional token, fields `;`-separated (angles in **unreal rotation
   draft mis-renders overlapping-subtract geometry silently.
   - **Prerequisites.** Docker, and the game's own files on the composed package search path (its
     `System/` and content), configured under `~/.uedcli/config.toml` `[games.*].paths`. On a fresh
-    machine, `dev/scripts/setup-game-preview.sh /path/to/DeusEx` (or `--url <installer>`) provisions
-    the whole path in one command — the base image, the game files, the config, and a verify render;
-    run it with `--help`. The image is built and the preview package compiled automatically on first
-    use — **no UnrealEd/UCC toolchain to install** (the generic preview compiles its engine-only
-    helper with the container's own UCC).
+    machine, `dev/scripts/setup-game-preview.sh /path/to/DeusEx` (or `--url <installer>`, or no
+    argument at all to use its built-in checksum-pinned default download) provisions the whole path
+    in one command — the base image, the game files, the config, and a verify render; run it with
+    `--help`. The image is built and the preview package compiled automatically on first use — **no
+    UnrealEd/UCC toolchain to install** (the generic preview compiles its engine-only helper with
+    the container's own UCC).
   - **`--map PATH`** previews a **prebuilt** map file instead of the selected trunk (skips the
     materialize cache); actor-relative shots resolve against the running game.
   - **`--rebuild`** forces a fresh materialize under a new unique name (guarantees the game reloads it).
