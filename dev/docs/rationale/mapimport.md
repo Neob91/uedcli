@@ -41,7 +41,7 @@ byte-identical to the previous behaviour.
 value, and would re-parse text just produced. Also rejected: changing the shared renderer's float
 format globally — that would alter `actor show` and every query verb for one caller's benefit.
 
-**Refs:** `uedcli/uprops.py` (`ValueStyle`, `T3D_STYLE`, `_byte_member_text`, `format_float_t3d`).
+**Refs:** `uedcli/uprops/values.py` (`ValueStyle`, `T3D_STYLE`, `_byte_member_text`, `format_float_t3d`).
 
 ## The struct member-drop compares a nested tree, not flat pairs
 
@@ -67,8 +67,8 @@ is a string can contain `,` or `)`, so the split is not sound. Also rejected: wa
 default raw bytes in parallel — needs two value packages threaded through the shared decoder, for no
 gain over comparing trees.
 
-**Refs:** `uedcli/uprops.py` (`struct_tag_member_tree`, `zero_struct_tree`, `strip_member_tree`,
-`render_member_tree`), `uedcli/tests/test_mapimport_import.py`.
+**Refs:** `uedcli/uprops/values.py` (`struct_tag_member_tree`, `zero_struct_tree`,
+`strip_member_tree`, `render_member_tree`), `uedcli/tests/test_mapimport_import.py`.
 
 ## `Prop.array_inner` is persisted in the schema cache, and the cache version was bumped
 
@@ -87,7 +87,8 @@ decoded with `zip(_PROP_FIELDS, row)`, and `zip` truncates, so a stale v1 row wo
 **Rejected:** recomputing `array_inner` on cache read — the cache exists precisely to avoid re-walking
 the package. Also rejected: leaving the version at 1 — see the `zip`-truncation trap.
 
-**Refs:** `uedcli/uprops.py` (`Prop.array_inner`, `_decode_property(_inner=True)`),
+**Refs:** `uedcli/uprops/base.py` (`Prop.array_inner`), `uedcli/uprops/ufield.py`
+(`_decode_property(_inner=True)`),
 `uedcli/schema_cache.py` (`_PROP_FIELDS`, `_prop_row`/`_prop_from_row`),
 `uedcli/tests/test_mapimport_array.py`.
 

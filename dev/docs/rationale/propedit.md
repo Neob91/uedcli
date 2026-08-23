@@ -1,6 +1,6 @@
 # `actor prop` internals — why the property editor is built this way
 
-Engineering decisions about `uedcli/propedit.py` (the pure `actor prop set|unset|get` logic) and
+Engineering decisions about `uedcli/propedit/` (the pure `actor prop set|unset|get` logic) and
 its shared seams with `uedcli/typedprops.py` (the value-semantics layer the H3 post-verify compare
 also uses).
 
@@ -40,7 +40,7 @@ instead of a dict of half-parsed members. That was already `propedit`'s behaviou
   `propedit` already depends on it conceptually.
 
 **Refs:** `uedcli/typedprops.py` (`split_struct_members`, `top_level_eq`, `parse_struct_text`) ·
-`uedcli/propedit.py` (`split_struct_text`) · `uedcli/tests/test_propedit.py` ·
+`uedcli/propedit/structtext.py` (`split_struct_text`) · `uedcli/tests/test_propedit.py` ·
 `uedcli/tests/test_actor_prop.py` (the quoted-comma verb-level regression)
 
 ## `actor prop` blocks only genuinely-unsettable props, because the edits are reversible
@@ -63,6 +63,6 @@ multi-token invocation leaves the trunk untouched.
   `set region=…`; the shared `is_computed_key` helper case-folds, so `normalize`'s strip and this
   warning agree on what is computed.
 
-**Refs:** `uedcli/propedit.py` (`HARD_REJECT`, `plan_edit`, `TYPED_FIELDS`) · `uedcli/normalize.py`
+**Refs:** `uedcli/propedit/` (`base.HARD_REJECT`, `edit.plan_edit`, `fields.TYPED_FIELDS`) · `uedcli/normalize.py`
 (`is_computed_key`) · `uedcli/dispatch.py` (the `actor prop set|unset|get` handlers) ·
 `uedcli/tests/test_propedit.py` · `uedcli/tests/test_actor_prop.py`
