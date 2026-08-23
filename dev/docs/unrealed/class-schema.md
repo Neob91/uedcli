@@ -1,7 +1,7 @@
 # UClass on-disk facts — abstractness + shipped source (offline)
 
 How uedcli reads a class's abstractness and its `.uc` source directly from a v68 `.u` package,
-with no editor. Consumed by `uedcli/uprops.py` (`class_is_abstract`, `_class_script_source`) and
+with no editor. Consumed by `uedcli/uprops/uclass.py` (`class_is_abstract`, `_class_script_source`) and
 `uedcli/classindex.py` (the `class list` placeable filter). See `package-format.md` for the header/
 name/import/export table layout these build on.
 

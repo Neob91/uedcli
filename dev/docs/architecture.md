@@ -145,11 +145,14 @@ and [`spikes/2026-07-05-git-merge-t3d-layout/`](spikes/2026-07-05-git-merge-t3d-
   JSON formatters, the `event graph` verb; no editor, see "Commands" below),
   `upackage.py` (the ONE low-level UE1 package reader — header/tables/compact-index/tagged-
   property lists — every package decoder builds on; `direction/packages.md`, 2026-07-18 10:02 §5),
-  `uprops.py` (offline class-property SCHEMA + class-DEFAULT extraction from the game's own
-  `.u` — the source of truth for `actor prop` validation and effective-value reads),
-  `propedit.py` (the pure `actor prop set|unset|get` verb logic: dot-path grammar, planner,
-  effective values, typed-field registry; see "Class-property schema" below. Its
-  `split_struct_text` does NOT re-implement the struct-literal grammar — the quote- and
+  `uprops/` (offline class-property SCHEMA + class-DEFAULT extraction from the game's own
+  `.u` — the source of truth for `actor prop` validation and effective-value reads; four layers,
+  `base` < `ufield` < `uclass` < `values`, behind a re-export-only root, so every `uprops.X`
+  caller is unaffected),
+  `propedit/` (the pure `actor prop set|unset|get` verb logic: dot-path grammar, planner,
+  effective values, typed-field registry; six layers, `base` < `tokens` < `paths` < `structtext` <
+  `fields` < `edit`, behind a re-export-only root; see "Class-property schema" below. Its
+  `structtext.split_struct_text` does NOT re-implement the struct-literal grammar — the quote- and
   depth-aware member split (`typedprops.split_struct_members`) and the name/value `=` finder
   (`typedprops.top_level_eq`) are shared with the compare path, so a quoted comma
   (`(Msg="a,b",Count=1)`) parses identically on both sides; see
@@ -1146,7 +1149,7 @@ and plan both in board item `re-evaluate-whether-reject-nonlevel-target`; `direc
   and `rank_between`'s `ValueError` on genuinely-adjacent imported ranks (e.g. `a`/`a0`) or `--first`
   against a smallest-digit min is caught → "cannot reorder …", never a traceback.
 
-## Class-property schema, DEFAULTS & the `actor prop` verbs (`upackage.py`, `uprops.py`, `propedit.py`)
+## Class-property schema, DEFAULTS & the `actor prop` verbs (`upackage.py`, `uprops/`, `propedit/`)
 
 **`actor prop set|unset|get <actor> TOKEN…`** (spec in board item `materialize-post-verify-fails-when-the-trunk`;
 `direction/packages.md`, 2026-07-18 10:02 + 10:30 UTC — every design choice Andrzej's) reads, sets, and clears
@@ -1188,7 +1191,7 @@ class → exit 2; an unbuildable class schema → exit 2 (no-fallback); plain `f
 **`actor build --prop`** uses the same grammar + validation (tokens compose onto the class-default
 base; a `Location` token routes to the typed field, overriding `--at`).
 
-**Layering.** `propedit.py` is the pure verb logic (grammar, planner, effective values, dump-all,
+**Layering.** `propedit/` is the pure verb logic (grammar, planner, effective values, dump-all,
 find matcher, typed fields) — unit-tested directly (`test_propedit.py`) and through the verbs
 (`test_actor_prop.py`). `dispatch.py` wires the handlers plus FOUR mockable seams the tests patch:
 `_class_schema` (casefold name → `Prop`), `_class_defaults` ((casefold name, index) → canonical
@@ -1201,7 +1204,7 @@ no-fallback contract, decisions 2026-06-26 14:10, extended to reads).
 never a stub** — through the unified low-level core **`upackage.py`** (decision 2026-07-18 §5:
 one reader for the shared `.u/.dx/.utx/.uax/.umx/.unr` container — header v61/68/69, FCompactIndex,
 FString, name/import/export tables, the tagged-property-list parser, object-ref helpers with
-outer-chain qualification). `uprops.py` builds on it (its old private copies deleted;
+outer-chain qualification). `uprops/` builds on it (its old private copies deleted;
 `uprops.Package`/`SchemaError`/`load_package` are re-exports, so callers are unchanged);
 `utexture`/`dxpkg` migrate as a board follow-up. On top, `uprops` recovers per-class `Prop` schema
 (name/kind/array_dim/flags/category/enum values — RE'd byte-exact, `unrealed/class-schema.md`),
