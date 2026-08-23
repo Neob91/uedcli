@@ -261,8 +261,8 @@ class _AnyTexture:
     """A texture resolver that accepts anything. The committed fixtures' polygons carry no texture
     reference at all, so texture validation is not what these tests are about."""
 
-    def __init__(self, _files):
-        pass
+    def __init__(self, _files, class_index=None):
+        pass                                          # `class_index` is threaded by cli.ingest
 
     def exists(self, _ref):
         return True

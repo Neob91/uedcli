@@ -199,6 +199,10 @@ def test_markdown_anchors_resolve(doc: Path) -> None:
 _MAY_NAME_DELETED = frozenset({
     "dev/docs/rationale/README.md",     # the "git log --follow -- dev/docs/decisions.md" signpost
     "uedcli/tests/test_doc_links.py",   # this file
+    # A board item REPORTING that something cites a retired doc has to name it to be readable. Same
+    # reason this file is exempt: naming a dead doc in order to describe it is not pointing a reader
+    # at it. Delete the entry when the item is pruned from `done/`.
+    "dev/docs/board/done/master-red-unified-asset-catalog-spec-questions/overview.md",
 })
 
 

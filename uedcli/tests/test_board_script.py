@@ -12,6 +12,7 @@ checked that `bin/board` actually implements that subset the same way.
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 import tomllib
 from pathlib import Path
@@ -217,9 +218,24 @@ def test_ls_rejects_two_stages() -> None:
     assert proc.returncode == 2 and "to-spike" in proc.stderr
 
 
-def test_ls_json_on_an_empty_stage_is_an_empty_array() -> None:
-    """`stale/` is empty by owner decision, and a queue drains — consumers must not get no output."""
-    proc = _run("ls", "stale", "--json")
+def test_ls_json_on_an_empty_stage_is_an_empty_array(tmp_path: Path) -> None:
+    """A queue drains, and a consumer must then get `[]` — not empty stdout it cannot parse.
+
+    Run over a TEMP board rather than a real stage. This used to point at `stale/` on the premise
+    that it is empty, which is not a property the board guarantees: `stale/` exists to HOLD items
+    ("judged stale, retained not deleted"), and the 2026-08-02 sweep duly put one there, reddening
+    the suite for weeks. Any real stage can be filled by unrelated work, so none of them can carry
+    this assertion. `bin/board` resolves its board dir from its own location, so a copy of the
+    shipped script beside an empty tree gives a genuinely empty stage with no mocking.
+    """
+    board = tmp_path / "dev" / "docs" / "board"
+    for stage in ("inbox", "to-spec", "to-spike", "to-plan", "to-build", "someday", "stale", "done"):
+        (board / stage).mkdir(parents=True)
+    (tmp_path / "bin").mkdir()
+    shutil.copy2(SCRIPT, tmp_path / "bin" / "board")
+
+    proc = subprocess.run(["bash", str(tmp_path / "bin" / "board"), "ls", "stale", "--json"],
+                          capture_output=True, text=True, cwd=tmp_path)
     assert proc.returncode == 0, proc.stderr
     assert json.loads(proc.stdout) == []
 

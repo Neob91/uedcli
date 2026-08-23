@@ -32,8 +32,10 @@ def test_map_importadd_uses_z_drive_path():
     assert ex.call_args[0][0] == r"MAP IMPORTADD FILE=Z:\repo\Temp\x.t3d"
 
 
-def test_screenshot_shoots_into_work_then_cps_out_to_the_host_path():
+def test_screenshot_shoots_into_work_then_cps_out_to_the_host_path(tmp_path):
     d = Driver(container="test-ctr")
+    host_png = tmp_path / "out" / "shot.png"
+    host_png.parent.mkdir()
     calls = []
 
     def fake_run(cmd, *a, **kw):
@@ -41,15 +43,18 @@ def test_screenshot_shoots_into_work_then_cps_out_to_the_host_path():
         return mock.Mock(stdout="", returncode=0, stderr="")
 
     # Patch the subprocess MODULE's run so xfer.cp_out/remove (same shared module) is caught too.
+    # The destination is a REAL tmp dir: cp_out streams the bytes out and opens the host path
+    # itself, so a nonexistent literal like /host/out/ made this fail everywhere but one machine.
     with mock.patch("uedcli.driver.subprocess.run", autospec=True, side_effect=fake_run):
-        d.screenshot("/host/out/shot.png")
+        d.screenshot(str(host_png))
 
     shot = next(c for c in calls if "shot" in c)              # wine_ctl shot <work>
     work = shot[-1]
     assert work.startswith("/work/") and work.endswith(".png")
-    # the /work png was docker cp'd OUT to the host destination
-    assert any(c[:2] == ["docker", "cp"] and c[2] == f"test-ctr:{work}"
-               and c[3] == "/host/out/shot.png" for c in calls)
+    # the /work png was streamed OUT to the host destination. `docker exec … cat`, not `docker cp`:
+    # cp from a running container remounts its mounts read-only, which rootless docker cannot do on
+    # a `:ro` bind (`fc4329f`). The host path is the process's stdout redirect, so it is not in argv.
+    assert any(c == ["docker", "exec", "test-ctr", "cat", work] for c in calls)
     # and THAT /work png was cleaned up (not merely some rm -rf)
     assert any(c[:3] == ["docker", "exec", "test-ctr"] and c[3:5] == ["rm", "-rf"] and work in c
                for c in calls)
