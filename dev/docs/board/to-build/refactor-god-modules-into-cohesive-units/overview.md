@@ -1,6 +1,6 @@
 +++
 priority = "p3"
-kind = "chore"
+kind = "implement"
 summary = "Refactor god modules into cohesive units"
 +++
 
@@ -21,11 +21,12 @@ tests pass unchanged. Target layout and constraints in `spec.md`, slices in `pla
 
 ## `preview.py` is NOT in scope
 
-The original survey named it the worst offender at 2714 lines. It is 2290 now (`6d8f770` removed the
-legend and name machinery), and `consolidate-level-preview-native-onto-the-actor` owns it — that
-item's step 1 is a `preview.py` refactor gated on byte-identical goldens. Splitting it here would
-collide. So this item discharges three of the four named modules; `preview.py`'s split rides along
-with the consolidation.
+The original survey named it the worst offender at 2714 lines; `6d8f770` removed the legend and name
+machinery, so it is 2290 now. `consolidate-level-preview-native-onto-the-actor` owns it — that
+item is actively rewriting it (one `Projection` seam extracted, then a perspective camera and a near
+clipper ADDED), so splitting it here would collide — and that item does not decompose the file. This
+item therefore discharges three of the four named modules; `preview.py`'s split is tracked separately
+as `split-preview-py-after-the-preview`.
 
 ## Why p3
 
