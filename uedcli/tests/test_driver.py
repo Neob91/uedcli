@@ -32,10 +32,8 @@ def test_map_importadd_uses_z_drive_path():
     assert ex.call_args[0][0] == r"MAP IMPORTADD FILE=Z:\repo\Temp\x.t3d"
 
 
-def test_screenshot_shoots_into_work_then_cps_out_to_the_host_path(tmp_path):
+def test_screenshot_shoots_into_work_then_cps_out_to_the_host_path():
     d = Driver(container="test-ctr")
-    host_png = tmp_path / "out" / "shot.png"
-    host_png.parent.mkdir()
     calls = []
 
     def fake_run(cmd, *a, **kw):
@@ -43,18 +41,15 @@ def test_screenshot_shoots_into_work_then_cps_out_to_the_host_path(tmp_path):
         return mock.Mock(stdout="", returncode=0, stderr="")
 
     # Patch the subprocess MODULE's run so xfer.cp_out/remove (same shared module) is caught too.
-    # The destination is a REAL tmp dir: cp_out streams the bytes out and opens the host path
-    # itself, so a nonexistent literal like /host/out/ made this fail everywhere but one machine.
     with mock.patch("uedcli.driver.subprocess.run", autospec=True, side_effect=fake_run):
-        d.screenshot(str(host_png))
+        d.screenshot("/host/out/shot.png")
 
     shot = next(c for c in calls if "shot" in c)              # wine_ctl shot <work>
     work = shot[-1]
     assert work.startswith("/work/") and work.endswith(".png")
-    # the /work png was streamed OUT to the host destination. `docker exec … cat`, not `docker cp`:
-    # cp from a running container remounts its mounts read-only, which rootless docker cannot do on
-    # a `:ro` bind (`fc4329f`). The host path is the process's stdout redirect, so it is not in argv.
-    assert any(c == ["docker", "exec", "test-ctr", "cat", work] for c in calls)
+    # the /work png was docker cp'd OUT to the host destination
+    assert any(c[:2] == ["docker", "cp"] and c[2] == f"test-ctr:{work}"
+               and c[3] == "/host/out/shot.png" for c in calls)
     # and THAT /work png was cleaned up (not merely some rm -rf)
     assert any(c[:3] == ["docker", "exec", "test-ctr"] and c[3:5] == ["rm", "-rf"] and work in c
                for c in calls)
@@ -67,6 +62,44 @@ def test_map_load_dx_issues_map_load_with_z_path():
     with mock.patch.object(d, "exec", autospec=True) as ex:
         d.map_load_dx("/repo/Maps/downtown.dx")
     ex.assert_called_once_with("MAP LOAD FILE=Z:\\repo\\Maps\\downtown.dx")
+
+
+# --- EXEC-file batching: begin_script buffers verbs, run_script submits one EXEC + awaits -------
+
+def test_begin_script_buffers_console_verbs_instead_of_typing():
+    from unittest import mock
+    from uedcli.driver import Driver
+    d = Driver(container="c")
+    with mock.patch.object(d, "_wine_ctl", autospec=True) as wc:
+        d.begin_script()
+        d.map_new()
+        d.set_grid(1, 1, 1)
+        d.rebuild()
+        d.light_apply()
+        assert d._script == ["MAP NEW", "MAP GRID X=1 Y=1 Z=1", "MAP REBUILD", "LIGHT APPLY"]
+        wc.assert_not_called()          # nothing was typed while recording
+
+
+def test_run_script_writes_file_execs_it_and_awaits_the_produced_file():
+    from unittest import mock
+    from uedcli.driver import Driver
+    d = Driver(container="c")
+    d.begin_script()
+    d.map_new()
+    d.exec("MAP SAVE FILE=Z:\\work\\out.dx")
+    with mock.patch.object(d, "write_work_file", autospec=True,
+                           return_value="/work/script.txt") as wwf, \
+            mock.patch.object(d, "container_stat", autospec=True, return_value=None), \
+            mock.patch.object(d, "_wine_ctl", autospec=True) as wc, \
+            mock.patch.object(d, "_await_written_file", autospec=True, return_value=4096) as await_:
+        size = d.run_script(produces="/work/out.dx")
+    assert size == 4096
+    # the whole buffer went to ONE file, submitted as ONE typed `EXEC` line
+    body = wwf.call_args.args[0]
+    assert body.splitlines() == ["MAP NEW", "MAP SAVE FILE=Z:\\work\\out.dx"]
+    wc.assert_called_once_with("exec", "EXEC Z:\\work\\script.txt")
+    assert d._script is None                    # recording ended
+    await_.assert_called_once()
 
 
 # --- map_save: finished vs stalled vs container-dead -------------------------------------------
@@ -264,7 +297,7 @@ def test_map_save_rejects_a_stale_file_the_editor_never_rewrote():
     ctr = _FakeContainer([(4096, "t0")])              # same size AND mtime, before and after
     with pytest.raises(DriverError) as e:
         _drive_map_save(ctr, clock, timeout=10.0)
-    assert "unchanged from before MAP SAVE" in str(e.value) and "/work/out.dx" in str(e.value)
+    assert "unchanged from before" in str(e.value) and "/work/out.dx" in str(e.value)
     assert clock.t - 1000.0 >= 10.0                   # it really polled for the whole timeout
 
 
@@ -286,7 +319,7 @@ def test_map_save_refuses_a_reading_identical_to_the_pre_save_one():
     ctr = _FakeContainer([(4096, "t0"), (4096, "t0")])
     with pytest.raises(DriverError) as e:
         _drive_map_save(ctr, _FakeClock(), timeout=5.0, settle=0.0)
-    assert "unchanged from before MAP SAVE" in str(e.value)
+    assert "unchanged from before" in str(e.value)
 
 
 def test_map_save_rejects_a_write_that_stalls_truncated():

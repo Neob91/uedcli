@@ -17,6 +17,7 @@ import shlex
 import struct
 import subprocess
 import time
+import uuid
 
 WINE_CTL = "/opt/uned/wine_ctl.py"
 _EDITOR_LOG = "/opt/UED22/Editor.log"
@@ -155,6 +156,9 @@ def package_header_problem(header: bytes, size: int) -> str | None:
 class Driver:
     def __init__(self, container: str = "dx-lum-uned"):
         self.container = container
+        # When a script is being recorded (`begin_script`), console verbs are BUFFERED here instead
+        # of typed, and `run_script` submits them as ONE `EXEC <file>`. None = type each verb live.
+        self._script: list[str] | None = None
 
     def _wine_ctl(self, *args: str, capture: bool = False) -> str:
         cmd = ["docker", "exec", self.container, "python3", WINE_CTL, *args]
@@ -166,7 +170,63 @@ class Driver:
         return res.stdout if capture else ""
 
     def exec(self, line: str) -> None:
+        # Recording: buffer the verb for a single `EXEC <file>` submission (`run_script`) instead of
+        # typing it. Batching the whole write-only drive into one script is what stops a slow verb
+        # (a retail `MAP REBUILD`) from swallowing the NEXT verb's keystroke and how the run sails
+        # through the GC "Cleaning up..." dialog (spike 2026-07-18-exec-file-console-batch).
+        if self._script is not None:
+            self._script.append(line)
+            return
         self._wine_ctl("exec", line)
+
+    def begin_script(self) -> None:
+        """Start recording console verbs instead of typing them. Every `exec`-routed verb
+        (`map_new`/`map_importadd`/`edit_paste`/`rebuild`/`light_apply`/`obj_load`/…) is buffered
+        until `run_script` submits them as one `EXEC <file>`. EAGER side-effects that are NOT console
+        verbs — `set_clipboard`, container file writes, ini edits, log/stat reads — still run
+        immediately, which is correct: the clipboard and the IMPORTADD source files must exist before
+        the script runs. Nesting is not supported (asserts).
+
+        CONSTRAINT — the X CLIPBOARD is a single global, but `EDIT PASTE` is buffered and runs later.
+        A recorded drive may hold at most ONE clipboard-dependent verb: `materialize` records exactly
+        one `set_clipboard`+`EDIT PASTE` (all brushes in one paste), so the clipboard set eagerly is
+        still the one the buffered paste reads. A drive that buffered two pastes would run BOTH
+        against the last clipboard — don't record more than one without staging brushes differently.
+
+        On a live failure between `begin_script` and `run_script` the buffer is left set; today every
+        `Driver` is single-use (torn down in `run_materialize`'s `finally`) so it is discarded. A
+        future reused/warm editor must clear `self._script` before recording again."""
+        assert self._script is None, "begin_script: a script is already being recorded"
+        self._script = []
+
+    def run_script(self, *, produces: str, timeout: float = 1800.0, poll: float = 2.0,
+                   stable_reads: int = 3, settle: float = 3.0, recheck: float = 30.0) -> int:
+        """Submit the recorded verbs as ONE `EXEC <file>` and WAIT for `produces` (the container path
+        the script's last write-verb creates, e.g. the `MAP SAVE` .dx) to be completely written.
+
+        The engine runs the imported command file line-by-line through its OWN exec loop — not the
+        Command-box UI path — so no verb can drop the next verb's keystroke and the GC dialog does
+        not stall it (spike 2026-07-18). The typed `EXEC` submission returns immediately with no
+        progress signal, so completion is detected the same way `map_save` detects a finished save:
+        `produces` appearing, holding stable across `stable_reads`/`settle`, and passing the package
+        header check. Returns its size. Raises `DriverError` if it never completes within `timeout`."""
+        assert self._script is not None, "run_script: no script is being recorded"
+        lines, self._script = self._script, None
+        script_path = self.write_work_file("\n".join(lines) + "\n", ext="txt")
+        before = self.container_stat(produces)
+        self.exec(f"EXEC {to_z_path(script_path)}")
+        return self._await_written_file(produces, before=before, timeout=timeout, poll=poll,
+                                        stable_reads=stable_reads, settle=settle, recheck=recheck)
+
+    def write_work_file(self, content: str, *, ext: str = "txt") -> str:
+        """Write `content` to a unique `/work/<uuid>.<ext>` inside the container (via `docker exec
+        tee`, so no host/container path skew) and return the container path."""
+        path = f"/work/uedcli_{uuid.uuid4().hex}.{ext}"
+        res = subprocess.run(["docker", "exec", "-i", self.container, "tee", path],
+                             input=content, text=True, capture_output=True, check=False)
+        if res.returncode != 0:
+            raise DriverError(f"write_work_file {path} failed: {(res.stderr or '').strip()}")
+        return path
 
     def click(self, x: int, y: int, button: int = 1) -> None:
         """A real XTEST click at window-relative (x,y) — makes that viewport pane current AND forces
@@ -307,6 +367,16 @@ class Driver:
         report — the real cause was a transient wedge)."""
         before = self.container_stat(container_path)
         self.exec(f"MAP SAVE FILE={to_z_path(container_path)}")
+        return self._await_written_file(container_path, before=before, timeout=timeout, poll=poll,
+                                        stable_reads=stable_reads, settle=settle, recheck=recheck)
+
+    def _await_written_file(self, container_path: str, *, before: tuple[int, str] | None,
+                            timeout: float, poll: float, stable_reads: int, settle: float,
+                            recheck: float) -> int:
+        """Poll until `container_path` is completely written (the four signals in `map_save`'s
+        docstring), returning its size — or raise `DriverError` on timeout. Shared by `map_save`
+        (which types `MAP SAVE` first) and `run_script` (which submits an `EXEC <file>` whose last
+        write-verb produces this file), so the completion check is identical either way."""
         started = time.monotonic()
         deadline = started + timeout
         prev: int | None = None                     # size of the previous reading
@@ -321,7 +391,7 @@ class Driver:
                 why, prev, runs, checked = "no file appeared", None, 0, None
             elif before is not None and cur == before:
                 why, prev, runs, checked = (
-                    f"the file is unchanged from before MAP SAVE ({cur[0]} byte(s), same mtime) — "
+                    f"the file is unchanged from before ({cur[0]} byte(s), same mtime) — "
                     f"the editor wrote nothing"), None, 0, None
             else:
                 size = cur[0]
@@ -351,9 +421,9 @@ class Driver:
                 # Report the ELAPSED time, not the configured bound: one iteration can block up to
                 # PROBE_TIMEOUT per probe, so the two are not the same number.
                 raise DriverError(
-                    f"MAP SAVE never produced a finished file at {container_path}: {why} (after "
+                    f"the editor never produced a finished file at {container_path}: {why} (after "
                     f"{time.monotonic() - started:.0f}s, bound {timeout:.0f}s). The editor accepted "
-                    f"the command but did not complete the save — check the editor log; it most "
+                    f"the command but did not finish writing it — check the editor log; it most "
                     f"likely wedged.")
             time.sleep(poll)
 

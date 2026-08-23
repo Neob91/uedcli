@@ -91,6 +91,7 @@ def _materialize(driver, *, result: dict[str, str], materialized_order: list[str
     never reaches them — no live driver). `search_dirs`/`mounts` are the config-derived HOST search
     path + `/resources` bind mounts threaded from `run_materialize` (asset-wiring cutover
     2026-07-14); the SAME `mounts` drives both the ini `Paths` and the host→container remap."""
+    import sys
     from .materialize import materialize
     from .model import parse_t3d
     from .geometry import validate_brush
@@ -100,10 +101,17 @@ def _materialize(driver, *, result: dict[str, str], materialized_order: list[str
     def parse_actor(t3d):
         return next(iter(parse_t3d(t3d).actors.values()))
 
+    def validate_lenient(brush):
+        # A non-planar face is NOT fatal to materialize: the editor accepts it (it built the retail
+        # maps that carry them) and `doctor` only WARNs (owner ruling 2026-08-23). Warn, build it.
+        for warn in validate_brush(brush, planar_fatal=False):
+            print(f"warning: {warn} — building it (the editor tolerates non-planar faces)",
+                  file=sys.stderr)
+
     materialize(driver=driver,
                 current_actors={}, merged_actors=result,
                 current_order=[], merged_order=materialized_order,
-                parse_actor=parse_actor, validate_brush=validate_brush,
+                parse_actor=parse_actor, validate_brush=validate_lenient,
                 re_add=lambda actors: writes._re_add(driver, actors),
                 delete_named=lambda names: None, rebuild=driver.rebuild,
                 packages=packages,
@@ -175,11 +183,12 @@ def _level_defaults(level, *, resolver):
     return defaults
 
 
-def _save_and_swap_verified(ed, dx_path: str, expected, *, defaults, state_dir,
+def _save_and_swap_verified(ed, dx_path: str, expected, *, work_out, defaults, state_dir,
                             no_verify: bool = False, keep_build: bool = False) -> None:
-    """MAP SAVE to /work → H3 verify in the EDITOR container (B1: the editor's /work is private to
-    it, so the saved temp must be re-exported there, not in the substrate container) → cp_out to
-    `<state_dir>/tmp/<uuid>.dx` → atomic host `os.replace` onto the target (EXDEV fallback for an
+    """Given the map ALREADY saved to `work_out` (the `MAP SAVE` is the last line of the build
+    script `run_materialize` runs), H3-verify it in the EDITOR container (B1: the editor's /work is
+    private to it, so the saved temp is re-exported there, not in the substrate container) → cp_out
+    to `<state_dir>/tmp/<uuid>.dx` → atomic host `os.replace` onto the target (EXDEV fallback for an
     out-of-project target). No container-written temp ever lands in the repo tree. D-Q3: the verify
     ALSO qualifies the re-exported actual via `ed` — the SAME live editor that just materialized +
     saved it, no second container. Integration-exercised.
@@ -191,9 +200,7 @@ def _save_and_swap_verified(ed, dx_path: str, expected, *, defaults, state_dir,
     `<state_dir>/tmp/materialize-rejected.dx` on a verify FAILURE so the operator can inspect what
     was actually built (the black-box-materialize fix)."""
     from . import xfer
-    work_out = xfer.work_path("dx")
     try:
-        ed.map_save(work_out)
         if not no_verify:
             vr = verify_dx_matches(container=ed.container, dx_path=work_out, expected=expected,
                                    defaults=defaults, qualify_driver=ed)
@@ -303,13 +310,27 @@ def run_materialize(*, level, out_path, overwrite, state_dir, schema_resolver,
                 bsp_log_off = ed.log_size()
             except Exception:
                 bsp_log_off = None
+        # The whole write-only drive goes into ONE `EXEC <file>` (spike 2026-07-18): the engine runs
+        # the verbs in-order through its own exec loop, so no slow verb (a retail `MAP REBUILD` runs
+        # ~90 s+) can swallow the next verb's keystroke the way the typed console does — the failure
+        # that left `MAP SAVE` unheard and wedged every real map. `begin_script` buffers each
+        # `exec`-routed verb; the eager side-effects inside `_materialize` (the ini `Paths` edit, the
+        # IMPORTADD source files, the paste clipboard) still run live so the script's files exist
+        # before it runs. `run_script` submits the EXEC and waits for the `MAP SAVE` .dx.
+        from . import xfer
+        from .driver import to_z_path
+        work_out = xfer.work_path("dx")
+        ed.begin_script()
         _materialize(ed, result=result, materialized_order=mo,
                      packages=_level_referenced_packages(level),
                      search_dirs=host_search_dirs, mounts=mounts)
         ed.light_apply()                               # _materialize's MAP REBUILD wiped lighting
+        ed.exec(f"MAP SAVE FILE={to_z_path(work_out)}")
+        ed.run_script(produces=work_out)
         host_out.parent.mkdir(parents=True, exist_ok=True)
-        _save_and_swap_verified(ed, out_path, _expected_level(result, mo), defaults=defaults,
-                                state_dir=state_dir, no_verify=no_verify, keep_build=keep_build)
+        _save_and_swap_verified(ed, out_path, _expected_level(result, mo), work_out=work_out,
+                                defaults=defaults, state_dir=state_dir, no_verify=no_verify,
+                                keep_build=keep_build)
         # Build+save succeeded: run the two advisory BSP health checks (owner design 2026-08-03).
         # ADVISORY ONLY — the map is already written; these must never turn a good build into a
         # failure, so the whole block is guarded and the rc stays 0 no matter what they find/raise.

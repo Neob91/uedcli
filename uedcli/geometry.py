@@ -48,20 +48,33 @@ def _norm(a):
     return _dot(a, a) ** 0.5
 
 
-def validate_brush(brush: Brush) -> None:
+def validate_brush(brush: Brush, *, planar_fatal: bool = True) -> list[str]:
     """Validate all polygons in brush after grid-snap.
 
-    Raises GeometryError with a precise diagnostic on the first failing polygon.
-    Within-polygon coincidence is the only fault checked — vertices shared across
-    different polygons of a brush (cube corners) are normal and not flagged.
-    """
+    Raises GeometryError with a precise diagnostic on the first failing polygon. Within-polygon
+    coincidence is the only fault checked — vertices shared across different polygons of a brush
+    (cube corners) are normal and not flagged.
+
+    With `planar_fatal=False` a non-planar poly is NOT fatal: its diagnostic is collected and
+    returned instead of raised, so a caller can build it and warn. `materialize` uses this because
+    the editor itself accepts non-planar faces (it built the retail maps that carry them) and
+    `doctor` only WARNs on them (owner ruling 2026-08-23). Coincident/degenerate faults still
+    raise either way — they genuinely break the editor's CSG. Returns the non-fatal warnings (empty
+    unless `planar_fatal=False` caught one)."""
+    warnings: list[str] = []
     for pi, poly in enumerate(brush.polys):
         cleaned = [_clean3(v) for v in poly.vertices]
         _check_coincident(brush, pi, cleaned)
         # Plane/degeneracy math is geometric-tolerance work — run it in float.
         vf = [(float(a), float(b), float(c)) for a, b, c in cleaned]
         normal = _check_degenerate(brush, pi, vf)
-        _check_planar(brush, pi, vf, normal)
+        try:
+            _check_planar(brush, pi, vf, normal)
+        except GeometryError as exc:
+            if planar_fatal:
+                raise
+            warnings.append(str(exc))
+    return warnings
 
 
 def _check_coincident(brush, pi, verts) -> None:

@@ -381,6 +381,25 @@ def ensure_editor(editor_id: str, *, state_dir: Path, mounts=None, ready_timeout
         except subprocess.TimeoutExpired:
             raise DriverError(f"`docker compose run` did not start editor container {container} "
                               f"within {LAUNCH_TIMEOUT:.0f}s (dockerd hung?)") from None
+        except subprocess.CalledProcessError as e:
+            # Surface docker's OWN stderr — a bare CalledProcessError hides it and reads as
+            # "materialize is broken" when the real cause is upstream (an unmountable bind source, a
+            # full disk, a missing image). The commonest trap: the stub-cache mount source
+            # (`config.stub_cache_root()`, under $UEDCLI_HOME or ~/.uedcli) is on a path the docker
+            # DAEMON cannot bind-mount — e.g. a home dir outside the daemon's visible roots — which
+            # fails with "error while creating mount source path … permission denied".
+            err = (e.stderr or "").strip() or "no stderr"
+            hint = ""
+            stub_src = str(config.stub_cache_root())
+            if "creating mount source path" in err or "mkdir" in err:
+                hint = (f"\nThe docker daemon could not create a bind-mount source. If it names "
+                        f"{stub_src!r}, that path is not visible to the daemon — set $UEDCLI_HOME to "
+                        f"a daemon-mountable directory (e.g. under the workspace) so the stub cache "
+                        f"lands there.")
+            elif "no space" in err.lower():
+                hint = "\nThe host is out of disk — reclaim space (e.g. `docker builder prune`)."
+            raise DriverError(f"`docker compose run` failed to start editor container {container}: "
+                              f"{err}{hint}") from None
 
     attempts = max(1, start_attempts)
     for attempt in range(attempts):

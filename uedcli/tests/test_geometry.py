@@ -68,3 +68,21 @@ def test_shared_corner_across_polys_is_ok():
     # cube corners are shared across faces — must NOT be flagged
     a = parse_t3d(read_fixture("brush_subtract.t3d")).actors["Brush938"]
     validate_brush(a.brush)  # already shares corners; no raise
+
+
+def test_nonplanar_returned_as_warning_when_not_fatal():
+    # planar_fatal=False: a non-planar face is reported, not raised (materialize builds retail maps
+    # whose brushes carry them; owner ruling 2026-08-23).
+    b = parse_t3d(read_fixture("brush_subtract.t3d")).actors["Brush938"].brush
+    b.polys[0].vertices = [(0.0, 0.0, 0.0), (100.0, 0.0, 0.0),
+                           (100.0, 100.0, 0.0), (0.0, 100.0, 50.0)]
+    warnings = validate_brush(b, planar_fatal=False)
+    assert any("non-planar" in w for w in warnings)
+
+
+def test_coincident_still_fatal_when_planar_not_fatal():
+    # planar_fatal=False relaxes ONLY the planar check; coincident/degenerate still raise (they
+    # genuinely break the editor's CSG).
+    b = Brush(model_name="M", polys=[_poly([_D(0, 0, 0), _D(0.0005, 0, 0), _D(0, 10, 0)])])
+    with pytest.raises(GeometryError):
+        validate_brush(b, planar_fatal=False)

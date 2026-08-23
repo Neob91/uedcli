@@ -211,7 +211,7 @@ def _blocks_only(segment: str) -> str:
 
 
 def dump_obj_dependencies(driver, *, package: str = "MyLevel",
-                          max_attempts: int = 20, poll_interval: float = 1.0) -> str:
+                          max_attempts: int = 180, poll_interval: float = 1.0) -> str:
     """Settle-and-read recipe (revised 2026-06-20 —
     dev/docs/spikes/2026-06-20-obj-dependencies-untextured-poly-correlation.md). Two
     independent issues made the original single-attempt recipe unreliable, both fixed by
@@ -226,7 +226,11 @@ def dump_obj_dependencies(driver, *, package: str = "MyLevel",
     just anywhere in the read text, which could match a stale earlier walk's terminator that
     happened to flush in the same burst) — live-confirmed reliable (5/5 rounds, 2026-06-20).
     Returns only the isolated blocks segment (`_blocks_only`), never the raw read. Raises
-    `TimeoutError` rather than ever returning a possibly-partial dump."""
+    `TimeoutError` rather than ever returning a possibly-partial dump.
+
+    The ceiling is 180 s (180×1 s): a retail level's dependency walk (verify re-exports the built
+    map and dumps it) runs well past the former 20 s — a real `06_HongKong_WanChai_Garage` build
+    timed out at 20 s on every attempt, completed given the longer window (2026-08-23)."""
     offset = driver.log_size()
     driver.obj_dependencies(package)
     for _ in range(max_attempts):
@@ -240,7 +244,7 @@ def dump_obj_dependencies(driver, *, package: str = "MyLevel",
                        f"{max_attempts} attempts ({max_attempts * poll_interval:.0f}s)")
 
 
-def _read_loaded_classes(driver, *, max_attempts: int = 45, poll_interval: float = 2.0,
+def _read_loaded_classes(driver, *, max_attempts: int = 90, poll_interval: float = 2.0,
                          ) -> dict[str, set[str]]:
     """Settle-and-read `OBJ LIST CLASS=Class` for `qualify_level_classes`. Unlike `OBJ
     DEPENDENCIES` this command has no "N Deleted Objects"-style completion marker to wait for
@@ -257,9 +261,10 @@ def _read_loaded_classes(driver, *, max_attempts: int = 45, poll_interval: float
     headless never auto-closes and which wedges every later command — so a once-before dismiss lets
     the class set never settle and the poll times out deterministically. Re-flushing each round also
     keeps pushing the 4KB stdio buffer past its boundary while the load is still emitting classes.
-    The ceiling is 90s (45×2s): a cold `DeusEx.u` class enumeration runs well past the former 10s
+    The ceiling is 180s (90×2s): a cold `DeusEx.u` class enumeration runs well past the former 10s
     (confirmed live 2026-07-25 — `preview --game` of a `DeusExMover` level timed out at 10s on every
-    attempt, succeeded once given the longer window)."""
+    attempt, succeeded once given the longer window), and a retail-level verify pushes it further
+    still (raised from 45×2s alongside `dump_obj_dependencies`, 2026-08-23)."""
     offset = driver.log_size()
     previous: dict[str, set[str]] | None = None
     for _ in range(max_attempts):
