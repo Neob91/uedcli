@@ -170,12 +170,16 @@ def _build_brushes(builders, shape, args):
     # builders stay a degrees-valued internal API (four direct callers produce editor-blessed
     # parity goldens from angles that are not half-segments at all — dev/docs/direction/generators.md 2026-07-25 02:30
     # UTC, D11), while the user-facing surface is UU or a bool, never degrees.
-    if shape == "cylinder":
-        return [builders.cylinder(args.height, args.radius, args.sides, args.texture,
-                                  angle_offset=_align_offset_degrees(args), axis=args.axis)]
-    if shape == "cone":
-        return [builders.cone(args.height, args.radius, args.sides, args.texture,
-                              angle_offset=_align_offset_degrees(args), axis=args.axis)]
+    if shape in ("cylinder", "cone"):
+        # USER-FACING range check naming --sides, BEFORE the --align-to-side → degrees conversion
+        # (generators.md D12): _align_offset_degrees divides 180/sides, so an unchecked --sides 0
+        # would ZeroDivision before the builder's own >= 3 guard runs. The builder keeps that guard
+        # for its non-CLI callers.
+        if args.sides < 3:
+            raise CommandError(f"brush build {shape}: --sides must be at least 3, got {args.sides}")
+        builder = builders.cylinder if shape == "cylinder" else builders.cone
+        return [builder(args.height, args.radius, args.sides, args.texture,
+                        angle_offset=_align_offset_degrees(args), axis=args.axis)]
     if shape == "sheet":
         return [builders.sheet(args.width, args.height, args.plane, args.texture,
                                extra_flags=getattr(args, "flags", None))]

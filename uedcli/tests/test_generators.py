@@ -496,6 +496,19 @@ def test_align_to_side_is_not_caught_by_the_positive_dimension_guard(capsys):
     assert parse_t3d(capsys.readouterr().out).actors                 # a real brush came out
 
 
+@pytest.mark.parametrize("shape", ["cylinder", "cone"])
+@pytest.mark.parametrize("sides", [0, 1, 2])
+@pytest.mark.parametrize("align_to_side", [False, True])
+def test_sides_below_three_is_a_clean_exit_2_naming_the_flag(shape, sides, align_to_side, capsys):
+    # --align-to-side offsets by 180/sides, so sides=0 used to ZeroDivision (traceback, exit 1)
+    # before the builder's own >= 3 guard. The CLI-level check must reject every sides < 3 the same
+    # way, naming --sides, with or without --align-to-side.
+    rc = dispatch(_build_args(shape, sides=sides, align_to_side=align_to_side))
+    assert rc == 2
+    err = capsys.readouterr().err
+    assert f"--sides must be at least 3, got {sides}" in err and "Traceback" not in err
+
+
 def test_every_builder_shape_declares_its_positive_dimensions():
     # THE plug-in point's enforcement: enumerate what the CLI actually defines and require EVERY
     # float-typed flag of every `brush build <shape>` to be either guarded by
