@@ -9,12 +9,18 @@ Two things this walks that a naive scan would miss:
 - **Function bodies, not just module scope** (`ast.walk`, not `tree.body`). A lazy in-function
   import is exactly the reflex a cycle invites, and the spec forbids it as an escape hatch.
   `test_import_boundary.py` walks the same way for the same reason.
-- **Only single-dot imports are in-package.** `from ..upackage import Package` leaves the
-  package and is always legal; counting it as an in-package edge would red-flag correct code.
+- **Every spelling, by resolving each import rather than matching its shape.** Relative,
+  absolute, parent-relative and `import x.y.z` all name the same module, and an import of the
+  package ROOT counts as `__init__` — that is the partially-initialised-package cycle. `..upackage`
+  resolves outside the package and is ignored, as it must be.
 
-`test_the_layering_gate_reports_an_upward_edge` is the negative control: the gate below is
-green-by-skip until the packages exist, and a check nobody has watched fail is a check nobody
-knows works.
+The `test_the_layering_gate_reports_*` cases are the negative controls — one per spelling the gate
+must catch. Two positive controls guard the other direction:
+`..._passes_a_downward_edge_and_an_out_of_package_one`, and
+`..._allows_a_submodule_imported_off_the_package_root`, which is the only thing standing between
+`from uedcli.uprops import base` and being falsely flagged as a root cycle.
+The real check is green-by-skip until the packages exist, and a check nobody has watched fail is a
+check nobody knows works.
 """
 from __future__ import annotations
 
@@ -34,20 +40,44 @@ LAYERS: dict[str, tuple[str, ...]] = {
 }
 
 
-def _sibling_imports(tree: ast.AST) -> set[str]:
-    """Every in-package sibling module a tree imports, anywhere in it (function bodies included).
+def _sibling_imports(tree: ast.AST, pkg: str, siblings: frozenset[str]) -> set[str]:
+    """Every in-package sibling a tree imports, anywhere in it (function bodies included).
 
-    Only `level == 1` counts: inside `uedcli/uprops/x.py` AND inside `uedcli/uprops/__init__.py`,
-    a single dot anchors on `uedcli.uprops`, so the two cases need no special-casing.
+    Each import is RESOLVED to an absolute module name and then tested against the package, rather
+    than pattern-matched per spelling — `from .values import X`, `from uedcli.uprops.values import
+    X`, `import uedcli.uprops.values` and `from ..uprops.values import X` all name one module, and a
+    gate that recognised only some of them would pass an upward edge written the other way.
+
+    Importing a SYMBOL from the package root resolves to `__init__`, ranked last, so a submodule
+    reaching back through the root — the partially-initialised-package cycle `spec.md` warns about —
+    reads as the upward edge it is. Importing a SUBMODULE from the root
+    (`from uedcli.uprops import base`) is not that: at runtime it is identical to `from . import
+    base` and binds no root attribute, so it counts as an edge to `base`, not to `__init__`.
+    `..upackage` resolves outside `pkg` and is ignored.
     """
+    parent = pkg.rpartition(".")[0]
     out: set[str] = set()
+
+    def take(absolute: str) -> None:
+        if absolute == pkg:
+            out.add("__init__")
+        elif absolute.startswith(f"{pkg}."):
+            out.add(absolute[len(pkg) + 1:].split(".")[0])
+
     for node in ast.walk(tree):
-        if not isinstance(node, ast.ImportFrom) or node.level != 1:
-            continue
-        if node.module:
-            out.add(node.module.split(".")[0])        # `from .base import X`
-        else:
-            out.update(a.name for a in node.names)    # `from . import base, values`
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                take(alias.name)
+        elif isinstance(node, ast.ImportFrom):
+            base = {0: "", 1: pkg, 2: parent}.get(node.level)
+            if base is None:                          # `...x` and deeper: never in this package
+                continue
+            root = ".".join(p for p in (base, node.module) if p)
+            names = {a.name for a in node.names}
+            if not (root == pkg and names <= siblings):
+                take(root)                            # a SYMBOL off the root is the cycle
+            for alias in node.names:                  # `from . import base, values`
+                take(f"{root}.{alias.name}" if root else alias.name)
     return out
 
 
@@ -60,7 +90,8 @@ def _upward_edges(pkg_dir: Path, order: Sequence[str]) -> list[str]:
         if me not in rank:
             continue
         tree = ast.parse(path.read_text(encoding="utf-8"))
-        for target in sorted(_sibling_imports(tree)):
+        siblings = frozenset(order)
+        for target in sorted(_sibling_imports(tree, f"uedcli.{pkg_dir.name}", siblings)):
             if target in rank and rank[target] >= rank[me]:
                 offenders.append(f"{pkg_dir.name}/{path.name} imports .{target}")
     return offenders
@@ -78,6 +109,14 @@ def test_the_rank_table_names_every_module(pkg_name: str) -> None:
         f"uedcli/{pkg_name}/ and the rank table disagree: "
         f"unranked {sorted(found - set(LAYERS[pkg_name]))}, "
         f"missing {sorted(set(LAYERS[pkg_name]) - found)}")
+    # A SUBPACKAGE is invisible to `*.py`, so it would be neither ranked nor checked — the gate
+    # would stay green over a whole unchecked subtree. These packages are flat by design; if that
+    # ever changes, the rank model has to change with it rather than silently stop covering.
+    subpackages = sorted(d.name for d in pkg_dir.iterdir()
+                         if d.is_dir() and any(d.glob("*.py")))   # namespace packages too
+    assert not subpackages, (
+        f"uedcli/{pkg_name}/ gained subpackage(s) {subpackages}; the layer model is flat and the "
+        f"gate only walks *.py, so these would be unchecked")
 
 
 @pytest.mark.parametrize("pkg_name", sorted(LAYERS))
@@ -94,6 +133,7 @@ def test_no_module_imports_a_later_layer(pkg_name: str) -> None:
 # --- the gate's own regression ------------------------------------------------------------
 
 def _fixture_package(tmp_path: Path, files: dict[str, str]) -> Path:
+    tmp_path.mkdir(parents=True, exist_ok=True)
     pkg_dir = tmp_path / "uprops"                     # a name the rank table DOES carry
     pkg_dir.mkdir()
     for name, body in files.items():
@@ -109,11 +149,85 @@ def test_the_layering_gate_reports_an_upward_edge(tmp_path: Path) -> None:
     assert _upward_edges(pkg_dir, LAYERS["uprops"]) == ["uprops/base.py imports .values"]
 
 
+def test_the_layering_gate_reports_an_absolute_upward_edge(tmp_path: Path) -> None:
+    """The same edge written absolutely is still an edge — both spellings reach `.values`."""
+    pkg_dir = _fixture_package(tmp_path, {
+        "base.py": "from uedcli.uprops.values import CLI_STYLE\n",
+        "values.py": "CLI_STYLE = 1\n",
+    })
+    assert _upward_edges(pkg_dir, LAYERS["uprops"]) == ["uprops/base.py imports .values"]
+
+    pkg_dir2 = _fixture_package(tmp_path / "b", {
+        "base.py": "import uedcli.uprops.values\n",
+        "values.py": "CLI_STYLE = 1\n",
+    })
+    assert _upward_edges(pkg_dir2, LAYERS["uprops"]) == ["uprops/base.py imports .values"]
+
+
+def test_the_layering_gate_reports_a_submodule_reaching_back_through_the_root(
+        tmp_path: Path) -> None:
+    """The partially-initialised-package cycle `spec.md` warns about: a submodule importing its own
+    package root. `__init__` is ranked last precisely so this reads as an upward edge."""
+    for i, body in enumerate(("from uedcli.uprops import Prop\n", "from uedcli import uprops\n")):
+        pkg_dir = _fixture_package(tmp_path / str(i), {
+            "base.py": "Prop = 1\n",
+            "values.py": body,
+        })
+        assert _upward_edges(pkg_dir, LAYERS["uprops"]) == [
+            "uprops/values.py imports .__init__"], f"missed the root edge in {body!r}"
+
+
+def test_the_layering_gate_reports_a_parent_relative_sibling_edge(tmp_path: Path) -> None:
+    """`..uprops.values` names the same module as `.values` — the depth rewrite slice 2 requires
+    (`.upackage` -> `..upackage`) makes this exact spelling a live reflex."""
+    pkg_dir = _fixture_package(tmp_path, {
+        "base.py": "from ..uprops.values import CLI_STYLE\n",
+        "values.py": "CLI_STYLE = 1\n",
+    })
+    assert _upward_edges(pkg_dir, LAYERS["uprops"]) == ["uprops/base.py imports .values"]
+
+
 def test_the_layering_gate_passes_a_downward_edge_and_an_out_of_package_one(
         tmp_path: Path) -> None:
-    """A green run must be reachable, and `..upackage` must not read as an in-package edge."""
+    """A green run must be reachable, and out-of-package imports must not read as in-package edges.
+
+    `..values` inside `base.py` is the discriminating case: its last component is a ranked layer
+    name, but it resolves to `uedcli.values`, outside the package. It sits in the LOWEST-ranked
+    module on purpose — a gate that matched basenames, or resolved level 2 against the package
+    instead of its parent, would read it as `base -> values`, an upward edge, and go red. Put the
+    same import in a high-ranked module and the mis-resolution lands as a legal downward edge, so
+    the control could never fail.
+    """
     pkg_dir = _fixture_package(tmp_path, {
-        "base.py": "from ..upackage import Package\n",
+        "base.py": "from ..upackage import Package\nfrom ..values import Unrelated\n",
         "values.py": "from .base import Prop\nfrom ..upackage import SchemaError\n",
     })
     assert _upward_edges(pkg_dir, LAYERS["uprops"]) == []
+
+
+def test_the_layering_gate_reports_a_symbol_imported_off_the_package_root(tmp_path: Path) -> None:
+    """`from . import Prop` is the spelling `spec.md` names as the cycle, and the one an implementer
+    under cycle pressure actually types. Every OTHER spelling of it was caught for three revisions
+    while this one was not, which is why it has its own control."""
+    for i, body in enumerate(("from . import Prop\n",
+                              "from . import base, Prop\n",
+                              "def f():\n    from . import Prop\n")):
+        pkg_dir = _fixture_package(tmp_path / f"sym{i}", {
+            "base.py": "Prop = 1\n",
+            "values.py": body,
+        })
+        assert _upward_edges(pkg_dir, LAYERS["uprops"]) == [
+            "uprops/values.py imports .__init__"], f"missed the cycle in {body!r}"
+
+
+def test_the_layering_gate_allows_a_submodule_imported_off_the_package_root(
+        tmp_path: Path) -> None:
+    """`from uedcli.uprops import base` binds no root attribute — at runtime it is `from . import
+    base`, a legal downward edge. Only a SYMBOL off the root is the partially-initialised cycle."""
+    for i, body in enumerate(("from uedcli.uprops import base\n", "from ..uprops import base\n",
+                              "from . import base\n")):
+        pkg_dir = _fixture_package(tmp_path / f"ok{i}", {
+            "base.py": "Prop = 1\n",
+            "values.py": body,
+        })
+        assert _upward_edges(pkg_dir, LAYERS["uprops"]) == []

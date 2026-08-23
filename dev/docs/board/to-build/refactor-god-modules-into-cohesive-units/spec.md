@@ -123,10 +123,10 @@ Two placements are counter-intuitive and load-bearing:
 | `fields.py` | `TypedField`, `ScaleField`, `TYPED_FIELDS`, `_fmt_dec` |
 | `edit.py` | the orchestration, plus the leaf-scalar validation it is the sole consumer of: `Plan`, `plan_edit`, `get_lines`, `dump_all_lines`, `effective_value`, `effective_match`, `values_match`, `_stored_map`, `validate_leaf_value`, `_canonicalize_enum`, `_canon_scalar`, `_validate_query_value` |
 
-Three placements are worth stating:
+Four placements are worth stating:
 
 - **`ClassCtx` goes in `base.py`, not `tokens.py`.** It is the schema-access bundle, unrelated to
-  token grammar, it depends on nothing, and eleven symbols across four layers use it.
+  token grammar, it depends on nothing, and eleven symbols across three layers use it.
 - **`_fmt_dec` goes in `fields.py`** — its only callers are `TypedField` and `ScaleField`.
 - **`zero_value` goes in `structtext.py`, not the orchestration layer** — `full_struct_text` calls it
   (`propedit.py:449`), and `structtext` cannot import upward.
@@ -219,7 +219,7 @@ the first draft of this spec asserted a layering that was provably cyclic.
   |------------------------------------------------------------|---
   | `test_import_verb.py::test_imported_class_names_reach_the_trunk_fully_qualified` | `_AnyTexture` stub vs `f89334b`'s `class_index=` kwarg — item `master-red-anytexture-test-double-not-updated` |
   | `test_import_verb.py::test_the_scratch_drop_happens_before_qualification_in_the_real_pipeline` | same |
-  | `test_doc_links.py::test_no_citation_of_a_deleted_doc` | `decisions.md` substring — item `master-red-unified-asset-catalog-spec-questions` |
+  | `test_doc_links.py::test_no_citation_of_a_deleted_doc` | a retired doc's filename appears as a substring — item `master-red-unified-asset-catalog-spec-questions` |
   | `test_board_script.py::test_ls_json_on_an_empty_stage_is_an_empty_array` | `stale/` is non-empty |
   | `test_driver.py::test_screenshot_shoots_into_work_then_cps_out_to_the_host_path` | host-dependent (writes a literal `/host/out/` path) |
 

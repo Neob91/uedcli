@@ -18,7 +18,7 @@ static array (`Nest.Marks.1` — stored/rendered as `Marks(1)=` inside the struc
 `KEY(N)` spelling is rejected with a hint; the STORED T3D keeps its native `Key(N)=` form (this
 is CLI grammar only).
 
-Module map — six layers, each importing only the ones above it:
+Module map — six layers, each importing only the ones LISTED BEFORE it:
 
 - `base.py` — the error, the hard-reject set, the regexes, `ClassCtx`.
 - `tokens.py` — the token grammar and the whole-invocation checks.

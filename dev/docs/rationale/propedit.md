@@ -64,5 +64,5 @@ multi-token invocation leaves the trunk untouched.
   warning agree on what is computed.
 
 **Refs:** `uedcli/propedit/` (`base.HARD_REJECT`, `edit.plan_edit`, `fields.TYPED_FIELDS`) · `uedcli/normalize.py`
-(`is_computed_key`) · `uedcli/dispatch.py` (the `actor prop set|unset|get` handlers) ·
+(`is_computed_key`) · `uedcli/cli/commands/actor/prop.py` (the `actor prop set|unset|get` handlers) ·
 `uedcli/tests/test_propedit.py` · `uedcli/tests/test_actor_prop.py`

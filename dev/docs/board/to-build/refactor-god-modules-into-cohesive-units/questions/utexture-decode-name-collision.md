@@ -1,18 +1,13 @@
-+++
-priority = "p2"
-kind = "owner-question"
-summary = "The god-module split's utexture_decode.py name shadows the spike harness module of the same name"
-depends-on = ["refactor-god-modules-into-cohesive-units"]
-+++
+# Slice 1's module name collides with a spike harness — rename it, fix the test, or fix the spike?
 
-# `utexture_decode.py` collides with the 2026-06-27 spike harness module name
+## Context
 
-Slice 1 of `refactor-god-modules-into-cohesive-units` — moving `utexture.py`'s decoder half into
+Slice 1 — moving `utexture.py`'s decoder half into
 `uedcli/utexture_decode.py` — was built, measured and then REVERTED. It reddens two tests, and every
 fix available touches something the item is not allowed to touch. The split itself is correct; only
 the file NAME is the problem, and the name is fixed by that item's `spec.md`.
 
-## The mechanism
+### The mechanism
 
 Three things line up:
 
@@ -51,7 +46,7 @@ environment-dependent, in the same class as `test_driver.py`'s `/host/out/` fail
 live shadowing hazard rather than a one-off: any future top-level module added to `uedcli/` whose
 name matches a spike-harness module has the same problem.
 
-## Why it was not fixed in place
+### Why it was not fixed in place
 
 Every available fix is out of that item's scope, and two of them need a ruling:
 

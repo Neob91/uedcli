@@ -17,7 +17,7 @@ The new layouts:
 - `uedcli/propedit/` — `base` < `tokens` < `paths` < `structtext` < `fields` < `edit`, same root.
 
 The `utexture.py` decoder split is NOT part of this — it is blocked on a name collision, tracked as
-`utexture-decode-py-collides-with-the-2026-06-27`. No doc row below depends on it.
+the sibling question `utexture-decode-name-collision.md`. No doc row below depends on it.
 
 ## Proposed edits — `dev/docs/architecture.md`
 

@@ -18,7 +18,7 @@ every existing `uprops.Package`/`uprops.SchemaError` caller keeps working unchan
 cursor-to-EOF integrity check on every record is the no-fallback contract — a layout error
 desyncs and is caught.
 
-Module map — four layers, each importing only the ones above it:
+Module map — four layers, each importing only the ones LISTED BEFORE it:
 
 - `base.py` — `Prop`, the UProperty kind sets, the `SchemaError` guard.
 - `ufield.py` — the UField family: property/enum/struct decode and the bytecode walk.

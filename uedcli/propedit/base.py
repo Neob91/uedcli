@@ -1,6 +1,6 @@
 """The primitives every other propedit layer builds on: the user-facing error, the hard-reject set,
 the token/struct-text regexes, the two value-parsing helpers, and the lazy per-class schema bundle
-`ClassCtx` that eleven symbols across four layers take as an argument."""
+`ClassCtx` that eleven symbols across three layers take as an argument."""
 from __future__ import annotations
 
 import re

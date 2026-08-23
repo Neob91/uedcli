@@ -1,8 +1,8 @@
 # Plan — split the god modules
 
-Five slices, each a separate commit leaving the suite no worse than the recorded baseline
+Five slices, each leaving the suite no worse than the recorded baseline
 (`spec.md` "Verification" — five tests are already red on master for unrelated reasons). Slice 0 first; slices 1-3 are
-independent of each other and ordered by ascending risk; slice 4 needs all three landed.
+independent of each other and ordered by ascending risk; slice 4 needs 2 and 3 landed (it ran without slice 1).
 
 ## Slice 0 — the layering test, before any code moves
 
@@ -26,8 +26,10 @@ Two things the test must do, or it measures nothing:
   lazy in-function imports as a cycle escape hatch, which is exactly the reflex an executor reaches
   for — and a top-level-only scan cannot see it. `uedcli/tests/test_import_boundary.py:65` already
   does this and its docstring says why; copy that approach.
-- **Treat only single-dot imports as in-package.** `from ..upackage import Package` leaves the
-  package and is always legal; counting it as an in-package edge would red-flag the correct code.
+- **Resolve each import to an absolute module name, then test it against the package** — do not
+  pattern-match spellings. `.values`, `uedcli.uprops.values`, `..uprops.values` and
+  `import uedcli.uprops.values` are one module, and an import of the package ROOT is an edge to
+  `__init__` (the partially-initialised-package cycle). `..upackage` resolves outside and is legal.
 
 The test skips while the packages do not exist, so at slice 0 it is green-by-skip and proves nothing.
 **Commit a negative control** rather than proving it once by hand: a fixture package with a
@@ -37,7 +39,13 @@ does exactly this (`test_link_check_fails_on_a_missing_file:264`,
 once and never again; and a package the rank table does not name is not checked AT ALL, so a later
 rename of `schema.py` would silently drop it from the check with the suite still green.
 
-## Slice 1 — `utexture_decode.py` (lowest risk)
+## Slice 1 — `utexture_decode.py` — BUILT, MEASURED, REVERTED (blocked)
+
+Slices 0, 2, 3 and 4 landed in `25a9325`. Slice 1 did not: the filename below shadows a committed
+spike harness module and flips two tests from skip to fail. It was built, verified byte-identical,
+and reverted rather than improvised around. The ruling that unblocks it is
+`questions/utexture-decode-name-collision.md`; the steps below are correct once a name is settled.
+
 
 1. Enumerate `utexture.py`'s current public surface FIRST, `_`-prefixed names included — the module
    has no `__all__`, and the tests read `utexture._CODE_TO_CLASS`, `_fitting_classes`, `_bc2_alpha`
