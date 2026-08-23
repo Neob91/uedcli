@@ -39,7 +39,11 @@ import sys
 from math import sqrt
 from pathlib import Path
 
-ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedcli")
+# Derived from this file's own location, not hardcoded: harness/ -> <spike>/ -> spikes/ -> docs/
+# -> dev/ -> repo root (parents[5]). A hardcoded absolute path resolved on exactly one machine, so everywhere
+# else these imports failed and `test_native_materialize`'s two collision-oracle tests silently
+# SKIPPED instead of running.
+ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "dev/docs/spikes/2026-06-27-decontainerize-uedcli/harness"))
 import utexture_decode as UT  # noqa: E402

@@ -14,10 +14,34 @@ from pathlib import Path
 import pytest
 
 _BATCH = Path(__file__).resolve().parents[1] / "game" / "preview_batch.py"
-sys.path.insert(0, str(_BATCH.parents[1]))              # so `import preview_shots` (baked alongside) resolves
-_spec = importlib.util.spec_from_file_location("preview_batch", _BATCH)
-pb = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(pb)
+
+
+def _load(name: str, path: Path):
+    """Load a baked container script by PATH, binding it under `name` in `sys.modules`.
+
+    `preview_batch` does a bare `import preview_shots` because the image bakes the two side by side
+    at /opt/uedpreview; in the source tree they are one directory apart. Pre-binding `preview_shots`
+    here satisfies that import from `sys.modules`, so THIS file adds nothing to `sys.path`. It used
+    to add `uedcli/`, which leaks for the whole pytest session and makes every top-level module
+    there bare-importable, where it can shadow — or be shadowed by — an unrelated module of the same
+    name; it collided with a spike harness in 2026-08. (`preview_batch`'s own module body still adds
+    `uedcli/game/` when exec'd below. That is the script's container behaviour, not ours, and the
+    directory holds nothing bare-imported anywhere — but it is the same class of leak, so do not
+    read this as `sys.path` being untouched.)
+    """
+    spec = importlib.util.spec_from_file_location(name, path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    try:
+        spec.loader.exec_module(module)
+    except BaseException:
+        del sys.modules[name]                       # never leave a half-built module bound
+        raise
+    return module
+
+
+_load("preview_shots", _BATCH.parents[1] / "preview_shots.py")
+pb = _load("preview_batch", _BATCH)
 
 
 class FakeSock:

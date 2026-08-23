@@ -39,12 +39,11 @@ does exactly this (`test_link_check_fails_on_a_missing_file:264`,
 once and never again; and a package the rank table does not name is not checked AT ALL, so a later
 rename of `schema.py` would silently drop it from the check with the suite still green.
 
-## Slice 1 — `utexture_decode.py` — BUILT, MEASURED, REVERTED (blocked)
+## Slice 1 — `utexture_decode.py`
 
-Slices 0, 2, 3 and 4 landed in `25a9325`. Slice 1 did not: the filename below shadows a committed
-spike harness module and flips two tests from skip to fail. It was built, verified byte-identical,
-and reverted rather than improvised around. The ruling that unblocks it is
-`questions/utexture-decode-name-collision.md`; the steps below are correct once a name is settled.
+Slices 0, 2, 3 and 4 landed in `25a9325`. Slice 1 was blocked once — the filename shadowed a spike
+harness module of the same name — and the owner ruled the fix at the cause: stop
+`test_preview_batch.py` widening `sys.path` for the whole session. The name stands.
 
 
 1. Enumerate `utexture.py`'s current public surface FIRST, `_`-prefixed names included — the module

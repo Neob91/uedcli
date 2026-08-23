@@ -165,6 +165,13 @@ the first draft of this spec asserted a layering that was provably cyclic.
 ## Constraints
 
 - **No public rename.** Anything reachable as `module.name` today stays reachable as `module.name`.
+- **`test_preview_batch.py` is edited, by owner ruling (2026-08-23), and it is the one exception to
+  "no test is edited".** It used to put `uedcli/` on `sys.path` for the whole pytest session, which
+  made every top-level module there bare-importable and collided with a spike harness module named
+  `utexture_decode`. The ruling was to fix that at the cause rather than rename the new module: it
+  now preloads `preview_shots` into `sys.modules` by path, the idiom the file already used for
+  `preview_batch`. The same ruling authorised deriving the spike harness's hardcoded `ROOT` from
+  `__file__`, which turns two permanently-skipped collision-oracle tests into two that run.
 - **`cli/dispatch.py` imports `uprops` at module scope** for `SchemaError` — one of the eight error
   owners its allowlist permits (`test_import_boundary.py:319`). That entry stays valid, since the
   name still resolves through the package root, but every CLI invocation now imports four submodules
