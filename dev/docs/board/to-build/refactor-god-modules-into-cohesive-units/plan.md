@@ -1,7 +1,7 @@
 # Plan — split the god modules
 
 Five slices, each a separate commit leaving the suite no worse than the recorded baseline
-(`spec.md` "Verification" — two tests are already red on master for unrelated reasons). Slice 0 first; slices 1-3 are
+(`spec.md` "Verification" — five tests are already red on master for unrelated reasons). Slice 0 first; slices 1-3 are
 independent of each other and ordered by ascending risk; slice 4 needs all three landed.
 
 ## Slice 0 — the layering test, before any code moves
@@ -13,11 +13,12 @@ Rank **every** module including the package root:
 
 | Package | Order |
 |-------------|---
-| `uprops` | `base` < `script` < `schema` < `values` < `__init__` |
-| `propedit` | `base` < `tokens` < `paths` < `structtext` < `fields` < `__init__` |
+| `uprops` | `base` < `ufield` < `uclass` < `values` < `__init__` |
+| `propedit` | `base` < `tokens` < `paths` < `structtext` < `fields` < `edit` < `__init__` |
 
-`__init__` ranks LAST in both — it re-exports its siblings, so it must import from all of them, and
-any order that ranks it lower turns correct code red.
+`__init__` ranks LAST in both — it is pure re-export, so it imports from every sibling, and any
+order that ranks it lower turns correct code red. Both packages end in a top layer (`values.py`, `edit.py`) with the
+root holding no logic; the test enforces that shape as much as the direction.
 
 Two things the test must do, or it measures nothing:
 
@@ -36,14 +37,14 @@ does exactly this (`test_link_check_fails_on_a_missing_file:264`,
 once and never again; and a package the rank table does not name is not checked AT ALL, so a later
 rename of `schema.py` would silently drop it from the check with the suite still green.
 
-## Slice 1 — `utexture_codec.py` (lowest risk)
+## Slice 1 — `utexture_decode.py` (lowest risk)
 
 1. Enumerate `utexture.py`'s current public surface FIRST, `_`-prefixed names included — the module
    has no `__all__`, and the tests read `utexture._CODE_TO_CLASS`, `_fitting_classes`, `_bc2_alpha`
    and friends directly.
 2. Move the fourteen decoder/layout symbols **and the five constants** (`_LINEAR_BPP`,
    `_BLOCK_BYTES`, `_CODE_TO_CLASS`, `_CODE_TO_LAYOUT`, `_CLASS_TO_LAYOUT`) into
-   `uedcli/utexture_codec.py`. Import `Mip` under `if TYPE_CHECKING:`.
+   `uedcli/utexture_decode.py`. Import `Mip` under `if TYPE_CHECKING:`.
 3. `utexture.py` imports back what it calls and re-exports the list from step 1.
 4. Gate: **the full suite against the baseline**, not `-k texture`. `mip0_to_rgb` and `decode_palette` are used by
    `test_engine_facts.py` and `meshrender.py` decodes mesh skins through `utexture`, so a `-k
@@ -70,7 +71,7 @@ alongside the module and move symbols in.
    `read_compact_index as _read_compact_index` / `read_fstring as _read_fstring` aliases. Inside
    `uedcli/uprops/__init__.py`, `.` anchors on `uedcli.uprops`, so the unfixed line resolves to
    `uedcli.uprops.upackage` and the whole suite errors at collection. The rename is NOT a no-op step.
-3. Peel out in layer order — `base.py`, `script.py`, `schema.py`, `values.py` — fixing each file's
+3. Peel out in layer order — `base.py`, `ufield.py`, `uclass.py`, `values.py` — fixing each file's
    import depth AS it is peeled, not in a later pass, and running `bin/test` after each so a break is
    attributable to one move. Point the `upackage` names at `..upackage` in every file that uses them.
 4. Fix the function-local imports listed in `spec.md` as their owning symbol moves —
@@ -85,7 +86,7 @@ alongside the module and move symbols in.
 ## Slice 3 — `uedcli/propedit/`
 
 Same shape: `mkdir uedcli/propedit && git mv uedcli/propedit.py uedcli/propedit/__init__.py` first,
-then peel out `base.py`, `tokens.py`, `paths.py`, `structtext.py`, `fields.py`, with the same
+then peel out `base.py`, `tokens.py`, `paths.py`, `structtext.py`, `fields.py`, `edit.py`, with the same
 import-depth fix and subset gate. `propedit.py` has THREE module-scope relative imports to fix in the
 rename step (`:28` `from . import typedprops`, `:29` `from .normalize import is_computed_key`, `:30`
 `from .uprops import Prop, SchemaError`) plus the four function-local ones. Its `dir()` exclusion list

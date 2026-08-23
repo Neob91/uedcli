@@ -29,14 +29,30 @@ spec lists the BC decoders, `detect_layout`/`Layout` and `mip0_to_rgb` under "Te
 
 Each split module becomes a package whose `__init__.py` re-exports the current public surface, so
 every `uprops.X` / `propedit.X` call site keeps working untouched. `utexture.py` stays a flat module
-and gains a flat sibling, because the migration item reshapes it shortly.
+and gains a flat sibling, because the migration item reshapes it shortly. The sibling is
+`utexture_decode.py`, not `utexture_codec.py`: it only decodes, and `native/codec.py` earns "codec"
+by doing both directions — one word, one meaning.
 
 **Placement is exhaustive.** Every top-level symbol in each file is assigned below — 45 in
 `propedit.py`, 57 in `uprops.py`. A symbol left unplaced is where an executor invents a policy
 mid-slice, so there are no "and the rest" clauses.
 
-**Every `__init__.py` also re-exports its siblings' names**, on top of whatever the table assigns
-it. The tables say where a symbol LIVES, not what the package root exposes; the root exposes
+**Both packages have the same shape**: a `base` of shared primitives, named layers above it, a top
+layer, and an `__init__.py` that is PURE RE-EXPORT and holds no logic. That is why `propedit`'s
+top layer is `edit.py` rather than code left sitting in the root — an `__init__.py` holding 500 lines
+of the hardest logic in one package and nothing at all in the other is the kind of asymmetry that
+makes a reader distrust both. The shared shape is a pattern, not identical roles: `edit.py`
+orchestrates the verbs, while `values.py` is uprops' largest domain layer and its cross-package entry
+point (`resolve_class_properties`) sits one layer down in `uclass.py`.
+
+**These roots re-export; `cli/`, `native/` and `bsp/` have import-free, docstring-only roots.** That
+divergence is deliberate — those packages were built with their layout visible to callers, while
+these two must keep ~50 existing `uprops.X` / `propedit.X` call sites working unchanged. Each new
+`__init__.py` still carries a module-map docstring in the style of `native/__init__.py`, so the first
+thing a reader meets is what the layers are.
+
+**Each `__init__.py` re-exports every one of its siblings' names.** The tables say where a symbol
+LIVES, not what the package root exposes; the root exposes
 every symbol the flat module DEFINED — **`_`-prefixed included** — because the tests read
 `uprops._decode_property` (`test_uprops_category.py:52,62,71,91`), `uprops._super_fqcn`
 (`test_uprops.py:136`), `uprops._class_script_source` (`test_uprops_defaults.py:114`) and
@@ -62,39 +78,63 @@ All four layers need them (`values.py` alone uses `SchemaError` 24 times and `Pa
 Reproduce the two aliases (`read_compact_index as _read_compact_index`,
 `read_fstring as _read_fstring`) in each file that uses them.
 
-### `uedcli/uprops/` — layered `base` < `script` < `schema` < `values`
+### `uedcli/uprops/` — layered `base` < `ufield` < `uclass` < `values`
 
 | Module | Holds |
 |-------------|---
-| `base.py` | `Prop`, `PROPERTY_TYPES`, `_KINDS_WITH_TYPE_REF`, `CPF_NET`, `_schema_guard`, `_safe_name`, `_last_compact`, `_STRUCT_BIN_SIZES`, `ValueStyle`, `CLI_STYLE`, `T3D_STYLE`, `format_float`, `format_float_t3d` |
-| `script.py` | `_walk_expr`, `_skip_script`, `enum_values`, `_field_next`, `struct_children_ref`, `find_struct_export`, `struct_members`, `_decode_property`, `_EX_END_FUNCTION_PARMS` |
-| `schema.py` | `class_export_index`, `own_class_properties`, `class_index_map`, `super_fqcn_by_index`, `_super_fqcn`, `super_fqcn`, `iter_classes`, `class_is_abstract`, `abstract_from_source`, `_class_script_source`, `resolve_class_properties`, `class_default_tags`, `_ABSTRACT_DECL`, `_ABSTRACT_KW`, `_BLOCK_COMMENT`, `_LINE_COMMENT` |
-| `values.py` | `struct_tag_member_tree`, `zero_struct_tree`, `strip_member_tree`, `render_member_tree`, `member_keys`, `decode_array_tag`, `render_default_tag`, `render_object_ref`, `resolve_class_default_tags`, `resolve_class_defaults`, `resolve_type_export`, `resolve_enum_names`, `_decode_struct_bin`, `_decode_struct_bin_at`, `_struct_tree_at`, `_byte_member_text`, `_zero_member_text`, `_pkg_for_owner`, `struct_member_schema` |
+| `base.py` | `Prop`, `PROPERTY_TYPES`, `_KINDS_WITH_TYPE_REF`, `CPF_NET`, `_schema_guard`, `_safe_name`, `_last_compact`, `_STRUCT_BIN_SIZES` |
+| `ufield.py` | the UField family — properties, enums, structs: `_decode_property`, `enum_values`, `struct_members`, `struct_children_ref`, `find_struct_export`, `_field_next`, and the bytecode walk `_walk_expr` / `_skip_script` / `_EX_END_FUNCTION_PARMS` |
+| `uclass.py` | everything UClass-level: `class_export_index`, `own_class_properties`, `class_index_map`, `super_fqcn_by_index`, `_super_fqcn`, `super_fqcn`, `iter_classes`, `class_is_abstract`, `abstract_from_source`, `_class_script_source`, `resolve_class_properties`, `class_default_tags`, `_ABSTRACT_DECL`, `_ABSTRACT_KW`, `_BLOCK_COMMENT`, `_LINE_COMMENT` |
+| `values.py` | value decode, render, and the rendering policy: `ValueStyle`, `CLI_STYLE`, `T3D_STYLE`, `format_float`, `format_float_t3d`, `struct_tag_member_tree`, `zero_struct_tree`, `strip_member_tree`, `render_member_tree`, `member_keys`, `decode_array_tag`, `render_default_tag`, `render_object_ref`, `resolve_class_default_tags`, `resolve_class_defaults`, `resolve_type_export`, `resolve_enum_names`, `struct_member_schema`, `_decode_struct_bin`, `_decode_struct_bin_at`, `_struct_tree_at`, `_byte_member_text`, `_zero_member_text`, `_pkg_for_owner` |
+
+**The two middle layers are named for their SUBJECT, not their verb.** An earlier draft called them
+`script.py` and `schema.py`, and both names failed the predict-the-file test: only three of nine
+symbols walk bytecode, and *every* layer decodes something — `uclass.py` decodes UClass bodies,
+`values.py` has `_decode_struct_bin`. `ufield`/`uclass` are the engine's own type names
+(`dev/docs/unrealed/`), so `find_struct_export` and `class_export_index` land where a reader expects,
+and `struct_member_schema` no longer sits next to a module called `schema.py`. It also keeps
+`fields.py` meaning exactly one thing across the project — `propedit/fields.py` is the typed-field
+registry, and a `uprops/fields.py` holding UField decode would make one name mean two things.
+
+`ValueStyle`/`CLI_STYLE`/`T3D_STYLE`/`format_float*` live in `values.py`, not `base.py`. They depend
+on nothing, so a mechanical placement drops them at the bottom; but no `ufield` or `uclass` symbol
+consults them and every consumer is in `values`. Depending on nothing is not a reason to sit in
+`base`.
 
 Two placements are counter-intuitive and load-bearing:
 
-- **`_decode_property` goes in `script.py`, not `schema.py`.** It calls `enum_values`
-  (`uprops.py:142`) and `struct_members` calls IT (`uprops.py:709`) — both in `script`. Moving it to
-  `schema` would make `script → schema`, the upward edge. (`schema → script` is downward and legal;
-  two such edges already exist and are fine.)
-- **`class_default_tags` goes in `schema.py`, not `script.py`**, because it calls
-  `class_export_index`. Leaving it in `script` is the one back-edge that makes the layering a cycle.
+- **`class_default_tags` goes in `uclass.py`, not `ufield.py`**, because it calls
+  `class_export_index`. Leaving it with the decoders is the one back-edge that makes the layering a
+  cycle. (`uclass → ufield` is downward and legal; two such edges exist and are fine.)
+- **`resolve_class_default_tags` goes in `values.py`, not beside its `uclass.py` primitive.** It is
+  the hierarchy-walking overlay that `resolve_class_defaults` consumes, and the two are read and
+  changed together; splitting the pair to keep the primitive and its overlay adjacent would trade one
+  adjacency for a worse one. It could legally sit in `uclass.py` — this is a choice, not a
+  constraint.
 
-### `uedcli/propedit/` — layered `base` < `tokens` < `paths` < `structtext` < `fields` < top
+### `uedcli/propedit/` — layered `base` < `tokens` < `paths` < `structtext` < `fields` < `edit`
 
 | Module | Holds |
 |----------------|---
-| `base.py` | `PropEditError`, `HARD_REJECT`, `STRUCT_FILL`, `_dequote`, `_dec_finite`, `_fmt_dec`, `_NUM_BOUND`, `_IDENT_RE`, `_INT_RE`, `_PAREN_KEY_RE`, `_PAREN_ANY_RE`, `_VR_STRUCTS` |
-| `tokens.py` | `PropToken`, `ClassCtx`, `parse_token`, `check_hard_reject`, `check_overlaps` |
+| `base.py` | `PropEditError`, `HARD_REJECT`, `STRUCT_FILL`, `ClassCtx`, `_dequote`, `_dec_finite`, `_NUM_BOUND`, `_IDENT_RE`, `_INT_RE`, `_PAREN_KEY_RE`, `_PAREN_ANY_RE`, `_VR_STRUCTS` |
+| `tokens.py` | `PropToken`, `parse_token`, `check_hard_reject`, `check_overlaps` |
 | `paths.py` | `MemberStep`, `ResolvedPath`, `resolve_path`, `_member_map`, `_text_key_ident` |
-| `structtext.py`| `split_struct_text`, `emit_struct_text`, `merge_struct_texts`, `full_struct_text`, `zero_value`, `_set_member_in_text`, `_unset_member_in_text`, `_maybe_comma_sugar`, `validate_leaf_value`, `_canonicalize_enum`, `_canon_scalar`, `_validate_query_value` |
-| `fields.py` | `TypedField`, `ScaleField`, `TYPED_FIELDS` |
-| `__init__.py` | `Plan`, `plan_edit`, `get_lines`, `dump_all_lines`, `effective_value`, `effective_match`, `values_match`, `_stored_map` |
+| `structtext.py`| `split_struct_text`, `emit_struct_text`, `merge_struct_texts`, `full_struct_text`, `zero_value`, `_set_member_in_text`, `_unset_member_in_text`, `_maybe_comma_sugar` |
+| `fields.py` | `TypedField`, `ScaleField`, `TYPED_FIELDS`, `_fmt_dec` |
+| `edit.py` | the orchestration, plus the leaf-scalar validation it is the sole consumer of: `Plan`, `plan_edit`, `get_lines`, `dump_all_lines`, `effective_value`, `effective_match`, `values_match`, `_stored_map`, `validate_leaf_value`, `_canonicalize_enum`, `_canon_scalar`, `_validate_query_value` |
 
-**`zero_value` goes in `structtext.py`, not `__init__.py`** — `full_struct_text` calls it
-(`propedit.py:449`), and `full_struct_text` cannot import upward from the package root.
+Three placements are worth stating:
 
-### `uedcli/utexture_codec.py`
+- **`ClassCtx` goes in `base.py`, not `tokens.py`.** It is the schema-access bundle, unrelated to
+  token grammar, it depends on nothing, and eleven symbols across four layers use it.
+- **`_fmt_dec` goes in `fields.py`** — its only callers are `TypedField` and `ScaleField`.
+- **`zero_value` goes in `structtext.py`, not the orchestration layer** — `full_struct_text` calls it
+  (`propedit.py:449`), and `structtext` cannot import upward.
+- **The four leaf-scalar validators go in `edit.py`, not `structtext.py`.** None of them touches a
+  struct-text function, they depend only on base-layer symbols, and every caller is an edit-layer
+  symbol. In `structtext.py` they would make it "struct-text read/write AND scalar validation".
+
+### `uedcli/utexture_decode.py`
 
 `_rgb565`, `_bc_colours`, `_bc2_alpha`, `_bc3_alpha`, `_decode_block`, `_decode_bc1`, `_decode_bc2`,
 `_decode_bc3`, `_decode_linear1`, `mip0_to_rgb`, `Layout`, `DetectionFailure`, `_fitting_classes`,
@@ -125,6 +165,11 @@ the first draft of this spec asserted a layering that was provably cyclic.
 ## Constraints
 
 - **No public rename.** Anything reachable as `module.name` today stays reachable as `module.name`.
+- **`cli/dispatch.py` imports `uprops` at module scope** for `SchemaError` — one of the eight error
+  owners its allowlist permits (`test_import_boundary.py:319`). That entry stays valid, since the
+  name still resolves through the package root, but every CLI invocation now imports four submodules
+  where it imported one. Same bytecode, a few more file stats; no action needed, stated so nobody
+  reads it later as an accident.
 - **No signature changes** and **no lazy in-function imports to break a cycle.** If a cycle appears,
   the placement is wrong; fix the placement.
 - **`_`-prefixed does not mean private to the file.** Grep every symbol's callers, tests included,
