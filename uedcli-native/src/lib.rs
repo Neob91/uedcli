@@ -304,20 +304,22 @@ fn serialize_model(py: Python<'_>, built: &Built) -> PyResult<Py<PyBytes>> {
 }
 
 /// One flat world-space textured polygon for `render_frame` (native preview, spec §5):
-/// `(verts_flat, uv_base, uv_axis_u, uv_axis_v, pan, tex_index)`.  `verts_flat` = the ring
-/// as x,y,z triples; the UV frame is in texel units (Python computes it from the SOURCE
+/// `(verts_flat, uv_base, uv_axis_u, uv_axis_v, pan, tex_index, masked)`.  `verts_flat` = the
+/// ring as x,y,z triples; the UV frame is in texel units (Python computes it from the SOURCE
 /// poly's authored axes); `tex_index` indexes the texture table, `-1` = flat default grey.
-type RenderPolyTuple = (Vec<f32>, [f32; 3], [f32; 3], [f32; 3], [f32; 2], i32);
+/// `masked` = the face's PF_Masked bit: sample the texture's mask and skip transparent texels.
+type RenderPolyTuple = (Vec<f32>, [f32; 3], [f32; 3], [f32; 3], [f32; 2], i32, bool);
 
 /// `render_frame` — the `--native` preview rasterizer (spec §5).  Flat world-space
-/// polygons + a texture table (`(w, h, rgb_bytes)` mip0) + a camera BASIS
+/// polygons + a texture table (`(w, h, rgb_bytes, mask_bytes)` mip0; `mask` is `w*h` bytes,
+/// `1` opaque / `0` transparent, consulted only for PF_Masked faces) + a camera BASIS
 /// (`(location, forward, right, up, fov_deg)` — Python single-sources the FRotator
 /// convention; Rust never converts angles) -> `width*height*3` RGB bytes.
 #[pyfunction]
 fn render_frame(
     py: Python<'_>,
     polys: Vec<RenderPolyTuple>,
-    textures: Vec<(u32, u32, Vec<u8>)>,
+    textures: Vec<(u32, u32, Vec<u8>, Vec<u8>)>,
     camera: ([f32; 3], [f32; 3], [f32; 3], [f32; 3], f32),
     size: (u32, u32),
 ) -> PyResult<Py<PyBytes>> {
@@ -327,12 +329,19 @@ fn render_frame(
             "render size {width}x{height} out of range (1..=16384)"
         )));
     }
-    for (i, (w, h, data)) in textures.iter().enumerate() {
+    for (i, (w, h, data, mask)) in textures.iter().enumerate() {
         if (w * h * 3) as usize != data.len() {
             return Err(BuildError::new_err(format!(
                 "texture {i}: {w}x{h} needs {} RGB bytes, got {}",
                 w * h * 3,
                 data.len()
+            )));
+        }
+        if (w * h) as usize != mask.len() {
+            return Err(BuildError::new_err(format!(
+                "texture {i}: {w}x{h} needs {} mask bytes, got {}",
+                w * h,
+                mask.len()
             )));
         }
         if *w == 0 || *h == 0 {
@@ -343,7 +352,7 @@ fn render_frame(
     }
     let rpolys: Vec<render::RenderPoly> = polys
         .into_iter()
-        .map(|(verts_flat, base, au, av, pan, tex_index)| {
+        .map(|(verts_flat, base, au, av, pan, tex_index, masked)| {
             let verts = verts_flat
                 .chunks_exact(3)
                 .map(|c| model::Vec3::new(c[0], c[1], c[2]))
@@ -355,12 +364,13 @@ fn render_frame(
                 uv_axis_v: model::Vec3::new(av[0], av[1], av[2]),
                 pan,
                 tex_index,
+                masked,
             }
         })
         .collect();
     let rtex: Vec<render::RenderTexture> = textures
         .into_iter()
-        .map(|(w, h, data)| render::RenderTexture { w, h, data })
+        .map(|(w, h, data, mask)| render::RenderTexture { w, h, data, mask })
         .collect();
     let (loc, fwd, right, up, fov) = camera;
     let cam = render::Camera {

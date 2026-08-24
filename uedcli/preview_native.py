@@ -38,6 +38,7 @@ from .transform import DegenerateTransformError
 from .utexture import TextureError, TextureResolver
 
 PF_INVISIBLE = 0x1
+PF_MASKED = 0x2                                       # alpha-test: palette-index-0 texels cut out
 
 # The game's first-person default horizontal FOV: Engine.PlayerPawn defaultproperties
 # `DesiredFOV=75.000000` / `DefaultFOV=75.000000` (DX install `Engine/Classes/PlayerPawn.uc:4940`,
@@ -161,15 +162,16 @@ def _mover_world_polys(level, index) -> list[tuple[list, object, object]]:
 
 # --------------------------------------------------------------------- textures
 
-def _checkerboard() -> tuple[int, int, bytes]:
+def _checkerboard() -> tuple[int, int, bytes, bytes]:
     """The unresolvable-ref placeholder: magenta/black checks — the miss is visible in the
-    render itself (spec §4.5)."""
+    render itself (spec §4.5). Fully opaque (all-1 mask) so a PF_Masked face pointing at an
+    unresolvable texture still shows the whole checkerboard rather than being cut to nothing."""
     data = bytearray()
     for y in range(_CHECKER_SIZE):
         for x in range(_CHECKER_SIZE):
             on = ((x // _CHECKER_CELL) + (y // _CHECKER_CELL)) % 2 == 0
             data += b"\xff\x00\xff" if on else b"\x00\x00\x00"
-    return (_CHECKER_SIZE, _CHECKER_SIZE, bytes(data))
+    return (_CHECKER_SIZE, _CHECKER_SIZE, bytes(data), b"\x01" * (_CHECKER_SIZE * _CHECKER_SIZE))
 
 
 class _TextureTable:
@@ -178,9 +180,15 @@ class _TextureTable:
 
     def __init__(self, resolver: TextureResolver) -> None:
         self._resolver = resolver
-        self.table: list[tuple[int, int, bytes]] = []
+        self.table: list[tuple[int, int, bytes, bytes]] = []
+        self.bmasked: list[bool] = []                    # per-index: is the texture itself bMasked
         self._by_ref: dict[str, int] = {}
         self._checker_index: int | None = None
+
+    def is_bmasked(self, idx: int) -> bool:
+        """Does the texture at table `idx` carry `bMasked` (masks index-0 regardless of the surface
+        `PF_Masked` flag)? `-1`/out-of-range (no texture) → False."""
+        return 0 <= idx < len(self.bmasked) and self.bmasked[idx]
 
     def index_for(self, ref: str | None) -> int:
         if not ref:
@@ -200,10 +208,12 @@ class _TextureTable:
             if self._checker_index is None:
                 self._checker_index = len(self.table)
                 self.table.append(_checkerboard())
+                self.bmasked.append(False)
             idx = self._checker_index
         else:
             idx = len(self.table)
-            self.table.append((got.width, got.height, got.rgb))
+            self.table.append((got.width, got.height, got.rgb, got.mask))
+            self.bmasked.append(bool(got.b_masked))
         self._by_ref[key] = idx
         return idx
 
@@ -292,7 +302,13 @@ def build_scene(level, search_files, index) -> tuple[list, list]:
             tex_index = -1                               # unknown owner → flat grey
         verts_flat = [c for v in world_verts for c in
                       (float(v[0]), float(v[1]), float(v[2]))]
-        polys.append((verts_flat, list(base_w), list(tu), list(tv), list(pan), tex_index))
+        # A face masks index-0 as see-through iff the surface `PF_Masked` flag is set OR the texture
+        # itself is `bMasked` — the engine ORs a texture's PolyFlags onto every surface it's applied
+        # to, so a masked texture masks with NO surface flag (owner-confirmed, `unrealed/quirks.md`
+        # "a face draws index 0 as a hole iff poly.flags & PF_Masked OR its texture carries bMasked").
+        # Matches `cli/rendering.py`'s `--faces` gate.
+        masked = bool(flags & PF_MASKED) or textures.is_bmasked(tex_index)
+        polys.append((verts_flat, list(base_w), list(tu), list(tv), list(pan), tex_index, masked))
 
     for world_verts, i_actor, i_brush_poly in _node_polys(model):
         if 0 <= i_actor < len(join):

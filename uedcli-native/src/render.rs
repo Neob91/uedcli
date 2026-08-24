@@ -23,13 +23,17 @@ pub struct RenderPoly {
     pub uv_axis_v: Vec3,
     pub pan: [f32; 2],
     pub tex_index: i32,
+    pub masked: bool, // PF_Masked: skip texels whose mask byte is 0 (palette-index-0 transparent)
 }
 
-/// A decoded texture: mip0 RGB, row-major, `data.len() == w*h*3`.
+/// A decoded texture: mip0 RGB, row-major, `data.len() == w*h*3`. `mask` is the per-texel
+/// alpha-test mask, `mask.len() == w*h`, `1 = opaque`, `0 = transparent` (only consulted for
+/// PF_Masked faces). The placeholder checkerboard carries an all-opaque mask.
 pub struct RenderTexture {
     pub w: u32,
     pub h: u32,
     pub data: Vec<u8>,
+    pub mask: Vec<u8>,
 }
 
 /// Camera basis (world space). `forward`/`right`/`up` are the rotation matrix columns the
@@ -203,6 +207,7 @@ pub fn render(
                 &scr[k],
                 &scr[k + 1],
                 tex,
+                poly.masked,
                 shade,
             );
         }
@@ -220,6 +225,7 @@ fn raster_tri(
     b: &[f32; 5],
     c: &[f32; 5],
     tex: Option<&RenderTexture>,
+    masked: bool,
     shade: f32,
 ) {
     let min_x = a[0].min(b[0]).min(c[0]).floor().max(0.0) as usize;
@@ -253,7 +259,6 @@ fn raster_tri(
             if inv_d <= zbuf[pi] {
                 continue; // an earlier polygon is closer (or equal) here
             }
-            zbuf[pi] = inv_d;
             let (mut rr, mut gg, mut bb) = (
                 DEFAULT_GREY[0] as f32,
                 DEFAULT_GREY[1] as f32,
@@ -264,11 +269,20 @@ fn raster_tri(
                 let v = (w0 * a[4] + w1 * b[4] + w2 * c[4]) / inv_d;
                 let tx = wrap(u.floor() as i64, t.w);
                 let ty = wrap(v.floor() as i64, t.h);
-                let ti = ((ty * t.w + tx) * 3) as usize;
+                let texel = (ty * t.w + tx) as usize;
+                // PF_Masked alpha test: a transparent texel (mask byte 0) is skipped WHOLE —
+                // no colour, no z-write — so farther geometry / background shows through. The
+                // mask index equals the colour texel, so the same UV/mip is sampled. `get`
+                // bounds-checks defensively (mask.len() == w*h is enforced at the FFI edge).
+                if masked && t.mask.get(texel).copied().unwrap_or(1) == 0 {
+                    continue;
+                }
+                let ti = texel * 3;
                 rr = t.data[ti] as f32;
                 gg = t.data[ti + 1] as f32;
                 bb = t.data[ti + 2] as f32;
             }
+            zbuf[pi] = inv_d;
             let o = pi * 3;
             img[o] = (rr * shade).min(255.0) as u8;
             img[o + 1] = (gg * shade).min(255.0) as u8;
@@ -308,6 +322,7 @@ mod tests {
             uv_axis_v: Vec3::new(0.0, 0.0, -1.0),
             pan: [0.0, 0.0],
             tex_index,
+            masked: false,
         }
     }
 
@@ -337,6 +352,7 @@ mod tests {
             w: 2,
             h: 2,
             data: vec![255, 0, 0, 0, 255, 0, 0, 0, 255, 255, 255, 255],
+            mask: vec![1, 1, 1, 1],
         };
         // Wall 2uu at depth 32, focal 32 (90° fov, 64px wide) -> covers 2 px around centre.
         let cam = cam_at_origin_looking_plus_x(90.0);
@@ -385,6 +401,7 @@ mod tests {
             w: 1,
             h: 1,
             data: vec![255, 0, 0],
+            mask: vec![1],
         };
         let img = render(
             &[far, near],
@@ -417,6 +434,7 @@ mod tests {
             w: 2,
             h: 1,
             data: vec![255, 0, 0, 0, 255, 0],
+            mask: vec![1, 1],
         };
         let cam = cam_at_origin_looking_plus_x(90.0);
         let plain = render(
@@ -425,6 +443,7 @@ mod tests {
                 w: 2,
                 h: 1,
                 data: tex.data.clone(),
+                mask: vec![1, 1],
             }],
             &cam,
             64,
@@ -440,5 +459,77 @@ mod tests {
         let panned = render(&[p], &[tex], &cam, 64, 64);
         assert!(px(&panned, 31)[1] > 0 && px(&panned, 31)[0] == 0); // panned left = green
         assert!(px(&panned, 32)[0] > 0 && px(&panned, 32)[1] == 0); // wraps back to red
+    }
+
+    #[test]
+    fn masked_face_skips_transparent_texels() {
+        // 2x1 texture, both texels red; left texel opaque (mask 1), right transparent (mask 0).
+        // A masked wall in FRONT of a full-frame grey wall: the left half shows red, the right
+        // half shows the grey wall BEHIND (the transparent texel wrote neither colour nor z).
+        let tex = RenderTexture {
+            w: 2,
+            h: 1,
+            data: vec![255, 0, 0, 255, 0, 0],
+            mask: vec![1, 0],
+        };
+        let back = wall(80.0, 400.0, -1); // grey, far, full-frame
+        let mut front = wall(32.0, 2.0, 0); // 2-uu masked wall, near, 2 texels
+        front.masked = true;
+        let cam = cam_at_origin_looking_plus_x(90.0);
+        let img = render(&[back, front], &[tex], &cam, 64, 64);
+        let px = |x: usize| {
+            let o = (32 * 64 + x) * 3;
+            [img[o], img[o + 1], img[o + 2]]
+        };
+        // Left texel (opaque): red front wall. g == b == 0, r > 0.
+        assert!(px(31)[0] > 0 && px(31)[1] == 0 && px(31)[2] == 0);
+        // Right texel (transparent, skipped): grey back wall shows through (r == g == b > 0).
+        let right = px(32);
+        assert!(right[0] > 0 && right[0] == right[1] && right[1] == right[2]);
+
+        // Same wall WITHOUT the flag: the transparent texel renders opaque red (fast path).
+        let mut opaque = wall(32.0, 2.0, 0);
+        opaque.masked = false;
+        let tex2 = RenderTexture {
+            w: 2,
+            h: 1,
+            data: vec![255, 0, 0, 255, 0, 0],
+            mask: vec![1, 0],
+        };
+        let back2 = wall(80.0, 400.0, -1);
+        let img = render(&[back2, opaque], &[tex2], &cam, 64, 64);
+        let o = (32 * 64 + 32) * 3;
+        assert!(img[o] > 0 && img[o + 1] == 0 && img[o + 2] == 0); // red, not grey
+    }
+
+    #[test]
+    fn masked_transparent_texel_leaves_z_unwritten() {
+        // Discriminates the z-write relocation: the masked wall is drawn FIRST and a FARTHER wall
+        // second. At a transparent texel the masked face must write neither colour NOR z, so the
+        // later farther wall passes the z-test and shows through. (With a z-write-before-skip bug
+        // the masked face's depth would occlude the farther wall and the pixel would stay
+        // BACKGROUND.) The reversed draw order is what makes this case sensitive to the relocation.
+        let tex = RenderTexture {
+            w: 2,
+            h: 1,
+            data: vec![255, 0, 0, 255, 0, 0],
+            mask: vec![1, 0], // left opaque, right transparent
+        };
+        let mut front = wall(32.0, 2.0, 0); // near masked wall, 2 texels
+        front.masked = true;
+        let back = wall(80.0, 400.0, -1); // farther grey full-frame wall
+        let cam = cam_at_origin_looking_plus_x(90.0);
+        let img = render(&[front, back], &[tex], &cam, 64, 64); // masked drawn FIRST
+        let px = |x: usize| {
+            let o = (32 * 64 + x) * 3;
+            [img[o], img[o + 1], img[o + 2]]
+        };
+        // Left texel (opaque): the near red wall.
+        assert!(px(31)[0] > 0 && px(31)[1] == 0 && px(31)[2] == 0);
+        // Right texel (transparent): the FARTHER wall shows (shaded grey, r == g == b), NOT the
+        // background — the masked face left z unwritten so the later wall won the depth test.
+        let right = px(32);
+        assert_ne!(right, BACKGROUND);
+        assert!(right[0] > 0 && right[0] == right[1] && right[1] == right[2]);
     }
 }

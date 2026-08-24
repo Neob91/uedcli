@@ -136,8 +136,9 @@ def test_unresolvable_ref_checkerboards_and_warns_once(capsys):
     assert err.count("Missing.Tex") == 1         # ONE warning per distinct ref
     assert "unknown-package" in err              # the decoder's case, not a generic "missing"
     assert len(table) == 1                       # the shared checkerboard slot
-    w, h, data = table[0]
+    w, h, data, mask = table[0]
     assert data[:3] == b"\xff\x00\xff"           # magenta/black checks
+    assert mask == b"\x01" * (w * h)             # checkerboard is fully opaque
     assert all(p[5] == 0 for p in polys)
 
 
@@ -155,8 +156,61 @@ def test_real_fixture_texture_resolves():
     room = cube_room(texture="LUM_InfoPortraits.ArthurCallaway")
     polys, table = pn.build_scene(_level(room), [str(FIXTURES / "LUM_InfoPortraits.utx")], IDX)
     assert len(table) == 1
-    w, h, _ = table[0]
+    w, h, _, mask = table[0]
     assert (w, h) == (64, 64)
+    assert len(mask) == w * h                    # per-texel mask plumbed alongside RGB
+
+
+def test_pf_masked_flag_plumbed_to_poly_tuple():
+    """A face's PF_Masked bit reaches the render-poly tuple's `masked` field; a plain face is
+    False. This is what tells the rasterizer to alpha-test the texture's mask for that face."""
+    polys, _ = pn.build_scene(_level(cube_room()), [], IDX)
+    assert polys and all(p[6] is False for p in polys)
+
+    masked = cube_room()
+    set_prop(masked, "PolyFlags", str(pn.PF_MASKED))
+    polys, _ = pn.build_scene(_level(masked), [], IDX)
+    assert polys and all(p[6] is True for p in polys)
+
+
+def test_bmasked_texture_masks_without_the_surface_flag():
+    """`_TextureTable.is_bmasked` reports the texture's own `bMasked`, so `add_poly` masks a face
+    whose TEXTURE is bMasked even with no `PF_Masked` surface flag — the engine ORs a texture's
+    PolyFlags onto every surface it's applied to (`unrealed/quirks.md`). The no-texture (-1) slot is
+    False."""
+    from types import SimpleNamespace
+    def _tex(b_masked):
+        return SimpleNamespace(width=2, height=1, rgb=b"\xff\x00\x00\xff\x00\x00",
+                               mask=b"\x01\x00", b_masked=b_masked)
+
+    class _Resolver:
+        def resolve(self, ref):
+            return _tex(ref == "Masked.Tex")
+
+    t = pn._TextureTable(_Resolver())
+    assert t.is_bmasked(t.index_for("Masked.Tex")) is True
+    assert t.is_bmasked(t.index_for("Plain.Tex")) is False
+    assert t.is_bmasked(-1) is False
+
+
+def test_bmasked_texture_masks_through_build_scene(monkeypatch):
+    """END-TO-END: a face whose TEXTURE is bMasked masks (`p[6]` True) via `build_scene` even with no
+    `PF_Masked` surface flag — this pins the deciding `or textures.is_bmasked(...)` in `add_poly`
+    (dropping it makes every poly False, failing here)."""
+    from types import SimpleNamespace
+
+    class _Resolver:
+        def __init__(self, *a, **k):
+            pass
+
+        def resolve(self, ref):
+            return SimpleNamespace(width=2, height=1, rgb=b"\xff\x00\x00\xff\x00\x00",
+                                   mask=b"\x01\x00", b_masked=True)
+
+    monkeypatch.setattr(pn, "TextureResolver", _Resolver)
+    room = cube_room(texture="Masked.Tex")               # bMasked texture, NO PolyFlags set
+    polys, _ = pn.build_scene(_level(room), [], IDX)
+    assert polys and all(p[6] is True for p in polys)
 
 
 # --------------------------------------------------------------- transform cross-checks
@@ -307,8 +361,8 @@ def test_pixel_probe_marker_quad_lands_at_oracle_pixel():
     # marker quad: 8uu square centred at (200, 60, -40), facing the camera at origin
     cx, cy, cz = 200.0, 60.0, -40.0
     quad = ([cx, cy - 4, cz - 4, cx, cy + 4, cz - 4, cx, cy + 4, cz + 4, cx, cy - 4, cz + 4],
-            [cx, cy, cz], [0.0, 1.0, 0.0], [0.0, 0.0, -1.0], [0.0, 0.0], 0)
-    red = (1, 1, bytes([255, 0, 0]))
+            [cx, cy, cz], [0.0, 1.0, 0.0], [0.0, 0.0, -1.0], [0.0, 0.0], 0, False)
+    red = (1, 1, bytes([255, 0, 0]), bytes([1]))
     import uedcli_native
     W, H, FOV = 320, 240, 90.0
     fwd, right, up = pn.camera_basis(0.0, 0.0)
@@ -342,7 +396,7 @@ def _synthetic_scene(tmp_path=None):
     table (no package file needed): the resolver misses, then the table is patched."""
     lvl = _case_c_level()
     polys, table = pn.build_scene(lvl, [], IDX)
-    asym = (2, 2, bytes([255, 0, 0, 0, 255, 0, 0, 0, 255, 255, 255, 0]))
+    asym = (2, 2, bytes([255, 0, 0, 0, 255, 0, 0, 0, 255, 255, 255, 0]), bytes([1, 1, 1, 1]))
     table = [asym if i == 0 else t for i, t in enumerate(table)]
     return polys, table
 
