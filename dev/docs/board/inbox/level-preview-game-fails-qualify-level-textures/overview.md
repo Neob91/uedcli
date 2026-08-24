@@ -40,8 +40,34 @@ Two candidate causes (rank in the spike):
 Blocks `--game` preview AND `level materialize` of IMPORTED retail maps. Does not affect authored
 trunks. Distinct from the native-CSG geometry-drop item and the Wanchai editor-wedge.
 
-## Investigation
-Spike launched 2026-08-24 (subagent): compare an imported brush's textured-poly order/count/names vs
-the editor's `OBJ DEPENDENCIES` block for the same brush; determine whether import drift, missing
-textures, or both dominate; recommend whether the fix is in `mapimport` (poly order), `qualify`
-(matching strategy), or texture resolution. Findings append here.
+## Root cause (spike 2026-08-24, verified)
+**A parser bug in `qualify.parse_obj_dependencies` — NOT missing textures, NOT import drift.** The
+regex `_LINE = r"(?:Log:\s*)?\s*(Class|Texture)\s+(\S+)"` (`qualify.py:16`) captures only dependency
+lines whose class token is the literal `Texture`, and silently drops every `Texture` **subclass**
+(`WetTexture`, `FireTexture`, `ScriptedTexture`, `WaveTexture`).
+
+`02_NYC_Bar` textures 60 of its 208 brushes with `Effects.water.drtywater_a`, whose export class is
+**`WetTexture`** (animated water). The editor's `OBJ DEPENDENCIES` prints each dep as
+`<ClassName> <FullPath>` (`spikes/2026-06-19-read-surface-texture-package.md` L63-100), so that poly's
+line is `WetTexture Effects.water.drtywater_a` — the regex skips it, the parsed block comes back one
+poly short, the brush's authored `want` (6 names) no longer equals the block (5) → the loud raise at
+`qualify.py:129`, at the first such brush (`Brush9`). The "201 of 208 unclaimed" is just the abort
+state (7 claimed before Brush9), not 201 broken brushes.
+
+Verified: 38 distinct refs, **0 missing** (the earlier `drtywater_a` "miss" was a resolver artifact
+from `class_index=None`; with a real `ClassIndex` it resolves — `no-mip-data` because animated, but
+present). **60/208** brushes touch the one `WetTexture` — exactly the failing set. Import preserves
+per-brush poly order + count (H2 excluded).
+
+## Fix direction
+In `qualify.py::parse_obj_dependencies`, not `mapimport`/texture-resolution. Import-INDEPENDENT: an
+authored trunk with a `WetTexture`/`FireTexture` on any poly fails identically. Options: (a) within an
+`Engine.Polys` block, treat every non-`Class` `<Word> <dotted.ref>` line as a poly texture ref
+(smallest); or (b) pass the `Engine.Texture`-descendant class names and accept those prefixes. **Live
+check before building:** confirm an `Engine.Polys` block for a subclass-textured brush contains ONLY
+per-poly texture lines (no other dependency kind) so a broadened match can't absorb a non-texture line.
+Quick win once that's confirmed.
+
+Repro/measure scripts: `_scratch`-external, under the job tmp (`classify_ref_classes.py`,
+`measure_nyc_bar_textures.py`, `probe_effects_and_dx.py`). Related native-preview bug filed:
+`native-preview-texture-resolver-ignores-texture-subclasses`.
