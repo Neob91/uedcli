@@ -13,7 +13,7 @@ import struct
 from dataclasses import dataclass
 from decimal import Decimal
 
-from .model import Actor, Level
+from .model import Actor, Level, strip_texture_group
 from .emit import emit_actor, emit_brush
 from .typedprops import ActorValues, prop_key, typed_value
 
@@ -374,6 +374,13 @@ def _geometry_text(a: Actor) -> str:
         return ""
     b = copy.deepcopy(a.brush)
     for p in b.polys:
+        # Strip the group to `Package.Name` on BOTH compare sides (convention: NEVER store a group
+        # in a qualified texture — `model.strip_texture_group`). The trunk holds a MIX (some 2-part,
+        # some stale 3-part); the offline `.dx` decode always renders the full 3-part path from the
+        # import table (`mapimport.polygon_of`). UE1 resolves a poly texture by name within its
+        # package regardless of group, so `Package.Name` is the shared identity — else the same face
+        # reads as a GEOMETRY diff.
+        p.texture = strip_texture_group(p.texture)
         p.origin = _f32_vec(p.origin)
         p.normal = None
         p.texture_u = _f32_vec(p.texture_u)

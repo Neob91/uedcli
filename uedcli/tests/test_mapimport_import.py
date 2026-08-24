@@ -146,16 +146,14 @@ def test_the_builder_brush_and_viewport_cameras_are_dropped(paste_text):
     assert level.order == [n for n in level.order if n in level.actors]
 
 
-def test_the_drop_must_happen_before_class_names_are_qualified(paste_text):
-    """The drop keys on the SHORT class name, so qualifying first defeats it.
+def test_the_drop_is_independent_of_class_qualification(paste_text):
+    """The scratch drop fires whether the class is stored short or fully qualified.
 
-    Import rewrites every class name to its fully-qualified form (`Brush` → `Engine.Brush`) before
-    the tree is written, because every other trunk stores them that way. Both scratch tests match
-    on the short name — the builder-brush test literally requires `Class=Brush` — so once that
-    rewrite has run, neither can ever match again and the apparatus would ship in the tree.
-
-    This test pins the ordering constraint rather than trusting a comment: it qualifies FIRST and
-    asserts the builder brush then survives, which is the failure mode.
+    `is_builder_brush` matches the BARE class name (`(a.cls or '').rsplit('.', 1)[-1]`), so a builder
+    brush is dropped whether its class is `Brush` or `Engine.Brush`; the camera check already strips
+    qualification itself. So `drop_editor_scratch` no longer depends on running before import's
+    class-qualification rewrite. This pins that qualification-independence: qualify FIRST, then assert
+    both are still dropped.
     """
     level = model.parse_t3d(paste_text)
     for a in level.actors.values():                    # simulate qualify_and_validate's rewrite
@@ -164,11 +162,7 @@ def test_the_drop_must_happen_before_class_names_are_qualified(paste_text):
 
     dropped = mapimport.drop_editor_scratch(level)
 
-    assert "Brush1" not in dropped, (
-        "the builder-brush check unexpectedly still fires after qualification — if that is now "
-        "true the ordering constraint has changed and this test should be revisited")
-    assert "Brush1" in level.actors
-    # The camera test strips qualification itself, so it keeps working either way.
+    assert "Brush1" in dropped and "Brush1" not in level.actors
     assert "Camera6" in dropped
 
 

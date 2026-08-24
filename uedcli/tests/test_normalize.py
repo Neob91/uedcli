@@ -213,6 +213,39 @@ def test_compare_view_ignores_the_recomputed_poly_normal():
     assert compare_view(_lvl("1"), defaults=d) == compare_view(_lvl("-1"), defaults=d)
 
 
+def test_compare_view_canonicalizes_poly_texture_to_package_name():
+    # A poly texture the trunk stores 2-part (`Pkg.Name`) and the offline .dx decode renders 3-part
+    # (`Pkg.Group.Name`) is the SAME face -- UE1 resolves by name within the package regardless of
+    # group. Both must compare EQUAL, at any group depth, while a genuinely different leaf differs.
+    from uedcli.normalize import compare_view
+    from uedcli.model import Actor, Brush, Level, Polygon
+    from decimal import Decimal
+    verts = [(Decimal("0"), Decimal("0"), Decimal("0")), (Decimal("64"), Decimal("0"), Decimal("0"))]
+
+    def _lvl(tex):
+        a = Actor(name="B", cls="Engine.Brush")
+        a.brush = Brush(model_name="Model0", polys=[Polygon(texture=tex, vertices=list(verts))])
+        lv = Level(actors={"B": a}); lv.order = ["B"]
+        return lv
+    d = StubDefaults()
+    cv = lambda t: compare_view(_lvl(t), defaults=d)
+    assert cv("NYCBar.Misc.BarSign_Bb") == cv("NYCBar.BarSign_Bb")   # 3-part == 2-part (the fix)
+    assert cv("Pkg.G1.G2.Name") == cv("Pkg.Name")                    # nested groups collapse
+    assert cv("PkgA.Name") != cv("PkgB.Name")                        # different PACKAGE must NOT collapse
+    assert cv(None) != cv("Pkg.Name")                                # untextured face differs from textured
+    assert cv("NYCBar.BarSign_Bb") != cv("NYCBar.OtherSign")         # different leaf still differs
+
+
+def test_strip_texture_group_edge_cases():
+    from uedcli.model import strip_texture_group as canon
+    assert canon(None) is None
+    assert canon("") == ""
+    assert canon("BareName") == "BareName"                           # single segment untouched
+    assert canon("Pkg.Name") == "Pkg.Name"
+    assert canon("Pkg.Group.Name") == "Pkg.Name"
+    assert canon("Pkg.G1.G2.G3.Name") == "Pkg.Name"
+
+
 def test_canonical_actor_t3d_stays_faithful_for_trunk_and_import():
     # Finding 1 (cold review 2026-07-14): canonical_actor_t3d is ALSO the durable trunk-write
     # (trunk.dump_actor_body) AND the editor/game import payload (apply._materialize `result`).
@@ -224,11 +257,13 @@ def test_canonical_actor_t3d_stays_faithful_for_trunk_and_import():
     from decimal import Decimal
     a = Actor(name="B", cls="Brush")
     a.brush = Brush(model_name="Model0",
-                    polys=[Polygon(texture="T", origin=(Decimal("43.552099"), Decimal("0"), Decimal("0")),
+                    polys=[Polygon(texture="Pkg.Group.Name",
+                                   origin=(Decimal("43.552099"), Decimal("0"), Decimal("0")),
                                    normal=(Decimal("0"), Decimal("0"), Decimal("1")),
                                    vertices=[(Decimal("64"), Decimal("-128"), Decimal("0"))])])
     out = canonical_actor_t3d(a)
     assert "Normal" in out                          # Normal PRESERVED (faithful for trunk/import)
+    assert "Texture=Pkg.Group.Name" in out          # group PRESERVED (texture canon is compare-only)
     assert "+00043.552099" in out                   # FULL precision preserved, not float32 ...097
     assert "+00064.000000" in out and "-00128.000000" in out       # integers exact
 

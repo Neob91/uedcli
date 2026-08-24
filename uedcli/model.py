@@ -127,6 +127,19 @@ class Level:
     order: list[str] = field(default_factory=list)
 
 
+def strip_texture_group(ref: str | None) -> str | None:
+    """Collapse a qualified texture ref `Package.Group.Name` (or deeper) to `Package.Name`; a bare
+    name, 2-part ref, `None`, and `""` pass through unchanged. The group is NEVER required to resolve
+    an object — a 2-part ref binds the same object as the 3-part form even when the object genuinely
+    has a group (unrealed/quirks.md / unrealed/t3d.md, confirmed live). uedcli convention: NEVER
+    store a group in a qualified texture name, including refs read back from the editor's own `OBJ
+    DEPENDENCIES` output or an offline `.dx` decode."""
+    if not ref:
+        return ref
+    parts = ref.split(".")
+    return ref if len(parts) <= 2 else f"{parts[0]}.{parts[-1]}"
+
+
 def _vec(m: re.Match, base: int) -> tuple[float, float, float]:
     return (float(m.group(base)), float(m.group(base + 1)), float(m.group(base + 2)))
 

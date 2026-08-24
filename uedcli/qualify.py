@@ -11,7 +11,7 @@ from __future__ import annotations
 import re
 import time
 
-from .model import Level
+from .model import Level, strip_texture_group
 
 _LINE = re.compile(r"(?:Log:\s*)?\s*(Class|Texture)\s+(\S+)")
 
@@ -55,16 +55,6 @@ def parse_loaded_classes(dump: str) -> dict[str, set[str]]:
     return result
 
 
-def _strip_group(ref: str) -> str:
-    """Collapse `Package.Group.Name` (or deeper) to `Package.Name`. The group is NEVER required
-    to resolve an object — confirmed live (unrealed/quirks.md "T3D format" / unrealed/t3d.md): a 2-part ref binds
-    the same object as the 3-part form, even when the object genuinely has a group. uedcli
-    convention: NEVER store a group in a qualified texture name, including refs read back from
-    the editor's own `OBJ DEPENDENCIES` output."""
-    parts = ref.split(".")
-    return ref if len(parts) <= 2 else f"{parts[0]}.{parts[-1]}"
-
-
 def _bare(ref: str) -> str:
     """The object's own name — the segment after the last `.` — of a texture ref, dropping any
     package/group qualifier (`LUM_CoreTex.Tile.grey_stone_tile` → `grey_stone_tile`; a bare
@@ -77,7 +67,7 @@ def _bare(ref: str) -> str:
 
 def qualify_level_textures(level: Level, blocks: list[list[str]]) -> None:
     """Patch each textured brush's polys with the package-qualified ref OBJ DEPENDENCIES reports
-    (group stripped — `_strip_group`), by matching each brush to its OWN dump block ON CONTENT.
+    (group stripped — `model.strip_texture_group`), by matching each brush to its OWN dump block ON CONTENT.
 
     Why content, not position: the dump's `Engine.Polys` walk isn't limited to OUR authored
     brushes — the level's own world BSP `Model` emits one too, an AGGREGATE of every brush's
@@ -134,7 +124,7 @@ def qualify_level_textures(level: Level, blocks: list[list[str]]) -> None:
                 f"blocks still unclaimed (dump poly-order drift or a missing/misnamed texture?)")
         claimed.add(hit)
         for poly, ref in zip(polys, non_empty_blocks[hit]):
-            poly.texture = _strip_group(ref)
+            poly.texture = strip_texture_group(ref)
 
 
 def qualify_level_classes(level: Level, loaded_classes: dict[str, set[str]]) -> None:

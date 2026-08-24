@@ -75,6 +75,23 @@ def test_verify_mismatch_message_points_at_the_GEOMETRY_line_when_the_brush_diff
     assert "+00096.000000" in result.message and "+00064.000000" in result.message
 
 
+def test_verify_passes_when_poly_texture_differs_only_by_group_segment():
+    # The trunk stores a poly texture 2-part (`Pkg.Name`); the offline .dx decode renders it 3-part
+    # (`Pkg.Group.Name`) from the import table -- same face. It must PASS, not report a GEOMETRY diff.
+    brush = ("Begin Map\nBegin Actor Class=Engine.Brush Name=B1\n"
+             "    Begin Brush Name=Model0\n       Begin PolyList\n"
+             "         Begin Polygon Texture=%s\n"
+             "         Vertex   +00000.000000,+00000.000000,+00000.000000\n"
+             "         End Polygon\n       End PolyList\n    End Brush\n"
+             '    Brush=Model\'MyLevel.Model0\'\n    Name="B1"\nEnd Actor\nEnd Map')
+    expected = _lvl(brush % "NYCBar.BarSign_Bb")            # trunk: 2-part
+    result = _verify(brush % "NYCBar.Misc.BarSign_Bb", expected, _DEFAULTS)  # built: 3-part
+    assert result.ok is True
+    # A genuinely different leaf still fails.
+    bad = _verify(brush % "NYCBar.Misc.OtherSign", expected, _DEFAULTS)
+    assert bad.ok is False and "GEOMETRY" in bad.message
+
+
 def test_verify_mismatch_message_flags_a_missing_actor():
     # expected has L1+L2; the built map (got) has only L1 -> name L2 as MISSING.
     two = _T3D.replace("End Map",
