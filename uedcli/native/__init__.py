@@ -1,17 +1,16 @@
-"""Native (editor-free) `.dx`/`.unr` materialize — the offline build path.
+"""Native (editor-free) `.dx`/`.unr` codec + brush marshalling.
 
-This package is the Python glue for the native `level materialize`: it reads the
-git-tracked T3D trunk and writes a game-loadable UE1 package byte-by-byte, with the
-BSP/CSG compute delegated to the Rust `uedcli_native` extension (when built) and the
-proven byte-exact serializers kept here in Python.
+The proven byte-exact UE1 package serializers/parsers kept in Python, shared by
+`level import` (`mapimport`), the built-model health check (`bsp.builtmodel`), and the
+native `level preview` path. The BSP/CSG compute itself lives in the Rust `uedcli_native`
+extension.
 
-Module map (see board item `native-level-materialize` §3):
-  codec.py        - FCompactIndex + primitive read/write (shared)
-  pkg_write.py    - UE1 package container: header/names/imports/exports/layout/GUID+gen
-  umodel.py       - UModel body parse (self-check) + write-from-arrays (Python dev oracle)
-  actor_write.py  - StateFrame + FPropertyTag property list + struct layouts + UPolys
-  level_write.py  - ULevel body (Actors/URL/ModelRef/ReachSpecs/trailing)
-  pkgref.py       - import/name resolver (class -> defining package, textures by ref)
-  assemble.py     - object graph -> name/import synth -> package bytes; Actors[0/1] synth
-  materialize.py  - run_materialize_native(): trunk -> build -> assemble -> self-check -> swap
+Module map:
+  codec.py         - FCompactIndex + primitive read/write (shared)
+  pkg_write.py     - UE1 package container: header/names/imports/exports/layout + parse
+  umodel.py        - UModel body parse + write-from-arrays (Python dev oracle)
+  actor_write.py   - StateFrame + FPropertyTag property list + struct layouts + UPolys/FPoly
+  props.py         - N-3 typed-property conversion + late-bound import refs
+  brush_marshal.py - brush actor -> CSG BrushTuple; world-CSG selection (used by brushcsg/preview)
+  csg_golden.py    - editor-golden CSG differential capture harness (tests)
 """

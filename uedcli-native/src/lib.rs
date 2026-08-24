@@ -14,12 +14,9 @@ mod build;
 mod csg;
 mod f32;
 mod fpoly;
-mod light;
-mod linecheck;
 mod model;
 mod model_write;
 mod passes;
-mod paths;
 mod render;
 mod zones;
 
@@ -295,15 +292,6 @@ fn intersect_brushset(
         .collect())
 }
 
-/// `build_carved_box` — the M0 single-subtract stand-in (kept for the dual-serializer §6 gate
-/// 5 cross-check against the Python `carved_box_model`).
-#[pyfunction]
-#[pyo3(signature = (size=512.0, height=256.0))]
-fn build_carved_box(py: Python<'_>, size: f32, height: f32) -> PyResult<Built> {
-    let model = py.allow_threads(|| build::carved_box(size, height));
-    Ok(Built { model })
-}
-
 /// `serialize_model` (§8.1) — the built UModel body as `bytes`.  Pinned byte-identical to
 /// the Python oracle by §6 gate 5.
 #[pyfunction]
@@ -313,35 +301,6 @@ fn serialize_model(py: Python<'_>, built: &Built) -> PyResult<Py<PyBytes>> {
         .allow_threads(|| model_write::serialize(model))
         .map_err(map_err)?;
     Ok(PyBytes::new_bound(py, &bytes).unbind())
-}
-
-/// `bake_lighting` (§8.1) — the native `LIGHT APPLY` surface-lightmap bake (spike section 20).
-/// Fills the built Model's lightmap arrays (`light_map`/`light_bits`/`lights`) and links each
-/// lit surf's `iLightMap`, in parallel (rayon).  `lights` is the participating light set as
-/// `[(location=[x,y,z], radius_byte), ...]` — the caller filters `LightType != LT_None`.  The
-/// `lights` array holds 0-based light INDICES + `-1` NULL terminators (Python assembly rewrites
-/// them to export object-refs).  Heavy compute runs under `allow_threads` (interruptible).
-#[pyfunction]
-fn bake_lighting(py: Python<'_>, built: &mut Built, lights: Vec<([f32; 3], u8)>) -> PyResult<()> {
-    let inputs: Vec<light::LightInput> = lights
-        .iter()
-        .map(|(loc, r)| light::LightInput {
-            location: model::Vec3::new(loc[0], loc[1], loc[2]),
-            radius: *r,
-        })
-        .collect();
-    let model = &mut built.model;
-    py.allow_threads(|| light::bake(model, &inputs))
-        .map_err(map_err)?;
-    Ok(())
-}
-
-/// `build_paths` (§8.1) — reachspec build.  N-5; not yet ported.
-#[pyfunction]
-fn build_paths(_built: &Built) -> PyResult<()> {
-    Err(BuildError::new_err(
-        "build_paths is not implemented (N-5: reachspec build)",
-    ))
 }
 
 /// One flat world-space textured polygon for `render_frame` (native preview, spec §5):
@@ -415,87 +374,6 @@ fn render_frame(
     Ok(PyBytes::new_bound(py, &img).unbind())
 }
 
-/// `opt_geom_from_arrays` — TEST/VALIDATION entry for the standalone `bspOptGeom` port
-/// (`bspoptgeom.rs`).  Reconstructs the minimal `Model` fields the pass touches from flat arrays,
-/// runs the full `bsp_opt_geom`, and returns the mutated results, so the offline harness
-/// (`optgeom_validate.py`) can assert byte-exact reproduction of a parsed golden `Model`'s
-/// `FVert.iSide` + `NumSharedSides` (and that pass-1 inserts nothing on an already-optimized model).
-/// Inputs: `points` = 3·P f32; per-node `plane` = 4·N f32, `ivertpool/numverts/ifront/iback/iplane`
-/// = N i32; per-vert `ivertex` = V i32.  Returns `(vert_ivertex, vert_iside, node_ivertpool,
-/// node_numverts, num_shared_sides)`.
-#[pyfunction]
-#[allow(clippy::type_complexity, clippy::too_many_arguments)]
-fn opt_geom_from_arrays(
-    py: Python<'_>,
-    points: Vec<f32>,
-    node_plane: Vec<f32>,
-    node_ivertpool: Vec<i32>,
-    node_numverts: Vec<i32>,
-    node_ifront: Vec<i32>,
-    node_iback: Vec<i32>,
-    node_iplane: Vec<i32>,
-    vert_ivertex: Vec<i32>,
-) -> PyResult<(Vec<i32>, Vec<i32>, Vec<i32>, Vec<i32>, i32)> {
-    let n_nodes = node_ivertpool.len();
-    if node_numverts.len() != n_nodes
-        || node_ifront.len() != n_nodes
-        || node_iback.len() != n_nodes
-        || node_iplane.len() != n_nodes
-        || node_plane.len() != n_nodes * 4
-    {
-        return Err(BuildError::new_err(
-            "opt_geom_from_arrays: node array length mismatch",
-        ));
-    }
-    if points.len() % 3 != 0 {
-        return Err(BuildError::new_err(
-            "opt_geom_from_arrays: points not a multiple of 3",
-        ));
-    }
-    let (verts_out, iside_out, pool_out, nv_out, nss) = py.allow_threads(move || {
-        let mut model = model::Model::default();
-        model.points = points
-            .chunks_exact(3)
-            .map(|c| model::Vec3::new(c[0], c[1], c[2]))
-            .collect();
-        model.verts = vert_ivertex
-            .iter()
-            .map(|&iv| model::BspVert {
-                i_vertex: iv,
-                i_side: -1,
-            })
-            .collect();
-        model.nodes = (0..n_nodes)
-            .map(|i| {
-                let pl = model::Plane {
-                    x: node_plane[i * 4],
-                    y: node_plane[i * 4 + 1],
-                    z: node_plane[i * 4 + 2],
-                    w: node_plane[i * 4 + 3],
-                };
-                let mut nd = model::BspNode::leaf(pl, 0, node_ivertpool[i], node_numverts[i]);
-                nd.i_front = node_ifront[i];
-                nd.i_back = node_iback[i];
-                nd.i_plane = node_iplane[i];
-                nd
-            })
-            .collect();
-        bspoptgeom::bsp_opt_geom(&mut model);
-        let verts_out: Vec<i32> = model.verts.iter().map(|v| v.i_vertex).collect();
-        let iside_out: Vec<i32> = model.verts.iter().map(|v| v.i_side).collect();
-        let pool_out: Vec<i32> = model.nodes.iter().map(|n| n.i_vert_pool).collect();
-        let nv_out: Vec<i32> = model.nodes.iter().map(|n| n.num_vertices).collect();
-        (
-            verts_out,
-            iside_out,
-            pool_out,
-            nv_out,
-            model.num_shared_sides,
-        )
-    });
-    Ok((verts_out, iside_out, pool_out, nv_out, nss))
-}
-
 #[pymodule]
 fn uedcli_native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("BuildError", m.py().get_type_bound::<BuildError>())?;
@@ -503,11 +381,7 @@ fn uedcli_native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(build_geometry, m)?)?;
     m.add_function(wrap_pyfunction!(build_geometry_bspcsg, m)?)?;
     m.add_function(wrap_pyfunction!(intersect_brushset, m)?)?;
-    m.add_function(wrap_pyfunction!(build_carved_box, m)?)?;
     m.add_function(wrap_pyfunction!(serialize_model, m)?)?;
-    m.add_function(wrap_pyfunction!(bake_lighting, m)?)?;
-    m.add_function(wrap_pyfunction!(build_paths, m)?)?;
     m.add_function(wrap_pyfunction!(render_frame, m)?)?;
-    m.add_function(wrap_pyfunction!(opt_geom_from_arrays, m)?)?;
     Ok(())
 }

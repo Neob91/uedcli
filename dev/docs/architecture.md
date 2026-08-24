@@ -1472,8 +1472,7 @@ in `spikes/2026-06-25-mover-keyframe-basepos-semantics.md`.
   - **Every caller of `is_mover` passes an index**, and the predicate itself has no name-guess
     fallback inside it: `doctor.run_doctor`/`check_watertight`/`_is_closed_solid_brush`,
     `eventgraph.build_graph`, `preview_native.build_scene`/`_brush_inputs`/`_mover_world_polys`,
-    `native.materialize._in_world_csg`/`_build_level_model`/`run_materialize_native`,
-    `brushcsg.check_all_csg_brushes`, `movers.canonicalize_mover`, and the dispatch verbs
+    `brush_marshal._in_world_csg`, `brushcsg.check_all_csg_brushes`, `movers.canonicalize_mover`, and the dispatch verbs
     (`mover key`, `brush scale`, `brush apply-transform`).
   - **ONE name-suffix mover test survives OUTSIDE `is_mover`, deliberately** (do not "fix" it in
     passing): `preview.classify_brush` still picks the magenta *mover* colour with
@@ -1595,30 +1594,29 @@ Rationale, rejected alternatives and the outstanding verification gap:
 [`unrealed/package-format.md`](unrealed/package-format.md) (`RF_HasStack` is a per-EXPORT flag;
 `FPoly.ItemName` index 0 is a real name).
 
-## Native (editor-free) materialize (`uedcli/native/`, `uedcli-native/`)
-The offline build path that turns the git-tracked T3D trunk into a game-loadable `.dx`/`.unr`
-**with no editor, no wine, no container** — the design is board item `native-level-materialize`
-(RE evidence: `spikes/2026-07-15-native-materialize/sections/{10,20,30}`). Two artifacts:
+## Native CSG core (`uedcli/native/`, `uedcli-native/`)
+The in-process Rust CSG core that carves the T3D trunk into a BSP model **with no editor, no wine,
+no container**. It backs `level preview --native` (`build_geometry`/`build_geometry_bspcsg` →
+`serialize_model` → the software rasterizer) and `brush intersect`/`deintersect`
+(`intersect_brushset`). The offline native *materialize* build that once sat on top of this core
+(`run_materialize_native`, `assemble.py`, `level_write.py`, `pkgref.py`, Rust `light.rs`/`paths.rs`)
+was **removed 2026-08-23**: it had no CLI caller and never reached the CSG solidity parity below; the
+editor-driven `apply.run_materialize` is the sole `level materialize`. Two artifacts remain:
 
-- **Python glue `uedcli/native/`** owns orchestration + the proven byte-exact serializers:
-  `codec.py` (FCompactIndex + primitives + FString), `pkg_write.py` (package container:
-  header/names/imports/exports layout + GUID/generation mint + a `parse_package` re-reader),
-  `umodel.py` (UModel body parse + write-from-arrays — the Python **dev oracle**),
-  `actor_write.py` (StateFrame + FPropertyTag list + struct layouts + UPolys/FPoly),
-  `level_write.py` (the ULevel body: Actors/FURL/ModelRef/ReachSpecs/trailing), `pkgref.py`
-  (import/name resolver — class→defining-package, textures by ref), `assemble.py` (object graph
-  → name/import synthesis → body serialization → layout; **synthesizes the mandatory `Actors[0]`
-  LevelInfo + `Actors[1]` Default Brush + builder-cube UModel, and asserts a PlayerStart is
-  present**), and `materialize.py` (`run_materialize_native` + the **always-on offline
-  self-check**: re-parse to EOF, resolve surf/model refs, assert the Actors[0]=LevelInfo /
-  Actors[1]=Brush / PlayerStart invariants — §6 gate 1).
+- **Python glue `uedcli/native/`**: the `.dx` codec — `codec.py` (FCompactIndex + primitives +
+  FString), `umodel.py` (UModel body parse + write-from-arrays — the Python **dev oracle**, shared with
+  `level import` and preview), `actor_write.py` (StateFrame + FPropertyTag list + UPolys/FPoly),
+  `pkg_write.py` (package container + a `parse_package` re-reader) — plus `brush_marshal.py` (one CSG
+  brush actor → the flat `BrushTuple` the Rust core takes: `_build_brush_input`, the world-CSG/mover
+  selector `_in_world_csg`; shared by `brushcsg.py` and `preview_native.py`) and `csg_golden.py` (the
+  editor-golden differential harness).
   - **World-CSG brush selection (`_in_world_csg`).** Only STATIC brushes are carved into the world
     BSP; a **Mover** (`Engine.Mover` / a subclass like `DeusExMover`, `ElevatorMover`) carries a
     brush but is a DYNAMIC actor (door/elevator/lift) whose brush UnrealEd keeps as the Mover's OWN
-    private Model — it is never CSGed into the world.  `_build_level_model`'s `csg_order` therefore
+    private Model — it is never CSGed into the world.  `brush_marshal._in_world_csg` therefore
     filters movers OUT of the CSG input (via the shared substrate-generic `movers.is_mover`
-    predicate), while `_trunk_to_actorspecs` still EMITS every mover as a level actor (actor
-    emission is independent of CSG selection).  Feeding movers into world CSG fills their doorways
+    predicate), while preview still renders every mover (`preview_native._mover_world_polys`, as
+    world-transformed extra_polys — CSG selection is independent of what is drawn).  Feeding movers into world CSG fills their doorways
     solid and shatters empty-space connectivity into spurious zones/leaf-blobs — measured on the
     retail levels: excluding movers took HK/WanChai-Market leaf-blobs 21→2 and zones 24→5 (matching
     the editor golden's own 5), and UNATCO-HQ leaf-blobs 18→7 and zones 20→9 (editor 7); the castle
@@ -1626,13 +1624,13 @@ The offline build path that turns the git-tracked T3D trunk into a game-loadable
     predicate** — i.e. with the `DeusEx.BreakableGlass` brushes still entering CSG — and have not
     been re-run since; re-measuring is a `board/inbox/` chore.  The suffix GAP itself (a Mover
     subclass not named `*Mover` leaking into CSG) is CLOSED: `is_mover` is schema-aware since
-    2026-07-25, so `_in_world_csg`/`_build_level_model`/`run_materialize_native` take the
-    `ClassIndex` (`index=`/`class_index=`) and resolve the hierarchy for real.
+    2026-07-25, so `_in_world_csg` and the preview builders take the `ClassIndex`
+    (`index=`/`class_index=`) and resolve the hierarchy for real.
 - **Rust crate `uedcli-native/`** (a PyO3/maturin extension `uedcli_native`) owns the CPU-bound
-  compute (spec §8: pure CPython misses the ≤2 min build target). `src/` is a pure-Rust core
-  plus a THIN `lib.rs` PyO3 shim exposing the staged FFI contract (`build_geometry`/
-  `serialize_model`/`bake_lighting`/`build_paths`) with a `BuildError` exception and `allow_threads`
-  around compute. `cargo test` runs the core with no Python. The **CSG core** (N-1) is:
+  compute (pure CPython is too slow for the CSG solve). `src/` is a pure-Rust core plus a THIN
+  `lib.rs` PyO3 shim exposing `build_geometry`/`build_geometry_bspcsg`/`intersect_brushset`/
+  `serialize_model`/`render_frame` with a `BuildError` exception and `allow_threads` around compute.
+  `cargo test` runs the core with no Python. The **CSG core** (N-1) is:
   - `fpoly.rs` — `FPoly`: CalcNormal/Fix/RemoveColinears/**Finalize/Reverse/Transform**/SplitWithPlane
     (classify+cut) with the exact ±0.25/±0.01 thresholds; carries the surf-link metadata that flows
     into node emission. Transform does Location/Rotation/PrePivot and **rejects non-identity Scale**
@@ -1691,8 +1689,7 @@ The offline build path that turns the git-tracked T3D trunk into a game-loadable
     assembly (`_patch_zone_refs`, mirrors `_patch_light_refs`) by PointRegion-resolving each
     ZoneInfo's Location into a zone.  `Visibility = ~0`.  Zone MEMBERSHIP is approximate vs the
     editor (the flood is centroid/poly-filter based, not the exact `sub_aa370` passes), but the
-    pawn's zone is valid and disconnected regions (the SkyBox) separate correctly.  `light/paths.rs`
-    remain N-4/N-5 stubs.
+    pawn's zone is valid and disconnected regions (the SkyBox) separate correctly.
   - **KNOWN GAP — CSG geometry parity (pre-existing, in `csg.rs`/`build.rs`, NOT zones):** for the
     full 95-brush castle, ~8 brushes (battlement merlons, some walls/steps, an arrow-slit) build a
     different solid/void than UnrealEd (~11% grid-solidity divergence), so a native map does not yet
@@ -1766,14 +1763,11 @@ needs `bspMergeCoplanars` coplanar-face union (`build.rs merge_coplanars` is a d
 `FindBestSplit` uses a split-minimizing variant that substitutes for the missing merge/opt passes),
 and **f (portal)** needs `TestVisibility` portalization/zones (native is single-zone; leaf-count
 parity for multi-region carves is the same slice). §6 gate 5 (dual serializer) still passes.
-**Collision hulls (`bsp_build_bounds`) now build, so a native-materialized map is PLAYABLE**: the
-pawn stands (`phys=1`) and `uplayctl shot` renders the world first-person — live-verified on
-`NativeCastle` 2026-07-16 (the full castle trunk, 95 brushes). Validate offline with the box-sweep
-oracle `spikes/2026-07-15-native-materialize/harness/line_check.py` (a downward pawn sweep must HIT
-at `floor+extent`). `bake_lighting`/`build_paths` are N-4/N-5. `apply.run_materialize` still drives the editor; flipping
-it to the native path as its **sole** path awaits full CSG parity (b/f) + N-3 typed-prop
-serialization + editor-mock test migration (flagged in `board/inbox/`). Build the extension:
-`cd uedcli-native && maturin develop`; `cargo test` runs the core goldens.
+The core builds a full Model (nodes/surfs/points, plus `bsp_build_bounds` collision hulls and
+`zones.rs`); `level preview --native` reads only the geometry. `level materialize` is editor-driven
+(`apply.run_materialize`) — the native build that once consumed the lighting/paths passes was removed
+(2026-08-23). Build the extension: `cd uedcli-native && maturin develop`; `cargo test` runs the core
+goldens.
 
 ## Adding a verb (model-side, no editor)
 1. `cli.py`: add the parser under `actor`/`brush` (brush sub-groups: `poly`/`vertex`)/`mover`/
@@ -2024,11 +2018,10 @@ the spiral lives in one local frame with its column base at z=0.
 materialize`) and the real engine (the default `level preview --game`), but the **coarse** native
 core assumes convex brushes: `uedcli-native/src/csg.rs` `point_in_convex` tests "behind every face"
 (the convex hull, not the true solid), so a stepped brush's concave notches classify as solid.
-That core is what `level preview --native` uses (and what `_build_level_model`'s `core=` kwarg selects internally — there is no `--core` CLI flag). Native
-*materialize* by DEFAULT is NOT affected — it runs `core="bspcsg"`, the incremental `bspBrushCSG`
-port, which never calls `point_in_convex` (though `bspcsg.rs` flags a non-convex FIRST Add as an
-unhandled case of its convex world-seed shortcut, so a concave brush should not lead a level's
-adds). This joins the already-documented ~11% native solidity
+That coarse core (`build_geometry`) is what `level preview --native` uses; its
+`build_geometry_bspcsg` fallback — the incremental `bspBrushCSG` port — never calls
+`point_in_convex` (though `bspcsg.rs` flags a non-convex FIRST Add as an unhandled case of its convex
+world-seed shortcut, so a concave brush should not lead a level's adds). This joins the already-documented ~11% native solidity
 divergence on walls/steps (KNOWN GAP below); the `csg.rs:61` comment "DX brush builders emit convex
 brushes, so this is exact" is now **falsified for builder output**, with a `board/inbox/` follow-up to
 decompose non-convex builder brushes into convex pieces (or guard+warn) on the native path.

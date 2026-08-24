@@ -196,8 +196,8 @@ pub struct Model {
     /// (re-raw-zones/linecheck-oracle.md).
     pub leaf_hulls: Vec<i32>,
     pub leaves: Vec<BspLeaf>,
-    /// `LIGHT APPLY` bake output (spike section 20).  All empty for an unlit build; filled by
-    /// `light::bake`.  `light_map` is the `FLightMapIndex` array (UModel+0xa8); `light_bits` the
+    /// `LIGHT APPLY` bake output (spike section 20).  Always empty — the lighting bake was removed
+    /// 2026-08-23.  `light_map` is the `FLightMapIndex` array (UModel+0xa8); `light_bits` the
     /// packed 1-bit-per-lumel shadow planes (UModel+0xb4); `lights` the flattened per-surf light
     /// runs (UModel+0xe4) — each entry a 0-based INDEX into the bake's input light list, with a
     /// `-1` NULL-terminator between runs.  Python assembly rewrites those indices to export

@@ -1,6 +1,6 @@
 """Native-materialize brush-SCALE regression (spike `2026-07-15-native-materialize` §87 §9).
 
-`materialize._build_brush_input` used to silently DROP every brush's `MainScale`/`PostScale`, so a
+`brush_marshal._build_brush_input` used to silently DROP every brush's `MainScale`/`PostScale`, so a
 scaled brush built at UNIT size.  On real DX levels a scaled-up SUBTRACT then carved a tiny hole
 instead of the full room, leaving the room interior SOLID — native over-solidified the editor's open
 void (HK `[A]` 74.5 %, UNATCO 15.3 %; `shatter_probe.py`).  The fix bakes the full linear map
@@ -18,12 +18,8 @@ import pytest
 
 from uedcli import model as trunk_model
 from uedcli.builders import cube, make_brush_actor
-from uedcli.native import materialize
+from uedcli.native import brush_marshal
 from uedcli.transform import FScale
-
-from uedcli.tests.conftest import StubClassIndex
-
-IDX = StubClassIndex()          # the offline class resolver `movers.is_mover` needs
 
 
 def _one_brush_level(name, brush, *, location=(0.0, 0.0, 0.0), post_scale=None, main_scale=None):
@@ -39,94 +35,16 @@ def _one_brush_level(name, brush, *, location=(0.0, 0.0, 0.0), post_scale=None, 
     return lvl
 
 
-# Points DEEP inside the intended 512x512x256 world room (|x|,|y|<256, |z|<128) but OUTSIDE the
-# 64x64x32 unit brush (|x|,|y|>32, |z|>16) — so each reads OPEN iff scale was applied, SOLID iff
-# scale was dropped.  (A point inside the unit hole, e.g. the origin, reads OPEN either way and would
-# catch nothing, so all probes are deliberately outside it.)
-_INTERIOR = [(200.0, 200.0, 100.0), (-200.0, -200.0, -100.0),
-             (200.0, -200.0, 100.0), (-200.0, 200.0, -100.0)]
-# Points OUTSIDE the 512x512x256 room on every side — SOLID in a correct build (the subtract
-# stops at ±256/±128); if scale over-applied these would wrongly read OPEN.
-_EXTERIOR = [(400.0, 0.0, 0.0), (-400.0, 0.0, 0.0), (0.0, 400.0, 0.0),
-             (0.0, -400.0, 0.0), (0.0, 0.0, 300.0), (0.0, 0.0, -300.0)]
-
-
-def test_postscale_subtract_carves_full_room_like_explicit():
-    """A `cube(64,64,32)` subtract with PostScale (8,8,8) carves the same 512x512x256 world room as
-    an explicit `cube(512,512,256)` subtract: identical solidity at every interior + exterior probe,
-    and the same surf count.  Scale-drop regression catcher (the whole §87 §9 bug class)."""
-    pytest.importorskip("uedcli_native")
-    scaled = _one_brush_level("Room", cube(64, 64, 32),
-                              post_scale=FScale(scale=(8, 8, 8)))
-    explicit = _one_brush_level("Room", cube(512, 512, 256))
-    m_scaled, *_ = materialize._build_level_model(scaled, index=IDX, bake_light=False)
-    m_explicit, *_ = materialize._build_level_model(explicit, index=IDX, bake_light=False)
-
-    for p in _INTERIOR:
-        zs = materialize._model_point_zone(m_scaled, p)
-        ze = materialize._model_point_zone(m_explicit, p)
-        assert zs > 0, (f"interior {p} reads SOLID in the scaled build (zone {zs}) — brush scale "
-                        "was DROPPED (§87 §9); the scaled-up subtract carved only the unit hole")
-        assert ze > 0, f"explicit build interior {p} unexpectedly SOLID (zone {ze})"
-
-    for p in _EXTERIOR:
-        assert materialize._model_point_zone(m_scaled, p) == 0, \
-            f"exterior {p} reads OPEN in the scaled build — scale over-carved"
-        assert materialize._model_point_zone(m_explicit, p) == 0, \
-            f"exterior {p} reads OPEN in the explicit build"
-
-    assert len(m_scaled.surfs) == len(m_explicit.surfs), (
-        f"scaled build has {len(m_scaled.surfs)} surfs vs explicit {len(m_explicit.surfs)} — a "
-        "correctly-scaled box carves the identical 6-face room")
-
-
-def test_mainscale_matches_postscale_for_axis_aligned_box():
-    """MainScale (LOCAL/pre-rotation) and PostScale (WORLD/post-rotation) coincide for an
-    axis-aligned box with no rotation — both must carve the full room (pins that `actor_linear`'s
-    MainScale leg is honoured too, not only PostScale)."""
-    pytest.importorskip("uedcli_native")
-    main = _one_brush_level("Room", cube(64, 64, 32), main_scale=FScale(scale=(8, 8, 8)))
-    m_main, *_ = materialize._build_level_model(main, index=IDX, bake_light=False)
-    for p in _INTERIOR:
-        assert materialize._model_point_zone(m_main, p) > 0, \
-            f"interior {p} SOLID under MainScale — the MainScale leg of actor_linear was dropped"
-    for p in _EXTERIOR:
-        assert materialize._model_point_zone(m_main, p) == 0, f"exterior {p} OPEN under MainScale"
-
-
-def test_mirror_scale_subtract_carves_room_not_inside_out():
-    """A MIRRORED subtract (`PostScale (-8,8,8)`, `det(L) < 0`) must carve the room the RIGHT way
-    round, not build inside-out.  The mirror inverts winding orientation; the Rust core assumes
-    Orientation +1 and never re-flips, so `_build_brush_input` must PRE-reverse the ring (as
-    `transform.bake` does on `det3(L) < 0`).  Without that reversal `calc_normal` yields inward
-    normals and the interior reads SOLID.  Regression for the mirror-scale case (HK has ~30 such
-    brushes) flagged by the cold-review gate."""
-    pytest.importorskip("uedcli_native")
-    from uedcli.transform import det3
-    from uedcli import rotation as ROT
-    lvl = _one_brush_level("Room", cube(64, 64, 32), post_scale=FScale(scale=(-8, 8, 8)))
-    assert det3(ROT.actor_linear(lvl.actors["Room"])) < 0, "fixture must be a true mirror (det<0)"
-    m, *_ = materialize._build_level_model(lvl, index=IDX, bake_light=False)
-    # A mirror of a symmetric centred cube keeps the same 512x512x256 extents, so the SAME probes
-    # apply: interior OPEN (carved right-side-out), exterior SOLID.
-    for p in _INTERIOR:
-        assert materialize._model_point_zone(m, p) > 0, (
-            f"interior {p} SOLID under a MIRROR subtract — winding not reversed for det(L)<0, so the "
-            "subtract built inside-out")
-    for p in _EXTERIOR:
-        assert materialize._model_point_zone(m, p) == 0, f"exterior {p} OPEN under a mirror subtract"
-
-
 def test_unscaled_brush_is_untouched_by_the_scale_path():
     """The gate: an identity-scale brush must take the exact prior (rotation-only) builder path, so
     its BrushTuple is unchanged — this is what keeps the castle byte-identical.  Assert the tuple a
     plain subtract produces carries authored normals/origins (non-empty) and identity `scale`."""
     lvl = _one_brush_level("Room", cube(512, 512, 256))
     verts, sizes, normals, oper, _pf, _loc, R, _pp, scale, *_rest = \
-        materialize._build_brush_input("Room", lvl.actors["Room"])
+        brush_marshal._build_brush_input("Room", lvl.actors["Room"])
     assert normals, "unscaled brush lost its authored per-poly normals (should keep the prior path)"
     assert tuple(scale) == (1.0, 1.0, 1.0), "unscaled brush must pass identity scale"
-    assert R == materialize._IDENTITY_ROT, "unscaled, unrotated brush must pass identity rotation"
+    assert R == brush_marshal._IDENTITY_ROT, "unscaled, unrotated brush must pass identity rotation"
 
 
 # ── §92 §34: texture axes are COVECTORS — covariant `(L⁻¹)ᵀ`, not forward-`L` ──────────────────
@@ -147,31 +65,6 @@ def _one_add_brush_level(name, brush, *, post_scale=None, main_scale=None):
     lvl.actors[name] = a
     lvl.order.append(name)
     return lvl
-
-
-def _texu_magnitudes(model):
-    import math
-    return {round(math.sqrt(sum(c * c for c in model.vectors[su.v_texture_u])), 4)
-            for su in model.surfs if su.v_texture_u >= 0}
-
-
-def test_scaled_brush_texture_axis_is_covariant():
-    """A `cube` face carries a UNIT in-plane TextureU (`builders._tex_basis`).  Under a uniform
-    PostScale s=2 the emitted world texture axis must SHRINK by 1/s (covariant `(L⁻¹)ᵀ`), so every
-    surf's vTextureU has magnitude 1/2 — and NONE has magnitude 2 (the pre-fix forward-L value that
-    squared the scale into the axis).  §92 §34 end-to-end regression through the Rust core."""
-    pytest.importorskip("uedcli_native")
-    s = 2.0
-    lvl = _one_add_brush_level("Box", cube(64, 64, 32), post_scale=FScale(scale=(2, 2, 2)))
-    m, *_ = materialize._build_level_model(lvl, index=IDX, bake_light=False)
-    mags = _texu_magnitudes(m)
-    assert mags, "no textured surfs emitted"
-    assert all(abs(mag - 1.0 / s) < 1e-3 for mag in mags), (
-        f"scaled-brush texture-U magnitudes {sorted(mags)} are not covariant 1/s={1.0/s}; the "
-        "forward-L bug gives s=2 (squared scale into the axis) — §92 §34 regression")
-    assert all(abs(mag - s) > 1e-2 for mag in mags), (
-        f"a texture-U magnitude equals the forward-L value s={s} in {sorted(mags)} — the covariant "
-        "pre-cancel was not applied")
 
 
 def test_tex_cov_pre_cancel_reproduces_inverse_transpose():
@@ -198,21 +91,79 @@ def test_unscaled_brush_texture_axes_pass_through_unchanged():
     authored TextureU byte-unchanged — this is what keeps the castle (0 scaled brushes) byte-identical
     after §92 §34.  The emitted `tex_u_flat` must equal the actor's authored per-poly TextureU."""
     lvl = _one_add_brush_level("Box", cube(64, 64, 32))
-    tup = materialize._build_brush_input("Box", lvl.actors["Box"])
+    tup = brush_marshal._build_brush_input("Box", lvl.actors["Box"])
     tex_u_flat = tup[10]                                # (…, poly_flags_flat, tex_u_flat, (tex_v,orig))
     authored = [float(c) for poly in lvl.actors["Box"].brush.polys for c in poly.texture_u]
     assert tex_u_flat == authored, \
         "unscaled brush texture axes were altered — the covariant pre-cancel must gate on `scaled`"
 
 
+def test_scaled_brush_emitted_texture_u_is_covariant_precancel():
+    """A `cube` face carries a UNIT in-plane authored TextureU (`builders._tex_basis`).  Under a uniform
+    PostScale s=2 `_build_brush_input` must PRE-CANCEL each axis with `tex_cov = (LᵀL)⁻¹` so the Rust
+    core's later forward-`L` comes out covariant `(L⁻¹)ᵀ`.  Pin the EMITTED value (tuple index 10,
+    `tex_u_flat`) directly: the pre-cancel shrinks the unit axis to 1/s²=0.25 (which forward-`L` scales
+    back to the editor's 1/s), so every emitted magnitude is 1/s² — and NONE is the authored 1.0 (the
+    forward-L bug leaves the axis un-cancelled, which Rust then squares to s) nor s itself.  Unit-level
+    rewrite of the deleted end-to-end §92 §34 covariance regression; pins current f32 behavior."""
+    import math
+    s = 2.0
+    a = make_brush_actor("Box", cube(64, 64, 32), csg="add")
+    a.post_scale = FScale(scale=(2, 2, 2))
+    tex_u_flat = brush_marshal._build_brush_input("Box", a)[10]     # index 10 == tex_u_flat
+    mags = {round(math.sqrt(sum(c * c for c in tex_u_flat[i:i + 3])), 6)
+            for i in range(0, len(tex_u_flat), 3)}
+    assert mags, "no texture axes emitted"
+    assert all(abs(mag - 1.0 / (s * s)) < 1e-6 for mag in mags), (
+        f"emitted tex_u magnitudes {sorted(mags)} are not the covariant pre-cancel 1/s²={1.0/(s*s)}; "
+        "the forward-L bug leaves the authored axis un-cancelled — §92 §34 regression")
+    assert all(abs(mag - 1.0) > 1e-3 for mag in mags), (
+        f"an emitted tex_u magnitude is the un-cancelled authored 1.0 in {sorted(mags)} — the covariant "
+        "pre-cancel was not applied (forward-L then squares it into s)")
+    assert all(abs(mag - s) > 1e-3 for mag in mags), \
+        f"an emitted tex_u magnitude equals the forward-L value s={s} in {sorted(mags)}"
+
+
+def test_mirror_scaled_brush_pre_reverses_each_poly_ring():
+    """A MIRRORED scaled brush (`PostScale (-2,2,2)`, `det(L)<0`) must PRE-reverse every poly's vertex
+    ring so the post-`L` world winding stays outward-CCW — the Rust core assumes Orientation +1 and
+    never re-flips, so without the reversal `calc_normal` yields inward normals and a subtract builds
+    inside-out.  Compare the emitted per-poly ring (tuple index 0, grouped by index 1 `poly_sizes`)
+    against the same brush under a non-mirror positive scale: each ring is exactly reversed (so the
+    first-triangle winding flips).  Unit-level rewrite of the deleted end-to-end mirror regression."""
+    from uedcli import rotation as ROT
+    from uedcli.transform import det3
+    mir = _one_add_brush_level("Mir", cube(64, 64, 32), post_scale=FScale(scale=(-2, 2, 2)))
+    base = _one_add_brush_level("Base", cube(64, 64, 32), post_scale=FScale(scale=(2, 2, 2)))
+    assert det3(ROT.actor_linear(mir.actors["Mir"])) < 0, "fixture must be a true mirror (det<0)"
+    assert det3(ROT.actor_linear(base.actors["Base"])) > 0, "baseline must be non-mirror (det>0)"
+    tm = brush_marshal._build_brush_input("Mir", mir.actors["Mir"])
+    tb = brush_marshal._build_brush_input("Base", base.actors["Base"])
+    assert tm[1] == tb[1], f"poly_sizes differ (mirror {tm[1]} vs baseline {tb[1]})"
+
+    def _rings(tup):
+        verts = [tup[0][i:i + 3] for i in range(0, len(tup[0]), 3)]
+        rings, off = [], 0
+        for n in tup[1]:
+            rings.append(verts[off:off + n])
+            off += n
+        return rings
+
+    rm, rb = _rings(tm), _rings(tb)
+    for i, (ring_m, ring_b) in enumerate(zip(rm, rb)):
+        assert ring_m == list(reversed(ring_b)), (
+            f"poly {i} ring not pre-reversed under a mirror: {ring_m} vs reversed baseline "
+            f"{list(reversed(ring_b))} — det(L)<0 winding fix dropped")
+
+
 def test_zero_scale_axis_raises_clean_error_not_zerodivision():
     """A zero/degenerate scale axis makes L singular; the covariant pre-cancel inverts L, so it must
     raise a clear `BuildError` NAMING the brush (repo rule: no bare traceback to the CLI user), never
     a `ZeroDivisionError`.  §92 §34 review requirement."""
-    from uedcli.native.materialize import BuildError
+    from uedcli.native.brush_marshal import BuildError
     lvl = _one_add_brush_level("Flat", cube(64, 64, 32), post_scale=FScale(scale=(0, 1, 1)))
     with pytest.raises(BuildError, match="Flat"):
-        materialize._build_brush_input("Flat", lvl.actors["Flat"])
+        brush_marshal._build_brush_input("Flat", lvl.actors["Flat"])
 
 
 def _brush578_faces():
@@ -279,7 +230,7 @@ def test_scaled_brush_stored_normal_bits_match_editor_end_to_end():
     a.props.append(("PrePivot", "(X=-7.529359,Y=-12.799914,Z=-6.000000)"))
     trunk_model.Level()  # (no level object needed; _build_brush_input takes the actor directly)
 
-    tup = list(materialize._build_brush_input("B578", a))
+    tup = list(brush_marshal._build_brush_input("B578", a))
     assert len(tup[11][2]) == 9, "scaled brush must carry a 9-float covariant VectorXform"
 
     cov_bits = _y_surf_normal_bits(tuple(tup))
@@ -300,11 +251,11 @@ def test_sheared_scaled_brush_raises_clear_error_not_silent_misbuild():
     off-diagonal).  A sheared SCALED brush would therefore get sheared VERTS (via `L`) but an
     un-sheared NORMAL (via the diagonal covariant) — a silent mis-build.  No DX brush uses sheer, so
     `_build_brush_input` must raise a clear `BuildError` NAMING the brush, never mis-build silently."""
-    from uedcli.native.materialize import BuildError
+    from uedcli.native.brush_marshal import BuildError
     lvl = _one_add_brush_level("Sheared", cube(64, 64, 32),
                                post_scale=FScale(scale=(2, 1, 1), sheer_rate=0.3, sheer_axis="SHEER_XY"))
     with pytest.raises(BuildError, match="Sheared"):
-        materialize._build_brush_input("Sheared", lvl.actors["Sheared"])
+        brush_marshal._build_brush_input("Sheared", lvl.actors["Sheared"])
 
 
 def test_rotated_scaled_vec_xform_is_the_covariant_inverse_transpose():
@@ -319,7 +270,7 @@ def test_rotated_scaled_vec_xform_is_the_covariant_inverse_transpose():
     lvl = _one_add_brush_level("Yawed", cube(64, 32, 16), post_scale=FScale(scale=(1.25, 1.0, 1.0)))
     a = lvl.actors["Yawed"]
     a.props.append(("Rotation", "(Yaw=16384)"))            # 90 deg — a genuine R != I
-    tup = materialize._build_brush_input("Yawed", a)
+    tup = brush_marshal._build_brush_input("Yawed", a)
     vec_xform_flat = tup[11][2]
     assert len(vec_xform_flat) == 9, "a rotated+scaled brush must emit a 9-float VectorXform"
     vx = [vec_xform_flat[r * 3:r * 3 + 3] for r in range(3)]
@@ -371,7 +322,7 @@ def test_pointxform_f32_scale_input_f32_cast_matches_editor_not_double_matmul():
                                post_scale=FScale(scale=(0.249997, 1.0, 1.0)))
     a = lvl.actors["Yaw180"]
     a.props.append(("Rotation", "(Yaw=32768)"))            # 180° — a cardinal cross-term brush
-    L = materialize._pointxform_f32(a)
+    L = brush_marshal._pointxform_f32(a)
 
     def bits(x):
         return struct.unpack("<I", struct.pack("<f", float(x)))[0]
@@ -387,7 +338,7 @@ def test_pointxform_f32_scale_input_f32_cast_matches_editor_not_double_matmul():
     # C2 (§92 §45 review): guard the WIRING — `_build_brush_input` must actually RETURN the f32 pointxform
     # as the transform matrix (tuple index 6), not the double `L`.  Reverting line 581 back to `L` would
     # leave the math test above green but this red.
-    R_returned = materialize._build_brush_input("Yaw180", a)[6]
+    R_returned = brush_marshal._build_brush_input("Yaw180", a)[6]
     assert [[bits(R_returned[r][c]) for c in range(3)] for r in range(3)] \
         == [[bits(L[r][c]) for c in range(3)] for r in range(3)], \
         "_build_brush_input must wire _pointxform_f32 into the transform matrix (tuple[6]), not double L"
@@ -432,7 +383,7 @@ def test_pointxform_genuine_two_stage_rounding_when_both_scales_cross_axis():
                                main_scale=FScale(scale=(1.0, ms, 1.0)))
     a = lvl.actors["Cross"]
     a.props.append(("Rotation", "(Yaw=32768)"))
-    L = materialize._pointxform_f32(a)
+    L = brush_marshal._pointxform_f32(a)
     assert bits(L[0][1]) == bits(two), \
         f"pointxform must round per-op (two-stage) -> {bits(two):#010x}; got {bits(L[0][1]):#010x}"
     assert bits(L[0][1]) != bits(one), \
@@ -499,7 +450,7 @@ def test_scaled_brush_stores_authored_origin_as_pbase_end_to_end():
     This goes RED if `_build_brush_input` reverts to dropping the scaled brush's Origin (`base := verts[0]`)."""
     pytest.importorskip("uedcli_native")
     a = _slanted_scaled_wedge()
-    tup = list(materialize._build_brush_input("Wedge", a))
+    tup = list(brush_marshal._build_brush_input("Wedge", a))
     assert len(tup[11][1]) == 3 * 5, "a scaled brush must forward all authored per-poly Origins"
 
     w_keep, pbase_keep, fverts = _slanted_node_base_and_w(tup)

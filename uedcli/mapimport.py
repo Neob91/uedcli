@@ -498,8 +498,7 @@ def actor_refs(pkg: Package) -> list[int]:
     retail maps carry 29-329 of them. `Actors[0]` is always the `LevelInfo`.
 
     Evidence: `dev/docs/spikes/2026-07-24-level-import-order/findings.md` (decoded on retail
-    `00_Intro`, `00_Training`, `02_NYC_Street`); the same layout is what uedcli's own
-    `native.level_write.write_level_body` writes.
+    `00_Intro`, `00_Training`, `02_NYC_Street`).
     """
     e = pkg.exports[level_export_index(pkg)]
     buf, end = pkg.buf, e["soff"] + e["ssize"]

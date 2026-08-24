@@ -55,7 +55,7 @@ _UU = 65536
 #       cos on the identical float32 quantization grid as sin.
 #
 # Stored FRotator field values are unaffected — this is the trig SOURCE only (feeds the R matrix that
-# `native.materialize` hands to the Rust f32 CSG core, and uedcli's own previews/bounds/world_vertices).
+# `native.brush_marshal` hands to the Rust f32 CSG core, and uedcli's own previews/bounds/world_vertices).
 _TRIG_N = 16384            # GMath NUM_ANGLES
 _ANGLE_SHIFT = 2          # 16-bit field >> 2 → 14-bit table index (low 2 bits truncated)
 _TRIG_MASK = _TRIG_N - 1

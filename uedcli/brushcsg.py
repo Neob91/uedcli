@@ -93,7 +93,7 @@ def check_all_csg_brushes(actors, *, verb: str, index) -> None:
     *(`dev/docs/direction/conventions.md` "No silent half-answers", decision 2026-07-24 21:58 — this SUPERSEDES the spec's
     original warn-and-skip, which predates that rule.)*
     """
-    from .native.materialize import _in_world_csg
+    from .native.brush_marshal import _in_world_csg
 
     bad = []
     for a in actors:
@@ -209,7 +209,7 @@ def merge(actors, *, deintersect: bool):
     off the synthesized builder cube, which has no authored texture.
     """
     import uedcli_native
-    from .native.materialize import _build_brush_input
+    from .native.brush_marshal import _build_brush_input
 
     world, builder = build_scaffolding(actors, deintersect=deintersect)
     tuples = [_build_brush_input(a.name, a) for a in world]

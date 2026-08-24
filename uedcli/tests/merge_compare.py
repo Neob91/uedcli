@@ -88,7 +88,7 @@ def native_links(case_id: str) -> list[int]:
     has never carried `Link` — see `oracle_links`.
     """
     import uedcli_native
-    from uedcli.native.materialize import _build_brush_input
+    from uedcli.native.brush_marshal import _build_brush_input
 
     case = intersect_cases.CASES[case_id]
     actors = intersect_cases.build_actors(case_id)

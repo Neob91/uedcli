@@ -23,9 +23,8 @@ FFI entry point that does not yet exist; filed to `board/inbox/`).  The Rust `co
 is written as a mechanical copy of that same oracle (flat node enumeration + `head_of` chain-head
 resolution), and is CONFIRMED to reproduce it on the discriminating real trees: the native builds
 `NativeUnatco.dx` (45 zones) and `NativeCatacombs.dx` (43 zones) each equal
-`blockportal_interior_zones(that native tree) + 1` (44+1, 42+1).  Additional Rust end-to-end
-coverage: `test_native_materialize.py` (castle build -> 4 zones, byte-parity) and
-`test_water_portal_keeps_playerstart_out_of_water_zone` (both non-discriminating — the old and new
+`blockportal_interior_zones(that native tree) + 1` (44+1, 42+1).  Additional coverage:
+`test_water_portal_keeps_playerstart_out_of_water_zone` (non-discriminating — the old and new
 rules agree on castle-topology sealing portals).
 """
 from __future__ import annotations

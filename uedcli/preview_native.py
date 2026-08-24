@@ -6,7 +6,7 @@ built surface is joined back to its SOURCE brush poly for texture/Pan/flags (the
 textures decode natively (`uedcli.utexture`), and `uedcli_native.render_frame` software-
 rasterizes each SHOT pose to an RGB buffer that Pillow encodes as PNG.
 
-Deliberate divergences from `materialize._build_brush_input` (spec §4.2):
+Deliberate divergences from `brush_marshal._build_brush_input` (spec §4.2):
 - **Rotation passes through** as the GMath rot3x3 (a DRAFT preview of a rotated brush beats
   an error; validated offline against `rotation.world_vertices`, not editor goldens).
 - **Scale/sheer are checked here, explicitly**: non-identity `MainScale`/`PostScale`/
@@ -115,7 +115,7 @@ def _marshal_brush(actor) -> tuple:
     Shared by the trunk `_brush_inputs` (over `level.order`) and the ad-hoc `solve_world_surfaces`
     (over an actor list) — same algorithm, two input types. The caller has already resolved
     `CsgOper` (`_CSG_OPER`) and rejected scaled brushes."""
-    from .native.materialize import _parse_vec3
+    from .native.brush_marshal import _parse_vec3
 
     raw = dict(actor.props)
     oper = _CSG_OPER[raw.get("CsgOper", "CSG_Add")]

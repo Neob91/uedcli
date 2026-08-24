@@ -135,40 +135,6 @@ def test_sprite_footprint_is_drawscale_times_texel_dims():
     assert sprite_footprint(2.0, 32, 48) == (64.0, 96.0)
 
 
-# ── ULevel Actors-array layout (spike 2026-07-24-level-import-order) ─────────────────────────────
-
-def test_level_actors_array_is_int_num_max_then_compact_refs():
-    """`Engine.Level`'s Actors array (native tail, after the object's None-terminated property list)
-    is `[i32 Num][i32 Max]` (raw INT32, NOT a compact count; Num==Max on disk) then Num signed
-    FCompactIndex object refs, ref 0 == a null/deleted slot; Actors[0] == LevelInfo. This is the
-    authoritative actor ORDER `level import` must emit (spec 2026-07-24 §5.1). Pinned by decoding
-    the encode mirror `native.level_write.write_level_body` with the production `upackage` reader —
-    if either side's layout drifts, the round-trip breaks and this trips. (Verified live against
-    retail 00_Intro/00_Training/02_NYC_Street — see the spike's findings.md; game maps are gitignored
-    copyrighted assets, so the committed regression rides the writer.)"""
-    import struct
-
-    from uedcli import upackage
-    from uedcli.native.level_write import write_level_body
-
-    # LevelInfo at [0], default brush at [1], a null/deleted slot, then a real actor (artificial refs).
-    actor_refs = [1, 2, 0, 4207]
-    body = write_level_body(none_index=0, actor_refs=actor_refs, model_ref=99)
-
-    pos = 0
-    none_idx, pos = upackage.read_compact_index(body, pos)
-    assert none_idx == 0                                        # the UObject property-list terminator
-    num, mx = struct.unpack_from("<ii", body, pos); pos += 8
-    assert (num, mx) == (len(actor_refs), len(actor_refs))      # raw INT32, Num == Max
-    decoded = []
-    for _ in range(num):
-        r, pos = upackage.read_compact_index(body, pos)
-        decoded.append(r)
-    assert decoded == actor_refs                                # order + the null slot preserved
-    assert decoded[0] == 1                                      # Actors[0] == LevelInfo (invariant)
-    assert [r for r in decoded if r > 0] == [1, 2, 4207]        # dropping nulls keeps authored order
-
-
 def test_editor_frotator_omits_zero_components_and_never_writes_an_all_zero_rotation():
     """UnrealEd serializes an FRotator with its ZERO components OMITTED (`Rotation=(Yaw=-16384)`,
     never `(Pitch=0,Yaw=-16384,Roll=0)`) and omits the `Rotation=` line ENTIRELY when the rotator
