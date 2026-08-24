@@ -1,8 +1,11 @@
-# UnrealEd / UCC.exe geometry build — reverse-engineered specification
+# UnrealEd / UCC.exe geometry, lighting, and paths build — reverse-engineered specification
 
 **Subject:** the real UnrealEd 2.2 editor (Deus Ex-era UnrealEngine-1, UED22 build) as shipped in
-`uned/UED22/*.dll`/`UCC.exe`/`unrealed.exe` — specifically what happens when its BSP/CSG geometry
-build runs (`MAP REBUILD`, `BSP REBUILD`, and the console verbs around them).
+`uned/UED22/*.dll`/`UCC.exe`/`unrealed.exe` — specifically what happens when the editor's three build
+operations run: geometry/BSP (`MAP REBUILD`/`BSP REBUILD`), lighting (`LIGHT APPLY`), and AI paths
+(`PATHS DEFINE`/`PATHS BUILD`) — both as console verbs and as the `UnrealEd.exe` GUI's `Build` dialog
+(F8 / Ctrl-B), which is confirmed (§1.5) to dispatch through the identical console-verb strings, not a
+separate code path.
 
 **Evidence basis — read this before trusting any claim below.** Every claim here traces to one of:
 static disassembly of the actual shipped DLLs (function/RVA cited), a live-driven real UnrealEd
@@ -23,7 +26,7 @@ not that code, as the ground truth to reimplement against.
   `.dx` files, or a real editor-written file and a hand-decoded structural model of it.
 - **[INFERRED]** — the source document itself flags this as inference/hypothesis rather than a
   directly cited instruction or observation. Weaker; called out explicitly wherever used.
-- **[OPEN]** — a question the gathered evidence does not settle. Listed in §16.
+- **[OPEN]** — a question the gathered evidence does not settle. Listed in §18.
 
 Every fact is further cited to the specific evidence file it came from (paths relative to
 `dev/docs/spikes/2026-07-15-native-materialize/`, or to an earlier top-level spike under
@@ -138,11 +141,82 @@ reproducible fixed point given identical input and identical command sequence.
 order: `SaveExports → SaveImportMap → SaveExportMap → RewriteSummary`, then a literal
 `"Save.tmp"`/`"Moving '%s' to '%s'"` pair — the package is serialized into a temp file, its header is
 patched last inside that temp file, then the temp file is moved onto the destination path. (This is
-extracted from the wide-string table per the methodology in §18, not from live behavior — treat the
+extracted from the wide-string table per the methodology in §20, not from live behavior — treat the
 *existence and order* of these phases as solid, the exact move-vs-copy mechanism as unconfirmed.)
 
 `MAP REBUILD` invalidates existing lighting — a subsequent `LIGHT APPLY` is required to rebuild it if
 lighting is wanted in the output; `PATHS`-related data is not wiped by a geometry rebuild.
+
+### 1.5 The GUI `Build` dialog (`UnrealEd.exe`, F8 / Ctrl-B) — confirmed sends the same exec strings
+
+**[DISASM `unrealed.exe` + `Editor.dll` wide-string tables]**. `unrealed.exe` is the WxWindows GUI
+frontend; per the project's established methodology (§18), its wide-string table holds printf-style
+templates that get formatted and handed to the same `Exec()` the console uses (already established
+for other GUI actions, e.g. `CAMERA UPDATE FLAGS=%d MISC1=%d MISC2=%d …`). Direct extraction from
+`unrealed.exe`'s string table confirms this holds for the `Build` menu/dialog too — it is not a
+separate code path from the console verbs documented throughout this spec, it is the *same* verbs,
+string-formatted from dialog controls:
+
+```
+'MAP REBUILD VISIBLEONLY=%d'
+'BSP REBUILD'  ' LAME'  ' GOOD'  ' OPTIMAL'  ' OPTGEOM'  ' ZONES'  ' BALANCE=%d'  ' PORTALBIAS=%d'
+'LIGHT APPLY SELECTED=%d VISIBLEONLY=%d'
+'PATHS DEFINE'
+'PATHS BUILD'
+```
+
+The `BSP REBUILD` line is five separate string fragments concatenated based on which dialog controls
+are set — quality is a radio group (`&Lame`/`&Good`/`&Optimal`), `OPTGEOM`/`ZONES` are checkboxes
+(`&Optimize Geometry`/`&Build Visibility Zones`), `BALANCE=%d`/`PORTALBIAS=%d` come from two
+`msctls_trackbar32` sliders labeled `Minimize Cuts`↔`Balance Tree` and `Ignore Portals`↔`Portals Cut
+All`. Two adjacent string-table entries, `15` and `70`, sit immediately next to those two slider
+labels respectively — `70` exactly matches the console's own independently-disassembly-confirmed
+default `PortalBias` (§1.2), which is strong (though not itself instruction-level-confirmed — a
+dialog-resource-table parse would be needed to be fully certain) evidence that these are the dialog's
+default slider positions, and that the **long-standing "classically 15" Balance folklore refers to
+this GUI default, not the console's own omitted-argument default of 50** (§1.2) — two different
+defaults for two different invocation paths, previously conflated.
+
+**The `Build` submenu / F8 dialog exposes four independent scopes, not one combined action**
+(`unrealed.exe` menu-item strings: `Rebuild &BSP Only`, `Rebuild &Geometry Only`, `Rebuild Lighting
+Only`, `Rebuild AI Paths`, `&Build All`; the `Build Options` dialog's own tab strip: `Geometry` |
+`BSP` | `Lighting` | `Paths`):
+
+| Menu item | Exec string(s) sent |
+|---|---|
+| **Rebuild Geometry Only** | `MAP REBUILD VISIBLEONLY=<checkbox>` alone |
+| **Rebuild BSP Only** | `BSP REBUILD <quality> [OPTGEOM] [ZONES] BALANCE=<n> PORTALBIAS=<n>` alone — re-partitions/optimizes the *existing* geometry without re-running CSG |
+| **Rebuild Lighting Only** | `LIGHT APPLY SELECTED=<n> VISIBLEONLY=<n>` alone |
+| **Rebuild AI Paths** | `PATHS DEFINE` then `PATHS BUILD` |
+| **Build All** (Ctrl-B; tooltip: `"Build All (as per current build settings)"`) | all of the above, in order: geometry → BSP → lighting → paths |
+
+This resolves an item this spec previously flagged as open (§18 below): "Geometry Only" and "BSP
+Only" being separate GUI actions confirms `MAP REBUILD` (→ `csgRebuild`, §2) and `BSP REBUILD` (→
+`bspRepartition`, §5.3) really are two independently-invokable operations with distinct scopes, not
+one operation under two names — and it confirms **`Build All`'s default sequence is exactly the
+two-step `MAP REBUILD; BSP REBUILD <quality> OPTGEOM ZONES` sequence** this spec's §1.3 already
+established empirically by live-driving the console. The GUI does not do anything the console verbs
+can't reproduce.
+
+The dialog also has a checkbox `&Only Rebuild Visible Actors?` (→ `VISIBLEONLY=`) and, on the
+Lighting tab, `&Apply selected lights/lights in selected zone descriptors only` (→ `SELECTED=`/
+`VISIBLEONLY=` on `LIGHT APPLY`). `Editor.dll`'s own wide-string table independently confirms
+`SELECTED=`, `VISIBLEONLY=`, `LOWOPT`, `HIGHOPT` as tokens its exec parser recognizes as argument
+keys — i.e. the parser side agrees with the GUI's template side, not just the GUI's own claim about
+itself.
+
+A `Build` progress/results panel shows: `Brushes`, `Zones`, `Polys`, `Nodes`, a `Ratio` (format
+`%1.2f:1`), `Max Depth`, `Avg Depth`, `Points`, `Lights`, `Paths` counts — confirming these are all
+values the real editor computes and surfaces after a build (a useful checklist for what a
+reimplementation's own reporting should be able to reproduce), though the exact formula for `Ratio`/
+`Max Depth`/`Avg Depth` was not decoded here.
+
+A confirmation dialog specific to `PATHS BUILD` reads: *"This command will erase all existing
+pathnodes and attempt to create a pathnode network on its own. Are you sure this is what you want to
+do?"* / *"NOTE: This process can take a VERY long time."* — a genuine user-facing warning that the
+console verb has no equivalent guard for (driving `PATHS BUILD` headlessly skips this confirmation
+entirely, per the general "driving is fire-and-forget, dialogs don't block a scripted `EXEC`"
+behavior documented in `dev/docs/unrealed/quirks.md`).
 
 ---
 
@@ -274,14 +348,14 @@ Normals and texture axes are mapped by the inverse-transpose of the vertex map, 
 axes must be pre-cancelled by `(L⁻¹)ᵀ` — a covariant, not naive, transform.
 `FCoords::operator*(FScale)` multiplies per-column by scale; `operator/(FScale)` divides per-axis via
 `divss`; `TransformVectorBy` is three dot products against the frame's axes; `SafeNormalSlow` computes
-`1/(f32)sqrt((f64)SquareSum)` — the same double-widened-magnitude normalize used throughout (§11).
+`1/(f32)sqrt((f64)SquareSum)` — the same double-widened-magnitude normalize used throughout (§13).
 
 **The composed matrix element for a diagonal-`PostScale`, identity-`MainScale` brush is
 `M[i][k] = f32(f32(PostScale_i · R[i][k]) · MainScale_k)` — a two-stage f32 rounding, not one
 double-precision matmul narrowed once.** Since every real DX rotate+scale brush has `MainScale =
 identity`, the dominant real-world effect is that the editor stores `FVector Scale` itself as
 float32, not double — e.g. on a cardinal 180° rotation the cross-term `R[0][1]=-sin(180°)=8.742278e-08`
-(§11's trig-table artifact) combined with an f32-stored scale factor yields a specific 1-ULP-different
+(§13's trig-table artifact) combined with an f32-stored scale factor yields a specific 1-ULP-different
 bit pattern from the double-precision-computed equivalent
 **[DISASM, LIVE; `sections/92-bspbrushcsg-reallevel-port-plan.md:1680-1687,1759-1768`]**.
 
@@ -1112,7 +1186,360 @@ non-blocking — hull-less solid space does not block a point-check either.
 
 ---
 
-## 10. Serialized `UModel` on-disk format
+## 10. Lighting rebuild (`LIGHT APPLY`)
+
+Console verb `LIGHT APPLY [SELECTED=<n>] [VISIBLEONLY=<n>] [SHOWINV]`; GUI "Build Lighting" sends the
+identical `LIGHT APPLY SELECTED=%d VISIBLEONLY=%d` string (§1.5). Dispatches to
+`UEditorEngine::shadowIlluminateBsp(ULevel*, INT selected, INT changedOnly)`
+**[DISASM Editor.dll 0xa5e10]**; source path embedded in the binary is
+`C:\GameDev\UnrealTournament\Editor\Src\UnShadow.cpp`. This operates against the **already-built**
+BSP (`Level->Model->Nodes`) via a line-check against the tree — it is strictly downstream of geometry
+build (§1-§9), never upstream of it.
+
+### 10.1 The decisive finding: visibility bits, not intensity
+
+**The bake stores a per-lumel shadow BIT, never a light intensity, colour, or attenuation value.**
+For every lit surface, per light that reaches it, the editor stores a 1-bit-per-lumel mask: `1` =
+that lumel has clear line-of-sight to the light and is inside its radius; `0` = shadowed or
+out-of-range. No brightness, hue, saturation, or sign is baked — those are read from the light
+actor's own properties (already present in the level's actor data) and applied by the **game at
+render time**, not by the editor at build time. The bake is purely geometric: radius cutoff + BSP
+line-of-sight. This collapses "reproduce lighting" to "reproduce a per-lumel BSP ray test", not
+"port a light-transport/radiosity model" — Deus Ex's coloured lighting is entirely a render-time
+tint of a monochrome bit-plane.
+
+### 10.2 Pipeline
+
+Progress strings in order, confirming four ordered stages: `"Rebuilding lighting"`, `"Computing
+visibility"`, `"Allocating meshes"`, `"Raytracing"`.
+
+1. **Reset.** Empties `Model->LightMap` (`UModel+0xa8`) and `Model->LightBits` (`UModel+0xb4`); sets
+   every `FBspSurf.iLightMap` (`surf+0x18`) to `-1`. **Every `LIGHT APPLY` invocation discards prior
+   lightmap data before regenerating it** — this is the bake's own internal reset, not a claim about
+   what a separate geometry rebuild does to lighting (that connection is not directly evidenced — see
+   §18 item 6).
+2. **Gather lights** ("Computing visibility", `Editor.dll 0xa4ba0`) — a per-**leaf** flood (§10.5)
+   determining which surfaces/leaves each light can even reach, before any per-lumel raytracing.
+3. **Allocate meshes** ("Allocating meshes", `Editor.dll 0xa5bf0`) — per lightable surface, computes
+   the lumel-grid dimensions/scale/pan (§10.4) and stores an `FLightMapIndex`, setting
+   `surf.iLightMap`.
+4. **Raytrace** ("Raytracing", `Editor.dll 0xa5010`, `illuminateSurf`) — per lumel × per light in the
+   surface's list, radius cutoff + BSP shadow ray, packs the resulting bit (§10.3). Run once per
+   static surface and once per mover surface (a second pass with `mover != 0`, lighting mover
+   surfaces in the mover's base pose).
+5. Populates `Model->Lights` (`UModel+0xe4`) as the flattened per-list light-actor references.
+
+### 10.3 The raytrace, per lumel per light
+
+1. **Radius cutoff.** `d² = |P - Light.Location|²`; `R = Light.WorldLightRadius()` (virtual, vtable
+   `+0x6c`). If `R² <= d²`: bit=0, no ray cast — cheap reject before any BSP work.
+   `AActor::WorldLightRadius` **[DISASM Engine.dll 0x116b50]**: `R = (LightRadius + 1) × 25.0` world
+   units, `LightRadius` a `BYTE` at `actor+0x1a1` — the classic UE1 ×25 scale. This radius (plus the
+   light's `Location`) is the **only** light property read by the geometric bake; `LightBrightness`/
+   `LightHue`/`LightSaturation`/`LightType`/`LightEffect`/`bSpecialLit` are never read here — those
+   are render-time only.
+2. **Front-of-plane test.** A real-content measurement (0/3497 back-facing entries across a real
+   built level's full per-surface light lists) shows the editor never lists a light behind a
+   surface's own plane — `d=(Light.Location-Base)·vNormal <= 0` excludes it from the surface's light
+   list before raytracing even starts. The exact enforcement point (inferred to be inside the
+   gather/visibility pass's renderer-delegation calls) was not itself disassembled to a specific
+   branch — the *effect* is measured with 0/3497 exceptions on real content, the *mechanism* inside
+   the gather pass is not pinned to an instruction.
+3. **Shadow ray.** `Level->Model->LineCheck(...)` (vtable `+0x58` → `UModel::LineCheck`,
+   `Engine.dll 0x1ae4c0`; the boolean variant is `UModel::FastLineCheck`, `Engine.dll 0x1ada40` — the
+   zero-extent line check already documented in §9.1, reused here rather than a separate lighting-only
+   ray primitive). Solid surfaces occlude; non-solid/semisolid/portal/masked do not, per ordinary
+   `LineCheck` collision-flag behavior.
+4. **Self-shadow bias.** The ray/lumel origin is pushed off the surface by `Normal × 4.0` world units
+   (constant `4.0`), to avoid the surface self-occluding its own lumel.
+
+### 10.4 `FLightMapIndex` (40 bytes) and the lumel-grid formula
+
+Fields (in-memory offset): `+0x00 DataOffset` (i32), `+0x04 iLightActors` (i32, `-1` = unreached),
+`+0x08 Pan` (3×f32), `+0x14 UScale`/`+0x18 VScale` (f32), `+0x1c USize`/`+0x20 VSize` (compact index,
+clamped `[2,256]`).
+
+Scale selection, from `.rdata` constants keyed on the surf's shadow-detail `PolyFlags`: `128` if both
+`PF_HighShadowDetail|PF_LowShadowDetail` set, `16` if only High, `64` if only Low, else `32` default.
+
+**Grid-sizing formula — settled only after correcting an earlier wrong disassembly reading, per the
+source's own revision history (preserved here rather than presenting the corrected version as if it
+were the first attempt):**
+
+```
+size        = Clamp(ceil(extent / lumel_scale), 2, 256)             // NOT truncation
+texel_scale = (extent + 0.25) / (size - 1)                          // NOT extent/(size-1)
+extent      = max((vertex - Base)·TexAxis) - min((vertex - Base)·TexAxis)   // subtract Base FIRST
+Pan         = min((vertex - Base)·TexAxis) - 0.125                  // base-relative, NOT raw-world
+```
+
+Each correction was caught by a byte-diff against a real editor-built `Test_Castle.dx` (484/484
+`FLightMapIndex` records match exactly once all four corrections are applied) — a naive truncating
+`size` formula, an `extent/(size-1)` scale formula, a raw-world (not base-relative) extent/Pan
+computation, and a wrong `vert·Tex - Base·Tex` operation order (algebraically equal to
+`(vert-Base)·Tex` in real arithmetic, but rounds differently in float32 on angled texture axes) were
+each individually falsified by this real map before the formula above was confirmed. This history is
+worth keeping in a spec, not just the final answer: each of these four naive-seeming variants is
+exactly the kind of guess a fresh reimplementation would make and get wrong.
+
+### 10.5 Gather / visibility pass — the per-leaf permeating-light flood
+
+`FEditorVisibility::ActorVisibility` **[DISASM Editor.dll 0xa6d00]**, source path `UnVisi.cpp`. This
+is neither pure zone-based nor pure radius-based culling — it is a **radius-gated, BSP-portal
+flood-fill with beam clipping**:
+
+- **Seed leaf**: plain BSP descent from the root by `PlaneDot(node.Plane, Light.Location)` sign,
+  following children to a terminal `iLeaf`. A light embedded in solid space (`iLeaf==-1`) seeds
+  nothing. No coplanar-chain walking, no radius test at the seed.
+- **Marking**: appends the light actor's pointer to `FEditorVisibility+0x10054[iLeaf]` (an intrusive
+  list, deduped by pointer identity — an already-marked leaf is not re-appended, but flooding still
+  continues *through* it; there is no depth guard, termination relies on the beam narrowing to
+  nothing).
+- **Flood through each portal of the current leaf**, gated on:
+  - **side**: `d = (Light.Location - Portal.Base)·Portal.Normal < 0` (light on the leaf's own side).
+  - **radius**: `d > -R` (the portal plane itself is within the light's radius).
+  - then recurses into the leaf on the portal's other side, **clipping the carried beam polygon**
+    (the light's view pyramid) against the portal's edges via `FPoly::SplitWithPlaneFast` before
+    recursing — a beam that clips away to nothing simply stops flooding.
+- A **non-seed** leaf additionally requires some portal of that leaf to have a vertex strictly within
+  `WorldLightRadius` of the light before it can be entered at all.
+- A sibling pass (`Editor.dll 0xa9290`) repeats the identical mechanism for fog-volumetric lights
+  into `leaf.iVolumetric`, using `WorldVolumetricRadius` (`Engine.dll 0x116bb0`,
+  `25×(VolumeRadius_byte + 1)`), gated additionally on the leaf's zone having `bFogZone` set.
+  `leaf.iExclusive` (u64, `FBspLeaf`'s 4th field) is never written anywhere in this whole pass —
+  stays at its `EmptyModel` init value of all-ones.
+- Eligibility gates at the call site: the light pass requires `LightType != 0` and the actor's
+  `bStatic|bNoDelete` flag bits; the volumetric pass additionally requires a nonzero
+  `VolumeRadius`/`VolumeBrightness`.
+
+This flood populates a **first region** of `Model->Lights` (per-leaf permeating-light lists, indexed
+by `FBspLeaf.iPermeating`), distinct from the **second region** populated by §10.2's per-surface
+gather (indexed by `FLightMapIndex.iLightActors`) — on one real reference map the two regions occupy
+disjoint index ranges `[0, 7455)` and `[7455, 11392)` respectively within the same flat `Model->Lights`
+array, discovered by walking every index that actually references the array rather than assuming a
+single format.
+
+### 10.6 `LightBits` — exact byte encoding
+
+Per lit surface, its `N` light bit-planes (`N` = the length of its `iLightActors` NULL-terminated
+run) are stored consecutively starting at `FLightMapIndex.DataOffset`. Each plane is `USize × VSize`
+bits, row-major in V: `VSize` rows, each `ceil(USize/8)` bytes, byte-aligned per row; within a row,
+lumel `u` is bit `(u & 7)` of byte `u >> 3`, **LSB-first**. Bit `1` = lit, `0` = shadowed/out-of-range.
+Bits above `USize` in a row's final byte are not guaranteed cleared.
+
+Verified by a byte-span reconciliation across three real levels: the gap between consecutive
+`DataOffset`s divides exactly by `N × ceil(USize/8) × VSize` with zero exceptions across 2867+2293+621
+real records, and the resulting `N` independently matches the `iLightActors` run length to NULL for
+every one of those records — two independently-derived measures of the same value agree with zero
+mismatches.
+
+### 10.7 `PF_Portal` lightmap-skip mask; `LightMap` array emission order
+
+**Skip mask** (pinned by disassembly of the allocate-meshes gate): a surf is skipped for lightmapping
+(`iLightMap` stays `-1`) iff `PolyFlags & 0x400081 != 0`, where
+`0x400081 = PF_Unlit(0x400000) | PF_FakeBackdrop(0x80) | PF_Invisible(0x1)`. **`PF_Portal` is NOT in
+this mask** — a two-sided water-portal sheet is genuinely lightmapped by the real editor (confirmed:
+real lit records on a two-sided portal surface in a reference map).
+
+**Array order**: the on-disk `LightMap` array is emitted in **BSP tree-walk order**, not surf-index
+order (a real reference map's record→surf sequence is `[102, 324, 267, 191, 17, …]`, not `[0,1,2,…]`)
+— descend from the root, visit the current node's surf (allocating its `FLightMapIndex` record the
+first time each lightmappable surf is seen across the whole walk), recurse BACK then FRONT, then step
+along the node's own `iPlane` coplanar chain. A surf is marked "seen" on first visit regardless of
+whether it's actually lightmappable. This walk reproduces a real map's emission order exactly.
+`LightBits` offsets and the per-surf `Lights`-array region follow this same order.
+
+### 10.8 Constants
+
+| Constant | Value | Role |
+|---|---|---|
+| Light radius formula | `(LightRadius_byte + 1) × 25.0` | `WorldLightRadius`, also the volumetric analogue with a different byte field |
+| Self-shadow bias | `Normal × 4.0` uu | ray-origin push-off |
+| Lumel-grid scale | 128 / 16 / 64 / 32 (High+Low / High / Low / default) | keyed on shadow-detail `PolyFlags` |
+| Lumel-grid size clamp | `[2, 256]` | `FLightMapIndex.USize`/`VSize` |
+| Lightmap-skip mask | `0x400081 = PF_Unlit\|PF_FakeBackdrop\|PF_Invisible` | gates `iLightMap=-1` (portal NOT included) |
+
+### 10.9 Confidence notes
+
+Very strong: the bit-not-intensity finding, the `LightBits` byte encoding (byte-span reconciliation,
+zero exceptions across 2867+2293+621 real records), the grid formula (484/484 exact against a real
+map, with the wrong intermediate readings explicitly falsified rather than silently dropped), the
+`LightMap` emission-order walk, and the `PF_Portal` skip-mask correction — all cross-checked against
+real editor-written `.dx` bytes, not disassembly alone. Weaker/explicitly flagged by the source: the
+front-of-plane test's enforcement point (effect measured at 0/3497 exceptions, mechanism not
+instruction-pinned); the exact semantic naming of `FPoly::SplitWithPlaneFast`'s `SP_Back`/`SP_Split`
+enum values inside the visibility flood (behavior exact-as-quoted, semantic label inferred from
+convention); `actor+0x28`/`zoneinfo+0x27c`'s exact bit meanings (inferred from standard UE1
+declaration order, not independently re-proven here). **Not established by either source read for
+this section**: what a *geometry* rebuild does to already-baked lighting data at the instruction
+level (only the bake's own self-reset was found, not a `MAP REBUILD`-side confirmation) — carried
+forward as an open item, §18.
+
+---
+
+## 11. Paths rebuild (`PATHS DEFINE` / `PATHS BUILD`)
+
+Console verbs `PATHS DEFINE` / `PATHS BUILD [LOWOPT|HIGHOPT]`; GUI "Build Paths" sends `PATHS DEFINE`
+then `PATHS BUILD` (§1.5). Both dispatch through `FPathBuilder::buildPaths(ULevel*, INT opt)`
+**[DISASM Engine.dll 0x177770]** — note this lives in `Engine.dll`, not `Editor.dll` (the AI
+navigation graph is a runtime/gameplay structure the editor happens to also be able to build, unlike
+the BSP/lighting machinery which is editor-only).
+
+### 11.1 Pipeline: `definePaths` vs `createPaths` vs `Prune`
+
+`buildPaths`'s own sequence: strip stale auto-`PathNode`s → `undefinePaths` → **`definePaths`**
+(place markers) → acquire a scout pawn → set scout collision params → **`createPaths(opt)`** (build
+all `FReachSpec`s) → destroy scout → refresh markers → log `"Built Paths: %d"`.
+
+- **`definePaths`** **[DISASM Engine.dll 0x178c10]** only **spawns auto-marker `NavigationPoint`s** —
+  an `InventorySpot` under every `Inventory` actor, a `WarpZoneMarker` under every `WarpZoneInfo`
+  actor — and builds **zero** `FReachSpec`s. Logs `"DevPath: Defining paths."`. So `PATHS DEFINE` run
+  standalone (as its own console verb) yields markers only, no edges — it is a strict subset of what
+  `PATHS BUILD` runs internally as its own second stage, not a separate half of the graph.
+- **`createPaths`** is where every `FReachSpec` edge is actually built (§11.3-11.4).
+- **`Prune`** **[DISASM Engine.dll 0x176790]** runs last, marking redundant edges (§11.6).
+
+### 11.2 `FReachSpec` — fields and on-disk layout
+
+On-disk, inside `ULevel.ReachSpecs` (a `TArray`, compact-index count), byte-exact against a 100-real-map
+corpus (`level_roundtrip.py`, 100/100 exact):
+
+```
+FReachSpec:
+  i32 Distance          // path cost
+  ci  Start              // object ref -> source NavigationPoint
+  ci  End                // object ref -> destination NavigationPoint
+  i32 CollisionRadius    // largest pawn radius that fits this edge
+  i32 CollisionHeight    // largest pawn height that fits this edge
+  i32 reachFlags         // bitmask, §11.5
+  u8  bPruned            // 1 = kept for AI fallback, excluded from routing
+```
+
+Variable serialized length (17-21 bytes, `Start`/`End` are 1-3-byte compact indices). Edges are
+**directed** — `Start→End` one-way; a bidirectional connection is two separate records.
+
+In-memory shape (28 bytes, `ULevel+0x8c`): same fields, `Start`/`End` as raw `AActor*` pointers
+instead of compact-index refs. Each `NavigationPoint` additionally carries three `16×INT` arrays
+indexing into `ReachSpecs` (`-1` = empty slot): `upstreamPaths[16]` (incoming), `Paths[16]`
+(outgoing, used for routing), `prunedPaths[16]` (pruned edges kept as fallback) — this per-node
+array's exact on-disk property-tag encoding was not independently byte-verified against a real level
+by the sources read (flagged open, §18).
+
+### 11.3 Reachability test — the scout sweep and the trace
+
+`createPaths` builds the graph with a **scout pawn** sized `SetCollisionSize(Radius=52.0,
+Height=40.0)` **[DISASM Engine.dll 0x10177a4f]**. For each candidate node pair, `findBestReachable`
+**[DISASM Engine.dll 0x193dd0]** **sweeps the scout's collision size from `(18.0, 39.0)` up to a max
+radius of `70.0`**, recording the *largest* size that still successfully traverses — that becomes the
+stored `CollisionRadius`/`CollisionHeight`. A resulting radius `< 24` marks the edge bot-only; the
+default marker/PathNode height is `48.0`.
+
+**Candidate-pair distance bound**: `createPaths` only attempts a connection between two
+`NavigationPoint`s within squared straight-line distance **16384 (128²)** on its near pass, extended
+to **640000 (800²)** on its extended `TestReach` pass — an effective maximum node spacing of roughly
+800 uu.
+
+**The trace** dispatches on the scout's `Physics` mode via `APawn::Reachable(Dest)`
+**[DISASM Engine.dll 0x17d8f0]**:
+- `walkReachable` **[0x1846e0]** — steps the scout's collision **cylinder** from start toward end in
+  segments of `MAXTESTMOVESIZE = 128.0` (base step `16.0`), applying gravity/step-up/max-fall with a
+  slope-parabola constant of `0.8`, capped at roughly 100 iterations; success sets `R_WALK`.
+- `flyReachable` / `swimReachable` / `jumpReachable` **[0x1822c0 / 0x183c90 / 0x182c50]** set
+  `R_FLY`/`R_SWIM`/`R_JUMP`; jump uses a max jump height of roughly `48.0` and hands off landing to
+  `walkReachable`.
+
+This is confirmed to be a **cylinder trace consuming the scout's collision size against world
+geometry** — i.e. genuinely dependent on the built BSP's collision (§9), not a pure line-of-sight or
+graph-distance heuristic — but the specific low-level primitive it calls (whether this routes through
+`BoxLineCheck`/`LeafHulls`, §9.2, the same way pawn movement does, or a separate sweep routine) is not
+named by instruction in the source material read for this section; treat "traces against built
+collision" as confirmed and "which exact collision primitive" as open (§18).
+
+**Stored cost** (`FReachSpec.Distance`) is the straight-line Euclidean distance
+`(End.Location - Start.Location).Size()` cast to `INT` — the trace decides whether an edge *exists*,
+not its stored cost. Multi-hop composition (`FReachSpec::operator+`, `Engine.dll 0x193a20`):
+`Distance=a+b`, `Radius=min(a,b)`, `Height=min(a,b)`, `flags=a|b`.
+
+**Special hardcoded edges** (`addReachSpecs`, `Engine.dll 0x1770a0`): a Lift's `LiftCenter→LiftExit`
+edge is hardcoded `Distance=500, Radius=60, Height=60, flags=R_SPECIAL`; Teleporter/WarpZone edges
+also carry `R_SPECIAL`, bypassing the trace entirely.
+
+### 11.4 `ReachFlags` bit constants
+
+| Flag | Value | Confidence |
+|---|---|---|
+| `R_WALK` | 1 | [DISASM] `walkReachable` sets it directly |
+| `R_FLY` | 2 | [DISASM] `flyReachable` sets it directly |
+| `R_SWIM` | 4 | [DISASM] `swimReachable` sets it directly |
+| `R_JUMP` | 8 | [DISASM] `jumpReachable` sets it directly |
+| `R_DOOR` | 16 | [INFERRED] — standard UE1 enum shape, not independently binary-confirmed |
+| `R_SPECIAL` | 32 | [DISASM] `addReachSpecs` writes it for Lift/Teleporter/WarpZone edges |
+| `R_PLAYERONLY` | 64 | [INFERRED] — standard UE1 enum shape, not independently binary-confirmed |
+
+5 of 7 bits are disassembly-confirmed; `R_DOOR`/`R_PLAYERONLY` remain inferred only (§18). Membership
+test `FReachSpec::supports(r, h, flags)` **[DISASM Engine.dll 0x11aa40]**: an edge serves a query
+pawn iff `spec.CollisionRadius>=r && spec.CollisionHeight>=h && (spec.reachFlags & flags)==flags`.
+
+### 11.5 `LOWOPT` / `HIGHOPT`
+
+Maps to `opt=0`/default `opt=1`/`opt=2`, passed straight through as `buildPaths`'s second argument
+into `createPaths(opt)`. **What `opt` actually changes inside `createPaths` was not decoded by the
+sources read** — no branch gated on `opt` was disassembled — this is confirmed only as a numeric
+pass-through, not as a described algorithmic difference (§18).
+
+### 11.6 Pruning
+
+`Prune` **[DISASM Engine.dll 0x176790]**: for each node `N`, for every incoming `A→N` and outgoing
+`N→B` pair, if a direct edge `A→B` already exists and the two-hop route is nearly as good — the
+decoded rule is `combined(A→N→B).Distance <= 1.2 × direct(A→B).Distance` and the direct edge adds no
+reachability the combined route lacks — the direct edge is pruned: `bPruned=1`, removed from
+`A.Paths[]`/`B.upstreamPaths[]` (shift-compacted, `-1`-filled) and appended to `A.prunedPaths[]`.
+Pruned specs **stay in the array** (kept as an AI expensive-path fallback) but are excluded from the
+primary `Paths[]` walk routing uses.
+
+### 11.7 Geometry dependency and survival across `MAP REBUILD`
+
+**Path building requires the already-built BSP** — the reachability trace runs "against the built
+level BSP", strictly downstream of geometry build, the same ordering constraint as lighting (§10).
+
+**Survival across `MAP REBUILD`**: `dev/docs/unrealed/commands.md` states paths are not wiped by
+`MAP REBUILD`, unlike lighting. The read sources support this **structurally, not by a direct
+disassembly citation of the rebuild routine**: `ULevel.ReachSpecs` (`ULevel+0x8c`) is serialized
+directly on the `ULevel` object itself (`ULevel::Serialize`, `Engine.dll 0x16a660`), **not** inside
+the `Model`/BSP object — whereas lighting data (`LightMap`/`LightBits`) lives *inside* `UModel`
+(`+0xa8`/`+0xb4`, §10.4), the object `MAP REBUILD`/`csgRebuild` reconstructs (§2). Since a geometry
+rebuild reconstructs the `Model` `ULevel.ModelRef` points at but does not itself touch the separate
+`ULevel.ReachSpecs` array, survival is the structurally consistent outcome — but this is an inference
+from where each data structure lives, not a cited instruction confirming the rebuild routine
+deliberately preserves `ReachSpecs` (§18).
+
+`ULevel` load performs no path validation or rebuild on its own; reachspecs are consumed lazily only
+by AI (`findPathToward`/`Reachable`) — several real shipped levels ship with `ReachSpecs.Count==0`
+and load/play fine for a human, with AI navigation simply absent (falling back to direct
+movement/idle) rather than the level failing to load.
+
+### 11.8 Ground-truth numbers
+
+A real shipped level (`01_NYC_UNATCOIsland.dx`) carries **12,514 reachspecs**, decoded byte-exact — the
+largest of a 100-real-map round-trip corpus, all 100/100 byte-exact (spanning a 22-actor test map up
+to the 12,514-reachspec level above). No path-*node*-count ground truth was found in the sources read
+(only the edge/reachspec count above).
+
+### 11.9 Confidence notes
+
+Strong: `FReachSpec`'s on-disk layout (100/100 real maps byte-exact), 5 of 7 `ReachFlags` bit values,
+`definePaths`/`createPaths`/`Prune` pipeline order and the `Prune` criterion, the scout-sweep
+mechanism and its numeric constants, the special hardcoded Lift/Teleporter/WarpZone edges. Weaker/
+explicitly open: `R_DOOR`/`R_PLAYERONLY`'s exact values (inferred from convention only),
+`LOWOPT`/`HIGHOPT`'s actual internal effect (numeric pass-through confirmed, algorithmic difference
+not decoded), which exact low-level collision primitive `Reachable`'s trace calls, the per-node
+`Paths[16]`/`upstreamPaths[16]`/`prunedPaths[16]` array's on-disk property-tag encoding, and the
+paths-survive-`MAP REBUILD` claim's mechanism (structural inference, not a direct rebuild-routine
+citation).
+
+---
+
+## 12. Serialized `UModel` on-disk format
 
 `FBspNode` (0x40 bytes in memory; ~43 bytes typical serialized size, varies with compact-index
 encoding) **[BYTE-DIFF against `DXOnly.dx`; `sections/50-model-ondisk-layout-and-render.md`]**:
@@ -1170,7 +1597,7 @@ node (`FBspNode.Plane`) and **never** populate the `Vectors` array — only `FBs
 
 ---
 
-## 11. Float32 precision — reproducibility requirements
+## 13. Float32 precision — reproducibility requirements
 
 **Build provenance, decisive, not inferred:** `Editor.dll`/`Engine.dll`/`core.dll` all report MSVC
 linker version 14.32 (Visual Studio 2022) and `TimeDateStamp` 2022-10-29 — this is a **2022 MSVC
@@ -1233,7 +1660,7 @@ or the trig table's precast order), not a precision-model gap.
 
 ---
 
-## 12. Ground-truth reference numbers (for validating a reimplementation)
+## 14. Ground-truth reference numbers (for validating a reimplementation)
 
 All captured by actually driving a real UED22 editor session (`MAP REBUILD; BSP REBUILD OPTIMAL
 OPTGEOM ZONES`, or equivalent) and reading its output, or by structurally parsing a real shipped
@@ -1285,7 +1712,7 @@ result; §1.1 shows they don't.)
 
 ---
 
-## 13. Binary map (consolidated function/RVA table)
+## 15. Binary map (consolidated function/RVA table)
 
 All addresses are file RVAs as `pefile` reports them (ImageBase `0x10000000` for every DLL below;
 subtract nothing further).
@@ -1344,9 +1771,9 @@ subtract nothing further).
 | `FPoly::RemoveColinears` | Engine.dll | `0x151090` | coincident+colinear vertex removal (§4) |
 | `FPoly::CalcNormal` | Engine.dll | `0x150510` | normal + zero-area detection (§4, §3.7) |
 | `FPoly::Finalize` | Engine.dll | `0x150ac0` | the face-survival gate (§4) |
-| `FPlane::PlaneDot` | Core.dll | `0x24e60` | signed point-plane distance (§9, §11) |
-| `FVector::NormalizeSlow` | Core.dll | `0x249d0` | f32→f64-sqrt→f32 normalize, used by `CalcNormal` (§11) |
-| `FVector::Normalize` | Core.dll | `0x24940` | x87-based normalize, NOT the surf-normal path (§11) |
+| `FPlane::PlaneDot` | Core.dll | `0x24e60` | signed point-plane distance (§9, §13) |
+| `FVector::NormalizeSlow` | Core.dll | `0x249d0` | f32→f64-sqrt→f32 normalize, used by `CalcNormal` (§13) |
+| `FVector::Normalize` | Core.dll | `0x24940` | x87-based normalize, NOT the surf-normal path (§13) |
 | `UModel::LineCheck` | Engine.dll | `0xf3c20` | collision dispatcher (§9) |
 | Zero-extent line check | Engine.dll | `0xf3560` | (§9.1) |
 | `BoxLineCheck` | Engine.dll | `0xf42f0` | pawn/actor sweep collision (§9.2) |
@@ -1356,7 +1783,7 @@ subtract nothing further).
 
 ---
 
-## 14. Confidence summary by subsystem
+## 16. Confidence summary by subsystem
 
 | Subsystem | Confidence |
 |---|---|
@@ -1380,11 +1807,19 @@ subtract nothing further).
 | Collision: `BoxLineCheck` requiring `LeafHulls` | [DISASM] + [LIVE A/B test] — strong |
 | `UModel` on-disk field layout | [BYTE-DIFF] for `FBspNode`/`FBspVert`/array ordering; `FBspSurf`'s full field list beyond the first two fields is **not independently re-verified** by this evidence pass |
 | Float32/SSE determinism of the real DLLs | [DISASM] whole-binary census — very strong, decisive (2022 SSE2 rebuild, zero FMA, zero fldcw); trig-table precast artifact [LIVE]-confirmed on real rotated content |
-| Ground-truth topology numbers (§12) | [LIVE] + [BYTE-DIFF], multiple real levels, cross-validated by determinism replay |
+| Ground-truth topology numbers (§14) | [LIVE] + [BYTE-DIFF], multiple real levels, cross-validated by determinism replay |
+| GUI `Build` dialog → exec-string dispatch (§1.5) | [DISASM] direct wide-string extraction from `unrealed.exe`, cross-confirmed by `Editor.dll`'s exec-parser arg-key vocabulary — strong for *which strings get sent*; the `15`/`70` GUI default-slider-value reading is [DISASM]-suggestive but not confirmed to instruction level (would need a dialog-resource-table parse) |
+| Lighting bake: bit-not-intensity storage model, `LightBits` byte encoding, lumel-grid formula | [DISASM] + [BYTE-DIFF], byte-exact against real `.dx` files (484/484 grid records, zero-exception byte-span reconciliation) — very strong |
+| Lighting bake: per-leaf permeating-light flood (`ActorVisibility`) | [DISASM], single decode, internally detailed; the front-of-plane test's *mechanism* (vs its measured *effect*, 0/3497 exceptions) is [OPEN] |
+| Lighting-vs-geometry-rebuild interaction (does `MAP REBUILD` wipe lighting, and how) | behavioral claim [LIVE] via `commands.md`; the mechanism is [OPEN] — not directly disassembled in either source read for §10 |
+| `FReachSpec` on-disk layout, pipeline order, scout-sweep reachability trace | [DISASM] + [BYTE-DIFF], 100/100 real maps byte-exact for the layout |
+| `ReachFlags` bit values | 5/7 [DISASM]-confirmed; `R_DOOR`/`R_PLAYERONLY` [INFERRED] only |
+| `LOWOPT`/`HIGHOPT`'s actual algorithmic effect | [OPEN] — only the `opt=0/1/2` numeric pass-through is confirmed |
+| Paths survive `MAP REBUILD`, unlike lighting | behavioral claim [LIVE] via `commands.md`; the mechanism is a structural inference (object-layout argument, §11.7), not a direct rebuild-routine citation — [OPEN] |
 
 ---
 
-## 15. What this document does not establish
+## 17. What this document does not establish
 
 - **`FBspSurf`'s complete on-disk field layout and order** beyond `Texture`/`PolyFlags` at `+0x0`/
   `+0x4` — not independently re-derived here to the same level of certainty as `FBspNode`.
@@ -1394,13 +1829,18 @@ subtract nothing further).
   zone/portal/bounds filtering passes) — inferred from caller branch structure, not independently
   disassembled at its own definition.
 - **The unidentified trailing `TArray<INT>` in the `UModel` serialization** between `Leaves` and the
-  `RootOutside`/`Linked` tail (§10) — its purpose was not identified.
+  `RootOutside`/`Linked` tail (§12) — its purpose was not identified.
 - **The exact resolution of the coincident Add/Subtract shared-surface normal case** (§3.7) — honestly
   reported as unresolved by the source material rather than forced to a plausible-looking answer.
+- **What a geometry rebuild does to existing lighting/paths data, at the instruction level** (§10.2,
+  §11.7) — both interactions are documented behaviorally elsewhere in this project but neither was
+  traced to a specific instruction by the sources read for this document.
+- **`LOWOPT`/`HIGHOPT`'s actual effect on path building**, and **which collision primitive the paths
+  reachability trace calls** (§11.3, §11.5).
 
 ---
 
-## 16. Open items requiring direct live verification
+## 18. Open items requiring direct live verification
 
 1. **[§1.1, §1.2, §5.3] Does `MAP REBUILD`'s `UEditorEngine::Rebuild` (`0x65a40`) call the same
    `csgRebuild` (`0x4a650`) whose own disassembled tail unconditionally runs `bspOptGeom`, or a
@@ -1422,24 +1862,44 @@ subtract nothing further).
    settle which numeric value maps to which physical case, independent of either prior document.
 3. **[§9.2 / broader] `BoxLineCheck`'s hull-plane-count cap** and any other undecoded edge cases in
    the box-sweep collision path beyond what §9.2 covers.
-4. **[§10] `FBspSurf`'s complete serialized field list and order.**
+4. **[§12] `FBspSurf`'s complete serialized field list and order.**
 5. **[§3.7] The coincident Add/Subtract shared-surface normal case** left unresolved by the source
    material.
+6. **[§10.2, §10.9] What a geometry (`MAP REBUILD`) rebuild does to already-baked lighting data, at
+   the instruction level.** `commands.md` documents the behavior (a rebuild wipes lighting), and
+   `shadowIlluminateBsp`'s own self-reset on every `LIGHT APPLY` is disassembly-confirmed, but no
+   source read for this document disassembles the rebuild routine's side of that interaction.
+   Resolve by disassembling `csgRebuild`'s `EmptyModel` call (§2) for whether it clears
+   `UModel.LightMap`/`LightBits` as part of its known Nodes/Surfs/Verts/Points/Vectors/Zones reset,
+   or by baking a level, driving `MAP REBUILD` alone, and reading back `Model.LightMap`/`LightBits`.
+7. **[§11.3] Which exact low-level collision primitive `APawn::Reachable`'s trace calls** — confirmed
+   to consume the scout's collision size against built world geometry, not confirmed to route through
+   `BoxLineCheck`/`LeafHulls` (§9.2) by name in the source material read.
+8. **[§11.5] `LOWOPT`/`HIGHOPT`'s actual algorithmic effect inside `createPaths`** — only the
+   `opt=0/1/2` numeric pass-through is confirmed; no branch gated on `opt` was disassembled.
+9. **[§11.7] Direct disassembly confirmation that `MAP REBUILD` does not touch `ULevel.ReachSpecs`**
+   — currently only a structural inference from `ReachSpecs` living on `ULevel` rather than inside
+   the rebuilt `Model` object.
+10. **[§1.5] Whether the `15`/`70` values found adjacent to the `Build Options` dialog's Balance/
+    PortalBias slider labels are genuinely the sliders' default positions**, rather than unrelated
+    nearby strings — `70` matching the independently-confirmed console default is suggestive but not
+    proof; would need the dialog's compiled resource template parsed directly.
 
 ---
 
-## 17. Related, not covered
+## 19. Related, not covered
 
-`GMath.TrigFLOAT` (§11) and `ABrush::BuildCoords`/`FPoly::Transform` (§3.1a) are covered only to the
+`GMath.TrigFLOAT` (§13) and `ABrush::BuildCoords`/`FPoly::Transform` (§3.1a) are covered only to the
 depth needed to explain their role in per-brush transform and float32 fidelity. `AMover`'s own
-private-`UModel` collision system, and lighting bake (`LIGHT APPLY`), are both explicitly out of scope
-for this document (geometry build only) — see
+private-`UModel` collision system is explicitly out of scope for this document — see
 `dev/docs/spikes/2026-06-24-bsp-collision-solidity-movers-from-binary.md` §3 for movers' separate
-collision path.
+collision path. (Geometry build, lighting build, and paths build — the three scopes the GUI's `Build`
+dialog exposes, §1.5 — are all now covered, §1-§9 and §12-§17 for geometry, §10 for lighting, §11 for
+paths.)
 
 ---
 
-## 18. Evidence index
+## 20. Evidence index
 
 Primary disassembly/decode documents (all under `dev/docs/spikes/`):
 
@@ -1470,6 +1930,24 @@ Primary disassembly/decode documents (all under `dev/docs/spikes/`):
   `85-hkmarket-parity.md`, `86-catacombs-parity.md`.
 - `2026-07-15-native-materialize/41-fp-model-x87-vs-sse.md`, `81-phase0-feasibility.md`,
   `PARITY-STATUS.md` — float-determinism census and methodology status.
+- `2026-07-15-native-materialize/sections/20-lighting-bake.md` (1268 lines) and
+  `2026-07-15-native-materialize/re-raw-zones/lightflood-6d00.md` — full `LIGHT APPLY`/
+  `shadowIlluminateBsp` decode (§10): pipeline, storage layout, `LightBits` encoding,
+  `FLightMapIndex`/grid-sizing formula, the raytrace, and the per-leaf permeating-light flood.
+- `2026-07-15-native-materialize/sections/30-ulevel-paths-assembly.md` (628 lines) and
+  `2026-06-27-decontainerize-uedcli/05-lighting-and-paths.md` — full `FPathBuilder` decode (§11):
+  `definePaths`/`createPaths`/`Prune`, `FReachSpec` layout, the scout-sweep reachability trace,
+  `ReachFlags`.
+- `dev/docs/unrealed/commands.md` (`## Build pipeline` section) and
+  `dev/docs/unrealed/leveldesign/kb/actors-collision-pathing.md` §7 — console-verb-level facts for
+  `PATHS`/`LIGHT APPLY` already documented before this item, and the file's own confidence-marker
+  convention (checked and respected — §7.1's node-spacing guidance is explicitly tagged
+  tutorial-corpus by the source file itself and was excluded from this document's load-bearing claims
+  accordingly).
+- `uned/UED22/unrealed.exe` and `uned/UED22/Editor.dll` wide-string tables — read directly (§1.5),
+  not via an existing spike doc: confirms the GUI `Build` dialog's menu items, checkboxes, sliders,
+  and their exact `Exec()` string templates, cross-checked against `Editor.dll`'s own recognized
+  argument-key vocabulary.
 
 Explicitly excluded as evidence throughout this document: `uedcli-native/src/*.rs`, `uedcli/*.py`,
 and `dev/docs/board/*` (this project's own reimplementation and its bug tracker) — see the note at
