@@ -218,14 +218,17 @@ class Driver:
         return self._await_written_file(produces, before=before, timeout=timeout, poll=poll,
                                         stable_reads=stable_reads, settle=settle, recheck=recheck)
 
-    def write_work_file(self, content: str, *, ext: str = "txt") -> str:
-        """Write `content` to a unique `/work/<uuid>.<ext>` inside the container (via `docker exec
-        tee`, so no host/container path skew) and return the container path."""
+    def write_work_file(self, content: str | bytes, *, ext: str = "txt") -> str:
+        """Write `content` (text or bytes) to a unique `/work/<uuid>.<ext>` inside the container (via
+        `docker exec tee`, so no host/container path skew) and return the container path. Bytes are
+        for a pre-assembled `.dx` the drive `MAP LOAD`s."""
         path = f"/work/uedcli_{uuid.uuid4().hex}.{ext}"
+        is_bytes = isinstance(content, bytes)
         res = subprocess.run(["docker", "exec", "-i", self.container, "tee", path],
-                             input=content, text=True, capture_output=True, check=False)
+                             input=content, text=not is_bytes, capture_output=True, check=False)
         if res.returncode != 0:
-            raise DriverError(f"write_work_file {path} failed: {(res.stderr or '').strip()}")
+            err = res.stderr if not is_bytes else (res.stderr or b"").decode(errors="replace")
+            raise DriverError(f"write_work_file {path} failed: {(err or '').strip()}")
         return path
 
     def click(self, x: int, y: int, button: int = 1) -> None:

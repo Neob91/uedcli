@@ -292,10 +292,15 @@ class StubDefaults:
     silently resolving to nothing."""
 
     def __init__(self, table: dict[str, dict[tuple[str, int], str]] | None = None, *,
-                 schema: dict[str, dict[str, object]] | None = None):
+                 schema: dict[str, dict[str, object]] | None = None,
+                 noneditable: set[str] | None = None):
         self._table = {k.casefold(): v for k, v in (table or {}).items()}
         self._schema = {k.casefold(): {n.casefold(): stub_field(s) for n, s in v.items()}
                         for k, v in (schema or {}).items()}
+        # Prop names the compare treats as NON-`var()`-editable (engine-managed) so its edit-rule
+        # drops them; every other stub prop is authored/editable. The real `ClassInfo` reads this
+        # from CPF_Edit. A test that expects a computed prop stripped lists it here.
+        self._noneditable = {n.casefold() for n in (noneditable or ())}
         self._memo: dict[str, object] = {}
         self.resolutions = 0
 
@@ -307,7 +312,12 @@ class StubDefaults:
         key = fqcn.casefold()
         hit = self._memo.get(key)
         if hit is None:
-            hit = self._memo[key] = ClassInfo(fqcn, dict(self._schema.get(key, {})),
-                                              dict(self._table.get(key, {})))
+            # The stub's flat per-class schema is what that class "declares", so every prop's
+            # declaring class is the class it is listed under (real `ClassInfo` gets this from
+            # `uprops.Prop.owner`).
+            props = dict(self._schema.get(key, {}))
+            editable = {n: n not in self._noneditable for n in props}
+            hit = self._memo[key] = ClassInfo(fqcn, props, dict(self._table.get(key, {})),
+                                              {n: fqcn for n in props}, editable)
             self.resolutions += 1
         return hit

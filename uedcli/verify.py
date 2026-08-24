@@ -75,32 +75,63 @@ def _first_diff(got: CompareView, expected: CompareView) -> str:
     return "the compare views differ but no per-actor/order diff found (a canonicalization mismatch?)"
 
 
-def verify_dx_matches(*, container: str, dx_path: str, expected: Level, defaults,
-                      qualify_driver=None) -> VerifyResult:
-    """Compare the map actually written at `dx_path` against the `expected` level.
+def _drop_editor_cameras(got: Level, expected: Level) -> None:
+    """The editor SPAWNS viewport `Engine.Camera` actors during the build (LIGHT APPLY / viewport
+    setup) that the trunk never authored — a commandlet/GUI-editor artifact, not level content. Drop
+    any `Camera` in `got` that `expected` does not contain: an authored camera IS in the trunk by
+    name, so this removes only the editor's own spawns and never real content. Mutates `got`."""
+    editor_spawned = [n for n, a in got.actors.items()
+                      if (a.cls or "").rsplit(".", 1)[-1].casefold() == "camera"
+                      and n not in expected.actors]
+    for n in editor_spawned:
+        del got.actors[n]
+    if editor_spawned:
+        got.order = [n for n in got.order if n in got.actors]
 
-    `defaults` is a `classdefaults.ClassDefaults` — REQUIRED, no default and no fallback. Both
-    sides resolve every property to its effective TYPED value against the real class schema +
-    defaults; substituting "assume zero" for a class that cannot be resolved is the very bug the
-    typed compare removes, so an unresolvable class raises `uprops.SchemaError` (naming the actor
-    and the class) instead."""
-    got = export_dx_level(container, dx_path)
-    if qualify_driver is not None:
-        from .qualify import (qualify_live_level,          # local import: qualify imports
-                              requalify_classes_to_loaded,  # editor/driver, which verify.py
-                              _read_loaded_classes)         # otherwise has no need of
-        qualify_live_level(got, qualify_driver)
-        # Reconcile `expected`'s classes to the SAME live loaded-class set — by BARE name, INCLUDING
-        # an already-qualified class. Since offline ingest qualification (classindex) now stores an
-        # FQCN in the trunk, `expected` arrives FQCN; the older `qualify_level_classes` would SKIP a
-        # dotted class, leaving `expected` on the OFFLINE pick while `got` carries the LIVE pick — a
-        # false mismatch if those ever differ. `requalify_classes_to_loaded` maps both sides to the
-        # live pick, so H3 stays live-vs-live. It also still handles a LEGACY bare `expected` (older
-        # stash/prefab content, or a `--tree` box hand-edited bare) — the backstop that made
-        # auditing every creation site unnecessary (GPT-5.4 review, 2026-06-21).
-        requalify_classes_to_loaded(expected, _read_loaded_classes(qualify_driver))
-    got_view = compare_view(got, defaults=defaults)
-    expected_view = compare_view(expected, defaults=defaults)
+
+def decode_dx_level_offline(host_dx_path: str, *, index, schema) -> Level:
+    """Decode a built `.dx`/`.unr` FILE into a `Level` OFFLINE — no editor. The map file already
+    carries every qualifier the editor's `MAP EXPORT` strips: texture refs are qualified IMPORTS and
+    each actor's class is a fully-qualified export ref, so `mapimport` reads them straight from the
+    package tables. This is what lets the post-verify skip the fragile editor round-trip (`MAP EXPORT`
+    + `OBJ DEPENDENCIES` texture-qualify, which can time out and mis-match a brush to its dump block).
+
+    `index` is a `classindex.ClassIndex` over the game `.u` (typing/struct/array member decode);
+    `schema` a `mapimport.ImportSchema`. Raises `upackage.SchemaError` on a corrupt/truncated map
+    (naming the file), never a bare struct/IndexError."""
+    from . import mapimport, upackage
+    from .model import parse_t3d
+    from .normalize import level_order, normalize_level
+    from pathlib import Path
+    pkg = upackage.load_package(host_dx_path, name=Path(host_dx_path).stem)
+    level = parse_t3d(mapimport.import_map(pkg, index, schema))
+    # `MAP EXPORT`/`import_map` write a BARE `Class=`; recover each actor's FQCN from the `.dx`'s own
+    # export class ref (the class the editor actually built the actor with — authoritative).
+    for i, e in enumerate(pkg.exports):
+        if pkg.name_of_ref(e["cls"]) == "Class":
+            continue
+        name = pkg.names[e["nm"]]
+        fqcn = pkg.object_path(e["cls"])
+        if fqcn and name in level.actors:
+            level.actors[name].cls = fqcn
+    level.order = level_order(level)
+    normalize_level(level)
+    return level
+
+
+def verify_dx_matches(*, dx_path: str, expected: Level, defaults, index, schema,
+                      ignore: frozenset[tuple[str, str]] = frozenset()) -> VerifyResult:
+    """Compare the map at HOST path `dx_path` against the `expected` level, decoding it OFFLINE
+    (`decode_dx_level_offline` — no editor MAP EXPORT / OBJ DEPENDENCIES).
+
+    `defaults` is a `classdefaults.ClassDefaults` — REQUIRED, no default and no fallback. Both sides
+    resolve every property to its effective TYPED value against the real class schema + defaults;
+    substituting "assume zero" for a class that cannot be resolved is the very bug the typed compare
+    removes, so an unresolvable class raises `uprops.SchemaError` (naming the actor + class)."""
+    got = decode_dx_level_offline(dx_path, index=index, schema=schema)
+    _drop_editor_cameras(got, expected)
+    got_view = compare_view(got, defaults=defaults, ignore=ignore)
+    expected_view = compare_view(expected, defaults=defaults, ignore=ignore)
     if got_view == expected_view:
         return VerifyResult(ok=True)
     return VerifyResult(ok=False,

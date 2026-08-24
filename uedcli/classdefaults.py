@@ -31,6 +31,10 @@ from __future__ import annotations
 from . import typedprops, uprops
 from .typedprops import Field
 
+# CPF_Edit — an UnrealScript `var()` (editor-visible) property. The compare treats a property with
+# this flag as AUTHORED content and without it as engine-managed state.
+CPF_EDIT = 0x1
+
 # `uprops.Prop.kind` (the UProperty subclass) -> the compare-side `Field.kind`. `ByteProperty` is
 # resolved separately: with an enum it is an ENUM (compared by ordinal), without one a plain BYTE.
 _KIND_BY_PROPERTY = {
@@ -59,10 +63,20 @@ class ClassInfo:
     """
 
     def __init__(self, fqcn: str, fields: dict[str, Field],
-                 defaults: dict[tuple[str, int], str]):
+                 defaults: dict[tuple[str, int], str],
+                 owners: dict[str, str] | None = None,
+                 editable: dict[str, bool] | None = None):
         self.fqcn = fqcn
         self.fields = fields
         self.defaults = defaults
+        # casefold(prop name) -> the FQCN of the class that DECLARES it (from `uprops.Prop.owner`),
+        # so the compare can scope a per-game ignore to the declaring class (owner ruling 2026-08-24)
+        # rather than a global name that could hit an unrelated class's own property.
+        self.owners = owners or {}
+        # casefold(prop name) -> is it CPF_Edit (a `var()` UnrealScript property)? The compare drops
+        # every NON-editable property (engine-managed state the level author never sets) EXCEPT the
+        # handful authored through UnrealEd's special editors (PrePivot, mover KeyPos/KeyRot).
+        self.editable = editable or {}
         self._typed: dict[tuple[str, int], object] = {}
 
     def field(self, name: str) -> Field:
@@ -143,7 +157,9 @@ class ClassDefaults:
         defaults = uprops.resolve_class_defaults(fqcn, resolver=self._resolver, schema=schema,
                                                  _pkgs=self._pkgs)
         fields = {name: self._field_for(p) for name, p in schema.items()}
-        return ClassInfo(fqcn, fields, defaults)
+        owners = {name: p.owner for name, p in schema.items()}
+        editable = {name: bool(p.property_flags & CPF_EDIT) for name, p in schema.items()}
+        return ClassInfo(fqcn, fields, defaults, owners, editable)
 
     def _package(self, name: str):
         pkg = self._pkgs.get(name)

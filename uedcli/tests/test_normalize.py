@@ -1,5 +1,5 @@
 from uedcli.model import parse_t3d, Actor
-from uedcli.normalize import normalize_level, canonical_actor_t3d, COMPUTED_PROPS
+from uedcli.normalize import normalize_level, canonical_actor_t3d, is_authored_prop
 from uedcli.tests.conftest import StubDefaults, read_fixture
 
 
@@ -59,10 +59,22 @@ def test_canonical_actor_t3d_strips_timeseconds():
     assert "LightBrightness" in out
 
 
-def test_computed_props_set_contains_expected():
-    assert "TimeSeconds" in COMPUTED_PROPS
-    assert "Summary" in COMPUTED_PROPS
-    assert "Region" in COMPUTED_PROPS
+def test_edit_rule_strips_non_editable_keeps_authored_and_special_editors():
+    # non-editable engine state -> not authored (dropped)
+    assert not is_authored_prop("region", editable=False)
+    assert not is_authored_prop("savedpos", editable=False)
+    assert not is_authored_prop("distancefromplayer", editable=False)
+    assert not is_authored_prop("prevnavigationpoint", editable=None)   # schema-less computed
+    assert not is_authored_prop("aiprofile", editable=None)             # prefix
+    # var()-editable authored props -> kept
+    assert is_authored_prop("tag", editable=True)
+    assert is_authored_prop("userlist", editable=True)
+    # special-editor exceptions: non-editable but authored -> kept
+    assert is_authored_prop("prepivot", editable=False)
+    assert is_authored_prop("keypos", editable=False)
+    assert is_authored_prop("keyrot", editable=False)
+    # unknown prop (no schema entry) -> kept, compared untyped
+    assert is_authored_prop("somemodprop", editable=None)
 
 
 def test_stable_actor_ordering():
@@ -530,10 +542,12 @@ def test_a_trunk_mover_compares_equal_to_its_editor_reexport_carrying_the_saved_
     """THE regression for the materialize abort: the trunk omits SavedPos/SavedRot, the rebuilt
     map's re-export carries the sentinels, and the H3 post-verify must see NO difference."""
     from uedcli.normalize import compare_view
+    # SavedPos/SavedRot/BasePos/BaseRot are engine-managed (non-`var()`), so the edit-rule drops them.
     d = StubDefaults(schema={"Engine.Mover": {"SavedPos": "struct:X=float,Y=float,Z=float",
                                               "SavedRot": "struct:Pitch=int,Yaw=int,Roll=int",
                                               "BasePos": "struct:X=float,Y=float,Z=float",
-                                              "BaseRot": "struct:Pitch=int,Yaw=int,Roll=int"}})
+                                              "BaseRot": "struct:Pitch=int,Yaw=int,Roll=int"}},
+                     noneditable={"savedpos", "savedrot", "basepos", "baserot"})
     assert (compare_view(_mover_level(stamped=True), defaults=d)
             == compare_view(_mover_level(stamped=False), defaults=d))
 
@@ -574,15 +588,35 @@ def test_it_does_not_flag_authored_props_as_computed():
         assert not is_computed_key(k), k
 
 
-def test_no_computed_prop_case_collides_with_a_plausibly_authored_prop():
-    # Guard the global case-fold change: a folded COMPUTED_PROPS member must not equal a folded
-    # real authored prop (which would silently strip authored content).
-    from uedcli.normalize import COMPUTED_PROPS
+def test_no_ingest_computed_name_collides_with_a_plausibly_authored_prop():
+    # The INGEST strip is by bare name, so a computed name must not equal a real authored prop.
+    from uedcli.normalize import _INGEST_NAMES
     authored = {"LightBrightness", "LightRadius", "LightHue", "Tag", "PrePivot", "Rotation",
                 "CsgOper", "PolyFlags", "Group", "Event", "Physics", "Mass", "Skin"}
-    folded_computed = {c.casefold() for c in COMPUTED_PROPS}
-    collisions = {a for a in authored if a.casefold() in folded_computed}
+    collisions = {a for a in authored if a.casefold() in _INGEST_NAMES}
     assert collisions == set(), collisions
+
+
+def test_per_game_ignore_and_edit_rule_via_compare_view():
+    """The per-game ignore list drops an authored (editable) prop the editor can't round-trip, and
+    the edit-rule drops a non-editable one, from the compare view."""
+    from uedcli.normalize import compare_view
+    from uedcli.model import parse_t3d
+    from uedcli.tests.conftest import StubDefaults
+    d = StubDefaults(schema={"Engine.Actor": {"bOwned": "bool", "bHidden": "bool",
+                                              "Region": "struct:iLeaf=int"}},
+                     noneditable={"region"})
+    lvl = parse_t3d('Begin Map\nBegin Actor Class=Engine.Actor Name=A\n'
+                    '    bOwned=True\n    bHidden=True\n    Region=(iLeaf=5)\n'
+                    '    Name="A"\nEnd Actor\nEnd Map\n')
+    for a in lvl.actors.values():
+        a.cls = "Engine.Actor"
+    ign = frozenset({("engine.actor", "bowned")})
+    view = compare_view(lvl, defaults=d, ignore=ign)
+    own = view.actors["A"].own
+    assert ("bhidden", 0) in own                          # authored, editable -> kept
+    assert ("bowned", 0) not in own                       # per-game ignore -> dropped
+    assert ("region", 0) not in own                       # non-editable -> dropped by edit-rule
 
 
 

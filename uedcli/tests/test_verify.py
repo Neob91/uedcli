@@ -1,5 +1,5 @@
 from unittest import mock
-from uedcli.verify import verify_dx_matches, VerifyResult
+from uedcli.verify import verify_dx_matches, VerifyResult, decode_dx_level_offline
 from uedcli.model import parse_t3d
 from uedcli.normalize import normalize_level, level_order
 from uedcli.tests.conftest import StubDefaults
@@ -9,31 +9,38 @@ _T3D = ("Begin Map\nBegin Actor Class=Engine.Light Name=L1\n    Name=\"L1\"\nEnd
 _DEFAULTS = StubDefaults()          # no class has a non-zero default in these fixtures
 
 
-def _lvl():
-    lv = parse_t3d(_T3D)
+def _lvl(t3d=_T3D):
+    lv = parse_t3d(t3d)
     lv.order = level_order(lv)
     normalize_level(lv)
     return lv
 
 
+def _verify(built_t3d, expected, defaults, **kw):
+    """Run the post-verify with the built `.dx` decode STUBBED to `built_t3d` — the real decode
+    (`decode_dx_level_offline`) reads a package file + game schema the offline suite has none of, so
+    the got side is injected as an already-parsed level here (its class-ref qualification is covered
+    by the materialize integration path, not these unit fixtures)."""
+    with mock.patch("uedcli.verify.decode_dx_level_offline", return_value=_lvl(built_t3d)):
+        return verify_dx_matches(dx_path="/tmp/x.dx", expected=expected, defaults=defaults,
+                                 index=None, schema=None, **kw)
+
+
 def test_verify_passes_when_exported_matches_expected():
-    with mock.patch("uedcli.store_export.export_dx_t3d", autospec=True, return_value=_T3D):
-        result = verify_dx_matches(container="c", dx_path="/repo/Temp/x.dx", expected=_lvl(), defaults=_DEFAULTS)
+    result = _verify(_T3D, _lvl(), _DEFAULTS)
     assert isinstance(result, VerifyResult) and result.ok is True
 
 
 def test_verify_fails_when_exported_differs():
     moved = _T3D.replace('Name="L1"', 'Location=(X=99.000000,Y=0,Z=0)\n    Name="L1"')
-    with mock.patch("uedcli.store_export.export_dx_t3d", autospec=True, return_value=moved):
-        result = verify_dx_matches(container="c", dx_path="/repo/Temp/x.dx", expected=_lvl(), defaults=_DEFAULTS)
+    result = _verify(moved, _lvl(), _DEFAULTS)
     assert result.ok is False and "mismatch" in result.message
 
 
 def test_verify_mismatch_message_names_the_differing_actor():
     # black-box-materialize fix: the message must point at the FIRST differing actor+field.
     moved = _T3D.replace('Name="L1"', 'Location=(X=99.000000,Y=0,Z=0)\n    Name="L1"')
-    with mock.patch("uedcli.store_export.export_dx_t3d", autospec=True, return_value=moved):
-        result = verify_dx_matches(container="c", dx_path="/repo/Temp/x.dx", expected=_lvl(), defaults=_DEFAULTS)
+    result = _verify(moved, _lvl(), _DEFAULTS)
     assert result.ok is False
     assert "'L1'" in result.message and "differs" in result.message
 
@@ -41,14 +48,11 @@ def test_verify_mismatch_message_names_the_differing_actor():
 def test_verify_mismatch_message_names_the_PROPERTY_and_both_values():
     """The post-verify aborts the build with nothing written, so its message is the ONLY thing the
     user has to work from. It must name the property and show both sides — including, when one side
-    simply omits the line, the class default that side therefore resolves to, which is usually the
-    actual explanation."""
+    simply omits the line, the class default that side therefore resolves to."""
     d = StubDefaults({"Engine.Light": {("lightradius", 0): "64"}},
                      schema={"Engine.Light": {"LightRadius": "byte"}})
     built = _T3D.replace('Name="L1"', 'LightRadius=0\n    Name="L1"')
-    with mock.patch("uedcli.store_export.export_dx_t3d", autospec=True, return_value=built):
-        result = verify_dx_matches(container="c", dx_path="/repo/Temp/x.dx", expected=_lvl(),
-                                   defaults=d)
+    result = _verify(built, _lvl(), d)
     assert result.ok is False
     assert "'L1'" in result.message and "LightRadius" in result.message
     assert "built:    LightRadius=0" in result.message
@@ -65,13 +69,8 @@ def test_verify_mismatch_message_points_at_the_GEOMETRY_line_when_the_brush_diff
              "         End Polygon\n"
              "       End PolyList\n    End Brush\n"
              '    Brush=Model\'MyLevel.Model0\'\n    Name="B1"\nEnd Actor\nEnd Map')
-    expected = parse_t3d(brush % "64")
-    expected.order = level_order(expected)
-    normalize_level(expected)
-    with mock.patch("uedcli.store_export.export_dx_t3d", autospec=True,
-                    return_value=brush % "96"):
-        result = verify_dx_matches(container="c", dx_path="/repo/Temp/x.dx", expected=expected,
-                                   defaults=_DEFAULTS)
+    expected = _lvl(brush % "64")
+    result = _verify(brush % "96", expected, _DEFAULTS)
     assert result.ok is False and "GEOMETRY" in result.message
     assert "+00096.000000" in result.message and "+00064.000000" in result.message
 
@@ -80,50 +79,24 @@ def test_verify_mismatch_message_flags_a_missing_actor():
     # expected has L1+L2; the built map (got) has only L1 -> name L2 as MISSING.
     two = _T3D.replace("End Map",
                        'Begin Actor Class=Engine.Light Name=L2\n    Name="L2"\nEnd Actor\nEnd Map')
-    expected = parse_t3d(two)
-    expected.order = level_order(expected)
-    normalize_level(expected)
-    with mock.patch("uedcli.store_export.export_dx_t3d", autospec=True, return_value=_T3D):
-        result = verify_dx_matches(container="c", dx_path="/repo/Temp/x.dx", expected=expected, defaults=_DEFAULTS)
+    result = _verify(_T3D, _lvl(two), _DEFAULTS)
     assert result.ok is False and "'L2'" in result.message and "MISSING" in result.message
 
 
-def test_verify_qualifies_via_the_passed_driver_before_comparing():
-    from uedcli.qualify import qualify_level_textures   # sanity: real function exists
-    # `requalify_classes_to_loaded` is mocked out here, so the export must arrive already
-    # qualified: an unresolvable class is fatal to the compare by design (no zero fallback).
-    bare_export = ("Begin Map\nBegin Actor Class=Engine.Light Name=L1\n"
-                   "    Name=\"L1\"\nEnd Actor\nEnd Map")
-    with mock.patch("uedcli.store_export.export_dx_t3d", autospec=True, return_value=bare_export), \
-         mock.patch("uedcli.qualify.qualify_live_level", autospec=True) as ql, \
-         mock.patch("uedcli.qualify.requalify_classes_to_loaded", autospec=True) as qlc, \
-         mock.patch("uedcli.qualify._read_loaded_classes", autospec=True, return_value={}):
-        result = verify_dx_matches(container="c", dx_path="/repo/Temp/x.dx", expected=_lvl(), defaults=_DEFAULTS,
-                                   qualify_driver=mock.Mock())
-    ql.assert_called_once()                  # the qualify pass ran before the hash-compare
-    qlc.assert_called_once()                 # expected's classes are reconciled to the live set (live-vs-live)
-    assert result.ok is True                 # L1 has no brush/texture, so qualify is a no-op here
+def test_verify_drops_editor_spawned_cameras_absent_from_the_trunk():
+    # The editor spawns viewport Engine.Camera actors on build; the trunk has none, so they must be
+    # dropped from the got side (an authored camera would be in expected by name and kept).
+    built = _T3D.replace("End Map",
+                         'Begin Actor Class=Engine.Camera Name=Camera6\n    Name="Camera6"\n'
+                         'End Actor\nEnd Map')
+    result = _verify(built, _lvl(), _DEFAULTS)
+    assert result.ok is True                 # the extra Camera6 is dropped, not a mismatch
 
 
-def test_verify_qualifies_expected_so_a_bare_expected_class_still_matches_a_qualified_got():
-    # `expected` may carry a bare class from any creation path that doesn't qualify at
-    # construction (e.g. actor add <file.t3d>, or stash/prefab content authored before class
-    # qualification shipped) -- it must be qualified against the SAME loaded-class set as the
-    # on-disk read, or a real content match looks like a post-verify mismatch (2026-06-21,
-    # GPT-5.4 review).
-    already_qualified_export = ("Begin Map\nBegin Actor Class=Engine.Light Name=L1\n"
-                                "    Name=\"L1\"\nEnd Actor\nEnd Map")
-    bare_expected = parse_t3d(
-        "Begin Map\nBegin Actor Class=Light Name=L1\n    Name=\"L1\"\nEnd Actor\nEnd Map")
-    bare_expected.order = level_order(bare_expected)
-    normalize_level(bare_expected)
-    with mock.patch("uedcli.store_export.export_dx_t3d", autospec=True,
-                    return_value=already_qualified_export), \
-         mock.patch("uedcli.qualify.qualify_live_level", autospec=True), \
-         mock.patch("uedcli.qualify._read_loaded_classes", autospec=True,
-                    return_value={"Light": {"Engine.Light"}}):
-        result = verify_dx_matches(container="c", dx_path="/repo/Temp/x.dx",
-                                   expected=bare_expected, defaults=_DEFAULTS,
-                                   qualify_driver=mock.Mock())
+def test_verify_per_game_ignore_drops_a_prop_the_built_map_lacks():
+    # bOwned is authored but the editor's engine can't round-trip it (per-game ignore); the built
+    # map omits it, the trunk has it -> ignoring it makes the verify pass.
+    d = StubDefaults(schema={"Engine.Light": {"bOwned": "bool"}})
+    expected = _lvl(_T3D.replace('Name="L1"', 'bOwned=True\n    Name="L1"'))
+    result = _verify(_T3D, expected, d, ignore=frozenset({("engine.light", "bowned")}))
     assert result.ok is True
-    assert bare_expected.actors["L1"].cls == "Engine.Light"     # mutated in place

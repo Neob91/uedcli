@@ -227,3 +227,32 @@ def test_a_struct_class_default_renders_from_the_committed_packages():
     # Struct defaults are a real, populated category here, not an empty set that would make the
     # assertions above vacuous if the type were mis-detected.
     assert sum(1 for v in d.values() if isinstance(v, str) and v.startswith("(")) >= 10
+
+
+@pytest.mark.skipif(not _HAVE_INSTALL, reason="v68 install (Core.u/Engine.u) not present")
+def test_cpf_edit_flags_underpin_the_compare_edit_rule():
+    """`normalize`'s post-verify edit-rule compares a property iff it is `var()`-editable (CPF_Edit)
+    except the special-editor exceptions. That correctness rests on the REAL flags decoded from the
+    game `.u`; pin a representative set so a `property_flags` decode regression trips here rather than
+    silently switching the compare from stripping engine state to comparing it."""
+    CPF_EDIT = 0x1
+    def edit(cls, prop):
+        for p in uprops.resolve_class_properties(cls, resolver=_install_resolver):
+            if p.name.casefold() == prop.casefold():
+                return bool(p.property_flags & CPF_EDIT)
+        raise AssertionError(f"{cls}.{prop} not found")
+    # engine-managed -> NON-editable (the edit-rule drops these)
+    for cls, prop in [("Engine.Actor", "Region"), ("Engine.Actor", "OldLocation"),
+                      ("Engine.Actor", "bSelected"), ("Engine.Actor", "DistanceFromPlayer"),
+                      ("Engine.Mover", "SavedPos"), ("Engine.Mover", "BasePos"),
+                      ("Engine.NavigationPoint", "Paths")]:
+        assert edit(cls, prop) is False, f"{cls}.{prop} should be non-editable"
+    # special-editor-authored, non-editable -> KEPT via _RETAIN_NONEDIT
+    for cls, prop in [("Engine.Actor", "PrePivot"), ("Engine.Mover", "KeyPos"),
+                      ("Engine.Mover", "KeyRot")]:
+        assert edit(cls, prop) is False, f"{cls}.{prop} should be non-editable (retained separately)"
+    # authored var() -> editable (the edit-rule keeps these)
+    for cls, prop in [("Engine.Actor", "Tag"), ("Engine.Actor", "Event"),
+                      ("Engine.Brush", "CsgOper"), ("Engine.Mover", "NumKeys"),
+                      ("Engine.Actor", "bOwned")]:
+        assert edit(cls, prop) is True, f"{cls}.{prop} should be editable"

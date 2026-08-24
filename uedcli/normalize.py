@@ -57,42 +57,30 @@ def canonicalize_self_refs(t3d: str) -> str:
 # that never had an explicit `Tag` — is noise, and even that is dropped ONLY on the throwaway
 # compare view (`_actor_values`, which also guards it on the class not defaulting `Tag`), never
 # here: this list feeds the durable trunk emit.
-COMPUTED_PROPS: frozenset[str] = frozenset({
-    "TimeSeconds", "Summary", "Region", "OldLocation", "NavigationPointList", "PawnList",
-    "nextNavigationPoint", "prevNavigationPoint", "Level", "bSelected",
-    # Mover base pose is editor-DERIVED from Location/Rotation at import (spike 2026-06-25 test E),
-    # so a uedcli-authored mover (which omits them) and its re-export (which adds them) must
-    # canonicalize equal. OldRot is NOT added on faith — only OldLocation is spike-confirmed;
-    # add OldRot only if Task 12's integration re-export shows it (no unverified-symbol guesses).
-    "BasePos", "BaseRot",
-    # `AMover::PostLoad()` UNCONDITIONALLY overwrites these two with a fixed "not saved yet"
-    # sentinel — `SavedPos=(-12345,-12345,-12345)`, `SavedRot=(Pitch=123,Yaw=456,Roll=789)` — on
-    # every load of a Mover object, before any code can read what the map file stored. So no
-    # authored value can ever survive a round trip, and the map/T3D a mover comes back as always
-    # carries the sentinel while a uedcli-authored mover (which omits both) does not; without this
-    # entry every mover map fails the H3 post-verify. Disassembled out of BOTH engines (spike
-    # 2026-07-25 `spikes/2026-07-25-mover-savedpos-savedrot-engine-stamped/`): UED22
-    # `Engine.dll` `?PostLoad@AMover@@UAEXXZ` @ RVA 0x171140, and the DX-shipped `Engine.dll`
-    # @ RVA 0xaf7e0 — the same two stores, no guard, right after `Super::PostLoad()`. Corroborated
-    # by the corpus (487 `SavedPos` and 487 `SavedRot` lines across the git-tracked editor exports:
-    # exactly ONE distinct value EACH, only on Mover-derived classes — against 224 distinct
-    # `BasePos` values, the control) and by every retail map that holds a mover (81 of the 130
-    # `DX/Maps` map files) carrying it at exactly 3 floats per rotator, one per mover. Confirmed
-    # end-to-end live 2026-07-25: the built `.dx` holds NO sentinel, but the post-verify's own UCC
-    # re-export of that same file does.
-    # This set is keyed by BARE NAME across every class, so a name may only be added when stripping
-    # it is right for EVERY class declaring it. Audited: `SavedPos` is declared by `Engine.Mover`
-    # alone; `SavedRot` also by `DeusEx.LaserIterator`, which descends from `Core.Object` (not
-    # `Actor`) and so can never appear in a level T3D. Both are therefore exact.
-    # `SavedTrigger` is deliberately NOT added, and MUST NOT BE: `Engine.TriggerLight` declares its
-    # own `SavedTrigger`, and it IS a placeable Actor — adding the name here would silently strip
-    # that property from every TriggerLight in the durable trunk emit. It also costs nothing:
-    # `PostLoad` never touches it and it appears ZERO times in the whole corpus, so it can't cause
-    # a mismatch. (Same "no unverified-symbol guesses" rule that keeps `OldRot` out.)
-    "SavedPos", "SavedRot"})
-
-# AIProfile is indexed (AIProfile(0)=...); match by prefix.
-_COMPUTED_PREFIXES = ("AIProfile",)
+# What the post-verify COMPARES is only AUTHORED content. A property is authored iff it is
+# `var()`-EDITABLE (CPF_Edit in the schema, `ClassInfo.editable`) OR one of the few authored through
+# UnrealEd's SPECIAL editors — which the UnrealScript compiler marks non-editable: `PrePivot` (the
+# pivot tool) and a mover's `KeyPos`/`KeyRot` (the keyframe tool). Every OTHER non-editable property
+# is engine-managed state the level author never sets — `Region`/`OldLocation`/`bSelected` (load),
+# `SavedPos`/`BasePos` (mover PostLoad), the nav-graph arrays (PATHS BUILD),
+# `DistanceFromPlayer`/`LastRenderTime` (per-frame), `FootRegion` (load) — and is dropped from the
+# compare. This one schema-read rule replaces a hand-maintained computed-prop list (owner ruling
+# 2026-08-24: "exclude non-editable properties automatically").
+_RETAIN_NONEDIT: frozenset[str] = frozenset({"prepivot", "keypos", "keyrot"})
+# Engine-managed props with NO schema entry to read a flag from, so they stay matched by name:
+# `AIProfile(N)` (indexed navigation weight) by prefix, `prevNavigationPoint` (native; its pair
+# `nextNavigationPoint` IS a `var` and the edit-rule drops it) exactly.
+_COMPUTED_PREFIXES = ("aiprofile",)
+_COMPUTED_GLOBAL: frozenset[str] = frozenset({"prevnavigationpoint"})
+# INGEST strip (`normalize_actor`) is schema-free — it feeds the durable trunk and the generator
+# snippet reader with no project context — so it can only match by NAME. It drops the long-known
+# engine-managed names so they never enter the git-tracked trunk (hygiene only; the compare's
+# edit-rule is the complete guarantee). Newer transient props (DistanceFromPlayer, …) are left in
+# the trunk and stripped at compare, so no re-import churns the tree.
+_INGEST_NAMES: frozenset[str] = frozenset({
+    "timeseconds", "summary", "region", "oldlocation", "navigationpointlist", "pawnlist",
+    "nextnavigationpoint", "prevnavigationpoint", "level", "bselected",
+    "basepos", "baserot", "savedpos", "savedrot"})
 
 # The red builder brush's actor Name is editor-version/counter-dependent (Brush0/Brush1/…),
 # so it is NOT a reliable discriminator (Task 4a). Its inner brush MODEL is the reserved
@@ -101,18 +89,30 @@ BUILDER_BRUSH_NAME = "Brush0"          # kept for the `actor add` snippet skip i
 BUILDER_BRUSH_MODEL_NAME = "Brush"
 
 
-_COMPUTED_FOLDED: frozenset[str] = frozenset(p.casefold() for p in COMPUTED_PROPS)
-_COMPUTED_PREFIXES_FOLDED: tuple[str, ...] = tuple(p.casefold() for p in _COMPUTED_PREFIXES)
-
-
 def is_computed_key(key: str) -> bool:
-    """Whether `key` is an editor-computed/derived prop that does not persist as authored content.
-    **Case-insensitive** (FName semantics): shared by `normalize`'s strip AND `actor prop`'s
-    "won't persist" warning, so both agree on what's computed (decision 2026-06-26 12:41 UTC)."""
+    """INGEST strip (schema-free, feeds the durable trunk): whether `key` is a long-known
+    engine-managed prop matched by NAME. **Case-insensitive** (FName semantics). Shared by
+    `normalize`'s strip AND `actor prop`'s "won't persist" warning (decision 2026-06-26 12:41 UTC).
+    The compare uses the schema-based edit-rule (`is_authored_prop`) instead."""
     k = key.casefold()
-    if k in _COMPUTED_FOLDED:
+    if k in _INGEST_NAMES:
         return True
-    return any(k.startswith(p) for p in _COMPUTED_PREFIXES_FOLDED)
+    return any(k.startswith(p) for p in _COMPUTED_PREFIXES)
+
+
+def is_authored_prop(name_casefold: str, *, editable: bool | None) -> bool:
+    """COMPARE rule: whether property `name_casefold` is AUTHORED content the post-verify compares.
+    True iff it is `var()`-editable (`editable`, from `ClassInfo.editable`) or a special-editor
+    exception (`PrePivot`, mover `KeyPos`/`KeyRot`). An unknown property (`editable is None`) is kept
+    and compared untyped. Non-editable engine state — and the schema-less `AIProfile`/
+    `prevNavigationPoint` — is not authored."""
+    if name_casefold in _RETAIN_NONEDIT:
+        return True
+    if name_casefold in _COMPUTED_GLOBAL:
+        return False
+    if any(name_casefold.startswith(p) for p in _COMPUTED_PREFIXES):
+        return False
+    return editable is None or editable
 
 
 def normalize_actor(a: Actor) -> None:
@@ -148,8 +148,12 @@ def is_builder_brush(a: Actor) -> bool:
     Task 4a (spike, 2026-06-18) corrected the plan's `Name == "Brush0"` rule: a fresh editor
     numbers the builder brush `Brush1+`, so the exact name is NOT a constant — keying on it
     would FAIL to strip the builder brush in the common fresh-level case. The inner model name
-    `Brush` is the strongest single signal; pair it with no-CsgOper. Name is no longer used."""
-    if a.cls != "Brush" or a.brush is None:
+    `Brush` is the strongest single signal; pair it with no-CsgOper. Name is no longer used.
+
+    Matched by the BARE class name, so it fires whether the class arrives bare (`Class=Brush` from
+    `MAP EXPORT`) or fully qualified (`Engine.Brush`, from the offline `.dx` decode the post-verify
+    now uses)."""
+    if (a.cls or "").rsplit(".", 1)[-1] != "Brush" or a.brush is None:
         return False
     if any(k == "CsgOper" for k, _ in a.props):
         return False
@@ -263,7 +267,8 @@ class CompareView:
     order: list[str]
 
 
-def compare_view(level: Level, *, defaults) -> CompareView:
+def compare_view(level: Level, *, defaults, ignore: frozenset[tuple[str, str]] = frozenset()
+                 ) -> CompareView:
     """The ONE compare view the post-verify uses — equality check and diagnostic diff both read
     THIS (no hand-mirrored second copy that can drift out of step with it).
 
@@ -306,7 +311,7 @@ def compare_view(level: Level, *, defaults) -> CompareView:
                 f"cannot verify: two actors both canonicalize to the name {name!r} — rename the "
                 f"non-LevelInfo one (the engine's LevelInfo singleton owns that name in the "
                 f"compare)")
-        actors[name] = _actor_values(a, info)
+        actors[name] = _actor_values(a, info, ignore)
     return CompareView(actors=actors, order=[rename.get(n, n) for n in level.order])
 
 
@@ -383,7 +388,7 @@ def _geometry_text(a: Actor) -> str:
     return canonicalize_self_refs(emit_brush(b))
 
 
-def _actor_values(a: Actor, info) -> ActorValues:
+def _actor_values(a: Actor, info, ignore: frozenset[tuple[str, str]] = frozenset()) -> ActorValues:
     """One actor's TYPED EFFECTIVE VALUES (`typedprops.ActorValues`) — what the post-verify compares.
 
     Only the properties the actor itself states are decoded here; every other property of the class
@@ -393,10 +398,13 @@ def _actor_values(a: Actor, info) -> ActorValues:
     difference. Three model-typed properties (`Location`, `MainScale`, `PostScale`) live outside
     `props` and are re-rendered from their typed fields.
 
-    Two things are dropped, both editor artifacts rather than authored content:
+    Three things are dropped, none of them authored content the compare should check:
 
-    * computed/derived props (`is_computed_key`: `Region`, `BasePos`, `bSelected`, …), exactly as
-      `normalize_actor` drops them from the durable emit;
+    * NON-authored props — every property that is not `var()`-editable and not a special-editor
+      exception (`is_authored_prop`): `Region`/`bSelected`/`SavedPos`/nav-graph/`DistanceFromPlayer`/…;
+    * a per-game IGNORE prop (`(declaring class, prop)` in `ignore`) — an authored `var()` property
+      the game's engine adds to a base class that the materialize editor's engine package lacks, so
+      it can never round-trip (e.g. DeusEx `Engine.Actor.bOwned` under UED22). The caller warns;
     * the editor's own `Tag=<bare class name>` default-stamp, which every actor that never had an
       explicit `Tag` comes back from the editor carrying. It is dropped ONLY when the class does not
       itself default `Tag` — `TNM.Trestkon` defaults `Tag='Player'` (5 TNM classes default it), so
@@ -414,9 +422,12 @@ def _actor_values(a: Actor, info) -> ActorValues:
         spelled[key] = name
 
     for k, v in a.props:
-        if is_computed_key(k):
-            continue
         key = prop_key(k)
+        owner = info.owners.get(key[0])
+        if not is_authored_prop(key[0], editable=info.editable.get(key[0])):
+            continue
+        if ignore and owner and (owner.casefold(), key[0]) in ignore:
+            continue
         text = canonicalize_self_refs(v)
         if key == ("tag", 0) and key not in info.defaults and text.casefold() == bare:
             continue                                  # the editor's default-stamp, not content

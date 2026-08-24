@@ -69,6 +69,11 @@ class Substrate:
     """A game's base packages (internal term "substrate"; user-facing TOML key `[games.<name>]`)."""
     name: str
     paths: str                      # colon-separated DIRECTORIES, MUST be absolute
+    # `Package.Class.prop` names the post-verify must IGNORE for this game: authored (`var()`)
+    # properties the game's own engine adds to a base class that the MATERIALIZE editor's engine
+    # package does not have, so they can never round-trip (e.g. DeusEx's `Engine.Actor.bOwned` under
+    # the UED22 editor). Compared and dropped with a stderr warning, never silently.
+    ignore_props: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -287,7 +292,7 @@ def load_user_config(override: str | None = None) -> UserConfig | None:
         where = f"{path} [games.{name}]"
         if not isinstance(tbl, dict):
             raise ConfigError(f"{where}: must be a table")
-        _reject_unknown(tbl, {"paths"}, where)
+        _reject_unknown(tbl, {"paths", "ignore_props"}, where)
         paths = tbl.get("paths")
         if not isinstance(paths, str) or not paths.strip():
             raise ConfigError(f"{where}: required key 'paths' (a colon-separated dir list) is missing")
@@ -297,7 +302,13 @@ def load_user_config(override: str | None = None) -> UserConfig | None:
         for pat in (p.strip() for p in paths.split(":") if p.strip()):
             if not os.path.isabs(pat):
                 raise ConfigError(f"{where}: dir must be absolute: {pat!r}")
-        games[name] = Substrate(name=name, paths=paths)
+        ignore = tbl.get("ignore_props", [])
+        if not isinstance(ignore, list) or not all(isinstance(x, str) for x in ignore):
+            raise ConfigError(f"{where}: 'ignore_props' must be a list of 'Package.Class.prop' strings")
+        for entry in ignore:
+            if entry.count(".") < 2:
+                raise ConfigError(f"{where}: ignore_props entry must be Package.Class.prop: {entry!r}")
+        games[name] = Substrate(name=name, paths=paths, ignore_props=tuple(ignore))
     return UserConfig(games=games, source=path)
 
 

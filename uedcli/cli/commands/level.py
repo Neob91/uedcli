@@ -410,7 +410,8 @@ def _level_materialize(args) -> int:
                                    state_dir=config.state_dir(project.root, create=True),
                                    no_verify=getattr(args, "no_verify", False),
                                    keep_build=getattr(args, "keep_build", False),
-                                   no_bsp_check=getattr(args, "no_bsp_check", False))
+                                   no_bsp_check=getattr(args, "no_bsp_check", False),
+                                   ignore_props=resources.ignore_props_for(project))
     if result.rc != 0:
         print(result.message, file=sys.stderr)
         return result.rc

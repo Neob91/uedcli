@@ -71,6 +71,20 @@ def composed_dirs(project) -> list[str]:
             "package paths; create it with a [games.<name>] paths dir list")
     return config.composed_search_dirs(project, user_config)
 
+
+def ignore_props_for(project) -> tuple[str, ...]:
+    """The game's `ignore_props` (`Package.Class.prop` the post-verify ignores — authored props the
+    game's engine adds to a base class the materialize editor's engine package lacks). Empty when no
+    games config resolves (the verify then compares every authored prop)."""
+    user_config = config.load_user_config()
+    if user_config is None:
+        return ()
+    try:
+        return config.select_substrate(project, user_config).ignore_props
+    except config.ConfigError:
+        return ()
+
+
 def texture_resolver(project, class_index=None):
     """A `utexture.TextureResolver` over the project's composed package files, or None when no
     config / no packages (a sprite then can't resolve → its actor degrades to a marker). MOCKABLE

@@ -226,3 +226,22 @@ def canonicalize_mover(actor: Actor, index) -> None:
     rstr = rotation.emit_frotator(base_uu)
     _set(actor, "Rotation", None if rstr == "()" else rstr)
     _set(actor, "KeyNum", None)
+
+
+def set_base_pose(actor: Actor, index) -> None:
+    """Write BasePos/BaseRot = the key-0 base pose (the mover's Location/Rotation) into the actor.
+
+    The editor DERIVES BasePos/BaseRot from Location/Rotation only on IMPORT (`MAP IMPORTADD`/`EDIT
+    PASTE`), NOT on `MAP LOAD`. A MAP-LOADed mover therefore has BasePos=0, and `MAP REBUILD`
+    recomputes Location = BasePos + KeyPos[KeyNum=0] = 0 — wiping the mover's world position. Writing
+    BasePos/BaseRot into the package ourselves makes the MAP-LOADed mover already correct. Movers are
+    canonicalized to KeyNum=0 on ingest, so Location/Rotation ARE the base pose. `normalize` strips
+    BasePos/BaseRot from the compare, so this never shows as a post-verify diff. No-op for non-movers."""
+    if not is_mover(actor, index):
+        return
+    pos = rotation.emit_fvector(actor.location or _ZERO_POS)
+    _set(actor, "BasePos", None if pos == "()" else pos)
+    # BaseRot must be the Rotation VERBATIM (not reduced mod 65536): the editor re-derives the mover's
+    # Rotation as BaseRot + KeyRot[0], and FRotator components are compared exactly -- an over-range
+    # `Yaw=-81920` that reduced to `49152` would fail the post-verify (typedprops INT, 2026-07-25 spike).
+    _set(actor, "BaseRot", _get(actor, "Rotation"))

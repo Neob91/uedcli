@@ -145,10 +145,42 @@ def build_stub(
     (`container_assets.remap`) so it always matches an actual mount."""
     from .driver import to_z_path
 
-    def _cp(*cp_args: str) -> None:
-        r = subprocess.run(["docker", "cp", *cp_args], capture_output=True, text=True)
+    # Move files container<->host with `docker exec` streams, NOT `docker cp`: under rootless docker
+    # `docker cp` remounts the container's bind mounts read-only and fails ("remount-ro … operation
+    # not permitted") when a mount (e.g. `/stubs`) can't be remounted. `cat` exfils a file, `tar`
+    # streams a directory tree, neither of which touches the mounts. (Owner ruling, 2026-08-24.)
+    def _exfil_file(src: str, dest: Path) -> None:
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        with open(dest, "wb") as fh:
+            r = subprocess.run(["docker", "exec", container, "cat", src],
+                               stdout=fh, stderr=subprocess.PIPE)
         if r.returncode != 0:
-            raise StubBuildError(f"docker cp {' '.join(cp_args)} failed: {r.stderr.strip()}")
+            raise StubBuildError(f"exfil {src} failed: {r.stderr.decode(errors='replace').strip()}")
+
+    def _stream(producer: list[str], consumer: list[str], what: str, *, prod_in=None) -> None:
+        prod = subprocess.Popen(producer, stdin=(subprocess.PIPE if prod_in is not None else None),
+                                stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        if prod_in is not None:
+            prod.stdin.write(prod_in); prod.stdin.close()
+        cons = subprocess.run(consumer, stdin=prod.stdout, capture_output=True)
+        prod.stdout.close()
+        perr = prod.stderr.read(); prod.wait()
+        if prod.returncode != 0 or cons.returncode != 0:
+            raise StubBuildError(f"{what} failed: "
+                                 f"{perr.decode(errors='replace').strip() or cons.stderr.decode(errors='replace').strip()}")
+
+    def _exfil_dir(src: str, dest: Path) -> None:
+        # tar the container dir to stdout, untar into dest's PARENT so `<base>/…` lands as `dest`.
+        parent, base = src.rsplit("/", 1)
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        _stream(["docker", "exec", container, "sh", "-c", f"cd {parent} && tar cf - {base}"],
+                ["tar", "xf", "-", "-C", str(dest.parent)], f"exfil dir {src}")
+
+    def _infil_dir(src: Path, dest_parent: str) -> None:
+        # tar the host dir and untar it under `dest_parent` in the container -> `dest_parent/src.name`.
+        _stream(["tar", "cf", "-", "-C", str(src.parent), src.name],
+                ["docker", "exec", "-i", container, "sh", "-c", f"cd {dest_parent} && tar xf -"],
+                f"infil {src} -> {dest_parent}")
 
     work = f"/work/stub-{temp_name}"
     raw = f"{work}/raw"
@@ -166,13 +198,13 @@ def build_stub(
 
         with tempfile.TemporaryDirectory() as host_tmp:
             host_raw = Path(host_tmp) / "raw"
-            _cp(f"{container}:{raw}", str(host_raw))
+            _exfil_dir(raw, host_raw)
             staged = Path(host_tmp) / temp_name
             assemble_stub_source(
                 classes_dir=host_raw / "Classes", umodel_dir=host_raw / "um",
                 textures_dir=host_raw / "Textures", out_dir=staged, package=name,
             )
-            _cp(str(staged), f"{container}:/opt/{temp_name}")
+            _infil_dir(staged, "/opt")
 
         # The target's direct code deps go on EditPackages BEFORE <temp_name> (which must be last);
         # `/stubs` on Paths so a cache-stub dep resolves alongside the substrate-v69 ones.
@@ -191,7 +223,7 @@ def build_stub(
 
         out_path = Path(out_u_path)
         out_path.parent.mkdir(parents=True, exist_ok=True)
-        _cp(f"{container}:{built}", str(out_path))
+        _exfil_file(built, out_path)
         return out_path
     finally:
         # Always clean container-side residue (only matters for a reused container; an ephemeral

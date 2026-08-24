@@ -192,6 +192,7 @@ def test_an_unresolvable_class_in_the_BUILT_map_is_a_clean_exit_2(tmp_path, monk
     monkeypatch.setattr(applymod, "verify_dx_matches", mock.Mock(
         side_effect=SchemaError("cannot verify actor 'Cam_x' — class must be fully qualified "
                                 "(Package.Class): 'Camera'")))
+    monkeypatch.setattr(xfer, "cp_out", lambda *a, **k: None)   # the .dx is cp'd to host BEFORE verify
     monkeypatch.setattr(xfer, "remove", lambda *a, **k: None)
     out = tmp_path / "New.dx"
     r = run_materialize(level=_one_actor_level(), schema_resolver=_NO_PACKAGES,
