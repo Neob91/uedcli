@@ -43,6 +43,34 @@ Distinct from `--game` (real engine). Related boarded gaps: `bspcsg-core-apply-s
 `the-native-over-produces-leaves-3-6-gap` (done), the b/f CSG-differential xfail residuals. This item
 is the RETAIL-scale severity + a directed root-cause investigation (findings fold in below).
 
-## Investigation
-Spike launched 2026-08-24 (subagent) — quantify dropped-surf count on Wanchai, localise the dominant
-cause, recommend a fix direction. Findings append here.
+## Root cause (spike 2026-08-24, verified): preview uses the WRONG CSG core
+`preview_native.build_scene` calls `uedcli_native.build_geometry` (the `build.rs` coarse core:
+convex-hull point-in-solid oracle + batch single-partition). The faithful editor-parity incremental
+core `build_geometry_bspcsg` (`bspcsg.rs`, grows the BSP node-by-node like UnrealEd) is **never used
+by `level preview`** — even though `actor preview --faces textured` already uses it via
+`solve_world_surfaces`.
+
+Native-vs-editor surf ratio (editor `.dx` UModel = ground truth):
+
+| map | brushes | scaled% | `build_geometry` (preview) | `build_geometry_bspcsg` | editor |
+|---|--:|--:|--:|--:|--:|
+| NYC Bar (control) | 203 | 2.5% | 938 / **0.98** | — | 953 |
+| WanChai Garage | 198 | 60% | 635 / **0.63** | 931 / **0.93** | 1004 |
+| WanChai Market | 1304 | 75% | 1615 / **0.31** (366s) | 5285 / **1.01** (31s) | 5224 |
+
+The faithful core reproduces the editor essentially exactly AND is ~12× faster. Ranked causes:
+1. **Wrong core = ≈all of the drop** (swap alone: Market 0.31→1.01, Garage 0.63→0.93 on identical input).
+2. **Scaled brushes are the trigger** that exposes `build.rs`'s non-watertight batch oracle (Garage
+   198 brushes/60% scaled → 0.63 vs NYC 203/2.5% → 0.98). The scale-baked geometry is fine — bspcsg
+   builds it correctly; `build.rs` annihilates fragments on dense scaled geometry.
+3. **Non-convex brushes (minor)**: 34/1304, top face-droppers under the convex-hull oracle; moot on bspcsg.
+Ruled out: coplanar merge (`same_surface` only reassembles a face's own fragments) and the NotSolid sheets.
+
+## Fix direction
+**Quick win, drop-in:** point `build_scene` at `build_geometry_bspcsg` (same `Built`/`serialize_model`/
+`_node_polys` join path — it's already the `except BuildError` fallback and the `--faces textured`
+primary). Recovers the geometry and is far faster; no `csg.rs`/`build.rs` change. `build.rs`'s coarse
+core is superseded — not worth deep-fixing. **Verify with a visual PNG spot-check** (the spike confirmed
+surf/node counts + join tags but did not render).
+
+Spike scripts under the job tmp (`cores.py <dx>`, `control.py`, `convexity.py`, `scaled.py`, `RESULTS.md`).
