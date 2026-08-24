@@ -1107,15 +1107,20 @@ and plan both in board item `re-evaluate-whether-reject-nonlevel-target`; `direc
   - **USE:** `rotation.actor_linear` composes the full linear part `L = PostScale·R·MainScale` (None
     when rotation + both scales are identity — the unscaled fast path). `world_vertices` and every
     world-geometry consumer (`query.list_polys`/`list_vertices`, `writes.actor_bounds`, `preview`,
-    `doctor`, `best_grid_pivot`) build world verts through it. The write inverse uses the TRUE matrix
-    inverse `L⁻¹` (`world_to_local_point`/`_delta`) and the transpose `Lᵀ` for a plane normal
-    (`world_to_local_normal` — the world→local covector pullback; reduces to `Rᵀ` under pure
-    rotation), so `brush clip`/`vertex move` edit a scaled brush DIRECTLY in its previewed world
-    frame. The sheer coefficient is the disassembled piecewise snap (`transform.sheer_coeff`,
-    engine-fact pinned). *(The combined scale+sheer matrix ORDER is `Sheer·Scale` — an offline
-    choice; single-effect cases match the live spike, combined is the integration differential's job.
-    The `--native` preview + native binary build still REJECT / pass-identity scale — a separate
-    deferred workstream.)*
+    `doctor`, `best_grid_pivot`) build world verts through it. The per-poly APPLY is single-sourced in
+    `transform`: `apply_linear` (`v'=L·v`), `flip_winding` (reverse the ring on `det(L)<0`),
+    `covariant_axes` (`(L⁻¹)ᵀ` for texture/normal directions) and `reject_degenerate` (exit 2 naming a
+    non-invertible `L`) — shared by `bake`, `world_vertices`, and the CSG marshaller
+    `native.brush_marshal._build_brush_input` (`unify-transform-application-logic-into-one-home`). The
+    write inverse uses the TRUE matrix inverse `L⁻¹` (`world_to_local_point`/`_delta`) and the
+    transpose `Lᵀ` for a plane normal (`world_to_local_normal` — the world→local covector pullback;
+    reduces to `Rᵀ` under pure rotation), so `brush clip`/`vertex move` edit a scaled brush DIRECTLY in
+    its previewed world frame. The sheer coefficient is the disassembled piecewise snap
+    (`transform.sheer_coeff`, engine-fact pinned). *(The combined scale+sheer matrix ORDER is
+    `Sheer·Scale` — an offline choice; single-effect cases match the live spike, combined is the
+    integration differential's job. `level preview --native` and `brush intersect`/`deintersect` now
+    build scaled/mirrored/sheared brushes too, baking `L` into the Rust `rot`; preview's UV stays
+    rotation-only, so textures slide on scaled faces until the covariant-UV follow-on.)*
   - **BAKE — `brush apply-transform`:** folds `L` into the PolyList (`v'=L·v`, `PrePivot'=L·PrePivot`
     — D8's explicit carve-out, `Location` unchanged, fields → identity, `Rotation` dropped), reverses
     each poly's winding when `det(L)<0` (mirror/odd shear — else an inside-out CSG-crashing brush),
@@ -2248,9 +2253,10 @@ parameter on `render_brush_pgm`/`render_brushes_pgm`/`render_quad_pgm` and on
   EVEN number of negative axes is a 180° rotation (determinant +1) and is deliberately untouched; a sheer
   leaves the determinant at the scale product. **`wire` is deliberately NOT corrected** — it culls
   nothing, so the inversion costs it only the front/back shade, and the ruling was about the filled modes
-  (`board/inbox/wire-renders-a-mirrored-brush-with-its-front`). *(Unrelated to
-  `preview_native._reject_scaled`, which still rejects ALL scale in the `--native` tier — the two tiers do
-  NOT agree on scaled brushes.)*
+  (`board/inbox/wire-renders-a-mirrored-brush-with-its-front`). *(The `--native` tier now RENDERS
+  scaled/mirrored/sheared brushes — `brush_marshal._build_brush_input` bakes `L = PostScale·R·MainScale`
+  into the Rust `rot`; its UV frame stays rotation-only, so textures slide on scaled faces until the
+  covariant-UV follow-on.)*
 - **Refusals, all naming the offender**: unresolvable mover-ness (grouped by cause), and no project (the
   re-raise names `--faces` and why a preview wants one — the bare house "not in a uedcli project" names
   neither, and `--from-t3d` makes being outside one ordinary). **NOT
