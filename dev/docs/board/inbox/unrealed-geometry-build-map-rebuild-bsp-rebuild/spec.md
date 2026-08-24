@@ -141,7 +141,7 @@ reproducible fixed point given identical input and identical command sequence.
 order: `SaveExports → SaveImportMap → SaveExportMap → RewriteSummary`, then a literal
 `"Save.tmp"`/`"Moving '%s' to '%s'"` pair — the package is serialized into a temp file, its header is
 patched last inside that temp file, then the temp file is moved onto the destination path. (This is
-extracted from the wide-string table per the methodology in §20, not from live behavior — treat the
+extracted from the wide-string table per the methodology in §21, not from live behavior — treat the
 *existence and order* of these phases as solid, the exact move-vs-copy mechanism as unconfirmed.)
 
 `MAP REBUILD` invalidates existing lighting — a subsequent `LIGHT APPLY` is required to rebuild it if
@@ -605,6 +605,52 @@ filter.
 
 **[DISASM; `dev/docs/spikes/2026-06-24-bsp-csg-hole-mechanism-from-binary.md` §4d,
 `re-raw-zones/bspbrushcsg-filter-decode.md` §4, `dev/docs/spikes/2026-06-24-bsp-collision-solidity-movers-from-binary.md` §2]**
+
+### 3.10 Point and vector pool management — `bspAddPoint` / `bspAddVector`
+
+Every world vertex and every stored normal/texture-axis is deduplicated against the model's shared
+`Points`/`Vectors` pools rather than appended unconditionally — this determines the pool **indices**
+a from-scratch implementation must reproduce, independent of getting the CSG/partition algorithms
+themselves right.
+
+**`bspAddPoint`** **[DISASM Editor.dll 0x35430, calling Engine.dll `UModel::FindNearestVertex`
+0x1adeb0 → recursive descent 0x1adb60]**:
+```
+dist = FindNearestVertex(Model, pt, thresh, &out_idx)   // -1.0 sentinel if the model is empty
+if dist < 0 or dist > thresh:
+    idx = Points.AddItem(pt)      // no match within threshold -> append fresh
+else:
+    idx = out_idx                 // reuse the existing point
+```
+`thresh = 0.002` (worldspace call site) or `0.015` (local-space call site) — the same two constants
+as `THRESH_POINTS_ARE_SAME`/`THRESH_POINTS_ARE_NEAR` used elsewhere (§3.9).
+
+`FindNearestVertex` descends the BSP tree by `PlaneDot` sign (the same tree the point is being added
+into, already partially built) rather than a linear scan. **Descent pruning uses squared distance**
+(`dx²+dy²+dz²`, no sqrt — cheap). On the single winning candidate, the **accept test uses a real
+distance**: `appSqrt` (`core.dll 0x31720`, `sqrtsd` f64→f32) is applied to the winning squared
+distance, and *that* real value is compared against the threshold — **not** a squared-vs-squared
+compare. A faithful port must take the sqrt before thresholding, not skip it as a "same result,
+cheaper" optimization — it changes which candidate passes right at the threshold boundary. All SSE,
+no x87, no rsqrt approximation (same discipline as §11's other findings).
+
+**Critically, this returns the *nearest* existing point within threshold, not the *first* found** —
+so the dedup outcome is unambiguous and does not depend on descent/scan order, only on what points
+already exist in the pool at the moment each new point is proposed. **The Points/Vectors pool's final
+index ORDER is therefore a pure function of the order in which points get *proposed* for insertion**
+— which is itself a downstream consequence of the exact node-emission order documented in §3-§5.
+Getting `FindNearestVertex`'s own rule right is necessary but not sufficient for a matching pool: the
+proposing order (every upstream CSG/split/repartition step, in the exact order the real editor
+performs them) has to match too, or the *same* correct dedup rule accepts/rejects different points
+and the pools diverge — see §20 for what this looks like when actually attempted.
+
+**`bspAddVector`** **[DISASM Editor.dll 0x35530, helper 0x31ae0]** — the same shape, for normals and
+texture axes, at thresholds `2e-05`/`4e-04` (matching `THRESH_NORMALS_ARE_SAME`/
+`THRESH_VECTORS_ARE_NEAR`).
+
+Both `bspAddNode`, `bspAddPoint`, and `bspAddVector` append to their respective arrays purely in
+tree-walk/proposal order — no hash-map iteration, no RNG, no address-dependent ordering anywhere in
+this mechanism.
 
 ---
 
@@ -1595,6 +1641,53 @@ object-table renumbering even where the underlying multiset content matched (pla
 node (`FBspNode.Plane`) and **never** populate the `Vectors` array — only `FBspSurf.vNormal`/
 `vTextureU`/`vTextureV` reference `Vectors`.
 
+### 12.1 Export/import table ordering — NOT (yet) shown to be a deterministic function of the trunk
+
+This is the single largest known obstacle to whole-*package* byte-exactness, separate from every
+geometry/lighting/paths algorithm question in §1-§11 — those describe the `UModel`/`ULevel` payload
+content correctly; this is about the numbering of the package's own **export table** (every object
+the package defines, including every Brush actor and every referenced texture) that fields like
+`FBspSurf.iActor`/`texture_ref` index into.
+
+**Measured** (per-field byte-diff of the real, editor-built `Test_Castle.dx`'s 485-entry `Surfs`
+section against a structurally-correct reconstruction of the same content) **[BYTE-DIFF;
+`sections/83-surf-ref-order-session-artifact.md`]**: every *geometric* surf field
+(`vNormal`/`vTextureU`/`vTextureV`/`iLightMap`/`iBrushPoly`/`iZone`/`poly_flags`) is **100% byte-exact
+(485/485)**. Only two fields diverge, both **object-table index fields**, both **0% positional
+match**: `iActor` (the owning brush's export-table index) and `texture_ref` (an import-table index).
+In both cases the field resolves to the **correct referent by name** (485/485 for both) — the object
+being referenced is right, only the **table position** the editor assigned it differs.
+
+**The divergence is not explainable by any trunk-derivable ordering rule tested:**
+- Export order is not `Actors[]`/trunk order (`LevelInfo0`, `Actors[0]`, is export #8; the brush
+  block is non-contiguous in the export table).
+- It is not name-hash order and not lexicographic order (same-name-prefix, random-suffix actors
+  *cluster* in the table, which is inconsistent with a hash, but the order within a cluster isn't
+  alphabetical either).
+- A sweep of every deterministic-from-trunk candidate ordering topped out at **~40%** raw match; the
+  editor's own actual brush order, merely compacted to small indices (i.e. "what if this were the
+  right order, just re-based"), reaches **~92%** — meaning the *ordering itself*, not an offset or
+  base, is the gap, and no trunk-derivable rule reproduces that ordering.
+
+**The open, load-bearing question** (this measurement is against a **hand-authored** `.dx` — a map
+edited over a long session of CSG rebuilds, moves, and paste-duplications, whose export order plausibly
+reflects that editing *history*, not a clean deterministic function of final content): would a **clean
+`MAP IMPORT`** of a T3D trunk into a fresh level produce export/import tables in trunk order (or some
+other deterministic order), unlike a hand-edited map's accumulated-history order? **This is untested**
+— no editor-materialized-from-a-clean-trunk `.dx` was produced and compared. It is the single
+experiment that would settle whether whole-package byte-exactness is reachable via a deterministic
+export-order rule, or whether it requires reproducing the exact sequence of editor operations a map
+was authored with (not generally recoverable from a T3D trunk alone).
+
+**A related, distinct residual**: the `Points` pool itself (§3.10's dedup algorithm, correctly
+decoded) was measured, in the same comparison, to genuinely differ in *membership*, not just
+order — 484 points present only in the editor's pool, 133 only in the reconstruction's, 1551 shared
+(i.e. neither a subset nor superset of the other) — consistent with §3.10's point that
+`FindNearestVertex`'s dedup rule is order-sensitive: getting the rule right is not sufficient if the
+proposal order (every upstream step, exactly) doesn't also match.
+
+**[OPEN]** — carried into §18 and §20.
+
 ---
 
 ## 13. Float32 precision — reproducibility requirements
@@ -1816,6 +1909,9 @@ subtract nothing further).
 | `ReachFlags` bit values | 5/7 [DISASM]-confirmed; `R_DOOR`/`R_PLAYERONLY` [INFERRED] only |
 | `LOWOPT`/`HIGHOPT`'s actual algorithmic effect | [OPEN] — only the `opt=0/1/2` numeric pass-through is confirmed |
 | Paths survive `MAP REBUILD`, unlike lighting | behavioral claim [LIVE] via `commands.md`; the mechanism is a structural inference (object-layout argument, §11.7), not a direct rebuild-routine citation — [OPEN] |
+| `bspAddPoint`/`bspAddVector` pool dedup rule (§3.10) | [DISASM], nearest-not-first, address-cited thresholds — strong for the *rule*; whether an implementation's *proposal order* matches closely enough to reproduce the real pool is a separate, [OPEN], empirically-hard question (§20.2) |
+| Export/import table ordering (§12.1) | [BYTE-DIFF] for the *measurement* (not trunk-derivable on the one map tested) — strong; the underlying *rule* (if any) is [OPEN], gated on an untested clean-reimport experiment |
+| BSP repartition matching the real editor at production scale (700+ brushes) | [DISASM]-verified algorithm, [LIVE]-verified small-scale (95 brushes, byte-identical); [OPEN] and [LIVE]-**disproven** at real scale (measured 57-node surplus, root cause not pinned) — see §20.2 |
 
 ---
 
@@ -1837,6 +1933,11 @@ subtract nothing further).
   traced to a specific instruction by the sources read for this document.
 - **`LOWOPT`/`HIGHOPT`'s actual effect on path building**, and **which collision primitive the paths
   reachability trace calls** (§11.3, §11.5).
+- **Why the correctly-decoded BSP repartition algorithm (§5) diverges from the real editor by dozens
+  of nodes at real (700+ brush) scale**, despite matching node-for-node at small (95-brush) scale
+  (§20.2) — narrowed to a soup-content difference upstream of repartition, not further pinned.
+- **Whether export/import table ordering is ever a deterministic function of the trunk** (§12.1,
+  §20.3) — the one experiment that would settle this (a clean re-import, diffed) was not run.
 
 ---
 
@@ -1884,6 +1985,16 @@ subtract nothing further).
     PortalBias slider labels are genuinely the sliders' default positions**, rather than unrelated
     nearby strings — `70` matching the independently-confirmed console default is suggestive but not
     proof; would need the dialog's compiled resource template parsed directly.
+11. **[§20.2] The real-scale (700+ brush) BSP repartition over-split's root cause.** Confirmed to be a
+    CSG-filtered-soup-content divergence, not a `FindBestSplit`/`SplitPolyList` algorithm defect, but
+    the specific upstream mechanism was not pinned before the investigation was shelved. Resolve via
+    live-`gdb` differential bisection against a real running editor building a real large map,
+    comparing the exact fragment set/order reaching repartition — substantial effort (prior attempts
+    span roughly 2000 lines of bisection notes without closing it).
+12. **[§12.1, §20.3] Whether a clean `MAP IMPORT` of a T3D trunk produces deterministic (e.g.
+    trunk-order) export/import table numbering**, unlike the session-history-dependent order measured
+    on a hand-authored map. A single bounded experiment: import a trunk fresh, save, and diff the
+    resulting table order against the trunk order and against the hand-authored golden's order.
 
 ---
 
@@ -1899,7 +2010,95 @@ paths.)
 
 ---
 
-## 20. Evidence index
+## 20. Implementation feasibility — is this spec enough to actually build?
+
+**Evidentiary basis for this section only, stated up front:** every other section of this document
+is sourced strictly from primary UnrealEd evidence (binary disassembly, live-editor observation),
+per the rule at the top of this document. This section is different in kind — it answers a
+feasibility question ("if someone builds this, what happens?"), which existing primary evidence
+alone cannot answer. For that question, the relevant evidence is the historical record of an actual
+implementation attempt inside this codebase (`uedcli-native/`'s CSG/BSP/lighting/paths modules,
+since removed) and the git history of what happened to it. This section cites that history as
+implementation-outcome evidence, not as a source for any claim about UnrealEd's own internals —
+every algorithmic claim anywhere else in this document still stands on its own primary citation.
+
+### 20.1 The direct answer
+
+**For driving the real `UnrealEd.exe`/`UCC.exe` editor** (§1-§11, §1.5's GUI-dispatch mapping): yes,
+this spec is sufficient, and this is not a hypothetical — it is what this project's own architecture
+settled on for its actual production `level materialize` path. A from-scratch native reimplementation
+of the geometry/CSG core was built, developed for weeks, and ultimately **removed** (commit
+`fbccd70`, "Remove the native materialize build path") in favor of exclusively driving the real
+editor, with the removal commit's own words: *"the native materialize build path... had no CLI caller
+and never reached the CSG solidity parity"* and *"flipping [`apply.run_materialize`] to the native
+path as its sole path awaits full CSG parity... [an] awaiting condition that was not reached."* If the
+goal is "reproduce the real editor's build output," orchestrating the real editor via the console
+verbs this spec documents is the only path proven to work end-to-end.
+
+**For a from-scratch native engine that reproduces the real editor's output with no editor at
+runtime**: **not yet** — not because this spec's algorithm descriptions are wrong (the individual
+mechanisms are disassembly-cited and, where tested in isolation or at small scale, byte-verified),
+but because getting all of them to interact correctly, at real (hundreds-of-brushes) production
+scale, has been attempted and has not yet succeeded. Three specific, characterized gaps remain, none
+of them "we don't know the algorithm" — all three are "we know the algorithm and an attempt built
+from it still didn't converge, for a reason not yet pinned":
+
+### 20.2 Gap 1 — BSP repartition over-splits at real scale, root cause not identified
+
+`SplitPolyList`/`FindBestSplit` (§5) is the single most rigorously verified mechanism in this whole
+document — byte-verified with a committed, re-assertable disassembly harness (§5.2), and an
+implementation built directly from that decode reproduced the real editor's tree **node-for-node** on
+a 95-brush castle level (1156/1156 nodes, byte-identical Model body). At real production scale
+(a 734-brush UNATCO level), the same algorithm, fed the correct CSG-filtered soup (portal handling
+included), produced **6371 nodes against the real editor's 6314** — a 57-node surplus, characterized
+specifically as **broad axis-aligned wall planes**, not tied to any single brush's face and not
+explained by `bspOptGeom` (independently confirmed to be a GC/weld pass, not a redundant-split
+trimmer — §6.3 — and separately, its own decode explicitly rules it out as a fix here: it can't
+collapse an over-split tree because the surplus nodes are reachable/live, not garbage). Extensive
+live-`gdb`-driven bisection against the real running editor narrowed this to "a structural divergence
+in the CSG-filtered soup content feeding the repartition, not a flaw in the partition algorithm
+itself" — but the exact mechanism producing that soup-content difference was not pinned before the
+investigation was shelved. **This is squarely a §3 (CSG filter) or §3.10 (point/vector pool proposal
+order) question, not a §5 one** — some subtlety in exactly which fragments reach the repartition step,
+or in what order, differs from the real editor in a way that only shows up past a few hundred brushes.
+
+### 20.3 Gap 2 — export/import table ordering (§12.1)
+
+Independent of geometry correctness: reproducing a real `.dx` file byte-for-byte also requires
+reproducing the package's own export/import table numbering, which every actor/texture/brush cross-
+reference (`FBspSurf.iActor`, `texture_ref`, and by the same logic `Model.Lights` actor refs,
+`Zones[].ZoneActor`, `FReachSpec.Start`/`End`) indexes into. §12.1 measured this is not a
+trunk-derivable deterministic function on the one real map tested, and the decisive test — whether a
+*clean* re-import produces trunk-order tables, unlike a hand-authored map's session-history-dependent
+order — has not been run.
+
+### 20.4 Gap 3 — lighting and paths were decoded but never build-tested
+
+§10 (lighting) and §11 (paths) are sourced from the same caliber of primary evidence as the geometry
+sections — disassembly-cited, in the lighting case byte-verified against real `.dx` files (§10.9).
+But unlike geometry, a native implementation of these was never carried past a stub: the Rust modules
+that once existed for lighting (824 lines) and collision/paths were deleted in the same removal
+commit that ended the native geometry effort, having reached only "N-4/N-5 stub" status per that
+commit's own description — i.e., **no implementation attempt within this project ever got far enough
+to test §10/§11 against real output.** Their algorithmic content is well-evidenced; their
+*build-feasibility* is, unlike geometry's, completely untested.
+
+### 20.5 What this means in practice
+
+None of the three gaps above require new disassembly to *understand the algorithm* — every mechanism
+they touch is already specified elsewhere in this document. What they require is either (a) further
+live-editor-driven differential investigation at real map scale (gdb-instrumented, crash-prone,
+previously took weeks of dedicated effort for gap 1 alone and did not close it), or (b) the single
+bounded experiment described in §12.1 for gap 2, or (c) simply attempting an implementation of §10/§11
+and finding out what breaks for gap 3. None of this was attempted fresh for this document — a live
+UnrealEd container is available in this environment (confirmed running), but the scale of gap 1's
+own investigation (documented across roughly 2000 lines of prior bisection work, itself inconclusive)
+means a proportionate next step is a dedicated, scoped follow-up — not something to rush inside this
+synthesis pass. Flagged on the board rather than attempted here.
+
+---
+
+## 21. Evidence index
 
 Primary disassembly/decode documents (all under `dev/docs/spikes/`):
 
@@ -1948,7 +2147,22 @@ Primary disassembly/decode documents (all under `dev/docs/spikes/`):
   not via an existing spike doc: confirms the GUI `Build` dialog's menu items, checkboxes, sliders,
   and their exact `Exec()` string templates, cross-checked against `Editor.dll`'s own recognized
   argument-key vocabulary.
+- `2026-07-15-native-materialize/re-raw-zones/fp-classification-sites.md` — also the source for
+  `bspAddPoint`/`bspAddVector`'s decoded dedup algorithm (§3.10), in addition to its float-site table
+  already cited via §13.
+- `2026-07-15-native-materialize/sections/83-surf-ref-order-session-artifact.md` and
+  `sections/82b-ground-truth-byte-diff.md` — the export/import table ordering byte-diff measurement
+  (§12.1): both are primary byte-diffs against a real editor-written `.dx`, not implementation
+  narrative.
 
-Explicitly excluded as evidence throughout this document: `uedcli-native/src/*.rs`, `uedcli/*.py`,
-and `dev/docs/board/*` (this project's own reimplementation and its bug tracker) — see the note at
-the top of this document.
+**§20 only** draws on a different evidentiary basis, stated in full at that section's head: the git
+history and architecture-doc record of an actual (since-removed) native implementation attempt in
+this codebase, cited as implementation-outcome evidence — commit `fbccd70` ("Remove the native
+materialize build path") and its `dev/docs/architecture.md` diff, `PARITY-STATUS.md`, and
+`sections/92-bspbrushcsg-reallevel-port-plan.md` §36/§53/§54 (the repartition over-split
+investigation). No claim about UnrealEd's own internals anywhere in this document rests on that
+material — only §20's feasibility assessment does.
+
+Explicitly excluded as evidence for every claim about UnrealEd's own behavior throughout this
+document: `uedcli-native/src/*.rs`, `uedcli/*.py`, and `dev/docs/board/*` (this project's own
+reimplementation and its bug tracker) — see the note at the top of this document.
