@@ -16,7 +16,7 @@ dev/docs directive; the plan's approval gate listed these files):
 - `rationale/surface.md`: link+names `uedcli/cli/main.py parse_pan/parse_factor_pair` ->
   `uedcli/cli/parsers/_arguments.py ...`.
 - `rationale/reported-coordinates.md`: `cli.parse_coord` -> `parse_coord`.
-- `rationale/userdocs.md`: Refs `uedcli/cli/main.py (the docs parser)` ->
+- rationale/userdocs.md (deleted 2026-08-24; this item moot): Refs `uedcli/cli/main.py (the docs parser)` ->
   `uedcli/cli/parsers/docs.py (...)`.
 
 No prose meaning changed. `architecture.md` deliberately untouched (handled separately per the plan).

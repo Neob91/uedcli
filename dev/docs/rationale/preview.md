@@ -1,7 +1,6 @@
 # `preview.py` — the `actor`/`stash`/`prefab preview` renderer
 
-Why the stdlib-only schematic renderer is the way it is. See [`README.md`](README.md) for the index and
-the entry shape. Revised in place — agents maintain this freely.
+Why the stdlib-only schematic renderer is the way it is. Revised in place — agents maintain this freely.
 
 What the renderer DOES is [`../architecture.md`](../architecture.md) "Preview internals"; the owner's
 product decisions about `actor preview` are parked on `dev/docs/board/inbox/` pending a `direction/`

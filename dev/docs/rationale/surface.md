@@ -1,7 +1,7 @@
 # `surface.py` — per-face texture edits
 
-Why the surface-edit code is the way it is. Sibling of [`emit.md`](emit.md) and [`cli.md`](cli.md);
-see [`README.md`](README.md) for the index. Revised in place — agents maintain this freely.
+Why the surface-edit code is the way it is. Sibling of [`emit.md`](emit.md) and [`cli.md`](cli.md).
+Revised in place — agents maintain this freely.
 
 Owner product decisions about these verbs live in `../direction/conventions.md` (once confirmed) and
 are parked meanwhile on `dev/docs/board/inbox/`; this file holds only the engineering.

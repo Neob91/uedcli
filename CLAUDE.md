@@ -71,15 +71,16 @@ The detail and the rejected alternatives live in `dev/docs/direction/conventions
   format, or code path, delete it outright in the change that adds the replacement — the new spelling
   is the only spelling. Never a deprecated alias, a no-op flag, a migration-error shim, dual-format
   support, or an "old way" branch. *(Superseded only when uedcli is released.)*
-- No silent half-answers, no fallbacks. A command that can't fully satisfy a request exits 2 naming
-  the offending value, never a partial result plus a stderr warning that scrolls away, and never a
-  substituted default for something it couldn't resolve.
-- Never switch behavior based on the environment. A verb does the SAME thing on every host — same
-  code path, same engine, same output — or it exits 2 naming what's wrong. Never branch on CPU arch,
-  OS, an env var, or the presence/absence of a tool to pick a different implementation or a
-  "fallback" (e.g. editor here, native builder there). If something can't run on a host, that's a
-  broken host to FIX, surfaced as a clear error — not a second code path the tool silently takes.
-  *(Owner ruling, 2026-08-06.)*
+- No fallbacks, and no silent half-answers — for any command or script — unless the owner explicitly
+  asked for or agreed to one. A command that can't fully satisfy a request exits 2 naming the offending
+  value, never a partial result plus a stderr warning that scrolls away, and never a substituted
+  default for something it couldn't resolve. Never switch behavior on the environment either: a verb
+  does the SAME thing on every host — same code path, same engine, same output — never branching on CPU
+  arch, OS, an env var, or the presence/absence of a tool to pick a different implementation. When an
+  approach is specified (e.g. a dockerized setup), it is the only path: a missing host tool is a broken
+  host to FIX, surfaced as a clear error, never a reason to silently keep a second code path (a host
+  path "in case docker isn't there"). *(Owner rulings, 2026-07-27 / 2026-08-06 / 2026-08-24.)* Full rule:
+  `dev/docs/direction/conventions.md`.
 - Never let a Python exception reach the user. A bad actor/entity name exits non-zero with a clear
   message naming the value (`Actor not found: Foo`), never a bare `KeyError`/`IndexError` traceback.
   Cover each path with a regression test.

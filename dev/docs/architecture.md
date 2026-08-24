@@ -784,7 +784,6 @@ and plan both in board item `re-evaluate-whether-reject-nonlevel-target`; `direc
     from stdin and is **atomic** — one unresolvable key means nothing at all on stdout and exit 2,
     never a partial dump that reads as complete; on success each page is preceded by a
     `<!-- topic: <key> -->` marker naming it, so `docs search … | docs show -` composes.
-  - Rationale + rejected alternatives: [`rationale/userdocs.md`](rationale/userdocs.md).
 - **`class list`/`class show`** — offline actor-class discovery over the composed `.u` path (no
   editor, no ambient level); see "Class discovery + qualify-and-validate on ingest" below.
 - **Generator verbs (stdout T3D producers)** — `dispatch.py` handles these without resolving a

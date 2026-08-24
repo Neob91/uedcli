@@ -14,7 +14,7 @@ rather than a path join (traversal and developer-tree leakage die structurally);
 folds to its directory topic and the root one to `index`; a duplicate topic key is a hard error
 naming both files; every failure is a clean exit 2 via the existing `_SelectionExit`. New module
 `uedcli/userdocs.py`, 58 tests in `uedcli/tests/test_docs_command.py`. Durable write-ups:
-`../architecture.md` "Commands (namespaced)" and `dev/docs/rationale/userdocs.md`.
+`../architecture.md` "Commands (namespaced)" (the rationale/userdocs.md write-up was later deleted).
 **Built in the `docs-command` worktree; the build gate ran two rounds (6 findings, then 12), all
 fixed** — the round-2 set included an unreadable directory reading back as an empty one
 (`pathlib`'s glob swallows `scandir`'s `OSError`), a missing UTF-8 BOM strip on `docs show -`,

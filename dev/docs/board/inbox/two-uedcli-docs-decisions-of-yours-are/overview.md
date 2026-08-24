@@ -37,7 +37,7 @@ fallbacks"** (it is an instance of that rule):
 > (not by a user of a shipped binary), the refusal fires during enumeration so it breaks the test
 > suite and every invocation at authoring time, and can never reach a user.
 
-**What I judged NOT yours, and left in `rationale/userdocs.md`:** the resolver's
+**What I judged NOT yours, and left in rationale/userdocs.md (since deleted):** the resolver's
 source-tree-before-packaged-`_docs` order. The spec marks it a review finding (`[R:H2-B]`), not
 a ruling of yours, and it is an implementation trade about dev iteration. Say the word if you
 read it as yours and it moves too. *(2026-07-26.)*

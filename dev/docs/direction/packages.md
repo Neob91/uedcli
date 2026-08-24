@@ -3,9 +3,9 @@
 ## What we want
 
 All Unreal package files — `.u`, `.dx`, `.utx`, `.uax`, `.umx`, `.unr` — are **one on-disk
-container format**: the same magic, the same header, the same name/import/export tables, the same
-tagged-property encoding. Version 68 (Deus Ex) and version 69 (UT-lineage) differ in what the
-classes *say*, not in how the file is laid out.
+container format**: the same magic, header, name/import/export tables, and tagged-property encoding.
+Version 68 (Deus Ex) and version 69 (UT-lineage) differ in what the classes *say*, not in how the
+file is laid out.
 
 ### One low-level reader; per-use-case decoders on top
 
@@ -15,14 +15,14 @@ qualification, and the UE1 tagged-property list. Everything else is a decoder la
 class schema and defaults, textures, meshes, the import closure, native map-file decode.
 
 **No use-case and no file extension reimplements the low-level parsing.** The private parser copies
-that predate the core migrate onto it; none survives as a second parser to keep true.
+that predate the core migrate onto it; none survives as a second parser.
 
 ### The file describes itself — never a per-game table
 
-Layout is derived from the **data**, not from a table of what a particular game meant. This is the
-rule that makes uedcli a generic UnrealEngine-1 tool rather than a Deus Ex one: a decoder that needs
-a game's own code package in order to read that game's asset cannot read a lone `.utx` from an
-engine we have never seen.
+Layout is derived from the **data**, not from a table of what a particular game meant. This is what
+makes uedcli a generic UnrealEngine-1 tool rather than a Deus Ex one: a decoder that needs a game's
+own code package to read that game's asset cannot read a lone `.utx` from an engine we have never
+seen.
 
 - A **mesh's vertex stride** is read off the `Verts` TLazyArray's own skip offset — 8 bytes for
   Deus Ex's `int16` quad, 4 for stock Unreal's packed dword. One decoder, every substrate, no flag.
@@ -30,14 +30,13 @@ engine we have never seen.
   formats floor at one block while linear formats keep scaling, so the tail of the chain separates
   them. The numeric `Format` code is a **hint, a tiebreak and a veto** — never the authority.
 
-**The limit this leaves is stated wherever the universality claim is made** — in the docs, in the
-error text, in the code comment — and never buried as a corner case: **a block-compressed 16-byte
-chain that no code resolves does not decode.** BC2 and BC3 have identical block sizes and identical
-chains and differ only inside the alpha half; nothing in the data separates them. A chain that fits
-**exactly one** layout decodes — P8, or a block-compressed chain no other layout fits. But a
-**code-less** chain that several layouts fit is itself ambiguous: a 16-byte BC1 chain is
-indistinguishable from P8 (48 of 1137 in `uned/UED22` resolve as P8), so it is a named error, not a
-guessed BC1. Never a wrong pixel.
+The limit this leaves is stated wherever the universality claim is made — docs, error text, code
+comment — never buried as a corner case: **a block-compressed 16-byte chain that no code resolves
+does not decode.** BC2 and BC3 have identical block sizes and identical chains and differ only inside
+the alpha half; nothing in the data separates them. A chain that fits **exactly one** layout decodes
+— P8, or a block-compressed chain no other layout fits. A **code-less** chain that several layouts
+fit is ambiguous: a 16-byte BC1 chain is indistinguishable from P8 (48 of 1137 in `uned/UED22`
+resolve as P8), so it is a named error, not a guessed BC1.
 
 ### A package READ has the engine's semantics
 
@@ -86,8 +85,7 @@ where "cannot decode" does not mean "the command fails": a request for **one nam
 degrades that one surface and warns.
 
 Decode correctness is proven against **independent oracles** — data encoded by the original tools,
-or a third-party decoder — never against a fixture our own encoder produced, which proves only that
-we agree with ourselves.
+or a third-party decoder — never against a fixture our own encoder produced.
 
 ## Rejected
 
@@ -120,8 +118,8 @@ we agree with ourselves.
 **Texture layout**
 
 - **Reading `ETextureFormat` out of each game's `Engine.u`** — it makes decoding depend on having
-  that game's code package, so a lone `.utx` from an unknown engine would not decode. That defeats
-  the universality which is the entire point.
+  that game's code package, so a lone `.utx` from an unknown engine would not decode, defeating the
+  universality.
 - **Hardcoding one game's format table** — measured wrong across installs: the same slot is 8
   bytes/pixel in one shipped game and 2 in another. A wrong table mis-slices real data and then
   emits a *bogus* size mismatch, turning an honest failure into a wrong diagnosis.

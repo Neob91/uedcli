@@ -4,101 +4,94 @@
 
 Two **independent** organizational dimensions on every actor, both uedcli-side only.
 [`terminology.md`](terminology.md) defines the terms; this doc is how they are set,
-managed and queried, and why there are two.
+managed and queried.
 
-**Why two.** A `folder` is one hierarchical path per actor — good for "where does this
-live," useless for cross-cutting concerns. A torch is at `castle.tower` AND is
-`lighting` AND `interactive` at once. The multi-valued axis is its own dimension
-rather than a loosened folder.
+**Why two.** A `folder` is one hierarchical path per actor — "where does this live." A
+`label` is multi-valued and cross-cutting: a torch is at `castle.tower` AND is `lighting`
+AND `interactive` at once. The multi-valued axis is its own dimension, not a loosened
+folder.
 
-**Set at CREATION, on the generators.** `brush build`/`actor build` take
-`--folder <path>` and `--label <l>` (repeatable). They emit the organization as T3D
-comment carriers — `// uedcli-folder:` and `// uedcli-labels:` — which `actor add`
-persists into the sidecars:
+**Set at CREATION, on the generators.** `brush build`/`actor build` take `--folder <path>`
+and `--label <l>` (repeatable). They emit the organization as T3D comment carriers —
+`// uedcli-folder:` and `// uedcli-labels:` — which `actor add` persists into the sidecars:
 
     brush build cube --folder castle.wall --label lit | actor add -
 
 `brush intersect`/`brush deintersect` inherit the same generator flag set.
 
-**`actor add` is a PURE carrier-consumer.** It has NO `--folder`/`--label` flag: it
-persists whatever carriers ride the incoming T3D and nothing else. A generator is the
-single place that creates an actor's identity, including its organization — one setter,
-no precedence rule to remember.
+**`actor add` is a PURE carrier-consumer.** No `--folder`/`--label` flag: it persists
+whatever carriers ride the incoming T3D and nothing else. A generator is the single place
+that creates an actor's identity, including its organization — one setter, no precedence
+rule.
 
-**Changed afterwards on the trunk**, value on a flag, actors positional or `-` from
-stdin, so `-` universally means "actors from stdin":
+**Changed afterwards on the trunk**, value on a flag, actors positional or `-` from stdin
+(so `-` universally means "actors from stdin"):
 
 - `actor folder set --to <path> <names…|->` · `actor folder unset` · `actor folder get`
 - `actor label add|remove --label <l> (repeatable) <names…|->` · `actor label clear` ·
   `actor label get`
 
-There is **no `label set`** — replace-all is `clear` + `add`. On a single-valued
-dimension `set` is the only way to change the value; on a multi-valued one it is
-derivable, so it would be surface for nothing.
+There is **no `label set`** — replace-all is `clear` + `add`; on a multi-valued dimension
+`set` is derivable, so it would be surface for nothing.
 `set`/`unset`/`add`/`remove`/`clear` are producers: touched Names to stdout, the human
 count to stderr, so every organization edit chains in a pipeline.
 
-**Both dimensions work on every tree — `--tree level|stash|prefab`.** The
-unify-T3D-trees invariant gives stash and prefab members the same per-actor sidecar
-slot, so a level-only restriction would be an artificial asymmetry between the two
-dimensions.
+**Both dimensions work on every tree — `--tree level|stash|prefab`.** The unify-T3D-trees
+invariant gives stash and prefab members the same per-actor sidecar slot, so a level-only
+restriction would be an artificial asymmetry.
 
 **Queried with `actor find`:** `--folder <pattern>`, `--label <glob>` (repeatable,
 OR-combined), and `--no-folder`/`--no-label` for the unset sets — the only way to reach
-them, since an unset value matches no pattern, and therefore the only way to ask "what
-have I not filed yet".
+them, since an unset value matches no pattern, and so the only way to ask "what have I not
+filed yet".
 
-**Folder pattern matching is globstar.** A **wildcard-free** pattern is a subtree
-prefix: `castle` selects `castle` and every descendant. **Any** wildcard makes the
-pattern a pure segment-glob with no implicit subtree: `*` matches exactly one segment,
-`**` any depth (zero or more). So `castle.*` = direct children, `castle.**` = the whole
-subtree (== bare `castle`), `**.roof` = a `roof` at any depth. The subtree-vs-glob
-asymmetry is **deliberate and non-compositional** — `**.roof` gives the roof nodes only,
-not their contents, while bare `castle` does include its contents — and it is documented
-loudly in `--help` rather than smoothed over. "Every roof and everything inside" is
-`--folder '**.roof' --folder '**.roof.**'`.
+**Folder pattern matching is globstar.** A **wildcard-free** pattern is a subtree prefix:
+`castle` selects `castle` and every descendant. **Any** wildcard makes the pattern a pure
+segment-glob with no implicit subtree: `*` matches exactly one segment, `**` any depth
+(zero or more). So `castle.*` = direct children, `castle.**` = the whole subtree (== bare
+`castle`), `**.roof` = a `roof` at any depth. The subtree-vs-glob asymmetry is
+**deliberate and non-compositional** — `**.roof` gives the roof nodes only, not their
+contents, while bare `castle` does include its contents — and is documented in `--help`.
+"Every roof and everything inside" is `--folder '**.roof' --folder '**.roof.**'`.
 
 **Label patterns are flat and `*`-only** — labels have no hierarchy. Both dimensions
-accept `*` (folders additionally `**`) and **reject** `?`, `[` and `]` with a clean exit
-2, so there is no pattern-syntax asymmetry between them. Stored segments/tokens are
-`[A-Za-z0-9_+-]`, matched case-insensitively, stored as authored.
+accept `*` (folders additionally `**`) and **reject** `?`, `[` and `]` with a clean exit 2,
+so there is no pattern-syntax asymmetry. Stored segments/tokens are `[A-Za-z0-9_+-]`,
+matched case-insensitively, stored as authored.
 
 **Independent of the engine `Group` prop, which is retained unchanged.** No absorb, no
 derive, in either direction; an actor may carry both. `actor find --group` (the T3D-prop
 filter) stays.
 
-**Placement — `stash apply` / `prefab apply`** — merges a captured actor set or a
-library prefab into the current level. It keeps **both** dimensions, independently:
+**Placement — `stash apply` / `prefab apply`** — merges a captured actor set or a library
+prefab into the current level. It keeps **both** dimensions, independently:
 
-- `--group` stamps the engine `Group` prop, defaulting to the stash id / prefab
-  basename. Renaming it to `--folder` would have silently changed what an existing
-  scripted `stash apply --group X` does.
-- `--folder` sets the uedcli sidecar and has **no default** — placed actors are
-  unfoldered unless asked for, rather than being silently filed under a name the user
-  never chose.
+- `--group` stamps the engine `Group` prop, defaulting to the stash id / prefab basename.
+- `--folder` sets the uedcli sidecar and has **no default** — placed actors are unfoldered
+  unless asked for, rather than silently filed under a name the user never chose.
 - **A fresh batch token is ALWAYS minted**, exactly as `actor duplicate` does:
   `prefab-<name>-<rand>` / `stash-<id>-<rand>`, with the source name sanitised into the
-  label charset. Placed actors carry `inherited ∪ {batch token} ∪ {explicit --label}` —
-  an explicit `--label` is purely **additive** and never replaces the token, so the
-  batch stays addressable by a collision-free handle after the pipeline ends. The
-  readable middle segment means `actor find --label 'prefab-castle-tower-*'` finds every
-  placement of that prefab, not just the last one.
+  label charset. Placed actors carry `inherited ∪ {batch token} ∪ {explicit --label}` — an
+  explicit `--label` is purely **additive** and never replaces the token, so the batch
+  stays addressable by a collision-free handle after the pipeline ends. The readable middle
+  segment means `actor find --label 'prefab-castle-tower-*'` finds every placement of that
+  prefab, not just the last one.
 
 **`actor duplicate` uses labels as the batch handle** the same way. Copies carry
 `inherited ∪ {dup-<rand>} ∪ {explicit --label}`. Placement is **required** (`--by` or
-`--at`) — an explicit `--by 0,0,0` is the deliberate duplicate-in-place escape hatch,
-so an accidental invisible overlapping copy is an error rather than a warning.
+`--at`) — an explicit `--by 0,0,0` is the deliberate duplicate-in-place escape hatch, so an
+accidental overlapping copy is an error rather than a warning.
 
 **The carrier is a T3D comment, so `actor show` output is both round-tripping and
-editor-importable.** UnrealEd's importer silently strips `//` line-comments, so the
-default output carries the organization for uedcli and is dropped without warning by the
-editor. `--t3d-only` suppresses the comments for a byte-exact editor export.
+editor-importable.** UnrealEd's importer silently strips `//` line-comments, so the default
+output carries the organization for uedcli and is dropped by the editor. `--t3d-only`
+suppresses the comments for a byte-exact editor export.
 
 **Never emitted to the built map, never in the level hash.** Both are editor-organization
-metadata with no gameplay meaning; the sidecar is the source of truth, which also
-sidesteps UnrealEd's FName length limit on `Group=` for deep dotted paths. The
-consequence is accepted: open the built map in UnrealEd and the organization is not
-there — only the engine `Group` prop, which uedcli leaves untouched.
+metadata with no gameplay meaning; the sidecar is the source of truth, which also sidesteps
+UnrealEd's FName length limit on `Group=` for deep dotted paths. The consequence is
+accepted: open the built map in UnrealEd and the organization is not there — only the engine
+`Group` prop, which uedcli leaves untouched.
 
 **Enumeration lives under `actor` too.** `actor folder list` prints the distinct folder
 paths in use, `actor label list` the distinct labels — answering *what exists*, which
@@ -114,10 +107,9 @@ parallel namespace would duplicate the query surface.
   `Package.Group.Name`, and the property-browser `var(Group)` category.
 - **Naming the flat dimension `tag`.** Collides with the real `Engine.Actor.Tag` property
   (reached via `find --prop Tag=`) — the same overload `folder` was invented to avoid.
-  `keyword`, `mark` and `badge` were also weighed; `label` won once it was freed by renaming
-  `actor preview`'s annotation flag `--labels` → `--annotate`.
-- **Deferring that preview flag rename to a separate later step** — the best word was taken
-  immediately rather than left occupied.
+  `label` won once freed by renaming `actor preview`'s annotation flag `--labels` →
+  `--annotate`.
+- **Deferring that preview flag rename to a separate later step.**
 - **Storing the folder in the T3D `Group=` prop.** Deep dotted paths overflow UnrealEd's
   FName length limit; a sidecar beside `order_value` also merges per-actor under `git merge`
   like the rest of the trunk.
@@ -135,7 +127,7 @@ parallel namespace would duplicate the query surface.
 - **Renaming `stash apply --group` → `--folder`.** Would drop the ability to stamp a T3D
   `Group` prop at placement and silently change what an existing scripted invocation does.
 - **Retiring `actor find --group`.**
-- **Defaulting the placement folder from the stash id / prefab basename** — it invents
+- **Defaulting the placement folder from the stash id / prefab basename** — invents
   organization the user never asked for. The *batch label* carries that provenance instead,
   where it is additive rather than a silent default.
 - **Restricting label surfaces to the level tree.** The unify-T3D-trees invariant gives
@@ -181,20 +173,20 @@ parallel namespace would duplicate the query surface.
 - **Pure-T3D default with a `--with-folder` opt-in.** The carrier removes the
   round-trip-vs-compatibility tension entirely, so the opt-in is unnecessary.
 - **Carrying organization out-of-band** (a side channel beside the T3D). Keeps the T3D pure,
-  but `actor show | actor add -` stops round-tripping — and that pipeline is what the whole
-  CLI is built on.
+  but `actor show | actor add -` stops round-tripping — the pipeline the whole CLI is built
+  on.
 
 **Batch handles**
 
 - **A batch token minted only when `--label` is absent**, on either `duplicate` or
-  placement. A named batch would then be addressable only by a name that might already be
-  in use elsewhere.
+  placement. A named batch would then be addressable only by a name that might already be in
+  use elsewhere.
 - **No auto-minted token at all.** Cleanest label sets; loses the re-addressable-batch
   guarantee that is the whole point.
 - **A bare `<kind>-<name>` token with no random suffix.** Readable, but applying the same
   prefab twice gives both batches the same label, so the one just placed cannot be isolated.
-- **A bare in-place `duplicate` as a warning rather than an error.** Accidental invisible
-  overlapping copies; `--by 0,0,0` makes the overlap intentional.
+- **A bare in-place `duplicate` as a warning rather than an error.** Accidental overlapping
+  copies; `--by 0,0,0` makes the overlap intentional.
 - **Deferring `--by`/`--at` to a placement follow-up** — one coherent duplicate overhaul.
 
 ## Refs
