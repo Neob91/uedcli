@@ -122,23 +122,6 @@ def check_guards(actors, *, deintersect: bool) -> None:
             "carved out of SOLID background; use `brush intersect` for an additive set")
 
 
-def check_unscaled(actors) -> None:
-    """Reject a scaled source brush, naming it (spec §6).
-
-    Inherited from the incremental bspcsg core, which errors on a non-identity `MainScale`/
-    `PostScale` (`bspcsg.rs:2064`) — a pre-existing CORE gap, not an intersect-specific one, tracked
-    as its own board item ("bspcsg core: apply scaled brushes").  Until it lands we refuse loudly
-    instead of silently mis-building: a scaled brush would carve at the wrong size.
-    """
-    from . import rotation as ROT
-
-    for a in actors:
-        if not (ROT.actor_main_scale(a).is_identity() and ROT.actor_post_scale(a).is_identity()):
-            raise BrushCsgError(
-                f"brush actor {a.name} has a non-identity MainScale/PostScale — scaled source "
-                f"brushes are not supported yet; bake it first with `brush apply-transform {a.name}`")
-
-
 def _cube_actor(name: str, center, half, *, csg: str | None, oper_prop: str | None = None):
     """One axis-aligned scaffolding cube as a brush Actor (so it marshals through the same
     `_build_brush_input` path as a real source brush)."""
@@ -209,11 +192,17 @@ def merge(actors, *, deintersect: bool):
     off the synthesized builder cube, which has no authored texture.
     """
     import uedcli_native
-    from .native.brush_marshal import _build_brush_input
+    from .native.brush_marshal import BuildError, _build_brush_input
 
     world, builder = build_scaffolding(actors, deintersect=deintersect)
-    tuples = [_build_brush_input(a.name, a) for a in world]
-    btuple = _build_brush_input(builder.name, builder)
+    # A scaled/mirrored source brush bakes its full linear map `L` into `rot` (scale stays identity),
+    # so the `build_geometry_bspcsg` world build inside `intersect_brushset` applies it — no core
+    # change needed.  A degenerate/sheared scale the marshaller refuses surfaces as a named exit-2.
+    try:
+        tuples = [_build_brush_input(a.name, a) for a in world]
+        btuple = _build_brush_input(builder.name, builder)
+    except BuildError as e:
+        raise BrushCsgError(str(e)) from e
     faces = uedcli_native.intersect_brushset(tuples, btuple)
 
     out = []

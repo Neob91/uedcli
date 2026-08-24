@@ -163,6 +163,61 @@ def det3(M) -> float:
             + M[0][2] * (M[1][0] * M[2][1] - M[1][1] * M[2][0]))
 
 
+# ── shared apply of `L = PostScale·R·MainScale` (the single home) ────────────────────────────────
+# The four rules every brush-transform consumer needs — the point transform, the mirror winding-flip,
+# the covariant covector map, and the degenerate-scale reject — live here once. `bake`,
+# `rotation.world_vertices`, and `native.brush_marshal._build_brush_input` compose them with their own
+# affine glue (PrePivot/Location) rather than re-deriving each. `rotation` imports `transform`, so the
+# helpers that need `matvec`/`inverse`/`transpose` lazy-import `rotation` (as `bake` does).
+
+# Below this |det(L)| the linear map is non-invertible (a zero/collapsed scale axis): the covariant and
+# world→local inversions it feeds would divide by ~0. Distinct from SCALE_EPS (a per-axis authoring
+# guard); this is the composed determinant.
+_DET_EPS = 1e-12
+
+
+class DegenerateTransformError(Exception):
+    """A brush's linear map `L = PostScale·R·MainScale` is non-invertible (`|det L| < eps`, a
+    zero/degenerate MainScale/PostScale axis). Carries the brush name (surfaces as a clean exit-2)."""
+
+
+def apply_linear(points, L) -> list[tuple[float, float, float]]:
+    """Apply the 3×3 linear map `L` to each point, returning transformed float triples — the one home
+    for `v' = L·v`. Callers own the surrounding affine glue (PrePivot subtract, Location add) and any
+    rounding."""
+    from . import rotation as ROT                       # rotation imports transform — lazy = no cycle
+    return [ROT.matvec(L, (float(p[0]), float(p[1]), float(p[2]))) for p in points]
+
+
+def flip_winding(L) -> bool:
+    """True when `L` inverts orientation (`det L < 0` — an odd number of negative scale axes / a sheer
+    flip): the poly ring must be reversed so the post-`L` winding stays outward-CCW, else a subtract
+    builds inside-out."""
+    return det3(L) < 0.0
+
+
+def covariant_axes(L):
+    """The covariant map `(L⁻¹)ᵀ` for direction covectors — plane normals and texture axes. A covector
+    `n` maps as `(L⁻¹)ᵀ·n` (not `L·n`) so it stays glued as points bake by `L`; under a pure rotation
+    the two coincide, under scale/sheer only this keeps a normal unit and texture density fixed."""
+    from . import rotation as ROT
+    return ROT.transpose(ROT.inverse(L))
+
+
+def reject_degenerate(L, name) -> None:
+    """Raise `DegenerateTransformError` naming the brush when `L` is non-invertible (`|det L| < eps`).
+    The build path (`brush_marshal._build_brush_input`) calls this before inverting `L` for the
+    covariant axes, so a singular scaled brush exits 2 naming the value rather than a bare
+    `ZeroDivisionError`. `bake` does NOT call it (D8 carve-out — it accepts a degenerate `L`); nor do
+    the `world_to_local_*` edit paths yet (a singular map there still raises `ZeroDivisionError` —
+    pre-existing)."""
+    d = det3(L)
+    if abs(d) < _DET_EPS:
+        raise DegenerateTransformError(
+            f"Brush {name}: non-invertible transform (zero or degenerate MainScale/PostScale axis, "
+            f"det(L)={d:.3g})")
+
+
 # ── permanent transform (`brush apply-transform`) ───────────────────────────────────────────────
 
 def _reset_rotation(out: Actor) -> None:
@@ -203,18 +258,17 @@ def bake(actor: Actor, *, lock_textures: bool = True) -> Actor:
         return out
 
     pp = ROT.actor_prepivot(actor)
-    flip = det3(L) < 0
+    flip = flip_winding(L)
 
     def apply_point(p) -> Vec3:
-        f = ROT.matvec(L, (float(p[0]), float(p[1]), float(p[2])))
+        f = apply_linear((p,), L)[0]
         return (clean(f[0]), clean(f[1]), clean(f[2]))
 
     # Texture axes are COVECTORS (the texel coord is `(vertex − Origin)·TextureU`). For the mapping to
-    # stay glued as vertices/Origin bake by L, a texture axis must transform by the INVERSE-TRANSPOSE
-    # `(L⁻¹)ᵀ` (Unreal's normal/direction xform; §4 "normals use inverse-transpose"), NOT L — under a
-    # pure rotation both coincide, but under scale/sheer only the inverse-transpose keeps the texture
-    # density fixed. (Exact editor TEXTURELOCK parity is the integration differential's job.)
-    NT = ROT.transpose(ROT.inverse(L))
+    # stay glued as vertices/Origin bake by L, a texture axis must transform by the inverse-transpose
+    # `(L⁻¹)ᵀ` (§4 "normals use inverse-transpose"), NOT L. (Exact editor TEXTURELOCK parity is the
+    # integration differential's job.)
+    NT = covariant_axes(L)
 
     def apply_dir(p):
         f = ROT.matvec(NT, (float(p[0]), float(p[1]), float(p[2])))

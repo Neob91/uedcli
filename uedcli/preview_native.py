@@ -6,11 +6,11 @@ built surface is joined back to its SOURCE brush poly for texture/Pan/flags (the
 textures decode natively (`uedcli.utexture`), and `uedcli_native.render_frame` software-
 rasterizes each SHOT pose to an RGB buffer that Pillow encodes as PNG.
 
-Deliberate divergences from `brush_marshal._build_brush_input` (spec §4.2):
-- **Rotation passes through** as the GMath rot3x3 (a DRAFT preview of a rotated brush beats
-  an error; validated offline against `rotation.world_vertices`, not editor goldens).
-- **Scale/sheer are checked here, explicitly**: non-identity `MainScale`/`PostScale`/
-  `SheerRate` → a named error (materialize's check misses PostScale/SheerRate — boarded).
+Geometry marshals through the SHARED `brush_marshal._build_brush_input` (`_marshal_brush` is a
+thin wrapper): a rotated/scaled/mirrored/sheared brush bakes its full linear map `L` into the CSG
+world transform and renders (a degenerate/sheared-singular scale exits 2, named). Draft-validated
+offline against `rotation.world_vertices`, not editor goldens. UV stays rotation-only for now
+(textures slide on scaled faces until the covariant-UV follow-on).
 
 The per-surf UV frame is computed HERE, Python-side, from the source poly's authored
 `Origin`/`TextureU`/`TextureV`/`Pan` (`base_w = Location + R·(Origin − PrePivot)`,
@@ -19,11 +19,10 @@ default axes that ignore authored alignment, and Pan doesn't survive the build a
 spec §5). The function is `texframe.world_uv_frame`, shared with the `brush poly align` verbs
 (`polyalign.py`), so the two cannot disagree about where a texture sits.
 Movers are out of world CSG, so they render directly as world-transformed
-`extra_polys` at the base pose (`rotation.actor_matrix` — the same math every measurement
+`extra_polys` at the base pose (`rotation.actor_linear` — the same math every measurement
 verb uses)."""
 from __future__ import annotations
 
-import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -31,7 +30,7 @@ from pathlib import Path
 from . import movers
 from .normalize import is_builder_brush
 from .preview_shots import ResolvedShot, Shot, resolve_pose, shot_filename
-from .rotation import (actor_matrix, actor_prepivot, deg_to_uu, euler_to_matrix_uu, matvec)
+from .rotation import (actor_linear, actor_prepivot, deg_to_uu, euler_to_matrix_uu, matvec)
 from .texframe import poly_flags_int, world_uv_frame
 from .utexture import TextureError, TextureResolver
 
@@ -43,7 +42,6 @@ PF_INVISIBLE = 0x1
 DEFAULT_FOV = 75.0
 DEFAULT_SIZE = (1280, 960)
 
-_IDENTITY_ROT = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
 _CSG_OPER = {"CSG_Add": 1, "CSG_Subtract": 2}
 
 # The unresolvable-texture checkerboard (spec §4.5): magenta/black 8-px checks, 64².
@@ -54,100 +52,20 @@ class NativePreviewError(Exception):
     """User-facing native-preview failure (→ stderr + exit 2, never a traceback)."""
 
 
-# --------------------------------------------------------------------- scale/sheer gate
-
-_SCALE_XYZ = re.compile(r"Scale=\(([^)]*)\)")
-_AXIS_VAL = re.compile(r"\b([XYZ])=(-?[0-9.]+)")
-_SHEER_RATE = re.compile(r"SheerRate=(-?[0-9.]+)")
-
-
-def _scale_identity(raw_value: str) -> tuple[bool, str]:
-    """Is a `MainScale`/`PostScale` T3D value the identity transform? Returns
-    (identity?, offending-part). The value form is
-    `( [Scale=(X=..,Y=..,Z=..),] [SheerRate=..,] SheerAxis=.. )` — a Scale axis is present
-    iff ≠ 1.0, SheerRate iff ≠ 0.0 (quirks.md "Scale & sheer"). `SheerAxis` alone is
-    identity."""
-    m = _SCALE_XYZ.search(raw_value)
-    if m:
-        for axis, val in _AXIS_VAL.findall(m.group(1)):
-            try:
-                if float(val) != 1.0:
-                    return False, f"Scale {axis}={val}"
-            except ValueError:
-                return False, f"Scale {axis}={val!r}"
-    m = _SHEER_RATE.search(raw_value)
-    if m:
-        try:
-            if float(m.group(1)) != 0.0:
-                return False, f"SheerRate={m.group(1)}"
-        except ValueError:
-            return False, f"SheerRate={m.group(1)!r}"
-    return True, ""
-
-
-def _reject_scaled(name: str, actor) -> None:
-    """Named exit-2 on any non-identity MainScale/PostScale/SheerRate (spec §4.2/§7).
-    The native geometry core still passes identity scale to Rust, so a scaled brush would build
-    wrong — reject loudly. Scale now lives in the typed model fields (spec §10); re-serialize each to
-    the T3D form so the existing identity check applies unchanged."""
-    from .transform import emit_fscale
-    fields = (("MainScale", actor.main_scale), ("PostScale", actor.post_scale))
-    for field, fs in fields:
-        if fs is None:
-            continue
-        ok, part = _scale_identity(emit_fscale(fs))
-        if not ok:
-            raise NativePreviewError(
-                f"brush {name}: non-identity {field} ({part}) is not supported by the native "
-                f"preview (scale support is a deferred spec; remove the scale or use --game "
-                f"when that tier lands)")
-
-
 # --------------------------------------------------------------------- brush inputs
 
-def _rot3x3(actor):
-    R = actor_matrix(actor)                  # None == renders-as-identity (low-bit fields)
-    return _IDENTITY_ROT if R is None else R
-
-
 def _marshal_brush(actor) -> tuple:
-    """One CSG brush actor → the flat `BrushTuple` `build_geometry`/`build_geometry_bspcsg` take.
-    Shared by the trunk `_brush_inputs` (over `level.order`) and the ad-hoc `solve_world_surfaces`
-    (over an actor list) — same algorithm, two input types. The caller has already resolved
-    `CsgOper` (`_CSG_OPER`) and rejected scaled brushes."""
-    from .native.brush_marshal import _parse_vec3
-
-    raw = dict(actor.props)
-    oper = _CSG_OPER[raw.get("CsgOper", "CSG_Add")]
-    loc = tuple(float(c) for c in actor.location) if actor.location else (0.0, 0.0, 0.0)
-    prepivot = _parse_vec3(raw.get("PrePivot"))
-
-    verts_flat: list[float] = []
-    poly_sizes: list[int] = []
-    normals_flat: list[float] = []
-    poly_flags_flat: list[int] = []
-    have_all_normals = True
-    for poly in actor.brush.polys:
-        poly_sizes.append(len(poly.vertices))
-        for v in poly.vertices:
-            verts_flat += [float(v[0]), float(v[1]), float(v[2])]
-        if poly.normal is not None:
-            normals_flat += [float(poly.normal[0]), float(poly.normal[1]), float(poly.normal[2])]
-        else:
-            have_all_normals = False
-        poly_flags_flat.append(poly.flags or 0)
-    if not have_all_normals:
-        normals_flat = []                        # Rust CalcNormal from winding
-    # Empty per-poly texture-axis lists: preview derives its UV frames from the join polys'
-    # authored axes separately, so the built model's surf axes are unused here — leaving them
-    # empty keeps the built geometry byte-for-byte as before. Trailing empties: tex_u, then the
-    # (tex_v, origins, vec_xform) triple — all defaulted (preview derives UV frames from the join
-    # polys separately, its built geometry is pBase-agnostic so base stays verts[0], and preview
-    # rejects scaled brushes so no covariant normal map is needed). The triple keeps the marshalled
-    # arity at 12 (PyO3 tuple cap).
-    return (verts_flat, poly_sizes, normals_flat, oper, poly_flags_int(raw),
-            list(loc), _rot3x3(actor), list(prepivot), [1.0, 1.0, 1.0],
-            poly_flags_flat, [], ([], [], []))
+    """One CSG brush actor → the flat `BrushTuple` `build_geometry`/`build_geometry_bspcsg` take,
+    via the shared `native.brush_marshal._build_brush_input` — the SINGLE transform-application home
+    (scaled/mirrored/sheared brushes bake their linear map `L` into `rot`, unscaled take the exact
+    rotation-only path). A degenerate/sheared scale the marshaller refuses surfaces as a named
+    exit-2, never a traceback. The built model's surf tex axes are unused by preview (it derives UV
+    frames from the join polys' authored axes separately), so passing the authored axes is harmless."""
+    from .native.brush_marshal import BuildError, _build_brush_input
+    try:
+        return _build_brush_input(actor.name, actor)
+    except BuildError as e:
+        raise NativePreviewError(str(e)) from e
 
 
 def _csg_oper_or_skip(name: str, raw: dict) -> int | None:
@@ -174,7 +92,6 @@ def _brush_inputs(level, index) -> tuple[list, list[tuple[str, list]]]:
             continue
         if _csg_oper_or_skip(name, dict(actor.props)) is None:
             continue
-        _reject_scaled(name, actor)
         brushes.append(_marshal_brush(actor))
         join.append((name, actor.brush.polys))
     return brushes, join
@@ -204,20 +121,25 @@ def _node_polys(model) -> list[tuple[list[tuple[float, float, float]], int, int]
 
 def _mover_actor_world_polys(actor) -> list[tuple[list, object, object]]:
     """One mover actor's brush polys world-transformed at the BASE pose
-    (`Location + R·(v − PrePivot)` — `rotation.actor_matrix` path). Returns `(world_verts, actor,
-    poly)` so the UV frame comes from the same authored fields."""
-    _reject_scaled(actor.name, actor)
+    (`Location + L·(v − PrePivot)`, `L = actor_linear` — the full scale/rotation map, so a scaled
+    mover renders at its real size). A mirrored `L` (`det < 0`) reverses each ring (the native
+    renderer is winding-agnostic, so this is only for consistency with the CSG path). Returns
+    `(world_verts, actor, poly)` so the UV frame comes from the same authored fields."""
+    from .transform import flip_winding
     loc = tuple(float(c) for c in (actor.location or (0, 0, 0)))
     pp = tuple(float(c) for c in actor_prepivot(actor))
-    R = actor_matrix(actor)
+    L = actor_linear(actor)
+    flip = L is not None and flip_winding(L)
     out = []
     for poly in actor.brush.polys:
         world = []
         for v in poly.vertices:
             rel = (float(v[0]) - pp[0], float(v[1]) - pp[1], float(v[2]) - pp[2])
-            if R is not None:
-                rel = matvec(R, rel)
+            if L is not None:
+                rel = matvec(L, rel)
             world.append((loc[0] + rel[0], loc[1] + rel[1], loc[2] + rel[2]))
+        if flip:
+            world.reverse()
         out.append((world, actor, poly))
     return out
 
@@ -420,7 +342,6 @@ def solve_world_surfaces(actors, index, search_files=None) -> SolvedWorld:
             continue
         if _csg_oper_or_skip(actor.name, dict(actor.props)) is None:
             continue
-        _reject_scaled(actor.name, actor)
         brushes.append(_marshal_brush(actor))
         join.append(actor)
 

@@ -412,6 +412,7 @@ def world_vertices(actor) -> list[tuple[float, float, float]]:
     An unscaled+unrotated brush keeps the L=None fast path (byte-identical to plain Location + v)."""
     if actor.brush is None:
         return []
+    from .transform import apply_linear
     loc = actor.location or (Decimal(0), Decimal(0), Decimal(0))
     lx, ly, lz = float(loc[0]), float(loc[1]), float(loc[2])
     pp = actor_prepivot(actor)
@@ -419,13 +420,9 @@ def world_vertices(actor) -> list[tuple[float, float, float]]:
     L = actor_linear(actor)
     out = []
     for poly in actor.brush.polys:
-        for v in poly.vertices:
-            vx, vy, vz = float(v[0]) - px, float(v[1]) - py, float(v[2]) - pz
-            if L is None:
-                rx, ry, rz = vx, vy, vz
-            else:
-                rx, ry, rz = matvec(L, (vx, vy, vz))
-            out.append((lx + rx, ly + ry, lz + rz))
+        rel = [(float(v[0]) - px, float(v[1]) - py, float(v[2]) - pz) for v in poly.vertices]
+        xf = rel if L is None else apply_linear(rel, L)        # L=None fast path: float pass-through
+        out.extend((lx + r[0], ly + r[1], lz + r[2]) for r in xf)
     return out
 
 

@@ -198,64 +198,69 @@ def _brush578_faces():
     return b
 
 
-def _y_surf_normal_bits(brush_tuple):
-    """Build the single brush through the FULL native CSG+serialize path, return the set of ±y-axis
-    surf-normal `.y` bit patterns (the faces whose normal is ~(0,±1,0))."""
-    import struct
+def _y_surf_normals(brush_tuple):
+    """Build the single brush through the FULL native CSG+serialize path, return the ±y-axis
+    surf normals (the faces whose normal is ~(0,±1,0)) as float triples."""
     import uedcli_native
     from uedcli.native import umodel as UMO
     body = bytes(uedcli_native.serialize_model(uedcli_native.build_geometry_bspcsg([brush_tuple])))
     m = UMO.parse_model_body(body, 0, len(body))
-    out = set()
+    out = []
     for s in m.surfs:
         n = m.vectors[s.v_normal]
         if abs(abs(n[1]) - 1) < 0.01 and abs(n[0]) < 0.01 and abs(n[2]) < 0.01:
-            out.add(struct.unpack("<I", struct.pack("<f", float(n[1])))[0])
+            out.append((float(n[0]), float(n[1]), float(n[2])))
     return out
 
 
-def test_scaled_brush_stored_normal_bits_match_editor_end_to_end():
-    """§92 §43 review (end-to-end, self-contained): build UNATCO Brush578 (PostScale=(1.0625,0.625,1),
-    a lone ADD so its faces survive as surfs with NO axis vector to dedup against) through the FULL
-    native path (`_build_brush_input` -> `build_geometry_bspcsg` -> `serialize_model`) and assert the
-    STORED −y surf-normal bit == the editor's gdb-dumped `0xbf800000` (EXACT unit; golden30 node 359).
-    The DISCRIMINATOR: with the covariant VectorXform path REMOVED (vec_xform stripped -> the old
-    `calc_normal(world)` path) the same build stores `0xbf7fffff` (the 0.99999994 twin) — asserted
-    below — so this test goes RED if the fix is reverted or the covariant normal is wrong."""
+def test_scaled_brush_stores_a_unit_covariant_normal_end_to_end():
+    """End-to-end (self-contained): build UNATCO Brush578 (PostScale=(1.0625,0.625,1), a lone ADD so
+    its faces survive as surfs) through the FULL native path (`_build_brush_input` ->
+    `build_geometry_bspcsg` -> `serialize_model`) and assert the stored −y surf normal is UNIT and
+    axis-aligned — the covariant VectorXform path `(L⁻¹)ᵀ` + `SafeNormalSlow` recomputes the face
+    normal correctly under non-uniform scale, NOT the L-warped world winding (which yields a
+    non-axis normal on a scale-asymmetric face).  Double-precision: exact editor byte-parity
+    (`0xbf800000`) is deliberately no longer a goal (the f32 vertex/normal path was vestigial once
+    native materialize was removed), so this pins the geometric fact (unit, axis) not the bit."""
     pytest.importorskip("uedcli_native")
-    from uedcli import model as trunk_model
     from uedcli.builders import make_brush_actor
     a = make_brush_actor("B578", _brush578_faces(), location=(144.0, 1824.0, 314.0), csg="add")
     a.post_scale = FScale(scale=(1.062501, 0.624999, 1.0))
     a.props.append(("PrePivot", "(X=-7.529359,Y=-12.799914,Z=-6.000000)"))
-    trunk_model.Level()  # (no level object needed; _build_brush_input takes the actor directly)
 
-    tup = list(brush_marshal._build_brush_input("B578", a))
+    tup = brush_marshal._build_brush_input("B578", a)
     assert len(tup[11][2]) == 9, "scaled brush must carry a 9-float covariant VectorXform"
 
-    cov_bits = _y_surf_normal_bits(tuple(tup))
-    assert 0xbf80_0000 in cov_bits, \
-        f"covariant path must STORE the editor's exact-unit -y normal 0xbf800000; got {[hex(b) for b in cov_bits]}"
-
-    # Remove the covariant map -> the old calc_normal(world) path -> the 0.99999994 twin (0xbf7fffff).
-    stripped = list(tup)
-    t = list(stripped[11]); t[2] = []; stripped[11] = tuple(t)
-    calc_bits = _y_surf_normal_bits(tuple(stripped))
-    assert 0xbf7f_ffff in calc_bits and 0xbf80_0000 not in calc_bits, \
-        f"calc_normal(world) path IS the twin (0xbf7fffff), != editor 0xbf800000; got {[hex(b) for b in calc_bits]}"
+    normals = _y_surf_normals(tup)
+    assert normals, "no ±y surf normal found in the built brush"
+    for n in normals:
+        assert abs(abs(n[1]) - 1.0) < 1e-4 and abs(n[0]) < 1e-4 and abs(n[2]) < 1e-4, \
+            f"−y face normal must be a unit axis under the covariant map; got {n}"
 
 
-def test_sheared_scaled_brush_raises_clear_error_not_silent_misbuild():
-    """§92 §43 review: the covariant face-normal map `(L⁻¹)ᵀ` is built from the DIAGONAL scale only,
-    but a non-zero `SheerRate` is baked into `L` by `actor_linear` (`fscale_matrix` adds the
-    off-diagonal).  A sheared SCALED brush would therefore get sheared VERTS (via `L`) but an
-    un-sheared NORMAL (via the diagonal covariant) — a silent mis-build.  No DX brush uses sheer, so
-    `_build_brush_input` must raise a clear `BuildError` NAMING the brush, never mis-build silently."""
-    from uedcli.native.brush_marshal import BuildError
+def test_sheared_scaled_brush_bakes_the_sheer_into_both_verts_and_normal():
+    """A sheared scale now BUILDS (the double unify handles it): `actor_linear` bakes the sheer
+    off-diagonal into `L`, so both the vertex map (tuple[6] = `L`) AND the covariant normal map
+    (`(L⁻¹)ᵀ`) carry it — no silent mis-build, so no reject.  The old f32 path built both from the
+    DIAGONAL scale only and had to refuse sheer; that reject is gone.  Guard: tuple[6] equals the
+    sheared `actor_linear` (a genuine off-diagonal), and the emitted covariant VectorXform is `(L⁻¹)ᵀ`."""
+    from uedcli import rotation as ROT
+    from uedcli.transform import det3
     lvl = _one_add_brush_level("Sheared", cube(64, 64, 32),
                                post_scale=FScale(scale=(2, 1, 1), sheer_rate=0.3, sheer_axis="SHEER_XY"))
-    with pytest.raises(BuildError, match="Sheared"):
-        brush_marshal._build_brush_input("Sheared", lvl.actors["Sheared"])
+    a = lvl.actors["Sheared"]
+    L = ROT.actor_linear(a)
+    assert det3(L) > 0                                     # not a mirror -> covariant path
+    assert L[1][0] != 0.0, "fixture must actually shear (a genuine off-diagonal in L)"
+    tup = brush_marshal._build_brush_input("Sheared", a)   # must NOT raise
+    for r in range(3):
+        for c in range(3):
+            assert tup[6][r][c] == L[r][c], "tuple[6] must be the sheared double actor_linear"
+    vx = [tup[11][2][i:i + 3] for i in range(0, 9, 3)]
+    ref = ROT.transpose(ROT.inverse(L))                   # (L⁻¹)ᵀ — carries the sheer too
+    for r in range(3):
+        for c in range(3):
+            assert abs(vx[r][c] - ref[r][c]) < 1e-9, "covariant VectorXform must be the sheared (L⁻¹)ᵀ"
 
 
 def test_rotated_scaled_vec_xform_is_the_covariant_inverse_transpose():
@@ -291,103 +296,32 @@ def test_rotated_scaled_vec_xform_is_the_covariant_inverse_transpose():
         f"local +x normal must covariant-map to world +y under yaw=90; got {wn}"
 
 
-# ── §92 §45: the rot+scale VERTEX precision lever — editor f32 `FCoords` PointXform + authored base ──
-# `_build_brush_input` used to compose the scaled brush's world transform via `rotation.actor_linear`'s
-# Python-DOUBLE matmul, and DROP the authored per-poly Origin (base := verts[0]).  Both cost the
-# rot+scale committed-tree byte-parity.  The editor builds `PointXform` as an f32 `FCoords` chain
-# `((UnitCoords·PostScale)·Rotation)·MainScale` (ABrush::BuildCoords, Engine.dll 0x111390): it multiplies
-# by the f32-cast `FVector Scale` (and rounds per FCoords op), where the double matmul multiplies by the
-# raw double scale — so the tiny cardinal cross-term `sin(180°)=8.74e-8` times PostScale lands 1 ULP off.
-# EVERY DX rot+scale brush has MainScale=identity, so the f32-cast of the scale INPUT is the whole effect
-# there (the genuine intermediate second rounding bites only when PS and MS both cross the same off-axis;
-# unexercised by DX but reproduced for the general case).  Plus the surf `pBase` the editor stores is the
-# TRANSFORMED authored Origin, not a ring corner.  Together these closed all 8 UNATCO N=105 scaled-brush
-# vertex/`w` twins (Brush48/236/359/750) and the L-composition twins at N=762 (Brush541/348) — the
-# committed incremental tree is otherwise STRUCTURALLY IDENTICAL to the editor's (1637/1637 nodes
-# index-for-index on iF/iB/iP/isurf/nv; only precision-twin planes).
+# ── the rot+scale VERTEX transform (double `actor_linear`) + authored base ──
+# `_build_brush_input` bakes the scaled brush's world transform as the DOUBLE `L = PostScale·R·MainScale`
+# (`rotation.actor_linear`), passed as the Rust `rot`, and KEEPS the authored per-poly Origin (the surf
+# `pBase` the editor stores is the transformed authored Origin, not a ring corner).  The f32 `FCoords`
+# PointXform that once reproduced editor BYTE-parity is gone — it was vestigial once native materialize
+# was removed (no surviving consumer — draft preview / the CSG boolean verbs — needs editor byte-parity).
 
 
-def test_pointxform_f32_scale_input_f32_cast_matches_editor_not_double_matmul():
-    """The editor's f32-cast `FVector Scale` input vs `actor_linear`'s raw-double scale (§92 §45 review).
-    Yaw=180° (cardinal) makes `R[0][1] = -sin(180°) = 8.742278e-08`; under `PostScale.x=0.249997` (and
-    MainScale=identity, as EVERY DX rot+scale brush) the element `L[0][1] = f32(f32(PS_x)·R[0][1])` =
-    `0x32bbbc9b` — the EXACT bit an UnrealEd gdb `Model->Nodes` dump stores for the real UNATCO Brush541
-    (idx 464), because the editor stores `PostScale` as f32.  `actor_linear` multiplies by the RAW double
-    `0.249997` and rounds once to `0x32bbbc9a` (1 ULP low — the vertex twin).  With MS=identity the
-    'second' f32 stage is a no-op, so THIS case isolates the scale-input f32 cast; the two-stage rounding
-    is pinned separately below.  If the fix drops the input f32 cast this flips to `0x32bbbc9a`."""
-    import struct
+def test_scaled_brush_wires_actor_linear_as_the_transform_matrix():
+    """The vertex transform tuple[6] IS the double `actor_linear` map `L = PostScale·R·MainScale` — the
+    unified apply, not a separate f32 PointXform.  Guards the wiring: a scaled brush must hand the Rust
+    core the full double `L` as `rot` (so `FPoly::transform` yields `L·(v−PrePivot)+Loc`) with the
+    `scale` tuple left identity (index 8) so the core's scaled-brush reject never fires."""
     from uedcli import rotation as ROT
     lvl = _one_add_brush_level("Yaw180", cube(64, 32, 16),
                                post_scale=FScale(scale=(0.249997, 1.0, 1.0)))
     a = lvl.actors["Yaw180"]
     a.props.append(("Rotation", "(Yaw=32768)"))            # 180° — a cardinal cross-term brush
-    L = brush_marshal._pointxform_f32(a)
-
-    def bits(x):
-        return struct.unpack("<I", struct.pack("<f", float(x)))[0]
-
-    assert bits(L[0][1]) == 0x32bbbc9b, \
-        f"PointXform L[0][1] must be the editor's f32-scale bit 0x32bbbc9b; got {bits(L[0][1]):#010x}"
-    # And guard the DIRECTION: the old double matmul (raw-double scale) rounds to the twin 0x32bbbc9a.
-    Ld = ROT.actor_linear(a)
-    assert bits(Ld[0][1]) == 0x32bbbc9a, \
-        "actor_linear double matmul is the twin path (0x32bbbc9a); the fix must NOT use it for the vertex R"
-    assert bits(L[0][1]) != bits(Ld[0][1]), "the f32 op-order must differ from the double matmul here"
-
-    # C2 (§92 §45 review): guard the WIRING — `_build_brush_input` must actually RETURN the f32 pointxform
-    # as the transform matrix (tuple index 6), not the double `L`.  Reverting line 581 back to `L` would
-    # leave the math test above green but this red.
-    R_returned = brush_marshal._build_brush_input("Yaw180", a)[6]
-    assert [[bits(R_returned[r][c]) for c in range(3)] for r in range(3)] \
-        == [[bits(L[r][c]) for c in range(3)] for r in range(3)], \
-        "_build_brush_input must wire _pointxform_f32 into the transform matrix (tuple[6]), not double L"
-
-
-def test_pointxform_genuine_two_stage_rounding_when_both_scales_cross_axis():
-    """Pin the GENUINE intermediate rounding (§92 §45 review C1): when PostScale AND MainScale are both
-    non-unit on the SAME crossed off-axis, `f32(f32(PS·R)·MS)` differs from a single-rounded `f32(PS·R·MS)`.
-    Unexercised by DX (all MS=identity) but the editor's FCoords chain rounds per-op, so `_pointxform_f32`
-    must too.  Constructed so the two-stage result and the single-rounded product diverge by 1 ULP.
-
-    NOTE: this is a CHANGE-DETECTOR (it re-derives the SUT's own `f32(f32(PS·R)·MS)` expectation), not an
-    independent oracle — its job is to catch a silent regression to single-rounding.  The independent,
-    editor-anchored pin is `test_pointxform_f32_scale_input_f32_cast_matches_editor_not_double_matmul`
-    (bit `0x32bbbc9b` from an UnrealEd gdb dump)."""
-    import struct
-    from uedcli import rotation as ROT
-
-    def bits(x):
-        return struct.unpack("<I", struct.pack("<f", float(x)))[0]
-
-    def f32(x):
-        return struct.unpack("f", struct.pack("f", float(x)))[0]
-
-    # Search a few PS/MS pairs on the crossed (x-row, y-col) axis for a case where per-op two-stage f32
-    # rounding differs from the single-rounded triple product (the cardinal cross-term R[0][1]).
-    r01 = -ROT.gmath_sin(32768)                             # -sin(180°) = 8.742278e-08 (GMath table)
-    found = None
-    for ps in (0.249997, 0.6, 1.3, 1.7, 2.1, 0.9375):
-        for ms in (0.6, 1.3, 1.7, 2.1, 3.0, 0.75):
-            two = f32(f32(f32(ps) * f32(r01)) * f32(ms))
-            one = f32(f32(ps) * f32(r01) * f32(ms))         # single-rounded triple product
-            if bits(two) != bits(one):
-                found = (ps, ms, two, one)
-                break
-        if found:
-            break
-    assert found is not None, "expected some PS/MS pair to expose the two-stage rounding"
-    ps, ms, two, one = found
-    lvl = _one_add_brush_level("Cross", cube(64, 32, 16),
-                               post_scale=FScale(scale=(ps, 1.0, 1.0)),
-                               main_scale=FScale(scale=(1.0, ms, 1.0)))
-    a = lvl.actors["Cross"]
-    a.props.append(("Rotation", "(Yaw=32768)"))
-    L = brush_marshal._pointxform_f32(a)
-    assert bits(L[0][1]) == bits(two), \
-        f"pointxform must round per-op (two-stage) -> {bits(two):#010x}; got {bits(L[0][1]):#010x}"
-    assert bits(L[0][1]) != bits(one), \
-        "two-stage per-op rounding must differ from a single-rounded triple product for this PS/MS pair"
+    tup = brush_marshal._build_brush_input("Yaw180", a)
+    R_returned, scale = tup[6], tup[8]
+    L = ROT.actor_linear(a)
+    for r in range(3):
+        for c in range(3):
+            assert R_returned[r][c] == L[r][c], \
+                f"tuple[6][{r}][{c}]={R_returned[r][c]} must be the double actor_linear {L[r][c]}"
+    assert tuple(scale) == (1.0, 1.0, 1.0), "the scale tuple must stay identity (L is baked into rot)"
 
 
 def _slanted_scaled_wedge():

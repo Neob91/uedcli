@@ -1028,8 +1028,9 @@ intersect verbs.
 - **Empty stdin is a clean no-op** (exit 0), like every generator.
 - **Non-brush actors and Movers are refused** (exit 2, naming them) rather than skipped — a merge
   quietly missing a piece reads as a complete answer. Narrow the pipe (`actor find --kind brush …`).
-- **Scaled source brushes are refused**, naming the brush: bake the scale first with
-  `brush apply-transform <name>`. (A gap in the CSG core, not these verbs.)
+- **Scaled, mirrored, and sheared source brushes build** — the transform is baked into the CSG
+  input. Only a **non-invertible (degenerate) scale** (a zero or sub-epsilon axis) is refused, exit 2
+  naming the brush.
 
 ## Output flags
 
@@ -1068,7 +1069,7 @@ The merge is faithful or it fails — it never returns a partial weld:
 
 - a **non-brush actor or a Mover** in the piped set (exit 2, naming it) — narrow the pipe with
   `actor find --kind brush`;
-- a **scaled source brush** (exit 2, naming it) — bake it first with `brush apply-transform <name>`;
+- a **non-invertible (degenerate) source brush** — a zero or sub-epsilon scale axis (exit 2, naming it);
 - a set with **no additive** (`intersect`) or **no subtractive** (`deintersect`), pointing you at
   the other verb;
 - a **name list** on stdin instead of a T3D snippet (the two stdin conventions are easy to mix up).
@@ -1517,7 +1518,9 @@ One shot per positional token, fields `;`-separated (angles in **unreal rotation
 - **`--native`** — the opt-in offline draft. **No container at all**: the native CSG core carves the
   trunk in-process and a software rasterizer renders **textured, flat-shaded** perspective stills in
   seconds. Movers render at base pose; point actors, meshes, sky, lighting, and translucency do NOT
-  render (translucent/masked faces render opaque). `--fov DEG` (default 75) applies here; `--map` /
+  render (translucent/masked faces render opaque). Scaled, mirrored, and sheared brushes render (the
+  transform is baked into the geometry), but the texture frame is rotation-only, so textures slide on
+  scaled faces. `--fov DEG` (default 75) applies here; `--map` /
   `--rebuild` / `--keep-alive` are rejected with `--native`.
 
 **Shared:** `--out-dir DIR` (required unless `--list-actors`; created if absent), `--size WxH`

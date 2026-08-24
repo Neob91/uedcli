@@ -114,13 +114,44 @@ def test_a_mover_in_the_set_is_refused(monkeypatch, capsys):
     assert "Door" in cap.err and "Mover" in cap.err
 
 
-def test_a_scaled_source_brush_is_refused_naming_it(monkeypatch, capsys):
+def test_a_scaled_source_brush_now_builds_at_its_scaled_size(monkeypatch, capsys):
+    """A scaled source brush now MERGES (was exit-2): its linear map `L` bakes into `rot` with the
+    `scale` tuple left identity, so the `build_geometry_bspcsg` world build inside `intersect_brushset`
+    applies it — no core change.  The merged brush spans the SCALED extent (a 128³ cube at MainScale
+    X=2 reaches x=±128, not the unit ±64)."""
     from uedcli.transform import FScale
-    a = _cube("Scaled")
+    a = _cube("Scaled", size=(128, 128, 128))
     a.main_scale = FScale(scale=(Decimal(2), Decimal(1), Decimal(1)))
     rc, cap = _run("intersect", _t3d(a), monkeypatch, capsys)
+    assert rc == 0, cap.err
+    polys = next(iter(parse_t3d(cap.out).actors.values())).brush.polys
+    xs = {float(v[0]) for p in polys for v in p.vertices}
+    assert max(xs) == pytest.approx(128.0) and min(xs) == pytest.approx(-128.0), \
+        f"scaled cube must reach x=±128 (unit ±64 × MainScale.x=2); got x in [{min(xs)},{max(xs)}]"
+
+
+def test_a_degenerate_scaled_source_brush_exits_2_naming_it(monkeypatch, capsys):
+    """A zero/degenerate scale axis makes `L` singular — the marshaller refuses with a named
+    `BrushCsgError` (exit 2), never a traceback."""
+    from uedcli.transform import FScale
+    a = _cube("Flat")
+    a.post_scale = FScale(scale=(Decimal(0), Decimal(1), Decimal(1)))
+    rc, cap = _run("intersect", _t3d(a), monkeypatch, capsys)
     assert rc == 2
-    assert "Scaled" in cap.err and "apply-transform" in cap.err
+    assert "Flat" in cap.err and "non-invertible" in cap.err
+
+
+def test_a_mirrored_source_brush_builds_a_closed_solid(monkeypatch, capsys):
+    """A mirrored source brush (`det L < 0`) merges into a closed box: the marshaller pre-reverses each
+    ring so the post-`L` winding stays outward-CCW (a subtract would otherwise build inside-out)."""
+    from uedcli.transform import FScale
+    a = _cube("Mir", size=(128, 128, 128))
+    a.post_scale = FScale(scale=(Decimal(-1), Decimal(1), Decimal(1)))       # one mirror axis
+    rc, cap = _run("intersect", _t3d(a), monkeypatch, capsys)
+    assert rc == 0, cap.err
+    polys = next(iter(parse_t3d(cap.out).actors.values())).brush.polys
+    normals = {tuple(round(float(c)) for c in p.normal) for p in polys}
+    assert len(normals) == 6, f"a mirrored cube must merge to a closed 6-normal box; got {normals}"
 
 
 def test_intersect_of_a_block_with_a_notch_carves_the_notch(monkeypatch, capsys):

@@ -162,6 +162,49 @@ def test_unscaled_unrotated_keeps_the_none_fast_path():
     assert R.actor_linear(a) is None                  # identity sentinel preserved
 
 
+# ── shared apply helpers (the single home) ────────────────────────────────────────────────────────
+
+def test_apply_linear_maps_each_point_by_L():
+    L = [[2.0, 0.0, 0.0], [0.0, 3.0, 0.0], [0.0, 0.0, 0.5]]
+    assert T.apply_linear([(1, 2, 4), (-1, 0, 2)], L) == [(2.0, 6.0, 2.0), (-2.0, 0.0, 1.0)]
+
+
+def test_flip_winding_is_negative_determinant():
+    assert T.flip_winding([[-1.0, 0, 0], [0, 1.0, 0], [0, 0, 1.0]]) is True     # one mirror axis
+    assert T.flip_winding([[2.0, 0, 0], [0, 3.0, 0], [0, 0, 0.5]]) is False     # positive det
+
+
+def test_covariant_axes_is_the_inverse_transpose():
+    L = [[2.0, 0.0, 0.0], [0.5, 1.0, 0.0], [0.0, 0.0, 4.0]]      # sheared+scaled
+    NT = T.covariant_axes(L)
+    ref = R.transpose(R.inverse(L))
+    for i in range(3):
+        for j in range(3):
+            assert abs(NT[i][j] - ref[i][j]) < 1e-12
+    # a covariant covector round-trips: (L⁻¹)ᵀ·n dotted against L·v is n·v (density-preserving)
+    n, v = (1.0, -2.0, 0.5), (3.0, 1.0, -1.0)
+    lhs = sum(a * b for a, b in zip(R.matvec(NT, n), R.matvec(L, v)))
+    assert abs(lhs - sum(a * b for a, b in zip(n, v))) < 1e-9
+
+
+def test_reject_degenerate_raises_naming_the_brush():
+    T.reject_degenerate([[2.0, 0, 0], [0, 1.0, 0], [0, 0, 1.0]], "Fine")       # invertible → no raise
+    with pytest.raises(T.DegenerateTransformError, match="Flat"):
+        T.reject_degenerate([[0.0, 0, 0], [0, 1.0, 0], [0, 0, 1.0]], "Flat")
+
+
+def test_bake_and_world_vertices_agree_at_origin_without_prepivot():
+    """The unify parity: with Location=0 AND PrePivot=0, `bake` (folds `v'=L·v` into the polys, then
+    `emit.clean`) and `world_vertices` (`Location + L·(v−PrePivot)`, raw float) apply the SAME `L` and
+    so land the same vertex set. A scale-only `L` keeps the coords exact through `clean`."""
+    a = _cube_actor(main=T.FScale((D("1.5"), D(2), D("0.5"))))         # loc=(0,0,0), no PrePivot
+    baked = T.bake(a)
+    got = sorted({tuple(round(float(c), 4) for c in v)
+                  for p in baked.brush.polys for v in p.vertices})
+    want = sorted({tuple(round(c, 4) for c in w) for w in R.world_vertices(a)})
+    assert got == want
+
+
 # ── bake (apply-transform) ───────────────────────────────────────────────────────────────────────
 
 def test_bake_folds_scale_and_resets_fields():

@@ -109,7 +109,6 @@ def merge(args) -> int:
         brushcsg.check_all_csg_brushes(actors, verb=verb,
                                        index=resources.mover_index(args, f"brush {verb}"))
         brushcsg.check_guards(actors, deintersect=deintersect)
-        brushcsg.check_unscaled(actors)
         n = len(actors)
         print(f"brush {verb}: merging {n} brush{'' if n == 1 else 'es'}", file=sys.stderr)
         pairs = brushcsg.merge(actors, deintersect=deintersect)

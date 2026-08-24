@@ -6,8 +6,6 @@ which brushes are carved into the world BSP (`_in_world_csg`). Shared by `brushc
 """
 from __future__ import annotations
 
-import struct
-
 from ..movers import is_mover
 
 # ECsgOper ordinals == the Rust `build_geometry` oper codes (1=Add..4=Deintersect).
@@ -18,48 +16,6 @@ _IDENTITY_ROT = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
 
 class BuildError(Exception):
     """A native-build failure carrying the offending value (surfaces as a clean exit-2)."""
-
-
-def _f32(x: float) -> float:
-    """Round to float32 — the editor's `FCoords` scale arithmetic is single-precision, so the
-    covariant normal map's per-axis reciprocals must be built at f32 to match it (§92 §43)."""
-    return struct.unpack("f", struct.pack("f", float(x)))[0]
-
-
-def _pointxform_f32(actor):
-    """The editor's `FModelCoords.PointXform` linear map, built in UnrealEd's f32 `FCoords` op-order
-    `((UnitCoords·PostScale)·Rotation)·MainScale` (`ABrush::BuildCoords`, Engine.dll 0x111390; §92 §45),
-    NOT `rotation.actor_linear`'s Python-DOUBLE matmul.
-
-    Both compute the SAME map `L = diag(PostScale)·R·diag(MainScale)`; the difference is WHERE f32
-    rounding lands.  The effective element is `M[i][k] = f32( f32(PostScale_i · R[i][k]) · MainScale_k )`:
-    PostScale scales row `i`, `R` is the GMath rotation matrix, MainScale scales column `k`.  Two things
-    the double matmul gets wrong (§92 §45 review):
-      * **The dominant lever for DX content (the ONE that moves the bit): the scale INPUTS are f32-cast
-        before the multiply.**  The editor stores `FVector Scale` as float32, so it multiplies by
-        `f32(0.249997)` where `rotation.actor_linear` multiplies by the raw double `0.249997`.  On the
-        cardinal cross-term `R[0][1] = -sin(180°) = 8.742278e-08` (§42), `f32(f32(PS)·R)` = `0x32bbbc9b`
-        vs the double's `0x32bbbc9a` — 1 ULP, which a ~2000uu vertex amplifies into the node-`w` twin
-        (UNATCO Brush541/Brush348).  EVERY DX rot+scale brush has MainScale=identity, so this input cast
-        is the whole effect there.
-      * **The intermediate f32 round after `PostScale·Rotation`, before `MainScale`** — a genuine
-        SECOND rounding that bites ONLY when both PostScale and MainScale are non-unit on the SAME
-        crossed off-axis (`f32(f32(PS·R)·MS)` ≠ `f32(PS·R·MS)`).  No DX brush exercises it (all have
-        MS=identity), but reproducing it keeps the general case editor-faithful.
-    `FCoords::operator*(FScale)` multiplies each axis per-column by Scale (0x18180);
-    `FCoords::operator*(FCoords)` composes via `TransformVectorBy` (0x2dd50) with `M_Rotation = Rᵀ`, so
-    the compose reproduces `diag(PS)·R` (a diagonal `M_A` makes each compose a single f32 multiply — the
-    two zero terms add exactly).
-
-    Non-sheared only (every DX MainScale/PostScale has SheerRate=0; the caller rejects sheer for every
-    scaled brush).  Returns a 3×3 list of f32 floats — the `rot` matrix the Rust `FPoly::transform`
-    applies as `world = L·(v−PrePivot)+Loc`."""
-    from .. import rotation as ROT
-    Rm = ROT.actor_matrix(actor)                         # GMath rotation 3×3 (None == identity)
-    R = _IDENTITY_ROT if Rm is None else [[_f32(float(x)) for x in row] for row in Rm]
-    PS = [_f32(float(c)) for c in ROT.actor_post_scale(actor).scale]
-    MS = [_f32(float(c)) for c in ROT.actor_main_scale(actor).scale]
-    return [[_f32(_f32(PS[i] * R[i][k]) * MS[k]) for k in range(3)] for i in range(3)]
 
 
 def _in_world_csg(actor, index) -> bool:
@@ -109,33 +65,23 @@ def _build_brush_input(name, actor):
 
     SCALE (`MainScale`/`PostScale`) — §87 §9 (`spikes/2026-07-15-native-materialize/`), the root of
     native over-solidification on real DX levels.  A scaled-up SUBTRACT brush that builds at UNIT
-    size carves a tiny hole instead of the full room, so the room interior stays SOLID and the
-    editor's open void reads solid in native (`shatter_probe.py` metric `[A]` — HK 74.5%, UNATCO
-    15.3%).  The Rust core (`build.rs:786`) *rejects* a non-identity `scale` tuple and only applies
-    the `rot` 3×3 to the brush's local polys, so we BAKE the brush's full linear map
-    `L = PostScale·R·MainScale` (`rotation.actor_linear`) into `rot`: `FPoly::transform` then yields
-    `world = Location + L·(v − PrePivot)`, the correct scaled world winding, and the `scale` tuple
-    stays identity so the reject guard never fires (matching its own advice, "apply scale upstream").
-    Result: HK `[A]` 74.5%→8.9% (surfs 2664→4723 toward the 5224 golden), UNATCO 15.3%→1.1%.
+    size carves a tiny hole instead of the full room, so the room interior stays SOLID.  The Rust
+    core (`build.rs:786`) *rejects* a non-identity `scale` tuple and only applies the `rot` 3×3 to
+    the brush's local polys, so we BAKE the brush's full linear map `L = PostScale·R·MainScale`
+    (`rotation.actor_linear`, double) into `rot`: `FPoly::transform` then yields `world = Location +
+    L·(v − PrePivot)`, the correct scaled world winding, and the `scale` tuple stays identity so the
+    reject guard never fires.
 
-    GATED on non-identity scale: an UNSCALED brush (which is EVERY brush on the castle — 0 scaled
-    brushes) takes the exact existing rotation-only path, so its build is byte-identical to baseline
-    (verified: castle 485 surfs / 1156 nodes unchanged; only the package GUID differs).  For a SCALED
-    brush we additionally DROP the authored per-poly normals and Origins (empty lists → the Rust
-    core recomputes each from the TRANSFORMED winding): the authored local-space normal/Origin are
-    PRE-scale and no longer describe the scaled face, and the core already re-derives every final
-    surf `vNormal` from its winding (`build.rs` post-`bsp_merge_coplanars` plane pass + the oracle's
-    `finalize`/`calc_normal`), so a winding-derived normal is exactly right and needs no
-    inverse-transpose here; the surf `pBase` falls back to the poly's `verts[0]`.  A MIRRORED brush
-    (`det(L) < 0`) has its per-poly ring PRE-reversed (see the `mirror` note below) so the post-`L`
-    winding stays outward-CCW.  Texture axes (`TextureU`/`TextureV`) ride the SAME forward `L`
-    through `FPoly::transform` — exact only for a PURE ROTATION; the editor treats them as covectors
-    (`transform.bake` uses the inverse-transpose `(L⁻¹)ᵀ`), so under ANY non-identity scale (uniform
-    included) forward-`L` differs.  This changes neither solidity nor surf COUNTS (the gated metrics)
-    — it can shift the `Vectors`-pool dedup, i.e. a byte-PARITY / texture-appearance concern only —
-    and is boarded separately (needs live editor evidence to pin the exact convention).  Scale lives
-    in the typed `actor.main_scale`/`post_scale` fields (not `props`), so `raw.get("MainScale")` is
-    absent and the `scale` tuple below stays identity."""
+    GATED on non-identity scale (incl. sheer): an UNSCALED brush keeps the exact rotation-only path,
+    byte-identical to baseline.  For a SCALED brush we DROP the authored per-poly normals (empty →
+    the Rust core recomputes from the TRANSFORMED winding; the authored local normal is pre-scale)
+    but KEEP the authored Origins (`FPoly::transform` maps each by `L`, exactly as the editor's
+    `FPoly::Transform` maps `Base` — the surf `pBase`).  A MIRRORED brush (`det L < 0`) has each
+    per-poly ring PRE-reversed (the `mirror` note below) so the post-`L` winding stays outward-CCW.
+    The transform is DOUBLE precision throughout (the f32 editor-parity vertex/normal path was
+    vestigial once native materialize was removed — no surviving consumer needs editor byte-parity).
+    Scale lives in the typed `actor.main_scale`/`post_scale` fields (not `props`), so
+    `raw.get("MainScale")` is absent and the `scale` tuple below stays identity."""
     raw = dict(actor.props)
     oper_name = raw.get("CsgOper", "CSG_Add")
     oper = _CSG_OPER.get(oper_name)
@@ -146,93 +92,48 @@ def _build_brush_input(name, actor):
     except ValueError:
         poly_flags = 0
     from .. import rotation as ROT
+    from ..transform import covariant_axes, flip_winding, reject_degenerate, DegenerateTransformError
     # A brush is "scaled" when either MainScale (local/pre-rotation) or PostScale (world/post-rotation)
-    # is non-identity.  Only then do we bake the full linear map + drop authored normals/Origins;
+    # is non-identity (incl. sheer).  Only then do we bake the full linear map + drop authored normals;
     # every unscaled brush keeps the exact prior path (rotation-only), preserving byte-parity.
     scaled = not (ROT.actor_main_scale(actor).is_identity()
                   and ROT.actor_post_scale(actor).is_identity())
     mirror = False
-    # Covariant pre-cancel for texture axes on SCALED brushes (§92 §34).  The Rust core transforms a
-    # poly's TextureU/TextureV by the SAME forward map it applies to verts (`FPoly::transform` ->
-    # `rot_only` with `rot = L`), i.e. it emits `L·texUV`.  But texture axes are COVECTORS: the editor
-    # transforms them by the inverse-transpose `(L⁻¹)ᵀ` (`transform.bake`'s `NT`), so under a
-    # non-identity scale forward-`L` SQUARES the scale into the axis magnitude (e.g. UNATCO Brush420
-    # PostScale.x=1.4167, authored texU.x=1.4167 -> native 1.4167²=2.0069 vs the editor's
-    # 1.4167/1.4167=1.0), producing extra Vectors-pool entries that never dedup (the +146 UNATCO
-    # vector over-production is entirely these scaled-brush texture axes — see §92 §34).  Since Rust
-    # will re-apply `L`, we PRE-CANCEL here: pass `P·texUV` with `P = L⁻¹·(L⁻¹)ᵀ = (LᵀL)⁻¹`, so that
-    # `L·(P·texUV) = (L⁻¹)ᵀ·texUV` — exactly the editor's covariant axis.  GATED on `scaled`: an
-    # unscaled brush (every castle brush; `tex_cov` stays None) keeps the identity path byte-for-byte.
-    # SCOPE: this closes the +146 vector-COUNT over-production (the round-tripped axis dedups into the
-    # editor's pool entry, well within `bsp_add_vector`'s 0.001 tol), but `L·(LᵀL)⁻¹·v` is NOT
-    # bit-identical to the editor's direct `(L⁻¹)ᵀ·v` (sub-tol FP drift from the L round-trip) — full
-    # axis-VALUE byte-parity is a separate concern (would need Rust to apply the covariant map directly).
-    from ..transform import det3
     tex_cov = None
     vec_xform_flat: list[float] = []                     # scaled: (L⁻¹)ᵀ VectorXform for the normal
     if scaled:
-        L = ROT.actor_linear(actor)                      # PostScale·R·MainScale (double; det/inverse/mirror)
-        # §92 §45: build the vertex transform `R` (the editor's PointXform) in UnrealEd's f32 `FCoords`
-        # op-order, NOT the double `L` above — the editor multiplies by the f32-cast `FVector Scale`
-        # (and rounds per FCoords op), where the double matmul multiplies by the raw double scale; that
-        # 1-ULP gap on the cardinal cross-term is the rot+scale node-`w` VERTEX twin (§92 §44/§45).  `L`
-        # stays double for the covariant/mirror/det math below (tolerance-level; the normal is renormalized).
-        R = _pointxform_f32(actor)
-        # SHEER guard for EVERY scaled brush (mirror or not): `_pointxform_f32` (the vertex map) AND the
-        # covariant `(L⁻¹)ᵀ` normal map below are built from the DIAGONAL scale only, so a non-zero
-        # SheerRate would shear NEITHER the verts nor the normal — a silent mis-build.  Every DX
-        # MainScale/PostScale has SheerRate=0 (transform.py), so reject cleanly (repo rule: no silent
-        # wrong result).  Hoisted here to also cover the MIRROR case: pre-§45 only the non-mirror branch
-        # rejected sheer (the mirror branch baked sheer into the double-`L` verts), but now BOTH branches
-        # take the diagonal `_pointxform_f32` for `R`, so both must reject (§92 §45 review C3).
-        if (float(ROT.actor_main_scale(actor).sheer_rate) != 0.0
-                or float(ROT.actor_post_scale(actor).sheer_rate) != 0.0):
-            raise BuildError(
-                f"Brush {name}: sheared scale (non-zero SheerRate) is unsupported — the f32 PointXform "
-                f"and covariant normal map are both built from the diagonal scale only")
-        # A zero/degenerate scale axis makes L singular -> `ROT.inverse` would ZeroDivisionError and
-        # reach the CLI user (repo rule: no bare traceback, name the offending value).  Reject cleanly.
-        if abs(det3(L)) < 1e-12:
-            raise BuildError(
-                f"Brush {name}: non-invertible scale (zero or degenerate MainScale/PostScale axis, "
-                f"det(L)={det3(L):.3g}) — cannot compute covariant texture axes")
+        # The vertex transform IS the full double linear map `L = PostScale·R·MainScale`, passed as the
+        # Rust `rot`: `FPoly::transform` yields `world = L·(v−PrePivot)+Loc`, and `scale` stays identity
+        # so the core's reject never fires.  `L` includes sheer (`fscale_matrix`'s off-diagonal), so a
+        # sheared scale bakes correctly into both the verts (here) and the normal (covariant below) — no
+        # sheer reject is needed (it existed only for the deleted diagonal-only f32 construction).
+        L = ROT.actor_linear(actor)                      # PostScale·R·MainScale (double)
+        R = L
+        # A zero/degenerate scale axis makes L singular -> the covariant `(L⁻¹)ᵀ` inversion below would
+        # ZeroDivisionError and reach the CLI user.  Reject cleanly, naming the brush.
+        try:
+            reject_degenerate(L, name)
+        except DegenerateTransformError as e:
+            raise BuildError(str(e)) from e
         _Linv = ROT.inverse(L)
         tex_cov = ROT.matmul(_Linv, ROT.transpose(_Linv))  # (LᵀL)⁻¹ — pre-cancels Rust's forward L
-        # MIRROR (odd number of negative scale axes → det(L) < 0): the linear map inverts winding
-        # orientation, so the L-transformed vertex ring runs CW and `calc_normal` (CCW→outward) would
-        # yield INWARD normals — a subtract would build inside-out.  The Rust core assumes Orientation
-        # +1 (`bspcsg.rs:1589` "NO LOOP-1 reverse") and never re-flips, so we PRE-reverse each poly's
-        # ring here (exactly as the model-side `transform.bake` does on `det3(L) < 0`) — after L the
-        # winding is outward-CCW again and the recomputed normal is correct.  The OLD code rejected all
-        # scaled brushes; this keeps a mirrored brush a correct build instead of a silent mis-build.
-        mirror = det3(L) < 0.0
-        # §92 §43: the editor computes each SCALED face's normal via `ABrush::BuildCoords`' VectorXform
-        # `(L⁻¹)ᵀ` + `SafeNormalSlow` (covariant), NOT `calc_normal` over the L-warped world winding —
-        # which yields `0.99999994` (1 ULP under unit) on a face made asymmetric by non-uniform scale
-        # (Brush578's ±x/±y → the N=30 committed twins).  Pass `(L⁻¹)ᵀ` so the Rust core recomputes the
-        # face normal the editor's way.
-        #
-        # `L = PostScale·R·MainScale = diag(PS)·R·diag(MS)`, so the covariant map is
-        #   `(L⁻¹)ᵀ = diag(1/PS)·(R⁻¹)ᵀ·diag(1/MS) = diag(1/PS)·R·diag(1/MS)`  (R orthonormal).
-        # We build it from CLEAN per-axis f32 reciprocals `1/PS`, `1/MS` (the editor's
-        # `FCoords::operator/(FScale)` divides each axis by the scale — one `divss` per component) times
-        # the SAME GMath `R` — NOT `ROT.transpose(ROT.inverse(L))`, whose adjugate/determinant mixes the
-        # axes so `1/1.625` comes back 1 ULP off and `SafeNormalSlow` renormalizes an axis normal to
-        # `0.99999994` (re-introducing the very twin).  GATED off a MIRROR (det<0): there the covariant
-        # image flips orientation, so the ring-reverse + `calc_normal` path above stays (no DX
-        # mirror-scaled brush exists — verified — so this is a safety gate, not an exercised branch).
+        # Covariant pre-cancel for texture axes (§92 §34): the Rust core applies the SAME forward `L` to
+        # a poly's TextureU/TextureV as to its verts, but axes are COVECTORS mapping by `(L⁻¹)ᵀ`.  We
+        # pass `(LᵀL)⁻¹·texUV` so the core's forward `L·((LᵀL)⁻¹·texUV) = (L⁻¹)ᵀ·texUV` — the editor's
+        # covariant axis.  Gated on `scaled`: an unscaled brush (`tex_cov` None) passes axes unchanged.
+        # MIRROR (`det L < 0`): the linear map inverts winding, so the L-transformed ring runs CW and
+        # `calc_normal` (CCW→outward) would yield INWARD normals — a subtract builds inside-out.  The
+        # Rust core assumes Orientation +1 and never re-flips, so we PRE-reverse each poly's ring below
+        # (as `transform.bake` does) — after `L` the winding is outward-CCW again.
+        mirror = flip_winding(L)
+        # Non-mirror: pass the covariant face-normal map `(L⁻¹)ᵀ` so the Rust core recomputes each scaled
+        # face's normal via `VectorXform + SafeNormalSlow` (the editor's way — a unit axis normal), NOT
+        # `calc_normal` over the L-warped world winding (which yields a non-axis normal on a face made
+        # asymmetric by non-uniform scale).  Gated off a mirror: there the covariant image flips
+        # orientation, so the ring-reverse + `calc_normal` path stays.
         if not mirror:
-            # (Sheer is already rejected above for every scaled brush.)  Build the covariant normal map
-            # `(L⁻¹)ᵀ = diag(1/PS)·R·diag(1/MS)` from CLEAN per-axis f32 reciprocals.
-            def _recip_diag(fs):
-                s = fs.scale
-                return [[(_f32(1.0 / _f32(float(s[j]))) if i == j else 0.0) for j in range(3)]
-                        for i in range(3)]
-            Rm = ROT.actor_matrix(actor)                 # GMath R (None == identity)
-            R_only = _IDENTITY_ROT if Rm is None else [[float(x) for x in row] for row in Rm]
-            _vx = ROT.matmul(_recip_diag(ROT.actor_post_scale(actor)),
-                             ROT.matmul(R_only, _recip_diag(ROT.actor_main_scale(actor))))
-            vec_xform_flat = [float(_vx[r][c]) for r in range(3) for c in range(3)]
+            NT = covariant_axes(L)                       # (L⁻¹)ᵀ
+            vec_xform_flat = [float(NT[r][c]) for r in range(3) for c in range(3)]
     else:
         Rm = ROT.actor_matrix(actor)                     # None == renders-as-identity (low-bit fields)
         R = _IDENTITY_ROT if Rm is None else [[float(x) for x in row] for row in Rm]
@@ -307,15 +208,12 @@ def _build_brush_input(name, actor):
     if not have_all_origins:
         origins_flat = []                                # some poly lacks an authored Origin ->
         #                                                  Rust defaults base to verts[0]
-    # §92 §45: a SCALED brush KEEPS its authored per-poly Origin (transformed by `L` in `FPoly::transform`,
-    # exactly as the editor's `FPoly::Transform` maps `Base`).  Native used to drop it (base := verts[0]),
-    # but the surf `pBase` the editor stores is the TRANSFORMED authored Origin, not a ring corner — and
-    # because a scaled face's node normal carries tiny non-axis components (covariant map), `w = Normal·Base`
-    # differs by ~1 ULP between the two base points.  Passing the authored Origin closed all 8 UNATCO N=105
-    # scaled-brush vertex/`w` twins (Brush48/236/359/750).  (Unscaled brushes already keep their Origin.)
+    # A SCALED brush KEEPS its authored per-poly Origin (transformed by `L` in `FPoly::transform`,
+    # exactly as the editor's `FPoly::Transform` maps `Base`): the surf `pBase` the editor stores is the
+    # transformed authored Origin, not a ring corner (§92 §45).
     # `tex_v_flat`, `origins_flat` and `vec_xform_flat` ride bundled in a triple (PyO3 tuple
-    # FromPyObject caps at 12).  `vec_xform_flat` is 9 floats (the covariant face-normal map for a
-    # scaled brush, §92 §43) or empty (unscaled -> Rust keeps the winding-normal path).
+    # FromPyObject caps at 12).  `vec_xform_flat` is the 9-float covariant face-normal map for a scaled
+    # (non-mirror) brush, or empty (unscaled/mirror -> Rust keeps the winding-normal path).
     return (verts_flat, poly_sizes, normals_flat, oper, poly_flags,
             list(loc), R, list(prepivot), list(scale), poly_flags_flat,
             tex_u_flat, (tex_v_flat, origins_flat, vec_xform_flat))

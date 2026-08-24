@@ -149,8 +149,7 @@ def cube_room(name="Room", size=512.0, height=256.0, texture=None):
 def set_prop(actor, key: str, value: str) -> None:
     """Set one actor property from its T3D text. `MainScale`/`PostScale` are TYPED model fields
     rather than props, so they route to the field: written into `props` they would be read by
-    nothing, and the gate that consumes them (`preview_native._reject_scaled`) would pass
-    vacuously."""
+    nothing (`rotation.actor_main_scale`/`_post_scale` read the typed field)."""
     if key in ("MainScale", "PostScale"):
         from uedcli.transform import parse_fscale
         setattr(actor, "main_scale" if key == "MainScale" else "post_scale", parse_fscale(value))

@@ -33,27 +33,41 @@ def _level(*actors: Actor) -> Level:
     return lvl
 
 
-# --------------------------------------------------------------- scale/sheer rejections
+# --------------------------------------------------------------- scaled/mirrored/sheared render
+# Scaled brushes now RENDER (their linear map `L` bakes into the CSG world transform) instead of
+# exiting 2 — `preview_native._marshal_brush` is a thin wrapper over the shared `_build_brush_input`.
 
 
-def test_mainscale_rejected_named():
+def test_mainscale_brush_renders_scaled():
+    """A non-identity MainScale renders its 6 carved faces (was exit-2). The verts land where the
+    scaled `world_vertices` puts them — geometry cross-checked in `test_scaled_brush_preview_*`."""
     room = cube_room()
     set_prop(room, "MainScale", "(Scale=(X=2.000000),SheerAxis=SHEER_ZX)")
-    with pytest.raises(pn.NativePreviewError, match="Room.*MainScale.*X=2"):
-        pn.build_scene(_level(room), [], IDX)
+    polys, _ = pn.build_scene(_level(room), [], IDX)
+    assert len(polys) == 6
 
 
-def test_postscale_rejected_named():
+def test_postscale_brush_renders_scaled():
     room = cube_room()
     set_prop(room, "PostScale", "(Scale=(Z=0.500000),SheerAxis=SHEER_ZX)")
-    with pytest.raises(pn.NativePreviewError, match="Room.*PostScale.*Z=0.5"):
-        pn.build_scene(_level(room), [], IDX)
+    polys, _ = pn.build_scene(_level(room), [], IDX)
+    assert len(polys) == 6
 
 
-def test_sheerrate_rejected_named():
+def test_sheerrate_brush_renders():
+    """A pure-sheer scale (det=1) now renders too — the double `L` carries the sheer off-diagonal."""
     room = cube_room()
     set_prop(room, "MainScale", "(SheerRate=0.250000,SheerAxis=SHEER_ZX)")
-    with pytest.raises(pn.NativePreviewError, match="Room.*MainScale.*SheerRate=0.25"):
+    polys, _ = pn.build_scene(_level(room), [], IDX)
+    assert len(polys) == 6
+
+
+def test_degenerate_scale_exits_2_naming_the_brush():
+    """A zero/degenerate scale axis makes `L` singular — the covariant map would ZeroDivisionError, so
+    the marshaller refuses with a named `NativePreviewError` (exit 2), never a traceback."""
+    room = cube_room()
+    set_prop(room, "PostScale", "(Scale=(X=0.000000),SheerAxis=SHEER_ZX)")
+    with pytest.raises(pn.NativePreviewError, match="Room.*non-invertible"):
         pn.build_scene(_level(room), [], IDX)
 
 
@@ -163,6 +177,35 @@ def test_rotated_brush_rust_transform_matches_world_vertices():
     # A lone subtract keeps its faces whole (possibly split by BSP, but every node vertex
     # lies on the brush's transformed geometry) — corner set must be a superset match.
     assert expect <= got
+
+
+def _preview_corner_set(lvl):
+    polys, _ = pn.build_scene(lvl, [], IDX)
+    return {tuple(round(c, 2) for c in p[0][i:i + 3])
+            for p in polys for i in range(0, len(p[0]), 3)}
+
+
+def test_scaled_brush_preview_geometry_matches_world_vertices():
+    """The unify parity (spec §8): a SCALED brush's preview node-poly WORLD geometry lands exactly
+    where `world_vertices` puts it — the shared `L` bake feeds the CSG world transform, so preview
+    renders the scaled solid (was exit-2). Geometry, not pixels."""
+    room = cube_room("Scaled", 256, 128)
+    room.location = (Decimal(64), Decimal(-32), Decimal(16))
+    set_prop(room, "PostScale",
+             "(Scale=(X=1.500000,Y=2.000000,Z=0.500000),SheerAxis=SHEER_ZX)")
+    expect = {tuple(round(c, 2) for c in v) for v in world_vertices(room)}
+    assert expect <= _preview_corner_set(_level(room))
+
+
+def test_mirrored_world_csg_brush_preview_geometry_matches_world_vertices():
+    """A MIRRORED world-CSG brush (`det L < 0`, ring-reverse path) renders where `world_vertices`
+    puts it. The Rust core keys winding off ring order (unlike the winding-agnostic renderer), so the
+    marshaller's pre-reverse is what keeps the carved solid right-side-out here."""
+    room = cube_room("Mir", 256, 128)
+    room.location = (Decimal(64), Decimal(-32), Decimal(16))
+    set_prop(room, "PostScale", "(Scale=(X=-1.500000),SheerAxis=SHEER_ZX)")
+    expect = {tuple(round(c, 2) for c in v) for v in world_vertices(room)}
+    assert expect <= _preview_corner_set(_level(room))
 
 
 def test_mover_world_polys_match_world_vertices():
