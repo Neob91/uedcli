@@ -357,7 +357,12 @@ def test_golden_image_byte_exact(capsys):
     editor-EXACT float32 GMath table, so the 90°-yaw pose uses cos(90°) = −8.742278e-08 (the game's
     own value) instead of double 0. The 0° frame stays BYTE-IDENTICAL; the 90° frame's face-side flips
     are what the GAME renders (the game builds its camera from the same table), so the golden tracks it.
-    Cross-reviewed defensible; the anchor U/V/Pan pins are unaffected (texture math, not camera trig)."""
+    Cross-reviewed defensible; the anchor U/V/Pan pins are unaffected (texture math, not camera trig).
+    RE-BLESSED 2026-08-24 after `build_scene` switched to the faithful `build_geometry_bspcsg` core
+    (board `native-preview-drops-large-geometry-on-full`). The core change alters case c's fragment
+    tessellation (coarse 18 nodes/12 surfs → bspcsg 16/10), so the pixel buffer moves; the case-c
+    surf SET still matches the editor golden (`test_csg_native_differential`), and the anchor U/V/Pan
+    + camera-trig pins are unaffected (only the CSG core feeding fragments changed)."""
     capsys.readouterr()                          # swallow the checkerboard warning
     import uedcli_native
     polys, table = _synthetic_scene()

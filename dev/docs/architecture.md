@@ -1601,7 +1601,7 @@ Rationale, rejected alternatives and the outstanding verification gap:
 
 ## Native CSG core (`uedcli/native/`, `uedcli-native/`)
 The in-process Rust CSG core that carves the T3D trunk into a BSP model **with no editor, no wine,
-no container**. It backs `level preview --native` (`build_geometry`/`build_geometry_bspcsg` →
+no container**. It backs `level preview --native` (`build_geometry_bspcsg` →
 `serialize_model` → the software rasterizer) and `brush intersect`/`deintersect`
 (`intersect_brushset`). The offline native *materialize* build that once sat on top of this core
 (`run_materialize_native`, `assemble.py`, `level_write.py`, `pkgref.py`, Rust `light.rs`/`paths.rs`)
@@ -2023,10 +2023,11 @@ the spiral lives in one local frame with its column base at z=0.
 materialize`) and the real engine (the default `level preview --game`), but the **coarse** native
 core assumes convex brushes: `uedcli-native/src/csg.rs` `point_in_convex` tests "behind every face"
 (the convex hull, not the true solid), so a stepped brush's concave notches classify as solid.
-That coarse core (`build_geometry`) is what `level preview --native` uses; its
-`build_geometry_bspcsg` fallback — the incremental `bspBrushCSG` port — never calls
-`point_in_convex` (though `bspcsg.rs` flags a non-convex FIRST Add as an unhandled case of its convex
-world-seed shortcut, so a concave brush should not lead a level's adds). This joins the already-documented ~11% native solidity
+`level preview --native` uses `build_geometry_bspcsg` (the incremental `bspBrushCSG` port; the coarse
+`build_geometry` was retired from preview 2026-08-24), which never calls `point_in_convex` — so the
+concave-notch-as-solid error above does NOT affect preview. `bspcsg.rs` instead flags a non-convex
+FIRST Add as an unhandled case of its convex world-seed shortcut, so a concave brush should not lead a
+level's adds. This joins the already-documented ~11% native solidity
 divergence on walls/steps (KNOWN GAP below); the `csg.rs:61` comment "DX brush builders emit convex
 brushes, so this is exact" is now **falsified for builder output**, with a `board/inbox/` follow-up to
 decompose non-convex builder brushes into convex pieces (or guard+warn) on the native path.

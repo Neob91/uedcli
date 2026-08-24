@@ -1,6 +1,7 @@
 """`level preview --native` — the offline draft backend (spec
 board item `de-containerization-follow-on-spec-items`). Zero docker, zero editor, zero game:
-the trunk is carved in-process by the Rust CSG core (`uedcli_native.build_geometry`), each
+the trunk is carved in-process by the faithful Rust CSG core (`uedcli_native.build_geometry_bspcsg`,
+the incremental `bspBrushCSG` port that matches the editor's surviving surfaces), each
 built surface is joined back to its SOURCE brush poly for texture/Pan/flags (the same
 `i_actor`/`i_brush_poly` provenance `assemble._patch_surf_refs` consumes at materialize),
 textures decode natively (`uedcli.utexture`), and `uedcli_native.render_frame` software-
@@ -260,7 +261,11 @@ def build_scene(level, search_files, index) -> tuple[list, list]:
     if not brushes:
         raise NativePreviewError("nothing to render: the trunk has no CSG brush actors")
     try:
-        built = uedcli_native.build_geometry(brushes)
+        # FAITHFUL incremental `bspBrushCSG` core, same as `solve_world_surfaces` — it reproduces
+        # the editor's surviving-surface set (Wanchai ratio ~1.01), where the coarse `build_geometry`
+        # convex point-in-solid dropped ~69% of surfaces (board `native-preview-drops-large-geometry-
+        # on-full`). Same `BrushTuple` input and `serialize_model`/`_node_polys` join path.
+        built = uedcli_native.build_geometry_bspcsg(brushes)
         body = uedcli_native.serialize_model(built)
     except uedcli_native.BuildError as ex:
         raise NativePreviewError(f"native CSG build failed: {ex}") from ex
