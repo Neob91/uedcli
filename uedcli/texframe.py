@@ -17,7 +17,8 @@ from __future__ import annotations
 
 import math
 
-from .rotation import actor_matrix, actor_prepivot, matvec
+from .rotation import (actor_linear, actor_main_scale, actor_post_scale, actor_prepivot, inverse,
+                       matvec, transpose)
 
 
 def poly_flags_int(raw: dict) -> int:
@@ -51,17 +52,26 @@ def newell(verts) -> tuple[float, float, float]:
 
 
 def world_uv_frame(actor, poly):
-    """The source poly's authored texture frame, transformed to world space:
-    `base_w = Location + R·(Origin − PrePivot)`, `axes_w = R·axes`. Missing Origin → local
-    zero; missing/zero axes → `tex_basis_default`."""
+    """The source poly's authored texture frame, transformed to world space by the actor's FULL linear
+    map `L = PostScale·R·MainScale` (`rotation.actor_linear`): `base_w = Location + L·(Origin −
+    PrePivot)` because `Origin` is a POINT, and `axes_w = (L⁻¹)ᵀ·axes` because `TextureU`/`TextureV`
+    are COVECTORS (the covariant map keeps texel density fixed under scale/sheer — same inverse-
+    transpose `transform.bake` uses). Missing Origin → local zero; missing/zero axes →
+    `tex_basis_default`.
+
+    UNSCALED PATH IS BYTE-IDENTICAL to the old rotation-only frame: `actor_linear` returns exactly the
+    rotation matrix when there is no scale, and for a pure rotation the axes use `L` directly (not the
+    covariant map) so `matvec(L, axis)` reproduces the old `R·axis` bit-for-bit — `(L⁻¹)ᵀ` only differs
+    from `L` once scale/sheer is present."""
     loc = tuple(float(c) for c in (actor.location or (0, 0, 0)))
     pp = tuple(float(c) for c in actor_prepivot(actor))
-    R = actor_matrix(actor)
+    L = actor_linear(actor)                          # None (identity) or PostScale·R·MainScale
+    scaled = not (actor_main_scale(actor).is_identity() and actor_post_scale(actor).is_identity())
 
     origin = tuple(float(c) for c in poly.origin) if poly.origin is not None else (0.0, 0.0, 0.0)
     rel = (origin[0] - pp[0], origin[1] - pp[1], origin[2] - pp[2])
-    if R is not None:
-        rel = matvec(R, rel)
+    if L is not None:
+        rel = matvec(L, rel)                         # Origin is a POINT → full linear map
     base_w = (loc[0] + rel[0], loc[1] + rel[1], loc[2] + rel[2])
 
     tu = tuple(float(c) for c in poly.texture_u) if poly.texture_u is not None else None
@@ -75,7 +85,12 @@ def world_uv_frame(actor, poly):
             else newell([tuple(float(c) for c in v) for v in poly.vertices])
         size = math.sqrt(sum(c * c for c in n)) or 1.0
         tu, tv = tex_basis_default(tuple(c / size for c in n))
-    if R is not None:
-        tu, tv = tuple(matvec(R, tu)), tuple(matvec(R, tv))
+    if L is not None:
+        # Covectors: `(L⁻¹)ᵀ` under scale/sheer, `L` for a pure rotation (byte-identical old path).
+        if scaled:                                   # a zero/degenerate scale axis makes L non-invertible
+            from .transform import reject_degenerate  # → exit 2 naming the brush, not a bare inverse() crash
+            reject_degenerate(L, getattr(actor, "name", "?"))
+        axes_map = transpose(inverse(L)) if scaled else L
+        tu, tv = tuple(matvec(axes_map, tu)), tuple(matvec(axes_map, tv))
     pan = (float(poly.pan[0]), float(poly.pan[1])) if poly.pan else (0.0, 0.0)
     return base_w, tu, tv, pan

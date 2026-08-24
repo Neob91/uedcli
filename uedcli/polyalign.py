@@ -16,10 +16,11 @@ UV convention (verified from `render.rs`/`texframe.py`, not memory):
 with the texel scale carried in `|TextureU|` (a UNIT TextureU = 1 texel per world unit). The frame is
 WORLD-space: two faces are seamlessly aligned when a shared-edge world point maps to the same (U,V)
 from either face. The stored `Origin`/`TextureU`/`TextureV` are per-BRUSH (the renderer maps them to
-world via `base_w = Location + R·(Origin − PrePivot)`, `axes_w = R·axes`), so a shared world frame is
-written into each face by INVERSE-TRANSFORMING it through that face's own brush rotation — NOT by
-copying identical stored values (which would only align faces of one brush). The continuity offset
-lives in the float `Origin`, so `Pan` stays the seed's integer.
+world via `base_w = Location + L·(Origin − PrePivot)`, `axes_w = (L⁻¹)ᵀ·axes`, `L = PostScale·R·
+MainScale`), so a shared world frame is written into each face by INVERSE-TRANSFORMING it through that
+face's own brush transform — NOT by copying identical stored values (which would only align faces of
+one brush). The continuity offset lives in the float `Origin`, so `Pan` stays the seed's integer.
+Scale/sheer are honoured (a scaled brush aligns correctly), matching `texframe.world_uv_frame`.
 """
 from __future__ import annotations
 
@@ -47,6 +48,17 @@ class PolyAlignError(ValueError):
     """A user-facing alignment error (bad selection, non-coplanar set, non-ring set, …). A
     `ValueError` subclass so the dispatch layer's existing `except ValueError` prints it and exits
     non-zero — no traceback ever reaches the user (uedcli CLAUDE.md)."""
+
+
+def _uv_frame_guarded(actor, poly):
+    """`texframe.world_uv_frame`, translating a degenerate-scale `L` (a zero/sub-epsilon scale axis
+    makes the covariant axis map non-invertible) into `PolyAlignError` naming the brush — never a bare
+    `ZeroDivisionError`. (The CSG world path guards this in `brush_marshal`.)"""
+    from .transform import DegenerateTransformError
+    try:
+        return world_uv_frame(actor, poly)
+    except DegenerateTransformError as e:
+        raise PolyAlignError(str(e)) from e
 
 
 # --------------------------------------------------------------------- tiny vector helpers
@@ -90,18 +102,17 @@ def _centroid(verts):
 # --------------------------------------------------------------------- world geometry
 
 def _world_verts(actor: Actor, poly) -> list[tuple[float, float, float]]:
-    """A poly's vertices in WORLD space, using the SAME rotation-only transform as
-    `texframe.world_uv_frame` (`Location + R·(v − PrePivot)`), so the UV frame and the
-    vertices it is measured against stay mutually consistent. (Scale is not applied — matching
-    `world_uv_frame`; a scaled textured brush is a known out-of-scope edge case, see the module
-    doc + inbox follow-up.)"""
-    R = rotation.actor_matrix(actor)
+    """A poly's vertices in WORLD space, using the SAME full linear map `L = PostScale·R·MainScale`
+    as `texframe.world_uv_frame` (`Location + L·(v − PrePivot)`), so the UV frame and the vertices it
+    is measured against stay mutually consistent — including on a scaled/sheared brush. `L=None`
+    (unscaled+unrotated) keeps the byte-identical fast path."""
+    L = rotation.actor_linear(actor)
     pp = rotation.actor_prepivot(actor)
     loc = actor.location or (Decimal(0), Decimal(0), Decimal(0))
     lx, ly, lz = float(loc[0]), float(loc[1]), float(loc[2])
     out = []
     for v in poly.vertices:
-        w = rotation.local_offset(R, pp, v)
+        w = rotation.local_offset(L, pp, v)
         # float() each addend independently — `local_offset` may return Decimals (None-rotation fast
         # path) or floats, so coerce before adding to `loc` to avoid a Decimal+float TypeError.
         out.append((lx + float(w[0]), ly + float(w[1]), lz + float(w[2])))
@@ -119,21 +130,37 @@ def _world_normal(actor: Actor, poly, ref: str) -> tuple[float, float, float]:
 
 def _write_world_frame(actor: Actor, poly, base_w, tu_w, tv_w, pan) -> None:
     """Write a WORLD texture frame `(base_w, tu_w, tv_w, pan)` into `poly` by inverse-transforming
-    through `actor`'s own rotation — the exact inverse of `world_uv_frame`
-    (`Origin = R⁻¹·(base_w − Location) + PrePivot`, `TextureU/V = R⁻¹·axes_w`). For an unrotated
-    brush R is identity and this is a direct copy. `Pan` is written as the seed's integer."""
-    R = rotation.actor_matrix(actor)
+    through `actor`'s own linear map `L = PostScale·R·MainScale` — the exact inverse of
+    `world_uv_frame`: the POINT `Origin = L⁻¹·(base_w − Location) + PrePivot`, and the COVECTORS
+    `TextureU/V = Lᵀ·axes_w` (`Lᵀ` inverts the forward `(L⁻¹)ᵀ`). Unscaled+unrotated (L=None) is a
+    direct copy; a pure rotation keeps the old `R⁻¹`-for-both path byte-for-byte (`Rᵀ = R⁻¹`).
+    `Pan` is written as the seed's integer."""
+    L = rotation.actor_linear(actor)
+    scaled = not (rotation.actor_main_scale(actor).is_identity()
+                  and rotation.actor_post_scale(actor).is_identity())
+    if scaled:                                       # degenerate L → the inverse() below crashes; exit 2
+        from .transform import DegenerateTransformError, reject_degenerate
+        try:
+            reject_degenerate(L, getattr(actor, "name", "?"))
+        except DegenerateTransformError as e:
+            raise PolyAlignError(str(e)) from e
     pp = tuple(float(c) for c in rotation.actor_prepivot(actor))
     loc = tuple(float(c) for c in (actor.location or (0, 0, 0)))
     rel = _sub(base_w, loc)
-    if R is None:
+    if L is None:
         origin, tu, tv = (rel[0] + pp[0], rel[1] + pp[1], rel[2] + pp[2]), tu_w, tv_w
-    else:
-        rinv = rotation.inverse(R)
+    elif not scaled:
+        rinv = rotation.inverse(L)                   # L == R; `R⁻¹` for point AND axes (old path)
         ro = rotation.matvec(rinv, rel)
         origin = (ro[0] + pp[0], ro[1] + pp[1], ro[2] + pp[2])
         tu = rotation.matvec(rinv, tu_w)
         tv = rotation.matvec(rinv, tv_w)
+    else:
+        ro = rotation.matvec(rotation.inverse(L), rel)   # POINT → L⁻¹
+        origin = (ro[0] + pp[0], ro[1] + pp[1], ro[2] + pp[2])
+        lt = rotation.transpose(L)                       # COVECTORS → Lᵀ (inverse of (L⁻¹)ᵀ)
+        tu = rotation.matvec(lt, tu_w)
+        tv = rotation.matvec(lt, tv_w)
     poly.origin = (float(origin[0]), float(origin[1]), float(origin[2]))
     poly.texture_u = (float(tu[0]), float(tu[1]), float(tu[2]))
     poly.texture_v = (float(tv[0]), float(tv[1]), float(tv[2]))
@@ -253,7 +280,7 @@ def _coplanar_align(level: Level, targets, mode: str, fresh_frame: bool) -> list
         base_w = _centroid(_world_verts(seed_actor, seed_poly))
         pan = (0, 0)
     else:
-        base_w, tu_w, tv_w, pan = world_uv_frame(seed_actor, seed_poly)
+        base_w, tu_w, tv_w, pan = _uv_frame_guarded(seed_actor, seed_poly)
     for bn, i, a, p in faces:
         _write_world_frame(a, p, base_w, tu_w, tv_w, pan)
     return sorted({bn for bn, _ in targets})
@@ -326,7 +353,7 @@ def _ring_align(level: Level, targets, fresh_frame: bool, fit_perimeter: bool) -
         pan = (0, 0)
         tv_w = axis
     else:
-        base0, tu0, tv0, pan = world_uv_frame(actor, faces[0][1])
+        base0, tu0, tv0, pan = _uv_frame_guarded(actor, faces[0][1])
         t_hat = _unit(_cross(axis, normals[0]))          # seed's in-plane tangent (⊥ axis)
         density_u = math.hypot(_dot(tu0, t_hat), _dot(tv0, t_hat)) or 1.0
         density_v = math.hypot(_dot(tu0, axis), _dot(tv0, axis)) or 1.0
@@ -413,7 +440,7 @@ def face_uv(actor: Actor, poly, world_point) -> tuple[float, float]:
     """The (U,V) texel coordinate a world point maps to under `poly`'s stored frame, via the canonical
     convention `U=(P−Origin)·TextureU+PanU`. Reuses `world_uv_frame` (the renderer's frame), so a
     test can assert seam continuity by comparing this across the two faces sharing an edge."""
-    base_w, tu_w, tv_w, pan = world_uv_frame(actor, poly)
+    base_w, tu_w, tv_w, pan = _uv_frame_guarded(actor, poly)
     p = tuple(float(c) for c in world_point)
     rel = _sub(p, base_w)
     return (_dot(rel, tu_w) + pan[0], _dot(rel, tv_w) + pan[1])

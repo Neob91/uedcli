@@ -10,12 +10,13 @@ rasterizes each SHOT pose to an RGB buffer that Pillow encodes as PNG.
 Geometry marshals through the SHARED `brush_marshal._build_brush_input` (`_marshal_brush` is a
 thin wrapper): a rotated/scaled/mirrored/sheared brush bakes its full linear map `L` into the CSG
 world transform and renders (a degenerate/sheared-singular scale exits 2, named). Draft-validated
-offline against `rotation.world_vertices`, not editor goldens. UV stays rotation-only for now
-(textures slide on scaled faces until the covariant-UV follow-on).
+offline against `rotation.world_vertices`, not editor goldens. UV is SCALE-AWARE: the frame uses the
+same full `L` so textures sit correctly on scaled/sheared/mirrored faces.
 
 The per-surf UV frame is computed HERE, Python-side, from the source poly's authored
-`Origin`/`TextureU`/`TextureV`/`Pan` (`base_w = Location + R·(Origin − PrePivot)`,
-`axes_w = R·axes`) — the built surf's texture vectors are NEVER read (the build synthesizes
+`Origin`/`TextureU`/`TextureV`/`Pan` (`base_w = Location + L·(Origin − PrePivot)`,
+`axes_w = (L⁻¹)ᵀ·axes`, `L = PostScale·R·MainScale`) — the built surf's texture vectors are NEVER read
+(the build synthesizes
 default axes that ignore authored alignment, and Pan doesn't survive the build at all;
 spec §5). The function is `texframe.world_uv_frame`, shared with the `brush poly align` verbs
 (`polyalign.py`), so the two cannot disagree about where a texture sits.
@@ -33,6 +34,7 @@ from .normalize import is_builder_brush
 from .preview_shots import ResolvedShot, Shot, resolve_pose, shot_filename
 from .rotation import (actor_linear, actor_prepivot, deg_to_uu, euler_to_matrix_uu, matvec)
 from .texframe import poly_flags_int, world_uv_frame
+from .transform import DegenerateTransformError
 from .utexture import TextureError, TextureResolver
 
 PF_INVISIBLE = 0x1
@@ -280,7 +282,10 @@ def build_scene(level, search_files, index) -> tuple[list, list]:
         if flags & PF_INVISIBLE:
             return                                       # dropped Python-side (spec §5)
         if actor is not None and poly is not None:
-            base_w, tu, tv, pan = world_uv_frame(actor, poly)
+            try:
+                base_w, tu, tv, pan = world_uv_frame(actor, poly)
+            except DegenerateTransformError as e:        # degenerate-scale mover/brush → exit 2 (spec §7)
+                raise NativePreviewError(str(e)) from e
             tex_index = textures.index_for(poly.texture)
         else:
             base_w, tu, tv, pan = (0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0)

@@ -94,6 +94,60 @@ def test_uv_frame_zero_axes_seed_from_THE_WINDING_when_normal_is_absent():
     assert tu == pytest.approx(exp_u) and tv == pytest.approx(exp_v)
 
 
+def test_uv_frame_unscaled_rotated_is_byte_identical_to_rotation_only():
+    """The load-bearing invariant of the scale-aware rewrite: with NO scale, the frame must equal the
+    old rotation-only output BIT-FOR-BIT — base `Location + R·(Origin−PrePivot)`, axes `R·axis` (NOT
+    the covariant `(L⁻¹)ᵀ`, which differs from `R` at ~1e-7 for a GMath-table R). Every existing
+    preview/polyalign golden depends on this, so it is pinned by exact `==`, not `approx`."""
+    from uedcli import rotation
+    actor, poly = _quad_poly()
+    actor.location = (Decimal(100), Decimal(200), Decimal(50))
+    set_prop(actor, "Rotation", "(Yaw=9000)")            # non-cardinal, so R⁻¹ᵀ ≠ R numerically
+    set_prop(actor, "PrePivot", "(X=10.000000,Y=20.000000,Z=30.000000)")
+    poly.origin = (12.0, 24.0, 36.0)
+    poly.texture_u = (1.0, 0.0, 0.0)
+    poly.texture_v = (0.0, 0.0, 1.0)
+    base, tu, tv, _ = world_uv_frame(actor, poly)
+
+    R = rotation.actor_matrix(actor)
+    rel = rotation.matvec(R, (12.0 - 10.0, 24.0 - 20.0, 36.0 - 30.0))
+    assert base == (100.0 + rel[0], 200.0 + rel[1], 50.0 + rel[2])   # exact, not approx
+    assert tu == tuple(rotation.matvec(R, (1.0, 0.0, 0.0)))
+    assert tv == tuple(rotation.matvec(R, (0.0, 0.0, 1.0)))
+
+
+def test_uv_frame_scaled_origin_is_a_point_axes_are_covectors():
+    """A scaled brush: the Origin transforms as a POINT by `L` (density stretches with the geometry),
+    while `TextureU`/`TextureV` transform as COVECTORS by `(L⁻¹)ᵀ` (magnitude shrinks so texel density
+    stays fixed). MainScale X=2 ⇒ base X doubles, world TextureU halves."""
+    from uedcli.transform import FScale
+    actor, poly = _quad_poly()
+    actor.main_scale = FScale(scale=(Decimal(2), Decimal(1), Decimal(1)))
+    poly.origin = (10.0, 0.0, 0.0)
+    poly.texture_u = (1.0, 0.0, 0.0)
+    poly.texture_v = (0.0, 1.0, 0.0)
+    poly.pan = (0, 0)
+    base, tu, tv, _ = world_uv_frame(actor, poly)
+    assert base == pytest.approx((20.0, 0.0, 0.0), abs=1e-9)     # Origin·L (point) — X doubled
+    assert tu == pytest.approx((0.5, 0.0, 0.0), abs=1e-9)        # (L⁻¹)ᵀ·U (covector) — X halved
+    assert tv == pytest.approx((0.0, 1.0, 0.0), abs=1e-9)
+
+
+def test_uv_frame_degenerate_scale_raises_naming_the_brush():
+    """A zero (degenerate) scale axis makes `L` non-invertible, so the covariant axis map can't be
+    built — `world_uv_frame` raises `DegenerateTransformError` naming the brush (→ dispatch exit 2),
+    never a bare `ZeroDivisionError`. Guards the mover + `brush poly align` callers (the CSG world path
+    already guards this in `brush_marshal`)."""
+    from uedcli.transform import DegenerateTransformError, FScale
+    actor, poly = _quad_poly("Flat")
+    actor.main_scale = FScale(scale=(Decimal(0), Decimal(1), Decimal(1)))
+    poly.origin = (1.0, 0.0, 0.0)
+    poly.texture_u = (1.0, 0.0, 0.0)
+    poly.texture_v = (0.0, 1.0, 0.0)
+    with pytest.raises(DegenerateTransformError, match="Flat.*non-invertible"):
+        world_uv_frame(actor, poly)
+
+
 # ------------------------------------------------------------ actor `PolyFlags`
 
 
@@ -133,15 +187,17 @@ def test_texframe_source_names_only_stdlib_rotation_and_builders():
     converse: a direct import the subprocess test would miss because it is function-local and never
     executed.
 
-    `rotation` is REQUIRED, not optional: `world_uv_frame` calls
-    `actor_prepivot`/`actor_matrix`/`matvec`. If this fails, move the offending import out — do NOT
-    thread the matrices in as parameters, because `world_uv_frame`'s signature is what stops this
-    tier and `--native` drifting apart."""
+    `rotation` and `transform` are REQUIRED, not optional: `world_uv_frame` calls
+    `actor_prepivot`/`actor_linear`/`matvec`/`inverse`/`transpose` and, for the degenerate-scale guard,
+    `transform.reject_degenerate` (both pure-Python, same no-native/no-game tier). If this fails, move
+    the offending import out — do NOT thread the matrices in as parameters, because `world_uv_frame`'s
+    signature is what stops this tier and `--native` drifting apart."""
     mods = _imported_modules(pathlib.Path(texframe.__file__))
     # An exact set, so it also excludes the two the plan names: `preview_native` (drags in
     # `uedcli_native` + the texture resolver) and `utexture` (needs a game install). Separate
     # asserts for those two could never fail on their own.
-    assert {m for m in mods if m.split(".")[0] == "uedcli"} == {"uedcli.rotation", "uedcli.builders"}
+    assert ({m for m in mods if m.split(".")[0] == "uedcli"}
+            == {"uedcli.rotation", "uedcli.builders", "uedcli.transform"})
     assert {m.split(".")[0] for m in mods} - {"uedcli"} <= set(sys.stdlib_module_names)
 
 
