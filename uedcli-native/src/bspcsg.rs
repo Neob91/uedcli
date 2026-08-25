@@ -41,7 +41,7 @@ const F_COSPATIAL_FACING_IN: i32 = 4;
 // re-raw-zones/findbestsplit-params-decode.md): bspRepartition pushes BalancePacked=0xc, Opt=GOOD(1).
 //   Balance    = 0xc & 0xff        = 12
 //   PortalBias = (0xc >> 8) & 0xff = 0
-//   Opt=GOOD   => candidate/counting stride Inc = max(NumPolys/10, 1)  (OPTIMAL would be stride 1).
+//   Opt=GOOD   => candidate/counting stride Inc = max(NumPolys/20, 1)  (OPTIMAL would be stride 1).
 const BALANCE: i32 = 12;
 const PORTAL_BIAS: i32 = 0;
 
@@ -1316,15 +1316,21 @@ fn build_brush_temp_bsp(temp_polys: &[FPoly]) -> Result<Model, BuildError> {
 /// score (no `SPLIT_WEIGHT` deviation) — required for byte-identity of the rebuilt tree.
 ///
 /// `opt` selects the candidate-search stride (applied to BOTH the outer candidate loop AND the inner
-/// front/back/split counting loop — decode `0x3369e imul 0x66666667; sar 3` = integer `NumPolys/10`,
-/// `0x336bd cmovle 1`): `Opt::Good` = `Inc = max(NumPolys/10, 1)` (the repartition path);
+/// front/back/split counting loop — decode `0x3369e imul 0x66666667; sar 3` = integer `NumPolys/20`,
+/// `0x336bd cmovle 1`): `Opt::Good` = `Inc = max(NumPolys/20, 1)` (the repartition path);
 /// `Opt::Lame` = `Inc = max(NumPolys/4, 1)` (the temp-brush convex partition — LAME per
 /// findbestsplit-params-decode.md Evidence 4).  With `Inc>1` the returned `best` is the strided
 /// winner index used directly as the splitter — the engine likewise splits on the strided winner
 /// and then partitions ALL polys; only the SEARCH strides.
 fn find_best_split_exact(polys: &[FPoly], balance: i32, portal_bias: i32, opt: Opt) -> usize {
-    let structural = |pf: u32| (pf & 0x28) != 0 && (pf & csg::PF_PORTAL) == 0;
-    let all_structural = polys.iter().all(|p| structural(p.poly_flags));
+    // Pre-pass (`0x336cb`..`0x336ef`): `all_structural` = every poly carries the `0x28`
+    // (semisolid|notsolid) mask.  It tests the mask ALONE (`test byte [eax+0x1b0],0x28`) — being a
+    // portal exempts a poly from the per-candidate skip below, NOT from this pre-pass.
+    let is_structural = |pf: u32| (pf & 0x28) != 0;
+    let all_structural = polys.iter().all(|p| is_structural(p.poly_flags));
+    // Per-candidate skip (`0x3374b`..`0x33760`): a structural poly is skipped unless it is a portal
+    // or the whole list is structural.
+    let is_eligible = |pf: u32| !is_structural(pf) || (pf & csg::PF_PORTAL) != 0 || all_structural;
     if polys.len() == 1 {
         return 0;
     }
@@ -1334,13 +1340,18 @@ fn find_best_split_exact(polys: &[FPoly], balance: i32, portal_bias: i32, opt: O
     let pbias = portal_bias as f32 / 100.0;
     let mut best = usize::MAX;
     let mut best_score = f32::INFINITY;
-    let mut i = 0;
-    while i < polys.len() {
+    // The candidate loop walks SLOTS, not a plain `(0..n).step_by(inc)`.  Slot `k` spans
+    // `[k*inc, (k+1)*inc)` and the candidate is the FIRST ELIGIBLE poly in that window: an
+    // ineligible one advances WITHIN the window (`0x33760 je 0x33734`, back to `inc esi`), and the
+    // slot only ends when `esi` reaches the running threshold `[ebp-0x24]` (`0x3373b`), which the
+    // loop-back at `0x338c1` then uses as the next slot's start.
+    let mut slot = 0;
+    while slot < polys.len() {
+        let window_end = (slot + inc).min(polys.len());
+        let cand_i = (slot..window_end).find(|&k| is_eligible(polys[k].poly_flags));
+        slot += inc;
+        let Some(i) = cand_i else { continue };
         let cand = &polys[i];
-        if structural(cand.poly_flags) && !all_structural {
-            i += inc;
-            continue;
-        }
         let cand_portal = (cand.poly_flags & csg::PF_PORTAL) != 0;
         let (mut front, mut back, mut splits) = (0i32, 0i32, 0f32);
         let mut j = 0;
@@ -1372,7 +1383,6 @@ fn find_best_split_exact(polys: &[FPoly], balance: i32, portal_bias: i32, opt: O
             best_score = score;
             best = i;
         }
-        i += inc;
     }
     if best == usize::MAX {
         0
@@ -2836,6 +2846,43 @@ mod tests {
             ni = child;
         }
         true
+    }
+
+    #[test]
+    fn candidate_scan_reaches_past_a_structural_poly_inside_its_slot() {
+        // 40 parallel YZ quads, so no candidate ever splits another and the score is 12*|F-B|.
+        // GOOD stride = 40/20 = 2, so the candidate slots are [0,2), [2,4), … and only the
+        // even indices are slot boundaries.  Poly 21 sits at x=19 — the median of the 20
+        // even-indexed polys the inner loop samples — so it alone scores 0; every even
+        // candidate is excluded from its own sample and so scores at least 12.  Poly 20, its
+        // slot's boundary, is NotSolid (`0x08`) and therefore skipped as a candidate: reaching
+        // poly 21 requires scanning forward INSIDE slot 10 (`Editor.dll 0x33760 je 0x33734`).
+        // Stepping to the next slot on a skip instead picks an even index.
+        let quad = |x: f32| {
+            let mut p = FPoly::new(vec![
+                Vec3::new(x, -10.0, -10.0),
+                Vec3::new(x, 10.0, -10.0),
+                Vec3::new(x, 10.0, 10.0),
+                Vec3::new(x, -10.0, 10.0),
+            ]);
+            p.normal = Vec3::new(1.0, 0.0, 0.0);
+            p.base = Vec3::new(x, 0.0, 0.0);
+            p
+        };
+        let mut polys: Vec<FPoly> = (0..40).map(|i| quad(i as f32)).collect();
+        polys.swap(19, 21); // put the median plane x=19 at an ODD index, off every slot boundary
+        polys[20].poly_flags = 0x08;
+        assert_eq!(find_best_split_exact(&polys, 12, 0, Opt::Good), 21);
+
+        // The pre-pass tests the `0x28` mask alone: with every poly structural, `all_structural`
+        // holds even though one is a portal, so all 40 are eligible again and the winner returns
+        // to the score-12 tie at the earliest slot boundary.  Conjoining "not a portal" into the
+        // pre-pass would leave only the portal eligible.
+        for p in polys.iter_mut() {
+            p.poly_flags = 0x08;
+        }
+        polys[30].poly_flags = 0x08 | csg::PF_PORTAL;
+        assert_eq!(find_best_split_exact(&polys, 12, 0, Opt::Good), 18);
     }
 
     /// §92 §30 SEED FIX regression — the unit changed is `bsp_filter_fpoly`'s empty-tree branch.

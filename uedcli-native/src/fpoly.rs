@@ -45,6 +45,19 @@ pub fn safe_normal_slow(v: &Vec3) -> Option<Vec3> {
     Some(Vec3::new(v.x * inv, v.y * inv, v.z * inv))
 }
 
+/// `FLinePlaneIntersection(P1, P2, PlaneBase, PlaneNormal)` (`Engine.dll 0x1506f0`) — where the
+/// segment `P1→P2` meets the plane.  The engine derives the parameter from two FRESH dot products,
+/// `t = ((Base-P1)·N) / ((P2-P1)·N)` with one `divss` (`0x150780`), not from the two vertices'
+/// already-computed signed distances.  The two forms are algebraically equal but cancel in
+/// different places — this one dots fresh coordinate differences where the other subtracts two
+/// rounded plane distances — so they part in the low bits at world scale, and the cut vertex is
+/// stored.
+fn line_plane_intersection(p1: &Vec3, p2: &Vec3, base: &Vec3, normal: &Vec3) -> Vec3 {
+    let dir = p2.sub(p1);
+    let t = base.sub(p1).dot(normal) / dir.dot(normal);
+    Vec3::new(p1.x + dir.x * t, p1.y + dir.y * t, p1.z + dir.z * t)
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Split {
     Front,
@@ -271,44 +284,60 @@ impl FPoly {
             return Split::Front;
         }
 
-        // straddles -> cut
+        // straddles -> cut (`Engine.dll 0x151b40`..`0x151ed8`)
         let n = self.verts.len();
         let mut front = self.empty_copy();
         let mut back = self.empty_copy();
-        let side = |d: f32| -> i32 {
+        // A vertex inside the ±T band gets no side of its own: it INHERITS the running side
+        // (`0x151e47 mov [ebp-0x1c], ecx` — `Status = PrevStatus`), so it joins one ring, never
+        // both.  The classify pre-pass leaves the last vertex's side in `PrevStatus`
+        // (`0x151b34`), which is what the wrap-around edge is compared against.
+        const FRONT: u8 = 0;
+        const BACK: u8 = 1;
+        let side = |d: f32, prev: u8| -> u8 {
             if d > t {
-                0
+                FRONT
             } else if d < -t {
-                1
+                BACK
             } else {
-                2
+                prev
             }
         };
+        let mut prev_status = 2u8; // V_EITHER, the pre-pass seed (`0x1518f7 mov edi,2`)
+        for d in &dists {
+            prev_status = side(*d, prev_status);
+        }
+        let mut prev_i = n - 1;
         for i in 0..n {
-            let prev = self.verts[(i + n - 1) % n];
-            let cur = self.verts[i];
-            let prev_d = dists[(i + n - 1) % n];
-            let this_d = dists[i];
-            let ps = side(prev_d);
-            let cs = side(this_d);
-            if (ps == 0 && cs == 1) || (ps == 1 && cs == 0) {
-                let f = prev_d / (prev_d - this_d);
-                let inter = Vec3::new(
-                    prev.x + (cur.x - prev.x) * f,
-                    prev.y + (cur.y - prev.y) * f,
-                    prev.z + (cur.z - prev.z) * f,
-                );
-                front.verts.push(inter);
-                back.verts.push(inter);
-            }
-            match cs {
-                0 => front.verts.push(cur),
-                1 => back.verts.push(cur),
-                _ => {
-                    front.verts.push(cur);
-                    back.verts.push(cur);
+            let status = side(dists[i], prev_status);
+            if status != prev_status {
+                // Crossing.  When the PREVIOUS vertex is itself in the band it IS the cut point
+                // (`0x151c97`: `-T <= PrevDist < T`), and since it already sits in the ring it
+                // inherited, it is added to the NEW side only — not to both.
+                // The binary has a third arm first (`0x151be7`, "the CURRENT vertex is in the
+                // band → it is the cut point"): dead code, because an in-band vertex inherits
+                // `PrevStatus` and so can never reach a `status != prev_status` branch.
+                if dists[prev_i] >= -t && dists[prev_i] < t {
+                    let v = self.verts[prev_i];
+                    if status == FRONT {
+                        front.verts.push(v);
+                    } else {
+                        back.verts.push(v);
+                    }
+                } else {
+                    let inter =
+                        line_plane_intersection(&self.verts[prev_i], &self.verts[i], base, normal);
+                    front.verts.push(inter);
+                    back.verts.push(inter);
                 }
             }
+            if status == FRONT {
+                front.verts.push(self.verts[i]);
+            } else {
+                back.verts.push(self.verts[i]);
+            }
+            prev_status = status;
+            prev_i = i;
         }
         front.fix();
         back.fix();
@@ -525,6 +554,36 @@ mod tests {
             Split::Split(front, back) => {
                 assert!(front.verts.len() >= 3, "front {:?}", front.verts);
                 assert!(back.verts.len() >= 3, "back {:?}", back.verts);
+            }
+            other => panic!("expected Split, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn on_plane_vertex_joins_one_fragment_not_both() {
+        // A vertex inside the ±0.25 band takes the running side (`Engine.dll 0x151e47`), so it
+        // lands in ONE fragment.  Here the on-plane vertex (0,0,0) sits between two front
+        // vertices, so both it and its two neighbours go front and the back fragment is the bare
+        // triangle below the plane.  Copying the vertex into BOTH rings instead leaves a colinear
+        // extra vertex in the back ring that `Fix` cannot drop (it is not a duplicate).
+        let p = FPoly::new(vec![
+            Vec3::new(-10.0, 0.0, 10.0),
+            Vec3::new(0.0, 0.0, 0.0),
+            Vec3::new(10.0, 0.0, 10.0),
+            Vec3::new(0.0, 0.0, -10.0),
+        ]);
+        match p.split_with_plane(&Vec3::new(0.0, 0.0, 0.0), &Vec3::new(0.0, 0.0, 1.0), false) {
+            Split::Split(front, back) => {
+                assert_eq!(front.verts.len(), 5, "front {:?}", front.verts);
+                assert_eq!(back.verts.len(), 3, "back {:?}", back.verts);
+                // The two cut points, from `line_plane_intersection` — halfway along each of the
+                // two crossing edges.
+                assert_eq!(
+                    (back.verts[0].x, back.verts[0].z, back.verts[1].x, back.verts[1].z),
+                    (-5.0, 0.0, 5.0, 0.0),
+                    "cut points {:?}",
+                    back.verts
+                );
             }
             other => panic!("expected Split, got {:?}", other),
         }

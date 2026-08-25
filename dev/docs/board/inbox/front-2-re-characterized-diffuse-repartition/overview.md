@@ -105,6 +105,11 @@ whether orphan-count parity is achievable at all without first closing the ~7% s
 
 ---
 
+*(The two follow-ups below were run independently and in parallel, both starting from the "before"
+baseline above — neither had seen the other's fix. They touch disjoint code
+(`bspoptgeom.rs` vs `bspcsg.rs`/`fpoly.rs`) and both are landed; a future re-measurement with both
+fixes applied together has not been run yet.)*
+
 ## Follow-up (2026-08-25): live optgeom probe run — amplification hypothesis refuted; ring-cap divergence found and fixed
 
 New probe `harness/editor-tree-oracle/bspopt_insert_unatco.py` (inserter `0x31920` entry, full-map
@@ -146,3 +151,73 @@ sequence. Both live entirely upstream of optgeom.
 
 Repro: UNATCO trunk re-ingested at `_scratch/unatco/uedcli/maps/unatco` (`ingest_dx_trunk.py`, now
 path-portable); native NINS log byte-identical across runs and across the trunk re-ingest.
+## Follow-up (2026-08-25): half the divergence WAS a single bug — `FindBestSplit`'s candidate loop
+
+Static line-by-line audit of `find_best_split_exact` (`uedcli-native/src/bspcsg.rs`) against a
+fresh disassembly of `FindBestSplit` (`Editor.dll 0x335d0`, read this session, not taken from the
+spec). Two deviations, both in candidate SELECTION, both dead code on the castle and live on
+UNATCO:
+
+1. **The candidate loop skipped whole slots.** The engine's loop walks slots `[k*inc, (k+1)*inc)`
+   and takes the FIRST ELIGIBLE poly in the window: an ineligible (structural non-portal) candidate
+   advances WITHIN the window (`0x33760 je 0x33734`, back to `inc esi`), and only reaching the
+   running threshold `[ebp-0x24]` ends the slot (`0x3373b`; `0x338c1` then starts the next slot at
+   that threshold). Native stepped straight to the next slot boundary instead, so every candidate
+   sitting behind a structural poly at a slot boundary was never scored — native's candidate set was
+   a strict subset of the engine's.
+2. **`all_structural` was computed with the wrong predicate.** The pre-pass (`0x336cb`..`0x336ef`)
+   tests the `0x28` mask ALONE; native also required non-portal, so a list of all-structural polys
+   containing a portal came out `false` where the engine has `true`. No measurable effect on UNATCO
+   (it needs a sublist where every poly carries `0x28`), but it is what the binary does.
+
+**Why the castle never saw it:** if no poly carries `0x28`, nothing is ever skipped, so the window
+scan degenerates to the slot boundary and both deviations are provably no-ops — and the castle has 0
+detail brushes (per the Front-1 done item; the castle trunk and `Test_Castle.dx` are not present in
+this environment, so the 1156/1156 castle gate could NOT be re-run here — it should be re-run
+wherever they live). UNATCO has 377 detail brushes, and the repartition stride is `NumPolys/20` —
+122 at the root — so at UNATCO scale whole 122-wide candidate windows were being dropped.
+
+**Result** (same measurement as above: full 734-brush build vs `/tmp/UEDGolden_unatco_full.dx`):
+
+| | shared | only-native | only-editor | distinct only-nat / only-ed | nodes | live verts |
+|---|---|---|---|---|---|---|
+| before | 5824 | 423 | 490 | 264 / 266 | 6247 | 28506 |
+| after  | 6116 | 250 | 198 | 156 / 146 | 6366 | 29046 |
+| golden | — | — | — | — | 6314 | 28785 |
+
+Total node disagreement **913 → 448 (-51%)**; distinct disagreeing planes 530 → 302. Node count
+moved from -1.1% to +0.8% (sign flip, same magnitude); `surfs` and `vectors` stay EXACT; `Verts`
+pool worsened 93187 → 95154 (still the orphan-garbage amplification this item describes, not live
+topology). Front-1's byte-identical pre-repartition committed tree is UNAFFECTED
+(`committed_tree_diff.py` vs the cached `editor-struct-unatco-762.log`: 6368/6368, 0 structural
+nodes, the same 81 w-twins). `cargo test --release` 53/53, including a new regression test that
+fails against the old loop.
+
+Also fixed in the same pass, from the `SplitWithPlane` disassembly (`Engine.dll 0x1518b0`): a
+vertex inside the ±0.25 band takes the running side (`0x151e47 Status = PrevStatus`) instead of
+being copied into BOTH fragments, and the cut point comes from `FLinePlaneIntersection`
+(`0x1506f0`, `t = ((Base-P1)·N)/((P2-P1)·N)`) rather than from the two vertices' signed distances.
+Measured effect at UNATCO scale: none (nodes 6368→6366, shared 6117→6116) — the case needs a vertex
+within 0.25 of a split plane, which grid-snapped geometry rarely produces. Kept because it is what
+the binary does; both halves are pinned by a regression test (fragment vertex counts for the band
+inheritance, the two cut coordinates for the intersection formula).
+
+**What did NOT explain anything** (checked, ruled out, with specifics): the score's float32
+op-order (`score2 = (100-Balance)*Splits` first, `|F-B|*Balance + score2` last, portal bonus
+subtracted last — native matches `0x33843`..`0x33896` term for term, and IEEE addition is
+commutative so the operand order of the final `+` cannot differ); the strict-`<` earliest-wins
+tie-break (`0x338a0 comiss; ja`); the inner classify loop's stride and its `j == i` skip
+(`0x33772`/`0x3377a`); the GOOD stride `NumPolys/20` (`imul 0x66666667; sar edx,3` — confirmed, the
+`/10` in the spec's §5.2 text is stale, §5.3 and the code have it right); non-deterministic
+iteration — there is no `HashMap`/`HashSet`/rayon anywhere in the `bspcsg.rs` repartition path
+(`build.rs`'s `find_best_split`, which does have a rayon reduce above 128 polys, is the separate
+coarse `build_geometry` heuristic with its own `SPLIT_WEIGHT`, not this path); `bsp_add_node`'s
+coplanar chaining (walks `iPlane` to the chain end, equivalent to the engine's running `iPlane`
+cursor) and its >16-vertex storage split.
+
+**Where the remaining +54 nodes could be:** both engines enter `bspMergeCoplanars` with the same
+5114 faces (counted from the two committed-tree dumps), and native's post-merge soup — the root
+`FindBestSplit` `NumPolys` — is 2504. The editor's has never been captured at UNATCO scale, and it
+is the one number that would say whether the residual sits in the soup or in `SplitPolyList`. Filed
+as `dev/docs/board/inbox/editor-unatco-repartition-soup-size-unknown`, which also records that the
+`2449` in the geometry spec is native's own old figure, not the editor's.

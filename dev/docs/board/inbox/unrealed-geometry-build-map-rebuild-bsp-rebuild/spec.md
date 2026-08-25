@@ -758,7 +758,9 @@ Signature: `FindBestSplit(NumPolys, PolyList, Optimization, BalancePortal)`.
 
 **Candidate stride `Inc`, by `Optimization`:**
 - `OPTIMAL (2)` → `Inc = 1` — try every poly, exact.
-- `GOOD (1)` → `Inc = NumPolys / 10` (signed division via the `0x66666667` magic-multiply idiom).
+- `GOOD (1)` → `Inc = NumPolys / 20` (`imul 0x66666667; sar edx,3` — the `0x66666667` magic-multiply
+  idiom shifted by 3, i.e. `/20`, NOT the `/10` a shift of 2 would give; re-read from the binary
+  2026-08-25 and corroborated live by `fbs_stride_oracle` — `NumPolys=199` gives stride 9).
 - `LAME (0)` → `Inc = NumPolys / 4`.
 - Floored at 1.
 
@@ -777,8 +779,9 @@ poly has the `0x28` mask and is not `PF_Portal` and not `all_structural`, it is 
 structural) it's eligible.
 
 **The classification inner loop steps by the SAME `Inc`** — GOOD/LAME score against a subsample of the
-other polys too; only OPTIMAL is exact. **Real-world consequence of this, live-measured on the actual
-734-brush UNATCO map's CSG-root poly soup** (`NumPolys=2449`, `stride=122` under GOOD): the sparse
+other polys too; only OPTIMAL is exact. **Real-world consequence of this, measured on the 734-brush
+UNATCO map's CSG-root poly soup** (`NumPolys=2449`, `stride=122` under GOOD — that soup was NATIVE's,
+not the editor's; the editor's UNATCO soup has never been captured): the sparse
 sample scores a horizontal-splitter candidate *worse* (score 100) than a slanted-wall candidate (score
 24), while a full stride-1 scan of the identical soup inverts the ranking (horizontal split scores
 2676, "4.6× better") — a genuine, observed failure mode of `GOOD` mode's sampling on real content, not
