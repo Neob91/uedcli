@@ -102,3 +102,47 @@ full 734-brush map.
 confirm whether the amplification hypothesis is right or whether the editor's own optgeom pass is
 *also* order-sensitive in a way that happens to match its own repartition order exactly (i.e.
 whether orphan-count parity is achievable at all without first closing the ~7% split-choice gap).
+
+---
+
+## Follow-up (2026-08-25): live optgeom probe run — amplification hypothesis refuted; ring-cap divergence found and fixed
+
+New probe `harness/editor-tree-oracle/bspopt_insert_unatco.py` (inserter `0x31920` entry, full-map
+golden, bare `MAP REBUILD`) captured every editor weld attempt in order:
+`logs/bspopt-insert-unatco.log`, 3599 attempts. Comparator: `weld_unatco_diff.py` (all numbers below
+reproduce from it).
+
+**New editor behavior found (disasm `0x31960` + live): a ring-size cap missing from spec §6.3.** The
+inserter refuses a weld when `NumVertices+1 >= 16` (debugf "Node side limit reached") — no splice, no
+live-table update. Live: 22 refusals on full UNATCO, all on rings pinned at nv=15 (its node 2 `z=240`
+x18, node 550 `x=-432` x4) — exactly the two rings uncapped native grew to 23/18. Fixed in
+`bspoptgeom.rs::add_point_link` (+ `NCAP` debug line, regression test
+`tjunction_weld_refused_at_ring_cap`). Post-fix native: 24 refusals on the same two nodes, max ring
+15 = golden's max, splices 3536→3525, verts 93187→92980; node tree unchanged (5824/423/490 — optgeom
+is downstream of repartition). `cargo test` 52/52.
+
+**Amplification hypothesis refuted.** Pass-1 orphan creation is near parity, not an amplifier:
+Σ(nv at splice) = editor 18135 (identity check: inferred pre-pass1 pool 54776 + Σ(nv+1) 21712 =
+76488, the golden pool exactly) vs native 17759. The whole +21.8% Verts gap sits BEFORE optgeom:
+pre-pass1 pool native 71696 (direct `UEDCLI_BSPCSG_PREOPT_NODES` dump) vs editor 54776 — ~+17k
+orphan slots of repartition-era ring churn, with live verts within 1%.
+
+**Walk order is not an independent defect.** Fresh disasm `0x36937-0x3693f`: the editor's pass-1
+outer loop is a plain ascending node-index walk, ascending ring positions, `prev = b ? b-1 : nv-1` —
+structurally identical to native's; on byte-identical input (castle) welds match exactly (975). At
+UNATCO scale the weld sequences differ heavily (shared welds only 13.5% positionally aligned, difflib
+0.49), but that is input-driven: 80.7%/85.0% of only-native/only-editor weld events sit on planes
+where the final trees disagree, vs 35.2% of shared welds — weld divergence is downstream of the ~7%
+repartition divergence, not a second bug.
+
+**Spec tension (spec not edited):** §6.1 says `bspRefresh` "re-packs the vertex pool"; the golden's
+own arithmetic shows 29,568 orphans in the editor's pre-pass1 pool, so the prologue
+`bspRefresh(Model, 0)` cannot be doing a full vert repack on this path.
+
+**Net read unchanged in direction, sharper in shape:** the residual is (a) the diffuse ~7%
+`FindBestSplit` disagreement, and (b) a repartition-era pool-churn history difference (+17k orphan
+slots) that `Verts` byte-parity cannot reach without reproducing the editor's exact split/copy
+sequence. Both live entirely upstream of optgeom.
+
+Repro: UNATCO trunk re-ingested at `_scratch/unatco/uedcli/maps/unatco` (`ingest_dx_trunk.py`, now
+path-portable); native NINS log byte-identical across runs and across the trunk re-ingest.

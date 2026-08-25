@@ -29,8 +29,9 @@ import argparse
 import sys
 from pathlib import Path
 
-ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedcli")
+ROOT = Path(__file__).resolve().parents[5]      # Tools/uedcli (harness/ -> spike/ -> spikes/ -> docs/ -> dev/ -> root)
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "dev/docs/spikes/2026-07-15-native-materialize/harness"))
 
 from spike_classindex import class_index  # noqa: E402  (schema-aware mover gate's index)
 from uedcli import trunk as trunk_mod                     # noqa: E402

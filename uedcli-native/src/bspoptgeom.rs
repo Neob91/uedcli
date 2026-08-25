@@ -32,10 +32,10 @@
 use crate::model::{BspVert, Model, Plane, Vec3};
 
 // Debug-only detector-stage counters (UEDCLI_OPTGEOM_DEBUG): [scans, already_vert, band_reached,
-// break_projge, capsule_fail, inserted].  Thread-local so the recursive descent can bump them.
-// The env check is cached in a OnceLock so the hot path (bumped ~200k/build) pays no getenv cost.
+// break_projge, capsule_fail, accepts, cap_refused].  Thread-local so the recursive descent can
+// bump them.  The env check is cached in a OnceLock so the hot path (~200k/build) pays no getenv.
 thread_local! {
-    static DBG_STATS: std::cell::RefCell<[u64; 6]> = const { std::cell::RefCell::new([0; 6]) };
+    static DBG_STATS: std::cell::RefCell<[u64; 7]> = const { std::cell::RefCell::new([0; 7]) };
 }
 fn dbg_on() -> bool {
     use std::sync::OnceLock;
@@ -225,8 +225,8 @@ pub fn eliminate_tjunctions(model: &mut Model) -> usize {
             inserted
         );
         eprintln!(
-            "OPTGEOM detector: ring_scans={} already_vertex={} band_reached={} break_projge={} capsule_fail={} inserts={}",
-            s[0], s[1], s[2], s[3], s[4], s[5]
+            "OPTGEOM detector: ring_scans={} already_vertex={} band_reached={} break_projge={} capsule_fail={} accepts={} cap_refused={}",
+            s[0], s[1], s[2], s[3], s[4], s[5], s[6]
         );
     }
     inserted
@@ -297,6 +297,24 @@ fn add_point_link(
             break; // corrupt coplanar chain (cycle) — bail rather than spin
         }
         if let Some(edge) = tjunction_edge(model, cur, point) {
+            // Ring-size cap (`0x31960`, disasm + live 2026-08-25): the inserter refuses when
+            // `NumVertices+1 >= 16` — debugf "Node side limit reached", NO splice and NO live-table
+            // update.  Live-confirmed on full UNATCO: 22 refusals, all on rings pinned at nv=15
+            // (`editor-tree-oracle/logs/bspopt-insert-unatco.log`); uncapped, native grew those same
+            // rings to 18/23.
+            if model.nodes[cur as usize].num_vertices + 1 >= 16 {
+                dbg_bump(6);
+                if dbg_on() {
+                    let n = &model.nodes[cur as usize];
+                    let p = &model.points[point as usize];
+                    eprintln!(
+                        "NCAP node={} edge={} point={} plane={:.4},{:.4},{:.4},{:.4} P={:.4},{:.4},{:.4}",
+                        cur, edge, point, n.plane.x, n.plane.y, n.plane.z, n.plane.w, p.x, p.y, p.z
+                    );
+                }
+                cur = model.nodes[cur as usize].i_plane;
+                continue;
+            }
             if dbg_on() {
                 let n = &model.nodes[cur as usize];
                 let p = &model.points[point as usize];
@@ -421,7 +439,7 @@ fn tjunction_edge(model: &Model, ni: i32, point: i32) -> Option<i32> {
         best = j; // accept, keep LAST ([ebp-0x34]=esi)
     }
     if best >= 0 {
-        dbg_bump(5); // inserted
+        dbg_bump(5); // detector accept (a later ring-size cap can still refuse the splice)
         Some(best)
     } else {
         None
@@ -730,6 +748,55 @@ mod tests {
             .map(|j| m.verts[(base + j) as usize].i_vertex)
             .collect();
         assert_eq!(ring, vec![0, 4, 1, 2, 3], "point 4 spliced between corners 0 and 1");
+    }
+
+    /// Build the mid-edge-weld fixture with P's ring padded to `nv` vertices (top/left edges
+    /// subdivided with colinear points).  Point index of the weldable T-vertex is `nv`.
+    fn capped_fixture(nv: i32) -> Model {
+        let mut m = Model::default();
+        let t = (nv - 5) as usize; // top-edge interior subdivisions
+        let mut pts = vec![
+            Vec3::new(0.0, 0.0, 0.0),
+            Vec3::new(20.0, 0.0, 0.0),
+            Vec3::new(20.0, 10.0, 0.0),
+        ];
+        for k in 0..t {
+            pts.push(Vec3::new(19.0 - 18.0 * (k as f32) / (t as f32 - 1.0), 10.0, 0.0));
+        }
+        pts.push(Vec3::new(0.0, 10.0, 0.0));
+        pts.push(Vec3::new(0.0, 5.0, 0.0));
+        let weld = pts.len() as i32; // == nv
+        pts.push(Vec3::new(10.0, 0.0, 0.0)); // T-vertex mid P's bottom edge
+        pts.push(Vec3::new(10.0, -10.0, 0.0));
+        pts.push(Vec3::new(5.0, -10.0, 0.0));
+        m.points = pts;
+        let pl = Plane { x: 0.0, y: 0.0, z: 1.0, w: 0.0 };
+        m.verts = (0..nv + 3).map(|i| BspVert { i_vertex: i, i_side: -1 }).collect();
+        let mut p_node = leaf_node(pl, 0, nv);
+        p_node.i_plane = 1;
+        let q_node = leaf_node(pl, nv, 3);
+        m.nodes = vec![p_node, q_node];
+        assert_eq!(weld, nv);
+        m
+    }
+
+    /// The inserter's ring-size cap (`0x31960`): a weld that would push `NumVertices` past 15 is
+    /// refused ("Node side limit reached") — no splice, no pool growth.  At nv=14 the same weld
+    /// lands (boundary control).  Live-pinned on full UNATCO: the editor refuses 22 welds, all on
+    /// rings at nv=15; uncapped native grew those rings to 18/23.
+    #[test]
+    fn tjunction_weld_refused_at_ring_cap() {
+        let mut m = capped_fixture(14);
+        let before = m.verts.len();
+        assert_eq!(eliminate_tjunctions(&mut m), 1, "nv=14 -> weld lands (15 <= cap)");
+        assert!(m.verts.len() > before);
+        assert_eq!(m.nodes[0].num_vertices, 15);
+
+        let mut m = capped_fixture(15);
+        let before = m.verts.len();
+        assert_eq!(eliminate_tjunctions(&mut m), 0, "nv=15 -> weld refused (would exceed 15)");
+        assert_eq!(m.verts.len(), before, "refusal must not touch the pool");
+        assert_eq!(m.nodes[0].num_vertices, 15);
     }
 
     /// merge_near_points is a no-op when all points are far apart.
