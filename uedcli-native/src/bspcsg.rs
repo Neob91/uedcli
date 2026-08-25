@@ -2229,21 +2229,22 @@ pub fn build_geometry_bspcsg(brushes: &[build::BrushInput]) -> Result<Model, Bui
     let mut model = Model::default();
     model.root_outside = false; // DX level: solid world, Subtract carves.
 
-    // A detail brush (2nd incremental layer, not repartitioned): Semisolid | NotSolid.
-    // EXCEPT a PORTAL brush: a portal is non-solid (NotSolid, so it carves nothing and its node is
-    // NF_NotCsg via `derive_nf`), BUT it is a STRUCTURAL SPLITTER that UnrealEd processes in the
-    // FIRST incremental `bspBrushCSG` phase — BEFORE `bspBuildFPolys`/repartition — so a portal face
-    // enters the repartition SOUP as a valid splitter candidate (`FindBestSplit` skips a `0x28`
-    // candidate only when it is `!PF_Portal`, `bspcsg.rs:1178` / §82 §4).  Native previously forced
-    // every portal into the semisolid SECOND layer (`eff_flags` NotSolid + `is_detail`), which runs
-    // AFTER repartition, so a portal never reached the soup — the committed incremental tree then
-    // dropped the portal that the editor keeps (§92 §54: Brush344, the first UNATCO detail brush, is
-    // the first (105,213] structural divergence — editor 1639 vs native 1637 committed nodes at
-    // N=106).  Treat a portal as STRUCTURAL (pass 1), keeping only genuine semisolid/nonsolid brushes
-    // in the deferred pass.  Castle-safe by construction: the castle has 0 portal (and 0 detail)
-    // brushes, so `detail_pass` is identical to the old `is_detail` there.
-    let is_portal = |b: &build::BrushInput| b.poly_flags & csg::PF_PORTAL != 0;
-    let detail_pass = |b: &build::BrushInput, pf: u32| pf & 0x28 != 0 && !is_portal(b);
+    // A detail brush (2nd incremental layer, not repartitioned) is a SEMISOLID one: semisolid has a
+    // real partial-carve effect (a distinct `leaf_func` classification table, spec.md line 445) that
+    // stays deferred pending direct evidence either way.  A NotSolid-WITHOUT-Semisolid brush — portal
+    // or not — carves nothing (`derive_nf` sets NF_NotCsg for NotSolid) and is a valid FindBestSplit
+    // candidate the real editor processes in the FIRST incremental `bspBrushCSG` phase, BEFORE
+    // `bspBuildFPolys`/repartition (`FindBestSplit` skips a `0x28` candidate only when it is
+    // `!PF_Portal`, `bspcsg.rs:1178` / §82 §4 — the split-scoring exception already assumed a NotSolid
+    // splitter can reach the soup at all).  §92 §54 first proved this for PORTAL brushes only
+    // (Brush344/UNATCO: editor 1639 vs native 1637 committed nodes at N=106).  A live N=112 UNATCO
+    // oracle capture generalizes it: `Brush416` (world-csg idx 111, `PF_NotSolid|PF_TwoSided|0x4` —
+    // an ordinary glass/window pane, NOT Portal, NOT Semisolid) contributes exactly 2 pre-repartition
+    // committed nodes in the real editor (1766 vs native's pre-fix 1764) — the same "+2 non-CSG
+    // splitter" signature as a portal.  So the true rule is NotSolid (regardless of Portal), not
+    // NotSolid&&Portal.  Castle-safe by construction: the castle has 0 detail brushes at all, so
+    // `detail_pass` is a no-op there either way.
+    let detail_pass = |_b: &build::BrushInput, pf: u32| pf & csg::PF_SEMISOLID != 0;
 
     // Resolve the per-brush effective poly_flags (Portal force: NotSolid, Semisolid cleared).
     let eff_flags = |b: &build::BrushInput| -> u32 {
@@ -2268,7 +2269,8 @@ pub fn build_geometry_bspcsg(brushes: &[build::BrushInput]) -> Result<Model, Bui
         }
     }
 
-    // Pass 1: STRUCTURAL brushes (incremental) — now INCLUDING portals (see `detail_pass`).
+    // Pass 1: STRUCTURAL brushes (incremental) — now INCLUDING any NotSolid non-semisolid brush,
+    // portal or not (see `detail_pass`).
     for (bi, b) in brushes.iter().enumerate() {
         let pf = eff_flags(b);
         if detail_pass(b, pf) {
@@ -2386,8 +2388,8 @@ pub fn build_geometry_bspcsg(brushes: &[build::BrushInput]) -> Result<Model, Bui
         bsp_cleanup(&mut model);
     }
 
-    // Pass 2: SEMISOLID / NONSOLID detail brushes (incremental, NOT repartitioned) — portals are
-    // NOT here (they were processed structurally in pass 1; `detail_pass` excludes them).
+    // Pass 2: SEMISOLID detail brushes (incremental, NOT repartitioned) — NotSolid-only brushes
+    // (portal or not) are NOT here; they were processed structurally in pass 1 (`detail_pass`).
     for (bi, b) in brushes.iter().enumerate() {
         let pf = eff_flags(b);
         if !detail_pass(b, pf) {
@@ -3392,6 +3394,79 @@ mod tests {
         assert!(
             portal_node.map_or(false, |n| n.node_flags & 1 != 0),
             "the portal node must be NF_NotCsg (carves nothing)"
+        );
+    }
+
+    /// A single-quad NotSolid sheet brush that is NOT a portal — an ordinary glass/window pane,
+    /// `PF_NotSolid|PF_TwoSided|PF_Translucent` (mirrors UNATCO `Brush416`, `PolyFlags=0x10c`, world-csg
+    /// idx 111 — §92 §54 generalization, live N=112 oracle capture 2026-08-25).
+    fn glass_sheet(hx: f32, hy: f32, loc: Vec3, oper: CsgOper) -> build::BrushInput {
+        let pf = csg::PF_NOTSOLID | 0x100 | 0x04; // NotSolid|TwoSided|Translucent, NOT Portal
+        let mut p = FPoly::new(vec![
+            Vec3::new(-hx, -hy, 0.0),
+            Vec3::new(hx, -hy, 0.0),
+            Vec3::new(hx, hy, 0.0),
+            Vec3::new(-hx, hy, 0.0),
+        ]);
+        p.normal = Vec3::new(0.0, 0.0, 1.0);
+        p.poly_flags = pf;
+        build::BrushInput {
+            polys: vec![p],
+            oper,
+            poly_flags: pf,
+            rot: [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
+            prepivot: Vec3::new(0.0, 0.0, 0.0),
+            location: loc,
+            scale: Vec3::new(1.0, 1.0, 1.0),
+            vec_xform: None,
+        }
+    }
+
+    /// §92 §54 generalization — a NotSolid brush that is NOT a portal (e.g. an ordinary glass pane)
+    /// ALSO belongs in the FIRST (structural) incremental `bspBrushCSG` pass, not the deferred
+    /// semisolid pass-2.  Proved live (not just for portals): a gdb capture of the real editor's
+    /// pre-repartition committed tree for the first 112 UNATCO world-csg brushes has 1766 nodes vs
+    /// native's pre-fix 1764 — the SAME "+2 non-CSG splitter" signature §54 found for a portal —
+    /// attributable to `Brush416` (idx 111, `PF_NotSolid|PF_TwoSided|0x4`, NOT Portal, NOT Semisolid),
+    /// the last brush the N=112 cutoff includes. Reverting `detail_pass` to `pf & 0x28 != 0 &&
+    /// !is_portal` (NotSolid-but-not-portal deferred to pass 2) routes this brush's face out of the
+    /// soup, so it never reaches the repartitioned tree — assertions (1)/(2) go RED.
+    #[test]
+    fn notsolid_non_portal_brush_enters_pass1_repartition_soup() {
+        let c = Vec3::new(0.0, 0.0, 0.0);
+        let room_only =
+            build_geometry_bspcsg(&[box_brush(256.0, 256.0, 256.0, c, CsgOper::Subtract)]).unwrap();
+        let with_glass = build_geometry_bspcsg(&[
+            box_brush(256.0, 256.0, 256.0, c, CsgOper::Subtract),
+            glass_sheet(256.0, 256.0, Vec3::new(0.0, 0.0, -256.0), CsgOper::Add),
+        ])
+        .unwrap();
+
+        // (1) The glass pane reached the repartitioned tree: a surf carries its PF_Translucent bit.
+        let glass_surf = with_glass.surfs.iter().position(|s| s.poly_flags & 0x04 != 0);
+        assert!(
+            glass_surf.is_some(),
+            "a NotSolid-but-not-portal brush must reach the repartitioned tree as a surf — it was \
+             DROPPED, so it was routed to the deferred pass-2 layer instead of the pass-1 soup"
+        );
+
+        // (2) It genuinely ADDED that surf (a pass-1 splitter contributes; a pass-2-deferred one
+        // does not, since pass 2 never repartitions).
+        assert!(
+            with_glass.surfs.len() > room_only.surfs.len(),
+            "the glass pane must add a surf over the pane-free room ({} vs {}); equal counts mean it \
+             never entered the pass-1 soup",
+            with_glass.surfs.len(),
+            room_only.surfs.len()
+        );
+
+        // (3) Carve-safety: the pane's node stays NF_NotCsg (0x01) — it partitions, but carves no
+        // solid (`derive_nf` sets NF_NotCsg from NotSolid).
+        let gs = glass_surf.unwrap() as i32;
+        let glass_node = with_glass.nodes.iter().find(|n| n.i_surf == gs);
+        assert!(
+            glass_node.map_or(false, |n| n.node_flags & 1 != 0),
+            "the glass pane's node must be NF_NotCsg (carves nothing)"
         );
     }
 

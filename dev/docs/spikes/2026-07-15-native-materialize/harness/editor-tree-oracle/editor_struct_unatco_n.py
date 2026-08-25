@@ -22,7 +22,7 @@ import sys
 import time
 from pathlib import Path
 
-ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedcli")
+ROOT = Path(__file__).resolve().parents[6]      # Tools/uedcli (editor-tree-oracle/ -> harness/ -> spike/ -> spikes/ -> docs/ -> dev/ -> root)
 HARNESS = ROOT / "dev/docs/spikes/2026-07-15-native-materialize/harness"
 HERE = HARNESS / "editor-tree-oracle"
 sys.path.insert(0, str(ROOT)); sys.path.insert(0, str(HARNESS)); sys.path.insert(0, str(HERE))
@@ -95,7 +95,12 @@ def main():
                         print(f"  WARN OBJ LOAD {p}: {exc}", flush=True)
         except Exception as exc:
             print(f"WARN ref_pkgs: {exc}", flush=True)
-        subprocess.run(["docker", "cp", str(golden), f"{container}:/work/golden.dx"], check=True)
+        # `docker cp` (either direction) remounts every one of the container's mounts read-only,
+        # which rootless docker cannot do for the `:ro` /stubs bind mount ("remount-ro … operation
+        # not permitted") — stream via `docker exec cat` instead (xfer.cp_out's fix, mirrored here
+        # since this predates that fix and both directions hit it).
+        subprocess.run(["docker", "exec", "-i", container, "bash", "-c", "cat > /work/golden.dx"],
+                       input=golden.read_bytes(), check=True)
         drv.exec(f"MAP LOAD FILE={to_z_path('/work/golden.dx')}")
         time.sleep(3.0)
         pid = O._editor_pid(container)
@@ -119,7 +124,8 @@ def main():
             if done and done != "0":
                 break
             time.sleep(1.0)
-        subprocess.run(["docker", "cp", f"{container}:/tmp/es.log", str(OUT)], check=True)
+        with open(OUT, "wb") as f:
+            subprocess.run(["docker", "exec", container, "cat", "/tmp/es.log"], check=True, stdout=f)
         nd = subprocess.run(["bash", "-c", f"grep -c '^ND ' {OUT}"], capture_output=True, text=True).stdout.strip()
         print(f"wrote {OUT} ({nd} ND lines)", flush=True)
     finally:

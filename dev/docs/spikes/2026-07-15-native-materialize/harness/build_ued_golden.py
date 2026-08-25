@@ -75,7 +75,7 @@ import sys
 import time
 from pathlib import Path
 
-ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedcli")
+ROOT = Path(__file__).resolve().parents[5]      # Tools/uedcli (harness/ -> spike/ -> spikes/ -> docs/ -> dev/ -> root)
 sys.path.insert(0, str(ROOT))
 
 from uedcli import config, trunk, xfer                          # noqa: E402
@@ -88,8 +88,8 @@ from uedcli.packages import editor_search_dirs, ensure_load     # noqa: E402
 from uedcli.writes import _re_add                               # noqa: E402
 from uedcli.uuid7 import uuid7                                  # noqa: E402
 
-DEFAULT_TRUNK = "/home/neob91/Games/LutrisDX/drive_c/DX/LUM/_scratch/unatco/uedcli/maps/unatco"
-DEFAULT_OUT = "/home/neob91/Games/LutrisDX/drive_c/DX/LUM/_scratch/uedgolden/UEDGolden_unatco.dx"
+DEFAULT_TRUNK = str(ROOT / "_scratch/unatco/uedcli/maps/unatco")
+DEFAULT_OUT = str(ROOT / "_scratch/uedgolden/UEDGolden_unatco.dx")
 
 
 def _cpu_pct(container: str) -> float:
@@ -100,7 +100,7 @@ def _cpu_pct(container: str) -> float:
     return float((r.stdout.strip().rstrip("%")) or 0.0)
 
 
-def _wait_idle(container: str, *, label: str, thresh: float = 8.0, quiet_reads: int = 8,
+def _wait_idle(container: str, *, label: str, thresh: float = 30.0, quiet_reads: int = 8,
                min_seconds: float = 0.0, timeout: float = 1800.0) -> float:
     """Block until the editor container CPU stays under `thresh`% for `quiet_reads` CONSECUTIVE
     reads (~1.5 s/read via docker stats) — the editor finished the console command — or raise
@@ -144,6 +144,10 @@ def main() -> int:
     ap.add_argument("--world-only", action="store_true",
                     help="keep only Brush + LevelInfo actors (cleanest geometry golden)")
     ap.add_argument("--no-light", action="store_true", help="skip LIGHT APPLY (unlit golden)")
+    ap.add_argument("--no-obj-load", action="store_true",
+                    help="skip OBJ LOAD of referenced texture/sound packages (geometry/BSP node "
+                         "planes do not depend on texture resolution; this environment's package "
+                         "load is extremely slow, so a geometry-only diagnostic golden can skip it)")
     ap.add_argument("--overwrite", action="store_true")
     ap.add_argument("--rebuild-timeout", type=float, default=2400.0)
     ap.add_argument("--quiet-reads", type=int, default=8,
@@ -235,8 +239,11 @@ def main() -> int:
         container = ensure_editor(ed_id, mounts=mounts, state_dir=state_dir)
         ed = Driver(container=container)
         print(f"editor up: {container}", flush=True)
-        ensure_load(ed, ref_pkgs, search_dirs=host_search_dirs, mounts=mounts)
-        _wait_idle(container, label="obj-load")
+        if args.no_obj_load:
+            print("  (--no-obj-load: skipping OBJ LOAD of referenced packages)", flush=True)
+        else:
+            ensure_load(ed, ref_pkgs, search_dirs=host_search_dirs, mounts=mounts)
+            _wait_idle(container, label="obj-load")
         ed.map_new()
         _wait_idle(container, label="map-new")
         _re_add(ed, actors)

@@ -15,13 +15,17 @@ def test_it_mints_a_work_dir_uuid_suffixed():
     assert d.startswith("/work/ucc_export-") and "." not in d.rsplit("/", 1)[-1]
 
 
-def test_cp_in_copies_host_to_a_minted_work_path_and_returns_raw_posix():
+def test_cp_in_copies_host_to_a_minted_work_path_and_returns_raw_posix(tmp_path):
+    # `docker cp`-in remounts the container's mounts :ro, which rootless docker cannot do — so
+    # cp_in streams the bytes with `docker exec … cat > path` (stdin from the host file) instead.
+    src = tmp_path / "Map.dx"
+    src.write_bytes(b"map-bytes")
     with mock.patch("uedcli.xfer.subprocess.run", autospec=True) as run:
-        cpath = xfer.cp_in("c1", "/host/abs/Map.dx", ext="dx")
+        cpath = xfer.cp_in("c1", str(src), ext="dx")
     assert cpath.startswith("/work/") and cpath.endswith(".dx")
     run.assert_called_once_with(
-        ["docker", "cp", "/host/abs/Map.dx", f"c1:{cpath}"],
-        check=True, capture_output=True, text=True, timeout=xfer.CP_TIMEOUT)
+        ["docker", "exec", "-i", "c1", "bash", "-c", f"cat > {cpath}"],
+        input=b"map-bytes", check=True, capture_output=True, timeout=xfer.CP_TIMEOUT)
 
 
 def test_cp_out_streams_container_file_to_host_via_docker_exec_cat(tmp_path):
@@ -53,9 +57,11 @@ def test_every_subprocess_call_here_passes_a_timeout(tmp_path):
     """A `docker cp`/`docker exec` with no `timeout=` parks the caller forever when dockerd hangs.
     Pinned as a property of the module rather than per-call, so a new call site cannot slip through
     unbounded."""
+    src = tmp_path / "x.dx"
+    src.write_bytes(b"x")
     with mock.patch("uedcli.xfer.subprocess.run", autospec=True) as run:
         run.return_value = mock.Mock(returncode=0)
-        xfer.cp_in("c1", "/host/x.dx", ext="dx")
+        xfer.cp_in("c1", str(src), ext="dx")
         xfer.cp_out("c1", "/work/x.dx", str(tmp_path / "y.dx"))
         xfer.remove("c1", "/work/x.dx")
     assert run.call_count == 3
@@ -63,15 +69,45 @@ def test_every_subprocess_call_here_passes_a_timeout(tmp_path):
         assert call.kwargs.get("timeout"), call
 
 
-def test_a_hung_cp_raises_a_named_driver_error_not_a_subprocess_timeout():
+def test_a_hung_cp_raises_a_named_driver_error_not_a_subprocess_timeout(tmp_path):
     import subprocess
     from uedcli.driver import DriverError
+    src = tmp_path / "x.dx"
+    src.write_bytes(b"x")
     with mock.patch("uedcli.xfer.subprocess.run", autospec=True) as run:
-        run.side_effect = subprocess.TimeoutExpired(cmd="docker cp", timeout=xfer.CP_TIMEOUT)
+        run.side_effect = subprocess.TimeoutExpired(cmd="docker exec", timeout=xfer.CP_TIMEOUT)
         try:
-            xfer.cp_in("c1", "/host/x.dx", ext="dx")
+            xfer.cp_in("c1", str(src), ext="dx")
         except DriverError as e:
-            assert "docker cp did not finish" in str(e) and "/host/x.dx" in str(e)
+            assert "docker exec cat did not finish" in str(e) and str(src) in str(e)
+        else:
+            raise AssertionError("expected DriverError")
+
+
+def test_cp_in_raises_a_named_driver_error_when_the_host_file_is_unreadable(tmp_path):
+    from uedcli.driver import DriverError
+    with mock.patch("uedcli.xfer.subprocess.run", autospec=True) as run:
+        try:
+            xfer.cp_in("c1", str(tmp_path / "missing.dx"), ext="dx")
+        except DriverError as e:
+            assert "cannot read" in str(e) and "missing.dx" in str(e)
+        else:
+            raise AssertionError("expected DriverError")
+    run.assert_not_called()
+
+
+def test_a_failed_cp_in_surfaces_dockers_stderr_in_a_named_driver_error(tmp_path):
+    import subprocess
+    from uedcli.driver import DriverError
+    src = tmp_path / "x.dx"
+    src.write_bytes(b"x")
+    err = subprocess.CalledProcessError(1, "docker exec", stderr=b"no space left on device")
+    with mock.patch("uedcli.xfer.subprocess.run", autospec=True) as run:
+        run.side_effect = err
+        try:
+            xfer.cp_in("c1", str(src), ext="dx")
+        except DriverError as e:
+            assert "docker exec cat failed" in str(e) and "no space left" in str(e)
         else:
             raise AssertionError("expected DriverError")
 

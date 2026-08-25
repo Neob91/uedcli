@@ -1,11 +1,11 @@
 """Host<->container file exchange. With the broad /repo bind mount gone (container-fs-isolation
-design), no container sees the repo tree: the target .dx is `docker cp`'d IN, results
-(verified .dx) are streamed OUT via `docker exec cat` (`docker cp`-out remounts the container's
-mounts read-only, which rootless docker cannot do for a `:ro` bind mount), and all editor scratch
-lives in the container-local /work dir that dies with the container. This module is the SOLE owner of
-/work path generation -- every path is uuid-suffixed because /work is shared by reused/standing
-containers (a fixed path would race). cp_in returns a RAW POSIX /work path; callers wrap with
-`driver.to_z_path` themselves where wine/UCC needs Z:\\ (don't bake Z:\\ in here)."""
+design), no container sees the repo tree: the target .dx is streamed IN and results (verified .dx)
+are streamed OUT, both via `docker exec cat` (`docker cp`, either direction, remounts the
+container's mounts read-only, which rootless docker cannot do for a `:ro` bind mount), and all
+editor scratch lives in the container-local /work dir that dies with the container. This module is
+the SOLE owner of /work path generation -- every path is uuid-suffixed because /work is shared by
+reused/standing containers (a fixed path would race). cp_in returns a RAW POSIX /work path; callers
+wrap with `driver.to_z_path` themselves where wine/UCC needs Z:\\ (don't bake Z:\\ in here)."""
 from __future__ import annotations
 
 import subprocess
@@ -38,27 +38,32 @@ def work_dir(stem: str) -> str:
     return f"{WORK}/{stem}-{uuid.uuid4().hex}"
 
 
-def _cp(args: list[str], what: str) -> None:
-    """One BOUNDED `docker cp`. A copy that does not finish within `CP_TIMEOUT` raises
-    `DriverError` naming what was being copied — a `RuntimeError` subclass, so the materialize /
-    preview guards already turn it into a clean `exit 2` message instead of a traceback or, as
-    before, an unbounded hang with no output."""
-    try:
-        subprocess.run(args, check=True, capture_output=True, text=True, timeout=CP_TIMEOUT)
-    except subprocess.TimeoutExpired:
-        raise DriverError(f"docker cp did not finish within {CP_TIMEOUT:.0f}s ({what}) — "
-                          f"dockerd or the container is not answering") from None
-    except subprocess.CalledProcessError as e:
-        # Surface docker's own stderr (else the caller sees only "exit status N" and can't tell a
-        # vanished container from a bad path — CLAUDE.md "error messages include the offending value").
-        raise DriverError(f"docker cp failed ({what}): {(e.stderr or '').strip() or 'no stderr'}") \
-            from None
-
 
 def cp_in(container: str, host_path: str, *, ext: str) -> str:
-    """Copy a host file into the container at a freshly-minted /work path; return that path."""
+    """Copy a host file into the container at a freshly-minted /work path; return that path.
+
+    Streams via `docker exec … bash -c "cat > path"` fed the file's bytes on stdin — NOT `docker
+    cp`. Like `cp_out`'s inbound-remount trap, `docker cp` INTO a running container also remounts
+    every one of the container's mounts read-only, which rootless docker cannot do for a `:ro`
+    bind mount (`/stubs`): `remount-ro … operation not permitted`. `docker exec cat` writes the
+    bytes with no remount, so it works under rootless and rootful alike."""
     cpath = work_path(ext)
-    _cp(["docker", "cp", host_path, f"{container}:{cpath}"], f"{host_path} → {container}:{cpath}")
+    what = f"{host_path} → {container}:{cpath}"
+    try:
+        with open(host_path, "rb") as src:
+            data = src.read()
+    except OSError as e:
+        raise DriverError(f"cannot read {host_path} ({what}): {e}") from None
+    try:
+        subprocess.run(["docker", "exec", "-i", container, "bash", "-c", f"cat > {cpath}"],
+                       input=data, check=True, capture_output=True, timeout=CP_TIMEOUT)
+    except subprocess.TimeoutExpired:
+        raise DriverError(f"docker exec cat did not finish within {CP_TIMEOUT:.0f}s ({what}) — "
+                          f"dockerd or the container is not answering") from None
+    except subprocess.CalledProcessError as e:
+        raise DriverError(f"docker exec cat failed ({what}): "
+                          f"{(e.stderr or b'').decode(errors='replace').strip() or 'no stderr'}") \
+            from None
     return cpath
 
 

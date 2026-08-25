@@ -31,26 +31,27 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import os
 import shutil
 import subprocess
 import sys
 from collections import Counter
 from pathlib import Path
 
-ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedcli")
+ROOT = Path(__file__).resolve().parents[5]      # Tools/uedcli (harness/ -> spike/ -> spikes/ -> docs/ -> dev/ -> root)
 HARNESS = ROOT / "dev/docs/spikes/2026-07-15-native-materialize/harness"
 sys.path.insert(0, str(ROOT))
-sys.path.insert(0, str(ROOT / "dev/docs/spikes/2026-06-27-decontainerize-uedcli/harness"))
 sys.path.insert(0, str(HARNESS))
 
 from spike_classindex import class_index  # noqa: E402  (schema-aware mover gate's index)
 from uedcli import trunk  # noqa: E402
 from uedcli.native import materialize as M, umodel as UM  # noqa: E402
+from uedcli.native import brush_marshal as BM  # noqa: E402  (_in_world_csg/_build_brush_input live here now)
 import uedcli_native  # noqa: E402
 import surf_class_diff as SCD  # noqa: E402
 
-FULL_TRUNK = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/_scratch/unatco/uedcli/maps/unatco")
-SUBSET_ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/_scratch/unatco-subset")
+FULL_TRUNK = Path(os.environ.get("UEDCLI_UNATCO_TRUNK", ROOT / "_scratch/unatco/uedcli/maps/unatco"))
+SUBSET_ROOT = ROOT / "_scratch/unatco-subset"
 BUILDER = HARNESS / "build_ued_golden.py"
 PYTHON = ROOT / ".venv/bin/python"
 
@@ -94,7 +95,7 @@ def build_editor_subset(n: int, force: bool = False, quiet_reads: int = 30) -> P
     subset_trunk = _make_subset_trunk(n)
     out.parent.mkdir(parents=True, exist_ok=True)
     cmd = [str(PYTHON), str(BUILDER), "--trunk", str(subset_trunk), "--out", str(out),
-           "--world-only", "--no-light", "--overwrite",
+           "--world-only", "--no-light", "--no-obj-load", "--overwrite",
            "--quiet-reads", str(quiet_reads), "--rebuild-min-seconds", "20"]
     print(f"[subset] editor-building N={n} ...", flush=True)
     r = subprocess.run(cmd, capture_output=True, text=True)
@@ -115,8 +116,8 @@ def native_surfs(n: int):
     # was the harness confound: it over-produced surfs the editor golden never had (leftover-only-
     # native ~170 at N=396, purely the mover contribution), contradicting the real build.  Take the
     # first N brush actors in trunk order, then drop the movers — matching the editor's own exclusion.
-    brushes = [nm for nm in _brush_order(level)[:n] if M._in_world_csg(level.actors[nm], class_index())]
-    bs = [M._build_brush_input(nm, level.actors[nm]) for nm in brushes]
+    brushes = [nm for nm in _brush_order(level)[:n] if BM._in_world_csg(level.actors[nm], class_index())]
+    bs = [BM._build_brush_input(nm, level.actors[nm]) for nm in brushes]
     m = uedcli_native.build_geometry_bspcsg(bs)
     body = uedcli_native.serialize_model(m)
     return UM.parse_model_body(body, 0, len(body))

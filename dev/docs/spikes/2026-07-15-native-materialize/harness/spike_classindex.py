@@ -26,10 +26,11 @@ def class_index():
     every mover."""
     global _INDEX
     if _INDEX is None:
+        import os
         from uedcli import config
         from uedcli.classindex import ClassIndex
         project = config.resolve_project(
-            cwd="/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedcli")
+            env_project=os.environ.get("UEDCLI_PROJECT"), cwd=os.getcwd())
         if project is None:
             raise RuntimeError("spike_classindex: no uedcli project resolved (need uedcli.toml)")
         user_config = config.load_user_config()

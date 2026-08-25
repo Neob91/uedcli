@@ -35,12 +35,13 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import os
 import subprocess
 import sys
 import time
 from pathlib import Path
 
-ROOT = Path("/home/neob91/Games/LutrisDX/drive_c/DX/LUM/Tools/uedcli")
+ROOT = Path(__file__).resolve().parents[6]      # Tools/uedcli (editor-tree-oracle/ -> harness/ -> spike/ -> spikes/ -> docs/ -> dev/ -> root)
 HARNESS = ROOT / "dev/docs/spikes/2026-07-15-native-materialize/harness"
 HERE = HARNESS / "editor-tree-oracle"
 sys.path.insert(0, str(ROOT))
@@ -177,7 +178,13 @@ def start_dbg_editor(container: str, mounts, state_dir: Path) -> None:
            "run", "-d", "-p", "0:6080", "--name", container,
            "-v", f"{wp_vol}:/wineprefix", *ini_mount,
            *container_assets.docker_mount_args(mounts), "uned"]
-    subprocess.run(cmd, cwd=str(ROOT / "uned"), check=True, capture_output=True, text=True)
+    # UEDCLI_STUB_CACHE must be set explicitly: the compose file's `${UEDCLI_STUB_CACHE:-${HOME}/...}`
+    # nested substitution is not supported by docker compose's interpolation (it resolves only the
+    # outer `${HOME}` and drops the trailing path), so the un-set-var fallback mounts plain `$HOME`
+    # itself as the bind source -> "mkdir $HOME: permission denied". `editor.ensure_editor` already
+    # works around this (board chore 2026-07-18); mirrored here since this call bypasses that helper.
+    env = {**os.environ, "UEDCLI_STUB_CACHE": str(config.stub_cache_root(create=True))}
+    subprocess.run(cmd, cwd=str(ROOT / "uned"), env=env, check=True, capture_output=True, text=True)
     editor_mod._wait_ready(container, 120.0)
 
 
