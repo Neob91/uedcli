@@ -1648,6 +1648,13 @@ fn make_ed_polys(model: &Model, i_node: i32, out: &mut Vec<FPoly>) {
 /// exact ORDER `bspBuild`/`SplitPolyList` then consumes (verified vs `editor_polys_oracle.py`).
 /// (The prior port clustered each whole group at its head index; that produced the right face SET
 /// but the wrong ORDER, leaving `node_diff` prefix stuck at 0.)
+///
+/// The candidate (`j`) scan does NOT skip a poly already claimed by an earlier group: the engine's
+/// inner loop (`0x100362fc`-`0x1003641d`) tests `iLink`/coplanar/normal/UV against `Polys[j]`
+/// unconditionally and re-sets its `0x40000000` bit even if already set — only the OUTER anchor
+/// role is skip-gated on that flag (`0x100362b9`). So one poly can be pulled into more than one
+/// group's candidate list; `merge_group`'s own `NumVertices<=0` skip makes a second pass over an
+/// already-fused member a no-op, matching the engine's `MergeCoplanarPolys` per-member check.
 fn bsp_merge_coplanars(polys: Vec<FPoly>) -> Vec<FPoly> {
     let mut polys = polys;
     let mut grouped = vec![false; polys.len()];
@@ -1661,9 +1668,6 @@ fn bsp_merge_coplanars(polys: Vec<FPoly>) -> Vec<FPoly> {
         grouped[i] = true;
         let mut group = vec![i];
         for j in (i + 1)..n {
-            if grouped[j] {
-                continue;
-            }
             if merge_group_pred(&polys[i], &polys[j]) {
                 grouped[j] = true;
                 group.push(j);
@@ -2438,6 +2442,30 @@ pub fn build_geometry_bspcsg(brushes: &[build::BrushInput]) -> Result<Model, Bui
             );
         }
         let fpolys = bsp_build_fpolys(&model);
+        // PRE-MERGE FRAGMENT DUMP (UEDCLI_BSPCSG_PREMERGE_DUMP=<ilink>[,<ilink>...]) — env-gated,
+        // forensic-only: the exact `bsp_build_fpolys` output for named surfs, BEFORE
+        // `bsp_merge_coplanars` groups/fuses anything.  Lets a specific iLink's raw fragment set be
+        // compared against the editor's (which has no equivalent pre-merge capture point today).
+        if let Ok(want) = std::env::var("UEDCLI_BSPCSG_PREMERGE_DUMP") {
+            let wanted: std::collections::HashSet<i32> =
+                want.split(',').filter_map(|s| s.trim().parse().ok()).collect();
+            for (i, p) in fpolys.iter().enumerate() {
+                if !wanted.contains(&p.i_link) {
+                    continue;
+                }
+                eprintln!(
+                    "PREMERGE idx={} ilink={} nv={} flags={:#x} N={:.6},{:.6},{:.6} B={:.6},{:.6},{:.6} TU={:.6},{:.6},{:.6} TV={:.6},{:.6},{:.6}",
+                    i, p.i_link, p.verts.len(), p.poly_flags,
+                    p.normal.x, p.normal.y, p.normal.z,
+                    p.base.x, p.base.y, p.base.z,
+                    p.texture_u.x, p.texture_u.y, p.texture_u.z,
+                    p.texture_v.x, p.texture_v.y, p.texture_v.z,
+                );
+                for v in &p.verts {
+                    eprintln!("PMVERT {:.6},{:.6},{:.6}", v.x, v.y, v.z);
+                }
+            }
+        }
         let merged = bsp_merge_coplanars(fpolys);
         // SOUP-ORDER DUMP (UEDCLI_BSPCSG_SOUP_ORDER) — env-gated; the exact ORDER `bsp_build`/
         // `split_poly_list`/`find_best_split` consumes the post-merge soup, one line per face in
@@ -3265,6 +3293,69 @@ mod tests {
         assert_eq!(
             on_b_plane, 3,
             "a >=14-vert repartition front fragment must SplitInHalf into two coplanar nodes (got {on_b_plane})"
+        );
+    }
+
+    #[test]
+    fn merge_coplanars_rescans_a_poly_already_claimed_by_an_earlier_group() {
+        // `bspMergeCoplanars` (`0x36200`): the candidate (`j`) scan tests iLink/coplanar/normal/UV
+        // unconditionally and does NOT skip a poly already pulled into an earlier anchor's group —
+        // only the OUTER anchor role is skip-gated on the "grouped" flag. So the SAME poly can be a
+        // candidate for more than one anchor if the group predicate (in particular, the epsilon-ball
+        // texture-UV-near test) is not transitive: A and D can each be "near enough" to B without
+        // being near enough to EACH OTHER.
+        //
+        // A (far away, non-adjacent) and D (edge-adjacent to B) both share B's iLink/plane/normal.
+        // textureU: A=0, D=7e-4, B=3.5e-4 -> |A-D|=7e-4 fails the 4e-4 gate (A and D never group
+        // together) but |A-B|=3.5e-4 and |D-B|=3.5e-4 both pass, so B is a valid candidate for BOTH
+        // A's group and D's group. B only actually shares an edge with D. A pre-fix build skips B
+        // when D's turn comes (already flagged from A's group), so D never merges with B at all.
+        let mut a = FPoly::new(vec![
+            Vec3::new(0.0, 0.0, 0.0),
+            Vec3::new(10.0, 0.0, 0.0),
+            Vec3::new(10.0, 10.0, 0.0),
+            Vec3::new(0.0, 10.0, 0.0),
+        ]);
+        a.finalize().unwrap();
+        a.i_link = 5;
+        a.texture_u = Vec3::new(0.0, 0.0, 0.0);
+
+        let mut d = FPoly::new(vec![
+            Vec3::new(20.0, 0.0, 0.0),
+            Vec3::new(30.0, 0.0, 0.0),
+            Vec3::new(30.0, 10.0, 0.0),
+            Vec3::new(20.0, 10.0, 0.0),
+        ]);
+        d.finalize().unwrap();
+        d.i_link = 5;
+        d.texture_u = Vec3::new(0.0007, 0.0, 0.0);
+
+        let mut b = FPoly::new(vec![
+            Vec3::new(30.0, 0.0, 0.0),
+            Vec3::new(40.0, 0.0, 0.0),
+            Vec3::new(40.0, 10.0, 0.0),
+            Vec3::new(30.0, 10.0, 0.0),
+        ]);
+        b.finalize().unwrap();
+        b.i_link = 5;
+        b.texture_u = Vec3::new(0.00035, 0.0, 0.0);
+
+        let out = bsp_merge_coplanars(vec![a, d, b]);
+
+        assert_eq!(
+            out.len(),
+            2,
+            "D and B share an edge and must fuse into one poly, leaving A separate (got {} polys)",
+            out.len()
+        );
+        // D+B are two same-size axis-aligned quads sharing a full edge: the fused ring's two
+        // seam midpoints are exactly colinear with their neighbours, so RemoveColinears thins the
+        // 6-point splice back down to the resulting rectangle's 4 real corners.
+        let fused = out.iter().find(|p| p.verts.len() == 4 && p.base.x > 15.0);
+        assert!(
+            fused.is_some(),
+            "expected D+B fused into one 4-vertex rectangle (20,0)-(40,10); got {:?}",
+            out.iter().map(|p| p.verts.len()).collect::<Vec<_>>()
         );
     }
 

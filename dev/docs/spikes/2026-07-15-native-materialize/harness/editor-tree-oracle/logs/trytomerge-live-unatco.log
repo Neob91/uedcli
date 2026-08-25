@@ -1,0 +1,1428 @@
+[New LWP 152]
+[New LWP 162]
+[New LWP 163]
+[New LWP 164]
+[New LWP 165]
+[New LWP 166]
+[New LWP 167]
+[New LWP 168]
+[New LWP 169]
+[New LWP 170]
+[New LWP 171]
+[New LWP 172]
+[New LWP 173]
+[New LWP 174]
+[New LWP 175]
+[New LWP 176]
+[New LWP 177]
+[New LWP 178]
+[New LWP 179]
+[New LWP 180]
+[New LWP 181]
+[New LWP 182]
+[New LWP 183]
+[New LWP 184]
+[New LWP 185]
+[New LWP 186]
+[New LWP 187]
+[New LWP 188]
+[New LWP 189]
+[New LWP 190]
+[New LWP 232]
+[New LWP 234]
+[New LWP 265]
+[New LWP 281]
+[Thread debugging using libthread_db enabled]
+Using host libthread_db library "/lib/x86_64-linux-gnu/libthread_db.so.1".
+0xf7ef6cfc in __kernel_vsyscall ()
+Breakpoint 1 at 0x10034b73
+Breakpoint 2 at 0x10034bf1
+Breakpoint 3 at 0x10034ddc
+Breakpoint 4 at 0x10034dea
+Breakpoint 5 at 0x10034e1d
+Breakpoint 6 at 0x1004a041
+ORACLE_ATTACHED
+TTM FOUND p1=0xcdd2c64 p2=0xcdd3b24 ilink=977 start1(edi)=0 start2(esi)=2
+TTM RING p1=0xcdd2c64 p2=0xcdd3b24 ilink=977 ringcount=6
+TTM AFTERRC p1=0xcdd2c64 p2=0xcdd3b24 ilink=977 rc_eax=1 ringcount=4
+TTM OK   p1=0xcdd2c64 p2=0xcdd3b24 ilink=977 nv1=4 nv2=0 newnv=4
+TTM FAIL p1=0xcdd2c64 p2=0xcdd9b04 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd2c64 p2=0xcddaf4c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd2c64 p2=0xcddb124 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd2c64 p2=0xcddb2fc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd2c64 p2=0xcdefd04 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd2c64 p2=0xcdf5ebc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd2c64 p2=0xcdf6094 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd2c64 p2=0xcdf626c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd2c64 p2=0xcdf6444 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd2c64 p2=0xcdf661c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd2c64 p2=0xcdf69cc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd2c64 p2=0xce3edd4 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd2c64 p2=0xcf3a4e4 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd2c64 p2=0xcf3b57c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd2c64 p2=0xcf3b754 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd2c64 p2=0xcf46854 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd2c64 p2=0xcf485d4 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd2c64 p2=0xcf49dcc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd2c64 p2=0xcf4bb4c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd2c64 p2=0xcf731dc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd2c64 p2=0xcf77f4c ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcdd2c64 p2=0xcf82e74 ilink=977 start1(edi)=1 start2(esi)=1
+TTM FAIL p1=0xcdd2c64 p2=0xcf82e74 ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcdd2c64 p2=0xcf858dc ilink=977 start1(edi)=2 start2(esi)=1
+TTM FAIL p1=0xcdd2c64 p2=0xcf858dc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd2c64 p2=0xcf99b84 ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcdd2c64 p2=0xcf9b37c ilink=977 start1(edi)=3 start2(esi)=0
+TTM FAIL p1=0xcdd2c64 p2=0xcf9b37c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd2c64 p2=0xcf9b904 ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcdd2c64 p2=0xcf9f22c ilink=977 start1(edi)=0 start2(esi)=1
+TTM FAIL p1=0xcdd2c64 p2=0xcf9f22c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd2c64 p2=0xcfa0bfc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd2c64 p2=0xcfabcfc ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcdd9b04 p2=0xcddaf4c ilink=977 start1(edi)=1 start2(esi)=1
+TTM FAIL p1=0xcdd9b04 p2=0xcddaf4c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd9b04 p2=0xcddb124 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd9b04 p2=0xcddb2fc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd9b04 p2=0xcdefd04 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd9b04 p2=0xcdf5ebc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd9b04 p2=0xcdf6094 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd9b04 p2=0xcdf626c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd9b04 p2=0xcdf6444 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd9b04 p2=0xcdf661c ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcdd9b04 p2=0xcdf69cc ilink=977 start1(edi)=1 start2(esi)=2
+TTM FAIL p1=0xcdd9b04 p2=0xcdf69cc ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcdd9b04 p2=0xce3edd4 ilink=977 start1(edi)=1 start2(esi)=3
+TTM RING p1=0xcdd9b04 p2=0xce3edd4 ilink=977 ringcount=6
+TTM AFTERRC p1=0xcdd9b04 p2=0xce3edd4 ilink=977 rc_eax=1 ringcount=4
+TTM OK   p1=0xcdd9b04 p2=0xce3edd4 ilink=977 nv1=4 nv2=0 newnv=4
+TTM FAIL p1=0xcdd9b04 p2=0xcf3a4e4 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd9b04 p2=0xcf3b57c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd9b04 p2=0xcf3b754 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd9b04 p2=0xcf46854 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd9b04 p2=0xcf485d4 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd9b04 p2=0xcf49dcc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd9b04 p2=0xcf4bb4c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd9b04 p2=0xcf731dc ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcdd9b04 p2=0xcf77f4c ilink=977 start1(edi)=0 start2(esi)=0
+TTM RING p1=0xcdd9b04 p2=0xcf77f4c ilink=977 ringcount=6
+TTM AFTERRC p1=0xcdd9b04 p2=0xcf77f4c ilink=977 rc_eax=1 ringcount=4
+TTM OK   p1=0xcdd9b04 p2=0xcf77f4c ilink=977 nv1=4 nv2=0 newnv=4
+TTM FAIL p1=0xcdd9b04 p2=0xcf82e74 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd9b04 p2=0xcf858dc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd9b04 p2=0xcf99b84 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd9b04 p2=0xcf9b37c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd9b04 p2=0xcf9b904 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd9b04 p2=0xcf9f22c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd9b04 p2=0xcfa0bfc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd9b04 p2=0xcfabcfc ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcddaf4c p2=0xcddb124 ilink=977 start1(edi)=3 start2(esi)=1
+TTM FAIL p1=0xcddaf4c p2=0xcddb124 ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcddaf4c p2=0xcddb2fc ilink=977 start1(edi)=0 start2(esi)=0
+TTM FAIL p1=0xcddaf4c p2=0xcddb2fc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddaf4c p2=0xcdefd04 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddaf4c p2=0xcdf5ebc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddaf4c p2=0xcdf6094 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddaf4c p2=0xcdf626c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddaf4c p2=0xcdf6444 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddaf4c p2=0xcdf661c ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcddaf4c p2=0xcdf69cc ilink=977 start1(edi)=1 start2(esi)=2
+TTM FAIL p1=0xcddaf4c p2=0xcdf69cc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddaf4c p2=0xcf3a4e4 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddaf4c p2=0xcf3b57c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddaf4c p2=0xcf3b754 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddaf4c p2=0xcf46854 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddaf4c p2=0xcf485d4 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddaf4c p2=0xcf49dcc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddaf4c p2=0xcf4bb4c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddaf4c p2=0xcf731dc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddaf4c p2=0xcf82e74 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddaf4c p2=0xcf858dc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddaf4c p2=0xcf99b84 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddaf4c p2=0xcf9b37c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddaf4c p2=0xcf9b904 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddaf4c p2=0xcf9f22c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddaf4c p2=0xcfa0bfc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddaf4c p2=0xcfabcfc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb124 p2=0xcddb2fc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb124 p2=0xcdefd04 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb124 p2=0xcdf5ebc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb124 p2=0xcdf6094 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb124 p2=0xcdf626c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb124 p2=0xcdf6444 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb124 p2=0xcdf661c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb124 p2=0xcdf69cc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb124 p2=0xcf3a4e4 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb124 p2=0xcf3b57c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb124 p2=0xcf3b754 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb124 p2=0xcf46854 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb124 p2=0xcf485d4 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb124 p2=0xcf49dcc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb124 p2=0xcf4bb4c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb124 p2=0xcf731dc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb124 p2=0xcf82e74 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb124 p2=0xcf858dc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb124 p2=0xcf99b84 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb124 p2=0xcf9b37c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb124 p2=0xcf9b904 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb124 p2=0xcf9f22c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb124 p2=0xcfa0bfc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb124 p2=0xcfabcfc ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcddb2fc p2=0xcdefd04 ilink=977 start1(edi)=3 start2(esi)=3
+TTM FAIL p1=0xcddb2fc p2=0xcdefd04 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb2fc p2=0xcdf5ebc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb2fc p2=0xcdf6094 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb2fc p2=0xcdf626c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb2fc p2=0xcdf6444 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb2fc p2=0xcdf661c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb2fc p2=0xcdf69cc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb2fc p2=0xcf3a4e4 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb2fc p2=0xcf3b57c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb2fc p2=0xcf3b754 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb2fc p2=0xcf46854 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb2fc p2=0xcf485d4 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb2fc p2=0xcf49dcc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb2fc p2=0xcf4bb4c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb2fc p2=0xcf731dc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb2fc p2=0xcf82e74 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb2fc p2=0xcf858dc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb2fc p2=0xcf99b84 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb2fc p2=0xcf9b37c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb2fc p2=0xcf9b904 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb2fc p2=0xcf9f22c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb2fc p2=0xcfa0bfc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb2fc p2=0xcfabcfc ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcdefd04 p2=0xcdf5ebc ilink=977 start1(edi)=1 start2(esi)=3
+TTM FAIL p1=0xcdefd04 p2=0xcdf5ebc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdefd04 p2=0xcdf6094 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdefd04 p2=0xcdf626c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdefd04 p2=0xcdf6444 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdefd04 p2=0xcdf661c ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcdefd04 p2=0xcdf69cc ilink=977 start1(edi)=2 start2(esi)=3
+TTM FAIL p1=0xcdefd04 p2=0xcdf69cc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdefd04 p2=0xcf3a4e4 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdefd04 p2=0xcf3b57c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdefd04 p2=0xcf3b754 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdefd04 p2=0xcf46854 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdefd04 p2=0xcf485d4 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdefd04 p2=0xcf49dcc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdefd04 p2=0xcf4bb4c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdefd04 p2=0xcf731dc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdefd04 p2=0xcf82e74 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdefd04 p2=0xcf858dc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdefd04 p2=0xcf99b84 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdefd04 p2=0xcf9b37c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdefd04 p2=0xcf9b904 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdefd04 p2=0xcf9f22c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdefd04 p2=0xcfa0bfc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdefd04 p2=0xcfabcfc ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcdf5ebc p2=0xcdf6094 ilink=977 start1(edi)=2 start2(esi)=3
+TTM FAIL p1=0xcdf5ebc p2=0xcdf6094 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf5ebc p2=0xcdf626c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf5ebc p2=0xcdf6444 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf5ebc p2=0xcdf661c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf5ebc p2=0xcdf69cc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf5ebc p2=0xcf3a4e4 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf5ebc p2=0xcf3b57c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf5ebc p2=0xcf3b754 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf5ebc p2=0xcf46854 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf5ebc p2=0xcf485d4 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf5ebc p2=0xcf49dcc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf5ebc p2=0xcf4bb4c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf5ebc p2=0xcf731dc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf5ebc p2=0xcf82e74 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf5ebc p2=0xcf858dc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf5ebc p2=0xcf99b84 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf5ebc p2=0xcf9b37c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf5ebc p2=0xcf9b904 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf5ebc p2=0xcf9f22c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf5ebc p2=0xcfa0bfc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf5ebc p2=0xcfabcfc ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcdf6094 p2=0xcdf626c ilink=977 start1(edi)=2 start2(esi)=3
+TTM FAIL p1=0xcdf6094 p2=0xcdf626c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6094 p2=0xcdf6444 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6094 p2=0xcdf661c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6094 p2=0xcdf69cc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6094 p2=0xcf3a4e4 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6094 p2=0xcf3b57c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6094 p2=0xcf3b754 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6094 p2=0xcf46854 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6094 p2=0xcf485d4 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6094 p2=0xcf49dcc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6094 p2=0xcf4bb4c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6094 p2=0xcf731dc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6094 p2=0xcf82e74 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6094 p2=0xcf858dc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6094 p2=0xcf99b84 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6094 p2=0xcf9b37c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6094 p2=0xcf9b904 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6094 p2=0xcf9f22c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6094 p2=0xcfa0bfc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6094 p2=0xcfabcfc ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcdf626c p2=0xcdf6444 ilink=977 start1(edi)=2 start2(esi)=3
+TTM FAIL p1=0xcdf626c p2=0xcdf6444 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf626c p2=0xcdf661c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf626c p2=0xcdf69cc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf626c p2=0xcf3a4e4 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf626c p2=0xcf3b57c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf626c p2=0xcf3b754 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf626c p2=0xcf46854 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf626c p2=0xcf485d4 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf626c p2=0xcf49dcc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf626c p2=0xcf4bb4c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf626c p2=0xcf731dc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf626c p2=0xcf82e74 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf626c p2=0xcf858dc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf626c p2=0xcf99b84 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf626c p2=0xcf9b37c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf626c p2=0xcf9b904 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf626c p2=0xcf9f22c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf626c p2=0xcfa0bfc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf626c p2=0xcfabcfc ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcdf6444 p2=0xcdf661c ilink=977 start1(edi)=2 start2(esi)=3
+TTM FAIL p1=0xcdf6444 p2=0xcdf661c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6444 p2=0xcdf69cc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6444 p2=0xcf3a4e4 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6444 p2=0xcf3b57c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6444 p2=0xcf3b754 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6444 p2=0xcf46854 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6444 p2=0xcf485d4 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6444 p2=0xcf49dcc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6444 p2=0xcf4bb4c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6444 p2=0xcf731dc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6444 p2=0xcf82e74 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6444 p2=0xcf858dc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6444 p2=0xcf99b84 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6444 p2=0xcf9b37c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6444 p2=0xcf9b904 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6444 p2=0xcf9f22c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6444 p2=0xcfa0bfc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6444 p2=0xcfabcfc ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcdf661c p2=0xcdf69cc ilink=977 start1(edi)=2 start2(esi)=0
+TTM FAIL p1=0xcdf661c p2=0xcdf69cc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf661c p2=0xcf3a4e4 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf661c p2=0xcf3b57c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf661c p2=0xcf3b754 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf661c p2=0xcf46854 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf661c p2=0xcf485d4 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf661c p2=0xcf49dcc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf661c p2=0xcf4bb4c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf661c p2=0xcf731dc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf661c p2=0xcf82e74 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf661c p2=0xcf858dc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf661c p2=0xcf99b84 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf661c p2=0xcf9b37c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf661c p2=0xcf9b904 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf661c p2=0xcf9f22c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf661c p2=0xcfa0bfc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf661c p2=0xcfabcfc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf69cc p2=0xcf3a4e4 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf69cc p2=0xcf3b57c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf69cc p2=0xcf3b754 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf69cc p2=0xcf46854 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf69cc p2=0xcf485d4 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf69cc p2=0xcf49dcc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf69cc p2=0xcf4bb4c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf69cc p2=0xcf731dc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf69cc p2=0xcf82e74 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf69cc p2=0xcf858dc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf69cc p2=0xcf99b84 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf69cc p2=0xcf9b37c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf69cc p2=0xcf9b904 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf69cc p2=0xcf9f22c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf69cc p2=0xcfa0bfc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf69cc p2=0xcfabcfc ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcf3a4e4 p2=0xcf3b57c ilink=977 start1(edi)=0 start2(esi)=0
+TTM FAIL p1=0xcf3a4e4 p2=0xcf3b57c ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcf3a4e4 p2=0xcf3b754 ilink=977 start1(edi)=3 start2(esi)=1
+TTM FAIL p1=0xcf3a4e4 p2=0xcf3b754 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcf3a4e4 p2=0xcf46854 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcf3a4e4 p2=0xcf485d4 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcf3a4e4 p2=0xcf49dcc ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcf3a4e4 p2=0xcf4bb4c ilink=977 start1(edi)=1 start2(esi)=2
+TTM FAIL p1=0xcf3a4e4 p2=0xcf4bb4c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcf3a4e4 p2=0xcf731dc ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcf3a4e4 p2=0xcf82e74 ilink=977 start1(edi)=1 start2(esi)=3
+TTM RING p1=0xcf3a4e4 p2=0xcf82e74 ilink=977 ringcount=6
+TTM AFTERRC p1=0xcf3a4e4 p2=0xcf82e74 ilink=977 rc_eax=1 ringcount=4
+TTM OK   p1=0xcf3a4e4 p2=0xcf82e74 ilink=977 nv1=4 nv2=0 newnv=4
+TTM FOUND p1=0xcf3a4e4 p2=0xcf858dc ilink=977 start1(edi)=2 start2(esi)=2
+TTM FAIL p1=0xcf3a4e4 p2=0xcf858dc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcf3a4e4 p2=0xcf99b84 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcf3a4e4 p2=0xcf9b37c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcf3a4e4 p2=0xcf9b904 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcf3a4e4 p2=0xcf9f22c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcf3a4e4 p2=0xcfa0bfc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcf3a4e4 p2=0xcfabcfc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcf3b57c p2=0xcf3b754 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcf3b57c p2=0xcf46854 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcf3b57c p2=0xcf485d4 ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcf3b57c p2=0xcf49dcc ilink=977 start1(edi)=3 start2(esi)=2
+TTM FAIL p1=0xcf3b57c p2=0xcf49dcc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcf3b57c p2=0xcf4bb4c ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcf3b57c p2=0xcf731dc ilink=977 start1(edi)=2 start2(esi)=3
+TTM FAIL p1=0xcf3b57c p2=0xcf731dc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcf3b57c p2=0xcf858dc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcf3b57c p2=0xcf99b84 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcf3b57c p2=0xcf9b37c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcf3b57c p2=0xcf9b904 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcf3b57c p2=0xcf9f22c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcf3b57c p2=0xcfa0bfc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcf3b57c p2=0xcfabcfc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcf3b754 p2=0xcf46854 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcf3b754 p2=0xcf485d4 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcf3b754 p2=0xcf49dcc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcf3b754 p2=0xcf4bb4c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcf3b754 p2=0xcf731dc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcf3b754 p2=0xcf858dc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcf3b754 p2=0xcf99b84 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcf3b754 p2=0xcf9b37c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcf3b754 p2=0xcf9b904 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcf3b754 p2=0xcf9f22c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcf3b754 p2=0xcfa0bfc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcf3b754 p2=0xcfabcfc ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcf46854 p2=0xcf485d4 ilink=977 start1(edi)=0 start2(esi)=2
+TTM RING p1=0xcf46854 p2=0xcf485d4 ilink=977 ringcount=6
+TTM AFTERRC p1=0xcf46854 p2=0xcf485d4 ilink=977 rc_eax=1 ringcount=4
+TTM OK   p1=0xcf46854 p2=0xcf485d4 ilink=977 nv1=4 nv2=0 newnv=4
+TTM FOUND p1=0xcf46854 p2=0xcf49dcc ilink=977 start1(edi)=0 start2(esi)=0
+TTM RING p1=0xcf46854 p2=0xcf49dcc ilink=977 ringcount=6
+TTM AFTERRC p1=0xcf46854 p2=0xcf49dcc ilink=977 rc_eax=1 ringcount=4
+TTM OK   p1=0xcf46854 p2=0xcf49dcc ilink=977 nv1=4 nv2=0 newnv=4
+TTM FOUND p1=0xcf46854 p2=0xcf4bb4c ilink=977 start1(edi)=1 start2(esi)=0
+TTM RING p1=0xcf46854 p2=0xcf4bb4c ilink=977 ringcount=6
+TTM AFTERRC p1=0xcf46854 p2=0xcf4bb4c ilink=977 rc_eax=1 ringcount=4
+TTM OK   p1=0xcf46854 p2=0xcf4bb4c ilink=977 nv1=4 nv2=0 newnv=4
+TTM FOUND p1=0xcf46854 p2=0xcf731dc ilink=977 start1(edi)=1 start2(esi)=2
+TTM FAIL p1=0xcf46854 p2=0xcf731dc ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcf46854 p2=0xcf858dc ilink=977 start1(edi)=2 start2(esi)=0
+TTM RING p1=0xcf46854 p2=0xcf858dc ilink=977 ringcount=6
+TTM AFTERRC p1=0xcf46854 p2=0xcf858dc ilink=977 rc_eax=1 ringcount=4
+TTM OK   p1=0xcf46854 p2=0xcf858dc ilink=977 nv1=4 nv2=0 newnv=4
+TTM FAIL p1=0xcf46854 p2=0xcf99b84 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcf46854 p2=0xcf9b37c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcf46854 p2=0xcf9b904 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcf46854 p2=0xcf9f22c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcf46854 p2=0xcfa0bfc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcf46854 p2=0xcfabcfc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcf731dc p2=0xcf99b84 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcf731dc p2=0xcf9b37c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcf731dc p2=0xcf9b904 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcf731dc p2=0xcf9f22c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcf731dc p2=0xcfa0bfc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcf731dc p2=0xcfabcfc ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcf99b84 p2=0xcf9b37c ilink=977 start1(edi)=3 start2(esi)=3
+TTM FAIL p1=0xcf99b84 p2=0xcf9b37c ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcf99b84 p2=0xcf9b904 ilink=977 start1(edi)=0 start2(esi)=2
+TTM FAIL p1=0xcf99b84 p2=0xcf9b904 ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcf99b84 p2=0xcf9f22c ilink=977 start1(edi)=2 start2(esi)=2
+TTM FAIL p1=0xcf99b84 p2=0xcf9f22c ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcf99b84 p2=0xcfa0bfc ilink=977 start1(edi)=1 start2(esi)=0
+TTM FAIL p1=0xcf99b84 p2=0xcfa0bfc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcf99b84 p2=0xcfabcfc ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcf9b37c p2=0xcf9b904 ilink=977 start1(edi)=1 start2(esi)=0
+TTM RING p1=0xcf9b37c p2=0xcf9b904 ilink=977 ringcount=6
+TTM AFTERRC p1=0xcf9b37c p2=0xcf9b904 ilink=977 rc_eax=1 ringcount=4
+TTM OK   p1=0xcf9b37c p2=0xcf9b904 ilink=977 nv1=4 nv2=0 newnv=4
+TTM FAIL p1=0xcf9b37c p2=0xcf9f22c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcf9b37c p2=0xcfa0bfc ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcf9b37c p2=0xcfabcfc ilink=977 start1(edi)=2 start2(esi)=0
+TTM FAIL p1=0xcf9b37c p2=0xcfabcfc ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcf9f22c p2=0xcfa0bfc ilink=977 start1(edi)=0 start2(esi)=2
+TTM RING p1=0xcf9f22c p2=0xcfa0bfc ilink=977 ringcount=6
+TTM AFTERRC p1=0xcf9f22c p2=0xcfa0bfc ilink=977 rc_eax=1 ringcount=4
+TTM OK   p1=0xcf9f22c p2=0xcfa0bfc ilink=977 nv1=4 nv2=0 newnv=4
+TTM FOUND p1=0xcf9f22c p2=0xcfabcfc ilink=977 start1(edi)=3 start2(esi)=3
+TTM FAIL p1=0xcf9f22c p2=0xcfabcfc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd2c64 p2=0xcdd9b04 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd2c64 p2=0xcddaf4c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd2c64 p2=0xcddb124 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd2c64 p2=0xcddb2fc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd2c64 p2=0xcdefd04 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd2c64 p2=0xcdf5ebc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd2c64 p2=0xcdf6094 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd2c64 p2=0xcdf626c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd2c64 p2=0xcdf6444 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd2c64 p2=0xcdf661c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd2c64 p2=0xcdf69cc ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcdd2c64 p2=0xcf3a4e4 ilink=977 start1(edi)=1 start2(esi)=3
+TTM FAIL p1=0xcdd2c64 p2=0xcf3a4e4 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd2c64 p2=0xcf3b57c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd2c64 p2=0xcf3b754 ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcdd2c64 p2=0xcf46854 ilink=977 start1(edi)=2 start2(esi)=2
+TTM FAIL p1=0xcdd2c64 p2=0xcf46854 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd2c64 p2=0xcf731dc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd2c64 p2=0xcf99b84 ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcdd2c64 p2=0xcf9b37c ilink=977 start1(edi)=3 start2(esi)=1
+TTM FAIL p1=0xcdd2c64 p2=0xcf9b37c ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcdd2c64 p2=0xcf9f22c ilink=977 start1(edi)=0 start2(esi)=0
+TTM FAIL p1=0xcdd2c64 p2=0xcf9f22c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd2c64 p2=0xcfabcfc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd9b04 p2=0xcddaf4c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd9b04 p2=0xcddb124 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd9b04 p2=0xcddb2fc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd9b04 p2=0xcdefd04 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd9b04 p2=0xcdf5ebc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd9b04 p2=0xcdf6094 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd9b04 p2=0xcdf626c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd9b04 p2=0xcdf6444 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd9b04 p2=0xcdf661c ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcdd9b04 p2=0xcdf69cc ilink=977 start1(edi)=1 start2(esi)=1
+TTM FAIL p1=0xcdd9b04 p2=0xcdf69cc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd9b04 p2=0xcf3a4e4 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd9b04 p2=0xcf3b57c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd9b04 p2=0xcf3b754 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd9b04 p2=0xcf46854 ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcdd9b04 p2=0xcf731dc ilink=977 start1(edi)=2 start2(esi)=1
+TTM RING p1=0xcdd9b04 p2=0xcf731dc ilink=977 ringcount=6
+TTM AFTERRC p1=0xcdd9b04 p2=0xcf731dc ilink=977 rc_eax=0 ringcount=6
+TTM FAIL p1=0xcdd9b04 p2=0xcf731dc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd9b04 p2=0xcf99b84 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd9b04 p2=0xcf9b37c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd9b04 p2=0xcf9f22c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd9b04 p2=0xcfabcfc ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcddaf4c p2=0xcddb124 ilink=977 start1(edi)=3 start2(esi)=1
+TTM FAIL p1=0xcddaf4c p2=0xcddb124 ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcddaf4c p2=0xcddb2fc ilink=977 start1(edi)=0 start2(esi)=0
+TTM FAIL p1=0xcddaf4c p2=0xcddb2fc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddaf4c p2=0xcdefd04 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddaf4c p2=0xcdf5ebc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddaf4c p2=0xcdf6094 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddaf4c p2=0xcdf626c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddaf4c p2=0xcdf6444 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddaf4c p2=0xcdf661c ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcddaf4c p2=0xcdf69cc ilink=977 start1(edi)=1 start2(esi)=2
+TTM FAIL p1=0xcddaf4c p2=0xcdf69cc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddaf4c p2=0xcf3a4e4 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddaf4c p2=0xcf3b57c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddaf4c p2=0xcf3b754 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddaf4c p2=0xcf46854 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddaf4c p2=0xcf731dc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddaf4c p2=0xcf99b84 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddaf4c p2=0xcf9b37c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddaf4c p2=0xcf9f22c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddaf4c p2=0xcfabcfc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb124 p2=0xcddb2fc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb124 p2=0xcdefd04 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb124 p2=0xcdf5ebc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb124 p2=0xcdf6094 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb124 p2=0xcdf626c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb124 p2=0xcdf6444 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb124 p2=0xcdf661c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb124 p2=0xcdf69cc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb124 p2=0xcf3a4e4 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb124 p2=0xcf3b57c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb124 p2=0xcf3b754 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb124 p2=0xcf46854 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb124 p2=0xcf731dc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb124 p2=0xcf99b84 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb124 p2=0xcf9b37c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb124 p2=0xcf9f22c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb124 p2=0xcfabcfc ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcddb2fc p2=0xcdefd04 ilink=977 start1(edi)=3 start2(esi)=3
+TTM FAIL p1=0xcddb2fc p2=0xcdefd04 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb2fc p2=0xcdf5ebc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb2fc p2=0xcdf6094 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb2fc p2=0xcdf626c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb2fc p2=0xcdf6444 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb2fc p2=0xcdf661c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb2fc p2=0xcdf69cc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb2fc p2=0xcf3a4e4 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb2fc p2=0xcf3b57c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb2fc p2=0xcf3b754 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb2fc p2=0xcf46854 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb2fc p2=0xcf731dc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb2fc p2=0xcf99b84 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb2fc p2=0xcf9b37c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb2fc p2=0xcf9f22c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb2fc p2=0xcfabcfc ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcdefd04 p2=0xcdf5ebc ilink=977 start1(edi)=1 start2(esi)=3
+TTM FAIL p1=0xcdefd04 p2=0xcdf5ebc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdefd04 p2=0xcdf6094 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdefd04 p2=0xcdf626c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdefd04 p2=0xcdf6444 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdefd04 p2=0xcdf661c ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcdefd04 p2=0xcdf69cc ilink=977 start1(edi)=2 start2(esi)=3
+TTM FAIL p1=0xcdefd04 p2=0xcdf69cc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdefd04 p2=0xcf3a4e4 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdefd04 p2=0xcf3b57c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdefd04 p2=0xcf3b754 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdefd04 p2=0xcf46854 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdefd04 p2=0xcf731dc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdefd04 p2=0xcf99b84 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdefd04 p2=0xcf9b37c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdefd04 p2=0xcf9f22c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdefd04 p2=0xcfabcfc ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcdf5ebc p2=0xcdf6094 ilink=977 start1(edi)=2 start2(esi)=3
+TTM FAIL p1=0xcdf5ebc p2=0xcdf6094 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf5ebc p2=0xcdf626c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf5ebc p2=0xcdf6444 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf5ebc p2=0xcdf661c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf5ebc p2=0xcdf69cc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf5ebc p2=0xcf3a4e4 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf5ebc p2=0xcf3b57c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf5ebc p2=0xcf3b754 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf5ebc p2=0xcf46854 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf5ebc p2=0xcf731dc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf5ebc p2=0xcf99b84 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf5ebc p2=0xcf9b37c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf5ebc p2=0xcf9f22c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf5ebc p2=0xcfabcfc ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcdf6094 p2=0xcdf626c ilink=977 start1(edi)=2 start2(esi)=3
+TTM FAIL p1=0xcdf6094 p2=0xcdf626c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6094 p2=0xcdf6444 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6094 p2=0xcdf661c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6094 p2=0xcdf69cc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6094 p2=0xcf3a4e4 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6094 p2=0xcf3b57c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6094 p2=0xcf3b754 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6094 p2=0xcf46854 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6094 p2=0xcf731dc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6094 p2=0xcf99b84 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6094 p2=0xcf9b37c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6094 p2=0xcf9f22c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6094 p2=0xcfabcfc ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcdf626c p2=0xcdf6444 ilink=977 start1(edi)=2 start2(esi)=3
+TTM FAIL p1=0xcdf626c p2=0xcdf6444 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf626c p2=0xcdf661c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf626c p2=0xcdf69cc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf626c p2=0xcf3a4e4 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf626c p2=0xcf3b57c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf626c p2=0xcf3b754 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf626c p2=0xcf46854 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf626c p2=0xcf731dc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf626c p2=0xcf99b84 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf626c p2=0xcf9b37c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf626c p2=0xcf9f22c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf626c p2=0xcfabcfc ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcdf6444 p2=0xcdf661c ilink=977 start1(edi)=2 start2(esi)=3
+TTM FAIL p1=0xcdf6444 p2=0xcdf661c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6444 p2=0xcdf69cc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6444 p2=0xcf3a4e4 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6444 p2=0xcf3b57c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6444 p2=0xcf3b754 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6444 p2=0xcf46854 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6444 p2=0xcf731dc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6444 p2=0xcf99b84 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6444 p2=0xcf9b37c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6444 p2=0xcf9f22c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6444 p2=0xcfabcfc ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcdf661c p2=0xcdf69cc ilink=977 start1(edi)=2 start2(esi)=0
+TTM FAIL p1=0xcdf661c p2=0xcdf69cc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf661c p2=0xcf3a4e4 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf661c p2=0xcf3b57c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf661c p2=0xcf3b754 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf661c p2=0xcf46854 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf661c p2=0xcf731dc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf661c p2=0xcf99b84 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf661c p2=0xcf9b37c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf661c p2=0xcf9f22c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf661c p2=0xcfabcfc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf69cc p2=0xcf3a4e4 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf69cc p2=0xcf3b57c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf69cc p2=0xcf3b754 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf69cc p2=0xcf46854 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf69cc p2=0xcf731dc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf69cc p2=0xcf99b84 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf69cc p2=0xcf9b37c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf69cc p2=0xcf9f22c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf69cc p2=0xcfabcfc ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcf3a4e4 p2=0xcf3b57c ilink=977 start1(edi)=1 start2(esi)=0
+TTM FAIL p1=0xcf3a4e4 p2=0xcf3b57c ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcf3a4e4 p2=0xcf3b754 ilink=977 start1(edi)=0 start2(esi)=1
+TTM FAIL p1=0xcf3a4e4 p2=0xcf3b754 ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcf3a4e4 p2=0xcf46854 ilink=977 start1(edi)=2 start2(esi)=3
+TTM FAIL p1=0xcf3a4e4 p2=0xcf46854 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcf3a4e4 p2=0xcf731dc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcf3a4e4 p2=0xcf99b84 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcf3a4e4 p2=0xcf9b37c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcf3a4e4 p2=0xcf9f22c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcf3a4e4 p2=0xcfabcfc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcf3b57c p2=0xcf3b754 ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcf3b57c p2=0xcf46854 ilink=977 start1(edi)=3 start2(esi)=0
+TTM FAIL p1=0xcf3b57c p2=0xcf46854 ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcf3b57c p2=0xcf731dc ilink=977 start1(edi)=2 start2(esi)=3
+TTM FAIL p1=0xcf3b57c p2=0xcf731dc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcf3b57c p2=0xcf99b84 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcf3b57c p2=0xcf9b37c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcf3b57c p2=0xcf9f22c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcf3b57c p2=0xcfabcfc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcf3b754 p2=0xcf46854 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcf3b754 p2=0xcf731dc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcf3b754 p2=0xcf99b84 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcf3b754 p2=0xcf9b37c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcf3b754 p2=0xcf9f22c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcf3b754 p2=0xcfabcfc ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcf46854 p2=0xcf731dc ilink=977 start1(edi)=1 start2(esi)=2
+TTM FAIL p1=0xcf46854 p2=0xcf731dc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcf46854 p2=0xcf99b84 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcf46854 p2=0xcf9b37c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcf46854 p2=0xcf9f22c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcf46854 p2=0xcfabcfc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcf731dc p2=0xcf99b84 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcf731dc p2=0xcf9b37c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcf731dc p2=0xcf9f22c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcf731dc p2=0xcfabcfc ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcf99b84 p2=0xcf9b37c ilink=977 start1(edi)=0 start2(esi)=3
+TTM RING p1=0xcf99b84 p2=0xcf9b37c ilink=977 ringcount=6
+TTM AFTERRC p1=0xcf99b84 p2=0xcf9b37c ilink=977 rc_eax=1 ringcount=4
+TTM OK   p1=0xcf99b84 p2=0xcf9b37c ilink=977 nv1=4 nv2=0 newnv=4
+TTM FOUND p1=0xcf99b84 p2=0xcf9f22c ilink=977 start1(edi)=0 start2(esi)=2
+TTM RING p1=0xcf99b84 p2=0xcf9f22c ilink=977 ringcount=6
+TTM AFTERRC p1=0xcf99b84 p2=0xcf9f22c ilink=977 rc_eax=1 ringcount=4
+TTM OK   p1=0xcf99b84 p2=0xcf9f22c ilink=977 nv1=4 nv2=0 newnv=4
+TTM FOUND p1=0xcf99b84 p2=0xcfabcfc ilink=977 start1(edi)=1 start2(esi)=0
+TTM RING p1=0xcf99b84 p2=0xcfabcfc ilink=977 ringcount=6
+TTM AFTERRC p1=0xcf99b84 p2=0xcfabcfc ilink=977 rc_eax=1 ringcount=4
+TTM OK   p1=0xcf99b84 p2=0xcfabcfc ilink=977 nv1=4 nv2=0 newnv=4
+TTM FAIL p1=0xcdd2c64 p2=0xcdd9b04 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd2c64 p2=0xcddaf4c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd2c64 p2=0xcddb124 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd2c64 p2=0xcddb2fc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd2c64 p2=0xcdefd04 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd2c64 p2=0xcdf5ebc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd2c64 p2=0xcdf6094 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd2c64 p2=0xcdf626c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd2c64 p2=0xcdf6444 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd2c64 p2=0xcdf661c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd2c64 p2=0xcdf69cc ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcdd2c64 p2=0xcf3a4e4 ilink=977 start1(edi)=1 start2(esi)=3
+TTM FAIL p1=0xcdd2c64 p2=0xcf3a4e4 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd2c64 p2=0xcf3b57c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd2c64 p2=0xcf3b754 ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcdd2c64 p2=0xcf46854 ilink=977 start1(edi)=2 start2(esi)=2
+TTM FAIL p1=0xcdd2c64 p2=0xcf46854 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd2c64 p2=0xcf731dc ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcdd2c64 p2=0xcf99b84 ilink=977 start1(edi)=0 start2(esi)=0
+TTM RING p1=0xcdd2c64 p2=0xcf99b84 ilink=977 ringcount=6
+TTM AFTERRC p1=0xcdd2c64 p2=0xcf99b84 ilink=977 rc_eax=1 ringcount=4
+TTM OK   p1=0xcdd2c64 p2=0xcf99b84 ilink=977 nv1=4 nv2=0 newnv=4
+TTM FAIL p1=0xcdd9b04 p2=0xcddaf4c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd9b04 p2=0xcddb124 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd9b04 p2=0xcddb2fc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd9b04 p2=0xcdefd04 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd9b04 p2=0xcdf5ebc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd9b04 p2=0xcdf6094 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd9b04 p2=0xcdf626c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd9b04 p2=0xcdf6444 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd9b04 p2=0xcdf661c ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcdd9b04 p2=0xcdf69cc ilink=977 start1(edi)=1 start2(esi)=1
+TTM FAIL p1=0xcdd9b04 p2=0xcdf69cc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd9b04 p2=0xcf3a4e4 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd9b04 p2=0xcf3b57c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd9b04 p2=0xcf3b754 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd9b04 p2=0xcf46854 ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcdd9b04 p2=0xcf731dc ilink=977 start1(edi)=2 start2(esi)=1
+TTM RING p1=0xcdd9b04 p2=0xcf731dc ilink=977 ringcount=6
+TTM AFTERRC p1=0xcdd9b04 p2=0xcf731dc ilink=977 rc_eax=0 ringcount=6
+TTM FAIL p1=0xcdd9b04 p2=0xcf731dc ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcddaf4c p2=0xcddb124 ilink=977 start1(edi)=3 start2(esi)=1
+TTM FAIL p1=0xcddaf4c p2=0xcddb124 ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcddaf4c p2=0xcddb2fc ilink=977 start1(edi)=0 start2(esi)=0
+TTM FAIL p1=0xcddaf4c p2=0xcddb2fc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddaf4c p2=0xcdefd04 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddaf4c p2=0xcdf5ebc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddaf4c p2=0xcdf6094 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddaf4c p2=0xcdf626c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddaf4c p2=0xcdf6444 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddaf4c p2=0xcdf661c ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcddaf4c p2=0xcdf69cc ilink=977 start1(edi)=1 start2(esi)=2
+TTM FAIL p1=0xcddaf4c p2=0xcdf69cc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddaf4c p2=0xcf3a4e4 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddaf4c p2=0xcf3b57c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddaf4c p2=0xcf3b754 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddaf4c p2=0xcf46854 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddaf4c p2=0xcf731dc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb124 p2=0xcddb2fc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb124 p2=0xcdefd04 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb124 p2=0xcdf5ebc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb124 p2=0xcdf6094 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb124 p2=0xcdf626c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb124 p2=0xcdf6444 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb124 p2=0xcdf661c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb124 p2=0xcdf69cc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb124 p2=0xcf3a4e4 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb124 p2=0xcf3b57c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb124 p2=0xcf3b754 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb124 p2=0xcf46854 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb124 p2=0xcf731dc ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcddb2fc p2=0xcdefd04 ilink=977 start1(edi)=3 start2(esi)=3
+TTM FAIL p1=0xcddb2fc p2=0xcdefd04 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb2fc p2=0xcdf5ebc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb2fc p2=0xcdf6094 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb2fc p2=0xcdf626c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb2fc p2=0xcdf6444 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb2fc p2=0xcdf661c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb2fc p2=0xcdf69cc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb2fc p2=0xcf3a4e4 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb2fc p2=0xcf3b57c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb2fc p2=0xcf3b754 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb2fc p2=0xcf46854 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb2fc p2=0xcf731dc ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcdefd04 p2=0xcdf5ebc ilink=977 start1(edi)=1 start2(esi)=3
+TTM FAIL p1=0xcdefd04 p2=0xcdf5ebc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdefd04 p2=0xcdf6094 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdefd04 p2=0xcdf626c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdefd04 p2=0xcdf6444 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdefd04 p2=0xcdf661c ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcdefd04 p2=0xcdf69cc ilink=977 start1(edi)=2 start2(esi)=3
+TTM FAIL p1=0xcdefd04 p2=0xcdf69cc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdefd04 p2=0xcf3a4e4 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdefd04 p2=0xcf3b57c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdefd04 p2=0xcf3b754 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdefd04 p2=0xcf46854 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdefd04 p2=0xcf731dc ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcdf5ebc p2=0xcdf6094 ilink=977 start1(edi)=2 start2(esi)=3
+TTM FAIL p1=0xcdf5ebc p2=0xcdf6094 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf5ebc p2=0xcdf626c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf5ebc p2=0xcdf6444 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf5ebc p2=0xcdf661c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf5ebc p2=0xcdf69cc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf5ebc p2=0xcf3a4e4 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf5ebc p2=0xcf3b57c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf5ebc p2=0xcf3b754 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf5ebc p2=0xcf46854 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf5ebc p2=0xcf731dc ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcdf6094 p2=0xcdf626c ilink=977 start1(edi)=2 start2(esi)=3
+TTM FAIL p1=0xcdf6094 p2=0xcdf626c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6094 p2=0xcdf6444 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6094 p2=0xcdf661c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6094 p2=0xcdf69cc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6094 p2=0xcf3a4e4 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6094 p2=0xcf3b57c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6094 p2=0xcf3b754 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6094 p2=0xcf46854 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6094 p2=0xcf731dc ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcdf626c p2=0xcdf6444 ilink=977 start1(edi)=2 start2(esi)=3
+TTM FAIL p1=0xcdf626c p2=0xcdf6444 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf626c p2=0xcdf661c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf626c p2=0xcdf69cc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf626c p2=0xcf3a4e4 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf626c p2=0xcf3b57c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf626c p2=0xcf3b754 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf626c p2=0xcf46854 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf626c p2=0xcf731dc ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcdf6444 p2=0xcdf661c ilink=977 start1(edi)=2 start2(esi)=3
+TTM FAIL p1=0xcdf6444 p2=0xcdf661c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6444 p2=0xcdf69cc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6444 p2=0xcf3a4e4 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6444 p2=0xcf3b57c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6444 p2=0xcf3b754 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6444 p2=0xcf46854 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6444 p2=0xcf731dc ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcdf661c p2=0xcdf69cc ilink=977 start1(edi)=2 start2(esi)=0
+TTM FAIL p1=0xcdf661c p2=0xcdf69cc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf661c p2=0xcf3a4e4 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf661c p2=0xcf3b57c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf661c p2=0xcf3b754 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf661c p2=0xcf46854 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf661c p2=0xcf731dc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf69cc p2=0xcf3a4e4 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf69cc p2=0xcf3b57c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf69cc p2=0xcf3b754 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf69cc p2=0xcf46854 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf69cc p2=0xcf731dc ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcf3a4e4 p2=0xcf3b57c ilink=977 start1(edi)=1 start2(esi)=0
+TTM FAIL p1=0xcf3a4e4 p2=0xcf3b57c ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcf3a4e4 p2=0xcf3b754 ilink=977 start1(edi)=0 start2(esi)=1
+TTM FAIL p1=0xcf3a4e4 p2=0xcf3b754 ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcf3a4e4 p2=0xcf46854 ilink=977 start1(edi)=2 start2(esi)=3
+TTM FAIL p1=0xcf3a4e4 p2=0xcf46854 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcf3a4e4 p2=0xcf731dc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcf3b57c p2=0xcf3b754 ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcf3b57c p2=0xcf46854 ilink=977 start1(edi)=3 start2(esi)=0
+TTM FAIL p1=0xcf3b57c p2=0xcf46854 ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcf3b57c p2=0xcf731dc ilink=977 start1(edi)=2 start2(esi)=3
+TTM FAIL p1=0xcf3b57c p2=0xcf731dc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcf3b754 p2=0xcf46854 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcf3b754 p2=0xcf731dc ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcf46854 p2=0xcf731dc ilink=977 start1(edi)=1 start2(esi)=2
+TTM FAIL p1=0xcf46854 p2=0xcf731dc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd2c64 p2=0xcdd9b04 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd2c64 p2=0xcddaf4c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd2c64 p2=0xcddb124 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd2c64 p2=0xcddb2fc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd2c64 p2=0xcdefd04 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd2c64 p2=0xcdf5ebc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd2c64 p2=0xcdf6094 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd2c64 p2=0xcdf626c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd2c64 p2=0xcdf6444 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd2c64 p2=0xcdf661c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd2c64 p2=0xcdf69cc ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcdd2c64 p2=0xcf3a4e4 ilink=977 start1(edi)=0 start2(esi)=3
+TTM FAIL p1=0xcdd2c64 p2=0xcf3a4e4 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd2c64 p2=0xcf3b57c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd2c64 p2=0xcf3b754 ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcdd2c64 p2=0xcf46854 ilink=977 start1(edi)=1 start2(esi)=2
+TTM FAIL p1=0xcdd2c64 p2=0xcf46854 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd2c64 p2=0xcf731dc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd9b04 p2=0xcddaf4c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd9b04 p2=0xcddb124 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd9b04 p2=0xcddb2fc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd9b04 p2=0xcdefd04 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd9b04 p2=0xcdf5ebc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd9b04 p2=0xcdf6094 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd9b04 p2=0xcdf626c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd9b04 p2=0xcdf6444 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd9b04 p2=0xcdf661c ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcdd9b04 p2=0xcdf69cc ilink=977 start1(edi)=1 start2(esi)=1
+TTM FAIL p1=0xcdd9b04 p2=0xcdf69cc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd9b04 p2=0xcf3a4e4 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd9b04 p2=0xcf3b57c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd9b04 p2=0xcf3b754 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdd9b04 p2=0xcf46854 ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcdd9b04 p2=0xcf731dc ilink=977 start1(edi)=2 start2(esi)=1
+TTM RING p1=0xcdd9b04 p2=0xcf731dc ilink=977 ringcount=6
+TTM AFTERRC p1=0xcdd9b04 p2=0xcf731dc ilink=977 rc_eax=0 ringcount=6
+TTM FAIL p1=0xcdd9b04 p2=0xcf731dc ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcddaf4c p2=0xcddb124 ilink=977 start1(edi)=3 start2(esi)=1
+TTM FAIL p1=0xcddaf4c p2=0xcddb124 ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcddaf4c p2=0xcddb2fc ilink=977 start1(edi)=0 start2(esi)=0
+TTM FAIL p1=0xcddaf4c p2=0xcddb2fc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddaf4c p2=0xcdefd04 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddaf4c p2=0xcdf5ebc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddaf4c p2=0xcdf6094 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddaf4c p2=0xcdf626c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddaf4c p2=0xcdf6444 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddaf4c p2=0xcdf661c ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcddaf4c p2=0xcdf69cc ilink=977 start1(edi)=1 start2(esi)=2
+TTM FAIL p1=0xcddaf4c p2=0xcdf69cc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddaf4c p2=0xcf3a4e4 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddaf4c p2=0xcf3b57c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddaf4c p2=0xcf3b754 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddaf4c p2=0xcf46854 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddaf4c p2=0xcf731dc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb124 p2=0xcddb2fc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb124 p2=0xcdefd04 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb124 p2=0xcdf5ebc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb124 p2=0xcdf6094 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb124 p2=0xcdf626c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb124 p2=0xcdf6444 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb124 p2=0xcdf661c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb124 p2=0xcdf69cc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb124 p2=0xcf3a4e4 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb124 p2=0xcf3b57c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb124 p2=0xcf3b754 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb124 p2=0xcf46854 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb124 p2=0xcf731dc ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcddb2fc p2=0xcdefd04 ilink=977 start1(edi)=3 start2(esi)=3
+TTM FAIL p1=0xcddb2fc p2=0xcdefd04 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb2fc p2=0xcdf5ebc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb2fc p2=0xcdf6094 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb2fc p2=0xcdf626c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb2fc p2=0xcdf6444 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb2fc p2=0xcdf661c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb2fc p2=0xcdf69cc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb2fc p2=0xcf3a4e4 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb2fc p2=0xcf3b57c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb2fc p2=0xcf3b754 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb2fc p2=0xcf46854 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcddb2fc p2=0xcf731dc ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcdefd04 p2=0xcdf5ebc ilink=977 start1(edi)=1 start2(esi)=3
+TTM FAIL p1=0xcdefd04 p2=0xcdf5ebc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdefd04 p2=0xcdf6094 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdefd04 p2=0xcdf626c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdefd04 p2=0xcdf6444 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdefd04 p2=0xcdf661c ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcdefd04 p2=0xcdf69cc ilink=977 start1(edi)=2 start2(esi)=3
+TTM FAIL p1=0xcdefd04 p2=0xcdf69cc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdefd04 p2=0xcf3a4e4 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdefd04 p2=0xcf3b57c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdefd04 p2=0xcf3b754 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdefd04 p2=0xcf46854 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdefd04 p2=0xcf731dc ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcdf5ebc p2=0xcdf6094 ilink=977 start1(edi)=2 start2(esi)=3
+TTM FAIL p1=0xcdf5ebc p2=0xcdf6094 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf5ebc p2=0xcdf626c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf5ebc p2=0xcdf6444 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf5ebc p2=0xcdf661c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf5ebc p2=0xcdf69cc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf5ebc p2=0xcf3a4e4 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf5ebc p2=0xcf3b57c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf5ebc p2=0xcf3b754 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf5ebc p2=0xcf46854 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf5ebc p2=0xcf731dc ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcdf6094 p2=0xcdf626c ilink=977 start1(edi)=2 start2(esi)=3
+TTM FAIL p1=0xcdf6094 p2=0xcdf626c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6094 p2=0xcdf6444 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6094 p2=0xcdf661c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6094 p2=0xcdf69cc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6094 p2=0xcf3a4e4 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6094 p2=0xcf3b57c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6094 p2=0xcf3b754 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6094 p2=0xcf46854 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6094 p2=0xcf731dc ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcdf626c p2=0xcdf6444 ilink=977 start1(edi)=2 start2(esi)=3
+TTM FAIL p1=0xcdf626c p2=0xcdf6444 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf626c p2=0xcdf661c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf626c p2=0xcdf69cc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf626c p2=0xcf3a4e4 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf626c p2=0xcf3b57c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf626c p2=0xcf3b754 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf626c p2=0xcf46854 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf626c p2=0xcf731dc ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcdf6444 p2=0xcdf661c ilink=977 start1(edi)=2 start2(esi)=3
+TTM FAIL p1=0xcdf6444 p2=0xcdf661c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6444 p2=0xcdf69cc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6444 p2=0xcf3a4e4 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6444 p2=0xcf3b57c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6444 p2=0xcf3b754 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6444 p2=0xcf46854 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf6444 p2=0xcf731dc ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcdf661c p2=0xcdf69cc ilink=977 start1(edi)=2 start2(esi)=0
+TTM FAIL p1=0xcdf661c p2=0xcdf69cc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf661c p2=0xcf3a4e4 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf661c p2=0xcf3b57c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf661c p2=0xcf3b754 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf661c p2=0xcf46854 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf661c p2=0xcf731dc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf69cc p2=0xcf3a4e4 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf69cc p2=0xcf3b57c ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf69cc p2=0xcf3b754 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf69cc p2=0xcf46854 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcdf69cc p2=0xcf731dc ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcf3a4e4 p2=0xcf3b57c ilink=977 start1(edi)=1 start2(esi)=0
+TTM FAIL p1=0xcf3a4e4 p2=0xcf3b57c ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcf3a4e4 p2=0xcf3b754 ilink=977 start1(edi)=0 start2(esi)=1
+TTM FAIL p1=0xcf3a4e4 p2=0xcf3b754 ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcf3a4e4 p2=0xcf46854 ilink=977 start1(edi)=2 start2(esi)=3
+TTM FAIL p1=0xcf3a4e4 p2=0xcf46854 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcf3a4e4 p2=0xcf731dc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcf3b57c p2=0xcf3b754 ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcf3b57c p2=0xcf46854 ilink=977 start1(edi)=3 start2(esi)=0
+TTM FAIL p1=0xcf3b57c p2=0xcf46854 ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcf3b57c p2=0xcf731dc ilink=977 start1(edi)=2 start2(esi)=3
+TTM FAIL p1=0xcf3b57c p2=0xcf731dc ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcf3b754 p2=0xcf46854 ilink=977 nv1=4 nv2=4
+TTM FAIL p1=0xcf3b754 p2=0xcf731dc ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcf46854 p2=0xcf731dc ilink=977 start1(edi)=1 start2(esi)=2
+TTM FAIL p1=0xcf46854 p2=0xcf731dc ilink=977 nv1=4 nv2=4
+TTM FOUND p1=0xcdd4f6c p2=0xcf86efc ilink=300 start1(edi)=0 start2(esi)=1
+TTM RING p1=0xcdd4f6c p2=0xcf86efc ilink=300 ringcount=6
+TTM AFTERRC p1=0xcdd4f6c p2=0xcf86efc ilink=300 rc_eax=1 ringcount=4
+TTM OK   p1=0xcdd4f6c p2=0xcf86efc ilink=300 nv1=4 nv2=0 newnv=4
+TTM FAIL p1=0xce0bd0c p2=0xce0d32c ilink=878 nv1=4 nv2=4
+TTM FAIL p1=0xce0bd0c p2=0xce1f854 ilink=878 nv1=4 nv2=4
+TTM FOUND p1=0xce0bd0c p2=0xce28474 ilink=878 start1(edi)=0 start2(esi)=3
+TTM RING p1=0xce0bd0c p2=0xce28474 ilink=878 ringcount=6
+TTM AFTERRC p1=0xce0bd0c p2=0xce28474 ilink=878 rc_eax=1 ringcount=4
+TTM OK   p1=0xce0bd0c p2=0xce28474 ilink=878 nv1=4 nv2=0 newnv=4
+TTM FAIL p1=0xce0bd0c p2=0xce29e44 ilink=878 nv1=4 nv2=4
+TTM FAIL p1=0xce0bd0c p2=0xce2f314 ilink=878 nv1=4 nv2=4
+TTM FOUND p1=0xce0bd0c p2=0xce2fc4c ilink=878 start1(edi)=2 start2(esi)=3
+TTM RING p1=0xce0bd0c p2=0xce2fc4c ilink=878 ringcount=6
+TTM AFTERRC p1=0xce0bd0c p2=0xce2fc4c ilink=878 rc_eax=1 ringcount=4
+TTM OK   p1=0xce0bd0c p2=0xce2fc4c ilink=878 nv1=4 nv2=0 newnv=4
+TTM FAIL p1=0xce0bd0c p2=0xce324dc ilink=878 nv1=4 nv2=4
+TTM FAIL p1=0xce0bd0c p2=0xce34d6c ilink=878 nv1=4 nv2=4
+TTM FAIL p1=0xce0bd0c p2=0xce34f44 ilink=878 nv1=4 nv2=4
+TTM FAIL p1=0xce0bd0c p2=0xce952cc ilink=878 nv1=4 nv2=4
+TTM FAIL p1=0xce0bd0c p2=0xce97224 ilink=878 nv1=4 nv2=4
+TTM FAIL p1=0xce0bd0c p2=0xce973fc ilink=878 nv1=4 nv2=4
+TTM FOUND p1=0xce0bd0c p2=0xce975d4 ilink=878 start1(edi)=0 start2(esi)=2
+TTM RING p1=0xce0bd0c p2=0xce975d4 ilink=878 ringcount=6
+TTM AFTERRC p1=0xce0bd0c p2=0xce975d4 ilink=878 rc_eax=1 ringcount=4
+TTM OK   p1=0xce0bd0c p2=0xce975d4 ilink=878 nv1=4 nv2=0 newnv=4
+TTM FAIL p1=0xce0bd0c p2=0xce977ac ilink=878 nv1=4 nv2=4
+TTM FAIL p1=0xce0bd0c p2=0xcea9afc ilink=878 nv1=4 nv2=4
+TTM FAIL p1=0xce0bd0c p2=0xceb1684 ilink=878 nv1=4 nv2=4
+TTM FOUND p1=0xce0d32c p2=0xce1f854 ilink=878 start1(edi)=0 start2(esi)=2
+TTM RING p1=0xce0d32c p2=0xce1f854 ilink=878 ringcount=6
+TTM AFTERRC p1=0xce0d32c p2=0xce1f854 ilink=878 rc_eax=1 ringcount=4
+TTM OK   p1=0xce0d32c p2=0xce1f854 ilink=878 nv1=4 nv2=0 newnv=4
+TTM FOUND p1=0xce0d32c p2=0xce29e44 ilink=878 start1(edi)=0 start2(esi)=0
+TTM RING p1=0xce0d32c p2=0xce29e44 ilink=878 ringcount=6
+TTM AFTERRC p1=0xce0d32c p2=0xce29e44 ilink=878 rc_eax=1 ringcount=4
+TTM OK   p1=0xce0d32c p2=0xce29e44 ilink=878 nv1=4 nv2=0 newnv=4
+TTM FAIL p1=0xce0d32c p2=0xce2f314 ilink=878 nv1=4 nv2=4
+TTM FAIL p1=0xce0d32c p2=0xce324dc ilink=878 nv1=4 nv2=4
+TTM FAIL p1=0xce0d32c p2=0xce34d6c ilink=878 nv1=4 nv2=4
+TTM FOUND p1=0xce0d32c p2=0xce34f44 ilink=878 start1(edi)=2 start2(esi)=1
+TTM RING p1=0xce0d32c p2=0xce34f44 ilink=878 ringcount=6
+TTM AFTERRC p1=0xce0d32c p2=0xce34f44 ilink=878 rc_eax=1 ringcount=4
+TTM OK   p1=0xce0d32c p2=0xce34f44 ilink=878 nv1=4 nv2=0 newnv=4
+TTM FAIL p1=0xce0d32c p2=0xce952cc ilink=878 nv1=4 nv2=4
+TTM FAIL p1=0xce0d32c p2=0xce97224 ilink=878 nv1=4 nv2=4
+TTM FAIL p1=0xce0d32c p2=0xce973fc ilink=878 nv1=4 nv2=4
+TTM FOUND p1=0xce0d32c p2=0xce977ac ilink=878 start1(edi)=0 start2(esi)=3
+TTM FAIL p1=0xce0d32c p2=0xce977ac ilink=878 nv1=4 nv2=4
+TTM FOUND p1=0xce0d32c p2=0xcea9afc ilink=878 start1(edi)=1 start2(esi)=1
+TTM FAIL p1=0xce0d32c p2=0xcea9afc ilink=878 nv1=4 nv2=4
+TTM FAIL p1=0xce0d32c p2=0xceb1684 ilink=878 nv1=4 nv2=4
+TTM FOUND p1=0xce2f314 p2=0xce324dc ilink=878 start1(edi)=0 start2(esi)=3
+TTM RING p1=0xce2f314 p2=0xce324dc ilink=878 ringcount=6
+TTM AFTERRC p1=0xce2f314 p2=0xce324dc ilink=878 rc_eax=1 ringcount=4
+TTM OK   p1=0xce2f314 p2=0xce324dc ilink=878 nv1=4 nv2=0 newnv=4
+TTM FOUND p1=0xce2f314 p2=0xce34d6c ilink=878 start1(edi)=2 start2(esi)=2
+TTM FAIL p1=0xce2f314 p2=0xce34d6c ilink=878 nv1=4 nv2=4
+TTM FAIL p1=0xce2f314 p2=0xce952cc ilink=878 nv1=4 nv2=4
+TTM FAIL p1=0xce2f314 p2=0xce97224 ilink=878 nv1=4 nv2=4
+TTM FAIL p1=0xce2f314 p2=0xce973fc ilink=878 nv1=4 nv2=4
+TTM FAIL p1=0xce2f314 p2=0xce977ac ilink=878 nv1=4 nv2=4
+TTM FAIL p1=0xce2f314 p2=0xcea9afc ilink=878 nv1=4 nv2=4
+TTM FAIL p1=0xce2f314 p2=0xceb1684 ilink=878 nv1=4 nv2=4
+TTM FAIL p1=0xce34d6c p2=0xce952cc ilink=878 nv1=4 nv2=4
+TTM FAIL p1=0xce34d6c p2=0xce97224 ilink=878 nv1=4 nv2=4
+TTM FAIL p1=0xce34d6c p2=0xce973fc ilink=878 nv1=4 nv2=4
+TTM FAIL p1=0xce34d6c p2=0xce977ac ilink=878 nv1=4 nv2=4
+TTM FAIL p1=0xce34d6c p2=0xcea9afc ilink=878 nv1=4 nv2=4
+TTM FAIL p1=0xce34d6c p2=0xceb1684 ilink=878 nv1=4 nv2=4
+TTM FOUND p1=0xce952cc p2=0xce97224 ilink=878 start1(edi)=1 start2(esi)=3
+TTM FAIL p1=0xce952cc p2=0xce97224 ilink=878 nv1=4 nv2=4
+TTM FOUND p1=0xce952cc p2=0xce973fc ilink=878 start1(edi)=0 start2(esi)=1
+TTM FAIL p1=0xce952cc p2=0xce973fc ilink=878 nv1=4 nv2=4
+TTM FAIL p1=0xce952cc p2=0xce977ac ilink=878 nv1=4 nv2=4
+TTM FAIL p1=0xce952cc p2=0xcea9afc ilink=878 nv1=4 nv2=4
+TTM FOUND p1=0xce952cc p2=0xceb1684 ilink=878 start1(edi)=3 start2(esi)=3
+TTM FAIL p1=0xce952cc p2=0xceb1684 ilink=878 nv1=4 nv2=4
+TTM FAIL p1=0xce97224 p2=0xce973fc ilink=878 nv1=4 nv2=4
+TTM FAIL p1=0xce97224 p2=0xce977ac ilink=878 nv1=4 nv2=4
+TTM FAIL p1=0xce97224 p2=0xcea9afc ilink=878 nv1=4 nv2=4
+TTM FAIL p1=0xce97224 p2=0xceb1684 ilink=878 nv1=4 nv2=4
+TTM FOUND p1=0xce973fc p2=0xce977ac ilink=878 start1(edi)=2 start2(esi)=1
+TTM RING p1=0xce973fc p2=0xce977ac ilink=878 ringcount=6
+TTM AFTERRC p1=0xce973fc p2=0xce977ac ilink=878 rc_eax=1 ringcount=4
+TTM OK   p1=0xce973fc p2=0xce977ac ilink=878 nv1=4 nv2=0 newnv=4
+TTM FOUND p1=0xce973fc p2=0xcea9afc ilink=878 start1(edi)=2 start2(esi)=2
+TTM FAIL p1=0xce973fc p2=0xcea9afc ilink=878 nv1=4 nv2=4
+TTM FAIL p1=0xce973fc p2=0xceb1684 ilink=878 nv1=4 nv2=4
+TTM FOUND p1=0xcea9afc p2=0xceb1684 ilink=878 start1(edi)=0 start2(esi)=1
+TTM RING p1=0xcea9afc p2=0xceb1684 ilink=878 ringcount=6
+TTM AFTERRC p1=0xcea9afc p2=0xceb1684 ilink=878 rc_eax=1 ringcount=4
+TTM OK   p1=0xcea9afc p2=0xceb1684 ilink=878 nv1=4 nv2=0 newnv=4
+TTM FAIL p1=0xce0bd0c p2=0xce0d32c ilink=878 nv1=4 nv2=4
+TTM FOUND p1=0xce0bd0c p2=0xce2f314 ilink=878 start1(edi)=1 start2(esi)=1
+TTM FAIL p1=0xce0bd0c p2=0xce2f314 ilink=878 nv1=4 nv2=4
+TTM FAIL p1=0xce0bd0c p2=0xce34d6c ilink=878 nv1=4 nv2=4
+TTM FAIL p1=0xce0bd0c p2=0xce952cc ilink=878 nv1=4 nv2=4
+TTM FOUND p1=0xce0bd0c p2=0xce97224 ilink=878 start1(edi)=2 start2(esi)=2
+TTM RING p1=0xce0bd0c p2=0xce97224 ilink=878 ringcount=6
+TTM AFTERRC p1=0xce0bd0c p2=0xce97224 ilink=878 rc_eax=1 ringcount=4
+TTM OK   p1=0xce0bd0c p2=0xce97224 ilink=878 nv1=4 nv2=0 newnv=4
+TTM FAIL p1=0xce0bd0c p2=0xce973fc ilink=878 nv1=4 nv2=4
+TTM FAIL p1=0xce0bd0c p2=0xcea9afc ilink=878 nv1=4 nv2=4
+TTM FAIL p1=0xce0d32c p2=0xce2f314 ilink=878 nv1=4 nv2=4
+TTM FOUND p1=0xce0d32c p2=0xce34d6c ilink=878 start1(edi)=2 start2(esi)=1
+TTM RING p1=0xce0d32c p2=0xce34d6c ilink=878 ringcount=6
+TTM AFTERRC p1=0xce0d32c p2=0xce34d6c ilink=878 rc_eax=1 ringcount=4
+TTM OK   p1=0xce0d32c p2=0xce34d6c ilink=878 nv1=4 nv2=0 newnv=4
+TTM FAIL p1=0xce0d32c p2=0xce952cc ilink=878 nv1=4 nv2=4
+TTM FOUND p1=0xce0d32c p2=0xce973fc ilink=878 start1(edi)=0 start2(esi)=3
+TTM FAIL p1=0xce0d32c p2=0xce973fc ilink=878 nv1=4 nv2=4
+TTM FOUND p1=0xce0d32c p2=0xcea9afc ilink=878 start1(edi)=1 start2(esi)=0
+TTM FAIL p1=0xce0d32c p2=0xcea9afc ilink=878 nv1=4 nv2=4
+TTM FAIL p1=0xce2f314 p2=0xce952cc ilink=878 nv1=4 nv2=4
+TTM FAIL p1=0xce2f314 p2=0xce973fc ilink=878 nv1=4 nv2=4
+TTM FAIL p1=0xce2f314 p2=0xcea9afc ilink=878 nv1=4 nv2=4
+TTM FOUND p1=0xce952cc p2=0xce973fc ilink=878 start1(edi)=0 start2(esi)=1
+TTM FAIL p1=0xce952cc p2=0xce973fc ilink=878 nv1=4 nv2=4
+TTM FOUND p1=0xce952cc p2=0xcea9afc ilink=878 start1(edi)=3 start2(esi)=2
+TTM FAIL p1=0xce952cc p2=0xcea9afc ilink=878 nv1=4 nv2=4
+TTM FOUND p1=0xce973fc p2=0xcea9afc ilink=878 start1(edi)=2 start2(esi)=1
+TTM FAIL p1=0xce973fc p2=0xcea9afc ilink=878 nv1=4 nv2=4
+TTM FAIL p1=0xce0bd0c p2=0xce0d32c ilink=878 nv1=4 nv2=4
+TTM FOUND p1=0xce0bd0c p2=0xce2f314 ilink=878 start1(edi)=1 start2(esi)=1
+TTM FAIL p1=0xce0bd0c p2=0xce2f314 ilink=878 nv1=4 nv2=4
+TTM FOUND p1=0xce0bd0c p2=0xce952cc ilink=878 start1(edi)=2 start2(esi)=1
+TTM FAIL p1=0xce0bd0c p2=0xce952cc ilink=878 nv1=4 nv2=4
+TTM FAIL p1=0xce0bd0c p2=0xce973fc ilink=878 nv1=4 nv2=4
+TTM FAIL p1=0xce0bd0c p2=0xcea9afc ilink=878 nv1=4 nv2=4
+TTM FOUND p1=0xce0d32c p2=0xce2f314 ilink=878 start1(edi)=2 start2(esi)=2
+TTM FAIL p1=0xce0d32c p2=0xce2f314 ilink=878 nv1=4 nv2=4
+TTM FAIL p1=0xce0d32c p2=0xce952cc ilink=878 nv1=4 nv2=4
+TTM FOUND p1=0xce0d32c p2=0xce973fc ilink=878 start1(edi)=0 start2(esi)=3
+TTM FAIL p1=0xce0d32c p2=0xce973fc ilink=878 nv1=4 nv2=4
+TTM FOUND p1=0xce0d32c p2=0xcea9afc ilink=878 start1(edi)=1 start2(esi)=0
+TTM FAIL p1=0xce0d32c p2=0xcea9afc ilink=878 nv1=4 nv2=4
+TTM FAIL p1=0xce2f314 p2=0xce952cc ilink=878 nv1=4 nv2=4
+TTM FAIL p1=0xce2f314 p2=0xce973fc ilink=878 nv1=4 nv2=4
+TTM FAIL p1=0xce2f314 p2=0xcea9afc ilink=878 nv1=4 nv2=4
+TTM FOUND p1=0xce952cc p2=0xce973fc ilink=878 start1(edi)=0 start2(esi)=1
+TTM FAIL p1=0xce952cc p2=0xce973fc ilink=878 nv1=4 nv2=4
+TTM FOUND p1=0xce952cc p2=0xcea9afc ilink=878 start1(edi)=3 start2(esi)=2
+TTM FAIL p1=0xce952cc p2=0xcea9afc ilink=878 nv1=4 nv2=4
+TTM FOUND p1=0xce973fc p2=0xcea9afc ilink=878 start1(edi)=2 start2(esi)=1
+TTM FAIL p1=0xce973fc p2=0xcea9afc ilink=878 nv1=4 nv2=4
+TTM FAIL p1=0xce0c0bc p2=0xce0c9f4 ilink=888 nv1=4 nv2=4
+TTM FOUND p1=0xce0c0bc p2=0xce28824 ilink=888 start1(edi)=2 start2(esi)=3
+TTM FAIL p1=0xce0c0bc p2=0xce28824 ilink=888 nv1=4 nv2=4
+TTM FOUND p1=0xce0c0bc p2=0xce2a1f4 ilink=888 start1(edi)=1 start2(esi)=1
+TTM FAIL p1=0xce0c0bc p2=0xce2a1f4 ilink=888 nv1=4 nv2=4
+TTM FAIL p1=0xce0c0bc p2=0xce2a954 ilink=888 nv1=4 nv2=4
+TTM FAIL p1=0xce0c0bc p2=0xce2f89c ilink=888 nv1=4 nv2=4
+TTM FAIL p1=0xce0c0bc p2=0xce32a64 ilink=888 nv1=4 nv2=4
+TTM FAIL p1=0xce0c0bc p2=0xce3339c ilink=888 nv1=4 nv2=4
+TTM FAIL p1=0xce0c0bc p2=0xce33574 ilink=888 nv1=4 nv2=4
+TTM FAIL p1=0xce0c0bc p2=0xce95854 ilink=888 nv1=4 nv2=4
+TTM FOUND p1=0xce0c0bc p2=0xce96364 ilink=888 start1(edi)=0 start2(esi)=1
+TTM RING p1=0xce0c0bc p2=0xce96364 ilink=888 ringcount=6
+TTM AFTERRC p1=0xce0c0bc p2=0xce96364 ilink=888 rc_eax=1 ringcount=4
+TTM OK   p1=0xce0c0bc p2=0xce96364 ilink=888 nv1=4 nv2=0 newnv=4
+TTM FAIL p1=0xce0c0bc p2=0xce9653c ilink=888 nv1=4 nv2=4
+TTM FAIL p1=0xce0c9f4 p2=0xce28824 ilink=888 nv1=4 nv2=4
+TTM FAIL p1=0xce0c9f4 p2=0xce2a1f4 ilink=888 nv1=4 nv2=4
+TTM FOUND p1=0xce0c9f4 p2=0xce2a954 ilink=888 start1(edi)=2 start2(esi)=1
+TTM RING p1=0xce0c9f4 p2=0xce2a954 ilink=888 ringcount=6
+TTM AFTERRC p1=0xce0c9f4 p2=0xce2a954 ilink=888 rc_eax=1 ringcount=4
+TTM OK   p1=0xce0c9f4 p2=0xce2a954 ilink=888 nv1=4 nv2=0 newnv=4
+TTM FAIL p1=0xce0c9f4 p2=0xce2f89c ilink=888 nv1=4 nv2=4
+TTM FAIL p1=0xce0c9f4 p2=0xce32a64 ilink=888 nv1=4 nv2=4
+TTM FAIL p1=0xce0c9f4 p2=0xce3339c ilink=888 nv1=4 nv2=4
+TTM FOUND p1=0xce0c9f4 p2=0xce33574 ilink=888 start1(edi)=2 start2(esi)=2
+TTM RING p1=0xce0c9f4 p2=0xce33574 ilink=888 ringcount=6
+TTM AFTERRC p1=0xce0c9f4 p2=0xce33574 ilink=888 rc_eax=1 ringcount=4
+TTM OK   p1=0xce0c9f4 p2=0xce33574 ilink=888 nv1=4 nv2=0 newnv=4
+TTM FAIL p1=0xce0c9f4 p2=0xce95854 ilink=888 nv1=4 nv2=4
+TTM FOUND p1=0xce0c9f4 p2=0xce9653c ilink=888 start1(edi)=0 start2(esi)=3
+TTM RING p1=0xce0c9f4 p2=0xce9653c ilink=888 ringcount=6
+TTM AFTERRC p1=0xce0c9f4 p2=0xce9653c ilink=888 rc_eax=1 ringcount=4
+TTM OK   p1=0xce0c9f4 p2=0xce9653c ilink=888 nv1=4 nv2=0 newnv=4
+TTM FOUND p1=0xce28824 p2=0xce2a1f4 ilink=888 start1(edi)=0 start2(esi)=0
+TTM RING p1=0xce28824 p2=0xce2a1f4 ilink=888 ringcount=6
+TTM AFTERRC p1=0xce28824 p2=0xce2a1f4 ilink=888 rc_eax=1 ringcount=4
+TTM OK   p1=0xce28824 p2=0xce2a1f4 ilink=888 nv1=4 nv2=0 newnv=4
+TTM FOUND p1=0xce28824 p2=0xce2f89c ilink=888 start1(edi)=0 start2(esi)=3
+TTM FAIL p1=0xce28824 p2=0xce2f89c ilink=888 nv1=4 nv2=4
+TTM FAIL p1=0xce28824 p2=0xce32a64 ilink=888 nv1=4 nv2=4
+TTM FOUND p1=0xce28824 p2=0xce3339c ilink=888 start1(edi)=3 start2(esi)=3
+TTM FAIL p1=0xce28824 p2=0xce3339c ilink=888 nv1=4 nv2=4
+TTM FAIL p1=0xce28824 p2=0xce95854 ilink=888 nv1=4 nv2=4
+TTM FOUND p1=0xce2f89c p2=0xce32a64 ilink=888 start1(edi)=1 start2(esi)=3
+TTM FAIL p1=0xce2f89c p2=0xce32a64 ilink=888 nv1=4 nv2=4
+TTM FOUND p1=0xce2f89c p2=0xce3339c ilink=888 start1(edi)=0 start2(esi)=2
+TTM FAIL p1=0xce2f89c p2=0xce3339c ilink=888 nv1=4 nv2=4
+TTM FAIL p1=0xce2f89c p2=0xce95854 ilink=888 nv1=4 nv2=4
+TTM FOUND p1=0xce32a64 p2=0xce3339c ilink=888 start1(edi)=0 start2(esi)=1
+TTM FAIL p1=0xce32a64 p2=0xce3339c ilink=888 nv1=4 nv2=4
+TTM FAIL p1=0xce32a64 p2=0xce95854 ilink=888 nv1=4 nv2=4
+TTM FAIL p1=0xce3339c p2=0xce95854 ilink=888 nv1=4 nv2=4
+TTM FAIL p1=0xce0c0bc p2=0xce0c9f4 ilink=888 nv1=4 nv2=4
+TTM FOUND p1=0xce0c0bc p2=0xce28824 ilink=888 start1(edi)=0 start2(esi)=2
+TTM RING p1=0xce0c0bc p2=0xce28824 ilink=888 ringcount=6
+TTM AFTERRC p1=0xce0c0bc p2=0xce28824 ilink=888 rc_eax=1 ringcount=4
+TTM OK   p1=0xce0c0bc p2=0xce28824 ilink=888 nv1=4 nv2=0 newnv=4
+TTM FOUND p1=0xce0c0bc p2=0xce2f89c ilink=888 start1(edi)=3 start2(esi)=3
+TTM FAIL p1=0xce0c0bc p2=0xce2f89c ilink=888 nv1=4 nv2=4
+TTM FAIL p1=0xce0c0bc p2=0xce32a64 ilink=888 nv1=4 nv2=4
+TTM FOUND p1=0xce0c0bc p2=0xce3339c ilink=888 start1(edi)=2 start2(esi)=3
+TTM FAIL p1=0xce0c0bc p2=0xce3339c ilink=888 nv1=4 nv2=4
+TTM FOUND p1=0xce0c0bc p2=0xce95854 ilink=888 start1(edi)=0 start2(esi)=2
+TTM FAIL p1=0xce0c0bc p2=0xce95854 ilink=888 nv1=4 nv2=4
+TTM FAIL p1=0xce0c9f4 p2=0xce2f89c ilink=888 nv1=4 nv2=4
+TTM FOUND p1=0xce0c9f4 p2=0xce32a64 ilink=888 start1(edi)=0 start2(esi)=1
+TTM FAIL p1=0xce0c9f4 p2=0xce32a64 ilink=888 nv1=4 nv2=4
+TTM FAIL p1=0xce0c9f4 p2=0xce3339c ilink=888 nv1=4 nv2=4
+TTM FOUND p1=0xce0c9f4 p2=0xce95854 ilink=888 start1(edi)=3 start2(esi)=1
+TTM FAIL p1=0xce0c9f4 p2=0xce95854 ilink=888 nv1=4 nv2=4
+TTM FOUND p1=0xce2f89c p2=0xce32a64 ilink=888 start1(edi)=1 start2(esi)=3
+TTM FAIL p1=0xce2f89c p2=0xce32a64 ilink=888 nv1=4 nv2=4
+TTM FOUND p1=0xce2f89c p2=0xce3339c ilink=888 start1(edi)=0 start2(esi)=2
+TTM FAIL p1=0xce2f89c p2=0xce3339c ilink=888 nv1=4 nv2=4
+TTM FAIL p1=0xce2f89c p2=0xce95854 ilink=888 nv1=4 nv2=4
+TTM FOUND p1=0xce32a64 p2=0xce3339c ilink=888 start1(edi)=0 start2(esi)=1
+TTM FAIL p1=0xce32a64 p2=0xce3339c ilink=888 nv1=4 nv2=4
+TTM FAIL p1=0xce32a64 p2=0xce95854 ilink=888 nv1=4 nv2=4
+TTM FAIL p1=0xce3339c p2=0xce95854 ilink=888 nv1=4 nv2=4
+TTM FAIL p1=0xce0c0bc p2=0xce0c9f4 ilink=888 nv1=4 nv2=4
+TTM FOUND p1=0xce0c0bc p2=0xce2f89c ilink=888 start1(edi)=3 start2(esi)=3
+TTM FAIL p1=0xce0c0bc p2=0xce2f89c ilink=888 nv1=4 nv2=4
+TTM FAIL p1=0xce0c0bc p2=0xce32a64 ilink=888 nv1=4 nv2=4
+TTM FOUND p1=0xce0c0bc p2=0xce3339c ilink=888 start1(edi)=2 start2(esi)=3
+TTM FAIL p1=0xce0c0bc p2=0xce3339c ilink=888 nv1=4 nv2=4
+TTM FOUND p1=0xce0c0bc p2=0xce95854 ilink=888 start1(edi)=0 start2(esi)=2
+TTM FAIL p1=0xce0c0bc p2=0xce95854 ilink=888 nv1=4 nv2=4
+TTM FAIL p1=0xce0c9f4 p2=0xce2f89c ilink=888 nv1=4 nv2=4
+TTM FOUND p1=0xce0c9f4 p2=0xce32a64 ilink=888 start1(edi)=0 start2(esi)=1
+TTM FAIL p1=0xce0c9f4 p2=0xce32a64 ilink=888 nv1=4 nv2=4
+TTM FAIL p1=0xce0c9f4 p2=0xce3339c ilink=888 nv1=4 nv2=4
+TTM FOUND p1=0xce0c9f4 p2=0xce95854 ilink=888 start1(edi)=3 start2(esi)=1
+TTM FAIL p1=0xce0c9f4 p2=0xce95854 ilink=888 nv1=4 nv2=4
+TTM FOUND p1=0xce2f89c p2=0xce32a64 ilink=888 start1(edi)=1 start2(esi)=3
+TTM FAIL p1=0xce2f89c p2=0xce32a64 ilink=888 nv1=4 nv2=4
+TTM FOUND p1=0xce2f89c p2=0xce3339c ilink=888 start1(edi)=0 start2(esi)=2
+TTM FAIL p1=0xce2f89c p2=0xce3339c ilink=888 nv1=4 nv2=4
+TTM FAIL p1=0xce2f89c p2=0xce95854 ilink=888 nv1=4 nv2=4
+TTM FOUND p1=0xce32a64 p2=0xce3339c ilink=888 start1(edi)=0 start2(esi)=1
+TTM FAIL p1=0xce32a64 p2=0xce3339c ilink=888 nv1=4 nv2=4
+TTM FAIL p1=0xce32a64 p2=0xce95854 ilink=888 nv1=4 nv2=4
+TTM FAIL p1=0xce3339c p2=0xce95854 ilink=888 nv1=4 nv2=4
+TTM FAIL p1=0xce0d504 p2=0xce0d6dc ilink=889 nv1=4 nv2=4
+TTM FOUND p1=0xce0d504 p2=0xce2b814 ilink=889 start1(edi)=2 start2(esi)=1
+TTM RING p1=0xce0d504 p2=0xce2b814 ilink=889 ringcount=6
+TTM AFTERRC p1=0xce0d504 p2=0xce2b814 ilink=889 rc_eax=1 ringcount=4
+TTM OK   p1=0xce0d504 p2=0xce2b814 ilink=889 nv1=4 nv2=0 newnv=4
+TTM FAIL p1=0xce0d504 p2=0xce2b9ec ilink=889 nv1=4 nv2=4
+TTM FAIL p1=0xce0d504 p2=0xce3511c ilink=889 nv1=4 nv2=4
+TTM FOUND p1=0xce0d504 p2=0xce352f4 ilink=889 start1(edi)=2 start2(esi)=2
+TTM RING p1=0xce0d504 p2=0xce352f4 ilink=889 ringcount=6
+TTM AFTERRC p1=0xce0d504 p2=0xce352f4 ilink=889 rc_eax=1 ringcount=4
+TTM OK   p1=0xce0d504 p2=0xce352f4 ilink=889 nv1=4 nv2=0 newnv=4
+TTM FAIL p1=0xce0d504 p2=0xce354cc ilink=889 nv1=4 nv2=4
+TTM FAIL p1=0xce0d504 p2=0xce97984 ilink=889 nv1=4 nv2=4
+TTM FOUND p1=0xce0d504 p2=0xce97b5c ilink=889 start1(edi)=0 start2(esi)=3
+TTM RING p1=0xce0d504 p2=0xce97b5c ilink=889 ringcount=6
+TTM AFTERRC p1=0xce0d504 p2=0xce97b5c ilink=889 rc_eax=1 ringcount=4
+TTM OK   p1=0xce0d504 p2=0xce97b5c ilink=889 nv1=4 nv2=0 newnv=4
+TTM FAIL p1=0xce0d504 p2=0xce97d34 ilink=889 nv1=4 nv2=4
+TTM FOUND p1=0xce0d6dc p2=0xce2b9ec ilink=889 start1(edi)=2 start2(esi)=1
+TTM RING p1=0xce0d6dc p2=0xce2b9ec ilink=889 ringcount=6
+TTM AFTERRC p1=0xce0d6dc p2=0xce2b9ec ilink=889 rc_eax=1 ringcount=4
+TTM OK   p1=0xce0d6dc p2=0xce2b9ec ilink=889 nv1=4 nv2=0 newnv=4
+TTM FAIL p1=0xce0d6dc p2=0xce3511c ilink=889 nv1=4 nv2=4
+TTM FOUND p1=0xce0d6dc p2=0xce354cc ilink=889 start1(edi)=2 start2(esi)=3
+TTM RING p1=0xce0d6dc p2=0xce354cc ilink=889 ringcount=6
+TTM AFTERRC p1=0xce0d6dc p2=0xce354cc ilink=889 rc_eax=1 ringcount=4
+TTM OK   p1=0xce0d6dc p2=0xce354cc ilink=889 nv1=4 nv2=0 newnv=4
+TTM FAIL p1=0xce0d6dc p2=0xce97984 ilink=889 nv1=4 nv2=4
+TTM FOUND p1=0xce0d6dc p2=0xce97d34 ilink=889 start1(edi)=0 start2(esi)=3
+TTM RING p1=0xce0d6dc p2=0xce97d34 ilink=889 ringcount=6
+TTM AFTERRC p1=0xce0d6dc p2=0xce97d34 ilink=889 rc_eax=1 ringcount=4
+TTM OK   p1=0xce0d6dc p2=0xce97d34 ilink=889 nv1=4 nv2=0 newnv=4
+TTM FAIL p1=0xce3511c p2=0xce97984 ilink=889 nv1=4 nv2=4
+TTM FAIL p1=0xce0d504 p2=0xce0d6dc ilink=889 nv1=4 nv2=4
+TTM FOUND p1=0xce0d504 p2=0xce3511c ilink=889 start1(edi)=0 start2(esi)=1
+TTM FAIL p1=0xce0d504 p2=0xce3511c ilink=889 nv1=4 nv2=4
+TTM FOUND p1=0xce0d504 p2=0xce97984 ilink=889 start1(edi)=3 start2(esi)=3
+TTM FAIL p1=0xce0d504 p2=0xce97984 ilink=889 nv1=4 nv2=4
+TTM FOUND p1=0xce0d6dc p2=0xce3511c ilink=889 start1(edi)=1 start2(esi)=0
+TTM FAIL p1=0xce0d6dc p2=0xce3511c ilink=889 nv1=4 nv2=4
+TTM FOUND p1=0xce0d6dc p2=0xce97984 ilink=889 start1(edi)=2 start2(esi)=0
+TTM FAIL p1=0xce0d6dc p2=0xce97984 ilink=889 nv1=4 nv2=4
+TTM FAIL p1=0xce3511c p2=0xce97984 ilink=889 nv1=4 nv2=4
+TTM FOUND p1=0xce0d8b4 p2=0xce2bbc4 ilink=896 start1(edi)=2 start2(esi)=1
+TTM RING p1=0xce0d8b4 p2=0xce2bbc4 ilink=896 ringcount=6
+TTM AFTERRC p1=0xce0d8b4 p2=0xce2bbc4 ilink=896 rc_eax=1 ringcount=4
+TTM OK   p1=0xce0d8b4 p2=0xce2bbc4 ilink=896 nv1=4 nv2=0 newnv=4
+TTM FOUND p1=0xce0d8b4 p2=0xce356a4 ilink=896 start1(edi)=2 start2(esi)=1
+TTM RING p1=0xce0d8b4 p2=0xce356a4 ilink=896 ringcount=6
+TTM AFTERRC p1=0xce0d8b4 p2=0xce356a4 ilink=896 rc_eax=1 ringcount=4
+TTM OK   p1=0xce0d8b4 p2=0xce356a4 ilink=896 nv1=4 nv2=0 newnv=4
+TTM FOUND p1=0xce0d8b4 p2=0xce97f0c ilink=896 start1(edi)=0 start2(esi)=3
+TTM RING p1=0xce0d8b4 p2=0xce97f0c ilink=896 ringcount=6
+TTM AFTERRC p1=0xce0d8b4 p2=0xce97f0c ilink=896 rc_eax=1 ringcount=4
+TTM OK   p1=0xce0d8b4 p2=0xce97f0c ilink=896 nv1=4 nv2=0 newnv=4
+TTM FOUND p1=0xd01086c p2=0xd010a44 ilink=1144 start1(edi)=2 start2(esi)=1
+TTM RING p1=0xd01086c p2=0xd010a44 ilink=1144 ringcount=6
+TTM AFTERRC p1=0xd01086c p2=0xd010a44 ilink=1144 rc_eax=0 ringcount=6
+TTM FAIL p1=0xd01086c p2=0xd010a44 ilink=1144 nv1=4 nv2=4
+TTM FAIL p1=0xd01086c p2=0xd010c1c ilink=1144 nv1=4 nv2=4
+TTM FAIL p1=0xd01086c p2=0xd010df4 ilink=1144 nv1=4 nv2=4
+TTM FOUND p1=0xd010a44 p2=0xd010c1c ilink=1144 start1(edi)=2 start2(esi)=1
+TTM RING p1=0xd010a44 p2=0xd010c1c ilink=1144 ringcount=6
+TTM AFTERRC p1=0xd010a44 p2=0xd010c1c ilink=1144 rc_eax=0 ringcount=6
+TTM FAIL p1=0xd010a44 p2=0xd010c1c ilink=1144 nv1=4 nv2=4
+TTM FAIL p1=0xd010a44 p2=0xd010df4 ilink=1144 nv1=4 nv2=4
+TTM FOUND p1=0xd010c1c p2=0xd010df4 ilink=1144 start1(edi)=2 start2(esi)=1
+TTM RING p1=0xd010c1c p2=0xd010df4 ilink=1144 ringcount=6
+TTM AFTERRC p1=0xd010c1c p2=0xd010df4 ilink=1144 rc_eax=0 ringcount=6
+TTM FAIL p1=0xd010c1c p2=0xd010df4 ilink=1144 nv1=4 nv2=4
+TTM FOUND p1=0xd01172c p2=0xd011904 ilink=1163 start1(edi)=0 start2(esi)=1
+TTM FAIL p1=0xd01172c p2=0xd011904 ilink=1163 nv1=4 nv2=5
+TTM FOUND p1=0xd01172c p2=0xd011adc ilink=1163 start1(edi)=3 start2(esi)=1
+TTM FAIL p1=0xd01172c p2=0xd011adc ilink=1163 nv1=4 nv2=3
+TTM FOUND p1=0xd01172c p2=0xd011cb4 ilink=1163 start1(edi)=2 start2(esi)=1
+TTM RING p1=0xd01172c p2=0xd011cb4 ilink=1163 ringcount=6
+TTM AFTERRC p1=0xd01172c p2=0xd011cb4 ilink=1163 rc_eax=1 ringcount=5
+TTM OK   p1=0xd01172c p2=0xd011cb4 ilink=1163 nv1=5 nv2=0 newnv=5
+TTM FAIL p1=0xd01172c p2=0xd011e8c ilink=1163 nv1=5 nv2=4
+TTM FOUND p1=0xd01172c p2=0xd012064 ilink=1163 start1(edi)=4 start2(esi)=2
+TTM FAIL p1=0xd01172c p2=0xd012064 ilink=1163 nv1=5 nv2=4
+TTM FOUND p1=0xd01172c p2=0xd01223c ilink=1163 start1(edi)=3 start2(esi)=1
+TTM RING p1=0xd01172c p2=0xd01223c ilink=1163 ringcount=6
+TTM AFTERRC p1=0xd01172c p2=0xd01223c ilink=1163 rc_eax=1 ringcount=5
+TTM OK   p1=0xd01172c p2=0xd01223c ilink=1163 nv1=5 nv2=0 newnv=5
+TTM FAIL p1=0xd01172c p2=0xd012414 ilink=1163 nv1=5 nv2=3
+TTM FAIL p1=0xd01172c p2=0xd0125ec ilink=1163 nv1=5 nv2=5
+TTM FAIL p1=0xd01172c p2=0xd0127c4 ilink=1163 nv1=5 nv2=5
+TTM FOUND p1=0xd01172c p2=0xd01299c ilink=1163 start1(edi)=4 start2(esi)=1
+TTM FAIL p1=0xd01172c p2=0xd01299c ilink=1163 nv1=5 nv2=4
+TTM FAIL p1=0xd01172c p2=0xd012b74 ilink=1163 nv1=5 nv2=4
+TTM FAIL p1=0xd01172c p2=0xd012d4c ilink=1163 nv1=5 nv2=3
+TTM FAIL p1=0xd01172c p2=0xd012f24 ilink=1163 nv1=5 nv2=4
+TTM FAIL p1=0xd01172c p2=0xd0130fc ilink=1163 nv1=5 nv2=4
+TTM FOUND p1=0xd011904 p2=0xd011adc ilink=1163 start1(edi)=2 start2(esi)=0
+TTM RING p1=0xd011904 p2=0xd011adc ilink=1163 ringcount=6
+TTM AFTERRC p1=0xd011904 p2=0xd011adc ilink=1163 rc_eax=1 ringcount=4
+TTM OK   p1=0xd011904 p2=0xd011adc ilink=1163 nv1=4 nv2=0 newnv=4
+TTM FOUND p1=0xd011904 p2=0xd011e8c ilink=1163 start1(edi)=0 start2(esi)=0
+TTM FAIL p1=0xd011904 p2=0xd011e8c ilink=1163 nv1=4 nv2=4
+TTM FOUND p1=0xd011904 p2=0xd012064 ilink=1163 start1(edi)=3 start2(esi)=1
+TTM FAIL p1=0xd011904 p2=0xd012064 ilink=1163 nv1=4 nv2=4
+TTM FAIL p1=0xd011904 p2=0xd012414 ilink=1163 nv1=4 nv2=3
+TTM FAIL p1=0xd011904 p2=0xd0125ec ilink=1163 nv1=4 nv2=5
+TTM FAIL p1=0xd011904 p2=0xd0127c4 ilink=1163 nv1=4 nv2=5
+TTM FAIL p1=0xd011904 p2=0xd01299c ilink=1163 nv1=4 nv2=4
+TTM FAIL p1=0xd011904 p2=0xd012b74 ilink=1163 nv1=4 nv2=4
+TTM FAIL p1=0xd011904 p2=0xd012d4c ilink=1163 nv1=4 nv2=3
+TTM FAIL p1=0xd011904 p2=0xd012f24 ilink=1163 nv1=4 nv2=4
+TTM FAIL p1=0xd011904 p2=0xd0130fc ilink=1163 nv1=4 nv2=4
+TTM FOUND p1=0xd011e8c p2=0xd012064 ilink=1163 start1(edi)=1 start2(esi)=0
+TTM RING p1=0xd011e8c p2=0xd012064 ilink=1163 ringcount=6
+TTM AFTERRC p1=0xd011e8c p2=0xd012064 ilink=1163 rc_eax=1 ringcount=4
+TTM OK   p1=0xd011e8c p2=0xd012064 ilink=1163 nv1=4 nv2=0 newnv=4
+TTM FAIL p1=0xd011e8c p2=0xd012414 ilink=1163 nv1=4 nv2=3
+TTM FOUND p1=0xd011e8c p2=0xd0125ec ilink=1163 start1(edi)=0 start2(esi)=0
+TTM FAIL p1=0xd011e8c p2=0xd0125ec ilink=1163 nv1=4 nv2=5
+TTM FOUND p1=0xd011e8c p2=0xd0127c4 ilink=1163 start1(edi)=3 start2(esi)=1
+TTM FAIL p1=0xd011e8c p2=0xd0127c4 ilink=1163 nv1=4 nv2=5
+TTM FAIL p1=0xd011e8c p2=0xd01299c ilink=1163 nv1=4 nv2=4
+TTM FAIL p1=0xd011e8c p2=0xd012b74 ilink=1163 nv1=4 nv2=4
+TTM FAIL p1=0xd011e8c p2=0xd012d4c ilink=1163 nv1=4 nv2=3
+TTM FAIL p1=0xd011e8c p2=0xd012f24 ilink=1163 nv1=4 nv2=4
+TTM FAIL p1=0xd011e8c p2=0xd0130fc ilink=1163 nv1=4 nv2=4
+TTM FOUND p1=0xd012414 p2=0xd0125ec ilink=1163 start1(edi)=0 start2(esi)=2
+TTM RING p1=0xd012414 p2=0xd0125ec ilink=1163 ringcount=6
+TTM AFTERRC p1=0xd012414 p2=0xd0125ec ilink=1163 rc_eax=1 ringcount=4
+TTM OK   p1=0xd012414 p2=0xd0125ec ilink=1163 nv1=4 nv2=0 newnv=4
+TTM FOUND p1=0xd012414 p2=0xd0127c4 ilink=1163 start1(edi)=0 start2(esi)=4
+TTM RING p1=0xd012414 p2=0xd0127c4 ilink=1163 ringcount=7
+TTM AFTERRC p1=0xd012414 p2=0xd0127c4 ilink=1163 rc_eax=1 ringcount=5
+TTM OK   p1=0xd012414 p2=0xd0127c4 ilink=1163 nv1=5 nv2=0 newnv=5
+TTM FOUND p1=0xd012414 p2=0xd01299c ilink=1163 start1(edi)=3 start2(esi)=0
+TTM RING p1=0xd012414 p2=0xd01299c ilink=1163 ringcount=7
+TTM AFTERRC p1=0xd012414 p2=0xd01299c ilink=1163 rc_eax=1 ringcount=5
+TTM OK   p1=0xd012414 p2=0xd01299c ilink=1163 nv1=5 nv2=0 newnv=5
+TTM FAIL p1=0xd012414 p2=0xd012b74 ilink=1163 nv1=5 nv2=4
+TTM FOUND p1=0xd012414 p2=0xd012d4c ilink=1163 start1(edi)=0 start2(esi)=0
+TTM FAIL p1=0xd012414 p2=0xd012d4c ilink=1163 nv1=5 nv2=3
+TTM FAIL p1=0xd012414 p2=0xd012f24 ilink=1163 nv1=5 nv2=4
+TTM FOUND p1=0xd012414 p2=0xd0130fc ilink=1163 start1(edi)=4 start2(esi)=1
+TTM FAIL p1=0xd012414 p2=0xd0130fc ilink=1163 nv1=5 nv2=4
+TTM FOUND p1=0xd012b74 p2=0xd012d4c ilink=1163 start1(edi)=0 start2(esi)=1
+TTM RING p1=0xd012b74 p2=0xd012d4c ilink=1163 ringcount=5
+TTM AFTERRC p1=0xd012b74 p2=0xd012d4c ilink=1163 rc_eax=1 ringcount=4
+TTM OK   p1=0xd012b74 p2=0xd012d4c ilink=1163 nv1=4 nv2=0 newnv=4
+TTM FOUND p1=0xd012b74 p2=0xd012f24 ilink=1163 start1(edi)=0 start2(esi)=0
+TTM RING p1=0xd012b74 p2=0xd012f24 ilink=1163 ringcount=6
+TTM AFTERRC p1=0xd012b74 p2=0xd012f24 ilink=1163 rc_eax=1 ringcount=4
+TTM OK   p1=0xd012b74 p2=0xd012f24 ilink=1163 nv1=4 nv2=0 newnv=4
+TTM FOUND p1=0xd012b74 p2=0xd0130fc ilink=1163 start1(edi)=2 start2(esi)=0
+TTM RING p1=0xd012b74 p2=0xd0130fc ilink=1163 ringcount=6
+TTM AFTERRC p1=0xd012b74 p2=0xd0130fc ilink=1163 rc_eax=1 ringcount=4
+TTM OK   p1=0xd012b74 p2=0xd0130fc ilink=1163 nv1=4 nv2=0 newnv=4
+TTM FOUND p1=0xd01172c p2=0xd011904 ilink=1163 start1(edi)=0 start2(esi)=2
+TTM FAIL p1=0xd01172c p2=0xd011904 ilink=1163 nv1=5 nv2=4
+TTM FAIL p1=0xd01172c p2=0xd011e8c ilink=1163 nv1=5 nv2=4
+TTM FOUND p1=0xd01172c p2=0xd012414 ilink=1163 start1(edi)=4 start2(esi)=3
+TTM FAIL p1=0xd01172c p2=0xd012414 ilink=1163 nv1=5 nv2=5
+TTM FAIL p1=0xd01172c p2=0xd012b74 ilink=1163 nv1=5 nv2=4
+TTM FOUND p1=0xd011904 p2=0xd011e8c ilink=1163 start1(edi)=0 start2(esi)=1
+TTM RING p1=0xd011904 p2=0xd011e8c ilink=1163 ringcount=6
+TTM AFTERRC p1=0xd011904 p2=0xd011e8c ilink=1163 rc_eax=0 ringcount=6
+TTM FAIL p1=0xd011904 p2=0xd011e8c ilink=1163 nv1=4 nv2=4
+TTM FAIL p1=0xd011904 p2=0xd012414 ilink=1163 nv1=4 nv2=5
+TTM FAIL p1=0xd011904 p2=0xd012b74 ilink=1163 nv1=4 nv2=4
+TTM FOUND p1=0xd011e8c p2=0xd012414 ilink=1163 start1(edi)=0 start2(esi)=1
+TTM RING p1=0xd011e8c p2=0xd012414 ilink=1163 ringcount=7
+TTM AFTERRC p1=0xd011e8c p2=0xd012414 ilink=1163 rc_eax=0 ringcount=7
+TTM FAIL p1=0xd011e8c p2=0xd012414 ilink=1163 nv1=4 nv2=5
+TTM FAIL p1=0xd011e8c p2=0xd012b74 ilink=1163 nv1=4 nv2=4
+TTM FOUND p1=0xd012414 p2=0xd012b74 ilink=1163 start1(edi)=0 start2(esi)=1
+TTM RING p1=0xd012414 p2=0xd012b74 ilink=1163 ringcount=7
+TTM AFTERRC p1=0xd012414 p2=0xd012b74 ilink=1163 rc_eax=0 ringcount=7
+TTM FAIL p1=0xd012414 p2=0xd012b74 ilink=1163 nv1=5 nv2=4
+REPART_ENTRY
+REPART_ENTRY
+REPART_ENTRY
+REPART_ENTRY
+REPART_ENTRY
+REPART_ENTRY
