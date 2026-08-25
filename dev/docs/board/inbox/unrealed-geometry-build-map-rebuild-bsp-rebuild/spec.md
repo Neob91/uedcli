@@ -1672,12 +1672,24 @@ being referenced is right, only the **table position** the editor assigned it di
 **The open, load-bearing question** (this measurement is against a **hand-authored** `.dx` — a map
 edited over a long session of CSG rebuilds, moves, and paste-duplications, whose export order plausibly
 reflects that editing *history*, not a clean deterministic function of final content): would a **clean
-`MAP IMPORT`** of a T3D trunk into a fresh level produce export/import tables in trunk order (or some
-other deterministic order), unlike a hand-edited map's accumulated-history order? **This is untested**
-— no editor-materialized-from-a-clean-trunk `.dx` was produced and compared. It is the single
-experiment that would settle whether whole-package byte-exactness is reachable via a deterministic
-export-order rule, or whether it requires reproducing the exact sequence of editor operations a map
-was authored with (not generally recoverable from a T3D trunk alone).
+import** of a T3D trunk into a fresh level produce export/import tables in trunk order (or some
+other deterministic order), unlike a hand-edited map's accumulated-history order? Since this document
+was first drafted, this was tested live, twice, with two different results worth recording precisely
+(full account, evidence, and the resulting positive finding in §20.3):
+
+- **Driving raw `MAP IMPORT FILE=<t3d>` directly crashes the editor's whole container process, 4/4
+  attempts, independent of level size** (17KB/59-export level through 627KB/915-export level) —
+  **[LIVE]**, `dev/docs/board/inbox/clean-map-import-crashes-the-editor-container/overview.md`. This
+  specific driving path could not be used to test the question at all.
+- **Routing the same real level through this project's own production pipeline instead
+  (`level import` → `level materialize`, twice from the same trunk) did not crash, and answered the
+  determinism half of the question outright: yes.** Full package output (not just export/import order
+  — every byte outside the known-variable GUID/timestamp) was identical across two independent runs
+  from the same input. The *trunk-order-derivability* half remains open — this clean pipeline's export
+  order still didn't match trunk order (2.7% exact positional match) any better than the original
+  hand-authored-map measurement above (0%), though it showed real, non-random structure (class/CSG
+  clustering) that trunk order alone doesn't capture. See §20.3 for the full result and what it does
+  and doesn't establish.
 
 **A related, distinct residual**: the `Points` pool itself (§3.10's dedup algorithm, correctly
 decoded) was measured, in the same comparison, to genuinely differ in *membership*, not just
@@ -1910,7 +1922,9 @@ subtract nothing further).
 | `LOWOPT`/`HIGHOPT`'s actual algorithmic effect | [OPEN] — only the `opt=0/1/2` numeric pass-through is confirmed |
 | Paths survive `MAP REBUILD`, unlike lighting | behavioral claim [LIVE] via `commands.md`; the mechanism is a structural inference (object-layout argument, §11.7), not a direct rebuild-routine citation — [OPEN] |
 | `bspAddPoint`/`bspAddVector` pool dedup rule (§3.10) | [DISASM], nearest-not-first, address-cited thresholds — strong for the *rule*; whether an implementation's *proposal order* matches closely enough to reproduce the real pool is a separate, [OPEN], empirically-hard question (§20.2) |
-| Export/import table ordering (§12.1) | [BYTE-DIFF] for the *measurement* (not trunk-derivable on the one map tested) — strong; the underlying *rule* (if any) is [OPEN], gated on an untested clean-reimport experiment |
+| Export/import table ordering — determinism (§12.1, §20.3) | [LIVE], two independent live rebuilds from the same trunk, byte-identical modulo GUID/timestamp — strong, confirmed |
+| Export/import table ordering — trunk-derivability (§12.1, §20.3) | [BYTE-DIFF] + [LIVE] for the *measurement* (not trunk-derivable, on three independent maps now) — strong; the underlying *rule* (if any) is still [OPEN] |
+| `MAP IMPORT` driving reliability | [LIVE] 4/4 crashes, size-independent — strong for the *symptom*; root cause (app bug vs. host resource issue) [OPEN] |
 | BSP repartition matching the real editor at production scale (700+ brushes) | [DISASM]-verified algorithm, [LIVE]-verified small-scale (95 brushes, byte-identical); [OPEN] and [LIVE]-**disproven** at real scale (measured 57-node surplus, root cause not pinned) — see §20.2 |
 
 ---
@@ -1991,10 +2005,19 @@ subtract nothing further).
     live-`gdb` differential bisection against a real running editor building a real large map,
     comparing the exact fragment set/order reaching repartition — substantial effort (prior attempts
     span roughly 2000 lines of bisection notes without closing it).
-12. **[§12.1, §20.3] Whether a clean `MAP IMPORT` of a T3D trunk produces deterministic (e.g.
-    trunk-order) export/import table numbering**, unlike the session-history-dependent order measured
-    on a hand-authored map. A single bounded experiment: import a trunk fresh, save, and diff the
-    resulting table order against the trunk order and against the hand-authored golden's order.
+12. **[§12.1, §20.3] RESOLVED (partially): determinism is confirmed** — two independent rebuilds of
+    the same trunk via this project's actual `level materialize` pipeline produced byte-identical
+    output (36/20,644 differing bytes, all known GUID/timestamp variance). **Trunk-order derivability
+    remains open**: the resulting order matched trunk order on only 2.7% of positions despite showing
+    real non-random structure (CSG/class clustering, strict numeric ordering within auto-numbered
+    classes). Whether that structure follows a decodable rule, and whether raw `MAP IMPORT`
+    specifically (rather than this project's `assemble_unbuilt`+`MAP LOAD` pipeline) would behave
+    differently, is still untested — `MAP IMPORT` itself could not be driven at all (item 13 raised
+    that as its own new finding).
+13. **[new] Root cause of `MAP IMPORT` crashing the editor container 4/4 times, independent of level
+    size** (`dev/docs/board/inbox/clean-map-import-crashes-the-editor-container/overview.md`). Not
+    isolated to a specific one of `MAP NEW`/`MAP IMPORT`/`MAP SAVE`, and not distinguished from a
+    possible host-level resource issue vs. an application-level incompatibility.
 
 ---
 
@@ -2062,15 +2085,61 @@ investigation was shelved. **This is squarely a §3 (CSG filter) or §3.10 (poin
 order) question, not a §5 one** — some subtlety in exactly which fragments reach the repartition step,
 or in what order, differs from the real editor in a way that only shows up past a few hundred brushes.
 
-### 20.3 Gap 2 — export/import table ordering (§12.1)
+### 20.3 Gap 2 — export/import table ordering: determinism confirmed, trunk-derivability still open
 
 Independent of geometry correctness: reproducing a real `.dx` file byte-for-byte also requires
 reproducing the package's own export/import table numbering, which every actor/texture/brush cross-
 reference (`FBspSurf.iActor`, `texture_ref`, and by the same logic `Model.Lights` actor refs,
-`Zones[].ZoneActor`, `FReachSpec.Start`/`End`) indexes into. §12.1 measured this is not a
-trunk-derivable deterministic function on the one real map tested, and the decisive test — whether a
-*clean* re-import produces trunk-order tables, unlike a hand-authored map's session-history-dependent
-order — has not been run.
+`Zones[].ZoneActor`, `FReachSpec.Start`/`End`) indexes into.
+
+**Two live experiments were run to close this gap, with different tools and different results —
+reported in full, including the failure, per this section's own evidentiary rule (implementation-
+outcome evidence, not a claim about UnrealEd's internals):**
+
+**Attempt 1 — drive raw `MAP IMPORT` directly (failed at the infrastructure level).** Hand-driving
+`MAP NEW → MAP IMPORT FILE=<t3d> → MAP SAVE` against a real shipped level crashed the whole editor
+container's process tree — not a wedge, the container itself died — on **4 out of 4 attempts**,
+across levels from 17KB/59-export up to 627KB/915-export, ruling out a size/complexity correlation.
+No clean-imported `.dx` was ever produced this way. Recorded at
+`dev/docs/board/inbox/clean-map-import-crashes-the-editor-container/overview.md`, including the
+honest caveat that 4/4 crashes on a possibly-shared host is suggestive of a real incompatibility with
+this specific driving sequence but isn't proof of an application-level bug in isolation.
+
+**Attempt 2 — route the same real level through this project's own production build pipeline instead
+(succeeded).** Rather than hand-driving `MAP IMPORT`, the same real level (`DX.dx`, 59 exports/28
+imports) was decoded offline into a T3D trunk (`level import`, no editor involved) and then built
+back into a `.dx` **twice, independently, from the same trunk** via this project's actual production
+command (`level materialize` — an ephemeral editor container running `assemble_unbuilt` + `MAP LOAD`
++ `MAP REBUILD` + `LIGHT APPLY` + `MAP SAVE`, the same pipeline §1.3 documents, not raw `MAP IMPORT`).
+Both runs succeeded (no crash). Results:
+
+- **Determinism: confirmed, decisively.** The two independent rebuilds from the identical trunk
+  produced package output identical in every export, every import, and the entire name table — and
+  at the raw byte level, only 36 of 20,644 body bytes differed, all attributable to the already-known
+  per-save GUID (16 bytes) and timestamp variance. This settles the determinism half of the open
+  question: **a fixed pipeline (this project's actual `level materialize` command) reproduces
+  byte-identical package output on repeat runs from the same input.** That is the property that
+  actually matters for uedcli's own use — stable, reproducible builds — independent of whether the
+  result matches any *external* reference file's specific byte layout.
+- **Trunk-order derivability: still not established.** The rebuilt package's export order matched the
+  T3D trunk's own actor order on only 2.7% of positions (76.4% pairwise-order agreement) — no better
+  than the original hand-authored-map measurement in §12.1 (0% exact match there). It also didn't
+  reproduce the *original* shipped file's own order (8.1% exact / 68.6% pairwise). But the order
+  wasn't random either: it showed real structure — actors clustered before the `Model`/`Polys`
+  sub-objects their brushes generate (in CSG-build order), auto-numbered actor classes
+  (`InterpolationPoint0..15`) landed in strict numeric order regardless of trunk position, and
+  editor-scratch objects clustered near the end. This is a genuine clue toward *some* deterministic
+  rule (plausibly influenced by the CSG/build order §2-§9 already document, or by the sequence
+  `assemble_unbuilt`'s own object emission happens to use — this experiment cannot distinguish those
+  two contributions from each other) — but that rule was not decoded here.
+
+**Net effect on this gap:** whole-package **byte-exactness against a specific external reference**
+(e.g. a hand-authored golden, or matching some other tool's independent ordering choice) remains
+unresolved — the ordering rule, if a simple one exists, hasn't been found. But whole-package
+**self-consistent reproducibility** (same input → same output, every time) is no longer an open
+question for this project's actual pipeline — it's confirmed. A from-scratch native engine attempting
+to match a *specific* real editor-written file byte-for-byte still has the original open problem; a
+tool that just needs its own builds to be stable and correct (uedcli's actual requirement) does not.
 
 ### 20.4 Gap 3 — lighting and paths were decoded but never build-tested
 

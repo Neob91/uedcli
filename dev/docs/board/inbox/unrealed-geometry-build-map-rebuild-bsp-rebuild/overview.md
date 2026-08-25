@@ -84,3 +84,14 @@ decoded in the existing spike material but had never been added to the spec — 
 head): it's the git/architecture-doc history of the since-removed native implementation attempt,
 cited as implementation-*outcome* evidence, not as a source for any claim about UnrealEd's own
 internals — every other section's algorithmic claims still rest solely on primary editor evidence.
+
+**Round 4** ran two live experiments to actually test §20.3's gap 2 rather than leave it purely
+theoretical. Attempt 1 (hand-driving raw `MAP IMPORT`) crashed the editor container 4/4 times,
+independent of level size — logged separately at
+`board/inbox/clean-map-import-crashes-the-editor-container/`. Attempt 2, using this project's own
+proven `level import`/`level materialize` CLI instead of hand-rolled driving, succeeded and got a real
+answer: **determinism is confirmed** (two independent rebuilds of the same trunk via the real
+production pipeline are byte-identical, modulo the known GUID/timestamp bytes) — a genuinely positive
+result. Trunk-order derivability is still open (2.7% exact match against trunk order), but the
+resulting order showed real, non-random structure worth someone decoding later. Spec.md §12.1 and
+§20.3 updated with the full account of both attempts.
