@@ -38,3 +38,33 @@ own soup at the time of `sections/92` §20, and §20's conclusion was explicitly
 ("§20 said native 'under-merges → more soup' — WRONG"). Native's soup has since moved to 2504 (the
 Front-1 pass-staging fix routes NotSolid brushes into pass 1, so more faces reach the soup). The
 spec sentence has been corrected in place; this note records why.
+
+## Answer (2026-08-25): editor's root NumPolys = 2514 — the soup is faithful, the gap is downstream
+
+Live gdb capture (`harness/editor-tree-oracle/repart_numpolys_unatco.py`, new — breakpoint at
+`Editor.dll 0x1004a041`, the `bspBuild` call site *inside* `bspRepartition`; `[esp]=Model`, walks
+`Model->Polys->Element` — same address `editor_polys_oracle.py` already used, so this is
+unambiguously the world-tree repartition call, not a per-brush temp-BSP call). `MAP LOAD` +
+`MAP REBUILD` of `/tmp/UEDGolden_unatco_full.dx` (no OBJ LOAD needed — `MAP LOAD` demand-loads
+content packages, `dev/docs/unrealed/quirks.md`), one breakpoint hit for the whole rebuild:
+
+```
+REPART_BUILD model=0x58fb784 polys=0x57d468c num=2514 nonzero_nv=2514
+```
+
+**Editor's root NumPolys is 2514** (all 2514 entries already `NumVertices>0` — no zero-vertex
+slack to filter). Native's is 2504. **+10, +0.4%** — an order of magnitude smaller than the ~7%
+node-plane disagreement (448 nodes) this soup feeds into.
+
+**Sharper than "close": the two deltas run in OPPOSITE directions.** Native's soup is *smaller*
+(2504 < 2514) yet native's final node count is *larger* (6366 > 6314, from the Front-2 candidate-fix
+measurement). If the soup gap were driving the node gap, a smaller input soup should tend toward
+fewer nodes, not more. It doesn't — so the +52-node / 448-plane-disagreement residual cannot be
+explained by soup composition; it sits entirely in `SplitPolyList`/`FindBestSplit`'s own split
+choices over an already near-identical input set.
+
+**Conclusion: this confirms the remaining gap is a genuine heuristic-matching problem, not a soup
+bug.** `bspMergeCoplanars`/soup construction is faithful at UNATCO scale (within 0.4%, consistent
+with the castle-scale 199/199 exact-match finding). Not pursued further here (scoping the 260+
+distinct disagreeing planes into a bisectable subset, if one exists, is a separate, open-ended
+task) — reporting the number per this item's own instructions rather than forcing that next step.
