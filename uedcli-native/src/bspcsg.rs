@@ -1303,6 +1303,7 @@ fn build_brush_temp_bsp(temp_polys: &[FPoly]) -> Result<Model, BuildError> {
         TEMP_BALANCE,
         TEMP_PORTAL_BIAS,
         Opt::Lame,
+        &mut 0,
     )?;
     for n in tm.nodes.iter_mut() {
         n.node_flags &= !NF_IS_NEW;
@@ -1391,6 +1392,85 @@ fn find_best_split_exact(polys: &[FPoly], balance: i32, portal_bias: i32, opt: O
     }
 }
 
+/// Forensic twin of `find_best_split_exact` (UEDCLI_REPART_FBS_DUMP) — same candidate-slot walk,
+/// but returns one row per candidate SLOT (eligible or skipped) instead of just the winner.  Kept
+/// separate so the traced path never touches the hot loop above.  Row: (slot_start, cand_i,
+/// eligible, plane, poly_flags, portal, front, back, splits, score).
+struct FbsRow {
+    slot: usize,
+    cand_i: Option<usize>,
+    plane: Option<(f32, f32, f32, f32)>,
+    poly_flags: u32,
+    portal: bool,
+    front: i32,
+    back: i32,
+    splits: f32,
+    score: f32,
+}
+
+fn find_best_split_trace(polys: &[FPoly], balance: i32, portal_bias: i32, opt: Opt) -> (usize, Vec<FbsRow>) {
+    let is_structural = |pf: u32| (pf & 0x28) != 0;
+    let all_structural = polys.iter().all(|p| is_structural(p.poly_flags));
+    let is_eligible = |pf: u32| !is_structural(pf) || (pf & csg::PF_PORTAL) != 0 || all_structural;
+    let mut rows = Vec::new();
+    if polys.len() == 1 {
+        return (0, rows);
+    }
+    let inc = opt.stride(polys.len());
+    let bal = balance as f32;
+    let inv_bal = (100 - balance) as f32;
+    let pbias = portal_bias as f32 / 100.0;
+    let mut best = usize::MAX;
+    let mut best_score = f32::INFINITY;
+    let mut slot = 0;
+    while slot < polys.len() {
+        let window_end = (slot + inc).min(polys.len());
+        let cand_i = (slot..window_end).find(|&k| is_eligible(polys[k].poly_flags));
+        let Some(i) = cand_i else {
+            rows.push(FbsRow { slot, cand_i: None, plane: None, poly_flags: 0, portal: false,
+                                front: 0, back: 0, splits: 0.0, score: f32::NAN });
+            slot += inc;
+            continue;
+        };
+        let cand = &polys[i];
+        let cand_portal = (cand.poly_flags & csg::PF_PORTAL) != 0;
+        let (mut front, mut back, mut splits) = (0i32, 0i32, 0f32);
+        let mut j = 0;
+        while j < polys.len() {
+            if j != i {
+                let p = &polys[j];
+                match p.split_with_plane(&cand.base, &cand.normal, false) {
+                    Split::Front => front += 1,
+                    Split::Back => back += 1,
+                    Split::Coplanar => {}
+                    Split::Split(_, _) => {
+                        splits += if (p.poly_flags & csg::PF_PORTAL) != 0 { 16.0 } else { 1.0 };
+                    }
+                }
+            }
+            j += inc;
+        }
+        let score2 = inv_bal * splits;
+        let mut score = (front - back).abs() as f32 * bal + score2;
+        if cand_portal {
+            score -= score2 * pbias;
+        }
+        rows.push(FbsRow {
+            slot, cand_i: Some(i),
+            plane: Some((cand.base.x, cand.base.y, cand.base.z, 0.0))
+                .map(|_| (cand.normal.x, cand.normal.y, cand.normal.z,
+                          cand.normal.x * cand.base.x + cand.normal.y * cand.base.y + cand.normal.z * cand.base.z)),
+            poly_flags: cand.poly_flags, portal: cand_portal, front, back, splits, score,
+        });
+        if best == usize::MAX || score < best_score {
+            best_score = score;
+            best = i;
+        }
+        slot += inc;
+    }
+    (if best == usize::MAX { 0 } else { best }, rows)
+}
+
 /// `SplitPolyList` (`0x34530`): make `FindBestSplit`'s plane a node, chain its coplanars, partition
 /// the rest, recurse front/back.  Emits into `model`.  `share_surfs` seeds `iLink=Surfs.Num` on the
 /// splitter (bspBuild's `RebuildSimplePolys` path).
@@ -1403,6 +1483,7 @@ fn split_poly_list(
     balance: i32,
     portal_bias: i32,
     opt: Opt,
+    call_id: &mut usize,
 ) -> Result<(), BuildError> {
     if polys.is_empty() {
         return Ok(());
@@ -1412,9 +1493,41 @@ fn split_poly_list(
             "bspcsg: SplitPolyList exceeded max depth".into(),
         ));
     }
-    let i_best = find_best_split_exact(&polys, balance, portal_bias, opt);
-    let splitter = polys[i_best].clone();
-    let i_node = bsp_add_node(model, i_parent, place, NF_IS_NEW, &splitter);
+    let my_id = *call_id;
+    *call_id += 1;
+    // FORENSIC CANDIDATE DUMP (UEDCLI_REPART_FBS_DUMP) — env-gated; one CALL header + one CAND row
+    // per candidate slot `find_best_split_exact` walked, so a specific repartition SplitPolyList
+    // call (identified by the resulting `i_node`, since `call_id` alone isn't stable across builds)
+    // can be pulled out and its full scoring table inspected against the real editor's choice.
+    let fbs_dump = std::env::var("UEDCLI_REPART_FBS_DUMP").is_ok();
+    let (i_best, splitter) = if fbs_dump {
+        let (i_best, rows) = find_best_split_trace(&polys, balance, portal_bias, opt);
+        (i_best, Some(rows))
+    } else {
+        (find_best_split_exact(&polys, balance, portal_bias, opt), None)
+    };
+    let splitter_poly = polys[i_best].clone();
+    let i_node = bsp_add_node(model, i_parent, place, NF_IS_NEW, &splitter_poly);
+    if let Some(rows) = splitter {
+        eprintln!(
+            "REPART_CALL id={} i_node={} depth={} numpolys={} best_i={} best_plane=({:.6},{:.6},{:.6},{:.6})",
+            my_id, i_node, depth, polys.len(), i_best,
+            splitter_poly.normal.x, splitter_poly.normal.y, splitter_poly.normal.z,
+            splitter_poly.normal.x * splitter_poly.base.x
+                + splitter_poly.normal.y * splitter_poly.base.y
+                + splitter_poly.normal.z * splitter_poly.base.z,
+        );
+        for r in &rows {
+            match (r.cand_i, r.plane) {
+                (Some(i), Some((nx, ny, nz, d))) => eprintln!(
+                    "REPART_CAND id={} slot={} i={} plane=({:.6},{:.6},{:.6},{:.6}) flags={:#x} portal={} front={} back={} splits={} score={:.6}",
+                    my_id, r.slot, i, nx, ny, nz, d, r.poly_flags, r.portal, r.front, r.back, r.splits, r.score
+                ),
+                _ => eprintln!("REPART_CAND id={} slot={} SKIPPED", my_id, r.slot),
+            }
+        }
+    }
+    let splitter = splitter_poly;
 
     let mut front: Vec<FPoly> = Vec::new();
     let mut back: Vec<FPoly> = Vec::new();
@@ -1469,6 +1582,7 @@ fn split_poly_list(
         balance,
         portal_bias,
         opt,
+        call_id,
     )?;
     split_poly_list(
         model,
@@ -1479,6 +1593,7 @@ fn split_poly_list(
         balance,
         portal_bias,
         opt,
+        call_id,
     )?;
     Ok(())
 }
@@ -1740,7 +1855,7 @@ fn bsp_build(model: &mut Model, polys: Vec<FPoly>) -> Result<(), BuildError> {
         p.i_link = i_surf;
     }
     // Repartition: the byte-verified 12/0/GOOD engine params.
-    split_poly_list(model, -1, NODE_ROOT, ready, 0, BALANCE, PORTAL_BIAS, Opt::Good)
+    split_poly_list(model, -1, NODE_ROOT, ready, 0, BALANCE, PORTAL_BIAS, Opt::Good, &mut 0)
 }
 
 // --- driver: bspBrushCSG ---------------------------------------------------------------------
@@ -3138,6 +3253,7 @@ mod tests {
             BALANCE,
             PORTAL_BIAS,
             Opt::Good,
+            &mut 0,
         )
         .unwrap();
 
