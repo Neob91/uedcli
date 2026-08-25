@@ -53,8 +53,11 @@ class TrunkLevelSource:
         return self.trunk_dir.name
 
     def load(self) -> Level:
-        (level, self._ranks, self._loaded_bodies,
-         self._loaded_folders) = trunk.read_level_with_bodies(self.trunk_dir)
+        try:
+            (level, self._ranks, self._loaded_bodies,
+             self._loaded_folders) = trunk.read_level_with_bodies(self.trunk_dir)
+        except (OSError, ValueError) as e:               # corrupt actor.t3d/sidecar → clean, not a traceback
+            raise CommandError(f"cannot read level {self.trunk_dir.name!r}: {e}")
         # Labels ride on `level.actors[name].labels` (read_actor_tree loads the sidecar there, not
         # into the returned tuple), so derive the baseline from the model — same as folders.
         self._loaded_labels = {n: level.actors[n].labels for n in level.actors}

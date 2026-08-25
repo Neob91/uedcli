@@ -132,6 +132,9 @@ def dump_actor_body(actor: Actor) -> str:
 def load_actor_body(text: str, name: str) -> Actor:
     """Parse a stored body and re-inject identity from the directory `name`."""
     lvl = parse_t3d(text)                       # exactly one actor; header has no Name → keyed ""
+    if not lvl.actors:                          # non-blank but no parseable Begin Actor block
+        raise ValueError(f"actors/{name}/actor.t3d: no parseable actor "
+                         f"(corrupt, truncated, or unresolved merge markers?)")
     a = next(iter(lvl.actors.values()))
     a.name = name
     if a.brush is not None:

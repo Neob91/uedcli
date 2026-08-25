@@ -218,6 +218,35 @@ def test_set_array_index_out_of_bounds_and_negative_error():
     assert _run(_level(), "set", ["MultiSkins.-1=X"])[0] == 2
 
 
+_ANCHORS_SCHEMA = {**_SCHEMA, "anchors": _prop("Anchors", "StructProperty", array_dim=4,
+                                               type_ref=3, type_name="Vector")}
+
+
+def test_set_base_struct_static_array_by_member_without_index_errors(capsys):
+    # `Anchors.X` (a struct static array addressed by member, NO index) must exit 2 naming the array
+    # — never silently fabricate element 0 and leave the real element untouched.
+    level = _level(props=[("Anchors(2)", "(X=1,Y=2,Z=3)")])
+    rc, saved, actor = _run(level, "set", ["Anchors.X=99"], schema=_ANCHORS_SCHEMA)
+    assert rc == 2 and saved is None
+    err = capsys.readouterr().err
+    assert "Anchors" in err and "static array" in err
+    assert actor.props == [("Anchors(2)", "(X=1,Y=2,Z=3)")]        # untouched
+
+
+def test_get_base_struct_static_array_by_member_without_index_errors(capsys):
+    level = _level(props=[("Anchors(2)", "(X=1,Y=2,Z=3)")])
+    rc, _s, _a = _run(level, "get", ["Anchors.X"], schema=_ANCHORS_SCHEMA)
+    assert rc == 2 and "static array" in capsys.readouterr().err
+
+
+def test_set_base_struct_static_array_indexed_member_still_works():
+    # The guard must not break the correctly-indexed spelling `Anchors.2.X`.
+    level = _level(props=[("Anchors(2)", "(X=1,Y=2,Z=3)")])
+    rc, _s, actor = _run(level, "set", ["Anchors.2.X=99"], schema=_ANCHORS_SCHEMA)
+    assert rc == 0
+    assert ("Anchors(2)", "(X=99,Y=2,Z=3)") in actor.props
+
+
 # ── set: struct members ──────────────────────────────────────────────────────────
 
 

@@ -5,6 +5,7 @@ rewrite, package extraction) and the file I/O."""
 from __future__ import annotations
 
 import copy
+import fcntl
 import os
 import re
 import shutil
@@ -16,7 +17,7 @@ from uedcli.emit import clean, fmt_coord
 from uedcli.model import Actor, Level, Vec3, parse_t3d
 from uedcli.normalize import canonical_actor_t3d
 from uedcli.writes import union_bounds
-from uedcli import t3dtree
+from uedcli import config, t3dtree
 
 _ENGINE_PACKAGES = frozenset({"Engine"})
 _ZERO: Vec3 = (Decimal(0), Decimal(0), Decimal(0))
@@ -56,13 +57,17 @@ def referenced_packages(actors: list[Actor]) -> set[str]:
 
 def validate_member_name(name: str) -> None:
     """Guard a stash id / prefab name used in git-tree and filesystem paths. Rejects empty,
-    absolute, `..`, backslash, and any segment outside [A-Za-z0-9._-] so `--id`/`--as` can't escape
-    the store/library root. Forward slashes are allowed (prefab subdirs like `hangar/archway`)."""
+    absolute, `..`, backslash, any leading-dot segment, and any segment outside [A-Za-z0-9._-] so
+    `--id`/`--as` can't escape the store/library root. Forward slashes are allowed (prefab subdirs
+    like `hangar/archway`)."""
     if not name or name.startswith("/") or "\\" in name:
         raise ValueError(f"invalid name {name!r}: empty, absolute, or contains a backslash")
     segments = name.split("/")
     if any(seg in ("", ".", "..") for seg in segments):
         raise ValueError(f"invalid name {name!r}: empty or '.'/'..' path segment")
+    if any(seg.startswith(".") for seg in segments):     # `.locks`/`.staging` are internal dirs (would
+        raise ValueError(f"invalid name {name!r}: a segment may not start with '.' "  # collide/hide from git)
+                         f"(reserved for the '.locks'/'.staging' internal dirs)")
     if any(not _SAFE_SEGMENT.fullmatch(seg) for seg in segments):
         raise ValueError(f"invalid name {name!r}: segments must match [A-Za-z0-9._-]")
 
@@ -197,24 +202,30 @@ def write_tree_box(dest: Path, *, full_level: dict[str, str], order: list[str],
     Refuses an existing `dest` without `force`. The caller has already validated the box name +
     containment."""
     dest = Path(dest)
-    if dest.exists() and not force:
-        raise FileExistsError(f"already exists: {dest.name} (use --force)")
-    prior = _read_ranks_if_present(dest)
-    level = _level_from_blobs(full_level, order, folders)
-    ranks = _ranks_for(level.order, prior)
-    staging_root = dest.parent / _STAGING_DIR
-    staging_root.mkdir(parents=True, exist_ok=True)
-    staging = Path(tempfile.mkdtemp(dir=staging_root))
-    try:
-        t3dtree.write_actor_tree(staging, level, ranks)
-        t3dtree.write_sidecars(staging, packages=packages, meta=meta)
-        if dest.exists():
-            shutil.rmtree(dest)
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        os.replace(staging, dest)
-    finally:
-        if staging.exists():
-            shutil.rmtree(staging, ignore_errors=True)
+    # Per-box flock: two writers to the SAME box serialize (last wins CLEANLY) instead of racing the
+    # rmtree→replace swap and clobbering each other. Keyed off `dest` in a self-ignored sibling dir,
+    # the same pattern the trunk save and the catalog writers use.
+    lock_home = config.self_ignoring_dir(dest.parent / ".locks", create=True,
+                                         what="stash/prefab lock dir")
+    with open(lock_home / f"{dest.name}.lock", "w") as lf:
+        fcntl.flock(lf, fcntl.LOCK_EX)
+        if dest.exists() and not force:
+            raise FileExistsError(f"already exists: {dest.name} (use --force)")
+        prior = _read_ranks_if_present(dest)
+        level = _level_from_blobs(full_level, order, folders)
+        ranks = _ranks_for(level.order, prior)
+        staging_root = dest.parent / _STAGING_DIR
+        staging_root.mkdir(parents=True, exist_ok=True)
+        staging = Path(tempfile.mkdtemp(dir=staging_root))
+        try:
+            t3dtree.write_actor_tree(staging, level, ranks)
+            t3dtree.write_sidecars(staging, packages=packages, meta=meta)
+            if dest.exists():
+                shutil.rmtree(dest)
+            os.replace(staging, dest)
+        finally:
+            if staging.exists():
+                shutil.rmtree(staging, ignore_errors=True)
 
 
 def read_tree_box(dest: Path) -> tuple[dict[str, str], list[str], list[str], dict, dict[str, str | None]]:

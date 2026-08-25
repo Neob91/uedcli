@@ -4,6 +4,7 @@ import pytest
 
 from uedcli import stashlib
 from uedcli.model import Actor, Brush, Polygon
+from uedcli.normalize import canonical_actor_t3d
 from uedcli.writes import union_bounds
 
 
@@ -154,3 +155,26 @@ def test_it_refuses_to_overwrite_a_prefab_without_force(tmp_path):
 def test_it_refuses_a_prefab_name_that_escapes_the_root(tmp_path):
     with pytest.raises(ValueError):
         stashlib.write_prefab(tmp_path, "../escape", full_level={}, order=[], packages=[], meta={})
+
+
+def test_it_refuses_a_dotted_box_name_that_collides_with_the_lock_dir(tmp_path):
+    # `.locks`/`.staging` are write_tree_box's own internal dirs — a box so named would hijack them.
+    for bad in (".locks", ".staging", "hangar/.locks"):
+        with pytest.raises(ValueError, match="start with"):
+            stashlib.validate_member_name(bad)
+    with pytest.raises(ValueError):
+        stashlib.write_prefab(tmp_path / "prefabs", ".locks",
+                              full_level={}, order=[], packages=[], meta={})
+
+
+def test_write_tree_box_takes_a_per_box_flock(tmp_path):
+    """A stash/prefab write serializes under `<root>/.locks/<box>.lock` — self-ignoring, like the
+    trunk save and catalog locks — so two concurrent writers can't race the staging swap and clobber
+    each other."""
+    root = tmp_path / "prefabs"
+    blob = canonical_actor_t3d(_brush_actor("Panel", "DeusExDeco.Stone.Block"))
+    stashlib.write_prefab(root, "door", full_level={"Panel": blob}, order=["Panel"],
+                          packages=[], meta={})
+    locks = root / ".locks"
+    assert (locks / "door.lock").exists()
+    assert (locks / ".gitignore").read_text() == "*\n"

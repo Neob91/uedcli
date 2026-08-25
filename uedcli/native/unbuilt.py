@@ -214,7 +214,10 @@ def assemble_unbuilt(level, *, version: int = 68, level_name: str = "MyLevel",
                                                csg_oper=None, extra=[]),
                        flags=ASM._FLAGS_BRUSH_ACTOR)
 
-    for b in [x for x in brush_actors if x.name != dbrush]:
+    # No `!= dbrush` filter: a real trunk brush named `DefaultBrush` must collide with the reserved
+    # builder-brush export above and raise `_reserve`'s duplicate-name error (→ clean exit 2), never
+    # be silently dropped.
+    for b in brush_actors:
         shape = f"Model_{b.name}"
         src = level.actors.get(b.name)
         polys = _fpolys(src.brush, tex_ref, actor=b.name) if src is not None and src.brush else []
@@ -252,7 +255,7 @@ def assemble_unbuilt(level, *, version: int = 68, level_name: str = "MyLevel",
         # every other actor follows in trunk order. (`reserve` order above is the separate export-table
         # order, which the editor reshuffles harmlessly.)
         rest = [n for n in (level.order or list(level.actors))
-                if n not in (li_name, dbrush)]
+                if n != li_name]                 # a real `dbrush`-named actor already errored above
         refs = [asm.eref(li_name), asm.eref(dbrush)] + [asm.eref(n) for n in rest]
         return write_level_body(none_index=0, actor_refs=refs, model_ref=asm.eref(lm),
                                 url=url, reach_specs=None)

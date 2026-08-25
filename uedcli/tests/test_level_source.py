@@ -254,3 +254,22 @@ def test_read_level_skips_an_empty_torn_body(tmp_path):
     (torn / "order_value").write_text("t\n")
     lv, ranks = trunk.read_level(tmp_path)
     assert set(lv.actors) == {"Good_1"} and "Torn_2" not in ranks
+
+
+def test_read_level_errors_cleanly_on_a_corrupt_non_blank_body(tmp_path):
+    """A non-blank but unparseable actor.t3d (e.g. unresolved merge markers) is a HARD error naming
+    the actor — not a raw StopIteration, and not silently dropped like the 0-byte torn case."""
+    seed = Level(actors={"Good_1": Actor(name="Good_1", cls="Light")})
+    trunk.write_level(tmp_path, seed, {"Good_1": "m"})
+    bad = tmp_path / "actors" / "Bad_2"
+    bad.mkdir()
+    (bad / "actor.t3d").write_text("<<<<<<< HEAD\nsome garbage\n=======\n")
+    (bad / "order_value").write_text("t\n")
+    src = level_sources.TrunkLevelSource(tmp_path)
+    with pytest.raises(errors.CommandError, match="Bad_2"):
+        src.load()
+
+
+def test_load_actor_body_rejects_a_body_with_no_actor_block():
+    with pytest.raises(ValueError, match="Foo"):
+        trunk.load_actor_body("garbage, not a t3d actor block\n", "Foo")

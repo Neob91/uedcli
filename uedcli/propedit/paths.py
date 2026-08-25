@@ -58,6 +58,9 @@ def resolve_path(tok: PropToken, ctx: ClassCtx) -> ResolvedPath:
             raise PropEditError(f"{tok.base}.{segs[0]}: index out of bounds "
                                 f"(array size {prop.array_dim}, valid 0..{prop.array_dim - 1})")
         index = segs.pop(0)
+    elif prop.array_dim > 1 and segs:                # base is a static array, addressed by member
+        raise PropEditError(f"{prop.name} is a static array — index it ({prop.name}.N) "
+                            f"before taking member .{segs[0]}")
     members: list[MemberStep] = []
     cur = prop
     for seg in segs:
