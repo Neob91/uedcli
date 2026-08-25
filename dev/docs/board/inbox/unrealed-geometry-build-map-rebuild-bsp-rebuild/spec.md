@@ -670,13 +670,49 @@ Note this is consistent with §3.7's live finding: `CalcNormal` here is only rea
 already all-zero going in — it is not an unconditional recompute, matching the observation that a
 real `MAP REBUILD` triggers zero `CalcNormal` calls (stored normals are already non-zero by then).
 
-**`RemoveColinears`** **[DISASM Engine.dll 0x151090]** runs two passes over the vertex ring:
-- **Pass 1 — coincident vertices.** For each vertex, `Side = V[i]-V[i-1]` crossed with the poly
+**`RemoveColinears`** **[DISASM Engine.dll 0x151090, cross-checked against the DLL's own PE export
+table for `?RemoveColinears@FPoly@@QAEHXZ`]** runs THREE stages over the vertex ring — an earlier
+pass at this doc (and at the native port) missed the third, a genuine convexity/reflex-vertex gate,
+until board item `bspmergecoplanars-8-case-merge-gap-live-traced`'s follow-up pinned it
+**[DISASM + LIVE + direct x86 emulation of the real bytes against a real editor-captured ring — see
+below]**:
+- **Stage 1 — coincident vertices.** For each vertex, `Side = V[i]-V[i-1]` crossed with the poly
   Normal, tested via `NormalizeSlow` (fails when squared length `< 1e-8`, i.e. length `< ~1e-4 uu`) —
-  consecutive vertices closer than ~1e-4 uu collapse to one.
-- **Pass 2 — colinear vertices.** Adjacent side-plane normals compared component-wise, threshold
-  `9.999999e-05` — a vertex on a straight edge (parallel neighboring edges) is redundant and removed.
-- **After either pass, if `NumVertices < 3`: sets `NumVertices=0`, caller discards the poly.**
+  consecutive vertices closer than ~1e-4 uu collapse to one. The normalized `Side × Normal` (the
+  edge's outward in-plane normal) is cached per surviving vertex for stage 2, never recomputed —
+  only ever shifted in lockstep with a later removal.
+- **Stage 2 — colinear vertices, else a convexity gate.** For each surviving vertex `i`, in order:
+  if its cached side-normal and vertex `i+1`'s are component-wise near (threshold `9.999999e-05`) —
+  the two edges meeting at `i` are parallel, a straight run — `i` is redundant, drop it. **Otherwise
+  (a genuine corner), the engine does NOT simply keep the vertex and move on**: it classifies the
+  WHOLE ring against the tangent plane through vertex `i` (`Base=V[i]`, `Normal=Sides[i]`, via
+  `SplitWithPlane`, §5.4). A properly convex vertex has every other ring vertex on the Back
+  (interior) side, or exactly on the plane (Coplanar) — either classification is accepted. If the
+  classification is instead `Front` or `Split` — some OTHER vertex pokes past this one's own
+  tangent plane, i.e. `i` is a **reflex vertex** — `RemoveColinears` REJECTS THE WHOLE RING
+  outright (returns 0/false), not just that one vertex; `NumVertices` is left UNCHANGED (the caller
+  sees the original count, not a partial thinning).
+- **`NumVertices < 3` at any point (stages 1 or 2): sets `NumVertices=0`, caller discards the poly.**
+
+**Evidence for stage 2's convexity gate** [`bspmergecoplanars-8-case-merge-gap-live-traced` follow-up,
+2026-08-25]: the prior pass at this function found only stages 1 and the colinear HALF of stage 2,
+predicting ACCEPT for a real UNATCO `TryToMerge` ring (`iLink=1144`) that the live editor
+demonstrably rejects (`TTM AFTERRC rc_eax=0`, confirmed fresh **[LIVE]** both from a cached prior
+run and re-run in-session, byte-identical). A corrected live probe — breakpoint on
+`RemoveColinears`'s ENTRY, resolved via a live IAT-slot read (`Engine.dll` is rebased ~`-0xF00000`
+relative to its declared image base at runtime; `Editor.dll` is not — a naive same-base computation
+lands on the wrong code), filtered by the exact caller return address (`0x10034de8`, the only one of
+Editor.dll's two call sites into `RemoveColinears` that belongs to `TryToMerge`; the other,
+`0x1003680a`, is a distinct FPoly-from-BSP-node-data reconstruction function) — captured the REAL
+ring `RemoveColinears` receives: byte-exact match (verts to the ULP, `Normal` hex-confirmed EXACTLY
+`(-0.0,-0.0,1.0)`, no hidden epsilon) against an independent hand-reconstruction of `TryToMerge`'s
+own ring-building logic (§6.2) from fresh `Editor.dll 0x34b10` disassembly. Ring index 0 is reflex
+(2D cross-product sign flips only there: `-372.9` against neighbours `3355`–`14695`). Directly
+executing the real `RemoveColinears`/`SplitWithPlane` machine code bytes (`unicorn` x86 emulation,
+`Engine.dll`'s image mapped at its own declared base, `operator^`/`NormalizeSlow` hooked to their
+Core.dll ABI, everything else — including `SplitWithPlane` itself — run natively) against this exact
+ring reproduces the live result exactly: `eax=0`, `NumVertices` unchanged at 6, classification at
+vertex 0 = `Split(3)`.
 
 **`CalcNormal`** **[DISASM Engine.dll 0x150510]** accumulates a triangle-fan normal (`Σ (V[i-1]-V[0]) ×
 (V[i]-V[0])` for `i=2..N`, twice the area-weighted normal, pivoted at vertex 0 — confirmed bit-identical
@@ -1876,7 +1912,7 @@ subtract nothing further).
 | `FPoly::SplitWithPlaneFast` | Engine.dll | `0x151f90` | classify-only, used by `FindBestSplit` (§5.2, §5.4) |
 | `FPoly::SplitWithNode` | Engine.dll | (not independently pinned) | used by zone/portal filtering (§7.2, §7.4) |
 | `FPoly::Fix` | Engine.dll | `0x150da0` | near-duplicate vertex collapse (§4) |
-| `FPoly::RemoveColinears` | Engine.dll | `0x151090` | coincident+colinear vertex removal (§4) |
+| `FPoly::RemoveColinears` | Engine.dll | `0x151090` | coincident+colinear removal + reflex-vertex convexity gate (§4) |
 | `FPoly::CalcNormal` | Engine.dll | `0x150510` | normal + zero-area detection (§4, §3.7) |
 | `FPoly::Finalize` | Engine.dll | `0x150ac0` | the face-survival gate (§4) |
 | `FPlane::PlaneDot` | Core.dll | `0x24e60` | signed point-plane distance (§9, §13) |

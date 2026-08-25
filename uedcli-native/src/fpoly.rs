@@ -172,33 +172,92 @@ impl FPoly {
         self.verts.len()
     }
 
-    /// Drop colinear vertices (side-plane normals equal within THRESH_COLINEAR).  Thins to 0
-    /// if it drops below 3 (the poly vanishes — a "silent-absence hole" source).
+    /// `FPoly::RemoveColinears` (Engine.dll `0x151090`, cross-checked against the DLL's own PE
+    /// export table and pinned by x86 emulation of the real bytes against a real editor-captured
+    /// ring — board item `bspmergecoplanars-8-case-merge-gap-live-traced` follow-up, 2026-08-25).
+    /// THREE stages, not two — an earlier reading of this function (and this port) missed the
+    /// third:
+    ///
+    /// 1. **Coincident-vertex removal.** `Side = V[i] - V[i-1]`, `NormalizeSlow(Side × Normal)`
+    ///    fails (squared length `< SMALL_NUMBER`) when `V[i]` sits within ~1e-4 uu of `V[i-1]` —
+    ///    that vertex is redundant, drop it (no advance; the shifted-in vertex is re-tested at
+    ///    the same index, matching the engine's in-place array shift). The normalized
+    ///    `Side × Normal` — the edge's OUTWARD in-plane normal — is cached per surviving vertex
+    ///    (`sides`, never recomputed, only ever shifted alongside a later removal) for stage 2.
+    /// 2. **Per surviving vertex, in ring order:** if its cached side-normal and the NEXT
+    ///    vertex's are component-wise near (`THRESH_COLINEAR`) — i.e. the two edges meeting at
+    ///    this vertex are parallel, a straight run — the vertex is redundant, drop it (same
+    ///    no-advance/re-test rule). Otherwise (a genuine corner) run a **convexity gate**:
+    ///    classify the WHOLE ring against the tangent plane through this vertex
+    ///    (`Base = V[i]`, `Normal = sides[i]`, `SplitWithPlane`). A properly convex vertex has
+    ///    every other vertex on the BACK (interior) side, or exactly on the plane (Coplanar). If
+    ///    the classification comes back `Front` or `Split` — some other vertex pokes past this
+    ///    one's own tangent plane, i.e. this is a **reflex vertex** — the WHOLE merge is
+    ///    rejected outright (`return 0`), not just this one vertex.
+    /// 3. **`NumVertices < 3` at any point → reject** (`return 0`); the poly vanishes (a
+    ///    "silent-absence hole" source).
     pub fn remove_colinears(&mut self) -> usize {
-        let n = self.verts.len();
-        if n < 3 {
+        if self.verts.len() < 3 {
             self.verts.clear();
             return 0;
         }
-        let mut keep = vec![true; n];
-        for i in 0..n {
-            let prev = self.verts[(i + n - 1) % n];
-            let cur = self.verts[i];
-            let next = self.verts[(i + 1) % n];
-            let a = cur.sub(&prev);
-            let b = next.sub(&cur);
-            let cross = a.cross(&b);
-            let denom = a.size() * b.size();
-            if denom > SMALL_NUMBER && cross.size() / denom < THRESH_COLINEAR {
-                keep[i] = false;
+        let mut verts = std::mem::take(&mut self.verts);
+        let mut sides: Vec<Vec3> = Vec::with_capacity(verts.len());
+
+        // Stage 1 — coincident-vertex removal.
+        let mut i = 0;
+        while i < verts.len() {
+            let prev = verts[(i + verts.len() - 1) % verts.len()];
+            let side = verts[i].sub(&prev);
+            let sxn = side.cross(&self.normal);
+            match safe_normal_slow(&sxn) {
+                None => {
+                    verts.remove(i);
+                }
+                Some(s) => {
+                    sides.push(s);
+                    i += 1;
+                }
+            }
+            if verts.len() < 3 {
+                self.verts.clear();
+                return 0;
             }
         }
-        let out: Vec<Vec3> = (0..n).filter(|&i| keep[i]).map(|i| self.verts[i]).collect();
-        if out.len() < 3 {
-            self.verts.clear();
-            return 0;
+
+        // Stage 2 — per-vertex colinear-redundancy removal, else the reflex-vertex convexity
+        // gate.
+        let vectors_near = |a: &Vec3, b: &Vec3| -> bool {
+            (a.x - b.x).abs() < THRESH_COLINEAR
+                && (a.y - b.y).abs() < THRESH_COLINEAR
+                && (a.z - b.z).abs() < THRESH_COLINEAR
+        };
+        let mut i = 0;
+        while i < verts.len() {
+            let next_i = (i + 1) % verts.len();
+            if vectors_near(&sides[i], &sides[next_i]) {
+                verts.remove(i);
+                sides.remove(i);
+                if verts.len() < 3 {
+                    self.verts.clear();
+                    return 0;
+                }
+                continue;
+            }
+            // `false` (0.25 threshold) confirmed at this exact call site by disassembly: the
+            // `VeryPrecise` arg at `Engine.dll` 0x10151343 is a literal `push 0`.
+            let probe = FPoly::new(verts.clone());
+            match probe.split_with_plane(&verts[i], &sides[i], false) {
+                Split::Front | Split::Split(_, _) => {
+                    self.verts.clear();
+                    return 0;
+                }
+                Split::Back | Split::Coplanar => {}
+            }
+            i += 1;
         }
-        self.verts = out;
+
+        self.verts = verts;
         self.verts.len()
     }
 
@@ -618,5 +677,68 @@ mod tests {
         p.transform(&id, &Vec3::new(0.0, 0.0, 0.0), &Vec3::new(100.0, 0.0, 0.0))
             .unwrap();
         assert!((p.verts[0].x - -10.0 - 100.0).abs() < 1e-4);
+    }
+
+    #[test]
+    fn remove_colinears_rejects_a_reflex_merge_ring() {
+        // `bspmergecoplanars-8-case-merge-gap-live-traced` follow-up (2026-08-25): the real
+        // editor's `RemoveColinears` (Engine.dll 0x151090) has a third stage neither this port
+        // nor the earlier board item caught — a convexity gate (§ port doc above `remove_colinears`).
+        // This is the EXACT UNATCO `iLink=1144` merge ring `TryToMerge` builds for the first of 3
+        // adjacent CSG fragment pairs there: verts byte-confirmed live (gdb, `RC_ENTRY`/`RC_V0..5`,
+        // `logs/removecolinears-entry-unatco.log`) against the real running editor, and Normal
+        // hex-confirmed EXACT `(-0.0,-0.0,1.0)` (`NHEX=0x80000000,0x80000000,0x3f800000`, no hidden
+        // epsilon). Ring index 0 is reflex (2D cross-product sign flips only there: -372.9 against
+        // neighbours 3355..14695). x86 emulation of the real `RemoveColinears` bytes (unicorn, IAT
+        // hooks for `operator^`/`NormalizeSlow`, this exact ring) returns `eax=0` (reject),
+        // `NumVertices` UNCHANGED at 6 — matching the live `TTM AFTERRC rc_eax=0 ringcount=6`
+        // observed twice fresh this session (`logs/trytomerge-live-unatco.log`) and the prior
+        // session's independent capture. Before this fix, native's `remove_colinears` (a single
+        // colinearity pass, no convexity check) wrongly ACCEPTED this ring, over-merging 4 real
+        // editor fragments into 1 (`iLink=1144`: native `nv=10`×1 vs editor `nv=4`×4).
+        let mut p = FPoly {
+            normal: Vec3::new(-0.0, -0.0, 1.0),
+            verts: vec![
+                Vec3::new(-2425.910156, 1921.385254, 560.0),
+                Vec3::new(-2431.999756, 1952.000000, 560.0),
+                Vec3::new(-2591.999756, 1952.000000, 560.0),
+                Vec3::new(-2573.731201, 1860.155884, 560.0),
+                Vec3::new(-2521.705566, 1782.294312, 560.0),
+                Vec3::new(-2408.568604, 1895.431396, 560.0),
+            ],
+            ..FPoly::new(vec![])
+        };
+        assert_eq!(
+            p.remove_colinears(),
+            0,
+            "a ring with a reflex vertex must be rejected outright, matching the real editor"
+        );
+        assert!(p.verts.is_empty());
+    }
+
+    #[test]
+    fn remove_colinears_still_merges_a_plain_convex_ring() {
+        // The convexity gate must not become a blanket reject: a convex hexagon with two
+        // colinear midpoints (as `TryToMerge` would build from two coplanar squares sharing an
+        // edge) must still thin to the plain rectangle. CCW winding for `Normal=(0,0,1)` (right
+        // along the bottom first, matching `square_xy`'s convention — an earlier CW draft of this
+        // ring wrongly tripped the new gate on every vertex, since a CW ring makes the cached
+        // `Side × Normal` point inward instead of outward).
+        let mut p = FPoly {
+            normal: Vec3::new(0.0, 0.0, 1.0),
+            verts: vec![
+                Vec3::new(0.0, 0.0, 0.0),
+                Vec3::new(10.0, 0.0, 0.0),
+                Vec3::new(20.0, 0.0, 0.0),
+                Vec3::new(20.0, 10.0, 0.0),
+                Vec3::new(10.0, 10.0, 0.0),
+                Vec3::new(0.0, 10.0, 0.0),
+            ],
+            ..FPoly::new(vec![])
+        };
+        // The two colinear midpoints (10,0,0) and (10,10,0) must thin away, leaving the plain
+        // 4-vert rectangle — a convex ring must survive the gate intact.
+        assert_eq!(p.remove_colinears(), 4);
+        assert_eq!(p.verts.len(), 4);
     }
 }
