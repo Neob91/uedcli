@@ -21,7 +21,16 @@ The docstring's accepted-risk language covers only the crash-during-`rmtree`→`
 writers racing — that isn't crash-dependent and isn't accepted anywhere. For a shared, agent-editable
 prefab between commits (the normal working state) this is real silent edit loss.
 
-Fix: take the same per-box `flock` the trunk path uses before the staging swap. Regression test with
-two writers.
+Fix: take a per-box `flock` (key off `dest`, e.g. `dest.parent/.locks/{dest.name}.lock` via
+`config.self_ignoring_dir`, the pattern the trunk save and the catalog writers already use) before
+the staging swap. `write_tree_box` is the one function both `write_stash` and `write_prefab` funnel
+through and already has `dest` in scope. Regression test with two writers.
 
-Confirmed by direct read (flock present in trunk save, absent here).
+Caveat (double-check): a flock only serialises the two full-snapshot replacements so the last wins
+CLEANLY (and closes the torn `rmtree`→`os.replace` window). It does NOT give the trunk's stronger
+guarantee — the trunk composes disjoint concurrent edits via a per-actor content-diff/delta write
+(`cli/level_sources.py:96-113`), whereas `write_tree_box` always rewrites the whole box. True
+compose-parity would need a delta write here too; file separately if wanted.
+
+Double-checked (self + Sonnet): bug CONFIRMED (no lock in `write_tree_box`, `write_stash`,
+`write_prefab`, or either `*LevelSource.save`); fix safe and correctly scoped.

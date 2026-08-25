@@ -24,7 +24,14 @@ merge.
 Test coverage: partial — only the 0-byte case is covered; the corrupt-`meta.json` tests don't cover
 corrupt `actor.t3d`.
 
-Fix: on empty `lvl.actors`, raise a value-naming error (the dir `name`) that `dispatch.py` turns into
-a clean exit 2. Regression test with conflict-marker body.
+Fix (double-checked — TWO parts, both needed):
+1. In `load_actor_body`, on empty `lvl.actors` raise a value-naming error (the dir `name`).
+2. Wrap `TrunkLevelSource.load()` (`cli/level_sources.py:55-63`) in
+   `except (OSError, ValueError) as e: raise CommandError(...)` — its stash/prefab siblings
+   (`:148-152`, `:195-201`) already do this; the trunk path (the one this trigger exercises) does
+   NOT, and `dispatch.py`'s guard catches neither bare `StopIteration` nor bare `ValueError`. Part 1
+   alone still escapes uncaught for trunk-level commands.
+Regression test with a conflict-marker body.
 
-Confirmed by direct read; StopIteration reproduced empirically by the auditing subagent.
+Double-checked (self + Sonnet): bug CONFIRMED (`dispatch.py:26-82` catch list excludes
+`StopIteration`); fix PARTIAL as first written — needs part 2 above.
