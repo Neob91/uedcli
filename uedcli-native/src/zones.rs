@@ -770,11 +770,11 @@ fn collect_zone_barriers(model: &Model) -> HashSet<(i32, i32)> {
 
 // --- top-level -------------------------------------------------------------
 
-/// Full leaf + zone assignment (replaces the single-zone stub).  Call ONCE per finalize: the reset
+/// Full leaf + zone assignment (replaces the single-zone stub).  Call ONCE per build: the reset
 /// below clears leaves/`iZone`/`ZoneMask` but does NOT remove the Pass D fragment nodes/points/verts
 /// this appends (nor undo their `i_plane` splices), so a second call would re-walk them as real
-/// chain members and append more — not idempotent.  (Called once from `build.rs`/`bspcsg.rs`
-/// `finalize`.)
+/// chain members and append more — not idempotent.  (Called once from `build.rs`'s
+/// `finalize_leaves_and_bbox` and once from `bspcsg.rs`'s `zone_pass`.)
 ///
 /// Returns the Pass-D split-group node indices in the editor's array-emission order (`[original,
 /// frag1, …]` per split, in `passd_walk` order).  The `bspcsg` pipeline relabels the node array to
@@ -945,7 +945,7 @@ pub fn assign_leaves_and_zones(model: &mut Model) -> Vec<usize> {
                 }
                 let (plane, i_surf, node_flags) = {
                     let n = &model.nodes[owner];
-                    (n.plane, n.i_surf, n.node_flags) // owner flags already NF_IsNew-cleared (finalize)
+                    (n.plane, n.i_surf, n.node_flags) // owner flags NF_IsNew-cleared by the caller
                 };
                 let new_idx = model.nodes.len() as i32;
                 model.nodes.push(crate::model::BspNode {
@@ -991,23 +991,7 @@ pub fn assign_leaves_and_zones(model: &mut Model) -> Vec<usize> {
         }
     }
 
-    // Pass E: node ZoneMask = OR of 1<<iZone over self + children + coplanar chain (zone 0 = no bit).
-    build_zone_mask(model, 0);
-    // coplanar-chain roots off the main tree may be unreached; OR their own bits directly.
-    for ni in 0..model.nodes.len() {
-        if model.nodes[ni].zone_mask == 0 {
-            let z0 = model.nodes[ni].i_zone[0];
-            let z1 = model.nodes[ni].i_zone[1];
-            let mut m = 0u64;
-            if z0 > 0 {
-                m |= 1u64 << (z0 as u64 & 63);
-            }
-            if z1 > 0 {
-                m |= 1u64 << (z1 as u64 & 63);
-            }
-            model.nodes[ni].zone_mask = if m == 0 { 0 } else { m };
-        }
-    }
+    build_zone_masks(model);
 
     // FBspSurf.iZone stays (0,0) — the editor's `TestVisibility` writes NOTHING into any FBspSurf
     // (re-raw-zones/passD-assignzones-7400.md §3), and a real editor map (`Test_Castle.dx`) ships
@@ -1039,6 +1023,35 @@ pub fn assign_leaves_and_zones(model: &mut Model) -> Vec<usize> {
     }
     model.zones = zones;
     tail_order
+}
+
+/// Pass E, `BuildZoneMasks`: node `ZoneMask` = OR of `1<<iZone` over self + children + coplanar
+/// chain (zone 0 sets no bit).  `bspBuildBounds` runs it a SECOND time (spec §8 step 1), which is
+/// what stamps the nodes the detail-brush layer appended after `TestVisibility` — they are born with
+/// `ZoneMask` all-ones and would otherwise ship that sentinel.
+pub fn build_zone_masks(model: &mut Model) {
+    if model.nodes.is_empty() {
+        return;
+    }
+    // Zero first: the fallback below reads `zone_mask == 0` as "the recursion never reached this
+    // node", which is only true from a cleared start.  A node born after an earlier run of this pass
+    // carries `u64::MAX`, and would otherwise be skipped by both the recursion and the fallback.
+    for n in model.nodes.iter_mut() {
+        n.zone_mask = 0;
+    }
+    build_zone_mask(model, 0);
+    // Coplanar-chain roots off the main tree may be unreached; OR their own bits directly.
+    for ni in 0..model.nodes.len() {
+        if model.nodes[ni].zone_mask == 0 {
+            let mut m = 0u64;
+            for z in model.nodes[ni].i_zone {
+                if z > 0 {
+                    m |= 1u64 << (z as u64 & 63);
+                }
+            }
+            model.nodes[ni].zone_mask = m;
+        }
+    }
 }
 
 /// Recursive `ZoneMask` (Pass E): OR of `1<<iZone[k]` over self + children + coplanar chain.

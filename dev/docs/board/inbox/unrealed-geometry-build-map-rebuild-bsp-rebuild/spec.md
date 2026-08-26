@@ -233,10 +233,28 @@ through. Decoded structure **[DISASM; `dev/docs/spikes/2026-06-24-bsp-csg-hole-m
 3. For each brush in that order, applies its CSG operation via `UEditorEngine::bspBrushCSG` (a virtual
    call, `vtable+0x214`) — the whole of §3 below. **Before CSG proper, each brush is first run through
    `bspValidateBrush` (§3.0)** and, for portal brushes, forced-flag handling (below).
-4. After all brushes: the world tree is repartitioned (`bspBuild`, via `bspRepartition`, §6), then
-   `bspRefresh` (§7.1), `bspMergeCoplanars` (§7.2), `bspOptGeom` (§7.3, but see §1.1's open question on
-   whether this runs unconditionally or only under `BSP REBUILD ... OPTGEOM`), `bspBuildBounds`
-   (§9).
+4. Then the tail below.
+
+**The exact tail, by address** **[DISASM Editor.dll 0x4a650, re-read 2026-08-26]** — the ORDER here is
+load-bearing and an earlier pass at this doc had it wrong (it put the zone pass at the very end):
+
+| address | call | what |
+|---|---|---|
+| `0x1004a870` | `[edx+0x214]` | `bspBrushCSG` — the STRUCTURAL brush loop |
+| `0x1004a89a` | `[eax+0x1ec]`, args `(Model, 0, 0)` | `bspRepartition` — the world repartition: `bspBuildFPolys` → `bspMergeCoplanars` (§6.2) → `bspBuild` (§5) → `bspRefresh` (§6.1) |
+| `0x1004a8af` | `[eax+0x264]`, args `(Level, Model, 0, 0)` | **`TestVisibility`** — leaves/portals/zones/Pass D (§7) |
+| `0x1004a8e4` | `0x10049380(Model, &a, &b, 0)`, guarded by `Nodes.Num != 0` | undecoded |
+| `0x1004a9e8` | `[edx+0x214]` | `bspBrushCSG` — the DETAIL (semisolid) brush loop |
+| `0x1004aa3f` | `[eax+0x1ec]`, args `(Model, node.iFront, 2)` | per-node SUB-BSP repartition, over a collected node list |
+| `0x1004aa90` | `[eax+0x1ec]`, args `(Model, node.iBack, 2)` | the same over the `iBack` children |
+| `0x1004aab0` | `[eax+0x218]` | `bspOptGeom` (§6.3) |
+| `0x1004aac0` | `[eax+0x208]` | `bspBuildBounds` (§8) |
+
+So the zone pass runs in the MIDDLE, before the detail brushes filter through the tree — see §7's
+"When it runs". The two sub-BSP repartition loops are a distinct pass from the world repartition:
+on the 734-brush UNATCO map they fire 209 times, leave the node count at 6314, and take
+`Verts` 44314 → 54776 / `Points` 11445 → 12909 / `Surfs` 3703 → 6059 before `bspOptGeom` sees the
+model **[LIVE, `harness/editor-tree-oracle/logs/repart-stage-unatco.log`]**.
 
 Portals get special flag handling before CSG (decoded at `Editor.dll 0x4a800-0x4a821`
 **[DISASM; `dev/docs/spikes/2026-06-24-bsp-collision-solidity-movers-from-binary.md` §3]**): a brush
@@ -783,6 +801,27 @@ distinct from the above (an `FBspNode`'s vertex-count field is one byte, capping
 17+-vertex poly is split into a 16-vertex node and an `N-14`-vertex node sharing 2 vertices, itself
 recursing through `bspAddNode`.
 
+**`bspAddNode` also seeds the new node's zone/leaf fields from its PARENT**
+**[DISASM Editor.dll 0x1003524a–0x100352c7, decoded 2026-08-26]** (`FBspNode`: `ZoneMask` +0x10,
+`iZone[2]` bytes at +0x34/+0x35, `iLeaf[2]` at +0x38/+0x3c). Every new node starts `ZoneMask` all-ones
+(`0x100351df: or eax,-1`), then, by `ENodePlace`:
+- **`NODE_Root` (3)**: `iLeaf[0]=iLeaf[1]=-1`, `iZone[0]=iZone[1]=0`.
+- **`NODE_Front` (1) / `NODE_Back` (0)**: no inheritance here — the branch jumps past this block to
+  `0x1003535b`, which was **[NOT DECODED]**. Where a front/back-placed node's `iZone`/`iLeaf` come
+  from is therefore still open, and that is the placement most brush faces get.
+- **`NODE_Plane` (2)**: a helper (`[0x100ce510]`, called with the new node as `this` and the parent as
+  the argument) returns a float; `k = (0.0 > result) ? 1 : 0` (`comiss`/`seta`), then
+  `new.iLeaf[0] = parent.iLeaf[k]`, `new.iLeaf[1] = parent.iLeaf[1-k]`,
+  `new.iZone[0] = parent.iZone[k]`, `new.iZone[1] = parent.iZone[1-k]`, and finally
+  `parent.iPlane = <new node index>`. I.e. a coplanar-chain member inherits its parent's zones and
+  leaves, swapped when the two faces point opposite ways. The helper is presumed to be a plane/normal
+  comparison but was **not** itself disassembled — **[UNVERIFIED]** on that one point.
+
+So a COPLANAR-chain node appended after `TestVisibility` — by the detail-brush layer, which never
+re-runs the zone pass — still gets a real zone. `bspBuildBounds`'s second `BuildZoneMasks` (§8 step 1)
+then recomputes its `ZoneMask` off that inherited `iZone`. The same is not established for a
+front/back-placed node; see the undecoded branch above.
+
 ### 5.2 `FindBestSplit` — the exact scoring heuristic
 
 **[DISASM Editor.dll 0x335d0]**, fully byte-verified with a committed re-assertable harness
@@ -985,8 +1024,18 @@ every surf's `+0x18=-1` field, empty `Model.Leaves`/`Lights` → **Pass A** `Ass
 / `bspRefresh` / `bspBuildBounds`. Terminal log line:
 `"Portalized: %i portals, %i zone portals (%i fragments), %i leaves, %i nodes"`.
 
-Per §1.1, this whole pipeline only runs under the explicit `ZONES` keyword on `BSP REBUILD` — not as
-part of a bare `MAP REBUILD`.
+**When it runs — corrected 2026-08-26.** An earlier pass at this doc said the pipeline runs only under
+the explicit `ZONES` keyword on `BSP REBUILD`, never as part of a bare `MAP REBUILD`. That is wrong
+for the `MAP REBUILD` path: `csgRebuild` calls `TestVisibility` **unconditionally**, at
+`Editor.dll 0x1004a8af` (`[eax+0x264]`, args `(Level, Model, 0, 0)`) — between the world
+repartition and the detail-brush loop (§2). §1.1's own weaker statement ("does not *re-run* leaf/zone
+enumeration") stands and is now explained: the leaves a bare `MAP REBUILD` leaves behind are stale
+because the detail loop appends ~3300 nodes AFTER `TestVisibility`, not because the pass was skipped.
+The `ZONES` keyword governs only the separate `BSP REBUILD` entry point.
+**[DISASM Editor.dll 0x4a650; LIVE, `harness/editor-tree-oracle/brushcsg_calls_unatco.py` — on the
+734-brush UNATCO map the world repartition returns 2953 nodes and the first detail brush already sees
+2984, and the golden's own 762 leaves / 7 zones are reproduced exactly by running the pass at this
+position]**.
 
 `FEditorVisibility`'s own field layout (editor-only scratch on `GMem`, never disk-serialized —
 included here only as a cross-reference aid for re-disassembling any of the passes below, not needed

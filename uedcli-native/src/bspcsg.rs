@@ -2257,12 +2257,17 @@ fn bsp_brush_csg(model: &mut Model, brush: &build::BrushInput, actor_index: i32,
 
 // --- finalize (leaves/zones/bounds), mirroring build.rs::finalize_leaves_and_bbox ------------
 
-fn finalize(model: &mut Model) {
+/// Swap every node's `iFront`/`iBack` — native's CSG-side child convention vs the engine's.
+fn swap_node_children(model: &mut Model) {
     for n in model.nodes.iter_mut() {
         std::mem::swap(&mut n.i_front, &mut n.i_back);
-        n.node_flags &= !NF_IS_NEW;
-        n.i_render_bound = -1;
     }
+}
+
+/// `TestVisibility` (`Editor.dll 0xaa940`, engine vtable `+0x264`): leaves, portals, the zone flood
+/// and Pass D's per-zone fragment split.  Reads/writes the ENGINE child convention — bracket it with
+/// `swap_node_children` when the tree is in native's.
+fn zone_pass(model: &mut Model) {
     let passd_tail = zones::assign_leaves_and_zones(model);
     for n in model.nodes.iter_mut() {
         n.node_flags &= !build::NF_SOLID_BOUND;
@@ -2272,6 +2277,14 @@ fn finalize(model: &mut Model) {
     // the tree isomorphic — so collision/zones/render are byte-unchanged; only the on-disk node ORDER
     // (and thus `Bounds`/`LeafHulls`, built after) moves to match `Test_Castle.dx` positionally.
     reorder_nodes_to_tail(model, &passd_tail);
+}
+
+fn finalize(model: &mut Model) {
+    swap_node_children(model);
+    for n in model.nodes.iter_mut() {
+        n.node_flags &= !NF_IS_NEW;
+        n.i_render_bound = -1;
+    }
     if model.points.is_empty() {
         model.bbox_min = Vec3::new(0.0, 0.0, 0.0);
         model.bbox_max = Vec3::new(0.0, 0.0, 0.0);
@@ -2540,6 +2553,60 @@ pub fn build_geometry_bspcsg(brushes: &[build::BrushInput]) -> Result<Model, Bui
         // The castle byte-identity golden never caught it: the castle has 0 detail brushes.
         bsp_cleanup(&mut model);
     }
+    // STAGE COUNTS (UEDCLI_BSPCSG_STAGE_COUNTS) — env-gated.  Nothing in the serialized map says
+    // which pipeline stage built a node, so a count gap against a golden cannot be attributed
+    // without these.
+    let stage_counts = std::env::var("UEDCLI_BSPCSG_STAGE_COUNTS").is_ok();
+    if stage_counts {
+        eprintln!(
+            "STAGE post-repartition nodes={} surfs={} verts={} points={}",
+            model.nodes.len(), model.surfs.len(), model.verts.len(), model.points.len()
+        );
+    }
+    // POST-REPARTITION NODE DUMP (UEDCLI_BSPCSG_REPART_NODES) — env-gated.  Line format matches
+    // `harness/editor-tree-oracle/repart_tree_unatco.py`, which reads the SAME state out of the live
+    // editor (`Editor.dll 0x1004a05f`, right after `bspRefresh` inside `bspRepartition`), so the two
+    // dumps diff node-for-node.
+    if std::env::var("UEDCLI_BSPCSG_REPART_NODES").is_ok() {
+        for (i, n) in model.nodes.iter().enumerate() {
+            eprintln!(
+                "RNODE {} isurf={} nv={} iB={} iF={} iP={} nf={} plane={:.5},{:.5},{:.5},{:.5}",
+                i, n.i_surf, n.num_vertices, n.i_back, n.i_front, n.i_plane, n.node_flags,
+                n.plane.x, n.plane.y, n.plane.z, n.plane.w
+            );
+        }
+    }
+
+    // TestVisibility runs HERE — between the repartition and the detail-brush loop, not after it.
+    // `csgRebuild` (`Editor.dll 0x4a650`) calls `bspRepartition` (vtable `+0x1ec`) at `0x1004a89a`,
+    // then `TestVisibility` (vtable `+0x264`) at `0x1004a8af`, and only then enters the second
+    // (detail) `bspBrushCSG` loop at `0x1004a9e8` **[DISASM]**.  Live-confirmed on the 734-brush
+    // UNATCO golden **[LIVE, `harness/editor-tree-oracle/brushcsg_calls_unatco.py`]**: the editor's
+    // repartition returns 2953 nodes and the FIRST detail brush already sees 2984 — the +31 is the
+    // zone pass's own fragment split, in the tree the detail brushes then filter through.
+    //
+    // Running it afterwards instead (native's old order) is wrong twice over: the detail brushes see
+    // an unfragmented tree, and Pass D then re-fragments faces the detail layer has already cut, so a
+    // face fans out far more than the editor's (measured +81 vs +31 on UNATCO).  Since the editor
+    // never re-runs it, the leaves this pass writes go STALE against the finished tree — that is the
+    // real editor's own bare-`MAP REBUILD` output (spec §14: 9.45 node `iLeaf` refs per leaf), not a
+    // defect to paper over here.
+    //
+    // The pass reads the ENGINE child convention (`iFront`/`iBack` swapped relative to native's CSG
+    // convention), so it is bracketed by the swap `finalize` used to own; the detail loop below needs
+    // the native convention back.
+    swap_node_children(&mut model);
+    for n in model.nodes.iter_mut() {
+        n.node_flags &= !NF_IS_NEW; // Pass D skips NF_IsNew fragments; clear even the unreachable.
+    }
+    zone_pass(&mut model);
+    swap_node_children(&mut model);
+    if stage_counts {
+        eprintln!(
+            "STAGE post-testvisibility nodes={} verts={} points={}",
+            model.nodes.len(), model.verts.len(), model.points.len()
+        );
+    }
 
     // Pass 2: SEMISOLID detail brushes (incremental, NOT repartitioned) — NotSolid-only brushes
     // (portal or not) are NOT here; they were processed structurally in pass 1 (`detail_pass`).
@@ -2551,9 +2618,21 @@ pub fn build_geometry_bspcsg(brushes: &[build::BrushInput]) -> Result<Model, Bui
         // Detail brushes still need NF_IsNew cleared per pass; bsp_brush_csg handles that.
         bsp_brush_csg(&mut model, b, bi as i32, pf);
     }
+    if stage_counts {
+        eprintln!(
+            "STAGE post-pass2 nodes={} verts={} points={}",
+            model.nodes.len(), model.verts.len(), model.points.len()
+        );
+    }
 
     // finalize (leaves/zones/bbox) + collision hulls.
     finalize(&mut model);
+    if stage_counts {
+        eprintln!(
+            "STAGE post-finalize nodes={} verts={} points={}",
+            model.nodes.len(), model.verts.len(), model.points.len()
+        );
+    }
     // PRE-OPTGEOM NODE DUMP (UEDCLI_BSPCSG_PREOPT_NODES) — env-gated; native counterpart of the
     // editor's `bspopt_pool_oracle`-family Model->Nodes dump at bspOptGeom ENTRY (§10.13).  Emits
     // each node's plane + iF/iB/iP + isurf + nv so the pre-optgeom TREE can be diffed node-for-node
@@ -2573,7 +2652,7 @@ pub fn build_geometry_bspcsg(brushes: &[build::BrushInput]) -> Result<Model, Bui
     // bspOptGeom: T-junction elimination (grows Verts) + shared-side linking (sets every iSide
     // and NumSharedSides).  Mirrors csgRebuild's call ORDER (Editor 0x4a650, §80): it runs at
     // step 5 — AFTER the repartition+bspRefresh (step 2), AFTER TestVisibility's zone fragment-split
-    // (step 3 = our zones Pass D inside `finalize`), AND after the semisolid/detail second layer
+    // (step 3 = our zones Pass D, `zone_pass`), AND after the semisolid/detail second layer
     // (step 4 = our Pass 2 above) — right before bspBuildBounds.  Running it here (not at the
     // repartition tail) is load-bearing: the zone split creates the extra coplanar faces whose
     // near-endpoint T-cracks pass 1 welds, and `finalize`'s front/back swap has put the tree in

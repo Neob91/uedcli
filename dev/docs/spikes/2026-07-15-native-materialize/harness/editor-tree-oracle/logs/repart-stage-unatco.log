@@ -1,0 +1,1303 @@
+[New LWP 169]
+[New LWP 218]
+[New LWP 219]
+[New LWP 220]
+[New LWP 221]
+[New LWP 222]
+[New LWP 223]
+[New LWP 224]
+[New LWP 225]
+[New LWP 226]
+[New LWP 227]
+[New LWP 228]
+[New LWP 229]
+[New LWP 230]
+[New LWP 231]
+[New LWP 232]
+[New LWP 233]
+[New LWP 234]
+[New LWP 235]
+[New LWP 236]
+[New LWP 237]
+[New LWP 238]
+[New LWP 239]
+[New LWP 240]
+[New LWP 241]
+[New LWP 242]
+[New LWP 243]
+[New LWP 244]
+[New LWP 245]
+[New LWP 246]
+[New LWP 249]
+[New LWP 251]
+[New LWP 253]
+[New LWP 263]
+[Thread debugging using libthread_db enabled]
+Using host libthread_db library "/lib/x86_64-linux-gnu/libthread_db.so.1".
+0xf7f6dcfc in __kernel_vsyscall ()
+Breakpoint 1 at 0x10049fc0
+Breakpoint 2 at 0x1004a00d
+Breakpoint 3 at 0x1004a027
+Breakpoint 4 at 0x1004a047
+Breakpoint 5 at 0x1004a05f
+ORACLE_ATTACHED
+A_entry nodes=6368 verts=45943 points=13258 surfs=1720
+B_makeedpolys nodes=6368 verts=45943 points=13258 surfs=1720
+C_mergecoplanar nodes=6368 verts=45943 points=13258 surfs=1720
+D_bspbuild nodes=2953 verts=11794 points=5607 surfs=1720
+E_bsprefresh nodes=2953 verts=11794 points=5607 surfs=1720
+STAGEEND
+A_entry nodes=6314 verts=44314 points=11445 surfs=3703
+B_makeedpolys nodes=6314 verts=44314 points=11445 surfs=3703
+C_mergecoplanar nodes=6314 verts=44314 points=11445 surfs=3703
+D_bspbuild nodes=6389 verts=44622 points=11498 surfs=3768
+E_bsprefresh nodes=6314 verts=44622 points=11498 surfs=3768
+STAGEEND
+A_entry nodes=6314 verts=44622 points=11498 surfs=3768
+B_makeedpolys nodes=6314 verts=44622 points=11498 surfs=3768
+C_mergecoplanar nodes=6314 verts=44622 points=11498 surfs=3768
+D_bspbuild nodes=6317 verts=44634 points=11501 surfs=3771
+E_bsprefresh nodes=6314 verts=44634 points=11501 surfs=3771
+STAGEEND
+A_entry nodes=6314 verts=44634 points=11501 surfs=3771
+B_makeedpolys nodes=6314 verts=44634 points=11501 surfs=3771
+C_mergecoplanar nodes=6314 verts=44634 points=11501 surfs=3771
+D_bspbuild nodes=6331 verts=44706 points=11516 surfs=3788
+E_bsprefresh nodes=6314 verts=44706 points=11516 surfs=3788
+STAGEEND
+A_entry nodes=6314 verts=44706 points=11516 surfs=3788
+B_makeedpolys nodes=6314 verts=44706 points=11516 surfs=3788
+C_mergecoplanar nodes=6314 verts=44706 points=11516 surfs=3788
+D_bspbuild nodes=6322 verts=44736 points=11523 surfs=3796
+E_bsprefresh nodes=6314 verts=44736 points=11523 surfs=3796
+STAGEEND
+A_entry nodes=6314 verts=44736 points=11523 surfs=3796
+B_makeedpolys nodes=6314 verts=44736 points=11523 surfs=3796
+C_mergecoplanar nodes=6314 verts=44736 points=11523 surfs=3796
+D_bspbuild nodes=6318 verts=44752 points=11526 surfs=3800
+E_bsprefresh nodes=6314 verts=44752 points=11526 surfs=3800
+STAGEEND
+A_entry nodes=6314 verts=44752 points=11526 surfs=3800
+B_makeedpolys nodes=6314 verts=44752 points=11526 surfs=3800
+C_mergecoplanar nodes=6314 verts=44752 points=11526 surfs=3800
+D_bspbuild nodes=6318 verts=44768 points=11530 surfs=3804
+E_bsprefresh nodes=6314 verts=44768 points=11530 surfs=3804
+STAGEEND
+A_entry nodes=6314 verts=44768 points=11530 surfs=3804
+B_makeedpolys nodes=6314 verts=44768 points=11530 surfs=3804
+C_mergecoplanar nodes=6314 verts=44768 points=11530 surfs=3804
+D_bspbuild nodes=6316 verts=44776 points=11532 surfs=3806
+E_bsprefresh nodes=6314 verts=44776 points=11532 surfs=3806
+STAGEEND
+A_entry nodes=6314 verts=44776 points=11532 surfs=3806
+B_makeedpolys nodes=6314 verts=44776 points=11532 surfs=3806
+C_mergecoplanar nodes=6314 verts=44776 points=11532 surfs=3806
+D_bspbuild nodes=6318 verts=44792 points=11536 surfs=3810
+E_bsprefresh nodes=6314 verts=44792 points=11536 surfs=3810
+STAGEEND
+A_entry nodes=6314 verts=44792 points=11536 surfs=3810
+B_makeedpolys nodes=6314 verts=44792 points=11536 surfs=3810
+C_mergecoplanar nodes=6314 verts=44792 points=11536 surfs=3810
+D_bspbuild nodes=6324 verts=44832 points=11537 surfs=3820
+E_bsprefresh nodes=6314 verts=44832 points=11537 surfs=3820
+STAGEEND
+A_entry nodes=6314 verts=44832 points=11537 surfs=3820
+B_makeedpolys nodes=6314 verts=44832 points=11537 surfs=3820
+C_mergecoplanar nodes=6314 verts=44832 points=11537 surfs=3820
+D_bspbuild nodes=6316 verts=44840 points=11539 surfs=3822
+E_bsprefresh nodes=6314 verts=44840 points=11539 surfs=3822
+STAGEEND
+A_entry nodes=6314 verts=44840 points=11539 surfs=3822
+B_makeedpolys nodes=6314 verts=44840 points=11539 surfs=3822
+C_mergecoplanar nodes=6314 verts=44840 points=11539 surfs=3822
+D_bspbuild nodes=6331 verts=44910 points=11550 surfs=3839
+E_bsprefresh nodes=6314 verts=44910 points=11550 surfs=3839
+STAGEEND
+A_entry nodes=6314 verts=44910 points=11550 surfs=3839
+B_makeedpolys nodes=6314 verts=44910 points=11550 surfs=3839
+C_mergecoplanar nodes=6314 verts=44910 points=11550 surfs=3839
+D_bspbuild nodes=6330 verts=44982 points=11560 surfs=3855
+E_bsprefresh nodes=6314 verts=44982 points=11560 surfs=3855
+STAGEEND
+A_entry nodes=6314 verts=44982 points=11560 surfs=3855
+B_makeedpolys nodes=6314 verts=44982 points=11560 surfs=3855
+C_mergecoplanar nodes=6314 verts=44982 points=11560 surfs=3855
+D_bspbuild nodes=6340 verts=45086 points=11574 surfs=3881
+E_bsprefresh nodes=6314 verts=45086 points=11574 surfs=3881
+STAGEEND
+A_entry nodes=6314 verts=45086 points=11574 surfs=3881
+B_makeedpolys nodes=6314 verts=45086 points=11574 surfs=3881
+C_mergecoplanar nodes=6314 verts=45086 points=11574 surfs=3881
+D_bspbuild nodes=6318 verts=45102 points=11574 surfs=3885
+E_bsprefresh nodes=6314 verts=45102 points=11574 surfs=3885
+STAGEEND
+A_entry nodes=6314 verts=45102 points=11574 surfs=3885
+B_makeedpolys nodes=6314 verts=45102 points=11574 surfs=3885
+C_mergecoplanar nodes=6314 verts=45102 points=11574 surfs=3885
+D_bspbuild nodes=6320 verts=45126 points=11580 surfs=3891
+E_bsprefresh nodes=6314 verts=45126 points=11580 surfs=3891
+STAGEEND
+A_entry nodes=6314 verts=45126 points=11580 surfs=3891
+B_makeedpolys nodes=6314 verts=45126 points=11580 surfs=3891
+C_mergecoplanar nodes=6314 verts=45126 points=11580 surfs=3891
+D_bspbuild nodes=6320 verts=45150 points=11586 surfs=3897
+E_bsprefresh nodes=6314 verts=45150 points=11586 surfs=3897
+STAGEEND
+A_entry nodes=6314 verts=45150 points=11586 surfs=3897
+B_makeedpolys nodes=6314 verts=45150 points=11586 surfs=3897
+C_mergecoplanar nodes=6314 verts=45150 points=11586 surfs=3897
+D_bspbuild nodes=6327 verts=45202 points=11598 surfs=3910
+E_bsprefresh nodes=6314 verts=45202 points=11598 surfs=3910
+STAGEEND
+A_entry nodes=6314 verts=45202 points=11598 surfs=3910
+B_makeedpolys nodes=6314 verts=45202 points=11598 surfs=3910
+C_mergecoplanar nodes=6314 verts=45202 points=11598 surfs=3910
+D_bspbuild nodes=6318 verts=45218 points=11598 surfs=3914
+E_bsprefresh nodes=6314 verts=45218 points=11598 surfs=3914
+STAGEEND
+A_entry nodes=6314 verts=45218 points=11598 surfs=3914
+B_makeedpolys nodes=6314 verts=45218 points=11598 surfs=3914
+C_mergecoplanar nodes=6314 verts=45218 points=11598 surfs=3914
+D_bspbuild nodes=6323 verts=45258 points=11606 surfs=3923
+E_bsprefresh nodes=6314 verts=45258 points=11606 surfs=3923
+STAGEEND
+A_entry nodes=6314 verts=45258 points=11606 surfs=3923
+B_makeedpolys nodes=6314 verts=45258 points=11606 surfs=3923
+C_mergecoplanar nodes=6314 verts=45258 points=11606 surfs=3923
+D_bspbuild nodes=6318 verts=45274 points=11610 surfs=3927
+E_bsprefresh nodes=6314 verts=45274 points=11610 surfs=3927
+STAGEEND
+A_entry nodes=6314 verts=45274 points=11610 surfs=3927
+B_makeedpolys nodes=6314 verts=45274 points=11610 surfs=3927
+C_mergecoplanar nodes=6314 verts=45274 points=11610 surfs=3927
+D_bspbuild nodes=6315 verts=45278 points=11611 surfs=3928
+E_bsprefresh nodes=6314 verts=45278 points=11611 surfs=3928
+STAGEEND
+A_entry nodes=6314 verts=45278 points=11611 surfs=3928
+B_makeedpolys nodes=6314 verts=45278 points=11611 surfs=3928
+C_mergecoplanar nodes=6314 verts=45278 points=11611 surfs=3928
+D_bspbuild nodes=6340 verts=45390 points=11634 surfs=3954
+E_bsprefresh nodes=6314 verts=45390 points=11634 surfs=3954
+STAGEEND
+A_entry nodes=6314 verts=45390 points=11634 surfs=3954
+B_makeedpolys nodes=6314 verts=45390 points=11634 surfs=3954
+C_mergecoplanar nodes=6314 verts=45390 points=11634 surfs=3954
+D_bspbuild nodes=6328 verts=45450 points=11646 surfs=3968
+E_bsprefresh nodes=6314 verts=45450 points=11646 surfs=3968
+STAGEEND
+A_entry nodes=6314 verts=45450 points=11646 surfs=3968
+B_makeedpolys nodes=6314 verts=45450 points=11646 surfs=3968
+C_mergecoplanar nodes=6314 verts=45450 points=11646 surfs=3968
+D_bspbuild nodes=6373 verts=45684 points=11689 surfs=4021
+E_bsprefresh nodes=6314 verts=45684 points=11689 surfs=4021
+STAGEEND
+A_entry nodes=6314 verts=45684 points=11689 surfs=4021
+B_makeedpolys nodes=6314 verts=45684 points=11689 surfs=4021
+C_mergecoplanar nodes=6314 verts=45684 points=11689 surfs=4021
+D_bspbuild nodes=6318 verts=45700 points=11692 surfs=4025
+E_bsprefresh nodes=6314 verts=45700 points=11692 surfs=4025
+STAGEEND
+A_entry nodes=6314 verts=45700 points=11692 surfs=4025
+B_makeedpolys nodes=6314 verts=45700 points=11692 surfs=4025
+C_mergecoplanar nodes=6314 verts=45700 points=11692 surfs=4025
+D_bspbuild nodes=6323 verts=45736 points=11701 surfs=4034
+E_bsprefresh nodes=6314 verts=45736 points=11701 surfs=4034
+STAGEEND
+A_entry nodes=6314 verts=45736 points=11701 surfs=4034
+B_makeedpolys nodes=6314 verts=45736 points=11701 surfs=4034
+C_mergecoplanar nodes=6314 verts=45736 points=11701 surfs=4034
+D_bspbuild nodes=6316 verts=45744 points=11703 surfs=4036
+E_bsprefresh nodes=6314 verts=45744 points=11703 surfs=4036
+STAGEEND
+A_entry nodes=6314 verts=45744 points=11703 surfs=4036
+B_makeedpolys nodes=6314 verts=45744 points=11703 surfs=4036
+C_mergecoplanar nodes=6314 verts=45744 points=11703 surfs=4036
+D_bspbuild nodes=6319 verts=45764 points=11703 surfs=4041
+E_bsprefresh nodes=6314 verts=45764 points=11703 surfs=4041
+STAGEEND
+A_entry nodes=6314 verts=45764 points=11703 surfs=4041
+B_makeedpolys nodes=6314 verts=45764 points=11703 surfs=4041
+C_mergecoplanar nodes=6314 verts=45764 points=11703 surfs=4041
+D_bspbuild nodes=6340 verts=45868 points=11717 surfs=4067
+E_bsprefresh nodes=6314 verts=45868 points=11717 surfs=4067
+STAGEEND
+A_entry nodes=6314 verts=45868 points=11717 surfs=4067
+B_makeedpolys nodes=6314 verts=45868 points=11717 surfs=4067
+C_mergecoplanar nodes=6314 verts=45868 points=11717 surfs=4067
+D_bspbuild nodes=6319 verts=45888 points=11720 surfs=4072
+E_bsprefresh nodes=6314 verts=45888 points=11720 surfs=4072
+STAGEEND
+A_entry nodes=6314 verts=45888 points=11720 surfs=4072
+B_makeedpolys nodes=6314 verts=45888 points=11720 surfs=4072
+C_mergecoplanar nodes=6314 verts=45888 points=11720 surfs=4072
+D_bspbuild nodes=6318 verts=45904 points=11724 surfs=4076
+E_bsprefresh nodes=6314 verts=45904 points=11724 surfs=4076
+STAGEEND
+A_entry nodes=6314 verts=45904 points=11724 surfs=4076
+B_makeedpolys nodes=6314 verts=45904 points=11724 surfs=4076
+C_mergecoplanar nodes=6314 verts=45904 points=11724 surfs=4076
+D_bspbuild nodes=6323 verts=45940 points=11731 surfs=4083
+E_bsprefresh nodes=6314 verts=45940 points=11731 surfs=4083
+STAGEEND
+A_entry nodes=6314 verts=45940 points=11731 surfs=4083
+B_makeedpolys nodes=6314 verts=45940 points=11731 surfs=4083
+C_mergecoplanar nodes=6314 verts=45940 points=11731 surfs=4083
+D_bspbuild nodes=6316 verts=45948 points=11733 surfs=4085
+E_bsprefresh nodes=6314 verts=45948 points=11733 surfs=4085
+STAGEEND
+A_entry nodes=6314 verts=45948 points=11733 surfs=4085
+B_makeedpolys nodes=6314 verts=45948 points=11733 surfs=4085
+C_mergecoplanar nodes=6314 verts=45948 points=11733 surfs=4085
+D_bspbuild nodes=6326 verts=45996 points=11739 surfs=4097
+E_bsprefresh nodes=6314 verts=45996 points=11739 surfs=4097
+STAGEEND
+A_entry nodes=6314 verts=45996 points=11739 surfs=4097
+B_makeedpolys nodes=6314 verts=45996 points=11739 surfs=4097
+C_mergecoplanar nodes=6314 verts=45996 points=11739 surfs=4097
+D_bspbuild nodes=6324 verts=46036 points=11744 surfs=4107
+E_bsprefresh nodes=6314 verts=46036 points=11744 surfs=4107
+STAGEEND
+A_entry nodes=6314 verts=46036 points=11744 surfs=4107
+B_makeedpolys nodes=6314 verts=46036 points=11744 surfs=4107
+C_mergecoplanar nodes=6314 verts=46036 points=11744 surfs=4107
+D_bspbuild nodes=6322 verts=46068 points=11748 surfs=4115
+E_bsprefresh nodes=6314 verts=46068 points=11748 surfs=4115
+STAGEEND
+A_entry nodes=6314 verts=46068 points=11748 surfs=4115
+B_makeedpolys nodes=6314 verts=46068 points=11748 surfs=4115
+C_mergecoplanar nodes=6314 verts=46068 points=11748 surfs=4115
+D_bspbuild nodes=6331 verts=46134 points=11759 surfs=4131
+E_bsprefresh nodes=6314 verts=46134 points=11759 surfs=4131
+STAGEEND
+A_entry nodes=6314 verts=46134 points=11759 surfs=4131
+B_makeedpolys nodes=6314 verts=46134 points=11759 surfs=4131
+C_mergecoplanar nodes=6314 verts=46134 points=11759 surfs=4131
+D_bspbuild nodes=6335 verts=46222 points=11778 surfs=4152
+E_bsprefresh nodes=6314 verts=46222 points=11778 surfs=4152
+STAGEEND
+A_entry nodes=6314 verts=46222 points=11778 surfs=4152
+B_makeedpolys nodes=6314 verts=46222 points=11778 surfs=4152
+C_mergecoplanar nodes=6314 verts=46222 points=11778 surfs=4152
+D_bspbuild nodes=6347 verts=46370 points=11791 surfs=4184
+E_bsprefresh nodes=6314 verts=46370 points=11791 surfs=4184
+STAGEEND
+A_entry nodes=6314 verts=46370 points=11791 surfs=4184
+B_makeedpolys nodes=6314 verts=46370 points=11791 surfs=4184
+C_mergecoplanar nodes=6314 verts=46370 points=11791 surfs=4184
+D_bspbuild nodes=6320 verts=46394 points=11794 surfs=4190
+E_bsprefresh nodes=6314 verts=46394 points=11794 surfs=4190
+STAGEEND
+A_entry nodes=6314 verts=46394 points=11794 surfs=4190
+B_makeedpolys nodes=6314 verts=46394 points=11794 surfs=4190
+C_mergecoplanar nodes=6314 verts=46394 points=11794 surfs=4190
+D_bspbuild nodes=6320 verts=46418 points=11797 surfs=4196
+E_bsprefresh nodes=6314 verts=46418 points=11797 surfs=4196
+STAGEEND
+A_entry nodes=6314 verts=46418 points=11797 surfs=4196
+B_makeedpolys nodes=6314 verts=46418 points=11797 surfs=4196
+C_mergecoplanar nodes=6314 verts=46418 points=11797 surfs=4196
+D_bspbuild nodes=6343 verts=46541 points=11804 surfs=4223
+E_bsprefresh nodes=6314 verts=46541 points=11804 surfs=4223
+STAGEEND
+A_entry nodes=6314 verts=46541 points=11804 surfs=4223
+B_makeedpolys nodes=6314 verts=46541 points=11804 surfs=4223
+C_mergecoplanar nodes=6314 verts=46541 points=11804 surfs=4223
+D_bspbuild nodes=6322 verts=46573 points=11804 surfs=4231
+E_bsprefresh nodes=6314 verts=46573 points=11804 surfs=4231
+STAGEEND
+A_entry nodes=6314 verts=46573 points=11804 surfs=4231
+B_makeedpolys nodes=6314 verts=46573 points=11804 surfs=4231
+C_mergecoplanar nodes=6314 verts=46573 points=11804 surfs=4231
+D_bspbuild nodes=6325 verts=46614 points=11805 surfs=4242
+E_bsprefresh nodes=6314 verts=46614 points=11805 surfs=4242
+STAGEEND
+A_entry nodes=6314 verts=46614 points=11805 surfs=4242
+B_makeedpolys nodes=6314 verts=46614 points=11805 surfs=4242
+C_mergecoplanar nodes=6314 verts=46614 points=11805 surfs=4242
+D_bspbuild nodes=6338 verts=46711 points=11810 surfs=4264
+E_bsprefresh nodes=6314 verts=46711 points=11810 surfs=4264
+STAGEEND
+A_entry nodes=6314 verts=46711 points=11810 surfs=4264
+B_makeedpolys nodes=6314 verts=46711 points=11810 surfs=4264
+C_mergecoplanar nodes=6314 verts=46711 points=11810 surfs=4264
+D_bspbuild nodes=6334 verts=46795 points=11814 surfs=4283
+E_bsprefresh nodes=6314 verts=46795 points=11814 surfs=4283
+STAGEEND
+A_entry nodes=6314 verts=46795 points=11814 surfs=4283
+B_makeedpolys nodes=6314 verts=46795 points=11814 surfs=4283
+C_mergecoplanar nodes=6314 verts=46795 points=11814 surfs=4283
+D_bspbuild nodes=6318 verts=46810 points=11815 surfs=4287
+E_bsprefresh nodes=6314 verts=46810 points=11815 surfs=4287
+STAGEEND
+A_entry nodes=6314 verts=46810 points=11815 surfs=4287
+B_makeedpolys nodes=6314 verts=46810 points=11815 surfs=4287
+C_mergecoplanar nodes=6314 verts=46810 points=11815 surfs=4287
+D_bspbuild nodes=6317 verts=46822 points=11816 surfs=4290
+E_bsprefresh nodes=6314 verts=46822 points=11816 surfs=4290
+STAGEEND
+A_entry nodes=6314 verts=46822 points=11816 surfs=4290
+B_makeedpolys nodes=6314 verts=46822 points=11816 surfs=4290
+C_mergecoplanar nodes=6314 verts=46822 points=11816 surfs=4290
+D_bspbuild nodes=6318 verts=46837 points=11817 surfs=4294
+E_bsprefresh nodes=6314 verts=46837 points=11817 surfs=4294
+STAGEEND
+A_entry nodes=6314 verts=46837 points=11817 surfs=4294
+B_makeedpolys nodes=6314 verts=46837 points=11817 surfs=4294
+C_mergecoplanar nodes=6314 verts=46837 points=11817 surfs=4294
+D_bspbuild nodes=6317 verts=46849 points=11817 surfs=4297
+E_bsprefresh nodes=6314 verts=46849 points=11817 surfs=4297
+STAGEEND
+A_entry nodes=6314 verts=46849 points=11817 surfs=4297
+B_makeedpolys nodes=6314 verts=46849 points=11817 surfs=4297
+C_mergecoplanar nodes=6314 verts=46849 points=11817 surfs=4297
+D_bspbuild nodes=6317 verts=46861 points=11818 surfs=4300
+E_bsprefresh nodes=6314 verts=46861 points=11818 surfs=4300
+STAGEEND
+A_entry nodes=6314 verts=46861 points=11818 surfs=4300
+B_makeedpolys nodes=6314 verts=46861 points=11818 surfs=4300
+C_mergecoplanar nodes=6314 verts=46861 points=11818 surfs=4300
+D_bspbuild nodes=6319 verts=46881 points=11820 surfs=4305
+E_bsprefresh nodes=6314 verts=46881 points=11820 surfs=4305
+STAGEEND
+A_entry nodes=6314 verts=46881 points=11820 surfs=4305
+B_makeedpolys nodes=6314 verts=46881 points=11820 surfs=4305
+C_mergecoplanar nodes=6314 verts=46881 points=11820 surfs=4305
+D_bspbuild nodes=6319 verts=46901 points=11821 surfs=4310
+E_bsprefresh nodes=6314 verts=46901 points=11821 surfs=4310
+STAGEEND
+A_entry nodes=6314 verts=46901 points=11821 surfs=4310
+B_makeedpolys nodes=6314 verts=46901 points=11821 surfs=4310
+C_mergecoplanar nodes=6314 verts=46901 points=11821 surfs=4310
+D_bspbuild nodes=6320 verts=46927 points=11826 surfs=4316
+E_bsprefresh nodes=6314 verts=46927 points=11826 surfs=4316
+STAGEEND
+A_entry nodes=6314 verts=46927 points=11826 surfs=4316
+B_makeedpolys nodes=6314 verts=46927 points=11826 surfs=4316
+C_mergecoplanar nodes=6314 verts=46927 points=11826 surfs=4316
+D_bspbuild nodes=6320 verts=46953 points=11831 surfs=4322
+E_bsprefresh nodes=6314 verts=46953 points=11831 surfs=4322
+STAGEEND
+A_entry nodes=6314 verts=46953 points=11831 surfs=4322
+B_makeedpolys nodes=6314 verts=46953 points=11831 surfs=4322
+C_mergecoplanar nodes=6314 verts=46953 points=11831 surfs=4322
+D_bspbuild nodes=6327 verts=47005 points=11841 surfs=4334
+E_bsprefresh nodes=6314 verts=47005 points=11841 surfs=4334
+STAGEEND
+A_entry nodes=6314 verts=47005 points=11841 surfs=4334
+B_makeedpolys nodes=6314 verts=47005 points=11841 surfs=4334
+C_mergecoplanar nodes=6314 verts=47005 points=11841 surfs=4334
+D_bspbuild nodes=6318 verts=47021 points=11841 surfs=4338
+E_bsprefresh nodes=6314 verts=47021 points=11841 surfs=4338
+STAGEEND
+A_entry nodes=6314 verts=47021 points=11841 surfs=4338
+B_makeedpolys nodes=6314 verts=47021 points=11841 surfs=4338
+C_mergecoplanar nodes=6314 verts=47021 points=11841 surfs=4338
+D_bspbuild nodes=6319 verts=47041 points=11845 surfs=4343
+E_bsprefresh nodes=6314 verts=47041 points=11845 surfs=4343
+STAGEEND
+A_entry nodes=6314 verts=47041 points=11845 surfs=4343
+B_makeedpolys nodes=6314 verts=47041 points=11845 surfs=4343
+C_mergecoplanar nodes=6314 verts=47041 points=11845 surfs=4343
+D_bspbuild nodes=6318 verts=47057 points=11849 surfs=4347
+E_bsprefresh nodes=6314 verts=47057 points=11849 surfs=4347
+STAGEEND
+A_entry nodes=6314 verts=47057 points=11849 surfs=4347
+B_makeedpolys nodes=6314 verts=47057 points=11849 surfs=4347
+C_mergecoplanar nodes=6314 verts=47057 points=11849 surfs=4347
+D_bspbuild nodes=6318 verts=47073 points=11853 surfs=4351
+E_bsprefresh nodes=6314 verts=47073 points=11853 surfs=4351
+STAGEEND
+A_entry nodes=6314 verts=47073 points=11853 surfs=4351
+B_makeedpolys nodes=6314 verts=47073 points=11853 surfs=4351
+C_mergecoplanar nodes=6314 verts=47073 points=11853 surfs=4351
+D_bspbuild nodes=6317 verts=47085 points=11856 surfs=4354
+E_bsprefresh nodes=6314 verts=47085 points=11856 surfs=4354
+STAGEEND
+A_entry nodes=6314 verts=47085 points=11856 surfs=4354
+B_makeedpolys nodes=6314 verts=47085 points=11856 surfs=4354
+C_mergecoplanar nodes=6314 verts=47085 points=11856 surfs=4354
+D_bspbuild nodes=6328 verts=47145 points=11864 surfs=4368
+E_bsprefresh nodes=6314 verts=47145 points=11864 surfs=4368
+STAGEEND
+A_entry nodes=6314 verts=47145 points=11864 surfs=4368
+B_makeedpolys nodes=6314 verts=47145 points=11864 surfs=4368
+C_mergecoplanar nodes=6314 verts=47145 points=11864 surfs=4368
+D_bspbuild nodes=6322 verts=47177 points=11872 surfs=4376
+E_bsprefresh nodes=6314 verts=47177 points=11872 surfs=4376
+STAGEEND
+A_entry nodes=6314 verts=47177 points=11872 surfs=4376
+B_makeedpolys nodes=6314 verts=47177 points=11872 surfs=4376
+C_mergecoplanar nodes=6314 verts=47177 points=11872 surfs=4376
+D_bspbuild nodes=6318 verts=47193 points=11872 surfs=4380
+E_bsprefresh nodes=6314 verts=47193 points=11872 surfs=4380
+STAGEEND
+A_entry nodes=6314 verts=47193 points=11872 surfs=4380
+B_makeedpolys nodes=6314 verts=47193 points=11872 surfs=4380
+C_mergecoplanar nodes=6314 verts=47193 points=11872 surfs=4380
+D_bspbuild nodes=6318 verts=47209 points=11872 surfs=4384
+E_bsprefresh nodes=6314 verts=47209 points=11872 surfs=4384
+STAGEEND
+A_entry nodes=6314 verts=47209 points=11872 surfs=4384
+B_makeedpolys nodes=6314 verts=47209 points=11872 surfs=4384
+C_mergecoplanar nodes=6314 verts=47209 points=11872 surfs=4384
+D_bspbuild nodes=6323 verts=47249 points=11880 surfs=4393
+E_bsprefresh nodes=6314 verts=47249 points=11880 surfs=4393
+STAGEEND
+A_entry nodes=6314 verts=47249 points=11880 surfs=4393
+B_makeedpolys nodes=6314 verts=47249 points=11880 surfs=4393
+C_mergecoplanar nodes=6314 verts=47249 points=11880 surfs=4393
+D_bspbuild nodes=6332 verts=47319 points=11887 surfs=4410
+E_bsprefresh nodes=6314 verts=47319 points=11887 surfs=4410
+STAGEEND
+A_entry nodes=6314 verts=47319 points=11887 surfs=4410
+B_makeedpolys nodes=6314 verts=47319 points=11887 surfs=4410
+C_mergecoplanar nodes=6314 verts=47319 points=11887 surfs=4410
+D_bspbuild nodes=6329 verts=47383 points=11900 surfs=4425
+E_bsprefresh nodes=6314 verts=47383 points=11900 surfs=4425
+STAGEEND
+A_entry nodes=6314 verts=47383 points=11900 surfs=4425
+B_makeedpolys nodes=6314 verts=47383 points=11900 surfs=4425
+C_mergecoplanar nodes=6314 verts=47383 points=11900 surfs=4425
+D_bspbuild nodes=6322 verts=47413 points=11907 surfs=4433
+E_bsprefresh nodes=6314 verts=47413 points=11907 surfs=4433
+STAGEEND
+A_entry nodes=6314 verts=47413 points=11907 surfs=4433
+B_makeedpolys nodes=6314 verts=47413 points=11907 surfs=4433
+C_mergecoplanar nodes=6314 verts=47413 points=11907 surfs=4433
+D_bspbuild nodes=6318 verts=47429 points=11910 surfs=4437
+E_bsprefresh nodes=6314 verts=47429 points=11910 surfs=4437
+STAGEEND
+A_entry nodes=6314 verts=47429 points=11910 surfs=4437
+B_makeedpolys nodes=6314 verts=47429 points=11910 surfs=4437
+C_mergecoplanar nodes=6314 verts=47429 points=11910 surfs=4437
+D_bspbuild nodes=6318 verts=47445 points=11914 surfs=4441
+E_bsprefresh nodes=6314 verts=47445 points=11914 surfs=4441
+STAGEEND
+A_entry nodes=6314 verts=47445 points=11914 surfs=4441
+B_makeedpolys nodes=6314 verts=47445 points=11914 surfs=4441
+C_mergecoplanar nodes=6314 verts=47445 points=11914 surfs=4441
+D_bspbuild nodes=6316 verts=47453 points=11916 surfs=4443
+E_bsprefresh nodes=6314 verts=47453 points=11916 surfs=4443
+STAGEEND
+A_entry nodes=6314 verts=47453 points=11916 surfs=4443
+B_makeedpolys nodes=6314 verts=47453 points=11916 surfs=4443
+C_mergecoplanar nodes=6314 verts=47453 points=11916 surfs=4443
+D_bspbuild nodes=6326 verts=47501 points=11928 surfs=4455
+E_bsprefresh nodes=6314 verts=47501 points=11928 surfs=4455
+STAGEEND
+A_entry nodes=6314 verts=47501 points=11928 surfs=4455
+B_makeedpolys nodes=6314 verts=47501 points=11928 surfs=4455
+C_mergecoplanar nodes=6314 verts=47501 points=11928 surfs=4455
+D_bspbuild nodes=6319 verts=47521 points=11933 surfs=4460
+E_bsprefresh nodes=6314 verts=47521 points=11933 surfs=4460
+STAGEEND
+A_entry nodes=6314 verts=47521 points=11933 surfs=4460
+B_makeedpolys nodes=6314 verts=47521 points=11933 surfs=4460
+C_mergecoplanar nodes=6314 verts=47521 points=11933 surfs=4460
+D_bspbuild nodes=6318 verts=47537 points=11937 surfs=4464
+E_bsprefresh nodes=6314 verts=47537 points=11937 surfs=4464
+STAGEEND
+A_entry nodes=6314 verts=47537 points=11937 surfs=4464
+B_makeedpolys nodes=6314 verts=47537 points=11937 surfs=4464
+C_mergecoplanar nodes=6314 verts=47537 points=11937 surfs=4464
+D_bspbuild nodes=6319 verts=47557 points=11940 surfs=4469
+E_bsprefresh nodes=6314 verts=47557 points=11940 surfs=4469
+STAGEEND
+A_entry nodes=6314 verts=47557 points=11940 surfs=4469
+B_makeedpolys nodes=6314 verts=47557 points=11940 surfs=4469
+C_mergecoplanar nodes=6314 verts=47557 points=11940 surfs=4469
+D_bspbuild nodes=6318 verts=47573 points=11944 surfs=4473
+E_bsprefresh nodes=6314 verts=47573 points=11944 surfs=4473
+STAGEEND
+A_entry nodes=6314 verts=47573 points=11944 surfs=4473
+B_makeedpolys nodes=6314 verts=47573 points=11944 surfs=4473
+C_mergecoplanar nodes=6314 verts=47573 points=11944 surfs=4473
+D_bspbuild nodes=6325 verts=47617 points=11951 surfs=4484
+E_bsprefresh nodes=6314 verts=47617 points=11951 surfs=4484
+STAGEEND
+A_entry nodes=6314 verts=47617 points=11951 surfs=4484
+B_makeedpolys nodes=6314 verts=47617 points=11951 surfs=4484
+C_mergecoplanar nodes=6314 verts=47617 points=11951 surfs=4484
+D_bspbuild nodes=6322 verts=47649 points=11959 surfs=4492
+E_bsprefresh nodes=6314 verts=47649 points=11959 surfs=4492
+STAGEEND
+A_entry nodes=6314 verts=47649 points=11959 surfs=4492
+B_makeedpolys nodes=6314 verts=47649 points=11959 surfs=4492
+C_mergecoplanar nodes=6314 verts=47649 points=11959 surfs=4492
+D_bspbuild nodes=6326 verts=47697 points=11969 surfs=4503
+E_bsprefresh nodes=6314 verts=47697 points=11969 surfs=4503
+STAGEEND
+A_entry nodes=6314 verts=47697 points=11969 surfs=4503
+B_makeedpolys nodes=6314 verts=47697 points=11969 surfs=4503
+C_mergecoplanar nodes=6314 verts=47697 points=11969 surfs=4503
+D_bspbuild nodes=6356 verts=47873 points=11994 surfs=4544
+E_bsprefresh nodes=6314 verts=47873 points=11994 surfs=4544
+STAGEEND
+A_entry nodes=6314 verts=47873 points=11994 surfs=4544
+B_makeedpolys nodes=6314 verts=47873 points=11994 surfs=4544
+C_mergecoplanar nodes=6314 verts=47873 points=11994 surfs=4544
+D_bspbuild nodes=6317 verts=47885 points=11994 surfs=4547
+E_bsprefresh nodes=6314 verts=47885 points=11994 surfs=4547
+STAGEEND
+A_entry nodes=6314 verts=47885 points=11994 surfs=4547
+B_makeedpolys nodes=6314 verts=47885 points=11994 surfs=4547
+C_mergecoplanar nodes=6314 verts=47885 points=11994 surfs=4547
+D_bspbuild nodes=6317 verts=47897 points=11994 surfs=4550
+E_bsprefresh nodes=6314 verts=47897 points=11994 surfs=4550
+STAGEEND
+A_entry nodes=6314 verts=47897 points=11994 surfs=4550
+B_makeedpolys nodes=6314 verts=47897 points=11994 surfs=4550
+C_mergecoplanar nodes=6314 verts=47897 points=11994 surfs=4550
+D_bspbuild nodes=6323 verts=47937 points=12002 surfs=4559
+E_bsprefresh nodes=6314 verts=47937 points=12002 surfs=4559
+STAGEEND
+A_entry nodes=6314 verts=47937 points=12002 surfs=4559
+B_makeedpolys nodes=6314 verts=47937 points=12002 surfs=4559
+C_mergecoplanar nodes=6314 verts=47937 points=12002 surfs=4559
+D_bspbuild nodes=6319 verts=47957 points=12006 surfs=4564
+E_bsprefresh nodes=6314 verts=47957 points=12006 surfs=4564
+STAGEEND
+A_entry nodes=6314 verts=47957 points=12006 surfs=4564
+B_makeedpolys nodes=6314 verts=47957 points=12006 surfs=4564
+C_mergecoplanar nodes=6314 verts=47957 points=12006 surfs=4564
+D_bspbuild nodes=6331 verts=48025 points=12023 surfs=4581
+E_bsprefresh nodes=6314 verts=48025 points=12023 surfs=4581
+STAGEEND
+A_entry nodes=6314 verts=48025 points=12023 surfs=4581
+B_makeedpolys nodes=6314 verts=48025 points=12023 surfs=4581
+C_mergecoplanar nodes=6314 verts=48025 points=12023 surfs=4581
+D_bspbuild nodes=6335 verts=48109 points=12042 surfs=4601
+E_bsprefresh nodes=6314 verts=48109 points=12042 surfs=4601
+STAGEEND
+A_entry nodes=6314 verts=48109 points=12042 surfs=4601
+B_makeedpolys nodes=6314 verts=48109 points=12042 surfs=4601
+C_mergecoplanar nodes=6314 verts=48109 points=12042 surfs=4601
+D_bspbuild nodes=6319 verts=48129 points=12046 surfs=4606
+E_bsprefresh nodes=6314 verts=48129 points=12046 surfs=4606
+STAGEEND
+A_entry nodes=6314 verts=48129 points=12046 surfs=4606
+B_makeedpolys nodes=6314 verts=48129 points=12046 surfs=4606
+C_mergecoplanar nodes=6314 verts=48129 points=12046 surfs=4606
+D_bspbuild nodes=6319 verts=48149 points=12046 surfs=4611
+E_bsprefresh nodes=6314 verts=48149 points=12046 surfs=4611
+STAGEEND
+A_entry nodes=6314 verts=48149 points=12046 surfs=4611
+B_makeedpolys nodes=6314 verts=48149 points=12046 surfs=4611
+C_mergecoplanar nodes=6314 verts=48149 points=12046 surfs=4611
+D_bspbuild nodes=6325 verts=48193 points=12055 surfs=4620
+E_bsprefresh nodes=6314 verts=48193 points=12055 surfs=4620
+STAGEEND
+A_entry nodes=6314 verts=48193 points=12055 surfs=4620
+B_makeedpolys nodes=6314 verts=48193 points=12055 surfs=4620
+C_mergecoplanar nodes=6314 verts=48193 points=12055 surfs=4620
+D_bspbuild nodes=6320 verts=48217 points=12058 surfs=4626
+E_bsprefresh nodes=6314 verts=48217 points=12058 surfs=4626
+STAGEEND
+A_entry nodes=6314 verts=48217 points=12058 surfs=4626
+B_makeedpolys nodes=6314 verts=48217 points=12058 surfs=4626
+C_mergecoplanar nodes=6314 verts=48217 points=12058 surfs=4626
+D_bspbuild nodes=6326 verts=48265 points=12062 surfs=4634
+E_bsprefresh nodes=6314 verts=48265 points=12062 surfs=4634
+STAGEEND
+A_entry nodes=6314 verts=48265 points=12062 surfs=4634
+B_makeedpolys nodes=6314 verts=48265 points=12062 surfs=4634
+C_mergecoplanar nodes=6314 verts=48265 points=12062 surfs=4634
+D_bspbuild nodes=6316 verts=48273 points=12062 surfs=4636
+E_bsprefresh nodes=6314 verts=48273 points=12062 surfs=4636
+STAGEEND
+A_entry nodes=6314 verts=48273 points=12062 surfs=4636
+B_makeedpolys nodes=6314 verts=48273 points=12062 surfs=4636
+C_mergecoplanar nodes=6314 verts=48273 points=12062 surfs=4636
+D_bspbuild nodes=6316 verts=48281 points=12062 surfs=4638
+E_bsprefresh nodes=6314 verts=48281 points=12062 surfs=4638
+STAGEEND
+A_entry nodes=6314 verts=48281 points=12062 surfs=4638
+B_makeedpolys nodes=6314 verts=48281 points=12062 surfs=4638
+C_mergecoplanar nodes=6314 verts=48281 points=12062 surfs=4638
+D_bspbuild nodes=6324 verts=48321 points=12070 surfs=4648
+E_bsprefresh nodes=6314 verts=48321 points=12070 surfs=4648
+STAGEEND
+A_entry nodes=6314 verts=48321 points=12070 surfs=4648
+B_makeedpolys nodes=6314 verts=48321 points=12070 surfs=4648
+C_mergecoplanar nodes=6314 verts=48321 points=12070 surfs=4648
+D_bspbuild nodes=6334 verts=48401 points=12078 surfs=4668
+E_bsprefresh nodes=6314 verts=48401 points=12078 surfs=4668
+STAGEEND
+A_entry nodes=6314 verts=48401 points=12078 surfs=4668
+B_makeedpolys nodes=6314 verts=48401 points=12078 surfs=4668
+C_mergecoplanar nodes=6314 verts=48401 points=12078 surfs=4668
+D_bspbuild nodes=6324 verts=48441 points=12080 surfs=4678
+E_bsprefresh nodes=6314 verts=48441 points=12080 surfs=4678
+STAGEEND
+A_entry nodes=6314 verts=48441 points=12080 surfs=4678
+B_makeedpolys nodes=6314 verts=48441 points=12080 surfs=4678
+C_mergecoplanar nodes=6314 verts=48441 points=12080 surfs=4678
+D_bspbuild nodes=6329 verts=48501 points=12093 surfs=4692
+E_bsprefresh nodes=6314 verts=48501 points=12093 surfs=4692
+STAGEEND
+A_entry nodes=6314 verts=48501 points=12093 surfs=4692
+B_makeedpolys nodes=6314 verts=48501 points=12093 surfs=4692
+C_mergecoplanar nodes=6314 verts=48501 points=12093 surfs=4692
+D_bspbuild nodes=6329 verts=48561 points=12106 surfs=4706
+E_bsprefresh nodes=6314 verts=48561 points=12106 surfs=4706
+STAGEEND
+A_entry nodes=6314 verts=48561 points=12106 surfs=4706
+B_makeedpolys nodes=6314 verts=48561 points=12106 surfs=4706
+C_mergecoplanar nodes=6314 verts=48561 points=12106 surfs=4706
+D_bspbuild nodes=6320 verts=48585 points=12108 surfs=4712
+E_bsprefresh nodes=6314 verts=48585 points=12108 surfs=4712
+STAGEEND
+A_entry nodes=6314 verts=48585 points=12108 surfs=4712
+B_makeedpolys nodes=6314 verts=48585 points=12108 surfs=4712
+C_mergecoplanar nodes=6314 verts=48585 points=12108 surfs=4712
+D_bspbuild nodes=6320 verts=48609 points=12110 surfs=4718
+E_bsprefresh nodes=6314 verts=48609 points=12110 surfs=4718
+STAGEEND
+A_entry nodes=6314 verts=48609 points=12110 surfs=4718
+B_makeedpolys nodes=6314 verts=48609 points=12110 surfs=4718
+C_mergecoplanar nodes=6314 verts=48609 points=12110 surfs=4718
+D_bspbuild nodes=6320 verts=48633 points=12112 surfs=4724
+E_bsprefresh nodes=6314 verts=48633 points=12112 surfs=4724
+STAGEEND
+A_entry nodes=6314 verts=48633 points=12112 surfs=4724
+B_makeedpolys nodes=6314 verts=48633 points=12112 surfs=4724
+C_mergecoplanar nodes=6314 verts=48633 points=12112 surfs=4724
+D_bspbuild nodes=6317 verts=48645 points=12115 surfs=4727
+E_bsprefresh nodes=6314 verts=48645 points=12115 surfs=4727
+STAGEEND
+A_entry nodes=6314 verts=48645 points=12115 surfs=4727
+B_makeedpolys nodes=6314 verts=48645 points=12115 surfs=4727
+C_mergecoplanar nodes=6314 verts=48645 points=12115 surfs=4727
+D_bspbuild nodes=6315 verts=48649 points=12116 surfs=4728
+E_bsprefresh nodes=6314 verts=48649 points=12116 surfs=4728
+STAGEEND
+A_entry nodes=6314 verts=48649 points=12116 surfs=4728
+B_makeedpolys nodes=6314 verts=48649 points=12116 surfs=4728
+C_mergecoplanar nodes=6314 verts=48649 points=12116 surfs=4728
+D_bspbuild nodes=6318 verts=48665 points=12120 surfs=4732
+E_bsprefresh nodes=6314 verts=48665 points=12120 surfs=4732
+STAGEEND
+A_entry nodes=6314 verts=48665 points=12120 surfs=4732
+B_makeedpolys nodes=6314 verts=48665 points=12120 surfs=4732
+C_mergecoplanar nodes=6314 verts=48665 points=12120 surfs=4732
+D_bspbuild nodes=6317 verts=48677 points=12123 surfs=4735
+E_bsprefresh nodes=6314 verts=48677 points=12123 surfs=4735
+STAGEEND
+A_entry nodes=6314 verts=48677 points=12123 surfs=4735
+B_makeedpolys nodes=6314 verts=48677 points=12123 surfs=4735
+C_mergecoplanar nodes=6314 verts=48677 points=12123 surfs=4735
+D_bspbuild nodes=6315 verts=48681 points=12124 surfs=4736
+E_bsprefresh nodes=6314 verts=48681 points=12124 surfs=4736
+STAGEEND
+A_entry nodes=6314 verts=48681 points=12124 surfs=4736
+B_makeedpolys nodes=6314 verts=48681 points=12124 surfs=4736
+C_mergecoplanar nodes=6314 verts=48681 points=12124 surfs=4736
+D_bspbuild nodes=6330 verts=48745 points=12139 surfs=4751
+E_bsprefresh nodes=6314 verts=48745 points=12139 surfs=4751
+STAGEEND
+A_entry nodes=6314 verts=48745 points=12139 surfs=4751
+B_makeedpolys nodes=6314 verts=48745 points=12139 surfs=4751
+C_mergecoplanar nodes=6314 verts=48745 points=12139 surfs=4751
+D_bspbuild nodes=6365 verts=48949 points=12182 surfs=4786
+E_bsprefresh nodes=6314 verts=48949 points=12174 surfs=4786
+STAGEEND
+A_entry nodes=6314 verts=48949 points=12174 surfs=4786
+B_makeedpolys nodes=6314 verts=48949 points=12174 surfs=4786
+C_mergecoplanar nodes=6314 verts=48949 points=12174 surfs=4786
+D_bspbuild nodes=6340 verts=49053 points=12192 surfs=4804
+E_bsprefresh nodes=6314 verts=49053 points=12192 surfs=4804
+STAGEEND
+A_entry nodes=6314 verts=49053 points=12192 surfs=4804
+B_makeedpolys nodes=6314 verts=49053 points=12192 surfs=4804
+C_mergecoplanar nodes=6314 verts=49053 points=12192 surfs=4804
+D_bspbuild nodes=6353 verts=49209 points=12221 surfs=4833
+E_bsprefresh nodes=6314 verts=49209 points=12221 surfs=4833
+STAGEEND
+A_entry nodes=6314 verts=49209 points=12221 surfs=4833
+B_makeedpolys nodes=6314 verts=49209 points=12221 surfs=4833
+C_mergecoplanar nodes=6314 verts=49209 points=12221 surfs=4833
+D_bspbuild nodes=6371 verts=49437 points=12252 surfs=4870
+E_bsprefresh nodes=6314 verts=49437 points=12252 surfs=4870
+STAGEEND
+A_entry nodes=6314 verts=49437 points=12252 surfs=4870
+B_makeedpolys nodes=6314 verts=49437 points=12252 surfs=4870
+C_mergecoplanar nodes=6314 verts=49437 points=12252 surfs=4870
+D_bspbuild nodes=6319 verts=49457 points=12256 surfs=4875
+E_bsprefresh nodes=6314 verts=49457 points=12256 surfs=4875
+STAGEEND
+A_entry nodes=6314 verts=49457 points=12256 surfs=4875
+B_makeedpolys nodes=6314 verts=49457 points=12256 surfs=4875
+C_mergecoplanar nodes=6314 verts=49457 points=12256 surfs=4875
+D_bspbuild nodes=6316 verts=49465 points=12258 surfs=4877
+E_bsprefresh nodes=6314 verts=49465 points=12258 surfs=4877
+STAGEEND
+A_entry nodes=6314 verts=49465 points=12258 surfs=4877
+B_makeedpolys nodes=6314 verts=49465 points=12258 surfs=4877
+C_mergecoplanar nodes=6314 verts=49465 points=12258 surfs=4877
+D_bspbuild nodes=6368 verts=49689 points=12288 surfs=4930
+E_bsprefresh nodes=6314 verts=49689 points=12288 surfs=4930
+STAGEEND
+A_entry nodes=6314 verts=49689 points=12288 surfs=4930
+B_makeedpolys nodes=6314 verts=49689 points=12288 surfs=4930
+C_mergecoplanar nodes=6314 verts=49689 points=12288 surfs=4930
+D_bspbuild nodes=6323 verts=49725 points=12297 surfs=4939
+E_bsprefresh nodes=6314 verts=49725 points=12297 surfs=4939
+STAGEEND
+A_entry nodes=6314 verts=49725 points=12297 surfs=4939
+B_makeedpolys nodes=6314 verts=49725 points=12297 surfs=4939
+C_mergecoplanar nodes=6314 verts=49725 points=12297 surfs=4939
+D_bspbuild nodes=6360 verts=49909 points=12330 surfs=4976
+E_bsprefresh nodes=6314 verts=49909 points=12330 surfs=4976
+STAGEEND
+A_entry nodes=6314 verts=49909 points=12330 surfs=4976
+B_makeedpolys nodes=6314 verts=49909 points=12330 surfs=4976
+C_mergecoplanar nodes=6314 verts=49909 points=12330 surfs=4976
+D_bspbuild nodes=6336 verts=49995 points=12333 surfs=4997
+E_bsprefresh nodes=6314 verts=49995 points=12333 surfs=4997
+STAGEEND
+A_entry nodes=6314 verts=49995 points=12333 surfs=4997
+B_makeedpolys nodes=6314 verts=49995 points=12333 surfs=4997
+C_mergecoplanar nodes=6314 verts=49995 points=12333 surfs=4997
+D_bspbuild nodes=6320 verts=50019 points=12333 surfs=5003
+E_bsprefresh nodes=6314 verts=50019 points=12333 surfs=5003
+STAGEEND
+A_entry nodes=6314 verts=50019 points=12333 surfs=5003
+B_makeedpolys nodes=6314 verts=50019 points=12333 surfs=5003
+C_mergecoplanar nodes=6314 verts=50019 points=12333 surfs=5003
+D_bspbuild nodes=6319 verts=50038 points=12333 surfs=5008
+E_bsprefresh nodes=6314 verts=50038 points=12333 surfs=5008
+STAGEEND
+A_entry nodes=6314 verts=50038 points=12333 surfs=5008
+B_makeedpolys nodes=6314 verts=50038 points=12333 surfs=5008
+C_mergecoplanar nodes=6314 verts=50038 points=12333 surfs=5008
+D_bspbuild nodes=6319 verts=50058 points=12333 surfs=5013
+E_bsprefresh nodes=6314 verts=50058 points=12333 surfs=5013
+STAGEEND
+A_entry nodes=6314 verts=50058 points=12333 surfs=5013
+B_makeedpolys nodes=6314 verts=50058 points=12333 surfs=5013
+C_mergecoplanar nodes=6314 verts=50058 points=12333 surfs=5013
+D_bspbuild nodes=6317 verts=50070 points=12333 surfs=5016
+E_bsprefresh nodes=6314 verts=50070 points=12333 surfs=5016
+STAGEEND
+A_entry nodes=6314 verts=50070 points=12333 surfs=5016
+B_makeedpolys nodes=6314 verts=50070 points=12333 surfs=5016
+C_mergecoplanar nodes=6314 verts=50070 points=12333 surfs=5016
+D_bspbuild nodes=6338 verts=50166 points=12353 surfs=5036
+E_bsprefresh nodes=6314 verts=50166 points=12353 surfs=5036
+STAGEEND
+A_entry nodes=6314 verts=50166 points=12353 surfs=5036
+B_makeedpolys nodes=6314 verts=50166 points=12353 surfs=5036
+C_mergecoplanar nodes=6314 verts=50166 points=12353 surfs=5036
+D_bspbuild nodes=6325 verts=50210 points=12362 surfs=5045
+E_bsprefresh nodes=6314 verts=50210 points=12362 surfs=5045
+STAGEEND
+A_entry nodes=6314 verts=50210 points=12362 surfs=5045
+B_makeedpolys nodes=6314 verts=50210 points=12362 surfs=5045
+C_mergecoplanar nodes=6314 verts=50210 points=12362 surfs=5045
+D_bspbuild nodes=6378 verts=50466 points=12414 surfs=5100
+E_bsprefresh nodes=6314 verts=50466 points=12398 surfs=5100
+STAGEEND
+A_entry nodes=6314 verts=50466 points=12398 surfs=5100
+B_makeedpolys nodes=6314 verts=50466 points=12398 surfs=5100
+C_mergecoplanar nodes=6314 verts=50466 points=12398 surfs=5100
+D_bspbuild nodes=6358 verts=50650 points=12405 surfs=5138
+E_bsprefresh nodes=6314 verts=50650 points=12405 surfs=5138
+STAGEEND
+A_entry nodes=6314 verts=50650 points=12405 surfs=5138
+B_makeedpolys nodes=6314 verts=50650 points=12405 surfs=5138
+C_mergecoplanar nodes=6314 verts=50650 points=12405 surfs=5138
+D_bspbuild nodes=6334 verts=50728 points=12413 surfs=5157
+E_bsprefresh nodes=6314 verts=50728 points=12413 surfs=5157
+STAGEEND
+A_entry nodes=6314 verts=50728 points=12413 surfs=5157
+B_makeedpolys nodes=6314 verts=50728 points=12413 surfs=5157
+C_mergecoplanar nodes=6314 verts=50728 points=12413 surfs=5157
+D_bspbuild nodes=6327 verts=50780 points=12414 surfs=5168
+E_bsprefresh nodes=6314 verts=50780 points=12414 surfs=5168
+STAGEEND
+A_entry nodes=6314 verts=50780 points=12414 surfs=5168
+B_makeedpolys nodes=6314 verts=50780 points=12414 surfs=5168
+C_mergecoplanar nodes=6314 verts=50780 points=12414 surfs=5168
+D_bspbuild nodes=6316 verts=50788 points=12414 surfs=5170
+E_bsprefresh nodes=6314 verts=50788 points=12414 surfs=5170
+STAGEEND
+A_entry nodes=6314 verts=50788 points=12414 surfs=5170
+B_makeedpolys nodes=6314 verts=50788 points=12414 surfs=5170
+C_mergecoplanar nodes=6314 verts=50788 points=12414 surfs=5170
+D_bspbuild nodes=6329 verts=50848 points=12428 surfs=5184
+E_bsprefresh nodes=6314 verts=50848 points=12428 surfs=5184
+STAGEEND
+A_entry nodes=6314 verts=50848 points=12428 surfs=5184
+B_makeedpolys nodes=6314 verts=50848 points=12428 surfs=5184
+C_mergecoplanar nodes=6314 verts=50848 points=12428 surfs=5184
+D_bspbuild nodes=6319 verts=50868 points=12429 surfs=5189
+E_bsprefresh nodes=6314 verts=50868 points=12429 surfs=5189
+STAGEEND
+A_entry nodes=6314 verts=50868 points=12429 surfs=5189
+B_makeedpolys nodes=6314 verts=50868 points=12429 surfs=5189
+C_mergecoplanar nodes=6314 verts=50868 points=12429 surfs=5189
+D_bspbuild nodes=6334 verts=50948 points=12437 surfs=5209
+E_bsprefresh nodes=6314 verts=50948 points=12437 surfs=5209
+STAGEEND
+A_entry nodes=6314 verts=50948 points=12437 surfs=5209
+B_makeedpolys nodes=6314 verts=50948 points=12437 surfs=5209
+C_mergecoplanar nodes=6314 verts=50948 points=12437 surfs=5209
+D_bspbuild nodes=6330 verts=51012 points=12452 surfs=5224
+E_bsprefresh nodes=6314 verts=51012 points=12452 surfs=5224
+STAGEEND
+A_entry nodes=6314 verts=51012 points=12452 surfs=5224
+B_makeedpolys nodes=6314 verts=51012 points=12452 surfs=5224
+C_mergecoplanar nodes=6314 verts=51012 points=12452 surfs=5224
+D_bspbuild nodes=6332 verts=51084 points=12464 surfs=5241
+E_bsprefresh nodes=6314 verts=51084 points=12464 surfs=5241
+STAGEEND
+A_entry nodes=6314 verts=51084 points=12464 surfs=5241
+B_makeedpolys nodes=6314 verts=51084 points=12464 surfs=5241
+C_mergecoplanar nodes=6314 verts=51084 points=12464 surfs=5241
+D_bspbuild nodes=6336 verts=51172 points=12485 surfs=5262
+E_bsprefresh nodes=6314 verts=51172 points=12485 surfs=5262
+STAGEEND
+A_entry nodes=6314 verts=51172 points=12485 surfs=5262
+B_makeedpolys nodes=6314 verts=51172 points=12485 surfs=5262
+C_mergecoplanar nodes=6314 verts=51172 points=12485 surfs=5262
+D_bspbuild nodes=6336 verts=51260 points=12506 surfs=5283
+E_bsprefresh nodes=6314 verts=51260 points=12506 surfs=5283
+STAGEEND
+A_entry nodes=6314 verts=51260 points=12506 surfs=5283
+B_makeedpolys nodes=6314 verts=51260 points=12506 surfs=5283
+C_mergecoplanar nodes=6314 verts=51260 points=12506 surfs=5283
+D_bspbuild nodes=6323 verts=51296 points=12514 surfs=5292
+E_bsprefresh nodes=6314 verts=51296 points=12514 surfs=5292
+STAGEEND
+A_entry nodes=6314 verts=51296 points=12514 surfs=5292
+B_makeedpolys nodes=6314 verts=51296 points=12514 surfs=5292
+C_mergecoplanar nodes=6314 verts=51296 points=12514 surfs=5292
+D_bspbuild nodes=6323 verts=51332 points=12521 surfs=5301
+E_bsprefresh nodes=6314 verts=51332 points=12521 surfs=5301
+STAGEEND
+A_entry nodes=6314 verts=51332 points=12521 surfs=5301
+B_makeedpolys nodes=6314 verts=51332 points=12521 surfs=5301
+C_mergecoplanar nodes=6314 verts=51332 points=12521 surfs=5301
+D_bspbuild nodes=6317 verts=51344 points=12523 surfs=5304
+E_bsprefresh nodes=6314 verts=51344 points=12523 surfs=5304
+STAGEEND
+A_entry nodes=6314 verts=51344 points=12523 surfs=5304
+B_makeedpolys nodes=6314 verts=51344 points=12523 surfs=5304
+C_mergecoplanar nodes=6314 verts=51344 points=12523 surfs=5304
+D_bspbuild nodes=6320 verts=51368 points=12529 surfs=5310
+E_bsprefresh nodes=6314 verts=51368 points=12529 surfs=5310
+STAGEEND
+A_entry nodes=6314 verts=51368 points=12529 surfs=5310
+B_makeedpolys nodes=6314 verts=51368 points=12529 surfs=5310
+C_mergecoplanar nodes=6314 verts=51368 points=12529 surfs=5310
+D_bspbuild nodes=6320 verts=51392 points=12535 surfs=5316
+E_bsprefresh nodes=6314 verts=51392 points=12535 surfs=5316
+STAGEEND
+A_entry nodes=6314 verts=51392 points=12535 surfs=5316
+B_makeedpolys nodes=6314 verts=51392 points=12535 surfs=5316
+C_mergecoplanar nodes=6314 verts=51392 points=12535 surfs=5316
+D_bspbuild nodes=6342 verts=51496 points=12539 surfs=5338
+E_bsprefresh nodes=6314 verts=51496 points=12539 surfs=5338
+STAGEEND
+A_entry nodes=6314 verts=51496 points=12539 surfs=5338
+B_makeedpolys nodes=6314 verts=51496 points=12539 surfs=5338
+C_mergecoplanar nodes=6314 verts=51496 points=12539 surfs=5338
+D_bspbuild nodes=6329 verts=51556 points=12539 surfs=5351
+E_bsprefresh nodes=6314 verts=51556 points=12539 surfs=5351
+STAGEEND
+A_entry nodes=6314 verts=51556 points=12539 surfs=5351
+B_makeedpolys nodes=6314 verts=51556 points=12539 surfs=5351
+C_mergecoplanar nodes=6314 verts=51556 points=12539 surfs=5351
+D_bspbuild nodes=6321 verts=51584 points=12539 surfs=5356
+E_bsprefresh nodes=6314 verts=51584 points=12539 surfs=5356
+STAGEEND
+A_entry nodes=6314 verts=51584 points=12539 surfs=5356
+B_makeedpolys nodes=6314 verts=51584 points=12539 surfs=5356
+C_mergecoplanar nodes=6314 verts=51584 points=12539 surfs=5356
+D_bspbuild nodes=6327 verts=51636 points=12539 surfs=5368
+E_bsprefresh nodes=6314 verts=51636 points=12539 surfs=5368
+STAGEEND
+A_entry nodes=6314 verts=51636 points=12539 surfs=5368
+B_makeedpolys nodes=6314 verts=51636 points=12539 surfs=5368
+C_mergecoplanar nodes=6314 verts=51636 points=12539 surfs=5368
+D_bspbuild nodes=6325 verts=51680 points=12539 surfs=5378
+E_bsprefresh nodes=6314 verts=51680 points=12539 surfs=5378
+STAGEEND
+A_entry nodes=6314 verts=51680 points=12539 surfs=5378
+B_makeedpolys nodes=6314 verts=51680 points=12539 surfs=5378
+C_mergecoplanar nodes=6314 verts=51680 points=12539 surfs=5378
+D_bspbuild nodes=6339 verts=51780 points=12559 surfs=5400
+E_bsprefresh nodes=6314 verts=51780 points=12559 surfs=5400
+STAGEEND
+A_entry nodes=6314 verts=51780 points=12559 surfs=5400
+B_makeedpolys nodes=6314 verts=51780 points=12559 surfs=5400
+C_mergecoplanar nodes=6314 verts=51780 points=12559 surfs=5400
+D_bspbuild nodes=6327 verts=51832 points=12568 surfs=5413
+E_bsprefresh nodes=6314 verts=51832 points=12568 surfs=5413
+STAGEEND
+A_entry nodes=6314 verts=51832 points=12568 surfs=5413
+B_makeedpolys nodes=6314 verts=51832 points=12568 surfs=5413
+C_mergecoplanar nodes=6314 verts=51832 points=12568 surfs=5413
+D_bspbuild nodes=6319 verts=51852 points=12573 surfs=5418
+E_bsprefresh nodes=6314 verts=51852 points=12573 surfs=5418
+STAGEEND
+A_entry nodes=6314 verts=51852 points=12573 surfs=5418
+B_makeedpolys nodes=6314 verts=51852 points=12573 surfs=5418
+C_mergecoplanar nodes=6314 verts=51852 points=12573 surfs=5418
+D_bspbuild nodes=6318 verts=51868 points=12576 surfs=5422
+E_bsprefresh nodes=6314 verts=51868 points=12576 surfs=5422
+STAGEEND
+A_entry nodes=6314 verts=51868 points=12576 surfs=5422
+B_makeedpolys nodes=6314 verts=51868 points=12576 surfs=5422
+C_mergecoplanar nodes=6314 verts=51868 points=12576 surfs=5422
+D_bspbuild nodes=6318 verts=51884 points=12579 surfs=5426
+E_bsprefresh nodes=6314 verts=51884 points=12579 surfs=5426
+STAGEEND
+A_entry nodes=6314 verts=51884 points=12579 surfs=5426
+B_makeedpolys nodes=6314 verts=51884 points=12579 surfs=5426
+C_mergecoplanar nodes=6314 verts=51884 points=12579 surfs=5426
+D_bspbuild nodes=6323 verts=51920 points=12579 surfs=5435
+E_bsprefresh nodes=6314 verts=51920 points=12579 surfs=5435
+STAGEEND
+A_entry nodes=6314 verts=51920 points=12579 surfs=5435
+B_makeedpolys nodes=6314 verts=51920 points=12579 surfs=5435
+C_mergecoplanar nodes=6314 verts=51920 points=12579 surfs=5435
+D_bspbuild nodes=6319 verts=51940 points=12583 surfs=5440
+E_bsprefresh nodes=6314 verts=51940 points=12583 surfs=5440
+STAGEEND
+A_entry nodes=6314 verts=51940 points=12583 surfs=5440
+B_makeedpolys nodes=6314 verts=51940 points=12583 surfs=5440
+C_mergecoplanar nodes=6314 verts=51940 points=12583 surfs=5440
+D_bspbuild nodes=6320 verts=51964 points=12583 surfs=5446
+E_bsprefresh nodes=6314 verts=51964 points=12583 surfs=5446
+STAGEEND
+A_entry nodes=6314 verts=51964 points=12583 surfs=5446
+B_makeedpolys nodes=6314 verts=51964 points=12583 surfs=5446
+C_mergecoplanar nodes=6314 verts=51964 points=12583 surfs=5446
+D_bspbuild nodes=6318 verts=51980 points=12584 surfs=5450
+E_bsprefresh nodes=6314 verts=51980 points=12584 surfs=5450
+STAGEEND
+A_entry nodes=6314 verts=51980 points=12584 surfs=5450
+B_makeedpolys nodes=6314 verts=51980 points=12584 surfs=5450
+C_mergecoplanar nodes=6314 verts=51980 points=12584 surfs=5450
+D_bspbuild nodes=6361 verts=52168 points=12598 surfs=5492
+E_bsprefresh nodes=6314 verts=52168 points=12598 surfs=5492
+STAGEEND
+A_entry nodes=6314 verts=52168 points=12598 surfs=5492
+B_makeedpolys nodes=6314 verts=52168 points=12598 surfs=5492
+C_mergecoplanar nodes=6314 verts=52168 points=12598 surfs=5492
+D_bspbuild nodes=6369 verts=52388 points=12620 surfs=5535
+E_bsprefresh nodes=6314 verts=52388 points=12620 surfs=5535
+STAGEEND
+A_entry nodes=6314 verts=52388 points=12620 surfs=5535
+B_makeedpolys nodes=6314 verts=52388 points=12620 surfs=5535
+C_mergecoplanar nodes=6314 verts=52388 points=12620 surfs=5535
+D_bspbuild nodes=6366 verts=52596 points=12650 surfs=5580
+E_bsprefresh nodes=6314 verts=52596 points=12640 surfs=5580
+STAGEEND
+A_entry nodes=6314 verts=52596 points=12640 surfs=5580
+B_makeedpolys nodes=6314 verts=52596 points=12640 surfs=5580
+C_mergecoplanar nodes=6314 verts=52596 points=12640 surfs=5580
+D_bspbuild nodes=6334 verts=52676 points=12640 surfs=5598
+E_bsprefresh nodes=6314 verts=52676 points=12640 surfs=5598
+STAGEEND
+A_entry nodes=6314 verts=52676 points=12640 surfs=5598
+B_makeedpolys nodes=6314 verts=52676 points=12640 surfs=5598
+C_mergecoplanar nodes=6314 verts=52676 points=12640 surfs=5598
+D_bspbuild nodes=6323 verts=52716 points=12648 surfs=5607
+E_bsprefresh nodes=6314 verts=52716 points=12648 surfs=5607
+STAGEEND
+A_entry nodes=6314 verts=52716 points=12648 surfs=5607
+B_makeedpolys nodes=6314 verts=52716 points=12648 surfs=5607
+C_mergecoplanar nodes=6314 verts=52716 points=12648 surfs=5607
+D_bspbuild nodes=6317 verts=52728 points=12651 surfs=5610
+E_bsprefresh nodes=6314 verts=52728 points=12651 surfs=5610
+STAGEEND
+A_entry nodes=6314 verts=52728 points=12651 surfs=5610
+B_makeedpolys nodes=6314 verts=52728 points=12651 surfs=5610
+C_mergecoplanar nodes=6314 verts=52728 points=12651 surfs=5610
+D_bspbuild nodes=6316 verts=52736 points=12653 surfs=5612
+E_bsprefresh nodes=6314 verts=52736 points=12653 surfs=5612
+STAGEEND
+A_entry nodes=6314 verts=52736 points=12653 surfs=5612
+B_makeedpolys nodes=6314 verts=52736 points=12653 surfs=5612
+C_mergecoplanar nodes=6314 verts=52736 points=12653 surfs=5612
+D_bspbuild nodes=6334 verts=52816 points=12653 surfs=5630
+E_bsprefresh nodes=6314 verts=52816 points=12653 surfs=5630
+STAGEEND
+A_entry nodes=6314 verts=52816 points=12653 surfs=5630
+B_makeedpolys nodes=6314 verts=52816 points=12653 surfs=5630
+C_mergecoplanar nodes=6314 verts=52816 points=12653 surfs=5630
+D_bspbuild nodes=6323 verts=52856 points=12661 surfs=5639
+E_bsprefresh nodes=6314 verts=52856 points=12661 surfs=5639
+STAGEEND
+A_entry nodes=6314 verts=52856 points=12661 surfs=5639
+B_makeedpolys nodes=6314 verts=52856 points=12661 surfs=5639
+C_mergecoplanar nodes=6314 verts=52856 points=12661 surfs=5639
+D_bspbuild nodes=6317 verts=52868 points=12664 surfs=5642
+E_bsprefresh nodes=6314 verts=52868 points=12664 surfs=5642
+STAGEEND
+A_entry nodes=6314 verts=52868 points=12664 surfs=5642
+B_makeedpolys nodes=6314 verts=52868 points=12664 surfs=5642
+C_mergecoplanar nodes=6314 verts=52868 points=12664 surfs=5642
+D_bspbuild nodes=6316 verts=52876 points=12666 surfs=5644
+E_bsprefresh nodes=6314 verts=52876 points=12666 surfs=5644
+STAGEEND
+A_entry nodes=6314 verts=52876 points=12666 surfs=5644
+B_makeedpolys nodes=6314 verts=52876 points=12666 surfs=5644
+C_mergecoplanar nodes=6314 verts=52876 points=12666 surfs=5644
+D_bspbuild nodes=6319 verts=52896 points=12671 surfs=5649
+E_bsprefresh nodes=6314 verts=52896 points=12671 surfs=5649
+STAGEEND
+A_entry nodes=6314 verts=52896 points=12671 surfs=5649
+B_makeedpolys nodes=6314 verts=52896 points=12671 surfs=5649
+C_mergecoplanar nodes=6314 verts=52896 points=12671 surfs=5649
+D_bspbuild nodes=6316 verts=52904 points=12673 surfs=5651
+E_bsprefresh nodes=6314 verts=52904 points=12673 surfs=5651
+STAGEEND
+A_entry nodes=6314 verts=52904 points=12673 surfs=5651
+B_makeedpolys nodes=6314 verts=52904 points=12673 surfs=5651
+C_mergecoplanar nodes=6314 verts=52904 points=12673 surfs=5651
+D_bspbuild nodes=6319 verts=52924 points=12678 surfs=5656
+E_bsprefresh nodes=6314 verts=52924 points=12678 surfs=5656
+STAGEEND
+A_entry nodes=6314 verts=52924 points=12678 surfs=5656
+B_makeedpolys nodes=6314 verts=52924 points=12678 surfs=5656
+C_mergecoplanar nodes=6314 verts=52924 points=12678 surfs=5656
+D_bspbuild nodes=6316 verts=52932 points=12680 surfs=5658
+E_bsprefresh nodes=6314 verts=52932 points=12680 surfs=5658
+STAGEEND
+A_entry nodes=6314 verts=52932 points=12680 surfs=5658
+B_makeedpolys nodes=6314 verts=52932 points=12680 surfs=5658
+C_mergecoplanar nodes=6314 verts=52932 points=12680 surfs=5658
+D_bspbuild nodes=6339 verts=53032 points=12700 surfs=5680
+E_bsprefresh nodes=6314 verts=53032 points=12700 surfs=5680
+STAGEEND
+A_entry nodes=6314 verts=53032 points=12700 surfs=5680
+B_makeedpolys nodes=6314 verts=53032 points=12700 surfs=5680
+C_mergecoplanar nodes=6314 verts=53032 points=12700 surfs=5680
+D_bspbuild nodes=6318 verts=53048 points=12703 surfs=5684
+E_bsprefresh nodes=6314 verts=53048 points=12703 surfs=5684
+STAGEEND
+A_entry nodes=6314 verts=53048 points=12703 surfs=5684
+B_makeedpolys nodes=6314 verts=53048 points=12703 surfs=5684
+C_mergecoplanar nodes=6314 verts=53048 points=12703 surfs=5684
+D_bspbuild nodes=6319 verts=53068 points=12703 surfs=5689
+E_bsprefresh nodes=6314 verts=53068 points=12703 surfs=5689
+STAGEEND
+A_entry nodes=6314 verts=53068 points=12703 surfs=5689
+B_makeedpolys nodes=6314 verts=53068 points=12703 surfs=5689
+C_mergecoplanar nodes=6314 verts=53068 points=12703 surfs=5689
+D_bspbuild nodes=6317 verts=53080 points=12705 surfs=5692
+E_bsprefresh nodes=6314 verts=53080 points=12705 surfs=5692
+STAGEEND
+A_entry nodes=6314 verts=53080 points=12705 surfs=5692
+B_makeedpolys nodes=6314 verts=53080 points=12705 surfs=5692
+C_mergecoplanar nodes=6314 verts=53080 points=12705 surfs=5692
+D_bspbuild nodes=6317 verts=53092 points=12707 surfs=5695
+E_bsprefresh nodes=6314 verts=53092 points=12707 surfs=5695
+STAGEEND
+A_entry nodes=6314 verts=53092 points=12707 surfs=5695
+B_makeedpolys nodes=6314 verts=53092 points=12707 surfs=5695
+C_mergecoplanar nodes=6314 verts=53092 points=12707 surfs=5695
+D_bspbuild nodes=6318 verts=53108 points=12710 surfs=5699
+E_bsprefresh nodes=6314 verts=53108 points=12710 surfs=5699
+STAGEEND
+A_entry nodes=6314 verts=53108 points=12710 surfs=5699
+B_makeedpolys nodes=6314 verts=53108 points=12710 surfs=5699
+C_mergecoplanar nodes=6314 verts=53108 points=12710 surfs=5699
+D_bspbuild nodes=6332 verts=53182 points=12718 surfs=5717
+E_bsprefresh nodes=6314 verts=53182 points=12718 surfs=5717
+STAGEEND
+A_entry nodes=6314 verts=53182 points=12718 surfs=5717
+B_makeedpolys nodes=6314 verts=53182 points=12718 surfs=5717
+C_mergecoplanar nodes=6314 verts=53182 points=12718 surfs=5717
+D_bspbuild nodes=6318 verts=53198 points=12718 surfs=5721
+E_bsprefresh nodes=6314 verts=53198 points=12718 surfs=5721
+STAGEEND
+A_entry nodes=6314 verts=53198 points=12718 surfs=5721
+B_makeedpolys nodes=6314 verts=53198 points=12718 surfs=5721
+C_mergecoplanar nodes=6314 verts=53198 points=12718 surfs=5721
+D_bspbuild nodes=6318 verts=53214 points=12718 surfs=5725
+E_bsprefresh nodes=6314 verts=53214 points=12718 surfs=5725
+STAGEEND
+A_entry nodes=6314 verts=53214 points=12718 surfs=5725
+B_makeedpolys nodes=6314 verts=53214 points=12718 surfs=5725
+C_mergecoplanar nodes=6314 verts=53214 points=12718 surfs=5725
+D_bspbuild nodes=6325 verts=53256 points=12725 surfs=5736
+E_bsprefresh nodes=6314 verts=53256 points=12725 surfs=5736
+STAGEEND
+A_entry nodes=6314 verts=53256 points=12725 surfs=5736
+B_makeedpolys nodes=6314 verts=53256 points=12725 surfs=5736
+C_mergecoplanar nodes=6314 verts=53256 points=12725 surfs=5736
+D_bspbuild nodes=6324 verts=53296 points=12728 surfs=5746
+E_bsprefresh nodes=6314 verts=53296 points=12728 surfs=5746
+STAGEEND
+A_entry nodes=6314 verts=53296 points=12728 surfs=5746
+B_makeedpolys nodes=6314 verts=53296 points=12728 surfs=5746
+C_mergecoplanar nodes=6314 verts=53296 points=12728 surfs=5746
+D_bspbuild nodes=6319 verts=53316 points=12730 surfs=5751
+E_bsprefresh nodes=6314 verts=53316 points=12730 surfs=5751
+STAGEEND
+A_entry nodes=6314 verts=53316 points=12730 surfs=5751
+B_makeedpolys nodes=6314 verts=53316 points=12730 surfs=5751
+C_mergecoplanar nodes=6314 verts=53316 points=12730 surfs=5751
+D_bspbuild nodes=6322 verts=53348 points=12733 surfs=5759
+E_bsprefresh nodes=6314 verts=53348 points=12733 surfs=5759
+STAGEEND
+A_entry nodes=6314 verts=53348 points=12733 surfs=5759
+B_makeedpolys nodes=6314 verts=53348 points=12733 surfs=5759
+C_mergecoplanar nodes=6314 verts=53348 points=12733 surfs=5759
+D_bspbuild nodes=6316 verts=53356 points=12735 surfs=5761
+E_bsprefresh nodes=6314 verts=53356 points=12735 surfs=5761
+STAGEEND
+A_entry nodes=6314 verts=53356 points=12735 surfs=5761
+B_makeedpolys nodes=6314 verts=53356 points=12735 surfs=5761
+C_mergecoplanar nodes=6314 verts=53356 points=12735 surfs=5761
+D_bspbuild nodes=6319 verts=53376 points=12736 surfs=5766
+E_bsprefresh nodes=6314 verts=53376 points=12736 surfs=5766
+STAGEEND
+A_entry nodes=6314 verts=53376 points=12736 surfs=5766
+B_makeedpolys nodes=6314 verts=53376 points=12736 surfs=5766
+C_mergecoplanar nodes=6314 verts=53376 points=12736 surfs=5766
+D_bspbuild nodes=6319 verts=53396 points=12737 surfs=5771
+E_bsprefresh nodes=6314 verts=53396 points=12737 surfs=5771
+STAGEEND
+A_entry nodes=6314 verts=53396 points=12737 surfs=5771
+B_makeedpolys nodes=6314 verts=53396 points=12737 surfs=5771
+C_mergecoplanar nodes=6314 verts=53396 points=12737 surfs=5771
+D_bspbuild nodes=6318 verts=53412 points=12740 surfs=5775
+E_bsprefresh nodes=6314 verts=53412 points=12740 surfs=5775
+STAGEEND
+A_entry nodes=6314 verts=53412 points=12740 surfs=5775
+B_makeedpolys nodes=6314 verts=53412 points=12740 surfs=5775
+C_mergecoplanar nodes=6314 verts=53412 points=12740 surfs=5775
+D_bspbuild nodes=6324 verts=53452 points=12744 surfs=5783
+E_bsprefresh nodes=6314 verts=53452 points=12744 surfs=5783
+STAGEEND
+A_entry nodes=6314 verts=53452 points=12744 surfs=5783
+B_makeedpolys nodes=6314 verts=53452 points=12744 surfs=5783
+C_mergecoplanar nodes=6314 verts=53452 points=12744 surfs=5783
+D_bspbuild nodes=6319 verts=53472 points=12746 surfs=5788
+E_bsprefresh nodes=6314 verts=53472 points=12746 surfs=5788
+STAGEEND
+A_entry nodes=6314 verts=53472 points=12746 surfs=5788
+B_makeedpolys nodes=6314 verts=53472 points=12746 surfs=5788
+C_mergecoplanar nodes=6314 verts=53472 points=12746 surfs=5788
+D_bspbuild nodes=6436 verts=53976 points=12831 surfs=5881
+E_bsprefresh nodes=6314 verts=53976 points=12831 surfs=5881
+STAGEEND
+A_entry nodes=6314 verts=53976 points=12831 surfs=5881
+B_makeedpolys nodes=6314 verts=53976 points=12831 surfs=5881
+C_mergecoplanar nodes=6314 verts=53976 points=12831 surfs=5881
+D_bspbuild nodes=6320 verts=54000 points=12837 surfs=5887
+E_bsprefresh nodes=6314 verts=54000 points=12837 surfs=5887
+STAGEEND
+A_entry nodes=6314 verts=54000 points=12837 surfs=5887
+B_makeedpolys nodes=6314 verts=54000 points=12837 surfs=5887
+C_mergecoplanar nodes=6314 verts=54000 points=12837 surfs=5887
+D_bspbuild nodes=6333 verts=54076 points=12851 surfs=5905
+E_bsprefresh nodes=6314 verts=54076 points=12851 surfs=5905
+STAGEEND
+A_entry nodes=6314 verts=54076 points=12851 surfs=5905
+B_makeedpolys nodes=6314 verts=54076 points=12851 surfs=5905
+C_mergecoplanar nodes=6314 verts=54076 points=12851 surfs=5905
+D_bspbuild nodes=6320 verts=54100 points=12857 surfs=5911
+E_bsprefresh nodes=6314 verts=54100 points=12857 surfs=5911
+STAGEEND
+A_entry nodes=6314 verts=54100 points=12857 surfs=5911
+B_makeedpolys nodes=6314 verts=54100 points=12857 surfs=5911
+C_mergecoplanar nodes=6314 verts=54100 points=12857 surfs=5911
+D_bspbuild nodes=6332 verts=54176 points=12867 surfs=5929
+E_bsprefresh nodes=6314 verts=54176 points=12867 surfs=5929
+STAGEEND
+A_entry nodes=6314 verts=54176 points=12867 surfs=5929
+B_makeedpolys nodes=6314 verts=54176 points=12867 surfs=5929
+C_mergecoplanar nodes=6314 verts=54176 points=12867 surfs=5929
+D_bspbuild nodes=6320 verts=54200 points=12873 surfs=5935
+E_bsprefresh nodes=6314 verts=54200 points=12873 surfs=5935
+STAGEEND
+A_entry nodes=6314 verts=54200 points=12873 surfs=5935
+B_makeedpolys nodes=6314 verts=54200 points=12873 surfs=5935
+C_mergecoplanar nodes=6314 verts=54200 points=12873 surfs=5935
+D_bspbuild nodes=6320 verts=54224 points=12879 surfs=5941
+E_bsprefresh nodes=6314 verts=54224 points=12879 surfs=5941
+STAGEEND
+A_entry nodes=6314 verts=54224 points=12879 surfs=5941
+B_makeedpolys nodes=6314 verts=54224 points=12879 surfs=5941
+C_mergecoplanar nodes=6314 verts=54224 points=12879 surfs=5941
+D_bspbuild nodes=6320 verts=54248 points=12881 surfs=5947
+E_bsprefresh nodes=6314 verts=54248 points=12881 surfs=5947
+STAGEEND
+A_entry nodes=6314 verts=54248 points=12881 surfs=5947
+B_makeedpolys nodes=6314 verts=54248 points=12881 surfs=5947
+C_mergecoplanar nodes=6314 verts=54248 points=12881 surfs=5947
+D_bspbuild nodes=6320 verts=54272 points=12883 surfs=5953
+E_bsprefresh nodes=6314 verts=54272 points=12883 surfs=5953
+STAGEEND
+A_entry nodes=6314 verts=54272 points=12883 surfs=5953
+B_makeedpolys nodes=6314 verts=54272 points=12883 surfs=5953
+C_mergecoplanar nodes=6314 verts=54272 points=12883 surfs=5953
+D_bspbuild nodes=6320 verts=54296 points=12885 surfs=5959
+E_bsprefresh nodes=6314 verts=54296 points=12885 surfs=5959
+STAGEEND
+A_entry nodes=6314 verts=54296 points=12885 surfs=5959
+B_makeedpolys nodes=6314 verts=54296 points=12885 surfs=5959
+C_mergecoplanar nodes=6314 verts=54296 points=12885 surfs=5959
+D_bspbuild nodes=6320 verts=54320 points=12887 surfs=5963
+E_bsprefresh nodes=6314 verts=54320 points=12887 surfs=5963
+STAGEEND
+A_entry nodes=6314 verts=54320 points=12887 surfs=5963
+B_makeedpolys nodes=6314 verts=54320 points=12887 surfs=5963
+C_mergecoplanar nodes=6314 verts=54320 points=12887 surfs=5963
+D_bspbuild nodes=6320 verts=54344 points=12887 surfs=5967
+E_bsprefresh nodes=6314 verts=54344 points=12887 surfs=5967
+STAGEEND
+A_entry nodes=6314 verts=54344 points=12887 surfs=5967
+B_makeedpolys nodes=6314 verts=54344 points=12887 surfs=5967
+C_mergecoplanar nodes=6314 verts=54344 points=12887 surfs=5967
+D_bspbuild nodes=6344 verts=54456 points=12891 surfs=5991
+E_bsprefresh nodes=6314 verts=54456 points=12891 surfs=5991
+STAGEEND
+A_entry nodes=6314 verts=54456 points=12891 surfs=5991
+B_makeedpolys nodes=6314 verts=54456 points=12891 surfs=5991
+C_mergecoplanar nodes=6314 verts=54456 points=12891 surfs=5991
+D_bspbuild nodes=6320 verts=54480 points=12893 surfs=5995
+E_bsprefresh nodes=6314 verts=54480 points=12893 surfs=5995
+STAGEEND
+A_entry nodes=6314 verts=54480 points=12893 surfs=5995
+B_makeedpolys nodes=6314 verts=54480 points=12893 surfs=5995
+C_mergecoplanar nodes=6314 verts=54480 points=12893 surfs=5995
+D_bspbuild nodes=6318 verts=54496 points=12893 surfs=5999
+E_bsprefresh nodes=6314 verts=54496 points=12893 surfs=5999
+STAGEEND
+A_entry nodes=6314 verts=54496 points=12893 surfs=5999
+B_makeedpolys nodes=6314 verts=54496 points=12893 surfs=5999
+C_mergecoplanar nodes=6314 verts=54496 points=12893 surfs=5999
+D_bspbuild nodes=6344 verts=54608 points=12898 surfs=6023
+E_bsprefresh nodes=6314 verts=54608 points=12898 surfs=6023
+STAGEEND
+A_entry nodes=6314 verts=54608 points=12898 surfs=6023
+B_makeedpolys nodes=6314 verts=54608 points=12898 surfs=6023
+C_mergecoplanar nodes=6314 verts=54608 points=12898 surfs=6023
+D_bspbuild nodes=6322 verts=54638 points=12900 surfs=6027
+E_bsprefresh nodes=6314 verts=54638 points=12900 surfs=6027
+STAGEEND
+A_entry nodes=6314 verts=54638 points=12900 surfs=6027
+B_makeedpolys nodes=6314 verts=54638 points=12900 surfs=6027
+C_mergecoplanar nodes=6314 verts=54638 points=12900 surfs=6027
+D_bspbuild nodes=6318 verts=54654 points=12900 surfs=6031
+E_bsprefresh nodes=6314 verts=54654 points=12900 surfs=6031
+STAGEEND
+A_entry nodes=6314 verts=54654 points=12900 surfs=6031
+B_makeedpolys nodes=6314 verts=54654 points=12900 surfs=6031
+C_mergecoplanar nodes=6314 verts=54654 points=12900 surfs=6031
+D_bspbuild nodes=6340 verts=54752 points=12903 surfs=6053
+E_bsprefresh nodes=6314 verts=54752 points=12903 surfs=6053
+STAGEEND
+A_entry nodes=6314 verts=54752 points=12903 surfs=6053
+B_makeedpolys nodes=6314 verts=54752 points=12903 surfs=6053
+C_mergecoplanar nodes=6314 verts=54752 points=12903 surfs=6053
+D_bspbuild nodes=6320 verts=54776 points=12909 surfs=6059
+E_bsprefresh nodes=6314 verts=54776 points=12909 surfs=6059
+STAGEEND

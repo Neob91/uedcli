@@ -579,9 +579,14 @@ impl<'a> BoundBuilder<'a> {
 }
 
 /// `bspBuildBounds` — build the render `Bounds` (0xc0) and collision `LeafHulls` (0xcc) arrays and
-/// the per-node `iRenderBound`/`iCollisionBound`.  Faithful port of the editor's `FilterBound`
-/// descent (see the module header).  Empty node array -> nothing to build.
+/// the per-node `iRenderBound`/`iCollisionBound`, and re-runs Pass E over every node's `ZoneMask`.
+/// Faithful port of the editor's `FilterBound` descent (see the module header).  Empty node array ->
+/// nothing to build.
 pub fn bsp_build_bounds(model: &mut Model) {
+    // Step 1 of the editor's own sequence (spec §8): re-run Pass E.  Load-bearing since the zone
+    // pass moved to its real place mid-`csgRebuild` — every node the detail-brush layer appends
+    // afterwards is born with `ZoneMask` all-ones and is stamped only here.
+    crate::zones::build_zone_masks(model);
     model.bounds.clear();
     model.leaf_hulls.clear();
     for n in model.nodes.iter_mut() {
