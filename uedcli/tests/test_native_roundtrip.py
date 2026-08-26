@@ -149,3 +149,108 @@ def test_native_writer_roundtrip_preserves_each_shape(tmp_path):
     # Nested struct: MainScale parses into the typed `main_scale` field (X=2, sheer axis kept).
     ms = got.actors["B_add"].main_scale
     assert ms is not None and float(ms.scale[0]) == 2.0 and ms.sheer_axis == "SHEER_ZX"
+
+
+def test_native_world_model_ships_in_the_package_with_real_refs():
+    """`assemble_unbuilt(world_model=...)` writes the NATIVELY built world BSP into the package's
+    world Model export -- the editor-free build path (`materialize.build_world_model`). Pins the
+    two things assembly must add on top of the raw build, which the CSG core cannot know: every
+    surf's `iActor` becomes the owning brush's EXPORT ref and its `texture_ref` the source poly's
+    texture IMPORT. A regression here ships a map whose surfaces are ownerless and untextured."""
+    pytest.importorskip("uedcli_native")
+    from uedcli.bsp.builtmodel import load_model_from_dx
+    from uedcli.native.materialize import build_world_model, resolve_zone_actors
+
+    level = _synthesize_level()
+    built, csg_brushes = build_world_model(level, index=_index())
+    # Movers are never carved into the world (the editor keeps a mover's brush as its own model).
+    assert [n for n, _ in csg_brushes] == ["B_add", "B_sub"]
+    assert built.nodes, "the native CSG core produced no BSP nodes"
+
+    pkg_dirs = [str(_UED22)]
+    dx_bytes, _warnings = assemble_unbuilt(
+        level, schema=substrate_schema(*pkg_dirs), pkg_dirs=pkg_dirs, world_model=built,
+        csg_brushes=csg_brushes, zone_actors=resolve_zone_actors(level, built))
+    saved = load_model_from_dx(dx_bytes)
+
+    assert (len(saved.nodes), len(saved.surfs), len(saved.points), len(saved.verts)) == \
+           (len(built.nodes), len(built.surfs), len(built.points), len(built.verts))
+    assert all(s.i_actor > 0 for s in saved.surfs), "a surf kept a raw brush index as its iActor"
+    assert all(s.texture_ref < 0 for s in saved.surfs), "a surf did not resolve a texture import"
+
+
+def test_assemble_rewrites_the_levels_own_package_refs_to_mylevel(tmp_path):
+    """A trunk imported from a shipped map keeps intra-level refs qualified with the ORIGINAL map's
+    package name. `assemble_unbuilt` must requalify them to `MyLevel.` itself, for EVERY caller --
+    left alone they assemble as a package IMPORT and the engine aborts the whole load
+    (`Can't import private object Teleporter 03_NYC_UNATCOHQ.Teleporter0`), silently shipping an
+    empty map. `PathNode0` is the probe that names the package; the `Teleporter` ref rides along."""
+    from uedcli import upackage
+    t3d = (_synthesize_t3d().replace("End Map\n", "")
+           + "Begin Actor Class=Engine.PathNode Name=PathNode0\n"
+             "    Location=(X=32.000000,Y=32.000000,Z=32.000000)\n"
+             "    Name=\"PathNode0\"\nEnd Actor\n"
+             "Begin Actor Class=Engine.Teleporter Name=Teleporter0\n"
+             "    Location=(X=96.000000,Y=32.000000,Z=32.000000)\n"
+             "    Name=\"Teleporter0\"\nEnd Actor\n"
+             # Two self-package refs: a nav ref (the probe that names the package) and the
+             # Teleporter ref that made the game refuse the whole level.
+             "Begin Actor Class=Engine.PathNode Name=PathNode1\n"
+             "    Location=(X=64.000000,Y=32.000000,Z=32.000000)\n"
+             "    previousPath=PathNode'03_NYC_UNATCOHQ.PathNode0'\n"
+             "    Base=Teleporter'03_NYC_UNATCOHQ.Teleporter0'\n"
+             "    Name=\"PathNode1\"\nEnd Actor\n"
+           + "End Map\n")
+    level = model.parse_t3d(t3d)
+    level.order = level_order(level)
+    normalize_level(level)
+
+    dx, warnings = _write_and_decode(level, tmp_path)
+    assert warnings == []                    # a dropped ref would warn "which this level does not contain"
+    pkg = upackage.load_package(str(dx), name="Map")
+    assert "03_nyc_unatcohq" not in {pkg.names[i[3]].casefold() for i in pkg.imports}, \
+        "the level's own package leaked into the package tables as an import"
+    got = decode_dx_level_offline(str(dx), index=_index(),
+                                  schema=mapimport.ImportSchema(resolver=_resolver))
+    # Both refs came back as EXPORT refs -- the decode qualifies them with the package's own name,
+    # which is the `.dx`'s stem (`Map`), not the trunk's `03_NYC_UNATCOHQ`.
+    p1 = dict(got.actors["PathNode1"].props)
+    assert p1["previousPath"] == "PathNode'Map.PathNode0'"
+    assert p1["Base"] == "Teleporter'Map.Teleporter0'"
+
+
+def test_native_materialize_builds_and_verifies_a_map_with_no_editor(tmp_path, capsys):
+    """`apply._materialize_native` end to end — what `UEDCLI_NATIVE_MATERIALIZE=1` runs. Drives the
+    real native CSG build, the assembly, the offline post-verify and the atomic install, with no
+    editor seam stubbed and no container reachable. Pins the mover warning (M1 ships unbuilt) and
+    that the note says what was and was not verified."""
+    pytest.importorskip("uedcli_native")
+    from uedcli import apply as applymod
+    from uedcli.bsp.builtmodel import load_model_from_dx
+    from uedcli.normalize import canonical_actor_t3d
+
+    level = _synthesize_level()
+    result = {n: canonical_actor_t3d(a) for n, a in level.actors.items()}
+    mo = applymod._materialized_order(result, level.order)
+    out = tmp_path / "Built.dx"
+    r = applymod._materialize_native(
+        result=result, materialized_order=mo, search_dirs=[str(_UED22)], out_path=str(out),
+        state_dir=tmp_path / ".uedcli", expected=applymod._expected_level(result, mo),
+        defaults=ClassDefaults(_resolver), index=_index(),
+        schema=mapimport.ImportSchema(resolver=_resolver),
+        no_verify=False, keep_build=False, no_bsp_check=False, ignore=frozenset())
+
+    assert r.rc == 0, r.message
+    assert load_model_from_dx(out.read_bytes()).nodes, "the installed map ships no world BSP"
+    assert not list((tmp_path / ".uedcli" / "tmp").glob("*.dx")), "a staging temp was stranded"
+    err = capsys.readouterr().err
+    assert "1 mover(s) present, geometry unbuilt" in err and "M1" in err
+    assert "NOT verified: the BSP tree" in err
+
+
+def test_unbuilt_world_model_is_empty_without_the_native_build(tmp_path):
+    """Without `world_model` the package still ships an EMPTY world BSP -- the default
+    `level materialize` path, where the editor's `MAP REBUILD` builds it."""
+    from uedcli.bsp.builtmodel import load_model_from_dx
+    dx, _warns = _write_and_decode(_synthesize_level(), tmp_path)
+    assert load_model_from_dx(dx.read_bytes()).nodes == []

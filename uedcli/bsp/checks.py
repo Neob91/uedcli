@@ -42,6 +42,17 @@ def _built_model_check(dx_path: str) -> list[str]:
         return [f"  built-model check skipped ({type(e).__name__}: {e})"]
 
 
+def run_offline_bsp_checks(dx_path: str) -> list[str]:
+    """The half of `run_bsp_checks` that needs no editor — the built-model defect scan. The other
+    check reads the editor's own `MAP REBUILD` warnings out of its log, and on the editor-free
+    native materialize path no editor ran, so it is not skipped-with-an-excuse, it does not apply."""
+    lines = _built_model_check(dx_path)
+    if not lines:
+        return []
+    return ["materialize: BSP health check (advisory; build succeeded; no editor ran, so only the "
+            "built-model scan applies):", *lines]
+
+
 def run_bsp_checks(driver, *, log_offset: int | None, dx_path: str) -> list[str]:
     """Both checks, each independently guarded. Returns stderr lines (empty = both clean and ran
     without incident). `log_offset` None ⇒ the build-output check is skipped (offset capture failed)."""

@@ -2,9 +2,13 @@
 
 This is the small trunk->structures seam that `assemble_unbuilt` consumes: each trunk actor becomes
 an `assemble.ActorSpec` carrying TYPED `FPropertyTag`s (`props.convert_actor_props`), with `Location`
-routed from the actor's typed field. The NATIVE build path (Rust CSG/BSP/lighting) that used to live
-here was removed with the editor-less materialize (`fbccd70`); the editor now does the BSP/light/paths
-build after `MAP LOAD` of the assembled package.
+routed from the actor's typed field. The editor does the light/paths build after `MAP LOAD` of the
+assembled package.
+
+`build_world_model` is the world-BSP half of the editor-free build (`apply._materialize_native`,
+gated on `UEDCLI_NATIVE_MATERIALIZE=1`): the Rust `bspBrushCSG` port carves the world instead of the
+editor's `MAP REBUILD`, and the built `Model` is written straight into the package's world Model
+export.
 """
 from __future__ import annotations
 
@@ -97,6 +101,85 @@ def _trunk_to_actorspecs(level, schema):
             is_player_start=(short == "PlayerStart"))
         (brush_actors if spec.is_brush else actors).append(spec)
     return actors, brush_actors, warnings
+
+
+class NativeBuildError(ValueError):
+    """A native world-BSP build failure, naming the offending value. A `ValueError` so
+    `apply.run_materialize`'s guard already turns it into a clean exit 2, like `uprops.SchemaError`."""
+
+
+def build_world_model(level, *, index):
+    """Carve the world BSP with the native CSG core (`uedcli_native.build_geometry_bspcsg`) and
+    return `(model, csg_brushes)`: the built `umodel.Model` and the CSG-ordered
+    `(brush_actor_name, polys)` list that the built surfs' `iActor` tag indexes (what
+    `unbuilt.assemble_unbuilt` needs to rewrite each surf's owner + texture to real object refs).
+
+    Movers and the transient builder brush stay out of world CSG, exactly as `csgRebuild` keeps them
+    out; `index` is the `classindex.ClassIndex` that decides mover-ness against the real class
+    hierarchy. Raises `NativeBuildError` on any failure -- never a partial model."""
+    from ..normalize import is_builder_brush
+    from . import umodel as UM
+    from .brush_marshal import BuildError, _build_brush_input, _in_world_csg
+    try:
+        import uedcli_native
+    except ImportError:
+        raise NativeBuildError(
+            "the uedcli_native extension is not built -- the native world-BSP build needs it "
+            "(run bin/test once, or build with `maturin develop`)") from None
+    brushes, csg_brushes = [], []
+    for name in level.order:
+        actor = level.actors.get(name)
+        if actor is None or actor.brush is None:
+            continue
+        if is_builder_brush(actor) or not _in_world_csg(actor, index):
+            continue
+        try:
+            brushes.append(_build_brush_input(name, actor))
+        except BuildError as e:
+            raise NativeBuildError(str(e)) from e
+        csg_brushes.append((name, actor.brush.polys))
+    if not brushes:
+        raise NativeBuildError("the trunk has no world-CSG brush actors -- nothing to build")
+    try:
+        body = uedcli_native.serialize_model(uedcli_native.build_geometry_bspcsg(brushes))
+    except uedcli_native.BuildError as e:
+        raise NativeBuildError(f"native CSG build failed: {e}") from e
+    return UM.parse_model_body(body, 0, len(body)), csg_brushes
+
+
+def _model_point_zone(model, p) -> int:
+    """PointRegion descent on a built `umodel.Model`: the zone number at point `p` (0 = solid)."""
+    if not model.nodes:
+        return 0
+    ni = 0
+    while True:
+        n = model.nodes[ni]
+        nx, ny, nz, w = n.plane
+        pd = nx * p[0] + ny * p[1] + nz * p[2] - w
+        side = 1 if pd >= 0 else 0
+        child = n.i_back if side == 1 else n.i_front
+        if child == -1:
+            lf = n.i_leaf[side]
+            return model.leaves[lf].i_zone if 0 <= lf < len(model.leaves) else 0
+        ni = child
+
+
+def resolve_zone_actors(level, model) -> dict:
+    """`zone_number -> the ZoneInfo/SkyZoneInfo/WarpZoneInfo actor` whose `Location` PointRegion-
+    resolves into that zone. `LevelInfo` (also an AZoneInfo) is excluded -- a default interior zone
+    with no ZoneInfo keeps a NULL ZoneActor. First actor wins per zone.
+    `assemble._patch_zone_refs` rewrites these names to export refs."""
+    zone_actors: dict[int, str] = {}
+    for name, a in level.actors.items():
+        short = (a.cls or "").split(".")[-1]
+        if short == "LevelInfo" or not short.endswith("ZoneInfo"):
+            continue
+        if a.location is None:
+            continue
+        z = _model_point_zone(model, tuple(float(c) for c in a.location))
+        if z > 0 and z not in zone_actors:
+            zone_actors[z] = name
+    return zone_actors
 
 
 def _parse_vec3(raw: str | None, default=(0.0, 0.0, 0.0)) -> tuple:

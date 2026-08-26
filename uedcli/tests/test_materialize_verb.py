@@ -32,6 +32,9 @@ def _NO_PACKAGES(package_name):
 @pytest.fixture
 def _stub_editor(monkeypatch):
     """Stub the live editor seams so run_materialize's orchestration + guards are offline-testable."""
+    # The gate is an env var, so a developer with it exported would silently reroute every test here
+    # through the editor-free path; the one test that wants it sets it back.
+    monkeypatch.delenv("UEDCLI_NATIVE_MATERIALIZE", raising=False)
     monkeypatch.setattr(applymod, "ensure_editor", lambda ed_id, **kw: "uned-stub")
     monkeypatch.setattr(applymod, "stop_editor", lambda ed_id, sd: None)
     monkeypatch.setattr(applymod, "Driver", lambda container=None: mock.Mock())
@@ -466,6 +469,32 @@ def test_a_bsp_check_that_raises_does_not_fail_the_build(tmp_path, monkeypatch, 
                         out_path=str(tmp_path / "New.dx"), overwrite=False)
     assert r.rc == 0                                  # NOT "materialize failed (nothing written)"
     assert "BSP health check skipped" in r.bsp_notes and "parser exploded" in r.bsp_notes
+
+
+def test_the_native_gate_routes_around_the_editor_entirely(tmp_path, monkeypatch, _stub_editor):
+    """`UEDCLI_NATIVE_MATERIALIZE=1` is a TEMPORARY test gate (no CLI flag, undocumented) that routes
+    materialize to the editor-free native build. Its whole point is that no container is started."""
+    monkeypatch.setenv("UEDCLI_NATIVE_MATERIALIZE", "1")
+    monkeypatch.setattr(applymod, "ensure_editor",
+                        lambda *a, **k: pytest.fail("the native path started an editor container"))
+    seen = {}
+    monkeypatch.setattr(applymod, "_materialize_native",
+                        lambda **kw: seen.update(kw) or ApplyResult(rc=0, message="materialized New.dx"))
+    r = run_materialize(level=_one_actor_level(), schema_resolver=_NO_PACKAGES,
+                        state_dir=tmp_path / ".uedcli", keep_build=True,
+                        out_path=str(tmp_path / "New.dx"), overwrite=False)
+    assert r.rc == 0
+    assert seen["keep_build"] is True and seen["expected"].order == ["A_1"]
+
+
+def test_without_the_native_gate_materialize_still_drives_the_editor(tmp_path, monkeypatch,
+                                                                     _stub_editor):
+    monkeypatch.setattr(applymod, "_materialize_native",
+                        lambda **kw: pytest.fail("the default path routed to the native build"))
+    r = run_materialize(level=_one_actor_level(), schema_resolver=_NO_PACKAGES,
+                        state_dir=tmp_path / ".uedcli",
+                        out_path=str(tmp_path / "New.dx"), overwrite=False)
+    assert r.rc == 0
 
 
 def test_dispatch_prints_bsp_notes_to_stderr(tmp_path, monkeypatch, capsys):
