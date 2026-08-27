@@ -14,6 +14,8 @@ mod build;
 mod csg;
 mod f32;
 mod fpoly;
+mod light;
+mod linecheck;
 mod model;
 mod model_write;
 mod passes;
@@ -310,6 +312,33 @@ fn serialize_model(py: Python<'_>, built: &Built) -> PyResult<Py<PyBytes>> {
     Ok(PyBytes::new_bound(py, &bytes).unbind())
 }
 
+/// `bake_lighting` — the native `LIGHT APPLY` surface-lightmap bake (spike section 20).
+/// Fills the built Model's lightmap arrays (`light_map`/`light_bits`/`lights`) and links each
+/// lit surf's `iLightMap`, in parallel (rayon).  `lights` is the participating light set as
+/// `[(location=[x,y,z], radius_byte, special_lit), ...]` — the caller applies the actor-level filter
+/// (`LightType != LT_None && (bStatic || bNoDelete)`).  The
+/// `lights` array holds 0-based light INDICES + `-1` NULL terminators (Python assembly rewrites
+/// them to export object-refs).  Heavy compute runs under `allow_threads` (interruptible).
+#[pyfunction]
+fn bake_lighting(
+    py: Python<'_>,
+    built: &mut Built,
+    lights: Vec<([f32; 3], u8, bool)>,
+) -> PyResult<()> {
+    let inputs: Vec<light::LightInput> = lights
+        .iter()
+        .map(|(loc, r, special)| light::LightInput {
+            location: model::Vec3::new(loc[0], loc[1], loc[2]),
+            radius: *r,
+            special_lit: *special,
+        })
+        .collect();
+    let model = &mut built.model;
+    py.allow_threads(|| light::bake(model, &inputs))
+        .map_err(map_err)?;
+    Ok(())
+}
+
 /// One flat world-space textured polygon for `render_frame` (native preview, spec §5):
 /// `(verts_flat, uv_base, uv_axis_u, uv_axis_v, pan, tex_index, masked)`.  `verts_flat` = the
 /// ring as x,y,z triples; the UV frame is in texel units (Python computes it from the SOURCE
@@ -399,6 +428,7 @@ fn uedcli_native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(build_geometry_bspcsg, m)?)?;
     m.add_function(wrap_pyfunction!(intersect_brushset, m)?)?;
     m.add_function(wrap_pyfunction!(serialize_model, m)?)?;
+    m.add_function(wrap_pyfunction!(bake_lighting, m)?)?;
     m.add_function(wrap_pyfunction!(render_frame, m)?)?;
     Ok(())
 }

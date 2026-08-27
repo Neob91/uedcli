@@ -195,7 +195,7 @@ def _patch_native_surf_refs(asm, model, csg_brushes, tex_ref) -> None:
 
 def assemble_unbuilt(level, *, version: int = 68, level_name: str = "MyLevel",
                      schema=None, pkg_dirs=None, world_model=None, csg_brushes=None,
-                     zone_actors=None):
+                     zone_actors=None, light_names=None):
     """`assemble_level` with an EMPTY world Model and REAL per-brush polys.
 
     `schema` is the `ImportSchema` (or bare `schema_lookup` callback) that types every actor prop
@@ -208,6 +208,10 @@ def assemble_unbuilt(level, *, version: int = 68, level_name: str = "MyLevel",
     (`materialize.build_world_model`) plus its `csg_brushes` join list and `zone_actors` map and the
     package ships that BSP, so the editor has nothing left to rebuild (`MAP LOAD` without
     `MAP REBUILD`). Mover brush models stay unbuilt either way -- only `MAP REBUILD` builds those.
+
+    `light_names` is the ordered light-actor name list the baked Model's `lights` array indexes
+    (`materialize.gather_lights`, index i == light i): assembly rewrites those indexes to the actors'
+    export refs.
 
     MUTATES `level`: `rewrite_self_package_refs` requalifies the level's own package refs to
     `MyLevel.` before anything is typed, because a package that skipped it ships unloadable.
@@ -327,6 +331,7 @@ def assemble_unbuilt(level, *, version: int = 68, level_name: str = "MyLevel",
         def _world_model_body():
             _patch_native_surf_refs(asm, world_model, csg_brushes or [], tex_ref)
             ASM._patch_zone_refs(asm, world_model, zone_actors)
+            ASM._patch_light_refs(asm, world_model, light_names)
             return UM.write_model_body(world_model)
         asm._reserve(lm, "Engine.Model", ASM._FLAGS_LOAD, _world_model_body)
 

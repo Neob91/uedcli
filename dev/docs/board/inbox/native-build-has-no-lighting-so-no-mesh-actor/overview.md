@@ -1,11 +1,29 @@
 +++
-priority = "p1"
+priority = "p2"
 kind = "implement"
-summary = "Proved by a controlled experiment: an empty Model.LightMap/LightBits/Lights is the sole reason the editor-free build draws no mesh actors. Nothing short of baking lighting fixes it."
+summary = "The cause is fixed -- the editor-free build now bakes Model.LightMap/LightBits/Lights and links every surf's iLightMap, so the arrays this item names are populated. What is NOT done is re-running the in-game check that mesh actors actually draw again; that is all this item is still open for."
 spikes = ["dev/docs/spikes/2026-08-26-editor-free-native-materialize/"]
 +++
 
 # The editor-free build draws no mesh actors because it bakes no lighting
+
+**Update 2026-08-27 — the cause is addressed; only the in-game re-check is outstanding.** The native
+`LIGHT APPLY` bake is back and wired into `UEDCLI_NATIVE_MATERIALIZE=1`: it populates
+`Model.LightMap`/`LightBits`/`Lights` and links every lit surf's `iLightMap`, reproducing the editor's
+own output on `01_NYC_UNATCOHQ` to 99.0% of per-(surface, light) shadow bit-planes byte-identical. So
+the condition this item's experiment isolated — the arrays being EMPTY — no longer holds.
+
+Nobody has booted the game on a natively-lit build to confirm the mesh actors draw and the
+`FLightManager::SetupForActor` criticals are gone. That check is the whole of what is left here: build
+UNATCO with the env gate, `level preview --game`, and count `Anomalous singularity` /
+`SetupForActor` in `DeusEx.log` against the control. Note one thing the bake does NOT yet emit: the
+per-leaf permeating light lists (`Model.Lights` region 1, board
+`port-the-per-leaf-permeating-light-lists-model`), and `zones.rs` still stubs every leaf's
+`iPermeating` to `0`, which points each leaf at a per-SURFACE run. `SetupForActor` is exactly the path
+that reads a leaf's permeating list, so that stub is the first thing to suspect if the criticals
+persist.
+
+The original write-up follows.
 
 `UEDCLI_NATIVE_MATERIALIZE=1` maps render their BSP surfaces correctly but no mesh actor at all —
 no plants, chairs or NPCs — and `DeusEx.log` fills with a per-frame critical stack:

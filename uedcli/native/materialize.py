@@ -108,11 +108,116 @@ class NativeBuildError(ValueError):
     `apply.run_materialize`'s guard already turns it into a clean exit 2, like `uprops.SchemaError`."""
 
 
-def build_world_model(level, *, index):
-    """Carve the world BSP with the native CSG core (`uedcli_native.build_geometry_bspcsg`) and
-    return `(model, csg_brushes)`: the built `umodel.Model` and the CSG-ordered
-    `(brush_actor_name, polys)` list that the built surfs' `iActor` tag indexes (what
-    `unbuilt.assemble_unbuilt` needs to rewrite each surf's owner + texture to real object refs).
+def gather_lights(level, *, defaults):
+    """The level's participating lights for the native `LIGHT APPLY` bake, in trunk-actor order:
+    `[(actor_name, (x, y, z), light_radius_byte, b_special_lit), ...]`.
+
+    The editor's gather pass walks `Level->Actors` in array order and accepts an actor on exactly
+    two conditions (`Editor.dll 0x100a4cc7` / `0x100a4cd4`, disassembled 2026-08-27):
+
+        LightType != LT_None    and    (bStatic or bNoDelete)
+
+    There is NO class check -- any class can be a light -- and no facing, zone or brightness test
+    here. The second condition is what the first native cut got wrong: it accepted every actor with
+    a light type, which on UNATCO pulled in 7 `DeusEx.SecurityCamera`s the editor's bake lists
+    nowhere. A `SecurityCamera` does default `LightType=LT_Steady`, but `DeusEx.DeusExDecoration`
+    overrides `bStatic` back to False and nothing in its chain sets `bNoDelete`, so the editor drops
+    it; `Engine.Light` defaults both True.
+
+    Every value is the EFFECTIVE one -- stated, else the class default from `defaults` (a
+    `classdefaults.ClassDefaults`) -- because a bare `Engine.Light` states none of the three.
+
+    The bake itself reads Location, `LightRadius` (a BYTE; world radius `(LightRadius + 1) * 25`,
+    `AActor::WorldLightRadius`, `Engine 0x10116b50`) and `bSpecialLit`, which partitions lights and
+    surfaces into two disjoint sets (see `light.rs`'s `LightInput`). Brightness, hue and attenuation
+    are the game's job at render time."""
+    from .. import typedprops
+    out = []
+    for name in (level.order or list(level.actors)):
+        a = level.actors.get(name)
+        if a is None:
+            continue
+        info = defaults.for_class(a.cls or "Engine.Actor")
+        if _effective_int(a, info, name, "lighttype", typedprops) == 0:
+            continue                                   # LT_None -> not a light
+        if not (_effective_bool(a, info, name, "bstatic", typedprops)
+                or _effective_bool(a, info, name, "bnodelete", typedprops)):
+            continue                                   # a transient actor never bakes
+        radius = _effective_int(a, info, name, "lightradius", typedprops)
+        out.append((name, _effective_location(a, info),
+                    # `LightRadius` is a BYTE, and a `MAP IMPORT` of an out-of-range value WRAPS, so
+                    # a trunk saying 300 must bake as 44 -- clamping to 255 instead would give a
+                    # different radius from the editor's and the typed post-verify cannot see it.
+                    radius % 256,
+                    _effective_bool(a, info, name, "bspeciallit", typedprops)))
+    return out
+
+
+def _effective_location(actor, info) -> tuple:
+    """The actor's effective world `Location` as floats.
+
+    An actor with NO `Location` line at all parses to `location is None` (the trunk reader is
+    schema-free), and the effective value is then the CLASS DEFAULT -- which is not always the
+    origin: `Engine.Camera` defaults `Z=300`. Skipping such an actor would silently drop a light
+    sitting at its class's default position."""
+    if actor.location is not None:
+        return tuple(float(c) for c in actor.location)
+    return _parse_vec3(info.defaults.get(("location", 0)))
+
+
+class LightPropError(ValueError):
+    """A light property that cannot be decoded -- surfaced rather than read as "not a light", which
+    would ship a map missing that light's contribution with no signal. A `ValueError`, so
+    `apply.run_materialize`'s guard turns it into a clean exit 2."""
+
+
+def _effective_value(actor, info, actor_name: str, key: str, typedprops):
+    """The actor's effective value for property `key` (casefolded): the value it states, decoded
+    through the property's declared `Field`, else the class default.
+
+    A STATED value that does not decode raises `LightPropError` naming the actor, the property and
+    the text. It cannot be read as absent: silently treating an undecodable `LightType` as `LT_None`
+    drops the light from the bake, and the built map is then wrong with nothing to show for it. An
+    actor that simply does not HAVE the property is a different case and resolves to the type's zero
+    through `typed_default`, which is how every non-light actor is rejected."""
+    stated = next(((k, v) for k, v in actor.props if k.casefold() == key), None)
+    if stated is None:
+        return info.typed_default((key, 0))
+    spelled, text = stated
+    value = typedprops.typed_value(text, info.field(key))
+    if not isinstance(value, (int, float, bool)):
+        raise LightPropError(
+            f"{actor_name}: cannot decode {spelled}={text!r} against the class schema for "
+            f"{actor.cls!r} -- a light property must resolve to a number or a bool")
+    return value
+
+
+def _effective_int(actor, info, actor_name: str, key: str, typedprops) -> int:
+    """`_effective_value` as an int; `0` for a value the type has no number for (the type's zero for
+    a property the class does not declare)."""
+    v = _effective_value(actor, info, actor_name, key, typedprops)
+    return int(v) if isinstance(v, (int, float)) and not isinstance(v, bool) else 0
+
+
+def _effective_bool(actor, info, actor_name: str, key: str, typedprops) -> bool:
+    """`_effective_value` as a bool. A `BoolProperty` decodes to a real `bool`; a class that does not
+    declare the property yields the type's zero, which is `False` -- the engine's own default for
+    both flags this is used for."""
+    return _effective_value(actor, info, actor_name, key, typedprops) is True
+
+
+def build_world_model(level, *, index, lights=()):
+    """Carve the world BSP with the native CSG core (`uedcli_native.build_geometry_bspcsg`), bake the
+    lighting into it (`uedcli_native.bake_lighting`), and return `(model, csg_brushes)`: the built
+    `umodel.Model` and the CSG-ordered `(brush_actor_name, polys)` list that the built surfs'
+    `iActor` tag indexes (what `unbuilt.assemble_unbuilt` needs to rewrite each surf's owner +
+    texture to real object refs).
+
+    `lights` is `gather_lights`'s output; the Model's `lights` array comes back holding 0-based
+    indexes into it, which `assemble._patch_light_refs` rewrites to export refs using the same
+    ordered name list. Empty `lights` still bakes: every lightmappable surf gets a DARK record, which
+    is what the editor writes for a level with no lights (§2) and what the game's mesh-actor lighting
+    path needs to exist at all.
 
     Movers and the transient builder brush stay out of world CSG, exactly as `csgRebuild` keeps them
     out; `index` is the `classindex.ClassIndex` that decides mover-ness against the real class
@@ -141,7 +246,9 @@ def build_world_model(level, *, index):
     if not brushes:
         raise NativeBuildError("the trunk has no world-CSG brush actors -- nothing to build")
     try:
-        body = uedcli_native.serialize_model(uedcli_native.build_geometry_bspcsg(brushes))
+        built = uedcli_native.build_geometry_bspcsg(brushes)
+        uedcli_native.bake_lighting(built, [(loc, radius, special) for _n, loc, radius, special in lights])
+        body = uedcli_native.serialize_model(built)
     except uedcli_native.BuildError as e:
         raise NativeBuildError(f"native CSG build failed: {e}") from e
     return UM.parse_model_body(body, 0, len(body)), csg_brushes

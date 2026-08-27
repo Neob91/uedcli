@@ -318,23 +318,30 @@ _MATERIALIZE_ERRORS = (DriverError, RuntimeError, TimeoutError, ValueError, OSEr
 
 def _materialize_native(*, result: dict[str, str], materialized_order: list[str], search_dirs,
                         out_path: str, state_dir, expected, defaults, index, schema,
-                        no_verify: bool, keep_build: bool, no_bsp_check: bool,
+                        schema_resolver, no_verify: bool, keep_build: bool, no_bsp_check: bool,
                         ignore: frozenset[tuple[str, str]]) -> ApplyResult:
     """Build the map with NO editor at all: the native CSG core (`native.materialize.build_world_model`)
-    carves the world BSP in-process and `assemble_unbuilt` writes it straight into the package, so
-    there is no `MAP LOAD`, no `MAP REBUILD`, no `LIGHT APPLY` and no container anywhere.
+    carves the world BSP AND bakes the lighting in-process, and `assemble_unbuilt` writes both
+    straight into the package, so there is no `MAP LOAD`, no `MAP REBUILD`, no `LIGHT APPLY` and no
+    container anywhere.
 
-    It bakes NO lighting, and without `MAP REBUILD` no Mover gets its private brush model built
-    (`csgPrepMovingBrush`) — a mover ships as an actor with polys but no geometry. Movers WARN and
+    Without `MAP REBUILD` no Mover gets its private brush model built (`csgPrepMovingBrush`) — a
+    mover ships as an actor with polys but no geometry. Movers WARN and
     continue rather than refuse, because refusing would make the gate useless on the retail maps it
     exists to test (board `native-geometry-path-leaves-mover-models-unbuilt`).
+
+    The lighting bake needs the level's CLASS DEFAULTS to decide which actors are lights at all (an
+    `Engine.Light` states no `LightType` and takes the class default), so it resolves them from
+    `schema_resolver` rather than reusing `defaults` — which is `None` under `--no-verify`, and the
+    map's content must not depend on a verify flag.
 
     The post-verify is the same offline `verify_dx_matches` the editor path runs. The BSP tree itself
     is NOT verified: that comparison needs an editor-built golden, and inventing a check without one
     would be a half-answer."""
     import sys
+    from .classdefaults import ClassDefaults
     from .movers import is_mover
-    from .native.materialize import build_world_model, resolve_zone_actors
+    from .native.materialize import build_world_model, gather_lights, resolve_zone_actors
     from .native.unbuilt import assemble_unbuilt, substrate_schema
 
     pkg_dirs = [str(d) for d in (search_dirs or [])]
@@ -344,12 +351,19 @@ def _materialize_native(*, result: dict[str, str], materialized_order: list[str]
             print(f"warning: native materialize: {len(movers)} mover(s) present, geometry unbuilt "
                   f"(the native path has no mover-CSG support yet): {', '.join(movers)}",
                   file=sys.stderr)
+        # Reuse the post-verify's resolver when it exists — a `ClassDefaults` is a per-invocation
+        # memo over ONE shared package map, and a second one re-loads every package and re-decodes
+        # every class. It is `None` only under `--no-verify`, and the map's content must not depend
+        # on a verify flag, so that case builds its own.
+        lights = gather_lights(level, defaults=defaults or ClassDefaults(schema_resolver))
+        print(f"native materialize: {len(lights)} participating light(s)", file=sys.stderr)
         # Before `assemble_unbuilt`, which rewrites the level's own package refs in place. Safe only
         # because the CSG input (`CsgOper`, `PolyFlags`, the transform) carries no object ref.
-        world_model, csg_brushes = build_world_model(level, index=class_index)
+        world_model, csg_brushes = build_world_model(level, index=class_index, lights=lights)
         dx_bytes, warnings = assemble_unbuilt(
             level, schema=substrate_schema(*pkg_dirs), pkg_dirs=pkg_dirs, world_model=world_model,
-            csg_brushes=csg_brushes, zone_actors=resolve_zone_actors(level, world_model))
+            csg_brushes=csg_brushes, zone_actors=resolve_zone_actors(level, world_model),
+            light_names=[n for n, *_rest in lights])
         for w in warnings:
             print(f"warning: {w}", file=sys.stderr)
         Path(os.path.abspath(out_path)).parent.mkdir(parents=True, exist_ok=True)
@@ -365,8 +379,8 @@ def _materialize_native(*, result: dict[str, str], materialized_order: list[str]
         return ApplyResult(rc=2, message=f"materialize failed (nothing written): {e}")
     print("native materialize: NOTHING verified (--no-verify)." if no_verify else
           "native materialize: verified offline — actor and property fidelity against the intended "
-          "level. NOT verified: the BSP tree (that needs an editor-built golden to compare against) "
-          "and lighting (none is built).", file=sys.stderr)
+          "level. NOT verified: the BSP tree or the lighting bake (both need an editor-built golden "
+          "to compare against).", file=sys.stderr)
     bsp_notes = ""
     if not no_bsp_check:
         try:
@@ -467,8 +481,8 @@ def run_materialize(*, level, out_path, overwrite, state_dir, schema_resolver,
         return _materialize_native(
             result=result, materialized_order=mo, search_dirs=host_search_dirs, out_path=out_path,
             state_dir=state_dir, expected=_expected_level(result, mo), defaults=defaults,
-            index=verify_index, schema=verify_schema, no_verify=no_verify, keep_build=keep_build,
-            no_bsp_check=no_bsp_check, ignore=ignore)
+            index=verify_index, schema=verify_schema, schema_resolver=schema_resolver,
+            no_verify=no_verify, keep_build=keep_build, no_bsp_check=no_bsp_check, ignore=ignore)
     ed_id = uuid7()                                    # bare uuid → editor_container keeps all groups
     bsp_notes = ""
     try:

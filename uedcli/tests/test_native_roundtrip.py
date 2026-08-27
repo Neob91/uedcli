@@ -179,6 +179,159 @@ def test_native_world_model_ships_in_the_package_with_real_refs():
     assert all(s.texture_ref < 0 for s in saved.surfs), "a surf did not resolve a texture import"
 
 
+def _room_t3d(half=(256, 256, 128)) -> str:
+    """A closed subtracted box with a Light at its centre — the smallest level whose bake produces
+    LIT records, so the whole lighting chain (gather -> bake -> `Model.Lights` export refs) is
+    exercised offline."""
+    hx, hy, hz = half
+    faces = [                                            # (normal, 4 verts) — outward, CCW outside
+        ((1, 0, 0), [(hx, -hy, -hz), (hx, hy, -hz), (hx, hy, hz), (hx, -hy, hz)]),
+        ((-1, 0, 0), [(-hx, hy, -hz), (-hx, -hy, -hz), (-hx, -hy, hz), (-hx, hy, hz)]),
+        ((0, 1, 0), [(hx, hy, -hz), (-hx, hy, -hz), (-hx, hy, hz), (hx, hy, hz)]),
+        ((0, -1, 0), [(-hx, -hy, -hz), (hx, -hy, -hz), (hx, -hy, hz), (-hx, -hy, hz)]),
+        ((0, 0, 1), [(-hx, -hy, hz), (hx, -hy, hz), (hx, hy, hz), (-hx, hy, hz)]),
+        ((0, 0, -1), [(-hx, hy, -hz), (hx, hy, -hz), (hx, -hy, -hz), (-hx, -hy, -hz)]),
+    ]
+    polys = ""
+    for n, verts in faces:
+        # Each face needs texture axes IN ITS OWN PLANE. Reusing one pair for all six (the obvious
+        # shortcut) leaves the ±X walls with TextureU along their own normal, so their texture-space
+        # extent is 0, the lumel basis is singular, and the bake has no grid to walk.
+        tu, tv = ((0, 1, 0), (0, 0, 1)) if n[0] else \
+                 ((1, 0, 0), (0, 0, 1)) if n[1] else ((1, 0, 0), (0, 1, 0))
+        polys += ("         Begin Polygon Item=Base Texture=CoreTexMetal.Area51Wall_A Flags=0\n"
+                  "            Origin   +00000.000000,+00000.000000,+00000.000000\n"
+                  f"            Normal   {n[0]:+013.6f},{n[1]:+013.6f},{n[2]:+013.6f}\n"
+                  f"            TextureU {tu[0]:+013.6f},{tu[1]:+013.6f},{tu[2]:+013.6f}\n"
+                  f"            TextureV {tv[0]:+013.6f},{tv[1]:+013.6f},{tv[2]:+013.6f}\n")
+        for v in verts:
+            polys += f"            Vertex   {v[0]:+013.6f},{v[1]:+013.6f},{v[2]:+013.6f}\n"
+        polys += "         End Polygon\n"
+    return ("Begin Map\n"
+            "Begin Actor Class=Engine.LevelInfo Name=LevelInfo0\n"
+            "    Name=\"LevelInfo0\"\nEnd Actor\n"
+            + _brush("Room", "Model_Room", "CSG_Subtract", polys)
+            + "Begin Actor Class=Engine.Light Name=Lamp\n"
+              "    LightRadius=40\n"
+              "    Location=(X=0.000000,Y=0.000000,Z=0.000000)\n"
+              "    Name=\"Lamp\"\nEnd Actor\n"
+              "Begin Actor Class=Engine.PlayerStart Name=Start0\n"
+              "    Location=(X=0.000000,Y=0.000000,Z=0.000000)\n"
+              "    Name=\"Start0\"\nEnd Actor\n"
+              "End Map\n")
+
+
+def test_gather_lights_needs_bstatic_or_bnodelete_and_reads_effective_values():
+    """The editor's gather pass accepts an actor as a light on `LightType != LT_None` AND
+    `bStatic || bNoDelete` (`Editor 0x100a4cc7`/`0x100a4cd4`). Dropping the second condition is what
+    made native bake 7 of UNATCO's `SecurityCamera`s as lights the editor lists nowhere.
+
+    Every value is the EFFECTIVE one, and all three are exercised as class DEFAULTS here: the
+    `Engine.Light` states none of them and must still be gathered with its default radius."""
+    from uedcli.classdefaults import ClassDefaults
+    from uedcli.native.materialize import LightPropError, gather_lights
+
+    def gathered(t3d_body: str):
+        lv = model.parse_t3d("Begin Map\n" + t3d_body + "End Map\n")
+        lv.order = level_order(lv)
+        return gather_lights(lv, defaults=ClassDefaults(_resolver))
+
+    # A bare Engine.Light: no LightType, no bStatic, no LightRadius stated -> all defaults, and it
+    # participates. Its default LightRadius is what reaches the bake.
+    got = gathered("Begin Actor Class=Engine.Light Name=L\n"
+                   "    Location=(X=1.000000,Y=2.000000,Z=3.000000)\n    Name=\"L\"\nEnd Actor\n")
+    assert [n for n, *_ in got] == ["L"]
+    assert got[0][1] == (1.0, 2.0, 3.0) and got[0][2] > 0
+
+    # Same class with bStatic AND bNoDelete turned off: no longer a light. (`Engine.Light` defaults
+    # both True, which is why the SecurityCamera case needed the class-default read to see it.)
+    assert gathered("Begin Actor Class=Engine.Light Name=L\n"
+                    "    bStatic=False\n    bNoDelete=False\n"
+                    "    Location=(X=1.000000)\n    Name=\"L\"\nEnd Actor\n") == []
+    # Either flag alone is enough — the editor's test is a single `test byte [actor+0x28], 5`.
+    assert len(gathered("Begin Actor Class=Engine.Light Name=L\n"
+                        "    bStatic=False\n    Location=(X=1.000000)\n"
+                        "    Name=\"L\"\nEnd Actor\n")) == 1
+    # LT_None is not a light even when static.
+    assert gathered("Begin Actor Class=Engine.Light Name=L\n"
+                    "    LightType=LT_None\n    Location=(X=1.000000)\n"
+                    "    Name=\"L\"\nEnd Actor\n") == []
+    # An actor class with no LightType at all is simply not a light (the type's zero, not an error).
+    assert gathered("Begin Actor Class=Engine.PathNode Name=P\n"
+                    "    Location=(X=1.000000)\n    Name=\"P\"\nEnd Actor\n") == []
+    # An actor with NO Location line takes its CLASS DEFAULT position, and must not be dropped:
+    # dropping it ships a map missing that light with no signal.
+    assert [n for n, *_ in gathered("Begin Actor Class=Engine.Light Name=L\n"
+                                    "    Name=\"L\"\nEnd Actor\n")] == ["L"]
+    # A STATED value that cannot be decoded is an error, never "not a light".
+    with pytest.raises(LightPropError, match="LightType"):
+        gathered("Begin Actor Class=Engine.Light Name=L\n"
+                 "    LightType=LT_NoSuchType\n    Location=(X=1.000000)\n"
+                 "    Name=\"L\"\nEnd Actor\n")
+    # LightRadius is a BYTE and an out-of-range trunk value WRAPS on import, as the editor's would.
+    assert gathered("Begin Actor Class=Engine.Light Name=L\n"
+                    "    LightRadius=300\n    Location=(X=1.000000)\n"
+                    "    Name=\"L\"\nEnd Actor\n")[0][2] == 44
+
+
+def test_patch_light_refs_refuses_an_index_with_no_name():
+    """A baked light index that `light_names` cannot resolve must RAISE. Mapping it to 0 — the run's
+    NULL terminator — truncates that surface's light run and silently pushes every later light off
+    the surface, which is what forgetting `light_names=` on a caller that passes a baked
+    `world_model` would do."""
+    from uedcli.native import assemble as ASM
+    from uedcli.native import umodel as UM
+
+    m = UM.Model()
+    m.lights = [1, -1]
+    with pytest.raises(ValueError, match="light index 1 has no name"):
+        ASM._patch_light_refs(ASM._Assembler(68, "MyLevel"), m, ["only-one"])
+    # A name that resolves but is not an actor of this package is the same class of mistake.
+    m.lights = [0, -1]
+    with pytest.raises(ValueError, match="not an actor in this package"):
+        ASM._patch_light_refs(ASM._Assembler(68, "MyLevel"), m, ["only-one"])
+
+
+def test_native_lit_room_ships_light_export_refs(tmp_path):
+    """The native bake's `Model.Lights` array must reach the package as EXPORT OBJECT REFS to the
+    light actors, not as the 0-based light indices the Rust core emits. Left unrewritten, index 0 is
+    indistinguishable from the NULL run terminator, so the game reads a truncated light run — and a
+    non-zero index resolves to whatever export happens to sit there. Pins the whole chain:
+    `gather_lights` -> `build_world_model(lights=)` -> `assemble_unbuilt(light_names=)`."""
+    pytest.importorskip("uedcli_native")
+    from uedcli import upackage
+    from uedcli.bsp.builtmodel import load_model_from_dx
+    from uedcli.classdefaults import ClassDefaults
+    from uedcli.native.materialize import build_world_model, gather_lights, resolve_zone_actors
+
+    level = model.parse_t3d(_room_t3d())
+    level.order = level_order(level)
+    normalize_level(level)
+    lights = gather_lights(level, defaults=ClassDefaults(_resolver))
+    assert [n for n, *_rest in lights] == ["Lamp"], "the Light was not gathered"
+    assert lights[0][2] == 40, "the stated LightRadius did not reach the bake"
+
+    built, csg_brushes = build_world_model(level, index=_index(), lights=lights)
+    assert len(built.light_map) == 6, "one record per room wall"
+    assert all(r.i_light_actors >= 0 for r in built.light_map), \
+        "a wall of a room with a light at its centre baked dark"
+    assert built.lights == [0, -1] * 6, "pre-assembly the runs are light INDEX + -1 terminator"
+
+    pkg_dirs = [str(_UED22)]
+    dx_bytes, _warnings = assemble_unbuilt(
+        level, schema=substrate_schema(*pkg_dirs), pkg_dirs=pkg_dirs, world_model=built,
+        csg_brushes=csg_brushes, zone_actors=resolve_zone_actors(level, built),
+        light_names=[n for n, *_rest in lights])
+
+    dx = tmp_path / "Room.dx"
+    dx.write_bytes(dx_bytes)
+    saved = load_model_from_dx(dx_bytes)
+    assert saved.lights[0] > 0, "the light index was not rewritten to an export ref"
+    assert saved.lights == [saved.lights[0], 0] * 6, \
+        "the runs are not (one export ref, NULL) per wall"
+    assert upackage.load_package(str(dx)).name_of_ref(saved.lights[0]) == "Lamp"
+
+
 def test_assemble_rewrites_the_levels_own_package_refs_to_mylevel(tmp_path):
     """A trunk imported from a shipped map keeps intra-level refs qualified with the ORIGINAL map's
     package name. `assemble_unbuilt` must requalify them to `MyLevel.` itself, for EVERY caller --
@@ -237,15 +390,33 @@ def test_native_materialize_builds_and_verifies_a_map_with_no_editor(tmp_path, c
         result=result, materialized_order=mo, search_dirs=[str(_UED22)], out_path=str(out),
         state_dir=tmp_path / ".uedcli", expected=applymod._expected_level(result, mo),
         defaults=ClassDefaults(_resolver), index=_index(),
-        schema=mapimport.ImportSchema(resolver=_resolver),
+        schema=mapimport.ImportSchema(resolver=_resolver), schema_resolver=_resolver,
         no_verify=False, keep_build=False, no_bsp_check=False, ignore=frozenset())
 
     assert r.rc == 0, r.message
-    assert load_model_from_dx(out.read_bytes()).nodes, "the installed map ships no world BSP"
+    built = load_model_from_dx(out.read_bytes())
+    assert built.nodes, "the installed map ships no world BSP"
     assert not list((tmp_path / ".uedcli" / "tmp").glob("*.dx")), "a staging temp was stranded"
     err = capsys.readouterr().err
     assert "1 mover(s) present, geometry unbuilt" in err and "M1" in err
     assert "NOT verified: the BSP tree" in err
+    # The lighting bake ran and its output is INTERNALLY CONSISTENT in the installed map: the level's
+    # one `Engine.Light` is gathered, and every lightmappable surf links a record. (This fixture's
+    # world is two coplanar quads, so the light reaches nothing and every record is dark; a real room
+    # lighting its walls is covered by the Rust `single_room_light_fully_lights_all_walls`, and the
+    # export-ref rewrite by `test_native_lit_room_ships_light_export_refs`.)
+    assert "1 participating light(s)" in err
+    assert built.light_map, "no lightmap records -- the bake did not run"
+    assert {s.i_light_map for s in built.surfs} == set(range(len(built.light_map))), \
+        "surf <-> record links are not a bijection onto the record array"
+    for rec in built.light_map:
+        if rec.i_light_actors < 0:                        # a dark record: reached by no light
+            assert rec.data_offset == 0
+            continue
+        run = built.lights[rec.i_light_actors:]
+        n = run.index(0)                                  # the NULL that ends this surf's run
+        end = rec.data_offset + n * ((rec.u_size + 7) // 8) * rec.v_size
+        assert end <= len(built.light_bits), "a record's bit-planes run past LightBits"
 
 
 def test_unbuilt_world_model_is_empty_without_the_native_build(tmp_path):

@@ -315,17 +315,28 @@ def _patch_zone_refs(asm: _Assembler, model: UM.Model, zone_actors) -> None:
 
 
 def _patch_light_refs(asm: _Assembler, model: UM.Model, light_names) -> None:
-    """Rewrite the level-Model `lights` array (UModel+0xe4) from the N-4 bake's intermediate form
+    """Rewrite the level-Model `lights` array (UModel+0xe4) from the bake's intermediate form
     — 0-based light INDICES + `-1` NULL terminators — to the final on-disk object-refs: a light
     index `i` -> the light actor's export ref (`asm.eref(light_names[i])`); a `-1` terminator -> 0
-    (None).  A no-op when the Model carries no baked lights (unlit build)."""
+    (None).  A no-op when the Model carries no baked lights (unlit build).
+
+    An index with no name RAISES rather than becoming a 0: a 0 is the run TERMINATOR, so mapping an
+    unresolved index to it truncates that surface's light run and silently shifts every light after
+    it off the surface. That is the failure mode of forgetting `light_names=` on a caller that passes
+    a baked `world_model`, which would otherwise ship a map whose every run is one entry long."""
     if not model.lights:
         return
     names = light_names or []
     patched = []
     for r in model.lights:
-        if r < 0 or r >= len(names):
-            patched.append(0)                            # NULL terminator (or unknown -> None)
+        if r < 0:
+            patched.append(0)                            # the run's NULL terminator
+        elif r >= len(names):
+            raise ValueError(
+                f"baked light index {r} has no name (light_names has {len(names)}) -- the Model's "
+                f"light runs and the light list are out of step")
+        elif names[r] not in asm.index_of:
+            raise ValueError(f"baked light {names[r]!r} is not an actor in this package")
         else:
             patched.append(asm.eref(names[r]))
     model.lights = patched
