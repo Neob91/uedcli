@@ -14,11 +14,12 @@ is the source, reached through git, never a build target.
   and each mover's private model, `LIGHT APPLY`s the lighting, then `MAP SAVE`s the result. Writing
   the package ourselves and loading it avoids the editor's add path (`MAP NEW` + `EDIT
   PASTE`/`IMPORTADD`), which GPFs on complex retail geometry and cannot express every authored value;
-  the built `Actors` array is faithful, with no append reorder. A geometry-only native path (behind the
-  temporary `UEDCLI_NATIVE_MATERIALIZE=1` test gate) already reaches exact BSP parity with the
-  editor's own build; it has no lighting yet and cannot build a mover's private model, so it is not
-  yet the default. On failure nothing is written — the build exits 2 and the existing `--out` file is
-  left untouched.
+  the built `Actors` array is faithful, with no append reorder. A native path (behind the temporary
+  `UEDCLI_NATIVE_MATERIALIZE=1` test gate) already reaches exact BSP parity with the editor's own
+  build on `01_NYC_UNATCOHQ` and bakes the lighting to 99% of its shadow bit-planes byte-identical;
+  it still cannot build a mover's private model, and its BSP does not yet match on every level, so it
+  is not yet the default. On failure nothing is written — the build exits 2 and the existing `--out`
+  file is left untouched.
 - **The destination is named explicitly (`--out`), and an existing file is never silently clobbered**
   — materialize refuses and exits 2 naming the file. The opt-in **`--overwrite`** allows it, because
   rebuilding to the same path is the inner loop ([`safety.md`](safety.md)).

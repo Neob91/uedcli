@@ -202,7 +202,9 @@ light `Li` in the surface's list, compute the lumel's **world position** `P` (§
    ```
    `AActor::WorldLightRadius` (`Engine 0x116b50`): **`R = (LightRadius + 1) × 25.0`** world
    units, where `LightRadius` is the `BYTE` at `actor+0x1a1` (the classic UE1 ×25 radius
-   scale). ✅ **This radius is the ONLY light property the bake reads** besides Location.
+   scale). ✅ **This radius is the only light property the RAYTRACE reads** besides Location — but the
+   bake as a whole also reads `LightType`, `bStatic`, `bNoDelete` and `bSpecialLit` in the gather pass,
+   and the ray's `ExtraNodeFlags` depends on the SURFACE's `PF_BrightCorners` (§23).
 2. **Shadow ray (BSP line-of-sight)** ✅
    ```
    hit = Level->Model->LineCheck(FCheckResult, actor=NULL,
@@ -234,32 +236,40 @@ is a runtime effect and is **not** part of this static bake. 📖
 
 ---
 
-## 6. Lumel → world position (for the ray) — mechanism + residual
+## 6. Lumel → world position (for the ray) — BOTH RESIDUALS CLOSED (✅ 2026-08-27)
 
-The lumel grid lives in the surface's texture frame. Per the raytrace and grid code the
-ingredients are: the surface plane basis `TextureU`, `TextureV`, `Normal` (world vectors,
-un-normalised, from `Vectors[]`), the base point `Base = Points[pBase]`, the texture-space
-origin `Pan=(Umin−0.125, Vmin−0.125)`, and per-lumel spacing `UScale`/`VScale`. Lumel
-`(u,v)` maps to texture coords `texU = Pan.X + u·UScale`, `texV = Pan.Y + v·VScale`, and its
-world position solves `P·TextureU = texU`, `P·TextureV = texV`, `P·Normal = Base·Normal`
-(a 3×3 inverse of `[TextureU; TextureV; Normal]`), then `P += Normal×4` bias. 🔬
+The lumel grid lives in the surface's texture frame. The ingredients are: the surface plane basis
+`TextureU`, `TextureV`, `Normal` (world vectors, un-normalised, from `Vectors[]`), the base point
+`Base = Points[pBase]`, the texture-space origin `Pan=(Umin−0.125, Vmin−0.125)`, and per-lumel
+spacing `UScale`/`VScale`.
 
-**Residual — two DISTINCT items with different blast radius (don't conflate them):**
-1. **Sub-lumel sample offset** (corner `u`, centre `u+0.5`, or the 2×2 supersample implied by
-   the `0.25` constant at `0x100dcb00`). Affects **only where inside a lumel** the ray is cast
-   → shadow-edge antialiasing. Genuinely cosmetic; a `u+0.5` centre-sample approximation is
-   fine to ship.
-2. **The inverse-basis assembly** (the exact `[TextureU; TextureV; Normal]` 3×3 inverse that
-   turns `(texU,texV)` back into a world point). This is **NOT AA-only** — a wrong basis shifts
-   **every** lumel's world position systematically, corrupting shadows across the whole surface
-   (and every ray origin). It must be **validated against one real baked surface before any
-   shadow output is trusted** — it is the one lighting item that can be silently, broadly wrong.
-**To close both:** finish disassembling the grid-position loop at `Editor 0x100a5220–0x100a57ff`
-(it already shows `divsd` by `(USize−1)`/`(VSize−1)` and `×0.25`), AND diff one baked surface's
-bits against a Python trace for a hand-built room (the differential check gates item 2). Neither
-blocks *load* — lighting is regenerable build output, never hashed — but item 2 blocks
-"shadows are correct", so it is an N-4 correctness gate, not a cosmetic nicety. ✅ (non-block
-for load; item 2 IS a correctness gate for shadows — see master spec §6)
+This section previously listed two open residuals. Both are now settled from the instructions
+(`Editor 0x100a54f0`–`0x100a5a42`).
+
+**1. Sub-lumel sample offset — ONE ray per lumel, at the grid CORNER.** ✅ There is no centre offset
+and no supersample. The `0.25` constant is not an AA sample spacing: it is the `PF_BrightCorners` grid
+inset (§23).
+
+**2. The inverse-basis assembly — the earlier reading was RIGHT.** ✅ The editor builds
+`FCoords(0, TextureU, TextureV, Normal).Inverse().Transpose()` (`FCoords::Inverse` = `core 0x509c0`,
+`Transpose` = `core 0x2ddd0`) and reads off `XAxis`/`YAxis`, which unwinds to the adjugate inverse:
+with `det = TextureU · (TextureV × Normal)`, `u_dir = (TextureV × Normal)/det` and
+`v_dir = (Normal × TextureU)/det`, so `u_dir · TextureU = 1` and `u_dir · TextureV = u_dir · Normal =
+0`. The `Vectors[]` entries are used verbatim, with no re-normalisation (`0x100a5107`–`0x100a5174`).
+
+**One refinement that DOES matter for byte identity:** the editor does not solve for each lumel. It
+builds the grid origin once per light —
+`origin = Base + Normal×4 + u_dir·Pan.X + v_dir·Pan.Y` (`0x100a5610`), with the `Normal×4` self-shadow
+bias applied ONCE to that origin rather than per lumel (`0x100a54f0`) — then walks the grid by
+repeated f32 ADDITION of `u_dir·UScale` and `v_dir·VScale` (`FVector::operator+=`, `0x100a5a35`). The
+f32 rounding of an accumulation differs from that of a fresh multiply, so a per-lumel solve cannot be
+bit-identical however correct its algebra.
+
+**Still open, and now the largest single source of shadow-bit disagreement** (466 of ~4M lumel bits on
+`01_NYC_UNATCOHQ`, 487-vs-24 shadow-edge versus solid-blob, i.e. rounding at shadow boundaries rather
+than a rule): `lumel_axes` computes `det = tu·(tv×normal)` while `FCoords::Inverse` expands the same
+determinant in a different term grouping — algebraically equal, not f32-identical, and every
+accumulated lumel position inherits the ulp.
 
 ---
 
@@ -1082,16 +1092,37 @@ are now REFUTED (harness `perm_region_decode.py`, decode confirmed 2026-07-18):
   under-includes leaves lit around corners.
 
 So region 1 is a genuine **shadowed volumetric flood** (radius reach **AND** BSP line-of-sight through
-portals) — UnrealEd's `shadowIlluminateBsp` per-leaf gather — and reproducing it requires porting that
-gather, **including the editor's exact within-run ORDER**, which is the gather-DISCOVERY order, not
-sorted: leaf0 = export refs `[2,1,3,6,7,11,12]` = participating-light indices `[44,43,42,39,19,13,12]`
-(so the byte-level order is gather-order *in export-ref space*, coupling this to the export-renumber
-blocker (C1)). Decode facts pinned by `perm_region_decode.py`: region 1 = `Lights[0,7455)`, region 2 =
+portals) and reproducing it requires porting that flood, **including the editor's exact within-run
+ORDER**.
+
+> ⚠️ **CORRECTED 2026-08-27, twice.** This paragraph attributed region 1 to
+> `shadowIlluminateBsp` and called its within-run order "the gather-DISCOVERY order, not sorted".
+> Both are wrong.
+>
+> **It is not the lighting bake's output at all.** `shadowIlluminateBsp` empties only
+> `Model->LightMap` (`0x100a5eb3`) and `Model->LightBits` (`0x100a5ee0`) and never touches
+> `Model->Lights` or `Model->Leaves` for the level model. Region 1 is produced by `csgRebuild`
+> (`0x1004a650`) → `TestVisibility` (`0x100aa940`) → `FEditorVisibility::Portalize` (`0x100aa370`),
+> the ZONING build; it survives into a `LIGHT APPLY` output only because the bake APPENDS after it.
+> So the port belongs with `zones.rs`, not `light.rs`. (Consequence worth knowing: because the bake
+> never empties `Model->Lights`, a second `LIGHT APPLY` with no rebuild in between appends a THIRD
+> region and orphans the previous region 2 — any golden must come from a full rebuild.)
+>
+> **The order is exactly DESCENDING `Level->Actors` index.** `Portalize` loops lights outer in
+> ascending `Level->Actors` order, completes one light's whole flood before starting the next,
+> dedupes per (leaf, light), and PREPENDS each mark (`0x100a6f2c`) — so flattening emits each leaf's
+> run reversed. The observed leaf-0 run `[44,43,42,39,19,13,12]` is that rule, not an arbitrary
+> trace, and it does not couple to the export-renumber blocker (C1) as claimed.
+>
+> Full decoded algorithm, plus `iVolumetric`/`iVisibilityMask` and the two things to verify before
+> porting: board item `port-the-per-leaf-permeating-light-lists-model`.
+
+Decode facts pinned by `perm_region_decode.py`: region 1 = `Lights[0,7455)`, region 2 =
 `[7455,11392)` (clean split); 366/384 leaves carry a run (18 have `iPermeating=-1`); run lengths 2–39
 (mode ~11); the ref→light-index map is 0-unmatched (the set is expressible in native's index space).
-This is a sizeable **separate port** (tracked on the board), NOT a `light.rs` one-liner, and — see (C) —
-cannot reach raw-byte identity on its own until export renumbering (C1) also lands. **Deferred**: a
-wrong SET is worse than the honest `iPermeating=0` stub, so it stays stubbed until the gather is ported.
+Re-measured on `01_NYC_UNATCOHQ` 2026-08-27: region 1 = `Lights[0,5405)`, 761 of 776 leaves carrying a
+run, 4644 run entries. **Deferred**: a wrong SET is worse than the honest `iPermeating=0` stub, so it
+stays stubbed until the flood is ported.
 
 ### (B) The `LightMap`/`LightBits` gap — FIXED the `PF_Portal` over-cull ✅
 
@@ -1206,7 +1237,7 @@ So walk order is the correct, editor-verified layout and is **required** for byt
 RAW positional match dips slightly (~43.6%→~42%) purely because the `LightBits` cascade shifts everything
 after it — an artifact of the length-difference content gap, not of the order fix.
 
-## 22. LightMap grid-sizing rule PINNED byte-exact — `ceil(extent/scale)` + subtract-base-first extent (✅ FIXED, 2026-07-18, `light.rs`)
+## 22. LightMap grid-sizing rule PINNED byte-exact — `ceil((extent−0.25)/scale)` + subtract-base-first extent (✅ FIXED, 2026-07-18; rule corrected 2026-08-27, `light.rs`)
 
 §21 (E) left the residual `LightMap`/`LightBits` gap as "per-record CONTENT (grid size ±1, `u/v_scale`
 FP)". This section closes the **integer** part of that gap completely and the float part down to a small
@@ -1218,13 +1249,39 @@ records by walk order (record *k* = same lit surf on both sides, §21 (E)) and, 
 each of the editor's 484 stored records from that record's **own** surf geometry. Three findings, each
 484/484 exact against the golden:
 
-1. **Grid dim = `Clamp(ceil(extent / lumel_scale), 2, 256)`**, NOT the old
-   `trunc((extent−0.25)/scale − 0.5) + 1`. Decisive teeth: an **exact multiple** of the lumel scale
-   takes NO extra texel — extent 64 at scale 32 → `ceil(2.0)=2` (old form gave 2, but a non-multiple
-   like extent 80 → `ceil(2.5)=3` where the old form gave 2). Extent 1024 at scale 32 → 32, not 33. The
-   old truncation under-counted every non-multiple by exactly 1, which is why §21 measured native "1
-   smaller on 75 (u) / 106 (v)" — **134 of 484 records**. With `ceil`: `UClamp` 484/484, `VClamp`
-   484/484.
+1. **Grid dim = `Clamp(ceil((extent − 0.25) / lumel_scale), 2, 256)`.** ✅ The `0.25` is the
+   half-lumel pad at each end (`Pan = min − 0.125`) taken back out before the division.
+
+   > ⚠️ **CORRECTED 2026-08-27.** This finding originally read `ceil(extent / lumel_scale)`, fitted
+   > 484/484 on `Test_Castle.dx`. That form is wrong on real level content. Refitted against the
+   > editor's own `LIGHT APPLY` output on `01_NYC_UNATCOHQ` (3434 lit records, 6868 axes;
+   > `spikes/2026-08-27-native-light-apply-parity/harness/grid_formula_fit.py`), predicting each
+   > record's stored `UClamp`/`VClamp` from that record's own surf extent:
+   >
+   > | candidate                                | axes exact |
+   > |------------------------------------------|---
+   > | `ceil((extent − 0.25)/scale)`            | **6868 / 6868** |
+   > | `ceil(extent / scale)`                   | 6605 / 6868 |
+   > | `round(extent / scale)`                  | 6379 / 6868 |
+   > | `trunc((extent − 0.25)/scale − 0.5) + 1` | 6116 / 6868 |
+   >
+   > The two leading forms differ only where the extent sits within 0.25 **above** an exact multiple
+   > of the lumel scale — e.g. surf 7, extent 160.001831 at scale 32: `ceil(5.00006) = 6`, editor
+   > stores 5. `Test_Castle`'s axis-aligned geometry never produces such an extent, which is why the
+   > earlier fit scored 484/484 there and only broke on a real level.
+
+   Confirmed instruction-by-instruction at `Editor 0x100a5bf0`: `size = rint((extent − 0.25)/scale
+   − 0.5) + 1`, `cvtsd2si` at round-to-nearest, which is the same `ceil` for any extent that is not
+   bit-exactly `0.25 + n·scale`. ✅ Every boundary the earlier form cites still holds: extent 64 at
+   scale 32 → 2, 1024 at 32 → 32, 80 at 32 → 3, 16 at 32 → clamped to 2.
+
+   Two further corrections from the same decode:
+
+   - **The upper bound is not a clamp.** `size > 256` DOUBLES the lumel scale and recomputes the axis
+     (`0x100a5dba`; the V axis retries independently at `0x100a5dac`), so an oversized surface gets a
+     different `UScale` too, not a truncated grid. ✅
+   - **Only the extent subtraction is f32.** Everything after it is f64 down to one narrowing store,
+     and the `0.25`/`0.5`/`0.125` constants are f64 in `.rdata` (`movsd`), not f32. ✅
 
 2. **Texel scale = `(extent + 0.25) / (size − 1)`**, NOT `extent / (size − 1)`. The grid spans
    `[min − 0.125, max + 0.125]` (a half-lumel pad each side, matching `Pan = min − 0.125`), so the
@@ -1240,10 +1297,11 @@ each of the editor's 484 stored records from that record's **own** surf geometry
    angled-**V** surfaces diverged while **U** was already clean. `Vec3::dot` accumulates `x+y+z`
    left-to-right in f32, matching the engine's `FVector operator|`.
 
-**Native code (`light.rs`).** `axis_grid` now returns `size = (extent/scale).ceil().clamp(2.0,256.0)`
-and `uscale = (extent + 0.25)/(size − 1)`; `bake_surf`'s extent loop computes `let d = v.sub(&base);
-d.dot(&tu) / d.dot(&tv)`. Regression `axis_grid_matches_editor_ceil_rule` pins the ceil rule + scale +
-the exact-multiple boundary against a red test.
+**Native code (`light.rs`).** `axis_grid` returns `size = ceil((extent − 0.25)/scale)` clamped up to a
+minimum of 2, doubling `scale` and recomputing while `size > 256`, and `uscale = (extent + 0.25)/(size
+− 1)` in f64; `bake_surf`'s extent loop computes `let d = v.sub(&base); d.dot(&tu) / d.dot(&tv)`.
+Regressions `axis_grid_matches_editor_ceil_rule` (the rule, the scale, the exact-multiple boundary and
+the two UNATCO teeth cases) and `a_grid_over_256_lumels_doubles_the_lumel_scale`.
 
 **RAW positional result (native vs editor golden, `ground_truth_bytediff.py`), per-section over min length:**
 
@@ -1266,3 +1324,81 @@ the residual `LightBits` gap is no longer grid dims — it is the shadow **conte
 each surf (the `Lights` region native 3960 vs editor 11392 reflects the per-leaf permeating-light region
 native still omits, §21 (A)) and the per-lumel LOS/backface bits (§17, ~74% aligned). Those are separate,
 larger levers (portalization + per-leaf light lists), not the grid descriptor this section closed.
+
+## 23. `PF_BrightCorners` — the flag this doc never mentioned, and 84% of the last shadow-bit gap (✅ 2026-08-27)
+
+`PF_BrightCorners = 0x00080000`. ✅ Named from `unrealed.exe`'s own surface-flags dialog table
+(`.data 0x4cd8f8`, beside control `0x42a`, captioned "Bright Corners"); the same table gives
+`PF_DirtyShadows = 0x00040000`.
+
+It changes the bake in two ways and the STORED descriptor in none:
+
+1. **The SAMPLE grid is inset.** `origin += 0.25·(u_dir + v_dir)` and the step becomes
+   `(f32)((f64)UScale − 0.5/(USize−1))` (`Editor 0x100a56ff`–`0x100a5818`), so the whole grid pulls
+   0.5 off the surface's edges. The SERIALIZED `UScale`/`VScale` keep the un-shrunk values. ✅
+2. **The shadow ray's `ExtraNodeFlags` goes from `0x04` to `0x14`** (`0x100a597a`, a `cmove` on
+   `surf.PolyFlags & 0x80000`). Bit `0x10` does NOT exempt a node from being solid. Inside the walker
+   (`Engine 0x101ae190`) a solid terminal is a hit only once some EMPTY terminal has been reached — a
+   per-call flag at `0x102dbbb4`, reset at entry (`0x101ae54a`), set only at an empty terminal
+   (`0x101ae4ac`) — and since the walk takes the near half of every crossing first, "still unset"
+   means the ray STARTED in solid and has not left it. With `0x10` set it reports CLEAR instead
+   (`0x101ae451`–`0x101ae45b`). ✅ It does not set the flag itself, so a ray beginning inside a RUN of
+   solid cells is suppressed at each of them; only a blocker met after open space blocks.
+
+Why it matters so much: a lumel grid is the surface's texture-space BOUNDING BOX, so on a
+non-rectangular or corner-adjacent face many lumels sit inside neighbouring solid brushes. Measured on
+the `01_NYC_UNATCOHQ` oracle, surfaces WITHOUT the flag were already 99.2% plane-byte-identical while
+surfaces WITH it were 33.6%; honouring both mechanisms took the whole map from 96.2% to **99.0%** of
+per-(surface, light) bit-planes byte-identical. ✅
+
+`light.rs` regressions: `bright_corners_changes_the_walk_but_not_the_stored_descriptor`,
+`linecheck.rs`'s `bright_corners_reports_clear_when_the_ray_starts_in_solid` and
+`bright_corners_suppresses_a_whole_leading_run_of_solid_cells`.
+
+### Three §5 details the same decode pinned
+
+- **The shadow ray** is `UModel::LineCheck` (`Model` vtable `+0x58` → `Engine 0x101ae4c0`) with
+  `Owner = NULL`, `End = light.Location`, `Start = lumel`, `Extent = (0,0,0)`; any hit blocks (there is
+  no `Time` threshold). ✅
+- **The radius test** is a strict `d2 < R2` in f32, with `R = (LightRadius+1)×25` hoisted per light. ✅
+- **An ordinary shadow ray already passes `ExtraNodeFlags = 0x04`**, so a node the build marked
+  `NF_NotVisBlocking` never occludes it. ✅ Worth stating plainly because treating those nodes as
+  occluders cost 54157 lumels on UNATCO — the single largest error found in the bake.
+
+### The row's trailing padding bits
+
+A row is `ceil(USize/8)` bytes and the game masks to `USize` when it reads, so the bits above `USize`
+cannot affect play — but they are on disk. The editor's packer sets them from the LAST `LineCheck`
+result it holds (`0x100a5a4c`–`0x100a5a5d`): all ones when the row's last real lumel was lit, else
+zero. ✅ That is why 40% of the bits above `USize` are set in its own UNATCO output. It is **not** a
+re-trace of the extrapolated lumels — an earlier guess that it was scored worse, and the instructions
+read the stored result rather than calling `LineCheck` again. Zero-filling them left 2026 of 3345
+records byte-different for no other reason. `light.rs::row_padding`.
+
+### Where the bake stands after this section
+
+Against the editor's own `LIGHT APPLY` of the same trunk on `01_NYC_UNATCOHQ` — the oracle built
+`MAP NEW` → `EDIT PASTE` → `MAP REBUILD` → `LIGHT APPLY` → `MAP SAVE`, the only pipeline whose tree the
+native CSG core reproduces:
+
+| measure                                           | native vs editor |
+|---------------------------------------------------|---
+| surfs / nodes / leaves / vectors                  | 3616 / 6314 / 762 / 599, equal |
+| `LightMap` records, and their array order         | 3345 / 3345, identical order |
+| surfs `iLightMap = -1`                            | 271 / 271 |
+| grid dims (`UClamp`/`VClamp`)                     | 3345 / 3345 exact |
+| records byte-identical                            | 2518 / 3345 |
+| per-(surface, light) shadow planes byte-identical | 8162 / 8246 = 99.0% |
+| lumel bits equal                                  | 99.988% of 3,978,275 |
+| light runs identical incl. order                  | 2977 / 3345 |
+| light actors listed on a surface                  | 189 / 189, none either-only |
+
+Three gaps remain, none of them in `light.rs`, each with its own board item: the per-surface light RUN
+(the editor picks each light's surface set by rasterizing six 1024×1024 cube-map faces —
+`port-urender-getvisiblesurfs-so-each-light-gets`), the per-leaf permeating region of `Model.Lights`
+(`port-the-per-leaf-permeating-light-lists-model`), and `Pan`/`UScale`/`VScale` on 160 records that
+follow the upstream `Points` f32 residual (`unatco-verts-points-residual-after-the-zone`). Byte
+identity on any level other than UNATCO is additionally gated on
+`native-bsp-matches-the-editor-on-unatco-but-not`.
+
+Harness: `spikes/2026-08-27-native-light-apply-parity/harness/`.

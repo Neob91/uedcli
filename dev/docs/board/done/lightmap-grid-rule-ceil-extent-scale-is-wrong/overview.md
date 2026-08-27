@@ -1,7 +1,7 @@
 +++
-priority = "p2"
+priority = "p3"
 kind = "docs"
-summary = "spikes/2026-07-15-native-materialize/sections/20-lighting-bake.md §22 states the editor's lumel grid dim is ceil(extent/lumel_scale), fitted 484/484 on Test_Castle. On UNATCO that form misses 263 of 6868 axes; ceil((extent-0.25)/lumel_scale) fits 6868/6868 and still satisfies every boundary §22 lists. The doc needs correcting (owner approval required)."
+summary = "DONE 2026-08-27. The owner approved all four corrections and both stale statements; §22's grid rule, §21 (A)'s within-run order, §6's two residuals and a new §23 on PF_BrightCorners are applied, along with architecture.md's removed-light.rs claim and direction/materialize.md's 'has no lighting yet'."
 +++
 
 # Lightmap grid rule `ceil(extent/scale)` is wrong on real content

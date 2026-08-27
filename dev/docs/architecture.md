@@ -1601,11 +1601,12 @@ Rationale, rejected alternatives and the outstanding verification gap:
 ## Native CSG core (`uedcli/native/`, `uedcli-native/`)
 The in-process Rust CSG core that carves the T3D trunk into a BSP model **with no editor, no wine,
 no container**. It backs `level preview --native` (`build_geometry_bspcsg` →
-`serialize_model` → the software rasterizer) and `brush intersect`/`deintersect`
-(`intersect_brushset`). The offline native *materialize* build that once sat on top of this core
-(`run_materialize_native`, `assemble.py`, `level_write.py`, `pkgref.py`, Rust `light.rs`/`paths.rs`)
-was **removed 2026-08-23**: it had no CLI caller and never reached the CSG solidity parity below; the
-editor-driven `apply.run_materialize` is the sole `level materialize`. Two artifacts remain:
+`serialize_model` → the software rasterizer), `brush intersect`/`deintersect`
+(`intersect_brushset`), and — behind the temporary `UEDCLI_NATIVE_MATERIALIZE=1` gate — the
+**editor-free `level materialize`** (`apply._materialize_native`), which carves the world BSP and
+bakes the lighting in process and writes the map itself. Rust `light.rs`/`linecheck.rs` and the
+Python glue (`assemble.py`, `level_write.py`, `pkgref.py`) were removed 2026-08-23 as uncalled and
+restored when that path came back; only `paths.rs` (the reachspec build) stays unported. Below:
 
 - **Python glue `uedcli/native/`**: the `.dx` codec — `codec.py` (FCompactIndex + primitives +
   FString), `umodel.py` (UModel body parse + write-from-arrays — the Python **dev oracle**, shared with
