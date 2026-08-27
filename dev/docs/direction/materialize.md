@@ -6,15 +6,19 @@ Editing produces the git-tracked T3D trunk; **`level materialize`** is the pure 
 the current trunk into the `.dx`/`.unr` **map file**. It is **map-file output only** — the T3D tree
 is the source, reached through git, never a build target.
 
-- **The build assembles the map natively, then lets the editor build geometry and lighting.**
-  `native.unbuilt.assemble_unbuilt` writes an **unbuilt** `.dx`/`.unr` directly — every actor (movers
-  included) in trunk order, with real brush polys, typed props (structs, arrays, mover keyframes,
-  `PrePivot`), and each mover's key-0 base pose in `BasePos`/`BaseRot`. The editor `MAP LOAD`s that
-  package, `MAP REBUILD`s it (building each mover's private model and the world CSG), then `MAP SAVE`s
-  the built map. Writing the package ourselves and loading it avoids the editor's add path (`MAP NEW`
-  + `EDIT PASTE`/`IMPORTADD`), which GPFs on complex retail geometry and cannot express every authored
-  value; the built `Actors` array is faithful, with no append reorder. On failure nothing is written —
-  the build exits 2 and the existing `--out` file is left untouched.
+- **The build runs entirely inside uedcli, with no UnrealEd editor involved at all — geometry and
+  lighting both authored natively.** That is the goal; it is not yet built. Today `level materialize`
+  still needs a live editor: `native.unbuilt.assemble_unbuilt` writes every actor (movers included) in
+  trunk order, with real brush polys and every typed prop (structs, arrays, mover keyframes,
+  `PrePivot`), as an **unbuilt** `.dx`/`.unr`; the editor `MAP LOAD`s it, `MAP REBUILD`s the world CSG
+  and each mover's private model, `LIGHT APPLY`s the lighting, then `MAP SAVE`s the result. Writing
+  the package ourselves and loading it avoids the editor's add path (`MAP NEW` + `EDIT
+  PASTE`/`IMPORTADD`), which GPFs on complex retail geometry and cannot express every authored value;
+  the built `Actors` array is faithful, with no append reorder. A geometry-only native path (behind the
+  temporary `UEDCLI_NATIVE_MATERIALIZE=1` test gate) already reaches exact BSP parity with the
+  editor's own build; it has no lighting yet and cannot build a mover's private model, so it is not
+  yet the default. On failure nothing is written — the build exits 2 and the existing `--out` file is
+  left untouched.
 - **The destination is named explicitly (`--out`), and an existing file is never silently clobbered**
   — materialize refuses and exits 2 naming the file. The opt-in **`--overwrite`** allows it, because
   rebuilding to the same path is the inner loop ([`safety.md`](safety.md)).
