@@ -1,7 +1,7 @@
 //! `FPoly` — the working polygon of CSG (§10.2-3).  The N-1 port: `CalcNormal`, `Fix`,
 //! `RemoveColinears`, `Finalize`, `Reverse`, `Transform`, and `SplitWithPlane` (classify +
 //! cut) with the exact engine thresholds.  Beyond geometry, an `FPoly` carries the
-//! **surf-link metadata** (`actor`/`texture`/`i_link`/`i_brush_poly`/`i_zone`) that flows
+//! **surf-link metadata** (`actor`/`texture`/`i_link`/`i_brush_poly`/`pan`) that flows
 //! through the CSG leaf-filter into `bspAddNode` (§6.4) — a fragment's surf identity.
 //!
 //! **FP fidelity (spike 41):** native `f32`, no `mul_add`/FMA; dot products reduce
@@ -79,7 +79,9 @@ pub struct FPoly {
     pub texture: i32,
     pub i_link: i32,
     pub i_brush_poly: i32,
-    pub i_zone: [u16; 2],
+    /// Authored texture pan (T3D `Pan U=/V=`), copied verbatim into the surf's `PanU`/`PanV`.  The
+    /// transform does not touch it and every split fragment inherits it (`empty_copy`).
+    pub pan: [i32; 2],
 }
 
 impl FPoly {
@@ -95,7 +97,7 @@ impl FPoly {
             texture: 0,
             i_link: -1,
             i_brush_poly: -1,
-            i_zone: [0, 0],
+            pan: [0, 0],
         }
     }
 
@@ -436,7 +438,7 @@ impl FPoly {
             texture: self.texture,
             i_link: self.i_link,
             i_brush_poly: self.i_brush_poly,
-            i_zone: self.i_zone,
+            pan: self.pan,
         }
     }
 }

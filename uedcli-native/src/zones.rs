@@ -993,15 +993,12 @@ pub fn assign_leaves_and_zones(model: &mut Model) -> Vec<usize> {
 
     build_zone_masks(model);
 
-    // FBspSurf.iZone stays (0,0) — the editor's `TestVisibility` writes NOTHING into any FBspSurf
-    // (re-raw-zones/passD-assignzones-7400.md §3), and a real editor map (`Test_Castle.dx`) ships
-    // ALL 485 surfs at iZone (0,0).  The GAME recomputes a surface's zone at load from the node
-    // tree; a NON-ZERO stored value is read as "already resolved" and trusted stale, mis-zoning the
-    // surface (observed as the water-pit/backdrop going black in-game).  So emit the editor's bytes:
-    // leave every surf iZone (0,0).
-    for s in model.surfs.iter_mut() {
-        s.i_zone = [0, 0];
-    }
+    // The zone pass writes NOTHING into any FBspSurf: the editor's `TestVisibility` doesn't
+    // (re-raw-zones/passD-assignzones-7400.md §3), and the two u16 slots it used to stamp a zone pair
+    // into are really `PanU`/`PanV`, the authored texture pan (evidence on `model::BspSurf::pan`).
+    // Zeroing them erased the pan from every surface, so that loop is gone.  `Test_Castle.dx` ships
+    // all-zero there, which is what put the old reading in — but that map is not in-repo to re-check,
+    // and an all-zero pan is exactly what a map with no `Pan U=/V=` on any poly would store.
 
     // Pass F: Zones array + Connectivity (self-bit; OR across zone portals).
     let mut zones: Vec<Zone> = (0..num_zones)

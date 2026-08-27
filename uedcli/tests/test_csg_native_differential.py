@@ -63,7 +63,8 @@ def _actor_to_brush(actor):
         _IDENT, [0.0, 0.0, 0.0], [1.0, 1.0, 1.0], poly_flags_flat,
         [],           # per-poly tex_u axes: empty -> Rust default basis (this golden pins surf SETS,
                       # not the Vectors pool, so authored axes are irrelevant here)
-        ([], [], []),  # (tex_v, origins, vec_xform) triple, all empty -> default basis + base=verts[0]
+        ([], [], [], []),  # (tex_v, origins, vec_xform, pans) — all empty: default basis,
+                           # base=verts[0], zero pan
     )
 
 

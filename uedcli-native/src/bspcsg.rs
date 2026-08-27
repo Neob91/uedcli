@@ -176,7 +176,7 @@ fn alloc_surf(model: &mut Model, edpoly: &FPoly) -> i32 {
         v_texture_v,
         i_actor: edpoly.actor,
         i_brush_poly: edpoly.i_brush_poly,
-        i_zone: edpoly.i_zone,
+        pan: edpoly.pan,
         i_light_map: -1,
     });
     (model.surfs.len() - 1) as i32
@@ -857,6 +857,9 @@ fn bsp_node_to_fpoly(model: &Model, ni: usize) -> Option<FPoly> {
     p.actor = s.i_actor;
     p.texture = s.texture_ref;
     p.i_brush_poly = s.i_brush_poly;
+    // The pan is part of the surf's texture state, and bspRepartition re-allocs every surf from
+    // these reconstructed polys — dropping it here erases the authored pan from the whole build.
+    p.pan = s.pan;
     p.i_link = n.i_surf;
     p.remove_colinears();
     if p.verts.len() < 3 {

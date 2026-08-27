@@ -486,7 +486,7 @@ fn alloc_surf(model: &mut Model, edpoly: &FPoly) -> i32 {
         v_texture_v,
         i_actor: edpoly.actor,
         i_brush_poly: edpoly.i_brush_poly,
-        i_zone: edpoly.i_zone,
+        pan: edpoly.pan,
         i_light_map: -1,
     });
     (model.surfs.len() - 1) as i32
@@ -990,7 +990,7 @@ pub fn carved_box(size: f32, height: f32) -> Model {
             v_texture_v: v_idx,
             i_actor: 0,
             i_brush_poly: fi as i32,
-            i_zone: [0, 0],
+            pan: [0, 0],
             i_light_map: -1,
         });
         let vp = verts.len() as i32;
@@ -1455,7 +1455,7 @@ mod tests {
             v_texture_v: 0,
             i_actor: 0,
             i_brush_poly: 0,
-            i_zone: [0, 0],
+            pan: [0, 0],
             i_light_map: -1,
         }];
         model.vectors = vec![Vec3::new(1.0, 0.0, 0.0)];

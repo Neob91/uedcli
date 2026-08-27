@@ -105,8 +105,10 @@ fn put_surf(out: &mut Vec<u8>, s: &BspSurf) {
     // pointer -> the AddLight AV (Render.dll 0x10b08b4a).  Keep byte-identical to umodel._enc_surf.
     put_ci(out, s.i_light_map);
     put_ci(out, s.i_brush_poly);
-    put_u16(out, s.i_zone[0]);
-    put_u16(out, s.i_zone[1]);
+    // PanU/PanV (SWORD each): the authored texture pan, masked into the two-byte slot the way a
+    // negative pan ships in every retail map (`Pan V=-152` -> 0xff68).
+    put_u16(out, (s.pan[0] & 0xFFFF) as u16);
+    put_u16(out, (s.pan[1] & 0xFFFF) as u16);
     put_ci(out, s.i_actor);
 }
 

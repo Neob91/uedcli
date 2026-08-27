@@ -106,7 +106,12 @@ pub struct BspSurf {
     pub v_texture_v: i32,
     pub i_actor: i32,
     pub i_brush_poly: i32,
-    pub i_zone: [u16; 2],
+    /// `PanU`/`PanV` — the surface's texture pan, two SWORDs on disk.  NOT the zone pair this field
+    /// was read as until 2026-08-27: every one of retail `01_NYC_UNATCOHQ.dx`'s 3570 world surfs
+    /// holds exactly the authored `Pan U=/V=` of the brush polygon it came from (408 non-zero, 0
+    /// mismatches), and 8189 of 46280 surfs across 12 retail maps are non-zero with values spanning
+    /// the full u16 range — which no zone index (≤64 per level) could be.
+    pub pan: [i32; 2],
     pub i_light_map: i32,
 }
 

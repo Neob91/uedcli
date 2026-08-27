@@ -74,8 +74,11 @@ impl Built {
 /// surf `pBase`, so passing it is load-bearing for `Points`/`pBase` byte-parity: without it the
 /// core defaults `base` to `verts[0]` (a CORNER), welding pBase onto a ring vertex instead of
 /// emitting the editor's distinct orphan origin point.  Empty list -> keep the `verts[0]` default.
-/// It rides bundled with `tex_v_flat` in a nested `(tex_v_flat, origins_flat)` pair because PyO3's
-/// `FromPyObject` for tuples tops out at 12 fields; the pair keeps the marshalled arity at 12.
+/// `pans_flat` = the PER-POLY authored texture pan (T3D `Pan U=/V=`), two ints per poly; the surf
+/// stores it as `PanU`/`PanV` and a dropped pan slides the texture across the surface.  Empty list
+/// -> every poly's pan is 0.
+/// It rides bundled with `tex_v_flat` in a nested tuple because PyO3's `FromPyObject` for tuples
+/// tops out at 12 fields; the bundle keeps the marshalled arity at 12.
 /// `oper`: 1=Add, 2=Subtract, 3=Intersect, 4=Deintersect.
 type BrushTuple = (
     Vec<f32>,
@@ -89,7 +92,7 @@ type BrushTuple = (
     [f32; 3],
     Vec<u32>,
     Vec<f32>,
-    (Vec<f32>, Vec<f32>, Vec<f32>),
+    (Vec<f32>, Vec<f32>, Vec<f32>, Vec<i32>),
 );
 
 fn oper_from_i32(o: i32) -> Result<csg::CsgOper, model::BuildError> {
@@ -117,7 +120,7 @@ fn brush_from_tuple(t: &BrushTuple) -> Result<build::BrushInput, model::BuildErr
         scale,
         poly_flags_flat,
         tex_u_flat,
-        (tex_v_flat, origins_flat, vec_xform_flat),
+        (tex_v_flat, origins_flat, vec_xform_flat, pans_flat),
     ) = t;
     // `vec_xform_flat` = 9 floats (row-major `(L⁻¹)ᵀ`, ABrush::BuildCoords VectorXform) for a SCALED
     // brush, else empty.  When present, `bsp_brush_csg` recomputes each face normal covariantly
@@ -181,6 +184,10 @@ fn brush_from_tuple(t: &BrushTuple) -> Result<build::BrushInput, model::BuildErr
                 origins_flat[pi * 3 + 1],
                 origins_flat[pi * 3 + 2],
             );
+        }
+        // per-poly authored texture pan (T3D Pan U/V) -> the surf's PanU/PanV.
+        if pans_flat.len() >= (pi + 1) * 2 {
+            p.pan = [pans_flat[pi * 2], pans_flat[pi * 2 + 1]];
         }
         polys.push(p);
     }

@@ -66,7 +66,10 @@ class BspSurf:
     v_texture_v: int = 0
     i_actor: int = 0        # owning brush actor ref (0=none)
     i_brush_poly: int = -1
-    i_zone: tuple = (0, 0)
+    # (PanU, PanV) — the surface's authored texture pan, two SWORDs on disk, read raw as unsigned
+    # (a negative pan reads back as 65536+n).  Not a zone pair; the evidence is on the Rust
+    # `model::BspSurf::pan`, the same struct.
+    pan: tuple = (0, 0)
     i_light_map: int = -1   # +0x24 == iLightMap (-1 = unlit)
 
 
@@ -182,7 +185,7 @@ def _enc_node(n: BspNode) -> bytes:
 def _enc_surf(s: BspSurf) -> bytes:
     # FBspSurf on-disk order (VERIFIED vs real maps DXOnly/DX/Entry, 2026-07-16):
     #   Texture, PolyFlags, pBase, vNormal, vTextureU, vTextureV, **iLightMap**, iBrushPoly,
-    #   iZone[0], iZone[1], **iActor**.  iLightMap is the 7th field (right after vTextureV) and
+    #   PanU, PanV, **iActor**.  iLightMap is the 7th field (right after vTextureV) and
     #   the OWNING-BRUSH iActor is the LAST field — NOT the reverse.  Getting these two swapped
     #   made the game read iLightMap from our iActor slot (a large brush ref) → out-of-range
     #   Model.LightMap[] → garbage FLightMapIndex.iLightActors → bad Model.Lights[] pointer →
@@ -197,8 +200,8 @@ def _enc_surf(s: BspSurf) -> bytes:
     out += write_ci(s.v_texture_v)
     out += write_ci(s.i_light_map)      # slot 7: iLightMap (index into Model.LightMap, or -1)
     out += write_ci(s.i_brush_poly)
-    out += enc_u16(s.i_zone[0])
-    out += enc_u16(s.i_zone[1])
+    out += enc_u16(s.pan[0] & 0xFFFF)
+    out += enc_u16(s.pan[1] & 0xFFFF)
     out += write_ci(s.i_actor)          # last: iActor (owning brush actor obj-ref, 0=none)
     return bytes(out)
 
@@ -341,11 +344,11 @@ def _parse_surf(buf, pos):
     v_v, pos = read_ci(buf, pos)
     i_light_map, pos = read_ci(buf, pos)      # slot 7: iLightMap
     i_brush_poly, pos = read_ci(buf, pos)
-    z0, pos = _u16(buf, pos); z1, pos = _u16(buf, pos)
+    pan_u, pos = _u16(buf, pos); pan_v, pos = _u16(buf, pos)
     i_actor, pos = read_ci(buf, pos)          # last: iActor
     return BspSurf(texture_ref=texture_ref, poly_flags=poly_flags, p_base=p_base,
                    v_normal=v_normal, v_texture_u=v_u, v_texture_v=v_v,
-                   i_actor=i_actor, i_brush_poly=i_brush_poly, i_zone=(z0, z1),
+                   i_actor=i_actor, i_brush_poly=i_brush_poly, pan=(pan_u, pan_v),
                    i_light_map=i_light_map), pos
 
 
