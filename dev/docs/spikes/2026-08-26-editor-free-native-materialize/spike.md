@@ -53,9 +53,10 @@ other caller of `assemble_unbuilt` silently produced an unloadable map. It now l
 - **No mover geometry.** Only `MAP REBUILD` builds a mover's private brush model
   (`csgPrepMovingBrush`); UNATCO's 28 `DeusExMover`s ship as actors with polys but no BSP. The build
   warns naming them and continues. Board: `native-geometry-path-leaves-mover-models-unbuilt`.
-- **No mesh actors draw.** The native leaf/zone pass marks ~2× the solid leaf slots the editor does,
-  so ~60 % of point actors `PointRegion`-resolve into solid space and the game's actor lighting
-  faults. Board: `native-bsp-leaf-assignment-marks-2x-the-solid` (p1).
+- **No mesh actors draw** — a consequence of the missing lighting, not of the BSP. Proved by
+  stripping only `Model.LightMap`/`LightBits`/`Lights` out of an editor build
+  (`harness/strip_lighting.py`): it reproduces the symptom and the `FLightManager::SetupForActor`
+  critical exactly. Board: `native-build-has-no-lighting-so-no-mesh-actor` (p1).
 
 Those three are why `UEDCLI_NATIVE_MATERIALIZE=1` is an undocumented env gate rather than a CLI
 flag. Board: `editor-free-native-world-bsp-map-assembly`.

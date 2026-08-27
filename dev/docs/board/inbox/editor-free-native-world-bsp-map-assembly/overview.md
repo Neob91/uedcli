@@ -37,9 +37,9 @@ container. The game client (`DeusEx.exe`) loads and renders it. Spike:
 `UEDCLI_NATIVE_MATERIALIZE=1` is an env var, absent from `--help` and `docs/usage.md` (owner,
 2026-08-26). The maps it produces are incomplete by construction — no lighting, no mover geometry,
 no mesh actors — so it is scaffolding for the native-engine work, not something to offer a user. It
-graduates to a real CLI flag once `native-geometry-path-leaves-mover-models-unbuilt` and
-`native-bsp-leaf-assignment-marks-2x-the-solid` are closed and something bakes lighting offline.
-That flag has not been designed.
+graduates to a real CLI flag once `native-geometry-path-leaves-mover-models-unbuilt` is closed and
+something bakes lighting offline (`native-build-has-no-lighting-so-no-mesh-actor`). That flag has
+not been designed.
 
 ## Measured on UNATCO (1437-actor trunk)
 
@@ -62,7 +62,8 @@ non-`apply` caller of `assemble_unbuilt` silently produced an unloadable map. It
 
 - **No lighting.** Nothing bakes lightmaps offline (the Rust `light.rs` port was deleted with
   `fbccd70`), and the owner ruled the editor out for this too. Surfaces render fullbright.
-- **Mesh actors do not draw** — see `native-bsp-leaf-assignment-marks-2x-the-solid`.
+- **Mesh actors do not draw**, and that is the missing lighting, proved by experiment — see
+  `native-build-has-no-lighting-so-no-mesh-actor`.
 - **Movers ship unbuilt** — see `native-geometry-path-leaves-mover-models-unbuilt`.
 - **What the final interface is.** A `level materialize` flag, a separate verb, or library-only —
   the owner's call, once the three above are closed.

@@ -184,8 +184,10 @@ fn alloc_surf(model: &mut Model, edpoly: &FPoly) -> i32 {
 
 /// `bspAddNode` (`0x34e80`): emit a node (+ on demand a shared surf + pooled verts) for `edpoly`,
 /// linked under `i_parent` per `place`.  Coplanar-chain walk + >16-vert storage split + surf
-/// sharing via `iLink==Surfs.Num`.  Returns the new node index.  Copied from build.rs (unchanged
-/// semantics) so the default path stays byte-identical.
+/// sharing via `iLink==Surfs.Num`.  Returns the new node index.  Started as a copy of `build.rs`'s,
+/// and the two have since diverged: only this one seeds `iZone`/`iLeaf` from the parent
+/// (`inherit_parent_leaf_zone`).  `build.rs`'s path does not need it — its `finalize_leaves_and_bbox`
+/// runs the zone pass LAST, so no node there escapes Pass A/D.
 // ORACLE INSTRUMENTATION (UEDCLI_BSPCSG_TREE_DUMP) — env-gated, default path byte-unchanged.
 // Logs each INCREMENTAL world-tree node add (LOOP-2 leaf_func + FWTB wtb_leaf) to diff native's
 // incremental bspBrushCSG tree against the editor-tree oracle (sections/82 §10.6-§10.8).  `PP`/`pnv`
@@ -279,6 +281,8 @@ fn bsp_add_node(
     node.node_flags = nf;
     model.nodes.push(node);
 
+    inherit_parent_leaf_zone(model, i_parent, i_node, place);
+
     match place {
         NODE_BACK => model.nodes[i_parent as usize].i_back = i_node,
         NODE_FRONT => model.nodes[i_parent as usize].i_front = i_node,
@@ -286,6 +290,49 @@ fn bsp_add_node(
         _ => {}
     }
     i_node
+}
+
+/// `bspAddNode`'s zone/leaf seeding from the PARENT node — the last block of the real function
+/// **[DISASM Editor.dll `0x3524a`–`0x352c7` (root + coplanar) and `0x3535b`–`0x3539c` (front/back,
+/// decoded 2026-08-27); spec §5.1]**.  `FBspNode`: `iZone[2]` bytes at `+0x34/+0x35`, `iLeaf[2]` at
+/// `+0x38/+0x3c`.
+///
+/// ```text
+/// NODE_Root  (3): iLeaf[0] = iLeaf[1] = -1;  iZone[0] = iZone[1] = 0
+/// NODE_Front (1) / NODE_Back (0):
+///                 iLeaf[0] = iLeaf[1] = parent.iLeaf[NodePlace]
+///                 iZone[0] = iZone[1] = parent.iZone[NodePlace]
+/// NODE_Plane (2): k = (newPlane | parentPlane) < 0     // FPlane::operator|, Core.dll 0x17d60:
+///                 iLeaf[0] = parent.iLeaf[k];  iLeaf[1] = parent.iLeaf[1-k]   // a FOUR-component
+///                 iZone[0] = parent.iZone[k];  iZone[1] = parent.iZone[1-k]   // dot, W included
+/// ```
+///
+/// **Why it is load-bearing.** `csgRebuild` runs `TestVisibility` (the leaf/zone pass) BETWEEN the
+/// world repartition and the detail-brush loop, so the ~3300 nodes the detail loop appends are never
+/// visited by Pass A/D.  Their zones and leaves come from here and nowhere else.  Without this, every
+/// detail node reads `iLeaf = (-1, -1)` / `iZone = (0, 0)` — solid, zone 0 — and `UModel::PointRegion`,
+/// which descends to the first childless side and reads that slot, resolves any actor below a detail
+/// node into solid space: 1027 of UNATCO's 1437 actors, against the editor build's 126.
+fn inherit_parent_leaf_zone(model: &mut Model, i_parent: i32, i_node: i32, place: i32) {
+    if place == NODE_ROOT {
+        return; // BspNode::leaf already seeds iLeaf = -1 / iZone = 0; it is the only parentless case.
+    }
+    let (p_plane, p_leaf, p_zone) = {
+        let p = &model.nodes[i_parent as usize];
+        (p.plane, p.i_leaf, p.i_zone)
+    };
+    let (leaf, zone) = if place == NODE_PLANE {
+        let n = model.nodes[i_node as usize].plane;
+        let dot = n.x * p_plane.x + n.y * p_plane.y + n.z * p_plane.z + n.w * p_plane.w;
+        let k = usize::from(dot < 0.0);
+        ([p_leaf[k], p_leaf[1 - k]], [p_zone[k], p_zone[1 - k]])
+    } else {
+        let s = place as usize; // NODE_Back = 0, NODE_Front = 1 — the same indices as iLeaf/iZone.
+        ([p_leaf[s]; 2], [p_zone[s]; 2])
+    };
+    let n = &mut model.nodes[i_node as usize];
+    n.i_leaf = leaf;
+    n.i_zone = zone;
 }
 
 // --- bspCleanup: splice FWTB-DEAD nodes out of the incremental tree ---------------------------
@@ -3044,6 +3091,53 @@ mod tests {
             scale: Vec3::new(1.0, 1.0, 1.0),
             vec_xform: None,
         }
+    }
+
+    /// `bspAddNode` seeds a new node's `iZone`/`iLeaf` from its PARENT — the block at
+    /// `Editor.dll 0x1003524a` (root/coplanar) and `0x1003535b` (front/back).  Without it every node
+    /// the detail-brush layer appends AFTER `TestVisibility` reads solid/zone-0, and `PointRegion`
+    /// resolves any actor under such a node into solid space (board
+    /// `native-bsp-leaf-assignment-marks-2x-the-solid`).
+    #[test]
+    fn add_node_seeds_zone_and_leaf_from_its_parent() {
+        let quad = |z: f32, up: bool| {
+            let s = if up { 1.0 } else { -1.0 };
+            let mut p = FPoly::new(vec![
+                Vec3::new(-10.0, -10.0 * s, z),
+                Vec3::new(10.0, -10.0 * s, z),
+                Vec3::new(10.0, 10.0 * s, z),
+                Vec3::new(-10.0, 10.0 * s, z),
+            ]);
+            p.normal = Vec3::new(0.0, 0.0, s);
+            p.base = Vec3::new(0.0, 0.0, z);
+            p
+        };
+        let mut m = Model::default();
+        let root = bsp_add_node(&mut m, -1, NODE_ROOT, 0, &quad(0.0, true));
+        assert_eq!(m.nodes[root as usize].i_leaf, [-1, -1], "NODE_Root: iLeaf = -1");
+        assert_eq!(m.nodes[root as usize].i_zone, [0, 0], "NODE_Root: iZone = 0");
+
+        // Stand in for what Pass A/D leave on the parent: distinct per-side leaf and zone.
+        m.nodes[root as usize].i_leaf = [7, 9];
+        m.nodes[root as usize].i_zone = [3, 5];
+
+        // FRONT/BACK: BOTH of the child's sides take the parent's own side (index == ENodePlace).
+        let front = bsp_add_node(&mut m, root, NODE_FRONT, 0, &quad(1.0, true));
+        assert_eq!(m.nodes[front as usize].i_leaf, [9, 9]);
+        assert_eq!(m.nodes[front as usize].i_zone, [5, 5]);
+        let back = bsp_add_node(&mut m, root, NODE_BACK, 0, &quad(-1.0, true));
+        assert_eq!(m.nodes[back as usize].i_leaf, [7, 7]);
+        assert_eq!(m.nodes[back as usize].i_zone, [3, 3]);
+
+        // COPLANAR, same facing: straight copy of both sides.
+        let cop = bsp_add_node(&mut m, root, NODE_PLANE, 0, &quad(0.0, true));
+        assert_eq!(m.nodes[cop as usize].i_leaf, [7, 9]);
+        assert_eq!(m.nodes[cop as usize].i_zone, [3, 5]);
+        // COPLANAR, opposite facing: sides SWAP (the 4-component FPlane dot goes negative).  It
+        // chains off the previous coplanar member, which is the one it inherits from.
+        let flip = bsp_add_node(&mut m, root, NODE_PLANE, 0, &quad(0.0, false));
+        assert_eq!(m.nodes[flip as usize].i_leaf, [9, 7]);
+        assert_eq!(m.nodes[flip as usize].i_zone, [5, 3]);
     }
 
     /// Descent solidity on the FINAL (engine-convention) model: solid iff the region resolves to

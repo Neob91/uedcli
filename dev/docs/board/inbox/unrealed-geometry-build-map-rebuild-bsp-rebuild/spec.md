@@ -806,21 +806,29 @@ recursing through `bspAddNode`.
 `iZone[2]` bytes at +0x34/+0x35, `iLeaf[2]` at +0x38/+0x3c). Every new node starts `ZoneMask` all-ones
 (`0x100351df: or eax,-1`), then, by `ENodePlace`:
 - **`NODE_Root` (3)**: `iLeaf[0]=iLeaf[1]=-1`, `iZone[0]=iZone[1]=0`.
-- **`NODE_Front` (1) / `NODE_Back` (0)**: no inheritance here — the branch jumps past this block to
-  `0x1003535b`, which was **[NOT DECODED]**. Where a front/back-placed node's `iZone`/`iLeaf` come
-  from is therefore still open, and that is the placement most brush faces get.
+- **`NODE_Front` (1) / `NODE_Back` (0)**: the branch jumps past this block to `0x1003535b`, which
+  **[DISASM Editor.dll 0x1003535b–0x1003539c, decoded 2026-08-27]** reads
+  `ecx = (NodePlace == 1)`, then `new.iLeaf[0] = new.iLeaf[1] = parent.iLeaf[ecx]` and
+  `new.iZone[0] = new.iZone[1] = parent.iZone[ecx]`, and finally
+  `parent.iChild[NodePlace] = <new node index>`. I.e. BOTH of the child's sides take the parent's
+  own side — `ENodePlace` and the `iLeaf`/`iZone` index are the same number.
 - **`NODE_Plane` (2)**: a helper (`[0x100ce510]`, called with the new node as `this` and the parent as
   the argument) returns a float; `k = (0.0 > result) ? 1 : 0` (`comiss`/`seta`), then
   `new.iLeaf[0] = parent.iLeaf[k]`, `new.iLeaf[1] = parent.iLeaf[1-k]`,
   `new.iZone[0] = parent.iZone[k]`, `new.iZone[1] = parent.iZone[1-k]`, and finally
   `parent.iPlane = <new node index>`. I.e. a coplanar-chain member inherits its parent's zones and
-  leaves, swapped when the two faces point opposite ways. The helper is presumed to be a plane/normal
-  comparison but was **not** itself disassembled — **[UNVERIFIED]** on that one point.
+  leaves, swapped when the two faces point opposite ways. The helper is `FPlane::operator|`
+  (`Core.dll` export `??UFPlane@@QBEMABV0@@Z`, RVA `0x17d60`), a **FOUR**-component dot —
+  `movups`/`mulps` over all 16 bytes, then a `shufps 0xb1` + `addps` + `movhlps` + `addss` horizontal
+  sum — not the 3-component normal dot **[DISASM Core.dll 0x17d60, decoded 2026-08-27]**. (Its
+  sibling at `0x17d90` is the `FPlane|FVector` 3-component overload; `bspAddNode` calls the former.)
 
-So a COPLANAR-chain node appended after `TestVisibility` — by the detail-brush layer, which never
-re-runs the zone pass — still gets a real zone. `bspBuildBounds`'s second `BuildZoneMasks` (§8 step 1)
-then recomputes its `ZoneMask` off that inherited `iZone`. The same is not established for a
-front/back-placed node; see the undecoded branch above.
+So a node appended after `TestVisibility` — by the detail-brush layer, which never re-runs the zone
+pass — still gets a real zone and leaf, whatever its placement. `bspBuildBounds`'s second
+`BuildZoneMasks` (§8 step 1) then recomputes its `ZoneMask` off that inherited `iZone`. Ported as
+`bspcsg::inherit_parent_leaf_zone`; without it the ~3300 detail nodes on UNATCO all read
+`iLeaf = (-1,-1)` / `iZone = (0,0)`, and `PointRegion` resolved 1027 of 1437 actors into solid space
+instead of 126 (board `native-bsp-leaf-assignment-marks-2x-the-solid`).
 
 ### 5.2 `FindBestSplit` — the exact scoring heuristic
 
