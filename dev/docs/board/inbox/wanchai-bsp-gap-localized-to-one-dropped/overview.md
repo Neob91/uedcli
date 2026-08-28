@@ -232,14 +232,14 @@ left untouched until answered.
 A live-editor capture this session (see §4's descent question and the "18 + 2" open items)
 confirmed the mechanism precisely: the z=112 face is NOT a plain-`F_INSIDE` add (mechanism 2
 ruled out) and NOT a classification-table error (mechanism 1's table is correct). The real root is
-native's `is_csg_filter` (`uedcli-native/src/bspcsg.rs:486`) dropping the editor's `NumVertices > 0`
+native's `is_csg_filter` (`uedcli-native/src/bspcsg.rs:477`) dropping the editor's `NumVertices > 0`
 clause. Both native and editor descend to the SAME coplanar world node 11825; the cascade descends
 DEAD nodes (`nv=0, nf=0`) like 13139. The editor treats those as non-CSG (`IsCsg = NumVertices>0 &&
 !(nf&0x21)`, so `outside` does not flip); native treated them as CSG (its predicate lacked the
 `nv>0` clause, so `outside` flipped). That flips the cascade's leaf state → native returned
 `F_COPLANAR_INSIDE(3)` and added the face, the editor returns a cospatial `F_COSPATIAL_*` and drops it.
 
-Fix (commit …): restored the `NumVertices > 0` clause to `is_csg_filter`, matching the editor's true
+Fix (commit b3609ea): restored the `NumVertices > 0` clause to `is_csg_filter`, matching the editor's true
 predicate. The old 2026-07-17 validation against N=4..8 / non-OG castle fixtures is no longer valid
 parity evidence (owner ruling 2026-08-28: only OG retail levels count).
 
@@ -249,9 +249,13 @@ Measured after the fix:
 - Wanchai Market (OG, 1304 brushes): node gap went from −267 (11381 vs 11648) to **+20 (11668 vs
   11648)**; surfs now exact 5284=5284.
 
-The remaining +20 (0.17 % of nodes, surfs exact) is the PRE-EXISTING FindBestSplit/SplitPolyList
-split-choice divergence (`findbestsplit-divergence-forensic-dive-17-real`), unmasked onto the other
-side of zero — not a new defect and not the fix over-applying. The vertical float32-W noise on a
-couple of shared planes aside, the two surface-plane SETS are identical. Next: track the splitter
-residual as its own item and iterate it across OG levels (don't expand the corpus blindly — the
-orchestrator's rule is to confirm the first few levels match first, which is done).
+The `bspMergeCoplanars` 8-surface fragment drift that several items blamed for the residual was
+already fixed by commit `7f4a773` (`remove_colinears` reflex-vertex convexity gate;
+`done/bspmergecoplanars-8-case-merge-gap-live-traced`), which landed before this fix. So the +20
+that persists here is NOT the merge mechanism — it needs its own re-pin post-`7f4a773`. What is
+certain: UNATCO is node-exact (6314=6314), the two surface-plane sets match, and surfs are exact.
+The +20 is structural (surf-exactness means the surface sets match; the tree shape differs), and
+surf-exactness is necessary but not sufficient — `LightMap` records are tree-walk ordered, so the
+tree must be NODE-exact before Wanchai lighting is byte-comparable. Next: pin and close the +20 on
+OG Wanchai (rule: don't expand the corpus blindly; confirm the first few levels match first, done
+for UNATCO).

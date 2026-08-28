@@ -28,8 +28,8 @@ OVER-SOLIDIFICATION: a golden cross-tree PointRegion probe (`harness/shatter_pro
 space on HK Market, 15.3 % UNATCO, 9.7 % Catacombs — and `[A]` is IDENTICAL pre- vs
 post-repartition (`UEDCLI_BSPCSG_NOREPART`), so the root is Pass-1 incremental `bsp_brush_csg`, NOT
 repartition/merge/find_best_split (all ruled out) and NOT `zones.rs` (proven byte-faithful). The
-mechanism is the `is_csg_filter` dead-node hack (`bspcsg.rs:437`, drops the engine's `NumVertices>0`
-clause): an FWTB-DEAD face buried solid-on-both-sides by overlapping ADDITIVE brushes wrongly keeps
+mechanism is the `is_csg_filter` dead-node hack (superseded — see below): an FWTB-DEAD face buried
+solid-on-both-sides by overlapping ADDITIVE brushes wrongly keeps
 flipping `Outside`, so later additive fragments in genuine void are mis-classified `F_INSIDE`,
 dropped, and the void mis-labels solid. TRIGGER = overlapping-additive burial (castle has 23.2 %
 dead nodes but `[A]=0` — dead-node COUNT is not it; the malignant kind is additive-buried). The
@@ -40,3 +40,12 @@ level to the differential loop. Module: `bspcsg.rs` ONLY (MEDIUM effort; deeper 
 re-port is the LARGE fallback). Evidence: §87 + §70 §13; reproduce `harness/shatter_probe.py` +
 `harness/overlap_discriminator.py`. (Found 2026-07-18; split + flood-half fixed, cause-2 pinned
 2026-07-19.)
+
+> **Superseded 2026-08-28** — the `is_csg_filter` dead-node hack this item named has been
+> eliminated, not "scoped": commit `b3609ea` restored the editor's `NumVertices>0` clause to
+> `is_csg_filter` (`bspcsg.rs:477`), exactly the remedy §87 proposed. The HK"Market 74.5 %
+> over-solid probe ([A] probe) is independent corroboration; the Wanchai resolution
+> (`wanchai-bsp-gap-localized-to-one-dropped` §9) caught the same mechanism live. Re-measure the
+> `[A]`/over-fragmentation numbers on OG trunks (UNATCO, Wanchai) before acting on this item's
+> remaining text. The two spike sections (82, 87) that validate the old drop are stale — flag for
+> owner approval to correct (dev/docs/spikes not agent-editable).
