@@ -462,29 +462,20 @@ fn cleanup_nodes(model: &mut Model, i_node: i32, i_parent: i32) {
 // --- IsCsg (filter convention, mask 0x21 = NF_NotCsg|NF_IsNew) --------------------------------
 
 /// `FBspNode::IsCsg` (`0x33b80`, extraMask=0): a node counts as CSG-solid iff it is neither NotCsg
-/// (0x01) nor freshly-added-this-brush (NF_IsNew 0x20).
+/// (0x01) nor freshly-added-this-brush (NF_IsNew 0x20) — AND has `NumVertices > 0`.
 ///
-/// **DEAD-NODE CSG (2026-07-17, subset-soup-differential PINNED — §8.1).** The engine's raw `IsCsg`
-/// ALSO requires `NumVertices > 0`.  We deliberately DROP that clause.  Here is why, traced end to
-/// end: `FilterWorldThroughBrush` deletes a world face that a later brush's footprint consumes by
-/// setting the node's `NumVertices = 0` (the FACE is gone) while keeping the node in the tree as a
-/// plane-only splitter (§8.1).  The bounded SOLID the face divided is still there — e.g. the world
-/// floor is cut where a wall stands on it, but everything BELOW the floor plane stays solid.  A
-/// *later* brush face that lands coplanar with that dead floor node must still see it as a CSG
-/// solid-divider so the `Outside` flag flips crossing the plane; if it doesn't, the below-plane
-/// region mis-propagates as VOID and the coplanar classifier returns `F_COPLANAR_OUTSIDE(2)`
-/// (both-sides-void) instead of `F_COSPATIAL_FACING_IN(4)` (facing into solid), so `AddBrushToWorldFunc`
-/// wrongly KEEPS a buried face (e.g. a wall's bottom, solid above and below).  Live differential:
-/// this was the FIRST soup divergence (N=4, WallLeft/WallRight bottom faces — editor drops them,
-/// native kept 2 surplus).  Dropping the `nv>0` clause reproduces the editor's fragment set EXACTLY
-/// at N=4..8, lifts full-castle solidity 98.99% -> 99.97% (== the editor golden's own score) and the
-/// surf count 474 -> 485 (== editor).  In this pipeline every `nv==0` node is an FWTB-deleted
-/// formerly-solid face (NotCsg is still masked by 0x21; a freshly-added node always has verts), so
-/// this only re-CSGs the deleted solid dividers — never a live or genuinely-non-CSG node.  The engine
-/// reaches the same net fragment set via its node ordering / tree structure; this is the
-/// order-independent equivalent.  See `sections/82` §8.1.
+/// **DEAD-NODE CSG (2026-08-28, live-editor PINNED).** We originally dropped the `NumVertices > 0`
+/// clause (2026-07-17), validated against N=4..8 synthetic tests and the non-OG castle fixture: a
+/// face that `FilterWorldThroughBrush` deleted by setting `NumVertices = 0` (the FACE gone, the node
+/// left as a plane-only splitter, §8.1) had to keep dividing space as a CSG solid so the `Outside`
+/// flag still flipped crossing it.  The 2026-08-27/28 Wanchai live capture REFUTES that for the
+/// EDITOR's own predicate: it treats `NumVertices == 0` as non-CSG (`csg=0`), i.e. a dead node does
+/// NOT flip `Outside`.  Restoring the clause matches the editor's true `IsCsg`.  The old N=4..8 /
+/// castle validation was non-OG (owner ruling 2026-08-28: only original retail levels are valid
+/// parity evidence), so those fixtures can no longer adjudicate this.  See
+/// `wanchai-bsp-gap-localized-to-one-dropped`; re-measured on OG retail UNATCO / Wanchai.
 fn is_csg_filter(n: &BspNode) -> bool {
-    (n.node_flags & 0x21) == 0
+    n.num_vertices > 0 && (n.node_flags & 0x21) == 0
 }
 
 // --- the filter recursion (FilterEdPoly / FilterLeaf) ----------------------------------------
@@ -4138,5 +4129,34 @@ mod tests {
         // P1 range: 0,1 seed themselves; 2 links to 0; 3 links to 1.
         // P2 range: 4 seeds itself (surf 7 does NOT reach back to index 0); 5 seeds; 6 links to 4.
         assert_eq!(links, vec![0, 1, 0, 1, 4, 5, 4]);
+    }
+
+    /// GATE — the corrected `is_csg_filter` matches the editor's `IsCsg =
+    /// NumVertices>0 && !(nf&0x21)`.  Pinned by the 2026-08-27/28 Wanchai live capture: the editor
+    /// treats a `NumVertices == 0` dead node as NON-CSG (its `outside` does not flip), which is what
+    /// makes it drop Brush250's buried z=112 face where native previously kept it.  The `nv>0` clause
+    /// was dropped in 2026-07-17 against N=4..8 / non-OG castle fixtures; those are no longer valid
+    /// parity evidence (owner ruling 2026-08-28 — only OG retail levels count).
+    #[test]
+    fn is_csg_filter_matches_editor_predicate() {
+        use crate::model::BspNode;
+        let plane = crate::model::Plane { x: 0.0, y: 0.0, z: 1.0, w: 0.0 };
+        let live = BspNode::leaf(plane, 0, 0, 4);
+        assert!(
+            is_csg_filter(&live),
+            "a live node (num_vertices>0, flags clean) must be CSG-solid"
+        );
+
+        let mut dead = BspNode::leaf(plane, 0, 0, 0);
+        assert!(
+            !is_csg_filter(&dead),
+            "a dead node (num_vertices==0) must be NON-CSG even with clean flags — the editor's IsCsg"
+        );
+
+        dead.num_vertices = 4;
+        dead.node_flags = 0x01; // NF_NotCsg
+        assert!(!is_csg_filter(&dead), "NF_NotCsg must make a live node non-CSG");
+        dead.node_flags = 0x20; // NF_IsNew
+        assert!(!is_csg_filter(&dead), "NF_IsNew must make a live node non-CSG");
     }
 }
