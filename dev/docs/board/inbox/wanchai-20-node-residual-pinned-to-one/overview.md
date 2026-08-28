@@ -64,8 +64,8 @@ FindBestSplit at node 9855 picks `Y=−631.99994` where the editor picks `Y=−7
 re-partitions to 860 vs 840 = the +20. The measurements above are current-tree and hold. The
 CAUSAL story linking the +2 soup delta to a "points/verts pass-1 residual" came from the
 pre-2026-08-14 spike decode, which the 2026-08-28 owner ruling invalidates — do not treat that
-link as known. The +2's own origin (which 2 polys; `bsp_build_fpolys` vs `bsp_merge_coplanars`)
-is UNMEASURED — the editor's soup and per-ilink pre-merge fragments are not archived.
+link as known. The +2's own origin was UNMEASURED when this item was written — see below for the
+current-tree measurement (2026-08-28) that now names it.
 
 ## Decisive experiment / lever
 
@@ -76,6 +76,43 @@ the differing faces to pin whether `bsp_build_fpolys` or `bsp_merge_coplanars` i
 names the second defect precisely and is the highest-leverage lever: matching the +2 de-flips the
 node-9855 splitter and should close the +20 (surf-exactness is already held). The switch is
 independent of the `is_csg_filter` fix that landed at `b3609ea`.
+
+## Finding (2026-08-28, current tree): the +2 origin measured, and a fix that closes +20
+
+The +2 is a single fusion difference on two same-ilink coplanar fragment pairs, and it is NOT a
+`bsp_build_fpolys` vs `bsp_merge_coplanars` generation defect as the item guessed — it is a
+`TryToMerge` seam-tolerance miss on two legitimately-different fragment geometries.
+
+- The seam corner `y=-768.00439` is native-computed, not authored: `grep` finds no `768.004` in the
+  tree. It comes from **Brush754**, a CSG_Subtract box scaled by `PostScale=(X=1.999992,Y=4.499965,
+  Z=4), SheerAxis=SHEER_ZX` at `Location=(-1024,-1056,-192)`. Its `Y=4.499965` (not `4.5`) puts its
+  south face at world `y≈-768.0044` instead of `-768`; that genuine fractional plane, extended by CSG,
+  cuts the room's door faces into a lower z-band fragment bounded at `y=-768.0044` and an upper
+  z-band fragment bounded instead by the door jamb at `y=-768.0`. So the two fragments genuinely
+  differ at the seam by 0.00439.
+- West face (`x=-16`, ilink 3139): fragments 6014 (z∈[-160,-128], seam corner `-768.00439`) and 7458
+  (z∈[-128,-112], seam corner `-768.0`), coplanar, same texture axes → `merge_group_pred` passes, but
+  `try_to_merge` step 3 uses `points_are_same` (`THRESH_POINTS_ARE_SAME`=0.002); the 0.00439 gap makes
+  the forward neighbour test fail, so the merge is refused. East face (`x=-496`, ilink 3140): the
+  mirror pair 6015/7457.
+- **Validated fix (research-only, threw away after): change `try_to_merge` step 3's neighbour test
+  from `points_are_same` to a NEAR box test at `THRESH_POINTS_ARE_NEAR` (0.015, an engine constant
+  already present at `build.rs:18`).** Measured: Wanchai soup 8189→8187 (=editor), nodes 11668→11648
+  (=editor), surfs 5284 (=editor); UNATCO stays 6314/3616/10758 (hard gate held). The fused west poly
+  6014 becomes exactly the editor's captured pentagon
+  `(-16,-768.00439,-128)(-16,-768.00439,-160)(-16,-896,-160)(-16,-896,-112)(-16,-768,-112)` — through
+  the existing `remove_colinears`, no vertex-value rewriting. This closes the +2 and the +20 in one
+  switch: the smaller seam (0.0044 < 0.015) is fused, the node-9855 splitter pick de-flips, and nodes
+  land exactly on the editor's 11648. UNATCO unchanged confirms no over-fusion on the other gated
+  level. Tolerances 0.005…0.05 all close the +2 with the same result, so the value is not
+  sensitivity-tuned: 0.015 (the existing NEAR constant) is the natural choice, not a magic number.
+- **Residual:** native points 16819→16807, still +16 vs editor 16791. The +2 fusion removes 12 points;
+  the +16 is a separate, pre-existing precision-drift family (the item's "+28 known points family"),
+  not part of the +2/+20 pin and not closed by this switch.
+- Caveats: the step-3 NEAR threshold is inferred from the editor's own output (native with it matches
+  the editor byte-for-byte on soup/nodes/surfs on both gated levels); it is not a live editor probe,
+  so the threshold attribution is a strong hypothesis, not a confirmed disassembly, and the fix is a
+  change to committed `bspcsg.rs` — proposal awaiting the owner, see `questions/merge-step3-nearest.md`.
 
 ## Evidence
 

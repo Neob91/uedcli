@@ -21,6 +21,9 @@ use crate::{build, csg, passes, zones};
 
 const NF_IS_NEW: u8 = 0x20;
 const THRESH_POINTS_ARE_SAME: f32 = 0.002;
+/// Looser vertex-coincidence box bound for the `try_to_merge` step-3 edge-neighbour test.  The
+/// same SAME-vs-NEAR dichotomy `build.rs` uses for point pooling.
+const THRESH_POINTS_ARE_NEAR: f32 = 0.015;
 const THRESH_NORMALS_ARE_SAME: f32 = 2.0e-5;
 
 // ENodePlace
@@ -1755,10 +1758,22 @@ fn merge_group_pred(a: &FPoly, b: &FPoly) -> bool {
 /// a diagonal passes a `.size()` (Euclidean) test's failure but fails this box test's success (and
 /// vice-versa): the box test is what decides whether two fragment corners are "the same" vertex,
 /// so it must match the engine exactly (verified live 2026-07-17, `sections/82 §7c`).
+/// Per-component **box** coincidence test: each axis must differ by less than `tol` (NOT Euclidean
+/// distance).  `points_are_same`/`points_are_near` are the SAME(0.002)/NEAR(0.015) pair — the same
+/// dichotomy `build.rs::bsp_add_point` uses for point pooling.
+#[inline]
+fn points_are_same_with(p: &Vec3, q: &Vec3, tol: f32) -> bool {
+    (p.x - q.x).abs() < tol && (p.y - q.y).abs() < tol && (p.z - q.z).abs() < tol
+}
+
+#[inline]
 fn points_are_same(p: &Vec3, q: &Vec3) -> bool {
-    (p.x - q.x).abs() < THRESH_POINTS_ARE_SAME
-        && (p.y - q.y).abs() < THRESH_POINTS_ARE_SAME
-        && (p.z - q.z).abs() < THRESH_POINTS_ARE_SAME
+    points_are_same_with(p, q, THRESH_POINTS_ARE_SAME)
+}
+
+#[inline]
+fn points_are_near(p: &Vec3, q: &Vec3) -> bool {
+    points_are_same_with(p, q, THRESH_POINTS_ARE_NEAR)
 }
 
 /// `MergeCoplanarPolys` (Editor.dll `0x33cb0`): fixpoint pairwise `TryToMerge` over one group.
@@ -1801,7 +1816,9 @@ fn merge_group(polys: &mut [FPoly], group: &[usize]) {
 ///      never tried, so the merge is order-sensitive exactly as the engine is.)
 ///   3. Forward test `a[(Start1+1)%NV1]` vs `b[(Start2-1)%NV2]`: match ⇒ `End1=Start1+1,
 ///      Start2=Start2-1`.  Else backward test `a[(Start1-1)%NV1]` vs `b[(Start2+1)%NV2]`: match ⇒
-///      `Start1=Start1-1, End2=Start2+1`.  Neither ⇒ `None` (only one point overlaps).
+///      `Start1=Start1-1, End2=Start2+1`.  Neither ⇒ `None` (only one point overlaps).  The neighbour
+///      tests use the NEAR (0.015) box coincidence, the step-2 anchor still SAME (0.002) — so two
+///      coplanar source-face fragments fuse when their shared edge is off by a fractional-brush seam.
 ///   4. Build ring: ALL `NV1` verts of `a` starting at `End1` (wrapping), then `NV2-2` verts of
 ///      `b` starting at `(End2+1)%NV2` (pre-increment) — i.e. `b`'s verts minus its two shared ones.
 ///   5. `RemoveColinears`; reject if it collapses `<3` verts or the result exceeds 16 verts.
@@ -1835,16 +1852,18 @@ fn try_to_merge(a: &FPoly, b: &FPoly) -> Option<FPoly> {
             x
         }
     };
-    // 3. Forward / backward neighbour test.
+    // 3. Forward / backward neighbour test.  The neighbours need only be NEAR (0.015), not SAME
+    //    (0.002): two fragments of one source face whose shared-edge corner sits a few units out
+    //    of exact register (a fractional-brush seam) still fuse, matching the editor.
     let mut end1 = start1;
     let mut end2 = start2;
     let (tf1, tf2) = (wrap(start1 + 1, nv1), wrap(start2 - 1, nv2));
-    if points_are_same(&a.verts[tf1 as usize], &b.verts[tf2 as usize]) {
+    if points_are_near(&a.verts[tf1 as usize], &b.verts[tf2 as usize]) {
         end1 = tf1;
         start2 = tf2;
     } else {
         let (tb1, tb2) = (wrap(start1 - 1, nv1), wrap(start2 + 1, nv2));
-        if points_are_same(&a.verts[tb1 as usize], &b.verts[tb2 as usize]) {
+        if points_are_near(&a.verts[tb1 as usize], &b.verts[tb2 as usize]) {
             start1 = tb1;
             end2 = tb2;
         } else {
@@ -3524,6 +3543,61 @@ mod tests {
             "expected D+B fused into one 4-vertex rectangle (20,0)-(40,10); got {:?}",
             out.iter().map(|p| p.verts.len()).collect::<Vec<_>>()
         );
+    }
+
+    #[test]
+    fn try_to_merge_step3_fuses_a_fractional_brush_seam_gap() {
+        // Wanchai +2/+20: Brush754's PostScale Y=4.499965 puts a genuine fractional face plane at
+        // world y=-768.00439, so two coplanar same-face fragments of one door face meet at a shared
+        // edge whose corners differ by 0.00439 (SAME 0.002 box rejects, NEAR 0.015 accepts). The
+        // editor fuses them into one polygon; native kept both while step 3 used the SAME threshold.
+        // Step 3 now uses NEAR, so the seam-gap pair fuses and matches the editor.
+        let mut a = FPoly::new(vec![
+            Vec3::new(0.0, 0.0, 0.0),
+            Vec3::new(10.0, 0.0, 0.0),
+            Vec3::new(10.0, 10.0, 0.0),
+            Vec3::new(0.0, 10.0, 0.0),
+        ]);
+        a.finalize().unwrap();
+        a.i_link = 3139;
+        a.texture_u = Vec3::new(0.0, 0.0, 0.0);
+        a.texture_v = Vec3::new(0.0, 0.0, 0.0);
+
+        // Right quad, one shared-edge corner 0.00439 out of register (B[3]=y=10.00439 vs A[2]=y=10).
+        let mut b = FPoly::new(vec![
+            Vec3::new(10.0, 0.0, 0.0),
+            Vec3::new(20.0, 0.0, 0.0),
+            Vec3::new(20.0, 10.0, 0.0),
+            Vec3::new(10.0, 10.00439, 0.0),
+        ]);
+        b.finalize().unwrap();
+        b.i_link = 3139;
+        b.texture_u = Vec3::new(0.0, 0.0, 0.0);
+        b.texture_v = Vec3::new(0.0, 0.0, 0.0);
+
+        let fused = try_to_merge(&a, &b).expect("0.00439 seam gap must fuse under the NEAR step-3 test");
+
+        // Fuses back to the 4-corner rectangle spanning (0,0)-(20,10) after RemoveColinears thins
+        // the shared-edge seam vertices.
+        assert!(
+            fused.verts.len() == 4,
+            "fused poly should be a 4-vertex rectangle; got {} verts: {:?}",
+            fused.verts.len(),
+            fused.verts
+        );
+        for v in [
+            Vec3::new(0.0, 0.0, 0.0),
+            Vec3::new(20.0, 0.0, 0.0),
+            Vec3::new(20.0, 10.0, 0.0),
+            Vec3::new(0.0, 10.0, 0.0),
+        ] {
+            assert!(
+                fused.verts.iter().any(|p| p.sub(&v).size() < 1e-3),
+                "missing expected corner {:?}; got {:?}",
+                v,
+                fused.verts
+            );
+        }
     }
 
     #[test]
