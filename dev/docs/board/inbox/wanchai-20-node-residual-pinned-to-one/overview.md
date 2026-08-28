@@ -59,11 +59,13 @@ the iPlane coplanar chains, record a divergence origin at the first plane mismat
   2-poly content/order difference at the root propagates to the node-9855 strided counts and flips
   the pick; downstream, that one splitter choice re-partitions its slab into +20 nodes.
 
-Full chain: pass-1 surf-geometry residual (the points/verts family, UNATCO's known residual too) →
-2 extra FPolys at repartition entry (8189 vs 8187) → GOOD-strided FindBestSplit at node 9855 picks
-`Y=−631.99994` where the editor picks `Y=−752.00000` → subtree re-partitions to 860 vs 840 = the
-+20. The final two links (which 2 polys; bsp_build_fpolys vs bsp_merge_coplanars) are UNMEASURED —
-the editor's soup and per-ilink pre-merge fragments are not archived.
+Measured chain: the root soup differs at repartition entry (+2, 8189 vs 8187) → GOOD-strided
+FindBestSplit at node 9855 picks `Y=−631.99994` where the editor picks `Y=−752.00000` → subtree
+re-partitions to 860 vs 840 = the +20. The measurements above are current-tree and hold. The
+CAUSAL story linking the +2 soup delta to a "points/verts pass-1 residual" came from the
+pre-2026-08-14 spike decode, which the 2026-08-28 owner ruling invalidates — do not treat that
+link as known. The +2's own origin (which 2 polys; `bsp_build_fpolys` vs `bsp_merge_coplanars`)
+is UNMEASURED — the editor's soup and per-ilink pre-merge fragments are not archived.
 
 ## Decisive experiment / lever
 
