@@ -113,3 +113,27 @@ existing indices, (c) graft the result back: append the new nodes to the model's
 the model's existing Points/Vectors/Verts pools rather than rebuilding them. This is real tree
 surgery, not a small patch — attempted carefully in a dedicated pass, with UNATCO+Wanchai's current
 exact node/surf counts as a hard regression gate (both are easy to break with a half-right graft).
+
+## First implementation attempt 2026-08-29: reverted, did not work
+
+Tried the graft using EXISTING primitives that turned out to already support it structurally:
+`bsp_add_node` already accepts an arbitrary parent + `NODE_FRONT`/`NODE_BACK` place (not just
+root), appending to the model's existing pools — no new low-level machinery needed. Wired: (1)
+`collect_repartition_frontier` (port of `sub_49380`, recursing `i_back`/`i_front` only, no
+`i_plane` — matches the disassembly), called right after the post-zone-pass `swap_node_children`,
+before the detail loop; (2) `repartition_frontier`, called after the detail loop, reusing the
+already-existing `make_ed_polys` (turns out to be exactly the subtree-poly-collector needed) +
+`split_poly_list` to rebuild each grown subtree onto its original parent slot; (3)
+`passes::bsp_refresh` after, to compact orphaned pre-repartition nodes (matches "each call's
+bspBuild bumps the count and bspRefresh brings it back").
+
+**Result: wrong, in the wrong direction.** UNATCO post-repartition-frontier: nodes 6314→9539
+(target: stay ~6314), verts 44325→38084 (target: grow toward 54776 — it SHRANK instead). Also
+broke an existing unit test (`a_semisolid_detail_brush_reaches_the_world`: expected 12 faces, got
+18). Reverted (`bspcsg.rs` back to the pre-attempt commit) rather than debug further this session —
+the node-count blowup suggests either the frontier collection is over-broad (collecting nodes that
+shouldn't be there, so the loop repartitions far more of the tree than the real ~209 calls should
+touch) or `bsp_refresh` isn't compacting the pre-repartition orphans the way assumed. Next attempt
+should start by comparing `repart_frontier_a`/`repart_frontier_b`'s size against the expected ~209
+(one board-item citation), and instrumenting `collect_repartition_frontier` to check whether it's
+walking correctly before touching `split_poly_list` at all.
