@@ -204,3 +204,29 @@ Verts-only comparison as sufficient.
 **Next step:** identify which ~7 of the 209 `repart_frontier_a`/`repart_frontier_b` entries add a
 net node (compare `make_ed_polys`'s pre-repartition subtree node count against what
 `split_poly_list` produces for that same subtree) rather than treating this as solved.
+
+## Pinned exactly 2026-08-29, same day: it's 3 calls, not ~7 scattered ones
+
+Added `UEDCLI_REPART_CALL_DIAG` (env-gated, committed `d9d69f3`) to log any call whose appended
+node count differs from its original poly count. On UNATCO, exactly 3 of 209 calls are non-zero,
+summing to the full +7:
+
+| parent | place | child | orig polys | appended nodes | delta |
+|---:|---:|---:|---:|---:|---:|
+| 1917 | NODE_FRONT | 4096 | 85 | 89 | +4 |
+| 1892 | NODE_FRONT | 3086 | 141 | 143 | +2 |
+| 689 | NODE_FRONT | 6108 | 40 | 41 | +1 |
+
+All three are `list_b` entries (native `i_front` = editor's iBack). The other 206 calls are exactly
+net-zero, matching "bspBuild bumps the count and bspRefresh brings it back." This is NOT a
+fundamental flaw in the mechanism — it's 3 specific `find_best_split_exact` tie-break/heuristic
+choices differing from what the live editor's exact run picks for these 3 particular poly soups
+(85/141/40 faces), the same category of residual as other split-heuristic edge cases elsewhere in
+this codebase, not evidence the whole approach is wrong. Reproduce:
+`UEDCLI_REPART_CALL_DIAG=1 UEDCLI_BSPCSG_STAGE_COUNTS=1 <build UNATCO>`.
+
+**This is the actual blocker for UNATCO's node-exactness** (and therefore its lighting
+comparability — see the CORRECTION section above). Next real step: dump the 40-poly soup (child
+6108, the smallest of the three) and diff `find_best_split_exact`'s scoring against what the
+editor's `FindBestSplit` would pick, the same methodology that closed the Wanchai NEAR/SAME
+epsilon gap (`5b0a022`).
