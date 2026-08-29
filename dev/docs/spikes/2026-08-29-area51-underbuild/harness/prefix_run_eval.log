@@ -1,0 +1,32 @@
+world CSG brushes: 1343
+levelinfo: ['LevelInfo']
+starting editor uned-a51-prefix ...
+    [map-new] idle after 15s
+
+=== golden final per-brush (full 1343-brush tree) ===
+  idx0 Brush529     golden=5
+  idx1 Brush3257    golden=10
+  idx2 Brush3256    golden=28
+=== end golden ===
+
+    [map-new-p1] idle after 65s
+    [add-p1] idle after 15s
+    [rebuild-p1] idle after 17s
+
+### prefix N=1 nodes=6 surfs=6 golden_total=6058
+  idx0 Brush529     native-ish prefix count=6 golden_final=5
+    [map-new-p2] idle after 15s
+    [add-p2] idle after 15s
+    [rebuild-p2] idle after 46s
+
+### prefix N=2 nodes=32 surfs=32 golden_total=6058
+  idx0 Brush529     native-ish prefix count=6 golden_final=5
+  idx1 Brush3257    native-ish prefix count=26 golden_final=10
+    [map-new-p3] idle after 15s
+    [add-p3] idle after 15s
+    [rebuild-p3] idle after 17s
+
+### prefix N=3 nodes=74 surfs=60 golden_total=6058
+  idx0 Brush529     native-ish prefix count=6 golden_final=5
+  idx1 Brush3257    native-ish prefix count=18 golden_final=10
+  idx2 Brush3256    native-ish prefix count=36 golden_final=28

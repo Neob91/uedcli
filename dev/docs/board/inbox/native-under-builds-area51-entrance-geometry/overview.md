@@ -76,6 +76,41 @@ Residual (open): WHY the editor strips the early subtract lofts' faces to 10 whi
 differential trace, not a guess (there is no angle to atomize it further from the retail golden,
 which has no intermediate states beyond the final tree).
 
+## Live differential editor trace 2026-08-29 (root cause located)
+
+Drove the real editor (`dx-lum-uned-dbg`) through incremental prefixes: `MAP NEW` + `EDIT PASTE`
+first N world-CSG brushes + `MAP REBUILD`, parsing world surf count per brush, diffed against
+native. Divergence brush is **index 5 — Brush3252** (6th world-CSG brush, a 26-poly CSG_Subtract
+loft). Through N=5 editor and native are IDENTICAL for every brush; at N=6 native over-carves:
+
+| brush | editor (N=6→48) | native (N=6→48) |
+|---|---|---|
+| Brush3257 (#1) | 10 (holds) | 10→5→0 |
+| Brush3256 (#2) | 28 (holds) | 36→12→0 |
+| Brush3252 (#5) | 18 | 0 |
+
+Root cause (measured, code path localizable): editor and native share the CSG core
+(`filter_world_through_brush` → `wtb_filter_ed_poly`). When a new subtract brush arrives, each
+existing world face whose plane straddles its bound sphere is split and fragments strictly inside
+the new subtract volume are discarded (`g_discarded > 0`); if nothing is interior the carve rolls
+back and the face survives. The EDITOR plateaus: once faces are carved to their coplanar-fused
+boundary, every later subtract finds them outside/on-boundary, the carve rolls back, and the count
+never drops below golden. NATIVE misclassifies 5–10 of those same surviving faces as interior at
+N=6/7 and carves them away, collapsing Brush3257/3256/3252 to 0 and the entrance room with them.
+
+Not yet atomized: the exact misclassified face at the N=5→N=6 transition (coplanar-sign vs a
+NEAR-type epsilon in `split_with_plane`/`wtb_filter_ed_poly`; the rollback gate `g_discarded == 0`
+is the exact place the two must differ). Needed: a node-level diff of named N=5→N=6.
+
+Separate editor-self residual (not native's fault): Brush3254 (#4) holds 36 through N=48 while the
+full-1343 golden reads 28 — an editor incremental-vs-final inconsistency, unresolved, distinct from
+the −511 gap (which is dominated by the native over-carve above).
+
+Minimal repro: first 7 world-CSG brushes in CSG order
+`Brush529, Brush3257, Brush3256, Brush3255, Brush3254, Brush3252, Brush3245`; N=7 editor keeps
+{10,28,18} for 3257/3256/3252, native gives {0,0,0}. Native mirror probe `a51_native_prefix.py`,
+editor probe `a51_editor_prefix.py` (`_scratch/a51-editor-trace/`).
+
 Evidence scripts (to move to `dev/docs/spikes/<slug>/` before closing): `a51_cumgap.py`,
 `a51_fixture_iso.py`, `a51_per_brush_attr.py`, `a51_norepart_bisect.py`, `a51_isolate.py`,
 `a51_overlap.py`, `a51_ablate.py`, `a51_geom.py`, `a51_faceprobe.py`, `a51_goldenprobe.py`,
