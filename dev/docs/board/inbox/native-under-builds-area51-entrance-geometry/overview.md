@@ -111,8 +111,28 @@ Minimal repro: first 7 world-CSG brushes in CSG order
 {10,28,18} for 3257/3256/3252, native gives {0,0,0}. Native mirror probe `a51_native_prefix.py`,
 editor probe `a51_editor_prefix.py` (`_scratch/a51-editor-trace/`).
 
-Evidence scripts (to move to `dev/docs/spikes/<slug>/` before closing): `a51_cumgap.py`,
-`a51_fixture_iso.py`, `a51_per_brush_attr.py`, `a51_norepart_bisect.py`, `a51_isolate.py`,
-`a51_overlap.py`, `a51_ablate.py`, `a51_geom.py`, `a51_faceprobe.py`, `a51_goldenprobe.py`,
-`a51_dome_walls.py`, `a51_order.py`, `a51_golden_geom.py`, `a51_no1178mirror.py`,
-`a51_progress.py`, `a51_grid.py`, `a51_first20.py`, `a51_firstbrush.py`.
+Evidence scripts already live in `dev/docs/spikes/2026-08-29-area51-underbuild/harness/`.
+
+## 2026-08-29: reproduced offline at exactly N=6, one more affected brush found
+
+Re-ran (no live editor needed — `a51_prefix_05.dx`/`a51_prefix_06.dx` from the trace above already
+on disk) at the precise N=5→N=6 transition: N=5 matches exactly (173 nodes/130 surfs both sides);
+N=6 diverges to editor 198/140 vs native 123/98. Per-brush at N=6:
+
+| brush | editor | native |
+|---|---:|---:|
+| Brush529 (#0) | 6 | 3 |
+| Brush3257 (#1) | 10 | 5 |
+| Brush3256 (#2) | 28 | 12 |
+| Brush3255 (#3) | 42 | 42 |
+| Brush3254 (#4) | 36 | 36 |
+| Brush3252 (#5) | 18 | 0 |
+
+**Brush529 is ALSO over-carved at N=6** (6→3, exactly halved) — not previously itemized (the
+existing table above only tracked 3257/3256/3252). 3257 also halves exactly (10→5); 3256 does not
+(28→12, not 14) — inconsistent with a simple "discard exactly half" rule, so whatever native
+misclassifies as interior is a specific FACE SET, not a uniform fraction. Repro script:
+`dev/docs/spikes/2026-08-29-area51-underbuild/harness/a51_node_n6_diff.py` (added). Still needed:
+match individual surfaces by plane/geometry between the two 130-surf N=5 trees and the two N=6
+trees to find exactly which N=5 face(s) get reclassified — the per-brush counts alone don't
+localize past "somewhere in Brush529/3257/3256's remaining faces."
