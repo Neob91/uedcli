@@ -261,3 +261,22 @@ have all run — so replaying just these 6 brushes in isolation would NOT reprod
 soup; the surrounding tree shape these faces survived into depends on the other ~728 brushes too.
 A live differential here needs the ACTUAL editor mid-build state at this exact point, not a
 brush-subset repro.
+
+**Confirms it's a pure tree-shape difference, not a lost face:** per-brush surf counts for all 6 of
+child=6108's contributing brushes match the editor EXACTLY (6/6/6/6/6/4), and total surfs match
+exactly (3616=3616) — the face SET is completely right; only how the ~209 repartitions carve that
+set into nodes differs.
+
+**Tried, reverted: `bsp_merge_coplanars` before re-splitting each subtree.** The world-level
+repartition calls it on its poly soup before its own `bsp_build` (`bspcsg.rs:2660`);
+`repartition_frontier` never did the equivalent for its reconstructed subtree polys, so tried
+adding it. Mixed and net negative: UNATCO pre-weld verts got almost exact (54781 vs target 54776,
+was +2425) and final verts much closer (76696 vs 76488, was +2443) — but nodes overshot the OTHER
+way, badly (5689 vs target 6314, was 6321) — the merge is too aggressive applied per-subtree.
+Worse, it broke Wanchai's previously node-EXACT match (11648 → 11628) while only marginally
+helping its verts/points. Reverted; the shipped (no per-subtree merge) state stays better balanced
+overall since it doesn't regress Wanchai's clean win. Whatever the real mechanism is, it's not a
+blanket "always merge coplanars before re-splitting" — more likely the editor's actual
+`bspRepartition` merges more selectively (e.g. only within-brush, or only truly co-planar AND
+touching fragments, not the full cross-poly `bspMergeCoplanars` sweep this codebase's version
+does) — another point supporting that this needs a live differential, not more parameter guessing.
