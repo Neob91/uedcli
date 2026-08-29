@@ -1767,6 +1767,8 @@ fn repartition_frontier(model: &mut Model, list_a: &[i32], list_b: &[i32]) -> Re
             continue;
         }
         let diag = std::env::var("UEDCLI_REPART_CALL_DIAG").is_ok();
+        let fbs_target = std::env::var("UEDCLI_REPART_FBS_CHILD").ok().and_then(|v| v.parse::<i32>().ok());
+        let fbs_polys = if fbs_target == Some(child) { Some(polys.clone()) } else { None };
         let (orig_polys, before_nodes) = (polys.len(), model.nodes.len());
         split_poly_list(model, parent, place, polys, 0, BALANCE, PORTAL_BIAS, Opt::Good, &mut call_id)?;
         if diag {
@@ -1775,6 +1777,16 @@ fn repartition_frontier(model: &mut Model, list_a: &[i32], list_b: &[i32]) -> Re
                 eprintln!(
                     "REPART_CALL_DIAG parent={parent} place={place} child={child} orig_polys={orig_polys} appended_nodes={appended} delta={}",
                     appended as i64 - orig_polys as i64
+                );
+            }
+        }
+        if let Some(fbs_polys) = fbs_polys {
+            let (winner, rows) = find_best_split_trace(&fbs_polys, BALANCE, PORTAL_BIAS, Opt::Good);
+            eprintln!("FBS_ROOT_TRACE child={child} n_polys={} winner_slot={winner}", fbs_polys.len());
+            for r in &rows {
+                eprintln!(
+                    "  slot={} cand_i={:?} plane={:?} pf={:#x} portal={} front={} back={} splits={} score={}",
+                    r.slot, r.cand_i, r.plane, r.poly_flags, r.portal, r.front, r.back, r.splits, r.score
                 );
             }
         }
