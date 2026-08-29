@@ -250,3 +250,14 @@ diff manually: split polys via slot 12's plane, dump each half's own trace, and 
 until node COUNTS between the two halves stop matching editor per-half node counts from a captured
 tree — needs `a51`-style incremental capture infrastructure adapted for this soup instead of brush
 prefixes).
+
+**Checked whether an Area51-style minimal repro applies here — it doesn't, directly.**
+`UEDCLI_REPART_FBS_CHILD` now also prints the subtree's source brush actors (`ff735ed`): child=6108's
+40 polys trace back to 6 brushes (`Brush140`, `Brush148`, `Brush1158`, `Brush1550`, `Brush1551`,
+`Brush132`). Unlike Area51 (where a prefix of N brushes in CSG order directly reproduces an
+under-build native and the editor both hit), this subtree is a DEEPLY DERIVED intermediate state —
+what's left after the world repartition, `TestVisibility`/zone pass, and the full detail-brush loop
+have all run — so replaying just these 6 brushes in isolation would NOT reproduce the same 40-poly
+soup; the surrounding tree shape these faces survived into depends on the other ~728 brushes too.
+A live differential here needs the ACTUAL editor mid-build state at this exact point, not a
+brush-subset repro.
