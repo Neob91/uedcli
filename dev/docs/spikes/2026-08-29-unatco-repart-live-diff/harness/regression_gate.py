@@ -41,7 +41,12 @@ def main():
     for name, project, subpath, golden_path in CASES:
         os.environ["UEDCLI_PROJECT"] = project
         proj = Path(project)
-        trunk_path = proj / subpath if subpath else next((proj / "maps").iterdir())
+        if subpath:
+            trunk_path = proj / subpath
+        elif (proj / "actors").exists():
+            trunk_path = proj  # trunk IS the project root (no maps/ nesting)
+        else:
+            trunk_path = next((proj / "maps").iterdir())
         level, _ = trunk.read_level(trunk_path)
         ci = class_index()
         names = [n for n in level.order

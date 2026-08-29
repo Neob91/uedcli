@@ -1,0 +1,329 @@
+[New LWP 143]
+[New LWP 163]
+[New LWP 164]
+[New LWP 165]
+[New LWP 166]
+[New LWP 167]
+[New LWP 168]
+[New LWP 169]
+[New LWP 170]
+[New LWP 171]
+[New LWP 172]
+[New LWP 173]
+[New LWP 174]
+[New LWP 175]
+[New LWP 176]
+[New LWP 177]
+[New LWP 178]
+[New LWP 179]
+[New LWP 180]
+[New LWP 181]
+[New LWP 182]
+[New LWP 183]
+[New LWP 184]
+[New LWP 185]
+[New LWP 186]
+[New LWP 187]
+[New LWP 188]
+[New LWP 189]
+[New LWP 190]
+[New LWP 191]
+[New LWP 201]
+[New LWP 242]
+[New LWP 243]
+[New LWP 244]
+[Thread debugging using libthread_db enabled]
+Using host libthread_db library "/lib/x86_64-linux-gnu/libthread_db.so.1".
+0xf7fbacfc in __kernel_vsyscall ()
+Breakpoint 1 at 0x10049fc0
+Breakpoint 2 at 0x1004a05f
+Breakpoint 3 at 0x10034e80
+Breakpoint 4 at 0x100338ee
+ORACLE_ATTACHED
+CALL idx=1 model=0x58fde1c child=0 third=0
+STAGEEND idx=1
+CALL idx=2 model=0x58fde1c child=4077 third=2
+STAGEEND idx=2
+CALL idx=3 model=0x58fde1c child=4844 third=2
+STAGEEND idx=3
+CALL idx=4 model=0x58fde1c child=4142 third=2
+STAGEEND idx=4
+CALL idx=5 model=0x58fde1c child=5499 third=2
+STAGEEND idx=5
+CALL idx=6 model=0x58fde1c child=5500 third=2
+STAGEEND idx=6
+CALL idx=7 model=0x58fde1c child=5501 third=2
+STAGEEND idx=7
+CALL idx=8 model=0x58fde1c child=5502 third=2
+STAGEEND idx=8
+CALL idx=9 model=0x58fde1c child=3851 third=2
+STAGEEND idx=9
+CALL idx=10 model=0x58fde1c child=6304 third=2
+STAGEEND idx=10
+CALL idx=11 model=0x58fde1c child=4862 third=2
+STAGEEND idx=11
+CALL idx=12 model=0x58fde1c child=4038 third=2
+STAGEEND idx=12
+CALL idx=13 model=0x58fde1c child=3671 third=2
+STAGEEND idx=13
+CALL idx=14 model=0x58fde1c child=3600 third=2
+STAGEEND idx=14
+CALL idx=15 model=0x58fde1c child=5651 third=2
+STAGEEND idx=15
+CALL idx=16 model=0x58fde1c child=6298 third=2
+STAGEEND idx=16
+CALL idx=17 model=0x58fde1c child=6292 third=2
+STAGEEND idx=17
+CALL idx=18 model=0x58fde1c child=6270 third=2
+STAGEEND idx=18
+CALL idx=19 model=0x58fde1c child=5650 third=2
+STAGEEND idx=19
+CALL idx=20 model=0x58fde1c child=3984 third=2
+STAGEEND idx=20
+CALL idx=21 model=0x58fde1c child=3817 third=2
+STAGEEND idx=21
+CALL idx=22 model=0x58fde1c child=4930 third=2
+STAGEEND idx=22
+CALL idx=23 model=0x58fde1c child=3966 third=2
+STAGEEND idx=23
+CALL idx=24 model=0x58fde1c child=3831 third=2
+STAGEEND idx=24
+CALL idx=25 model=0x58fde1c child=3836 third=2
+STAGEEND idx=25
+CALL idx=26 model=0x58fde1c child=5536 third=2
+STAGEEND idx=26
+CALL idx=27 model=0x58fde1c child=4724 third=2
+STAGEEND idx=27
+CALL idx=28 model=0x58fde1c child=5538 third=2
+STAGEEND idx=28
+CALL idx=29 model=0x58fde1c child=4242 third=2
+STAGEEND idx=29
+CALL idx=30 model=0x58fde1c child=3578 third=2
+STAGEEND idx=30
+CALL idx=31 model=0x58fde1c child=6039 third=2
+STAGEEND idx=31
+CALL idx=32 model=0x58fde1c child=3653 third=2
+STAGEEND idx=32
+CALL idx=33 model=0x58fde1c child=3662 third=2
+STAGEEND idx=33
+CALL idx=34 model=0x58fde1c child=3658 third=2
+STAGEEND idx=34
+CALL idx=35 model=0x58fde1c child=3601 third=2
+STAGEEND idx=35
+CALL idx=36 model=0x58fde1c child=4237 third=2
+STAGEEND idx=36
+CALL idx=37 model=0x58fde1c child=3627 third=2
+STAGEEND idx=37
+CALL idx=38 model=0x58fde1c child=4209 third=2
+STAGEEND idx=38
+CALL idx=39 model=0x58fde1c child=3948 third=2
+STAGEEND idx=39
+CALL idx=40 model=0x58fde1c child=3672 third=2
+STAGEEND idx=40
+CALL idx=41 model=0x58fde1c child=5398 third=2
+STAGEEND idx=41
+CALL idx=42 model=0x58fde1c child=5392 third=2
+STAGEEND idx=42
+CALL idx=43 model=0x58fde1c child=6108 third=2
+STAGEEND idx=43
+CALL idx=44 model=0x58fde1c child=5378 third=2
+STAGEEND idx=44
+CALL idx=45 model=0x58fde1c child=6136 third=2
+STAGEEND idx=45
+CALL idx=46 model=0x58fde1c child=6109 third=2
+STAGEEND idx=46
+CALL idx=47 model=0x58fde1c child=6110 third=2
+STAGEEND idx=47
+CALL idx=48 model=0x58fde1c child=6140 third=2
+STAGEEND idx=48
+CALL idx=49 model=0x58fde1c child=6113 third=2
+STAGEEND idx=49
+CALL idx=50 model=0x58fde1c child=6163 third=2
+STAGEEND idx=50
+CALL idx=51 model=0x58fde1c child=6164 third=2
+STAGEEND idx=51
+CALL idx=52 model=0x58fde1c child=6141 third=2
+STAGEEND idx=52
+CALL idx=53 model=0x58fde1c child=6152 third=2
+STAGEEND idx=53
+CALL idx=54 model=0x58fde1c child=4523 third=2
+STAGEEND idx=54
+CALL idx=55 model=0x58fde1c child=4059 third=2
+STAGEEND idx=55
+CALL idx=56 model=0x58fde1c child=4056 third=2
+STAGEEND idx=56
+CALL idx=57 model=0x58fde1c child=5863 third=2
+STAGEEND idx=57
+CALL idx=58 model=0x58fde1c child=5974 third=2
+STAGEEND idx=58
+CALL idx=59 model=0x58fde1c child=6098 third=2
+STAGEEND idx=59
+CALL idx=60 model=0x58fde1c child=4265 third=2
+STAGEEND idx=60
+CALL idx=61 model=0x58fde1c child=4266 third=2
+STAGEEND idx=61
+CALL idx=62 model=0x58fde1c child=4267 third=2
+STAGEEND idx=62
+CALL idx=63 model=0x58fde1c child=4222 third=2
+STAGEEND idx=63
+CALL idx=64 model=0x58fde1c child=5847 third=2
+STAGEEND idx=64
+CALL idx=65 model=0x58fde1c child=4835 third=2
+STAGEEND idx=65
+CALL idx=66 model=0x58fde1c child=4834 third=2
+STAGEEND idx=66
+CALL idx=67 model=0x58fde1c child=4011 third=2
+STAGEEND idx=67
+CALL idx=68 model=0x58fde1c child=3873 third=2
+STAGEEND idx=68
+CALL idx=69 model=0x58fde1c child=4002 third=2
+STAGEEND idx=69
+CALL idx=70 model=0x58fde1c child=5448 third=2
+STAGEEND idx=70
+CALL idx=71 model=0x58fde1c child=5449 third=2
+STAGEEND idx=71
+CALL idx=72 model=0x58fde1c child=5450 third=2
+STAGEEND idx=72
+CALL idx=73 model=0x58fde1c child=5451 third=2
+STAGEEND idx=73
+CALL idx=74 model=0x58fde1c child=5855 third=2
+STAGEEND idx=74
+CALL idx=75 model=0x58fde1c child=6093 third=2
+STAGEEND idx=75
+CALL idx=76 model=0x58fde1c child=6088 third=2
+STAGEEND idx=76
+CALL idx=77 model=0x58fde1c child=5876 third=2
+STAGEEND idx=77
+CALL idx=78 model=0x58fde1c child=5934 third=2
+STAGEEND idx=78
+CALL idx=79 model=0x58fde1c child=3062 third=2
+STAGEEND idx=79
+CALL idx=80 model=0x58fde1c child=5848 third=2
+STAGEEND idx=80
+CALL idx=81 model=0x58fde1c child=5864 third=2
+STAGEEND idx=81
+CALL idx=82 model=0x58fde1c child=3863 third=2
+STAGEEND idx=82
+CALL idx=83 model=0x58fde1c child=3864 third=2
+STAGEEND idx=83
+CALL idx=84 model=0x58fde1c child=3865 third=2
+STAGEEND idx=84
+CALL idx=85 model=0x58fde1c child=3993 third=2
+STAGEEND idx=85
+CALL idx=86 model=0x58fde1c child=4956 third=2
+STAGEEND idx=86
+CALL idx=87 model=0x58fde1c child=4247 third=2
+STAGEEND idx=87
+CALL idx=88 model=0x58fde1c child=5856 third=2
+STAGEEND idx=88
+CALL idx=89 model=0x58fde1c child=5409 third=2
+STAGEEND idx=89
+CALL idx=90 model=0x58fde1c child=4232 third=2
+STAGEEND idx=90
+CALL idx=91 model=0x58fde1c child=4382 third=2
+STAGEEND idx=91
+CALL idx=92 model=0x58fde1c child=3559 third=2
+STAGEEND idx=92
+CALL idx=93 model=0x58fde1c child=5644 third=2
+STAGEEND idx=93
+CALL idx=94 model=0x58fde1c child=5687 third=2
+STAGEEND idx=94
+CALL idx=95 model=0x58fde1c child=5688 third=2
+STAGEEND idx=95
+CALL idx=96 model=0x58fde1c child=5739 third=2
+STAGEEND idx=96
+CALL idx=97 model=0x58fde1c child=5750 third=2
+STAGEEND idx=97
+CALL idx=98 model=0x58fde1c child=5819 third=2
+STAGEEND idx=98
+CALL idx=99 model=0x58fde1c child=5758 third=2
+STAGEEND idx=99
+CALL idx=100 model=0x58fde1c child=5786 third=2
+STAGEEND idx=100
+CALL idx=101 model=0x58fde1c child=5807 third=2
+STAGEEND idx=101
+CALL idx=102 model=0x58fde1c child=5801 third=2
+STAGEEND idx=102
+CALL idx=103 model=0x58fde1c child=5813 third=2
+STAGEEND idx=103
+CALL idx=104 model=0x58fde1c child=3028 third=2
+STAGEEND idx=104
+CALL idx=105 model=0x58fde1c child=3029 third=2
+STAGEEND idx=105
+CALL idx=106 model=0x58fde1c child=3030 third=2
+STAGEEND idx=106
+CALL idx=107 model=0x58fde1c child=3031 third=2
+STAGEEND idx=107
+CALL idx=108 model=0x58fde1c child=3032 third=2
+STAGEEND idx=108
+CALL idx=109 model=0x58fde1c child=3396 third=2
+STAGEEND idx=109
+CALL idx=110 model=0x58fde1c child=3033 third=2
+STAGEEND idx=110
+CALL idx=111 model=0x58fde1c child=3145 third=2
+STAGEEND idx=111
+CALL idx=112 model=0x58fde1c child=3088 third=2
+STAGEEND idx=112
+CALL idx=113 model=0x58fde1c child=3086 third=2
+TARGET_BEGIN idx=113
+FBS numpolys=57 opt=1 balance=12 stride=2
+ADD parent=-1 place=3 flags=0 ilink=4833 nv=4 N=0.000000,1.000000,0.000000 B=1351.999878,-1087.999878,240.000000
+ADD parent=6314 place=2 flags=0 ilink=4833 nv=4 N=0.000000,1.000000,0.000000 B=1072.000000,-1087.999878,240.000000
+ADD parent=6315 place=2 flags=0 ilink=4833 nv=4 N=0.000000,-1.000000,0.000000 B=1360.000000,-1088.000000,240.000000
+ADD parent=6316 place=2 flags=0 ilink=4833 nv=4 N=0.000000,1.000000,0.000000 B=1072.000000,-1087.999878,240.000000
+ADD parent=6317 place=2 flags=0 ilink=4833 nv=4 N=0.000000,1.000000,0.000000 B=1351.999878,-1087.999878,240.000000
+ADD parent=6318 place=2 flags=0 ilink=4833 nv=4 N=0.000000,-1.000000,0.000000 B=1360.000000,-1088.000000,240.000000
+ADD parent=6319 place=2 flags=0 ilink=4833 nv=4 N=0.000000,1.000000,0.000000 B=1072.000000,-1087.999878,240.000000
+ADD parent=6320 place=2 flags=0 ilink=4833 nv=4 N=0.000000,1.000000,0.000000 B=1351.999878,-1087.999878,240.000000
+ADD parent=6321 place=2 flags=0 ilink=4833 nv=4 N=0.000000,-1.000000,0.000000 B=1360.000000,-1088.000000,240.000000
+ADD parent=6314 place=1 flags=0 ilink=4834 nv=4 N=-1.000000,0.000000,0.000000 B=1071.983643,-1023.999207,240.000000
+ADD parent=6323 place=2 flags=0 ilink=4834 nv=4 N=-1.000000,0.000000,0.000000 B=1072.000000,-1088.000000,240.000000
+ADD parent=6324 place=2 flags=0 ilink=4834 nv=4 N=-1.000000,0.000000,0.000000 B=1072.000000,-1088.000000,240.000000
+ADD parent=6325 place=2 flags=0 ilink=4834 nv=4 N=-1.000000,0.000000,0.000000 B=1072.000000,-1088.000000,240.000000
+ADD parent=6323 place=1 flags=0 ilink=4835 nv=4 N=-0.000000,-0.000000,1.000000 B=822.000000,-1064.000000,32.000000
+ADD parent=6327 place=0 flags=0 ilink=4836 nv=4 N=-0.000000,-0.000000,-1.000000 B=822.000000,-968.000000,16.000000
+ADD parent=6328 place=0 flags=0 ilink=4837 nv=4 N=0.000000,1.000000,0.000000 B=822.000000,-968.000000,16.000000
+ADD parent=6329 place=0 flags=0 ilink=4838 nv=4 N=1.000000,0.000000,0.000000 B=824.000000,-968.000000,16.000000
+ADD parent=6330 place=0 flags=0 ilink=4839 nv=4 N=-1.000000,0.000000,0.000000 B=822.000000,-1064.000000,16.000000
+ADD parent=6331 place=0 flags=0 ilink=4840 nv=4 N=0.000000,-1.000000,0.000000 B=824.000000,-1064.000000,16.000000
+ADD parent=6323 place=0 flags=0 ilink=4841 nv=4 N=0.000000,-1.000000,0.000000 B=1079.983643,-1023.999268,240.000000
+ADD parent=6333 place=2 flags=0 ilink=4841 nv=4 N=0.000000,-1.000000,0.000000 B=1359.983643,-1023.999268,240.000000
+ADD parent=6334 place=2 flags=0 ilink=4841 nv=4 N=0.000000,1.000000,0.000000 B=1072.000000,-1024.000000,240.000000
+ADD parent=6335 place=2 flags=0 ilink=4841 nv=4 N=0.000000,-1.000000,0.000000 B=1079.983643,-1023.999268,240.000000
+ADD parent=6336 place=2 flags=0 ilink=4841 nv=4 N=0.000000,-1.000000,0.000000 B=1359.983643,-1023.999268,240.000000
+ADD parent=6337 place=2 flags=0 ilink=4841 nv=4 N=0.000000,1.000000,0.000000 B=1072.000000,-1024.000000,240.000000
+ADD parent=6338 place=2 flags=0 ilink=4841 nv=4 N=0.000000,-1.000000,0.000000 B=1079.983643,-1023.999268,240.000000
+ADD parent=6339 place=2 flags=0 ilink=4841 nv=4 N=0.000000,-1.000000,0.000000 B=1359.983643,-1023.999268,240.000000
+ADD parent=6340 place=2 flags=0 ilink=4841 nv=4 N=0.000000,1.000000,0.000000 B=1072.000000,-1024.000000,240.000000
+ADD parent=6333 place=1 flags=0 ilink=4842 nv=4 N=-0.000000,-0.000000,1.000000 B=1856.000000,-3552.000000,58.000000
+ADD parent=6342 place=1 flags=0 ilink=4843 nv=4 N=-0.000000,-0.000000,1.000000 B=1856.000000,-3552.000000,106.000000
+ADD parent=6343 place=0 flags=0 ilink=4844 nv=4 N=-0.000000,-0.000000,-1.000000 B=1856.000000,-3552.000000,98.000000
+ADD parent=6344 place=0 flags=0 ilink=4845 nv=4 N=1.000000,0.000000,0.000000 B=1360.000000,-1024.000000,240.000000
+ADD parent=6342 place=0 flags=0 ilink=4846 nv=4 N=-0.000000,-0.000000,1.000000 B=1856.000000,-3552.000000,10.000000
+ADD parent=6346 place=1 flags=0 ilink=4847 nv=4 N=-0.000000,-0.000000,-1.000000 B=1856.000000,-3552.000000,50.000000
+ADD parent=6347 place=0 flags=0 ilink=4848 nv=4 N=1.000000,0.000000,0.000000 B=1360.000000,-1024.000000,240.000000
+ADD parent=6346 place=0 flags=0 ilink=4849 nv=4 N=-0.000000,-0.000000,-1.000000 B=1856.000000,-3552.000000,2.000000
+ADD parent=6349 place=0 flags=0 ilink=4850 nv=4 N=1.000000,0.000000,0.000000 B=1360.000000,-1024.000000,240.000000
+ADD parent=6333 place=0 flags=0 ilink=4851 nv=4 N=-1.000000,0.000000,0.000000 B=1351.983643,-1023.999207,240.000000
+ADD parent=6351 place=1 flags=0 ilink=4852 nv=4 N=0.000000,1.000000,0.000000 B=1071.983643,-1019.199097,240.000000
+ADD parent=6352 place=0 flags=0 ilink=4853 nv=4 N=1.000000,0.000000,0.000000 B=1079.983643,-1019.199097,240.000000
+ADD parent=6353 place=0 flags=0 ilink=4854 nv=4 N=-0.000000,-0.000000,1.000000 B=-288.000000,-1968.000000,104.000000
+ADD parent=6351 place=0 flags=0 ilink=4855 nv=4 N=1.000000,0.000000,0.000000 B=1359.983643,-1019.199097,240.000000
+ADD parent=6355 place=0 flags=0 ilink=4856 nv=4 N=0.000000,1.000000,0.000000 B=1351.983643,-1019.199097,240.000000
+ADD parent=6356 place=0 flags=0 ilink=4857 nv=4 N=-0.000000,-0.000000,1.000000 B=-288.000000,-1968.000000,104.000000
+ADD parent=6314 place=0 flags=0 ilink=4858 nv=4 N=0.000000,-1.000000,0.000000 B=1080.000000,-1092.800049,240.000000
+ADD parent=6358 place=2 flags=0 ilink=4858 nv=4 N=0.000000,-1.000000,0.000000 B=1359.999878,-1092.800049,240.000000
+ADD parent=6358 place=1 flags=0 ilink=4859 nv=4 N=1.000000,0.000000,0.000000 B=880.000000,-1199.999878,0.000000
+ADD parent=6360 place=1 flags=0 ilink=4860 nv=4 N=0.000000,1.000000,0.000000 B=880.000000,-1392.000000,0.000000
+ADD parent=6361 place=0 flags=0 ilink=4861 nv=4 N=-0.000000,-0.000000,1.000000 B=-288.000000,-1968.000000,-14.000000
+ADD parent=6360 place=0 flags=0 ilink=4862 nv=4 N=-0.000000,-0.000000,1.000000 B=-288.000000,-1968.000732,-14.000000
+ADD parent=6363 place=0 flags=0 ilink=4863 nv=4 N=0.000000,1.000000,0.000000 B=816.000000,-1199.999878,0.000000
+ADD parent=6358 place=0 flags=0 ilink=4864 nv=4 N=1.000000,0.000000,0.000000 B=1080.000000,-1087.999878,240.000000
+ADD parent=6365 place=1 flags=0 ilink=4865 nv=4 N=1.000000,0.000000,0.000000 B=1359.999878,-1088.000000,240.000000
+ADD parent=6366 place=0 flags=0 ilink=4866 nv=4 N=-1.000000,0.000000,0.000000 B=1351.999878,-1092.799927,240.000000
+ADD parent=6367 place=0 flags=0 ilink=4867 nv=4 N=-0.000000,-0.000000,1.000000 B=-288.000122,-1968.000000,104.000000
+ADD parent=6365 place=0 flags=0 ilink=4868 nv=4 N=-1.000000,0.000000,0.000000 B=1072.000000,-1092.799927,240.000000
+ADD parent=6369 place=0 flags=0 ilink=4869 nv=4 N=-0.000000,-0.000000,1.000000 B=-288.000000,-1968.000000,104.000000
+STAGEEND idx=113
+TARGET_END
+[Inferior 1 (process 33) detached]

@@ -1,7 +1,7 @@
 +++
 priority = "p1"
 kind = "implement"
-summary = "SHIPPED 2026-08-29 (repartition_frontier + compact_unreachable_nodes, bspcsg.rs), but with a REGRESSION on UNATCO's lighting -- see 'lighting regressed' below. Remaining UNATCO node gap (6321 vs 6314) root-caused via live gdb capture: repartition_frontier's make_ed_polys emits unmerged coplanar duplicates (live-verified 40 vs editor's real 29 for child=6108); bsp_merge_coplanars fixes that ONE call exactly (byte-identical root split) but blanket-applied to all 209 calls reproduces the prior 5689-node regression -- fix needs to be selective, not yet found. Wanchai stays node-exact throughout."
+summary = "SHIPPED 2026-08-29 (repartition_frontier + compact_unreachable_nodes, bspcsg.rs), but with a REGRESSION on UNATCO's lighting -- see 'lighting regressed' below. Remaining UNATCO node gap (6321 vs 6314) root-caused via live gdb capture: repartition_frontier's make_ed_polys emits unmerged coplanar duplicates (live-verified 40 vs editor's real 29 for child=6108); bsp_merge_coplanars fixes that ONE call exactly (byte-identical root split) but blanket-applied to all 209 calls reproduces the prior 5689-node regression -- fix needs to be selective, not yet found. Wanchai stays node-exact throughout. 2026-08-29 PM: merge is now verified PER-CALL-CORRECT on 4/4 live-checked calls (full recursive tree, not just root split) including the single biggest reduction (child=3086, 141->57); the -625/-634 blanket regression does NOT come from bad merging -- root cause still open, see 'per-call merge proven correct, aggregate still wrong' below."
 +++
 
 # UNATCO `Verts`/`Points` residual — it is the unported sub-BSP repartition loop
@@ -415,3 +415,100 @@ cross-call interaction from processing 209 grafts sequentially without recompact
 a way this item hasn't traced). Neither is confirmed; both need their own live/isolated check before
 another wiring attempt. `dev/docs/spikes/2026-08-29-unatco-repart-live-diff/` has the reusable
 harness for either.
+
+## Per-call merge proven correct on 4/4 (full recursive tree, not just root); aggregate deficit still
+## unexplained — root cause is NOT merge selectivity (2026-08-29, later PM)
+
+Two new committed diagnostics in `bspcsg.rs::repartition_frontier` (both env-gated, zero effect on
+the default path — confirmed by `regression_gate.py` and `bin/test -k bspcsg` unchanged at
+6321/11648 with neither var set):
+
+- **`UEDCLI_REPART_ISOLATED_TREE`** (paired with the existing `UEDCLI_REPART_FBS_CHILD=<child>`):
+  merges the target call's `fbs_polys`, rebuilds them via `split_poly_list` into a scratch clone of
+  `model` with `nodes` cleared (sharing the real surf/point/vector pools by clone, so `i_link`s still
+  resolve), and dumps every resulting node's `iFront`/`iBack`/`iPlane`/plane — the FULL recursive
+  shape, not just the root split `UEDCLI_REPART_FBS_DUMP`/`FBS_ROOT_TRACE` already gave.
+- **`UEDCLI_REPART_BLANKET_MERGE`** (temporary experiment, kept as a diagnostic): reproduces the
+  reverted blanket-merge attempt but adds a `REPART_MERGE_DIAG` line per call
+  (`orig_polys`/`merged_polys`/`appended_nodes`), so the whole 209-call distribution can be
+  inspected instead of just the final aggregate.
+
+**Test 1 — full recursive shape for `child=6108`, not just the root.** Normalized the editor's real
+29-`ADD` capture (`logs/repart-child-6108.log`) into a 0-based node tree (line `k`'s assigned index is
+`6314+(k-1)`, confirmed by the `parent=` fields matching exactly on that assumption) and diffed it
+node-for-node against `UEDCLI_REPART_ISOLATED_TREE`'s 29-node dump for the same call. **Every single
+`iFront`/`iBack`/`iPlane` link matches exactly, all 29 nodes, plus spot-checked plane `W` values
+(base·normal) at nodes 0/1/11/15/17 all agree to 4+ decimal places.** This refutes the standing
+hypothesis (a): matching the root split is NOT insufficient here — the recursion the winning split
+feeds into ALSO reproduces the editor exactly, once fed the merged poly list.
+
+**Test 2 — where does the 209-call blanket regression's shortfall actually live?** Ran
+`UEDCLI_REPART_BLANKET_MERGE` over full UNATCO and analyzed the 209 `REPART_MERGE_DIAG` lines
+(`sum(orig_polys)=3218`, `sum(merged_polys)=2584`, `sum(appended)=2593`, matching the `-625`ish
+regression via `6314 + 2593(appended) − 3218(removed by compact_unreachable_nodes) = 5689`, exact).
+**Only 46 of 209 calls have ANY reduction under merge; 163 are pure no-ops.** The reduction is heavily
+concentrated: the top 7 calls alone (`child=3086,3033,3088,3693,3079,4077,4096`) account for 367 of
+the 634 total poly reduction (58%).
+
+**Test 3 — live-verified the single BIGGEST contributor.** `child=3086` (`parent=1892 place=NODE_FRONT`,
+the same call flagged by the old `REPART_CALL_DIAG` with `delta=+2` under the CURRENT shipped/unmerged
+code — that diagnostic's "+2" is a red herring, an artifact of the `>=14`-vert split-in-half rule,
+utterly unrelated to matching the editor): native's unmerged reconstruction is 141 polys, merged is
+57. Live gdb capture (`repart_child_trace.py 3086`, `logs/repart-child-3086.log`): editor's real
+subtree for this call is **exactly 57 `ADD` lines** — matching native's merged prediction exactly, not
+the unmerged 141. Third call verified exact (after 6108, 4077), and by far the largest.
+
+**Test 4 — live-verified a large ZERO-reduction call, to check the other side.** `child=3836`
+(`parent=517 place=NODE_FRONT`, 59 polys, merge finds no duplicates so `orig_polys==merged_polys==59`):
+live gdb capture (`logs/repart-child-3836.log`) — editor's real subtree is **exactly 59 `ADD` lines**,
+matching native's UNMERGED reconstruction exactly. So native's current per-call poly-count
+reconstruction is ALREADY correct here even without merging.
+
+**4/4 live-verified calls now match the editor exactly** (6108, 4077 — poly count + root split only;
+3086, 3836 — this session, full node count including the single biggest reduction and a large
+zero-reduction control). Also ruled out: no two of the 209 `(parent, place)` entries target the same
+`child` node index (checked programmatically), so double-processing/index-corruption across calls is
+not happening at that level.
+
+**The open contradiction.** If every call's own merge-and-resplit is individually correct (4/4,
+covering both a shrinking case and a non-shrinking case), the AGGREGATE result of applying it to all
+209 should land at editor's real total (6314) — not undershoot by 625. It doesn't. Arithmetically:
+`6314 + appended − removed = final`, and `removed` (what `compact_unreachable_nodes` actually deletes)
+equals `sum(orig_polys)=3218` exactly — i.e. the raw, UNMERGED size of every old subtree being
+replaced. For the final total to reach 6314, `appended` would have to equal 3218 too (matching what's
+removed), but the individually-verified-correct `appended` is `~2593` (the merged, smaller sizes).
+This is not a contradiction in the per-call evidence — it means one of two things, neither confirmed
+yet:
+- Editor's own PRE-repartition subtree at these 46 spots is NOT the same size as native's (i.e. NOT
+  141 raw nodes for the `child=3086` spot, but something smaller to begin with) — but this conflicts
+  with the ALREADY live-verified fact that native and editor agree EXACTLY on the total node count
+  (6314) at the post-detail-loop checkpoint immediately before repartition begins. If editor's own
+  pre-repartition subtrees are smaller at exactly these 46 spots, something elsewhere in the tree must
+  be correspondingly BIGGER on native's side to still land on 6314 at that checkpoint — not yet
+  located.
+- Or: some subset of the OTHER ~163 "merge is a no-op" calls actually need to GROW during repartition
+  (editor's real post-repartition subtree bigger than the raw poly reconstruction), which neither the
+  shipped unmerged code nor a merge-based fix can currently produce (`bsp_merge_coplanars` only ever
+  shrinks-or-preserves; native's `split_poly_list` has no mechanism to emit more nodes than input polys
+  except the rare `>=14`-vert split-in-half case). Only 1 of the 163 no-op calls has been live-checked
+  (`child=3836`, which needed no growth) — nowhere near enough coverage to rule this out; a genuine
+  "needs growth" call has never been found or looked for.
+
+**Next step:** sample more of the 163 "merge no-op" calls (ideally biased toward LARGE ones, since a
+compensating growth big enough to offset a 625-node deficit would likely be concentrated the same way
+the reduction is) specifically looking for one where editor's real count EXCEEDS native's raw
+`orig_polys` — the first direct evidence for or against the "some calls need to grow" hypothesis. If
+none is found after a reasonable sample, the alternative (a genuine pre-repartition tree-shape
+difference at the 46 reducing spots, currently masked by a compensating error elsewhere in the
+~6314-node tree) becomes the leading explanation and needs its own hunt — most likely inside the
+detail-brush CSG loop / `bsp_cleanup` immediately upstream of `collect_repartition_frontier`'s
+snapshot, not inside `repartition_frontier` itself.
+
+**Not shipped.** `bspcsg.rs`'s default build path is unchanged (`UEDCLI_REPART_ISOLATED_TREE` and
+`UEDCLI_REPART_BLANKET_MERGE` are both opt-in, off by default); `bin/test -k bspcsg` (84/84) and
+`regression_gate.py` with no env vars set both reproduce the pre-existing 6321/11648 baseline exactly,
+confirmed after committing the two diagnostics. The regression_gate harness itself needed a small path
+fix (`dev/docs/spikes/2026-08-29-unatco-repart-live-diff/harness/regression_gate.py`): the Wanchai
+scratch trunk (`dev/games/trunks/tmp-wanchai-market`) no longer nests under a `maps/` subdirectory
+(likely touched by a concurrent session sharing this checkout) — the script now detects an `actors/`
+dir directly under the project root and uses that as the trunk path instead of assuming `maps/<name>`.

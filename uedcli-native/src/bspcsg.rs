@@ -1769,8 +1769,22 @@ fn repartition_frontier(model: &mut Model, list_a: &[i32], list_b: &[i32]) -> Re
         let diag = std::env::var("UEDCLI_REPART_CALL_DIAG").is_ok();
         let fbs_target = std::env::var("UEDCLI_REPART_FBS_CHILD").ok().and_then(|v| v.parse::<i32>().ok());
         let fbs_polys = if fbs_target == Some(child) { Some(polys.clone()) } else { None };
-        let (orig_polys, before_nodes) = (polys.len(), model.nodes.len());
+        // TEMPORARY EXPERIMENT (UEDCLI_REPART_BLANKET_MERGE) -- unatco-verts-points-residual-after-
+        // the-zone, testing whether the per-call merge fix (proven exact on child=6108/4077 in
+        // isolation) is *individually* well-behaved across all 209 calls when actually wired in, to
+        // localize the -625 blanket-regression's origin. NOT shipped -- revert before finishing.
+        let blanket_merge = std::env::var("UEDCLI_REPART_BLANKET_MERGE").is_ok();
+        let orig_polys = polys.len();
+        let polys = if blanket_merge { bsp_merge_coplanars(polys) } else { polys };
+        let merged_polys = polys.len();
+        let before_nodes = model.nodes.len();
         split_poly_list(model, parent, place, polys, 0, BALANCE, PORTAL_BIAS, Opt::Good, &mut call_id)?;
+        if blanket_merge {
+            let appended = model.nodes.len() - before_nodes;
+            eprintln!(
+                "REPART_MERGE_DIAG parent={parent} place={place} child={child} orig_polys={orig_polys} merged_polys={merged_polys} appended_nodes={appended}"
+            );
+        }
         if diag {
             let appended = model.nodes.len() - before_nodes;
             if appended != orig_polys {
@@ -1792,6 +1806,32 @@ fn repartition_frontier(model: &mut Model, list_a: &[i32], list_b: &[i32]) -> Re
                     "  slot={} cand_i={:?} plane={:?} pf={:#x} portal={} front={} back={} splits={} score={}",
                     r.slot, r.cand_i, r.plane, r.poly_flags, r.portal, r.front, r.back, r.splits, r.score
                 );
+            }
+            // ISOLATED RECURSIVE TREE (UEDCLI_REPART_ISOLATED_TREE, temporary diagnostic —
+            // `unatco-verts-points-residual-after-the-zone`, testing whether matching the ROOT
+            // split (already confirmed for child=6108/4077) also matches the FULL recursive
+            // shape, not just the top level). Merge `fbs_polys` and rebuild in a scratch model
+            // that shares the real model's surf/point/vector pools (clone) but starts with an
+            // empty node array, so the resulting subtree is indexed from 0 and diffable directly
+            // against a live editor `ADD` capture (`repart_child_trace.py`) with parent offsets
+            // normalized the same way.
+            if std::env::var("UEDCLI_REPART_ISOLATED_TREE").is_ok() {
+                let merged = bsp_merge_coplanars(fbs_polys.clone());
+                eprintln!("ISOTREE child={child} merged_count={}", merged.len());
+                let mut scratch = model.clone();
+                scratch.nodes.clear();
+                let mut iso_call_id = 0usize;
+                let _ = split_poly_list(
+                    &mut scratch, -1, NODE_ROOT, merged, 0, BALANCE, PORTAL_BIAS, Opt::Good,
+                    &mut iso_call_id,
+                );
+                for (i, n) in scratch.nodes.iter().enumerate() {
+                    eprintln!(
+                        "ISONODE i={i} iF={} iB={} iP={} isurf={} nv={} N={:.6},{:.6},{:.6} W={:.6}",
+                        n.i_front, n.i_back, n.i_plane, n.i_surf, n.num_vertices,
+                        n.plane.x, n.plane.y, n.plane.z, n.plane.w
+                    );
+                }
             }
         }
     }
