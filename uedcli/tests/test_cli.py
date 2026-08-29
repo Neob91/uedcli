@@ -669,3 +669,19 @@ def test_actor_find_errors_on_bad_kind(capsys):
     with pytest.raises(SystemExit) as exc:
         build_parser().parse_args(["actor", "find", "--kind", "blah"])
     assert exc.value.code == 2
+
+
+def test_level_reimport_parses_mapfile_tree_and_force():
+    ns = build_parser().parse_args(
+        ["level", "reimport", "edited.dx", "--tree", "level/m03-study", "--force"])
+    assert ns.cmd == "level"
+    assert ns.sub == "reimport"
+    assert ns.mapfile == "edited.dx"
+    assert ns.tree == "level/m03-study"
+    assert ns.force is True
+
+
+def test_level_reimport_tree_and_force_default_when_omitted():
+    ns = build_parser().parse_args(["level", "reimport", "edited.dx"])
+    assert ns.tree is None
+    assert ns.force is False

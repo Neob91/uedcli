@@ -1,7 +1,7 @@
 """`level` command family — operations over a project's levels.
 
 `cli.dispatch` enters through `run(args)`, which routes the subverb: `list`/`create`/`import`/
-`materialize`/`preview`/`status`/`doctor`. Ordering the reorg must preserve:
+`reimport`/`materialize`/`preview`/`status`/`doctor`. Ordering the reorg must preserve:
 
 - `level import` resolves its destination and runs the overwrite/path-safety guard BEFORE reading the
   map file (`_resolve_import_dest`);
@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import os
 import re
+import secrets
 import subprocess
 import sys
 import time
@@ -45,6 +46,8 @@ def run(args) -> int:
         return _level_create(args)
     if args.sub == "import":
         return _level_import(args)
+    if args.sub == "reimport":
+        return _level_reimport(args)
     if args.sub == "list":
         return _level_list(args)
     if args.sub == "status":
@@ -296,6 +299,121 @@ def _level_import(args) -> int:
         print(f"note: {n}", file=sys.stderr)
     if kind == "level":
         print(f"to edit it: export UEDCLI_LEVEL={dest_name}", file=sys.stderr)
+    return 0
+
+
+def _level_reimport(args) -> int:
+    """`level reimport MAPFILE --tree level/NAME [--force]` — fold a hand-edited COMPILED map back
+    into the EXISTING trunk that produced it, matching actors by name so unrelated actors,
+    folders/labels and CSG order are left untouched.
+
+    Unlike `level import`, the destination must already exist (`level_sources.resolve_level_only`
+    — the same level-only resolver `materialize`/`preview` use, so the ambient `$UEDCLI_LEVEL` is
+    the default target and a mutation from it is announced once, same as any other trunk write).
+
+    The pipeline:
+    1. Resolve the level (must exist) and decode the map file — identical to `level import`'s
+       steps 2-5 (`mapimport.import_map` -> parse -> drop editor scratch -> validate).
+    2. Diff the decode against the trunk's current on-disk `Level`, by actor name
+       (`reimport_ops.diff_actors`).
+    3. The blast-radius guard: refuse (exit 2) unless `--force` if more than 20% of the trunk's
+       actors would be modified or deleted (`reimport_ops.blast_radius_exceeded`).
+    4. Recompute brush `order_value`s only (`reimport_ops.compute_brush_ranks`); point actors and
+       unmodified brushes keep their existing rank untouched.
+    5. Write through the ordinary trunk delta path (`trunk.write_level`), touching only the actors
+       that actually changed body or rank.
+
+    See dev/docs/board/to-plan/level-reimport-reimport-a-hand-edited-dx-unr/spec.md.
+    """
+    from ... import reimport_ops
+
+    project = resources.resolve_project(args)
+    name, from_env = level_sources.resolve_level_only(args, verb="level reimport")
+    if from_env:
+        level_sources.announce_env_level(name, action="reimporting into")
+    level_dir = Path(config.project_maps_dir(project)) / name
+
+    mapfile = Path(args.mapfile)
+    if not mapfile.is_file():
+        raise CommandError(f"map file not found: {args.mapfile}")
+
+    # decode — identical to `level import` steps 2-5.
+    index = resources.class_index(project)
+    from ... import mapimport, upackage
+    try:
+        pkg = upackage.load_package(str(mapfile), name=mapfile.stem)
+    except SchemaError as e:
+        raise CommandError(f"{args.mapfile}: {e}")
+    notes: list[str] = []
+    text = mapimport.import_map(pkg, index, mapimport.ImportSchema(resolver=index.resolver()),
+                                notes=notes)
+    ordered = parse_t3d_actors(text)
+    seen: set[str] = set()
+    dups = sorted({a.name for a in ordered if a.name in seen or seen.add(a.name)})
+    if dups:
+        raise CommandError(
+            f"{args.mapfile}: {len(dups)} actor name(s) appear more than once and would collapse "
+            f"into a single actor: {', '.join(dups[:10])}" + (" …" if len(dups) > 10 else ""))
+    new_level = Level(actors={a.name: a for a in ordered}, order=[a.name for a in ordered])
+    dropped = mapimport.drop_editor_scratch(new_level)
+    ingest.validate_ingest_actors(list(new_level.actors.values()), args)
+
+    # diff against the existing trunk.
+    existing_level, existing_ranks = trunk.read_level(level_dir)
+    diff = reimport_ops.diff_actors(existing_level, new_level)
+
+    # Folder/label sidecars have no compiled-map equivalent — carry them over from the trunk for
+    # every matched actor whose body changed (spec: "Folder/label sidecars are left untouched").
+    for n in diff.changed:
+        new_level.actors[n].folder = existing_level.actors[n].folder
+        new_level.actors[n].labels = existing_level.actors[n].labels
+
+    # Mark every newly added actor with one shared, per-invocation label so they're easy to find
+    # and review afterward (owner decision, 2026-08-29) — `actor find --label reimport-<hex>`.
+    reimport_label = None
+    if diff.added:
+        reimport_label = f"reimport-{secrets.token_hex(3)}"
+        for n in diff.added:
+            new_level.actors[n].labels = frozenset({reimport_label})
+
+    if reimport_ops.blast_radius_exceeded(diff, len(existing_level.actors)) and not args.force:
+        blast = len(diff.modified) + len(diff.deleted)
+        pct = 100 * blast / len(existing_level.actors)
+        raise CommandError(
+            f"reimport would modify/delete {blast}/{len(existing_level.actors)} actors "
+            f"({pct:.0f}%, over the 20% guard) — pass --force to proceed "
+            f"({len(diff.modified)} modified, {len(diff.deleted)} deleted)")
+
+    for n in sorted(diff.modified):
+        old_cls = existing_level.actors[n].cls
+        new_cls = new_level.actors[n].cls
+        if old_cls != new_cls:
+            print(f"note: {n} changed class {old_cls} -> {new_cls}", file=sys.stderr)
+
+    # order_value: brushes only (point actors and unmoved brushes keep their existing rank).
+    brush_ranks = reimport_ops.compute_brush_ranks(existing_ranks, new_level, diff)
+    ranks = dict(existing_ranks)
+    ranks.update(brush_ranks)
+    for n in sorted(diff.added):
+        if new_level.actors[n].brush is None:          # new POINT actors: append-after-all
+            ranks[n] = trunk.append_rank(ranks)
+
+    only = diff.changed | {n for n in new_level.actors if ranks.get(n) != existing_ranks.get(n)}
+    trunk.write_level(level_dir, new_level, ranks, deleted=diff.deleted, only=only)
+
+    for n in new_level.order:
+        print(n)
+    print(f"reimported {len(new_level.actors)} actor(s) from {mapfile.name} into level: {name} "
+          f"({len(diff.added)} added, {len(diff.deleted)} deleted, {len(diff.changed)} changed)",
+          file=sys.stderr)
+    if reimport_label:
+        print(f"note: {len(diff.added)} added actor(s) labeled '{reimport_label}' — "
+              f"`actor find --label {reimport_label}` to review them", file=sys.stderr)
+    if dropped:
+        print(f"note: dropped {len(dropped)} editor scratch object(s) ({', '.join(dropped[:6])}"
+              + (" …" if len(dropped) > 6 else "") + ")", file=sys.stderr)
+    for n in notes:
+        print(f"note: {n}", file=sys.stderr)
     return 0
 
 

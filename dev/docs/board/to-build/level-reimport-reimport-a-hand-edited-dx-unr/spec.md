@@ -29,9 +29,12 @@ box, matching actors by name so unrelated actors are left untouched.
 - **Actors are matched by name** against the trunk's current on-disk actor set (loaded via the
   ordinary `src.load()`):
   - **Matched** (name in both) — body replaced verbatim from the decode. This is the hand-edit.
-    Folder/label sidecars are left untouched — the compiled format carries neither.
+    Folder/label sidecars are left untouched — the compiled format carries neither — whether or not
+    the body changed.
   - **Added** (map-only) — new actor dir. A point actor is appended-after-all, same as any new-actor
-    write today. A brush is ranked per the order rule below.
+    write today. A brush is ranked per the order rule below. Every added actor also gets one shared
+    `reimport-<hex>` label, freshly minted per invocation, for later review (`actor find --label
+    reimport-<hex>`) — owner decision, 2026-08-29.
   - **Deleted** (trunk-only) — passed as `deleted=` to `trunk.write_level`, the same mechanism
     `level import --overwrite` already uses for its whole-trunk case, scoped here to the real diff.
 - **`order_value` recompute is brush-only.** Point actors don't participate in CSG, and

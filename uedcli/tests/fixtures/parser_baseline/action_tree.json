@@ -72,7 +72,7 @@
         "actor": "actor query/mutate verbs",
         "brush": "brush geometry verbs",
         "mover": "mover (animated brush actor) keyframe verbs",
-        "level": "level lifecycle verbs (create/import/list/materialize/preview/status/doctor)",
+        "level": "level lifecycle verbs (create/import/reimport/list/materialize/preview/status/doctor)",
         "event": "analyse the level's Tag<->Event trigger wiring (who-triggers-whom). Offline, model-side, no editor. Sub-verbs: graph",
         "project": "inspect the resolved uedcli project",
         "class": "discover the substrate's actor classes and their property schemas (offline; reads the game's own .u packages — no editor, no level needed)",
@@ -7869,6 +7869,7 @@
             "list",
             "create",
             "import",
+            "reimport",
             "materialize",
             "preview",
             "status",
@@ -7878,6 +7879,7 @@
             "list": "list the project's levels (trunk dirs under <maps>), one name per line to stdout (pipe-friendly, e.g. `level list | ...`); a count and the active level go to stderr",
             "create": "scaffold a NEW level (maps/<name>/) with a LevelInfo actor (required by materialize); to edit it, export UEDCLI_LEVEL=<name>",
             "import": "decode a COMPILED map file (.dx/.unr) into a NEW T3D tree — the inverse of materialize. Reads the map's bytes directly: no UnrealEd, no container, no game. Use it to study, diff or remix an existing map with the ordinary query/edit verbs. The editor's own scratch objects (the red builder brush, the viewport cameras) are left out; every content actor is imported with its properties and brush geometry",
+            "reimport": "fold a hand-edited COMPILED map (.dx/.unr) back into the level trunk that produced it. Matches actors by NAME, so unrelated actors, folders/labels and CSG order are left untouched — unlike `level import --overwrite`, which replaces the whole trunk. The level must already exist; use `level import` to create one",
             "materialize": "build $UEDCLI_LEVEL's trunk into a .dx/.unr map file (pure build; no merge)",
             "preview": "render freely-posed still shots of $UEDCLI_LEVEL. The default --game backend is the faithful lit in-game tier: a warm reused headless-game container renders truly-lit first-person frames (first batch ~1-3 min: boot + travel; later batches reuse the warm container). --native is the opt-in offline draft rasterizer (no editor, no container, no game): textured + flat-shaded, seconds per batch, but no lighting/meshes/sky.",
             "status": "thin read-only dashboard for $UEDCLI_LEVEL (or a --tree box): actor counts, duplicate order_values, git state",
@@ -8038,6 +8040,79 @@
               "metavar": null,
               "converter": null,
               "help": "permit replacing an existing destination level/stash (default: refuse, exit 2). Checked BEFORE the map file is read, so a refusal costs nothing and touches nothing",
+              "mutex_group": null
+            }
+          ],
+          "subparsers": {}
+        },
+        "reimport": {
+          "class": "_CoordArgumentParser",
+          "prog": "uedcli level reimport",
+          "mutex_groups": [],
+          "actions": [
+            {
+              "class": "_HelpAction",
+              "option_strings": [
+                "-h",
+                "--help"
+              ],
+              "dest": "help",
+              "nargs": 0,
+              "const": null,
+              "default": {
+                "__suppress__": true
+              },
+              "required": false,
+              "choices": null,
+              "metavar": null,
+              "converter": null,
+              "help": "show this help message and exit",
+              "mutex_group": null
+            },
+            {
+              "class": "_StoreAction",
+              "option_strings": [],
+              "dest": "mapfile",
+              "nargs": null,
+              "const": null,
+              "default": null,
+              "required": true,
+              "choices": null,
+              "metavar": "MAPFILE",
+              "converter": null,
+              "help": "the compiled map file to reimport (.dx or .unr), relative to the current directory. A file that is missing, unreadable, or not a UE1 package errors (exit 2) naming it",
+              "mutex_group": null
+            },
+            {
+              "class": "_StoreTrueAction",
+              "option_strings": [
+                "--force"
+              ],
+              "dest": "force",
+              "nargs": 0,
+              "const": true,
+              "default": false,
+              "required": false,
+              "choices": null,
+              "metavar": null,
+              "converter": null,
+              "help": "proceed even if more than 20%% of the trunk's actors would be modified or deleted (default: refuse, exit 2, naming the percentage — a guard against reimporting the wrong file by mistake). Pure additions never count toward this threshold",
+              "mutex_group": null
+            },
+            {
+              "class": "_StoreAction",
+              "option_strings": [
+                "--tree"
+              ],
+              "dest": "tree",
+              "nargs": null,
+              "const": null,
+              "default": null,
+              "required": false,
+              "choices": null,
+              "metavar": "level/NAME",
+              "converter": null,
+              "help": "build/preview this level instead of $UEDCLI_LEVEL: level/NAME (materialize and preview operate on a level only — use `stash preview`/`prefab preview` for a captured set). Default: the level named by $UEDCLI_LEVEL.",
               "mutex_group": null
             }
           ],

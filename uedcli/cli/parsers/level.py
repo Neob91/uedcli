@@ -7,7 +7,7 @@ from ._arguments import _tree_flag
 def register(sub) -> None:
     level = sub.add_parser("level",
                            help="level lifecycle verbs "
-                                "(create/import/list/materialize/preview/status/doctor)")
+                                "(create/import/reimport/list/materialize/preview/status/doctor)")
     lsub = level.add_subparsers(dest="sub", required=True)
     llist = lsub.add_parser(
         "list",
@@ -43,6 +43,22 @@ def register(sub) -> None:
         "--overwrite", action="store_true",
         help="permit replacing an existing destination level/stash (default: refuse, exit 2). "
              "Checked BEFORE the map file is read, so a refusal costs nothing and touches nothing")
+    lreimport = lsub.add_parser(
+        "reimport",
+        help="fold a hand-edited COMPILED map (.dx/.unr) back into the level trunk that produced "
+             "it. Matches actors by NAME, so unrelated actors, folders/labels and CSG order are "
+             "left untouched — unlike `level import --overwrite`, which replaces the whole trunk. "
+             "The level must already exist; use `level import` to create one")
+    lreimport.add_argument(
+        "mapfile", metavar="MAPFILE",
+        help="the compiled map file to reimport (.dx or .unr), relative to the current directory. "
+             "A file that is missing, unreadable, or not a UE1 package errors (exit 2) naming it")
+    lreimport.add_argument(
+        "--force", action="store_true",
+        help="proceed even if more than 20%% of the trunk's actors would be modified or deleted "
+             "(default: refuse, exit 2, naming the percentage — a guard against reimporting the "
+             "wrong file by mistake). Pure additions never count toward this threshold")
+    _tree_flag(lreimport, level_only=True)
     lmat = lsub.add_parser(
         "materialize",
         help="build $UEDCLI_LEVEL's trunk into a .dx/.unr map file (pure build; no merge)")
