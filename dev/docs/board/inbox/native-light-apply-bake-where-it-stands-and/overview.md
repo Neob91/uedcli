@@ -1,7 +1,7 @@
 +++
 priority = "p1"
 kind = "debug"
-summary = "Resume pointer for the native LIGHT APPLY bake. It reproduces the editor's own output on 01_NYC_UNATCOHQ to 99.2% of per-(surface,light) shadow planes byte-identical; 2628 of 3345 LightMap records are byte-identical (78.6%). Two named gaps remain (permeating lights, Points/Vectors residual); the light-run selection gap is much smaller after self-occlusion landed but not closed. How to rebuild both oracles and re-measure in one command each."
+summary = "Resume pointer for the native LIGHT APPLY bake. STALE ON UNATCO as of 2026-08-29 PM: the repartition-frontier geometry fix (unatco-verts-points-residual-after-the-zone) broke UNATCO's node-exactness (6314->6321), which drops its LightMap records byte-identical from 2628/3345 (78.6%) to 1627/3345 (48.6%) -- re-measure before trusting the UNATCO table below. Wanchai's numbers (3228/4530, 71.3%) are unaffected and current. How to rebuild both oracles and re-measure in one command each."
 depends-on = ["port-urender-getvisiblesurfs-so-each-light-gets", "port-the-per-leaf-permeating-light-lists-model", "unatco-verts-points-residual-after-the-zone"]
 spikes = ["dev/docs/spikes/2026-08-27-native-light-apply-parity/"]
 +++
@@ -39,9 +39,17 @@ Trunks used: `_scratch/bsp-parity-proj/maps/unatco` (1437 actors, 734 world brus
 `dev/games/trunks/tmp-wanchai-market` (2288 actors, 1304 world brushes). Both have fully qualified
 actor classes, which `gather_lights` needs.
 
-## State on `01_NYC_UNATCOHQ` (trees identical, so records align 1:1)
+## State on `01_NYC_UNATCOHQ` — STALE, trees no longer identical, records do NOT align 1:1
 
-Re-measured 2026-08-29 after the `GetVisibleSurfs` self-occlusion fix (`9c148d4`):
+Table below measured 2026-08-29 AM after the `GetVisibleSurfs` self-occlusion fix (`9c148d4`),
+back when UNATCO's tree was still node-exact. Later the same day, `04986a2` (repartition-frontier)
+moved UNATCO's nodes to 6321 (was 6314) — the table's premise ("trees identical, records align
+1:1") no longer holds, so these specific numbers are not a meaningful current measurement.
+Full re-run afterward: 1627/3345 (48.6%) byte-identical, but that number conflates real bake
+differences with pure record-misalignment noise now that the trees disagree, so it isn't
+trustworthy as a bake-quality number either — needs UNATCO's node-exactness restored (see
+`unatco-verts-points-residual-after-the-zone`'s "CORRECTION" section) before this table means
+anything again. Wanchai's table below is unaffected (its nodes stayed exact) and still current.
 
 | | native | editor |
 |---|---:|---:|

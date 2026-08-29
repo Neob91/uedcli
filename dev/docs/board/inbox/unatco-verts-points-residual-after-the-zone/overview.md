@@ -1,7 +1,7 @@
 +++
 priority = "p1"
 kind = "implement"
-summary = "SHIPPED 2026-08-29 (repartition_frontier + compact_unreachable_nodes, bspcsg.rs): UNATCO Verts 66037->78931 (editor 76488), Wanchai 167325->169451 (editor 169313, was -1988 now +138 -- 14x closer). Both node-exact levels net-improved sharply; 4 OTHER already-inexact levels (a separate, still-unexplained over-build bug) get worse in Verts, not better -- see the caveat section."
+summary = "SHIPPED 2026-08-29 (repartition_frontier + compact_unreachable_nodes, bspcsg.rs), but with a REGRESSION on UNATCO -- see the 'lighting regressed' section below before trusting this as a clean win. Wanchai: nodes stay exact (11648), Verts -1988->+138 (14x closer), lighting UNCHANGED (3228/4530 byte-identical, same as before). UNATCO: nodes drift off-exact 6314->6321 (+7), which breaks lightmap-record alignment and drops lighting byte-identical from 2628/3345 to 1627/3345 -- a real regression on the metric that matters more. 4 OTHER already-inexact levels get worse in Verts too (separate over-build bug)."
 +++
 
 # UNATCO `Verts`/`Points` residual — it is the unported sub-BSP repartition loop
@@ -173,6 +173,34 @@ roughly doubles on some. None of the 4 were geometry-exact before OR after, so n
 regresses — but it means this fix alone does not make those 4 exact, and the other over-build cause
 needs its own investigation before it will.
 
-Shipped anyway: net positive on the two levels with an otherwise-correct tree (UNATCO, Wanchai —
-exactly the ones the owner said to validate against first), and doesn't cost any currently-exact
-level its exactness.
+## CORRECTION 2026-08-29, same day: UNATCO's node count is no longer exact, and lighting regressed
+
+The "shipped anyway" line above was wrong to call this unqualified good news on UNATCO. Full
+`level materialize` + `lightparity.py` against the UNATCO lit golden, AFTER this fix:
+
+| | before this fix | after this fix |
+|---|---:|---:|
+| UNATCO nodes | 6314 (exact) | 6321 (+7, NOT exact) |
+| UNATCO LightMap records byte-identical | 2628/3345 (78.6%) | 1627/3345 (48.6%) |
+| Wanchai nodes | 11648 (exact) | 11648 (exact, unchanged) |
+| Wanchai LightMap records byte-identical | 3228/4530 (71.3%) | 3228/4530 (71.3%, unchanged) |
+
+Losing UNATCO's node-exactness breaks `LightMap` record ALIGNMENT (record `k` on each side no
+longer describes the same surface — the same reason Wanchai needed the `5b0a022` fix before its
+lighting could be compared meaningfully at all), so `lightparity.py`'s per-record comparison is
+now comparing largely unrelated surfaces. **This is a real regression on the metric that actually
+gates the parity goal (byte-identical output), not just a cosmetic Verts-count miss.**
+
+Wanchai is unaffected and a clean win end to end (nodes exact throughout, Verts 14x closer,
+lighting numbers literally unchanged) — the regression is UNATCO-specific: ~7 of its 209
+repartition-frontier calls net one extra node each (202/209 are net-zero, matching the "bspBuild
+bumps then bspRefresh brings back" citation; a handful aren't). Kept shipped rather than reverted
+because Wanchai's result is unambiguously good and the mechanism is structurally verified correct
+(the 209/209 frontier-collector match, the disassembly-decoded algorithm) — but UNATCO's +7-node
+gap needs closing before this can be called done, and any NEW level added to the comparison corpus
+should be checked for the same node-exactness-vs-lighting-alignment interaction before trusting a
+Verts-only comparison as sufficient.
+
+**Next step:** identify which ~7 of the 209 `repart_frontier_a`/`repart_frontier_b` entries add a
+net node (compare `make_ed_polys`'s pre-repartition subtree node count against what
+`split_poly_list` produces for that same subtree) rather than treating this as solved.
