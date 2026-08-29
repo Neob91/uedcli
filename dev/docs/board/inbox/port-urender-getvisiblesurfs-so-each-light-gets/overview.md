@@ -4,6 +4,15 @@ kind = "implement"
 summary = "The last structural gap in the native lighting bake: the editor picks each light's surface set with a six-face 1024x1024 cube-map rasterization (URender::GetVisibleSurfs -> OccludeBsp, per-zone span buffers), and native uses a plane test plus per-lumel LOS. On UNATCO that leaves native listing 618 (surface, light) pairs the editor rejects, against only 7 it misses. Fully decoded below."
 +++
 
+## Status 2026-08-29: partial port landed, NOT closed
+
+`uedcli-native/src/visible_surfs.rs` ports zone-reachability, backface, frustum-clip and
+`PF_Invisible` filtering, but ships with true opaque-surface self-occlusion DISABLED
+(`SUBTRACT_OCCLUSION = false`) because enabling it regresses missed pairs 7→1110 — see
+`getvisiblesurfs-self-occlusion-regresses-missed`. Net effect on UNATCO with it off: extra
+618→447, missed 7→119, byte-identical records 2518→2557/3345. Real, tested, committed — but the
+gap this item describes is still open pending that occlusion bug.
+
 # Port `URender::GetVisibleSurfs` so each light gets the editor's surface set
 
 The native `LIGHT APPLY` bake reproduces the editor's own output on `01_NYC_UNATCOHQ` to 99.0% of

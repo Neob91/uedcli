@@ -80,11 +80,11 @@ rather than being UNATCO-specific artifacts. `Lights` entries (13477 vs 31613) a
 
 ## The three remaining gaps, none of them in `light.rs`
 
-1. **Light runs — 368 records, one-sided: native adds 618 (surface, light) pairs and misses 7.** The
-   editor picks each light's surface set by RASTERIZING six 1024x1024 cube-map faces from the light
-   and keeping whatever survives per-zone span buffers. Fully decoded in
-   `port-urender-getvisiblesurfs-so-each-light-gets`, including a port sketch. This is the only gap
-   that is genuinely the bake's own.
+1. **Light runs.** Was: 618 extra (surface, light) pairs, 7 missed. A partial port landed
+   2026-08-29 (`port-urender-getvisiblesurfs-so-each-light-gets`, zone/backface/frustum filtering
+   without self-occlusion): now 447 extra, 119 missed, byte-identical 2518→2557/3345. Enabling true
+   self-occlusion regresses missed to 1110 (`getvisiblesurfs-self-occlusion-regresses-missed`) — not
+   yet closed. This is the only gap that is genuinely the bake's own.
 2. **`Model.Lights` is 11368 vs 16263 entries** — the missing 5405 is the per-leaf permeating region,
    produced by the ZONING build, not the bake: `port-the-per-leaf-permeating-light-lists-model` has the
    whole algorithm. `zones.rs` also still stubs every leaf's `iPermeating` to `0`, which is wrong data
