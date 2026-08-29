@@ -93,7 +93,7 @@ pub struct LightInput {
 
 impl LightInput {
     #[inline]
-    fn world_radius(&self) -> f32 {
+    pub(crate) fn world_radius(&self) -> f32 {
         (self.radius as f32 + 1.0) * 25.0
     }
 }
@@ -359,6 +359,12 @@ pub fn bake(model: &mut Model, lights: &[LightInput]) -> Result<(), BuildError> 
     }
     validate_indices(model)?;
     validate_finite(model)?;
+
+    // `Model.Lights` region 1 (per-leaf permeating light lists) is NOT wired in here yet:
+    // `permeating_lights::write_permeating_region` exists and is unit-tested, but on UNATCO its
+    // leaf-reachability SET matches the editor exactly (748/762) while the per-leaf light CONTENT
+    // does not (4/762 exact) -- see `port-the-per-leaf-permeating-light-lists-model`. Shipping
+    // wrong-but-plausible light lists is worse than the current honest `iPermeating = -1` gap.
 
     if std::env::var("UEDCLI_VISGATE_DUMP").is_ok() {
         let mut surfaced = 0usize;

@@ -143,9 +143,15 @@ fn plane_axes(n: [f32; 3]) -> ([f32; 3], [f32; 3]) {
 /// covers.  (The old per-generating-node `zone_portal` flag over-marked: a small portal surface in
 /// a large BSP cell had its whole cell-sized infinite-quad face flagged, wrongly separating leaves
 /// that share open space — the native zone over-fragmentation root cause, §70 §13.)
-struct Portal {
-    a: i32,
-    b: i32,
+pub(crate) struct Portal {
+    pub(crate) a: i32,
+    pub(crate) b: i32,
+    /// The shared polygon (`sub`/`frag` from `collect_portals`), plus the generating node's plane
+    /// (`normal`/`w`, oriented toward `a` — see `collect_portals`). Consumed by
+    /// `permeating_lights::collect_leaf_portals` for the beam-flood; unused by the zone union-find.
+    pub(crate) poly: Vec<[f32; 3]>,
+    pub(crate) normal: [f32; 3],
+    pub(crate) w: f32,
 }
 
 /// Area² proxy (sum of triangle cross-products) — reject slivers below `MIN_AREA`.
@@ -278,6 +284,9 @@ fn collect_portals(
                     out.push(Portal {
                         a: front_leaf,
                         b: back_leaf,
+                        poly: sub.clone(),
+                        normal: pl,
+                        w: n.plane.w,
                     });
                 }
             }
@@ -294,6 +303,17 @@ fn collect_portals(
         collect_portals(model, i_front, planes, out);
         planes.pop();
     }
+}
+
+/// Fresh re-collection of every empty-leaf-to-empty-leaf portal (with geometry), for
+/// `permeating_lights` to consume at BAKE time — the geometry-build-time `portals` local in
+/// `assign_leaves_and_zones` doesn't survive past that call, but the node tree is unchanged by the
+/// time lighting runs, so recomputing here is cheap and exact.
+pub(crate) fn collect_leaf_portals(model: &Model) -> Vec<Portal> {
+    let mut planes: Vec<([f32; 3], f32)> = Vec::new();
+    let mut out = Vec::new();
+    collect_portals(model, 0, &mut planes, &mut out);
+    out
 }
 
 // --- Pass C: zone flood (union-find) ---------------------------------------
@@ -855,7 +875,10 @@ pub fn assign_leaves_and_zones(model: &mut Model) -> Vec<usize> {
         let r = find(&mut parent, i as i32);
         let z = (dense[r as usize] % 63) + 1;
         model.leaves[i].i_zone = z;
-        model.leaves[i].i_permeating = 0;
+        // -1 = "no participating light reaches this leaf" (the correct sentinel; region 1 of
+        // `Model.Lights` isn't ported yet -- see `port-the-per-leaf-permeating-light-lists-model`
+        // -- but a bogus `0` here would misleadingly alias whatever ends up at `Lights[0]`).
+        model.leaves[i].i_permeating = -1;
     }
     let num_zones = (n_zones_found + 1).min(64); // + zone 0
 

@@ -19,6 +19,7 @@ mod linecheck;
 mod model;
 mod model_write;
 mod passes;
+mod permeating_lights;
 mod render;
 mod visible_surfs;
 mod zones;
