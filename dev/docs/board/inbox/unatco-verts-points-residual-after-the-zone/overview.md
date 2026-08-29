@@ -226,7 +226,27 @@ this codebase, not evidence the whole approach is wrong. Reproduce:
 `UEDCLI_REPART_CALL_DIAG=1 UEDCLI_BSPCSG_STAGE_COUNTS=1 <build UNATCO>`.
 
 **This is the actual blocker for UNATCO's node-exactness** (and therefore its lighting
-comparability — see the CORRECTION section above). Next real step: dump the 40-poly soup (child
-6108, the smallest of the three) and diff `find_best_split_exact`'s scoring against what the
-editor's `FindBestSplit` would pick, the same methodology that closed the Wanchai NEAR/SAME
-epsilon gap (`5b0a022`).
+comparability — see the CORRECTION section above).
+
+## Root split checked, not it — divergence is deeper in the recursion (2026-08-29)
+
+Added `UEDCLI_REPART_FBS_CHILD` (env-gated, `7496253`) to dump `find_best_split_trace`'s candidate
+table for one repartition call's TOP-LEVEL split. Checked the smallest case (child=6108, 40 polys,
+delta +1): winner is slot 12 at score 60, next-best is slot 32 at score 108 — not a near-tie, a
+clean, unambiguous win by a wide margin. So the root split is NOT where native and the editor
+diverge; the +1 extra node happens somewhere in the RECURSIVE sub-splits of the resulting front/back
+halves (front=7, back=12 polys from the winning split), which the current trace tool doesn't reach
+(it only traces one level, by design — "kept separate so the traced path never touches the hot
+loop").
+
+**Real next step needs a live differential, not more static tracing:** without an independent
+capture of what the EDITOR'S `bspRepartition(Model, 6108-equivalent-node, 2)` actually produced for
+this exact 40-poly subtree, there's no ground truth to diff native's recursive choices against —
+same category of work as the Area51 N=5→N=6 trace (`native-under-builds-area51-entrance-geometry`).
+Candidate approach: instrument the editor to dump its own `FindBestSplit` winner at each recursion
+level for one `MAP REBUILD`, or — cheaper — bisect by re-running native with `UEDCLI_REPART_FBS_CHILD`
+pointed at intermediate node indices once the recursive front/back children are known (recurse the
+diff manually: split polys via slot 12's plane, dump each half's own trace, and keep descending
+until node COUNTS between the two halves stop matching editor per-half node counts from a captured
+tree — needs `a51`-style incremental capture infrastructure adapted for this soup instead of brush
+prefixes).
