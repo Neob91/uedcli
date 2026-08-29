@@ -20,6 +20,7 @@ mod model;
 mod model_write;
 mod passes;
 mod render;
+mod visible_surfs;
 mod zones;
 
 use pyo3::create_exception;

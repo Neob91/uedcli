@@ -72,7 +72,7 @@ const SELF_SHADOW_BIAS: f32 = 4.0;
 /// dropping the cull put a back-side light on 2586 of 5486 (surf, light) entries, roughly doubling
 /// the lights per surface and flattening the render's contrast.
 #[inline]
-fn light_in_front(normal: &Vec3, base: &Vec3, light: &Vec3, poly_flags: u32) -> bool {
+pub(crate) fn light_in_front(normal: &Vec3, base: &Vec3, light: &Vec3, poly_flags: u32) -> bool {
     poly_flags & (PF_TWO_SIDED | PF_PORTAL) != 0
         || light.sub(base).dot(normal) >= -1.0
 }
@@ -360,6 +360,43 @@ pub fn bake(model: &mut Model, lights: &[LightInput]) -> Result<(), BuildError> 
     validate_indices(model)?;
     validate_finite(model)?;
 
+    if std::env::var("UEDCLI_VISGATE_DUMP").is_ok() {
+        let mut surfaced = 0usize;
+        let mut zoneless = 0usize;
+        let mut nonzero_zones = std::collections::HashSet::new();
+        for n in &model.nodes {
+            if n.i_surf >= 0 && n.num_vertices >= 3 {
+                surfaced += 1;
+                if n.i_zone == [0, 0] {
+                    zoneless += 1;
+                }
+                for z in n.i_zone {
+                    if z != 0 {
+                        nonzero_zones.insert(z);
+                    }
+                }
+            }
+        }
+        eprintln!(
+            "VISGATE_DUMP surfaced_nodes={surfaced} zoneless={zoneless} distinct_nonzero_zones={} \
+             total_zones_array_len={}",
+            nonzero_zones.len(),
+            model.zones.len()
+        );
+    }
+
+    // Per light, the editor's `URender::GetVisibleSurfs` candidate surf set (`visible_surfs.rs`) —
+    // computed BEFORE the per-surf bake below, once per light, in parallel. This replaces the old,
+    // more permissive selection (plane test + per-lumel LOS alone) with the editor's own six-face
+    // cube-map occlusion rasterization; see that module's doc comment for what is and isn't ported.
+    let visible_per_light: Vec<std::collections::HashSet<i32>> = lights
+        .par_iter()
+        .map(|l| crate::visible_surfs::get_visible_surfs(model, l.location))
+        .collect();
+    if std::env::var("UEDCLI_VISGATE_DUMP").is_ok() {
+        crate::visible_surfs::dump_debug_counters();
+    }
+
     // Gather each surf's node vertices (a shared surf is referenced by several nodes) once.
     let mut surf_verts: Vec<Vec<Vec3>> = vec![Vec::new(); model.surfs.len()];
     for n in &model.nodes {
@@ -376,7 +413,7 @@ pub fn bake(model: &mut Model, lights: &[LightInput]) -> Result<(), BuildError> 
     // (2-4) Per-surface bake, in parallel.
     let mut bakes: Vec<Option<SurfBake>> = (0..model.surfs.len())
         .into_par_iter()
-        .map(|si| bake_surf(model, &surf_verts[si], si, lights))
+        .map(|si| bake_surf(model, &surf_verts[si], si, lights, &visible_per_light))
         .collect();
 
     // (5) Serial concat: assign DataOffset/iLightActors, append planes + light runs, link surfs.
@@ -466,7 +503,15 @@ fn lightmap_emit_order(model: &Model) -> Vec<usize> {
 }
 
 /// Compute one surface's grid + shadow planes (§3-§6).  Returns `None` for an unlightmapped surf.
-fn bake_surf(model: &Model, verts: &[Vec3], si: usize, lights: &[LightInput]) -> Option<SurfBake> {
+/// `visible_per_light[li]` is that light's `GetVisibleSurfs` candidate set (`visible_surfs.rs`) —
+/// checked below alongside the existing `bSpecialLit`/backface/radius filters.
+fn bake_surf(
+    model: &Model,
+    verts: &[Vec3],
+    si: usize,
+    lights: &[LightInput],
+    visible_per_light: &[std::collections::HashSet<i32>],
+) -> Option<SurfBake> {
     let s = &model.surfs[si];
     if s.poly_flags & PF_NO_LIGHTMAP != 0 || verts.is_empty() {
         return None;
@@ -568,6 +613,12 @@ fn bake_surf(model: &Model, verts: &[Vec3], si: usize, lights: &[LightInput]) ->
         // Backface cull: a light behind this surface's plane never lights its front face (editor
         // parity — see `light_in_front`). Cheapest possible test, so do it first.
         if !light_in_front(&normal, &base, &l.location, s.poly_flags) {
+            continue;
+        }
+        // `URender::GetVisibleSurfs` gate (`visible_surfs.rs`): the editor's own six-face cube-map
+        // occlusion rasterization decides which surfaces even enter a light's run, independent of
+        // (and stricter than) the plane/radius/per-lumel tests below.
+        if !visible_per_light[li].contains(&(si as i32)) {
             continue;
         }
         let wr = l.world_radius();
