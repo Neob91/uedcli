@@ -384,3 +384,34 @@ no-op there and the 5689 regression comes from `try_to_merge`'s geometric weld b
 inputs) or is itself SMALLER (predicting native's reconstruction has a broader duplication problem
 that merge over-corrects). That result should show which of the two failure modes is real before
 attempting another wiring.
+
+## `REPART_CALL_DIAG`'s delta flag is NOT a valid proxy for "needs merging" (2026-08-29 PM, cont'd)
+
+Ran the next-step check above on `child=4077` — the 2nd of the 209 calls, `REPART_CALL_DIAG`-silent
+(i.e. one of the ~206 calls this item's earlier write-ups assumed were already correct). Same live
+gdb method as `child=6108`:
+
+- Native's unmerged `make_ed_polys` reconstruction: **107** polys.
+- Editor's real `FindBestSplit` (live-captured, `0x100338ee`): **numpolys=75**.
+- `bsp_merge_coplanars` on the same 107 polys, in isolation: **75** — exact match again, and its
+  winning plane's `score=0` (a clean, unambiguous winner, so this isn't a near-tie either).
+
+**This overturns the working assumption that only ~3 of 209 calls need the merge.** `child=4077` was
+never flagged by `REPART_CALL_DIAG` (its `appended_nodes == orig_polys`, i.e. native's own
+un-merged 107-poly split happens to still emit exactly 107 nodes with no net loss) — that diagnostic
+only measures native's OWN internal input/output consistency, not whether the result matches the
+editor. It is silent here despite a 107-vs-75 gap even bigger than `child=6108`'s 40-vs-29. So the
+merge is very likely needed on most/all 209 calls, not a handful — 2 for 2 tested so far, both exact.
+
+**This makes the 5689-node blanket-merge regression MORE surprising, not less**: if merging
+independently reproduces the editor's exact poly count and winning split on every call checked so
+far, the -625 node deficit must come from something other than "merge is too aggressive on most
+calls" — candidates not yet checked: (a) a genuine per-call node-count difference downstream of the
+root split even when the poly SET matches (i.e. matching the root decision isn't sufficient — the
+recursive front/back splits could still diverge and this happens to cost nodes on net), or (b) a
+cross-call interaction from processing 209 grafts sequentially without recompacting between them
+(`compact_unreachable_nodes` only runs once, at the very end, after ALL 209 calls — a later call's
+`make_ed_polys` walk could be reading a subtree state some earlier call's graft already altered, in
+a way this item hasn't traced). Neither is confirmed; both need their own live/isolated check before
+another wiring attempt. `dev/docs/spikes/2026-08-29-unatco-repart-live-diff/` has the reusable
+harness for either.
