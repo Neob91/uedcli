@@ -15,8 +15,11 @@ and D1 (built-model located defects: invisible walls + fall-through) now run aut
 `level materialize` after a successful build+save, advisory-only on stderr at rc 0, with
 `--no-bsp-check` to disable. Shipped in `bsp-issue-detector` (see `done/`).
 
-That spec is a separate board item, so it is not silently rewritten here. It needs the owner's call:
-retire it as superseded, or keep the parts still wanted (the D0-b measurement — its own inbox item
+That spec was a separate board item, so it was not silently rewritten in place. It is now retired to
+`done/bsp-issue-ground-truth-detector-d0-d1` (superseded, 2026-08-29); its three open re-scope
+questions were folded here into `questions/` (`complete-detector-coverage-and-ci-model`,
+`d2-boundary-now-the-engine-exists`, `native-engine-supersedes-d1-parser`). What to keep from the
+parts still wanted stands as an owner call (the D0-b measurement — its own inbox item
 `d0-b-measure-build-emergent-bsp-drops-over-real`; a standalone pre-built-`.dx` verb — its own inbox
 item `standalone-verb-to-run-bsp-checks-on-a-pre`; the deferred D2 offline engine, largely built in
 Rust already per the spec's own 2026-08-01 audit).
