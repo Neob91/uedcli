@@ -4,14 +4,15 @@ kind = "implement"
 summary = "The last structural gap in the native lighting bake: the editor picks each light's surface set with a six-face 1024x1024 cube-map rasterization (URender::GetVisibleSurfs -> OccludeBsp, per-zone span buffers), and native uses a plane test plus per-lumel LOS. On UNATCO that leaves native listing 618 (surface, light) pairs the editor rejects, against only 7 it misses. Fully decoded below."
 +++
 
-## Status 2026-08-29: partial port landed, NOT closed
+## Status 2026-08-29: self-occlusion landed, gap much smaller, still NOT closed
 
-`uedcli-native/src/visible_surfs.rs` ports zone-reachability, backface, frustum-clip and
-`PF_Invisible` filtering, but ships with true opaque-surface self-occlusion DISABLED
-(`SUBTRACT_OCCLUSION = false`) because enabling it regresses missed pairs 7→1110 — see
-`getvisiblesurfs-self-occlusion-regresses-missed`. Net effect on UNATCO with it off: extra
-618→447, missed 7→119, byte-identical records 2518→2557/3345. Real, tested, committed — but the
-gap this item describes is still open pending that occlusion bug.
+`uedcli-native/src/visible_surfs.rs` now ports the full gather including true opaque-surface
+self-occlusion (`SUBTRACT_OCCLUSION = true`, `SpanBuf` rewritten as a per-row interval list to
+match the real `FSpanBuffer` — see `getvisiblesurfs-self-occlusion-regresses-missed`, resolved).
+UNATCO: extra 618→151, missed 7→233, byte-identical records 2518→2628/3345. Wanchai: extra
+526→131, missed 12→347, byte-identical 3229→3228/4530 (flat). Real, tested, committed — closer,
+but not 0/0 on either level. `MergeWith` (`render.dll 0x1001e3b0`) is still undecoded and is the
+next suspect, especially for Wanchai's larger `missed` count (more zone/portal crossings).
 
 # Port `URender::GetVisibleSurfs` so each light gets the editor's surface set
 

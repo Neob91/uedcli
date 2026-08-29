@@ -1,7 +1,7 @@
 +++
 priority = "p1"
 kind = "debug"
-summary = "Resume pointer for the native LIGHT APPLY bake. It reproduces the editor's own output on 01_NYC_UNATCOHQ to 99.0% of per-(surface,light) shadow planes byte-identical and 99.99% of lumel bits; 2518 of 3345 LightMap records are byte-identical. Three named gaps remain, all owned elsewhere. How to rebuild both oracles and re-measure in one command each."
+summary = "Resume pointer for the native LIGHT APPLY bake. It reproduces the editor's own output on 01_NYC_UNATCOHQ to 99.2% of per-(surface,light) shadow planes byte-identical; 2628 of 3345 LightMap records are byte-identical (78.6%). Two named gaps remain (permeating lights, Points/Vectors residual); the light-run selection gap is much smaller after self-occlusion landed but not closed. How to rebuild both oracles and re-measure in one command each."
 depends-on = ["port-urender-getvisiblesurfs-so-each-light-gets", "port-the-per-leaf-permeating-light-lists-model", "unatco-verts-points-residual-after-the-zone"]
 spikes = ["dev/docs/spikes/2026-08-27-native-light-apply-parity/"]
 +++
@@ -41,23 +41,22 @@ actor classes, which `gather_lights` needs.
 
 ## State on `01_NYC_UNATCOHQ` (trees identical, so records align 1:1)
 
+Re-measured 2026-08-29 after the `GetVisibleSurfs` self-occlusion fix (`9c148d4`):
+
 | | native | editor |
 |---|---:|---:|
 | surfs / nodes / leaves / vectors | 3616 / 6314 / 762 / 599 | same |
 | `LightMap` records | 3345 | 3345 |
 | surfs `iLightMap = -1` | 271 | 271 |
-| grid dims (`UClamp`/`VClamp`) exact | 3345 / 3345 | — |
-| records byte-identical | 2518 / 3345 | — |
-| per-(surface,light) shadow planes byte-identical | 8162 / 8246 = 99.0% | — |
-| lumel bits equal | 99.988% of 3,978,275 | — |
-| light runs identical incl. order | 2977 / 3345 | — |
+| records byte-identical | 2628 / 3345 = 78.6% | — |
+| run identical (same set+order) | 3080 / 3345 = 92.1% | — |
+| extra (surf,light) pairs native adds / misses | 151 / 233 | — |
+| shadow bits on grid+run-matched records | 3161574 / 3185728 = 99.24% | — |
 | light actors listed on a surface | 189 | 189 (0 either-only) |
 
-## State on `09_HONGKONG_WANCHAI_MARKET` (re-measured 2026-08-29, trees now node-exact after `5b0a022`)
+## State on `09_HONGKONG_WANCHAI_MARKET` (re-measured 2026-08-29, trees node-exact after `5b0a022`)
 
-The old approximate (geometry-matched) numbers below are superseded — the tree gap that forced
-approximate matching (`native-bsp-matches-the-editor-on-unatco-but-not`) is fixed, so records now
-align 1:1 like UNATCO's. Exact-tree measurement:
+Re-measured again after the self-occlusion fix (`9c148d4`):
 
 | | native | editor |
 |---|---:|---:|
@@ -66,33 +65,34 @@ align 1:1 like UNATCO's. Exact-tree measurement:
 | vectors | 479 | 487 |
 | `LightMap` records | 4530 | 4530 |
 | surfs `iLightMap = -1` | 754 | 754 |
-| records byte-identical | 3229 / 4530 = 71.3% | — |
-| run identical (same set+order) | 4165 / 4530 = 91.9% | — |
-| extra (surf,light) pairs native adds / misses | 526 / 12 | — |
-| shadow bits on grid+run-matched records | 1007920 / 1018504 = 98.96% | — |
+| records byte-identical | 3228 / 4530 = 71.3% | — |
+| run identical (same set+order) | 4182 / 4530 = 92.3% | — |
+| extra (surf,light) pairs native adds / misses | 131 / 347 | — |
+| shadow bits on grid+run-matched records | 1069024 / 1079832 = 99.00% | — |
 | light actors listed on a surface | 229 | 229 (0 either-only) |
 
-Same shape as UNATCO's 618-extra/7-missing light-run gap (gap 1 below) and the same Points/Vectors
-residual (gap 3), both roughly proportional to level size — confirms the two known gaps generalize
-rather than being UNATCO-specific artifacts. `Lights` entries (13477 vs 31613) also confirm gap 2
-(permeating region) scales the same way. Reproduced with
-`_scratch/wanchai-relight-2026-08-29/{golden,native}.dx`, `lightparity.py`/`run_diff.py` logs alongside.
+Byte-identical count is essentially FLAT vs the pre-fix measurement (3229→3228) — extra pairs
+dropped a lot (526→131) but missed rose (12→347), unlike UNATCO where every metric improved. The
+self-occlusion fix (`getvisiblesurfs-self-occlusion-regresses-missed`) is a clear win on UNATCO and
+a wash on Wanchai; `merge_into`'s fidelity to the undecoded `MergeWith` is the leading suspect for
+the difference (Wanchai has more zones/portal crossings). Reproduced with
+`_scratch/wanchai-relight-2026-08-29/{golden,native_occl}.dx`, `lightparity.py`/`run_diff.py` logs.
 
-## The three remaining gaps, none of them in `light.rs`
+## The three remaining gaps, none in `light.rs`'s per-lumel bake itself
 
-1. **Light runs.** Was: 618 extra (surface, light) pairs, 7 missed. A partial port landed
-   2026-08-29 (`port-urender-getvisiblesurfs-so-each-light-gets`, zone/backface/frustum filtering
-   without self-occlusion): now 447 extra, 119 missed, byte-identical 2518→2557/3345. Enabling true
-   self-occlusion regresses missed to 1110 (`getvisiblesurfs-self-occlusion-regresses-missed`) — not
-   yet closed. This is the only gap that is genuinely the bake's own.
-2. **`Model.Lights` is 11368 vs 16263 entries** — the missing 5405 is the per-leaf permeating region,
-   produced by the ZONING build, not the bake: `port-the-per-leaf-permeating-light-lists-model` has the
-   whole algorithm. `zones.rs` also still stubs every leaf's `iPermeating` to `0`, which is wrong data
-   rather than missing data.
-3. **`Pan` / `UScale` / `VScale` differ on 160 / 111 / 94 records** — exactly the records whose surf
-   base point or texture vector differs from the editor by f32, i.e. the `Points` residual (native
-   10758 vs 10752). See `unatco-verts-points-residual-after-the-zone`. No lighting change can move
-   these; they follow for free when Points reaches parity.
+1. **Light runs — much smaller after `9c148d4`, still open.** UNATCO: was 618 extra/7 missed, now
+   151/233. Wanchai: was 526/12, now 131/347. `port-urender-getvisiblesurfs-so-each-light-gets` has
+   the resume state; `MergeWith` (`render.dll 0x1001e3b0`) is the next thing to decode.
+2. **`Model.Lights` is 11368 vs 16263 entries on UNATCO** — the missing 5405 is the per-leaf
+   permeating region, produced by the ZONING build, not the bake:
+   `port-the-per-leaf-permeating-light-lists-model` has a first port attempt (not wired in — leaf
+   SET matches exactly but per-leaf content doesn't yet). `zones.rs` no longer stubs every leaf's
+   `iPermeating` to a bogus `0` (fixed to the correct `-1`, `8d7fe30`).
+3. **`Pan` / `UScale` / `VScale`** differ on exactly the records whose surf base point or texture
+   vector differs from the editor by f32, i.e. the `Points` residual (native 10758 vs 10752 on
+   UNATCO). See `unatco-verts-points-residual-after-the-zone` — its causal story is flagged
+   unreliable by `owner-ruling-all-native-decode-spike-findings`, needs re-diagnosis from fresh live
+   capture. No lighting change can move these; they follow for free when Points reaches parity.
 
 ## Two smaller leads, not chased
 
