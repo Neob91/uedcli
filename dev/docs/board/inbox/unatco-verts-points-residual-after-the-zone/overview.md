@@ -1,7 +1,7 @@
 +++
-priority = "p2"
-kind = "debug"
-summary = "UNATCO Verts end 66037 vs the editor's 76488 — NOT a bspOptGeom weld gap (both weld exactly +21712); the whole 10.5k is csgRebuild's ~209 per-node sub-BSP repartitions, which native does not port at all"
+priority = "p1"
+kind = "implement"
+summary = "UNATCO Verts end 66037 vs the editor's 76488 — the whole 10.5k is csgRebuild's ~209 sub-BSP repartitions of newly-grown subtrees (mechanism fully decoded 2026-08-29, independent of the invalidated spike). Affects EVERY level's geometry, not just UNATCO. Needs new subtree-graft capability in bspcsg.rs -- real implementation work, not yet started."
 +++
 
 # UNATCO `Verts`/`Points` residual — it is the unported sub-BSP repartition loop
@@ -84,8 +84,32 @@ disassembly. Re-verified TODAY from scratch, independent of the old write-up:
   and BEFORE the detail-brush loop — a different position than assumed) is NOT this mechanism;
   its role is still unclear and it predates the gap this item is about.
 
-**Still unknown, blocking a port:** WHERE and under what condition list 1 / list 2 get populated —
-this has to be inside the detail-brush loop body (`0x1004a900`-`0x1004a9fc`, not yet traced past the
-PolyFlags gate at `0x1004a986`-`0x1004a99d`), presumably one `TArray::AddItem` per processed detail
-brush's newly-added node(s), split front/back by some condition. Next step: keep tracing that range
-for the `AddItem`-shaped call(s) writing into `ebp-0x64`/`ebp-0x58`.
+**Resolved — the collector is `sub_49380` (`Editor.dll 0x10049380`), fully decoded 2026-08-29.**
+Called ONCE, right after `TestVisibility`/zone pass and BEFORE the detail-brush loop (not inside
+it — that assumption above was wrong). It's a recursive tree walk, `sub_49380(Model, List1, List2,
+nodeIndex)`: for the given node, if `Nodes[n].iFront == -1` (`+0x24`), `TArray::AddItem(List1, &n)`
+(`Editor.dll 0x100123e0`); else recurse into `Nodes[n].iFront`. Same for `iBack` (`+0x20`) / List2.
+Called on the tree root, so it walks the WHOLE tree and collects, into List1, every node that is
+CURRENTLY a front-side leaf (no front child yet), and into List2, every current back-side leaf.
+
+**The full mechanism, now completely understood:**
+1. Before the detail-brush loop: `sub_49380` snapshots the tree's current "frontier" — every node
+   with an empty front slot into List1, every node with an empty back slot into List2.
+2. The detail-brush loop runs (CSGs semisolid/detail brushes into the tree) — this can attach NEW
+   subtrees onto any of those previously-empty slots.
+3. After the detail loop: for each `n` in List1, if `Nodes[n].iFront` is NOW `!= -1` (a subtree grew
+   there since the snapshot), `bspRepartition(Model, Nodes[n].iFront, 2)` — re-balance JUST that new
+   subtree in place. Same for List2/`iBack`. This is why it's ~209 calls on UNATCO: one per leaf slot
+   that gained a subtree during the detail pass, not one per detail brush.
+
+**Why this isn't a quick port:** native's own "repartition" (the `post-repartition` stage) is a
+FULL-TREE rebuild — `model.nodes.clear()` + `bsp_build(&mut model, merged_soup)` from scratch
+(`bspcsg.rs` ~2585-2596) — there is no existing "repartition just this subtree in place" capability.
+A faithful port needs: (a) collect the polygon soup for a subtree (`bsp_node_to_fpoly`,
+`bspcsg.rs:871`, already reconstructs one node's poly — walking a whole subtree with it is new),
+(b) run the split/build on that soup in an ISOLATED node range so it doesn't touch the parent tree's
+existing indices, (c) graft the result back: append the new nodes to the model's node array
+(index-rebased) and rewrite the parent's `iFront`/`iBack` to point at the new subtree root, sharing
+the model's existing Points/Vectors/Verts pools rather than rebuilding them. This is real tree
+surgery, not a small patch — attempted carefully in a dedicated pass, with UNATCO+Wanchai's current
+exact node/surf counts as a hard regression gate (both are easy to break with a half-right graft).
