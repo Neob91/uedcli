@@ -1781,6 +1781,10 @@ fn repartition_frontier(model: &mut Model, list_a: &[i32], list_b: &[i32]) -> Re
             }
         }
         if let Some(fbs_polys) = fbs_polys {
+            let mut actors: Vec<i32> = fbs_polys.iter().map(|p| p.actor).collect();
+            actors.sort_unstable();
+            actors.dedup();
+            eprintln!("FBS_ACTORS child={child} distinct_actors={actors:?}");
             let (winner, rows) = find_best_split_trace(&fbs_polys, BALANCE, PORTAL_BIAS, Opt::Good);
             eprintln!("FBS_ROOT_TRACE child={child} n_polys={} winner_slot={winner}", fbs_polys.len());
             for r in &rows {
