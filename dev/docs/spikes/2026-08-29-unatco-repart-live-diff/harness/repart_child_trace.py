@@ -97,8 +97,7 @@ commands
 silent
 if $fbs_seen == 0
   set $fbs_seen = 1
-  set $w = $eax
-  printf "FBS numpolys=%d opt=%d balance=%d stride=%d winN=%.6f,%.6f,%.6f winB=%.6f,%.6f,%.6f\n", *(int *)($ebp + 8), *(int *)($ebp + 0x10), *(int *)($ebp + 0x14), *(int *)($ebp - 0x18), *(float *)($w + 0xc), *(float *)($w + 0x10), *(float *)($w + 0x14), *(float *)($w), *(float *)($w + 4), *(float *)($w + 8)
+  printf "FBS numpolys=%d opt=%d balance=%d stride=%d\n", *(int *)($ebp + 8), *(int *)($ebp + 0x10), *(int *)($ebp + 0x14), *(int *)($ebp - 0x18)
 end
 continue
 end
