@@ -1766,7 +1766,18 @@ fn repartition_frontier(model: &mut Model, list_a: &[i32], list_b: &[i32]) -> Re
         if polys.is_empty() {
             continue;
         }
+        let diag = std::env::var("UEDCLI_REPART_CALL_DIAG").is_ok();
+        let (orig_polys, before_nodes) = (polys.len(), model.nodes.len());
         split_poly_list(model, parent, place, polys, 0, BALANCE, PORTAL_BIAS, Opt::Good, &mut call_id)?;
+        if diag {
+            let appended = model.nodes.len() - before_nodes;
+            if appended != orig_polys {
+                eprintln!(
+                    "REPART_CALL_DIAG parent={parent} place={place} child={child} orig_polys={orig_polys} appended_nodes={appended} delta={}",
+                    appended as i64 - orig_polys as i64
+                );
+            }
+        }
     }
     Ok(())
 }
