@@ -1,8 +1,22 @@
 +++
 priority = "p1"
 kind = "implement"
-summary = "`Model.Lights` has two regions: the per-LEAF permeating light lists (5405 of UNATCO's 16263 entries) and the per-SURFACE shadow runs. Native emits only the surface runs and stubs every leaf's `iPermeating` to 0, which points each leaf at a SURFACE run. The leaf region is produced by csgRebuild -> TestVisibility -> Portalize, i.e. it is a zones.rs port, not a lighting one. The full algorithm is decoded below."
+summary = "`Model.Lights` has two regions: the per-LEAF permeating light lists (5405 of UNATCO's 16263 entries) and the per-SURFACE shadow runs. Native emits only the surface runs; every leaf's `iPermeating` now correctly stubs to -1 (was a bogus 0, fixed 2026-08-29). The leaf region is produced by csgRebuild -> TestVisibility -> Portalize, i.e. it is a zones.rs port, not a lighting one. The full algorithm is decoded below."
+spikes = ["dev/docs/spikes/2026-08-29-permeating-lights/"]
 +++
+
+## Status 2026-08-29: first port attempt, NOT wired in — wrong per-leaf content
+
+`uedcli-native/src/permeating_lights.rs` implements the flood below (portal collection reused from
+`zones::collect_leaf_portals`), but is not called from `light::bake`. On UNATCO: leaf-reachability
+SET matches the editor exactly (748/762, same leaves both sides) — the portal graph and per-light
+radius reachability are sound — but per-leaf light CONTENT is wrong (only 4/762 leaves have an
+exact-match run). Two suspects, neither isolated: the flood-direction orientation (derived from
+`zones::Portal`'s a/b convention, not independently verified for this use), and `clip_beam` (a
+from-scratch Sutherland-Hodgman clip standing in for the undecoded `FPoly::SplitWithPlaneFast`).
+Full writeup: `dev/docs/spikes/2026-08-29-permeating-lights/README.md`. Separately fixed:
+`zones.rs` no longer stubs every leaf's `iPermeating` to a bogus `0` (now the correct `-1`), which
+was actively wrong regardless of this port's fate.
 
 # Port the per-leaf permeating light lists (`Model.Lights` region 1)
 
