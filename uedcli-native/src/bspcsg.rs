@@ -1680,6 +1680,97 @@ fn make_ed_polys(model: &Model, i_node: i32, out: &mut Vec<FPoly>) {
     }
 }
 
+/// Garbage-collect `model.nodes`: drop everything unreachable from root 0 (walking
+/// `i_front`/`i_back`/`i_plane`), compact, and remap every surviving node's links. `bsp_add_node`
+/// always APPENDS (never reuses a freed slot), so grafting a new subtree onto an existing parent
+/// (`repartition_frontier`) leaves the old subtree's nodes as permanent orphans unless something
+/// collects them — `passes::bsp_refresh` does NOT (it only compacts surfs/verts, not nodes; see its
+/// own doc comment). Needed for the repartition-frontier graft to be net-zero on node count, the
+/// way the editor's own "`bspBuild` bumps the count and `bspRefresh` brings it back" is.
+fn compact_unreachable_nodes(model: &mut Model) {
+    if model.nodes.is_empty() {
+        return;
+    }
+    let mut reachable = vec![false; model.nodes.len()];
+    let mut stack = vec![0i32];
+    while let Some(ni) = stack.pop() {
+        if ni < 0 || reachable[ni as usize] {
+            continue;
+        }
+        reachable[ni as usize] = true;
+        let n = &model.nodes[ni as usize];
+        stack.push(n.i_front);
+        stack.push(n.i_back);
+        stack.push(n.i_plane);
+    }
+    let mut remap = vec![-1i32; model.nodes.len()];
+    let mut new_nodes = Vec::with_capacity(model.nodes.len());
+    for (i, &r) in reachable.iter().enumerate() {
+        if r {
+            remap[i] = new_nodes.len() as i32;
+            new_nodes.push(model.nodes[i].clone());
+        }
+    }
+    let relink = |i: i32, remap: &[i32]| if i >= 0 { remap[i as usize] } else { -1 };
+    for n in new_nodes.iter_mut() {
+        n.i_front = relink(n.i_front, &remap);
+        n.i_back = relink(n.i_back, &remap);
+        n.i_plane = relink(n.i_plane, &remap);
+    }
+    model.nodes = new_nodes;
+}
+
+/// Port of `sub_49380` (`Editor.dll 0x10049380`) — see `unatco-verts-points-residual-after-the-zone`.
+fn collect_repartition_frontier(model: &Model, ni: i32, list_a: &mut Vec<i32>, list_b: &mut Vec<i32>) {
+    if ni < 0 {
+        return;
+    }
+    let (i_back, i_front) = {
+        let n = &model.nodes[ni as usize];
+        (n.i_back, n.i_front)
+    };
+    if i_back == -1 {
+        list_a.push(ni);
+    } else {
+        collect_repartition_frontier(model, i_back, list_a, list_b);
+    }
+    if i_front == -1 {
+        list_b.push(ni);
+    } else {
+        collect_repartition_frontier(model, i_front, list_a, list_b);
+    }
+}
+
+/// Re-partition every frontier slot that grew a subtree during the detail-brush loop
+/// (`bspRepartition(Model, iChild, 2)`, `Editor.dll 0x1004aa3f`/`0x1004aa90`): reconstruct the
+/// subtree's polygons (`make_ed_polys`) and rebuild via `split_poly_list` onto the same parent
+/// slot. `list_a` grafts onto `NODE_BACK` (native's `i_back` = editor's iFront), `list_b` onto
+/// `NODE_FRONT`. Leaves old subtree nodes as orphans — caller must run
+/// `compact_unreachable_nodes` after, `bsp_refresh` does NOT collect them (surfs/verts only).
+fn repartition_frontier(model: &mut Model, list_a: &[i32], list_b: &[i32]) -> Result<(), BuildError> {
+    let mut call_id = 0usize;
+    for (parent, place) in list_a.iter().map(|&n| (n, NODE_BACK))
+        .chain(list_b.iter().map(|&n| (n, NODE_FRONT)))
+        .collect::<Vec<_>>()
+    {
+        let child = if place == NODE_BACK {
+            model.nodes[parent as usize].i_back
+        } else {
+            model.nodes[parent as usize].i_front
+        };
+        if child == -1 {
+            continue;
+        }
+        let mut polys = Vec::new();
+        make_ed_polys(model, child, &mut polys);
+        if polys.is_empty() {
+            continue;
+        }
+        split_poly_list(model, parent, place, polys, 0, BALANCE, PORTAL_BIAS, Opt::Good, &mut call_id)?;
+    }
+    Ok(())
+}
+
 /// `bspMergeCoplanars` (`0x36200`) with `MergeDisparateTextures=0`: group polys sharing iLink +
 /// coplanar-offset + same-facing normal + matching texture axes, then fuse each group>1 by
 /// fixpoint pairwise edge-merge (`TryToMerge`).  Retains T-junction fragmentation the engine keeps.
@@ -2668,6 +2759,14 @@ pub fn build_geometry_bspcsg(brushes: &[build::BrushInput]) -> Result<Model, Bui
         );
     }
 
+    // Snapshot the tree's frontier BEFORE the detail loop (`sub_49380` port — verified 2026-08-29 to
+    // collect EXACTLY the 209 nodes that go on to grow on UNATCO, matching the editor's own count).
+    let mut repart_frontier_a: Vec<i32> = Vec::new();
+    let mut repart_frontier_b: Vec<i32> = Vec::new();
+    if !model.nodes.is_empty() {
+        collect_repartition_frontier(&model, 0, &mut repart_frontier_a, &mut repart_frontier_b);
+    }
+
     // Pass 2: SEMISOLID detail brushes (incremental, NOT repartitioned) — NotSolid-only brushes
     // (portal or not) are NOT here; they were processed structurally in pass 1 (`detail_pass`).
     for (bi, b) in brushes.iter().enumerate() {
@@ -2681,6 +2780,18 @@ pub fn build_geometry_bspcsg(brushes: &[build::BrushInput]) -> Result<Model, Bui
     if stage_counts {
         eprintln!(
             "STAGE post-pass2 nodes={} verts={} points={}",
+            model.nodes.len(), model.verts.len(), model.points.len()
+        );
+    }
+
+    // Re-partition just the subtrees that grew on the pre-detail-loop frontier, then GC the
+    // orphaned pre-repartition nodes `bsp_add_node`'s append-only growth leaves behind
+    // (`bsp_refresh` does not collect nodes, only surfs/verts — see `compact_unreachable_nodes`).
+    repartition_frontier(&mut model, &repart_frontier_a, &repart_frontier_b)?;
+    compact_unreachable_nodes(&mut model);
+    if stage_counts {
+        eprintln!(
+            "STAGE post-repartition-frontier nodes={} verts={} points={}",
             model.nodes.len(), model.verts.len(), model.points.len()
         );
     }
