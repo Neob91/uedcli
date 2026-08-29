@@ -1,5 +1,5 @@
 +++
-priority = "p0"
+priority = "p1"
 kind = "owner-question"
 summary = "OWNER ruling: every native-decode spike finding written before 2026-08-14 is invalid — treat the July editor-disassembly decodes as unreliable (the agent was drunk)"
 +++

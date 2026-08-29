@@ -1,6 +1,8 @@
----
-kind: question
----
++++
+priority = "p?"
+kind = "unknown"
+summary = "Post-verify inner brush model Name: not a bug — store/load neutralization keeps both sides in sync"
++++
 
 # Post-verify compares inner brush model Name as authored content
 

@@ -1,6 +1,8 @@
----
-kind: bug
----
++++
+priority = "p3"
+kind = "debug"
+summary = "Stale test: builder-brush drop-before-qualify ordering test fails"
++++
 
 # Stale test: builder-brush drop-before-qualify ordering test fails
 

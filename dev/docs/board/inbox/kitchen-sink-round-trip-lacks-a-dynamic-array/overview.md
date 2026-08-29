@@ -1,6 +1,8 @@
----
-kind: task
----
++++
+priority = "p3"
+kind = "chore"
+summary = "Kitchen-sink round-trip test lacks a dynamic-array case"
++++
 
 # Kitchen-sink round-trip lacks a dynamic-array case
 

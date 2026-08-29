@@ -1,4 +1,4 @@
-## Question
+## Context
 
 `spec.md` in this item is a full reverse-engineered specification of UnrealEd's geometry-build
 pipeline (`MAP REBUILD`/`BSP REBUILD`: `csgRebuild`, `bspBrushCSG`, `bspBuild`/`FindBestSplit`,

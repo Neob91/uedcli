@@ -1,6 +1,6 @@
 +++
 priority = "p2"
-kind = "bug"
+kind = "debug"
 summary = "class preview mirrors mesh horizontally (ATM renders as MTA)"
 +++
 

@@ -6,7 +6,7 @@ summary = "[OWNER] rationale/ tree lost its index (README deleted)"
 
 # [OWNER] rationale/ tree lost its index (README deleted)
 
-`dev/docs/rationale/README.md` was deleted in the docs-prune (owner-approved as ledger
+dev/docs/rationale/README.md was deleted in the docs-prune (owner-approved as ledger
 archaeology). It also served as the tree's index / entry-shape reference; `preview.md` and
 `surface.md` linked to it, and those dead links were removed. The `rationale/` tree now has no
 index.

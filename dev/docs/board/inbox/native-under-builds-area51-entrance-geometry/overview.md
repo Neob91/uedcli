@@ -1,6 +1,6 @@
 +++
 priority = "p1"
-kind = "finding"
+kind = "debug"
 summary = "native under-builds Area51 Entrance geometry far below editor golden"
 +++
 

@@ -1,3 +1,9 @@
++++
+priority = "p1"
+kind = "debug"
+summary = "EDIT PASTE deterministically GPFs after importing phantom Class=Brush point actors"
++++
+
 # EDIT PASTE deterministically GPFs after importing phantom `Class=Brush` point actors
 
 ## Finding

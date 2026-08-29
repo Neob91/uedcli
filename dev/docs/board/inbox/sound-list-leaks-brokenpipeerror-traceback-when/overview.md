@@ -1,6 +1,6 @@
 +++
 priority = "p2"
-kind = "bug"
+kind = "debug"
 summary = "sound list leaks BrokenPipeError traceback when piped to head"
 +++
 
