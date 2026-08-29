@@ -1,7 +1,7 @@
 +++
 priority = "p1"
 kind = "implement"
-summary = "UNATCO Verts end 66037 vs the editor's 76488 — the whole 10.5k is csgRebuild's ~209 sub-BSP repartitions of newly-grown subtrees (mechanism fully decoded 2026-08-29, independent of the invalidated spike). Affects EVERY level's geometry, not just UNATCO. Needs new subtree-graft capability in bspcsg.rs -- real implementation work, not yet started."
+summary = "SHIPPED 2026-08-29 (repartition_frontier + compact_unreachable_nodes, bspcsg.rs): UNATCO Verts 66037->78931 (editor 76488), Wanchai 167325->169451 (editor 169313, was -1988 now +138 -- 14x closer). Both node-exact levels net-improved sharply; 4 OTHER already-inexact levels (a separate, still-unexplained over-build bug) get worse in Verts, not better -- see the caveat section."
 +++
 
 # UNATCO `Verts`/`Points` residual — it is the unported sub-BSP repartition loop
@@ -130,10 +130,49 @@ bspBuild bumps the count and bspRefresh brings it back").
 **Result: wrong, in the wrong direction.** UNATCO post-repartition-frontier: nodes 6314→9539
 (target: stay ~6314), verts 44325→38084 (target: grow toward 54776 — it SHRANK instead). Also
 broke an existing unit test (`a_semisolid_detail_brush_reaches_the_world`: expected 12 faces, got
-18). Reverted (`bspcsg.rs` back to the pre-attempt commit) rather than debug further this session —
-the node-count blowup suggests either the frontier collection is over-broad (collecting nodes that
-shouldn't be there, so the loop repartitions far more of the tree than the real ~209 calls should
-touch) or `bsp_refresh` isn't compacting the pre-repartition orphans the way assumed. Next attempt
-should start by comparing `repart_frontier_a`/`repart_frontier_b`'s size against the expected ~209
-(one board-item citation), and instrumenting `collect_repartition_frontier` to check whether it's
-walking correctly before touching `split_poly_list` at all.
+18). Reverted (`bspcsg.rs` back to the pre-attempt commit) rather than debug further this session.
+
+## Second attempt 2026-08-29: SHIPPED — root cause was a missing node-array GC, not the collector
+
+Added a diagnostic-only build (collector wired, no mutation) to check `collect_repartition_frontier`
+against the expected count BEFORE touching anything: `total_grown=209` on UNATCO, matching the
+editor's own citation EXACTLY. The collector was correct all along — the bug was entirely in the
+graft step. Root cause: `bsp_add_node` always APPENDS, never reuses a freed slot, so grafting a new
+subtree onto an existing parent leaves the OLD subtree's nodes as permanent orphans — and
+`passes::bsp_refresh` does NOT collect them (its own doc comment: it only compacts surfs/verts, not
+nodes). That's the entire "node count blew up, verts shrank" failure from the first attempt: real
+new nodes were being added, but sitting alongside thousands of unreachable orphans, and
+`bsp_node_to_fpoly`/`make_ed_polys` on a corrupted tree pulled in less real geometry than before, not
+more.
+
+Fix: added `compact_unreachable_nodes` — a proper mark-and-sweep from root 0 over
+`i_front`/`i_back`/`i_plane`, remapping every surviving node's links — run once after
+`repartition_frontier`. Result:
+
+| | UNATCO before | UNATCO after | Wanchai before | Wanchai after |
+|---|---:|---:|---:|---:|
+| nodes (target 6314 / 11648) | 6314 | 6321 | 11648 | 11648 |
+| verts pre-weld (target ~54776 / n/a) | 44325 | 57201 | 110992 | 113118 |
+| verts final (target 76488 / 169313) | 66037 | 78931 | 167325 | 169451 |
+| points final (target 10752 / 16791) | 10758 | 10766 | 16807 | 16807 |
+
+Wanchai's verts error dropped from −1988 (−1.2%) to +138 (+0.08%) — a ~14x improvement, nodes stay
+exactly 11648 (editor-exact) before and after. UNATCO's nodes go from exact (6314) to 6321 (+7,
+0.1% off) and verts from −10451 (native had never had this pass) to +2443 over (+3.2%) — much
+closer than the prior "doesn't exist at all" gap, though not yet exact. `a_semisolid_detail_brush_
+reaches_the_world` now passes (was the first attempt's casualty). Full `bin/test` green (84/84
+Rust, only the pre-existing unrelated pytest failures).
+
+**Caveat — makes 4 OTHER already-inexact levels' Verts worse, not better**
+(`geometry-re-check-on-4-more-og-levels-0-4-exact`): smuggler/paris-chateau/training-final/
+hk-helibase all had a DIFFERENT, still-unexplained node-count over-build even before this fix.
+`repartition_frontier` reconstructs polygons FROM the current tree (`make_ed_polys`), so on a tree
+that's already wrong for an unrelated reason, it compounds the error rather than correcting it —
+their verts flip from under-built to over-built (e.g. smuggler −9624→+10615) and node over-build
+roughly doubles on some. None of the 4 were geometry-exact before OR after, so nothing that worked
+regresses — but it means this fix alone does not make those 4 exact, and the other over-build cause
+needs its own investigation before it will.
+
+Shipped anyway: net positive on the two levels with an otherwise-correct tree (UNATCO, Wanchai —
+exactly the ones the owner said to validate against first), and doesn't cost any currently-exact
+level its exactness.

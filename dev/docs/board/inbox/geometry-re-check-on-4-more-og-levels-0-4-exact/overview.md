@@ -27,3 +27,15 @@ Combined with UNATCO+Wanchai (exact) and Area51 (severely under-built, separate 
 OG levels checked on the current tree, 2 are geometry-exact. Closing the shared Verts/Points
 residual is likely the single highest-leverage next step for geometry across the whole corpus,
 not a per-level chase.
+
+## Update 2026-08-29: NOT the same bug as UNATCO's — the repartition-frontier fix makes these 4 WORSE
+
+`unatco-verts-points-residual-after-the-zone` shipped the repartition-frontier fix, which was
+assumed (per this item's "not a new distinct bug per level" line above) to help these 4 too. It
+does not — re-measured with the fix in: all 4 flip from Verts UNDER-built to OVER-built (smuggler
+−9624→+10615, paris-chateau −11246→+9771, training-final −20798→+11550, hk-helibase −9711→+15988),
+and node over-build roughly doubles on 3 of the 4 (smuggler +104→+253, hk-helibase +226→+460). So
+this item's premise was wrong: these 4 levels have a DIFFERENT, still-unexplained over-build cause
+on top of (or instead of) the sub-BSP-repartition gap — fixing the shared mechanism exposed rather
+than closed their residual. Still 0/4 exact; needs its own investigation, not covered by the
+repartition-frontier fix.
