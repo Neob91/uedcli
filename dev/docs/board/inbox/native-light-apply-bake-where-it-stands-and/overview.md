@@ -2,7 +2,7 @@
 priority = "p1"
 kind = "debug"
 summary = "Resume pointer for the native LIGHT APPLY bake. It reproduces the editor's own output on 01_NYC_UNATCOHQ to 99.0% of per-(surface,light) shadow planes byte-identical and 99.99% of lumel bits; 2518 of 3345 LightMap records are byte-identical. Three named gaps remain, all owned elsewhere. How to rebuild both oracles and re-measure in one command each."
-depends-on = ["port-urender-getvisiblesurfs-so-each-light-gets", "port-the-per-leaf-permeating-light-lists-model", "native-bsp-matches-the-editor-on-unatco-but-not"]
+depends-on = ["port-urender-getvisiblesurfs-so-each-light-gets", "port-the-per-leaf-permeating-light-lists-model", "unatco-verts-points-residual-after-the-zone"]
 spikes = ["dev/docs/spikes/2026-08-27-native-light-apply-parity/"]
 +++
 
@@ -53,9 +53,30 @@ actor classes, which `gather_lights` needs.
 | light runs identical incl. order | 2977 / 3345 | — |
 | light actors listed on a surface | 189 | 189 (0 either-only) |
 
-On `09_HONGKONG_WANCHAI_MARKET` the two trees do NOT agree, so the same rules were checked by matching
-surfaces by geometry: grid dims 99.7%, runs 92.0%, planes byte-identical 95.2%, shadow bits 99.08%,
-and 0 surfaces native bakes dark that the editor lights.
+## State on `09_HONGKONG_WANCHAI_MARKET` (re-measured 2026-08-29, trees now node-exact after `5b0a022`)
+
+The old approximate (geometry-matched) numbers below are superseded — the tree gap that forced
+approximate matching (`native-bsp-matches-the-editor-on-unatco-but-not`) is fixed, so records now
+align 1:1 like UNATCO's. Exact-tree measurement:
+
+| | native | editor |
+|---|---:|---:|
+| surfs / nodes / leaves | 5284 / 11648 / 3371 | same |
+| points | 16807 | 16791 |
+| vectors | 479 | 487 |
+| `LightMap` records | 4530 | 4530 |
+| surfs `iLightMap = -1` | 754 | 754 |
+| records byte-identical | 3229 / 4530 = 71.3% | — |
+| run identical (same set+order) | 4165 / 4530 = 91.9% | — |
+| extra (surf,light) pairs native adds / misses | 526 / 12 | — |
+| shadow bits on grid+run-matched records | 1007920 / 1018504 = 98.96% | — |
+| light actors listed on a surface | 229 | 229 (0 either-only) |
+
+Same shape as UNATCO's 618-extra/7-missing light-run gap (gap 1 below) and the same Points/Vectors
+residual (gap 3), both roughly proportional to level size — confirms the two known gaps generalize
+rather than being UNATCO-specific artifacts. `Lights` entries (13477 vs 31613) also confirm gap 2
+(permeating region) scales the same way. Reproduced with
+`_scratch/wanchai-relight-2026-08-29/{golden,native}.dx`, `lightparity.py`/`run_diff.py` logs alongside.
 
 ## The three remaining gaps, none of them in `light.rs`
 
@@ -72,9 +93,6 @@ and 0 surfaces native bakes dark that the editor lights.
    base point or texture vector differs from the editor by f32, i.e. the `Points` residual (native
    10758 vs 10752). See `unatco-verts-points-residual-after-the-zone`. No lighting change can move
    these; they follow for free when Points reaches parity.
-
-Plus `native-bsp-matches-the-editor-on-unatco-but-not`: byte identity of the lighting sections on any
-level other than UNATCO is gated on the BSP tree agreeing there first.
 
 ## Two smaller leads, not chased
 
