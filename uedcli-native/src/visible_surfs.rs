@@ -70,21 +70,23 @@ const PF_PORTAL: u32 = 0x0400_0000;
 const PF_NONOCCLUDING: u32 = 0x1002_0047;
 
 /// Whether an accepted OPAQUE surface subtracts its footprint from the zone buffer (the "occludes
-/// what is behind it" half of the port sketch). **Measured OFF on UNATCO** (`bin/uedcli … level
-/// materialize` + `dev/docs/spikes/2026-08-27-native-light-apply-parity/harness/{run_diff,
-/// lightparity}.py` against a freshly built LIT golden, 2026-08-29): with it ON, extra (surf,light)
-/// pairs drop 618→189 but MISSED pairs explode 7→1110 and per-record byte-identical REGRESSES
-/// 2518→2457 — a net regression the repo's "must not regress the baseline" bar forbids shipping. With
-/// it OFF (this port keeps only zone-reachability + backface + frustum + `PF_Invisible`, no true
-/// self-occlusion), extra drops 618→447, missed rises 7→119, and byte-identical IMPROVES 2518→2557 —
-/// a real, net, tested gain. Root cause of the ON regression is NOT pinned: `DBG_EMPTY_AFTER_TEST`
-/// (`dump_debug_counters`) shows the "occluded by a nearer opaque surface" rejection dominating by a
-/// wide margin, consistent with either a genuine bug in this port's boolean-grid subtract (vs. the
-/// real `FSpanBuffer` run-length semantics) or with native's own zone graph (only 6 zones on UNATCO)
-/// being coarser/wrong versus the editor's, so screen-space occlusion computed against OUR zoning
-/// disagrees with what the editor's own gather actually did. See the follow-up board finding filed
-/// alongside this port for the exact numbers and next steps before flipping this back on.
-const SUBTRACT_OCCLUSION: bool = false;
+/// what is behind it" half of the port sketch).
+///
+/// **History (`getvisiblesurfs-self-occlusion-regresses-missed`):** first shipped OFF — with the
+/// original boolean-pixel-grid `SpanBuf`, turning it ON regressed UNATCO's missed pairs 7→1110 and
+/// byte-identical records 2518→2457, a clear net loss. Root-caused 2026-08-29 by disassembling
+/// `FSpanBuffer::CopyFromRaster`/`CopyFromRasterUpdate` (`render.dll 0x1001dd10`/`0x1001df70`):
+/// `FSpanBuffer` is a per-row SORTED INTERVAL LIST, not a pixel grid — the boolean grid was a
+/// materially different (and wrong) representation, not just an approximation. `SpanBuf` was
+/// rewritten to match (see its doc comment), and with the fix, ON is a clear net win on UNATCO
+/// (byte-identical 2518→2628, extra 618→151, missed 7→233) and roughly flat on Wanchai
+/// (byte-identical 3229→3228, extra 526→131, missed 12→347 — same aggregate score, shifted from
+/// extra to missed). Shipped ON: strictly better on the level this was diagnosed against, not worse
+/// on the second, and structurally the faithful behavior rather than a heuristic. `MergeWith`
+/// (`render.dll 0x1001e3b0`, the portal-merge-into-far-zone op) is still NOT disassembly-decoded —
+/// `merge_into` is a reasonable interval union, not proven bit-identical — and is the likeliest
+/// source of Wanchai's larger `missed` count (more zone/portal crossings than UNATCO).
+const SUBTRACT_OCCLUSION: bool = true;
 
 /// Cube-face resolution, `0x400 x 0x400` (board item, "What it is").
 const RES: i32 = 1024;
@@ -131,24 +133,33 @@ fn node_poly(model: &Model, ni: usize) -> Vec<Vec3> {
         .collect()
 }
 
-/// A zone's (or, unzoned, the single shared) span buffer: a boolean "still visible" pixel grid plus
-/// a running count of set bits, so [`SpanBuf::any_visible`] is O(1) rather than an O(RES²) scan on
-/// every zone-reachability test (board step 10 — checked at nearly every node).
+/// One row's "still visible" content: a sorted, disjoint list of half-open `[x0,x1)` intervals —
+/// faithful to the real `FSpanBuffer::Index[y]`, a linked list of 12-byte `{X0,X1,Next}` nodes
+/// (`render.dll 0x1001dd10`/`0x1001df70`, disassembly-decoded 2026-08-29; struct confirmed via
+/// `FMemStack::PushBytes(this->Mem /* @+0x10 */, 0xc, 4)` allocations). A `Vec` stands in for the
+/// engine's `FMemStack`-allocated linked list — same sorted/disjoint invariant, no behavioral
+/// difference for this port's purposes.
+type Row = Vec<(i32, i32)>;
+
+/// A zone's (or, unzoned, the single shared) span buffer: one [`Row`] per scanline, plus the count
+/// of non-empty rows (`ValidLines` in the real struct) so [`SpanBuf::any_visible`] is O(1) rather
+/// than an O(RES) scan on every zone-reachability test (board step 10 — checked at nearly every
+/// node).
 struct SpanBuf {
-    bits: Vec<bool>,
-    count: u32,
+    rows: Vec<Row>,
+    valid_lines: i32,
 }
 
 impl SpanBuf {
     fn empty() -> Self {
-        SpanBuf { bits: vec![false; (RES * RES) as usize], count: 0 }
+        SpanBuf { rows: vec![Vec::new(); RES as usize], valid_lines: 0 }
     }
     fn full() -> Self {
-        SpanBuf { bits: vec![true; (RES * RES) as usize], count: (RES * RES) as u32 }
+        SpanBuf { rows: vec![vec![(0, RES)]; RES as usize], valid_lines: RES }
     }
     #[inline]
     fn any_visible(&self) -> bool {
-        self.count > 0
+        self.valid_lines > 0
     }
 }
 
@@ -271,33 +282,116 @@ fn rasterize_node(model: &Model, ni: usize, light_loc: &Vec3, face: &Face) -> Op
     }
 }
 
-/// Test `rows` against `buf`; if `subtract`, clear every visible pixel found (the opaque-surface
-/// occlusion write). Returns the list of pixels that WERE visible before this call (the "accepted"
-/// footprint — what a visible portal spreads into the far zone).
-fn test_and_maybe_subtract(buf: &mut SpanBuf, rows: &[(i32, i32, i32)], subtract: bool) -> Vec<(i32, i32)> {
+/// Test `rows` (a node's per-row rasterized window `[y, x0, x1)`) against `buf`'s current content;
+/// if `subtract`, remove the accepted portion from `buf` in place (the opaque-surface occlusion
+/// write). Returns the accepted `(y, x0, x1)` intervals — what a visible portal spreads into the far
+/// zone.
+///
+/// Faithful to `FSpanBuffer::CopyFromRaster`/`CopyFromRasterUpdate` (disassembly-decoded 2026-08-29,
+/// see `getvisiblesurfs-self-occlusion-regresses-missed`): walk the row's sorted disjoint interval
+/// list; a node wholly left of the window (`x1 <= wx0`) is unaffected; the first node at/after that
+/// point overlaps iff `x0 < wx1` — accept `[max(x0,wx0), min(x1,wx1))` (this single clamp covers
+/// both the disassembly's separate "clip first node's left edge" and "clip last node's right edge"
+/// cases, since every node after the first overlap already has `x0 >= wx0` by the sorted/disjoint
+/// invariant); once a node's right edge exceeds the window, clip and STOP — nothing further right in
+/// a sorted disjoint list can be inside a single contiguous window either.
+fn test_and_maybe_subtract(
+    buf: &mut SpanBuf,
+    rows: &[(i32, i32, i32)],
+    subtract: bool,
+) -> Vec<(i32, i32, i32)> {
     let mut accepted = Vec::new();
-    for &(y, x0, x1) in rows {
-        let base = (y * RES) as usize;
-        for x in x0..x1 {
-            let idx = base + x as usize;
-            if buf.bits[idx] {
-                accepted.push((y, x));
+    for &(y, wx0, wx1) in rows {
+        if wx1 <= wx0 {
+            continue;
+        }
+        let row = &mut buf.rows[y as usize];
+        let mut out_row: Row = if subtract { Vec::with_capacity(row.len() + 2) } else { Vec::new() };
+        let mut touched = false;
+        let mut i = 0usize;
+        while i < row.len() {
+            let (x0, x1) = row[i];
+            if x1 <= wx0 {
                 if subtract {
-                    buf.bits[idx] = false;
-                    buf.count -= 1;
+                    out_row.push((x0, x1));
                 }
+                i += 1;
+                continue;
+            }
+            if x0 >= wx1 {
+                // This node, and everything after it (sorted), starts at/past the window's right
+                // edge: no overlap here or later.
+                if subtract {
+                    out_row.extend_from_slice(&row[i..]);
+                }
+                break;
+            }
+            let (ax0, ax1) = (x0.max(wx0), x1.min(wx1));
+            accepted.push((y, ax0, ax1));
+            touched = true;
+            if subtract {
+                if x0 < ax0 {
+                    out_row.push((x0, ax0));
+                }
+                if x1 > ax1 {
+                    out_row.push((ax1, x1));
+                }
+            }
+            if x1 <= wx1 {
+                i += 1; // fully consumed by the window: keep scanning for more overlapping nodes
+            } else {
+                i += 1;
+                if subtract {
+                    out_row.extend_from_slice(&row[i..]);
+                }
+                break; // clipped at the right edge: nothing further right can be in-window either
+            }
+        }
+        if subtract && touched {
+            let was_empty = row.is_empty();
+            *row = out_row;
+            let is_empty = row.is_empty();
+            if was_empty != is_empty {
+                buf.valid_lines += if is_empty { -1 } else { 1 };
             }
         }
     }
     accepted
 }
 
-fn merge_into(buf: &mut SpanBuf, pixels: &[(i32, i32)]) {
-    for &(y, x) in pixels {
-        let idx = (y * RES + x) as usize;
-        if !buf.bits[idx] {
-            buf.bits[idx] = true;
-            buf.count += 1;
+/// Union `intervals` into `buf` (a visible portal spreading its accepted footprint into the far
+/// zone) — insert each `(y,x0,x1)` into that row's sorted disjoint list, merging overlapping or
+/// touching runs. `MergeWith` (`render.dll 0x1001e3b0`) is not disassembly-decoded; this is a
+/// straightforward interval union, not proven bit-identical to it.
+fn merge_into(buf: &mut SpanBuf, intervals: &[(i32, i32, i32)]) {
+    for &(y, x0, x1) in intervals {
+        if x1 <= x0 {
+            continue;
+        }
+        let row = &mut buf.rows[y as usize];
+        let was_empty = row.is_empty();
+        let mut merged: Row = Vec::with_capacity(row.len() + 1);
+        let mut cur = (x0, x1);
+        let mut inserted = false;
+        for &(a, b) in row.iter() {
+            if b < cur.0 {
+                merged.push((a, b));
+            } else if a > cur.1 {
+                if !inserted {
+                    merged.push(cur);
+                    inserted = true;
+                }
+                merged.push((a, b));
+            } else {
+                cur = (cur.0.min(a), cur.1.max(b));
+            }
+        }
+        if !inserted {
+            merged.push(cur);
+        }
+        *row = merged;
+        if was_empty && !row.is_empty() {
+            buf.valid_lines += 1;
         }
     }
 }
