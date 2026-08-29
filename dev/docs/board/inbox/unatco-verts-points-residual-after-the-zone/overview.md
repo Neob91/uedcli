@@ -1,7 +1,7 @@
 +++
 priority = "p1"
 kind = "implement"
-summary = "SHIPPED 2026-08-29 (repartition_frontier + compact_unreachable_nodes, bspcsg.rs), but with a REGRESSION on UNATCO -- see the 'lighting regressed' section below before trusting this as a clean win. Wanchai: nodes stay exact (11648), Verts -1988->+138 (14x closer), lighting UNCHANGED (3228/4530 byte-identical, same as before). UNATCO: nodes drift off-exact 6314->6321 (+7), which breaks lightmap-record alignment and drops lighting byte-identical from 2628/3345 to 1627/3345 -- a real regression on the metric that matters more. 4 OTHER already-inexact levels get worse in Verts too (separate over-build bug)."
+summary = "SHIPPED 2026-08-29 (repartition_frontier + compact_unreachable_nodes, bspcsg.rs), but with a REGRESSION on UNATCO's lighting -- see 'lighting regressed' below. Remaining UNATCO node gap (6321 vs 6314) root-caused via live gdb capture: repartition_frontier's make_ed_polys emits unmerged coplanar duplicates (live-verified 40 vs editor's real 29 for child=6108); bsp_merge_coplanars fixes that ONE call exactly (byte-identical root split) but blanket-applied to all 209 calls reproduces the prior 5689-node regression -- fix needs to be selective, not yet found. Wanchai stays node-exact throughout."
 +++
 
 # UNATCO `Verts`/`Points` residual — it is the unported sub-BSP repartition loop
@@ -280,3 +280,107 @@ blanket "always merge coplanars before re-splitting" — more likely the editor'
 `bspRepartition` merges more selectively (e.g. only within-brush, or only truly co-planar AND
 touching fragments, not the full cross-poly `bspMergeCoplanars` sweep this codebase's version
 does) — another point supporting that this needs a live differential, not more parameter guessing.
+
+## Live GDB capture of `child=6108` (2026-08-29 PM): root cause found — a poly-COUNT gap, not order
+
+Static disassembly and parameter tuning (`Opt::Lame`, blanket `bsp_merge_coplanars`) were exhausted
+without closing this. Built a live differential (`dev/docs/spikes/2026-08-29-unatco-repart-live-diff/`,
+gdb attached to the Wine-hosted `UED22` process, `Editor.dll` breakpoints on `bspRepartition`
+(`0x10049fc0`), `bspAddNode` (`0x10034e80`), and `FindBestSplit`'s return (`0x100338ee`), gated to
+fire only during this one subtree's own repartition call) against a full `MAP LOAD` +
+`MAP REBUILD` of `_scratch/bsp-parity-proj/golden_unatco_control.dx` under `dx-lum-uned-dbg`. Note:
+both `ued-x86-runtime`/`dx-lum-uned-dbg`/`uedcli-rust-build` images had been evicted from the shared
+Docker daemon by disk pressure mid-session; rebuilt from their committed Dockerfiles (all three
+reproducible on this x86_64 host — no FEX/arm64 snapshot problem here).
+
+**Editor's real root split for `child=6108` is a DIFFERENT plane than native picks, and for a
+concrete, measured reason:**
+
+- Editor's actual first `bspAddNode` for this subtree uses plane `N=(1,0,0) B=(508, 8.000002, 280)`
+  — i.e. `x=508`. This is NOT native's chosen winner (`slot=12`, plane `(0,0,-1,-280)`, score=60,
+  `pf=0x21`=`PF_SEMISOLID|PF_INVISIBLE`); it matches native's OWN candidate at `slot=32`
+  (`pf=0x20`=`PF_SEMISOLID` only, score=108) — a candidate native's own `find_best_split_exact`
+  ranks WORSE (higher score) and rejects.
+- **Ruled out: candidate-list ORDER.** Re-ran `find_best_split_trace` on the same 40
+  `make_ed_polys`-reconstructed polys sorted by surf index (`i_link`, matching `bspBuildFPolys`'
+  documented "from Surfs" order) instead of the tree-walk order `make_ed_polys` produces — native's
+  winner is UNCHANGED (still the score=60 candidate, just at a different sampled slot). Order alone
+  does not explain the divergence.
+- **Confirmed: candidate-list SIZE.** The live `FindBestSplit` breakpoint (`0x100338ee`, args
+  `NumPolys=[ebp+8] Opt=[ebp+0x10] Balance=[ebp+0x14] stride=[ebp-0x18]`, per
+  `fbs_stride_oracle.py`'s decode) caught the editor's real root-level call for this subtree:
+  `numpolys=29 opt=1 balance=12 stride=1`. Native's `make_ed_polys` reconstructs **40** polys for
+  the same subtree — **11 more than the editor's real list**. (`opt=1`/`stride=1` also contradicts
+  the old, pre-2026-08-14 `fbs_stride_oracle.py` comment's "Opt=1→N/10" formula — another data point
+  the owner's invalidation ruling was right to flag; not chased further here.) The editor's 29-poly
+  list also matches the 29 `bspAddNode` calls captured for this subtree's whole rebuild (one native
+  fragment survives roughly 1:1 into one output node here), corroborating 29 as the real count, not
+  a one-off artifact of the breakpoint.
+
+**Root cause, not yet fixed:** `make_ed_polys` (native's subtree-poly reconstructor for
+`repartition_frontier`, walking the OLD subtree's nodes self→front→back→coplanar-chain) emits 11
+spurious extra polys the editor's real `bspBuildFPolys`+`bspMergeCoplanars` step does not — most
+likely un-merged coplanar/adjacent fragments left over from the subtree's ORIGINAL (pre-repartition)
+build that the editor's real merge pass coalesces and native's reconstruction does not. This is
+consistent in direction with the reverted blanket-`bsp_merge_coplanars` experiment above (which
+shrank the poly count and moved UNATCO verts almost exact) but explains why that blanket version
+overshot elsewhere: merging needs to be scoped to reproduce this exact 40→29 reduction, not applied
+indiscriminately across the whole reconstructed list.
+
+**Not yet done:** identify which specific 11 of the 40 polys are the spurious ones (dump both lists
+side by side, matched by plane+base, to see whether they're a coplanar-chain artifact specifically or
+something else), then check whether a scoped fix generalizes to the other 2 residual calls and to
+Wanchai's own (currently-exact) tree before touching shipped code — the prior blanket-merge attempt
+broke Wanchai, so any fix here needs that as a hard regression gate before shipping.
+
+## Mechanism fully identified (2026-08-29 PM) — but the general fix is still open; blanket
+## application reproduces the EXACT prior regression, so this is NOT a quick port
+
+Ran the 11-poly gap to ground: every one of the 11 "extra" polys in native's 40-poly reconstruction
+shares its exact `i_surf` (via `FPoly.i_link = n.i_surf`, set in `bsp_node_to_fpoly`) with another
+poly already in the list — e.g. `isurf=3555` appears 3 times (nv=4,3,4), `isurf=3556` 3 times,
+five other surfs 2 times each: 29 unique `(actor, i_brush_poly)` pairs, 11 duplicate copies, exactly
+`40 − 29`. These are unmerged coplanar fragments left over from the subtree's ORIGINAL (pre-repartition)
+build, sharing a surf via UE1's normal coplanar-chain sharing — not a traversal bug in `make_ed_polys`
+(vertex counts differ between "duplicate" entries, so they are genuinely different NODES, not the same
+node visited twice).
+
+**Isolated fix, verified exact:** the ALREADY-SHIPPED `bsp_merge_coplanars` (its `merge_group_pred`
+already gates on `a.i_link == b.i_link`, i.e. it is already scoped to same-surf fragments, not a
+blanket coplanar sweep) applied to JUST this subtree's 40 reconstructed polys, in isolation:
+- Produces exactly 29 output polys — matching the editor's real `FindBestSplit` `NumPolys=29` to the
+  digit (live-captured, see the GDB-capture section above).
+- Feeding that merged 29-poly list into `find_best_split_trace` picks `plane=(1,0,0,508)` as the
+  winner — the editor's EXACT real root split for this subtree, byte for byte.
+
+This is airtight for `child=6108` specifically: candidate SET, count, and the resulting split
+decision all match the editor exactly once merged.
+
+**But wiring `bsp_merge_coplanars(polys)` into `repartition_frontier` for ALL 209 calls (not just this
+one) reproduces the identical regression the earlier "Tried, reverted" experiment above already hit:
+UNATCO nodes 6321→5689 (target 6314, surfs/leaves stay exact, points -569) — the SAME 5689 number,
+independently reproduced.** So the merge step is provably correct for the one call that needs it, and
+provably wrong in aggregate across the other ~208. The missing piece is SELECTIVITY: something
+distinguishes the ~3 calls that need this merge from the ~206 that apparently don't (or where merging
+actively corrupts an otherwise-correct split) — not yet identified. Reverted (`bspcsg.rs` back to the
+pre-experiment commit; `cargo test --lib` 84/84 pass after).
+
+**Live-capture infra now exists and is reusable**: `dev/docs/spikes/2026-08-29-unatco-repart-live-diff/`
+— `repart_child_trace.py <node>` attaches gdb to a real `MAP LOAD`+`MAP REBUILD` of
+`_scratch/bsp-parity-proj/golden_unatco_control.dx` under `dx-lum-uned-dbg`, gates breakpoints on
+`bspRepartition`/`bspAddNode`/`FindBestSplit` to fire only during one target subtree's own call, and
+captures its exact node-by-node build; `native_child_trace.py <node>` gets native's own
+`FBS_ROOT_TRACE`/`FBS_ACTORS` for the same call via `UEDCLI_REPART_FBS_CHILD`;
+`regression_gate.py` re-measures full UNATCO+Wanchai geometry against their world-only goldens.
+Both `ued-x86-runtime`/`dx-lum-uned-dbg`/`uedcli-rust-build` Docker images were evicted from the
+shared daemon by disk pressure mid-session and rebuilt from their committed Dockerfiles (all
+reproducible on this x86_64 host — the FEX/arm64 snapshot problem in
+`ued-x86-runtime-reproducible-arm64-fex-image` does not apply here).
+
+**Next step:** run the SAME live-capture method against one of the ~206 "clean" calls (any
+`REPART_CALL_DIAG`-silent call, i.e. one whose native delta is already 0) to see whether the editor's
+real poly count for it EQUALS native's unmerged `make_ed_polys` count (predicting merge should be a
+no-op there and the 5689 regression comes from `try_to_merge`'s geometric weld being wrong on some
+inputs) or is itself SMALLER (predicting native's reconstruction has a broader duplication problem
+that merge over-corrects). That result should show which of the two failure modes is real before
+attempting another wiring.
