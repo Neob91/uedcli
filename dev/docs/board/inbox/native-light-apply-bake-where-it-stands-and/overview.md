@@ -84,6 +84,21 @@ trustworthy as a bake-quality number either — needs UNATCO's node-exactness re
 `unatco-verts-points-residual-after-the-zone`'s "CORRECTION" section) before this table means
 anything again. Wanchai's table below is unaffected (its nodes stayed exact) and still current.
 
+**2026-08-30: UNATCO's node-exactness is now restored** — `repartition_frontier` rewritten
+(`done/unatco-verts-points-residual-after-the-zone`, `dev/docs/native-materialize-findings.md`),
+nodes/surfs/leaves all byte-exact against golden for the first time. A bounded spot-check (not a
+full re-run of this item's own table/methodology) against the existing lit golden
+(`_scratch/native-visgate-2026-08-29/golden_unatco_lit.dx`,
+`dev/docs/spikes/2026-08-29-unatco-repart-live-diff/harness/light_spotcheck_unatco.py`) confirms the
+bake now completes cleanly (it crashed before that fix, on an unrelated latent bug also found and
+fixed the same round — see the findings ledger): surfs/nodes/leaves/vectors/LightMap-record-count
+all exact both sides (3616/6314/762/599/3345), 2692/3345 records fully identical, 99.23% shadow-bit
+agreement on grid+run-matched records. This table's own STALE numbers above were NOT re-measured —
+that's this item's own full methodology (`build_ued_lit_golden.py` + `lightparity.py` +
+`bit_asymmetry.py` + `run_diff.py` + `light_geomatch.py`), a bigger undertaking than the spot-check
+run here. Re-running it properly is the concrete next step if this item is picked up again — the
+tree is finally in a state where it would mean something.
+
 | | native | editor |
 |---|---:|---:|
 | surfs / nodes / leaves / vectors | 3616 / 6314 / 762 / 599 | same |

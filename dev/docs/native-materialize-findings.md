@@ -532,3 +532,74 @@ needs to perform the REAL per-call reconstruction (merge included, matching `chi
 resulting NODE structure the way the real editor does — growing verts/points without committing
 nodes. No `bspcsg.rs` changes this entry (pure log analysis + one static disassembly check, no
 container spin-up); `bin/test -k bspcsg` (84/84) and `regression_gate.py`'s default path unaffected.
+
+**SHIPPED — the actionable fix from the entry above: `repartition_frontier` now reproduces the
+editor's real per-call "reconstruct, discard the node tree, keep the Verts/Points" behavior exactly.
+UNATCO's node/surf/leaf counts are now byte-exact for the first time in this whole investigation;
+verts residual dropped from +2443 to +5. Caught and fixed a second, real latent bug along the way —
+a `-1` vertex-index crash in the lighting bake that this fix's own orphan verts exposed.**
+(2026-08-30, TDD + live UNATCO/Wanchai verification) — `repartition_frontier` (`bspcsg.rs`)
+rewritten: for each frontier call, still runs the real reconstruction (`make_ed_polys` → always-on
+`reduce_repartition_polys` merge → `split_poly_list`), but now into a throwaway `scratch =
+model.clone()` instead of `model` directly. Only `scratch`'s `Verts`/`Points` growth
+(`scratch.{verts,points}[before..]`) gets copied into `model`; `scratch`'s new node tree and its own
+copy of the parent's rewritten child pointer are discarded — `model.nodes`/`model.surfs` are never
+touched, so the parent keeps pointing at the pre-existing child exactly as before. No new surf is
+ever allocated in `scratch` either: `FPoly::split_with_plane`'s fragments always preserve `i_link`
+(`empty_copy`), so `bsp_add_node`'s `alloc_surf` path is never reached. Removed the now-structurally-
+impossible diagnostics (`UEDCLI_REPART_COMPACT_PER_CALL`, `UEDCLI_REPART_CALL_DIAG`,
+`UEDCLI_REPART_BLANKET_MERGE`, `UEDCLI_REPART_REAL_TREE`, `UEDCLI_REPART_ISOLATED_TREE`,
+`UEDCLI_REPART_FBS_INPUT`) — each measured something (appended node counts, an optional/gated merge,
+a grafted subtree) that no longer exists under the new architecture; kept
+`UEDCLI_REPART_PERCALL_VERTS` (still meaningful, now the primary way to inspect the fix's own
+behavior per call).
+
+TDD: added `bspcsg::tests::repartition_frontier_is_a_node_noop_but_grows_verts` (needed
+`PartialEq` added to `BspNode`/`Plane` in `model.rs`, a plain additive derive) — builds a real small
+box model, picks any node with a real child, asserts after `repartition_frontier`: `model.nodes`
+byte-identical (both length AND content, via `assert_eq!` on the whole `Vec<BspNode>`), `model.surfs`
+same length, `model.verts` strictly grew. Confirmed RED against the pre-fix code (11 nodes vs 6,
+the old graft appending 5) before the fix, GREEN after (85/85 total, up from 84).
+
+Live verification, in order (per the coordinator's own sequencing — verts growth first, before
+anything else): (1) `UEDCLI_BSPCSG_STAGE_COUNTS=1` on a real UNATCO build: `post-pass2` (="after the
+detail loop") verts=44325, `post-repartition-frontier` (="after the ~209 sub-BSP repartitions")
+verts=54781 — a **+10456** delta against the target **+10462** (`repart-stage-unatco.log`), off by
+only 6 (0.06%), and `nodes` exactly 6314 at both checkpoints (matching the target precisely, since
+nodes are structurally untouched by this pass now). (2) `regression_gate.py`: UNATCO
+`nodes/surfs/leaves` all `d=+0` for the first time this whole investigation (was `d=+7` nodes before
+this fix); `verts d=+5` (was `+2443`); `points d=+16`. Wanchai stays exact throughout (`verts d=+74`,
+was `+138` — also improved, though Wanchai was never the item's primary subject). Full `bin/test`
+(not just `-k bspcsg`): 12329 passed, 0 failed, both before and after this fix (no regression
+anywhere else in the codebase).
+
+**Second, real bug found and fixed along the way, not anticipated going in:** the lighting spot-check
+(`light_spotcheck_unatco.py`, new — mirrors `apply.py`'s `_materialize_native` logic directly with
+the same UNATCO trunk `regression_gate.py` uses, since this project doesn't use the CLI's
+`level/NAME` tree convention) crashed: `lightmap bake: vert iVertex index -1 out of range [0,10758)`.
+Root-caused via `light.rs`'s `validate_indices`, which scans ALL of `model.verts` unconditionally
+(not just node-reachable ones) — to `reorder_points_canonical` (`bspcsg.rs`), a pre-existing points-
+compaction pass whose own "surviving points" walk covered only `surf.p_base` and node-reachable
+`vert.i_vertex` ranges. Its own doc comment had predicted this exact failure mode almost verbatim:
+"if a future `bsp_opt_geom` ever removed/repacked verts, an orphan could name a dropped point and hit
+the `-1` sentinel here — re-audit this loop then." `repartition_frontier`'s new orphan verts are
+exactly that future case: unlike `bsp_opt_geom::insert_point`'s orphans (which always duplicate a
+point some live ring already uses), these can name a BRAND NEW point no live node ring uses at all —
+so the old compaction walk dropped it, and the -1 sentinel followed. Fix: added a third walk pass
+covering every vert's own point directly (not just node-reachable ones), matching the function's
+OWN already-stated intent ("a point is referenced iff some `surf.pBase` or `vert.iVertex` names it").
+Verified: lighting bake now completes cleanly for UNATCO for the first time in this investigation
+(previously blocked/STALE per `native-light-apply-bake-where-it-stands-and`) — `surfs`/`nodes`/
+`leaves`/`vectors`/LightMap-record-COUNT all exact (3616/6314/762/599/3345 both sides), 2692/3345
+records fully byte-identical, 99.23% shadow-bit agreement on grid+run-matched records. Remaining
+lighting gaps (Lights entries 10646 vs 16263, some run/bits diffs) match ALREADY-TRACKED, unrelated
+issues in that other item (light-run matching, `Model.Lights` count) — not new regressions from this
+fix, and re-measuring that item's own UNATCO table in full is out of scope here (named as its own
+follow-up, not chased).
+
+Files: `light_spotcheck_unatco.py` (new,
+`dev/docs/spikes/2026-08-29-unatco-repart-live-diff/harness/`), reused the existing lit golden
+(`_scratch/native-visgate-2026-08-29/golden_unatco_lit.dx`, built 2026-08-29, unaffected by this
+native-side change). `bin/test -k bspcsg` (85/85, was 84/84) and full `bin/test` (12329/0, both
+before and after) both clean. `regression_gate.py`: UNATCO/Wanchai both `EXACT` (nodes/surfs/leaves),
+`GATE: PASS`.

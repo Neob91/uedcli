@@ -1773,21 +1773,40 @@ fn collect_repartition_frontier(model: &Model, ni: i32, list_a: &mut Vec<i32>, l
 /// slot. `list_a` grafts onto `NODE_BACK` (native's `i_back` = editor's iFront), `list_b` onto
 /// `NODE_FRONT`. Leaves old subtree nodes as orphans — caller must run
 /// `compact_unreachable_nodes` after, `bsp_refresh` does NOT collect them (surfs/verts only).
+/// Port of `bspRepartition`'s per-subtree call (`Editor.dll 0x10049fc0`), called once per
+/// `collect_repartition_frontier` entry. **The real editor's call is a NODE no-op that PERMANENTLY
+/// leaks `Verts`/`Points`, and this reproduces that exactly rather than "fixing" it — the goal is
+/// byte-identical output, and the editor's real output includes this waste.**
+///
+/// Live-verified exhaustively on UNATCO's full 209-call sequence
+/// (`unatco-verts-points-residual-after-the-zone`, `repart-stage-unatco.log`, cross-checked against
+/// 26 individually byte-diffed live captures): every call's real `bspBuildFPolys` →
+/// `bspMergeCoplanars` → `bspBuild`/`SplitPolyList` reconstruction builds a whole NEW subtree via
+/// real `bspAddNode` calls (growing `Nodes`/`Verts`/`Points`) — but the SAME call's own `bspRefresh`
+/// (`Core.dll!FArray::Remove`, IAT-confirmed) discards the new NODE structure every single time,
+/// landing `Nodes.Num` back at the exact pre-call baseline (209/209 calls, no exceptions). It does
+/// NOT correspondingly compact `Verts`/`Points`: those pools keep every vertex the discarded
+/// reconstruction allocated (0/209 calls net to zero vert growth — every call grows it, summing
+/// exactly to the aggregate `44314→54776` figure). So the parent's pre-existing child is left
+/// exactly as it was, and only the `Verts`/`Points` growth from computing the (correctly merged,
+/// per `child=6108`'s live cross-check) reconstruction survives.
+///
+/// Implementation: run the real reconstruction into a throwaway `scratch` clone of `model` (so
+/// `bsp_add_node`'s coplanar-chain walk and `MAX_VERTICES` splitting see the SAME pre-existing tree
+/// state the real call would), then copy out only the `Verts`/`Points` it appended — never
+/// `model.nodes`, never `model.surfs`. No new surf is ever allocated here: `FPoly::split_with_plane`
+/// always preserves `i_link` on its fragments (`empty_copy`), so `bsp_add_node`'s `alloc_surf` path
+/// is never reached — `scratch.surfs` never grows past what `model.surfs` already had.
 fn repartition_frontier(model: &mut Model, list_a: &[i32], list_b: &[i32]) -> Result<(), BuildError> {
     let mut call_id = 0usize;
-    // TEMPORARY EXPERIMENT (UEDCLI_REPART_COMPACT_PER_CALL) -- unatco-verts-points-residual-after-
-    // the-zone, testing hypothesis (b): does the editor's real per-subtree bspRefresh compact nodes
-    // IMMEDIATELY (not just once at the very end, as native's compact_unreachable_nodes currently
-    // does)?  Index-based worklist (not a plain `for`) so a mid-loop compaction's remap can fix up
-    // the still-pending entries' `parent` index before they're read.
-    let compact_per_call = std::env::var("UEDCLI_REPART_COMPACT_PER_CALL").is_ok();
-    let mut worklist: Vec<(i32, i32)> = list_a.iter().map(|&n| (n, NODE_BACK))
+    let worklist: Vec<(i32, i32)> = list_a.iter().map(|&n| (n, NODE_BACK))
         .chain(list_b.iter().map(|&n| (n, NODE_FRONT)))
         .collect();
-    let mut wi = 0usize;
-    while wi < worklist.len() {
-        let (parent, place) = worklist[wi];
-        wi += 1;
+    // Per-call Verts/Points before/after, to verify the fix directly against the editor's own
+    // per-call growth (`repart-stage-unatco.log`/`wanchai-ed-repart-stage.log`). Zero effect on the
+    // default path.
+    let percall_verts_diag = std::env::var("UEDCLI_REPART_PERCALL_VERTS").is_ok();
+    for (seq, &(parent, place)) in worklist.iter().enumerate() {
         let child = if place == NODE_BACK {
             model.nodes[parent as usize].i_back
         } else {
@@ -1801,126 +1820,23 @@ fn repartition_frontier(model: &mut Model, list_a: &[i32], list_b: &[i32]) -> Re
         if polys.is_empty() {
             continue;
         }
-        let diag = std::env::var("UEDCLI_REPART_CALL_DIAG").is_ok();
-        let fbs_target = std::env::var("UEDCLI_REPART_FBS_CHILD").ok().and_then(|v| v.parse::<i32>().ok());
-        let fbs_polys = if fbs_target == Some(child) { Some(polys.clone()) } else { None };
-        // TEMPORARY DIAGNOSTIC (UEDCLI_REPART_FBS_INPUT) -- unatco-verts-points-residual-after-the-
-        // zone, tracing where split_poly_list's spurious extra node comes from for child=6108: dump
-        // the RAW input poly list (i_link=source isurf, verts.len(), actor, i_brush_poly) BEFORE any
-        // splitting, to diff against the output nodes' isurf multiset.
-        if fbs_target == Some(child) && std::env::var("UEDCLI_REPART_FBS_INPUT").is_ok() {
-            for (k, p) in polys.iter().enumerate() {
-                eprintln!(
-                    "FBSIN child={child} k={k} i_link={} nv={} actor={} i_brush_poly={}",
-                    p.i_link, p.verts.len(), p.actor, p.i_brush_poly
-                );
-            }
-        }
-        // TEMPORARY EXPERIMENT (UEDCLI_REPART_BLANKET_MERGE) -- unatco-verts-points-residual-after-
-        // the-zone, testing whether the per-call merge fix (proven exact on child=6108/4077 in
-        // isolation) is *individually* well-behaved across all 209 calls when actually wired in, to
-        // localize the -625 blanket-regression's origin. NOT shipped -- revert before finishing.
-        let blanket_merge = std::env::var("UEDCLI_REPART_BLANKET_MERGE").is_ok();
-        let orig_polys = polys.len();
-        let polys = if blanket_merge { reduce_repartition_polys(polys) } else { polys };
-        let merged_polys = polys.len();
-        let before_nodes = model.nodes.len();
-        // TEMPORARY DIAGNOSTIC (UEDCLI_REPART_PERCALL_VERTS) -- wanchai-verts-points-residual-
-        // independently: per-call Verts/Points before/after, to compare against the editor's own
-        // per-call growth (dev/docs/spikes/.../logs/wanchai-ed-repart-stage.log) and localize
-        // whether the Wanchai residual concentrates in a few calls or spreads thin across all of
-        // them. Zero effect on the default path.
-        let percall_verts_diag = std::env::var("UEDCLI_REPART_PERCALL_VERTS").is_ok();
+        let merged = reduce_repartition_polys(polys);
         let before_verts = model.verts.len();
         let before_points = model.points.len();
-        split_poly_list(model, parent, place, polys, 0, BALANCE, PORTAL_BIAS, Opt::Good, &mut call_id)?;
+
+        let mut scratch = model.clone();
+        split_poly_list(&mut scratch, parent, place, merged, 0, BALANCE, PORTAL_BIAS, Opt::Good, &mut call_id)?;
+        // Keep the Verts/Points growth (the real editor's permanent leak); discard everything else
+        // in `scratch` — its new node tree and its own copy of the parent's rewritten child pointer
+        // never touch `model`.
+        model.points.extend_from_slice(&scratch.points[before_points..]);
+        model.verts.extend_from_slice(&scratch.verts[before_verts..]);
+
         if percall_verts_diag {
             eprintln!(
-                "REPART_PERCALL seq={} parent={parent} place={place} child={child} orig_polys={orig_polys} verts_before={before_verts} verts_after={} points_before={before_points} points_after={}",
-                wi - 1, model.verts.len(), model.points.len()
+                "REPART_PERCALL seq={seq} parent={parent} place={place} child={child} verts_before={before_verts} verts_after={} points_before={before_points} points_after={}",
+                model.verts.len(), model.points.len()
             );
-        }
-        // TEMPORARY DIAGNOSTIC (UEDCLI_REPART_REAL_TREE, paired with UEDCLI_REPART_FBS_CHILD) --
-        // wanchai-verts-points-residual-independently: dump the REAL (unmerged, as-shipped) subtree
-        // this call just grafted into `model` -- unlike UEDCLI_REPART_ISOLATED_TREE, which always
-        // merges via `reduce_repartition_polys` regardless of `UEDCLI_REPART_BLANKET_MERGE` and
-        // rebuilds in a scratch clone, so it does NOT show what the default path actually built.
-        if fbs_target == Some(child) && std::env::var("UEDCLI_REPART_REAL_TREE").is_ok() {
-            eprintln!("REALTREE child={child} orig_polys={orig_polys} appended={}", model.nodes.len() - before_nodes);
-            for i in before_nodes..model.nodes.len() {
-                let n = &model.nodes[i];
-                eprintln!(
-                    "RTNODE i={i} iF={} iB={} iP={} isurf={} nv={} plane={:.6},{:.6},{:.6},{:.6}",
-                    n.i_front, n.i_back, n.i_plane, n.i_surf, n.num_vertices,
-                    n.plane.x, n.plane.y, n.plane.z, n.plane.w
-                );
-            }
-        }
-        if compact_per_call {
-            let remap = compact_unreachable_nodes(model);
-            for e in worklist[wi..].iter_mut() {
-                let new_parent = remap[e.0 as usize];
-                debug_assert!(
-                    new_parent != -1,
-                    "compact_per_call: pending frontier parent {} went unreachable", e.0
-                );
-                e.0 = new_parent;
-            }
-        }
-        if blanket_merge {
-            let appended = model.nodes.len() - before_nodes;
-            eprintln!(
-                "REPART_MERGE_DIAG parent={parent} place={place} child={child} orig_polys={orig_polys} merged_polys={merged_polys} appended_nodes={appended}"
-            );
-        }
-        if diag {
-            let appended = model.nodes.len() - before_nodes;
-            if appended != orig_polys {
-                eprintln!(
-                    "REPART_CALL_DIAG parent={parent} place={place} child={child} orig_polys={orig_polys} appended_nodes={appended} delta={}",
-                    appended as i64 - orig_polys as i64
-                );
-            }
-        }
-        if let Some(fbs_polys) = fbs_polys {
-            let mut actors: Vec<i32> = fbs_polys.iter().map(|p| p.actor).collect();
-            actors.sort_unstable();
-            actors.dedup();
-            eprintln!("FBS_ACTORS child={child} distinct_actors={actors:?}");
-            let (winner, rows) = find_best_split_trace(&fbs_polys, BALANCE, PORTAL_BIAS, Opt::Good);
-            eprintln!("FBS_ROOT_TRACE child={child} n_polys={} winner_slot={winner}", fbs_polys.len());
-            for r in &rows {
-                eprintln!(
-                    "  slot={} cand_i={:?} plane={:?} pf={:#x} portal={} front={} back={} splits={} score={}",
-                    r.slot, r.cand_i, r.plane, r.poly_flags, r.portal, r.front, r.back, r.splits, r.score
-                );
-            }
-            // ISOLATED RECURSIVE TREE (UEDCLI_REPART_ISOLATED_TREE, temporary diagnostic —
-            // `unatco-verts-points-residual-after-the-zone`, testing whether matching the ROOT
-            // split (already confirmed for child=6108/4077) also matches the FULL recursive
-            // shape, not just the top level). Merge `fbs_polys` and rebuild in a scratch model
-            // that shares the real model's surf/point/vector pools (clone) but starts with an
-            // empty node array, so the resulting subtree is indexed from 0 and diffable directly
-            // against a live editor `ADD` capture (`repart_child_trace.py`) with parent offsets
-            // normalized the same way.
-            if std::env::var("UEDCLI_REPART_ISOLATED_TREE").is_ok() {
-                let merged = reduce_repartition_polys(fbs_polys.clone());
-                eprintln!("ISOTREE child={child} merged_count={}", merged.len());
-                let mut scratch = model.clone();
-                scratch.nodes.clear();
-                let mut iso_call_id = 0usize;
-                let _ = split_poly_list(
-                    &mut scratch, -1, NODE_ROOT, merged, 0, BALANCE, PORTAL_BIAS, Opt::Good,
-                    &mut iso_call_id,
-                );
-                for (i, n) in scratch.nodes.iter().enumerate() {
-                    eprintln!(
-                        "ISONODE i={i} iF={} iB={} iP={} isurf={} nv={} N={:.6},{:.6},{:.6} W={:.6}",
-                        n.i_front, n.i_back, n.i_plane, n.i_surf, n.num_vertices,
-                        n.plane.x, n.plane.y, n.plane.z, n.plane.w
-                    );
-                }
-            }
         }
     }
     Ok(())
@@ -3311,6 +3227,16 @@ fn reorder_points_canonical(model: &mut Model) {
                 push(model.verts[(node.i_vert_pool + k) as usize].i_vertex);
             }
         }
+        // Finally, every OTHER vert's own point, in pool order — covers `repartition_frontier`'s
+        // orphan verts (`unatco-verts-points-residual-after-the-zone`: the real editor's per-call
+        // reconstruction is discarded structurally but permanently grows Verts/Points, so these
+        // verts are never node-reachable by design). Re-audits the NOTE below: unlike the
+        // `bsp_opt_geom::insert_point` orphans it already covers, a `repartition_frontier` orphan
+        // can name a BRAND NEW point no live ring uses at all — without this pass, that point gets
+        // dropped and the orphan's `i_vertex` hits the `-1` sentinel just below.
+        for v in &model.verts {
+            push(v.i_vertex);
+        }
     }
     let new_points: Vec<Vec3> = order.iter().map(|&i| model.points[i]).collect();
     model.points = new_points;
@@ -3319,13 +3245,11 @@ fn reorder_points_canonical(model: &mut Model) {
             s.p_base = old_to_new[s.p_base as usize];
         }
     }
-    // Renumber EVERY vert's iVertex — including the ORPHAN verts `bsp_opt_geom::insert_point` leaves
-    // behind (it allocates a fresh ring block and abandons the old one rather than repacking, and
-    // those orphans ARE serialized).  This is sound only because T-junction welding is monotone: it
-    // copies every old ring vert forward and never drops a point from all live rings, so every point
-    // an orphan names is ALSO named by a live ring vert → it is in `order` and `old_to_new[..] >= 0`.
-    // If a future `bsp_opt_geom` ever removed/repacked verts, an orphan could name a dropped point and
-    // hit the `-1` sentinel here — re-audit this loop then.
+    // Renumber EVERY vert's iVertex — including orphan verts (`bsp_opt_geom::insert_point`'s
+    // abandoned-ring-block orphans, and `repartition_frontier`'s discarded-reconstruction orphans).
+    // `old_to_new[..]` is never `-1` for any vert reached here: the `order` walk above now includes
+    // every vert's own point directly (not just node-reachable ones), so nothing an orphan names can
+    // be dropped, regardless of whether any live node ring also names it.
     for v in &mut model.verts {
         if v.i_vertex >= 0 {
             v.i_vertex = old_to_new[v.i_vertex as usize];
@@ -4544,5 +4468,80 @@ mod tests {
         assert!(!is_csg_filter(&dead), "NF_NotCsg must make a live node non-CSG");
         dead.node_flags = 0x20; // NF_IsNew
         assert!(!is_csg_filter(&dead), "NF_IsNew must make a live node non-CSG");
+    }
+
+    /// GATE (TDD, written before the fix) — `unatco-verts-points-residual-after-the-zone`: the real
+    /// editor's `bspRepartition` call is a proven no-op on NODE structure (`bspRefresh`'s
+    /// `Core.dll!FArray::Remove` discards every freshly-built subtree, 209/209 UNATCO calls
+    /// live-verified) but a real, PERMANENT grower of `Verts`/`Points` (0/209 calls net to zero
+    /// vert growth; every call keeps what its own real, merged reconstruction allocated, even
+    /// though nothing ends up referencing it). `repartition_frontier` must reproduce both halves:
+    /// leave the parent's `i_front`/`i_back` and the node array untouched, while still growing
+    /// `verts` (points may or may not grow, depending on whether the reconstructed poly's corners
+    /// already exist in the pool — but a real reconstruction always pushes fresh `BspVert` pool
+    /// entries per `bsp_add_node`, which never reuses an existing vert-pool slot).
+    #[test]
+    fn repartition_frontier_is_a_node_noop_but_grows_verts() {
+        let c = Vec3::new(0.0, 0.0, 0.0);
+        let mut model =
+            build_geometry_bspcsg(&[box_brush(256.0, 256.0, 256.0, c, CsgOper::Add)]).unwrap();
+
+        // Find any node with a real (non-leaf-empty) child, exactly like `collect_repartition_frontier`
+        // would surface as a frontier entry — don't hardcode which index or which place, since the
+        // exact tree shape is incidental to this single-box scenario.
+        let (parent, place) = model
+            .nodes
+            .iter()
+            .enumerate()
+            .find_map(|(i, n)| {
+                if n.i_back != -1 {
+                    Some((i as i32, NODE_BACK))
+                } else if n.i_front != -1 {
+                    Some((i as i32, NODE_FRONT))
+                } else {
+                    None
+                }
+            })
+            .expect("a freshly-built box model must have at least one node with a real child");
+
+        let nodes_before = model.nodes.clone();
+        let verts_before = model.verts.len();
+        let points_before = model.points.len();
+        let surfs_before = model.surfs.len();
+
+        let (list_a, list_b) = if place == NODE_BACK {
+            (vec![parent], vec![])
+        } else {
+            (vec![], vec![parent])
+        };
+        repartition_frontier(&mut model, &list_a, &list_b).unwrap();
+
+        assert_eq!(
+            model.nodes.len(),
+            nodes_before.len(),
+            "repartition_frontier must never append or remove nodes"
+        );
+        assert_eq!(
+            model.nodes, nodes_before,
+            "repartition_frontier must never modify ANY existing node's content, including the \
+             parent's i_front/i_back — the real editor's bspRefresh discards its whole freshly-built \
+             subtree, so the parent keeps pointing at the pre-existing child unchanged"
+        );
+        assert_eq!(
+            model.surfs.len(),
+            surfs_before,
+            "split fragments always preserve i_link (FPoly::empty_copy), so this reconstruction \
+             never allocates a new surf"
+        );
+        assert!(
+            model.verts.len() > verts_before,
+            "the real editor's per-call reconstruction permanently grows Verts even though nothing \
+             ends up referencing the new entries — verts_before={verts_before} verts_after={}",
+            model.verts.len()
+        );
+        assert!(
+            model.points.len() >= points_before,
+            "points must never shrink"
+        );
     }
 }

@@ -243,3 +243,16 @@ there as a re-examination risk rather than silently assumed still valid.
 logs only — no new claims requiring a fresh capture beyond the `iPlane`-walk fix above. `bin/test -k
 bspcsg` (84/84) and `regression_gate.py`'s default path unchanged (Wanchai still exact at 11648;
 UNATCO still 6321 vs 6314 golden) before/after.
+
+## SHIPPED, same day, from the sibling UNATCO item: `repartition_frontier` rewritten (done/
+## `unatco-verts-points-residual-after-the-zone`) — Wanchai's own verts residual improved as a
+## side effect, still not closed.
+
+The fix implementing the mechanism this item helped characterize (`bspRepartition`'s real per-call
+reconstruction is discarded structurally but permanently grows Verts/Points) shipped from the UNATCO
+item, not this one — see that item (now in `done/`) and `dev/docs/native-materialize-findings.md` for
+the full write-up. Wanchai stays node/surf/leaf-exact throughout (unaffected, as always); verts
+improved `d=+138 → d=+74` (points unchanged, `d=+16`) — a real improvement, but Wanchai's own residual
+is not fully closed by this fix alone. Not investigated further here — this item's own scope (identify
+the specific known-delta calls, characterize the no-op) is complete; closing Wanchai's remaining +74
+verts gap would be a new, separate investigation if picked up.

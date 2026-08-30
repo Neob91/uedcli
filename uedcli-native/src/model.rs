@@ -45,7 +45,7 @@ impl Vec3 {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Plane {
     pub x: f32,
     pub y: f32,
@@ -53,7 +53,7 @@ pub struct Plane {
     pub w: f32,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct BspNode {
     pub plane: Plane,
     pub zone_mask: u64,
