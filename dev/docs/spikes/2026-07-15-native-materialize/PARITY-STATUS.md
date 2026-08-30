@@ -1,8 +1,10 @@
 # Native ↔ UnrealEd byte-parity — session status / resume handoff
 
-*Checkpoint 2026-07-20. Read this FIRST on resume, then the cited `sections/92-*.md` entries for detail.
+*Checkpoint 2026-07-20 — predates the 2026-08-14 owner ruling invalidating pre-cutoff spike
+findings (`owner-ruling-all-native-decode-spike-findings`); treat this file's claims as unverified
+until re-derived. Read this FIRST on resume, then the cited `sections/92-*.md` entries for detail.
 This file is the durable resume pointer; the blow-by-blow lives in `sections/92-bspbrushcsg-reallevel-port-plan.md`
-(§11–§54).*
+(§11–§54). Short, checkable, current-tree facts: `../../native-materialize-findings.md`.*
 
 ---
 

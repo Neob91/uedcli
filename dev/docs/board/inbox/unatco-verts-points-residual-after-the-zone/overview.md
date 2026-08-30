@@ -6,6 +6,10 @@ summary = "SHIPPED 2026-08-29 (repartition_frontier + compact_unreachable_nodes,
 
 # UNATCO `Verts`/`Points` residual — it is the unported sub-BSP repartition loop
 
+Short, checkable, cross-cutting facts from this investigation are logged in
+`dev/docs/native-materialize-findings.md` (check it before re-deriving something already known;
+follow its check/recheck process before changing an entry).
+
 Follow-up to `csgrebuild-runs-testvisibility-between-the`, which put native's UNATCO node tree exactly
 on the editor golden (6314/6314). `Verts` and `Points` are what is still open, and both are now
 stage-localized against live editor counts

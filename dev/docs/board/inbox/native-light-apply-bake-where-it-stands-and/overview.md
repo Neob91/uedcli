@@ -8,6 +8,10 @@ spikes = ["dev/docs/spikes/2026-08-27-native-light-apply-parity/"]
 
 # Native `LIGHT APPLY` bake: where it stands and what closes the last gaps
 
+Short, checkable, cross-cutting facts from this work are logged in
+`dev/docs/native-materialize-findings.md` (check it before re-deriving something already known;
+follow its check/recheck process before changing an entry).
+
 `UEDCLI_NATIVE_MATERIALIZE=1 level materialize` now bakes lighting with no editor anywhere in the
 path: `native.materialize.gather_lights` → `build_world_model(lights=)` →
 `uedcli_native.bake_lighting` → `assemble_unbuilt(light_names=)`. A full lit build of the 1437-actor
