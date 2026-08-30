@@ -1,7 +1,7 @@
 +++
 priority = "p2"
 kind = "debug"
-summary = "Confirmed line_clear (not lumel_axes) causes Wanchai's bits-only shadow divergence. Round 3 found the round 1-2 target function (target+0x5b0) was wrong; round 4 pinned the real crossing formula (t'=de/(de-ds)) and measured it regressing both levels when grafted onto native's alternating recursion -- reverted. Round 5 explains why: point2 (the query's lumel_pos) stays bit-identical across 4 successive genuine crossings on every one of 12 sampled rays -- the real algorithm's recursion shape doesn't alternate near/far like seg_clear does, it always shrinks toward a fixed anchor. A faithful port needs a recursion-structure rewrite, not a formula swap -- scoped for a future round, no fix attempted."
+summary = "Confirmed line_clear (not lumel_axes) causes Wanchai's bits-only shadow divergence. Round 3 found the round 1-2 target function (target+0x5b0) was wrong; round 4 pinned the real crossing formula (t'=de/(de-ds)) and measured it regressing both levels when grafted onto native's alternating recursion -- reverted. Round 5 explains why: point2 (the query's lumel_pos) stays bit-identical across 4 successive genuine crossings. Round 6: full disassembly of the real walker (0x17ce190) fully resolves the recursion shape (one genuine near-recursion replacing point1, tail-loop far-continuation replacing point2) AND finds a real, live-confirmed +/-0.001 epsilon band (not 0.0) governing whole-segment/crossing classification -- directly explains round 1's original bug exemplar. State-threading (edi) and terminal polarity still not confidently resolved (6 sampled rays were all-blocked, never exercised the clear-return paths) -- no port attempted, per the standing rule."
 depends-on = ["getvisiblesurfs-wanchai-run-gap-root-cause"]
 spikes = ["dev/docs/spikes/2026-08-29-unatco-repart-live-diff/"]
 +++
@@ -321,13 +321,120 @@ to match one traced case). `git diff` on `linecheck.rs` is empty.
 - `dev/docs/spikes/2026-08-29-unatco-repart-live-diff/logs/linecheck-multicrossing-survey.log`
   (round 5, the 12-ray capture the `point2`-fixed finding is drawn from)
 
+## Round 6 (2026-08-30): full static disassembly of the REAL walker resolves the recursion shape
+## completely, AND finds a genuine ±0.001 epsilon band (not 0.0) governing the whole-segment/crossing
+## classification -- a major, concrete, live-confirmed new fact. State-threading (`edi`) and terminal
+## polarity are NOT yet resolved with enough confidence to port safely; no code change made.
+
+Continuation task: finish round 5's open question (the per-node loop/child-selection mechanics) via
+live capture, then rewrite `line_clear`'s recursion to match, port the confirmed `t` formula, and
+verify no regression -- with the explicit instruction to verify the shape thoroughly BEFORE porting,
+learning from round 4's blind-swap regression.
+
+**Method.** Two new harnesses, both reusing the proven surf-gated attach technique (rounds 3-5):
+`linecheck_walker_full_disasm.py` (a live `x/400i 0x17ce190` dump straight from process memory --
+no RVA/base translation needed, the address is directly breakpointable and has been stable across
+every restart since round 3) captured the WHOLE function body (`0x17ce190`-`0x17ce441`, plus the
+caller context through `0x17ce4c0`+); `linecheck_walker_state_trace.py` then placed ~20 breakpoints
+at every branch/state-transition point identified in the disasm and traced 6 real rays end-to-end
+(node index, D1/D2, branch kind, `edi` before/after, recursive-call args, terminal path, final
+result), cross-referencing the live register values against round 3-4's already-known raw numbers to
+catch hand-decoding sign errors (which the first pass of static reading DID make once -- see below --
+caught and corrected before trusting the result).
+
+**Finding 1 -- the recursion shape, fully resolved.** `0x17ce190` is a LOOP over whole-segment
+(no-crossing) nodes -- `descend`ing without any function call, just overwriting the current node
+index and jumping back to the loop top (`0x17ce425`->`0x17ce1c0`) -- with exactly ONE genuine
+recursive call (`call 0x17ce190` at `0x17ce3b4`) per crossing. Argument-slot analysis (which FVector
+lands at which stack offset, independent of any sign/FP reading -- the most reliable part of this
+trace) proves: the near recursive call always **replaces point1 with `mid`, leaves point2
+unchanged**, and descends into whichever child point1's OWN plane-dot (`D1`) selects (not point2's,
+correcting an earlier mid-trace guess this round). Once that call returns, if clear, the SAME frame
+continues via the loop (not a second call) into the OTHER child, this time with **point2 replaced by
+`mid`, point1 left unchanged** -- exactly the "near recursion, far tail-loop" pattern predicted by
+round 5's `point2`-stays-fixed observation, now explained structurally: `point2` only changes at the
+far-continuation step, which is why a chain of NEAR recursions (round 5's 4-crossing example) never
+touches it. This closes round 5's exact open question: the near/far split IS a genuine two-way
+`descend(...) && descend(...)` test (short-circuits on the near call returning blocked, `0x17ce439`),
+it is simply implemented with the far half as a compiler-tail-call-eliminated loop rather than a
+second stack frame -- behaviorally equivalent to native's own shape, but with DIFFERENT roles: native
+always treats its first argument (`start`) as the one that shrinks toward `mid` first; the real editor
+always shrinks POINT1 (which round 3 established, live, is `light_loc` -- native's `end`, not
+`start`) toward `mid` first, anchoring on POINT2 (`lumel_pos`, native's `start`) until the
+far-continuation step.
+
+**Finding 2 -- a genuine ±0.001 epsilon band governs classification, live-read from process memory,
+not assumed.** The two float constants gating the FRONT/BACK/crossing three-way split
+(`0x183761c`, `0x182293c`) were previously unknown/unread (rounds 1-2 refuted a **different**
+epsilon hypothesis for the WRONG function, `target+0x5b0`). Read directly via `x/f *addr` this round:
+**CONST1 = -0.001, CONST2 = +0.001** (bit-exact float32 encodings of 0.001, not 0.0). Re-deriving the
+boundary logic with these values: FRONT-whole requires `D1 > -0.001 AND D2 > -0.001`; BACK-whole
+requires `D1 < 0.001 AND D2 < 0.001`; anything else is a crossing. This means a node whose D1 (or D2)
+is only *slightly* on the "wrong" side of 0 (within 0.001) still gets swept into the SAME
+classification as its partner, avoiding a spurious crossing split. This is DIRECTLY the mechanism
+round 1's original traced exemplar needed: a ray origin sitting ~0.0002uu off a splitting plane
+(`ds`≈-0.0002) would, under native's strict `>=0.0` test, register as a crossing and descend the
+tiny near-zero sub-segment first -- exactly the false-block bug round 1 found. Under the REAL
+±0.001 band, that same tiny-negative value falls inside the epsilon and gets absorbed into the
+SAME-side classification as its partner instead. **Round 1's original epsilon hypothesis was right in
+spirit -- it was examining the wrong function; the real function genuinely has one.**
+
+**Finding 3 -- the crossing formula re-confirmed with corrected point roles.** `t = D1/(D2-D1)`
+(register-derived, matches round 3's raw captured `t=-0.592757821` for its traced ray EXACTLY once
+D1/D2 are correctly identified as point1/point2's own dots via a live memory read at the CROSS_ENTRY
+breakpoint -- an earlier attempt this round had D1/D2 swapped from mis-reading x87-pending-store
+timing, caught by cross-checking against round 3's already-known live numbers before trusting
+anything further). `mid = point2 + t*(point2 - point1)`, algebraically consistent with round 4's
+independently live-verified `mid` coordinates (`t = -t'` where `t'` is round 4's `de/(de-ds)`, an
+EXACT floating-point negation, not an approximation, so no contradiction).
+
+**Finding 4 -- a real, non-obvious CSG-mask asymmetry, NOT yet reconciled.** Every whole-segment
+CSG-classification site strips `NF_BrightCorners` (`0x10`) from `extra_flags` before testing against
+`NodeFlags` (`and al,0xef; or al,0x21`), matching the existing `is_csg` helper exactly. The
+far-continuation's OWN classification site (`0x17ce3d5`-`0x17ce3da`, live-confirmed present and
+reachable) does NOT strip that bit (`or al,0x21` only) -- a real, disassembly- and live-trace-
+confirmed difference from `is_csg`'s formula, not yet understood or reconciled with the existing
+model. If real and load-bearing, this means the far-continuation step cannot simply reuse the
+existing `is_csg` helper unmodified for a NF_BrightCorners-flagged surface.
+
+**Not resolved -- why no port was attempted this round.** The `edi`/"state" thread's full semantics
+(what it represents, and its value on every whole-segment AND far-continuation branch) and the
+terminal-handling return polarity were traced live for 6 real rays (`linecheck-walker-state-trace.log`)
+and are CONSISTENT with `eax=1`/`edi`-nonzero meaning CLEAR (cross-validated against the terminal
+path that matches the EXISTING, already-tested `NF_BrightCorners`-suppression semantics in
+`linecheck.rs` exactly: solid terminal + `NF_BrightCorners` + `seen_empty`-equivalent global still 0
+-> returns 1/clear, precisely matching `bright_corners_reports_clear_when_the_ray_starts_in_solid`).
+But the exact `edi` bit-formula for EVERY branch (whole-segment CSG/non-CSG on both FRONT and BACK,
+which use different AND/OR combinations that are not yet fully explained semantically -- see the
+raw disasm) and how it composes across nested near-recursions is not yet confidently enough
+understood to port without real regression risk, matching the standing rule and round 4's own
+lesson. Six sampled rays all returned the same outcome (all-blocked, a plausible shadowed row), so
+this trace did not exercise the CLEAR-return / non-solid-terminal paths at all -- a real gap in
+validation coverage, not just in derivation.
+
+**Not shipped.** No `linecheck.rs` change this round; `git diff` on it is empty.
+`bin/test -k linecheck` and `regression_gate.py` not re-run (nothing that could regress changed --
+only new committed spike harnesses/logs were added).
+
 ## Concrete next step for a future round
 
-Round 5 answered the near/far alternation question (`point2` never swaps roles -- it's a fixed
-anchor for the whole walk). What's still open: the exact per-node LOOP mechanics within one physical
-frame (which child gets selected via `ecx` in the `EARLY_RETURN_A`/`_B` branches, and what determines
-when the loop continues vs. when a genuine `call 0x17ce190` is needed), and whether this
-single-recursive-call shape ever needs a second branch the way native's `descend(...) &&
-descend(...)` does, or is provably sufficient as a single-direction walk for a zero-extent shadow ray.
-Only once that's understood can `seg_clear` be rewritten to match the real recursion SHAPE (not just
-have its formula patched), and re-measured before shipping.
+Round 6 fully resolved the recursion SHAPE and found the real ±0.001 epsilon band (both now safe to
+port with confidence). What remains before a safe port: (1) trace rays that return CLEAR and hit a
+non-CSG or empty terminal, to pin the `edi` state-formula's semantics across every branch (the 6
+rays this round were all-blocked and never exercised those paths); (2) resolve Finding 4's CSG-mask
+asymmetry -- confirm it's real (not a mis-read) and work out what it implies for a NF_BrightCorners
+surface; (3) only then port the full recursion (shape + epsilon + formula + resolved state machine)
+via TDD, and re-run the FULL lighting comparison (not a sample) on UNATCO and Wanchai before/after,
+per the standing gate.
+
+## Files (round 6)
+
+- `dev/docs/spikes/2026-08-29-unatco-repart-live-diff/harness/linecheck_walker_full_disasm.py` (new
+  -- live `x/400i` dump of the real walker's whole body, no RVA translation needed)
+- `dev/docs/spikes/2026-08-29-unatco-repart-live-diff/logs/linecheck-walker-full-disasm.log` (the
+  captured disassembly Findings 1-3 above are read from)
+- `dev/docs/spikes/2026-08-29-unatco-repart-live-diff/harness/linecheck_walker_state_trace.py` (new
+  -- ~20-breakpoint live state trace of 6 real rays, plus a direct memory read of the two epsilon
+  constants)
+- `dev/docs/spikes/2026-08-29-unatco-repart-live-diff/logs/linecheck-walker-state-trace.log` (the
+  6-ray capture Finding 2/4 and the "not resolved" section are drawn from)

@@ -1,0 +1,417 @@
+[New LWP 144]
+[New LWP 153]
+[New LWP 154]
+[New LWP 155]
+[New LWP 156]
+[New LWP 157]
+[New LWP 158]
+[New LWP 159]
+[New LWP 160]
+[New LWP 161]
+[New LWP 162]
+[New LWP 163]
+[New LWP 164]
+[New LWP 165]
+[New LWP 166]
+[New LWP 167]
+[New LWP 168]
+[New LWP 169]
+[New LWP 170]
+[New LWP 171]
+[New LWP 172]
+[New LWP 173]
+[New LWP 174]
+[New LWP 175]
+[New LWP 176]
+[New LWP 177]
+[New LWP 178]
+[New LWP 179]
+[New LWP 180]
+[New LWP 181]
+[New LWP 197]
+[New LWP 243]
+[New LWP 244]
+[New LWP 245]
+[Thread debugging using libthread_db enabled]
+Using host libthread_db library "/lib/x86_64-linux-gnu/libthread_db.so.1".
+0xf7f0bcfc in __kernel_vsyscall ()
+CONST1=-0.00100000005
+CONST2=0.00100000005
+Breakpoint 1 at 0x100a5043
+ORACLE_ATTACHED
+SURF_ENTER isurf=1
+Breakpoint 2 at 0x100a5a04
+Breakpoint 3 at 0x17ce1cd
+Breakpoint 4 at 0x17ce219
+Breakpoint 5 at 0x17ce249
+Breakpoint 6 at 0x17ce25b
+Breakpoint 7 at 0x17ce28d
+Breakpoint 8 at 0x17ce29c
+Breakpoint 9 at 0x17ce425
+Breakpoint 10 at 0x17ce306
+Breakpoint 11 at 0x17ce31c
+Breakpoint 12 at 0x17ce3b4
+Breakpoint 13 at 0x17ce3bc
+Breakpoint 14 at 0x17ce3d5
+Breakpoint 15 at 0x17ce3ef
+Breakpoint 16 at 0x17ce3df
+Breakpoint 17 at 0x17ce3f9
+Breakpoint 18 at 0x17ce400
+Breakpoint 19 at 0x17ce442
+Breakpoint 20 at 0x17ce445
+Breakpoint 21 at 0x17ce449
+Breakpoint 22 at 0x17ce456
+Breakpoint 23 at 0x17ce464
+Breakpoint 24 at 0x17ce4ac
+Breakpoint 25 at 0x17ce439
+Breakpoint 26 at 0x100a5a07
+RAY_ENTER ray=1 px=1462.90857 py=-1500.60205 pz=4
+NODE ray=1 depth=1 inode=0 node=0xded0024 edi_in=0
+DOTS ray=1 depth=1 D1_pending_in_x87=1
+  BRANCH ray=1 depth=1 kind=BACK_CSG edi_before=0
+  TAIL ray=1 depth=1 next_inode=5172 edi_after=0
+NODE ray=1 depth=2 inode=5172 node=0xdf20d24 edi_in=0
+DOTS ray=1 depth=2 D1_pending_in_x87=1
+  BRANCH ray=1 depth=2 kind=FRONT_CSG edi_before=0
+  TAIL ray=1 depth=2 next_inode=5193 edi_after=1
+NODE ray=1 depth=3 inode=5193 node=0xdf21264 edi_in=1
+DOTS ray=1 depth=3 D1_pending_in_x87=1
+  BRANCH ray=1 depth=3 kind=BACK_CSG edi_before=1
+  TAIL ray=1 depth=3 next_inode=5840 edi_after=0
+NODE ray=1 depth=4 inode=5840 node=0xdf2b424 edi_in=0
+DOTS ray=1 depth=4 D1_pending_in_x87=1
+  CROSS_D1 ray=1 depth=4 D1=-140
+  NEARFLAG ray=1 depth=4 flag=0
+  RECURSE_CALL ray=1 depth=4 child=6313 state_out=0
+NODE ray=1 depth=5 inode=6313 node=0xdf32a64 edi_in=0
+DOTS ray=1 depth=5 D1_pending_in_x87=1
+  BRANCH ray=1 depth=5 kind=FRONT_CSG edi_before=0
+  TAIL ray=1 depth=5 next_inode=6320 edi_after=1
+NODE ray=1 depth=6 inode=6320 node=0xdf32c24 edi_in=1
+DOTS ray=1 depth=6 D1_pending_in_x87=1
+  CROSS_D1 ray=1 depth=6 D1=124
+  NEARFLAG ray=1 depth=6 flag=1
+  RECURSE_CALL ray=1 depth=6 child=6349 state_out=0
+NODE ray=1 depth=7 inode=6349 node=0xdf33364 edi_in=1
+DOTS ray=1 depth=7 D1_pending_in_x87=1
+  CROSS_D1 ray=1 depth=7 D1=-364.602051
+  NEARFLAG ray=1 depth=7 flag=0
+  RECURSE_CALL ray=1 depth=7 child=6442 state_out=0
+NODE ray=1 depth=8 inode=6442 node=0xdf34aa4 edi_in=0
+DOTS ray=1 depth=8 D1_pending_in_x87=1
+  BRANCH ray=1 depth=8 kind=BACK_CSG edi_before=0
+  TAIL ray=1 depth=8 next_inode=6467 edi_after=0
+NODE ray=1 depth=9 inode=6467 node=0xdf350e4 edi_in=0
+DOTS ray=1 depth=9 D1_pending_in_x87=1
+  BRANCH ray=1 depth=9 kind=FRONT_CSG edi_before=0
+  TAIL ray=1 depth=9 next_inode=6468 edi_after=1
+NODE ray=1 depth=10 inode=6468 node=0xdf35124 edi_in=1
+DOTS ray=1 depth=10 D1_pending_in_x87=1
+  BRANCH ray=1 depth=10 kind=BACK_CSG edi_before=1
+  TAIL ray=1 depth=10 next_inode=6476 edi_after=0
+NODE ray=1 depth=11 inode=6476 node=0xdf35324 edi_in=0
+DOTS ray=1 depth=11 D1_pending_in_x87=1
+  BRANCH ray=1 depth=11 kind=BACK_CSG edi_before=0
+  TAIL ray=1 depth=11 next_inode=-1 edi_after=0
+  TERMINAL_B ray=1 depth=11 edi=0
+  TERMINAL_GLOBALCHECK ray=1 depth=11 edi=0 global=0 bl_bit10=0
+  TERMINAL_WRITEOUT ray=1 depth=11 edx=0 edi=0
+  RECURSE_RETURN ray=1 depth=11 result=0
+  SHORTCIRCUIT_BLOCKED ray=1 depth=11
+  RECURSE_RETURN ray=1 depth=11 result=0
+  SHORTCIRCUIT_BLOCKED ray=1 depth=11
+  RECURSE_RETURN ray=1 depth=11 result=0
+  SHORTCIRCUIT_BLOCKED ray=1 depth=11
+RAY_RETURN ray=1 result=0
+RAY_ENTER ray=2 px=1495.12793 py=-1500.60205 pz=4
+NODE ray=2 depth=1 inode=0 node=0xded0024 edi_in=0
+DOTS ray=2 depth=1 D1_pending_in_x87=1
+  BRANCH ray=2 depth=1 kind=BACK_CSG edi_before=0
+  TAIL ray=2 depth=1 next_inode=5172 edi_after=0
+NODE ray=2 depth=2 inode=5172 node=0xdf20d24 edi_in=0
+DOTS ray=2 depth=2 D1_pending_in_x87=1
+  BRANCH ray=2 depth=2 kind=FRONT_CSG edi_before=0
+  TAIL ray=2 depth=2 next_inode=5193 edi_after=1
+NODE ray=2 depth=3 inode=5193 node=0xdf21264 edi_in=1
+DOTS ray=2 depth=3 D1_pending_in_x87=1
+  BRANCH ray=2 depth=3 kind=BACK_CSG edi_before=1
+  TAIL ray=2 depth=3 next_inode=5840 edi_after=0
+NODE ray=2 depth=4 inode=5840 node=0xdf2b424 edi_in=0
+DOTS ray=2 depth=4 D1_pending_in_x87=1
+  CROSS_D1 ray=2 depth=4 D1=-140
+  NEARFLAG ray=2 depth=4 flag=0
+  RECURSE_CALL ray=2 depth=4 child=6313 state_out=0
+NODE ray=2 depth=5 inode=6313 node=0xdf32a64 edi_in=0
+DOTS ray=2 depth=5 D1_pending_in_x87=1
+  BRANCH ray=2 depth=5 kind=FRONT_CSG edi_before=0
+  TAIL ray=2 depth=5 next_inode=6320 edi_after=1
+NODE ray=2 depth=6 inode=6320 node=0xdf32c24 edi_in=1
+DOTS ray=2 depth=6 D1_pending_in_x87=1
+  CROSS_D1 ray=2 depth=6 D1=124
+  NEARFLAG ray=2 depth=6 flag=1
+  RECURSE_CALL ray=2 depth=6 child=6349 state_out=0
+NODE ray=2 depth=7 inode=6349 node=0xdf33364 edi_in=1
+DOTS ray=2 depth=7 D1_pending_in_x87=1
+  CROSS_D1 ray=2 depth=7 D1=-364.602051
+  NEARFLAG ray=2 depth=7 flag=0
+  RECURSE_CALL ray=2 depth=7 child=6442 state_out=0
+NODE ray=2 depth=8 inode=6442 node=0xdf34aa4 edi_in=0
+DOTS ray=2 depth=8 D1_pending_in_x87=1
+  BRANCH ray=2 depth=8 kind=BACK_CSG edi_before=0
+  TAIL ray=2 depth=8 next_inode=6467 edi_after=0
+NODE ray=2 depth=9 inode=6467 node=0xdf350e4 edi_in=0
+DOTS ray=2 depth=9 D1_pending_in_x87=1
+  BRANCH ray=2 depth=9 kind=FRONT_CSG edi_before=0
+  TAIL ray=2 depth=9 next_inode=6468 edi_after=1
+NODE ray=2 depth=10 inode=6468 node=0xdf35124 edi_in=1
+DOTS ray=2 depth=10 D1_pending_in_x87=1
+  BRANCH ray=2 depth=10 kind=BACK_CSG edi_before=1
+  TAIL ray=2 depth=10 next_inode=6476 edi_after=0
+NODE ray=2 depth=11 inode=6476 node=0xdf35324 edi_in=0
+DOTS ray=2 depth=11 D1_pending_in_x87=1
+  BRANCH ray=2 depth=11 kind=BACK_CSG edi_before=0
+  TAIL ray=2 depth=11 next_inode=-1 edi_after=0
+  TERMINAL_B ray=2 depth=11 edi=0
+  TERMINAL_GLOBALCHECK ray=2 depth=11 edi=0 global=0 bl_bit10=0
+  TERMINAL_WRITEOUT ray=2 depth=11 edx=0 edi=0
+  RECURSE_RETURN ray=2 depth=11 result=0
+  SHORTCIRCUIT_BLOCKED ray=2 depth=11
+  RECURSE_RETURN ray=2 depth=11 result=0
+  SHORTCIRCUIT_BLOCKED ray=2 depth=11
+  RECURSE_RETURN ray=2 depth=11 result=0
+  SHORTCIRCUIT_BLOCKED ray=2 depth=11
+RAY_RETURN ray=2 result=0
+RAY_ENTER ray=3 px=1527.34729 py=-1500.60205 pz=4
+NODE ray=3 depth=1 inode=0 node=0xded0024 edi_in=0
+DOTS ray=3 depth=1 D1_pending_in_x87=1
+  BRANCH ray=3 depth=1 kind=BACK_CSG edi_before=0
+  TAIL ray=3 depth=1 next_inode=5172 edi_after=0
+NODE ray=3 depth=2 inode=5172 node=0xdf20d24 edi_in=0
+DOTS ray=3 depth=2 D1_pending_in_x87=1
+  BRANCH ray=3 depth=2 kind=FRONT_CSG edi_before=0
+  TAIL ray=3 depth=2 next_inode=5193 edi_after=1
+NODE ray=3 depth=3 inode=5193 node=0xdf21264 edi_in=1
+DOTS ray=3 depth=3 D1_pending_in_x87=1
+  BRANCH ray=3 depth=3 kind=BACK_CSG edi_before=1
+  TAIL ray=3 depth=3 next_inode=5840 edi_after=0
+NODE ray=3 depth=4 inode=5840 node=0xdf2b424 edi_in=0
+DOTS ray=3 depth=4 D1_pending_in_x87=1
+  CROSS_D1 ray=3 depth=4 D1=-140
+  NEARFLAG ray=3 depth=4 flag=0
+  RECURSE_CALL ray=3 depth=4 child=6313 state_out=0
+NODE ray=3 depth=5 inode=6313 node=0xdf32a64 edi_in=0
+DOTS ray=3 depth=5 D1_pending_in_x87=1
+  BRANCH ray=3 depth=5 kind=FRONT_CSG edi_before=0
+  TAIL ray=3 depth=5 next_inode=6320 edi_after=1
+NODE ray=3 depth=6 inode=6320 node=0xdf32c24 edi_in=1
+DOTS ray=3 depth=6 D1_pending_in_x87=1
+  CROSS_D1 ray=3 depth=6 D1=124
+  NEARFLAG ray=3 depth=6 flag=1
+  RECURSE_CALL ray=3 depth=6 child=6349 state_out=0
+NODE ray=3 depth=7 inode=6349 node=0xdf33364 edi_in=1
+DOTS ray=3 depth=7 D1_pending_in_x87=1
+  CROSS_D1 ray=3 depth=7 D1=-364.602051
+  NEARFLAG ray=3 depth=7 flag=0
+  RECURSE_CALL ray=3 depth=7 child=6442 state_out=0
+NODE ray=3 depth=8 inode=6442 node=0xdf34aa4 edi_in=0
+DOTS ray=3 depth=8 D1_pending_in_x87=1
+  BRANCH ray=3 depth=8 kind=BACK_CSG edi_before=0
+  TAIL ray=3 depth=8 next_inode=6467 edi_after=0
+NODE ray=3 depth=9 inode=6467 node=0xdf350e4 edi_in=0
+DOTS ray=3 depth=9 D1_pending_in_x87=1
+  BRANCH ray=3 depth=9 kind=FRONT_CSG edi_before=0
+  TAIL ray=3 depth=9 next_inode=6468 edi_after=1
+NODE ray=3 depth=10 inode=6468 node=0xdf35124 edi_in=1
+DOTS ray=3 depth=10 D1_pending_in_x87=1
+  BRANCH ray=3 depth=10 kind=BACK_CSG edi_before=1
+  TAIL ray=3 depth=10 next_inode=6476 edi_after=0
+NODE ray=3 depth=11 inode=6476 node=0xdf35324 edi_in=0
+DOTS ray=3 depth=11 D1_pending_in_x87=1
+  BRANCH ray=3 depth=11 kind=BACK_CSG edi_before=0
+  TAIL ray=3 depth=11 next_inode=-1 edi_after=0
+  TERMINAL_B ray=3 depth=11 edi=0
+  TERMINAL_GLOBALCHECK ray=3 depth=11 edi=0 global=0 bl_bit10=0
+  TERMINAL_WRITEOUT ray=3 depth=11 edx=0 edi=0
+  RECURSE_RETURN ray=3 depth=11 result=0
+  SHORTCIRCUIT_BLOCKED ray=3 depth=11
+  RECURSE_RETURN ray=3 depth=11 result=0
+  SHORTCIRCUIT_BLOCKED ray=3 depth=11
+  RECURSE_RETURN ray=3 depth=11 result=0
+  SHORTCIRCUIT_BLOCKED ray=3 depth=11
+RAY_RETURN ray=3 result=0
+RAY_ENTER ray=4 px=1559.56665 py=-1500.60205 pz=4
+NODE ray=4 depth=1 inode=0 node=0xded0024 edi_in=0
+DOTS ray=4 depth=1 D1_pending_in_x87=1
+  BRANCH ray=4 depth=1 kind=BACK_CSG edi_before=0
+  TAIL ray=4 depth=1 next_inode=5172 edi_after=0
+NODE ray=4 depth=2 inode=5172 node=0xdf20d24 edi_in=0
+DOTS ray=4 depth=2 D1_pending_in_x87=1
+  BRANCH ray=4 depth=2 kind=FRONT_CSG edi_before=0
+  TAIL ray=4 depth=2 next_inode=5193 edi_after=1
+NODE ray=4 depth=3 inode=5193 node=0xdf21264 edi_in=1
+DOTS ray=4 depth=3 D1_pending_in_x87=1
+  BRANCH ray=4 depth=3 kind=BACK_CSG edi_before=1
+  TAIL ray=4 depth=3 next_inode=5840 edi_after=0
+NODE ray=4 depth=4 inode=5840 node=0xdf2b424 edi_in=0
+DOTS ray=4 depth=4 D1_pending_in_x87=1
+  CROSS_D1 ray=4 depth=4 D1=-140
+  NEARFLAG ray=4 depth=4 flag=0
+  RECURSE_CALL ray=4 depth=4 child=6313 state_out=0
+NODE ray=4 depth=5 inode=6313 node=0xdf32a64 edi_in=0
+DOTS ray=4 depth=5 D1_pending_in_x87=1
+  BRANCH ray=4 depth=5 kind=FRONT_CSG edi_before=0
+  TAIL ray=4 depth=5 next_inode=6320 edi_after=1
+NODE ray=4 depth=6 inode=6320 node=0xdf32c24 edi_in=1
+DOTS ray=4 depth=6 D1_pending_in_x87=1
+  CROSS_D1 ray=4 depth=6 D1=124
+  NEARFLAG ray=4 depth=6 flag=1
+  RECURSE_CALL ray=4 depth=6 child=6349 state_out=0
+NODE ray=4 depth=7 inode=6349 node=0xdf33364 edi_in=1
+DOTS ray=4 depth=7 D1_pending_in_x87=1
+  CROSS_D1 ray=4 depth=7 D1=-364.602051
+  NEARFLAG ray=4 depth=7 flag=0
+  RECURSE_CALL ray=4 depth=7 child=6442 state_out=0
+NODE ray=4 depth=8 inode=6442 node=0xdf34aa4 edi_in=0
+DOTS ray=4 depth=8 D1_pending_in_x87=1
+  BRANCH ray=4 depth=8 kind=BACK_CSG edi_before=0
+  TAIL ray=4 depth=8 next_inode=6467 edi_after=0
+NODE ray=4 depth=9 inode=6467 node=0xdf350e4 edi_in=0
+DOTS ray=4 depth=9 D1_pending_in_x87=1
+  BRANCH ray=4 depth=9 kind=FRONT_CSG edi_before=0
+  TAIL ray=4 depth=9 next_inode=6468 edi_after=1
+NODE ray=4 depth=10 inode=6468 node=0xdf35124 edi_in=1
+DOTS ray=4 depth=10 D1_pending_in_x87=1
+  BRANCH ray=4 depth=10 kind=BACK_CSG edi_before=1
+  TAIL ray=4 depth=10 next_inode=6476 edi_after=0
+NODE ray=4 depth=11 inode=6476 node=0xdf35324 edi_in=0
+DOTS ray=4 depth=11 D1_pending_in_x87=1
+  BRANCH ray=4 depth=11 kind=BACK_CSG edi_before=0
+  TAIL ray=4 depth=11 next_inode=-1 edi_after=0
+  TERMINAL_B ray=4 depth=11 edi=0
+  TERMINAL_GLOBALCHECK ray=4 depth=11 edi=0 global=0 bl_bit10=0
+  TERMINAL_WRITEOUT ray=4 depth=11 edx=0 edi=0
+  RECURSE_RETURN ray=4 depth=11 result=0
+  SHORTCIRCUIT_BLOCKED ray=4 depth=11
+  RECURSE_RETURN ray=4 depth=11 result=0
+  SHORTCIRCUIT_BLOCKED ray=4 depth=11
+  RECURSE_RETURN ray=4 depth=11 result=0
+  SHORTCIRCUIT_BLOCKED ray=4 depth=11
+RAY_RETURN ray=4 result=0
+RAY_ENTER ray=5 px=1591.78601 py=-1500.60205 pz=4
+NODE ray=5 depth=1 inode=0 node=0xded0024 edi_in=0
+DOTS ray=5 depth=1 D1_pending_in_x87=1
+  BRANCH ray=5 depth=1 kind=BACK_CSG edi_before=0
+  TAIL ray=5 depth=1 next_inode=5172 edi_after=0
+NODE ray=5 depth=2 inode=5172 node=0xdf20d24 edi_in=0
+DOTS ray=5 depth=2 D1_pending_in_x87=1
+  BRANCH ray=5 depth=2 kind=FRONT_CSG edi_before=0
+  TAIL ray=5 depth=2 next_inode=5193 edi_after=1
+NODE ray=5 depth=3 inode=5193 node=0xdf21264 edi_in=1
+DOTS ray=5 depth=3 D1_pending_in_x87=1
+  BRANCH ray=5 depth=3 kind=BACK_CSG edi_before=1
+  TAIL ray=5 depth=3 next_inode=5840 edi_after=0
+NODE ray=5 depth=4 inode=5840 node=0xdf2b424 edi_in=0
+DOTS ray=5 depth=4 D1_pending_in_x87=1
+  CROSS_D1 ray=5 depth=4 D1=-140
+  NEARFLAG ray=5 depth=4 flag=0
+  RECURSE_CALL ray=5 depth=4 child=6313 state_out=0
+NODE ray=5 depth=5 inode=6313 node=0xdf32a64 edi_in=0
+DOTS ray=5 depth=5 D1_pending_in_x87=1
+  BRANCH ray=5 depth=5 kind=FRONT_CSG edi_before=0
+  TAIL ray=5 depth=5 next_inode=6320 edi_after=1
+NODE ray=5 depth=6 inode=6320 node=0xdf32c24 edi_in=1
+DOTS ray=5 depth=6 D1_pending_in_x87=1
+  CROSS_D1 ray=5 depth=6 D1=124
+  NEARFLAG ray=5 depth=6 flag=1
+  RECURSE_CALL ray=5 depth=6 child=6349 state_out=0
+NODE ray=5 depth=7 inode=6349 node=0xdf33364 edi_in=1
+DOTS ray=5 depth=7 D1_pending_in_x87=1
+  CROSS_D1 ray=5 depth=7 D1=-364.602051
+  NEARFLAG ray=5 depth=7 flag=0
+  RECURSE_CALL ray=5 depth=7 child=6442 state_out=0
+NODE ray=5 depth=8 inode=6442 node=0xdf34aa4 edi_in=0
+DOTS ray=5 depth=8 D1_pending_in_x87=1
+  BRANCH ray=5 depth=8 kind=BACK_CSG edi_before=0
+  TAIL ray=5 depth=8 next_inode=6467 edi_after=0
+NODE ray=5 depth=9 inode=6467 node=0xdf350e4 edi_in=0
+DOTS ray=5 depth=9 D1_pending_in_x87=1
+  BRANCH ray=5 depth=9 kind=FRONT_CSG edi_before=0
+  TAIL ray=5 depth=9 next_inode=6468 edi_after=1
+NODE ray=5 depth=10 inode=6468 node=0xdf35124 edi_in=1
+DOTS ray=5 depth=10 D1_pending_in_x87=1
+  BRANCH ray=5 depth=10 kind=BACK_CSG edi_before=1
+  TAIL ray=5 depth=10 next_inode=6476 edi_after=0
+NODE ray=5 depth=11 inode=6476 node=0xdf35324 edi_in=0
+DOTS ray=5 depth=11 D1_pending_in_x87=1
+  BRANCH ray=5 depth=11 kind=BACK_CSG edi_before=0
+  TAIL ray=5 depth=11 next_inode=-1 edi_after=0
+  TERMINAL_B ray=5 depth=11 edi=0
+  TERMINAL_GLOBALCHECK ray=5 depth=11 edi=0 global=0 bl_bit10=0
+  TERMINAL_WRITEOUT ray=5 depth=11 edx=0 edi=0
+  RECURSE_RETURN ray=5 depth=11 result=0
+  SHORTCIRCUIT_BLOCKED ray=5 depth=11
+  RECURSE_RETURN ray=5 depth=11 result=0
+  SHORTCIRCUIT_BLOCKED ray=5 depth=11
+  RECURSE_RETURN ray=5 depth=11 result=0
+  SHORTCIRCUIT_BLOCKED ray=5 depth=11
+RAY_RETURN ray=5 result=0
+RAY_ENTER ray=6 px=1624.00537 py=-1500.60205 pz=4
+NODE ray=6 depth=1 inode=0 node=0xded0024 edi_in=0
+DOTS ray=6 depth=1 D1_pending_in_x87=1
+  BRANCH ray=6 depth=1 kind=BACK_CSG edi_before=0
+  TAIL ray=6 depth=1 next_inode=5172 edi_after=0
+NODE ray=6 depth=2 inode=5172 node=0xdf20d24 edi_in=0
+DOTS ray=6 depth=2 D1_pending_in_x87=1
+  BRANCH ray=6 depth=2 kind=FRONT_CSG edi_before=0
+  TAIL ray=6 depth=2 next_inode=5193 edi_after=1
+NODE ray=6 depth=3 inode=5193 node=0xdf21264 edi_in=1
+DOTS ray=6 depth=3 D1_pending_in_x87=1
+  BRANCH ray=6 depth=3 kind=BACK_CSG edi_before=1
+  TAIL ray=6 depth=3 next_inode=5840 edi_after=0
+NODE ray=6 depth=4 inode=5840 node=0xdf2b424 edi_in=0
+DOTS ray=6 depth=4 D1_pending_in_x87=1
+  CROSS_D1 ray=6 depth=4 D1=-140
+  NEARFLAG ray=6 depth=4 flag=0
+  RECURSE_CALL ray=6 depth=4 child=6313 state_out=0
+NODE ray=6 depth=5 inode=6313 node=0xdf32a64 edi_in=0
+DOTS ray=6 depth=5 D1_pending_in_x87=1
+  BRANCH ray=6 depth=5 kind=FRONT_CSG edi_before=0
+  TAIL ray=6 depth=5 next_inode=6320 edi_after=1
+NODE ray=6 depth=6 inode=6320 node=0xdf32c24 edi_in=1
+DOTS ray=6 depth=6 D1_pending_in_x87=1
+  CROSS_D1 ray=6 depth=6 D1=124
+  NEARFLAG ray=6 depth=6 flag=1
+  RECURSE_CALL ray=6 depth=6 child=6349 state_out=0
+NODE ray=6 depth=7 inode=6349 node=0xdf33364 edi_in=1
+DOTS ray=6 depth=7 D1_pending_in_x87=1
+  CROSS_D1 ray=6 depth=7 D1=-364.602051
+  NEARFLAG ray=6 depth=7 flag=0
+  RECURSE_CALL ray=6 depth=7 child=6442 state_out=0
+NODE ray=6 depth=8 inode=6442 node=0xdf34aa4 edi_in=0
+DOTS ray=6 depth=8 D1_pending_in_x87=1
+  BRANCH ray=6 depth=8 kind=BACK_CSG edi_before=0
+  TAIL ray=6 depth=8 next_inode=6467 edi_after=0
+NODE ray=6 depth=9 inode=6467 node=0xdf350e4 edi_in=0
+DOTS ray=6 depth=9 D1_pending_in_x87=1
+  BRANCH ray=6 depth=9 kind=FRONT_CSG edi_before=0
+  TAIL ray=6 depth=9 next_inode=6468 edi_after=1
+NODE ray=6 depth=10 inode=6468 node=0xdf35124 edi_in=1
+DOTS ray=6 depth=10 D1_pending_in_x87=1
+  BRANCH ray=6 depth=10 kind=BACK_CSG edi_before=1
+  TAIL ray=6 depth=10 next_inode=6476 edi_after=0
+NODE ray=6 depth=11 inode=6476 node=0xdf35324 edi_in=0
+DOTS ray=6 depth=11 D1_pending_in_x87=1
+  BRANCH ray=6 depth=11 kind=BACK_CSG edi_before=0
+  TAIL ray=6 depth=11 next_inode=-1 edi_after=0
+  TERMINAL_B ray=6 depth=11 edi=0
+  TERMINAL_GLOBALCHECK ray=6 depth=11 edi=0 global=0 bl_bit10=0
+  TERMINAL_WRITEOUT ray=6 depth=11 edx=0 edi=0
+  RECURSE_RETURN ray=6 depth=11 result=0
+  SHORTCIRCUIT_BLOCKED ray=6 depth=11
+  RECURSE_RETURN ray=6 depth=11 result=0
+  SHORTCIRCUIT_BLOCKED ray=6 depth=11
+  RECURSE_RETURN ray=6 depth=11 result=0
+  SHORTCIRCUIT_BLOCKED ray=6 depth=11
+RAY_RETURN ray=6 result=0
+TARGET_DONE
+[Inferior 1 (process 33) detached]

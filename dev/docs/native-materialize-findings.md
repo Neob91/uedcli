@@ -1433,3 +1433,36 @@ worse, just that more surfaces are now exposed to that pre-existing, unrelated g
 the `line_clear` bits-only bucket, plus whatever residual DFS-order or span-buffer subtlety remains
 unexamined (not chased further this round — the specific "zone1 exhausted" symptom that motivated
 this investigation is now addressed at its root, not just measured around).
+
+**Real shadow-ray walker (`Editor.dll 0x17ce190`) recursion shape — fully resolved via full live
+disassembly, not the function rounds 1-2 examined** (2026-08-30, 🔬 live `x/400i` capture +
+20-breakpoint state trace, `line-clear-shadow-ray-algorithm-gap-found-real` round 6) — the real
+walker is a LOOP over whole-segment (no-crossing) nodes with exactly ONE genuine recursive call
+per crossing: the near call always replaces `point1` with `mid` (keeps `point2` unchanged) and
+descends via `point1`'s OWN plane-dot sign (not `point2`'s); once it returns clear, the SAME frame
+tail-loops (not a second call) into the other child with `point2` replaced by `mid` and `point1`
+unchanged. Argument-slot layout (not sign-dependent, most reliable part of the trace) confirms this
+directly. Explains round 5's "`point2` stays fixed across 4 crossings" as a structural consequence,
+not a coincidence: `point2` only changes at the far-continuation tail-loop step, never during a
+chain of near-recursions.
+
+**Real shadow-ray classification uses a genuine ±0.001 epsilon band, live-read from process memory —
+not 0.0, and DIFFERENT from the epsilon rounds 1-2 refuted (that was for the wrong function,
+`target+0x5b0`)** (2026-08-30, 🔬 live memory read, same round) — the two float constants gating
+FRONT/BACK/crossing classification (`Editor.dll` addrs `0x183761c`/`0x182293c` in this build)
+read live as **exactly ±0.001** (f32-encoded). FRONT-whole requires `D1>-0.001 AND D2>-0.001`;
+BACK-whole requires `D1<0.001 AND D2<0.001`; else crossing. This is the exact mechanism round 1's
+original traced exemplar needed (a ray origin ~0.0002uu off a splitting plane spuriously classified
+as a crossing under native's strict `>=0.0`) — the real function absorbs that into the epsilon band
+instead. Crossing formula re-confirmed with corrected point roles: `t=D1/(D2-D1)`,
+`mid=point2+t*(point2-point1)` — matches round 3's raw captured `t` and round 4's live `mid`
+coordinates exactly (algebraically `t=-t'` of round 4's formula, an exact float negation, not an
+approximation).
+
+**Not yet resolved, no port shipped:** the `edi`/state-thread's full semantics and terminal-handling
+polarity (traced live for 6 rays, all-blocked outcome only — never exercised the clear-return path),
+plus a found-but-unreconciled CSG-mask asymmetry between whole-segment and far-continuation branches
+(far-continuation doesn't strip `NF_BrightCorners` before testing, unlike every other site and the
+existing `is_csg` helper). `linecheck.rs` untouched this round (`git diff` empty); no regression-gate
+re-run needed (nothing that could regress changed). Full detail:
+`dev/docs/board/inbox/line-clear-shadow-ray-algorithm-gap-found-real/overview.md`.
