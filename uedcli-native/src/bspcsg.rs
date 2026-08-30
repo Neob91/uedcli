@@ -2201,11 +2201,23 @@ fn is_unit_axis(n: &Vec3) -> bool {
     zeros == 2 && ones == 1
 }
 
-/// True iff `rot` is a PURE rotation (each row unit-length within tol) — NOT a scale/mirror map.
-/// A scaled or mirrored brush bakes its linear map `L` (e.g. `diag(-8,8,8)`) into `rot` with
-/// `vec_xform = None`; multiplying a unit local normal by such an `L` would de-normalize it, so the
-/// §48 subtract-recompute (which maps the local normal by `rot` assuming a rotation) MUST skip those
-/// — they are handled by the covariant `vec_xform` path or the existing `else` winding recompute.
+/// True iff `rot` is a PURE rotation (each row unit-length within tol, determinant +1) — NOT a
+/// scale/mirror map. A scaled or mirrored brush bakes its linear map `L` (e.g. `diag(-8,8,8)` or a
+/// mirror `diag(-1,1,1)`) into `rot` with `vec_xform = None`; multiplying a unit local normal by
+/// such an `L` would de-normalize it (non-uniform scale) or FLIP it (a mirror — orthonormal rows, so
+/// the length check alone can't see it), so the §48 subtract-recompute (which maps the local normal
+/// by `rot` assuming a rotation) MUST skip those — they are handled by the covariant `vec_xform`
+/// path (scaled, non-mirror) or `brush_marshal.py`'s ring-pre-reverse + `FPoly::finalize` winding
+/// recompute (mirror; `_build_brush_input`'s own doc: "Gated off a mirror: there the covariant image
+/// flips orientation, so the ring-reverse + calc_normal path stays"). A reflection has orthonormal
+/// rows just like a rotation — only `determinant<0` tells them apart — so the length-only check let
+/// a mirrored Subtract brush's already-correct `finalize()` normal get overwritten by this recompute
+/// (using the mirror-baked `rot` on the ALREADY-reversed local winding), producing systematically
+/// inverted (inward) face normals for the whole brush: `build_brush_temp_bsp` then builds that
+/// brush's own convex partition inside-out, so `filter_world_through_brush` misclassifies
+/// spatially-unrelated world faces as interior and discards them — live-traced root cause of
+/// `native-under-builds-area51-entrance-geometry` and the wider severe-under-build family (Wanchai
+/// Garage/Paris Underground/NYC 747/OceanLab Lab).
 fn rot_is_pure_rotation(rot: &[[f32; 3]; 3]) -> bool {
     for r in rot {
         let len2 = r[0] * r[0] + r[1] * r[1] + r[2] * r[2];
@@ -2213,7 +2225,10 @@ fn rot_is_pure_rotation(rot: &[[f32; 3]; 3]) -> bool {
             return false;
         }
     }
-    true
+    let det = rot[0][0] * (rot[1][1] * rot[2][2] - rot[1][2] * rot[2][1])
+        - rot[0][1] * (rot[1][0] * rot[2][2] - rot[1][2] * rot[2][0])
+        + rot[0][2] * (rot[1][0] * rot[2][1] - rot[1][1] * rot[2][0]);
+    det > 0.0
 }
 
 /// `bspBrushCSG` **LOOP 1** (`0x35791`) — transform the brush's polys into world space and adjust
@@ -3951,6 +3966,14 @@ mod tests {
         // `diag(-8,8,8)` regression).
         let mirror = [[-8.0, 0.0, 0.0], [0.0, 8.0, 0.0], [0.0, 0.0, 8.0]];
         assert!(!rot_is_pure_rotation(&mirror));
+        // A PURE mirror (no scale, e.g. `MainScale=(-1,1,1)`) has orthonormal (unit-length) rows,
+        // same as a real rotation — only the determinant sign (-1 vs +1) tells them apart. Missing
+        // this let a mirrored Subtract brush's already-correct `finalize()` normal get overwritten
+        // by the §48 recompute, producing inside-out `build_brush_temp_bsp` trees and a
+        // spatially-nonsensical over-carve of unrelated world geometry (root cause of
+        // `native-under-builds-area51-entrance-geometry`, live-traced on Wanchai Garage's Brush24).
+        let pure_mirror = [[-1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]];
+        assert!(!rot_is_pure_rotation(&pure_mirror));
     }
 
     /// A right-triangular-prism (wedge) whose single slanted face carries an AUTHORED normal a few

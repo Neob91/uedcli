@@ -57,6 +57,16 @@ CASES = [
      SCRATCH / "geo-confirm-freeclinic08-wk/golden_freeclinic08_generous.dx"),
     ("nsfhq04", SCRATCH / "geo-confirm-nsfhq04-wk", "maps/nsfhq04",
      SCRATCH / "geo-confirm-nsfhq04-wk/golden_nsfhq04.dx"),
+    # Severe-under-build family (`native-under-builds-area51-entrance-geometry`), added to measure
+    # the `rot_is_pure_rotation` mirror-determinant fix's effect across all known instances.
+    ("wanchai-garage", SCRATCH / "geo-confirm-wanchai-garage", "maps/wanchai-garage",
+     SCRATCH / "geo-confirm-wanchai-garage/golden_wanchai-garage.dx"),
+    ("paris-underground", SCRATCH / "geo-confirm-paris-underground", "maps/paris-underground",
+     SCRATCH / "geo-confirm-paris-underground/golden_paris-underground.dx"),
+    ("nyc-747", SCRATCH / "geo-confirm-nyc-747", "maps/nyc-747",
+     SCRATCH / "geo-confirm-nyc-747/golden_nyc-747.dx"),
+    ("oceanlab-lab", SCRATCH / "geo-confirm-oceanlab-lab", "maps/oceanlab-lab",
+     SCRATCH / "geo-confirm-oceanlab-lab/golden_oceanlab-lab.dx"),
 ]
 
 
