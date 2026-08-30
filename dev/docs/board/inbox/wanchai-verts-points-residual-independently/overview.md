@@ -95,3 +95,86 @@ New reusable diagnostic: `UEDCLI_REPART_PERCALL_VERTS=1` (`bspcsg.rs::repartitio
 verts/points before/after, `dev/docs/spikes/2026-08-29-unatco-repart-live-diff/harness/
 wanchai_stage_diag.py` drives a build with it set for Wanchai specifically (sibling of
 `regression_gate.py`, same trunk/golden pair).
+
+## 2026-08-30, same day, follow-up: the specific 9 calls IDENTIFIED by real node identity, live-
+## verified — and it's the same architectural dead-end as UNATCO's, at 1/30th the scale. STOPPING here
+## per the coordinator's steer, not shipping.
+
+Bounded follow-up: find the specific calls behind the +64 `repartition_frontier` share (previously
+only known by histogram-bucket shape, not identity) and what's structurally different about them.
+
+**Got real per-call editor identity — the key unlock.** The existing editor stage-log capture
+(`wanchai-ed-repart-stage.log`) doesn't record the child node index per call, so it could only be
+compared to native positionally (100/119 "mismatches" — pure order noise, see the section above).
+Two new live-gdb captures close that:
+- `prepart_tree_wanchai.py` (committed, Wanchai sibling of `prepart_tree_unatco.py`) dumps the
+  editor's full pre-repartition-frontier `Model->Nodes` (11648 nodes). Diffed node-for-node against
+  native's own `UEDCLI_BSPCSG_PREPART_NODES` dump: **only 22/11648 nodes structurally differ**
+  (same small coplanar-chain-order-swap signature UNATCO's investigation already found, e.g. a
+  handful of 2–3-node permutation clusters) — native's node INDEX directly corresponds to the
+  editor's own index at this checkpoint, not just an isomorphic tree. Walking each of native's 119
+  `child` values through the editor's own dump (self + `iF`/`iB`/`iP`, same rule as `make_ed_polys`)
+  reproduces native's `orig_polys` **exactly, 119/119, zero mismatches** — the pre-repartition INPUT
+  soup is provably identical for every one of Wanchai's 119 calls, same conclusion the UNATCO
+  investigation reached for its own 209/209 (now independently confirmed on a second level).
+- `repart_stage_child_wanchai.py` (committed) re-runs the stage capture but ALSO logs the real
+  `child=` index (`esp+8` at `bspRepartition` entry) per group, so native's per-call table
+  (`UEDCLI_REPART_PERCALL_VERTS`) can be joined by CHILD IDENTITY instead of position.
+
+**Joined by identity: 110/119 calls match the editor's real vert growth EXACTLY. The other 9 are the
+whole story, and every one is off by a small, specific amount:**
+
+| child | orig_polys | native Δverts | editor real Δverts | diff |
+|---:|---:|---:|---:|---:|
+| 11633 | 15 | 60 | 52 | +8 |
+| 11295 | 5 | 20 | 16 | +4 |
+| 11291 | 6 | 24 | 16 | +8 |
+| 11287 | 6 | 24 | 20 | +4 |
+| 11283 | 7 | 28 | 20 | +8 |
+| 11206 | 4 | 12 | 4 | +8 |
+| 11211 | 4 | 12 | 4 | +8 |
+| 11216 | 4 | 12 | 4 | +8 |
+| 11201 | 4 | 12 | 4 | +8 |
+
+(Sum of diffs = 64, exactly the whole `repartition_frontier` segment — these 9 calls, precisely
+identified, are the ENTIRE +64, not a sample of it.)
+
+**Live-verified the mechanism on the simplest case, `child=11201`.** `UEDCLI_REPART_REAL_TREE` (new,
+paired with `UEDCLI_REPART_FBS_CHILD`, dumps the REAL as-shipped subtree a call actually grafted —
+unlike `UEDCLI_REPART_ISOLATED_TREE`, which always merges regardless of `UEDCLI_REPART_BLANKET_MERGE`
+so it doesn't show the default path's real output) shows native's real output is **4 separate
+triangle nodes** (`nv=3` each), all sharing one `isurf`/plane, chained via `iPlane` — the same
+"un-merged coplanar duplicate fragments left over from the ORIGINAL pre-repartition build" signature
+already fully diagnosed for UNATCO's `child=6108`/`4077`/`3086`. `UEDCLI_REPART_ISOLATED_TREE` predicts
+`bsp_merge_coplanars` reduces these 4 triangles to exactly 1 quad node. **`repart_child_trace.py 11201
+<wanchai golden>` (live gdb, reused verbatim from the UNATCO harness) confirms the editor's REAL
+subtree is exactly 1 `bspAddNode` call, `nv=4`** — the merged prediction, byte-exact plane match.
+Same mechanism as UNATCO, now live-verified on Wanchai too.
+
+**Why this isn't shippable: it's the identical "correct per-call, wrong in aggregate" contradiction
+UNATCO's investigation hit, just fully accounted-for at 1/30th the scale.** `bsp_merge_coplanars` is
+idempotent on a poly list with no same-surf duplicates, so "merge only where it would change something"
+and "blanket-merge all 119 calls" are mathematically the SAME operation — there is no selective
+half-measure to try that differs from the already-reverted blanket-merge experiment
+(`unatco-verts-points-residual-after-the-zone`, "it broke Wanchai's previously node-exact match
+(11648 → 11628)"). Computed each of these 9 calls' own `UEDCLI_REPART_ISOLATED_TREE` merged node
+count and summed the reduction against `orig_polys`: **13,4,4,5,5,1,1,1,1 vs 15,5,6,6,7,4,4,4,4 — a
+total of exactly −20 nodes**, matching the earlier blanket-merge experiment's regression
+(11648 → 11628) to the digit. So the ENTIRE Wanchai node-count regression from that experiment is
+fully explained by just these 9 calls (no hidden compensating deficit elsewhere, unlike UNATCO's
+−625 which never balanced against its own 46-call prediction) — but it's still a regression: fixing
+these 9 calls' verts by merging necessarily shrinks their own node count too, and Wanchai's CURRENT
+unmerged path already lands the true FINAL aggregate at the right number (11648, matching the golden)
+despite representing these 9 subtrees "wrong" (as extra unmerged fragments) locally. Why the true
+final count stays right without the merge, when the merge is independently proven correct per call
+(live, not just predicted) — same unresolved shape as UNATCO's "individually correct, aggregate
+wrong" puzzle. Not chased further.
+
+**Stopping here per the coordinator's steer** (bounded task: identify the calls + look at what's
+structurally different — done; do not grind into the open-ended aggregate contradiction UNATCO
+already spent ~2M tokens on without resolving). No fix shipped. Wanchai stays node/surf/leaf-exact
+at 11648, verts +138, unchanged; `bin/test -k bspcsg` (84/84) and `regression_gate.py`'s default path
+are byte-identical before/after this round's two new diagnostics (`UEDCLI_REPART_REAL_TREE`, plus the
+committed `prepart_tree_wanchai.py`/`repart_stage_child_wanchai.py` harness scripts — all zero-effect
+on the default path, all reusable for a future round or for the sibling UNATCO investigation, which
+has never had per-call editor identity this precise before).

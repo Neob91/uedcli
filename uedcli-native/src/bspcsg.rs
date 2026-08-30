@@ -1808,6 +1808,22 @@ fn repartition_frontier(model: &mut Model, list_a: &[i32], list_b: &[i32]) -> Re
                 wi - 1, model.verts.len(), model.points.len()
             );
         }
+        // TEMPORARY DIAGNOSTIC (UEDCLI_REPART_REAL_TREE, paired with UEDCLI_REPART_FBS_CHILD) --
+        // wanchai-verts-points-residual-independently: dump the REAL (unmerged, as-shipped) subtree
+        // this call just grafted into `model` -- unlike UEDCLI_REPART_ISOLATED_TREE, which always
+        // merges via `reduce_repartition_polys` regardless of `UEDCLI_REPART_BLANKET_MERGE` and
+        // rebuilds in a scratch clone, so it does NOT show what the default path actually built.
+        if fbs_target == Some(child) && std::env::var("UEDCLI_REPART_REAL_TREE").is_ok() {
+            eprintln!("REALTREE child={child} orig_polys={orig_polys} appended={}", model.nodes.len() - before_nodes);
+            for i in before_nodes..model.nodes.len() {
+                let n = &model.nodes[i];
+                eprintln!(
+                    "RTNODE i={i} iF={} iB={} iP={} isurf={} nv={} plane={:.6},{:.6},{:.6},{:.6}",
+                    n.i_front, n.i_back, n.i_plane, n.i_surf, n.num_vertices,
+                    n.plane.x, n.plane.y, n.plane.z, n.plane.w
+                );
+            }
+        }
         if compact_per_call {
             let remap = compact_unreachable_nodes(model);
             for e in worklist[wi..].iter_mut() {

@@ -1,0 +1,92 @@
+[New LWP 152]
+[New LWP 199]
+[New LWP 200]
+[New LWP 201]
+[New LWP 202]
+[New LWP 203]
+[New LWP 204]
+[New LWP 205]
+[New LWP 206]
+[New LWP 207]
+[New LWP 208]
+[New LWP 209]
+[New LWP 210]
+[New LWP 211]
+[New LWP 212]
+[New LWP 213]
+[New LWP 214]
+[New LWP 215]
+[New LWP 216]
+[New LWP 217]
+[New LWP 218]
+[New LWP 219]
+[New LWP 220]
+[New LWP 221]
+[New LWP 222]
+[New LWP 223]
+[New LWP 224]
+[New LWP 225]
+[New LWP 226]
+[New LWP 227]
+[New LWP 231]
+[New LWP 232]
+[New LWP 233]
+[New LWP 234]
+[Thread debugging using libthread_db enabled]
+Using host libthread_db library "/lib/x86_64-linux-gnu/libthread_db.so.1".
+0xf7f45cfc in __kernel_vsyscall ()
+Breakpoint 1 at 0x10049fc0
+Breakpoint 2 at 0x1004a05f
+Breakpoint 3 at 0x10034e80
+Breakpoint 4 at 0x100338ee
+ORACLE_ATTACHED
+CALL idx=1 model=0xc51c64c child=0 third=0
+STAGEEND idx=1
+CALL idx=2 model=0xc51c64c child=11544 third=2
+STAGEEND idx=2
+CALL idx=3 model=0xc51c64c child=11559 third=2
+STAGEEND idx=3
+CALL idx=4 model=0xc51c64c child=11528 third=2
+STAGEEND idx=4
+CALL idx=5 model=0xc51c64c child=11512 third=2
+STAGEEND idx=5
+CALL idx=6 model=0xc51c64c child=11526 third=2
+STAGEEND idx=6
+CALL idx=7 model=0xc51c64c child=11515 third=2
+STAGEEND idx=7
+CALL idx=8 model=0xc51c64c child=11542 third=2
+STAGEEND idx=8
+CALL idx=9 model=0xc51c64c child=11557 third=2
+STAGEEND idx=9
+CALL idx=10 model=0xc51c64c child=11543 third=2
+STAGEEND idx=10
+CALL idx=11 model=0xc51c64c child=11560 third=2
+STAGEEND idx=11
+CALL idx=12 model=0xc51c64c child=11427 third=2
+STAGEEND idx=12
+CALL idx=13 model=0xc51c64c child=11421 third=2
+STAGEEND idx=13
+CALL idx=14 model=0xc51c64c child=11433 third=2
+STAGEEND idx=14
+CALL idx=15 model=0xc51c64c child=11415 third=2
+STAGEEND idx=15
+CALL idx=16 model=0xc51c64c child=11558 third=2
+STAGEEND idx=16
+CALL idx=17 model=0xc51c64c child=11445 third=2
+STAGEEND idx=17
+CALL idx=18 model=0xc51c64c child=11439 third=2
+STAGEEND idx=18
+CALL idx=19 model=0xc51c64c child=11193 third=2
+STAGEEND idx=19
+CALL idx=20 model=0xc51c64c child=11194 third=2
+STAGEEND idx=20
+CALL idx=21 model=0xc51c64c child=11195 third=2
+STAGEEND idx=21
+CALL idx=22 model=0xc51c64c child=11196 third=2
+STAGEEND idx=22
+CALL idx=23 model=0xc51c64c child=11201 third=2
+TARGET_BEGIN idx=23
+ADD parent=-1 place=3 flags=0 ilink=5845 nv=4 N=0.000000,1.000000,0.000000 B=1232.000000,-1656.000000,-144.000000
+STAGEEND idx=23
+TARGET_END
+[Inferior 1 (process 33) detached]

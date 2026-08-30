@@ -139,16 +139,32 @@ freeclinic08/nsfhq04 have a nonzero surf delta (a genuinely different face SET),
 different mechanism, not blocked on the UNATCO investigation.
 
 **Wanchai's Points/Verts residual is small, additive, and NOT the same shape as UNATCO's aggregate
-node-count mystery** (2026-08-30, 🔬) — fresh measurement, current tree (post `repartition_frontier`
-+`compact_unreachable_nodes`): Wanchai nodes/surfs/leaves stay EXACT (11648/…); verts +138 (+0.08%),
-points +16, vectors −8 (new, previously untracked). `UEDCLI_BSPCSG_STAGE_COUNTS` vs the live-captured
-editor stage log (`wanchai-ed-repart-stage.log`, dated 2026-08-27, post-cutoff) splits +138 additively:
-world-level repartition +6, zone-pass+detail-loop (combined) +63, `repartition_frontier`'s 119 subtree
-calls +64, `bsp_opt_geom` T-junction weld +5 (near-exact, same as UNATCO's weld finding). New env-gated
-diagnostic `UEDCLI_REPART_PERCALL_VERTS` (`bspcsg.rs::repartition_frontier`) shows the +64 segment
-concentrates in exactly ~8 of 119 calls, each off by a uniform **+8** verts regardless of subtree size
-(not diffuse noise) — mechanism and the specific 8 calls not yet identified (node-index numbering
-differs between engines, no valid positional correspondence). Full detail:
-`dev/docs/board/inbox/wanchai-verts-points-residual-independently/overview.md`. No fix shipped;
-default build path byte-unchanged (`regression_gate.py`, `bin/test -k bspcsg` 84/84, both before/after
-this diagnostic).
+node-count mystery — but its `repartition_frontier` share hits the identical dead end at 1/30th
+scale** (2026-08-30, 🔬, updated same day) — fresh measurement, current tree (post
+`repartition_frontier`+`compact_unreachable_nodes`): Wanchai nodes/surfs/leaves stay EXACT (11648/…);
+verts +138 (+0.08%), points +16, vectors −8 (new, previously untracked). `UEDCLI_BSPCSG_STAGE_COUNTS`
+vs the live-captured editor stage log splits +138 additively: world-level repartition +6,
+zone-pass+detail-loop (combined) +63, `repartition_frontier`'s 119 subtree calls +64, `bsp_opt_geom`
+T-junction weld +5 (near-exact, same as UNATCO's weld finding).
+
+The +64 share was fully IDENTIFIED (not just localized): two new live-gdb captures
+(`prepart_tree_wanchai.py`, `repart_stage_child_wanchai.py`) gave real editor node identity per call
+(native's node index corresponds directly to the editor's own at this checkpoint, 11626/11648 exact,
+22 coplanar-chain-order swaps only), letting native's 119 calls join the editor's real per-call vert
+growth by CHILD IDENTITY instead of sequence position. Result: **110/119 match exactly; the other 9
+(children 11633/11295/11291/11287/11283/11206/11211/11216/11201) sum to exactly +64.** Live-verified
+the simplest (`child=11201`, `repart_child_trace.py`, reused verbatim from the UNATCO harness): native
+reconstructs 4 unmerged same-surf coplanar triangle fragments; the editor's real subtree is 1 merged
+quad node — the SAME mechanism already diagnosed for UNATCO's `child=6108`/`4077`/`3086`. But
+`bsp_merge_coplanars` is idempotent on non-duplicate input, so "merge selectively" and "blanket-merge
+all 119" are mathematically identical — and blanket-merge is ALREADY KNOWN to break Wanchai's
+node-exactness (11648→11628, `unatco-verts-points-residual-after-the-zone`). Summed these 9 calls' own
+`UEDCLI_REPART_ISOLATED_TREE` merged-node counts: reduction is exactly −20, fully explaining that
+regression (unlike UNATCO's −625, which never balanced against its 46-call prediction) — but Wanchai's
+CURRENT unmerged path already lands the true final aggregate at 11648 despite representing these 9
+subtrees "wrong" locally. Same "correct per call, wrong in aggregate" contradiction as UNATCO's open
+puzzle, confirmed live rather than assumed. Full detail + the per-call table:
+`dev/docs/board/inbox/wanchai-verts-points-residual-independently/overview.md`. STOPPED here per the
+coordinator's steer (bounded task, don't re-burn UNATCO-scale budget on the same open contradiction).
+No fix shipped; default build path byte-unchanged (`regression_gate.py`, `bin/test -k bspcsg` 84/84,
+before/after all of this round's diagnostics).

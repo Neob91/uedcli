@@ -1,0 +1,400 @@
+[New LWP 145]
+[New LWP 170]
+[New LWP 171]
+[New LWP 172]
+[New LWP 173]
+[New LWP 174]
+[New LWP 175]
+[New LWP 176]
+[New LWP 177]
+[New LWP 178]
+[New LWP 179]
+[New LWP 180]
+[New LWP 181]
+[New LWP 182]
+[New LWP 183]
+[New LWP 184]
+[New LWP 185]
+[New LWP 186]
+[New LWP 187]
+[New LWP 188]
+[New LWP 189]
+[New LWP 190]
+[New LWP 191]
+[New LWP 192]
+[New LWP 193]
+[New LWP 194]
+[New LWP 195]
+[New LWP 196]
+[New LWP 197]
+[New LWP 198]
+[New LWP 199]
+[New LWP 240]
+[New LWP 241]
+[New LWP 242]
+[Thread debugging using libthread_db enabled]
+Using host libthread_db library "/lib/x86_64-linux-gnu/libthread_db.so.1".
+0xf7f3bcfc in __kernel_vsyscall ()
+Breakpoint 1 at 0x10049fc0
+Breakpoint 2 at 0x1004a05f
+ORACLE_ATTACHED
+A_entry child=0 nodes=21147 verts=224697 points=61287 surfs=5322
+E_bsprefresh child=0 nodes=11011 verts=43759 points=18544 surfs=5322
+STAGEEND
+A_entry child=11544 nodes=11648 verts=110923 points=19619 surfs=5757
+E_bsprefresh child=11544 nodes=11648 verts=110943 points=19619 surfs=5762
+STAGEEND
+A_entry child=11559 nodes=11648 verts=110943 points=19619 surfs=5762
+E_bsprefresh child=11559 nodes=11648 verts=110959 points=19619 surfs=5766
+STAGEEND
+A_entry child=11528 nodes=11648 verts=110959 points=19619 surfs=5766
+E_bsprefresh child=11528 nodes=11648 verts=110979 points=19619 surfs=5771
+STAGEEND
+A_entry child=11512 nodes=11648 verts=110979 points=19619 surfs=5771
+E_bsprefresh child=11512 nodes=11648 verts=110995 points=19619 surfs=5775
+STAGEEND
+A_entry child=11526 nodes=11648 verts=110995 points=19619 surfs=5775
+E_bsprefresh child=11526 nodes=11648 verts=111012 points=19619 surfs=5779
+STAGEEND
+A_entry child=11515 nodes=11648 verts=111012 points=19619 surfs=5779
+E_bsprefresh child=11515 nodes=11648 verts=111019 points=19619 surfs=5781
+STAGEEND
+A_entry child=11542 nodes=11648 verts=111019 points=19619 surfs=5781
+E_bsprefresh child=11542 nodes=11648 verts=111031 points=19619 surfs=5784
+STAGEEND
+A_entry child=11557 nodes=11648 verts=111031 points=19619 surfs=5784
+E_bsprefresh child=11557 nodes=11648 verts=111043 points=19619 surfs=5787
+STAGEEND
+A_entry child=11543 nodes=11648 verts=111043 points=19619 surfs=5787
+E_bsprefresh child=11543 nodes=11648 verts=111055 points=19619 surfs=5790
+STAGEEND
+A_entry child=11560 nodes=11648 verts=111055 points=19619 surfs=5790
+E_bsprefresh child=11560 nodes=11648 verts=111065 points=19619 surfs=5793
+STAGEEND
+A_entry child=11427 nodes=11648 verts=111065 points=19619 surfs=5793
+E_bsprefresh child=11427 nodes=11648 verts=111089 points=19619 surfs=5799
+STAGEEND
+A_entry child=11421 nodes=11648 verts=111089 points=19619 surfs=5799
+E_bsprefresh child=11421 nodes=11648 verts=111113 points=19619 surfs=5805
+STAGEEND
+A_entry child=11433 nodes=11648 verts=111113 points=19619 surfs=5805
+E_bsprefresh child=11433 nodes=11648 verts=111137 points=19619 surfs=5811
+STAGEEND
+A_entry child=11415 nodes=11648 verts=111137 points=19619 surfs=5811
+E_bsprefresh child=11415 nodes=11648 verts=111161 points=19619 surfs=5817
+STAGEEND
+A_entry child=11558 nodes=11648 verts=111161 points=19619 surfs=5817
+E_bsprefresh child=11558 nodes=11648 verts=111178 points=19619 surfs=5821
+STAGEEND
+A_entry child=11445 nodes=11648 verts=111178 points=19619 surfs=5821
+E_bsprefresh child=11445 nodes=11648 verts=111202 points=19619 surfs=5827
+STAGEEND
+A_entry child=11439 nodes=11648 verts=111202 points=19619 surfs=5827
+E_bsprefresh child=11439 nodes=11648 verts=111226 points=19619 surfs=5833
+STAGEEND
+A_entry child=11193 nodes=11648 verts=111226 points=19619 surfs=5833
+E_bsprefresh child=11193 nodes=11648 verts=111238 points=19619 surfs=5836
+STAGEEND
+A_entry child=11194 nodes=11648 verts=111238 points=19619 surfs=5836
+E_bsprefresh child=11194 nodes=11648 verts=111250 points=19619 surfs=5839
+STAGEEND
+A_entry child=11195 nodes=11648 verts=111250 points=19619 surfs=5839
+E_bsprefresh child=11195 nodes=11648 verts=111262 points=19619 surfs=5842
+STAGEEND
+A_entry child=11196 nodes=11648 verts=111262 points=19619 surfs=5842
+E_bsprefresh child=11196 nodes=11648 verts=111274 points=19619 surfs=5845
+STAGEEND
+A_entry child=11201 nodes=11648 verts=111274 points=19619 surfs=5845
+E_bsprefresh child=11201 nodes=11648 verts=111278 points=19619 surfs=5846
+STAGEEND
+A_entry child=11216 nodes=11648 verts=111278 points=19619 surfs=5846
+E_bsprefresh child=11216 nodes=11648 verts=111282 points=19619 surfs=5847
+STAGEEND
+A_entry child=11217 nodes=11648 verts=111282 points=19619 surfs=5847
+E_bsprefresh child=11217 nodes=11648 verts=111285 points=19619 surfs=5848
+STAGEEND
+A_entry child=11202 nodes=11648 verts=111285 points=19619 surfs=5848
+E_bsprefresh child=11202 nodes=11648 verts=111288 points=19619 surfs=5849
+STAGEEND
+A_entry child=11211 nodes=11648 verts=111288 points=19619 surfs=5849
+E_bsprefresh child=11211 nodes=11648 verts=111292 points=19619 surfs=5850
+STAGEEND
+A_entry child=11206 nodes=11648 verts=111292 points=19619 surfs=5850
+E_bsprefresh child=11206 nodes=11648 verts=111296 points=19619 surfs=5851
+STAGEEND
+A_entry child=11212 nodes=11648 verts=111296 points=19619 surfs=5851
+E_bsprefresh child=11212 nodes=11648 verts=111299 points=19619 surfs=5852
+STAGEEND
+A_entry child=11207 nodes=11648 verts=111299 points=19619 surfs=5852
+E_bsprefresh child=11207 nodes=11648 verts=111302 points=19619 surfs=5853
+STAGEEND
+A_entry child=11181 nodes=11648 verts=111302 points=19619 surfs=5853
+E_bsprefresh child=11181 nodes=11648 verts=111306 points=19619 surfs=5854
+STAGEEND
+A_entry child=11130 nodes=11648 verts=111306 points=19619 surfs=5854
+E_bsprefresh child=11130 nodes=11648 verts=111314 points=19620 surfs=5855
+STAGEEND
+A_entry child=11127 nodes=11648 verts=111314 points=19620 surfs=5855
+E_bsprefresh child=11127 nodes=11648 verts=111318 points=19621 surfs=5856
+STAGEEND
+A_entry child=11128 nodes=11648 verts=111318 points=19621 surfs=5856
+E_bsprefresh child=11128 nodes=11648 verts=111326 points=19622 surfs=5857
+STAGEEND
+A_entry child=11104 nodes=11648 verts=111326 points=19622 surfs=5857
+E_bsprefresh child=11104 nodes=11648 verts=111350 points=19622 surfs=5858
+STAGEEND
+A_entry child=11107 nodes=11648 verts=111350 points=19622 surfs=5858
+E_bsprefresh child=11107 nodes=11648 verts=111358 points=19622 surfs=5859
+STAGEEND
+A_entry child=11114 nodes=11648 verts=111358 points=19622 surfs=5859
+E_bsprefresh child=11114 nodes=11648 verts=111366 points=19622 surfs=5860
+STAGEEND
+A_entry child=11101 nodes=11648 verts=111366 points=19622 surfs=5860
+E_bsprefresh child=11101 nodes=11648 verts=111370 points=19622 surfs=5861
+STAGEEND
+A_entry child=11092 nodes=11648 verts=111370 points=19622 surfs=5861
+E_bsprefresh child=11092 nodes=11648 verts=111378 points=19622 surfs=5862
+STAGEEND
+A_entry child=11120 nodes=11648 verts=111378 points=19622 surfs=5862
+E_bsprefresh child=11120 nodes=11648 verts=111382 points=19622 surfs=5863
+STAGEEND
+A_entry child=11118 nodes=11648 verts=111382 points=19622 surfs=5863
+E_bsprefresh child=11118 nodes=11648 verts=111386 points=19622 surfs=5864
+STAGEEND
+A_entry child=11103 nodes=11648 verts=111386 points=19622 surfs=5864
+E_bsprefresh child=11103 nodes=11648 verts=111390 points=19622 surfs=5865
+STAGEEND
+A_entry child=11102 nodes=11648 verts=111390 points=19622 surfs=5865
+E_bsprefresh child=11102 nodes=11648 verts=111394 points=19622 surfs=5866
+STAGEEND
+A_entry child=11119 nodes=11648 verts=111394 points=19622 surfs=5866
+E_bsprefresh child=11119 nodes=11648 verts=111398 points=19622 surfs=5867
+STAGEEND
+A_entry child=11182 nodes=11648 verts=111398 points=19622 surfs=5867
+E_bsprefresh child=11182 nodes=11648 verts=111402 points=19622 surfs=5868
+STAGEEND
+A_entry child=11183 nodes=11648 verts=111402 points=19622 surfs=5868
+E_bsprefresh child=11183 nodes=11648 verts=111410 points=19622 surfs=5869
+STAGEEND
+A_entry child=11184 nodes=11648 verts=111410 points=19622 surfs=5869
+E_bsprefresh child=11184 nodes=11648 verts=111414 points=19622 surfs=5870
+STAGEEND
+A_entry child=11185 nodes=11648 verts=111414 points=19622 surfs=5870
+E_bsprefresh child=11185 nodes=11648 verts=111418 points=19622 surfs=5871
+STAGEEND
+A_entry child=11613 nodes=11648 verts=111418 points=19622 surfs=5871
+E_bsprefresh child=11613 nodes=11648 verts=111438 points=19622 surfs=5876
+STAGEEND
+A_entry child=11110 nodes=11648 verts=111438 points=19622 surfs=5876
+E_bsprefresh child=11110 nodes=11648 verts=111442 points=19622 surfs=5877
+STAGEEND
+A_entry child=11109 nodes=11648 verts=111442 points=19622 surfs=5877
+E_bsprefresh child=11109 nodes=11648 verts=111446 points=19622 surfs=5878
+STAGEEND
+A_entry child=11111 nodes=11648 verts=111446 points=19622 surfs=5878
+E_bsprefresh child=11111 nodes=11648 verts=111454 points=19622 surfs=5879
+STAGEEND
+A_entry child=11614 nodes=11648 verts=111454 points=19622 surfs=5879
+E_bsprefresh child=11614 nodes=11648 verts=111474 points=19622 surfs=5884
+STAGEEND
+A_entry child=11186 nodes=11648 verts=111474 points=19622 surfs=5884
+E_bsprefresh child=11186 nodes=11648 verts=111478 points=19622 surfs=5885
+STAGEEND
+A_entry child=11187 nodes=11648 verts=111478 points=19622 surfs=5885
+E_bsprefresh child=11187 nodes=11648 verts=111482 points=19622 surfs=5886
+STAGEEND
+A_entry child=11188 nodes=11648 verts=111482 points=19622 surfs=5886
+E_bsprefresh child=11188 nodes=11648 verts=111486 points=19622 surfs=5887
+STAGEEND
+A_entry child=11283 nodes=11648 verts=111486 points=19622 surfs=5887
+E_bsprefresh child=11283 nodes=11648 verts=111506 points=19622 surfs=5892
+STAGEEND
+A_entry child=11284 nodes=11648 verts=111506 points=19622 surfs=5892
+E_bsprefresh child=11284 nodes=11648 verts=111522 points=19622 surfs=5896
+STAGEEND
+A_entry child=11285 nodes=11648 verts=111522 points=19622 surfs=5896
+E_bsprefresh child=11285 nodes=11648 verts=111538 points=19622 surfs=5900
+STAGEEND
+A_entry child=11286 nodes=11648 verts=111538 points=19622 surfs=5900
+E_bsprefresh child=11286 nodes=11648 verts=111554 points=19622 surfs=5904
+STAGEEND
+A_entry child=11287 nodes=11648 verts=111554 points=19622 surfs=5904
+E_bsprefresh child=11287 nodes=11648 verts=111574 points=19622 surfs=5909
+STAGEEND
+A_entry child=11291 nodes=11648 verts=111574 points=19622 surfs=5909
+E_bsprefresh child=11291 nodes=11648 verts=111590 points=19622 surfs=5913
+STAGEEND
+A_entry child=11295 nodes=11648 verts=111590 points=19622 surfs=5913
+E_bsprefresh child=11295 nodes=11648 verts=111606 points=19622 surfs=5917
+STAGEEND
+A_entry child=11236 nodes=11648 verts=111606 points=19622 surfs=5917
+E_bsprefresh child=11236 nodes=11648 verts=111622 points=19622 surfs=5921
+STAGEEND
+A_entry child=11248 nodes=11648 verts=111622 points=19622 surfs=5921
+E_bsprefresh child=11248 nodes=11648 verts=111642 points=19622 surfs=5926
+STAGEEND
+A_entry child=11237 nodes=11648 verts=111642 points=19622 surfs=5926
+E_bsprefresh child=11237 nodes=11648 verts=111658 points=19622 surfs=5930
+STAGEEND
+A_entry child=11253 nodes=11648 verts=111658 points=19622 surfs=5930
+E_bsprefresh child=11253 nodes=11648 verts=111678 points=19622 surfs=5935
+STAGEEND
+A_entry child=11633 nodes=11648 verts=111678 points=19622 surfs=5935
+E_bsprefresh child=11633 nodes=11648 verts=111730 points=19622 surfs=5948
+STAGEEND
+A_entry child=11385 nodes=11648 verts=111730 points=19622 surfs=5948
+E_bsprefresh child=11385 nodes=11648 verts=111754 points=19622 surfs=5954
+STAGEEND
+A_entry child=11379 nodes=11648 verts=111754 points=19622 surfs=5954
+E_bsprefresh child=11379 nodes=11648 verts=111778 points=19622 surfs=5960
+STAGEEND
+A_entry child=11391 nodes=11648 verts=111778 points=19622 surfs=5960
+E_bsprefresh child=11391 nodes=11648 verts=111802 points=19622 surfs=5966
+STAGEEND
+A_entry child=11124 nodes=11648 verts=111802 points=19622 surfs=5966
+E_bsprefresh child=11124 nodes=11648 verts=111806 points=19623 surfs=5967
+STAGEEND
+A_entry child=11278 nodes=11648 verts=111806 points=19623 surfs=5967
+E_bsprefresh child=11278 nodes=11648 verts=111810 points=19623 surfs=5968
+STAGEEND
+A_entry child=11259 nodes=11648 verts=111810 points=19623 surfs=5968
+E_bsprefresh child=11259 nodes=11648 verts=111838 points=19623 surfs=5975
+STAGEEND
+A_entry child=11258 nodes=11648 verts=111838 points=19623 surfs=5975
+E_bsprefresh child=11258 nodes=11648 verts=111866 points=19623 surfs=5982
+STAGEEND
+A_entry child=11238 nodes=11648 verts=111866 points=19623 surfs=5982
+E_bsprefresh child=11238 nodes=11648 verts=111878 points=19623 surfs=5985
+STAGEEND
+A_entry child=11126 nodes=11648 verts=111878 points=19623 surfs=5985
+E_bsprefresh child=11126 nodes=11648 verts=111882 points=19624 surfs=5986
+STAGEEND
+A_entry child=11333 nodes=11648 verts=111882 points=19624 surfs=5986
+E_bsprefresh child=11333 nodes=11648 verts=111906 points=19624 surfs=5992
+STAGEEND
+A_entry child=11321 nodes=11648 verts=111906 points=19624 surfs=5992
+E_bsprefresh child=11321 nodes=11648 verts=111930 points=19624 surfs=5998
+STAGEEND
+A_entry child=11327 nodes=11648 verts=111930 points=19624 surfs=5998
+E_bsprefresh child=11327 nodes=11648 verts=111954 points=19624 surfs=6004
+STAGEEND
+A_entry child=11339 nodes=11648 verts=111954 points=19624 surfs=6004
+E_bsprefresh child=11339 nodes=11648 verts=111978 points=19624 surfs=6010
+STAGEEND
+A_entry child=11345 nodes=11648 verts=111978 points=19624 surfs=6010
+E_bsprefresh child=11345 nodes=11648 verts=112002 points=19624 surfs=6016
+STAGEEND
+A_entry child=11351 nodes=11648 verts=112002 points=19624 surfs=6016
+E_bsprefresh child=11351 nodes=11648 verts=112026 points=19624 surfs=6022
+STAGEEND
+A_entry child=11409 nodes=11648 verts=112026 points=19624 surfs=6022
+E_bsprefresh child=11409 nodes=11648 verts=112050 points=19624 surfs=6028
+STAGEEND
+A_entry child=11272 nodes=11648 verts=112050 points=19624 surfs=6028
+E_bsprefresh child=11272 nodes=11648 verts=112078 points=19624 surfs=6035
+STAGEEND
+A_entry child=11397 nodes=11648 verts=112078 points=19624 surfs=6035
+E_bsprefresh child=11397 nodes=11648 verts=112102 points=19624 surfs=6041
+STAGEEND
+A_entry child=11357 nodes=11648 verts=112102 points=19624 surfs=6041
+E_bsprefresh child=11357 nodes=11648 verts=112130 points=19624 surfs=6048
+STAGEEND
+A_entry child=11403 nodes=11648 verts=112130 points=19624 surfs=6048
+E_bsprefresh child=11403 nodes=11648 verts=112154 points=19624 surfs=6054
+STAGEEND
+A_entry child=11273 nodes=11648 verts=112154 points=19624 surfs=6054
+E_bsprefresh child=11273 nodes=11648 verts=112182 points=19624 surfs=6061
+STAGEEND
+A_entry child=11071 nodes=11648 verts=112182 points=19624 surfs=6061
+E_bsprefresh child=11071 nodes=11648 verts=112262 points=19624 surfs=6079
+STAGEEND
+A_entry child=11123 nodes=11648 verts=112262 points=19624 surfs=6079
+E_bsprefresh child=11123 nodes=11648 verts=112266 points=19625 surfs=6080
+STAGEEND
+A_entry child=11121 nodes=11648 verts=112266 points=19625 surfs=6080
+E_bsprefresh child=11121 nodes=11648 verts=112274 points=19625 surfs=6081
+STAGEEND
+A_entry child=11089 nodes=11648 verts=112274 points=19625 surfs=6081
+E_bsprefresh child=11089 nodes=11648 verts=112314 points=19625 surfs=6082
+STAGEEND
+A_entry child=11125 nodes=11648 verts=112314 points=19625 surfs=6082
+E_bsprefresh child=11125 nodes=11648 verts=112318 points=19626 surfs=6083
+STAGEEND
+A_entry child=11132 nodes=11648 verts=112318 points=19626 surfs=6083
+E_bsprefresh child=11132 nodes=11648 verts=112514 points=19626 surfs=6084
+STAGEEND
+A_entry child=11274 nodes=11648 verts=112514 points=19626 surfs=6084
+E_bsprefresh child=11274 nodes=11648 verts=112530 points=19626 surfs=6088
+STAGEEND
+A_entry child=11511 nodes=11648 verts=112530 points=19626 surfs=6088
+E_bsprefresh child=11511 nodes=11648 verts=112556 points=19626 surfs=6094
+STAGEEND
+A_entry child=11527 nodes=11648 verts=112556 points=19626 surfs=6094
+E_bsprefresh child=11527 nodes=11648 verts=112570 points=19626 surfs=6098
+STAGEEND
+A_entry child=11279 nodes=11648 verts=112570 points=19626 surfs=6098
+E_bsprefresh child=11279 nodes=11648 verts=112574 points=19626 surfs=6099
+STAGEEND
+A_entry child=11282 nodes=11648 verts=112574 points=19626 surfs=6099
+E_bsprefresh child=11282 nodes=11648 verts=112578 points=19626 surfs=6100
+STAGEEND
+A_entry child=11281 nodes=11648 verts=112578 points=19626 surfs=6100
+E_bsprefresh child=11281 nodes=11648 verts=112582 points=19626 surfs=6101
+STAGEEND
+A_entry child=11280 nodes=11648 verts=112582 points=19626 surfs=6101
+E_bsprefresh child=11280 nodes=11648 verts=112586 points=19626 surfs=6102
+STAGEEND
+A_entry child=11501 nodes=11648 verts=112586 points=19626 surfs=6102
+E_bsprefresh child=11501 nodes=11648 verts=112600 points=19626 surfs=6106
+STAGEEND
+A_entry child=11492 nodes=11648 verts=112600 points=19626 surfs=6106
+E_bsprefresh child=11492 nodes=11648 verts=112614 points=19626 surfs=6110
+STAGEEND
+A_entry child=11502 nodes=11648 verts=112614 points=19626 surfs=6110
+E_bsprefresh child=11502 nodes=11648 verts=112631 points=19626 surfs=6114
+STAGEEND
+A_entry child=11491 nodes=11648 verts=112631 points=19626 surfs=6114
+E_bsprefresh child=11491 nodes=11648 verts=112657 points=19626 surfs=6120
+STAGEEND
+A_entry child=11485 nodes=11648 verts=112657 points=19626 surfs=6120
+E_bsprefresh child=11485 nodes=11648 verts=112677 points=19626 surfs=6125
+STAGEEND
+A_entry child=11479 nodes=11648 verts=112677 points=19626 surfs=6125
+E_bsprefresh child=11479 nodes=11648 verts=112697 points=19626 surfs=6130
+STAGEEND
+A_entry child=11469 nodes=11648 verts=112697 points=19626 surfs=6130
+E_bsprefresh child=11469 nodes=11648 verts=112713 points=19626 surfs=6134
+STAGEEND
+A_entry child=11604 nodes=11648 verts=112713 points=19626 surfs=6134
+E_bsprefresh child=11604 nodes=11648 verts=112753 points=19626 surfs=6144
+STAGEEND
+A_entry child=11597 nodes=11648 verts=112753 points=19626 surfs=6144
+E_bsprefresh child=11597 nodes=11648 verts=112777 points=19626 surfs=6150
+STAGEEND
+A_entry child=11603 nodes=11648 verts=112777 points=19626 surfs=6150
+E_bsprefresh child=11603 nodes=11648 verts=112813 points=19626 surfs=6159
+STAGEEND
+A_entry child=11573 nodes=11648 verts=112813 points=19626 surfs=6159
+E_bsprefresh child=11573 nodes=11648 verts=112837 points=19626 surfs=6165
+STAGEEND
+A_entry child=11579 nodes=11648 verts=112837 points=19626 surfs=6165
+E_bsprefresh child=11579 nodes=11648 verts=112861 points=19626 surfs=6171
+STAGEEND
+A_entry child=11585 nodes=11648 verts=112861 points=19626 surfs=6171
+E_bsprefresh child=11585 nodes=11648 verts=112885 points=19626 surfs=6177
+STAGEEND
+A_entry child=11591 nodes=11648 verts=112885 points=19626 surfs=6177
+E_bsprefresh child=11591 nodes=11648 verts=112909 points=19626 surfs=6183
+STAGEEND
+A_entry child=11470 nodes=11648 verts=112909 points=19626 surfs=6183
+E_bsprefresh child=11470 nodes=11648 verts=112925 points=19626 surfs=6187
+STAGEEND
+A_entry child=11463 nodes=11648 verts=112925 points=19626 surfs=6187
+E_bsprefresh child=11463 nodes=11648 verts=112945 points=19626 surfs=6192
+STAGEEND
+A_entry child=11457 nodes=11648 verts=112945 points=19626 surfs=6192
+E_bsprefresh child=11457 nodes=11648 verts=112965 points=19626 surfs=6197
+STAGEEND
+A_entry child=11451 nodes=11648 verts=112965 points=19626 surfs=6197
+E_bsprefresh child=11451 nodes=11648 verts=112985 points=19626 surfs=6202
+STAGEEND
