@@ -67,7 +67,7 @@ def main() -> int:
 
     trunk_dir = Path(args.trunk).resolve()
     project = config.load_project(str(trunk_dir.parent.parent))
-    lights = {n: (loc, r) for n, loc, r in gather_lights(
+    lights = {n: (loc, r) for n, loc, r, _special in gather_lights(
         trunkmod.read_level(trunk_dir)[0],
         defaults=ClassDefaults(schema_resolver(project, config.load_user_config())))}
 
