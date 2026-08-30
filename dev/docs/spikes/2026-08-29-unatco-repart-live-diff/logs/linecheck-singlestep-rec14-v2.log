@@ -1,0 +1,59 @@
+[New LWP 144]
+[New LWP 153]
+[New LWP 154]
+[New LWP 155]
+[New LWP 156]
+[New LWP 157]
+[New LWP 158]
+[New LWP 159]
+[New LWP 160]
+[New LWP 161]
+[New LWP 162]
+[New LWP 163]
+[New LWP 164]
+[New LWP 165]
+[New LWP 166]
+[New LWP 167]
+[New LWP 168]
+[New LWP 169]
+[New LWP 170]
+[New LWP 171]
+[New LWP 172]
+[New LWP 173]
+[New LWP 174]
+[New LWP 175]
+[New LWP 176]
+[New LWP 177]
+[New LWP 178]
+[New LWP 179]
+[New LWP 180]
+[New LWP 181]
+[New LWP 197]
+[New LWP 243]
+[New LWP 244]
+[New LWP 245]
+[Thread debugging using libthread_db enabled]
+Using host libthread_db library "/lib/x86_64-linux-gnu/libthread_db.so.1".
+0xf7f9acfc in __kernel_vsyscall ()
+Breakpoint 1 at 0x100a5043
+ORACLE_ATTACHED
+SURF_ENTER isurf=4556
+Breakpoint 2 at 0x100a5a04
+Breakpoint 3 at 0x100a5a07
+TARGET_ENTER px=1760 py=1148.125 pz=191.875031
+RESOLVED model=0xc55388c target=0x17ce4c0 inner=0x17cea70
+Breakpoint 4 at 0x17ce2ae
+Breakpoint 5 at 0x17ce2e6
+Breakpoint 6 at 0x17ce3b4
+Breakpoint 7 at 0x17ce507
+Breakpoint 8 at 0x17cea19
+Breakpoint 9 at 0x17cea70
+Breakpoint 10 at 0x17ceb02
+Breakpoint 11 at 0x17ceb45
+NODES_NUM_CHECK edi=0xc55388c nodes_num=23808
+CROSS_ENTRY A=-39.1334839 B=26.8858643 p1=(1570.38855,1147.62537,283.467133) p2=(1760,1148.125,191.875031)
+CROSS_T t=-0.592757821
+RECURSE_CALL (self-recursive into 0x17ce190)
+TARGET_RETURN result=1
+TARGET_DONE
+[Inferior 1 (process 33) detached]

@@ -1024,6 +1024,71 @@ surface's processing. That cuts the hit volume by orders of magnitude and should
 trace of the `mid`-formula finding above tractable. No production code changed this round
 (`linecheck.rs` untouched); no regression-gate re-run needed (nothing that could regress changed).
 
+**Round 3 (surf-gated live trace, worked): the per-node walker examined in rounds 1-2
+(`target+0x5b0`, `0x17cea70`) is the WRONG function — real zero-extent shadow rays for the traced
+surface never reach it. Found and live-confirmed the ACTUAL recursive walker (`0x17ce190`), captured
+its real crossing-fraction formula for the target ray's root-level call, but the full sign/role
+mapping is not yet resolved -- genuinely open, not a completed pin.** (2026-08-30, 🔬 live gdb,
+`linecheck_singlestep_rec14_v2.py`/`_v3.py`, new) — Implemented the coordinator's proposed fix for
+round 1's volume problem: gate the ray-level breakpoint behind `illuminateSurf`'s own per-surface
+entry (`Editor.dll 0x100a5010`, located fresh via a backward int3-padding scan, confirmed live to
+take `iSurf` at `[ebp+0xc]`), armed only once `iSurf==4556` (the surf for record 14, computed
+offline). This cut the run from a 25-minute hang with zero hits to under a minute, completing
+reliably across five reruns.
+
+**Surprise result: our exact target ray (`rec=14 Light42 v=3 u=0`, matched by exact float
+comparison) reached neither the "empty model" short path NOR `target+0x5b0` before returning.** A
+follow-up 20-ray survey of the SAME surface (no per-ray filter, just logging every ray's outcome)
+showed ALL 20 sampled rays -- both `result=0` and `result=1` cases, i.e. both directions of the bug
+-- take the SAME branch: `early_exit_0x17ce867`, reached via `call 0x17ce190` returning non-zero,
+which the dispatcher then returns directly without ever touching `target+0x5b0`. So `target+0x5b0`
+(the function rounds 1-2 spent a whole round hand-decoding) is real, reachable code (round 1's
+un-gated first-3-hits capture did land inside it and dump a coherent disassembly) but is NOT the
+path real per-lumel shadow rays for this surface take -- it must be some OTHER LineCheck variant
+(box-extent collision, an actor-movement trace, or similar). **This means round 2's whole
+`mid`-formula analysis (`t'=de/(de-ds)` vs native's `t=ds/(ds-de)`) was performed on a function that,
+while real, is not demonstrated to be the one that actually produces this bug — an important
+correction, not a refutation of that analysis' correctness on its own terms.**
+
+**Disassembled `0x17ce190` live** (`x/500i`, no static file lookup needed since it's read straight
+from live process memory) and confirmed it IS genuinely recursive: a self-call at `0x17ce3b4`
+(`call 0x17ce190`), gated behind the same near/far crossing-detection shape as `line_clear`/`seg_clear`
+(early returns for both-same-side cases at `0x17ce249`-`0x17ce2a9`, a crossing branch at `0x17ce2ae`
+computing a fraction and a sub-segment before recursing). Captured LIVE, for the target ray's
+ROOT-level call: `A=-39.1334839` (plane-dot of `point1`), `B=26.8858643` (plane-dot of `point2`),
+`point1=(1570.38855,1147.62537,283.467133)` = **`light_loc` exactly**, `point2=(1760,1148.125,
+191.875031)` = **the lumel position exactly** (bit-for-bit match to the known target ray, confirming
+the capture is genuinely on-target) — so this build passes `(light_loc, lumel_pos)` in that ORDER,
+opposite the assumed `(start=lumel, end=light)` labeling used in round 2's analysis of the other
+function. Crossing fraction: `t = A/(B-A)`, live-verified exactly (`-39.1334839/(26.8858643-
+(-39.1334839)) = -0.592757821`, matching the captured `CROSS_T` to 9 significant figures).
+
+**Open, not resolved this round:** mapping this `t` onto native's `t_native=ds/(ds-de)` convention
+(with `ds`=plane-dot of the segment's OWN start, `de`=of its end) requires knowing which of
+`point1`/`point2` is being treated as the "current segment start" at each recursive level, which
+alternates as the walk descends near/far sides (matching `line_clear`'s own `side`/`parent_csg`
+alternation) — only the ROOT call was captured, so this isn't pinned generally. A naive `ds=B` (point2
+=lumel=segment start), `de=A` mapping gives `t_native=B/(B-A)=0.407242`, and empirically
+`editor_t = t_native - 1` for this one data point — a real, reproducible relationship, but a
+`t-1` shift (not a simple `1-t` complement) implies EITHER a different base point for the lerp
+(`mid = point1 + t*(point2-point1)` with `t` allowed outside `[0,1]`, still landing on the correct
+line but via a different, not-yet-verified algebraic path) or a mislabeled A/B role — not
+disambiguated with the data captured so far. Confirmed via disassembly that `mid = point1 +
+t*(point2-point1)` (the delta computed as `point2-point1` at `0x17ce2b2`-`0x17ce2da`, scaled by `t`,
+then combined with `point1` via a virtual call at `0x17ce300`) but did NOT capture the resulting mid
+point's own coordinates live to check whether it lands strictly between the two endpoints, which
+would resolve the open question directly — the natural next step for a future round, not attempted
+here (budget/scope).
+
+**Not shipped.** No change to `linecheck.rs` or any other production code; this round is read-only
+live capture + static disassembly. `bin/test`/`regression_gate.py` not re-run (nothing that could
+regress changed). New harness files (all in `dev/docs/spikes/2026-08-29-unatco-repart-live-diff/
+harness/`): `linecheck_singlestep_rec14_v2.py` (the surf-gated single-ray trace, iterated several
+times in place to add the dispatcher disasm, the `0x17ce190` disasm, and the final `A`/`B`/`t`
+capture — each iteration's gdb log is the source for the facts above), `linecheck_singlestep_rec14_v3.py`
+(the 20-ray outcome survey that found the `target+0x5b0` misidentification). Logs:
+`linecheck-singlestep-rec14-v2.log`, `linecheck-singlestep-rec14-v3.log`.
+
 **`line_clear` CONFIRMED as the real cause (not a geometry residual): disagrees with the editor's real
 bit even fed the editor's own real tree/inputs. Live-disassembled the real editor function on the
 current build; REFUTES the old ±0.001 epsilon-tolerance hypothesis; full per-node state formula NOT

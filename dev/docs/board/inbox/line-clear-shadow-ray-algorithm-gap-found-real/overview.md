@@ -1,7 +1,7 @@
 +++
 priority = "p2"
 kind = "debug"
-summary = "Confirmed line_clear (not lumel_axes) causes Wanchai's bits-only shadow divergence. Round 2: static hand-decode reproduces the per-node bit formula and finds a new non-bit-identical crossing-point (mid) formula, but a live single-step attempt to confirm it hung on the shared per-ray call site's hit volume and was killed -- no fix, logged per the no-speculative-fix rule."
+summary = "Confirmed line_clear (not lumel_axes) causes Wanchai's bits-only shadow divergence. Round 3: a surf-gated live trace (fixing round 2's hang) found the function rounds 1-2 analyzed (target+0x5b0) is NOT the one real shadow rays use; located and live-captured the actual recursive walker (0x17ce190) and its crossing formula for one ray's root call, but the full sign/role mapping to native's t=ds/(ds-de) is still open -- no fix, logged per the no-speculative-fix rule."
 depends-on = ["getvisiblesurfs-wanchai-run-gap-root-cause"]
 spikes = ["dev/docs/spikes/2026-08-29-unatco-repart-live-diff/"]
 +++
@@ -168,13 +168,46 @@ less-frequent checkpoint -- e.g. `illuminateSurf`'s own per-surface entry (~4530
 Wanchai, not per-bit), conditioned on the target surf's `iLightMap` index, arming the per-node
 breakpoints only for that one surface's processing window.
 
+## Round 3 (2026-08-30): the surf-gate WORKED -- and revealed round 1-2's target function was wrong
+
+Implemented round 2's own proposed fix: gate the ray-level breakpoint behind `illuminateSurf`'s
+per-surface entry (`Editor.dll 0x100a5010`, located fresh via a backward int3-padding scan, confirmed
+live to take `iSurf` at `[ebp+0xc]`), armed only once `iSurf==4556` (the surf for record 14). This cut
+the run from round 2's 25-minute hang to under a minute, reliably, across five reruns.
+
+**The target ray reached neither of the two paths examined in rounds 1-2.** A 20-ray survey of the
+same surface (no per-ray filter, logging every ray's outcome) showed ALL 20 sampled rays -- both
+`result=0` and `result=1` cases -- take the SAME branch: `early_exit_0x17ce867`, reached via
+`call 0x17ce190` returning non-zero, which the dispatcher then returns directly. `target+0x5b0` (the
+function rounds 1-2 spent a whole round hand-decoding) is real, reachable code -- round 1's un-gated
+capture did land inside it -- but is demonstrably NOT the path real per-lumel shadow rays for this
+surface take. **This means round 2's `mid`-formula analysis, while a real and carefully-derived
+static decode, was performed on a function not shown to be the one producing this bug -- an important
+correction to the round's own premise, not a refutation of the analysis on its own terms.**
+
+**Found and live-confirmed the actual recursive walker: `0x17ce190`.** Disassembled live (`x/500i`,
+straight from process memory) and confirmed genuinely recursive (self-call at `0x17ce3b4`), with the
+same near/far crossing-detection shape as `line_clear`. Captured live, for the target ray's
+ROOT-level call: `point1=light_loc`, `point2=lumel_pos` (both bit-exact matches to the known target
+ray, confirming the capture is on-target), `A=-39.1334839` (plane-dot of point1), `B=26.8858643`
+(plane-dot of point2), crossing fraction `t=A/(B-A)=-0.592757821` (live-verified to 9 significant
+figures against the formula). Confirmed via disassembly `mid = point1 + t*(point2-point1)`.
+
+**Open, not resolved this round:** the exact mapping from this `t` to native's `t_native=ds/(ds-de)`
+needs the per-recursive-level start/end role (which alternates near/far as the walk descends) --
+only the root call was captured. A naive mapping gives `editor_t = t_native - 1` for this one data
+point (real and reproducible, but a `t-1` shift is a more surprising relationship than a simple
+`1-t` complement, and isn't disambiguated by one data point). Did not capture the resulting `mid`
+point's own coordinates to check it lands between the two endpoints -- the natural next step for a
+future round.
+
 ## Not shipped
 
-No change to `linecheck.rs`, `light.rs`, or any other production code across either round -- per the
-standing rule (owner, 2026-08-30): the real mechanism is not yet confidently known (the `mid`-formula
-finding above is a static decode, not live-confirmed), so no speculative fix, tolerance, or rounding
-tweak was attempted. `regression_gate.py`/`bin/test` were not re-run since nothing that could regress
-them changed.
+No change to `linecheck.rs`, `light.rs`, or any other production code across all three rounds -- per
+the standing rule (owner, 2026-08-30): the real mechanism is not yet confidently known (round 3 found
+the RIGHT function but has not fully pinned its formula), so no speculative fix, tolerance, or
+rounding tweak was attempted. `regression_gate.py`/`bin/test` were not re-run since nothing that could
+regress them changed.
 
 ## Files
 
@@ -183,9 +216,15 @@ them changed.
 - `dev/docs/spikes/2026-08-29-unatco-repart-live-diff/harness/linecheck_target_disasm.py` (round 1,
   the live vtable-target resolver + disassembler)
 - `dev/docs/spikes/2026-08-29-unatco-repart-live-diff/harness/linecheck_singlestep_rec14.py` (round
-  2, new -- the targeted live single-step attempt; hung on the shared-call-site volume problem
-  above, reusable once re-gated on a per-surface checkpoint)
+  2, the targeted live single-step attempt that hung on the shared-call-site volume problem)
+- `dev/docs/spikes/2026-08-29-unatco-repart-live-diff/harness/linecheck_singlestep_rec14_v2.py` (round
+  3, new -- the surf-gated single-ray trace; iterated in place across several reruns to add the
+  dispatcher disasm, the `0x17ce190` disasm, and the final `A`/`B`/`t` capture)
+- `dev/docs/spikes/2026-08-29-unatco-repart-live-diff/harness/linecheck_singlestep_rec14_v3.py` (round
+  3, new -- the 20-ray outcome survey that found the `target+0x5b0` misidentification)
 - `dev/docs/spikes/2026-08-29-unatco-repart-live-diff/logs/light-spotcheck-wanchai-native.dx` (round
   1, fresh native rebuild used that round)
 - `dev/docs/spikes/2026-08-29-unatco-repart-live-diff/logs/linecheck-target-disasm.log` (round 1, the
   live capture + disassembly -- round 2's static decode is a from-scratch re-read of this same file)
+- `dev/docs/spikes/2026-08-29-unatco-repart-live-diff/logs/linecheck-singlestep-rec14-v2.log`,
+  `linecheck-singlestep-rec14-v3.log` (round 3, the live capture logs the facts above are drawn from)
