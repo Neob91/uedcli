@@ -137,3 +137,18 @@ differ, summing to 260 absolute delta against a net -20 (heavy cancellation). Di
 UNATCO's residual (+7 nodes, ZERO surf/leaf delta — same face set, different tree shape only):
 freeclinic08/nsfhq04 have a nonzero surf delta (a genuinely different face SET), so this is a
 different mechanism, not blocked on the UNATCO investigation.
+
+**Wanchai's Points/Verts residual is small, additive, and NOT the same shape as UNATCO's aggregate
+node-count mystery** (2026-08-30, 🔬) — fresh measurement, current tree (post `repartition_frontier`
++`compact_unreachable_nodes`): Wanchai nodes/surfs/leaves stay EXACT (11648/…); verts +138 (+0.08%),
+points +16, vectors −8 (new, previously untracked). `UEDCLI_BSPCSG_STAGE_COUNTS` vs the live-captured
+editor stage log (`wanchai-ed-repart-stage.log`, dated 2026-08-27, post-cutoff) splits +138 additively:
+world-level repartition +6, zone-pass+detail-loop (combined) +63, `repartition_frontier`'s 119 subtree
+calls +64, `bsp_opt_geom` T-junction weld +5 (near-exact, same as UNATCO's weld finding). New env-gated
+diagnostic `UEDCLI_REPART_PERCALL_VERTS` (`bspcsg.rs::repartition_frontier`) shows the +64 segment
+concentrates in exactly ~8 of 119 calls, each off by a uniform **+8** verts regardless of subtree size
+(not diffuse noise) — mechanism and the specific 8 calls not yet identified (node-index numbering
+differs between engines, no valid positional correspondence). Full detail:
+`dev/docs/board/inbox/wanchai-verts-points-residual-independently/overview.md`. No fix shipped;
+default build path byte-unchanged (`regression_gate.py`, `bin/test -k bspcsg` 84/84, both before/after
+this diagnostic).

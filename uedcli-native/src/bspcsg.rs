@@ -1793,7 +1793,21 @@ fn repartition_frontier(model: &mut Model, list_a: &[i32], list_b: &[i32]) -> Re
         let polys = if blanket_merge { reduce_repartition_polys(polys) } else { polys };
         let merged_polys = polys.len();
         let before_nodes = model.nodes.len();
+        // TEMPORARY DIAGNOSTIC (UEDCLI_REPART_PERCALL_VERTS) -- wanchai-verts-points-residual-
+        // independently: per-call Verts/Points before/after, to compare against the editor's own
+        // per-call growth (dev/docs/spikes/.../logs/wanchai-ed-repart-stage.log) and localize
+        // whether the Wanchai residual concentrates in a few calls or spreads thin across all of
+        // them. Zero effect on the default path.
+        let percall_verts_diag = std::env::var("UEDCLI_REPART_PERCALL_VERTS").is_ok();
+        let before_verts = model.verts.len();
+        let before_points = model.points.len();
         split_poly_list(model, parent, place, polys, 0, BALANCE, PORTAL_BIAS, Opt::Good, &mut call_id)?;
+        if percall_verts_diag {
+            eprintln!(
+                "REPART_PERCALL seq={} parent={parent} place={place} child={child} orig_polys={orig_polys} verts_before={before_verts} verts_after={} points_before={before_points} points_after={}",
+                wi - 1, model.verts.len(), model.points.len()
+            );
+        }
         if compact_per_call {
             let remap = compact_unreachable_nodes(model);
             for e in worklist[wi..].iter_mut() {
