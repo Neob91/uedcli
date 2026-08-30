@@ -1510,3 +1510,55 @@ a determinant check. Closes the severe under-build (-13% to -27% node deficits) 
 Wanchai Garage, Paris Underground, NYC 747, OceanLab Lab — deltas now match the corpus's ordinary
 over-build noise range. UNATCO/Wanchai Market unaffected, stay exact. Full detail:
 `dev/docs/board/inbox/mirrored-brush-determinant-fix-closes-the/overview.md`.
+
+**smuggler's `+4` surf residual (nodes/leaves EXACT) isolated to 4 `PF_Semisolid CSG_Add` brushes;
+PASS-A (structural) tree confirmed BYTE-EXACT — a NEW, cleaner shape than freeclinic08/nsfhq04's,
+mechanism NOT found (no fix shipped)** (2026-08-30, 🔬 offline + one attempted live descent trace,
+inconclusive) — `breadth_gate.py` baseline: smuggler nodes 7007/7007 EXACT, surfs `d=+4`, leaves
+`d=+0` (verts `-70`/points `+135`/vectors `+13`, not gated). Per-brush surf-count attribution
+(`smuggler_surf_diff.py`, same method as `fc08_surf_diff.py`) finds **exactly 4 brushes**, each
+`d=+1`: `Brush547`/`Brush550`/`Brush273`/`Brush457` (world-CSG idx 119/120/124/266) — all
+`CsgOper=CSG_Add PolyFlags=32` (`PF_Semisolid`), all 128-poly composite props (texture
+`CoreTexMetal.Heli_LiftMetl_A`, a "Heli Lift"-style stacked-panel object placed 4 times).
+
+**Decisive new test, borrowing freeclinic08's own methodology (`smuggler_filter_trunk.py` +
+`geo_golden_resume_structural.py`, both committed): smuggler's PASS-A (all 79 `PF_Semisolid`
+brushes dropped, 660 of 739 actors kept) is nodes/surfs/leaves BYTE-EXACT against a freshly built
+editor golden of the SAME filtered trunk** (native `2526/1378/614`, editor `2526/1378/614`, verts/
+points/vectors within noise: `+65/+1/-1`). This is the opposite of freeclinic08 (PASS-A already
+`-38 nodes/-23 leaves` before its own semisolid brush ran) — smuggler's `+4` surf delta is **entirely
+a PASS-2 (semisolid) effect on an otherwise-exact tree**, not inherited from an already-wrong PASS-A
+repartition gap. A cleaner, more tractable shape than freeclinic08/nsfhq04's diffuse residual, and a
+DIFFERENT mechanism from UNATCO's fixed `repartition_frontier` gap (which was never about PASS-2).
+
+**Per-brush poly attribution (`smuggler_brush_surf_detail.py`, matches native/editor surfs by
+`i_brush_poly`):** 3 of 4 (`Brush547`/`Brush550`/`Brush273`) are a CLEAN single addition — native
+keeps local poly index **124** (same index all three times) as an extra surf with NO editor
+counterpart at all (not a swap); `Brush457` is a different shape — native keeps poly **99**, editor
+instead keeps poly **16** (a genuine one-for-one SWAP between two non-coplanar, non-duplicate faces,
+net `+1`). Poly 124 (all three matching brushes) is the BOTTOM-most stacked panel of the prop
+(`Z` spans the brush's own `PrePivot.Z`, e.g. `Brush547`'s `PrePivot=(12,-40,-52)` and poly124 spans
+`Z=[-52,-40]`) — suggestive of a coincident/boundary-adjacent face at the very bottom of a placed
+prop (the classic `F_COSPATIAL_FACING_OUT` case `leaf_func`'s `LeafFunc::Add` arm gates OFF for
+`PF_SEMISOLID` faces specifically, `bspcsg.rs:604-613`), but this is a HYPOTHESIS, not confirmed.
+
+**Attempted to confirm via the existing `UEDCLI_BSPCSG_DESCENT=<i_link>` tracer — inconclusive, ruled
+out as unreliable for this purpose.** `i_link` is a per-brush-CSG-call-LOCAL temp index (assigned
+fresh inside `bsp_brush_csg` per brush, `bspcsg.rs` ~2382-2460), not a global/stable identifier, so
+`UEDCLI_BSPCSG_DESCENT=124` fired 37 times across the WHOLE build (every brush with ≥125 polys hits
+local index 124 once), none distinguishable as "the" `Brush547` call without brush-scoped
+instrumentation this tracer doesn't have. None of the 37 captured lines showed the expected
+near-zero-distance coincident-plane signature the hypothesis predicts, but this is NOT strong
+evidence against it — the specific `Brush547` line was never confirmed to be among the 37. **Per
+the standing rule (a fix must replicate the real, live-verified mechanism), no fix was attempted.**
+
+**Not shipped, no source changes.** Only new committed harness scripts (`dev/docs/spikes/
+2026-08-29-unatco-repart-live-diff/harness/`): `smuggler_surf_diff.py`, `smuggler_brush_surf_detail.py`,
+`smuggler_filter_trunk.py`, `smuggler_native_structural.py`, `smuggler_structural_compare.py`,
+`geo_golden_resume_structural.py` (+ its dependency `geo_golden_driver.py`, previously
+`_scratch`-only). `bin/test`/`regression_gate.py` unaffected (no `.rs` edits this round). Full
+write-up: `dev/docs/board/inbox/smuggler-4-surf-delta-traced-to-4-pf-semisolid/overview.md`.
+**Concrete next step for a future round:** scope the descent tracer by enclosing brush actor name
+(or isolate a single-brush repro: rebuild with ONLY `Brush547` as the sole `PF_Semisolid` addition
+onto the already-exact PASS-A tree) before attempting another live/native differential on poly 124's
+actual classification.
