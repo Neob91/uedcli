@@ -1,0 +1,48 @@
+[New LWP 145]
+[New LWP 154]
+[New LWP 155]
+[New LWP 156]
+[New LWP 157]
+[New LWP 158]
+[New LWP 159]
+[New LWP 160]
+[New LWP 161]
+[New LWP 162]
+[New LWP 163]
+[New LWP 164]
+[New LWP 165]
+[New LWP 166]
+[New LWP 167]
+[New LWP 168]
+[New LWP 169]
+[New LWP 170]
+[New LWP 171]
+[New LWP 172]
+[New LWP 173]
+[New LWP 174]
+[New LWP 175]
+[New LWP 176]
+[New LWP 177]
+[New LWP 178]
+[New LWP 179]
+[New LWP 180]
+[New LWP 181]
+[New LWP 182]
+[New LWP 193]
+[New LWP 250]
+[New LWP 251]
+[New LWP 252]
+[Thread debugging using libthread_db enabled]
+Using host libthread_db library "/lib/x86_64-linux-gnu/libthread_db.so.1".
+0xf7f96cfc in __kernel_vsyscall ()
+Breakpoint 1 at 0x10036870
+Breakpoint 2 at 0x100368ed
+Breakpoint 3 at 0x100368fa
+Breakpoint 4 at 0x10036c1a
+ORACLE_ATTACHED
+ENTRY callidx=1 model=0xc52bd2c nodes=11648 verts=112985 points=19626
+POST_SHRINK callidx=1 model=0xc52bd2c nodes=11648 verts=112985 points=19626
+POST_VTCALL200 callidx=1 model=0xc52bd2c nodes=11648 verts=112985 points=16791
+EXIT callidx=1 model=0xc52bd2c nodes=11648 verts=169313 points=16791
+OPTGEOM_DONE callidx=1
+[Inferior 1 (process 33) detached]

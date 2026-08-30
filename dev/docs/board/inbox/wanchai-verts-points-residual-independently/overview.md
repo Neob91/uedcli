@@ -1,7 +1,7 @@
 +++
 priority = "p3"
 kind = "debug"
-summary = "Wanchai verts residual closed to +74 by the shipped repartition_frontier fix. Points residual (+16, now identical on UNATCO and Wanchai) measured cross-level: the match is COINCIDENCE, not one mechanism -- two differently-shaped errors happen to land on the same total. EmptyModel(0,0)'s world-level keep-Points semantics CONFIRMED live (2026-08-30) but a naive port (UEDCLI_BSPCSG_WORLD_KEEP_POINTS) makes Points markedly WORSE (+16->+912/+2673) -- measured and rejected, not shipped. Round 3 (2026-08-30): found the missing mechanism -- real bspRefresh ALSO compacts Points/Vectors (fresh disassembly), not just Nodes. Ported (bsp_refresh_points_vectors, gated behind the same flag): closes the regression to +16/+19 -- essentially on par with, not better than, the current shipped default. Not switched to default; no forward progress on the +16 residual itself."
+summary = "Wanchai verts residual closed to +74 by the shipped repartition_frontier fix. Points residual (+16, now identical on UNATCO and Wanchai) measured cross-level: the match is COINCIDENCE, not one mechanism -- two differently-shaped errors happen to land on the same total. EmptyModel(0,0)'s world-level keep-Points semantics CONFIRMED live (2026-08-30) but a naive port (UEDCLI_BSPCSG_WORLD_KEEP_POINTS) makes Points markedly WORSE (+16->+912/+2673) -- measured and rejected, not shipped. Round 3 (2026-08-30): found the missing mechanism -- real bspRefresh ALSO compacts Points/Vectors (fresh disassembly), not just Nodes. Ported (bsp_refresh_points_vectors, gated behind the same flag): closes the regression to +16/+19 -- essentially on par with, not better than, the current shipped default. Not switched to default; no forward progress on the +16 residual itself. Round 4 (2026-08-30): live-confirmed the real editor's Points GC runs INSIDE bspOptGeom, before the T-junction weld, landing EXACTLY on the final golden Points count on both levels (Editor.dll 0x100368f4, a call right after the ShrinkModel-style merge) -- but porting the ORDERING alone (running native's existing reorder_points_canonical earlier, gated behind UEDCLI_BSPCSG_EARLY_POINTS_COMPACT) makes ZERO measurable difference (same 52 points dropped either way) -- measured and reverted, zero footprint. Residual now genuinely exhausted across 4 rounds; recommend stopping and redirecting effort to Wanchai's lighting gaps (MergeWith decode, shadow-ray precision) instead."
 depends-on = ["unatco-verts-points-residual-after-the-zone"]
 +++
 
@@ -432,3 +432,72 @@ specific `+16` residual should look elsewhere — e.g. `reorder_points_canonical
 ORDER gap (already flagged, not byte-exact) or the 52-points-dropped-per-level final compaction, not
 another attempt at porting `EmptyModel`'s keep semantics. New file:
 `dev/docs/spikes/2026-08-29-unatco-repart-live-diff/harness/keep_points_stage_diag.py`.
+
+## Round 4, 2026-08-30: the untried lever (does `reorder_points_canonical` miss a LATER editor
+## compaction opportunity?) — mechanism found and live-confirmed exact, but porting it changes
+## nothing. Residual now exhausted across 4 rounds; recommend stopping.
+
+Task: check whether the real editor's own final points-compaction happens somewhere AFTER
+`bspOptGeom`'s T-junction weld that native's `reorder_points_canonical` (which runs once, at the very
+end of the pipeline) currently misses.
+
+**Live-verified the opposite of the question's premise: the editor's real compaction runs BEFORE the
+weld, not after, and lands EXACTLY on the final golden Points count right there.** New harness
+`bspoptgeom_pool_trace.py` (`dev/docs/spikes/2026-08-29-unatco-repart-live-diff/harness/`), reusing the
+`emptymodel_worldlevel_trace.py`/`vtable_dump.py` gdb-attach scaffolding. Independently re-derived
+`bspOptGeom`'s entry RVA (`Editor.dll 0x10036870`) via the pre-existing `vtable_dump.py`'s live
+`slot218=0x10036870` capture (already on record, UNATCO, post-2026-08-14) and fresh static disassembly
+this round of `0x10036870`-`0x10036c32` (not copied from the pre-08-14 doc) — which also independently
+reconfirmed the `0x33dc0` `ShrinkModel`-style point-merge call's identity/signature
+(`(Model, radius=0.25)`, matching `bspoptgeom.rs::merge_near_points`'s own doc comment) and found an
+un-identified second call right after it, `0x100368f4: call [eax+0x200]`.
+
+Bracketed all 4 points (ENTRY / POST_SHRINK / POST_VTCALL200 / EXIT) with a live Points/Verts/Nodes
+read of the same model pointer, on the REAL UNATCO and Wanchai goldens (never `Test_Castle`):
+
+| level | ENTRY points | POST_SHRINK | POST_VTCALL200 | EXIT | golden final |
+|---|---:|---:|---:|---:|---:|
+| UNATCO | 12909 | 12909 | **10752** | 10752 | **10752** |
+| Wanchai | 19626 | 19626 | **16791** | 16791 | **16791** |
+
+The `0x33dc0` merge call does NOT physically shrink Points (unchanged ENTRY→POST_SHRINK — only remaps
+`vert.iVertex`, confirming `merge_near_points`'s own doc comment live, not just by assertion). The VERY
+NEXT call drops Points straight to the exact final on-disk value, on BOTH levels, before the T-junction
+weld runs — and Points never changes again after that (flat through EXIT; the weld only grows Verts,
+54776→76488 UNATCO / 112985→169313 Wanchai in the same window).
+
+**Ported the ORDERING — not a new mechanism, just called native's own existing
+`reorder_points_canonical` a second time, between `merge_near_points` and `eliminate_tjunctions`
+instead of only at the very end — gated behind `UEDCLI_BSPCSG_EARLY_POINTS_COMPACT` (off by default).
+Measured: ZERO effect.** `regression_gate.py` with the flag on is byte-identical to off on every
+metric, both levels (points `d=+16` both, unchanged). `UEDCLI_REORDER_POINTS_DIAG` showed why: the
+early call drops the same 52 points per level as the current single late call, and the late call then
+finds nothing left to drop. Native's own reachable-point SET is invariant to WHEN the compaction runs —
+refutes this round's working hypothesis (that the late-only call over-counts points the weld's own
+orphaned pre-splice ring copies keep spuriously "reachable").
+
+**Why the gap survives regardless:** the editor's raw (pre-compaction) pool is proportionally much
+bigger than what it drops, compared to native (UNATCO: editor 12909→10752, a 16.7% drop; native
+10820→10768, a 0.5% drop) — native's pool is already tight by construction (continuous
+`bsp_add_point` tolerance-dedup + `repartition_frontier`'s scratch-clone design never allocates the
+editor's equivalent scratch churn), so there is little for any reachability GC to find, wherever it
+runs. The two engines' raw pools are not directly comparable; matching the editor's GC RULE (which
+native already effectively does, same 52 either way) doesn't converge the totals because the gap is
+upstream, in raw accumulation, not in the sweep.
+
+**Not shipped — reverted cleanly, zero footprint** (`bspcsg.rs`/`bspoptgeom.rs` `git diff` empty vs the
+pre-round commit). Kept only the new harness (`bspoptgeom_pool_trace.py`, reusable for a future
+raw-accumulation investigation) + its two logs. `bin/test -k bspcsg` 87/87 unchanged;
+`regression_gate.py` byte-identical before/after (both levels EXACT, points `d=+16` both).
+
+**Recommend stopping here.** Four rounds have now covered: (1) not one shared mechanism; (2) a naive
+keep-points port that regresses badly; (3) the same port with the real compaction mechanism found and
+wired in, converging to par-not-better; (4) this round's ordering lever, zero effect. The remaining
+open thread — why the editor's RAW pre-`bspOptGeom` pool runs ~2000+ points hotter than native's at the
+equivalent stage (12909 vs 10820 UNATCO) despite nodes/surfs/leaves already matching exactly there — is
+a different, harder, differently-shaped question (raw accumulation, not GC timing/rule) that no round
+so far has attempted. Given the residual is 0.1% of an already node/surf/leaf-EXACT tree and doesn't
+block lighting comparison (LightMap record alignment depends on node/surf/leaf counts, already exact on
+both levels), better ROI for a future session is elsewhere: Wanchai's still-open LIGHTING gaps
+(light-run matching needs `MergeWith` decoded; a shadow-ray precision issue) — Wanchai is unblocked for
+that work today, unlike freeclinic08/nsfhq04 which are blocked on their own separate geometry gap.
