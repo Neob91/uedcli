@@ -1,7 +1,7 @@
 +++
 priority = "p2"
 kind = "debug"
-summary = "Confirmed line_clear (not lumel_axes) causes Wanchai's bits-only shadow divergence. Round 3: a surf-gated live trace (fixing round 2's hang) found the function rounds 1-2 analyzed (target+0x5b0) is NOT the one real shadow rays use; located and live-captured the actual recursive walker (0x17ce190) and its crossing formula for one ray's root call, but the full sign/role mapping to native's t=ds/(ds-de) is still open -- no fix, logged per the no-speculative-fix rule."
+summary = "Confirmed line_clear (not lumel_axes) causes Wanchai's bits-only shadow divergence. Round 3 found the round 1-2 target function (target+0x5b0) was wrong; round 4 pinned the real crossing formula (t'=de/(de-ds)) with live mid-point coordinates, implemented+TDD'd it, but the lighting re-measurement showed a SEVERE REGRESSION on both Wanchai (72.8%->29.9%) and UNATCO (80.5%->42.3%) -- reverted. The formula is correct for the one traced crossing but does not generalize safely when blanket-applied; the missing piece is 0x17ce190's full recursion structure, not the formula itself."
 depends-on = ["getvisiblesurfs-wanchai-run-gap-root-cause"]
 spikes = ["dev/docs/spikes/2026-08-29-unatco-repart-live-diff/"]
 +++
@@ -201,13 +201,58 @@ point (real and reproducible, but a `t-1` shift is a more surprising relationshi
 point's own coordinates to check it lands between the two endpoints -- the natural next step for a
 future round.
 
+## Round 4 (2026-08-30): formula pinned cleanly with real mid coordinates, implemented + TDD'd,
+## but the lighting re-measurement shows a SEVERE REGRESSION -- reverted
+
+Extended the round-3 harness (`linecheck_singlestep_rec14_v2.py`) with a breakpoint at `0x17ce190`'s
+own entry (reads incoming `point1`/`point2` for every call, including recursive ones) and one where
+the computed `mid` local gets read for the recursive call's own argument setup. Captured the target
+ray's root-level crossing `mid=(1647.60632,1147.82886,246.166962)` -- verified offline, exact f32
+arithmetic, to match `lerp(start=lumel_pos, end=light_loc, t')` where `t'=de/(de-ds)` (native's own
+convention) to FULL FLOAT32 PRECISION. This is exactly `1-t` where `t=ds/(ds-de)` is native's
+original formula (`t+t'=1.0000000` to 7 decimal places) -- confirms round 2's ORIGINAL static
+hypothesis, derived that round on the wrong function, turns out to be exactly the right formula for
+the right one. (Round 3's tentative `editor_t=t_native-1` guess was based on a mislabeled algebraic
+role and is superseded by this cleaner result.)
+
+**Implemented via TDD.** Refactored `linecheck.rs`'s inline `t = ds/(ds-de)` into a named
+`crossing_fraction(ds,de) -> f32 { de/(de-ds) }`, with a test pinning the live-captured numbers.
+Confirmed genuinely RED before the fix and GREEN after (a first RED attempt used an overly broad
+`sed` that also broke the test itself, giving a misleading result -- caught and redone with a scoped
+edit before trusting it). `bin/test -k linecheck`: 88/88. Full `bin/test`: exit 0. `regression_gate.py`:
+UNATCO/Wanchai both still node/surf/leaf-EXACT (geometry untouched by a lighting-only change, as
+expected).
+
+**But the actual gate -- the lighting re-measurement -- shows regression, not improvement:**
+
+| level | before | with the fix |
+|---|---:|---:|
+| Wanchai byte-identical | 3297/4530 (72.8%) | 1355/4530 (29.9%) |
+| UNATCO byte-identical | 2692/3345 (80.5%) | 1414/3345 (42.3%) |
+
+The damage concentrates in the `run` bucket (which lights a surface's run even includes) -- a metric
+the per-lumel occlusion formula should have no business touching, which is the clearest sign this
+isn't simply "closer to the editor." **Reverted** (`git checkout -- uedcli-native/src/linecheck.rs`):
+confirmed `bin/test -k linecheck` back to 87/87 and both levels' lighting measurements reproduce the
+exact baseline numbers above, so the regression was real, not a measurement artifact.
+
+**Why a live-verified-correct formula still regressed:** the capture only verified `de/(de-ds)` for
+ONE genuine crossing (the root level of one ray) -- the depth-2 trace found no second crossing to
+cross-check. `0x17ce190`'s own recursion (captured this round) always keeps `point2` fixed and only
+ever replaces `point1` with `mid`, which doesn't obviously match `line_clear`'s `seg_clear`/`descend`
+structure (which alternates which of `start`/`end` gets replaced, depending on near-vs-far side).
+Blanket-substituting the formula everywhere `ds`/`de` are used, without first confirming it holds for
+BOTH sides of a crossing and across recursion depth, was not "replicating the editor's real
+algorithm" -- it was applying one live-verified fact more broadly than it was actually verified to
+hold, and the regression is the direct evidence of that gap.
+
 ## Not shipped
 
-No change to `linecheck.rs`, `light.rs`, or any other production code across all three rounds -- per
-the standing rule (owner, 2026-08-30): the real mechanism is not yet confidently known (round 3 found
-the RIGHT function but has not fully pinned its formula), so no speculative fix, tolerance, or
-rounding tweak was attempted. `regression_gate.py`/`bin/test` were not re-run since nothing that could
-regress them changed.
+No change to `linecheck.rs`, `light.rs`, or any other production code survives across all four
+rounds -- round 4's fix was implemented, tested, and measured, but reverted after the lighting
+re-measurement showed regression rather than the required real improvement (per the standing rule,
+2026-08-30: replicate the real algorithm, verified, not a formula that merely happens to match one
+traced case). `git diff` on `linecheck.rs` is empty.
 
 ## Files
 
@@ -218,13 +263,26 @@ regress them changed.
 - `dev/docs/spikes/2026-08-29-unatco-repart-live-diff/harness/linecheck_singlestep_rec14.py` (round
   2, the targeted live single-step attempt that hung on the shared-call-site volume problem)
 - `dev/docs/spikes/2026-08-29-unatco-repart-live-diff/harness/linecheck_singlestep_rec14_v2.py` (round
-  3, new -- the surf-gated single-ray trace; iterated in place across several reruns to add the
-  dispatcher disasm, the `0x17ce190` disasm, and the final `A`/`B`/`t` capture)
+  3, iterated further in round 4 -- the surf-gated single-ray trace; accumulates the dispatcher
+  disasm, the `0x17ce190` disasm, the `A`/`B`/`t` capture, and (round 4) the `CALL_ENTRY`/`MID`/
+  `EARLY_RETURN_A`/`EARLY_RETURN_B` breakpoints -- reusable for a deeper future trace)
 - `dev/docs/spikes/2026-08-29-unatco-repart-live-diff/harness/linecheck_singlestep_rec14_v3.py` (round
-  3, new -- the 20-ray outcome survey that found the `target+0x5b0` misidentification)
-- `dev/docs/spikes/2026-08-29-unatco-repart-live-diff/logs/light-spotcheck-wanchai-native.dx` (round
-  1, fresh native rebuild used that round)
+  3, the 20-ray outcome survey that found the `target+0x5b0` misidentification)
+- `dev/docs/spikes/2026-08-29-unatco-repart-live-diff/logs/light-spotcheck-wanchai-native.dx`,
+  `light-spotcheck-unatco-native.dx` (round 4, fresh native rebuilds of the REVERTED tree, used to
+  confirm the clean-baseline numbers in the before/after table above)
 - `dev/docs/spikes/2026-08-29-unatco-repart-live-diff/logs/linecheck-target-disasm.log` (round 1, the
   live capture + disassembly -- round 2's static decode is a from-scratch re-read of this same file)
 - `dev/docs/spikes/2026-08-29-unatco-repart-live-diff/logs/linecheck-singlestep-rec14-v2.log`,
-  `linecheck-singlestep-rec14-v3.log` (round 3, the live capture logs the facts above are drawn from)
+  `linecheck-singlestep-rec14-v3.log` (rounds 3-4, the live capture logs the facts above are drawn
+  from)
+
+## Concrete next step for a future round
+
+`0x17ce190`'s crossing FRACTION formula is solid; what's missing is its full recursion structure.
+Needed: trace a ray with MULTIPLE genuine crossings (this round's exemplar only had one), watching
+whether `point1`/`point2` ever swap roles (which one gets replaced by `mid`) depending on near/far
+side, and whether the "other side" of a crossing is handled by a loop continuation (like `0x17cea70`'s
+tail-loop structure) rather than the single `call 0x17ce190` this round observed. Only once that's
+understood can the formula be ported as part of a faithful WHOLE-algorithm port, not a single-line
+substitution.

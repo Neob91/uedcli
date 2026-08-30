@@ -98,6 +98,23 @@ if $isurf == __ISURF__ && $armed_surf == 0
       set $target = *(int *)($vtbl + 0x58)
       set $inner = $target + 0x5b0
       printf "RESOLVED model=0x%x target=0x%x inner=0x%x\n", $model, $target, $inner
+      set $depth = 0
+
+      break *0x17ce1b4
+      commands
+      silent
+      if $active == 1
+        set $depth = $depth + 1
+        set $p1x = *(float*)($ebp+0x1c)
+        set $p1y = *(float*)($ebp+0x20)
+        set $p1z = *(float*)($ebp+0x24)
+        set $p2x = *(float*)($ebp+0x28)
+        set $p2y = *(float*)($ebp+0x2c)
+        set $p2z = *(float*)($ebp+0x30)
+        printf "CALL_ENTRY depth=%d point1=(%.9g,%.9g,%.9g) point2=(%.9g,%.9g,%.9g)\n", $depth, $p1x, $p1y, $p1z, $p2x, $p2y, $p2z
+      end
+      continue
+      end
 
       break *0x17ce2ae
       commands
@@ -105,13 +122,7 @@ if $isurf == __ISURF__ && $armed_surf == 0
       if $active == 1
         set $A = *(float*)($ebp-0x8)
         set $B = *(float*)($ebp-0xc)
-        set $p1x = *(float*)($ebp+0x1c)
-        set $p1y = *(float*)($ebp+0x20)
-        set $p1z = *(float*)($ebp+0x24)
-        set $p2x = *(float*)($ebp+0x28)
-        set $p2y = *(float*)($ebp+0x2c)
-        set $p2z = *(float*)($ebp+0x30)
-        printf "CROSS_ENTRY A=%.9g B=%.9g p1=(%.9g,%.9g,%.9g) p2=(%.9g,%.9g,%.9g)\n", $A, $B, $p1x, $p1y, $p1z, $p2x, $p2y, $p2z
+        printf "  CROSS_ENTRY depth=%d A=%.9g B=%.9g\n", $depth, $A, $B
       end
       continue
       end
@@ -121,7 +132,19 @@ if $isurf == __ISURF__ && $armed_surf == 0
       silent
       if $active == 1
         set $t = $xmm4.v4_float[0]
-        printf "CROSS_T t=%.9g\n", $t
+        printf "  CROSS_T depth=%d t=%.9g\n", $depth, $t
+      end
+      continue
+      end
+
+      break *0x17ce387
+      commands
+      silent
+      if $active == 1
+        set $midx = *(float*)($ebp-0x1c)
+        set $midy = *(float*)($ebp-0x18)
+        set $midz = *(float*)($ebp-0x14)
+        printf "  MID depth=%d mid=(%.9g,%.9g,%.9g)\n", $depth, $midx, $midy, $midz
       end
       continue
       end
@@ -130,7 +153,25 @@ if $isurf == __ISURF__ && $armed_surf == 0
       commands
       silent
       if $active == 1
-        printf "RECURSE_CALL (self-recursive into 0x17ce190)\n"
+        printf "  RECURSE_CALL depth=%d (self-recursive into 0x17ce190)\n", $depth
+      end
+      continue
+      end
+
+      break *0x17ce249
+      commands
+      silent
+      if $active == 1
+        printf "  EARLY_RETURN_A depth=%d (both-positive-side terminal branch)\n", $depth
+      end
+      continue
+      end
+
+      break *0x17ce29c
+      commands
+      silent
+      if $active == 1
+        printf "  EARLY_RETURN_B depth=%d (both-negative-side terminal branch)\n", $depth
       end
       continue
       end

@@ -1089,6 +1089,82 @@ capture — each iteration's gdb log is the source for the facts above), `linech
 (the 20-ray outcome survey that found the `target+0x5b0` misidentification). Logs:
 `linecheck-singlestep-rec14-v2.log`, `linecheck-singlestep-rec14-v3.log`.
 
+**Round 4: captured the real `mid` coordinates and traced one level deeper — CLEANLY PINS the
+crossing formula (`t'=de/(de-ds)`, algebraic complement of native's `t=ds/(ds-de)`, exactly as
+originally hypothesized in round 2, now proven on the RIGHT function). Implemented, TDD'd, full
+`bin/test` green, geometry gate green — but the live lighting re-measurement shows a SEVERE
+REGRESSION on both Wanchai and UNATCO, not an improvement. REVERTED. The formula, though
+live-verified correct for the one traced crossing, does not generalize safely across the whole
+population when blanket-applied — an open question for a future round, not the same thing as
+"formula unknown."** (2026-08-30, 🔬 live gdb + TDD implementation + measured revert) —
+
+**Part 1: pinned the formula with real numbers, not algebra.** Extended the surf-gated harness
+(`linecheck_singlestep_rec14_v2.py`) with a breakpoint at the function's own entry (`0x17ce1b4`,
+reads incoming `point1`/`point2` for EVERY call including recursive ones) and one right where the
+computed `mid` local (`-0x1c/-0x18/-0x14(%ebp)`) is read for the recursive call's own argument setup
+(`0x17ce387`). Captured, for the target ray's root-level crossing: `mid=(1647.60632,1147.82886,
+246.166962)` — verified offline (`python3 -c`, exact f32 arithmetic) to match `lerp(start=lumel_pos,
+end=light_loc, t')` to full float32 precision, where `t'=de/(de-ds)` (native's own `ds`/`de`/`start`/
+`end` convention: `ds=plane_dot(start)`, `de=plane_dot(end)`) — NOT `lerp(..., t=ds/(ds-de))`, and NOT
+the round-3 entry's tentative `mid=point1+t*(point2-point1)`/`editor_t=t_native-1` guess (that guess
+used a wrong pairing of which local variable played which algebraic role; the real relationship is
+the clean `t'=1-t` complement, confirmed to 7 decimal places: `t_native+t'=1.0000000`). This directly
+confirms round 2's ORIGINAL static-only hypothesis (`t'=de/(de-ds)`, algebraically `1-t` but not
+bit-identical) — derived that round from hand-reading the WRONG function, but the formula itself
+turns out to be exactly right for the RIGHT one. Depth-2 trace: 15/15 further breakpoint hits were
+`EARLY_RETURN_A` (both-same-side, no more crossings needed for this ray) — consistent, no
+contradiction, but means only ONE genuine crossing was observed end-to-end this round.
+
+**Part 2: implemented via TDD, following the standing rule to the letter.** Refactored `linecheck.rs`
+`seg_clear`'s inline `let t = ds / (ds - de);` into a named `fn crossing_fraction(ds, de) -> f32 { de
+/ (de - ds) }`, called from the same site. New test
+`crossing_fraction_matches_the_editors_live_captured_formula` pins the exact live-captured numbers
+(`ds=26.8858643`, `de=-39.1334839`) against both the new formula AND the resulting `mid` (within
+1e-2 of the observed coordinates). Confirmed genuinely RED before the fix (temporarily reverted just
+`crossing_fraction`'s body, not the test — `assert_eq!` failure `left: 0.4072422 right: 0.5927578`,
+exactly the two formulas' values) and GREEN after, cleanly (a first RED attempt used an overly broad
+`sed` that also clobbered the test's own local variable, giving a misleading identical-looking
+failure — caught and redone correctly with a scoped `Edit`, not `sed`, before trusting the result).
+`bin/test -k linecheck`: 88/88 (was 87). Full `bin/test`: exit 0 (pytest + `cargo test`, both host and
+containerized phases). `regression_gate.py`: UNATCO/Wanchai both still node/surf/leaf-EXACT, points/
+verts/vectors deltas byte-identical to the pre-change baseline (a lighting-only change cannot and did
+not touch geometry).
+
+**Part 3: the lighting re-measurement (the actual gate) shows regression, not improvement — reverted.**
+`light_spotcheck_wanchai.py` + `lightparity_buckets.py`, before/after, same golden, same trunk:
+
+| level | before (baseline) | with the fix | verdict |
+|---|---:|---:|---|
+| Wanchai byte-identical | 3297/4530 (72.8%) | 1355/4530 (29.9%) | REGRESSION |
+| Wanchai `run` differs | 261 (21.2% of bad) | 1714 (54.0% of bad) | REGRESSION |
+| UNATCO byte-identical | 2692/3345 (80.5%) | 1414/3345 (42.3%) | REGRESSION |
+| UNATCO `run` differs | 193 (29.6% of bad) | 992 (51.4% of bad) | REGRESSION |
+
+The dominant damage is in the `run` bucket (which light-run SET/ORDER a surface gets) — a metric
+`crossing_fraction` should have NO business touching, since that's a per-lumel shadow-ray OCCLUSION
+formula, not light-relevance gating. This is the concrete, measured signal that blanket-substituting
+`de/(de-ds)` for `ds/(ds-de)` everywhere `line_clear`/`seg_clear` is called is NOT the same thing as
+"replicate the editor's real algorithm" — the live capture only verified the formula for ONE genuine
+crossing, at the ROOT level, of ONE ray, and the depth-2 trace found no second crossing to
+cross-check against. `0x17ce190`'s own recursion structure (captured this round: the recursive call
+always keeps `point2` fixed and only ever replaces `point1` with `mid`) does not obviously match
+Rust's `seg_clear`/`descend` structure (which alternates which of `start`/`end` gets replaced,
+depending on near-vs-far side) closely enough to be confident `de/(de-ds)` is universally the right
+substitution regardless of recursion depth or which side is being visited — this round did not
+verify that, and the population-level regression is direct evidence it is NOT simply that. Reverted
+cleanly (`git checkout -- uedcli-native/src/linecheck.rs`): `bin/test -k linecheck` back to 87/87,
+`light_spotcheck_wanchai.py`/`_unatco.py` both reproduce the exact baseline numbers above, confirming
+the revert is complete and the regression was real (not a measurement artifact).
+
+**Open for a future round, precisely scoped:** the crossing FRACTION formula for the one traced
+exemplar is solid and live-verified; what's missing is understanding `0x17ce190`'s full recursion
+structure (does it ever replace `point2` instead of `point1`? does the near/far visiting order match
+native's? is there a SEPARATE code path or argument convention for the "other side" of a crossing
+that this round never triggered?) well enough to port the WHOLE algorithm, not just one formula in
+isolation. No `linecheck.rs` change shipped; `git diff` on that file is empty. New harness edits
+retained in `linecheck_singlestep_rec14_v2.py` (now includes the `CALL_ENTRY`/`MID`/
+`EARLY_RETURN_A`/`EARLY_RETURN_B` breakpoints from this round, reusable for a deeper trace).
+
 **`line_clear` CONFIRMED as the real cause (not a geometry residual): disagrees with the editor's real
 bit even fed the editor's own real tree/inputs. Live-disassembled the real editor function on the
 current build; REFUTES the old ±0.001 epsilon-tolerance hypothesis; full per-node state formula NOT
