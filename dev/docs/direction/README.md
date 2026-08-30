@@ -24,3 +24,4 @@ Siblings: `../rationale/` (why the code is that way — agent-owned), `../archit
 | [`terminology.md`](terminology.md) | level, map file, T3D tree, folder, label | ✅ |
 | [`conventions.md`](conventions.md) | no back-compat cruft; explicit, discoverable, model-side | ✅ |
 | [`process.md`](process.md) | how the project is run — gates, worktrees, the docs model | ✅ |
+| [`documentation.md`](documentation.md) | the docs ship inside the tool and are served through it | ✅ |

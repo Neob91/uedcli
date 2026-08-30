@@ -22,6 +22,7 @@ import importlib.resources
 import io
 import json
 import os
+import re
 from pathlib import Path
 
 import pytest
@@ -439,6 +440,74 @@ def test_the_real_docs_tree_has_no_duplicate_topic_keys(monkeypatch):
     keys = [d.key for d in docs]
     assert keys, "the shipped docs tree must serve at least one page"
     assert len(keys) == len({k.casefold() for k in keys})   # restatement, not an independent check
+
+
+_LINK_RE = re.compile(r"\[[^\]]*\]\(((?:[^()]|\([^()]*\))+)\)")
+_HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*$", re.MULTILINE)
+_FENCE_RE = re.compile(r"^```.*?^```[ \t]*$", re.MULTILINE | re.DOTALL)
+
+
+def _strip_code_fences(text: str) -> str:
+    """Blank out fenced ```code``` blocks before link/heading extraction. A fenced example can
+    contain a bash `# comment` (read as a level-1 heading by `_HEADING_RE`) or a literal markdown
+    snippet showing what generated output looks like (read as a real link) — neither is an actual
+    heading or a navigable link on the rendered page."""
+    return _FENCE_RE.sub("", text)
+
+
+def _heading_slugs(text: str) -> set[str]:
+    """The set of anchor slugs a markdown viewer (GitHub, and the one every `docs/` page is
+    written for) would generate for every heading in `text`: lowercase, backticks/punctuation
+    stripped, each space turned into its own hyphen (not collapsed — "a / b" produces the double
+    hyphen `a--b`, matching the anchors already written into `usage.md` by hand), and a `-1`/`-2`
+    suffix on a slug that repeats earlier in the same file, exactly as GitHub disambiguates it."""
+    seen: dict[str, int] = {}
+    slugs = set()
+    for _, heading in _HEADING_RE.findall(text):
+        heading = re.sub(r"`([^`]*)`", r"\1", heading)
+        base = re.sub(r"[^\w\s-]", "", heading.lower()).replace(" ", "-")
+        n = seen.get(base, 0)
+        slugs.add(base if n == 0 else f"{base}-{n}")
+        seen[base] = n + 1
+    return slugs
+
+
+def test_the_real_docs_tree_has_no_dead_links():
+    """Every `[text](target)` in the served docs points somewhere real: a relative `target` file
+    must exist on disk, and a `#anchor` (alone, or after a file) must match an actual heading in
+    the file it addresses. A rename or a typo'd anchor breaks this at authoring time instead of
+    silently stranding a reader (or an agent) mid-click.
+
+    External links (`http(s)://`, `mailto:`) are out of scope — no network access here, and their
+    liveness is not this tree's to guarantee.
+    """
+    root = userdocs.docs_root()
+    docs = userdocs.load_docs()
+    # Fenced ```code``` blocks are stripped up front: a bash `#` comment inside one reads as a
+    # heading to `_HEADING_RE`, and an example markdown link inside one isn't a real, navigable
+    # link on the rendered page — both would otherwise pollute detection either way.
+    texts = {d.path: _strip_code_fences(d.path.read_text()) for d in docs}
+    broken = []
+    for path, text in texts.items():
+        own_anchors = _heading_slugs(text)
+        for target in _LINK_RE.findall(text):
+            target = target.strip()
+            if target.startswith(("http://", "https://", "mailto:")):
+                continue
+            filepart, _, anchor = target.partition("#")
+            if not filepart:
+                if anchor and anchor not in own_anchors:
+                    broken.append(f"{path.relative_to(root)}: {target!r} — no such heading in this file")
+                continue
+            resolved = (path.parent / filepart).resolve()
+            if not resolved.exists():
+                broken.append(f"{path.relative_to(root)}: {target!r} — {filepart!r} does not exist")
+            elif anchor and resolved.is_file():
+                target_text = texts.get(resolved) or _strip_code_fences(resolved.read_text())
+                if anchor not in _heading_slugs(target_text):
+                    broken.append(
+                        f"{path.relative_to(root)}: {target!r} — no such heading in {filepart!r}")
+    assert not broken, "\n".join(broken)
 
 
 # ------------------------------------------------------------------------------- the docs root

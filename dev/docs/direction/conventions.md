@@ -60,6 +60,11 @@ can't run.
 - The one calibrated exception: a set member a verb structurally cannot act on (a point actor handed
   to a poly verb) is named on stderr and skipped, because a mixed `find` result is normal input to a
   shape-specific verb. An unknown name in that set is still exit 2.
+- **An ambiguous served set is an error, not a precedence rule.** Where two inputs claim one name —
+  two documentation files deriving the same topic key, say — the tool refuses and names both, rather
+  than picking one silently. Where such a conflict can only be created by an author (not by a user of
+  a shipped binary), the refusal fires during enumeration so it breaks the test suite and every
+  invocation at authoring time, and can never reach a user. *(Owner ruling, 2026-07-24.)*
 
 ### A class question is answered from the class hierarchy, never the name
 
