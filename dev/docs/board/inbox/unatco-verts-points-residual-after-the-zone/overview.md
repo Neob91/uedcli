@@ -1017,3 +1017,36 @@ editing it would be an unverified, wide-blast-radius change to code governing ev
 codebase, and the real root cause (ordering) is still unconfirmed.** `bin/test -k bspcsg` (84/84) and
 `regression_gate.py`'s default path unchanged (UNATCO 6321/6314, Wanchai exact 11648) — both new
 diagnostics are env-gated, zero default-path effect.
+
+## Same day, final follow-up in this chain: ran the "get the editor's real poly ORDER" live capture.
+## The order hypothesis was wrong, but the capture found something bigger — closing the loop with
+## the Wanchai no-op finding, and reframing the whole bug one level up. No fix this round.
+
+New live capture (`fbs_root_poly_order.py`, reusing `repart_child_trace.py`'s proven breakpoint
+scaffolding) at the editor's real `FindBestSplit` entry (`Editor.dll 0x100338EE`), gated to the FIRST
+hit after `child=6108`'s `bspRepartition` entry (the root-level call): **`numpolys=29`, not 40** —
+several entries have `nv=5`/`nv=6`, larger than any single original poly. Validated exactly as
+directed: `k=21` has `i_link=3633, normal=(1,0,0), dist=508.0` — matching the previously-known editor
+root-split plane `(1,0,0,508)` precisely, confirming the capture is correct. So the editor's real
+`FindBestSplit` input is the MERGED 29-poly list, not the unmerged 40 native currently feeds it.
+
+Then a cheap, no-capture check: native's OWN `reduce_repartition_polys` function
+(`UEDCLI_REPART_ISOLATED_TREE`), applied to the SAME 40-poly input, produces **`merged_count=29`** —
+an exact match — with the SAME root plane `(1,0,0,508)`. **Native's merge implementation is already
+correct and reproduces the editor's real input exactly; `repartition_frontier`'s default path simply
+never calls it.**
+
+**This closes the loop with the Wanchai finding, same day, sibling item
+(`wanchai-verts-points-residual-independently`): the editor's real per-call reconstruction is genuine,
+correct work (merge included) that then gets discarded anyway — `bspRefresh`'s real `FArray::Remove`
+throws away the freshly-built (merged) subtree because it lives past the pre-call `Nodes.Num`
+boundary, leaving the OLD unmerged subtree (confirmed unchanged, `node_content_before_after.py`) as
+the real persisted output.** So neither "add the merge step" nor "fix the poly order" is the right
+fix in isolation — both would still commit SOMETHING into the persistent tree, when the evidence
+(9/9 Wanchai calls, this 1 UNATCO call) says the real editor commits NOTHING for calls checked so
+far. The open question for a future round: where and why does the tree's real final shape ever
+differ from what existed before `repartition_frontier`'s subtree loop began, if no call checked yet
+shows a persisted change. **No fix attempted or shipped this round** — this is a bigger, more
+fundamental question than a narrow ordering fix, and needs its own investigation, not a patch bolted
+onto this chain. `bin/test -k bspcsg` (84/84) and `regression_gate.py`'s default path unchanged
+(UNATCO 6321/6314, Wanchai exact 11648) — no `bspcsg.rs` changes this entry.

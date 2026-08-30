@@ -1,0 +1,74 @@
+[New LWP 145]
+[New LWP 154]
+[New LWP 155]
+[New LWP 156]
+[New LWP 157]
+[New LWP 158]
+[New LWP 159]
+[New LWP 160]
+[New LWP 161]
+[New LWP 162]
+[New LWP 163]
+[New LWP 164]
+[New LWP 165]
+[New LWP 166]
+[New LWP 167]
+[New LWP 168]
+[New LWP 169]
+[New LWP 170]
+[New LWP 171]
+[New LWP 172]
+[New LWP 173]
+[New LWP 174]
+[New LWP 175]
+[New LWP 176]
+[New LWP 177]
+[New LWP 178]
+[New LWP 179]
+[New LWP 180]
+[New LWP 181]
+[New LWP 182]
+[New LWP 198]
+[New LWP 239]
+[New LWP 240]
+[New LWP 241]
+[Thread debugging using libthread_db enabled]
+Using host libthread_db library "/lib/x86_64-linux-gnu/libthread_db.so.1".
+0xf7ee2cfc in __kernel_vsyscall ()
+Breakpoint 1 at 0x10049fc0
+Breakpoint 2 at 0x1004a05f
+Breakpoint 3 at 0x100338ee
+ORACLE_ATTACHED
+TARGET_BEGIN child=6108
+FBSHEADER numpolys=29 arr=0x5797c80
+FBSPOLY k=0 i_link=3592 nv=3 normal=-0.664364,-0.000000,0.747409 dist=-146.201279
+FBSPOLY k=1 i_link=3598 nv=4 normal=0.707107,0.000000,0.707107 dist=582.656006
+FBSPOLY k=2 i_link=3646 nv=4 normal=-0.000000,-0.000000,-1.000000 dist=-413.999969
+FBSPOLY k=3 i_link=3647 nv=4 normal=1.000000,0.000000,0.000000 dist=452.000000
+FBSPOLY k=4 i_link=3648 nv=4 normal=-1.000000,0.000000,0.000000 dist=-448.000000
+FBSPOLY k=5 i_link=3600 nv=5 normal=0.000000,-1.000000,0.000000 dist=16.000000
+FBSPOLY k=6 i_link=3628 nv=3 normal=-0.000000,-0.000000,1.000000 dist=282.000000
+FBSPOLY k=7 i_link=3640 nv=4 normal=0.000000,-0.707107,0.707107 dist=239.000748
+FBSPOLY k=8 i_link=3642 nv=6 normal=-1.000000,0.000000,0.000000 dist=-486.000000
+FBSPOLY k=9 i_link=3643 nv=6 normal=1.000000,0.000000,0.000000 dist=502.000000
+FBSPOLY k=10 i_link=3644 nv=6 normal=0.000000,1.000000,0.000000 dist=-49.998116
+FBSPOLY k=11 i_link=3645 nv=4 normal=0.000000,-1.000000,0.000000 dist=53.998116
+FBSPOLY k=12 i_link=3629 nv=3 normal=-0.000000,-0.000000,-1.000000 dist=-280.000000
+FBSPOLY k=13 i_link=3634 nv=5 normal=-0.000000,0.664364,0.747409 dist=176.056396
+FBSPOLY k=14 i_link=3635 nv=5 normal=0.000000,-0.664364,-0.747409 dist=-173.066757
+FBSPOLY k=15 i_link=3636 nv=4 normal=-1.000000,0.000000,0.000000 dist=-486.000000
+FBSPOLY k=16 i_link=3637 nv=4 normal=1.000000,0.000000,0.000000 dist=502.000000
+FBSPOLY k=17 i_link=3638 nv=4 normal=0.000000,1.000000,0.000000 dist=-32.000000
+FBSPOLY k=18 i_link=3639 nv=4 normal=0.000000,-1.000000,0.000000 dist=50.000000
+FBSPOLY k=19 i_link=3641 nv=4 normal=0.000000,-0.707107,-0.707107 dist=-159.807434
+FBSPOLY k=20 i_link=3630 nv=4 normal=0.000000,-1.000000,0.000000 dist=24.000000
+FBSPOLY k=21 i_link=3633 nv=4 normal=1.000000,0.000000,0.000000 dist=508.000000
+FBSPOLY k=22 i_link=3601 nv=4 normal=0.000000,1.000000,0.000000 dist=0.000000
+FBSPOLY k=23 i_link=3602 nv=5 normal=-1.000000,0.000000,0.000000 dist=-536.000000
+FBSPOLY k=24 i_link=3603 nv=5 normal=1.000000,0.000000,0.000000 dist=540.000000
+FBSPOLY k=25 i_link=3593 nv=3 normal=0.664364,0.000000,-0.747409 dist=149.190918
+FBSPOLY k=26 i_link=3594 nv=4 normal=0.000000,-1.000000,0.000000 dist=16.000000
+FBSPOLY k=27 i_link=3597 nv=4 normal=1.000000,0.000000,0.000000 dist=536.000000
+FBSPOLY k=28 i_link=3599 nv=4 normal=0.707107,0.000000,-0.707107 dist=183.847839
+TARGET_END
+[Inferior 1 (process 33) detached]
