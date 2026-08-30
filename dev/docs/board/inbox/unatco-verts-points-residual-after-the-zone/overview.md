@@ -1082,12 +1082,17 @@ round:
   checkpoint's label implies, the +10462 could belong to a DIFFERENT stage entirely, wrongly folded
   into "the 209 repartitions" by the log's own boundary markers. Would need re-deriving the
   checkpoint markers against fresh disassembly, not just trusting the existing log's own labels.
-- **(b) Unrepresentative sample.** 10 calls (9 Wanchai + 1 UNATCO) is a small fraction of the ~328
-  total (209 UNATCO + 119 Wanchai) — all 10 checked happen to be flagged/known-delta or
-  easily-identified cases. It is entirely possible most of the other ~318 calls DO show real
-  persisted changes (verts growing, nodes net-zero because growth in one call is offset by shrinkage
-  in another), and the 10 checked so far are systematically unusual (e.g. all deliberately chosen
-  because they were ALREADY known to be interesting/flagged cases, not a random sample).
+- **(b) Unrepresentative sample — TESTED SAME DAY, REFUTED.** 10 calls (9 Wanchai + 1 UNATCO) is a
+  small fraction of the ~328 total (209 UNATCO + 119 Wanchai), and all 10 were flagged/known-delta,
+  not random. Tested directly: `unatco_boring_calls_noop_check.py` ran the same before/after
+  byte-diff check on 16 MORE UNATCO calls, chosen by `callidx` range (10–17, then 190–197 — early
+  and late in the sequence) with no reference to native's own diagnostics at all. **Both batches: 0
+  of 90 and 0 of 134 slots changed.** 26 calls checked in total now, three different selection
+  criteria (known-delta, sequential-early, sequential-late), all no-ops. This makes broad,
+  diffuse growth across "most boring calls" implausible — not exhaustively ruled out (26/209 is not
+  every call, so a small minority of the other ~183 could still hide it), but no longer the leading
+  explanation. See `dev/docs/native-materialize-findings.md` for the full write-up. (a) and (c)
+  below are now the more likely reconciliations.
 - **(c) A final, one-time commit step.** `compact_unreachable_nodes` (native) already runs once,
   after ALL 209/119 calls finish, not per-call — matching the editor's own two post-loop calls found
   this session (`vtbl+0x218`, whose edge/vertex-coincidence logic reads as a T-junction weld;

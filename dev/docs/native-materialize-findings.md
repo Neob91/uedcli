@@ -448,3 +448,25 @@ not the presence or absence of a merge step alone, but WHERE and WHY the tree's 
 ever differs from what existed before `repartition_frontier`'s subtree loop began. No `bspcsg.rs`
 changes this entry; `bin/test -k bspcsg` (84/84) and `regression_gate.py`'s default path unchanged
 (UNATCO 6321/6314, Wanchai exact 11648).
+
+**Candidate reconciliation (b) — "the 10 no-op calls checked are an unrepresentative,
+pre-selected-as-interesting sample" — tested directly and REFUTED. 16 more UNATCO calls, chosen
+from opposite ends of the 209-call sequence without any reference to native's own diagnostics, are
+ALSO all no-ops.** (2026-08-30, 🔬) — `unatco_boring_calls_noop_check.py` (new; same
+`iFront`/`iBack`/`iPlane` BFS + before/after byte-diff method as `wanchai_descendant_slots.py`,
+triggered by `callidx` range instead of a pre-known target-child list, so the calls checked are NOT
+selected by anything native's own reconstruction says about them). Two batches: `callidx` 10–17 (90
+total slots across 8 calls) and `callidx` 190–197 (134 total slots across 8 calls) — chosen simply as
+"early" and "late" in the sequence, not by any interestingness criterion. **Both batches: 0/0
+changed.** Combined with the original 10 (9 Wanchai known-delta + UNATCO `child=6108`), that is 26
+individually-checked `bspRepartition` calls, spanning two different levels and both ends of UNATCO's
+own 209-call sequence, chosen by three different selection criteria (known-delta, sequential-early,
+sequential-late) — ALL no-ops. This makes candidate (b) from the open-contradiction write-up
+(`unatco-verts-points-residual-after-the-zone`) very unlikely: the real `+10462`-vert aggregate
+growth is not plausibly hiding in "boring" calls that simply hadn't been checked yet, unless it is
+concentrated in a small minority of the remaining ~183 UNATCO calls not yet sampled (not
+exhaustively ruled out — 26/209 is not "every call" — but the two-batch, opposite-ends sampling
+makes broad diffuse growth across "most boring calls" implausible). Candidates (a) checkpoint
+misattribution and (c) a final one-time commit step after all calls finish are now the more likely
+reconciliations; neither tested this round. No `bspcsg.rs` changes; `bin/test -k bspcsg` (84/84)
+unaffected (no source edits this entry).
