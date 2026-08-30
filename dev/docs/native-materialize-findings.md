@@ -125,18 +125,24 @@ test` green.
 **freeclinic08/nsfhq04's `+1 surf` traced to ONE semisolid brush each** (2026-08-30, 🔬) —
 per-brush surf-count attribution (`fc08_surf_diff.py`) finds exactly one `PF_Semisolid` CSG_Add
 brush per level (freeclinic08 `Brush143`, nsfhq04 `Brush531`) where native keeps an authored poly
-the editor's built model drops. Root: `csg.rs`'s `classify_fragment` is an explicitly-approximate
-nudge-based (`EPS_NUDGE=0.5`) point-in-solid replay, not a port of the editor's real classify-BSP
-filter; native's nudge sample disagrees with the editor near this buried semisolid face. Not fixed
-(shared code, blind tuning risks a `blanket_merge`-style regression elsewhere). See board item
+the editor's built model drops. **CORRECTION, same session:** the entry originally named
+`csg.rs`'s `classify_fragment` (a nudge-based point-in-solid approximation) as root cause — WRONG,
+that function is dead for this path. `uedcli_native.build_geometry_bspcsg` (what every script here
+calls) dispatches to `bspcsg::build_geometry_bspcsg`, which has its OWN `filter_ed_poly` — a
+faithful recursive BSP-node descent matching the decoded editor algorithm
+(`sections/10-bsp-csg-build.md` §4), re-verified live this session (`verify_csg_build.py` 33/33
+against current `uned/UED22`). True cause still open; live investigation continuing in board item
 `freeclinic08-nsfhq04-1-surf-under-build-root`.
 
 **freeclinic08's node/leaf deficit is diffuse across ~25% of brushes, NOT localized** (2026-08-30,
 🔬) — per-brush BSP-node-plane-owner attribution (`fc08_node_owner_diff.py`) shows 75/305 brushes
-differ, summing to 260 absolute delta against a net -20 (heavy cancellation). Distinct from
-UNATCO's residual (+7 nodes, ZERO surf/leaf delta — same face set, different tree shape only):
-freeclinic08/nsfhq04 have a nonzero surf delta (a genuinely different face SET), so this is a
-different mechanism, not blocked on the UNATCO investigation.
+differ, summing to 260 absolute delta against a net -20 (heavy cancellation), while a combined
+surf+node check (`fc08_combined_diff.py`) shows 74 of those 75 have MATCHING surf counts (same
+face set, different split shape only) — the same symptom shape as UNATCO's residual (+7 nodes,
+zero surf/leaf delta). Only `Brush143` (the `+1 surf` brush) differs in both. Whether the diffuse
+tree-shape issue and the `+1 surf` are one root cause (PASS-A repartition tie-break sensitivity,
+Brush143's PASS-B `filter_ed_poly` walk hitting an already-slightly-wrong PASS-A tree) or two is
+under live test — see the board item.
 
 **Wanchai's Points/Verts residual is small, additive, and NOT the same shape as UNATCO's aggregate
 node-count mystery — but its `repartition_frontier` share hits the identical dead end at 1/30th
@@ -167,4 +173,53 @@ puzzle, confirmed live rather than assumed. Full detail + the per-call table:
 `dev/docs/board/inbox/wanchai-verts-points-residual-independently/overview.md`. STOPPED here per the
 coordinator's steer (bounded task, don't re-burn UNATCO-scale budget on the same open contradiction).
 No fix shipped; default build path byte-unchanged (`regression_gate.py`, `bin/test -k bspcsg` 84/84,
+
+**`bspRepartition`'s per-subtree call builds into a SEPARATE, persistently-reused SCRATCH `UModel`,
+never the real world Model — full disassembly, live-cross-validated** (2026-08-30, 📖+🔬) —
+`bspRepartition` (`Editor.dll 0x10049fc0`) is a short dispatcher: 4 sequential virtual calls, all with
+`this=persistent Model` (confirmed: same `[ebp-0x18]` local at every `csgRebuild` call site), each ALSO
+passed an explicit `CTX` arg = `[[Model+0xa8]+0x98]`, a DIFFERENT `UModel`-shaped object —
+`bspBuildFPolys`(vtbl+0x20c) / `bspMergeCoplanars`(+0x210) / `bspBuild`(+0x1fc) / `bspRefresh`(+0x200).
+Live-verified (`bspbuild_ctx_dump.py`, breaking inside `bspBuild` at `ebx`=this/`esi`=CTX): `ebx≠esi`
+in 1203/1203 samples across a full Wanchai `MAP REBUILD`; `esi` (the scratch) is a SINGLE constant
+address across all 120 genuine `bspRepartition`-triggered `bspBuild` calls (the other 1083 hits, a
+different constant, come from `bspBuild` being called elsewhere entirely — e.g. per-brush incremental
+CSG — not attributed further). `bspMergeCoplanars` operates entirely on the scratch's own `Polys`
+sub-array (`[[CTX+0x54]+0x2c]`, `FPoly` stride `0x1d8`), never touching the persistent Model.
+`bspRefresh` (`Engine.dll!EmptyModel@UModel@@QAEXHH@Z` sibling) operates on ITS arg1 (=scratch, via
+`[ebp+8]`), not `this` — compacts the scratch's surfs/verts/points/vectors only, matching the
+already-ported `passes::bsp_refresh` scope exactly, just now confirmed scoped to a scratch object for
+subtree calls specifically. `bspBuild`'s `Flag` param (`0`=world-level, `1`=unidentified, `2`=subtree)
+gates `UModel::EmptyModel`: Flag∈{0,1} call it on the scratch before rebuilding; **Flag=2 (every
+subtree repartition call) SKIPS `EmptyModel` entirely** and calls the `SplitPolyList`-equivalent
+(`0x10034530`) straight into the scratch's EXISTING node array — meaning the scratch's `Nodes`
+ACCUMULATES, uncleared, across ALL 209/119 subtree calls in one `MAP REBUILD`, never reset between
+them. Explains the session's earlier "persistent Model's `Nodes.Num` reads flat at the pre-loop
+baseline for literally every one of 209 calls" finding: that reading (`esp+4` at `bspRepartition`
+entry) was the PERSISTENT model all along (validated, unlike a same-session `ECX`-based reread which
+was refuted as a different, wrong object) — it stays flat because the PERSISTENT model's own Nodes
+array is genuinely untouched throughout the ENTIRE 209/119-call loop; all the real per-call construction
+happens in the separate, accumulating scratch object instead.
+
+**Not yet found: the actual scratch→persistent commit/graft step** (2026-08-30, 📖) — fully
+disassembled all 4 of `bspRepartition`'s own sub-calls (above) plus the two calls `csgRebuild` makes
+immediately after BOTH frontier loops finish (`vtbl+0x218` at `Editor.dll 0x10036870`, `vtbl+0x208` at
+`0x100aace0`, both resolved live via a vtable dump, `vtable_dump.py`) — NONE of the six write to the
+persistent Model's `Nodes` array or any node's `iFront`/`iBack`/`iPlane`. `+0x218`'s body (edge/vertex
+coincidence loops keyed on byte offset `0x36`=`NumVertices`, called on `(this=persistent,
+arg1=persistent)` — i.e. both this AND arg1 are the SAME object, an odd but plausible legacy-signature
+artifact) reads as a T-junction WELD pass (`bspOptGeom` or a direct sibling), not a tree splice — matches
+its position in the pipeline (right after repartition, before the weld numbers the board items already
+track). `+0x208` matches `bspBuildBounds`/`BuildInfiniteFPoly` (hardcoded `±32768`/`±65536` box
+constants). So the mechanism that gets each accumulated scratch subtree back into the persistent tree's
+real `iFront`/`iBack` links — which MUST exist, since the final serialized map is correct and
+structurally exact — is still unlocated: candidates not yet checked are a pointer-SWAP (reassigning
+which object the persistent Model's OWN fields point at, rather than a copy) or deeper logic inside
+`SplitPolyList` (`0x10034530`) or the `MakeEdPolys`-shaped helper `bspBuildFPolys` conditionally calls
+(`0x10033bb0`, fires only when the scratch already has nodes from a prior call) — neither of those two
+functions has been disassembled yet. This is the concrete next step for a future round; see
+`unatco-verts-points-residual-after-the-zone` and `wanchai-verts-points-residual-independently` for the
+`-625`/`+64` puzzles this would very plausibly explain if resolved (a scratch object holding growing,
+uncommitted state across many calls is exactly the shape needed for "individually correct, aggregate
+wrong").
 before/after all of this round's diagnostics).

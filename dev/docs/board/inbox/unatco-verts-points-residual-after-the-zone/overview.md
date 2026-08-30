@@ -1,7 +1,7 @@
 +++
 priority = "p1"
 kind = "implement"
-summary = "SHIPPED 2026-08-29 (repartition_frontier + compact_unreachable_nodes, bspcsg.rs), but with a REGRESSION on UNATCO's lighting -- see 'lighting regressed' below. UNATCO node gap (6321 vs 6314, unmerged baseline) root-caused: repartition_frontier's make_ed_polys reconstructs unmerged coplanar duplicates that bsp_merge_coplanars correctly fixes per-call (10/10 live-verified exact against the real editor) -- but blanket-applying the merge to all 209 calls reproduces a 5689-node UNDER-build (-625), not a fix. 2026-08-30: SIX independently-checked, clean architectural hypotheses all refuted with real evidence -- per-call merge correctness (10/10), pre-repartition input identity (209/209, structural), compaction timing (proven irrelevant via experiment), progressive real per-call index allocation (refuted 9/9), a surf-dedup-not-geometric-merge mechanism (refuted -- wrong SHAPE not just count, and worse in aggregate: 5599 vs merge's 5689), and a calling-convention/ECX bug in the Nodes.Num readings (refuted via disassembly -- ECX is a real but WRONG object, esp+4 remains the validated reading). The underlying Nodes.Num-flat-at-6314-every-call contradiction (vs child=6108's real content occupying fresh indices 6314-6342) is STILL UNEXPLAINED after all six checks; needs fresh disassembly of the actual per-subtree commit/graft mechanism, not more live-gdb probing at current breakpoints. Wanchai stays node-exact throughout (unaffected). No bspcsg.rs changes shipped -- default path unchanged (6321/11648), gate still fails on the merge fix as before."
+summary = "SHIPPED 2026-08-29 (repartition_frontier + compact_unreachable_nodes, bspcsg.rs), but with a REGRESSION on UNATCO's lighting -- see 'lighting regressed' below. UNATCO node gap (6321 vs 6314, unmerged baseline) root-caused: repartition_frontier's make_ed_polys reconstructs unmerged coplanar duplicates that bsp_merge_coplanars correctly fixes per-call (10/10 live-verified exact against the real editor) -- but blanket-applying the merge to all 209 calls reproduces a 5689-node UNDER-build (-625), not a fix. 2026-08-30: SIX architectural hypotheses refuted with real evidence (per-call merge correctness, pre-repartition input identity, compaction timing, progressive index allocation, surf-dedup, calling-convention/ECX). Later the same day: full disassembly of bspRepartition found a genuinely NEW mechanism never previously identified -- every per-subtree call builds into a SEPARATE, persistently-reused SCRATCH UModel (live-verified, ebx!=esi in 1203/1203 samples), which accumulates uncleared across the whole 209/119-call loop (bspBuild's Flag=2 path skips EmptyModel entirely) -- explaining why the persistent model's own Nodes.Num reads flat throughout. The exact scratch-to-persistent COMMIT step is still unlocated after disassembling all 4 of bspRepartition's sub-calls plus 2 post-loop calls; candidates (SplitPolyList internals, a pointer-swap) need a future round. See dev/docs/native-materialize-findings.md for the full write-up. Wanchai stays node-exact throughout (unaffected). No bspcsg.rs changes shipped this round -- default path unchanged (6321/11648)."
 +++
 
 # UNATCO `Verts`/`Points` residual — it is the unported sub-BSP repartition loop
@@ -871,3 +871,52 @@ disassembling `csgRebuild`'s OWN prologue to see where `edi` gets set).
 **Not shipped.** `bspcsg.rs`'s only change this round is the `surf_dedup`/`reduce_repartition_polys`
 diagnostic (opt-in, off by default); `bin/test -k bspcsg` (84/84) and `regression_gate.py` with no env
 vars set both reproduce the pre-existing 6321/11648 baseline exactly. No fix cleared the hard gate.
+
+## 2026-08-30, later: full disassembly of `bspRepartition` — a genuinely new architectural finding
+## (a separate SCRATCH `UModel`, never before identified), but the exact commit mechanism is still
+## unlocated. Redirected mid-round to use Wanchai's smaller 9-call case as the disassembly test bed
+## per the coordinator's steer (same Editor.dll, findings apply to both levels identically).
+
+Full write-up (live-verified, not just static reading) in `dev/docs/native-materialize-findings.md`
+(two new entries) — summary here:
+
+`bspRepartition` (`Editor.dll 0x10049fc0`) is a short 4-call dispatcher (`bspBuildFPolys`/
+`bspMergeCoplanars`/`bspBuild`/`bspRefresh`, resolved to real addresses via a new `vtable_dump.py`
+live capture), and **every per-subtree call builds its new geometry into a SEPARATE, single,
+persistently-reused SCRATCH `UModel`** (`CTX = [[PersistentModel+0xa8]+0x98]`) — never the real
+persistent world Model directly. Live-verified via a new `bspbuild_ctx_dump.py` (breaking inside
+`bspBuild`, comparing `ebx`=this/persistent vs `esi`=CTX/scratch): `ebx≠esi` in 1203/1203 samples over
+a full Wanchai `MAP REBUILD`, and the scratch address is a SINGLE CONSTANT across all 120 genuine
+`bspRepartition`-triggered calls. **`bspBuild`'s `Flag` parameter (2 for every subtree call) skips
+`UModel::EmptyModel` entirely** and appends straight into the scratch's EXISTING node array via the
+`SplitPolyList` equivalent — meaning the scratch accumulates, uncleared, across the WHOLE 209/119-call
+loop. This directly explains the earlier session's "`Nodes.Num` reads flat at the pre-loop baseline for
+literally every one of 209 calls" contradiction: that reading (`esp+4` at `bspRepartition` entry) was
+genuinely the PERSISTENT model, which really IS untouched throughout the whole loop — all the real
+per-call construction happens in the separate scratch object instead.
+
+**Not yet found: where the scratch's accumulated subtrees get committed back into the persistent
+Model's real `iFront`/`iBack` links.** Fully disassembled all 4 of `bspRepartition`'s own sub-calls
+plus the two calls `csgRebuild` makes right after both frontier loops finish (`vtbl+0x218`, reads as a
+T-junction weld pass; `vtbl+0x208`, reads as bounds-building) — none of the six write to the
+persistent Model's node tree. The commit mechanism (which MUST exist, since the final map is correct)
+is still unlocated — candidates: a pointer-swap not yet found, or deeper logic inside `SplitPolyList`
+(`0x10034530`) or the `MakeEdPolys`-shaped helper `bspBuildFPolys` conditionally calls (`0x10033bb0`),
+neither disassembled yet.
+
+**This is real, new progress — the scratch-model architecture was never identified in any prior round
+of this investigation** — but per the coordinator's own bar ("if disassembly genuinely doesn't turn up
+anything new... stop"), the specific missing piece (the commit step) remains open after a substantial,
+genuine disassembly effort this round (7 functions fully or mostly disassembled: `bspRepartition`,
+`bspBuild`, `bspRefresh`, `bspMergeCoplanars`, plus the two post-loop calls, plus `csgRebuild`'s own
+call-site code). Stopping here rather than continuing to disassemble `SplitPolyList`/`0x10033bb0` blind
+— that's the concrete, scoped next step for a future round, not a dead end to re-derive from scratch.
+
+**Not shipped, no regression risk.** All new tools (`vtable_dump.py`, `bspbuild_ctx_dump.py`) are
+read-only live captures; no `bspcsg.rs` changes this round. `bin/test -k bspcsg` (84/84) and
+`regression_gate.py`'s default path unaffected (unchanged from the prior round: 6321/11648).
+
+**Disk note:** the shared Docker daemon hit 100% full twice this round (0 bytes free) from container
+churn across concurrent sessions; recovered both times via `docker builder prune -a -f` (safe —
+regenerable build cache only, freed 2.5GB) and removing this session's own orphaned `uned-wp-vtdump`
+volume (never another session's). Left `uned-wp-testdbg`/other unrecognized volumes untouched.

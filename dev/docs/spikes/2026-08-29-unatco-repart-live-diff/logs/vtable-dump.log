@@ -1,4 +1,5 @@
-[New LWP 152]
+[New LWP 162]
+[New LWP 172]
 [New LWP 173]
 [New LWP 174]
 [New LWP 175]
@@ -27,15 +28,14 @@
 [New LWP 198]
 [New LWP 199]
 [New LWP 200]
-[New LWP 201]
-[New LWP 227]
+[New LWP 241]
 [New LWP 245]
 [New LWP 246]
 [New LWP 247]
 [Thread debugging using libthread_db enabled]
 Using host libthread_db library "/lib/x86_64-linux-gnu/libthread_db.so.1".
-0xf7fbfcfc in __kernel_vsyscall ()
+0xf7f0bcfc in __kernel_vsyscall ()
 Breakpoint 1 at 0x10049fc0
 ORACLE_ATTACHED
-VTDUMP model=0x3a8564c vtbl=0x100cf5d4 bspBuildFPolys=0x10036090 bspMergeCoplanars=0x10036200 bspBuild=0x10035ef0 bspRefresh=0x10036cd0
-[Inferior 1 (process 34) detached]
+VTDUMP model=0x3a85924 vtbl=0x100cf5d4 bspBuildFPolys=0x10036090 bspMergeCoplanars=0x10036200 bspBuild=0x10035ef0 bspRefresh=0x10036cd0 slot208=0x100aace0 slot218=0x10036870
+[Inferior 1 (process 33) detached]

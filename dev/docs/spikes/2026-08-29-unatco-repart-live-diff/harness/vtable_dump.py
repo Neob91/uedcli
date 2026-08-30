@@ -51,7 +51,7 @@ break *0x10049fc0
 commands
 silent
 set $vtbl = *(unsigned int *)($ecx)
-printf "VTDUMP model=%#x vtbl=%#x bspBuildFPolys=%#x bspMergeCoplanars=%#x bspBuild=%#x bspRefresh=%#x\n", $ecx, $vtbl, *(unsigned int*)($vtbl+0x20c), *(unsigned int*)($vtbl+0x210), *(unsigned int*)($vtbl+0x1fc), *(unsigned int*)($vtbl+0x200)
+printf "VTDUMP model=%#x vtbl=%#x bspBuildFPolys=%#x bspMergeCoplanars=%#x bspBuild=%#x bspRefresh=%#x slot208=%#x slot218=%#x\n", $ecx, $vtbl, *(unsigned int*)($vtbl+0x20c), *(unsigned int*)($vtbl+0x210), *(unsigned int*)($vtbl+0x1fc), *(unsigned int*)($vtbl+0x200), *(unsigned int*)($vtbl+0x208), *(unsigned int*)($vtbl+0x218)
 detach
 quit
 end
