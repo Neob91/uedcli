@@ -1499,3 +1499,14 @@ discipline that found round 7's two earlier real gaps). Reverted (`git checkout 
 uedcli-native/src/linecheck.rs`, diff empty); `bin/test -k linecheck` 90/90; no regression-gate
 re-run needed (nothing shipped). Full detail + concrete next steps:
 `dev/docs/board/inbox/line-clear-shadow-ray-algorithm-gap-found-real/overview.md`.
+
+**`rot_is_pure_rotation` missed pure mirrors, root-causing the severe-under-build family** (🔬,
+`c7b8b0b`, SHIPPED) — a mirror (e.g. `MainScale=(-1,1,1)`) has orthonormal rows just like a real
+rotation; only `det<0` distinguishes it. The length-only check let a mirrored Subtract brush's
+§48 normal-recompute fire on already-correct, already-winding-reversed normals, inverting them —
+`build_brush_temp_bsp` built that brush's own tree inside-out, so `filter_world_through_brush`
+discarded unrelated world faces as "interior." Live-traced on Wanchai Garage's `Brush24`. Fixed with
+a determinant check. Closes the severe under-build (-13% to -27% node deficits) on Area51-entrance,
+Wanchai Garage, Paris Underground, NYC 747, OceanLab Lab — deltas now match the corpus's ordinary
+over-build noise range. UNATCO/Wanchai Market unaffected, stay exact. Full detail:
+`dev/docs/board/inbox/mirrored-brush-determinant-fix-closes-the/overview.md`.
