@@ -2,7 +2,7 @@
 priority = "p2"
 kind = "debug"
 summary = "Root-caused Wanchai's larger GetVisibleSurfs missed-pair count to same-zone rasterization over-occlusion, not MergeWith/portal fidelity as previously suspected; shipped a pixel-center rounding fix."
-depends-on = ["port-urender-getvisiblesurfs-so-each-light-gets", "native-light-apply-bake-where-it-stands-and"]
+depends-on = ["port-urender-getvisiblesurfs-so-each-light-gets"]
 +++
 
 # GetVisibleSurfs Wanchai run-gap root cause: pixel-center rasterization fix
