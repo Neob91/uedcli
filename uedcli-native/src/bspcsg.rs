@@ -1687,9 +1687,14 @@ fn make_ed_polys(model: &Model, i_node: i32, out: &mut Vec<FPoly>) {
 /// collects them — `passes::bsp_refresh` does NOT (it only compacts surfs/verts, not nodes; see its
 /// own doc comment). Needed for the repartition-frontier graft to be net-zero on node count, the
 /// way the editor's own "`bspBuild` bumps the count and `bspRefresh` brings it back" is.
-fn compact_unreachable_nodes(model: &mut Model) {
+///
+/// Returns the `old index -> new index` remap (`-1` for a removed node) so a caller holding OTHER
+/// node-index references (e.g. `repartition_frontier`'s still-pending worklist) can fix them up —
+/// see `UEDCLI_REPART_COMPACT_PER_CALL`, testing whether the editor's real per-subtree `bspRefresh`
+/// compacts nodes immediately (not just once at the very end, as native currently does).
+fn compact_unreachable_nodes(model: &mut Model) -> Vec<i32> {
     if model.nodes.is_empty() {
-        return;
+        return Vec::new();
     }
     let mut reachable = vec![false; model.nodes.len()];
     let mut stack = vec![0i32];
@@ -1718,6 +1723,7 @@ fn compact_unreachable_nodes(model: &mut Model) {
         n.i_plane = relink(n.i_plane, &remap);
     }
     model.nodes = new_nodes;
+    remap
 }
 
 /// Port of `sub_49380` (`Editor.dll 0x10049380`) — see `unatco-verts-points-residual-after-the-zone`.
@@ -1749,10 +1755,19 @@ fn collect_repartition_frontier(model: &Model, ni: i32, list_a: &mut Vec<i32>, l
 /// `compact_unreachable_nodes` after, `bsp_refresh` does NOT collect them (surfs/verts only).
 fn repartition_frontier(model: &mut Model, list_a: &[i32], list_b: &[i32]) -> Result<(), BuildError> {
     let mut call_id = 0usize;
-    for (parent, place) in list_a.iter().map(|&n| (n, NODE_BACK))
+    // TEMPORARY EXPERIMENT (UEDCLI_REPART_COMPACT_PER_CALL) -- unatco-verts-points-residual-after-
+    // the-zone, testing hypothesis (b): does the editor's real per-subtree bspRefresh compact nodes
+    // IMMEDIATELY (not just once at the very end, as native's compact_unreachable_nodes currently
+    // does)?  Index-based worklist (not a plain `for`) so a mid-loop compaction's remap can fix up
+    // the still-pending entries' `parent` index before they're read.
+    let compact_per_call = std::env::var("UEDCLI_REPART_COMPACT_PER_CALL").is_ok();
+    let mut worklist: Vec<(i32, i32)> = list_a.iter().map(|&n| (n, NODE_BACK))
         .chain(list_b.iter().map(|&n| (n, NODE_FRONT)))
-        .collect::<Vec<_>>()
-    {
+        .collect();
+    let mut wi = 0usize;
+    while wi < worklist.len() {
+        let (parent, place) = worklist[wi];
+        wi += 1;
         let child = if place == NODE_BACK {
             model.nodes[parent as usize].i_back
         } else {
@@ -1779,6 +1794,17 @@ fn repartition_frontier(model: &mut Model, list_a: &[i32], list_b: &[i32]) -> Re
         let merged_polys = polys.len();
         let before_nodes = model.nodes.len();
         split_poly_list(model, parent, place, polys, 0, BALANCE, PORTAL_BIAS, Opt::Good, &mut call_id)?;
+        if compact_per_call {
+            let remap = compact_unreachable_nodes(model);
+            for e in worklist[wi..].iter_mut() {
+                let new_parent = remap[e.0 as usize];
+                debug_assert!(
+                    new_parent != -1,
+                    "compact_per_call: pending frontier parent {} went unreachable", e.0
+                );
+                e.0 = new_parent;
+            }
+        }
         if blanket_merge {
             let appended = model.nodes.len() - before_nodes;
             eprintln!(

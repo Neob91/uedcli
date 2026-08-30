@@ -1,7 +1,7 @@
 +++
 priority = "p1"
 kind = "implement"
-summary = "SHIPPED 2026-08-29 (repartition_frontier + compact_unreachable_nodes, bspcsg.rs), but with a REGRESSION on UNATCO's lighting -- see 'lighting regressed' below. Remaining UNATCO node gap (6321 vs 6314) root-caused via live gdb capture: repartition_frontier's make_ed_polys emits unmerged coplanar duplicates (live-verified 40 vs editor's real 29 for child=6108); bsp_merge_coplanars fixes that ONE call exactly (byte-identical root split) but blanket-applied to all 209 calls reproduces the prior 5689-node regression -- fix needs to be selective, not yet found. Wanchai stays node-exact throughout. 2026-08-29 PM: merge is now verified PER-CALL-CORRECT on 7/7 live-checked calls (full recursive tree on one, node counts on the rest) including the single biggest reduction (child=3086, 141->57); the pre-repartition SUBTREE that feeds each call also matches editor's own exactly (same 'duplicate' input on both sides, not a native-only artifact); a cheap all-209-calls-in-one-run growth probe hit a measurement-artifact dead end (documented, do not repeat). The -625/-634 blanket regression's root cause is STILL OPEN -- see 'per-call merge proven correct, aggregate still wrong' and the later 2026-08-29 night section."
+summary = "SHIPPED 2026-08-29 (repartition_frontier + compact_unreachable_nodes, bspcsg.rs), but with a REGRESSION on UNATCO's lighting -- see 'lighting regressed' below. UNATCO node gap (6321 vs 6314, unmerged baseline) root-caused: repartition_frontier's make_ed_polys reconstructs unmerged coplanar duplicates that bsp_merge_coplanars correctly fixes per-call (10/10 live-verified exact against the real editor, spanning sizes 8-141, both NODE_BACK/NODE_FRONT, both reducing and non-reducing) -- but blanket-applying the merge to all 209 calls reproduces a 5689-node UNDER-build (-625), not a fix. 2026-08-30: eliminated both leading explanations for the -625 gap -- compaction TIMING (once at the end vs per-call) is proven irrelevant by a real experiment (byte-identical results either way), and the pre-repartition INPUT to every one of the 209 calls is proven structurally identical between native and editor (209/209, not just a sample). Root cause of the -625 deficit is STILL OPEN after exhausting every cheap/offline check; see the 2026-08-30 'state of the investigation' section for the full evidence trail and what's left to try. Wanchai stays node-exact throughout (unaffected by any of this)."
 +++
 
 # UNATCO `Verts`/`Points` residual — it is the unported sub-BSP repartition loop
@@ -609,3 +609,94 @@ itself) that native's single end-of-loop `compact_unreachable_nodes` doesn't rep
 eliminated: the specific coplanar-chain-order quirk found in the frontier-set diff (nodes 2947/2230)
 could be a symptom of a broader chain-ordering difference elsewhere that a leaf-set diff alone
 wouldn't surface — not investigated further this session.
+
+## 2026-08-30: hypothesis (b) [compaction timing] cleanly REFUTED; pre-repartition structural match
+## extended to ALL 209 calls (not just a sample); 3 more live-verified calls, still 0/10 growth found.
+## Root cause remains OPEN — this is the state-of-investigation summary for a future round.
+
+Per the coordinator's steer, tackled lead (b) first since it's a single measurement/experiment rather
+than ~150 more live gdb round-trips.
+
+**(b) is refuted, cleanly, with a real experiment (not just reasoning).** Added
+`UEDCLI_REPART_COMPACT_PER_CALL` (`bspcsg.rs`, committed, opt-in): `compact_unreachable_nodes` now
+returns its `old->new` remap table, and `repartition_frontier`'s worklist is index-based (not a plain
+`for`) so a mid-loop compaction's remap can fix up the still-pending entries' `parent` field before
+they're read on a later iteration (a real correctness requirement for this experiment — a mid-loop
+compaction with no remap would silently corrupt every later call's `parent` index). Results:
+- `UEDCLI_REPART_COMPACT_PER_CALL=1` alone (no merge): **byte-identical to the unmerged baseline**
+  (6321/11648, matching every metric — verts, points, vectors, all unchanged). No `debug_assert`
+  fired (a pending frontier parent never went unreachable mid-loop, confirming the structural
+  disjointness reasoning from the prior session was right).
+- `UEDCLI_REPART_COMPACT_PER_CALL=1` + `UEDCLI_REPART_BLANKET_MERGE=1` together: **byte-identical to
+  blanket-merge alone** (5689/11628, every metric — verts +208/+84, points -569/-1, vectors +0/-8, all
+  matching exactly between the two runs).
+Compaction TIMING — once at the end of the whole 209-call loop vs. immediately after every individual
+call — makes **zero difference** to the final result, with or without the merge fix. This is the
+predicted outcome of the disjoint-subtree structural argument from the prior session (each frontier
+target's subtree is reachable only via its own specific parent link, set once before
+`repartition_frontier`'s loop starts, so no call's graft can ever alter what a DIFFERENT, not-yet-
+processed call's own subtree contains — reachability GC run early or late collects the exact same
+dead set either way) — now confirmed empirically, not just argued. The re-formulated hypothesis (b)
+(per-call editor-side compaction interacting with `make_ed_polys`'s later reads) does not hold.
+
+**Pre-repartition structural match extended from a 7-call sample to ALL 209 calls — still solid, still
+free (uses the tree dumps already on disk, zero new live captures).** The prior session compared
+native's `UEDCLI_BSPCSG_PREPART_NODES` dump against the editor's `prepart_tree_unatco.py` capture for
+only the 7 live-verified calls. Re-ran the same reachability-walk comparison for every one of the 209
+`(child)` values in `/tmp/merge_diag.log` (reusable one-off script, not yet committed — trivial to
+reproduce from the two committed log files, `logs/prepart-tree-unatco.log` and a
+`UEDCLI_BSPCSG_PREPART_NODES=1` native run): **all 209 calls' pre-repartition subtree NODE-INDEX SETS
+match exactly between native and editor, and every node's `nv` (vertex count) within those sets also
+matches exactly** — not just aggregate size, actual set-equality plus a per-node structural proxy. Zero
+mismatches. This closes off "the pre-repartition tree has a hidden shape/size difference at some
+untested call" as an explanation just as completely as the 7-call sample suggested, now for the WHOLE
+frontier, not a biased subset.
+
+**3 more live-verified calls, still 0/10 total showing growth**, diversifying away from the "biggest
+calls only" bias of the prior round:
+- `child=4247` (17 polys, no-op, `place=NODE_FRONT`) — editor real = 17 exactly.
+- `child=4998` (8 polys, no-op, `place=NODE_BACK` — the smallest and only the 2nd `NODE_BACK` case
+  checked) — editor real = 8 exactly.
+- `child=4096` (85→54 under merge; **also one of the original 3 `REPART_CALL_DIAG`-flagged calls**,
+  whose UNMERGED native reconstruction internally grows 85→89 via the `>=14`-vertex split-in-half rule
+  — the same red-herring category as `child=3086`'s old `+2` flag) — editor real = **54**, exactly
+  matching the MERGED prediction, not the internally-grown unmerged 89. Confirms again that
+  `REPART_CALL_DIAG`'s "delta" signal (an internal self-consistency check, not a ground-truth compare)
+  is meaningless for judging correctness — third such case now (`3086`, `6108`, `4096`).
+
+**10/10 live-verified calls total** (`6108`, `4077`, `3086`, `4096`, `3836`, `3600`, `4668`, `3689`,
+`4247`, `4998`), spanning sizes 8-141, both `place` values, both reducing and non-reducing calls, and
+the one internally-inconsistent-under-unmerged edge case. Zero counter-examples to "native's merged
+prediction (or raw prediction, when merge is a no-op) exactly equals editor's real output" — but this
+is still only 10 of 209 (4.8%), and every selection was biased toward LARGE calls within each bucket;
+the ~199 untested calls skew small (≤17 polys, mostly single digits to teens).
+
+**Where this leaves the investigation.** Every offline-checkable structural question has now been
+asked and answered favorably: the per-call merge operation is correct (10/10), the pre-repartition
+INPUT to every one of the 209 calls is structurally identical between engines (209/209), and
+compaction timing is provably irrelevant (a real experiment, not just an argument). The arithmetic
+(`start(6314) + appended(~2593) - removed(3218, = sum of ALL 209 calls' raw old-subtree sizes) =
+5689`) is airtight given those facts, which means the -625 deficit can ONLY come from `appended` being
+too low relative to what editor's real per-call outputs would sum to — i.e. from a subset of the
+untested ~199 calls where editor's real output does NOT match native's prediction. Two flavors remain
+open, neither eliminated nor confirmed:
+1. **True per-call growth** (editor's real output > native's raw/merged prediction) concentrated in
+   the small, untested calls rather than the large, tested ones — 0/10 evidence so far, but the sample
+   is entirely large-biased and could simply be missing it.
+2. **A subtler, low-rate SPLIT-CHOICE divergence** — not a poly-count mismatch at all, but
+   `bsp_merge_coplanars`'s geometric thresholds or `find_best_split_exact`'s heuristic picking a
+   DIFFERENT (still node-count-EQUAL) tree shape than the editor's real recursion for some small
+   fraction of calls, in a way a top-N-biased or "biggest reduction" sample would never surface — this
+   would require comparing FULL recursive structure (like the `child=6108` isolated-tree check), not
+   just final counts, against real per-call editor ground truth, for calls picked by some OTHER
+   criterion than size (texture/geometry pattern, near-tie split scores, etc. — none tried yet).
+
+**Recommended next step for a future round:** neither exhaustive live-sampling of ~199 more calls nor
+more reasoning from existing data is likely to crack this cheaply. The highest-leverage remaining move
+is probably either (a) a genuinely different, cheaper-than-live-gdb oracle for editor's real per-call
+output across ALL 209 calls at once — which would need `repart_allcalls_unatco.py`'s `Nodes.Num`
+contradiction actually resolved first (not attempted this round; the coordinator's suggested
+per-call-compaction fix for it was a DIFFERENT experiment, already run and negative — see above), or
+(b) accepting the -625 deficit is not going to yield to per-call analysis and instead looking at
+whether a full recursive-structure diff (not just counts) on a RANDOM (not size-biased) sample of ~10
+more small calls turns up anything.
