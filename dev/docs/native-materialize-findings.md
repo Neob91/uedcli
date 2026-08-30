@@ -120,3 +120,20 @@ positional compare doesn't apply) run_ok 92.0%→94.2%, dark/lit mismatches 29+3
 on either level's shadow-bit-equal or grid/pan/scale rates, or on Wanchai's geometry exactness
 (surfs/nodes/leaves unchanged, purely a lighting-side change). `bin/test -k light` + full `cargo
 test` green.
+
+
+**freeclinic08/nsfhq04's `+1 surf` traced to ONE semisolid brush each** (2026-08-30, 🔬) —
+per-brush surf-count attribution (`fc08_surf_diff.py`) finds exactly one `PF_Semisolid` CSG_Add
+brush per level (freeclinic08 `Brush143`, nsfhq04 `Brush531`) where native keeps an authored poly
+the editor's built model drops. Root: `csg.rs`'s `classify_fragment` is an explicitly-approximate
+nudge-based (`EPS_NUDGE=0.5`) point-in-solid replay, not a port of the editor's real classify-BSP
+filter; native's nudge sample disagrees with the editor near this buried semisolid face. Not fixed
+(shared code, blind tuning risks a `blanket_merge`-style regression elsewhere). See board item
+`freeclinic08-nsfhq04-1-surf-under-build-root`.
+
+**freeclinic08's node/leaf deficit is diffuse across ~25% of brushes, NOT localized** (2026-08-30,
+🔬) — per-brush BSP-node-plane-owner attribution (`fc08_node_owner_diff.py`) shows 75/305 brushes
+differ, summing to 260 absolute delta against a net -20 (heavy cancellation). Distinct from
+UNATCO's residual (+7 nodes, ZERO surf/leaf delta — same face set, different tree shape only):
+freeclinic08/nsfhq04 have a nonzero surf delta (a genuinely different face SET), so this is a
+different mechanism, not blocked on the UNATCO investigation.
