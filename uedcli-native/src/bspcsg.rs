@@ -586,6 +586,37 @@ enum LeafFunc {
     Collect(CollectKind),
 }
 
+/// DESCENT/LEAF TRACE scope (`UEDCLI_BSPCSG_DESCENT=<ilink>` / `_ACTOR=<world-csg actor idx>` /
+/// `_POLY=<i_brush_poly>`) — env-gated; shared by the `filter_ed_poly` descent-path trace and
+/// `leaf_func`'s terminal-classification trace below.
+///
+/// `i_link` alone does NOT identify a brush: it is reassigned per brush-CSG-call to a
+/// (speculative, not-yet-committed) surf slot number, `model.surfs.len()` at the time the poly's
+/// coincident-group representative is first seen — a value that can repeat across UNRELATED
+/// brushes whenever an earlier candidate surf never actually got committed by `bsp_add_node`
+/// (dropped fragment), not a stable per-brush-poly identity
+/// (`smuggler-4-surf-delta-traced-to-4-pf-semisolid`, 2026-08-30). `actor` (the world-CSG brush
+/// index, stable and set once per `bsp_brush_csg` call, `FPoly::empty_copy`-preserved across every
+/// split fragment) and `i_brush_poly` (the AUTHORED local poly index within that brush, likewise
+/// preserved) together give an unambiguous per-brush-per-face identity; set `_ACTOR`/`_POLY` to
+/// scope a trace to one specific brush's one specific face, or `UEDCLI_BSPCSG_DESCENT` alone for
+/// the legacy i_link-keyed lookup (still valid where the caller has an independent iLink from an
+/// editor-side dump, e.g. `wanchai-bsp-gap-localized-to-one-dropped`). At least one filter must be
+/// set; every SET filter must match.
+fn descent_scope_matches(edpoly: &FPoly) -> bool {
+    let want_link = std::env::var("UEDCLI_BSPCSG_DESCENT").ok().and_then(|s| s.parse::<i32>().ok());
+    let want_actor = std::env::var("UEDCLI_BSPCSG_DESCENT_ACTOR")
+        .ok()
+        .and_then(|s| s.parse::<i32>().ok());
+    let want_poly = std::env::var("UEDCLI_BSPCSG_DESCENT_POLY")
+        .ok()
+        .and_then(|s| s.parse::<i32>().ok());
+    (want_link.is_some() || want_actor.is_some() || want_poly.is_some())
+        && want_link.is_none_or(|v| v == edpoly.i_link)
+        && want_actor.is_none_or(|v| v == edpoly.actor)
+        && want_poly.is_none_or(|v| v == edpoly.i_brush_poly)
+}
+
 /// The per-CsgOper leaf callback — where nodes are ADDED (`AddBrushToWorldFunc 0x31770` /
 /// `SubtractBrushFromWorldFunc 0x348c0`).  §8.2: `Subtract` is NOT a mirror — it adds ONLY on
 /// `{F_INSIDE, F_COPLANAR_INSIDE}` (no `F_COSPATIAL_FACING_IN`, no semisolid gate) and stores the
@@ -606,6 +637,16 @@ fn leaf_func(
                 || filter == F_COPLANAR_OUTSIDE
                 || (filter == F_COSPATIAL_FACING_OUT
                     && (edpoly.poly_flags & csg::PF_SEMISOLID) == 0);
+            // LEAF-CLASSIFY TRACE — same actor/poly scoping as the DESCENT trace above
+            // (`smuggler-4-surf-delta-traced-to-4-pf-semisolid`): shows the terminal `filter`
+            // value + the semisolid gate's own verdict, not just the descent path.
+            if descent_scope_matches(edpoly) {
+                eprintln!(
+                    "LEAF actor={} i_brush_poly={} i_link={} filter={} semisolid={} add={}",
+                    edpoly.actor, edpoly.i_brush_poly, edpoly.i_link,
+                    filter, (edpoly.poly_flags & csg::PF_SEMISOLID) != 0, add
+                );
+            }
             if add {
                 let r = bsp_add_node(model, i_node, place, NF_IS_NEW, edpoly);
                 trace_node_add(model, "ADD", i_node, place, NF_IS_NEW, edpoly, r);
@@ -712,12 +753,10 @@ fn filter_ed_poly(
             (node.i_front, node.i_back, is_csg_filter(node), base, normal)
         };
 
-        // DESCENT TRACE (UEDCLI_BSPCSG_DESCENT=<ilink>) — env-gated; native counterpart of the
+        // DESCENT TRACE — env-gated (see `descent_scope_matches`); native counterpart of the
         // editor's `editor_descent.py` FilterEdPoly-loop-head trace (§10.8): the exact tree path a
         // poly + its split fragments descend, for pinning a per-poly emit-order divergence.
-        if std::env::var("UEDCLI_BSPCSG_DESCENT").ok().and_then(|s| s.parse::<i32>().ok())
-            == Some(edpoly.i_link)
-        {
+        if descent_scope_matches(&edpoly) {
             let node_surf = model.nodes[i_node as usize].i_surf;
             let dists: Vec<f32> =
                 edpoly.verts.iter().map(|v| v.sub(&base).dot(&normal)).collect();
@@ -733,7 +772,8 @@ fn filter_ed_poly(
                 Split::Split(f, b) => format!("SPLIT f_nv={} b_nv={}", f.verts.len(), b.verts.len()),
             };
             eprintln!(
-                "DESC node={} nsurf={} iF={} iB={} csg={} nv={} N=({:.4},{:.4},{:.4}) min={:.5} max={:.5} -> {}",
+                "DESC actor={} i_brush_poly={} i_link={} node={} nsurf={} iF={} iB={} csg={} nv={} N=({:.4},{:.4},{:.4}) min={:.5} max={:.5} -> {}",
+                edpoly.actor, edpoly.i_brush_poly, edpoly.i_link,
                 i_node, node_surf, i_front, i_back, csg as i32, edpoly.verts.len(),
                 normal.x, normal.y, normal.z, mn, mx, cls
             );

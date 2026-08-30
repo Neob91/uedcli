@@ -1562,3 +1562,67 @@ write-up: `dev/docs/board/inbox/smuggler-4-surf-delta-traced-to-4-pf-semisolid/o
 (or isolate a single-brush repro: rebuild with ONLY `Brush547` as the sole `PF_Semisolid` addition
 onto the already-exact PASS-A tree) before attempting another live/native differential on poly 124's
 actual classification.
+
+**Descent tracer fixed to scope by brush+poly (not `i_link`); `F_COSPATIAL_FACING_OUT`/`PF_SEMISOLID`
+hypothesis for smuggler's `Brush547` REFUTED with unambiguous live evidence — the real terminal
+classification is `F_COPLANAR_OUTSIDE`, unconditionally added, not the cospatial/semisolid-gated
+path at all.** (2026-08-30, native-code trace) — `bspcsg.rs`'s `filter_ed_poly`/`leaf_func` DESCENT
+tracer took `UEDCLI_BSPCSG_DESCENT=<i_link>` only; `i_link` at that point is a per-brush-call
+speculative surf-slot number (`model.surfs.len()` at first-seen time, never incremented unless the
+candidate actually commits via `bsp_add_node`), so it collides across unrelated brushes whenever an
+earlier candidate got dropped — not a stable identity, confirmed the prior round's "37 lines, none
+attributable" dead end. Fix: added `UEDCLI_BSPCSG_DESCENT_ACTOR=<world-csg actor idx>` and
+`UEDCLI_BSPCSG_DESCENT_POLY=<i_brush_poly>`, both keying off `FPoly` fields that were ALREADY
+present and already `empty_copy`-preserved across every split fragment (`fpoly.rs`) but never used
+by the tracer: `actor` (set once per `bsp_brush_csg` call to the world-CSG brush index) and
+`i_brush_poly` (the authored local poly index within that brush). Refactored the scope-matching
+logic into a shared `descent_scope_matches(edpoly)` helper (any SET filter must match; at least one
+must be set) used by both the existing descent-path trace and a new `LEAF` trace added inside
+`leaf_func`'s `Add` arm (prints `filter`/`semisolid`/`add`, the actual leaf-classify verdict the old
+tracer never exposed at all).
+
+Ran the whole smuggler build with `UEDCLI_BSPCSG_DESCENT_ACTOR=119 UEDCLI_BSPCSG_DESCENT_POLY=124`
+(`Brush547`'s world-csg index / local poly index, from the prior round's own attribution table):
+**every captured line carries `actor=119 i_brush_poly=124`** — fully unambiguous, unlike the old
+`i_link`-keyed attempt. Result: 3 `LEAF` lines, all `filter=2 semisolid=true add=true` — `filter=2`
+is `F_COPLANAR_OUTSIDE`, not either cospatial value (`F_COSPATIAL_FACING_OUT=5`/
+`F_COSPATIAL_FACING_IN=4` in this file's own constants). `leaf_func`'s `Add` arm adds `F_OUTSIDE`/
+`F_COPLANAR_OUTSIDE` UNCONDITIONALLY (no semisolid gate) — and the disassembly-decoded real editor
+`AddFunc` (`Editor.dll 0x31770`, `sections/10-bsp-csg-build.md` §4.3, 📖 byte-verified) does the
+identical thing: `if Filter == F_OUTSIDE(0) or F_COPLANAR_OUTSIDE(2): bspAddNode(...)` unconditional,
+no semisolid test — the semisolid gate in the real editor applies only to the OTHER cospatial branch
+(`elif Filter == <cospatial, raw value 5> and not semisolid`). **So the originally-suspected
+mechanism does not apply here at all: this poly never reaches the semisolid-gated branch on either
+side, native and the confirmed real editor treat `F_COPLANAR_OUTSIDE` identically, and the gate
+itself is not the bug.**
+
+Note in passing, not acted on: this file's own `F_COSPATIAL_FACING_OUT=5`/`F_COSPATIAL_FACING_IN=4`
+are the reverse of `sections/10-bsp-csg-build.md`'s disassembly-derived `F_COSPATIAL_FACING_OUT=4`/
+`F_COSPATIAL_FACING_IN=5`. Not a functional bug — the semisolid gate in `leaf_func` keys off
+whichever constant equals raw value 5, matching the real `AddFunc`'s own gate on raw value 5 — but a
+naming mismatch worth resolving before anyone reasons about "in vs out" here again; left alone since
+renaming risks touching unrelated call sites for zero behavior change and was out of this round's
+scope.
+
+**New characterization, not previously known:** the full (unscoped-by-poly) descent trace for this
+poly shows it reaching a genuine `COPLANAR dot=-1.00000` hit partway down (native node 2706, `csg=0`
+— i.e. NOT a node from the already-confirmed-exact PASS-A structural tree, but one of `Brush547`'s
+OWN earlier-added faces from earlier in this SAME `bsp_brush_csg` call). This contradicts the
+original hypothesis's framing ("resting on structural floor geometry") — the coincidence is INTERNAL
+to the brush's own reconstructed geometry (two touching faces of the same stacked-panel composite
+prop, exactly opposite-facing), not against the world. Whether native's classification of this
+self-coincidence genuinely diverges from the real editor's (a bug in the coplanar-facing test or in
+reaching a different node than the real editor does), or whether real semisolid/PASS-2 CSG uses some
+mechanism beyond the shared `AddFunc`/`leaf_func` that native's Pass 2 (which calls the same
+`bsp_brush_csg` as Pass 1, `bspcsg.rs` ~2953-2960) doesn't model, is **not determined this round** —
+would need either a live editor-side capture of this exact poly's real classification or a
+single-brush isolated repro, neither attempted (per the standing rule: no fix without a confirmed
+real mechanism, and per spike judgment: this reframes rather than closes the question, logged rather
+than chased further).
+
+**No `bspcsg.rs` semantic changes** — both new/changed blocks are env-gated diagnostics only
+(`descent_scope_matches`, the new `LEAF` trace), zero effect on any default-path build. Verified:
+full `bin/test` 12517 passed/0 failed (pytest) + 90/90 (cargo test), both before and after;
+`regression_gate.py` UNATCO/Wanchai both EXACT, `GATE: PASS`; `breadth_gate.py` unaffected (numbers
+unchanged from the pre-existing corpus measurement — read-only tracer addition, no build-path code
+touched).
