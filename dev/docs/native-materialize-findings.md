@@ -235,3 +235,14 @@ PART STILL STANDS, see correction above. The REST of this entry (scratch holds/a
 `bspBuild`'s Flag=2 skips `EmptyModel` to append into the scratch's node array) is WRONG — live
 evidence above shows node writes go straight to the persistent Model past its own `Num`, not to a
 separate scratch object.
+
+**Breadth geometry check, 9 new OG levels (Endgame4/NYC-Bar/NYC-Underground04/Paris-Club/
+NYC-ShipFan/Vandenberg-Gas/Wanchai-Garage/Paris-Underground/NYC-747)** (2026-08-30, 🔬,
+`dev/docs/board/inbox/breadth-geometry-check-on-9-new-og-levels-1-9/`) — 1/9 exact: Endgame4 (6-brush
+cutscene map, exact on every count incl. verts/points/vectors — same trivial-map pattern as `DX.dx`,
+not `Wanchai`-class evidence). Wanchai Garage/Paris Underground/NYC 747 are a SEVERE under-build
+family (-13% to -21% nodes AND double-digit-percent surfs together), matching the already
+root-caused `native-under-builds-area51-entrance-geometry` over-carve mechanism — not re-investigated,
+just re-observed at 3x new instances. Updated corpus: 3/20 levels exact (15%), or 1/18 excluding the
+two trivial cutscene maps (~5.6%) — sample breadth (20 of ~20-30 total OG levels) is no longer the
+limiting factor, the parity RATE is.
