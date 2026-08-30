@@ -1,7 +1,7 @@
 +++
 priority = "p2"
 kind = "debug"
-summary = "smuggler's +4 surf residual (nodes/leaves exact) isolated to 4 PF_Semisolid CSG_Add brushes; PASS-A structural tree confirmed byte-exact (a NEW, cleaner shape than freeclinic08/nsfhq04); root mechanism not found, no fix shipped"
+summary = "smuggler's +4 surf residual (nodes/leaves exact) isolated to 4 PF_Semisolid CSG_Add brushes; PASS-A structural tree confirmed byte-exact (a NEW, cleaner shape than freeclinic08/nsfhq04); F_COSPATIAL_FACING_OUT/PF_SEMISOLID hypothesis REFUTED with brush-scoped tracer; root mechanism still not found, no fix shipped"
 +++
 
 # smuggler +4 surf delta traced to 4 PF_Semisolid brushes, PASS-A exact
@@ -118,8 +118,43 @@ than grinding further on an open-ended reverse-engineering task.
 (+ its dependency `geo_golden_driver.py`, promoted from `_scratch/` where it already existed for the
 original full-smuggler golden build).
 
-## No fix shipped
+## No fix shipped (round 1)
 
 No `uedcli-native/src/` changes this round. `bin/test`/`regression_gate.py`/`breadth_gate.py` all
 unaffected (verified via `git status` — no source edits made). smuggler stays at nodes/leaves
 EXACT, surfs `d=+4`.
+
+## Round 2 (2026-08-30): tracer fixed, hypothesis REFUTED
+
+The old `UEDCLI_BSPCSG_DESCENT=<i_link>` tracer was unusable for attribution — `i_link` is a
+per-brush-call speculative surf-slot number that collides across unrelated brushes whenever an
+earlier candidate never actually committed. Fixed: added `UEDCLI_BSPCSG_DESCENT_ACTOR`/`_POLY`,
+keyed off `FPoly.actor`/`i_brush_poly` (stable, `empty_copy`-preserved, already present but unused
+by the tracer), refactored into a shared `descent_scope_matches` helper, plus a new `LEAF` trace
+inside `leaf_func`'s `Add` arm exposing the actual terminal classification.
+
+Ran the whole smuggler build scoped to `Brush547`'s poly124 (`actor=119 i_brush_poly=124`) —
+every captured line unambiguous. Result: `filter=2` (`F_COPLANAR_OUTSIDE`), added unconditionally,
+`semisolid` gate never in play. Matches the disassembly-confirmed real `AddFunc`
+(`Editor.dll 0x31770`, `sections/10-bsp-csg-build.md` §4.3): `F_OUTSIDE`/`F_COPLANAR_OUTSIDE` are
+added unconditionally in both native and the real editor — the coincident-face-drop hypothesis does
+not apply to this poly at all. **REFUTED.**
+
+New characterization instead: the unscoped descent trace shows this poly hitting a genuine
+`COPLANAR dot=-1.00000` node partway down that belongs to `Brush547`'s OWN earlier-added faces from
+the same `bsp_brush_csg` call, not world/structural geometry — the coincidence is internal to the
+brush's own reconstructed geometry (two touching faces of the same stacked-panel prop). Whether
+native's classification of this self-coincidence diverges from the real editor's, or whether real
+PASS-2 uses a mechanism beyond the shared `AddFunc`/`leaf_func` that native's Pass 2 doesn't model,
+is undetermined — needs a live editor-side capture of this exact poly or a single-brush isolated
+repro, neither attempted.
+
+Also noted, not acted on: this file's `F_COSPATIAL_FACING_OUT=5`/`F_COSPATIAL_FACING_IN=4` are the
+reverse of `sections/10-bsp-csg-build.md`'s disassembly-derived values — not a functional bug (the
+semisolid gate correctly keys off raw value 5 either way) but a naming mismatch worth fixing later;
+out of scope this round (touches unrelated call sites, zero behavior change).
+
+No fix shipped this round either — only the tracer (env-gated, zero default-path effect). Verified:
+full `bin/test` 12517 passed/0 failed + 90/90 cargo test; `regression_gate.py` UNATCO/Wanchai both
+EXACT; `breadth_gate.py` unchanged (4/17 exact, smuggler still surfs `d=+4`, severe-under-build
+family unaffected). Committed `fd67aa6`. Full trace details: `native-materialize-findings.md`.
