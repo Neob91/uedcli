@@ -205,3 +205,49 @@ added in `native-materialize-findings.md` (search "DIFFERENT call site, not the 
 
 freeclinic08 and nsfhq04 remain not-exact. The breadth gate is unchanged: 3/13 (2/11 unique
 levels + the trivial `DX.dx`) still exact, still below the 30% floor.
+
+## 2026-08-30, second continuation: world-level root cause found — poly-list ORDER, not scoring
+
+Picked up the concrete next step named at the end of the last section: a live gdb capture of the
+editor's real world-level `FindBestSplit` poly order, scaled up from the single-subtree technique
+(`fbs_root_poly_order.py`) to the world-level call (`fbs_world_poly_order.py`, new, committed to the
+harness dir).
+
+**Result: CONFIRMED.** Target: freeclinic08's structural-only 141-brush golden (already isolates
+Pass-2 out; 0 surf delta, −38 node delta). Native's own world-level `split_poly_list` call (offline,
+`UEDCLI_REPART_FBS_DUMP` — a pre-existing diagnostic, no new capture needed for this half) has
+`numpolys=1019`. The live gdb capture also got **1019** `FBSPOLY` entries for the same brush set —
+same merged-poly-set SIZE both sides, so the divergence isn't a missing/extra poly. `Opt::Good`'s
+stride for 1019 is `inc=50`, so only 21 candidates (indices 0,50,…,1000) ever get scored, on both
+sides. The real editor's actual root split (read straight off the golden `.dx`, node[0].plane) is
+`(0,−1,0,896)`. In the LIVE-CAPTURED real order, the poly with that exact plane sits at **k=700** —
+itself a sampled window-start (`14×50`), an exact plane match at a genuinely-evaluated index: about
+as decisive as evidence gets, since `FindBestSplit` can only return a plane it actually scored. In
+NATIVE's own reconstruction (same brush set, `UEDCLI_BSPCSG_SOUP_ORDER`), the identical poly (matched
+by plane AND the internal `i_link`, which numbers consistently across both captures) sits at **k=672**
+— inside an already-sampled-elsewhere window, never tested. Native's own world-level winner
+(`i=600`, plane `(1,0,0,576)`) is real and correctly the lowest-scoring **among the 21 candidates its
+own list order exposes it to** — `find_best_split_exact`'s windowed-stride selection is exonerated a
+SECOND time (first was UNATCO's `child=6108`): the algorithm is faithful, it is scoring the wrong
+candidate set because the input order differs. A second poly (`i_link=57`) shows the same shape at a
+different magnitude (editor `k=468` vs native `k=124`, a 344-position shift vs the first poly's
+28-position shift) — ruling out a simple constant/linear reindex; this is a genuine structural
+reordering, not a uniform permutation.
+
+This is a DIFFERENT finding than the earlier "ordering hypothesis was wrong" conclusion for UNATCO's
+`repartition_frontier` subtree calls (`child=6108`) — that call's whole reconstruction gets discarded
+by `bspRefresh`, so its input order turned out irrelevant to the persisted tree. That escape hatch does
+NOT exist here: the world-level call is confirmed (`emptymodel_worldlevel_trace.py`, prior session) to
+commit straight to the persistent Model, so poly order here genuinely determines the real, final,
+shipped tree shape.
+
+**Not further root-caused, no fix shipped**, per the standing "no algorithm not confidently known"
+rule. WHY native's world-level poly order differs from the editor's real order — traced to Pass-1's
+incrementally-built tree shape, to `bsp_merge_coplanars`'s grouping/walk order, or elsewhere — is
+still open; closing it needs at least one more live capture (the editor's real PRE-world-level tree
+order, the `prepart_tree_*` technique not yet applied at world level) at a scope comparable to the
+rest of this investigation. Diminishing-returns call per the task's own budget: this round's question
+(order vs. scoring) is answered with high confidence; a speculative reorder was deliberately NOT
+attempted (would be the forbidden tolerance-fudge). No `bspcsg.rs` changes — read-only capture only.
+Full write-up: `native-materialize-findings.md`, search "poly-list ORDER mismatch". New file:
+`dev/docs/spikes/2026-08-29-unatco-repart-live-diff/harness/fbs_world_poly_order.py`.

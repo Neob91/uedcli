@@ -1656,3 +1656,74 @@ unresolved**; closing it needs a live gdb capture of the editor's real world-lev
 ~141-poly merged soup (`fbs_root_poly_order.py`-style, scaled up from UNATCO's single-subtree
 capture), not attempted this round. `regression_gate.py`: UNATCO/Wanchai unchanged, `GATE: PASS` (no
 source edits). See `freeclinic08-nsfhq04-1-surf-under-build-root` for the full per-stage numbers.
+
+**The world-level `bsp_build` divergence, ROOT-CAUSED: a genuine poly-list ORDER mismatch between
+native's and the real editor's `bspBuildFPolys`/merge reconstruction — NOT a scoring/tie-break bug.
+`find_best_split_exact`'s stride formula is exonerated a second time (world-level call, not just the
+earlier subtree case).** (2026-08-30, 🔬 live, new harness `fbs_world_poly_order.py`) — Did the live
+capture flagged as the concrete next step above, scaled to the WORLD-level call instead of a subtree
+(`fbs_root_poly_order.py`'s own mechanism: breakpoint `FindBestSplit` entry `0x100338EE`, gated to the
+first hit after the FIRST `bspRepartition` entry `0x10049fc0` — `callidx==1`, the same world-level
+gate `emptymodel_worldlevel_trace.py` already live-verified). Target: freeclinic08's structural-only
+141-brush golden (`_scratch/fc08-structural-only/golden_structural.dx`, the pre-existing isolate with
+0 surf delta / −38 node delta).
+
+Captured **1019** `FBSPOLY` entries — exactly matching native's own `UEDCLI_REPART_FBS_DUMP`/
+`UEDCLI_BSPCSG_SOUP_ORDER` count for the identical brush set (`numpolys=1019` at native's own
+world-level `split_poly_list` call, confirmed via a fresh offline run of those pre-existing
+diagnostics) — so the MERGED POLY SET is the same size both sides; the divergence is not a
+missing/extra poly. `Opt::Good`'s stride for 1019 polys is `inc=1019/20=50`, so both sides' search
+only ever SAMPLES the poly at each 50-wide window's first eligible index (0,50,100,…,1000 — the
+window-start when all local flags are plain, which holds here: none of the checked entries carry the
+`0x28` semisolid/notsolid mask, this being the structural-only set by construction). The real editor's
+`node[0]` (read straight from the golden `.dx`, no live capture needed for this half) is
+`plane=(0,−1,0,896)`. In the LIVE-CAPTURED real editor order, the poly bearing that EXACT plane sits
+at **k=700** — itself one of the 21 sampled window-start indices (`700 = 14×50`) — an exact,
+bit-identical plane match at a genuinely-sampled slot, which is definitive: the real `FindBestSplit`
+can only return a plane it actually evaluated, and this is the only `k=700`-adjacent candidate whose
+plane matches the built model's real answer. In NATIVE's own reconstruction (`UEDCLI_BSPCSG_SOUP_ORDER`
+on the same brush set), the SAME identifiable poly (matched by exact plane AND `i_link`, which numbers
+consistently across both captures — confirmed on multiple polys, not just this one) sits at **k=672**
+— inside window `[650,700)`, NEVER sampled (native's own candidate for that window is index 650
+itself, a wholly different, unrelated poly/plane, matching `UEDCLI_REPART_FBS_DUMP`'s own
+`REPART_CAND id=0 slot=650` row). Native's own world-level winner (`best_i=600`, `score=24.0`, plane
+`(1,0,0,576)`) is real and lowest-scoring **among the 21 candidates its own order exposes it to** —
+the algorithm is not malfunctioning, it is scoring the wrong candidate SET because the input order
+differs. A second poly (`i_link=57`, the other end of the same corridor) shows the same shape at
+different magnitude: editor real order `k=468`, native order `k=124` — a 344-position shift, vs the
+first poly's 28-position shift, ruling out a simple constant/linear reindex (e.g. a reversed list or
+an off-by-N rotation) — this is a genuine STRUCTURAL reordering, consistent with a different recursive
+tree-walk order, not a uniform permutation.
+
+**This exonerates `find_best_split_exact`'s windowed-stride candidate selection a second time** (the
+first was UNATCO's `child=6108`, disassembly-verified faithful to the real editor's own coarse
+sampling) — for THIS call site too, the formula is correct; feeding it the editor's own real order
+would very likely reproduce the editor's real choice (the winning plane match at a genuinely-sampled
+index is about as strong a proof as available without also capturing full per-poly vertex arrays to
+re-run the exact score). This is also a DIFFERENT finding than "the ordering hypothesis was wrong"
+for UNATCO's `repartition_frontier` subtree calls (`child=6108`, earlier entry) — that refutation
+was about a call whose entire reconstruction gets DISCARDED by `bspRefresh`'s node-array `Remove`
+(the pre-existing subtree survives instead), which does NOT apply here: the world-level call is
+confirmed to commit directly to the persistent Model (`emptymodel_worldlevel_trace.py`,
+`this_eq_m=1`), so there is no discard-and-keep-the-old-tree escape hatch available at this call site
+— the poly-list order genuinely is what determines the real, final, persisted tree shape here.
+
+**NOT further root-caused, and NO FIX SHIPPED, per the standing rule.** WHY native's poly-list order
+diverges from the editor's real order — whether it traces to a difference already present in Pass 1's
+incrementally-built world tree (before this call even runs), to `bsp_merge_coplanars`'s own grouping/
+walk order, or to something else — is not determined this round; establishing it would need at least
+one more live capture (the editor's real PRE-world-level-repartition incremental tree order, the
+`prepart_tree_unatco.py`/`prepart_tree_wanchai.py` technique already proven for subtree calls, not yet
+applied at world level) and is comparable in scope to the rest of this investigation. Per the standing
+rule ("if the real algorithm isn't confidently known, log the gap as unresolved rather than shipping
+an approximation"), no reordering fix was attempted — a plausible-looking reorder (e.g. sort by some
+proxy key) would be exactly the forbidden tolerance-fudge, chosen because it might measure better, not
+because the real mechanism is known. Diminishing-returns judgment call per the task's own budget
+guidance: this round's goal (confirm or refute the poly-order hypothesis for the world-level call) is
+now answered with high confidence; the deeper "why" is named as the concrete next step, not chased
+further here. No `bspcsg.rs` changes — read-only live capture (new harness script, committed) plus
+reuse of pre-existing env-gated diagnostics (`UEDCLI_REPART_FBS_DUMP`, `UEDCLI_BSPCSG_SOUP_ORDER`,
+already committed). `regression_gate.py` not re-run (no source edits to re-verify against); the
+committed harness addition is inert on the default build path. New file:
+`dev/docs/spikes/2026-08-29-unatco-repart-live-diff/harness/fbs_world_poly_order.py`, log at
+`dev/docs/spikes/2026-08-29-unatco-repart-live-diff/logs/fbs-world-poly-order-fc08struct.log`.
