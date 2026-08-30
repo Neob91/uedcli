@@ -1,10 +1,10 @@
 +++
 priority = "p1"
 kind = "debug"
-summary = "Breadth geometry check on 9 new OG levels: 1/9 exact (Endgame4)"
+summary = "Breadth geometry check on 10 new OG levels: 1/10 exact (Endgame4)"
 +++
 
-# Breadth geometry check on 9 new OG levels: 1/9 exact (Endgame4)
+# Breadth geometry check on 10 new OG levels: 1/10 exact (Endgame4)
 
 Pure-breadth pass per the standing 30%-floor goal: test previously-untested shipped Deus Ex levels
 for exact native geometry, no root-causing. Method: `level import MAPFILE --tree level/NAME`
@@ -29,20 +29,23 @@ is solid by construction, no retroactive check needed.
 | Wanchai Garage | `06_HongKong_WanChai_Garage.dx` | 198 | 2146 | 1696 | -450 | -141 | -68 | no (severe under-build) |
 | Paris Underground | `11_Paris_Underground.dx` | 272 | 2427 | 2017 | -410 | -177 | -32 | no (severe under-build) |
 | NYC 747 | `03_NYC_747.dx` | 373 | 4462 | 3870 | -592 | -127 | -146 | no (severe under-build) |
+| OceanLab Lab | `14_OceanLab_Lab.dx` | 1886 | 29533 | 23045 | -6488 | -4469 | -3864 | no (severe under-build) |
 
-**1/9 exact.** Endgame4 (23KB, a 6-brush cutscene/logo screen) is exact on every count — the same
+**1/10 exact.** Endgame4 (23KB, a 6-brush cutscene/logo screen) is exact on every count — the same
 trivial-map pattern as `DX.dx`, not a real win for the parity floor but a real confirmation of the
 pattern.
 
 ## Notes
 
-- **Wanchai Garage / Paris Underground / NYC 747 are a severe-under-build family, matching the
-  already root-caused `native-under-builds-area51-entrance-geometry` pattern** (native over-carves a
-  CSG-subtract brush's surviving faces, misclassifying some as interior and discarding them —
-  confirmed root cause there, not re-investigated here): all three lose double-digit percent of nodes
-  AND surfs together (Area51: -26.7%/-8.4%; here -20.9%/-6.6%, -16.9%/-7.3%, -13.3%/-2.8%), unlike the
-  small over-build/under-build noise seen elsewhere in the corpus (≤1% surf delta, usually 0). Not a
-  new bug — same family, wider than previously known (now 4/20 levels tested show it).
+- **Wanchai Garage / Paris Underground / NYC 747 / OceanLab Lab are a severe-under-build family,
+  matching the already root-caused `native-under-builds-area51-entrance-geometry` pattern** (native
+  over-carves a CSG-subtract brush's surviving faces, misclassifying some as interior and discarding
+  them — confirmed root cause there, not re-investigated here): all four lose double-digit percent of
+  nodes AND surfs together (Area51: -26.7%/-8.4%; here -20.9%/-6.6%, -16.9%/-7.3%, -13.3%/-2.8%,
+  OceanLab -22.0%/-19.7% — its largest surf-percentage loss of the family), unlike the small
+  over-build/under-build noise seen elsewhere in the corpus (≤1% surf delta, usually 0). Not a new
+  bug — same family, wider than previously known (now 5/21 levels tested show it, and it scales to
+  the largest level tested so far).
 - NYC Bar (+1 node, +97 verts, 0 surf/leaf delta) and Paris Club (+8 nodes) are small-magnitude
   over-builds in the same range as the previously-documented UNATCO/paris-chateau/training-final
   pattern — not investigated further.
@@ -50,14 +53,11 @@ pattern.
   here with a nonzero surf delta +2 and a NEGATIVE leaf delta -134 alongside a node/vert over-build)
   are over-builds of larger magnitude than the small-noise group but not in the severe-under-build
   family either — a third shape, not investigated further (breadth over depth per the task).
-- `14_OceanLab_Lab.dx` (1925 brushes, largest candidate) attempted separately — see the follow-up
-  note/update once its golden build completes (large rebuild, run as a bounded background job).
-
 ## Updated overall count
 
 Prior corpus (`breadth-geometry-re-check-across-11-og-levels-2`): 2/11 exact (Wanchai Market,
-`DX.dx`). Adding this batch: **3/20 levels now tested, 3 exact (15%)** — Wanchai Market, `DX.dx`,
-Endgame4. Both new-exact entries (`DX.dx`, Endgame4) are trivial cutscene/logo maps (≤6 brushes);
-excluding those two, real levels stand at 1/18 exact (Wanchai Market only, ~5.6%). Still below the
-30% floor. 20 levels is roughly 65-100% of the ~20-30 total OG DX level estimate, so sample breadth
-is no longer the limiting factor — the parity RATE is.
+`DX.dx`). Adding this batch of 10 (including OceanLab Lab): **3/21 levels now tested, 3 exact
+(14.3%)** — Wanchai Market, `DX.dx`, Endgame4. Both new-exact entries (`DX.dx`, Endgame4) are trivial
+cutscene/logo maps (≤6 brushes); excluding those two, real levels stand at 1/19 exact (Wanchai Market
+only, ~5.3%). Still below the 30% floor. 21 levels is roughly 70-100%+ of the ~20-30 total OG DX
+level estimate, so sample breadth is no longer the limiting factor — the parity RATE is.
