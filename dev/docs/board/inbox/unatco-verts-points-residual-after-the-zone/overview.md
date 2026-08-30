@@ -1,7 +1,7 @@
 +++
 priority = "p1"
 kind = "implement"
-summary = "SHIPPED 2026-08-29 (repartition_frontier + compact_unreachable_nodes, bspcsg.rs), but with a REGRESSION on UNATCO's lighting -- see 'lighting regressed' below. UNATCO node gap (6321 vs 6314, unmerged baseline) root-caused: repartition_frontier's make_ed_polys reconstructs unmerged coplanar duplicates that bsp_merge_coplanars correctly fixes per-call (10/10 live-verified exact against the real editor) -- but blanket-applying the merge to all 209 calls reproduces a 5689-node UNDER-build (-625), not a fix. 2026-08-30: ALL clean, testable-with-current-tools architectural hypotheses now exhausted and refuted -- per-call merge correctness (10/10), pre-repartition input identity (209/209, structural), compaction timing (proven irrelevant via a real experiment), and progressive real per-call index allocation (refuted 9/9 -- editor's every one of 209 calls restarts at the SAME fixed baseline index 6314, not a cumulative shrinking one). That last check surfaced a genuinely new puzzle -- editor's real per-subtree commit mechanism is neither native's append-then-GC-once model nor a progressive-compaction one -- that needs fresh DISASSEMBLY work, not more live-gdb probing at the current breakpoints. STOPPING this line of investigation per standing guidance; see the 2026-08-30 sections for the full evidence trail and handoff notes. Wanchai stays node-exact throughout (unaffected by any of this). No bspcsg.rs changes shipped this round -- default path unchanged, gate still fails on the merge fix as before."
+summary = "SHIPPED 2026-08-29 (repartition_frontier + compact_unreachable_nodes, bspcsg.rs), but with a REGRESSION on UNATCO's lighting -- see 'lighting regressed' below. UNATCO node gap (6321 vs 6314, unmerged baseline) root-caused: repartition_frontier's make_ed_polys reconstructs unmerged coplanar duplicates that bsp_merge_coplanars correctly fixes per-call (10/10 live-verified exact against the real editor) -- but blanket-applying the merge to all 209 calls reproduces a 5689-node UNDER-build (-625), not a fix. 2026-08-30: SIX independently-checked, clean architectural hypotheses all refuted with real evidence -- per-call merge correctness (10/10), pre-repartition input identity (209/209, structural), compaction timing (proven irrelevant via experiment), progressive real per-call index allocation (refuted 9/9), a surf-dedup-not-geometric-merge mechanism (refuted -- wrong SHAPE not just count, and worse in aggregate: 5599 vs merge's 5689), and a calling-convention/ECX bug in the Nodes.Num readings (refuted via disassembly -- ECX is a real but WRONG object, esp+4 remains the validated reading). The underlying Nodes.Num-flat-at-6314-every-call contradiction (vs child=6108's real content occupying fresh indices 6314-6342) is STILL UNEXPLAINED after all six checks; needs fresh disassembly of the actual per-subtree commit/graft mechanism, not more live-gdb probing at current breakpoints. Wanchai stays node-exact throughout (unaffected). No bspcsg.rs changes shipped -- default path unchanged (6321/11648), gate still fails on the merge fix as before."
 +++
 
 # UNATCO `Verts`/`Points` residual — it is the unported sub-BSP repartition loop
@@ -788,3 +788,86 @@ path (not the world-level one, which behaves differently — its own `Nodes.Num`
 matched expectations). Candidate angle: `EmptyModel`'s own two integer arguments (`0, 0` here) likely
 select a mode; the world-level call's arguments may differ and be worth re-checking too, since ITS
 `Nodes.Num` readings never showed this fixed-baseline-restart behavior.
+
+## 2026-08-30, continued: two more sharp coordinator hypotheses tested — surf-dedup mechanism REFUTED
+## (wrong shape, not just count); the calling-convention/`ECX` hypothesis for the `Nodes.Num`
+## contradiction also REFUTED, via disassembly this time, not another live guess
+
+**Surf-dedup hypothesis (does `bspBuildFPolys` walk `Model->Surfs` emitting one poly per unique surf,
+with NO geometric weld — making `bsp_merge_coplanars`'s actual weld unnecessary?): REFUTED, cleanly,
+and more informatively than a pass/fail count check.** Added `surf_dedup` (`bspcsg.rs`, committed,
+temporary) — keep only the FIRST poly per unique `i_link`, no geometry — and a
+`UEDCLI_REPART_MERGE_MODE=dedup` switch shared by both `UEDCLI_REPART_BLANKET_MERGE` and
+`UEDCLI_REPART_ISOLATED_TREE` (default stays `bsp_merge_coplanars`, so this is purely additive).
+Results on `child=6108`:
+- **Poly count**: dedup gives 29, identical to merge's 29 — a count-only check would call this a
+  match.
+- **Shape (the actual test the coordinator asked for)**: dedup's root node has plane
+  `(0,0,-1,-280)` — this is native's OWN wrong winner from the unmerged 40-poly trace (`slot=12`,
+  score=60) — NOT editor's real winning plane `(1,0,0,508)` (`slot=32`, score=108) that
+  `bsp_merge_coplanars` reproduces exactly (independently re-verified this round: `ISONODE i=0`'s
+  plane under merge mode is still `N=(1,0,0) W=508`). So dedup gets the COUNT right by coincidence
+  and the SHAPE wrong — exactly the failure mode the coordinator flagged as possible, confirmed real.
+  This makes sense in hindsight: "first poly encountered per surf, arbitrary" keeps whichever
+  fragment happens to sort first, discarding the true weld's combined vertex extent — geometrically
+  meaningless, not a coincidental stand-in for the real merge.
+- **Blanket-wide** (`UEDCLI_REPART_BLANKET_MERGE=1 UEDCLI_REPART_MERGE_MODE=dedup`): UNATCO lands at
+  **5599** (d=-715), WORSE than merge's 5689 (d=-625); Wanchai at 11628 (d=-20), same regression merge
+  already causes. Dedup is strictly worse than merge on every axis checked. `bspBuildFPolys` walking
+  `Surfs` with no weld is not what's happening — the geometric weld in `bsp_merge_coplanars` is doing
+  real, necessary work, not an accidental substitute for simple dedup.
+
+**Calling-convention hypothesis for the `Nodes.Num` contradiction (does `esp+4` actually mean Model at
+the SUBTREE call site, or is Model really in `ECX` with `esp+4` reading unrelated caller-frame data?):
+checked via static disassembly first, as instructed, then a live re-capture — REFUTED, though it
+surfaced a real and interesting fact along the way.**
+
+Disassembled `Editor.dll` around all three `bspRepartition` call sites inside `csgRebuild`
+(`0x1004a650`, one clean aligned disassembly of `0x500` bytes covering all three — `rdis.py` from
+`dev/docs/spikes/2026-08-27-native-light-apply-parity/harness/`, works fine, `capstone` 5.0.7):
+- **World-level** (`0x1004a89a`): `mov esi,[ebp-0x18]` (Model); `mov eax,[esi]` (vtable);
+  `push 0; push 0; push dword ptr[edi+0x98]; mov ecx,esi` (ecx=Model=this); `call [eax+0x1ec]`.
+- **Subtree loop1** (`0x1004aa3f`) and **loop2** (`0x1004aa90`): same shape —
+  `mov ecx,[ebp-0x18]` (SAME local as the world-level Model read!); `mov eax,[ecx]` (vtable);
+  `push 2; push ebx (iChild); push edx (=[edi+0x98]); call [eax+0x1ec]`.
+
+So the coordinator's read of the pattern is right on one count: **`ecx` genuinely is a distinct value
+from the pushed stack args at both call sites — it's the virtual-call `this`, loaded from the exact
+same `[ebp-0x18]` local both times** (strong evidence it really is the persistent world Model). The
+pushed args landing at `esp+4`/`esp+8`/`esp+0xc` inside the callee are `([edi+0x98], iChild, 2)`, not
+`(Model, iChild, 2)` — `$child` (`esp+8`) has been reading `iChild` correctly the whole session by
+coincidence of argument position, exactly as the coordinator suspected.
+
+**But `ECX` is not the fix.** Re-disassembled `bspRepartition`'s own prologue (`0x10049fc0`): a normal
+function prologue (`push ebp; mov ebp,esp; ...; mov edi,ecx; ...`) — no vtable-thunk `this`-adjustment,
+so `ecx` at entry is exactly what the caller set it to, no surprises there. Re-ran
+`repart_allcalls_unatco.py` with `$m = $ecx` instead of `$m = *(unsigned int*)($esp+4)` (temporary
+edit, reverted after — `git diff` on the harness script is clean): the resulting pointer
+(`0x3a854c4`) is STABLE across all 210 calls (same as the `esp+4` reading's own stability, `0x58fe1b4`
+in that run) but reading `Nodes.Num` through it (`ecx+0x5c`) gives **6, constant, for every single
+call** — obviously wrong (even the world-level repartition alone produces 2953 nodes). So `ecx` points
+at some OTHER, smaller object — not the world Model, or not one holding `Nodes` at `+0x5c` — while the
+ORIGINAL `esp+4` reading remains the one independently validated multiple times this multi-session
+investigation (2953 post-world-repartition, 2984 post-testvisibility, 6314 post-detail-loop, all
+matching independently-known-correct values at OTHER breakpoints in EARLIER, separate capture runs).
+Swapping to `ecx` doesn't resolve the "flat 6314, contradicted by `child=6108`'s real content at
+indices 6314-6342" contradiction — it replaces a validated-but-contradicted reading with an
+unvalidated, actively-wrong one. **This specific calling-convention bug hypothesis is refuted.**
+
+**Where this leaves things.** Both of this round's sharp, concrete hypotheses — surf-dedup instead of
+geometric merge, and a `esp+4`-vs-`ecx` calling-convention bug — are now checked and refuted with
+real evidence (a live blanket-wide regression_gate run for dedup; disassembly plus a live re-capture
+for the calling convention). Combined with the prior rounds' four refuted hypotheses (per-call merge
+correctness, pre-repartition input identity, compaction timing, progressive real index allocation),
+this is now SIX independently-checked, clean architectural hypotheses, all refuted, plus the standing
+unresolved `Nodes.Num`-flat-at-6314 contradiction that none of them explain. The `esp+4` reading is
+still the best-supported one available and its contradiction with `child=6108`'s known real content
+remains open — resolving it needs either disassembly of what runs BETWEEN `EmptyModel(0,0)` and a
+completed graft becoming durably reachable (the same handoff note as before), or determining
+`[edi+0x98]`'s actual field identity in `csgRebuild`'s own stack frame (not yet done — `edi` itself,
+in `csgRebuild`, was assumed stable across the whole function but never independently confirmed by
+disassembling `csgRebuild`'s OWN prologue to see where `edi` gets set).
+
+**Not shipped.** `bspcsg.rs`'s only change this round is the `surf_dedup`/`reduce_repartition_polys`
+diagnostic (opt-in, off by default); `bin/test -k bspcsg` (84/84) and `regression_gate.py` with no env
+vars set both reproduce the pre-existing 6321/11648 baseline exactly. No fix cleared the hard gate.

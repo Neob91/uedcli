@@ -1790,7 +1790,7 @@ fn repartition_frontier(model: &mut Model, list_a: &[i32], list_b: &[i32]) -> Re
         // localize the -625 blanket-regression's origin. NOT shipped -- revert before finishing.
         let blanket_merge = std::env::var("UEDCLI_REPART_BLANKET_MERGE").is_ok();
         let orig_polys = polys.len();
-        let polys = if blanket_merge { bsp_merge_coplanars(polys) } else { polys };
+        let polys = if blanket_merge { reduce_repartition_polys(polys) } else { polys };
         let merged_polys = polys.len();
         let before_nodes = model.nodes.len();
         split_poly_list(model, parent, place, polys, 0, BALANCE, PORTAL_BIAS, Opt::Good, &mut call_id)?;
@@ -1842,7 +1842,7 @@ fn repartition_frontier(model: &mut Model, list_a: &[i32], list_b: &[i32]) -> Re
             // against a live editor `ADD` capture (`repart_child_trace.py`) with parent offsets
             // normalized the same way.
             if std::env::var("UEDCLI_REPART_ISOLATED_TREE").is_ok() {
-                let merged = bsp_merge_coplanars(fbs_polys.clone());
+                let merged = reduce_repartition_polys(fbs_polys.clone());
                 eprintln!("ISOTREE child={child} merged_count={}", merged.len());
                 let mut scratch = model.clone();
                 scratch.nodes.clear();
@@ -1914,6 +1914,32 @@ fn bsp_merge_coplanars(polys: Vec<FPoly>) -> Vec<FPoly> {
         }
     }
     out
+}
+
+/// TEMPORARY EXPERIMENT — `unatco-verts-points-residual-after-the-zone`, coordinator's sharper
+/// hypothesis (2026-08-30): `bspBuildFPolys` (the step BEFORE `bspMergeCoplanars`) may walk
+/// `Model->Surfs` (a flat array with ONE entry per surf, regardless of how many nodes/fragments
+/// share it) rather than the node tree — which would emit exactly one poly per unique `i_link`,
+/// with NO geometric weld involved, and `bspMergeCoplanars` would be a separate LATER step doing
+/// genuine geometric merging of DISTINCT-surf adjacent fragments (not what closes the 40→29 gap).
+/// This is the crude test of that: keep only the FIRST poly encountered per unique `i_link`, no
+/// geometry, no `try_to_merge`. If this reproduces the same counts/shapes `bsp_merge_coplanars`
+/// does, dedup and merge coincide on the tested calls (doesn't distinguish them); if not, or if
+/// wiring this blanket-wide lands closer to 6314 than the merge's 5689, that's a real signal.
+fn surf_dedup(polys: Vec<FPoly>) -> Vec<FPoly> {
+    let mut seen = std::collections::HashSet::new();
+    polys.into_iter().filter(|p| seen.insert(p.i_link)).collect()
+}
+
+/// Dispatcher for the two `repartition_frontier` reduction experiments, selected by
+/// `UEDCLI_REPART_MERGE_MODE` (`dedup` -> `surf_dedup`; anything else, including unset -> the
+/// already-tested `bsp_merge_coplanars`) so `UEDCLI_REPART_BLANKET_MERGE`/`UEDCLI_REPART_ISOLATED_TREE`
+/// share one switch. TEMPORARY — `unatco-verts-points-residual-after-the-zone`.
+fn reduce_repartition_polys(polys: Vec<FPoly>) -> Vec<FPoly> {
+    match std::env::var("UEDCLI_REPART_MERGE_MODE").as_deref() {
+        Ok("dedup") => surf_dedup(polys),
+        _ => bsp_merge_coplanars(polys),
+    }
 }
 
 fn merge_group_pred(a: &FPoly, b: &FPoly) -> bool {
