@@ -1,6 +1,7 @@
 """`brush` command-family parser registrar (build/edit/poly/vertex)."""
 from __future__ import annotations
 
+import argparse
 from decimal import Decimal
 
 from ._arguments import (
@@ -600,3 +601,40 @@ def register(sub) -> None:
                         help="--ring only: snap the texture scale so an integer number of texels "
                              "fits the perimeter (exact seam meet); default leaves the closing seam")
     _tree_flag(palign)
+
+    def _top_arg(s: str):
+        if s == "all":
+            return "all"
+        try:
+            n = int(s)
+        except ValueError:
+            raise argparse.ArgumentTypeError(f"--top must be a positive integer or 'all', got {s!r}")
+        if n < 1:
+            raise argparse.ArgumentTypeError(f"--top must be a positive integer or 'all', got {s!r}")
+        return n
+
+    measure = bsub.add_parser("measure", help="pure geometric measurement (no mutation)")
+    msub = measure.add_subparsers(dest="measuresub", required=True)
+    mrel = msub.add_parser(
+        "relation",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        help="report the exact geometric relationship between every pair of faces across "
+             "2+ named brushes (plane, normals, distance, footprint_2d overlap, deltas)",
+        epilog=(
+            "footprint_2d values (the 2-D outline relationship, projected onto the shared or\n"
+            "parallel plane -- independent of `distance`, the out-of-plane gap):\n"
+            "  none        no touching or overlap at all\n"
+            "  vertex      touch at a single point\n"
+            "  edge        touch along a line segment, zero area overlap\n"
+            "  partial     real area overlap, neither fully contains the other\n"
+            "  contains    one fully inside the other's footprint (direction stated)\n"
+            "  coincident  identical footprint both ways -- usually a stray duplicate\n"
+        ),
+    )
+    mrel.add_argument(
+        "names", nargs="+",
+        help="brush actor names to compare, or '-' to read a newline name list from stdin")
+    mrel.add_argument(
+        "--top", type=_top_arg, default=1,
+        help="max ranked candidate poly-pairs to show per brush pair (default 1); "
+             "'all' shows every qualifying pair with no cap")

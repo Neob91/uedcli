@@ -2788,7 +2788,8 @@
             "intersect",
             "deintersect",
             "vertex",
-            "poly"
+            "poly",
+            "measure"
           ],
           "subparser_help": {
             "scale": "scale a group of BRUSH actors: set their MainScale (a negative axis mirrors). `mirror` is `brush scale --by -1,1,1` (no separate verb). A non-brush (point) actor is rejected",
@@ -2800,7 +2801,8 @@
             "intersect": "CSG-merge a piped brush SET into ONE brush against an EMPTY background: additives make solid, subtractives carve it, and the resulting solid's boundary is written as a single welded brush T3D to stdout. Needs at least one additive brush",
             "deintersect": "CSG-merge a piped brush SET into ONE brush against a SOLID background: the set's subtractives define voids and the VOID is written as a solid — the 'negative'/plug that exactly fills a carved doorway (pair with --mover-class for a door). Needs at least one subtractive brush",
             "vertex": "vertex query/edit (move-only; never add/delete)",
-            "poly": "per-surface (polygon) query/edit verbs"
+            "poly": "per-surface (polygon) query/edit verbs",
+            "measure": "pure geometric measurement (no mutation)"
           }
         }
       ],
@@ -7176,6 +7178,111 @@
                   "metavar": "KIND/NAME",
                   "converter": null,
                   "help": "operate on this tree instead of $UEDCLI_LEVEL: KIND/NAME where KIND is level|stash|prefab and NAME is the level/stash/prefab name (may be nested, e.g. stash/hangar/arch). Default: the level named by $UEDCLI_LEVEL.",
+                  "mutex_group": null
+                }
+              ],
+              "subparsers": {}
+            }
+          }
+        },
+        "measure": {
+          "class": "_CoordArgumentParser",
+          "prog": "uedcli brush measure",
+          "mutex_groups": [],
+          "actions": [
+            {
+              "class": "_HelpAction",
+              "option_strings": [
+                "-h",
+                "--help"
+              ],
+              "dest": "help",
+              "nargs": 0,
+              "const": null,
+              "default": {
+                "__suppress__": true
+              },
+              "required": false,
+              "choices": null,
+              "metavar": null,
+              "converter": null,
+              "help": "show this help message and exit",
+              "mutex_group": null
+            },
+            {
+              "class": "_SubParsersAction",
+              "option_strings": [],
+              "dest": "measuresub",
+              "nargs": "A...",
+              "const": null,
+              "default": null,
+              "required": true,
+              "choices": null,
+              "metavar": null,
+              "converter": null,
+              "help": null,
+              "mutex_group": null,
+              "subparser_choices": [
+                "relation"
+              ],
+              "subparser_help": {
+                "relation": "report the exact geometric relationship between every pair of faces across 2+ named brushes (plane, normals, distance, footprint_2d overlap, deltas)"
+              }
+            }
+          ],
+          "subparsers": {
+            "relation": {
+              "class": "_CoordArgumentParser",
+              "prog": "uedcli brush measure relation",
+              "mutex_groups": [],
+              "actions": [
+                {
+                  "class": "_HelpAction",
+                  "option_strings": [
+                    "-h",
+                    "--help"
+                  ],
+                  "dest": "help",
+                  "nargs": 0,
+                  "const": null,
+                  "default": {
+                    "__suppress__": true
+                  },
+                  "required": false,
+                  "choices": null,
+                  "metavar": null,
+                  "converter": null,
+                  "help": "show this help message and exit",
+                  "mutex_group": null
+                },
+                {
+                  "class": "_StoreAction",
+                  "option_strings": [],
+                  "dest": "names",
+                  "nargs": "+",
+                  "const": null,
+                  "default": null,
+                  "required": true,
+                  "choices": null,
+                  "metavar": null,
+                  "converter": null,
+                  "help": "brush actor names to compare, or '-' to read a newline name list from stdin",
+                  "mutex_group": null
+                },
+                {
+                  "class": "_StoreAction",
+                  "option_strings": [
+                    "--top"
+                  ],
+                  "dest": "top",
+                  "nargs": null,
+                  "const": null,
+                  "default": 1,
+                  "required": false,
+                  "choices": null,
+                  "metavar": null,
+                  "converter": "_top_arg",
+                  "help": "max ranked candidate poly-pairs to show per brush pair (default 1); 'all' shows every qualifying pair with no cap",
                   "mutex_group": null
                 }
               ],
