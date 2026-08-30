@@ -1,15 +1,32 @@
 +++
 priority = "p2"
 kind = "debug"
-summary = "freeclinic08/nsfhq04 +1-surf under-build root-caused to CSG classify_fragment approximation, distinct from UNATCO"
+summary = "freeclinic08's +1-surf traced to PASS-A repartition tree already non-exact (-38 nodes/-23 leaves, 0 surf delta) before the semisolid brush is processed — same class as UNATCO's open residual, not locally fixable"
 +++
 
-# freeclinic08/nsfhq04 +1-surf under-build root-caused to CSG classify_fragment approximation, distinct from UNATCO
+# freeclinic08/nsfhq04 +1-surf under-build
 
 Follow-up to `breadth-geometry-re-check-across-11-og-levels-2`: dug into the two closest-to-exact
 non-exact levels (freeclinic08 nodes -20/surfs +1/leaves -23, nsfhq04 nodes -78/surfs +1/leaves
--26). No fix shipped — root mechanism identified, but fixing it safely needs more than this
-session's budget; see "Why not fixed" below.
+-26).
+
+**CORRECTION (2026-08-30, same session, independently re-verified before overwriting per the
+findings-ledger process):** this item originally claimed `uedcli-native/src/csg.rs`'s
+`classify_fragment` (a nudge-based point-in-solid approximation) was the root mechanism. That is
+**wrong** — `csg.rs::bsp_brush_csg`/`classify_fragment` is called only from `build.rs`, which backs
+`build_geometry` (the OLD default path). `uedcli_native.build_geometry_bspcsg` — the function every
+script in this investigation (and `breadth_gate.py`) actually calls — dispatches to
+`bspcsg::build_geometry_bspcsg`, which has its **own**, separate `bsp_brush_csg`/`filter_ed_poly`
+(`bspcsg.rs` ~700-900, ~2433-2530): a faithful recursive BSP-node-plane descent (Split::Front/Back/
+Split/Coplanar, CSG-adjusted `outside` propagation, exact-0.0 coplanar facing test) that matches the
+editor's real `FilterEdPoly`/`bspBrushCSG` algorithm as decoded in
+`dev/docs/spikes/2026-07-15-native-materialize/sections/10-bsp-csg-build.md` §4 and
+`re-raw-zones/bspbrushcsg-intersect-deintersect-decode.md`. Re-ran that doc's verification harness
+(`verify_csg_build.py`) against the CURRENT `uned/UED22/Editor.dll`/`Engine.dll` this session:
+**33/33 checks pass** — the decoded algorithm is confirmed live, not just read from a pre-2026-08-14
+doc. So there is no "port the real algorithm" work to do — it's already there and correct as far as
+the decode goes. The real question is why a faithful `filter_ed_poly` still misclassifies Brush143's
+poly1; see "Live investigation" below.
 
 ## The +1 surf, precisely
 
@@ -26,21 +43,50 @@ point world `(1088, -2432, -274)`, normal `(0,0,-1)`) as a surf; the editor's bu
 surf for that poly at all — every other poly (0, 2, 3, 4, 5) matches exactly (same base
 point/normal on both sides).
 
-## Root mechanism
+## Live investigation (in progress, current session continuation)
 
-`uedcli-native/src/csg.rs`'s `classify_fragment` classifies each face fragment by **nudging its
-centroid ±0.5uu (`EPS_NUDGE`) along the winding normal and sampling point-in-solid** against the
-accumulated world brushes — the file's own header comment states this REPLAYS CSG as a
-point-in-solid test, explicitly *not* a port of the editor's real `bspBrushCSG` classify-BSP
-filter (a different algorithm, kept only for splitting).
+`Brush143` is `PF_Semisolid CSG_Add`, so per the decoded `csgRebuild` pass order (§1 of the
+`10-bsp-csg-build.md` spec, now live-reverified) it is processed in **PASS B** (the semisolid
+"detail" loop), which runs AFTER PASS A's structural brushes have gone through ONE full
+`bspRepartition` (BuildFPolys → MergeCoplanars → bspBuild/SplitPolyList → bspRefresh). So
+`filter_ed_poly`'s descent for Brush143's poly1 walks the PASS-A **repartitioned** tree, not a raw
+incremental append chain — `bspcsg.rs`'s `build_geometry_bspcsg` already mirrors this two-pass
+structure (own code comments: "Pass 1: STRUCTURAL... Pass 2: SEMISOLID detail... NOT
+repartitioned").
 
-`LeafFunc::Add`'s classification-to-keep/discard mapping (`leaf_apply`, `csg.rs:214-231`): a
-fragment classified `Outside` is always kept; one classified `CospatialFacingIn` (solid on both
-nudge samples — buried) is kept **unless** `PF_SEMISOLID` is set, in which case it is discarded.
-Brush143's poly1 is semisolid, so the only way native's `Add` keeps it is if `classify_fragment`
-returned `Outside` rather than `CospatialFacingIn` — i.e. native's nudge sample landed in void
-where the editor's real classify-BSP finds the face buried (or clips it away upstream). This is a
-genuine face-survival divergence, not a downstream tree-shape artifact.
+**Hypothesis under test:** if PASS A's own repartitioned structural tree is ALREADY not
+node-exact vs the editor at the point Brush143 is processed (the same class of repartition/
+`FindBestSplit` tie-break sensitivity that drives UNATCO's still-unresolved residual and the
+diffuse 74-brush node-ownership smear below), Brush143's poly1 would land on a different node/
+plane sequence during its `filter_ed_poly` walk purely as a DOWNSTREAM consequence — not a bug in
+`filter_ed_poly` itself, and not independently fixable without first closing the PASS-A
+repartition gap (the same open problem as UNATCO).
+
+Test: built a `freeclinic08` trunk with all 164 semisolid-Add ("detail", PASS-B) world-CSG
+brushes removed (141 structural brushes remain), then compared NATIVE's `build_geometry_bspcsg`
+on that same structural-only brush list against a live UnrealEd `--world-only --no-light` build of
+the identical filtered trunk (`build_ued_golden.py`, the same golden-build method the findings
+ledger already validated).
+
+**Result — CONFIRMED, hypothesis correct** (`/tmp/fc08_native_structural.py`,
+`/tmp/fc08_golden_counts.py`):
+
+| | nodes | surfs | leaves |
+|---|---|---|---|
+| native structural-only | 1141 | 680 | 290 |
+| editor structural-only (live) | 1179 | 680 | 313 |
+| delta | **-38** | 0 | **-23** |
+
+Surfs match exactly (680=680) — Brush143's `+1 surf` is entirely a PASS-B effect, confirmed absent
+when PASS B never runs. But nodes/leaves do NOT match: PASS A's own structural tree is already
+**-38 nodes / -23 leaves**, same face set (0 surf delta) — the identical symptom shape as UNATCO's
+residual (same face set, different tree shape only). So PASS A is confirmed non-exact *before*
+Brush143 is even reached; its `filter_ed_poly` walk descending a wrong tree is sufficient to explain
+the `+1 surf`, with no separate bug needed in `filter_ed_poly` itself. (The full-build leaf delta,
+-23, exactly matches the structural-only leaf delta -23 — the semisolid PASS-B brushes don't move
+leaf count at all here. The node delta shifts -38 → -20 once PASS B runs, i.e. adding the semisolid
+brushes back happens to cancel 18 of the 38 structural-only node misses — cancellation, not a sign
+PASS B fixes anything.)
 
 ## The -20/-78 node and -23/-26 leaf deficit is diffuse, not localized
 
@@ -52,42 +98,58 @@ or two brushes driving the total. Top individual deltas (Brush28 -17, Brush62 -1
 ...) are semisolid-brush-heavy, but freeclinic08 is 164/305 (54%) semisolid brushes overall, so
 that's roughly base rate, not enrichment — semisolid-ness alone doesn't isolate the affected set.
 
-This spread is consistent with `classify_fragment`'s nudge-sample approximation disagreeing with
-the editor's real classify-BSP on many individual near-boundary faces across the level (not just
-Brush143's), each shift rippling through which face becomes a repartition split plane — the same
-kind of tree-shape cascade the Wanchai `try_to_merge` NEAR-threshold fix (5b0a022) demonstrated
-(one merge-threshold miss on Brush754 alone moved Wanchai's node count by 20).
+This spread is consistent with the SAME kind of repartition/`FindBestSplit` tie-break sensitivity
+UNATCO's residual shows — each near-tie shift rippling through which face becomes a repartition
+split plane, the same kind of tree-shape cascade the Wanchai `try_to_merge` NEAR-threshold fix
+(5b0a022) demonstrated (one merge-threshold miss on Brush754 alone moved Wanchai's node count by
+20). Whether it's literally the SAME root cause as UNATCO's (unresolved, `blanket_merge` gated
+off) or a distinct instance of the same class is what the live structural-only test above is
+checking.
 
-## Distinct from UNATCO's paused residual — answers the task's open question
+## Distinct from UNATCO's paused residual? — same class, confirmed
 
-UNATCO's own mismatch (`unatco-verts-points-residual-after-the-zone`, paused) is **+7 nodes with
-ZERO surf delta and ZERO leaf delta** — the same SET of surviving faces, only a different tree
-SHAPE (a pure repartition/merge-shape issue). freeclinic08/nsfhq04 have a **nonzero surf delta**
-(a literally different set of surviving faces, from `classify_fragment`) plus a leaf delta. These
-are two distinct mechanisms sharing only the general "native's BSP build isn't a byte-exact port
-of the editor's" nature — freeclinic08/nsfhq04's under-build is NOT the same bug as UNATCO's
-over-build, and is not blocked on that investigation resolving.
+The previous version of this item claimed freeclinic08/nsfhq04 are **definitely not** the same bug
+as UNATCO, based on the (now-corrected) `classify_fragment` claim. That was wrong the other way
+too: the structural-only result above shows freeclinic08's PASS-A tree alone reproduces UNATCO's
+exact residual *signature* — same face set (0 surf delta), node/leaf-count-only divergence
+(-38/-23) — before the semisolid brushes that produce the final `+1 surf` are even added. The
+FINAL full-build counts still differ from UNATCO's (freeclinic08 has a nonzero surf delta, UNATCO
+doesn't), but that's because freeclinic08 additionally runs a PASS-B semisolid brush whose
+classification depends on the already-wrong PASS-A tree — one root cause (PASS-A repartition
+tie-break gap), two different-looking final symptoms depending on what PASS B does with it.
 
 ## Why not fixed this session
 
-`classify_fragment`'s nudge-based point-in-solid replay is shared by every level's CSG build.
-Tuning it blindly (e.g. `EPS_NUDGE`) risks exactly the class of regression the `blanket_merge`
-experiment already produced elsewhere (fixed one thing, regressed UNATCO 6321→5689 nodes,
-findings ledger). A safe fix needs either instrumented live evidence of what the editor's real
-classify-BSP does at this exact boundary (comparable live-tracing effort to the Area51/UNATCO
-investigations) or porting the editor's actual classify-BSP filter instead of the point-in-solid
-approximation — both larger than this session's budget. Stopping here per the task's explicit
-"don't grind if architecturally stuck" instruction, since the affected code and blast radius look
-comparable in size to the still-open UNATCO item, even though the specific mechanism differs.
+The structural-only test confirms PASS A is already non-exact (-38 nodes/-23 leaves, 0 surf delta)
+before Brush143 is even processed — architecturally the same class of problem as UNATCO's residual
+(a repartition/`FindBestSplit` tie-break gap), not a locally fixable bug in `filter_ed_poly` or
+Brush143's classification. Per the task's "don't grind if architecturally stuck" instruction, this
+item stops here rather than chasing PASS-A repartition parity — UNATCO's own investigation and the
+concurrent Wanchai verts/points investigation have already spent large effort on this exact class
+of problem with no resolution (see `native-materialize-findings.md`'s Wanchai entry, same session:
+"correct per call, wrong in aggregate" contradiction, also stopped on coordinator steer).
 
 ## Harness
 
 Scripts written this session (not yet promoted out of `_scratch/`, which is gitignored — rerun
-against a clean tree before relying on them long-term):
-`_scratch/fc08_surf_diff.py`, `_scratch/fc08_brush143.py`, `_scratch/fc08_poly1_verts.py`,
-`_scratch/fc08_node_owner_diff.py`. Baseline re-confirmed via
+against a clean tree before relying on them long-term): `_scratch/fc08_surf_diff.py`,
+`_scratch/fc08_brush143.py`, `_scratch/fc08_poly1_verts.py`, `_scratch/fc08_node_owner_diff.py`,
+`_scratch/fc08_combined_diff.py` (surf-count vs node-owner cross-reference — confirms 74/75
+node-owner-divergent brushes have MATCHING surf counts, i.e. same face set/different split shape;
+only `Brush143` differs in both), `/tmp/fc08_filter_trunk.py` + `/tmp/fc08_native_structural.py`
+(builds the structural-only filtered trunk under `_scratch/fc08-structural-only/` and gets native's
+counts) + `/tmp/fc08_golden_counts.py` (parses the live `build_ued_golden.py --world-only --no-light`
+output of that same trunk) — the PASS-A-only structural comparison that confirmed the result above;
+not yet promoted to a committed path, none survive in `/tmp` past this session — copy alongside the
+others if this line of investigation continues. Baseline re-confirmed via
 `dev/docs/spikes/2026-08-29-unatco-repart-live-diff/harness/breadth_gate.py` unchanged (3/13
-exact) before starting; no source changes were made, so no re-run after.
+exact) at session start; no source changes were made, so no re-run needed after.
+
+Also independently re-ran `dev/docs/spikes/2026-07-15-native-materialize/harness/verify_csg_build.py`
+against the current `uned/UED22` binaries this session (`pip install pefile capstone` into
+`.venv`) — 33/33 checks pass, confirming the `10-bsp-csg-build.md` §4 CSG-filter decode (which
+`bspcsg.rs`'s `filter_ed_poly`/leaf funcs already implement) is still accurate on the current
+tree, not just trusted from the pre-2026-08-14 doc.
 
 ## No level added
 
