@@ -955,3 +955,37 @@ a "tune until it matches" one. New files:
 `regression_gate.py`
 byte-identical before/after (both levels still EXACT), `bin/test` unaffected (no `.rs`/`.py`
 production-code edits this round).
+
+**`line_clear` CONFIRMED as the real cause (not a geometry residual): disagrees with the editor's real
+bit even fed the editor's own real tree/inputs. Live-disassembled the real editor function on the
+current build; REFUTES the old ±0.001 epsilon-tolerance hypothesis; full per-node state formula NOT
+decoded — no fix.** (2026-08-30, offline decisive test + 🔬 live gdb) — New
+`line_clear_algorithm_check.py`: ported `line_clear` verbatim to Python (f32-exact), self-consistency-
+verified against native's OWN real output on native's OWN tree (40/40 match — the port is faithful),
+then ran it against the GOLDEN's own real tree/inputs (already serialized in the lit `.dx` — `LIGHT
+APPLY` never rebuilds BSP, so no live capture needed for this part) for "bits-only" bucket mismatches:
+**20/40 sampled disagree with the editor's real bit**, 16/20 in the direction "line_clear says
+blocked, editor says clear". This rules out the geometry-residual explanation and confirms a genuine
+`line_clear` algorithm gap.
+
+Manually traced one mismatch (`rec=14 Light42 v=3 u=0`) to a ray origin sitting ~0.0002uu off an
+axis-aligned BSP plane, where `line_clear`'s strict `ds>=0.0` test takes a spurious near-zero
+"crossing" split. The pre-08-14 (owner-flagged untrusted) `linecheck-oracle.md` claims a ±0.001
+epsilon band would avoid exactly this. **Live-checked directly on the current build**
+(`linecheck_target_disasm.py`, new): fresh disasm confirms the real call site (`Editor.dll` `illuminateSurf`,
+`call dword ptr [eax+0x58]` off `Level->Model`'s vtable — independently re-derives the pre-08-14
+"vtable +0x58" claim), live-resolved the real call target, and disassembled the actual recursive
+per-node walker. **REFUTED**: the real classification (`comiss`+`setae`) is a strict `>=0.0` test, no
+epsilon — same as native's own test. **Ruled out for the traced exemplar** (not eliminated generally):
+the plane-dot is an SSE pairwise-sum dot product, different ASSOCIATION than native's left-to-right
+scalar sum; provably bit-identical for the traced exemplar's axis-aligned plane (b=c=0 collapses both
+orders to the same two operands), unchecked on oblique planes. **Cross-validated** existing
+`model.rs`/`bspcsg.rs` node-layout assumptions live: `FBspNode` stride 0x40, children at `+0x20`/
+`+0x24`, `NodeFlags` at `+0x37` — all confirmed exactly. **Not decoded**: the per-node state-threading
+bit formula (XOR/AND of front-flags, incoming state, `NodeFlags`) appears, as read, to test only bit0
+(`NF_NOT_CSG`) of `NodeFlags` — leaving open whether/where `NF_NotVisBlocking`/`NF_IsNew` gating
+happens elsewhere, or whether the static read has an error (dense SSE register reuse, not verified by
+single-stepping). Stopped here per the "log clearly, don't grind" guidance — next step named: a
+live single-step trace of the same known-mismatching ray through this exact function. No production
+code changed (`linecheck.rs` untouched); full findings + reusable harnesses:
+`dev/docs/board/inbox/line-clear-shadow-ray-algorithm-gap-found-real/overview.md`.

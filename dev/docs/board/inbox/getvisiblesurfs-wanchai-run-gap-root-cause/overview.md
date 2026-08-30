@@ -65,5 +65,11 @@ the `Points`/geometry residual tracked in `wanchai-verts-points-residual-indepen
 here. After that, `bits`-only divergence with matching run/grid/pan/scale (255 records): the
 `lumel_axes` vs `FCoords::Inverse` determinant-grouping-ulp hypothesis was CHASED 2026-08-30 and
 REFUTED (disassembly proof + live gdb capture, 80/80 match — see the findings ledger and
-`native-light-apply-bake-where-it-stands-and`) — `lumel_axes` needs no fix; the real cause is
-downstream, most likely `linecheck::line_clear`, not yet investigated.
+`native-light-apply-bake-where-it-stands-and`) — `lumel_axes` needs no fix.
+
+**2026-08-30, same day: `linecheck::line_clear` investigated and CONFIRMED as the real cause** (not
+a geometry residual) — it disagrees with the editor's real bit even when fed the editor's own real
+tree/inputs (20/40 sampled mismatches). Live-disassembled the real editor function on the current
+build: refutes an old epsilon-tolerance hypothesis, rules out a plane-dot summation-order hypothesis
+for the traced exemplar, but the exact per-node state formula was not fully decoded — no fix shipped.
+Full writeup: `dev/docs/board/inbox/line-clear-shadow-ray-algorithm-gap-found-real/overview.md`.

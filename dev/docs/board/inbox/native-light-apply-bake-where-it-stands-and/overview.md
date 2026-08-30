@@ -1,8 +1,8 @@
 +++
 priority = "p1"
 kind = "debug"
-summary = "Resume pointer for the native LIGHT APPLY bake. Wanchai now 3297/4530 (72.8%) byte-identical after a pixel-center rasterization fix (getvisiblesurfs-wanchai-run-gap-root-cause, 2026-08-30) -- was 3228/4530 (71.3%), UNCHANGED by the later repartition_frontier geometry fix (re-measured 2026-08-30). Gap 2 (per-lumel shadow-ray precision / lumel_axes term-grouping) hypothesis REFUTED this round -- disassembly-proved AND live-gdb-confirmed (80/80) bit-identical to the editor's FCoords::Inverse; real bits-only divergence is downstream (line_clear/LineCheck), not yet found. UNATCO table below is STILL STALE (its tree hasn't been node-exact since the repartition-frontier fix); re-measure before trusting it."
-depends-on = ["port-urender-getvisiblesurfs-so-each-light-gets", "port-the-per-leaf-permeating-light-lists-model", "unatco-verts-points-residual-after-the-zone", "getvisiblesurfs-wanchai-run-gap-root-cause"]
+summary = "Resume pointer for the native LIGHT APPLY bake. Wanchai now 3297/4530 (72.8%) byte-identical after a pixel-center rasterization fix (getvisiblesurfs-wanchai-run-gap-root-cause, 2026-08-30) -- was 3228/4530 (71.3%), UNCHANGED by the later repartition_frontier geometry fix (re-measured 2026-08-30). Gap 2's lumel_axes hypothesis REFUTED (80/80 live match to FCoords::Inverse); line_clear investigated next and CONFIRMED as the real cause (disagrees with the editor's real bit on the editor's own real tree, 20/40 sampled) -- the editor's real function was live-disassembled on the current build but its per-node state formula was not fully decoded, no fix yet (line-clear-shadow-ray-algorithm-gap-found-real). UNATCO table below is STILL STALE (its tree hasn't been node-exact since the repartition-frontier fix); re-measure before trusting it."
+depends-on = ["port-urender-getvisiblesurfs-so-each-light-gets", "port-the-per-leaf-permeating-light-lists-model", "unatco-verts-points-residual-after-the-zone", "getvisiblesurfs-wanchai-run-gap-root-cause", "line-clear-shadow-ray-algorithm-gap-found-real"]
 spikes = ["dev/docs/spikes/2026-08-27-native-light-apply-parity/"]
 +++
 
@@ -169,10 +169,19 @@ the difference (Wanchai has more zones/portal crossings). Reproduced with
   `Editor.dll 0x100a5570` (right after the real `FCoords(0,TU,TV,N).Inverse().Transpose()` chain
   returns) during a real Wanchai `LIGHT APPLY`, captures the editor's REAL `u_dir`/`v_dir` for 80
   surfaces, diffs against `light.rs::lumel_axes`'s own formula on the same inputs: **80/80 match, 0
-  mismatches**. `lumel_axes` needs no fix. The real cause of the bits-only bucket is downstream —
-  most likely `linecheck::line_clear` (the shadow ray's actual BSP line-of-sight test) — not yet
-  investigated; see the findings ledger's 2026-08-30 entry for the full derivation (ABI/stack-layout
-  trace included, reusable for a future `line_clear` investigation).
+  mismatches**. `lumel_axes` needs no fix.
+* **CHASED 2026-08-30 (same day), CONFIRMED (not a fix yet).** The real cause of the bits-only bucket
+  is `linecheck::line_clear` — offline cross-check (`line_clear_algorithm_check.py`) shows the ported
+  algorithm disagrees with the editor's real bit 20/40 sampled times even when fed the editor's OWN
+  real BSP tree and real ray endpoints (self-consistency against native's own output verified faithful
+  first, 40/40). Live-disassembled the real editor shadow-ray function on the current build
+  (`linecheck_target_disasm.py`): refutes an old ±0.001 epsilon-tolerance hypothesis (the real test is
+  a strict `>=0.0`, same as native's), rules out a plane-dot summation-association hypothesis for the
+  one traced exemplar (axis-aligned plane, provably bit-identical either way), and cross-validates the
+  existing `FBspNode` layout assumptions (`+0x20`/`+0x24`/`+0x37`, stride 0x40) live. The per-node
+  state-threading bit formula was NOT fully decoded (dense SSE register reuse; needs a single-step
+  trace, not more static reading) — no fix shipped, per the standing rule. Full writeup:
+  `dev/docs/board/inbox/line-clear-shadow-ray-algorithm-gap-found-real/overview.md`.
 * `FovAngle` for the editor's temp visibility viewport is not pinned (it is `Actor+0x304`, never set by
   the gather pass, and `SpawnViewActor` reuses a free `Camera`). Six 90°-apart faces only cover the
   sphere at FOV 90. Needed before a `GetVisibleSurfs` port can claim fidelity.

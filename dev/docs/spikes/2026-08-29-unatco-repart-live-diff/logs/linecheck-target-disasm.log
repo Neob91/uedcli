@@ -1,0 +1,945 @@
+[New LWP 146]
+[New LWP 155]
+[New LWP 156]
+[New LWP 157]
+[New LWP 158]
+[New LWP 159]
+[New LWP 160]
+[New LWP 161]
+[New LWP 162]
+[New LWP 163]
+[New LWP 164]
+[New LWP 165]
+[New LWP 166]
+[New LWP 167]
+[New LWP 168]
+[New LWP 169]
+[New LWP 170]
+[New LWP 171]
+[New LWP 172]
+[New LWP 173]
+[New LWP 174]
+[New LWP 175]
+[New LWP 176]
+[New LWP 177]
+[New LWP 178]
+[New LWP 179]
+[New LWP 180]
+[New LWP 181]
+[New LWP 182]
+[New LWP 183]
+[New LWP 199]
+[New LWP 245]
+[New LWP 246]
+[New LWP 247]
+[Thread debugging using libthread_db enabled]
+Using host libthread_db library "/lib/x86_64-linux-gnu/libthread_db.so.1".
+0xf7f34cfc in __kernel_vsyscall ()
+Breakpoint 1 at 0x100a5a04
+ORACLE_ATTACHED
+HIT n=0 model=0xc54447c vtbl=0x181a254 target=0x17ce4c0
+INNER=0x17cea70
+DISASM_START
+   0x17cea70:	push   %ebx
+   0x17cea71:	mov    %esp,%ebx
+   0x17cea73:	sub    $0x8,%esp
+   0x17cea76:	and    $0xfffffff0,%esp
+   0x17cea79:	add    $0x4,%esp
+   0x17cea7c:	push   %ebp
+   0x17cea7d:	mov    0x4(%ebx),%ebp
+   0x17cea80:	mov    %ebp,0x4(%esp)
+   0x17cea84:	mov    %esp,%ebp
+   0x17cea86:	sub    $0x38,%esp
+   0x17cea89:	mov    0xc(%ebx),%dl
+   0x17cea8c:	movaps %xmm1,%xmm5
+   0x17cea8f:	push   %esi
+   0x17cea90:	mov    0x8(%ebx),%esi
+   0x17cea93:	movaps %xmm0,%xmm4
+   0x17cea96:	movaps %xmm5,-0x30(%ebp)
+   0x17cea9a:	push   %edi
+   0x17cea9b:	cmp    $0xffffffff,%esi
+   0x17cea9e:	je     0x17ceb81
+   0x17ceaa4:	mov    0x18fbbb0,%edi
+   0x17ceaaa:	xorps  %xmm6,%xmm6
+   0x17ceaad:	mov    %dl,-0x1(%ebp)
+   0x17ceab0:	shl    $0x6,%esi
+   0x17ceab3:	xor    %ecx,%ecx
+   0x17ceab5:	add    %edi,%esi
+   0x17ceab7:	movups (%esi),%xmm2
+   0x17ceaba:	mov    0x37(%esi),%dh
+   0x17ceabd:	movaps %xmm2,%xmm1
+   0x17ceac0:	mulps  %xmm4,%xmm2
+   0x17ceac3:	mulps  %xmm5,%xmm1
+   0x17ceac6:	movaps %xmm1,%xmm3
+   0x17ceac9:	shufps $0xb1,%xmm1,%xmm3
+   0x17ceacd:	movaps %xmm3,%xmm0
+   0x17cead0:	addps  %xmm1,%xmm0
+   0x17cead3:	movaps %xmm2,%xmm1
+   0x17cead6:	shufps $0xb1,%xmm2,%xmm1
+   0x17ceada:	movhlps %xmm0,%xmm3
+   0x17ceadd:	addss  %xmm0,%xmm3
+   0x17ceae1:	movaps %xmm1,%xmm0
+   0x17ceae4:	addps  %xmm2,%xmm0
+   0x17ceae7:	comiss %xmm6,%xmm3
+   0x17ceaea:	movhlps %xmm0,%xmm1
+   0x17ceaed:	addss  %xmm0,%xmm1
+   0x17ceaf1:	setae  %cl
+   0x17ceaf4:	xor    %eax,%eax
+   0x17ceaf6:	mov    %ecx,-0xc(%ebp)
+   0x17ceaf9:	comiss %xmm6,%xmm1
+   0x17ceafc:	setae  %al
+   0x17ceaff:	mov    %eax,-0x8(%ebp)
+   0x17ceb02:	cmp    %eax,%ecx
+   0x17ceb04:	je     0x17ceb65
+   0x17ceb06:	movaps %xmm3,%xmm0
+   0x17ceb09:	mov    -0x8(%ebp),%ecx
+   0x17ceb0c:	subss  %xmm1,%xmm0
+   0x17ceb10:	xorps  %xmm2,%xmm2
+   0x17ceb13:	xor    %dl,%al
+   0x17ceb15:	movaps %xmm4,%xmm1
+   0x17ceb18:	and    %dh,%al
+   0x17ceb1a:	and    $0x1,%al
+   0x17ceb1c:	xor    %cl,%al
+   0x17ceb1e:	divss  %xmm0,%xmm3
+   0x17ceb22:	movzbl %al,%eax
+   0x17ceb25:	push   %eax
+   0x17ceb26:	movaps %xmm4,%xmm0
+   0x17ceb29:	push   0x20(%esi,%ecx,4)
+   0x17ceb2d:	subps  %xmm5,%xmm0
+   0x17ceb30:	movss  %xmm3,%xmm2
+   0x17ceb34:	shufps $0xc0,%xmm2,%xmm2
+   0x17ceb38:	mulps  %xmm0,%xmm2
+   0x17ceb3b:	addps  %xmm5,%xmm2
+   0x17ceb3e:	movaps %xmm2,%xmm0
+   0x17ceb41:	movaps %xmm2,-0x20(%ebp)
+   0x17ceb45:	call   0x17cea70
+   0x17ceb4a:	add    $0x8,%esp
+   0x17ceb4d:	test   %al,%al
+   0x17ceb4f:	je     0x17ceb8c
+   0x17ceb51:	movaps -0x20(%ebp),%xmm4
+   0x17ceb55:	xorps  %xmm6,%xmm6
+   0x17ceb58:	movaps -0x30(%ebp),%xmm5
+   0x17ceb5c:	mov    -0xc(%ebp),%ecx
+   0x17ceb5f:	mov    -0x1(%ebp),%dl
+   0x17ceb62:	mov    0x37(%esi),%dh
+   0x17ceb65:	mov    0x20(%esi,%ecx,4),%esi
+   0x17ceb69:	mov    %cl,%al
+   0x17ceb6b:	xor    %dl,%al
+   0x17ceb6d:	and    %dh,%al
+   0x17ceb6f:	and    $0x1,%al
+   0x17ceb71:	xor    %cl,%al
+   0x17ceb73:	mov    %al,%dl
+   0x17ceb75:	mov    %dl,-0x1(%ebp)
+   0x17ceb78:	cmp    $0xffffffff,%esi
+   0x17ceb7b:	jne    0x17ceab0
+   0x17ceb81:	mov    %dl,%al
+   0x17ceb83:	pop    %edi
+   0x17ceb84:	pop    %esi
+   0x17ceb85:	mov    %ebp,%esp
+   0x17ceb87:	pop    %ebp
+   0x17ceb88:	mov    %ebx,%esp
+   0x17ceb8a:	pop    %ebx
+   0x17ceb8b:	ret
+   0x17ceb8c:	pop    %edi
+   0x17ceb8d:	xor    %al,%al
+   0x17ceb8f:	pop    %esi
+   0x17ceb90:	mov    %ebp,%esp
+   0x17ceb92:	pop    %ebp
+   0x17ceb93:	mov    %ebx,%esp
+   0x17ceb95:	pop    %ebx
+   0x17ceb96:	ret
+   0x17ceb97:	int3
+   0x17ceb98:	int3
+   0x17ceb99:	int3
+   0x17ceb9a:	int3
+   0x17ceb9b:	int3
+   0x17ceb9c:	int3
+   0x17ceb9d:	int3
+   0x17ceb9e:	int3
+   0x17ceb9f:	int3
+   0x17ceba0:	push   %ebp
+   0x17ceba1:	mov    %esp,%ebp
+   0x17ceba3:	push   $0xffffffff
+   0x17ceba5:	push   $0x1817630
+   0x17cebaa:	mov    %fs:0x0,%eax
+   0x17cebb0:	push   %eax
+   0x17cebb1:	sub    $0x660,%esp
+   0x17cebb7:	mov    0x1899424,%eax
+   0x17cebbc:	xor    %ebp,%eax
+   0x17cebbe:	mov    %eax,-0x14(%ebp)
+   0x17cebc1:	push   %ebx
+   0x17cebc2:	push   %esi
+   0x17cebc3:	push   %edi
+   0x17cebc4:	push   %eax
+   0x17cebc5:	lea    -0xc(%ebp),%eax
+   0x17cebc8:	mov    %eax,%fs:0x0
+   0x17cebce:	mov    %esp,-0x10(%ebp)
+   0x17cebd1:	mov    %ecx,-0x5b4(%ebp)
+   0x17cebd7:	mov    0x8(%ebp),%edi
+   0x17cebda:	mov    0xc(%ebp),%ebx
+   0x17cebdd:	movl   $0x0,-0x4(%ebp)
+   0x17cebe4:	fwait
+   0x17cebe5:	xorps  %xmm1,%xmm1
+   0x17cebe8:	movl   $0x0,-0x5cc(%ebp)
+   0x17cebf2:	movl   $0x0,-0x5c8(%ebp)
+   0x17cebfc:	movl   $0x0,-0x5c4(%ebp)
+   0x17cec06:	movl   $0x0,0x14(%edi)
+   0x17cec0d:	movl   $0x0,0x18(%edi)
+   0x17cec14:	movl   $0x0,0x1c(%edi)
+   0x17cec1b:	movss  0x10(%ebp),%xmm0
+   0x17cec20:	movss  %xmm0,0x8(%edi)
+   0x17cec25:	movss  0x14(%ebp),%xmm0
+   0x17cec2a:	movss  %xmm0,0xc(%edi)
+   0x17cec2f:	movss  0x18(%ebp),%xmm0
+   0x17cec34:	movss  %xmm0,0x10(%edi)
+   0x17cec39:	mov    %ecx,0x20(%edi)
+   0x17cec3c:	mov    %ebx,0x4(%edi)
+   0x17cec3f:	movl   $0x0,0x24(%edi)
+   0x17cec46:	mov    0xf0(%ecx),%eax
+   0x17cec4c:	mov    %eax,-0x5ac(%ebp)
+   0x17cec52:	cmpl   $0x0,0x5c(%ecx)
+   0x17cec56:	je     0x17cedfb
+   0x17cec5c:	movl   $0x0,-0x5d8(%ebp)
+   0x17cec66:	movl   $0x0,-0x5d4(%ebp)
+   0x17cec70:	movl   $0x0,-0x5d0(%ebp)
+   0x17cec7a:	movss  0x1c(%ebp),%xmm2
+   0x17cec7f:	ucomiss %xmm1,%xmm2
+   0x17cec82:	lahf
+   0x17cec83:	test   $0x44,%ah
+   0x17cec86:	jp     0x17ced6d
+   0x17cec8c:	movss  0x20(%ebp),%xmm0
+   0x17cec91:	ucomiss %xmm1,%xmm0
+   0x17cec94:	lahf
+   0x17cec95:	test   $0x44,%ah
+   0x17cec98:	jp     0x17ced6d
+   0x17cec9e:	movss  0x24(%ebp),%xmm0
+   0x17ceca3:	ucomiss %xmm1,%xmm0
+   0x17ceca6:	lahf
+   0x17ceca7:	test   $0x44,%ah
+   0x17cecaa:	jp     0x17ced6d
+   0x17cecb0:	xor    %esi,%esi
+   0x17cecb2:	test   %ebx,%ebx
+   0x17cecb4:	je     0x17cecc9
+   0x17cecb6:	mov    (%ebx),%eax
+   0x17cecb8:	lea    -0x63c(%ebp),%ecx
+   0x17cecbe:	push   %ecx
+   0x17cecbf:	mov    %ebx,%ecx
+   0x17cecc1:	call   *0x98(%eax)
+   0x17cecc7:	jmp    0x17cecde
+   0x17cecc9:	mov    0x18192e8,%eax
+   0x17cecce:	add    $0x18,%eax
+   0x17cecd1:	push   %eax
+   0x17cecd2:	lea    -0x66c(%ebp),%ecx
+   0x17cecd8:	call   *0x1819234
+   0x17cecde:	push   %eax
+   0x17cecdf:	lea    -0x60c(%ebp),%ecx
+   0x17cece5:	call   *0x1819238
+   0x17ceceb:	nopl   0x0(%eax,%eax,1)
+   0x17cecf0:	mov    %esi,-0x5b0(%ebp)
+   0x17cecf6:	shl    $0x6,%esi
+   0x17cecf9:	mov    -0x5b4(%ebp),%eax
+   0x17cecff:	add    0x58(%eax),%esi
+   0x17ced02:	lea    0x10(%ebp),%eax
+   0x17ced05:	push   %eax
+   0x17ced06:	lea    -0x60c(%ebp),%eax
+   0x17ced0c:	push   %eax
+   0x17ced0d:	lea    -0x5dc(%ebp),%eax
+   0x17ced13:	push   %eax
+   0x17ced14:	mov    %esi,%ecx
+   0x17ced16:	call   *0x1819988
+   0x17ced1c:	mov    %eax,%ecx
+   0x17ced1e:	call   *0x18194fc
+   0x17ced24:	fstps  -0x5b8(%ebp)
+   0x17ced2a:	movss  -0x5b8(%ebp),%xmm0
+   0x17ced32:	xor    %ebx,%ebx
+   0x17ced34:	xorps  %xmm1,%xmm1
+   0x17ced37:	comiss %xmm1,%xmm0
+   0x17ced3a:	seta   %bl
+   0x17ced3d:	push   $0x0
+   0x17ced3f:	push   -0x5ac(%ebp)
+   0x17ced45:	push   %ebx
+   0x17ced46:	mov    %esi,%ecx
+   0x17ced48:	call   0x17cd4f0
+   0x17ced4d:	mov    %eax,-0x5ac(%ebp)
+   0x17ced53:	mov    0x20(%esi,%ebx,4),%esi
+   0x17ced57:	cmp    $0xffffffff,%esi
+   0x17ced5a:	jne    0x17cecf0
+   0x17ced5c:	mov    -0x5b0(%ebp),%ecx
+   0x17ced62:	lea    (%ebx,%ecx,2),%ecx
+   0x17ced65:	mov    %ecx,0x28(%edi)
+   0x17ced68:	jmp    0x17cedfb
+   0x17ced6d:	push   0x28(%ebp)
+   0x17ced70:	sub    $0xc,%esp
+   0x17ced73:	mov    %esp,%eax
+   0x17ced75:	movss  %xmm2,(%eax)
+   0x17ced79:	movss  0x20(%ebp),%xmm0
+   0x17ced7e:	movss  %xmm0,0x4(%eax)
+   0x17ced83:	movss  0x24(%ebp),%xmm0
+   0x17ced88:	movss  %xmm0,0x8(%eax)
+   0x17ced8d:	sub    $0xc,%esp
+   0x17ced90:	mov    %esp,%eax
+   0x17ced92:	movss  0x10(%ebp),%xmm0
+   0x17ced97:	movss  %xmm0,(%eax)
+   0x17ced9b:	movss  0x14(%ebp),%xmm0
+   0x17ceda0:	movss  %xmm0,0x4(%eax)
+   0x17ceda5:	movss  0x18(%ebp),%xmm0
+   0x17cedaa:	movss  %xmm0,0x8(%eax)
+   0x17cedaf:	push   %ebx
+   0x17cedb0:	push   %ecx
+   0x17cedb1:	push   %edi
+   0x17cedb2:	lea    -0x5a8(%ebp),%ecx
+   0x17cedb8:	call   0x17cbb20
+   0x17cedbd:	push   -0x5ac(%ebp)
+   0x17cedc3:	push   $0x0
+   0x17cedc5:	push   $0x0
+   0x17cedc7:	lea    -0x5a8(%ebp),%ecx
+   0x17cedcd:	call   0x17cc890
+   0x17cedd2:	mov    %eax,-0x5ac(%ebp)
+   0x17cedd8:	cmp    %ebx,0x4(%edi)
+   0x17ceddb:	je     0x17cedfb
+   0x17ceddd:	push   $0x143
+   0x17cede2:	push   $0x18374cc
+   0x17cede7:	push   $0x1837500
+   0x17cedec:	call   *0x181906c
+   0x17cedf2:	add    $0xc,%esp
+   0x17cedf5:	mov    -0x5ac(%ebp),%eax
+   0x17cedfb:	fwait
+   0x17cedfc:	mov    -0xc(%ebp),%ecx
+   0x17cedff:	mov    %ecx,%fs:0x0
+   0x17cee06:	pop    %ecx
+   0x17cee07:	pop    %edi
+   0x17cee08:	pop    %esi
+   0x17cee09:	pop    %ebx
+   0x17cee0a:	mov    -0x14(%ebp),%ecx
+   0x17cee0d:	xor    %ebp,%ecx
+   0x17cee0f:	call   0x17ee409
+   0x17cee14:	mov    %ebp,%esp
+   0x17cee16:	pop    %ebp
+   0x17cee17:	ret    $0x24
+   0x17cee1a:	push   $0x18374a4
+   0x17cee1f:	push   $0x1819f40
+   0x17cee24:	call   *0x1819070
+   0x17cee2a:	add    $0x8,%esp
+   0x17cee2d:	push   $0x0
+   0x17cee2f:	push   $0x0
+   0x17cee31:	call   0x17ef400
+   0x17cee36:	mov    -0x5c0(%ebp),%eax
+   0x17cee3c:	mov    %eax,-0x5bc(%ebp)
+   0x17cee42:	push   $0x18513f8
+   0x17cee47:	lea    -0x5bc(%ebp),%eax
+   0x17cee4d:	push   %eax
+   0x17cee4e:	call   0x17ef400
+   0x17cee53:	int3
+   0x17cee54:	int3
+   0x17cee55:	int3
+   0x17cee56:	int3
+   0x17cee57:	int3
+   0x17cee58:	int3
+   0x17cee59:	int3
+   0x17cee5a:	int3
+   0x17cee5b:	int3
+   0x17cee5c:	int3
+   0x17cee5d:	int3
+   0x17cee5e:	int3
+   0x17cee5f:	int3
+   0x17cee60:	push   %ebp
+   0x17cee61:	mov    %esp,%ebp
+   0x17cee63:	push   $0xffffffff
+   0x17cee65:	push   $0x1817660
+   0x17cee6a:	mov    %fs:0x0,%eax
+   0x17cee70:	push   %eax
+   0x17cee71:	sub    $0x1c,%esp
+   0x17cee74:	push   %ebx
+   0x17cee75:	push   %esi
+   0x17cee76:	push   %edi
+   0x17cee77:	mov    0x1899424,%eax
+   0x17cee7c:	xor    %ebp,%eax
+   0x17cee7e:	push   %eax
+   0x17cee7f:	lea    -0xc(%ebp),%eax
+   0x17cee82:	mov    %eax,%fs:0x0
+   0x17cee88:	mov    %esp,-0x10(%ebp)
+   0x17cee8b:	mov    %ecx,%ebx
+   0x17cee8d:	movl   $0x0,-0x4(%ebp)
+   0x17cee94:	fwait
+   0x17cee95:	mov    0xc(%ebp),%esi
+   0x17cee98:	test   %esi,%esi
+   0x17cee9a:	jne    0x17ceeb4
+   0x17cee9c:	push   $0x2cc
+   0x17ceea1:	push   $0x18374cc
+   0x17ceea6:	push   $0x183758c
+   0x17ceeab:	call   *0x181906c
+   0x17ceeb1:	add    $0xc,%esp
+   0x17ceeb4:	mov    %esi,-0x28(%ebp)
+   0x17ceeb7:	movl   $0xffffffff,-0x24(%ebp)
+   0x17ceebe:	movb   $0x0,-0x20(%ebp)
+   0x17ceec2:	cmpl   $0x0,0x5c(%ebx)
+   0x17ceec6:	je     0x17cef50
+   0x17ceecc:	xor    %esi,%esi
+   0x17ceece:	mov    %esi,-0x14(%ebp)
+   0x17ceed1:	xor    %edi,%edi
+   0x17ceed3:	xor    %ecx,%ecx
+   0x17ceed5:	mov    0x58(%ebx),%edx
+   0x17ceed8:	cmp    $0xffffffff,%edi
+   0x17ceedb:	je     0x17cef0e
+   0x17ceedd:	mov    %edi,%esi
+   0x17ceedf:	shl    $0x6,%esi
+   0x17ceee2:	add    %edx,%esi
+   0x17ceee4:	lea    0x10(%ebp),%eax
+   0x17ceee7:	push   %eax
+   0x17ceee8:	mov    %esi,%ecx
+   0x17ceeea:	call   *0x18194fc
+   0x17ceef0:	fstps  -0x14(%ebp)
+   0x17ceef3:	movss  -0x14(%ebp),%xmm0
+   0x17ceef8:	xor    %eax,%eax
+   0x17ceefa:	xorps  %xmm1,%xmm1
+   0x17ceefd:	comiss %xmm1,%xmm0
+   0x17cef00:	setae  %al
+   0x17cef03:	mov    %eax,-0x14(%ebp)
+   0x17cef06:	mov    %edi,%ecx
+   0x17cef08:	mov    0x20(%esi,%eax,4),%edi
+   0x17cef0c:	jmp    0x17ceed5
+   0x17cef0e:	mov    %ecx,%eax
+   0x17cef10:	shl    $0x4,%eax
+   0x17cef13:	mov    -0x14(%ebp),%esi
+   0x17cef16:	add    %esi,%eax
+   0x17cef18:	mov    0x38(%edx,%eax,4),%eax
+   0x17cef1c:	mov    %eax,-0x24(%ebp)
+   0x17cef1f:	cmpl   $0x0,0x100(%ebx)
+   0x17cef26:	je     0x17cef33
+   0x17cef28:	shl    $0x6,%ecx
+   0x17cef2b:	add    %edx,%ecx
+   0x17cef2d:	mov    0x34(%ecx,%esi,1),%al
+   0x17cef31:	jmp    0x17cef35
+   0x17cef33:	xor    %al,%al
+   0x17cef35:	mov    %al,-0x20(%ebp)
+   0x17cef38:	movzbl %al,%eax
+   0x17cef3b:	lea    (%eax,%eax,2),%eax
+   0x17cef3e:	mov    0x104(%ebx,%eax,8),%eax
+   0x17cef45:	test   %eax,%eax
+   0x17cef47:	mov    0xc(%ebp),%ecx
+   0x17cef4a:	cmovne %eax,%ecx
+   0x17cef4d:	mov    %ecx,-0x28(%ebp)
+   0x17cef50:	movq   -0x28(%ebp),%xmm0
+   0x17cef55:	mov    0x8(%ebp),%eax
+   0x17cef58:	movq   %xmm0,(%eax)
+   0x17cef5c:	mov    -0x20(%ebp),%ecx
+   0x17cef5f:	mov    %ecx,0x8(%eax)
+   0x17cef62:	fwait
+   0x17cef63:	mov    -0xc(%ebp),%ecx
+   0x17cef66:	mov    %ecx,%fs:0x0
+   0x17cef6d:	pop    %ecx
+   0x17cef6e:	pop    %edi
+   0x17cef6f:	pop    %esi
+   0x17cef70:	pop    %ebx
+   0x17cef71:	mov    %ebp,%esp
+   0x17cef73:	pop    %ebp
+   0x17cef74:	ret    $0x14
+   0x17cef77:	push   $0x1837564
+   0x17cef7c:	push   $0x1819f40
+   0x17cef81:	call   *0x1819070
+   0x17cef87:	add    $0x8,%esp
+   0x17cef8a:	push   $0x0
+   0x17cef8c:	push   $0x0
+   0x17cef8e:	call   0x17ef400
+   0x17cef93:	mov    -0x1c(%ebp),%eax
+   0x17cef96:	mov    %eax,-0x18(%ebp)
+   0x17cef99:	push   $0x18513f8
+   0x17cef9e:	lea    -0x18(%ebp),%eax
+   0x17cefa1:	push   %eax
+   0x17cefa2:	call   0x17ef400
+   0x17cefa7:	int3
+   0x17cefa8:	int3
+   0x17cefa9:	int3
+   0x17cefaa:	int3
+   0x17cefab:	int3
+   0x17cefac:	int3
+   0x17cefad:	int3
+   0x17cefae:	int3
+   0x17cefaf:	int3
+   0x17cefb0:	push   %ebp
+   0x17cefb1:	mov    %esp,%ebp
+   0x17cefb3:	push   %esi
+   0x17cefb4:	mov    0xc(%ebp),%esi
+   0x17cefb7:	push   %edi
+   0x17cefb8:	mov    0x10(%ebp),%edi
+   0x17cefbb:	nopl   0x0(%eax,%eax,1)
+   0x17cefc0:	mov    0x8(%ebp),%eax
+   0x17cefc3:	shl    $0x6,%esi
+   0x17cefc6:	push   %edi
+   0x17cefc7:	add    0x58(%eax),%esi
+   0x17cefca:	mov    %esi,%ecx
+   0x17cefcc:	andb   $0x3f,0x37(%esi)
+   0x17cefd0:	call   *0x18194fc
+   0x17cefd6:	movss  0xc(%edi),%xmm1
+   0x17cefdb:	fstps  0x10(%ebp)
+   0x17cefde:	movss  0x10(%ebp),%xmm2
+   0x17cefe3:	movaps %xmm1,%xmm0
+   0x17cefe6:	xorps  0x181ee60,%xmm0
+   0x17cefed:	comiss %xmm2,%xmm0
+   0x17ceff0:	jbe    0x17ceffb
+   0x17ceff2:	orb    $0x80,0x37(%esi)
+   0x17ceff6:	mov    0x20(%esi),%esi
+   0x17ceff9:	jmp    0x17cf01e
+   0x17ceffb:	comiss %xmm1,%xmm2
+   0x17ceffe:	jbe    0x17cf006
+   0x17cf000:	orb    $0x40,0x37(%esi)
+   0x17cf004:	jmp    0x17cf01b
+   0x17cf006:	mov    0x20(%esi),%eax
+   0x17cf009:	cmp    $0xffffffff,%eax
+   0x17cf00c:	je     0x17cf01b
+   0x17cf00e:	push   %edi
+   0x17cf00f:	push   %eax
+   0x17cf010:	push   0x8(%ebp)
+   0x17cf013:	call   0x17cefb0
+   0x17cf018:	add    $0xc,%esp
+   0x17cf01b:	mov    0x24(%esi),%esi
+   0x17cf01e:	cmp    $0xffffffff,%esi
+   0x17cf021:	jne    0x17cefc0
+   0x17cf023:	pop    %edi
+   0x17cf024:	pop    %esi
+   0x17cf025:	pop    %ebp
+   0x17cf026:	ret
+   0x17cf027:	int3
+   0x17cf028:	int3
+   0x17cf029:	int3
+   0x17cf02a:	int3
+   0x17cf02b:	int3
+   0x17cf02c:	int3
+   0x17cf02d:	int3
+   0x17cf02e:	int3
+   0x17cf02f:	int3
+   0x17cf030:	push   %ebp
+   0x17cf031:	mov    %esp,%ebp
+   0x17cf033:	push   $0xffffffff
+   0x17cf035:	push   $0x1817680
+   0x17cf03a:	mov    %fs:0x0,%eax
+   0x17cf040:	push   %eax
+   0x17cf041:	sub    $0xc,%esp
+   0x17cf044:	push   %ebx
+   0x17cf045:	push   %esi
+   0x17cf046:	push   %edi
+   0x17cf047:	mov    0x1899424,%eax
+   0x17cf04c:	xor    %ebp,%eax
+   0x17cf04e:	push   %eax
+   0x17cf04f:	lea    -0xc(%ebp),%eax
+   0x17cf052:	mov    %eax,%fs:0x0
+   0x17cf058:	mov    %esp,-0x10(%ebp)
+   0x17cf05b:	movl   $0x0,-0x4(%ebp)
+   0x17cf062:	cmpl   $0x0,0x5c(%ecx)
+   0x17cf066:	je     0x17cf076
+   0x17cf068:	push   0x8(%ebp)
+   0x17cf06b:	push   $0x0
+   0x17cf06d:	push   %ecx
+   0x17cf06e:	call   0x17cefb0
+   0x17cf073:	add    $0xc,%esp
+   0x17cf076:	movl   $0xffffffff,-0x4(%ebp)
+   0x17cf07d:	mov    -0xc(%ebp),%ecx
+   0x17cf080:	mov    %ecx,%fs:0x0
+   0x17cf087:	pop    %ecx
+   0x17cf088:	pop    %edi
+   0x17cf089:	pop    %esi
+   0x17cf08a:	pop    %ebx
+   0x17cf08b:	mov    %ebp,%esp
+   0x17cf08d:	pop    %ebp
+   0x17cf08e:	ret    $0x4
+   0x17cf091:	push   $0x18375cc
+   0x17cf096:	push   $0x1819f40
+   0x17cf09b:	call   *0x1819070
+   0x17cf0a1:	add    $0x8,%esp
+   0x17cf0a4:	push   $0x0
+   0x17cf0a6:	push   $0x0
+   0x17cf0a8:	call   0x17ef400
+   0x17cf0ad:	mov    -0x18(%ebp),%eax
+   0x17cf0b0:	mov    %eax,-0x14(%ebp)
+   0x17cf0b3:	push   $0x18513f8
+   0x17cf0b8:	lea    -0x14(%ebp),%eax
+   0x17cf0bb:	push   %eax
+   0x17cf0bc:	call   0x17ef400
+   0x17cf0c1:	int3
+   0x17cf0c2:	int3
+   0x17cf0c3:	int3
+   0x17cf0c4:	int3
+   0x17cf0c5:	int3
+   0x17cf0c6:	int3
+   0x17cf0c7:	int3
+   0x17cf0c8:	int3
+   0x17cf0c9:	int3
+   0x17cf0ca:	int3
+   0x17cf0cb:	int3
+   0x17cf0cc:	int3
+   0x17cf0cd:	int3
+   0x17cf0ce:	int3
+   0x17cf0cf:	int3
+   0x17cf0d0:	push   %ebp
+   0x17cf0d1:	mov    %esp,%ebp
+   0x17cf0d3:	sub    $0x20,%esp
+   0x17cf0d6:	push   %ebx
+   0x17cf0d7:	mov    0x8(%ebp),%ebx
+   0x17cf0da:	push   %edi
+   0x17cf0db:	mov    %ecx,%edi
+   0x17cf0dd:	mov    0x2c(%ebx),%edx
+   0x17cf0e0:	mov    0x4(%edi),%eax
+   0x17cf0e3:	mov    0xcc(%eax),%eax
+   0x17cf0e9:	lea    (%eax,%edx,4),%edx
+   0x17cf0ec:	movl   $0x0,0x4c(%edi)
+   0x17cf0f3:	mov    %edx,0x580(%edi)
+   0x17cf0f9:	xor    %eax,%eax
+   0x17cf0fb:	cmpl   $0xffffffff,(%edx)
+   0x17cf0fe:	je     0x17cf1f1
+   0x17cf104:	xor    %ecx,%ecx
+   0x17cf106:	push   %esi
+   0x17cf107:	cmp    $0x40,%ecx
+   0x17cf10a:	jae    0x17cf1ed
+   0x17cf110:	mov    0x4(%edi),%eax
+   0x17cf113:	lea    0x8(%ecx),%esi
+   0x17cf116:	mov    (%edx,%ecx,4),%ecx
+   0x17cf119:	shl    $0x6,%ecx
+   0x17cf11c:	shl    $0x4,%esi
+   0x17cf11f:	add    0x58(%eax),%ecx
+   0x17cf122:	add    %edi,%esi
+   0x17cf124:	movups (%ecx),%xmm0
+   0x17cf127:	movups %xmm0,(%esi)
+   0x17cf12a:	cmpl   $0x0,0x8(%edi)
+   0x17cf12e:	je     0x17cf146
+   0x17cf130:	lea    0xc(%edi),%eax
+   0x17cf133:	mov    %esi,%ecx
+   0x17cf135:	push   %eax
+   0x17cf136:	lea    -0x10(%ebp),%eax
+   0x17cf139:	push   %eax
+   0x17cf13a:	call   *0x1819988
+   0x17cf140:	movups (%eax),%xmm0
+   0x17cf143:	movups %xmm0,(%esi)
+   0x17cf146:	mov    0x4c(%edi),%ebx
+   0x17cf149:	mov    0x580(%edi),%eax
+   0x17cf14f:	testl  $0x40000000,(%eax,%ebx,4)
+   0x17cf156:	je     0x17cf16d
+   0x17cf158:	lea    -0x20(%ebp),%eax
+   0x17cf15b:	mov    %esi,%ecx
+   0x17cf15d:	push   %eax
+   0x17cf15e:	call   *0x1819984
+   0x17cf164:	movups (%eax),%xmm0
+   0x17cf167:	movups %xmm0,(%esi)
+   0x17cf16a:	mov    0x4c(%edi),%ebx
+   0x17cf16d:	movss  (%esi),%xmm1
+   0x17cf171:	xorps  %xmm0,%xmm0
+   0x17cf174:	comiss %xmm1,%xmm0
+   0x17cf177:	jbe    0x17cf180
+   0x17cf179:	mov    $0x1,%edx
+   0x17cf17e:	jmp    0x17cf18d
+   0x17cf180:	xor    %edx,%edx
+   0x17cf182:	mov    $0x2,%eax
+   0x17cf187:	comiss %xmm0,%xmm1
+   0x17cf18a:	cmova  %eax,%edx
+   0x17cf18d:	movss  0x4(%esi),%xmm1
+   0x17cf192:	comiss %xmm1,%xmm0
+   0x17cf195:	jbe    0x17cf19e
+   0x17cf197:	mov    $0x4,%ecx
+   0x17cf19c:	jmp    0x17cf1ab
+   0x17cf19e:	xor    %ecx,%ecx
+   0x17cf1a0:	mov    $0x8,%eax
+   0x17cf1a5:	comiss %xmm0,%xmm1
+   0x17cf1a8:	cmova  %eax,%ecx
+   0x17cf1ab:	movss  0x8(%esi),%xmm1
+   0x17cf1b0:	comiss %xmm1,%xmm0
+   0x17cf1b3:	jbe    0x17cf1bc
+   0x17cf1b5:	mov    $0x10,%eax
+   0x17cf1ba:	jmp    0x17cf1c9
+   0x17cf1bc:	xor    %eax,%eax
+   0x17cf1be:	mov    $0x20,%esi
+   0x17cf1c3:	comiss %xmm0,%xmm1
+   0x17cf1c6:	cmova  %esi,%eax
+   0x17cf1c9:	or     %ecx,%eax
+   0x17cf1cb:	or     %edx,%eax
+   0x17cf1cd:	mov    %eax,0x480(%edi,%ebx,4)
+   0x17cf1d4:	mov    0x4c(%edi),%eax
+   0x17cf1d7:	inc    %eax
+   0x17cf1d8:	mov    %eax,0x4c(%edi)
+   0x17cf1db:	mov    %eax,%ecx
+   0x17cf1dd:	mov    0x580(%edi),%edx
+   0x17cf1e3:	cmpl   $0xffffffff,(%edx,%ecx,4)
+   0x17cf1e7:	jne    0x17cf107
+   0x17cf1ed:	mov    0x8(%ebp),%ebx
+   0x17cf1f0:	pop    %esi
+   0x17cf1f1:	mov    0x2c(%ebx),%edx
+   0x17cf1f4:	add    %eax,%edx
+   0x17cf1f6:	mov    0x4(%edi),%eax
+   0x17cf1f9:	mov    0xcc(%eax),%ecx
+   0x17cf1ff:	mov    0x4(%ecx,%edx,4),%eax
+   0x17cf203:	mov    %eax,0x5c(%edi)
+   0x17cf206:	mov    0x8(%ecx,%edx,4),%eax
+   0x17cf20a:	mov    %eax,0x60(%edi)
+   0x17cf20d:	mov    0xc(%ecx,%edx,4),%eax
+   0x17cf211:	mov    %eax,0x64(%edi)
+   0x17cf214:	mov    0x10(%ecx,%edx,4),%eax
+   0x17cf218:	mov    %eax,0x68(%edi)
+   0x17cf21b:	mov    0x14(%ecx,%edx,4),%eax
+   0x17cf21f:	mov    %eax,0x6c(%edi)
+   0x17cf222:	mov    0x18(%ecx,%edx,4),%eax
+   0x17cf226:	mov    %eax,0x70(%edi)
+   0x17cf229:	pop    %edi
+   0x17cf22a:	pop    %ebx
+   0x17cf22b:	mov    %ebp,%esp
+   0x17cf22d:	pop    %ebp
+   0x17cf22e:	ret    $0x4
+   0x17cf231:	int3
+   0x17cf232:	int3
+   0x17cf233:	int3
+   0x17cf234:	int3
+   0x17cf235:	int3
+   0x17cf236:	int3
+   0x17cf237:	int3
+   0x17cf238:	int3
+   0x17cf239:	int3
+   0x17cf23a:	int3
+   0x17cf23b:	int3
+   0x17cf23c:	int3
+   0x17cf23d:	int3
+   0x17cf23e:	int3
+   0x17cf23f:	int3
+   0x17cf240:	push   %ebp
+   0x17cf241:	mov    %esp,%ebp
+   0x17cf243:	push   $0xffffffff
+   0x17cf245:	push   $0x1817754
+   0x17cf24a:	mov    %fs:0x0,%eax
+   0x17cf250:	push   %eax
+   0x17cf251:	sub    $0x8a0,%esp
+   0x17cf257:	mov    0x1899424,%eax
+   0x17cf25c:	xor    %ebp,%eax
+   0x17cf25e:	mov    %eax,-0x14(%ebp)
+   0x17cf261:	push   %ebx
+   0x17cf262:	push   %esi
+   0x17cf263:	push   %edi
+   0x17cf264:	push   %eax
+   0x17cf265:	lea    -0xc(%ebp),%eax
+   0x17cf268:	mov    %eax,%fs:0x0
+   0x17cf26e:	mov    %esp,-0x10(%ebp)
+   0x17cf271:	mov    %ecx,%ebx
+   0x17cf273:	mov    %ebx,-0x818(%ebp)
+   0x17cf279:	mov    %ebx,-0x860(%ebp)
+   0x17cf27f:	mov    0x8(%ebp),%esi
+   0x17cf282:	mov    %esi,-0x81c(%ebp)
+   0x17cf288:	mov    0xc(%ebp),%edi
+   0x17cf28b:	mov    %edi,-0x828(%ebp)
+   0x17cf291:	push   $0x18fbbec
+   0x17cf296:	call   *0x18190e8
+   0x17cf29c:	movl   $0x0,-0x4(%ebp)
+   0x17cf2a3:	lea    0xc(%ebx),%ecx
+   0x17cf2a6:	push   $0x18fbbbc
+   0x17cf2ab:	call   *0x18190e8
+   0x17cf2b1:	movb   $0x1,-0x4(%ebp)
+   0x17cf2b5:	mov    0x18fbbb8,%eax
+   0x17cf2ba:	mov    %eax,0x18(%ebx)
+   0x17cf2bd:	lea    0x1c(%ebx),%ecx
+   0x17cf2c0:	push   $0x18fbbe0
+   0x17cf2c5:	call   *0x18190e8
+   0x17cf2cb:	movb   $0x2,-0x4(%ebp)
+   0x17cf2cf:	lea    0x28(%ebx),%eax
+   0x17cf2d2:	mov    %eax,-0x864(%ebp)
+   0x17cf2d8:	movl   $0x0,(%eax)
+   0x17cf2de:	movl   $0x0,0x4(%eax)
+   0x17cf2e5:	movl   $0x0,0x8(%eax)
+   0x17cf2ec:	movb   $0x4,-0x4(%ebp)
+   0x17cf2f0:	lea    0x34(%ebx),%ecx
+   0x17cf2f3:	push   $0x18fbbc8
+   0x17cf2f8:	call   *0x18190e8
+   0x17cf2fe:	movb   $0x5,-0x4(%ebp)
+   0x17cf302:	movl   $0x1,0x40(%ebx)
+   0x17cf309:	movb   $0x6,-0x4(%ebp)
+   0x17cf30d:	test   %edi,%edi
+   0x17cf30f:	jne    0x17cf329
+   0x17cf311:	push   $0x9b
+   0x17cf316:	push   $0x1837778
+   0x17cf31b:	push   $0x18377ac
+   0x17cf320:	call   *0x181906c
+   0x17cf326:	add    $0xc,%esp
+   0x17cf329:	lea    -0x814(%ebp),%edi
+   0x17cf32f:	mov    %edi,-0x820(%ebp)
+   0x17cf335:	push   $0x400
+   0x17cf33a:	push   -0x828(%ebp)
+   0x17cf340:	mov    %edi,%eax
+   0x17cf342:	push   %eax
+   0x17cf343:	call   *0x1819564
+   0x17cf349:	add    $0xc,%esp
+   0x17cf34c:	mov    0x10(%ebp),%eax
+   0x17cf34f:	cmp    $0x2,%eax
+   0x17cf352:	jne    0x17cf3a8
+   0x17cf354:	test   %esi,%esi
+   0x17cf356:	jne    0x17cf370
+   0x17cf358:	push   $0xa6
+   0x17cf35d:	push   $0x1837778
+   0x17cf362:	push   $0x18377b4
+   0x17cf367:	call   *0x181906c
+   0x17cf36d:	add    $0xc,%esp
+   0x17cf370:	push   %esi
+   0x17cf371:	mov    %ebx,%ecx
+   0x17cf373:	call   *0x18190f4
+   0x17cf379:	lea    0xc(%esi),%eax
+   0x17cf37c:	push   %eax
+   0x17cf37d:	lea    0xc(%ebx),%ecx
+   0x17cf380:	call   *0x18190f4
+   0x17cf386:	lea    0x1c(%esi),%eax
+   0x17cf389:	push   %eax
+   0x17cf38a:	lea    0x1c(%ebx),%ecx
+   0x17cf38d:	call   *0x18190f4
+   0x17cf393:	lea    0x34(%esi),%eax
+   0x17cf396:	push   %eax
+   0x17cf397:	lea    0x34(%ebx),%ecx
+   0x17cf39a:	call   *0x18190f4
+   0x17cf3a0:	mov    0x18(%esi),%eax
+   0x17cf3a3:	mov    %eax,0x18(%ebx)
+   0x17cf3a6:	jmp    0x17cf3b1
+   0x17cf3a8:	cmp    $0x1,%eax
+   0x17cf3ab:	jne    0x17cf4a2
+   0x17cf3b1:	test   %esi,%esi
+   0x17cf3b3:	jne    0x17cf3cd
+   0x17cf3b5:	push   $0xaf
+   0x17cf3ba:	push   $0x1837778
+   0x17cf3bf:	push   $0x18377b4
+   0x17cf3c4:	call   *0x181906c
+   0x17cf3ca:	add    $0xc,%esp
+   0x17cf3cd:	xor    %eax,%eax
+   0x17cf3cf:	mov    %eax,-0x834(%ebp)
+   0x17cf3d5:	cmp    0x2c(%esi),%eax
+   0x17cf3d8:	jge    0x17cf4a2
+   0x17cf3de:	lea    (%eax,%eax,2),%eax
+   0x17cf3e1:	shl    $0x2,%eax
+   0x17cf3e4:	mov    %eax,-0x818(%ebp)
+   0x17cf3ea:	mov    0x28(%esi),%ecx
+   0x17cf3ed:	add    %eax,%ecx
+   0x17cf3ef:	push   $0x18377bc
+   0x17cf3f4:	call   *0x18190fc
+   0x17cf3fa:	push   %eax
+   0x17cf3fb:	call   *0x1819094
+   0x17cf401:	add    $0x8,%esp
+   0x17cf404:	test   %eax,%eax
+   0x17cf406:	je     0x17cf496
+   0x17cf40c:	mov    0x28(%esi),%ecx
+   0x17cf40f:	add    -0x818(%ebp),%ecx
+   0x17cf415:	push   $0x18377c8
+   0x17cf41a:	call   *0x18190fc
+   0x17cf420:	push   %eax
+   0x17cf421:	call   *0x1819094
+   0x17cf427:	add    $0x8,%esp
+   0x17cf42a:	test   %eax,%eax
+   0x17cf42c:	je     0x17cf496
+   0x17cf42e:	mov    0x28(%esi),%ecx
+   0x17cf431:	add    -0x818(%ebp),%ecx
+   0x17cf437:	push   $0x18377d0
+   0x17cf43c:	call   *0x18190fc
+   0x17cf442:	push   %eax
+   0x17cf443:	call   *0x1819094
+   0x17cf449:	add    $0x8,%esp
+   0x17cf44c:	test   %eax,%eax
+   0x17cf44e:	je     0x17cf496
+   0x17cf450:	mov    0x28(%esi),%ecx
+   0x17cf453:	add    -0x818(%ebp),%ecx
+   0x17cf459:	push   $0x18377dc
+   0x17cf45e:	call   *0x18190fc
+   0x17cf464:	push   %eax
+   0x17cf465:	call   *0x1819094
+   0x17cf46b:	add    $0x8,%esp
+   0x17cf46e:	test   %eax,%eax
+   0x17cf470:	je     0x17cf496
+   0x17cf472:	lea    0x28(%ebx),%eax
+   0x17cf475:	push   %eax
+   0x17cf476:	push   $0xc
+   0x17cf478:	call   0x1709920
+   0x17cf47d:	add    $0x8,%esp
+   0x17cf480:	mov    %eax,%ecx
+   0x17cf482:	test   %ecx,%ecx
+   0x17cf484:	je     0x17cf496
+   0x17cf486:	mov    0x28(%esi),%eax
+   0x17cf489:	add    -0x818(%ebp),%eax
+   0x17cf48f:	push   %eax
+   0x17cf490:	call   *0x18190e8
+   0x17cf496:	mov    -0x834(%ebp),%eax
+   0x17cf49c:	inc    %eax
+   0x17cf49d:	jmp    0x17cf3cf
+   0x17cf4a2:	cmpw   $0x20,(%edi)
+   0x17cf4a6:	jne    0x17cf4b3
+   0x17cf4a8:	add    $0x2,%edi
+   0x17cf4ab:	mov    %edi,-0x820(%ebp)
+   0x17cf4b1:	jmp    0x17cf4a2
+   0x17cf4b3:	push   $0x23
+   0x17cf4b5:	push   $0x3f
+   0x17cf4b7:	push   %edi
+   0x17cf4b8:	call   0x17d1230
+   0x17cf4bd:	add    $0xc,%esp
+   0x17cf4c0:	test   %eax,%eax
+   0x17cf4c2:	je     0x17cf58e
+   0x17cf4c8:	movzwl (%eax),%ecx
+   0x17cf4cb:	mov    %ecx,-0x828(%ebp)
+   0x17cf4d1:	movl   $0x0,-0x838(%ebp)
+   0x17cf4db:	xor    %ecx,%ecx
+   0x17cf4dd:	mov    %cx,(%eax)
+   0x17cf4e0:	add    $0x2,%eax
+   0x17cf4e3:	mov    %eax,-0x818(%ebp)
+   0x17cf4e9:	nopl   0x0(%eax)
+   0x17cf4f0:	push   $0x23
+   0x17cf4f2:	push   $0x3f
+   0x17cf4f4:	push   %eax
+   0x17cf4f5:	call   0x17d1230
+   0x17cf4fa:	add    $0xc,%esp
+   0x17cf4fd:	mov    %eax,%esi
+   0x17cf4ff:	mov    %esi,-0x84c(%ebp)
+   0x17cf505:	test   %esi,%esi
+   0x17cf507:	je     0x17cf520
+   0x17cf509:	movzwl (%esi),%eax
+   0x17cf50c:	mov    %eax,-0x838(%ebp)
+   0x17cf512:	xor    %eax,%eax
+   0x17cf514:	mov    %ax,(%esi)
+   0x17cf517:	add    $0x2,%esi
+   0x17cf51a:	mov    %esi,-0x84c(%ebp)
+   0x17cf520:	push   -0x818(%ebp)
+   0x17cf526:	call   0x17d1140
+   0x17cf52b:	add    $0x4,%esp
+   0x17cf52e:	test   %eax,%eax
+   0x17cf530:	jne    0x17cf547
+   0x17cf532:	push   %eax
+   0x17cf533:	lea    -0x8ac(%ebp),%ecx
+   0x17cf539:	call   0x17cfdc0
+   0x17cf53e:	movb   $0x7,-0x4(%ebp)
+   0x17cf542:	jmp    0x17cfd2f
+   0x17cf547:	push   -0x818(%ebp)
+   0x17cf54d:	cmpw   $0x3f,-0x828(%ebp)
+   0x17cf555:	jne    0x17cf560
+   0x17cf557:	mov    %ebx,%ecx
+   0x17cf559:	call   0x17d00e0
+   0x17cf55e:	jmp    0x17cf569
+   0x17cf560:	lea    0x34(%ebx),%ecx
+   0x17cf563:	call   *0x18190f0
+   0x17cf569:	mov    %esi,%eax
+   0x17cf56b:	mov    %eax,-0x818(%ebp)
+   0x17cf571:	mov    -0x838(%ebp),%ecx
+   0x17cf577:	movzwl %cx,%ecx
+   0x17cf57a:	mov    %ecx,-0x828(%ebp)
+   0x17cf580:	test   %esi,%esi
+   0x17cf582:	jne    0x17cf4f0
+   0x17cf588:	mov    -0x81c(%ebp),%esi
+   0x17cf58e:	movl   $0x0,-0x824(%ebp)
+   0x17cf598:	movl   $0x0,-0x830(%ebp)
+   0x17cf5a2:	push   %edi
+   0x17cf5a3:	call   *0x1819090
+   0x17cf5a9:	add    $0x4,%esp
+   0x17cf5ac:	cmp    $0x3,%eax
+   0x17cf5af:	jle    0x17cf62e
+   0x17cf5b1:	cmpw   $0x3a,0x2(%edi)
+   0x17cf5b6:	jne    0x17cf62e
+   0x17cf5b8:	movzwl 0x4(%edi),%eax
+   0x17cf5bc:	cmp    $0x2f,%eax
+   0x17cf5bf:	je     0x17cf5c6
+   0x17cf5c1:	cmp    $0x5c,%eax
+   0x17cf5c4:	jne    0x17cf62e
+   0x17cf5c6:	push   $0x18fbbec
+   0x17cf5cb:	mov    %ebx,%ecx
+   0x17cf5cd:	call   *0x18190f4
+   0x17cf5d3:	push   $0x18fbbbc
+   0x17cf5d8:	lea    0xc(%ebx),%ecx
+   0x17cf5db:	call   *0x18190f4
+   0x17cf5e1:	push   %edi
+   0x17cf5e2:	lea    0x1c(%ebx),%ecx
+   0x17cf5e5:	call   *0x18190f0
+   0x17cf5eb:	push   $0x18fbbc8
+DISASM_END
+TARGET_DONE
+[Inferior 1 (process 34) detached]
