@@ -57,8 +57,12 @@ or Wanchai's geometry exactness (surf/node/leaf counts unchanged — purely a li
 
 ## Still open
 
-`MergeWith` remains undecoded and may still matter for the residual ~20% zone-crossing share of the
-missed count. The bulk of the remaining gap (Wanchai still only 72.8% byte-identical) is the largest
+**`MergeWith` decoded and RULED OUT, same day** (`mergewith-fully-decoded-confirms-merge-into`,
+`dev/docs/board/done/`): full disassembly + a 10-sample live capture during a real Wanchai
+`LIGHT APPLY` shows `merge_into` already reproduces the real editor's row-merge algorithm exactly,
+10/10 (7 pure appends, 3 genuine merges including touching-boundary cases). So the ~20%
+zone-crossing share of the missed count is NOT a `MergeWith`-fidelity gap — its real cause is still
+unidentified. The bulk of the remaining gap (Wanchai still only 72.8% byte-identical) is the largest
 single bucket — pure `Pan`/`UScale`/`VScale` divergence with matching run+bits (711 of 1233 bad
 records, re-measured 2026-08-30 on the current, post-`repartition_frontier` tree) — which follows from
 the `Points`/geometry residual tracked in `wanchai-verts-points-residual-independently`, out of scope

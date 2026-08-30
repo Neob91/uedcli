@@ -1263,3 +1263,34 @@ single-stepping). Stopped here per the "log clearly, don't grind" guidance — n
 live single-step trace of the same known-mismatching ray through this exact function. No production
 code changed (`linecheck.rs` untouched); full findings + reusable harnesses:
 `dev/docs/board/inbox/line-clear-shadow-ray-algorithm-gap-found-real/overview.md`.
+
+**`FSpanBuffer::MergeWith` (`render.dll` file RVA `0x1001e3b0`) fully decoded — `visible_surfs.rs`'s
+`merge_into` already reproduces it exactly; NOT the cause of Wanchai's zone-crossing missed-pair
+share.** (2026-08-30, 📖+🔬, `mergewith-fully-decoded-confirms-merge-into`) — Full
+instruction-by-instruction static disasm (`rdis.py dis Render 0x1001e3b0 0x400`, no gaps, `ret 4` to
+`ret`): grows `this->Index`'s `[StartY,EndY)` row-pointer array only if `Other`'s range isn't already
+contained (irrelevant to native's fixed `[0,RES)` `SpanBuf`), then for each row in `Other`'s range
+does a standard two-sorted-disjoint-list merge of 12-byte `{X0,X1,Next}` nodes into `this`'s row,
+`FMemStack`-allocating new nodes for anything not already `this`'s own, touching intervals (`OtherX1
+== ThisX0`, `jge` not `jg`) merging same as a true overlap. `this+8` (`ValidLines` per the existing
+`FSpanBuffer` struct-layout note) turns out to be a total INTERVAL-NODE count (±1 per node
+alloc/absorb), not a per-ROW count as `SpanBuf::valid_lines` assumes — but every consumer
+(`any_visible`, the real `ValidLines<=0` reachability test) only tests `>0`/`<=0`, which both
+countings agree on, so this has no functional effect.
+
+**Live-verified**, `mergewith_live_check.py`
+(`dev/docs/spikes/2026-08-29-unatco-repart-live-diff/harness/`): first confirmed render.dll does NOT
+load at its preferred `0x10000000` base in this wine process (it loads at `0x015b0000`; only
+Editor.dll keeps its preferred slot — every PRIOR live capture in this codebase happened to target
+Editor.dll, so this addressing gap was latent and unnoticed) — computed the real breakpoint VA as
+`render_base + (static_va - 0x10000000)`, resolved fresh from `/proc/PID/maps` each run. 10 real
+`MergeWith` calls captured during a genuine Wanchai `LIGHT APPLY`: 7 pure-append (this row empty) +
+3 genuine merges including two touching-boundary cases. All 10 match, node for node, what
+`merge_into` independently computes from the same captured inputs. `merge_into` needed no fix; ported
+the finding into its own doc comment + a new regression test (`merge_into_matches_the_real_editors_output`)
+pinning the 3 live-captured merge cases. No functional code change — `regression_gate.py`: UNATCO
+6314/6314 exact, Wanchai 11648/11648 exact, before and after (this change cannot affect the compiled
+extension's behavior — doc comment + a `#[cfg(test)]`-gated test only). `bin/test -k visible_surfs`
+88/88 green. Leaves the ~20% zone-crossing share of Wanchai's missed pairs unexplained by anything
+found this round — `MergeWith` is ruled out as the cause, not identified as fixed; the real cause is
+still open.

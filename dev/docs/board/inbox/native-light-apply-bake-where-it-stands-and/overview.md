@@ -144,7 +144,10 @@ the difference (Wanchai has more zones/portal crossings). Reproduced with
 
 1. **Light runs — much smaller after `9c148d4`, still open.** UNATCO: was 618 extra/7 missed, now
    151/233. Wanchai: was 526/12, now 131/347. `port-urender-getvisiblesurfs-so-each-light-gets` has
-   the resume state; `MergeWith` (`render.dll 0x1001e3b0`) is the next thing to decode.
+   the resume state. `MergeWith` (`render.dll 0x1001e3b0`) is now fully decoded and confirmed correct
+   as ported (`mergewith-fully-decoded-confirms-merge-into`, `dev/docs/board/done/`) — ruled out as
+   the cause of the residual, not the source of it; the ~20% zone-crossing share of Wanchai's missed
+   pairs still needs a real explanation.
 2. **`Model.Lights` is 11368 vs 16263 entries on UNATCO** — the missing 5405 is the per-leaf
    permeating region, produced by the ZONING build, not the bake:
    `port-the-per-leaf-permeating-light-lists-model` has a first port attempt (not wired in — leaf

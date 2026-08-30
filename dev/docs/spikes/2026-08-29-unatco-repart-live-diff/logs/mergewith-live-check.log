@@ -1,0 +1,129 @@
+[New LWP 154]
+[New LWP 170]
+[New LWP 171]
+[New LWP 172]
+[New LWP 173]
+[New LWP 174]
+[New LWP 175]
+[New LWP 176]
+[New LWP 177]
+[New LWP 178]
+[New LWP 179]
+[New LWP 180]
+[New LWP 181]
+[New LWP 182]
+[New LWP 183]
+[New LWP 184]
+[New LWP 185]
+[New LWP 186]
+[New LWP 187]
+[New LWP 188]
+[New LWP 189]
+[New LWP 190]
+[New LWP 191]
+[New LWP 192]
+[New LWP 193]
+[New LWP 194]
+[New LWP 195]
+[New LWP 196]
+[New LWP 197]
+[New LWP 198]
+[New LWP 199]
+[New LWP 241]
+[New LWP 242]
+[New LWP 253]
+[Thread debugging using libthread_db enabled]
+Using host libthread_db library "/lib/x86_64-linux-gnu/libthread_db.so.1".
+0xf7f1dcfc in __kernel_vsyscall ()
+Breakpoint 1 at 0x15ce3b0
+ORACLE_ATTACHED
+HIT n=0 this=0x146d078 this_start=0 this_end=0 this_valid=0 this_index=0 other=0xe096c04 other_start=958 other_end=1024 other_valid=21 other_index=0xe14ccc0
+ROWCHOICE y=965 (both_nonnull_row=-1 other_nonnull_row=965)
+PRE_THIS_ROW y=965 head=0
+  ROW_PRE_OTHER node=0xe14cdc8 X0=822 X1=823
+Breakpoint 2 at 0x15ce60c
+AT_EPILOGUE this=0x146d078
+POST_THIS_ROW y=965 head=0xe097ca0
+  ROW_POST_THIS node=0xe097ca0 X0=822 X1=823
+HIT n=1 this=0x146d078 this_start=0 this_end=0 this_valid=0 this_index=0 other=0xe0e6154 other_start=985 other_end=1024 other_valid=16 other_index=0xe1747c0
+ROWCHOICE y=993 (both_nonnull_row=-1 other_nonnull_row=993)
+PRE_THIS_ROW y=993 head=0
+  ROW_PRE_OTHER node=0xe17485c X0=693 X1=694
+Breakpoint 3 at 0x15ce60c
+AT_EPILOGUE this=0x146d078
+POST_THIS_ROW y=993 head=0xe0e71d0
+  ROW_POST_THIS node=0xe0e71d0 X0=693 X1=694
+No breakpoint number 2.
+HIT n=2 this=0x146d078 this_start=0 this_end=0 this_valid=0 this_index=0 other=0xe0f76c4 other_start=698 other_end=755 other_valid=49 other_index=0xe11b880
+ROWCHOICE y=702 (both_nonnull_row=-1 other_nonnull_row=702)
+PRE_THIS_ROW y=702 head=0
+  ROW_PRE_OTHER node=0xe11b964 X0=315 X1=316
+Breakpoint 4 at 0x15ce60c
+AT_EPILOGUE this=0x146d078
+POST_THIS_ROW y=702 head=0xe0f82ec
+  ROW_POST_THIS node=0xe0f82ec X0=315 X1=316
+No breakpoint number 2.
+HIT n=3 this=0x146d078 this_start=0 this_end=755 this_valid=42 this_index=0xe0f7720 other=0xe0f8c44 other_start=694 other_end=744 other_valid=42 other_index=0xe11d3e0
+ROWCHOICE y=702 (both_nonnull_row=702 other_nonnull_row=702)
+PRE_THIS_ROW y=702 head=0xe0f82ec
+  ROW_PRE_THIS node=0xe0f82ec X0=315 X1=316
+  ROW_PRE_OTHER node=0xe11d4a8 X0=316 X1=317
+Breakpoint 5 at 0x15ce60c
+AT_EPILOGUE this=0x146d078
+POST_THIS_ROW y=702 head=0xe0f82ec
+  ROW_POST_THIS node=0xe0f82ec X0=315 X1=317
+No breakpoint number 2.
+HIT n=4 this=0x146d078 this_start=0 this_end=0 this_valid=0 this_index=0 other=0xe10db74 other_start=553 other_end=623 other_valid=34 other_index=0xe08bd00
+ROWCHOICE y=570 (both_nonnull_row=-1 other_nonnull_row=570)
+PRE_THIS_ROW y=570 head=0
+  ROW_PRE_OTHER node=0xe08be18 X0=59 X1=62
+Breakpoint 6 at 0x15ce60c
+AT_EPILOGUE this=0x146d078
+POST_THIS_ROW y=570 head=0xe10e5fc
+  ROW_POST_THIS node=0xe10e5fc X0=59 X1=62
+No breakpoint number 2.
+HIT n=5 this=0x146d078 this_start=0 this_end=0 this_valid=0 this_index=0 other=0xe0d12d4 other_start=625 other_end=744 other_valid=114 other_index=0xe0a7d70
+ROWCHOICE y=627 (both_nonnull_row=-1 other_nonnull_row=627)
+PRE_THIS_ROW y=627 head=0
+  ROW_PRE_OTHER node=0xe0a7f4c X0=978 X1=980
+Breakpoint 7 at 0x15ce60c
+AT_EPILOGUE this=0x146d078
+POST_THIS_ROW y=627 head=0xe0d1f80
+  ROW_POST_THIS node=0xe0d1f80 X0=978 X1=980
+No breakpoint number 2.
+HIT n=6 this=0x146d078 this_start=0 this_end=744 this_valid=105 this_index=0xe0d13e0 other=0xe0d3634 other_start=615 other_end=732 other_valid=67 other_index=0xe0ab8d0
+ROWCHOICE y=627 (both_nonnull_row=627 other_nonnull_row=627)
+PRE_THIS_ROW y=627 head=0xe0d1f80
+  ROW_PRE_THIS node=0xe0d1f80 X0=978 X1=980
+  ROW_PRE_OTHER node=0xe0abaa4 X0=976 X1=978
+Breakpoint 8 at 0x15ce60c
+AT_EPILOGUE this=0x146d078
+POST_THIS_ROW y=627 head=0xe0d1f80
+  ROW_POST_THIS node=0xe0d1f80 X0=976 X1=980
+No breakpoint number 2.
+HIT n=7 this=0x146d078 this_start=0 this_end=0 this_valid=0 this_index=0 other=0xe104374 other_start=828 other_end=953 other_valid=62 other_index=0xe0f8960
+ROWCHOICE y=884 (both_nonnull_row=-1 other_nonnull_row=884)
+PRE_THIS_ROW y=884 head=0
+  ROW_PRE_OTHER node=0xe0f8b54 X0=989 X1=991
+Breakpoint 9 at 0x15ce60c
+AT_EPILOGUE this=0x146d078
+POST_THIS_ROW y=884 head=0xe1053f4
+  ROW_POST_THIS node=0xe1053f4 X0=989 X1=991
+No breakpoint number 2.
+HIT n=8 this=0x146d078 this_start=0 this_end=953 this_valid=47 this_index=0xe104510 other=0xe15a914 other_start=799 other_end=931 other_valid=15 other_index=0xe0fc540
+ROWCHOICE y=887 (both_nonnull_row=887 other_nonnull_row=887)
+PRE_THIS_ROW y=887 head=0xe105418
+  ROW_PRE_THIS node=0xe105418 X0=974 X1=991
+  ROW_PRE_OTHER node=0xe0fc750 X0=971 X1=974
+Breakpoint 10 at 0x15ce60c
+AT_EPILOGUE this=0x146d078
+POST_THIS_ROW y=887 head=0xe105418
+  ROW_POST_THIS node=0xe105418 X0=971 X1=991
+No breakpoint number 2.
+HIT n=9 this=0x146d078 this_start=0 this_end=0 this_valid=0 this_index=0 other=0xe1060f4 other_start=901 other_end=973 other_valid=9 other_index=0xe1336a0
+ROWCHOICE y=945 (both_nonnull_row=-1 other_nonnull_row=945)
+PRE_THIS_ROW y=945 head=0
+  ROW_PRE_OTHER node=0xe1337c0 X0=43 X1=44
+Breakpoint 11 at 0x15ce60c
+TARGET_DONE
+[Inferior 1 (process 33) detached]

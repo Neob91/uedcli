@@ -82,18 +82,22 @@ const PF_NONOCCLUDING: u32 = 0x1002_0047;
 /// (byte-identical 2518→2628, extra 618→151, missed 7→233) and roughly flat on Wanchai
 /// (byte-identical 3229→3228, extra 526→131, missed 12→347 — same aggregate score, shifted from
 /// extra to missed). Shipped ON: strictly better on the level this was diagnosed against, not worse
-/// on the second, and structurally the faithful behavior rather than a heuristic. `MergeWith`
-/// (`render.dll 0x1001e3b0`, the portal-merge-into-far-zone op) is still NOT disassembly-decoded —
-/// `merge_into` is a reasonable interval union, not proven bit-identical. CORRECTED 2026-08-30
-/// (`getvisiblesurfs-wanchai-run-gap-root-cause`): it is NOT the likeliest source of Wanchai's larger
-/// `missed` count — `pair_geometry.py`'s light/surf-zone comparison shows only ~20% of Wanchai's
-/// missed pairs even cross a zone boundary (light and surface agree 94.6% of the time on "both
-/// list", 96.3% on "native only", but just 80.0% on "editor only" — a real but small skew). A live
-/// trace of a concrete missing pair (Light45 / surf 2920, same zone as its light) found dense
-/// same-zone clutter fully consuming a row's span before the target was even reached — see
+/// on the second, and structurally the faithful behavior rather than a heuristic. CORRECTED
+/// 2026-08-30 (`getvisiblesurfs-wanchai-run-gap-root-cause`): `MergeWith` is NOT the likeliest source
+/// of Wanchai's larger `missed` count — `pair_geometry.py`'s light/surf-zone comparison shows only
+/// ~20% of Wanchai's missed pairs even cross a zone boundary (light and surface agree 94.6% of the
+/// time on "both list", 96.3% on "native only", but just 80.0% on "editor only" — a real but small
+/// skew). A live trace of a concrete missing pair (Light45 / surf 2920, same zone as its light) found
+/// dense same-zone clutter fully consuming a row's span before the target was even reached — see
 /// `rasterize_node`'s pixel-center-coverage fix, which cut Wanchai's missed count 350→314 without
-/// touching `MergeWith` at all. `MergeWith` fidelity may still matter for the remaining ~20%, but
-/// the bulk of the gap is same-zone rasterization precision, not portal-merge fidelity.
+/// touching `MergeWith` at all. **`MergeWith` itself is now fully decoded and confirmed correct as
+/// ported** (`mergewith-fully-decoded-confirms-merge-into`, 2026-08-30): a complete
+/// instruction-by-instruction disassembly of `render.dll 0x1001e3b0` (see [`merge_into`]'s doc
+/// comment) plus a 10-sample live capture during a real Wanchai `LIGHT APPLY` (7 pure-append rows +
+/// 3 genuine overlap/touching-boundary merges) shows the real algorithm produces byte-identical
+/// output to what `merge_into` independently computes on the same inputs, 10/10. So the ~20%
+/// zone-crossing share of Wanchai's missed pairs is NOT a `MergeWith`-fidelity gap — its true cause
+/// is still open, but ruled out as a suspect here.
 const SUBTRACT_OCCLUSION: bool = true;
 
 /// Cube-face resolution, `0x400 x 0x400` (board item, "What it is").
@@ -387,8 +391,43 @@ fn test_and_maybe_subtract(
 
 /// Union `intervals` into `buf` (a visible portal spreading its accepted footprint into the far
 /// zone) — insert each `(y,x0,x1)` into that row's sorted disjoint list, merging overlapping or
-/// touching runs. `MergeWith` (`render.dll 0x1001e3b0`) is not disassembly-decoded; this is a
-/// straightforward interval union, not proven bit-identical to it.
+/// touching runs.
+///
+/// **Fully decoded and confirmed correct** (`mergewith-fully-decoded-confirms-merge-into`,
+/// 2026-08-30, disasm + live). `FSpanBuffer::MergeWith(this, Other)` (`render.dll` file RVA
+/// `0x1001e3b0`) was disassembled instruction-by-instruction (`rdis.py dis Render 0x1001e3b0 0x400`)
+/// and found to be: (1) if `Other`'s `[StartY,EndY)` isn't already contained in `this`'s own range,
+/// reallocate `this->Index` to cover `[min(this.Start,Other.Start), max(this.End,Other.End))`,
+/// copying the old row-pointer array into its new offset and zero-filling the newly extended rows
+/// (irrelevant to this port — [`SpanBuf`] always allocates the full `[0,RES)` range up front, never
+/// needs to grow); (2) for each row `y` in `[Other.StartY, Other.EndY)`, merge the two sorted disjoint
+/// 12-byte-node (`{X0,X1,Next}`) interval lists `this->Index[y]` and `Other->Index[y-Other.StartY]`
+/// into one new sorted disjoint list written back to `this->Index[y]` — a standard two-sorted-list
+/// merge, `FMemStack`-allocating a fresh node for anything not already owned by `this` (an Other-only
+/// run, or a run absorbed from `this`'s own chain that needs pushing further left/right — `this`'s
+/// FIRST node in a merged run is mutated in place, not reallocated). Two intervals that only TOUCH
+/// (`OtherX1 == ThisX0`, half-open boundary) still merge (`jge`, not `jg`, at the overlap test) — this
+/// port's `merge_into` uses the same non-strict `b < cur.0` / `a > cur.1` boundary, confirmed to
+/// match. `this+8` (`ValidLines` per the pre-existing `FSpanBuffer` struct layout) increments once
+/// per NEW node allocated and decrements once per `this`-node absorbed-and-discarded during a merge —
+/// i.e. it is a total INTERVAL-NODE count, not a per-ROW count as `SpanBuf::valid_lines` (which only
+/// flips ±1 on a row's empty↔non-empty transition) — but this has NO functional effect anywhere it's
+/// read: every consumer ([`SpanBuf::any_visible`], the real `ValidLines <= 0` zone-reachability test)
+/// only tests `> 0`/`<= 0`, which both countings agree on (zero iff the buffer is truly empty).
+///
+/// **Live-verified** (`mergewith_live_check.py`,
+/// `dev/docs/spikes/2026-08-29-unatco-repart-live-diff/harness/`): 10 real `MergeWith` calls during a
+/// genuine Wanchai `LIGHT APPLY`, gdb-breakpointed at the function's real runtime address (render.dll
+/// does NOT load at its preferred 0x10000000 base in this wine process — confirmed live, it actually
+/// loads at 0x015b0000; only Editor.dll keeps its preferred slot, which is why every prior live
+/// capture in this codebase happened to work off the raw static VA and this one didn't at first).
+/// 7/10 were a pure append (this's row empty, Other contributes one node — output equals Other's node
+/// verbatim); 3/10 were a genuine merge, including two touching-boundary cases (`(978,980)` + a
+/// row-content `(976,978)` → `(976,980)`; `(974,991)` + `(971,974)` → `(971,991)`) and one interior
+/// overlap (`(315,316)` + `(316,317)` → `(315,317)`). All 10 match, node for node, what `merge_into`
+/// independently computes from the same captured inputs (`merge_into_matches_the_real_editors_output`
+/// below pins the 3 genuine-merge cases). So `merge_into` needed no fix — it already reproduces the
+/// real `MergeWith`'s row-merge algorithm exactly for every case sampled.
 fn merge_into(buf: &mut SpanBuf, intervals: &[(i32, i32, i32)]) {
     for &(y, x0, x1) in intervals {
         if x1 <= x0 {
@@ -763,5 +802,36 @@ mod tests {
         crate::zones::assign_leaves_and_zones(&mut m);
         let visible = get_visible_surfs(&m, Vec3::new(0.0, 0.0, 0.0));
         assert!(visible.is_empty(), "PF_Invisible surfaces must never appear in the gather");
+    }
+
+    #[test]
+    fn merge_into_matches_the_real_editors_output() {
+        // Pins `mergewith-fully-decoded-confirms-merge-into` (2026-08-30): the real editor's
+        // `FSpanBuffer::MergeWith` (render.dll 0x1001e3b0), live-captured node-for-node during a real
+        // Wanchai `LIGHT APPLY` (`mergewith_live_check.py`), against `merge_into` fed the exact same
+        // pre-existing row content and incoming interval, for all 3 sampled cases that were a genuine
+        // merge (not a plain append into an empty row) — including two touching-boundary merges.
+        struct Case {
+            row_before: &'static [(i32, i32)],
+            incoming: (i32, i32),
+            row_after: &'static [(i32, i32)],
+        }
+        // (this row content, other's incoming interval) -> this row content after MergeWith, as
+        // captured live: n=3 (y=702), n=6 (y=627), n=8 (y=887).
+        let cases = [
+            Case { row_before: &[(315, 316)], incoming: (316, 317), row_after: &[(315, 317)] },
+            Case { row_before: &[(978, 980)], incoming: (976, 978), row_after: &[(976, 980)] },
+            Case { row_before: &[(974, 991)], incoming: (971, 974), row_after: &[(971, 991)] },
+        ];
+        for c in cases {
+            let mut buf = SpanBuf::empty();
+            buf.rows[0] = c.row_before.to_vec();
+            merge_into(&mut buf, &[(0, c.incoming.0, c.incoming.1)]);
+            assert_eq!(
+                buf.rows[0], c.row_after,
+                "row {:?} + incoming {:?} should merge to {:?}",
+                c.row_before, c.incoming, c.row_after
+            );
+        }
     }
 }
