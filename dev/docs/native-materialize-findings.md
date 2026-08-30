@@ -65,6 +65,11 @@ independently confirmed, only inferred from file dates + project convention. Do 
 specific breadth results as fully trustworthy until this is closed (rebuild at least one from
 scratch and diff against the existing file).
 
+**`_scratch/wanchai-relight-2026-08-29/golden.dx` provenance — CONFIRMED** (2026-08-30, 🔬) — its
+`golden_build.log` shows the correct `build_ued_lit_golden.py` pipeline ran end to end (`[map-new]`,
+`[re-add]`/EDIT PASTE, `[rebuild[0]]` MAP REBUILD, `LIGHT APPLY`, MAP SAVE), never `MAP LOAD` on a
+shipped file; log timestamps match the file's mtime. Safe to use as the Wanchai lighting oracle.
+
 **`repartition_frontier`'s poly reconstruction has same-surf duplicates** (🔬, live-verified on
 UNATCO `child=6108`: 40 polys via `make_ed_polys` vs editor's real `FindBestSplit` NumPolys=29;
 `child=4077`: 107 vs 75) — `make_ed_polys` walks the OLD subtree's nodes (self/front/back/coplanar-
