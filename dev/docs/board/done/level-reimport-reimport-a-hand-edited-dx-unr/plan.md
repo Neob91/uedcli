@@ -1,6 +1,6 @@
 # Plan — `level reimport`
 
-Canonical plan: `docs/superpowers/plans/2026-08-29-level-reimport.md` (written via the
+Canonical plan: `dev/docs/superpowers/plans/2026-08-29-level-reimport.md` (written via the
 `writing-plans` skill, TDD task-by-task, against this item's `spec.md`).
 
 Five tasks: (1) `reimport_ops.diff_actors` — classify actors by name; (2)

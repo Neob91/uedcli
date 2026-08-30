@@ -16,5 +16,5 @@ added actor gets a shared `reimport-<hex>` label for later review.
 A build-time finding (matched-and-changed actors were losing their folder/labels sidecar — see
 `level-reimport-drops-folder-labels-sidecar-on-a`) was confirmed and fixed before merge.
 
-Design: `docs/superpowers/specs/2026-08-29-level-reimport-design.md` (`spec.md` here mirrors it).
+Design: `dev/docs/superpowers/specs/2026-08-29-level-reimport-design.md` (`spec.md` here mirrors it).
 Plan: `plan.md`. User docs: `docs/usage.md` "`level reimport`".

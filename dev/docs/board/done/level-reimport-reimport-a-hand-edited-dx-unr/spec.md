@@ -1,7 +1,7 @@
 # Spec — `level reimport`
 
 Owner-approved 2026-08-29 via brainstorming; canonical copy at
-`docs/superpowers/specs/2026-08-29-level-reimport-design.md`. Mirrored here for the board runbook.
+`dev/docs/superpowers/specs/2026-08-29-level-reimport-design.md`. Mirrored here for the board runbook.
 
 ## Motivation
 

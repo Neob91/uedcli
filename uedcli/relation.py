@@ -1,5 +1,5 @@
 """Cross-brush geometric relationships — `brush measure relation`. Pure Python, model-side, no
-editor, no native CSG. See docs/superpowers/specs/2026-08-29-brush-measure-design.md."""
+editor, no native CSG. See dev/docs/superpowers/specs/2026-08-29-brush-measure-design.md."""
 from __future__ import annotations
 
 import itertools
