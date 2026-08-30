@@ -1165,6 +1165,71 @@ isolation. No `linecheck.rs` change shipped; `git diff` on that file is empty. N
 retained in `linecheck_singlestep_rec14_v2.py` (now includes the `CALL_ENTRY`/`MID`/
 `EARLY_RETURN_A`/`EARLY_RETURN_B` breakpoints from this round, reusable for a deeper trace).
 
+**Round 5: `point2` staying fixed across the whole recursion is a GENUINE, robust structural
+invariant — confirmed across 4 successive genuine crossings, on each of 12 different rays, not an
+artifact of round 4's single-crossing sample. This means `0x17ce190`'s recursion shape is
+fundamentally NOT the alternating near/far structure `linecheck.rs`'s `seg_clear`/`descend` uses —
+which is the real, now well-evidenced reason round 4's formula-only substitution regressed: the
+formula was correct, but grafting it onto a differently-shaped recursion was never going to work. A
+full, faithful port needs a recursion-structure rewrite, not a one-line formula swap — scoped for a
+future round, not attempted here.** (2026-08-30, 🔬 live gdb, no code change) —
+
+New harness `linecheck_multicrossing_survey.py`: drops the single-ray `px`/`py`/`pz` filter from the
+round 3-4 harness (whose breakpoint offsets from `0x17ce190` were confirmed STABLE across several
+separate editor restarts already, so no live re-resolution was needed) and instead arms on
+`illuminateSurf`'s FIRST call (whichever surface that is — turned out to be `iSurf=1`), logging full
+per-ray recursion structure for the first 12 rays. Completed in under a minute, same as rounds 3-4's
+technique.
+
+**Result, ray 1 (representative — all 12 rays show the identical structural pattern, just different
+coordinates):** 4 genuine crossings occur before the ray resolves (`RAY_RETURN result=0`). Grepping
+just the `CALL_ENTRY` lines for this ray:
+
+    CALL_ENTRY depth=1 point1=(1574.90796,-705.968018,179.389343) point2=(1462.90857,-1500.60205,4)
+    CALL_ENTRY depth=1 point1=(1552.3092,-866.30603,144)          point2=(1462.90857,-1500.60205,4)
+    CALL_ENTRY depth=1 point1=(1542.09204,-938.796997,128)        point2=(1462.90857,-1500.60205,4)
+    CALL_ENTRY depth=1 point1=(1514.29736,-1136,84.4739227)       point2=(1462.90857,-1500.60205,4)
+
+`point2` is **bit-identical** across all four physical recursive calls; `point1` starts at `light_loc`
+and gets replaced by each successive `mid`, converging toward `point2` (the lumel position, i.e.
+native's own `start` argument for this call). This is not a coincidence of one ray — the same exact
+shape (point2 frozen, point1 shrinking) repeats identically across all 12 sampled rays this round
+(different surfaces/records, different coordinates, same structural invariant).
+
+**Methodology caveat, logged so a future reader of the raw log isn't misled:** the harness's own
+`$depth` bookkeeping (incremented at `CALL_ENTRY`, decremented at `EARLY_RETURN_A`/`_B`) is WRONG as
+a call-stack-depth indicator — `EARLY_RETURN_A`/`_B` do not unwind a call frame, they mark the
+function's internal per-node LOOP continuing to the next node within the SAME physical stack frame
+(the same tail-loop optimization already established for `target+0x5b0`/`0x17cea70` in round 1 and
+described for `illuminateSurf`'s dispatcher's own loop pattern) — so several `EARLY_RETURN_A`/
+`CROSS_ENTRY` pairs can appear at what the log labels as decreasing "depth" while still inside ONE
+`CALL_ENTRY` frame. The `CALL_ENTRY` count itself (a fresh `call 0x17ce190`) is the reliable measure
+of genuine recursion depth, and that count is what the "4 crossings" claim above is based on, not the
+buggy `$depth` field.
+
+**What this explains, concretely:** round 4's `crossing_fraction` fix computed `t'=de/(de-ds)`
+correctly (live-verified to full f32 precision against the observed `mid`) but plugged it into
+`seg_clear`'s EXISTING recursion, which alternates — for a crossing, it visits `[start,mid]` as the
+near half and `[mid,end]` as the far half, swapping which of the ORIGINAL two endpoints survives into
+each recursive call. The real editor algorithm, per this round's evidence, does no such alternation:
+it always keeps the ORIGINAL query's `start`-equivalent point (`point2`/lumel_pos) fixed through the
+ENTIRE walk and only ever shrinks the other end. Grafting the right formula onto the wrong recursion
+shape produces a function that computes a numerically-plausible `mid` at each step but recurses on
+the WRONG set of sub-segments overall — consistent with, and now a mechanistic explanation for, the
+measured population-level regression (round 4's before/after table).
+
+**Not attempted this round:** a full recursion-structure port. Understanding the loop/child-selection
+mechanics well enough to safely rewrite `seg_clear`'s shape (not just its formula) — specifically
+what determines the NEXT node to test within one physical frame (the `ecx`-selected child from the
+`EARLY_RETURN_A`/`_B` branches) and whether the single-recursive-call structure ever needs a genuine
+SECOND branch (matching native's `&&`-combined near+far) or is provably equivalent to a single-
+direction walk for this specific zero-extent case — is scoped as a distinct, larger task for a future
+round, not blindly attempted here per the standing rule (no fix without full live-verified
+confidence). No `linecheck.rs` change this round; `git diff` on that file is empty; `bin/test`/
+`regression_gate.py` not re-run (nothing that could regress changed). New file:
+`dev/docs/spikes/2026-08-29-unatco-repart-live-diff/harness/linecheck_multicrossing_survey.py`; log:
+`dev/docs/spikes/2026-08-29-unatco-repart-live-diff/logs/linecheck-multicrossing-survey.log`.
+
 **`line_clear` CONFIRMED as the real cause (not a geometry residual): disagrees with the editor's real
 bit even fed the editor's own real tree/inputs. Live-disassembled the real editor function on the
 current build; REFUTES the old ±0.001 epsilon-tolerance hypothesis; full per-node state formula NOT

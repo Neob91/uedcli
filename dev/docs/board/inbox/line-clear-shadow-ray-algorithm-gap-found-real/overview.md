@@ -1,7 +1,7 @@
 +++
 priority = "p2"
 kind = "debug"
-summary = "Confirmed line_clear (not lumel_axes) causes Wanchai's bits-only shadow divergence. Round 3 found the round 1-2 target function (target+0x5b0) was wrong; round 4 pinned the real crossing formula (t'=de/(de-ds)) with live mid-point coordinates, implemented+TDD'd it, but the lighting re-measurement showed a SEVERE REGRESSION on both Wanchai (72.8%->29.9%) and UNATCO (80.5%->42.3%) -- reverted. The formula is correct for the one traced crossing but does not generalize safely when blanket-applied; the missing piece is 0x17ce190's full recursion structure, not the formula itself."
+summary = "Confirmed line_clear (not lumel_axes) causes Wanchai's bits-only shadow divergence. Round 3 found the round 1-2 target function (target+0x5b0) was wrong; round 4 pinned the real crossing formula (t'=de/(de-ds)) and measured it regressing both levels when grafted onto native's alternating recursion -- reverted. Round 5 explains why: point2 (the query's lumel_pos) stays bit-identical across 4 successive genuine crossings on every one of 12 sampled rays -- the real algorithm's recursion shape doesn't alternate near/far like seg_clear does, it always shrinks toward a fixed anchor. A faithful port needs a recursion-structure rewrite, not a formula swap -- scoped for a future round, no fix attempted."
 depends-on = ["getvisiblesurfs-wanchai-run-gap-root-cause"]
 spikes = ["dev/docs/spikes/2026-08-29-unatco-repart-live-diff/"]
 +++
@@ -246,13 +246,53 @@ BOTH sides of a crossing and across recursion depth, was not "replicating the ed
 algorithm" -- it was applying one live-verified fact more broadly than it was actually verified to
 hold, and the regression is the direct evidence of that gap.
 
+## Round 5 (2026-08-30): the recursion-structure question is ANSWERED -- `point2` staying fixed is a
+## genuine structural invariant, not a one-ray artifact, and it explains round 4's regression
+
+New harness `linecheck_multicrossing_survey.py`: drops the single-ray filter from rounds 3-4 (whose
+`0x17ce190`-relative breakpoint offsets were already confirmed stable across several editor restarts)
+and instead logs full recursion structure for the first 12 rays of whichever surface comes first
+(`iSurf=1`). Completed in under a minute, same fast technique as rounds 3-4.
+
+**Result: every one of the 12 sampled rays shows 4 genuine crossings before resolving, and in every
+one, `point2` is bit-identical across all 4 physical recursive calls -- only `point1` ever changes,**
+shrinking from `light_loc` through each successive `mid` toward `point2` (the lumel/query point).
+Example (ray 1's `CALL_ENTRY` lines):
+
+    point1=(1574.90796,-705.968018,179.389343) point2=(1462.90857,-1500.60205,4)
+    point1=(1552.3092,-866.30603,144)          point2=(1462.90857,-1500.60205,4)
+    point1=(1542.09204,-938.796997,128)        point2=(1462.90857,-1500.60205,4)
+    point1=(1514.29736,-1136,84.4739227)       point2=(1462.90857,-1500.60205,4)
+
+This is not a coincidence of one ray -- the identical shape (point2 frozen, point1 shrinking) repeats
+across all 12 rays sampled, different surfaces/coordinates, same invariant. (Caveat logged in the
+findings ledger: the harness's own `$depth` counter is unreliable as a call-stack-depth indicator --
+`EARLY_RETURN_A`/`_B` mark an internal per-node LOOP continuing within one physical frame, not a
+returning call; the `CALL_ENTRY` count, not `$depth`, is what "4 crossings" is based on.)
+
+**This directly explains round 4's regression.** The real editor algorithm does not alternate which
+endpoint gets replaced (the way `seg_clear`/`descend` visits `[start,mid]` then `[mid,end]`, swapping
+which original endpoint survives each call) -- it always keeps the query's original `start`-equivalent
+point fixed and only ever shrinks the other end. Round 4's fix grafted the (correct) formula onto the
+(differently-shaped) existing recursion; the formula alone was never going to reproduce the real
+algorithm's behavior population-wide, because the RECURSION SHAPE itself differs, not just the number
+computed at each step.
+
+**Not attempted this round:** a full recursion-structure port. What's still needed: understanding the
+loop/child-selection mechanics (what determines the next node tested within one physical frame) and
+whether the single-recursive-call structure ever needs a genuine second branch (matching native's
+`&&`-combined near+far) or is provably a single-direction walk for this zero-extent case -- a
+distinct, larger task, not safely attempted blind per the standing rule. No `linecheck.rs` change;
+`bin/test`/`regression_gate.py` not re-run (nothing that could regress changed).
+
 ## Not shipped
 
-No change to `linecheck.rs`, `light.rs`, or any other production code survives across all four
+No change to `linecheck.rs`, `light.rs`, or any other production code survives across all five
 rounds -- round 4's fix was implemented, tested, and measured, but reverted after the lighting
-re-measurement showed regression rather than the required real improvement (per the standing rule,
-2026-08-30: replicate the real algorithm, verified, not a formula that merely happens to match one
-traced case). `git diff` on `linecheck.rs` is empty.
+re-measurement showed regression rather than the required real improvement; round 5 explains why
+(recursion-shape mismatch) but does not yet know enough to safely port the real shape (per the
+standing rule, 2026-08-30: replicate the real algorithm, verified, not a formula that merely happens
+to match one traced case). `git diff` on `linecheck.rs` is empty.
 
 ## Files
 
@@ -276,13 +316,18 @@ traced case). `git diff` on `linecheck.rs` is empty.
 - `dev/docs/spikes/2026-08-29-unatco-repart-live-diff/logs/linecheck-singlestep-rec14-v2.log`,
   `linecheck-singlestep-rec14-v3.log` (rounds 3-4, the live capture logs the facts above are drawn
   from)
+- `dev/docs/spikes/2026-08-29-unatco-repart-live-diff/harness/linecheck_multicrossing_survey.py`
+  (round 5, new -- the multi-ray, no-filter recursion-structure survey)
+- `dev/docs/spikes/2026-08-29-unatco-repart-live-diff/logs/linecheck-multicrossing-survey.log`
+  (round 5, the 12-ray capture the `point2`-fixed finding is drawn from)
 
 ## Concrete next step for a future round
 
-`0x17ce190`'s crossing FRACTION formula is solid; what's missing is its full recursion structure.
-Needed: trace a ray with MULTIPLE genuine crossings (this round's exemplar only had one), watching
-whether `point1`/`point2` ever swap roles (which one gets replaced by `mid`) depending on near/far
-side, and whether the "other side" of a crossing is handled by a loop continuation (like `0x17cea70`'s
-tail-loop structure) rather than the single `call 0x17ce190` this round observed. Only once that's
-understood can the formula be ported as part of a faithful WHOLE-algorithm port, not a single-line
-substitution.
+Round 5 answered the near/far alternation question (`point2` never swaps roles -- it's a fixed
+anchor for the whole walk). What's still open: the exact per-node LOOP mechanics within one physical
+frame (which child gets selected via `ecx` in the `EARLY_RETURN_A`/`_B` branches, and what determines
+when the loop continues vs. when a genuine `call 0x17ce190` is needed), and whether this
+single-recursive-call shape ever needs a second branch the way native's `descend(...) &&
+descend(...)` does, or is provably sufficient as a single-direction walk for a zero-extent shadow ray.
+Only once that's understood can `seg_clear` be rewritten to match the real recursion SHAPE (not just
+have its formula patched), and re-measured before shipping.

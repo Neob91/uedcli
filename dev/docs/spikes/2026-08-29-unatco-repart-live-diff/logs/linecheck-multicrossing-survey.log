@@ -1,0 +1,303 @@
+[New LWP 143]
+[New LWP 152]
+[New LWP 153]
+[New LWP 154]
+[New LWP 155]
+[New LWP 156]
+[New LWP 157]
+[New LWP 158]
+[New LWP 159]
+[New LWP 160]
+[New LWP 161]
+[New LWP 162]
+[New LWP 163]
+[New LWP 164]
+[New LWP 165]
+[New LWP 166]
+[New LWP 167]
+[New LWP 168]
+[New LWP 169]
+[New LWP 170]
+[New LWP 171]
+[New LWP 172]
+[New LWP 173]
+[New LWP 174]
+[New LWP 175]
+[New LWP 176]
+[New LWP 177]
+[New LWP 178]
+[New LWP 179]
+[New LWP 180]
+[New LWP 195]
+[New LWP 247]
+[New LWP 248]
+[New LWP 249]
+[Thread debugging using libthread_db enabled]
+Using host libthread_db library "/lib/x86_64-linux-gnu/libthread_db.so.1".
+0xf7f91cfc in __kernel_vsyscall ()
+Breakpoint 1 at 0x100a5043
+ORACLE_ATTACHED
+SURF_ENTER isurf=1
+Breakpoint 2 at 0x100a5a04
+Breakpoint 3 at 0x17ce1b4
+Breakpoint 4 at 0x17ce2ae
+Breakpoint 5 at 0x17ce2e6
+Breakpoint 6 at 0x17ce387
+Breakpoint 7 at 0x17ce3b4
+Breakpoint 8 at 0x17ce249
+Breakpoint 9 at 0x17ce29c
+Breakpoint 10 at 0x100a5a07
+RAY_ENTER ray=1 px=1462.90857 py=-1500.60205 pz=4
+  CALL_ENTRY ray=1 depth=1 point1=(1574.90796,-705.968018,179.389343) point2=(1462.90857,-1500.60205,4)
+    EARLY_RETURN_A ray=1 depth=1
+    CROSS_ENTRY ray=1 depth=0 A=-140 B=35.3893433
+    CROSS_T ray=1 depth=0 t=-0.798224092
+    MID ray=1 depth=0 mid=(1552.3092,-866.30603,144)
+    RECURSE_CALL ray=1 depth=0
+  CALL_ENTRY ray=1 depth=1 point1=(1552.3092,-866.30603,144) point2=(1462.90857,-1500.60205,4)
+    EARLY_RETURN_A ray=1 depth=1
+    CROSS_ENTRY ray=1 depth=0 A=124 B=-16
+    CROSS_T ray=1 depth=0 t=-0.885714293
+    MID ray=1 depth=0 mid=(1542.09204,-938.796997,128)
+    RECURSE_CALL ray=1 depth=0
+  CALL_ENTRY ray=1 depth=1 point1=(1542.09204,-938.796997,128) point2=(1462.90857,-1500.60205,4)
+    CROSS_ENTRY ray=1 depth=1 A=-364.602051 B=197.203003
+    CROSS_T ray=1 depth=1 t=-0.64898324
+    MID ray=1 depth=1 mid=(1514.29736,-1136,84.4739227)
+    RECURSE_CALL ray=1 depth=1
+  CALL_ENTRY ray=1 depth=2 point1=(1514.29736,-1136,84.4739227) point2=(1462.90857,-1500.60205,4)
+    EARLY_RETURN_A ray=1 depth=2
+RAY_RETURN ray=1 result=0 max_depth=2
+RAY_ENTER ray=2 px=1495.12793 py=-1500.60205 pz=4
+  CALL_ENTRY ray=2 depth=1 point1=(1574.90796,-705.968018,179.389343) point2=(1495.12793,-1500.60205,4)
+    EARLY_RETURN_A ray=2 depth=1
+    CROSS_ENTRY ray=2 depth=0 A=-140 B=35.3893433
+    CROSS_T ray=2 depth=0 t=-0.798224092
+    MID ray=2 depth=0 mid=(1558.8103,-866.30603,144)
+    RECURSE_CALL ray=2 depth=0
+  CALL_ENTRY ray=2 depth=1 point1=(1558.8103,-866.30603,144) point2=(1495.12793,-1500.60205,4)
+    EARLY_RETURN_A ray=2 depth=1
+    CROSS_ENTRY ray=2 depth=0 A=124 B=-16
+    CROSS_T ray=2 depth=0 t=-0.885714293
+    MID ray=2 depth=0 mid=(1551.53235,-938.796997,128)
+    RECURSE_CALL ray=2 depth=0
+  CALL_ENTRY ray=2 depth=1 point1=(1551.53235,-938.796997,128) point2=(1495.12793,-1500.60205,4)
+    CROSS_ENTRY ray=2 depth=1 A=-364.602051 B=197.203003
+    CROSS_T ray=2 depth=1 t=-0.64898324
+    MID ray=2 depth=1 mid=(1531.7334,-1136,84.4739227)
+    RECURSE_CALL ray=2 depth=1
+  CALL_ENTRY ray=2 depth=2 point1=(1531.7334,-1136,84.4739227) point2=(1495.12793,-1500.60205,4)
+    EARLY_RETURN_A ray=2 depth=2
+RAY_RETURN ray=2 result=0 max_depth=2
+RAY_ENTER ray=3 px=1527.34729 py=-1500.60205 pz=4
+  CALL_ENTRY ray=3 depth=1 point1=(1574.90796,-705.968018,179.389343) point2=(1527.34729,-1500.60205,4)
+    EARLY_RETURN_A ray=3 depth=1
+    CROSS_ENTRY ray=3 depth=0 A=-140 B=35.3893433
+    CROSS_T ray=3 depth=0 t=-0.798224092
+    MID ray=3 depth=0 mid=(1565.3114,-866.30603,144)
+    RECURSE_CALL ray=3 depth=0
+  CALL_ENTRY ray=3 depth=1 point1=(1565.3114,-866.30603,144) point2=(1527.34729,-1500.60205,4)
+    EARLY_RETURN_A ray=3 depth=1
+    CROSS_ENTRY ray=3 depth=0 A=124 B=-16
+    CROSS_T ray=3 depth=0 t=-0.885714293
+    MID ray=3 depth=0 mid=(1560.97266,-938.796997,128)
+    RECURSE_CALL ray=3 depth=0
+  CALL_ENTRY ray=3 depth=1 point1=(1560.97266,-938.796997,128) point2=(1527.34729,-1500.60205,4)
+    CROSS_ENTRY ray=3 depth=1 A=-364.602051 B=197.203003
+    CROSS_T ray=3 depth=1 t=-0.64898324
+    MID ray=3 depth=1 mid=(1549.16956,-1136,84.4739227)
+    RECURSE_CALL ray=3 depth=1
+  CALL_ENTRY ray=3 depth=2 point1=(1549.16956,-1136,84.4739227) point2=(1527.34729,-1500.60205,4)
+    EARLY_RETURN_A ray=3 depth=2
+RAY_RETURN ray=3 result=0 max_depth=2
+RAY_ENTER ray=4 px=1559.56665 py=-1500.60205 pz=4
+  CALL_ENTRY ray=4 depth=1 point1=(1574.90796,-705.968018,179.389343) point2=(1559.56665,-1500.60205,4)
+    EARLY_RETURN_A ray=4 depth=1
+    CROSS_ENTRY ray=4 depth=0 A=-140 B=35.3893433
+    CROSS_T ray=4 depth=0 t=-0.798224092
+    MID ray=4 depth=0 mid=(1571.8125,-866.30603,144)
+    RECURSE_CALL ray=4 depth=0
+  CALL_ENTRY ray=4 depth=1 point1=(1571.8125,-866.30603,144) point2=(1559.56665,-1500.60205,4)
+    EARLY_RETURN_A ray=4 depth=1
+    CROSS_ENTRY ray=4 depth=0 A=124 B=-16
+    CROSS_T ray=4 depth=0 t=-0.885714293
+    MID ray=4 depth=0 mid=(1570.41296,-938.796997,128)
+    RECURSE_CALL ray=4 depth=0
+  CALL_ENTRY ray=4 depth=1 point1=(1570.41296,-938.796997,128) point2=(1559.56665,-1500.60205,4)
+    CROSS_ENTRY ray=4 depth=1 A=-364.602051 B=197.203003
+    CROSS_T ray=4 depth=1 t=-0.64898324
+    MID ray=4 depth=1 mid=(1566.60571,-1136,84.4739227)
+    RECURSE_CALL ray=4 depth=1
+  CALL_ENTRY ray=4 depth=2 point1=(1566.60571,-1136,84.4739227) point2=(1559.56665,-1500.60205,4)
+    EARLY_RETURN_A ray=4 depth=2
+RAY_RETURN ray=4 result=0 max_depth=2
+RAY_ENTER ray=5 px=1591.78601 py=-1500.60205 pz=4
+  CALL_ENTRY ray=5 depth=1 point1=(1574.90796,-705.968018,179.389343) point2=(1591.78601,-1500.60205,4)
+    EARLY_RETURN_A ray=5 depth=1
+    CROSS_ENTRY ray=5 depth=0 A=-140 B=35.3893433
+    CROSS_T ray=5 depth=0 t=-0.798224092
+    MID ray=5 depth=0 mid=(1578.3136,-866.30603,144)
+    RECURSE_CALL ray=5 depth=0
+  CALL_ENTRY ray=5 depth=1 point1=(1578.3136,-866.30603,144) point2=(1591.78601,-1500.60205,4)
+    EARLY_RETURN_A ray=5 depth=1
+    CROSS_ENTRY ray=5 depth=0 A=124 B=-16
+    CROSS_T ray=5 depth=0 t=-0.885714293
+    MID ray=5 depth=0 mid=(1579.85327,-938.796997,128)
+    RECURSE_CALL ray=5 depth=0
+  CALL_ENTRY ray=5 depth=1 point1=(1579.85327,-938.796997,128) point2=(1591.78601,-1500.60205,4)
+    CROSS_ENTRY ray=5 depth=1 A=-364.602051 B=197.203003
+    CROSS_T ray=5 depth=1 t=-0.64898324
+    MID ray=5 depth=1 mid=(1584.04187,-1136,84.4739227)
+    RECURSE_CALL ray=5 depth=1
+  CALL_ENTRY ray=5 depth=2 point1=(1584.04187,-1136,84.4739227) point2=(1591.78601,-1500.60205,4)
+    EARLY_RETURN_A ray=5 depth=2
+RAY_RETURN ray=5 result=0 max_depth=2
+RAY_ENTER ray=6 px=1624.00537 py=-1500.60205 pz=4
+  CALL_ENTRY ray=6 depth=1 point1=(1574.90796,-705.968018,179.389343) point2=(1624.00537,-1500.60205,4)
+    EARLY_RETURN_A ray=6 depth=1
+    CROSS_ENTRY ray=6 depth=0 A=-140 B=35.3893433
+    CROSS_T ray=6 depth=0 t=-0.798224092
+    MID ray=6 depth=0 mid=(1584.81458,-866.30603,144)
+    RECURSE_CALL ray=6 depth=0
+  CALL_ENTRY ray=6 depth=1 point1=(1584.81458,-866.30603,144) point2=(1624.00537,-1500.60205,4)
+    EARLY_RETURN_A ray=6 depth=1
+    CROSS_ENTRY ray=6 depth=0 A=124 B=-16
+    CROSS_T ray=6 depth=0 t=-0.885714293
+    MID ray=6 depth=0 mid=(1589.29358,-938.796997,128)
+    RECURSE_CALL ray=6 depth=0
+  CALL_ENTRY ray=6 depth=1 point1=(1589.29358,-938.796997,128) point2=(1624.00537,-1500.60205,4)
+    CROSS_ENTRY ray=6 depth=1 A=-364.602051 B=197.203003
+    CROSS_T ray=6 depth=1 t=-0.64898324
+    MID ray=6 depth=1 mid=(1601.47803,-1136,84.4739227)
+    RECURSE_CALL ray=6 depth=1
+  CALL_ENTRY ray=6 depth=2 point1=(1601.47803,-1136,84.4739227) point2=(1624.00537,-1500.60205,4)
+    EARLY_RETURN_A ray=6 depth=2
+RAY_RETURN ray=6 result=0 max_depth=2
+RAY_ENTER ray=7 px=1656.22473 py=-1500.60205 pz=4
+  CALL_ENTRY ray=7 depth=1 point1=(1574.90796,-705.968018,179.389343) point2=(1656.22473,-1500.60205,4)
+    EARLY_RETURN_A ray=7 depth=1
+    CROSS_ENTRY ray=7 depth=0 A=-140 B=35.3893433
+    CROSS_T ray=7 depth=0 t=-0.798224092
+    MID ray=7 depth=0 mid=(1591.31567,-866.30603,144)
+    RECURSE_CALL ray=7 depth=0
+  CALL_ENTRY ray=7 depth=1 point1=(1591.31567,-866.30603,144) point2=(1656.22473,-1500.60205,4)
+    EARLY_RETURN_A ray=7 depth=1
+    CROSS_ENTRY ray=7 depth=0 A=124 B=-16
+    CROSS_T ray=7 depth=0 t=-0.885714293
+    MID ray=7 depth=0 mid=(1598.73389,-938.796997,128)
+    RECURSE_CALL ray=7 depth=0
+  CALL_ENTRY ray=7 depth=1 point1=(1598.73389,-938.796997,128) point2=(1656.22473,-1500.60205,4)
+    CROSS_ENTRY ray=7 depth=1 A=-364.602051 B=197.203003
+    CROSS_T ray=7 depth=1 t=-0.64898324
+    MID ray=7 depth=1 mid=(1618.91418,-1136,84.4739227)
+    RECURSE_CALL ray=7 depth=1
+  CALL_ENTRY ray=7 depth=2 point1=(1618.91418,-1136,84.4739227) point2=(1656.22473,-1500.60205,4)
+    EARLY_RETURN_A ray=7 depth=2
+RAY_RETURN ray=7 result=0 max_depth=2
+RAY_ENTER ray=8 px=1688.44409 py=-1500.60205 pz=4
+  CALL_ENTRY ray=8 depth=1 point1=(1574.90796,-705.968018,179.389343) point2=(1688.44409,-1500.60205,4)
+    EARLY_RETURN_A ray=8 depth=1
+    CROSS_ENTRY ray=8 depth=0 A=-140 B=35.3893433
+    CROSS_T ray=8 depth=0 t=-0.798224092
+    MID ray=8 depth=0 mid=(1597.81677,-866.30603,144)
+    RECURSE_CALL ray=8 depth=0
+  CALL_ENTRY ray=8 depth=1 point1=(1597.81677,-866.30603,144) point2=(1688.44409,-1500.60205,4)
+    EARLY_RETURN_A ray=8 depth=1
+    CROSS_ENTRY ray=8 depth=0 A=124 B=-16
+    CROSS_T ray=8 depth=0 t=-0.885714293
+    MID ray=8 depth=0 mid=(1608.17419,-938.796997,128)
+    RECURSE_CALL ray=8 depth=0
+  CALL_ENTRY ray=8 depth=1 point1=(1608.17419,-938.796997,128) point2=(1688.44409,-1500.60205,4)
+    CROSS_ENTRY ray=8 depth=1 A=-364.602051 B=197.203003
+    CROSS_T ray=8 depth=1 t=-0.64898324
+    MID ray=8 depth=1 mid=(1636.35022,-1136,84.4739227)
+    RECURSE_CALL ray=8 depth=1
+  CALL_ENTRY ray=8 depth=2 point1=(1636.35022,-1136,84.4739227) point2=(1688.44409,-1500.60205,4)
+    EARLY_RETURN_A ray=8 depth=2
+RAY_RETURN ray=8 result=0 max_depth=2
+RAY_ENTER ray=9 px=1334.03113 py=-1468.33105 pz=4
+  CALL_ENTRY ray=9 depth=1 point1=(1574.90796,-705.968018,179.389343) point2=(1334.03113,-1468.33105,4)
+    EARLY_RETURN_A ray=9 depth=1
+    CROSS_ENTRY ray=9 depth=0 A=-140 B=35.3893433
+    CROSS_T ray=9 depth=0 t=-0.798224092
+    MID ray=9 depth=0 mid=(1526.30481,-859.794495,144)
+    RECURSE_CALL ray=9 depth=0
+  CALL_ENTRY ray=9 depth=1 point1=(1526.30481,-859.794495,144) point2=(1334.03113,-1468.33105,4)
+    EARLY_RETURN_A ray=9 depth=1
+    CROSS_ENTRY ray=9 depth=0 A=124 B=-16
+    CROSS_T ray=9 depth=0 t=-0.885714293
+    MID ray=9 depth=0 mid=(1504.33069,-929.341553,128)
+    RECURSE_CALL ray=9 depth=0
+  CALL_ENTRY ray=9 depth=1 point1=(1504.33069,-929.341553,128) point2=(1334.03113,-1468.33105,4)
+    CROSS_ENTRY ray=9 depth=1 A=-332.331055 B=206.658447
+    CROSS_T ray=9 depth=1 t=-0.616581678
+    MID ray=9 depth=1 mid=(1439.03467,-1136,80.456131)
+    RECURSE_CALL ray=9 depth=1
+  CALL_ENTRY ray=9 depth=2 point1=(1439.03467,-1136,80.456131) point2=(1334.03113,-1468.33105,4)
+    EARLY_RETURN_A ray=9 depth=2
+RAY_RETURN ray=9 result=0 max_depth=2
+RAY_ENTER ray=10 px=1366.25049 py=-1468.33105 pz=4
+  CALL_ENTRY ray=10 depth=1 point1=(1574.90796,-705.968018,179.389343) point2=(1366.25049,-1468.33105,4)
+    EARLY_RETURN_A ray=10 depth=1
+    CROSS_ENTRY ray=10 depth=0 A=-140 B=35.3893433
+    CROSS_T ray=10 depth=0 t=-0.798224092
+    MID ray=10 depth=0 mid=(1532.80591,-859.794495,144)
+    RECURSE_CALL ray=10 depth=0
+  CALL_ENTRY ray=10 depth=1 point1=(1532.80591,-859.794495,144) point2=(1366.25049,-1468.33105,4)
+    EARLY_RETURN_A ray=10 depth=1
+    CROSS_ENTRY ray=10 depth=0 A=124 B=-16
+    CROSS_T ray=10 depth=0 t=-0.885714293
+    MID ray=10 depth=0 mid=(1513.771,-929.341553,128)
+    RECURSE_CALL ray=10 depth=0
+  CALL_ENTRY ray=10 depth=1 point1=(1513.771,-929.341553,128) point2=(1366.25049,-1468.33105,4)
+    CROSS_ENTRY ray=10 depth=1 A=-332.331055 B=206.658447
+    CROSS_T ray=10 depth=1 t=-0.616581678
+    MID ray=10 depth=1 mid=(1457.20898,-1136,80.456131)
+    RECURSE_CALL ray=10 depth=1
+  CALL_ENTRY ray=10 depth=2 point1=(1457.20898,-1136,80.456131) point2=(1366.25049,-1468.33105,4)
+    EARLY_RETURN_A ray=10 depth=2
+RAY_RETURN ray=10 result=0 max_depth=2
+RAY_ENTER ray=11 px=1398.46985 py=-1468.33105 pz=4
+  CALL_ENTRY ray=11 depth=1 point1=(1574.90796,-705.968018,179.389343) point2=(1398.46985,-1468.33105,4)
+    EARLY_RETURN_A ray=11 depth=1
+    CROSS_ENTRY ray=11 depth=0 A=-140 B=35.3893433
+    CROSS_T ray=11 depth=0 t=-0.798224092
+    MID ray=11 depth=0 mid=(1539.30701,-859.794495,144)
+    RECURSE_CALL ray=11 depth=0
+  CALL_ENTRY ray=11 depth=1 point1=(1539.30701,-859.794495,144) point2=(1398.46985,-1468.33105,4)
+    EARLY_RETURN_A ray=11 depth=1
+    CROSS_ENTRY ray=11 depth=0 A=124 B=-16
+    CROSS_T ray=11 depth=0 t=-0.885714293
+    MID ray=11 depth=0 mid=(1523.2113,-929.341553,128)
+    RECURSE_CALL ray=11 depth=0
+  CALL_ENTRY ray=11 depth=1 point1=(1523.2113,-929.341553,128) point2=(1398.46985,-1468.33105,4)
+    CROSS_ENTRY ray=11 depth=1 A=-332.331055 B=206.658447
+    CROSS_T ray=11 depth=1 t=-0.616581678
+    MID ray=11 depth=1 mid=(1475.38318,-1136,80.456131)
+    RECURSE_CALL ray=11 depth=1
+  CALL_ENTRY ray=11 depth=2 point1=(1475.38318,-1136,80.456131) point2=(1398.46985,-1468.33105,4)
+    EARLY_RETURN_A ray=11 depth=2
+RAY_RETURN ray=11 result=0 max_depth=2
+RAY_ENTER ray=12 px=1430.68921 py=-1468.33105 pz=4
+  CALL_ENTRY ray=12 depth=1 point1=(1574.90796,-705.968018,179.389343) point2=(1430.68921,-1468.33105,4)
+    EARLY_RETURN_A ray=12 depth=1
+    CROSS_ENTRY ray=12 depth=0 A=-140 B=35.3893433
+    CROSS_T ray=12 depth=0 t=-0.798224092
+    MID ray=12 depth=0 mid=(1545.80811,-859.794495,144)
+    RECURSE_CALL ray=12 depth=0
+  CALL_ENTRY ray=12 depth=1 point1=(1545.80811,-859.794495,144) point2=(1430.68921,-1468.33105,4)
+    EARLY_RETURN_A ray=12 depth=1
+    CROSS_ENTRY ray=12 depth=0 A=124 B=-16
+    CROSS_T ray=12 depth=0 t=-0.885714293
+    MID ray=12 depth=0 mid=(1532.65161,-929.341553,128)
+    RECURSE_CALL ray=12 depth=0
+  CALL_ENTRY ray=12 depth=1 point1=(1532.65161,-929.341553,128) point2=(1430.68921,-1468.33105,4)
+    CROSS_ENTRY ray=12 depth=1 A=-332.331055 B=206.658447
+    CROSS_T ray=12 depth=1 t=-0.616581678
+    MID ray=12 depth=1 mid=(1493.55737,-1136,80.456131)
+    RECURSE_CALL ray=12 depth=1
+  CALL_ENTRY ray=12 depth=2 point1=(1493.55737,-1136,80.456131) point2=(1430.68921,-1468.33105,4)
+    EARLY_RETURN_A ray=12 depth=2
+RAY_RETURN ray=12 result=0 max_depth=2
+TARGET_DONE
+[Inferior 1 (process 34) detached]
