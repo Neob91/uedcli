@@ -39,12 +39,18 @@ iLink=+0x1c4`. Verified working via live gdb capture, `dev/docs/spikes/2026-08-2
 
 **`bspRepartition` subtree-level call sites** (📖🔬, `Editor.dll 0x1004aa3f`/`0x1004aa90`, 3-arg
 `bspRepartition(Model, iChild, 2)`, called from `csgRebuild`'s two post-detail-loop frontier
-loops) — `esp+8=iChild` verified reliable (matches known target node indices across 10+ live
-captures). `esp+4` as "Model" is **UNVERIFIED for this call site** — only ever confirmed at the
-2-arg world-level site above, which may use a different calling convention. A `repart_allcalls_unatco.py`
-sweep reading `esp+4` here returned a suspicious constant (6314) for every one of 209 calls —
-possible garbage read, not yet resolved. Do not trust `esp+4`-derived Model/Nodes.Num data from
-this call site until the calling convention is confirmed by fresh disassembly.
+loops) — `esp+8=iChild` and `esp+4=Model` BOTH confirmed correct (`esp+4` independently validated
+against known values 2953/2984/6314 at other breakpoints; `ecx` at this call site is a real but
+DIFFERENT object — swapping to it gives a nonsensical constant `Nodes.Num=6`, refuted). The
+`repart_allcalls_unatco.py` sweep's flat `Nodes.Num=6314` reading for all 209 calls is NOT a
+calling-convention bug — cause still unresolved, not a measurement artifact of the read itself.
+
+**`bsp_merge_coplanars`'s geometric weld is doing real, necessary work** (🔬, `child=6108`) — a
+naive "keep one poly per unique `i_surf`" dedup matches the merge's poly COUNT (29) but picks the
+WRONG root split (native's own `(0,0,-1,-280)`, not the editor's real `(1,0,0,508)` that the actual
+merge reproduces exactly). Blanket-applied, dedup lands at 5599 nodes — worse than merge's 5689.
+`bspBuildFPolys` is not a plain surf-array walk; whatever the editor does, it needs the weld's
+actual geometry, not just fewer polys.
 
 **`repartition_frontier`'s poly reconstruction has same-surf duplicates** (🔬, live-verified on
 UNATCO `child=6108`: 40 polys via `make_ed_polys` vs editor's real `FindBestSplit` NumPolys=29;
