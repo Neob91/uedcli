@@ -938,3 +938,20 @@ live captures; no `bspcsg.rs` changes this round. `bin/test -k bspcsg` (84/84) a
 churn across concurrent sessions; recovered both times via `docker builder prune -a -f` (safe —
 regenerable build cache only, freed 2.5GB) and removing this session's own orphaned `uned-wp-vtdump`
 volume (never another session's). Left `uned-wp-testdbg`/other unrecognized volumes untouched.
+
+## 2026-08-30, flagged from the sibling Wanchai item — re-examination risk on THIS item's own
+## per-call methodology, not independently re-checked here.
+
+`wanchai-verts-points-residual-independently` found that `repart_child_trace.py`'s live
+`bspAddNode`-during-the-call capture measures TRANSIENT, DISCARDED scratch construction (per
+`nodesnum_watch.py`'s `Core.dll!FArray::Remove` finding), not the real persistent tree — and that
+once Wanchai's 9 "known-bad" calls are measured against the true persistent content (via
+`prepart_tree_wanchai.py`'s existing pre-`repartition_frontier` dump, cross-referenced, no new
+capture needed) all 9 show ZERO delta, not the tabulated ones. **This item's own `child=6108`
+(and the `4077`/`3086` siblings it cites) were characterized using the SAME `repart_child_trace.py`
+methodology — "the editor's REAL subtree is exactly 1 `bspAddNode` call" framing appears earlier in
+this item too.** Not independently re-checked this round (would need the same cross-reference:
+`prepart_tree_unatco.py`'s existing dump — already committed, per-call subtree walk over
+`iFront`/`iBack`/`iPlane` — against `child=6108`'s persistent vertex count vs native's own `Δverts`).
+Concrete next step if this item is picked up again: run that same cross-reference here before
+trusting any `repart_child_trace.py`-derived "editor real" figure in this item's own analysis.

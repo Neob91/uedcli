@@ -275,3 +275,48 @@ files: `wanchai_descendant_slots.py`, `node_content_before_after.py`,
 `dev/docs/spikes/2026-08-29-unatco-repart-live-diff/harness/`). No `bspcsg.rs` changes; read-only
 live capture only. `bin/test -k bspcsg` (84/84) and `regression_gate.py`'s default path unchanged
 (UNATCO nodes 6321 vs golden 6314, Wanchai exact at 11648) before/after.
+
+**CORRECTION, same day: the per-call "editor real Δverts" methodology (`repart_child_trace.py`'s
+live `bspAddNode`-during-the-call capture) measures TRANSIENT, DISCARDED scratch construction, not
+the real persistent tree — invalidating the "9 known-bad calls" delta table in
+`wanchai-verts-points-residual-independently`. Once measured against the true persistent content,
+all 9 of those calls show ZERO delta, not the tabulated +4/+8s.** (2026-08-30, 🔬, corrects the
+`repart_child_trace.py`-derived "editor real Δverts" column used throughout both
+`wanchai-verts-points-residual-independently` and, by the same methodology,
+`unatco-verts-points-residual-after-the-zone`'s `child=6108`/`4077`/`3086` figures — NOT
+independently re-checked for UNATCO this round, flagged as a re-examination risk) — Extended
+`wanchai_descendant_slots.py`'s BFS to also follow `iPlane` (the coplanar-duplicate chain,
+`FBspNode` `+0x28`) after finding the original version silently missed 12 of 43 nodes for the 4
+coplanar-leaf targets (`11206/11211/11216/11201`, each `iFront=iBack=-1` but a live 4-node `iPlane`
+chain). Rerun: **55 total slots across all 9 subtrees — still 0 changed**, now covering every node
+reachable by any of the three link fields. Separately, cross-referenced `prepart_tree_wanchai.py`'s
+existing "state right before `repartition_frontier`'s subtree loop begins" dump (`callidx==2`,
+already committed, no new capture needed): for EVERY ONE of the 9 targets, the pre-existing subtree
+size (BFS over `iFront`/`iBack`/`iPlane`) exactly equals `orig_polys` from the per-call table (9/9
+exact: 15/5/6/6/7/4/4/4/4) — the editor's real, persistent tree already represents each original
+poly as one separate, unmerged node BEFORE `repartition_frontier` ever touches these subtrees. Cross
+-checked UNATCO's OWN existing `prepart_tree_unatco.py` dump (same `callidx==2` checkpoint, no new
+capture) for `child=6108`: pre-existing subtree size = 40 nodes, exactly matching that call's own
+"40 polys" description — same pattern, second level, no new live capture needed to see it. **Given
+the call is a proven no-op (55/55 unchanged) and the persistent structure is confirmed unmerged and
+matches `orig_polys`, the true persistent vertex count per subtree is `orig_polys × verts-per-poly`
+— and for all 9 Wanchai targets, that number is EXACTLY equal to native's own current (default,
+unmerged) `Δverts`, not the tabulated "editor real Δverts" figure** (e.g. `child=11201`: table said
+editor-real=4, persistent-content computation says 12 — matching native's own 12 exactly; same
+exact-match pattern for all 9). So `repart_child_trace.py`'s "editor's REAL subtree is exactly 1
+`bspAddNode` call, nv=4" framing (used to justify the whole "9 known-bad calls" table) was a
+misnomer: that call is real (confirmed live, `bspAddNode`'s own `Model` arg matches the persistent
+model, per `repart_addnode_model_trace.py`) but its RESULT never survives — `bspRefresh`'s
+`FArray::Remove` discards it every time (`nodesnum_watch.py`), and the pre-existing, un-merged,
+never-modified content is what actually ships. **Implication, not yet independently verified: the
+Wanchai "+64 verts, attributed to `repartition_frontier`'s 119 calls" stage-count finding
+(`UEDCLI_BSPCSG_STAGE_COUNTS` vs the live editor stage log) may itself be comparing against the same
+flawed "transient bspAddNode capture" reference for at least these 9 calls — if so, the true source
+of Wanchai's real +138-vert residual is NOT localized to these 9 calls and needs re-attribution from
+scratch, not a fix aimed at `repartition_frontier`'s merge logic.** Not yet checked: whether the
+`UEDCLI_BSPCSG_STAGE_COUNTS` aggregate measurement uses `prepart_tree_wanchai.py`-style persistent
+snapshots (unaffected by this correction) or `repart_child_trace.py`-style per-call capture
+(affected) as its editor-side reference — that's the concrete next step before touching any
+`bspcsg.rs` code. No `bspcsg.rs` changes this round; read-only live capture and re-analysis of
+already-committed logs only. `bin/test -k bspcsg` (84/84) and `regression_gate.py`'s default path
+unchanged (UNATCO 6321/6314, Wanchai exact 11648) before/after.

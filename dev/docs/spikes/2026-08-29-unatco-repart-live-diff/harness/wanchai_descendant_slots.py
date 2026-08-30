@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 r"""Live GDB capture: for each of Wanchai's 9 known-delta `repartition_frontier` subtree calls
 (`wanchai-verts-points-residual-independently`), BFS-walk the subtree from its root (via
-`iFront`/`iBack`, `Editor.dll` `FBspNode` offsets `+0x20`/`+0x24`, confirmed in `bspcsg.rs`'s own
-"ENGINE convention" comment), capture every visited node's full 64 raw bytes (`FBspNode` stride,
-`0x40`, matching the `FArray::Remove` call's own `ElementSize` argument found in
+`iFront`/`iBack`/`iPlane` — `Editor.dll` `FBspNode` offsets `+0x20`/`+0x24`/`+0x28`, `iFront`/`iBack`
+confirmed in `bspcsg.rs`'s own "ENGINE convention" comment; `iPlane` chains the coplanar-duplicate
+successors and MUST be walked too — an earlier version of this script omitted it and silently missed
+12 of the 43 "descendant" nodes for the 4 coplanar-leaf targets, since those targets have
+`iFront=iBack=-1` but a live `iPlane` chain), capture every visited node's full 64 raw bytes
+(`FBspNode` stride `0x40`, matching the `FArray::Remove` call's own `ElementSize` argument found in
 `node_content_before_after.py`) at `bspRepartition` entry, then re-read the SAME indices at
 `bspRepartition`'s own `bspRefresh`-return marker (`0x1004a05f`) and diff.
 
@@ -87,6 +90,7 @@ if $ismatch == 1
     set $node = $base + $cur * 0x40
     set $f = *(int *)($node + 0x20)
     set $b = *(int *)($node + 0x24)
+    set $p = *(int *)($node + 0x28)
     if $f != -1 && $n < 64
       set $idx[$qtail] = $f
       set $qtail = $qtail + 1
@@ -94,6 +98,11 @@ if $ismatch == 1
     end
     if $b != -1 && $n < 64
       set $idx[$qtail] = $b
+      set $qtail = $qtail + 1
+      set $n = $n + 1
+    end
+    if $p != -1 && $n < 64
+      set $idx[$qtail] = $p
       set $qtail = $qtail + 1
       set $n = $n + 1
     end

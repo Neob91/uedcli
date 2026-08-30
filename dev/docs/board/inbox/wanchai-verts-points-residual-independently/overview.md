@@ -186,25 +186,60 @@ has never had per-call editor identity this precise before).
 `wanchai_descendant_slots.py` (`dev/docs/spikes/2026-08-29-unatco-repart-live-diff/harness/`):
 BFS-walked `iFront`/`iBack` from each of the 9 calls' target node AT its `bspRepartition` entry,
 captured every reached node's full 64 raw bytes, re-read the SAME indices at the call's own
-`bspRefresh`-return marker. **43 total slots across all 9 subtrees (4 of the 9 —
-`11201/11216/11211/11206` — are single-leaf, no descendants at all) — 0 changed, byte-for-byte,
-everywhere.** This generalizes UNATCO's single-node `child=6108` finding
-(`unatco-verts-points-residual-after-the-zone`, same day) to the full subtree, on the exact 9 calls
-already independently known to have a node-count delta. Combined with the earlier `Nodes.Num`
-watchpoint result (always nets to the pre-call baseline), both obvious "where does the editor commit
-this call's result" candidates are now ruled out for this calibration set: no net array growth, no
-in-place content rewrite anywhere reachable from the call's own target.
+`bspRefresh`-return marker. First pass found "43 total slots, 0 changed" but the walk only followed
+`iFront`/`iBack` — a bug, since 4 of the 9 targets (`11201/11216/11211/11206`) have
+`iFront=iBack=-1` but a live `iPlane` coplanar-chain, silently unwalked. **Fixed to also follow
+`iPlane`; rerun: 55 total slots across all 9 subtrees — still 0 changed, byte-for-byte, everywhere,
+now covering every node reachable by any of the three link fields.** Combined with the earlier
+`Nodes.Num` watchpoint result (always nets to the pre-call baseline), both obvious "where does the
+editor commit this call's result" candidates are ruled out for this calibration set: no net array
+growth, no in-place content rewrite anywhere reachable from the call's own target — the editor's own
+call is a proven, complete no-op for all 9.
 
-**Reframing, not just a null result:** since the editor's own call for these 9 subtrees is
-observably a no-op at the node level, the delta these subtrees show under isolated NATIVE-vs-editor
-comparison is more likely a NATIVE-side reconstruction issue (native re-deriving unmerged fragments
-from content that an EARLIER pass, before `repartition_frontier`, already got right) than a hidden
-editor commit mechanism still to find. Not yet tested: reading the same node's content at a point
-BEFORE `repartition_frontier`'s subtree loop starts (world-level/zone-pass boundary) to see if it
-already matches what native SHOULD be reconstructing. That's the next concrete step if this gets
-picked up again, and it's a smaller, more targeted capture than another round of "where's the commit
-step" hunting.
+## Same day, follow-up: this no-op finding, cross-referenced against ALREADY-COMMITTED tree dumps
+## (no new capture needed), corrects the per-call table above — it was measuring the wrong thing.
 
-**Not shipped, no regression risk.** Read-only live capture only. `bin/test -k bspcsg` (84/84) and
-`regression_gate.py`'s default path unchanged (Wanchai still exact at 11648; UNATCO still 6321 vs
-6314 golden) before/after.
+Cross-referenced `prepart_tree_wanchai.py`'s existing dump (the editor's full tree at `callidx==2`,
+the exact moment right before `repartition_frontier`'s subtree loop begins — already committed, no
+new capture): for EVERY ONE of the 9 targets, the PRE-EXISTING subtree size (BFS over
+`iFront`/`iBack`/`iPlane`) exactly equals `orig_polys` from the table above (9/9 exact:
+15/5/6/6/7/4/4/4/4) — the editor's persistent tree already has each original poly as one separate,
+unmerged node BEFORE `repartition_frontier` touches these subtrees at all. Given the call is a
+proven no-op (55/55 unchanged, this round) and the pre-existing structure is unmerged and matches
+`orig_polys`, that same unmerged structure is what SHIPS — so the true persistent vertex count per
+subtree is `orig_polys × verts-per-poly`. **Computed this for all 9: it exactly equals native's own
+current (default, unmerged) `Δverts` column — NOT the "editor real Δverts" column in the table
+above, for all 9 targets** (e.g. `child=11201`: table said editor-real=4; persistent-content
+computation says 12, matching native's own 12 exactly; same exact match for the other 8).
+
+**This means the "editor real Δverts" column above, and the whole "9 known-bad calls, summing to
+exactly +64" framing built on it, measured the WRONG thing.** That column came from
+`repart_child_trace.py`'s live capture of `bspAddNode` calls DURING the target's own
+`bspRepartition` call — genuinely real calls (confirmed live, `bspAddNode`'s own `Model` argument
+matches the persistent model,
+`dev/docs/spikes/2026-08-29-unatco-repart-live-diff/harness/repart_addnode_model_trace.py`) but
+whose RESULT never survives: `bspRefresh`'s own `Core.dll!FArray::Remove` call discards it every
+single time (`nodesnum_watch.py`, same investigation, `native-materialize-findings.md`). So "the
+editor's REAL subtree is exactly 1 `bspAddNode` call, nv=4" (this item's own earlier framing for
+`child=11201`) was a misnomer — that call is real but its output is thrown away; the actual
+persistent, shipped content is the pre-existing 4-node unmerged chain, which numerically matches
+native's CURRENT default output exactly. **Once measured against the true persistent content, all 9
+of these calls show ZERO delta, not the tabulated +4/+8s.**
+
+**Open, not resolved by this round:** if these 9 calls' real per-call delta is zero, Wanchai's true
++138-vert residual (and the "+64 attributed to `repartition_frontier`'s 119 calls" stage-count
+finding specifically) is NOT localized to these 9 calls after all — it needs re-attribution from a
+clean slate. Not yet checked: whether the `UEDCLI_BSPCSG_STAGE_COUNTS` aggregate measurement that
+produced "+64" used a `prepart_tree_wanchai.py`-style persistent snapshot (unaffected by this
+correction) or a `repart_child_trace.py`-style live per-call capture (affected, per this finding) as
+its editor-side reference for repartition_frontier's segment — that's the concrete next step, and it
+determines whether the "+64" figure needs to be thrown out or was measured correctly by a different
+route. The SAME methodology (`repart_child_trace.py`'s live per-call capture) was also used for
+UNATCO's `child=6108`/`4077`/`3086` in the sibling item
+(`unatco-verts-points-residual-after-the-zone`) — NOT independently re-checked this round, flagged
+there as a re-examination risk rather than silently assumed still valid.
+
+**Not shipped, no regression risk.** Read-only live capture and re-analysis of already-committed
+logs only — no new claims requiring a fresh capture beyond the `iPlane`-walk fix above. `bin/test -k
+bspcsg` (84/84) and `regression_gate.py`'s default path unchanged (Wanchai still exact at 11648;
+UNATCO still 6321 vs 6314 golden) before/after.
