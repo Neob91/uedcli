@@ -1,7 +1,7 @@
 +++
 priority = "p2"
 kind = "debug"
-summary = "Confirmed line_clear (not lumel_axes) causes Wanchai's bits-only shadow divergence; live-disassembled the real editor function on the current build but did not fully decode its per-node state formula -- no fix, logged per the no-speculative-fix rule."
+summary = "Confirmed line_clear (not lumel_axes) causes Wanchai's bits-only shadow divergence. Round 2: static hand-decode reproduces the per-node bit formula and finds a new non-bit-identical crossing-point (mid) formula, but a live single-step attempt to confirm it hung on the shared per-ray call site's hit volume and was killed -- no fix, logged per the no-speculative-fix rule."
 depends-on = ["getvisiblesurfs-wanchai-run-gap-root-cause"]
 spikes = ["dev/docs/spikes/2026-08-29-unatco-repart-live-diff/"]
 +++
@@ -126,23 +126,66 @@ reliable next step is a live, single-step gdb trace of the SAME known-mismatchin
 diffing against `line_clear_py`'s own trace for the identical input -- mechanical value comparison
 instead of further hand-decoding of SSE-optimized asm.
 
+## Round 2 (2026-08-30): static formula pinned, live single-step attempted and abandoned as too slow
+
+Continuation task: a live single-step gdb trace of the exact known-mismatching ray (`rec=14
+Light42 v=3 u=0`) through the recursive walker, to mechanically pin Finding D instead of hand-reading
+more disassembly. Two outcomes:
+
+**1. A from-scratch static hand-decode of the already-committed `linecheck-target-disasm.log`
+independently reproduces Finding D's bit formula exactly, AND finds a new, likely-relevant
+divergence Finding D didn't cover.** Full line-by-line SSE trace (every `shufps`/`movhlps`/`addps`
+semantics worked out by hand) plus a fresh disasm of the CALLER (`illuminateSurf`'s call site,
+`rdis.py dis Editor 0x100a5900 0x160`) to pin the argument convention: the call is
+`Model->vtbl[0x58](extra_flags, lumel_pos, light_loc, 0, &out)`, `ecx`=Model, `extra_flags`∈{4,0x14}
+matching `VIS_EXTRA_FLAGS`/`VIS_BRIGHT_CORNERS` exactly.
+
+- **Bit formula**: `new_state = (((incoming_state XOR front_start) AND NodeFlags_byte) AND 1) XOR
+  front_start` -- same as Finding D, independently re-derived (not copied from the prior entry).
+- **NEW: the crossing-point `mid` uses a different, non-bit-identical formula.** Native computes
+  `t=ds/(ds-de)`, `mid=start+(end-start)*t`. The editor instead computes `t'=de/(de-ds)` (a SEPARATE
+  division) then `mid=end+t'*(start-end)` -- algebraically `t'≡1-t` (equal at both `ds=0`/`de=0`
+  endpoints) but NOT bit-identical, since the two are independently-rounded divisions, not a computed
+  `1-t`. For the traced exemplar (`ds`≈-0.0002, `de`≈112.39), native's `t=ds/(ds-de)` is dominated by
+  the tiny, noise-sensitive `ds` (`t≈1.78e-6`), while the editor's `t'=de/(de-ds)` is dominated by the
+  large, well-conditioned `de` (`t'≈0.9999982`) -- a real, structural reason the two engines could
+  land on different `mid` points from the SAME `ds`/`de` pair, precisely in the near-zero-crossing
+  regime this whole investigation is about. **Not live-confirmed.**
+
+**2. The live single-step attempt hung and was killed -- the shared per-ray call site is hit too
+often for a breakpoint-based approach to reach one specific ray in bounded time.** New harness
+`linecheck_singlestep_rec14.py`: one gdb session, a conditional breakpoint at the fixed outer call
+site (`0x100a5a04`) gated on the pushed lumel position matching the target ray, arming two further
+breakpoints (`+0x92` for `ds`/`de`/flags per node, `+0xd5` for the computed `mid`) only once matched.
+Ran 25 minutes with the log still stuck at `ORACLE_ATTACHED` (zero hits logged); `ps` inside the
+container showed `gdb` at 99.6% CPU / 24:45 accumulated CPU-time and `unrealed.exe` actively running
+at 53.6% -- confirming `LIGHT APPLY` genuinely ran and the breakpoint genuinely fired repeatedly, just
+never yet on a match, because that call site is hit once per shadow-ray BIT computed across the WHOLE
+level (order 10^5-10^6 for a level this size), each hit costing a full ptrace round-trip through
+Docker. Killed (`docker kill`/`rm`) per the standing background-work rule rather than let it run
+indefinitely. **Concrete next step, not attempted:** gate the fine-grained breakpoints behind a much
+less-frequent checkpoint -- e.g. `illuminateSurf`'s own per-surface entry (~4530 hits total for
+Wanchai, not per-bit), conditioned on the target surf's `iLightMap` index, arming the per-node
+breakpoints only for that one surface's processing window.
+
 ## Not shipped
 
-No change to `linecheck.rs`, `light.rs`, or any other production code this round -- per the standing
-rule (owner, 2026-08-30): the real mechanism is not yet confidently known (finding D above is an open
-question, not a resolved fact), so no speculative fix, tolerance, or rounding tweak was attempted.
-`git status` confirms zero production-code diffs; only two new harness scripts and their log/dx output
-were added (`dev/docs/spikes/2026-08-29-unatco-repart-live-diff/harness/line_clear_algorithm_check.py`,
-`linecheck_target_disasm.py`). `regression_gate.py`/`bin/test` were not re-run since nothing that
-could regress them changed.
+No change to `linecheck.rs`, `light.rs`, or any other production code across either round -- per the
+standing rule (owner, 2026-08-30): the real mechanism is not yet confidently known (the `mid`-formula
+finding above is a static decode, not live-confirmed), so no speculative fix, tolerance, or rounding
+tweak was attempted. `regression_gate.py`/`bin/test` were not re-run since nothing that could regress
+them changed.
 
 ## Files
 
-- `dev/docs/spikes/2026-08-29-unatco-repart-live-diff/harness/line_clear_algorithm_check.py` (new,
-  the offline algorithm cross-check -- reusable for a future round's re-test)
-- `dev/docs/spikes/2026-08-29-unatco-repart-live-diff/harness/linecheck_target_disasm.py` (new, the
-  live vtable-target resolver + disassembler -- reusable for a single-step follow-up)
-- `dev/docs/spikes/2026-08-29-unatco-repart-live-diff/logs/light-spotcheck-wanchai-native.dx` (fresh
-  native rebuild used by this round)
-- `dev/docs/spikes/2026-08-29-unatco-repart-live-diff/logs/linecheck-target-disasm.log` (the live
-  capture + disassembly)
+- `dev/docs/spikes/2026-08-29-unatco-repart-live-diff/harness/line_clear_algorithm_check.py` (round
+  1, the offline algorithm cross-check -- reusable for a future round's re-test)
+- `dev/docs/spikes/2026-08-29-unatco-repart-live-diff/harness/linecheck_target_disasm.py` (round 1,
+  the live vtable-target resolver + disassembler)
+- `dev/docs/spikes/2026-08-29-unatco-repart-live-diff/harness/linecheck_singlestep_rec14.py` (round
+  2, new -- the targeted live single-step attempt; hung on the shared-call-site volume problem
+  above, reusable once re-gated on a per-surface checkpoint)
+- `dev/docs/spikes/2026-08-29-unatco-repart-live-diff/logs/light-spotcheck-wanchai-native.dx` (round
+  1, fresh native rebuild used that round)
+- `dev/docs/spikes/2026-08-29-unatco-repart-live-diff/logs/linecheck-target-disasm.log` (round 1, the
+  live capture + disassembly -- round 2's static decode is a from-scratch re-read of this same file)

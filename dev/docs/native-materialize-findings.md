@@ -956,6 +956,74 @@ a "tune until it matches" one. New files:
 byte-identical before/after (both levels still EXACT), `bin/test` unaffected (no `.rs`/`.py`
 production-code edits this round).
 
+**`line_clear`'s per-node state-threading formula INDEPENDENTLY re-derived by a from-scratch static
+hand-decode of the already-committed disassembly — confirms the prior round's Finding D
+transcription exactly, and finds a NEW, likely-relevant divergence in the crossing-point (`mid`)
+formula. Live single-step confirmation attempted, but the breakpoint (at the shared per-ray call
+site) fires for essentially every shadow ray in the whole bake — hung for 25 min with zero hits
+logged, killed. NOT live-verified — static decode only, no production change.** (2026-08-30, 📖
+static, no live capture succeeded) — Line-by-line SSE decode of `linecheck-target-disasm.log`'s
+already-committed disassembly of the recursive walker (`target+0x5b0`, offsets `+0x92`-`+0xd5`),
+cross-referenced against a fresh static disasm of the CALLER (`rdis.py dis Editor 0x100a5900 0x160`,
+the `illuminateSurf` call site at `0x100a59f3`-`0x100a5a04`) to pin the argument-passing convention:
+the outer call pushes `extra_flags` (4 or 0x14, matching `VIS_EXTRA_FLAGS`/`VIS_BRIGHT_CORNERS`
+exactly), then two `FVector`s built from `[ebp-0x7c/-0x78/-0x74]` (the lumel position) and
+`[esi+0xd0/+0xd4/+0xd8]` (`esi`=light actor, `Location`), confirming the call is
+`Model->vtbl[0x58](extra_flags, lumel_pos, light_loc, 0, &out)` with `ecx`=Model — matches the
+existing `linecheck.rs` doc comment's "ecx = Level->Model" claim, independently re-derived.
+
+**Bit formula — reproduces Finding D exactly, from scratch.** Tracing `setae %cl`/`setae %al` at
+`+0x81`/`+0x8c` (`front_end=de>=0`, `front_start=ds>=0`) through to the XOR/AND chain at
+`+0xa3`-`+0xac`: `new_state = (((incoming_state XOR front_start) AND NodeFlags_byte) AND 1) XOR
+front_start` — algebraically tests only bit 0 (`NF_NOT_CSG`) of `NodeFlags`, same conclusion as the
+prior round's Finding D. Independently confirms it was read correctly the first time.
+
+**NEW finding: the crossing-point `mid` is computed via a DIFFERENT, non-bit-identical formula.**
+Native (`linecheck.rs`): `t = ds/(ds-de)`, `mid = lerp(start,end,t) = start+(end-start)*t`. The
+disassembly at `+0xae`-`+0xd4` shows the editor instead computes `t' = de/(de-ds)` (a SEPARATE
+division, `divss` at inner-offset `+0xae`) then `mid = end + t'*(start-end)` (`subps`/`mulps`/`addps`
+at `+0xb6`-`+0xcb`) — algebraically `t'≡1-t` (verified: both formulas agree exactly at `ds=0` and
+`de=0` endpoints), but NOT bit-identical, since `t` and `t'` are two INDEPENDENTLY-rounded divisions,
+not related by a computed `1-t`. This matters most exactly in the traced exemplar's regime: `ds`
+tiny (≈-0.0002) and `de` large (≈112.39) makes `t=ds/(ds-de)` a division dominated by the SMALL,
+noise-sensitive numerator (`t≈1.78e-6`, amplifying any ULP-level imprecision in `ds` itself), while
+`t'=de/(de-ds)` is dominated by the LARGE, well-conditioned `de` (`t'≈0.9999982`, comparatively
+insensitive to `ds`'s exact tiny value) — a real, structural reason the two engines could reach
+different `mid` points, and therefore different recursion outcomes, from the SAME bit-identical
+`ds`/`de` pair, precisely in the near-zero-plane-crossing case the original manual trace flagged.
+**Not live-confirmed this round** — see below.
+
+**Live single-step attempt: hung, killed, no data captured.** New harness
+`linecheck_singlestep_rec14.py` (committed, `dev/docs/spikes/2026-08-29-unatco-repart-live-diff/
+harness/`) targets the exact known-mismatching ray (`rec=14 Light42 v=3 u=0`,
+`p=(1760.0,1148.125,191.87503051757812)`, `light_loc=(1570.3885...,1147.6254...,283.4671...)`, this
+session's fresh `line_clear_algorithm_check.py` run against the CURRENT `native.dx`/`golden.dx` —
+now 40/40 golden-tree disagreements sampled, up from the prior round's 20/40, same direction split).
+Design: one gdb session, a conditional breakpoint at the fixed outer call site (`0x100a5a04`) gated
+on the pushed lumel-position matching the target within a tight float band, which on match resolves
+the recursive walker's live (relocatable) address and arms two further breakpoints at `+0x92`
+(logs `ds`,`de`,front-flags,`NodeFlags` per node) and `+0xd5` (logs the computed `mid` before each
+recursive call) — scoped to just that one ray's call tree via an `$active` flag cleared at return.
+**Problem found via live diagnosis, not assumed:** the container ran 25 minutes with the gdb log
+still stuck at `ORACLE_ATTACHED` (0 breakpoint hits logged); `ps` inside the container showed `gdb`
+at 99.6% CPU with 24:45 accumulated CPU-time and `unrealed.exe` actively running at 53.6% CPU — i.e.
+`LIGHT APPLY` genuinely ran and the outer breakpoint genuinely fired, just never (yet) on a match,
+because that call site is hit once per shadow-ray bit computed across the WHOLE level (on the order
+of 10^5-10^6 for a level this size, per the existing "shadow bits on grid+run-matched records"
+counts elsewhere in this file) — each hit costs a full ptrace stop/evaluate/resume round-trip
+through Docker, so reaching record 14 of ~4530 records this way was not going to finish in bounded
+time. Killed (`docker kill`/`docker rm`) rather than let it run indefinitely, per the standing
+background-work rule.
+
+**Concrete next step for a future round (not attempted, per the "don't grind" guidance once a
+technique is shown to be too unwieldy):** gate the fine-grained breakpoints behind a much
+LESS-frequent checkpoint than the per-ray call site — e.g. a breakpoint at `illuminateSurf`'s own
+per-surface entry (hit ~4530 times total, not per-bit), conditioned on the target surf's
+`iLightMap`/index, arming the per-ray/per-node breakpoints only for the duration of that ONE
+surface's processing. That cuts the hit volume by orders of magnitude and should make a bounded live
+trace of the `mid`-formula finding above tractable. No production code changed this round
+(`linecheck.rs` untouched); no regression-gate re-run needed (nothing that could regress changed).
+
 **`line_clear` CONFIRMED as the real cause (not a geometry residual): disagrees with the editor's real
 bit even fed the editor's own real tree/inputs. Live-disassembled the real editor function on the
 current build; REFUTES the old ±0.001 epsilon-tolerance hypothesis; full per-node state formula NOT
