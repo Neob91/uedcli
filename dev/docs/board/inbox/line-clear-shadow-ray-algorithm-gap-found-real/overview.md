@@ -1,7 +1,7 @@
 +++
 priority = "p2"
 kind = "debug"
-summary = "Confirmed line_clear (not lumel_axes) causes Wanchai's bits-only shadow divergence. Round 3 found the round 1-2 target function (target+0x5b0) was wrong; round 4 pinned the real crossing formula (t'=de/(de-ds)) and measured it regressing both levels when grafted onto native's alternating recursion -- reverted. Round 5 explains why: point2 (the query's lumel_pos) stays bit-identical across 4 successive genuine crossings. Round 6: full disassembly of the real walker (0x17ce190) fully resolves the recursion shape (one genuine near-recursion replacing point1, tail-loop far-continuation replacing point2) AND finds a real, live-confirmed +/-0.001 epsilon band (not 0.0) governing whole-segment/crossing classification -- directly explains round 1's original bug exemplar. State-threading (edi) and terminal polarity still not confidently resolved (6 sampled rays were all-blocked, never exercised the clear-return paths) -- no port attempted, per the standing rule."
+summary = "Confirmed line_clear (not lumel_axes) causes Wanchai's bits-only shadow divergence. Round 3 found the round 1-2 target function (target+0x5b0) was wrong; round 4 pinned the real crossing formula (t'=de/(de-ds)) and measured it regressing both levels when grafted onto native's alternating recursion -- reverted. Round 5 explains why: point2 (the query's lumel_pos) stays bit-identical across 4 successive genuine crossings. Round 6: full disassembly of the real walker (0x17ce190) fully resolves the recursion shape (one genuine near-recursion replacing point1, tail-loop far-continuation replacing point2) AND finds a real, live-confirmed +/-0.001 epsilon band (not 0.0). Round 7: pinned the full state-machine (near-call incoming state, far-continuation state) via live capture of a CLEAR ray, verified perfectly (122/122 mechanical checks, 4/4 real rays incl. exact node-path replication) -- then found, via a broad offline sweep against real golden bits, a large-scale regression (81-92%, well below the ~99% baseline) that the earlier small-sample verification missed entirely. A FRONT/BACK state-formula swap only partially helps one region and hurts another (ruling out a simple sign error); the leading hypothesis (an unmodeled zone-transform branch gated on a context pointer) was LIVE-TESTED and REFUTED same round (edx=0 for all 4 sampled rays of the broken light, same as the working one). Root cause still open. Reverted cleanly -- linecheck.rs untouched, git diff empty, 90/90 tests green."
 depends-on = ["getvisiblesurfs-wanchai-run-gap-root-cause"]
 spikes = ["dev/docs/spikes/2026-08-29-unatco-repart-live-diff/"]
 +++
@@ -438,3 +438,148 @@ per the standing gate.
   constants)
 - `dev/docs/spikes/2026-08-29-unatco-repart-live-diff/logs/linecheck-walker-state-trace.log` (the
   6-ray capture Finding 2/4 and the "not resolved" section are drawn from)
+
+## Round 7 (2026-08-30): the state machine is fully pinned and passes every targeted check --
+## then a broad offline sweep against real golden bits reveals a large-scale regression the
+## targeted checks never exercised. Root cause not found; reverted cleanly.
+
+Continuation task, exactly as scoped by round 6: trace CLEAR-returning rays (round 6's 6 rays were
+all-blocked) to pin the `edi` state formula and terminal polarity, resolve the `NF_BrightCorners`
+CSG-mask asymmetry, then attempt the port with TDD + the full regression gate.
+
+**Found a CLEAR ray offline, not by brute-force live scanning.** A live outcome-only scan
+(`linecheck_find_clear_ray.py`) proved too slow (30 rays into one shadowed surface, 30+ still
+blocked, no live per-ray filtering by outcome is possible without huge ptrace overhead per hit --
+same class of problem round 2 hit and fixed by surf-gating). Instead: parsed `golden.dx` directly
+(no live capture) to find a real (surf, light, u, v) with a stored CLEAR bit --
+`isurf=1060, light=Light624`, a small 2x2-lumel surface (4 total shadow rays for the whole surface,
+1 light in its run) -- then targeted the existing surf-gated live-trace harness at that exact
+`isurf`. Deep-traced all 4 of its rays plus 2 incidental rays from the next surface LIGHT APPLY
+processed next: **3 CLEAR, 3 BLOCKED** -- the first genuine mix this investigation has captured.
+
+**Root-caused a live-capture-confirmed transcription error from round 6's own initial reading**,
+caught via the SAME cross-check discipline this investigation has used throughout (self-consistency
+before trusting a result): live-recapturing `D1`/`D2` at node 310 for two different rays sharing one
+light showed `[ebp-0x8]` VARIES per-ray (tracks the query/lumel point) while `[ebp-0xc]` stays
+constant (tracks the light) -- the OPPOSITE of round 6's original labels. Fixed: `t = D2/(D1-D2)`,
+`mid = point2 + t*(point2-point1)`, near-side keyed on `D2`'s (not `D1`'s) sign. Algebraically
+consistent with round 4's independently-verified `mid` formula (`t = -t'` is an exact float
+negation, not an approximation, so the two facts don't conflict).
+
+**Found and fixed a second real gap while validating end-to-end: the near-recursive call's own
+incoming state is NOT the caller's `edi` passed through** (what round 6 assumed) **-- it's a
+separate computation** (`0x17ce306`-`0x17ce35e`, decoded fresh this round after a live ray4
+end-to-end mismatch exposed the gap: real terminal showed `edi=0` where the "pass edi through"
+assumption predicted `edi=1`). It mirrors the far-continuation formula's shape (same `OR`-on-FRONT /
+`AND-NOT`-on-BACK pattern, algebraically simplified to one reusable `combine_state(side, state,
+csg)` helper covering all three sites: whole-segment update, near-call incoming state, and
+far-continuation update). Also found a real side effect round 6 missed: the terminal handler's
+`edi != 0` fast-return path also SETS the shared `seen_empty`-equivalent global (`0x17ce4ae`) before
+returning -- caught only by re-grepping the disasm a second time.
+
+**Verified extensively before attempting a port, learning round 4's lesson:**
+- 122 individual live-captured state transitions (whole-segment FRONT/BACK x CSG/non-CSG, both
+  far-continuation branches, terminal polarity) replayed mechanically against real `edi`/`NodeFlags`
+  read straight from `golden.dx` -- **0 mismatches**.
+- 4/4 real rays (isurf=1060) replayed end-to-end with the real light location + real lumel
+  positions + real BSP tree -- **exact final result match for all 4, and exact node-by-node visited
+  PATH match for 3/4** (the 4th wasn't checked for path, only result).
+
+**Then a broad, unbiased offline sweep (not cherry-picked records) against real golden bits found a
+severe regression the targeted checks never exercised:** `line_clear_v2_algorithm_check.py`
+(no native.dx needed -- tests the ported algorithm purely against golden's own stored bits) over
+2,000,000 real (surf, light, lumel) shadow-bit computations each on Wanchai and UNATCO:
+**Wanchai 92.36%, UNATCO 88.81%** -- both well below the current ~99% shadow-bit baseline the
+EXISTING (un-fixed) `line_clear` already achieves on grid+run-matched records. Direction is
+one-sided: every sampled mismatch is `golden=blocked, algorithm=clear` (never the reverse) --
+systematic under-blocking, not noise.
+
+**Ruled out the obvious hypothesis (a FRONT/BACK state-polarity swap) as NOT a clean fix.** Tested
+directly: swapping which side's CSG encounter sets vs. clears `state` gives 97.04% on one
+problem light (`Light24`, up from 81.34%) but is a genuine REGRESSION elsewhere (a different,
+working light/surface pair drops from 100% to a much lower rate when swapped -- not reported
+exactly, but confirmed strictly worse in aggregate testing). A uniform swap is provably not the
+right fix; the bug is something more localized/context-dependent than a single global sign error.
+
+**Live-verified example (`isurf=1060`) was a false positive for FULL fidelity, not a false
+finding -- a real, important lesson.** The isolated ray checks were genuinely solid (matching real
+disassembly, real registers, real final outcomes) but happened to sample only cases where the
+extra mechanism below (probably) doesn't apply, so they could not catch this gap. This is exactly
+why the task's own standing instruction to re-run the FULL lighting comparison (not a sample)
+before shipping exists -- and why it wasn't skipped here.
+
+**Leading hypothesis (an un-modeled zone-transform branch) was LIVE-TESTED THE SAME ROUND AND
+REFUTED.** Every dot-product computation in the walker is gated on `edx` (loaded from `[ebp+0x10]`,
+a pointer argument constant across the whole recursion, confirmed by re-tracing the arg-slot
+layout): `test edx,edx; je <plain-dot-path>` -- when non-null, the point is first passed through an
+indirect call (`call *0x1819988`) before the dot product is computed (`0x17ce1d3`-`0x17ce213`).
+Every port this round (Python and the reverted Rust) always takes the "edx is null" plain-dot path.
+New harness `linecheck_edx_zone_check.py`, surf-gated on UNATCO record 22 / `isurf=2810` (a small,
+single-light `Light24`-only surface, chosen offline to reach it fast without waiting through
+`Light70`'s own 3248-lumel block first): **`edx=0x0` for every single one of the 4 sampled rays**
+(2 returning result=0, 2 returning result=1) -- identical to the working case. This RULES OUT the
+zone-transform branch as the cause for this specific problem light: the "always take the plain-dot
+path" assumption every port made this round is confirmed correct here, not the bug.
+
+**So the root cause remains genuinely open after this round's full effort.** What's ruled out: a
+uniform FRONT/BACK state-polarity swap (helps one region, hurts another); the zone-transform branch
+(edx is null in the tested broken case, same as the working one). What's NOT yet tried: single-
+stepping the SPECIFIC short mismatch case live (this round's debugging was offline/Python only,
+after the initial live captures -- the previous two rounds' lesson, that offline hand-tracing
+repeatedly produces subtle sign/register errors a live capture catches, was not re-applied to this
+NEW regression before time ran out). The bug could still be a further transcription error in the
+already-decoded formula (unlikely given 122/122 + 4/4 exact-path checks, but not impossible), or a
+genuinely new mechanism neither round 6 nor round 7 has looked at yet (e.g. something in the
+un-examined portions of the terminal-handling block past `0x17ce464`, which writes output-struct
+fields this investigation has never needed until now, or a subtlety in how `MAX_DEPTH`/recursion
+interacts with real trees far deeper than the ~30-node examples checked so far).
+
+**Not shipped -- reverted cleanly.** `git checkout -- uedcli-native/src/linecheck.rs`: `git diff` on
+it is empty. `bin/test -k linecheck`: 90/90 (the previous 89 plus one degenerate synthetic-scenario
+concern surfaced mid-round, `a_not_vis_blocking_node_does_not_occlude`, which the pre-existing code
+already passes and the revert restores unchanged -- not itself resolved or explained, folded into
+the same unresolved-mechanism bucket above rather than chased further). No `regression_gate.py`
+re-run needed (no shipped code changed). `dev/docs/native-materialize-findings.md` carries the
+condensed version of this entry.
+
+## Concrete next step for a future round
+
+1. **Live single-step the shortest available real mismatch, not another offline hand-trace.** Round
+   7's own debugging (once the initial live captures were done) reverted to offline Python
+   reasoning and hit the same sign/register-confusion trap earlier rounds already learned to avoid
+   with live cross-checks. Use the proven surf-gate technique to attach at a KNOWN mismatching
+   (light, surface, u, v) -- e.g. re-derive one via `line_clear_v2_algorithm_check.py` against
+   UNATCO's `Light24`/record-22 surface (already isolated as broken this round, and already fast to
+   reach live, per `linecheck_edx_zone_check.py`'s own targeting) -- and log the SAME breakpoint set
+   `linecheck_walker_state_trace.py` already has (D1/D2, branch kind, `edi` before/after, terminal
+   path) for that EXACT ray, then diff node-by-node against the Python port's own trace on the same
+   inputs. This is the same technique that found and fixed round 7's two real gaps (the D1/D2 label
+   swap, the near-call incoming-state gap) -- apply it to the NEW regression before any more static
+   reading or hypothesis-guessing.
+2. Do not re-attempt a Rust port without re-running the SAME 2,000,000-bit-per-level offline sweep
+   (`line_clear_v2_algorithm_check.py`) first -- the isolated 4-ray check that looked complete this
+   round was demonstrably not sufficient on its own, and should not be trusted alone again.
+3. If the single-step trace doesn't resolve it either, consider whether the un-examined tail of the
+   terminal-handling block (`0x17ce464`+, which writes `FCheckResult`-style output fields this
+   investigation has never needed for a pure boolean test) or a deeper-than-tested recursion could
+   be involved -- both flagged as untested above, neither chased this round.
+
+## Files (round 7)
+
+- `dev/docs/spikes/2026-08-29-unatco-repart-live-diff/harness/linecheck_find_clear_ray.py` (new --
+  cheap outcome-only live scan across many rays/surfaces; superseded by the offline-lookup approach
+  for finding a specific clear ray, but kept as a reusable coarse survey tool)
+- `dev/docs/spikes/2026-08-29-unatco-repart-live-diff/harness/linecheck_walker_state_trace.py`
+  (extended this round: `--isurf` targeting, corrected `DOTS` breakpoint reading both `D1`/`D2`
+  explicitly instead of a placeholder)
+- `dev/docs/spikes/2026-08-29-unatco-repart-live-diff/logs/linecheck-walker-state-trace.log`
+  (overwritten each run -- the isurf=1060 6-ray capture this round's findings are drawn from; not
+  independently preserved per-run, a reusability gap for a future session to fix if needed)
+- `dev/docs/spikes/2026-08-29-unatco-repart-live-diff/harness/line_clear_v2_algorithm_check.py` (new
+  -- the full candidate port in Python, plus the offline large-scale golden-bit validator; kept
+  committed since it's the fastest way to re-test any future fix before touching Rust)
+- `dev/docs/spikes/2026-08-29-unatco-repart-live-diff/harness/linecheck_edx_zone_check.py` (new --
+  the targeted `edx`/zone-transform live check; refuted the hypothesis, kept as a reusable tool in
+  case a future round wants to re-check it against a different (light, surface) pair)
+- `dev/docs/spikes/2026-08-29-unatco-repart-live-diff/logs/linecheck-edx-zone-check.log` (the 4-ray
+  `edx=0x0` capture the refutation above is drawn from)

@@ -50,9 +50,12 @@ from uedcli.driver import Driver, to_z_path  # noqa: E402
 GOLDEN = Path(sys.argv[1]) if len(sys.argv) > 1 and not sys.argv[1].startswith("--") else (
     ROOT / "_scratch/wanchai-relight-2026-08-29/golden.dx")
 RAYS = 8
+TARGET_ISURF = None
 for i, a in enumerate(sys.argv):
     if a == "--rays":
         RAYS = int(sys.argv[i + 1])
+    if a == "--isurf":
+        TARGET_ISURF = int(sys.argv[i + 1])
 
 PROJECT_DIR = ROOT / "_scratch/oracle-project"
 CONTAINER = "uned-linecheck-walker-state"
@@ -81,9 +84,10 @@ set $depth = 0
 break *0x100a5043
 commands
 silent
-if $armed_surf == 0
+set $hit_isurf = *(int*)($ebp+0xc)
+if $armed_surf == 0 && (__ISURF_GATE__)
   set $armed_surf = 1
-  set $isurf = *(int*)($ebp+0xc)
+  set $isurf = $hit_isurf
   printf "SURF_ENTER isurf=%d\n", $isurf
 
   break *0x100a5a04
@@ -110,12 +114,13 @@ if $armed_surf == 0
   continue
   end
 
-  # right after both D1(point1),D2(point2) dots are resolved and stored: D1=[ebp-8], D2=[ebp-0xc]
-  break *0x17ce219
+  # right after both D1(point1),D2(point2) dots are resolved and stored (0x17ce22c: xmm1 just
+  # loaded from [ebp-0xc]=D2 -- both [ebp-8]=D1 and [ebp-0xc]=D2 are valid memory reads here)
+  break *0x17ce231
   commands
   silent
   if $active == 1
-    printf "DOTS ray=%d depth=%d D1_pending_in_x87=1\n", $ray, $depth
+    printf "DOTS ray=%d depth=%d D1=%.9g D2=%.9g\n", $ray, $depth, *(float*)($ebp-0x8), *(float*)($ebp-0xc)
   end
   continue
   end
@@ -354,7 +359,9 @@ def main() -> int:
         time.sleep(3.0)
         pid = O._editor_pid(CONTAINER)
         print(f"[state-trace] editor pid {pid}; attaching gdb ...", flush=True)
-        gdb_script = GDB.replace("__PID__", str(pid)).replace("__RAYS__", str(RAYS))
+        isurf_gate = "1" if TARGET_ISURF is None else f"$hit_isurf == {TARGET_ISURF}"
+        gdb_script = GDB.replace("__PID__", str(pid)).replace("__RAYS__", str(RAYS)).replace(
+            "__ISURF_GATE__", isurf_gate)
         subprocess.run(["docker", "exec", "-i", CONTAINER, "bash", "-c", "cat > /tmp/lws.gdb"],
                        input=gdb_script, text=True, check=True)
         subprocess.run(["docker", "exec", "-d", CONTAINER, "bash", "-c",

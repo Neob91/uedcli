@@ -1466,3 +1466,36 @@ plus a found-but-unreconciled CSG-mask asymmetry between whole-segment and far-c
 existing `is_csg` helper). `linecheck.rs` untouched this round (`git diff` empty); no regression-gate
 re-run needed (nothing that could regress changed). Full detail:
 `dev/docs/board/inbox/line-clear-shadow-ray-algorithm-gap-found-real/overview.md`.
+
+**Round 7 — the state machine (near-call incoming state, far-continuation state, terminal polarity)
+was fully pinned and passed EVERY targeted live check, then a broad offline sweep against real
+golden bits (not cherry-picked) revealed a severe, previously-invisible large-scale regression.
+Root cause not found; a FRONT/BACK swap hypothesis was tested and ruled out as not a clean fix; most
+likely cause is an entirely un-modeled zone-transform branch. Reverted cleanly, nothing shipped.**
+(2026-08-30, 🔬 live + offline, `line-clear-shadow-ray-algorithm-gap-found-real` round 7) — Found a
+live-verified transcription error in round 6's own D1/D2 register labels (`[ebp-0x8]` tracks the
+query/lumel point, `[ebp-0xc]` the light — the reverse of round 6's original reading), fixed the
+crossing formula and near-side test accordingly, and separately found the near-recursive call's own
+incoming state is NOT the caller's `edi` passed through (a real gap round 6 missed) but a distinct
+computation at `0x17ce306`-`0x17ce35e` — algebraically identical in shape to the far-continuation
+formula, unifying into one `combine_state(side, state, csg)` helper. Verified via 122 live-captured
+state transitions (0 mismatches) and 4/4 real rays replayed end-to-end with exact node-path
+matching for 3/4. **Then**, a full offline sweep of 2,000,000 real shadow bits each on Wanchai/UNATCO
+(`line_clear_v2_algorithm_check.py`, no live capture needed — golden's own tree is ground truth)
+showed only 92.36%/88.81% agreement — well below the ~99% baseline the CURRENT, un-fixed code
+already achieves — with every mismatch one-directional (`golden=blocked, algorithm=clear`, never
+the reverse). A FRONT/BACK state-polarity swap experiment (a concrete, principled hypothesis, not a
+parameter search) helped one problem light (81%→97%) but regressed another working one — ruled out
+as the fix. Leading hypothesis tested same round and REFUTED: `0x17ce1d3`-`0x17ce213` gates every dot-product
+computation on a constant-across-the-whole-call pointer (`edx`, loaded from `[ebp+0x10]`, built by
+the top-level dispatcher via a virtual call on the LineCheck's own "this") — every port this round
+always takes the "null" plain-dot path. New harness `linecheck_edx_zone_check.py`, surf-gated on a
+small single-light UNATCO surface (`Light24`, `isurf=2810`, chosen offline to reach fast): live
+capture shows **`edx=0x0` for all 4 sampled rays** (2 blocked, 2 clear) — identical to a working
+light, ruling out a missing zone-transform as the cause for this specific broken case. Root cause
+remains open; the recommended next step (not this round) is a live single-step of the SAME broken
+ray (not more offline hand-tracing, which is what led this round away from the working live-capture
+discipline that found round 7's two earlier real gaps). Reverted (`git checkout --
+uedcli-native/src/linecheck.rs`, diff empty); `bin/test -k linecheck` 90/90; no regression-gate
+re-run needed (nothing shipped). Full detail + concrete next steps:
+`dev/docs/board/inbox/line-clear-shadow-ray-algorithm-gap-found-real/overview.md`.
