@@ -1,0 +1,49 @@
+[New LWP 140]
+[New LWP 149]
+[New LWP 150]
+[New LWP 151]
+[New LWP 152]
+[New LWP 153]
+[New LWP 154]
+[New LWP 155]
+[New LWP 156]
+[New LWP 157]
+[New LWP 158]
+[New LWP 159]
+[New LWP 160]
+[New LWP 161]
+[New LWP 162]
+[New LWP 163]
+[New LWP 164]
+[New LWP 165]
+[New LWP 166]
+[New LWP 167]
+[New LWP 168]
+[New LWP 169]
+[New LWP 170]
+[New LWP 171]
+[New LWP 172]
+[New LWP 173]
+[New LWP 174]
+[New LWP 175]
+[New LWP 176]
+[New LWP 177]
+[New LWP 192]
+[New LWP 242]
+[New LWP 243]
+[New LWP 244]
+[Thread debugging using libthread_db enabled]
+Using host libthread_db library "/lib/x86_64-linux-gnu/libthread_db.so.1".
+0xf7ed8cfc in __kernel_vsyscall ()
+EM_ENTRY_VA=0x178ff10 EM_RET_VA=0x1790121
+Breakpoint 1 at 0x10049fc0
+Breakpoint 2 at 0x178ff10
+Breakpoint 3 at 0x1790121
+Breakpoint 4 at 0x1004a05f
+ORACLE_ATTACHED
+REPART_CALL callidx=1 child=0 model=0xc52bd2c m_nodes=21147 m_verts=224697 m_points=61287 m_vectors=452 m_surfs=5322
+EM_ENTRY callidx=1 child=0 this=0xc52bd2c bspbuild_ebx=0x3a85aa4 arg1=0 arg2=0 this_eq_ebx=0 this_eq_m=1 this_nodes=16341 this_verts=224697 this_points=4757 this_vectors=452 this_surfs=5322 ebx_nodes=6 ebx_verts=4096 ebx_points=0 ebx_vectors=0 ebx_surfs=0
+EM_RET callidx=1 child=0 this=0xc52bd2c ebx=0x3a85aa4 this_nodes=0 this_verts=0 this_points=4757 this_vectors=452 this_surfs=5322 ebx_nodes=6 ebx_verts=4096 ebx_points=0 ebx_vectors=0 ebx_surfs=0
+STAGEEND callidx=1 child=0 model=0xc52bd2c m_nodes=11011 m_verts=43759 m_points=18544 m_vectors=452 m_surfs=5322
+WORLD_END
+[Inferior 1 (process 33) detached]

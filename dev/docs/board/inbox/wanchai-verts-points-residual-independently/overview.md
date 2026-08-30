@@ -1,7 +1,7 @@
 +++
 priority = "p3"
 kind = "debug"
-summary = "Wanchai verts residual closed to +74 by the shipped repartition_frontier fix. Points residual (+16, now identical on UNATCO and Wanchai) measured cross-level: the match is COINCIDENCE, not one mechanism -- two differently-shaped errors happen to land on the same total. No fix shipped."
+summary = "Wanchai verts residual closed to +74 by the shipped repartition_frontier fix. Points residual (+16, now identical on UNATCO and Wanchai) measured cross-level: the match is COINCIDENCE, not one mechanism -- two differently-shaped errors happen to land on the same total. EmptyModel(0,0)'s world-level keep-Points semantics CONFIRMED live (2026-08-30) but a naive port (UEDCLI_BSPCSG_WORLD_KEEP_POINTS) makes Points markedly WORSE (+16->+912/+2673) -- measured and rejected, not shipped. No fix shipped."
 depends-on = ["unatco-verts-points-residual-after-the-zone"]
 +++
 
@@ -318,3 +318,52 @@ Shipped this round: two read-only, env-gated diagnostics only (`bspcsg.rs`) — 
 Both zero-effect on the default path: `regression_gate.py` byte-identical before/after (points `d=+16`
 both levels, still node/surf/leaf-EXACT everywhere), `bin/test -k bspcsg` 85/85, full `bin/test` green
 (see the commit for the exact run).
+
+## 2026-08-30, follow-up round: re-confirmed `EmptyModel(0,0)`'s world-level semantics from scratch via
+## live gdb (both levels) — mechanism CONFIRMED, but a naive port makes Points worse, not better.
+## Measured and rejected, not shipped.
+
+Task: re-derive the prior round's "recommended next step" (a live gdb capture of the world-level
+`EmptyModel`/`bspRefresh` args and Points pool) independently, since the prior round only cited a
+pre-2026-08-14 (owner-invalidated) disassembly claim as a SHAPE match, never live-verified it.
+
+**Confirmed, live, on both UNATCO and Wanchai.** New harness
+`dev/docs/spikes/2026-08-29-unatco-repart-live-diff/harness/emptymodel_worldlevel_trace.py`: re-derived
+`UModel::EmptyModel`'s address two ways independent of the old doc (Engine.dll's own export table +
+Editor.dll's import table, both read directly off the PE files), fresh-disassembled the function body,
+and captured its args/`this`/pool sizes live, bracketing the WORLD-level `bspRepartition(Model, 0)`
+call specifically (not a subtree call). Confirmed: `EmptyModel` is called with `this` EQUAL to the
+persistent world Model (`this_eq_m=1`, both levels — a new fact the old doc never established, and
+which corrects an over-broad reading of an unrelated, already-superseded "CTX scratch object" finding
+elsewhere in this investigation). Clears Nodes/Verts unconditionally; leaves Points/Vectors/Surfs
+byte-identical before vs after, on both levels. Full numbers and cross-validation against pre-existing
+editor stage logs: `native-materialize-findings.md`, "`EmptyModel(0,0)` world-level semantics".
+
+**Ported behind `UEDCLI_BSPCSG_WORLD_KEEP_POINTS` (off by default) and measured — REJECTED.** Only
+Points was toggled (Surfs must stay cleared for an unrelated reason — `bsp_build`'s own surf
+re-seeding contract — and is already parity-correct via a different existing mechanism; Vectors gets
+unconditionally rebuilt later regardless, confirmed to make no difference). `regression_gate.py` with
+the flag set: both levels stay node/surf/leaf-EXACT (no structural regression) but Points goes from
+`d=+16` to `d=+912` (UNATCO) / `d=+2673` (Wanchai) — a large regression on the exact metric this was
+meant to fix. The dedup/reuse machinery already in `bsp_add_point`/`bsp_add_node` is not, alone,
+sufficient to reproduce whatever downstream mechanism the real editor uses to keep this pool bounded.
+**Do not re-attempt a bare "stop clearing Points" without first finding that missing mechanism.**
+
+TDD: new `bspcsg::tests::world_keep_points_env_var_retains_points_the_default_clear_would_lose`
+(86th `bspcsg` test, was 85). Incidentally found (not investigated, filed separately as
+`two-overlapping-add-boxes-panic-dead-root-no`) a pre-existing `bsp_cleanup` panic on an unrelated
+two-box-overlap geometry.
+
+**Not shipped.** `UEDCLI_BSPCSG_WORLD_KEEP_POINTS` stays unset by default (byte-identical to before:
+`regression_gate.py` with no env vars — UNATCO/Wanchai both node/surf/leaf-EXACT, points `d=+16` both,
+verts/vectors unchanged). `bin/test -k bspcsg` 86/86, full `bin/test` green before and after.
+
+**Net position for a future round:** the FIRST part of the task's hypothesis (EmptyModel keeps
+Points/Vectors/Surfs) is now definitively confirmed, live, on real hardware, on both levels — that
+part of the old pre-08-14 doc's claim was right. But confirming a mechanism's EXISTENCE does not mean
+porting it naively helps; the real editor must be doing something else afterward (a later compaction
+or filter this investigation hasn't found) that keeps the kept-Points pool from ballooning the way
+native's naive port does. Finding THAT mechanism — likely by live-capturing the editor's Points pool
+at MORE checkpoints between the world-level call and the final on-disk count, the same way
+`repart_stage_unatco.py`/`wanchai-ed-repart-stage.log` already do for the aggregate stage numbers, but
+finer-grained — is the concrete next step, not a retry of this exact experiment.

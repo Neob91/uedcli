@@ -2771,15 +2771,35 @@ pub fn build_geometry_bspcsg(brushes: &[build::BrushInput]) -> Result<Model, Bui
         // `(vNormal, vTextureU, vTextureV)` reproduces the editor Vectors array byte-for-byte.
         canon_surf_keys = model.surfs.iter().map(|s| (s.i_actor, s.i_brush_poly)).collect();
 
-        // Fresh node/surf/vert arrays AND fresh point/vector pools: the reconstructed FPolys carry
-        // absolute coordinates (bsp_node_to_fpoly copied them out), so clearing Points/Vectors lets
-        // bsp_add_point/bsp_add_vector rebuild them compactly — dropping the CSG-phase ORPHAN points
-        // left by rolled-back grazes and deleted interior faces (the engine's repartition likewise
-        // rebuilds the pools; leaving them would inflate the final Points array far past parity).
+        // Fresh node/surf/vert arrays: the reconstructed FPolys carry absolute coordinates
+        // (bsp_node_to_fpoly copied them out), so a fresh Nodes/Surfs/Verts array lets `bsp_build`'s
+        // own surf re-seeding (one fresh `alloc_surf` per distinct source surf id, see `bsp_build`)
+        // and `bsp_add_node` rebuild them from `merged`. Vectors is UNCONDITIONALLY rebuilt later
+        // anyway (`rebuild_vector_pool`, walking the final canonical Surfs' own refs), so clearing it
+        // here has no effect on the final result either way — left as-is for symmetry with the
+        // other CSG-phase pools, not because it matters.
+        //
+        // `UEDCLI_BSPCSG_WORLD_KEEP_POINTS` (opt-in diagnostic, OFF by default — MEASURED AND
+        // REJECTED, kept only as a documented negative result). Live gdb capture
+        // (`emptymodel_worldlevel_trace.py`, UNATCO + Wanchai, both node/surf/leaf-exact) confirmed
+        // the real editor's `EmptyModel(0,0)` — called on the PERSISTENT world Model directly, not a
+        // scratch object, at this exact checkpoint (`this_eq_m=1` both levels) — unconditionally
+        // clears Nodes/Verts but leaves Points BYTE-IDENTICAL across the call. That confirms the
+        // MECHANISM (see `native-materialize-findings.md`), but porting it as a bare "stop clearing
+        // Points" makes the FINAL result markedly worse, not better: `regression_gate.py` with the
+        // flag set stays node/surf/leaf-EXACT on both levels (no structural regression) but Points
+        // overshoots go from d=+16 to d=+912 (UNATCO) / d=+2673 (Wanchai) — `bsp_add_point`'s
+        // tolerance-dedup and `reorder_points_canonical`'s reachability filter are not, on their own,
+        // enough to bound the kept CSG-phase pool back down to what the real editor's own later
+        // passes reconcile it to. The real editor's downstream mechanism that keeps this bounded is
+        // not yet identified — do not re-attempt a bare "keep" without finding it first. See board
+        // item `wanchai-verts-points-residual-independently`.
         model.nodes.clear();
         model.surfs.clear();
         model.verts.clear();
-        model.points.clear();
+        if std::env::var("UEDCLI_BSPCSG_WORLD_KEEP_POINTS").is_err() {
+            model.points.clear();
+        }
         model.vectors.clear();
         bsp_build(&mut model, merged)?;
         passes::bsp_refresh(&mut model);
@@ -4584,6 +4604,47 @@ mod tests {
         assert!(
             model.points.len() >= points_before,
             "points must never shrink"
+        );
+    }
+
+    /// `emptymodel_worldlevel_trace.py` (2026-08-30, live gdb, UNATCO + Wanchai) confirmed the real
+    /// editor's `EmptyModel(0,0)` keeps the persistent Model's Points pool untouched across the
+    /// WORLD-level `bspRepartition` call (only Nodes/Verts get cleared). `UEDCLI_BSPCSG_WORLD_KEEP_POINTS`
+    /// ports that (opt-in, not yet the default). Two overlapping ADD boxes leave incremental-CSG-phase
+    /// points that the world-level rebuild's simpler merged tree doesn't reference by index identity —
+    /// so a "keep" pass has real orphans available to reuse/retain, unlike a single trivial brush.
+    #[test]
+    fn world_keep_points_env_var_retains_points_the_default_clear_would_lose() {
+        let brushes = || {
+            [
+                box_brush(256.0, 256.0, 256.0, Vec3::new(0.0, 0.0, 0.0), CsgOper::Add),
+                box_brush(192.0, 160.0, 224.0, Vec3::new(180.0, 90.0, 40.0), CsgOper::Add),
+            ]
+        };
+
+        std::env::remove_var("UEDCLI_BSPCSG_WORLD_KEEP_POINTS");
+        let cleared = build_geometry_bspcsg(&brushes()).unwrap();
+
+        std::env::set_var("UEDCLI_BSPCSG_WORLD_KEEP_POINTS", "1");
+        let kept = build_geometry_bspcsg(&brushes()).unwrap();
+        std::env::remove_var("UEDCLI_BSPCSG_WORLD_KEEP_POINTS");
+
+        assert_eq!(
+            kept.nodes.len(),
+            cleared.nodes.len(),
+            "the env var only toggles Points clearing -- node COUNT must be identical either way"
+        );
+        assert_eq!(
+            kept.surfs.len(),
+            cleared.surfs.len(),
+            "surfs is unaffected by this env var -- must be identical either way"
+        );
+        assert!(
+            kept.points.len() >= cleared.points.len(),
+            "keeping CSG-phase points can only add reuse/retention opportunities, never fewer \
+             points survive: kept={} cleared={}",
+            kept.points.len(),
+            cleared.points.len()
         );
     }
 }
