@@ -899,3 +899,59 @@ a shadow-ray precision issue) — Wanchai is ALREADY node/surf/leaf-exact, so un
 nsfhq04 (blocked on their own separate geometry gap) lighting comparison there is not blocked by
 anything this residual touches. New file:
 `dev/docs/spikes/2026-08-29-unatco-repart-live-diff/harness/bspoptgeom_pool_trace.py`.
+
+**Wanchai lighting re-measured on the current (post-`repartition_frontier`) tree: 3297/4530 (72.8%)
+byte-identical, unchanged from the pre-fix number — the geometry improvement (verts `+138`→`+74`)
+didn't move the lighting bucket shape** (2026-08-30, offline, new harness `light_spotcheck_wanchai.py`
++ `lightparity_buckets.py`) — re-measured because the last full Wanchai lighting run predates
+`repartition_frontier`'s rewrite. Fresh bucket breakdown (first-match priority grid→run→bits→pan/scale,
+1233 bad records total): grid 6 (0.5%), run 261 (21.2%), bits 255 (20.7%), pan/scale 711 (57.7%) —
+same shape as the prior (now-superseded) 1302-bad-record table in
+`native-light-apply-bake-where-it-stands-and`, pan/scale still dominant.
+
+**Gap 2 (per-lumel shadow-ray precision) hypothesis REFUTED — `lumel_axes`'s determinant term-grouping
+is bit-IDENTICAL to the editor's `FCoords::Inverse`, both by closed-form proof and live capture; the
+real bake divergence is elsewhere, not yet identified.** (2026-08-30, 📖 fresh disassembly + 🔬 live
+gdb, both this session, no prior doc trusted) — `native-light-apply-bake-where-it-stands-and` names
+`lumel_axes` (`light.rs`) computing `det = tu·(tv×normal)` in a "different term grouping" than
+`FCoords::Inverse` (`core.dll 0x509c0`) as the likely cause of ~254 bad Wanchai records where run/grid/
+pan/scale all match but shadow bits don't. Fresh disassembly (`rdis.py dis Core 0x509c0 0x1b0`+more,
+not copied from any prior doc) of the full routine shows every cofactor is a single
+product-minus-product (e.g. `N.z*TV.y − N.y*TV.z`) — by IEEE754 float-multiplication commutativity
+(`a*b == b*a` bit-exact always) this is the SAME value as `light.rs`'s direct cross-product term
+(`tv.y*n.z − tv.z*n.y`), and the determinant's 3-term sum, though accumulated as
+`(A·TU.y + B·TU.x) + C·TU.z` vs Rust's `(TU.x·B + TU.y·A) + TU.z·C`, is ALSO bit-identical because
+IEEE754 addition is commutative (`a+b == b+a` exactly) — the two differently-ordered PAIRS evaluate to
+the same intermediate before the third add. A closed-form proof, not an approximation — confirmed
+`light.rs::Vec3::dot`/`cross` compile without FMA contraction (Rust doesn't fuse mul+add by default)
+so the source-level left-to-right order is what actually executes.
+
+Also traced the calling convention (not in any prior doc): `FCoords(0,TU,TV,N)`'s ctor pushes 6 dwords
+total, the LAST 4 being its own args (confirming `TextureU=ebp-0xa0`, `TextureV=ebp-0x94`,
+`Normal=ebp-0x88`) and the FIRST 2 being pre-staged hidden-return-pointers for the chained
+`.Inverse()`/`.Transpose()` calls — `Transpose`'s result (the `u_dir`/`v_dir` finally read off) lands
+at `ebp-0x108`, still addressable right after the `Transpose` call returns (`Editor.dll 0x100a5570`).
+
+Empirically confirmed LIVE, not just by proof: `lumel_axes_live_check.py` (new) breaks at
+`0x100a5570` during a real `MAP LOAD`+`LIGHT APPLY` of the Wanchai lit golden, captures
+TextureU/TextureV/Normal + the editor's REAL `u_dir`/`v_dir` for 80 real surfaces, and diffs against
+`light.rs::lumel_axes`'s own formula (re-implemented in Python with per-op f32 rounding, no shortcuts)
+run on the SAME captured inputs: **80/80 match, 0 mismatches** (`<1e-6` abs tolerance, well under any
+plausible ulp). Separately, an offline cross-check on 30 of Wanchai's real "bits-only-divergent"
+`LightMap` records (`bits_only_input_check.py`, new) found 29/30 already have BIT-IDENTICAL
+Base/TextureU/TextureV/Normal between native.dx and golden.dx — meaning their `u_dir`/`v_dir` (and
+thus ray origin/step) must already be bit-identical too, yet shadow bits still diverge for those
+records, independently corroborating that `lumel_axes` is not the cause.
+
+**Conclusion: no fix to `lumel_axes` — there is nothing wrong with it, live-verified. The real source
+of the "bits differ, run/grid/pan/scale all agree" bucket (255 Wanchai records) is downstream of the
+axis basis — most likely the shadow ray's actual `LineCheck`/BSP line-of-sight test (`linecheck::
+line_clear`) — not yet investigated.** Per the owner's standing rule (replicate the editor's real
+mechanism, never a fudge that merely converges): since the real cause isn't identified, no speculative
+change was made to `line_clear` or anywhere else — this is exactly the "log clearly and stop" case, not
+a "tune until it matches" one. New files:
+`dev/docs/spikes/2026-08-29-unatco-repart-live-diff/harness/light_spotcheck_wanchai.py`,
+`lightparity_buckets.py`, `lumel_axes_live_check.py`, `bits_only_input_check.py`. No source changes;
+`regression_gate.py`
+byte-identical before/after (both levels still EXACT), `bin/test` unaffected (no `.rs`/`.py`
+production-code edits this round).

@@ -1,7 +1,7 @@
 +++
 priority = "p1"
 kind = "debug"
-summary = "Resume pointer for the native LIGHT APPLY bake. Wanchai now 3297/4530 (72.8%) byte-identical after a pixel-center rasterization fix (getvisiblesurfs-wanchai-run-gap-root-cause, 2026-08-30) -- was 3228/4530 (71.3%). UNATCO table below is STILL STALE (its tree hasn't been node-exact since the repartition-frontier fix); re-measure before trusting it."
+summary = "Resume pointer for the native LIGHT APPLY bake. Wanchai now 3297/4530 (72.8%) byte-identical after a pixel-center rasterization fix (getvisiblesurfs-wanchai-run-gap-root-cause, 2026-08-30) -- was 3228/4530 (71.3%), UNCHANGED by the later repartition_frontier geometry fix (re-measured 2026-08-30). Gap 2 (per-lumel shadow-ray precision / lumel_axes term-grouping) hypothesis REFUTED this round -- disassembly-proved AND live-gdb-confirmed (80/80) bit-identical to the editor's FCoords::Inverse; real bits-only divergence is downstream (line_clear/LineCheck), not yet found. UNATCO table below is STILL STALE (its tree hasn't been node-exact since the repartition-frontier fix); re-measure before trusting it."
 depends-on = ["port-urender-getvisiblesurfs-so-each-light-gets", "port-the-per-leaf-permeating-light-lists-model", "unatco-verts-points-residual-after-the-zone", "getvisiblesurfs-wanchai-run-gap-root-cause"]
 spikes = ["dev/docs/spikes/2026-08-27-native-light-apply-parity/"]
 +++
@@ -29,8 +29,14 @@ pan/scale):
 |---|---:|---|
 | grid (`u_size`/`v_size`) mismatch | 6 | none of the three — separate, tiny |
 | run differs (whether or not pan/scale also differ) | 343 | gap 1, light runs |
-| bits differ, run+grid+pan+scale all agree | 254 | NOT one of the three — per-lumel shadow-ray precision, "not chased" below |
+| bits differ, run+grid+pan+scale all agree | 254 | NOT one of the three — per-lumel shadow-ray precision, chased+REFUTED below |
 | pan/scale differ ONLY (run+grid+bits all agree) | 699 | gap 3, `Points`/geometry residual |
+
+**Superseded by a fresh re-measurement, same day** (`light_spotcheck_wanchai.py` +
+`lightparity_buckets.py`, findings ledger): on the CURRENT tree (post-`repartition_frontier`'s verts
+fix, +138→+74), byte-identical count is unchanged (3297/4530, 72.8%) and the bucket shape is close but
+not identical — 1233 bad records: grid 6 (0.5%), run 261 (21.2%), bits 255 (20.7%), pan/scale 711
+(57.7%). Same conclusion holds (pan/scale — the `Points` residual — is still the largest bucket).
 
 So gap 3 (`Points` residual, out of scope here — tracked in `unatco-verts-points-residual-after-
 the-zone` / `wanchai-verts-points-residual-independently`) is actually the LARGEST single bucket at
@@ -150,13 +156,23 @@ the difference (Wanchai has more zones/portal crossings). Reproduced with
    unreliable by `owner-ruling-all-native-decode-spike-findings`, needs re-diagnosis from fresh live
    capture. No lighting change can move these; they follow for free when Points reaches parity.
 
-## Two smaller leads, not chased
+## Two smaller leads
 
-* The 466 lumels the editor lights and native does not are 487-vs-24 shadow-edge versus solid-blob, so
-  they are f32 rounding at shadow boundaries, not a rule. The likeliest single cause: `lumel_axes`
-  computes `det = tu·(tv×normal)` while `FCoords::Inverse` (`core 0x509c0`) expands the same
-  determinant in a different term grouping — algebraically equal, not f32-identical, and every
-  accumulated lumel position inherits the ulp.
+* **CHASED 2026-08-30, REFUTED.** The suspected cause of the "bits differ, run/grid/pan/scale agree"
+  bucket (255 Wanchai records) was: `lumel_axes` computes `det = tu·(tv×normal)` while
+  `FCoords::Inverse` (`core.dll 0x509c0`) expands the same determinant in a different term grouping,
+  "algebraically equal, not f32-identical". Fresh disassembly of the full routine (not this old note)
+  shows every cofactor is a single product-minus-product, bit-identical to `light.rs`'s direct
+  cross-product term by IEEE754 float-multiplication commutativity, and the determinant's 3-term sum
+  is bit-identical too by IEEE754 addition commutativity (different pairing, same value) — a
+  closed-form proof, not an approximation. Confirmed LIVE: `lumel_axes_live_check.py` breaks at
+  `Editor.dll 0x100a5570` (right after the real `FCoords(0,TU,TV,N).Inverse().Transpose()` chain
+  returns) during a real Wanchai `LIGHT APPLY`, captures the editor's REAL `u_dir`/`v_dir` for 80
+  surfaces, diffs against `light.rs::lumel_axes`'s own formula on the same inputs: **80/80 match, 0
+  mismatches**. `lumel_axes` needs no fix. The real cause of the bits-only bucket is downstream —
+  most likely `linecheck::line_clear` (the shadow ray's actual BSP line-of-sight test) — not yet
+  investigated; see the findings ledger's 2026-08-30 entry for the full derivation (ABI/stack-layout
+  trace included, reusable for a future `line_clear` investigation).
 * `FovAngle` for the editor's temp visibility viewport is not pinned (it is `Actor+0x304`, never set by
   the gather pass, and `SpawnViewActor` reuses a free `Camera`). Six 90°-apart faces only cover the
   sphere at FOV 90. Needed before a `GetVisibleSurfs` port can claim fidelity.

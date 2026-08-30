@@ -59,9 +59,11 @@ or Wanchai's geometry exactness (surf/node/leaf counts unchanged — purely a li
 
 `MergeWith` remains undecoded and may still matter for the residual ~20% zone-crossing share of the
 missed count. The bulk of the remaining gap (Wanchai still only 72.8% byte-identical) is the largest
-single bucket — pure `Pan`/`UScale`/`VScale` divergence with matching run+bits (699 of 1302 bad
-records, measured 2026-08-30) — which follows from the `Points`/geometry residual tracked in
-`wanchai-verts-points-residual-independently`, out of scope here. After that, `bits`-only divergence
-with matching run/grid/pan/scale (254 records) is per-lumel shadow-ray precision
-(`lumel_axes` vs `FCoords::Inverse` determinant-grouping ulp, previously noted as "not chased" —
-still true, would need the same kind of live-trace + fix cycle used here).
+single bucket — pure `Pan`/`UScale`/`VScale` divergence with matching run+bits (711 of 1233 bad
+records, re-measured 2026-08-30 on the current, post-`repartition_frontier` tree) — which follows from
+the `Points`/geometry residual tracked in `wanchai-verts-points-residual-independently`, out of scope
+here. After that, `bits`-only divergence with matching run/grid/pan/scale (255 records): the
+`lumel_axes` vs `FCoords::Inverse` determinant-grouping-ulp hypothesis was CHASED 2026-08-30 and
+REFUTED (disassembly proof + live gdb capture, 80/80 match — see the findings ledger and
+`native-light-apply-bake-where-it-stands-and`) — `lumel_axes` needs no fix; the real cause is
+downstream, most likely `linecheck::line_clear`, not yet investigated.
