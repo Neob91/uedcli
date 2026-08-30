@@ -1,7 +1,7 @@
 +++
 priority = "p1"
 kind = "implement"
-summary = "SHIPPED 2026-08-29 (repartition_frontier + compact_unreachable_nodes, bspcsg.rs), but with a REGRESSION on UNATCO's lighting -- see 'lighting regressed' below. UNATCO node gap (6321 vs 6314, unmerged baseline) root-caused: repartition_frontier's make_ed_polys reconstructs unmerged coplanar duplicates that bsp_merge_coplanars correctly fixes per-call (10/10 live-verified exact against the real editor) -- but blanket-applying the merge to all 209 calls reproduces a 5689-node UNDER-build (-625), not a fix. 2026-08-30: SIX architectural hypotheses refuted with real evidence. Later the same day: disassembly first suggested a separate scratch UModel holds subtree nodes -- REFUTED by direct live evidence (bspAddNode's own Model argument matches the persistent model 0/29 times mismatched; a Nodes.Num watchpoint shows real growth then a genuine FArray::Remove shrink back to baseline, every call, even for a known +1-delta subtree; that subtree's own root node bytes are unchanged before/after). Corrected mechanism: subtree calls write real nodes past the persistent model's own Nodes.Num as scratch, then bspRefresh removes them -- but where a delta actually becomes permanent is still not pinned down (checked: net Num growth -- no; root node content change -- no). See dev/docs/native-materialize-findings.md for the full write-up. Wanchai stays node-exact throughout (unaffected). No bspcsg.rs changes shipped this round -- default path unchanged (6321/11648)."
+summary = "SHIPPED 2026-08-29 (repartition_frontier + compact_unreachable_nodes, bspcsg.rs), but with a REGRESSION on UNATCO's lighting -- see 'lighting regressed' below. UNATCO node gap (6321 vs 6314, unmerged baseline): three calls pinned exactly (child=4096/+4, child=3086/+2, child=6108/+1, summing to +7). 2026-08-30, long investigative arc (full summary in the item body): scratch-UModel hypothesis raised then REFUTED by direct live evidence; found that repartition_frontier's own bspRepartition call is a proven, byte-verified NO-OP on the persistent tree for all 10 calls individually checked (9 Wanchai known-delta calls + UNATCO child=6108) -- the editor computes a real (often correctly-merged) answer and bspRefresh's real FArray::Remove discards it every time. Caught and corrected two of its own methodology errors along the way (a missed iPlane chain in a descendant walk; a per-call table that measured transient/discarded bspAddNode work, not real persistent content). Landed on an OPEN, UNRECONCILED CONTRADICTION: those 10 no-op calls conflict with the long-established stage-count table showing verts DO grow by +10462 in aggregate across the same 209-call sequence (nodes correctly stay flat, matching the no-op finding). Three reconciliations named as next steps (not chased): checkpoint misattribution, an unrepresentative 10-call sample, or a final one-time commit step after all calls finish. See dev/docs/native-materialize-findings.md and this item's body for the full write-up. Wanchai stays node-exact throughout (unaffected). No bspcsg.rs changes shipped this round -- default path unchanged (6321/11648)."
 +++
 
 # UNATCO `Verts`/`Points` residual — it is the unported sub-BSP repartition loop
@@ -1050,3 +1050,153 @@ shows a persisted change. **No fix attempted or shipped this round** — this is
 fundamental question than a narrow ordering fix, and needs its own investigation, not a patch bolted
 onto this chain. `bin/test -k bspcsg` (84/84) and `regression_gate.py`'s default path unchanged
 (UNATCO 6321/6314, Wanchai exact 11648) — no `bspcsg.rs` changes this entry.
+
+## The precise open contradiction — stopping the chain here, not because the trail went cold, but
+## because it landed on two established facts that cannot both be true as currently understood
+
+**Fact 1 (this session, 10/10 individually-checked calls):** every `repartition_frontier`
+`bspRepartition` call examined so far — Wanchai's 9 known-delta calls
+(`11633/11295/11291/11287/11283/11206/11211/11216/11201`, `wanchai-verts-points-residual-independently`)
+plus UNATCO's `child=6108` — shows ZERO persistent change to the tree. The editor computes a real,
+often genuinely different (merged) answer, and `bspRefresh`'s real `Core.dll!FArray::Remove` call
+discards it every single time, landing back at the exact pre-call state. Checked at the node-content
+level (root + full descendant walk for Wanchai, root for UNATCO) — not inferred, read byte-for-byte
+before and after.
+
+**Fact 2 (established much earlier in this item, "What is actually missing" above, `repart-stage-
+unatco.log`, disassembly-verified stage boundaries):** the SAME 209-call sequence, measured in
+aggregate via live editor stage counts, shows a large, real effect: verts go **44314 → 54776
+(+10462)** between "after the detail loop" (immediately before the 209 calls start) and "after the
+~209 sub-BSP repartitions" (immediately after they finish). Points move too (11445→12909). Nodes do
+NOT move in aggregate (6314→6314) — consistent with Fact 1 — but verts clearly do.
+
+**These do not currently reconcile.** If literally every one of the 209 calls is a no-op on the
+persistent tree (as the 10 checked so far all are), verts should ALSO net to zero across the
+sequence, the same way nodes do — but they don't, by a wide margin. Candidate reconciliations, named
+here as the concrete next steps for whichever session picks this up — none chased or tested this
+round:
+
+- **(a) Checkpoint misattribution.** The "after the detail loop" / "after the ~209 repartitions"
+  stage boundaries in `repart-stage-unatco.log` might not bracket what this item assumes — e.g. if
+  `TestVisibility` or the start of `bspOptGeom`'s own work actually begins earlier than the second
+  checkpoint's label implies, the +10462 could belong to a DIFFERENT stage entirely, wrongly folded
+  into "the 209 repartitions" by the log's own boundary markers. Would need re-deriving the
+  checkpoint markers against fresh disassembly, not just trusting the existing log's own labels.
+- **(b) Unrepresentative sample.** 10 calls (9 Wanchai + 1 UNATCO) is a small fraction of the ~328
+  total (209 UNATCO + 119 Wanchai) — all 10 checked happen to be flagged/known-delta or
+  easily-identified cases. It is entirely possible most of the other ~318 calls DO show real
+  persisted changes (verts growing, nodes net-zero because growth in one call is offset by shrinkage
+  in another), and the 10 checked so far are systematically unusual (e.g. all deliberately chosen
+  because they were ALREADY known to be interesting/flagged cases, not a random sample).
+- **(c) A final, one-time commit step.** `compact_unreachable_nodes` (native) already runs once,
+  after ALL 209/119 calls finish, not per-call — matching the editor's own two post-loop calls found
+  this session (`vtbl+0x218`, whose edge/vertex-coincidence logic reads as a T-junction weld;
+  `vtbl+0x208`, bounds-building). Neither of those two was checked for whether it ALSO folds in
+  accumulated, previously-discarded verts data from the whole loop (as opposed to just welding
+  T-junctions in the tree that already exists) — that check was not done this session.
+
+Whichever of these (or something else entirely) is right, the fix is not in `repartition_frontier`'s
+per-call logic as currently understood — every mechanism checked there (merge state, poly order,
+scoring stride, node-array growth/shrink) has been individually verified either faithful to the
+editor or irrelevant to what actually persists.
+
+## Comprehensive summary of the whole investigative arc — for a future session to pick up cleanly
+
+**Starting point (established well before this session):** UNATCO's node tree matched the editor
+exactly (6314/6314) after `repartition_frontier` shipped, but `Verts`/`Points` did not (+2443/+14 on
+the default path, still true today). The gap was stage-localized to `repartition_frontier`'s ~209
+`bspRepartition` calls specifically (see "What is actually missing" above) — native has no
+counterpart to this pass, so it is the WHOLE of the remaining `Verts` gap by construction. Three of
+those 209 calls were pinned exactly (`UEDCLI_REPART_CALL_DIAG`, "Pinned exactly 2026-08-29" above):
+`child=4096` (+4), `child=3086` (+2), `child=6108` (+1), summing to the full node-count +7.
+
+**Phase 1 — the "unmerged coplanar duplicates" theory.** `child=6108`'s reconstruction (via
+`make_ed_polys`) produces unmerged coplanar duplicate polys that `bsp_merge_coplanars` correctly
+fixes PER-CALL (10/10 live-verified exact against the real editor, in isolation) — but
+blanket-applying the merge to all 209 calls reproduces a 5689-node UNDER-build (−625), not a fix.
+This "correct per call, wrong in aggregate" contradiction (a different, older one than the contradiction
+above) consumed the bulk of this item's earlier rounds and was never resolved — six independently-
+checked architectural hypotheses were all refuted with real evidence (per-call merge correctness,
+pre-repartition input identity, compaction timing, progressive index allocation, a surf-dedup theory,
+a calling-convention/`ECX` reading bug).
+
+**Phase 2 — this session, full disassembly of `bspRepartition` itself.** First found (then
+REFUTED, see below) that subtree calls appeared to build into a separate, persistently-reused scratch
+`UModel` (`Editor.dll`, `bspBuildFPolys`/`bspMergeCoplanars`/`bspBuild`/`bspRefresh` fully
+disassembled, `vtable_dump.py`/`bspbuild_ctx_dump.py` built and used). Direct live evidence then
+refuted the "separate scratch model" reading: `bspAddNode`'s own `Model` argument matches the
+persistent model with 0/29 mismatches (`repart_addnode_model_trace.py`); a hardware watchpoint on the
+persistent model's own `Nodes.Num` (`nodesnum_watch.py`) shows real `+1` growth per `bspAddNode` call,
+then a genuine `Core.dll!FArray::Remove` call (confirmed by IAT symbol) shrinking it back to the
+exact pre-call baseline, every single call. Corrected mechanism: subtree calls write real nodes
+directly into the persistent model, past its own `Nodes.Num` boundary, as temporary scratch — always
+discarded.
+
+**Phase 3 — the descendant-slot no-op finding, generalized.** `node_content_before_after.py` found
+`child=6108`'s own root node byte-identical before/after its call. Extended to the WHOLE subtree on
+Wanchai's 9 independently-known-delta calls (`wanchai_descendant_slots.py`, BFS over
+`iFront`/`iBack`/`iPlane` — the first version missed the `iPlane` coplanar chain, a real bug in the
+check itself, caught and fixed before drawing conclusions): 55 total slots, 0 changed anywhere. The
+editor's own call is a proven, complete no-op for all 9.
+
+**Phase 4 — the methodology correction (a genuine self-caught error).** Cross-referencing the no-op
+finding against ALREADY-COMMITTED tree dumps (`prepart_tree_wanchai.py`, no new capture) found that
+the pre-existing, persistent content for all 9 Wanchai calls already matches `orig_polys` exactly
+(one node per original poly, unmerged) — and that persistent content's vertex count exactly matches
+native's own CURRENT default (unmerged) reconstruction, not the "editor real Δverts" figures in this
+item's own earlier per-call table. That table's methodology (`repart_child_trace.py`'s live capture
+of `bspAddNode` calls DURING the target call) was measuring TRANSIENT, DISCARDED scratch construction
+— real calls, but their result never survives. Once measured correctly, all 9 Wanchai calls showed
+ZERO delta, not the tabulated ones — a pure measurement artifact, no real editor/native gap for those
+9 calls specifically.
+
+**Phase 5 — re-checking whether the same correction applies to `child=6108`; it does not, in the
+same way.** Cross-referencing UNATCO's own pre-existing `prepart_tree_unatco.py` dump (no new
+capture) found `child=6108`'s persistent subtree is 40 unmerged nodes (157 verts), matching this
+item's OWN `UEDCLI_REPART_CALL_DIAG` "orig polys=40" reading — but that table's "appended
+nodes=41" is a NATIVE-INTERNAL comparison (native's own `make_ed_polys` read vs. native's own
+`split_poly_list` output), not subject to the Phase 4 methodology flaw. So `child=6108`'s `+1` delta
+is real, independent of the Wanchai correction — a different phenomenon, not the same artifact.
+
+**Phase 6 — locating the mechanism precisely, then ruling out two candidate fixes in turn.** Native
+diagnostics (`UEDCLI_REPART_FBS_INPUT`, `UEDCLI_REPART_TRACE_LINK`, both committed, env-gated)
+pinpointed the 41st node exactly: a genuine duplicate poly in the 40-poly input (`actor=686,
+i_brush_poly=2, i_link=3513`, at list positions 5 and 39) — one copy survives whole in native's
+output, the other splits into two triangles, at `depth=0` (the tree root). Candidate fix 1
+("`find_best_split_exact`'s scoring loop is buggy") was ruled out: the coarse-scoring stride that
+causes the miss is disassembly-verified faithful to the real editor's own heuristic
+(`findbestsplit-params-decode.md`, pre-existing). Candidate fix 2 ("native's poly ORDER differs from
+the editor's real order") was tested with a new live capture (`fbs_root_poly_order.py`, validated via
+an exact cross-check against the independently-known root-split plane `(1,0,0,508)`) and also ruled
+out — not because order matches, but because the real divergence is bigger: the editor's real
+`FindBestSplit` input is the MERGED 29-poly list (native's own `reduce_repartition_polys`, applied to
+the same input, independently reproduces `merged_count=29` exactly, same root plane), not the
+unmerged 40 native currently feeds it by default.
+
+**Where this lands:** the editor's real per-call reconstruction for `child=6108` is genuine, correct
+(merged) work — that then gets discarded anyway, exactly like Wanchai's 9 calls (its own root node
+bytes confirmed unchanged before/after). So this is NOT the same bug as Phase 4's methodology
+artifact, and NOT fixable by "add the merge step" (would still commit something the editor doesn't)
+or "fix the poly order" (refuted directly). It reframes into the contradiction stated at the top of
+this section: 10/10 calls checked show no persisted change, but the aggregate stage-count numbers
+say something clearly does change across the 209-call sequence. That contradiction, and the three
+named (not chased) candidate reconciliations, is the state this item is left in.
+
+**What is confirmed, reusable ground truth for a future session** (not to re-derive): `bspRepartition`
+(`Editor.dll 0x10049fc0`) dispatches `bspBuildFPolys`(vtbl+0x20c)/`bspMergeCoplanars`(+0x210)/
+`bspBuild`(+0x1fc)/`bspRefresh`(+0x200), all operating on the PERSISTENT model directly (no separate
+scratch object for nodes — a distinct object DOES exist and IS used, but only for the `Polys`/FPoly
+working set feeding `bspMergeCoplanars`, confirmed via `bspbuild_ctx_dump.py`'s `ebx≠esi` finding).
+`bspBuild`'s `Flag=2` (subtree case) appends real nodes past `Nodes.Num`; `bspRefresh` (via
+`Core.dll!FArray::Remove`, IAT-confirmed) removes them back to the pre-call baseline, every call, no
+exceptions found. `csgRebuild`'s loop calls `bspRepartition` per frontier entry
+(`vtbl+0x1ec`) with NOTHING else happening between calls (checked, plain loop bookkeeping only); two
+calls happen once after BOTH frontier loops finish (`vtbl+0x218`, `vtbl+0x208`) whose bodies read as
+T-junction-weld and bounds-building respectively, neither confirmed to touch accumulated vert data
+from the loop (candidate (c) above). All of this is disassembled, live-verified, and cross-checked —
+safe to build on without re-deriving.
+
+**No fix shipped this round or any prior round in this chain.** `bin/test -k bspcsg` (84/84) and
+`regression_gate.py`'s default path unchanged throughout (UNATCO 6321/6314, Wanchai exact 11648).
+Stopping this specific chain here per the coordinator's steer — a real, well-characterized open
+question, not a false lead, and not one more "well-defined next step" to keep chasing this round.
