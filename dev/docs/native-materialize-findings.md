@@ -603,3 +603,83 @@ Files: `light_spotcheck_unatco.py` (new,
 native-side change). `bin/test -k bspcsg` (85/85, was 84/84) and full `bin/test` (12329/0, both
 before and after) both clean. `regression_gate.py`: UNATCO/Wanchai both `EXACT` (nodes/surfs/leaves),
 `GATE: PASS`.
+
+**Points residual (+16 on both UNATCO and Wanchai, post-`repartition_frontier` fix): the identical
+size is a COINCIDENCE, not one shared mechanism — two different-shaped errors happen to land on the
+same total.** (2026-08-30, offline live measurement — `regression_gate.py` + a new env-gated
+`bspcsg.rs` stage/compaction probe, no docker/gdb this round) — `regression_gate.py` baseline
+confirmed both levels EXACT on nodes/surfs/leaves, points `d=+16` both. Per-stage breakdown
+(`UEDCLI_BSPCSG_STAGE_COUNTS`, editor reference = `repart-stage-unatco.log`/`wanchai-ed-repart-stage.log`,
+both live-captured `bspRepartition`-entry gdb logs, dated 2026-08-26/27, i.e. post-2026-08-14 and not
+covered by the pre-2026-08-14 spike invalidation):
+
+| stage | UNATCO native | UNATCO editor | UNATCO Δ | Wanchai native | Wanchai editor | Wanchai Δ |
+|---|---:|---:|---:|---:|---:|---:|
+| post-repartition (world-level `bsp_build`) | 5249 | 5607 | −358 | 15785 | 18544 | −2759 |
+| post-testvisibility (zone pass) | 5280 | 5638 | −358 | 15801 | n/a | — |
+| post-pass2 (after detail loop) | 10810 | 11445 | −635 | 16859 | 19619 | −2760 |
+| post-repartition-frontier (209/119 subtree calls) | 10820 | 12909 | −2089 | 16859 | 19626 | −2767 |
+| post-optgeom (weld) | 10820 | (not separately captured) | — | 16859 | (not separately captured) | — |
+| final (after `reorder_points_canonical`) | 10768 | 10752 | **+16** | 16807 | 16791 | **+16** |
+
+Two new facts pin down WHERE the sign flips and why the same total conceals different causes:
+
+1. **`repartition_frontier`'s OWN points growth is a big miss on UNATCO, negligible on Wanchai** — its
+   209/119-call share: UNATCO native +10 vs editor +1464 (native undershoots by 1454, in ONE stage);
+   Wanchai native +0 vs editor +7 (undershoot of 7, noise-level). This directly refutes the task's
+   working hypothesis that repartition_frontier's own scratch mechanism is where the shared +16
+   "enters" — it dominates UNATCO's error budget but is irrelevant to Wanchai's.
+2. **The FINAL compaction (`reorder_points_canonical`) drops exactly 52 points on BOTH levels** — new
+   `UEDCLI_REORDER_POINTS_DIAG` diagnostic (`bspcsg.rs`, env-gated, zero default-path effect) dumped
+   every dropped point's own coordinates: 52 genuinely distinct, level-specific coordinates each side
+   (not a fixed/constant set), so the equal count is itself coincidental, not a shared bug. Critically,
+   a second diagnostic (`REORDER_POINTS_REACHABLE_ONLY`) recomputed what the PRE-fix policy (drop any
+   point not reachable from a live node ring — i.e. before `repartition_frontier`'s orphan-vert-keep
+   fix shipped) would have kept: UNATCO 10758 (vs golden 10752, **+6** — the gap PRE-EXISTS independent
+   of the orphan-vert-retention feature), Wanchai 16807 (byte-identical to the CURRENT, orphan-aware
+   result — the orphan-vert-retention fix changes NOTHING for Wanchai, since its `repartition_frontier`
+   phase added zero new points to retain in the first place).
+
+**So the +16/+16 match is two different compositions landing on the same number:** UNATCO = a
+pre-existing +6 "reachable-only" gap PLUS +10 from the orphan-vert-retention fix (shipped for the
+lighting `-1 iVertex` crash, `unatco-verts-points-residual-after-the-zone`); Wanchai = a +16
+"reachable-only" gap entirely unrelated to that fix. Neither of the task's two named candidate
+mechanisms (repartition_frontier's own scratch clone; the orphan-vert-retention side effect) explains
+Wanchai's share at all, and both only partially explain UNATCO's.
+
+**The dominant SHARED mechanism across both levels is the world-level clear, not repartition_frontier**
+— `build_geometry_bspcsg` (`bspcsg.rs`) does `model.{nodes,surfs,verts,points,vectors}.clear()`
+immediately before the WORLD-level `bsp_build` call, and this is where the biggest single-stage gap
+opens on both levels (UNATCO −358, Wanchai −2759, at the very FIRST checkpoint, before repartition or
+testvisibility). This independently reproduces, in shape and cause, a **pre-2026-08-14** (thus
+owner-flagged, not trusted at face value) disassembly claim in
+`spikes/2026-07-15-native-materialize/sections/82-bspbrushcsg-port-decode.md` ("`EmptyModel(0,0)` +
+`bspRefresh` keep-set — decoded"): `Engine.dll UModel::EmptyModel(EmptySurfInfo, EmptyGeometry)`
+unconditionally clears Nodes/Verts but gates the Points/Vectors/Surfs frees on its args, so
+`EmptyModel(0,0)` **keeps** Points/Vectors/Surfs; `bspRepartition` calls `bspRefresh` with
+`NoRemapSurfs=1`, so the CSG-phase Points/Surfs pools survive into the repartition, unlike native's
+unconditional clear. That same old write-up already flagged porting this as **high tree-regression
+risk** ("entangled with `surf.pBase`/`vert.iVertex` pool indices") and explicitly did not attempt it
+on its own (smaller, pre-node-exactness) test case — this round's fresh measurement on the NOW
+node-exact UNATCO/Wanchai trees is consistent with, but does not itself re-derive, that old claim.
+
+**Not a clean, isolatable fix for either level.** The initial world-level gap does NOT propagate
+additively — both levels show a much larger swing during `repartition_frontier` + the final weld/
+compaction (UNATCO −358→−2089 then flips to +16, a swing of +2105; Wanchai −2759→−2767 then flips to
++16, a swing of +2783) that native's own compaction (`reorder_points_canonical`, dropping only 52
+points on each side) does not reproduce at anywhere near that scale — the small final residual is a
+near-cancellation of much larger, only partly-understood errors, not a sign that the pipeline is
+"almost right" at any single stage. **No fix shipped** — both candidate levers are either entangled
+with a previously-flagged high-risk area (the world-level clear) or don't touch one of the two levels
+at all (the orphan-vert-retention scope). Recommended next step for a future round: a live gdb
+capture of the CURRENT (node-exact) UNATCO's `EmptyModel`/`bspRefresh` args and points pool at the
+world-level `bspRepartition` boundary, to re-confirm the pre-2026-08-14 claim from scratch before
+attempting a no-clear world-level repartition.
+
+Shipped this round: two read-only, env-gated diagnostics only (`bspcsg.rs`) —
+`UEDCLI_BSPCSG_STAGE_COUNTS` gained one more line (`STAGE post-optgeom`, between the existing
+post-finalize and the surf/vector/point canonicalization), and `UEDCLI_REORDER_POINTS_DIAG`
+(dropped-point dump + the reachable-only comparison count) is new. Both zero-effect on the default
+path: `regression_gate.py` byte-identical before/after (UNATCO points `d=+16`, Wanchai points `d=+16`,
+both still node/surf/leaf-EXACT), `bin/test -k bspcsg` 85/85, full `bin/test` unaffected (containerized
+Rust goldens + host pytest both green — see the board item for the exact run).

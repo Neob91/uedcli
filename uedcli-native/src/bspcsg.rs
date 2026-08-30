@@ -2949,6 +2949,12 @@ pub fn build_geometry_bspcsg(brushes: &[build::BrushInput]) -> Result<Model, Bui
     // (Pass D appends split fragments onto the iPlane coplanar chain) + verts[].iVertex.
     crate::bspoptgeom::bsp_opt_geom(&mut model);
     passes::bsp_build_bounds(&mut model);
+    if stage_counts {
+        eprintln!(
+            "STAGE post-optgeom nodes={} verts={} points={}",
+            model.nodes.len(), model.verts.len(), model.points.len()
+        );
+    }
 
     // §10.19: canonicalize the Surfs pool to the editor's incremental-CSG order and rebuild the
     // Vectors pool from it.  A pure relabel of the Surfs/Vectors arrays + node.iSurf remap — it
@@ -3207,6 +3213,31 @@ fn reorder_points_canonical(model: &mut Model) {
     let n = model.points.len();
     let mut old_to_new = vec![-1i32; n];
     let mut order: Vec<usize> = Vec::new();
+    if std::env::var("UEDCLI_REORDER_POINTS_DIAG").is_ok() {
+        // TEMPORARY probe (native-materialize-findings.md points-residual round): how many points
+        // would survive under the PRE-fix "node-reachable only" policy (bases + node-ring verts,
+        // no orphan-vert pass) vs the current policy. Read-only — does not affect `model`.
+        let mut seen = vec![false; n];
+        let mut kept_reachable = 0usize;
+        let mut mark = |old_i: i32, seen: &mut Vec<bool>, kept: &mut usize| {
+            if old_i >= 0 {
+                let oi = old_i as usize;
+                if oi < n && !seen[oi] {
+                    seen[oi] = true;
+                    *kept += 1;
+                }
+            }
+        };
+        for s in &model.surfs {
+            mark(s.p_base, &mut seen, &mut kept_reachable);
+        }
+        for node in &model.nodes {
+            for k in 0..node.num_vertices {
+                mark(model.verts[(node.i_vert_pool + k) as usize].i_vertex, &mut seen, &mut kept_reachable);
+            }
+        }
+        eprintln!("REORDER_POINTS_REACHABLE_ONLY kept={}", kept_reachable);
+    }
     {
         let mut push = |old_i: i32| {
             if old_i >= 0 {
@@ -3236,6 +3267,17 @@ fn reorder_points_canonical(model: &mut Model) {
         // dropped and the orphan's `i_vertex` hits the `-1` sentinel just below.
         for v in &model.verts {
             push(v.i_vertex);
+        }
+    }
+    if std::env::var("UEDCLI_REORDER_POINTS_DIAG").is_ok() {
+        eprintln!(
+            "REORDER_POINTS before={} kept={} dropped={}",
+            n, order.len(), n - order.len()
+        );
+        for (oi, &nn) in old_to_new.iter().enumerate() {
+            if nn < 0 {
+                eprintln!("DROPPED_POINT idx={} v={:.6},{:.6},{:.6}", oi, model.points[oi].x, model.points[oi].y, model.points[oi].z);
+            }
         }
     }
     let new_points: Vec<Vec3> = order.iter().map(|&i| model.points[i]).collect();
