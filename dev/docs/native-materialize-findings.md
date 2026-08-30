@@ -98,3 +98,25 @@ pre-existing `−nodes,+1 surf` "native face-keeping / tree-shape" signature not
 `geo-confirm-wanchaimkt-wk/logs/verdict-report.md`, not a new bug); Area51-entrance stays the
 known severe under-build (-3384 nodes, matches prior root-caused measurement). 2/11 exact
 (18%, or 1/10 excluding the trivial intro screen) — below the 30% floor.
+
+**`GetVisibleSurfs`'s "missed" run gap is mostly same-zone rasterization precision, not
+`MergeWith`** (2026-08-30, 🔬 live) — `pair_geometry.py` (Wanchai, native vs golden) shows only
+~20% of missed (surf,light) pairs cross a zone boundary (light/surf zone agree 94.6% on matched
+pairs, 96.3% on native's own false positives, but only 80.0% on editor-only/missed pairs — real but
+small skew). Live per-pair trace of Light45/surf-2920 (a same-zone miss; `visible_surfs.rs`'s new
+`UEDCLI_VISGATE_TRACE_SURF`/`_LOC` env-gated probe) showed dense same-zone clutter (~40 small opaque
+surfaces) fully consuming the target's row before it was even reached — not a `MergeWith`/portal
+issue. Corrects the `SUBTRACT_OCCLUSION` doc comment's "MergeWith is the likeliest source" claim.
+
+**`rasterize_node`'s full-coverage floor/ceil over-occludes in cluttered scenes** (2026-08-30, 🔬
+live, shipped) — rounding a rasterized row's `[lo,hi)` outward to pixel boundaries (`lo.floor()`,
+`hi.ceil()`) pads every polygon's footprint by up to ~1px per edge; in a scene with many small
+adjacent opaque surfaces (Wanchai's market clutter) those pads compound across neighbours in one row
+and can swallow a genuine gap a pixel-center rasterizer would leave open. Switched to pixel-center
+coverage (`x0=ceil(lo-0.5)`, `x1=ceil(hi-0.5)`) — measured net effect: Wanchai `LightMap` records
+byte-identical 3228/4530 (71.3%) → 3297/4530 (72.8%), run differs 348→266, extra pairs 134→79,
+missed 350→314; UNATCO (geometry-matched via `light_geomatch.py`, its tree isn't node-exact so
+positional compare doesn't apply) run_ok 92.0%→94.2%, dark/lit mismatches 29+36→27+20. No regression
+on either level's shadow-bit-equal or grid/pan/scale rates, or on Wanchai's geometry exactness
+(surfs/nodes/leaves unchanged, purely a lighting-side change). `bin/test -k light` + full `cargo
+test` green.

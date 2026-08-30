@@ -1,8 +1,8 @@
 +++
 priority = "p1"
 kind = "debug"
-summary = "Resume pointer for the native LIGHT APPLY bake. STALE ON UNATCO as of 2026-08-29 PM: the repartition-frontier geometry fix (unatco-verts-points-residual-after-the-zone) broke UNATCO's node-exactness (6314->6321), which drops its LightMap records byte-identical from 2628/3345 (78.6%) to 1627/3345 (48.6%) -- re-measure before trusting the UNATCO table below. Wanchai's numbers (3228/4530, 71.3%) are unaffected and current. How to rebuild both oracles and re-measure in one command each."
-depends-on = ["port-urender-getvisiblesurfs-so-each-light-gets", "port-the-per-leaf-permeating-light-lists-model", "unatco-verts-points-residual-after-the-zone"]
+summary = "Resume pointer for the native LIGHT APPLY bake. Wanchai now 3297/4530 (72.8%) byte-identical after a pixel-center rasterization fix (getvisiblesurfs-wanchai-run-gap-root-cause, 2026-08-30) -- was 3228/4530 (71.3%). UNATCO table below is STILL STALE (its tree hasn't been node-exact since the repartition-frontier fix); re-measure before trusting it."
+depends-on = ["port-urender-getvisiblesurfs-so-each-light-gets", "port-the-per-leaf-permeating-light-lists-model", "unatco-verts-points-residual-after-the-zone", "getvisiblesurfs-wanchai-run-gap-root-cause"]
 spikes = ["dev/docs/spikes/2026-08-27-native-light-apply-parity/"]
 +++
 
@@ -11,6 +11,35 @@ spikes = ["dev/docs/spikes/2026-08-27-native-light-apply-parity/"]
 Short, checkable, cross-cutting facts from this work are logged in
 `dev/docs/native-materialize-findings.md` (check it before re-deriving something already known;
 follow its check/recheck process before changing an entry).
+
+## Status 2026-08-30: Wanchai improved, and the 3 gaps' relative WEIGHT is now measured
+
+`getvisiblesurfs-wanchai-run-gap-root-cause` shipped a `rasterize_node` pixel-center-coverage fix
+(see that item + the findings ledger). Wanchai: records byte-identical 3228/4530 (71.3%) →
+3297/4530 (72.8%), run differs 348→266, extra pairs 134→79, missed 350→314. UNATCO (geometry-
+matched, tree still not node-exact so the table below doesn't apply): run_ok 92.0%→94.2%. No
+regression on shadow-bit-equal, grid/pan/scale rates, or Wanchai's geometry exactness.
+
+That work also measured, for the first time, how much each of the "three remaining gaps" below
+actually contributes to Wanchai's non-identical records (1302 as of the fix; a record can hit more
+than one gap, classified by first match in this priority order — grid, then run, then bits, then
+pan/scale):
+
+| bucket | records | gap |
+|---|---:|---|
+| grid (`u_size`/`v_size`) mismatch | 6 | none of the three — separate, tiny |
+| run differs (whether or not pan/scale also differ) | 343 | gap 1, light runs |
+| bits differ, run+grid+pan+scale all agree | 254 | NOT one of the three — per-lumel shadow-ray precision, "not chased" below |
+| pan/scale differ ONLY (run+grid+bits all agree) | 699 | gap 3, `Points`/geometry residual |
+
+So gap 3 (`Points` residual, out of scope here — tracked in `unatco-verts-points-residual-after-
+the-zone` / `wanchai-verts-points-residual-independently`) is actually the LARGEST single bucket at
+54% of bad records — bigger than gap 1. Even a perfect fix for gaps 1 and the shadow-ray precision
+issue caps out around (3228+343+254)/4530 ≈ 84.5% on Wanchai; closing the rest needs the geometry
+fix. Gap 2 (`Model.Lights` permeating region) does NOT appear in this table at all — it's a
+separate array (`Model.Lights` region 1) that `lightparity.py`'s "records byte-identical" measure
+never reads, confirmed by reading `bake`'s `emit_record` (only region 2, the per-surface runs, feeds
+`LightMap`). Wiring it in would not move this percentage.
 
 `UEDCLI_NATIVE_MATERIALIZE=1 level materialize` now bakes lighting with no editor anywhere in the
 path: `native.materialize.gather_lights` → `build_world_model(lights=)` →

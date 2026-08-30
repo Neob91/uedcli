@@ -4,6 +4,16 @@ kind = "implement"
 summary = "The last structural gap in the native lighting bake: the editor picks each light's surface set with a six-face 1024x1024 cube-map rasterization (URender::GetVisibleSurfs -> OccludeBsp, per-zone span buffers), and native uses a plane test plus per-lumel LOS. On UNATCO that leaves native listing 618 (surface, light) pairs the editor rejects, against only 7 it misses. Fully decoded below."
 +++
 
+## Status 2026-08-30: pixel-center rasterization fix, gap smaller again, still NOT closed
+
+`rasterize_node`'s screen-space rounding switched from full-coverage (`floor`/`ceil`, pads every
+polygon's footprint outward) to pixel-center inclusion — see `getvisiblesurfs-wanchai-run-gap-root-
+cause`, which also found `MergeWith`/zone-crossing is NOT the dominant cause of Wanchai's larger
+`missed` count as the previous status here speculated (only ~20% of missed pairs cross a zone; the
+rest are same-zone rasterization-precision losses in dense clutter). Wanchai: extra 134→79, missed
+350→314, byte-identical 3228→3297/4530 (71.3%→72.8%). UNATCO (geometry-matched, tree not currently
+node-exact): run_ok 92.0%→94.2%. Shipped, tested, committed.
+
 ## Status 2026-08-29: self-occlusion landed, gap much smaller, still NOT closed
 
 `uedcli-native/src/visible_surfs.rs` now ports the full gather including true opaque-surface
@@ -11,8 +21,8 @@ self-occlusion (`SUBTRACT_OCCLUSION = true`, `SpanBuf` rewritten as a per-row in
 match the real `FSpanBuffer` — see `getvisiblesurfs-self-occlusion-regresses-missed`, resolved).
 UNATCO: extra 618→151, missed 7→233, byte-identical records 2518→2628/3345. Wanchai: extra
 526→131, missed 12→347, byte-identical 3229→3228/4530 (flat). Real, tested, committed — closer,
-but not 0/0 on either level. `MergeWith` (`render.dll 0x1001e3b0`) is still undecoded and is the
-next suspect, especially for Wanchai's larger `missed` count (more zone/portal crossings).
+but not 0/0 on either level. `MergeWith` (`render.dll 0x1001e3b0`) is still undecoded — see the
+2026-08-30 status above for why it turned out not to be the dominant cause of Wanchai's gap.
 
 # Port `URender::GetVisibleSurfs` so each light gets the editor's surface set
 
