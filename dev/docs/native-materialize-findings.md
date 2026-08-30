@@ -1371,3 +1371,65 @@ new bug. Checked for a second "gate too much" sibling per the coordinator's name
 on `PF_Invisible`/`PF_Semisolid`; `visible_surfs.rs` has no `PF_Semisolid` handling at all. None found.
 No `bspcsg.rs`/`visible_surfs.rs` changes this round (pure live-trace investigation); full writeup in
 `zone-crossing-getvisiblesurfs-gap-invisible`.
+
+**`GetVisibleSurfs`'s DFS order had `far_child` interleaved BEFORE the rest of the coplanar chain —
+fixed and shipped; real, positive lighting improvement on both levels, geometry unaffected.**
+(2026-08-30, 🔬 disasm cross-check + TDD + live) — Investigated whether native's BSP traversal order
+for `get_visible_surfs` matches the real editor's (the `zone-crossing-...` item's open tail: "zone1's
+span buffer is GLOBALLY exhausted by DFS order before traversal reaches it, even though other portals
+fed by the same buffer succeed earlier in the same run"). `port-urender-getvisiblesurfs-so-each-
+light-gets` already documents the real per-node order from disassembly ("AddUniqueItem ... front-to-
+back DFS order (near child -> own surface -> iPlane chain -> far child)") — near child, THEN own
+surface, THEN the REST of the `i_plane` coplanar chain, and ONLY THEN `far_child`. `visible_surfs.rs`'s
+`traverse` instead recursed into `far_child` immediately after the HEAD's own surface, before walking
+the rest of the chain (the chain walk happened via the `while cur = n.i_plane` loop, but each
+iteration re-triggered `far_child` = a no-op past the head since chain members carry
+`i_front=i_back=-1` — except the HEAD's own iteration, where `far_child` fired with a REAL subtree,
+one loop turn too early). Net effect: `far_child`'s subtree — potentially large — got to consume
+shared span-buffer area BEFORE a later chain member (or a portal reached only through one) was ever
+tested, an order-dependent exhaustion bug distinct from occlusion correctness.
+
+Fixed: `traverse` now computes `near_child`/`far_child` once at the chain head, recurses `near_child`,
+walks the ENTIRE `i_plane` chain testing every member's surface (a member's own zone_mask can still
+early-`break` the REMAINING chain, matching the prior optimization, but no longer skips `far_child`),
+and only then recurses `far_child` — matching the documented order exactly.
+
+TDD: `coplanar_chain_is_walked_before_far_child_not_interleaved_with_it` — a hand-built model (no CSG,
+`use_zones=false`) with a head node (no surface of its own), a coplanar-chain member holding a small
+"target" quad, and a `far_child` holding a bigger, angularly-larger opaque quad whose screen footprint
+fully covers the target's. RED before the fix (`far_child` consumed the shared buffer first, target
+rejected — confirmed live: `visible={1}`, target surf 0 missing); GREEN after. `cargo test` 90/90 (was
+89), full-suite and in isolation.
+
+**Measured, live, both directions:** `regression_gate.py` UNCHANGED (UNATCO 6314/6314, Wanchai
+11648/11648, both node/surf/leaf-exact, before and after — pure lighting-bake change, cannot touch
+geometry). Lighting improved on both levels (`light_spotcheck_unatco.py`/`light_spotcheck_wanchai.py`,
+fresh native rebuild each side, `run_diff.py` for the pair-level breakdown):
+
+| | UNATCO (geometry-matched) | Wanchai (positional, tree node-exact) |
+|---|---|---|
+| records byte-identical | 2739/3345 (81.9%) → **2769/3345 (82.8%)** | 3319/4530 (73.3%) → **3408/4530 (75.2%)** |
+| run identical (same set+order) | 3219/3345 → 3256/3345 | 4290/4530 → 4414/4530 |
+| records where the SET differs | 126 → 89 | 240 → 116 |
+| extra (surf,light) pairs native adds | 88 → 73 | 77 → **31** |
+| (surf,light) pairs native misses | 111 → **149** | 268 → 209 |
+| shadow-bit agreement (grid+run-matched) | 99.25% → 99.26% | 99.01% → 98.79% |
+
+Real, positive improvement on the primary metrics (byte-identical and run-identical record counts,
+extra pairs) on BOTH levels — Wanchai's gain is larger, consistent with it being the denser/more
+zone-crossing-heavy level this mechanism was diagnosed against. Two metrics moved the "wrong" way and
+are flagged rather than hidden: UNATCO's missed-pair count rose (111→149, even as byte-identical rows
+rose) — the 89 residual set-differing records apparently miss more pairs each on average than the 126
+before, i.e. fewer-but-larger residual failures, not a regression in the improved majority. Wanchai's
+shadow-bit-agreement rate dipped slightly (99.01%→98.79%) — the matched-record population grew
+substantially (more, and apparently larger, records now qualify as grid+run-matched), pulling in more
+lumels governed by the SEPARATE, already-tracked `line_clear` bug
+(`line-clear-shadow-ray-algorithm-gap-found-real`); not evidence this fix made per-lumel accuracy
+worse, just that more surfaces are now exposed to that pre-existing, unrelated gap. `bin/test`
+(12487 pytest passed, 90/90 cargo, full suite) and `regression_gate.py` green before and after.
+
+**Still open:** neither level reaches 100% — the remaining gap splits across the already-tracked
+`Pan`/`UScale`/`VScale` `Points`-residual bucket (`unatco-verts-points-residual-after-the-zone`) and
+the `line_clear` bits-only bucket, plus whatever residual DFS-order or span-buffer subtlety remains
+unexamined (not chased further this round — the specific "zone1 exhausted" symptom that motivated
+this investigation is now addressed at its root, not just measured around).

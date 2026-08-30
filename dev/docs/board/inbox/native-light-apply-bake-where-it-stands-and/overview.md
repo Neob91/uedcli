@@ -1,7 +1,7 @@
 +++
 priority = "p1"
 kind = "debug"
-summary = "Resume pointer for the native LIGHT APPLY bake. Wanchai now 3319/4530 (73.3%) byte-identical after the invisible-portal zone-crossing fix (zone-crossing-getvisiblesurfs-gap-invisible, 2026-08-30) -- was 3297/4530 (72.8%) after the earlier pixel-center rasterization fix. UNATCO (geometry-matched via light_spotcheck_unatco.py) 2739/3345 (81.9%), up from 2692/3345. Gap 2's lumel_axes hypothesis REFUTED (80/80 live match to FCoords::Inverse); line_clear investigated next and CONFIRMED as the real cause of the bits-only bucket, no fix yet (line-clear-shadow-ray-algorithm-gap-found-real). UNATCO table below (the OLDER 78.6% one) is STILL STALE; use light_spotcheck_unatco.py's own fresh numbers instead."
+summary = "Resume pointer for the native LIGHT APPLY bake. Wanchai now 3408/4530 (75.2%) byte-identical after fixing a GetVisibleSurfs DFS-order bug (far_child was interleaved before the coplanar chain, 2026-08-30) -- was 3319/4530 (73.3%) after the earlier invisible-portal zone-crossing fix. UNATCO (geometry-matched via light_spotcheck_unatco.py) 2769/3345 (82.8%), up from 2739/3345. Gap 2's lumel_axes hypothesis REFUTED (80/80 live match to FCoords::Inverse); line_clear investigated next and CONFIRMED as the real cause of the bits-only bucket, no fix yet (line-clear-shadow-ray-algorithm-gap-found-real). UNATCO table below (the OLDER 78.6% one) is STILL STALE; use light_spotcheck_unatco.py's own fresh numbers instead."
 depends-on = ["port-urender-getvisiblesurfs-so-each-light-gets", "port-the-per-leaf-permeating-light-lists-model", "unatco-verts-points-residual-after-the-zone", "getvisiblesurfs-wanchai-run-gap-root-cause", "line-clear-shadow-ray-algorithm-gap-found-real", "zone-crossing-getvisiblesurfs-gap-invisible"]
 spikes = ["dev/docs/spikes/2026-08-27-native-light-apply-parity/"]
 +++
@@ -12,7 +12,19 @@ Short, checkable, cross-cutting facts from this work are logged in
 `dev/docs/native-materialize-findings.md` (check it before re-deriving something already known;
 follow its check/recheck process before changing an entry).
 
-## Status 2026-08-30 (later): zone-crossing `PF_Invisible` bug fixed
+## Status 2026-08-30 (latest): `GetVisibleSurfs` DFS-order bug fixed (far_child was interleaved
+before the coplanar chain)
+
+`zone-crossing-getvisiblesurfs-gap-invisible`'s open tail ("zone1's span buffer is GLOBALLY exhausted
+by DFS order before traversal reaches it") was a real traversal-order bug, not just occlusion
+precision: `traverse` recursed into `far_child` one loop-turn too early (right after the head's own
+surface, before the rest of the `i_plane` coplanar chain), contra the documented real order (near
+child -> own surface -> iPlane chain -> far child). Fixed, TDD-pinned, geometry unaffected. UNATCO
+byte-identical 2739/3345 (81.9%) → **2769/3345 (82.8%)**; Wanchai 3319/4530 (73.3%) →
+**3408/4530 (75.2%)**, run-identical 4290→4414, extra pairs 77→31. Full detail: findings ledger +
+`zone-crossing-getvisiblesurfs-gap-invisible`.
+
+## Status 2026-08-30 (earlier): zone-crossing `PF_Invisible` bug fixed
 
 `zone-crossing-getvisiblesurfs-gap-invisible`: `PF_Invisible` was wrongly gating the whole raster/
 span-test/portal-crossing step for `GetVisibleSurfs` (not just the surf's own emission into the

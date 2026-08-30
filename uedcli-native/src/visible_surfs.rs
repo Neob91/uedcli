@@ -534,6 +534,20 @@ impl ZoneBufs {
 /// split plane (`i_front`/`i_back` both `-1` on a member, so recursing into them is a harmless
 /// no-op); every member still needs its own filter+rasterize pass. Mirrors the same pattern
 /// `light::lightmap_emit_order`'s walk and `zones::passd_walk` use for this Model.
+///
+/// **Order, fixed 2026-08-30** (`getvisiblesurfs-dfs-order-vs-far-child-interleave`): the real
+/// editor's own per-node order is disassembly-documented
+/// (`port-urender-getvisiblesurfs-so-each-light-gets`, "AddUniqueItem ... front-to-back DFS order
+/// (near child -> own surface -> iPlane chain -> far child)") as near child, THEN own surface, THEN
+/// the REST of the coplanar chain, and ONLY THEN `far_child`. An earlier version of this port instead
+/// recursed into `far_child` immediately after the head's own surface — before the rest of the chain
+/// — letting `far_child`'s subtree consume shared span-buffer area before a later chain member (or a
+/// portal reached only through one) was ever tested. That is an order-dependent span-buffer-
+/// exhaustion bug, distinct from occlusion correctness itself: the "zone1's span buffer is GLOBALLY
+/// exhausted ... by the time traversal reaches this node, even though other portals fed by the same
+/// buffer succeed earlier in the same run" finding
+/// (`zone-crossing-getvisiblesurfs-gap-invisible`) is exactly the symptom of far_child's subtree
+/// (visited too early) draining the buffer before DFS order would have reached a later chain member.
 #[allow(clippy::too_many_arguments)]
 fn traverse(
     model: &Model,
@@ -547,29 +561,50 @@ fn traverse(
     trace: Option<(usize, i32)>, // (face index, target surf) — see `trace_target`
     trace_portals: bool,        // see `trace_portals`
 ) {
+    if ni < 0 {
+        return;
+    }
+    let head = &model.nodes[ni as usize];
+    // Step 1: zone-mask subtree prune, checked at the chain HEAD before anything else. `zone_mask`
+    // is the OR of every zone reachable at or below this node (self + both children + the REST of
+    // the coplanar chain, `zones::build_zone_mask` folds in `i_plane` too), so a miss here rules out
+    // both children AND every chain member — safe to stop here without recursing at all.
+    if use_zones && (*active_mask & head.zone_mask) == 0 {
+        if trace.is_some_and(|(_, s)| s == head.i_surf) {
+            eprintln!(
+                "VISGATE_TRACE node={} surf={} PRUNED (zone_mask {:#x} & active {:#x} == 0)",
+                ni as usize, head.i_surf, head.zone_mask, *active_mask
+            );
+        }
+        return;
+    }
+    let d = plane_dot(&head.plane, light_loc);
+    let is_front = d > 0.0;
+    // Engine child convention on the finalized model (matches `linecheck.rs`): FRONT = `i_back`,
+    // BACK = `i_front`. The near child (same side as the light) is visited first.
+    let (near_child, far_child) =
+        if is_front { (head.i_back, head.i_front) } else { (head.i_front, head.i_back) };
+
+    // Near child, full subtree, first (front-to-back).
+    traverse(model, near_child, light_loc, face, use_zones, active_mask, spans, out, trace, trace_portals);
+
+    // Own surface, then every remaining `i_plane` coplanar chain member's surface — `far_child` is
+    // visited only AFTER the whole chain (below), never interleaved with it. A coplanar chain
+    // MEMBER carries `i_front == i_back == -1` (only the chain HEAD splits space), so re-deriving
+    // near/far per member below is a harmless no-op.
     let mut cur = ni;
     while cur >= 0 {
         let nu = cur as usize;
         let n = &model.nodes[nu];
-        // Step 1: zone-mask subtree prune. `zone_mask` is the OR of every zone reachable at or below
-        // this node (self + both children + the REST of the coplanar chain, `zones::build_zone_mask`
-        // folds in `i_plane` too), so a miss here also rules out every later chain member — safe to
-        // stop the whole chain, not just this one node.
         if use_zones && (*active_mask & n.zone_mask) == 0 {
+            // A later chain member's own (narrower) zone_mask can rule out the REMAINING chain
+            // without touching `far_child`, which is visited unconditionally below regardless of
+            // where in the chain this fires.
             if trace.is_some_and(|(_, s)| s == n.i_surf) {
                 eprintln!("VISGATE_TRACE node={nu} surf={} PRUNED (zone_mask {:#x} & active {:#x} == 0)", n.i_surf, n.zone_mask, *active_mask);
             }
-            return;
+            break;
         }
-        let d = plane_dot(&n.plane, light_loc);
-        let is_front = d > 0.0;
-        // Engine child convention on the finalized model (matches `linecheck.rs`): FRONT = `i_back`,
-        // BACK = `i_front`. The near child (same side as the light) is visited first. A coplanar
-        // chain MEMBER carries `i_front == i_back == -1` (only the chain HEAD splits space), so this
-        // recursion is a no-op past the first iteration.
-        let (near_child, far_child) =
-            if is_front { (n.i_back, n.i_front) } else { (n.i_front, n.i_back) };
-        traverse(model, near_child, light_loc, face, use_zones, active_mask, spans, out, trace, trace_portals);
 
         if n.i_surf >= 0 && (n.i_surf as usize) < model.surfs.len() && n.num_vertices >= 3 {
             let is_target = trace.is_some_and(|(_fi, s)| s == n.i_surf);
@@ -688,9 +723,11 @@ fn traverse(
             }
         }
 
-        traverse(model, far_child, light_loc, face, use_zones, active_mask, spans, out, trace, trace_portals);
         cur = n.i_plane;
     }
+
+    // Far child, full subtree, last — only after the whole coplanar chain above.
+    traverse(model, far_child, light_loc, face, use_zones, active_mask, spans, out, trace, trace_portals);
 }
 
 /// TEMP root-cause diagnostic (`getvisiblesurfs-wanchai-run-gap-root-cause`, 2026-08-30): when
@@ -981,6 +1018,107 @@ mod tests {
         assert!(
             !visible.contains(&0),
             "the portal surf itself (PF_Invisible) must never be emitted into the light's own run"
+        );
+    }
+
+    /// **Regression for the DFS-order fix (2026-08-30):** the real editor's own per-node order is
+    /// documented (`port-urender-getvisiblesurfs-so-each-light-gets`, "AddUniqueItem ... front-to-back
+    /// DFS order (near child -> own surface -> iPlane chain -> far child)") as near child, THEN own
+    /// surface, THEN the rest of the `i_plane` coplanar chain, and ONLY THEN `far_child`. An earlier
+    /// version of this port instead recursed into `far_child` immediately after the head's own
+    /// surface, before walking the rest of the chain — letting `far_child`'s subtree consume shared
+    /// span-buffer area before a later chain member was ever tested.
+    ///
+    /// Fixture (no CSG, no zones — `use_zones=false` exercises the single shared span buffer
+    /// directly): a head node with an empty near side and NO surface of its own, whose `i_plane`
+    /// chain holds one member (a small opaque "target" quad, closer to the light) and whose
+    /// `far_child` is a bigger opaque quad, farther away but angularly LARGER, so its screen
+    /// footprint fully covers the target's. If `far_child` is rasterized before the chain member,
+    /// it claims the shared buffer first and the member's later test comes back empty (rejected). If
+    /// the chain is walked first (correct order), the member claims its footprint while the buffer is
+    /// still full and is accepted regardless of what `far_child` does afterward.
+    #[test]
+    fn coplanar_chain_is_walked_before_far_child_not_interleaved_with_it() {
+        use crate::model::{BspNode, BspSurf, BspVert};
+
+        let m = Model {
+            // 0..4: chain-member "target" quad at x=50, half-extent 50 — closer to the light.
+            points: vec![
+                Vec3::new(50.0, -50.0, -50.0),
+                Vec3::new(50.0, 50.0, -50.0),
+                Vec3::new(50.0, 50.0, 50.0),
+                Vec3::new(50.0, -50.0, 50.0),
+                // 4..8: far_child "occluder" quad at x=200, half-extent 200 — farther away but
+                // angularly larger (200/300 vs the target's 50/150), so it fully covers the
+                // target's screen footprint if rasterized first.
+                Vec3::new(200.0, -200.0, -200.0),
+                Vec3::new(200.0, 200.0, -200.0),
+                Vec3::new(200.0, 200.0, 200.0),
+                Vec3::new(200.0, -200.0, 200.0),
+            ],
+            vectors: vec![Vec3::new(-1.0, 0.0, 0.0)], // both quads face back toward the light at -X
+            verts: (0..8).map(|i| BspVert { i_vertex: i, i_side: 0 }).collect(),
+            surfs: vec![
+                BspSurf {
+                    // surf 0: the chain-member target.
+                    texture_ref: -1,
+                    poly_flags: 0,
+                    p_base: 0,
+                    v_normal: 0,
+                    v_texture_u: 0,
+                    v_texture_v: 0,
+                    i_actor: -1,
+                    i_brush_poly: -1,
+                    pan: [0, 0],
+                    i_light_map: -1,
+                },
+                BspSurf {
+                    // surf 1: the far_child occluder.
+                    texture_ref: -1,
+                    poly_flags: 0,
+                    p_base: 4,
+                    v_normal: 0,
+                    v_texture_u: 0,
+                    v_texture_v: 0,
+                    i_actor: -1,
+                    i_brush_poly: -1,
+                    pan: [0, 0],
+                    i_light_map: -1,
+                },
+            ],
+            nodes: vec![
+                {
+                    // node 0: the head. No surface of its own (i_surf=-1, num_vertices=0). Near side
+                    // (x<0, same side as the light) empty; far side (x>0) is node 1 (the occluder);
+                    // i_plane chains to node 2 (the target).
+                    let mut n = BspNode::leaf(Plane { x: 1.0, y: 0.0, z: 0.0, w: 0.0 }, -1, 0, 0);
+                    n.i_front = -1;
+                    n.i_back = 1;
+                    n.i_plane = 2;
+                    n
+                },
+                {
+                    // node 1: far_child leaf, the occluder (surf 1).
+                    BspNode::leaf(Plane { x: 1.0, y: 0.0, z: 0.0, w: 0.0 }, 1, 4, 4)
+                },
+                {
+                    // node 2: coplanar chain member, the target (surf 0). Leaf: no children of its
+                    // own, end of chain (i_plane=-1, the `BspNode::leaf` default).
+                    BspNode::leaf(Plane { x: 1.0, y: 0.0, z: 0.0, w: 0.0 }, 0, 0, 4)
+                },
+            ],
+            root_outside: true,
+            ..Model::default()
+        };
+        // zone_mask defaults to u64::MAX (`BspNode::leaf`) and use_zones is false here (the light
+        // sits in zone 0, the default `i_zone`), so the zone-mask prune never engages — this fixture
+        // isolates the chain/far_child ORDER question from zone-crossing entirely.
+
+        let visible = get_visible_surfs(&m, Vec3::new(-100.0, 0.0, 0.0));
+        assert!(
+            visible.contains(&0),
+            "the coplanar chain member (surf 0) must be tested before far_child's larger, opaque \
+             subtree can claim its span-buffer footprint, got {visible:?}"
         );
     }
 

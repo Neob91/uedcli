@@ -139,3 +139,29 @@ still-open tail). Stopping here per the "log clearly, don't grind" guidance — 
 (a distinct zone-crossing-specific gating bug) is fully investigated for this round; the much larger
 `Pan`/`UScale`/`VScale` bucket (`Points`/geometry residual, `unatco-verts-points-residual-after-the-
 zone`) remains separately out of scope too.
+
+## Follow-up round, 2026-08-30: the "zone1 globally exhausted by DFS order" symptom root-caused and
+fixed — a real DFS-order bug, not just occlusion-precision residue
+
+The "Pairs 2/3" trace above (Light45/69 → surf4846/4740, portal surf998 `reachable=false` on every
+occurrence "even though other portals fed by the same buffer succeed earlier in the same run") was
+flagged as the same mechanism as `getvisiblesurfs-wanchai-run-gap-root-cause`'s same-zone clutter
+finding, not a distinct bug. Investigated whether it is instead (or also) a traversal-ORDER bug:
+`visible_surfs.rs::traverse` recursed into `far_child` immediately after the head node's own surface,
+BEFORE walking the rest of the `i_plane` coplanar chain — but the real editor's documented order
+(`port-urender-getvisiblesurfs-so-each-light-gets`, "front-to-back DFS order (near child -> own
+surface -> iPlane chain -> far child)") visits the WHOLE chain before `far_child`. So `far_child`'s
+subtree — which can be large — was consuming shared span-buffer area a loop-turn too early, before a
+later chain member (or a portal reached only through one) was tested: exactly the kind of
+order-dependent exhaustion the traced pairs showed.
+
+Fixed (TDD + live before/after, full detail in `dev/docs/native-materialize-findings.md`'s newest
+entry): restructured `traverse` to compute `near_child`/`far_child` once at the chain head, walk the
+full coplanar chain before recursing `far_child`. Regression test
+(`coplanar_chain_is_walked_before_far_child_not_interleaved_with_it`) went RED→GREEN; `cargo test`
+90/90; `regression_gate.py` unchanged (both levels stay node/surf/leaf-exact — pure lighting change).
+Real improvement on both levels: UNATCO byte-identical 2739/3345 (81.9%) → 2769/3345 (82.8%), run
+identical 3219→3256; Wanchai byte-identical 3319/4530 (73.3%) → 3408/4530 (75.2%), run identical
+4290→4414, extra pairs 77→31. Neither level reaches 100% — the residual now belongs to the
+already-tracked `Points`/`Pan` geometry bucket and the `line_clear` bits-only bug, not a further
+zone-crossing-specific gate. Shipped.
