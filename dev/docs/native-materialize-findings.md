@@ -1351,3 +1351,23 @@ purely-invisible portal. `bin/test -k "visible_surfs or light"` and full `cargo 
 and the much larger `Pan`/`UScale`/`VScale` bucket (the `Points`/geometry residual, unrelated,
 `unatco-verts-points-residual-after-the-zone`) and the `bits`-only bucket (`line_clear`,
 `line-clear-shadow-ray-algorithm-gap-found-real`) — neither touched by this change.
+
+**Remaining Wanchai zone-crossing misses traced to two ALREADY-tracked issues, not a second
+gating bug** (2026-08-30, 🔬 live, no code change) — fresh `zone_crossing_pairs.py` run against the
+post-invisible-portal-fix build found new editor-only zone-crossing pairs; traced 3 live
+(`UEDCLI_VISGATE_TRACE_PORTALS`). (1) Light100/48/50→surf3141 (zone2→1): `get_visible_surfs` now
+ACCEPTS it (confirms the fix generalizes) but it's still absent from the final run — all 3 lights are
+within radius (`worldRadius=225`, distances 127–209uu), so the residual is the already-confirmed-broken
+`linecheck::line_clear` per-lumel gate (`line-clear-shadow-ray-algorithm-gap-found-real`), not
+GetVisibleSurfs. (2) Light45/69→surf4846/4740 (zone1→2): the connecting portal (surf998, same one the
+invisible-portal fix unblocked) shows `reachable=false` — zone1's span buffer is GLOBALLY exhausted
+(`valid_lines<=0`) by DFS order before reaching it, even though OTHER portals fed by the same buffer
+succeed earlier in the same traversal (rules out "portals always fail"). Light45 is the exact light
+`getvisiblesurfs-wanchai-run-gap-root-cause`'s original trace used to diagnose the same-zone
+clutter-over-occlusion bucket — same mechanism, now also blocking a crossing as a side effect, not a
+new bug. Checked for a second "gate too much" sibling per the coordinator's named candidates:
+`zones.rs::build_zone_mask` (pure OR over children's `i_zone`, no `poly_flags` test) and
+`collect_zone_barriers` (oracle-validated leaf-pair-exact, `PF_PORTAL`-gated only) don't discriminate
+on `PF_Invisible`/`PF_Semisolid`; `visible_surfs.rs` has no `PF_Semisolid` handling at all. None found.
+No `bspcsg.rs`/`visible_surfs.rs` changes this round (pure live-trace investigation); full writeup in
+`zone-crossing-getvisiblesurfs-gap-invisible`.

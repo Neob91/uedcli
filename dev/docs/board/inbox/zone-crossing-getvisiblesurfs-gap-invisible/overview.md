@@ -89,9 +89,53 @@ zone-crossing share (only ~20% of Wanchai's missed pairs cross a zone at all, an
 goes through a purely-invisible portal). `bin/test -k "visible_surfs or light"` and full `cargo test`
 green; full `bin/test` run to confirm no other regression.
 
+## Follow-up round, same day: traced 3 more still-missed zone-crossing pairs — no second gating bug
+found; both remaining failure modes trace to ALREADY-tracked, separately-owned issues
+
+Fresh native rebuild + `zone_crossing_pairs.py` re-run against the post-fix Wanchai build surfaced new
+editor-only, zone-crossing pairs (the invisible-portal fix closed some, not all). Traced 3 with
+`UEDCLI_VISGATE_TRACE_SURF`/`_LOC`/`_TRACE_PORTALS`, live, on the current tree:
+
+**Pair 1 — Light100/Light48/Light50 → surf3141 (zone2→1 in the editor's numbering): GetVisibleSurfs
+now correctly ACCEPTS it (the fix generalizes), but it's still absent from the final light run.**
+Confirmed radius is not the gate (`gather_lights`: all three lights carry `LightRadius=8` →
+`worldRadius=225`uu, actual distances 127/188/209uu, all within range). The surf being
+GetVisibleSurfs-accepted but run-absent means the per-lumel gate downstream (`linecheck::line_clear`)
+is rejecting every lumel — that mechanism is ALREADY confirmed broken and tracked separately
+(`line-clear-shadow-ray-algorithm-gap-found-real`, "disagrees with the editor's real bit even on the
+editor's own real tree/inputs, 20/40 sampled"). Not a zone-crossing bug; this pair's residual belongs
+to that item, not this one.
+
+**Pairs 2/3 — Light45/Light69 → surf4846/surf4740 (zone1→2): genuinely still rejected AT the
+GetVisibleSurfs level, but not by a new gating defect.** The only zone1↔zone2 portal (surf998, the
+SAME one this item's fix already made crossable in principle) shows `reachable=false` on every visited
+occurrence, for BOTH lights, on every face reached — i.e. zone1's span buffer is GLOBALLY exhausted
+(`valid_lines<=0`, the same-buffer-wide check every node's zone-reachability test uses) by the time
+traversal reaches this node. This is NOT "portals always fail": other portals fed by the SAME zone1
+buffer (into zone4, nodes 10526/10528/9135) DO succeed at other points in the same traversal
+(`action=MERGE`), so the buffer isn't permanently dead — it's consumed by the time DFS order reaches
+surf998 specifically. Light45 is the EXACT light `getvisiblesurfs-wanchai-run-gap-root-cause`'s
+original live trace used to diagnose the same-zone clutter-over-occlusion bucket ("dense same-zone
+clutter (~40 small opaque surfaces) fully consuming the target's row before it was even reached") —
+this is the SAME mechanism, now also blocking a portal crossing as a side effect, not a distinct
+zone-crossing-specific bug. That bucket already has a partial fix (`rasterize_node`'s pixel-center
+rounding) and is tracked as not-fully-closed; this is further live evidence of its residual, not a new
+finding.
+
+**No second "gate too much" sibling bug found**, despite specifically checking the coordinator's named
+candidates: `zones.rs`'s `build_zone_mask` (pure OR over children's `i_zone`, no `poly_flags` test at
+all) and `collect_zone_barriers` (already oracle-validated leaf-pair-exact against 4 editor goldens,
+`PF_PORTAL`-gated only, no `PF_Invisible`/`PF_Semisolid` involvement) don't discriminate by any flag
+that would incorrectly withhold a zone_mask bit or barrier classification. `visible_surfs.rs` has no
+`PF_Semisolid` handling at all (checked, not referenced anywhere in the file). No code changed this
+round — pure live-trace investigation using the existing probes.
+
 ## Still open
 
-The remaining zone-crossing misses (this did not close 100% of the ~20% share — no further live trace
-done this round to find a second cause). The much larger buckets are unrelated and untouched: the
+The remaining zone-crossing misses split into two ALREADY-tracked issues (not a new bug): the
+per-lumel `line_clear` shadow-ray gate (`line-clear-shadow-ray-algorithm-gap-found-real`) and the
+same-zone rasterization over-occlusion residual (`getvisiblesurfs-wanchai-run-gap-root-cause`'s own
+still-open tail). Stopping here per the "log clearly, don't grind" guidance — this item's own scope
+(a distinct zone-crossing-specific gating bug) is fully investigated for this round; the much larger
 `Pan`/`UScale`/`VScale` bucket (`Points`/geometry residual, `unatco-verts-points-residual-after-the-
-zone`) and the `bits`-only bucket (`line_clear`, `line-clear-shadow-ray-algorithm-gap-found-real`).
+zone`) remains separately out of scope too.
