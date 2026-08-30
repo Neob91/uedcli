@@ -1,7 +1,7 @@
 +++
 priority = "p1"
 kind = "implement"
-summary = "SHIPPED 2026-08-29 (repartition_frontier + compact_unreachable_nodes, bspcsg.rs), but with a REGRESSION on UNATCO's lighting -- see 'lighting regressed' below. Remaining UNATCO node gap (6321 vs 6314) root-caused via live gdb capture: repartition_frontier's make_ed_polys emits unmerged coplanar duplicates (live-verified 40 vs editor's real 29 for child=6108); bsp_merge_coplanars fixes that ONE call exactly (byte-identical root split) but blanket-applied to all 209 calls reproduces the prior 5689-node regression -- fix needs to be selective, not yet found. Wanchai stays node-exact throughout. 2026-08-29 PM: merge is now verified PER-CALL-CORRECT on 4/4 live-checked calls (full recursive tree, not just root split) including the single biggest reduction (child=3086, 141->57); the -625/-634 blanket regression does NOT come from bad merging -- root cause still open, see 'per-call merge proven correct, aggregate still wrong' below."
+summary = "SHIPPED 2026-08-29 (repartition_frontier + compact_unreachable_nodes, bspcsg.rs), but with a REGRESSION on UNATCO's lighting -- see 'lighting regressed' below. Remaining UNATCO node gap (6321 vs 6314) root-caused via live gdb capture: repartition_frontier's make_ed_polys emits unmerged coplanar duplicates (live-verified 40 vs editor's real 29 for child=6108); bsp_merge_coplanars fixes that ONE call exactly (byte-identical root split) but blanket-applied to all 209 calls reproduces the prior 5689-node regression -- fix needs to be selective, not yet found. Wanchai stays node-exact throughout. 2026-08-29 PM: merge is now verified PER-CALL-CORRECT on 7/7 live-checked calls (full recursive tree on one, node counts on the rest) including the single biggest reduction (child=3086, 141->57); the pre-repartition SUBTREE that feeds each call also matches editor's own exactly (same 'duplicate' input on both sides, not a native-only artifact); a cheap all-209-calls-in-one-run growth probe hit a measurement-artifact dead end (documented, do not repeat). The -625/-634 blanket regression's root cause is STILL OPEN -- see 'per-call merge proven correct, aggregate still wrong' and the later 2026-08-29 night section."
 +++
 
 # UNATCO `Verts`/`Points` residual — it is the unported sub-BSP repartition loop
@@ -512,3 +512,100 @@ fix (`dev/docs/spikes/2026-08-29-unatco-repart-live-diff/harness/regression_gate
 scratch trunk (`dev/games/trunks/tmp-wanchai-market`) no longer nests under a `maps/` subdirectory
 (likely touched by a concurrent session sharing this checkout) — the script now detects an `actors/`
 dir directly under the project root and uses that as the trunk path instead of assuming `maps/<name>`.
+
+## 2026-08-29, later that night: growth hypothesis unconfirmed on the largest no-op calls; a
+## pre-repartition SUBTREE-SIZE match (new, solid); a measurement-artifact dead end (documented so it
+## isn't repeated)
+
+Continuing the "sample more of the 163 merge no-op calls, biased large, looking for editor real count
+> native's raw count" plan from the section above.
+
+**More live verification: 7/7 calls now match exactly, zero growth found.** Added 3 more live gdb
+captures (`repart_child_trace.py`) on the largest remaining zero-reduction calls:
+`child=3600` (26 polys, `parent=340 place=NODE_FRONT`) — editor real = 26 exactly.
+`child=4668` (25 polys, `parent=2487 place=NODE_FRONT`) — editor real = 25 exactly.
+`child=3689` (18 polys, `parent=1241 place=NODE_BACK` — the only place=0/NODE_BACK case checked so
+far) — editor real = 18 exactly.
+Combined with the earlier `3086`/`3836`, this is **7/7 live-verified calls exact** — the top 7 largest
+zero-reduction calls (out of 163) all confirm native's unmerged count is already correct, and the top
+3 reducing calls (out of 46) all confirm the merged count is correct. No call checked so far shows
+editor's real count EXCEEDING native's raw `orig_polys` — no evidence yet for "some calls need to
+grow". But only 7 of 163 no-op calls are checked (all biased toward the LARGEST) — the ~156 untested
+ones (each ≤17 polys) are not ruled out; if compensating growth exists, it is not concentrated at the
+top and would have to be spread thin across many small calls to reach +625 in aggregate.
+
+**New tool + solid finding: the pre-repartition SUBTREE feeding each call is IDENTICAL between native
+and editor, not just its count.** Added `UEDCLI_BSPCSG_PREPART_NODES` (`bspcsg.rs`, dumps
+`model.nodes` right before `repartition_frontier` runs — the post-detail-loop, pre-209-calls
+checkpoint, 6314 nodes) and a new committed harness script,
+`dev/docs/spikes/2026-08-29-unatco-repart-live-diff/harness/prepart_tree_unatco.py`, which captures
+the SAME checkpoint from the live editor (breaks on the SECOND `bspRepartition` entry — the first of
+the 209 subtree calls — right before it runs, and dumps the editor's own full `Model->Nodes`, all
+6314, via the same `FBspNode` layout `repart_tree_unatco.py` already used). Findings from
+`logs/prepart-tree-unatco.log` (editor) vs the native dump:
+- **Root node matches exactly** (plane `(-0,-0,1,240)`, `isurf` differs as expected — surf numbering
+  is a separate pool that doesn't need to match) — confirms node-index correspondence holds at this
+  checkpoint, a prerequisite for everything below.
+- **The frontier LEAF SET matches almost perfectly**: reproducing `collect_repartition_frontier`'s
+  logic in Python over both dumps (native's own `i_back`/`i_front` fields directly correspond to
+  editor's raw `iBack`/`iFront` at this checkpoint — NO swap needed here, unlike the swap inside
+  `zone_pass`'s own window) gives `list_b` (`NODE_FRONT` targets) matching 2691/2691 EXACTLY, and
+  `list_a` (`NODE_BACK` targets) matching 1988/1990 — off by exactly ONE swapped pair (native has node
+  2947, editor has node 2230; inspecting both shows they are the SAME physical coplanar chain at plane
+  `(0,0,1,-64)`, just built in the opposite chain order — a tiny, localized coplanar-order quirk, not
+  a systemic shape difference). **4679/4680 frontier slots agree exactly (99.98%)** — this refutes the
+  "different pre-repartition tree SHAPE hides behind the matching aggregate count" hypothesis as an
+  explanation for a 625-node gap; one swapped pair cannot account for it.
+- **For every one of the 7 live-verified calls, native's raw (pre-merge) subtree size at that
+  checkpoint EXACTLY equals editor's own raw subtree size at the same node index** (walked via each
+  engine's own `iFront`/`iBack`/`iPlane` from the frontier child, in both dumps): `child=6108`
+  40=40, `4077` 107=107, `3086` 141=141, `3836` 59=59, `3600` 26=26, `4668` 25=25, `3689` 18=18. This
+  is a new, solid, offline-checkable result — the "duplicate coplanar fragments" `make_ed_polys`
+  reconstructs are NOT a native-only reconstruction artifact; the editor's own pre-repartition tree
+  carries the exact same duplicated fragments, at the exact same count, at the exact same spot. It
+  strengthens (not weakens) the merge fix: both engines start from the identical "dirty" input: native's
+  `bsp_merge_coplanars` reduces it to editor's own real output, exactly, every time checked.
+
+**Dead end, documented so a future session doesn't repeat it: a "read `Model->Nodes.Num` after every
+one of the 209 calls in one `MAP REBUILD` run" probe gives an internally-inconsistent, unusable
+reading.** Built `repart_allcalls_unatco.py` (committed) to cheaply get editor's real per-call node
+delta for ALL 209 calls at once (instead of one expensive live capture per call), breaking on
+`bspRepartition` entry (`0x10049fc0`, caching `$m` = the Model pointer + `$child`) and dumping
+`*(int*)($m+0x5c)` at `bspRefresh` completion (`0x1004a05f`) for every call. Confirmed `$m` is the
+SAME pointer for every one of the 210 calls (rules out "reads a different/scratch Model" as the
+explanation) and got a suspiciously clean result: **`Nodes.Num` reads EXACTLY 6314 after literally
+every one of the 209 subtree calls, with zero exceptions** — and a 3-breakpoint version (adding
+`0x1004a047`, "after bspBuild, before bspRefresh") showed the count TEMPORARILY bumps up by exactly
+however many nodes that call's own `bspBuild` just appended (e.g. `child=4077`: 6314→6389, +75 — the
+same size the merged prediction gives), then drops back down to EXACTLY 6314 at `bspRefresh`
+completion, for every call, regardless of that call's own old/new subtree sizes.
+
+This is **directly contradicted** by independently-verified ground truth: `child=6108`'s real 29-node
+subtree (from the live `ADD`-sequence capture, cross-validated structurally against native's isolated
+merge-and-resplit tree — see the "full recursive tree" section above) occupies freshly-assigned node
+indices **6314 through 6342** — i.e. real, distinct, newly-built array entries that must exist for the
+final map to be correct, yet `Model->Nodes.Num` claims the array is back at 6314 (as if nothing was
+appended) immediately after. Ruled out as measurement bugs: breakpoint firing count is exactly 1 per
+call for `ENTRY`/`POSTBUILD`/`CALLEND` (210/210/210, no duplicates), and the Model pointer is stable.
+**Conclusion: whatever `Model->Nodes.Num` (`Model+0x5c`) reflects at the `bspRefresh`-completion PC
+inside the PER-SUBTREE repartition path, it is not simply "how many live node entries exist" — reading
+it this way is unreliable and should not be used as evidence for or against any hypothesis without
+first resolving this contradiction** (candidates, none checked: the offset means something different
+in this call path; `bspRefresh` writes back a saved pre-call checkpoint for unrelated bookkeeping
+reasons and the real compaction happens in a later, separately-located pass — mirroring native's own
+"append during the loop, `compact_unreachable_nodes` once at the end" shape, in which case per-call
+reads during the loop simply aren't comparable between the two engines at all). The "sample per-call
+editor deltas cheaply" idea is not disproven in principle — just this specific offset/breakpoint
+combination is unusable. Do not resume this exact approach without first explaining the contradiction.
+
+**Net position, unchanged in substance but now much better evidenced:** the per-call merge-and-resplit
+operation is correct (7/7, including matching pre-repartition inputs, not just outputs). The -625/-634
+aggregate deficit from blanket-applying it is real and still unexplained. The two most promising
+un-eliminated leads: (a) growth concentrated in many small no-op calls rather than a few large ones —
+untested, would need many more (cheap, since these are all small) live captures, or a fixed version of
+the all-calls-in-one-run probe once its `Nodes.Num` semantics are understood; (b) something in the
+FINAL, whole-model compaction (wherever/whenever it really happens — not `repartition_frontier`
+itself) that native's single end-of-loop `compact_unreachable_nodes` doesn't reproduce faithfully. Not
+eliminated: the specific coplanar-chain-order quirk found in the frontier-set diff (nodes 2947/2230)
+could be a symptom of a broader chain-ordering difference elsewhere that a leaf-set diff alone
+wouldn't surface — not investigated further this session.

@@ -2850,6 +2850,26 @@ pub fn build_geometry_bspcsg(brushes: &[build::BrushInput]) -> Result<Model, Bui
             model.nodes.len(), model.verts.len(), model.points.len()
         );
     }
+    // PRE-REPARTITION-FRONTIER NODE DUMP (UEDCLI_BSPCSG_PREPART_NODES) — env-gated; the exact
+    // tree state repartition_frontier's 209 calls are about to consume (matches editor's
+    // checkpoint right as its first sub-repartition call begins, i.e. bspRepartition CALL idx=2
+    // in `repart_child_trace.py`'s numbering).  Line format matches `RNODE` from
+    // `UEDCLI_BSPCSG_REPART_NODES` / the editor's `repart_tree_unatco.py` oracle so the two can
+    // be diffed structurally (which nodes are frontier leaves, not just aggregate counts) —
+    // `unatco-verts-points-residual-after-the-zone`, testing whether the -625/-634 blanket-merge
+    // deficit traces to a pre-repartition tree-SHAPE difference the matching aggregate count
+    // (6314=6314) hides.  NOTE the swap convention: native's `i_back`/`i_front` here already
+    // correspond to the editor's `iFront`/`iBack` respectively (see `collect_repartition_frontier`
+    // — this mapping holds post the final `swap_node_children` above, not just during zone_pass).
+    if std::env::var("UEDCLI_BSPCSG_PREPART_NODES").is_ok() {
+        for (i, n) in model.nodes.iter().enumerate() {
+            eprintln!(
+                "PNODE {} isurf={} nv={} iB={} iF={} iP={} nf={} plane={:.5},{:.5},{:.5},{:.5}",
+                i, n.i_surf, n.num_vertices, n.i_back, n.i_front, n.i_plane, n.node_flags,
+                n.plane.x, n.plane.y, n.plane.z, n.plane.w
+            );
+        }
+    }
 
     // Re-partition just the subtrees that grew on the pre-detail-loop frontier, then GC the
     // orphaned pre-repartition nodes `bsp_add_node`'s append-only growth leaves behind
