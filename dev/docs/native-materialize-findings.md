@@ -743,3 +743,70 @@ surf/leaf-EXACT, points `d=+16` both, verts `d=+5`/`d=+74`, vectors `d=+0`/`d=-8
 pre-round). `bin/test -k bspcsg` 86/86 (was 85), full `bin/test` green (host pytest + containerized
 `cargo test`, both before and after). New harness:
 `dev/docs/spikes/2026-08-29-unatco-repart-live-diff/harness/emptymodel_worldlevel_trace.py`.
+
+**Round 3 — the missing downstream mechanism FOUND: the real `bspRefresh` ALSO compacts Points AND
+Vectors on every call (fresh disassembly), not just Nodes. Wiring it into
+`UEDCLI_BSPCSG_WORLD_KEEP_POINTS` closes nearly the whole regression (+912→+16 UNATCO, +2673→+19
+Wanchai) — the flag is now a verified-working mechanism, just not better than the current shipped
+default. Not switched to default.** (2026-08-30, 📖 fresh disassembly + offline measurement, no
+docker/gdb needed this round) — Two offline (no live editor) diagnostics localized the entry point
+BEFORE any disassembly: `UEDCLI_BSPCSG_STAGE_COUNTS` + `UEDCLI_BSPCSG_WORLD_KEEP_POINTS` together (new
+harness `keep_points_stage_diag.py`) show UNATCO's points ALREADY at 21652 right after the world-level
+`bsp_build`+`bspRefresh` (editor's real value at the same checkpoint: 5607) — the blowup is not
+downstream of `repartition_frontier`/the weld at all, it is present at the very first post-world-clear
+checkpoint. `UEDCLI_BSPCSG_POOLDUMP` traced it one step earlier: PASS 1's own incremental per-brush
+`bsp_brush_csg` loop (before the world clear even runs) already holds 21362 raw Points on UNATCO, of
+which only 6400 are reachable from its own tree at that point (Wanchai: 54670 raw / 19054 reachable) —
+`bsp_cleanup` (Editor.dll `0x36160` port) only ever splices dead NODES, confirmed by reading its Rust
+port (`cleanup_nodes`, `bspcsg.rs`): it never touches Points, so PASS 1's Points pool is pure
+monotonic accumulation, unlike the real editor's (1510/4757 at the same checkpoint, per
+`emptymodel_worldlevel_trace.py` above).
+
+Fresh disassembly of `bspRefresh` (`Editor.dll`) PAST the range already decoded for the Nodes-array
+`FArray::Remove` call (the existing `0x10036e86` finding) — `0x10036fb0`-`0x10037166`, read directly
+off `uned/UED22/Editor.dll` via `rdis.py`, no prior write-up cited — shows it allocates TWO more remap
+tables sized to `Model+0x7c` (Vectors.Num) and `Model+0x8c` (Points.Num), marks a Point used iff some
+surf's `p_base` (`+0x8`) OR some (already-compacted) node's own vert-pool range (`iVertPool`/
+`NumVertices@+0x36`) names it via `Vert.iVertex`, marks a Vector used iff some surf's `v_normal`/
+`v_texture_u`/`v_texture_v` (`+0xc`/`+0x10`/`+0x14`) names it, physically compacts BOTH arrays in place
+(dense repack + a `0x10034310` shrink call, same pattern as the Nodes `Remove` call, plus an
+`appFailAssert` sanity check on the new count), then walks Surfs and Nodes AGAIN to rewrite every
+surviving cross-reference to the new indices — a real, complete GC, not just marking. **This directly
+refutes the "SHIPPED" entry above's own "`bspRefresh` does NOT correspondingly compact Verts/Points
+back down" claim, but only for POINTS/VECTORS — that claim is CONFIRMED correct for VERTS (no verts
+remap exists anywhere in this disassembled range).** The reachability RULE itself (surf.pBase / node
+vert-pool `iVertex`) is exactly what native's own `reorder_points_canonical` already implements (its
+doc comment even anticipated this: "native's `bsp_refresh` skips point compaction, leaving the +26
+CSG-phase orphans the editor's `bspRefresh` GCs") — the new fact is that the real editor runs this
+reachability GC on **every** `bspRefresh` call (world-level AND all ~209/119 subtree calls), not once
+at the very end the way native's `reorder_points_canonical` does.
+
+**Ported as `passes::bsp_refresh_points_vectors` (`passes.rs`), wired ONLY at the world-level
+checkpoint (`bspcsg.rs`, right after the existing `passes::bsp_refresh(&mut model)` call) and ONLY
+under the SAME `UEDCLI_BSPCSG_WORLD_KEEP_POINTS` flag — not wired into `repartition_frontier`'s own
+per-call scratch-clone architecture (out of scope this round, higher regression risk).** Result,
+offline, both goldens: UNATCO points `d=+912`→`+16` (now BYTE-EQUAL to the current default path's own
+`+16`), Wanchai points `d=+2673`→`+19` (default path is `+16`, so 3 worse) — nodes/surfs/leaves stay
+EXACT on both, verts and vectors stay byte-identical to the default path's own `+5`/`+74` and `+0`/
+`-8`. **The mechanism is now fully verified: finding it and porting it makes the "keep points" world-
+level semantics viable (no longer a severe regression) — but it converges to essentially the SAME
+final result the current shipped default (clear + fresh rebuild) already reaches, not a better one.**
+So this round closes the OPEN QUESTION (mechanism identified, confirmed, quantified) without unlocking
+new forward progress on the standing byte-parity goal — the current default stays the better (simpler,
+already-shipped) path to the same result.
+
+TDD: new `bspcsg::tests::world_keep_points_with_compaction_leaves_no_orphan_points` (87th whole-crate
+test, was 86 — the ledger's "`bspcsg` N/N" shorthand tracks the FULL `cargo test --lib` count, not a
+`bspcsg`-only filter; `bin/test -k bspcsg` only filters the pytest phase, cargo test always runs
+unfiltered) — two overlapping ADD boxes; pins that with the compaction, `WORLD_KEEP_POINTS`'s final
+`points.len()` is EXACT-equal to the default clearing path's (not just bounded/smaller-than-before),
+and that nodes/surfs stay identical either way. `cargo test --lib` 87/87 (was 86).
+
+**Not shipped to the default path** — `UEDCLI_BSPCSG_WORLD_KEEP_POINTS` stays unset by default, so
+`bsp_refresh_points_vectors` never runs unless explicitly opted in; `regression_gate.py` with no env
+vars: UNATCO/Wanchai both unchanged (node/surf/leaf-EXACT, points `d=+16` both, verts `d=+5`/`d=+74`,
+vectors `d=+0`/`d=-8` — byte-identical to pre-round). Full `bin/test` (pytest + `cargo test --lib`
+87/87) green, both before and after this round's change; `breadth_gate.py` (13 cases) unaffected —
+4/13 exact, same shape as the established baseline (see the board item for the exact numbers).
+New/changed files: `passes.rs` (`bsp_refresh_points_vectors`), `bspcsg.rs` (wiring + new test),
+`dev/docs/spikes/2026-08-29-unatco-repart-live-diff/harness/keep_points_stage_diag.py` (new).

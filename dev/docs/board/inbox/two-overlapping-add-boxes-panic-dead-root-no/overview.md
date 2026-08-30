@@ -1,6 +1,6 @@
 +++
 priority = "p3"
-kind = "bug"
+kind = "debug"
 summary = "build_geometry_bspcsg panics (debug_assert, bsp_cleanup) on two overlapping ADD boxes: box(256,256,256 @0,0,0) + box(256,256,256 @200,0,0), both CsgOper::Add -- 'cleanup: dead root with no iPlane successor (unhandled Case B root)' at bspcsg.rs:450. Found incidentally while writing an unrelated TDD test; not investigated or fixed."
 +++
 

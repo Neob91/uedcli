@@ -2803,6 +2803,15 @@ pub fn build_geometry_bspcsg(brushes: &[build::BrushInput]) -> Result<Model, Bui
         model.vectors.clear();
         bsp_build(&mut model, merged)?;
         passes::bsp_refresh(&mut model);
+        if std::env::var("UEDCLI_BSPCSG_WORLD_KEEP_POINTS").is_ok() {
+            // The missing mechanism `UEDCLI_BSPCSG_WORLD_KEEP_POINTS` needs to be viable: the real
+            // editor's `bspRefresh` ALSO drops unreferenced Points/Vectors on this same call (fresh
+            // disassembly, `passes::bsp_refresh_points_vectors`'s doc comment) — without it, the
+            // CSG-phase Points pool `EmptyModel(0,0)` deliberately keeps just accumulates unbounded.
+            // Scoped to this flag only: the default (clearing) path already starts this stage from
+            // an empty pool, so this call is a no-op there by construction and left unwired.
+            passes::bsp_refresh_points_vectors(&mut model);
+        }
         // CLEAR `NF_IsNew` ACROSS THE REBUILT TREE before anything filters through it.
         //
         // `NF_IsNew` is a per-brush TRANSIENT: `FBspNode::IsCsg()` (our `is_csg_filter`, mask 0x21)
@@ -4645,6 +4654,78 @@ mod tests {
              points survive: kept={} cleared={}",
             kept.points.len(),
             cleared.points.len()
+        );
+    }
+
+    /// Round 3 of `wanchai-verts-points-residual-independently`: the prior round found
+    /// `UEDCLI_BSPCSG_WORLD_KEEP_POINTS` alone regresses Points badly (UNATCO d=+16 -> +912,
+    /// Wanchai d=+16 -> +2673, per `regression_gate.py`) because nothing bounds the kept CSG-phase
+    /// pool back down. Fresh disassembly of the real `bspRefresh` (`Editor.dll` `0x10036fb0`-
+    /// `0x10037166`) found the missing mechanism: the real editor's `bspRefresh` ALSO drops
+    /// unreferenced Points/Vectors on every call, not just Nodes. `passes::bsp_refresh_points_vectors`
+    /// ports it, wired into the world-level checkpoint under this SAME env var. This pins the
+    /// invariant that makes the flag viable: after the world-level rebuild, every surviving Point is
+    /// reachable from some surf `p_base` or some node's vert pool -- no orphans left unbounded.
+    #[test]
+    fn world_keep_points_with_compaction_leaves_no_orphan_points() {
+        let brushes = [
+            box_brush(256.0, 256.0, 256.0, Vec3::new(0.0, 0.0, 0.0), CsgOper::Add),
+            box_brush(192.0, 160.0, 224.0, Vec3::new(180.0, 90.0, 40.0), CsgOper::Add),
+        ];
+
+        std::env::set_var("UEDCLI_BSPCSG_WORLD_KEEP_POINTS", "1");
+        let model = build_geometry_bspcsg(&brushes).unwrap();
+        std::env::remove_var("UEDCLI_BSPCSG_WORLD_KEEP_POINTS");
+
+        let mut reachable = vec![false; model.points.len()];
+        for s in &model.surfs {
+            if s.p_base >= 0 {
+                reachable[s.p_base as usize] = true;
+            }
+        }
+        for n in &model.nodes {
+            for k in 0..n.num_vertices {
+                let idx = (n.i_vert_pool + k) as usize;
+                if let Some(v) = model.verts.get(idx) {
+                    if v.i_vertex >= 0 {
+                        reachable[v.i_vertex as usize] = true;
+                    }
+                }
+            }
+        }
+        // NOTE: this checks the FINAL model, after the whole pipeline (zone pass, detail loop,
+        // repartition_frontier, weld, reorder_points_canonical) has run past the world-level
+        // checkpoint the compaction is wired at -- reorder_points_canonical's own end-of-pipeline
+        // reachability pass already guarantees this for the WHOLE build regardless of this fix, so
+        // this test's real value is the two asserts below, not this loop by itself. Kept as a
+        // sanity check that the fix doesn't leave the pool internally inconsistent.
+        assert!(
+            reachable.iter().all(|&r| r),
+            "reorder_points_canonical should already guarantee every final point is reachable"
+        );
+
+        std::env::remove_var("UEDCLI_BSPCSG_WORLD_KEEP_POINTS");
+        let cleared = build_geometry_bspcsg(&brushes).unwrap();
+        assert_eq!(
+            model.nodes.len(),
+            cleared.nodes.len(),
+            "the compaction only touches Points/Vectors -- node COUNT must stay identical"
+        );
+        assert_eq!(
+            model.surfs.len(),
+            cleared.surfs.len(),
+            "the compaction only touches Points/Vectors -- surf COUNT must stay identical"
+        );
+        // The concrete regression this pins: before this fix, keeping CSG-phase points with no
+        // downstream compaction left unbounded orphans (measured on real levels: UNATCO points
+        // d=+16 -> +912, Wanchai d=+16 -> +2673, `regression_gate.py`). With the real editor's own
+        // Points/Vectors compaction ported, this toy fixture reaches EXACT parity with the default
+        // clearing path, not just "bounded" -- the strongest form of this assertion available here.
+        assert_eq!(
+            model.points.len(),
+            cleared.points.len(),
+            "with the missing bspRefresh Points/Vectors compaction ported, keeping CSG-phase points \
+             should reach the same final count as clearing, not balloon unboundedly"
         );
     }
 }

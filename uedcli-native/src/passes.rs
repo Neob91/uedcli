@@ -235,6 +235,94 @@ pub fn bsp_refresh(model: &mut Model) {
     model.num_shared_sides = 0;
 }
 
+/// `bspRefresh`'s Points/Vectors compaction — the part `bsp_refresh` above deliberately skips
+/// (see its own doc comment). Fresh disassembly (2026-08-30, `Editor.dll` `0x10036fb0`-`0x10037166`,
+/// the real `bspRefresh` continuing past the Nodes/Surfs/Verts work `bsp_refresh` already ports)
+/// shows the real editor DOES drop unreferenced Points AND Vectors on every single `bspRefresh`
+/// call (world-level AND every subtree repartition), not just once at the very end the way native's
+/// `reorder_points_canonical`/`rebuild_vector_pool` currently do. Confirms and supersedes the
+/// `native-materialize-findings.md` "`bspRefresh` does NOT correspondingly compact Verts/Points"
+/// entry for POINTS specifically — that entry is correct for VERTS only (no verts remap exists in
+/// the disassembled range) but wrong for Points/Vectors, which this ports.
+///
+/// Reachability, read directly off the disassembly: a Point is used iff some surf's `p_base`
+/// (`+0x8`) OR some (already node-compacted) node's own vert-pool range names it via `vert.i_vertex`
+/// (matches `reorder_points_canonical`'s already-documented rule, just applied here per-call instead
+/// of once at the end). A Vector is used iff some surf's `v_normal`/`v_texture_u`/`v_texture_v`
+/// (`+0xc`/`+0x10`/`+0x14`) names it — Vectors have no vert-side reference class.
+///
+/// NOT wired into the default build path yet — called only under `UEDCLI_BSPCSG_WORLD_KEEP_POINTS`
+/// (`bspcsg.rs`), where it is the missing mechanism that bounds the kept CSG-phase Points pool the
+/// real `EmptyModel(0,0)` leaves untouched. See `wanchai-verts-points-residual-independently`.
+pub fn bsp_refresh_points_vectors(model: &mut Model) {
+    let mut pt_used = vec![false; model.points.len()];
+    let mut vec_used = vec![false; model.vectors.len()];
+    for s in &model.surfs {
+        if s.p_base >= 0 {
+            pt_used[s.p_base as usize] = true;
+        }
+        if s.v_normal >= 0 {
+            vec_used[s.v_normal as usize] = true;
+        }
+        if s.v_texture_u >= 0 {
+            vec_used[s.v_texture_u as usize] = true;
+        }
+        if s.v_texture_v >= 0 {
+            vec_used[s.v_texture_v as usize] = true;
+        }
+    }
+    for n in &model.nodes {
+        for k in 0..n.num_vertices {
+            let idx = (n.i_vert_pool + k) as usize;
+            if let Some(v) = model.verts.get(idx) {
+                if v.i_vertex >= 0 {
+                    pt_used[v.i_vertex as usize] = true;
+                }
+            }
+        }
+    }
+
+    let mut pt_remap = vec![-1i32; model.points.len()];
+    let mut new_points = Vec::new();
+    for (i, &used) in pt_used.iter().enumerate() {
+        if used {
+            pt_remap[i] = new_points.len() as i32;
+            new_points.push(model.points[i]);
+        }
+    }
+    let mut vec_remap = vec![-1i32; model.vectors.len()];
+    let mut new_vectors = Vec::new();
+    for (i, &used) in vec_used.iter().enumerate() {
+        if used {
+            vec_remap[i] = new_vectors.len() as i32;
+            new_vectors.push(model.vectors[i]);
+        }
+    }
+
+    for s in &mut model.surfs {
+        if s.p_base >= 0 {
+            s.p_base = pt_remap[s.p_base as usize];
+        }
+        if s.v_normal >= 0 {
+            s.v_normal = vec_remap[s.v_normal as usize];
+        }
+        if s.v_texture_u >= 0 {
+            s.v_texture_u = vec_remap[s.v_texture_u as usize];
+        }
+        if s.v_texture_v >= 0 {
+            s.v_texture_v = vec_remap[s.v_texture_v as usize];
+        }
+    }
+    for v in &mut model.verts {
+        if v.i_vertex >= 0 {
+            v.i_vertex = pt_remap[v.i_vertex as usize];
+        }
+    }
+
+    model.points = new_points;
+    model.vectors = new_vectors;
+}
+
 // --- bspBuildBounds (§7.4): render Bounds + collision LeafHulls -------------
 //
 // Faithful port of UnrealEd `UEditorEngine::bspBuildBounds` (Editor.dll 0xaace0) and its
