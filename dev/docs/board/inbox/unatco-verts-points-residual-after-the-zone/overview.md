@@ -1,7 +1,7 @@
 +++
 priority = "p1"
 kind = "implement"
-summary = "SHIPPED 2026-08-29 (repartition_frontier + compact_unreachable_nodes, bspcsg.rs), but with a REGRESSION on UNATCO's lighting -- see 'lighting regressed' below. UNATCO node gap (6321 vs 6314, unmerged baseline) root-caused: repartition_frontier's make_ed_polys reconstructs unmerged coplanar duplicates that bsp_merge_coplanars correctly fixes per-call (10/10 live-verified exact against the real editor, spanning sizes 8-141, both NODE_BACK/NODE_FRONT, both reducing and non-reducing) -- but blanket-applying the merge to all 209 calls reproduces a 5689-node UNDER-build (-625), not a fix. 2026-08-30: eliminated both leading explanations for the -625 gap -- compaction TIMING (once at the end vs per-call) is proven irrelevant by a real experiment (byte-identical results either way), and the pre-repartition INPUT to every one of the 209 calls is proven structurally identical between native and editor (209/209, not just a sample). Root cause of the -625 deficit is STILL OPEN after exhausting every cheap/offline check; see the 2026-08-30 'state of the investigation' section for the full evidence trail and what's left to try. Wanchai stays node-exact throughout (unaffected by any of this)."
+summary = "SHIPPED 2026-08-29 (repartition_frontier + compact_unreachable_nodes, bspcsg.rs), but with a REGRESSION on UNATCO's lighting -- see 'lighting regressed' below. UNATCO node gap (6321 vs 6314, unmerged baseline) root-caused: repartition_frontier's make_ed_polys reconstructs unmerged coplanar duplicates that bsp_merge_coplanars correctly fixes per-call (10/10 live-verified exact against the real editor) -- but blanket-applying the merge to all 209 calls reproduces a 5689-node UNDER-build (-625), not a fix. 2026-08-30: ALL clean, testable-with-current-tools architectural hypotheses now exhausted and refuted -- per-call merge correctness (10/10), pre-repartition input identity (209/209, structural), compaction timing (proven irrelevant via a real experiment), and progressive real per-call index allocation (refuted 9/9 -- editor's every one of 209 calls restarts at the SAME fixed baseline index 6314, not a cumulative shrinking one). That last check surfaced a genuinely new puzzle -- editor's real per-subtree commit mechanism is neither native's append-then-GC-once model nor a progressive-compaction one -- that needs fresh DISASSEMBLY work, not more live-gdb probing at the current breakpoints. STOPPING this line of investigation per standing guidance; see the 2026-08-30 sections for the full evidence trail and handoff notes. Wanchai stays node-exact throughout (unaffected by any of this). No bspcsg.rs changes shipped this round -- default path unchanged, gate still fails on the merge fix as before."
 +++
 
 # UNATCO `Verts`/`Points` residual — it is the unported sub-BSP repartition loop
@@ -700,3 +700,87 @@ per-call-compaction fix for it was a DIFFERENT experiment, already run and negat
 (b) accepting the -625 deficit is not going to yield to per-call analysis and instead looking at
 whether a full recursive-structure diff (not just counts) on a RANDOM (not size-biased) sample of ~10
 more small calls turns up anything.
+
+## 2026-08-30: index-allocation check — the specific "progressive per-call compaction" hypothesis is
+## REFUTED (9/9), but the underlying data reveals a THIRD architecture, neither native's nor the one
+## just tested — this needs disassembly, not more live-gdb probing at the current breakpoints.
+## STOPPING per the coordinator's own exhaustion criterion; state-of-investigation summary below.
+
+The coordinator asked for a specific, sharper check before treating hypothesis (b) as fully closed:
+does a call occurring LATER in the 209-call sequence — after a big reducer like `child=4077` (idx=2,
+107→75) has already run — get a LOWER real node index for its own graft than native's append-only
+model would predict (i.e. does editor really compact progressively, using the TRUE merged size, in a
+way the already-completed `UEDCLI_REPART_COMPACT_PER_CALL` experiment might not have faithfully
+tested)?
+
+**Concrete check, using data already on disk (zero new live captures):** every `repart_child_trace.py`
+capture logs each `bspAddNode` call's `parent=` argument. For a call's OWN first-added node (`place=3`,
+`ROOT`, `parent=-1`), the SECOND `ADD` line names that first node's assigned index directly, via
+`parent=<that index>`. Checked this for all 8 calls whose raw logs survive on disk (`3086`, `3836`,
+`3600`, `4668`, `3689`, `4247`, `4998`, `4096` — `6108`'s own log was independently decoded to the same
+value earlier this session, before a concurrent session truncated the file), spanning call-sequence
+positions **idx=14 through idx=207** — i.e. from very early to almost the very last of the 209 calls,
+on both sides of `child=4077`'s idx=2 reduction and several other reducers in between (confirmed via
+each capture's distinct `ilink`/`N`/`B` values on the FIRST line — proof these are 8 independent, real
+captures, not a stuck script). **Every single one of the 9 calls' second `ADD` line reads
+`parent=6314`** — i.e. every one of the 209 calls, regardless of how many reducers already ran before
+it, starts writing its own new subtree at the EXACT SAME fixed index (6314, the pre-loop baseline),
+not a progressively lower one.
+
+**This directly refutes the coordinator's specific hypothesis**: editor's real per-call node
+allocation does NOT reflect a cumulative, TRUE-merged-size-based compaction that would push later
+calls' indices down. If it did, `child=4096` (idx=116, occurring after MANY reducers including
+`4077`'s -32 and `3086`'s -84) would start well below 6314; it starts at 6314, identically to
+`child=3600` at idx=14 (right after the very first few calls).
+
+**But this ALSO reveals something neither native's model nor the just-tested hypothesis predicts.**
+6314 is not an arbitrary number — it is EXACTLY the well-established pre-loop baseline (confirmed via
+both `UEDCLI_BSPCSG_PREPART_NODES` and the live `prepart_tree_unatco.py` capture). For 9 different
+calls, spread across nearly the entire sequence, to ALL treat 6314 as "the next free index" — even
+though real, distinct, necessary content from EARLIER calls in the sequence must persist somewhere for
+the final map to be correct (verified structurally for `child=6108`, whose real content — 29 nodes —
+occupies indices 6314-6342 per this exact chain-decoding method) — the only coherent reading is: **each
+of the 209 individual `bspRepartition` sub-calls builds its new subtree into some kind of
+scratch/temporary working region that is treated as starting fresh from the SAME baseline index every
+time, and the true commit of that scratch content into its PERMANENT position in the model (without
+colliding with every other call's use of the identical 6314+ index range) happens through a mechanism
+this session's breakpoints never observed.** This is a genuinely different, THIRD architecture — not
+native's "always append past the true end, GC once at the end" and not the coordinator's "progressively
+compact using the true merged size" (which was tested directly via `UEDCLI_REPART_COMPACT_PER_CALL` +
+`UEDCLI_REPART_BLANKET_MERGE` and gave the unchanged 5689 result — a result now understood to be fully
+consistent with, not contradicted by, this new finding: that experiment tests WHEN native's own
+correct-by-construction reachability GC runs, which has nothing to do with whatever the editor's real
+per-call scratch/commit mechanism actually is).
+
+**Why this is the right point to stop, per the coordinator's own exhaustion criterion.** Resolving
+what the editor's real per-call commit mechanism is would need NEW disassembly work — tracing
+`EmptyModel(0,0)` and whatever runs between it and the point where a subtree's data is durably in its
+final position (not visible at the 4 breakpoints used this session: `0x10049fc0` entry, `0x1004a00d`,
+`0x1004a027`, `0x1004a047`, `0x1004a05f` bspRefresh) — not more live captures at the current
+instrumentation. Every clean, testable-with-current-tools architectural hypothesis has now been
+checked and answered:
+- Per-call merge correctness: **10/10 exact** (this session + prior).
+- Pre-repartition input identity: **209/209 exact**, structurally (node sets + per-node `nv`), not
+  just aggregate count.
+- Compaction TIMING (once at the end vs. per-call, native's own GC either way): **provably irrelevant**
+  (byte-identical results, with and without merge).
+- Progressive REAL per-call index allocation (editor genuinely using smaller, merged sizes as it goes):
+  **refuted, 9/9**, and refuted in a way that surfaces the deeper "fixed-baseline restart" puzzle above.
+
+None of these four (nor last session's frontier-set/subtree-size structural matches) explain the -625
+deficit. The path forward genuinely needs either fresh disassembly of the commit/graft mechanism, or a
+fundamentally different live-capture technique (e.g. watching memory writes to the "old subtree"'s
+original address range mid-call, to see whether the scratch-built new subtree gets copied there) —
+both out of scope for more probing at the current breakpoint set. **Stopping here per the standing
+instruction to not keep grinding once clean hypotheses are exhausted.** No code shipped this round
+(no `bspcsg.rs` changes were needed or made — this was pure investigation using already-committed
+diagnostics and already-captured logs). `bspcsg.rs` remains at its last-known-good, gate-passing state
+(6321/11648 default, verified unchanged from before this investigation).
+
+**Handoff for whoever picks this up next:** the concrete next step is disassembly, not another live
+probe — find what code runs between `EmptyModel(0,0)` (before `0x1004a047`) and wherever a completed
+per-subtree graft becomes durably reachable in the model, for the SPECIFIC per-subtree repartition
+path (not the world-level one, which behaves differently — its own `Nodes.Num` readings were sane and
+matched expectations). Candidate angle: `EmptyModel`'s own two integer arguments (`0, 0` here) likely
+select a mode; the world-level call's arguments may differ and be worth re-checking too, since ITS
+`Nodes.Num` readings never showed this fixed-baseline-restart behavior.
