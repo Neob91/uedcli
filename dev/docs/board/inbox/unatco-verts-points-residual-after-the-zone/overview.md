@@ -988,3 +988,32 @@ debugging task (read/instrument `bspcsg.rs`'s own split logic against this one i
 live-gdb editor capture. No `bspcsg.rs` changes this round; this check used only already-committed
 logs. `bin/test -k bspcsg` (84/84) and `regression_gate.py`'s default path unchanged (UNATCO
 6321/6314, Wanchai exact 11648).
+
+## Same day, follow-up: ran the named next step. Located the exact mechanism precisely — a real
+## scoring/split mismatch at the tree ROOT — but ruled out the obvious "fix the scoring loop"
+## response, because that loop is disassembly-verified faithful to the real editor. No fix this round.
+
+Added two TEMPORARY env-gated diagnostics to `bspcsg.rs` (`UEDCLI_REPART_FBS_INPUT`: dump each input
+poly's `i_link`/`nv`/`actor`/`i_brush_poly`; `UEDCLI_REPART_TRACE_LINK=<i_link>`: log every real
+`Split::Split` for polys with that `i_link`, with the splitter's plane and depth) — both off by
+default. Diffed the 40-poly INPUT against the 41-node OUTPUT by `(i_link, nv)`: the input has a
+genuine DUPLICATE poly (`actor=686, i_brush_poly=2, i_link=3513, nv=4`, at list positions `k=5` and
+`k=39`); the output has one surviving whole and the other split into two `nv=3` triangles. Traced to
+`depth=0` (the tree ROOT): the winning root candidate (`i_link=3542`), which `find_best_split_exact`'s
+own candidate table scored `splits=0`, genuinely produces a real split when applied to the
+`i_link=3513` poly — scoring and actual application disagree.
+
+**Root-caused the disagreement, then ruled out the obvious fix.** `find_best_split_exact`'s inner
+scoring loop samples only `j=0,inc,2·inc,…` (`inc=2` here); both `i_link=3513` duplicates sit at ODD
+indices (`5`, `39`), so no candidate's scoring ever sees them — a real blind spot. But
+`dev/docs/spikes/2026-07-15-native-materialize/re-raw-zones/findbestsplit-params-decode.md`
+(pre-existing, disassembly-verified) states "Both the candidate loop and the inner counting loop
+stride by `Inc`" — this blindness is a FAITHFUL property of the real editor's own heuristic, not a
+native deviation. So for native to diverge from the editor's real 0-splits/40-nodes output on this
+same subtree, the poly-list ORDER itself must differ from the editor's real order — not yet checked
+(would need a new live capture: a `bspBuildFPolys`-stage poly-order dump for this exact 40-poly list,
+not built this round). **No fix attempted — `find_best_split_exact` is confirmed correct as scored;
+editing it would be an unverified, wide-blast-radius change to code governing every BSP split in the
+codebase, and the real root cause (ordering) is still unconfirmed.** `bin/test -k bspcsg` (84/84) and
+`regression_gate.py`'s default path unchanged (UNATCO 6321/6314, Wanchai exact 11648) — both new
+diagnostics are env-gated, zero default-path effect.

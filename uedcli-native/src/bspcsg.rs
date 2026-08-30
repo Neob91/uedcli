@@ -1579,6 +1579,26 @@ fn split_poly_list(
         if j == i_best {
             continue;
         }
+        // TEMPORARY DIAGNOSTIC (UEDCLI_REPART_TRACE_LINK=<i_link>) -- unatco-verts-points-residual-
+        // after-the-zone, child=6108: find exactly which splitter plane cuts the poly with this
+        // i_link, to locate the spurious split producing the 41st node.
+        if let Ok(want) = std::env::var("UEDCLI_REPART_TRACE_LINK") {
+            if want.parse::<i32>() == Ok(p.i_link) {
+                let result_kind = match p.split_with_plane(&splitter.base, &splitter.normal, false) {
+                    Split::Front => "Front".to_string(),
+                    Split::Back => "Back".to_string(),
+                    Split::Coplanar => "Coplanar".to_string(),
+                    Split::Split(f, b) => format!("Split(front_nv={}, back_nv={})", f.verts.len(), b.verts.len()),
+                };
+                eprintln!(
+                    "TRACE_LINK i_link={} depth={} splitter_i_link={} splitter_plane=({:.6},{:.6},{:.6},{:.6}) poly_nv={} result={}",
+                    p.i_link, depth, splitter.i_link,
+                    splitter.normal.x, splitter.normal.y, splitter.normal.z,
+                    splitter.normal.x * splitter.base.x + splitter.normal.y * splitter.base.y + splitter.normal.z * splitter.base.z,
+                    p.verts.len(), result_kind
+                );
+            }
+        }
         match p.split_with_plane(&splitter.base, &splitter.normal, false) {
             Split::Front => front.push(p),
             Split::Back => back.push(p),
@@ -1784,6 +1804,18 @@ fn repartition_frontier(model: &mut Model, list_a: &[i32], list_b: &[i32]) -> Re
         let diag = std::env::var("UEDCLI_REPART_CALL_DIAG").is_ok();
         let fbs_target = std::env::var("UEDCLI_REPART_FBS_CHILD").ok().and_then(|v| v.parse::<i32>().ok());
         let fbs_polys = if fbs_target == Some(child) { Some(polys.clone()) } else { None };
+        // TEMPORARY DIAGNOSTIC (UEDCLI_REPART_FBS_INPUT) -- unatco-verts-points-residual-after-the-
+        // zone, tracing where split_poly_list's spurious extra node comes from for child=6108: dump
+        // the RAW input poly list (i_link=source isurf, verts.len(), actor, i_brush_poly) BEFORE any
+        // splitting, to diff against the output nodes' isurf multiset.
+        if fbs_target == Some(child) && std::env::var("UEDCLI_REPART_FBS_INPUT").is_ok() {
+            for (k, p) in polys.iter().enumerate() {
+                eprintln!(
+                    "FBSIN child={child} k={k} i_link={} nv={} actor={} i_brush_poly={}",
+                    p.i_link, p.verts.len(), p.actor, p.i_brush_poly
+                );
+            }
+        }
         // TEMPORARY EXPERIMENT (UEDCLI_REPART_BLANKET_MERGE) -- unatco-verts-points-residual-after-
         // the-zone, testing whether the per-call merge fix (proven exact on child=6108/4077 in
         // isolation) is *individually* well-behaved across all 209 calls when actually wired in, to

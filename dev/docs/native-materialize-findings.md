@@ -354,3 +354,44 @@ input to find where the 41st node comes from — a native-code debugging task, n
 editor capture. No `bspcsg.rs` changes; this check used only already-committed logs. `bin/test -k
 bspcsg` (84/84) and `regression_gate.py`'s default path unchanged (UNATCO 6321/6314, Wanchai exact
 11648).
+
+**`child=6108`'s 41st node located exactly: a real split at `depth=0` (the ROOT), on a poly the
+coarse `Opt::Good` scoring heuristic never sampled — but that heuristic is itself disassembly-
+verified faithful to the real editor, so the divergence is upstream (poly-list ORDER), not in
+`find_best_split_exact`. No fix identified or attempted this round.** (2026-08-30, native-code
+trace, no live-gdb capture) — Added two TEMPORARY env-gated diagnostics to `bspcsg.rs`
+(`UEDCLI_REPART_FBS_INPUT`, dumps each input poly's `i_link`/`nv`/`actor`/`i_brush_poly`;
+`UEDCLI_REPART_TRACE_LINK=<i_link>`, logs every `Split::Split` classification for polys with that
+`i_link`, with the splitter's own plane and depth) — both off by default, zero effect on the
+regression gate. Diffing the 40-poly INPUT multiset against the 41-node OUTPUT multiset (by
+`(i_link, nv)`) pinpointed the exact discrepancy: the input has a genuine DUPLICATE poly (`actor=686,
+i_brush_poly=2, i_link=3513, nv=4`, appearing twice at list positions `k=5` and `k=39`); the output
+has one surviving whole (`nv=4`) and the other split into two triangles (`nv=3` each) — the missing
+`(3513,4)` and the extra `2×(3513,3)`. `UEDCLI_REPART_TRACE_LINK=3513` traced this to `depth=0`: the
+ROOT split's own winning candidate (`i_link=3542`, `find_best_split_exact`'s own table scored it
+`splits=0`) genuinely produces `Split::Split(front_nv=3, back_nv=3)` when applied to the `i_link=3513`
+poly — a real, direct contradiction between the SCORING pass and the ACTUAL split.
+
+**Root-caused the scoring/actual mismatch, then ruled out `find_best_split_exact` itself as the
+bug.** `find_best_split_exact`'s inner counting loop scores each candidate by sampling only
+`j=0,inc,2·inc,…` (`inc=2` here, `Opt::Good`, `(40 poly count *0x66666667)>>35`) — BOTH duplicate
+`i_link=3513` polys sit at ODD list indices (`5`, `39`), so NEITHER is ever sampled by ANY
+candidate's scoring pass, for the entire `find_best_split_exact` call — a real, exploitable blind
+spot. But `dev/docs/spikes/2026-07-15-native-materialize/re-raw-zones/findbestsplit-params-decode.md`
+(🔬 disassembly-verified, pre-existing) states explicitly: "Both the candidate loop and the inner
+counting loop stride by `Inc`" — this coarse-scoring blindness is a FAITHFUL, disassembly-confirmed
+property of the real editor's own `FindBestSplit`, not a native deviation. So the mechanism that
+produces the 41st node (an under-scored candidate that turns out to really split something) is
+INHERENT to the real editor's own heuristic too — for native's output to diverge from the editor's
+(0 splits, 40 nodes) on this SAME subtree, the poly-list ORDER itself must differ: if the editor's
+real reconstruction places the `i_link=3513` duplicates at indices whose parity IS sampled (or if a
+different candidate ends up winning due to order differences elsewhere in the list), the editor's
+scoring would catch the split and the heuristic would pick a genuinely split-free plane instead. Not
+yet checked (would need a new live capture — a `bspBuildFPolys`-stage poly-order dump for this exact
+subtree, not yet built): whether native's `make_ed_polys`/`bsp_merge_coplanars` tree-walk order for
+`child=6108`'s 40 polys matches the editor's real order index-for-index, particularly around
+positions 5 and 39. **No fix attempted or proposed this round — `find_best_split_exact`'s scoring
+loop is confirmed correct as-is; changing it would be an unverified, wide-blast-radius edit to code
+that governs every BSP split in the codebase, and the actual root cause (ordering) is still
+unconfirmed.** `bin/test -k bspcsg` (84/84) and `regression_gate.py`'s default path unchanged (UNATCO
+6321/6314, Wanchai exact 11648) — both new diagnostics are env-gated, no default-path effect.
