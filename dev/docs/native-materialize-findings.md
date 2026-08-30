@@ -52,18 +52,19 @@ merge reproduces exactly). Blanket-applied, dedup lands at 5599 nodes — worse 
 `bspBuildFPolys` is not a plain surf-array walk; whatever the editor does, it needs the weld's
 actual geometry, not just fewer polys.
 
-**Golden `.dx` provenance — PARTIALLY VERIFIED, needs closing** (2026-08-30, 🔬 partial) — the
-established golden-build method (`dev/docs/spikes/2026-08-27-native-light-apply-parity/harness/build_ued_lit_golden.py`)
+**Golden `.dx` provenance — CONFIRMED, closed** (2026-08-30, 🔬) — the established golden-build
+method (`dev/docs/spikes/2026-08-27-native-light-apply-parity/harness/build_ued_lit_golden.py`)
 confirmed correct: `MAP NEW`→`EDIT PASTE`/`IMPORTADD`→`MAP REBUILD`→`LIGHT APPLY`, never `MAP LOAD`
-on an original file (documented elsewhere as producing a DIFFERENT world BSP from the same brushes).
-Shipped originals (`dev/games/substrate-deusex/Maps/*.dx`) are dated Nov 2017; goldens used this
-session (`_scratch/bsp-parity-proj/golden_unatco_control.dx`, `_scratch/golden_wanchai_world.dx`,
-`_scratch/geo-confirm-*/golden_*.dx`) are dated Aug 2026 — not copies of shipped files. BUT: the
-exact builder script for the `_scratch/geo-confirm-*` goldens (used in earlier 10-level/4-level
-breadth checks) could not be found anywhere in the committed tree — its provenance is NOT
-independently confirmed, only inferred from file dates + project convention. Do not cite those
-specific breadth results as fully trustworthy until this is closed (rebuild at least one from
-scratch and diff against the existing file).
+on an original file (documented elsewhere as producing a DIFFERENT world BSP from the same brushes:
+UNATCO LOAD 3705/6254/776 vs PASTE 3616/6314/762). Shipped originals
+(`dev/games/substrate-deusex/Maps/*.dx`) are dated Nov 2017; goldens used this session are dated
+Aug 2026. The `_scratch/geo-confirm-*` goldens (10-level/4-level breadth checks) had no committed
+builder script or log for most of the set — closed by independently rebuilding
+`geo-confirm-training-final`'s golden from scratch (`build_ued_golden.py --world-only --no-light
+--no-obj-load`, `MAP NEW`→`[re-add]`(EDIT PASTE)→`MAP REBUILD`→`MAP SAVE`, no `MAP LOAD`): the
+fresh rebuild is BIT-IDENTICAL to the pre-existing `golden_training-final.dx` (nodes/surfs/leaves/
+points/vectors/verts all equal: 11122/5307/848/16473/631/115560). Whole `geo-confirm-*` set is
+safe to use.
 
 **`_scratch/wanchai-relight-2026-08-29/golden.dx` provenance — CONFIRMED** (2026-08-30, 🔬) — its
 `golden_build.log` shows the correct `build_ued_lit_golden.py` pipeline ran end to end (`[map-new]`,
@@ -83,3 +84,17 @@ tested ones) drops UNATCO nodes 6321→5689 (target 6314), even though per-call 
 10/10 verified, pre-repartition subtree structure is 209/209 verified identical to the editor, and
 compaction timing (once-at-the-end vs per-call) is proven irrelevant. Root cause of the aggregate
 mismatch is still open — see `dev/docs/board/inbox/unatco-verts-points-residual-after-the-zone/`.
+NOT shipped: gated behind `UEDCLI_REPART_BLANKET_MERGE`, unset by default (`bspcsg.rs:1791`) — the
+default/current-tree build path does not apply it, so default-build UNATCO stays at 6321 (+7 vs
+6314), still NOT node-exact.
+
+**Full-corpus breadth geometry sweep, post-repartition_frontier-experiments** (2026-08-30, 🔬,
+`dev/docs/spikes/2026-08-29-unatco-repart-live-diff/harness/breadth_gate.py`) — 11 unique OG
+levels measured direct via `build_geometry_bspcsg` vs `MAP REBUILD`-only editor goldens: only
+**Wanchai (Market)** and **`DX.dx`** (the 5-brush intro/logo screen) are node/surf/leaf-exact.
+UNATCO, smuggler, paris-chateau, training-final, hk-helibase, nyc-street all OVER-build nodes by
+0.3–2.6%; freeclinic08/nsfhq04 UNDER-build nodes by 0.8–1% while surfs are +1 (matches the
+pre-existing `−nodes,+1 surf` "native face-keeping / tree-shape" signature noted in
+`geo-confirm-wanchaimkt-wk/logs/verdict-report.md`, not a new bug); Area51-entrance stays the
+known severe under-build (-3384 nodes, matches prior root-caused measurement). 2/11 exact
+(18%, or 1/10 excluding the trivial intro screen) — below the 30% floor.
