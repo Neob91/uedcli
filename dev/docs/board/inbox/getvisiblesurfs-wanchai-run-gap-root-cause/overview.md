@@ -77,3 +77,13 @@ tree/inputs (20/40 sampled mismatches). Live-disassembled the real editor functi
 build: refutes an old epsilon-tolerance hypothesis, rules out a plane-dot summation-order hypothesis
 for the traced exemplar, but the exact per-node state formula was not fully decoded — no fix shipped.
 Full writeup: `dev/docs/board/inbox/line-clear-shadow-ray-algorithm-gap-found-real/overview.md`.
+
+**2026-08-30, later the same day: the ~20% zone-crossing share of the missed count ROOT-CAUSED and
+partially FIXED** — `PF_Invisible` was wrongly gating the raster/span-test/portal-crossing step
+itself, not just emission into the light's run; since a `PF_Portal` surface is near-universally ALSO
+`PF_Invisible`, this silently blocked most/all invisible-portal zone-crossings. Live-traced to a
+concrete pair (Light482/surf881), root-caused against the existing disassembly's own address ordering
+(`0x1001a257` portal-cross < `0x1001a30d` invisible-exclusion), fixed, and TDD-pinned. Wanchai
+72.8%→73.3% byte-identical, UNATCO 80.5%→81.9%; geometry unaffected. Does not close the full
+zone-crossing share — full writeup: `dev/docs/board/inbox/zone-crossing-getvisiblesurfs-gap-invisible/
+overview.md`.

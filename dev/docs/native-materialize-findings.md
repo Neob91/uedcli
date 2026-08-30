@@ -1294,3 +1294,60 @@ extension's behavior — doc comment + a `#[cfg(test)]`-gated test only). `bin/t
 88/88 green. Leaves the ~20% zone-crossing share of Wanchai's missed pairs unexplained by anything
 found this round — `MergeWith` is ruled out as the cause, not identified as fixed; the real cause is
 still open.
+
+**Wanchai's zone-crossing `GetVisibleSurfs` gap root-caused and SHIPPED — `PF_Invisible` was wrongly
+gating portal zone-crossing, not just emission.** (2026-08-30, 📖+🔬, live trace +
+disassembly-address-ordering, TDD) — `zone_crossing_pairs.py` (new,
+`dev/docs/spikes/2026-08-29-unatco-repart-live-diff/harness/`, extends `pair_geometry.py`) listed
+concrete editor-only (surf,light) pairs whose light/surf BSP zones differ. Picked Light482/surf881
+(Wanchai, zone 4→1 in the editor's own numbering) and traced it live with a new env-gated probe
+(`UEDCLI_VISGATE_TRACE_PORTALS`, `visible_surfs.rs`, kept as a reusable diagnostic like the existing
+`_TRACE_SURF`/`_LOC` pair): the ONLY portal connecting the light's zone to the target's zone (surf
+998, `PolyFlags=0x4000109` = `PF_Portal|PF_NotSolid|PF_TwoSided|PF_Invisible`, IDENTICAL on native and
+the editor's own golden build) was rejected before rasterization purely because `invisible=true` —
+native's gate `if reachable && front_ok && !portal_needs_zones && !invisible` blocked rasterization,
+the span test AND the zone-crossing merge together for any invisible surface.
+
+Cross-checked against the board item's own disassembly (`port-urender-getvisiblesurfs-so-each-light-
+gets`'s "per-node/per-surface filters, in traversal order"): step 10 (zone reachability) and step 5's
+portal-crossing code (`ActiveZoneMask` OR + `MergeWith`, address `0x1001a257`) both execute BEFORE
+step 11's `PF_Invisible` emission-exclusion check (`0x1001a30d`) — address ORDER, not just adjacency,
+since `0x1001a257 < 0x1001a30d`. So the real editor rasterizes/tests/crosses a `PF_Portal` node
+regardless of `PF_Invisible`; the flag only suppresses the surf's own appearance in the light's final
+run (`iSurfs`/`Draw[]`), never the zone-crossing it performs. A `PF_Portal` surface is near-universally
+ALSO `PF_Invisible` (a zone portal is not meant to render), so this bug silently blocked most/all
+invisible-portal zone-crossings — a strong, disassembly-grounded candidate for a real fraction of the
+~20% zone-crossing missed-pair share (`getvisiblesurfs-wanchai-run-gap-root-cause`).
+
+**Fix** (`visible_surfs.rs::traverse`): moved the `!invisible` condition out of the shared
+raster/test/portal-cross gate and into ONLY the `out.insert(n.i_surf)` step (emission) — rasterization,
+`test_and_maybe_subtract` and the portal `merge_into`/`active_mask` update now run unconditionally on
+`invisible` (still gated on `reachable && front_ok && !portal_needs_zones`, as before). No change to
+non-portal invisible surfaces' visible-listing behavior (still never emitted); they now also get
+rasterized/tested (matching the real editor's `CopyFromRaster` call for every non-occluding surface),
+a functionally-harmless extra computation since `PF_Invisible ⊂ PF_NONOCCLUDING` already keeps
+`opaque=false` for them (no span-buffer mutation either way).
+
+TDD: `an_invisible_portal_still_propagates_visibility_into_its_far_zone` — a hand-built two-zone Model
+(no CSG; a single portal node dividing one open volume, mirroring the real editor's "ADD portal brush
+into open space" pattern) with a `PF_Portal|PF_Invisible` boundary; asserts the far wall IS reached
+(RED before the fix — the portal never crossed, wall unreachable) and the portal surf itself is still
+never emitted (guards against a naive "just drop `!invisible` everywhere" overcorrection). `cargo test`
+89/89 (was 88; the new test is the only addition) both in isolation and full-suite.
+
+**Measured, live, both directions of the standing regression gate:**
+`regression_gate.py`/`breadth_gate.py` UNCHANGED (UNATCO 6314/6314, Wanchai 11648/11648, both exact,
+before and after — this is a pure lighting-bake change, cannot touch geometry). Lighting improved on
+both levels (`light_spotcheck_wanchai.py`/`light_spotcheck_unatco.py`, fresh native rebuild each side):
+Wanchai `LightMap` records byte-identical 3297/4530 (72.8%) → 3319/4530 (73.3%), run differs 266→240,
+shadow-bit agreement flat (99.00%→99.01%); UNATCO (geometry-matched, its tree isn't node-exact so this
+is `light_spotcheck_unatco.py`'s own methodology, not the older stale table) byte-identical
+2692/3345 (80.5%) → 2739/3345 (81.9%), shadow-bit agreement 99.23%→99.25%. Both real, modest,
+same-direction improvements — consistent with fixing a subset (not all) of the zone-crossing share,
+since only ~20% of Wanchai's missed pairs cross a zone at all and not every crossing goes through a
+purely-invisible portal. `bin/test -k "visible_surfs or light"` and full `cargo test` green.
+
+**Still open:** the remaining zone-crossing misses (this fix did not close 100% of the ~20% share),
+and the much larger `Pan`/`UScale`/`VScale` bucket (the `Points`/geometry residual, unrelated,
+`unatco-verts-points-residual-after-the-zone`) and the `bits`-only bucket (`line_clear`,
+`line-clear-shadow-ray-algorithm-gap-found-real`) — neither touched by this change.

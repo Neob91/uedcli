@@ -53,7 +53,10 @@
 //! (step 2), `IsFront`/near-far child order (step 5), the exact back-face cull (step 7 — reuses
 //! `light::light_in_front`, already ported and tested), `PF_Portal && !bUseZones` (step 8), zone
 //! reachability (step 10), the `PF_Invisible` mask (step 11; `ShowFlags=0x800` keeps it in the drop
-//! set), the six exact 90°-apart face rotations and `AddUniqueItem` (here: a `HashSet`) union across
+//! set — **from emission into the light's own run only**; rasterization, the span-buffer accept/
+//! reject test and portal zone-crossing all run BEFORE this check, disassembly address order
+//! `0x1001a257` < `0x1001a30d` — see `invisible`'s doc comment in [`traverse`]), the six exact
+//! 90°-apart face rotations and `AddUniqueItem` (here: a `HashSet`) union across
 //! them (§ "What it is"), and the opaque/non-opaque split on the disassembly-verified
 //! `PF_NONOCCLUDING` mask (`render.dll 0x10019b57`'s `test …, 0x10020047`).
 
@@ -542,6 +545,7 @@ fn traverse(
     spans: &mut ZoneBufs,
     out: &mut HashSet<i32>,
     trace: Option<(usize, i32)>, // (face index, target surf) — see `trace_target`
+    trace_portals: bool,        // see `trace_portals`
 ) {
     let mut cur = ni;
     while cur >= 0 {
@@ -565,7 +569,7 @@ fn traverse(
         // recursion is a no-op past the first iteration.
         let (near_child, far_child) =
             if is_front { (n.i_back, n.i_front) } else { (n.i_front, n.i_back) };
-        traverse(model, near_child, light_loc, face, use_zones, active_mask, spans, out, trace);
+        traverse(model, near_child, light_loc, face, use_zones, active_mask, spans, out, trace, trace_portals);
 
         if n.i_surf >= 0 && (n.i_surf as usize) < model.surfs.len() && n.num_vertices >= 3 {
             let is_target = trace.is_some_and(|(_fi, s)| s == n.i_surf);
@@ -583,7 +587,19 @@ fn traverse(
             let front_ok = light_in_front(&normal, &base, light_loc, poly_flags);
             // Step 8: a portal surface is never drawn/crossed in the unzoned pass.
             let portal_needs_zones = poly_flags & PF_PORTAL != 0 && !use_zones;
-            // Step 11: `ShowFlags=0x800` keeps `PF_Invisible` in the drop set.
+            // Step 11: `ShowFlags=0x800` keeps `PF_Invisible` in the drop set — but ONLY from
+            // EMISSION into the caller's visible-surf set (`0x1001a30d`, decoded in the board item's
+            // "per-node/per-surface filters, in traversal order"). Disassembly address ordering shows
+            // the ACTIVE-ZONE-MASK-OR + `MergeWith` portal-crossing code (`0x1001a257`) runs BEFORE
+            // this check (`0x1001a30d`) — i.e. rasterization, the span-buffer accept/reject test, and
+            // zone-crossing all happen first, unconditionally; PF_Invisible only suppresses the final
+            // "add this surf to the light's run" step. A `PF_Portal` surface is near-universally ALSO
+            // `PF_Invisible` (a zone portal is not meant to render), so gating rasterization/crossing
+            // on `!invisible` — as this port did until `getvisiblesurfs-zone-crossing-...` — silently
+            // drops EVERY invisible portal's zone-crossing, live-confirmed the root cause of Wanchai's
+            // zone-crossing missed-pair share (Light482/surf881 across an invisible `PF_Portal|
+            // PF_Invisible` boundary, `zone_crossing_pairs.py` + the `UEDCLI_VISGATE_TRACE_PORTALS`
+            // probe, 2026-08-30).
             let invisible = poly_flags & PF_INVISIBLE != 0;
             if is_target {
                 eprintln!(
@@ -593,7 +609,17 @@ fn traverse(
                     n.i_surf
                 );
             }
-            if reachable && front_ok && !portal_needs_zones && !invisible {
+            if trace_portals && use_zones && poly_flags & PF_PORTAL != 0
+                && !(reachable && front_ok && !portal_needs_zones)
+            {
+                eprintln!(
+                    "VISGATE_TRACE_PORTAL node={nu} surf={} near_zone={near_zone} far_zone={} \
+                     REJECTED_BEFORE_RASTER reachable={reachable} front_ok={front_ok} invisible={invisible}",
+                    n.i_surf,
+                    n.i_zone[(!is_front) as usize]
+                );
+            }
+            if reachable && front_ok && !portal_needs_zones {
                 if let Some(rows) = rasterize_node(model, nu, light_loc, face) {
                     DBG_RASTERIZED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                     let opaque = SUBTRACT_OCCLUSION && poly_flags & PF_NONOCCLUDING == 0;
@@ -617,9 +643,22 @@ fn traverse(
                     }
                     if !accepted.is_empty() {
                         DBG_ACCEPTED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                        out.insert(n.i_surf);
+                        // Step 11/12: PF_Invisible suppresses EMISSION only — the surf never joins
+                        // the light's own run — never the raster/span-test/portal-crossing above.
+                        if !invisible {
+                            out.insert(n.i_surf);
+                        }
                         if use_zones && poly_flags & PF_PORTAL != 0 {
                             let far_zone = n.i_zone[(!is_front) as usize];
+                            if trace_portals {
+                                eprintln!(
+                                    "VISGATE_TRACE_PORTAL node={nu} surf={} near_zone={near_zone} \
+                                     far_zone={far_zone} accepted_px={} action={}",
+                                    n.i_surf,
+                                    accepted.iter().map(|&(_, x0, x1)| x1 - x0).sum::<i32>(),
+                                    if far_zone != 0 { "MERGE" } else { "SKIP(far_zone==0)" }
+                                );
+                            }
                             if far_zone != 0 {
                                 let far_buf = spans.get_or_empty(far_zone);
                                 merge_into(far_buf, &accepted);
@@ -628,6 +667,13 @@ fn traverse(
                         }
                     } else {
                         DBG_EMPTY_AFTER_TEST.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                        if trace_portals && use_zones && poly_flags & PF_PORTAL != 0 {
+                            eprintln!(
+                                "VISGATE_TRACE_PORTAL node={nu} surf={} near_zone={near_zone} \
+                                 EMPTY_AFTER_TEST (rasterized but self-occluded, no far-zone merge)",
+                                n.i_surf
+                            );
+                        }
                     }
                 } else if is_target {
                     eprintln!("VISGATE_TRACE node={nu} rasterize_node returned None (clipped away / degenerate)");
@@ -642,7 +688,7 @@ fn traverse(
             }
         }
 
-        traverse(model, far_child, light_loc, face, use_zones, active_mask, spans, out, trace);
+        traverse(model, far_child, light_loc, face, use_zones, active_mask, spans, out, trace, trace_portals);
         cur = n.i_plane;
     }
 }
@@ -665,6 +711,22 @@ fn trace_target() -> Option<(i32, Vec3)> {
     Some((surf, Vec3::new(parts[0], parts[1], parts[2])))
 }
 
+/// TEMP diagnostic (zone-crossing root-cause round, 2026-08-30): when `UEDCLI_VISGATE_TRACE_PORTALS`
+/// is set (any value) AND `UEDCLI_VISGATE_TRACE_LOC` matches the light being gathered (same 0.5uu
+/// gate as [`trace_target`]), print every `PF_PORTAL` node the traversal visits for that light,
+/// regardless of which surf it is — lets a live trace answer "does native even ATTEMPT the
+/// zone-crossing merge for the right portal" independent of the specific target surf's own accept/
+/// reject path. Env-gated, zero cost on the default path.
+fn trace_portals_for(light_loc: &Vec3) -> bool {
+    if std::env::var("UEDCLI_VISGATE_TRACE_PORTALS").is_err() {
+        return false;
+    }
+    let Ok(loc) = std::env::var("UEDCLI_VISGATE_TRACE_LOC") else { return false };
+    let parts: Vec<f32> = loc.split(',').filter_map(|s| s.trim().parse().ok()).collect();
+    parts.len() == 3
+        && Vec3::new(parts[0], parts[1], parts[2]).sub(light_loc).size() < 0.5
+}
+
 /// The full six-face gather for one light: the port of `URender::GetVisibleSurfs`. Returns the set of
 /// `iSurf` indices the editor's occlusion rasterization would list this light on (before the caller's
 /// own `bSpecialLit`/radius/per-lumel filters).
@@ -674,6 +736,7 @@ pub fn get_visible_surfs(model: &Model, light_loc: Vec3) -> HashSet<i32> {
         return out;
     }
     let trace = trace_target().filter(|(_, loc)| loc.sub(&light_loc).size() < 0.5);
+    let trace_portals = trace_portals_for(&light_loc);
     let view_zone = zone_of_point(model, light_loc);
     let use_zones = view_zone != 0;
     if let Some((surf, _)) = trace {
@@ -681,12 +744,15 @@ pub fn get_visible_surfs(model: &Model, light_loc: Vec3) -> HashSet<i32> {
             "VISGATE_TRACE light={light_loc:?} view_zone={view_zone} use_zones={use_zones} target_surf={surf}"
         );
     }
+    if trace_portals {
+        eprintln!("VISGATE_TRACE_PORTAL light={light_loc:?} view_zone={view_zone} use_zones={use_zones}");
+    }
     for (fi, face) in faces().iter().enumerate() {
         let mut spans = ZoneBufs { bufs: std::collections::HashMap::new() };
         let seed_key = if use_zones { view_zone } else { SHARED_KEY };
         spans.bufs.insert(seed_key, SpanBuf::full());
         let mut active_mask: u64 = if use_zones { 1u64 << (view_zone as u64 & 63) } else { u64::MAX };
-        traverse(model, 0, &light_loc, face, use_zones, &mut active_mask, &mut spans, &mut out, trace.map(|(s, _)| (fi, s)));
+        traverse(model, 0, &light_loc, face, use_zones, &mut active_mask, &mut spans, &mut out, trace.map(|(s, _)| (fi, s)), trace_portals);
     }
     if let Some((surf, _)) = trace {
         eprintln!("VISGATE_TRACE result: surf {surf} {}", if out.contains(&surf) { "ACCEPTED" } else { "REJECTED" });
@@ -802,6 +868,120 @@ mod tests {
         crate::zones::assign_leaves_and_zones(&mut m);
         let visible = get_visible_surfs(&m, Vec3::new(0.0, 0.0, 0.0));
         assert!(visible.is_empty(), "PF_Invisible surfaces must never appear in the gather");
+    }
+
+    /// **Regression for `getvisiblesurfs-zone-crossing-...` (2026-08-30):** a `PF_Portal` surface
+    /// that is ALSO `PF_Invisible` (the near-universal real case — a zone portal is not meant to
+    /// render, e.g. real Wanchai `Brush344`-style portals carry `PolyFlags=0x4000109` = `PF_Portal|
+    /// PF_NotSolid|PF_TwoSided|PF_Invisible`) must still propagate visibility into its far zone. Live
+    /// disassembly address ordering (`port-urender-getvisiblesurfs-so-each-light-gets`, steps 10/11)
+    /// shows the real editor's `ActiveZoneMask` OR + `MergeWith` portal-crossing code (`0x1001a257`)
+    /// runs BEFORE the `PF_Invisible` emission-exclusion check (`0x1001a30d`) — i.e. `PF_Invisible`
+    /// only suppresses the portal surf's OWN appearance in the light's run, never the zone-crossing
+    /// it performs. Gating rasterization/crossing on `!invisible` (this port's bug until this fix)
+    /// silently dropped every invisible portal's zone-crossing — live-traced to a concrete Wanchai
+    /// miss (Light482/surf881 via portal surf998, `zone_crossing_pairs.py` +
+    /// `UEDCLI_VISGATE_TRACE_PORTALS`) and measured as a real, positive fix: Wanchai byte-identical
+    /// `LightMap` records 3297/4530 (72.8%) -> 3319/4530 (73.3%), run differs 266->240; UNATCO
+    /// (geometry-matched) byte-identical 2692/3345 (80.5%) -> 2739/3345 (81.9%); neither level's
+    /// geometry (node/surf/leaf counts) changed (`regression_gate.py`/`breadth_gate.py` unaffected —
+    /// this is a lighting-only change).
+    ///
+    /// Hand-built two-zone fixture (no CSG — the portal doesn't need to carve anything, mirroring
+    /// the real editor's "an ADD portal brush purely divides one open volume into two zones"
+    /// pattern): a single portal node at the plane `x=0` whose FRONT side (`x>0`, zone 2) holds one
+    /// opaque wall node further along `+X`, and whose BACK side (`x<0`, zone 1, `i_front=-1`) is
+    /// empty — the light sits in zone 1, and the wall is visible ONLY by crossing the invisible
+    /// portal into zone 2.
+    #[test]
+    fn an_invisible_portal_still_propagates_visibility_into_its_far_zone() {
+        use crate::model::{BspNode, BspSurf, BspVert};
+
+        const PF_PORTAL_TEST: u32 = 0x0400_0000;
+        const PF_INVISIBLE_TEST: u32 = 0x0000_0001;
+        const PF_NOTSOLID_TEST: u32 = 0x0000_0008;
+        const PF_TWOSIDED_TEST: u32 = 0x0000_0100;
+
+        let mut m = Model {
+            // 0..4: portal quad at x=0, spanning y,z in [-50,50] — closer to the light, so it
+            // subtends a LARGER screen angle than the wall behind it (nests the wall's footprint
+            // inside the portal's accepted span).
+            points: vec![
+                Vec3::new(0.0, -50.0, -50.0),
+                Vec3::new(0.0, 50.0, -50.0),
+                Vec3::new(0.0, 50.0, 50.0),
+                Vec3::new(0.0, -50.0, 50.0),
+                // 4..8: wall quad at x=50, smaller half-extent, further from the light.
+                Vec3::new(50.0, -20.0, -20.0),
+                Vec3::new(50.0, 20.0, -20.0),
+                Vec3::new(50.0, 20.0, 20.0),
+                Vec3::new(50.0, -20.0, 20.0),
+            ],
+            vectors: vec![
+                Vec3::new(1.0, 0.0, 0.0),  // portal normal (unused: PF_Portal exempts backface cull)
+                Vec3::new(-1.0, 0.0, 0.0), // wall normal, faces back toward the light at -X
+            ],
+            verts: (0..8).map(|i| BspVert { i_vertex: i, i_side: 0 }).collect(),
+            surfs: vec![
+                BspSurf {
+                    texture_ref: -1,
+                    poly_flags: PF_PORTAL_TEST | PF_NOTSOLID_TEST | PF_TWOSIDED_TEST | PF_INVISIBLE_TEST,
+                    p_base: 0,
+                    v_normal: 0,
+                    v_texture_u: 0,
+                    v_texture_v: 0,
+                    i_actor: -1,
+                    i_brush_poly: -1,
+                    pan: [0, 0],
+                    i_light_map: -1,
+                },
+                BspSurf {
+                    texture_ref: -1,
+                    poly_flags: 0,
+                    p_base: 4,
+                    v_normal: 1,
+                    v_texture_u: 0,
+                    v_texture_v: 0,
+                    i_actor: -1,
+                    i_brush_poly: -1,
+                    pan: [0, 0],
+                    i_light_map: -1,
+                },
+            ],
+            nodes: vec![
+                {
+                    let mut n = BspNode::leaf(Plane { x: 1.0, y: 0.0, z: 0.0, w: 0.0 }, 0, 0, 4);
+                    n.i_front = -1; // near side (x<0, zone 1): empty
+                    n.i_back = 1; // far side (x>0, zone 2): the wall node
+                    n.i_zone = [1, 2]; // [back, front] = [zone1, zone2]
+                    n
+                },
+                {
+                    let mut n = BspNode::leaf(Plane { x: 1.0, y: 0.0, z: 0.0, w: 0.0 }, 1, 4, 4);
+                    n.i_zone = [2, 2]; // same zone either side — orientation doesn't matter here
+                    n
+                },
+            ],
+            root_outside: true,
+            ..Model::default()
+        };
+        // `zone_mask` is derived from `i_zone` via BFS over iFront/iBack/iPlane (`zones::
+        // build_zone_masks`) — computing it here rather than hand-picking a value keeps this fixture
+        // honest about what the real build pipeline would produce from the same wiring.
+        crate::zones::build_zone_masks(&mut m);
+        assert_eq!(m.nodes[0].zone_mask & 0x6, 0x6, "node0 must reach both zone 1 and zone 2");
+        assert_eq!(m.nodes[1].zone_mask & 0x4, 0x4, "node1 must reach zone 2");
+
+        let visible = get_visible_surfs(&m, Vec3::new(-100.0, 0.0, 0.0));
+        assert!(
+            visible.contains(&1),
+            "the wall (surf 1) behind an INVISIBLE portal must still be reached by crossing it, \
+             got {visible:?}"
+        );
+        assert!(
+            !visible.contains(&0),
+            "the portal surf itself (PF_Invisible) must never be emitted into the light's own run"
+        );
     }
 
     #[test]

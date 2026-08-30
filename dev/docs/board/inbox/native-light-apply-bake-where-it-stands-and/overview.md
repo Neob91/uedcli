@@ -1,8 +1,8 @@
 +++
 priority = "p1"
 kind = "debug"
-summary = "Resume pointer for the native LIGHT APPLY bake. Wanchai now 3297/4530 (72.8%) byte-identical after a pixel-center rasterization fix (getvisiblesurfs-wanchai-run-gap-root-cause, 2026-08-30) -- was 3228/4530 (71.3%), UNCHANGED by the later repartition_frontier geometry fix (re-measured 2026-08-30). Gap 2's lumel_axes hypothesis REFUTED (80/80 live match to FCoords::Inverse); line_clear investigated next and CONFIRMED as the real cause (disagrees with the editor's real bit on the editor's own real tree, 20/40 sampled) -- the editor's real function was live-disassembled on the current build but its per-node state formula was not fully decoded, no fix yet (line-clear-shadow-ray-algorithm-gap-found-real). UNATCO table below is STILL STALE (its tree hasn't been node-exact since the repartition-frontier fix); re-measure before trusting it."
-depends-on = ["port-urender-getvisiblesurfs-so-each-light-gets", "port-the-per-leaf-permeating-light-lists-model", "unatco-verts-points-residual-after-the-zone", "getvisiblesurfs-wanchai-run-gap-root-cause", "line-clear-shadow-ray-algorithm-gap-found-real"]
+summary = "Resume pointer for the native LIGHT APPLY bake. Wanchai now 3319/4530 (73.3%) byte-identical after the invisible-portal zone-crossing fix (zone-crossing-getvisiblesurfs-gap-invisible, 2026-08-30) -- was 3297/4530 (72.8%) after the earlier pixel-center rasterization fix. UNATCO (geometry-matched via light_spotcheck_unatco.py) 2739/3345 (81.9%), up from 2692/3345. Gap 2's lumel_axes hypothesis REFUTED (80/80 live match to FCoords::Inverse); line_clear investigated next and CONFIRMED as the real cause of the bits-only bucket, no fix yet (line-clear-shadow-ray-algorithm-gap-found-real). UNATCO table below (the OLDER 78.6% one) is STILL STALE; use light_spotcheck_unatco.py's own fresh numbers instead."
+depends-on = ["port-urender-getvisiblesurfs-so-each-light-gets", "port-the-per-leaf-permeating-light-lists-model", "unatco-verts-points-residual-after-the-zone", "getvisiblesurfs-wanchai-run-gap-root-cause", "line-clear-shadow-ray-algorithm-gap-found-real", "zone-crossing-getvisiblesurfs-gap-invisible"]
 spikes = ["dev/docs/spikes/2026-08-27-native-light-apply-parity/"]
 +++
 
@@ -11,6 +11,16 @@ spikes = ["dev/docs/spikes/2026-08-27-native-light-apply-parity/"]
 Short, checkable, cross-cutting facts from this work are logged in
 `dev/docs/native-materialize-findings.md` (check it before re-deriving something already known;
 follow its check/recheck process before changing an entry).
+
+## Status 2026-08-30 (later): zone-crossing `PF_Invisible` bug fixed
+
+`zone-crossing-getvisiblesurfs-gap-invisible`: `PF_Invisible` was wrongly gating the whole raster/
+span-test/portal-crossing step for `GetVisibleSurfs` (not just the surf's own emission into the
+light's run) — since a real `PF_Portal` surface is near-universally ALSO `PF_Invisible`, this silently
+blocked most/all invisible-portal zone-crossings. Fixed (`visible_surfs.rs::traverse`), TDD-pinned.
+Wanchai records byte-identical 3297/4530 (72.8%) → 3319/4530 (73.3%); UNATCO (geometry-matched)
+2692/3345 (80.5%) → 2739/3345 (81.9%). Geometry unaffected. Does not close the full zone-crossing
+share — some zone-crossing misses remain, cause not yet identified.
 
 ## Status 2026-08-30: Wanchai improved, and the 3 gaps' relative WEIGHT is now measured
 
