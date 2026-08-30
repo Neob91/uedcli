@@ -1,7 +1,7 @@
 +++
 priority = "p2"
 kind = "debug"
-summary = "freeclinic08's +1-surf traced to PASS-A repartition tree already non-exact (-38 nodes/-23 leaves, 0 surf delta) before the semisolid brush is processed — same class as UNATCO's open residual, not locally fixable"
+summary = "freeclinic08/nsfhq04's node deficit traced to the world-level bsp_build reconstruction (-38 nodes/-23 leaves on freeclinic08's structural-only set) — NOT the same repartition_frontier bug UNATCO's fix (bcc3693) closed; that fix is confirmed a no-op for these two levels"
 +++
 
 # freeclinic08/nsfhq04 +1-surf under-build
@@ -150,6 +150,56 @@ against the current `uned/UED22` binaries this session (`pip install pefile caps
 `.venv`) — 33/33 checks pass, confirming the `10-bsp-csg-build.md` §4 CSG-filter decode (which
 `bspcsg.rs`'s `filter_ed_poly`/leaf funcs already implement) is still accurate on the current
 tree, not just trusted from the pre-2026-08-14 doc.
+
+## 2026-08-30 continuation: does the `repartition_frontier` fix (`bcc3693`) close this? — NO, and now we know precisely why
+
+`bcc3693` ("`repartition_frontier`: reproduce the editor's real no-op-on-nodes fix") shipped after
+this item's last entry and made UNATCO node/surf/leaf-EXACT. `breadth_gate.py` re-run post-fix:
+freeclinic08 `nodes -30 surfs +1 leaves -23`, nsfhq04 `nodes -92 surfs +1 leaves -26` — same shape,
+**unchanged** from before the fix. Re-verified from scratch (candidate 1 in the follow-up task: maybe
+these levels never shared UNATCO's actual mechanism, just a similar-looking symptom) using
+`UEDCLI_BSPCSG_STAGE_COUNTS` on the pre-existing `_scratch/fc08-structural-only/` golden (141
+non-semisolid brushes, no Pass 2 at all):
+
+```
+STAGE post-repartition        nodes=1141   (golden final: 1179)
+STAGE post-testvisibility     nodes=1141   (unchanged)
+STAGE post-pass2              nodes=1141   (Pass 2 empty — 0 semisolid brushes in this set)
+STAGE post-repartition-frontier nodes=1141 (unchanged — confirmed no-op)
+STAGE post-finalize           nodes=1141   (unchanged)
+STAGE post-optgeom            nodes=1141   (unchanged)
+final: nodes -38, surfs +0, leaves -23 — BYTE-IDENTICAL to this item's own pre-fix measurement
+```
+
+**Confirmed: freeclinic08/nsfhq04 do NOT share UNATCO's mechanism.** UNATCO's bug lived entirely
+inside `repartition_frontier`'s per-subtree calls (209/119 calls, run AFTER the semisolid detail
+loop). freeclinic08's node deficit is already fully present at `post-repartition` — the ONE-TIME
+world-level `bsp_build_fpolys`→`bsp_merge_coplanars`→`bsp_build` reconstruction, which runs BEFORE
+`repartition_frontier` and is untouched by `bcc3693`. `repartition_frontier` is directly confirmed a
+genuine no-op here (1141 unchanged across every later stage, including on the FULL build with real
+Pass-2 growth: `post-pass2` 2492 → `post-repartition-frontier` 2492 unchanged; nsfhq04 same, 7564→7564
+unchanged) — so the fix had literally nothing to act on for either level. That is the complete answer
+to "why didn't the fix generalize": it fixed a different call site than the one these two levels are
+actually broken in.
+
+Cross-check: UNATCO's own world-level stage is independently confirmed EXACT (`post-repartition`
+nodes=2953, matching the live-gdb-captured editor STAGEEND value already on record from
+`emptymodel_worldlevel_trace.py`) — so native's world-level `bsp_build`/`FindBestSplit` machinery is
+not systematically broken; something about freeclinic08/nsfhq04's specific brush sets trips it.
+Re-ran the node-plane-owner attribution (`fc08_node_owner_diff.py`-style) isolated to the
+structural-only world-level result: 37/141 brushes (26%) differ, summing to 102 absolute delta
+against a net −38 (heavy cancellation) — the same diffuse, `FindBestSplit`-tie-break-shaped signature
+as before, just now correctly attributed to the world-level one-shot call instead of
+`repartition_frontier`'s per-subtree calls.
+
+**Not fixed.** The root cause of the world-level `bsp_build`'s own divergence — why `FindBestSplit`
+picks a different tree for freeclinic08's/nsfhq04's specific merged poly soup — is still open. Closing
+it needs a live gdb capture of the editor's real world-level poly order for a ~141-poly soup
+(`fbs_root_poly_order.py`-style, scaled up from UNATCO's single-subtree `child=6108` capture); not
+attempted this round (diminishing-returns judgment call, per the task's own budget guidance — this
+round's goal was root-causing why the UNATCO fix didn't generalize, which is now answered). No
+`bspcsg.rs` changes; `regression_gate.py` UNATCO/Wanchai unchanged, `GATE: PASS`. Findings ledger entry
+added in `native-materialize-findings.md` (search "DIFFERENT call site, not the same bug").
 
 ## No level added
 

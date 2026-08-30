@@ -1626,3 +1626,33 @@ full `bin/test` 12517 passed/0 failed (pytest) + 90/90 (cargo test), both before
 `regression_gate.py` UNATCO/Wanchai both EXACT, `GATE: PASS`; `breadth_gate.py` unaffected (numbers
 unchanged from the pre-existing corpus measurement — read-only tracer addition, no build-path code
 touched).
+
+**Why the `repartition_frontier` fix (`bcc3693`) didn't touch freeclinic08/nsfhq04: DIFFERENT call
+site, not the same bug — disproves the board item's "same class as UNATCO" framing.** (2026-08-30,
+offline `UEDCLI_BSPCSG_STAGE_COUNTS` measurement, no docker/gdb — no source changes) — freeclinic08's
+structural-only set (141 non-semisolid brushes, `_scratch/fc08-structural-only/`, pre-existing golden)
+re-measured post-fix: nodes/leaves still `-38/-23` (surfs `+0`), byte-identical to the board item's
+own pre-fix number. Stage-by-stage (`UEDCLI_BSPCSG_STAGE_COUNTS`): node count is **already** 1141 (vs
+golden 1179) at `post-repartition` — the ONE-TIME world-level `bsp_build_fpolys`→
+`bsp_merge_coplanars`→`bsp_build` reconstruction — and stays byte-frozen at 1141 through
+`post-testvisibility`/`post-pass2`(empty here)/`post-repartition-frontier`/`post-finalize`/
+`post-optgeom`. `repartition_frontier` is directly confirmed a no-op (1141→1141, and separately on the
+FULL freeclinic08 build with real Pass-2 growth: `post-pass2` 2492 → `post-repartition-frontier` 2492
+unchanged; nsfhq04 same, 7564→7564) — exactly as `bcc3693` designed it, but that means the fix had
+**nothing to touch** for these two levels: their deficit is entirely upstream, at the WORLD-LEVEL
+`bsp_build` call, a different code path UNATCO's own residual never implicated (UNATCO's world-level
+stage is independently confirmed EXACT: native 2953 nodes == the live-gdb-captured editor STAGEEND
+value, `emptymodel_worldlevel_trace.py`, already on record). Per-brush node-plane-owner attribution on
+the isolated world-level result (`fc08_node_owner_diff.py`-style) shows the same diffuse,
+heavy-cancellation shape as the original (now-superseded) full-build finding: 37/141 structural
+brushes (26%) differ, summing to 102 absolute vs a net −38 — consistent with a `FindBestSplit`
+tie-break/poly-order sensitivity, but firing at the world-level one-shot reconstruction (whole-level
+merged soup, one call) rather than `repartition_frontier`'s 209/119 per-subtree calls. nsfhq04 only
+gets the weaker half of this check (repartition_frontier confirmed no-op there too, but its
+`zone_pass` DOES move node count, 4933→4975, so world-level-vs-zone-pass isn't isolated the way
+freeclinic08's zero-semisolid test isolates it). **No fix — root cause of the world-level `bsp_build`
+divergence itself (why `FindBestSplit` lands on a different tree for these specific brush sets) is
+unresolved**; closing it needs a live gdb capture of the editor's real world-level poly order for a
+~141-poly merged soup (`fbs_root_poly_order.py`-style, scaled up from UNATCO's single-subtree
+capture), not attempted this round. `regression_gate.py`: UNATCO/Wanchai unchanged, `GATE: PASS` (no
+source edits). See `freeclinic08-nsfhq04-1-surf-under-build-root` for the full per-stage numbers.
