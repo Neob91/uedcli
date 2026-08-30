@@ -84,8 +84,16 @@ const PF_NONOCCLUDING: u32 = 0x1002_0047;
 /// extra to missed). Shipped ON: strictly better on the level this was diagnosed against, not worse
 /// on the second, and structurally the faithful behavior rather than a heuristic. `MergeWith`
 /// (`render.dll 0x1001e3b0`, the portal-merge-into-far-zone op) is still NOT disassembly-decoded —
-/// `merge_into` is a reasonable interval union, not proven bit-identical — and is the likeliest
-/// source of Wanchai's larger `missed` count (more zone/portal crossings than UNATCO).
+/// `merge_into` is a reasonable interval union, not proven bit-identical. CORRECTED 2026-08-30
+/// (`getvisiblesurfs-wanchai-run-gap-root-cause`): it is NOT the likeliest source of Wanchai's larger
+/// `missed` count — `pair_geometry.py`'s light/surf-zone comparison shows only ~20% of Wanchai's
+/// missed pairs even cross a zone boundary (light and surface agree 94.6% of the time on "both
+/// list", 96.3% on "native only", but just 80.0% on "editor only" — a real but small skew). A live
+/// trace of a concrete missing pair (Light45 / surf 2920, same zone as its light) found dense
+/// same-zone clutter fully consuming a row's span before the target was even reached — see
+/// `rasterize_node`'s pixel-center-coverage fix, which cut Wanchai's missed count 350→314 without
+/// touching `MergeWith` at all. `MergeWith` fidelity may still matter for the remaining ~20%, but
+/// the bulk of the gap is same-zone rasterization precision, not portal-merge fidelity.
 const SUBTRACT_OCCLUSION: bool = true;
 
 /// Cube-face resolution, `0x400 x 0x400` (board item, "What it is").
@@ -266,10 +274,28 @@ fn rasterize_node(model: &Model, ni: usize, light_loc: &Vec3, face: &Face) -> Op
         return None;
     }
     let mut rows = Vec::with_capacity((y1 - y0) as usize);
+    // Pixel-CENTER coverage (include column i iff its center i+0.5 lies in [lo,hi)), not
+    // full-coverage floor/ceil (`getvisiblesurfs-wanchai-run-gap-root-cause`, 2026-08-30). Live
+    // trace of a concrete missing (surf, light) pair on Wanchai (see that board item) found the
+    // target's tiny footprint swallowed by an accumulation of dozens of small NEIGHBOURING opaque
+    // surfaces' subtracted spans in the same row — plausible cause: full-coverage floor/ceil pads
+    // every polygon's footprint outward by up to ~1px per edge, and in a scene with many small
+    // adjacent surfaces (Wanchai's market clutter) those pads compound across neighbours and can
+    // swallow a genuine gap a pixel-center rasterizer would leave open. Measured net effect of this
+    // one-line change: Wanchai records byte-identical 3228/4530 (71.3%) -> 3297/4530 (72.8%), run
+    // differs 348->266, extra pairs 134->79, missed 350->314; UNATCO (geometry-matched, its tree
+    // isn't node-exact so positional compare doesn't apply) run_ok 92.0%->94.2%, dark/lit
+    // mismatches 29+36 -> 27+20. No regression on either level's shadow-bit-equal or grid/pan/scale
+    // rates. `x0 = ceil(lo-0.5)`, `x1 = ceil(hi-0.5)` is the standard pixel-center-inclusion
+    // formula. Zone-crossing pairs are NOT the dominant cause of the run gap this was chasing (only
+    // ~20% of Wanchai's missed pairs cross a zone, measured via `pair_geometry.py`), so `MergeWith`
+    // fidelity — named below as "the likeliest source" — is a smaller factor than that comment
+    // claimed; left uncorrected there pending independent re-confirmation per the findings-ledger
+    // process (`dev/docs/native-materialize-findings.md`).
     for y in y0..y1 {
         if let Some((lo, hi)) = convex_row_span(&screen, y as f32 + 0.5) {
-            let x0 = (lo.floor() as i32).max(0);
-            let x1 = (hi.ceil() as i32).min(RES);
+            let x0 = ((lo - 0.5).ceil() as i32).max(0);
+            let x1 = ((hi - 0.5).ceil() as i32).min(RES);
             if x1 > x0 {
                 rows.push((y, x0, x1));
             }
@@ -476,6 +502,7 @@ fn traverse(
     active_mask: &mut u64,
     spans: &mut ZoneBufs,
     out: &mut HashSet<i32>,
+    trace: Option<(usize, i32)>, // (face index, target surf) — see `trace_target`
 ) {
     let mut cur = ni;
     while cur >= 0 {
@@ -486,6 +513,9 @@ fn traverse(
         // folds in `i_plane` too), so a miss here also rules out every later chain member — safe to
         // stop the whole chain, not just this one node.
         if use_zones && (*active_mask & n.zone_mask) == 0 {
+            if trace.is_some_and(|(_, s)| s == n.i_surf) {
+                eprintln!("VISGATE_TRACE node={nu} surf={} PRUNED (zone_mask {:#x} & active {:#x} == 0)", n.i_surf, n.zone_mask, *active_mask);
+            }
             return;
         }
         let d = plane_dot(&n.plane, light_loc);
@@ -496,9 +526,10 @@ fn traverse(
         // recursion is a no-op past the first iteration.
         let (near_child, far_child) =
             if is_front { (n.i_back, n.i_front) } else { (n.i_front, n.i_back) };
-        traverse(model, near_child, light_loc, face, use_zones, active_mask, spans, out);
+        traverse(model, near_child, light_loc, face, use_zones, active_mask, spans, out, trace);
 
         if n.i_surf >= 0 && (n.i_surf as usize) < model.surfs.len() && n.num_vertices >= 3 {
+            let is_target = trace.is_some_and(|(_fi, s)| s == n.i_surf);
             let surf = &model.surfs[n.i_surf as usize];
             let poly_flags = surf.poly_flags;
             let near_zone = n.i_zone[is_front as usize];
@@ -515,12 +546,36 @@ fn traverse(
             let portal_needs_zones = poly_flags & PF_PORTAL != 0 && !use_zones;
             // Step 11: `ShowFlags=0x800` keeps `PF_Invisible` in the drop set.
             let invisible = poly_flags & PF_INVISIBLE != 0;
+            if is_target {
+                eprintln!(
+                    "VISGATE_TRACE node={nu} surf={} near_zone={near_zone} reachable={reachable} \
+                     front_ok={front_ok} portal_needs_zones={portal_needs_zones} invisible={invisible} \
+                     poly_flags={poly_flags:#x}",
+                    n.i_surf
+                );
+            }
             if reachable && front_ok && !portal_needs_zones && !invisible {
                 if let Some(rows) = rasterize_node(model, nu, light_loc, face) {
                     DBG_RASTERIZED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                     let opaque = SUBTRACT_OCCLUSION && poly_flags & PF_NONOCCLUDING == 0;
                     let buf = spans.get_or_empty(near_key);
+                    if is_target {
+                        for &(y, wx0, wx1) in &rows {
+                            eprintln!(
+                                "VISGATE_TRACE node={nu} PRE row y={y} window=[{wx0},{wx1}) buf_row={:?}",
+                                buf.rows[y as usize]
+                            );
+                        }
+                    }
                     let accepted = test_and_maybe_subtract(buf, &rows, opaque);
+                    if is_target {
+                        let row_span: i32 = rows.iter().map(|&(_, x0, x1)| x1 - x0).sum();
+                        let acc_span: i32 = accepted.iter().map(|&(_, x0, x1)| x1 - x0).sum();
+                        eprintln!(
+                            "VISGATE_TRACE node={nu} rasterized rows={} raster_px={row_span} accepted_px={acc_span} opaque={opaque}",
+                            rows.len()
+                        );
+                    }
                     if !accepted.is_empty() {
                         DBG_ACCEPTED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                         out.insert(n.i_surf);
@@ -535,6 +590,9 @@ fn traverse(
                     } else {
                         DBG_EMPTY_AFTER_TEST.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                     }
+                } else if is_target {
+                    eprintln!("VISGATE_TRACE node={nu} rasterize_node returned None (clipped away / degenerate)");
+                    DBG_CLIPPED_AWAY.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                 } else {
                     DBG_CLIPPED_AWAY.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                 }
@@ -545,9 +603,27 @@ fn traverse(
             }
         }
 
-        traverse(model, far_child, light_loc, face, use_zones, active_mask, spans, out);
+        traverse(model, far_child, light_loc, face, use_zones, active_mask, spans, out, trace);
         cur = n.i_plane;
     }
+}
+
+/// TEMP root-cause diagnostic (`getvisiblesurfs-wanchai-run-gap-root-cause`, 2026-08-30): when
+/// `UEDCLI_VISGATE_TRACE_SURF=<surf>` and `UEDCLI_VISGATE_TRACE_LOC=<x>,<y>,<z>` are both set, print
+/// a per-face, per-fragment-node trace of exactly why the named surf was accepted/rejected for the
+/// light at that location — which of `reachable`/`front_ok`/`portal_needs_zones`/`invisible` failed,
+/// or whether it rasterized but the span test came back empty (self-occlusion by something already
+/// in the zone buffer). Not on any hot path (env lookups only fire when both vars are set); left in
+/// place as a reusable probe rather than stripped after use, matching the existing `DBG_*` counters'
+/// precedent.
+fn trace_target() -> Option<(i32, Vec3)> {
+    let surf: i32 = std::env::var("UEDCLI_VISGATE_TRACE_SURF").ok()?.parse().ok()?;
+    let loc = std::env::var("UEDCLI_VISGATE_TRACE_LOC").ok()?;
+    let parts: Vec<f32> = loc.split(',').filter_map(|s| s.trim().parse().ok()).collect();
+    if parts.len() != 3 {
+        return None;
+    }
+    Some((surf, Vec3::new(parts[0], parts[1], parts[2])))
 }
 
 /// The full six-face gather for one light: the port of `URender::GetVisibleSurfs`. Returns the set of
@@ -558,14 +634,23 @@ pub fn get_visible_surfs(model: &Model, light_loc: Vec3) -> HashSet<i32> {
     if model.nodes.is_empty() {
         return out;
     }
+    let trace = trace_target().filter(|(_, loc)| loc.sub(&light_loc).size() < 0.5);
     let view_zone = zone_of_point(model, light_loc);
     let use_zones = view_zone != 0;
-    for face in faces().iter() {
+    if let Some((surf, _)) = trace {
+        eprintln!(
+            "VISGATE_TRACE light={light_loc:?} view_zone={view_zone} use_zones={use_zones} target_surf={surf}"
+        );
+    }
+    for (fi, face) in faces().iter().enumerate() {
         let mut spans = ZoneBufs { bufs: std::collections::HashMap::new() };
         let seed_key = if use_zones { view_zone } else { SHARED_KEY };
         spans.bufs.insert(seed_key, SpanBuf::full());
         let mut active_mask: u64 = if use_zones { 1u64 << (view_zone as u64 & 63) } else { u64::MAX };
-        traverse(model, 0, &light_loc, face, use_zones, &mut active_mask, &mut spans, &mut out);
+        traverse(model, 0, &light_loc, face, use_zones, &mut active_mask, &mut spans, &mut out, trace.map(|(s, _)| (fi, s)));
+    }
+    if let Some((surf, _)) = trace {
+        eprintln!("VISGATE_TRACE result: surf {surf} {}", if out.contains(&surf) { "ACCEPTED" } else { "REJECTED" });
     }
     out
 }
