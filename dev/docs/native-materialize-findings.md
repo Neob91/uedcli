@@ -247,3 +247,31 @@ surfs on OceanLab — the largest level tested, 1886 brushes), matching the alre
 re-observed at 4x new instances, including at the largest scale tested so far. Updated corpus: 3/21
 levels exact (14.3%), or 1/19 excluding the two trivial cutscene maps (~5.3%) — sample breadth (21 of
 ~20-30 total OG levels) is no longer the limiting factor, the parity RATE is.
+
+**Descendant-slot check on Wanchai's 9 known-delta `repartition_frontier` calls: ZERO content
+change anywhere, root or descendants — the "editor's own subtree call is a no-op" reading now
+generalizes cleanly** (2026-08-30, 🔬) — `node_content_before_after.py` (same day, earlier) found
+UNATCO `child=6108`'s own ROOT node slot byte-identical before/after its `bspRepartition` call. That
+checked only one node; `wanchai_descendant_slots.py` extends it to the WHOLE subtree: for each of
+Wanchai's 9 known-delta calls (`11633/11295/11291/11287/11283/11206/11211/11216/11201`, from
+`wanchai-verts-points-residual-independently`), BFS-walks `iFront`/`iBack` (`FBspNode` offsets
+`+0x20`/`+0x24`, per `bspcsg.rs`'s own "ENGINE convention" comment) from the root AT CALL ENTRY,
+captures every reached node's full 64 raw bytes (`FBspNode` stride `0x40`), then re-reads the SAME
+indices at the call's own `bspRefresh`-return marker. **43 total slots across all 9 subtrees (4 of
+the 9 are single-leaf, `nslots=1`, no descendants at all) — 0 changed.** Combined with
+`nodesnum_watch.py`'s finding that `Nodes.Num` always nets to the pre-call baseline, this rules out
+BOTH candidate commit sites (net array growth, in-place content rewrite) for the calibration set
+available. Reframes the open question: since the editor's own `repartition_frontier`-equivalent call
+appears to be a genuine no-op for these specific subtrees (nothing observably changes, at the node
+level, anywhere reachable from the call's own target), the "+1/+delta" mismatch these subtrees show
+under isolated NATIVE-vs-editor comparison may not be about an undiscovered editor commit mechanism
+at all — it may mean the CORRECT content was already established by an EARLIER pass (world-level or
+zone/detail-loop, before `repartition_frontier` ever runs), and NATIVE's own reconstruction for these
+specific subtrees is diverging from something that was already right, rather than from something the
+editor is about to change. Not yet tested: whether that earlier-pass content matches native's
+"already merged" expectation directly (would need a world-level-only capture, no subtree loop). Tool
+files: `wanchai_descendant_slots.py`, `node_content_before_after.py`,
+`repart_addnode_model_trace.py`, `nodesnum_watch.py` (all in
+`dev/docs/spikes/2026-08-29-unatco-repart-live-diff/harness/`). No `bspcsg.rs` changes; read-only
+live capture only. `bin/test -k bspcsg` (84/84) and `regression_gate.py`'s default path unchanged
+(UNATCO nodes 6321 vs golden 6314, Wanchai exact at 11648) before/after.

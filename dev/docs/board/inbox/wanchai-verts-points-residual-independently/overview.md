@@ -178,3 +178,33 @@ are byte-identical before/after this round's two new diagnostics (`UEDCLI_REPART
 committed `prepart_tree_wanchai.py`/`repart_stage_child_wanchai.py` harness scripts — all zero-effect
 on the default path, all reusable for a future round or for the sibling UNATCO investigation, which
 has never had per-call editor identity this precise before).
+
+## 2026-08-30, resumed (per coordinator: this "correct per-call, wrong in aggregate" signature turned
+## up on ~all breadth-tested OG levels, making it the highest-leverage blocker, not UNATCO-specific):
+## descendant-slot check on these exact 9 calls, decisive negative result.
+
+`wanchai_descendant_slots.py` (`dev/docs/spikes/2026-08-29-unatco-repart-live-diff/harness/`):
+BFS-walked `iFront`/`iBack` from each of the 9 calls' target node AT its `bspRepartition` entry,
+captured every reached node's full 64 raw bytes, re-read the SAME indices at the call's own
+`bspRefresh`-return marker. **43 total slots across all 9 subtrees (4 of the 9 —
+`11201/11216/11211/11206` — are single-leaf, no descendants at all) — 0 changed, byte-for-byte,
+everywhere.** This generalizes UNATCO's single-node `child=6108` finding
+(`unatco-verts-points-residual-after-the-zone`, same day) to the full subtree, on the exact 9 calls
+already independently known to have a node-count delta. Combined with the earlier `Nodes.Num`
+watchpoint result (always nets to the pre-call baseline), both obvious "where does the editor commit
+this call's result" candidates are now ruled out for this calibration set: no net array growth, no
+in-place content rewrite anywhere reachable from the call's own target.
+
+**Reframing, not just a null result:** since the editor's own call for these 9 subtrees is
+observably a no-op at the node level, the delta these subtrees show under isolated NATIVE-vs-editor
+comparison is more likely a NATIVE-side reconstruction issue (native re-deriving unmerged fragments
+from content that an EARLIER pass, before `repartition_frontier`, already got right) than a hidden
+editor commit mechanism still to find. Not yet tested: reading the same node's content at a point
+BEFORE `repartition_frontier`'s subtree loop starts (world-level/zone-pass boundary) to see if it
+already matches what native SHOULD be reconstructing. That's the next concrete step if this gets
+picked up again, and it's a smaller, more targeted capture than another round of "where's the commit
+step" hunting.
+
+**Not shipped, no regression risk.** Read-only live capture only. `bin/test -k bspcsg` (84/84) and
+`regression_gate.py`'s default path unchanged (Wanchai still exact at 11648; UNATCO still 6321 vs
+6314 golden) before/after.
