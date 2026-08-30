@@ -6,6 +6,12 @@ live captures, structural measurements. Not board-item narrative, not owner ruli
 (`direction/`), not design rationale (`rationale/`). Agents maintain this freely, but only by the
 process below — never overwrite silently.
 
+**Standing rule (owner, 2026-08-30):** native must follow the exact same PROCESS UnrealEd does, not
+just converge on a matching byte count/percentage. A fix replicates the editor's real, live-verified
+algorithm — never a rounding tweak, tolerance fudge, or alternate formula chosen because it happens
+to measure better. If the real algorithm isn't confidently known, log the gap as unresolved rather
+than shipping an approximation.
+
 ## Before adding or changing an entry
 
 1. Search this file for the same topic/mechanism (the RVA, function name, or subject).
