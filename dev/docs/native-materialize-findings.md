@@ -52,6 +52,19 @@ merge reproduces exactly). Blanket-applied, dedup lands at 5599 nodes — worse 
 `bspBuildFPolys` is not a plain surf-array walk; whatever the editor does, it needs the weld's
 actual geometry, not just fewer polys.
 
+**Golden `.dx` provenance — PARTIALLY VERIFIED, needs closing** (2026-08-30, 🔬 partial) — the
+established golden-build method (`dev/docs/spikes/2026-08-27-native-light-apply-parity/harness/build_ued_lit_golden.py`)
+confirmed correct: `MAP NEW`→`EDIT PASTE`/`IMPORTADD`→`MAP REBUILD`→`LIGHT APPLY`, never `MAP LOAD`
+on an original file (documented elsewhere as producing a DIFFERENT world BSP from the same brushes).
+Shipped originals (`dev/games/substrate-deusex/Maps/*.dx`) are dated Nov 2017; goldens used this
+session (`_scratch/bsp-parity-proj/golden_unatco_control.dx`, `_scratch/golden_wanchai_world.dx`,
+`_scratch/geo-confirm-*/golden_*.dx`) are dated Aug 2026 — not copies of shipped files. BUT: the
+exact builder script for the `_scratch/geo-confirm-*` goldens (used in earlier 10-level/4-level
+breadth checks) could not be found anywhere in the committed tree — its provenance is NOT
+independently confirmed, only inferred from file dates + project convention. Do not cite those
+specific breadth results as fully trustworthy until this is closed (rebuild at least one from
+scratch and diff against the existing file).
+
 **`repartition_frontier`'s poly reconstruction has same-surf duplicates** (🔬, live-verified on
 UNATCO `child=6108`: 40 polys via `make_ed_polys` vs editor's real `FindBestSplit` NumPolys=29;
 `child=4077`: 107 vs 75) — `make_ed_polys` walks the OLD subtree's nodes (self/front/back/coplanar-
