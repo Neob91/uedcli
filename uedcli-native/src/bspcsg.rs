@@ -2758,15 +2758,18 @@ pub fn build_geometry_bspcsg(brushes: &[build::BrushInput]) -> Result<Model, Bui
             );
         }
         let fpolys = bsp_build_fpolys(&model);
-        // PRE-MERGE FRAGMENT DUMP (UEDCLI_BSPCSG_PREMERGE_DUMP=<ilink>[,<ilink>...]) — env-gated,
-        // forensic-only: the exact `bsp_build_fpolys` output for named surfs, BEFORE
-        // `bsp_merge_coplanars` groups/fuses anything.  Lets a specific iLink's raw fragment set be
-        // compared against the editor's (which has no equivalent pre-merge capture point today).
+        // PRE-MERGE FRAGMENT DUMP (UEDCLI_BSPCSG_PREMERGE_DUMP=<ilink>[,<ilink>...]|ALL) — env-gated,
+        // forensic-only: the exact `bsp_build_fpolys` output for named surfs (or every fragment, with
+        // `ALL`), BEFORE `bsp_merge_coplanars` groups/fuses anything. Lets a specific iLink's raw
+        // fragment set, or the WHOLE pre-merge order, be compared against the editor's live-captured
+        // equivalent (`fpolys_stage_order.py`'s PREMERGE dump,
+        // `2026-08-29-unatco-repart-live-diff/harness/`).
         if let Ok(want) = std::env::var("UEDCLI_BSPCSG_PREMERGE_DUMP") {
+            let all = want.trim() == "ALL";
             let wanted: std::collections::HashSet<i32> =
                 want.split(',').filter_map(|s| s.trim().parse().ok()).collect();
             for (i, p) in fpolys.iter().enumerate() {
-                if !wanted.contains(&p.i_link) {
+                if !all && !wanted.contains(&p.i_link) {
                     continue;
                 }
                 eprintln!(

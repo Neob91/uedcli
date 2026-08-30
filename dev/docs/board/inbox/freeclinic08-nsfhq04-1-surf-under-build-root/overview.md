@@ -251,3 +251,65 @@ rest of this investigation. Diminishing-returns call per the task's own budget: 
 attempted (would be the forbidden tolerance-fudge). No `bspcsg.rs` changes — read-only capture only.
 Full write-up: `native-materialize-findings.md`, search "poly-list ORDER mismatch". New file:
 `dev/docs/spikes/2026-08-29-unatco-repart-live-diff/harness/fbs_world_poly_order.py`.
+
+## 2026-08-30, third continuation: divergence traced one stage further — already present coming out of Pass 1, not introduced by `bspBuildFPolys` or `bspMergeCoplanars`
+
+Picked up the concrete next step from the second continuation: a live capture of the two
+intermediate stage boundaries inside the world-level `bspRepartition` call — right after
+`bspBuildFPolys` returns (pre-merge) and right after `bspMergeCoplanars` returns (post-merge) — to
+localize which of the three steps (`bspBuildFPolys` extraction order, `bspMergeCoplanars` grouping/
+walk order, or something already present in Pass 1) introduces the poly-order divergence.
+
+New harness (`fpolys_stage_order.py`): disassembled `bspRepartition` fresh (`rdis.py dis Editor
+0x10049fc0 0xb0`) to get the real return addresses after calls 1 and 2 (`0x1004a00d`, `0x1004a027`),
+resolved the real vtable-dispatched function addresses via the already-committed `vtable-dump.log`
+(`bspBuildFPolys=0x10036090`, `bspMergeCoplanars=0x10036200`), then broke at each return address and
+dumped the CTX object's `Polys` array. First attempt used the offsets from an old, never-live-tested
+ledger entry (`[[CTX+0x54]+0x2c]`=Data) and got garbage (`data=0x535 count=1449 max=91422268` —
+`0x2c` is actually `Count`, not a pointer). Two more probe scripts
+(`ctx_polys_struct_probe.py`/`_probe2.py`) found the real layout by testing candidate offsets as
+`FPoly*` and checking for a sane unit normal: `Data=+0x28, Count=+0x2c, Max=+0x30` — 4 bytes off
+from the old entry, now corrected in the ledger and in `fpolys_stage_order.py`'s own docstring.
+
+**Result, freeclinic08's structural-only 141-brush golden:**
+
+| stage | editor (live) | native | match |
+|---|---|---|---|
+| PREMERGE (post-`bspBuildFPolys`) | 1333 polys | 1263 polys | first order divergence at k=2; **counts differ** |
+| POSTMERGE (post-`bspMergeCoplanars`) | 1019 polys | 1019 polys | same i_link multiset; same k=2 divergence pattern |
+
+The POSTMERGE capture cross-validates cleanly against the already-committed
+`fbs_world_poly_order.py` FindBestSplit-entry capture — index-for-index identical (`i_link=57` at
+`k=468` both ways) — confirming `bspBuild` doesn't reorder between merge output and
+`FindBestSplit`'s own input, and that the corrected CTX offsets are right.
+
+**The count mismatch at PREMERGE (1333 vs 1263) is the finding.** It's not just reordering — the
+real editor's Pass-1 incremental tree carries ~70 more raw poly-fragments than native's own Pass-1
+tree for the identical 141-brush set, even though both sides converge to the SAME 1019-face
+POSTMERGE set (and, per this item's own earlier measurement, the same final 680-surf set).
+`bspMergeCoplanars`'s grouping/walk order is independently confirmed elsewhere in the findings
+ledger to faithfully reduce whatever fragment soup it receives (child=6108's 40→29 merge matches the
+editor's real root split exactly), and `bspBuildFPolys`/`make_ed_polys` is a plain DFS tree-walk on
+both sides — so neither step INTRODUCES this divergence. It's inherited from a genuine tree-shape
+difference already present in Pass 1's own incrementally-built world tree, before any of the three
+repartition steps run.
+
+**Not further root-caused.** WHY the real editor's Pass-1 tree ends up with ~70 more fragments for
+the identical face set — a different CSG split/classification order across the 141 brushes, or a
+gap in native's `bsp_brush_csg`/`filter_ed_poly` the existing 33/33 disassembly check-set doesn't
+exercise — needs a live per-brush Pass-1 tree-shape trace (the `prepart_tree_*` technique, not yet
+run at world level for freeclinic08) to attribute the delta to specific brushes. Per the standing
+rule, no reorder/fudge fix attempted.
+
+**No fix shipped.** `bspcsg.rs` change: one additive `ALL` mode on the pre-existing env-gated
+`UEDCLI_BSPCSG_PREMERGE_DUMP` diagnostic (was name-filtered only) — zero effect on the default path
+(`bin/test -k bspcsg` 90/90, `regression_gate.py` UNATCO/Wanchai both EXACT, `GATE: PASS`, before and
+after). This is the 3rd consecutive round on this thread; the question posed this round (which step
+introduces the divergence) is answered with high confidence — none of the three, it's upstream of
+all of them — and this is logged as the next round's starting point rather than chased further here,
+per the task's own diminishing-returns budget guidance.
+
+New files (`dev/docs/spikes/2026-08-29-unatco-repart-live-diff/harness/`): `fpolys_stage_order.py`,
+`ctx_polys_struct_probe.py`, `ctx_polys_struct_probe2.py`. Log:
+`.../logs/fpolys-stage-order-fc08struct.log`. Full write-up:
+`native-materialize-findings.md`, search "Poly-list order divergence localized one stage further".
