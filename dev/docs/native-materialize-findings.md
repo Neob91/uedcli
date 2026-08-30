@@ -173,8 +173,53 @@ puzzle, confirmed live rather than assumed. Full detail + the per-call table:
 `dev/docs/board/inbox/wanchai-verts-points-residual-independently/overview.md`. STOPPED here per the
 coordinator's steer (bounded task, don't re-burn UNATCO-scale budget on the same open contradiction).
 No fix shipped; default build path byte-unchanged (`regression_gate.py`, `bin/test -k bspcsg` 84/84,
+before/after all of this round's diagnostics).
 
-**`bspRepartition`'s per-subtree call builds into a SEPARATE, persistently-reused SCRATCH `UModel`,
+**CORRECTED same day: nodes are NOT held in a separate scratch `UModel` — they're added directly to
+the persistent Model, past its own `Nodes.Num`, then discarded by a real `FArray::Remove` every
+single call. The earlier "scratch model accumulates nodes" entry (below, kept for the record) is
+REFUTED by direct live evidence — do not rely on it.** (2026-08-30, 🔬, supersedes the disasm-only
+entry immediately below) — `repart_addnode_model_trace.py`: live-captured `bspAddNode`'s
+(`Editor.dll 0x10034e80`) own `Model` argument (`esp+4`) for all 29 node-adds under `child=6108`'s
+`bspRepartition` call and diffed each against that SAME call's own `Model` arg — **0/29 mismatches**:
+every add targets the persistent Model directly, never a separate object. `nodesnum_watch.py`: a
+hardware watchpoint on the persistent Model's `Nodes.Num` (`+0x5c`) across a full `MAP REBUILD` shows
+real `+1` writes at each `bspAddNode` call (PC `0x19bb062`, called from `Editor.dll 0x10031cc4` /
+`0x10035188`), growing the counted array — so the EARLIER static-disassembly reading of `bspBuild`'s
+`esi` (Flag=2, `SplitPolyList` target) as "a separate scratch object" was a mis-tracked register: it
+is, in fact, the SAME persistent Model, just referenced past its own `Num` boundary as temporary
+scratch slots within the SAME allocation. At the end of every subtree call, `bspRefresh`
+(`Editor.dll 0x10036e86`) calls `Core.dll!Remove@FArray@@QAEXHHH@Z` (IAT `0x100ce7f4`, confirmed by
+symbol, not inference) with `(StartIndex=kept_count, Count=current_Num-kept_count,
+ElementSize=0x40)` — a genuine array-shrink, not a reset-to-constant. For every subtree call sampled
+so far (callidx 2–44 of 209, live-verified via the watchpoint's Old/New value pairs, including
+`child=6108` itself, independently known to have a `+1` node delta by isolated-subtree comparison)
+`kept_count` lands at EXACTLY the pre-call baseline (6314) — net zero growth, even for a subtree
+whose isolated reconstruction differs by one node. Checked whether the ROOT node's own fixed slot is
+where the real content lands: `node_content_before_after.py` read `Nodes[6108]`'s full 64 raw bytes
+(`FBspNode` stride, matching the `Remove` call's own `ElementSize=0x40`) at `child=6108`'s
+`bspRepartition` entry and again at its `bspRefresh` return — **byte-for-byte IDENTICAL**. So the
+subtree's root slot is not rewritten in place either; whatever growth+shrink happens during the call
+must be pure working scratch for computing content that lands somewhere else (an existing descendant
+slot, not yet checked) or the call is a genuine no-op for the majority of subtrees (matching "only
+3–9 of 209 calls have any delta" from the earlier per-call board-item findings) with real writes
+concentrated in the FEW calls that DO have a delta — not yet distinguished live. Separately, the CTX
+object from the entry below (`bspbuild_ctx_dump.py`'s `ebx≠esi` finding) is real and still stands —
+`bspMergeCoplanars` genuinely operates on a distinct object's `Polys` sub-array — but it holds the
+FPoly/poly-list WORKING SET for `bspBuildFPolys`/`bspMergeCoplanars` only, not the node tree; node
+writes always target the persistent Model, confirmed above.
+
+**Next step, precisely scoped:** live-check whether `child=6108`'s DESCENDANT node slots (its
+original `iFront`/`iBack` and their own children) change content across this same call — the check
+above only covered the subtree's root/parent slot, which turned out unchanged. If descendants also
+come back byte-identical for a call independently known to have a `+1` delta, the delta must be
+represented some OTHER way (a distinct `iFront`/`iBack` value pointing at a fixed slot within
+`[0,6314)` that legitimately holds different content than before world-level building, not caught by
+a single before/after diff at fixed indices) — worth a broader per-subtree scan, not single-node
+spot checks, in a future round.
+
+**REFUTED 2026-08-30 (see correction above, kept for the record) —
+`bspRepartition`'s per-subtree call builds into a SEPARATE, persistently-reused SCRATCH `UModel`,
 never the real world Model — full disassembly, live-cross-validated** (2026-08-30, 📖+🔬) —
 `bspRepartition` (`Editor.dll 0x10049fc0`) is a short dispatcher: 4 sequential virtual calls, all with
 `this=persistent Model` (confirmed: same `[ebp-0x18]` local at every `csgRebuild` call site), each ALSO
@@ -185,41 +230,8 @@ in 1203/1203 samples across a full Wanchai `MAP REBUILD`; `esi` (the scratch) is
 address across all 120 genuine `bspRepartition`-triggered `bspBuild` calls (the other 1083 hits, a
 different constant, come from `bspBuild` being called elsewhere entirely — e.g. per-brush incremental
 CSG — not attributed further). `bspMergeCoplanars` operates entirely on the scratch's own `Polys`
-sub-array (`[[CTX+0x54]+0x2c]`, `FPoly` stride `0x1d8`), never touching the persistent Model.
-`bspRefresh` (`Engine.dll!EmptyModel@UModel@@QAEXHH@Z` sibling) operates on ITS arg1 (=scratch, via
-`[ebp+8]`), not `this` — compacts the scratch's surfs/verts/points/vectors only, matching the
-already-ported `passes::bsp_refresh` scope exactly, just now confirmed scoped to a scratch object for
-subtree calls specifically. `bspBuild`'s `Flag` param (`0`=world-level, `1`=unidentified, `2`=subtree)
-gates `UModel::EmptyModel`: Flag∈{0,1} call it on the scratch before rebuilding; **Flag=2 (every
-subtree repartition call) SKIPS `EmptyModel` entirely** and calls the `SplitPolyList`-equivalent
-(`0x10034530`) straight into the scratch's EXISTING node array — meaning the scratch's `Nodes`
-ACCUMULATES, uncleared, across ALL 209/119 subtree calls in one `MAP REBUILD`, never reset between
-them. Explains the session's earlier "persistent Model's `Nodes.Num` reads flat at the pre-loop
-baseline for literally every one of 209 calls" finding: that reading (`esp+4` at `bspRepartition`
-entry) was the PERSISTENT model all along (validated, unlike a same-session `ECX`-based reread which
-was refuted as a different, wrong object) — it stays flat because the PERSISTENT model's own Nodes
-array is genuinely untouched throughout the ENTIRE 209/119-call loop; all the real per-call construction
-happens in the separate, accumulating scratch object instead.
-
-**Not yet found: the actual scratch→persistent commit/graft step** (2026-08-30, 📖) — fully
-disassembled all 4 of `bspRepartition`'s own sub-calls (above) plus the two calls `csgRebuild` makes
-immediately after BOTH frontier loops finish (`vtbl+0x218` at `Editor.dll 0x10036870`, `vtbl+0x208` at
-`0x100aace0`, both resolved live via a vtable dump, `vtable_dump.py`) — NONE of the six write to the
-persistent Model's `Nodes` array or any node's `iFront`/`iBack`/`iPlane`. `+0x218`'s body (edge/vertex
-coincidence loops keyed on byte offset `0x36`=`NumVertices`, called on `(this=persistent,
-arg1=persistent)` — i.e. both this AND arg1 are the SAME object, an odd but plausible legacy-signature
-artifact) reads as a T-junction WELD pass (`bspOptGeom` or a direct sibling), not a tree splice — matches
-its position in the pipeline (right after repartition, before the weld numbers the board items already
-track). `+0x208` matches `bspBuildBounds`/`BuildInfiniteFPoly` (hardcoded `±32768`/`±65536` box
-constants). So the mechanism that gets each accumulated scratch subtree back into the persistent tree's
-real `iFront`/`iBack` links — which MUST exist, since the final serialized map is correct and
-structurally exact — is still unlocated: candidates not yet checked are a pointer-SWAP (reassigning
-which object the persistent Model's OWN fields point at, rather than a copy) or deeper logic inside
-`SplitPolyList` (`0x10034530`) or the `MakeEdPolys`-shaped helper `bspBuildFPolys` conditionally calls
-(`0x10033bb0`, fires only when the scratch already has nodes from a prior call) — neither of those two
-functions has been disassembled yet. This is the concrete next step for a future round; see
-`unatco-verts-points-residual-after-the-zone` and `wanchai-verts-points-residual-independently` for the
-`-625`/`+64` puzzles this would very plausibly explain if resolved (a scratch object holding growing,
-uncommitted state across many calls is exactly the shape needed for "individually correct, aggregate
-wrong").
-before/after all of this round's diagnostics).
+sub-array (`[[CTX+0x54]+0x2c]`, `FPoly` stride `0x1d8`), never touching the persistent Model — THIS
+PART STILL STANDS, see correction above. The REST of this entry (scratch holds/accumulates Nodes,
+`bspBuild`'s Flag=2 skips `EmptyModel` to append into the scratch's node array) is WRONG — live
+evidence above shows node writes go straight to the persistent Model past its own `Num`, not to a
+separate scratch object.

@@ -1,0 +1,116 @@
+[New LWP 163]
+[New LWP 204]
+[New LWP 205]
+[New LWP 206]
+[New LWP 207]
+[New LWP 208]
+[New LWP 209]
+[New LWP 210]
+[New LWP 211]
+[New LWP 212]
+[New LWP 213]
+[New LWP 214]
+[New LWP 215]
+[New LWP 216]
+[New LWP 217]
+[New LWP 218]
+[New LWP 219]
+[New LWP 220]
+[New LWP 221]
+[New LWP 222]
+[New LWP 223]
+[New LWP 224]
+[New LWP 225]
+[New LWP 226]
+[New LWP 227]
+[New LWP 228]
+[New LWP 229]
+[New LWP 230]
+[New LWP 231]
+[New LWP 232]
+[New LWP 242]
+[New LWP 243]
+[New LWP 244]
+[New LWP 245]
+[Thread debugging using libthread_db enabled]
+Using host libthread_db library "/lib/x86_64-linux-gnu/libthread_db.so.1".
+0xf7fa9cfc in __kernel_vsyscall ()
+Breakpoint 1 at 0x10049fc0
+Breakpoint 2 at 0x1004a05f
+Breakpoint 3 at 0x10034e80
+ORACLE_ATTACHED
+CALL idx=1 model=0x58fe0ec child=0 third=0 nodesnum=6368
+CALL idx=2 model=0x58fe0ec child=4077 third=2 nodesnum=6314
+CALL idx=3 model=0x58fe0ec child=4844 third=2 nodesnum=6314
+CALL idx=4 model=0x58fe0ec child=4142 third=2 nodesnum=6314
+CALL idx=5 model=0x58fe0ec child=5499 third=2 nodesnum=6314
+CALL idx=6 model=0x58fe0ec child=5500 third=2 nodesnum=6314
+CALL idx=7 model=0x58fe0ec child=5501 third=2 nodesnum=6314
+CALL idx=8 model=0x58fe0ec child=5502 third=2 nodesnum=6314
+CALL idx=9 model=0x58fe0ec child=3851 third=2 nodesnum=6314
+CALL idx=10 model=0x58fe0ec child=6304 third=2 nodesnum=6314
+CALL idx=11 model=0x58fe0ec child=4862 third=2 nodesnum=6314
+CALL idx=12 model=0x58fe0ec child=4038 third=2 nodesnum=6314
+CALL idx=13 model=0x58fe0ec child=3671 third=2 nodesnum=6314
+CALL idx=14 model=0x58fe0ec child=3600 third=2 nodesnum=6314
+CALL idx=15 model=0x58fe0ec child=5651 third=2 nodesnum=6314
+CALL idx=16 model=0x58fe0ec child=6298 third=2 nodesnum=6314
+CALL idx=17 model=0x58fe0ec child=6292 third=2 nodesnum=6314
+CALL idx=18 model=0x58fe0ec child=6270 third=2 nodesnum=6314
+CALL idx=19 model=0x58fe0ec child=5650 third=2 nodesnum=6314
+CALL idx=20 model=0x58fe0ec child=3984 third=2 nodesnum=6314
+CALL idx=21 model=0x58fe0ec child=3817 third=2 nodesnum=6314
+CALL idx=22 model=0x58fe0ec child=4930 third=2 nodesnum=6314
+CALL idx=23 model=0x58fe0ec child=3966 third=2 nodesnum=6314
+CALL idx=24 model=0x58fe0ec child=3831 third=2 nodesnum=6314
+CALL idx=25 model=0x58fe0ec child=3836 third=2 nodesnum=6314
+CALL idx=26 model=0x58fe0ec child=5536 third=2 nodesnum=6314
+CALL idx=27 model=0x58fe0ec child=4724 third=2 nodesnum=6314
+CALL idx=28 model=0x58fe0ec child=5538 third=2 nodesnum=6314
+CALL idx=29 model=0x58fe0ec child=4242 third=2 nodesnum=6314
+CALL idx=30 model=0x58fe0ec child=3578 third=2 nodesnum=6314
+CALL idx=31 model=0x58fe0ec child=6039 third=2 nodesnum=6314
+CALL idx=32 model=0x58fe0ec child=3653 third=2 nodesnum=6314
+CALL idx=33 model=0x58fe0ec child=3662 third=2 nodesnum=6314
+CALL idx=34 model=0x58fe0ec child=3658 third=2 nodesnum=6314
+CALL idx=35 model=0x58fe0ec child=3601 third=2 nodesnum=6314
+CALL idx=36 model=0x58fe0ec child=4237 third=2 nodesnum=6314
+CALL idx=37 model=0x58fe0ec child=3627 third=2 nodesnum=6314
+CALL idx=38 model=0x58fe0ec child=4209 third=2 nodesnum=6314
+CALL idx=39 model=0x58fe0ec child=3948 third=2 nodesnum=6314
+CALL idx=40 model=0x58fe0ec child=3672 third=2 nodesnum=6314
+CALL idx=41 model=0x58fe0ec child=5398 third=2 nodesnum=6314
+CALL idx=42 model=0x58fe0ec child=5392 third=2 nodesnum=6314
+CALL idx=43 model=0x58fe0ec child=6108 third=2 nodesnum=6314
+TARGET_BEGIN idx=43 model=0x58fe0ec nodesnum=6314
+ADD model=0x58fe0ec match=1 parent=-1 place=3
+ADD model=0x58fe0ec match=1 parent=6314 place=1
+ADD model=0x58fe0ec match=1 parent=6315 place=2
+ADD model=0x58fe0ec match=1 parent=6315 place=1
+ADD model=0x58fe0ec match=1 parent=6317 place=0
+ADD model=0x58fe0ec match=1 parent=6318 place=0
+ADD model=0x58fe0ec match=1 parent=6315 place=0
+ADD model=0x58fe0ec match=1 parent=6320 place=0
+ADD model=0x58fe0ec match=1 parent=6321 place=0
+ADD model=0x58fe0ec match=1 parent=6322 place=0
+ADD model=0x58fe0ec match=1 parent=6323 place=0
+ADD model=0x58fe0ec match=1 parent=6314 place=0
+ADD model=0x58fe0ec match=1 parent=6325 place=1
+ADD model=0x58fe0ec match=1 parent=6326 place=0
+ADD model=0x58fe0ec match=1 parent=6327 place=0
+ADD model=0x58fe0ec match=1 parent=6325 place=0
+ADD model=0x58fe0ec match=1 parent=6329 place=2
+ADD model=0x58fe0ec match=1 parent=6329 place=1
+ADD model=0x58fe0ec match=1 parent=6331 place=1
+ADD model=0x58fe0ec match=1 parent=6332 place=0
+ADD model=0x58fe0ec match=1 parent=6333 place=0
+ADD model=0x58fe0ec match=1 parent=6331 place=0
+ADD model=0x58fe0ec match=1 parent=6335 place=0
+ADD model=0x58fe0ec match=1 parent=6336 place=0
+ADD model=0x58fe0ec match=1 parent=6337 place=0
+ADD model=0x58fe0ec match=1 parent=6329 place=0
+ADD model=0x58fe0ec match=1 parent=6339 place=0
+ADD model=0x58fe0ec match=1 parent=6340 place=0
+ADD model=0x58fe0ec match=1 parent=6341 place=0
+TARGET_END nodesnum=6314
+[Inferior 1 (process 33) detached]

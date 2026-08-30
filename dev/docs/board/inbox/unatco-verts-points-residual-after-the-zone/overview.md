@@ -1,7 +1,7 @@
 +++
 priority = "p1"
 kind = "implement"
-summary = "SHIPPED 2026-08-29 (repartition_frontier + compact_unreachable_nodes, bspcsg.rs), but with a REGRESSION on UNATCO's lighting -- see 'lighting regressed' below. UNATCO node gap (6321 vs 6314, unmerged baseline) root-caused: repartition_frontier's make_ed_polys reconstructs unmerged coplanar duplicates that bsp_merge_coplanars correctly fixes per-call (10/10 live-verified exact against the real editor) -- but blanket-applying the merge to all 209 calls reproduces a 5689-node UNDER-build (-625), not a fix. 2026-08-30: SIX architectural hypotheses refuted with real evidence (per-call merge correctness, pre-repartition input identity, compaction timing, progressive index allocation, surf-dedup, calling-convention/ECX). Later the same day: full disassembly of bspRepartition found a genuinely NEW mechanism never previously identified -- every per-subtree call builds into a SEPARATE, persistently-reused SCRATCH UModel (live-verified, ebx!=esi in 1203/1203 samples), which accumulates uncleared across the whole 209/119-call loop (bspBuild's Flag=2 path skips EmptyModel entirely) -- explaining why the persistent model's own Nodes.Num reads flat throughout. The exact scratch-to-persistent COMMIT step is still unlocated after disassembling all 4 of bspRepartition's sub-calls plus 2 post-loop calls; candidates (SplitPolyList internals, a pointer-swap) need a future round. See dev/docs/native-materialize-findings.md for the full write-up. Wanchai stays node-exact throughout (unaffected). No bspcsg.rs changes shipped this round -- default path unchanged (6321/11648)."
+summary = "SHIPPED 2026-08-29 (repartition_frontier + compact_unreachable_nodes, bspcsg.rs), but with a REGRESSION on UNATCO's lighting -- see 'lighting regressed' below. UNATCO node gap (6321 vs 6314, unmerged baseline) root-caused: repartition_frontier's make_ed_polys reconstructs unmerged coplanar duplicates that bsp_merge_coplanars correctly fixes per-call (10/10 live-verified exact against the real editor) -- but blanket-applying the merge to all 209 calls reproduces a 5689-node UNDER-build (-625), not a fix. 2026-08-30: SIX architectural hypotheses refuted with real evidence. Later the same day: disassembly first suggested a separate scratch UModel holds subtree nodes -- REFUTED by direct live evidence (bspAddNode's own Model argument matches the persistent model 0/29 times mismatched; a Nodes.Num watchpoint shows real growth then a genuine FArray::Remove shrink back to baseline, every call, even for a known +1-delta subtree; that subtree's own root node bytes are unchanged before/after). Corrected mechanism: subtree calls write real nodes past the persistent model's own Nodes.Num as scratch, then bspRefresh removes them -- but where a delta actually becomes permanent is still not pinned down (checked: net Num growth -- no; root node content change -- no). See dev/docs/native-materialize-findings.md for the full write-up. Wanchai stays node-exact throughout (unaffected). No bspcsg.rs changes shipped this round -- default path unchanged (6321/11648)."
 +++
 
 # UNATCO `Verts`/`Points` residual — it is the unported sub-BSP repartition loop
@@ -895,25 +895,43 @@ literally every one of 209 calls" contradiction: that reading (`esp+4` at `bspRe
 genuinely the PERSISTENT model, which really IS untouched throughout the whole loop — all the real
 per-call construction happens in the separate scratch object instead.
 
-**Not yet found: where the scratch's accumulated subtrees get committed back into the persistent
-Model's real `iFront`/`iBack` links.** Fully disassembled all 4 of `bspRepartition`'s own sub-calls
-plus the two calls `csgRebuild` makes right after both frontier loops finish (`vtbl+0x218`, reads as a
-T-junction weld pass; `vtbl+0x208`, reads as bounds-building) — none of the six write to the
-persistent Model's node tree. The commit mechanism (which MUST exist, since the final map is correct)
-is still unlocated — candidates: a pointer-swap not yet found, or deeper logic inside `SplitPolyList`
-(`0x10034530`) or the `MakeEdPolys`-shaped helper `bspBuildFPolys` conditionally calls (`0x10033bb0`),
-neither disassembled yet.
+## 2026-08-30, later still: the scratch-model reading above is WRONG. Corrected with direct live
+## evidence (`bspAddNode`'s own argument, a `Nodes.Num` watchpoint, a fixed-node content diff) — see
+## `dev/docs/native-materialize-findings.md` for the full write-up; summary here.
 
-**This is real, new progress — the scratch-model architecture was never identified in any prior round
-of this investigation** — but per the coordinator's own bar ("if disassembly genuinely doesn't turn up
-anything new... stop"), the specific missing piece (the commit step) remains open after a substantial,
-genuine disassembly effort this round (7 functions fully or mostly disassembled: `bspRepartition`,
-`bspBuild`, `bspRefresh`, `bspMergeCoplanars`, plus the two post-loop calls, plus `csgRebuild`'s own
-call-site code). Stopping here rather than continuing to disassemble `SplitPolyList`/`0x10033bb0` blind
-— that's the concrete, scoped next step for a future round, not a dead end to re-derive from scratch.
+`repart_addnode_model_trace.py` captured `bspAddNode`'s own `Model` argument for all 29 node-adds
+under `child=6108`'s `bspRepartition` call and diffed each against that call's own `Model` arg:
+**0/29 mismatches** — every node write targets the persistent Model directly, never the CTX object
+above. A hardware watchpoint on the persistent Model's `Nodes.Num` (`nodesnum_watch.py`) across a
+full `MAP REBUILD` shows real `+1` growth per `bspAddNode` call — so `bspBuild`'s `esi` (the
+`SplitPolyList` target for Flag=2) is the SAME persistent Model, referenced past its own `Num`
+boundary as scratch slots within the SAME allocation, not a separate object as read from static
+disassembly alone. At the end of every subtree call, `bspRefresh` calls
+`Core.dll!Remove@FArray@@QAEXHHH@Z` (confirmed by IAT symbol) removing everything past a computed
+"kept" boundary — a real array shrink, not a hardcoded reset. For every call sampled (2 through 44 of
+209, including `child=6108` itself, independently known to have a `+1` delta by isolated-subtree
+comparison), the kept boundary lands at EXACTLY the pre-call baseline (6314) — net zero. Checked
+whether `child=6108`'s own fixed node slot is where new content lands (`node_content_before_after.py`,
+its full 64 raw bytes at call entry vs. `bspRefresh` return): **byte-for-byte identical.** So the
+subtree's root slot isn't rewritten either — the real content change (if any, for this specific
+known-delta call) must land in a descendant slot, not yet checked, or the delta is realized some
+other way not yet identified.
 
-**Not shipped, no regression risk.** All new tools (`vtable_dump.py`, `bspbuild_ctx_dump.py`) are
-read-only live captures; no `bspcsg.rs` changes this round. `bin/test -k bspcsg` (84/84) and
+**Net status: the scratch-model claim (this session's earlier finding) is refuted by direct evidence
+and corrected. In its place: a precise, live-verified mechanism at the array level (grow past `Num`
+into the SAME persistent array as scratch, discard via a real `FArray::Remove` every call) — but the
+exact site where a subtree's refined split becomes a permanent, visible change is still not pinned
+down** — checked the two most obvious candidates (does `Num` net-grow: no; does the root node's own
+slot change: no) and both came back negative for the one calibration case available (`child=6108`).
+Concrete next step for a future round: check that call's DESCENDANT node slots (its original
+`iFront`/`iBack` and their children) for a content change, and/or find which of the 209 calls
+actually has non-zero net growth (only 3–9 of 209 are known to have any delta at all, so most calls
+may legitimately net to zero — the growth-then-discard cycle seen so far may simply be working
+scratch for calls that end up needing no change).
+
+**Not shipped, no regression risk.** All new tools (`vtable_dump.py`, `bspbuild_ctx_dump.py`,
+`repart_addnode_model_trace.py`, `nodesnum_watch.py`, `node_content_before_after.py`) are read-only
+live captures; no `bspcsg.rs` changes this round. `bin/test -k bspcsg` (84/84) and
 `regression_gate.py`'s default path unaffected (unchanged from the prior round: 6321/11648).
 
 **Disk note:** the shared Docker daemon hit 100% full twice this round (0 bytes free) from container
