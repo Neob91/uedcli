@@ -1,7 +1,7 @@
 +++
 priority = "p1"
 kind = "implement"
-summary = "SHIPPED 2026-08-29 (repartition_frontier + compact_unreachable_nodes, bspcsg.rs), but with a REGRESSION on UNATCO's lighting -- see 'lighting regressed' below. UNATCO node gap (6321 vs 6314, unmerged baseline): three calls pinned exactly (child=4096/+4, child=3086/+2, child=6108/+1, summing to +7). 2026-08-30, long investigative arc (full summary in the item body): scratch-UModel hypothesis raised then REFUTED by direct live evidence; found that repartition_frontier's own bspRepartition call is a proven, byte-verified NO-OP on the persistent tree for all 10 calls individually checked (9 Wanchai known-delta calls + UNATCO child=6108) -- the editor computes a real (often correctly-merged) answer and bspRefresh's real FArray::Remove discards it every time. Caught and corrected two of its own methodology errors along the way (a missed iPlane chain in a descendant walk; a per-call table that measured transient/discarded bspAddNode work, not real persistent content). Landed on an OPEN, UNRECONCILED CONTRADICTION: those 10 no-op calls conflict with the long-established stage-count table showing verts DO grow by +10462 in aggregate across the same 209-call sequence (nodes correctly stay flat, matching the no-op finding). Three reconciliations named as next steps (not chased): checkpoint misattribution, an unrepresentative 10-call sample, or a final one-time commit step after all calls finish. See dev/docs/native-materialize-findings.md and this item's body for the full write-up. Wanchai stays node-exact throughout (unaffected). No bspcsg.rs changes shipped this round -- default path unchanged (6321/11648)."
+summary = "SHIPPED 2026-08-29 (repartition_frontier + compact_unreachable_nodes, bspcsg.rs), but with a REGRESSION on UNATCO's lighting -- see 'lighting regressed' below. UNATCO node gap (6321 vs 6314, unmerged baseline): three calls pinned exactly (child=4096/+4, child=3086/+2, child=6108/+1, summing to +7). 2026-08-30, long investigative arc, RESOLVED (full summary in item body): scratch-UModel hypothesis raised then refuted; found bspRepartition's own call is a proven no-op on NODE content/count for 26 individually-checked calls (9 Wanchai + 17 UNATCO, the latter chosen without reference to native's diagnostics) -- bspRefresh's real FArray::Remove discards each call's freshly-built (often correctly-merged) node structure every time. That looked like it contradicted the long-established stage-count table showing verts growing +10462 in aggregate across the same 209-call sequence -- RESOLVED by re-parsing that same pre-existing log exhaustively (all 209 calls, not a sample): nodes net to zero 209/209 (confirms the live finding), but verts net to zero 0/209 -- every single call shows real, permanent vertex growth, summing exactly to 10462. bspRefresh compacts Nodes but never Verts/Points. No contradiction remains; the original 'no-op' framing was correct for nodes and overstated when generalized to 'the call'. Actionable direction for a future fix: repartition_frontier needs the real per-call reconstruction (merge included) so native's own vertex-pool grows the same way, while still discarding the resulting node structure. See dev/docs/native-materialize-findings.md and this item's body for the full write-up. Wanchai stays node-exact throughout (unaffected). No bspcsg.rs changes shipped this round -- default path unchanged (6321/11648)."
 +++
 
 # UNATCO `Verts`/`Points` residual — it is the unported sub-BSP repartition loop
@@ -1054,14 +1054,17 @@ onto this chain. `bin/test -k bspcsg` (84/84) and `regression_gate.py`'s default
 ## The precise open contradiction — stopping the chain here, not because the trail went cold, but
 ## because it landed on two established facts that cannot both be true as currently understood
 
-**Fact 1 (this session, 10/10 individually-checked calls):** every `repartition_frontier`
-`bspRepartition` call examined so far — Wanchai's 9 known-delta calls
+**Fact 1 (this session, originally "10/10", then "26/26" individually-checked calls) — CORRECTED
+below, this framing overstated what was actually shown; see the resolution after the candidate
+list.** Every `repartition_frontier` `bspRepartition` call examined — Wanchai's 9 known-delta calls
 (`11633/11295/11291/11287/11283/11206/11211/11216/11201`, `wanchai-verts-points-residual-independently`)
-plus UNATCO's `child=6108` — shows ZERO persistent change to the tree. The editor computes a real,
-often genuinely different (merged) answer, and `bspRefresh`'s real `Core.dll!FArray::Remove` call
-discards it every single time, landing back at the exact pre-call state. Checked at the node-content
-level (root + full descendant walk for Wanchai, root for UNATCO) — not inferred, read byte-for-byte
-before and after.
+plus UNATCO's `child=6108` plus 16 more UNATCO calls chosen without reference to native's own
+diagnostics — shows ZERO persistent change to node CONTENT AND NODE COUNT specifically (checked
+byte-for-byte, root + full descendant walk). `bspRefresh`'s real `Core.dll!FArray::Remove` call
+discards each call's freshly-built node structure every single time, landing back at the exact
+pre-call node state. **This part is correct and now exhaustively confirmed (see below). What was
+overstated: generalizing "node content/count is a no-op" to "the call is a no-op" — verts are NOT a
+no-op, per call, ever, and this was checkable in an already-existing log the whole time.**
 
 **Fact 2 (established much earlier in this item, "What is actually missing" above, `repart-stage-
 unatco.log`, disassembly-verified stage boundaries):** the SAME 209-call sequence, measured in
@@ -1104,6 +1107,50 @@ Whichever of these (or something else entirely) is right, the fix is not in `rep
 per-call logic as currently understood — every mechanism checked there (merge state, poly order,
 scoring stride, node-array growth/shrink) has been individually verified either faithful to the
 editor or irrelevant to what actually persists.
+
+## RESOLVED, same day: candidate (a) tested and refuted on its literal terms — but the same
+## re-analysis (pure log parsing, no new live capture, as directed) fully reconciles the
+## contradiction. No candidate is left open; (c) turns out to be unnecessary.
+
+Parsed `repart-stage-unatco.log` directly against the coordinator's three specific checks:
+
+1. **"210 groups" — CONFIRMED** by direct `STAGEEND` count (210), not the prior paraphrase.
+2. **"54776" is genuinely the 210th group's own value — CONFIRMED** by direct extraction.
+3. **`0x1004a05f` cannot fire from anywhere else — CONFIRMED by disassembly.** It is the literal
+   instruction immediately after `0x1004a059: call dword ptr[edx+0x200]` — `bspRepartition`'s own
+   4th internal call (vtbl+0x200 = `bspRefresh`) — sitting inside `bspRepartition`'s SEH-cleanup
+   epilogue. A different caller of `bspRefresh` returns to a different address by construction; this
+   one is call-site-scoped, not a generic function-entry breakpoint.
+
+So (a), literally posed, is refuted — the checkpoint is exactly what it claims to be. **But
+re-parsing the SAME log's per-group deltas (the natural next step once it was open) resolves the
+whole contradiction directly.** Of the 209 subtree-call groups: **209/209 show ZERO net node
+growth** (exhaustively confirms the "no-op" finding above for ALL 209 calls, not a 26-call sample)
+— but **0/209 show zero vert growth.** Every single call shows real, nonzero vertex growth. Summing
+each call's own delta across all 209 gives exactly **10462** — telescoping precisely onto the
+established `44314→54776` figure, with no gap and no need for candidate (c)'s "final commit step":
+the growth is already fully accounted for, individually, call by call.
+
+**The reconciliation:** `bspRefresh`'s `FArray::Remove` compaction targets `Nodes` specifically and
+reverts it to baseline every call (true, confirmed twice over — this log AND live byte-diffs). It
+does NOT correspondingly compact `Verts`/`Points`: those pools keep every vertex allocated during
+each call's real (and, per `child=6108`, correctly MERGED) reconstruction, even though the node
+structure that would reference those vertices gets thrown away by that same call's own `bspRefresh`.
+Matches this item's own pre-existing note that surfs DO eventually get compacted (later, differently)
+— verts/points never do, all the way to the final map, where native's verts/points gap is the entire
+remaining residual.
+
+**Correcting Fact 1 above, per this repo's own re-check process rather than a silent edit:** "the
+call is a no-op" was an overstatement. Node content/count IS a no-op (now exhaustively confirmed,
+209/209, not a sample). Verts are NOT — ever, on any of the 209 calls. Full write-up, including the
+exact log-parsing commands, in `dev/docs/native-materialize-findings.md`.
+
+**The actionable direction for a future fix (not attempted this round):** `repartition_frontier`
+needs to perform the REAL per-call reconstruction — merge included, matching `child=6108`'s
+confirmed `40→29` merge — so native's own vertex-pool additions accumulate the same way the editor's
+do, while still discarding the resulting NODE structure the way the real editor does. No
+`bspcsg.rs` changes this entry (pure log analysis + one static disassembly read, no container spin-up
+at all this round); `bin/test -k bspcsg` (84/84) and `regression_gate.py`'s default path unaffected.
 
 ## Comprehensive summary of the whole investigative arc — for a future session to pick up cleanly
 

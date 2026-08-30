@@ -470,3 +470,65 @@ makes broad diffuse growth across "most boring calls" implausible). Candidates (
 misattribution and (c) a final one-time commit step after all calls finish are now the more likely
 reconciliations; neither tested this round. No `bspcsg.rs` changes; `bin/test -k bspcsg` (84/84)
 unaffected (no source edits this entry).
+
+**Candidate (a) tested — checkpoint misattribution — REFUTED on its literal terms, but the SAME
+analysis fully resolves the contradiction: node CONTENT/COUNT is a genuine no-op (confirmed twice
+over), VERTS ARE NOT — every single one of the 209 subtree calls shows real, persistent vertex
+growth, exhaustively, no sampling needed. This was hiding in an already-committed, already-cited log
+the whole time; my own "no-op" framing was correct for nodes and OVERSTATED when generalized to "the
+call is a no-op."** (2026-08-30, pure log re-analysis, no new live capture — exactly as directed) —
+Parsed `dev/docs/spikes/2026-07-15-native-materialize/harness/editor-tree-oracle/logs/repart-stage-
+unatco.log` (pre-existing, cited since early in this item) directly, checking three specific claims:
+
+1. **"210 `bspRepartition` groups" — CONFIRMED**, counted directly from raw `STAGEEND` markers: 210,
+   not trusted from the prior paraphrase.
+2. **"54776" is the 210th (last) group's own `E_bsprefresh` verts value — CONFIRMED** by direct
+   extraction (`groups[-1]['E_bsprefresh']['verts'] == 54776`), not a different group, breakpoint, or
+   post-processing artifact.
+3. **`0x1004a05f` cannot fire from anywhere else — CONFIRMED by disassembly, not inference.** Static
+   read (`rdis.py dis Editor 0x1004a020 0x60`) shows `0x1004a059: call dword ptr[edx+0x200]` (the
+   4th internal call inside `bspRepartition`, matching vtbl+0x200 = `bspRefresh`, established earlier
+   this session) with `0x1004a05f` as the LITERAL NEXT INSTRUCTION — the return address, inside
+   `bspRepartition`'s own SEH-cleanup epilogue (`mov [ebp-4],-1; ...; ret 0xc`). This is a specific
+   program-counter position reachable ONLY by returning from `bspRepartition`'s own 4th call — no
+   other caller of `bspRefresh` (e.g. `bspOptGeom`, if it calls `bspRefresh` too) can land on this
+   exact address; a different call site returns to a different PC by construction. Not a generic
+   function-entry breakpoint — genuinely call-site-scoped.
+
+All three hold up — candidate (a), literally posed ("the checkpoint isn't measuring what it claims"),
+is REFUTED. **But re-parsing the SAME log's per-group deltas (not part of the coordinator's literal
+checklist, but the natural next step once the log was open) resolves the whole open contradiction
+directly:** of the 209 subtree-call groups (excluding group 0, the world-level call), **209/209 show
+ZERO net node growth** (`E_bsprefresh.nodes == A_entry.nodes` every time — exhaustively matches the
+live-verified "26/26 no-op" finding above, now confirmed for ALL 209 calls, not a sample) — but
+**0/209 show zero vert growth** (`E_bsprefresh.verts != A_entry.verts`, EVERY single call, no
+exceptions). Summing each call's own `(E_bsprefresh.verts − A_entry.verts)` across all 209 gives
+exactly **10462** — telescoping precisely onto the established `44314→54776` aggregate figure, with
+no gap and no need for any separate "final commit step" (candidate (c), now unnecessary as an
+explanation — the growth is already fully, individually accounted for, call by call).
+
+**The reconciliation:** `bspRefresh`'s compaction (`Core.dll!FArray::Remove`, confirmed via IAT
+symbol) targets the `Nodes` array specifically and reverts it to baseline every call — genuinely
+true, confirmed both by this log (209/209) and by live captures (`node_content_before_after.py`,
+`wanchai_descendant_slots.py`, `unatco_boring_calls_noop_check.py`, 26/26 calls, byte-for-byte). But
+`bspRefresh` does NOT correspondingly compact `Verts`/`Points` back down — those pools keep every
+vertex allocated during each call's real (and, per `child=6108`'s finding, correctly MERGED)
+reconstruction, even though the NODE structure that would reference those new vertices gets thrown
+away by the same call's own `bspRefresh`. This matches the item's own pre-existing "surfs 3703→6059
+(a later `bspRefresh` compacts them back to the shipped 3616)" note (surfs DO eventually get
+compacted, later — verts/points never do, all the way to the final serialized map, where native's
+own verts/points gap is the entire remaining residual).
+
+**So my own "no-op" claim from earlier this session (`unatco-verts-points-residual-after-the-zone`,
+"10/10", then "26/26", "the call is a proven no-op") was TRUE for node content/count specifically,
+and OVERSTATED where it implied the whole call has zero persistent effect — it does not. Logging this
+correction explicitly per this repo's own re-check process, since it directly contradicts the
+stronger framing used in that item's most recent entries.** This closes the open contradiction from
+the prior entry cleanly, with no candidate left unresolved: (a) refuted, (b) refuted, (c) unnecessary
+— replaced by a precise, exhaustively-confirmed mechanism (asymmetric node/verts compaction). The
+actionable direction for a future fix (not attempted this round): native's `repartition_frontier`
+needs to perform the REAL per-call reconstruction (merge included, matching `child=6108`'s confirmed
+`40→29` merge) so its own vertex-pool additions accumulate the same way, while still discarding the
+resulting NODE structure the way the real editor does — growing verts/points without committing
+nodes. No `bspcsg.rs` changes this entry (pure log analysis + one static disassembly check, no
+container spin-up); `bin/test -k bspcsg` (84/84) and `regression_gate.py`'s default path unaffected.
