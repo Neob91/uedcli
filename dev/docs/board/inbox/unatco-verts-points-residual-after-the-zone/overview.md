@@ -955,3 +955,36 @@ this item too.** Not independently re-checked this round (would need the same cr
 `iFront`/`iBack`/`iPlane` — against `child=6108`'s persistent vertex count vs native's own `Δverts`).
 Concrete next step if this item is picked up again: run that same cross-reference here before
 trusting any `repart_child_trace.py`-derived "editor real" figure in this item's own analysis.
+
+## Same day, follow-up: ran the bounded cross-reference on `child=6108` (no new capture — two
+## already-committed, methodologically distinct sources). Answer: NEITHER of the two candidate
+## stories — a third one. The `+1` here is real, and it's not about merging at all.
+
+`prepart_tree_unatco.py`'s existing dump (same `callidx==2` checkpoint used for Wanchai):
+`child=6108`'s persistent subtree = exactly 40 nodes (157 total verts), unmerged, one node per
+original poly. Compared against THIS item's own "Pinned exactly 2026-08-29" table above
+(`UEDCLI_REPART_CALL_DIAG`: `orig polys=40, appended nodes=41, delta=+1` for this same call) — that
+table is a NATIVE-INTERNAL comparison (native's own `make_ed_polys` read vs native's own
+`split_poly_list` output), not an editor-side live capture, so it is NOT subject to the
+`repart_child_trace.py` flaw found on the Wanchai item. Native's own "orig polys=40" independently
+confirms the persistent content — both readings land on 40, from two unrelated sources. But native's
+own "appended nodes=41" is real: from that SAME correctly-read 40-poly input, native's own
+reconstruction produces 41 nodes, one too many.
+
+**This rules out "native's unmerged reconstruction was right all along" — it wasn't, for this call.
+It also doesn't match "the merge happens earlier in the pipeline" — there's no sign of a merge
+upstream; the persistent target is 40 distinct unmerged nodes, matching native's own correctly-read
+input exactly.** The real bug is upstream of any merge/no-merge question: something in native's own
+`split_poly_list`/`bsp_add_node` chain manufactures a spurious extra node when converting an
+already-correctly-read 40-poly list into a node tree. So Wanchai's 9-calls-zero-delta finding and
+this item's `child=6108` are NOT the same phenomenon — Wanchai's was a pure measurement artifact (no
+real gap), this one is a real, unexplained node-count overcount internal to native's split logic
+(the `4096`/`3086` siblings in the "3 calls, +7" table not re-checked this round — this was a
+bounded, single-case check as directed).
+
+**Named next step, not chased this round:** trace `split_poly_list`/`bsp_add_node`'s own behavior on
+`child=6108`'s specific 40-poly input to find where the 41st node comes from — a native-code
+debugging task (read/instrument `bspcsg.rs`'s own split logic against this one input), not another
+live-gdb editor capture. No `bspcsg.rs` changes this round; this check used only already-committed
+logs. `bin/test -k bspcsg` (84/84) and `regression_gate.py`'s default path unchanged (UNATCO
+6321/6314, Wanchai exact 11648).

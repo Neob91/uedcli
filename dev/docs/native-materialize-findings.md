@@ -320,3 +320,37 @@ snapshots (unaffected by this correction) or `repart_child_trace.py`-style per-c
 `bspcsg.rs` code. No `bspcsg.rs` changes this round; read-only live capture and re-analysis of
 already-committed logs only. `bin/test -k bspcsg` (84/84) and `regression_gate.py`'s default path
 unchanged (UNATCO 6321/6314, Wanchai exact 11648) before/after.
+
+**Bounded re-check on UNATCO's `child=6108` using the corrected methodology: NEITHER of the two
+hypotheses this was meant to distinguish — a third story. The persistent editor content genuinely
+matches native's OWN read of it (40 unmerged nodes both ways), but native's OWN reconstruction
+OUTPUT still overcounts by 1 — a real bug, independent of any merge/no-merge question.**
+(2026-08-30, 🔬, no new capture — cross-referenced two already-committed, methodologically distinct
+sources) — `prepart_tree_unatco.py`'s existing dump (same `callidx==2` pre-`repartition_frontier`
+checkpoint used for Wanchai, BFS over `iFront`/`iBack`/`iPlane`): `child=6108`'s persistent subtree
+= exactly 40 nodes, 157 total verts — confirms the earlier "40 pre-existing nodes, matching '40
+polys'" read. Compared against the `UEDCLI_REPART_CALL_DIAG` table in
+`unatco-verts-points-residual-after-the-zone` (`orig polys=40, appended nodes=41, delta=+1` for this
+same call) — critically, that table is a NATIVE-INTERNAL comparison (native's own `make_ed_polys`
+read of the pre-existing subtree vs native's own `split_poly_list` output for the same subtree), NOT
+an editor-side live capture, so it is NOT subject to the `repart_child_trace.py`
+transient-capture flaw found above. Native's own "orig polys=40" independently confirms the
+persistent content (both readings land on 40, from two unrelated sources). But native's own
+"appended nodes=41" is real and unexplained by the methodology correction — from the SAME
+faithfully-read 40-poly input, native's `split_poly_list`/`bsp_add_node` chain produces 41 nodes,
+one too many. **This rules out hypothesis (a) — native's unmerged reconstruction is NOT already
+right for this call, contra Wanchai's 9 calls, where it was.** It also does not cleanly match
+hypothesis (b) — there's no sign of a merge happening upstream (the persistent target is 40
+distinct, unmerged nodes, and native's own input reading already correctly counts 40, not 41 or
+39). **The real bug is upstream of any merge/no-merge question: something in native's own
+split/add-node logic manufactures a spurious extra node when converting an already-correctly-read
+40-poly list into a node tree.** Wanchai's 9-calls-all-zero-delta finding and UNATCO's single
+`child=6108` case are therefore NOT the same phenomenon — Wanchai's residual was a measurement
+artifact (no real editor/native gap), UNATCO's `child=6108` (and by extension the other 2 of the
+"3 calls, summing to +7" — `4096`/`3086` — not re-checked this round) is a real, unexplained
+node-count overcount internal to native's split logic. Concrete next step (named, not chased this
+round): trace `split_poly_list`/`bsp_add_node`'s own behavior on `child=6108`'s specific 40-poly
+input to find where the 41st node comes from — a native-code debugging task, not another live-gdb
+editor capture. No `bspcsg.rs` changes; this check used only already-committed logs. `bin/test -k
+bspcsg` (84/84) and `regression_gate.py`'s default path unchanged (UNATCO 6321/6314, Wanchai exact
+11648).
