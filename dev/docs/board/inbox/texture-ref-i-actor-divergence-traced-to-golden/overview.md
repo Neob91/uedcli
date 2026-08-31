@@ -244,6 +244,21 @@ rule ... turns out to be more complex than a simple mechanical pattern: do NOT g
 this is logged as open rather than guessed at. Full write-up in `native-materialize-findings.md`
 (search "Round 3: `Polys` naming").
 
+## Round 4 (2026-08-31): the `node_flags` follow-up, homed as its own item
+
+Round 2's `node_flags` finding (862/6314 UNATCO world nodes differ, movers-excluded vs
+movers-included) got a dedicated characterization pass — moved to its own board item since it turned
+out to be about `node_flags`/occlusion mechanics, not `texture_ref`/`i_actor`:
+`board/inbox/node-flags-0x40-0x80-divergence-from-movers-no/`. Short version: two-thirds of the
+divergence (bits `0x40`/`0x80`) is a brand-new phenomenon with no disassembly-confirmed editor
+setter anywhere in `Editor.dll`/`render.dll`/`core.dll`/`Engine.dll`/`unrealed.exe` — best-supported
+(not live-confirmed) as uninitialized-memory noise tied to movers' extra per-actor CSG/paste
+allocation work, not a real scene-aware algorithm. The remaining third (`0x08`/`0x10`) is fully
+explained by the already-confirmed render-viewport occlusion leftover
+(`node-flags-8-is-nf-polyoccluded-a-render-only`, done/) and isn't new. Neither supports switching
+the default golden to movers-included; both point toward masking `node_flags` out of geometry-content
+comparisons entirely regardless of which golden variant is used. Full detail in that item.
+
 ## Round 4 (2026-08-31): the "missing world-`Polys` export" from round 3 is NOT a count gap — corrected. Content of the real field is confirmed non-derivable. No fix shipped.
 
 Follow-up on round 3's structural finding ("`unbuilt.py`'s world-model reservation never reserves a

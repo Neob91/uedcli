@@ -2275,6 +2275,50 @@ re-verify against a COUNT mismatch specifically). A candidate for a future round
 **No fix shipped.** The naming CONVENTION is pinned; the reproducible VALUE and its actual relevance
 to `texture_ref`/`i_actor` are not. Full write-up: `board/inbox/texture-ref-i-actor-divergence-traced-to-golden` (Round 3).
 
+**`node_flags` 862/6314 divergence (movers-excluded vs movers-included): reproduced; splits cleanly
+into a known render bit and a new, unexplained one.** (2026-08-31, 🔬 disassembly + offline
+analysis, no live capture) — Follow-up to Round 2's finding above. Bit-level XOR of the 862 diffs:
+`0x08` (337 nodes) + `0x10` (34) = the ALREADY-confirmed render-viewport occlusion leftover
+(`node-flags-8-is-nf-polyoccluded-a-render-only`, done/) — expected, since movers are visible
+occluding geometry the editor's last-viewport-render pass reasons about. `0x40` (346) + `0x80` (218)
+are NEW: absent from every movers-excluded build tried (never appear without movers), union 564
+nodes — the majority of the diff. Isolating the general (non-mover) actor-population effect
+(cached pre-widening narrow golden vs movers-excluded-widened, 20/6314 diffs) shows it's 100% bit
+`0x10` — confirms `0x40`/`0x80` are mover-specific, not a generic actor-count effect.
+
+Repeated the exact disassembly method the original `0x08` finding used (`capstone`+`pefile`,
+`FBspNode.NodeFlags` at struct offset `+0x37`), widened to any mnemonic/addressing form, across
+`Editor.dll`/`render.dll`/`core.dll`/`Engine.dll`/`unrealed.exe`: **no instruction anywhere sets
+`0x40` or `0x80`.** `Editor.dll` touches offset `+0x37` NOT AT ALL (extends "Editor.dll sets neither
+0x08 nor 0x10" to every bit — the whole deterministic build path never patches `NodeFlags` after
+`bspAddNode`'s own argument sets it once). `render.dll` has only the already-known 4 occlusion-walk
+instructions (plus one previously-unlogged clear, `and [.+0x37],0xf7`, the walk's own reset step) —
+none touch `0x40`/`0x80`. Two `Engine.dll` near-hits are `TLazyArray<BYTE>` ctor/assign, unrelated to
+`FBspNode`, a coincidental offset collision.
+
+Structural correlation (28 UNATCO movers' own root-to-leaf BSP descent paths, from their trunk
+`Location`s): real but far too small to be the mechanism — 24 total nodes touched across all 28
+movers (paths are 9-10 deep), vs 564 flipped by `0x40`/`0x80`. Real 4x enrichment (a mover's own path
+hits diff nodes at 33-55% vs the 13.7% base rate) explains only 9/564 by direct overlap. No
+zone-clustering either — scattered proportionally to the level's overall zone population, matching
+the ORIGINAL `0x08` finding's own "scattered, uncorrelated with zone" note.
+
+**Leading hypothesis, NOT live-confirmed: `0x40`/`0x80` are uninitialized-memory noise, not a real
+algorithm.** Movers are brush-bearing (own private Models, real per-actor CSG/paste work during
+`EDIT PASTE`) — categorically different allocation activity than plain actors, which is exactly the
+class this divergence gates on. Combined with the pre-existing live-verified fact that the Nodes
+array grows past its own `Num` into un-zeroed scratch slots every `bspRepartition` call
+(`nodesnum_watch.py`, 2026-08-30), a node's `NodeFlags` byte reading stale/reused memory content is a
+better fit than a deliberate scene-aware computation (no setter found; scattered, not clustered).
+Not live-verified — no heap-history/watchpoint capture done this round.
+
+**Implication:** does not support switching the default golden to movers-included. If `0x40`/`0x80`
+is noise, there's no algorithm to port, the opposite of the round's motivating question. Recommend
+(not decided) extending the existing `node_flags` exclusion (`82b-ground-truth-byte-diff.md`,
+"masking BOTH bits makes the editor's build-time flags EQUAL native's exactly") to cover `0x40`/
+`0x80` too. No `bspcsg.rs`/`uedcli-native` changes; pure analysis + static disassembly, no container
+spin-up. Full write-up: `board/inbox/node-flags-0x40-0x80-divergence-from-movers-no`.
+
 **Round 4: CORRECTION to Round 3's "genuine export-table COUNT gap" — refuted. `Polys` export COUNTS
 already match (6=6); the real 57-vs-52 gap is the already-known Camera leak (+6) plus one new,
 unrelated `LevelSummary` gap (+1) plus an unrelated actor-drop wash (-1/-1). The one real remaining
