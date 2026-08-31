@@ -301,7 +301,10 @@ def _preview_opts(pp):
                          "across the top and N rows (1,2,3…) down both sides, so every region of the "
                          "image has a text address. Each actor's cell is reported on stderr (and via "
                          "--json). The address is a region of the IMAGE, not a world coordinate. Must "
-                         "be in [1,52]. Default 12. Mutually exclusive with --no-locator-cells")
+                         "be in [1,52]. Default: picked automatically, finest that fits without "
+                         "crowding labels — on an ortho view (top/front/side) anchored to the world "
+                         "gridline overlay's own step, on iso an independent pixel-size pick. "
+                         "Mutually exclusive with --no-locator-cells")
     pp.add_argument("--no-locator-cells", dest="no_locator_cells", action="store_true",
                     help="turn off the locator-cell overlay entirely (gutter, stderr legend and the "
                          "--json cell data together — an actor's hidden flag is still reported). Gives "

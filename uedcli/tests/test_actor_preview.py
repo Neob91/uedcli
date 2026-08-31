@@ -80,8 +80,12 @@ def test_default_preview_paints_onface_poly_numbers(tmp_path, monkeypatch):
     proj = _project_with_two_brushes(tmp_path, monkeypatch)
     from uedcli.preview import DEFAULT_ANNOTATIONS
     labelled, plain = tmp_path / "l.png", tmp_path / "n.png"
-    assert dispatch.dispatch(_prev(proj, labelled, names=["WallA"], annotate=DEFAULT_ANNOTATIONS)) == 0
-    assert dispatch.dispatch(_prev(proj, plain, names=["WallA"], annotate="none")) == 0
+    # size=256, not _prev's default 128: the wider locator gutter (2026-08-31, more breathing room
+    # around the geometry) leaves too little drawable canvas at 128 for a face label to stay legible,
+    # so BOTH renders below would silently omit it (view-dependent omission) and tie at equal content.
+    assert dispatch.dispatch(_prev(proj, labelled, names=["WallA"], annotate=DEFAULT_ANNOTATIONS,
+                                   size=256)) == 0
+    assert dispatch.dispatch(_prev(proj, plain, names=["WallA"], annotate="none", size=256)) == 0
     assert _nonbg(_img(labelled)) > _nonbg(_img(plain))
 
 
@@ -368,8 +372,9 @@ def test_labels_mode_gates_which_labels_draw(tmp_path, monkeypatch):
 
     def content(mode):
         out = tmp_path / f"{mode}.png"
+        # size=256, not _prev's default 128 — see test_default_preview_paints_onface_poly_numbers.
         assert dispatch.dispatch(_prev(proj, out, names=["WallA", "WallB"],
-                                       annotate=mode, highlight=["WallA:0"])) == 0
+                                       annotate=mode, highlight=["WallA:0"], size=256)) == 0
         return _nonbg(_img(out))
     assert content("none") < content("highlighted") < content("all")
 
@@ -798,7 +803,7 @@ def test_it_prints_the_locator_legend_to_stderr_single_by_default(tmp_path, monk
     assert dispatch.dispatch(_prev(proj, out, names=["WallA", "WallB"], layout="single")) == 0
     cap = capsys.readouterr()
     assert cap.out.strip() == str(out.with_suffix(".png"))          # stdout stays the bare path
-    assert "locator: 12×12 columns A–L, rows 1–12" in cap.err       # density header
+    assert "locator: 4×4 columns A–D, rows 1–4" in cap.err          # auto density, iso (no grid), size=128
     # each actor gets an unqualified letter+number cell (single view)
     assert _re.search(r"^WallA  [A-Z]+\d+", cap.err, _re.M)
     assert _re.search(r"^WallB  [A-Z]+\d+", cap.err, _re.M)
@@ -821,13 +826,13 @@ def test_json_emits_the_locator_object_to_stdout(tmp_path, monkeypatch, capsys):
     cap = capsys.readouterr()
     obj = _json.loads(cap.out)                                       # stdout is the JSON, not the path
     assert obj["image"] == str(out.with_suffix(".png"))
-    assert obj["locator"] == {"cols": 12, "rows": 12}
+    assert obj["locator"] == {"cols": 3, "rows": 3}                 # grid-anchored (top, ortho), size=128
     assert set(obj["actors"]) == {"WallA", "WallB"}
     wa = obj["actors"]["WallA"]
     assert set(wa["panes"]) == {"Top"}                              # single view keyed by --view
     assert _re.fullmatch(r"[A-Z]+\d+", wa["panes"]["Top"]["cell"])
     assert wa["hidden"] is False
-    assert "locator: 12×12" in cap.err                              # legend still on stderr
+    assert "locator: 3×3" in cap.err                                # legend still on stderr
 
 
 def test_json_with_no_locator_cells_omits_locator_and_cell_span_but_keeps_hidden(tmp_path, monkeypatch,
@@ -1003,7 +1008,7 @@ def test_empty_actor_set_is_exit_0_with_no_cells(tmp_path, monkeypatch, capsys):
     rc = rendering.render_actors_to_out([], _prev(proj, out, layout="single", json=True))
     assert rc == 0
     obj = _json.loads(capsys.readouterr().out)
-    assert obj["locator"] == {"cols": 12, "rows": 12}
+    assert obj["locator"] == {"cols": 4, "rows": 4}                 # auto density, iso (no grid), size=128
     assert obj["actors"] == {}
 
 
@@ -1015,7 +1020,7 @@ def test_breakdown_emits_the_pane0_legend_single_view_unqualified(tmp_path, monk
     assert dispatch.dispatch(_prev(proj, out, names=["Room", "Pillar"], layout="breakdown",
                                    size=256)) == 0
     err = capsys.readouterr().err
-    assert "locator: 12×12 columns A–L, rows 1–12" in err
+    assert "locator: 12×12 columns A–L, rows 1–12" in err           # auto density, iso (no grid), size=256
     assert _re.search(r"^Room  [A-Z]+\d+", err, _re.M)
     assert "Top:" not in err and "Iso:" not in err                 # single-view, not pane-qualified
 

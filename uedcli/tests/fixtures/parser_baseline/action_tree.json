@@ -2701,7 +2701,7 @@
               "choices": null,
               "metavar": "N",
               "converter": "int",
-              "help": "density of the locator-cell overlay, ON BY DEFAULT: N columns (A,B,C…) across the top and N rows (1,2,3…) down both sides, so every region of the image has a text address. Each actor's cell is reported on stderr (and via --json). The address is a region of the IMAGE, not a world coordinate. Must be in [1,52]. Default 12. Mutually exclusive with --no-locator-cells",
+              "help": "density of the locator-cell overlay, ON BY DEFAULT: N columns (A,B,C…) across the top and N rows (1,2,3…) down both sides, so every region of the image has a text address. Each actor's cell is reported on stderr (and via --json). The address is a region of the IMAGE, not a world coordinate. Must be in [1,52]. Default: picked automatically, finest that fits without crowding labels — on an ortho view (top/front/side) anchored to the world gridline overlay's own step, on iso an independent pixel-size pick. Mutually exclusive with --no-locator-cells",
               "mutex_group": null
             },
             {
@@ -11763,7 +11763,7 @@
               "choices": null,
               "metavar": "N",
               "converter": "int",
-              "help": "density of the locator-cell overlay, ON BY DEFAULT: N columns (A,B,C…) across the top and N rows (1,2,3…) down both sides, so every region of the image has a text address. Each actor's cell is reported on stderr (and via --json). The address is a region of the IMAGE, not a world coordinate. Must be in [1,52]. Default 12. Mutually exclusive with --no-locator-cells",
+              "help": "density of the locator-cell overlay, ON BY DEFAULT: N columns (A,B,C…) across the top and N rows (1,2,3…) down both sides, so every region of the image has a text address. Each actor's cell is reported on stderr (and via --json). The address is a region of the IMAGE, not a world coordinate. Must be in [1,52]. Default: picked automatically, finest that fits without crowding labels — on an ortho view (top/front/side) anchored to the world gridline overlay's own step, on iso an independent pixel-size pick. Mutually exclusive with --no-locator-cells",
               "mutex_group": null
             },
             {
@@ -12524,7 +12524,7 @@
               "choices": null,
               "metavar": "N",
               "converter": "int",
-              "help": "density of the locator-cell overlay, ON BY DEFAULT: N columns (A,B,C…) across the top and N rows (1,2,3…) down both sides, so every region of the image has a text address. Each actor's cell is reported on stderr (and via --json). The address is a region of the IMAGE, not a world coordinate. Must be in [1,52]. Default 12. Mutually exclusive with --no-locator-cells",
+              "help": "density of the locator-cell overlay, ON BY DEFAULT: N columns (A,B,C…) across the top and N rows (1,2,3…) down both sides, so every region of the image has a text address. Each actor's cell is reported on stderr (and via --json). The address is a region of the IMAGE, not a world coordinate. Must be in [1,52]. Default: picked automatically, finest that fits without crowding labels — on an ortho view (top/front/side) anchored to the world gridline overlay's own step, on iso an independent pixel-size pick. Mutually exclusive with --no-locator-cells",
               "mutex_group": null
             },
             {

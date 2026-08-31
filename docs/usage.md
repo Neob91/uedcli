@@ -1140,7 +1140,7 @@ actor preview [<names…> | --from-t3d <FILE…|->]
               [--frame BRUSH[:IDX] | X0,Y0,Z0,X1,Y1,Z1] [--frame-tightness N]
               [--highlight POLY|NAME ...] [--focus BRUSH]
               [--show collision,light-range,sound-range]
-              [--iso-angle 30] [--size 1024] [--locator-cells 12 | --no-locator-cells] [--grid-size N]
+              [--iso-angle 30] [--size 1024] [--locator-cells N | --no-locator-cells] [--grid-size N]
               [--json] [--out PATH]
 ```
 
@@ -1309,11 +1309,24 @@ actor preview [<names…> | --from-t3d <FILE…|->]
   behind solid geometry under `--faces textured`) still gets a cell, flagged `(hidden)`. Two actors in
   the same cell each keep their own line. **The address is a region of the image/projection, never a
   world coordinate** — carry a cell back into a name set with `actor find`.
-- **`--locator-cells N`** (default `12`) sets the density: `N` columns × `N` rows. Must be in `[1, 52]`
-  (else a clean exit 2 naming the value). Under `breakdown` the locator + legend ride pane 0 (the
-  whole-scene pane) only. **`--no-locator-cells`** turns the whole feature off — gutter, stderr legend
-  and the `--json` cell data together — and gives the geometry the wider drawable rect back. The two
-  flags are mutually exclusive (a clean exit 2 naming both if given together).
+- **`--locator-cells N`** sets the density: `N` equal columns × `N` equal rows. Must be in `[1, 52]`
+  (else a clean exit 2 naming the value). Without it (and without `--no-locator-cells`), the density
+  is picked automatically, and how depends on the view: on an **ortho** view (`top`/`front`/`side`)
+  cells are ANCHORED to the world gridline overlay — a locator boundary lands on an actual drawn
+  line, picking the finest power-of-two multiple of the grid's own step that still keeps labels
+  clear (cells are then not all equal — the first/last are partial, absorbing whatever the frame's
+  edge doesn't land on exactly). On `iso` (no world gridline lattice to anchor to) the density falls
+  back to the equal-division picker: the finest `N` whose cell is an independently-chosen
+  power-of-two pixel span without its own column/row labels crowding each other. Either way a bigger
+  `--size` auto-picks a finer, more useful density, never a fixed count regardless of render size.
+  Under `--layout quad` each of the 4 panes resolves its OWN auto density independently (Top/Front/
+  Side can each anchor to a different gridline step; Iso always uses the pixel-fit fallback), so the
+  stderr legend/`--json` report ONE shared density only when every pane happens to agree, else a
+  line/key per pane. Under `breakdown` the locator + legend ride pane 0 (the whole-scene pane) only.
+  **`--no-locator-cells`** turns the whole
+  feature off — gutter, stderr legend and the `--json` cell data together — and gives the geometry
+  the wider drawable rect back. The two flags are mutually exclusive (a clean exit 2 naming both if
+  given together).
 - **Every orthographic pane** (`top`/`front`/`side`) **carries a world-space gridline overlay** —
   a ruler for scale and position, ported from UnrealEd's own 2D-viewport grid — **whether or not
   `--grid-size` is given**; the flag only overrides the spacing it picks automatically. **`iso` never

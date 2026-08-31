@@ -59,6 +59,7 @@ opposite faces). render_quad_pgm tiles Top/Front/Iso/Side like UnrealEd.
 """
 from __future__ import annotations
 
+import bisect
 import math
 import re
 from array import array
@@ -1991,32 +1992,94 @@ def _cell_address(col: int, row: int) -> str:
     return f"{_col_label(col)}{row + 1}"
 
 
-def _cell_of_pixel(px: float, py: float, rect: tuple[int, int, int, int], n: int) -> tuple[int, int]:
-    """Pixel → (col, row), 0-based, clamped to [0, n-1]. `rect` is the drawable canvas `(x0, x1, y0, y1)`;
-    the top row (smallest py) is row 0 (shown as 1)."""
-    x0, x1, y0, y1 = rect
-    col = _clamp(math.floor((px - x0) / ((x1 - x0) / n)), 0, n - 1)
-    row = _clamp(math.floor((py - y0) / ((y1 - y0) / n)), 0, n - 1)
+def _equal_boundaries(lo: float, hi: float, n: int) -> list[float]:
+    """`n+1` ascending pixel boundaries dividing `[lo, hi]` into `n` EQUAL cells — the locator's
+    non-grid-anchored mode (an explicit `--locator-cells N`, or the `iso` auto fallback, which has no
+    world gridline lattice to anchor to)."""
+    return [lo + i * (hi - lo) / n for i in range(n + 1)]
+
+
+def _cell_of_pixel(px: float, py: float, col_bounds: list[float], row_bounds: list[float]
+                   ) -> tuple[int, int]:
+    """Pixel → (col, row), 0-based, clamped to the last cell. `col_bounds`/`row_bounds` are ascending
+    pixel boundaries (`len - 1` cells each — `_equal_boundaries` or a grid-anchored lattice); the top
+    row (smallest py) is row 0 (shown as 1). Cells need not be equal width (a grid-anchored lattice's
+    edge cells are partial)."""
+    col = _clamp(bisect.bisect_right(col_bounds, px) - 1, 0, len(col_bounds) - 2)
+    row = _clamp(bisect.bisect_right(row_bounds, py) - 1, 0, len(row_bounds) - 2)
     return col, row
 
 
-def _actor_cells(points_px, rect: tuple[int, int, int, int], n: int) -> tuple[str, str | None]:
+def _actor_cells(points_px, col_bounds: list[float], row_bounds: list[float]) -> tuple[str, str | None]:
     """(centroid cell, span) for an actor's projected PIXEL points. Centroid = the mean pixel's cell;
     span = the AABB's `min–max` cell range, or None when that AABB is a single cell (a point actor, or a
     brush small enough to sit in one cell — no parens)."""
     xs = [p[0] for p in points_px]
     ys = [p[1] for p in points_px]
-    cell = _cell_address(*_cell_of_pixel(sum(xs) / len(xs), sum(ys) / len(ys), rect, n))
-    lo = _cell_of_pixel(min(xs), min(ys), rect, n)     # min col, min (top) row
-    hi = _cell_of_pixel(max(xs), max(ys), rect, n)
+    cell = _cell_address(*_cell_of_pixel(sum(xs) / len(xs), sum(ys) / len(ys), col_bounds, row_bounds))
+    lo = _cell_of_pixel(min(xs), min(ys), col_bounds, row_bounds)     # min col, min (top) row
+    hi = _cell_of_pixel(max(xs), max(ys), col_bounds, row_bounds)
     if lo == hi:
         return cell, None
     return cell, f"{_cell_address(*lo)}–{_cell_address(*hi)}"
 
 
+_LOCATOR_LABEL_GAP = 4      # min px of breathing room between two adjacent cell labels
+_LOCATOR_GUTTER_MARGIN = 10  # min px between the gutter labels and the geometry border
+_LOCATOR_MAX = 52           # cap so single-letter/short column addresses stay legible (cli/rendering.py
+                             # validates an explicit --locator-cells against this same constant)
+
+
+def _locator_label_px(chars: int, name_scale: int) -> tuple[int, int]:
+    """(width, height) in px of a `chars`-character label — `_draw_text`'s own glyph geometry (`3×5`
+    font, `scale`d). `chars` is 1 for columns A-Z / rows 1-9, 2 for columns AA.. / rows 10+ (needed
+    once a locator needs more than 26 of them, the point a single letter/digit runs out)."""
+    return (4 * chars - 1) * name_scale, 5 * name_scale
+
+
 def _locator_gutter_px(name_scale: int) -> int:
-    """Width of the reserved label band on each gutter side — the glyph height plus a small margin."""
-    return 5 * name_scale + 4
+    """Width of the reserved label band on each gutter side. Sized for the WORST-CASE 2-char label —
+    a row number can reach 2 digits (`--locator-cells`'s `_LOCATOR_MAX` allows it) well before a
+    column needs 2 letters, but the side gutters are exactly where a 2-digit row number is drawn, so
+    the band must fit one regardless of the actual `n` — plus `_LOCATOR_GUTTER_MARGIN` px so labels
+    never crowd the geometry border (2026-08-31: the old `5*scale+4` sized for label HEIGHT only, so a
+    2-digit row number — wider than tall — routinely overran it into the drawable canvas)."""
+    label_w, label_h = _locator_label_px(2, name_scale)
+    return max(label_w, label_h) + _LOCATOR_GUTTER_MARGIN
+
+
+def _auto_locator_cells(pane_size: int, max_n: int) -> int:
+    """Pick the FINEST EQUAL-DIVISION locator cell count whose cell is a power-of-two PIXEL span,
+    subject to its column/row labels staying clear of their neighbours. The fallback for `iso` (no
+    world gridline lattice to anchor to — see `_auto_locator_lattice` for the ortho case, which
+    anchors to the grid instead of picking a pixel size independently). Mirrors the world gridline
+    overlay's own auto-step shape (`_auto_grid_step` picks the largest power of two that still clears
+    a density floor), but inverted: here the SMALLEST candidate wins, since finer is the direction
+    that risks overlap, not legibility loss.
+
+    `pane_size` is THIS render's own pixel budget (`render_brushes_pgm`'s `size` — a `quad` pane
+    already calls in at `size // 2` per pane, so no caller-side adjustment is needed). A candidate
+    `cell_px` is accepted once BOTH label dimensions clear it with `_LOCATOR_LABEL_GAP` px to spare;
+    `n` is then the nearest cell count that yields close to that pixel span (cell counts are the
+    addressing unit users see, e.g. `--locator-cells`/`--json` `cols`/`rows` — not `cell_px` itself,
+    which is only the SELECTION criterion)."""
+    name_scale = max(2, pane_size // 256)
+    gutter = _locator_gutter_px(name_scale)
+    drawable = pane_size - 2 * _FRAME_PAD - 2 * gutter
+    if drawable <= 0:
+        return 1
+    cell_px = 8
+    while cell_px < drawable:
+        n = max(1, min(max_n, round(drawable / cell_px)))
+        chars = 1 if n <= 26 else 2
+        label_w, label_h = _locator_label_px(chars, name_scale)
+        actual_cell_px = drawable / n
+        if actual_cell_px >= label_w + _LOCATOR_LABEL_GAP and actual_cell_px >= label_h + _LOCATOR_LABEL_GAP:
+            return n
+        cell_px *= 2
+    return 1   # loop exhausted: n=1 (the whole `drawable`) is the widest cell this function can
+               # offer, not a guaranteed-adequate one — a pane too small even for that still returns
+               # it (the label may crowd the frame at extreme small sizes; no coarser cell would help)
 
 
 def _drawable_rect(size: int, pad: int, gutter: int) -> tuple[int, int, int, int]:
@@ -2025,27 +2088,101 @@ def _drawable_rect(size: int, pad: int, gutter: int) -> tuple[int, int, int, int
     return (pad + gutter, size - 1 - pad - gutter, pad + gutter, size - 1 - pad - gutter)
 
 
-def _draw_locator_gutter(buf, size, rect, n, name_scale, pad, gutter) -> None:
+def _auto_locator_lattice(grid_drawn: int, x0: float, x1: float, y0: float, y1: float, to_pxf_x,
+                          to_pxf_y, fminx: float, fminy: float, fspan: float, name_scale: int
+                          ) -> tuple[list[float], list[float]]:
+    """Owner ruling 2026-08-31: on an ORTHO view the locator should visually ALIGN with the world
+    gridline overlay, not just independently pick a power-of-two pixel size. `grid_drawn` (already
+    escalated — `_draw_grid_backdrop`'s return) is the world-unit spacing between ACTUAL drawn lines;
+    a locator cell of `grid_drawn * 2**k` world units lands its boundary on a real line for ANY `k`
+    (every drawn line is an integer multiple of `grid_drawn`), so this doubles `k` from 0.
+
+    Each candidate is validated against the REAL boundaries `_lattice_boundaries` would build (edge
+    cells merged), not an interior-cell-only estimate: a step whose plain `step * scale` looks wide
+    enough can still, after a thin partial edge cell merges into its neighbour, produce a narrower
+    (or — with two thin edges either side of few cells — far COARSER than expected) real result; only
+    building it for real catches that. Rows need no chars guess (a row label's HEIGHT doesn't depend
+    on 1 vs 2 digits); columns converge `chars` from the row-validated candidate's OWN resulting
+    column count (a fixed-point loop, <=2 iterations: a bigger gap only ever shrinks the count, so it
+    cannot oscillate)."""
+    row_gap = _locator_label_px(1, name_scale)[1] + _LOCATOR_LABEL_GAP    # height: chars-independent
+    step = grid_drawn
+    for _ in range(64):                     # power-of-two growth: always terminates in a handful
+        row_bounds = _lattice_boundaries(y0, y1, to_pxf_y, fminy, fspan, step, row_gap)
+        if min(b - a for a, b in zip(row_bounds, row_bounds[1:])) >= row_gap:
+            chars = 1
+            for _ in range(2):
+                col_gap = _locator_label_px(chars, name_scale)[0] + _LOCATOR_LABEL_GAP
+                col_bounds = _lattice_boundaries(x0, x1, to_pxf_x, fminx, fspan, step, col_gap)
+                need = 1 if len(col_bounds) - 1 <= 26 else 2
+                if need == chars:
+                    break
+                chars = need
+            if min(b - a for a, b in zip(col_bounds, col_bounds[1:])) >= col_gap:
+                return col_bounds, row_bounds
+        step *= 2
+    # Reached whenever the drawable rect itself is narrower than a single label (a small `--size`
+    # under `--layout quad`, whose panes render at half `--size` — e.g. `--size 128` quad panes are
+    # 64px, and this DOES fire there; not the theoretical-only case an earlier version of this
+    # comment claimed). A single whole-pane cell is the WIDEST answer this function can produce —
+    # not a guaranteed-adequate one, just the best available — so the label may still legibly crowd
+    # the frame at extreme small sizes; that is an inherent limit of the font/pane-size ratio, not
+    # something a coarser cell could fix (same reasoning as `_auto_locator_cells`'s own fallback).
+    return [x0, x1], [y0, y1]
+
+
+def _lattice_boundaries(edge_lo_px: float, edge_hi_px: float, px_of_world, lo_world: float,
+                        span_world: float, step_world: int, min_gap_px: float) -> list[float]:
+    """Ascending pixel boundaries covering `[edge_lo_px, edge_hi_px]`, anchored to WORLD multiples of
+    `step_world` (mapped through `px_of_world`) instead of equal division — so an interior boundary
+    coincides with an actual drawn gridline. The first/last cell is generally PARTIAL (the framed
+    region's own edge rarely lands exactly on the lattice); one narrower than `min_gap_px` merges into
+    its neighbour instead of crowding a label into a sliver too thin to read."""
+    hi_world = lo_world + span_world
+    first_i = math.floor(lo_world / step_world) + 1     # first lattice line STRICTLY inside the frame
+    lines_px = []
+    i = first_i
+    while i * step_world < hi_world:
+        lines_px.append(px_of_world(i * step_world))
+        i += 1
+    bounds = sorted({edge_lo_px, edge_hi_px, *lines_px})
+    # AT MOST one merge attempt per side (never a repeated `while`): every INTERIOR cell is exactly
+    # `step_world` wide (uniform lattice spacing), so one merge (partial edge cell + its one regular
+    # neighbour) is always >= that neighbour's own width — already proven adequate by the caller
+    # before it committed to this `step_world` (`_auto_locator_lattice` validates the REAL boundaries
+    # this function returns, escalating `step_world` until they pass, so a still-inadequate result
+    # here just means THAT candidate gets rejected, never silently accepted). A repeated `while`
+    # would risk re-triggering through a cell a PRIOR merge just fixed. This does NOT mean a middle
+    # cell can never be swallowed: with only ONE interior line, both edge checks target the SAME
+    # boundary, and if both edges are thin that single middle cell has no other neighbour to protect
+    # it — collapsing 3 cells to 1 there is the only possible outcome, not a defect in this merge.
+    if len(bounds) > 2 and bounds[1] - bounds[0] < min_gap_px:
+        bounds.pop(1)
+    if len(bounds) > 2 and bounds[-1] - bounds[-2] < min_gap_px:
+        bounds.pop(-2)
+    return bounds
+
+
+def _draw_locator_gutter(buf, size, col_bounds, row_bounds, name_scale, pad, gutter) -> None:
     """Draw the column letters (top band) and row numbers (both side bands) — no gridlines. Labels sit
-    in the reserved gutter band, clear of the geometry (which `_framing`'s `gutter` inset pushed in)."""
-    x0, x1, y0, y1 = rect
-    col_w = (x1 - x0) / n
-    row_h = (y1 - y0) / n
+    in the reserved gutter band, clear of the geometry (which `_framing`'s `gutter` inset pushed in),
+    centred on each cell — cells need not be equal width (a grid-anchored lattice's edge cells are
+    partial), so a label's x/y comes from its own boundary pair, not a fixed stride."""
     top_y = pad + gutter // 2                             # column-label band
     left_x = pad + gutter // 2
     right_x = size - 1 - pad - gutter // 2
-    for j in range(n):
-        _draw_text(buf, size, int(x0 + (j + 0.5) * col_w), top_y, _col_label(j), name_scale,
-                  LOCATOR_LABEL)
-    for i in range(n):
-        cy = int(y0 + (i + 0.5) * row_h)
+    for j in range(len(col_bounds) - 1):
+        cx = int((col_bounds[j] + col_bounds[j + 1]) / 2)
+        _draw_text(buf, size, cx, top_y, _col_label(j), name_scale, LOCATOR_LABEL)
+    for i in range(len(row_bounds) - 1):
+        cy = int((row_bounds[i] + row_bounds[i + 1]) / 2)
         _draw_text(buf, size, left_x, cy, str(i + 1), name_scale, LOCATOR_LABEL)
         _draw_text(buf, size, right_x, cy, str(i + 1), name_scale, LOCATOR_LABEL)
 
 
-def _collect_cells(geom, hidden, faces, points, to_pxf, rect, n, cells_out) -> None:
+def _collect_cells(geom, hidden, faces, points, to_pxf, col_bounds, row_bounds, cells_out) -> None:
     """Fill `cells_out` `{actor_name: ActorCell}` from the scene's per-actor projected points, mapped
-    through THIS pane's `to_pxf` + drawable `rect` — the same map the image draws from, so the cell and
+    through THIS pane's `to_pxf` + boundary lists — the same map the image draws from, so the cell and
     the pixels cannot drift. An actor is `hidden` when none of its faces put a pixel down: a point
     actor's marker always draws, a `wire` face is never culled or depth-hidden, and a filled face is
     hidden when the cull dropped it (absent from `vis_faces`) or depth hid it (`hidden`).
@@ -2054,23 +2191,23 @@ def _collect_cells(geom, hidden, faces, points, to_pxf, rect, n, cells_out) -> N
     cull / depth dropped it; either way the actor still gets its cell from its projected centroid
     whether or not it drew.
 
-    `n=None` (the locator off) skips the cell/span math entirely and fills only `hidden`. `hidden`
-    answers whether THIS render actually drew the actor, not an abstract cell-independent fact: under
-    `wire` it is invariant (`drew` above is every actor with points, never touching `to_pxf`), but under
-    a filled mode it comes from `_face_is_occluded` against the depth buffer, and the locator's gutter
-    reserve changes `to_pxf` — so `hidden` can legitimately differ between the locator on and off for
-    the SAME scene under `--faces textured` (measured; see spec §3.4). Each answer is honest about the
-    image it was computed from; the two are not guaranteed to agree."""
+    `col_bounds=None` (the locator off) skips the cell/span math entirely and fills only `hidden`.
+    `hidden` answers whether THIS render actually drew the actor, not an abstract cell-independent
+    fact: under `wire` it is invariant (`drew` above is every actor with points, never touching
+    `to_pxf`), but under a filled mode it comes from `_face_is_occluded` against the depth buffer, and
+    the locator's gutter reserve changes `to_pxf` — so `hidden` can legitimately differ between the
+    locator on and off for the SAME scene under `--faces textured` (measured; see spec §3.4). Each
+    answer is honest about the image it was computed from; the two are not guaranteed to agree."""
     if faces == "wire":
         drew = set(geom.actor_points)                # nothing is culled/depth-hidden under wire
     else:
         drew = {fk[0] for fk, _v3, _vs in geom.vis_faces if fk not in hidden}
     drew |= {a.name for a, _pr in points}            # a point actor's marker always draws
     for name, pts_proj in geom.actor_points.items():
-        if n is None:
+        if col_bounds is None:
             cells_out[name] = ActorCell(cell=None, span=None, hidden=name not in drew)
         else:
-            cell, span = _actor_cells([to_pxf(p) for p in pts_proj], rect, n)
+            cell, span = _actor_cells([to_pxf(p) for p in pts_proj], col_bounds, row_bounds)
             cells_out[name] = ActorCell(cell=cell, span=span, hidden=name not in drew)
 
 
@@ -2101,8 +2238,9 @@ def render_brushes_pgm(actors: list[Actor], *, view: str = "top", size: int = 25
                        brush_colors: str = "csg",
                        frame_pad: int = _FRAME_PAD, faces: str = "wire",
                        shown_highlights: set | None = None,
-                       locator: int | None = None, cells_out: dict | None = None,
-                       grid_size: int | None = None, grid_caption_out: dict | None = None) -> bytes:
+                       locator: int | str | None = None, cells_out: dict | None = None,
+                       grid_size: int | None = None, grid_caption_out: dict | None = None,
+                       locator_dims_out: dict | None = None) -> bytes:
     """Render a set of actors as a PPM (P6) on a dark background (`BG`, `#404040`).
 
     `faces` is the `--faces` MODE, and it is a parameter rather than something read off `render_data`
@@ -2149,14 +2287,21 @@ def render_brushes_pgm(actors: list[Actor], *, view: str = "top", size: int = 25
     billboard, else a marker; plus faint collision/light/sound overlays when populated.
     Empty input → blank grey PPM.
 
-    `locator` (or None = off) turns on the locator cells: `locator` columns × `locator` rows, drawn
-    as a LABEL GUTTER (letters across the top, numbers down both sides — no gridlines) in a reserved band
-    the geometry is inset clear of. Gated by a parameter, NOT drawn unconditionally, because
+    `locator` turns on the locator cells, drawn as a LABEL GUTTER (letters across the top, numbers
+    down both sides — no gridlines) in a reserved band the geometry is inset clear of: `None` = off,
+    an `int` = that many EQUAL columns × rows, `"auto"` = density picked HERE (owner ruling
+    2026-08-31) — on an ortho view, anchored to the world gridline overlay so a locator boundary
+    coincides with an actual drawn line (`_auto_locator_lattice` + `_lattice_boundaries`, cells
+    generally non-equal — the first/last are partial); on `iso` (no gridline lattice to anchor to) or
+    when `grid_size`'s escalation never fires, the equal-division pixel-size picker
+    (`_auto_locator_cells`). Gated by a parameter, NOT drawn unconditionally, because
     `_render_breakdown_grid` renders per pane and only pane 0 carries one. Independent of `--annotate`.
     `cells_out`, when a dict is passed, is filled `{actor_name: ActorCell}` — each actor's hidden flag,
-    plus (when `locator` is not None) its centroid cell + span, from THIS pane's own
-    `world_to_pxf`/drawable rect, so the legend and image cannot drift. Each pane needs its OWN
-    `cells_out` (cells are per-pane, unlike the shared `shown_highlights`).
+    plus (when `locator` is not None) its centroid cell + span, from THIS pane's own boundaries, so the
+    legend and image cannot drift. Each pane needs its OWN `cells_out` (cells are per-pane, unlike the
+    shared `shown_highlights`). `locator_dims_out`, when a dict is passed and `locator` is not None, is
+    filled `{"cols": int, "rows": int}` — THIS pane's actual cell count (can differ from another
+    pane's, and cols can differ from rows once cells are grid-anchored).
 
     `grid_size` (or None = auto) draws a two-tier world gridline lattice ported from UnrealEd's
     `DrawGridSection` (spec `add-visual-grid-for-2d-views-in-level-actor` §3) on the three
@@ -2184,6 +2329,13 @@ def render_brushes_pgm(actors: list[Actor], *, view: str = "top", size: int = 25
     occluders, points = geom.occluders, geom.points
 
     if not geom.pts:
+        # Nothing to frame, so no gridline lattice to anchor a locator to either — an empty/degenerate
+        # scene still owes `locator_dims_out` an answer (the CLI's stderr legend/--json need SOME
+        # cols/rows whenever `locator is not None`), so fall back to the equal-division pixel-size
+        # picker on this render's own `size` alone.
+        if locator is not None and locator_dims_out is not None:
+            n = locator if isinstance(locator, int) else _auto_locator_cells(size, _LOCATOR_MAX)
+            locator_dims_out["cols"] = locator_dims_out["rows"] = n
         return _ppm(_alloc_buffers(size, depth=False)[0], size)
     name_scale = max(2, size // 256)
     gutter = _locator_gutter_px(name_scale) if locator is not None else 0
@@ -2326,10 +2478,30 @@ def render_brushes_pgm(actors: list[Actor], *, view: str = "top", size: int = 25
     # when the locator is on.
     if locator is not None or cells_out is not None:
         rect = _drawable_rect(size, frame_pad, gutter)
+        col_bounds = row_bounds = None
         if locator is not None:
-            _draw_locator_gutter(buf, size, rect, locator, name_scale, frame_pad, gutter)
+            x0, x1, y0, y1 = rect
+            if isinstance(locator, int):
+                col_bounds = _equal_boundaries(x0, x1, locator)
+                row_bounds = _equal_boundaries(y0, y1, locator)
+            elif grid_drawn is not None:
+                # ortho + auto: anchor to the SAME lattice the gridline overlay just drew, so a
+                # locator boundary coincides with an actual drawn line (owner ruling 2026-08-31).
+                col_bounds, row_bounds = _auto_locator_lattice(
+                    grid_drawn, x0, x1, y0, y1, lambda w: to_pxf((w, fminy))[0],
+                    lambda w: to_pxf((fminx, w))[1], fminx, fminy, fspan, name_scale)
+            else:
+                # iso (or a pathological ortho pane with nothing to fit): no world lattice to anchor
+                # to — fall back to the independent power-of-two pixel-size picker.
+                n = _auto_locator_cells(size, _LOCATOR_MAX)
+                col_bounds = _equal_boundaries(x0, x1, n)
+                row_bounds = _equal_boundaries(y0, y1, n)
+            _draw_locator_gutter(buf, size, col_bounds, row_bounds, name_scale, frame_pad, gutter)
+            if locator_dims_out is not None:
+                locator_dims_out["cols"] = len(col_bounds) - 1
+                locator_dims_out["rows"] = len(row_bounds) - 1
         if cells_out is not None:
-            _collect_cells(geom, hidden, faces, points, to_pxf, rect, locator, cells_out)
+            _collect_cells(geom, hidden, faces, points, to_pxf, col_bounds, row_bounds, cells_out)
     # A gridded pane's extent/step report is stderr-ONLY (spec §6, owner-updated 2026-08-30) — nothing
     # is drawn into the image here. `grid_caption_out` just carries the text out for the caller to print.
     if grid_drawn is not None and grid_caption_out is not None:
@@ -2439,13 +2611,17 @@ def render_quad_pgm(actors, *, size: int = 512,
                     highlight_points=None, color_by_csg: bool = False, render_data=None,
                     focus: str | None = None, brush_colors: str = "csg",
                     faces: str = "wire", shown_highlights: set | None = None,
-                    locator: int | None = None, cells_out: dict | None = None,
-                    grid_size: int | None = None, captions_out: dict | None = None) -> bytes:
+                    locator: int | str | None = None, cells_out: dict | None = None,
+                    grid_size: int | None = None, captions_out: dict | None = None,
+                    locator_dims_out: dict | None = None) -> bytes:
     """UED-style 2×2: Top (TL), Front (TR), Iso (BL), Side (BR). On the hybrid (`color_by_csg`) path the
     per-actor tints are identical across panes (`assign_tints` is deterministic). `grid_size` (see
     `render_brushes_pgm`) grids Top/Front/Side; Iso stays bare (spec §2). `captions_out`, when a dict is
     passed, is filled `{"Top"|"Front"|"Side": {"text": str}}` — one entry per GRIDDED pane (Iso never
-    appears), in Top/Front/Side order, for the caller's stderr-only report (nothing is drawn here)."""
+    appears), in Top/Front/Side order, for the caller's stderr-only report (nothing is drawn here).
+    `locator_dims_out`, when a dict is passed and `locator` is not None, is filled `{"Top"|"Front"|
+    "Iso"|"Side": {"cols": int, "rows": int}}` — each pane resolves `locator="auto"` INDEPENDENTLY
+    (its own gridline step, or `iso`'s pixel-fit fallback), so two panes can legitimately disagree."""
     if isinstance(actors, Actor):
         actors = [actors]
     half = size // 2
@@ -2456,6 +2632,7 @@ def render_quad_pgm(actors, *, size: int = 512,
     for name, view, ox, oy in panes:
         pane_cells: dict = {}                            # each pane's OWN cell map (cells are per-pane)
         pane_caption: dict = {}
+        pane_dims: dict = {}
         sub = render_brushes_pgm(actors, view=view, size=half, annotations=annotations,
                                  iso_angle=iso_angle, region=region,
                                  highlight_polys=highlight_polys, highlight_points=highlight_points,
@@ -2465,11 +2642,14 @@ def render_quad_pgm(actors, *, size: int = 512,
                                  shown_highlights=shown_highlights, locator=locator,
                                  cells_out=pane_cells if cells_out is not None else None,
                                  grid_size=grid_size,
-                                 grid_caption_out=pane_caption if captions_out is not None else None)
+                                 grid_caption_out=pane_caption if captions_out is not None else None,
+                                 locator_dims_out=pane_dims if locator_dims_out is not None else None)
         if cells_out is not None:
             cells_out[name.capitalize()] = pane_cells    # tag by pane name: Top/Front/Iso/Side
         if captions_out is not None and pane_caption:
             captions_out[name.capitalize()] = pane_caption
+        if locator_dims_out is not None and pane_dims:
+            locator_dims_out[name.capitalize()] = pane_dims
         body = sub[len(hdr):]
         for j in range(half):
             dst = ((oy + j) * size + ox) * 3

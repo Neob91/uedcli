@@ -235,7 +235,7 @@ def _point_pane_region(point, render_data) -> tuple:
 
 def _render_breakdown_grid(actors, args, *, render_data, shown_highlights=None,
                            locator=None, cells_out=None, grid_size=None,
-                           grid_captions_out=None) -> bytes:
+                           grid_captions_out=None, locator_dims_out=None) -> bytes:
     """`--layout breakdown`: a near-square GRID of panes, returned as a Pillow **Image** (the panes
     themselves are PPM bytes from the stdlib renderer; the stitch is already Pillow, so the caller
     writes this Image straight to PNG instead of re-encoding it through PPM). Pane 0 is the whole scene in CSG
@@ -261,7 +261,8 @@ def _render_breakdown_grid(actors, args, *, render_data, shown_highlights=None,
     except ImportError as e:                             # Pillow absent (broken install)
         raise CommandError(f"--layout breakdown needs Pillow, which failed to import: {e}")
 
-    def _pane(*, annotations, focus, region, locator=None, cells_out=None, grid_caption_out=None) -> bytes:
+    def _pane(*, annotations, focus, region, locator=None, cells_out=None, grid_caption_out=None,
+             locator_dims_out=None) -> bytes:
         # No legend or overview names anywhere in the breakdown — the SCENE pane is a plain CSG map and
         # the per-actor panes are captioned. A tight `_BREAKDOWN_PAD`-px frame border keeps padding
         # minimal and CONSISTENT across panes (a fixed screen border, not a per-actor world margin).
@@ -274,14 +275,19 @@ def _render_breakdown_grid(actors, args, *, render_data, shown_highlights=None,
             render_data=render_data, focus=focus,
             brush_colors=brush_colors, faces=faces, frame_pad=_BREAKDOWN_PAD,
             shown_highlights=shown_highlights, locator=locator, cells_out=cells_out,
-            grid_size=grid_size, grid_caption_out=grid_caption_out)
+            grid_size=grid_size, grid_caption_out=grid_caption_out,
+            locator_dims_out=locator_dims_out)
 
     # Pane 0: the whole scene in CSG — a plain spatial map, NO labels (actors are identified by their
     # own captioned panes below). It alone carries the locator gutter + cell legend (single-view).
     scene_cap: dict = {}
+    scene_dims: dict = {}
     panes = [("SCENE", _pane(annotations=preview.parse_annotation_spec("none"), focus=None, region=None,
                              locator=locator, cells_out=cells_out,
-                             grid_caption_out=scene_cap if grid_captions_out is not None else None))]
+                             grid_caption_out=scene_cap if grid_captions_out is not None else None,
+                             locator_dims_out=scene_dims if locator_dims_out is not None else None))]
+    if locator_dims_out is not None and scene_dims:
+        locator_dims_out["Scene"] = scene_dims
     if grid_captions_out is not None and scene_cap:
         grid_captions_out["SCENE"] = scene_cap
     for a in actors:                                     # one focused + zoomed pane per actor, in order
@@ -321,8 +327,6 @@ def _render_breakdown_grid(actors, args, *, render_data, shown_highlights=None,
     return grid_img          # a Pillow Image — the write boundary encodes it to PNG directly
 
 
-_LOCATOR_DEFAULT = 12                # density when neither --locator-cells nor --no-locator-cells is given
-_LOCATOR_MAX = 52                    # cap so single-letter/short column addresses stay legible
 _QUAD_PANE_ORDER = ("Top", "Front", "Side", "Iso")   # legend/JSON pane order (see spec)
 
 
@@ -331,12 +335,32 @@ def _view_pane_key(view: str) -> str:
     return view.capitalize()
 
 
-def _locator_legend_lines(actors, panes: dict, n: int) -> list[str]:
-    """The stderr legend (locator on only): a density header, then one line per actor in SCENE order. A
-    single pane (single/breakdown) is unqualified (`Pillar  D4  (C3–E5)`); multiple panes (quad) are
-    pane-qualified (`Pillar  Top:D4 Front:B7 …`). An actor hidden in every pane appends `(hidden)`.
-    Same-cell collisions each keep their own line."""
-    lines = [f"locator: {n}×{n} columns A–{preview._col_label(n - 1)}, rows 1–{n}"]
+def _locator_density_lines(pane_dims: dict) -> list[str]:
+    """One density header per DISTINCT `(cols, rows)` pair seen across panes — a single pane, or a
+    `quad` where every pane happened to land on the same density, prints ONE unqualified line; once
+    grid-anchored panes disagree (a real possibility now — each ortho pane anchors to its OWN gridline
+    step, and `iso` has none to anchor to at all), each distinct density gets its own pane-named line
+    so the header stays honest about what actually drew."""
+    distinct = {dims for dims in pane_dims.values()}
+    if len(distinct) <= 1:
+        cols, rows = next(iter(pane_dims.values()))
+        return [f"locator: {cols}×{rows} columns A–{preview._col_label(cols - 1)}, rows 1–{rows}"]
+    lines = []
+    for pane in _QUAD_PANE_ORDER:
+        if pane not in pane_dims:
+            continue
+        cols, rows = pane_dims[pane]
+        lines.append(f"locator {pane}: {cols}×{rows} columns A–{preview._col_label(cols - 1)}, "
+                     f"rows 1–{rows}")
+    return lines
+
+
+def _locator_legend_lines(actors, panes: dict, pane_dims: dict) -> list[str]:
+    """The stderr legend (locator on only): a density header (`_locator_density_lines`), then one line
+    per actor in SCENE order. A single pane (single/breakdown) is unqualified (`Pillar  D4  (C3–E5)`);
+    multiple panes (quad) are pane-qualified (`Pillar  Top:D4 Front:B7 …`). An actor hidden in every
+    pane appends `(hidden)`. Same-cell collisions each keep their own line."""
+    lines = _locator_density_lines(pane_dims)
     quad = len(panes) > 1
     for a in actors:
         cells = {p: c[a.name] for p, c in panes.items() if a.name in c}
@@ -354,10 +378,13 @@ def _locator_legend_lines(actors, panes: dict, n: int) -> list[str]:
     return lines
 
 
-def _preview_json(image_path: str, actors, panes: dict, n: int | None) -> dict:
-    """The `--json` object. Locator on (`n` not None):
-    `{image, locator:{cols,rows}, actors:{name:{panes:{Pane:{cell,span}}, hidden}}}` — pane-keyed so a
-    script reads every layout the same way. Locator off (`n` is None): `{image,
+def _preview_json(image_path: str, actors, panes: dict, pane_dims: dict) -> dict:
+    """The `--json` object. Locator on (`pane_dims` non-empty):
+    `{image, locator:…, actors:{name:{panes:{Pane:{cell,span}}, hidden}}}` — pane-keyed so a script
+    reads every layout the same way. `locator` is `{cols,rows}` when every pane shares one density (a
+    single pane, or a `quad` where all 4 happened to agree), else pane-keyed
+    `{Pane:{cols,rows}, …}` — grid-anchored panes can genuinely disagree (each ortho pane anchors to
+    its OWN gridline step, `iso` has none). Locator off (`pane_dims` empty): `{image,
     actors:{name:{hidden}}}` — no `locator` key, and no `panes`/`cell`/`span` (omitted, not emitted
     empty), since there is no cell division to report; `hidden` alone stays a real answer either way."""
     order = _QUAD_PANE_ORDER if len(panes) > 1 else list(panes)
@@ -367,14 +394,19 @@ def _preview_json(image_path: str, actors, panes: dict, n: int | None) -> dict:
         if not cells:
             continue
         hidden = all(c.hidden for c in cells.values())
-        out_actors[a.name] = ({"hidden": hidden} if n is None else {
+        out_actors[a.name] = ({"hidden": hidden} if not pane_dims else {
             "panes": {p: {"cell": cells[p].cell, "span": cells[p].span}
                       for p in order if p in cells},
             "hidden": hidden,
         })
     obj: dict = {"image": image_path}
-    if n is not None:
-        obj["locator"] = {"cols": n, "rows": n}
+    if pane_dims:
+        distinct = {dims for dims in pane_dims.values()}
+        if len(distinct) <= 1:
+            cols, rows = next(iter(pane_dims.values()))
+            obj["locator"] = {"cols": cols, "rows": rows}
+        else:
+            obj["locator"] = {p: {"cols": c, "rows": r} for p, (c, r) in pane_dims.items()}
     obj["actors"] = out_actors
     return obj
 
@@ -385,15 +417,21 @@ def render_actors_to_out(actors, args) -> int:
     factor = getattr(args, "frame_tightness", 0.8)
     if not 0.0 <= factor <= 1.0:                         # errors name the offending value (CLI rule)
         raise CommandError(f"--frame-tightness must be in [0, 1], got {factor}")
-    # `--locator-cells`/`--no-locator-cells` resolve to one `int | None` (None = off). Neither given ⇒
-    # locator cells stay on at the default density (12) — opt-out, not opt-in.
+    # `--locator-cells`/`--no-locator-cells` resolve to one `int | "auto" | None` (None = off). Neither
+    # given ⇒ locator cells stay on (opt-out, not opt-in) at `"auto"` density — resolved PER PANE
+    # inside `preview.render_brushes_pgm` itself (owner ruling 2026-08-31, superseding the old flat
+    # default of 12): on an ortho view, anchored to that pane's own world gridline overlay so a
+    # locator boundary coincides with an actual drawn line; on `iso` (no gridline lattice), the
+    # independent power-of-two pixel-size picker (`preview._auto_locator_cells`). It has to live
+    # inside `preview.py` because the grid's own escalated step is only known there, deep in the
+    # per-pane framing — this layer no longer resolves a density up front.
     locator_n = getattr(args, "locator_cells", None)
     locator_off = getattr(args, "no_locator_cells", False)
     if locator_off and locator_n is not None:
         raise CommandError("--locator-cells and --no-locator-cells are mutually exclusive")
-    locator = None if locator_off else (_LOCATOR_DEFAULT if locator_n is None else locator_n)
-    if locator is not None and not 1 <= locator <= _LOCATOR_MAX:
-        raise CommandError(f"--locator-cells must be in [1, {_LOCATOR_MAX}], got {locator}")
+    if locator_n is not None and not 1 <= locator_n <= preview._LOCATOR_MAX:
+        raise CommandError(f"--locator-cells must be in [1, {preview._LOCATOR_MAX}], got {locator_n}")
+    locator = None if locator_off else (locator_n if locator_n is not None else "auto")
     layout = getattr(args, "layout", "quad")
     grid_size = getattr(args, "grid_size", None)
     if grid_size is not None:
@@ -455,17 +493,27 @@ def render_actors_to_out(actors, args) -> int:
     # `grid_captions` collects each GRIDDED pane's `{"text": str}` (spec §6, stderr-only — nothing is
     # ever drawn into the image) — printed below.
     grid_captions: dict = {}
+    # `pane_dims` collects each pane's resolved `(cols, rows)` — needed now that `locator="auto"` is
+    # resolved PER PANE (owner ruling 2026-08-31): two panes can genuinely disagree (an ortho pane
+    # anchors to its own gridline step, `iso` has none), so unlike everything above this is never a
+    # single shared value pulled from `args`.
+    pane_dims: dict = {}
     try:
         if layout == "breakdown":
             single = {}
+            single_dims: dict = {}
             data = _render_breakdown_grid(actors, args, render_data=render_data,
                                           shown_highlights=shown_highlights, locator=locator,
                                           cells_out=single, grid_size=grid_size,
-                                          grid_captions_out=grid_captions)
+                                          grid_captions_out=grid_captions,
+                                          locator_dims_out=single_dims)
             panes[_view_pane_key(args.view)] = single
+            if scene_dims := single_dims.get("Scene"):
+                pane_dims[_view_pane_key(args.view)] = (scene_dims["cols"], scene_dims["rows"])
         elif layout == "single":
             single = {}
             single_cap: dict = {}
+            single_dims: dict = {}
             data = preview.render_brushes_pgm(actors, view=args.view, size=args.size,
                                               annotations=annotation_spec, iso_angle=args.iso_angle,
                                               region=region, highlight_polys=highlight_polys,
@@ -474,11 +522,15 @@ def render_actors_to_out(actors, args) -> int:
                                               brush_colors=getattr(args, "brush_colors", "csg") or "csg",
                                               faces=faces, shown_highlights=shown_highlights,
                                               locator=locator, cells_out=single, grid_size=grid_size,
-                                              grid_caption_out=single_cap)
+                                              grid_caption_out=single_cap,
+                                              locator_dims_out=single_dims)
             panes[_view_pane_key(args.view)] = single
             if single_cap:
                 grid_captions[_view_pane_key(args.view)] = single_cap
+            if single_dims:
+                pane_dims[_view_pane_key(args.view)] = (single_dims["cols"], single_dims["rows"])
         else:                                            # quad (default)
+            quad_dims: dict = {}
             data = preview.render_quad_pgm(actors, size=args.size, annotations=annotation_spec,
                                            iso_angle=args.iso_angle, region=region,
                                            highlight_polys=highlight_polys,
@@ -487,7 +539,9 @@ def render_actors_to_out(actors, args) -> int:
                                            brush_colors=getattr(args, "brush_colors", "csg") or "csg",
                                            faces=faces, shown_highlights=shown_highlights,
                                            locator=locator, cells_out=panes, grid_size=grid_size,
-                                           captions_out=grid_captions)
+                                           captions_out=grid_captions, locator_dims_out=quad_dims)
+            for pane, dims in quad_dims.items():
+                pane_dims[pane] = (dims["cols"], dims["rows"])
     except preview.PreviewAbort as e:                    # a refusal only reachable mid-render
         raise CommandError(str(e)) from None
     _note_invisible_highlights(hi_requests, shown_highlights)
@@ -531,7 +585,7 @@ def render_actors_to_out(actors, args) -> int:
         if unaddressed := [a.name for a in actors if a.name not in addressed]:
             print(f"note: no locator cell for {', '.join(unaddressed)} (no projectable geometry)",
                   file=sys.stderr)
-        for line in _locator_legend_lines(actors, panes, locator):
+        for line in _locator_legend_lines(actors, panes, pane_dims):
             print(line, file=sys.stderr)
     # The grid's extent/step report (spec §6, owner-updated 2026-08-30) — stderr ONLY, unconditionally
     # for every gridded pane regardless of `--locator-cells`/`--json`; nothing is ever drawn into the
@@ -543,7 +597,7 @@ def render_actors_to_out(actors, args) -> int:
         for name, info in grid_captions.items():
             print(f"{name}: {info['text']}", file=sys.stderr)
     if getattr(args, "json", False):
-        print(json.dumps(_preview_json(host_out, actors, panes, locator), indent=2))
+        print(json.dumps(_preview_json(host_out, actors, panes, pane_dims), indent=2))
     else:
         print(host_out)                 # the rendered HOST file path
     return 0

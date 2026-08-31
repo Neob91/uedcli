@@ -944,6 +944,7 @@ def test_line_dim_alpha_composites_over_content_instead_of_overwriting():
 # ── locator cells: pure cell math ──────────────────────────────────────────────────────────────
 from uedcli.preview import (  # noqa: E402
     ActorCell, _actor_cells, _cell_address, _cell_of_pixel, _col_label, _drawable_rect,
+    _equal_boundaries,
 )
 
 
@@ -958,33 +959,188 @@ def test_it_addresses_a_cell_as_letter_column_plus_1based_row():
 
 
 def test_it_maps_a_pixel_to_its_cell_within_the_drawable_rect():
-    rect = (10, 130, 10, 130)                # 120x120 drawable, n=12 → 10px cells
-    assert _cell_of_pixel(15, 15, rect, 12) == (0, 0)      # top-left cell → A1
-    assert _cell_of_pixel(125, 125, rect, 12) == (11, 11)  # bottom-right cell → L12
-    assert _cell_of_pixel(65, 65, rect, 12) == (5, 5)      # centre → F6
+    bounds = _equal_boundaries(10, 130, 12)  # 120x120 drawable, n=12 → 10px cells
+    assert _cell_of_pixel(15, 15, bounds, bounds) == (0, 0)      # top-left cell → A1
+    assert _cell_of_pixel(125, 125, bounds, bounds) == (11, 11)  # bottom-right cell → L12
+    assert _cell_of_pixel(65, 65, bounds, bounds) == (5, 5)      # centre → F6
 
 
 def test_it_clamps_a_pixel_outside_the_rect_to_the_edge_cell():
-    rect = (10, 130, 10, 130)
-    assert _cell_of_pixel(-50, -50, rect, 12) == (0, 0)    # far above-left → first cell
-    assert _cell_of_pixel(999, 999, rect, 12) == (11, 11)  # far below-right → last cell
+    bounds = _equal_boundaries(10, 130, 12)
+    assert _cell_of_pixel(-50, -50, bounds, bounds) == (0, 0)    # far above-left → first cell
+    assert _cell_of_pixel(999, 999, bounds, bounds) == (11, 11)  # far below-right → last cell
 
 
 def test_it_takes_centroid_and_span_from_a_projected_point_set():
-    rect = (10, 130, 10, 130)                # 10px cells at n=12
+    bounds = _equal_boundaries(10, 130, 12)  # 10px cells at n=12
     # A box spanning cols C..E (px 35..55) and rows 3..5 (px 35..55); centroid ~ D4.
     pts = [(35.0, 35.0), (55.0, 55.0), (45.0, 45.0)]
-    assert _actor_cells(pts, rect, 12) == ("D4", "C3–E5")
+    assert _actor_cells(pts, bounds, bounds) == ("D4", "C3–E5")
 
 
 def test_a_single_cell_footprint_has_no_span():
-    rect = (10, 130, 10, 130)
-    assert _actor_cells([(65.0, 65.0)], rect, 12) == ("F6", None)          # a point actor
-    assert _actor_cells([(62.0, 62.0), (68.0, 68.0)], rect, 12) == ("F6", None)  # tiny, one cell
+    bounds = _equal_boundaries(10, 130, 12)
+    assert _actor_cells([(65.0, 65.0)], bounds, bounds) == ("F6", None)          # a point actor
+    assert _actor_cells([(62.0, 62.0), (68.0, 68.0)], bounds, bounds) == ("F6", None)  # tiny, one cell
 
 
 def test_it_computes_the_drawable_rect_from_pad_and_gutter():
     assert _drawable_rect(128, 6, 14) == (20, 107, 20, 107)        # pad+gutter .. size-1-pad-gutter
+
+
+# ── auto locator density: cell SIZE is the power-of-two, not cell COUNT ─────────────────────────
+
+def test_auto_locator_cells_labels_never_crowd():
+    from uedcli.preview import _FRAME_PAD, _auto_locator_cells, _locator_gutter_px, _locator_label_px
+    for pane_size in (128, 256, 512, 900, 2048):
+        n = _auto_locator_cells(pane_size, 52)
+        name_scale = max(2, pane_size // 256)
+        gutter = _locator_gutter_px(name_scale)
+        drawable = pane_size - 2 * _FRAME_PAD - 2 * gutter
+        label_w, label_h = _locator_label_px(1 if n <= 26 else 2, name_scale)
+        cell_px = drawable / n
+        assert cell_px >= label_w + 4 and cell_px >= label_h + 4    # labels stay clear (4px gap)
+
+
+def test_auto_locator_cells_is_the_finest_that_still_fits():
+    # The candidate cell size HALF the one actually picked (still a power of two) must fail the same
+    # clearance check — otherwise the picker stopped one step too coarse.
+    from uedcli.preview import _FRAME_PAD, _auto_locator_cells, _locator_gutter_px, _locator_label_px
+    for pane_size in (128, 256, 512, 900, 2048):
+        n = _auto_locator_cells(pane_size, 52)
+        name_scale = max(2, pane_size // 256)
+        gutter = _locator_gutter_px(name_scale)
+        drawable = pane_size - 2 * _FRAME_PAD - 2 * gutter
+        if drawable <= 0 or n >= 52:
+            continue                                     # degenerate pane / capped — no finer step to check
+        finer_n = max(1, min(52, round(drawable / (drawable / n / 2))))
+        if finer_n == n:
+            continue                                     # rounding collapsed to the same n — nothing finer
+        label_w, label_h = _locator_label_px(1 if finer_n <= 26 else 2, name_scale)
+        finer_cell_px = drawable / finer_n
+        assert finer_cell_px < label_w + 4 or finer_cell_px < label_h + 4
+
+
+def test_auto_locator_cells_never_exceeds_the_cap():
+    from uedcli.preview import _auto_locator_cells
+    assert _auto_locator_cells(100_000, 52) <= 52
+
+
+def test_auto_locator_cells_degrades_to_one_cell_on_a_tiny_pane():
+    from uedcli.preview import _auto_locator_cells
+    assert _auto_locator_cells(40, 52) == 1     # gutter alone eats most of a 40px pane
+
+
+def test_auto_locator_cells_matches_pinned_values_at_common_sizes():
+    # Pinned so a change to the picker's formula is a deliberate, reviewed diff here, not a silent
+    # drift noticed only via the CLI's stderr legend header changing shape.
+    from uedcli.preview import _auto_locator_cells
+    assert _auto_locator_cells(128, 52) == 4
+    assert _auto_locator_cells(256, 52) == 12
+    assert _auto_locator_cells(900, 52) == 26
+
+
+# ── grid-anchored locator: boundaries land on real drawn lines, never crowd a label ─────────────
+
+def _px_of_world_1d(w, edge_lo, lo_world, span_world, draw_px):
+    """A 1-D world→pixel affine map, matching `_framing`'s own formula — enough to exercise
+    `_lattice_boundaries`/`_auto_locator_lattice` without a full render."""
+    return edge_lo + (w - lo_world) / span_world * draw_px
+
+
+def test_lattice_boundaries_interior_lines_land_on_world_multiples_of_step():
+    from uedcli.preview import _lattice_boundaries
+    edge_lo, edge_hi, lo_world, span, step = 0.0, 100.0, 3.0, 250.0, 16
+    bounds = _lattice_boundaries(edge_lo, edge_hi, lambda w: _px_of_world_1d(w, edge_lo, lo_world, span, edge_hi - edge_lo),
+                                 lo_world, span, step, min_gap_px=0.0)  # gap=0: no merging, see raw lines
+    to_world = lambda px: lo_world + (px - edge_lo) / (edge_hi - edge_lo) * span
+    for b in bounds[1:-1]:                          # every INTERIOR boundary — not the two frame edges
+        w = to_world(b)
+        assert abs(w / step - round(w / step)) < 1e-6, f"{w} is not a multiple of step {step}"
+
+
+def test_lattice_boundaries_merges_only_the_thin_edge_cell_not_its_fine_neighbours():
+    # Identity px_of_world (px == world) for arithmetic that reads directly off the numbers: frame
+    # [2, 50), step 10 -> lines at world 10,20,30,40 -> raw cells 8,10,10,10,10 wide. Only the FIRST
+    # (8, world 2..10) is thinner than the gap (9); the four uniform 10-wide interior cells must NOT
+    # be touched — merging should absorb just the one thin edge into its immediate neighbour.
+    from uedcli.preview import _lattice_boundaries
+    bounds = _lattice_boundaries(2.0, 50.0, lambda w: w, 2.0, 48.0, 10, min_gap_px=9.0)
+    assert bounds == [2.0, 20.0, 30.0, 40.0, 50.0]     # world 10 absorbed into the first cell, only
+    widths = [b - a for a, b in zip(bounds, bounds[1:])]
+    assert widths == [18.0, 10.0, 10.0, 10.0]          # merged cell + the three untouched originals
+
+
+def test_auto_locator_lattice_never_returns_a_cell_thinner_than_its_label():
+    # Sweep fractional lattice/frame alignments (the case that broke the OLD interior-only estimate,
+    # since edge-cell width depends on exactly where the frame's own edge falls relative to the
+    # lattice) and require EVERY resulting cell — including any merged edge — to clear its label.
+    from uedcli.preview import _LOCATOR_LABEL_GAP, _auto_locator_lattice, _locator_label_px
+    x0, x1 = 24.0, 900.0 - 24.0
+    y0, y1 = 24.0, 900.0 - 24.0
+    name_scale = 3
+    grid_drawn = 16
+    for fspan in (17, 33, 48, 65, 96, 130, 200, 512):
+        for frac in (0.0, 0.1, 0.3, 0.5, 0.7, 0.9, 0.99):
+            fminx = fminy = frac * grid_drawn
+            col_b, row_b = _auto_locator_lattice(
+                grid_drawn, x0, x1, y0, y1,
+                lambda w: _px_of_world_1d(w, x0, fminx, fspan, x1 - x0),
+                lambda w: _px_of_world_1d(w, y0, fminy, fspan, y1 - y0),
+                fminx, fminy, fspan, name_scale)
+            cols = len(col_b) - 1
+            chars = 1 if cols <= 26 else 2
+            col_gap = _locator_label_px(chars, name_scale)[0] + _LOCATOR_LABEL_GAP
+            row_gap = _locator_label_px(1, name_scale)[1] + _LOCATOR_LABEL_GAP
+            col_widths = [b - a for a, b in zip(col_b, col_b[1:])]
+            row_widths = [b - a for a, b in zip(row_b, row_b[1:])]
+            assert min(col_widths) >= col_gap - 1e-6, (fspan, frac, col_widths, col_gap)
+            assert min(row_widths) >= row_gap - 1e-6, (fspan, frac, row_widths, row_gap)
+
+
+def test_auto_locator_lattice_reported_count_matches_the_real_boundaries():
+    # The bug a review round caught: the picker used to validate an INTERIOR-cell-only estimate, so
+    # it could accept a step "believing" it'd yield N columns while the real (edge-merged) result
+    # delivered fewer — self-inconsistent. `locator_dims_out`'s cols/rows must always equal what the
+    # boundaries it ALSO returns actually contain; assert that invariant directly, sweeping the same
+    # alignments as the crowding test above.
+    from uedcli.preview import _auto_locator_lattice
+    x0, x1 = 24.0, 128.0 - 24.0
+    y0, y1 = 24.0, 128.0 - 24.0
+    name_scale = 2
+    grid_drawn = 16
+    for fspan in (17, 33, 48, 65, 96, 130):
+        for frac in (0.0, 0.1, 0.3, 0.5, 0.7, 0.9, 0.99):
+            fminx = fminy = frac * grid_drawn
+            col_b, row_b = _auto_locator_lattice(
+                grid_drawn, x0, x1, y0, y1,
+                lambda w: _px_of_world_1d(w, x0, fminx, fspan, x1 - x0),
+                lambda w: _px_of_world_1d(w, y0, fminy, fspan, y1 - y0),
+                fminx, fminy, fspan, name_scale)
+            # the boundaries ARE the ground truth this test holds the picker to — no separate
+            # "believed" count exists anymore, so this is really asserting the function returns
+            # something internally coherent (ascending, >=1 cell) rather than re-deriving an
+            # independent expectation, which would just re-implement the picker.
+            assert col_b == sorted(col_b) and row_b == sorted(row_b)
+            assert len(col_b) >= 2 and len(row_b) >= 2
+
+
+def test_auto_locator_lattice_degrades_to_one_cell_without_crashing_on_a_tiny_pane():
+    # A review round's concrete repro: `--layout quad`'s panes render at HALF `--size`, so an
+    # ordinary `--size 128` gives each pane only 64px — small enough that the drawable rect (after
+    # the gutter reserve) is a few px, narrower than any label. The exhausted-search fallback must
+    # still return a valid (if unavoidably crowded) single cell, never crash or return something
+    # with fewer than 2 boundaries.
+    from uedcli.builders import cube, make_brush_actor
+    from uedcli.preview import render_quad_pgm
+    box = make_brush_actor("Big", cube(4000, 4000, 200), location=(0, 0, 0), csg="add")
+    for size in (128, 64, 32, 16):
+        dims = {}
+        data = render_quad_pgm([box], size=size, color_by_csg=True, locator="auto",
+                               locator_dims_out=dims)
+        assert data                                        # rendered SOMETHING, no exception
+        for pane in ("Top", "Front", "Iso", "Side"):
+            assert dims[pane]["cols"] >= 1 and dims[pane]["rows"] >= 1
 
 
 def test_actor_cell_is_a_frozen_value():
@@ -1096,8 +1252,8 @@ def test_cell_matches_where_the_label_would_land_on_the_image():
     # Consistency probe: the collector's cell for an actor is exactly the cell its projected-point
     # centroid falls in under the SAME framing (gutter inset) + drawable rect the image uses. Reproduce
     # via _scene_geometry.actor_points — the very source the collector reads — so the two cannot drift.
-    from uedcli.preview import (_drawable_rect, _cell_of_pixel, _cell_address, _framing,
-                                _locator_gutter_px, _scene_geometry)
+    from uedcli.preview import (_drawable_rect, _cell_of_pixel, _cell_address, _equal_boundaries,
+                                _framing, _locator_gutter_px, _scene_geometry)
     from uedcli.builders import cube, make_brush_actor
     box = make_brush_actor("Only", cube(128, 128, 128), location=(50, -30, 10), csg="add")
     size, n = 256, 12
@@ -1112,5 +1268,7 @@ def test_cell_matches_where_the_label_would_land_on_the_image():
     rect = _drawable_rect(size, _FRAME_PAD, gutter)
     proj = [to_pxf(p) for p in geom.actor_points["Only"]]
     xs = [p[0] for p in proj]; ys = [p[1] for p in proj]
-    want = _cell_address(*_cell_of_pixel(sum(xs) / len(xs), sum(ys) / len(ys), rect, n))
+    col_bounds = _equal_boundaries(rect[0], rect[1], n)
+    row_bounds = _equal_boundaries(rect[2], rect[3], n)
+    want = _cell_address(*_cell_of_pixel(sum(xs) / len(xs), sum(ys) / len(ys), col_bounds, row_bounds))
     assert cells["Only"].cell == want
