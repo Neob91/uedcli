@@ -10,11 +10,11 @@ owner's explicit direction.
 against `git show 91e4bbf:docs/usage.md` (2,001 lines / 139,080 bytes). `docs/usage.md` is a live
 file in a fast-moving shared repo and has already drifted twice during this spec's own lifetime —
 by implementation time it will not be at 91e4bbf. All drift observed so far sits at or after line
-1127 (inside `# actor preview`); everything at or before line 1126 has stayed byte-identical across
+1127 (inside `# actor diagram`); everything at or before line 1126 has stayed byte-identical across
 every revision checked. **Locate content by heading/bullet text, not by trusting a line number
 verbatim** — treat every line citation below as a hint pointing at 91e4bbf, re-derive the real range
 against HEAD before cutting. Two citations are already known-stale as of this writing (a third, the fifth `#projects-uedclitoml` occurrence at line 1355, is stale in exactly the same way but not flagged inline below — treat every citation at or after line 1127 as suspect) and are
-flagged inline where they occur (`actor preview`'s size, and "CSG-combining a stash"'s location).
+flagged inline where they occur (`actor diagram`'s size, and "CSG-combining a stash"'s location).
 
 ## Problem
 
@@ -125,10 +125,10 @@ assertions keep passing naturally, because `usage` stays a valid, populated topi
 - **≤ ~10,000 bytes → flat file**, no split.
 
 **This rule governs families, not individual leaves — a leaf with no sub-verb axis to split along
-stays one file regardless of size.** `actor/preview.md` (~22 KB on a current checkout, up from the
+stays one file regardless of size.** `actor/diagram.md` (~22 KB on a current checkout, up from the
 17,661-byte 91e4bbf baseline — the file's only significant drift, see the baseline-pin note) and
 `brush/build.md` (13,357 bytes) are both well over the 10,000-byte threshold and both ship as a
-single leaf anyway: `actor preview` is one verb with zero `##`/`###` sub-headings in its whole
+single leaf anyway: `actor diagram` is one verb with zero `##`/`###` sub-headings in its whole
 244-line run, so there's nothing to split along. Splitting a leaf further only happens when the
 *leaf itself* has an internal sub-verb structure to mirror (which is exactly how `brush/poly.md`
 etc. already got split out from `brush` as a whole) — size alone doesn't trigger it a second time
@@ -340,14 +340,14 @@ reference's tiny families):
    section (which stays conceptual prose in `docs/README.md`) already calls this the CLI's core
    philosophy; a natural seed for this theme, once written, is the three multi-verb pipe examples
    already in the file (`actor find --group cells | actor delete -`; `actor find --folder ... |
-   actor bbox -`; `actor find --within-bbox ... | actor preview -` — genuinely two-verb pipelines,
+   actor bbox -`; `actor find --within-bbox ... | actor diagram -` — genuinely two-verb pipelines,
    not single-verb examples, though small enough to stay inline on `reference/actor/find.md` for
    now rather than being pulled into their own page). No content moves here today; future page.
 2. **Building & shaping geometry** — `csg-combine-a-stash.md` lives here today; generator-then-edit
    patterns are a natural future addition.
 3. **Movers & animation** — `mover-keyframes.md` and `door-mover-flow.md` live here today, each
    cross-linked to their fuller `leveldesign/` counterparts.
-4. **Level lifecycle** — create → populate → materialize → preview → hand-edit in UnrealEd →
+4. **Level lifecycle** — create → populate → materialize → photo → hand-edit in UnrealEd →
    reimport, as one round-trip story. No content moves here today; future page.
 5. **Discovery idioms** — "how do I find X" techniques applying `actor find`'s filters in
    combination. Not populated from `usage.md` today — a placeholder for genuinely multi-verb
@@ -481,7 +481,7 @@ level" table uses — e.g.:
 ```
 
 The worked examples above already list two rows for `actor/` alone (the family index plus
-`preview`); a realistic row count across all ~17 reference *entries* (15 families, with `actor` and
+`diagram`); a realistic row count across all ~17 reference *entries* (15 families, with `actor` and
 `brush` each contributing 2 rows for their split-out large sub-pages — the reference **tree** itself
 is closer to 49 pages once every leaf is counted, but the capability table only needs one row per
 entry point, not one per leaf) is **~17 rows**. The usage table starts at 3 rows (the three pages
@@ -668,7 +668,7 @@ Board items `docs-search-cannot-find-music-classify-or`,
 - **Single file + TOC only** (no split) — doesn't fix the "any lookup costs ~35k tokens" problem,
   which measurement showed is the dominant cost.
 - **9-page grouping by conceptual weight** (an earlier draft of this design) — coarser than the
-  final shape; superseded once real byte measurements showed `actor` (with preview folded in)
+  final shape; superseded once real byte measurements showed `actor` (with diagram folded in)
   would have been the single biggest page, bigger than any brush sub-page, contradicting the
   goal it was meant to serve.
 - **One page per literal CLI leaf command, no subgrouping at all** — would produce 100+ files;
