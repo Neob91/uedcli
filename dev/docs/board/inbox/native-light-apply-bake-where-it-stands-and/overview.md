@@ -86,6 +86,20 @@ divergence remains on all 6 (dominated by `plane`/`i_zone`/`i_vert_pool`/`i_plan
 levels; `DX.dx` alone drops to a small isolated 4/26 `i_leaf`-only residual). Full numbers and
 reproduction: `native-materialize-findings.md`, search "now masks proven-noisy `node_flags` bits".
 
+**Follow-up, 2026-08-31: `DX.dx`'s 4/26 `i_leaf` residual above — FIXED, a real bug, not a
+methodology artifact.** `zones.rs::assign_leaves` (Pass A) visited its two child sides in the wrong
+order (`i_back` before `i_front`) — the project's own spec (`70-zones-portalization.md` §2) already
+documented the correct order (`iChild[0]`="back"=`i_front` field before `iChild[1]`="front"=`i_back`
+field); the code had transcribed it backwards. Confirmed by simulating both visit orders over
+`DX.dx`'s own tree topology and diffing against golden's real on-disk `iLeaf` values: only the
+spec's order matches all 26 nodes exactly. Fixed (swap the iteration order, TDD, uncommitted, worktree
+`dx-ileaf-investigation`) — `DX.dx`'s nodes array is now fully content-exact (0/26 diffs, was 4/26);
+`i_leaf` diffs also dropped to 0 on NYC Bar (was 874), UNATCO, and Wanchai Market (both previously
+carried unquantified `i_leaf` diffs, now absent from the field breakdown entirely) — a general fix,
+not a `DX.dx`-specific coincidence. `regression_gate.py`: `GATE: PASS`, no change to UNATCO/Wanchai's
+pre-existing verts/points/vectors deltas. Full detail: `native-materialize-findings.md`, search
+"last node-level residual".
+
 ## Harness catalog
 
 Reusable measurement/verification scripts for this effort. All live under `dev/docs/spikes/*/harness/`

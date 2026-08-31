@@ -2453,3 +2453,56 @@ Reproduction: cached goldens under `/tmp/uedcli-parity-cache/`; native's lit `.d
 the main checkout, no commits made there, worktree removed after. Before/after table via a throwaway
 script toggling `parity_lib.NODE_FLAGS_NOISE_MASK` between 0 and its real value around two
 `compare_content` calls on the same built native/golden pair (not committed).
+
+## `DX.dx`'s last node-level residual, the 4/26 `i_leaf` diffs, was a real `zones.rs::assign_leaves` traversal-order bug — FIXED, `DX.dx` nodes now content-exact
+
+**Confirmed live 2026-08-31, fix shipped (uncommitted, worktree `dx-ileaf-investigation`).** Re-ran
+`parity_report.py` on `DX.dx` — same 4 diffs as the prior round, unchanged: nodes `[6]`, `[11]`,
+`[21]`, `[25]` each disagree only on `i_leaf`, and only on the FRONT slot (`native=(-1,X)
+golden=(-1,Y)`), never structurally (every other node field, and `i_front`/`i_back`/`i_plane` on
+every node including these 4, already matched). Dumping both trees' `leaves` array content
+(`i_zone`/`i_volumetric`/`i_exclusive`, ignoring the separately-tracked, not-yet-wired
+`i_permeating`) showed all 5 leaves IDENTICAL in content on both sides (`i_zone=1`,
+`i_volumetric=-1`, `i_exclusive=all-1s` — `DX.dx` is degenerate: one zone, no volumetrics). Native's
+4 leaf-index values were exactly the reverse of golden's (`0↔4`, `1↔3`, `2` fixed) — the signature of
+a traversal-ORDER difference, not a structural one.
+
+**Root cause, confirmed by simulation against native's own tree topology (not guessed):** replaying
+`zones.rs::assign_leaves`'s Pass A DFS over `DX.dx`'s 26-node tree with each of the two possible
+child-visit orders and diffing the resulting `iLeaf` numbering against golden's real on-disk values —
+the current code's order (`i_back` then `i_front`) reproduces the exact 4 known mismatches (sanity
+check); the opposite order (`i_front` then `i_back`) matches golden's numbering on **all 26 nodes,
+0 mismatches**. This also matches what the project's own spec already said: `70-zones-portalization.md`
+§2, "DFS over `iChild[0]`(back) then `iChild[1]`(front)" — and `iChild[0]` = this struct's `i_front`
+field (`iChild[1]` = `i_back`, per this file's own FRONT/BACK-swap note directly above
+`assign_leaves`) — so the code had transcribed the spec's own already-decoded order backwards. Not a
+comparison-methodology artifact (leaves are NOT interchangeable/order-independent on disk — the
+on-disk `iLeaf` field is a literal index into the `Leaves` array, so a wrong visit order really does
+serialize different bytes) and not a structural/topological divergence (leaf content and the
+front/back tree shape already matched).
+
+**Fix:** swap the iteration order in `assign_leaves` (`uedcli-native/src/zones.rs`) from
+`[(1usize, i_back), (0usize, i_front)]` to `[(0usize, i_front), (1usize, i_back)]` — side labels
+(which side is FRONT vs BACK) are unchanged, only which is visited first. TDD: new test
+`assign_leaves_visits_i_front_before_i_back` (red under the old order, green under the new) added
+alongside the existing `zones.rs` unit tests.
+
+**Before/after, `i_leaf` field diffs (node content comparison, `NODE_FLAGS_NOISE_MASK` still
+applied):**
+
+| level | i_leaf diffs before | i_leaf diffs after | other node fields (untouched) |
+|---|---:|---:|---|
+| `DX.dx` | 4/26 | **0/26 — nodes array now fully content-exact** | none (was the only remaining node diff) |
+| `02_NYC_Bar.dx` | 874 | **0** | `i_zone` 11, `i_vert_pool` 67, `plane` 200 (pre-existing, untouched) |
+| `03_NYC_UNATCOHQ` (`bsp-parity-proj` golden) | present (untabulated count) | **0** (absent from the field breakdown entirely) | `i_vert_pool` 4576, `plane` 668, `i_zone` 57, `i_plane` 23, `i_back` 3, `i_collision_bound` 2, `i_render_bound` 2, `zone_mask` 9 |
+| Wanchai Market (`golden_wanchai_world.dx`) | present (untabulated count) | **0** (absent from the field breakdown entirely) | `i_vert_pool` 7803, `plane` 676, `i_zone` 205, `num_vertices` 10, `i_plane` 15, `zone_mask` 9 |
+
+`regression_gate.py` (UNATCO/Wanchai): `GATE: PASS`, both still node/surf/leaf-COUNT-exact, same
+pre-existing verts/points/vectors deltas as before this change (UNATCO +5/+16/+0, Wanchai
++74/+16/−8) — no regression. `DX.dx`'s remaining gap is now only `surfs`
+(`texture_ref`/`i_actor`/`p_base`, pre-existing, out of scope) and `leaves.i_permeating`
+(pre-existing stub, `port-the-per-leaf-permeating-light-lists-model`, out of scope) — the node-level
+gap this round targeted is fully closed. `bin/test` and `cargo test` (92/92) run clean.
+
+Not yet done: this fix was verified on 4 of the 6 tracked levels (not NYC ShipFan/NYC Underground);
+those two were not re-measured this round.
