@@ -59,3 +59,4 @@ level materialize --out maps/mylevel.dx
 - [mover-door.md](mover-door.md) — the shared mover mechanism and trigger wiring.
 - [../movers.md](../movers.md) — keyframes, `InitialState`, encroachment.
 - [../actors.md](../actors.md) — `LiftCenter`/`LiftExit` and pathing.
+- [the mover keyframe workflow](../../../usage/mover-keyframes.md) — the terse CLI-only version of building and keyframing a mover.

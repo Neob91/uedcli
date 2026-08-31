@@ -459,8 +459,9 @@ def _heading_slugs(text: str) -> set[str]:
     """The set of anchor slugs a markdown viewer (GitHub, and the one every `docs/` page is
     written for) would generate for every heading in `text`: lowercase, backticks/punctuation
     stripped, each space turned into its own hyphen (not collapsed — "a / b" produces the double
-    hyphen `a--b`, matching the anchors already written into `usage.md` by hand), and a `-1`/`-2`
-    suffix on a slug that repeats earlier in the same file, exactly as GitHub disambiguates it."""
+    hyphen `a--b`, matching the anchors already written into `docs/README.md` by hand), and a
+    `-1`/`-2` suffix on a slug that repeats earlier in the same file, exactly as GitHub
+    disambiguates it."""
     seen: dict[str, int] = {}
     slugs = set()
     for _, heading in _HEADING_RE.findall(text):
@@ -664,7 +665,7 @@ def test_one_unreadable_subdirectory_fails_the_whole_listing_rather_than_droppin
 
 
 def test_the_real_tree_serves_the_deepest_folded_index(monkeypatch, capsysbinary):
-    """The seventh folded README index in the shipped tree — the deepest one, and the one a
+    """The twelfth folded README index in the shipped tree — the deepest one, and the one a
     synthetic fixture is least likely to model. Byte-identical to that directory's own README."""
     monkeypatch.delenv("UEDCLI_DOCS_DIR", raising=False)
     readme = userdocs.docs_root() / "leveldesign" / "general" / "recipes" / "shapes" / "README.md"

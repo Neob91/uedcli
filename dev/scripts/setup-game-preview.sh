@@ -217,7 +217,7 @@ fi
 if [[ "$verify" == 0 ]]; then
     say "done (provision only; skipped --verify)"
     echo "  Try it (from $TOOL_ROOT):  bin/uedcli level photo --game 'at:0,0,64;rot:0,0' --out-dir /tmp/uedpv"
-    echo "  (pose grammar + backends: docs/usage.md \`level photo\`)"
+    echo "  (pose grammar + backends: docs/reference/level/photo.md)"
     exit 0
 fi
 if [[ "$dry_run" == 1 ]]; then
@@ -233,7 +233,7 @@ OUT="$(mktemp -d)"
 cd "$TOOL_ROOT"
 # Orbit the map's own PlayerStart so the frame looks at real geometry without hardcoding a pose.
 # Its instance NAME varies per map (PlayerStart0/1/…), so discover it from the running game first
-# (--list-actors is a --game --map query, docs/usage.md `level photo`). This first boot is the
+# (--list-actors is a --game --map query, docs/reference/level/photo.md). This first boot is the
 # slow one; the orbit render reuses the warm container. Keep stderr — if the boot/build fails, PS
 # is empty and its error is the thing to show, not "no PlayerStart".
 DISC_ERR="$OUT/.discover.err"

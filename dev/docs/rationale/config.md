@@ -2,8 +2,8 @@
 
 Engineering decisions about `uedcli/config.py`: how a project is found from the cwd, and how the
 two colon-separated directory lists (a project's `paths`, a `[games.<name>]` block's `paths`) are
-validated. The user-facing shape of these files is `docs/usage.md`; the product intent is
-[`../direction/projects-and-config.md`](../direction/projects-and-config.md).
+validated. The user-facing shape of these files is `docs/README.md` "Projects: `uedcli.toml`"; the
+product intent is [`../direction/projects-and-config.md`](../direction/projects-and-config.md).
 
 ## An unreadable project marker stops the walk-up, never skipped
 

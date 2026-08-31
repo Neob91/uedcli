@@ -17,7 +17,7 @@ Every doc has one job:
 
 | Doc | Answers | Tense / status | Mutability |
 |---|---|---|---|
-| **[../../docs/usage.md](../../docs/usage.md)** | "How do I use the CLI?" | current commands | tracks the CLI |
+| **[../../docs/reference/](../../docs/reference/actor/README.md)** / **[../../docs/usage/](../../docs/usage/README.md)** | "How do I use the CLI?" | current commands | tracks the CLI |
 | **[../../docs/leveldesign/](../../docs/leveldesign/README.md)** | "How do I design a **good, buildable level** (with uedcli)?" | user-facing level-design craft | the curated user cut of the dev knowledge base |
 | **[architecture.md](architecture.md)** | "How is it built **now**?" | what IS (implementation) | updated to match whenever the code changes — never stale |
 | **[unrealed/](unrealed/README.md)** | "How does **UnrealEd** (the editor) actually behave?" | verified editor-engine facts (✅/🔬/📖) | updated as findings are verified |
@@ -46,8 +46,9 @@ for which doc to read when lives in [`CLAUDE.md`](../../CLAUDE.md) ("Read-on-dem
 router").
 
 ## Read these
-- **[../../docs/usage.md](../../docs/usage.md)** — the CLI: query/mutate verbs, the `diagram` viewer,
-  `brush poly list`, brush clip, stash/prefab, the texture catalog (`sync`/`list`/`search`/`tags`/`classify`).
+- **[../../docs/reference/](../../docs/reference/actor/README.md)** — the CLI: query/mutate verbs,
+  the `diagram` viewer, `brush poly list`, brush clip, stash/prefab, the texture catalog
+  (`list`/`search`/`tags`/`classify`). **[../../docs/usage/](../../docs/usage/README.md)** — task-oriented guides.
 - **[../../docs/leveldesign/](../../docs/leveldesign/README.md)** — level-design craft for uedcli users: geometry/BSP,
   zoning, lighting, textures, movers, NPCs, human-scale numbers, and the Deus Ex immersive-sim design
   philosophy — mapped onto the verbs. The exhaustive engine reference behind it is the dev knowledge

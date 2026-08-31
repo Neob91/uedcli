@@ -134,7 +134,9 @@ Why the flags matter here:
   The ref is validated at author time, so a typo fails loudly.
 - The plug lands at the doorway's own position; pass `--at X,Y,Z` to place it elsewhere.
 
-See [`../../../usage.md`](../../../usage.md) for the full verb reference.
+See [the door mover flow](../../../usage/door-mover-flow.md) for the terse CLI-only version of this
+recipe, or [`brush intersect`/`brush deintersect`](../../../reference/brush/intersect.md) for the
+full verb reference.
 
 ## See also
 
@@ -144,3 +146,4 @@ See [`../../../usage.md`](../../../usage.md) for the full verb reference.
 - [`keypad-and-locks.md`](keypad-and-locks.md) — wire a keypad or control panel to this door.
 - [`nanokey.md`](nanokey.md) — make a key that opens it.
 - [`../../general/`](../../general/) — the engine movers guide (keyframes, pivots, encroachment).
+- [the door mover flow](../../../usage/door-mover-flow.md) — the terse CLI-only version of this recipe.

@@ -6,8 +6,9 @@ result — the solid a cluster of adds and subtracts encloses, or the void they 
 computed by the CSG algorithm. `brush intersect` / `brush deintersect` are the two verbs that do it.
 
 They are stateless generators: a T3D brush set in on stdin, one merged brush actor T3D out on
-stdout. See [`../../docs/usage.md`](../../docs/usage.md) for the user-facing reference and
-[`architecture.md`](architecture.md) for where they sit in the layer map.
+stdout. See [`../../docs/reference/brush/intersect.md`](../../docs/reference/brush/intersect.md)
+for the user-facing reference and [`architecture.md`](architecture.md) for where they sit in the
+layer map.
 
 > Historical note. These were once `stash intersect` / `stash deintersect`, which drove a live
 > UnrealEd through a per-command ephemeral container. Both the editor dependency and the

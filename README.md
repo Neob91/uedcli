@@ -60,12 +60,14 @@ uedcli level photo --game --map dev/games/deusex/Maps/00_Training.dx 'at:0,0,64;
 ```
 
 The pose grammar and both backends (`--game`, offline `--native`) are in
-[`docs/usage.md`](docs/usage.md) under `level photo`.
+[`docs/reference/level/photo.md`](docs/reference/level/photo.md).
 
 ## Documentation — see [`docs/`](docs/)
 
-- [`docs/usage.md`](docs/usage.md) — the CLI: query/mutate verbs, the `actor diagram` viewer,
-  `brush poly list`, brush clip, `stash`/`prefab`, the texture catalog (`sync`/`list`/`search`/`tags`/`classify`).
+- [`docs/reference/`](docs/reference/actor/README.md) — the CLI: query/mutate verbs, the `actor
+  diagram` viewer, `brush poly list`, brush clip, `stash`/`prefab`, the texture catalog
+  (`list`/`search`/`tags`/`classify`). [`docs/usage/`](docs/usage/README.md) has task-oriented
+  guides.
 - [`dev/docs/architecture.md`](dev/docs/architecture.md) — layers/modules, the write
   pattern, invariants, the git-tracked T3D trunk, how to add a verb, testing, the substrate.
 - [`dev/docs/unrealed/`](dev/docs/unrealed/README.md) — the verified UnrealEd-2-under-wine

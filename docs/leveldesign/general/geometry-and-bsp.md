@@ -102,7 +102,7 @@ coordinates.
 uedcli does not snap geometry to grid as you build — on-grid discipline is yours to keep. When a
 brush has drifted (a corner reading `15.997` where `16` belongs), `brush snap - --grid N --tolerance
 T` rounds each near-grid vertex back to the grid while leaving intentional off-grid angles alone (see
-[usage.md](../../usage.md) "Brush shape & surfaces"); it cleans float noise, not a brush that is
+[`brush snap`](../../reference/brush/core.md)); it cleans float noise, not a brush that is
 genuinely off-grid by design.
 
 ### Defenses

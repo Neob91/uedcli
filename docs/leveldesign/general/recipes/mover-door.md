@@ -55,3 +55,4 @@ level materialize --out maps/mylevel.dx
 
 - [../movers.md](../movers.md) — keyframes, encroachment, triggering, the black-door fix.
 - [lift.md](lift.md) — the same mechanism for a vertical lift.
+- [the door mover flow](../../../usage/door-mover-flow.md) — the terse CLI-only version of this recipe.

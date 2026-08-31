@@ -303,9 +303,9 @@ def _save_and_swap_verified(ed, dx_path: str, expected, *, work_out, defaults, s
 _MAP_EXTS = (".dx", ".unr")
 
 # TEMPORARY test gate (owner, 2026-08-26): an env var, not a CLI flag, and absent from `--help` and
-# `docs/usage.md`, because the maps the native path produces are incomplete by construction (no
-# lighting, no mover geometry). It graduates to a real flag when those land — board
-# `editor-free-native-world-bsp-map-assembly`.
+# `docs/reference/level/materialize.md`, because the maps the native path produces are incomplete
+# by construction (no lighting, no mover geometry). It graduates to a real flag when those land —
+# board `editor-free-native-world-bsp-map-assembly`.
 _NATIVE_ENV = "UEDCLI_NATIVE_MATERIALIZE"
 
 # Everything `run_materialize` turns into a clean exit 2 instead of a traceback. OSError covers the

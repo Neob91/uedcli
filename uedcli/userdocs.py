@@ -1,8 +1,9 @@
 """The user-facing documentation, served from the CLI itself (`uedcli docs list|show|search`).
 
 **What this module is for.** uedcli's prose documentation for its *users* lives in the repo's
-`docs/` directory — `docs/usage.md` (the CLI reference) and `docs/leveldesign/**` (level-design
-craft). This module makes that tree queryable through uedcli itself, so a consumer (a human at a
+`docs/` directory — `docs/reference/**` (the per-command CLI reference), `docs/usage/**` (task
+guides), and `docs/leveldesign/**` (level-design craft). This module makes that tree queryable
+through uedcli itself, so a consumer (a human at a
 terminal, or a shipped Claude skill routing a user to the right page) reads the docs **baked into
 the binary it has** instead of carrying its own copy that drifts. Same pattern as `git help
 <topic>` / `rustc --explain`.

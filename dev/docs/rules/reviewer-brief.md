@@ -74,9 +74,9 @@ that pipe together, never big verbs with many bespoke flags:
   doc that links to a spike, the board, `architecture.md` or any `dev/docs` path is
   a **leak and a real finding** — the user cannot open it. The fact goes in the
   user doc; the evidence pointer goes in the developer doc.
-- **Behaviour changes must land in the user docs in the same change** —
-  `docs/usage.md` (CLI reference) and `docs/leveldesign/`. A new verb or changed
-  flag with no doc update is a finding.
+- **Behaviour changes must land in the user docs in the same change** — the matching
+  `docs/reference/<family>` page (or `docs/usage/` if the change is workflow-shaped) and
+  `docs/leveldesign/`. A new verb or changed flag with no doc update is a finding.
 - **Every claim about how UnrealEd behaves carries its evidence** — a `spikes/`
   citation, and a date on any live finding. An undated, uncited engine assertion is
   a finding. Facts in `dev/docs/unrealed/*.md` carry a confidence marker: ✅

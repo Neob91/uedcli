@@ -830,7 +830,8 @@ and plan both in board item `re-evaluate-whether-reject-nonlevel-target`; `direc
     two "no editor, no container" generators DO need the class resolver (project + games config).
     The result is re-centred on emit so it is trivially relocatable and a `--mover-class` door
     rotates about a chosen pivot rather than the world origin (`--origin`/`--pivot`/`--at`, see
-    `usage.md`). They replaced the editor-driven `stash intersect`/`deintersect`, which are DELETED;
+    `../../docs/reference/brush/intersect.md`). They replaced the editor-driven `stash
+    intersect`/`deintersect`, which are DELETED;
     that editor path survives only as the golden regenerator (`tests/editor_oracle.py`,
     `-m integration`) behind the committed `tests/fixtures/intersect/` goldens. See `direction/generators.md`,
     2026-06-24 14:30 UTC (the generator pattern) and 2026-07-24 16:32 / 2026-07-25 (the merge
@@ -943,7 +944,7 @@ and plan both in board item `re-evaluate-whether-reject-nonlevel-target`; `direc
   - `level doctor [--json] [--severity …] [--category …] [--tree KIND/NAME]` — **static, offline**
     BSP/geometry lint (`doctor.py`; no editor).
     **SCOPE IS BOUNDED BY INTENT-INDEPENDENCE, and the boundary is permanent** *(owner ruling
-    2026-07-26; `docs/usage.md` "What `level doctor` WILL and WILL NOT find" states it user-facing)*:
+    2026-07-26; `docs/reference/level/doctor.md` "What `level doctor` will and will not find" states it user-facing)*:
     `doctor` reports only defects that are wrong **regardless of what the author intended** — the
     math/geometry that breaks or burdens the BSP, zoning of the same kind, and objectively-wrong
     footguns (an `Event` matching no `Tag`; a light buried in solid geometry). It does **NOT** judge
@@ -2293,7 +2294,8 @@ classification) — a third, unrelated sense, and the reason the selection type 
 **Which annotations** is an `AnnotationSpec` (`parse_annotation_spec`): per kind, the set of element
 categories that get one — poly faces by `(is_front, is_highlighted)`, actor names by `(is_brush,
 is_highlighted)`. The `--annotate` grammar is a comma-set of `KIND[:FILTER…]` selectors, unioned: a
-bare kind = ALL of it, filters narrow (intersect within a selector), commas union (see `usage.md`).
+bare kind = ALL of it, filters narrow (intersect within a selector), commas union (see
+`docs/reference/actor/diagram.md`).
 Parsed in dispatch so a bad value is a clean named error. `render_*` ask `spec.draws_poly`/
 `spec.draws_name` per element.
 

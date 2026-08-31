@@ -128,16 +128,18 @@ rules, and how UnrealEd facts are cited and confidence-tagged. The three rules b
   them, spell out the mechanism, and do not lean on context the reader lacks. An explanation that
   only makes sense if you already know how it works is a bug — rewrite it.
 - Keep the user-facing docs current with the CLI. Whenever a change alters behavior a user can
-  observe — a new verb, a changed flag, different output, a removed feature — update `docs/usage.md`
-  and `docs/leveldesign/` in the same change.
+  observe — a new verb, a changed flag, different output, a removed feature — update the matching
+  `docs/reference/<family>` page (or `docs/usage/` if the change is workflow-shaped) and
+  `docs/leveldesign/` in the same change.
 - `docs/` is all user-facing and must never reference the developer tree (`dev/docs/`): a user cannot
   open a spike, the board, or `architecture.md` and must not be sent there.
 
 New level-design knowledge in `docs/` — best practices, craft guidance, recipes, human-scale numbers,
 any engine or design claim (mostly `docs/leveldesign/`) — needs the owner's approval before you add
 it; inaccurate craft knowledge is costly and hard to catch. Rephrasing existing `docs/` content is
-fine, and so is documenting how a uedcli tool behaves (verbs, flags, output in `docs/usage.md`),
-which is checkable against the CLI.
+fine, and so is documenting how a uedcli tool behaves (verbs, flags, output in the matching
+`docs/reference/<family>` page, or `docs/usage/` if the change is workflow-shaped), which is
+checkable against the CLI.
 
 Document new learnings about how UnrealEd functions, our goals, or architectural choices in `dev/docs`
 — `dev/docs/unrealed/` for engine findings, back-referenced from code comments. The public

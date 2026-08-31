@@ -178,3 +178,4 @@ actor prop set ElevatorMover0 CESlaveMover=ElevatorA_innerdoors bCEControlsSlave
 - [`deusex-door.md`](deusex-door.md) — the `DeusExMover` door mechanics these movers inherit.
 - [`../classes.md`](../classes.md) — the DX mover family and gameplay-wiring actors.
 - [`../../general/`](../../general/) — engine movers, keyframes, and lift path nodes.
+- [the mover keyframe workflow](../../../usage/mover-keyframes.md) — the terse CLI-only version of building and keyframing a mover.
