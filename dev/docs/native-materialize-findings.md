@@ -2723,3 +2723,91 @@ move these 3 levels' numbers: it removes a real, confirmed confound from the com
 on some larger, differently-shaped level in the 21-level corpus not tested this round -- would have
 silently false-positived without it), it is zero-risk (comparison-only, no production code, TDD'd), and
 per the standing rule the mechanism itself is grounded in round 6's live verification, not a guess.
+
+## Round 8 (2026-08-31): permeating light lists (`Model.Lights` region 1) -- `SplitWithPlaneFast` decoded live, closes most of the per-leaf content gap; still NOT wired into `light::bake`, still not byte-exact
+
+Worktree `permeating-lights-fix`, task: `port-the-per-leaf-permeating-light-lists-model`'s two open
+verify-before-porting items.
+
+**(a) `FPortal.iFrontLeaf`/`iBackLeaf` orientation -- resolved by measurement, not a fresh gdb
+capture.** No live `MakePortals` capture was done this round. Instead: `zones.rs`'s own DFS
+visit-order fix (`a999b30`, already live-verified against `DX.dx`'s real on-disk `iLeaf` values)
+turned out to ALSO be the dominant fix for the permeating port's content bug -- rebuilding
+`permeating_lights.rs` unchanged against the now-current `zones.rs` moved UNATCO's per-leaf exact-run
+match from the board item's stale 4/762 to 675/762 (88.6%), including the leaf-0 reference run
+`[44,43,42,39,19,13,12]` matching exactly. A backward `iFrontLeaf`/`iBackLeaf` orientation would
+invert the flood's `d<0` gate globally and collapse the flood to near-nothing, not produce an
+88%-correct result with a narrow, structured residual -- so the existing `a`=front/`b`=back
+convention is trusted on this evidence. Flagged as weaker than a live capture would be; not attempted
+further this round.
+
+**(b) `FPoly::SplitWithPlaneFast` -- decoded by static disassembly, RESOLVED.** Found in `Engine.dll`
+(not `Editor.dll` -- it's an import) via its mangled export
+`?SplitWithPlaneFast@FPoly@@QBEHVFPlane@@PAV1@1@Z` at RVA `0x151f90` (image base `0x10000000` ->
+`0x10151f90`); disassembled with `pefile`+`capstone` per `unrealed/extracting-from-dll.md`'s method.
+It is NOT a plain per-vertex clip: every vertex's signed plane distance is classified by sign
+(`>= 0.0` exactly, ties go to "front"), but the function only calls the split decisive if some vertex
+exceeds `+THRESH_SPLIT_POLY_WITH_PLANE` (a `.rdata` float constant, extracted directly from the
+binary, RVA `0x206780` = `0.25`) AND some vertex is below `-0.25` (RVA `0x20b580`). Short of both,
+it returns the WHOLE polygon unclipped (`SP_Front`) or rejects it WHOLESALE (`SP_Back`) --  never a
+naive per-edge sliver. `permeating_lights.rs`'s `clip_beam` was doing exactly that naive sliver clip;
+replaced with `split_with_plane_fast`, a faithful port of the decoded algorithm (see its doc comment
+for the disassembly addresses). One branch (`SP_Coplanar`, neither flag set) has no known caller
+behavior from this round's disassembly -- defaulted to "kept whole" (empirically no worse than
+"reject" on this measurement: 35 vs 30 mismatches, but "reject" traded 0 missing for 3 new missing
+entries, a different failure mode) and flagged as the one still-open item.
+
+**Effect, measured on UNATCO (`03_NYC_UNATCOHQ.dx`) via
+`spikes/2026-08-29-permeating-lights/harness/check_permeating.py`** (per-leaf light-name run,
+resolved content, order+content compared against the self-built golden cached at
+`_scratch/permeating-check-2026-08-29/golden.dx`):
+
+| | leaves w/ exact run | mismatching leaves | mismatch shape |
+|---|---:|---:|---|
+| before (old `clip_beam`, wired) | 675/762 (88.6%) | 87 | 82 over-reach (extra lights only) + 5 under-reach (`Light127` missing everywhere) |
+| after (`split_with_plane_fast`) | 727/762 (95.4%) | 35 | 35 over-reach (extra lights only); the 5-leaf under-reach case fully fixed as a side effect |
+
+Remaining 35 mismatches are still 100% one-directional (native has extra lights, never missing,
+never reordered) -- consistent with a residual clip/qualification imprecision, not an orientation
+bug. Not further isolated this round.
+
+**`parity_report.py`, before (old `clip_beam`, wired) / after (fixed), all figures unchanged unless
+noted -- geometry and Lighting (`LightMap`/shadow-bit) are UNCHANGED by this fix on all 3 levels (it
+only writes `Model.Lights` region 1 + leaf `i_permeating`, which neither section reads):**
+
+- **DX.dx** -- geometry ✅ EXACT (26/26/5/250/32/6, d=+0 all), content ❌ NOT EXACT (pre-existing
+  `texture_ref`/`i_actor` export-order residual, `p_base`/points untouched by this round; leaves
+  content identical both before/after -- level has no permeating lights to speak of), lighting ✅
+  FULL 100% (26/26 records, 1536/1536 shadow bits) both before/after. `FULL PARITY: NO` (content),
+  unchanged.
+- **UNATCO (`03_NYC_UNATCOHQ.dx`)** -- geometry ❌ NOT EXACT (verts d=+5, points d=+16, pre-existing,
+  unchanged), content ❌ NOT EXACT: leaves' raw `i_permeating` POINTER differs at 734/762 indices
+  BOTH before and after -- unchanged at the byte level, because the fix leaves 35 (down from 87)
+  leaves with wrong CONTENT, and even one wrong leaf ahead of the tail cascades a pointer-offset
+  mismatch onto every later leaf's `i_permeating` value; the byte-exact metric only moves once ALL
+  upstream leaves are exact. Lighting 83.6% (2797/3345 records), 99.27% shadow bits, unchanged.
+  `FULL PARITY: NO`, unchanged at the byte-comparison level despite the real semantic-content
+  improvement above.
+- **NYC Bar (`02_NYC_Bar.dx`)** -- geometry ✅ EXACT (1620/953/283/20878/2762/138, d=+0 all), content
+  ❌ NOT EXACT: leaves' raw `i_permeating` differs at 230/283 before, 206/283 after (same cascade
+  caveat as UNATCO, but this level's residual leaf-content mismatches happen to shift the count
+  slightly). Lighting 87.7% (821/936 records), 99.76% shadow bits, unchanged. `FULL PARITY: NO`,
+  unchanged.
+
+**No level moved to FULL PARITY this round.** The fix is real and substantially closes the semantic
+per-leaf-content gap (measured directly), but the BYTE-level `i_permeating` index comparison --
+which is what full parity actually requires -- stays gated on reaching ZERO wrong-content leaves,
+not "mostly right"; a single remaining wrong leaf anywhere before the tail cascades to the whole rest
+of the array. `regression_gate.py` not re-run this round (scope: `cargo test --quiet` in
+`uedcli-native/`, 95/95 pass, no regression vs the 89 pre-existing; full `bin/test` intentionally
+NOT run per this session's standing instruction -- left for the coordinating session).
+
+**Shipped: `uedcli-native/src/permeating_lights.rs` only** (new `split_with_plane_fast`, 3 new unit
+tests pinning the decoded epsilon behavior against a naive clip). The dispatched agent also wired
+`write_permeating_region` into `light::bake` (`uedcli-native/src/light.rs`); the coordinating session
+reverted that part before committing. The owner's original call to leave it unwired (commit `8d7fe30`,
+"shipping wrong-but-plausible light lists is worse than the current honest `iPermeating = -1` gap")
+still holds -- 95.4% is real progress but still wrong-but-plausible, and this round's own measurement
+shows wiring it moves ZERO levels' byte-level parity. Flipping that call needs the owner's explicit
+yes (asked separately, not assumed). Scoped `bin/test -k permeating` (740 pytest + 95 cargo tests)
+re-verified clean after the revert.

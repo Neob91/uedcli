@@ -5,6 +5,24 @@ summary = "`Model.Lights` has two regions: the per-LEAF permeating light lists (
 spikes = ["dev/docs/spikes/2026-08-29-permeating-lights/"]
 +++
 
+## Status 2026-08-31: `SplitWithPlaneFast` decoded, content mostly fixed — still NOT wired into `light::bake`
+
+Both "verify before porting" items below addressed — see updated bullets. `clip_beam`'s naive
+Sutherland-Hodgman clip replaced with `split_with_plane_fast`, a disassembly-faithful port of the
+real function (`uedcli-native/src/permeating_lights.rs`). Measured on UNATCO (`03_NYC_UNATCOHQ.dx`):
+per-leaf exact-run matches went 675/762 → 727/762 (88.6% → 95.4%), mismatches 87 → 35, all remaining
+mismatches one-directional (native has extra lights, never missing). Full numbers and the
+disassembly evidence: `dev/docs/native-materialize-findings.md` "Round 8".
+
+**`write_permeating_region` was NOT wired into `light::bake` this round**, though the dispatched
+agent did wire it and the coordinating session reverted that part before committing. The owner's
+original call to leave it unwired (commit `8d7fe30`, comment: "shipping wrong-but-plausible light
+lists is worse than the current honest `iPermeating = -1` gap") still holds — 95.4% is real
+progress but is still wrong-but-plausible, not wrong-but-absent, and this round's own measurement
+shows wiring it in moves ZERO levels' byte-level parity (the comparison cascades on the first wrong
+leaf regardless). Flipping that call needs the owner's explicit yes, asked for separately. No level
+reaches FULL PARITY either way.
+
 ## Status 2026-08-29: first port attempt, NOT wired in — wrong per-leaf content
 
 `uedcli-native/src/permeating_lights.rs` implements the flood below (portal collection reused from
@@ -117,6 +135,21 @@ reached it in **DESCENDING `Level->Actors` index order**. The measured leaf-0 ru
 1. **Which filter result lands in `FPortal.iFrontLeaf` (`+0x1d8`) vs `iBackLeaf` (`+0x1dc`)** in
    `MakePortals` (`0x100a9750`). Get it backwards and the `d < 0` gate inverts, the flood runs the
    wrong way, and every leaf set is garbage. Only `AddPortal`'s arg→slot mapping (`0x100a72a0` →
-   ctor `0x100a7344`) was confirmed.
+   ctor `0x100a7344`) was confirmed. — **2026-08-31: trusted, not independently gdb-verified.** No
+   fresh `MakePortals` capture was done. Resolved instead by measurement: rebuilding the existing
+   `a`=front/`b`=back convention against `zones.rs`'s already-fixed DFS order (`a999b30`) reproduces
+   88.6% of UNATCO's leaves exactly, including the leaf-0 reference run — a backward orientation
+   would invert the flood globally and collapse it to near-nothing, not produce a mostly-correct
+   result with a narrow residual. Weaker evidence than a live capture; still open if stronger proof
+   is wanted later.
 2. **`FPoly::SplitWithPlaneFast`** (an `Engine` import at `[0x100cee30]`) is undecoded. Its coplanar
-   handling and epsilons shape the beam clip directly, so a port must mirror it exactly.
+   handling and epsilons shape the beam clip directly, so a port must mirror it exactly. —
+   **2026-08-31: RESOLVED by static disassembly.** Found in `Engine.dll` (export
+   `?SplitWithPlaneFast@FPoly@@QBEHVFPlane@@PAV1@1@Z`, RVA `0x151f90`); it classifies each vertex by
+   the SIGN of its plane distance (ties go front) but only treats the split as decisive once some
+   vertex passes `+0.25`/`-0.25` (`THRESH_SPLIT_POLY_WITH_PLANE`, `.rdata` constants at RVA
+   `0x206780`/`0x20b580`, extracted directly from the binary) on BOTH sides — short of that it
+   returns the polygon WHOLE or REJECTS it wholesale, never a naive per-edge sliver. Ported as
+   `split_with_plane_fast` in `permeating_lights.rs`. One branch (`SP_Coplanar`) has no confirmed
+   caller behavior — defaulted to "kept whole", flagged in the code and in
+   `native-materialize-findings.md` "Round 8" as the one remaining open item.

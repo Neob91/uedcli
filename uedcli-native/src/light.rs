@@ -365,6 +365,9 @@ pub fn bake(model: &mut Model, lights: &[LightInput]) -> Result<(), BuildError> 
     // leaf-reachability SET matches the editor exactly (748/762) while the per-leaf light CONTENT
     // does not (4/762 exact) -- see `port-the-per-leaf-permeating-light-lists-model`. Shipping
     // wrong-but-plausible light lists is worse than the current honest `iPermeating = -1` gap.
+    // 2026-08-31: `split_with_plane_fast` closed most of the gap (727/762, 95.4%) but not all of
+    // it -- still wrong-but-plausible, not wrong-but-absent. Owner's original call (commit
+    // 8d7fe30) stands unless/until they say otherwise; do not flip this without an explicit yes.
 
     if std::env::var("UEDCLI_VISGATE_DUMP").is_ok() {
         let mut surfaced = 0usize;

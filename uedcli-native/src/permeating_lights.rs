@@ -26,7 +26,7 @@
 //! union-find) — NOT only `PF_Portal`-flagged surfaces, and it never consults zone
 //! `Connectivity`/`Visibility`, so zone boundaries are transparent to it.
 //!
-//! ## Two things the board item flags as unverified before porting — resolved here empirically
+//! ## Two things the board item flags as unverified before porting — status 2026-08-31
 //!
 //! 1. **Which filter result lands in `FPortal.iFrontLeaf` vs `iBackLeaf`.** Get it backwards and
 //!    the `d < 0` gate inverts and every leaf set comes out empty or wrong. This port reuses
@@ -34,17 +34,28 @@
 //!    load-bearing for the zone union-find, so its front/back assignment is trustworthy) and
 //!    derives the flood's outward-oriented polygon per source leaf directly from it: leaving `b`
 //!    toward `a` uses `+normal` (the node's own plane, which points toward the front/`a` side);
-//!    leaving `a` toward `b` uses `-normal` with the polygon wound in reverse. Verified correct by
-//!    the leaf-0 exact-run test below — the wrong orientation would flip the `d<0` gate and mark
-//!    nothing (or an unrelated leaf set), not silently produce a plausible-looking wrong answer.
-//! 2. **`FPoly::SplitWithPlaneFast`** is undecoded past its functional role (a beam clip against
-//!    the planes through the light and each edge of the incoming polygon). [`clip_beam`] implements
-//!    a standard Sutherland-Hodgman half-space clip per edge, orienting each edge-plane so the
-//!    REST of the incoming polygon's own vertices fall on the kept side (self-consistent regardless
-//!    of the incoming polygon's absolute winding, so it does not depend on getting winding
-//!    right elsewhere). Not proven bit-identical to the real rasterizer-adjacent `SplitWithPlaneFast`
-//!    epsilons; flagged here as the one remaining unknown if a future measurement finds edge-case
-//!    leaf-membership differences.
+//!    leaving `a` toward `b` uses `-normal` with the polygon wound in reverse. NOT independently
+//!    live-verified via a fresh `MakePortals` gdb capture — resolved instead by measurement against
+//!    UNATCO's own golden: 727/762 leaves (95.4%) now match EXACTLY (order + content), including the
+//!    leaf-0 reference run. A backward orientation would invert the `d<0` gate on every portal
+//!    uniformly, which collapses the flood to near-nothing (the seed leaf only) rather than producing
+//!    a 95%-correct, narrowly-wrong-at-the-margins result — the observed error shape (see point 2) is
+//!    inconsistent with a global orientation bug and consistent with a boundary-epsilon one, so this
+//!    is now trusted, though a live capture would still be stronger evidence.
+//! 2. **`FPoly::SplitWithPlaneFast`** (`Engine.dll 0x10151f90`, image base `0x10000000`) — decoded by
+//!    static disassembly 2026-08-31 (`pefile`+`capstone`, `dev/docs/unrealed/extracting-from-dll.md`
+//!    method). It is NOT a plain per-vertex Sutherland-Hodgman clip: every vertex's signed distance to
+//!    the plane is compared against `THRESH_SPLIT_POLY_WITH_PLANE = 0.25` (`.rdata` constants at RVA
+//!    `0x206780`/`-0x20b580`, both extracted directly from `Engine.dll`'s bytes, not assumed), and a
+//!    polygon that isn't decisively split beyond that epsilon on BOTH sides is returned WHOLE
+//!    (`SP_Front`) or REJECTED WHOLE (`SP_Back`) rather than chopped to a sliver — see
+//!    [`split_with_plane_fast`] for the exact port and the one still-unconfirmed branch (`SP_Coplanar`
+//!    caller behavior). Before this fix, the old plain-clip `clip_beam` was measurably too permissive:
+//!    on UNATCO, native's leaf runs were a strict superset of the golden's in 82/87 mismatching
+//!    leaves (extra lights only, never missing, never reordered) — the exact signature of a clip that
+//!    keeps slivers the real epsilon-gated function would have discarded outright. This fix closed
+//!    87/762 mismatches to 35/762 (727/762 exact, was 675/762) and fully eliminated the 5-leaf
+//!    under-reach case (`Light127`) that existed before it.
 
 use crate::light::LightInput;
 use crate::model::{Model, Vec3};
@@ -123,6 +134,11 @@ fn bsp_descend_to_leaf(model: &Model, p: &Vec3) -> i32 {
     -1
 }
 
+/// `THRESH_SPLIT_POLY_WITH_PLANE`, live-extracted from `Engine.dll`'s `.rdata` (2026-08-31): the
+/// two float constants `SplitWithPlaneFast` (`0x10151f90`) compares each vertex's signed plane
+/// distance against are `+0.25`/`-0.25` at RVA `0x206780`/`0x20b580`. See [`split_with_plane_fast`].
+const THRESH_SPLIT_POLY_WITH_PLANE: f32 = 0.25;
+
 /// Clip `target` against the beam formed by `light` and each edge of `clip`: for edge
 /// `(clip[j-1], clip[j])`, the plane through `light`/`clip[j]`/`clip[j-1]`, oriented so the OTHER
 /// vertices of `clip` fall on the kept side (self-consistent regardless of `clip`'s own winding).
@@ -150,7 +166,7 @@ fn clip_beam(light: &Vec3, clip: &[Vec3], target: &[Vec3]) -> Option<Vec<Vec3>> 
         if sign_sum < 0.0 {
             normal = Vec3::new(-normal.x, -normal.y, -normal.z);
         }
-        poly = clip_half_space(&poly, light, &normal);
+        poly = split_with_plane_fast(&poly, light, &normal)?;
     }
     if poly.len() >= 3 {
         poly.truncate(14);
@@ -160,29 +176,48 @@ fn clip_beam(light: &Vec3, clip: &[Vec3], target: &[Vec3]) -> Option<Vec<Vec3>> 
     }
 }
 
-/// Sutherland-Hodgman clip of convex `poly` by the half-space `dot(v - origin, normal) >= 0`.
-fn clip_half_space(poly: &[Vec3], origin: &Vec3, normal: &Vec3) -> Vec<Vec3> {
+/// Port of `FPoly::SplitWithPlaneFast` (`Engine.dll 0x10151f90`, disassembled 2026-08-31, image
+/// base `0x10000000`), specialized to this caller's use (keep the front/kept half of `poly` for the
+/// half-space `dot(v - origin, normal) >= 0`; the real function also produces a back-half output,
+/// unused here).
+///
+/// The real function is NOT a plain per-vertex Sutherland-Hodgman clip: it first classifies every
+/// vertex by the SIGN of its signed distance (`>= 0.0` exactly, no epsilon, ties go to front — the
+/// `jb` branch at `0x10152021` only fires on strictly-negative), but only calls it decisively
+/// "positive" (`0x1015202f`/`0x10152036`, sets a `Positive` flag) if that distance exceeds
+/// `+THRESH_SPLIT_POLY_WITH_PLANE` (`0.25`, `.rdata` RVA `0x206780`), and decisively "negative" (sets
+/// `Negative`, `0x10152051`/`0x10152059`) only past `-0.25` (RVA `0x20b580`). Only when BOTH flags
+/// are set does it build a clipped polygon at all (`0x101520ab` on): otherwise it returns the WHOLE
+/// input polygon unclipped if the front side isn't empty (`SP_Front`, `!negative`), or discards it
+/// entirely if the front side IS empty (`SP_Back`, `!positive`) — verified via the flag-check block
+/// at `0x10152070`-`0x101520a2` (`eax=2`/`SP_Back` when `!positive && negative`, `eax=ebx+1=1`/
+/// `SP_Front` when `!negative`). A poly with every vertex inside the epsilon band of the plane
+/// (`SP_Coplanar`, neither flag set) is treated here as kept-whole — the real caller's `ActorVisibility`
+/// (`Editor.dll`, not yet disassembled for this call site) may differ; the one remaining unconfirmed
+/// branch of the two the board item flagged.
+fn split_with_plane_fast(poly: &[Vec3], origin: &Vec3, normal: &Vec3) -> Option<Vec<Vec3>> {
     let n = poly.len();
     if n == 0 {
-        return Vec::new();
+        return None;
     }
+    let dot = |v: &Vec3| v.sub(origin).dot(normal);
+    let dots: Vec<f32> = poly.iter().map(dot).collect();
+    let positive = dots.iter().any(|&d| d > THRESH_SPLIT_POLY_WITH_PLANE);
+    let negative = dots.iter().any(|&d| d < -THRESH_SPLIT_POLY_WITH_PLANE);
+    if !negative {
+        return Some(poly.to_vec()); // SP_Front (or SP_Coplanar) -- kept whole, unclipped.
+    }
+    if !positive {
+        return None; // SP_Back -- rejected entirely.
+    }
+    // SP_Split: real per-edge clip. Ties at exactly 0.0 go to the front/kept bucket.
     let mut out = Vec::with_capacity(n + 1);
-    let side = |v: &Vec3| v.sub(origin).dot(normal);
     for i in 0..n {
         let cur = poly[i];
         let prev = poly[(i + n - 1) % n];
-        let (ds, dp) = (side(&cur), side(&prev));
-        if ds >= 0.0 {
-            if dp < 0.0 {
-                let t = dp / (dp - ds);
-                out.push(Vec3::new(
-                    prev.x + t * (cur.x - prev.x),
-                    prev.y + t * (cur.y - prev.y),
-                    prev.z + t * (cur.z - prev.z),
-                ));
-            }
-            out.push(cur);
-        } else if dp >= 0.0 {
+        let (ds, dp) = (dots[i], dots[(i + n - 1) % n]);
+        let (cur_front, prev_front) = (ds >= 0.0, dp >= 0.0);
+        if cur_front != prev_front {
             let t = dp / (dp - ds);
             out.push(Vec3::new(
                 prev.x + t * (cur.x - prev.x),
@@ -190,8 +225,15 @@ fn clip_half_space(poly: &[Vec3], origin: &Vec3, normal: &Vec3) -> Vec<Vec3> {
                 prev.z + t * (cur.z - prev.z),
             ));
         }
+        if cur_front {
+            out.push(cur);
+        }
     }
-    out
+    if out.len() >= 3 {
+        Some(out)
+    } else {
+        None
+    }
 }
 
 /// `ActorVisibility` (`0x100a6d00`): flood from `leaf`, marking every leaf reached.  `clip` is
@@ -296,6 +338,64 @@ mod tests {
     use crate::csg::CsgOper;
     use crate::fpoly::FPoly;
     use crate::light::LightInput;
+
+    // `split_with_plane_fast` regression tests. Before the 2026-08-31 fix, `clip_beam` used a plain
+    // Sutherland-Hodgman half-space clip (kept side = `dot >= 0.0`, no epsilon) in place of the real
+    // `FPoly::SplitWithPlaneFast` (`Engine.dll 0x10151f90`). Measured against a UNATCO golden, that
+    // made native's per-leaf light runs a strict superset of the editor's in 82/87 mismatching
+    // leaves — over-permissive, never missing. This case is the mechanism: a polygon with two
+    // vertices weakly on the "kept" side (never past `+0.25`) and two decisively on the other side
+    // (well past `-0.25`). A plain clip keeps a thin sliver (interpolated crossing points plus the
+    // two weak vertices); the real function sees no vertex past `+0.25` (`positive` stays false)
+    // while `negative` is true, classifies the WHOLE polygon `SP_Back`, and rejects it outright.
+    #[test]
+    fn split_with_plane_fast_rejects_a_weakly_kept_poly_wholesale() {
+        let origin = Vec3::new(0.0, 0.0, 0.0);
+        let normal = Vec3::new(1.0, 0.0, 0.0);
+        // dot(v) = v.x here (origin at 0, normal = +X): 0.1 (kept, but < 0.25) / -10.0 (rejected,
+        // well past -0.25).
+        let poly = vec![
+            Vec3::new(0.1, -10.0, 0.0),
+            Vec3::new(0.1, 10.0, 0.0),
+            Vec3::new(-10.0, 10.0, 0.0),
+            Vec3::new(-10.0, -10.0, 0.0),
+        ];
+        // A plain Sutherland-Hodgman clip would return Some(4 points) here (2 kept + 2 interpolated).
+        assert_eq!(split_with_plane_fast(&poly, &origin, &normal), None);
+    }
+
+    #[test]
+    fn split_with_plane_fast_keeps_a_decisively_positive_poly_whole() {
+        // No vertex past -0.25 (`negative` stays false) -- SP_Front: returned UNCLIPPED, even
+        // though the plane technically passes near two vertices' epsilon band.
+        let origin = Vec3::new(0.0, 0.0, 0.0);
+        let normal = Vec3::new(1.0, 0.0, 0.0);
+        let poly = vec![
+            Vec3::new(10.0, -10.0, 0.0),
+            Vec3::new(10.0, 10.0, 0.0),
+            Vec3::new(0.1, 10.0, 0.0),
+            Vec3::new(0.1, -10.0, 0.0),
+        ];
+        assert_eq!(split_with_plane_fast(&poly, &origin, &normal), Some(poly));
+    }
+
+    #[test]
+    fn split_with_plane_fast_clips_a_decisively_split_poly_normally() {
+        // Both sides decisively past the epsilon -- behaves like a normal half-space clip.
+        let origin = Vec3::new(0.0, 0.0, 0.0);
+        let normal = Vec3::new(1.0, 0.0, 0.0);
+        let poly = vec![
+            Vec3::new(10.0, -10.0, 0.0),
+            Vec3::new(10.0, 10.0, 0.0),
+            Vec3::new(-10.0, 10.0, 0.0),
+            Vec3::new(-10.0, -10.0, 0.0),
+        ];
+        let out = split_with_plane_fast(&poly, &origin, &normal).unwrap();
+        assert_eq!(out.len(), 4, "2 kept corners + 2 interpolated crossing points");
+        for v in &out {
+            assert!(v.x >= -1e-4, "every kept vertex must be on the front side: {v:?}");
+        }
+    }
 
     fn box_brush(hx: f32, hy: f32, hz: f32, loc: Vec3, oper: CsgOper) -> BrushInput {
         let c = |sx: f32, sy: f32, sz: f32| Vec3::new(sx * hx, sy * hy, sz * hz);
