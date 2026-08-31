@@ -15,10 +15,15 @@ copy of the state machine -- both already f32-round every op and are independent
 golden/native self-consistency in their own rounds.
 
 Usage: broad_shadow_sweep.py GOLDEN.dx TRUNK_PROJECT_DIR TRUNK_REL [--target N] [--timeout SECONDS]
+  [--dump-v1-only PATH]
   e.g. broad_shadow_sweep.py _scratch/wanchai-relight-2026-08-29/golden.dx dev/games .
+
+Round 10: added `--dump-v1-only PATH` -- writes EVERY v1-only-correct (v1 right, v2 wrong) case as
+one JSON line to PATH, not just the first-20 printed sample the original script capped at.
 """
 from __future__ import annotations
 
+import json
 import sys
 import time
 from pathlib import Path
@@ -44,6 +49,12 @@ def main() -> int:
     timeout_s = None
     if "--timeout" in sys.argv:
         timeout_s = float(sys.argv[sys.argv.index("--timeout") + 1])
+    dump_path = None
+    if "--dump-v1-only" in sys.argv:
+        dump_path = Path(sys.argv[sys.argv.index("--dump-v1-only") + 1])
+        dump_f = dump_path.open("w")
+    else:
+        dump_f = None
 
     repo = str(ROOT)
     upackage, umodel = _load(repo)
@@ -122,6 +133,11 @@ def main() -> int:
                     else:
                         if r1 == eb and r2 != eb:
                             v1_only_correct += 1
+                            if dump_f is not None:
+                                dump_f.write(json.dumps(
+                                    dict(record=k, light=lname, v=v, u=u, golden=eb, v1=r1, v2=r2,
+                                         p=list(p), loc=list(loc))) + "\n")
+                                dump_f.flush()
                         if r2 == eb and r1 != eb:
                             v2_only_correct += 1
                         if len(v1v2_disagree_examples) < 20:
@@ -144,6 +160,10 @@ def main() -> int:
                 break
         if checked >= target or stopped_early:
             break
+
+    if dump_f is not None:
+        dump_f.close()
+        print(f"[broadsweep] wrote {v1_only_correct} v1-only-correct cases to {dump_path}", flush=True)
 
     elapsed = time.monotonic() - start_t
     print(f"\n[broadsweep] DONE reason={'target/timeout' if stopped_early else 'exhausted level'} "

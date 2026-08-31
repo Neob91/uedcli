@@ -1839,3 +1839,53 @@ real `record=977` regression pair (v1-correct/v2-wrong) is `Light92` at `v=0 u=0
 (`golden=BLOCKED(0), v1=BLOCKED(0)=correct, v2=CLEAR(1)=wrong`) — only 2 of the 203, not 4, and a
 different light. A future round chasing this cluster should live-trace `record=977`/`Light92`, not
 `Light189`.
+
+**Round 10: the whole 203-case population traced to ONE mechanism, then shown to be a
+`broad_shadow_sweep.py` measurement artifact, not a real `line_clear` v2 regression — v2 stays
+shipped, no source change.** (2026-08-31, offline + 🔬 live, `--dump-v1-only` extension to
+`broad_shadow_sweep.py` + `linecheck_nearstate_recheck.py`) — Dumped the full 203-case list (not
+just the 20 printed): **all 203 are ONE light (`Light92`), all 11 distinct surfaces are
+`PF_BrightCorners`-flagged, and every single case diverges at the SAME BSP node, 5394** (a
+crossing where near-side resolves via a nested recursion to `state=1`, then the far side hits a
+bare terminal, `i_front=-1`). Node 5394's `node_flags=0x10` (`NF_BrightCorners` only) in
+`golden.dx`'s saved model makes `is_csg`'s unstripped (near/far) mask read it as non-CSG, letting
+the already-proven-open `state` leak through a terminal that should be genuinely solid.
+
+**Live-verified this is not what the real editor's shadow-ray walker actually sees.**
+`linecheck_nearstate_recheck.py` (new, surf-gated on `isurf=1979`, the cheapest of the 11 targets —
+record 2296, `Light92`, `v=0 u=0`, ray 25) captured node 5394's REAL `NodeFlags` byte live, at the
+exact moment the real walker classifies it during `LIGHT APPLY`: **`0x00`, not `0x10`** — matching
+9/9 other path nodes exactly (only node 5394 differs from the golden-saved snapshot). `NF_BrightCorners`
+on this node is evidently set LATER in the same `LIGHT APPLY` run (its own owning surface, processed
+after record 2296's, presumably stamps it) — golden.dx's saved model reflects END-OF-BAKE state, not
+the state the walker saw at THIS ray's cast time. (Also caught and discarded a real bug in the
+pre-existing `linecheck_walker_state_trace.py`'s own `RECURSE_CALL state_out` field — its
+`$esp+0xc` offset does not land on the pushed state value once the mid-vector struct setup between
+`0x17ce364` and `0x17ce3b4` is hand-counted; a new direct-register breakpoint at `0x17ce35e`
+supersedes it for state reads. `NEARSTATE_EAX` there confirmed `eax=1`, matching the ALREADY-SHIPPED
+near-state formula exactly — that formula was never wrong.)
+
+**The decisive check: native's OWN model never sets `NF_BrightCorners` on ANY node — `derive_nf`
+(`build.rs`/`bspcsg.rs`) has no case for `PF_BrightCorners`, so every node's flags in native's real
+pipeline lack bit `0x10` unconditionally, matching the real editor's AT-CAST-TIME state for exactly
+this population.** Re-ran v1 and v2 against a fresh native-built Wanchai tree's OWN node flags
+(`light-spotcheck-wanchai-native.dx`, current tree, no source changes) for all 203 cases (positions
+recomputed via native's own `row_origins`, not copied from golden): **203/203 agree (both blocked,
+matching golden)** — v2 does NOT reproduce the golden-tree regression when run against what native
+actually builds. `broad_shadow_sweep.py` (and, by extension, round 7-9's whole "test the port
+against golden.dx's saved tree" methodology) is valid for static node properties but wrong for
+`NF_BrightCorners` specifically, since golden.dx's copy reflects a value the flag only reaches AFTER
+the tested ray's own cast time.
+
+**No fix shipped — none is needed for this population, and none is safe to attempt speculatively.**
+Adding a `PF_BrightCorners → NF_BrightCorners` case to `derive_nf` (which WOULD close native's
+node_flags gap against golden.dx byte-for-byte) is explicitly NOT done here: native builds its whole
+model before lighting runs, so a naive static set would apply the flag to EVERY node from the start
+of the bake, not incrementally per-surface like the real editor evidently does — which is exactly the
+mechanism that would turn this dormant 203-case population into a REAL regression. The real
+per-surface timing/ordering rule that governs when the editor sets this bit during `LIGHT APPLY` is
+undecoded; per the standing rule, logged as an open, separate question rather than guessed at.
+`git diff -- uedcli-native/src/` is empty this round. New spike files:
+`dev/docs/spikes/2026-08-29-unatco-repart-live-diff/harness/linecheck_nearstate_recheck.py`,
+`.../logs/linecheck-nearstate-recheck.log`; `broad_shadow_sweep.py` gained a `--dump-v1-only PATH`
+flag (unlimited dump, not capped at 20).

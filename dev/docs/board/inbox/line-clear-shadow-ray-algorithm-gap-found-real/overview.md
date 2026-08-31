@@ -1,7 +1,7 @@
 +++
 priority = "p2"
 kind = "debug"
-summary = "Confirmed line_clear (not lumel_axes) causes Wanchai's bits-only shadow divergence. Round 3 found the round 1-2 target function (target+0x5b0) was wrong; round 4 pinned the real crossing formula (t'=de/(de-ds)) and measured it regressing both levels when grafted onto native's alternating recursion -- reverted. Round 5 explains why: point2 (the query's lumel_pos) stays bit-identical across 4 successive genuine crossings. Round 6: full disassembly of the real walker (0x17ce190) fully resolves the recursion shape (one genuine near-recursion replacing point1, tail-loop far-continuation replacing point2) AND finds a real, live-confirmed +/-0.001 epsilon band (not 0.0). Round 7: pinned the full state-machine (near-call incoming state, far-continuation state) via live capture of a CLEAR ray, verified perfectly (122/122 mechanical checks, 4/4 real rays incl. exact node-path replication) -- then found, via a broad offline sweep against real golden bits, a large-scale regression (81-92%, well below the ~99% baseline) that the earlier small-sample verification missed entirely. A FRONT/BACK state-formula swap only partially helps one region and hurts another (ruling out a simple sign error); the leading hypothesis (an unmodeled zone-transform branch gated on a context pointer) was LIVE-TESTED and REFUTED same round (edx=0 for all 4 sampled rays of the broken light, same as the working one). Root cause still open. Reverted cleanly -- linecheck.rs untouched, git diff empty, 90/90 tests green. Round 8: round 7's regression was a measurement artifact (v2 tested with no light-radius cull against a radius-culled baseline) -- re-derived the state machine independently (matches round 7 exactly), live-confirmed the top-level call's edi_in=0/extra_flags=4, and found v2 is 262/262 (100%) correct on every real Wanchai native-vs-golden mismatch vs v1's 20/262 (7.6%), zero regressions. SHIPPED and COMMITTED: linecheck.rs now the threaded-state port, TDD'd RED/GREEN, Wanchai byte-identical 3408/4530->3418/4530 (independently reproduced). One pre-existing test (a_not_vis_blocking_node_does_not_occlude, an unrealistic all-non-CSG synthetic) conflicted; owner ruled ship+rewrite, rebuilt with a realistic partial-flagging construction, cargo test 91/91. Round 9: UNATCO re-measured, 2692/3345 (80.5%) -> 2797/3345 (83.6%), consistent real improvement. Completed the full-level broad sweep (922706 bits, whole Wanchai level): v2 is a NET improvement (99.9697%->99.9780%) but not a strict win -- 280 bits fixed, 203 genuine regression candidates found (v1 was right, v2 wrong), clustered around record 977/Light92 (corrected same day -- Light189 at that record is actually a v2 fix, not a regression). Logged as an open residual on the shipped fix, not chased further this round."
+summary = "Confirmed line_clear (not lumel_axes) causes Wanchai's bits-only shadow divergence. Round 3 found the round 1-2 target function (target+0x5b0) was wrong; round 4 pinned the real crossing formula (t'=de/(de-ds)) and measured it regressing both levels when grafted onto native's alternating recursion -- reverted. Round 5 explains why: point2 (the query's lumel_pos) stays bit-identical across 4 successive genuine crossings. Round 6: full disassembly of the real walker (0x17ce190) fully resolves the recursion shape (one genuine near-recursion replacing point1, tail-loop far-continuation replacing point2) AND finds a real, live-confirmed +/-0.001 epsilon band (not 0.0). Round 7: pinned the full state-machine (near-call incoming state, far-continuation state) via live capture of a CLEAR ray, verified perfectly (122/122 mechanical checks, 4/4 real rays incl. exact node-path replication) -- then found, via a broad offline sweep against real golden bits, a large-scale regression (81-92%, well below the ~99% baseline) that the earlier small-sample verification missed entirely. A FRONT/BACK state-formula swap only partially helps one region and hurts another (ruling out a simple sign error); the leading hypothesis (an unmodeled zone-transform branch gated on a context pointer) was LIVE-TESTED and REFUTED same round (edx=0 for all 4 sampled rays of the broken light, same as the working one). Root cause still open. Reverted cleanly -- linecheck.rs untouched, git diff empty, 90/90 tests green. Round 8: round 7's regression was a measurement artifact (v2 tested with no light-radius cull against a radius-culled baseline) -- re-derived the state machine independently (matches round 7 exactly), live-confirmed the top-level call's edi_in=0/extra_flags=4, and found v2 is 262/262 (100%) correct on every real Wanchai native-vs-golden mismatch vs v1's 20/262 (7.6%), zero regressions. SHIPPED and COMMITTED: linecheck.rs now the threaded-state port, TDD'd RED/GREEN, Wanchai byte-identical 3408/4530->3418/4530 (independently reproduced). One pre-existing test (a_not_vis_blocking_node_does_not_occlude, an unrealistic all-non-CSG synthetic) conflicted; owner ruled ship+rewrite, rebuilt with a realistic partial-flagging construction, cargo test 91/91. Round 9: UNATCO re-measured, 2692/3345 (80.5%) -> 2797/3345 (83.6%), consistent real improvement. Completed the full-level broad sweep (922706 bits, whole Wanchai level): v2 is a NET improvement (99.9697%->99.9780%) but not a strict win -- 280 bits fixed, 203 genuine regression candidates found (v1 was right, v2 wrong), clustered around record 977/Light92 (corrected same day -- Light189 at that record is actually a v2 fix, not a regression). Logged as an open residual on the shipped fix, not chased further this round. Round 10: dumped the full 203-case list -- all one light (Light92), all PF_BrightCorners surfaces, all diverge at the SAME BSP node (5394). Live-traced it: node 5394's real NodeFlags at cast time is 0x00, not golden.dx's saved 0x10 (NF_BrightCorners gets stamped later in the same LIGHT APPLY run) -- native never sets that bit at all, and re-running v1/v2 against a freshly native-built tree shows 203/203 agree (no regression). Concluded: a broad_shadow_sweep.py measurement artifact (testing against golden's post-hoc node flags), not a real v2 defect. No fix needed or shipped; line_clear v2 stays shipped as-is."
 depends-on = ["getvisiblesurfs-wanchai-run-gap-root-cause"]
 spikes = ["dev/docs/spikes/2026-08-29-unatco-repart-live-diff/"]
 +++
@@ -758,3 +758,102 @@ Also added `--radius-aware` to `line_clear_v2_algorithm_check.py` and committed 
 findings-doc entry; not duplicated here). Full detail incl. both runs' numbers:
 `dev/docs/native-materialize-findings.md`, the "CORRECTION" paragraph right after the 922,706-bit
 entry.
+
+## Round 10 (2026-08-31): the 203-case regression population is fully characterized -- one light,
+## one node, one mechanism -- then shown to be a measurement artifact, not a real v2 defect
+
+Picked up round 9's own named next step: dump the full 203-`v1-only-correct` list (`broad_shadow_
+sweep.py` only printed 20) and live-trace the `record=977`/`Light92` lead.
+
+**Bit convention confirmed first**, per the task's own instruction to re-check rather than assume:
+`broad_shadow_sweep.py`'s `r1`/`r2`/`eb` are all `1=line_clear returns CLEAR, 0=BLOCKED`, read
+directly off the golden's own stored shadow bit -- matches the already-committed correction above
+(re-derived independently, not just re-read).
+
+**Extended `broad_shadow_sweep.py` with `--dump-v1-only PATH`** (writes every `v1-only-correct`
+case as one JSON line, not just the first 20) and reran the full Wanchai sweep to exhaustion:
+identical headline numbers to round 9 (922,706 in-range bits; v1 922426/922706, v2 922503/922706;
+280 fixed, 203 regressions) -- confirms no drift, third independent reproduction of this exact
+count.
+
+**Characterization: the 203 cases are NOT diverse.** All land on **ONE light** (`Light92`), across
+11 distinct records/surfaces, and **all 11 surfaces are `PF_BrightCorners`-flagged** (100%, not a
+majority). Per-case node-by-node tracing (both v1's `descend`/`seg_clear` and v2's `seg_clear_v2`,
+run offline against golden's own tree) found the SAME divergence node, **5394**, governs literally
+all 11 (record, light) groups -- a crossing where the near side resolves (via its own nested
+recursion) to `state=1`, then the tail-loop far side lands directly on a bare terminal
+(`i_front=-1`). Node 5394's `node_flags=0x10` (`NF_BrightCorners` only) makes the near/far
+"unstripped" CSG mask (`is_csg(..., strip_bright_corners=false)`) read it as non-solid, so the
+already-proven-open `state` passes straight through a terminal that a fresh, unbiased check (v1's
+literal both-sides-AND recursion) correctly finds solid. This directly confirms and localizes round
+6's previously-flagged, never-reconciled "Finding 4" (the CSG-mask stripping asymmetry) as
+load-bearing for this entire population.
+
+**Picked the cheapest of the 11 targets for a live trace: record 2296, surf 1979, ray 25** (5 lights
+precede `Light92` in this surface's run at a 2x4-lumel grid -- 24 rays, no container-boot-cost
+guesswork needed, computed exactly from `light_names`/`runs`). `linecheck_walker_state_trace.py` ran
+clean (surf-gate + ray-count technique from rounds 3-8, still fast: under a minute once the
+container's up) and reproduced the offline trace's `p`/node path exactly, INCLUDING the real
+`RAY_RETURN result=0` (BLOCKED, matching golden) for a ray whose OWN golden-tree offline replay says
+CLEAR -- meaning the divergence is real, not a python-port artifact.
+
+**Root cause, live-confirmed: node 5394's REAL `NodeFlags` at the moment the walker classifies it is
+`0x00`, not golden.dx's saved `0x10`.** A new harness, `linecheck_nearstate_recheck.py` (adds a
+`NODE` breakpoint printing the live `NodeFlags` byte read directly off the node, `*(esi+0x37)`, at
+every step), confirmed 9/9 other path nodes match golden.dx's saved flags exactly and ONLY node 5394
+differs (live `0x00` vs golden's saved `0x10`). `NF_BrightCorners` on this node is evidently set
+LATER in the same `LIGHT APPLY` run (its OWN owning surface, a real poly with `num_vertices=5`,
+apparently gets processed after record 2296's) -- golden.dx's saved model is an END-OF-BAKE
+snapshot, not what the walker actually consulted when THIS ray was cast. (Along the way, also found
+and fixed a real bug in the PRE-EXISTING `linecheck_walker_state_trace.py`'s own `RECURSE_CALL
+state_out` field: its `$esp+0xc` read does not land on the pushed near-state value once the
+mid-vector struct setup between `0x17ce364` and `0x17ce3b4` is correctly hand-counted. A direct
+register breakpoint at `0x17ce35e` (where `%eax` is freshly finalized to 0/1, before anything else
+touches it) supersedes it -- and confirms `eax=1` for this exact case, i.e. the ALREADY-SHIPPED
+near-state formula was never wrong; only the old harness's diagnostic read of it was.)
+
+**Decisive check: native's own model never sets `NF_BrightCorners` on any node at all.**
+`derive_nf` (`build.rs`/`bspcsg.rs`) has no case mapping `PF_BrightCorners` (surf flag) to
+`NF_BrightCorners` (node flag) -- so in native's real, actual pipeline, EVERY node's flags lack bit
+`0x10` unconditionally, which happens to match the real editor's AT-CAST-TIME state for this whole
+population (their own surfaces, like record 2296's target node, haven't been "stamped" yet either).
+Re-ran v1 and v2 against a **freshly native-built** Wanchai tree (`light-spotcheck-wanchai-native.dx`,
+current tree, positions recomputed via native's OWN `row_origins`, not copied from golden) for all
+203 cases: **203/203 agree with each other (both blocked, matching golden)**. v2 does not reproduce
+this regression against what native actually builds -- only against golden.dx's saved,
+post-hoc-flagged tree.
+
+**Conclusion: this is a `broad_shadow_sweep.py` (and, by extension, the whole "test the port against
+golden.dx's saved tree" methodology used since round 1) measurement artifact for `NF_BrightCorners`
+specifically, not a real defect in the shipped `line_clear` v2.** `line_clear` v2 stays shipped, no
+change. **No fix attempted or needed** -- per the standing rule, do NOT add a `PF_BrightCorners`
+case to `derive_nf` speculatively: doing so would apply the flag to every node from the START of
+native's bake (native builds geometry once, before lighting), unlike the real editor's evident
+per-surface incremental timing -- which is exactly the mechanism that would turn this currently-inert
+203-case population into a genuine regression. The real timing rule (when, during `LIGHT APPLY`, the
+editor sets this bit) is undecoded and logged as a separate open question, not guessed at.
+
+**Not chased this round** (out of scope, flagged for a future round if relevant): whether any of
+round 8's decisive 262/262 real-mismatch verification set, or any of the 280 `v2-only-correct`
+"fixes," are affected by the same golden-tree-timing artifact in the OTHER direction (crediting or
+blaming v2 for something it doesn't actually do). Given both directions require a node whose OWN
+surface is processed later than the ray testing it, and the 262/280 populations were not re-verified
+against a freshly native-built tree this round, this is a real but unconfirmed caveat on those
+existing figures, not a re-opened question about the ship decision.
+
+`git diff -- uedcli-native/src/` is empty (no production-code changes this round). `bin/test` and
+`regression_gate.py` not re-run -- nothing that could regress changed; verified instead via `git
+status`/`git diff --stat` showing zero touched files under `uedcli-native/src/`.
+
+## Files (round 10)
+
+- `dev/docs/spikes/2026-08-29-unatco-repart-live-diff/harness/broad_shadow_sweep.py` (extended:
+  `--dump-v1-only PATH`, unlimited dump instead of the 20-example cap)
+- `dev/docs/spikes/2026-08-29-unatco-repart-live-diff/harness/linecheck_nearstate_recheck.py` (new --
+  surf-gated live trace with a direct-register near-state breakpoint at `0x17ce35e` and a live
+  `NodeFlags` byte read per node, superseding the older harness's miscalibrated `state_out` field for
+  state reads)
+- `dev/docs/spikes/2026-08-29-unatco-repart-live-diff/logs/linecheck-nearstate-recheck.log` (the
+  live capture the root-cause finding is drawn from)
+- `/tmp/v1_only_dump_wanchai.jsonl` (not committed, host-local -- the full 203-case dump; reproduce
+  via `broad_shadow_sweep.py ... --dump-v1-only PATH`)
