@@ -187,6 +187,12 @@ Geometry:
   `texture_ref` residual: `texture-group-index-misses-textures-inside-u` (a real native bug — `.u`
   code packages are never scanned for texture groups) and
   `golden-edit-paste-resolves-ambiguous-texture` (NYC Bar's 139 — the golden is the wrong side).
+  **Follow-up (2026-08-31): `texture-group-index-misses-textures-inside-u` — FIXED, moved to
+  `done/`.** `build_texture_group_index` now scans `*.u` too (purely additive over the existing
+  `*.utx` scan). `DX.dx` `texture_ref` 26 -> **0** (surfs residual now `p_base`-only, 13/26 — the
+  same §10.20 Points-order thread, unaffected); `02_NYC_Bar`/`03_NYC_UNATCOHQ` `texture_ref` counts
+  and full diff lists unchanged (139, 0) — no regression. `DX.dx` does not reach FULL PARITY from
+  this alone (the `p_base` residual remains). `native-materialize-findings.md` §6.
 - `smuggler-4-surf-delta-traced-to-4-pf-semisolid` — +4 surf residual, root mechanism not found.
 - `freeclinic08-nsfhq04-1-surf-under-build-root` — world-level poly-order divergence, localized to
   before `bspBuildFPolys` even runs, not root-caused further.

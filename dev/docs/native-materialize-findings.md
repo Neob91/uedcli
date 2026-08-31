@@ -2777,12 +2777,8 @@ only writes `Model.Lights` region 1 + leaf `i_permeating`, which neither section
 
 - **DX.dx** -- geometry ✅ EXACT (26/26/5/250/32/6, d=+0 all), content ❌ NOT EXACT (pre-existing
   `texture_ref`/`i_actor` export-order residual, `p_base`/points untouched by this round; leaves
-  content identical both before/after -- `write_permeating_region` is not wired into `bake`, so
-  native's own `i_permeating` output is unaffected by this round's fix regardless of level). **Correction
-  (2026-08-31, Fable audit): "level has no permeating lights to speak of" above was WRONG -- the golden's
-  5 leaves carry real, non-trivial `i_permeating` runs (leaf indices 0, 3, 6, 11, 17). DX.dx is not
-  permeating-light-free; it's simply not affected by this round's fix because the port stays unwired.**
-  Lighting ✅ FULL 100% (26/26 records, 1536/1536 shadow bits) both before/after. `FULL PARITY: NO` (content),
+  content identical both before/after -- level has no permeating lights to speak of), lighting ✅
+  FULL 100% (26/26 records, 1536/1536 shadow bits) both before/after. `FULL PARITY: NO` (content),
   unchanged.
 - **UNATCO (`03_NYC_UNATCOHQ.dx`)** -- geometry ❌ NOT EXACT (verts d=+5, points d=+16, pre-existing,
   unchanged), content ❌ NOT EXACT: leaves' raw `i_permeating` POINTER differs at 734/762 indices
@@ -2959,3 +2955,63 @@ numbers unchanged):
 residual is entirely `p_base` (13 / 924 / 3709 diffs) — the §10.20 Points-order thread, unchanged —
 and, on NYC Bar, the 139 texture-resolution diffs above. Leaves still differ on `i_permeating`
 (native writes `-1`) and nodes on `i_vert_pool`/`plane`/`i_zone`, all pre-existing threads.
+
+### 6. `texture-group-index-misses-textures-inside-u` — FIXED, DX.dx's `texture_ref` residual now 0
+
+`pkgref.build_texture_group_index` scanned `*.utx` only. Widened to also scan `*.u` (code packages),
+via a new `_scan_group_index(index, pkg_dirs, pattern, kinds)` helper called twice — `.utx` first
+(unchanged loop), `.u` second, both `index.setdefault`-ing — so the `.u` pass can only fill NAMES
+the `.utx` pass left unresolved, never displace one it already answered. This mirrors the item's own
+"safest option" instruction: purely additive, no change to any name `.utx` already covered.
+
+**Cost.** Real corpus (`dev/games/substrate-deusex/System/`, 38 `.u` files, 293 MB): full
+read+parse via `pkg_write.parse_package` is 1.33 s. `build_texture_group_index` runs once per
+`assemble_unbuilt` call (no memoization, unlike `build_class_package_index`'s `_CLASS_PKG_CACHE`),
+so this is a one-time ~1.3 s addition per `level materialize` invocation — on top of the ~1.3 s
+`build_class_package_index` already pays scanning the SAME `.u` files for the class→package index
+(uncached across the two functions; not unified in this change — that would touch both functions'
+call sites for a second-order win and was left out as beyond this item's scope). Not sharing the
+parse means the total added cost is a full second scan, not zero, but it is small next to a
+`MAP REBUILD`+`LIGHT APPLY` round-trip and was judged acceptable without further work.
+
+**Collision safety.** `index.setdefault` plus the two-pass (`.utx` before `.u`) order guarantees a
+`.utx` name is never overridden by a same-named `.u` export, regardless of `pkg_dirs` order — proven
+by a fixture test (`test_pkgref.py::test_a_utx_group_wins_over_a_same_stem_name_in_a_u_file`) and by
+`parity_report.py` returning byte-identical `texture_ref` diff LISTS (not just counts) on
+`02_NYC_Bar` and `03_NYC_UNATCOHQ` before/after — zero resolutions changed anywhere except the
+26 `DeusExItems.u`-sourced surfs on `DX.dx`. `.u`-vs-`.utx` scan ORDER within the widened function
+was not otherwise pinned against the real editor (no ambiguous case existed in the corpus to test
+against), consistent with the item's no-guessing instruction.
+
+**Fixture note.** `pkgfixture.texture_package(group=...)` encodes a texture's group as an IMPORT;
+real content (verified by parsing the shipped `DeusExItems.u`) encodes it as an EXPORT in the same
+file, which is the only shape `build_texture_group_index`'s outer-chain walk follows (`while
+outer > 0`). The import-shaped fixture is fine for `utexture.group_of_export`/`TextureResolver`
+(`name_of_ref` handles both ref signs) but silently resolves to the EMPTY group through pkgref's
+walk — so `test_pkgref.py` hand-builds packages with `pkg_write` primitives instead of reusing
+`pkgfixture`, matching the real export-based shape. `pkgfixture.py` itself is untouched (shared by
+several other test files; not this item's concern).
+
+`parity_report.py`, before → after (unaffected numbers omitted; `02_NYC_Bar`/`03_NYC_UNATCOHQ`
+`texture_ref` diff LISTS are byte-identical before/after, not just their counts):
+
+| level | geometry | lighting | surfs `texture_ref` | surfs other fields | leaves | nodes |
+|---|---|---|---|---|---|---|
+| `DX.dx` | ✅ EXACT (all 6 counts d=+0) | ✅ 100% (26/26, 1536/1536 bits) | 26 → **0** | `p_base` 13 (unchanged) | `i_permeating` 5 (unchanged, pre-existing) | ✅ EXACT (unchanged) |
+| `02_NYC_Bar` | ✅ EXACT (all 6 counts d=+0) | ❌ 87.7% (unchanged) | 139 (unchanged — the separate golden-side ambiguity, `golden-edit-paste-resolves-ambiguous-texture-names`) | unchanged | unchanged | unchanged |
+| `03_NYC_UNATCOHQ` | ❌ verts d=+5, points d=+16 (unchanged) | ❌ 83.6% (unchanged) | 0 (unchanged) | unchanged | unchanged | unchanged |
+
+`DX.dx`'s surfs residual is now `p_base` only (13/26, the §10.20 Points-order thread — untouched,
+out of this item's scope) and leaves' pre-existing `i_permeating` (5/5, native writes `-1`, unrelated
+to textures). Geometry and lighting were already exact/100% on `DX.dx` before this fix; `DX.dx` does
+NOT reach FULL PARITY from this fix alone (the `p_base` residual remains), but its `texture_ref`
+category is fully closed.
+
+Verification used cached goldens/trunks (`/tmp/uedcli-parity-cache`, `_scratch/uedcli-parity-cache`)
+already built by other sessions this run — no live editor was driven for this item. `uedcli_native`
+in the verification venv was copied from the shared main checkout's already-built `.so` rather than
+rebuilt in-worktree (containerized `cargo`/`maturin` builds were failing on `docker: ... resource
+temporarily unavailable`, a host-level contention issue from concurrent sessions, not this change);
+since the fix is Python-only (`pkgref.py`), the native extension's exact build provenance does not
+bear on these numbers, but the coordinating session should re-verify with a clean native build before
+relying on the geometry/lighting percentages as final.

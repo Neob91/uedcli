@@ -69,27 +69,20 @@ def build_class_package_index(pkg_dirs) -> dict:
     return index
 
 
-def build_texture_group_index(pkg_dirs, kinds=("Texture",)) -> dict:
-    """Scan `*.utx` in `pkg_dirs` and map `(package_stem.lower(), objname.lower())` -> the object's
-    GROUP chain (e.g. "Concrete", or "" for a top-level object).
-
-    UE1 content packages nest objects in groups; a texture's true path is `Package.Group.Name` and
-    an import MUST carry that group in its outer chain (the editor emits it) or the game raises
-    "Can't find Texture in file".  Our trunk stores only the 2-part `Package.Name` a poly's
-    `Texture=` uses, so `object_ref` needs this index to re-attach the group.  `pkg_dirs` is
-    searched in order (project overlay first, then game base — first hit wins, mirroring the
-    composed search path)."""
-    index: dict = {}
+def _scan_group_index(index: dict, pkg_dirs, pattern: str, kinds) -> None:
+    """Glob `pattern` (`"*.utx"` or `"*.u"`) over `pkg_dirs` and add each matching export's group
+    chain to `index` via `setdefault` — a name already present (from an earlier call) is never
+    overwritten, so calling this `.utx` first and `.u` second makes the `.u` pass purely additive."""
     for d in pkg_dirs or ():
         dp = Path(d)
         if not dp.is_dir():
             continue
-        for utx in sorted(dp.glob("*.utx")):
+        for f in sorted(dp.glob(pattern)):
             try:
-                p = parse_package(utx.read_bytes())
+                p = parse_package(f.read_bytes())
             except Exception:
                 continue                      # a bad/locked package never breaks the build
-            stem = utx.stem.lower()
+            stem = f.stem.lower()
             for i, e in enumerate(p.exports):
                 if p.class_of_export(i) not in kinds:
                     continue
@@ -99,6 +92,30 @@ def build_texture_group_index(pkg_dirs, kinds=("Texture",)) -> dict:
                     parts.append(p.names[oe["nm"]])
                     outer = oe["outer"]
                 index.setdefault((stem, p.names[e["nm"]].lower()), ".".join(reversed(parts)))
+
+
+def build_texture_group_index(pkg_dirs, kinds=("Texture",)) -> dict:
+    """Scan `*.utx` AND `*.u` in `pkg_dirs` and map `(package_stem.lower(), objname.lower())` ->
+    the object's GROUP chain (e.g. "Concrete", or "" for a top-level object).
+
+    UE1 content packages nest objects in groups; a texture's true path is `Package.Group.Name` and
+    an import MUST carry that group in its outer chain (the editor emits it) or the game raises
+    "Can't find Texture in file".  Our trunk stores only the 2-part `Package.Name` a poly's
+    `Texture=` uses, so `object_ref` needs this index to re-attach the group.  `pkg_dirs` is
+    searched in order (project overlay first, then game base — first hit wins, mirroring the
+    composed search path).
+
+    UE1 stores SOME textures inside CODE packages too (e.g. `DeusExItems.u`'s `Engine.Texture`
+    export `BlackMaskTex`, group `Skins` — an actor-skin texture with nowhere else to live). The
+    `.utx` pass runs first and the `.u` pass is `setdefault`-only, so a name resolvable from `.utx`
+    is never displaced by a same-named `.u` export — this widening is purely additive, matching
+    the pre-existing `.utx`-only behaviour for every name it already covered. Real-corpus measure
+    (`dev/docs/native-materialize-findings.md`, texture-group-index-misses-textures-inside-u): the
+    `.u` pass adds ~1.3s (293 MB / 38 files) to a `materialize` run that already pays a comparable
+    cost scanning the SAME files for `build_class_package_index`."""
+    index: dict = {}
+    _scan_group_index(index, pkg_dirs, "*.utx", kinds)
+    _scan_group_index(index, pkg_dirs, "*.u", kinds)
     return index
 
 
