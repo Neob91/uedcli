@@ -125,6 +125,14 @@ Lighting (detail below this section, and in `dev/docs/native-materialize-finding
 
 Geometry:
 
+- `texture-ref-i-actor-divergence-traced-to-golden` (2026-08-31) — the MAJOR CORRECTION content-diff
+  section's `texture_ref`/`i_actor` "import-table ordering" hypothesis is REFUTED: root cause is
+  `build_ued_lit_golden.py`'s deliberate actor-set filter (Brush+LevelInfo+lights only) making every
+  `parity_report.py` golden a different actor POPULATION than native's full-actor build, so the
+  raw object-ref indices `compare_content` diffs are apples-to-oranges — not a native bug. No fix
+  shipped (a tooling design call). Also live-confirmed golden `Camera` exports are leaked
+  `GetVisibleSurfs` temp-viewport actors, not real level content. `p_base`'s divergence is a
+  separate, real Points-array reorder, likely same family as the item below.
 - `smuggler-4-surf-delta-traced-to-4-pf-semisolid` — +4 surf residual, root mechanism not found.
 - `freeclinic08-nsfhq04-1-surf-under-build-root` — world-level poly-order divergence, localized to
   before `bspBuildFPolys` even runs, not root-caused further.

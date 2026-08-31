@@ -2123,3 +2123,37 @@ on Python floats: `-0.0 != 0.0` is `False`, `NaN != NaN` is `True`; fixed via on
 comparison). The review then caught a third gap (leaves missing from the comparison entirely,
 fixed the same way). 43 unit tests, `bin/test` unaffected (12721 passed/0 failed + 91/91 cargo,
 this only touches `dev/docs/` harness code).
+
+**Follow-up: the `texture_ref`/`i_actor` ordering hypothesis above is REFUTED. Root cause found: a
+golden-build actor-set mismatch, not a native table-ordering bug.** (2026-08-31) — parsed both
+`DX.dx` packages' full import/export tables (`uedcli/native/pkg_write.parse_package`). Native: 23
+imports/52 exports/115 names. Golden: 14 imports/33 exports/87 names — not the same content
+reordered, a genuinely smaller POPULATION: golden is missing 19 real trunk actors native includes
+(`DXLogo3`, `DXText0/1`, `DeusExLevelInfo0`, `EidosLogo0`, `ElectricityEmitter0`, all 16
+`InterpolationPoint*`, `IonStormLogo0`, `PlayerStart1` — every decorative/non-brush/non-light actor),
+and instead carries 6 `Camera6`-`Camera11` exports that came from neither the trunk nor golden's own
+paste filter — live confirmation of the already-suspected "`SpawnViewActor` reuses a free `Camera`"
+mechanism (this file's lighting section, "Two smaller leads"): `GetVisibleSurfs`'s six 90°-apart temp
+visibility cameras leak into the saved package uncleaned. Cause: `build_ued_lit_golden.py` (which
+every `parity_report.py` golden is built with) deliberately pastes only `{Brush, LevelInfo} ∪
+light-classes` into the editor — correct for its original geometry/lighting-only purpose, but
+`compare_content` (added this same round) diffs native's FULL-actor-set package against this
+narrowed golden field-by-field. `texture_ref`/`i_actor` are absolute object-ref integers into each
+package's OWN table, so comparing them across two differently-populated packages is apples-to-oranges
+regardless of whether native's resolver is correct — and where checked, both sides resolve to the
+SAME semantic identity (leaf names match: every surf's texture is `BlackMaskTex` on both sides, the
+referenced brush names match too). Likely explains a large share of the corpus-wide
+`texture_ref`/`i_actor` diff counts, not just `DX.dx` — unconfirmed beyond `DX.dx` this round.
+**No fix shipped** — the real options (widen the golden's actor set past the brush-safety line, or
+compare object-refs by resolved identity instead of raw index) are a tooling design call, not a
+native-code fix; logged for a decision rather than picked unilaterally.
+`board/inbox/texture-ref-i-actor-divergence-traced-to-golden` has the full write-up.
+
+`p_base` (a Points-array index, unrelated to object-ref tables) is a SEPARATE, real divergence: on
+`DX.dx`, verts/points/vectors counts are already zero-delta, yet `p_base` differs across most surfs
+by small amounts — e.g. `Brush3`'s surfs walk the same 5-point set `{0..4}` on both sides but the
+last three surfs read them as `2,3,4` (native) vs `3,4,2` (golden), a cyclic rotation, not noise.
+Likely the same FAMILY as `wanchai-verts-points-residual-independently` (a Points-array
+construction-order divergence) but not confirmed identical — that thread's cases carry a real count
+residual (Wanchai +16, UNATCO +16) while `DX.dx` shows pure reordering with no count delta, a
+cleaner, smaller isolated repro if that thread is picked up again. Not chased further this round.
