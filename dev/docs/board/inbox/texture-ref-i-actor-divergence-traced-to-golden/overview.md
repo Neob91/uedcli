@@ -1,7 +1,7 @@
 +++
 priority = "p1"
 kind = "debug"
-summary = "texture_ref/i_actor systematic offset traced to a golden-build actor-set mismatch (round 1); ROUND 2: the actor-set widening was shipped SAFE (geometry counts unchanged, incl. movers-included on UNATCO) but does NOT close the divergence -- the actor-set-mismatch theory is REFUTED as a sufficient explanation, real cause is leaked Camera6-Camera11 exports + native/editor object-naming differences; ROUND 6: the leaked cameras are REFUTED as a LIGHT APPLY/GetVisibleSurfs mechanism (live no-light control build carries the identical 6 exports) -- an editor-session/viewport artifact, native should not replicate it; p_base divergence is a separate, real Points-array reorder; ROUND 7: Camera-export exclusion implemented+TDD'd+shipped in parity_report.py (precedent: sections/31) but MEASURED ZERO effect on texture_ref/i_actor on DX.dx/NYC Bar/UNATCO -- the artifact never overlaps any surf's real i_actor range on any of the 3 levels, so the remaining divergence is confirmed to be entirely the native/editor object-naming-order mismatch rounds 2-4 already found, not the cameras"
+summary = "ROUND 8 (closing): the root cause pinned in rounds 2-4 -- the native/editor object-NAMING and export-ORDER mismatch -- is confirmed real but is NOT a native bug and never was the lever. Two independent fresh-container golden builds of the same trunk produce BYTE-IDENTICAL name/import/export tables (UNATCO: 3357 names, 289 imports, 2890 exports, 736 `Polys<N>` names, all identical; only the GUID differs), so the editor counter is fully reproducible -- just not derivable from the trunk (it counts the editor process's own object allocations, and the export table is written in UObject allocation-slot order). Comparing refs by RESOLVED IDENTITY instead of raw table index (shipped in parity_lib/parity_compare, TDD'd; supersedes and deletes round 7's Camera renumbering) takes `i_actor` from 26/953/3616 diffs to 0/0/0 on DX.dx/NYC Bar/UNATCO and `texture_ref` from 26/862/3615 to 26/139/0. The survivors are two SEPARATE texture-resolution issues, both newly filed. No level newly reaches FULL PARITY; the remaining surf blocker is `p_base` alone."
 depends-on = ["native-light-apply-bake-where-it-stands-and", "wanchai-verts-points-residual-independently"]
 +++
 
@@ -421,3 +421,71 @@ not restarted per the owner's instruction not to run the full suite this session
 to this change — same test file passes clean via the main checkout's venv and via a fresh isolated
 worktree venv). Full `bin/test` left for the coordinating session before it commits.
 Full writeup: `native-materialize-findings.md`, search "Round 7".
+
+## Round 8 (2026-08-31): the `Polys<N>` counter IS deterministic — and was never the lever. `i_actor` divergence closed to ZERO on all 3 levels by comparing resolved identity instead of raw table index
+
+Mandate: decide on live evidence whether the editor's `Polys<N>` auto-name counter is derivable from
+the trunk (fix native) or session state (exclude from comparison); then re-measure.
+
+**Two independent builds of the same trunk produce BYTE-IDENTICAL tables — the "unreproducible
+session state" framing is empirically wrong.** Round 2 left exactly the pair this test needs on disk:
+`/tmp/uedcli-widen-test/unatco_widened.dx` (15:46) and `unatco_widened_run2.dx` (15:54) — same trunk,
+same filter, separate fresh `uuid7()` editor containers, distinct GUIDs. Reparsed both: names
+3357/3357 identical **in order**, imports 289/289 identical, exports 2890/2890 identical in every
+field **including serial offsets**, all 736 `Polys<N>` names identical. Only the GUID differs. So the
+counter is fully reproducible run to run; what it is NOT is derivable from the trunk — it counts the
+editor process's own object allocations across `OBJ LOAD`/`MAP NEW`/`EDIT PASTE`/`MAP REBUILD`, and
+the export table is written in `UObject` allocation-slot order with freed slots reused (the `DX.dx`
+golden's actor export order matches neither trunk order nor `levelinfo_first_order`'s paste order).
+`sections/31`'s practical verdict stands; its stated reason does not. A live 2-build repro on `DX.dx`
+was also attempted but the host's docker `exec` is currently unstable (three separate editor
+containers died mid-run); the UNATCO pair is the stronger evidence anyway (2890 exports vs 57).
+
+**The counting rule, pinned:** `Polys4` = the builder brush's polys (its shape `Model` is named
+plainly `Brush`); the world BSP `Model` is `Model2` on every level; per-brush `Polys` run `6, 8, 10,
+…` (+2) in paste order, movers included; the world `Model`'s own `Polys` is the last number. So the
+rule IS simple — it just starts from a session offset native has no way to know.
+
+**Renaming was never the lever, and `i_actor` was already correct.** Both fields are raw POSITIONS in
+each package's own table. Resolving each side's refs through its OWN table to the referenced object's
+full dotted path:
+
+| level | `i_actor` raw → resolved | `texture_ref` raw → resolved |
+|---|---|---|
+| `DX.dx` (26 surfs) | 26 → **0** | 26 → 26 |
+| `02_NYC_Bar` (953) | 953 → **0** | 862 → **139** |
+| `03_NYC_UNATCOHQ` (3616) | 3616 → **0** | 3615 → **0** |
+
+**Shipped (comparison tooling only, no production code):** `parity_lib.object_paths` /
+`resolve_object_ref` / `resolve_surf_refs` / `OBJECT_REF_NONE` / `SURF_OBJECT_REF_FIELDS` +
+`parity_compare.object_paths`, wired into `compare_content`. TDD'd — 6 new tests including a
+synthetic "identical content, different export order" case and a "genuinely different texture" case
+that must still report. Round 7's Camera renumbering is strictly superseded (resolved identity is
+immune to any export-table difference, cameras included) and was **deleted** along with its 7 tests —
+flagged here because it removes a sibling session's just-landed work; revert that part if the
+coordinating session disagrees. Harness tests: 52 pass.
+
+`parity_report.py` before → after (`surfs` field-diff totals; nodes/leaves/geometry/lighting all
+unchanged):
+
+| level | geometry | surfs fields_differ | lighting |
+|---|---|---|---|
+| `DX.dx` | ✅ EXACT (6/6 counts d=+0) | 65 → **39** | ✅ 100% (26/26 records, 1536/1536 bits) |
+| `02_NYC_Bar` | ✅ EXACT (6/6 counts d=+0) | 2739 → **1063** | ❌ 87.7% (821/936), 99.76% bits |
+| `03_NYC_UNATCOHQ` | ❌ verts d=+5, points d=+16 | 10940 → **3709** | ❌ 83.6% (2797/3345), 99.27% bits |
+
+**No level newly reaches content-exactness or FULL PARITY.** With the artifact gone the surf residual
+is `p_base` alone (13 / 924 / 3709) — the §10.20 Points-order thread, unchanged — plus NYC Bar's 139
+texture diffs. That makes `p_base` the single blocking surf field on two of the three levels, and
+`DX.dx` (13 diffs, 26 surfs, geometry+lighting both already exact) the cleanest possible repro for it.
+
+**Two new items filed from the `texture_ref` residual:**
+`board/inbox/texture-group-index-misses-textures-inside-u/` (a real native bug: `.u` code packages
+are never scanned for texture groups, so `DX.dx` ships `DeusExItems.BlackMaskTex` where the editor
+AND the original map both say `DeusExItems.Skins.BlackMaskTex`) and
+`board/inbox/golden-edit-paste-resolves-ambiguous-texture/` (NYC Bar's 139: the golden is the WRONG
+side — native matches the trunk and the original shipped map).
+
+**This thread's own question is now answered and closed.** `texture_ref`/`i_actor` are no longer a
+divergence: `i_actor` is exact everywhere, and what remains under `texture_ref` is two separate,
+independently-tracked texture-resolution issues.

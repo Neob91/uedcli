@@ -2811,3 +2811,147 @@ still holds -- 95.4% is real progress but still wrong-but-plausible, and this ro
 shows wiring it moves ZERO levels' byte-level parity. Flipping that call needs the owner's explicit
 yes (asked separately, not assumed). Scoped `bin/test -k permeating` (740 pytest + 95 cargo tests)
 re-verified clean after the revert.
+
+## `texture_ref`/`i_actor` round 8 (2026-08-31): the editor's `Polys<N>` counter IS deterministic — and irrelevant. `i_actor` divergence was 100% a measurement artifact; semantic-identity comparison shipped
+
+Mandate: decide, on live evidence, whether the editor's `Polys<N>` auto-name counter is derivable
+from the trunk (fix it in native) or session state (exclude it from comparison), and re-measure
+`texture_ref`/`i_actor` on `DX.dx`/`02_NYC_Bar`/`03_NYC_UNATCOHQ`.
+
+### 1. Two independent builds of the same trunk produce BYTE-IDENTICAL name/import/export tables
+
+`build_ued_lit_golden.py` starts a fresh `uuid7()`-named editor container per run, so two runs are
+two separate editor processes. Round 2 left exactly that pair on disk for UNATCO
+(`/tmp/uedcli-widen-test/unatco_widened.dx`, 15:46, and `unatco_widened_run2.dx`, 15:54 — same trunk,
+same actor filter, distinct GUIDs, so genuinely two saves). Reparsed both with
+`pkg_write.parse_package`:
+
+| | run 1 | run 2 | equal? |
+|---|---:|---:|---|
+| names (count and ORDER) | 3357 | 3357 | ✅ identical |
+| imports (all fields) | 289 | 289 | ✅ identical |
+| exports (all fields, incl. `soff`) | 2890 | 2890 | ✅ identical |
+| `Polys<N>` names, in order | 736 | 736 | ✅ identical |
+| GUID | — | — | ❌ differs (expected) |
+
+Every one of the 736 `Polys` numbers is the same in both builds, as is every export row's serial
+offset.
+
+The two files are not byte-identical, though — 1603 of 2533794 bytes differ, and they fall in exactly
+three places, none of them a table:
+
+- 16 bytes at offset 36: the package GUID (already excluded).
+- 4 bytes at body offset 10-13 of **933 of the 1416 `RF_HasStack` exports** (every actor), and of only
+  1 of the 1474 non-`RF_HasStack` exports. Each actor body opens `90 90 ff ff ff ff ff ff ff ff` then
+  4 bytes that look like a heap pointer and change every run (`14 00 01 00` vs `e0 79 46 0d`). Read
+  against UE1's `FStateFrame::Serialize` layout (`Node`, `StateNode`, `ProbeMask` as a QWORD,
+  `LatentAction` as an INT) that is `LatentAction`, serialized uninitialized. Layout-inferred, NOT
+  disassembly-confirmed. The 483 `RF_HasStack` exports that happen to match are consistent with
+  garbage that sometimes collides.
+- 2 bytes inside `MyLevel`: a float32 `102.62` vs `102.57`, an elapsed-time field.
+
+The world BSP `Model2` (1.65 MB) is byte-identical, which is what round 2's "two independent builds
+are 100% byte-identical across nodes/surfs/leaves" actually measured.
+
+**This is a hard ceiling on the full-byte-parity goal and is new** — the real editor cannot reproduce
+its own output byte-for-byte, so neither can native. Filed as
+`board/inbox/actor-state-frame-latentaction-is-serialized/`.
+
+**So `sections/31-package-wrapper-parity.md`'s categorization is right but its stated reason is
+wrong.** Object numbering and name-table order are NOT run-to-run unstable "session-global state" —
+they are perfectly reproducible for a fixed pipeline. What they are is **not derivable from the
+trunk**: they are a function of the editor process's own object-allocation history across
+`OBJ LOAD` → `MAP NEW` → `EDIT PASTE` → `MAP REBUILD` → `LIGHT APPLY`. Native would have to emulate
+UnrealEd's `UObject` allocator to reproduce them. The practical verdict (exclude, don't chase) is
+unchanged; the doc's justification should be, if the owner wants it corrected.
+
+### 2. The counting rule, as far as it goes
+
+Same three goldens, `Polys` exports in numeric order:
+
+| level | world brushes | per-brush run | extras |
+|---|---:|---|---|
+| `DX.dx` | 5 | `Polys6,8,10,12,14` | `Polys15` (the world `Model2`'s own `Polys`) |
+| `02_NYC_Bar` | 202 | `Polys6 … Polys408` (+2) | `Polys4`, `Polys410`, `Polys411` |
+| `03_NYC_UNATCOHQ` (movers excluded) | 733 | `Polys6 … Polys1470` (+2) | `Polys4`, `Polys1472`, `Polys1473` |
+| `03_NYC_UNATCOHQ` (`--keep-classes ALL`) | 733 + 28 movers | `Polys6 … Polys1526` (+2) | `Polys4`, `Polys1528`, `Polys1529` |
+
+`Polys4` (9 bytes, empty) is the builder brush's shape polys, paired with the `Model` export named
+plainly `Brush`; the world BSP `Model` is auto-named `Model2` on every level. Movers get per-brush
+`Polys` in the same +2 run as world brushes. The run is contiguous in NUMBER but not in export
+POSITION — on `DX.dx` the 5th brush's `Polys14` and the world's `Polys15` sit at export indices 16
+and 21, in the middle of the pasted actors, while the other four sit in a tail block. That is
+because the export table is written in `UObject` allocation-slot order (freed slots reused), not in
+paste order: the `DX.dx` golden's actor export order (`Brush8, Brush3, Brush9, Light5, Brush5,
+Brush4, Light3, Light2, Light1, Light0, …`) matches neither the trunk order nor
+`levelinfo_first_order`'s paste order.
+
+### 3. Renaming was never the lever — `i_actor` is positional, and it was already semantically correct
+
+Round 3 predicted this and it is now measured. `BspSurf.texture_ref`/`i_actor` are raw POSITIONS in
+each package's own import/export table. Resolving each side's refs to the referenced object's full
+dotted path (each through its OWN table) and comparing THOSE:
+
+| level | `i_actor` raw-index diffs | `i_actor` resolved-identity diffs | `texture_ref` raw | `texture_ref` resolved |
+|---|---:|---:|---:|---:|
+| `DX.dx` (26 surfs) | 26 | **0** | 26 | 26 |
+| `02_NYC_Bar` (953) | 953 | **0** | 862 | **139** |
+| `03_NYC_UNATCOHQ` (3616) | 3616 | **0** | 3615 | **0** |
+
+Native's surf→owning-brush assignment is 100% correct on all three levels, and its surf→texture
+assignment is 100% correct on UNATCO. The entire `i_actor` "divergence" tracked since the 2026-08-31
+"MAJOR CORRECTION" was the export-table ordering difference, i.e. a measurement artifact. No native
+change would have improved it, and a `Polys` rename would have changed nothing at all.
+
+These are the CACHED goldens `parity_report.py` uses — `DX.dx`'s is still the narrow 13-actor one
+from round 1. Resolved identity is 0 anyway, which retroactively settles round 1's and round 2's
+question too: the golden's actor POPULATION never mattered to `i_actor` either. Only the raw index
+was ever sensitive to it.
+
+### 4. The two surviving `texture_ref` residuals are BOTH about texture resolution, and only one is native's fault
+
+- **`DX.dx`, 26/26 surfs — a real native bug.** Native emits the import `DeusExItems.BlackMaskTex`;
+  the editor (and the original shipped `DX.dx`) emit `DeusExItems.Skins.BlackMaskTex`. Confirmed
+  cause: `BlackMaskTex` is an `Engine.Texture` export inside `DeusExItems.u` under group `Skins`, and
+  `pkgref.build_texture_group_index` globs `*.utx` only — it never scans code packages (`*.u`), so
+  `object_ref` cannot re-attach the group the trunk's 2-part `Texture=DeusExItems.BlackMaskTex`
+  dropped. This ships a wrong import path in real `level materialize` output, the exact failure
+  `build_texture_group_index`'s own docstring warns about ("Can't find Texture in file"). Not fixed
+  this round (out of mandate, and widening the glob to `*.u` needs its own perf/regression check) —
+  filed as `board/inbox/texture-group-index-misses-textures-inside-u/`.
+- **`02_NYC_Bar`, 139/953 surfs — a GOLDEN-side artifact; native is the correct side.** e.g. native
+  `NewYorkCity.Metal.trough1` vs golden `NYCBar.Metal.trough1`. The trunk says
+  `Texture=NewYorkCity.trough1` and the ORIGINAL shipped `02_NYC_Bar.dx` imports
+  `NewYorkCity.Metal.trough1` — native is faithful. `trough1` exists in BOTH `NewYorkCity.utx` and
+  `NYCBar.utx` (both in group `Metal`), both packages were `OBJ LOAD`ed, and the editor's T3D-paste
+  texture lookup picked the other one. One further surf has golden `texture_ref = 0` for native's
+  `effects.water.drtywater_a` — `effects` is not in that build's `OBJ LOAD` set, so the editor left
+  the surface untextured. Filed as
+  `board/inbox/golden-edit-paste-resolves-ambiguous-texture-names/`.
+
+### 5. Shipped (comparison tooling only; no production code touched)
+
+`parity_lib.object_paths` / `resolve_object_ref` / `resolve_surf_refs` / `OBJECT_REF_NONE` /
+`SURF_OBJECT_REF_FIELDS` (pure, TDD'd — 6 new tests in `test_parity_lib.py`, including a synthetic
+"same content, different export order" case and a "genuinely different texture" case that must still
+report), plus `parity_compare.object_paths`, wired into `compare_content` so both sides' surf
+object-refs are resolved to identity before comparison.
+
+Round 7's Camera-artifact renumbering (`export_renumber_map`/`renumber_actor_ref`/
+`renumber_surf_actor_refs`/`CAMERA_ARTIFACT_EXPORT_CLASS`/`parity_compare.golden_export_classes`) is
+strictly superseded — resolved identity is immune to ANY export-table difference, cameras included —
+and was removed along with its 7 tests.
+
+`parity_report.py`, before → after (`surfs` field-diff totals; nodes/leaves and all geometry/lighting
+numbers unchanged):
+
+| level | geometry | surfs fields_differ | `i_actor` | `texture_ref` | lighting |
+|---|---|---|---|---|---|
+| `DX.dx` | ✅ EXACT (all 6 counts d=+0) | 65 → **39** | 26 → **0** | 26 → 26 | ✅ 100% (26/26 records, 1536/1536 bits) |
+| `02_NYC_Bar` | ✅ EXACT (all 6 counts d=+0) | 2739 → **1063** | 953 → **0** | 862 → **139** | ❌ 87.7% (821/936), 99.76% bits |
+| `03_NYC_UNATCOHQ` | ❌ verts d=+5, points d=+16 | 10940 → **3709** | 3616 → **0** | 3615 → **0** | ❌ 83.6% (2797/3345), 99.27% bits |
+
+**No level newly reaches content-exactness or FULL PARITY.** After removing the artifact, the surf
+residual is entirely `p_base` (13 / 924 / 3709 diffs) — the §10.20 Points-order thread, unchanged —
+and, on NYC Bar, the 139 texture-resolution diffs above. Leaves still differ on `i_permeating`
+(native writes `-1`) and nodes on `i_vert_pool`/`plane`/`i_zone`, all pre-existing threads.

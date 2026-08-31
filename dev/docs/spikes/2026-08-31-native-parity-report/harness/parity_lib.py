@@ -221,65 +221,83 @@ def compare_array_content(native, golden, *, array_name: str) -> ArrayContentRes
                               diffs=tuple(diffs))
 
 
-CAMERA_ARTIFACT_EXPORT_CLASS = "Camera"
-"""The golden's editor-session viewport-camera artifact class. Every self-built golden carries 6
-`Camera` exports (`Camera6`-`Camera11`) regardless of actor set, light count, or whether `LIGHT
-APPLY` even ran -- confirmed a pure editor-session/viewport artifact, not level content
-(`native-materialize-findings.md`, "REFUTED as a `LIGHT APPLY`/`GetVisibleSurfs` mechanism"; the same
-category as the excluded GUID/timestamps/name-table order,
-`spikes/2026-07-15-native-materialize/sections/31-package-wrapper-parity.md`). They pollute the
-golden's export table and shift the object-ref NUMBERING of every export after them, so a `BspSurf`'s
-`i_actor` (a positive 1-based export ref -- the owning brush actor) compares apples-to-oranges against
-native's own table, which never emits them. `texture_ref` is unaffected: it is always a NEGATIVE
-(import-table) ref (`BspSurf.texture_ref`'s own comment), and Camera artifacts are EXPORTS, not
-imports."""
+OBJECT_REF_NONE = "<none>"
+"""What `resolve_object_ref` returns for a null object-ref (0). A distinct sentinel rather than the
+empty string so a null on one side never silently compares equal to a real object whose path
+happens to be empty."""
+
+SURF_OBJECT_REF_FIELDS = ("texture_ref", "i_actor")
+"""The two `umodel.BspSurf` fields that hold a UE1 object-ref rather than a value: `texture_ref` (the
+surface's texture, always an IMPORT ref) and `i_actor` (its owning brush actor, always an EXPORT
+ref). Both are raw POSITIONS in the package's own import/export table, so their integer values are
+only comparable between two packages whose tables have the same population AND the same order --
+which native's assembled `.dx` and a UED22 golden never do.
+
+UnrealEd's export order is its process-global `UObject` allocation-slot order (objects minted during
+`OBJ LOAD`/`MAP NEW`/`EDIT PASTE`/`MAP REBUILD`, with freed slots reused), and its object
+auto-numbering (`Polys<N>`, `Camera<N>`, `Model2`) counts every object the session ever minted. Both
+are reproducible run to run -- two independent fresh-container builds of the same trunk produce
+byte-identical name/import/export tables -- but neither is derivable from the trunk's own content, so
+native cannot and should not replicate them (`sections/31-package-wrapper-parity.md`;
+`native-materialize-findings.md`, "`texture_ref`/`i_actor` round 8").
+
+So the comparison resolves both refs to the referenced object's full dotted path on each side and
+compares THAT. Live measurement (`texture_ref`/`i_actor` round 8, `DX.dx`/`02_NYC_Bar`/`03_NYC_UNATCOHQ`): raw-index
+comparison reported 26/953/3616 `i_actor` diffs, resolved-identity comparison reports 0/0/0 -- every
+one was table-ordering noise. `texture_ref` went 26/862/3615 -> 26/139/0, the survivors being real
+content bugs in native's texture resolution."""
 
 
-def export_renumber_map(export_classes: Sequence[str], *,
-                        artifact_class: str = CAMERA_ARTIFACT_EXPORT_CLASS) -> dict[int, int | None]:
-    """Map each 0-based golden export index to its index in a table with every `artifact_class`
-    export removed and every surviving export renumbered down to close the gap. An artifact index
-    maps to `None` (a real `i_actor` should never point at one -- `renumber_actor_ref` raises if it
-    does, rather than silently producing a bogus renumbered ref).
+def object_paths(exports: Sequence[tuple[int, str]],
+                 imports: Sequence[tuple[int, str]]) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """Full dotted path of every export and import, resolving each entry's outer chain. Each entry is
+    `(outer_ref, name)`: `0` = no outer (top level), positive = a 1-based EXPORT ref, negative = a
+    ~0-based IMPORT ref. A texture import's chain is `Package -> Group -> Name`, so this is what
+    turns three flat table rows into `DeusExItems.Skins.BlackMaskTex`."""
+    export_paths: list[str | None] = [None] * len(exports)
+    import_paths: list[str | None] = [None] * len(imports)
 
-    Artifact exports need not be contiguous or trailing -- live measurement on `02_NYC_Bar`/
-    `03_NYC_UNATCOHQ` goldens found them INTERSPERSED among per-brush `Model`/`Polys` exports, not
-    clustered at a fixed offset (only `DX.dx`, small enough that all real content precedes them, saw
-    them contiguous at the tail) -- so this walks the whole table rather than assuming any single
-    known position."""
-    mapping: dict[int, int | None] = {}
-    next_index = 0
-    for i, cls in enumerate(export_classes):
-        if cls == artifact_class:
-            mapping[i] = None
-        else:
-            mapping[i] = next_index
-            next_index += 1
-    return mapping
+    def path_of(ref: int) -> str:
+        if ref == 0:
+            return ""
+        table, cache, index = ((exports, export_paths, ref - 1) if ref > 0
+                               else (imports, import_paths, -ref - 1))
+        if not 0 <= index < len(table):
+            raise ValueError(f"outer ref {ref} is out of range ({len(table)} entries)")
+        if cache[index] is None:
+            outer, name = table[index]
+            head = path_of(outer)
+            cache[index] = f"{head}.{name}" if head else name
+        return cache[index]
 
-
-def renumber_actor_ref(ref: int, mapping: dict[int, int | None]) -> int:
-    """Renumber a `BspSurf.i_actor`-style UE1 object-ref through `export_renumber_map`'s mapping.
-    `ref <= 0` (none, or an import ref -- `texture_ref`'s domain, never touched by this) passes
-    through unchanged; a positive `ref` is a 1-based export index, renumbered to what it would be in
-    the artifact-stripped table. Raises `ValueError` if `ref` points AT a stripped artifact export --
-    a real surf referencing an editor viewport camera as its owning brush actor would contradict the
-    whole premise that these are unreferenced session state, so this surfaces loudly rather than
-    silently producing a wrong renumbered ref."""
-    if ref <= 0:
-        return ref
-    old_index = ref - 1
-    new_index = mapping.get(old_index, old_index)
-    if new_index is None:
-        raise ValueError(f"object-ref {ref} points at a stripped artifact export (index {old_index})")
-    return new_index + 1
+    return (tuple(path_of(i + 1) for i in range(len(exports))),
+            tuple(path_of(-i - 1) for i in range(len(imports))))
 
 
-def renumber_surf_actor_refs(surfs: Sequence, mapping: dict[int, int | None]) -> tuple:
-    """Apply `renumber_actor_ref` to every surf's `i_actor` -- the one `BspSurf` field the golden's
-    Camera-artifact export-table pollution can shift (see `CAMERA_ARTIFACT_EXPORT_CLASS`). Returns
-    new surf objects (`dataclasses.replace`); the input sequence is untouched."""
-    return tuple(replace(s, i_actor=renumber_actor_ref(s.i_actor, mapping)) for s in surfs)
+def resolve_object_ref(ref: int, *, export_paths: Sequence[str],
+                       import_paths: Sequence[str]) -> str:
+    """A UE1 object-ref as the referenced object's full dotted path -- the identity that IS
+    comparable across two independently-built packages (see `SURF_OBJECT_REF_FIELDS`). Raises
+    `ValueError` naming the ref if it points outside the table, rather than resolving to a
+    neighbouring object and silently reporting a false match."""
+    if ref == 0:
+        return OBJECT_REF_NONE
+    table, index = ((export_paths, ref - 1) if ref > 0 else (import_paths, -ref - 1))
+    if not 0 <= index < len(table):
+        raise ValueError(f"object-ref {ref} is out of range ({len(table)} entries)")
+    return table[index]
+
+
+def resolve_surf_refs(surfs: Sequence, *, export_paths: Sequence[str],
+                      import_paths: Sequence[str]) -> tuple:
+    """Every surf with its `SURF_OBJECT_REF_FIELDS` replaced by resolved identity paths. Returns new
+    surf objects (`dataclasses.replace`); the input sequence is untouched. Both sides of a comparison
+    must go through this -- `compare_array_content` then diffs path strings for those two fields and
+    raw values for every other."""
+    return tuple(replace(s, **{f: resolve_object_ref(getattr(s, f), export_paths=export_paths,
+                                                     import_paths=import_paths)
+                               for f in SURF_OBJECT_REF_FIELDS})
+                 for s in surfs)
 
 
 @dataclass(frozen=True, kw_only=True)

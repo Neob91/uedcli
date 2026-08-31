@@ -40,16 +40,17 @@ def parse_dx_model(dx_path: Path):
     return UM.parse_model_body(pkg.buf, pkg.exports[mi]["soff"], pkg.exports[mi]["ssize"])
 
 
-def golden_export_classes(golden_path: Path) -> list[str]:
-    """The golden's own export table, class-only -- a cheap reparse (header + tables, no body
-    decode) used to locate the editor-session Camera-viewport artifacts (`pl.CAMERA_ARTIFACT_
-    EXPORT_CLASS`) before comparing `i_actor`. Kept separate from `parse_dx_model` (which decodes
-    only the world Model's body and has no access to the export table) rather than widening that
-    function's return shape for its other callers (`compare_geometry`), which don't need this."""
+def object_paths(dx_bytes: bytes) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """`(export_paths, import_paths)` for a built `.dx` -- the full dotted path of every table entry,
+    which is what `pl.resolve_surf_refs` needs to compare a surf's `texture_ref`/`i_actor` by identity
+    instead of by raw table position (see `pl.SURF_OBJECT_REF_FIELDS`). A cheap header/tables-only
+    parse; kept separate from `parse_dx_model` (which decodes only the world Model's body and has no
+    access to the tables) rather than widening that function's return shape for its other callers."""
     _ensure_imports()
-    import utexture_decode as UT
-    pkg = UT.load_package(str(golden_path))
-    return [pkg.class_of_export(i) for i in range(len(pkg.exports))]
+    from uedcli.native.pkg_write import parse_package
+    pkg = parse_package(dx_bytes)
+    return pl.object_paths([(e["outer"], pkg.names[e["nm"]]) for e in pkg.exports],
+                           [(i[2], pkg.names[i[3]]) for i in pkg.imports])
 
 
 def _temp_dx(data: bytes) -> Path:
@@ -114,23 +115,27 @@ def compare_content(native_dx_bytes: bytes, golden_path: Path) -> pl.ContentComp
     reporting format is built on; verts/points/vectors are NOT included, see
     `native-materialize-findings.md` for that scope note.
 
-    Before comparing, the golden's `i_actor` is renumbered through `pl.export_renumber_map` to strip
-    its 6 editor-session `Camera` viewport-artifact exports (`pl.CAMERA_ARTIFACT_EXPORT_CLASS`) --
-    native never emits them, so comparing raw `i_actor` against an unstripped golden table would
-    misreport every surf whose owning brush export sits after (or, on the larger levels, among) the
-    artifacts as a real divergence. `texture_ref` is untouched -- it is always a negative import-table
-    ref, unaffected by an export-table artifact."""
+    A surf's two OBJECT-REF fields (`texture_ref`, `i_actor`) are compared by resolved identity, not
+    by raw table index: each side's refs go through `pl.resolve_surf_refs` with its OWN
+    `object_paths`, so the comparison asks "same texture? same owning brush actor?" rather than "same
+    integer position in two tables that are ordered differently by construction". See
+    `pl.SURF_OBJECT_REF_FIELDS` for why the raw indices can never agree. Every other surf field, and
+    all of nodes/leaves, stays a bit-exact raw comparison."""
     native_path = _temp_dx(native_dx_bytes)
     try:
         native_model = parse_dx_model(native_path)
     finally:
         native_path.unlink(missing_ok=True)
     golden_model = parse_dx_model(golden_path)
-    mapping = pl.export_renumber_map(golden_export_classes(golden_path))
-    golden_surfs = pl.renumber_surf_actor_refs(golden_model.surfs, mapping)
+    native_exports, native_imports = object_paths(native_dx_bytes)
+    golden_exports, golden_imports = object_paths(golden_path.read_bytes())
+    native_surfs = pl.resolve_surf_refs(native_model.surfs, export_paths=native_exports,
+                                        import_paths=native_imports)
+    golden_surfs = pl.resolve_surf_refs(golden_model.surfs, export_paths=golden_exports,
+                                        import_paths=golden_imports)
     return pl.ContentComparison(
         nodes=pl.compare_array_content(native_model.nodes, golden_model.nodes, array_name="nodes"),
-        surfs=pl.compare_array_content(native_model.surfs, golden_surfs, array_name="surfs"),
+        surfs=pl.compare_array_content(native_surfs, golden_surfs, array_name="surfs"),
         leaves=pl.compare_array_content(native_model.leaves, golden_model.leaves,
                                         array_name="leaves"))
 

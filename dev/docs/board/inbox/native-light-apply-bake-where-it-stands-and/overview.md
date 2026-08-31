@@ -173,6 +173,20 @@ Geometry:
   confirmed deterministic via a reproducibility control) — not shipped as the default pending a
   decision. New blocker: `wanchai-market-widened-golden-build-crashes` (widened build only, narrow
   golden still valid).
+  **Round 8 (2026-08-31) — this thread is CLOSED.** The resolved-identity comparison the round-2 note
+  called for was built and shipped (`parity_lib.object_paths`/`resolve_object_ref`/`resolve_surf_refs`
+  + `parity_compare.object_paths`, wired into `compare_content`; supersedes and deletes round 7's
+  Camera renumbering). `i_actor` goes 26/953/3616 raw diffs -> **0/0/0** on `DX.dx`/NYC Bar/UNATCO —
+  native's surf-to-owning-brush assignment was always correct — and `texture_ref` goes 26/862/3615 ->
+  26/139/0. The editor-side numbering is confirmed DETERMINISTIC (two independent fresh-container
+  builds of one trunk give byte-identical name/import/export tables, GUID aside) but not derivable
+  from the trunk, so native should not chase it. `surfs fields_differ` drops 65->39, 2739->1063,
+  10940->3709; no level newly reaches FULL PARITY, and **`p_base` is now the only remaining surf
+  blocker on UNATCO and the dominant one everywhere** — `DX.dx` (13 diffs over 26 surfs, geometry and
+  lighting both already exact) is the cleanest repro available for it. Two new items filed from the
+  `texture_ref` residual: `texture-group-index-misses-textures-inside-u` (a real native bug — `.u`
+  code packages are never scanned for texture groups) and
+  `golden-edit-paste-resolves-ambiguous-texture` (NYC Bar's 139 — the golden is the wrong side).
 - `smuggler-4-surf-delta-traced-to-4-pf-semisolid` — +4 surf residual, root mechanism not found.
 - `freeclinic08-nsfhq04-1-surf-under-build-root` — world-level poly-order divergence, localized to
   before `bspBuildFPolys` even runs, not root-caused further.

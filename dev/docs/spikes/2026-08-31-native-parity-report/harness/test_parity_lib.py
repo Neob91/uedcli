@@ -239,88 +239,88 @@ def test_compare_array_content_node_flags_mask_does_not_swallow_other_field_diff
     assert {d.field for d in r.diffs} == {"i_leaf"}
 
 
-def test_export_renumber_map_strips_artifacts_and_closes_the_gap():
-    # Cameras interspersed (not contiguous) -- indices 2,4,5,6,7,8 -- matching the live NYC
-    # Bar/UNATCO measurement (scattered among per-brush Model/Polys exports), not the DX.dx-only
-    # contiguous-at-tail special case.
-    classes = ["LevelInfo", "Brush", "Camera", "Brush", "Camera", "Camera", "Camera", "Camera",
-              "Camera", "Brush"]
-    m = pl.export_renumber_map(classes)
-    assert m == {0: 0, 1: 1, 2: None, 3: 2, 4: None, 5: None, 6: None, 7: None, 8: None, 9: 3}
+def test_object_paths_walks_the_outer_chain_for_exports_and_imports():
+    # exports: (outer-ref, name); imports: (outer-ref, name). Ref 0 = no outer (top level),
+    # positive = 1-based export ref, negative = ~0-based import ref.
+    exports = [(0, "MyLevel"), (1, "Model2")]
+    imports = [(0, "DeusExItems"), (-1, "Skins"), (-2, "BlackMaskTex")]
+    ep, ip = pl.object_paths(exports, imports)
+    assert ep == ("MyLevel", "MyLevel.Model2")
+    assert ip == ("DeusExItems", "DeusExItems.Skins", "DeusExItems.Skins.BlackMaskTex")
 
 
-def test_export_renumber_map_no_artifacts_is_identity():
-    classes = ["LevelInfo", "Brush", "Brush"]
-    m = pl.export_renumber_map(classes)
-    assert m == {0: 0, 1: 1, 2: 2}
+def test_resolve_object_ref_covers_none_export_and_import():
+    ep, ip = ("MyLevel", "Brush3"), ("Engine", "Engine.Tex")
+    assert pl.resolve_object_ref(0, export_paths=ep, import_paths=ip) == pl.OBJECT_REF_NONE
+    assert pl.resolve_object_ref(2, export_paths=ep, import_paths=ip) == "Brush3"
+    assert pl.resolve_object_ref(-2, export_paths=ep, import_paths=ip) == "Engine.Tex"
 
 
-def test_renumber_actor_ref_zero_and_negative_pass_through_unchanged():
-    # 0 = none, negative = an IMPORT ref (texture_ref's domain) -- neither is a positive export ref,
-    # so neither is in this mapping's domain at all.
-    mapping = pl.export_renumber_map(["Brush", "Camera", "Brush"])
-    assert pl.renumber_actor_ref(0, mapping) == 0
-    assert pl.renumber_actor_ref(-3, mapping) == -3
+def test_resolve_object_ref_out_of_range_names_the_offending_value():
+    with pytest.raises(ValueError, match="9"):
+        pl.resolve_object_ref(9, export_paths=("A",), import_paths=())
+    with pytest.raises(ValueError, match="-9"):
+        pl.resolve_object_ref(-9, export_paths=(), import_paths=("A",))
 
 
-def test_renumber_actor_ref_shifts_past_artifacts():
-    classes = ["LevelInfo", "Brush", "Camera", "Brush", "Camera", "Camera", "Camera", "Camera",
-              "Camera", "Brush"]
-    mapping = pl.export_renumber_map(classes)
-    # Brush at raw index 1 -> ref 2; nothing artifact-class precedes it -> unchanged.
-    assert pl.renumber_actor_ref(2, mapping) == 2
-    # Brush at raw index 3 -> ref 4; one Camera (index 2) precedes it -> ref 3.
-    assert pl.renumber_actor_ref(4, mapping) == 3
-    # Brush at raw index 9 -> ref 10; six Cameras precede it -> ref 4.
-    assert pl.renumber_actor_ref(10, mapping) == 4
-
-
-def test_renumber_actor_ref_raises_if_ref_points_at_a_stripped_artifact():
-    mapping = pl.export_renumber_map(["Brush", "Camera"])
-    with pytest.raises(ValueError, match="stripped artifact export"):
-        pl.renumber_actor_ref(2, mapping)  # ref 2 = raw index 1 = the Camera
-
-
-def test_renumber_surf_actor_refs_only_touches_i_actor():
+def test_resolve_surf_refs_replaces_both_ref_fields_and_leaves_the_rest():
     import dataclasses as dc
 
     @dc.dataclass
     class _Surf:
         texture_ref: int = 0
         i_actor: int = 0
+        p_base: int = 0
 
-    classes = ["LevelInfo", "Brush", "Camera", "Brush"]
-    mapping = pl.export_renumber_map(classes)
-    surfs = (_Surf(texture_ref=-5, i_actor=4),)  # ref4 = raw index3 -> one Camera precedes -> ref3
-    out = pl.renumber_surf_actor_refs(surfs, mapping)
-    assert out[0].i_actor == 3
-    assert out[0].texture_ref == -5  # untouched -- texture_ref is an import ref, not this mapping's domain
+    surfs = (_Surf(texture_ref=-2, i_actor=1, p_base=7),)
+    out = pl.resolve_surf_refs(surfs, export_paths=("Brush3",), import_paths=("A", "A.Tex"))
+    assert out[0].i_actor == "Brush3"
+    assert out[0].texture_ref == "A.Tex"
+    assert out[0].p_base == 7
 
 
-def test_camera_exclusion_closes_a_false_positive_i_actor_divergence():
-    """The TDD scenario the round-7 task mandate asked for: a synthetic golden export table with 6
-    Camera artifacts interspersed among real Brush exports (not contiguous, not at the end -- the
-    live-measured NYC Bar/UNATCO shape). Three surfaces each reference a different Brush actor.
-    Native never emits Camera exports, so its own table has no gap -- its `i_actor` values are what
-    golden's WOULD be if the artifacts were stripped. The OLD (raw-index) comparison must
-    false-positive on the two surfaces whose owning brush sits after a Camera; the NEW
-    (artifact-stripped-and-renumbered) comparison must find zero diffs."""
-    golden_classes = ["LevelInfo", "Brush", "Camera", "Brush", "Camera", "Camera", "Camera",
-                      "Camera", "Camera", "Brush"]
-    # golden's raw i_actor: brush at raw idx1 -> ref2; idx3 -> ref4; idx9 -> ref10.
-    golden_surfs = [_surf(i_actor=2), _surf(i_actor=4), _surf(i_actor=10)]
-    # native has no Camera exports at all -- its own table is already "artifact-stripped" shaped.
-    native_surfs = [_surf(i_actor=2), _surf(i_actor=3), _surf(i_actor=4)]
+def test_semantic_resolution_closes_a_pure_export_ordering_false_positive():
+    """The live-measured shape (round 8): native and the golden agree on WHICH brush actor owns
+    each surf and WHICH texture it wears, but their export/import tables are ordered differently,
+    so the raw indices disagree on every surf. Raw-index comparison must false-positive on all
+    three; resolved-identity comparison must find zero diffs."""
+    # Golden's export table interleaves editor-session objects among the actors; native's groups
+    # each brush actor with its shape. Same three brushes, different positions.
+    golden_exports = [(0, "LevelInfo0"), (0, "Brush8"), (0, "Camera6"), (0, "Brush3"),
+                      (0, "Camera7"), (0, "Brush9")]
+    native_exports = [(0, "LevelInfo0"), (0, "Brush3"), (0, "Brush8"), (0, "Brush9")]
+    imports = [(0, "Pkg"), (-1, "Grp"), (-2, "Tex")]
 
-    old_result = pl.compare_array_content(native_surfs, golden_surfs, array_name="surfs")
-    assert not old_result.exact
-    assert old_result.indices_differ == 2  # surfs [1] and [2] false-positive
+    golden_surfs = [_surf(i_actor=2, texture_ref=-3), _surf(i_actor=4, texture_ref=-3),
+                    _surf(i_actor=6, texture_ref=-3)]
+    native_surfs = [_surf(i_actor=3, texture_ref=-3), _surf(i_actor=2, texture_ref=-3),
+                    _surf(i_actor=4, texture_ref=-3)]
 
-    mapping = pl.export_renumber_map(golden_classes)
-    renumbered_golden = pl.renumber_surf_actor_refs(golden_surfs, mapping)
-    new_result = pl.compare_array_content(native_surfs, renumbered_golden, array_name="surfs")
-    assert new_result.exact
-    assert new_result.diffs == ()
+    raw = pl.compare_array_content(native_surfs, golden_surfs, array_name="surfs")
+    assert raw.indices_differ == 3
+
+    gep, gip = pl.object_paths(golden_exports, imports)
+    nep, nip = pl.object_paths(native_exports, imports)
+    resolved = pl.compare_array_content(
+        pl.resolve_surf_refs(native_surfs, export_paths=nep, import_paths=nip),
+        pl.resolve_surf_refs(golden_surfs, export_paths=gep, import_paths=gip),
+        array_name="surfs")
+    assert resolved.exact
+
+
+def test_semantic_resolution_still_reports_a_real_identity_mismatch():
+    """A genuine content bug -- the two sides name DIFFERENT textures -- must survive resolution."""
+    exports = [(0, "Brush3")]
+    golden_imports = [(0, "NYCBar"), (-1, "Metal"), (-2, "trough1")]
+    native_imports = [(0, "NewYorkCity"), (-1, "Metal"), (-2, "trough1")]
+    gep, gip = pl.object_paths(exports, golden_imports)
+    nep, nip = pl.object_paths(exports, native_imports)
+    r = pl.compare_array_content(
+        pl.resolve_surf_refs([_surf(i_actor=1, texture_ref=-3)], export_paths=nep, import_paths=nip),
+        pl.resolve_surf_refs([_surf(i_actor=1, texture_ref=-3)], export_paths=gep, import_paths=gip),
+        array_name="surfs")
+    assert not r.exact
+    assert {d.field for d in r.diffs} == {"texture_ref"}
 
 
 def _content(*, nodes_exact=True, surfs_exact=True, leaves_exact=True):
