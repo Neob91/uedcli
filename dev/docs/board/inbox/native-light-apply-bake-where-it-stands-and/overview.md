@@ -1,7 +1,7 @@
 +++
 priority = "p1"
 kind = "debug"
-summary = "Native materialize byte-parity vs UnrealEd UED22: status/index for the whole geometry+lighting effort. Wanchai lighting 3418/4530 (75.5%) byte-identical after line_clear v2; UNATCO 2797/3345 (83.6%). Geometry breadth 3/21 OG levels exact; severe-under-build family (Area51 etc.) closed by the mirrored-brush determinant fix. See below for the harness catalog and open threads."
+summary = "Native materialize FULL byte-parity vs UnrealEd UED22 (owner-reaffirmed 2026-08-31, not the looser node/surf/leaf-only 'EXACT' label): status/index for the whole geometry+lighting effort. ZERO levels at full parity yet -- UNATCO/Wanchai both node/surf/leaf-exact but carry verts/points(/vectors) residuals plus lighting gaps (83.6%/75.5% record-level). Verification has been narrow (mostly these 2 levels) -- flagged as an overfitting risk; goldens now being generated for the full 21-level breadth corpus in the background. See below for the harness catalog and open threads."
 depends-on = ["port-urender-getvisiblesurfs-so-each-light-gets", "port-the-per-leaf-permeating-light-lists-model", "getvisiblesurfs-wanchai-run-gap-root-cause", "line-clear-shadow-ray-algorithm-gap-found-real", "zone-crossing-getvisiblesurfs-gap-invisible", "smuggler-4-surf-delta-traced-to-4-pf-semisolid", "freeclinic08-nsfhq04-1-surf-under-build-root", "wanchai-verts-points-residual-independently", "pass-d-chain-link-order-native-splices-zone", "pass-d-fragment-nodes-get-ileaf-1-where", "splitwithplane-degenerate-fragment-fallback", "native-zone-over-fragmentation"]
 spikes = ["dev/docs/spikes/2026-08-27-native-light-apply-parity/", "dev/docs/spikes/2026-08-29-unatco-repart-live-diff/", "dev/docs/spikes/2026-08-29-area51-underbuild/", "dev/docs/spikes/2026-08-26-editor-free-native-materialize/"]
 +++
@@ -16,6 +16,28 @@ shipped Deus Ex levels is the bar; `Test_Castle`/non-retail fixtures are not val
 (`native-materialize-findings-older-than-2-weeks`). Findings older than ~2 weeks, and every
 pre-2026-08-14 native-decode/disassembly claim, are untrusted until re-derived live
 (`owner-ruling-all-native-decode-spike-findings`) — re-measure before relying on anything old.
+
+**Reaffirmed by the owner, 2026-08-31: the bar is FULL byte parity, not the "EXACT" label this item
+and its harness scripts have been using.** `regression_gate.py`/`breadth_gate.py` print "EXACT"
+based on node/surf/leaf counts ONLY — they silently ignore verts/points/vectors deltas. Neither
+UNATCO nor Wanchai is at full parity by the real bar: UNATCO carries verts+5/points+16, Wanchai
+carries verts+74/points+16/vectors−8, on top of both levels' lighting gaps (83.6%/75.5% record-level,
+nowhere near every `LightMap` record). **Zero levels have reached full byte parity to date.** The new
+`parity_report.py` (`2026-08-31-native-parity-report/harness/`) enforces the real bar directly — its
+`FULL PARITY: YES` requires all six geometry counts AND every lighting record byte-identical — use
+its verdict, not a bare "EXACT" claim, when reporting a level's status from here on.
+
+**Also flagged by the owner, 2026-08-31: a live methodological risk.** This session's fixes have
+been verified almost exclusively against UNATCO and Wanchai (occasionally the wider breadth corpus,
+but only for geometry, never lighting). A fix that looks correct on two specific levels could still
+be tuned to their particular geometry rather than a genuinely general port of the real algorithm —
+the standing rule against tolerance-fudging guards against picking a formula because it measures
+better, but narrow verification coverage is a softer version of the same risk: a real bug could
+simply never surface on the two levels we keep re-checking. Mitigation in progress: self-built
+lighting goldens are being generated for the full 21-level breadth corpus in the background
+(`docker-mount-source-permission-fails-from-main` tracks one blocker hit along the way), so future
+verification rounds can check `parity_report.py`'s `FULL PARITY` verdict across the whole corpus,
+not just the two levels this item has repeatedly returned to.
 
 This item is the STATUS/INDEX layer for the whole effort: current state, the harness catalog, and
 pointers to every open sub-thread. Blow-by-blow findings live in
