@@ -2777,8 +2777,12 @@ only writes `Model.Lights` region 1 + leaf `i_permeating`, which neither section
 
 - **DX.dx** -- geometry ✅ EXACT (26/26/5/250/32/6, d=+0 all), content ❌ NOT EXACT (pre-existing
   `texture_ref`/`i_actor` export-order residual, `p_base`/points untouched by this round; leaves
-  content identical both before/after -- level has no permeating lights to speak of), lighting ✅
-  FULL 100% (26/26 records, 1536/1536 shadow bits) both before/after. `FULL PARITY: NO` (content),
+  content identical both before/after -- `write_permeating_region` is not wired into `bake`, so
+  native's own `i_permeating` output is unaffected by this round's fix regardless of level). **Correction
+  (2026-08-31, Fable audit): "level has no permeating lights to speak of" above was WRONG -- the golden's
+  5 leaves carry real, non-trivial `i_permeating` runs (leaf indices 0, 3, 6, 11, 17). DX.dx is not
+  permeating-light-free; it's simply not affected by this round's fix because the port stays unwired.**
+  Lighting ✅ FULL 100% (26/26 records, 1536/1536 shadow bits) both before/after. `FULL PARITY: NO` (content),
   unchanged.
 - **UNATCO (`03_NYC_UNATCOHQ.dx`)** -- geometry ❌ NOT EXACT (verts d=+5, points d=+16, pre-existing,
   unchanged), content ❌ NOT EXACT: leaves' raw `i_permeating` POINTER differs at 734/762 indices

@@ -203,8 +203,10 @@ def compare_lighting(native_dx_bytes: bytes, golden_path: Path) -> pl.LightingSu
             continue  # native has no record here at all -- correctly NOT counted identical
         a, b = nm.light_map[k], em.light_map[k]
         run_match = nruns[k] == eruns[k]
-        grid_match = (a.u_size == b.u_size and a.v_size == b.v_size and a.pan == b.pan
-                     and a.u_scale == b.u_scale and a.v_scale == b.v_scale)
+        grid_match = (a.u_size == b.u_size and a.v_size == b.v_size
+                     and pl._bit_exact_eq(a.pan, b.pan)
+                     and pl._bit_exact_eq(a.u_scale, b.u_scale)
+                     and pl._bit_exact_eq(a.v_scale, b.v_scale))
         pa = LP.planes(nm, a, len(nruns[k]))
         pb = LP.planes(em, b, len(eruns[k]))
         if grid_match and run_match and pa == pb:
