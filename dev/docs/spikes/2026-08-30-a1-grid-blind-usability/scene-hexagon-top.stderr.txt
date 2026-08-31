@@ -1,0 +1,427 @@
+point actor 'LevelInfo0': schema unavailable (LevelInfo) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'LevelInfo')
+point actor 'DeusExLevelInfo0': schema unavailable (DeusExLevelInfo) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'DeusExLevelInfo')
+point actor 'Teleporter0': schema unavailable (Teleporter) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Teleporter')
+point actor 'Teleporter1': schema unavailable (Teleporter) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Teleporter')
+point actor 'Light12': schema unavailable (Light) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Light')
+point actor 'Light13': schema unavailable (Light) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Light')
+point actor 'Light14': schema unavailable (Light) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Light')
+point actor 'Light15': schema unavailable (Light) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Light')
+point actor 'Light16': schema unavailable (Light) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Light')
+point actor 'Light17': schema unavailable (Light) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Light')
+point actor 'Light411': schema unavailable (Light) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Light')
+point actor 'Light20': schema unavailable (Light) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Light')
+point actor 'Light21': schema unavailable (Light) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Light')
+point actor 'Light22': schema unavailable (Light) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Light')
+point actor 'Light23': schema unavailable (Light) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Light')
+point actor 'Light24': schema unavailable (Light) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Light')
+point actor 'Light32': schema unavailable (Light) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Light')
+point actor 'Light33': schema unavailable (Light) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Light')
+point actor 'Light34': schema unavailable (Light) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Light')
+point actor 'ParticleGenerator13': schema unavailable (ParticleGenerator) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'ParticleGenerator')
+point actor 'LiquorBottle0': schema unavailable (LiquorBottle) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'LiquorBottle')
+point actor 'WineBottle0': schema unavailable (WineBottle) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'WineBottle')
+point actor 'Light59': schema unavailable (Light) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Light')
+point actor 'Light65': schema unavailable (Light) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Light')
+point actor 'Light66': schema unavailable (Light) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Light')
+point actor 'Female0': schema unavailable (Female3) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Female3')
+point actor 'Businessman0': schema unavailable (Businessman2) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Businessman2')
+point actor 'Female1': schema unavailable (Female4) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Female4')
+point actor 'Bartender0': schema unavailable (Bartender) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Bartender')
+point actor 'Bartender1': schema unavailable (Bartender) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Bartender')
+point actor 'Liquor40oz0': schema unavailable (Liquor40oz) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Liquor40oz')
+point actor 'Liquor40oz1': schema unavailable (Liquor40oz) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Liquor40oz')
+point actor 'Liquor40oz2': schema unavailable (Liquor40oz) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Liquor40oz')
+point actor 'LiquorBottle1': schema unavailable (LiquorBottle) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'LiquorBottle')
+point actor 'LiquorBottle2': schema unavailable (LiquorBottle) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'LiquorBottle')
+point actor 'WineBottle1': schema unavailable (WineBottle) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'WineBottle')
+point actor 'WineBottle2': schema unavailable (WineBottle) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'WineBottle')
+point actor 'Light25': schema unavailable (Light) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Light')
+point actor 'Light0': schema unavailable (Light) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Light')
+point actor 'Light6': schema unavailable (Light) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Light')
+point actor 'Light37': schema unavailable (Light) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Light')
+point actor 'Light38': schema unavailable (Light) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Light')
+point actor 'Light39': schema unavailable (Light) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Light')
+point actor 'Light40': schema unavailable (Light) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Light')
+point actor 'Light41': schema unavailable (Light) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Light')
+point actor 'Light42': schema unavailable (Light) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Light')
+point actor 'Female2': schema unavailable (Female3) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Female3')
+point actor 'Businessman2': schema unavailable (Businessman2) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Businessman2')
+point actor 'Female3': schema unavailable (Female4) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Female4')
+point actor 'Light45': schema unavailable (Light) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Light')
+point actor 'Light46': schema unavailable (Light) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Light')
+point actor 'Light47': schema unavailable (Light) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Light')
+point actor 'PlayerStart0': schema unavailable (PlayerStart) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'PlayerStart')
+point actor 'Light49': schema unavailable (Light) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Light')
+point actor 'Light50': schema unavailable (Light) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Light')
+point actor 'Light51': schema unavailable (Light) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Light')
+point actor 'Light52': schema unavailable (Light) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Light')
+point actor 'Light53': schema unavailable (Light) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Light')
+point actor 'Light54': schema unavailable (Light) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Light')
+point actor 'Chair0': schema unavailable (Chair1) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Chair1')
+point actor 'Chair1': schema unavailable (Chair1) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Chair1')
+point actor 'Chair2': schema unavailable (Chair1) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Chair1')
+point actor 'Chair3': schema unavailable (Chair1) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Chair1')
+point actor 'Chair4': schema unavailable (Chair1) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Chair1')
+point actor 'Chair5': schema unavailable (Chair1) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Chair1')
+point actor 'Chair6': schema unavailable (Chair1) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Chair1')
+point actor 'Chair7': schema unavailable (Chair1) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Chair1')
+point actor 'Light11': schema unavailable (Light) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Light')
+point actor 'Chair29': schema unavailable (Chair1) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Chair1')
+point actor 'Chair30': schema unavailable (Chair1) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Chair1')
+point actor 'Chair31': schema unavailable (Chair1) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Chair1')
+point actor 'Chair32': schema unavailable (Chair1) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Chair1')
+point actor 'Chair33': schema unavailable (Chair1) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Chair1')
+point actor 'Chair34': schema unavailable (Chair1) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Chair1')
+point actor 'Chair35': schema unavailable (Chair1) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Chair1')
+point actor 'Chair36': schema unavailable (Chair1) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Chair1')
+point actor 'Chair52': schema unavailable (Chair1) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Chair1')
+point actor 'Chair53': schema unavailable (Chair1) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Chair1')
+point actor 'Chair54': schema unavailable (Chair1) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Chair1')
+point actor 'Chair55': schema unavailable (Chair1) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Chair1')
+point actor 'Chair56': schema unavailable (Chair1) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Chair1')
+point actor 'Chair57': schema unavailable (Chair1) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Chair1')
+point actor 'Chair58': schema unavailable (Chair1) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Chair1')
+point actor 'Chair59': schema unavailable (Chair1) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Chair1')
+point actor 'Chair60': schema unavailable (Chair1) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Chair1')
+point actor 'Chair61': schema unavailable (Chair1) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Chair1')
+point actor 'Chair62': schema unavailable (Chair1) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Chair1')
+point actor 'Chair63': schema unavailable (Chair1) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Chair1')
+point actor 'Chair64': schema unavailable (Chair1) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Chair1')
+point actor 'Chair65': schema unavailable (Chair1) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Chair1')
+point actor 'Chair66': schema unavailable (Chair1) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Chair1')
+point actor 'Chair67': schema unavailable (Chair1) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Chair1')
+point actor 'WineBottle3': schema unavailable (WineBottle) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'WineBottle')
+point actor 'Sodacan0': schema unavailable (Sodacan) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Sodacan')
+point actor 'Liquor40oz3': schema unavailable (Liquor40oz) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Liquor40oz')
+point actor 'Liquor40oz4': schema unavailable (Liquor40oz) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Liquor40oz')
+point actor 'Liquor40oz5': schema unavailable (Liquor40oz) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Liquor40oz')
+point actor 'Liquor40oz6': schema unavailable (Liquor40oz) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Liquor40oz')
+point actor 'Cigarettes0': schema unavailable (Cigarettes) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Cigarettes')
+point actor 'Light28': schema unavailable (Light) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Light')
+point actor 'Light30': schema unavailable (Light) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Light')
+point actor 'Light35': schema unavailable (Light) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Light')
+point actor 'Light1': schema unavailable (Light) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Light')
+point actor 'Light2': schema unavailable (Light) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Light')
+point actor 'Light3': schema unavailable (Light) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Light')
+point actor 'Light4': schema unavailable (Light) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Light')
+point actor 'Light5': schema unavailable (Light) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Light')
+point actor 'Light26': schema unavailable (Light) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Light')
+point actor 'Light27': schema unavailable (Light) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Light')
+point actor 'Brush_ei4244': schema unavailable (Brush) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Brush')
+point actor 'Brush_r56tl0': schema unavailable (Brush) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Brush')
+point actor 'Brush_1n466a': schema unavailable (Brush) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Brush')
+point actor 'Brush_4vxy1k': schema unavailable (Brush) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Brush')
+point actor 'Brush_91isyn': schema unavailable (Brush) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Brush')
+point actor 'Brush_su4u7b': schema unavailable (Brush) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Brush')
+point actor 'Brush_q0t1p5': schema unavailable (Brush) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Brush')
+point actor 'Light_h76gz7': schema unavailable (Light) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Light')
+point actor 'Brush_m4unsm': schema unavailable (Brush) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Brush')
+point actor 'Light_57i19k': schema unavailable (Light) — drawing an unscaled marker (class must be fully qualified (Package.Class): 'Light')
+grid: 12×12 columns A–L, rows 1–12
+LevelInfo0  C5
+Brush0  B1
+Brush12  C3  (B2–C3)
+Brush138  I11  (H10–J12)
+Brush100  I11  (H11–I11)
+DeusExLevelInfo0  B7
+Teleporter0  B5
+Teleporter1  B6
+Brush57  A7
+Light12  A7
+Brush58  A7  (A6–B7)
+Brush59  A7
+Brush60  B6  (A6–B7)
+Brush61  B6  (A6–B6)
+Brush62  B6  (A5–B6)
+Brush63  B5  (B5–B6)
+Brush64  B6  (A6–B6)
+Brush65  B5  (B5–B6)
+Brush66  B6  (A6–B6)
+Brush67  C5  (C5–C6)
+Brush68  C5  (B5–C6)
+Brush69  C5
+Brush70  C5
+Brush72  B5  (B5–B6)
+Light13  B6
+Brush73  B6
+Brush74  A7
+Brush75  A7
+Brush76  A6  (A6–B6)
+Light14  B6
+Brush77  B6
+Brush78  A6  (A6–B6)
+Light15  A7
+Brush79  A7
+Brush80  A7
+Light16  B5
+Brush81  B6
+Brush82  B5
+Light17  C5
+Brush83  C6  (B6–C6)
+Brush84  C5  (B5–C5)
+Brush85  C4  (C4–C5)
+Brush71  C5
+Brush87  C4
+Brush88  C4
+Brush91  I11  (H11–I11)
+Brush92  I11  (H11–I11)
+Brush93  I11
+Brush94  H11  (H11–I11)
+Brush95  H11  (H11–I11)
+Brush96  I11
+Brush97  I11  (H11–I11)
+Brush98  I11  (H11–I11)
+Brush99  I11  (I11–I12)
+Brush101  I12  (I11–I12)
+Brush102  I12  (I11–I12)
+Brush103  I12
+Brush105  I12  (I11–I12)
+Light411  C3
+Brush106  C3  (C3–C4)
+Brush107  C3  (C3–C4)
+Brush2226  C3  (C3–C4)
+Brush122  I12
+Brush115  I12
+Brush129  J11
+Brush130  J11
+Brush131  I12
+Brush132  I12
+Brush133  I12
+Light20  J11
+Light21  J11
+Light22  J11
+Light23  J11
+Light24  C5
+Brush134  C5
+Brush135  C5
+Brush136  J11
+Brush158  C4
+Light32  C4
+Brush160  C4
+Light33  C4
+Brush161  C4
+Light34  C4
+ParticleGenerator13  I12
+Brush172  C4
+Brush173  C4
+Brush174  C4
+Brush175  C4
+Brush176  C4
+Brush177  C4
+Brush178  C4
+Brush179  C4
+Brush180  C4
+Brush182  C4
+Brush186  C4
+LiquorBottle0  C4
+WineBottle0  C4
+Light59  C4
+Brush217  C4
+Brush218  C4
+Brush219  C4
+Brush220  C4
+Brush221  C4
+Brush222  C4
+Brush224  C4
+Light65  C4
+Brush225  C4
+Light66  C4
+Female0  C4
+Businessman0  C4
+Female1  C4
+Bartender0  C4
+Bartender1  C4
+Liquor40oz0  C4
+Liquor40oz1  C4
+Liquor40oz2  C4
+LiquorBottle1  C4
+LiquorBottle2  C4
+WineBottle1  C4
+WineBottle2  C4
+Brush1  C4  (C4–C5)
+Light25  C4
+Light0  C4
+Light6  C4
+Light37  C4
+Light38  C4
+Light39  C4
+Light40  C4
+Light41  C4
+Light42  C4
+Brush18  C3
+Female2  C3
+Businessman2  B2
+Female3  C3
+Light45  C3
+Brush26  B3  (A2–B3)
+Brush27  B3
+Light46  B3
+Brush29  B3
+Brush30  B3
+Light47  C3
+PlayerStart0  C4
+Light49  C2
+Brush42  C2  (B1–D2)
+Brush43  C2
+Brush44  C2
+Brush38  C2
+Brush39  C2
+Brush45  C2
+Brush46  C2
+Brush47  C2
+Brush48  C2
+Brush49  C2
+Brush50  C2
+Brush51  C2
+Brush52  C2
+Brush53  C2
+Brush54  C2
+Brush55  C2
+Brush56  C2
+Light50  B2
+Light51  C1
+Light52  C1
+Light53  C2
+Light54  C2
+Brush104  C2  (B1–D2)
+Brush8  C2
+Brush9  C2
+Brush10  C2
+Brush11  C2
+Brush13  C2
+Brush14  C2
+Brush15  C2
+Brush16  C2
+Brush17  C2
+Brush20  C2
+Brush22  C2
+Brush24  C2
+Brush28  C2
+Brush31  C2
+Brush32  C2
+Brush33  C2
+Brush34  C2
+Brush114  C3
+Brush116  C3
+Brush119  C3
+Brush120  C3
+Chair0  B2
+Brush139  B2
+Brush140  B2
+Chair1  B2
+Chair2  B2
+Chair3  B2
+Chair4  B2
+Chair5  B2
+Chair6  B2
+Chair7  B2
+Brush141  C3
+Brush142  C3
+Brush143  C3
+Light11  C3
+Chair29  C2
+Brush153  C2
+Brush154  C2
+Chair30  C2
+Chair31  D2
+Chair32  C2
+Chair33  D2
+Chair34  D2
+Chair35  C2
+Chair36  C2
+Chair52  C2
+Brush162  C2
+Brush163  C2
+Chair53  C2
+Chair54  D2
+Chair55  C2
+Chair56  D2
+Chair57  D2
+Chair58  C1
+Chair59  C2
+Chair60  B2
+Brush164  B2
+Brush165  B2
+Chair61  B2
+Chair62  B2
+Chair63  B2
+Chair64  B2
+Chair65  B2
+Chair66  B2
+Chair67  B2
+WineBottle3  B2
+Sodacan0  B2
+Liquor40oz3  B2
+Liquor40oz4  B2
+Liquor40oz5  B2
+Liquor40oz6  B2
+Cigarettes0  C2
+Brush167  C1  (B1–D1)
+Brush190  C1
+Brush191  C1  (B1–C1)
+Brush192  C1  (B1–D1)
+Light28  C1
+Light30  C1
+Light35  B1
+Brush2  B1
+Brush3  B1
+Brush4  B1  (B1–B2)
+Brush5  B1  (B1–B2)
+Brush6  B1  (B1–B2)
+Brush25  B2
+Brush35  B2
+Brush36  B1  (B1–B2)
+Brush37  B1  (B1–B2)
+Brush40  B1  (B1–B2)
+Brush110  B2
+Brush111  B2
+Light1  B1
+Light2  B1
+Light3  B1
+Light4  B2
+Light5  B1
+Brush149  D1
+Brush150  D2
+Brush157  B1
+Brush159  B1
+Brush166  B1  (A1–C1)
+Brush151  B1
+Brush152  B1
+Brush169  B2  (B1–B2)
+Brush193  C2  (B1–C2)
+Brush194  C2  (C1–D2)
+Brush195  C2  (C1–C2)
+Brush196  C2  (C1–C2)
+Brush202  C2  (C1–C2)
+Brush203  C2  (C1–C2)
+Brush208  A2
+Brush210  A2
+Brush211  A2
+Brush209  A2
+Light26  B2
+Brush212  A2
+Light27  B2
+Brush_ei4244  C2
+Brush_r56tl0  C2
+Brush_1n466a  C1
+Brush206  A2  (A1–A2)
+Brush207  A2  (A1–A2)
+Brush_4vxy1k  A2
+Brush_91isyn  A2
+Brush_su4u7b  A2
+Brush_q0t1p5  A2
+Light_h76gz7  B2
+Brush_m4unsm  A2
+Light_57i19k  B2
+Brush250  B2  (B1–C2)
+Brush251  B2  (B1–B2)
+Brush216  B2
+Brush223  B2
+Brush226  B2
+Brush227  B2
+Brush228  B2
+Brush229  B2
+Brush230  B2
+Brush231  B2
+Brush232  B2
+Brush233  B2

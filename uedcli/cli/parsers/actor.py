@@ -450,7 +450,10 @@ def register(sub) -> None:
     _tree_flag(rot)
 
     aprev = asub.add_parser(
-        "preview",
+        "preview", allow_abbrev=False,
+        # allow_abbrev=False: the retired `--grid` (renamed to `--locator-cells`) is now a unique
+        # abbreviation of `--grid-size` — without this it would silently parse as `--grid-size`
+        # instead of the clean unknown-argument error the rename is supposed to give it.
         help="self-rendered orthographic wireframe of actors from $UEDCLI_LEVEL (brushes coloured "
              "by CSG op; point actors as sprites/markers). Model-side, host-only — no editor")
     aprev.add_argument("names", nargs="*",

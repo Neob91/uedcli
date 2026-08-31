@@ -242,7 +242,7 @@ def _preview_opts(pp):
                          "'highlighted' is an accepted synonym). e.g. 'poly:hi' = highlighted faces "
                          "only; 'poly:vis' = every face index (same as bare poly). Keywords (stand "
                          "alone): none, all (=poly), highlighted (=poly:hi). Default: all face "
-                         "indices. Actor names are never drawn — locate a brush by its grid cell "
+                         "indices. Actor names are never drawn — locate a brush by its locator cell "
                          "(printed on stderr)")
     pp.add_argument("--frame", default=None, metavar="TARGET",
                     help="frame a target to fill the view; frames ONLY, does NOT highlight. Two forms: "
@@ -296,17 +296,38 @@ def _preview_opts(pp):
                          "extra overlay")
     pp.add_argument("--size", type=int, default=1024, metavar="PX",
                     help="output image edge length in pixels (default 1024)")
-    pp.add_argument("--grid", type=int, default=12, metavar="N",
-                    help="density of the always-on addressable grid: N columns (A,B,C…) across the top "
-                         "and N rows (1,2,3…) down both sides, so every region of the image has a text "
-                         "address. Each actor's cell is reported on stderr (and via --json). The grid "
-                         "is a region of the IMAGE, not a world coordinate. Must be in [1,52]. "
-                         "Default 12")
+    pp.add_argument("--locator-cells", dest="locator_cells", type=int, default=None, metavar="N",
+                    help="density of the locator-cell overlay, ON BY DEFAULT: N columns (A,B,C…) "
+                         "across the top and N rows (1,2,3…) down both sides, so every region of the "
+                         "image has a text address. Each actor's cell is reported on stderr (and via "
+                         "--json). The address is a region of the IMAGE, not a world coordinate. Must "
+                         "be in [1,52]. Default 12. Mutually exclusive with --no-locator-cells")
+    pp.add_argument("--no-locator-cells", dest="no_locator_cells", action="store_true",
+                    help="turn off the locator-cell overlay entirely (gutter, stderr legend and the "
+                         "--json cell data together — an actor's hidden flag is still reported). Gives "
+                         "the geometry back the screen space the gutter would have reserved. Mutually "
+                         "exclusive with --locator-cells")
+    pp.add_argument("--grid-size", dest="grid_size", type=int, default=None, metavar="N",
+                    help="draw a two-tier world gridline lattice on the orthographic panes "
+                         "(top/front/side; never iso, which mixes screen and world axes) — a scale/"
+                         "position ruler, ported from UnrealEd's own viewport grid. N sets the MINOR "
+                         "line spacing in world units and must be a power of two >= 1 (else a clean "
+                         "exit 2 naming the value); every 8th line is the MAJOR tier. Too fine for the "
+                         "pane escalates to a coarser spacing instead of erroring (matching the "
+                         "editor); too coarse draws nothing (exit 0). Each gridded pane gets a one-line "
+                         "caption at its top giving the framed world extent and the step actually "
+                         "drawn. Default: the largest power of two <= 1/16 of the pane's own framed "
+                         "world extent, picked per pane from its own zoom (16-32 minor divisions across "
+                         "the pane at any zoom). Conflicts with --view iso (a clean exit 2 "
+                         "naming it) — that view draws no gridlines, so the flag would be a silent "
+                         "no-op there")
     pp.add_argument("--json", dest="json", action="store_true",
-                    help="print a JSON object to stdout instead of the bare image path: "
-                         "{image, grid:{cols,rows}, actors:{name:{panes:{Pane:{cell,span}}, hidden}}} — "
-                         "the machine form of the grid legend (per-pane cells, pane-keyed for every "
-                         "layout). Without it, stdout stays the bare path and the legend goes to stderr")
+                    help="print a JSON object to stdout instead of the bare image path. With locator "
+                         "cells on (the default): {image, locator:{cols,rows}, "
+                         "actors:{name:{panes:{Pane:{cell,span}}, hidden}}}. With --no-locator-cells: "
+                         "{image, actors:{name:{hidden}}} — no locator/cell/span, hidden still "
+                         "reported. Without --json, stdout stays the bare path and the legend (if any) "
+                         "goes to stderr")
     pp.add_argument("--out", default=None, metavar="PATH",
                     help="host path to write the rendered PNG to (relative → resolved against the "
                          "cwd). The image is ALWAYS a PNG: whatever extension you give is replaced "

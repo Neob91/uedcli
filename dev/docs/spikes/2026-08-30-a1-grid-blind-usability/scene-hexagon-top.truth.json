@@ -1,0 +1,42 @@
+{
+  "T1-sparse-region": [
+    "Brush100",
+    "Brush101",
+    "Brush102",
+    "Brush103",
+    "Brush105",
+    "Brush115",
+    "Brush122",
+    "Brush129",
+    "Brush130",
+    "Brush131",
+    "Brush132",
+    "Brush133",
+    "Brush136",
+    "Brush138",
+    "Brush91",
+    "Brush92",
+    "Brush93",
+    "Brush94",
+    "Brush95",
+    "Brush96",
+    "Brush97",
+    "Brush98",
+    "Brush99",
+    "Light20",
+    "Light21",
+    "Light22",
+    "Light23",
+    "ParticleGenerator13"
+  ],
+  "T2-dense-discriminate": [
+    "Brush26",
+    "Brush27",
+    "Brush29",
+    "Brush30",
+    "Light46"
+  ],
+  "T3-locate": [
+    "B3"
+  ]
+}

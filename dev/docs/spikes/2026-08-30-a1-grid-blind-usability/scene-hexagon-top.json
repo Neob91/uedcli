@@ -1,0 +1,2772 @@
+{
+  "image": "/workspace/uedcli/.claude/worktrees/preview-grid-specs/dev/docs/spikes/2026-08-30-a1-grid-blind-usability/scene-hexagon-top.png",
+  "grid": {
+    "cols": 12,
+    "rows": 12
+  },
+  "actors": {
+    "LevelInfo0": {
+      "panes": {
+        "Top": {
+          "cell": "C5",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush0": {
+      "panes": {
+        "Top": {
+          "cell": "B1",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush12": {
+      "panes": {
+        "Top": {
+          "cell": "C3",
+          "span": "B2\u2013C3"
+        }
+      },
+      "hidden": false
+    },
+    "Brush138": {
+      "panes": {
+        "Top": {
+          "cell": "I11",
+          "span": "H10\u2013J12"
+        }
+      },
+      "hidden": false
+    },
+    "Brush100": {
+      "panes": {
+        "Top": {
+          "cell": "I11",
+          "span": "H11\u2013I11"
+        }
+      },
+      "hidden": false
+    },
+    "DeusExLevelInfo0": {
+      "panes": {
+        "Top": {
+          "cell": "B7",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Teleporter0": {
+      "panes": {
+        "Top": {
+          "cell": "B5",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Teleporter1": {
+      "panes": {
+        "Top": {
+          "cell": "B6",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush57": {
+      "panes": {
+        "Top": {
+          "cell": "A7",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Light12": {
+      "panes": {
+        "Top": {
+          "cell": "A7",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush58": {
+      "panes": {
+        "Top": {
+          "cell": "A7",
+          "span": "A6\u2013B7"
+        }
+      },
+      "hidden": false
+    },
+    "Brush59": {
+      "panes": {
+        "Top": {
+          "cell": "A7",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush60": {
+      "panes": {
+        "Top": {
+          "cell": "B6",
+          "span": "A6\u2013B7"
+        }
+      },
+      "hidden": false
+    },
+    "Brush61": {
+      "panes": {
+        "Top": {
+          "cell": "B6",
+          "span": "A6\u2013B6"
+        }
+      },
+      "hidden": false
+    },
+    "Brush62": {
+      "panes": {
+        "Top": {
+          "cell": "B6",
+          "span": "A5\u2013B6"
+        }
+      },
+      "hidden": false
+    },
+    "Brush63": {
+      "panes": {
+        "Top": {
+          "cell": "B5",
+          "span": "B5\u2013B6"
+        }
+      },
+      "hidden": false
+    },
+    "Brush64": {
+      "panes": {
+        "Top": {
+          "cell": "B6",
+          "span": "A6\u2013B6"
+        }
+      },
+      "hidden": false
+    },
+    "Brush65": {
+      "panes": {
+        "Top": {
+          "cell": "B5",
+          "span": "B5\u2013B6"
+        }
+      },
+      "hidden": false
+    },
+    "Brush66": {
+      "panes": {
+        "Top": {
+          "cell": "B6",
+          "span": "A6\u2013B6"
+        }
+      },
+      "hidden": false
+    },
+    "Brush67": {
+      "panes": {
+        "Top": {
+          "cell": "C5",
+          "span": "C5\u2013C6"
+        }
+      },
+      "hidden": false
+    },
+    "Brush68": {
+      "panes": {
+        "Top": {
+          "cell": "C5",
+          "span": "B5\u2013C6"
+        }
+      },
+      "hidden": false
+    },
+    "Brush69": {
+      "panes": {
+        "Top": {
+          "cell": "C5",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush70": {
+      "panes": {
+        "Top": {
+          "cell": "C5",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush72": {
+      "panes": {
+        "Top": {
+          "cell": "B5",
+          "span": "B5\u2013B6"
+        }
+      },
+      "hidden": false
+    },
+    "Light13": {
+      "panes": {
+        "Top": {
+          "cell": "B6",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush73": {
+      "panes": {
+        "Top": {
+          "cell": "B6",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush74": {
+      "panes": {
+        "Top": {
+          "cell": "A7",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush75": {
+      "panes": {
+        "Top": {
+          "cell": "A7",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush76": {
+      "panes": {
+        "Top": {
+          "cell": "A6",
+          "span": "A6\u2013B6"
+        }
+      },
+      "hidden": false
+    },
+    "Light14": {
+      "panes": {
+        "Top": {
+          "cell": "B6",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush77": {
+      "panes": {
+        "Top": {
+          "cell": "B6",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush78": {
+      "panes": {
+        "Top": {
+          "cell": "A6",
+          "span": "A6\u2013B6"
+        }
+      },
+      "hidden": false
+    },
+    "Light15": {
+      "panes": {
+        "Top": {
+          "cell": "A7",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush79": {
+      "panes": {
+        "Top": {
+          "cell": "A7",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush80": {
+      "panes": {
+        "Top": {
+          "cell": "A7",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Light16": {
+      "panes": {
+        "Top": {
+          "cell": "B5",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush81": {
+      "panes": {
+        "Top": {
+          "cell": "B6",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush82": {
+      "panes": {
+        "Top": {
+          "cell": "B5",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Light17": {
+      "panes": {
+        "Top": {
+          "cell": "C5",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush83": {
+      "panes": {
+        "Top": {
+          "cell": "C6",
+          "span": "B6\u2013C6"
+        }
+      },
+      "hidden": false
+    },
+    "Brush84": {
+      "panes": {
+        "Top": {
+          "cell": "C5",
+          "span": "B5\u2013C5"
+        }
+      },
+      "hidden": false
+    },
+    "Brush85": {
+      "panes": {
+        "Top": {
+          "cell": "C4",
+          "span": "C4\u2013C5"
+        }
+      },
+      "hidden": false
+    },
+    "Brush71": {
+      "panes": {
+        "Top": {
+          "cell": "C5",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush87": {
+      "panes": {
+        "Top": {
+          "cell": "C4",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush88": {
+      "panes": {
+        "Top": {
+          "cell": "C4",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush91": {
+      "panes": {
+        "Top": {
+          "cell": "I11",
+          "span": "H11\u2013I11"
+        }
+      },
+      "hidden": false
+    },
+    "Brush92": {
+      "panes": {
+        "Top": {
+          "cell": "I11",
+          "span": "H11\u2013I11"
+        }
+      },
+      "hidden": false
+    },
+    "Brush93": {
+      "panes": {
+        "Top": {
+          "cell": "I11",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush94": {
+      "panes": {
+        "Top": {
+          "cell": "H11",
+          "span": "H11\u2013I11"
+        }
+      },
+      "hidden": false
+    },
+    "Brush95": {
+      "panes": {
+        "Top": {
+          "cell": "H11",
+          "span": "H11\u2013I11"
+        }
+      },
+      "hidden": false
+    },
+    "Brush96": {
+      "panes": {
+        "Top": {
+          "cell": "I11",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush97": {
+      "panes": {
+        "Top": {
+          "cell": "I11",
+          "span": "H11\u2013I11"
+        }
+      },
+      "hidden": false
+    },
+    "Brush98": {
+      "panes": {
+        "Top": {
+          "cell": "I11",
+          "span": "H11\u2013I11"
+        }
+      },
+      "hidden": false
+    },
+    "Brush99": {
+      "panes": {
+        "Top": {
+          "cell": "I11",
+          "span": "I11\u2013I12"
+        }
+      },
+      "hidden": false
+    },
+    "Brush101": {
+      "panes": {
+        "Top": {
+          "cell": "I12",
+          "span": "I11\u2013I12"
+        }
+      },
+      "hidden": false
+    },
+    "Brush102": {
+      "panes": {
+        "Top": {
+          "cell": "I12",
+          "span": "I11\u2013I12"
+        }
+      },
+      "hidden": false
+    },
+    "Brush103": {
+      "panes": {
+        "Top": {
+          "cell": "I12",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush105": {
+      "panes": {
+        "Top": {
+          "cell": "I12",
+          "span": "I11\u2013I12"
+        }
+      },
+      "hidden": false
+    },
+    "Light411": {
+      "panes": {
+        "Top": {
+          "cell": "C3",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush106": {
+      "panes": {
+        "Top": {
+          "cell": "C3",
+          "span": "C3\u2013C4"
+        }
+      },
+      "hidden": false
+    },
+    "Brush107": {
+      "panes": {
+        "Top": {
+          "cell": "C3",
+          "span": "C3\u2013C4"
+        }
+      },
+      "hidden": false
+    },
+    "Brush2226": {
+      "panes": {
+        "Top": {
+          "cell": "C3",
+          "span": "C3\u2013C4"
+        }
+      },
+      "hidden": false
+    },
+    "Brush122": {
+      "panes": {
+        "Top": {
+          "cell": "I12",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush115": {
+      "panes": {
+        "Top": {
+          "cell": "I12",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush129": {
+      "panes": {
+        "Top": {
+          "cell": "J11",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush130": {
+      "panes": {
+        "Top": {
+          "cell": "J11",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush131": {
+      "panes": {
+        "Top": {
+          "cell": "I12",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush132": {
+      "panes": {
+        "Top": {
+          "cell": "I12",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush133": {
+      "panes": {
+        "Top": {
+          "cell": "I12",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Light20": {
+      "panes": {
+        "Top": {
+          "cell": "J11",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Light21": {
+      "panes": {
+        "Top": {
+          "cell": "J11",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Light22": {
+      "panes": {
+        "Top": {
+          "cell": "J11",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Light23": {
+      "panes": {
+        "Top": {
+          "cell": "J11",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Light24": {
+      "panes": {
+        "Top": {
+          "cell": "C5",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush134": {
+      "panes": {
+        "Top": {
+          "cell": "C5",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush135": {
+      "panes": {
+        "Top": {
+          "cell": "C5",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush136": {
+      "panes": {
+        "Top": {
+          "cell": "J11",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush158": {
+      "panes": {
+        "Top": {
+          "cell": "C4",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Light32": {
+      "panes": {
+        "Top": {
+          "cell": "C4",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush160": {
+      "panes": {
+        "Top": {
+          "cell": "C4",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Light33": {
+      "panes": {
+        "Top": {
+          "cell": "C4",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush161": {
+      "panes": {
+        "Top": {
+          "cell": "C4",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Light34": {
+      "panes": {
+        "Top": {
+          "cell": "C4",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "ParticleGenerator13": {
+      "panes": {
+        "Top": {
+          "cell": "I12",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush172": {
+      "panes": {
+        "Top": {
+          "cell": "C4",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush173": {
+      "panes": {
+        "Top": {
+          "cell": "C4",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush174": {
+      "panes": {
+        "Top": {
+          "cell": "C4",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush175": {
+      "panes": {
+        "Top": {
+          "cell": "C4",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush176": {
+      "panes": {
+        "Top": {
+          "cell": "C4",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush177": {
+      "panes": {
+        "Top": {
+          "cell": "C4",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush178": {
+      "panes": {
+        "Top": {
+          "cell": "C4",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush179": {
+      "panes": {
+        "Top": {
+          "cell": "C4",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush180": {
+      "panes": {
+        "Top": {
+          "cell": "C4",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush182": {
+      "panes": {
+        "Top": {
+          "cell": "C4",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush186": {
+      "panes": {
+        "Top": {
+          "cell": "C4",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "LiquorBottle0": {
+      "panes": {
+        "Top": {
+          "cell": "C4",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "WineBottle0": {
+      "panes": {
+        "Top": {
+          "cell": "C4",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Light59": {
+      "panes": {
+        "Top": {
+          "cell": "C4",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush217": {
+      "panes": {
+        "Top": {
+          "cell": "C4",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush218": {
+      "panes": {
+        "Top": {
+          "cell": "C4",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush219": {
+      "panes": {
+        "Top": {
+          "cell": "C4",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush220": {
+      "panes": {
+        "Top": {
+          "cell": "C4",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush221": {
+      "panes": {
+        "Top": {
+          "cell": "C4",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush222": {
+      "panes": {
+        "Top": {
+          "cell": "C4",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush224": {
+      "panes": {
+        "Top": {
+          "cell": "C4",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Light65": {
+      "panes": {
+        "Top": {
+          "cell": "C4",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush225": {
+      "panes": {
+        "Top": {
+          "cell": "C4",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Light66": {
+      "panes": {
+        "Top": {
+          "cell": "C4",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Female0": {
+      "panes": {
+        "Top": {
+          "cell": "C4",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Businessman0": {
+      "panes": {
+        "Top": {
+          "cell": "C4",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Female1": {
+      "panes": {
+        "Top": {
+          "cell": "C4",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Bartender0": {
+      "panes": {
+        "Top": {
+          "cell": "C4",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Bartender1": {
+      "panes": {
+        "Top": {
+          "cell": "C4",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Liquor40oz0": {
+      "panes": {
+        "Top": {
+          "cell": "C4",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Liquor40oz1": {
+      "panes": {
+        "Top": {
+          "cell": "C4",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Liquor40oz2": {
+      "panes": {
+        "Top": {
+          "cell": "C4",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "LiquorBottle1": {
+      "panes": {
+        "Top": {
+          "cell": "C4",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "LiquorBottle2": {
+      "panes": {
+        "Top": {
+          "cell": "C4",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "WineBottle1": {
+      "panes": {
+        "Top": {
+          "cell": "C4",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "WineBottle2": {
+      "panes": {
+        "Top": {
+          "cell": "C4",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush1": {
+      "panes": {
+        "Top": {
+          "cell": "C4",
+          "span": "C4\u2013C5"
+        }
+      },
+      "hidden": false
+    },
+    "Light25": {
+      "panes": {
+        "Top": {
+          "cell": "C4",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Light0": {
+      "panes": {
+        "Top": {
+          "cell": "C4",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Light6": {
+      "panes": {
+        "Top": {
+          "cell": "C4",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Light37": {
+      "panes": {
+        "Top": {
+          "cell": "C4",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Light38": {
+      "panes": {
+        "Top": {
+          "cell": "C4",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Light39": {
+      "panes": {
+        "Top": {
+          "cell": "C4",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Light40": {
+      "panes": {
+        "Top": {
+          "cell": "C4",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Light41": {
+      "panes": {
+        "Top": {
+          "cell": "C4",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Light42": {
+      "panes": {
+        "Top": {
+          "cell": "C4",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush18": {
+      "panes": {
+        "Top": {
+          "cell": "C3",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Female2": {
+      "panes": {
+        "Top": {
+          "cell": "C3",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Businessman2": {
+      "panes": {
+        "Top": {
+          "cell": "B2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Female3": {
+      "panes": {
+        "Top": {
+          "cell": "C3",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Light45": {
+      "panes": {
+        "Top": {
+          "cell": "C3",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush26": {
+      "panes": {
+        "Top": {
+          "cell": "B3",
+          "span": "A2\u2013B3"
+        }
+      },
+      "hidden": false
+    },
+    "Brush27": {
+      "panes": {
+        "Top": {
+          "cell": "B3",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Light46": {
+      "panes": {
+        "Top": {
+          "cell": "B3",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush29": {
+      "panes": {
+        "Top": {
+          "cell": "B3",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush30": {
+      "panes": {
+        "Top": {
+          "cell": "B3",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Light47": {
+      "panes": {
+        "Top": {
+          "cell": "C3",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "PlayerStart0": {
+      "panes": {
+        "Top": {
+          "cell": "C4",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Light49": {
+      "panes": {
+        "Top": {
+          "cell": "C2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush42": {
+      "panes": {
+        "Top": {
+          "cell": "C2",
+          "span": "B1\u2013D2"
+        }
+      },
+      "hidden": false
+    },
+    "Brush43": {
+      "panes": {
+        "Top": {
+          "cell": "C2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush44": {
+      "panes": {
+        "Top": {
+          "cell": "C2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush38": {
+      "panes": {
+        "Top": {
+          "cell": "C2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush39": {
+      "panes": {
+        "Top": {
+          "cell": "C2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush45": {
+      "panes": {
+        "Top": {
+          "cell": "C2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush46": {
+      "panes": {
+        "Top": {
+          "cell": "C2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush47": {
+      "panes": {
+        "Top": {
+          "cell": "C2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush48": {
+      "panes": {
+        "Top": {
+          "cell": "C2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush49": {
+      "panes": {
+        "Top": {
+          "cell": "C2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush50": {
+      "panes": {
+        "Top": {
+          "cell": "C2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush51": {
+      "panes": {
+        "Top": {
+          "cell": "C2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush52": {
+      "panes": {
+        "Top": {
+          "cell": "C2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush53": {
+      "panes": {
+        "Top": {
+          "cell": "C2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush54": {
+      "panes": {
+        "Top": {
+          "cell": "C2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush55": {
+      "panes": {
+        "Top": {
+          "cell": "C2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush56": {
+      "panes": {
+        "Top": {
+          "cell": "C2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Light50": {
+      "panes": {
+        "Top": {
+          "cell": "B2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Light51": {
+      "panes": {
+        "Top": {
+          "cell": "C1",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Light52": {
+      "panes": {
+        "Top": {
+          "cell": "C1",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Light53": {
+      "panes": {
+        "Top": {
+          "cell": "C2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Light54": {
+      "panes": {
+        "Top": {
+          "cell": "C2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush104": {
+      "panes": {
+        "Top": {
+          "cell": "C2",
+          "span": "B1\u2013D2"
+        }
+      },
+      "hidden": false
+    },
+    "Brush8": {
+      "panes": {
+        "Top": {
+          "cell": "C2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush9": {
+      "panes": {
+        "Top": {
+          "cell": "C2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush10": {
+      "panes": {
+        "Top": {
+          "cell": "C2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush11": {
+      "panes": {
+        "Top": {
+          "cell": "C2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush13": {
+      "panes": {
+        "Top": {
+          "cell": "C2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush14": {
+      "panes": {
+        "Top": {
+          "cell": "C2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush15": {
+      "panes": {
+        "Top": {
+          "cell": "C2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush16": {
+      "panes": {
+        "Top": {
+          "cell": "C2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush17": {
+      "panes": {
+        "Top": {
+          "cell": "C2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush20": {
+      "panes": {
+        "Top": {
+          "cell": "C2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush22": {
+      "panes": {
+        "Top": {
+          "cell": "C2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush24": {
+      "panes": {
+        "Top": {
+          "cell": "C2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush28": {
+      "panes": {
+        "Top": {
+          "cell": "C2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush31": {
+      "panes": {
+        "Top": {
+          "cell": "C2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush32": {
+      "panes": {
+        "Top": {
+          "cell": "C2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush33": {
+      "panes": {
+        "Top": {
+          "cell": "C2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush34": {
+      "panes": {
+        "Top": {
+          "cell": "C2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush114": {
+      "panes": {
+        "Top": {
+          "cell": "C3",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush116": {
+      "panes": {
+        "Top": {
+          "cell": "C3",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush119": {
+      "panes": {
+        "Top": {
+          "cell": "C3",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush120": {
+      "panes": {
+        "Top": {
+          "cell": "C3",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Chair0": {
+      "panes": {
+        "Top": {
+          "cell": "B2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush139": {
+      "panes": {
+        "Top": {
+          "cell": "B2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush140": {
+      "panes": {
+        "Top": {
+          "cell": "B2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Chair1": {
+      "panes": {
+        "Top": {
+          "cell": "B2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Chair2": {
+      "panes": {
+        "Top": {
+          "cell": "B2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Chair3": {
+      "panes": {
+        "Top": {
+          "cell": "B2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Chair4": {
+      "panes": {
+        "Top": {
+          "cell": "B2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Chair5": {
+      "panes": {
+        "Top": {
+          "cell": "B2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Chair6": {
+      "panes": {
+        "Top": {
+          "cell": "B2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Chair7": {
+      "panes": {
+        "Top": {
+          "cell": "B2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush141": {
+      "panes": {
+        "Top": {
+          "cell": "C3",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush142": {
+      "panes": {
+        "Top": {
+          "cell": "C3",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush143": {
+      "panes": {
+        "Top": {
+          "cell": "C3",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Light11": {
+      "panes": {
+        "Top": {
+          "cell": "C3",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Chair29": {
+      "panes": {
+        "Top": {
+          "cell": "C2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush153": {
+      "panes": {
+        "Top": {
+          "cell": "C2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush154": {
+      "panes": {
+        "Top": {
+          "cell": "C2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Chair30": {
+      "panes": {
+        "Top": {
+          "cell": "C2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Chair31": {
+      "panes": {
+        "Top": {
+          "cell": "D2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Chair32": {
+      "panes": {
+        "Top": {
+          "cell": "C2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Chair33": {
+      "panes": {
+        "Top": {
+          "cell": "D2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Chair34": {
+      "panes": {
+        "Top": {
+          "cell": "D2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Chair35": {
+      "panes": {
+        "Top": {
+          "cell": "C2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Chair36": {
+      "panes": {
+        "Top": {
+          "cell": "C2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Chair52": {
+      "panes": {
+        "Top": {
+          "cell": "C2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush162": {
+      "panes": {
+        "Top": {
+          "cell": "C2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush163": {
+      "panes": {
+        "Top": {
+          "cell": "C2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Chair53": {
+      "panes": {
+        "Top": {
+          "cell": "C2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Chair54": {
+      "panes": {
+        "Top": {
+          "cell": "D2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Chair55": {
+      "panes": {
+        "Top": {
+          "cell": "C2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Chair56": {
+      "panes": {
+        "Top": {
+          "cell": "D2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Chair57": {
+      "panes": {
+        "Top": {
+          "cell": "D2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Chair58": {
+      "panes": {
+        "Top": {
+          "cell": "C1",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Chair59": {
+      "panes": {
+        "Top": {
+          "cell": "C2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Chair60": {
+      "panes": {
+        "Top": {
+          "cell": "B2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush164": {
+      "panes": {
+        "Top": {
+          "cell": "B2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush165": {
+      "panes": {
+        "Top": {
+          "cell": "B2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Chair61": {
+      "panes": {
+        "Top": {
+          "cell": "B2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Chair62": {
+      "panes": {
+        "Top": {
+          "cell": "B2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Chair63": {
+      "panes": {
+        "Top": {
+          "cell": "B2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Chair64": {
+      "panes": {
+        "Top": {
+          "cell": "B2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Chair65": {
+      "panes": {
+        "Top": {
+          "cell": "B2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Chair66": {
+      "panes": {
+        "Top": {
+          "cell": "B2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Chair67": {
+      "panes": {
+        "Top": {
+          "cell": "B2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "WineBottle3": {
+      "panes": {
+        "Top": {
+          "cell": "B2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Sodacan0": {
+      "panes": {
+        "Top": {
+          "cell": "B2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Liquor40oz3": {
+      "panes": {
+        "Top": {
+          "cell": "B2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Liquor40oz4": {
+      "panes": {
+        "Top": {
+          "cell": "B2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Liquor40oz5": {
+      "panes": {
+        "Top": {
+          "cell": "B2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Liquor40oz6": {
+      "panes": {
+        "Top": {
+          "cell": "B2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Cigarettes0": {
+      "panes": {
+        "Top": {
+          "cell": "C2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush167": {
+      "panes": {
+        "Top": {
+          "cell": "C1",
+          "span": "B1\u2013D1"
+        }
+      },
+      "hidden": false
+    },
+    "Brush190": {
+      "panes": {
+        "Top": {
+          "cell": "C1",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush191": {
+      "panes": {
+        "Top": {
+          "cell": "C1",
+          "span": "B1\u2013C1"
+        }
+      },
+      "hidden": false
+    },
+    "Brush192": {
+      "panes": {
+        "Top": {
+          "cell": "C1",
+          "span": "B1\u2013D1"
+        }
+      },
+      "hidden": false
+    },
+    "Light28": {
+      "panes": {
+        "Top": {
+          "cell": "C1",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Light30": {
+      "panes": {
+        "Top": {
+          "cell": "C1",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Light35": {
+      "panes": {
+        "Top": {
+          "cell": "B1",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush2": {
+      "panes": {
+        "Top": {
+          "cell": "B1",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush3": {
+      "panes": {
+        "Top": {
+          "cell": "B1",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush4": {
+      "panes": {
+        "Top": {
+          "cell": "B1",
+          "span": "B1\u2013B2"
+        }
+      },
+      "hidden": false
+    },
+    "Brush5": {
+      "panes": {
+        "Top": {
+          "cell": "B1",
+          "span": "B1\u2013B2"
+        }
+      },
+      "hidden": false
+    },
+    "Brush6": {
+      "panes": {
+        "Top": {
+          "cell": "B1",
+          "span": "B1\u2013B2"
+        }
+      },
+      "hidden": false
+    },
+    "Brush25": {
+      "panes": {
+        "Top": {
+          "cell": "B2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush35": {
+      "panes": {
+        "Top": {
+          "cell": "B2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush36": {
+      "panes": {
+        "Top": {
+          "cell": "B1",
+          "span": "B1\u2013B2"
+        }
+      },
+      "hidden": false
+    },
+    "Brush37": {
+      "panes": {
+        "Top": {
+          "cell": "B1",
+          "span": "B1\u2013B2"
+        }
+      },
+      "hidden": false
+    },
+    "Brush40": {
+      "panes": {
+        "Top": {
+          "cell": "B1",
+          "span": "B1\u2013B2"
+        }
+      },
+      "hidden": false
+    },
+    "Brush110": {
+      "panes": {
+        "Top": {
+          "cell": "B2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush111": {
+      "panes": {
+        "Top": {
+          "cell": "B2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Light1": {
+      "panes": {
+        "Top": {
+          "cell": "B1",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Light2": {
+      "panes": {
+        "Top": {
+          "cell": "B1",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Light3": {
+      "panes": {
+        "Top": {
+          "cell": "B1",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Light4": {
+      "panes": {
+        "Top": {
+          "cell": "B2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Light5": {
+      "panes": {
+        "Top": {
+          "cell": "B1",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush149": {
+      "panes": {
+        "Top": {
+          "cell": "D1",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush150": {
+      "panes": {
+        "Top": {
+          "cell": "D2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush157": {
+      "panes": {
+        "Top": {
+          "cell": "B1",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush159": {
+      "panes": {
+        "Top": {
+          "cell": "B1",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush166": {
+      "panes": {
+        "Top": {
+          "cell": "B1",
+          "span": "A1\u2013C1"
+        }
+      },
+      "hidden": false
+    },
+    "Brush151": {
+      "panes": {
+        "Top": {
+          "cell": "B1",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush152": {
+      "panes": {
+        "Top": {
+          "cell": "B1",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush169": {
+      "panes": {
+        "Top": {
+          "cell": "B2",
+          "span": "B1\u2013B2"
+        }
+      },
+      "hidden": false
+    },
+    "Brush193": {
+      "panes": {
+        "Top": {
+          "cell": "C2",
+          "span": "B1\u2013C2"
+        }
+      },
+      "hidden": false
+    },
+    "Brush194": {
+      "panes": {
+        "Top": {
+          "cell": "C2",
+          "span": "C1\u2013D2"
+        }
+      },
+      "hidden": false
+    },
+    "Brush195": {
+      "panes": {
+        "Top": {
+          "cell": "C2",
+          "span": "C1\u2013C2"
+        }
+      },
+      "hidden": false
+    },
+    "Brush196": {
+      "panes": {
+        "Top": {
+          "cell": "C2",
+          "span": "C1\u2013C2"
+        }
+      },
+      "hidden": false
+    },
+    "Brush202": {
+      "panes": {
+        "Top": {
+          "cell": "C2",
+          "span": "C1\u2013C2"
+        }
+      },
+      "hidden": false
+    },
+    "Brush203": {
+      "panes": {
+        "Top": {
+          "cell": "C2",
+          "span": "C1\u2013C2"
+        }
+      },
+      "hidden": false
+    },
+    "Brush208": {
+      "panes": {
+        "Top": {
+          "cell": "A2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush210": {
+      "panes": {
+        "Top": {
+          "cell": "A2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush211": {
+      "panes": {
+        "Top": {
+          "cell": "A2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush209": {
+      "panes": {
+        "Top": {
+          "cell": "A2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Light26": {
+      "panes": {
+        "Top": {
+          "cell": "B2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush212": {
+      "panes": {
+        "Top": {
+          "cell": "A2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Light27": {
+      "panes": {
+        "Top": {
+          "cell": "B2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush_ei4244": {
+      "panes": {
+        "Top": {
+          "cell": "C2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush_r56tl0": {
+      "panes": {
+        "Top": {
+          "cell": "C2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush_1n466a": {
+      "panes": {
+        "Top": {
+          "cell": "C1",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush206": {
+      "panes": {
+        "Top": {
+          "cell": "A2",
+          "span": "A1\u2013A2"
+        }
+      },
+      "hidden": false
+    },
+    "Brush207": {
+      "panes": {
+        "Top": {
+          "cell": "A2",
+          "span": "A1\u2013A2"
+        }
+      },
+      "hidden": false
+    },
+    "Brush_4vxy1k": {
+      "panes": {
+        "Top": {
+          "cell": "A2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush_91isyn": {
+      "panes": {
+        "Top": {
+          "cell": "A2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush_su4u7b": {
+      "panes": {
+        "Top": {
+          "cell": "A2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush_q0t1p5": {
+      "panes": {
+        "Top": {
+          "cell": "A2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Light_h76gz7": {
+      "panes": {
+        "Top": {
+          "cell": "B2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush_m4unsm": {
+      "panes": {
+        "Top": {
+          "cell": "A2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Light_57i19k": {
+      "panes": {
+        "Top": {
+          "cell": "B2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush250": {
+      "panes": {
+        "Top": {
+          "cell": "B2",
+          "span": "B1\u2013C2"
+        }
+      },
+      "hidden": false
+    },
+    "Brush251": {
+      "panes": {
+        "Top": {
+          "cell": "B2",
+          "span": "B1\u2013B2"
+        }
+      },
+      "hidden": false
+    },
+    "Brush216": {
+      "panes": {
+        "Top": {
+          "cell": "B2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush223": {
+      "panes": {
+        "Top": {
+          "cell": "B2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush226": {
+      "panes": {
+        "Top": {
+          "cell": "B2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush227": {
+      "panes": {
+        "Top": {
+          "cell": "B2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush228": {
+      "panes": {
+        "Top": {
+          "cell": "B2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush229": {
+      "panes": {
+        "Top": {
+          "cell": "B2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush230": {
+      "panes": {
+        "Top": {
+          "cell": "B2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush231": {
+      "panes": {
+        "Top": {
+          "cell": "B2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush232": {
+      "panes": {
+        "Top": {
+          "cell": "B2",
+          "span": null
+        }
+      },
+      "hidden": false
+    },
+    "Brush233": {
+      "panes": {
+        "Top": {
+          "cell": "B2",
+          "span": null
+        }
+      },
+      "hidden": false
+    }
+  }
+}

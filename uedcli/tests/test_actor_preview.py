@@ -787,18 +787,18 @@ def test_it_renders_brush_colors_legend_differently_from_csg(tmp_path, monkeypat
     assert _is_png(legend_out)
 
 
-# ── addressable coordinate grid (always on): stderr legend, --json, --grid ──────────────────────
+# ── locator cells (on by default): stderr legend, --json, --locator-cells ───────────────────────
 import json as _json
 import re as _re
 
 
-def test_it_always_prints_the_grid_legend_to_stderr_single(tmp_path, monkeypatch, capsys):
+def test_it_prints_the_locator_legend_to_stderr_single_by_default(tmp_path, monkeypatch, capsys):
     proj = _project_with_two_brushes(tmp_path, monkeypatch)
     out = tmp_path / "o.png"
     assert dispatch.dispatch(_prev(proj, out, names=["WallA", "WallB"], layout="single")) == 0
     cap = capsys.readouterr()
     assert cap.out.strip() == str(out.with_suffix(".png"))          # stdout stays the bare path
-    assert "grid: 12×12 columns A–L, rows 1–12" in cap.err          # density header
+    assert "locator: 12×12 columns A–L, rows 1–12" in cap.err       # density header
     # each actor gets an unqualified letter+number cell (single view)
     assert _re.search(r"^WallA  [A-Z]+\d+", cap.err, _re.M)
     assert _re.search(r"^WallB  [A-Z]+\d+", cap.err, _re.M)
@@ -813,7 +813,7 @@ def test_it_pane_qualifies_the_legend_under_quad(tmp_path, monkeypatch, capsys):
     assert _re.search(r"Top:[A-Z]+\d+ Front:[A-Z]+\d+ Side:[A-Z]+\d+ Iso:[A-Z]+\d+", line)
 
 
-def test_json_emits_the_grid_object_to_stdout(tmp_path, monkeypatch, capsys):
+def test_json_emits_the_locator_object_to_stdout(tmp_path, monkeypatch, capsys):
     proj = _project_with_two_brushes(tmp_path, monkeypatch)
     out = tmp_path / "o.png"
     assert dispatch.dispatch(_prev(proj, out, names=["WallA", "WallB"], layout="single",
@@ -821,13 +821,115 @@ def test_json_emits_the_grid_object_to_stdout(tmp_path, monkeypatch, capsys):
     cap = capsys.readouterr()
     obj = _json.loads(cap.out)                                       # stdout is the JSON, not the path
     assert obj["image"] == str(out.with_suffix(".png"))
-    assert obj["grid"] == {"cols": 12, "rows": 12}
+    assert obj["locator"] == {"cols": 12, "rows": 12}
     assert set(obj["actors"]) == {"WallA", "WallB"}
     wa = obj["actors"]["WallA"]
     assert set(wa["panes"]) == {"Top"}                              # single view keyed by --view
     assert _re.fullmatch(r"[A-Z]+\d+", wa["panes"]["Top"]["cell"])
     assert wa["hidden"] is False
-    assert "grid: 12×12" in cap.err                                 # legend still on stderr
+    assert "locator: 12×12" in cap.err                              # legend still on stderr
+
+
+def test_json_with_no_locator_cells_omits_locator_and_cell_span_but_keeps_hidden(tmp_path, monkeypatch,
+                                                                                 capsys):
+    # §3.4's reduced shape: no `locator` key, no `panes`/`cell`/`span`, but still `hidden`. `hidden`
+    # answers the image actually rendered, not an abstract locator-independent fact — under `--faces
+    # textured` the locator's gutter reserve shifts `to_pxf`/the depth buffer and CAN change which face
+    # is occluded (board item `locator-on-vs-off-can-disagree-on-hidden-under`). The equality below
+    # holds because this fixture renders the default `wire`, where `hidden` never touches pixel
+    # positions.
+    proj = _project_with_two_brushes(tmp_path, monkeypatch)
+    on, off = tmp_path / "on.png", tmp_path / "off.png"
+    assert dispatch.dispatch(_prev(proj, on, names=["WallA", "WallB"], layout="single",
+                                   view="top", json=True)) == 0
+    obj_on = _json.loads(capsys.readouterr().out)
+    assert dispatch.dispatch(_prev(proj, off, names=["WallA", "WallB"], layout="single",
+                                   view="top", json=True, no_locator_cells=True)) == 0
+    cap = capsys.readouterr()
+    obj_off = _json.loads(cap.out)
+    assert "locator" not in obj_off
+    assert set(obj_off["actors"]) == {"WallA", "WallB"}
+    for name, actor in obj_off["actors"].items():
+        assert set(actor) == {"hidden"}                             # no panes/cell/span
+        assert actor["hidden"] == obj_on["actors"][name]["hidden"]  # agrees here — this fixture is wire
+    # No locator legend either -- but the grid's set/visible report (spec §6) is unconditional and
+    # independent of the locator, so `top` (ortho) still gets its one stderr line.
+    assert cap.err == "X -64..432  Y -64..432  grid set 16, visible 32\n"
+
+
+def test_no_locator_cells_prints_no_gutter_pixels_and_no_legend(tmp_path, monkeypatch, capsys):
+    from uedcli.preview import LOCATOR_LABEL
+    proj = _project_with_two_brushes(tmp_path, monkeypatch)
+    out = tmp_path / "o.png"
+    assert dispatch.dispatch(_prev(proj, out, names=["WallA", "WallB"], layout="single",
+                                   no_locator_cells=True)) == 0
+    cap = capsys.readouterr()
+    assert cap.err == ""                                            # no legend at all
+    assert LOCATOR_LABEL not in _colors(_img(out.with_suffix(".png")))
+
+
+def test_no_locator_cells_under_quad_has_no_gutter_in_any_pane(tmp_path, monkeypatch, capsys):
+    # `quad` carries the gutter on all four panes when the locator is on (spec §3.5: "quad is
+    # unchanged"); `--no-locator-cells` must drop it from every pane, not just the first.
+    from uedcli.preview import LOCATOR_LABEL
+    proj = _project_with_two_brushes(tmp_path, monkeypatch)
+    out = tmp_path / "o.png"
+    assert dispatch.dispatch(_prev(proj, out, names=["WallA", "WallB"], layout="quad",
+                                   no_locator_cells=True)) == 0
+    cap = capsys.readouterr()
+    # No locator legend -- but the grid's set/visible report (spec §6) is unconditional and independent
+    # of the locator, so the three ORTHO panes still each get one line and `Iso` gets none.
+    assert "locator:" not in cap.err
+    panes = [ln.split(":")[0] for ln in cap.err.splitlines() if ln.strip()]
+    assert panes == ["Top", "Front", "Side"]
+    assert LOCATOR_LABEL not in _colors(_img(out.with_suffix(".png")))
+
+
+def test_no_locator_cells_under_breakdown_has_no_gutter_on_the_scene_pane(tmp_path, monkeypatch,
+                                                                          capsys):
+    # `breakdown`'s gutter rides pane 0 (the SCENE pane) only when the locator is on; with it off, no
+    # pane (including pane 0) draws one, and there is no locator legend (breakdown still prints its own
+    # unrelated "breakdown: N brushes, ..." summary to stderr, so this checks for the absence of the
+    # locator's density-header line specifically, not an empty stderr).
+    from uedcli.preview import LOCATOR_LABEL
+    proj = _project_room_pillar(tmp_path, monkeypatch)
+    out = tmp_path / "b.png"
+    assert dispatch.dispatch(_prev(proj, out, names=["Room", "Pillar"], layout="breakdown",
+                                   size=256, no_locator_cells=True)) == 0
+    cap = capsys.readouterr()
+    assert "locator:" not in cap.err                                # no locator legend
+    assert LOCATOR_LABEL not in _colors(_img(out.with_suffix(".png")))
+
+
+def test_no_locator_cells_gives_geometry_the_wider_drawable_rect(tmp_path, monkeypatch, capsys):
+    # Not just "no visible labels" (which a gutter reserve left in by mistake, but simply unpainted,
+    # would still satisfy) — the framing must actually GAIN the reserved space back. WallA alone in
+    # `top` view projects to a perfect SQUARE (`cube` is centred on its origin), so both axes are
+    # equally frame-constrained and the drawn GEOMETRY's bounding box must expand on every side once
+    # the gutter reserve drops to 0. Excludes LOCATOR_LABEL pixels from the box: a wide row number
+    # (e.g. "12") is centred in the gutter band and can itself reach as far in as the frame pad,
+    # which would otherwise mask the very regression this test exists to catch.
+    from uedcli.preview import LOCATOR_LABEL, BG
+    proj = _project_with_two_brushes(tmp_path, monkeypatch)
+    on, off = tmp_path / "on.png", tmp_path / "off.png"
+    assert dispatch.dispatch(_prev(proj, on, names=["WallA"], layout="single", view="top")) == 0
+    capsys.readouterr()
+    assert dispatch.dispatch(_prev(proj, off, names=["WallA"], layout="single", view="top",
+                                   no_locator_cells=True)) == 0
+    capsys.readouterr()
+
+    def _geometry_bbox(path):
+        w, _h, b = _img(path)
+        idxs = [k // 3 for k in range(0, len(b), 3)
+                if tuple(b[k:k + 3]) not in ((BG, BG, BG), LOCATOR_LABEL)]
+        xs = [i % w for i in idxs]
+        ys = [i // w for i in idxs]
+        return min(xs), min(ys), max(xs), max(ys)
+
+    x0_on, y0_on, x1_on, y1_on = _geometry_bbox(on.with_suffix(".png"))
+    x0_off, y0_off, x1_off, y1_off = _geometry_bbox(off.with_suffix(".png"))
+    assert x0_off < x0_on and y0_off < y0_on          # extends further toward the top-left frame edge
+    assert x1_off > x1_on and y1_off > y1_on          # ...and the bottom-right edge
 
 
 def test_without_json_stdout_is_the_bare_path(tmp_path, monkeypatch, capsys):
@@ -837,37 +939,59 @@ def test_without_json_stdout_is_the_bare_path(tmp_path, monkeypatch, capsys):
     assert capsys.readouterr().out.strip() == str(out.with_suffix(".png"))
 
 
-def test_grid_density_override_changes_the_addresses(tmp_path, monkeypatch, capsys):
+def test_locator_density_override_changes_the_addresses(tmp_path, monkeypatch, capsys):
     proj = _project_with_two_brushes(tmp_path, monkeypatch)
     out = tmp_path / "o.png"
-    assert dispatch.dispatch(_prev(proj, out, names=["WallA", "WallB"], layout="single", grid=4)) == 0
+    assert dispatch.dispatch(_prev(proj, out, names=["WallA", "WallB"], layout="single",
+                                   locator_cells=4)) == 0
     err4 = capsys.readouterr().err
-    assert "grid: 4×4 columns A–D, rows 1–4" in err4
-    assert dispatch.dispatch(_prev(proj, out, names=["WallA", "WallB"], layout="single", grid=12)) == 0
+    assert "locator: 4×4 columns A–D, rows 1–4" in err4
+    assert dispatch.dispatch(_prev(proj, out, names=["WallA", "WallB"], layout="single",
+                                   locator_cells=12)) == 0
     err12 = capsys.readouterr().err
     assert err4 != err12                                            # different density → different cells
 
 
-def test_grid_zero_is_a_clean_named_error(tmp_path, monkeypatch, capsys):
+def test_locator_cells_zero_is_a_clean_named_error(tmp_path, monkeypatch, capsys):
     proj = _project_with_two_brushes(tmp_path, monkeypatch)
-    rc = dispatch.dispatch(_prev(proj, tmp_path / "o.png", names=["WallA"], grid=0))
+    rc = dispatch.dispatch(_prev(proj, tmp_path / "o.png", names=["WallA"], locator_cells=0))
     err = capsys.readouterr().err
-    assert rc == 2 and "--grid must be in [1, 52], got 0" in err and "Traceback" not in err
+    assert rc == 2 and "--locator-cells must be in [1, 52], got 0" in err and "Traceback" not in err
 
 
-def test_grid_too_large_is_a_clean_named_error(tmp_path, monkeypatch, capsys):
+def test_locator_cells_too_large_is_a_clean_named_error(tmp_path, monkeypatch, capsys):
     proj = _project_with_two_brushes(tmp_path, monkeypatch)
-    rc = dispatch.dispatch(_prev(proj, tmp_path / "o.png", names=["WallA"], grid=999))
+    rc = dispatch.dispatch(_prev(proj, tmp_path / "o.png", names=["WallA"], locator_cells=53))
     err = capsys.readouterr().err
-    assert rc == 2 and "--grid must be in [1, 52], got 999" in err and "Traceback" not in err
+    assert rc == 2 and "--locator-cells must be in [1, 52], got 53" in err and "Traceback" not in err
+
+
+def test_locator_cells_1_and_52_are_accepted(tmp_path, monkeypatch, capsys):
+    proj = _project_with_two_brushes(tmp_path, monkeypatch)
+    for n in (1, 52):
+        rc = dispatch.dispatch(_prev(proj, tmp_path / "o.png", names=["WallA"], locator_cells=n))
+        assert rc == 0
+        capsys.readouterr()
+
+
+def test_locator_cells_and_no_locator_cells_together_is_a_clean_named_error(tmp_path, monkeypatch,
+                                                                            capsys):
+    proj = _project_with_two_brushes(tmp_path, monkeypatch)
+    rc = dispatch.dispatch(_prev(proj, tmp_path / "o.png", names=["WallA"],
+                                 locator_cells=4, no_locator_cells=True))
+    err = capsys.readouterr().err
+    assert rc == 2 and "Traceback" not in err
+    assert "--locator-cells" in err and "--no-locator-cells" in err
+    assert "mutually exclusive" in err
 
 
 def test_same_cell_collision_co_lists_both_actors(tmp_path, monkeypatch, capsys):
-    # --grid 1 collapses the whole image to one cell (A1): both actors land there and each keeps its
-    # own legend line (a collision is not an error).
+    # --locator-cells 1 collapses the whole image to one cell (A1): both actors land there and each
+    # keep its own legend line (a collision is not an error).
     proj = _project_with_two_brushes(tmp_path, monkeypatch)
     out = tmp_path / "o.png"
-    assert dispatch.dispatch(_prev(proj, out, names=["WallA", "WallB"], layout="single", grid=1)) == 0
+    assert dispatch.dispatch(_prev(proj, out, names=["WallA", "WallB"], layout="single",
+                                   locator_cells=1)) == 0
     err = capsys.readouterr().err
     assert _re.search(r"^WallA  A1", err, _re.M) and _re.search(r"^WallB  A1", err, _re.M)
 
@@ -879,6 +1003,7 @@ def test_empty_actor_set_is_exit_0_with_no_cells(tmp_path, monkeypatch, capsys):
     rc = rendering.render_actors_to_out([], _prev(proj, out, layout="single", json=True))
     assert rc == 0
     obj = _json.loads(capsys.readouterr().out)
+    assert obj["locator"] == {"cols": 12, "rows": 12}
     assert obj["actors"] == {}
 
 
@@ -890,6 +1015,15 @@ def test_breakdown_emits_the_pane0_legend_single_view_unqualified(tmp_path, monk
     assert dispatch.dispatch(_prev(proj, out, names=["Room", "Pillar"], layout="breakdown",
                                    size=256)) == 0
     err = capsys.readouterr().err
-    assert "grid: 12×12 columns A–L, rows 1–12" in err
+    assert "locator: 12×12 columns A–L, rows 1–12" in err
     assert _re.search(r"^Room  [A-Z]+\d+", err, _re.M)
     assert "Top:" not in err and "Iso:" not in err                 # single-view, not pane-qualified
+
+
+def test_old_grid_flag_is_gone(capsys):
+    import pytest
+    from uedcli.cli import main as cli
+    parser = cli.build_parser()
+    with pytest.raises(SystemExit):                    # --grid was renamed, not aliased
+        parser.parse_args(["actor", "preview", "W", "--out", "o.png", "--grid", "4"])
+    assert "unrecognized arguments: --grid" in capsys.readouterr().err

@@ -1,0 +1,25 @@
+[
+  {
+    "id": "T1-sparse-region",
+    "kind": "region",
+    "cols": [7, 9],
+    "rows": [9, 11],
+    "prompt": "The image shows one small structure on its own in the lower-right, far away from everything else in the level. List the Name of every actor that makes up that isolated structure. Answer with one name per line and nothing else.",
+    "why": "The EASIEST case: a sparse, well-separated cluster with no neighbour to confuse it. If the addressing fails here it fails everywhere."
+  },
+  {
+    "id": "T2-dense-discriminate",
+    "kind": "region",
+    "cols": [1, 1],
+    "rows": [2, 2],
+    "prompt": "In the upper-left of the image there are two hexagonal rooms side by side. List the Name of every actor that makes up the LEFT-HAND one of those two hexagonal rooms — not the right-hand one. Answer with one name per line and nothing else.",
+    "why": "The DISCRIMINATING case: two similar structures in adjacent cells. This is what 'reliable on a complex render' has to mean."
+  },
+  {
+    "id": "T3-locate",
+    "kind": "locate",
+    "actor": "Brush30",
+    "prompt": "Where in this image is the actor named Brush30? Describe its position as precisely as the output lets you, and say what visible structure it is part of.",
+    "why": "The REVERSE direction: name → place. Tests the addressing mechanism itself, independent of whether a region maps to a unique name set."
+  }
+]

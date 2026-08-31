@@ -650,7 +650,7 @@ def test_framing_maps_world_points_to_pixels():
     minx, miny = min(p[0] for p in pts), min(p[1] for p in pts)
     span = max(max(p[0] for p in pts) - minx, max(p[1] for p in pts) - miny)
     for size in (128, 131, 256, 384):
-        _, to_px, _, _ = _framing(pts, None, size, "iso", 30.0)
+        _, to_px, _, _, _ = _framing(pts, None, size, "iso", 30.0)
         draw = size - 2 * _FRAME_PAD
         for p in pts:
             expected = (int((p[0] - minx) / span * draw) + _FRAME_PAD,
@@ -940,7 +940,7 @@ def test_line_dim_alpha_composites_over_content_instead_of_overwriting():
     assert px(5, 10) == over_bg           # away from the crossing: composited over the background
 
 
-# ── addressable coordinate grid: pure cell math ────────────────────────────────────────────────
+# ── locator cells: pure cell math ──────────────────────────────────────────────────────────────
 from uedcli.preview import (  # noqa: E402
     ActorCell, _actor_cells, _cell_address, _cell_of_pixel, _col_label, _drawable_rect,
 )
@@ -993,8 +993,8 @@ def test_actor_cell_is_a_frozen_value():
         c.cell = "A1"
 
 
-# ── addressable coordinate grid: gutter render + per-pane cell collection ───────────────────────
-from uedcli.preview import GRID_LABEL, _grid_gutter_px  # noqa: E402
+# ── locator cells: gutter render + per-pane cell collection ─────────────────────────────────────
+from uedcli.preview import LOCATOR_LABEL, _locator_gutter_px  # noqa: E402
 
 
 def _two_brushes():
@@ -1004,26 +1004,30 @@ def _two_brushes():
     return [a, b]
 
 
-def test_grid_none_renders_byte_identically_to_no_grid():
+def test_locator_label_is_pinned_so_a_change_is_deliberate():
+    assert LOCATOR_LABEL == (105, 105, 105)
+
+
+def test_locator_none_renders_byte_identically_to_no_locator():
     actors = _two_brushes()
     kw = dict(view="iso", size=256, color_by_csg=True)
-    assert render_brushes_pgm(actors, grid=None, **kw) == render_brushes_pgm(actors, **kw)
+    assert render_brushes_pgm(actors, locator=None, **kw) == render_brushes_pgm(actors, **kw)
 
 
-def test_grid_gutter_draws_and_changes_the_image():
+def test_locator_gutter_draws_and_changes_the_image():
     actors = _two_brushes()
     kw = dict(view="iso", size=256, color_by_csg=True)
-    with_grid = render_brushes_pgm(actors, grid=12, **kw)
-    assert with_grid != render_brushes_pgm(actors, **kw)
-    assert GRID_LABEL in _colors(with_grid)          # the gutter letters/numbers landed
+    with_locator = render_brushes_pgm(actors, locator=12, **kw)
+    assert with_locator != render_brushes_pgm(actors, **kw)
+    assert LOCATOR_LABEL in _colors(with_locator)    # the gutter letters/numbers landed
 
 
-def test_grid_gutter_is_independent_of_annotate_none():
-    # --annotate none clears on-geometry labels but the gutter still draws (grid is orthogonal).
+def test_locator_gutter_is_independent_of_annotate_none():
+    # --annotate none clears on-geometry labels but the gutter still draws (the locator is orthogonal).
     actors = _two_brushes()
-    img = render_brushes_pgm(actors, view="iso", size=256, color_by_csg=True, grid=12,
+    img = render_brushes_pgm(actors, view="iso", size=256, color_by_csg=True, locator=12,
                              annotations=AnnotationSpec.none())
-    assert GRID_LABEL in _colors(img)
+    assert LOCATOR_LABEL in _colors(img)
 
 
 def test_geometry_does_not_draw_in_the_gutter_band():
@@ -1031,30 +1035,58 @@ def test_geometry_does_not_draw_in_the_gutter_band():
     # letters — never brush geometry, which _framing insets clear of the band.
     actors = _two_brushes()
     size = 256
-    ppm = render_brushes_pgm(actors, view="iso", size=size, color_by_csg=True, grid=12,
+    ppm = render_brushes_pgm(actors, view="iso", size=size, color_by_csg=True, locator=12,
                              annotations=AnnotationSpec.none())
     px = _pixels(ppm)
-    gutter = _grid_gutter_px(max(2, size // 256))
+    gutter = _locator_gutter_px(max(2, size // 256))
     # a horizontal strip inside the left row-number band, below the top band: only BG or grey labels
     band_cols = range(_FRAME_PAD, _FRAME_PAD + gutter)
     for y in range(_FRAME_PAD + gutter + 20, size - _FRAME_PAD - gutter - 20):
         for x in band_cols:
-            assert px[y * size + x] in ((BG, BG, BG), GRID_LABEL)
+            assert px[y * size + x] in ((BG, BG, BG), LOCATOR_LABEL)
+
+
+def test_no_locator_draws_no_label_pixels():
+    # `--no-locator-cells`: no `LOCATOR_LABEL` pixel anywhere in the render. That the framing actually
+    # GAINS the reserved gutter back (not just that labels go unpainted, which a reserve left in by
+    # mistake would still satisfy) is pinned by driving the render and comparing drawn extents —
+    # `test_no_locator_cells_gives_geometry_the_wider_drawable_rect` in test_actor_preview.py, using a
+    # single-actor square projection so every side of the comparison is unambiguous.
+    actors = _two_brushes()
+    ppm = render_brushes_pgm(actors, view="iso", size=256, color_by_csg=True, locator=None)
+    assert LOCATOR_LABEL not in _colors(ppm)
 
 
 def test_per_pane_cells_collect_centroid_and_span():
     actors = _two_brushes()
     cells = {}
-    render_brushes_pgm(actors, view="top", size=256, color_by_csg=True, grid=12, cells_out=cells)
+    render_brushes_pgm(actors, view="top", size=256, color_by_csg=True, locator=12, cells_out=cells)
     assert set(cells) == {"Room", "Box"}
     assert cells["Room"].span is not None          # a big brush spans several cells
     assert cells["Room"].hidden is False
 
 
+def test_locator_off_still_collects_hidden_with_no_cell_or_span():
+    # `_collect_cells`'s n=None path: `hidden` is still collected with the locator off — cell/span stay
+    # None rather than being computed and discarded. `render_brushes_pgm` defaults to `faces="wire"`
+    # here, where `hidden` comes from `set(geom.actor_points)` and never touches pixel positions, so the
+    # equality below holds; under a filled mode the locator's gutter reserve can change `to_pxf` enough
+    # to flip which face wins a depth test, and `hidden` is NOT guaranteed to agree between the two
+    # modes there (board item `locator-on-vs-off-can-disagree-on-hidden-under`).
+    actors = _two_brushes()
+    on, off = {}, {}
+    render_brushes_pgm(actors, view="top", size=256, color_by_csg=True, locator=12, cells_out=on)
+    render_brushes_pgm(actors, view="top", size=256, color_by_csg=True, locator=None, cells_out=off)
+    assert set(off) == set(on) == {"Room", "Box"}
+    for name in on:
+        assert off[name].cell is None and off[name].span is None
+        assert off[name].hidden == on[name].hidden          # agrees here — this render is wire
+
+
 def test_quad_tags_cells_by_pane_name():
     actors = _two_brushes()
     qcells = {}
-    render_quad_pgm(actors, size=512, color_by_csg=True, grid=12, cells_out=qcells)
+    render_quad_pgm(actors, size=512, color_by_csg=True, locator=12, cells_out=qcells)
     assert set(qcells) == {"Top", "Front", "Iso", "Side"}
     assert set(qcells["Top"]) == {"Room", "Box"}
 
@@ -1064,18 +1096,18 @@ def test_cell_matches_where_the_label_would_land_on_the_image():
     # centroid falls in under the SAME framing (gutter inset) + drawable rect the image uses. Reproduce
     # via _scene_geometry.actor_points — the very source the collector reads — so the two cannot drift.
     from uedcli.preview import (_drawable_rect, _cell_of_pixel, _cell_address, _framing,
-                                _grid_gutter_px, _scene_geometry)
+                                _locator_gutter_px, _scene_geometry)
     from uedcli.builders import cube, make_brush_actor
     box = make_brush_actor("Only", cube(128, 128, 128), location=(50, -30, 10), csg="add")
     size, n = 256, 12
     cells = {}
-    render_brushes_pgm([box], view="top", size=size, color_by_csg=True, grid=n, cells_out=cells)
+    render_brushes_pgm([box], view="top", size=size, color_by_csg=True, locator=n, cells_out=cells)
     geom = _scene_geometry([box], view="top", iso_angle=30.0, annotations=AnnotationSpec.all(),
                            highlight_polys=set(), focus_cf=None, hybrid=True,
                            tints=assign_tints([box]), color_by_csg=True, render_data=PreviewData())
     name_scale = max(2, size // 256)
-    gutter = _grid_gutter_px(name_scale)
-    _s, _tp, to_pxf, _w = _framing(geom.pts, None, size, "top", 30.0, gutter=gutter)
+    gutter = _locator_gutter_px(name_scale)
+    _s, _tp, to_pxf, _w, _b = _framing(geom.pts, None, size, "top", 30.0, gutter=gutter)
     rect = _drawable_rect(size, _FRAME_PAD, gutter)
     proj = [to_pxf(p) for p in geom.actor_points["Only"]]
     xs = [p[0] for p in proj]; ys = [p[1] for p in proj]

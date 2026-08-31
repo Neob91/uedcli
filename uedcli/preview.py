@@ -9,16 +9,16 @@ writing, and PNG is the only form a preview ever takes on disk (no container/Unr
 involved either way).
 
 The `--annotate` flag selects WHICH poly-index marks a render draws, carried by an `AnnotationSpec`
-(`parse_annotation_spec`, `DEFAULT_ANNOTATIONS`). Actor names are never drawn — the addressable grid
-(a stderr `name → cell` map) is how a brush is located. The **actor `label` DIMENSION** (`labellib.py`
-— the flat `--label` classification stored per actor in the trunk) is a separate, unrelated sense
-living outside this module.
+(`parse_annotation_spec`, `DEFAULT_ANNOTATIONS`). Actor names are never drawn — locator cells (a
+stderr `name → cell` map, on by default; `--no-locator-cells` turns them off) are how a brush is
+located. The **actor `label` DIMENSION** (`labellib.py` — the flat `--label` classification stored
+per actor in the trunk) is a separate, unrelated sense living outside this module.
 
 Rendering choices (all to make poly numbers readable):
-  - light-on-BLACK, matching UnrealEd's viewport (owner ruling 2026-08-02): front edges brighter,
-    obscured/back edges dimmer (face distinction by shade). Uncoloured brushes use the light FRONT /
-    dimmer BACK pair; on the shared preview path each brush is coloured by its CSG classification
-    (`_CSG_PALETTE`).
+  - light-on-dark (background `#404040`, see `BG`; owner ruling 2026-08-30, superseding the
+    2026-08-02 pure-black ruling): front edges brighter, obscured/back edges dimmer (face
+    distinction by shade). Uncoloured brushes use the light FRONT / dimmer BACK pair; on the shared
+    preview path each brush is coloured by its CSG classification (`_CSG_PALETTE`).
   - a highlighted poly (`--highlight`) is drawn in its brush's vivid front hue with a
     bolder line (the facing dim is ignored on it); `--zoom` only frames, never highlights.
   - point (non-brush) actors draw as a DT_Sprite billboard or a marker, with
@@ -78,11 +78,12 @@ _DEPTH: dict[str, tuple[float, float, float]] = {
     "top": (0, 0, -1), "front": (0, 1, 0), "side": (1, 0, 0),
 }
 
-# Colours (RGB), tuned for the BLACK background (see BG). On black the facing cue inverts from the old
-# grey-bg tuning: the uncoloured FRONT is a light default (black lines would vanish) and BACK its dimmer
-# partner; captions/markers/gutter labels lift to a mid grey legible on black.
+# Colours (RGB), tuned for the DARK background (see BG, #404040 — not literally black, but dark enough
+# that this tuning still holds). The facing cue inverts from the old grey-bg tuning: the uncoloured
+# FRONT is a light default (a dark line would nearly vanish) and BACK its dimmer partner; captions/
+# markers/gutter labels lift to a mid grey legible on the dark bg.
 WHITE = (255, 255, 255)
-FRONT = (235, 235, 235)   # visible faces — near-white (uncoloured default, legible on black)
+FRONT = (235, 235, 235)   # visible faces — near-white (uncoloured default, legible on the dark bg)
 BACK = (120, 120, 120)    # obscured faces — dimmer grey partner of FRONT
 DIVIDER = (130, 130, 130)
 CAPTION = (170, 170, 170)
@@ -91,9 +92,9 @@ MARKER = (185, 185, 185)  # point-actor marker + label — neutral grey (NOT a C
 # CSG-op wire palette — each brush's wireframe is coloured by its CSG classification when
 # `color_by_csg=True` (the shared `actor`/`stash`/`prefab preview` path). Each entry is a
 # (front, back) shade pair: front = viewer-facing / vivid, back = obscured / DIMMER — so the facing
-# cue (front brighter, back dimmer) reads on the BLACK background, and `front` doubles as the vivid
+# cue (front brighter, back dimmer) reads on the DARK background, and `front` doubles as the vivid
 # highlight hue. Adapted from UnrealEd's own brush-wire legend (hue preserved, luminance tuned for our
-# black bg — as UED's viewport is); see
+# dark bg); see
 # dev/docs/unrealed/rendering.md. Red is deliberately NOT used (it's UED's builder brush, which we
 # don't render). test_preview.py pins the classify→palette→render WIRING (a subtracted brush renders
 # in the `subtract` pair; a point actor is never painted CSG-additive), not these literal RGB values.
@@ -105,7 +106,7 @@ PF_MASKED = 0x00000002
 PF_SEMISOLID = 0x00000020
 PF_NOTSOLID = 0x00000008
 _CSG_PALETTE: dict[str, tuple[tuple[int, int, int], tuple[int, int, int]]] = {
-    "add":       ((70, 110, 255),  (35, 55, 130)),    # additive solid — blue (front lifted for black)
+    "add":       ((70, 110, 255),  (35, 55, 130)),    # additive solid — blue (front lifted for the dark bg)
     "subtract":  ((225, 170, 40),  (120, 90, 20)),    # subtracted — yellow / gold
     "semisolid": ((235, 120, 80),  (125, 62, 40)),    # semi-solid — warm coral (distinct from mover)
     "nonsolid":  ((60, 200, 60),   (30, 100, 30)),    # non-solid — green
@@ -127,7 +128,7 @@ COL_LIGHT = (245, 175, 80)        # faint orange — light reach (deviated from 
 # a distinct per-brush tint tells them apart while the CSG wireframe cue is preserved. Tints are assigned
 # per actor in scene order (drawn or not — brushes AND point actors alike; an undrawn point actor with no
 # render data still consumes an index), cycling when the scene has more actors than entries. Chosen for
-# contrast on the black bg (BG=0) and mutual separation, and kept clear of the two most common CSG
+# contrast on the dark bg (BG=64) and mutual separation, and kept clear of the two most common CSG
 # wireframe hues (add=blue, subtract=gold) so a tint never reads as a CSG cue. The on-face number (digits
 # AND its underline) is painted in the tint; a legacy NAME label keeps black digits with a tinted box.
 # Used ONLY on the CSG-coloured preview path (`color_by_csg`); the legacy black/grey path keeps black
@@ -365,6 +366,8 @@ _FONT: dict[str, list[str]] = {
     "W": ["101", "101", "111", "111", "101"], "X": ["101", "101", "010", "101", "101"],
     "Y": ["101", "101", "010", "010", "010"], "Z": ["111", "001", "010", "100", "111"],
     "_": ["000", "000", "000", "000", "111"], "+": ["000", "010", "111", "010", "000"],
+    # "." and "/" — the grid caption's ".." range separator, decimal extents and "grid m/M" field.
+    ".": ["000", "000", "000", "000", "010"], "/": ["001", "001", "010", "100", "100"],
 }
 
 
@@ -429,9 +432,11 @@ def _is_front(verts3d, view: str, iso_angle: float = 30.0) -> bool:
 
 # ----- raster primitives (RGB buffer, 3 bytes/pixel) -------------------------
 
-BG = 0     # black background — matches UnrealEd's viewport (owner ruling 2026-08-02). The wire palette
-           # and captions/markers/gutter labels are luminance-tuned for black; `_fade_dimmed`'s fade
-           # toward BG now darkens toward black (a `--focus` de-emphasis, intended).
+BG = 64    # #404040 — owner ruling 2026-08-30, superseding the 2026-08-02 pure-black ruling
+           # (`board/inbox/move-the-preview-background-off-pure-black-to`; the CSG palette's own
+           # re-tune against this bg is a separate, still-open item). The wire palette and
+           # captions/markers/gutter labels are luminance-tuned for a DARK (not literally black) bg;
+           # `_fade_dimmed`'s fade toward BG now darkens toward this mid-dark grey, not black.
 
 
 def _new_buf(size: int) -> bytearray:
@@ -945,8 +950,8 @@ def _decal_opacity(n_front: int) -> float:
 
 
 _DIM_ALPHA = 0.15   # `--focus`/`--breakdown` draw a non-focused brush's wireframe at this opacity
-                    # (COMPOSITED, so crossed edges/numbers show through) — a fade-toward-bg (now
-                    # black) look that no longer hard-overwrites at crossings.
+                    # (COMPOSITED, so crossed edges/numbers show through) — a fade-toward-bg look
+                    # that no longer hard-overwrites at crossings.
 
 # A filled mode's non-focused FILLS composite at this opacity — separate from `_DIM_ALPHA`, which dims
 # thin LINES, where a faint stroke still reads as a stroke. THE OWNER'S VALUE, picked from a ladder of
@@ -1525,7 +1530,7 @@ class _SceneGeom:
     points: list         # (actor, PointRender)
     pts: list            # every projected point (verts + point footprints) — the framing source
     actor_points: dict   # actor_name → its projected 2-D points (brush: surviving verts; point: its
-                         # Location) — the addressable-grid cell source
+                         # Location) — the locator-cell source
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -1566,7 +1571,7 @@ def _solved_scene(solved, *, view, iso_angle, d_vec, annotations, highlight_poly
     overlay against the same depth buffer (occluded by / occluding the solved world), no cull, no
     labels. A source poly split into N fragments gets ONE index decal, on its largest fragment."""
     best_decal: dict = {}     # (name, idx) -> (area, centroid2d, depth, v3, accent)
-    brush_cands: dict = {}    # name -> projected 2d points (framing + grid cell)
+    brush_cands: dict = {}    # name -> projected 2d points (framing + locator cell)
 
     for surf in solved.world_surfaces:
         actor = surf.actor
@@ -1782,14 +1787,11 @@ def _scene_geometry(actors, *, view, iso_angle, annotations, highlight_polys, fo
 _FRAME_PAD = 6         # px border kept clear of the geometry on every side (shared by framing + reserve)
 
 
-def _framing(pts, region, size, view, iso_angle, pad: int = _FRAME_PAD, *, gutter: int = 0):
-    """World→pixel framing for a scene. Returns `(scale, to_px, to_pxf, world_to_pxf)`, computed from
-    the projected `pts` (or an explicit `region` AABB). Shared so every filmstrip pane and the
-    grouping pass frame IDENTICALLY (same `minx/span`), keeping geometry registered across panes.
-    `pad` is the px border kept clear of the geometry on every side. `gutter` reserves that many pixels
-    on the top and BOTH sides for the addressable-grid label band — a SYMMETRIC left/right inset, so the
-    x-mapping gains its own left offset. `gutter=0` is byte-identical to the un-reserved framing
-    (`draw == size - 2*pad`)."""
+def _framed_bounds(pts, region, view, iso_angle) -> tuple[float, float, float, float]:
+    """The projected-plane AABB `_framing` fits: `(minx, maxx, miny, maxy)`, from an explicit `region`
+    (a world AABB) or else the projected `pts`. Split out of `_framing` so the grid overlay/stderr report
+    (spec `add-visual-grid-for-2d-views-in-level-actor` §3/§6) can reproduce the SAME framed region —
+    `minx`/`miny` and `span = max(maxx-minx, maxy-miny)` — without re-deriving `_framing`'s internals."""
     if region is not None:
         x0, y0, z0, x1, y1, z1 = (float(c) for c in region)
         rp = [_project((x, y, z), view, iso_angle)
@@ -1799,6 +1801,20 @@ def _framing(pts, region, size, view, iso_angle, pad: int = _FRAME_PAD, *, gutte
     else:
         minx, maxx = min(p[0] for p in pts), max(p[0] for p in pts)
         miny, maxy = min(p[1] for p in pts), max(p[1] for p in pts)
+    return minx, maxx, miny, maxy
+
+
+def _framing(pts, region, size, view, iso_angle, pad: int = _FRAME_PAD, *, gutter: int = 0):
+    """World→pixel framing for a scene. Returns `(scale, to_px, to_pxf, world_to_pxf, bounds)`, computed
+    from the projected `pts` (or an explicit `region` AABB). Shared so every filmstrip pane and the
+    grouping pass frame IDENTICALLY (same `minx/span`), keeping geometry registered across panes.
+    `pad` is the px border kept clear of the geometry on every side. `gutter` reserves that many pixels
+    on the top and BOTH sides for the locator-cell label band — a SYMMETRIC left/right inset, so the
+    x-mapping gains its own left offset. `gutter=0` is byte-identical to the un-reserved framing
+    (`draw == size - 2*pad`). `bounds` is `(minx, miny, span, draw)` — the framed region's own two axis
+    origins, the world span shared by both (uniform scale), and the drawable px budget — the grid
+    overlay/stderr report's shared source of truth for the SAME region this framing fitted."""
+    minx, maxx, miny, maxy = _framed_bounds(pts, region, view, iso_angle)
     span = max(maxx - minx, maxy - miny) or 1.0
     draw = max(1, size - 2 * pad - 2 * gutter)   # uniform-scale budget after the reserves
     scale = draw / span
@@ -1816,22 +1832,134 @@ def _framing(pts, region, size, view, iso_angle, pad: int = _FRAME_PAD, *, gutte
     def world_to_pxf(p3):
         return to_pxf(_project(p3, view, iso_angle))
 
-    return scale, to_px, to_pxf, world_to_pxf
+    return scale, to_px, to_pxf, world_to_pxf, (minx, miny, span, draw)
 
 
-# ----- addressable coordinate grid -------------------------------------------
-# Every preview overlays a label gutter (columns A,B,C… across the top, rows 1,2,3… down both sides)
-# and reports each actor's grid cell as a `name → cell` legend on stderr + a `--json` map. The address
-# is a region of the IMAGE/PROJECTION, never a world coordinate. Owner-ruled 2026-08-02, LOCKED.
+# ----- world gridline overlay ---------------------------------------------------
+# A two-tier world-space lattice on the three orthographic panes (top/front/side, never iso — spec
+# `add-visual-grid-for-2d-views-in-level-actor` §2), ported from UnrealEd's `DrawGridSection` (§3;
+# `dev/docs/spikes/2026-08-30-unrealed-ortho-grid-density/`). A BACKDROP: drawn first, before any
+# geometry, never depth-tested, never dimmed by `--focus`.
 
-GRID_LABEL = (140, 140, 140)   # gutter letters/numbers — mid grey, legible on black, never WHITE
+_GRID_BASE = (64, 64, 64)      # == BG — the lerp origin, so a faded odd line fades to invisible (§4)
+_GRID_TARGET = (96, 96, 96)    # the lerp target: what a MAJOR (every 8th) line renders as
+_GRID_WORLD_CLAMP = 32768      # UE1 world extent — line indices never range past +/- this (§3.1)
+_AXIS_LETTERS = {0: "X", 1: "Y", 2: "Z"}
+
+
+def _auto_grid_step(span: float) -> int:
+    """The default minor step when `--grid-size` is not given (§3.3): the largest power of two
+    `<= span / 16`, floored at 1 (the smallest legal step) — 16-32 minor divisions across the pane at
+    any zoom, so the grid reads as a ruler rather than a lone crosshair. (Rejected: "coarsest power of
+    two that still yields >= 1 line" — measured on a 7712-uu pane it picked 4096 and drew TWO lines,
+    optimising for the wrong end of the range.)"""
+    step = 1
+    while step * 2 <= span / 16:
+        step *= 2
+    return step
+
+
+def _grid_escalation(width_px: int, world_per_px: float, step: int) -> tuple[int, int, float]:
+    """UnrealEd `DrawGridSection`'s density escalation (§3.1): `(shift, drawn, fade)` for a requested
+    minor `step` in a `width_px`-wide pane. `step` doubles (`shift` counts the doublings) until lines
+    are drawn >= 4px apart; `fade` (else 1.0) anti-pops the lines the next doubling would drop.
+    `width_px < 4` returns unescalated (`shift=0, fade=1.0`) — narrower than the 4px threshold itself,
+    so there is nothing to escalate to; guards `limit == 0`, which would never satisfy the escalation
+    loop's own exit condition. No real render reaches it (`_framing`'s `draw = max(1, ...)` only
+    shrinks this small at a `--size` far below any usable preview)."""
+    if width_px < 4:
+        return 0, step, 1.0
+    count = int(width_px * world_per_px / step)
+    limit = width_px // 4
+    shift = 0
+    fade = 1.0
+    if 2 * count >= limit:
+        while (count >> shift) >= limit:
+            shift += 1
+        fade = 2.0 - (2.0 * count) / ((1 << shift) * limit)
+    return shift, step << shift, fade
+
+
+def _grid_line_color(i: int, shift: int, fade: float) -> tuple[int, int, int]:
+    """One gridline's colour (§3.1/§3.2): `tier` lerps `_GRID_BASE` toward `_GRID_TARGET` — every 8th
+    line (in DRAWN units, `(i << shift) & 7`) lands on `_GRID_TARGET` (major), the rest halfway
+    (minor); an ODD line (`i & 1`) — exactly the ones the next doubling would drop — additionally fades
+    back toward `_GRID_BASE` by `fade`, so it is already invisible when it is dropped. Majors sit at
+    multiples of 8 and so are always even and never fade."""
+    tier = 0.5 if ((i << shift) & 7) else 1.0
+    c = tuple(_GRID_BASE[k] + (_GRID_TARGET[k] - _GRID_BASE[k]) * tier for k in range(3))
+    if i & 1:
+        c = tuple(_GRID_BASE[k] + (c[k] - _GRID_BASE[k]) * fade for k in range(3))
+    return tuple(round(v) for v in c)
+
+
+def _grid_indices(step: int, shift: int, lo_world: float, hi_world: float) -> range:
+    """The DRAWN-unit index range `[lo, hi)` for one axis (§3.1): the visible world range
+    `[lo_world, hi_world)` in units of `step`, clamped to +/- `_GRID_WORLD_CLAMP` world units, then
+    scaled down by `shift` — `world = (i << shift) * step` recovers the world coordinate."""
+    first_visible = math.floor(lo_world / step)
+    last_visible = math.ceil(hi_world / step)
+    lo = max(-_GRID_WORLD_CLAMP // step, first_visible) >> shift
+    hi = min(_GRID_WORLD_CLAMP // step, last_visible) >> shift
+    return range(lo, hi)
+
+
+def _draw_grid_backdrop(buf, size, to_px, minx, miny, span, draw_px, step: int) -> int:
+    """Draw the two-tier world gridline lattice into the pane framed by `minx`/`miny`/`span`/`draw_px`
+    (`_framing`'s own bounds, so the lattice fills exactly the drawable rect the geometry is framed
+    into — never the gutter/pad border outside it) — a BACKDROP, called BEFORE any geometry. Returns
+    the VISIBLE step actually rendered after escalation (`set << shift`), which may differ from the
+    requested `step` (== "set", §5) — for the stderr report (§6) to name."""
+    shift, drawn, fade = _grid_escalation(draw_px, span / draw_px, step)
+    for i in _grid_indices(step, shift, minx, minx + span):          # vertical lines (constant axis-1)
+        x_world = (i << shift) * step
+        color = _grid_line_color(i, shift, fade)
+        _line(buf, size, to_px((x_world, miny)), to_px((x_world, miny + span)), color)
+    for i in _grid_indices(step, shift, miny, miny + span):          # horizontal lines (constant axis-2)
+        y_world = (i << shift) * step
+        color = _grid_line_color(i, shift, fade)
+        _line(buf, size, to_px((minx, y_world)), to_px((minx + span, y_world)), color)
+    return drawn
+
+
+def _fmt_grid_num(v: float) -> str:
+    """A report extent value: an integer print when `v` is integral, else one decimal (§6)."""
+    return str(int(v)) if v == int(v) else f"{v:.1f}"
+
+
+def _grid_caption_text(view: str, minx: float, miny: float, span: float, step: int, drawn: int) -> str:
+    """The stderr report line (§6, owner-updated 2026-08-30) — nothing is ever drawn into the image
+    (an earlier draft did; measured to both overwrite CSG-coloured geometry and truncate on a small
+    pane, the same defect class as a gridline covering a face). The framed region's extent in the
+    pane's own two world axes, named by axis letter, plus `set` (the requested step) and `visible`
+    (`set << shift`, what actually drew) — equal on every default-path render, differing only when an
+    explicit `--grid-size` was too fine and escalated. Major spacing is deliberately NOT reported: the
+    tier test is on the PRE-escalation index (`(i << shift) & 7`), so majors are pinned to `8 * set`
+    world units, not `8 * drawn` — a caption printing `8 * drawn` measured wrong once escalated
+    (`board/inbox/grid-caption-major-8x-drawn-is-imprecise-once`), so the field is dropped rather than
+    corrected."""
+    ax, ay = _ORTHO_AXES[view]
+    lx, ly = _AXIS_LETTERS[ax], _AXIS_LETTERS[ay]
+    return (f"{lx} {_fmt_grid_num(minx)}..{_fmt_grid_num(minx + span)}  "
+            f"{ly} {_fmt_grid_num(miny)}..{_fmt_grid_num(miny + span)}  "
+            f"grid set {step}, visible {drawn}")
+
+
+# ----- locator cells -----------------------------------------------------------
+# By default every preview overlays a label gutter (columns A,B,C… across the top, rows 1,2,3… down
+# both sides) and reports each actor's cell as a `name → cell` legend on stderr + a `--json` map. The
+# address is a region of the IMAGE/PROJECTION, never a world coordinate. `--no-locator-cells` turns
+# the whole feature off.
+
+LOCATOR_LABEL = (105, 105, 105)   # gutter letters/numbers — mid grey, legible on the dark bg, never WHITE
 
 
 @dataclass(frozen=True, kw_only=True)
 class ActorCell:
-    """One actor's grid address within a single pane (image-space, not world)."""
-    cell: str            # the primary (centroid) cell, e.g. "D4"
-    span: str | None     # covered range "C3–E5", or None when the AABB is a single cell
+    """One actor's locator address within a single pane (image-space, not world). `cell`/`span` are
+    None when the locator is off (`n=None` in `_collect_cells`) — only `hidden` is answered then."""
+    cell: str | None      # the primary (centroid) cell, e.g. "D4"; None when the locator is off
+    span: str | None     # covered range "C3–E5"; None for a single-cell AABB, or when the locator is off
     hidden: bool         # the actor drew no pixel in this pane (culled/depth-hidden)
 
 
@@ -1873,18 +2001,18 @@ def _actor_cells(points_px, rect: tuple[int, int, int, int], n: int) -> tuple[st
     return cell, f"{_cell_address(*lo)}–{_cell_address(*hi)}"
 
 
-def _grid_gutter_px(name_scale: int) -> int:
+def _locator_gutter_px(name_scale: int) -> int:
     """Width of the reserved label band on each gutter side — the glyph height plus a small margin."""
     return 5 * name_scale + 4
 
 
 def _drawable_rect(size: int, pad: int, gutter: int) -> tuple[int, int, int, int]:
-    """The pane's drawable canvas `(x0, x1, y0, y1)` the grid divides — inset by `pad` (frame border)
-    and `gutter` (label band, all four sides)."""
+    """The pane's drawable canvas `(x0, x1, y0, y1)` the locator divides — inset by `pad` (frame
+    border) and `gutter` (label band, all four sides)."""
     return (pad + gutter, size - 1 - pad - gutter, pad + gutter, size - 1 - pad - gutter)
 
 
-def _draw_grid_gutter(buf, size, rect, n, name_scale, pad, gutter) -> None:
+def _draw_locator_gutter(buf, size, rect, n, name_scale, pad, gutter) -> None:
     """Draw the column letters (top band) and row numbers (both side bands) — no gridlines. Labels sit
     in the reserved gutter band, clear of the geometry (which `_framing`'s `gutter` inset pushed in)."""
     x0, x1, y0, y1 = rect
@@ -1894,11 +2022,12 @@ def _draw_grid_gutter(buf, size, rect, n, name_scale, pad, gutter) -> None:
     left_x = pad + gutter // 2
     right_x = size - 1 - pad - gutter // 2
     for j in range(n):
-        _draw_text(buf, size, int(x0 + (j + 0.5) * col_w), top_y, _col_label(j), name_scale, GRID_LABEL)
+        _draw_text(buf, size, int(x0 + (j + 0.5) * col_w), top_y, _col_label(j), name_scale,
+                  LOCATOR_LABEL)
     for i in range(n):
         cy = int(y0 + (i + 0.5) * row_h)
-        _draw_text(buf, size, left_x, cy, str(i + 1), name_scale, GRID_LABEL)
-        _draw_text(buf, size, right_x, cy, str(i + 1), name_scale, GRID_LABEL)
+        _draw_text(buf, size, left_x, cy, str(i + 1), name_scale, LOCATOR_LABEL)
+        _draw_text(buf, size, right_x, cy, str(i + 1), name_scale, LOCATOR_LABEL)
 
 
 def _collect_cells(geom, hidden, faces, points, to_pxf, rect, n, cells_out) -> None:
@@ -1910,15 +2039,26 @@ def _collect_cells(geom, hidden, faces, points, to_pxf, rect, n, cells_out) -> N
 
     Under `textured` a surface is absent because containment removed it (buried add) or the backface
     cull / depth dropped it; either way the actor still gets its cell from its projected centroid
-    whether or not it drew."""
+    whether or not it drew.
+
+    `n=None` (the locator off) skips the cell/span math entirely and fills only `hidden`. `hidden`
+    answers whether THIS render actually drew the actor, not an abstract cell-independent fact: under
+    `wire` it is invariant (`drew` above is every actor with points, never touching `to_pxf`), but under
+    a filled mode it comes from `_face_is_occluded` against the depth buffer, and the locator's gutter
+    reserve changes `to_pxf` — so `hidden` can legitimately differ between the locator on and off for
+    the SAME scene under `--faces textured` (measured; see spec §3.4). Each answer is honest about the
+    image it was computed from; the two are not guaranteed to agree."""
     if faces == "wire":
         drew = set(geom.actor_points)                # nothing is culled/depth-hidden under wire
     else:
         drew = {fk[0] for fk, _v3, _vs in geom.vis_faces if fk not in hidden}
     drew |= {a.name for a, _pr in points}            # a point actor's marker always draws
     for name, pts_proj in geom.actor_points.items():
-        cell, span = _actor_cells([to_pxf(p) for p in pts_proj], rect, n)
-        cells_out[name] = ActorCell(cell=cell, span=span, hidden=name not in drew)
+        if n is None:
+            cells_out[name] = ActorCell(cell=None, span=None, hidden=name not in drew)
+        else:
+            cell, span = _actor_cells([to_pxf(p) for p in pts_proj], rect, n)
+            cells_out[name] = ActorCell(cell=cell, span=span, hidden=name not in drew)
 
 
 def render_brush_pgm(actor: Actor, *, view: str = "top", size: int = 256,
@@ -1928,13 +2068,15 @@ def render_brush_pgm(actor: Actor, *, view: str = "top", size: int = 256,
                      color_by_csg: bool = False, render_data=None,
                      focus: str | None = None,
                      brush_colors: str = "csg", faces: str = "wire",
-                     grid: int | None = None, cells_out: dict | None = None) -> bytes:
+                     locator: int | None = None, cells_out: dict | None = None,
+                     grid_size: int | None = None, grid_caption_out: dict | None = None) -> bytes:
     return render_brushes_pgm([actor], view=view, size=size, annotations=annotations,
                               iso_angle=iso_angle, region=region, highlight_polys=highlight_polys,
                               highlight_points=highlight_points,
                               color_by_csg=color_by_csg, render_data=render_data,
                               focus=focus, brush_colors=brush_colors,
-                              faces=faces, grid=grid, cells_out=cells_out)
+                              faces=faces, locator=locator, cells_out=cells_out,
+                              grid_size=grid_size, grid_caption_out=grid_caption_out)
 
 
 def render_brushes_pgm(actors: list[Actor], *, view: str = "top", size: int = 256,
@@ -1946,8 +2088,9 @@ def render_brushes_pgm(actors: list[Actor], *, view: str = "top", size: int = 25
                        brush_colors: str = "csg",
                        frame_pad: int = _FRAME_PAD, faces: str = "wire",
                        shown_highlights: set | None = None,
-                       grid: int | None = None, cells_out: dict | None = None) -> bytes:
-    """Render a set of actors as a PPM (P6) on a black background (BG).
+                       locator: int | None = None, cells_out: dict | None = None,
+                       grid_size: int | None = None, grid_caption_out: dict | None = None) -> bytes:
+    """Render a set of actors as a PPM (P6) on a dark background (`BG`, `#404040`).
 
     `faces` is the `--faces` MODE, and it is a parameter rather than something read off `render_data`
     because `render_data.faces is None` would be both `wire` and `textured`. `wire` (the default)
@@ -1992,14 +2135,27 @@ def render_brushes_pgm(actors: list[Actor], *, view: str = "top", size: int = 25
     billboard, else a marker; plus faint collision/light/sound overlays when populated.
     Empty input → blank grey PPM.
 
-    `grid` (or None = off) turns on the addressable coordinate grid: `grid` columns × `grid` rows, drawn
+    `locator` (or None = off) turns on the locator cells: `locator` columns × `locator` rows, drawn
     as a LABEL GUTTER (letters across the top, numbers down both sides — no gridlines) in a reserved band
     the geometry is inset clear of. Gated by a parameter, NOT drawn unconditionally, because
-    `_render_breakdown_grid` renders per pane and only pane 0 carries a grid. Independent of `--annotate`.
-    `cells_out`, when a dict is passed WITH `grid`, is filled `{actor_name: ActorCell}` — each actor's
-    centroid cell + span + hidden flag, from THIS pane's own `world_to_pxf`/drawable rect, so the legend
-    and image cannot drift. Each pane needs its OWN `cells_out` (cells are per-pane, unlike the shared
-    `shown_highlights`)."""
+    `_render_breakdown_grid` renders per pane and only pane 0 carries one. Independent of `--annotate`.
+    `cells_out`, when a dict is passed, is filled `{actor_name: ActorCell}` — each actor's hidden flag,
+    plus (when `locator` is not None) its centroid cell + span, from THIS pane's own
+    `world_to_pxf`/drawable rect, so the legend and image cannot drift. Each pane needs its OWN
+    `cells_out` (cells are per-pane, unlike the shared `shown_highlights`).
+
+    `grid_size` (or None = auto) draws a two-tier world gridline lattice ported from UnrealEd's
+    `DrawGridSection` (spec `add-visual-grid-for-2d-views-in-level-actor` §3) on the three
+    orthographic views ONLY — `iso` draws none, mixing screen axes with world ones. It is a BACKDROP:
+    drawn first, before any geometry, never depth-tested, never dimmed by `--focus`. `None` picks the
+    largest power-of-two step `<= span/16` (`_auto_grid_step`) — 16-32 minor divisions across the pane
+    at any zoom; either way the density escalates (step doubles) until lines are >= 4px apart, so a
+    too-fine request is never an error (on the default path escalation never fires — the auto step
+    already clears the 4px threshold). NOTHING is drawn into the image beyond the lattice itself — no
+    caption (spec §6, owner-updated 2026-08-30: an earlier draft drew one and it measured to overwrite
+    CSG-coloured geometry and truncate on a small pane). `grid_caption_out`, when a dict is passed, is
+    filled `{"text": str}` for a gridded pane (absent for `iso`) — the caller's job to print, always,
+    on stderr (never in the image)."""
     highlight_polys = set(highlight_polys or ())
     highlight_points = set(highlight_points or ())
     render_data = render_data or PreviewData()
@@ -2016,12 +2172,20 @@ def render_brushes_pgm(actors: list[Actor], *, view: str = "top", size: int = 25
     if not geom.pts:
         return _ppm(_alloc_buffers(size, depth=False)[0], size)
     name_scale = max(2, size // 256)
-    gutter = _grid_gutter_px(name_scale) if grid is not None else 0
-    scale, to_px, to_pxf, world_to_pxf = _framing(geom.pts, region, size, view, iso_angle,
-                                                  pad=frame_pad, gutter=gutter)
+    gutter = _locator_gutter_px(name_scale) if locator is not None else 0
+    scale, to_px, to_pxf, world_to_pxf, (fminx, fminy, fspan, fdraw) = _framing(
+        geom.pts, region, size, view, iso_angle, pad=frame_pad, gutter=gutter)
 
     hidden: set = set()             # faces depth hid — their edges, outline and highlight index go
     buf, zbuf = _alloc_buffers(size, depth=bool(geom.fills))
+    # World gridline overlay (spec `add-visual-grid-for-2d-views-in-level-actor` §2/§3) — a BACKDROP,
+    # drawn first (before any geometry, so nothing depth-tests or `--focus`-dims it) and ONLY on the
+    # three orthographic views (`iso` mixes screen axes with world ones — no world lattice to draw).
+    grid_step: int | None = None       # the requested ("set") step, kept for the stderr report below
+    grid_drawn: int | None = None      # the VISIBLE step actually rendered (`set << shift`)
+    if view in _ORTHO_AXES:
+        grid_step = grid_size if grid_size is not None else _auto_grid_step(fspan)
+        grid_drawn = _draw_grid_backdrop(buf, size, to_px, fminx, fminy, fspan, fdraw, grid_step)
     # Face fills sit here, immediately after the background and AHEAD of the point layer: they are
     # brush geometry, and drawing them later would paint over every sprite and every `--show` overlay.
     if zbuf is not None:
@@ -2143,11 +2307,19 @@ def render_brushes_pgm(actors: list[Actor], *, view: str = "top", size: int = 25
         # caps), tinted per brush, blended at the face's graded `opacity` over a proportional halo.
         painted_on.append(_draw_painted_decal(buf, size, plan, tint, alpha=opacity))
     _draw_overlap_keyline(buf, size, painted_on)     # 1px white ring wherever two numbers overlap
-    if grid is not None:                             # addressable-grid gutter + per-actor cell map
+    # `cells_out` fills regardless of `locator` (see `_collect_cells` for what `hidden` answers and
+    # when the two modes can disagree) — but the gutter itself (and the cell/span math) draws only
+    # when the locator is on.
+    if locator is not None or cells_out is not None:
         rect = _drawable_rect(size, frame_pad, gutter)
-        _draw_grid_gutter(buf, size, rect, grid, name_scale, frame_pad, gutter)
+        if locator is not None:
+            _draw_locator_gutter(buf, size, rect, locator, name_scale, frame_pad, gutter)
         if cells_out is not None:
-            _collect_cells(geom, hidden, faces, points, to_pxf, rect, grid, cells_out)
+            _collect_cells(geom, hidden, faces, points, to_pxf, rect, locator, cells_out)
+    # A gridded pane's extent/step report is stderr-ONLY (spec §6, owner-updated 2026-08-30) — nothing
+    # is drawn into the image here. `grid_caption_out` just carries the text out for the caller to print.
+    if grid_drawn is not None and grid_caption_out is not None:
+        grid_caption_out["text"] = _grid_caption_text(view, fminx, fminy, fspan, grid_step, grid_drawn)
     return _ppm(buf, size)
 
 
@@ -2253,9 +2425,13 @@ def render_quad_pgm(actors, *, size: int = 512,
                     highlight_points=None, color_by_csg: bool = False, render_data=None,
                     focus: str | None = None, brush_colors: str = "csg",
                     faces: str = "wire", shown_highlights: set | None = None,
-                    grid: int | None = None, cells_out: dict | None = None) -> bytes:
+                    locator: int | None = None, cells_out: dict | None = None,
+                    grid_size: int | None = None, captions_out: dict | None = None) -> bytes:
     """UED-style 2×2: Top (TL), Front (TR), Iso (BL), Side (BR). On the hybrid (`color_by_csg`) path the
-    per-actor tints are identical across panes (`assign_tints` is deterministic)."""
+    per-actor tints are identical across panes (`assign_tints` is deterministic). `grid_size` (see
+    `render_brushes_pgm`) grids Top/Front/Side; Iso stays bare (spec §2). `captions_out`, when a dict is
+    passed, is filled `{"Top"|"Front"|"Side": {"text": str}}` — one entry per GRIDDED pane (Iso never
+    appears), in Top/Front/Side order, for the caller's stderr-only report (nothing is drawn here)."""
     if isinstance(actors, Actor):
         actors = [actors]
     half = size // 2
@@ -2265,24 +2441,29 @@ def render_quad_pgm(actors, *, size: int = 512,
              ("ISO", "iso", 0, half), ("SIDE", "side", half, half)]
     for name, view, ox, oy in panes:
         pane_cells: dict = {}                            # each pane's OWN cell map (cells are per-pane)
+        pane_caption: dict = {}
         sub = render_brushes_pgm(actors, view=view, size=half, annotations=annotations,
                                  iso_angle=iso_angle, region=region,
                                  highlight_polys=highlight_polys, highlight_points=highlight_points,
                                  color_by_csg=color_by_csg, render_data=render_data,
                                  focus=focus,
                                  brush_colors=brush_colors, faces=faces,
-                                 shown_highlights=shown_highlights, grid=grid,
-                                 cells_out=pane_cells if cells_out is not None else None)
+                                 shown_highlights=shown_highlights, locator=locator,
+                                 cells_out=pane_cells if cells_out is not None else None,
+                                 grid_size=grid_size,
+                                 grid_caption_out=pane_caption if captions_out is not None else None)
         if cells_out is not None:
             cells_out[name.capitalize()] = pane_cells    # tag by pane name: Top/Front/Iso/Side
+        if captions_out is not None and pane_caption:
+            captions_out[name.capitalize()] = pane_caption
         body = sub[len(hdr):]
         for j in range(half):
             dst = ((oy + j) * size + ox) * 3
             src = j * half * 3
             buf[dst:dst + half * 3] = body[src:src + half * 3]
         cap_y = oy + 12
-        if grid is not None:                             # keep it below the grid's top column-label band
-            cap_y = oy + _FRAME_PAD + _grid_gutter_px(max(2, half // 256)) + 10
+        if locator is not None:                          # keep it below the locator's top column-label band
+            cap_y = oy + _FRAME_PAD + _locator_gutter_px(max(2, half // 256)) + 10
         _draw_text(buf, size, ox + 4 + len(name) * 8, cap_y, name, 2, CAPTION)
     for k in range(size):
         _px(buf, size, half, k, DIVIDER)

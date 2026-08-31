@@ -1,0 +1,5 @@
+Brush30 is listed at grid cell B3, in the upper-left quadrant of the map (about 12% across, 22% down
+the 1024px image) — the left-hand hexagonal room on row 3, the one filled with green horizontal-line
+brushwork. The output gives no sub-cell extent for it, so B3 is the finest position available; it sits
+in a tight cluster with Brush26 (spanning A2–B3), Brush27, Brush29, and Light46 that makes up that
+hexagon room's interior structure.

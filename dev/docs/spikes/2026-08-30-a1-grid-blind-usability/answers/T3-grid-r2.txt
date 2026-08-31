@@ -1,0 +1,5 @@
+Brush30 is at grid cell B3 — the left-hand hexagonal chamber in row 3 (upper-left region of the map,
+roughly x≈75-165 px, y≈180-265 px), sitting below the dense B1-C2 cluster. The output gives only
+single-cell resolution (no multi-cell span for Brush30), so no finer position is available. It is part
+of that small hexagonal room's interior geometry, alongside Brush26 (A2-B3), Brush27, Brush29 and
+Light46.

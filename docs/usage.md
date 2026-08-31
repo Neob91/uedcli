@@ -1140,7 +1140,8 @@ actor preview [<names…> | --from-t3d <FILE…|->]
               [--frame BRUSH[:IDX] | X0,Y0,Z0,X1,Y1,Z1] [--frame-tightness N]
               [--highlight POLY|NAME ...] [--focus BRUSH]
               [--show collision,light-range,sound-range]
-              [--iso-angle 30] [--size 1024] [--grid 12] [--json] [--out PATH]
+              [--iso-angle 30] [--size 1024] [--locator-cells 12 | --no-locator-cells] [--grid-size N]
+              [--json] [--out PATH]
 ```
 
 - **Target set** — actor names, or `-` to read a newline name list from stdin (`actor find … | actor
@@ -1190,7 +1191,7 @@ actor preview [<names…> | --from-t3d <FILE…|->]
     or sheared brush** (its UV frame is rotation-only) — both a clean exit 2; use `wire` for those.
   - A solve that leaves **no surface** (e.g. adds with nothing to carve empty space around them) is a
     clean exit 2 naming the cause; a set of only point actors and/or movers (no world brushes) draws its
-    overlays over black at exit 0. `textured` composes with every other option here — `--focus`,
+    overlays over the dark background at exit 0. `textured` composes with every other option here — `--focus`,
     `--highlight` (its vivid outline is the only line art it keeps) and `--layout breakdown` included.
 - **Brushes are coloured by CSG op** (UnrealEd's legend): added-solid **blue**, subtracted
   **gold/yellow**, semi-solid **pink**, non-solid **green**, mover **magenta**; front faces darker,
@@ -1205,8 +1206,8 @@ actor preview [<names…> | --from-t3d <FILE…|->]
   **tint** from a categorical palette (~10 hues, cycled). A brush's **on-face poly-index decal** (the
   painted digits and their 6/9 baseline underline) carries that tint; a point actor's **marker** is
   drawn in it — so a number shared across brushes (every brush has a face `1`) is disambiguated by its
-  tint. **Actor names are not drawn on the preview**; identify each actor from its addressable-grid
-  cell reported on stderr (below).
+  tint. **Actor names are not drawn on the preview**; identify each actor from its locator cell
+  reported on stderr (below).
 - **Poly face indices are painted ON the face (on-face numbers).** Each face's index is a **number
   texture lying flat in the face's own 3-D plane** — it foreshortens with the surface under the
   projection, so it reads as decaled onto the geometry. It is placed at the **roomiest spot on the
@@ -1244,7 +1245,7 @@ actor preview [<names…> | --from-t3d <FILE…|->]
 - **`--annotate`** takes a **comma-set of `poly` selectors** (the drawn numbers are their **union**).
   Bare **`poly`** means every face index; each colon **filter** narrows; multiple filters on one
   selector intersect; commas union. Tokens are case/whitespace-insensitive. **Actor names are never
-  drawn** — locate a brush by its grid cell (printed on stderr, below).
+  drawn** — locate a brush by its locator cell (printed on stderr, below).
   - `poly` filters: **`vis`** (retained as an inert alias of bare `poly` — see the note below),
     **`hi`** (highlighted faces only). (`highlighted` is accepted as a synonym for `hi`.)
   - Examples: `poly:vis` = every face (same as bare `poly`); `poly:hi` = highlighted faces only.
@@ -1262,7 +1263,7 @@ actor preview [<names…> | --from-t3d <FILE…|->]
   `unqualified-ref` (write it as `Package.Name`), `unverified-format` (a real texture in a pixel
   layout uedcli cannot read yet), and so on. With **no texture search path configured**, the note says
   so instead of naming a case — run `project show` to see what is on the path. Its **name is not
-  drawn**; find it by the grid cell reported on stderr.
+  drawn**; find it by the locator cell reported on stderr.
 - **`--frame TARGET`** frames a target to fill the view (frames only — never highlights), in one of two
   forms. A **selector** — a bare **`BRUSH`** name frames that actor's whole AABB, or **`BRUSH:IDX`**
   frames ONE poly (a multi-index / `:all` value is an error). OR an **explicit world AABB** — six
@@ -1298,23 +1299,54 @@ actor preview [<names…> | --from-t3d <FILE…|->]
   sphere of a light's reach (`25·(LightRadius+1)` UU); **`sound-range`** — a faint blue sphere of an
   AmbientSound's reach (`25·(SoundRadius+1)` UU). Brush actors (including movers) are excluded, so a
   brush preview needs no class schema. An unknown member is a clean named error.
-- **An addressable coordinate grid is drawn on every preview** — a **label gutter** with columns
-  `A,B,C…` across the top and rows `1,2,3…` down both sides (no gridlines), so every region of the image
-  has a text address like `D4` (a letter is always a column, a number always a row). It is **always on**
-  (there is no flag to turn it off) and orthogonal to `--annotate`, so `--annotate none` still carries
-  the gutter. Each actor's cell is reported as a **legend on stderr**: a density header, then one line
-  per actor — `Pillar  D4  (C3–E5)` (the centroid cell, plus the covered range in parens) under
-  `single`/`breakdown`, or pane-qualified `Pillar  Top:D4 Front:B7 Side:C7 Iso:E5` under `quad`. An actor
-  that draws no pixel (e.g. one hidden behind solid geometry under `--faces textured`) still gets a cell,
-  flagged `(hidden)`. Two actors in the same cell each keep their own line. **The address is a region of
-  the image/projection, never a world coordinate** — carry a cell back into a name set with `actor find`.
-- **`--grid N`** (default `12`) sets the density: `N` columns × `N` rows. Must be in `[1, 52]` (else a
-  clean exit 2 naming the value). Under `breakdown` the grid + legend ride pane 0 (the whole-scene pane)
-  only.
-- **`--json`** prints a JSON object to stdout **instead of** the bare image path — the machine form of
-  the legend: `{image, grid:{cols,rows}, actors:{<name>:{panes:{<Pane>:{cell,span}}, hidden}}}`,
-  pane-keyed for every layout (a `single` render has one pane keyed by its `--view`). The stderr legend
-  is unchanged.
+- **Locator cells are drawn on every preview by default** — a **label gutter** with columns `A,B,C…`
+  across the top and rows `1,2,3…` down both sides (no gridlines), so every region of the image has a
+  text address like `D4` (a letter is always a column, a number always a row). It is **on by default**
+  and orthogonal to `--annotate`, so `--annotate none` still carries the gutter. Each actor's cell is
+  reported as a **legend on stderr**: a density header, then one line per actor — `Pillar  D4  (C3–E5)`
+  (the centroid cell, plus the covered range in parens) under `single`/`breakdown`, or pane-qualified
+  `Pillar  Top:D4 Front:B7 Side:C7 Iso:E5` under `quad`. An actor that draws no pixel (e.g. one hidden
+  behind solid geometry under `--faces textured`) still gets a cell, flagged `(hidden)`. Two actors in
+  the same cell each keep their own line. **The address is a region of the image/projection, never a
+  world coordinate** — carry a cell back into a name set with `actor find`.
+- **`--locator-cells N`** (default `12`) sets the density: `N` columns × `N` rows. Must be in `[1, 52]`
+  (else a clean exit 2 naming the value). Under `breakdown` the locator + legend ride pane 0 (the
+  whole-scene pane) only. **`--no-locator-cells`** turns the whole feature off — gutter, stderr legend
+  and the `--json` cell data together — and gives the geometry the wider drawable rect back. The two
+  flags are mutually exclusive (a clean exit 2 naming both if given together).
+- **Every orthographic pane** (`top`/`front`/`side`) **carries a world-space gridline overlay** —
+  a ruler for scale and position, ported from UnrealEd's own 2D-viewport grid — **whether or not
+  `--grid-size` is given**; the flag only overrides the spacing it picks automatically. **`iso` never
+  gets one** (its screen axes mix world axes, so a world lattice would not be a ruler there); giving
+  `--grid-size` together with `--view iso` under `single`/`breakdown` is a clean exit 2 (`quad` always
+  renders the ortho panes regardless of `--view`, so it is unaffected). Two tiers: a **minor** line
+  every step and a **major** line every 8th, both drawn as neutral greys never confused with the CSG
+  palette. **`--grid-size N`** sets the minor spacing in world units and must be a **power of two >= 1**
+  (else a clean exit 2 naming the value); without it, each pane picks its own step — the largest power
+  of two `<= span/16` of that pane's own framed world extent, landing 16-32 minor divisions across the
+  pane at any zoom, so the grid reads as a ruler rather than a lone crosshair. A spacing too fine for
+  the pane **escalates** to a coarser one instead of erroring (matching the editor; the auto step never
+  needs this — it already clears the density threshold); one too coarse to show any line at all draws
+  nothing (exit 0) — the stderr report (below) always names the step, so neither substitution is
+  silent. **Nothing about the grid is drawn into the image beyond the lattice itself** — no caption, no
+  legend; every gridded pane instead gets **one line printed to stderr**: the framed world extent in
+  the pane's own two axes, plus `set` (the step asked for — explicit `--grid-size` or the auto default)
+  and `visible` (`set` after escalation, what is actually on screen — equal to `set` on every default
+  render, differing only when an explicit `--grid-size` escalated), e.g. `X -1024..2048  Y -512..1536
+  grid set 32, visible 64`. Pane-qualified under `quad`/`breakdown` (`Top: X -1024..2048  Y -512..1536
+  grid set 32, visible 64`), unqualified under `single`; printed unconditionally, independent of
+  `--locator-cells`/`--json`. (Major-tier spacing is deliberately not reported — the tier test is on the
+  pre-escalation step, so it is pinned to `8 * set` world units, not `8 * visible`, and a caption
+  printing the latter reads wrong once escalated.) Under `quad`/`breakdown`, each pane frames (and so
+  may escalate) independently, so panes can report different steps. The grid is a backdrop: it never
+  covers geometry, is never dimmed by `--focus`, and is unaffected by `--faces`.
+- **`--json`** prints a JSON object to stdout **instead of** the bare image path. With locator cells on
+  (the default), it is the machine form of the legend:
+  `{image, locator:{cols,rows}, actors:{<name>:{panes:{<Pane>:{cell,span}}, hidden}}}`, pane-keyed for
+  every layout (a `single` render has one pane keyed by its `--view`). With `--no-locator-cells`, the
+  addressing drops out but `hidden` stays a real answer: `{image, actors:{<name>:{hidden}}}` — no
+  `locator` key, no `panes`/`cell`/`span`. The stderr legend is unchanged (and likewise absent with
+  `--no-locator-cells`).
 - `--out PATH` is the host image path. **A preview is always a PNG** (written via **Pillow**, the
   LLM-viewable form — no flag and no other way to get raw PPM out). Whatever extension you pass is
   **replaced** by `.png`, so `--out shot.jpg` writes `shot.png` and `--out shot` writes `shot.png`.

@@ -608,7 +608,7 @@ def test_the_mip_pick_uses_the_faces_own_screen_gradients_not_a_view_global_gain
     floor_frame = ((0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0))
     # A framing at iso 80 over both faces, shared scale (so any level difference is the in-plane gain).
     pts = [preview._project(p, "iso", 80.0) for f in (wall, floor) for p in f]
-    _s, _tp, _to, w2p = _framing(pts, None, 256, "iso", 80.0, pad=_FRAME_PAD)
+    _s, _tp, _to, w2p, _b = _framing(pts, None, 256, "iso", 80.0, pad=_FRAME_PAD)
 
     def level(v3, frame):
         (au, bu, _c1), (av, bv, _c2) = _face_uv_affine(v3, frame, w2p)
@@ -785,7 +785,7 @@ def test_a_bmasked_fixture_texture_masks_via_the_decoder(tmp_path, monkeypatch):
     assert all(td.masked[("Deco", i)] for i in range(6))
 
 
-# ── addressable grid: the hidden-actor flag (drew-nothing per pane) ─────────────────────────────
+# ── locator cells: the hidden-actor flag (drew-nothing per pane) ────────────────────────────────
 
 
 

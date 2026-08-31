@@ -16,7 +16,8 @@ which renders nothing in every projection, so AND is the faithful reading of "fl
 A depth-occlusion that only hides an actor in one view leaves it visible elsewhere, so it is not
 flagged. Single-view/breakdown reduce to that one pane.
 
-`_grid_legend_lines`/`_grid_json` in `uedcli/cli/rendering.py` (`all(c.hidden for c in cells.values())`).
+`_locator_legend_lines`/`_preview_json` in `uedcli/cli/rendering.py` (`all(c.hidden for c in
+cells.values())`).
 
 If the owner wants per-pane hidden surfaced in quad (e.g. `Top:D4(hidden)`), that is a different shape
 and a separate change.

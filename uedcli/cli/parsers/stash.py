@@ -33,7 +33,10 @@ def register(sub) -> None:
 
     stsub.add_parser("list", help="list stash register ids")
 
-    stprev = stsub.add_parser("preview", help="composite render of a register entry")
+    # allow_abbrev=False: the retired `--grid` is now a unique abbreviation of `--grid-size` —
+    # without this it would silently parse as `--grid-size` instead of a clean unknown-arg error.
+    stprev = stsub.add_parser("preview", allow_abbrev=False,
+                              help="composite render of a register entry")
     stprev.add_argument("id", help="register id to render")
     stprev.add_argument("names", nargs="*", help="actor subset; empty = whole set")
     _preview_opts(stprev)

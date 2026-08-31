@@ -234,7 +234,8 @@ def _point_pane_region(point, render_data) -> tuple:
 
 
 def _render_breakdown_grid(actors, args, *, render_data, shown_highlights=None,
-                           grid=None, cells_out=None) -> bytes:
+                           locator=None, cells_out=None, grid_size=None,
+                           grid_captions_out=None) -> bytes:
     """`--layout breakdown`: a near-square GRID of panes, returned as a Pillow **Image** (the panes
     themselves are PPM bytes from the stdlib renderer; the stitch is already Pillow, so the caller
     writes this Image straight to PNG instead of re-encoding it through PPM). Pane 0 is the whole scene in CSG
@@ -260,30 +261,42 @@ def _render_breakdown_grid(actors, args, *, render_data, shown_highlights=None,
     except ImportError as e:                             # Pillow absent (broken install)
         raise CommandError(f"--layout breakdown needs Pillow, which failed to import: {e}")
 
-    def _pane(*, annotations, focus, region, grid=None, cells_out=None) -> bytes:
+    def _pane(*, annotations, focus, region, locator=None, cells_out=None, grid_caption_out=None) -> bytes:
         # No legend or overview names anywhere in the breakdown — the SCENE pane is a plain CSG map and
         # the per-actor panes are captioned. A tight `_BREAKDOWN_PAD`-px frame border keeps padding
         # minimal and CONSISTENT across panes (a fixed screen border, not a per-actor world margin).
-        # The addressable grid rides ONLY the SCENE pane (pane 0); per-actor panes render as before.
+        # Locator cells ride ONLY the SCENE pane (pane 0); per-actor panes render as before. Every pane
+        # shares ONE `grid_size` (spec §2): each still picks its own DRAWN step, since each pane frames
+        # (and so escalates) independently.
         return preview.render_brushes_pgm(
             actors, view=view, size=size, annotations=annotations, iso_angle=args.iso_angle, region=region,
             highlight_polys=highlight_polys, highlight_points=highlight_points, color_by_csg=True,
             render_data=render_data, focus=focus,
             brush_colors=brush_colors, faces=faces, frame_pad=_BREAKDOWN_PAD,
-            shown_highlights=shown_highlights, grid=grid, cells_out=cells_out)
+            shown_highlights=shown_highlights, locator=locator, cells_out=cells_out,
+            grid_size=grid_size, grid_caption_out=grid_caption_out)
 
     # Pane 0: the whole scene in CSG — a plain spatial map, NO labels (actors are identified by their
-    # own captioned panes below). It alone carries the grid gutter + cell legend (single-view).
+    # own captioned panes below). It alone carries the locator gutter + cell legend (single-view).
+    scene_cap: dict = {}
     panes = [("SCENE", _pane(annotations=preview.parse_annotation_spec("none"), focus=None, region=None,
-                             grid=grid, cells_out=cells_out))]
+                             locator=locator, cells_out=cells_out,
+                             grid_caption_out=scene_cap if grid_captions_out is not None else None))]
+    if grid_captions_out is not None and scene_cap:
+        grid_captions_out["SCENE"] = scene_cap
     for a in actors:                                     # one focused + zoomed pane per actor, in order
+        pane_cap: dict = {}
+        gco = pane_cap if grid_captions_out is not None else None
         if a.brush is not None:                          # brush: focus + frame its own vertex AABB
             panes.append((a.name.upper(),
-                          _pane(annotations=annotation_spec, focus=a.name, region=_world_aabb([a], render_data))))
+                          _pane(annotations=annotation_spec, focus=a.name, region=_world_aabb([a], render_data),
+                                grid_caption_out=gco)))
         else:                                            # point: frame a box around its Location (focus
             panes.append((a.name.upper(),                # is brush-only, so leave it off — the tight
                           _pane(annotations=annotation_spec, focus=None,   # zoom + caption identify the point)
-                                region=_point_pane_region(a, render_data))))
+                                region=_point_pane_region(a, render_data), grid_caption_out=gco)))
+        if grid_captions_out is not None and pane_cap:
+            grid_captions_out[a.name.upper()] = pane_cap
     n = len(panes)
     cols = math.ceil(math.sqrt(n))                       # near-square, slightly wider than tall
     rows = math.ceil(n / cols)
@@ -308,7 +321,8 @@ def _render_breakdown_grid(actors, args, *, render_data, shown_highlights=None,
     return grid_img          # a Pillow Image — the write boundary encodes it to PNG directly
 
 
-_GRID_MAX = 52                       # cap so single-letter/short column addresses stay legible
+_LOCATOR_DEFAULT = 12                # density when neither --locator-cells nor --no-locator-cells is given
+_LOCATOR_MAX = 52                    # cap so single-letter/short column addresses stay legible
 _QUAD_PANE_ORDER = ("Top", "Front", "Side", "Iso")   # legend/JSON pane order (see spec)
 
 
@@ -317,12 +331,12 @@ def _view_pane_key(view: str) -> str:
     return view.capitalize()
 
 
-def _grid_legend_lines(actors, panes: dict, n: int) -> list[str]:
-    """The always-on stderr legend: a density header, then one line per actor in SCENE order. A single
-    pane (single/breakdown) is unqualified (`Pillar  D4  (C3–E5)`); multiple panes (quad) are
+def _locator_legend_lines(actors, panes: dict, n: int) -> list[str]:
+    """The stderr legend (locator on only): a density header, then one line per actor in SCENE order. A
+    single pane (single/breakdown) is unqualified (`Pillar  D4  (C3–E5)`); multiple panes (quad) are
     pane-qualified (`Pillar  Top:D4 Front:B7 …`). An actor hidden in every pane appends `(hidden)`.
     Same-cell collisions each keep their own line."""
-    lines = [f"grid: {n}×{n} columns A–{preview._col_label(n - 1)}, rows 1–{n}"]
+    lines = [f"locator: {n}×{n} columns A–{preview._col_label(n - 1)}, rows 1–{n}"]
     quad = len(panes) > 1
     for a in actors:
         cells = {p: c[a.name] for p, c in panes.items() if a.name in c}
@@ -340,21 +354,29 @@ def _grid_legend_lines(actors, panes: dict, n: int) -> list[str]:
     return lines
 
 
-def _grid_json(image_path: str, actors, panes: dict, n: int) -> dict:
-    """The `--json` object: `{image, grid:{cols,rows}, actors:{name:{panes:{Pane:{cell,span}}, hidden}}}`.
-    Uniform pane-keyed shape across every layout, so a script reads them all the same way."""
+def _preview_json(image_path: str, actors, panes: dict, n: int | None) -> dict:
+    """The `--json` object. Locator on (`n` not None):
+    `{image, locator:{cols,rows}, actors:{name:{panes:{Pane:{cell,span}}, hidden}}}` — pane-keyed so a
+    script reads every layout the same way. Locator off (`n` is None): `{image,
+    actors:{name:{hidden}}}` — no `locator` key, and no `panes`/`cell`/`span` (omitted, not emitted
+    empty), since there is no cell division to report; `hidden` alone stays a real answer either way."""
     order = _QUAD_PANE_ORDER if len(panes) > 1 else list(panes)
     out_actors: dict = {}
     for a in actors:
         cells = {p: c[a.name] for p, c in panes.items() if a.name in c}
         if not cells:
             continue
-        out_actors[a.name] = {
+        hidden = all(c.hidden for c in cells.values())
+        out_actors[a.name] = ({"hidden": hidden} if n is None else {
             "panes": {p: {"cell": cells[p].cell, "span": cells[p].span}
                       for p in order if p in cells},
-            "hidden": all(c.hidden for c in cells.values()),
-        }
-    return {"image": image_path, "grid": {"cols": n, "rows": n}, "actors": out_actors}
+            "hidden": hidden,
+        })
+    obj: dict = {"image": image_path}
+    if n is not None:
+        obj["locator"] = {"cols": n, "rows": n}
+    obj["actors"] = out_actors
+    return obj
 
 
 def render_actors_to_out(actors, args) -> int:
@@ -363,9 +385,28 @@ def render_actors_to_out(actors, args) -> int:
     factor = getattr(args, "frame_tightness", 0.8)
     if not 0.0 <= factor <= 1.0:                         # errors name the offending value (CLI rule)
         raise CommandError(f"--frame-tightness must be in [0, 1], got {factor}")
-    grid = getattr(args, "grid", 12)                     # the always-on addressable grid density
-    if not 1 <= grid <= _GRID_MAX:
-        raise CommandError(f"--grid must be in [1, {_GRID_MAX}], got {grid}")
+    # `--locator-cells`/`--no-locator-cells` resolve to one `int | None` (None = off). Neither given ⇒
+    # locator cells stay on at the default density (12) — opt-out, not opt-in.
+    locator_n = getattr(args, "locator_cells", None)
+    locator_off = getattr(args, "no_locator_cells", False)
+    if locator_off and locator_n is not None:
+        raise CommandError("--locator-cells and --no-locator-cells are mutually exclusive")
+    locator = None if locator_off else (_LOCATOR_DEFAULT if locator_n is None else locator_n)
+    if locator is not None and not 1 <= locator <= _LOCATOR_MAX:
+        raise CommandError(f"--locator-cells must be in [1, {_LOCATOR_MAX}], got {locator}")
+    layout = getattr(args, "layout", "quad")
+    grid_size = getattr(args, "grid_size", None)
+    if grid_size is not None:
+        if grid_size < 1 or (grid_size & (grid_size - 1)) != 0:
+            raise CommandError(f"--grid-size must be a power of two, got {grid_size}")
+        # 'quad' ignores --view (it renders all four panes regardless), so --grid-size always has an
+        # ortho pane to draw on there; 'single'/'breakdown' pick ONE view, and iso draws no gridlines
+        # at all (spec §2/§5) — so --grid-size there would be a silent no-op, which the conventions
+        # forbid.
+        if layout != "quad" and args.view == "iso":
+            raise CommandError(f"--grid-size {grid_size} conflicts with --view iso: iso draws no "
+                                f"gridlines (mixed screen/world axes), so --grid-size would have no "
+                                f"effect")
     m = 16.0                                             # keep the target off the frame edge
     try:
         annotation_spec = preview.parse_annotation_spec(args.annotate)
@@ -377,7 +418,6 @@ def render_actors_to_out(actors, args) -> int:
     except ValueError as e:                              # surface --annotate / selector parse failure
         raise CommandError(str(e))
     faces = _preview_faces_mode(args)
-    layout = getattr(args, "layout", "quad")
     if explicit_region is not None:
         # An explicit --frame AABB frames EXACTLY the given world box (+ the standard margin): it is
         # a box the user chose, so --frame-tightness does NOT modulate it (tightness tunes only the
@@ -406,17 +446,26 @@ def render_actors_to_out(actors, args) -> int:
     # that landed, so the note must subtract the union of what drew, not decide per pane (which would emit
     # up to four copies of a wrong answer under `--layout quad`).
     shown_highlights: set = set()
-    # The addressable grid is ALWAYS ON (owner-ruled). `panes` collects each pane's `{actor: ActorCell}`
-    # map — keyed by pane name for quad, by the single `--view` otherwise (breakdown reads off pane 0).
+    # `panes` collects each pane's `{actor: ActorCell}` map — keyed by pane name for quad, by the
+    # single `--view` otherwise (breakdown reads off pane 0) — filled whether or not the locator is on
+    # (see `_collect_cells`). `hidden` answers the image actually rendered: under `--faces wire` that
+    # answer is invariant either way, but under a filled mode the locator's gutter reserve shifts
+    # `to_pxf`/the depth buffer, so `hidden` can legitimately differ between the two modes.
     panes: dict = {}
+    # `grid_captions` collects each GRIDDED pane's `{"text": str}` (spec §6, stderr-only — nothing is
+    # ever drawn into the image) — printed below.
+    grid_captions: dict = {}
     try:
         if layout == "breakdown":
             single = {}
             data = _render_breakdown_grid(actors, args, render_data=render_data,
-                                          shown_highlights=shown_highlights, grid=grid, cells_out=single)
+                                          shown_highlights=shown_highlights, locator=locator,
+                                          cells_out=single, grid_size=grid_size,
+                                          grid_captions_out=grid_captions)
             panes[_view_pane_key(args.view)] = single
         elif layout == "single":
             single = {}
+            single_cap: dict = {}
             data = preview.render_brushes_pgm(actors, view=args.view, size=args.size,
                                               annotations=annotation_spec, iso_angle=args.iso_angle,
                                               region=region, highlight_polys=highlight_polys,
@@ -424,8 +473,11 @@ def render_actors_to_out(actors, args) -> int:
                                               color_by_csg=True, render_data=render_data, focus=focus,
                                               brush_colors=getattr(args, "brush_colors", "csg") or "csg",
                                               faces=faces, shown_highlights=shown_highlights,
-                                              grid=grid, cells_out=single)
+                                              locator=locator, cells_out=single, grid_size=grid_size,
+                                              grid_caption_out=single_cap)
             panes[_view_pane_key(args.view)] = single
+            if single_cap:
+                grid_captions[_view_pane_key(args.view)] = single_cap
         else:                                            # quad (default)
             data = preview.render_quad_pgm(actors, size=args.size, annotations=annotation_spec,
                                            iso_angle=args.iso_angle, region=region,
@@ -434,7 +486,8 @@ def render_actors_to_out(actors, args) -> int:
                                            color_by_csg=True, render_data=render_data, focus=focus,
                                            brush_colors=getattr(args, "brush_colors", "csg") or "csg",
                                            faces=faces, shown_highlights=shown_highlights,
-                                           grid=grid, cells_out=panes)
+                                           locator=locator, cells_out=panes, grid_size=grid_size,
+                                           captions_out=grid_captions)
     except preview.PreviewAbort as e:                    # a refusal only reachable mid-render
         raise CommandError(str(e)) from None
     _note_invisible_highlights(hi_requests, shown_highlights)
@@ -470,16 +523,27 @@ def render_actors_to_out(actors, args) -> int:
         raise CommandError(f"writing the preview PNG needs Pillow, which failed to import: {e}")
     except OSError as e:                                     # unwritable path, decode failure, ...
         raise CommandError(f"could not write preview to {host_out}: {e}")
-    # Addressable-grid output: the legend ALWAYS to stderr; a degenerate actor with no cell is noted,
-    # not listed. stdout is the machine form (--json) OR the bare path — one form, never both.
-    addressed = {name for pane in panes.values() for name in pane}
-    if unaddressed := [a.name for a in actors if a.name not in addressed]:
-        print(f"note: no grid cell for {', '.join(unaddressed)} (no projectable geometry)",
-              file=sys.stderr)
-    for line in _grid_legend_lines(actors, panes, grid):
-        print(line, file=sys.stderr)
+    # Locator output: the legend to stderr, and a degenerate actor with no cell is noted, not listed —
+    # both only when the locator is on (§3.5: no addresses for either to talk about with it off). stdout
+    # is the machine form (--json) OR the bare path — one form, never both.
+    if locator is not None:
+        addressed = {name for pane in panes.values() for name in pane}
+        if unaddressed := [a.name for a in actors if a.name not in addressed]:
+            print(f"note: no locator cell for {', '.join(unaddressed)} (no projectable geometry)",
+                  file=sys.stderr)
+        for line in _locator_legend_lines(actors, panes, locator):
+            print(line, file=sys.stderr)
+    # The grid's extent/step report (spec §6, owner-updated 2026-08-30) — stderr ONLY, unconditionally
+    # for every gridded pane regardless of `--locator-cells`/`--json`; nothing is ever drawn into the
+    # image. `single` is the one unqualified line; `quad`/`breakdown` prefix each with its pane name.
+    if layout == "single":
+        if grid_captions:
+            print(next(iter(grid_captions.values()))["text"], file=sys.stderr)
+    else:
+        for name, info in grid_captions.items():
+            print(f"{name}: {info['text']}", file=sys.stderr)
     if getattr(args, "json", False):
-        print(json.dumps(_grid_json(host_out, actors, panes, grid), indent=2))
+        print(json.dumps(_preview_json(host_out, actors, panes, locator), indent=2))
     else:
         print(host_out)                 # the rendered HOST file path
     return 0
