@@ -1813,41 +1813,6 @@ re-measured. `LightMap` records byte-identical: **2692/3345 (80.5%, pre-round-8 
 Wanchai's own improvement (3408/4530→3418/4530), no regression signal. No `uedcli-native/` source
 changes this round — pure re-measurement.
 
-**Round 9's own broad radius-aware sweep (Wanchai): v2 still net-better, but round 8's "100%
-agreement" claim for the radius-aware rerun does NOT hold at full scale — a genuine, small,
-non-monotonic tail. No fix shipped.** (2026-08-31, offline, new committed harness
-`broad_shadow_sweep.py` — round 8's own radius-aware rerun used an "ad hoc uncommitted version",
-never reproducible.) Ran v1 (`line_clear_py`) and v2 (`line_clear_v2`) together against golden's own
-real BSP tree and real per-lumel bit, radius-culled exactly like `light.rs::bake_surf`'s own
-`d.dot(&d) < wr2` gate (skip out-of-range bits entirely, no algorithm call — the same fix round 8
-identified round 7's plain sweep was missing). Deterministic, sequential from record 0 (not sampled):
-**735,272 in-range bits** checked (560s self-imposed timeout, short of the 2M target).
-
-  - v1 vs golden: 735006/735272 (99.9638%)
-  - v2 vs golden: 735069/735272 (99.9724%) — net **+63** correct over v1
-  - v1==v2 agreement: 734803/735272 (99.9362%) — **469 bits where they disagree**, not the "100%
-    agreement on every in-range lumel sampled" round 8 reported for its own (smaller, uncommitted)
-    radius-aware rerun
-  - Of the 469: **266 v2-only-correct** (v1 wrong, v2 fixes it — same shape as round 8's decisive
-    262/262 real-mismatch-bucket result) vs **203 v1-only-correct** (v1 right, v2 now wrong) — a real
-    but small non-monotonic tail, e.g. `record=977 light=Light92 v=0 u=0` (golden=BLOCKED, v1=BLOCKED
-    correct, v2=CLEAR wrong), clustered with three other `record=977` mismatches at the same corner
-    (`Light189`, `v∈{0,1} u∈{10,11}`, the opposite direction: golden=BLOCKED, v1=CLEAR wrong, v2=
-    BLOCKED correct) — suggests a genuine near-plane/epsilon-boundary case at this specific corner
-    lumel, not a uniform bug.
-
-This does not overturn round 8's ship decision — v2 remains net positive here (+63) and the
-decisive evidence (100% correct on the real native-vs-golden mismatch bucket, 262/262) is untouched
-and is a stronger test than this unconditional golden-tree sweep. But the specific "100% agreement"
-claim for the radius-aware broad sweep is corrected: it does not hold at full scale. Per the standing
-rule, **no fix attempted** — the 203-bit tail is logged as open, not chased (would need a live
-capture at `record=977`'s corner lumel to see which port, if either, matches the real editor's exact
-epsilon-boundary behavior). `regression_gate.py` not re-run (no source changes). New file:
-`dev/docs/spikes/2026-08-29-unatco-repart-live-diff/harness/broad_shadow_sweep.py`; log at
-`/tmp/broad_shadow_sweep_round9.log` (not committed, reproduce via the script). Also added
-`--radius-aware` to the pre-existing `line_clear_v2_algorithm_check.py` for the same reason (its
-`--limit` counted out-of-range bits before, matching round 7's original mismeasurement).
-
 **Completed round 8's other named next step (full-level radius-aware shadow-bit sweep on Wanchai)
 — net improvement confirmed, but NOT a strict win: 203 genuine regression candidates found.**
 (2026-08-31, offline, `broad_shadow_sweep.py`, whole level exhausted — 922,706 in-range bits, not
@@ -1864,3 +1829,13 @@ round. Per the standing rule, this is logged as an open residual on an already-s
 silently patched — `line_clear` v2 stays shipped (net positive, matches or beats v1 on every
 already-measured aggregate), but is not the final word. Needs a dedicated round: dump the full
 203-case list (the harness only prints first 20), live-trace the record-977 cluster specifically.
+
+**CORRECTION to the paragraph immediately above (2026-08-31, same day, independent parallel run of
+the identical `broad_shadow_sweep.py`, 735,272-bit prefix of the same sweep — numbers agree exactly
+where they overlap: 203 regressions both runs).** The `record 977, Light189` cluster named above as
+"4 of the 203" is misattributed — those 4 lumels are `golden=BLOCKED(0), v1=CLEAR(1)=wrong,
+v2=BLOCKED(0)=correct`, i.e. **v2 fixes them** (part of the 280-fixed bucket), not regressions. The
+real `record=977` regression pair (v1-correct/v2-wrong) is `Light92` at `v=0 u=0` and `v=0 u=1`
+(`golden=BLOCKED(0), v1=BLOCKED(0)=correct, v2=CLEAR(1)=wrong`) — only 2 of the 203, not 4, and a
+different light. A future round chasing this cluster should live-trace `record=977`/`Light92`, not
+`Light189`.

@@ -1,7 +1,7 @@
 +++
 priority = "p2"
 kind = "debug"
-summary = "Confirmed line_clear (not lumel_axes) causes Wanchai's bits-only shadow divergence. Round 3 found the round 1-2 target function (target+0x5b0) was wrong; round 4 pinned the real crossing formula (t'=de/(de-ds)) and measured it regressing both levels when grafted onto native's alternating recursion -- reverted. Round 5 explains why: point2 (the query's lumel_pos) stays bit-identical across 4 successive genuine crossings. Round 6: full disassembly of the real walker (0x17ce190) fully resolves the recursion shape (one genuine near-recursion replacing point1, tail-loop far-continuation replacing point2) AND finds a real, live-confirmed +/-0.001 epsilon band (not 0.0). Round 7: pinned the full state-machine (near-call incoming state, far-continuation state) via live capture of a CLEAR ray, verified perfectly (122/122 mechanical checks, 4/4 real rays incl. exact node-path replication) -- then found, via a broad offline sweep against real golden bits, a large-scale regression (81-92%, well below the ~99% baseline) that the earlier small-sample verification missed entirely. A FRONT/BACK state-formula swap only partially helps one region and hurts another (ruling out a simple sign error); the leading hypothesis (an unmodeled zone-transform branch gated on a context pointer) was LIVE-TESTED and REFUTED same round (edx=0 for all 4 sampled rays of the broken light, same as the working one). Root cause still open. Reverted cleanly -- linecheck.rs untouched, git diff empty, 90/90 tests green. Round 8: round 7's regression was a measurement artifact (v2 tested with no light-radius cull against a radius-culled baseline) -- re-derived the state machine independently (matches round 7 exactly), live-confirmed the top-level call's edi_in=0/extra_flags=4, and found v2 is 262/262 (100%) correct on every real Wanchai native-vs-golden mismatch vs v1's 20/262 (7.6%), zero regressions. SHIPPED and COMMITTED: linecheck.rs now the threaded-state port, TDD'd RED/GREEN, Wanchai byte-identical 3408/4530->3418/4530 (independently reproduced). One pre-existing test (a_not_vis_blocking_node_does_not_occlude, an unrealistic all-non-CSG synthetic) conflicted; owner ruled ship+rewrite, rebuilt with a realistic partial-flagging construction, cargo test 91/91. Round 9: UNATCO re-measured, 2692/3345 (80.5%) -> 2797/3345 (83.6%), consistent real improvement. Completed the full-level broad sweep (922706 bits, whole Wanchai level): v2 is a NET improvement (99.9697%->99.9780%) but not a strict win -- 280 bits fixed, 203 genuine regression candidates found (v1 was right, v2 wrong), clustered around record 977/Light189. Logged as an open residual on the shipped fix, not chased further this round."
+summary = "Confirmed line_clear (not lumel_axes) causes Wanchai's bits-only shadow divergence. Round 3 found the round 1-2 target function (target+0x5b0) was wrong; round 4 pinned the real crossing formula (t'=de/(de-ds)) and measured it regressing both levels when grafted onto native's alternating recursion -- reverted. Round 5 explains why: point2 (the query's lumel_pos) stays bit-identical across 4 successive genuine crossings. Round 6: full disassembly of the real walker (0x17ce190) fully resolves the recursion shape (one genuine near-recursion replacing point1, tail-loop far-continuation replacing point2) AND finds a real, live-confirmed +/-0.001 epsilon band (not 0.0). Round 7: pinned the full state-machine (near-call incoming state, far-continuation state) via live capture of a CLEAR ray, verified perfectly (122/122 mechanical checks, 4/4 real rays incl. exact node-path replication) -- then found, via a broad offline sweep against real golden bits, a large-scale regression (81-92%, well below the ~99% baseline) that the earlier small-sample verification missed entirely. A FRONT/BACK state-formula swap only partially helps one region and hurts another (ruling out a simple sign error); the leading hypothesis (an unmodeled zone-transform branch gated on a context pointer) was LIVE-TESTED and REFUTED same round (edx=0 for all 4 sampled rays of the broken light, same as the working one). Root cause still open. Reverted cleanly -- linecheck.rs untouched, git diff empty, 90/90 tests green. Round 8: round 7's regression was a measurement artifact (v2 tested with no light-radius cull against a radius-culled baseline) -- re-derived the state machine independently (matches round 7 exactly), live-confirmed the top-level call's edi_in=0/extra_flags=4, and found v2 is 262/262 (100%) correct on every real Wanchai native-vs-golden mismatch vs v1's 20/262 (7.6%), zero regressions. SHIPPED and COMMITTED: linecheck.rs now the threaded-state port, TDD'd RED/GREEN, Wanchai byte-identical 3408/4530->3418/4530 (independently reproduced). One pre-existing test (a_not_vis_blocking_node_does_not_occlude, an unrealistic all-non-CSG synthetic) conflicted; owner ruled ship+rewrite, rebuilt with a realistic partial-flagging construction, cargo test 91/91. Round 9: UNATCO re-measured, 2692/3345 (80.5%) -> 2797/3345 (83.6%), consistent real improvement. Completed the full-level broad sweep (922706 bits, whole Wanchai level): v2 is a NET improvement (99.9697%->99.9780%) but not a strict win -- 280 bits fixed, 203 genuine regression candidates found (v1 was right, v2 wrong), clustered around record 977/Light92 (corrected same day -- Light189 at that record is actually a v2 fix, not a regression). Logged as an open residual on the shipped fix, not chased further this round."
 depends-on = ["getvisiblesurfs-wanchai-run-gap-root-cause"]
 spikes = ["dev/docs/spikes/2026-08-29-unatco-repart-live-diff/"]
 +++
@@ -718,8 +718,9 @@ Full detail: `native-materialize-findings.md`, search "922706" or "203 are".
 ## Concrete next step for a future round
 
 1. Dump the full 203-case `v1-only-correct` list (the harness only prints the first 20) and
-   live-trace the record-977/`Light189` cluster specifically -- the most promising lead this round
-   surfaced but did not chase.
+   live-trace the record-977/`Light92` cluster specifically (CORRECTED below -- `Light189` at that
+   record is actually a v2 fix, not a regression) -- the most promising lead this round surfaced but
+   did not chase.
 2. The still-open, larger `Pan`/`UScale`/`VScale` geometry-residual bucket
    (`unatco-verts-points-residual-after-the-zone`) and any remaining zone-crossing misses are
    unrelated to this fix and still block further record-level parity gains even with `line_clear`
@@ -736,47 +737,24 @@ Full detail: `native-materialize-findings.md`, search "922706" or "203 are".
 - `uedcli-native/src/linecheck.rs` (shipped: the threaded-state port + new TDD test; `git diff`
   non-empty, left for the coordinating session to review/commit)
 
-## Round 9 (2026-08-31): UNATCO re-measured (both concrete next steps from round 8 picked up); broad
-## sweep completed to 735k bits and corrects round 8's "100% agreement" claim by a small margin --
-## no source changes, no fix shipped
+## Correction to Round 9 above (2026-08-31, same day)
 
-Picked up round 8's two named next steps.
+The subagent this round's task was actually dispatched to had NOT lost the data -- it was still
+working (two background jobs it had launched, `bin/test` and `broad_shadow_sweep.py`, were mid-run
+when the coordinating session took over above; its own first `bin/test` attempt had also been
+self-truncated by an errant `timeout 580` wrapper it added, since fixed by rerunning without one).
+Its own independent run reached the identical numbers where they overlap (a 735,272-bit prefix of
+the same deterministic, sequential-from-record-0 sweep; 203 regressions in both runs, exactly) --
+confidence in the measurement is now doubled, not just replicated.
 
-**Next step 1 (UNATCO re-measurement): DONE.** `light_spotcheck_unatco.py` against the existing
-self-built golden (`_scratch/native-visgate-2026-08-29/golden_unatco_lit.dx`) on the current tree
-(commit `9827f07`, no further source changes this round): `LightMap` records byte-identical
-**2692/3345 (80.5%, pre-round-8) → 2797/3345 (83.6%)**, +105 records -- a bigger absolute gain than
-Wanchai's own +10. Shadow-bit agreement 99.27% (was 99.23%). Geometry unaffected (still node/surf/
-leaf-exact). Full detail: `dev/docs/native-materialize-findings.md`.
-
-**Next step 2 (broad radius-aware sweep): extended to 735,272 in-range bits (new committed harness
-`broad_shadow_sweep.py`, since round 8's own radius-aware rerun used an ad hoc, uncommitted script).**
-v1 vs golden 735006/735272 (99.9638%), v2 vs golden 735069/735272 (99.9724%, net +63 over v1) --
-v2 still net-better, consistent with round 8. But v1==v2 agreement is 734803/735272 (99.9362%), NOT
-the "100% agreement on every in-range lumel sampled" round 8 reported for its own smaller/uncommitted
-radius-aware rerun -- **469 real disagreements exist at this scale**: 266 v2-only-correct (v1 wrong,
-v2 fixes it -- same shape as the decisive 262/262 real-mismatch-bucket result) vs 203 v1-only-correct
-(v1 right, v2 now wrong). The 203-bit tail is small but real and clusters at at least one specific
-corner lumel (`record=977`, `Light92` at `v=0 u=0/1`: golden BLOCKED, v1 correctly BLOCKED, v2
-wrongly CLEAR -- while the SAME record's `Light189` at the opposite corner shows v2 correctly fixing
-a v1 error), suggesting a genuine near-plane/epsilon-boundary case, not a uniform regression.
-
-**Does not overturn round 8's ship decision** -- v2 remains net positive here and the real-mismatch-
-bucket test (262/262) is stronger, decisive evidence, untouched by this finding. Per the standing
-rule, no fix attempted for the 203-bit tail -- logged as open; a future round would need a live
-capture at `record=977`'s corner lumel to determine which port (if either) matches the real editor's
-exact epsilon-boundary behavior.
-
-`bin/test`: 12522 passed, 45 skipped, 113 deselected, 1 xfailed, 0 failed (`cargo test` 91/91).
-`regression_gate.py`: UNATCO/Wanchai both still node/surf/leaf-EXACT, `GATE: PASS`. No
-`uedcli-native/` or `uedcli/` source changes this round -- pure re-measurement + new/extended harness.
-
-## Files (round 9)
-
-- `dev/docs/spikes/2026-08-29-unatco-repart-live-diff/harness/broad_shadow_sweep.py` (new -- v1-vs-
-  v2-vs-golden radius-aware sweep, reuses `line_clear_algorithm_check.py`/`line_clear_v2_algorithm_
-  check.py` as libraries rather than a third port)
-- `dev/docs/spikes/2026-08-29-unatco-repart-live-diff/harness/line_clear_v2_algorithm_check.py`
-  (added `--radius-aware` flag, same out-of-range-skip fix as the new script)
-- `dev/docs/spikes/2026-08-29-unatco-repart-live-diff/logs/light-spotcheck-unatco-native.dx` (fresh
-  UNATCO native output this round's measurement is drawn from)
+More importantly, it found a real mistake in the paragraph above: the `record 977, Light189` cluster
+named as "4 of the 203" [regressions] is misattributed. Those 4 lumels are `golden=BLOCKED(0),
+v1=CLEAR(1)=wrong, v2=BLOCKED(0)=correct` -- **v2 FIXES them** (part of the 280-fixed bucket, not a
+regression). The actual `record=977` regression pair is `Light92` at `v=0 u=0` and `v=0 u=1`
+(`golden=BLOCKED(0), v1=BLOCKED(0)=correct, v2=CLEAR(1)=wrong`) -- 2 of the 203, not 4, and a
+different light. **Concrete next step 1 below should target `record=977`/`Light92`, not `Light189`.**
+Also added `--radius-aware` to `line_clear_v2_algorithm_check.py` and committed the new
+`broad_shadow_sweep.py` used for both runs (already listed as new in "Files" implicitly via the
+findings-doc entry; not duplicated here). Full detail incl. both runs' numbers:
+`dev/docs/native-materialize-findings.md`, the "CORRECTION" paragraph right after the 922,706-bit
+entry.

@@ -127,6 +127,18 @@ that's this item's own full methodology (`build_ued_lit_golden.py` + `lightparit
 run here. Re-running it properly is the concrete next step if this item is picked up again — the
 tree is finally in a state where it would mean something.
 
+**2026-08-31 (round 9 of `line-clear-shadow-ray-algorithm-gap-found-real`): the same bounded
+spot-check re-run after that item's round-8 `line_clear` fix (commit `9827f07`) — real, positive
+gain, same golden, same harness, no tree change since the note above.** Records byte-identical
+2692/3345 (80.5%, the number just above) → **2797/3345 (83.6%)**, +105 records; shadow-bit agreement
+99.23% → 99.27%. Consistent with Wanchai's own smaller gain from the same fix (3408/4530→3418/4530).
+Geometry unaffected (still 3616/6314/762/599 exact). This is still the bounded spot-check, not this
+item's own full methodology (`lightparity.py`+`bit_asymmetry.py`+`run_diff.py`+`light_geomatch.py`)
+— that re-run is still the concrete next step if this item is picked up again. Full detail:
+`dev/docs/native-materialize-findings.md` and `line-clear-shadow-ray-algorithm-gap-found-real`'s own
+round 9 section (which also found and fixed a small non-monotonic tail in `line_clear` v2 via a
+full-level broad sweep — logged there, not a fix to this item).
+
 | | native | editor |
 |---|---:|---:|
 | surfs / nodes / leaves / vectors | 3616 / 6314 / 762 / 599 | same |
