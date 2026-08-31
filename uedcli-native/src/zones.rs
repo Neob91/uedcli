@@ -41,6 +41,13 @@ fn is_csg_leaf(n: &crate::model::BspNode) -> bool {
 /// `i_front`); at every empty terminal child append a leaf and record `node.iLeaf[side]`.
 /// `outside` propagates as `front = outside||IsCsg`, `back = outside && !IsCsg`, seeded
 /// `root_outside`.  Coplanar-chain (`i_plane`) nodes are not traversed (they keep iLeaf -1).
+///
+/// **Visit order: `i_front` (engine `iChild[0]`/"back") before `i_back` (engine `iChild[1]`/
+/// "front")** — spike `70-zones-portalization.md` §2's own decoded order ("DFS over `iChild[0]`
+/// (back) then `iChild[1]`(front)"), re-confirmed live 2026-08-31: simulating both orders over
+/// `DX.dx`'s own tree and diffing against its self-built UED22 golden's real on-disk `iLeaf`
+/// values, `i_front`-first matches all 26 nodes exactly (0 mismatches) where the previous
+/// `i_back`-first order mismatched exactly the 4 nodes `native-materialize-findings.md` tracked.
 fn assign_leaves(model: &mut Model, ni: i32, outside: bool) {
     if ni < 0 {
         return;
@@ -54,8 +61,9 @@ fn assign_leaves(model: &mut Model, ni: i32, outside: bool) {
             (n.node_flags & NF_SOLID_BOUND) != 0,
         )
     };
-    // side 1 = FRONT (i_back), side 0 = BACK (i_front)
-    for (side, child) in [(1usize, i_back), (0usize, i_front)] {
+    // side 1 = FRONT (i_back), side 0 = BACK (i_front) -- visited in engine order, BACK/i_front
+    // first (see the doc comment above).
+    for (side, child) in [(0usize, i_front), (1usize, i_back)] {
         let child_out = if csg { side == 1 } else { outside };
         if child == -1 {
             // A synthetic solid-bound node's EMPTY (front) side is a zero-volume sliver coincident
@@ -1099,7 +1107,36 @@ fn build_zone_mask(model: &mut Model, ni: i32) -> u64 {
 
 #[cfg(test)]
 mod tests {
-    use super::fix_ring;
+    use super::{assign_leaves, fix_ring};
+    use crate::model::{BspNode, Model, Plane};
+
+    /// Pass A must visit `i_front` before `i_back` at every branch -- confirmed 2026-08-31 by
+    /// re-deriving `DX.dx`'s real editor-built golden `iLeaf` numbering (0 of 26 nodes mismatch
+    /// under this order; the previous `i_back`-first order mismatched exactly the 4 nodes
+    /// `native-materialize-findings.md` tracked). Matches spike `70-zones-portalization.md` §2's
+    /// own decoded order ("DFS over `iChild[0]`(back) then `iChild[1]`(front)"; `iChild[0]` = this
+    /// struct's `i_front` field, `iChild[1]` = `i_back` -- see this file's own FRONT/BACK-swap note
+    /// above `assign_leaves`) -- the prior code had transcribed that order backwards.
+    #[test]
+    fn assign_leaves_visits_i_front_before_i_back() {
+        let leaf_node = |i_front: i32, i_back: i32| BspNode {
+            i_front,
+            i_back,
+            ..BspNode::leaf(Plane { x: 0.0, y: 0.0, z: 1.0, w: 0.0 }, -1, -1, 0)
+        };
+        let mut m = Model::default();
+        m.nodes.push(leaf_node(1, -1)); // node 0: front -> node 1, back -> terminal
+        m.nodes.push(leaf_node(-1, -1)); // node 1: both terminal
+
+        assign_leaves(&mut m, 0, true);
+
+        // Depth-first, front-first: node1's front terminal is discovered first (leaf 0), then
+        // node1's back terminal (leaf 1), then node0's own back terminal (leaf 2) -- node0's
+        // front side is a recursion, not a terminal, so it stays -1.
+        assert_eq!(m.nodes[1].i_leaf, [0, 1], "node 1 (front subtree): front-first, back-second");
+        assert_eq!(m.nodes[0].i_leaf, [-1, 2], "node 0: front side recurses, back side is leaf 2");
+        assert_eq!(m.leaves.len(), 3);
+    }
 
     /// Engine-fact regression for the Pass-D orphan `bspAddNode` degenerate-drop (§70 §12).
     /// UnrealEd's `bspAddNode` vertex-fill collapses corners within `THRESH_POINTS_ARE_SAME` and
