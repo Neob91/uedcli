@@ -1,7 +1,7 @@
 +++
 priority = "p2"
 kind = "debug"
-summary = "actor preview --faces textured: the bspcsg core starts from an EMPTY world, so isolated adds render (visible) instead of being invisible as the spec's SOLID-world premise (and UnrealEd) expect."
+summary = "actor diagram --faces textured: the bspcsg core starts from an EMPTY world, so isolated adds render (visible) instead of being invisible as the spec's SOLID-world premise (and UnrealEd) expect."
 +++
 
 # bspcsg solve starts from an empty world, not a solid one

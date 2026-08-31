@@ -179,7 +179,7 @@ ARGV_CORPUS = [
     ["actor", "rotate", "X"],
     ["brush", "scale", "B", "--to", "1,1,1", "--by", "2,2,2"],
     # non-required mutually-exclusive group violated
-    ["level", "preview", "at:0,0,0;rot:0,0", "--out-dir", "s", "--native", "--game"],
+    ["level", "photo", "at:0,0,0;rot:0,0", "--out-dir", "s", "--native", "--game"],
     ["actor", "find", "--folder", "F", "--no-folder"],
     # multiple simultaneous mistakes
     ["actor", "bogus", "--nope"],

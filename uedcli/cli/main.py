@@ -1,7 +1,7 @@
 """uedcli CLI — the LLM-facing verb surface. Query and mutate verbs operate
 model-side on $UEDCLI_LEVEL's git-native T3D trunk (`maps/<level>/`); the
 editor is reached only via a per-command ephemeral spin-up (materialize /
-preview / the stash CSG generators). The project's OWN git is the history —
+photo / the stash CSG generators). The project's OWN git is the history —
 uedcli reads it but never runs git for you, so history/recovery exist only once
 the project is its own repo (`level status` reports when it is not).
 """

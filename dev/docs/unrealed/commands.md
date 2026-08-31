@@ -225,10 +225,10 @@ Parser in `Editor.dll`; frontend `printf` usages in `unrealed.exe`.
   full FRotator" claim (live 2026-06-20, `Pitch=-4096,Yaw=49152,Roll=8192` round-tripped through a
   `MAP SAVE` readback) was true of the stored value but not of pixels — a 9-pose sweep rendered the
   identical view every time. So there is no console rotation-pose for a headless shot; the removed
-  `level preview --rotate` / `dispatch._camera_rotation_helper` wiring is gone.
+  `level photo --rotate` / `dispatch._camera_rotation_helper` wiring is gone.
   ✅ For a brush actor it does a look-at/frame — repositions and aims the camera to frame that brush,
   and the render reflects it (distance ∝ brush size, canonical angle). This is the only console
-  aiming primitive that works headless, and is what `level preview` auto-frames with: `SELECTNAME` a
+  aiming primitive that works headless, and is what `level photo` auto-frames with: `SELECTNAME` a
   brush → `CAMERA ALIGN NAME=` it. Result/error strings: "Aligned camera on the current target." /
   "…on named object."; errors "Missing name" / "Can't find target (viewport or selected actor)".
   See `specs/2026-06-18-uedcli-camera-rotation-no-mouse-design.md` (superseded notice) and the

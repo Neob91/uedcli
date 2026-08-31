@@ -1,12 +1,12 @@
 +++
 priority = "p?"
 kind = "debug"
-summary = "actor preview: --size forces an exact canvas instead of a max; framed geometry can touch edge locator labels"
+summary = "actor diagram: --size forces an exact canvas instead of a max; framed geometry can touch edge locator labels"
 +++
 
-# actor preview: --size forces an exact canvas instead of a max; framed geometry can touch edge locator labels
+# actor diagram: --size forces an exact canvas instead of a max; framed geometry can touch edge locator labels
 
-Found while brainstorming the CSG wire palette (`actor preview --faces wire --brush-colors csg`),
+Found while brainstorming the CSG wire palette (`actor diagram --faces wire --brush-colors csg`),
 comparing `--view iso` against `--view top`.
 
 - `--size` is applied as a forced exact canvas (e.g. `--size 900` always renders 900x900), not a

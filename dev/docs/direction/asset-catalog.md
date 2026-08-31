@@ -141,7 +141,7 @@ is [`packages.md`](packages.md)'s.
 **A decode failure is a typed result, and the caller chooses the disposition** — a calibrated exception
 to [`conventions.md`](conventions.md) "no silent half-answers", because an undecodable asset must stay
 enumerable: a per-ref request exits 2 naming it; enumeration records an `undecodable` row and keeps
-listing; a whole-level preview degrades that one surface and warns.
+listing; a whole-level photo degrades that one surface and warns.
 
 ### Mechanics that hold across all four kinds
 

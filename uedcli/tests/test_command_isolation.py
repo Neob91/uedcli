@@ -47,7 +47,7 @@ _ALL_FAMILIES = {
     "classes": ["class", "list"],
     "texture": ["texture", "classify", "tags"],
     "substrate": ["substrate", "stub", "--list"],
-    "actor": ["actor", "preview"],
+    "actor": ["actor", "diagram"],
     "brush": ["brush", "build", "cube", "--width", "1", "--breadth", "1", "--height", "1"],
     "mover": ["mover", "key", "list", "X"],
     "stash": ["stash", "list"],
@@ -128,7 +128,7 @@ _ACTOR_PKG = "uedcli.cli.commands.actor"
 _ACTOR_FEATURES = ("build", "preview", "query", "folder", "label", "prop", "edit")
 _ACTOR_ROUTE_MATRIX = {
     "build":     (["actor", "build", "Engine.Light"], "build"),
-    "preview":   (["actor", "preview", "X"], "preview"),
+    "diagram":   (["actor", "diagram", "X"], "preview"),
     "find":      (["actor", "find"], "query"),
     "show":      (["actor", "show", "X"], "query"),
     "bbox":      (["actor", "bbox", "X"], "query"),

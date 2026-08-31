@@ -3,7 +3,7 @@
 **Status:** ephemeral design scratch. Durable record → `docs/usage.md` + `architecture.md`;
 load-bearing choices → `decisions.md` (2026-07-22 09:54 UTC). Goes stale once built.
 
-**Board:** raised by Andrzej 2026-07-22 (mid-`actor preview` polish). Two coupled parts in ONE spec
+**Board:** raised by Andrzej 2026-07-22 (mid-`actor diagram` polish). Two coupled parts in ONE spec
 (same code: `preview.py` label pipeline + `cli.py`/`dispatch.py` wiring). Buildable in two commits
 (A = grammar+kinds, B = placement) but reviewed together.
 

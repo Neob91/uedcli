@@ -112,11 +112,11 @@ def test_empty_tree_string_errors_even_on_materialize(tmp_path, monkeypatch, cap
     assert "must be KIND/NAME" in capsys.readouterr().err
 
 
-# ── preview `--tree` + `--map` is a clean contradiction (spec §4b) ──────────────────────────
+# ── photo `--tree` + `--map` is a clean contradiction (spec §4b) ──────────────────────────
 
 def test_preview_tree_with_map_is_rejected(tmp_path, monkeypatch, capsys):
     proj, _ = _project(tmp_path, monkeypatch)
-    args = _ns(cmd="level", sub="preview", project=str(proj), native=False, game=True, fov=None,
+    args = _ns(cmd="level", sub="photo", project=str(proj), native=False, game=True, fov=None,
                map="/tmp/x.dx", rebuild=None, keep_alive=None, size="1280x960", list_actors=None,
                out_dir=str(tmp_path / "o"), sample=0, shots=["at:0,0,0;rot:0,0"], tree="level/lvl")
     assert dispatch.dispatch(args) == 2

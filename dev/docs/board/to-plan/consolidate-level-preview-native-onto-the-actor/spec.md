@@ -8,28 +8,28 @@ this file.
 
 ## Decisions (2026-08-05, owner)
 
-- **One shared renderer; add perspective to `preview.py`.** `level preview` (offline) is wired to the
-  SAME render path `actor preview` uses. `render.rs` + the camera/scene half of `preview_native.py`
+- **One shared renderer; add perspective to `preview.py`.** `level photo` (offline) is wired to the
+  SAME render path `actor diagram` uses. `render.rs` + the camera/scene half of `preview_native.py`
   retire.
 - **Ship pure-Python; a Rust rasterizer is a planned separate follow-on**
   (`rust-rasterizer-for-the-consolidated-offline`), not a gate.
 - **Missing texture = batch-report then refuse** (collect all undecodable surviving-surface refs,
   exit 2 once naming the set). Closes `level-preview-native-checkerboards`.
 - **Offline is now the DEFAULT; `--game` opts in; there is NO `--offline` flag** (2026-08-05,
-  revised). `level preview` with no flag renders the fast offline tier (the consolidated `preview.py`
-  path); `level preview --game` selects the faithful in-game tier. The `--native` flag is deleted with
+  revised). `level photo` with no flag renders the fast offline tier (the consolidated `preview.py`
+  path); `level photo --game` selects the faithful in-game tier. The `--native` flag is deleted with
   no replacement (`conventions.md` — one spelling). This FLIPS today's default (which is `--game`).
 
 ## Goal
 
-One offline rasterizer (`preview.py`) draws both the `actor preview` orthographic schematic AND
-`level preview`'s freely-posed perspective whole-level stills. Retiring the second renderer
+One offline rasterizer (`preview.py`) draws both the `actor diagram` orthographic schematic AND
+`level photo`'s freely-posed perspective whole-level stills. Retiring the second renderer
 (`render.rs` + the `preview_native` camera/scene half) removes the divergence that caused the native
 render bugs, and moving the offline level tier onto the faithful CSG core fixes the doorway defect.
 
 ## What exists today (file:line)
 
-- `actor preview` → `cli/commands/actor/preview.py:run` (23) → `rendering.render_actors_to_out`
+- `actor diagram` → `cli/commands/actor/diagram.py:run` (23) → `rendering.render_actors_to_out`
   (`cli/rendering.py:360`) → `preview.render_quad_pgm`/`render_brushes_pgm` (`preview.py:430`/420).
   Projection is strictly orthographic — `preview._project(v, view, iso_angle)` (`preview.py:409`),
   `view ∈ {top,front,side,iso}`. **No camera, fov, perspective, or polygon clipper anywhere in
@@ -38,7 +38,7 @@ render bugs, and moving the offline level tier onto the faithful CSG core fixes 
   (`preview.py:307`) is the CSG solve from `preview_native.solve_world_surfaces` → Rust
   `build_geometry_bspcsg` (the **faithful** core), rasterized in Python by `preview._solved_scene`
   (`preview.py:1882`).
-- `level preview --native` → `cli/commands/level.py:_level_preview` (423), native branch (537–553) →
+- `level photo --native` → `cli/commands/level.py:_level_preview` (423), native branch (537–553) →
   `preview_native.render_shots` (453) → `build_scene` (321, Rust **coarse** `build_geometry`) →
   `uedcli_native.render_frame` (Rust `render.rs`). Pose comes from the SHOT grammar
   (`preview_shots.parse_shot` → `ResolvedShot{eye,pitch,yaw}`, the backend-agnostic pose shape,
@@ -56,7 +56,7 @@ Replace the bare `_project(v, view, iso_angle)` calls with a projection object t
 vertex to `(screen_x, screen_y, depth)` and declares whether faces must be near-clipped:
 
 - `OrthoProjection(view, iso_angle)` — today's behaviour exactly (`_project` + `_view_depth`); no
-  clip; `depth = dot(world, into_screen)`. `actor preview` byte-output unchanged.
+  clip; `depth = dot(world, into_screen)`. `actor diagram` byte-output unchanged.
 - `PerspectiveProjection(eye, basis, fov, near, size)` — NEW. `basis` from the existing
   `rotation.euler_to_matrix_uu` (the spike-pinned FRotator convention, reused from
   `preview_native.camera_basis`). Transforms world→camera, **near-clips the face polygon**
@@ -74,9 +74,9 @@ z-buffer and one texture/shade path.
 
 Both verbs build the same `PreviewData` and call one renderer with a projection:
 
-- `actor preview` (`render_actors_to_out`): unchanged except it passes `OrthoProjection` per pane
+- `actor diagram` (`render_actors_to_out`): unchanged except it passes `OrthoProjection` per pane
   (quad = four; single/breakdown as today). No behaviour change; goldens must stay byte-identical.
-- `level preview` (offline): a new branch in `_level_preview` builds `PreviewData` over **all** the
+- `level photo` (offline): a new branch in `_level_preview` builds `PreviewData` over **all** the
   level's actors with `--faces textured` semantics (the solve), then renders one PNG per
   `ResolvedShot` with a `PerspectiveProjection(shot.eye, basis(shot.pitch,shot.yaw), fov, near,
   size)`. It replaces the `render_shots` import; `preview_shots`/pose resolution and the
@@ -91,7 +91,7 @@ Both verbs build the same `PreviewData` and call one renderer with a projection:
   today's `--fov requires --native` guard (`level.py:437–440`).
 - `--map`/`--rebuild`/`--keep-alive`/`--list-actors` still require `--game`; their existing
   `if not use_game` guards (`level.py:441–464`) are unchanged in effect once `use_game = args.game`.
-- **Behaviour change to call out:** `level preview` now defaults to the offline draft (fast, no
+- **Behaviour change to call out:** `level photo` now defaults to the offline draft (fast, no
   container) instead of the faithful in-game render, and the offline default can exit 2 on an
   undecodable texture (batch-refuse) where `--game` renders through the engine. Both follow from the
   owner's rulings; the docs must state the new default prominently.
@@ -106,10 +106,10 @@ should be honoured here, not re-littered:
 - `actor-preview-faces-textured-does-not-sort-the`: sort the actor set by `(order_value, name)` before
   the solve (a trunk level has the order sidecar), so a level render matches `materialize` order.
 - `actor-preview-bspcsg-starts-from-an-empty-world`: the empty-vs-solid seed. A whole level always
-  contains subtracts, so the adds-only degenerate does not arise for `level preview`; note it, do not
+  contains subtracts, so the adds-only degenerate does not arise for `level photo`; note it, do not
   block on it.
 
-### 4. Draft fidelity — adopt `actor preview`'s model (resolves §4)
+### 4. Draft fidelity — adopt `actor diagram`'s model (resolves §4)
 
 Drop `--native`'s draft shortcut of rendering masked/translucent/portal faces opaque. Masked faces
 already honour `TextureData.masked` (`preview.py:295`); `PF_Invisible` is dropped by both today.
@@ -118,7 +118,7 @@ opacity. (Lighting is still out — both tiers are flat/key-light; real lighting
 
 ### 5. Background / shade
 
-Match `actor preview` parity: **black** background (the `actor-preview-parity` ruling), replacing
+Match `actor diagram` parity: **black** background (the `actor-preview-parity` ruling), replacing
 `--native`'s dark-grey `[56,56,60]`. Shade formula is already identical (`0.55+0.45·|N·L|`,
 `preview.py`/`render.rs:54`), so shading is unchanged.
 
@@ -127,7 +127,7 @@ Match `actor preview` parity: **black** background (the `actor-preview-parity` r
 - **`preview_native.py` DROP** (level-preview-native only): `render_shots` (453), `build_scene` (321),
   `camera_basis` (288), `_TextureTable`/`_checkerboard` (250/239), `_mover_world_polys` (225), the
   render constants (38–44).
-- **`preview_native.py` KEEP** (used by `actor preview --faces textured`, and `actor_aim_point` by
+- **`preview_native.py` KEEP** (used by `actor diagram --faces textured`, and `actor_aim_point` by
   `preview_game.py:615/644`): `solve_world_surfaces` (400), `_marshal_brush` (113), `_node_polys`
   (185), `_reject_scaled` (88), `_mover_actor_world_polys` (205), `SolvedWorld`/`SolvedSurface`
   (392/381), `actor_aim_point` (301).
@@ -166,7 +166,7 @@ during build to confirm the whole-level budget; nothing in the design depends on
 
 ## Edge cases
 
-- `actor preview` (all `--faces`, all layouts) byte-identical after the refactor — the ortho path is
+- `actor diagram` (all `--faces`, all layouts) byte-identical after the refactor — the ortho path is
   unchanged; pin it.
 - Near-clip: a face straddling the near plane clips to a valid polygon; a face entirely behind it
   emits nothing; no NaN on a back-only subtract face or a degenerate/coincident pose (`resolve_pose`
@@ -178,7 +178,7 @@ during build to confirm the whole-level budget; nothing in the design depends on
 
 ## Tests
 
-- `actor preview` goldens (wire + textured, quad/single/breakdown) byte-unchanged.
+- `actor diagram` goldens (wire + textured, quad/single/breakdown) byte-unchanged.
 - New whole-level offline perspective goldens on a fixture exercising: a **doorway** (proves the
   faithful core killed the magenta), a **concave** face (scanline fill vs the retired triangle-fan
   bleed), a **revolve** brush (proves `level-preview-native-renders-no-revolve-brush` gone), and a
@@ -195,6 +195,6 @@ during build to confirm the whole-level budget; nothing in the design depends on
 - Independent of the unified-asset-catalog work; the spike is resolved, so nothing else gates it.
 - On build: fold into `architecture.md` "Preview internals" (which currently states "`--game` (the
   DEFAULT)", `architecture.md:889` — that wording flips) and the `actor-preview-parity` `direction/`
-  home (`actor-preview-parity-direction-home`), extended to the offline `level preview` tier; update
-  `docs/usage.md`'s `level preview` section (the default flip is user-visible). Owner approval
+  home (`actor-preview-parity-direction-home`), extended to the offline `level photo` tier; update
+  `docs/usage.md`'s `level photo` section (the default flip is user-visible). Owner approval
   required for any `direction/` or `docs/leveldesign/` edit.

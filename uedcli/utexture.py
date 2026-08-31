@@ -455,9 +455,9 @@ class DecodedTexture:
 
     `width`/`height`/`rgb`/`mask` are **mip 0**. `mips` is the WHOLE pyramid of the selected
     array, `(w, h, rgb, mask)` per level with mip 0 first — a caller that picks a level from
-    screen density (`actor preview --faces textured`) needs all of them. It is a lazy property,
+    screen density (`actor diagram --faces textured`) needs all of them. It is a lazy property,
     not a field: a full pyramid costs about a third more work and memory than mip 0 alone, and
-    the callers that only ever want level 0 (`level preview --native`, sprite billboards) must
+    the callers that only ever want level 0 (`level photo --native`, sprite billboards) must
     not pay for one. There is no second `resolve_*` entry point for it — one question, one way
     to ask it.
     """
@@ -603,7 +603,7 @@ class TextureResolver:
     `resolve(ref)` returns a **typed result**: a `DecodedTexture`, or a `TextureError` naming
     the case and the offending value. It never returns `None` and it never raises for a content
     problem — a corrupt package, a hostile mip count and an unknown name all come back as cases.
-    The caller chooses the disposition: `level preview --native` degrades to a checkerboard and
+    The caller chooses the disposition: `level photo --native` degrades to a checkerboard and
     warns, a per-ref request exits 2 naming the ref.
 
     A bare (unqualified) ref is refused (`unqualified-ref`) rather than scanned for across
@@ -664,7 +664,7 @@ class TextureResolver:
                 # range-checked, so a corrupt file can carry a name index, an object ref or an
                 # export index that points nowhere, and the walk below reads several of them.
                 # The accessors are individually total, but one unguarded index anywhere under
-                # here would otherwise surface as a Python traceback out of `level preview` or
+                # here would otherwise surface as a Python traceback out of `level photo` or
                 # author-time validation. Measured before this guard: 12 distinct single-byte
                 # corruptions of a 1,459-byte package raised IndexError out of `resolve()`.
                 self._ref_cache[key] = TextureError(

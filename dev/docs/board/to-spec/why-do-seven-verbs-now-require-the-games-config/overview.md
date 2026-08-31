@@ -10,7 +10,7 @@ Making `movers.is_mover`
 schema-aware (`direction/conventions.md`, 2026-07-25 10:18 UTC — "one predicate, no split") propagated the
 class-resolver requirement to every call site: **`mover key`, `level doctor`, `event graph`,
 `stash capture`, `brush scale`, `brush apply-transform`, `brush intersect`/`deintersect`** now
-exit 2 without a project + `~/.uedcli/config.toml`. (`level materialize` and both `level preview`
+exit 2 without a project + `~/.uedcli/config.toml`. (`level materialize` and both `level photo`
 tiers already required one.) Andrzej's ruling only sanctioned it for `level doctor`; the other six
 came along as a consequence, and that is a wider user-facing narrowing than the question asked
 about.
@@ -26,8 +26,8 @@ off the composed search path — stricter than "no games config", so a trunk ing
 `.dx`, or a mod actor whose `.u` sits elsewhere, now fails verbs that used to produce a report.
 Both resolve as one scoping call: *which verbs may skip the mover question entirely.*
 **Also in scope — the ONE surviving name-suffix mover test, `preview.classify_brush`.** It still
-decides mover-ness with `bare.endswith("Mover")`, on the shared `actor preview` / `stash preview` /
-`prefab preview` path, where it picks the CSG palette's magenta *mover* colour. (It also feeds
+decides mover-ness with `bare.endswith("Mover")`, on the shared `actor diagram` / `stash diagram` /
+`prefab diagram` path, where it picks the CSG palette's magenta *mover* colour. (It also feeds
 `is_solid` for hidden-line removal, but `"mover"` and `"add"` are both solid there, so usually only
 the colour differs — unless the misclassified mover carries `CsgOper=CSG_Subtract` or
 `PF_NotSolid`, which also costs it its solidity.)

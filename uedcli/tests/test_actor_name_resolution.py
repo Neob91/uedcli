@@ -333,12 +333,12 @@ def test_it_brush_vertex_move_records_canonical_name(tmp_path, monkeypatch):
     assert src.save.call_args.kwargs["args"]["name"] == "Brush1"
 
 
-# ── actor preview ─────────────────────────────────────────────────────────────
+# ── actor diagram ─────────────────────────────────────────────────────────────
 
 
 def test_it_actor_preview_resolves_case_insensitively(tmp_path, monkeypatch, capsys):
     args = SimpleNamespace(
-        cmd="actor", sub="preview", names=["brush1"], from_t3d=None,
+        cmd="actor", sub="diagram", names=["brush1"], from_t3d=None,
         out=None,
         container="dx-lum-uned")
     src = _fake_src(_fixture_level())
@@ -351,7 +351,7 @@ def test_it_actor_preview_resolves_case_insensitively(tmp_path, monkeypatch, cap
 
 def test_it_actor_preview_errors_on_missing(tmp_path, monkeypatch, capsys):
     args = SimpleNamespace(
-        cmd="actor", sub="preview", names=["NoSuch"], from_t3d=None,
+        cmd="actor", sub="diagram", names=["NoSuch"], from_t3d=None,
         out=None,
         container="dx-lum-uned")
     src = _fake_src(_fixture_level())
@@ -367,7 +367,7 @@ def test_it_actor_preview_errors_on_missing(tmp_path, monkeypatch, capsys):
 def test_it_actor_preview_errors_when_one_valid_one_invalid(tmp_path, monkeypatch, capsys):
     """One valid + one invalid name → still errors (not partial render)."""
     args = SimpleNamespace(
-        cmd="actor", sub="preview", names=["brush1", "NoSuch"], from_t3d=None,
+        cmd="actor", sub="diagram", names=["brush1", "NoSuch"], from_t3d=None,
         out=None,
         container="dx-lum-uned")
     src = _fake_src(_fixture_level())

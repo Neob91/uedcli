@@ -7,7 +7,7 @@ applies to UnrealEd 2.x for Unreal/UT/Deus Ex alike.
 > uedcli drives verbs, not this GUI. It authors the git-tracked T3D trunk with
 > composing verbs (`brush build … | actor add -`, `brush poly set`,
 > `actor prop set`, `mover key …`) and touches the editor only to
-> `level materialize` / `preview`. This page documents the GUI and the headless
+> `level materialize` / `photo`. This page documents the GUI and the headless
 > console verbs for a GUI-aware reader. Headless console driving:
 > [`../../commands.md`](../../commands.md); editor traps:
 > [`../../quirks.md`](../../quirks.md); render modes:

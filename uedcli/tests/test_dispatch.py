@@ -472,7 +472,7 @@ def _preview_proj(tmp_path, actors, order, monkeypatch):
 
 
 def _preview_args(proj, tmp_path, **over):
-    base = dict(cmd="level", sub="preview", shots=["at:0,0,0;rot:0,0"],
+    base = dict(cmd="level", sub="photo", shots=["at:0,0,0;rot:0,0"],
                 out_dir=str(tmp_path / "out"), native=False, game=False, size="1280x960",
                 fov=None, map=None, rebuild=False, keep_alive=False, project=str(proj),
                 list_actors=None, sample=0)
@@ -512,7 +512,7 @@ def test_level_preview_bad_token_errors_before_any_work(tmp_path, monkeypatch, c
                         lambda **kw: (_ for _ in ()).throw(AssertionError("worked on bad shot")))
     args = _preview_args(tmp_path, tmp_path, shots=["Keep:wire=hero"])   # OLD grammar
     assert D.dispatch(args) == 2
-    assert "preview grammar changed" in capsys.readouterr().err
+    assert "photo grammar changed" in capsys.readouterr().err
 
 
 def test_level_preview_game_routes_to_preview_game(tmp_path, monkeypatch):
@@ -529,9 +529,9 @@ def test_level_preview_game_routes_to_preview_game(tmp_path, monkeypatch):
 
 
 def test_level_preview_bare_defaults_to_game_backend(tmp_path, monkeypatch):
-    # THE default flip (2026-07-17): a bare `level preview` (neither --native nor --game) routes to
+    # THE default flip (2026-07-17): a bare `level photo` (neither --native nor --game) routes to
     # the in-game tier, NOT the offline rasterizer. Without this, reverting `use_game = not
-    # args.native` back to `args.game` would still pass every other preview test.
+    # args.native` back to `args.game` would still pass every other photo test.
     from uedcli import builders
     from uedcli.cli import dispatch as D
     room = builders.make_brush_actor("Room", builders.cube(600, 600, 300, "T"),
@@ -542,7 +542,7 @@ def test_level_preview_bare_defaults_to_game_backend(tmp_path, monkeypatch):
                         lambda **kw: (seen.update(kw), 1)[1])
     monkeypatch.setattr("uedcli.preview_native.render_shots",
                         lambda **kw: (_ for _ in ()).throw(
-                            AssertionError("bare `level preview` must NOT use the --native backend")))
+                            AssertionError("bare `level photo` must NOT use the --native backend")))
     _patch_user_config(monkeypatch)
     args = _preview_args(proj, tmp_path)                 # native=False, game=False ⇒ default game
     assert D.dispatch(args) == 0
@@ -591,7 +591,7 @@ def test_level_preview_native_error_is_clean_exit_2(tmp_path, monkeypatch, capsy
 
 
 # test_level_preview_with_session_errors_trunk_only removed: the `--session` reject block was
-# deleted with the session flags (slice 4) — preview is trunk-only unconditionally now.
+# deleted with the session flags (slice 4) — photo is trunk-only unconditionally now.
 
 
 def _rotated_brush_level():

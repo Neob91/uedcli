@@ -55,8 +55,8 @@ faces). Parameters: `--steps` (count), `--depth` (X per step), `--rise` (Z per s
 width). Address an individual tread/riser/side by its `Item` (the whole run is one actor).
 - Keep step rise ≤ 25 — the engine auto-climbs steps only up to the pawn's `MaxStepHeight` (25 uu in
   Deus Ex — see [human-scale.md](human-scale.md)); a taller step needs a jump. Recommended rise 16.
-- Native caveat: UnrealEd (`level materialize`) and the real engine (`level preview --game`) build
-  this non-convex brush correctly; the coarse CSG core behind `level preview --native` assumes convex
+- Native caveat: UnrealEd (`level materialize`) and the real engine (`level photo --game`) build
+  this non-convex brush correctly; the coarse CSG core behind `level photo --native` assumes convex
   brushes, so it mis-builds the concave notches. Judge staircases with `--game`, not `--native`.
 
 > The editor's curved-stair builder (`CurvedStairBuilder` — inner radius, angle of curve,
@@ -97,8 +97,8 @@ watertight. Faces are `Cap` per end plus one `Side<k>` per profile edge, numbere
 `brush poly find --item Side0` selects the face swept by the first profile edge.
 
 - Native caveat: as with `staircase`, UnrealEd (`level materialize`) and the real engine
-  (`level preview --game`) build a concave swept brush correctly, but the coarse CSG core behind
-  `level preview --native` draws a concave notch filled in — a preview artefact, not a geometry bug.
+  (`level photo --game`) build a concave swept brush correctly, but the coarse CSG core behind
+  `level photo --native` draws a concave notch filled in — a rendering artefact, not a geometry bug.
 
 ### `revolve` — sweep that same profile around an axis
 Same profile grammar and `--axis`; instead of a straight `--depth` it sweeps around the profile

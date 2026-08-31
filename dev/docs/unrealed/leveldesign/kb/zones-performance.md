@@ -146,7 +146,7 @@ Fog is engine-generic and lives on the `ZoneInfo`:
 Geometry → BSP → Lighting → Paths. Two traps:
 
 - Rebuilding Geometry+BSP erases lighting → relight after any geometry change. (From the uedcli seat
-  there is no standalone bake verb — re-`materialize`/`preview` re-bakes; see
+  there is no standalone bake verb — re-`materialize`/`photo` re-bakes; see
   [lighting.md](./lighting.md).)
 - Keep "Build Visibility Zones" checked — unchecking it wipes zones.
 
@@ -192,4 +192,4 @@ Pre-ship checklist:
 | Portal ordering | `actor order <names…> --last` (portals To Last; or `… \| actor order - --last`) | Order → To Last |
 
 Optimization readouts (STAT/rmode) and the build passes are editor-side — from the uedcli seat they
-run inside `level materialize`/`level preview`.
+run inside `level materialize`/`level photo`.

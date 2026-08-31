@@ -1,7 +1,7 @@
 +++
 priority = "p3"
 kind = "unknown"
-summary = "actor preview grid: the per-actor `hidden` bool (legend `(hidden)` + JSON `hidden`) aggregates the per-pane hidden flags as AND (hidden in EVERY pane). Underspecified in the spec — recording the call."
+summary = "actor diagram grid: the per-actor `hidden` bool (legend `(hidden)` + JSON `hidden`) aggregates the per-pane hidden flags as AND (hidden in EVERY pane). Underspecified in the spec — recording the call."
 +++
 
 # Preview grid: quad `hidden` aggregation is provisional

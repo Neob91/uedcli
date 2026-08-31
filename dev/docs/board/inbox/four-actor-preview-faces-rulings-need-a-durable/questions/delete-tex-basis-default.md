@@ -2,7 +2,7 @@
 
 ## Context
 
-Raised while resolving round-1 review findings on S1 of `actor preview --faces`. Not acted on: the
+Raised while resolving round-1 review findings on S1 of `actor diagram --faces`. Not acted on: the
 answer is the owner's, because it edits this spec, which has passed both review rounds.
 
 `uedcli/texframe.py`:

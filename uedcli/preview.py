@@ -95,7 +95,7 @@ CAPTION = (170, 170, 170)
 MARKER = (185, 185, 185)  # point-actor marker + label — neutral grey (NOT a CSG hue)
 
 # CSG-op wire palette — each brush's wireframe is coloured by its CSG classification when
-# `color_by_csg=True` (the shared `actor`/`stash`/`prefab preview` path). Each entry is a
+# `color_by_csg=True` (the shared `actor`/`stash`/`prefab diagram` path). Each entry is a
 # (front, back) pair; only `front` is used for wire edges (facing-blind since 2026-08-31 — see the
 # module docstring) and as the vivid highlight hue. `back` is unused dead data, kept only because it
 # is still UnrealEd's own legend value (see below) and other palette consumers may want it later.
@@ -665,7 +665,7 @@ def _affine_on_plane(f0, f1, f2, x0, y0, ux, uy, vx, vy, det):
 # The texel path shares the depth buffer and occlusion of the untextured/mover fills; only the fill
 # differs: each pixel samples the face's own decoded texture through its authored UV frame.
 # Shade, key light, mip pick and the DEFAULT_GREY no-texture colour all match `render.rs` (`level
-# preview --native`) so the two tiers agree up to f32-vs-f64 (spec §4.9): the divergences are declared,
+# photo --native`) so the two tiers agree up to f32-vs-f64 (spec §4.9): the divergences are declared,
 # never accidental.
 
 _KEY_LIGHT = (-0.408, -0.577, 0.707)   # render.rs KEY_LIGHT — un-normalized (|L| = 0.99962), abs() below
@@ -977,7 +977,7 @@ def _fade(rgb: tuple[int, int, int], amount: float = 0.6) -> tuple[int, int, int
 
 
 # ----- on-face PAINTED ("decal") poly-index rendering --------------------------
-# This is the SOLE way `actor preview` labels poly faces: paint the face's INDEX flat IN the face's own
+# This is the SOLE way `actor diagram` labels poly faces: paint the face's INDEX flat IN the face's own
 # 3-D plane, projected with the SAME `_project` as the wireframe, so it reads as painted ON the surface.
 # The in-plane basis is anchored to WORLD-UP (not a face edge — an edge shears to an italic under
 # projection): Vw (text-up) = world +Z projected into the face plane, so on a vertical wall the vertical

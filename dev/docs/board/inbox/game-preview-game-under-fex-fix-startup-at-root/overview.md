@@ -1,12 +1,12 @@
 +++
 priority = "p2"
 kind = "implement"
-summary = "Make level preview --game run under FEX+wine-10 by fixing the startup/corruption at its root"
+summary = "Make level photo --game run under FEX+wine-10 by fixing the startup/corruption at its root"
 +++
 
 # Game preview --game under FEX
 
-`level materialize` (editor) now runs under FEX+wine-10 on arm64. `level preview --game` does NOT —
+`level materialize` (editor) now runs under FEX+wine-10 on arm64. `level photo --game` does NOT —
 it still uses the qemu+wine-8 path (which works). Under FEX+wine-10 the game corrupts the object
 system on the runtime menu→map `ClientTravel` (spike `2026-08-06-game-under-fex`: `ULevel::PostLoad`
 AV / `StaticAllocateObject` assertion when the ~25-package menu graph is resident).

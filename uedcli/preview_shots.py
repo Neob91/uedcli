@@ -1,4 +1,4 @@
-"""Pure, offline shot model for `level preview` — the SHOT-token grammar (`at:…;rot:…` /
+"""Pure, offline shot model for `level photo` — the SHOT-token grammar (`at:…;rot:…` /
 `look:` / `orbit:`), the free-pose trig (`pose_from_lookat` / `pose_from_orbit`), and the
 output-filename rule. No editor, no I/O (fully unit-tested). The grammar is shared verbatim
 with the future `--game` tier (`spec-ingame-preview-design.md` §3, in board item
@@ -24,7 +24,7 @@ _SLUG_SAFE = re.compile(r"^[A-Za-z0-9_.-]+$")
 
 # --- the SHOT-token grammar (shared with the --game tier; in-game spec §3) ---------------
 
-_MIGRATION_HINT = ("preview grammar changed: pose each shot with "
+_MIGRATION_HINT = ("photo grammar changed: pose each shot with "
                    "'at:X,Y,Z;rot:PITCH,YAW', 'at:X,Y,Z;look:X,Y,Z|@Actor', or "
                    "'orbit:@Actor;radius:R;azimuth:A[;elev:B]' (angles in unreal rotation units, 16384 = 90°; "
                    "add ';name:STEM' for the output name)")
@@ -51,7 +51,7 @@ class Shot:
 @dataclass(frozen=True, kw_only=True)
 class ResolvedShot:
     """A Shot with every actor ref resolved and the pose trig done: a camera eye + FRotator
-    angles in degrees. This is the one shape both preview backends consume."""
+    angles in degrees. This is the one shape both photo backends consume."""
     eye: tuple[float, float, float]
     pitch: float
     yaw: float

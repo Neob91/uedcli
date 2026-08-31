@@ -463,7 +463,7 @@ In `uedcli/cli/parsers/level.py`, add immediately after the existing `limport` b
 ```
 
 Also update the family help string at the top of `register()` (currently
-`"level lifecycle verbs (create/import/list/materialize/preview/status/doctor)"`) to include
+`"level lifecycle verbs (create/import/list/materialize/photo/status/doctor)"`) to include
 `reimport`.
 
 - [ ] **Step 4: Run the tests to verify they pass**
@@ -709,7 +709,7 @@ def _level_reimport(args) -> int:
     folders/labels and CSG order are left untouched.
 
     Unlike `level import`, the destination must already exist (`level_sources.resolve_level_only`
-    — the same level-only resolver `materialize`/`preview` use, so the ambient `$UEDCLI_LEVEL` is
+    — the same level-only resolver `materialize`/`photo` use, so the ambient `$UEDCLI_LEVEL` is
     the default target and a mutation from it is announced once, same as any other trunk write).
 
     The pipeline:

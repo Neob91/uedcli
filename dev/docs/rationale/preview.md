@@ -1,9 +1,9 @@
-# `preview.py` — the `actor`/`stash`/`prefab preview` renderer
+# `preview.py` — the `actor`/`stash`/`prefab diagram` renderer
 
 Why the stdlib-only schematic renderer is the way it is. Revised in place — agents maintain this freely.
 
 What the renderer DOES is [`../architecture.md`](../architecture.md) "Preview internals"; the owner's
-product decisions about `actor preview` are parked on `dev/docs/board/inbox/` pending a `direction/`
+product decisions about `actor diagram` are parked on `dev/docs/board/inbox/` pending a `direction/`
 home. This file holds only the engineering.
 
 ---
@@ -133,6 +133,12 @@ of one flat hue (`_fill_face_textured`).
   normal, and the colour is `min(int(texel·shade), 255)` per channel — byte-for-byte `render.rs`'s
   key light and truncation, so `--native` and this tier agree up to f32-vs-f64 (spec §4.9). A face
   `render.rs` also skips (< 3 vertices, zero-length normal) shades `None` and is dropped.
+- **A scaled/sheared/mirrored brush renders — the UV frame takes the full linear map `L`, not just
+  rotation.** `texframe.world_uv_frame` maps the authored `Origin` (a point) by `L` and the
+  `TextureU`/`TextureV` axes (covectors) by `(L⁻¹)ᵀ`, the same covariant map the geometry solve
+  already applies (`native/brush_marshal._build_brush_input`), so the texture follows the transformed
+  geometry instead of sitting on untransformed axes over transformed faces. A degenerate scale axis
+  (non-invertible `L`) still exits 2, naming the brush — the one legitimate remaining refusal.
 
 **Rejected.**
 
@@ -148,12 +154,12 @@ of one flat hue (`_fill_face_textured`).
   The refusals themselves are the owner's product ruling (board item
   `four-actor-preview-faces-rulings-need-a-durable`), recorded here only for the engineering reason
   grey cannot stand in.
-- **Bilinear filtering, and scaled/sheared brushes under `textured`** — both deferred (plan §5). A
-  scaled or sheared brush exits 2 listing every offender, because its geometry is built with the full
-  linear transform while the UV frame uses rotation only, so the texture would not follow the
-  geometry — a wrong answer in the one tool meant to be authoritative about UV.
+- **Bilinear filtering** — deferred (plan §5).
 
 **Refs.** `uedcli/preview.py` `_fill_face_textured`, `_face_uv_affine`, `_mip_level`, `_face_shade`,
-`_plane_screen_probes`, `DEFAULT_GREY`; `uedcli/cli/rendering.py` `preview_textures`,
-`_reject_transformed_brushes`, `_reject_explicit_brush_colors`, `_texture_resolver_cause`;
-`uedcli/tests/test_preview_faces.py` and the golden `tests/fixtures/preview_textured_golden_iso.png`.
+`_plane_screen_probes`, `DEFAULT_GREY`; `uedcli/texframe.py` `world_uv_frame`;
+`uedcli/native/brush_marshal.py` `_build_brush_input`; `uedcli/cli/rendering.py` `preview_textures`,
+`_reject_explicit_brush_colors`, `_texture_resolver_cause`;
+`uedcli/tests/test_preview_faces.py` (incl. `test_textured_renders_scaled_sheared_and_mirrored_brushes`,
+`test_textured_degenerate_scale_still_exits_2_naming_the_brush`) and the golden
+`tests/fixtures/preview_textured_golden_iso.png`.

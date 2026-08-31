@@ -20,7 +20,7 @@ assertion**, which is that no genuine class name is defined in two packages.
 
 With no `~/.uedcli/config.toml` the test skips, so it is invisible on an unconfigured machine.
 
-Found while running `bin/test` for the `actor preview --faces` S1 slice; **unrelated to that slice**
+Found while running `bin/test` for the `actor diagram --faces` S1 slice; **unrelated to that slice**
 (reproduced against a pristine `git archive HEAD` copy with the S1 diff absent).
 
 **Not a finding:** an earlier draft of this item also reported

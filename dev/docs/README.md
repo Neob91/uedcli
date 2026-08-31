@@ -46,7 +46,7 @@ for which doc to read when lives in [`CLAUDE.md`](../../CLAUDE.md) ("Read-on-dem
 router").
 
 ## Read these
-- **[../../docs/usage.md](../../docs/usage.md)** — the CLI: query/mutate verbs, the `preview` viewer,
+- **[../../docs/usage.md](../../docs/usage.md)** — the CLI: query/mutate verbs, the `diagram` viewer,
   `brush poly list`, brush clip, stash/prefab, the texture catalog (`sync`/`list`/`search`/`tags`/`classify`).
 - **[../../docs/leveldesign/](../../docs/leveldesign/README.md)** — level-design craft for uedcli users: geometry/BSP,
   zoning, lighting, textures, movers, NPCs, human-scale numbers, and the Deus Ex immersive-sim design
@@ -79,7 +79,7 @@ router").
 2. **All edits are model-side:** compute on the `Actor`/`Brush`, `validate_brush`, emit
    canonical T3D, materialize via paste/IMPORTADD; modify = delete-then-readd. No GUI driving.
 3. **Polys are identified model-side by `(brush, index)`** (`PF_Selected` doesn't round-trip);
-   `brush poly list` + `preview` map index↔face.
+   `brush poly list` + `diagram` map index↔face.
 4. **The editor crashes often** (even idle) into a "window gone" zombie; every `wine_ctl`
    command fast-fails non-zero on a dead/crashed editor, and recovery is a container
    `--force-recreate`.
@@ -90,12 +90,12 @@ router").
 - **Built:** query (`actor find/show/get`, `brush poly list`, `level doctor`); mutate
   (`actor add/delete/move/set/rotate`, `brush clip`, `brush vertex move`, `brush poly set`);
   generators (`actor build`, `brush build` cube/cylinder/cone/sheet/staircase/spiral/extrude/revolve);
-  **movers** (`mover key count/move/rotate/remove/list`); the color `actor preview` viewer
+  **movers** (`mover key count/move/rotate/remove/list`); the color `actor diagram` viewer
   (quad/iso/zoom/highlight/labels/CSG-colour/point-actor sprites+markers/collision+range overlays);
   the **git-tracked T3D trunk** (`level status`/`list`,
   edited on ordinary git branches — the session store was replaced by git);
   `stash`/`prefab` capture-place-share; **`brush intersect`/`deintersect`** (the native CSG set merge);
-  `level materialize` (pure build) and `level preview` (batch posed-snapshot renderer via
+  `level materialize` (pure build) and `level photo` (batch posed-snapshot renderer via
   `CAMERA ALIGN`); the offline texture catalog (`sync`/`list`/`search`/`tags`/`classify`);
   package stubbing (`substrate stub`); the global-CLI foundation (`project show`, two-config
   scheme); fast driver liveness.

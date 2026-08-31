@@ -57,9 +57,9 @@ The **spiral staircase** is the one shape that is really a set — a central col
 tread per step — because rotated wedges and a column overlap, and a per-brush convex list keeps every
 piece valid on both the editor and the native paths.
 
-**Accepted caveat:** the offline draft renderer `level preview --native` classifies solidity as
+**Accepted caveat:** the offline draft renderer `level photo --native` classifies solidity as
 "behind every face plane", valid only for a convex solid, so it draws a concave notch **filled in**.
-UnrealEd and the default `level preview --game` render it correctly. Stated in `--help` and the user
+UnrealEd and the default `level photo --game` render it correctly. Stated in `--help` and the user
 docs.
 
 ### `--at` anchors a different point per shape

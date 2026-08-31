@@ -1,10 +1,10 @@
 +++
 priority = "p3"
 kind = "implement"
-summary = "`actor preview` rendering improvements"
+summary = "`actor diagram` rendering improvements"
 +++
 
-# `actor preview` rendering improvements
+# `actor diagram` rendering improvements
 
 — filled faces (back-to-front
 grey alpha compositing for stacked/concentric geometry), depth-sorted, pane captions in a header

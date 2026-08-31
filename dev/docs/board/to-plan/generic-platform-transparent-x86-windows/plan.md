@@ -21,7 +21,7 @@ De-risk the two ends under FEX first (spec U1/U2), then refactor onto one runtim
 4. **Port `level materialize`** onto the launcher (editor profile). Verify on arm: materialize
    produces a saved `.dx`; add a golden/regression test that fails without the runtime.
 
-5. **Port `level preview --game`** onto the launcher (game profile). Verify on arm: `--game` renders
+5. **Port `level photo --game`** onto the launcher (game profile). Verify on arm: `--game` renders
    a frame.
 
 6. **Delete the superseded paths** (no back-compat): fold `game-entrypoint.sh` arm handling and the

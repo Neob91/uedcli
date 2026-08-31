@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# build-image.sh — build the uedcli-game image (level preview --game).
+# build-image.sh — build the uedcli-game image (level photo --game).
 # args: <boot-map-src>
 # Two steps because a Docker RUN cannot see asset mounts (spec §5 gate fold):
 #   1) compile the engine-only UedPreview.u in a builder container with the base image's

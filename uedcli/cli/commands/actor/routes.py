@@ -11,8 +11,8 @@ Two source-free guarantees this route owns, both proven by fresh-process orderin
 - The trunk-only surface guards (`_apply_source_free_guards`) reject `--tree stash|prefab` for
   folder/label/order surfaces BEFORE any feature module resolves a project or ambient level — so a
   non-default `actor add --order` against a stash/prefab target fails without touching the trunk.
-- `actor preview` is routed here before the guards' peers resolve a source; its own `--from-t3d`
-  no-source guard then runs inside `preview.run`, so T3D-only preview never touches `$UEDCLI_LEVEL`.
+- `actor diagram` is routed here before the guards' peers resolve a source; its own `--from-t3d`
+  no-source guard then runs inside `preview.run`, so T3D-only diagram never touches `$UEDCLI_LEVEL`.
 
 To keep each subverb's feature module off the import path of the others, the owning module is
 imported only inside the branch that selects it (feature isolation, proven by fresh-process route
@@ -34,7 +34,7 @@ def run(args):
         from . import build
         return build.run(args)
     _apply_source_free_guards(args)
-    if args.sub == "preview":
+    if args.sub == "diagram":
         from . import preview
         return preview.run(args)
     if args.sub in ("find", "show", "bbox"):

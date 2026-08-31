@@ -11,7 +11,7 @@ summary = "RULED + DONE: --faces flat's invisible wireframe — edges take the o
 > `architecture.md`.
 
 **RULED by the owner: take the proposed fix — under `flat` only, each surviving face's edges draw in
-the OTHER member of its brush's colour pair. Implemented in S2 of `actor preview --faces` (board item
+the OTHER member of its brush's colour pair. Implemented in S2 of `actor diagram --faces` (board item
 `four-actor-preview-faces-rulings-need-a-durable`), with the final choice confirmed from real renders
 rather than reasoning, the treatment decision 2.12 set for the `--focus` dim constant.**
 
@@ -40,7 +40,7 @@ on the edge pass), which §4.6 already treats as an incidental.
 
 ## Measured
 
-`actor preview Room Pillar Crate --faces flat --annotate none --layout single --view iso --size 700`
+`actor diagram Room Pillar Crate --faces flat --annotate none --layout single --view iso --size 700`
 on a subtracted 1024×1024×384 room with an added pillar and crate inside it. The whole 700×700 image
 contains **exactly three colours**: `(224,224,224)` background, `(205,180,110)` subtract-back,
 `(0,0,200)` add-front. Zero edge pixels. The render is two flat silhouettes — a gold hexagon and a

@@ -2,7 +2,7 @@
 
 In UE1 lights are actors: place `Engine.Light` actors into the trunk to light the level. There is no
 light-editing mode and no bake verb — lighting bakes automatically on `level materialize` or
-`level preview`.
+`level photo`.
 
 ## How UE1 lighting works
 

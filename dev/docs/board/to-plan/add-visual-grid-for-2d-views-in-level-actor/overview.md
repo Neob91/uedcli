@@ -1,14 +1,14 @@
 +++
 priority = "p2"
 kind = "implement"
-summary = "Draw an actual world-space gridline overlay for orthographic (2D) panes in level actor preview."
+summary = "Draw an actual world-space gridline overlay for orthographic (2D) panes in level actor diagram."
 depends-on = ["remove-numbering-grid-from-level-actor-preview", "move-the-preview-background-off-pure-black-to"]
 spikes = ["dev/docs/spikes/2026-08-30-unrealed-ortho-grid-density/"]
 +++
 
-# Add visual grid for 2D views in level actor preview
+# Add visual grid for 2D views in level actor diagram
 
-Level actor preview's orthographic/2D panes carry no gridline overlay, so nothing on the image says
+Level actor diagram's orthographic/2D panes carry no gridline overlay, so nothing on the image says
 how big the geometry is or where it sits — the only addressing is the A1 label gutter, which is
 image-space and moves with the camera.
 

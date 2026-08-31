@@ -1,10 +1,10 @@
 +++
 priority = "p3"
 kind = "debug"
-summary = "actor preview --size 0 or negative tracebacks with IndexError"
+summary = "actor diagram --size 0 or negative tracebacks with IndexError"
 +++
 
-# `actor preview --size 0` (or negative) tracebacks with `IndexError`
+# `actor diagram --size 0` (or negative) tracebacks with `IndexError`
 
 **Pre-existing, not introduced by `--faces`, and deliberately out of that slice's scope** — found while
 fixing the neighbouring large-`--size` crash, which IS fixed (`preview._alloc_buffers` now catches
@@ -13,8 +13,8 @@ fixing the neighbouring large-`--size` crash, which IS fixed (`preview._alloc_bu
 ## Reproduce
 
 ```
-uedcli actor preview --from-t3d uedcli/tests/fixtures/level_small.t3d --size 0   # rc 1, IndexError
-uedcli actor preview --from-t3d uedcli/tests/fixtures/level_small.t3d --size -5  # rc 1, IndexError
+uedcli actor diagram --from-t3d uedcli/tests/fixtures/level_small.t3d --size 0   # rc 1, IndexError
+uedcli actor diagram --from-t3d uedcli/tests/fixtures/level_small.t3d --size -5  # rc 1, IndexError
 ```
 
 Both traceback out of `preview.DensityGrid.add_segment`. `DensityGrid.build` computes
@@ -25,7 +25,7 @@ empty and the first `cells[row * n_cols + col] += 1` indexes an empty list.
 
 `CLAUDE.md`: **never let a Python exception reach the CLI user** — a bad value must be a clean error
 naming it. `--size` is a plain `type=int` with no validation, so every non-positive value tracebacks, and
-`--size 0` is an easy typo. It affects all three preview verbs (`actor`/`stash`/`prefab preview`) in every
+`--size 0` is an easy typo. It affects all three preview verbs (`actor`/`stash`/`prefab diagram`) in every
 mode, `wire` included.
 
 ## The fix

@@ -3,7 +3,7 @@
 > **For agentic workers:** implement task-by-task; each task ends green + committed. Steps use
 > checkbox (`- [ ]`) syntax for tracking. TDD: failing test first, minimal code, green, commit.
 
-**Goal:** Replace the `actor preview` renderer's single `--labels {none,all,highlighted}` switch with
+**Goal:** Replace the `actor diagram` renderer's single `--labels {none,all,highlighted}` switch with
 a composable colon-filter grammar, add brush-name labels, and place all labels by geometry-aware cost
 minimization so it is visually clear which label belongs to what.
 
@@ -281,7 +281,7 @@ def test_it_defaults_to_todays_poly_and_name_labeling():
     ...  # assert via _nonbg pixel presence on a known scene (reuse an existing fixture scene)
 
 def test_it_rejects_a_bad_labels_value_with_a_clean_error(capsys):
-    # actor preview --labels poly:bogus  → exit != 0, stderr names 'bogus', NO 'Traceback'
+    # actor diagram --labels poly:bogus  → exit != 0, stderr names 'bogus', NO 'Traceback'
     ...
 ```
 

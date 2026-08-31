@@ -1,13 +1,13 @@
 +++
 priority = "p2"
 kind = "debug"
-summary = "actor preview --faces textured solves the set in the ARRIVAL order of the actors, not the trunk's (order_value, name) CSG order, so a piped/named set can render a different parity image than materialize."
+summary = "actor diagram --faces textured solves the set in the ARRIVAL order of the actors, not the trunk's (order_value, name) CSG order, so a piped/named set can render a different parity image than materialize."
 +++
 
-# `actor preview --faces textured` does not sort the set into trunk CSG order (M4)
+# `actor diagram --faces textured` does not sort the set into trunk CSG order (M4)
 
 Boarded (not silently fixed) per `spec.md` §M4 of `actor-preview-unrealed-render-parity-new-csg`,
-which says: "The plan must confirm `actor preview` already sorts its set that way before the solve; if
+which says: "The plan must confirm `actor diagram` already sorts its set that way before the solve; if
 it does not, that is a separate finding to board, not a silent fix here."
 
 ## Evidence
@@ -16,10 +16,10 @@ it does not, that is a separate finding to board, not a silent fix here."
 `build_geometry_bspcsg` in that order — its docstring: "in the order given — the actor-set order IS the
 CSG evaluation order." But the caller does not sort:
 
-- `uedcli/cli/commands/actor/preview.py:42` — `actors = [level.actors[n] for n in names]`, where
+- `uedcli/cli/commands/actor/diagram.py:42` — `actors = [level.actors[n] for n in names]`, where
   `names = query.resolve_actor_names(level, raw)` returns names in **input order**
   (`uedcli/query.py`, "Returns canonical names in input order"), i.e. the order the user typed or the
-  order a piped producer (`actor find … | actor preview -`) emitted — NOT the trunk's
+  order a piped producer (`actor find … | actor diagram -`) emitted — NOT the trunk's
   `(order_value, name)` order.
 - `--from-t3d` renders actors in file/snippet order.
 

@@ -1,10 +1,10 @@
 +++
 priority = "p3"
 kind = "implement"
-summary = "Make `actor preview` faster"
+summary = "Make `actor diagram` faster"
 +++
 
-# Make `actor preview` faster
+# Make `actor diagram` faster
 
 The offline wireframe renderer is a pure-Python
 stdlib rasterizer (`preview.py` — `render_brushes_pgm`/`render_quad_pgm`, per-pixel/per-poly loops);

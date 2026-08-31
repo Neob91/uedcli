@@ -149,7 +149,7 @@ def _dispatch(args) -> int:
 
     # Actor family route: `cli.commands.actor` owns the whole family — the source-free trunk-only
     # surface guards (folder/label/order rejection of `--tree stash|prefab`), the stateless `build`
-    # generator, `actor preview` (incl. the `--from-t3d` no-source guard), and every feature verb.
+    # generator, `actor diagram` (incl. the `--from-t3d` no-source guard), and every feature verb.
     # Entering here, before the eager level-source resolution below, keeps every source-free
     # guarantee; each feature module resolves its own source when it needs one. `routes.run` returns
     # `None` only for a sub argparse can't produce, so the guard below is defensive.

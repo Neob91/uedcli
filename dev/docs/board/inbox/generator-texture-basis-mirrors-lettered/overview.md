@@ -13,7 +13,7 @@ Root cause candidate: `builders._tex_basis` emits the polygon's `TextureU`/`Text
 `v = _cross(normal, u)` (`builders.py:147`). If that handedness disagrees with UnrealEd's own
 BrushBuilder convention, every generated face is systematically mirrored.
 
-`actor preview` is confirmed **faithful** — it maps from the same emitted `TextureU`/`TextureV`
+`actor diagram` is confirmed **faithful** — it maps from the same emitted `TextureU`/`TextureV`
 (`preview_native.py:16`; `preview.py:1917`), so it shows the same result the game builds. Fixing the
 basis corrects preview and game together; no divergence to manage.
 

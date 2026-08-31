@@ -8,7 +8,7 @@ summary = "setup-game-preview.sh step 1 (dx-lum-uned build) untested on a fresh 
 
 On branch `andrzej/p1/game-preview-generic`, `dev/scripts/setup-game-preview.sh` builds the
 `dx-lum-uned` base image in step 1 if absent. On this box the image already existed, so steps 2–5
-and a full `level preview --game` render were verified end to end, but **step 1's build was never
+and a full `level photo --game` render were verified end to end, but **step 1's build was never
 exercised here**.
 
 The amd64 wiring is sound but unverified on a clean build: `uned/Dockerfile` is `FROM

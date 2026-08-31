@@ -2,7 +2,7 @@
 
 ## Context
 
-The doc describes the user's loop: branch → edit trunk model-side → `level preview` → `level
+The doc describes the user's loop: branch → edit trunk model-side → `level photo` → `level
 materialize` → commit/merge. It spans several verb families plus git, so it is a narrative, not a
 verb reference. Options for its home under `docs/` (user-facing; it must never point at `dev/docs/`):
 

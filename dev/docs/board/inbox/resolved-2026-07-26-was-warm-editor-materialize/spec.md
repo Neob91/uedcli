@@ -54,7 +54,7 @@ Three costs, not one. The 2026-07-18 spec named only the first.
 **(a) Every build pays a full editor boot.** `level materialize` (`apply.run_materialize`) mints a
 fresh per-command container (`uned-<uuid7>`): `docker compose run` + a fresh WINEPREFIX volume
 (seeded from the image bake) + Xvfb/wine/UnrealEd launch + window-ready poll + per-package
-`OBJ LOAD`s — then tears it all down (`stop_editor`, container + volume). `level preview --game`
+`OBJ LOAD`s — then tears it all down (`stop_editor`, container + volume). `level photo --game`
 pays the same cost indirectly: it calls `run_materialize` whenever the trunk changed (its delivered-map
 cache is trunk-hash-keyed via `preview_game.materialized_dx`).
 
@@ -115,7 +115,7 @@ not edited until they are confirmed.
    2026-07-01) — so a package/Paths change on disk cannot be trusted to reach a running editor.
    *(Rejected: a config-only fingerprint — a re-synced texture or regenerated stub would silently
    build stale; always-reboot — forfeits the boot saving.)*
-4. **Callers: `level materialize` + `preview --game`'s internal materialize.** Both go through
+4. **Callers: `level materialize` + `photo --game`'s internal materialize.** Both go through
    `apply.run_materialize`, so the warm acquire lives at that seam. The `stash intersect`/`deintersect`
    CSG generators and the no-GUI UCC build containers are OUT of scope (§11).
 5. **A warm-mode build failure FAILS the invocation — no automatic ephemeral retry.** The warm

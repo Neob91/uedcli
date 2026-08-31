@@ -20,7 +20,7 @@ export PATH="$PWD/Tools/uedcli/bin:$PATH"   # or: ln -s "$PWD/Tools/uedcli/bin/u
 uedcli level status
 uedcli actor find --exact-class Brush
 uedcli brush poly list Brush41
-uedcli actor preview Brush41 --out /tmp/b41.png   # color quad wireframe PNG, poly-index labels
+uedcli actor diagram Brush41 --out /tmp/b41.png   # color quad wireframe PNG, poly-index labels
 # brush clip is a T3D filter (stdin→stdout); clip a placed brush in place with show→clip→replace
 uedcli actor show Brush41 | uedcli brush clip - --axis z --offset 128 --keep below | uedcli brush replace Brush41 -
 
@@ -31,9 +31,9 @@ bin/test          # path-qualified: `test` alone is a shell builtin
 Prefer a native interpreter? Everything above also works as `python3 -m uedcli …` /
 `python -m pytest uedcli -q` from a Python **3.12** environment with `Pillow>=11`.
 
-## In-game preview setup (`level preview --game`)
+## In-game photo setup (`level photo --game`)
 
-`level preview --game` (the default preview backend) renders truly-lit in-game frames by booting the
+`level photo --game` (the default photo backend) renders truly-lit in-game frames by booting the
 real game engine headless in a container. It needs Docker and the game's own files (copyrighted,
 user-supplied). One script provisions everything from a Deus Ex copy — a local install or
 ACE-installer directory, a download `--url`, or, with no argument at all, a built-in default
@@ -54,17 +54,17 @@ toolchain to install. Where to get a Deus Ex copy:
 Once set up (from a project — the repo root is one):
 
 ```bash
-uedcli level preview --game 'at:0,0,64;rot:0,0' --out-dir /tmp/shots   # a lit still of the trunk level
+uedcli level photo --game 'at:0,0,64;rot:0,0' --out-dir /tmp/shots   # a lit still of the trunk level
 # or point at a prebuilt map instead of the trunk:
-uedcli level preview --game --map dev/games/deusex/Maps/00_Training.dx 'at:0,0,64;rot:0,0' --out-dir /tmp/shots
+uedcli level photo --game --map dev/games/deusex/Maps/00_Training.dx 'at:0,0,64;rot:0,0' --out-dir /tmp/shots
 ```
 
 The pose grammar and both backends (`--game`, offline `--native`) are in
-[`docs/usage.md`](docs/usage.md) under `level preview`.
+[`docs/usage.md`](docs/usage.md) under `level photo`.
 
 ## Documentation — see [`docs/`](docs/)
 
-- [`docs/usage.md`](docs/usage.md) — the CLI: query/mutate verbs, the `actor preview` viewer,
+- [`docs/usage.md`](docs/usage.md) — the CLI: query/mutate verbs, the `actor diagram` viewer,
   `brush poly list`, brush clip, `stash`/`prefab`, the texture catalog (`sync`/`list`/`search`/`tags`/`classify`).
 - [`dev/docs/architecture.md`](dev/docs/architecture.md) — layers/modules, the write
   pattern, invariants, the git-tracked T3D trunk, how to add a verb, testing, the substrate.

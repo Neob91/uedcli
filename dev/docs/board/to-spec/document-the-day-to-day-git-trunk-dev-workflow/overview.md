@@ -8,7 +8,7 @@ summary = "Document the day-to-day git-trunk dev workflow (doc only)"
 
 Write a
 short how-to for the CURRENT (post-session-store) loop: work on a git feature branch → edit the
-T3D trunk model-side (`actor …`/`brush …`/`poly …`) → `level preview` to eyeball → `level
+T3D trunk model-side (`actor …`/`brush …`/`poly …`) → `level photo` to eyeball → `level
 materialize --out <map>` to build the artifact → `git commit`/`git merge` into trunk (git is the
 history + merge engine; per-actor `.t3d` files merge natively). Half of this is already decided
 (`direction/trunk-and-editor.md`: the trunk is a git-committed T3D tree, map files demoted to build artifacts); the

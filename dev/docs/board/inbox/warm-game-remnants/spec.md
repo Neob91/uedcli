@@ -1,8 +1,8 @@
-# `level preview --game` — warm reusable container + live map delivery (design spec)
+# `level photo --game` — warm reusable container + live map delivery (design spec)
 
 **Status:** **BUILT 2026-07-17** (live-verified: cold boot → reuse 17s vs 79s → idle self-death).
 Reviewed rounds 1–4 (8 cold reviewers), SP-R gate CONFIRMED live. The durable parts are folded into
-`architecture.md` (§`level preview --game`) + `decisions.md` (2026-07-17 06:57/07:30/08:31) +
+`architecture.md` (§`level photo --game`) + `decisions.md` (2026-07-17 06:57/07:30/08:31) +
 `unrealed/` memory; this ephemeral spec may now be pruned. Remaining/deferred items are on the board
 (`board/inbox/`). Below is the as-designed record.
 

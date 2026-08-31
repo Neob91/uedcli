@@ -5,7 +5,7 @@ source is the ambient `$UEDCLI_LEVEL` (not the old machine-local pointer). Cover
 `_resolve_level_source` parse+routing front branch, the two `LevelSource` classes
 (StashLevelSource/PrefabLevelSource) round-tripping, the [SR-#1] prefab meta-clobber regression,
 [SR-#2] path-traversal refusal, [SR-#3] a stored order naming a missing blob, the not-found guards,
-and the CLI flag scope (present on content verbs AND level materialize/preview level-only; absent on
+and the CLI flag scope (present on content verbs AND level materialize/photo level-only; absent on
 generators / brush preview).
 """
 import argparse
@@ -286,9 +286,9 @@ def _parses(argv):
     ["level", "doctor", "--tree", "prefab/d"],
     ["event", "graph", "--tree", "stash/s"],
     ["stash", "capture", "--tree", "level/other"],
-    # Level build/preview NOW take --tree (level-only; dispatch rejects other kinds) — 2026-07-20.
+    # Level build/photo NOW take --tree (level-only; dispatch rejects other kinds) — 2026-07-20.
     ["level", "materialize", "--out", "/tmp/x.dx", "--tree", "level/other"],
-    ["level", "preview", "--out-dir", "/tmp/o", "at:0,0,0;rot:0,0", "--tree", "level/other"],
+    ["level", "photo", "--out-dir", "/tmp/o", "at:0,0,0;rot:0,0", "--tree", "level/other"],
 ])
 def test_tree_flag_present_on_content_and_build_verbs(argv):
     assert _parses(argv)
@@ -299,7 +299,7 @@ def test_tree_flag_present_on_content_and_build_verbs(argv):
     ["brush", "build", "cube", "--width", "1", "--breadth", "1", "--height", "1",
      "--tree", "stash/s"],
     ["actor", "build", "Engine.Light", "--at", "0,0,0", "--tree", "stash/s"],
-    ["actor", "preview", "X", "--tree", "stash/s"],   # a per-kind stash|prefab preview exists
+    ["actor", "diagram", "X", "--tree", "stash/s"],   # a per-kind stash|prefab diagram exists
     # `brush clip` is a stateless T3D filter (it reads a piped set, targets no box).
     ["brush", "clip", "-", "--axis", "x", "--offset", "0", "--tree", "stash/s"],
 ])
@@ -308,7 +308,7 @@ def test_tree_flag_absent_on_excluded_verbs(argv):
 
 
 def test_materialize_preview_reject_non_level_tree(tmp_path, monkeypatch, capsys):
-    # materialize/preview accept `--tree level/…` only; a stash/prefab has no world to build/walk.
+    # materialize/photo accept `--tree level/…` only; a stash/prefab has no world to build/walk.
     proj, _ = _project(tmp_path, monkeypatch)
     _seed_stash(proj, "bay")
     assert dispatch.dispatch(_ns(cmd="level", sub="materialize", project=str(proj),

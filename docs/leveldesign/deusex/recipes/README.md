@@ -6,7 +6,7 @@ classic UnrealEd tutorial relies on a GUI-only gesture (grabbing a brush with In
 pivot vertex, snapping to grid), the recipe says so and gives the closest model-side path.
 
 You author the git-tracked T3D trunk with small composing verbs; the editor is touched only to
-`level materialize` / `level preview`.
+`level materialize` / `level photo`.
 
 ## How these recipes read
 

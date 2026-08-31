@@ -3,7 +3,7 @@
 The shared block from world bounds through preview render output: brush/point extraction, the
 `--frame`/`--highlight`/`--focus`/`--show` argument interpretation, per-point-actor render-data
 preparation, the mover resolution a filled render needs, and the host-side PNG write. Used by every
-preview family (actor, stash, prefab). The thin family preview ENTRY functions stay with their family
+diagram family (actor, stash, prefab). The thin family diagram ENTRY functions stay with their family
 (dispatch for now); they call `rendering.render_actors_to_out(...)` / `rendering.brush_actors_from(...)`.
 
 Public seams: `render_actors_to_out`, `brush_actors_from`, `preview_movers` (callers use
@@ -162,7 +162,7 @@ def _note_invisible_highlights(requests: list, shown: set) -> None:
     Under a filled mode a highlighted face that other geometry hides draws nothing at all (owner ruling:
     a highlight re-colours what is visible and is never an x-ray). That is a correct render, so it is NOT
     an error — but silence would leave the user unable to tell "that face is not shown" from "I mistyped
-    the index" or "the flag did not take". **stderr, never stdout**: a preview writes its image to
+    the index" or "the flag did not take". **stderr, never stdout**: a diagram writes its image to
     `--out`, and human-facing remarks must never enter a pipe (`direction/conventions.md`).
 
     **It names no CAUSE, deliberately.** Several different things make a highlight draw nothing and they are
@@ -735,8 +735,8 @@ def _preview_faces_mode(args) -> str:
 
 
 def _preview_verb(args, mode: str) -> str:
-    """`actor preview --faces textured` and friends — the verb+flag a `--faces` refusal names."""
-    return f"{getattr(args, 'cmd', 'actor')} {getattr(args, 'sub', 'preview')} --faces {mode}"
+    """`actor diagram --faces textured` and friends — the verb+flag a `--faces` refusal names."""
+    return f"{getattr(args, 'cmd', 'actor')} {getattr(args, 'sub', 'diagram')} --faces {mode}"
 
 
 def _mover_index_or_exit(args, verb: str):
@@ -809,9 +809,8 @@ def _preview_render_data(actors, args, show: set[str]) -> "preview.PreviewData":
     mode = _preview_faces_mode(args)
     faces = None
     if mode == "textured":
-        # Cheap arg/geometry refusals first (§2.7, §4.2), before touching any resolver.
+        # Cheap arg refusal first (§2.7), before touching any resolver.
         _reject_explicit_brush_colors(args)
-        _reject_transformed_brushes(actors, args)
         verb = _preview_verb(args, mode)
         index = (_mover_index_or_exit(args, verb)
                  if any(a.brush is not None for a in actors) else None)
@@ -847,40 +846,6 @@ def _reject_explicit_brush_colors(args) -> None:
         raise CommandError(f"{verb}: --brush-colors {chosen} conflicts with --faces textured. That flag "
                            f"colours the wireframe; textured draws none — it "
                            f"samples each face's OWN texture. Drop --brush-colors, or use --faces wire")
-
-
-def _nonidentity_scale_part(fs) -> str:
-    """The first non-identity component of an `FScale` (`Scale.X=..` / `SheerRate=..`), or "" for the
-    identity transform — for naming which field made a brush ineligible for `textured`."""
-    if fs is None or fs.is_identity():
-        return ""
-    from decimal import Decimal
-    for axis, val in zip("XYZ", fs.scale):
-        if Decimal(str(val)) != Decimal(1):
-            return f"Scale.{axis}={val}"
-    return f"SheerRate={fs.sheer_rate}"
-
-
-def _reject_transformed_brushes(actors, args) -> None:
-    """`--faces textured` refuses ANY scaled or sheared brush (§4.2), listing every offender with its
-    field (a batch is all-or-nothing). Its geometry is built with the full linear transform
-    (`PostScale·R·MainScale`, sheer folded in) while the UV frame uses rotation ONLY, so a texture would
-    sit on untransformed axes over transformed geometry — a wrong answer in the one tool meant to be
-    authoritative about UV. `wire` renders these; supporting them under `textured` is deferred."""
-    offenders: list[str] = []
-    for a in actors:
-        if a.brush is None:
-            continue
-        for field, fs in (("MainScale", a.main_scale), ("PostScale", a.post_scale)):
-            part = _nonidentity_scale_part(fs)
-            if part:
-                offenders.append(f"{a.name} ({field} {part})")
-    if offenders:
-        verb = _preview_verb(args, "textured")
-        raise CommandError(
-            f"{verb}: cannot texture {len(offenders)} scaled or sheared brush(es) — the UV frame uses "
-            f"rotation only, so the texture would not follow the transformed geometry: "
-            f"{', '.join(offenders)}. Remove the scale/sheer, or use --faces wire")
 
 
 def _texture_resolver_cause(project, verb: str) -> str:

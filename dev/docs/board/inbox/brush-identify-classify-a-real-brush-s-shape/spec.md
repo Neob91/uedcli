@@ -70,11 +70,11 @@ composition grammar. (The earlier "wireframe-primary" title oversold vision.)
 
 **Why not screenshots.** For *construction*, a textured screenshot **hides** the answer — textures
 paper over where one brush ends and the next begins. The wireframe is the skeleton, and the skeleton
-*is* the construction knowledge. `actor preview` renders it CSG-colored (added blue / subtracted gold
+*is* the construction knowledge. `actor diagram` renders it CSG-colored (added blue / subtracted gold
 / semisolid coral / nonsolid green / mover magenta), `--view top`/`iso` + `--layout quad`. **Verified
 safe on real maps:** `preview.py` draws each brush's authored polys directly (`enumerate(actor.brush.
 polys)`), it does **not** invoke the native CSG core — so scaled and concave brushes (which the native
-core rejects/mis-fills) render fine here. A lit screenshot (`level preview --game`) is occasional
+core rejects/mis-fills) render fine here. A lit screenshot (`level photo --game`) is occasional
 ground-truth only.
 
 **The actionable bridge — generator reverse-mapping (scoped honestly).** For each real brush, recover
@@ -235,7 +235,7 @@ The study both **depends on** and **prototypes** uedcli capabilities. Flagged to
    §2), or route to bucket (b)/(c). No verb today; prototyped in the harness; a strong candidate for a
    `uedcli` verb (`brush identify --as-generator`).
 4. **Spatial subset selection in `actor find` — `--within-bbox` now BUILT.** Carving "a region" out of
-   a big map for per-feature wireframes is `actor find --within-bbox X0,Y0,Z0,X1,Y1,Z1 | actor preview
+   a big map for per-feature wireframes is `actor find --within-bbox X0,Y0,Z0,X1,Y1,Z1 | actor diagram
    -` — **built + tested 2026-07-24** (full containment; `decisions.md` 2026-07-24 21:44 UTC), the
    `--within-bbox` slice of board item `find-relational-predicates`. This
    **replaces** the abandoned auto-clustering approach (global AABB connected-components collapsed a
@@ -296,7 +296,7 @@ distributions. A pilot that emits numbers but doesn't move build behavior has **
   true build order before drawing composition conclusions (the `level import` spec flags the same
   order question).
 - **Extraction reads geometry, not a rebuild — so the native-core caveats don't bite it.** The
-  classifier reads authored polys; `actor preview` also draws polys directly (§2, verified) — so
+  classifier reads authored polys; `actor diagram` also draws polys directly (§2, verified) — so
   scaled/concave brushes are fine for *extraction and wireframing*. The native caveats (concave
   mis-fill, scaled-brush reject — `board/inbox/`) only affect `--native` *rebuild* preview, which
   this study doesn't rely on.

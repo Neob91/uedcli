@@ -141,11 +141,11 @@ respect them when aligning surfaces.
 
 ## 5. How you look at your work — BOTH renderers, every milestone
 
-**a. `level preview --game` — the lit, faithful, in-game render.** This is the one that
+**a. `level photo --game` — the lit, faithful, in-game render.** This is the one that
 shows lighting, sky and real materials. It is the picture that matters.
 
 ```bash
-bin/uedctl level preview --game --out-dir <proj>/shots --size 800x600 \
+bin/uedctl level photo --game --out-dir <proj>/shots --size 800x600 \
   "at:X,Y,Z;rot:PITCH,YAW;name:hero1" \
   "at:X,Y,Z;look:@SomeActor;name:hero2"
 ```
@@ -155,21 +155,21 @@ bin/uedctl level preview --game --out-dir <proj>/shots --size 800x600 \
   by all three agents and serialised by a lock; first boot is ~2 min, later batches are
   much faster. Three agents each firing single-shot previews will crawl.
 
-**b. `actor preview` — the offline schematic (UED-style quad view).** Fast (~1 s), no
+**b. `actor diagram` — the offline schematic (UED-style quad view).** Fast (~1 s), no
 container. Use it to check layout and catch geometry mistakes.
 
 ```bash
-bin/uedctl actor find | bin/uedctl actor preview - --annotate name --size 900 \
+bin/uedctl actor find | bin/uedctl actor diagram - --annotate name --size 900 \
   --out <proj>/shots/schematic-<milestone>.png
 ```
 
 - **`--annotate name` — NEVER face annotations.** The default includes face-index
   numbering; it is noise here. Names only.
-- **`actor preview` needs an explicit name source.** Bare `actor preview` selects
+- **`actor diagram` needs an explicit name source.** Bare `actor diagram` selects
   nothing and silently writes no file (exit 0). Always pipe `actor find |` into
-  `actor preview -`.
+  `actor diagram -`.
 
-**c. `level preview --native` — optional fast draft** (~1 s, textured, **no lighting**).
+**c. `level photo --native` — optional fast draft** (~1 s, textured, **no lighting**).
 Handy for quick geometry spot-checks between milestones. Never judge lighting by it.
 
 **Always `Read` the PNGs you generate.** Look at your own work and fix what looks wrong.

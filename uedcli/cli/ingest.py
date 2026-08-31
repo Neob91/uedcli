@@ -33,7 +33,7 @@ def read_t3d_input(path_or_dash: str) -> str:
 def read_t3d_files(paths: list[str]) -> str:
     """The unified `--from-t3d <FILE…|->` reader: concatenate T3D text from one-or-more files (or
     `-` for a stdin snippet), in order. `-` is the SOLE value if present — no mixing stdin with
-    files (the `-` convention). Shared by `actor preview` (T3D mode) and `stash capture`."""
+    files (the `-` convention). Shared by `actor diagram` (T3D mode) and `stash capture`."""
     if "-" in paths and paths != ["-"]:
         raise CommandError("`-` reads a T3D snippet from stdin and cannot be combined with files")
     return "\n".join(read_t3d_input(p) for p in paths)

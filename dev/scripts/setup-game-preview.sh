@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
-# Get `uedcli level preview --game` working end to end on a fresh machine — one command.
+# Get `uedcli level photo --game` working end to end on a fresh machine — one command.
 #
-# `level preview --game` renders truly-lit in-game frames of a level by booting the real game
+# `level photo --game` renders truly-lit in-game frames of a level by booting the real game
 # engine headless in a container. That needs four things a fresh clone does NOT have, and which
 # no single step otherwise provisions:
 #   1. the `dx-lum-uned` base image (wine + Xvfb + the committed UED22 UCC) — nothing builds it;
 #   2. the game's own files (copyrighted, user-supplied, gitignored) — via install-deusex-assets.sh;
 #   3. `~/.uedcli/config.toml` `[games.<game>].paths` pointing at those files — hand-written today;
 #   4. a project `uedcli.toml` selecting the game — hand-written today.
-# The `uedcli-game` image itself is built automatically on first preview, so it is NOT a step here.
+# The `uedcli-game` image itself is built automatically on first photo, so it is NOT a step here.
 #
 # This script does 1-4 (idempotently — a re-run only does what is still missing), then by default
-# VERIFIES by rendering one real frame through `bin/uedcli level preview --game`.
+# VERIFIES by rendering one real frame through `bin/uedcli level photo --game`.
 #
 # The game files are copyrighted Deus Ex content. You supply the copy (a DRM-free GOG copy you own,
 # or your own mirror is the clean case); see dev/docs/deusex-assets-setup.md "Where to get Deus Ex".
@@ -216,8 +216,8 @@ fi
 # --- Step 5: verify with a real render ---------------------------------------------------------
 if [[ "$verify" == 0 ]]; then
     say "done (provision only; skipped --verify)"
-    echo "  Try it (from $TOOL_ROOT):  bin/uedcli level preview --game 'at:0,0,64;rot:0,0' --out-dir /tmp/uedpv"
-    echo "  (pose grammar + backends: docs/usage.md \`level preview\`)"
+    echo "  Try it (from $TOOL_ROOT):  bin/uedcli level photo --game 'at:0,0,64;rot:0,0' --out-dir /tmp/uedpv"
+    echo "  (pose grammar + backends: docs/usage.md \`level photo\`)"
     exit 0
 fi
 if [[ "$dry_run" == 1 ]]; then
@@ -233,11 +233,11 @@ OUT="$(mktemp -d)"
 cd "$TOOL_ROOT"
 # Orbit the map's own PlayerStart so the frame looks at real geometry without hardcoding a pose.
 # Its instance NAME varies per map (PlayerStart0/1/…), so discover it from the running game first
-# (--list-actors is a --game --map query, docs/usage.md `level preview`). This first boot is the
+# (--list-actors is a --game --map query, docs/usage.md `level photo`). This first boot is the
 # slow one; the orbit render reuses the warm container. Keep stderr — if the boot/build fails, PS
 # is empty and its error is the thing to show, not "no PlayerStart".
 DISC_ERR="$OUT/.discover.err"
-PS="$(bin/uedcli level preview --game --map "$BOOT_MAP" \
+PS="$(bin/uedcli level photo --game --map "$BOOT_MAP" \
         --list-actors Engine.PlayerStart --sample 1 2>"$DISC_ERR" | awk 'NR==1{print $1}')"
 if [[ -z "$PS" ]]; then
     echo "error: could not discover an Engine.PlayerStart in $(basename "$BOOT_MAP") — the first" >&2
@@ -246,17 +246,17 @@ if [[ -z "$PS" ]]; then
     exit 2
 fi
 SHOT="orbit:@$PS;radius:300;azimuth:0;elev:2000"
-if bin/uedcli level preview --game --map "$BOOT_MAP" "$SHOT" --out-dir "$OUT" --size 640x480; then
+if bin/uedcli level photo --game --map "$BOOT_MAP" "$SHOT" --out-dir "$OUT" --size 640x480; then
     frame="$(find "$OUT" -name '*.png' | head -n1)"
     if [[ -n "$frame" ]]; then
         echo
-        echo "SUCCESS: level preview --game rendered $frame"
-        echo "  Everything is wired. Your first trunk preview: bin/uedcli level preview --game <SHOT> --out-dir DIR"
+        echo "SUCCESS: level photo --game rendered $frame"
+        echo "  Everything is wired. Your first trunk photo: bin/uedcli level photo --game <SHOT> --out-dir DIR"
         exit 0
     fi
-    echo "error: preview reported success but produced no PNG in $OUT." >&2
+    echo "error: photo reported success but produced no PNG in $OUT." >&2
     exit 1
 fi
 echo "error: the verify render failed. The stack is provisioned; re-run just the render to retry:" >&2
-echo "       bin/uedcli level preview --game --map \"$BOOT_MAP\" \"$SHOT\" --out-dir DIR" >&2
+echo "       bin/uedcli level photo --game --map \"$BOOT_MAP\" \"$SHOT\" --out-dir DIR" >&2
 exit 1

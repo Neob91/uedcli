@@ -183,7 +183,7 @@ def test_parser_brush_vertex_move_to_absolute():
 
 
 def test_parser_level_preview_takes_shots_and_backend_flags():
-    ns = build_parser().parse_args(["level", "preview", "at:0,0,0;rot:0,90",
+    ns = build_parser().parse_args(["level", "photo", "at:0,0,0;rot:0,90",
                                     "orbit:@Keep;radius:600;azimuth:45",
                                     "--out-dir", "shots/", "--size", "640x480", "--fov", "90"])
     assert ns.shots == ["at:0,0,0;rot:0,90", "orbit:@Keep;radius:600;azimuth:45"]
@@ -194,18 +194,18 @@ def test_parser_level_preview_takes_shots_and_backend_flags():
 def test_parser_level_preview_native_game_mutually_exclusive():
     import pytest
     with pytest.raises(SystemExit):
-        build_parser().parse_args(["level", "preview", "at:0,0,0;rot:0,0",
+        build_parser().parse_args(["level", "photo", "at:0,0,0;rot:0,0",
                                    "--out-dir", "s", "--native", "--game"])
 
 
 def test_parser_level_preview_shot_and_outdir_optional_at_argparse():
     # The "need a SHOT + --out-dir" requirement moved from argparse to dispatch so `--list-actors`
     # can run with neither; argparse now accepts both empty (dispatch enforces the real rule).
-    a = build_parser().parse_args(["level", "preview", "--out-dir", "s"])   # no SHOT: OK at argparse
+    a = build_parser().parse_args(["level", "photo", "--out-dir", "s"])   # no SHOT: OK at argparse
     assert a.shots == [] and a.out_dir == "s"
-    a = build_parser().parse_args(["level", "preview", "at:0,0,0;rot:0,0"])  # no --out-dir: OK at argparse
+    a = build_parser().parse_args(["level", "photo", "at:0,0,0;rot:0,0"])  # no --out-dir: OK at argparse
     assert a.shots == ["at:0,0,0;rot:0,0"] and a.out_dir is None
-    a = build_parser().parse_args(["level", "preview", "--game", "--map", "x.dx",
+    a = build_parser().parse_args(["level", "photo", "--game", "--map", "x.dx",
                                    "--list-actors", "Engine.PathNode", "--sample", "5"])
     assert a.list_actors == "Engine.PathNode" and a.sample == 5
 
@@ -253,13 +253,13 @@ def test_parser_actor_delete():
 
 def test_parser_preview():
     p = build_parser()
-    ns = p.parse_args(["actor", "preview", "B1", "B2", "--view", "front", "--out", "/tmp/out.pgm"])
+    ns = p.parse_args(["actor", "diagram", "B1", "B2", "--view", "front", "--out", "/tmp/out.pgm"])
     assert ns.names == ["B1", "B2"] and ns.view == "front" and ns.out == "/tmp/out.pgm"
 
 
 def test_parser_actor_preview_flags():
     p = build_parser()
-    ns = p.parse_args(["actor", "preview", "--from-t3d", "a.t3d", "b.t3d", "--frame", "Wall:2",
+    ns = p.parse_args(["actor", "diagram", "--from-t3d", "a.t3d", "b.t3d", "--frame", "Wall:2",
                        "--layout", "breakdown", "--brush-colors", "legend",
                        "--highlight", "Wall:1", "--highlight", "Roof:0,3", "--annotate", "highlighted",
                        "--frame-tightness", "0.5", "--show", "collision,light-range,sound-range",
@@ -275,7 +275,7 @@ def test_parser_actor_preview_flags():
 def test_parser_actor_preview_frame_accepts_a_negative_leading_aabb():
     # A six-field --frame AABB whose first coord is negative parses as a VALUE, not mistaken for an
     # option — load-bearing on `_CoordArgumentParser._parse_optional`, so pin it (cold-review finding).
-    ns = build_parser().parse_args(["actor", "preview", "W", "--frame", "-512,0,0,512,0,256",
+    ns = build_parser().parse_args(["actor", "diagram", "W", "--frame", "-512,0,0,512,0,256",
                                     "--out", "o.png"])
     assert ns.frame == "-512,0,0,512,0,256"
 
@@ -288,26 +288,26 @@ def test_actor_preview_rejects_renamed_flags(capsys):
     for removed in ("--single", "--breakdown", "--zoom", "--zoom-region", "--zoom-factor",
                     "--show-collision", "--show-light-range", "--show-sound-range"):
         with pytest.raises(SystemExit):
-            build_parser().parse_args(["actor", "preview", "B1", "--out", "o.png", removed])
+            build_parser().parse_args(["actor", "diagram", "B1", "--out", "o.png", removed])
         assert f"unrecognized arguments: {removed}" in capsys.readouterr().err
 
 
 def test_actor_preview_annotate_default_matches_annotationspec_default():
     from uedcli.preview import AnnotationSpec, parse_annotation_spec
-    ns = build_parser().parse_args(["actor", "preview", "B1", "--out", "o.png"])
+    ns = build_parser().parse_args(["actor", "diagram", "B1", "--out", "o.png"])
     assert parse_annotation_spec(ns.annotate) == AnnotationSpec.default()   # CLI default == the canonical default
 
 
 def test_actor_preview_png_flag_is_gone():
     # PNG is the only preview output, so the flag that used to select it was DELETED outright
     # (no-back-compat rule) — `--png` is now an unrecognized argument on every preview verb.
-    for verb in (["actor", "preview", "B1"], ["stash", "preview", "s1"], ["prefab", "preview", "p1"]):
+    for verb in (["actor", "diagram", "B1"], ["stash", "diagram", "s1"], ["prefab", "diagram", "p1"]):
         with pytest.raises(SystemExit):
             build_parser().parse_args(verb + ["--out", "o.png", "--png"])
 
 
 def test_parser_brush_preview_is_gone():
-    with pytest.raises(SystemExit):                        # renamed to `actor preview`
+    with pytest.raises(SystemExit):                        # renamed to `actor diagram`
         build_parser().parse_args(["brush", "preview", "B1", "--out", "o.png"])
 
 
@@ -410,14 +410,14 @@ def test_it_parses_prefab_apply_and_promote():
 
 def test_it_parses_actor_preview():
     p = build_parser()
-    ns = p.parse_args(["actor", "preview", "Brush41", "--out", "shot.png"])
-    assert (ns.cmd, ns.sub) == ("actor", "preview") and ns.names == ["Brush41"] and ns.out == "shot.png"
+    ns = p.parse_args(["actor", "diagram", "Brush41", "--out", "shot.png"])
+    assert (ns.cmd, ns.sub) == ("actor", "diagram") and ns.names == ["Brush41"] and ns.out == "shot.png"
 
 
 def test_actor_preview_out_is_optional():
     # --out is optional: with none given it parses to None (dispatch then mints a temp path and prints
     # the absolute path it wrote).
-    ns = build_parser().parse_args(["actor", "preview", "Brush41"])
+    ns = build_parser().parse_args(["actor", "diagram", "Brush41"])
     assert ns.out is None
 
 
@@ -425,7 +425,7 @@ def test_level_preview_parser_rejects_retired_flags():
     import pytest
     for removed in ("--mode", "--lit", "--rotate", "--at"):
         with pytest.raises(SystemExit):
-            build_parser().parse_args(["level", "preview", "at:0,0,0;rot:0,0",
+            build_parser().parse_args(["level", "photo", "at:0,0,0;rot:0,0",
                                        "--out-dir", "o", removed, "x"])
 def test_parser_actor_rotate_by_and_pivot():
     p = build_parser()

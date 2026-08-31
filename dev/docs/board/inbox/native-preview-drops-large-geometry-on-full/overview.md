@@ -6,7 +6,7 @@ summary = "Native preview drops large geometry on full retail levels (Wanchai) �
 
 # Native preview drops large geometry on full retail levels
 
-`level preview --native` on **Wanchai Market** (retail DX, 1304 brushes, ~75% scaled) renders only a
+`level photo --native` on **Wanchai Market** (retail DX, 1304 brushes, ~75% scaled) renders only a
 partial world: whole walls/ceilings/floors are MISSING (rays pass into void → the flat grey
 background), disconnected surface fragments float in mid-air, and coplanar residuals speckle the
 surfaces that do build. A 360° sweep from `PlayerStart1` and several teleporters (2026-08-24) shows
@@ -22,7 +22,7 @@ accuracy**: the core mis-classifies solid/void and drops surfaces. Separate prob
 ```
 level import dev/games/deusex/Maps/02_NYC_Bar.dx --tree level/nyc-bar   # clean (203 brushes)
 # Wanchai trunk: dev/games/trunks/tmp-wanchai-market/ (1304 brushes) — largely holed
-level preview --native --tree level/tmp-wanchai-market --out-dir OUT "at:@PlayerStart1;rot:0,0"
+level photo --native --tree level/tmp-wanchai-market --out-dir OUT "at:@PlayerStart1;rot:0,0"
 ```
 
 ## Suspected mechanism (confirm in the spike)
@@ -47,7 +47,7 @@ is the RETAIL-scale severity + a directed root-cause investigation (findings fol
 `preview_native.build_scene` calls `uedcli_native.build_geometry` (the `build.rs` coarse core:
 convex-hull point-in-solid oracle + batch single-partition). The faithful editor-parity incremental
 core `build_geometry_bspcsg` (`bspcsg.rs`, grows the BSP node-by-node like UnrealEd) is **never used
-by `level preview`** — even though `actor preview --faces textured` already uses it via
+by `level photo`** — even though `actor diagram --faces textured` already uses it via
 `solve_world_surfaces`.
 
 Native-vs-editor surf ratio (editor `.dx` UModel = ground truth):

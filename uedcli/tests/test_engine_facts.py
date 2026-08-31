@@ -431,7 +431,7 @@ def test_index_zero_is_an_ordinary_colour_on_an_unmasked_texture():
     swatches that are 100 % index 0 and would vanish entirely.
 
     Spike: `dev/docs/spikes/2026-07-26-texture-masked-property/findings.md` §2-3. This pins the
-    gate that `actor preview --faces textured` depends on.
+    gate that `actor diagram --faces textured` depends on.
     """
     from uedcli import utexture
     pkg = utexture.load_package(str(Path(__file__).parent / "fixtures" / "LUM_InfoPortraits.utx"))

@@ -1,4 +1,4 @@
-# Plan — `actor preview --faces {wire,flat,textured}`
+# Plan — `actor diagram --faces {wire,flat,textured}`
 
 Implements board item `four-actor-preview-faces-rulings-need-a-durable`
 (spec gate passed; no structural finding in any round). **Read that spec and this plan; between them
@@ -178,7 +178,7 @@ Read it in dispatch as `getattr(args, "faces", "wire")` — the harness namespac
 
 **Done when**
 
-- **`--faces {wire,flat}`** parses on `actor`, `stash` and `prefab preview`. **`textured` is NOT a
+- **`--faces {wire,flat}`** parses on `actor`, `stash` and `prefab diagram`. **`textured` is NOT a
   choice yet — S4 adds it to `choices`.** argparse then gives an unknown value a clean exit 2 naming
   it, with **no refusal branch to write and none to remember to delete**. *(An earlier draft shipped
   `textured` in `choices` and refused it at dispatch; that is a flag value whose entire behaviour is
@@ -240,7 +240,7 @@ Read it in dispatch as `getattr(args, "faces", "wire")` — the harness namespac
   the existing suite drives constantly) — the third of spec §4.5's three colour cases.
 - **`wire` still renders when the class hierarchy cannot load**, alongside the failing arm above —
   decision 2.13's cost in both directions, and the promise §0 makes about `wire`.
-- **`prefab preview --prefab-dir X --faces flat` SUCCEEDS from inside a project** — `--prefab-dir`
+- **`prefab diagram --prefab-dir X --faces flat` SUCCEEDS from inside a project** — `--prefab-dir`
   overrides only the prefab library root; it implies neither "no project" nor "no resolver".
 - **Point sprites and each `--show` overlay survive an opaque fill** — the fills-at-step-2 ordering.
   Placing them later paints over every sprite and overlay, which is why the order is specified.
@@ -248,15 +248,15 @@ Read it in dispatch as `getattr(args, "faces", "wire")` — the harness namespac
   the existing suite drives constantly) — the third of §4.5's three colour cases.
 - **`wire` still renders when the class hierarchy cannot load**, alongside the failing arm above —
   decision 2.13's accepted cost in both directions, and the promise §0 makes about `wire`.
-- **`prefab preview --prefab-dir X --faces flat` SUCCEEDS from inside a project** — `--prefab-dir`
+- **`prefab diagram --prefab-dir X --faces flat` SUCCEEDS from inside a project** — `--prefab-dir`
   overrides only the prefab library root; it does not imply "no project", and no project does not
   imply no resolver.
 - The three corrected `help=` strings are in place, including `--show`'s "schema-free (no class
   lookup)" tail scoped to `wire`.
 - `docs/usage.md` documents `--faces` and its `wire`/`flat` values, **and its wireframe-only wordings
   are corrected in this slice** — grep it for `the wireframe viewer`, `color wireframe`,
-  `The wireframe is coloured by CSG op`, `the wireframe's colour source`, the `actor preview` synopsis
-  block, and `stash preview`'s `composite wireframe`. Each becomes false the moment `flat` ships.
+  `The wireframe is coloured by CSG op`, `the wireframe's colour source`, the `actor diagram` synopsis
+  block, and `stash diagram`'s `composite wireframe`. Each becomes false the moment `flat` ships.
 
 ### S3 — `--focus` over filled modes
 
@@ -369,5 +369,5 @@ Do not start until that item has landed and its accessor exists.
 
 The Rust port and making the native extension non-optional; bilinear filtering; real lighting; mesh
 rendering for point actors; the `Translucent` polyflag; supporting scaled/sheared brushes under
-`textured`; and any change to `level preview --native` (its concave-fan defect is filed separately on
+`textured`; and any change to `level photo --native` (its concave-fan defect is filed separately on
 `board/inbox/`).

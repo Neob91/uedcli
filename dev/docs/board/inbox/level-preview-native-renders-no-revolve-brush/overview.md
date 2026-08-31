@@ -1,10 +1,10 @@
 +++
 priority = "p2"
 kind = "debug"
-summary = "`level preview --native` renders NO revolve brush at all — absent, not mis-drawn"
+summary = "`level photo --native` renders NO revolve brush at all — absent, not mis-drawn"
 +++
 
-# `level preview --native` renders NO revolve brush at all — absent, not mis-drawn
+# `level photo --native` renders NO revolve brush at all — absent, not mis-drawn
 
 Measured 2026-07-26 (`dev/docs/spikes/2026-07-26-poly-rotate-curved-track/` finding 6). A
 `brush build revolve` never appears in a `--native` render. Ruled out: framing (re-measured on a

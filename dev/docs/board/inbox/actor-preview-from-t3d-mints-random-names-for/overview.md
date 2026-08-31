@@ -1,11 +1,11 @@
 +++
 priority = "p3"
 kind = "debug"
-summary = "actor preview --from-t3d gives unnamed brushes a fresh random Name per render, so --json is not reproducible."
+summary = "actor diagram --from-t3d gives unnamed brushes a fresh random Name per render, so --json is not reproducible."
 spikes = ["dev/docs/spikes/2026-08-30-a1-grid-blind-usability/"]
 +++
 
-# `actor preview --from-t3d` mints random Names for unnamed brushes
+# `actor diagram --from-t3d` mints random Names for unnamed brushes
 
 Rendering the same T3D twice produces different Names for the brushes that carry none: each render
 mints a fresh `Brush_<random>`. On `hexagon_good.t3d` (307 actors) 299 Names are stable across runs

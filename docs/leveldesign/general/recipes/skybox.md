@@ -37,7 +37,7 @@ actor build Engine.SkyZoneInfo --at 8000,8000,4000 | actor add -
 # 3. in the real level, flag the window/ceiling faces Fake Backdrop + Unlit
 brush poly find Window1 | brush poly set - --add-flag FakeBackdrop --add-flag Unlit
 
-# 4. build & preview (Fake-Backdrop faces show the sky in a realtime editor viewport and in a render)
+# 4. build & photo (Fake-Backdrop faces show the sky in a realtime editor viewport and in a render)
 level materialize --out maps/mylevel.dx
 ```
 

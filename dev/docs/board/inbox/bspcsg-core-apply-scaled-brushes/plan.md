@@ -107,7 +107,7 @@ that the compare reduces both sides to world space.
 
 **Gate B (Part-B acceptance):** native-vs-golden green (a)-(h); full `bin/test` + `cargo test` green; the
 door-mover flow runs end-to-end (`… | brush deintersect - --mover-class Engine.Mover --pivot min --at … |
-actor add -` → materialize → in-game/preview).
+actor add -` → materialize → in-game/photo).
 
 ---
 

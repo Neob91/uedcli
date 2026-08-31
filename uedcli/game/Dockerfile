@@ -1,4 +1,4 @@
-# uedcli-game — the `level preview --game` image (spec 2026-07-13 + gate folds).
+# uedcli-game — the `level photo --game` image (spec 2026-07-13 + gate folds).
 # Thin layer over the editor base: warm wineprefix + the compiled UedPreview packages +
 # the staged boot map + the game entrypoint. The .u compile happens in build-image.sh's
 # MOUNTED builder step (a Docker RUN cannot see the asset mounts). Build:

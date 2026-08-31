@@ -32,7 +32,7 @@ all gated on Andrzej's scope decision Q0 in the roadmap spec). Each is its own f
   902 meshes (466 retail v68 + 436 UED22 v69), vertex stride self-detects, textured render
   proven. `umodel.exe` is no longer needed for a mesh READ — it survives only inside the stub
   pipeline. Remaining: productise the harness into `uedcli/` (rides the asset-catalog build).
-- `[spike]` p3 — **Native textured preview** — **superseded: specced as `level preview --native`
+- `[spike]` p3 — **Native textured preview** — **superseded: specced as `level photo --native`
   (Andrzej 2026-07-16)**; see `spec.md` + the `board/to-plan/` entry.
 - `[spec]` p3 — **Native lighting baker** (2nd long pole): per-lumel raytrace producing the
   `FLightMesh` + lumel bytes (~1.7MB/small map); downstream of D2. Plus native pathnode

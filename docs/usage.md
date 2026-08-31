@@ -9,7 +9,7 @@ The source of truth is a git-tracked T3D tree on disk (one directory per actor u
 feature-branch state in your own repo, and `git` is the history and merge engine. Reads and
 edits are model-side compute against that tree (instant, no container). The editor / headless
 game is reached only for commands that must build or render: `level materialize` and
-`level preview --game`. Each spins up its own container as needed — no persistent session, no
+`level photo --game`. Each spins up its own container as needed — no persistent session, no
 `--container` flag.
 
 ```
@@ -95,10 +95,10 @@ path the dirs are actually at.
 decided by resolving its class against `Engine.Mover` in the game's code packages, *not* by guessing
 from the class name. So every verb that has to know — `mover key *`, `level doctor`, `event graph`,
 `brush scale`, `brush apply-transform`, `brush intersect`/`deintersect`, `stash capture`,
-`level preview --native` — needs a resolvable package search path: a project **and**
+`level photo --native` — needs a resolvable package search path: a project **and**
 `~/.uedcli/config.toml`. Without one the verb exits 2 naming itself and what is missing; it never
 falls back to a name guess, since that would silently report a real mover as a static brush.
-(`level materialize` and `level preview --game` need the same config to load the game's packages to
+(`level materialize` and `level photo --game` need the same config to load the game's packages to
 build and render, so in practice every verb on this page that touches packages wants it configured.)
 
 The same rule applies **per actor**: if an actor's class — or any class on its ancestor chain — is
@@ -188,7 +188,7 @@ When a **mutating** verb resolves the level from `UEDCLI_LEVEL` (not an explicit
 ```bash
 uedcli actor find --group cells | uedcli actor delete -
 uedcli actor find --folder castle.tower.** | uedcli actor bbox -   # enclosing box of a subtree
-uedcli actor find --within-bbox -512,0,-256,512,768,256 --kind brush | uedcli actor preview -   # render a region
+uedcli actor find --within-bbox -512,0,-256,512,768,256 --kind brush | uedcli actor diagram -   # render a region
 ```
 
 **Discover brushes by CSG type** (additive vs subtractive) uses the existing `--prop` — there is no
@@ -679,7 +679,7 @@ mirror, and is **not** affected. (A geometric argument from the sign of the scal
 determinant — uedcli's own frame math ignores scale entirely — not checked against the running editor.)
 
 **Identifying a surface to edit:** `brush poly list <brush>` for the exact index/facing/texture,
-then `actor preview <brush> --highlight <brush>:N` (below) to see it emphasised (or
+then `actor diagram <brush> --highlight <brush>:N` (below) to see it emphasised (or
 `--frame <brush>:N` to frame it).
 
 ### Continuous texture alignment (`brush poly align`)
@@ -723,12 +723,12 @@ nested (`stash/hangar/arch`). Omit it for the default ambient `$UEDCLI_LEVEL`. I
 `actor find/show/add/delete/move/prop/rotate/scale/order/bbox/folder/label`, `brush replace/vertex/poly`,
 `mover key *`, the read verbs `actor show`/`level status`/`level doctor`/`event graph` and `stash
 capture`'s SOURCE (`stash capture --tree level/<name>`; rejected together with `--from-t3d`),
-**and — level-kind only — `level materialize`/`level preview`** (`--tree level/<name>`
-builds/previews that level; `--tree stash|prefab` is rejected there, since a captured set has no world
-— use `stash`/`prefab preview`). Passing `--tree` explicitly suppresses the `editing level '…' (from
+**and — level-kind only — `level materialize`/`level photo`** (`--tree level/<name>`
+builds/photographs that level; `--tree stash|prefab` is rejected there, since a captured set has no world
+— use `stash`/`prefab diagram`). Passing `--tree` explicitly suppresses the `editing level '…' (from
 $UEDCLI_LEVEL)` echo. For a stash/prefab box, `level status`/`level doctor` label it by kind and skip
 the git hint. It is **not** on the generators (`brush build`/`actor build` — they read no box) or
-`actor preview` (use `stash`/`prefab preview`).
+`actor diagram` (use `stash`/`prefab diagram`).
 
 ---
 
@@ -823,8 +823,8 @@ orientation use `--rotate`, which stacks on top. `sheet` keeps `--plane` (the pl
   `LinearStairBuilder` stepped wedge — `Base` + `back` + per-step `Step`/`Rise` + tiled convex `Side`
   strips, `2 + 4·steps` faces. Its per-step boundaries are watertight T-junctions that `level doctor`
   accepts. **Native caveat:** UnrealEd (the default `level materialize`) and the real engine (the
-  default `level preview --game`) build this non-convex brush correctly, but the experimental native
-  CSG core assumes convex brushes, so `level preview --native` mis-builds its concave notches — use
+  default `level photo --game`) build this non-convex brush correctly, but the experimental native
+  CSG core assumes convex brushes, so `level photo --native` mis-builds its concave notches — use
   `--game`/UnrealEd for staircases. **Spiral is currently rough** (rectangular slabs, gaps) — prefer
   a cylinder column + per-step wedges until it's redone.
 
@@ -876,9 +876,9 @@ uedcli brush build extrude --axis y --depth 16 --at 0,0,0 \
   single and non-convex, like `brush build staircase`. The tiling only adds *diagonals* of your
   profile, never a new point on its outline, so the solid stays watertight. Face count is
   therefore `points + 2 × cap-pieces`. **Native caveat:** UnrealEd (the default `level
-  materialize`) and the real engine (the default `level preview --game`) build a concave brush
-  correctly, but the offline draft renderer `level preview --native` assumes convex solids, so it
-  draws a concave notch *filled in* — that is a preview artefact, not a geometry bug.
+  materialize`) and the real engine (the default `level photo --game`) build a concave brush
+  correctly, but the offline draft renderer `level photo --native` assumes convex solids, so it
+  draws a concave notch *filled in* — that is a rendering artefact, not a geometry bug.
 
 ### `revolve` — sweep a profile around an axis
 
@@ -1124,16 +1124,16 @@ uedcli mover key rotate Mover0 1 --by 0,16384,0        # swings about the hinge,
 
 ---
 
-# `actor preview` — the brush viewer
+# `actor diagram` — the brush viewer
 
 A self-rendered **colour** image (no editor) so you can see geometry and map **poly index ↔
 face**. Reads named actors from the current level, model-side. **`--faces`** picks how faces are drawn:
 `wire` (the default) is a content-free schematic of outlines; `textured` is the **CSG-solved textured
-world**, as UnrealEd's 3D viewport draws it. (Renamed from `brush preview`; `stash preview`/`prefab
-preview` keep their names.)
+world**, as UnrealEd's 3D viewport draws it. (`actor diagram` renamed from `brush preview` in
+2026-07-21; `actor diagram`/`stash diagram`/`prefab diagram` all renamed to `diagram` since.)
 
 ```
-actor preview [<names…> | --from-t3d <FILE…|->]
+actor diagram [<names…> | --from-t3d <FILE…|->]
               [--layout quad|single|breakdown] [--view top|front|side|iso]
               [--faces wire|textured]
               [--brush-colors csg|legend] [--annotate SELECTORS]
@@ -1145,8 +1145,8 @@ actor preview [<names…> | --from-t3d <FILE…|->]
 ```
 
 - **Target set** — actor names, or `-` to read a newline name list from stdin (`actor find … | actor
-  preview -`), or **`--from-t3d <FILE…|->`** to render the actors in one-or-more T3D files (or a `-`
-  stdin snippet: `brush build spiral | actor preview --from-t3d -`). Multiple files concatenate in
+  diagram -`), or **`--from-t3d <FILE…|->`** to render the actors in one-or-more T3D files (or a `-`
+  stdin snippet: `brush build spiral | actor diagram --from-t3d -`). Multiple files concatenate in
   order; `-` is the sole value. `--from-t3d` is mutually exclusive with names. Giving no target set
   at all (no names, no `-`, no `--from-t3d`) is an error (exit 2); an empty `-` stdin stays a clean
   no-op (exit 0).
@@ -1187,8 +1187,10 @@ actor preview [<names…> | --from-t3d <FILE…|->]
     `wire` it needs **both a resolved project and the per-user games config**, plus **every texture a
     surviving surface references to be readable** — miss one and it exits 2 naming the ref (a bare
     `Texture=Name` is rejected; qualify it as `Package.Name`). A scene that references no texture needs
-    no texture source. It also **rejects `--brush-colors`** (it samples real textures) and any **scaled
-    or sheared brush** (its UV frame is rotation-only) — both a clean exit 2; use `wire` for those.
+    no texture source. It also **rejects `--brush-colors`** (it samples real textures) — a clean exit
+    2; use `wire` instead. Scaled, mirrored, and sheared brushes render — the UV frame follows the
+    full transform, same as the geometry; only a **non-invertible (degenerate) scale** (a zero or
+    sub-epsilon axis) is refused, exit 2 naming the brush.
   - A solve that leaves **no surface** (e.g. adds with nothing to carve empty space around them) is a
     clean exit 2 naming the cause; a set of only point actors and/or movers (no world brushes) draws its
     overlays over the dark background at exit 0. `textured` composes with every other option here — `--focus`,
@@ -1206,7 +1208,7 @@ actor preview [<names…> | --from-t3d <FILE…|->]
   **tint** from a categorical palette (~10 hues, cycled). A brush's **on-face poly-index decal** (the
   painted digits and their 6/9 baseline underline) carries that tint; a point actor's **marker** is
   drawn in it — so a number shared across brushes (every brush has a face `1`) is disambiguated by its
-  tint. **Actor names are not drawn on the preview**; identify each actor from its locator cell
+  tint. **Actor names are not drawn on the diagram**; identify each actor from its locator cell
   reported on stderr (below).
 - **Poly face indices are painted ON the face (on-face numbers).** Each face's index is a **number
   texture lying flat in the face's own 3-D plane** — it foreshortens with the surface under the
@@ -1298,8 +1300,8 @@ actor preview [<names…> | --from-t3d <FILE…|->]
   8-sided wire cylinder in ISO (`CollisionHeight` is a HALF-height); **`light-range`** — a faint orange
   sphere of a light's reach (`25·(LightRadius+1)` UU); **`sound-range`** — a faint blue sphere of an
   AmbientSound's reach (`25·(SoundRadius+1)` UU). Brush actors (including movers) are excluded, so a
-  brush preview needs no class schema. An unknown member is a clean named error.
-- **Locator cells are drawn on every preview by default** — a **label gutter** with columns `A,B,C…`
+  brush diagram needs no class schema. An unknown member is a clean named error.
+- **Locator cells are drawn on every diagram by default** — a **label gutter** with columns `A,B,C…`
   across the top and rows `1,2,3…` down both sides (no gridlines), so every region of the image has a
   text address like `D4` (a letter is always a column, a number always a row). It is **on by default**
   and orthogonal to `--annotate`, so `--annotate none` still carries the gutter. Each actor's cell is
@@ -1360,7 +1362,7 @@ actor preview [<names…> | --from-t3d <FILE…|->]
   addressing drops out but `hidden` stays a real answer: `{image, actors:{<name>:{hidden}}}` — no
   `locator` key, no `panes`/`cell`/`span`. The stderr legend is unchanged (and likewise absent with
   `--no-locator-cells`).
-- `--out PATH` is the host image path. **A preview is always a PNG** (written via **Pillow**, the
+- `--out PATH` is the host image path. **A diagram is always a PNG** (written via **Pillow**, the
   LLM-viewable form — no flag and no other way to get raw PPM out). Whatever extension you pass is
   **replaced** by `.png`, so `--out shot.jpg` writes `shot.png` and `--out shot` writes `shot.png`.
   `--out` is **optional**: with no `--out`, a unique temp file is minted (`uedcli-preview-*.png`).
@@ -1383,7 +1385,7 @@ shared code path, with any per-box extras (`meta.json` capture anchor, `packages
 stash capture [- [<names…>] | <names…>] [--id ID] [--force] [--from-t3d <FILE…>]
 stash show    <id> [<names…>] [--summary]        # T3D dump (default), or a bbox/class/poly summary
 stash list                                        # register ids
-stash preview <id> [<names…>] <preview opts>      # composite render (like actor preview)
+stash diagram <id> [<names…>] <diagram opts>      # composite render (like actor diagram)
 stash drop    <id>
 stash apply   <id> [--at X,Y,Z] [--group NAME | --no-group] [--folder PATH]
 stash promote <id> --as <name> [--force] [--prefab-dir DIR]
@@ -1417,7 +1419,7 @@ mutates the current level. The library root is the resolved project's prefabs di
 ```
 prefab [--prefab-dir DIR] list
 prefab [--prefab-dir DIR] show  <name> [<names…>] [--summary]
-prefab [--prefab-dir DIR] preview <name> [<names…>] <preview opts>
+prefab [--prefab-dir DIR] diagram <name> [<names…>] <diagram opts>
 prefab [--prefab-dir DIR] apply <name> [--at X,Y,Z] [--group NAME | --no-group] [--folder PATH]
 prefab [--prefab-dir DIR] drop  <name>
 ```
@@ -1591,16 +1593,16 @@ of the same trunk; the editor path above remains the current one.)*
 
 ---
 
-# `level preview` — freely-posed still shots
+# `level photo` — freely-posed still shots
 
-**`level preview`** renders **still first-person shots** of the current level from arbitrary camera
+**`level photo`** renders **still first-person shots** of the current level from arbitrary camera
 poses. A **two-tier** command behind one verb, sharing one batched **pose grammar**. Read-only — it
 never writes the trunk or a committed map.
 
 ```
-level preview SHOT… --out-dir DIR [--game | --native] [--size WxH] [--fov DEG]
+level photo SHOT… --out-dir DIR [--game | --native] [--size WxH] [--fov DEG]
               [--map PATH] [--rebuild] [--keep-alive]
-level preview --list-actors Package.Class [--sample N] [--game --map PATH]   # discovery mode
+level photo --list-actors Package.Class [--sample N] [--game --map PATH]   # discovery mode
 ```
 
 ## The pose grammar (SHOT tokens)
@@ -1619,7 +1621,7 @@ One shot per positional token, fields `;`-separated (angles in **unreal rotation
 ## Backends
 
 - **`--game` (the DEFAULT)** — the faithful lit tier. Delivers the map into a **warm per-user
-  headless game container** (booted once ~90s, then REUSED across previews; self-terminates after
+  headless game container** (booted once ~90s, then REUSED across photo runs; self-terminates after
   10 min idle) and captures **truly-lit first-person frames** (real lighting/sky/textures). Pitch is
   clamped host-side to ±89.9°; movers render at rest pose. First batch ~1–3 min (boot + travel);
   later batches skip the boot. It is the default because it shows lighting/meshes/sky and the offline
@@ -1632,7 +1634,7 @@ One shot per positional token, fields `;`-separated (angles in **unreal rotation
     `--help`. The image is built and the preview package compiled automatically on first use — **no
     UnrealEd/UCC toolchain to install** (the generic preview compiles its engine-only helper with
     the container's own UCC).
-  - **`--map PATH`** previews a **prebuilt** map file instead of the selected trunk (skips the
+  - **`--map PATH`** shoots a **prebuilt** map file instead of the selected trunk (skips the
     materialize cache); actor-relative shots resolve against the running game.
   - **`--rebuild`** forces a fresh materialize under a new unique name (guarantees the game reloads it).
   - **`--keep-alive`** PINs the warm container (disables idle death) and prints its **noVNC URL** for
@@ -1645,8 +1647,8 @@ One shot per positional token, fields `;`-separated (angles in **unreal rotation
   trunk in-process and a software rasterizer renders **textured, flat-shaded** perspective stills in
   seconds. Movers render at base pose; point actors, meshes, sky, lighting, and translucency do NOT
   render (translucent/masked faces render opaque). Scaled, mirrored, and sheared brushes render (the
-  transform is baked into the geometry), but the texture frame is rotation-only, so textures slide on
-  scaled faces. `--fov DEG` (default 75) applies here; `--map` /
+  transform is baked into the geometry, and the texture frame follows it too — texels stretch/shear
+  with the surface). `--fov DEG` (default 75) applies here; `--map` /
   `--rebuild` / `--keep-alive` are rejected with `--native`.
 
 **Shared:** `--out-dir DIR` (required unless `--list-actors`; created if absent), `--size WxH`

@@ -46,4 +46,4 @@ it is a silent one.
 
 Make it a named typed decode error (`masked-default-unresolved`) so the caller must say what to do,
 consistent with "no silent half-answers". More correct, and it makes a decode fail on a path that has
-no code packages — which would break `level preview --native` on a textures-only search path.
+no code packages — which would break `level photo --native` on a textures-only search path.

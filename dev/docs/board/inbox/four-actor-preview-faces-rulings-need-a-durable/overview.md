@@ -1,17 +1,17 @@
 +++
 priority = "p1"
 kind = "owner-question"
-summary = "`actor preview --faces` rulings need a durable `direction/` home before their spec is deleted"
+summary = "`actor diagram --faces` rulings need a durable `direction/` home before their spec is deleted"
 +++
 
-# The `actor preview --faces` rulings need a durable `direction/` home before their spec is deleted
+# The `actor diagram --faces` rulings need a durable `direction/` home before their spec is deleted
 
 `spec.md` is ephemeral and
 is deleted on build; `CLAUDE.md` requires a decision you made to land in `direction/` first. These
 are product policy, not implementation detail. Proposed text (verbatim, awaiting a yes —
 suggested home `direction/trunk-and-editor.md`, since it is about what the preview tiers show):
 
-> **The offline preview tiers.** `actor preview` renders brush volumes as authored, before CSG.
+> **The offline preview tiers.** `actor diagram` renders brush volumes as authored, before CSG.
 > Its `--faces` modes are `wire` (outlines, the default, needing no game content at all), `flat`
 > (solid CSG-coloured fills) and `textured` (each face painted with its real texture through its
 > authored UV frame). **A subtract brush shows only its far faces**, because a subtraction's

@@ -1,8 +1,8 @@
 """`stash` command family — the tier-1 capture register (`<root>/.uedcli/stash/`).
 
 `cli.dispatch` enters through `run(args)`, which resolves the project-scoped register and routes the
-subverb (capture/list/show/drop/apply/promote/preview). Every read validates the stash's existence
-before touching its contents, and `preview` reads only after the existence gate — the prologue order
+subverb (capture/list/show/drop/apply/promote/diagram). Every read validates the stash's existence
+before touching its contents, and `diagram` reads only after the existence gate — the prologue order
 is unchanged from the transitional monolith. This module uses the shared `cli.ingest`,
 `cli.placement`, `cli.rendering` and `cli.level_sources` orchestrators; it never imports another
 command family or the router.
@@ -163,7 +163,7 @@ def _dispatch_stash_reads(args, reg) -> int:
             print(sid)
         return 0
     # Every remaining verb takes an id. An unknown id reads back as empties (register design), which
-    # would silently no-op (show/preview) or promote nothing — so validate up front. `reg.exists`
+    # would silently no-op (show/diagram) or promote nothing — so validate up front. `reg.exists`
     # keys on `meta.json` (resolves NESTED ids, and stays true for an emptied stash — `--target`
     # editing can delete a stash to zero actors, which content-emptiness can't distinguish from
     # missing). `drop` stays idempotent (a no-op on a missing id, like `rm -f`).
@@ -188,7 +188,7 @@ def _dispatch_stash_reads(args, reg) -> int:
         else:
             print("\n".join(actors_t3d[n] for n in chosen if n in actors_t3d))
         return 0
-    if args.sub == "preview":
+    if args.sub == "diagram":
         return preview(args, reg)
     if args.sub == "apply":
         actors_t3d, order, pkgs, meta, folders = reg.read_stash(args.id)
@@ -217,7 +217,7 @@ def _promote_stash(args, reg) -> int:
 
 
 def preview(args, reg) -> int:
-    """`stash preview <id> [names…]` — render a captured set's actors. `run` has already resolved
+    """`stash diagram <id> [names…]` — render a captured set's actors. `run` has already resolved
     `reg` and (via the read prologue) validated that the id exists; this reads the stash and hands
     its actors to the shared renderer."""
     actors_t3d, order, _pkgs, _meta, _folders = reg.read_stash(args.id)

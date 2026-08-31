@@ -264,15 +264,15 @@ def test_it_previews_a_stash_to_png(tmp_path, monkeypatch):
                     meta={"anchor": ["0", "0", "0"], "ts": 1})
     host_out = str(tmp_path / "out" / "p.png")
 
-    # preview is host-side only: any docker call means a container crept back in.
+    # diagram is host-side only: any docker call means a container crept back in.
     def no_docker(cmd, *a, **kw):
         if cmd and cmd[0] == "docker":
-            raise AssertionError(f"stash preview shelled out to docker: {cmd}")
+            raise AssertionError(f"stash diagram shelled out to docker: {cmd}")
         from unittest import mock
         return mock.Mock(returncode=0)
     monkeypatch.setattr(subprocess, "run", no_docker)
 
-    rc = dispatch.dispatch(_args(proj, sub="preview", id="archway", names=[],
+    rc = dispatch.dispatch(_args(proj, sub="diagram", id="archway", names=[],
                                  view="iso", annotate="all", iso_angle=30.0,
                                  size=128,
                                  out=host_out))
@@ -282,7 +282,7 @@ def test_it_previews_a_stash_to_png(tmp_path, monkeypatch):
 
 
 def test_it_routes_actor_preview_from_the_trunk_not_the_editor(tmp_path, monkeypatch):
-    # actor preview is model-side: it reads the ambient trunk level, never MAP EXPORT.
+    # actor diagram is model-side: it reads the ambient trunk level, never MAP EXPORT.
     from uedcli.normalize import canonical_actor_t3d
     from uedcli.model import parse_t3d
     arch = next(iter(parse_t3d("Begin Map\n" + _ARCH_T3D + "End Map\n").actors.values()))
@@ -293,13 +293,13 @@ def test_it_routes_actor_preview_from_the_trunk_not_the_editor(tmp_path, monkeyp
 
     def no_docker(cmd, *a, **kw):                        # host-side only: no container either
         if cmd and cmd[0] == "docker":
-            raise AssertionError(f"actor preview shelled out to docker: {cmd}")
+            raise AssertionError(f"actor diagram shelled out to docker: {cmd}")
         from unittest import mock
         return mock.Mock(returncode=0)
     monkeypatch.setattr(subprocess, "run", no_docker)
 
     host_out = str(tmp_path / "out" / "b.png")
-    rc = dispatch.dispatch(_args(proj, cmd="actor", sub="preview",
+    rc = dispatch.dispatch(_args(proj, cmd="actor", sub="diagram",
                                  names=["Arch"], from_t3d=None, view="iso",
                                  annotate="all", iso_angle=30.0,
                                  size=128, out=host_out))
@@ -309,7 +309,7 @@ def test_it_routes_actor_preview_from_the_trunk_not_the_editor(tmp_path, monkeyp
 
 
 def _preview_stash_args(proj, out):
-    return _args(proj, sub="preview", id="archway", names=[], view="iso",
+    return _args(proj, sub="diagram", id="archway", names=[], view="iso",
                  annotate="all", iso_angle=30.0,
                  size=128, out=out)
 
@@ -450,7 +450,7 @@ def test_preview_prints_the_rendered_path(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(subprocess, "run", fake_run)
 
     asked = str(tmp_path / "out" / "p.ppm")
-    rc = dispatch.dispatch(_args(proj, sub="preview", id="arch", names=[],
+    rc = dispatch.dispatch(_args(proj, sub="diagram", id="arch", names=[],
                                  view="iso", annotate="all", iso_angle=30.0,
                                  size=128,
                                  out=asked))

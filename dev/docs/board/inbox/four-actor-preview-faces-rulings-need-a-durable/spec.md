@@ -1,4 +1,4 @@
-# Spec: textured faces for `actor preview` (`--faces wire|flat|textured`)
+# Spec: textured faces for `actor diagram` (`--faces wire|flat|textured`)
 
 **Status:** spec review complete — both rounds run, **gate at its ceiling** (`CLAUDE.md` "Review
 gates"). No structural finding in either round. Everything found is fixed below, logged, or escalated;
@@ -18,15 +18,15 @@ build, so it is deliberately not cited as a path yet), and delete this file.
 
 ## 0. What this is, and what it is not
 
-`actor preview` renders an **orthographic schematic** of a set of actors — model-side, host-only, no
+`actor diagram` renders an **orthographic schematic** of a set of actors — model-side, host-only, no
 editor and no container. Today it draws **wireframe only**. This spec adds two solid-face modes, one
 of which samples each face's **real texture** through the face's own authored UV frame.
 
-**Not** a Rust port (§10); **not** a replacement for `level preview --native` (that stays the
+**Not** a Rust port (§10); **not** a replacement for `level photo --native` (that stays the
 perspective, whole-level, post-CSG tier); **not** lighting. The native extension stays optional —
-nothing here may make `actor preview` fail on a machine without `cargo`.
+nothing here may make `actor diagram` fail on a machine without `cargo`.
 
-**One property IS given up, deliberately (decision 2.13).** `actor preview` today needs no game
+**One property IS given up, deliberately (decision 2.13).** `actor diagram` today needs no game
 install for a brush-only render. `--faces flat` and `--faces textured` **do** — they load the class
 hierarchy to tell a mover from a real subtraction (§4.7), and `textured` additionally needs the
 textures the scene references. **`--faces wire`, the default, is unchanged and still needs nothing.**
@@ -34,7 +34,7 @@ textures the scene references. **`--faces wire`, the default, is unchanged and s
 **Why it is worth building.** Every texture-frame defect in
 [`spikes/levelbuild-friction/agent-reports.md`](../../../spikes/levelbuild-friction/agent-reports.md) —
 mirrored lettering, the half-shifted sheet, the wrapped door trim, the cut-out texture on a solid
-face — was **invisible in `actor preview`** and cost a full materialize + render cycle to see. Those
+face — was **invisible in `actor diagram`** and cost a full materialize + render cycle to see. Those
 faults are properties of the *authored* UV frame, which this tier reads directly.
 
 ## 1. The governing constraint
@@ -49,7 +49,7 @@ extend that same channel (§6).
 
 1. **`--faces {wire,flat,textured}`, default `wire`.** *Rejected: a boolean `--textured`* — no room
    for `flat` without a second flag later, and "No back-compat cruft" makes reshaping a hard break.
-2. **A textured face is shaded as `level preview --native` shades it** (§4.1). *Rejected:
+2. **A textured face is shaded as `level photo --native` shades it** (§4.1). *Rejected:
    unlit/full-bright.* Every divergence is enumerated in §4.9 — nothing diverges by accident.
 3. **Cut-outs are honoured, but ONLY on a genuinely masked face** (§4.3a). *Rejected: masking every
    index-0 texel unconditionally* — the spike measured **464 of 2,669** corpus textures using index 0
@@ -74,7 +74,7 @@ extend that same channel (§6).
    rationale ("it would do nothing") was **refuted**: `preview._scene_geometry` derives `vivid`, the
    `--highlight` colour, from it. It stands on the corrected ground that the flag's documented job is
    the wireframe, and repurposing it under one mode would give one flag two jobs.
-8. **`level preview` is NOT changed** — it keeps `--native`/`--game` (which *backend*).
+8. **`level photo` is NOT changed** — it keeps `--native`/`--game` (which *backend*).
 9. **The Rust port and a non-optional native extension are DEFERRED** (§10).
 10. **A subtract brush's faces render ONLY from inside the subtracted volume** (§4.7) — *"the
     subtract's polys looked at from OUTSIDE do not render in UnrealEd or in game, and they should not
@@ -97,7 +97,7 @@ extend that same channel (§6).
 
 ## 3. CLI surface
 
-One option, on `actor preview`, `stash preview` and `prefab preview` — they share
+One option, on `actor diagram`, `stash diagram` and `prefab diagram` — they share
 **`cli._preview_opts`** (`cli.py:686, 1476, 1513`).
 
 ```
@@ -402,7 +402,7 @@ near-uniform. **Owner ruling (2026-07-26): make it stronger, then verify with a 
 render rather than arithmetic.** The build produces that render, picks the constant from it, and
 records the chosen value plus the image in the `rationale/` preview topic. Starting point ≈ 0.35.
 
-### 4.9 Declared divergences from `level preview --native`
+### 4.9 Declared divergences from `level photo --native`
 
 | # | Divergence
 |---|---
@@ -549,9 +549,9 @@ preview works with no game install" stays true for `wire`/`flat` and is now fals
 every point-actor pane pass `focus=None` (`dispatch.py:775-783`) — so the two-pass count is the brush
 count, not N+1.
 
-**On timings, stated honestly.** The one measurement taken is `actor preview` quad @1024 **wireframe**
+**On timings, stated honestly.** The one measurement taken is `actor diagram` quad @1024 **wireframe**
 at 4.6 s (~1.05 M px) — measured 2026-07-26 on LUM `basement` (28 actors) via
-`time (uedcli actor find | uedcli actor preview - --out …)`, on the 4-core box this repo is developed
+`time (uedcli actor find | uedcli actor diagram - --out …)`, on the 4-core box this repo is developed
 on. That is *not* a fill rate — its cost is dominated by label placement and decal
 planning — so it cannot be extrapolated to fills, and this spec makes **no** slower/faster claim
 against `--native`. What is certain is qualitative: fills are O(area) where wireframe is O(perimeter),
@@ -618,7 +618,7 @@ secretly checkerboards is exactly that: the picture looks like an answer.
 | `flat` fill RGB for `csg`, `legend`, and the legacy `color_by_csg=False` path, unshaded | §4.5, all three
 | bare `--faces textured` succeeds; `--faces textured --brush-colors csg` exits 2          | the `default=None` + `or "csg"` mechanism
 | each of the resolver's three `None` causes, a bare ref, and an undecodable ref produce distinct exit-2 messages naming the case | §8
-| `stash preview` / `prefab preview` accept `--faces`; `--prefab-dir` inside a project **succeeds** | §3, §5 — the inverted round-2 claim
+| `stash diagram` / `prefab diagram` accept `--faces`; `--prefab-dir` inside a project **succeeds** | §3, §5 — the inverted round-2 claim
 | `--layout quad` and `--layout breakdown` render under `flat` and `textured`               | untested layouts in both rounds
 | non-finite UV (`nan` **and** `inf`) produces a clean result, never a traceback            | §4.3
 | **`textured` emits no wireframe pixels; `flat` does** | decision 2.5 — its most visible observable, previously untested
@@ -688,8 +688,8 @@ array, which is what made 30 unreadable textures in `LUM/Textures/LUM_CoreTex.ut
    falsy; board item `bmasked-with-no-reachable-class-default-source` records that cost.
 
 **THE CONTRACT NOTE THAT LIVED IN THE DELETED PLAN, kept here because this is now its only home:**
-a decoder error lets the CALLER choose the disposition, and the callers differ. `level preview
---native` degrades to a checkerboard and warns; **`actor preview --faces textured` REFUSES** — it
+a decoder error lets the CALLER choose the disposition, and the callers differ. `level photo
+--native` degrades to a checkerboard and warns; **`actor diagram --faces textured` REFUSES** — it
 exits 2 naming the ref (§2.6). Do not assume every preview caller degrades. The typed result carries
 enough to write either message, including telling a **bare (unqualified) ref** apart from a
 package/name miss, since the refusing caller has to tell the user to qualify it.
@@ -741,7 +741,7 @@ So switching to raw `CsgOper` (my last revision) culls *more*, not less, and **t
 rules get wrong**. The §9 test I wrote to guard it was unsatisfiable under either rule.
 
 There is no schema-free fix: `movers.is_mover` needs a `ClassIndex`, which `actor`/`stash`/`prefab
-preview` deliberately do not thread (that is an existing open item `classify_brush`'s own docstring
+diagram` deliberately do not thread (that is an existing open item `classify_brush`'s own docstring
 points at). `preview_native` only gets this right because it *does* have an index.
 
 **Options, all with real costs:** cull on raw `CsgOper` and accept subtract-movers rendering

@@ -1,8 +1,8 @@
-# `level preview` multi-preview port/URL surfacing — DRAFT spec
+# `level photo` multi-preview port/URL surfacing — DRAFT spec
 
 ## Goal
 
-Decide whether, and how, `level preview` should surface the noVNC port/URL when more than one
+Decide whether, and how, `level photo` should surface the noVNC port/URL when more than one
 preview could run at once — the concern the overview raised for "2+ simultaneous previews".
 
 ## Current state (the overview predates the architecture pivot)
@@ -12,7 +12,7 @@ The item was written against the OLD editor-screenshot preview (an interactive n
 (`rendering.md:8`, `trunk-and-editor.md:88`). The current `--game` preview is different in every
 way that matters here:
 
-- **Batched snapshots, not an interactive session.** `level preview` boots/reuses a container,
+- **Batched snapshots, not an interactive session.** `level photo` boots/reuses a container,
   renders the requested still shots, returns. It is not a live editor you watch (VNC is dev-debug
   only — `trunk-and-editor.md:135`).
 - **One WARM container per Unix user**, `uedcli-game-preview-<uid>` (`preview_game.py:391`),
@@ -47,7 +47,7 @@ design (one warm container per user), not an oversight.
   mislead; recommend NOT doing this.
 - (b) **Support N concurrent pinned live previews per user.** Real work against the current design: a
   new container-identity scheme (name per preview, not per user), a lifecycle/teardown story
-  (`level preview` owns no `stop` verb — deliberately, `trunk-and-editor.md:135`), and a URL list
+  (`level photo` owns no `stop` verb — deliberately, `trunk-and-editor.md:135`), and a URL list
   output. This is re-opening the persistent-editor model the direction docs rejected.
 
 Recommend (a): the concern is an artifact of the retired backend; the current model is intentionally

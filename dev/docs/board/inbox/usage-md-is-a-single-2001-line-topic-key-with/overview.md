@@ -16,7 +16,7 @@ Compounding it:
 - `## Actors` appears twice as separate H2 sections (`docs/usage.md:141` and `docs/usage.md:451`) —
   same anchor, a collision.
 - The file's own `# Query verbs` (`:139`) / `# Mutating verbs` (`:446`) top-level split silently
-  stops applying partway through: `# Movers` (`:954`), `# actor preview` (`:1127`), `# stash /
+  stops applying partway through: `# Movers` (`:954`), `# actor diagram` (`:1127`), `# stash /
   prefab` (`:1326`) and later H1s are siblings of those two, not children of either.
 
 NOTE: a rewrite — splitting `usage.md` by verb family into separate topic-keyed pages — is being

@@ -51,10 +51,10 @@ The lighting mechanics are in [lighting.md](lighting.md); the craft is:
 
 ## The build loop — see the geometry without the editor
 
-Iterate model-side with `actor preview` (the offline geometry viewer — no editor, no container):
+Iterate model-side with `actor diagram` (the offline geometry viewer — no editor, no container):
 render a quad or single view of the actors you're working on, judge it, adjust, repeat. It reads
-names from the level (or a stdin name list — `actor find --folder castle.stairs | actor preview -`),
-or a T3D snippet from a generator (`brush build spiral | actor preview --from-t3d -`).
+names from the level (or a stdin name list — `actor find --folder castle.stairs | actor diagram -`),
+or a T3D snippet from a generator (`brush build spiral | actor diagram --from-t3d -`).
 
 - Brushes are coloured by CSG op (added blue / subtracted gold / semisolid pink / nonsolid green /
   mover magenta), so a doorway subtract reads distinctly from the wall it carves.
@@ -64,7 +64,7 @@ or a T3D snippet from a generator (`brush build spiral | actor preview --from-t3
   its interior (near walls dropped) while an add not inside carved space is invisible. Reach for it to
   answer "does this fit inside that", "is this pillar actually in the room", "does the texture line up
   across the doorway". It needs a project and the game content available; `wire` needs neither, so a
-  bare `brush build … | actor preview --from-t3d -` renders from anywhere. `--focus` fades the other
+  bare `brush build … | actor diagram --from-t3d -` renders from anywhere. `--focus` fades the other
   brushes' fills as well as their outlines, and fades them only — what hides what never changes.
 - `--highlight BRUSH:idx` emphasises the exact face you're about to retexture or align (a bare actor
   name highlights a whole brush, or brackets a point actor); `--frame BRUSH` frames a whole brush and
@@ -76,7 +76,7 @@ or a T3D snippet from a generator (`brush build spiral | actor preview --from-t3
   point actor with its marker/sprite — so you read which face each index is without numbers piling
   up. It's a small-selection inspector (point actors get their own panes too, so subset first on a
   big scene).
-- Every preview carries **locator cells** (on by default): a gutter of column letters (top) and row
+- Every diagram carries **locator cells** (on by default): a gutter of column letters (top) and row
   numbers (sides), plus a `name → cell` legend on stderr (`Pillar  D4  (C3–E5)`, pane-qualified under
   `quad`). When you see a problem at `D4`, that cell is a text handle on the pixels — carry it back
   into a name set. It is a region of the image, not a world coordinate. `--locator-cells N` sets the
@@ -86,7 +86,7 @@ or a T3D snippet from a generator (`brush build spiral | actor preview --from-t3
   overlays an actor's collision cylinder and its light/sound reach for spacing decisions, as
   UnrealEd's radii view does.
 
-(For a truly-lit first-person shot, that's the separate `level preview --game` verb.)
+(For a truly-lit first-person shot, that's the separate `level photo --game` verb.)
 
 ## Related
 

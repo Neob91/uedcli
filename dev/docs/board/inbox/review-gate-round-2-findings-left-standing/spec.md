@@ -60,7 +60,7 @@ add -` consumes it into the trunk; per-surface edits run model-side via `brush p
 | Solidity choice | `--solidity solid\|semisolid\|nonsolid` on `brush build` | *Add Special* solidity / brush flags |
 | Point actors (lights, zone info, sky info, triggers) | `actor build Package.Class --prop KEY=VALUE --at X,Y,Z --rotate P,Y,R` \| `actor add -` | *Actor → Add \<Class\> Here*, then Properties |
 | Lights | `actor build Engine.Light --prop LightRadius=… --prop LightType=… --prop LightEffect=…` | place a `Light`, edit its Lighting props |
-| Lighting **bake** | **no standalone verb** — the lightmap bake runs *inside* `level materialize` / `level preview`; authoring lights is pure `actor` edits | GUI "Build Lighting" / F8's lighting pass |
+| Lighting **bake** | **no standalone verb** — the lightmap bake runs *inside* `level materialize` / `level photo`; authoring lights is pure `actor` edits | GUI "Build Lighting" / F8's lighting pass |
 | Movers | `brush build <shape> --mover-class <Package.Name>` \| `actor add -`, then `mover key count`/`move`/`rotate`/`remove`/`list` | *Add Mover*, record keyframes |
 | Zoning | `actor build Engine.ZoneInfo --prop … ` \| `actor add -`; zone-portal sheet via `brush build sheet --flag portal` \| `actor add -` | place `ZoneInfo`; sheet brush + *Add Special → Zone Portal* |
 | Water | `brush build sheet --flag portal --flag translucent` \| `actor add -` (the water surface) **plus** `actor build Engine.ZoneInfo --prop bWaterZone=True` \| `actor add -` (recipe §4.1) | translucent portal surface + `bWaterZone` ZoneInfo |
@@ -115,8 +115,8 @@ File-by-file:
   wipes lighting and `LIGHT APPLY` bakes, and carries the `2026-07-15` bake-mechanism box). The
   rewrite is light: reframe light *placement* as `actor build Engine.Light --prop … | actor add -`,
   and state plainly that from the uedcli seat **there is no standalone bake verb** — the lightmap
-  bake happens inside `level materialize` / `level preview`, so "run `LIGHT APPLY` after retinting"
-  becomes "re-`materialize`/`preview` to see lighting; authoring lights is pure `actor` edits". Keep
+  bake happens inside `level materialize` / `level photo`, so "run `LIGHT APPLY` after retinting"
+  becomes "re-`materialize`/`photo` to see lighting; authoring lights is pure `actor` edits". Keep
   the `LightType` vs `LightEffect` split, the `LE_Negative` note, and both Debunked callouts.
 - **`textures-and-surfaces.md`** — surface flags, alignment, `MyLevel`, and skybox rewritten around
   `brush poly find/set/align`. Flag names map to `--add-flag`/`--remove-flag`; alignment maps to
@@ -327,7 +327,7 @@ build step.)
   `masked`, …) — so the recipe (§4.1) uses them directly, no gap there. What is unverified is the
   **semantics** in this specific UED22/DeusEx build: does a `portal`+`translucent` NotSolid sheet
   plus a `bWaterZone` actor actually produce a swimmable water zone? That needs a live
-  `preview`/`materialize` probe. It is **not a spec blocker** — defer it to the **build gate**, where
+  `photo`/`materialize` probe. It is **not a spec blocker** — defer it to the **build gate**, where
   the built recipe is exercised once and the finding folded into `textures-and-surfaces.md`.
 - **Q2 (symlink dereference) — RESOLVED as documented-safe (downgraded from CRITICAL).** The Claude
   Code plugin-install behavior is that a **same-marketplace symlink target is dereferenced and copied

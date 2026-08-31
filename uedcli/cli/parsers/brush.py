@@ -299,9 +299,9 @@ def register(sub) -> None:
         "and holds at most 16 vertices, so a concave profile (an L, a notched cornice) or one "
         "longer than 16 points has each of its two caps tiled into several convex faces, adding "
         "only diagonals of your own outline. CAVEAT: UnrealEd (`level materialize`) and the real "
-        "engine (`level preview --game`) build such a brush correctly, but the offline draft "
-        "renderer `level preview --native` assumes convex solids and draws a concave notch FILLED "
-        "IN — a preview artefact, not a geometry bug."
+        "engine (`level photo --game`) build such a brush correctly, but the offline draft "
+        "renderer `level photo --native` assumes convex solids and draws a concave notch FILLED "
+        "IN — a rendering artefact, not a geometry bug."
     )
     _REVOLVE_OFFGRID_NOTE = (
         "OFF-GRID BY CONSTRUCTION: every vertex away from theta=0 lands on radius*cos/sin theta, "

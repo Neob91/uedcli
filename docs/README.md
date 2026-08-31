@@ -2,13 +2,13 @@
 
 `uedcli` makes level design a queryable, scriptable, auditable text surface an LLM can drive entirely
 as text — no GUI. The git-tracked T3D trunk is the source of truth; the `.dx`/`.unr` map file is a
-build artifact; `level materialize` compiles the trunk into a map file. Preview renders in-game
+build artifact; `level materialize` compiles the trunk into a map file. Photo renders in-game
 (`--game`, the default) or with the native offline rasterizer.
 
 These are the user-facing docs — how to drive uedcli and how to design good, buildable levels with
 it. There are two:
 
-- **[usage.md](usage.md)** — the CLI: query/mutate verbs, the `preview` viewer, `brush poly list`,
+- **[usage.md](usage.md)** — the CLI: query/mutate verbs, the `diagram` viewer, `brush poly list`,
   brush clip, stash/prefab, the texture catalog (`sync`/`list`/`search`/`tags`/`classify`). Read this
   for what to type. It also documents `uedcli docs list|show|search`, which serves these pages from
   the CLI, so you can read all of this in the terminal, offline.
@@ -28,5 +28,5 @@ when you need a Deus Ex class name, dimension, or the immersive-sim approach.
 uedcli has no monolithic "make a room" command. Small verbs pipe together: a generator prints a T3D
 snippet, `actor add -` writes it into the trunk, and per-surface / per-actor edits run model-side.
 You never edit inside the editor by hand — the verbs write the trunk, `level materialize` builds it,
-`level preview` shows it. The full pattern and the four verb families are in
+`level photo` shows it. The full pattern and the four verb families are in
 **[leveldesign/README.md](leveldesign/README.md)**.

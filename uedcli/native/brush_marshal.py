@@ -2,7 +2,7 @@
 
 Turns a trunk brush actor into the flat tuple the Rust CSG core takes, and decides
 which brushes are carved into the world BSP (`_in_world_csg`). Shared by `brushcsg`
-(the `brush intersect`/`deintersect` verbs) and `preview_native` (`level preview --native`).
+(the `brush intersect`/`deintersect` verbs) and `preview_native` (`level photo --native`).
 """
 from __future__ import annotations
 

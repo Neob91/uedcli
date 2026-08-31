@@ -13,7 +13,7 @@ Options:
 - (a) **Close/downscope** (recommend): confirm no code change, refresh the overview to the post-pivot
   reality. The port/URL concern is an artifact of the deleted backend.
 - (b) Build N concurrent pinned live previews per user: a per-preview container identity, a
-  teardown/`stop` story (which `level preview` deliberately lacks), and URL-list output — effectively
+  teardown/`stop` story (which `level photo` deliberately lacks), and URL-list output — effectively
   re-opening the persistent-editor model the direction docs rejected
   (`trunk-and-editor.md` Rejected, VNC-handoff bullet).
 

@@ -344,15 +344,15 @@ def _tree_flag(parser, *, level_only=False):
     instead of the ambient `$UEDCLI_LEVEL` (decisions 2026-07-20 — the three are one tree format, so
     the flag names a `tree`; it replaces the old `--target`). One helper, one help string — the single
     place a reader learns the set + default. It rides the mutating content verbs, the read verbs, AND
-    (level-only) `level materialize`/`preview`. `level_only=True` restricts the value to `level/NAME`
-    (materialize/preview build/walk a world — a stash/prefab has none; dispatch rejects the other
+    (level-only) `level materialize`/`photo`. `level_only=True` restricts the value to `level/NAME`
+    (materialize/photo build/walk a world — a stash/prefab has none; dispatch rejects the other
     kinds). Still NOT the generators (`actor build`/`brush build` — they read no tree; the ambient is
-    consumed downstream at `actor add`) or `actor preview` (per-kind `stash|prefab preview` exists)."""
+    consumed downstream at `actor add`) or `actor diagram` (per-kind `stash|prefab diagram` exists)."""
     if level_only:
         parser.add_argument(
             "--tree", metavar="level/NAME", default=None,
-            help="build/preview this level instead of $UEDCLI_LEVEL: level/NAME (materialize and "
-                 "preview operate on a level only — use `stash preview`/`prefab preview` for a "
+            help="build/photo this level instead of $UEDCLI_LEVEL: level/NAME (materialize and "
+                 "photo operate on a level only — use `stash diagram`/`prefab diagram` for a "
                  "captured set). Default: the level named by $UEDCLI_LEVEL.")
         return
     parser.add_argument(

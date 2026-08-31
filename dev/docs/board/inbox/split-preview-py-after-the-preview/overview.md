@@ -23,7 +23,7 @@ shading) — plus whatever the consolidation adds. At least three units: geometr
 rasterizer, and the preview orchestration.
 
 Blocked until then: re-splitting a file mid-rewrite would collide, and the consolidation's gate is
-byte-identical `actor preview` goldens, which a concurrent split would muddy.
+byte-identical `actor diagram` goldens, which a concurrent split would muddy.
 
 Use the same method the god-module split used — build the intra-module reference graph with `ast`,
 assign every top-level symbol, and assert no edge points up the chosen layer order before moving any

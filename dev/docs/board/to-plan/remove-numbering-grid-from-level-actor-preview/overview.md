@@ -5,7 +5,7 @@ summary = "Keep the addressable grid but rename it locator-cells, make it opt-ou
 spikes = ["dev/docs/spikes/2026-08-30-a1-grid-blind-usability/"]
 +++
 
-# Remove numbering grid from level actor preview
+# Remove numbering grid from level actor diagram
 
 **The slug is stale and stays** — slugs are permanent, and this item's resolution reversed.
 

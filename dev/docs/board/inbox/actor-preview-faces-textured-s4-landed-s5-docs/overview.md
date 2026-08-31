@@ -1,10 +1,10 @@
 +++
 priority = "p2"
 kind = "implement"
-summary = "actor preview --faces textured (S4) is built; S5 (cross-cutting docs, rationale, direction confirm, spec deletion) is left."
+summary = "actor diagram --faces textured (S4) is built; S5 (cross-cutting docs, rationale, direction confirm, spec deletion) is left."
 +++
 
-# `actor preview --faces textured` — S4 done, S5 remains
+# `actor diagram --faces textured` — S4 done, S5 remains
 
 S4 of board item `actor-preview-faces` shipped in the `actor-preview-textured` worktree (two commits):
 the texel renderer in `preview.py`, and the flag + dispatch resolution + `docs/usage.md`. `bin/test`

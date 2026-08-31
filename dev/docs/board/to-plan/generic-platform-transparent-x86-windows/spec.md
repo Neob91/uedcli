@@ -5,7 +5,7 @@
 One runtime that runs an x86 Windows program (`DeusEx.exe` or `unrealed.exe`) under wine in a
 container, choosing the x86-execution engine by host arch **transparently**: FEX + wine-10 on arm64,
 native wine on x86. Same program, same logic, same output — only the substrate adapts. Reused by
-`level materialize` (editor) and `level preview --game` (game), replacing today's two divergent
+`level materialize` (editor) and `level photo --game` (game), replacing today's two divergent
 container paths (`uned/` + `ensure_editor`, and `game/` + `game-entrypoint.sh`).
 
 Owner ruling (2026-08-06): substrate adaptation under identical logic is not a fallback and does not
@@ -45,7 +45,7 @@ Script Editor (`WCodeFrame`) window.
 - `level materialize`: `unrealed.exe`, editor packages, crafted `unrealtournament.ini`,
   ready=editor-drivable, drives `MAP IMPORTADD/REBUILD/SAVE`; headless render device (SoftDrv), no
   browser windows.
-- `level preview --game`: `DeusEx.exe`, game content, ready=`:7777`, renders a frame.
+- `level photo --game`: `DeusEx.exe`, game content, ready=`:7777`, renders a frame.
 
 ## Unknowns — spiked 2026-08-06
 

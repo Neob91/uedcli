@@ -87,7 +87,7 @@ brush poly find DeusExMover_ab12cd --texture CoreTexGlass.OldeStanGlass_A | brus
 - `level doctor` reports the welded mover as not watertight — e.g. `watertight … edge … shared by 3
   faces (non-manifold)`, one per coincident pane edge. False positive here: the coincident semisolid
   pane faces are intentional, and a mover never goes through world BSP, so the manifold requirement
-  doesn't apply. Judge it with `level preview --game`, not doctor. ✅
+  doesn't apply. Judge it with `level photo --game`, not doctor. ✅
   *(live-verified 2026-07-25; a known `doctor` limitation — it should skip the watertight check for
   mover brushes.)*
 - `--mover-class` makes the weld a base mover; author the swing/slide with `mover key rotate|move`

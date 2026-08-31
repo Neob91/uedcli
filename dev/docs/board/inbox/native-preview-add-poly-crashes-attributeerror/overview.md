@@ -15,7 +15,7 @@ forbids.
 
 **Latent, not yet fired**: the maps rendered so far (Wanchai, UNATCO HQ, NYC Bar) produce no
 out-of-range surf owners, so the None branch is never hit. A level/build whose BSP references an
-out-of-range owner would crash `level preview --native` outright.
+out-of-range owner would crash `level photo --native` outright.
 
 **Fix**: guard the flag read — compute `flags` INSIDE the `poly is not None` branch, or
 `flags = (poly.flags if poly is not None else 0) | (poly_flags_int(dict(actor.props)) if actor else 0)`.

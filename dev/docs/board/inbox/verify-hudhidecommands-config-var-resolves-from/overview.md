@@ -6,7 +6,7 @@ summary = "Confirm the base driver's `var config string HudHideCommands` actuall
 
 # Verify HudHideCommands config-var resolves from the active game ini
 
-The generic `level preview --game` hides the DeusEx HUD via `UedPreviewBaseDriver`'s
+The generic `level photo --game` hides the DeusEx HUD via `UedPreviewBaseDriver`'s
 `var config string HudHideCommands` (set to `"ShowHud 0"`), run through `P.ConsoleCommand`. The host
 passes it as `UED_HUD_HIDE`; `game-entrypoint.sh` writes:
 

@@ -4,11 +4,11 @@ Producing an image from the headless editor: GL setup, render modes, black-viewp
 taking a shaded screenshot. Command syntax in [`commands.md`](commands.md); general gotchas in
 [`quirks.md`](quirks.md).
 
-> **`level preview` no longer uses any of this (2026-07-16).** The editor-screenshot backend
+> **`level photo` no longer uses any of this (2026-07-16).** The editor-screenshot backend
 > (`preview_render.py` + the auto-frame recipe below) was retired for the offline `--native`
-> software rasterizer (`architecture.md` "level preview" / "Preview internals"). The rest of the
+> software rasterizer (`architecture.md` "level photo" / "Preview internals"). The rest of the
 > doc is still true editor behavior, kept for other editor drivers (debugging, future tooling);
-> only the claim that this is how `level preview` works is historical.
+> only the claim that this is how `level photo` works is historical.
 
 ## GL / device setup (baked into the inis)
 - Needs i386 Mesa GL (`libgl1:i386` …), `WindowedColorBits=32` (Xvfb depth-24 has no 16-bit GLX
@@ -121,7 +121,7 @@ pre-load frame). Prefer `CAMERA OPEN`.
 > the full FRotator" only verified the stored value via a `MAP SAVE` readback, never an image. So
 > there is no arbitrary-pose headless shot. The one console path that re-aims the render is
 > `CAMERA ALIGN NAME=<BRUSH>` — aligning to a brush repositions and aims the camera to frame it
-> (distance ∝ the brush's size, canonical angle). `level preview` uses this: it auto-frames a named
+> (distance ∝ the brush's size, canonical angle). `level photo` uses this: it auto-frames a named
 > brush, or the largest `CSG_Subtract` (the enclosing room) for `all`, a wide interior overview. See
 > `spikes/2026-07-12-preview-pose-calibration/`. The rest of this section (ALIGN mechanics, wmctrl sweep, chrome crop,
 > per-viewport ini) is still accurate for position and the render plumbing; only the claim that
@@ -158,7 +158,7 @@ Established live over a 6-round spike (2026-07-06,
   filter wrongly keeps it): `MID=$(wine_ctl status | grep -oE 'window=[0-9]+' | cut -d= -f2);
   MHEX=$(printf '0x%08x' $MID); wmctrl -l | awk -v m=$MHEX 'tolower($1)!=tolower(m){print $1}' |
   xargs -I{} wmctrl -i -r {} -e 0,3200,3200,200,150`. Then `driver.screenshot` + a chrome-border
-  crop `(104,92,1596,1104)` → a clean 1492×1012 posed textured shot. ✅ The shipped `level preview`
+  crop `(104,92,1596,1104)` → a clean 1492×1012 posed textured shot. ✅ The shipped `level photo`
   recipe, live-verified end-to-end 2026-07-06 (`test_preview_integration.py`: two distinct poses,
   mean-abs-diff 9.9 > 3.0, both bright mean ~146). `ACTOR SELECT NONE` is issued before each shot to
   clear the selection gizmo; the `wmctrl` sweep is re-run per shot because `MAP IMPORTADD` can
@@ -180,10 +180,10 @@ Established live over a 6-round spike (2026-07-06,
   the ini), not switchable per shot from the console. (An untested cleaner path: click the
   render-mode button on the pane's own toolbar — targets that pane directly, no command box.)
 
-## uedcli's offline `actor preview` — what UnrealEd draws, matched host-side
+## uedcli's offline `actor diagram` — what UnrealEd draws, matched host-side
 
-`actor preview` (`preview.py`) is our own stdlib rasterizer, not the editor; its colours and sizes
-match what UnrealEd's viewports show so a preview reads like the editor.
+`actor diagram` (`preview.py`) is our own stdlib rasterizer, not the editor; its colours and sizes
+match what UnrealEd's viewports show so a diagram reads like the editor.
 
 - Brush wire colours by CSG classification. uedcli reproduces UED's legend (hue preserved,
   luminance re-tuned for our light-grey background, since UED tunes for grey/black): added-solid =
