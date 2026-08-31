@@ -1,7 +1,7 @@
 +++
 priority = "p1"
 kind = "debug"
-summary = "Native materialize FULL byte-parity vs UnrealEd UED22 (owner-reaffirmed 2026-08-31, not the looser node/surf/leaf-only 'EXACT' label): status/index for the whole geometry+lighting effort. ZERO levels at full parity yet -- UNATCO/Wanchai both node/surf/leaf-exact but carry verts/points(/vectors) residuals plus lighting gaps (83.6%/75.5% record-level). Verification has been narrow (mostly these 2 levels) -- flagged as an overfitting risk; goldens now being generated for the full 21-level breadth corpus in the background. See below for the harness catalog and open threads."
+summary = "Native materialize FULL byte-parity vs UnrealEd UED22 (owner-reaffirmed 2026-08-31, not the looser node/surf/leaf-only 'EXACT' label): status/index for the whole geometry+lighting effort. Full 21-level breadth corpus now measured (18/21 goldens cached, 3 fail to build): only DX.dx (trivial) and NYC Bar are genuinely 6/6 geometry-exact; UNATCO 4/6, Wanchai Market 3/6; every non-trivial level's lighting is well under 100% and gated on its geometry gap. Zero non-trivial levels at full parity. See below for the harness catalog, the full per-level table (in the findings ledger), and open threads."
 depends-on = ["port-urender-getvisiblesurfs-so-each-light-gets", "port-the-per-leaf-permeating-light-lists-model", "getvisiblesurfs-wanchai-run-gap-root-cause", "line-clear-shadow-ray-algorithm-gap-found-real", "zone-crossing-getvisiblesurfs-gap-invisible", "smuggler-4-surf-delta-traced-to-4-pf-semisolid", "freeclinic08-nsfhq04-1-surf-under-build-root", "wanchai-verts-points-residual-independently", "pass-d-chain-link-order-native-splices-zone", "pass-d-fragment-nodes-get-ileaf-1-where", "splitwithplane-degenerate-fragment-fallback", "native-zone-over-fragmentation"]
 spikes = ["dev/docs/spikes/2026-08-27-native-light-apply-parity/", "dev/docs/spikes/2026-08-29-unatco-repart-live-diff/", "dev/docs/spikes/2026-08-29-area51-underbuild/", "dev/docs/spikes/2026-08-26-editor-free-native-materialize/"]
 +++
@@ -45,16 +45,20 @@ pointers to every open sub-thread. Blow-by-blow findings live in
 
 ## Current status (2026-08-31)
 
-**Geometry:** breadth sweep across 21 OG retail levels
-(`breadth-geometry-check-on-10-new-og-levels-1-10`, `breadth-geometry-re-check-across-11-og-levels-2`)
-— 3/21 exact (Wanchai Market, and the two trivial ≤6-brush intro/logo maps `DX.dx`/Endgame4); ~1/19
-excluding trivial maps. UNATCO is close but not node-exact (+7 nodes). The severe-under-build family
-(Area51 Entrance and 4 other levels losing 13-27% of nodes) is CLOSED — root-caused to a mirrored-brush
-determinant bug and shipped (`mirrored-brush-determinant-fix-closes-the`, commit `c7b8b0b`); remaining
-deltas on those 5 levels are back in the ordinary noise range. Two other under-build families are
-still open and NOT the same mechanism: `freeclinic08`/`nsfhq04` (-38 nodes/-23 leaves, a world-level
-`bspBuildFPolys`/merge poly-order divergence, localized but not root-caused) and `smuggler` (+4 surf
-residual, isolated to 4 `PF_Semisolid` brushes, root mechanism still open).
+**Geometry:** breadth pass across the 21-level OG retail corpus, 2026-08-31, using `parity_report.py`
+against freshly self-built goldens (18/21 built; 3 failed to build — `Endgame4` extraction gap,
+`smuggler`/`nyc-street` `EDIT PASTE` crashes; full table and per-level deltas in
+`dev/docs/native-materialize-findings.md`, search "Breadth golden-caching pass"). By the real bar
+(all six geometry counts zero-delta): **2/21 geometry-exact** (`DX.dx` trivial intro, NYC Bar).
+UNATCO and Wanchai Market are both node/surf/leaf-exact but carry real verts/points(/vectors)
+residuals (UNATCO +5/+16/+0; Wanchai +74/+16/−8) — 4/6 and 3/6 respectively, not full parity. The
+severe-under-build family (Area51 Entrance and 4 other levels previously losing 13-27% of nodes) is
+CLOSED — root-caused to a mirrored-brush determinant bug and shipped
+(`mirrored-brush-determinant-fix-closes-the`, commit `c7b8b0b`); remaining deltas on those 5 levels
+are back in the ordinary noise range, still not zero. Two other under-build families are still open
+and NOT the same mechanism: `freeclinic08`/`nsfhq04` (a world-level `bspBuildFPolys`/merge poly-order
+divergence, localized but not root-caused) and `smuggler` (+4 surf residual, isolated to 4
+`PF_Semisolid` brushes, root mechanism still open, round 3 in progress as of this writing).
 
 **Lighting:** `LIGHT APPLY` runs fully offline (`UEDCLI_NATIVE_MATERIALIZE=1 level materialize`, no
 editor in the path). After the `line_clear` threaded-state shadow-ray port (round 8, commit `9827f07`,

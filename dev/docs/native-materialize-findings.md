@@ -1971,3 +1971,72 @@ input the script's own usage line documents) and pointed at Wanchai's confirmed 
 files (uncommitted work, not lost — round 11's coordinating-session cleanup committed them):
 `round11_node_flags_at_cast.py`, `round11_fixbucket_brightcorners_audit.py`,
 `round11_decisive_node_order.py` (all `dev/docs/spikes/2026-08-29-unatco-repart-live-diff/harness/`).
+
+## Breadth golden-caching pass across the 21-level corpus (2026-08-31)
+
+Owner ask: pre-build and cache a self-built golden for every one of the 21 OG-retail breadth-corpus
+levels, so a future `parity_report.py` run against any of them is a cache hit, not a fresh editor
+build. Ran from an isolated worktree (own `.venv` + freshly-built `uedcli_native`).
+
+**Docker mount-permission blocker, root-caused, worked around, not fixed** — filed as
+`board/inbox/docker-mount-source-permission-fails-from-main`. From the main checkout, every
+editor-driving command fails with `mkdir /workspace/umodel_win32: permission denied`.
+`tool_assets.umodel_dir()` is package-relative (`tool_root().parent / "umodel_win32"`), deliberately
+a SIBLING of the tool dir. From the main checkout this resolves to `/workspace/umodel_win32` — a
+symlink to `dev/games/.cache/umodel-src` — and the rootless docker daemon (a different OS user than
+`agent`) fails to `mkdir` a bind-mount source there (`/workspace` is `agent`-owned, mode 0755, no
+group/other write; the daemon doesn't accept the existing symlink as satisfying its
+mount-source-exists check). From a worktree, `tool_root()` is the worktree dir, so `umodel_dir()`
+resolves instead to `.claude/worktrees/umodel_win32` — a real, already-populated directory an earlier
+worktree session created — so the daemon never needs to `mkdir` anything and the bug never fires.
+Confirmed live: 2/2 reproductions from the main checkout, 0 failures across 15 fresh builds run from
+a worktree. Incidental, not a fix — every worktree on this box shares that one directory.
+
+**18/21 levels now have a cached self-built golden** under `/tmp/uedcli-parity-cache/` (3
+pre-existing: UNATCO/`03_NYC_UNATCOHQ.dx`, Wanchai Market, `DX.dx`; 15 newly built this session). 3
+failed, no cached golden: **Endgame4** (offline UCC `batchexport` can't resolve
+`Engine.CameraPoint` — an extraction-mechanism gap, does not contradict the earlier geometry-exact
+finding via a different, live-editor ingest path); **smuggler** and **nyc-street** (both crash at
+`EDIT PASTE` right after `MAP NEW` — same signature as this session's Wanchai self-build crash,
+`wanchai-self-build-edit-paste-crash`).
+
+**Full per-level table, corrected against each level's raw log** (the golden-generation subagent's
+own summary table understated two levels' real deltas — UNATCO's node count was reported as a stale
+`+7` when the live re-verified number is `+0`, and Wanchai Market was called "EXACT" despite real
+verts/points/vectors deltas already on record all session; both corrected here from the raw
+`_scratch/parity_runs/*.log` output). Per the owner's standing format: tree structure = nodes/surfs/
+leaves all zero-delta; verts/points/vectors = all three zero-delta; geometry % = categories exact
+out of 6.
+
+| level | tree structure | verts/pts/vectors | geometry | lighting (records) |
+|---|:---:|:---:|---:|---:|
+| DX.dx (intro) | ✅ | ✅ | 6/6 (100%) | 26/26 (100.0%) |
+| NYC Bar | ✅ | ✅ | 6/6 (100%) | 821/936 (87.7%) |
+| UNATCO (`03_NYC_UNATCOHQ`) | ✅ | ❌ (+5/+16/+0) | 4/6 (66.7%) | 2797/3345 (83.6%) |
+| NYC ShipFan | ✅ | ❌ (+1/+21/+0) | 4/6 (66.7%) | 638/916 (69.7%) |
+| NYC Underground (04) | ✅ | ❌ (+26/+17/+0) | 4/6 (66.7%) | 448/803 (55.8%) |
+| Wanchai Market | ✅ | ❌ (+74/+16/−8) | 3/6 (50.0%) | 3418/4530 (75.5%) |
+| Paris Club | ❌ (+2 nodes) | ❌ (+36/+9/+0) | 3/6 (50.0%) | 1045/1361 (76.8%) |
+| HK Helibase | ❌ (+9 nodes) | ❌ (+122/+292/+0) | 3/6 (50.0%) | 4023/6002 (67.0%) |
+| Wanchai Garage | ❌ (−68 nodes/−12 leaves) | ❌ (−1224/−27/+0) | 2/6 (33.3%) | 1/941 (0.1%) |
+| Paris Underground | ❌ (−108 nodes/−4 leaves) | ❌ (−1306/−143/+0) | 2/6 (33.3%) | 0/1293 (0.0%) |
+| Paris Chateau | ❌ (+4 nodes) | ❌ (+16/+43/+2) | 2/6 (33.3%) | 3800/4646 (81.8%) |
+| Area51 Entrance | ❌ (+85/+51) | ❌ (+1055/+99/−9) | 1/6 (16.7%) | 3/5746 (0.1%) |
+| Training Final | ❌ (+105/+13) | ❌ (+1464/+286/+11) | 1/6 (16.7%) | 2/4875 (0.0%) |
+| FreeClinic08 | ❌ (−30/+1/−23) | ❌ (−729/−23/+0) | 1/6 (16.7%) | 1/1510 (0.1%) |
+| NYC 747 | ❌ (all 3 off) | ❌ (all 3 off) | 0/6 (0%) | 5/1918 (0.3%) |
+| Vandenberg Gas | ❌ (all 3 off) | ❌ (all 3 off) | 0/6 (0%) | 8/4325 (0.2%) |
+| OceanLab Lab | ❌ (all 3 off) | ❌ (all 3 off) | 0/6 (0%) | 9/10630 (0.1%) |
+| NSFHQ04 | ❌ (all 3 off) | ❌ (all 3 off) | 0/6 (0%) | 2/3321 (0.1%) |
+| Endgame4 | — | — | FAILED (extraction) | — |
+| smuggler | — | — | FAILED (crash) | — |
+| nyc-street | — | — | FAILED (crash) | — |
+
+**Zero levels at FULL PARITY** except the trivial `DX.dx` intro map — no real, non-trivial level has
+both tree structure AND verts/points/vectors AND every lighting record byte-identical. Geometry-6/6
+count: 2/21 (`DX.dx`, NYC Bar — both genuinely all-six-exact, not the looser node/surf/leaf "EXACT").
+Confirms the standing "lighting is gated on geometry parity" pattern: every level with a large
+geometry delta (any of Area51/NYC747/TrainingFinal/VandenbergGas/OceanLab over-build,
+FreeClinic08/NSFHQ04/WanchaiGarage/ParisUnderground under-build) collapses to <1% lighting; levels
+with only small verts/points deltas still land 55-90%. No new root-causing done this pass — breadth
+over depth, per the task.
