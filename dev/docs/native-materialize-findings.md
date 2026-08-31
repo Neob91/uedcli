@@ -2506,3 +2506,50 @@ gap this round targeted is fully closed. `bin/test` and `cargo test` (92/92) run
 
 Not yet done: this fix was verified on 4 of the 6 tracked levels (not NYC ShipFan/NYC Underground);
 those two were not re-measured this round.
+
+## `DX.dx`'s `p_base` reordering: confirmed the SAME pre-existing §10.20 residual, not the Wanchai/UNATCO Points-count thread; existing `bsp_refresh_points_vectors`/`UEDCLI_BSPCSG_WORLD_KEEP_POINTS` measured with ZERO effect; no fix shipped
+
+**Re-verified via `parity_report.py` (worktree `dx-pbase-investigation`, cache hit, no rebuild
+needed):** 13/26 `DX.dx` surfs still diverge on `p_base` (indices 3,4,5 / 9,10,11 / 15,16,17 / 19,20 /
+23,24). Every diff is a pure reorder within an already-correct point set — e.g. golden surfs 3,4,5
+read `{3,4,2}`, native reads `{2,3,4}` (a cyclic rotation of the same 3-point subset), and this
+pattern repeats per-brush. `verts`/`points`/`vectors` counts stay 0-delta (32/32 points both sides) —
+confirms the round-2 characterization in `texture-ref-i-actor-divergence-traced-to-golden` still
+holds, unstale.
+
+**This is the SAME family as the Wanchai/UNATCO Points thread only in the loose sense of "Points-array
+construction order" — but it is specifically the OTHER, older, already-pinned residual from that same
+lineage, not the +16-count bug those 4 rounds chased.** `reorder_points_canonical`'s own doc comment
+(`bspcsg.rs` ~L3290) already documents this exact defect, dated 2026-07-18 (spike §10.20, Test_Castle):
+"this matches the editor's LAYOUT (bases-first block)... but NOT its exact intra-block order — the
+editor's base/ring sub-order is a deeper `bspRefresh` reachability-DFS-compaction artifact of the
+PRE-compaction pool indices, not reconstructable from the final model." `DX.dx` reproduces this
+byte-for-byte in miniature: bases-first layout is right (0 count delta, structurally correct
+26-surf/32-point pool), only the intra-block sub-order is wrong — the exact shape §10.20 already named
+and left as a "deeper follow-on lever, not forced." Wanchai/UNATCO's own +16 residual (the 4-round
+thread) is a different bug (raw pool-SIZE overshoot upstream of any compaction, not order) — the two
+threads share a code area (`reorder_points_canonical`/`bsp_refresh_points_vectors`) but are not the
+same defect.
+
+**Tested whether the existing (Wanchai-thread-built, currently unwired) `bsp_refresh_points_vectors`
+mechanism, via its `UEDCLI_BSPCSG_WORLD_KEEP_POINTS` gate, closes `DX.dx`'s gap anyway — measured, ZERO
+effect.** Built native's model for `DX.dx` twice (env var unset / set to `1`) via
+`parity_compare.build_native_model` against the cached trunk+golden: geometry counts and the full
+`p_base` diff list are byte-identical between the two runs, all 13 diffs unchanged. Expected, once you
+read what the flag actually does: `bsp_refresh_points_vectors` is a reachability GC (drop points no
+surf/vert references) that preserves the SURVIVORS' existing relative pool order — it never reorders
+anything, and its own code comment (`bspcsg.rs` ~L2869) already says the default path "already starts
+this stage from an empty pool, so this call is a no-op there by construction" when there's nothing to
+keep. `DX.dx` has zero count residual (nothing for the GC to drop), so the flag is a no-op on this
+level by the same logic that makes it a partial win on Wanchai/UNATCO (which DO have a count gap) —
+confirms this mechanism addresses pool SIZE, not ORDER, and structurally cannot touch this residual on
+any level.
+
+**No fix shipped, no code changed.** Closing this needs what §10.20 already said it needs: a live
+capture of the real editor's Points pool CONTENT (not just counts) during the internal `bspRefresh`
+reachability-DFS compaction, mid-build — existing live-gdb harnesses in the Wanchai thread
+(`bspoptgeom_pool_trace.py` etc.) only capture pool COUNTS at checkpoints, not per-entry order/identity,
+so a new capture would be required. Per the standing no-guessing rule, not attempted this round (real
+new instrumentation, not a re-run of an already-built lever) — logged as open. `DX.dx`'s `surfs` residual
+after today's `i_leaf` fix is `texture_ref`/`i_actor` (golden-actor-set artifact, `texture-ref-i-actor-
+divergence-traced-to-golden`) + `p_base` (this entry) — nodes/leaves (mod `i_permeating`) stay exact.

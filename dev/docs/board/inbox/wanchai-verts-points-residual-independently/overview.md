@@ -501,3 +501,22 @@ block lighting comparison (LightMap record alignment depends on node/surf/leaf c
 both levels), better ROI for a future session is elsewhere: Wanchai's still-open LIGHTING gaps
 (light-run matching needs `MergeWith` decoded; a shadow-ray precision issue) — Wanchai is unblocked for
 that work today, unlike freeclinic08/nsfhq04 which are blocked on their own separate geometry gap.
+
+## 2026-08-31: `DX.dx`'s `p_base` reorder checked against this thread's mechanism — NOT the same bug, this thread's lever confirmed no help there either
+
+A separate investigation (`texture-ref-i-actor-divergence-traced-to-golden`, round 2) flagged `DX.dx`
+(the 5-brush intro map, now node-exact) as a possible clean repro of this thread's Points-array-order
+problem: 13/26 surfs have wrong `p_base`, but — unlike this thread's levels — `verts`/`points`/`vectors`
+counts are already 0-delta on `DX.dx`, so it's pure intra-block REORDER with no count residual at all.
+
+Tested this thread's own `bsp_refresh_points_vectors`/`UEDCLI_BSPCSG_WORLD_KEEP_POINTS` mechanism
+(Round 3's port) against `DX.dx` directly: zero effect, byte-identical `p_base` diffs on/off. Consistent
+with Round 3/4's own conclusion here (par-not-better, no ORDER progress) — this mechanism is a
+reachability GC that preserves survivors' existing relative order, never reorders them, and `DX.dx` has
+no count overshoot for it to GC in the first place, so it's a no-op there by the same logic that makes
+it a wash on Wanchai/UNATCO. **`DX.dx`'s `p_base` gap is NOT this thread's +16 Points-count bug** — it
+turns out to be the older, separately-already-pinned `reorder_points_canonical` intra-block-order
+residual from the 2026-07-18 Test_Castle spike (§10.20), reproduced cleanly here because `DX.dx` has no
+count noise to obscure it. Full detail: `native-materialize-findings.md`, "`DX.dx`'s `p_base`
+reordering"; `texture-ref-i-actor-divergence-traced-to-golden` round 5. No fix shipped, no code changed,
+no regression risk (read-only re-measurement).

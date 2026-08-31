@@ -318,3 +318,22 @@ New, unrelated, unflagged finding surfaced (not chased): golden carries one `Lev
 
 No production code changed this round (`uedcli-native/src/*`, `unbuilt.py` all untouched) — read-only
 live re-parsing in a disposable worktree, removed after, no commits.
+
+## Round 5 (2026-08-31): `p_base` re-verified, pinned as the pre-existing §10.20 residual, NOT the Wanchai/UNATCO Points-count bug; existing GC lever confirmed no help; no fix
+
+Re-verified this round's `p_base` characterization via `parity_report.py` (cache hit): still 13/26
+surfs diverge, same cyclic-3-point-subset-rotation shape as round 1's example, points/verts/vectors
+still 0-delta. Cross-checked against `bspcsg.rs`'s `reorder_points_canonical` doc comment: this is the
+SAME defect the 2026-07-18 Test_Castle spike (§10.20) already named and left open — "matches the
+editor's LAYOUT (bases-first) but not its intra-block sub-order... a `bspRefresh` reachability-DFS-
+compaction artifact of pre-compaction pool indices, not reconstructable from the final model" — now
+reproduced byte-for-byte on `DX.dx`, just cleaner (0 count delta vs Test_Castle's own point-count
+noise at the time). **Not the same bug as `wanchai-verts-points-residual-independently`'s +16
+Points-COUNT residual** — that thread's `bsp_refresh_points_vectors`/`UEDCLI_BSPCSG_WORLD_KEEP_POINTS`
+mechanism (a reachability GC) was tested directly against `DX.dx` and makes ZERO difference (byte-
+identical `p_base` diffs on/off) — expected, since that GC preserves survivors' existing order rather
+than reordering them, and `DX.dx` has nothing to GC (0 count delta) in the first place. Full
+measurement + reasoning: `native-materialize-findings.md`, "`DX.dx`'s `p_base` reordering". No fix
+shipped — real progress needs a live capture of the editor's Points pool CONTENT (not just counts)
+during its internal compaction, which no existing harness does; per the no-guessing rule, logged as
+open rather than attempted blind. No production code changed.
