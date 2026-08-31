@@ -9,7 +9,8 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import asdict, dataclass
+import struct
+from dataclasses import asdict, dataclass, fields
 from pathlib import Path
 
 CACHE_ROOT_DEFAULT = Path("/tmp/uedcli-parity-cache")
@@ -123,6 +124,102 @@ class GeometryDelta:
         return self.native == self.golden
 
 
+def _bit_exact_eq(a, b) -> bool:
+    """Bit-exact equality, correct for float32 fields (`plane`) where bare `!=` is wrong two ways:
+    `-0.0 != 0.0` is `False` in Python, so a genuine on-disk byte divergence (plausible from BSP
+    plane-equation math -- cross products, subtractions) would be silently missed; and two
+    bit-identical NaN payloads compare `!=` `True`, a false positive. Packing to the on-disk f32
+    bytes and comparing those sidesteps both. Recurses into tuples (`plane`/`i_zone`/`i_leaf`/
+    `pan`); plain int/enum fields compare with `==`, already exact."""
+    if isinstance(a, float) and isinstance(b, float):
+        return struct.pack("<f", a) == struct.pack("<f", b)
+    if isinstance(a, tuple) and isinstance(b, tuple):
+        return len(a) == len(b) and all(_bit_exact_eq(x, y) for x, y in zip(a, b))
+    return a == b
+
+
+@dataclass(frozen=True, kw_only=True)
+class FieldDiff:
+    """One `native[index].field` disagreement with `golden[index].field`, per `_bit_exact_eq`:
+    BIT-exact, no epsilon, no "close enough"."""
+    index: int
+    field: str
+    native: object
+    golden: object
+
+
+@dataclass(frozen=True, kw_only=True)
+class ArrayContentResult:
+    """Index-for-index field comparison of one native/golden array (nodes or surfs) -- POSITIONAL:
+    `native[i]` is compared against `golden[i]` for every `i`, never matched up structurally. The
+    goal is byte-identical `.dx` output, which is order-sensitive: a native build that produces an
+    "equivalent" tree in a different order still serializes to different bytes, so reordering must
+    show up as a diff, not be tolerated away."""
+    array_name: str
+    native_len: int
+    golden_len: int
+    diffs: tuple[FieldDiff, ...] = ()
+
+    @property
+    def compared(self) -> int:
+        """How many indices were actually compared -- the common prefix length."""
+        return min(self.native_len, self.golden_len)
+
+    @property
+    def diverging_indices(self) -> tuple[int, ...]:
+        return tuple(dict.fromkeys(d.index for d in self.diffs))
+
+    @property
+    def indices_differ(self) -> int:
+        return len(self.diverging_indices)
+
+    @property
+    def fields_differ(self) -> int:
+        return len(self.diffs)
+
+    @property
+    def exact(self) -> bool:
+        """Byte-identical content: equal length AND zero field diffs across the compared range. A
+        length mismatch fails this even with a diff-free common prefix -- two different-length
+        arrays can never serialize to the same bytes."""
+        return self.native_len == self.golden_len and not self.diffs
+
+
+def compare_array_content(native, golden, *, array_name: str) -> ArrayContentResult:
+    """Index-for-index field diff of two same-shape dataclass sequences (`umodel.BspNode` or
+    `BspSurf` instances, or any object exposing `dataclasses.fields`). Generic over whatever fields
+    the dataclass declares, so a future field added to `BspNode`/`BspSurf` is covered automatically
+    -- never a hand-maintained field list that can silently drift out of sync with the real struct."""
+    diffs = []
+    for i in range(min(len(native), len(golden))):
+        n, g = native[i], golden[i]
+        for f in fields(n):
+            nv, gv = getattr(n, f.name), getattr(g, f.name)
+            if not _bit_exact_eq(nv, gv):
+                diffs.append(FieldDiff(index=i, field=f.name, native=nv, golden=gv))
+    return ArrayContentResult(array_name=array_name, native_len=len(native), golden_len=len(golden),
+                              diffs=tuple(diffs))
+
+
+@dataclass(frozen=True, kw_only=True)
+class ContentComparison:
+    """Index-for-index content comparison of the three arrays that define the BSP tree's real
+    topology and per-face data: nodes, surfs, and leaves -- the same "tree structure" triple this
+    investigation's own reporting format is built on (`native-materialize-findings.md`). Exists
+    because `GeometryDelta`'s count-only compare cannot tell "genuinely identical tree" from "same
+    counts, different tree" -- two trees can agree on `len(nodes)`/`len(surfs)`/`len(leaves)` while
+    heavily disagreeing per-index (the `freeclinic08`/`nsfhq04` finding: "37/141 brushes differ,
+    summing to 102 absolute delta against a net -38" -- heavy disagreement that cancels out in the
+    aggregate count)."""
+    nodes: ArrayContentResult
+    surfs: ArrayContentResult
+    leaves: ArrayContentResult
+
+    @property
+    def exact(self) -> bool:
+        return self.nodes.exact and self.surfs.exact and self.leaves.exact
+
+
 @dataclass(frozen=True, kw_only=True)
 class LightingSummary:
     total_records: int
@@ -147,11 +244,13 @@ class LightingSummary:
         return self.identical_records == self.total_records
 
 
-def full_parity(geometry: GeometryDelta, lighting: LightingSummary) -> bool:
+def full_parity(geometry: GeometryDelta, content: ContentComparison, lighting: LightingSummary) -> bool:
     """FULL PARITY: YES iff geometry is byte-identical on every one of the six counts (not just
-    node/surf/leaf) AND every LightMap record is byte-identical. See `GeometryDelta.exact`'s
-    docstring for why this is stricter than the existing breadth-gate "EXACT" label."""
-    return geometry.exact and lighting.records_fully_identical
+    node/surf/leaf), the node/surf CONTENT is index-for-index byte-identical (not just counts --
+    see `ContentComparison`'s docstring for why counts alone are not enough), and every LightMap
+    record is byte-identical. See `GeometryDelta.exact`'s docstring for why the count half is
+    already stricter than the existing breadth-gate "EXACT" label."""
+    return geometry.exact and content.exact and lighting.records_fully_identical
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -162,12 +261,13 @@ class ParityReport:
     cache_hit: bool
     built_at: str | None
     geometry: GeometryDelta
+    content: ContentComparison
     lighting: LightingSummary
     warnings: tuple[str, ...] = ()
 
     @property
     def full_parity(self) -> bool:
-        return full_parity(self.geometry, self.lighting)
+        return full_parity(self.geometry, self.content, self.lighting)
 
 
 def _geometry_lines(g: GeometryDelta) -> list[str]:
@@ -180,6 +280,27 @@ def _geometry_lines(g: GeometryDelta) -> list[str]:
         ("vectors", g.native.vectors, g.golden.vectors, g.d_vectors),
     ]
     return [f"  {label:8} native={n:<8} golden={gd:<8} d={d:+d}" for label, n, gd, d in rows]
+
+
+def _content_array_lines(r: ArrayContentResult, *, max_diffs_shown: int = 30) -> list[str]:
+    if r.native_len != r.golden_len:
+        head = (f"  {r.array_name:8} LENGTH MISMATCH native={r.native_len:<8} golden={r.golden_len:<8}"
+                f" ({r.compared} common index(es) compared)")
+        if not r.diffs:
+            # A clean common prefix does NOT mean identical -- the length itself differs, so this
+            # array can never serialize byte-identical. Say so explicitly rather than claiming
+            # "content identical", which `ArrayContentResult.exact` (correctly) also refuses here.
+            return [head + " -- common prefix agrees, but length differs (NOT exact)"]
+    else:
+        head = f"  {r.array_name:8} native={r.native_len:<8} golden={r.golden_len:<8}"
+        if not r.diffs:
+            return [head + "  content identical"]
+    lines = [head, f"    {r.indices_differ} index(es) differ across {r.fields_differ} field(s):"]
+    for d in r.diffs[:max_diffs_shown]:
+        lines.append(f"      [{d.index}] {d.field}: native={d.native!r} golden={d.golden!r}")
+    if r.fields_differ > max_diffs_shown:
+        lines.append(f"      ... and {r.fields_differ - max_diffs_shown} more field diff(s)")
+    return lines
 
 
 def format_text(report: ParityReport) -> str:
@@ -195,6 +316,14 @@ def format_text(report: ParityReport) -> str:
         *_geometry_lines(report.geometry),
         f"  -> geometry {'EXACT' if report.geometry.exact else 'NOT EXACT'} "
         f"(all 6 counts must be byte-identical for FULL PARITY)",
+        "",
+        "Content (index-for-index nodes/surfs/leaves vs golden -- catches divergence counts alone "
+        "miss):",
+        *_content_array_lines(report.content.nodes),
+        *_content_array_lines(report.content.surfs),
+        *_content_array_lines(report.content.leaves),
+        f"  -> content {'EXACT' if report.content.exact else 'NOT EXACT'} "
+        f"(every node/surf/leaf field must match at every index for FULL PARITY)",
         "",
         "Lighting (LightMap records, native vs golden):",
         f"  records: {report.lighting.identical_records}/{report.lighting.total_records} "
@@ -221,6 +350,12 @@ def format_json(report: ParityReport) -> str:
         "leaves": report.geometry.d_leaves, "verts": report.geometry.d_verts,
         "points": report.geometry.d_points, "vectors": report.geometry.d_vectors,
     }
+    for name, r in (("nodes", report.content.nodes), ("surfs", report.content.surfs),
+                    ("leaves", report.content.leaves)):
+        d["content"][name]["indices_differ"] = r.indices_differ
+        d["content"][name]["fields_differ"] = r.fields_differ
+        d["content"][name]["exact"] = r.exact
+    d["content"]["exact"] = report.content.exact
     d["lighting"]["identical_pct"] = report.lighting.identical_pct
     d["lighting"]["shadow_bit_pct"] = report.lighting.shadow_bit_pct
     return json.dumps(d, indent=2, sort_keys=True)

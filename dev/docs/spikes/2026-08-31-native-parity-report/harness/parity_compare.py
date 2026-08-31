@@ -26,17 +26,26 @@ def _ensure_imports() -> None:
             sys.path.insert(0, sp)
 
 
-def parse_golden_model(golden_path: Path):
+def parse_dx_model(dx_path: Path):
     """The level BSP `Model` of a built map -- the largest `Engine.Model` export (every brush actor
     also owns a small shape Model; the world BSP dwarfs them), same rule `regression_gate.py`/
-    `lightparity.py` both use."""
+    `lightparity.py` both use. Works on ANY built `.dx` (golden or native's own assembled output) --
+    both are read through this one path so their `Model`s are extracted identically."""
     _ensure_imports()
     import utexture_decode as UT
     from uedcli.native import umodel as UM
-    pkg = UT.load_package(str(golden_path))
+    pkg = UT.load_package(str(dx_path))
     models = [i for i in range(len(pkg.exports)) if pkg.class_of_export(i) == "Model"]
     mi = max(models, key=lambda i: pkg.exports[i]["ssize"])
     return UM.parse_model_body(pkg.buf, pkg.exports[mi]["soff"], pkg.exports[mi]["ssize"])
+
+
+def _temp_dx(data: bytes) -> Path:
+    """Write `.dx` bytes to a throwaway temp file -- `parse_dx_model`/`lightparity.level_model`
+    read a path, not bytes, and native's own build only exists in memory until assembled."""
+    with tempfile.NamedTemporaryFile(suffix=".dx", delete=False) as f:
+        f.write(data)
+        return Path(f.name)
 
 
 def build_native_model(trunk_dir: Path):
@@ -71,9 +80,38 @@ def geometry_counts(model) -> pl.GeometryCounts:
 
 def compare_geometry(trunk_dir: Path, golden_path: Path) -> pl.GeometryDelta:
     native_model, _level = build_native_model(trunk_dir)
-    golden_model = parse_golden_model(golden_path)
+    golden_model = parse_dx_model(golden_path)
     return pl.GeometryDelta(native=geometry_counts(native_model),
                             golden=geometry_counts(golden_model))
+
+
+def compare_content(native_dx_bytes: bytes, golden_path: Path) -> pl.ContentComparison:
+    """Index-for-index nodes/surfs field comparison -- the check `compare_geometry`'s aggregate
+    counts cannot do (see `pl.ContentComparison`'s docstring).
+
+    Deliberately compares native's own FULLY ASSEMBLED `.dx` bytes (the same bytes
+    `compare_lighting` reads, built by `build_native_lit_dx`) -- NOT the bare
+    `build_geometry_bspcsg` model `compare_geometry`/`build_native_model` use. The bare CSG-only
+    build never populates `texture_ref`/`i_actor`/`i_light_map` (`i_actor` there is a transient
+    index into the CSG brush LIST, not an object ref; texture/light refs are filled in later by
+    `unbuilt.assemble_unbuilt`'s rewrite pass and the lighting bake) -- comparing it field-by-field
+    against golden's fully-assembled surfs would flag those three fields as "different" on every
+    single surf regardless of whether the tree itself is right, a false positive from comparing the
+    wrong build stage rather than a real divergence (confirmed live on `DX.dx`, first run of this
+    comparison). Covers nodes/surfs/leaves -- the "tree structure" triple this investigation's own
+    reporting format is built on; verts/points/vectors are NOT included, see
+    `native-materialize-findings.md` for that scope note."""
+    native_path = _temp_dx(native_dx_bytes)
+    try:
+        native_model = parse_dx_model(native_path)
+    finally:
+        native_path.unlink(missing_ok=True)
+    golden_model = parse_dx_model(golden_path)
+    return pl.ContentComparison(
+        nodes=pl.compare_array_content(native_model.nodes, golden_model.nodes, array_name="nodes"),
+        surfs=pl.compare_array_content(native_model.surfs, golden_model.surfs, array_name="surfs"),
+        leaves=pl.compare_array_content(native_model.leaves, golden_model.leaves,
+                                        array_name="leaves"))
 
 
 def build_native_lit_dx(trunk_dir: Path, project_root: Path) -> tuple[bytes, list[str]]:
@@ -118,9 +156,7 @@ def compare_lighting(native_dx_bytes: bytes, golden_path: Path) -> pl.LightingSu
     from uedcli import upackage
     from uedcli.native import umodel
 
-    with tempfile.NamedTemporaryFile(suffix=".dx", delete=False) as f:
-        f.write(native_dx_bytes)
-        native_path = Path(f.name)
+    native_path = _temp_dx(native_dx_bytes)
     try:
         npkg, nm = LP.level_model(upackage, umodel, str(native_path))
     finally:

@@ -13,11 +13,13 @@ not a valid comparison target -- `dev/docs/native-materialize-findings.md`, "Gol
 provenance -- CONFIRMED, closed").
 
 Compares geometry (nodes/surfs/leaves/verts/points/vectors -- exact counts, native
-`build_geometry_bspcsg` vs the golden) and lighting (`LightMap` byte-identical record
-count/percentage + grid+run-matched shadow-bit agreement), and prints a top-line
-`FULL PARITY: YES/NO` verdict -- YES only if EVERY geometry count and EVERY `LightMap` record is
-byte-identical (stricter than `breadth_gate.py`'s node/surf/leaf-only "EXACT" label, which ignores a
-verts/points/vectors delta).
+`build_geometry_bspcsg` vs the golden), CONTENT (nodes/surfs/leaves -- index-for-index field comparison,
+`native[i]` vs `golden[i]` for every `i`; catches a genuinely different tree that happens to share
+every count with the golden, which the count-only check above cannot), and lighting (`LightMap`
+byte-identical record count/percentage + grid+run-matched shadow-bit agreement). Prints a top-line
+`FULL PARITY: YES/NO` verdict -- YES only if EVERY geometry count, EVERY node/surf field at every
+index, and EVERY `LightMap` record is byte-identical (stricter than `breadth_gate.py`'s
+node/surf/leaf-only "EXACT" label, which checks neither a verts/points/vectors delta nor content).
 
 Usage:
   .venv/bin/python parity_report.py <path/to/level.dx> [--json] [--game deusex]
@@ -90,6 +92,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         geometry = pc.compare_geometry(trunk_dir, layout.golden)
         native_dx, build_warnings = pc.build_native_lit_dx(trunk_dir, trunk_dir.parent.parent)
+        content = pc.compare_content(native_dx, layout.golden)
         lighting = pc.compare_lighting(native_dx, layout.golden)
     except Exception as e:  # noqa: BLE001 -- never let a raw traceback reach the user
         print(f"parity report: comparison failed for {dx_path}: {e}", file=sys.stderr)
@@ -97,8 +100,8 @@ def main(argv: list[str] | None = None) -> int:
 
     report = pl.ParityReport(source_dx=str(dx_path), content_hash=pl.content_hash(dx_path),
                              level_name=level_name, cache_hit=cache_hit,
-                             built_at=meta.get("built_at"), geometry=geometry, lighting=lighting,
-                             warnings=tuple(build_warnings))
+                             built_at=meta.get("built_at"), geometry=geometry, content=content,
+                             lighting=lighting, warnings=tuple(build_warnings))
     print(pl.format_json(report) if args.json else pl.format_text(report))
     return 0 if report.full_parity else 1
 
