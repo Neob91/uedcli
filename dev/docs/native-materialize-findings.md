@@ -2553,3 +2553,78 @@ so a new capture would be required. Per the standing no-guessing rule, not attem
 new instrumentation, not a re-run of an already-built lever) — logged as open. `DX.dx`'s `surfs` residual
 after today's `i_leaf` fix is `texture_ref`/`i_actor` (golden-actor-set artifact, `texture-ref-i-actor-
 divergence-traced-to-golden`) + `p_base` (this entry) — nodes/leaves (mod `i_permeating`) stay exact.
+
+## The `Camera6`-`Camera11` leak: REFUTED as a `LIGHT APPLY`/`GetVisibleSurfs` mechanism — a live no-light control build carries the identical 6 exports
+
+Follow-up on the standing "leaked `GetVisibleSurfs` temp visibility camera" hypothesis
+(`texture-ref-i-actor-divergence-traced-to-golden`, `native-light-apply-bake-where-it-stands-and` "Two
+smaller leads"): every self-built golden carries 6 `Camera6`-`Camera11` exports, previously attributed
+to `URender::GetVisibleSurfs`'s six 90°-apart cube-map faces spawning/reusing temp viewport `Camera`
+actors during `LIGHT APPLY` and never being cleaned up before `MAP SAVE`. That attribution was never
+live-verified — this round settles it.
+
+**Count/naming is invariant across radically different actor populations — first sign the mechanism
+isn't light- or paste-content-dependent.** Parsed every cached/widened `DX.dx`/NYC Bar/UNATCO golden
+export table (`pkg_write.parse_package`): 9 builds spanning 5-195 real `Light`-class exports and
+33-2974 total exports, across three different actor-set filters (narrow brush+light-only, widened
+all-non-mover, `ALL` incl. movers) and two independent re-builds of the same UNATCO config — **every
+one carries exactly 6 `Camera` exports, named exactly `Camera6`-`Camera11`, byte-identical strings, no
+exceptions.** If this were "one temp camera leaks per light" or scaled with actor-paste population,
+the count and/or the numeric suffix would move across a 5-to-195-light, 33-to-2974-export span. It
+never does.
+
+**Decisive test: a live `--no-light` control build (`build_ued_lit_golden.py` already ships this flag
+for exactly this purpose) on `DX.dx`'s trunk — `MAP NEW` → `EDIT PASTE` (all 37 actors) → `MAP REBUILD`
+→ `MAP SAVE`, `LIGHT APPLY` never called.** Built live this round (worktree
+`camera-leak-investigation`, trunk `_scratch/geo-confirm-dx/maps/dx` — this trunk predates
+class-name qualification and needed a throwaway in-memory `ClassIndex.qualify_and_validate` patch
+before `gather_lights` would run on it, unrelated to this finding). Result, parsed the same way:
+**57 exports, `Camera` count = 6, names `Camera6`-`Camera11` — identical to every LIGHT-APPLY'd
+golden.** `LIGHT APPLY` never ran in this build. The leak is not downstream of it.
+
+**Conclusion: the hypothesis is REFUTED.** The 6 stray `Camera` exports are not a `GetVisibleSurfs`
+artifact and do not belong to `LIGHT APPLY` at all — they are already present after nothing more than
+`MAP NEW`/`EDIT PASTE`/`MAP REBUILD`, i.e. an editor-session/viewport artifact of driving UnrealEd at
+all, independent of lighting. This matches two pieces of evidence that were already on record but not
+previously cross-referenced against the `GetVisibleSurfs` theory:
+- `sections/31-package-wrapper-parity.md` (spike 2026-07-15/07-18, `Test_Castle.dx` — a golden built
+  the OLDER unlit way, no `LIGHT APPLY` anywhere in that spike's pipeline either) already documented
+  "6 `Camera` viewport actors... serialized from UnrealEd's viewport/browser session" as
+  editor-session-global state with **no theory attached to `GetVisibleSurfs`** — filed alongside the
+  session-global FName pool order and the session-global UObject numbering as fundamentally
+  unreproducible-from-the-trunk state, not as an algorithm output.
+- `dev/docs/unrealed/package-format.md` ("The `Actors` array is the authority...", 2026-07-27, 88
+  retail Deus Ex maps measured against UnrealEd's own `UCC batchexport`): **every single retail map
+  carries exactly 4 viewport `Camera` actors on its roster**, universally, that the exporter omits —
+  an independent, much larger-sample confirmation that UnrealEd always saves some fixed small number
+  of its own UI viewport cameras into any map it saves, unrelated to that map's content, lighting, or
+  how it was built.
+
+**Why our self-built goldens show 6 and retail shows 4: not resolved this round, and not this round's
+question.** The most likely explanation is that this pipeline's headless `wine_ctl`/Xvfb/fluxbox
+automation session ends up with a different number of live viewport windows open at `MAP SAVE` time
+than a real interactive 4-pane artist session — a headless-automation/session-setup detail, not a
+lighting or geometry algorithm. Not chased further (out of this round's scope: the question asked was
+specifically whether this is a `LIGHT APPLY` mechanism, and it is not).
+
+**Answer to the round's mandate: native's lighting bake should NOT replicate this.** `visible_surfs.rs`
+(`uedcli-native/src/`) already has zero concept of spawning actors or viewports — it is a purely
+geometric/mathematical port (a `Face` struct, in-memory span buffers) with no architectural hook for
+"emit N stray exports," and confirmed above, there is no real editor `LIGHT APPLY` algorithm fact to
+port here regardless. Adding 6 fake `Camera` exports to native's output would not be replicating a
+`LIGHT APPLY` quirk (there is none to replicate) — it would be inventing content to chase a
+superficial byte count, exactly the "guess and fudge" move the standing rule forbids. This is the same
+category of gap `materialize-verify-qualify-level-textures` already flagged for the verify path
+("Retail maps DO normally ship viewport cameras... the verify should treat them as an editor artifact
+... not a mismatch") — a package-wrapper/session-state gap to be EXCLUDED from comparison at the
+tooling layer (same treatment as timestamps/GUIDs/name-table order, `sections/31`), not something for
+`level materialize`'s content to reproduce.
+
+**No fix shipped, none should be.** No production code changed (`uedcli-native/src/*`, `unbuilt.py`,
+`assemble.py` all untouched). The `--no-light` build lives at
+`/tmp/camera-leak-investigation/dx_nolight.dx`; the qualify-patched driver script at
+`/tmp/camera-leak-investigation/build_ued_lit_golden_qualify.py` (throwaway, not committed — its only
+change from `build_ued_lit_golden.py` is the in-memory `ClassIndex.qualify_and_validate` call needed
+because `_scratch/geo-confirm-dx`'s trunk predates class qualification). Worktree
+`camera-leak-investigation` left in place uncommitted for the coordinating session to inspect; no
+docker containers left running (`stop_editor`'s `finally` ran cleanly).

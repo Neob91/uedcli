@@ -1,7 +1,7 @@
 +++
 priority = "p1"
 kind = "debug"
-summary = "texture_ref/i_actor systematic offset traced to a golden-build actor-set mismatch (round 1); ROUND 2: the actor-set widening was shipped SAFE (geometry counts unchanged, incl. movers-included on UNATCO) but does NOT close the divergence -- the actor-set-mismatch theory is REFUTED as a sufficient explanation, real cause is leaked GetVisibleSurfs camera exports + native/editor object-naming differences; p_base divergence is a separate, real Points-array reorder"
+summary = "texture_ref/i_actor systematic offset traced to a golden-build actor-set mismatch (round 1); ROUND 2: the actor-set widening was shipped SAFE (geometry counts unchanged, incl. movers-included on UNATCO) but does NOT close the divergence -- the actor-set-mismatch theory is REFUTED as a sufficient explanation, real cause is leaked Camera6-Camera11 exports + native/editor object-naming differences; ROUND 6: the leaked cameras are REFUTED as a LIGHT APPLY/GetVisibleSurfs mechanism (live no-light control build carries the identical 6 exports) -- an editor-session/viewport artifact, native should not replicate it; p_base divergence is a separate, real Points-array reorder"
 depends-on = ["native-light-apply-bake-where-it-stands-and", "wanchai-verts-points-residual-independently"]
 +++
 
@@ -337,3 +337,47 @@ measurement + reasoning: `native-materialize-findings.md`, "`DX.dx`'s `p_base` r
 shipped — real progress needs a live capture of the editor's Points pool CONTENT (not just counts)
 during its internal compaction, which no existing harness does; per the no-guessing rule, logged as
 open rather than attempted blind. No production code changed.
+
+## Round 6 (2026-08-31): the `Camera6`-`Camera11` leak is REFUTED as a `LIGHT APPLY`/`GetVisibleSurfs` mechanism
+
+Mandate: is the leaked-camera export set (round 1's "live confirmation of the already-suspected
+`SpawnViewActor` reuses a free `Camera`" mechanism) genuinely internal to `LIGHT APPLY`, and so
+something native's lighting bake should replicate — or a golden-build-script artifact? Answer: **the
+golden-build-script framing was also wrong; it's a `LIGHT APPLY`-INDEPENDENT editor-session artifact.**
+Native should NOT replicate it.
+
+**Invariance across population, first sign.** Parsed 9 cached/widened `DX.dx`/NYC Bar/UNATCO golden
+export tables spanning 5-195 real lights and 33-2974 total exports, across 3 different actor-set
+filters plus 2 independent UNATCO rebuilds: every single one carries exactly 6 `Camera` exports named
+exactly `Camera6`-`Camera11` — the count and the numeric suffix never move, regardless of how many
+lights or actors were pasted.
+
+**Decisive test: a live `--no-light` control build (the harness script already has this flag) on
+`DX.dx`'s trunk — `MAP NEW` → `EDIT PASTE` (37 actors) → `MAP REBUILD` → `MAP SAVE`, `LIGHT APPLY`
+never called.** Built live this round: **57 exports, still exactly 6 `Camera` exports, still
+`Camera6`-`Camera11`** — byte-identical naming to every LIGHT-APPLY'd golden, with `LIGHT APPLY` never
+having run. The leak predates lighting entirely.
+
+**Corroborated by two pieces of evidence already on record but never cross-checked against the
+`GetVisibleSurfs` theory:** `sections/31-package-wrapper-parity.md` (2026-07-18, `Test_Castle.dx`,
+built the older UNLIT way) already documented the same "6 `Camera` viewport actors... serialized from
+UnrealEd's viewport/browser session" as unreproducible session state, no `GetVisibleSurfs` theory
+attached; and `dev/docs/unrealed/package-format.md`'s 88-retail-map measurement found **every retail
+Deus Ex map carries exactly 4 viewport `Camera` actors**, universally, independent of content — the
+same phenomenon at a much larger sample, confirming it's a normal "the editor saves its own open
+viewports" fact, not an algorithm output. Why our pipeline gets 6 instead of retail's 4 is unresolved
+(likely a headless-automation viewport-count difference, not examined this round — out of scope for
+the question actually asked).
+
+**Native should not replicate this.** `visible_surfs.rs` is a purely geometric port with no concept of
+spawning actors/viewports at all, and there is now no real `LIGHT APPLY` mechanism here to port in the
+first place — adding 6 fake `Camera` exports to native's output would be inventing content to chase a
+superficial count, not replicating a verified editor quirk. Same category of gap
+`materialize-verify-qualify-level-textures` already flagged for the verify path: a
+package-wrapper/session-state artifact to exclude from comparison, not something for `level
+materialize`'s content to reproduce.
+
+No fix shipped, none should be — the mandate that would have justified one (a genuine `LIGHT
+APPLY`-internal mechanism) does not hold. No production code touched. Full writeup:
+`native-materialize-findings.md`, search "REFUTED as a `LIGHT APPLY`". Worktree
+`camera-leak-investigation` left in place, uncommitted, for the coordinating session.
