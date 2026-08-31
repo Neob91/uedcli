@@ -18,7 +18,14 @@ Structure (round 6, live-disassembly-confirmed):
     script parameterizes it so round 7's live-captured facts can be dropped in and validated here,
     fast, before touching Rust).
 
-Usage: line_clear_v2_algorithm_check.py GOLDEN.dx TRUNK_PROJECT_DIR TRUNK_REL [--limit N]
+Usage: line_clear_v2_algorithm_check.py GOLDEN.dx TRUNK_PROJECT_DIR TRUNK_REL [--limit N] [--radius-aware]
+
+`--radius-aware`: skip out-of-light-radius lumel bits entirely (no `line_clear` call, doesn't count
+toward `--limit`) -- matches `light.rs`'s own per-lumel `d.dot(&d) < wr2` gate before it ever calls
+`line_clear` (world radius `(LightRadius_byte + 1) * 25`, `AActor::WorldLightRadius`). Without this
+flag the sweep counts every lumel unconditionally, which round 7 showed measures the wrong thing (a
+light 677uu from a lumel with 425uu radius is "out of range", not a `line_clear` disagreement) --
+round 8's own round used an ad hoc uncommitted version of this cull; this flag makes it reusable.
 """
 from __future__ import annotations
 
@@ -276,6 +283,7 @@ def main() -> int:
     limit = 2000
     if "--limit" in sys.argv:
         limit = int(sys.argv[sys.argv.index("--limit") + 1])
+    radius_aware = "--radius-aware" in sys.argv
 
     repo = str(ROOT)
     upackage, umodel = _load(repo)
