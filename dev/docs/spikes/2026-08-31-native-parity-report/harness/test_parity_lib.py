@@ -9,6 +9,8 @@ import hashlib
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import parity_lib as pl  # noqa: E402
@@ -108,6 +110,17 @@ class _Node:
 
 def _node(**kw):
     return _Node(**kw)
+
+
+@dataclasses.dataclass
+class _Surf:
+    """A minimal stand-in for `umodel.BspSurf`, same rationale as `_Node` above."""
+    texture_ref: int = 0
+    i_actor: int = 0
+
+
+def _surf(**kw):
+    return _Surf(**kw)
 
 
 def test_compare_array_content_identical_arrays_are_exact():
@@ -224,6 +237,90 @@ def test_compare_array_content_node_flags_mask_does_not_swallow_other_field_diff
     r = pl.compare_array_content(native, golden, array_name="nodes")
     assert not r.exact
     assert {d.field for d in r.diffs} == {"i_leaf"}
+
+
+def test_export_renumber_map_strips_artifacts_and_closes_the_gap():
+    # Cameras interspersed (not contiguous) -- indices 2,4,5,6,7,8 -- matching the live NYC
+    # Bar/UNATCO measurement (scattered among per-brush Model/Polys exports), not the DX.dx-only
+    # contiguous-at-tail special case.
+    classes = ["LevelInfo", "Brush", "Camera", "Brush", "Camera", "Camera", "Camera", "Camera",
+              "Camera", "Brush"]
+    m = pl.export_renumber_map(classes)
+    assert m == {0: 0, 1: 1, 2: None, 3: 2, 4: None, 5: None, 6: None, 7: None, 8: None, 9: 3}
+
+
+def test_export_renumber_map_no_artifacts_is_identity():
+    classes = ["LevelInfo", "Brush", "Brush"]
+    m = pl.export_renumber_map(classes)
+    assert m == {0: 0, 1: 1, 2: 2}
+
+
+def test_renumber_actor_ref_zero_and_negative_pass_through_unchanged():
+    # 0 = none, negative = an IMPORT ref (texture_ref's domain) -- neither is a positive export ref,
+    # so neither is in this mapping's domain at all.
+    mapping = pl.export_renumber_map(["Brush", "Camera", "Brush"])
+    assert pl.renumber_actor_ref(0, mapping) == 0
+    assert pl.renumber_actor_ref(-3, mapping) == -3
+
+
+def test_renumber_actor_ref_shifts_past_artifacts():
+    classes = ["LevelInfo", "Brush", "Camera", "Brush", "Camera", "Camera", "Camera", "Camera",
+              "Camera", "Brush"]
+    mapping = pl.export_renumber_map(classes)
+    # Brush at raw index 1 -> ref 2; nothing artifact-class precedes it -> unchanged.
+    assert pl.renumber_actor_ref(2, mapping) == 2
+    # Brush at raw index 3 -> ref 4; one Camera (index 2) precedes it -> ref 3.
+    assert pl.renumber_actor_ref(4, mapping) == 3
+    # Brush at raw index 9 -> ref 10; six Cameras precede it -> ref 4.
+    assert pl.renumber_actor_ref(10, mapping) == 4
+
+
+def test_renumber_actor_ref_raises_if_ref_points_at_a_stripped_artifact():
+    mapping = pl.export_renumber_map(["Brush", "Camera"])
+    with pytest.raises(ValueError, match="stripped artifact export"):
+        pl.renumber_actor_ref(2, mapping)  # ref 2 = raw index 1 = the Camera
+
+
+def test_renumber_surf_actor_refs_only_touches_i_actor():
+    import dataclasses as dc
+
+    @dc.dataclass
+    class _Surf:
+        texture_ref: int = 0
+        i_actor: int = 0
+
+    classes = ["LevelInfo", "Brush", "Camera", "Brush"]
+    mapping = pl.export_renumber_map(classes)
+    surfs = (_Surf(texture_ref=-5, i_actor=4),)  # ref4 = raw index3 -> one Camera precedes -> ref3
+    out = pl.renumber_surf_actor_refs(surfs, mapping)
+    assert out[0].i_actor == 3
+    assert out[0].texture_ref == -5  # untouched -- texture_ref is an import ref, not this mapping's domain
+
+
+def test_camera_exclusion_closes_a_false_positive_i_actor_divergence():
+    """The TDD scenario the round-7 task mandate asked for: a synthetic golden export table with 6
+    Camera artifacts interspersed among real Brush exports (not contiguous, not at the end -- the
+    live-measured NYC Bar/UNATCO shape). Three surfaces each reference a different Brush actor.
+    Native never emits Camera exports, so its own table has no gap -- its `i_actor` values are what
+    golden's WOULD be if the artifacts were stripped. The OLD (raw-index) comparison must
+    false-positive on the two surfaces whose owning brush sits after a Camera; the NEW
+    (artifact-stripped-and-renumbered) comparison must find zero diffs."""
+    golden_classes = ["LevelInfo", "Brush", "Camera", "Brush", "Camera", "Camera", "Camera",
+                      "Camera", "Camera", "Brush"]
+    # golden's raw i_actor: brush at raw idx1 -> ref2; idx3 -> ref4; idx9 -> ref10.
+    golden_surfs = [_surf(i_actor=2), _surf(i_actor=4), _surf(i_actor=10)]
+    # native has no Camera exports at all -- its own table is already "artifact-stripped" shaped.
+    native_surfs = [_surf(i_actor=2), _surf(i_actor=3), _surf(i_actor=4)]
+
+    old_result = pl.compare_array_content(native_surfs, golden_surfs, array_name="surfs")
+    assert not old_result.exact
+    assert old_result.indices_differ == 2  # surfs [1] and [2] false-positive
+
+    mapping = pl.export_renumber_map(golden_classes)
+    renumbered_golden = pl.renumber_surf_actor_refs(golden_surfs, mapping)
+    new_result = pl.compare_array_content(native_surfs, renumbered_golden, array_name="surfs")
+    assert new_result.exact
+    assert new_result.diffs == ()
 
 
 def _content(*, nodes_exact=True, surfs_exact=True, leaves_exact=True):

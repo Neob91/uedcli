@@ -1,7 +1,7 @@
 +++
 priority = "p1"
 kind = "debug"
-summary = "texture_ref/i_actor systematic offset traced to a golden-build actor-set mismatch (round 1); ROUND 2: the actor-set widening was shipped SAFE (geometry counts unchanged, incl. movers-included on UNATCO) but does NOT close the divergence -- the actor-set-mismatch theory is REFUTED as a sufficient explanation, real cause is leaked Camera6-Camera11 exports + native/editor object-naming differences; ROUND 6: the leaked cameras are REFUTED as a LIGHT APPLY/GetVisibleSurfs mechanism (live no-light control build carries the identical 6 exports) -- an editor-session/viewport artifact, native should not replicate it; p_base divergence is a separate, real Points-array reorder"
+summary = "texture_ref/i_actor systematic offset traced to a golden-build actor-set mismatch (round 1); ROUND 2: the actor-set widening was shipped SAFE (geometry counts unchanged, incl. movers-included on UNATCO) but does NOT close the divergence -- the actor-set-mismatch theory is REFUTED as a sufficient explanation, real cause is leaked Camera6-Camera11 exports + native/editor object-naming differences; ROUND 6: the leaked cameras are REFUTED as a LIGHT APPLY/GetVisibleSurfs mechanism (live no-light control build carries the identical 6 exports) -- an editor-session/viewport artifact, native should not replicate it; p_base divergence is a separate, real Points-array reorder; ROUND 7: Camera-export exclusion implemented+TDD'd+shipped in parity_report.py (precedent: sections/31) but MEASURED ZERO effect on texture_ref/i_actor on DX.dx/NYC Bar/UNATCO -- the artifact never overlaps any surf's real i_actor range on any of the 3 levels, so the remaining divergence is confirmed to be entirely the native/editor object-naming-order mismatch rounds 2-4 already found, not the cameras"
 depends-on = ["native-light-apply-bake-where-it-stands-and", "wanchai-verts-points-residual-independently"]
 +++
 
@@ -381,3 +381,43 @@ No fix shipped, none should be — the mandate that would have justified one (a 
 APPLY`-internal mechanism) does not hold. No production code touched. Full writeup:
 `native-materialize-findings.md`, search "REFUTED as a `LIGHT APPLY`". Worktree
 `camera-leak-investigation` left in place, uncommitted, for the coordinating session.
+
+## Round 7 (2026-08-31): Camera-export exclusion implemented, TDD'd, shipped — measured ZERO effect on `texture_ref`/`i_actor`
+
+Mandate: implement the round-6-confirmed Camera-artifact exclusion in `parity_report.py`'s content
+comparison (precedent: `sections/31-package-wrapper-parity.md`, the same treatment as excluded
+GUIDs/timestamps/name-table order), and measure whether it closes any of this thread's
+`texture_ref`/`i_actor` divergence on DX.dx, `02_NYC_Bar`, `03_NYC_UNATCOHQ`.
+
+**Camera position, confirmed on all 3 goldens: NOT always contiguous.** `DX.dx` (33 exports): 6
+contiguous indices (18-23) at the tail. NYC Bar (683 exports) and UNATCO (2409 exports): scattered
+among per-brush `Model`/`Polys` pairs — `[263,264,268,271,272,275]` / `[911,912,913,915,916,917]`.
+
+**Shipped:** `parity_lib.export_renumber_map`/`renumber_actor_ref`/`renumber_surf_actor_refs` (pure,
+TDD'd — 7 new tests in `test_parity_lib.py`, including the exact synthetic-interspersed-cameras
+scenario the mandate asked for) + `parity_compare.golden_export_classes`, wired into `compare_content`
+to renumber the golden's `i_actor` before comparing. `texture_ref` untouched by design (always a
+negative import ref, never an export ref a Camera artifact could shift).
+
+**Result: ZERO measured change on any of the 3 levels** — `surfs fields_differ`/`i_actor`
+diffs/`texture_ref` diffs all byte-identical before/after (DX.dx 65/26/26, NYC Bar 2739/953/862,
+UNATCO 10940/3616/3615), and the individual diff VALUES are identical too, not just the counts.
+**Root cause: on every level, the maximum real `i_actor` any surf references sits immediately BEFORE
+the first Camera artifact** (UNATCO: max ref 911, first Camera at export index 911; NYC Bar: max ref
+264, first Camera at 263; DX.dx: Cameras are past all 12 real exports) — the artifact is inserted at a
+session point that consistently comes after the last referenceable world-CSG brush, so stripping it
+changes nothing on these levels even though it IS interspersed among the wider export table.
+
+**Conclusion: this sharpens round 2's finding rather than reopening it.** The `texture_ref`/`i_actor`
+divergence is confirmed to be entirely the native/editor object-serialization-order mismatch rounds
+2-4 already isolated (`Model_<brush>Polys` vs `Polys<N>`, `sections/31`'s "Object numbering...
+fundamentally unreproducible"), not the Camera leak. The exclusion is still shipped (uncommitted,
+worktree `camera-export-exclusion`) — it's correct, zero-risk, and removes a real confound that could
+matter on an untested, differently-shaped level in the corpus — but it does not, and structurally
+cannot, close this thread's own divergence. `regression_gate.py`: PASS, no change. Scoped
+`test_parity_lib.py` (46 tests, 7 new): pass, in the worktree's own isolated venv (a full `bin/test`
+run this round hit an unrelated shared-venv `PIL`/DXT-codec flake from a concurrent session and was
+not restarted per the owner's instruction not to run the full suite this session; confirmed unrelated
+to this change — same test file passes clean via the main checkout's venv and via a fresh isolated
+worktree venv). Full `bin/test` left for the coordinating session before it commits.
+Full writeup: `native-materialize-findings.md`, search "Round 7".

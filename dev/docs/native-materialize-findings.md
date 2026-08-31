@@ -2628,3 +2628,98 @@ change from `build_ued_lit_golden.py` is the in-memory `ClassIndex.qualify_and_v
 because `_scratch/geo-confirm-dx`'s trunk predates class qualification). Worktree
 `camera-leak-investigation` left in place uncommitted for the coordinating session to inspect; no
 docker containers left running (`stop_editor`'s `finally` ran cleanly).
+
+## Round 7 (2026-08-31): Camera-artifact export exclusion implemented and shipped in `parity_report.py` -- correct, TDD'd, but MEASURED ZERO effect on `texture_ref`/`i_actor` across all 3 tracked levels
+
+Mandate: round 6 confirmed the golden's 6 `Camera6`-`Camera11` exports are a pure editor-session
+artifact, not `LIGHT APPLY` content. Following the `sections/31-package-wrapper-parity.md` precedent
+(GUIDs/timestamps/name-table order are excluded from comparison the same way), implement the
+exclusion in `parity_report.py`'s content comparison and measure whether it closes any of the
+`texture_ref`/`i_actor` divergence chased across rounds 1-6.
+
+**Where the 6 Camera exports land, confirmed live on all 3 tracked goldens (`pkg_write.parse_package`
+export-table dump) -- NOT a fixed position, contrary to the initial assumption.** `DX.dx` (33
+exports): contiguous, indices 18-23 (0-based), sandwiched between the world model's own `Polys` and a
+tail run of per-brush `Model`s -- but this is because `DX.dx` is small enough that every other export
+lands before them. NYC Bar (683 exports) and UNATCO (2409 exports): scattered/interspersed among
+per-brush `Model`/`Polys` pairs -- NYC Bar `[263, 264, 268, 271, 272, 275]`, UNATCO
+`[911, 912, 913, 915, 916, 917]`. So the exclusion cannot assume contiguity or a fixed offset; it has
+to walk the whole export-class table and renumber generically.
+
+**Implementation (`dev/docs/spikes/2026-08-31-native-parity-report/harness/`).** `parity_lib.py` gained
+`CAMERA_ARTIFACT_EXPORT_CLASS`, `export_renumber_map(export_classes)` (0-based golden export index ->
+its index in an artifact-stripped table, `None` for a stripped artifact), `renumber_actor_ref(ref,
+mapping)` (renumbers a positive 1-based export ref, raises `ValueError` if it targets a stripped
+artifact, passes `ref <= 0` through untouched -- `texture_ref` is always a negative IMPORT ref per its
+own field comment and is never in this mapping's domain), and `renumber_surf_actor_refs(surfs,
+mapping)`. `parity_compare.py` gained `golden_export_classes(golden_path)` (a cheap header/table-only
+reparse) and wires the three into `compare_content`: the golden's surfs have `i_actor` renumbered
+through the artifact-stripped mapping before the index-for-index `compare_array_content` call.
+`texture_ref` is untouched by design. TDD: `test_parity_lib.py` gained 7 tests, including the exact
+scenario the mandate asked for -- a synthetic export table with 6 Camera artifacts interspersed (not
+contiguous) among real `Brush` exports, asserting the OLD raw-index comparison false-positives on the
+two surfaces whose owning brush sits after an artifact, and the NEW renumbered comparison finds zero
+diffs.
+
+**Measured before/after on all 3 tracked levels (self-built cached goldens, native's own fresh lit
+build each time, worktree `camera-export-exclusion` to avoid the main-checkout docker-mount bug) --
+ZERO change on every metric:**
+
+| level | surfs fields_differ (before/after) | `i_actor` diffs (before/after) | `texture_ref` diffs (before/after) | geometry/lighting |
+|---|---:|---:|---:|---|
+| `DX.dx` | 65 / 65 | 26 / 26 | 26 / 26 | unchanged |
+| `02_NYC_Bar` | 2739 / 2739 | 953 / 953 | 862 / 862 | unchanged |
+| `03_NYC_UNATCOHQ` | 10940 / 10940 | 3616 / 3616 | 3615 / 3615 | unchanged |
+
+Every individual diff's reported golden VALUE is also byte-identical before/after (checked, not just
+the count) -- the renumbering genuinely runs (unit-tested and confirmed active), it just never changes
+anything on these 3 levels' real data.
+
+**Root cause of the zero effect, confirmed by direct inspection: on all 3 levels, the maximum golden
+`i_actor` value referenced by ANY surf never exceeds the position immediately before the first Camera
+artifact.** UNATCO: max real `i_actor` across all 3616 surfs is 911 (export index 910); the first
+Camera sits at export index 911 -- one past the last real reference, zero overlap. NYC Bar: same
+shape (max real ref 264; first Camera at 263). `DX.dx`: Cameras sit at the very tail (18-23), after
+all 12 real content exports. In other words, the artifact is inserted at a session checkpoint that
+consistently comes AFTER the last world-CSG brush actor any surf could reference, on every level tried
+-- so even though the Cameras are numerically interspersed among the FULL export table (contrary to
+the initial "always contiguous at the end" guess), they never fall between the golden's own real
+surf-owning-brush positions where a shift would actually change anything.
+
+**Conclusion: the exclusion is real, correctly implemented, precedent-following, and shipped -- but
+it is not, and structurally cannot be, the fix for the `texture_ref`/`i_actor` divergence this thread
+has chased across 6 rounds.** This confirms and sharpens round 2's finding ("the leaked Camera exports
+persist regardless of actor population... a structural mismatch no actor-set widening fixes"): the
+real cause is what rounds 2-4 already isolated -- native's own export serializer places/names
+per-brush `Model`/`Polys` objects in a fundamentally different order than the golden's editor-session
+build (`Model_<brush>Polys` vs `Polys<N>`, `sections/31`'s already-documented "Object numbering...
+fundamentally unreproducible" residual), which dominates the whole comparison and is untouched by
+stripping 6 known-artifact exports from one end of a table whose ordering diverges throughout. This is
+not "more architecturally invasive than expected" in the sense of the renumbering itself being hard --
+the renumbering mechanism is simple and works exactly as designed -- it is that the artifact this round
+targeted was never the actual source of the measured divergence on these levels.
+
+**Residual, unaffected by this round, as expected (task's own item 6):** no level reaches geometry
+content-exactness -- `DX.dx` nodes stay exact (prior fix), leaves carry the pre-existing
+`i_permeating` stub gap (5/5), surfs carry `texture_ref`/`i_actor` (both an IMPORT/EXPORT-order
+mismatch, not this round's target) and `p_base` (13/26, the separately-tracked §10.20 Points-reorder
+residual). NYC Bar/UNATCO add their own pre-existing `p_base`/points-count residuals plus (newly
+visible in this round's per-field breakdown, not previously called out by name) small
+`v_normal`/`v_texture_u`/`v_texture_v` diff counts -- not chased, out of scope. No level reaches FULL
+PARITY. `regression_gate.py`: `GATE: PASS`, UNATCO/Wanchai unchanged (+5/+16/+0 and +74/+16/-8, same
+as every prior round). Scoped check only this round (owner said not to run the full suite this
+session): `test_parity_lib.py`'s 46 tests (7 new) pass in the worktree's own isolated venv, unaffected
+by an unrelated shared-venv `PIL`/DXT-codec flake hit mid-round from a concurrent session's
+`bin/test` sharing the main checkout's live `.venv` -- confirmed not caused by this change (same
+`test_utexture_blocks.py` passes clean both via the main checkout's venv directly and via the
+worktree's own fresh, isolated venv). Full `bin/test` (pytest + `cargo test`) NOT run this round --
+left for the coordinating session before it commits. Only
+`dev/docs/spikes/2026-08-31-native-parity-report/harness/*` changed, no `uedcli-native/src/` or
+`uedcli/` production code touched.
+
+**Shipped (uncommitted, worktree `camera-export-exclusion`).** The fix stays in even though it didn't
+move these 3 levels' numbers: it removes a real, confirmed confound from the comparison methodology
+(a golden built on a level where a real brush DOES land after the Camera-artifact position -- plausible
+on some larger, differently-shaped level in the 21-level corpus not tested this round -- would have
+silently false-positived without it), it is zero-risk (comparison-only, no production code, TDD'd), and
+per the standing rule the mechanism itself is grounded in round 6's live verification, not a guess.

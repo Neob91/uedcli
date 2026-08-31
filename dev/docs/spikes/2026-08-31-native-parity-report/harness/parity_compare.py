@@ -40,6 +40,18 @@ def parse_dx_model(dx_path: Path):
     return UM.parse_model_body(pkg.buf, pkg.exports[mi]["soff"], pkg.exports[mi]["ssize"])
 
 
+def golden_export_classes(golden_path: Path) -> list[str]:
+    """The golden's own export table, class-only -- a cheap reparse (header + tables, no body
+    decode) used to locate the editor-session Camera-viewport artifacts (`pl.CAMERA_ARTIFACT_
+    EXPORT_CLASS`) before comparing `i_actor`. Kept separate from `parse_dx_model` (which decodes
+    only the world Model's body and has no access to the export table) rather than widening that
+    function's return shape for its other callers (`compare_geometry`), which don't need this."""
+    _ensure_imports()
+    import utexture_decode as UT
+    pkg = UT.load_package(str(golden_path))
+    return [pkg.class_of_export(i) for i in range(len(pkg.exports))]
+
+
 def _temp_dx(data: bytes) -> Path:
     """Write `.dx` bytes to a throwaway temp file -- `parse_dx_model`/`lightparity.level_model`
     read a path, not bytes, and native's own build only exists in memory until assembled."""
@@ -100,16 +112,25 @@ def compare_content(native_dx_bytes: bytes, golden_path: Path) -> pl.ContentComp
     wrong build stage rather than a real divergence (confirmed live on `DX.dx`, first run of this
     comparison). Covers nodes/surfs/leaves -- the "tree structure" triple this investigation's own
     reporting format is built on; verts/points/vectors are NOT included, see
-    `native-materialize-findings.md` for that scope note."""
+    `native-materialize-findings.md` for that scope note.
+
+    Before comparing, the golden's `i_actor` is renumbered through `pl.export_renumber_map` to strip
+    its 6 editor-session `Camera` viewport-artifact exports (`pl.CAMERA_ARTIFACT_EXPORT_CLASS`) --
+    native never emits them, so comparing raw `i_actor` against an unstripped golden table would
+    misreport every surf whose owning brush export sits after (or, on the larger levels, among) the
+    artifacts as a real divergence. `texture_ref` is untouched -- it is always a negative import-table
+    ref, unaffected by an export-table artifact."""
     native_path = _temp_dx(native_dx_bytes)
     try:
         native_model = parse_dx_model(native_path)
     finally:
         native_path.unlink(missing_ok=True)
     golden_model = parse_dx_model(golden_path)
+    mapping = pl.export_renumber_map(golden_export_classes(golden_path))
+    golden_surfs = pl.renumber_surf_actor_refs(golden_model.surfs, mapping)
     return pl.ContentComparison(
         nodes=pl.compare_array_content(native_model.nodes, golden_model.nodes, array_name="nodes"),
-        surfs=pl.compare_array_content(native_model.surfs, golden_model.surfs, array_name="surfs"),
+        surfs=pl.compare_array_content(native_model.surfs, golden_surfs, array_name="surfs"),
         leaves=pl.compare_array_content(native_model.leaves, golden_model.leaves,
                                         array_name="leaves"))
 

@@ -10,8 +10,9 @@ from __future__ import annotations
 import hashlib
 import json
 import struct
-from dataclasses import asdict, dataclass, fields
+from dataclasses import asdict, dataclass, fields, replace
 from pathlib import Path
+from typing import Sequence
 
 CACHE_ROOT_DEFAULT = Path("/tmp/uedcli-parity-cache")
 
@@ -218,6 +219,67 @@ def compare_array_content(native, golden, *, array_name: str) -> ArrayContentRes
                 diffs.append(FieldDiff(index=i, field=f.name, native=nv, golden=gv))
     return ArrayContentResult(array_name=array_name, native_len=len(native), golden_len=len(golden),
                               diffs=tuple(diffs))
+
+
+CAMERA_ARTIFACT_EXPORT_CLASS = "Camera"
+"""The golden's editor-session viewport-camera artifact class. Every self-built golden carries 6
+`Camera` exports (`Camera6`-`Camera11`) regardless of actor set, light count, or whether `LIGHT
+APPLY` even ran -- confirmed a pure editor-session/viewport artifact, not level content
+(`native-materialize-findings.md`, "REFUTED as a `LIGHT APPLY`/`GetVisibleSurfs` mechanism"; the same
+category as the excluded GUID/timestamps/name-table order,
+`spikes/2026-07-15-native-materialize/sections/31-package-wrapper-parity.md`). They pollute the
+golden's export table and shift the object-ref NUMBERING of every export after them, so a `BspSurf`'s
+`i_actor` (a positive 1-based export ref -- the owning brush actor) compares apples-to-oranges against
+native's own table, which never emits them. `texture_ref` is unaffected: it is always a NEGATIVE
+(import-table) ref (`BspSurf.texture_ref`'s own comment), and Camera artifacts are EXPORTS, not
+imports."""
+
+
+def export_renumber_map(export_classes: Sequence[str], *,
+                        artifact_class: str = CAMERA_ARTIFACT_EXPORT_CLASS) -> dict[int, int | None]:
+    """Map each 0-based golden export index to its index in a table with every `artifact_class`
+    export removed and every surviving export renumbered down to close the gap. An artifact index
+    maps to `None` (a real `i_actor` should never point at one -- `renumber_actor_ref` raises if it
+    does, rather than silently producing a bogus renumbered ref).
+
+    Artifact exports need not be contiguous or trailing -- live measurement on `02_NYC_Bar`/
+    `03_NYC_UNATCOHQ` goldens found them INTERSPERSED among per-brush `Model`/`Polys` exports, not
+    clustered at a fixed offset (only `DX.dx`, small enough that all real content precedes them, saw
+    them contiguous at the tail) -- so this walks the whole table rather than assuming any single
+    known position."""
+    mapping: dict[int, int | None] = {}
+    next_index = 0
+    for i, cls in enumerate(export_classes):
+        if cls == artifact_class:
+            mapping[i] = None
+        else:
+            mapping[i] = next_index
+            next_index += 1
+    return mapping
+
+
+def renumber_actor_ref(ref: int, mapping: dict[int, int | None]) -> int:
+    """Renumber a `BspSurf.i_actor`-style UE1 object-ref through `export_renumber_map`'s mapping.
+    `ref <= 0` (none, or an import ref -- `texture_ref`'s domain, never touched by this) passes
+    through unchanged; a positive `ref` is a 1-based export index, renumbered to what it would be in
+    the artifact-stripped table. Raises `ValueError` if `ref` points AT a stripped artifact export --
+    a real surf referencing an editor viewport camera as its owning brush actor would contradict the
+    whole premise that these are unreferenced session state, so this surfaces loudly rather than
+    silently producing a wrong renumbered ref."""
+    if ref <= 0:
+        return ref
+    old_index = ref - 1
+    new_index = mapping.get(old_index, old_index)
+    if new_index is None:
+        raise ValueError(f"object-ref {ref} points at a stripped artifact export (index {old_index})")
+    return new_index + 1
+
+
+def renumber_surf_actor_refs(surfs: Sequence, mapping: dict[int, int | None]) -> tuple:
+    """Apply `renumber_actor_ref` to every surf's `i_actor` -- the one `BspSurf` field the golden's
+    Camera-artifact export-table pollution can shift (see `CAMERA_ARTIFACT_EXPORT_CLASS`). Returns
+    new surf objects (`dataclasses.replace`); the input sequence is untouched."""
+    return tuple(replace(s, i_actor=renumber_actor_ref(s.i_actor, mapping)) for s in surfs)
 
 
 @dataclass(frozen=True, kw_only=True)
