@@ -6,6 +6,9 @@ live captures, structural measurements. Not board-item narrative, not owner ruli
 (`direction/`), not design rationale (`rationale/`). Agents maintain this freely, but only by the
 process below — never overwrite silently.
 
+See board item `native-light-apply-bake-where-it-stands-and` for current status, the harness
+catalog, and an index of every open sub-thread — this file stays the detailed findings record.
+
 **Standing rule (owner, 2026-08-30):** native must follow the exact same PROCESS UnrealEd does, not
 just converge on a matching byte count/percentage. A fix replicates the editor's real, live-verified
 algorithm — never a rounding tweak, tolerance fudge, or alternate formula chosen because it happens

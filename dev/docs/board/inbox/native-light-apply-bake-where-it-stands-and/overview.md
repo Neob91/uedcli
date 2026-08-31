@@ -1,16 +1,153 @@
 +++
 priority = "p1"
 kind = "debug"
-summary = "Resume pointer for the native LIGHT APPLY bake. Wanchai now 3418/4530 (75.5%) byte-identical after line_clear-shadow-ray-algorithm-gap-found-real's round-8 threaded-state fix (was 3408/4530 after the GetVisibleSurfs DFS-order fix, 2026-08-30). UNATCO (geometry-matched via light_spotcheck_unatco.py) still 2769/3345 (82.8%) -- NOT re-measured against the line_clear fix this round, no local trunk/golden available; that is the concrete next step. Gap 2's lumel_axes hypothesis REFUTED (80/80 live match to FCoords::Inverse); line_clear was the real cause of the bits-only bucket and is now fixed and shipped (round 8), with one pre-existing test flagged as conflicting (owner decision needed, see the item). UNATCO table below (the OLDER 78.6% one) is STILL STALE; use light_spotcheck_unatco.py's own fresh numbers instead."
-depends-on = ["port-urender-getvisiblesurfs-so-each-light-gets", "port-the-per-leaf-permeating-light-lists-model", "unatco-verts-points-residual-after-the-zone", "getvisiblesurfs-wanchai-run-gap-root-cause", "line-clear-shadow-ray-algorithm-gap-found-real", "zone-crossing-getvisiblesurfs-gap-invisible"]
-spikes = ["dev/docs/spikes/2026-08-27-native-light-apply-parity/"]
+summary = "Native materialize byte-parity vs UnrealEd UED22: status/index for the whole geometry+lighting effort. Wanchai lighting 3418/4530 (75.5%) byte-identical after line_clear v2; UNATCO 2797/3345 (83.6%). Geometry breadth 3/21 OG levels exact; severe-under-build family (Area51 etc.) closed by the mirrored-brush determinant fix. See below for the harness catalog and open threads."
+depends-on = ["port-urender-getvisiblesurfs-so-each-light-gets", "port-the-per-leaf-permeating-light-lists-model", "getvisiblesurfs-wanchai-run-gap-root-cause", "line-clear-shadow-ray-algorithm-gap-found-real", "zone-crossing-getvisiblesurfs-gap-invisible", "smuggler-4-surf-delta-traced-to-4-pf-semisolid", "freeclinic08-nsfhq04-1-surf-under-build-root", "wanchai-verts-points-residual-independently", "pass-d-chain-link-order-native-splices-zone", "pass-d-fragment-nodes-get-ileaf-1-where", "splitwithplane-degenerate-fragment-fallback", "native-zone-over-fragmentation"]
+spikes = ["dev/docs/spikes/2026-08-27-native-light-apply-parity/", "dev/docs/spikes/2026-08-29-unatco-repart-live-diff/", "dev/docs/spikes/2026-08-29-area51-underbuild/", "dev/docs/spikes/2026-08-26-editor-free-native-materialize/"]
 +++
 
-# Native `LIGHT APPLY` bake: where it stands and what closes the last gaps
+# Native materialize byte-parity: status, index, and harness catalog
 
-Short, checkable, cross-cutting facts from this work are logged in
-`dev/docs/native-materialize-findings.md` (check it before re-deriving something already known;
-follow its check/recheck process before changing an entry).
+**Standing goal** (owner, 2026-08-30, `dev/docs/native-materialize-findings.md`): native `level
+materialize` must reproduce UnrealEd UED22's real geometry-build and lighting-bake PROCESS, not just
+converge on a matching byte count — a fix ports the editor's real, live-verified algorithm, never a
+tolerance fudge chosen because it measures better. Byte-identical `.dx` output on original (OG),
+shipped Deus Ex levels is the bar; `Test_Castle`/non-retail fixtures are not valid evidence
+(`native-materialize-findings-older-than-2-weeks`). Findings older than ~2 weeks, and every
+pre-2026-08-14 native-decode/disassembly claim, are untrusted until re-derived live
+(`owner-ruling-all-native-decode-spike-findings`) — re-measure before relying on anything old.
+
+This item is the STATUS/INDEX layer for the whole effort: current state, the harness catalog, and
+pointers to every open sub-thread. Blow-by-blow findings live in
+`dev/docs/native-materialize-findings.md` — search it, don't duplicate it here.
+
+## Current status (2026-08-31)
+
+**Geometry:** breadth sweep across 21 OG retail levels
+(`breadth-geometry-check-on-10-new-og-levels-1-10`, `breadth-geometry-re-check-across-11-og-levels-2`)
+— 3/21 exact (Wanchai Market, and the two trivial ≤6-brush intro/logo maps `DX.dx`/Endgame4); ~1/19
+excluding trivial maps. UNATCO is close but not node-exact (+7 nodes). The severe-under-build family
+(Area51 Entrance and 4 other levels losing 13-27% of nodes) is CLOSED — root-caused to a mirrored-brush
+determinant bug and shipped (`mirrored-brush-determinant-fix-closes-the`, commit `c7b8b0b`); remaining
+deltas on those 5 levels are back in the ordinary noise range. Two other under-build families are
+still open and NOT the same mechanism: `freeclinic08`/`nsfhq04` (-38 nodes/-23 leaves, a world-level
+`bspBuildFPolys`/merge poly-order divergence, localized but not root-caused) and `smuggler` (+4 surf
+residual, isolated to 4 `PF_Semisolid` brushes, root mechanism still open).
+
+**Lighting:** `LIGHT APPLY` runs fully offline (`UEDCLI_NATIVE_MATERIALIZE=1 level materialize`, no
+editor in the path). After the `line_clear` threaded-state shadow-ray port (round 8, commit `9827f07`,
+shipped): Wanchai `LightMap` records byte-identical 3418/4530 (75.5%); UNATCO 2797/3345 (83.6%,
+geometry-matched spot-check, not the item's own full re-run). The largest remaining bucket on Wanchai
+is the `Points`/geometry residual (~54% of bad records, gap 3 below) — lighting parity is gated on
+geometry parity more than on the bake algorithm itself at this point.
+
+## Harness catalog
+
+Reusable measurement/verification scripts for this effort. All live under `dev/docs/spikes/*/harness/`
+and import the production `.dx` decoder (`uedcli/native/umodel.py`) or drive the real editor via
+`ensure_editor`. No unified parity-report/verify tool has landed yet — `git log` on master shows no
+such merge as of 2026-08-31; treat any reference to one elsewhere as aspirational, not shipped.
+
+| script | path | what it checks |
+|---|---|---|
+| `regression_gate.py` | `2026-08-29-unatco-repart-live-diff/harness/` | UNATCO + Wanchai node/surf/leaf exactness against their committed goldens — the standard "did this change regress anything" gate, run before/after every `bspcsg.rs`/`zones.rs` edit |
+| `breadth_gate.py` | `2026-08-29-unatco-repart-live-diff/harness/` | node/surf/leaf/vert/point/vector counts for `uedcli_native.build_geometry_bspcsg` vs an editor `MAP REBUILD`-only golden, across the whole `geo-confirm-*` corpus — the breadth/30%-floor measurement |
+| `geo_golden_driver.py` / `geo_golden_resume_structural.py` | `2026-08-29-unatco-repart-live-diff/harness/` | drives the real editor (`MAP NEW` → `EDIT PASTE` → `MAP REBUILD` → `MAP SAVE`, chunked) to build a fresh geometry-only golden `.dx` from a trunk |
+| `build_ued_golden.py` | `2026-07-15-native-materialize/harness/` | canonical `--world-only --no-light [--no-obj-load]` golden builder; the one referenced by nearly every geometry-parity item as the correct provenance (never `MAP LOAD` — see `map-load-and-edit-paste-build-different-world`) |
+| `build_ued_lit_golden.py` | `2026-08-27-native-light-apply-parity/harness/` | same, but runs `LIGHT APPLY` too, for a lighting-bake golden |
+| `lightparity.py`, `bit_asymmetry.py`, `run_diff.py`, `light_geomatch.py`, `lights_regions.py`, `grid_formula_fit.py` | `2026-08-27-native-light-apply-parity/harness/` | `LightMap`-record-level comparison suite: byte-identical %, which direction bits err, which (surf,light) pairs are extra/missing, geometry-tree divergence at mismatched records, `Model.Lights`'s two regions split apart, the lumel-grid sizing rule |
+| `light_spotcheck_unatco.py`, `light_spotcheck_wanchai.py` | `2026-08-29-unatco-repart-live-diff/harness/` | fast bounded spot-check of an existing lit golden (no fresh editor build) — the "get today's number" script, used every round instead of a full re-run |
+| `broad_shadow_sweep.py` | `2026-08-29-unatco-repart-live-diff/harness/` | full-level (whole Wanchai, ~900K+ bits) shadow-bit sweep, v1-vs-v2-vs-golden — the only harness that exhausts a level rather than sampling |
+| `lumel_axes_live_check.py`, `line_clear_algorithm_check.py`, `line_clear_v2_algorithm_check.py`, `linecheck_*.py` | `2026-08-29-unatco-repart-live-diff/harness/` | live-gdb capture and offline cross-check of the shadow-ray walker (`linecheck.rs`/`line_clear`) against the real editor, function-by-function |
+| `mergewith_live_check.py` | `2026-08-29-unatco-repart-live-diff/harness/` | live capture of `FSpanBuffer::MergeWith`, confirms `merge_into`'s port is faithful |
+| `zone_crossing_pairs.py`, `wanchai_descendant_slots.py` | `2026-08-29-unatco-repart-live-diff/harness/` | `GetVisibleSurfs`/zone-crossing pair-level diffing |
+| `prepart_tree_unatco.py`, `prepart_tree_wanchai.py`, `fbs_root_poly_order.py`, `fbs_world_poly_order.py`, `fpolys_stage_order.py` | `2026-08-29-unatco-repart-live-diff/harness/` | live capture of the real editor's `FindBestSplit`/`bspRepartition`/`bspBuildFPolys` poly order at various stages — the toolkit for any future repartition-order investigation |
+| `smuggler_*.py` | `2026-08-29-unatco-repart-live-diff/harness/` | brush/poly-scoped descent+leaf tracer for `bspcsg.rs`'s `filter_ed_poly`/`leaf_func` (env-gated `UEDCLI_BSPCSG_DESCENT_ACTOR`/`_POLY`), built for the smuggler residual but reusable for any brush-scoped CSG classification question |
+| `a51_*.py` | `2026-08-29-area51-underbuild/harness/` | per-brush attribution, isolation, and prefix-replay toolkit that root-caused the Area51 under-build (over-carve misclassification at a specific brush index) — the pattern to reuse for any future "which brush causes this delta" investigation |
+| `umodel_parser.py` / `umodel_serialize.py` | `dev/docs/spikes/bspspike/` | frozen, independent `.dx` decode/encode copies (stale naming only — nothing imports them; the live decoder every other harness uses is `uedcli/native/umodel.py`) |
+
+Known harness defects, not yet fixed: `umodel-parser-harness-pf-portal-constant-is` (a `bspspike`
+harness has `PF_PORTAL` wrong, `0x0080` is actually `FakeBackdrop`); `breadth_gate.py` segfaults
+intermittently across a full 13-case back-to-back run (not reproduced in isolation, not investigated).
+
+## Open threads
+
+Lighting (detail below this section, and in `dev/docs/native-materialize-findings.md`):
+
+- **Light runs** (`port-urender-getvisiblesurfs-so-each-light-gets`) — extra/missed (surf,light)
+  pairs, much smaller after the DFS-order and `PF_Invisible` fixes but not closed.
+- **`Model.Lights` per-leaf permeating region** (`port-the-per-leaf-permeating-light-lists-model`) —
+  first port attempt lands the right leaf SET, not yet the right per-leaf content; not wired in.
+- **`Points`/geometry residual** feeding `Pan`/`UScale`/`VScale` mismatches — tracked as a geometry
+  thread below (`wanchai-verts-points-residual-independently`); the largest single lighting bucket.
+
+Geometry:
+
+- `smuggler-4-surf-delta-traced-to-4-pf-semisolid` — +4 surf residual, root mechanism not found.
+- `freeclinic08-nsfhq04-1-surf-under-build-root` — world-level poly-order divergence, localized to
+  before `bspBuildFPolys` even runs, not root-caused further.
+- `wanchai-verts-points-residual-independently` — +16/+19 verts/points residual on Wanchai,
+  "exhausted across 4 rounds", explicitly recommends stopping and redirecting to lighting instead.
+- `pass-d-chain-link-order-native-splices-zone`, `pass-d-fragment-nodes-get-ileaf-1-where` — two
+  distinct zone-split fragment-ordering/leaf-assignment gaps in `zones.rs`'s Pass D, both untouched
+  since filed.
+- `splitwithplane-degenerate-fragment-fallback` — `FPoly::SplitWithPlane` degenerate-cut fallback
+  behavior differs from native's.
+- `native-zone-over-fragmentation` — the flood-fill half of a zone over-fragmentation bug is fixed;
+  a CSG-tree-shape cause remains, called "the real bottleneck".
+- `two-overlapping-add-boxes-panic-dead-root-no` — `build_geometry_bspcsg` panics on a specific
+  two-box synthetic case; found incidentally, not investigated.
+- `native-materialize-silently-ignores-postscale` — materialize's brush-input gate reads `MainScale`
+  only, silently mis-building brushes with `PostScale`/`SheerRate`.
+- `self-package-rewrite-turns-a-map-embedded` — latent (no shipped map hits it) package-self-ref bug
+  in the `assemble_unbuilt` path.
+
+Methodology / infrastructure:
+
+- `map-load-and-edit-paste-build-different-world` — the editor builds a genuinely different world BSP
+  via `MAP LOAD` vs `MAP NEW`+`EDIT PASTE` from the same brushes; every golden in this effort must use
+  the paste path, never `MAP LOAD`.
+- `no-reproducible-recipe-for-the-index-aligned` — the original node-for-node-aligned UNATCO golden
+  (6314 nodes) that early parity work was measured against lived in `/tmp` and is gone; `level
+  materialize` now produces a differently-ordered 6254/6321-node tree, so that specific historical
+  comparison can't be re-run.
+- `clean-map-import-crashes-the-editor-container` — a bare `MAP IMPORT` (no CSG paste) crashes the
+  editor container regardless of level size; blocks the export/import-table-ordering question in
+  `unrealed-geometry-build-map-rebuild-bsp-rebuild` §12.1/§20.3.
+- `dx-lum-uned-image-missing-rendering-md-editor` — the container image never baked the documented
+  headless-rendering fixes, so a real GUI editor pixel render is unobtainable here (does not block the
+  `ExecCommandlet`-only path this effort actually uses).
+- `dev-docs-states-fbspsurf-izone-where-the-field` — `dev/docs` still documents the on-disk
+  `FBspSurf` u16 pair as a zone index; it is `PanU`/`PanV`. Code already fixed; docs need the owner's
+  yes.
+- `lean-classify-trees` — perf-only, owner-question open on whether an empirically-(not provably-)
+  byte-identical optimization is acceptable.
+
+Reference (not action items, cite before re-deriving):
+
+- `owner-ruling-all-native-decode-spike-findings`, `native-materialize-findings-older-than-2-weeks` —
+  the two standing process rulings this whole effort runs under.
+- `unrealed-geometry-build-map-rebuild-bsp-rebuild` — the reverse-engineered spec of UnrealEd's
+  geometry/lighting/paths build, the primary algorithmic reference for any new port.
+- `editor-free-native-world-bsp-map-assembly` — current architecture note: `level materialize` builds
+  a whole `.dx` with no UnrealEd behind `UEDCLI_NATIVE_MATERIALIZE=1`; still needs a permanent CLI
+  flag once this effort's remaining gaps close.
+- `done/unatco-verts-points-residual-after-the-zone`, `done/mergewith-fully-decoded-confirms-merge-into`
+  — already-closed geometry/lighting sub-threads with detail worth reading before re-opening either.
+
+## Superseded / retired items
+
+~60 older board items (mostly filed 2026-07-xx, before the pre-2026-08-14 decode findings were ruled
+untrustworthy, plus a handful of this session's superseded measurement rounds) were folded into
+`dev/docs/board/done/` in the same change that wrote this item, each with a one-line supersession
+note. Git history has the full text if any of them turns out to hold something not captured here or
+in the findings ledger.
+
+---
+
+The lighting-bake detail below predates this restructure and is kept for its checkable tables and
+reproduction recipe; treat "Status" dates within it as the most recent for the LIGHTING thread
+specifically, not for the whole effort (see "Current status" above for that).
 
 ## Status 2026-08-30 (latest): `GetVisibleSurfs` DFS-order bug fixed (far_child was interleaved
 before the coplanar chain)
@@ -60,14 +197,14 @@ fix, +138→+74), byte-identical count is unchanged (3297/4530, 72.8%) and the b
 not identical — 1233 bad records: grid 6 (0.5%), run 261 (21.2%), bits 255 (20.7%), pan/scale 711
 (57.7%). Same conclusion holds (pan/scale — the `Points` residual — is still the largest bucket).
 
-So gap 3 (`Points` residual, out of scope here — tracked in `unatco-verts-points-residual-after-
-the-zone` / `wanchai-verts-points-residual-independently`) is actually the LARGEST single bucket at
-54% of bad records — bigger than gap 1. Even a perfect fix for gaps 1 and the shadow-ray precision
-issue caps out around (3228+343+254)/4530 ≈ 84.5% on Wanchai; closing the rest needs the geometry
-fix. Gap 2 (`Model.Lights` permeating region) does NOT appear in this table at all — it's a
-separate array (`Model.Lights` region 1) that `lightparity.py`'s "records byte-identical" measure
-never reads, confirmed by reading `bake`'s `emit_record` (only region 2, the per-surface runs, feeds
-`LightMap`). Wiring it in would not move this percentage.
+So gap 3 (`Points` residual, out of scope here — tracked in
+`wanchai-verts-points-residual-independently`) is actually the LARGEST single bucket at 54% of bad
+records — bigger than gap 1. Even a perfect fix for gaps 1 and the shadow-ray precision issue caps out
+around (3228+343+254)/4530 ≈ 84.5% on Wanchai; closing the rest needs the geometry fix. Gap 2
+(`Model.Lights` permeating region) does NOT appear in this table at all — it's a separate array
+(`Model.Lights` region 1) that `lightparity.py`'s "records byte-identical" measure never reads,
+confirmed by reading `bake`'s `emit_record` (only region 2, the per-surface runs, feeds `LightMap`).
+Wiring it in would not move this percentage.
 
 `UEDCLI_NATIVE_MATERIALIZE=1 level materialize` now bakes lighting with no editor anywhere in the
 path: `native.materialize.gather_lights` → `build_world_model(lights=)` →
@@ -109,7 +246,7 @@ moved UNATCO's nodes to 6321 (was 6314) — the table's premise ("trees identica
 Full re-run afterward: 1627/3345 (48.6%) byte-identical, but that number conflates real bake
 differences with pure record-misalignment noise now that the trees disagree, so it isn't
 trustworthy as a bake-quality number either — needs UNATCO's node-exactness restored (see
-`unatco-verts-points-residual-after-the-zone`'s "CORRECTION" section) before this table means
+`done/unatco-verts-points-residual-after-the-zone`'s "CORRECTION" section) before this table means
 anything again. Wanchai's table below is unaffected (its nodes stayed exact) and still current.
 
 **2026-08-30: UNATCO's node-exactness is now restored** — `repartition_frontier` rewritten
@@ -189,9 +326,11 @@ the difference (Wanchai has more zones/portal crossings). Reproduced with
    `iPermeating` to a bogus `0` (fixed to the correct `-1`, `8d7fe30`).
 3. **`Pan` / `UScale` / `VScale`** differ on exactly the records whose surf base point or texture
    vector differs from the editor by f32, i.e. the `Points` residual (native 10758 vs 10752 on
-   UNATCO). See `unatco-verts-points-residual-after-the-zone` — its causal story is flagged
-   unreliable by `owner-ruling-all-native-decode-spike-findings`, needs re-diagnosis from fresh live
-   capture. No lighting change can move these; they follow for free when Points reaches parity.
+   UNATCO). See `done/unatco-verts-points-residual-after-the-zone` and
+   `wanchai-verts-points-residual-independently` — the UNATCO causal story is flagged unreliable by
+   `owner-ruling-all-native-decode-spike-findings`, needs re-diagnosis from fresh live capture if
+   picked up again. No lighting change can move these; they follow for free when Points reaches
+   parity.
 
 ## Two smaller leads
 
@@ -207,18 +346,15 @@ the difference (Wanchai has more zones/portal crossings). Reproduced with
   returns) during a real Wanchai `LIGHT APPLY`, captures the editor's REAL `u_dir`/`v_dir` for 80
   surfaces, diffs against `light.rs::lumel_axes`'s own formula on the same inputs: **80/80 match, 0
   mismatches**. `lumel_axes` needs no fix.
-* **CHASED 2026-08-30 (same day), CONFIRMED (not a fix yet).** The real cause of the bits-only bucket
-  is `linecheck::line_clear` — offline cross-check (`line_clear_algorithm_check.py`) shows the ported
-  algorithm disagrees with the editor's real bit 20/40 sampled times even when fed the editor's OWN
-  real BSP tree and real ray endpoints (self-consistency against native's own output verified faithful
-  first, 40/40). Live-disassembled the real editor shadow-ray function on the current build
-  (`linecheck_target_disasm.py`): refutes an old ±0.001 epsilon-tolerance hypothesis (the real test is
-  a strict `>=0.0`, same as native's), rules out a plane-dot summation-association hypothesis for the
-  one traced exemplar (axis-aligned plane, provably bit-identical either way), and cross-validates the
-  existing `FBspNode` layout assumptions (`+0x20`/`+0x24`/`+0x37`, stride 0x40) live. The per-node
-  state-threading bit formula was NOT fully decoded (dense SSE register reuse; needs a single-step
-  trace, not more static reading) — no fix shipped, per the standing rule. Full writeup:
-  `dev/docs/board/inbox/line-clear-shadow-ray-algorithm-gap-found-real/overview.md`.
+* **CHASED 2026-08-30 (same day), CONFIRMED, then SHIPPED (round 8) and re-verified clean through
+  round 10.** The real cause of the bits-only bucket was `linecheck::line_clear`; the ported
+  threaded-state walker is now shipped (`9827f07`) and independently re-verified against a full-level
+  sweep, a 203-case regression population traced to a `broad_shadow_sweep.py` measurement artifact
+  (not a real defect), and confirmed not to reproduce against native's own built tree. Full 10-round
+  writeup: `line-clear-shadow-ray-algorithm-gap-found-real`. One open, explicitly-not-chased footnote:
+  the real editor's per-surface timing for when it sets `NF_BrightCorners` during `LIGHT APPLY` is
+  undecoded — dormant today (native never sets that bit, matching the editor's at-cast-time state),
+  but would need decoding before native could set it without risking a real regression.
 * `FovAngle` for the editor's temp visibility viewport is not pinned (it is `Actor+0x304`, never set by
   the gather pass, and `SpawnViewActor` reuses a free `Camera`). Six 90°-apart faces only cover the
   sphere at FOV 90. Needed before a `GetVisibleSurfs` port can claim fidelity.
