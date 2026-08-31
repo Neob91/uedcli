@@ -2403,3 +2403,53 @@ item if a future round wants full export-table parity.
 
 No `unbuilt.py`/`assemble.py`/any production code changes this round — read-only live re-parsing in a
 disposable worktree (removed after, no commits). `bin/test` not re-run (no source changed).
+
+## `parity_report.py` content comparison now masks proven-noisy `node_flags` bits — result: no level's nodes array is node-exact even so
+
+Measurement-tool change, not a native-code change. `compare_array_content` (`parity_lib.py`) compared
+`BspNode.node_flags` bit-exact, unmasked, same as every other field — but two already-closed findings
+prove 4 of its 8 bits are not part of the editor's deterministic build at all: `0x08`/`0x10`
+(`NF_PolyOccluded`/`NF_BoxOccluded`, render-viewport occlusion leftover from whatever camera position
+the LAST `LIGHT APPLY` session happened to leave, set only by `render.dll`, confirmed absent from
+`Editor.dll`'s entire build path — `board/done/node-flags-8-is-nf-polyoccluded-a-render-only`) and
+`0x40`/`0x80` (no disassembly-confirmed setter ANYWHERE in the editor, all 5 relevant DLLs/EXE
+scanned; best-supported hypothesis is uninitialized-memory noise from mover-triggered allocation, not
+a real algorithm — `board/inbox/node-flags-0x40-0x80-divergence-from-movers-no`). Comparing these
+bit-exact was measuring noise, not a real divergence.
+
+Added `NODE_FLAGS_NOISE_MASK = 0x08|0x10|0x40|0x80`; `compare_array_content` now masks only this one
+field (`(native & ~MASK) != (golden & ~MASK)`) before comparing — every other `BspNode` field and all
+of `BspSurf` stay bit-exact, zero tolerance, unchanged. Report text/JSON headers now name the mask and
+cite both board items so a future reader can't mistake this for an unmasked comparison. TDD:
+`test_parity_lib.py` gained 3 tests — masked-bits-only diff now reports exact, a real (non-masked) bit
+flip still reports a diff, and a real diff in a DIFFERENT field (`i_leaf`) on a node whose
+`node_flags` also differs is still caught (the mask must not swallow anything beyond its own field).
+
+**Re-measured all 6 tracked levels (self-built goldens, cached; native's own freshly-built lit `.dx`
+each time) — before (unmasked) vs after (masked) node-content diff INDEX count:**
+
+| level | before (idx differ) | after (idx differ) | swallowed (node_flags-only) | nodes now exact? |
+|---|---:|---:|---:|---|
+| `DX.dx` | 8 | 4 | 4 | NO — 4 `i_leaf` diffs remain |
+| NYC Bar | 1351 | 942 | 409 | NO — `i_leaf`/`i_vert_pool`/`i_zone`/`plane` remain |
+| UNATCO (`03_NYC_UNATCOHQ.dx`) | 6201 | 6002 | 199 | NO — `i_back`/`i_collision_bound`/`i_leaf`/`i_plane`/`i_render_bound`/`i_vert_pool`/`i_zone`/`plane`/`zone_mask` remain |
+| Wanchai Market | 11168 | 9659 | 1509 | NO — `i_leaf`/`i_plane`/`i_vert_pool`/`i_zone`/`num_vertices`/`plane`/`zone_mask` remain |
+| NYC ShipFan | 1731 | 1700 | 31 | NO — `i_leaf`/`i_plane`/`i_vert_pool`/`i_zone`/`plane`/`zone_mask` remain |
+| NYC Underground | 1804 | 1775 | 29 | NO — `i_back`/`i_collision_bound`/`i_front`/`i_leaf`/`i_plane`/`i_render_bound`/`i_vert_pool`/`i_zone`/`num_vertices`/`plane`/`zone_mask` remain |
+
+**Verdict: masking is correct and does remove real noise (409-1509 indices per level stop being
+misreported as diverging on the bigger levels), but it does not reveal any level's nodes array as
+genuinely content-exact.** Every level still has real, non-masked field divergence after
+masking — dominated by `plane`/`i_zone`/`i_vert_pool`/`i_plane` on the larger levels (an open,
+already-tracked structural issue, not this task's scope) and, on `DX.dx` specifically, a small
+isolated `i_leaf` residual (4/26 nodes) with no `node_flags` involvement at all. `surfs`/`leaves`
+still diverge on every level too (`texture_ref`/`i_actor`/`p_base`/`i_permeating` — all pre-existing,
+separately tracked threads, untouched by this change; `BspSurf`'s comparison was not touched, per
+scope).
+
+Reproduction: cached goldens under `/tmp/uedcli-parity-cache/`; native's lit `.dx` built via
+`parity_compare.build_native_lit_dx`; run from a worktree (main-checkout docker mount-source bug,
+`board/inbox/docker-mount-source-permission-fails-from-main`), `.venv`/`dev/games` symlinked in from
+the main checkout, no commits made there, worktree removed after. Before/after table via a throwaway
+script toggling `parity_lib.NODE_FLAGS_NOISE_MASK` between 0 and its real value around two
+`compare_content` calls on the same built native/golden pair (not committed).

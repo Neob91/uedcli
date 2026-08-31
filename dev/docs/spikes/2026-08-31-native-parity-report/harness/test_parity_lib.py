@@ -102,6 +102,8 @@ class _Node:
     i_surf: int = 0
     i_front: int = -1
     i_back: int = -1
+    node_flags: int = 0
+    i_leaf: tuple = (-1, -1)
 
 
 def _node(**kw):
@@ -190,6 +192,38 @@ def test_compare_array_content_identical_nan_payload_is_not_a_false_positive():
     golden = [_node(plane=(nan, 0.0, 1.0, 0.0))]
     r = pl.compare_array_content(native, golden, array_name="nodes")
     assert r.exact
+
+
+def test_compare_array_content_node_flags_masked_bits_are_not_a_diff():
+    # 0x08/0x10 (render-viewport occlusion leftover, board/done/
+    # node-flags-8-is-nf-polyoccluded-a-render-only) and 0x40/0x80 (no editor setter found at all,
+    # board/inbox/node-flags-0x40-0x80-divergence-from-movers-no) are proven non-derivable from the
+    # deterministic build -- masked out of the node_flags comparison specifically.
+    native = [_node(node_flags=0x01 | 0x08 | 0x40)]
+    golden = [_node(node_flags=0x01 | 0x10 | 0x80)]
+    r = pl.compare_array_content(native, golden, array_name="nodes")
+    assert r.exact
+    assert r.diffs == ()
+
+
+def test_compare_array_content_node_flags_non_masked_bit_still_a_diff():
+    # The mask is narrow: a real divergence outside 0x08/0x10/0x40/0x80 must still be caught.
+    native = [_node(node_flags=0x01)]
+    golden = [_node(node_flags=0x02)]
+    r = pl.compare_array_content(native, golden, array_name="nodes")
+    assert not r.exact
+    assert r.fields_differ == 1
+    assert r.diffs[0].field == "node_flags"
+
+
+def test_compare_array_content_node_flags_mask_does_not_swallow_other_field_diff():
+    # Regression guard: masking node_flags must not accidentally hide a REAL divergence in a
+    # different field (e.g. i_leaf) on the same node.
+    native = [_node(node_flags=0x08, i_leaf=(3, -1))]
+    golden = [_node(node_flags=0x10, i_leaf=(5, -1))]
+    r = pl.compare_array_content(native, golden, array_name="nodes")
+    assert not r.exact
+    assert {d.field for d in r.diffs} == {"i_leaf"}
 
 
 def _content(*, nodes_exact=True, surfs_exact=True, leaves_exact=True):

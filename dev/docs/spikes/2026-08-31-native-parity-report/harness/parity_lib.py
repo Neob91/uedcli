@@ -15,6 +15,17 @@ from pathlib import Path
 
 CACHE_ROOT_DEFAULT = Path("/tmp/uedcli-parity-cache")
 
+NODE_FLAGS_NOISE_MASK = 0x08 | 0x10 | 0x40 | 0x80
+"""`BspNode.node_flags` bits proven not derivable from the editor's deterministic build path --
+masked out before comparing this ONE field, nothing else. `0x08 NF_PolyOccluded` / `0x10
+NF_BoxOccluded`: a live-camera-dependent render-viewport leftover set only by `render.dll`'s
+occlusion walk, confirmed absent from `Editor.dll`'s build path
+(`board/done/node-flags-8-is-nf-polyoccluded-a-render-only`). `0x40`/`0x80`: no
+disassembly-confirmed setter anywhere in the editor at all -- likely uninitialized-memory noise from
+mover-triggered allocation, not a real algorithm
+(`board/inbox/node-flags-0x40-0x80-divergence-from-movers-no`). Every other `node_flags` bit, and
+every other `BspNode`/`BspSurf` field, stays bit-exact -- see `compare_array_content`."""
+
 
 def content_hash(path: Path) -> str:
     """sha256 of the file's bytes — the cache key. The input `.dx` never changes (a shipped game
@@ -189,13 +200,21 @@ def compare_array_content(native, golden, *, array_name: str) -> ArrayContentRes
     """Index-for-index field diff of two same-shape dataclass sequences (`umodel.BspNode` or
     `BspSurf` instances, or any object exposing `dataclasses.fields`). Generic over whatever fields
     the dataclass declares, so a future field added to `BspNode`/`BspSurf` is covered automatically
-    -- never a hand-maintained field list that can silently drift out of sync with the real struct."""
+    -- never a hand-maintained field list that can silently drift out of sync with the real struct.
+
+    One named exception: `node_flags` is compared with `NODE_FLAGS_NOISE_MASK` bits stripped from
+    both sides first (see that constant's docstring for why). Every other field, on `BspNode` and
+    `BspSurf` alike, is still bit-exact with zero tolerance."""
     diffs = []
     for i in range(min(len(native), len(golden))):
         n, g = native[i], golden[i]
         for f in fields(n):
             nv, gv = getattr(n, f.name), getattr(g, f.name)
-            if not _bit_exact_eq(nv, gv):
+            if f.name == "node_flags":
+                differs = (nv & ~NODE_FLAGS_NOISE_MASK) != (gv & ~NODE_FLAGS_NOISE_MASK)
+            else:
+                differs = not _bit_exact_eq(nv, gv)
+            if differs:
                 diffs.append(FieldDiff(index=i, field=f.name, native=nv, golden=gv))
     return ArrayContentResult(array_name=array_name, native_len=len(native), golden_len=len(golden),
                               diffs=tuple(diffs))
@@ -318,7 +337,9 @@ def format_text(report: ParityReport) -> str:
         f"(all 6 counts must be byte-identical for FULL PARITY)",
         "",
         "Content (index-for-index nodes/surfs/leaves vs golden -- catches divergence counts alone "
-        "miss):",
+        "miss; node_flags compared with known-noisy render-viewport/uninitialized-memory bits "
+        "masked -- 0x08/0x10/0x40/0x80, see board/done/node-flags-8-is-nf-polyoccluded-a-render-only "
+        "and board/inbox/node-flags-0x40-0x80-divergence-from-movers-no):",
         *_content_array_lines(report.content.nodes),
         *_content_array_lines(report.content.surfs),
         *_content_array_lines(report.content.leaves),
@@ -356,6 +377,7 @@ def format_json(report: ParityReport) -> str:
         d["content"][name]["fields_differ"] = r.fields_differ
         d["content"][name]["exact"] = r.exact
     d["content"]["exact"] = report.content.exact
+    d["content"]["node_flags_noise_mask"] = NODE_FLAGS_NOISE_MASK
     d["lighting"]["identical_pct"] = report.lighting.identical_pct
     d["lighting"]["shadow_bit_pct"] = report.lighting.shadow_bit_pct
     return json.dumps(d, indent=2, sort_keys=True)

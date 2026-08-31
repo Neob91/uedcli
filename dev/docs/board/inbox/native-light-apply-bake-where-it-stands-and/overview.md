@@ -74,6 +74,18 @@ geometry-matched spot-check, not the item's own full re-run). The largest remain
 is the `Points`/geometry residual (~54% of bad records, gap 3 below) — lighting parity is gated on
 geometry parity more than on the bake algorithm itself at this point.
 
+**Follow-up, same day:** the `DX.dx`/NYC Bar/UNATCO/Wanchai content-comparison numbers above were
+measured with `node_flags` compared bit-exact, unmasked — but two closed findings prove 4 of its 8
+bits (`0x08`/`0x10`/`0x40`/`0x80`) are not derivable from the editor's deterministic build at all
+(`node-flags-8-is-nf-polyoccluded-a-render-only`, `node-flags-0x40-0x80-divergence-from-movers-no`).
+`parity_report.py`'s `compare_array_content` now masks those 4 bits for `node_flags` only, every
+other field (and all of `BspSurf`) unchanged. Re-measured 6 levels (`DX.dx`, NYC Bar, UNATCO,
+Wanchai Market, NYC ShipFan, NYC Underground): masking removes real noise (29-1509 falsely-diverging
+node indices per level) but **no level's nodes array becomes content-exact** — real, non-masked
+divergence remains on all 6 (dominated by `plane`/`i_zone`/`i_vert_pool`/`i_plane` on the bigger
+levels; `DX.dx` alone drops to a small isolated 4/26 `i_leaf`-only residual). Full numbers and
+reproduction: `native-materialize-findings.md`, search "now masks proven-noisy `node_flags` bits".
+
 ## Harness catalog
 
 Reusable measurement/verification scripts for this effort. All live under `dev/docs/spikes/*/harness/`

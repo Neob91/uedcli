@@ -1,6 +1,6 @@
 +++
 priority = "p2"
-kind = "bug"
+kind = "debug"
 summary = "Building 06_HongKong_WanChai_Market's golden with the widened (movers-excluded) actor set crashes the editor reproducibly at the first EDIT PASTE -- narrow-set build still works fine"
 depends-on = ["texture-ref-i-actor-divergence-traced-to-golden"]
 +++
