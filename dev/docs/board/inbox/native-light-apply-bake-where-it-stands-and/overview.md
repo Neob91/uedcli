@@ -193,6 +193,13 @@ Geometry:
   same §10.20 Points-order thread, unaffected); `02_NYC_Bar`/`03_NYC_UNATCOHQ` `texture_ref` counts
   and full diff lists unchanged (139, 0) — no regression. `DX.dx` does not reach FULL PARITY from
   this alone (the `p_base` residual remains). `native-materialize-findings.md` §6.
+  **Round 9 (2026-08-31): raw-byte matching (the alternative to resolved-identity) confirmed NOT
+  achievable, not merely unfinished.** Full export-table class set enumerated with zero surprises on
+  3 goldens; the `Camera6`-`Camera11` viewport artifact is proven to exist in every one of the 88
+  retail Deus Ex maps too (`unrealed/package-format.md`, 4/map) — it encodes UI/session state that
+  was never part of any level's trunk content, golden or retail, so no reverse-engineering recovers
+  it. Resolved-identity comparison is now the PERMANENT definition of correctness for
+  `texture_ref`/`i_actor`, not a workaround pending a decision.
 - `smuggler-4-surf-delta-traced-to-4-pf-semisolid` — +4 surf residual, root mechanism not found.
 - `freeclinic08-nsfhq04-1-surf-under-build-root` — world-level poly-order divergence, localized to
   before `bspBuildFPolys` even runs, not root-caused further.

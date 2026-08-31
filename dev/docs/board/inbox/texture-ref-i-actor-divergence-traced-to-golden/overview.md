@@ -1,7 +1,7 @@
 +++
 priority = "p1"
 kind = "debug"
-summary = "ROUND 8 (closing): the root cause pinned in rounds 2-4 -- the native/editor object-NAMING and export-ORDER mismatch -- is confirmed real but is NOT a native bug and never was the lever. Two independent fresh-container golden builds of the same trunk produce BYTE-IDENTICAL name/import/export tables (UNATCO: 3357 names, 289 imports, 2890 exports, 736 `Polys<N>` names, all identical; only the GUID differs), so the editor counter is fully reproducible -- just not derivable from the trunk (it counts the editor process's own object allocations, and the export table is written in UObject allocation-slot order). Comparing refs by RESOLVED IDENTITY instead of raw table index (shipped in parity_lib/parity_compare, TDD'd; supersedes and deletes round 7's Camera renumbering) takes `i_actor` from 26/953/3616 diffs to 0/0/0 on DX.dx/NYC Bar/UNATCO and `texture_ref` from 26/862/3615 to 26/139/0. The survivors are two SEPARATE texture-resolution issues, both newly filed. No level newly reaches FULL PARITY; the remaining surf blocker is `p_base` alone."
+summary = "ROUND 9 (2026-08-31, final close): raw-byte matching of texture_ref/i_actor is not achievable, not just unfinished. The full export-table CLASS set is enumerated with zero surprises across 3 goldens (DX.dx/NYC Bar/UNATCO): every export is real content (actors/Brush/Model), the Polys per-brush temp counter, the Camera6-Camera11 viewport leak, or a fixed LevelSummary+Level tail pair. But the table POSITION of real content is governed by the editor's internal UObject allocation-slot history across the whole OBJ LOAD->MAP NEW->EDIT PASTE->MAP REBUILD->LIGHT APPLY pipeline -- deterministic per fixed recipe (round 8), never derived from trunk content despite 8 rounds trying. Two of the sub-mechanisms are now confirmed categorically closed, not just hard: (1) the Camera viewport exports are proven to exist in EVERY retail Deus Ex map too (package-format.md, 4/map, universal) -- they encode which viewport a human had open at save time, information that was never in the trunk to begin with, for goldens or for the original shipped levels; (2) actor-body LatentAction bytes are proven non-reproducible by the editor against ITSELF on an identical trunk. Recommendation: keep resolved-identity comparison PERMANENTLY for texture_ref/i_actor -- this is not a workaround pending a decision, it is the only definition of 'correct' that a trunk-content-only system can ever satisfy."
 depends-on = ["native-light-apply-bake-where-it-stands-and", "wanchai-verts-points-residual-independently"]
 +++
 
@@ -489,3 +489,124 @@ side — native matches the trunk and the original shipped map).
 **This thread's own question is now answered and closed.** `texture_ref`/`i_actor` are no longer a
 divergence: `i_actor` is exact everywhere, and what remains under `texture_ref` is two separate,
 independently-tracked texture-resolution issues.
+
+## Round 9 (2026-08-31): is raw-byte matching achievable in principle, not just unfinished? Answer: no -- two independently-sufficient reasons, both now confirmed
+
+Mandate (owner, via the coordinating session): round 8 closed this thread pragmatically (resolved
+identity, ship it), but never asked whether the underlying raw-byte-position problem is actually
+solvable if pursued further. Enumerate everything in a golden's export/import table beyond `Polys<N>`
+and `Camera6`-`Camera11`, and for each unexplained piece, determine deterministic-and-derivable,
+deterministic-but-not-yet-derived, or genuinely non-derivable.
+
+### 1. The export CLASS set is fully enumerated -- zero surprises across 3 goldens
+
+Classified every export in `dx_widened.dx` (57), `unatco_widened.dx`/`_run2.dx` (2890 each), and
+`nycbar_widened.dx` (901) by class (`pkg_write.parse_package` + `class_of_export`). Every export
+falls into exactly one of four buckets, no residual "unknown class" anywhere:
+
+| bucket                                                     | DX.dx | UNATCO | NYC Bar |
+|-------------------------------------------------------------|------:|-------:|---|
+| real actor/asset content (Brush + every game-actor class)   |    37 |   1410 | 483 |
+| `Model` (brush geometry, real content)                       |     6 |    736 | 205 |
+| `Polys` (brush geometry, real content, auto-named)           |     6 |    736 | 205 |
+| `Camera` (viewport artifact, NOT content)                    |     6 |      6 | 6 |
+| `LevelSummary` + `Level` (save-time bookkeeping pair)        |   1+1 |    1+1 | 1+1 |
+
+So "what's in the table" is a closed, answered question -- the open question was never "what other
+kinds of objects are hiding in there" (there are none), it's "why does each object land at the table
+POSITION it does."
+
+### 2. `LevelSummary`+`Level`: new, small, and irrelevant to `texture_ref`/`i_actor`
+
+Not previously checked for stability. Confirmed byte-identical (name, outer, flags, body, `soff`)
+between the two independent UNATCO runs from round 8 -- deterministic, like everything else on that
+pair. Position is a pinned, trivial rule: always the LAST two exports in the table, `LevelSummary`
+then `Level`, on all 3 goldens (DX.dx 55,56 of 57; NYC Bar 899,900 of 901; UNATCO 2888,2889 of 2890).
+Body is a short tagged-property blob (`b'1]\n\tUntitled\x00\x00'` on DX.dx, `b'P\x04]\n\tUntitled\x00\x01'`
+on UNATCO) -- looks like it's just the map-browser title, defaulting to "Untitled" because none of
+these test builds ever sets one; not fully decoded, not chased further, and it doesn't matter for
+this thread: no `BspSurf` field ever references a `Level` or `LevelSummary` export, so fully pinning
+this would not move `texture_ref`/`i_actor` even if characterized completely.
+
+### 3. Real content's table POSITION: the one mechanism that actually matters, and it resists derivation for an architectural reason, not a knowledge gap
+
+`texture_ref`/`i_actor` are raw indices into the table position real content lands at. Rounds 2-8
+already established the position is NOT paste order, NOT trunk order, and NOT any formula tried
+against `Model`/`Surfs`/`Nodes` -- it's "`UObject` allocation-slot order, freed slots reused" across
+the full `OBJ LOAD`->`MAP NEW`->`EDIT PASTE`->`MAP REBUILD`->`LIGHT APPLY` pipeline. Round 8 already
+proved this is deterministic given a fixed recipe (two independent UNATCO builds: 2890/2890 exports
+identical in every field including `soff`). This round adds no new derivation -- none was found --
+but reframes the conclusion: this is not "not yet reverse-engineered," it's asking for the internal
+bookkeeping state of an allocator across five separate engine-internal operations that the trunk
+itself never specifies. Matching it exactly would mean emulating UnrealEd's `UObject` allocator
+call-for-call, not deriving a formula from level content -- round 3 already flagged this as
+"a materially bigger reverse-engineering task than a naming convention," and nothing in 8 rounds of
+trying (including live disassembly for the `node_flags` sub-question, see below) found a shortcut.
+
+### 4. Two sub-mechanisms are now CONFIRMED categorically impossible, not just hard -- this is the new result
+
+**`Camera6`-`Camera11` (round 6's finding), cross-checked against `unrealed/package-format.md`'s
+independent 88-map retail measurement:** "viewport `Camera` actors (on the roster) | 4 per map, every
+map | [UnrealEd's own exporter] omits **all** of them." Every one of the 88 shipped, original Deus Ex
+maps -- not just our self-built goldens -- carries viewport-camera exports with no trunk-derivable
+content: they record which viewport window was open on whichever human's screen when they hit File >
+Save in 1999. There is no formula from level content to "which of 4 viewports had focus" because that
+information was never part of the level's content in the first place -- it's UI/session state,
+external to the trunk by definition, for the original retail levels as much as for any self-built
+golden. This closes the door permanently, not just "for now": even a hypothetical perfect emulation of
+UnrealEd's engine internals could not produce byte-identical Camera exports against a retail target,
+because the missing input isn't computable, it's lost history.
+
+**Actor-body `LatentAction` bytes (`actor-state-frame-latentaction-is-serialized`, filed alongside
+round 8):** already proven the editor cannot reproduce these 4 bytes/actor against ITSELF, across two
+independent builds of the identical trunk. Not a derivation gap -- the source data is uninitialized
+heap memory, provably non-deterministic at the source. A hard ceiling independent of whether the
+table-order problem is ever solved.
+
+Both are now confirmed by evidence of the SAME strength as the `Polys<N>` counter's own
+"deterministic but not derivable" finding, but landing on the opposite conclusion: `Polys<N>`'s
+starting offset might still be derivable with enough reverse-engineering (unproven either way); these
+two are proven NOT derivable, by construction, permanently.
+
+### 5. The remaining "deterministic-but-not-yet-derived" pieces are small, separately tracked, and don't change the verdict
+
+Not re-investigated live this round (already exhaustively attempted in rounds 3-5, all flagged as
+needing a live `bspBrushCSG`/`bspRefresh`/`csgRebuild` capture this project has no harness for yet):
+the world `Model`'s own `Polys=` field content (round 4, refuted "aggregate of all surfs," no formula
+found on 3 levels), `p_base` Points-array intra-block order (round 5, same family, refuted formulas),
+and `node_flags` `0x40`/`0x80` (`node-flags-0x40-0x80-divergence-from-movers-no`, disassembly across
+5 binaries found no setter anywhere -- best-supported as uninitialized-memory noise, same family as
+`LatentAction`, not live-confirmed). None of these gate `texture_ref`/`i_actor` specifically -- they
+gate `p_base` and `node_flags`, tracked separately -- and none look bounded/small enough to be worth
+a dedicated live-capture effort just to settle whether they're "hard" like Camera/LatentAction or
+"unfinished" like `Polys<N>`'s offset; the practical answer (exclude/mask, don't chase) is unchanged
+either way.
+
+### Verdict
+
+**Raw-byte matching of `texture_ref`/`i_actor` (and, by construction, of the whole export/import
+table) is NOT achievable -- not "still open, needs more work," but closed on the evidence:**
+
+1. The dominant mechanism (real content's table position, ~100% of every real export) is
+   architecturally not a function of trunk content -- it needs the internal state of an object
+   allocator across a 5-stage editor pipeline the trunk never specifies. Nothing found in 8 rounds
+   suggests this shrinks to a bounded, portable rule set; every attempt (naming convention,
+   actor-set widening, Camera exclusion, per-class counting) either found nothing or found the wrong
+   axis.
+2. Independent of #1, one confirmed real component of the table (`Camera` viewport exports) encodes
+   information that was never part of any level's content, self-built or retail -- there is no
+   version of "know the rules better" that recovers it.
+3. Independent of both, actor body content itself has a proven non-derivable component
+   (`LatentAction`) that the oracle cannot reproduce against itself.
+
+**Recommendation: keep resolved-identity comparison (`parity_lib.resolve_object_ref`/
+`resolve_surf_refs`, shipped round 8) as the PERMANENT definition of "correct" for `texture_ref`/
+`i_actor`, not a workaround pending a decision.** This is not a redefinition chosen because it
+measures better -- it is the only definition of correctness a system that only has trunk content to
+work from can ever satisfy, since part of what raw-byte equality would demand (viewport UI state,
+uninitialized memory) is provably absent from the trunk by construction, for goldens and for every
+original shipped Deus Ex map alike. Nothing was built or shipped to `uedcli-native/src/` or
+`uedcli/native/` this round -- pure read-only analysis of cached goldens
+(`/tmp/uedcli-widen-test/{dx,unatco,unatco_run2,nycbar}_widened.dx`), no live container spin-up
+needed since the determinism question was already answered by round 8's pair and the retail-Camera
+cross-check only needed the already-committed `unrealed/package-format.md` measurement.

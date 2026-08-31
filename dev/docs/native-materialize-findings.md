@@ -3015,3 +3015,59 @@ temporarily unavailable`, a host-level contention issue from concurrent sessions
 since the fix is Python-only (`pkgref.py`), the native extension's exact build provenance does not
 bear on these numbers, but the coordinating session should re-verify with a clean native build before
 relying on the geometry/lighting percentages as final.
+
+## `texture_ref`/`i_actor` round 9 (2026-08-31): is raw-byte matching achievable in principle? No -- closed, not open
+
+Follow-up question the owner asked directly after round 8: round 8 shipped resolved-identity
+comparison as pragmatically good enough, but never established whether raw-byte matching the
+export-table position is achievable if pursued further, or a hard ceiling like `LatentAction`. Full
+write-up: `board/inbox/texture-ref-i-actor-divergence-traced-to-golden` (Round 9). Summary:
+
+**The export CLASS set is fully enumerated, zero surprises, across 3 goldens** (`pkg_write.
+parse_package` + `class_of_export` on `dx_widened.dx`/`unatco_widened.dx`/`nycbar_widened.dx`):
+every export is real content (`Brush` + game-actor classes: 37/1410/483), `Model` (6/736/205),
+`Polys` (6/736/205, real geometry, auto-named), `Camera` (6/6/6, viewport artifact), or a fixed
+`LevelSummary`+`Level` tail pair (1+1 on all three). No unclassified export kind anywhere.
+
+**New, small finding: `LevelSummary`+`Level` are always the LAST two exports, in that order** —
+confirmed byte-identical across round 8's two independent UNATCO builds (deterministic, like
+everything else that pair measured). Body looks like a map-title tagged-property blob defaulting to
+`"Untitled"` (test builds never set one) — not fully decoded, doesn't matter here: no `BspSurf` field
+ever references a `Level`/`LevelSummary` export, so this pair is irrelevant to `texture_ref`/
+`i_actor` regardless of whether it's ever fully characterized.
+
+**The load-bearing mechanism — real content's table POSITION — is architecturally, not just
+practically, resistant to derivation.** Rounds 2-8 already ruled out paste order, trunk order, and
+every formula tried against `Model`/`Surfs`/`Nodes`; it's `UObject` allocation-slot order (freed
+slots reused) across `OBJ LOAD`→`MAP NEW`→`EDIT PASTE`→`MAP REBUILD`→`LIGHT APPLY`, deterministic per
+fixed recipe (round 8's byte-identical 2890/2890-export UNATCO pair) but not a function of the
+trunk's own content — it's the internal bookkeeping state of an allocator across 5 engine-internal
+operations the trunk never specifies. Matching it means emulating `UObject` allocation call-for-call,
+not deriving a formula.
+
+**Two sub-mechanisms are now confirmed categorically impossible, not merely hard — the round's actual
+new result.** Cross-checking `Camera6`-`Camera11` (round 6) against `unrealed/package-format.md`'s
+independent 88-retail-map measurement ("viewport `Camera` actors … 4 per map, every map") shows this
+is not a self-built-golden artifact: every shipped Deus Ex map carries the same kind of
+content-independent viewport-camera export, encoding which window had focus on whoever's screen at
+`File > Save` in 1999 — information that was never part of any level's content, golden or retail, so
+no amount of reverse-engineering recovers it. And `actor-state-frame-latentaction-is-serialized`
+(filed alongside round 8) already proved the editor cannot reproduce its own actor-body
+`LatentAction` bytes run-to-run on an identical trunk — uninitialized heap memory, not a derivation
+gap. Both are stronger conclusions than `Polys<N>`'s "deterministic but not yet derived" starting
+offset, which remains merely unfinished, not proven impossible.
+
+**Not re-investigated live this round** (already exhaustively attempted, all need a
+`bspBrushCSG`/`bspRefresh`/`csgRebuild` live capture this project has no harness for): the world
+`Model`'s own `Polys=` field content (round 4), `p_base` Points-array order (round 5), `node_flags`
+`0x40`/`0x80` (no disassembly-confirmed setter in 5 binaries, `node-flags-0x40-0x80-divergence-from-
+movers-no`). None gate `texture_ref`/`i_actor`; the practical answer (exclude/mask) is unchanged
+either way.
+
+**Verdict: raw-byte matching of `texture_ref`/`i_actor` is NOT achievable — closed on the evidence,
+not open pending more reverse-engineering.** Recommend keeping resolved-identity comparison
+(`parity_lib.resolve_object_ref`/`resolve_surf_refs`) as the PERMANENT definition of correctness for
+these fields, not a workaround awaiting a decision — part of what raw-byte equality would require
+(viewport UI state, uninitialized memory) is provably absent from the trunk by construction, for
+self-built goldens and for every original shipped Deus Ex map alike. No production code touched;
+read-only analysis of already-cached goldens, no live container spin-up needed.
