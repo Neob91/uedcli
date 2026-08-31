@@ -2222,3 +2222,55 @@ This round's widened goldens are at `/tmp/uedcli-widen-test/`, NOT installed ove
 numbers argue against silently treating "widened" as an improvement to adopt; installing over the
 live cache is the coordinating session's call. Full write-up:
 `board/inbox/texture-ref-i-actor-divergence-traced-to-golden` (Round 2).
+
+**Round 3: `Polys` naming — the CONVENTION is confirmed, the exact per-object VALUE is not
+reproducible, and a naming-only fix would not move `texture_ref`/`i_actor` anyway. No fix shipped.**
+(2026-08-31.) Follow-up on the `Model_Brush3Polys` vs `Polys6` lead from round 2.
+
+*The editor's naming rule, confirmed with high confidence across 3 goldens (`DX.dx`, NYC Bar,
+UNATCO — 1400+ Model/Polys exports inspected via `pkg_write.parse_package`):* a brush's inner
+`Model` keeps whatever name its T3D `Brush=Model'Pkg.Model_Brush3'` line gives it explicitly
+(matches native's own `Model_{actorname}` scheme byte-for-byte — no divergence there). Its `Polys`
+sub-object does NOT — `t3d.md`'s own `Begin PolyList … End PolyList` grammar (line 43) carries no
+`Name=` field, so the T3D importer (the golden is built by `EDIT PASTE`, a T3D-parse path) is forced
+to auto-create it, landing on the class's own global auto-name: `Polys<N>`, N a package-wide counter
+for the `Polys` class, unrelated to the owning brush. Every golden inspected: strictly `Polys<N>`,
+`N` stepping by exactly +2 per successive brush in export order (`Polys4,6,8,…`; UNATCO: 720
+consecutive +2 steps over 723 Polys/Model pairs) — never once `<brush-derived-string>Polys`.
+
+*Why the exact value is not reproducible:* the per-brush +2 step (not +1) means TWO `Polys` objects are allocated
+per brush and only the even one survives to be saved — a temp/working copy the editor discards
+before `MAP SAVE`, consistent with `quirks.md`'s already-documented extra `Engine.Polys` block per
+level (the world `Model`'s own aggregate post-CSG surface set, "position among the per-brush blocks
+is not stable"). This starting offset (base N before the first per-brush entry) is NOT constant
+across levels — 6 on `DX.dx` and NYC Bar, but 4 on UNATCO — and the world-model's own aggregate
+`Polys` export lands OUT of the per-brush numeric run and at an arbitrary export-table position (on
+UNATCO: `Polys1447`, appearing near the world `Model` export, well before the per-brush run that
+tops out at `Polys1444`). None of this is derivable from the T3D trunk; it is a byproduct of
+`build_ued_lit_golden.py`'s own internal `EDIT PASTE`/CSG/temp-object churn inside that specific
+editor session, which native does not run and has no way to replicate short of literally emulating
+the editor's per-brush CSG-temp-object allocation order — a materially bigger reverse-engineering
+task than "a naming convention," out of scope for this round's budget.
+
+*Renaming alone would not close the `texture_ref`/`i_actor` gap regardless:* both fields are raw
+POSITIONAL object-refs into the combined import/export index space (`umodel.py` `BspSurf.texture_ref`
+= "obj-ref of the texture", `i_actor` = "owning brush actor ref" — positive = export index+1,
+negative = -(import index+1); see `umodel.py:61,67`), not name-string lookups. Changing only the
+STRING attached to an already-reserved export would not move its table position/count, so a
+naming-only fix cannot by construction change these fields. What actually determines them is export
+table population (count) and order — a separate axis from the naming-string question this round was
+scoped to.
+
+*One separate, concrete, structural finding surfaced along the way (not this round's mandate, not
+fixed):* `unbuilt.py`'s world-model reservation (`lm = "Model_Level"`, `unbuilt.py:323-336`) never
+reserves a companion `Polys` export for the world model — native's assembled package has NO
+counterpart to the golden's extra world-aggregate `Engine.Polys` block that `quirks.md` already
+documents the real editor always emits. This is a genuine export-table COUNT gap (not a naming
+artifact), independently visible in the DX.dx export-table diff (widened golden: 57 exports vs
+native's 52). Flagged, not fixed — inserting it requires knowing where in the table it belongs and
+whether omitting it has any consequence beyond this comparison harness (the `unbuilt.py` comment at
+line 342 asserts export order is "reshuffled harmlessly" by the editor, which this round did not
+re-verify against a COUNT mismatch specifically). A candidate for a future round, not this one.
+
+**No fix shipped.** The naming CONVENTION is pinned; the reproducible VALUE and its actual relevance
+to `texture_ref`/`i_actor` are not. Full write-up: `board/inbox/texture-ref-i-actor-divergence-traced-to-golden` (Round 3).

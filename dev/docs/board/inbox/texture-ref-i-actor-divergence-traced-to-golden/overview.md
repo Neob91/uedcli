@@ -197,3 +197,49 @@ NYC Bar, UNATCO widened, UNATCO `ALL`, a UNATCO widened repro-control build) -- 
 live shared `/tmp/uedcli-parity-cache/` cache entries, since that cache is read by other sessions and
 this round's own numbers argue against silently treating "widened" as an improvement to adopt.
 Installing over the live cache (or not) is the coordinating session's call.
+
+## Round 3 (2026-08-31): `Polys` naming convention pinned; no fix shipped
+
+Follow-up on round 2's `Model_Brush3Polys` (native) vs `Polys6` (golden) lead specifically -- the one
+flagged as most likely a genuine, fixable native-code naming bug.
+
+**The editor's naming rule, confirmed across 3 goldens.** Parsed `DX.dx`, NYC Bar and UNATCO's cached
+golden export tables (`pkg_write.parse_package`), 1400+ `Model`/`Polys` exports total. A brush's inner
+`Model` keeps whatever name its T3D `Brush=Model'Pkg.Model_Brush3'` line gives explicitly -- matches
+native's own `Model_{actorname}` scheme exactly, no divergence there. Its `Polys` sub-object does not:
+`t3d.md`'s `Begin PolyList ... End PolyList` grammar carries no `Name=` field, so the T3D importer
+(golden building goes through `EDIT PASTE`, a T3D-parse path) auto-names it from the class's own
+global counter: strictly `Polys<N>`, N a package-wide counter, unrelated to the owning brush. Every
+golden: `N` steps by exactly +2 per successive brush in export order (UNATCO: 720 consecutive +2
+steps over 723 pairs) -- never `<brush-name>Polys`.
+
+**Why the exact N is not reproducible from the trunk.** The +2 (not +1) step means two `Polys`
+objects are allocated per brush and only the even one is saved -- a discarded temp/working copy,
+consistent with `quirks.md`'s already-documented extra world-aggregate `Engine.Polys` block per
+level. The starting offset before the per-brush run differs by level (6 on `DX.dx`/NYC Bar, 4 on
+UNATCO) and the world-model's own aggregate `Polys` lands OUT of the per-brush numeric run at an
+arbitrary table position (UNATCO: `Polys1447`, appearing near the world `Model` export well before
+the per-brush run tops out at `Polys1444`). None of this derives from the T3D trunk -- it's a
+byproduct of `build_ued_lit_golden.py`'s own internal `EDIT PASTE`/CSG/temp-object churn in that one
+editor session, which native doesn't run and can't replicate short of emulating the editor's per-brush
+CSG-temp-object allocation order -- a materially bigger task than "a naming convention," out of this
+round's scope.
+
+**Renaming alone would not have closed the `texture_ref`/`i_actor` gap regardless.** Both fields are
+raw POSITIONAL object-refs into the import/export index space (`umodel.py` `BspSurf.texture_ref`/
+`i_actor`), not name-string lookups. Changing only the string attached to an already-reserved export
+doesn't move its table position or the table's count, so a naming-only fix cannot by construction
+change these fields -- table population/order is the actual lever, a separate axis from this round's
+naming-convention question.
+
+**Separate structural finding, not fixed, not this round's mandate:** `unbuilt.py`'s world-model
+reservation (`lm = "Model_Level"`, `unbuilt.py:323-336`) never reserves a companion `Polys` export --
+native has no counterpart to the golden's extra world-aggregate `Engine.Polys` block `quirks.md`
+already documents. A genuine export-table COUNT gap (not naming), visible in the DX.dx export-table
+diff (widened golden 57 exports vs native's 52). Flagged as a candidate for a future round.
+
+**No fix shipped.** The naming convention is pinned with confidence; the reproducible value, and its
+actual relevance to `texture_ref`/`i_actor`, are not. Per the task's own ground rules ("if the naming
+rule ... turns out to be more complex than a simple mechanical pattern: do NOT guess/ship a fix"),
+this is logged as open rather than guessed at. Full write-up in `native-materialize-findings.md`
+(search "Round 3: `Polys` naming").
