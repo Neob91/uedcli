@@ -1,0 +1,42 @@
+[New LWP 147]
+[New LWP 163]
+[New LWP 164]
+[New LWP 165]
+[New LWP 166]
+[New LWP 167]
+[New LWP 168]
+[New LWP 169]
+[New LWP 170]
+[New LWP 171]
+[New LWP 172]
+[New LWP 173]
+[New LWP 174]
+[New LWP 175]
+[New LWP 176]
+[New LWP 177]
+[New LWP 178]
+[New LWP 179]
+[New LWP 180]
+[New LWP 181]
+[New LWP 182]
+[New LWP 183]
+[New LWP 184]
+[New LWP 185]
+[New LWP 186]
+[New LWP 187]
+[New LWP 188]
+[New LWP 189]
+[New LWP 190]
+[New LWP 192]
+[New LWP 198]
+[New LWP 239]
+[New LWP 240]
+[New LWP 241]
+[Thread debugging using libthread_db enabled]
+Using host libthread_db library "/lib/x86_64-linux-gnu/libthread_db.so.1".
+0xf7f98cfc in __kernel_vsyscall ()
+Breakpoint 1 at 0x100a5043
+Breakpoint 2 at 0x100a5a04
+Breakpoint 3 at 0x17ce1cd
+Breakpoint 4 at 0x100a5a07
+ORACLE_ATTACHED
