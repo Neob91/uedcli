@@ -2,7 +2,7 @@
 priority = "p1"
 kind = "debug"
 summary = "Native materialize FULL byte-parity vs UnrealEd UED22 (owner-reaffirmed 2026-08-31, not the looser node/surf/leaf-only 'EXACT' label): status/index for the whole geometry+lighting effort. CORRECTED 2026-08-31: 'tree structure EXACT' claims were count-only, not content -- a real index-for-index comparison shows ZERO levels (not even DX.dx/NYC Bar) have genuine node/surf/leaf content parity, only count-coincidence. Full 21-level breadth corpus measured (18/21 goldens cached, 3 fail to build); every non-trivial level's lighting is well under 100% and gated on its geometry gap. See below for the harness catalog, the full per-level table (in the findings ledger), and open threads."
-depends-on = ["port-urender-getvisiblesurfs-so-each-light-gets", "port-the-per-leaf-permeating-light-lists-model", "getvisiblesurfs-wanchai-run-gap-root-cause", "line-clear-shadow-ray-algorithm-gap-found-real", "zone-crossing-getvisiblesurfs-gap-invisible", "smuggler-4-surf-delta-traced-to-4-pf-semisolid", "freeclinic08-nsfhq04-1-surf-under-build-root", "wanchai-verts-points-residual-independently", "pass-d-chain-link-order-native-splices-zone", "pass-d-fragment-nodes-get-ileaf-1-where", "splitwithplane-degenerate-fragment-fallback", "native-zone-over-fragmentation"]
+depends-on = ["port-urender-getvisiblesurfs-so-each-light-gets", "port-the-per-leaf-permeating-light-lists-model", "getvisiblesurfs-wanchai-run-gap-root-cause", "line-clear-shadow-ray-algorithm-gap-found-real", "zone-crossing-getvisiblesurfs-gap-invisible", "smuggler-4-surf-delta-traced-to-4-pf-semisolid", "freeclinic08-nsfhq04-1-surf-under-build-root", "wanchai-verts-points-residual-independently", "pass-d-chain-link-order-native-splices-zone", "pass-d-fragment-nodes-get-ileaf-1-where", "splitwithplane-degenerate-fragment-fallback", "native-zone-over-fragmentation", "lighting-bits-only-divergence-localizes-to"]
 spikes = ["dev/docs/spikes/2026-08-27-native-light-apply-parity/", "dev/docs/spikes/2026-08-29-unatco-repart-live-diff/", "dev/docs/spikes/2026-08-29-area51-underbuild/", "dev/docs/spikes/2026-08-26-editor-free-native-materialize/"]
 +++
 
@@ -148,6 +148,15 @@ Lighting (detail below this section, and in `dev/docs/native-materialize-finding
   first port attempt lands the right leaf SET, not yet the right per-leaf content; not wired in.
 - **`Points`/geometry residual** feeding `Pan`/`UScale`/`VScale` mismatches — tracked as a geometry
   thread below (`wanchai-verts-points-residual-independently`); the largest single lighting bucket.
+- **2026-08-31, record-level breakdown (new board item `lighting-bits-only-divergence-localizes-to`):**
+  the bad-record set on NYC Bar/UNATCO splits ~40-45%/~40-45%/~13% into `grid`-only / `bits`-only /
+  `run`-differs. `grid`-only is now DIRECTLY traced (13-14x correlation) to real Points/Vectors VALUE
+  drift (tens of ULPs) that persists even where Points COUNT is exact (NYC Bar) — a narrower angle on
+  the item above, not new scope. `bits`-only (the largest bucket) is NOT diffuse precision noise: 53-
+  72% of bad records have exactly ONE wrong light out of several sharing the same surface/grid, and
+  specific light actors (`Light30` on NYC Bar, `Light227` on UNATCO) recur as the bad one across many
+  surfaces with no static (class/radius) distinguisher from always-correct co-located lights. Both need
+  live capture to progress further; no fix shipped this round.
 
 Geometry:
 

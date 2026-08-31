@@ -3132,3 +3132,74 @@ worktree `.claude/worktrees/node-flags-live-verify` (branch `node-flags-live-ver
 per this round's instructions; the offline diff/index-correspondence check used the main checkout's
 already-built `uedcli_native` venv (`/workspace/uedcli/.venv`) against the still-cached
 `/tmp/uedcli-widen-test/unatco_{widened,all}.dx` — no rebuild, no editor.
+
+## Lighting record divergence: failure-mode breakdown (2026-08-31, no docker/live editor)
+
+Sandbox docker/runc was still down this round (confirmed once, not retried further —
+`sandbox-docker-runc-cannot-start-any-container`), so this is entirely offline against cached goldens
+(`/tmp/uedcli-parity-cache/`, `_scratch/uedcli-parity-cache/<hash>/trunk`, both re-used read-only via
+`parity_report.py`/`parity_compare.py` — a real cache hit, no re-extraction, no re-build). Task: NYC
+Bar (87.7%, 821/936) and UNATCO (83.6%, 2797/3345) lighting-record divergence had never been broken
+down past the aggregate percentage this session. Full writeup, board item
+`lighting-bits-only-divergence-localizes-to`; summary here.
+
+Confirmed the current numbers first (`parity_report.py --json`, matches the standing item exactly):
+NYC Bar geometry is COUNT-exact (all 6 deltas `d=+0`); UNATCO carries the known verts+5/points+16.
+
+**Split the aggregate into 3 mutually-exclusive buckets** (previously only union'd field counts
+existed): `bits`-only (grid+run agree, shadow bits differ), `grid`-only (`Pan`/`UScale`/`VScale`
+differ, bits+run agree), `run` differs. Both levels: `bits`-only and `grid`-only are each ~40-45% of
+bad records, `run` a steady ~13%.
+
+**`grid`-only bucket root cause, confirmed with new evidence: real Points/Vectors VALUE drift, even
+where Points COUNT is exact.** The standing "Points residual" thread only ever tracked COUNT deltas
+(UNATCO +16, Wanchai +16/+19) — NYC Bar's 0-delta geometry was assumed clean on this axis. A multiset
+compare of `Model.Points` (native vs golden, both 2762 entries on NYC Bar) finds 54 native points (2%)
+whose VALUE matches no golden point at all — e.g. native `(0.0, -311.9998779296875,
+-255.99993896484375)` vs golden's `(0.0, -312.0, -256.0)`, tens of ULPs apart, not a rounding-mode
+artifact. `Model.Vectors`: 47/138 (34%) similarly value-mismatched. UNATCO: 393/10768 points (3.6%),
+on top of its already-known +16 count residual. Correlating each `grid`-only record's owning surf
+(via `i_light_map` → node vert-pool ∪ `p_base`) against this divergent-point set: NYC Bar 32/49
+(65.3%) touch a divergent point vs a 4.8% baseline on identical records (13.6x enrichment); UNATCO
+148/196 (75.5%) vs 5.4% baseline (14x). This is a real causal link, not aggregate coincidence — the
+bake's own grid math (`axis_grid` in `light.rs`) is unaffected; it faithfully reproduces whatever
+`vmin`/`vmax` it's handed. No lighting-side fix is possible here. This is a NEW, narrower angle on the
+already-4x-exhausted `wanchai-verts-points-residual-independently` thread (that thread tracked COUNT
+only; this shows a genuine VALUE-level drift persists even at zero count delta) — not a reason to
+reopen it without a fresh live-capture angle on the intermediate CSG split arithmetic.
+
+**`bits`-only bucket (the largest, ~45% both levels): NOT diffuse precision noise.** Divergent-point
+correlation here is weak (NYC Bar 16.0%, UNATCO 8.4%, barely above baseline) — a different mechanism.
+Splitting each bad record's `LightBits` back into its per-light sub-planes (stored consecutively per
+run) and XORing independently: 72% of NYC Bar's bad records (36/50) and 53% of UNATCO's (132/250) have
+EXACTLY ONE light with any wrong bits — every OTHER light sharing that same surface/grid is
+bit-perfect. Where more than one light is bad, it's still typically 1-2 of 4-9, not all slightly off.
+This rules out diffuse per-lumel rounding noise (which would scatter evenly across every light on a
+record) and explains the earlier "bits-only records average 2-3x more lights per surface" observation
+as pure exposure (more lights = more chances one is the bad one), not noise scaling with ray count.
+**The bad light is not random per-surface noise: specific light ACTORS recur as the bad one across
+many different surfaces** — NYC Bar's `Light30` on 7 of only 50 bad records; UNATCO's `Light227` on
+12 of 250. Checked the trunk T3D for a static distinguisher (class, `LightRadius`, cone/effect fields)
+between recurring-bad and always-good co-located lights on NYC Bar — none found; all are plain
+`Engine.Light`, ordinary radii. Whatever makes these lights special isn't in their declared
+properties — likely a Location/geometry relationship only a live trace surfaces.
+
+**Bottom line, no fix shipped, both leads need live capture:**
+1. `grid`-only — why 54-393 Points/Vectors values drift by tens of ULPs even when total counts match
+   (geometry-side CSG float accumulation, not the bake).
+2. `bits`-only — why specific recurring lights (`Light30`, `Light227`, …) produce a wrong shadow trace
+   on multiple surfaces while co-located lights on the same surfaces are correct. Needs a live gdb
+   trace of `line_clear` for one of these now-concrete (surf, light) repros (e.g. `Light30` against
+   any of its 7 bad NYC Bar surfaces), the same mechanism `line_clear_algorithm_check.py`/
+   `linecheck_*.py` already use, pointed at a real repro instead of a generic sweep.
+
+Neither of the two previously-"chased" leads (shadow-ray precision / `lumel_axes`'s determinant,
+`MergeWith`'s span-buffer merge) is reopened by this — both are independently confirmed correct
+elsewhere in the pipeline and are not the computation this finding implicates (the ray WALK itself,
+not the determinant or the merge). `9827f07` (round-8 `line_clear` port) stands; 99.27%/99.76%
+shadow-bit agreement is unchanged — this narrows what's left of that residual to specific,
+reproducible pairs instead of "diffuse, chased+refuted".
+
+No source changed (`uedcli-native/src/` untouched); this was pure characterization. Worktree
+`.claude/worktrees/lighting-divergence-breakdown` (branch of the same name), left uncommitted per this
+round's instructions. Board item: `lighting-bits-only-divergence-localizes-to`.
