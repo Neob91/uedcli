@@ -1,7 +1,7 @@
 +++
 priority = "p1"
 kind = "debug"
-summary = "Native BSP is node-exact against the editor's paste-built golden on 01_NYC_UNATCOHQ (734 brushes) but not on 09_HONGKONG_WANCHAI_MARKET (1304 brushes): nodes 11381 vs 11648, leaves 3240 vs 3371, points 16522 vs 16791, vectors 481 vs 487, surfs 5283 vs 5284. Same pipeline both sides."
+summary = "Native BSP is node-exact against the editor's paste-built golden on 03_NYC_UNATCOHQ (734 brushes, mislabeled 01_NYC_UNATCOHQ until 2026-08-31 -- see unatco-baseline-trunk-is-actually-03-nyc) but not on 09_HONGKONG_WANCHAI_MARKET (1304 brushes): nodes 11381 vs 11648, leaves 3240 vs 3371, points 16522 vs 16791, vectors 481 vs 487, surfs 5283 vs 5284. Same pipeline both sides."
 +++
 
 # Native BSP matches the editor on UNATCO but not on `WANCHAI_MARKET`

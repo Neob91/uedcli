@@ -26,7 +26,9 @@ but not 0/0 on either level. `MergeWith` (`render.dll 0x1001e3b0`) is still unde
 
 # Port `URender::GetVisibleSurfs` so each light gets the editor's surface set
 
-The native `LIGHT APPLY` bake reproduces the editor's own output on `01_NYC_UNATCOHQ` to 99.0% of
+The native `LIGHT APPLY` bake reproduces the editor's own output on `03_NYC_UNATCOHQ` (mislabeled
+`01_NYC_UNATCOHQ` throughout this session's docs until 2026-08-31, see
+`unatco-baseline-trunk-is-actually-03-nyc`) to 99.0% of
 per-(surface, light) shadow bit-planes byte-identical and 99.99% of lumel bits. The remaining
 structural difference is WHICH surfaces each light is listed on: 368 of 3345 records have a different
 light run, and it is one-sided — native adds 618 pairs, misses 7.

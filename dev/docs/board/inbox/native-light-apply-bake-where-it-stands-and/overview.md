@@ -237,7 +237,11 @@ Trunks used: `_scratch/bsp-parity-proj/maps/unatco` (1437 actors, 734 world brus
 `dev/games/trunks/tmp-wanchai-market` (2288 actors, 1304 world brushes). Both have fully qualified
 actor classes, which `gather_lights` needs.
 
-## State on `01_NYC_UNATCOHQ` — STALE, trees no longer identical, records do NOT align 1:1
+## State on `03_NYC_UNATCOHQ` — STALE, trees no longer identical, records do NOT align 1:1
+
+(Was mislabeled `01_NYC_UNATCOHQ` throughout this session's docs until 2026-08-31 —
+`unatco-baseline-trunk-is-actually-03-nyc` confirmed the `_scratch/bsp-parity-proj/maps/unatco`
+trunk this whole investigation uses is actually `03_NYC_UNATCOHQ.dx`, not `01_`.)
 
 Table below measured 2026-08-29 AM after the `GetVisibleSurfs` self-occlusion fix (`9c148d4`),
 back when UNATCO's tree was still node-exact. Later the same day, `04986a2` (repartition-frontier)

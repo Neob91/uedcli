@@ -6,7 +6,9 @@ summary = "The editor carves a different world BSP from the SAME 734 UNATCO brus
 
 # `MAP LOAD` and `EDIT PASTE` build different world BSPs from the same brushes
 
-Measured on `01_NYC_UNATCOHQ` (the `_scratch/bsp-parity-proj` trunk), both builds bare `MAP REBUILD`,
+Measured on `03_NYC_UNATCOHQ` (the `_scratch/bsp-parity-proj` trunk -- mislabeled `01_NYC_UNATCOHQ`
+throughout this session's docs until 2026-08-31, see `unatco-baseline-trunk-is-actually-03-nyc`),
+both builds bare `MAP REBUILD`,
 both world-only, both from the identical 734 `Engine.Brush` actors:
 
 | brushes entered the level via | surfs | nodes | leaves | zones | distinct owning brushes |

@@ -6,7 +6,8 @@ summary = "Superseded by `port-the-per-leaf-permeating-light-lists-model`, which
 
 # Native OMITS the per-LEAF permeating light lists — superseded
 
-The finding stands and is re-measured on `01_NYC_UNATCOHQ`: `Model.Lights` region 1 is
+The finding stands and is re-measured on `03_NYC_UNATCOHQ` (mislabeled `01_NYC_UNATCOHQ` until
+2026-08-31, see `unatco-baseline-trunk-is-actually-03-nyc`): `Model.Lights` region 1 is
 `Lights[0, 5405)`, 761 of 776 leaves carrying a run, and native emits none of it while stubbing every
 leaf's `iPermeating` to `0`.
 

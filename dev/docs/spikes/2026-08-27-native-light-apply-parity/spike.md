@@ -7,7 +7,9 @@ draws at all. Can we bake the lightmaps ourselves, to the byte-identity bar
 
 ## TL;DR — yes, to 99% of the shadow bytes, and the rest is not the bake's
 
-The bake reproduces the editor's own `LIGHT APPLY` output on `01_NYC_UNATCOHQ`: the same 3345
+The bake reproduces the editor's own `LIGHT APPLY` output on `03_NYC_UNATCOHQ` (mislabeled
+`01_NYC_UNATCOHQ` throughout this session's docs until 2026-08-31, see
+`unatco-baseline-trunk-is-actually-03-nyc`): the same 3345
 `FLightMapIndex` records in the same array order, the same 271 unlightmapped surfaces, grid
 descriptors exact on 3345/3345 records, **8162 of 8246 per-(surface, light) shadow bit-planes
 byte-identical**, and 99.988% of 3,978,275 individual lumel bits equal. A full lit build of that

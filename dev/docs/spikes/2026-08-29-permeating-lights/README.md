@@ -5,7 +5,8 @@ Implements the algorithm decoded in `port-the-per-leaf-permeating-light-lists-mo
 reusing `zones::collect_leaf_portals` (already built for the zone union-find) for the
 every-empty-leaf-to-empty-leaf adjacency graph.
 
-**Not wired into `light::bake`.** On `01_NYC_UNATCOHQ` (node-exact tree):
+**Not wired into `light::bake`.** On `03_NYC_UNATCOHQ` (node-exact tree; mislabeled `01_NYC_UNATCOHQ`
+until 2026-08-31, see `unatco-baseline-trunk-is-actually-03-nyc`):
 
 - Leaf-reachability SET is EXACT: 748/762 leaves marked on both native and a freshly-built LIT
   golden, and it's the SAME 748 leaves both times.

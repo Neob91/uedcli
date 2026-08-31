@@ -3,7 +3,8 @@
 
 Why not the production `level materialize` editor path: that path assembles an unbuilt package and
 `MAP LOAD`s it, and the editor then carves a DIFFERENT world BSP from the very same brushes than it
-does when the brushes arrive via `MAP NEW` + `EDIT PASTE` (measured on `01_NYC_UNATCOHQ`, world-only
+does when the brushes arrive via `MAP NEW` + `EDIT PASTE` (measured on `03_NYC_UNATCOHQ` -- mislabeled
+`01_NYC_UNATCOHQ` until 2026-08-31, see board item `unatco-baseline-trunk-is-actually-03-nyc` -- world-only
 either way: MAP LOAD 3705 surfs / 6254 nodes / 776 leaves, paste 3616 / 6314 / 762). The native CSG
 core reproduces the PASTE tree exactly, so the lit oracle has to be built the paste way too —
 otherwise every lightmap record on the two sides describes a different surface and no byte comparison

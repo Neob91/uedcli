@@ -18,7 +18,8 @@ actor, the property and the text rather than reading as absent.
 **The participation rule is disassembled, not guessed.** The editor's gather pass accepts an actor on
 `LightType != LT_None` AND `(bStatic || bNoDelete)` (`Editor 0x100a4cc7` / `0x100a4cd4`), with no class
 check at all. The second condition is what the heuristic was missing: it is why the editor's bake
-lists none of `01_NYC_UNATCOHQ`'s 7 `DeusEx.SecurityCamera`s even though they default
+lists none of `03_NYC_UNATCOHQ`'s (mislabeled `01_NYC_UNATCOHQ` until 2026-08-31) 7
+`DeusEx.SecurityCamera`s even though they default
 `LightType=LT_Steady` — `DeusEx.DeusExDecoration` overrides `bStatic` back to False and nothing in
 their chain sets `bNoDelete`.
 

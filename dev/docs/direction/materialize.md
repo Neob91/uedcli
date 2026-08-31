@@ -16,7 +16,9 @@ is the source, reached through git, never a build target.
   PASTE`/`IMPORTADD`), which GPFs on complex retail geometry and cannot express every authored value;
   the built `Actors` array is faithful, with no append reorder. A native path (behind the temporary
   `UEDCLI_NATIVE_MATERIALIZE=1` test gate) already reaches exact BSP parity with the editor's own
-  build on `01_NYC_UNATCOHQ` and bakes the lighting to 99% of its shadow bit-planes byte-identical;
+  build on `03_NYC_UNATCOHQ` (mislabeled `01_NYC_UNATCOHQ` until 2026-08-31 -- same shipped UNATCO
+  HQ mission location, different mission-revisit file) and bakes the lighting to 99% of its shadow
+  bit-planes byte-identical;
   it still cannot build a mover's private model, and its BSP does not yet match on every level, so it
   is not yet the default. On failure nothing is written — the build exits 2 and the existing `--out`
   file is left untouched.
