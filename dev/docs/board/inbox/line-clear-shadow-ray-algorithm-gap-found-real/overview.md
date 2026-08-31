@@ -1,7 +1,7 @@
 +++
 priority = "p2"
 kind = "debug"
-summary = "Confirmed line_clear (not lumel_axes) causes Wanchai's bits-only shadow divergence. Round 3 found the round 1-2 target function (target+0x5b0) was wrong; round 4 pinned the real crossing formula (t'=de/(de-ds)) and measured it regressing both levels when grafted onto native's alternating recursion -- reverted. Round 5 explains why: point2 (the query's lumel_pos) stays bit-identical across 4 successive genuine crossings. Round 6: full disassembly of the real walker (0x17ce190) fully resolves the recursion shape (one genuine near-recursion replacing point1, tail-loop far-continuation replacing point2) AND finds a real, live-confirmed +/-0.001 epsilon band (not 0.0). Round 7: pinned the full state-machine (near-call incoming state, far-continuation state) via live capture of a CLEAR ray, verified perfectly (122/122 mechanical checks, 4/4 real rays incl. exact node-path replication) -- then found, via a broad offline sweep against real golden bits, a large-scale regression (81-92%, well below the ~99% baseline) that the earlier small-sample verification missed entirely. A FRONT/BACK state-formula swap only partially helps one region and hurts another (ruling out a simple sign error); the leading hypothesis (an unmodeled zone-transform branch gated on a context pointer) was LIVE-TESTED and REFUTED same round (edx=0 for all 4 sampled rays of the broken light, same as the working one). Root cause still open. Reverted cleanly -- linecheck.rs untouched, git diff empty, 90/90 tests green."
+summary = "Confirmed line_clear (not lumel_axes) causes Wanchai's bits-only shadow divergence. Round 3 found the round 1-2 target function (target+0x5b0) was wrong; round 4 pinned the real crossing formula (t'=de/(de-ds)) and measured it regressing both levels when grafted onto native's alternating recursion -- reverted. Round 5 explains why: point2 (the query's lumel_pos) stays bit-identical across 4 successive genuine crossings. Round 6: full disassembly of the real walker (0x17ce190) fully resolves the recursion shape (one genuine near-recursion replacing point1, tail-loop far-continuation replacing point2) AND finds a real, live-confirmed +/-0.001 epsilon band (not 0.0). Round 7: pinned the full state-machine (near-call incoming state, far-continuation state) via live capture of a CLEAR ray, verified perfectly (122/122 mechanical checks, 4/4 real rays incl. exact node-path replication) -- then found, via a broad offline sweep against real golden bits, a large-scale regression (81-92%, well below the ~99% baseline) that the earlier small-sample verification missed entirely. A FRONT/BACK state-formula swap only partially helps one region and hurts another (ruling out a simple sign error); the leading hypothesis (an unmodeled zone-transform branch gated on a context pointer) was LIVE-TESTED and REFUTED same round (edx=0 for all 4 sampled rays of the broken light, same as the working one). Root cause still open. Reverted cleanly -- linecheck.rs untouched, git diff empty, 90/90 tests green. Round 8: round 7's regression was a measurement artifact (v2 tested with no light-radius cull against a radius-culled baseline) -- re-derived the state machine independently (matches round 7 exactly), live-confirmed the top-level call's edi_in=0/extra_flags=4, and found v2 is 262/262 (100%) correct on every real Wanchai native-vs-golden mismatch vs v1's 20/262 (7.6%), zero regressions. SHIPPED and COMMITTED: linecheck.rs now the threaded-state port, TDD'd RED/GREEN, Wanchai byte-identical 3408/4530->3418/4530 (independently reproduced). One pre-existing test (a_not_vis_blocking_node_does_not_occlude, an unrealistic all-non-CSG synthetic) conflicted; owner ruled ship+rewrite, rebuilt with a realistic partial-flagging construction, cargo test 91/91. UNATCO not re-measured (no local trunk)."
 depends-on = ["getvisiblesurfs-wanchai-run-gap-root-cause"]
 spikes = ["dev/docs/spikes/2026-08-29-unatco-repart-live-diff/"]
 +++
@@ -583,3 +583,133 @@ condensed version of this entry.
   case a future round wants to re-check it against a different (light, surface) pair)
 - `dev/docs/spikes/2026-08-29-unatco-repart-live-diff/logs/linecheck-edx-zone-check.log` (the 4-ray
   `edx=0x0` capture the refutation above is drawn from)
+
+## Round 8 (2026-08-31): round 7's "regression" was an apples-to-oranges measurement, not a real bug
+## in v2 -- SHIPPED, live-verified 100% correct on every real Wanchai mismatch, one pre-existing
+## test now conflicts and is flagged, not altered
+
+Picked up exactly at round 7's stopping point (its own "concrete next step for a future round").
+
+**Re-derived round 7's whole state-machine independently, from the raw disasm, a second time --
+zero discrepancies found.** Re-disassembled `0x17ce190` fresh (`rdis.py`-equivalent read of the
+already-committed `linecheck-walker-full-disasm.log`, byte-by-byte, including precise stack-offset
+arithmetic for the recursive call's argument layout) without trusting round 7's own transcription.
+Every formula -- the +/-0.001 whole-segment epsilon (live-reread: `CONST1=-0.00100000005`,
+`CONST2=0.00100000005`), the crossing fraction/`mid` formula, the near-call incoming-state formula,
+the far-continuation formula, the terminal handler -- matches round 7's port exactly. Found one
+genuine algebraic simplification round 7 had already noted but not fully spelled out: all three
+state-update sites (whole FRONT/BACK segment, near-call incoming state, far continuation) reduce to
+ONE two-argument rule, `combine_state(side, state, csg) = state||csg` (FRONT) `state&&!csg` (BACK) --
+shipped as a single helper.
+
+**Live re-verified the top-level (non-recursive) call's own argument layout, closing a NEW static-
+accounting puzzle this round hit and initially could not resolve by hand.** A fresh byte-count of
+`illuminateSurf`'s call site (`Editor.dll 0x100a598b`-`0x100a5a04`) only totalled 0x30 bytes of
+pushed args against the recursive self-call's 0x34 -- a 4-byte (one-dword) mismatch that, read
+naively, would put the model pointer at 0 for the ROOT call only. New harness
+`linecheck_toplevel_args_check.py`: breakpoints at the call instruction AND at `0x17ce190+3`
+(prologue-end) dump every argument slot for 6 real top-level calls (isurf=1) during a genuine
+Wanchai `LIGHT APPLY`. Result: the callee's OWN view is fully sane at every call --
+`ebp0c(model)=0xd59425c` (matches caller `ecx`, non-null), `ebp10(zone-ctx)=0x0`,
+`ebp34(edi_in)=0x0`, `ebp38(extra_flags)=0x4`, `point1=light_loc`, `point2=lumel_pos` -- i.e. the
+static byte-mismatch is real but resolves to something upstream of the raw push sequence (an
+adjustor/thunk at the vtable slot, not chased further since the callee's actual received values are
+what matters and those are now live-confirmed correct). This DEFINITIVELY CLOSES the "is the
+top-level `edi_in`/`extra_flags` really 0/4" question every round since 3 had assumed but never
+directly dumped.
+
+**Root-caused round 7's regression as a measurement artifact, not a v2 algorithm bug.** Two
+offline sweeps against Wanchai's real `golden.dx` (no live capture needed, `line_clear_v2_algorithm_
+check.py` reused as-is):
+1. A broad, UNCONDITIONAL scan (every lumel bit, 900k+ sampled) found **zero** cases where v1
+   (current shipped) gets the real bit right and v2 gets it wrong, and v1/v2 agreed with EACH OTHER
+   on literally every sampled bit.
+2. Restricted to the population that actually matters -- every lumel where a real, freshly rebuilt
+   `native.dx` ALREADY disagrees with `golden.dx` (198 records, 262 in-range-of-light lumels, the
+   full level, not cherry-picked) -- **v1 matches golden 20/262 (7.63%); v2 matches golden 262/262
+   (100.00%)**, including the exact original round-1 exemplar (record 14, `Light42`, v=3 u=0/1).
+   Zero regressions: every one of v1's 20 correct lumels is also correct under v2.
+
+Round 7's 88-92% figure was real but measured the wrong thing: `line_clear_v2_algorithm_check.py`
+calls `line_clear` directly with no light-radius cull, over ALL lumels unconditionally, then compares
+against a 99% baseline that comes from a REAL compiled run which DOES apply `light.rs`'s radius cull
+before ever calling `line_clear`. Confirmed concretely: the FIRST mismatch in round 7's own printed
+list (`rec=3 Light391 v=34 u=20`, golden=BLOCKED, v2=CLEAR) is a lumel 677uu from a light whose world
+radius is 425uu -- genuinely out of range, nothing to do with `line_clear`'s BSP walk at all. A
+radius-aware rerun of the SAME broad sweep (2M-bit target, ~900k completed within this round's time
+budget) shows 100% agreement for BOTH v1 and v2 on every in-range lumel sampled -- the two algorithms
+are indistinguishable at random-sample scale (they only diverge on rare multi-crossing-with-a-non-
+CSG-pass-through geometry, which is common enough in the REAL mismatch bucket above but rare in a
+uniform sample of ~4.5M total bits).
+
+**Shipped.** `uedcli-native/src/linecheck.rs`: replaced the old direct-parent-only `descend`/
+`seg_clear` with the disassembly-faithful threaded-state walker (`combine_state`/`terminal`/
+`seg_clear`, a loop + exactly one genuine recursion per crossing, matching round 6's resolved
+recursion shape). TDD: `ancestor_solid_state_survives_a_non_csg_pass_through` -- a hand-built
+2-node model (`NodeA` genuinely CSG-solid, `NodeB` non-CSG immediately behind it) where a ray that
+demonstrably crosses `NodeA`'s solid interior must stay blocked through `NodeB`'s non-occluding
+pass-through; confirmed RED against the pre-fix code (temporarily reverted the file via `git
+checkout`, added the test, ran it failing, then restored the fix) and GREEN after. Also fixed a
+robustness gap the first draft of the port introduced: the recursion-depth backstop must bound the
+whole call tree (tail steps AND recursive near-calls together, a real C-stack recursion), not just
+one frame's own tail loop -- threaded `depth` through the recursive call properly, re-verified
+identical Wanchai output before/after that fix. `cargo test`: 90/91 (see conflict below); full
+`bin/test` (`UEDCLI_SKIP_NATIVE=1`, native side covered separately by `cargo test` above): **12521
+passed, 0 failed**, 45 skipped/113 deselected/1 xfailed all pre-existing and unrelated;
+`regression_gate.py`: UNATCO/Wanchai both still node/surf/leaf-EXACT (pure lighting-bake change).
+
+**Real, positive, zero-regression lighting improvement, live-measured on a fresh Wanchai rebuild**
+(`light_spotcheck_wanchai.py`, native extension rebuilt with the fix): `LightMap` records
+byte-identical **3408/4530 (75.2%) -> 3418/4530 (75.5%)**, +10 records, matching the small (262-lumel)
+scale of the real-world fix. Shadow-bit agreement (grid+run-matched) unchanged at 98.79% to 2 decimal
+places -- 262 fixed bits out of ~2.49M is below that metric's resolution; the record-level count is
+the metric that actually moves at this scale. UNATCO NOT independently re-measured this round: no
+local trunk/golden was available (the working copy used by earlier rounds is gone), and rebuilding
+one from scratch was out of this round's time budget -- flagged as the concrete next step, not
+skipped silently.
+
+**Found a genuine conflict with a pre-existing, real-measurement-backed test -- resolved by owner
+ruling (2026-08-31).** `a_not_vis_blocking_node_does_not_occlude` built a room and flagged EVERY
+node `NF_NotVisBlocking`, then asserted a ray through the wall stays CLEAR. Under the verified-correct
+threaded algorithm, a tree where literally every node is non-CSG never produces positive evidence of
+open space (the top-level `state` starts at `false`/"unproven" and only a genuine FRONT-of-CSG-solid
+node can set it `true`), so the terminal defaults to BLOCKED -- this specific synthetic scenario
+failed. The test's own justification (54157->3902 dark-lumel real UNATCO measurement) is about a
+REALISTIC partial-flagging scenario (160/6314 real nodes), which still holds under v2 (any real ray
+still crosses genuine CSG-solid nodes elsewhere establishing `state=true`) -- only the synthetic
+"100% of nodes flagged" edge case, which no real level ever produces, diverged.
+
+Owner ruled: ship the fix, rewrite the test's construction. Rebuilt it with a solid ancestor node
+(`NodeA`, genuine CSG-solid) the ray crosses first -- establishing `state=true` the way a real ray
+always does before reaching a flagged node -- followed by the node under test (`NodeB`), asserted
+both as a baseline (genuinely solid, occludes) and flagged (`NF_NotVisBlocking`, does not occlude
+despite the ray's prior open-space evidence). Both cases pass under v2; the test still pins the same
+54157->3902 real-measurement motivation. `cargo test`: 91/91 (was 90/91 with the old test failing).
+Independently re-verified by the coordinating session: full `bin/test` clean, `regression_gate.py`
+UNATCO/Wanchai still node/surf/leaf-EXACT, and the Wanchai 3408/4530->3418/4530 record-level
+improvement reproduced exactly via a fresh independent run of `light_spotcheck_wanchai.py`.
+`line_clear` v2 SHIPPED, committed.
+
+## Concrete next step for a future round
+
+1. Re-measure UNATCO with a freshly rebuilt trunk/golden (this round's biggest gap -- Wanchai alone
+   is strong evidence but the standing task explicitly wants both levels).
+2. Complete the radius-aware broad sweep to the full ~2-4M-bit target on both levels (this round
+   completed ~900k of the ~2M target on Wanchai before time ran out; the partial result was already
+   decisive but a full run would tighten the confidence interval and might surface a genuine v1/v2
+   divergence the partial sample missed).
+3. The still-open, larger `Pan`/`UScale`/`VScale` geometry-residual bucket
+   (`unatco-verts-points-residual-after-the-zone`) and any remaining zone-crossing misses are
+   unrelated to this fix and still block further record-level parity gains even with `line_clear`
+   now correct.
+
+## Files (round 8)
+
+- `dev/docs/spikes/2026-08-29-unatco-repart-live-diff/harness/linecheck_toplevel_args_check.py`
+  (new -- live dumps the top-level call's full argument layout, both at the caller's call site and
+  the callee's own prologue; closes the "is edi_in really 0" question with direct evidence instead of
+  inference)
+- `dev/docs/spikes/2026-08-29-unatco-repart-live-diff/logs/linecheck-toplevel-args-check.log` (the
+  6-call Wanchai isurf=1 capture the top-level-args finding is drawn from)
+- `uedcli-native/src/linecheck.rs` (shipped: the threaded-state port + new TDD test; `git diff`
+  non-empty, left for the coordinating session to review/commit)

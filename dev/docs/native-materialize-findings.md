@@ -1764,6 +1764,29 @@ from a genuine tree-SHAPE difference already present in Pass 1's own incremental
 before `bspBuildFPolys` ever runs. This is new localization, one stage further upstream than any
 prior entry in this chain reached.
 
+**`line_clear` round 7's "regression" was a measurement artifact, not a real v2 bug — the threaded-
+state port is 262/262 (100%) correct on every real Wanchai native-vs-golden mismatch vs v1's 20/262
+(7.6%), shipped** (2026-08-31, 🔬 live + offline oracle) — Round 7's v2 checker calls `line_clear`
+directly with no light-radius cull, over ALL lumels, then compared against a 99% baseline from a real
+compiled run that DOES cull by radius first. Confirmed: round 7's own first-listed mismatch
+(`rec=3 Light391 v=34 u=20`) is 677uu from a light with 425uu world radius — genuinely out of range,
+unrelated to `line_clear`. Restricted to the real (native.dx≠golden.dx) mismatch bucket, in-range
+only, whole Wanchai level (198 records, 262 lumels, not cherry-picked): v1 20/262 correct, v2 262/262
+— zero regressions. `uedcli-native/src/linecheck.rs` now ships the threaded `combine_state`/
+`terminal`/`seg_clear` port. Wanchai byte-identical 3408/4530→3418/4530; `regression_gate.py` exact
+before/after. Full round-by-round detail: `line-clear-shadow-ray-algorithm-gap-found-real`.
+
+**`a_not_vis_blocking_node_does_not_occlude` conflicted with the verified-correct `line_clear`
+threaded-state port — resolved per owner ruling (2026-08-31): rewrite the test, ship the fix.**
+The old construction flagged EVERY node `NF_NotVisBlocking` (unrealistic: no real level does this)
+and expected CLEAR. The real algorithm's `state` starts `false`/unproven and only a genuine
+CSG-solid FRONT crossing sets it `true`; an all-non-CSG tree never earns that, so the terminal
+reports BLOCKED. Rewrote the test to a realistic partial-flagging construction matching the real
+UNATCO ratio (a solid ancestor node the ray crosses first, establishing `state=true`, then the
+flagged node under test) — both the baseline-solid and flagged cases now pass under v2, and the
+test still pins the same real-measurement motivation (54157→3902 dark lumels). `cargo test`: 91/91.
+Full `bin/test`: independently re-verified clean. `line_clear` v2 SHIPPED.
+
 **Not further root-caused.** WHY editor's real Pass-1 tree ends up with ~70 more fragments for the
 same face set — a different CSG split/classification order across the 141 structural brushes, or a
 genuine algorithmic gap in native's `bsp_brush_csg`/`filter_ed_poly` not caught by the existing

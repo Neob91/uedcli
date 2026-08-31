@@ -1,0 +1,212 @@
+[New LWP 152]
+[New LWP 168]
+[New LWP 169]
+[New LWP 170]
+[New LWP 171]
+[New LWP 172]
+[New LWP 173]
+[New LWP 174]
+[New LWP 175]
+[New LWP 176]
+[New LWP 177]
+[New LWP 178]
+[New LWP 179]
+[New LWP 180]
+[New LWP 181]
+[New LWP 182]
+[New LWP 183]
+[New LWP 184]
+[New LWP 185]
+[New LWP 186]
+[New LWP 187]
+[New LWP 188]
+[New LWP 189]
+[New LWP 190]
+[New LWP 191]
+[New LWP 192]
+[New LWP 193]
+[New LWP 194]
+[New LWP 195]
+[New LWP 196]
+[New LWP 197]
+[New LWP 240]
+[New LWP 241]
+[New LWP 242]
+[Thread debugging using libthread_db enabled]
+Using host libthread_db library "/lib/x86_64-linux-gnu/libthread_db.so.1".
+0xf7f92cfc in __kernel_vsyscall ()
+Breakpoint 1 at 0x100a5043
+ORACLE_ATTACHED
+SURF_ENTER isurf=1
+Breakpoint 2 at 0x100a5a04
+Breakpoint 3 at 0x17ce193
+CALL n=1 caller_eax(vtbl)=0x181a254 caller_ecx=0xd59425c caller_edx=0x146d7b0
+  esp+00(E outptr)=0x146d7b0
+  esp+04           =0x0
+  esp+08 f=1574.91
+  esp+0c f=-705.968
+  esp+10 f=179.389
+  esp+14 f=1462.91
+  esp+18 f=-1500.6
+  esp+1c f=4
+  esp+20           =0x0
+  esp+24           =0x0
+  esp+28           =0x0
+  esp+2c           =0x4
+  esp+30           =0x7c9b1273
+ENTRY n=1 ebp08(E)=0x146d7b0 ebp0c(D)=0xd59425c ebp10(C)=0x0 ebp14(B)=0x0 ebp18(A/inode)=0
+  point1(ebp1c,20,24)=(1574.91,-705.968,179.389)
+  point2(ebp28,2c,30)=(1462.91,-1500.6,4)
+  ebp34(edi_in)=0x0 ebp38(extra_flags)=0x4
+ENTRY n=1 ebp08(E)=0x146d7b0 ebp0c(D)=0xd59425c ebp10(C)=0x0 ebp14(B)=0x0 ebp18(A/inode)=6313
+  point1(ebp1c,20,24)=(1552.31,-866.306,144)
+  point2(ebp28,2c,30)=(1462.91,-1500.6,4)
+  ebp34(edi_in)=0x0 ebp38(extra_flags)=0x4
+ENTRY n=1 ebp08(E)=0x146d7b0 ebp0c(D)=0xd59425c ebp10(C)=0x0 ebp14(B)=0x0 ebp18(A/inode)=6349
+  point1(ebp1c,20,24)=(1542.09,-938.797,128)
+  point2(ebp28,2c,30)=(1462.91,-1500.6,4)
+  ebp34(edi_in)=0x1 ebp38(extra_flags)=0x4
+ENTRY n=1 ebp08(E)=0x146d7b0 ebp0c(D)=0xd59425c ebp10(C)=0x0 ebp14(B)=0x0 ebp18(A/inode)=6442
+  point1(ebp1c,20,24)=(1514.3,-1136,84.4739)
+  point2(ebp28,2c,30)=(1462.91,-1500.6,4)
+  ebp34(edi_in)=0x0 ebp38(extra_flags)=0x4
+CALL n=2 caller_eax(vtbl)=0x181a254 caller_ecx=0xd59425c caller_edx=0x146d7b0
+  esp+00(E outptr)=0x146d7b0
+  esp+04           =0x0
+  esp+08 f=1574.91
+  esp+0c f=-705.968
+  esp+10 f=179.389
+  esp+14 f=1495.13
+  esp+18 f=-1500.6
+  esp+1c f=4
+  esp+20           =0x0
+  esp+24           =0x0
+  esp+28           =0x0
+  esp+2c           =0x4
+  esp+30           =0x7c9b1273
+ENTRY n=2 ebp08(E)=0x146d7b0 ebp0c(D)=0xd59425c ebp10(C)=0x0 ebp14(B)=0x0 ebp18(A/inode)=0
+  point1(ebp1c,20,24)=(1574.91,-705.968,179.389)
+  point2(ebp28,2c,30)=(1495.13,-1500.6,4)
+  ebp34(edi_in)=0x0 ebp38(extra_flags)=0x4
+ENTRY n=2 ebp08(E)=0x146d7b0 ebp0c(D)=0xd59425c ebp10(C)=0x0 ebp14(B)=0x0 ebp18(A/inode)=6313
+  point1(ebp1c,20,24)=(1558.81,-866.306,144)
+  point2(ebp28,2c,30)=(1495.13,-1500.6,4)
+  ebp34(edi_in)=0x0 ebp38(extra_flags)=0x4
+ENTRY n=2 ebp08(E)=0x146d7b0 ebp0c(D)=0xd59425c ebp10(C)=0x0 ebp14(B)=0x0 ebp18(A/inode)=6349
+  point1(ebp1c,20,24)=(1551.53,-938.797,128)
+  point2(ebp28,2c,30)=(1495.13,-1500.6,4)
+  ebp34(edi_in)=0x1 ebp38(extra_flags)=0x4
+ENTRY n=2 ebp08(E)=0x146d7b0 ebp0c(D)=0xd59425c ebp10(C)=0x0 ebp14(B)=0x0 ebp18(A/inode)=6442
+  point1(ebp1c,20,24)=(1531.73,-1136,84.4739)
+  point2(ebp28,2c,30)=(1495.13,-1500.6,4)
+  ebp34(edi_in)=0x0 ebp38(extra_flags)=0x4
+CALL n=3 caller_eax(vtbl)=0x181a254 caller_ecx=0xd59425c caller_edx=0x146d7b0
+  esp+00(E outptr)=0x146d7b0
+  esp+04           =0x0
+  esp+08 f=1574.91
+  esp+0c f=-705.968
+  esp+10 f=179.389
+  esp+14 f=1527.35
+  esp+18 f=-1500.6
+  esp+1c f=4
+  esp+20           =0x0
+  esp+24           =0x0
+  esp+28           =0x0
+  esp+2c           =0x4
+  esp+30           =0x7c9b1273
+ENTRY n=3 ebp08(E)=0x146d7b0 ebp0c(D)=0xd59425c ebp10(C)=0x0 ebp14(B)=0x0 ebp18(A/inode)=0
+  point1(ebp1c,20,24)=(1574.91,-705.968,179.389)
+  point2(ebp28,2c,30)=(1527.35,-1500.6,4)
+  ebp34(edi_in)=0x0 ebp38(extra_flags)=0x4
+ENTRY n=3 ebp08(E)=0x146d7b0 ebp0c(D)=0xd59425c ebp10(C)=0x0 ebp14(B)=0x0 ebp18(A/inode)=6313
+  point1(ebp1c,20,24)=(1565.31,-866.306,144)
+  point2(ebp28,2c,30)=(1527.35,-1500.6,4)
+  ebp34(edi_in)=0x0 ebp38(extra_flags)=0x4
+ENTRY n=3 ebp08(E)=0x146d7b0 ebp0c(D)=0xd59425c ebp10(C)=0x0 ebp14(B)=0x0 ebp18(A/inode)=6349
+  point1(ebp1c,20,24)=(1560.97,-938.797,128)
+  point2(ebp28,2c,30)=(1527.35,-1500.6,4)
+  ebp34(edi_in)=0x1 ebp38(extra_flags)=0x4
+ENTRY n=3 ebp08(E)=0x146d7b0 ebp0c(D)=0xd59425c ebp10(C)=0x0 ebp14(B)=0x0 ebp18(A/inode)=6442
+  point1(ebp1c,20,24)=(1549.17,-1136,84.4739)
+  point2(ebp28,2c,30)=(1527.35,-1500.6,4)
+  ebp34(edi_in)=0x0 ebp38(extra_flags)=0x4
+CALL n=4 caller_eax(vtbl)=0x181a254 caller_ecx=0xd59425c caller_edx=0x146d7b0
+  esp+00(E outptr)=0x146d7b0
+  esp+04           =0x0
+  esp+08 f=1574.91
+  esp+0c f=-705.968
+  esp+10 f=179.389
+  esp+14 f=1559.57
+  esp+18 f=-1500.6
+  esp+1c f=4
+  esp+20           =0x0
+  esp+24           =0x0
+  esp+28           =0x0
+  esp+2c           =0x4
+  esp+30           =0x7c9b1273
+ENTRY n=4 ebp08(E)=0x146d7b0 ebp0c(D)=0xd59425c ebp10(C)=0x0 ebp14(B)=0x0 ebp18(A/inode)=0
+  point1(ebp1c,20,24)=(1574.91,-705.968,179.389)
+  point2(ebp28,2c,30)=(1559.57,-1500.6,4)
+  ebp34(edi_in)=0x0 ebp38(extra_flags)=0x4
+ENTRY n=4 ebp08(E)=0x146d7b0 ebp0c(D)=0xd59425c ebp10(C)=0x0 ebp14(B)=0x0 ebp18(A/inode)=6313
+  point1(ebp1c,20,24)=(1571.81,-866.306,144)
+  point2(ebp28,2c,30)=(1559.57,-1500.6,4)
+  ebp34(edi_in)=0x0 ebp38(extra_flags)=0x4
+ENTRY n=4 ebp08(E)=0x146d7b0 ebp0c(D)=0xd59425c ebp10(C)=0x0 ebp14(B)=0x0 ebp18(A/inode)=6349
+  point1(ebp1c,20,24)=(1570.41,-938.797,128)
+  point2(ebp28,2c,30)=(1559.57,-1500.6,4)
+  ebp34(edi_in)=0x1 ebp38(extra_flags)=0x4
+ENTRY n=4 ebp08(E)=0x146d7b0 ebp0c(D)=0xd59425c ebp10(C)=0x0 ebp14(B)=0x0 ebp18(A/inode)=6442
+  point1(ebp1c,20,24)=(1566.61,-1136,84.4739)
+  point2(ebp28,2c,30)=(1559.57,-1500.6,4)
+  ebp34(edi_in)=0x0 ebp38(extra_flags)=0x4
+CALL n=5 caller_eax(vtbl)=0x181a254 caller_ecx=0xd59425c caller_edx=0x146d7b0
+  esp+00(E outptr)=0x146d7b0
+  esp+04           =0x0
+  esp+08 f=1574.91
+  esp+0c f=-705.968
+  esp+10 f=179.389
+  esp+14 f=1591.79
+  esp+18 f=-1500.6
+  esp+1c f=4
+  esp+20           =0x0
+  esp+24           =0x0
+  esp+28           =0x0
+  esp+2c           =0x4
+  esp+30           =0x7c9b1273
+ENTRY n=5 ebp08(E)=0x146d7b0 ebp0c(D)=0xd59425c ebp10(C)=0x0 ebp14(B)=0x0 ebp18(A/inode)=0
+  point1(ebp1c,20,24)=(1574.91,-705.968,179.389)
+  point2(ebp28,2c,30)=(1591.79,-1500.6,4)
+  ebp34(edi_in)=0x0 ebp38(extra_flags)=0x4
+ENTRY n=5 ebp08(E)=0x146d7b0 ebp0c(D)=0xd59425c ebp10(C)=0x0 ebp14(B)=0x0 ebp18(A/inode)=6313
+  point1(ebp1c,20,24)=(1578.31,-866.306,144)
+  point2(ebp28,2c,30)=(1591.79,-1500.6,4)
+  ebp34(edi_in)=0x0 ebp38(extra_flags)=0x4
+ENTRY n=5 ebp08(E)=0x146d7b0 ebp0c(D)=0xd59425c ebp10(C)=0x0 ebp14(B)=0x0 ebp18(A/inode)=6349
+  point1(ebp1c,20,24)=(1579.85,-938.797,128)
+  point2(ebp28,2c,30)=(1591.79,-1500.6,4)
+  ebp34(edi_in)=0x1 ebp38(extra_flags)=0x4
+ENTRY n=5 ebp08(E)=0x146d7b0 ebp0c(D)=0xd59425c ebp10(C)=0x0 ebp14(B)=0x0 ebp18(A/inode)=6442
+  point1(ebp1c,20,24)=(1584.04,-1136,84.4739)
+  point2(ebp28,2c,30)=(1591.79,-1500.6,4)
+  ebp34(edi_in)=0x0 ebp38(extra_flags)=0x4
+CALL n=6 caller_eax(vtbl)=0x181a254 caller_ecx=0xd59425c caller_edx=0x146d7b0
+  esp+00(E outptr)=0x146d7b0
+  esp+04           =0x0
+  esp+08 f=1574.91
+  esp+0c f=-705.968
+  esp+10 f=179.389
+  esp+14 f=1624.01
+  esp+18 f=-1500.6
+  esp+1c f=4
+  esp+20           =0x0
+  esp+24           =0x0
+  esp+28           =0x0
+  esp+2c           =0x4
+  esp+30           =0x7c9b1273
+ENTRY n=6 ebp08(E)=0x146d7b0 ebp0c(D)=0xd59425c ebp10(C)=0x0 ebp14(B)=0x0 ebp18(A/inode)=0
+  point1(ebp1c,20,24)=(1574.91,-705.968,179.389)
+  point2(ebp28,2c,30)=(1624.01,-1500.6,4)
+  ebp34(edi_in)=0x0 ebp38(extra_flags)=0x4
+TARGET_DONE
+[Inferior 1 (process 33) detached]
