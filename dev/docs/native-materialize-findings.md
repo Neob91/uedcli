@@ -2084,3 +2084,42 @@ round's scope. Per the standing rule, no fix shipped without a confirmed mechani
 `smuggler_b547_isolated_golden.py` (committed alongside this entry), trunk under
 `_scratch/smuggler-b547-isolated/` (not committed, scratch). Full write-up:
 `dev/docs/board/inbox/smuggler-4-surf-delta-traced-to-4-pf-semisolid/overview.md` (Round 3).
+
+**MAJOR CORRECTION: "tree structure EXACT" claims for DX.dx, NYC Bar, UNATCO, Wanchai Market, NYC
+ShipFan, and NYC Underground were all count-coincidence, not content identity — zero levels in the
+corpus have genuine structural tree parity.** (2026-08-31) — `parity_report.py`'s geometry check
+only ever compared aggregate array LENGTHS (`len(model.nodes)` etc.), never the actual per-index
+content. Added real index-for-index field comparison (`ContentComparison`, bit-exact, no epsilon,
+generic over `dataclasses.fields` so it can't drift from the real struct layout) covering
+nodes/surfs/leaves — the same "tree structure" triple this ledger's own reporting format is built
+on. Ran against every level previously reported as node/surf/leaf-exact:
+
+- **`DX.dx`** (previously the session's one clean `FULL PARITY: YES`): NOT content-exact. 8/26
+  nodes differ (`node_flags`, `i_leaf`); every one of 26 surfs differs (`texture_ref`, `i_actor`,
+  `p_base`); all 5 leaves differ in `i_permeating` (native always `-1`, golden has real per-leaf
+  light-list indices — this specific divergence is EXPECTED and matches the already-known,
+  not-yet-wired-in `port-the-per-leaf-permeating-light-lists-model` gap, not a new finding).
+- **NYC Bar** (previously the only non-trivial 6/6-geometry-exact level): NOT content-exact. 2700+
+  individual field divergences across nodes/surfs, dominated by `i_actor`/`texture_ref`/`p_base`.
+- UNATCO, Wanchai Market, NYC ShipFan, NYC Underground: all already `geometry NOT EXACT` (counts
+  themselves don't match), so content divergence there is expected, not new information — confirmed
+  for completeness.
+
+The scale and pattern of the `i_actor`/`texture_ref` divergence (large, systematic, not small
+plane-key noise) is consistent with a package import/export table ORDERING difference between
+native's and the golden's object-ref numbering, not necessarily a BSP topology bug — a hypothesis,
+not confirmed. `p_base`'s divergence looks more structurally relevant (a Points-array base-index
+per surf) and may connect to the still-open `wanchai-verts-points-residual-independently` thread.
+Root-causing either is a genuine, separate investigation for a future round — not attempted here,
+this was a measurement-tooling fix, not a BSP-algorithm fix. `git diff -- uedcli-native/src/` is
+empty; no source changes.
+
+Implementation note: an independent review pass (dispatched specifically because this tool is now
+the source of truth for parity claims) caught two things before merge — a build-stage mismatch
+(comparing native's bare `build_geometry_bspcsg` output, which never populates
+`texture_ref`/`i_actor`/`i_light_map`, against golden's fully-assembled surfs; fixed by parsing
+native's own fully-assembled `.dx` bytes on both sides) and a non-bit-exact float comparison (`!=`
+on Python floats: `-0.0 != 0.0` is `False`, `NaN != NaN` is `True`; fixed via on-disk f32 byte
+comparison). The review then caught a third gap (leaves missing from the comparison entirely,
+fixed the same way). 43 unit tests, `bin/test` unaffected (12721 passed/0 failed + 91/91 cargo,
+this only touches `dev/docs/` harness code).

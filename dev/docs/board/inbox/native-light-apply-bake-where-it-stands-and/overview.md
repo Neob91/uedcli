@@ -1,7 +1,7 @@
 +++
 priority = "p1"
 kind = "debug"
-summary = "Native materialize FULL byte-parity vs UnrealEd UED22 (owner-reaffirmed 2026-08-31, not the looser node/surf/leaf-only 'EXACT' label): status/index for the whole geometry+lighting effort. Full 21-level breadth corpus now measured (18/21 goldens cached, 3 fail to build): only DX.dx (trivial) and NYC Bar are genuinely 6/6 geometry-exact; UNATCO 4/6, Wanchai Market 3/6; every non-trivial level's lighting is well under 100% and gated on its geometry gap. Zero non-trivial levels at full parity. See below for the harness catalog, the full per-level table (in the findings ledger), and open threads."
+summary = "Native materialize FULL byte-parity vs UnrealEd UED22 (owner-reaffirmed 2026-08-31, not the looser node/surf/leaf-only 'EXACT' label): status/index for the whole geometry+lighting effort. CORRECTED 2026-08-31: 'tree structure EXACT' claims were count-only, not content -- a real index-for-index comparison shows ZERO levels (not even DX.dx/NYC Bar) have genuine node/surf/leaf content parity, only count-coincidence. Full 21-level breadth corpus measured (18/21 goldens cached, 3 fail to build); every non-trivial level's lighting is well under 100% and gated on its geometry gap. See below for the harness catalog, the full per-level table (in the findings ledger), and open threads."
 depends-on = ["port-urender-getvisiblesurfs-so-each-light-gets", "port-the-per-leaf-permeating-light-lists-model", "getvisiblesurfs-wanchai-run-gap-root-cause", "line-clear-shadow-ray-algorithm-gap-found-real", "zone-crossing-getvisiblesurfs-gap-invisible", "smuggler-4-surf-delta-traced-to-4-pf-semisolid", "freeclinic08-nsfhq04-1-surf-under-build-root", "wanchai-verts-points-residual-independently", "pass-d-chain-link-order-native-splices-zone", "pass-d-fragment-nodes-get-ileaf-1-where", "splitwithplane-degenerate-fragment-fallback", "native-zone-over-fragmentation"]
 spikes = ["dev/docs/spikes/2026-08-27-native-light-apply-parity/", "dev/docs/spikes/2026-08-29-unatco-repart-live-diff/", "dev/docs/spikes/2026-08-29-area51-underbuild/", "dev/docs/spikes/2026-08-26-editor-free-native-materialize/"]
 +++
@@ -49,9 +49,16 @@ pointers to every open sub-thread. Blow-by-blow findings live in
 against freshly self-built goldens (18/21 built; 3 failed to build — `Endgame4` extraction gap,
 `smuggler`/`nyc-street` `EDIT PASTE` crashes; full table and per-level deltas in
 `dev/docs/native-materialize-findings.md`, search "Breadth golden-caching pass"). By the real bar
-(all six geometry counts zero-delta): **2/21 geometry-exact** (`DX.dx` trivial intro, NYC Bar).
-UNATCO and Wanchai Market are both node/surf/leaf-exact but carry real verts/points(/vectors)
-residuals (UNATCO +5/+16/+0; Wanchai +74/+16/−8) — 4/6 and 3/6 respectively, not full parity. The
+(all six geometry COUNTS zero-delta): **2/21 count-exact** (`DX.dx` trivial intro, NYC Bar).
+**CORRECTION, same day: even that overclaims.** A real index-for-index content comparison
+(`parity_report.py`, commits `ad6b11b`+`0f09f6a`) shows counts matching is not the same as the tree
+actually being identical — `DX.dx` and NYC Bar both fail content comparison (`DX.dx`: 8/26 nodes
+differ, every surf differs, all 5 leaves differ in `i_permeating`; NYC Bar: 2700+ field diffs).
+**Zero levels in the corpus have genuine structural tree parity, not even the trivial intro map.**
+Full detail: `native-materialize-findings.md`, search "MAJOR CORRECTION". UNATCO and Wanchai Market
+are both node/surf/leaf-COUNT-exact but carry real verts/points(/vectors) count residuals too
+(UNATCO +5/+16/+0; Wanchai +74/+16/−8) — 4/6 and 3/6 by count, and per the above, not
+content-verified at all. The
 severe-under-build family (Area51 Entrance and 4 other levels previously losing 13-27% of nodes) is
 CLOSED — root-caused to a mirrored-brush determinant bug and shipped
 (`mirrored-brush-determinant-fix-closes-the`, commit `c7b8b0b`); remaining deltas on those 5 levels
