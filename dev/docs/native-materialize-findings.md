@@ -2274,3 +2274,88 @@ re-verify against a COUNT mismatch specifically). A candidate for a future round
 
 **No fix shipped.** The naming CONVENTION is pinned; the reproducible VALUE and its actual relevance
 to `texture_ref`/`i_actor` are not. Full write-up: `board/inbox/texture-ref-i-actor-divergence-traced-to-golden` (Round 3).
+
+**Round 4: CORRECTION to Round 3's "genuine export-table COUNT gap" — refuted. `Polys` export COUNTS
+already match (6=6); the real 57-vs-52 gap is the already-known Camera leak (+6) plus one new,
+unrelated `LevelSummary` gap (+1) plus an unrelated actor-drop wash (-1/-1). The one real remaining
+divergence is a FIELD, not a missing export — and its content is confirmed NOT derivable from final
+Model/Surf data. No fix shipped; index-shift risk confirmed non-existent (moot).** (2026-08-31, 🔬
+live re-parse, `pkg_write.parse_package` + a hand-rolled `FPoly`/`UPolys` body parser matching
+`actor_write.write_fpoly`/`write_upolys_body`'s exact layout, cross-checked byte-for-byte via each
+`Model`'s own reach-EOF self-check.) Independently re-derived from raw bytes, not from reading the
+Round 3 entry as a premise.
+
+Re-verified current-tree numbers directly (not trusted from Round 3): golden (`dx_widened.dx`,
+unchanged since Round 2/3) parses to 26 imports/57 exports/143 names. Native's own fresh build
+(worktree `world-polys-export-check`, needed only because `umodel_win32`'s docker mount fails from
+the main checkout — `docker-mount-source-permission-fails-from-main`; extracted DX's trunk via
+`parity_pipeline.ensure_golden`, built via `parity_compare.build_native_lit_dx`) parses to 23
+imports/52 exports/115 names — exact match to Round 1/3's cited number, now re-confirmed live on the
+current tree, not carried over.
+
+**Per-class export diff (the check Round 3 didn't do) refutes its own framing:** `Counter` over
+`class_of_export` for every export, native vs golden — only 4 classes differ: `Camera` (0→6, the
+already-known `GetVisibleSurfs` leak), `LevelSummary` (0→1, new, see below), `Brush` (8→7) and
+`Model` (7→6). **`Polys`: 6 native, 6 golden — EQUAL.** Round 3's "genuine export-table COUNT gap
+(not a naming artifact)" for `Polys` is wrong; there is no `Polys`-count deficit to fix. The
+`Brush`/`Model` -1/-1 is a pre-existing, unrelated wash: native's own build emits two `Brush1`/`Brush2`
+actors with a live warning ("`refers to MyLevel.Model2, which this level does not contain --
+dropped`") that this specific DX.dx trunk already carries, orthogonal to this task.
+
+**What IS real: native's world `Model` (`Model_Level`) never sets its own `field_0x54`
+(`UModel.Polys=`, `assemble.py`'s own comment on the identical per-brush field), so it serializes as
+0/None; the golden's world `Model` (`Model2`) has it set to a real, non-empty `Polys` export.**
+Confirmed via `umodel.parse_model_body`'s own reach-EOF self-check (would raise on any layout
+misread) on `Model2`'s full body. This is a genuine field-content divergence, not a table-count one —
+`unbuilt.py`'s `_world_model_body` (lines 331-336) has no counterpart to `assemble.py`'s
+`_empty_model_body`'s `m.field_0x54 = asm.eref(polys_name)` for every OTHER `Model` it writes.
+
+**What that field actually points to, checked on 3 levels — NOT a stable "aggregate of every
+surviving surf" as `quirks.md`'s `OBJ DEPENDENCIES`-based note (a different, text-dump mechanism)
+suggested, and not derivable from `Model.Surfs`/`Nodes` by any formula tried:**
+- `DX.dx` (26 nodes = 26 surfs, no BSP splitting): world `Model2.field_0x54` → `Polys15`, 26 `FPoly`
+  entries, `i_link` sequential 0-25 (matches surf index), `actor_ref` spanning ALL 5 real brushes
+  (2,3,4,6,7 mixed) — degenerate/inconclusive on its own (surf count IS 26 here).
+- NYC Bar (widened golden, 1620 nodes / 953 surfs): world `Model2.field_0x54` → `Polys411`, only **9**
+  `FPoly` entries, **every one the SAME single `actor_ref` (59)** — an octagonal-prism shape (8 side
+  quads + 1 cap), `i_link` sequential 1500-1508, `i_brush_poly` 0-7 then 9. Not remotely an aggregate
+  of 953 surfs — this is one brush's own authored poly set.
+- UNATCO (widened golden, 6314 nodes / 3616 surfs): same pattern, worse — `Polys1473`, only **6**
+  `FPoly` entries, **all one single `actor_ref` (187)**.
+
+**Circumstantial mechanism, not confirmed live:** `DX.dx`'s world `Polys15` is numbered immediately
+adjacent to `Brush4`'s own dedicated `Polys14` (the LAST per-brush `Polys` in the global `Polys<N>`
+counter run, per Round 3's own "+2 per brush" finding) — consistent with the world `Model`'s
+`Polys=` field simply being left pointing at whatever SCRATCH `Polys` object the editor's internal
+per-brush CSG loop most recently touched when the loop ended, not a deliberate semantic aggregate.
+This would explain both the DX.dx and NYC-Bar/UNATCO shapes (a trivial level's "last touched" scratch
+state happens to look aggregate-like; a large level's does not) without needing two different
+mechanisms. **Not live-verified — would need a `bspBrushCSG`/`csgRebuild` capture of `Model->Polys`
+across the per-brush loop to confirm**, out of this round's scope.
+
+**Risk (the round's other mandate): CONFIRMED SAFE, though now moot since no fix ships.**
+`assemble.py`'s `_Assembler._reserve`/`eref` is fully name-resolved: every export is looked up via
+`asm.index_of[name]` (a dict), body closures run only after ALL exports are reserved (`build()`,
+"Body fns run AFTER all exports are reserved, so eref() resolves any forward ref"), and a grep of
+every `.exports[` site in `unbuilt.py`/`assemble.py`/`pkg_write.py` confirms none indexes by a raw
+hardcoded position — always through `index_of`/`eref`. Adding one more `_reserve()` call anywhere
+would not shift or break any other reference. The Round 3 "does reshuffling break a hardcoded index"
+worry does not apply to this codebase.
+
+**No fix shipped.** Per the standing "no guessing at content" rule: the export-count gap this was
+meant to close does not exist (`Polys` counts already match); the one real divergence (the world
+Model's own `Polys=` field) has content that is level-dependent, editor-build-order-dependent, and
+not reconstructible from `Model.Surfs`/`Nodes`/`Verts` by any formula this round tried on 3 different
+levels — confirmed wrong on 2 of 3, not merely "unverified." Shipping "point at a synthesized
+aggregate of all surfs" (the natural guess) would be a known-wrong value, not an approximation.
+Closing this needs a live capture of the editor's internal per-brush CSG/`Polys`-scratch-reuse
+timing, not a native-code change.
+
+**New, unrelated, unflagged finding surfaced, not chased:** the golden carries one `LevelSummary`
+export (14 bytes: `b'1]\n\tUntitled\x00\x00'`) that native never emits — looks like a `MAP
+SAVE`-time editor bookkeeping object (map-browser title/thumbnail metadata), not investigated
+further. Separate from both the Camera leak and this entry's `Polys` field question; worth a board
+item if a future round wants full export-table parity.
+
+No `unbuilt.py`/`assemble.py`/any production code changes this round — read-only live re-parsing in a
+disposable worktree (removed after, no commits). `bin/test` not re-run (no source changed).

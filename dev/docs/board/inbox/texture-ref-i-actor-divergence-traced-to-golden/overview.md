@@ -243,3 +243,63 @@ actual relevance to `texture_ref`/`i_actor`, are not. Per the task's own ground 
 rule ... turns out to be more complex than a simple mechanical pattern: do NOT guess/ship a fix"),
 this is logged as open rather than guessed at. Full write-up in `native-materialize-findings.md`
 (search "Round 3: `Polys` naming").
+
+## Round 4 (2026-08-31): the "missing world-`Polys` export" from round 3 is NOT a count gap — corrected. Content of the real field is confirmed non-derivable. No fix shipped.
+
+Follow-up on round 3's structural finding ("`unbuilt.py`'s world-model reservation never reserves a
+companion `Polys` export... a genuine export-table COUNT gap"). Mandate: confirm the gap, determine
+the real editor content, assess index-shift risk, ship if safe+knowable.
+
+**Confirmed live, current tree, independently re-derived (not read from round 3 first):** golden
+`dx_widened.dx` (unchanged since round 2/3) parses to 26/57/143; native's own fresh build (a
+disposable worktree, needed only to work around the main-checkout's docker-mount permission bug —
+see `docker-mount-source-permission-fails-from-main`) parses to 23/52/115 — exact match to round
+1/3's cited number, re-confirmed on this session's tree rather than trusted.
+
+**Round 3's "genuine COUNT gap" framing is wrong.** A per-class export diff (`Counter` over
+`class_of_export`) shows `Polys`: **6 native, 6 golden — equal.** The real 57-vs-52 delta is: `Camera`
++6 (the already-known `GetVisibleSurfs` leak), `LevelSummary` +1 (new, see below), and a `Brush`/`Model`
+-1/-1 wash (an unrelated, pre-existing dangling-actor artifact specific to this DX.dx trunk, already
+surfaced as a live warning during native's own build: "`Brush1.Brush: refers to MyLevel.Model2, which
+this level does not contain -- dropped`"). There is no `Polys`-count deficit to fix.
+
+**What's real: a FIELD, not an export.** Native's world `Model` (`Model_Level`) never sets its own
+`field_0x54` (`UModel.Polys=`) — `unbuilt.py`'s `_world_model_body` has no counterpart to
+`assemble.py`'s `_empty_model_body`'s `m.field_0x54 = asm.eref(polys_name)` used for every OTHER
+`Model` it writes. The golden's world `Model` DOES set it, to a real, non-empty `Polys` export.
+
+**What that field actually points to — checked on 3 levels, confirmed NOT a stable "aggregate of
+every surviving surf" (the natural reading of `quirks.md`'s `OBJ DEPENDENCIES`-based note, a
+different, unrelated dump mechanism) and not reconstructible from `Model.Surfs`/`Nodes` by any
+formula tried:**
+- `DX.dx` (26 nodes = 26 surfs): world Polys has 26 entries spanning all 5 real brushes — looks
+  aggregate-like, but inconclusive (surf count IS 26 here, a degenerate case).
+- NYC Bar (1620 nodes / 953 surfs): world Polys has only **9** entries, **all one single actor** — an
+  8-sided prism shape, clearly one brush's own poly set, not an aggregate of 953 surfs.
+- UNATCO (6314 nodes / 3616 surfs): same pattern — only **6** entries, **all one single actor**.
+
+Circumstantial (not live-verified) mechanism: `DX.dx`'s world `Polys15` sits numerically adjacent to
+`Brush4`'s own dedicated `Polys14` (the LAST per-brush `Polys` in round 3's already-documented +2
+global counter run) — consistent with the world Model's `Polys=` simply being left pointing at
+whatever scratch `Polys` object the editor's internal per-brush CSG loop last touched, not a
+deliberate aggregate. Would need a live `csgRebuild` capture to confirm; out of this round's scope.
+
+**Risk (confirmed safe, now moot): `assemble.py`'s export-index resolution is fully name-based**
+(`asm.index_of[name]` dict, `eref()`, body closures deferred until after all exports are reserved) —
+no code anywhere indexes exports by a hardcoded position. Adding one more `_reserve()` call would not
+shift or break any other reference. Round 3's "does reshuffling break a hardcoded index" worry does
+not apply to this codebase.
+
+**No fix shipped.** The count gap this was meant to close doesn't exist; the one real divergence (the
+world Model's own `Polys=` field) has content confirmed wrong on 2 of 3 levels for the only formula
+that seemed plausible ("aggregate of all surfs") — not merely unverified, actually refuted. Per the
+standing no-guessing rule, this needs a live capture of the editor's internal per-brush CSG/`Polys`
+scratch-reuse timing, not a native-code change. Full write-up: `native-materialize-findings.md`,
+search "Round 4: CORRECTION to Round 3".
+
+New, unrelated, unflagged finding surfaced (not chased): golden carries one `LevelSummary` export
+(14 bytes, `"...Untitled..."`) native never emits — looks like `MAP SAVE`-time editor bookkeeping
+(map-browser title metadata), not investigated further.
+
+No production code changed this round (`uedcli-native/src/*`, `unbuilt.py` all untouched) — read-only
+live re-parsing in a disposable worktree, removed after, no commits.
