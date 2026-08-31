@@ -1892,3 +1892,54 @@ undecoded; per the standing rule, logged as an open, separate question rather th
 `dev/docs/spikes/2026-08-29-unatco-repart-live-diff/harness/linecheck_nearstate_recheck.py`,
 `.../logs/linecheck-nearstate-recheck.log`; `broad_shadow_sweep.py` gained a `--dump-v1-only PATH`
 flag (unlimited dump, not capped at 20).
+
+**New infrastructure, not a finding: canonical single-entry-point parity report tool, shipped**
+(2026-08-31) — `dev/docs/spikes/2026-08-31-native-parity-report/harness/parity_report.py
+<path/to/OG-level.dx> [--json]`: one script, geometry (nodes/surfs/leaves/verts/points/vectors,
+exact counts) AND lighting (`LightMap` byte-identical record count/percentage + grid+run-matched
+shadow-bit agreement) together, top-line `FULL PARITY: YES/NO` (YES only if EVERY geometry count
+and EVERY `LightMap` record is byte-identical — stricter than `breadth_gate.py`'s node/surf/leaf-only
+"EXACT"). Content-hashes the input `.dx`, caches the self-built golden under
+`/tmp/uedcli-parity-cache/<hash>/` (golden+meta only; the extracted trunk lives under
+`_scratch/uedcli-parity-cache/<hash>/trunk/` instead — `/tmp` breaks the ephemeral build
+container's ini bind-mount under a sandboxed shell, see `dev/docs/parallel-editors.md`). Never
+`MAP LOAD`s the original — reuses `ingest_dx_trunk.py` (extraction) + `build_ued_lit_golden.py`
+(`MAP NEW`→`EDIT PASTE`→`MAP REBUILD`→`LIGHT APPLY`→`MAP SAVE`) as subprocesses, plus one new
+post-extraction step (`classindex.ClassIndex.qualify_and_validate`, the same mechanism
+`uedcli/cli/ingest.py`'s real ingest gate uses) since `ingest_dx_trunk.py`'s own output can leave a
+class BARE (e.g. `LevelInfo`), which `gather_lights`/`ClassDefaults` reject. Live-verified: `DX.dx`
+(trivial, FULL PARITY: YES, 26/26 LightMap records + 1536/1536 shadow bits), a fresh cache-miss run
+vs a cache-hit re-run (1.5s), and both UNATCO and Wanchai reproduce this ledger's own most recent
+figures exactly (below) — independently re-confirmed by the coordinating session too (cache-hit
+re-run 34s, byte-identical numbers). 28 offline unit tests (pure cache/compare/verdict logic, no
+docker) under the same `harness/` dir; not part of `bin/test` (lives under `dev/docs/`, not
+`uedcli/`).
+
+**Found while live-testing the new tool: the "UNATCO" baseline this whole ledger cites is actually
+`03_NYC_UNATCOHQ.dx`, not `01_NYC_UNATCOHQ.dx`** (2026-08-31, 🔬 confirmed by raw byte search) — DX
+ships UNATCO HQ as several per-mission `.dx` snapshots (`01_`/`03_`/`04_`/`05_NYC_UNATCOHQ.dx`).
+`01_NYC_UNATCOHQ.dx` contains `AlexJacobson`, lacks `AllianceTrigger`; `03_NYC_UNATCOHQ.dx` contains
+`AllianceTrigger`, lacks `AlexJacobson` — matching the historical `_scratch/bsp-parity-proj/maps/unatco`
+trunk's own actor names exactly (has `AllianceTrigger0/1/2`, lacks `AlexJacobson0`). Running the new
+tool against `03_NYC_UNATCOHQ.dx` reproduces every figure this ledger has reported for "UNATCO" bit
+for bit: nodes/surfs/leaves EXACT (6314/3616/762), verts d=+5, points d=+16, vectors d=+0, lighting
+2797/3345 (83.6%) byte-identical, shadow bits 3729140/3756584 (99.27%). Against the LITERAL
+`01_NYC_UNATCOHQ.dx` (a real, different actor/geometry snapshot: 1470 actors vs 1437, 721 raw
+`Class=Brush` actors vs 734) geometry is NOT node-exact (d_nodes=+350, d_surfs=+3, d_leaves=+39).
+Owner ruling 2026-08-31: rename references to `03_NYC_UNATCOHQ.dx` (done, this ledger's own
+mentions were already bare "UNATCO" and needed no change; 9 board/spike/direction docs corrected —
+see `unatco-baseline-trunk-is-actually-03-nyc`), keep it as the real target, no re-verification
+needed.
+
+**Also found: `build_ued_lit_golden.py`'s Wanchai self-build (`06_HongKong_WanChai_Market.dx`,
+1303-brush trunk) crashed UnrealEd 3/3 tries in this session's environment**, always at the level's
+first `EDIT PASTE` right after `MAP NEW` (`error: UnrealEd has crashed — a 'Critical Error' dialog is
+open`), before any `MAP REBUILD`/`LIGHT APPLY` step. Host resources were not the cause (18G free,
+load 1.3-1.6/14 cores, no orphaned containers). NOT a regression in the harness itself — the same
+trunk previously built successfully (`_scratch/wanchai-relight-2026-08-29/golden.dx`, provenance
+already confirmed above, still the basis for this ledger's `line_clear` Wanchai figures) — cause
+undetermined (possibly environment/load-specific to this session's ~11 concurrent worktrees). Worked
+around (not root-caused) by seeding that pre-existing confirmed golden into the new tool's cache
+while using the tool's own fresh trunk extraction: geometry/lighting matched the ledger exactly
+(nodes/surfs/leaves EXACT 11648/5284/3371, verts +74, points +16, vectors −8, lighting 3418/4530
+(75.5%), shadow bits 98.79%). Filed as `board/inbox/wanchai-self-build-edit-paste-crash`.

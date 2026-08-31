@@ -45,11 +45,20 @@ geometry parity more than on the bake algorithm itself at this point.
 
 Reusable measurement/verification scripts for this effort. All live under `dev/docs/spikes/*/harness/`
 and import the production `.dx` decoder (`uedcli/native/umodel.py`) or drive the real editor via
-`ensure_editor`. No unified parity-report/verify tool has landed yet — `git log` on master shows no
-such merge as of 2026-08-31; treat any reference to one elsewhere as aspirational, not shipped.
+`ensure_editor`.
+
+**Canonical single-entry-point tool (2026-08-31):**
+`dev/docs/spikes/2026-08-31-native-parity-report/harness/parity_report.py <path/to/OG-level.dx>` —
+one script, geometry AND lighting together, a top-line `FULL PARITY: YES/NO` verdict, content-hash
+caches the expensive self-built golden under `/tmp/uedcli-parity-cache/`. Live-verified against
+`03_NYC_UNATCOHQ.dx` and Wanchai, reproducing this item's own most recent figures exactly (UNATCO
+2797/3345 83.6%, Wanchai 3418/4530 75.5%). Use this instead of the per-script chain below for a
+"re-run the full methodology on a level" check; the table below stays as the reference for the
+individual scripts it composes and for anything it doesn't cover yet.
 
 | script | path | what it checks |
 |---|---|---|
+| `parity_report.py` | `2026-08-31-native-parity-report/harness/` | the canonical tool above — geometry + lighting parity for one OG `.dx` level, cached self-built golden, `--json` for scripting |
 | `regression_gate.py` | `2026-08-29-unatco-repart-live-diff/harness/` | UNATCO + Wanchai node/surf/leaf exactness against their committed goldens — the standard "did this change regress anything" gate, run before/after every `bspcsg.rs`/`zones.rs` edit |
 | `breadth_gate.py` | `2026-08-29-unatco-repart-live-diff/harness/` | node/surf/leaf/vert/point/vector counts for `uedcli_native.build_geometry_bspcsg` vs an editor `MAP REBUILD`-only golden, across the whole `geo-confirm-*` corpus — the breadth/30%-floor measurement |
 | `geo_golden_driver.py` / `geo_golden_resume_structural.py` | `2026-08-29-unatco-repart-live-diff/harness/` | drives the real editor (`MAP NEW` → `EDIT PASTE` → `MAP REBUILD` → `MAP SAVE`, chunked) to build a fresh geometry-only golden `.dx` from a trunk |
