@@ -20,17 +20,23 @@ much and the golden's GEOMETRY is contaminated, because `_re_add` pastes any bru
 world brush — a `DeusExMover` included, and a real level's movers add hundreds of surfaces the
 editor's own build keeps in a separate per-mover model.
 
-So the default keeps `Brush` + `LevelInfo` + **every class the bake itself would treat as a light**,
-derived from the trunk via `native.materialize.gather_lights` rather than hardcoded. Hardcoding
-`Light` is a trap: `09_HONGKONG_WANCHAI_MARKET` has 13 `Engine.Spotlight`s alongside its 221
-`Engine.Light`s, and a golden built without them reads as native inventing 13 lights. Any kept class
-that carries a brush is refused, because pasting it would change the geometry.
+So the default keeps every actor class in the trunk EXCEPT classes that descend from `Engine.Mover`
+(schema-checked via `classindex.ClassIndex` + `movers.is_mover` -- not a name guess), plus it always
+keeps `Brush` + `LevelInfo` + **every class the bake itself would treat as a light**, derived from the
+trunk via `native.materialize.gather_lights` rather than hardcoded. Hardcoding `Light` is a trap:
+`09_HONGKONG_WANCHAI_MARKET` has 13 `Engine.Spotlight`s alongside its 221 `Engine.Light`s, and a
+golden built without them reads as native inventing 13 lights. A class whose mover-ness can't be
+determined (its package isn't on the search path, or a bare name collides across packages with
+disagreeing verdicts) is excluded conservatively, not guessed safe. Any kept class that actually
+carries a brush is still refused at build time regardless of how it got into `keep` -- the backstop
+below, not just the mover check, is what keeps the geometry honest.
 
 Run it as a BOUNDED BACKGROUND JOB — the editor wedges silently.
 
 Usage:
   build_ued_lit_golden.py --trunk <trunk-dir> --out <golden.dx> [--overwrite]
-                          [--keep-classes Brush,LevelInfo,Light] [--no-light]
+                          [--keep-classes Brush,LevelInfo,Light|ALL] [--no-light]
+                          [--allow-brush-bearing]
 """
 from __future__ import annotations
 
@@ -42,9 +48,10 @@ ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "dev/docs/spikes/2026-07-15-native-materialize/harness"))
 
-from uedcli import config, trunk, xfer                              # noqa: E402
+from uedcli import config, movers, trunk, xfer                      # noqa: E402
 from uedcli.apply import _level_referenced_packages                 # noqa: E402
 from uedcli.classdefaults import ClassDefaults                      # noqa: E402
+from uedcli.classindex import ClassIndex, ClassRefError             # noqa: E402
 from uedcli.container_assets import resource_mounts                 # noqa: E402
 from uedcli.driver import Driver                                    # noqa: E402
 from uedcli.editor import ensure_editor, stop_editor                # noqa: E402
@@ -65,10 +72,17 @@ def main() -> int:
     ap.add_argument("--overwrite", action="store_true")
     ap.add_argument("--keep-classes", default=None,
                     help="comma-separated SHORT class names to build; everything else is dropped. "
-                         "Default: Brush, LevelInfo, and every class the bake treats as a light "
-                         "(derived from the trunk). Keeping a brush-bearing class other than Brush "
-                         "(a Mover) contaminates the world BSP, because _re_add pastes it as a "
-                         "world brush.")
+                         "Pass ALL to keep every class present in the trunk with no filtering at all "
+                         "(for measuring geometry contamination -- see --allow-brush-bearing). "
+                         "Default: every trunk class except Engine.Mover descendants, plus always "
+                         "Brush, LevelInfo, and every class the bake treats as a light (derived from "
+                         "the trunk). Keeping a brush-bearing class other than Brush (a Mover) "
+                         "contaminates the world BSP, because _re_add pastes it as a world brush.")
+    ap.add_argument("--allow-brush-bearing", action="store_true",
+                    help="do not refuse when a kept class other than Brush carries its own brush/"
+                         "model (e.g. a Mover). UNSAFE for the golden's normal geometry-parity "
+                         "purpose -- _re_add pastes such an actor as a WORLD brush, which can change "
+                         "the built BSP. Only for deliberately measuring that contamination.")
     ap.add_argument("--no-light", action="store_true", help="skip LIGHT APPLY (unlit control)")
     ap.add_argument("--rebuild-cmd", default="MAP REBUILD",
                     help="the rebuild step(s), ';'-separated. The DEFAULT bare `MAP REBUILD` is the "
@@ -94,23 +108,58 @@ def main() -> int:
     host_search_dirs = editor_search_dirs(search_dirs)
 
     lvl, _ranks = trunk.read_level(trunk_dir)
+    all_short = {(_short_class(lvl.actors[n].cls) or "").casefold() for n in lvl.order}
     if args.keep_classes:
-        keep = {c.strip().casefold() for c in args.keep_classes.split(",") if c.strip()}
+        if args.keep_classes.strip().upper() == "ALL":
+            keep = set(all_short)
+        else:
+            keep = {c.strip().casefold() for c in args.keep_classes.split(",") if c.strip()}
     else:
         lights = gather_lights(lvl, defaults=ClassDefaults(
             schema_resolver(project, user_config)))
         light_classes = {(_short_class(lvl.actors[n].cls) or "").casefold()
                          for n, *_rest in lights}
-        keep = {"brush", "levelinfo"} | light_classes
+        class_index = ClassIndex.from_project(project, user_config)
+        mover_short: set[str] = set()
+        unresolved_short: set[str] = set()
+        if class_index.class_exists(movers.MOVER_BASE):
+            for n in lvl.order:
+                actor = lvl.actors[n]
+                short = (_short_class(actor.cls) or "").casefold()
+                if not short or short in mover_short or short in unresolved_short:
+                    continue
+                try:
+                    if movers.is_mover(actor, class_index):
+                        mover_short.add(short)
+                except ClassRefError as e:
+                    unresolved_short.add(short)
+                    print(f"cannot determine mover-ness for class {actor.cls!r}: {e} -- "
+                          f"excluding conservatively", file=sys.stderr)
+            keep = (all_short - mover_short - unresolved_short) | {"brush", "levelinfo"} | light_classes
+            if mover_short:
+                print(f"Mover-descendant classes excluded (brush-bearing): {sorted(mover_short)}",
+                      flush=True)
+            if unresolved_short:
+                print(f"classes excluded (mover-ness undetermined): {sorted(unresolved_short)}",
+                      flush=True)
+        else:
+            print(f"cannot resolve {movers.MOVER_BASE} on this search path -- falling back to the "
+                  f"narrow default (brush+levelinfo+light classes only)", file=sys.stderr)
+            keep = {"brush", "levelinfo"} | light_classes
         print(f"light classes in this trunk: {sorted(light_classes)}", flush=True)
     if bad := sorted({lvl.actors[n].cls for n in lvl.order
                       if (_short_class(lvl.actors[n].cls) or "").casefold() in keep
                       and (_short_class(lvl.actors[n].cls) or "").casefold() != "brush"
                       and lvl.actors[n].brush is not None}):
-        print(f"refusing to build: {', '.join(bad)} carries a brush, and `_re_add` would paste it "
-              f"as a WORLD brush -- the golden's geometry would not be the one native builds",
-              file=sys.stderr)
-        return 2
+        if args.allow_brush_bearing:
+            print(f"WARNING: proceeding despite brush-bearing classes in keep (--allow-brush-bearing): "
+                  f"{', '.join(bad)} -- the golden's geometry may not be the one native builds",
+                  file=sys.stderr)
+        else:
+            print(f"refusing to build: {', '.join(bad)} carries a brush, and `_re_add` would paste it "
+                  f"as a WORLD brush -- the golden's geometry would not be the one native builds",
+                  file=sys.stderr)
+            return 2
     order = [n for n in lvl.order
              if (_short_class(lvl.actors[n].cls) or "").casefold() in keep]
     classes = {n: lvl.actors[n].cls for n in order}

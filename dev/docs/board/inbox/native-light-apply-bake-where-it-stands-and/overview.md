@@ -133,6 +133,20 @@ Geometry:
   shipped (a tooling design call). Also live-confirmed golden `Camera` exports are leaked
   `GetVisibleSurfs` temp-viewport actors, not real level content. `p_base`'s divergence is a
   separate, real Points-array reorder, likely same family as the item below.
+  **Round 2 (2026-08-31, owner-directed):** the golden's actor-set filter WAS widened (movers
+  excluded, schema-checked via `classindex`/`movers.is_mover`) and verified SAFE — geometry counts
+  unchanged on `DX.dx`/UNATCO/NYC Bar, including a UNATCO build with movers explicitly INCLUDED
+  (`--keep-classes ALL`, counts still unchanged, movers don't merge into world CSG, confirmed via
+  +28 separate per-mover `Model` exports) — but does NOT close the `texture_ref`/`i_actor`
+  divergence (statistically unchanged, one level even got worse). Real cause: the leaked `Camera`
+  exports persist regardless of actor population, plus native's own object serializer names
+  per-brush auxiliary objects differently from the real editor's — a structural mismatch no
+  actor-set widening fixes. The originally-logged alternative (compare object-refs by resolved
+  identity, not raw index) is the one worth trying next. New, real (non-count) side effect found:
+  including movers changes `node_flags` on ~14% of world nodes (occlusion/lighting-bake metadata,
+  confirmed deterministic via a reproducibility control) — not shipped as the default pending a
+  decision. New blocker: `wanchai-market-widened-golden-build-crashes` (widened build only, narrow
+  golden still valid).
 - `smuggler-4-surf-delta-traced-to-4-pf-semisolid` — +4 surf residual, root mechanism not found.
 - `freeclinic08-nsfhq04-1-surf-under-build-root` — world-level poly-order divergence, localized to
   before `bspBuildFPolys` even runs, not root-caused further.

@@ -1,7 +1,7 @@
 +++
 priority = "p1"
 kind = "debug"
-summary = "texture_ref/i_actor systematic offset (MAJOR CORRECTION content-diff finding) traced to a golden-build actor-set mismatch, not a native import/export-table bug -- REFUTES the ordering hypothesis; p_base divergence is a separate, real Points-array reorder"
+summary = "texture_ref/i_actor systematic offset traced to a golden-build actor-set mismatch (round 1); ROUND 2: the actor-set widening was shipped SAFE (geometry counts unchanged, incl. movers-included on UNATCO) but does NOT close the divergence -- the actor-set-mismatch theory is REFUTED as a sufficient explanation, real cause is leaked GetVisibleSurfs camera exports + native/editor object-naming differences; p_base divergence is a separate, real Points-array reorder"
 depends-on = ["native-light-apply-bake-where-it-stands-and", "wanchai-verts-points-residual-independently"]
 +++
 
@@ -89,3 +89,111 @@ Investigation script (throwaway, not committed --
 `uedcli/native/pkg_write.parse_package`, dumps/diffs the full import and export tables plus a
 per-surf `texture_ref`/`i_actor`/`p_base` table. Not committed (throwaway); rerun trivially from the
 recipe above if needed again.
+
+## Round 2 (2026-08-31, owner-directed): widening shipped, verified SAFE, but does NOT close the divergence
+
+Owner ruling: widen `build_ued_lit_golden.py`'s default actor set to everything except classes that
+are actually brush-bearing, determined via the class schema (not name-matching) -- then, per a
+follow-up mid-task, ALSO empirically test the TRUE full set (movers included) rather than assuming
+the docstring's contamination warning without measuring it.
+
+**Implementation.** `build_ued_lit_golden.py`'s default `keep` now computes every trunk class EXCEPT
+`Engine.Mover` descendants -- resolved via `classindex.ClassIndex` + the existing `movers.is_mover`
+predicate (the same schema-aware check `doctor`/dispatch/native materialize already use), not a name
+guess. Caught `DeusEx.BreakableGlass` on Wanchai automatically (a real Mover subclass whose name
+doesn't end in "Mover" -- exactly the class of bug `movers.is_mover`'s own docstring warns
+name-matching would miss). A class whose mover-ness can't be resolved (package off the search path,
+or a bare-name cross-package collision that disagrees) is excluded conservatively, with a stderr
+note. Added `--keep-classes ALL` (every trunk class, no filtering) and `--allow-brush-bearing`
+(bypasses the existing refuse-on-brush-bearing check) so the true full set -- movers included -- can
+be built deliberately for measurement; the safety refusal still gates the normal/default path
+unchanged.
+
+**Safety verification (the owner's explicit bar): PASSED on every level tried.** Geometry COUNTS
+(nodes/surfs/leaves/verts/points/vectors) after widening, vs the existing narrow-actor-set goldens:
+
+| level | nodes | surfs | leaves | verts | points | vectors |
+|---|---:|---:|---:|---:|---:|---:|
+| `DX.dx` (widened) | 26=26 | 26=26 | 5=5 | 250=250 | 32=32 | 6=6 |
+| UNATCO (widened) | 6314=6314 | 3616=3616 | 762=762 | 76488=76488 | 10752=10752 | 599=599 |
+| NYC Bar (widened) | 1620=1620 | 953=953 | 283=283 | 20878=20878 | 2762=2762 | 138=138 |
+| UNATCO (movers INCLUDED, `ALL`) | 6314=6314 | 3616=3616 | 762=762 | 76488=76488 | 10752=10752 | 599=599 |
+
+All byte-identical. Confirmed genuinely inert (not count-coincidence) via index-for-index content
+comparison on `DX.dx`: nodes and leaves are field-identical, only surfs' `i_actor`/`texture_ref`
+shift (the expected object-ref renumbering from a larger population).
+
+**The owner's specific follow-up -- movers included, no exclusions, real measurement, not the
+docstring's untested assumption:** built UNATCO with `--keep-classes ALL --allow-brush-bearing`
+(1437 actors, 762 "brush" entries = 734 world brushes + 28 `DeusExMover`s). Result: counts
+unchanged (table above) -- movers pasted via `EDIT PASTE` do **not** merge into the world model.
+Confirmed structurally: the built package carries 764 `Model` exports vs 736 without movers, exactly
++28 = the mover count, each mover keeping its own small private Model (9322/9088/8515/8083 bytes
+serial size, etc.) separate from the world Model -- matching the real production `MAP LOAD` behavior
+the original docstring worried a paste-built golden would diverge from, not the "pastes any
+brush-bearing actor as a world brush" mechanism it warned about. **So for these 28 movers, on this
+level, the contamination the docstring warns about does not occur.**
+
+It is not entirely free, though: content-level comparison found `node_flags` differs on 862/6314
+world nodes (13.7%) between the movers-excluded and movers-included builds. Confirmed REAL, not
+build-to-build noise -- two independent builds of the IDENTICAL movers-excluded actor set are 100%
+byte-identical across nodes/surfs/leaves, zero diffs, so this harness's build is fully deterministic.
+Every other node field (`plane`, `i_leaf`, `i_zone`, etc.) is untouched; surfs differ only in the
+expected `i_actor`/`texture_ref` shift; leaves are 100% identical either way. A smaller
+same-direction effect (20/6314 nodes) already exists between the ORIGINAL narrow golden and the
+movers-EXCLUDED widened one, so `node_flags` has some sensitivity to actor population in general,
+much more so once movers are added. `unrealed/quirks.md` documents `0x08 NF_PolyOccluded` +
+`0x10 NF_BoxOccluded` as "occlusion bits the editor's live-viewport render pass writes... session
+-dependent" in one prior measurement -- but that doesn't explain what we see here, since our own
+reproducibility check shows zero session-to-session noise in this headless pipeline; the observed
+bits (`8,16,64,128` and combinations) are a deterministic function of the actor set here, not of
+which session built it.
+
+**Decision: NOT shipped as the new default.** The owner's stated criterion was "if counts stay
+IDENTICAL... ship the true full-actor-set default, use it everywhere" -- counts did stay identical,
+but the node_flags finding is new information the criterion didn't anticipate (a real, deterministic
+content difference outside the count-based bar). Also, native's OWN world-model build already
+excludes movers from world CSG (`parity_compare.build_native_model` filters to
+`_in_world_csg`-qualifying brushes only), so the movers-EXCLUDED widened default is the
+internally-consistent choice for comparing against native's current behavior. Given a real, if
+narrow, complication was found, this is a decision for the owner/coordinating session, not something
+to pick unilaterally per the project's own "measure it, stop, report the evidence... wait for the
+yes" rule -- flagged here rather than defaulted to "ALL".
+
+**The motivating hypothesis is REFUTED, more strongly than round 1 found.** Re-ran `compare_content`
+(native's full assembled build vs the now-WIDENED golden) on `DX.dx`, NYC Bar and UNATCO -- the
+fields that were diverging before widening are statistically UNCHANGED after:
+
+| level | before (nodes / surfs / leaves field-diffs) | after |
+|---|---|---|
+| `DX.dx` | 8 / 65 / 5 | 8 / 65 / 5 -- **identical** |
+| NYC Bar | 2066 / 2739 / 354 | 2091 / 2830 / 637 -- **worse** (new `i_volumetric` leaf divergence) |
+| UNATCO | 22202 / 10940 / 1496 | 22199 / 10941 / 1496 -- **noise-level** |
+
+Direct export-table diff on `DX.dx` (native: 23 imports/52 exports/115 names; widened golden: 26/57/143)
+shows why: even with matching actor POPULATIONS, the golden's table still doesn't match native's,
+because (a) the already-known leaked `Camera6`-`Camera11` `GetVisibleSurfs` temp-viewport exports are
+still present -- they leak regardless of which actors were pasted, a separate unfixed bug, not an
+actor-population effect -- and (b) native's own serializer names per-brush auxiliary objects
+differently from the real editor's own naming (`Model_Brush3Polys`/`Model_Brush4Polys`/... on
+native's side vs `Polys6`/`Polys8`/`Polys10`/... on the golden's side) -- a structural difference
+between the two build mechanisms that no amount of actor-set widening can close, since `texture_ref`/
+`i_actor` are raw indices into these mismatched tables. Of the two options round 1 logged as real
+alternatives (widen the actor set, or compare object-refs by resolved semantic identity instead of
+raw index), only the first was tried here and it does not deliver on its own; the second is the one
+now worth trying, and likely also needs the leaked-camera cleanup fixed first for `DX.dx`-scale
+levels where it's a larger share of the mismatch.
+
+**New blocker found, not chased (out of scope, budget):** `06_HongKong_WanChai_Market`'s widened
+build (movers excluded, 2261 actors incl. `BreakableGlass`-excluded) CRASHES the editor reproducibly
+at the first `EDIT PASTE` -- same failure point on 2 independent attempts (retry-once-then-file
+applied). Its existing narrow golden is untouched and still valid; the widened one could not be
+built this round. Root cause not investigated.
+
+**State left behind:** `build_ued_lit_golden.py` is changed (uncommitted, per task instruction) to
+ship the movers-excluded widened default plus the `ALL`/`--allow-brush-bearing` escape hatches; the
+safety refusal is unchanged. This round's widened goldens live at `/tmp/uedcli-widen-test/` (DX.dx,
+NYC Bar, UNATCO widened, UNATCO `ALL`, a UNATCO widened repro-control build) -- NOT installed over the
+live shared `/tmp/uedcli-parity-cache/` cache entries, since that cache is read by other sessions and
+this round's own numbers argue against silently treating "widened" as an improvement to adopt.
+Installing over the live cache (or not) is the coordinating session's call.

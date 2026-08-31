@@ -2157,3 +2157,68 @@ Likely the same FAMILY as `wanchai-verts-points-residual-independently` (a Point
 construction-order divergence) but not confirmed identical — that thread's cases carry a real count
 residual (Wanchai +16, UNATCO +16) while `DX.dx` shows pure reordering with no count delta, a
 cleaner, smaller isolated repro if that thread is picked up again. Not chased further this round.
+
+**Round 2: golden actor-set widened (movers excluded, schema-checked) and shipped SAFE — but the
+texture_ref/i_actor fix does NOT deliver; hypothesis REFUTED a second, stronger time.** (2026-08-31,
+owner-directed follow-up) — `build_ued_lit_golden.py`'s default `keep` widened from
+`{Brush,LevelInfo}∪lights` to every trunk class EXCEPT `Engine.Mover` descendants, resolved via
+`classindex.ClassIndex`+`movers.is_mover` (schema-based, not name-matching — catches
+`DeusEx.BreakableGlass` on Wanchai, which doesn't end in "Mover"). A class whose mover-ness can't be
+resolved is excluded conservatively. New `--keep-classes ALL` + `--allow-brush-bearing` force the
+true full set (movers included) for measurement; the refuse-on-brush-bearing check still gates the
+default path.
+
+*Safety (the owner's bar): PASSED.* Geometry COUNTS (nodes/surfs/leaves/verts/points/vectors)
+unchanged after widening on `DX.dx` (26/26/5/250/32/6), UNATCO (6314/3616/762/76488/10752/599) and
+NYC Bar (1620/953/283/20878/2762/138) — byte-identical to the existing narrow goldens. Content-level
+check on `DX.dx` confirms it's genuinely inert, not count-coincidence: nodes/leaves identical
+field-for-field, only surfs' `i_actor`/`texture_ref` shift (expected index-table renumbering from the
+larger population).
+
+*Owner follow-up: also tried the TRUE full set on UNATCO, movers included
+(`--keep-classes ALL --allow-brush-bearing`, 28 `DeusExMover` actors).* Counts still unchanged,
+byte-identical — movers pasted via `EDIT PASTE` do NOT merge into the world model (764 vs 736 `Model`
+exports, +28 = exactly the mover count, each keeping its own private Model, matching real production
+`MAP LOAD` behavior). But content-level check found `node_flags` differs on 862/6314 world nodes
+(13.7%) — confirmed REAL, not noise (two independent builds of the identical movers-excluded set are
+100% byte-identical, zero diffs — the pipeline is deterministic). Every other node field
+(`plane`/`i_leaf`/`i_zone`/etc.) is unaffected; surfs differ only in the expected object-ref shift;
+leaves 100% identical. A smaller same-direction effect (20/6314 nodes) already exists between the
+ORIGINAL narrow golden and the movers-EXCLUDED widened one, so `node_flags` (occlusion/lighting-bake
+metadata — see `unrealed/quirks.md` "`0x08 NF_PolyOccluded` + `0x10 NF_BoxOccluded`... render-only
+occlusion bits") has some sensitivity to actor population generally, far more so with movers. Node
+topology (the owner's literal safety bar) is unaffected either way. **Not shipped as the default** —
+counts-unchanged was the stated "ship it" criterion, but the node_flags finding is new information
+outside that criterion, and movers-excluded also matches native's OWN world-model build
+(`parity_compare.build_native_model` filters non-world-CSG brushes — i.e. movers — from its own
+input), so it's the internally-consistent choice pending a decision this round doesn't make
+unilaterally.
+
+*The motivating hypothesis is REFUTED, more strongly than the first round.* Re-ran `compare_content`
+(native's full build vs the WIDENED golden) on `DX.dx`, NYC Bar and UNATCO: field-diff counts are
+statistically unchanged from the narrow-golden baseline on all three (`DX.dx`: identical — same
+8/26 nodes, 26/26 surfs, 5/5 leaves, same fields; NYC Bar: nodes 2066→2091, surfs 2739→2830, leaves
+WORSE 354→637 with a new `i_volumetric` divergence; UNATCO: 22202→22199, 10940→10941, 1496→1496,
+noise-level). Direct export-table diff on `DX.dx` explains why: the golden's table still doesn't
+match native's even with matching actor POPULATIONS, because (a) the leaked `Camera6`-`Camera11`
+`GetVisibleSurfs` temp-viewport exports persist regardless of which actors were pasted (a separate,
+unfixed bug), and (b) native's serializer names per-brush auxiliary objects differently from the real
+editor (`Model_Brush3Polys` vs `Polys6`, etc.) — a structural difference between the two build
+mechanisms no actor-set widening can close. `texture_ref`/`i_actor` are raw indices into these
+tables, so they were never going to converge via population-matching alone. Of the two options the
+first round logged, only "widen the actor set" was tried and it does not deliver; "compare object-refs
+by resolved semantic identity instead of raw index" (in `compare_content`) is the one worth trying
+next.
+
+*New blocker found, not chased:* `06_HongKong_WanChai_Market`'s widened build CRASHES the editor
+reproducibly at the first `EDIT PASTE` (2 attempts, identical failure point); its narrow golden is
+untouched and still valid. Root cause not investigated (budget; retry-once-then-file-a-finding).
+
+Not committed (spike harness change, left for the coordinating session per task instruction).
+Reproduction: `build_ued_lit_golden.py --trunk <trunk> --out <out> --keep-classes ALL
+--allow-brush-bearing` for the true full set; drop both flags for the new (movers-excluded) default.
+This round's widened goldens are at `/tmp/uedcli-widen-test/`, NOT installed over the live
+`/tmp/uedcli-parity-cache/` entries — that cache is shared across sessions, and this round's own
+numbers argue against silently treating "widened" as an improvement to adopt; installing over the
+live cache is the coordinating session's call. Full write-up:
+`board/inbox/texture-ref-i-actor-divergence-traced-to-golden` (Round 2).
