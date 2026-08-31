@@ -182,3 +182,50 @@ narrow golden, positional `node_flags` XOR + bit histogram; mover locations via 
 root-to-leaf descent via the movers-excluded tree's own `plane`/`i_front`/`i_back`. Disassembly scan:
 `capstone`+`pefile` over `/workspace/uedcli/uned/UED22/*.dll`/`.exe`, matching `or`/`and`/`xor`/
 `bts`/`btr`/`mov`/`movzx` instructions whose operand string contains `+ 0x37]`.
+
+## 2026-08-31 status update: live gdb blocked (sandbox docker/runc is dead); static re-scan finds a real block-copy site, and disproves this item's own "zero setter" claim
+
+Tasked with doing the live gdb capture §"Left undone" named. **Not achievable this session — no
+container can start at all in this sandbox.** `docker run --rm hello-world` (the official
+zero-dependency sanity image) fails identically to every other attempt:
+`OCI runtime create failed ... runc did not terminate successfully: exit status 2` (also seen as
+`failed to create shim task: ttrpc: closed`). `docker info`/`docker ps` work fine (daemon reachable
+over `DOCKER_HOST=tcp://dind:2375`); `/sys/fs/cgroup` is mounted `ro`, no systemd
+("Running in rootless-mode without cgroups. Systemd is required..."). Reproduced 4 separate ways
+(plain debian image, `hello-world`, a fresh `ued-x86-runtime` build, 3 retries with pauses) — this is
+an infra fault in the sandbox's `dind` sidecar, not a Dockerfile problem and not fixable from an
+agent session. Full detail + the static findings below: `native-materialize-findings.md`
+("`node_flags` 0x40/0x80: live gdb capture blocked...", 2026-08-31).
+
+Fell back to pure static disassembly (capstone+pefile, no editor) and found two things §3's method
+missed, because it (like the original `0x08` finding) scanned Editor.dll's EXPORT TABLE only:
+
+1. **§3's "Editor.dll touches offset +0x37 NOT AT ALL" is wrong.** `bspAddNode` (VA `0x10034e80`) is
+   never in the export table — reached only via one indirect vtable slot (`.rdata 0x100cf7f8`, the
+   same vtable `bspRepartition`/`bspBuild`/`bspRefresh` sit in) — so the export-scoped scan silently
+   skipped it. It contains one explicit `NodeFlags` write, `mov byte ptr [esi+0x37], al` at VA
+   `0x100351c2`, `al` = its own 4th argument. A plain `mov`, not `or`/`and`.
+2. Traced that argument to its only 2 real call sites (whole-`.text` scan for the vtable-slot call):
+   both push a hardcoded **`0x20`** constant, never a variable, never `0x40`/`0x80`. Internal
+   recursive self-calls forward it unchanged. `0x20` never survives to either build's SAVED
+   `node_flags` (checked all 6314 nodes both sides) — something clears it before save, not located.
+3. **Found the block-copy §5 flagged as unconfirmed and un-ruled-out.** `bspRefresh` (also
+   unexported, same blind spot) contains an in-place Nodes-array compaction loop: surviving nodes get
+   copied WHOLE (four 16-byte SSE `movups`, the whole `0x40`-byte `FBspNode`) from an OLD slot to a
+   NEW compacted slot when earlier nodes are removed. The last copy (`[dest+0x30]`, VA `0x10036e44`)
+   covers `NodeFlags` at `+0x37` as a side effect — invisible to a "+0x37 operand" scan. This
+   reconciles cleanly with §"Left undone"'s own live findings (`node_content_before_after.py` etc.):
+   those all sampled calls with zero real removals, where this same loop copies every node onto
+   itself (no-op, byte-identical) — never contradicted, just unexercised on a call with a real hole.
+
+**Still open, needs live tracing to close (blocked this round):** what clears `NF_IsNew` (`0x20`)
+before save and whether it also touches `0x40`/`0x80`; what marks a node for removal (feeding the
+compaction copy) and what NodeFlags the ORIGINAL relocated node had. So this update confirms
+hypothesis 2's premise (a real block-copy mechanism exists) without confirming its source content is
+real algorithm state versus stale content relocated from a defunct node — genuinely inconclusive
+between the three hypotheses, not just "not done yet." **`NODE_FLAGS_NOISE_MASK`: no change
+recommended** — not confident enough either way to touch `parity_lib.py`.
+
+Static scripts (capstone/pefile only, no docker) at
+`dev/docs/spikes/2026-08-31-node-flags-live-verify/harness/`, uncommitted in worktree
+`.claude/worktrees/node-flags-live-verify`.

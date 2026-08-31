@@ -3016,58 +3016,119 @@ since the fix is Python-only (`pkgref.py`), the native extension's exact build p
 bear on these numbers, but the coordinating session should re-verify with a clean native build before
 relying on the geometry/lighting percentages as final.
 
-## `texture_ref`/`i_actor` round 9 (2026-08-31): is raw-byte matching achievable in principle? No -- closed, not open
+## `node_flags` 0x40/0x80: live gdb capture blocked (docker/runc dead in this sandbox); static re-scan finds the block-copy site the prior round flagged as unconfirmed, and disproves its own "zero setter" claim
 
-Follow-up question the owner asked directly after round 8: round 8 shipped resolved-identity
-comparison as pragmatically good enough, but never established whether raw-byte matching the
-export-table position is achievable if pursued further, or a hard ceiling like `LatentAction`. Full
-write-up: `board/inbox/texture-ref-i-actor-divergence-traced-to-golden` (Round 9). Summary:
+Follow-up to `node-flags-0x40-0x80-divergence-from-movers-no` (2026-08-31 Round, above), tasked to do
+the live gdb verification its own "Left undone" section named. **Live capture was not achievable this
+session — no container can start at all in this sandbox (📖 static findings only below, no 🔬).**
 
-**The export CLASS set is fully enumerated, zero surprises, across 3 goldens** (`pkg_write.
-parse_package` + `class_of_export` on `dx_widened.dx`/`unatco_widened.dx`/`nycbar_widened.dx`):
-every export is real content (`Brush` + game-actor classes: 37/1410/483), `Model` (6/736/205),
-`Polys` (6/736/205, real geometry, auto-named), `Camera` (6/6/6, viewport artifact), or a fixed
-`LevelSummary`+`Level` tail pair (1+1 on all three). No unclassified export kind anywhere.
+**Docker is dead here, confirmed thoroughly, not a Dockerfile issue.** `docker info` and `docker ps`
+work (daemon reachable, `DOCKER_HOST=tcp://dind:2375`, rootless backend), but every `docker run`
+fails at container-create: `docker run --rm debian:bookworm-slim true` and the OFFICIAL
+`docker run --rm hello-world` (a zero-dependency sanity image) both fail identically —
+`OCI runtime create failed ... runc did not terminate successfully: exit status 2` /
+`failed to create shim task: ttrpc: closed`. `/sys/fs/cgroup` is mounted `ro`, no systemd
+(`docker info`: "Running in rootless-mode without cgroups. Systemd is required..."). Reproduced
+building `ued-x86-runtime` fresh (apt-get layer fails the same way) and via 3 separate retries with
+pauses. This is an infra fault in the `dind` sidecar for this sandbox instance, not something fixable
+from an agent session (no access to restart the daemon or its backend VM); the coordinating session
+should retry in a fresh sandbox. Nothing below used the editor, gdb, or Wine.
 
-**New, small finding: `LevelSummary`+`Level` are always the LAST two exports, in that order** —
-confirmed byte-identical across round 8's two independent UNATCO builds (deterministic, like
-everything else that pair measured). Body looks like a map-title tagged-property blob defaulting to
-`"Untitled"` (test builds never set one) — not fully decoded, doesn't matter here: no `BspSurf` field
-ever references a `Level`/`LevelSummary` export, so this pair is irrelevant to `texture_ref`/
-`i_actor` regardless of whether it's ever fully characterized.
+**Corrects the prior round's static-scan claim: `bspAddNode` DOES write `NodeFlags` — the original
+scan was scoped to Editor.dll's EXPORT TABLE and silently skipped this function because it isn't
+exported.** `bspAddNode` (VA `0x10034e80`) is called ONLY indirectly: a raw byte scan for `E8 <rel32>`
+resolving to `0x10034e80` anywhere in Editor.dll's `.text` (alignment-independent, catches every
+direct call regardless of linear-disasm desync) found **zero** hits; a data-scan found exactly one
+`.rdata` reference, at `0x100cf7f8`, which is slot `+0x224` of a ~172-entry function-pointer table at
+`0x100cf5d4` (the same vtable `bspRepartition`/`bspBuild`/`bspRefresh` sit in — `[+0x1fc]` through
+`[+0x210]` match the prior round's own offsets). Because it's reached only through this vtable slot,
+the "disassemble every exported function" method the prior round (and the original `0x08` finding)
+both used never looked inside it. Full disassembly (capstone, all ~1300 instructions of the function)
+finds exactly one instruction touching struct offset `+0x37`: `mov byte ptr [esi+0x37], al` at VA
+`0x100351c2`, where `al` is loaded 3 instructions earlier from `[ebp+0x14]` — the function's OWN 4th
+argument (`NodeFlags`, matching the known call signature `Model, iParent, ENodePlace, NodeFlags,
+EdPoly*` this project's other harnesses already use, e.g. `editor_tree_oracle.py`'s
+`_GDB_SCRIPT`). It is a plain `mov` (full overwrite), not `or`/`and` — it cannot "preserve" whatever
+was in that byte before the call.
 
-**The load-bearing mechanism — real content's table POSITION — is architecturally, not just
-practically, resistant to derivation.** Rounds 2-8 already ruled out paste order, trunk order, and
-every formula tried against `Model`/`Surfs`/`Nodes`; it's `UObject` allocation-slot order (freed
-slots reused) across `OBJ LOAD`→`MAP NEW`→`EDIT PASTE`→`MAP REBUILD`→`LIGHT APPLY`, deterministic per
-fixed recipe (round 8's byte-identical 2890/2890-export UNATCO pair) but not a function of the
-trunk's own content — it's the internal bookkeeping state of an allocator across 5 engine-internal
-operations the trunk never specifies. Matching it means emulating `UObject` allocation call-for-call,
-not deriving a formula.
+**Traced the argument's real source: the only 2 external call sites into `bspAddNode` anywhere in
+Editor.dll both push a HARDCODED CONSTANT, `0x20` — never a variable, never 0x40/0x80.** Scanned all
+66,562 linearly-disassembled `.text` instructions for `call [reg + 0x224]` (the confirmed vtable
+slot): exactly 2 external hits, `0x100317d9` and `0x10031bf6`. At both, the `NodeFlags` push
+(2nd-from-top of the 5-arg block, matching the known stack layout) is a literal `push 0x20`, not a
+register/memory read. `bspAddNode`'s own internal recursive self-calls (through the same vtable slot,
+for the front/back-split continuation and the coplanar-chain append — both branches disassembled)
+forward this SAME argument unchanged (`push dword ptr [ebp+0x14]`), never recomputing it. `0x20`
+matches UE1's likely `NF_IsNew` (a transient "just built this pass" marker) — consistent with a
+direct check: **bit `0x20` never appears in EITHER `unatco_widened.dx`'s or `unatco_all.dx`'s SAVED
+`node_flags`** (checked all 6314 nodes both sides, `parity_compare.parse_dx_model` +
+`uedcli_native`), i.e. something clears it before the map is saved. That clearing site was not
+located this round (candidate: a `bspCleanup`/`bspOptimize`-style finalize pass, not yet found).
 
-**Two sub-mechanisms are now confirmed categorically impossible, not merely hard — the round's actual
-new result.** Cross-checking `Camera6`-`Camera11` (round 6) against `unrealed/package-format.md`'s
-independent 88-retail-map measurement ("viewport `Camera` actors … 4 per map, every map") shows this
-is not a self-built-golden artifact: every shipped Deus Ex map carries the same kind of
-content-independent viewport-camera export, encoding which window had focus on whoever's screen at
-`File > Save` in 1999 — information that was never part of any level's content, golden or retail, so
-no amount of reverse-engineering recovers it. And `actor-state-frame-latentaction-is-serialized`
-(filed alongside round 8) already proved the editor cannot reproduce its own actor-body
-`LatentAction` bytes run-to-run on an identical trunk — uninitialized heap memory, not a derivation
-gap. Both are stronger conclusions than `Polys<N>`'s "deterministic but not yet derived" starting
-offset, which remains merely unfinished, not proven impossible.
+**Re-verified the prior round's diff numbers independently (own parse, not reused) and confirmed
+index correspondence is exact — zero non-flags field differs anywhere in the 6314-node tree.**
+Re-parsed both cached `/tmp/uedcli-widen-test/unatco_{widened,all}.dx` (still present, unchanged):
+862/6314 `node_flags` diffs reproduced exactly (346×`0x40` + 218×`0x80` + 337×`0x08` + 34×`0x10`).
+Checked every one of `i_front`/`i_back`/`i_plane`/`i_leaf`/`i_surf`/`i_vert_pool`/`i_zone`/
+`i_collision_bound`/`i_render_bound`/`num_vertices`/`plane`/`zone_mask` at all 6314 positional
+indices between the two builds: **0 differ**, anywhere — the divergence really is `node_flags`-only,
+not a comparison-methodology artifact. Node index 0 (the tree ROOT) is itself one of the 564
+`0x40`/`0x80` nodes (`0x00` movers-excluded → `0x40` movers-included) — the most structurally central
+node in the whole tree carries this divergence, which argues against it being some obscure edge case.
 
-**Not re-investigated live this round** (already exhaustively attempted, all need a
-`bspBrushCSG`/`bspRefresh`/`csgRebuild` live capture this project has no harness for): the world
-`Model`'s own `Polys=` field content (round 4), `p_base` Points-array order (round 5), `node_flags`
-`0x40`/`0x80` (no disassembly-confirmed setter in 5 binaries, `node-flags-0x40-0x80-divergence-from-
-movers-no`). None gate `texture_ref`/`i_actor`; the practical answer (exclude/mask) is unchanged
-either way.
+**Headline finding: located the exact block-copy mechanism the prior round's own "Left undone"
+section flagged as unconfirmed and unable-to-rule-out from single-instruction scanning.**
+`bspRefresh` (VA `0x10036cd0`, vtbl `+0x200`, also unexported — same blind spot) contains an in-place
+Nodes-array COMPACTION loop (VA `0x10036dff`–`0x10036e59`): for `esi = 0 .. Nodes.Num` (`Model+0x5c`,
+the same field `nodesnum_watch.py` already confirmed), a parallel remap array marks removed nodes
+with `-1` (skip, don't advance the kept-count `ecx`); every SURVIVING node is copied WHOLE — the
+entire 0x40-byte `FBspNode` stride, as four 16-byte `movups` (SSE) copies covering byte ranges
+`[0x00,0x10)`, `[0x10,0x20)`, `[0x20,0x30)`, `[0x30,0x40)` — from its OLD slot
+(`Nodes.Data + esi*0x40`) to a NEW, compacted slot (`Nodes.Data + ecx*0x40`). The last of the four
+copies, `movups xmmword ptr [ecx+0x30], xmm0` at VA `0x10036e44`, spans bytes `0x30`–`0x3F`,
+covering `NodeFlags` at `+0x37` as a side effect of a 16-byte vector copy — exactly the class of
+instruction a "+0x37 operand string" scan cannot see (its own operand is `+0x30`, not `+0x37`). This
+loop runs once per `bspRefresh` call, i.e. up to ~209 times per `MAP REBUILD`
+(`unatco-verts-points-residual-after-the-zone`'s per-call count).
 
-**Verdict: raw-byte matching of `texture_ref`/`i_actor` is NOT achievable — closed on the evidence,
-not open pending more reverse-engineering.** Recommend keeping resolved-identity comparison
-(`parity_lib.resolve_object_ref`/`resolve_surf_refs`) as the PERMANENT definition of correctness for
-these fields, not a workaround awaiting a decision — part of what raw-byte equality would require
-(viewport UI state, uninitialized memory) is provably absent from the trunk by construction, for
-self-built goldens and for every original shipped Deus Ex map alike. No production code touched;
-read-only analysis of already-cached goldens, no live container spin-up needed.
+**Reconciles cleanly with every prior LIVE finding that seemed to rule out any content change.**
+`nodesnum_watch.py`/`node_content_before_after.py`/`wanchai_descendant_slots.py` (2026-08-30, all
+🔬) sampled calls where `Nodes.Num` nets back to the EXACT pre-call baseline — i.e. calls where
+nothing was ever marked `-1`, so this SAME compaction loop still runs but copies every node onto
+ITSELF (`esi == ecx` throughout), byte-identical, indistinguishable from a no-op in a before/after
+diff. Those findings were correct for the specific calls they sampled; they just never happened to
+land on a call with a real hole to compact. The mechanism was never contradicted, only unexercised in
+the sampled set.
+
+**What this does and does not settle, against the 3 hypotheses this round was asked to distinguish.**
+Confirms hypothesis 2's PREMISE — a real whole-struct block-copy mechanism exists in the editor's
+build path, reachable from an unexported function two levels of static-scan blind spot deep (an
+un-exported callee, then a copy whose own operand offset isn't the target byte's offset). It does
+NOT confirm that this copy's SOURCE content is itself "real" engine state (a legitimate `0x40`/`0x80`
+computed somewhere and then relocated down through 1+ compaction hops) versus stale/leftover content
+from a now-defunct node's slot that a compaction copy propagated forward without anyone having
+written it deliberately — both remain open. Two things this round could NOT locate, and both need
+live tracing (blocked) or substantially more static call-graph work to close: (a) what clears
+`NF_IsNew` (`0x20`) before save, and whether that same code touches `0x40`/`0x80`; (b) what marks the
+remap array `-1` (the removal decision), and what the ORIGINAL source node (the one whose content
+ends up relocated into a surviving `0x40`/`0x80` slot) had for `NodeFlags` before ITS OWN creation —
+tracing that requires either a live watchpoint across a real movers-included build (the originally
+planned method, blocked) or building a full call-graph/data-flow model of `bspBuild`'s recursive
+split logic offline, not attempted this round (budget).
+
+**Recommendation on `NODE_FLAGS_NOISE_MASK`: leave it as-is.** This round neither confirms a decoded
+algorithm native could replicate nor closes off the noise hypothesis — it narrows WHERE the
+remaining uncertainty lives (a real copy mechanism plus two still-unlocated writers) without
+resolving it. Not confident enough to touch `parity_lib.py`; flagging for the coordinating session
+per the task's own ground rules.
+
+Static-analysis scripts (capstone+pefile, no editor/docker) committed at
+`dev/docs/spikes/2026-08-31-node-flags-live-verify/harness/`: `disasm_bspaddnode.py` (full
+`bspAddNode` disasm + `+0x37`-coverage scan), `find_calls_raw.py` (alignment-independent `E8` scan),
+`find_vtbl224_sites.py` (whole-`.text` scan for the vtable-slot call), `disasm_bspbuild.py` (ruled out
+`bspBuild` as a direct caller), `full_text_flags_scan.py` (whole-`.text` `+0x37`-coverage scan, noisy
+— useful only restricted to BSP-related code ranges, not run that way this round). Work done in
+worktree `.claude/worktrees/node-flags-live-verify` (branch `node-flags-live-verify`), left uncommitted
+per this round's instructions; the offline diff/index-correspondence check used the main checkout's
+already-built `uedcli_native` venv (`/workspace/uedcli/.venv`) against the still-cached
+`/tmp/uedcli-widen-test/unatco_{widened,all}.dx` — no rebuild, no editor.
