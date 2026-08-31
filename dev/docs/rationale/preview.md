@@ -74,18 +74,23 @@ call, not a regression — but it is the owner's call, and it needs new renders.
 **Refs.** `dev/docs/spikes/2026-07-27-preview-focus-dim/` (the ladder, the before/after pair and the
 harness); `uedcli/preview.py` `_DIM_FILL_ALPHA`; `uedcli/tests/test_preview_faces.py` pins the value.
 
-## The addressable grid's default density is `--grid 12` (agent choice)
+## The addressable grid's default density is auto-picked (agent choice, 2026-08-31, supersedes the flat `12`)
 
-The always-on coordinate grid (owner-ruled 2026-08-02) leaves the DEFAULT cell count to us. `12` — a
-12×12 grid, columns `A–L`, rows `1–12`. It divides the pane's drawable rect, not the geometry, so a
-cell is a fixed region of the projection (`_drawable_rect`, `_cell_of_pixel`); the address is
-image-space, never world.
+The always-on coordinate grid (owner-ruled 2026-08-02) leaves the DEFAULT cell count to us; a later
+owner ruling (2026-08-31) fixed the GOAL — locator cells should visually align with the world
+gridline overlay, not just independently pick a legible pixel size — and left the algorithm to us.
+On an ortho view, `_auto_locator_lattice` walks power-of-two multiples of the gridline overlay's own
+escalated step (so a boundary always coincides with a real drawn line) and validates the REAL
+resulting cell widths (after merging any too-thin partial edge cell) against the label footprint,
+escalating until every cell clears it. `iso` has no gridline lattice to anchor to, so it keeps the
+earlier `_auto_locator_cells` — the finest independent power-of-two pixel size that avoids label
+crowding. `--layout quad`'s 4 panes resolve density independently (each ortho pane may anchor to a
+different step; `iso` always uses the pixel-fit fallback), so two panes can legitimately report
+different `cols`/`rows`.
 
-**Why 12.** Single-letter columns (`≤26` keeps every column one glyph, so no `AA` to parse), a cell
-big enough to hold a font glyph in the gutter at the default `--size 1024` (~80 px/cell), and fine
-enough that a cell names a small region rather than a quadrant. Above ~26 the columns need two letters
-and the gutter labels crowd; the owner-set bound is `[1, 52]` (`_GRID_MAX`), and past 52 the addresses
-stop being short.
+**Refs.** `uedcli/preview.py` `_auto_locator_lattice`/`_lattice_boundaries`/`_auto_locator_cells`;
+`uedcli/tests/test_preview.py` locator/lattice tests; `dev/docs/spikes/2026-08-30-unrealed-ortho-grid-density/`
+(the world gridline overlay this anchors to).
 
 **Rejected.** *8* — coarse; a cell spans a large area, so `D4` barely narrows a busy scene. *16/26* —
 finer, but at 256-px panes (quad, breakdown) the gutter letters abut, and 26 reaches the last
