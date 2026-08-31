@@ -1,18 +1,18 @@
 """`level` command family — operations over a project's levels.
 
 `cli.dispatch` enters through `run(args)`, which routes the subverb: `list`/`create`/`import`/
-`reimport`/`materialize`/`preview`/`status`/`doctor`. Ordering the reorg must preserve:
+`reimport`/`materialize`/`photo`/`status`/`doctor`. Ordering the reorg must preserve:
 
 - `level import` resolves its destination and runs the overwrite/path-safety guard BEFORE reading the
   map file (`_resolve_import_dest`);
-- `level materialize` validates `--out`, and `level preview` validates its shot/mode flags, BEFORE
+- `level materialize` validates `--out`, and `level photo` validates its shot/mode flags, BEFORE
   resolving the project or any expensive game resource;
 - source resolution honours `--tree`/`$UEDCLI_LEVEL`, and a level taken from the env is announced once
   (`level_sources.announce_env_level`) for the WRITE verbs (materialize/capture), never for a read;
-- `preview` keeps its lazy resource provider — the composed dirs/load set/schema resolver are built
+- `photo` keeps its lazy resource provider — the composed dirs/load set/schema resolver are built
   only on a trunk cache miss, never for `--map` or a cache hit.
 
-Level preview stays WITH this family (it was deliberately not folded into `cli.rendering`). This
+Level photo stays WITH this family (it was deliberately not folded into `cli.rendering`). This
 module uses the shared `cli.ingest`/`cli.resources`/`cli.level_sources` owners and the model/service
 modules; it never imports another command family or the router.
 """
@@ -38,7 +38,7 @@ def run(args) -> int:
     """Route one `level` invocation to its handler, preserving the monolith's dispatch order."""
     if args.sub == "materialize":
         return _level_materialize(args)
-    if args.sub == "preview":
+    if args.sub == "photo":
         return _level_preview(args)
     if args.sub == "doctor":
         return _level_doctor(args, level_sources.resolve_level_source(args))
@@ -308,7 +308,7 @@ def _level_reimport(args) -> int:
     folders/labels and CSG order are left untouched.
 
     Unlike `level import`, the destination must already exist (`level_sources.resolve_level_only`
-    — the same level-only resolver `materialize`/`preview` use, so the ambient `$UEDCLI_LEVEL` is
+    — the same level-only resolver `materialize`/`photo` use, so the ambient `$UEDCLI_LEVEL` is
     the default target and a mutation from it is announced once, same as any other trunk write).
 
     The pipeline:
@@ -540,7 +540,7 @@ def _level_materialize(args) -> int:
 
 
 def _level_preview(args) -> int:
-    """`level preview` — freely-posed still shots of the current level. The DEFAULT backend
+    """`level photo` — freely-posed still shots of the current level. The DEFAULT backend
     is `--game` (the faithful tier, spec 2026-07-13): it delivers the map into a WARM per-user
     headless-game container and captures truly-lit first-person frames (real lighting/sky/
     meshes). `--native` is the opt-in offline DRAFT tier (spec 2026-07-16): the Rust CSG core
@@ -561,10 +561,10 @@ def _level_preview(args) -> int:
         for value, flag in ((args.map, "--map"), (args.rebuild, "--rebuild"),
                             (args.keep_alive, "--keep-alive")):
             if value:
-                print(f"{flag} requires --game (the in-game preview tier)", file=sys.stderr)
+                print(f"{flag} requires --game (the in-game photo tier)", file=sys.stderr)
                 return 2
     # `--tree` selects a TRUNK level; `--map` renders a retail map file — the two are mutually
-    # exclusive (a --map preview never resolves a trunk level, so a --tree would be silently ignored).
+    # exclusive (a --map photo never resolves a trunk level, so a --tree would be silently ignored).
     if getattr(args, "tree", None) and args.map:
         print("--tree names a trunk level; it cannot be combined with --map (a retail map file)",
               file=sys.stderr)
@@ -608,7 +608,7 @@ def _level_preview(args) -> int:
     project = resources.resolve_project(args)
     user_config = config.load_user_config()
     if user_config is None:                                 # same hard error as materialize
-        print("no per-user games config (~/.uedcli/config.toml): preview resolves packages "
+        print("no per-user games config (~/.uedcli/config.toml): photo resolves packages "
               "over the game's base paths; create it with a [games.<name>] paths dir list",
               file=sys.stderr)
         return 2
@@ -629,9 +629,9 @@ def _level_preview(args) -> int:
         level = name = None
         if args.map is None:                    # trunk mode needs a level (--map renders a retail map)
             maps_dir = Path(config.project_maps_dir(project))
-            name, _ = level_sources.resolve_level_only(       # level-only; preview is a READ → no echo
-                args, verb="preview",
-                alt_hint="use `stash preview` / `prefab preview` to render a captured set")
+            name, _ = level_sources.resolve_level_only(       # level-only; photo is a READ → no echo
+                args, verb="photo",
+                alt_hint="use `stash diagram` / `prefab diagram` to render a captured set")
             level = level_sources.TrunkLevelSource(maps_dir / name).load()
 
         def _provide_resources():
@@ -655,8 +655,8 @@ def _level_preview(args) -> int:
 
     maps_dir = Path(config.project_maps_dir(project))
     name, _ = level_sources.resolve_level_only(               # native draft is always trunk mode; READ → no echo
-        args, verb="preview",
-        alt_hint="use `stash preview` / `prefab preview` to render a captured set")
+        args, verb="photo",
+        alt_hint="use `stash diagram` / `prefab diagram` to render a captured set")
     src = level_sources.TrunkLevelSource(maps_dir / name)
     level = src.load()
     search_files = config.composed_search_files(project, user_config)
@@ -664,7 +664,7 @@ def _level_preview(args) -> int:
         n = render_shots(level=level, shots=shots, out_dir=Path(args.out_dir), size=size,
                          fov=args.fov if args.fov is not None else DEFAULT_FOV,
                          search_files=search_files,
-                         index=resources.mover_index(args, "level preview --native", project=project))
+                         index=resources.mover_index(args, "level photo --native", project=project))
     except NativePreviewError as e:
         print(str(e), file=sys.stderr)
         return 2

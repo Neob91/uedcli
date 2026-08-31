@@ -1,4 +1,4 @@
-"""`actor preview` dispatch ergonomics: the renamed verb, unified `--from-t3d`, the `BRUSH:idx`
+"""`actor diagram` dispatch ergonomics: the renamed verb, unified `--from-t3d`, the `BRUSH:idx`
 `--frame` selector (frames only), the unified `--highlight` (a poly selector or an actor name), and `--frame-tightness`. These
 drive `dispatch.dispatch` against a real trunk level (model-side, host-only — no editor/container)."""
 from pathlib import Path
@@ -23,7 +23,7 @@ def _project_with_two_brushes(tmp_path, monkeypatch, name="lvl"):
 
 
 def _prev(proj, out, **kw):
-    base = dict(cmd="actor", sub="preview", project=str(proj), names=[], from_t3d=None,
+    base = dict(cmd="actor", sub="diagram", project=str(proj), names=[], from_t3d=None,
                 view="iso", layout="quad", annotate="all", iso_angle=30.0, frame=None,
                 frame_tightness=0.8, highlight=None, focus=None, show="", size=128,
                 out=str(out) if out is not None else None, brush_colors="csg")
@@ -75,7 +75,7 @@ def test_it_renames_brush_preview_to_actor_preview(tmp_path, monkeypatch):
 
 
 def test_default_preview_paints_onface_poly_numbers(tmp_path, monkeypatch):
-    # The default `actor preview` (no flag) paints on-face poly numbers: a subtract room's face decals
+    # The default `actor diagram` (no flag) paints on-face poly numbers: a subtract room's face decals
     # add content over an un-annotated render of the same actor.
     proj = _project_with_two_brushes(tmp_path, monkeypatch)
     from uedcli.preview import DEFAULT_ANNOTATIONS
@@ -384,7 +384,7 @@ def test_old_highlight_poly_flag_is_gone():
     from uedcli.cli import main as cli
     parser = cli.build_parser()
     with pytest.raises(SystemExit):                        # --highlight-poly was cleanly removed
-        parser.parse_args(["actor", "preview", "--out", "x.png", "--highlight-poly", "WallA:0"])
+        parser.parse_args(["actor", "diagram", "--out", "x.png", "--highlight-poly", "WallA:0"])
 
 
 def test_zoom_factor_interpolates(tmp_path, monkeypatch):
@@ -544,7 +544,7 @@ def test_point_actor_in_a_stash_renders(tmp_path, monkeypatch):
     reg.write_stash("box", full_level={"Torch": canonical_actor_t3d(light)}, order=["Torch"],
                     packages=[], meta={"anchor": ["0", "0", "0"], "ts": 1})
     out = tmp_path / "o.png"
-    args = SimpleNamespace(cmd="stash", sub="preview", project=str(proj), id="box", names=[],
+    args = SimpleNamespace(cmd="stash", sub="diagram", project=str(proj), id="box", names=[],
                            view="top", layout="single", annotate="all", iso_angle=30.0, frame=None,
                            highlight=None, focus=None, frame_tightness=0.8, show="",
                            size=128, out=str(out), container="c")
@@ -575,7 +575,7 @@ def test_drawscale_zero_sprite_falls_back_to_a_marker(tmp_path, monkeypatch, cap
 
 
 def test_point_actor_in_a_prefab_renders(tmp_path, monkeypatch):
-    # Pins the prefab-preview `brushes_only=False`: a prefab's point actor must not be dropped
+    # Pins the prefab-diagram `brushes_only=False`: a prefab's point actor must not be dropped
     # pre-render (the stash path had it; prefab was missed).
     from uedcli import stashlib
     from uedcli.normalize import canonical_actor_t3d
@@ -585,7 +585,7 @@ def test_point_actor_in_a_prefab_renders(tmp_path, monkeypatch):
                               Actor(name="Torch", cls="Engine.Light", location=(0, 0, 0)))},
                           order=["Torch"], packages=[], meta={"anchor": ["0", "0", "0"], "ts": 1})
     out = tmp_path / "o.png"
-    args = SimpleNamespace(cmd="prefab", sub="preview", project=str(proj), name="box", names=[],
+    args = SimpleNamespace(cmd="prefab", sub="diagram", project=str(proj), name="box", names=[],
                            prefab_dir=None, view="top", layout="single", annotate="all", iso_angle=30.0,
                            frame=None, highlight=None, focus=None, frame_tightness=0.8, show="",
                            size=128, out=str(out))
@@ -1030,5 +1030,5 @@ def test_old_grid_flag_is_gone(capsys):
     from uedcli.cli import main as cli
     parser = cli.build_parser()
     with pytest.raises(SystemExit):                    # --grid was renamed, not aliased
-        parser.parse_args(["actor", "preview", "W", "--out", "o.png", "--grid", "4"])
+        parser.parse_args(["actor", "diagram", "W", "--out", "o.png", "--grid", "4"])
     assert "unrecognized arguments: --grid" in capsys.readouterr().err

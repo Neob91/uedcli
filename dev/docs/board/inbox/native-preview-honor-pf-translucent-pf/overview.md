@@ -6,7 +6,7 @@ summary = "native preview: honor PF_Translucent / PF_Modulated (blended transpar
 
 # native preview: honor `PF_Translucent` / `PF_Modulated`
 
-`level preview --native` renders **translucent** and **modulated** surfaces (glass, water sheets,
+`level photo --native` renders **translucent** and **modulated** surfaces (glass, water sheets,
 additive glows, screen overlays) as fully OPAQUE — a draft-tier limitation. `PF_Masked` (the
 alpha-TEST cutout — grates/fences/foliage) is handled separately (its own change); this item is the
 harder, BLENDED case.

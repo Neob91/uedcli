@@ -1,10 +1,10 @@
 +++
 priority = "p2"
 kind = "debug"
-summary = "`level preview --native` checkerboards an unresolvable texture ref and warns — a `conventions.md`-Rejected warn-and-continue"
+summary = "`level photo --native` checkerboards an unresolvable texture ref and warns — a `conventions.md`-Rejected warn-and-continue"
 +++
 
-# `level preview --native` checkerboards an unresolvable texture ref and warns — a `conventions.md`-Rejected warn-and-continue
+# `level photo --native` checkerboards an unresolvable texture ref and warns — a `conventions.md`-Rejected warn-and-continue
 
 `preview_native._TextureTable` renders a
 checkerboard for any ref it cannot resolve and prints one stderr warning, then exits 0 with an

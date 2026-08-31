@@ -1,4 +1,4 @@
-# A world-space gridline overlay for `actor preview`'s orthographic panes
+# A world-space gridline overlay for `actor diagram`'s orthographic panes
 
 **Status:** spec (ephemeral — fold into `architecture.md` + `docs/usage.md` on build, then this file may
 be deleted).
@@ -11,7 +11,7 @@ reported as a **bounding box at the top** of the pane, not as per-line labels.
 
 ## 1. The gap
 
-`actor preview` frames a scene automatically: `_framing` fits the projected geometry to the pane and
+`actor diagram` frames a scene automatically: `_framing` fits the projected geometry to the pane and
 derives `scale = draw / span`. Nothing in the output says what that scale is. So the image answers
 "what shape is this" and cannot answer either of:
 
@@ -23,7 +23,7 @@ derives `scale = draw / span`. Nothing in the output says what that scale is. So
   carried back into a `Location`.
 
 UnrealEd's own 2D viewports solve this with a two-tier world gridline lattice — confirmed against
-`Editor.dll` (`dev/docs/spikes/2026-08-30-unrealed-ortho-grid-density/`). `actor preview` has no
+`Editor.dll` (`dev/docs/spikes/2026-08-30-unrealed-ortho-grid-density/`). `actor diagram` has no
 equivalent, so every judgement about scale or position has to leave the image and go back to
 `actor bbox` / `actor show`.
 
@@ -51,8 +51,8 @@ Per layout:
   picks **its own** step from **its own** scale. That is the intended behaviour, not a defect: a pane
   zoomed to one brush should get a finer grid than the whole-scene pane above it.
 
-This is the shared `preview.py` renderer, so `stash preview` and `prefab preview` inherit it. It does
-**not** touch `level preview --native` (`preview_native.py`), a separate renderer — a gridline overlay
+This is the shared `preview.py` renderer, so `stash diagram` and `prefab diagram` inherit it. It does
+**not** touch `level photo --native` (`preview_native.py`), a separate renderer — a gridline overlay
 there is out of scope and not filed by this item.
 
 ## 3. Port UnrealEd's `DrawGridSection`
@@ -291,7 +291,7 @@ Neither state changes anything in §§3–6. This item does not depend on that o
 
 - Emphasising the world-origin axes. A natural third tier, but not ruled in; raise it as a question if
   reading the first renders makes it feel missing.
-- A gridline overlay for `level preview --native` (§2).
+- A gridline overlay for `level photo --native` (§2).
 - Any grid on a future perspective mode (`dev/docs/spikes/2026-08-05-perspective-in-preview-py/`).
 
 ## 9. Tests
@@ -331,7 +331,7 @@ Neither state changes anything in §§3–6. This item does not depend on that o
 - **Empty scene** — no gridlines and no caption; the renderer returns before a framing exists, so there
   is no scale to draw against.
 - **Line weight** — 1 px at every `--size`, matching the existing wire strokes.
-- **All three verbs** — `actor preview`, `stash preview` and `prefab preview` share
+- **All three verbs** — `actor diagram`, `stash diagram` and `prefab diagram` share
   `render_actors_to_out`, so each gets the flag and the same behaviour.
 - **Golden** — one small committed golden PNG for a fixed scene at a fixed `--size` and `--grid-size`,
   so a change to the lattice geometry or the greys is visible in review rather than silent.

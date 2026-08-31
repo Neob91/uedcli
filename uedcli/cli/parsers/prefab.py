@@ -21,7 +21,7 @@ def register(sub) -> None:
                         help="print a one-line-per-actor summary instead of the full T3D")
     # allow_abbrev=False: the retired `--grid` is now a unique abbreviation of `--grid-size` —
     # without this it would silently parse as `--grid-size` instead of a clean unknown-arg error.
-    pfprev = pfsub.add_parser("preview", allow_abbrev=False,
+    pfprev = pfsub.add_parser("diagram", allow_abbrev=False,
                               help="composite render of a prefab")
     pfprev.add_argument("name", help="prefab name to render")
     pfprev.add_argument("names", nargs="*", help="actor subset; empty = whole set")

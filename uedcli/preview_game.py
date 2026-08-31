@@ -1,4 +1,4 @@
-"""`level preview --game` — the faithful in-game backend. Its spec is
+"""`level photo --game` — the faithful in-game backend. Its spec is
 `spec-ingame-preview-design.md` in board item `level-preview-game` (gate-folded 2026-07-16),
 alongside that item's `plan.md`.
 
@@ -47,7 +47,7 @@ TRAVEL_TIMEOUT_S = 480          # cold big-map travel can take minutes (game-boo
 
 
 class GamePreviewError(Exception):
-    """User-facing --game preview failure (→ stderr + exit 2)."""
+    """User-facing --game photo failure (→ stderr + exit 2)."""
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -82,7 +82,7 @@ def _substrate_row(game: str) -> dict:
     row = SUBSTRATES.get(game)
     if row is None:
         raise GamePreviewError(
-            f"game {game!r} has no --game preview substrate entry yet (known: "
+            f"game {game!r} has no --game photo substrate entry yet (known: "
             f"{', '.join(sorted(SUBSTRATES))}); add its row to preview_game.SUBSTRATES")
     return row
 
@@ -179,7 +179,7 @@ def materialized_dx(project, level_name: str, level, *, rebuild: bool,
                              state_dir=config.state_dir(project.root, create=True),
                              out_path=str(target), overwrite=True)
     if result.rc != 0:
-        raise GamePreviewError(f"materialize for preview failed: {result.message}")
+        raise GamePreviewError(f"materialize for photo failed: {result.message}")
     _prune_prefix(d, "materialized", protect=target)
     return target
 
@@ -411,7 +411,7 @@ def _acquire_lock() -> int:
             if time.time() > deadline:
                 os.close(fd)
                 raise GamePreviewError(
-                    f"another uedcli --game preview has held the container lock for "
+                    f"another uedcli --game photo has held the container lock for "
                     f">{WARM_LOCK_TIMEOUT_S//60} min — it is probably still running; retry "
                     f"shortly. Only if you are certain none is running: `docker rm -f "
                     f"{_warm_name()}` and remove {config._user_home() / 'game-preview.lock'}"
@@ -580,7 +580,7 @@ def _exec_batch(name: str, req: dict, timeout: float):
 
 def list_actors(*, project, user_config, game: str, map_path: str, cls: str, sample: int) -> str:
     """QUERY mode: travel to a `--map` and print its actors of `cls` (or N evenly-sampled) as
-    `Name x y z` lines — for discovering `@actor` refs to compose into preview shots. No screenshots."""
+    `Name x y z` lines — for discovering `@actor` refs to compose into shots. No screenshots."""
     lock_fd = None
     try:
         row = _substrate_row(game)
@@ -657,7 +657,7 @@ def render_shots(*, shots: list[Shot], out_dir: Path, size: tuple[int, int],
             shot_field = {"unresolved": [dataclasses.asdict(s) for s in shots]}
         else:
             if level is None or level_name is None:
-                raise GamePreviewError("no trunk level to preview (select one, or pass --map)")
+                raise GamePreviewError("no trunk level to shoot (select one, or pass --map)")
             if not trunk_has_playerstart(level):
                 raise GamePreviewError(
                     f"level {level_name!r} has no PlayerStart — the game cannot spawn a pawn "
@@ -711,7 +711,7 @@ def render_shots(*, shots: list[Shot], out_dir: Path, size: tuple[int, int],
         raise
     except Exception as e:                        # any stray error (setup, docker hang, parse) must
         raise GamePreviewError(                   # be a named exit-2, never a bare traceback (L2)
-            f"--game preview failed unexpectedly ({type(e).__name__}: {e})") from e
+            f"--game photo failed unexpectedly ({type(e).__name__}: {e})") from e
     finally:
         if lock_fd is not None:
             _release_lock(lock_fd)

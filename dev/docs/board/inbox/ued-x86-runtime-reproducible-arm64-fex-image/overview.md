@@ -14,7 +14,7 @@ snapshot, so a fresh machine can't reproduce it.
 
 ## Out-of-box status (what a clean checkout gets)
 
-- **Works out-of-box** — the dev toolchain: `bin/test`, `bin/uedcli`, and `level preview --native`
+- **Works out-of-box** — the dev toolchain: `bin/test`, `bin/uedcli`, and `level photo --native`
   need only `python3.12` on PATH + Docker + network. The Rust ext builds in a container automatically
   (`dev-container/Dockerfile`) and installs into the venv.
 - **Does NOT work out-of-box** — `level materialize` (and `--game`) on arm64: it needs the

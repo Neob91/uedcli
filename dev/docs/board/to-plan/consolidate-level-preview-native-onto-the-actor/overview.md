@@ -1,13 +1,13 @@
 +++
 priority = "p2"
 kind = "implement"
-summary = "Consolidate `level preview --native` onto the `actor preview` renderer"
+summary = "Consolidate `level photo --native` onto the `actor diagram` renderer"
 +++
 
-# Consolidate `level preview --native` onto the `actor preview` renderer
+# Consolidate `level photo --native` onto the `actor diagram` renderer
 
-Owner intent (2026-08-05): the two offline renderers should become one. **Keep `actor preview`'s
-logic (`preview.py` + the faithful `build_geometry_bspcsg` CSG core); retire `level preview
+Owner intent (2026-08-05): the two offline renderers should become one. **Keep `actor diagram`'s
+logic (`preview.py` + the faithful `build_geometry_bspcsg` CSG core); retire `level photo
 --native`'s logic (`preview_native.py`'s Rust `render.rs` rasterizer + the default `build_geometry`
 core), which is buggy.** Full spec written (`spec.md`), all owner rulings folded (offline flag = `--offline`); the spike
 `2026-08-05-perspective-in-preview-py` resolved both gated points (perspective fits `preview.py` as a
@@ -18,22 +18,22 @@ ready to plan.
 
 The two renderers are not the same shape:
 
-- `actor preview` (`preview.py`) is an **orthographic schematic** — top/front/side/iso panes, no
+- `actor diagram` (`preview.py`) is an **orthographic schematic** — top/front/side/iso panes, no
   camera. It uses the faithful CSG core.
-- `level preview --native` (`preview_native.py`) renders **freely-posed PERSPECTIVE** whole-level
+- `level photo --native` (`preview_native.py`) renders **freely-posed PERSPECTIVE** whole-level
   stills from the shared SHOT grammar (`at:/rot:/look:/orbit:`, `--fov`). It uses the default CSG
   core (the buggy one) and the Rust rasterizer.
 
-So "keep actor preview's logic" cannot be a straight swap: `preview.py` has no perspective camera and
+So "keep actor diagram's logic" cannot be a straight swap: `preview.py` has no perspective camera and
 no SHOT-pose projection. **Owner decision (2026-08-05): add a perspective camera to `preview.py` and
-wire `level preview --native` to the same render path `actor preview` uses — one shared renderer.**
+wire `level photo --native` to the same render path `actor diagram` uses — one shared renderer.**
 Ship pure-Python (a Rust rasterizer is a planned follow-on); a missing texture batch-reports then
 exits 2. See `spec.md` "Decisions".
 
 ## Why this is wanted
 
 Every `--native` render bug is in the retired-candidate code, and several are already *fixed* on the
-`actor preview` side (concave fill, missing-texture refusal, the faithful doorway CSG). Consolidating
+`actor diagram` side (concave fill, missing-texture refusal, the faithful doorway CSG). Consolidating
 closes the divergence and the maintenance of a second rasterizer/CSG core.
 
 ## Bug items this would subsume or moot (verify each on build)
@@ -54,7 +54,7 @@ closes the divergence and the maintenance of a second rasterizer/CSG core.
 ## Related, not subsumed
 
 - `actor-preview-parity-direction-home` (owner-question) — the `direction/` home for actor-preview
-  render rules; a consolidation would extend it to cover the offline `level preview` tier.
+  render rules; a consolidation would extend it to cover the offline `level photo` tier.
 - `actor-preview-faces-textured-does-not-sort-the` — CSG-order sorting; applies to any shared solve.
 - `actor-preview-bspcsg-starts-from-an-empty-world` — the shared core's empty-vs-solid seed.
 

@@ -59,7 +59,7 @@ Two consequences:
   typed compare exists to remove.
 - **The identity hash and the compare view are separate.** The compare view may fold every
   editor-owned representation difference. The content hash stays **pure and schema-free**, because it
-  is also the preview build-cache key: every equivalence folded into a cache key is a chance to serve
+  is also the photo build-cache key: every equivalence folded into a cache key is a chance to serve
   a map built from something else, whereas a stricter hash can only cost a rebuild.
 
 ### The write side never omits a property to mean zero

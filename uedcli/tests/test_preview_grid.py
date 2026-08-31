@@ -230,7 +230,7 @@ def test_too_coarse_step_is_reported_unescalated_in_the_caption():
 
 def test_grid_size_parses_on_all_three_preview_verbs():
     p = cli.build_parser()
-    for argv in (["actor", "preview", "A"], ["stash", "preview", "id"], ["prefab", "preview", "name"]):
+    for argv in (["actor", "diagram", "A"], ["stash", "diagram", "id"], ["prefab", "diagram", "name"]):
         assert p.parse_args(argv).grid_size is None
         assert p.parse_args(argv + ["--grid-size", "64"]).grid_size == 64
 
@@ -250,7 +250,7 @@ def _args(proj, out, **kw):
     # `annotate="none"` (no on-face poly-index decals) so a grid-colour presence/absence check is
     # never confused by a decal's own translucent halo blend, which can coincidentally land on the
     # exact same RGB as a grid tier.
-    base = dict(cmd="actor", sub="preview", project=str(proj), names=["B"], from_t3d=None,
+    base = dict(cmd="actor", sub="diagram", project=str(proj), names=["B"], from_t3d=None,
                 view="top", layout="single", annotate="none", iso_angle=30.0, frame=None,
                 frame_tightness=0.8, highlight=None, focus=None, show="", size=128,
                 out=str(out), brush_colors="csg", grid_size=None)
@@ -538,7 +538,7 @@ _ARCH_T3D = (
 
 
 def _stash_args(proj, out, **kw):
-    base = dict(cmd="stash", sub="preview", project=str(proj), container="c", id="archway",
+    base = dict(cmd="stash", sub="diagram", project=str(proj), container="c", id="archway",
                 names=[], view="top", layout="single", annotate="all", iso_angle=30.0, frame=None,
                 frame_tightness=0.8, highlight=None, focus=None, show="", size=128,
                 out=str(out), brush_colors="csg", grid_size=64)
@@ -573,7 +573,7 @@ def test_grid_size_renders_through_prefab_preview(tmp_path, monkeypatch):
     stashlib.write_prefab(proj / "prefabs", "box", full_level={"Arch": _ARCH_T3D}, order=["Arch"],
                           packages=[], meta={"anchor": ["0", "0", "0"], "ts": 1})
     out = tmp_path / "o.png"
-    args = SimpleNamespace(cmd="prefab", sub="preview", project=str(proj), name="box", names=[],
+    args = SimpleNamespace(cmd="prefab", sub="diagram", project=str(proj), name="box", names=[],
                            prefab_dir=None, view="top", layout="single", annotate="all",
                            iso_angle=30.0, frame=None, highlight=None, focus=None,
                            frame_tightness=0.8, show="", size=128, out=str(out), brush_colors="csg",

@@ -15,7 +15,7 @@ collision) plus redundancy (the value already names the kind). Objections to the
 **(1) the KIND distinction is load-bearing, not incidental** — same *format*, genuinely different
 *kinds*: a **level** materializes to a playable `.dx`/`.unr` (git-tracked domain object), a **stash**
 is machine-local throwaway (captured/applied, no world), a **prefab** is a git-committed shareable
-library artifact (placed; `packages`+`meta.json` siblings). `level materialize`/`preview` are
+library artifact (placed; `packages`+`meta.json` siblings). `level materialize`/`photo` are
 level-only *because a stash/prefab has no world to build*. A flat `tree create/materialize/apply`
 doesn't erase the kinds — only the word for them — so you'd trade named kinds (clear) for per-verb
 "not valid for this kind" errors (worse). **(2) "tree" is already taken:** terminology (2026-06-23)

@@ -9,7 +9,7 @@ artifact**: never the merge unit, never edited.
 - Every `actor`/`brush`/`poly`/`vertex` read and mutation is **model-side compute** against the T3D
   — no `docker exec`, no `MAP EXPORT`, no liveness check during a content verb.
 - **UnrealEd is not in the read/edit loop.** It is reached at one seam, `level materialize` (which
-  `level preview --game` calls internally). Nothing else drives it.
+  `level photo --game` calls internally). Nothing else drives it.
 - The LLM issues semantic by-name commands; T3D is internal plumbing.
 
 **A level is edited on an ordinary git feature branch** and merged into trunk with `git merge`. There
@@ -58,7 +58,7 @@ editor and no UCC (UCC is the test oracle only). After import the only remaining
 
 ### Preview is two tiers behind one verb
 
-`level preview` shares one batched pose grammar (`at:…;rot:…` / `look:@actor` / `orbit:…`):
+`level photo` shares one batched pose grammar (`at:…;rot:…` / `look:@actor` / `orbit:…`):
 
 - **`--game` (the default) — faithful.** Delivers the map into a warm per-user headless game
   container and renders truly-lit first-person stills: freezes the world, ghosts the player, poses
@@ -101,17 +101,17 @@ The editor drives neither tier; the editor-screenshot renderer is deleted.
   path schema-free.
 - **A lenient "import anyway, keep unresolved refs + warn" mode** — boarded, not adopted: produces a
   trunk that won't re-materialize.
-- **`level preview` as an interactive VNC handoff** — VNC is dev-debug; batched snapshots avoid a
+- **`level photo` as an interactive VNC handoff** — VNC is dev-debug; batched snapshots avoid a
   teardown/identity model.
-- **One shot per preview invocation** — the boot is the expensive part; a pose list renders in one
+- **One shot per photo invocation** — the boot is the expensive part; a pose list renders in one
   boot.
-- **The editor as the preview driver** — the headless editor render can't be freely posed
+- **The editor as the photo driver** — the headless editor render can't be freely posed
   (`CAMERA ALIGN` auto-frames from one angle) and editor-lit isn't in-game baked lighting.
-- **Previewing in another tool or its session** — uedcli owns the trunk, materialize, the hash and
+- **Shooting in another tool or its session** — uedcli owns the trunk, materialize, the hash and
   the verb.
-- **Always re-materializing before a preview** — a level-hash freshness check reuses an up-to-date
+- **Always re-materializing before a photo** — a level-hash freshness check reuses an up-to-date
   build.
-- **Native replacing the in-game preview** (loses the lit/sky/mesh ground truth), or **native as an
+- **Native replacing the in-game photo** (loses the lit/sky/mesh ground truth), or **native as an
   interim tier to be demoted** once `--game` lands — the draft tier stays.
 - **Keeping `--native` as the default and merely documenting its blind spots** — an agent does not
   read caveats mid-loop, so a misleading render is the problem; `--game` is the default and `--native`

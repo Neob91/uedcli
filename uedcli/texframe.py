@@ -1,6 +1,6 @@
 """Face math shared across modules: a face's outward normal from its winding, and where its authored
 texture sits on it. Who reads what, today — `newell`: `preview.py`, `query.py`, `surface.py`,
-`polyalign.py`; `world_uv_frame`: `preview_native.py` (the `level preview --native` backend) and
+`polyalign.py`; `world_uv_frame`: `preview_native.py` (the `level photo --native` backend) and
 `polyalign.py` (the align verbs); `poly_flags_int`: `preview_native.py`.
 
 A LEAF, on purpose: stdlib, `uedcli.rotation` and `uedcli.builders` only. `preview.py` needs

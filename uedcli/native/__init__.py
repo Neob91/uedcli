@@ -2,7 +2,7 @@
 
 The proven byte-exact UE1 package serializers/parsers kept in Python, shared by
 `level import` (`mapimport`), the built-model health check (`bsp.builtmodel`), and the
-native `level preview` path. The BSP/CSG compute itself lives in the Rust `uedcli_native`
+native `level photo` path. The BSP/CSG compute itself lives in the Rust `uedcli_native`
 extension.
 
 Module map:

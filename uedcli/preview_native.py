@@ -1,4 +1,4 @@
-"""`level preview --native` — the offline draft backend (spec
+"""`level photo --native` — the offline draft backend (spec
 board item `de-containerization-follow-on-spec-items`). Zero docker, zero editor, zero game:
 the trunk is carved in-process by the faithful Rust CSG core (`uedcli_native.build_geometry_bspcsg`,
 the incremental `bspBrushCSG` port that matches the editor's surviving surfaces), each
@@ -53,7 +53,7 @@ _CHECKER_SIZE, _CHECKER_CELL = 64, 8
 
 
 class NativePreviewError(Exception):
-    """User-facing native-preview failure (→ stderr + exit 2, never a traceback)."""
+    """User-facing native-photo failure (→ stderr + exit 2, never a traceback)."""
 
 
 # --------------------------------------------------------------------- brush inputs
@@ -128,11 +128,23 @@ def _mover_actor_world_polys(actor) -> list[tuple[list, object, object]]:
     (`Location + L·(v − PrePivot)`, `L = actor_linear` — the full scale/rotation map, so a scaled
     mover renders at its real size). A mirrored `L` (`det < 0`) reverses each ring (the native
     renderer is winding-agnostic, so this is only for consistency with the CSG path). Returns
-    `(world_verts, actor, poly)` so the UV frame comes from the same authored fields."""
-    from .transform import flip_winding
+    `(world_verts, actor, poly)` so the UV frame comes from the same authored fields.
+
+    A degenerate (non-invertible) `MainScale`/`PostScale` exits 2 naming the actor, same as a
+    world-CSG brush (`brush_marshal._build_brush_input`'s `reject_degenerate`) — movers skip world
+    CSG entirely (`_in_world_csg`), so without this check here a degenerate mover would silently
+    collapse to a zero-area poly instead of refusing."""
+    from .rotation import actor_main_scale, actor_post_scale
+    from .transform import flip_winding, reject_degenerate
     loc = tuple(float(c) for c in (actor.location or (0, 0, 0)))
     pp = tuple(float(c) for c in actor_prepivot(actor))
     L = actor_linear(actor)
+    scaled = not (actor_main_scale(actor).is_identity() and actor_post_scale(actor).is_identity())
+    if scaled:
+        try:
+            reject_degenerate(L, actor.name)
+        except DegenerateTransformError as e:
+            raise NativePreviewError(str(e)) from e
     flip = L is not None and flip_winding(L)
     out = []
     for poly in actor.brush.polys:
@@ -266,7 +278,7 @@ def build_scene(level, search_files, index) -> tuple[list, list]:
         import uedcli_native
     except ImportError:
         raise NativePreviewError(
-            "the uedcli_native extension is not built — `level preview --native` needs it "
+            "the uedcli_native extension is not built — `level photo --native` needs it "
             "(build with `maturin develop`, or run bin/test once)") from None
 
     brushes, join = _brush_inputs(level, index)
@@ -339,7 +351,7 @@ class SolvedSurface:
 
 @dataclass(frozen=True)
 class SolvedWorld:
-    """The CSG solve output `actor preview --faces textured` draws: the surviving world surfaces
+    """The CSG solve output `actor diagram --faces textured` draws: the surviving world surfaces
     plus the movers (excluded from world CSG, drawn as a separate overlay)."""
     world_surfaces: list  # list[SolvedSurface]
     mover_polys: list     # list[(world_verts, actor, poly)]
@@ -348,7 +360,7 @@ class SolvedWorld:
 def solve_world_surfaces(actors, index, search_files=None) -> SolvedWorld:
     """Run the native CSG solve over an ad-hoc actor list (in the order given — the actor-set order
     IS the CSG evaluation order) through the FAITHFUL `build_geometry_bspcsg` core, and return the
-    surviving world surfaces + the movers. This is the `actor preview --faces textured` engine: the
+    surviving world surfaces + the movers. This is the `actor diagram --faces textured` engine: the
     world is solved in isolation from a SOLID world, so an add not inside subtracted space leaves no
     surface. `index` is a `classindex.ClassIndex`; movers are excluded from world CSG (raising
     `classindex.ClassRefError` straight through on an unresolvable class). Raises `NativePreviewError`
@@ -357,7 +369,7 @@ def solve_world_surfaces(actors, index, search_files=None) -> SolvedWorld:
         import uedcli_native
     except ImportError:
         raise NativePreviewError(
-            "the uedcli_native extension is not built — `actor preview --faces textured` needs it "
+            "the uedcli_native extension is not built — `actor diagram --faces textured` needs it "
             "(build with `maturin develop`, or run bin/test once)") from None
 
     brushes, join = [], []

@@ -1,4 +1,4 @@
-"""`actor preview` — model-only, host-side still shots of actors (no editor, no container).
+"""`actor diagram` — model-only, host-side still shots of actors (no editor, no container).
 
 Two forms, one entry:
 
@@ -21,15 +21,15 @@ from ....model import parse_t3d_actors
 
 
 def run(args) -> int:
-    """`actor preview` entry. Dispatch routes every `actor preview` here."""
+    """`actor diagram` entry. Dispatch routes every `actor diagram` here."""
     if getattr(args, "from_t3d", None):
         return _from_t3d(args)
-    # Every non-T3D preview resolves the trunk level source first — before the empty-stdin no-op, so
+    # Every non-T3D diagram resolves the trunk level source first — before the empty-stdin no-op, so
     # the resolution order matches the pre-move dispatch flow (no project ⇒ clean exit 2).
     src = level_sources.resolve_level_source(args)
     if not args.names:                                      # no names AND no `-`: nothing to render
         raise CommandError(
-            "actor preview: no actors to render — pass names or - (a piped set)")
+            "actor diagram: no actors to render — pass names or - (a piped set)")
     raw = targets.resolve_target_names(args.names)         # `-` → names from stdin (spec §1)
     if not raw:
         return 0                                            # `-` with empty stdin: no-op, exit 0
@@ -44,7 +44,7 @@ def run(args) -> int:
 
 
 def _from_t3d(args) -> int:
-    """`actor preview --from-t3d <FILE…|->` — render every actor in the given snippet(s), NO level
+    """`actor diagram --from-t3d <FILE…|->` — render every actor in the given snippet(s), NO level
     required. Multiple files concatenate in order; duplicate Names are uniquified so all render."""
     if args.names:
         raise CommandError("--from-t3d is mutually exclusive with actor names (T3D mode "

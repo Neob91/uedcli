@@ -12,7 +12,7 @@ UED22's v469 UCC can't build the DeusEx driver `UedPreviewDX`. **But for an ENGI
 Verified live 2026-08-03: the engine-only `UedPreview.u` compiled with regular UED22 v469 UCC LOADS
 AND RUNS inside the retail v68 `DeusEx.exe` (versions are one apart, 68 vs 69; engine-only classes
 reference only stock `Engine`/`Core`/`IpDrv`, resolved by name). Real SoftDrv frames captured; uedcli
-`actor preview --faces textured` alignment MATCHES the engine pixels (F-glyph orientation, handedness,
+`actor diagram --faces textured` alignment MATCHES the engine pixels (F-glyph orientation, handedness,
 tiling density, quadrant layout, registration dot).
 
 Two GUI-editor gotchas cleared (not blockers): build the map via headless `Editor.ExecCommandlet`

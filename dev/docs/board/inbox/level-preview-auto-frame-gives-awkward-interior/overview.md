@@ -1,10 +1,10 @@
 +++
 priority = "p2"
 kind = "unknown"
-summary = "`level preview` auto-frame gives awkward interior compositions; no \"hero\" exterior shot"
+summary = "`level photo` auto-frame gives awkward interior compositions; no \"hero\" exterior shot"
 +++
 
-# `level preview` auto-frame gives awkward interior compositions; no "hero" exterior shot
+# `level photo` auto-frame gives awkward interior compositions; no "hero" exterior shot
 
 p2.
 The overview (`all`) frames the enclosing room subtract from INSIDE at wall height → you get a

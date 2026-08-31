@@ -1,4 +1,4 @@
-May `actor preview` take a NumPy dependency to vectorize its hot loops?
+May `actor diagram` take a NumPy dependency to vectorize its hot loops?
 
 ## Context
 

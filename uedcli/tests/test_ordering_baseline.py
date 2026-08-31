@@ -7,13 +7,13 @@ Covers the spec's source-free and validation-order guarantees:
 - `actor order` / `actor add --order <non-last>` reject a stash/prefab target BEFORE resolving a
   project or level source;
 - `actor folder|label` on a stash/prefab reject before source resolution too;
-- `actor preview --from-t3d` routes before any level-source resolution;
+- `actor diagram --from-t3d` routes before any level-source resolution;
 - empty-stdin behaviour, INCLUDING that source resolution already happens before the no-op (so an
   empty-stdin verb outside a project errors, inside a project no-ops without loading);
 - `level materialize` validates `--out` before resolving the project/load set;
-- `level preview` validates its shot/mode flags before resolving the project;
+- `level photo` validates its shot/mode flags before resolving the project;
 - `_mover_index` translation of a missing project vs a missing games config vs an empty path;
-- `actor preview`'s tailored filled-render mover error, and its point-only no-op that never
+- `actor diagram`'s tailored filled-render mover error, and its point-only no-op that never
   resolves a class index;
 - `actor find` without `--prop`/`--subclass-of` never touches the schema.
 """
@@ -110,7 +110,7 @@ def test_actor_folder_and_label_on_a_box_reject_before_resolution(monkeypatch, c
     assert calls == []
 
 
-# --- actor preview --from-t3d routes before source resolution ---------------------------------
+# --- actor diagram --from-t3d routes before source resolution ---------------------------------
 
 def test_actor_preview_from_t3d_runs_before_level_source_resolution(monkeypatch):
     from uedcli.cli.commands.actor import preview as actor_preview
@@ -118,7 +118,7 @@ def test_actor_preview_from_t3d_runs_before_level_source_resolution(monkeypatch)
     monkeypatch.setattr(level_sources, "resolve_level_source",
                         lambda a: seen.append("level_source") or _fail("source resolved"))
     monkeypatch.setattr(actor_preview, "_from_t3d", lambda a: seen.append("from_t3d") or 0)
-    rc = D.dispatch(_ns(cmd="actor", sub="preview", from_t3d=["snippet.t3d"]))
+    rc = D.dispatch(_ns(cmd="actor", sub="diagram", from_t3d=["snippet.t3d"]))
     assert rc == 0
     assert seen == ["from_t3d"]                            # from-t3d handled, source never resolved
 
@@ -161,7 +161,7 @@ def test_empty_stdin_outside_a_project_errors_at_source_resolution(monkeypatch, 
     assert "not in a uedcli project" in capsys.readouterr().err
 
 
-# --- validation before expensive resolution: materialize / preview ----------------------------
+# --- validation before expensive resolution: materialize / photo ----------------------------
 
 def test_materialize_validates_out_before_resolving_the_project(monkeypatch, capsys):
     called = []
@@ -175,7 +175,7 @@ def test_materialize_validates_out_before_resolving_the_project(monkeypatch, cap
 def test_preview_validates_flags_before_resolving_the_project(monkeypatch, capsys):
     called = []
     monkeypatch.setattr(resources, "resolve_project", lambda a: called.append("project"))
-    rc = D.dispatch(_ns(cmd="level", sub="preview", native=False, fov=90.0, map=None,
+    rc = D.dispatch(_ns(cmd="level", sub="photo", native=False, fov=90.0, map=None,
                         rebuild=None, keep_alive=None, size="1280x960", list_actors=None,
                         out_dir="s", shots=[], sample=0))
     assert rc == 2
@@ -212,7 +212,7 @@ def test_mover_index_empty_path_translates_naming_verb(monkeypatch):
     assert "no package search path" in ei.value.message
 
 
-# --- actor preview filled-render mover error + point-only no-op --------------------------------
+# --- actor diagram filled-render mover error + point-only no-op --------------------------------
 
 def _brush_actor(name="B"):
     return make_brush_actor(name, cube(64.0, 64.0, 64.0), csg="subtract")
@@ -223,7 +223,7 @@ def test_preview_fill_wraps_project_error_with_a_tailored_message(monkeypatch):
                         lambda args, verb, project=None:
                         (_ for _ in ()).throw(D.ProjectError("not in a uedcli project")))
     with pytest.raises(D.CommandError) as ei:
-        rendering.preview_movers([_brush_actor()], _ns(cmd="actor", sub="preview"), "flat")
+        rendering.preview_movers([_brush_actor()], _ns(cmd="actor", sub="diagram"), "flat")
     msg = ei.value.message
     assert "Engine.Mover" in msg and "wire needs neither" in msg
 
@@ -233,7 +233,7 @@ def test_preview_point_only_selection_never_resolves_a_class_index(monkeypatch):
     monkeypatch.setattr(resources, "mover_index",
                         lambda *a, **k: called.append("mover_index") or mock.Mock(empty=False))
     point = Actor(name="P", cls="Engine.Light", location=(0, 0, 0), brush=None)
-    assert rendering.preview_movers([point], _ns(cmd="actor", sub="preview"), "flat") == frozenset()
+    assert rendering.preview_movers([point], _ns(cmd="actor", sub="diagram"), "flat") == frozenset()
     assert called == []                                   # no brushes → no class index resolved
 
 
@@ -362,10 +362,10 @@ def test_failing_save_aborts_before_any_output(monkeypatch, capsys):
     assert "filesystem error: disk full" in capsys.readouterr().err
 
 
-# --- stash / prefab preview prologue order ----------------------------------------------------
+# --- stash / prefab diagram prologue order ----------------------------------------------------
 
 def test_stash_preview_validates_existence_before_read_and_render(monkeypatch):
-    """Stash preview resolves the project/register, then checks existence, then reads, then renders."""
+    """Stash diagram resolves the project/register, then checks existence, then reads, then renders."""
     events = []
 
     class Reg:
@@ -381,7 +381,7 @@ def test_stash_preview_validates_existence_before_read_and_render(monkeypatch):
                         lambda a: events.append(("register",)) or Reg())
     monkeypatch.setattr(rendering, "render_actors_to_out",
                         lambda actors, args: events.append(("render",)) or 0)
-    rc = D.dispatch(_ns(cmd="stash", sub="preview", id="bay", names=[], summary=False))
+    rc = D.dispatch(_ns(cmd="stash", sub="diagram", id="bay", names=[], summary=False))
     assert rc == 0
     kinds = [e[0] for e in events]
     assert kinds[0] == "register" and kinds[-1] == "render"
@@ -403,7 +403,7 @@ def test_stash_preview_not_found_stops_before_read_and_render(monkeypatch, capsy
     monkeypatch.setattr(stash_cmd, "_resolve_stash_register", lambda a: Reg())
     monkeypatch.setattr(rendering, "render_actors_to_out",
                         lambda actors, args: events.append(("render",)) or 0)
-    rc = D.dispatch(_ns(cmd="stash", sub="preview", id="ghost", names=[], summary=False))
+    rc = D.dispatch(_ns(cmd="stash", sub="diagram", id="ghost", names=[], summary=False))
     assert rc == 2
     assert "stash not found" in capsys.readouterr().err
     assert events == [("exists", "ghost")]                # no read, no render
@@ -416,7 +416,7 @@ def test_prefab_preview_validates_name_before_any_filesystem_op(monkeypatch, cap
                         lambda root: events.append(("list",)) or [])
     monkeypatch.setattr(rendering, "render_actors_to_out",
                         lambda actors, args: events.append(("render",)) or 0)
-    rc = D.dispatch(_ns(cmd="prefab", sub="preview", name="../escape", names=[], summary=False))
+    rc = D.dispatch(_ns(cmd="prefab", sub="diagram", name="../escape", names=[], summary=False))
     assert rc == 2                                        # name grammar rejected first
     assert events == []                                  # no list_prefabs, no read, no render
 
@@ -430,6 +430,6 @@ def test_prefab_preview_lists_then_reads_then_renders(monkeypatch):
                         lambda root, name: events.append(("read", name)) or ({}, [], [], {}, {}))
     monkeypatch.setattr(rendering, "render_actors_to_out",
                         lambda actors, args: events.append(("render",)) or 0)
-    rc = D.dispatch(_ns(cmd="prefab", sub="preview", name="door", names=[], summary=False))
+    rc = D.dispatch(_ns(cmd="prefab", sub="diagram", name="door", names=[], summary=False))
     assert rc == 0
     assert events == [("list",), ("read", "door"), ("render",)]

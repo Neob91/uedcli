@@ -1,11 +1,11 @@
-# Native offline preview — `level preview --native` (design spec)
+# Native offline preview — `level photo --native` (design spec)
 
 **Status:** draft (spec gate pending). Ephemeral per-feature scratch — once built, fold the durable
 parts into `architecture.md` (+ any engine facts into `unrealed/*.md`) and keep the decisions in
 `decisions.md`.
 
 **Decisions captured (Andrzej, 2026-07-16):** see `decisions.md` entry
-`2026-07-16 12:13 UTC — level preview becomes two-backend`. The choices + rejected alternatives live
+`2026-07-16 12:13 UTC — level photo becomes two-backend`. The choices + rejected alternatives live
 there (durable), not here. Companion spec: board item `level-preview-game` (the `--game`
 faithful tier — this spec shares its SHOT grammar and retires the same editor backend).
 
@@ -15,11 +15,11 @@ faithful tier — this spec shares its SHOT grammar and retires the same editor 
 
 Every existing way to *see* a level costs a container:
 
-- The shipped `level preview` boots an ephemeral **UnrealEd** per render mode, can only auto-frame
+- The shipped `level photo` boots an ephemeral **UnrealEd** per render mode, can only auto-frame
   a named brush from one canonical angle (free rotation never reaches the pixels — spike
   `2026-07-12-preview-pose-calibration`), and its lighting is unfaithful to the game.
 - The planned `--game` tier (spec in board item `level-preview-game`) fixes fidelity and posing,
-  but each preview still costs: materialize (editor boot, minutes when stale) + a game-container
+  but each photo still costs: materialize (editor boot, minutes when stale) + a game-container
   boot + travel. Right for hero shots and lighting judgment; too slow for the inner edit loop.
 
 Meanwhile the native (editor-free) materialize line has produced, as by-products, every piece an
@@ -36,7 +36,7 @@ Meanwhile the native (editor-free) materialize line has produced, as by-products
   (`spikes/2026-06-27-decontainerize-uedcli/harness/native_render.py` — top-down ortho only, but the
   surf→UV→texel path is proven).
 
-**The fix:** promote those pieces into a first-class **draft preview backend** — `level preview`
+**The fix:** promote those pieces into a first-class **draft preview backend** — `level photo`
 (default `--native`) reads the trunk, carves it with the Rust CSG build, decodes the referenced
 textures, and software-rasterizes freely-posed perspective stills in-process. **Zero docker, zero
 editor, zero game** — seconds per batch. It complements (never replaces) `--game`: native answers
@@ -51,7 +51,7 @@ All from `decisions.md 2026-07-16 12:13 UTC` (Andrzej):
 | # | Decision |
 |---|---|
 | D1 | Native is a **draft tier complementing** the in-game preview (partially revises the 2026-07-13 rejection of an offline rasterizer: rejected as THE preview, accepted as draft). |
-| D2 | **One verb, backend flags:** `level preview {--native\|--game}`; **`--native` is the default**; the editor-screenshot backend (`preview_render.py` + `TARGET[:MODE][=NAME]`) is **retired/deleted** when `--native` lands. `--game` = clean exit-2 "not built yet" until the in-game tier ships. |
+| D2 | **One verb, backend flags:** `level photo {--native\|--game}`; **`--native` is the default**; the editor-screenshot backend (`preview_render.py` + `TARGET[:MODE][=NAME]`) is **retired/deleted** when `--native` lands. `--game` = clean exit-2 "not built yet" until the in-game tier ships. |
 | D3 | **Geometry = the Rust CSG build on the trunk, in-process.** The preview shows the CARVED world (BSP surfs), not raw brushes. N-2 residuals (un-merged coplanar fragments; missing zone splits) accepted — both invisible to a textured render. No `--from-dx` in v1 (rejected, can be added later). |
 | D4 | **Pose grammar = the in-game spec's SHOT tokens, shared verbatim** (`at:…;rot:…` / `look:` / `orbit:`; 2026-07-13 spec §3). Same tokens work on both backends. |
 | D5 | **Lighting: flat-textured v1; `--lit` is a scoped fast-follow** consuming the N-4 bake (§8). |
@@ -64,7 +64,7 @@ All from `decisions.md 2026-07-16 12:13 UTC` (Andrzej):
 ## 3. CLI surface
 
 ```
-uedcli level preview SHOT [SHOT ...] --out-dir DIR
+uedcli level photo SHOT [SHOT ...] --out-dir DIR
                      [--native | --game]   # backend; --native is the default
                      [--size WxH]          # output resolution (default 1280x960, 4:3 — matches --game)
                      [--fov DEG]           # horizontal FOV (default: the game's first-person default)
@@ -99,7 +99,7 @@ uedcli level preview SHOT [SHOT ...] --out-dir DIR
   `shot-01`, `shot-02`, …; `name:STEM` overrides; never silently overwrites) — same as the in-game
   spec.
 
-**Verbs unaffected:** `brush`/`stash`/`prefab preview` (the offline PPM/P6 wireframe) stay exactly
+**Verbs unaffected:** `brush`/`stash`/`prefab diagram` (the offline PPM/P6 wireframe) stay exactly
 as-is; `level doctor` remains the lint surface. The render-mode taxonomy stays dropped (decision
 2026-07-13 20:38) — native has one draft look (v1 flat-textured; later `+ --lit`).
 
@@ -261,7 +261,7 @@ precisely because CPython missed such targets; rasterizing ~1.2 MP × 8 is trivi
   `render_frame(...)` FFI entry beside `build_geometry`/`serialize_model`/`bake_lighting` (an
   **additive** `lib.rs` registration — the `BrushTuple` shape and the build/CSG modules are NOT
   touched; see the §5 plan refinement and the plan's concurrency contract).
-- **Changed:** `cli.py` (`level preview` grows `--native`/`--game`/`--size`/`--fov`, SHOT
+- **Changed:** `cli.py` (`level photo` grows `--native`/`--game`/`--size`/`--fov`, SHOT
   positionals), `dispatch._level_preview` (front half: parse/validate/resolve poses — shared with
   the future `--game`; back half: route by backend), `preview_shots.py` (SHOT-token parser +
   `pose_from_lookat`/`pose_from_orbit` replace `parse_frame`; a new SHOT-token stem helper
@@ -269,7 +269,7 @@ precisely because CPython missed such targets; rasterizing ~1.2 MP × 8 is trivi
 - **Deleted (D2):** `preview_render.py`, `MODE_INI`, the `TARGET[:MODE][=NAME]` grammar, and their
   editor-boot plumbing. (The in-game spec §7 lists the same deletions — whichever tier lands first
   performs them; this one is landing first.)
-- **Docs on land:** `architecture.md` `level preview` section rewritten (two backends);
+- **Docs on land:** `architecture.md` `level photo` section rewritten (two backends);
   `direction.md` preview paragraph reconciled (draft tier + faithful tier); board entries moved.
 
 ---
@@ -347,7 +347,7 @@ never round-trips through the map file.
   the bless script printing a diff count on mismatch. Small resolution (e.g. 320×240).
 - **One-time LIVE anchor (required build gate, before the golden is blessed):** render one simple
   room carrying an asymmetric REAL texture with an authored non-zero `Pan`, natively AND via a real
-  engine render (the still-present editor `level preview` before its deletion, or the game via
+  engine render (the still-present editor `level photo` before its deletion, or the game via
   uplayctl), and record the comparison (images + verdict on U direction, V row order, Pan
   sign/frame) in `dev/docs/spikes/2026-07-16-native-preview-anchor/`. This pins exactly the three
   things no self-referential test can (Pan sign — §5 gate; V-flip; axis direction). Without it a
@@ -367,7 +367,7 @@ never round-trips through the map file.
   study alongside `level import`).
 - **`brush preview` texturing** — DROPPED (Andrzej, decisions.md 2026-07-16).
 - **Scaled brushes** — rejected with a named error until the scale-support spec lands (then both
-  materialize and preview lift together).
+  materialize and photo lift together).
 - **The `--game` tier itself** — its own spec (board item `level-preview-game`); this build
   must leave the shared front half (grammar, pose math, filename rules) in the shape that spec's §7
   expects.

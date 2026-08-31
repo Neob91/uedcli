@@ -1,10 +1,10 @@
 +++
 priority = "p2"
 kind = "owner-question"
-summary = "`level preview --game` blocked on this box: TWO independent gaps found (2026-07-21)"
+summary = "`level photo --game` blocked on this box: TWO independent gaps found (2026-07-21)"
 +++
 
-# `level preview --game` blocked on this box: TWO independent gaps found (2026-07-21)
+# `level photo --game` blocked on this box: TWO independent gaps found (2026-07-21)
 
 Dogfooded the whole path — installed GOG Deus Ex (1.112fm) at `~/Games/DeusEx`, ran
 `dev/scripts/install-deusex-assets.sh` (clean), previewed. `--native` renders brushdemo fine.

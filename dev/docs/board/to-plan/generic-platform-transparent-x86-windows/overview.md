@@ -7,7 +7,7 @@ summary = "Generic platform-transparent x86-Windows runtime for game + editor (F
 # Generic platform-transparent x86-Windows runtime for game + editor (FEX on arm, native on x86)
 
 One wrapper that runs an x86 Windows program (DeusEx.exe or unrealed.exe) under the
-host-appropriate x86-execution engine, transparently. Reused by `level preview --game` and
+host-appropriate x86-execution engine, transparently. Reused by `level photo --game` and
 `level materialize`. Owner ruling (2026-08-06): this is **not** a fallback and does not violate
 no-env-switching — the logic is identical, only the x86 substrate adapts, the way Docker already
 picks native-vs-qemu.
@@ -34,7 +34,7 @@ Mesh-browser `RenDev` viewport assertion, which materialize never triggers.)
   esync/fsync, dll overrides, crafted ini + `[Core.System] Paths`, package/asset mounts, the
   wedge-relaunch loop, and a ready signal (editor window vs `:7777` bind).
 - Consumers: `level materialize` (unrealed.exe; needs a headless render device, no browser windows)
-  and `level preview --game` (DeusEx.exe; boots to `:7777`, renders a frame).
+  and `level photo --game` (DeusEx.exe; boots to `:7777`, renders a frame).
 
 ## Open questions / risks
 

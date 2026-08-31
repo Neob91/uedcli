@@ -1,17 +1,17 @@
 +++
 priority = "p1"
 kind = "debug"
-summary = "level preview --game fails qualify_level_textures on imported retail levels (content/order drift)"
+summary = "level photo --game fails qualify_level_textures on imported retail levels (content/order drift)"
 +++
 
-# `level preview --game` fails `qualify_level_textures` on imported retail levels
+# `level photo --game` fails `qualify_level_textures` on imported retail levels
 
-`level preview --game` on an IMPORTED retail trunk fails in materialize at the texture-qualify step:
+`level photo --game` on an IMPORTED retail trunk fails in materialize at the texture-qualify step:
 
 ```
 level import dev/games/deusex/Maps/02_NYC_Bar.dx --tree level/nyc-bar   # 203 brushes
-level preview --game --tree level/nyc-bar --out-dir OUT "at:@PlayerStart0;rot:0,-16264"
-# → materialize for preview failed: qualify_level_textures: no OBJ DEPENDENCIES Engine.Polys
+level photo --game --tree level/nyc-bar --out-dir OUT "at:@PlayerStart0;rot:0,-16264"
+# → materialize for photo failed: qualify_level_textures: no OBJ DEPENDENCIES Engine.Polys
 #   block matches brush 'Brush9''s 6 textured polys ['Uob_Concrete','NYCstonBloc_A','Bricks_b',
 #   'Bricks_b','Bricks_b','drtywater_a'] — 201 of 208 non-empty blocks still unclaimed
 ```
@@ -37,7 +37,7 @@ Two candidate causes (rank in the spike):
   versa) fails the exact match. Likely a contributor, unlikely to explain 201/208 alone.
 
 ## Scope
-Blocks `--game` preview AND `level materialize` of IMPORTED retail maps. Does not affect authored
+Blocks `--game` photo AND `level materialize` of IMPORTED retail maps. Does not affect authored
 trunks. Distinct from the native-CSG geometry-drop item and the Wanchai editor-wedge.
 
 ## Root cause (spike 2026-08-24, verified)

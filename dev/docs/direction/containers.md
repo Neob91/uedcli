@@ -4,7 +4,7 @@
 
 A **container** is a Docker container uedcli starts, drives, and discards to run a Windows program
 under wine: the **UnrealEd 2.2 editor** (materialize, qualify), the no-GUI **UCC build container**
-(stub building, texture batchexport), and the **game container** (`level preview --game`). uedcli
+(stub building, texture batchexport), and the **game container** (`level photo --game`). uedcli
 itself never runs in one — that is a separate ruling ([`process.md`](process.md)); this topic covers
 the containers it *drives*.
 

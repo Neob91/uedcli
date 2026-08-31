@@ -47,7 +47,7 @@ handled by container-fs isolation):
    rather than crashes); set `UEDCLI_BOX_CACHE=/tmp/box_<id>.json` per worker.
 
 A bind-mount source must be visible to the docker daemon, not just your shell. `level
-preview` boots the editor with a per-boot `UnrealEd.ini` override mounted `-v
+photo` boots the editor with a per-boot `UnrealEd.ini` override mounted `-v
 <host-ini>:/opt/UED22/UnrealEd.ini`. If the source path is in the system tempdir
 (`/tmp`) under a sandboxed shell (e.g. `devdawg-shell`), `/tmp` is private to the
 sandbox: the daemon resolves `/tmp/<c>.preview.ini` against its own tmp, finds nothing,
@@ -81,7 +81,7 @@ Require a numeric `window=<id>`, not the bare substring `window=`. For the first
 after launch `status` prints `window=<unresolved: could not find an UnrealEd window>`
 (process up, window not yet mapped) — a substring check treats that as ready and the
 next `exec` fails "could not find an UnrealEd window". `_wait_ready` matches `window=\d`
-(live-confirmed 2026-07-06, surfaced by `level preview` whose boot immediately drives
+(live-confirmed 2026-07-06, surfaced by `level photo` whose boot immediately drives
 the editor). The image is warm, so the handle usually resolves within a few seconds.
 
 ## Concurrency is memory-bound — cap it

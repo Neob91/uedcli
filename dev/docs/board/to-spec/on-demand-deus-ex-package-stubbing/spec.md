@@ -61,7 +61,7 @@ Three remnants:
   `AssembledStub`; the change is to log its `cross_package_refs` rather than discard them.
 
 - **Remnant 3 (pending the question):** two coherent end states, and the owner picks:
-  - **Wire the auto-trigger** — at the materialize/preview resolution pre-pass, feed the
+  - **Wire the auto-trigger** — at the materialize/photo resolution pre-pass, feed the
     unstubbed-v68 set (`unloadable_v68_packages`, or the missing set) to `stub_missing_packages`
     before the refuse check, so a referenced v68 code package is stubbed on demand and the build
     proceeds. Delivers the promised "automatic and lazy" behavior. Cost: a materialize can now
@@ -77,7 +77,7 @@ Three remnants:
 ## Edge cases & errors
 
 - Auto-stub of a package whose closure hits the M1 boundary: the existing `StubClosureError` /
-  `StubBuildError` must reach the user as a clean exit-2 message (the materialize/preview guards
+  `StubBuildError` must reach the user as a clean exit-2 message (the materialize/photo guards
   already convert `RuntimeError`/`ValueError`), never a bare traceback.
 - A missing package with no v68 `.u` on the search path is a genuine absent asset, not a stub
   candidate (`_is_stub_candidate`, `stub.py:314`) — must stay a normal missing-asset error, not an

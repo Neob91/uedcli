@@ -136,7 +136,7 @@ something different per face normal. Reaching for a *known* orientation is what 
 this in the help so nobody adds `--to` on the strength of the wrong argument.
 
 - `--by` is in **unreal rotation units** (16384 = 90°), matching `brush build --rotate`,
-  `mover key rotate` and the `level preview` pose grammar.
+  `mover key rotate` and the `level photo` pose grammar.
 - **The sign is defined at the AXIS level, because that is the only form a test can assert**:
   a quarter turn is `U' = n̂ × U`, `V' = n̂ × V` (arithmetic, no trig). Concretely — and this is the
   assertion to pin — **on a `+Z` face with `TextureU=+X, TextureV=+Y`, `--by 16384` yields
@@ -1496,7 +1496,7 @@ multi-brush set either way.
   Filed to `board/inbox/` as its own item rather than guessed at here.
 - **Runs spanning more than one brush** — exit 2 naming the brushes.
 - ~~`brush poly scale`~~ — **pulled INTO this change** on the owner's 2026-07-26 ruling; see §2.5.
-- Fixing `level preview --native`'s inability to render a revolve (spike finding 6; filed). It makes
+- Fixing `level photo --native`'s inability to render a revolve (spike finding 6; filed). It makes
   this feature harder to *verify* but does not change its design.
 
 ## 7. Owner confirmation still required

@@ -13,7 +13,7 @@ Integration tests (`-m integration`) require the live editor RUNTIME container a
 default (`pytest.ini`).
 
 The Rust goldens run every time (the container supplies cargo + `libpython`), so a green run exercises
-the native `uedcli_native` core — `level materialize` and `preview` native paths — not just the
+the native `uedcli_native` core — `level materialize` and `photo` native paths — not just the
 Python. `UEDCLI_SKIP_NATIVE=1` skips the extension build + `cargo test` for a pytest-only run (the
 native pytest tests `importorskip("uedcli_native")`). See `../dev-runtime.md` for the build mechanics
 and the `UEDCLI_VENV*` knobs.

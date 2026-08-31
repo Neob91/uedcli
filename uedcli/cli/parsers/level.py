@@ -7,7 +7,7 @@ from ._arguments import _tree_flag
 def register(sub) -> None:
     level = sub.add_parser("level",
                            help="level lifecycle verbs "
-                                "(create/import/reimport/list/materialize/preview/status/doctor)")
+                                "(create/import/reimport/list/materialize/photo/status/doctor)")
     lsub = level.add_subparsers(dest="sub", required=True)
     llist = lsub.add_parser(
         "list",
@@ -80,7 +80,7 @@ def register(sub) -> None:
     _tree_flag(lmat, level_only=True)   # build a named level explicitly instead of $UEDCLI_LEVEL
 
     lprev = lsub.add_parser(
-        "preview",
+        "photo",
         help="render freely-posed still shots of $UEDCLI_LEVEL. The default --game "
              "backend is the faithful lit in-game tier: a warm reused headless-game container "
              "renders truly-lit first-person frames (first batch ~1-3 min: boot + travel; later "
@@ -104,7 +104,7 @@ def register(sub) -> None:
     lprev.add_argument("--list-actors", dest="list_actors", metavar="Package.Class", default=None,
                        help="--game --map QUERY mode: instead of shooting, print the map's actors of "
                             "this class as 'Name x y z' (e.g. Engine.PathNode blankets every walkable "
-                            "spot) — discover @Actor refs to compose into preview shots. Add --sample "
+                            "spot) — discover @Actor refs to compose into shots. Add --sample "
                             "N for N evenly-spread. No screenshots; --out-dir not needed")
     lprev.add_argument("--sample", type=int, default=0, metavar="N",
                        help="with --list-actors: print only N actors, evenly indexed across the map")
@@ -119,7 +119,7 @@ def register(sub) -> None:
                        help="the faithful in-game renderer (the DEFAULT — passing it is optional): "
                             "delivers the map into a WARM "
                             "per-user headless game container (booted once ~90s, then REUSED "
-                            "across previews; self-terminates after 10 min idle) and captures "
+                            "across `level photo` runs; self-terminates after 10 min idle) and captures "
                             "truly-lit first-person frames (real lighting/sky/textures). Pitch "
                             "is clamped to ±89.9°; movers at rest pose. First batch ~1-3 min "
                             "(boot + travel); later batches skip the boot")
@@ -132,7 +132,7 @@ def register(sub) -> None:
                             "Native renders true straight-up/down; --game renders at the game's "
                             "own FOV and clamps pitch host-side to ±89.9°")
     lprev.add_argument("--map", default=None, metavar="PATH",
-                       help="--game only: preview a prebuilt map file (.dx/.unr) instead of the "
+                       help="--game only: shoot a prebuilt map file (.dx/.unr) instead of the "
                             "$UEDCLI_LEVEL trunk (skips the materialize cache). Actor-relative shots "
                             "(at:@/look:@/orbit:@) ARE supported with --map — they resolve against "
                             "the RUNNING game (use --list-actors to discover names). Rejected with "
@@ -145,9 +145,9 @@ def register(sub) -> None:
     lprev.add_argument("--keep-alive", dest="keep_alive", action="store_true",
                        help="--game only: PIN the warm game container (disable its idle "
                             "self-death) and print its noVNC URL for live inspection; the pin "
-                            "sticks across later previews until you release it with docker rm "
+                            "sticks across later `level photo` runs until you release it with docker rm "
                             "-f. Rejected with --native (no container)")
-    _tree_flag(lprev, level_only=True)  # preview a named level explicitly instead of $UEDCLI_LEVEL
+    _tree_flag(lprev, level_only=True)  # select a named level explicitly instead of $UEDCLI_LEVEL
 
     lstat = lsub.add_parser("status",
                             help="thin read-only dashboard for $UEDCLI_LEVEL (or a --tree "

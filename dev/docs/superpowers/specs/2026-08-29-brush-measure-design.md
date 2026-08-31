@@ -562,7 +562,7 @@ per owner call — not a target model for this workflow.)
 - **Volumetric containment** (fully/partially-inside-the-solid, not just in-plane footprint) needs
   real solid-vs-solid intersection — a materially harder problem than plane-fitting. This codebase's
   existing volumetric CSG (`brush intersect`/`brush deintersect`) is documented convex-only, the same
-  limitation already known to bite `level preview --native` on concave brushes. Worth a separate,
+  limitation already known to bite `level photo --native` on concave brushes. Worth a separate,
   explicitly-scoped spec later; not blocking this one.
 - **`--json` for `relation`.** Ship the human-readable report only for v1; add structured output if a
   real scripting need shows up.

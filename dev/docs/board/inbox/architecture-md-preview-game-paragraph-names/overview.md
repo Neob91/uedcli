@@ -1,13 +1,13 @@
 +++
 priority = "p2"
 kind = "owner-question"
-summary = "[OWNER — confirm] architecture.md's `level preview --game` paragraph still names the removed `UedPreviewDX` typed driver and the `inputs/edit/` hUCC toolchain — needs the owner's yes to edit dev/docs."
+summary = "[OWNER — confirm] architecture.md's `level photo --game` paragraph still names the removed `UedPreviewDX` typed driver and the `inputs/edit/` hUCC toolchain — needs the owner's yes to edit dev/docs."
 +++
 
 # [OWNER — confirm] architecture.md preview --game paragraph names removed UedPreviewDX/hUCC
 
 The `game-preview-generic` branch removed the DeusEx typed driver (`UedPreviewDX`), the hUCC gate,
-and `uedcli/game/inputs/`. `dev/docs/architecture.md` (the `level preview --game` paragraph, ~L2166)
+and `uedcli/game/inputs/`. `dev/docs/architecture.md` (the `level photo --game` paragraph, ~L2166)
 still describes them:
 
 > … `uscript/` — the `UedPreview` link/console/base-driver package + the `UedPreviewDX` DeusEx

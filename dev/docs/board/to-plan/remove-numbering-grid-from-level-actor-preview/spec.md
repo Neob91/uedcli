@@ -143,7 +143,7 @@ rejected because it would make a locator-on filled render's `hidden` stop descri
 
 Everything below is decided so the implementer chooses nothing (owner, 2026-08-30):
 
-- **All three verbs.** `actor preview`, `stash preview` and `prefab preview` all call
+- **All three verbs.** `actor diagram`, `stash diagram` and `prefab diagram` all call
   `render_actors_to_out`, so all three get both flags and identical behaviour.
 - **`breakdown` is unchanged**: the locator rides **pane 0 only**, as today. Per-actor panes get no
   gutter. (The sibling gridline item deliberately differs — gridlines ride *every* pane, because a

@@ -23,7 +23,7 @@ never needs.
 
 uedcli authors the git-tracked T3D trunk with composing verbs (`brush build … | actor add -`, `brush poly
 set`, `actor prop set`, `mover key …`, `actor order --first|--last`); the editor is touched only to `level
-materialize` / `level preview`. Read craft here as **"which verb achieves this"**, with the UnrealEd GUI
+materialize` / `level photo`. Read craft here as **"which verb achieves this"**, with the UnrealEd GUI
 action kept as an annotation.
 
 ## Confidence markers (repo convention)

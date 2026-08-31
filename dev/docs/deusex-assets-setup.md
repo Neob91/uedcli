@@ -1,7 +1,7 @@
 # Installing full Deus Ex assets into the substrate
 
 The committed `uned/UED22` editor substrate ships only stripped editor code (the
-version-69 `.u` the editor loads). To materialize/preview real maps, and to stub
+version-69 `.u` the editor loads). To materialize/photo real maps, and to stub
 v68 Deus Ex code packages into v69 (see "Package stubbing" in
 [`architecture.md`](architecture.md)), uedcli also needs the game's content
 (textures/sounds/music) and the original v68 `.u` code. Those are copyrighted Deus
@@ -185,7 +185,7 @@ done
 # Sounds ~2 .uax, Music ~35 .umx.
 ```
 
-A live end-to-end check is `uedcli level materialize` / `level preview` on a base-content
+A live end-to-end check is `uedcli level materialize` / `level photo` on a base-content
 map (it fails fast and names any still-missing package), or `uedcli substrate stub <pkg>`
 once package stubbing lands.
 

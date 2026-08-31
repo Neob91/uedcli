@@ -1,4 +1,4 @@
-# `level preview --native` — implementation plan
+# `level photo --native` — implementation plan
 
 **Spec:** [`spec.md`](spec.md)
 (two-cold-reviewer gated, findings folded). **Decisions:** `decisions.md` 2026-07-16 12:13 UTC.
@@ -29,8 +29,8 @@ deliberately architected to stay out of its way (the spec §5 "plan refinement")
   trivial. Coordinate by appending at the end of the registration block.
 - `uedcli-native/src/render.rs`, `Cargo.toml` (only if a dep were needed — none is planned) — new
   file.
-- `preview_shots.py` — S3 adds the SHOT parser/pose math, S6 prunes the old grammar. Preview-only.
-- `cli.py` / `dispatch.py` — the `level preview` verb region only. NB the preview and materialize
+- `preview_shots.py` — S3 adds the SHOT parser/pose math, S6 prunes the old grammar. Photo-only.
+- `cli.py` / `dispatch.py` — the `level photo` verb region only. NB the photo and materialize
   parser blocks are textually ADJACENT in `cli.py`, so concurrent edits may textually conflict —
   expect plain merges there, not "clean by construction".
 - Deleted at cutover: `preview_render.py`, `MODE_INI`, `preview_shots.parse_frame` + their tests —
@@ -72,10 +72,10 @@ re-run once before digging.
 
 ### S2 — Live anchor capture (BEFORE the editor preview is deleted)
 The §9 anchor gate needs a real-engine reference render, and the easiest source — the CURRENT
-editor-screenshot `level preview` — is deleted in S6. Capture the reference NOW:
+editor-screenshot `level photo` — is deleted in S6. Capture the reference NOW:
 - Author a throwaway one-room trunk carrying an asymmetric REAL texture on known faces, one face
   with authored non-zero `Pan`, one brush rotated 45°.
-- Render it with today's `level preview` (shaded mode) and/or the game via uplayctl; store images +
+- Render it with today's `level photo` (shaded mode) and/or the game via uplayctl; store images +
   the face/texture/pan manifest in `dev/docs/spikes/2026-07-16-native-preview-anchor/` (committed —
   spikes are durable evidence; the trunk fixture too).
 - No verdict yet — the comparison happens in S5 when the native render exists. This slice only
@@ -155,11 +155,11 @@ editor-screenshot `level preview` — is deleted in S6. Capture the reference NO
   the ~8 preview tests in `test_dispatch.py` that monkeypatch `preview_render.render_shots` /
   assert old-grammar behavior get REWRITTEN against the native backend, not just deleted; the
   `preview_render` docstring mention in `normalize.py` (grep for the NAME, not just imports).
-- Docs reconciliation (same commit): `architecture.md` `level preview` section (two backends,
+- Docs reconciliation (same commit): `architecture.md` `level photo` section (two backends,
   native pipeline, deletion note) + "Preview internals"; `docs/usage.md` preview section IF its
   rewrite hasn't landed (it carries a stale-warning banner — at minimum update the preview lines);
   `unrealed/rendering.md` gets a pointer that the editor-screenshot recipe is retired for `level
-  preview` (recipe text stays — it documents editor behavior, still true for other drivers).
+  photo` (recipe text stays — it documents editor behavior, still true for other drivers).
   (`direction.md` needs nothing — already reconciled to the 2026-07-16 decision and committed;
   verify it still matches at cutover.)
 - Board: strike the built entry from `board/to-plan/`; `board/done/` tail note; new TODOs for anything
@@ -188,7 +188,7 @@ editor-screenshot `level preview` — is deleted in S6. Capture the reference NO
 - **`orbit`/`look` gimbal cases** (straight up/down) — covered by S3 unit tests; the in-game spec
   §9 lists the same cases, keep the tests backend-agnostic so that tier inherits them.
 - **Semisolid trunks** — the semisolid brush set flows through `build_geometry` (case-e parity is
-  green), so the castle WITH ornament should preview even though materialize's MAP SAVE bug blocked
+  green), so the castle WITH ornament should photo even though materialize's MAP SAVE bug blocked
   the editor path; if a semisolid-specific render artifact shows up in S7, board it — don't chase
   it mid-build.
 

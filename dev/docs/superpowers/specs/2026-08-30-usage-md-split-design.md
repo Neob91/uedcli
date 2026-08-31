@@ -141,11 +141,11 @@ exclude content that moves to `docs/usage/` or `docs/README.md`; see "Workflow c
 
 | Family | Bytes | Treatment |
 |---|---:|---|
-| actor (CRUD, no preview) | 22,638 | directory — **not a clean cut, same shape as `class` below**: raw ranges 141–259 (query, opens with a shared 6-verb command table) + 381–406 (`## Folders`) + 407–445 (`## Labels`) + 446–450 (`# Mutating verbs` preamble) + 451–547 (mutating) + 929–953 (`## \`actor build\``) = 22,858; **minus** the 220-byte preamble (446–450, goes to `docs/README.md`) = **22,638**. Neither `## Actors` section has a single `###` sub-heading — splitting these 22 KB into 11 leaves is authoring against a shared table, not cutting along pre-drawn lines, the same effort class as `class`'s shared fence below. |
-| actor preview | ~22,056 on a current checkout (91e4bbf baseline was 17,661; this section is the file's only significant drift — re-measure `# \`actor preview\`` against HEAD before cutting either way) | *(own leaf under `actor/`, not split further — see the family-vs-leaf threshold note above)* |
+| actor (CRUD, no diagram) | 22,638 | directory — **not a clean cut, same shape as `class` below**: raw ranges 141–259 (query, opens with a shared 6-verb command table) + 381–406 (`## Folders`) + 407–445 (`## Labels`) + 446–450 (`# Mutating verbs` preamble) + 451–547 (mutating) + 929–953 (`## \`actor build\``) = 22,858; **minus** the 220-byte preamble (446–450, goes to `docs/README.md`) = **22,638**. Neither `## Actors` section has a single `###` sub-heading — splitting these 22 KB into 11 leaves is authoring against a shared table, not cutting along pre-drawn lines, the same effort class as `class`'s shared fence below. |
+| actor diagram | ~22,056 on a current checkout (91e4bbf baseline was 17,661; this section is the file's only significant drift — re-measure `# \`actor diagram\`` against HEAD before cutting either way) | *(own leaf under `actor/`, not split further — see the family-vs-leaf threshold note above)* |
 | brush (poly/vertex/measure/core/intersect) | 21,006 | directory — **not a clean cut**: `## Brush surfaces & geometry` (260–309) opens with its own shared 4-row command table feeding `poly.md`/`vertex.md`/`measure.md`, no sub-headings of its own either. Derivation: raw ranges 260–309 + 548–734 + 1019–1126 = 22,762; **minus** the 1,399-byte `--tree` block (inside 548–734, goes to `docs/README.md`) = 21,363; **minus** the 357-byte "door-mover flow" (inside 1019–1126, goes to `docs/usage/`) = **21,006**. Two separate subtractions from two disjoint sub-ranges — do not apply either twice. |
 | brush build (generators) | 13,357 | *(own leaf under `brush/`)* |
-| level (doctor/import/reimport/materialize/preview, **+create/list/status as three small leaves**) | 18,422 | directory — the "Choosing a level" table (all five rows: `create`/`import`/`reimport`/`list`/`status`) moves into `level/README.md`'s own index; the `import`/`reimport` rows link to the existing `import.md`/`reimport.md` leaves, and `create`/`list`/`status` **each get their own tiny new leaf** (`create.md`/`list.md`/`status.md`, ~176/218/306 bytes respectively) rather than being index-row-only text with nowhere to link — this makes `level/` the one family whose README genuinely indexes all eight of its verbs, none left as an orphaned row. None of the five rows' bytes were ever counted in the 18,422 figure (see below); the three new leaves' ~700 bytes come from the table itself, not from this row. |
+| level (doctor/import/reimport/materialize/photo, **+create/list/status as three small leaves**) | 18,422 | directory — the "Choosing a level" table (all five rows: `create`/`import`/`reimport`/`list`/`status`) moves into `level/README.md`'s own index; the `import`/`reimport` rows link to the existing `import.md`/`reimport.md` leaves, and `create`/`list`/`status` **each get their own tiny new leaf** (`create.md`/`list.md`/`status.md`, ~176/218/306 bytes respectively) rather than being index-row-only text with nowhere to link — this makes `level/` the one family whose README genuinely indexes all eight of its verbs, none left as an orphaned row. None of the five rows' bytes were ever counted in the 18,422 figure (see below); the three new leaves' ~700 bytes come from the table itself, not from this row. |
 | class | 13,216 | directory — over the 10,000-byte threshold. **Six** leaves, matching `uedcli/cli/parsers/classes.py`'s six sub-verbs and the file's own `### class preview` / `### class classify` / `### class search` / `### class prewarm` sub-headings (`list` and `show` have no sub-heading of their own — they're the section's opening, unheaded, sharing one fence with the other four's synopses): `list.md`, `show.md`, `preview.md`, `classify.md`, `search.md`, `prewarm.md`. Not a clean cut — like `sound`+`music` below, this needs light authoring to split the one shared synopsis fence six ways, not just moving pre-separated sections. |
 | mover | 3,372 | flat — the `# Movers` section is 4,508 bytes total; minus the 1,136-byte keyframe-authoring worked example (goes to `docs/usage/`) = **3,372** |
 | sound+music | 4,070 total | **two** flat files (`sound.md`, `music.md` — separate parser modules; do not merge). **Not a clean cut**: the section is one interleaved narrative with shared intro prose and paired fenced examples (`sound list` / `music list` on adjacent lines) — producing two independent pages is light authoring, not a byte-preserving split. The two pages will read as near-duplicates of each other — both currently expose the identical `list`/`show`/`search`/`classify` surface (`preview`/`prewarm` are deferred phase-(b) work absent from *both* today, not a `sound`-only feature; there is no `--similar` flag on either), differing mainly in `music`'s extra title/format output fields — accepted, same as the leveldesign overlap, rather than merged into one file (they're separate parser modules per the "never merge" rule). |
@@ -188,7 +188,7 @@ document).
   `docs/README.md`, same split as `uedcli.toml`/`project show` above.
 - **`` `--tree KIND/NAME` ``** (lines 716–734, 1,399 bytes) sits inside brush's mutating-verb line
   range by accident of file position, but its own text says it rides `actor`, `brush`, `mover key`,
-  and `level materialize`/`preview` alike — it's cross-cutting, not brush-specific. It goes in
+  and `level materialize`/`photo` alike — it's cross-cutting, not brush-specific. It goes in
   `docs/README.md`, next to the level-selection front matter, not under `brush/`.
 - **The `# Mutating verbs` preamble** (lines 446–450, 220 bytes — "these transform the in-memory
   level and rewrite the T3D trunk; committing is your own `git`; each also accepts `--tree
@@ -373,7 +373,7 @@ docs/reference/actor/
   build.md
   folder.md    (get/rename/set/unset together)
   label.md     (add/remove/clear/get together)
-  preview.md   topic "reference/actor/preview"  — the largest single leaf in the tree (see the
+  diagram.md   topic "reference/actor/diagram"  — the largest single leaf in the tree (see the
                                                     known-stale-size caveat above), a sibling leaf,
                                                     not folded into the CRUD pages
 ```
@@ -383,7 +383,7 @@ docs/reference/actor/
 ```markdown
 # Actors
 
-Query, mutate, and organize actors. See also [preview](preview.md) for rendering,
+Query, mutate, and organize actors. See also [diagram](diagram.md) for rendering,
 [brush](../brush/README.md) for per-surface geometry once an actor is a brush. For a worked
 multi-command example, see [the door mover flow](../../usage/door-mover-flow.md).
 
@@ -445,7 +445,7 @@ docs/reference/brush/
 `level/`'s exact leaf boundaries are the one thing left to implementation-time judgment: the
 "Choosing a level" table's `create`/`import`/`reimport`/`list`/`status` rows all become index rows
 in `level/README.md` (per "Content that doesn't move cleanly" above); `doctor`, `import`,
-`reimport`, `materialize`, `preview` are each substantial enough (40–70 lines apiece) to stand alone
+`reimport`, `materialize`, `photo` are each substantial enough (40–70 lines apiece) to stand alone
 as full leaves, and are cheap to confirm with the text in hand.
 
 ## `docs/README.md` budget
@@ -477,7 +477,7 @@ level" table uses — e.g.:
 | Family | Covers |
 |---|---|
 | [`reference/actor/`](reference/actor/) | find/add/delete/move/rotate/prop/build, folders, labels |
-| [`reference/actor/preview.md`](reference/actor/preview.md) | the brush/actor viewer |
+| [`reference/actor/diagram.md`](reference/actor/diagram.md) | the brush/actor viewer |
 ```
 
 The worked examples above already list two rows for `actor/` alone (the family index plus
@@ -491,11 +491,11 @@ identified above) and grows as the other themes get written. At ~90 bytes a row 
 exact size at implementation time — see the baseline-pin note).
 
 Because the split multiplies basename collisions within `reference/` (`build` exists under both
-`actor/` and `brush/`; `preview` under `actor/` and `level/`; `list`/`show`/`search`/`classify`
-repeat across every catalog family — `find_doc` deliberately refuses bare-basename resolution, so
-`docs show preview` alone won't resolve), both capability tables' links use full paths, and a
-one-line note near the top of `docs/README.md` says so explicitly: topic keys are full paths
-(`reference/actor/preview`, not `preview`).
+`actor/` and `brush/`; `list`/`show`/`search`/`classify` repeat across every catalog family —
+`find_doc` deliberately refuses bare-basename resolution, so `docs show build` alone won't
+resolve), both capability tables' links use full paths, and a one-line note near the top of
+`docs/README.md` says so explicitly: topic keys are full paths (`reference/actor/diagram`, not
+`diagram`).
 
 ## Content fixes folded into the move (not deferred)
 

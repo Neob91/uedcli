@@ -598,10 +598,10 @@ def staircase(steps: int, depth: float, rise: float, breadth: float,
     Rise/tiled-Side) — direction/generators.md 2026-07-21 12:06 UTC.
 
     NATIVE-CSG CAVEAT: this non-convex brush is built correctly by UnrealEd (the
-    default `level materialize`) and the real engine (the default `--game` preview),
+    default `level materialize`) and the real engine (the default `--game` photo),
     but the COARSE native core assumes convex brushes
-    (`uedcli-native/src/csg.rs` `point_in_convex`), so `level preview --native` and
-    the coarse core behind `level preview --native` mis-classifies its concave notches. Native
+    (`uedcli-native/src/csg.rs` `point_in_convex`), so `level photo --native` and
+    the coarse core behind `level photo --native` mis-classifies its concave notches. Native
     materialize's DEFAULT core (`bspcsg`, the incremental bspBrushCSG port) never calls
     `point_in_convex` and is unaffected — see architecture.md."""
     if steps < 1:

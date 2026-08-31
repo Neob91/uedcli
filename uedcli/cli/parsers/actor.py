@@ -62,7 +62,7 @@ def register(sub) -> None:
              "Honours each actor's full transform (a scaled/rotated brush's TRUE world box is tested); "
              "a point actor (Light, mesh deco, nav point) is its Location point. Single-valued; ANDs "
              "with the other filters. Selects a region's actors to pipe into a set verb (add --kind "
-             "brush for geometry only, e.g. `… --within-bbox … --kind brush | actor preview -`).")
+             "brush for geometry only, e.g. `… --within-bbox … --kind brush | actor diagram -`).")
     find.add_argument(
         "--overlapping-bbox", dest="overlapping_bbox", default=None, type=parse_bbox,
         metavar="X0,Y0,Z0,X1,Y1,Z1",
@@ -450,7 +450,7 @@ def register(sub) -> None:
     _tree_flag(rot)
 
     aprev = asub.add_parser(
-        "preview", allow_abbrev=False,
+        "diagram", allow_abbrev=False,
         # allow_abbrev=False: the retired `--grid` (renamed to `--locator-cells`) is now a unique
         # abbreviation of `--grid-size` — without this it would silently parse as `--grid-size`
         # instead of the clean unknown-argument error the rename is supposed to give it.
@@ -458,11 +458,11 @@ def register(sub) -> None:
              "by CSG op; point actors as sprites/markers). Model-side, host-only — no editor")
     aprev.add_argument("names", nargs="*",
                        help="actors to render (case-insensitive), or the single token - to read a "
-                            "newline-separated name list from stdin (`actor find … | actor preview "
+                            "newline-separated name list from stdin (`actor find … | actor diagram "
                             "-`). Ignored when --from-t3d is given")
     aprev.add_argument("--from-t3d", dest="from_t3d", nargs="+", default=None, metavar="FILE",
                        help="render the actors in these T3D file(s) instead of the level, or - for a "
-                            "T3D snippet on stdin (`brush build spiral | actor preview --from-t3d -`). "
+                            "T3D snippet on stdin (`brush build spiral | actor diagram --from-t3d -`). "
                             "Multiple files concatenate in order; - is the sole value if present. "
                             "Mutually exclusive with the names source")
     _preview_opts(aprev)

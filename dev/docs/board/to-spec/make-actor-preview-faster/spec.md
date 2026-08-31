@@ -1,11 +1,11 @@
-# Spec DRAFT — make `actor preview` faster
+# Spec DRAFT — make `actor diagram` faster
 
 Status: draft for owner review. Numbers below were measured in THIS container (no game content),
 so `wire` only; `flat`/`textured` fill cost is estimated, not measured (see Open questions).
 
 ## Goal
 
-`actor preview` is the model-side build-loop viewer, so its latency is felt on every
+`actor diagram` is the model-side build-loop viewer, so its latency is felt on every
 iterate-and-look cycle. Profile where the time goes and cut it, keeping byte-pinned output identical
 except where a lever is explicitly a visible change the owner approves.
 
@@ -26,7 +26,7 @@ Fixture: `uedcli/tests/fixtures/level_small.t3d`, 15 actors / 13 brushes. In-pro
 
 - Pure geometry (wire, no annotations) is cheap: single iso 31 ms @1024, 65 ms @2048.
 - PNG encode (Pillow, 1024²) ≈ 30 ms.
-- End-to-end CLI (`actor preview --from-t3d …`, default quad) ≈ 0.47 s wall (adds ~0.15 s Python
+- End-to-end CLI (`actor diagram --from-t3d …`, default quad) ≈ 0.47 s wall (adds ~0.15 s Python
   start + parse).
 
 **The dominant cost is the on-face annotation layout, not fill or encode.** cProfile of 3× quad @1024

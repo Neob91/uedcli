@@ -20,12 +20,12 @@ later slice knows which characterization test guards which move.
 - `test_source_baseline.py`: trunk `LOCK_EX` before+during write; stash/prefab meta+folder preserved
   through an edit; labels neither persisted nor restored; the `from_env` announce is emitted inside
   `TrunkLevelSource.save`, once.
-- `test_ordering_baseline.py`: source-free order/folder/label box rejections; `actor preview
-  --from-t3d` before source resolution; empty-stdin inside/outside a project; materialize/preview
-  validation before project resolution; `_mover_index` translation matrix; preview filled-render
+- `test_ordering_baseline.py`: source-free order/folder/label box rejections; `actor diagram
+  --from-t3d` before source resolution; empty-stdin inside/outside a project; materialize/photo
+  validation before project resolution; `_mover_index` translation matrix; diagram filled-render
   tailored error + point-only no-op; plain `find` touches no schema; brush-scale cheap checks before
   the class resolver; save-vs-output ordering (add = save-before-output, brush scale =
-  output-before-save; failing save surfaces); stash/prefab preview prologue order.
+  output-before-save; failing save surfaces); stash/prefab diagram prologue order.
 
 ## Items covered by PRE-EXISTING tests (cited so a move names its guard)
 

@@ -107,7 +107,7 @@ parallel namespace would duplicate the query surface.
   `Package.Group.Name`, and the property-browser `var(Group)` category.
 - **Naming the flat dimension `tag`.** Collides with the real `Engine.Actor.Tag` property
   (reached via `find --prop Tag=`) — the same overload `folder` was invented to avoid.
-  `label` won once freed by renaming `actor preview`'s annotation flag `--labels` →
+  `label` won once freed by renaming `actor diagram`'s annotation flag `--labels` →
   `--annotate`.
 - **Deferring that preview flag rename to a separate later step.**
 - **Storing the folder in the T3D `Group=` prop.** Deep dotted paths overflow UnrealEd's

@@ -1,4 +1,4 @@
-"""`actor preview --faces` behaviour: the `wire` byte-identity golden, the texel rasterizer, and the
+"""`actor diagram --faces` behaviour: the `wire` byte-identity golden, the texel rasterizer, and the
 `textured` = CSG-solved-world path (backface cull, decal-once, guards, the parity golden).
 
 **The wire golden pair is the primary regression guard for the wireframe.** Re-bless only after
@@ -43,9 +43,9 @@ GOLDEN_QUAD = FIXTURES / "preview_wire_golden_quad.png"
 
 
 def _preview_args(out, **kw):
-    """A `actor preview --from-t3d` arg namespace. `brush_colors=None` is what a run with no
+    """A `actor diagram --from-t3d` arg namespace. `brush_colors=None` is what a run with no
     `--brush-colors` flag now parses to, and `faces` is left ABSENT unless a test sets it."""
-    base = dict(cmd="actor", sub="preview", project=None, names=[], from_t3d=None,
+    base = dict(cmd="actor", sub="diagram", project=None, names=[], from_t3d=None,
                 view="iso", layout="single", annotate=DEFAULT_ANNOTATIONS, iso_angle=30.0,
                 frame=None, frame_tightness=0.8, highlight=None, focus=None, show="", size=256,
                 out=str(out), brush_colors=None)
@@ -152,9 +152,9 @@ def _geom(actors, *, faces="wire", view="iso", color_by_csg=True, brush_colors="
 # ── the flag surface ──────────────────────────────────────────────────────────────────────────
 
 @pytest.mark.parametrize("argv", [
-    ["actor", "preview", "A"],
-    ["stash", "preview", "someid"],
-    ["prefab", "preview", "somename"],
+    ["actor", "diagram", "A"],
+    ["stash", "diagram", "someid"],
+    ["prefab", "diagram", "somename"],
 ])
 def test_faces_parses_on_all_three_preview_verbs(argv):
     """One flag, added once to the shared `_preview_opts`, so all three preview verbs carry it. Two
@@ -170,7 +170,7 @@ def test_an_unknown_faces_value_is_a_clean_exit_2_naming_it(capsys):
     """The two choices are `wire`/`textured`; anything else is argparse's own choice error, exit 2
     naming the bad value — no bespoke refusal branch."""
     with pytest.raises(SystemExit) as e:
-        cli.build_parser().parse_args(["actor", "preview", "A", "--faces", "shaded"])
+        cli.build_parser().parse_args(["actor", "diagram", "A", "--faces", "shaded"])
     assert e.value.code == 2
     assert "shaded" in capsys.readouterr().err
 
@@ -178,7 +178,7 @@ def test_an_unknown_faces_value_is_a_clean_exit_2_naming_it(capsys):
 def test_faces_help_describes_textured():
     """`-h` and the docs must agree the moment `textured` is a choice."""
     actions = {a.dest: (a.help or "") for a in cli.build_parser()._subparsers._group_actions[0]
-               .choices["actor"]._subparsers._group_actions[0].choices["preview"]._actions}
+               .choices["actor"]._subparsers._group_actions[0].choices["diagram"]._actions}
     assert "textured" in actions["faces"] and "UV frame" in actions["faces"]
 
 
@@ -685,11 +685,10 @@ def test_textured_with_explicit_brush_colors_exits_2(tmp_path, monkeypatch, caps
     assert "--brush-colors" in capsys.readouterr().err
 
 
-def test_textured_rejects_scaled_and_sheared_brushes_listing_every_offender(tmp_path, monkeypatch,
-                                                                           capsys):
-    """§4.2/§8: a positive-determinant scale, a shear and a mirror are ALL refused under textured (the
-    UV frame is rotation-only), naming every offender with its field — while `wire` and `flat` render
-    them (that scope is pinned elsewhere)."""
+def test_textured_renders_scaled_sheared_and_mirrored_brushes(tmp_path, monkeypatch, capsys):
+    """§4.2/§8 reversed: the UV frame (`texframe.world_uv_frame`) takes the brush's full linear map
+    `L`, same as the geometry solve, so a positive-determinant scale, a shear and a mirror all render
+    under textured — same as `wire`/`flat` (that scope is pinned elsewhere)."""
     from uedcli.transform import FScale
     _patch_resolver(monkeypatch, _utx(tmp_path))
     scaled = _tbox("Scaled", ref="Fix.T")
@@ -697,12 +696,24 @@ def test_textured_rejects_scaled_and_sheared_brushes_listing_every_offender(tmp_
     sheared = _tbox("Sheared", ref="Fix.T", location=(600.0, 0.0, 0.0))
     sheared.post_scale = FScale(scale=(Decimal(1), Decimal(1), Decimal(1)),
                                 sheer_rate=Decimal("0.5"), sheer_axis="SHEER_ZX")
-    assert _run(tmp_path, [scaled, sheared], faces="textured") == 2
-    err = capsys.readouterr().err
-    assert "Scaled" in err and "Sheared" in err and "MainScale" in err and "SheerRate" in err
-    # ...but wire and flat still render the same scaled/sheared set.
-    assert _run(tmp_path, [scaled, sheared], faces="wire") == 0
+    mirrored = _tbox("Mirrored", ref="Fix.T", location=(1200.0, 0.0, 0.0))
+    mirrored.main_scale = FScale(scale=(Decimal(-1), Decimal(1), Decimal(1)))
+    assert _run(tmp_path, [scaled, sheared, mirrored], faces="textured") == 0
     capsys.readouterr()
+    # ...and wire/flat still render the same set (unchanged scope).
+    assert _run(tmp_path, [scaled, sheared, mirrored], faces="wire") == 0
+    capsys.readouterr()
+
+
+def test_textured_degenerate_scale_still_exits_2_naming_the_brush(tmp_path, monkeypatch, capsys):
+    """A zero-axis scale makes `L` non-invertible — the one legitimate remaining refusal, now raised
+    by the shared marshaller/UV frame rather than the deleted CLI-level guard."""
+    from uedcli.transform import FScale
+    _patch_resolver(monkeypatch, _utx(tmp_path))
+    degenerate = _tbox("Degenerate", ref="Fix.T")
+    degenerate.main_scale = FScale(scale=(Decimal(0), Decimal(1), Decimal(1)))
+    assert _run(tmp_path, [degenerate], faces="textured") == 2
+    assert "Degenerate" in capsys.readouterr().err
 
 
 def test_textured_renders_a_scene_that_references_no_texture(tmp_path, monkeypatch, capsys):
@@ -722,7 +733,7 @@ def test_textured_refuses_when_a_referenced_texture_has_no_resolver(tmp_path, ca
     assert _run(tmp_path, [_tbox("Box", ref="Fix.T")], faces="textured",
                 project=str(tmp_project)) == 2
     err = capsys.readouterr().err
-    assert "games config" in err and "actor preview --faces textured" in err
+    assert "games config" in err and "actor diagram --faces textured" in err
 
 
 def test_the_three_no_resolver_causes_name_distinct_reasons(monkeypatch, tmp_path):
@@ -731,7 +742,7 @@ def test_the_three_no_resolver_causes_name_distinct_reasons(monkeypatch, tmp_pat
     two of them."""
     from uedcli import config
     from uedcli.cli import rendering
-    verb = "actor preview --faces textured"
+    verb = "actor diagram --faces textured"
     monkeypatch.setattr(config, "load_user_config", lambda: None)
     assert "no per-user games config" in rendering._texture_resolver_cause(object(), verb)
 
@@ -916,6 +927,21 @@ def test_a_mover_draws_as_a_filled_magenta_overlay():
                             mover_class="Engine.Mover")
     geom = _geom([room, door], faces="textured", movers=["Door"])
     assert any(rgb == MOVER_F for _v3, _vs, rgb, _d in geom.fills)   # mover magenta fill present
+
+
+def test_a_degenerate_scale_mover_exits_2_naming_it_not_silently_collapsed():
+    """A mover skips world CSG entirely (`_in_world_csg`), so it never reaches
+    `brush_marshal._build_brush_input`'s own `reject_degenerate` gate — `_mover_actor_world_polys`
+    carries the same check itself, or a degenerate mover would silently collapse to a zero-area poly
+    instead of refusing. Regression: the deleted CLI-level `_reject_transformed_brushes` used to catch
+    this (it checked every brush's `MainScale`/`PostScale`, movers included, degenerate or not)."""
+    from uedcli.preview_native import NativePreviewError
+    from uedcli.transform import FScale
+    door = make_brush_actor("Door", cube(128.0, 128.0, 256.0), mover_class="Engine.Mover")
+    door.main_scale = FScale(scale=(Decimal(0), Decimal(1), Decimal(1)))
+    with pytest.raises(NativePreviewError) as e:
+        _solve([door])
+    assert "Door" in str(e.value)
 
 
 # -- the pre-solve guards (§B4) + texture-after-solve (§M2) --------------------------------------

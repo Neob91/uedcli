@@ -7,10 +7,10 @@ summary = "materialize MAP SAVE exceeds its 600s bound on a retail-size map"
 # materialize MAP SAVE exceeds its 600s bound on a retail-size map
 
 `level import`ing `06_HongKong_WanChai_Market.dx` gives a trunk of 2288 actors (1331 brush, 957
-point). `level preview --game` on that trunk fails in its materialize step:
+point). `level photo --game` on that trunk fails in its materialize step:
 
 ```
-materialize for preview failed: materialize failed (nothing written): MAP SAVE never produced a
+materialize for photo failed: materialize failed (nothing written): MAP SAVE never produced a
 finished file at /work/<uuid>.dx: no file appeared (after 601s, bound 600s). The editor accepted the
 command but did not complete the save — check the editor log; it most likely wedged.
 ```

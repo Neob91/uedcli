@@ -3,7 +3,7 @@ through `wine_ctl exec`.
 
 **Reading the level back goes through `MAP EXPORT` alone** (`Driver.map_export`),
 and even that is rare: the git-tracked T3D trunk is authoritative, so only the build/snapshot
-path (materialize/preview) ever reads from the editor at all. The old `EDIT COPY` → X-clipboard
+path (materialize/photo) ever reads from the editor at all. The old `EDIT COPY` → X-clipboard
 read path is GONE — `Driver.edit_copy` was deleted 2026-07-26 as uncalled. The clipboard is
 still WRITTEN, though: `set_clipboard` + `edit_paste` are how brushes are added, because
 IMPORTADD'd brushes are not selectable (`writes._re_add`, `native.csg_golden`).
@@ -237,7 +237,7 @@ class Driver:
         (`wine_ctl click` takes x,y POSITIONALLY.)
 
         **No uedcli verb calls this.** It was used by the editor-screenshot preview flow that was
-        deleted 2026-07-16 (`level preview` now renders model-side, without the editor); its live
+        deleted 2026-07-16 (`level photo` now renders model-side, without the editor); its live
         callers today are the committed spike harnesses under `dev/docs/spikes/`. Retained
         deliberately — see `dev/docs/rationale/driver.md`."""
         self._wine_ctl("click", str(x), str(y), "--button", str(button))
@@ -312,8 +312,8 @@ class Driver:
         brush, and the render DOES reflect it. See unrealed/commands.md `CAMERA ALIGN` +
         rendering.md "Posed shots".
 
-        **No uedcli verb calls this.** It used to auto-frame the editor-screenshot `level preview`
-        flow, which was deleted 2026-07-16 — `level preview` renders model-side now and never poses
+        **No uedcli verb calls this.** It used to auto-frame the editor-screenshot `level photo`
+        flow, which was deleted 2026-07-16 — `level photo` renders model-side now and never poses
         an editor camera. Its live callers are the committed spike harnesses under
         `dev/docs/spikes/`. Retained deliberately — see `dev/docs/rationale/driver.md`."""
         self.exec("CAMERA ALIGN" if name is None else f"CAMERA ALIGN NAME={name}")

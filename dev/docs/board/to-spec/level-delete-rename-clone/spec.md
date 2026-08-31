@@ -11,7 +11,7 @@ The probe found no verb for any of the three.
 ## Current state
 
 - Levels are created (`level create`) and imported (`level import`) but never deleted, renamed, or
-  copied — `cli/commands/level.py:36` routes only `list/create/import/materialize/preview/status/
+  copied — `cli/commands/level.py:36` routes only `list/create/import/materialize/photo/status/
   doctor`.
 - A level IS just a directory: `maps/<name>/actors/<actor>/{actor.t3d, order_value[, folder]
   [, labels]}` (`terminology.md`; `t3dtree.py`). The level name is the `<name>` dir name; an actor's

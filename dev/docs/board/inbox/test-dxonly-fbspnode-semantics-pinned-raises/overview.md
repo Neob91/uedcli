@@ -25,7 +25,7 @@ FAILED uedcli/tests/test_native_materialize.py::test_dxonly_fbspnode_semantics_p
 ```
 
 **Pre-existing and environment-dependent, not caused by any recent change.** The test predates the
-`actor preview --faces` work and that feature does not touch the file. It is invisible when `bin/test`
+`actor diagram --faces` work and that feature does not touch the file. It is invisible when `bin/test`
 runs from a **worktree** — `.claude/worktrees/<slug>/uedcli/tests/` is one level deeper, so `parents[5]`
 resolves and the test skips cleanly. It only fails from the main checkout, which is why it surfaced at
 merge time rather than during the build.

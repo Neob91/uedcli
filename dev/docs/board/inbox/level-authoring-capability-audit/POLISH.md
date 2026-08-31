@@ -94,10 +94,10 @@ snapping to the power-of-two grid and reseating them on their supporting surface
 
 ## How to verify — BOTH renderers
 
-- Fast geometry checks: `bin/uedctl level preview --native` (~1s, no lighting).
-- **Truth: `bin/uedctl level preview --game`** — batch ALL of a check's shots into ONE
+- Fast geometry checks: `bin/uedctl level photo --native` (~1s, no lighting).
+- **Truth: `bin/uedctl level photo --game`** — batch ALL of a check's shots into ONE
   invocation; the container is shared and serialised.
-- Wireframe: `bin/uedctl actor find | bin/uedctl actor preview - --annotate name --size 900 --out <proj>/shots/<name>.png`
+- Wireframe: `bin/uedctl actor find | bin/uedctl actor diagram - --annotate name --size 900 --out <proj>/shots/<name>.png`
 - **`Read` every picture you produce.** Judge the fix by looking at it.
 
 ## Traps that already cost this project hours
@@ -109,7 +109,7 @@ snapping to the power-of-two grid and reseating them on their supporting surface
 - Post-verify raises **false positives** (`actor ... MISSING from the built map`,
   `differs on property Base`) on builds that are actually fine — `--no-verify` is the
   workaround, but see above.
-- `level preview --game` has **no `--no-verify`**; use `--map <file>` against a map you
+- `level photo --game` has **no `--no-verify`**; use `--map <file>` against a map you
   built and size-checked.
 - **Check exit codes.** `cmd | tail` reports *tail's* status — use `${PIPESTATUS[0]}` or
   `set -o pipefail`. And a zero exit does not prove success: verify the artifact.

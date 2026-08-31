@@ -169,7 +169,7 @@ properties and geometry, never for the level's completeness.
   Confirmed live 2026-06-20: the cached image still had the pre-`Extra/AI`→`Tools/uedcli`-rename
   `ENTRYPOINT`, though `Dockerfile` had long since been corrected to
   `/repo/Tools/uedcli/uned/entrypoint.sh` — every fresh per-session editor (`ensure_editor`,
-  i.e. every real `level apply`/`level preview`/`session start <dx>`) failed immediately
+  i.e. every real `level apply`/`level photo`/`session start <dx>`) failed immediately
   (`bash: /repo/Extra/AI/entrypoint.sh: No such file or directory`, container exits 127) while
   the already-running persistent `dx-lum-uned` kept working (it doesn't need the new image). If a
   fresh per-session editor won't start, `cd Tools/uedcli/uned && docker compose build` before
@@ -460,7 +460,7 @@ measurement, stores it in typed fields, and bakes it (`brush apply-transform`) �
   selection, no-op on a missing name. Caveat: for IMPORTADD brushes it selects-for-read
   (`EDIT COPY` sees it) but `ACTOR DELETE` still no-ops (the missing-`Bound` quirk below); point
   actors are fully actionable. `SELECTNAME` + `ACTOR DELETE` drives the camera-rotation helper
-  (`dispatch._camera_rotation_helper`, wired as `level preview --rotate`): it places a transient
+  (`dispatch._camera_rotation_helper`, wired as `level photo --rotate`): it places a transient
   `Light` carrying the desired rotation, `SELECTNAME`s it, `CAMERA ALIGN NAME=`s it (adopting its
   full FRotator), then deletes the helper for zero residue. The materialize / apply path does not
   delete actors by name — it is a full re-import from a clean `MAP NEW` (`materialize.py`): every
@@ -473,7 +473,7 @@ measurement, stores it in typed fields, and bakes it (`brush apply-transform`) �
   the rule for Lights etc.).
 - `PF_Selected` does not round-trip (selection lives on derived BSP surfaces, not the
   authored brush PolyList) — you can't ask the editor "which poly is this surface". Identify a
-  poly model-side by `(brush, index)` via `brush poly list` + the preview viewer.
+  poly model-side by `(brush, index)` via `brush poly list` + the diagram viewer.
 
 ## How brushes enter the level
 - `ACTOR SELECT INSIDE` selects a brush only if it entered via `BRUSH ADD` or a well-formed
@@ -553,7 +553,7 @@ measurement, stores it in typed fields, and bakes it (`brush apply-transform`) �
     space: `CoreTexMetal.ladder_a` across the north flank of two stacked solid containers meant you
     looked straight through both into the yard. The same trap was hit independently on a second level
     (a masked lattice painted onto a solid shaft wall).
-  - Corollary: `level preview --native` is a free detector — it renders masked faces opaque, so an
+  - Corollary: `level photo --native` is a free detector — it renders masked faces opaque, so an
     index-0 region shows as raw magenta. Container-free and seconds, versus a `--game` render.
   *(Import-side mechanism: owner, 2026-07-26. Render-side behavior observed live in `--game` renders
   on two levels — `../spikes/levelbuild-friction/agent-reports.md`. Stored property probed and

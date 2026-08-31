@@ -66,7 +66,7 @@ list that would drift from it and miss a project's own overriding classes.
 ### Meshes decode natively
 
 The complete `UMesh`/`ULodMesh` body decodes in-process. Rendering a mesh — a catalog thumbnail, an
-actor preview — is therefore **pure offline compute: no editor, no container, and no `umodel.exe`**,
+actor diagram — is therefore **pure offline compute: no editor, no container, and no `umodel.exe`**,
 which survives only inside the stub pipeline it already serves.
 
 ### Decoding is cheap on a cold process

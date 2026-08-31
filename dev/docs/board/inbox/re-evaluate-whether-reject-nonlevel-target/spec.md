@@ -42,7 +42,7 @@ with two things, both now cleared:
 - The engine `Actor.Tag` property (the obvious first choice, "tag") is a real UnrealScript field, matched
   today via `actor find --prop Tag=…`. Naming our dimension "tag" would sit a `--tag` filter right next
   to `--prop Tag=` — the exact overload `folder` was invented to avoid with `Group`. **Rejected: "tag".**
-- "label" *was* taken by `actor preview`'s on-image text annotations (`--labels`). **Andrzej renamed that
+- "label" *was* taken by `actor diagram`'s on-image text annotations (`--labels`). **Andrzej renamed that
   flag to `--annotate`** (`cli.py:137`, `dispatch.py:487`), freeing the word for the dimension where it
   fits best. (Follow-up, §13: the preview *internals* — `parse_label_spec`, `DEFAULT_LABELS`,
   `LabelSpec` — are still "label"-named; rename them to `annotation*` for clarity in a separate chore.)

@@ -1,8 +1,8 @@
-# Spec DRAFT — `actor preview` rendering improvements
+# Spec DRAFT — `actor diagram` rendering improvements
 
 Status: draft for owner review. **Replaces the prior spec, which was stale** — it described a
 330-line `brush preview` with a pure-wireframe renderer and no golden fixtures. Since then the verb
-is `actor preview`, `preview.py` is ~2600 lines, `--faces {wire,flat,textured}` shipped (board
+is `actor diagram`, `preview.py` is ~2600 lines, `--faces {wire,flat,textured}` shipped (board
 `actor-preview-faces`), and byte-pinned goldens exist. This draft re-enumerates the wanted
 improvements against what is actually shipped.
 

@@ -2,7 +2,7 @@
 
 ## Context
 
-RULED by the owner and IMPLEMENTED in S2 of `actor preview --faces`, kept as the only record of why
+RULED by the owner and IMPLEMENTED in S2 of `actor diagram --faces`, kept as the only record of why
 `flat`'s colour roles are assigned as they are, and of a second observable a cold review found under
 the same root cause.
 

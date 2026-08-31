@@ -133,7 +133,7 @@ def unstubbed_v68_message(packages: list[str]) -> str:
 
 def search_path_package_names(files: list[tuple[str, str]]) -> list[str]:
     """The bare package NAMES on a composed search path (config.composed_search_files output) — the
-    load set for `level materialize`/`level preview` (decision 2026-07-05 23:00: load the whole
+    load set for `level materialize`/`level photo` (decision 2026-07-05 23:00: load the whole
     composed search path; no per-level derivation, no closure walk). One name per package file, in the
     caller's already-stem-deduped order. NOTE: ensure_load re-resolves each name against its threaded
     HOST `search_dirs` (`editor_search_dirs(search_dirs)` = stub cache + UED22 + the whole composed

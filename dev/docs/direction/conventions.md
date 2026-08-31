@@ -71,7 +71,7 @@ can't run.
 "Is this a Mover?" means "does its class descend from `Engine.Mover`?", resolved offline against the
 game's own `.u` — one shared predicate, no per-substrate class list, no name-suffix guess. Every
 mover-aware verb (`mover key`, `level doctor`, `event graph`, `brush scale`/`apply-transform`/
-`intersect`/`deintersect`, `stash capture`, `level preview --native`, the native build) needs a
+`intersect`/`deintersect`, `stash capture`, `level photo --native`, the native build) needs a
 resolvable package search path, and without one exits 2 naming the verb and what is missing.
 
 ### Verbs compose
@@ -105,7 +105,7 @@ Pick the verb by which a new command is. Nothing is renamed to unify them.
 ### Model-side by default
 
 Content reads and mutations are pure model-side compute against the T3D. The editor is touched only
-to build or preview, never to answer a question about the trunk.
+to build or photo, never to answer a question about the trunk.
 
 ### Placement anchors the bbox-min corner; rotation pivots a member's own Location
 

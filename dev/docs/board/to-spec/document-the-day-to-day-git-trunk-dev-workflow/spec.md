@@ -9,7 +9,7 @@ Write one short how-to for the current loop a user follows to edit a level with 
 
     work on a git feature branch
       → edit the T3D trunk model-side (`actor …` / `brush …` / `poly …`)
-      → `level preview` to eyeball
+      → `level photo` to eyeball
       → `level materialize --out <map>` to build the artifact
       → `git commit` / merge into trunk
 
@@ -25,10 +25,10 @@ itself (feature worktrees, squash-merge), which is developer-only and lives in
 
 - The loop's PHILOSOPHY is already stated at the top of `docs/usage.md`: "The source of truth is a
   git-tracked T3D tree on disk … `git` is the history and merge engine … The editor / headless game
-  is reached only for `level materialize` and `level preview --game`" (`docs/usage.md:7-13`), and
+  is reached only for `level materialize` and `level photo --game`" (`docs/usage.md:7-13`), and
   the composability rules (`:23-60`).
 - The verbs exist and are documented individually: model-side mutators (`usage.md:394+`),
-  `level preview` / `actor preview` (`usage.md:1033+`), `level materialize` (referenced as the build
+  `level photo` / `actor diagram` (`usage.md:1033+`), `level materialize` (referenced as the build
   step, inverse of `level import`, `usage.md:132`), `level create` / `level status`
   (`usage.md:129-134`).
 - What is MISSING is a single "here is the daily loop end to end" walk-through tying them together.
@@ -44,7 +44,7 @@ itself (feature worktrees, squash-merge), which is developer-only and lives in
 ### Home (proposed — see `questions/doc-home.md`)
 
 A new top-level user doc, **`docs/workflow.md`**, cross-linked from `docs/usage.md`'s intro and from
-`docs/README.md`. Rationale: the loop spans query + mutate + preview + materialize + git — bigger
+`docs/README.md`. Rationale: the loop spans query + mutate + photo + materialize + git — bigger
 than any one `usage.md` section, and `usage.md` is organised as a per-verb reference, not a
 narrative. A standalone page is the thing a user looks for under "how do I actually work".
 
@@ -59,7 +59,7 @@ is an owner decision.
 2. **Start** — pick/scaffold a level (`level create`), `export UEDCLI_LEVEL=<name>`, branch in git.
 3. **Edit model-side** — the `find | mutate -` loop over `actor` / `brush` / `poly`; instant, no
    editor. Point at the verb reference in `usage.md`, do not restate every verb.
-4. **Eyeball** — `level preview` (and `actor preview`) to see the change without a full build.
+4. **Eyeball** — `level photo` (and `actor diagram`) to see the change without a full build.
 5. **Build the artifact** — `level materialize --out <map>` to produce the compiled map; when to
    build (before commit / on a milestone) vs. rely on preview.
 6. **Commit & merge** — `git commit` the trunk; how per-actor `.t3d` files merge natively; git is

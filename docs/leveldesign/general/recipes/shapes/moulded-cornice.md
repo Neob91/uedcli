@@ -38,8 +38,8 @@ step, back in to 16, up to 16, then a 45° chamfer to `(8,24)` and back to the w
   vertices, so uedcli tiles each cap into convex faces while the brush as a whole stays concave — the
   same arrangement `brush build staircase` uses. The tiling only adds diagonals of your profile, so
   the solid stays watertight.
-- Preview: `level preview --native`, the fast offline draft, assumes convex solids and draws the
-  moulding's notch filled in. Use the default `level preview --game` (or build it) to see the real
+- Preview: `level photo --native`, the fast offline draft, assumes convex solids and draws the
+  moulding's notch filled in. Use the default `level photo --game` (or build it) to see the real
   shape — the geometry is correct either way.
 - Mitre the corners by hand. A sweep has square ends; where two runs meet at a corner, either overlap
   them and accept the seam, or cut each end with [`brush clip`](chamfered-box.md) at 45°.

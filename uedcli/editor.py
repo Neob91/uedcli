@@ -1,5 +1,5 @@
 """The editor is a per-command EPHEMERAL resource: every editor-driving verb (`level
-materialize`/`preview`, the `stash` CSG generators) mints its own throwaway container from a fresh
+materialize`/`photo`, the `stash` CSG generators) mints its own throwaway container from a fresh
 `uuid7` id, drives it, and tears it down — there is no session and no standing per-project editor
 (direction/containers.md 2026-07-06 05:12; architecture.md "The editor is a per-command ephemeral resource").
 This module owns the container naming + lifecycle (`ensure_editor`/`stop_editor`).
@@ -65,7 +65,7 @@ def _wineprefix_volume(editor_id: str) -> str:
 
 def _is_running(container: str) -> bool:
     """Is this container up? BOUNDED (`PROBE_TIMEOUT`) — a `docker ps` that never answers is a dead
-    daemon, and it must raise a named `DriverError` (which the materialize/preview guards turn into
+    daemon, and it must raise a named `DriverError` (which the materialize/photo guards turn into
     a clean exit 2) rather than hanging `ensure_editor` before it has even tried to start."""
     try:
         res = subprocess.run(["docker", "ps", "-q", "-f", f"name=^{container}$"],
@@ -126,7 +126,7 @@ def _wait_ready(container: str, timeout: float) -> None:
 def _base_ini_path() -> Path:
     """The editor's `UnrealEd.ini` (the pre-bake source, which already carries the SoftDrv
     `Device=` the bake also sets — so it matches the baked `/opt/UED22/UnrealEd.ini` for the keys
-    `level preview` overrides)."""
+    `level photo` overrides)."""
     return Path(_compose_dir()) / "UED22" / "UnrealEd.ini"
 
 
@@ -317,7 +317,7 @@ def ensure_editor(editor_id: str, *, state_dir: Path, mounts=None, ready_timeout
     boot); the entrypoint's `/deusex` Paths block was removed in the asset-wiring cutover (Part C,
     2026-07-14), so nothing else touches `[Core.System] Paths` post-launch.
 
-    `ini_overrides` (`level preview`): bind-mount a temp `UnrealEd.ini` with those `[section]` key
+    `ini_overrides` (`level photo`): bind-mount a temp `UnrealEd.ini` with those `[section]` key
     overrides over the baked `/opt/UED22/UnrealEd.ini`, so the editor boots in the requested render
     mode / viewport layout — single boot, no restart. Mounted READ-WRITE (wine rewrites the ini on
     exit; a `:ro` mount → EACCES → GPF).
@@ -328,7 +328,7 @@ def ensure_editor(editor_id: str, *, state_dir: Path, mounts=None, ready_timeout
 
     `start_attempts` (bounded readiness retry): UnrealEd is crash-prone and intermittently dies at
     startup — the container comes up but its editor window never resolves, so `_wait_ready` times
-    out. That is the single most frequent interruption in the build→preview loop, so a readiness
+    out. That is the single most frequent interruption in the build→photo loop, so a readiness
     timeout is not fatal on the first try: up to `start_attempts` times we reap the wedged container
     (`docker rm -f`, clearing the leaked name) and re-spin a fresh one, re-waiting each time. Only
     when every attempt has timed out do we raise `EditorNotReadyError` (a clear, named error, never
@@ -422,7 +422,7 @@ def ensure_editor(editor_id: str, *, state_dir: Path, mounts=None, ready_timeout
 
 def stop_editor(editor_id: str, state_dir: Path) -> None:
     """Tear down this ephemeral editor's container + its wineprefix volume (free the ~0.5 GB); remove
-    any override/engine ini the boot wrote under `<state_dir>/tmp/` (no leak per preview mode-group /
+    any override/engine ini the boot wrote under `<state_dir>/tmp/` (no leak per photo mode-group /
     materialize).
 
     Every docker call here is BOUNDED (`PROBE_TIMEOUT`) with the timeout SWALLOWED — the same

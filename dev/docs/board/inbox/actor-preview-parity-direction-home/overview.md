@@ -11,7 +11,7 @@ deleted; `CLAUDE.md` requires the durable product intent to live in `direction/`
 actor-preview direction topic yet. Proposed text (verbatim, awaiting a yes — suggested home a new
 actor-preview topic, or a section of `direction/trunk-and-editor.md`):
 
-> **`actor preview` render modes.** `actor preview` (and `stash`/`prefab preview`) render the trunk
+> **`actor diagram` render modes.** `actor diagram` (and `stash`/`prefab diagram`) render the trunk
 > offline, matching UnrealEd's viewport, on a BLACK background. `--faces` has exactly two values:
 > - **`wire`** (default) — CSG-coloured outlines only; a content-free schematic that needs no game
 >   install and works on `--from-t3d` from anywhere.

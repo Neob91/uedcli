@@ -2,7 +2,7 @@
 
 Guidance for building buildable UnrealEngine-1 levels with uedcli, mapped onto the verbs you run. You
 author a git-tracked T3D trunk with small composing verbs; the editor is only touched for
-`level materialize` / `level preview`.
+`level materialize` / `level photo`.
 
 This user area splits by scope:
 
@@ -50,7 +50,7 @@ The four verb families you compose:
 | `actor prop set` / `actor order` / `mover key`                   | per-actor property, CSG-order, and mover-keyframe edits                                                             | `actor prop set Door1 MoveTime=1.5` (`bLocked` etc. are DX `DeusExMover` props — see deusex/) |
 
 How it builds. The T3D trunk is the source of truth (committed to git). `level materialize` drives
-UnrealEd to compile it into the `.dx`/`.unr` map file; `level preview` renders stills. The verbs write
+UnrealEd to compile it into the `.dx`/`.unr` map file; `level photo` renders stills. The verbs write
 the trunk; the editor only builds it.
 
 ---

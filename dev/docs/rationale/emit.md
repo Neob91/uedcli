@@ -7,7 +7,7 @@ Decisions about `uedcli/emit.py`, the module that turns the in-memory model
 2. the `MAP IMPORT` payload handed to UnrealEd at `level materialize`,
 3. the compare view the post-verify checks the built map against
    (`normalize.compare_view` → `_geometry_text` → `emit_brush`), and
-4. the identity hash that keys the preview build cache (`normalize.canonical_level_hash`).
+4. the identity hash that keys the photo build cache (`normalize.canonical_level_hash`).
 
 A spelling emitted here appears on all four at once, including both sides of the post-verify
 comparison.
@@ -77,7 +77,7 @@ Consequences a reader should expect:
   text differs from the file on disk, and such an actor now differs by exactly that line. So a user
   who edits one actor can see other actors appear in `git status` with only zero-`Pan` lines removed
   — a one-time migration to the canonical spelling, not a content change.
-- A level holding a zero `Pan` gets a new identity hash, so its next preview rebuilds once.
+- A level holding a zero `Pan` gets a new identity hash, so its next photo rebuilds once.
   `canonical_level_hash` runs over this same emitted text and keys `preview_game.materialized_dx`'s
   build cache, so the cached `.dx` is no longer found under the new key. That is the harmless
   direction for the cache to err — a stale hit would serve a map built from different content; a

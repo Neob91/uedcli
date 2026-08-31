@@ -1,10 +1,10 @@
 +++
 priority = "p3"
 kind = "owner-question"
-summary = "`actor preview` overlays are POINT-actor-only (built 2026-07-21)"
+summary = "`actor diagram` overlays are POINT-actor-only (built 2026-07-21)"
 +++
 
-# `actor preview` overlays are POINT-actor-only (built 2026-07-21)
+# `actor diagram` overlays are POINT-actor-only (built 2026-07-21)
 
 `--show-collision`
 / `--show-light-range` / `--show-sound-range` resolve fields ONLY for point actors (`actor.brush is

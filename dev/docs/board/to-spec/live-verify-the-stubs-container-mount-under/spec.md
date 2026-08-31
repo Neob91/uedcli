@@ -2,7 +2,7 @@
 
 ## Goal
 
-Confirm on a live editor container that a real `level materialize`/`level preview` mounts the v69
+Confirm on a live editor container that a real `level materialize`/`level photo` mounts the v69
 stub cache at `/stubs` from the env-fed source and actually `OBJ LOAD`s the stubs from there. The
 `${HOME}`-interpolation / stripped-env concern is already closed in code (a board chore, 2026-07-18);
 the one remaining leg is the end-to-end confirmation, which is substrate-gated.
@@ -21,7 +21,7 @@ The wiring is in place and offline-inspectable:
   (`uedcli/packages.py:214`), and `ensure_load` `OBJ LOAD FILE=`s each resolved package
   (`packages.py:270`).
 
-Unverified live: that a materialize/preview whose level references a stubbed package actually finds
+Unverified live: that a materialize/photo whose level references a stubbed package actually finds
 and loads the stub from `/stubs` inside a real container (the mount is populated, visible, and the
 `OBJ LOAD FILE=/stubs/<pkg>.u` binds).
 

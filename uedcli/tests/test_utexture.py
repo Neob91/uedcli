@@ -567,7 +567,7 @@ def test_install_system_and_textures_failures_drop_to_zero():
 # --- S2b: the mip pyramid and the bMasked read rule ---------------------------------
 
 def test_the_result_carries_every_mip_of_the_selected_array():
-    """`actor preview --faces textured` picks a mip per face from screen density, so it needs
+    """`actor diagram --faces textured` picks a mip per face from screen density, so it needs
     the whole pyramid and not just level 0. The levels come from the array S1's selection rule
     chose, which `array` names, and level 0 is the same buffers the top-level fields carry."""
     got = TextureResolver([COMPMIPS]).resolve("UccCompMips.SpikeFixture")
@@ -688,7 +688,7 @@ def test_no_single_byte_corruption_makes_the_resolver_raise():
     corruptions** of this 1,459-byte package raised `IndexError` straight out of
     `TextureResolver.resolve()`.
 
-    That is a Python traceback out of `level preview --native` and out of author-time texture
+    That is a Python traceback out of `level photo --native` and out of author-time texture
     validation, on nothing worse than a damaged `.utx` sitting on the search path. Every byte is
     flipped here in turn; every result must be a `DecodedTexture` or a `TextureError`.
     """

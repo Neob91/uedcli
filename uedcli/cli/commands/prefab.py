@@ -1,6 +1,6 @@
 """`prefab` command family — the durable tier-2 library.
 
-`cli.dispatch` enters through `run(args)`. Reads (list/show/preview/drop) touch only the tracked
+`cli.dispatch` enters through `run(args)`. Reads (list/show/diagram/drop) touch only the tracked
 prefab dir; `apply` resolves the selected trunk level and reuses `cli.placement.apply_set`. Every
 subverb that takes a member name validates that name (`stashlib.validate_member_name`) before ANY
 filesystem touch, so a `../../x` name cannot escape the library root. This module uses the shared
@@ -33,7 +33,7 @@ def read_or_exit(root, name: str):
 
 
 def run(args) -> int:
-    """The durable tier-2 library. Reads (list/show/preview/drop) touch only the tracked dir;
+    """The durable tier-2 library. Reads (list/show/diagram/drop) touch only the tracked dir;
     apply resolves the selected trunk level and reuses `placement.apply_set`."""
     root = resources.prefab_root(args)
     # M1: validate the name before ANY filesystem touch (read OR the drop unlink) so a
@@ -59,7 +59,7 @@ def run(args) -> int:
         else:
             print("\n".join(actors_t3d[n] for n in chosen if n in actors_t3d))
         return 0
-    if args.sub == "preview":
+    if args.sub == "diagram":
         return preview(args, root)
     if args.sub == "drop":
         # A NEW prefab is a DIR `<name>/`; also unlink any OLD-format `<name>.t3d`/`.json` so a stale
@@ -84,7 +84,7 @@ def run(args) -> int:
 
 
 def preview(args, root) -> int:
-    """`prefab preview <name> [names…]` — render a stored prefab's actors. `run` has already
+    """`prefab diagram <name> [names…]` — render a stored prefab's actors. `run` has already
     validated the member name; this reads the prefab and hands its actors to the shared renderer."""
     actors_t3d, order, _pkgs, _meta, _folders = read_or_exit(root, args.name)
     return rendering.render_actors_to_out(

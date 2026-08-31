@@ -45,8 +45,8 @@
 The durable source of truth is the git-tracked T3D trunk — one directory per actor under
 `<maps-dir>/<level>/`, edited on ordinary git feature branches. The `.dx`/`.unr` map
 file is a build artifact, never the merge unit. UnrealEd is not in the read/edit loop —
-it is a build/preview tool reached only via a per-command ephemeral spin-up (`level materialize`,
-`level preview`, the `stash` CSG generators). Every `actor`/`brush`/`poly`/`vertex` read and
+it is a build/photo tool reached only via a per-command ephemeral spin-up (`level materialize`,
+`level photo`, the `stash` CSG generators). Every `actor`/`brush`/`poly`/`vertex` read and
 mutation is pure model-side compute against the trunk (no `docker exec`, no `MAP EXPORT`); the LLM
 issues semantic by-name commands; T3D is internal plumbing. Git is the history — `git commit` is
 the user's own, uedcli never wraps version control.
@@ -77,7 +77,7 @@ and [`spikes/2026-07-05-git-merge-t3d-layout/`](spikes/2026-07-05-git-merge-t3d-
   `LevelSelectionError`/`ConfigError`; **`GeometryError`** (a degenerate/invalid brush from a
   model-side verb — actor add, brush clip/vertex, mover key, the builders, stash/prefab apply;
   `level materialize` catches its own build-time geometry error locally); and editor-driver failures
-  (`DriverError`/`TimeoutError` from materialize/preview/stash CSG — `EditorNotReadyError` subclasses `TimeoutError`, so a startup death lands there too). Per-verb
+  (`DriverError`/`TimeoutError` from materialize/photo/stash CSG — `EditorNotReadyError` subclasses `TimeoutError`, so a startup death lands there too). Per-verb
   guards cover the rest: unreadable/missing/corrupt T3D input (`_read_t3d_input` for
   `actor add`/`stash capture --from-t3d`; `_read_prefab_or_exit` for the prefab library — both name
   the offender), a not-found stash id / prefab name (clean "not found", not a silent no-op or
@@ -235,7 +235,7 @@ and [`spikes/2026-07-05-git-merge-t3d-layout/`](spikes/2026-07-05-git-merge-t3d-
   `stop_editor`), `xfer.py`'s `cp_in`/`cp_out`/`remove`, and `store_export.export_dx_t3d`'s three
   execs all pass a `timeout=`; a query/teardown call that blows it is SWALLOWED where it runs on a
   teardown path (mirroring `preview_game.stop_game`) and otherwise raises a named `DriverError`,
-  which the materialize/preview guards already surface as a clean exit 2. `_wait_ready`'s bound is
+  which the materialize/photo guards already surface as a clean exit 2. `_wait_ready`'s bound is
   the load-bearing one: an unbounded `docker exec` inside its deadline loop meant the deadline could
   never expire, so `ensure_editor`'s readiness retry never fired. `export_dx_t3d` also removes its
   `/work/ucc_export-<uuid>` dir in a `finally:`, so a failed export strands nothing. See
@@ -372,14 +372,14 @@ The flag rides the content verbs that MUTATE or lack a per-kind equivalent
 (`actor add/delete/move/prop/rotate/find`, `brush clip/replace/vertex list|move/poly
 list|set|find|align`, `mover key count/move/rotate/remove/list`), the READ verbs (`actor show`,
 `level status`, `level doctor`, `event graph`, and `stash capture`'s SOURCE), **and — level-kind only
-— `level materialize`/`level preview`** (a build/preview of a *world*; `--tree stash|prefab` is
+— `level materialize`/`level photo`** (a build/photo of a *world*; `--tree stash|prefab` is
 rejected via the shared `_resolve_level_only` helper since a captured actor-set has none, and
-`stash`/`prefab preview` exist for those). For the box-inspecting reads, `_level_status`/
+`stash`/`prefab diagram` exist for those). For the box-inspecting reads, `_level_status`/
 `_level_doctor` use the source's uniform `display_name`/`kind` (a stash/prefab has an empty `_ranks`,
 so no duplicate-order finding, and `level status` prints a git hint only for a `TrunkLevelSource`).
 `stash capture --tree` names the capture SOURCE (rejected in combination with `--from-t3d`). It stays
 **deliberately absent** from the generators (`actor build`/`brush build`, which target nothing) and
-`actor preview` (a per-kind `stash`/`prefab preview` already exists).
+`actor diagram` (a per-kind `stash`/`prefab diagram` already exists).
 
 **Mutation visibility echo.** Because a per-shell env var still lets a *stale* `export` silently edit
 the wrong level, a **mutating** verb that resolved from the ambient env (`src.from_env` and no
@@ -454,7 +454,7 @@ A **prefab** is the durable, tracked, shareable tier-2 form: the per-actor tree
 LUM repo `Prefabs/`), overridable per-invocation via `--prefab-dir` (with the flag no project is
 needed; with neither a project nor the flag → clean exit 2). `stash promote` copies a register entry
 there; `stashlib.{write,read,list}_prefab` are the pure file I/O. `prefab` reads
-(`list`/`show`/`preview`/`drop`) touch only the tracked dir; only `prefab apply` resolves the
+(`list`/`show`/`diagram`/`drop`) touch only the tracked dir; only `prefab apply` resolves the
 selected trunk level. **Migration is a HARD CUTOVER** (`direction/trunk-and-editor.md`, 2026-07-18 addendum, sub-choice
 1): there is NO dual-read of the pre-per-actor-tree single-blob prefab (`<name>.t3d` + `<name>.json`)
 — reading one raises `stashlib.OldFormatPrefab`, surfaced as a clean exit-2 message naming the
@@ -487,7 +487,7 @@ class (`direction/materialize.md`):
   main consumer is `preview_game.materialized_dx`, which names the built map
   `materialized__<level>__<hash12>.dx` and **reuses that file whenever the hash matches** — so any
   equivalence folded in here is a pair of different levels collapsing onto one cache entry, i.e. a
-  preview showing a map built from something else. Erring strict only ever costs a rebuild.
+  photo showing a map built from something else. Erring strict only ever costs a rebuild.
 - **`compare_view(level, *, defaults) -> CompareView`** — what the H3 post-verify compares:
   `{canonical actor name -> typedprops.ActorValues}` + the canonicalized order. It rewrites the
   engine-managed LevelInfo actor Name to a fixed sentinel, then per actor builds the **typed
@@ -861,7 +861,7 @@ and plan both in board item `re-evaluate-whether-reject-nonlevel-target`; `direc
     per invocation, torn down in a `finally`; no session, no shared lock — `direction/containers.md`, 2026-07-06
     05:12). **Refuses to overwrite an existing `--out`** (exit 2, naming the file) unless
     `--overwrite`; H3 catches a silent `MAP SAVE` failure.
-  - `level preview SHOT... --out-dir DIR [--game|--native] [--size WxH] [--fov DEG]` —
+  - `level photo SHOT... --out-dir DIR [--game|--native] [--size WxH] [--fov DEG]` —
     **freely-posed still shots, two backends behind one verb; `--game` is the DEFAULT, `--native`
     is opt-in** (decisions 2026-07-16 12:13 + 2026-07-17 18:46; spec
     board item `de-containerization-follow-on-spec-items`). `dispatch._level_preview` resolves the tier as
@@ -1029,7 +1029,7 @@ and plan both in board item `re-evaluate-whether-reject-nonlevel-target`; `direc
   20:54 UTC). Known scope limit: the edge model reads the single `Event` prop only — multi-event
   array props (Dispatcher `OutEvents(n)`, Counter) are not modelled (inbox).
 - **Content verbs are model-side** (no editor): `actor …`, `brush …` (including `brush poly …`
-  and `brush vertex …`, the surface/corner sub-editors), **`mover key …`**, `actor preview`
+  and `brush vertex …`, the surface/corner sub-editors), **`mover key …`**, `actor diagram`
   (wireframe).
 - **The actor-name composition pipe** (spec in board item `actor-name-composition-pipe`) closes
   `actor find`'s output into the name-taking verbs at both ends. **Producer:** `actor add` prints
@@ -1117,9 +1117,10 @@ and plan both in board item `re-evaluate-whether-reject-nonlevel-target`; `direc
     its previewed world frame. The sheer coefficient is the disassembled piecewise snap
     (`transform.sheer_coeff`, engine-fact pinned). *(The combined scale+sheer matrix ORDER is
     `Sheer·Scale` — an offline choice; single-effect cases match the live spike, combined is the
-    integration differential's job. `level preview --native` and `brush intersect`/`deintersect` now
-    build scaled/mirrored/sheared brushes too, baking `L` into the Rust `rot`; preview's UV stays
-    rotation-only, so textures slide on scaled faces until the covariant-UV follow-on.)*
+    integration differential's job. `level photo --native`, `actor diagram --faces textured`, and
+    `brush intersect`/`deintersect` all build scaled/mirrored/sheared brushes, baking `L` into the
+    Rust `rot`; their UV frames follow the same `L` (`texframe.world_uv_frame`'s covariant map), so
+    textures track the transformed geometry rather than sliding on scaled faces.)*
   - **BAKE — `brush apply-transform`:** folds `L` into the PolyList (`v'=L·v`, `PrePivot'=L·PrePivot`
     — D8's explicit carve-out, `Location` unchanged, fields → identity, `Rotation` dropped), reverses
     each poly's winding when `det(L)<0` (mirror/odd shear — else an inside-out CSG-crashing brush),
@@ -1481,7 +1482,7 @@ in `spikes/2026-06-25-mover-keyframe-basepos-semantics.md`.
   - **ONE name-suffix mover test survives OUTSIDE `is_mover`, deliberately** (do not "fix" it in
     passing): `preview.classify_brush` still picks the magenta *mover* colour with
     `bare.endswith("Mover")`. It is the CSG-palette + hidden-line classifier on the shared
-    `actor preview` / `stash preview` / `prefab preview` path, so threading a `ClassIndex` into it
+    `actor diagram` / `stash diagram` / `prefab diagram` path, so threading a `ClassIndex` into it
     would make those three verbs require a project + the games config too — a further verb family —
     while an open spec item — board item `why-do-seven-verbs-now-require-the-games-config` — is
     asking whether that requirement should be scoped BACK DOWN. Which verbs may ask the mover
@@ -1496,7 +1497,7 @@ in `spikes/2026-06-25-mover-keyframe-basepos-semantics.md`.
   - **Consequence: those verbs now REQUIRE a class resolver**, hence a project + the per-user games
     config. The verbs that NEWLY require one: `mover key`, `level doctor`, `event graph`,
     `stash capture`, `brush scale`, `brush apply-transform`, `brush intersect`/`deintersect`
-    (`level materialize` and both `level preview` tiers already did). `dispatch._mover_index` is the
+    (`level materialize` and both `level photo` tiers already did). `dispatch._mover_index` is the
     ONE seam that builds it (over `_class_index`, itself the mockable seam); BOTH resolver-less
     routes — no games config, and a config that resolves no packages (`index.empty`) — exit 2 naming
     the verb and the requirement. `doctor` treats subclass movers as closed solids (deliberate: it
@@ -1513,13 +1514,13 @@ in `spikes/2026-06-25-mover-keyframe-basepos-semantics.md`.
 ## The editor is a per-command ephemeral resource (`editor.py`)
 The editor is a build/preview tool, not the source of truth — and every editor-driving verb spins
 up its **own throwaway container for that one invocation**, then tears it down. There is no session
-and no standing per-project editor: `level materialize` and `level preview` each mint a fresh
+and no standing per-project editor: `level materialize` and `level photo` each mint a fresh
 `uuid7` id, `ensure_editor(id)` `docker compose run`s
 a container named `uned-<uuid7>` (its own WINEPREFIX volume + an **ephemeral** noVNC host port via
 `-p 0:6080`, read back with `docker port` — `--service-ports` would collide with the standing
 `dx-lum-uned`'s fixed `127.0.0.1:6080`), drive it, and `stop_editor(id)` in a `finally` (removes the
 container + volume). Because each container is unshared, concurrent invocations never touch each
-other's editor state — parallel-safe by construction, no drive lock needed; `preview` boots one
+other's editor state — parallel-safe by construction, no drive lock needed; `photo` boots one
 editor per distinct render mode. The container is **derived per command, never a `--container`
 flag.** *(`direction/containers.md`, 2026-07-06 05:12 — per-command editor identity.)* Every editor/build-
 container spin-up takes an explicit **`state_dir`** — the resolved project's `<root>/.uedcli/`
@@ -1600,7 +1601,7 @@ Rationale, rejected alternatives and the outstanding verification gap:
 
 ## Native CSG core (`uedcli/native/`, `uedcli-native/`)
 The in-process Rust CSG core that carves the T3D trunk into a BSP model **with no editor, no wine,
-no container**. It backs `level preview --native` (`build_geometry_bspcsg` →
+no container**. It backs `level photo --native` (`build_geometry_bspcsg` →
 `serialize_model` → the software rasterizer), `brush intersect`/`deintersect`
 (`intersect_brushset`), and — behind the temporary `UEDCLI_NATIVE_MATERIALIZE=1` gate — the
 **editor-free `level materialize`** (`apply._materialize_native`), which carves the world BSP and
@@ -1610,7 +1611,7 @@ restored when that path came back; only `paths.rs` (the reachspec build) stays u
 
 - **Python glue `uedcli/native/`**: the `.dx` codec — `codec.py` (FCompactIndex + primitives +
   FString), `umodel.py` (UModel body parse + write-from-arrays — the Python **dev oracle**, shared with
-  `level import` and preview), `actor_write.py` (StateFrame + FPropertyTag list + UPolys/FPoly),
+  `level import` and photo), `actor_write.py` (StateFrame + FPropertyTag list + UPolys/FPoly),
   `pkg_write.py` (package container + a `parse_package` re-reader) — plus `brush_marshal.py` (one CSG
   brush actor → the flat `BrushTuple` the Rust core takes: `_build_brush_input`, the world-CSG/mover
   selector `_in_world_csg`; shared by `brushcsg.py` and `preview_native.py`) and `csg_golden.py` (the
@@ -1769,7 +1770,7 @@ needs `bspMergeCoplanars` coplanar-face union (`build.rs merge_coplanars` is a d
 and **f (portal)** needs `TestVisibility` portalization/zones (native is single-zone; leaf-count
 parity for multi-region carves is the same slice). §6 gate 5 (dual serializer) still passes.
 The core builds a full Model (nodes/surfs/points, plus `bsp_build_bounds` collision hulls and
-`zones.rs`); `level preview --native` reads only the geometry. `level materialize` is editor-driven
+`zones.rs`); `level photo --native` reads only the geometry. `level materialize` is editor-driven
 (`apply.run_materialize`) — the native build that once consumed the lighting/paths passes was removed
 (2026-08-23). Build the extension: `cd uedcli-native && maturin develop`; `cargo test` runs the core
 goldens.
@@ -1784,7 +1785,7 @@ goldens.
    touched=…)` (`trunk.write_level` — preserves each surviving actor's `order_value`, mints an
    appended one for a new actor) — **no `driver`, no editor**.
 3. Put read logic in `query.py`; mutation is the model transform inline (or a pure helper). The
-   editor (`writes.py`/`Driver`) is reached only by `level materialize` and `level preview` — never
+   editor (`writes.py`/`Driver`) is reached only by `level materialize` and `level photo` — never
    by a content read/edit verb, and no longer by the CSG merge generators (they are native).
 4. Add an offline unit test that seeds a trunk (`trunk.write_level`) and asserts the resulting
    trunk dir; mock the editor seams only on materialize-side tests. Fixtures in `tests/fixtures/`.
@@ -2020,10 +2021,10 @@ wedge passes `validate_brush` and `_face`'s Newell flip still lands the winding 
 the spiral lives in one local frame with its column base at z=0.
 **Native-CSG caveat (falsifies `csg.rs:61`):** this non-convex staircase brush — and equally an
 `extrude`/`revolve` of a concave profile — is built correctly by UnrealEd (the default `level
-materialize`) and the real engine (the default `level preview --game`), but the **coarse** native
+materialize`) and the real engine (the default `level photo --game`), but the **coarse** native
 core assumes convex brushes: `uedcli-native/src/csg.rs` `point_in_convex` tests "behind every face"
 (the convex hull, not the true solid), so a stepped brush's concave notches classify as solid.
-`level preview --native` uses `build_geometry_bspcsg` (the incremental `bspBrushCSG` port; the coarse
+`level photo --native` uses `build_geometry_bspcsg` (the incremental `bspBrushCSG` port; the coarse
 `build_geometry` was retired from preview 2026-08-24), which never calls `point_in_convex` — so the
 concave-notch-as-solid error above does NOT affect preview. `bspcsg.rs` instead flags a non-convex
 FIRST Add as an unhandled case of its convex world-seed shortcut, so a concave brush should not lead a
@@ -2034,7 +2035,7 @@ decompose non-convex builder brushes into convex pieces (or guard+warn) on the n
 The convex CSG shapes (cube/cylinder/cone) were validated live
 (paste→rebuild→select) on parallel ephemeral editors — see `parallel-editors.md`; the single-brush
 staircase is verified offline (doctor-clean under the T-junction-aware `check_watertight` + the
-`actor preview` wireframe render), NOT live paste→rebuild→select (deferred — `direction/generators.md`,
+`actor diagram` wireframe render), NOT live paste→rebuild→select (deferred — `direction/generators.md`,
 2026-07-21 12:22 UTC).
 
 **Swept profile generators — `brush build extrude` / `brush build revolve`.** These two are the
@@ -2131,11 +2132,11 @@ world-vertex set — a legitimate (winding-blind) change-detector. `sheet` is ex
 
 ## Preview internals
 
-**`level preview --native`** (the opt-in offline draft backend; `--game` is the default —
-see the `level preview` verb above) is split across four pieces:
+**`level photo --native`** (the opt-in offline draft backend; `--game` is the default —
+see the `level photo` verb above) is split across four pieces:
 `preview_shots.py` (the pure SHOT grammar + `pose_from_lookat`/`pose_from_orbit` trig +
 `shot_filename` dedup — shared with the `--game` tier), `preview_native.py` (the
-orchestration described under the `level preview` verb above), `utexture.py` (the native
+orchestration described under the `level photo` verb above), `utexture.py` (the native
 UTexture/UPalette decoder + `TextureResolver` over `config.composed_search_files` — promoted
 from the 2026-06-27 decontainerize spike, corpus-validated byte-identical to UCC's export;
 `resolve(ref)` returns a TYPED result, either a `DecodedTexture` or a `TextureError` naming
@@ -2157,7 +2158,7 @@ and the byte-exact golden (`tests/fixtures/native_preview_golden.png`, Linux/x86
 against the live anchor — `spikes/2026-07-16-native-preview-anchor/`; re-bless with
 `UEDCLI_BLESS_GOLDEN=1` only after re-verifying the anchor).
 
-**`level preview --game`** (the faithful tier) is a THIN host (`preview_game.py`: D5 delivered-map
+**`level photo --game`** (the faithful tier) is a THIN host (`preview_game.py`: D5 delivered-map
 naming `materialized_dx`/`copied_map`; `acquire_warm_container` = one `docker inspect` reuse gate +
 flock + fingerprint LABEL; `run_batch` = one `docker exec` feeding a JSON request to the container
 script and parsing the length-framed PNG stream; `ensure_image` with a host-side source-hash marker
@@ -2172,7 +2173,7 @@ its README). Container/host seams are mocked offline (`test_preview_game.py`) an
 link/travel seams too (`test_preview_batch.py`, fake link socket + fake X-grab); the live paths are
 the SP-R reload-keying spike + the 2026-07-17 one-exec acceptance (warm ~2.2s, 10-shot 8.37s).
 
-**`actor`/`stash`/`prefab preview`** (`preview.py`) is stdlib-only (no PIL/numpy). Projects polys to 2D (ortho top/front/side or
+**`actor`/`stash`/`prefab diagram`** (`preview.py`) is stdlib-only (no PIL/numpy). Projects polys to 2D (ortho top/front/side or
 true-30° iso), back-face culls per view (`_is_front` vs the view's depth direction) to
 shade obscured faces the lighter of a **CSG-op colour pair** (`classify_brush` → `_CSG_PALETTE`,
 keyed on `CsgOper`/solidity-`PolyFlags`/mover: add-solid blue, subtract gold, semisolid pink,
@@ -2203,10 +2204,12 @@ parameter on `render_brush_pgm`/`render_brushes_pgm`/`render_quad_pgm` and on
   truncated as `render.rs`'s key light (`_face_shade` = `0.55 + 0.45·|N·L|/|N|`), so it agrees with
   `--native` up to f32-vs-f64. **`textured` emits NO wireframe** (a highlighted face takes only an
   outline); a poly with no `Texture` fills `DEFAULT_GREY·shade`. Its resolution and refusals live in
-  dispatch (`cli/rendering.py` `preview_textures`): a scaled or sheared brush, `--brush-colors` given
-  with `textured`, a non-finite UV frame, and any unreadable/bare/undecodable ref each exit 2 naming
-  the offender (a bare ref says to qualify it `Package.Name`); no resolver names which of three causes
-  applies; a scene referencing NO texture needs — and resolves — none. **Accepted cost, as `flat`:
+  dispatch (`cli/rendering.py` `preview_textures`): `--brush-colors` given with `textured`, a
+  non-finite UV frame (incl. a degenerate/non-invertible scale), and any unreadable/bare/undecodable
+  ref each exit 2 naming the offender (a bare ref says to qualify it `Package.Name`); no resolver
+  names which of three causes applies; a scene referencing NO texture needs — and resolves — none.
+  Scaled/mirrored/sheared brushes render (`texframe.world_uv_frame` takes the full `L`). **Accepted
+  cost, as `flat`:
   `textured` needs the project's game content; `wire` needs neither.**
 - **A filled mode assigns THREE roles from that ONE two-member pair** (owner ruling; the first
   assignment gave two of them the same value as the fill and both were invisible — the renders that
@@ -2254,10 +2257,10 @@ parameter on `render_brush_pgm`/`render_brushes_pgm`/`render_quad_pgm` and on
   EVEN number of negative axes is a 180° rotation (determinant +1) and is deliberately untouched; a sheer
   leaves the determinant at the scale product. **`wire` is deliberately NOT corrected** — it culls
   nothing, so the inversion costs it only the front/back shade, and the ruling was about the filled modes
-  (`board/inbox/wire-renders-a-mirrored-brush-with-its-front`). *(The `--native` tier now RENDERS
-  scaled/mirrored/sheared brushes — `brush_marshal._build_brush_input` bakes `L = PostScale·R·MainScale`
-  into the Rust `rot`; its UV frame stays rotation-only, so textures slide on scaled faces until the
-  covariant-UV follow-on.)*
+  (`board/inbox/wire-renders-a-mirrored-brush-with-its-front`). *(The `--native`/`textured` tiers
+  RENDER scaled/mirrored/sheared brushes — `brush_marshal._build_brush_input` bakes
+  `L = PostScale·R·MainScale` into the Rust `rot`, and their UV frame follows the same `L`
+  (`texframe.world_uv_frame`), so textures track the transformed geometry.)*
 - **Refusals, all naming the offender**: unresolvable mover-ness (grouped by cause), and no project (the
   re-raise names `--faces` and why a preview wants one — the bare house "not in a uedcli project" names
   neither, and `--from-t3d` makes being outside one ordinary). **NOT
@@ -2295,7 +2298,7 @@ Parsed in dispatch so a bad value is a clean named error. `render_*` ask `spec.d
 `spec.draws_name` per element.
 
 **Hybrid tint + legend** is the label scheme on the CSG-coloured path (`color_by_csg=True`, the real
-`actor`/`stash`/`prefab preview`). The wireframe keeps its CSG hue (blue=add, gold=subtract, …), but
+`actor`/`stash`/`prefab diagram`). The wireframe keeps its CSG hue (blue=add, gold=subtract, …), but
 two brushes with the SAME CSG op then share one wire colour, so each actor's LABELS instead carry a
 distinct categorical **per-actor TINT** (`assign_tints` → `_TINT_PALETTE`, cycled by scene order over
 brushes AND point actors alike, kept clear of add-blue/subtract-gold and of red). A brush's on-face
@@ -2486,7 +2489,7 @@ focus/zoom per pane so a CLI `--focus`/`--frame` is ignored.
 
 **Where NAME labels go** is geometry-aware. Poly indices are painted on-face (above); actor NAMES on
 the **legacy** (non-hybrid) path are the only labels placed by `_place_labels` (on the hybrid `actor
-preview` path names live in the legend, so the pass is empty). `_place_labels` (over frozen
+diagram` path names live in the legend, so the pass is empty). `_place_labels` (over frozen
 `_LabelItem`→`_PlacedLabel`) minimises a cost per candidate ring position:
 `k1·avg_density + k2·label_overlap + k3·leader_len` over a coarse **`DensityGrid`** of the drawn
 wireframe **plus point-marker footprints, the legend rect, and the on-face decal boxes** (so labels flee
@@ -2512,7 +2515,7 @@ makes the cull render a `CsgOper=CSG_Subtract` door inside-out. **`preview.py` s
 class-default via the `_class_defaults` seam and decoding sprites through a `_texture_resolver`
 (`utexture.TextureResolver.resolve`, whose `DecodedTexture` carries the mask — palette index 0 =
 transparent; a `TextureError` degrades to a marker with the case name in the stderr note). Brush-only previews resolve no
-schema (a pure-brush `--faces wire` preview works with no game install); a point actor whose schema is unresolvable
+schema (a pure-brush `--faces wire` diagram works with no game install); a point actor whose schema is unresolvable
 degrades to an unscaled labelled marker + a stderr note, never a `SchemaError` traceback.
 `render_quad_pgm` tiles four panes. `_render_actors_to_out` also resolves the `--frame` target
 (`_parse_frame` splits an explicit six-field `X0,Y0,Z0,X1,Y1,Z1` AABB from a selector; the selector goes
@@ -2530,7 +2533,7 @@ by browsers, most viewers and an LLM, which is the audience previews exist for, 
 PPM exists (decision 2026-07-24 21:57). `--out`'s extension is REPLACED by `.png` (`--out shot.jpg` →
 `shot.png`); with `--out` omitted a `uedcli-preview-*.png` temp path is minted. Either way the absolute
 path actually written is printed to stdout. The `actor`/`stash`/`prefab
-preview` verbs were the only container users that drove neither the editor nor UCC; they no longer
+diagram` verbs were the only container users that drove neither the editor nor UCC; they no longer
 need a running container at all.
 
 ## Testing
@@ -2558,8 +2561,8 @@ already treats `/opt/UED22` as canonical (`packages._BAKED_UED22`,
 `packages._EDITOR_INI`, `driver.py`/`store_export.py`/`texture.py`). See
 [the decision](direction/containers.md).
 The image must include `xclip` (clipboard read/write) and `imagemagick` (editor-screenshot
-capture + crop for `level preview`/rendering — `wine_ctl.py`'s `import`/`convert`; NOT brush
-`preview`, which is host-side Pillow).
+capture + crop for `level photo`/rendering — `wine_ctl.py`'s `import`/`convert`; NOT
+`diagram`, which is host-side Pillow).
 
 **Code vs. content split.** Editor CODE (`.u`) is **substrate-authoritative**: UED22's
 stripped, version-69 `.u` files are the only code the editor's runtime ever loads — the real
@@ -2610,9 +2613,9 @@ either. The old static asset mounts (`DeusExAssets/ → /deusex:ro`, `Textures/`
   same-named v68 `.u` a composed code dir puts on Paths — the editor never loads a v68 package it has
   stubbed. This replaces the entrypoint's boot-time `sed`.
 
-This is uniform across the GUI editor (`editor.ensure_editor`, for materialize/qualify/preview), the
+This is uniform across the GUI editor (`editor.ensure_editor`, for materialize/qualify/photo), the
 no-GUI **build container** (`stub.ephemeral_build_container`, for stub-build + `texture sync`), and
-the preview game — ALL mount the SAME whole composed set through `resource_mounts`. `build_stub`'s
+the photo game — ALL mount the SAME whole composed set through `resource_mounts`. `build_stub`'s
 `batchexport`/`umodel` read the v68 `.u` decompile SOURCE by its remapped `/resources/<n>` path
 (never via Paths). The only static mounts left in `docker-compose.yml` are the baked-adjacent v69
 stub cache (`${UEDCLI_STUB_CACHE:-${HOME}/.uedcli/cache/stubs}:/stubs:ro` — both

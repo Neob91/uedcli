@@ -286,11 +286,11 @@ def announce_env_level(name: str, *, action: str = "editing") -> None:
 
 
 def resolve_level_only(args, *, verb: str, alt_hint: str | None = None) -> tuple[str, bool]:
-    """Resolve the level for a build/preview verb that operates on a LEVEL only (materialize, preview
+    """Resolve the level for a build/photo verb that operates on a LEVEL only (materialize, photo
     trunk mode). Same precedence as `resolve_level_source` (explicit `--tree` > ambient
     `$UEDCLI_LEVEL`) but constrained to the `level` kind — `--tree stash|prefab` is rejected with a
-    clear exit 2, since a captured actor-set has no world to build or walk (dedicated `stash preview`/
-    `prefab preview` exist). Returns `(level_name, from_env)`; the caller uses the name to build a
+    clear exit 2, since a captured actor-set has no world to build or walk (dedicated `stash diagram`/
+    `prefab diagram` exist). Returns `(level_name, from_env)`; the caller uses the name to build a
     `TrunkLevelSource` and `from_env` to decide whether to announce the level."""
     project = resources.resolve_project(args)                     # no project → ProjectError → exit 2
     maps_dir = Path(config.project_maps_dir(project))

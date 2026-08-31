@@ -47,7 +47,7 @@ Verified by the native-materialize spike
 - Brightness, hue, saturation, and attenuation are applied at render time from the light's own
   properties; they are not baked into the mask. So re-tinting a light (`LightHue`, `LightSaturation`,
   `LightBrightness`) does not require re-running the visibility bake: the colour/falloff maths run
-  per-frame from the live property values. (From the uedcli seat you re-`materialize`/`preview` to see
+  per-frame from the live property values. (From the uedcli seat you re-`materialize`/`photo` to see
   the change regardless — there is no partial-bake verb.)
 - **Radius → world reach** ≈ **(LightRadius + 1) × 25 uu**. A default `LightRadius=64` reaches
   ≈ 1625 uu.
@@ -62,8 +62,8 @@ actor find --subclass-of Engine.Light | actor prop set - LightHue=28 LightSatura
 ```
 
 There is no `uedcli light bake` / `uedcli relight` verb. The lightmap bake happens inside
-`level materialize` and `level preview` — author lights as actors, then materialize/preview to see the
-result. The old GUI advice "run `LIGHT APPLY` after retinting" becomes: re-`materialize`/`preview`.
+`level materialize` and `level photo` — author lights as actors, then materialize/photo to see the
+result. The old GUI advice "run `LIGHT APPLY` after retinting" becomes: re-`materialize`/`photo`.
 
 > **UnrealEd GUI equivalent:** place a `Light` actor (L+RMB), edit its *Lighting* property category, then
 > Build Lighting (or F8's lighting pass).
@@ -219,7 +219,7 @@ From the tutorial corpus.
 | Animated / shaped light | add `--prop LightType=LT_Flicker --prop LightEffect=LE_FireWaver` |
 | Tint a set of lights | `actor find --subclass-of Engine.Light \| actor prop set - LightHue=28 LightSaturation=64` |
 | Read a light default | `actor build Engine.Light \| actor add - \| actor prop get - LightRadius` |
-| See the result | `level materialize` / `level preview` (the bake runs **inside** these — no standalone bake verb) |
+| See the result | `level materialize` / `level photo` (the bake runs **inside** these — no standalone bake verb) |
 
 Lighting-related numbers live in the human-scale table in [`../README.md`](../README.md) and
 [`README.md`](README.md) §9 (`Engine.Light` defaults: Radius 64 / Brightness 64 /
