@@ -1,7 +1,7 @@
 +++
 priority = "p2"
 kind = "debug"
-summary = "smuggler's +4 surf residual (nodes/leaves exact) isolated to 4 PF_Semisolid CSG_Add brushes; PASS-A structural tree confirmed byte-exact (a NEW, cleaner shape than freeclinic08/nsfhq04); F_COSPATIAL_FACING_OUT/PF_SEMISOLID hypothesis REFUTED with brush-scoped tracer; root mechanism still not found, no fix shipped"
+summary = "smuggler's +4 surf residual (nodes/leaves exact) isolated to 4 PF_Semisolid CSG_Add brushes; PASS-A structural tree confirmed byte-exact; F_COSPATIAL_FACING_OUT/PF_SEMISOLID hypothesis REFUTED; round 3 LIVE-CONFIRMED via isolated single-brush editor rebuild that native's self-coincidence classification (Brush547 poly124 vs its own poly5) genuinely diverges from the real editor; exact transform-precision mechanism still not pinned, no fix shipped"
 +++
 
 # smuggler +4 surf delta traced to 4 PF_Semisolid brushes, PASS-A exact
@@ -158,3 +158,69 @@ No fix shipped this round either — only the tracer (env-gated, zero default-pa
 full `bin/test` 12517 passed/0 failed + 90/90 cargo test; `regression_gate.py` UNATCO/Wanchai both
 EXACT; `breadth_gate.py` unchanged (4/17 exact, smuggler still surfs `d=+4`, severe-under-build
 family unaffected). Committed `fd67aa6`. Full trace details: `native-materialize-findings.md`.
+
+## Round 3 (2026-08-31): self-coincidence LIVE-CONFIRMED as a real divergence, root cause still open
+
+Picked up round 2's exact open lead ("does native's classification of poly124's self-coincidence
+with `Brush547`'s own poly5 genuinely diverge from the real editor, or does real PASS-2 use a
+mechanism native doesn't model — needs live editor capture or a single-brush isolated repro").
+
+**Step 1 — re-verified round 2's finding still holds.** Re-ran the actor/poly-scoped descent tracer
+(`UEDCLI_BSPCSG_DESCENT_ACTOR=119 UEDCLI_BSPCSG_DESCENT_POLY=124`) on the current tree: unchanged —
+poly124 descends ~20 nodes, hits `COPLANAR dot=-1.00000` at node 2706, ends in 3 `LEAF filter=2
+semisolid=true add=true` lines (all `F_COPLANAR_OUTSIDE`, added unconditionally, semisolid gate never
+in play — matches round 2). Confirmed node 2706's surf (`nsurf=1473`) is `i_actor=119
+i_brush_poly=5` — Brush547's own poly5, not world/structural geometry. Pulled the raw T3D: poly5
+(`normal=(0,1,0)`, `Y=32` plane) and poly124 (`normal=(0.00208,-1,0)`, `Y=32` plane) are two AUTHORED
+faces of the same "Heli Lift" stacked-panel brush, touching at Y≈32 with opposite normals — a real
+internal seam in the original prop geometry, not a build artifact.
+
+**Step 2 — single-brush isolated repro, live editor build (the decisive test).** Built
+`_scratch/smuggler-b547-isolated`: the confirmed-exact PASS-A structural trunk (429 non-semisolid
+brushes, same relative order) + `Brush547` appended LAST as the sole PF_Semisolid addition. This
+ordering is faithful to the real algorithm, not a guess — `10-bsp-csg-build.md`/
+`82-bspbrushcsg-port-decode.md` document PASS B (semisolid) as a full, unrepartitioned second pass
+over ALL PASS-A brushes, run strictly after PASS A completes, in trunk order — so by the time any
+semisolid brush is processed for real, every structural brush is already in the tree and no other
+semisolid brush has touched it yet.
+
+- Native, offline, on this isolated trunk: reproduces the full-level result exactly — 65 surfs for
+  `Brush547`, `i_brush_poly=124` still the sole native-only key. Proves the effect has ZERO
+  dependency on the other 78 semisolid brushes.
+- Real editor, live, on the SAME isolated trunk (`smuggler_b547_isolated_golden.py`, a
+  `geo_golden_resume_structural.py` copy, chunked `MAP NEW`→`EDIT PASTE`→`MAP REBUILD`→`MAP SAVE`,
+  27 chunks, ~40 min real editor time): **64 surfs for `Brush547`, `i_brush_poly=124` absent** — the
+  identical delta, in complete isolation, with a real editor.
+
+**Conclusion: CONFIRMED, not just hypothesized — native's classification of this self-coincidence is
+a genuine algorithmic divergence from the real editor**, reproduced with zero cross-brush
+interference. This resolves round 2's open question in favor of "native has a real bug here," ruling
+out "real PASS-2 uses an unmodeled mechanism that happens to look the same on the full level."
+
+**Two more candidate mechanisms checked and ruled out:**
+- `splitwithplane-degenerate-fragment-fallback` (the catalogued `SplitWithPlane` degenerate-sliver
+  fallback native is missing): the two `SPLIT`s poly124 passes through en route to node 2706 both
+  produce `f_nv=4 b_nv=4` — no degenerate fragment involved, so that gap doesn't apply here.
+- A surf-reuse/dedup difference in `bsp_add_node`'s `i_link`: `brush_loop1`'s pre-pass groups
+  same-brush polys sharing an identical plane AND orientation via `links[i]`; poly5
+  (`normal=(0,1,0)`) and poly124 (`normal=(0.00208,-1,0)`, opposite-facing) are not in the same
+  orientation class, so each gets an independent surf slot on both sides regardless — not the
+  mechanism. The node-2706 `Coplanar` classification itself is also not threshold-borderline: vertex
+  distances to the plane are `0.0`-`0.0166`, well inside `THRESH_SPLIT_POLY_WITH_PLANE`'s `±0.25`
+  band.
+
+**Best remaining candidate, NOT confirmed:** a small (sub-0.001, ULP-level) floating-point difference
+between native's and the real editor's vertex/normal transform for this Yaw=`-16384`-rotated brush.
+The per-brush surf-key diff shows small plane-key mismatches (e.g. normal `(0.0,-1.0,-0.002)` vs
+`(-0.0,-1.0,-0.002)`, dist `-60.6` vs `-60.7`) across MOST of `Brush547`'s other surviving faces too
+(harmless there — neither side's classification flips) — plausibly enough to tip the ~20-node-deep
+descent path just before node 2706, changing poly124's final classification without the coplanar test
+itself being a near-miss. Pinning this needs bit-level comparison of the two transform code paths —
+the same class of work as the still-open `wanchai-verts-points-residual-independently` Points
+residual. Out of this round's scope.
+
+**No fix shipped** (mechanism narrowed, not confirmed — per the standing rule). Harness added:
+`smuggler_b547_isolated_golden.py` (`dev/docs/spikes/2026-08-29-unatco-repart-live-diff/harness/`).
+Trunk `_scratch/smuggler-b547-isolated/` is scratch, not committed. `bin/test`/`regression_gate.py`
+not run this round — no `.rs` source changes were made (git status showed `bspcsg.rs` untouched
+throughout). Full detail: `native-materialize-findings.md`.

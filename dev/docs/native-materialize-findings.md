@@ -2040,3 +2040,47 @@ geometry delta (any of Area51/NYC747/TrainingFinal/VandenbergGas/OceanLab over-b
 FreeClinic08/NSFHQ04/WanchaiGarage/ParisUnderground under-build) collapses to <1% lighting; levels
 with only small verts/points deltas still land 55-90%. No new root-causing done this pass — breadth
 over depth, per the task.
+
+**Smuggler round 3: self-coincidence LIVE-CONFIRMED as a real native/editor divergence via an
+isolated single-brush editor rebuild; exact root cause still not pinned, no fix shipped.** Round 2
+left it undetermined whether native's classification of `Brush547`'s poly124 (which the trace shows
+landing `COPLANAR dot=-1.00000` against the SAME brush's own poly5, both faces of the "Heli Lift"
+prop touching at Y≈32 with opposite normals) genuinely diverges from the real editor, or reflects
+some PASS-2 mechanism native doesn't model. Built `_scratch/smuggler-b547-isolated`: the confirmed-
+exact PASS-A structural trunk (429 non-semisolid brushes) + `Brush547` alone appended last (matching
+`10-bsp-csg-build.md`'s documented PASS B — a full, unrepartitioned second pass strictly after PASS
+A, in trunk order — so this ordering is a faithful reduction, not a guess), driven through a real
+`MAP NEW`→`EDIT PASTE`(chunked)→`MAP REBUILD`→`MAP SAVE` via a new
+`smuggler_b547_isolated_golden.py` (copy of `geo_golden_resume_structural.py` retargeted). Native's
+own offline build of the identical isolated trunk reproduces the full-level result exactly (65 surfs
+for `Brush547`, same extra `i_brush_poly=124` key) — proving the effect has zero dependency on the
+other 78 semisolid brushes. **The live editor golden for this same isolated trunk: 64 surfs for
+`Brush547`, `i_brush_poly=124` absent** — the identical delta, reproduced with a real editor in
+complete isolation. This upgrades round 2's "not determined" to a confirmed fact: native's handling
+of this self-coincidence is a genuine algorithmic divergence from the real editor, not an artifact of
+cross-brush interaction or of the unscoped tracer.
+
+Two more candidate mechanisms ruled out this round: (1) `splitwithplane-degenerate-fragment-fallback`
+(the catalogued `FPoly::SplitWithPlane` degenerate-sliver fallback) — checked directly, both `SPLIT`s
+poly124 passes through en route to node 2706 produce `f_nv=4 b_nv=4`, no degenerate fragment, so that
+gap does not apply here. (2) A surf-reuse/dedup difference in `bsp_add_node`'s `i_link` handling —
+checked the code (`bspcsg.rs` `brush_loop1`'s pre-pass groups same-brush polys sharing an identical
+plane+orientation via `links[i]`, seeding a shared speculative surf slot): poly5 (normal `(0,1,0)`)
+and poly124 (normal `(0.00208,-1,0)`, opposite-facing) are NOT in the same orientation-equivalence
+class, so each gets its own surf slot on both sides regardless — not the mechanism either. The
+node-2706 `Coplanar` classification itself is also not a threshold-borderline call: vertex distances
+to the plane are `0.0`–`0.0166`, comfortably inside `THRESH_SPLIT_POLY_WITH_PLANE`'s `±0.25` band, not
+a near-miss at that specific test.
+
+Best remaining candidate, NOT confirmed: a small (sub-0.001, ULP-level) floating-point difference
+between native's and the real editor's vertex/normal transform for this Yaw=`-16384`-rotated brush —
+visible as small plane-key mismatches (e.g. normal `(0.0,-1.0,-0.002)` vs `(-0.0,-1.0,-0.002)`, dist
+`-60.6` vs `-60.7`) across MOST of `Brush547`'s other surviving faces too (harmless there, since
+neither side's classification flips) — could tip the ~20-node-deep descent path leading to node 2706
+just enough to change poly124's final classification, without touching the coplanar test's own
+threshold. Pinning this needs bit-level comparison of the two transform code paths, the same class of
+work as the still-open `wanchai-verts-points-residual-independently` Points residual — out of this
+round's scope. Per the standing rule, no fix shipped without a confirmed mechanism. Harness added:
+`smuggler_b547_isolated_golden.py` (committed alongside this entry), trunk under
+`_scratch/smuggler-b547-isolated/` (not committed, scratch). Full write-up:
+`dev/docs/board/inbox/smuggler-4-surf-delta-traced-to-4-pf-semisolid/overview.md` (Round 3).
