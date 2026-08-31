@@ -1194,8 +1194,8 @@ actor preview [<names…> | --from-t3d <FILE…|->]
     overlays over the dark background at exit 0. `textured` composes with every other option here — `--focus`,
     `--highlight` (its vivid outline is the only line art it keeps) and `--layout breakdown` included.
 - **Brushes are coloured by CSG op** (UnrealEd's legend): added-solid **blue**, subtracted
-  **gold/yellow**, semi-solid **pink**, non-solid **green**, mover **magenta**; front faces darker,
-  obscured/back faces lighter. This says what each brush *does*.
+  **gold/yellow**, semi-solid **pink**, non-solid **green**, mover **magenta**; front and
+  obscured/back faces draw in the same shade (facing-blind). This says what each brush *does*.
 - **`--brush-colors {csg,legend}`** picks the colour source for the `--faces wire` wireframe.
   `csg` (default) is the CSG-op colouring above. **`legend`** instead draws each brush in *its own
   per-actor tint* — every brush a distinct colour (you trade the CSG cue for telling same-op brushes

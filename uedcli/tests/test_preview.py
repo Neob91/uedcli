@@ -56,11 +56,11 @@ def test_render_draws_some_edges():
     assert _nonbg(render_brush_pgm(_brush(), view="top", size=128)) > 0
 
 
-def test_front_light_back_dimmer():
+def test_wire_edges_are_facing_blind():
     from uedcli.preview import BACK
     cols = _colors(render_brush_pgm(_brush(), view="iso", size=256, annotations=AnnotationSpec.all()))
-    assert FRONT in cols              # front-facing edges — the light uncoloured default (on black)
-    assert BACK in cols               # obscured (back) edges — its dimmer partner
+    assert FRONT in cols              # every wire edge — front OR back — draws in the same shade
+    assert BACK not in cols           # no separate dimmer partner for obscured edges
 
 
 def test_poly_index_labels_add_pixels():
@@ -86,7 +86,8 @@ def test_csg_color_paints_subtracted_brush_gold():
     from uedcli.preview import _CSG_PALETTE
     front, back = _CSG_PALETTE["subtract"]
     cols = _colors(render_brush_pgm(_brush(), view="iso", size=256, annotations=AnnotationSpec.none(), color_by_csg=True))
-    assert front in cols and back in cols     # facing shade pair survives; brush is gold not uncoloured
+    assert front in cols                      # brush is gold, front and back alike, not uncoloured
+    assert back not in cols                   # no separate dimmer back shade
     assert FRONT not in cols                  # no uncoloured wireframe when coloured by CSG
 
 

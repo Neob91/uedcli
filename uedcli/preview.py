@@ -16,9 +16,12 @@ per actor in the trunk) is a separate, unrelated sense living outside this modul
 
 Rendering choices (all to make poly numbers readable):
   - light-on-dark (background `#404040`, see `BG`; owner ruling 2026-08-30, superseding the
-    2026-08-02 pure-black ruling): front edges brighter, obscured/back edges dimmer (face
-    distinction by shade). Uncoloured brushes use the light FRONT / dimmer BACK pair; on the shared
-    preview path each brush is coloured by its CSG classification (`_CSG_PALETTE`).
+    2026-08-02 pure-black ruling). Wire edges are facing-BLIND (owner ruling 2026-08-31,
+    superseding 2026-08-30's front-brighter/back-dimmer split): front and obscured/back edges
+    render in the SAME shade, since the dim back shade nearly vanished against the dark bg —
+    especially in ortho views, where most of a shape's edges are back. Uncoloured brushes use
+    the light `FRONT` shade for every edge; on the shared preview path each brush is coloured
+    by its CSG classification (`_CSG_PALETTE`) instead, front and back alike.
   - a highlighted poly (`--highlight`) is drawn in its brush's vivid front hue with a
     bolder line (the facing dim is ignored on it); `--zoom` only frames, never highlights.
   - point (non-brush) actors draw as a DT_Sprite billboard or a marker, with
@@ -79,21 +82,23 @@ _DEPTH: dict[str, tuple[float, float, float]] = {
 }
 
 # Colours (RGB), tuned for the DARK background (see BG, #404040 — not literally black, but dark enough
-# that this tuning still holds). The facing cue inverts from the old grey-bg tuning: the uncoloured
-# FRONT is a light default (a dark line would nearly vanish) and BACK its dimmer partner; captions/
-# markers/gutter labels lift to a mid grey legible on the dark bg.
+# that this tuning still holds); captions/markers/gutter labels lift to a mid grey legible on the dark
+# bg. BACK is UNUSED for wire edges since the 2026-08-31 facing-blind ruling above (kept only for its
+# few other callers — hidden/uncoloured-mode textured-edge tuples, tests pinning that it never
+# appears in a wire render).
 WHITE = (255, 255, 255)
 FRONT = (235, 235, 235)   # visible faces — near-white (uncoloured default, legible on the dark bg)
-BACK = (120, 120, 120)    # obscured faces — dimmer grey partner of FRONT
+BACK = (120, 120, 120)    # unused for wire edges (facing-blind); see the module docstring
 DIVIDER = (130, 130, 130)
 CAPTION = (170, 170, 170)
 MARKER = (185, 185, 185)  # point-actor marker + label — neutral grey (NOT a CSG hue)
 
 # CSG-op wire palette — each brush's wireframe is coloured by its CSG classification when
 # `color_by_csg=True` (the shared `actor`/`stash`/`prefab preview` path). Each entry is a
-# (front, back) shade pair: front = viewer-facing / vivid, back = obscured / DIMMER — so the facing
-# cue (front brighter, back dimmer) reads on the DARK background, and `front` doubles as the vivid
-# highlight hue. Adapted from UnrealEd's own brush-wire legend (hue preserved, luminance tuned for our
+# (front, back) pair; only `front` is used for wire edges (facing-blind since 2026-08-31 — see the
+# module docstring) and as the vivid highlight hue. `back` is unused dead data, kept only because it
+# is still UnrealEd's own legend value (see below) and other palette consumers may want it later.
+# Adapted from UnrealEd's own brush-wire legend (hue preserved, luminance tuned for our
 # dark bg); see
 # dev/docs/unrealed/rendering.md. Red is deliberately NOT used (it's UED's builder brush, which we
 # don't render). test_preview.py pins the classify→palette→render WIRING (a subtracted brush renders
@@ -961,9 +966,12 @@ _DIM_FILL_ALPHA = 0.35
 
 
 def _fade(rgb: tuple[int, int, int], amount: float = 0.6) -> tuple[int, int, int]:
-    """Blend a colour `amount` of the way toward the background — a dimmed SHADE (still opaque). Used for
-    the `brush_colors=legend` back-face tint; the `--focus` dimming is now a composite `_DIM_ALPHA`
-    instead (see `_scene_geometry`), so a faint brush no longer covers the edges/numbers it crosses."""
+    """Blend a colour `amount` of the way toward the background — a dimmed SHADE (still opaque). Not
+    called in production: `--focus` dimming is a composite `_DIM_ALPHA` instead (see
+    `_scene_geometry`), so a faint brush no longer covers the edges/numbers it crosses, and wire edges
+    no longer have a back-face shade to compute (facing-blind since 2026-08-31). Kept as the reference
+    blend formula the focus-dim tests check the alpha composite against — same arithmetic, computed
+    independently."""
     return tuple(round(c + (BG - c) * amount) for c in rgb)
 
 
@@ -1724,13 +1732,18 @@ def _scene_geometry(actors, *, view, iso_angle, annotations, highlight_polys, fo
         csg_key = classify_brush(actor)
         if color_by_csg and brush_colors == "legend":
             # colour the wireframe by the actor's own per-actor TINT (not the CSG op) — drops the CSG
-            # cue but tells same-op brushes apart at a glance without reading numbers.
-            base = tints[actor.name]
-            front_rgb, back_rgb, vivid = base, _fade(base), base
+            # cue but tells same-op brushes apart at a glance without reading numbers. A highlighted
+            # poly uses this same tint as its vivid hue, matching the wireframe it highlights.
+            vivid = edge_rgb = tints[actor.name]
         else:
-            csg_front, csg_back = _CSG_PALETTE[csg_key]
-            vivid = csg_front
-            front_rgb, back_rgb = (csg_front, csg_back) if color_by_csg else (FRONT, BACK)
+            # `vivid` is the brush's own CSG hue, used by a highlighted poly even when the
+            # wireframe itself is uncoloured (test_highlight_poly_is_the_brushes_vivid_hue_and_bolder).
+            vivid = _CSG_PALETTE[csg_key][0]
+            edge_rgb = vivid if color_by_csg else FRONT
+        # Back (obscured) edges render in the SAME colour as front edges — no facing-dim shade
+        # (2026-08-31: the front/back luminance split made obscured wire edges nearly vanish
+        # against the dark bg, especially in ortho views where most of a shape's edges are back).
+        front_rgb = back_rgb = edge_rgb
         is_focus_brush = focus_cf is not None and actor.name.casefold() == focus_cf
         # A non-focused brush is DIMMED by compositing its wireframe at _DIM_ALPHA, so its faint lines
         # let crossed edges/numbers show through.
@@ -2098,9 +2111,10 @@ def render_brushes_pgm(actors: list[Actor], *, view: str = "top", size: int = 25
     only surviving surfaces, each through its texture + authored UV frame, with a per-view backface
     cull and NO wireframe; it needs `render_data.faces` populated (see `_scene_geometry`/`_solved_scene`).
 
-    Under `wire` brush actors draw as a wireframe: front faces darker, obscured/back faces lighter. When
-    `color_by_csg` the shade pair is the brush's CSG hue (`classify_brush` → `_CSG_PALETTE`);
-    otherwise the uncoloured FRONT/BACK pair.
+    Under `wire` brush actors draw as a wireframe, facing-blind: front and obscured/back faces draw in
+    the SAME shade (the front/back split was removed 2026-08-31 — it made back edges nearly vanish
+    against the dark bg). When `color_by_csg` that shade is the brush's CSG hue (`classify_brush` →
+    `_CSG_PALETTE[key][0]`); otherwise the uncoloured `FRONT`.
     `highlight_polys` is a set of `(actor_name, poly_idx)` — those polys draw
     in their brush's vivid front hue with a bolder line (facing dim ignored). `highlight_points` is a
     set of point-actor names — each gets corner brackets (a selection reticle) under its sprite/marker.
@@ -2242,9 +2256,9 @@ def render_brushes_pgm(actors: list[Actor], *, view: str = "top", size: int = 25
         _draw_point_underlay(buf, size, actor, pr, view, iso_angle, to_px, scale,
                              highlighted=actor.name in highlight_points)
     # `textured` draws NO wireframe (decision 2.5): only `--highlight` outlines below are line art.
-    # `wire` draws the back (lighter) then front (darker) edges of every non-depth-hidden face.
+    # `wire` draws every non-depth-hidden edge, back then front — same shade either way (facing-blind).
     draw_wire = faces != "textured"
-    for f, (a, b), fr, bk, al, fk in edges:         # back (lighter) then front (darker)
+    for f, (a, b), fr, bk, al, fk in edges:         # back then front (same shade, facing-blind)
         if draw_wire and not f and fk not in hidden:
             _line(buf, size, to_px(a), to_px(b), bk, alpha=al)
     for f, (a, b), fr, bk, al, fk in edges:

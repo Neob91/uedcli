@@ -301,12 +301,23 @@ def test_an_unrenderable_size_becomes_a_clean_exit_2_through_dispatch(tmp_path, 
 
 
 def test_wire_keeps_the_vivid_highlight_hue_untouched():
-    """`wire` fills nothing; its highlight is the brush's vivid CSG hue, and its edge pair is the
-    (front, back) shade — both guarded by the byte-identity golden too."""
+    """`wire` fills nothing; its highlight is the brush's vivid CSG hue, and every edge — front or
+    back — renders in that same hue (no facing-dim shade), both guarded by the byte-identity golden."""
     geom = _geom([_box("Add")], faces="wire", highlight_polys={("Add", 1)})
     assert {rgb for _e, rgb, _k in geom.hi_edges} == {ADD_F}
     assert geom.fills == []
-    assert {(e[2], e[3]) for e in geom.edges} == {(ADD_F, ADD_B)}
+    assert {(e[2], e[3]) for e in geom.edges} == {(ADD_F, ADD_F)}
+
+
+def test_legend_highlight_uses_the_actors_tint_not_the_csg_hue():
+    """`--brush-colors legend` swaps the whole wireframe to the actor's own tint — a highlighted poly
+    must match the wireframe it highlights, not fall back to the CSG hue it deliberately hides."""
+    box = _box("Add")
+    tint = assign_tints([box])["Add"]
+    geom = _geom([box], faces="wire", brush_colors="legend", highlight_polys={("Add", 1)})
+    assert {rgb for _e, rgb, _k in geom.hi_edges} == {tint}
+    assert ADD_F not in {rgb for _e, rgb, _k in geom.hi_edges}
+    assert {(e[2], e[3]) for e in geom.edges} == {(tint, tint)}
 
 
 # ── a filled render only needs a class index when there is something to classify ────────────────
