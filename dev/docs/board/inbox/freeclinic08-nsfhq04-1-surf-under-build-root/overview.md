@@ -1,7 +1,7 @@
 +++
-priority = "p2"
+priority = "p1"
 kind = "debug"
-summary = "freeclinic08's ENTIRE structural-only node/leaf residual (-38/-23) ROOT-CAUSED: Brush586, the level's first world-CSG brush, has no CsgOper= (real default CSG_Active) — the SAME unfixed Vandenberg Gas Brush230 mechanism. Removing it alone makes the remaining 140 brushes byte-identical. nsfhq04's Brush8321 (also index-0, no CsgOper=) is confirmed a SIGNIFICANT driver too, but does not fully explain nsfhq04's residual alone. No fix shipped (mechanism still unknown, same as Vandenberg)."
+summary = "freeclinic08's ENTIRE structural-only node/leaf residual ROOT-CAUSED and FIXED (CsgOper::Active, 528e602): Brush586's no-CsgOper= case is now handled. nsfhq04's Brush8321 (same mechanism) is also fixed, but nsfhq04 is STILL the worst-parity level in the corpus (0/6) — a second divergence, first world-CSG brush Brush842, localized live; suspected same classify-BSP over-fragmentation mechanism as the parallel Area51 Entrance Brush1852 investigation, not yet disassembly-confirmed."
 +++
 
 # freeclinic08/nsfhq04 +1-surf under-build
@@ -419,3 +419,22 @@ pattern), `fc08_n13_node_owner.py` (per-brush node-owner attribution on the 13-b
   interaction with a wrongly-modeled Pass-1 world shell is unmeasured.
 - Whether other OG-DX levels share a `CsgOper`-absent first brush is unmeasured beyond these 3
   (Vandenberg Gas, freeclinic08, nsfhq04) out of the 21-level corpus.
+
+## 2026-09-01, 5th continuation: `CsgOper::Active` (528e602) shipped, closes freeclinic08 fully; nsfhq04 has a SECOND, distinct divergence at `Brush842`
+
+`528e602` shipped since the 4th continuation, fixing the `CsgOper`-absent mechanism this item
+originally root-caused. freeclinic08 is now confirmed count-exact on nodes/surfs/leaves (side effect,
+independently re-verified — see `native-materialize-findings.md`, "confirm CsgOper::Active fix already
+closes FreeClinic08's structural residual").
+
+nsfhq04 is NOT closed — it remains the single worst-parity level in the 2026-09-01 regenerated breadth
+table (0/6 geometry). Re-ran the round-2 harness (`nsfhq04_prefix_search2.py`, already built for this
+exact follow-up) to completion: with `Brush8321` correctly handled by `CsgOper::Active` (not removed),
+the FIRST divergent brush in the level is `Brush842` (world-CSG index 513 of 660, structural-only set)
+— `d_nodes=+131 d_surfs=+0 d_leaves=+38` at that prefix. `Brush842` carries a near-non-planar authored
+poly (tiny normal/vertex deviations from axis-alignment despite an algebraically-trivial 180°-flip
+rotation) — a plausible trigger for a coplanar/split-epsilon classification difference during the
+classify-BSP descent, the SAME symptom shape (node/leaf-only delta, surf-exact) the parallel Area51
+Entrance `Brush1852` investigation converged on this same round. Not proven the same root cause; not
+disassembly-confirmed. No fix shipped. Full detail: `native-materialize-findings.md`, search "NSFHQ04
+5th continuation".

@@ -4860,3 +4860,61 @@ editor golden builder, mirrors `unatco_subset.py`), `area51_addfunc_oracle.py` (
 (native's `UEDCLI_BSPCSG_TREE_DUMP`+`UEDCLI_BSPCSG_DESCENT_ACTOR` trace, one process for both n=506
 and n=507 so NADD/LEAF counts are directly comparable), `area51_compare_tail.py` /
 `area51_frag_diff.py` (tail-diff and fragment-level Base/Normal comparison).
+
+## 2026-09-01, NSFHQ04 5th continuation: post-`CsgOper::Active` fix, second divergent brush localized — `Brush842`, first non-axis-aligned rotation in the level
+
+Worst-parity level in the corpus (0/6 geometry, per the 2026-09-01 regenerated breadth table). The
+`528e602` `CsgOper::Active` fix (which correctly handles `Brush8321`, the `CsgOper`-absent brush from
+the 4th continuation above) is confirmed shipped and in effect; this round asks the open question that
+continuation left: what explains the residual BEYOND `Brush8321`.
+
+**Method**: re-ran the existing `nsfhq04_prefix_search2.py`/`prefix_search_lib2.py` harness (already
+committed, built for exactly this follow-up — a "round 2" search over the same structural-only,
+non-`PF_Semisolid` 660-brush set, WITHOUT removing `Brush8321`, now that `CsgOper::Active` handles it
+natively) to completion. A dispatched investigation agent had built the harness and started the search
+but stalled twice waiting on background builds that had already finished without producing a
+completion signal (both times verified via `ps`/`docker ps`/file-mtime — no live process, no recent
+file writes); the coordinating session ran the already-built, already-committed script directly to
+finish the search rather than re-deriving it.
+
+**Binary search result**: prefix *n*=512 (`Brush841`) is byte-exact (nodes=surfs=leaves match
+natively-computed vs a freshly self-built editor golden); *n*=513 (adds `Brush842`) diverges by
+`d_nodes=+131 d_surfs=+0 d_leaves=+38`.
+
+**`Brush842`'s properties are notable**: `CsgOper=CSG_Add`, `Rotation=(Pitch=65536, Yaw=-131072,
+Roll=-32768)` — in Unreal's 65536-units-per-circle angle representation this is Pitch=360°≡0°,
+Yaw=-720°≡0°, Roll=-180°, i.e. algebraically a pure 180° flip, not an arbitrary tilt. Despite that, its
+authored T3D poly data is NOT perfectly axis-planar: e.g. poly 0's `Normal=(-0.002003, 0, 1.0)` (not
+exactly `(0,0,1)`) and its 4 vertices' Z values are `+65.919899, +66.000000, +65.919899, +65.919899`
+(not identical) — a ~0.08uu spread across nominally-coplanar vertices. `MainScale`/`PostScale` both
+specify `SheerAxis=SHEER_ZX` but no `Scale=`/`SheerRate=`, so both default to identity scale/zero
+shear rate — the near-degenerate poly shape is NOT an actual applied shear transform, it's baked into
+the T3D-authored vertex/normal data itself (both native and the editor consume this SAME authored data
+from the SAME T3D — this is not an input difference between the two sides).
+
+**Not yet root-caused; strong hypothesis, unconfirmed**: a near-but-not-exactly-planar poly is exactly
+the class of input that would stress a coplanar-vs-split epsilon/threshold decision during
+`filter_ed_poly`'s classify-BSP descent — the SAME code path (`bspcsg.rs`'s `filter_ed_poly`, dispatch
+into `THRESH_SPLIT_POLY_WITH_PLANE`/`THRESH_POINTS_ARE_SAME`/etc., all already disassembly-confirmed
+per `fpoly.rs`'s own citations) that the PARALLEL Area51 Entrance `Brush1852` investigation (see
+"Area51 Brush1852... classify-BSP over-fragmentation" above) independently converged on THE SAME ROUND,
+also as a "native produces more fragments than the editor" pattern. **This may be the same underlying
+mechanism as Area51's residual** — both are `CSG_Add` brushes whose over-fragmentation shows up as a
+node/leaf-only (surf-exact) delta, both localized to a single brush via live prefix binary search, both
+pointing at the classify-BSP split/descent stage rather than the leaf keep/discard decision. Not proven
+identical — Area51's `Brush1852` is NOT reported as having a similarly degenerate poly shape (that
+wasn't checked for it), and NSFHQ04's is the first such case measured. Worth checking Area51's
+`Brush1852` for the same near-non-planar-authored-poly property once the concurrent `angr`-decompile
+round on `FilterEdPoly` lands — if both share a poly-shape trigger, one fix should close both.
+
+**No fix shipped** — per the no-guessing rule, the epsilon-threshold hypothesis above is not
+disassembly-confirmed at this specific call site for this specific poly; the existing
+`THRESH_SPLIT_POLY_WITH_PLANE=0.25`/`THRESH_POINTS_ARE_SAME=0.002` constants are already
+disassembly-cited elsewhere in `fpoly.rs`, so a naive "just widen the epsilon" change would be
+unverified guessing, not a confirmed fix. Next step: a `FilterEdPoly`-loophead live trace on `Brush842`
+specifically (the same technique the Area51 thread is applying, now that `angr`'s decompiler is being
+tried there for readable pseudocode instead of raw capstone) to see whether the divergence is a
+Front/Back/Split/Coplanar classification flip on this poly's near-planar faces.
+
+No `bspcsg.rs`/`csg.rs` changes this round. `bin/test` not re-run (read-only investigation, no source
+touched). Board: `freeclinic08-nsfhq04-1-surf-under-build-root` (existing item), appended.
