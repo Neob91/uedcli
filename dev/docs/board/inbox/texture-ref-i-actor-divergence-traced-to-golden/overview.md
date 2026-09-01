@@ -786,3 +786,35 @@ real cadence is finer. Finding the actual trigger unit needs a live gdb capture 
 counted calls, not what triggered each one) -- not attempted this round, budget. Code:
 `uedcli-native/src/bspcsg.rs`. Worktree `.claude/worktrees/bspcsg-incremental-points`, left
 uncommitted per this round's instructions.
+
+## Round 14 (2026-09-01): `bspRefresh`'s real cadence found -- it's COARSER than per-brush, not finer; round 13's guess had the direction backwards
+
+Full detail: `native-materialize-findings.md`, "Round 14: `bspRefresh`'s real cadence found". Mandate:
+round 13 guessed the real `bspRefresh` cadence must be finer than "once per completed brush" (its own
+per-brush placement, wired into `bsp_brush_csg`'s tail, crashed UNATCO and regressed `DX.dx`). This
+round's job: find the real trigger, live, on a case with genuine PERSISTING cross-brush splits (round
+12's T-junction trunk), and check round 13's own call site for a mundane bug before trusting the
+cadence theory.
+
+**Verdict: the opposite of round 13's guess. `bspRefresh` fires ZERO times during brush CSG, for any
+brush, including ones with real cross-brush WTB resplits.** All 5 calls it makes on the T-junction
+trunk (4 brushes) happen within/around a SEPARATE rebuild phase that runs AFTER every brush's CSG
+finishes -- confirmed by a new interleaved gdb trace (one session, one global sequence counter, both
+`bspAddPoint` and `bspRefresh` breakpoints together) showing zero `bspRefresh` hits across the first
+303 of 607 `bspAddPoint` calls (spanning all 4 brushes' full CSG, including `PillarD`'s cross-brush
+notch-resplit against `PillarC`'s existing surf -- exactly the case round 13 named as the likely
+trigger for a finer cadence), and direct coordinate evidence that the calls immediately following each
+`bspRefresh` hit restart from `Room`'s own box-corner points, in a different order than brush-CSG
+order -- a fresh tree-rebuild pass, not a continuation of CSG.
+
+**This is a call-site bug, not a too-coarse cadence, per this round's own mandate item 3: round 13
+wired the GC into the CSG phase, a phase the real editor never GCs during, at all.** It also explains
+UNATCO's crash and `DX.dx`'s regression as one mechanism: round 9 already established that ring-only
+points aren't linked to any node until node/vert-pool construction happens later, during
+`bspRepartition`'s subtree recursion -- so a GC run mid-CSG (as round 13's per-brush call does)
+necessarily misclassifies still-needed points as unreachable.
+
+No production code touched. New harness:
+`dev/docs/spikes/2026-09-01-dx-pbase-points-trace/harness/combined_refresh_addpoint_trace.py` (log:
+`.../logs/combined-tjunction.log`). Worktree `.claude/worktrees/pbase-round14-refresh-cadence`, left
+uncommitted per this round's instructions.

@@ -3889,3 +3889,114 @@ branch, the per-brush `bsp_refresh_points_vectors` call in `bsp_brush_csg`, the 
 `incremental_points_keeps_the_simplest_subtract_case_structurally_safe_but_not_parity_exact`).
 Worktree `.claude/worktrees/bspcsg-incremental-points`, left uncommitted per this round's
 instructions.
+
+## Round 14 (2026-09-01): `bspRefresh`'s real cadence found -- ZERO calls during brush CSG, all of them tied to a SEPARATE post-CSG rebuild phase; round 13's per-brush placement is the bug, not a too-coarse cadence
+
+Task: round 13's incremental-point-pool attempt called the (pre-existing)
+`passes::bsp_refresh_points_vectors` GC once per brush, in `bsp_brush_csg`'s tail -- matching round 9's
+"5 `bspRefresh` calls for `DX.dx`'s 5 brushes" correlation -- and that measured worse on `DX.dx` and
+crashed UNATCO. Round 13 guessed the real cadence must be FINER than once-per-brush (some sub-brush
+checkpoint). This round's mandate: find the real trigger, live, on a case with genuine cross-brush
+persisting splits (not `DX.dx`'s trivial unsplit boxes), per round 13's own item 3 -- check for a
+mundane bug in round 13's call-site placement before assuming the cadence theory.
+
+**Verdict: round 13's cadence theory had the direction backwards. The real cadence is COARSER than
+once-per-brush, not finer -- `bspRefresh` fires ZERO times during brush CSG (any brush, including ones
+with real cross-brush WTB resplits) and only fires within a SEPARATE rebuild phase that runs AFTER all
+brushes' CSG completes.** Round 13's bug is a phase-placement bug: it wired the GC into the CSG phase,
+a phase the real editor never GCs during, at all.
+
+**Method: a new combined trace, one gdb session, one global sequence counter, breaking on all four VAs
+at once** (`bspAddPoint` entry `0x1003545d`/exits `0x100354ce`+`0x100355a7`, `bspRefresh` entry
+`0x10036cd0`/exit `0x1003718f` -- all four VAs reused unmodified from round 9). Prior rounds traced
+`bspAddPoint` and `bspRefresh` in SEPARATE gdb runs and could only correlate by call-index heuristics
+across two different logs; interleaving both in one session with one counter gives the true relative
+order directly. New harness: `dev/docs/spikes/2026-09-01-dx-pbase-points-trace/harness/
+combined_refresh_addpoint_trace.py`. Target: round 12's own T-junction trunk
+(`build_tjunction_trunk.py`, unmodified) -- `Room` (`CSG_Subtract`) + `PillarB`/`PillarC` (`CSG_Add`,
+overlapping) + `PillarD` (`CSG_Add`, corner-bite) -- the case round 12 already proved has a real,
+PERSISTING cross-brush split (surf 12/14, 3 final nodes each from one canonical surf reused across
+PillarB's cut and PillarD's notch). Rebuilt the golden fresh this round (`build_ued_golden.py
+--world-only --no-light --no-obj-load`); log committed at `dev/docs/spikes/2026-09-01-dx-pbase-points-
+trace/logs/combined-tjunction.log`.
+
+**Result: 607 `bspAddPoint` calls (identical count to round 12's separately-traced run on the same
+trunk -- confirms determinism/reproducibility) and exactly 5 `bspRefresh` calls, matching round 9's
+`DX.dx` count coincidentally -- but their POSITION in the call sequence refutes per-brush cadence
+outright:**
+
+| `bspRefresh` call | fires between `bspAddPoint` calls | nodes/points/vectors before -> after |
+|---|---|---|
+| rfidx=1 | apidx 303 / apidx 304 | 40/65/23 -> 34/23/23 |
+| rfidx=2 | apidx 415 / apidx 416 | 28/61/23 -> 28/61/23 (no-op) |
+| rfidx=3 | immediately after rfidx=2, same boundary | 28/61/23 -> 28/61/23 (no-op) |
+| rfidx=4 | apidx 607 (the LAST call of the whole build) / after it | 76/99/23 -> 28/61/23 |
+| rfidx=5 | immediately after rfidx=4, same boundary | 28/61/23 -> 28/60/22 |
+
+**Decisive coordinate evidence for what's actually happening at these boundaries.** Calls 208-303 are
+`PillarD`'s own CSG pass against `PillarC`/`PillarB` (coordinates in the 160-512 range, matching that
+geometry -- confirms round 12's "PillarD reuses the already-allocated surf via dedup calls only, no
+fresh `alloc_surf`" finding held for the ENTIRE tail of PillarD's processing, not just the window round
+12 sampled). Call 304, immediately after rfidx=1, jumps straight to `(1024,-1024,1024)`,
+`(1024,1024,1024)`, ... -- `Room`'s own 2048-cube corner points (half-extent 1024), i.e. a dead restart
+from the FIRST brush's own geometry, in a totally different order than brush-CSG order. The same thing
+happens again at call 416, immediately after the rfidx=2/3 no-op pair: `(-1024,-1024,-1024)`,
+`(1024,-1024,-1024)`, ... -- `Room`'s corners AGAIN, a second full pass. **This can only be a separate,
+subsequent tree-rebuild pass that re-walks the model's final merged polygon soup from scratch
+(revisiting `Room`'s geometry multiple times, in `bsp_build`-recursion order, not brush-CSG order) --
+not a continuation of brush processing.** Grepping the full log confirms **zero** `RF_ENTRY`/`RF_EXIT`
+lines anywhere in the first 790 log lines (`bspAddPoint` calls 1-303, spanning ALL FOUR brushes' full
+CSG -- `Room`+`PillarB`+`PillarC`'s split-vs-`PillarB` (round 11/12's own subject) +`PillarD`'s
+cross-brush WTB notch-resplit against `PillarC`'s existing surf, round 13's own named suspect for a
+finer-grained trigger).
+
+**This matches a mechanism already on record, predating round 9: `points_pool_refresh_trace.py`'s own
+docstring (written by round 9 itself) already states "`bspRefresh` ... is called once at world-level
+and once per `bspRepartition` subtree (up to ~209/119 times on larger levels)" -- citing prior "Round
+3". Round 9 itself labeled `DX.dx`'s call 1 "the world-level, FIRST `bspRefresh`"** (§`DX.dx`'s
+`p_base` residual" section above), already distinguishing it from a "per-brush" call, a distinction
+round 13 overlooked when it generalized "5 calls, 5 brushes" into per-brush causality. This round's
+5-call breakdown reads cleanly against that pre-existing mechanism: **rfidx=1 sits exactly at the
+CSG-phase/rebuild-phase seam (plausibly the "world-level" call, fired once as the finished CSG model is
+handed to the rebuild/repartition step) and rfidx=2-5 are "per-subtree" checkpoints WITHIN that
+rebuild's own recursion** (2 no-op mid-rebuild, 2 more -- one doing the real, large final compaction --
+right after the rebuild's own last `bspAddPoint` call). The subtree count (4, for this tiny synthetic
+level) scales with the rebuild's own recursion depth/structure, not with brush count -- consistent with
+the doc's already-recorded "up to ~209/119 on larger levels" scaling note.
+
+**This directly explains round 13's regression AND crash as one mechanism, not two separate bugs --
+answering item 3 of this round's mandate: it is a call-site bug, not a too-coarse cadence.** Round 13
+wired `passes::bsp_refresh_points_vectors` into `bsp_brush_csg`'s own tail -- i.e. DURING the CSG
+phase, once per brush. This trace shows the real editor runs this GC ZERO times during CSG, for ANY
+brush, including the one (`PillarD`) round 13 itself flagged as the likely culprit ("a LATER brush's
+`FilterWorldThroughBrush` re-visits an EXISTING surf's points"). Round 9 already established why a
+mid-CSG GC is unsafe on its own terms: "ring-only points ... are NOT YET referenced by any node's
+vert-pool at the time of the FIRST `bspRefresh` -- node/vert-pool construction happens later, DURING
+`bspRepartition`'s subtree recursion" (§`DX.dx`'s `p_base` residual" section). Running a reachability
+GC before that linkage exists (as round 13's per-brush call does) will misclassify still-needed points
+as unreachable and drop them -- exactly UNATCO's crash symptom (`vert iVertex index -1 out of range`,
+a point a later stage needed was already gone) and, on `DX.dx`, a corruption of index alignment
+relative to a golden that never GCs until the rebuild phase (the measured 13->25 `p_base` regression).
+
+**Connects to round 13's own "root architectural fact" (`model.points` unconditionally cleared before
+`bspRepartition`'s own rebuild in `build_geometry_bspcsg`) -- native already has the right SEAM for
+this, it's just not where the GC call was wired.** The real editor's own rebuild/repartition-equivalent
+phase is exactly the phase native's `build_geometry_bspcsg` already treats specially (the
+`model.points.clear()` call). This round did not attempt to move the GC call there or otherwise change
+`uedcli-native/src/*` -- per this round's mandate, characterization only, no implementation. A future
+round can now target the GC call site with confidence: NOT `bsp_brush_csg`'s per-brush tail, but
+somewhere in/around the rebuild/repartition-equivalent phase, with a trigger tied to that phase's own
+recursion structure (subtree checkpoints), not to brush completion. What is still NOT characterized:
+the exact recursion unit that maps 1:1 to a real subtree checkpoint (this round pinned WHERE the calls
+land in the `bspAddPoint` sequence, not the precise C++ call site inside the rebuild), and how the
+count scales on a real level's much deeper rebuild recursion (UNATCO/Wanchai) -- both open for a future
+implementation round.
+
+**No production code touched this round** (`uedcli-native/src/*` untouched; `DX.dx`/UNATCO/Wanchai
+`p_base` counts unchanged). New committed-worthy harness (left uncommitted per this round's
+instructions): `dev/docs/spikes/2026-09-01-dx-pbase-points-trace/harness/
+combined_refresh_addpoint_trace.py` (interleaved `bspAddPoint`+`bspRefresh` trace, one gdb session, one
+global sequence counter -- reusable for any future cadence question needing true call-order evidence)
+and `dev/docs/spikes/2026-09-01-dx-pbase-points-trace/logs/combined-tjunction.log` (this round's 1408-
+line capture). Worktree `.claude/worktrees/pbase-round14-refresh-cadence`, left uncommitted per this
+round's instructions.
