@@ -4000,3 +4000,112 @@ global sequence counter -- reusable for any future cadence question needing true
 and `dev/docs/spikes/2026-09-01-dx-pbase-points-trace/logs/combined-tjunction.log` (this round's 1408-
 line capture). Worktree `.claude/worktrees/pbase-round14-refresh-cadence`, left uncommitted per this
 round's instructions.
+
+## OceanLab Lab +27 surf over-build — root-caused and FIXED: `bsp_validate_brush_links` coplanarity gate used `verts[0]`, must use the authored `Base` (2026-09-01)
+
+Owner directed a shift to the worst-parity levels, starting with OceanLab Lab (`14_OceanLab_Lab.dx`,
+1886 brushes, the largest level in the corpus). It was previously the worst instance of the
+severe-under-build family (`breadth-geometry-check-on-10-new-og-levels-1-10`: nodes -22.0%, surfs
+-19.7%) attributed to the same root cause as Area51 Entrance (mirrored-brush determinant bug, fixed
+`c7b8b0b`). A fresh breadth pass (2026-09-01, cached golden) showed the shape had FLIPPED to a much
+smaller OVER-build (nodes +465, surfs +27, leaves +86, verts +3958, points +1003, vectors -66) — the
+mirrored-brush fix evidently touched OceanLab too, but left (or revealed) a second, smaller, unrelated
+issue. This item root-causes and fixes the SURF half of that residual.
+
+**Per-brush surf attribution** (method from `freeclinic08-nsfhq04-1-surf-under-build-root`: native
+`BspSurf.i_actor` vs golden's resolved via `epkg.name_of_ref`, script
+`dev/docs/spikes/2026-09-01-oceanlab-overbuild/harness/` — see below) found **exactly 9 brushes**
+differ, **each by exactly +3** (native 18 vs golden 15, or native 21 vs golden 18), summing to the
+full net +27 with zero cancellation — an unusually clean signal. All 9 are `Brush784`/`844`/`858`/
+`872`/`886`/`904`/`918`/`1852`/`1868`: identical-shape 26-poly `CSG_Add PolyFlags=32` (PF_Semisolid)
+"2D Loft" BrushBuilder decorative details (a small beveled octagonal-ring shape, `Item=2DLoftTOP/SIDE/
+END`), each authored with a few thousandths of a unit of construction noise between its own vertices
+(e.g. `PrePivot=(X=-0.001648,Y=0.001342,Z=-0.002441)`) — NOT mirrored, NOT scaled (`MainScale`/
+`PostScale` both identity, no `Rotation`), so unrelated to the `c7b8b0b` determinant fix's code path
+(that fix's `rot_is_pure_rotation` gate only matters for `CSG_Subtract` or the off-by-default
+`ADD_RECOMPUTE_NORMAL` experiment; these are plain `CSG_Add`). Of 110 total 26-poly "loft" brushes in
+the level, only these 9 are affected — a shape-family issue, not universal.
+
+**Root cause: `bsp_validate_brush_links`'s coplanarity gate (`bspcsg.rs`, the §92-§9 "dome-cap fix")
+used each poly's `verts[0]` as its on-plane reference point instead of the poly's own authored `Base`
+field (T3D `Origin=`).** This function assigns each brush poly a surf-link `iLink` so coplanar
+same-facing same-texture faces of ONE brush share a single `FBspSurf` (`Editor.dll 0x37290`, the gate
+that already fixed the UNATCO dome-cap N=9-facets-should-be-1 case). The coplanarity test is `-0.001 <
+Normal·(Base_j − Base_i) < 0.001`; the existing code computed `Base` as each poly's first vertex, on
+the (undocumented, never live-checked) assumption that `FPoly::Finalize`'s "base snap" meant `Base :=
+verts[0]`. For OceanLab's loft brushes this is wrong: their own vertices carry construction noise
+large enough (~0.0015–0.0042, 1.5×–4× the ±0.001 band) to push some genuinely-coplanar pairs of an
+otherwise-flat cap/ring outside the band, while each face's AUTHORED `Origin` sits exactly on its
+intended plane (0 delta) — because `Origin`/`Base` is the texture-plane anchor point, mathematically
+required to lie exactly on the polygon's plane by construction, unlike an arbitrary vertex which only
+approximates it once BrushBuilder-generated coordinates carry rounding.
+
+A pure-Python reimplementation of the documented link algorithm (`_scratch/oceanlab_link_sim.py`,
+throwaway — see harness note below) against Brush784's raw T3D polys confirmed: `verts[0]`-based
+linking gives 21 groups (matches native's actual isolated build exactly), `Base`(Origin)-based linking
+gives 18 groups. Ran this comparison across all 110 26-poly loft brushes in the level
+(`/tmp/link_sim2.py`): **exactly the same 9 brushes flip 21→18 under the Origin-based reference point;
+the other 101 are byte-identical either way** — a maximally clean signal with no collateral risk
+visible even before touching Rust.
+
+**Live-verified before shipping** (per the standing no-guessing rule), isolating the leading-Add-brush
+quirk out of the picture: pasting `Brush784` ALONE into a fresh `MAP NEW` gives a genuinely EMPTY
+golden (0 nodes/surfs — "Unreal's world is solid by default... additive brushes only matter where
+something was subtracted", `unrealed/quirks.md` "CSG model"; this is the ALREADY-documented "leading
+CSG_Add into an empty world" divergence, irrelevant to this finding and NOT what's being tested here).
+Fixed by pasting a synthetic ADD shell (16000³) + SUBTRACT room (4000³) around Brush784's own location
+first, giving it real carved space to sit in (`oceanlab_isolate_golden.py`) — a real UED22 build (`MAP
+NEW`→`EDIT PASTE`→`MAP REBUILD`→`MAP SAVE`, no lighting needed) then attributed per-actor
+(`oceanlab_isolate_check.py`): **native (pre-fix) = 21 surfs for Brush784, the live editor = 18** —
+exactly reproducing the isolated-brush prediction and the full-level +3 delta, confirming the
+mechanism is INTRINSIC to this brush's own geometry (not contextual/interaction with the other 1885
+brushes).
+
+**Fix** (`uedcli-native/src/bspcsg.rs`, `bsp_validate_brush_links`): `base.push(p.verts.first()...)`
+→ `base.push(p.base)`. `p.base` already carries the real authored `Origin` when the brush has one
+(`brush_marshal.py`'s `origins_flat`, the same field already load-bearing for `pBase`/`Points` byte
+parity on scaled brushes, §92 §45) and safely falls back to `verts[0]` when absent (`FPoly::new`'s
+default) — so this is a strict correction with no new fallback gap. New regression test
+(`validate_brush_links_uses_authored_base_not_verts0`) pins two coplanar faces whose own noisy
+`verts[0]` would fail the ±0.001 band but whose authored `Base` links them correctly; the pre-existing
+dome-cap test (`validate_brush_links_fuses_coplanar_same_facing_faces`) still passes unchanged (its
+synthetic facets never diverge `Base` from `verts[0]`, so it couldn't have caught this).
+
+**Result — OceanLab Lab surfs now EXACT.** Before: surfs native=11305 golden=11278 (d=+27, 9 brushes
+each +3). After: **surfs native=11278 golden=11278 (d=+0), 0 differing brushes.** Nodes/leaves/verts/
+points/vectors are UNCHANGED by this fix (nodes d=+465, leaves d=+86, verts d=+3980, points d=+1003,
+vectors d=-66) — a separate, still-open residual, almost certainly the same class of `bsp_build`/
+`FindBestSplit`-tie-break repartition-order gap already open on UNATCO/freeclinic08/nsfhq04 (see
+`freeclinic08-nsfhq04-1-surf-under-build-root` above): same-face-set (surfs now exact), tree-shape-only
+divergence. Not investigated further this round — per the task's own scope (surf attribution was the
+assigned target; the node/leaf/vert residual is the SAME open architectural problem several other
+rounds have already spent large, inconclusive effort on) and the standing no-guessing rule (no
+confident root cause in hand for it).
+
+**Non-regression, all cached goldens, geometry counts unchanged from pre-fix**: `DX.dx` exact on all 6
+counts (26/26/5/250/32/6, d=+0 everywhere); NYC Bar exact on all 6 (1620/953/283/20878/2762/138,
+d=+0); Wanchai Market nodes/surfs/leaves exact (11648/5284/3371, d=+0), verts+74/points+16/vectors-8
+(matching the already-documented residual exactly); UNATCO nodes/surfs/leaves exact (6314/3616/762,
+d=+0), verts+5/points+16/vectors+0 (matching `unatco-verts-points-residual-after-the-zone`'s own
+figures exactly). `cargo test` (uedcli-native): 99/99 passed (was 99 before the new test was added —
+so 100 after; re-ran the full suite post-fix, all green). Scoped pytest touching the affected native
+paths (`test_native_scale`, `test_preview_native`, `test_native_surf_pan`, `test_brush_merge`,
+`test_preview_faces`): 169/169 passed.
+
+**Same mechanism likely explains part of NYC 747's parallel shape-flip** (also flipped from severe
+under-build to a smaller over-build per the same breadth pass, +79 nodes/+12 surfs/-10 leaves) — not
+independently re-investigated (breadth over depth per the task's own instruction), but the "small
+CSG_Add PF_Semisolid decorative brush with a nonzero surf delta" shape is consistent with the same
+`Base`-vs-`verts[0]` gap; worth a quick per-brush attribution check in a future round before assuming
+a new mechanism there.
+
+Harness (all under `dev/docs/spikes/2026-09-01-oceanlab-overbuild/harness/`, committed per
+`dev/docs/rules/spikes.md`): `oceanlab_isolate_golden.py` (live-editor isolated golden builder, with
+the synthetic ADD-shell+SUBTRACT-room context), `oceanlab_isolate_check.py` (native-vs-isolated-golden
+per-brush surf attribution). The full-level attribution script (`_scratch/oceanlab_surf_diff.py`) and
+the pure-Python link-algorithm simulator (`_scratch/oceanlab_link_sim.py`, `/tmp/link_sim2.py`) were
+throwaway one-shot analysis, not promoted — the committed harness above is sufficient to reproduce the
+live-verification step; the full-level attribution is a straightforward reuse of
+`fc08_surf_diff.py`'s already-committed pattern against OceanLab's own cached trunk/golden
+(`/tmp/uedcli-parity-cache/4e3757c3f3b2144f3750084db83cdbbc8bd4412047aadffa17c0494f4fa51a39/`,
+worktree-local trunk copy at `_scratch/uedcli-parity-cache/<same hash>/trunk/`).

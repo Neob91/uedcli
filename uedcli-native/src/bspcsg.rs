@@ -2282,23 +2282,39 @@ fn bsp_build(model: &mut Model, polys: Vec<FPoly>) -> Result<(), BuildError> {
 /// Castle-SAFE: no castle brush has two coplanar same-normal faces, so every `links[i] == i` there
 /// (byte-identity gate confirms).
 ///
-/// The geometry gate uses each face's FINALIZED (winding-derived) normal + on-plane base, NOT the
-/// authored `FPoly::Normal`/`Base`: the editor links AFTER `FPoly::Finalize` (`CalcNormal` + base
-/// snap), and some T3D faces carry a STALE/projected authored normal (the sloped-roof case handled in
-/// LOOP 1).  Deciding coplanarity on the authored normal would link/unlink on a plane the rest of the
-/// build treats as wrong.  The exact-axis gate is kept faithful to the decode: on `Brush755`'s dome
-/// cap the 9 `(0,0,1)` facets carry IDENTICAL `TextureU`/`TextureV`, so it passes and they link.
+/// The normal used is the FINALIZED (winding-derived) one, NOT the authored `FPoly::Normal`: some
+/// T3D faces carry a STALE/projected authored normal (the sloped-roof case handled in LOOP 1), and
+/// deciding coplanarity on it would link/unlink on a plane the rest of the build treats as wrong.
+/// The BASE, by contrast, IS the authored `FPoly::Base` (T3D `Origin=`) — corrected 2026-09-01
+/// (OceanLab Lab finding, see the call site) after a `verts[0]`-based base missed 3 real merges per
+/// brush on 9 real T3D-authored brushes whose own vertices carry a few thousandths of a unit of
+/// construction noise; the authored Origin sits exactly on the intended plane and reproduces the
+/// editor's grouping exactly. The exact-axis gate is kept faithful to the decode: on `Brush755`'s
+/// dome cap the 9 `(0,0,1)` facets carry IDENTICAL `TextureU`/`TextureV`, so it passes and they link.
 fn bsp_validate_brush_links(polys: &[FPoly]) -> Vec<i32> {
     let n = polys.len();
     // Finalized normal + on-plane base per face, in brush-LOCAL space (the editor's link-time
-    // geometry).  Fall back to the authored normal only for a degenerate winding.
+    // geometry).  Fall back to the authored normal only for a degenerate winding.  The base is
+    // the poly's own `FPoly::Base` (T3D `Origin=`), NOT `verts[0]` — live-verified 2026-09-01
+    // (OceanLab Lab's 9 "2D Loft" PF_Semisolid detail brushes, `native-materialize-findings.md`
+    // "OceanLab Lab +27 surf over-build"): a `verts[0]`-based coplanarity check missed 3 real
+    // merges per brush (native 21 groups vs the live editor's isolated-golden 18) because these
+    // T3D-authored faces carry a few thousandths of a unit of construction noise between their
+    // OWN vertices, large enough (~0.0015-0.004) to push the `verts[0]` pair outside the ±0.001
+    // coplanar band on some pairs but not others of the SAME flat cap/ring — while every poly's
+    // own authored `Origin` sits exactly on its intended plane (0 delta), reproducing the
+    // editor's grouping exactly on all 9 affected brushes with zero change on the other 101
+    // same-poly-count brushes in the level.  `p.base` already carries the real authored Origin
+    // when the brush has one (`brush_marshal.py`'s `origins_flat`, also what `bspAddNode` stores
+    // as the surf `pBase`, §92 §45) and safely falls back to `verts[0]` otherwise (`FPoly::new`'s
+    // default, `lib.rs`) — so this is a strict improvement, no new fallback gap.
     let mut nrm: Vec<Vec3> = Vec::with_capacity(n);
     let mut base: Vec<Vec3> = Vec::with_capacity(n);
     for p in polys {
         let mut w = p.clone();
         w.normal = Vec3::new(0.0, 0.0, 0.0);
         nrm.push(if w.calc_normal() { w.normal } else { p.normal });
-        base.push(p.verts.first().copied().unwrap_or(p.base));
+        base.push(p.base);
     }
     let mut links: Vec<i32> = (0..n as i32).collect();
     for i in 0..n {
@@ -4045,6 +4061,43 @@ mod tests {
             bsp_validate_brush_links(&cap2),
             vec![0, 0, 2],
             "differing texture axes must NOT link (exact-axis gate)"
+        );
+    }
+
+    /// OceanLab Lab finding (2026-09-01, `native-materialize-findings.md` "OceanLab Lab +27 surf
+    /// over-build"): the coplanarity gate must use each poly's own AUTHORED `Base` (T3D `Origin=`),
+    /// not `verts[0]`.  Real T3D-authored geometry (a "2D Loft" BrushBuilder shape, 9 instances in
+    /// OceanLab Lab) carries a few thousandths of a unit of construction noise BETWEEN a face's own
+    /// vertices — large enough to push a `verts[0]`-based coplanarity check outside the ±0.001 band
+    /// on some pairs of an otherwise-flat cap while the SAME faces' authored `Origin` sits exactly
+    /// on the intended plane (0 delta).  Live-verified: an isolated context golden (real editor,
+    /// `dev/docs/spikes/2026-09-01-oceanlab-overbuild/harness/oceanlab_isolate_golden.py`) of
+    /// `Brush784` groups its 26 authored polys into 18 surfs; a `verts[0]`-based gate gave 21
+    /// (missed 3 real merges), the authored-`Base` gate gives 18 exactly.
+    #[test]
+    fn validate_brush_links_uses_authored_base_not_verts0() {
+        // Two coplanar (0,0,1) quads whose OWN vertices carry ~0.002 uu of noise (so a `verts[0]`
+        // coplanarity check reads a ~0.002 plane offset, outside the ±0.001 band), but whose
+        // AUTHORED `Base` (T3D `Origin=`) is exactly on the shared z=64 plane on both.
+        let mk_noisy = |cx: f32, z_noise: f32| {
+            let z = 64.0 + z_noise;
+            let mut p = FPoly::new(vec![
+                Vec3::new(cx - 8.0, -8.0, z),
+                Vec3::new(cx + 8.0, -8.0, z),
+                Vec3::new(cx + 8.0, 8.0, z),
+                Vec3::new(cx - 8.0, 8.0, z),
+            ]);
+            p.normal = Vec3::new(0.0, 0.0, 1.0);
+            p.texture_u = Vec3::new(1.0, 0.0, 0.0);
+            p.texture_v = Vec3::new(0.0, 1.0, 0.0);
+            p.base = Vec3::new(cx, 0.0, 64.0); // authored Origin: exactly on the true plane
+            p
+        };
+        let noisy = vec![mk_noisy(0.0, 0.002), mk_noisy(24.0, -0.0005)];
+        assert_eq!(
+            bsp_validate_brush_links(&noisy),
+            vec![0, 0],
+            "authored Base (on-plane) must link two faces whose own noisy verts[0] would not"
         );
     }
 
