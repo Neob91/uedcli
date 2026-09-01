@@ -30,6 +30,12 @@ to reduce the delta.
 - Sweep the worst-parity levels one at a time: after each fix lands, re-rank the corpus and
   investigate whichever level is worst next. Current worst-first queue and results:
   `native-light-apply-bake-where-it-stands-and`.
+- Faithfully reproduce a real, live-verified editor effect even when the level authoring that
+  triggers it looks like a mistake (e.g. `vandenberg-gas-csg-active-csgoper-brush-causes`'s
+  `CsgOper`-absent brush) — never silently "correct" the data to what was presumably intended.
+  Comment the code and file a board note flagging it as likely-unintentional authoring, so the
+  behavior can be revisited later, but the shipped behavior still matches what UnrealEd actually
+  does with it.
 
 ## Before adding or changing an entry
 
