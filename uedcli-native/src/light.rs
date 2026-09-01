@@ -650,13 +650,17 @@ fn bake_surf(
         }
         let u_step = scaled(&u_dir, step_u);
         let v_step = scaled(&v_dir, step_v);
-        // The editor keeps the LAST `LineCheck` result across lumels and uses it to fill the row's
-        // trailing padding bits (below). It is only refreshed when a ray actually runs, so a
-        // radius-rejected lumel leaves it standing.
-        let mut last_clear = false;
         for v in 0..v_size {
             let mut p = row_origin;
             for byte in 0..row_bytes {
+                // The editor keeps the LAST `LineCheck` result to fill this BYTE's trailing padding
+                // bits (below), refreshed only when a ray actually runs (a radius-rejected lumel
+                // leaves it standing) -- but the carry does not survive a byte boundary: reset per
+                // byte, confirmed live against a real (surf, light) population where a radius gap
+                // spans a byte edge (`Light30`/NYC Bar records 23/26/28/38/40/91/867, all 7
+                // byte-exact once reset here instead of once per light before the row loop --
+                // `lighting-bits-only-divergence-localizes-to`, round 2026-09-01).
+                let mut last_clear = false;
                 let mut acc = 0u8;
                 let first = byte as i32 * 8;
                 for bit in 0..8u32 {
@@ -699,6 +703,7 @@ mod tests {
     use crate::build::{build_geometry_from_brushes, BrushInput};
     use crate::csg::CsgOper;
     use crate::fpoly::FPoly;
+    use crate::model::BspSurf;
 
     fn box_brush(hx: f32, hy: f32, hz: f32, loc: Vec3, oper: CsgOper) -> BrushInput {
         let c = |sx: f32, sy: f32, sz: f32| Vec3::new(sx * hx, sy * hy, sz * hz);
@@ -993,6 +998,71 @@ mod tests {
         assert!(padding_bits(PF_BRIGHT_CORNERS) > 0,
                 "with the BrightCorners inset the last real lumel is lit, so its row's padding bits \
                  must be set — a zero-fill would leave them 0");
+    }
+
+    #[test]
+    fn row_padding_carry_does_not_survive_a_byte_boundary() {
+        // Real bug, found live 2026-09-01 tracing NYC Bar's `Light30` (`bits`-only bucket,
+        // `lighting-bits-only-divergence-localizes-to`): `Light30`'s per-lumel bit disagreed with
+        // the editor's real `LIGHT APPLY` output on 7 surfaces, ALWAYS confined to padding bits
+        // (beyond `USize`) -- `line_clear` itself matches the editor bit-for-bit on every one of
+        // those surfaces' IN-RANGE lumels (`light30_offline_check.py`, 100% agreement). Root cause:
+        // `last_clear` (the value `row_padding` repeats into the padding bits) was declared once
+        // per LIGHT, before the whole row loop, so it kept carrying a stale value across a byte
+        // boundary whenever the lumels in between were skipped by the radius cull -- confirmed by
+        // replaying golden's own stored geometry through a corrected simulator that resets
+        // `last_clear` at the start of each output BYTE: all 7 of `Light30`'s records became
+        // byte-exact (`dev/docs/spikes/2026-09-01-light30-bits-trace/`).
+        //
+        // A single row spanning 2 bytes (USize=12), an EMPTY model (`line_clear` trivially returns
+        // CLEAR for any in-range query -- no occlusion geometry needed to isolate this), and a light
+        // positioned so lumels 0-7 (byte 0) are all in range and CLEAR, lumels 8-11 (byte 1's real
+        // bits) are all out of range, and 12-15 are the true padding bits.
+        let m = Model::default(); // no nodes -> line_clear(..) == true unconditionally
+        let base = Vec3::new(0.0, 0.0, 0.0);
+        let normal = Vec3::new(0.0, 0.0, 1.0);
+        let tu = Vec3::new(1.0, 0.0, 0.0);
+        let tv = Vec3::new(0.0, 1.0, 0.0);
+        let mut model = Model {
+            points: vec![base],
+            vectors: vec![normal, tu, tv],
+            surfs: vec![BspSurf {
+                texture_ref: -1,
+                poly_flags: 0,
+                p_base: 0,
+                v_normal: 0,
+                v_texture_u: 1,
+                v_texture_v: 2,
+                i_actor: -1,
+                i_brush_poly: -1,
+                pan: [0, 0],
+                i_light_map: -1,
+            }],
+            ..m
+        };
+        let verts = vec![
+            Vec3::new(0.0, 0.0, 0.0),
+            Vec3::new(360.0, 0.0, 0.0),
+            Vec3::new(360.0, 10.0, 0.0),
+            Vec3::new(0.0, 10.0, 0.0),
+        ];
+        let light = LightInput { location: Vec3::new(-50.0, 0.0, 10.0), radius: 11,
+                                 special_lit: false };
+        let visible = [std::collections::HashSet::from([0i32])];
+        let sb = bake_surf(&model, &verts, 0, std::slice::from_ref(&light), &visible)
+            .expect("surf must bake (has a texture basis)");
+        assert_eq!(sb.rec.u_size, 12, "fixture must span 2 bytes (row_bytes=ceil(12/8)=2)");
+        assert_eq!(sb.light_indices, vec![0], "the light must actually reach this surf");
+        let row_bytes = 2usize;
+        let byte0 = sb.bits[0];
+        let byte1 = sb.bits[1];
+        assert_eq!(byte0, 0xff, "lumels 0-7: all in range of a radius-11 light at x=-50, and CLEAR \
+                                  (no occluding geometry) -> byte 0 fully set");
+        assert_eq!(byte1 & 0x0f, 0, "lumels 8-11: real bits, but out of range -> unset either way");
+        assert_eq!(byte1 & 0xf0, 0, "lumels 12-15: PADDING. Byte 0's last real ray was CLEAR, but \
+                                      no ray ran in byte 1 at all -- the stale CLEAR must not carry \
+                                      across the byte boundary into this byte's own padding");
+        assert_eq!(sb.bits.len(), row_bytes * sb.rec.v_size as usize);
     }
 
     #[test]

@@ -100,6 +100,15 @@ not a `DX.dx`-specific coincidence. `regression_gate.py`: `GATE: PASS`, no chang
 pre-existing verts/points/vectors deltas. Full detail: `native-materialize-findings.md`, search
 "last node-level residual".
 
+**Follow-up, 2026-09-01: lighting -- the `bits`-only recurring-bad-light population FIXED (a
+`row_padding` carry bug, not `line_clear`).** `light.rs::bake_surf` reset its padding-fill carry value
+once per LIGHT instead of once per output BYTE, so a padding byte could inherit a stale CLEAR result
+from many lumels earlier whenever the lumels in between were radius-culled. One line moved, TDD'd.
+NYC Bar shadow-bit agreement 99.76% -> **100.00%** (421088/421088); UNATCO 99.27% -> **99.998%** (80
+bits left of 3.76M). `LightMap` records byte-identical: NYC Bar 87.71%->93.06% (+50 records), UNATCO
+83.6%->90.94% (+245 records). `DX.dx` unchanged at 100% (no regression). `cargo test --lib`: 96/96.
+Detail: `native-materialize-findings.md`, search "row_padding state-carry"; `lighting-bits-only-divergence-localizes-to`.
+
 ## Harness catalog
 
 Reusable measurement/verification scripts for this effort. All live under `dev/docs/spikes/*/harness/`
@@ -488,6 +497,16 @@ the difference (Wanchai has more zones/portal crossings). Reproduced with
 * `FovAngle` for the editor's temp visibility viewport is not pinned (it is `Actor+0x304`, never set by
   the gather pass, and `SpawnViewActor` reuses a free `Camera`). Six 90°-apart faces only cover the
   sphere at FOV 90. Needed before a `GetVisibleSurfs` port can claim fidelity.
+* **CHASED 2026-09-01, root cause was NOT `line_clear` -- a separate `row_padding` state-carry bug in
+  `bake_surf`'s row-packing loop, now FIXED.** The recurring-bad-light population (`Light30`/NYC Bar,
+  `Light227`/UNATCO, `lighting-bits-only-divergence-localizes-to`) traced to ground: `line_clear`
+  itself is bit-perfect (100% agreement replaying golden's own tree, radius-gated); the real
+  divergence was entirely in padding bits (beyond `USize`), from a carry-value declared once per light
+  instead of once per output byte. One line moved, TDD'd, shipped. NYC Bar shadow bits 99.76% ->
+  100.00%; UNATCO 99.27% -> 99.998% (80 bits left of 3.76M). Records byte-identical: NYC Bar
+  87.71%->93.06% (+50), UNATCO 83.6%->90.94% (+245). `DX.dx` unchanged at 100% (no regression). Full
+  writeup: `native-materialize-findings.md`, search "row_padding state-carry"; round detail:
+  `lighting-bits-only-divergence-localizes-to`.
 
 ## Doc corrections awaiting the owner
 

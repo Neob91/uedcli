@@ -120,3 +120,35 @@ one of them is a "bad" light, not that per-lumel noise scales with exposure.
   bit-identical (unrelated computation -- the determinant, not the ray walk) and `MergeWith` is fully
   decoded and confirmed faithfully ported (span-buffer merge, not per-lumel shadow tracing). Neither
   contradicts a real remaining gap in the ray walk itself for specific geometries.
+
+## 2026-09-01: `bits`-only bucket root cause found and FIXED -- not `line_clear`, a `row_padding` bug
+
+Traced `Light30`'s 7 bad NYC Bar records to ground. `light_clear` itself is NOT the cause: replayed
+every in-range lumel `Light30` queries against golden's own real BSP tree with the shipped v2 port
+(`light30_offline_check.py`, new, radius-gated correctly this time -- an unguarded first pass hit the
+exact same "no radius cull" mistake round 7 already logged, then was fixed) -- **100.00% agreement,
+4728/4728**. The real mismatch (confirmed real against native's actual built `.dx`, not just golden)
+lives entirely in PADDING bits (indices >= `USize`, per the existing `row_padding` mechanism): native's
+`bake_surf` declared its `last_clear` carry-value ONCE per light, before the whole row loop, so a
+padding byte could inherit a stale CLEAR from many lumels (even rows, even bytes) earlier whenever the
+lumels in between were radius-culled with no ray run to refresh it. Replaying golden's own real bytes
+under three carry-reset hypotheses (persist / reset-per-row / reset-per-byte) found reset-per-BYTE is
+the only one that matches all 7 of `Light30`'s records exactly, byte for byte.
+
+**Fixed**: `uedcli-native/src/light.rs` now resets `last_clear` at the top of each output byte, not
+once per light. New regression test `row_padding_carry_does_not_survive_a_byte_boundary` (RED before,
+GREEN after; `cargo test --lib`: 96/96). Measured before/after (`parity_report.py`):
+
+| level | shadow bits | records byte-identical |
+|---|---|---|
+| NYC Bar | 99.76% -> **100.00%** (421088/421088) | 87.71% -> **93.06%** (+50) |
+| UNATCO | 99.27% -> **99.998%** (80 bits left of 3.76M) | 83.6% -> **90.94%** (+245) |
+| `DX.dx` | 100% (unchanged, no regression) | 100% (unchanged) |
+
+No live gdb capture was needed -- the offline golden-tree replay was decisive on its own. Full writeup:
+`dev/docs/native-materialize-findings.md` (search "row_padding state-carry"). This bucket is
+effectively closed for NYC Bar and nearly closed for UNATCO (80 bits, not chased further this round --
+plausibly the same ULP-drift geometry mechanism as records 38/40, which this round found still carry
+real vector-value drift and left untouched). Remaining divergence on both levels is now dominated by
+the `grid`-only (Points/Vectors value drift, already tracked 4+ rounds) and `run`-differs
+(`GetVisibleSurfs`) buckets from section 1 above, neither touched this round.
