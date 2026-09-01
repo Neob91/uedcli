@@ -2,10 +2,10 @@
 
 get / set / unset
 
-`actor prop get <name|-> [KEY…] [--kv | --json]` — print EFFECTIVE property values — the stored
-value if present, else the class default decoded offline from the game packages, else the type's
-zero — one line per KEY in argument order (a whole static array prints as one `(0=V,1=W,…)` line; a
-whole struct prints every member). With **no KEYs**, dumps the actor's STORED props (plus
+`actor prop get <name|-> [KEY…] [--kv | --json]` — print the EFFECTIVE value of each KEY, one per
+line, in the order given: the stored value if set, else the class default (decoded offline from the
+game packages), else the type's zero. A whole static array prints as one `(0=V,1=W,…)` line; a whole
+struct prints every member. With **no KEYs**, dumps the actor's STORED props (plus
 `Location`). `--kv` prints round-trippable `KEY=VALUE` lines (feeds back into `actor prop set`);
 `--json` emits a `{key: value}` object (values as strings). The name may be `-` to read a stdin name
 list and dump every piped actor (output is then `<name>\t<key>=<value>`).

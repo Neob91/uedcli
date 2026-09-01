@@ -108,7 +108,7 @@ actor diagram [<names…> | --from-t3d <FILE…|->]
 - **On-face numbers are graded translucent by depth.** A visible face is drawn at 56% opacity, and each
   face in front of it keeps 60% of that (near faces clear, buried faces faint), so the nearer faces'
   numbers stand out. A face counts as "in front" under the **self-or-solid** rule: a nearer front face
-  that covers it dims it **iff** that occluder is a **solid** CSG op (added/semi-solid/mover) **or**
+  that covers it dims it only when that occluder is a **solid** CSG op (added/semi-solid/mover) or
   belongs to the **same brush**. So a hollow room's near walls dim its own far walls, while a solid
   brush sitting **inside** a room is **not** dimmed by the room's walls; solid brushes still dim across
   brushes. A number **unreadable on screen** is omitted — a **view-dependent** verdict: a face too
@@ -131,7 +131,7 @@ actor diagram [<names…> | --from-t3d <FILE…|->]
     numbering is facing-blind, so `poly:vis` — now an inert alias of bare `poly` — numbers every face;
     opacity, not presence, is the front/back cue. `vis` is kept only so pre-facing-blind specs still
     parse.)
-  - An invalid token is a clean named error (e.g. `--annotate: unknown filter 'foo' for kind 'poly'`).
+  - An invalid token is a clean exit 2 naming it (e.g. `--annotate: unknown filter 'foo' for kind 'poly'`).
 - **Point actors** render as their **DT_Sprite** billboard (footprint `DrawScale·USize × DrawScale·
   VSize`) or, for DT_Mesh/DT_None (or a sprite that does not decode), a small **marker** (a filled
   diamond in the actor's tint, with a white halo) at Location. A sprite that does not decode prints a
@@ -174,7 +174,7 @@ actor diagram [<names…> | --from-t3d <FILE…|->]
   8-sided wire cylinder in ISO (`CollisionHeight` is a HALF-height); **`light-range`** — a faint orange
   sphere of a light's reach (`25·(LightRadius+1)` UU); **`sound-range`** — a faint blue sphere of an
   AmbientSound's reach (`25·(SoundRadius+1)` UU). Brush actors (including movers) are excluded, so a
-  brush diagram needs no class schema. An unknown member is a clean named error.
+  brush diagram needs no class schema. An unknown member is a clean exit 2 naming it.
 - **Locator cells are drawn on every diagram by default** — a **label gutter** with columns `A,B,C…`
   across the top and rows `1,2,3…` down both sides (no gridlines), so every region of the image has a
   text address like `D4` (a letter is always a column, a number always a row). It is **on by default**

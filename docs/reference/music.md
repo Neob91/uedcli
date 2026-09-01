@@ -3,8 +3,8 @@
 `music` catalogs the substrate's music modules the way `class` catalogs its actor classes —
 enumerate, inspect, search, and record a classification — offline, reading the game's own `.umx`/`.u`
 packages, no editor or level. `music` additionally reports each module's **embedded title** and
-**format**. This is **phase (a)**: no sample decoding yet, so there is no `music preview`
-(spectrogram), duration, or export.
+**format**. Sample decoding isn't implemented yet, so there is no `music preview` (spectrogram),
+duration, or export.
 
 ```bash
 # enumerate every object, one full dotted ref per line (count to stderr); NO default filter

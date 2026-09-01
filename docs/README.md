@@ -1,11 +1,11 @@
 # uedcli docs
 
-`uedcli` makes level design a queryable, scriptable, auditable text surface an LLM can drive entirely
-as text — no GUI, issuing semantic, by-name commands (`actor find`, `brush build`, `mover key
-move`, …) against Deus Ex `.dx` and Unreal/UT `.unr` levels alike; the T3D text format is internal
-plumbing. The git-tracked T3D trunk is the source of truth; the `.dx`/`.unr` map file is a
-build artifact; `level materialize` compiles the trunk into a map file. Photo renders in-game
-(`--game`, the default) or with the native offline rasterizer.
+`uedcli` turns level design into plain text — no GUI. An LLM (or you) can query it, script it, and
+audit it directly, issuing plain, named commands (`actor find`, `brush build`, `mover key move`, …)
+against Deus Ex `.dx` and Unreal/UT `.unr` levels alike; the T3D text format is internal plumbing.
+The git-tracked T3D trunk is the source of truth; the `.dx`/`.unr` map file is a build artifact;
+`level materialize` compiles the trunk into a map file. Photo renders in-game (`--game`, the
+default) or with the native offline rasterizer.
 
 ```
 uedcli <verb> …                      # if installed on $PATH (pipx)
@@ -98,7 +98,8 @@ All dir keys are relative to the project root (absolute allowed), so uedcli can 
   shared across projects. There is no central per-project bucket and no project `id`.
 
 **Package layering.** The effective package search path is the project's overlay `paths` first, then
-the selected game's base dirs, deduped project-shadows-base. `paths` are **bare directories**,
+the selected game's base dirs. Duplicates are removed, keeping the project's copy over the game's.
+`paths` are **bare directories**,
 colon-separated — uedcli owns the five package extensions (`.u .dx .utx .uax .umx`) and scans the
 dirs itself. Because `:` is the list separator, a pasted **Windows path** (`C:\DX\System`) cannot be
 a dir: uedcli names it and exits 2, in both the project and the `[games.*]` config. Use the POSIX
