@@ -197,11 +197,11 @@ also accepts `--tree KIND/NAME` (above) to edit a different box.
 | [`reference/level/`](reference/level/README.md) | create/import/reimport/list/status/doctor/materialize/photo |
 | [`reference/class/`](reference/class/README.md) | actor-class discovery: list/show/preview/search/prewarm/classify |
 | [`reference/mover.md`](reference/mover.md) | `mover key` — animated brush actors (doors/lifts/gears) |
-| [`reference/sound.md`](reference/sound.md) | sound catalog: list/show/search/classify |
-| [`reference/music.md`](reference/music.md) | music catalog: list/show/search/classify, title/format |
+| [`reference/sound/`](reference/sound/README.md) | sound catalog: list/show/search/classify |
+| [`reference/music/`](reference/music/README.md) | music catalog: list/show/search/classify, title/format |
 | [`reference/stash.md`](reference/stash.md) | private, machine-local captured actor sets |
 | [`reference/prefab.md`](reference/prefab.md) | durable, git-tracked, shareable actor sets |
-| [`reference/texture.md`](reference/texture.md) | texture catalog: list/show/preview/search/classify |
+| [`reference/texture/`](reference/texture/README.md) | texture catalog: list/show/preview/search/classify |
 | [`reference/docs.md`](reference/docs.md) | `uedcli docs list/show/search` |
 | [`reference/event.md`](reference/event.md) | `event graph` — trigger wiring |
 | [`reference/project.md`](reference/project.md) | `project show` |

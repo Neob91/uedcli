@@ -13,6 +13,6 @@ and record a classification (tags + description).
 | [`class prewarm`](prewarm.md) | eagerly warm the package schema cache so a later offline `list`/`search`/`show` starts warm |
 | [`class classify`](classify.md) | record / inspect what a class IS — `set`/`unset`/`status`/`tags` |
 
-See also: [`sound`](../sound.md) and [`music`](../music.md) (the same catalog shape over audio),
-[`texture`](../texture.md) (the same shape over textures),
+See also: [`sound`](../sound/README.md) and [`music`](../music/README.md) (the same catalog shape
+over audio), [`texture`](../texture/README.md) (the same shape over textures),
 [classes.md](../../leveldesign/deusex/classes.md) (the Deus Ex class families in level-design terms).
