@@ -19,3 +19,8 @@ per-command layer) — `docs/usage/`'s workflow prose is inherently hand-authore
 The split spec measured that generation timing doesn't change the token-economics win (the split
 alone delivers the reduction), so this is a fast-follow, not a blocker, and was explicitly not
 built as part of that spec.
+
+A post-ship review of the hand-authored tree (2026-09-01) found the ~49 pages vary in shape — some
+have runnable examples and an exit-status callout, most don't; no page tabulates its flags. A
+generator would also fix this for free by imposing one template, rather than needing a separate
+hand-retrofit pass.
