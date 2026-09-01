@@ -100,15 +100,6 @@ not a `DX.dx`-specific coincidence. `regression_gate.py`: `GATE: PASS`, no chang
 pre-existing verts/points/vectors deltas. Full detail: `native-materialize-findings.md`, search
 "last node-level residual".
 
-**Follow-up, 2026-09-01: lighting -- the `bits`-only recurring-bad-light population FIXED (a
-`row_padding` carry bug, not `line_clear`).** `light.rs::bake_surf` reset its padding-fill carry value
-once per LIGHT instead of once per output BYTE, so a padding byte could inherit a stale CLEAR result
-from many lumels earlier whenever the lumels in between were radius-culled. One line moved, TDD'd.
-NYC Bar shadow-bit agreement 99.76% -> **100.00%** (421088/421088); UNATCO 99.27% -> **99.998%** (80
-bits left of 3.76M). `LightMap` records byte-identical: NYC Bar 87.71%->93.06% (+50 records), UNATCO
-83.6%->90.94% (+245 records). `DX.dx` unchanged at 100% (no regression). `cargo test --lib`: 96/96.
-Detail: `native-materialize-findings.md`, search "row_padding state-carry"; `lighting-bits-only-divergence-localizes-to`.
-
 ## Harness catalog
 
 Reusable measurement/verification scripts for this effort. All live under `dev/docs/spikes/*/harness/`
@@ -166,6 +157,16 @@ Lighting (detail below this section, and in `dev/docs/native-materialize-finding
   specific light actors (`Light30` on NYC Bar, `Light227` on UNATCO) recur as the bad one across many
   surfaces with no static (class/radius) distinguisher from always-correct co-located lights. Both need
   live capture to progress further; no fix shipped this round.
+- **2026-09-01: `grid`-only's root mechanism found** (exact numeric reconstruction, not live gdb) —
+  CSG_Add faces wrongly keep the authored (lossy 6-decimal-text) surf normal where the real editor
+  recomputes it from the vertex winding (contradicts the existing "CSG_Add keeps authored" rule,
+  `bspcsg.rs`'s `subtract_recomputes_slant_normal_while_add_keeps_authored`, built on castle evidence).
+  A gated experiment (`UEDCLI_BSPCSG_ADD_RECOMPUTE_NORMAL`, off by default) cuts value-mismatched
+  Points/Vectors 54-85% on NYC Bar/UNATCO with zero node/surf/leaf regression on either node-exact
+  level. Not shipped to default (needs live gdb confirmation or owner sign-off, since it contradicts a
+  passing test built from different evidence) and the lighting-bucket impact was not re-measured this
+  round (geometry-side result only). Full detail: `lighting-bits-only-divergence-localizes-to`,
+  `native-materialize-findings.md`.
 
 Geometry:
 
@@ -497,16 +498,6 @@ the difference (Wanchai has more zones/portal crossings). Reproduced with
 * `FovAngle` for the editor's temp visibility viewport is not pinned (it is `Actor+0x304`, never set by
   the gather pass, and `SpawnViewActor` reuses a free `Camera`). Six 90°-apart faces only cover the
   sphere at FOV 90. Needed before a `GetVisibleSurfs` port can claim fidelity.
-* **CHASED 2026-09-01, root cause was NOT `line_clear` -- a separate `row_padding` state-carry bug in
-  `bake_surf`'s row-packing loop, now FIXED.** The recurring-bad-light population (`Light30`/NYC Bar,
-  `Light227`/UNATCO, `lighting-bits-only-divergence-localizes-to`) traced to ground: `line_clear`
-  itself is bit-perfect (100% agreement replaying golden's own tree, radius-gated); the real
-  divergence was entirely in padding bits (beyond `USize`), from a carry-value declared once per light
-  instead of once per output byte. One line moved, TDD'd, shipped. NYC Bar shadow bits 99.76% ->
-  100.00%; UNATCO 99.27% -> 99.998% (80 bits left of 3.76M). Records byte-identical: NYC Bar
-  87.71%->93.06% (+50), UNATCO 83.6%->90.94% (+245). `DX.dx` unchanged at 100% (no regression). Full
-  writeup: `native-materialize-findings.md`, search "row_padding state-carry"; round detail:
-  `lighting-bits-only-divergence-localizes-to`.
 
 ## Doc corrections awaiting the owner
 

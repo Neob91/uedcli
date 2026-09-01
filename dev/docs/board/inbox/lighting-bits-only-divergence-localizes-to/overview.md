@@ -1,7 +1,7 @@
 +++
 priority = "p2"
 kind = "debug"
-summary = "Lighting record failure modes now split into 3 named, measured buckets (grid/bits/run); grid-only traced to real (but tiny) Points-value drift even on count-exact NYC Bar, bits-only traced to specific per-light shadow traces (not diffuse precision noise) -- both need live capture to go further"
+summary = "Lighting record failure modes now split into 3 named, measured buckets (grid/bits/run); grid-only traced to real (but tiny) Points-value drift even on count-exact NYC Bar, bits-only traced to specific per-light shadow traces (not diffuse precision noise) -- both need live capture to go further. 2026-09-01: grid-only's root mechanism found by exact numeric reconstruction (not live gdb) -- CSG_Add faces wrongly keep the authored (lossy 6dp-text) normal where golden recomputes it; gated experiment (UEDCLI_BSPCSG_ADD_RECOMPUTE_NORMAL) cuts value-mismatched points/vectors 54-79% on NYC Bar/UNATCO with zero structural regression, not shipped to default (contradicts a pinned test, needs live confirmation)."
 depends-on = []
 +++
 
@@ -121,34 +121,35 @@ one of them is a "bad" light, not that per-lumel noise scales with exposure.
   decoded and confirmed faithfully ported (span-buffer merge, not per-lumel shadow tracing). Neither
   contradicts a real remaining gap in the ray walk itself for specific geometries.
 
-## 2026-09-01: `bits`-only bucket root cause found and FIXED -- not `line_clear`, a `row_padding` bug
+## 2026-09-01: `grid`-only bucket's root mechanism found (exact numeric reconstruction, not live gdb)
+## and quantified -- CSG_Add faces wrongly keep the authored normal; gated experiment measured, not shipped
 
-Traced `Light30`'s 7 bad NYC Bar records to ground. `light_clear` itself is NOT the cause: replayed
-every in-range lumel `Light30` queries against golden's own real BSP tree with the shipped v2 port
-(`light30_offline_check.py`, new, radius-gated correctly this time -- an unguarded first pass hit the
-exact same "no radius cull" mistake round 7 already logged, then was fixed) -- **100.00% agreement,
-4728/4728**. The real mismatch (confirmed real against native's actual built `.dx`, not just golden)
-lives entirely in PADDING bits (indices >= `USize`, per the existing `row_padding` mechanism): native's
-`bake_surf` declared its `last_clear` carry-value ONCE per light, before the whole row loop, so a
-padding byte could inherit a stale CLEAR from many lumels (even rows, even bytes) earlier whenever the
-lumels in between were radius-culled with no ray run to refresh it. Replaying golden's own real bytes
-under three carry-reset hypotheses (persist / reset-per-row / reset-per-byte) found reset-per-BYTE is
-the only one that matches all 7 of `Light30`'s records exactly, byte for byte.
+Traced one concrete NYC Bar drifted point (`Brush69`, a CSG_Add sloped face) to its owning surf and
+reproduced native's exact drifted value BY HAND using only the T3D-authored integers/normal text and
+`bspcsg.rs`'s own base-snap formula -- no editor needed. The authored normal text (`0.894427`/
+`0.447214`, 6 decimal places) is ~2e-7 off the true `2/√5`/`1/√5`; fed into the base-snap dot product
+with a ~130uu lever arm, this alone produces the observed drift (`d=0.00012969970703125`, just over
+the snap's `1e-4` threshold) -- mathematically the point lies exactly on the plane; the snap is
+spurious, purely a text-precision artifact.
 
-**Fixed**: `uedcli-native/src/light.rs` now resets `last_clear` at the top of each output byte, not
-once per light. New regression test `row_padding_carry_does_not_survive_a_byte_boundary` (RED before,
-GREEN after; `cargo test --lib`: 96/96). Measured before/after (`parity_report.py`):
+**Decisive counter-evidence to the existing "CSG_Add keeps authored normal" rule (`bspcsg.rs`
+`subtract_recomputes_slant_normal_while_add_keeps_authored`, from §92 §48's castle-bastion evidence).**
+Golden's actually-stored normal for this surf matches NEITHER the authored text NOR the true value --
+it's within 1-2 ULP of a from-scratch `CalcNormal`-over-local-winding reconstruction. Checked across
+ALL mismatched vectors on both node-exact levels: 100% (265/265 UNATCO, large majority NYC Bar) trace
+to `CSG_Add` faces holding the literal authored-text value; zero to `CSG_Subtract` (already correct).
 
-| level | shadow bits | records byte-identical |
-|---|---|---|
-| NYC Bar | 99.76% -> **100.00%** (421088/421088) | 87.71% -> **93.06%** (+50) |
-| UNATCO | 99.27% -> **99.998%** (80 bits left of 3.76M) | 83.6% -> **90.94%** (+245) |
-| `DX.dx` | 100% (unchanged, no regression) | 100% (unchanged) |
+**Measured a gated experiment** (`UEDCLI_BSPCSG_ADD_RECOMPUTE_NORMAL`, off by default): extends the
+existing Subtract-only recompute branch to Add too (same already-tested `calc_normal` code, no new
+arithmetic). Result, no structural regression (node/surf/leaf counts unchanged, exact, both levels):
+NYC Bar points value-mismatched 58→25 (-57%), vectors 47→10 (-79%); UNATCO points 393→179 (-54%),
+vectors 136→21 (-85%), verts delta improves +5→+4. `cargo test bspcsg` 24/24 unchanged (flag off by
+default).
 
-No live gdb capture was needed -- the offline golden-tree replay was decisive on its own. Full writeup:
-`dev/docs/native-materialize-findings.md` (search "row_padding state-carry"). This bucket is
-effectively closed for NYC Bar and nearly closed for UNATCO (80 bits, not chased further this round --
-plausibly the same ULP-drift geometry mechanism as records 38/40, which this round found still carry
-real vector-value drift and left untouched). Remaining divergence on both levels is now dominated by
-the `grid`-only (Points/Vectors value drift, already tracked 4+ rounds) and `run`-differs
-(`GetVisibleSurfs`) buckets from section 1 above, neither touched this round.
+**Not shipped to default** -- this is exact-arithmetic reconstruction + golden-value matching, not a
+live capture of the real editor's `FPoly::Finalize`/`CalcNormal` call for a CSG_Add brush, and it
+contradicts a committed, passing test built from different (castle) evidence. Needs a live gdb
+breakpoint on `CalcNormal` (`Engine.dll 0x150510`) during `EDIT PASTE` of a CSG_Add brush to settle
+definitively, or the owner accepting this evidence in lieu of one. Full writeup:
+`native-materialize-findings.md`, "grid-only bucket's Points/Vectors VALUE drift -- root mechanism
+found". Worktree: `.claude/worktrees/lighting-points-value-drift`, left uncommitted.

@@ -91,11 +91,45 @@ impl Opt {
 
 // --- pooling (bspAddPoint / bspAddVector) — copied from build.rs to keep it untouched --------
 
+/// `UEDCLI_BSPCSG_POINT_NEAREST` — opt-in switch from FIRST-within-threshold to the real engine's
+/// NEAREST-within-threshold dedup rule (spec `unrealed-geometry-build-map-rebuild-bsp-rebuild/
+/// spec.md` §3.10, DISASM `Editor.dll 0x35430` calling `Engine.dll UModel::FindNearestVertex
+/// 0x1adeb0`): "this returns the *nearest* existing point within threshold, not the *first*
+/// found". Gated because it changes every dedup call site; measured effect on the lighting-bits-
+/// only-divergence-localizes-to grid-only bucket, `native-materialize-findings.md`.
+fn point_nearest_enabled() -> bool {
+    static FLAG: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *FLAG.get_or_init(|| std::env::var("UEDCLI_BSPCSG_POINT_NEAREST").is_ok())
+}
+
+/// `UEDCLI_BSPCSG_ADD_RECOMPUTE_NORMAL` — EXPERIMENT, off by default. Extends the §92 §48
+/// winding-recompute (currently gated to `CsgOper::Subtract` only, matching
+/// `subtract_recomputes_slant_normal_while_add_keeps_authored`) to CSG_Add faces too. Measured
+/// motivation: on real, unmodified NYC Bar/UNATCO content, every value-mismatched (native vs
+/// golden) surf normal traces to a CSG_Add face storing the AUTHORED T3D text (6-decimal, lossy)
+/// while golden stores a value 1-2 ULP from a from-scratch `CalcNormal`-over-local-winding
+/// reconstruction, not from the authored text (`lighting-bits-only-divergence-localizes-to`,
+/// 2026-09-01 round). This directly contradicts the "Add keeps authored" premise §48 pinned from
+/// castle-bastion evidence, but has NOT been live-gdb-confirmed for a CSG_Add brush — gated as an
+/// experiment, not switched to default, per the no-guessing-without-live-confirmation rule.
+fn add_recompute_normal_enabled() -> bool {
+    static FLAG: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *FLAG.get_or_init(|| std::env::var("UEDCLI_BSPCSG_ADD_RECOMPUTE_NORMAL").is_ok())
+}
+
 fn bsp_add_point(model: &mut Model, v: Vec3) -> i32 {
     // FindNearestVertex threshold 0.002 (fp-classification-sites §7).
-    for (i, p) in model.points.iter().enumerate() {
-        if v.sub(p).size() < THRESH_POINTS_ARE_SAME {
-            return i as i32;
+    if point_nearest_enabled() {
+        if let Some((i, dist)) = nearest(&model.points, &v) {
+            if dist < THRESH_POINTS_ARE_SAME {
+                return i as i32;
+            }
+        }
+    } else {
+        for (i, p) in model.points.iter().enumerate() {
+            if v.sub(p).size() < THRESH_POINTS_ARE_SAME {
+                return i as i32;
+            }
         }
     }
     model.points.push(v);
@@ -108,13 +142,31 @@ fn bsp_add_vector(model: &mut Model, v: Vec3, exact: bool) -> i32 {
     } else {
         0.001
     };
-    for (i, p) in model.vectors.iter().enumerate() {
-        if v.sub(p).size() < tol {
-            return i as i32;
+    if point_nearest_enabled() {
+        if let Some((i, dist)) = nearest(&model.vectors, &v) {
+            if dist < tol {
+                return i as i32;
+            }
+        }
+    } else {
+        for (i, p) in model.vectors.iter().enumerate() {
+            if v.sub(p).size() < tol {
+                return i as i32;
+            }
         }
     }
     model.vectors.push(v);
     (model.vectors.len() - 1) as i32
+}
+
+/// `(index, distance)` of the entry in `pool` nearest `v` — the real `FindNearestVertex`'s
+/// selection rule. Descent pruning uses squared distance; the accept test the caller applies uses
+/// a real (post-`sqrt`) distance (spec §3.10), so this returns the real distance, not squared.
+fn nearest(pool: &[Vec3], v: &Vec3) -> Option<(usize, f32)> {
+    pool.iter()
+        .enumerate()
+        .map(|(i, p)| (i, v.sub(p).size()))
+        .min_by(|a, b| a.1.partial_cmp(&b.1).unwrap())
 }
 
 /// Derive `NodeFlags` from a surf's PolyFlags (matches build.rs::derive_nf).
@@ -2333,7 +2385,7 @@ fn brush_loop1(brush: &build::BrushInput, actor_index: i32, poly_flags: u32) -> 
             if let Some(n) = safe_normal_slow(&transform_vector_by(&nloc, vx)) {
                 ed.normal = n;
             }
-        } else if oper == csg::CsgOper::Subtract
+        } else if (oper == csg::CsgOper::Subtract || add_recompute_normal_enabled())
             && !is_unit_axis(&p.normal)
             && rot_is_pure_rotation(&brush.rot)
         {

@@ -3204,80 +3204,115 @@ No source changed (`uedcli-native/src/` untouched); this was pure characterizati
 `.claude/worktrees/lighting-divergence-breakdown` (branch of the same name), left uncommitted per this
 round's instructions. Board item: `lighting-bits-only-divergence-localizes-to`.
 
-## `bits`-only bucket: real root cause found and FIXED -- not `line_clear`, a `row_padding` state-carry
-## bug. NYC Bar shadow bits 99.76%->100.00%, UNATCO 99.27%->99.998% (2026-09-01, offline + live docker)
+## 2026-09-01: `grid`-only bucket's Points/Vectors VALUE drift — root mechanism found (numeric proof,
+## not live gdb) and quantified: CSG_Add faces wrongly keep the AUTHORED (6-decimal-text) normal where
+## the real editor recomputes it, contradicting the existing §92 §48 "Add keeps authored" rule
 
-Traced the recurring-bad-light finding above (`Light30` on 7 NYC Bar surfaces) to ground. Docker was
-back this round (confirmed via `docker run --rm hello-world`), so a live gdb trace was prepared
-(`editor_tree_oracle.start_dbg_editor`/the `linecheck_*.py` breakpoint pattern), but turned out
-unnecessary: an OFFLINE check settled it first, since `LIGHT APPLY` never rebuilds BSP so golden's own
-saved tree/bits are ground truth for a replay, and the replay alone pinned an exact mechanism -- no
-live capture needed to close this one.
+Task: live-trace the CSG split arithmetic behind the `grid`-only bucket's Points/Vectors value drift
+(`lighting-bits-only-divergence-localizes-to`, "grid-only bucket" section) — 54-393 points/47-136
+vectors per level whose VALUE matches no golden point/vector even though the total COUNT is exact.
+Read first: `lighting-bits-only-divergence-localizes-to`, `wanchai-verts-points-residual-independently`
+(all 4 rounds), `native-materialize-findings.md` §92 (`p_base`/`ShrinkModel`/`bspRefresh` sections).
+Docker/live editor was up this round (confirmed via `docker run --rm hello-world`).
 
-**Step 1 -- ruled out `line_clear` itself.** New `light30_offline_check.py` (reuses
-`line_clear_v2_algorithm_check.py`'s exact port of the shipped `linecheck.rs` v2 algorithm) replayed
-every lumel of `Light30`'s participation against golden's own real BSP tree. First pass (no radius
-gate) showed only 74% agreement -- alarming, but a repeat of round 7's own already-documented mistake
-(`--radius-aware` was defined but never wired into that script): most of the "disagreement" was
-`line_clear` being asked about lumels the real bake never queries at all (outside
-`(LightRadius+1)*25` world radius). Re-run WITH the same `d.dot(&d) < wr2` gate `light.rs::bake_surf`
-applies before ever calling `line_clear`: **4728/4728 in-range bits, 100.00% agreement.** `line_clear`
-is bit-perfect for every real query this light makes. The `9827f07` port is not implicated.
+**Reproduced the starting point** (worktree `.claude/worktrees/lighting-points-value-drift`, fresh
+`.venv`+`uedcli_native` build): NYC Bar, current tree — geometry COUNT-exact (all 6 metrics `d=+0`,
+2758/2758 points), 58/2758 (2.1%) points and 47/142 (33%) vectors multiset-value-mismatched (new
+harness `find_drifted_points.py`, committed alongside this round). Close to the board item's cited
+54/2762 — small drift from a day of unrelated commits, not a different phenomenon.
 
-**Step 2 -- confirmed the mismatch is real but lives entirely in PADDING bits.** `find_bad_light_records.py`
-(new) rebuilds native's own lit `.dx` (`parity_compare.build_native_lit_dx`) and diffs each light's own
-sub-plane against golden's, reproducing the standing finding exactly (`Light30` bad on records
-23/26/28/38/40/91/867). `light30_geom_compare.py` (new) then compared native's vs golden's own
-`p_base`/`v_normal`/`v_texture_u`/`v_texture_v` for those 7 records: 5/7 byte-identical on every input
-(ruling out the separate, already-known Points/Vectors ULP-drift mechanism for those); the other 2
-(records 38/40) DO carry real ULP-level vector drift, a second, independent, already-tracked
-mechanism (the "`grid`-only" bucket's root cause from the entry above) -- not investigated further
-here since it's the same open geometry-side question. Direct hex dump of the mismatching bytes on all
-7 shows the SAME shape every time: native's tail byte(s) hold a repeating non-zero pattern where
-golden's are `0x00` -- e.g. record 23 `native=f9f9f8` vs `golden=f9f900`, record 867 (33-row) native's
-last several bytes repeat `e0` where golden is all `00`. The REAL lumel bits (index < `USize`) match
-exactly on both sides in every case; only the bits beyond `USize` (the packer's own padding, per
-`row_padding`, `a_row_is_packed_to_its_last_whole_byte`) differ.
+**Traced ONE concrete point to its owning brush and reproduced native's exact drifted value by hand.**
+`trace_drifted_point.py` (new, committed): native `points[204] = (0.0, -311.9998779296875,
+-255.99993896484375)` is the `p_base` (only) of surf 251, owned by `Brush69` (`CsgOper=CSG_Add`, plain
+integer `Location=(-384,-440,0)`/`PrePivot=(256,40,-8)`, no `Rotation`, no real `MainScale`/`PostScale`
+sheer) — a sloped (1:2 ramp, authored `Normal=(0,0.894427,0.447214)`) face whose `p_base` is the
+polygon's `Origin=(640,168,-264)` (local), NOT one of its 4 ring vertices. Hand-computed the exact
+`bspcsg.rs` base-snap formula (`d = Normal·(Vertex[0]-Base); if |d|>1e-4: Base += Normal*d`, all f32,
+`Vec3::dot`'s left-to-right reduction) using ONLY the T3D-authored integers/normal-text: **reproduces
+native's stored value bit-for-bit** (`(0.0, -311.9998779296875, -255.99993896484375)`), no editor
+needed — `d = 0.00012969970703125`, just 30% over the `1e-4` threshold, purely from the AUTHORED
+normal text's rounding (`0.894427`/`0.447214`, 6 decimal places) being ~2e-7 off the true `2/√5`/`1/√5`.
+Mathematically the Origin lies EXACTLY on the polygon plane (integer geometry, `d=0` with the true
+normal) — the snap is spurious, triggered only by text-precision noise amplified by the ~130uu lever
+arm between `Base` and `Vertex[0]`.
 
-**Step 3 -- decisive replay pinned the exact wrong state-carry.** `light.rs::bake_surf` declares `let
-mut last_clear = false;` ONCE, before the whole `for v in 0..v_size` row loop, so the value
-`row_padding` repeats into a byte's padding bits can carry forward from an earlier lumel query
-arbitrarily far back -- across an intervening run of radius-culled (real, in-range-tested-false)
-lumels, across a byte boundary, even across a ROW boundary -- as long as no ray runs in between to
-refresh it. Reimplemented `bake_surf`'s row-packing loop three ways in Python against golden's own
-stored geometry/tree (persist-for-the-whole-record = current code; reset-once-per-ROW;
-reset-once-per-output-BYTE) and replayed each against the real recorded bytes for all 7 `Light30`
-records: persist matches 0/7, reset-per-row matches 6/7 (fails record 91, whose row spans 2 bytes),
-**reset-per-BYTE matches 7/7 exactly, byte for byte.** The real editor evidently keeps no state longer
-than the one packed output byte it is currently filling.
+**Decisive: golden's stored normal for this exact surf is NEITHER the authored text NOR the
+mathematically-true unit normal — it's a RECOMPUTED value, close (1-2 ULP) to `CalcNormal`-over-local-
+winding.** `golden.vectors[44] = (0.0, 0.8944272994995117, 0.44721364974975586)`; `f32(0.894427) =
+0.8944270014762878` (native's stored value, the authored text — exact match to native, confirming
+native trusts the text); `f32(2/√5) = 0.8944271802902222` (the true value) — golden matches NEITHER.
+Hand-reconstructing `CalcNormal` (triangle-fan cross-product accumulation, pivoted at `V0`, f32
+throughout, `NormalizeSlow`'s f64-widened magnitude — the exact algorithm `fpoly.rs::calc_normal`
+already implements, per §92 §16/§17) over the polygon's 4 local integer vertices gives `(0.0,
+0.8944271802902222, 0.4472135901451111)` — within 1-2 ULP of golden's stored value, and nowhere near
+the authored text. **This directly contradicts `bspcsg.rs`'s current CSG_Add branch** (`else` arm,
+~line 2426: "UNSCALED CSG_Add... keeps its authored normal", gated by
+`subtract_recomputes_slant_normal_while_add_keeps_authored`'s pinned test, built on §92 §48's
+castle-bastion evidence that Add keeps authored and only Subtract recomputes).
 
-**Fix shipped:** moved `let mut last_clear = false;` from before the `v` loop to the top of the `for
-byte in 0..row_bytes` loop (`uedcli-native/src/light.rs`) -- one line moved, `row_padding` itself
-untouched. New regression test `row_padding_carry_does_not_survive_a_byte_boundary`: an EMPTY model
-(`line_clear` trivially returns CLEAR for any query -- isolates the packing bug from any occlusion
-concern) with one 12-lumel-wide (`USize=12`, 2 bytes) surf and a light positioned so byte 0 (lumels
-0-7) is fully in range and CLEAR, byte 1's real bits (8-11) are out of range, and 12-15 are true
-padding; asserts the padding stays `0x00` rather than inheriting byte 0's stale CLEAR. Verified RED
-against the pre-fix code (`0xf0`) and GREEN after. `cargo test --lib`: 96/96 (was 95/95 -- the one new
-test), `cargo test --lib light::`: 13/13.
+**Not a one-off: checked all 47 NYC Bar + 136 UNATCO mismatched vectors' owning-surf `CsgOper`.** NYC
+Bar: the large majority trace to `CSG_Add` faces whose native value is bit-exact to the authored T3D
+text (`f32(0.707107)`, `f32(0.866026)`, `f32(0.894427)`, etc. — literal 6-decimal-text values).
+**UNATCO (node-exact fixture, `_scratch/bsp-parity-proj/`): 265/265 (100%) of (vector,surf) pairs
+touching a mismatched vector are `CSG_Add` — ZERO `CSG_Subtract`.** Exactly the pattern predicted if
+native's Subtract-recompute is already correct (matching golden) but its Add-keeps-authored branch is
+not — cross-level, 100%-consistent, not a single-brush coincidence.
 
-**Measured before/after** (`parity_report.py`, self-built goldens, cache-hit, no re-extraction):
+**Measured a gated experiment: extend the existing §92 §48 winding-recompute to CSG_Add too.**
+`UEDCLI_BSPCSG_ADD_RECOMPUTE_NORMAL` (new, off by default, `bspcsg.rs`) widens the recompute branch's
+condition from `oper == Subtract` to `oper == Subtract || <flag>`, unchanged otherwise (same
+`!is_unit_axis`/`rot_is_pure_rotation` guards, same code path Subtract already uses — no new
+arithmetic, reuses the already-`§92`-decoded/tested `calc_normal`). Result, both node-exact levels,
+counts vs golden unchanged (no structural regression):
 
-| level | shadow bits (before -> after) | `LightMap` records byte-identical (before -> after) |
-|---|---|---|
-| NYC Bar (`02_NYC_Bar.dx`) | 420064/421088 (99.76%) -> **421088/421088 (100.00%)** | 821/936 (87.71%) -> **871/936 (93.06%)**, +50 |
-| UNATCO (`03_NYC_UNATCOHQ.dx`) | 3729140/3756584 (99.27%) -> **3756504/3756584 (99.998%)**, 80 bits left | 2797/3345 (83.6%) -> **3042/3345 (90.94%)**, +245 |
-| `DX.dx` | 1536/1536 (100%, unchanged) | 26/26 (100%, unchanged) -- no regression |
+| level | metric | default | `ADD_RECOMPUTE_NORMAL=1` |
+|---|---|---:|---:|
+| NYC Bar | nodes/surfs/leaves | EXACT (unchanged) | EXACT (unchanged) |
+| NYC Bar | points value-mismatched | 58/2758 | **25/2758 (-57%)** |
+| NYC Bar | vectors value-mismatched | 47/142 | **10/142 (-79%)** |
+| UNATCO | nodes/surfs/leaves | 6314/3616/762 EXACT | 6314/3616/762 EXACT (unchanged) |
+| UNATCO | verts delta | +5 | **+4** (slightly better) |
+| UNATCO | points delta (count) | +16 | +16 (unchanged) |
+| UNATCO | points value-mismatched | 393/10768 | **179/10768 (-54%)** |
+| UNATCO | vectors value-mismatched | 136/599 | **21/599 (-85%)** |
 
-NYC Bar's shadow-bit gap is now fully closed. UNATCO has 80 wrong bits left (of 3.76M) -- not chased
-further this round; likely a residual instance of the same ULP-drift geometry mechanism noted for
-records 38/40 above, or a genuinely new tail worth a fresh offline sweep before assuming so. The
-remaining NOT-byte-identical records on both levels are dominated by the `grid`-only bucket (real
-Points/Vectors value drift, already tracked, exhausted 4+ rounds) and the small `run`-differs bucket
-(the known `GetVisibleSurfs` gap) -- neither touched this round.
+`cargo test bspcsg` (scoped): 24/24 pass unchanged, env var unset by default — the pinned
+`subtract_recomputes_slant_normal_while_add_keeps_authored` test is untouched (it never sets the flag).
+The 25/179 (NYC Bar/UNATCO) points still mismatched WITH the flag on are now sub-ULP-to-few-ULP (0.000004
+to 0.0014 nearest-golden distance, vs 1e-4-to-0.03 before) — a much smaller, separate residual matching
+the already-documented §92 §52 "second `SafeNormalSlow` in `FPoly::Transform`" precision gap, not a new
+open thread.
 
-Work done in worktree `.claude/worktrees/lighting-light30-bits-trace` (branch of the same name), left
-uncommitted per this round's instructions. New spike:
-`dev/docs/spikes/2026-09-01-light30-bits-trace/harness/` (`light30_offline_check.py`,
-`find_bad_light_records.py`, `light30_geom_compare.py`). Board items:
-`lighting-bits-only-divergence-localizes-to`, `native-light-apply-bake-where-it-stands-and`.
+**Why NOT shipped to default.** This numerically falsifies §92 §48's "CSG_Add keeps authored normal"
+premise on real, unmodified retail content (not synthetic) — but that premise is backed by a committed,
+passing test built from CASTLE evidence (not live-reconfirmed this round), and my own evidence here is
+exact-arithmetic reconstruction + golden-value matching, NOT a live capture of the real editor's
+`FPoly::Finalize`/`CalcNormal` call for a CSG_Add brush. Per the standing no-guessing rule this is
+strong enough to report and gate, not strong enough to flip a tested default without a live capture
+(or the owner accepting this evidence in lieu of one) — a live gdb breakpoint on `CalcNormal`
+(`Engine.dll 0x150510`) during `EDIT PASTE` of a CSG_Add brush (e.g. NYC Bar's `Brush69`) would settle
+it directly and either fix `subtract_recomputes_slant_normal_while_add_keeps_authored`'s premise
+(remove the `Subtract`-only gate) or explain what's actually different about the castle-bastion case
+this evidence doesn't reproduce. Not attempted live this round — the numeric route above was
+independently decisive and cheaper; live tracing is the natural next step if this is picked up again.
+
+**Lighting-bucket impact not re-measured this round** (would need a fresh `lightparity_buckets.py` run
+against a native build with the flag on — not done; the geometry-side improvement above is the
+consolidated, load-bearing result). Given the earlier finding's own 13-14x enrichment of `grid`-only
+records touching a divergent point, halving-to-quartering the divergent-point count is expected to
+shrink the `grid`-only bucket materially, but this is a prediction, not a measurement.
+
+New harnesses (committed, `dev/docs/spikes/2026-08-31-native-parity-report/harness/`):
+`find_drifted_points.py` (multiset points/vectors value-mismatch dump for any trunk+golden pair),
+`trace_drifted_point.py` (resolve a native Points[] index to its owning surf/brush actor). Code change:
+`uedcli-native/src/bspcsg.rs` — `add_recompute_normal_enabled()` + the widened recompute-branch
+condition (gated, off by default, zero effect on the default path — `cargo test bspcsg` 24/24 unchanged,
+regression gate unrun full this round but the scoped counts above show no node/surf/leaf regression on
+either node-exact level). Also tried and reverted (zero measured effect, see harness for the diagnostic):
+`UEDCLI_BSPCSG_POINT_NEAREST` (`bsp_add_point`/`bsp_add_vector` FIRST-vs-NEAREST dedup, per spec.md §3.10
+— confirmed byte-identical output on/off for NYC Bar, extending `pass-d-orphan-ivertex-stale-index-
+parity`'s "red herring for pool SIZE" finding to VALUES too).
+
+Worktree: `.claude/worktrees/lighting-points-value-drift` (branch of the same name), left uncommitted
+per this round's instructions. Board items updated: `lighting-bits-only-divergence-localizes-to`,
+`wanchai-verts-points-residual-independently`.

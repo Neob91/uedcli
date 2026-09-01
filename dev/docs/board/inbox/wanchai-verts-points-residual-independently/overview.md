@@ -502,6 +502,21 @@ both levels), better ROI for a future session is elsewhere: Wanchai's still-open
 (light-run matching needs `MergeWith` decoded; a shadow-ray precision issue) — Wanchai is unblocked for
 that work today, unlike freeclinic08/nsfhq04 which are blocked on their own separate geometry gap.
 
+## 2026-09-01: cross-reference from the `grid`-only VALUE-drift thread — FIRST-vs-NEAREST `bspAddPoint` dedup confirmed a red herring for VALUES too (not just SIZE, `pass-d-orphan-ivertex-stale-index-parity`'s existing finding); the real VALUE-drift mechanism is unrelated, filed on the sibling item
+
+A separate round (`lighting-bits-only-divergence-localizes-to`, same date) investigating count-EXACT
+NYC Bar's Points/Vectors VALUE drift (a NEW angle this thread's 4 rounds never tested, since Wanchai's
+own count delta always muddied the picture) tested this thread's adjacent open question — spec.md
+§3.10 documents the real `bspAddPoint`/`bspAddVector` dedup as NEAREST-within-threshold, while
+`bspcsg.rs`/`build.rs` both implement FIRST-within-threshold (`UEDCLI_BSPCSG_POINT_NEAREST`, new gated
+diagnostic). **Byte-identical output on/off for NYC Bar (58/58 mismatched points, same values) —
+confirmed a red herring for VALUES too**, extending `pass-d-orphan-ivertex-stale-index-parity`'s
+"red herring for pool SIZE" finding. The real mechanism is unrelated: CSG_Add faces wrongly keep the
+authored (lossy 6-decimal-text) normal where the real editor recomputes it from the vertex winding —
+full writeup and a measured (not shipped) fix candidate in `lighting-bits-only-divergence-localizes-to`
+and `native-materialize-findings.md`. Not Wanchai-specific (measured on NYC Bar/UNATCO); not re-run
+against Wanchai's own count residual this round.
+
 ## 2026-08-31: `DX.dx`'s `p_base` reorder checked against this thread's mechanism — NOT the same bug, this thread's lever confirmed no help there either
 
 A separate investigation (`texture-ref-i-actor-divergence-traced-to-golden`, round 2) flagged `DX.dx`
