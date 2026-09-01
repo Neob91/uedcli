@@ -23,6 +23,6 @@ Query, mutate, and organize actors. See also [diagram](diagram.md) for rendering
 | [`actor prop set/unset`](prop.md) | mutate | set or clear properties in one atomic, schema-validated edit |
 | [`actor folder set/unset/rename`](folder.md) | mutate | manage the uedcli-side folder |
 | [`actor label add/remove/clear`](label.md) | mutate | manage the uedcli-side labels |
-| [`actor build`](build.md) | mutate | write a point-actor T3D for a given class |
+| [`actor build`](build.md) | — | write a point-actor T3D for a given class (generator) |
 
 *query — model-side, instant, no editor; mutate — model-side, rewrite the trunk.*

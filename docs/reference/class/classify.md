@@ -20,7 +20,9 @@ printf '%s\n' '{"ref":"DeusEx.BarStool","tags":["chair"],"description":"a stool"
 - **`set`** merges: on re-set, `--tags` **union** onto the stored tags through a strip / lowercase /
   de-dupe normalizer, so re-running never loses a tag. A **different non-empty** `--description`
   **exits 2** printing the stored text; pass `--replace` to overwrite; identical text is a no-op. An
-  unknown class, or a ref that is not `Package.Class`, **exits 2** naming it.
+  unknown class, or a ref that is not `Package.Class`, **exits 2** naming it. (Unlike the
+  sound/music/texture catalogs' `classify set`, which refuses outright on an already-classified
+  object unless `--force` — no `--force` flag exists here; `class classify set` always merges.)
 - **`mount:` and `faces:` are reserved tag namespaces.** A `faces:` tag needs an axis token —
   `+x -x +y -y +z -z` (case-normalized, so `faces:+X` is fine); any other value **exits 2** naming
   it. A `mount:` tag needs a non-empty value (free text, e.g. `mount:wall`). Only the **shape** is

@@ -38,6 +38,13 @@ See [the mover keyframe workflow](../usage/mover-keyframes.md) for a worked keyf
   - *Tilted-base caveat:* the rotation math is per-component FRotator arithmetic, geometrically naive
     for a non-cardinal base `Rotation` — for a tilted base, `--from-world` and `--from-base` are not a
     simple additive re-basing.
+- **`mover key remove <name> <index>`** deletes keyframe `index` (`1 <= index < NumKeys`; index 0,
+  the base pose, is rejected — delete the actor with `actor delete` to remove the whole mover) and
+  **compacts**: every surviving key above `index` shifts down by one (old key `i+1` becomes new key
+  `i`, and so on), `NumKeys` decrements, and the vacated top slot's `KeyPos`/`KeyRot` are cleared. This
+  is destructive, unlike lowering `NumKeys` via `mover key count` (which leaves offsets dormant but
+  intact) — a removed key's offset is gone. Exit 2 if `index` is out of range, or if removing would
+  drop `NumKeys` below the 2-key minimum.
 - **`mover key list --json`** emits `{idx, world_pos, world_rot, off_pos, off_rot, base}` per key.
 - Mover config props (`MoveTime`/`DelayTime`/`StayOpenTime`/`OtherTime` timing, the
   `MoverGlideType`/`MoverEncroachType`/`BumpType` behavior enums, `Tag`/`Event`, return-group leader)

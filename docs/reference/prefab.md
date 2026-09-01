@@ -19,8 +19,10 @@ prefab [--prefab-dir DIR] apply <name> [--at X,Y,Z] [--group NAME | --no-group] 
 prefab [--prefab-dir DIR] drop  <name>
 ```
 
-- **Unlike `stash apply`, `prefab apply` also defaults to the captured anchor** with no `--at`
-  (`--at` overrides). `--group`/`--no-group`/`--folder` behave as in [`stash apply`](stash.md).
+- **Without `--at`, `prefab apply` lands at the world origin** (`0,0,0`), NOT the prefab's captured
+  anchor — unlike [`stash apply`](stash.md), which defaults to the captured anchor. A shared prefab's
+  original coords are only meaningful in its capture level, so origin is the safer default; `--at`
+  overrides. `--group`/`--no-group`/`--folder` behave as in `stash apply`.
 
 `prefab list`/`prefab drop` are read/manage verbs over the library, same shape as `show`/`diagram`/
 `apply` above.
