@@ -4777,3 +4777,86 @@ open with a clear next step recorded in its own board item). The natural next ta
 priority order: Area51 Entrance's `Brush1852` mechanism (needs live gdb/disassembly, has a precise
 minimal repro already), NSFHQ04's residual beyond `Brush8321`, Training Final's unconfirmed lead,
 or returning to the `p_base`/`node_flags` threads from the first snapshot.
+
+## Area51 Entrance `Brush1852`: live-traced to OVER-FRAGMENTATION in the classify-BSP descent, NOT
+## a keep/discard logic bug — mechanism narrowed, exact cause not yet pinned (2026-09-01)
+
+Live gdb-traced the real editor's `bspBrushCSG` (`Editor.dll`, this tree's own `uned/UED22/Editor.dll`)
+against native for Brush1852's own incremental CSG call, isolated at the n=506 (byte-exact)  n=507
+(adds Brush1852) prefix transition — the same brush/context the prior round localized the residual to.
+Fresh worktree, fresh `bin/test -k bspcsg` build (`.so` mtime verified newer than every `.rs` source
+file before trusting any measurement).
+
+**Infrastructure fix (reusable): `docker cp` is broken in this sandbox whenever a container has a
+`:ro` bind mount.** Every `docker cp` (both directions) against a `uned`-family container fails with
+`Error response from daemon: remount-ro .../stubs, flags: 0x1021: operation not permitted` — rootless
+dockerd here cannot remount the container's `/stubs:ro` asset mount, which `docker cp`'s
+implementation touches regardless of the actual copy destination. Confirmed live: a bare `docker run`
+with just `-v host:/stubs:ro` reproduces it for `docker cp` in EITHER direction; `docker exec -i
+container bash -c "cat > /path"` (write) and `docker exec container cat /path` (read, capture stdout)
+bypass it entirely and were verified working. The existing `editor_tree_oracle.py`/`editor_descent.py`
+harnesses still use raw `docker cp` — they may be silently broken in this same sandbox; a session
+resuming live-editor gdb work here should swap to the `exec`-based transfer first, not re-diagnose the
+same failure. Root cause is host/sandbox-level (rootless docker + this overlay/kernel combination), not
+a code bug — no fix filed against the harness itself beyond the workaround.
+
+**Disassembly re-confirms `AddBrushToWorldFunc` (`Editor.dll` RVA `0x31770`) matches
+`bspcsg.rs::leaf_func`'s `LeafFunc::Add` arm byte-for-byte.** Args at (breakpoint on the FIRST
+instruction, prologue not yet run, so `$esp`-relative not `$ebp`-relative — the same trap
+`editor_tree_oracle.py`'s own header warns about, hit and fixed live this round after a first attempt
+crashed gdb with "Cannot access memory" from stale caller-frame `$ebp`): `$esp+4`=Model, `+8`=iNode,
+`+0xc`=EdPoly, `+0x10`=Filter, `+0x14`=Place. The add-gate is a literal cumulative `sub eax,0` /
+`sub eax,2` / `sub eax,3` chain — `Filter==0` (Outside) or `Filter==2` (CoplanarOutside) add
+unconditionally; `Filter==5` (CospatialFacingOut) adds only if `EdPoly->PolyFlags` bit `0x20`
+(`PF_Semisolid`, byte offset `+0x1b0`) is clear — then calls `bspAddNode` via the vtable
+(`GEditor` vtable slot `+0x224`) with args `(Model, iParent, Place, NodeFlags=0x20, EdPoly)`. This is
+IDENTICAL to `F_OUTSIDE=0`/`F_COPLANAR_OUTSIDE=2`/`F_COSPATIAL_FACING_OUT=5` and the semisolid gate in
+`bspcsg.rs`. **The keep-vs-discard decision logic is confirmed correct** — this is not where the bug is.
+
+**The real divergence: native's classify-BSP descent produces MORE terminal fragments than the
+editor for the SAME 6-poly brush against the SAME byte-exact n=506 world.** Traced BOTH sides for the
+n=506→507 transition (Brush1852 is world-CSG brush index 506, 0-based, the last of the n=507 prefix):
+
+- **Editor** (`AddBrushToWorldFunc` gdb trace, n=507 log tail minus n=506 log tail — clean since
+  Brush1852 is the only brush added between them): **17 total classify calls** — 13 kept
+  (`Filter∈{0,2}` or non-semisolid `5`), 4 discarded (`Filter=1`, Inside).
+- **Native** (`UEDCLI_BSPCSG_DESCENT_ACTOR=506` LEAF trace, same n=507 build, one process so the NADD
+  and LEAF counts are directly comparable): **26 total classify calls** — 14 kept, 12 discarded.
+  (A separate NADD-only tail count of 21 is NOT the same granularity — `bsp_add_node` internally
+  splits an oversized polygon into multiple stored nodes per one `LEAF`-gated classify decision, so
+  21 NADD insertions came from only 14 `LEAF add=true` calls; the apples-to-apples count against the
+  editor's `AddBrushToWorldFunc` call count is the 26 LEAF classifications, not the 21 NADD lines.)
+
+**26 vs 17 — native produces 53% MORE terminal fragments**, concentrated in one of the brush's 6
+authored polys: `i_brush_poly=4` alone accounts for 10 of native's 26 classifications (poly 0: 4,
+poly 1: 3, poly 2: 3, poly 3: 1, poly 4: 10, poly 5: 5). A fragment-level Base/Normal diff (coarse —
+`FPoly::Base` is the plane's stored base point, unchanged across a split, so this cannot fully
+disambiguate distinct split fragments sharing a plane) found 14 native-kept fragments with NO
+corresponding editor call (kept OR discarded) at the same Base/Normal at all, and 2 Base/Normal pairs
+where the editor calls the leaf 4× (3 kept + 1 discarded — a coplanar cascade) that native does not
+reproduce with the same multiplicity — consistent with native's descent visiting more/different nodes
+of the classify BSP than the editor's, not a difference in what gets kept once classified.
+
+**Conclusion: the mechanism is over-fragmentation during `FilterEdPoly`'s descent/split (native
+splits Brush1852's polys against more of the accumulated world's structural planes than the editor
+does), not the leaf keep/discard decision (disassembly-verified identical).** This is a NEW,
+narrower finding than the prior round's "editor absorbs with 0 leaves, native creates 51" — that
+full-level number is not reproduced at this reduced n=506/507 scale (the editor here still keeps 13
+of its own fragments, not 0; the "0 new leaves" full-level number is apparently specific to the much
+larger 1343-brush accumulated context, not an artifact reproducible in isolation at this prefix size).
+**No fix shipped** — the specific `split_with_plane` call, node, or accumulated-tree-shape difference
+responsible for the extra ~9 splits is NOT pinned; per the no-guessing rule this needs a
+`FilterEdPoly`-loophead-level live trace (the exact node/plane visited at each recursion step, the way
+`editor_descent.py` already does for `iLink`-scoped fragments) on BOTH sides, correlated fragment-by-
+fragment via a finer key than Base/Normal (the full vertex list, or the `i_brush_poly`+split-path),
+to find the FIRST node where the two descents disagree on Front/Back/Split/Coplanar classification.
+That live-loophead trace was not run this round (time-boxed); the gdb harness and RVAs needed for it
+are proven working this round (see Infrastructure fix above) and the next session can go straight to
+it without re-deriving the container/mount workarounds.
+
+Harness: `dev/docs/spikes/2026-09-01-area51-training-final-residual/harness/area51_subset.py` (N-brush
+editor golden builder, mirrors `unatco_subset.py`), `area51_addfunc_oracle.py` (live gdb trace of
+`AddBrushToWorldFunc`, `$esp`-relative, `docker exec`-based transfer), `area51_native_leaf_dump.py`
+(native's `UEDCLI_BSPCSG_TREE_DUMP`+`UEDCLI_BSPCSG_DESCENT_ACTOR` trace, one process for both n=506
+and n=507 so NADD/LEAF counts are directly comparable), `area51_compare_tail.py` /
+`area51_frag_diff.py` (tail-diff and fragment-level Base/Normal comparison).
