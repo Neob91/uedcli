@@ -1,7 +1,7 @@
 +++
 priority = "p1"
 kind = "debug"
-summary = "Area51 Entrance's entire +85 node/+51 leaf residual live-localized to Brush1852; live-traced to classify-BSP over-fragmentation (26 vs 17 terminal fragments), NOT a keep/discard bug (disassembly-verified). Exact split-divergence node not yet pinned. Training Final open, static lead only."
+summary = "Area51 Entrance's entire +85 node/+51 leaf residual live-localized to Brush1852; live-traced to classify-BSP over-fragmentation (26 vs 17 terminal fragments), NOT a keep/discard bug (disassembly-verified). `angr` decompiler round located FilterEdPoly/FilterLeaf/SplitWithPlane by address and ruled out a float-epsilon-flip; exact split-divergence mechanism still not pinned. Training Final open, static lead only."
 +++
 
 # Area51 Entrance residual localized to Brush1852; Training Final still open
@@ -65,4 +65,24 @@ Committed under `dev/docs/spikes/2026-09-01-area51-training-final-residual/harne
 (prefix binary search), `area51_remove1852.py` (decisive removal test), `area51_subset.py` (N-brush
 editor golden builder), `area51_addfunc_oracle.py` (live gdb trace of the editor's
 `AddBrushToWorldFunc`), `area51_native_leaf_dump.py` (native's matching classify trace),
-`area51_compare_tail.py` / `area51_frag_diff.py` (tail-diff and fragment comparison).
+`area51_compare_tail.py` / `area51_frag_diff.py` (tail-diff and fragment comparison),
+`find_addfunc_callers.py` (static caller-scan used to locate `FilterEdPoly`), `area51_dist_threshold_probe.py`
+(the split-threshold-margin diagnostic).
+
+## `angr` decompiler round (2026-09-01) — mechanism still open
+
+Full detail: `dev/docs/native-materialize-findings.md`, search "angr decompiler tried on Brush1852".
+Summary: `angr`'s decompiler is usable on `Editor.dll` (readable pseudo-C for a large self-recursive
+SEH-wrapped function in seconds, though variable names are generic and a few instructions need raw
+disassembly to trust). Located `FilterEdPoly` (`Editor.dll` `0x32bf0`) and `FilterLeaf` (`0x33130`) via
+a static caller-scan for `AddBrushToWorldFunc`'s address-as-immediate (the call turned out to be
+INDIRECT, so a `call`-target scan found nothing — scanning for the raw VA bytes as an immediate
+operand found the one real reference instantly). Both addresses match what `bspcsg.rs`'s existing doc
+comments already cite — independent confirmation, not a new function. Located `FPoly::SplitWithPlane`
+directly via `Engine.dll`'s export table (`0x1518b0`, no caller-chase needed) and disassembly-confirmed
+its two threshold constants (`0.25` default, `0.01` "VeryPrecise") match `fpoly.rs` exactly, and that
+`FilterEdPoly` always uses the default. Live-measured Brush1852's `i_brush_poly=4` descent
+(47 nodes traced) and found every classify margin from the `±0.25` threshold is `>= 0.25` — **ruling
+out a float-precision epsilon-flip as the mechanism**. No fix shipped; the remaining lead is a
+traversal-order/tie-break difference among coplanar-grouped nodes, not a classify or threshold bug —
+needs the loophead-level dual trace the prior round already flagged as the next step.

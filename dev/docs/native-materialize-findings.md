@@ -4918,3 +4918,102 @@ Front/Back/Split/Coplanar classification flip on this poly's near-planar faces.
 
 No `bspcsg.rs`/`csg.rs` changes this round. `bin/test` not re-run (read-only investigation, no source
 touched). Board: `freeclinic08-nsfhq04-1-surf-under-build-root` (existing item), appended.
+
+## `angr` decompiler tried on Brush1852's over-fragmentation; located `FilterEdPoly`/`FilterLeaf`/
+## `FPoly::SplitWithPlane` by address, confirmed the existing port matches disassembly, and RULED OUT
+## the epsilon-flip hypothesis with a live measurement — mechanism still open (2026-09-01)
+
+Owner-approved new tool for this investigation: `angr`'s decompiler (`proj.analyses.Decompiler`),
+instead of continuing pure gdb/register tracing. Worked in a fresh worktree
+(`.claude/worktrees/area51-filteredpoly-decompile` branched off `master`, fast-forwarded onto this
+same round's prior commit).
+
+**Method note (faster than caller-chase): a raw byte scan beats `angr` CFGFast for "who calls this
+address".** The plan was to find `FilterEdPoly` by locating every caller of `AddBrushToWorldFunc` (VA
+`0x10031770`). A linear-sweep capstone/raw-`E8` scan of `Editor.dll`'s `.text` for direct
+`call 0x10031770` found **zero hits** — the call is INDIRECT (the function pointer is threaded through
+`FilterEdPoly`'s recursion as a parameter, never a hardcoded `call rel32`). The fix: scan the whole
+file for the raw 4-byte VA `70 17 03 10` (little-endian `0x10031770`) as an IMMEDIATE operand instead
+of a call target. **Exactly one occurrence**, at `Editor.dll` VA `0x10035a91`, inside `bspBrushCSG`
+(RVA `0x355e0`, ~0x4b1 bytes in): a `cmove` picks `AddBrushToWorldFunc` when `CsgOper==1`(Add), else a
+sibling leaf func at `0x100348c0` (almost certainly `SubtractBrushFromWorldFunc`), then
+`push eax; call 0x10031f50`. `0x10031f50` is a small bootstrap wrapper (empty-tree fast path calls the
+filter func directly; else calls `0x10032bf0` with `(Filter, Model, iNode=0, EdPoly, CoplanarInfo,
+Outside)`). **`0x10032bf0` is `FilterEdPoly`** — confirmed self-recursive (4 call sites to itself: one
+for the `>=14`-vertex `SplitInHalf` pre-split, two for the `SP_Split` front/back children, consistent
+with "~2 recursive calls per invocation") and it calls a fixed leaf dispatcher at `0x33130`
+(`FilterLeaf`). **These are the SAME two addresses `bspcsg.rs`'s `filter_ed_poly`/`filter_leaf` already
+cite in their doc comments** (`0x32bf0`, `0x33130`, plus the `+0x18..+0x28` `FCoplanarInfo` frame
+layout) — a prior round had already hand-disassembled this function; this round's `angr`+raw-scan
+route re-derives the same two addresses independently and much faster (minutes, not a live gdb
+session).
+
+**`angr`'s decompiler verdict: usable, with real caveats.** `CFGFast` over `Editor.dll` (835 KB `.text`)
+took ~126 s and found 9147 functions including `FilterEdPoly` at the right address (though its
+recovered `size` was short — 1275 bytes vs the function's true extent past `0x331bb`, since MSVC's SEH
+frame gives it multiple epilogues and at least one exception-dispatch-only edge `CFGFast` can't see
+statically; the recovered graph was still enough to decompile). `proj.analyses.Decompiler(fn,
+cfg=cfg.model)` produced pseudo-C in a few seconds that is READABLE and structurally correct — it
+correctly resolved the self-recursive calls, the `FPoly::SplitInHalf`/`FPoly::SplitWithPlane` calls
+(see below — it even recovered the cross-DLL IMPORTED symbol names, not just addresses), and the
+overall Front/Back-loop / Split-recurse / Coplanar-cascade shape matches `bspcsg.rs`'s existing
+port and doc comments line for line. Caveats: variable names are generic (`v1`..`v51`, `a0`..`a9`),
+a few SIMD/struct-copy instructions came out as `/* unsupported instruction */` or a raw `_INSERT`/
+`CONCAT` pseudo-op, and one 20-byte-struct-by-value argument (the `FCoplanarInfo`) decompiles as
+manual stack-slice copies rather than a named struct — exactly the "reliability" caveat the task
+anticipated, so every non-obvious line was still cross-checked against raw capstone disassembly
+before being trusted. Net: worth using AGAIN for locating/skimming a large unfamiliar function fast,
+but not a substitute for disassembly on the specific lines that matter.
+
+**`FPoly::SplitWithPlane` didn't need any of the above — it's a direct export of `Engine.dll`, not
+`Editor.dll`.** `FPoly` is an Engine-core class; `Engine.dll`'s export table has
+`?SplitWithPlane@FPoly@@QBEHABVFVector@@0PAV1@1H@Z` at VA `0x101518b0` (RVA `0x1518b0`) directly —
+no caller-chase needed. (General navigational fact for future spelunking: `UEditorEngine::bsp*`
+methods — `bspBrushCSG`, `bspAddNode`, etc. — are `Editor.dll` exports; `FPoly` methods —
+`SplitWithPlane`, `SplitInHalf`, `SplitWithNode`, `CalcNormal`, `Fix`, `Reverse` — are `Engine.dll`
+exports/imports. `Editor.dll` never defines `FPoly`'s own methods, it only imports them.)
+Disassembled it directly (no decompiler needed, the function is a clean, single-epilogue vertex-loop):
+confirms **both threshold constants read straight out of `.rdata`** — `THRESH_SPLIT_POLY_PRECISELY` =
+`0.009999999776482582` (f32 `0.01`) at RVA `0x1fee1c`, `THRESH_SPLIT_POLY_WITH_PLANE` = `0.25` at RVA
+`0x206780` — selected by the function's last (`InOverrideThreshold`/"VeryPrecise") argument, which
+`FilterEdPoly` **always passes as literal `0`** at its one `SplitWithPlane` call site (confirmed in
+both the raw disassembly and the `angr` pseudo-C: `SplitWithPlane(v13, base, normal, &front, &back,
+0)`). **`fpoly.rs`'s constants (`THRESH_SPLIT_POLY_WITH_PLANE: f32 = 0.25`,
+`THRESH_SPLIT_POLY_PRECISELY: f32 = 0.01`) and every `split_with_plane(..., false)` call site in
+`bspcsg.rs` already match this exactly** — no discrepancy found in the threshold value or which one
+gets used.
+
+**Live measurement: RULES OUT the "near-threshold float-precision epsilon flip" hypothesis for
+Brush1852's `i_brush_poly=4`.** Since the classify/split code structurally matches and the threshold
+constant matches, the next natural hypothesis was that native and the editor compute a given vertex's
+signed plane distance via a different FP operation order and land on opposite sides of `±0.25` for
+some vertex sitting very close to the boundary — which would explain a divergence localized to one
+specific brush/context without any logic bug. Built the venv + native `.so` fresh in this worktree and
+ran the existing env-gated `filter_ed_poly` DESCENT trace
+(`UEDCLI_BSPCSG_DESCENT_ACTOR=506 UEDCLI_BSPCSG_DESCENT_POLY=4`, new harness
+`area51_dist_threshold_probe.py`) against the real n=507 trunk (via the cached extraction under
+`breadth-parity-check`'s `_scratch`). Result: **47 descent nodes traced for this poly; the closest any
+min/max signed distance comes to the `±0.25` threshold is a margin of `0.2498`** (i.e. the actual
+distances there are `~0.00015`/`~0.00016` — comfortably inside the Coplanar band, not near the Front/
+Back/Split boundary at all) — every genuine `SPLIT` classification has a margin `>= 0.32`, most far
+larger (up to `20+`). **No node anywhere in this poly's descent is a plausible epsilon-boundary
+coincidence.** This rules out the float-precision hypothesis outright for this poly — native's 26-vs-
+17 divergence is not explained by any vertex sitting near the classify threshold.
+
+**Conclusion — mechanism still NOT pinned; do not guess a fix.** Both the classify/split logic AND
+its threshold constant are disassembly-confirmed to match `bspcsg.rs` exactly, and the "some vertex is
+right at the epsilon boundary" explanation is now live-measured and ruled out. What remains
+unexplained is HOW two structurally-identical descents over the SAME byte-exact n=506 world tree visit
+a different NUMBER of nodes for the same input poly. The leading remaining hypothesis (untested this
+round) is a TRAVERSAL-ORDER/tie-break difference rather than a classify difference: multiple world-tree
+nodes can share one coplanar group (`iLink`), and if native and the editor pick a different member of
+that group as the traversal "leaf" at some level, the two descents could disagree in fragment COUNT
+while every individual classification decision (Front/Back/Split/Coplanar, and the threshold used to
+make it) stays byte-identical. Confirming that needs exactly what the prior round already flagged as
+the next step and this round did not attempt: a `FilterEdPoly`-loophead-level trace on BOTH sides
+(the specific node index + its `i_surf`/`iLink` visited at each recursion step, not just the classify
+verdict), correlated finer than Base/Normal.
+
+Harness added this round: `find_addfunc_callers.py` (the `E8`-scan / raw-VA-immediate-scan caller
+finder — documents the "call is indirect, scan for the immediate instead" method for reuse),
+`area51_dist_threshold_probe.py` (the `DESC`-trace threshold-margin diagnostic).
