@@ -4208,3 +4208,121 @@ This item's code changes (`uedcli-native/src/bspcsg.rs`, `uedcli-native/src/lib.
 `uedcli/native/brush_marshal.py`) are uncommitted in the worktree `nyc747-parity-residual` per this
 round's task instructions — the coordinating session verifies (full non-regression incl. re-running
 `parity_report.py` on DX.dx/NYC Bar/UNATCO/OceanLab Lab) and commits.
+
+## Vandenberg Gas +606 node over-build — root-caused to a specific brush's CsgOper, mechanism NOT understood, OPEN (2026-09-01)
+
+Picked up `12_Vandenberg_Gas.dx` (870 brushes) as the worst-parity level with no prior root-cause
+thread (flagged "a third shape, not investigated further" in
+`breadth-geometry-check-on-10-new-og-levels-1-10`). Fresh rebuild against current master (post
+both the OceanLab `Base`-fix `d07622e` and the NYC 747 texture-identity fix `4b7b186`) reproduces
+the exact pre-fix numbers, confirming both are genuinely zero-effect here: nodes native=11289
+golden=10683 (d=+606), surfs native=4556 golden=4554 (d=+2), leaves native=3334 golden=3468
+(d=-134), verts d=+9480, points d=+696, vectors d=+130. `LENGTH MISMATCH` on nodes/surfs/leaves —
+real tree-shape divergence, not a value mismatch at matching indices.
+
+**Per-brush attribution** (surf-count, `nyc747_surf_diff.py`'s method, plus a second axis —
+node-plane-owner count via `node.i_surf -> surf.i_actor`, `fc08_node_owner_diff.py`'s method — since
+the surf delta here is tiny (+2) while nodes/verts are large, unlike the OceanLab/NYC 747 cases;
+script `dev/docs/spikes/2026-09-01-vandenberg-gas-node-overbuild/harness/vandenberg_attrib.py`)
+found `Brush54` (world-CSG idx=3, `CsgOper=CSG_Subtract`, 412 polys, `MainScale=(1.243502 uniform)`,
+`PostScale=(1.393913,1.149680,1.158020)` non-uniform, no `Rotation`, no mirror — ruling out the
+already-fixed `c7b8b0b` determinant bug) as the dominant single outlier: surf native=181 editor=71
+(d=+110, level's own net is only +2 — heavy cancellation elsewhere), node-owner native=1373
+editor=472 (d=+901, level's own net is +606). 403/870 brushes differ in node-owner count at all
+(diffuse, abs-sum 3144 against net +606) — a similar SHAPE to the already-known diffuse
+`FindBestSplit`-tie-break class (freeclinic08/nsfhq04/UNATCO), but Brush54's own single-brush
+delta far exceeding the level's net delta ruled out a simple "same diffuse class" conclusion without
+checking further.
+
+**Live isolation of Brush54 alone was CONTEXT-DEPENDENT, not intrinsic** — the key finding that
+redirected the investigation. Isolating Brush54 with a synthetic 20000uu ADD shell (the world is
+solid by default, so a lone `CSG_Subtract` only needs an enclosing shell, no separate subtract room
+— `vandenberg_isolate_golden.py`/`vandenberg_isolate_check.py`): the live editor carved 472
+nodes/181 surfs (matching the full-level node-owner attribution exactly, 472=472 — confirms editor's
+per-brush node ownership is context-INDEPENDENT, as expected of a well-behaved engine), but
+**native produced ZERO effect** — `UEDCLI_BSPCSG_STAGE_COUNTS` showed `post-repartition nodes=6`
+(identical to the bare shell, no trace of Brush54's carve at any stage). So Brush54's own geometry
+in isolation is not what's broken in native; something about its REAL preceding context (not
+reproduced by a synthetic shell) matters.
+
+**Traced to the REAL preceding context**: Brush54 is world-CSG order idx=3 (4th brush); the true
+first 3 are `Brush230` (idx=0, `Class=Engine.Brush`, ONE poly, `Flags=8` NotSolid, carries
+`LightBrightness`/`LightHue`/`LightSaturation`/`TempScale` — none of which are normal Brush
+properties, looks like a stray original-game authoring artifact — and, load-bearing: **no
+`CsgOper=` line at all**), `Brush2054` (idx=1, `CSG_Subtract`, 6 polys), `Brush73` (idx=2,
+`CSG_Subtract`, 6 polys). Confirmed via `uedcli.classdefaults.ClassDefaults` against the real
+`Engine.u`: `Engine.Brush.CsgOper`'s class default is `CSG_Active` (ordinal 0, no override text) —
+NOT `CSG_Add`. `uedcli/native/brush_marshal.py::_build_brush_input` hardcodes
+`raw.get("CsgOper", "CSG_Add")` — an absent `CsgOper` is currently marshaled as an active `CSG_Add`
+brush, contradicting the class default. This is the ONLY brush actor in Vandenberg Gas (and in
+every other cached level trunk checked — DX.dx, NYC Bar, UNATCO, Wanchai Market, OceanLab Lab,
+NYC 747, freeclinic08, nsfhq04) with a genuine (non-Mover) `Engine.Brush` and no `CsgOper=` — zero
+regression surface for any already-tracked level.
+
+**Three live A/B/C builds, decisive** (`vandenberg_csgoper_test_golden.py` +
+`vandenberg_csgoper_explicit_add_golden.py`, real UED22, `MAP NEW`→`EDIT PASTE`→`MAP REBUILD`→
+`MAP SAVE`), each building `[Brush2054, Brush73, Brush54]` preceded by a variant of Brush230:
+
+| build | Brush230 variant | editor nodes/surfs/leaves/verts/points/vectors |
+|---|---|---|
+| A | Brush230 OMITTED entirely | 483 / 193 / 87 / 4938 / 301 / 426 |
+| B | Brush230 AS AUTHORED (no `CsgOper=`) | **181 / 84 / 46 / 1904 / 184 / 182** |
+| C | Brush230 with an EXPLICIT `CsgOper=CSG_Add` added (same geometry) | 483 / 193 / 87 / 4938 / 301 / 426 |
+
+C is byte-identical to A on every count — confirms an explicit `CsgOper=CSG_Add` on this same
+degenerate 1-poly NotSolid brush is a genuine no-op (consistent with the documented "additive
+brushes only matter where something was subtracted", `unrealed/quirks.md` "CSG model" — a leading
+Add into the by-default-solid world adds nothing new). **This REFUTES two hypotheses in sequence**:
+(1) "the real editor treats a `CsgOper`-absent brush as inert/skipped" — refuted by B ≠ A; (2) "the
+real editor treats a `CsgOper`-absent brush the same as an explicit `CsgOper=CSG_Add`" — refuted by
+B ≠ C (if native's current "default absent CsgOper to CSG_Add" bug were the whole story, B should
+equal C; it does not). B is a **third, distinct, unexplained behavior** — the real editor does
+something specific to a literal `CsgOper`-absent (`CSG_Active`) brush that neither skips it nor
+treats it as an ordinary Add, and that specific behavior roughly HALVES the resulting geometry of
+the three subtracts that follow it. Cross-checked `_build_brush_input` and `oper_from_i32` (Rust
+`lib.rs`): the Rust core has no `CsgOper::Active` variant at all (`oper_from_i32` rejects int `0`
+outright, `"unknown CsgOper 0 (expect 1..=4)"`) — so today's `"CSG_Add"` Python-side default is not
+just wrong-valued, it is the ONLY thing standing between this brush and a hard `BuildError`, i.e.
+native has never had any representation for what B's behavior actually is.
+
+Also re-ingested B's own saved `.dx` (`ingest_dx_trunk.py`) and confirmed Brush230 re-exports with
+**still no `CsgOper=` line** — the editor does not silently rewrite/coerce it to an explicit value on
+round-trip, so its true resolved oper is genuinely `CSG_Active`, yet it still has this large,
+concrete structural effect. Native, checked on the SAME three sets: A=native 483 (exact match to
+editor — confirms native is correct for Brush2054/73/54 alone), B=native 504 (only +21 over A, far
+short of editor's -302-from-A collapse to 181) — native's current handling reproduces neither A/C's
+correct no-op-adjacent value for a real Add nor B's real, drastic reduction.
+
+**NOT root-caused further — genuinely open.** What the real UnrealEd `csgRebuild` does internally
+for a brush whose `CsgOper` is literally `CSG_Active` (why it structurally reduces, not omits or
+adds) is unknown; establishing it needs disassembly-level work (`unrealed/extracting-from-dll.md`)
+not done this round — a live black-box A/B/C test can prove WHAT happens but not WHY. Per the
+standing no-guessing rule, no fix is shipped: native has no representation for `CSG_Active` at all
+(Rust rejects the ordinal outright), and shipping either "treat as Add" (already refuted, and
+already what happens today via the Python default) or "skip/exclude from world CSG" (also refuted
+by B ≠ A) would be shipping a KNOWN-WRONG behavior with more confidence than warranted. Given
+`bspcsg.rs`'s own already-filed `first_add_seed` gap describes a superficially similar "leading Add
+behaves unexpectedly" class, it was directly checked and ruled out here (C reproduces A exactly, so
+a genuine leading `CSG_Add` on this same geometry does NOT trigger any shell-mismatch anomaly) —
+this is a distinct, new, unexplained mechanism, not that already-known one.
+
+Whether this same mechanism explains any of the remaining diffuse 402-brush node-owner delta
+elsewhere in the level (net +606 against Brush54's own +901) was not checked further — Brush230 is
+the only `CsgOper`-absent world-CSG brush in the level, so if it IS the root cause of Brush54's
+divergence (plausible given the isolation test showed Brush54 alone, against a real shell, is
+correct — it's the PRECEDING real context that's wrong, and Brush230 is the one confirmed-different
+element of that context), it likely also explains a meaningful share of the diffuse residual
+elsewhere, but this was not measured (would need a live full-level A/B, expensive, out of this
+round's scope).
+
+**No fix shipped, no code changed.** Filed as board item
+`vandenberg-gas-csg-active-csgoper-brush-causes` (inbox). Harness (all committed,
+`dev/docs/spikes/2026-09-01-vandenberg-gas-node-overbuild/harness/`):
+`vandenberg_attrib.py` (per-brush surf + node-owner attribution), `vandenberg_isolate_golden.py` +
+`vandenberg_isolate_check.py` (Brush54-alone live isolation), `vandenberg_csgoper_test_golden.py` +
+`vandenberg_csgoper_test_compare.py` (the A/B live builds), `vandenberg_csgoper_explicit_add_golden.py`
+(the C live build), `vandenberg_csgoper_native_compare.py` (native-vs-editor on sets A/B).
+
+**Non-regression**: no code changed this round, so no re-verification was needed; the fresh rebuild
+at the top of this entry (confirming both prior fixes are genuinely zero-effect on Vandenberg Gas)
+is the only measurement taken against already-shipped code.
