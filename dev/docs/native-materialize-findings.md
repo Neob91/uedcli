@@ -4332,3 +4332,76 @@ round's scope).
 **Non-regression**: no code changed this round, so no re-verification was needed; the fresh rebuild
 at the top of this entry (confirming both prior fixes are genuinely zero-effect on Vandenberg Gas)
 is the only measurement taken against already-shipped code.
+
+## Session status snapshot (2026-09-01, before a context compaction)
+
+Written to survive a compaction — captures what's fixed, what's open, and what's in flight right now.
+
+**Parity: still zero levels at full byte parity.** 30% floor (≥6 of 21) unmet.
+
+**Shipped this session (all committed to master, all live-verified or non-regression-checked):**
+- `zones.rs::assign_leaves` DFS visit-order fix (`i_leaf` numbering, closed DX.dx's node array).
+- `light.rs` row-padding-carry fix (`1ef4fe4`) — NYC Bar shadow bits 99.76%→100%, UNATCO
+  99.27%→100%; records NYC Bar 87.7%→93.1%, UNATCO 83.6%→90.9%.
+- `permeating_lights.rs`'s `split_with_plane_fast` decode (`f9d2e73`) — port correct, deliberately
+  NOT wired into `bake` (owner ruling stands: `iPermeating=-1` honest stub beats 95%-correct data).
+- `parity_report.py` resolved-identity comparison for `texture_ref`/`i_actor` (`dcc08db`) — proven
+  the ONLY definition of correctness these two fields can ever have (raw-byte matching is
+  categorically impossible: viewport-camera exports encode lost UI session state, actor bodies
+  carry provably non-deterministic `LatentAction` bytes).
+- `bsp_validate_brush_links` fixed twice, same shared function, both live-verified against a real
+  UED22 build: (1) `d07622e` — use authored `Base`, not `verts[0]`, for the coplanarity check
+  (closed OceanLab Lab's +27 surf gap to 0). (2) `4b7b186` — actually populate `FPoly.texture` at
+  marshal time, it was an unconditional no-op before (closed NYC 747's -5 surf gap to 0).
+
+**Still open, each with a board item:**
+- `p_base` (Points-array intra-block order) — 5 rounds (9-13) on DX.dx/UNATCO/Wanchai. Mechanism
+  fully characterized for both unsplit AND split-fragment cases (live gdb, multiple synthetic
+  brushes). A real incremental point-pool architecture was attempted (`6ba3f2b`, gated off,
+  measured WORSE) and round 14 found WHY: `bspRefresh` never runs during brush CSG at all, it's a
+  separate post-CSG rebuild-phase call, not per-brush. The real rebuild-phase call site and its
+  scaling on deep recursion (UNATCO/Wanchai) are still unknown. Thread:
+  `texture-ref-i-actor-divergence-traced-to-golden`.
+- `node_flags` `0x40`/`0x80` — static disassembly found a real `bspRefresh` block-copy site that can
+  carry stale flag bytes, but whether its source content is real state or relocated garbage is
+  unconfirmed. `NODE_FLAGS_NOISE_MASK` stays as-is. Thread:
+  `node-flags-0x40-0x80-divergence-from-movers-no`.
+- Lighting `grid`-only bucket (Points/Vectors ULP-level value drift) — traced to CSG_Add faces
+  keeping the authored (lossy 6-decimal-text) normal where the real editor recomputes it from the
+  winding. A gated experiment (`UEDCLI_BSPCSG_ADD_RECOMPUTE_NORMAL`, `81e64c9`) cuts the mismatch
+  54-85% but contradicts an existing castle-bastion-derived test — NOT shipped as default, needs
+  live gdb confirmation or an explicit owner yes. Thread: `lighting-bits-only-divergence-localizes-to`.
+- 3 corpus levels have no cached golden at all: `Endgame4` (extraction gap, unrelated), `smuggler`
+  and `nyc-street` (both crash at `EDIT PASTE` right after `MAP NEW`, not reproduced live this
+  session). Thread: `wanchai-self-build-edit-paste-crash` (same crash signature).
+- `12_Vandenberg_Gas.dx` — `Brush230`, a `CsgOper`-absent `Engine.Brush` (real class default
+  `CSG_Active`, not `CSG_Add` as native assumes), has a real, live-A/B/C-proven ~2.7x geometry
+  reduction on the brushes that follow it. Owner ruling: reproduce it faithfully (it's genuine
+  original-game level data, not tooling corruption) even though the brush itself looks like a
+  stray/mistaken authoring artifact — comment the code, flag for future reconsideration, don't
+  silently correct the data. Mechanism not yet disassembly-confirmed. Thread:
+  `vandenberg-gas-csg-active-csgoper-brush-causes`.
+
+**In flight right now (dispatched, not yet landed — check for their board items/ledger entries
+before re-dispatching either):**
+- Disassemble `csgRebuild`'s real `CsgOper==CSG_Active` dispatch and implement it (Rust `CsgOper`
+  enum + `brush_marshal.py`'s wrong `CSG_Add` default), per the owner ruling above. Non-regression
+  bar: DX.dx, NYC Bar, UNATCO, OceanLab Lab, NYC 747 (all 5 already-fixed goldens) plus the existing
+  A/B/C golden data (`dev/docs/spikes/2026-09-01-vandenberg-gas-node-overbuild/harness/`).
+  Board item: `vandenberg-gas-csg-active-csgoper-brush-causes`.
+- `04_NYC_NSFHQ.dx`'s node/leaf/vert under-build (nodes d=-92, leaves d=-26, verts d=-1774,
+  points d=-129) — the existing `freeclinic08-nsfhq04-1-surf-under-build-root` thread only ever
+  explained a tiny `+1` surf delta (`Brush531`/`Brush143` `CSG_Add`+`PF_Semisolid` misclassification);
+  this much larger residual is unexplained. `08_NYC_FreeClinic.dx` has a similar-shaped unexplained
+  residual and shares the narrow prior thread — worth checking for a shared mechanism.
+
+**Standing process discipline this session** (see "Standing directives" above for the owner-given
+ones): before copying a subagent's file into the main checkout, diff it against the file's CURRENT
+committed HEAD to confirm it's a pure addition — several rounds this session (light30, permeating,
+oceanlab, nyc747, vandenberg) forked their worktree before a LATER commit landed, and a naive
+wholesale overwrite silently deleted that later content; the fix each time was extracting only the
+genuinely-new section and appending it onto the current HEAD, not trusting the worktree's full file.
+Also: after any native code change, force-verify the Python-importable `.venv` extension is
+genuinely freshly built (check its `.so` mtime against your last source edit) before trusting any
+parity measurement — `bin/test`'s own build-skip-if-no-pytest-match caching silently produced a
+stale-binary false negative on the NYC 747 round.
