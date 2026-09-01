@@ -121,8 +121,7 @@ one of them is a "bad" light, not that per-lumel noise scales with exposure.
   decoded and confirmed faithfully ported (span-buffer merge, not per-lumel shadow tracing). Neither
   contradicts a real remaining gap in the ray walk itself for specific geometries.
 
-## 2026-09-01: `grid`-only bucket's root mechanism found (exact numeric reconstruction, not live gdb)
-## and quantified -- CSG_Add faces wrongly keep the authored normal; gated experiment measured, not shipped
+## 2026-09-01: `grid`-only bucket's root mechanism found (exact numeric reconstruction, not live gdb) and quantified -- CSG_Add faces wrongly keep the authored normal; gated experiment measured, not shipped
 
 Traced one concrete NYC Bar drifted point (`Brush69`, a CSG_Add sloped face) to its owning surf and
 reproduced native's exact drifted value BY HAND using only the T3D-authored integers/normal text and
