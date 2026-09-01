@@ -22,6 +22,15 @@ over-build") was live-verified against a real UED22 build (an isolated context g
 shipping — native's predicted surf-group count matched the live editor's exactly, not just measured
 to reduce the delta.
 
+**Standing directives (owner, 2026-09-01):**
+- Work fully autonomously — do not stop to ask; investigate and act (fix + ship when confidently
+  live-verified, per the rule above). Escalate only a genuinely irreversible action or a reversal of
+  an explicit prior owner ruling.
+- Report parity status every time it changes — not just on request.
+- Sweep the worst-parity levels one at a time: after each fix lands, re-rank the corpus and
+  investigate whichever level is worst next. Current worst-first queue and results:
+  `native-light-apply-bake-where-it-stands-and`.
+
 ## Before adding or changing an entry
 
 1. Search this file for the same topic/mechanism (the RVA, function name, or subject).
