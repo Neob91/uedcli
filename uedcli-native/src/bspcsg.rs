@@ -2490,6 +2490,16 @@ fn brush_loop1(brush: &build::BrushInput, actor_index: i32, poly_flags: u32) -> 
             && !is_unit_axis(&p.normal)
             && rot_is_pure_rotation(&brush.rot)
         {
+            // DELIBERATELY NOT extended to `CsgOper::Active` (2026-09-01): every OTHER Active-vs-
+            // Subtract dispatch in `bspBrushCSG` was independently disassembled this round and
+            // confirmed identical (see `csg::CsgOper::Active`'s doc comment), but §48's "Subtract
+            // recomputes, Add keeps authored" rule was derived empirically from a real-level census
+            // (`op_axis_census.py`) that contained only Add/Subtract brushes — never disassembled to
+            // instruction level, so there is no evidence it keys on literal `CsgOper==2` vs "not
+            // Add" like every other dispatch here does. Extending it to `Active` on that pattern
+            // alone would be exactly the un-derived guess the no-guessing rule forbids. Un-affected
+            // by the current fix (Brush230, the live motivating case, is a single poly).
+            //
             // §92 §48 SUBTRACT NORMAL RECOMPUTE — the editor's per-face normal DECISION rule.
             // For a CSG_Subtract brush, UnrealEd's `bspBrushCSG` filters the RECONSTRUCTED brush-model
             // polys (`bspBuildFPolys` -> `FPoly::Finalize` -> `CalcNormal` over the brush-LOCAL
@@ -2588,9 +2598,12 @@ fn brush_loop1(brush: &build::BrushInput, actor_index: i32, poly_flags: u32) -> 
 
 fn bsp_brush_csg(model: &mut Model, brush: &build::BrushInput, actor_index: i32, poly_flags: u32) {
     let oper = brush.oper;
-    if oper != csg::CsgOper::Add && oper != csg::CsgOper::Subtract {
+    if oper == csg::CsgOper::Intersect || oper == csg::CsgOper::Deintersect {
         // Intersect/Deintersect never reach MAP REBUILD — they are the `BRUSH FROM INTERSECTION`/
         // `DEINTERSECTION` exec commands, whose tail (`0x35ab3`) lives in `intersect_brushset`.
+        // `csgRebuild`'s own dispatch (`0x100359d3`-`0x100359df`) branches away to that tail on a
+        // LITERAL `CsgOper==3||4` test — `Active` (0) does not match, so it falls through into the
+        // shared Add/Subtract body below, same as the real editor.
         return;
     }
     let mut temp = brush_loop1(brush, actor_index, poly_flags);
@@ -2686,7 +2699,12 @@ fn bsp_brush_csg(model: &mut Model, brush: &build::BrushInput, actor_index: i32,
             filter_world_through_brush(
                 model,
                 &brush_temp,
-                oper == csg::CsgOper::Subtract,
+                // World-thru-brush leaf func select (`Editor.dll 0x33472`-`0x1003347f`, independently
+                // re-disassembled 2026-09-01): `eax=SubtractFunc(0x34980); cmp CsgOper,1; cmove
+                // eax,AddFunc(0x31b90)` — Subtract is the pre-cmove DEFAULT, overridden to Add only on
+                // a literal `CsgOper==1`. `Active` (0) does not match, so it takes the Subtract func,
+                // same as real Subtract.
+                oper != csg::CsgOper::Add,
                 None,
                 &mut sink,
             );
@@ -4044,6 +4062,47 @@ mod tests {
                 n.dot(&b) < 0.0,
                 "wall normal must point inward (offset {})",
                 n.dot(&b)
+            );
+        }
+    }
+
+    /// `CsgOper::Active` (T3D's absent-`CsgOper=` class default, ordinal 0) must dispatch inside
+    /// `bsp_brush_csg` IDENTICALLY to `CsgOper::Subtract` — disassembly-confirmed 2026-09-01
+    /// (`Editor.dll bspBrushCSG 0x355e0`, live-verified against this tree's own `uned/UED22/
+    /// Editor.dll`): every CsgOper dispatch that gates node/surf output tests a LITERAL ordinal
+    /// equality (`cmp CsgOper,1` for Add at `0x10035688`/`0x10035a84`-`0x95`, `cmp CsgOper,3` for
+    /// Intersect at `0x100359d3`), never a range/validity check, so ordinal 0 falls through every
+    /// one of them into the same "not this specific value" branch Subtract(2) takes. Pins the FIX
+    /// for `dev/docs/board/inbox/vandenberg-gas-csg-active-csgoper-brush-causes/overview.md`: an
+    /// early `bsp_brush_csg` guard used to silently no-op any oper that wasn't literally Add or
+    /// Subtract, which (once `Active` became representable) would have shipped the ALREADY-REFUTED
+    /// "skip the brush" hypothesis (live A/B/C build "A").
+    #[test]
+    fn csg_active_dispatches_exactly_like_subtract() {
+        let geom = (256.0, 256.0, 128.0, Vec3::new(0.0, 0.0, 0.0));
+        let subtract = build_geometry_bspcsg(&[box_brush(
+            geom.0, geom.1, geom.2, geom.3, CsgOper::Subtract,
+        )])
+        .unwrap();
+        let active = build_geometry_bspcsg(&[box_brush(
+            geom.0, geom.1, geom.2, geom.3, CsgOper::Active,
+        )])
+        .unwrap();
+
+        // Not the "skip the brush" no-op (build A of the live test): a skipped brush leaves an
+        // EMPTY world (no nodes/surfs at all), not a 6-wall carved room.
+        assert_eq!(active.surfs.len(), 6, "Active must carve exactly like Subtract, not no-op");
+        assert_eq!(active.nodes.len(), subtract.nodes.len());
+        assert_eq!(active.surfs.len(), subtract.surfs.len());
+        assert_eq!(active.verts.len(), subtract.verts.len());
+        assert_eq!(active.points.len(), subtract.points.len());
+        assert_eq!(active.vectors.len(), subtract.vectors.len());
+        for (a, s) in active.surfs.iter().zip(subtract.surfs.iter()) {
+            let an = active.vectors[a.v_normal as usize];
+            let sn = subtract.vectors[s.v_normal as usize];
+            assert!(
+                (an.x - sn.x).abs() < 1e-6 && (an.y - sn.y).abs() < 1e-6 && (an.z - sn.z).abs() < 1e-6,
+                "Active and Subtract must carve the identical surf normals"
             );
         }
     }

@@ -20,9 +20,25 @@ pub const PF_NOTSOLID: u32 = 0x08;
 pub const PF_PORTAL: u32 = 0x0400_0000;
 const CSG_SUBTRACT_MASK: u32 = 0x28; // PF_Semisolid | PF_NotSolid
 
-/// `ECsgOper` (§4.1): Add=1, Subtract=2, Intersect=3, Deintersect=4.
+/// `ECsgOper` (§4.1): Active=0, Add=1, Subtract=2, Intersect=3, Deintersect=4.
+///
+/// `Active` is `Engine.Brush.CsgOper`'s CLASS DEFAULT — a brush actor gets it only when it never
+/// went through a real `BRUSH ADD`/`SUBTRACT`/etc (an absent `CsgOper=` in the T3D). Disassembly
+/// (`Editor.dll bspBrushCSG 0x355e0`, live-verified 2026-09-01 against this tree's own
+/// `uned/UED22/Editor.dll`) shows every CsgOper-dispatch inside `bspBrushCSG` is a literal
+/// equality test against a SPECIFIC ordinal (`cmp CsgOper,1` for Add, `cmp CsgOper,3` for
+/// Intersect, `cmp CsgOper,2` for one Subtract-only side effect) — never a range/validity check —
+/// so `CsgOper=0` falls through every one of those tests into whichever branch is the "not this
+/// specific value" default, which is the SUBTRACT-shaped one at all THREE dispatch points that
+/// gate node/surf/vert output (`subtractMask`, the LOOP-2 pass-1 filter func, the world-through-
+/// brush leaf func — RVAs `0x10035688`, `0x10035a84`-`0x10035a95`, `0x10033472`-`0x1003347f`).
+/// A real placed brush actor is never AUTHORED with `CsgOper=CSG_Active` on purpose — this variant
+/// exists to reproduce the editor's real (likely-unintended-by-the-level-author) behavior when one
+/// is, not because `Active` is a meaningful world-CSG operation in its own right. See
+/// `dev/docs/board/inbox/vandenberg-gas-csg-active-csgoper-brush-causes/overview.md`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CsgOper {
+    Active,
     Add,
     Subtract,
     Intersect,

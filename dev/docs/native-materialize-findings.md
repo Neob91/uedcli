@@ -4405,3 +4405,130 @@ Also: after any native code change, force-verify the Python-importable `.venv` e
 genuinely freshly built (check its `.so` mtime against your last source edit) before trusting any
 parity measurement — `bin/test`'s own build-skip-if-no-pytest-match caching silently produced a
 stale-binary false negative on the NYC 747 round.
+
+## Vandenberg Gas CSG_Active mechanism — DECODED via disassembly, FIX SHIPPED (2026-09-01, round 2)
+
+Follow-up to the entry above. Disassembled `bspBrushCSG` (`Editor.dll 0x355e0`) directly against
+this worktree's own `uned/UED22/Editor.dll` (📖, `harness/adis.py`/`pe.py`, capstone) rather than
+re-deriving from the prior spike's `sections/10-bsp-csg-build.md`/`re-raw-zones/
+bspbrushcsg-filter-decode.md` write-ups (both already fully cover the Add/Subtract/Intersect/
+Deintersect dispatch but never mention `CsgOper=0`, since no known level authored one before
+Brush230 surfaced it).
+
+**The mechanism.** Every `CsgOper` dispatch inside `bspBrushCSG` that gates node/surf/vert output is
+a LITERAL equality test against a specific ordinal — never a range/validity check — so ordinal 0
+(`CSG_Active`) falls through each one into the "not this specific value" branch, which is the
+SUBTRACT-shaped one at every site that matters for geometry:
+- **`subtractMask`** (`0x10035688`): `mov [local],0x28; cmp CsgOper,1; cmovne eax,[local]` — mask is
+  `0x28` (`PF_Semisolid|PF_NotSolid`) whenever `CsgOper != 1`, so `Active` strips `PF_NotSolid` off
+  Brush230's own (authored-NotSolid) poly exactly as a real Subtract would — the "acts solid despite
+  being authored NotSolid" mechanism.
+- **LOOP-2 pass-1 filter func** (`0x10035a84`-`0x10035a95`): `mov eax,SubtractFunc(0x348c0); cmp
+  CsgOper,1; cmove eax,AddFunc(0x31770)` — Subtract is the pre-cmove DEFAULT, overridden to Add only
+  on a literal `CsgOper==1`.
+- **World-thru-brush leaf func** (`0x33472`-`0x1003347f`, independently re-disassembled — already
+  decoded in `re-raw-zones/bspbrushcsg-filter-decode.md` for Add/Subtract, not previously connected
+  to this investigation): `mov eax,SubtractFunc(0x34980); cmp CsgOper,1; cmove eax,AddFunc(0x31b90)`
+  — same shape.
+- **`CsgOper==3||4` branch-away** to the Intersect/Deintersect tail (`0x100359d3`-`0x100359df`,
+  `cmp eax,3/4; je 0x35ab3`) does NOT match `CsgOper=0`, so `Active` falls through into the shared
+  Add/Subtract body instead of being diverted — confirms it is a REAL participant, not skipped.
+- One and only one site keys on the LITERAL value 2 (not "not Add"): a `Model->NumZones=0` reset
+  (`0x100356a2`, `cmp CsgOper,2; jne skip`) — `Active` does NOT trigger it. Confirmed orthogonal to
+  node/surf/vert output (`Model+0x100`=`NumZones`, per `re-raw-zones/passC-zonesetter.md`; zones are
+  recomputed wholesale by the later `TestVisibility` flood and are outside native's current
+  single-zone-first-cut scope, §8.3 of `sections/10-bsp-csg-build.md`).
+- Also checked `csgRebuild`'s own PASS-A structural loop (`0x1004a650`+): the semisolid+Add "defer to
+  detail pass" `continue` (`0x1004a804 cmp byte[actor+0x20c],1`) is ALSO a literal `CsgOper==1` test
+  (bonus finding: `Actor+0x20c` is the in-memory `CsgOper` field offset) — `Active` is not diverted
+  there either, so it reaches `bspBrushCSG` as an ordinary PASS-A structural brush, as the live A/B/C
+  test's magnitude already implied.
+
+**Net conclusion: `CsgOper::Active` is, for BSP geometry purposes, dispatched IDENTICALLY to
+`CsgOper::Subtract`** inside `bspBrushCSG` — not a distinct "structural flag" (hypothesis (a) from
+this round's task, refuted: nothing in `bspBrushCSG` special-cases ordinal 0 as anything other than
+"not 1/not 3/not 2"), and not a coincidental curve-fit — every dispatch point that differs between
+Add and Subtract was independently disassembled and found to route `Active` into Subtract's own
+branch, by the mechanical fact that x86-compiled `(CsgOper==X) ? A : B` ternaries take the `B` arm
+for ANY non-`X` value, ordinal 0 included.
+
+**One deliberately unresolved residual.** `bspcsg.rs`'s pre-existing `oper == CsgOper::Subtract`
+gate on the §92 §48 "Subtract recomputes the winding normal, Add keeps authored" rule was NOT
+extended to `Active` — that rule was derived empirically from a real-level census containing only
+Add/Subtract brushes, never disassembled to instruction level, so there is no evidence it keys on
+literal `CsgOper==2` vs. "not Add" like every other site above. Extending it on pattern-alone would
+be exactly the un-derived guess the no-guessing rule forbids. Flagged in code (`bspcsg.rs` comment
+next to the `oper == CsgOper::Subtract` condition). Irrelevant to Brush230 itself (a single poly).
+
+**Fix shipped**: `uedcli-native/src/csg.rs` — new `CsgOper::Active` enum variant (with the mechanism
+above as its doc comment); `csg.rs`'s own `bsp_brush_csg`/`point_in_solid` dispatch already used
+`_ => Subtract-shaped` wildcard arms, so they needed no change. `uedcli-native/src/lib.rs` —
+`oper_from_i32` now maps int `0` to `CsgOper::Active` instead of erroring. `uedcli-native/src/
+bspcsg.rs` — the REAL bug: `bsp_brush_csg`'s early guard `if oper != Add && oper != Subtract:
+return` used to silently no-op any newly-representable `Active` brush (the ALREADY-REFUTED "skip"
+hypothesis, live build A); narrowed to `if oper == Intersect || oper == Deintersect: return` so
+`Active` falls through to the shared body. Also broadened the world-thru-brush leaf-func selector
+(`oper == Subtract` → `oper != Add`) per the disassembly-confirmed pattern above. `uedcli/native/
+brush_marshal.py::_build_brush_input` — default `raw.get("CsgOper", "CSG_Add")` →
+`raw.get("CsgOper", "CSG_Active")`, matching `Engine.Brush.CsgOper`'s real class default (the
+`_CSG_OPER` string→ordinal table already had `"CSG_Active": 0`; only the default string was wrong).
+Every comment flags this as reproducing likely-unintentional level authoring, per the owner ruling.
+
+**TDD**: `csg_active_dispatches_exactly_like_subtract` (`bspcsg.rs`) pins that a single-brush
+`CsgOper::Active` build (a) is NOT a no-op (6 surfs carved, not an empty world — rules out the
+refuted "skip" hypothesis regressing) and (b) is node/surf/vert/point/vector-count IDENTICAL, with
+identical surf normals, to the same geometry built as `CsgOper::Subtract`. `bin/test -k bspcsg`:
+cargo test 102/102 (was 101, +1 new), pytest 78/78 (native ext freshly rebuilt — `.so` mtime
+confirmed newer than every edited source file). Scoped pytest matching the standard native-path set
+(`test_native_scale`/`test_preview_native`/`test_native_surf_pan`/`test_brush_merge`/
+`test_preview_faces`): 169/169.
+
+**Live re-verification against this item's own A/B/C harness** (goldens rebuilt fresh — the prior
+round's worktree and its `_scratch/` goldens no longer exist; harness scripts' hardcoded `ROOT`/
+`TRUNK` repointed at the current worktree, reusing its already-extracted trunk):
+- Fresh live-editor rebuild of A/B reproduces the prior round's numbers exactly (483/193/87/4938/
+  301/426 and 181/84/46/1904/184/182) — confirms the golden data is reproducible, not a fluke.
+- Fresh live-editor rebuild of C (explicit `CsgOper=CSG_Add`) again reproduces A exactly
+  (483/193/87/4938/301/426) — unaffected by this round's change (as expected: C never touches the
+  `CsgOper::Active` path at all).
+- **Native vs. editor, set B (Brush230 as authored, the motivating case)**: nodes/surfs/leaves/
+  points now EXACT (181/84/46/184, `d=+0` each — was 504/unmeasured pre-fix, an unmeasured-direction
+  wrong value). verts `d=+21` (1925 vs 1904), vectors `d=+0`. **Set A (baseline, Brush230 excluded —
+  untouched by this fix)** shows the SAME class of small residual (verts `d=+71`, vectors `d=-2`,
+  nodes/surfs/leaves/points otherwise exact) — proves the small vert/vector residual is a PRE-
+  EXISTING, separate class (present even with Brush230 absent entirely), not something this fix
+  introduced or should chase (out of scope; likely the same vertex-pool-dedup/tie-break class already
+  open on UNATCO `d=+5` verts and others).
+
+**Full-level Vandenberg Gas re-measure** (`parity_report.py`, fresh native rebuild, cached golden
+reused — golden is a pure real-editor build, independent of native code):
+before (this entry's own pre-fix numbers, confirmed unchanged from the entry above) nodes
+native=11289 golden=10683 `d=+606`, surfs `d=+2`, leaves `d=-134`, verts `d=+9480`, points `d=+696`,
+vectors `d=+130`; **after**: nodes native=10715 golden=10683 **`d=+32`**, surfs native=4554
+golden=4554 **`d=+0` (exact)**, leaves native=3473 golden=3468 `d=+5`, verts native=144824
+golden=144950 **`d=-126`**, points native=15069 golden=15030 `d=+39`, vectors native=1505
+golden=1523 `d=-18`. The dominant residual is closed (node delta cut ~95%, vert delta cut ~99%);
+`LENGTH MISMATCH` no longer describes a single dominant cause — the remaining `d=+32` nodes is
+presumably (not measured this round) some share of the diffuse 402-brush node-owner residual this
+entry's round 1 flagged as "unmeasured whether related." Not full byte parity yet — a distinct,
+smaller, unexplained residual remains, out of THIS round's scope.
+
+**Non-regression, all 5 required goldens** (`parity_report.py`, fresh native rebuild against cached
+goldens): `DX.dx` exact on all 6 counts (26/26/5/250/32/6, `d=+0`, UNCHANGED). `02_NYC_Bar.dx` exact
+on all 6 (1620/953/283/20878/2762/138, `d=+0`, UNCHANGED). `03_NYC_UNATCOHQ.dx` nodes/surfs/leaves
+exact (6314/3616/762, `d=+0`), verts `d=+5`/points `d=+16`/vectors `d=+0` — matches the documented
+pre-existing residual exactly, UNCHANGED. `14_OceanLab_Lab.dx` surfs exact (11278/11278, `d=+0`),
+nodes `d=+465`/leaves `d=+86`/verts `d=+3980`/points `d=+1003`/vectors `d=-66` — matches its own
+documented still-open residual exactly, UNCHANGED. `03_NYC_747.dx` surfs exact (2026/2026, `d=+0`),
+nodes `d=+68`/leaves `d=-10` — matches, UNCHANGED (verts/points/vectors not individually re-quoted
+in the prior entry but consistent: `d=+698`/`d=+227`/`d=-7`). Every one of these 5 levels is
+confirmed to contain NO `CsgOper`-absent `Engine.Brush` (per round 1's corpus check), so zero effect
+was the expected and observed result on all five.
+
+**Left uncommitted** — this round's code changes (`uedcli-native/src/csg.rs`, `uedcli-native/src/
+lib.rs`, `uedcli-native/src/bspcsg.rs`, `uedcli/native/brush_marshal.py`) are uncommitted in the
+worktree `vandenberg-csg-active`; the coordinating session verifies independently and commits.
+
+Harness: reused all of round 1's committed scripts (`dev/docs/spikes/2026-09-01-vandenberg-gas-
+node-overbuild/harness/`), only repointing their hardcoded `ROOT`/`TRUNK` at the current worktree —
+no new harness files this round.

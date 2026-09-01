@@ -107,12 +107,16 @@ type BrushTuple = (
 
 fn oper_from_i32(o: i32) -> Result<csg::CsgOper, model::BuildError> {
     match o {
+        // 0 = CSG_Active, `Engine.Brush.CsgOper`'s class default (an absent `CsgOper=` in the
+        // T3D) — see `csg::CsgOper::Active`'s doc comment for the disassembly evidence that the
+        // real editor dispatches it exactly like Subtract inside `bspBrushCSG`.
+        0 => Ok(csg::CsgOper::Active),
         1 => Ok(csg::CsgOper::Add),
         2 => Ok(csg::CsgOper::Subtract),
         3 => Ok(csg::CsgOper::Intersect),
         4 => Ok(csg::CsgOper::Deintersect),
         _ => Err(model::BuildError(format!(
-            "unknown CsgOper {o} (expect 1..=4)"
+            "unknown CsgOper {o} (expect 0..=4)"
         ))),
     }
 }

@@ -83,7 +83,18 @@ def _build_brush_input(name, actor):
     Scale lives in the typed `actor.main_scale`/`post_scale` fields (not `props`), so
     `raw.get("MainScale")` is absent and the `scale` tuple below stays identity."""
     raw = dict(actor.props)
-    oper_name = raw.get("CsgOper", "CSG_Add")
+    # `Engine.Brush.CsgOper`'s real class default is CSG_Active (0), not CSG_Add — confirmed via
+    # `uedcli.classdefaults` against the real `Engine.u`. A brush actor only reaches this default
+    # when it never went through a real BRUSH ADD/SUBTRACT/etc (an absent `CsgOper=` in the T3D) —
+    # almost certainly a stray/mistaken level-authoring artifact (e.g. Vandenberg Gas's `Brush230`,
+    # a 1-poly `NotSolid` brush carrying stray Light-actor properties). The real editor still
+    # processes it, and does so exactly like CSG_Subtract (`dev/docs/native-materialize-findings.md`,
+    # "Vandenberg Gas +606 node over-build", 2026-09-01 round) — reproduced faithfully per owner
+    # ruling rather than silently "corrected" to CSG_Add. See `csg::CsgOper::Active`'s doc comment
+    # (`uedcli-native/src/csg.rs`) for the disassembly evidence, and
+    # `dev/docs/board/inbox/vandenberg-gas-csg-active-csgoper-brush-causes/overview.md` for a note
+    # this authoring pattern may be worth a lint/warning in the future.
+    oper_name = raw.get("CsgOper", "CSG_Active")
     oper = _CSG_OPER.get(oper_name)
     if oper is None:
         raise BuildError(f"brush {name}: unknown CsgOper {oper_name!r}")

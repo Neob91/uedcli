@@ -17,7 +17,7 @@ import dataclasses
 import sys
 from pathlib import Path
 
-ROOT = Path("/workspace/uedcli/.claude/worktrees/vandenberg-gas-parity")
+ROOT = Path("/workspace/uedcli/.claude/worktrees/vandenberg-csg-active")
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "dev/docs/spikes/2026-07-15-native-materialize/harness"))
 sys.path.insert(0, str(ROOT / "dev/docs/spikes/2026-08-29-unatco-repart-live-diff/harness"))
