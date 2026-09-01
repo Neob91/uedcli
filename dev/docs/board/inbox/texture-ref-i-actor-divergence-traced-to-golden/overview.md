@@ -610,3 +610,37 @@ original shipped Deus Ex map alike. Nothing was built or shipped to `uedcli-nati
 (`/tmp/uedcli-widen-test/{dx,unatco,unatco_run2,nycbar}_widened.dx`), no live container spin-up
 needed since the determinism question was already answered by round 8's pair and the retail-Camera
 cross-check only needed the already-committed `unrealed/package-format.md` measurement.
+
+## Round 9 (2026-09-01): `p_base` -- live gdb REFUTES §10.20's "not reconstructable" framing for `DX.dx`'s simple case; exact mechanism pinned; no fix shipped (generalization to split polygons unverified)
+
+Full detail: `native-materialize-findings.md`, "`DX.dx`'s `p_base` residual: §10.20 hypothesis
+REFUTED for the simple case". Summary here since this item owns the `p_base` sub-thread.
+
+Two new live gdb harnesses (`dev/docs/spikes/2026-09-01-dx-pbase-points-trace/harness/`,
+`points_pool_refresh_trace.py` + `bspaddpoint_call_trace.py`) captured, across a real `MAP REBUILD` of
+`DX.dx`'s trunk: (1) the full `Model.Points` array before/after every one of the 5 `bspRefresh` calls
+the whole build makes, and (2) every `bspAddPoint` call's input point + returned pool index (new VA
+`0x10035430`, resolved from the `UModel` vtable and cross-checked against the already-known
+`bspRefresh` slot).
+
+**Result: `bspRefresh`'s compaction preserves relative order (drop-orphans-and-close-gap only, never
+reorders) -- the real reordering happens INSIDE the original CSG point-insertion sequence, which
+follows a decoded, deterministic rule: each polygon's `Origin` first (exact dedup), then its `Vertex`
+list in REVERSE authored order (tolerance dedup), walked polygon-by-polygon in authored order.** This
+exactly reproduces golden's real base-block order for `Brush3` (5/5 points confirmed live) and, offline
+via the same rule applied to `Brush8`'s T3D, predicts its surf 9/10/11 `p_base` = `{8,9,7}` exactly
+(vs. native's current wrong `{7,8,9}`) -- not a one-brush fluke.
+
+**Not "lost information" for this case -- native could in principle reconstruct it**, since native
+already tracks CSG-processing order and has the T3D `Vertex` lists. But the full rule also needs a
+periodic (per-`bspRefresh`-call) drop-and-later-readd choreography that native's current single
+end-of-build `reorder_points_canonical` pass does not model, and `DX.dx`'s brushes are all UNSPLIT
+whole boxes -- `UNATCO`/Wanchai's own `p_base` residual (924/3709) involves real CSG polygon splitting,
+where a split fragment's vertex order isn't the T3D list at all, so this exact rule is unverified there.
+**No fix shipped** -- implementing this safely needs a real architecture change to
+`reorder_points_canonical` plus live re-verification on `UNATCO`/Wanchai (both currently node/surf/leaf
+EXACT; a wrong generalization risks regressing that). Logged as a confirmed, narrower mechanism finding
+rather than a shipped fix, per the standing no-guessing rule.
+
+`DX.dx` stays at geometry EXACT / lighting 100% / `p_base` 13/26 -- does not reach FULL PARITY this
+round. Worktree `.claude/worktrees/dx-pbase-live-gdb`, left uncommitted.

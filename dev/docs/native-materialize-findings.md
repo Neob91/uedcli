@@ -3390,3 +3390,121 @@ parity`'s "red herring for pool SIZE" finding to VALUES too).
 Worktree: `.claude/worktrees/lighting-points-value-drift` (branch of the same name), left uncommitted
 per this round's instructions. Board items updated: `lighting-bits-only-divergence-localizes-to`,
 `wanchai-verts-points-residual-independently`.
+
+## `DX.dx`'s `p_base` residual: §10.20 hypothesis REFUTED for the simple case -- live gdb pins the exact rule (`Origin` then REVERSED ring vertices, per polygon, in authored order); NOT shipped (generalization to split polygons unverified)
+
+Task: live-verify whether §10.20's "pre-compaction pool indices, not reconstructable from the final
+model" hypothesis holds for `DX.dx`'s 13/26 `p_base` diffs (`texture-ref-i-actor-divergence-traced-to-
+golden`, `native-materialize-findings.md` "`DX.dx`'s `p_base` reordering"). Worktree
+`.claude/worktrees/dx-pbase-live-gdb`. Docker/live editor up throughout.
+
+**Offline localization first (no editor).** `parity_report.py` on `DX.dx` (cache hit): still 13/26
+`p_base` diffs, geometry EXACT, lighting 100%. Parsed the cached golden's `Model` directly
+(`parity_compare.parse_dx_model`): all 13 diffs trace to `Brush3`/`Brush8`/`Brush9`/`Brush4` (plain
+unsplit 6-face `CSG_Subtract` unit cubes), each contributing a 3-point rotation within its own 5-point
+base sub-block (e.g. `Brush3`'s surfs 3-5: golden `p_base` = `{3,4,2}`, native = `{2,3,4}` — same set,
+rotated). Reconstructing the golden's base-block order from the FINAL model alone (surf order, node
+order, ring order, every combination tried) never reproduced this rotation — consistent with §10.20,
+but not yet a live confirmation.
+
+**Live capture 1 (`points_pool_refresh_trace.py`, new): every `bspRefresh` call's full `Model.Points`
+array content, before and after, across a real `MAP REBUILD` of `DX.dx`'s trunk.** `bspRefresh` entry
+VA (`0x10036cd0`) was already known from prior rounds; this round freshly disassembled its single true
+exit (`0x1003718f`, `ret 8` — the OTHER `ret` in the same disassembly window, `0x10037251`, belongs to
+a different function whose prologue starts immediately after `0x1003718f`, confirmed by inspecting the
+bytes around it). Only **5 `bspRefresh` calls** fire for the whole `DX.dx` build (it is tiny). Decisive
+finding: **every compaction call preserves the RELATIVE ORDER of surviving points — it never reorders,
+only drops unreferenced ones and closes the gap.** Call 5's AFTER array (32 points) is BYTE-IDENTICAL,
+index for index, to golden's real saved `Points` array. Call 5's BEFORE array (42 points) already has
+`Brush3`'s 5 base points in the exact golden order `[A,E,H,G,F]` at raw positions `[0,1,2,3,4]`
+(A/E/H/G/F = the 5 distinct authored polygon Origins of `Brush3`'s 6 faces). Tracing back further:
+call 1's (the world-level, FIRST `bspRefresh`) BEFORE array (44 points) already has these same 5
+values at raw positions `[0,4,5,6,7]`, and call 1's AFTER (19 points) already matches golden's real
+`Points[0..18]` exactly. **So the reordering is not a `bspRefresh` artifact at all — it is baked in
+before the world's very first `bspRefresh` call**, refuting the specific "it's a `bspRefresh`
+reachability-DFS-compaction artifact" half of §10.20 (the DROP/close-gap behavior IS a `bspRefresh`
+reachability GC, exactly as documented — but ORDER survives from earlier untouched).
+
+**Live capture 2 (`bspaddpoint_call_trace.py`, new): every `bspAddPoint` call during the same
+`MAP REBUILD`.** Resolved `bspAddPoint`'s VA (`0x10035430`) from the `UModel` vtable at
+`0x100cf5d4+0x1f4` (the same vtable `bspRefresh`/`bspBuild`/`bspRepartition`/`bspAddNode` already sit
+in — cross-checked by independently re-deriving `bspRefresh`'s own already-known VA from `+0x200` and
+getting `0x10036cd0` back exactly). Signature confirmed live: `__thiscall bspAddPoint(Model* ecx,
+FVector* [ebp+0xc], INT Exact [ebp+0x10])` — `[ebp+8]` is a REUSED scratch stack slot the function
+later overwrites with a float, not the point argument (an early, wrong read of `[ebp+8]` as the
+FVector produced all-zero coordinates for all 600 calls; `[ebp+0xc]` is the real argument. `ecx`, not
+`[ebp+8]`, is the `Model` this-pointer, moved to `esi`). Captured the input `FVector` and `Exact` flag
+at entry (`0x1003545d`, post-prologue) and the returned pool index (`eax`) at the function's `ret 0xc`
+epilogue (`0x100354ce`; a second candidate `ret 0xc` at `0x100355a7` fired inconsistently — 168 times
+against 600 real calls — and was excluded as unreliable/misidentified, not used).
+
+**The exact per-polygon call sequence, decoded directly from the trace: `Origin` first (`Exact=1`),
+then its 4 `Vertex` entries in REVERSE authored order (`Exact=0`), repeated per polygon in AUTHORED
+polygon order.** `Brush3`'s poly0 (`Vertex` order A,B,C,D in the T3D): captured calls are
+`Origin=A(exact=1) -> A,D,C,B(exact=0 each)` — vertices D,C,B,A, i.e. the T3D list REVERSED. Poly1
+(`Vertex` order E,F,G,H): captured calls `Origin=E(exact=1) -> H,G,F,E(exact=0)` — again the exact
+reverse of the authored E,F,G,H list. This is not guesswork — 600 calls across the whole build were
+captured and this pattern holds at every polygon boundary (every 5th call has `Exact=1`, matching one
+polygon's `Origin`).
+
+**Decisive check: does the LAST `bspAddPoint` return value for each of `Brush3`'s 5 base points equal
+its true FINAL saved `Points[]` index?** Grepped all hits for A/E/H/G/F's coordinates across the full
+600-call trace (each value gets re-queried many times by later brushes/passes, since the pool is
+global and every `Exact`/tolerance dedup call against an existing point returns its CURRENT index,
+which can shift across a `bspRefresh` drop-and-later-readd cycle). Last hit per value: A -> idx 0
+(golden real: 0), E -> idx 1 (real: 1), H -> idx 2 (real: 2), G -> idx 3 (real: 3), F -> idx 4 (real:
+4). **5/5 exact matches.**
+
+**Why the base-block LAYOUT (bases lead, rings trail) still holds despite `Origin`+reversed-`Vertex`
+calls happening interleaved, same as §10.19/10.20 already established:** ring-only points (never any
+polygon's `Origin` anywhere in the level) get inserted into the pool early too (as non-`Exact`
+`Vertex` calls) but are NOT YET referenced by any node's vert-pool at the time of the FIRST
+`bspRefresh` (node/vert-pool construction happens later, during `bspRepartition`'s subtree recursion)
+— so the reachability GC drops them as orphans at that checkpoint, and they get freshly RE-ADDED to
+the pool later once real BSP nodes reference them as ring vertices, landing far down in the final
+array (confirmed directly: `Brush3`'s poly0 vertices D/C/B raw-pool-positioned at 1/2/3 in call 1's
+BEFORE array are ABSENT from call 1's AFTER array, and reappear at golden's real indices 22-24 in the
+final saved model). Base points (referenced by `surf.pBase` immediately, as soon as the surf exists)
+survive every GC and keep their relative insertion order — which is why the base block's INTERNAL
+order reflects the raw `Origin`+reversed-`Vertex` insertion sequence, including contributions from
+vertex-only calls of an EARLIER polygon that happen to be a LATER polygon's `Origin` (exactly `Brush3`
+poly1's reversed vertices H,G,F landing ahead of poly3/poly4's own `Origin` calls for G/F, which just
+dedup back to the same indices).
+
+**Cross-check against a second brush, `Brush8` (same cube shape, `Location=(1280,0,0)`, offline only —
+T3D read, no new gdb needed): the SAME rule predicts golden's real surf 9/10/11 `p_base` = `{8,9,7}`
+exactly, while the naive "origin-only, first-appearance" rule (what native's `reorder_points_canonical`
+currently implements) predicts the WRONG rotation `{7,8,9}` — matching the actual native/golden diff on
+those surfs precisely.** Not a `Brush3`-specific fluke.
+
+**Conclusion: §10.20's hypothesis is REFUTED as stated for this class of case.** The order is not
+"lost information reconstructable only from a live capture" — it is a fully mechanical, deterministic
+function of (a) brush CSG-processing order (native already tracks this — `canon_surf_keys`), (b) each
+polygon's AUTHORED `Vertex` list read `Origin`-first-then-REVERSED (native has this in the T3D), and
+(c) a periodic (per-`bspRefresh`-call) reachability GC that can drop and later re-add a point,
+which native's current single END-of-build `reorder_points_canonical` pass does not model (it walks
+the FINAL surf/node structure once, which cannot reproduce a mid-build drop-then-readd's effect on
+relative order).
+
+**No fix shipped.** Full confidence in the mechanism above is confined to `DX.dx`'s specific case:
+plain, UNSPLIT, whole-brush `CSG_Subtract` boxes, each polygon's authored `Vertex` list untouched by
+CSG splitting. `UNATCO`/Wanchai's own residual `p_base` diffs (924/3709, still tracked, node/surf/leaf
+EXACT) involve real polygon SPLITTING against existing world geometry during CSG — a split-generated
+sub-polygon's own vertex order is NOT the T3D `Vertex` list (it's computed by `FPoly::SplitWithPlane`
+at CSG time), so this exact reconstruction rule does not obviously extend there without further live
+verification (not attempted this round — budget). Implementing "Origin-then-reversed-vertex insertion
+order, replayed through the SAME periodic drop/readd choreography the real `bspRefresh` GC performs at
+every one of its ~209/119 subtree calls on the bigger levels" is a real architectural change to
+`reorder_points_canonical` (replacing one final canonical resort with an incremental, mid-build-aware
+model), not a small patch — and shipping it blind on UNATCO/Wanchai risks the hard-won node/surf/leaf
+EXACT status those two levels currently hold. Per the standing no-guessing rule, logged as a confirmed
+mechanism + an open generalization question rather than shipped code.
+
+New harnesses (committed, `dev/docs/spikes/2026-09-01-dx-pbase-points-trace/harness/`):
+`points_pool_refresh_trace.py` (per-`bspRefresh`-call full `Points` array before/after dump — reusable
+on any level small enough to dump the whole pool cheaply), `bspaddpoint_call_trace.py` (every
+`bspAddPoint` call's input point + `Exact` flag + returned pool index — the new, decoded VA
+`0x10035430` and its `[ebp+0xc]`/`[ebp+0x10]`/`ecx` argument layout are reusable for any future
+CSG-insertion-order investigation). `DX.dx` remains at geometry EXACT / lighting 100% / `p_base` 13/26
+unresolved — does NOT reach FULL PARITY this round. Worktree `.claude/worktrees/dx-pbase-live-gdb`,
+left uncommitted per this round's instructions.
