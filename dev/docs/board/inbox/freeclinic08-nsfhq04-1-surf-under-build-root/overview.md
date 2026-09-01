@@ -1,7 +1,7 @@
 +++
 priority = "p1"
 kind = "debug"
-summary = "freeclinic08's ENTIRE structural-only node/leaf residual ROOT-CAUSED and FIXED (CsgOper::Active, 528e602): Brush586's no-CsgOper= case is now handled. nsfhq04's Brush8321 (same mechanism) is also fixed, but nsfhq04 is STILL the worst-parity level in the corpus (0/6) — a second divergence, first world-CSG brush Brush842, localized live; suspected same classify-BSP over-fragmentation mechanism as the parallel Area51 Entrance Brush1852 investigation, not yet disassembly-confirmed."
+summary = "freeclinic08's ENTIRE structural-only node/leaf residual ROOT-CAUSED and FIXED (CsgOper::Active, 528e602): Brush586's no-CsgOper= case is now handled. nsfhq04's Brush8321 (same mechanism) is also fixed, but nsfhq04 is STILL the worst-parity level in the corpus (0/6). Second divergence localized to Brush842 (5th continuation), then DISPROVEN as a Brush842-local bug (6th continuation, live gdb trace): Brush842's own classify-BSP descent is byte-exact vs the editor; the +131/+38 node/leaf delta is diffuse across 172 OTHER brushes, same open world-level-repartition-poly-order class as UNATCO's still-unresolved residual. No fix shipped, mechanism still open."
 +++
 
 # freeclinic08/nsfhq04 +1-surf under-build
@@ -385,6 +385,38 @@ second, and the "first brush has no stated `CsgOper`" pattern likely recurs acro
 corpus (unmeasured beyond these 3 levels). See `native-materialize-findings.md`, search "Vandenberg
 Gas mechanism confirmed on freeclinic08/nsfhq04" for the full write-up and the cross-reference into
 the Vandenberg item.
+
+## 2026-09-01, 6th continuation: `Brush842`'s own classify-BSP descent proven byte-exact
+(live gdb trace); NSFHQ04's residual is diffuse, at the one-time world-level repartition — same
+class as UNATCO's still-open problem, not a new bug
+
+Fresh worktree, fresh build, reproduced the 5th continuation's `Brush842` divergence exactly
+(n=512 exact, n=513 `d_nodes=+131 d_surfs=+0 d_leaves=+38`). Two results:
+
+1. **Epsilon-margin probe (all 6 authored polys, no prior per-poly attribution needed): RULES OUT
+   the epsilon-flip hypothesis.** Closest margin to the `±0.25` split threshold is 0.169890 (poly 0,
+   the near-degenerate one) — not a plausible float-precision coincidence.
+2. **Live gdb trace of the real editor's `AddBrushToWorldFunc` calls for `Brush842`'s own
+   incremental CSG-add, cross-checked against a final-tree node-owner attribution: `Brush842` itself
+   is byte-exact.** Editor: 19 calls, 12 kept/7 discarded. Native's own `LEAF` trace: 19 total, 12
+   `add=true`/7 `add=false` — an exact match. Final-tree attribution: native=8/editor=8 nodes,
+   native=5/editor=5 surfs owned by `Brush842`. The `+131`/`+38` delta is diffuse across 172/513
+   OTHER brushes (net +131, abs-sum 637 — heavy cancellation), not concentrated at `Brush842` at all.
+
+**The 5th continuation's whole framing ("`Brush842`'s near-degenerate poly triggers a classify-BSP
+over-fragmentation") is disproven**, not just its epsilon-flip sub-case — two independent live
+measurements agree `Brush842`'s own CSG-add is exact. The real mechanism: `Brush842`'s mere
+inclusion changes the polygon pool the one-time world-level `bspBuildFPolys`→`bspMergeCoplanars`→
+`bspBuild` repartition consumes, and that step's output shifts diffusely across many already-settled
+brushes — the same symptom signature (surf-exact, node/leaf-only delta, diffuse cross-brush
+attribution) as UNATCO's still-open residual and freeclinic08's pre-`Brush586`-fix diffuse residual.
+Very likely the same open problem recurring a third time, not confirmed identical (needs a
+world-level poly-order live capture, not run this round). No fix shipped — no logic bug found;
+the actual mechanism is the already-known-open world-level poly-order class. Also found and flagged
+a methodology issue for the parallel Area51 thread: its `NADD`-tail-based fragment counts are not
+actor-scoped and may be inflated by the same world-level repartition's own node-seeding (measured
+3.5x inflation here: 42 raw vs 12 properly-scoped). Full write-up:
+`native-materialize-findings.md`, search "NSFHQ04 6th continuation".
 
 **Methodology note, important for other concurrent investigations this session**: this round found
 and fixed a real contamination bug in its own harness — `sys.path.insert(0, "/workspace/uedcli")`

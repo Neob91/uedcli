@@ -5017,3 +5017,94 @@ verdict), correlated finer than Base/Normal.
 Harness added this round: `find_addfunc_callers.py` (the `E8`-scan / raw-VA-immediate-scan caller
 finder — documents the "call is indirect, scan for the immediate instead" method for reuse),
 `area51_dist_threshold_probe.py` (the `DESC`-trace threshold-margin diagnostic).
+
+## NSFHQ04 6th continuation: epsilon-flip AND the whole "`Brush842` over-fragments" framing both
+## DISPROVEN — live gdb trace shows its own classify-BSP descent is byte-exact; the real residual is
+## diffuse, at the one-time world-level repartition, same class as UNATCO's open problem (2026-09-01)
+
+Fresh worktree off `master` (fast-forwarded to `3716973`, which already carries `528e602`
+`CsgOper::Active` and the Area51 `angr`-decompiler round). Native `.so` rebuilt fresh (mtime
+confirmed newer than `bspcsg.rs`). Re-ran `nsfhq04_prefix_search2.py 512 513` end to end (own
+editor-driven golden builds, not reused from any other worktree): reproduced the 5th continuation's
+result exactly — n=512 (`Brush841`) byte-exact, n=513 (`Brush842`) `d_nodes=+131 d_surfs=+0
+d_leaves=+38`.
+
+**Step 1 — epsilon-margin probe (`nsfhq04_dist_threshold_probe.py`, adapted from Area51's
+`area51_dist_threshold_probe.py`): RULES OUT the epsilon-flip hypothesis.** Unlike Area51 (which had
+a prior per-poly attribution pinning the search to `i_brush_poly=4`), no such attribution existed for
+`Brush842` yet, so this run scoped only `UEDCLI_BSPCSG_DESCENT_ACTOR=512` (no `_POLY` filter),
+tracing all 6 authored polys' full descent in one pass (115 `DESC` lines). Closest margin to the
+`±0.25` `THRESH_SPLIT_POLY_WITH_PLANE` boundary: **0.169890** (poly 0 — the near-degenerate one,
+`min=0.00000 max=0.08011`, classified `COPLANAR dot=-1.00000`). Every other node's margin is `>=
+0.21`. A margin of 0.17 is not a plausible float-precision coincidence (that would need an FP
+divergence on the order of 0.1uu, far beyond float32 noise) — poly 0's authored ~0.08uu
+non-planarity is real but lands solidly inside the coplanar band, nowhere near the split/coplanar
+boundary. Same qualitative outcome as Area51's `Brush1852` probe, though NSFHQ04's margin (0.17) is
+meaningfully tighter than Area51's (0.2498) — still decisively not a boundary case.
+
+**Step 2 — per-brush node-owner attribution (`nsfhq04_brush842_attrib.py`, `area51_attrib.py`'s
+method) on the FINAL built trees at n=513: `Brush842` itself is EXACT.** Native's own build vs a
+fresh editor golden (`golden_n0513.dx`, built by the same `nsfhq04_prefix_search2.py` run): surf
+count owned by `Brush842` native=5 editor=5; node-plane-owner count native=8 editor=8 — no
+difference at all. The `+131`/`+38` delta is entirely attributed to **172 of 513 OTHER brushes**
+(net `+131`, abs-sum `637` — heavy cancellation), not to `Brush842`.
+
+**Step 3 — live gdb trace of the REAL editor's own `AddBrushToWorldFunc` calls for `Brush842`
+(`nsfhq04_addfunc_oracle.py`, same `$esp`-relative-args technique as `area51_addfunc_oracle.py`, VA
+`0x10031770`): its incremental CSG-add is byte-identical to native's, fragment for fragment.**
+Traced `MAP REBUILD` of `golden_n0512.dx` (2701 `AddBrushToWorldFunc` calls total) and
+`golden_n0513.dx` (2720 calls); the tail (`nsfhq04_compare_tail.py`) — the calls attributable to
+`Brush842`'s own incremental add — is **19 calls, 12 kept / 7 discarded**. Native's own `LEAF` trace
+for the same brush (`nsfhq04_native_leaf_dump.py`, properly actor/poly-scoped via
+`descent_scope_matches`) is **19 total, 12 `add=true` / 7 `add=false`** — an EXACT match, both in
+total count and in the kept/discarded split. This directly disproves the 5th continuation's framing:
+`Brush842`'s own classify-BSP descent does not over-fragment relative to the editor at all; it is
+provably identical.
+
+**Methodology correction, relevant to the parallel Area51 thread.** `trace_node_add`'s `NADD` dump
+(`UEDCLI_BSPCSG_TREE_DUMP`) is NOT actor-scoped — it fires from `bsp_add_node`'s callers at BOTH the
+per-brush CSG leaf-add sites (`leaf_func`'s `ADD`/`SUB`) AND the one-time world-level repartition's
+own node-seeding (`SEED`/`FWTB`, `bspcsg.rs` lines ~1306/2688), which `build_geometry_bspcsg` always
+runs (`UEDCLI_BSPCSG_STAGE_COUNTS`'s `post-repartition` stage, confirmed present on every call, subset
+or full). Measured directly here: `Brush842`'s raw `NADD`-tail count (n=513 total minus n=512 total)
+is **42** — 3.5x the properly-scoped `LEAF add=true` count of **12** — because the world-level
+repartition's own node-seeding differs between the two builds and leaks into the same tail window.
+The `LEAF` trace (gated by `descent_scope_matches` on `actor`/`i_brush_poly`) is immune to this and is
+the correct clean per-brush metric. **Area51's own `area51_frag_diff.py`/`area51_native_leaf_dump.py`
+"native kept: 26" figure for `Brush1852` is computed from the SAME raw `NADD`-tail method and may be
+similarly inflated** — worth re-checking against a `LEAF add=true`-only count before treating 26 (vs
+editor's 17) as ground truth for that investigation. Not re-verified here (out of this round's scope);
+flagging for that thread.
+
+**Conclusion: the whole "`Brush842` over-fragments its own descent" hypothesis is disproven, not just
+its epsilon-flip sub-case.** Two independent, live-trace-confirmed measurements (step 2's final-tree
+attribution, step 3's live incremental-add gdb trace) agree: `Brush842`'s own CSG-add is exact on both
+sides. The real mechanism is that `Brush842`'s mere inclusion changes the polygon pool the ONE-TIME
+world-level `bspBuildFPolys`→`bspMergeCoplanars`→`bspBuild` repartition consumes (confirmed present in
+native's pipeline at the `post-repartition` stage, node count 3568 already close to final 3604 there),
+and that step's output differs diffusely across 172 already-settled brushes — the SAME symptom
+signature (surf-exact, node/leaf-only delta, diffuse cross-brush node-ownership, present at/before the
+one-time world-level rebuild) as UNATCO's still-open residual and freeclinic08's PRE-`Brush586`-fix
+diffuse residual (both previously traced to a world-level poly-list-order/`FindBestSplit`-tie-break
+sensitivity that remains unresolved — see freeclinic08's "divergence traced one stage further"
+continuation above). This is very likely the SAME open problem recurring on a third level, not a new,
+locally-fixable bug — but this round did not re-run the `prepart_tree_*`/`fpolys_stage_order.py`-style
+world-level poly-order live capture needed to prove it's the IDENTICAL mechanism rather than a
+different instance of the same class; that remains the concrete next step, shared with UNATCO's own
+open item. Not confirmed (or denied) as the SAME mechanism as Area51's `Brush1852` residual — that
+depends on whether Area51's own per-brush attribution also shows `Brush1852` itself exact, which this
+round did not check (out of scope; flagged for that thread above).
+
+**No fix shipped.** No logic difference was found in `bspcsg.rs` — the opposite: `Brush842`'s own
+classify-BSP logic is proven byte-exact by direct live comparison. The actual mechanism is the
+still-open world-level poly-order class, not something to guess-fix here, per the standing
+no-guessing rule. `bin/test`: Rust `cargo test` 102/102 pass; pytest has 10 pre-existing failures (2
+`test_board.py` frontmatter checks on unrelated board items, 6 `test_csg_native_differential.py`
+cases failing on a `ValueError: expected tuple of length 5, but got tuple of length 4`, 1
+`test_doc_links.py` case) — all pre-existing on `master` tip `3716973` before this round (zero
+`uedcli-native/src` or `uedcli/` changes made this round); not investigated further, out of scope.
+
+Harness added this round, all under
+`dev/docs/spikes/2026-09-01-fc08-nsfhq04-csgactive/harness/`: `nsfhq04_dist_threshold_probe.py`,
+`nsfhq04_brush842_attrib.py`, `nsfhq04_native_leaf_dump.py`, `nsfhq04_addfunc_oracle.py`,
+`nsfhq04_compare_tail.py`. Board: `freeclinic08-nsfhq04-1-surf-under-build-root`, appended.
