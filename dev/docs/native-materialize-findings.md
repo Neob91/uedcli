@@ -3783,3 +3783,109 @@ every level whose geometry is close enough for records to positionally line up:
 Still **zero levels at full byte parity**; geometry-6/6 count-exact stays 2/21 (DX.dx, NYC Bar).
 Full per-level table shown to the owner as an artifact this round; not reproduced in full here to
 avoid duplicating `parity_report.py`'s own output -- rerun it directly for exact current numbers.
+
+## Round 13: first real IMPLEMENTATION attempt at the incremental point-pool architecture rounds 9-12 scoped -- MEASURED NEGATIVE on all 3 tracked levels; not shipped, root cause narrowed but not found
+
+Task: rounds 9-12 fully pinned the real editor's per-polygon `bspAddPoint` insertion rule (`Origin`
+then reversed ring for an unsplit whole polygon; forward winding + first-fragment-only `alloc_surf`
+for a split) but explicitly stopped short of implementing it, since round 10 proved a POST-HOC
+resort over the final model cannot replay it. This round's mandate: build the real incremental
+architecture -- per-brush insertion in CSG order, replaying `bspRefresh`'s periodic drop/readd
+compaction -- and measure it for real, non-regression-gated, on `DX.dx`/UNATCO/Wanchai.
+
+**Root architectural fact found first (not previously documented): `model.points` is UNCONDITIONALLY
+CLEARED before `bspRepartition`'s own rebuild** (`build_geometry_bspcsg`, the `model.points.clear()`
+call gated only by the pre-existing `UEDCLI_BSPCSG_WORLD_KEEP_POINTS`, off by default). Since
+`bspRepartition` throws away `model.nodes`/`model.surfs`/`model.verts`/`model.points`/`model.vectors`
+and rebuilds ALL of them from the post-merge fragment soup via a fresh `bsp_build`, native's Pass-1
+incremental insertion order (the thing rounds 9-12 characterized) is discarded by construction before
+it can ever reach the final model -- `reorder_points_canonical`'s end-of-build reconstruction exists
+`BECAUSE` of this discard, not despite it. This means any fix has to (a) keep the Points/Vectors pools
+alive across that clear, not just insert them correctly during Pass 1.
+
+**Implementation (`uedcli-native/src/bspcsg.rs`, gated behind NEW flag
+`UEDCLI_BSPCSG_INCREMENTAL_POINTS`, off by default -- 0 effect unless set):**
+1. `bsp_add_node`: for a poly whose surf is a first-allocation (`i_link < 0`, i.e. `alloc_surf` runs)
+   AND the flag is set, resolve each ring vertex's point-pool index by walking `edpoly.verts`
+   BACKWARDS (round 9's "Origin then reversed ring" rule) while still writing the results into
+   `model.verts` in the polygon's own FORWARD order (the node's real rendering ring must stay
+   forward -- only which pool index a point receives changes, never which point a vert names). A
+   split fragment (`i_link >= 0`, reusing an EXISTING surf) is untouched -- round 11/12's "forward,
+   never reversed" rule for a fragment already falls out of the existing default code path.
+2. `bsp_brush_csg`'s tail: after the existing per-brush `bsp_cleanup`, call the ALREADY-existing
+   (but previously unwired) `passes::bsp_refresh_points_vectors` once per brush -- an order-preserving
+   reachability GC (drops orphans, never reorders survivors) matching round 9's own measured cadence
+   (`DX.dx`: exactly 5 `bspRefresh` calls for exactly 5 brushes).
+3. `build_geometry_bspcsg`'s repartition-clear boundary: extend `UEDCLI_BSPCSG_WORLD_KEEP_POINTS`'s
+   existing points-survival condition to also fire under the new flag.
+4. The end-of-build canonicalization: when the new flag is set, replace the
+   `reorder_points_canonical` call (bases-then-rings RECONSTRUCTION from the final structure) with a
+   bare `passes::bsp_refresh_points_vectors` call (order-preserving orphan-drop only) -- added after
+   discovering (1)-(3) alone had ZERO measured effect (see below), because `reorder_points_canonical`
+   unconditionally overwrites whatever order preceded it.
+
+**Measured on `DX.dx` via `parity_report.py` (cached golden, no live editor) -- THREE separate,
+isolated configurations, each rebuilt and independently verified:**
+
+| configuration | surf `p_base` diffs | geometry (6 counts) |
+|---|---:|---|
+| default (flag off) -- baseline | 13/26 | EXACT (26/26/5/250/32/6) |
+| (1)+(2)+(3), but `reorder_points_canonical` still runs at the end | 13/26 (byte-identical to baseline) | EXACT |
+| (1)+(2)+(3)+(4) -- the incremental order actually reaches the final model | 25/26 | still EXACT |
+| (2)+(3)+(4) only, insertion-order reversal (1) DISABLED via a temporary debug gate | 25/26 (identical numeric result to the row above) | still EXACT |
+
+The middle row's zero effect is a clean, mechanical confirmation, not a surprise in hindsight:
+`reorder_points_canonical` derives order purely from the FINAL surf/node structure (bases in
+canonical-surf order, then ring verts in node-array order), so it overwrites ANY preceding order
+unconditionally -- keeping Points alive through repartition changes nothing until something ALSO
+stops re-deriving order from scratch at the end. The bottom two rows isolate the real question --
+does the raw incrementally-preserved order (once it's actually allowed to reach the final model) beat
+the default's post-hoc heuristic? -- and answer NO, decisively: 25/26 is worse than 13/26, and this
+holds REGARDLESS of whether the Origin+reversed-ring insertion rule is applied, meaning the damage is
+not primarily an insertion-order-rule bug -- it is in the keep-alive + per-brush-GC mechanism itself.
+
+**On UNATCO the flag is worse than a parity regression -- the native build fails outright:**
+`parity_report.py --json` against `03_NYC_UNATCOHQ.dx` with the flag set exits 2, `native CSG build
+failed: lightmap bake: vert iVertex index -1 out of range [0,10758)` -- a dangling point reference a
+later stage can't resolve. Root cause not chased down this round (budget), but the shape is
+suggestive: UNATCO has real WTB-path cross-brush re-splits (rounds 11/12's whole subject), where a
+LATER brush's `FilterWorldThroughBrush` re-visits an EXISTING surf's points; a per-brush GC that only
+runs in `bsp_brush_csg`'s OWN tail (i.e. once that BRUSH is done) has no visibility into a point a
+FUTURE brush's WTB pass will still need, and can drop it as an orphan too early. **Wanchai, by
+contrast, does NOT crash** with the flag on: node/surf/leaf counts stay EXACT (11648/5284/3371, d=+0
+each, byte-identical to the flag-off baseline) and verts/points deltas actually IMPROVE slightly
+(verts d=+74->+49, points d=+16->+14; vectors unchanged at d=-8) -- a genuinely mixed, unresolved
+result this round did not have budget to reconcile with UNATCO's outright crash on ostensibly the
+same mechanism.
+
+**Non-regression: CONFIRMED on all 3 tracked levels, by construction and by live measurement.** Every
+change is gated behind `UEDCLI_BSPCSG_INCREMENTAL_POINTS`, off by default, so the default path is
+provably untouched (every new branch has an unmodified `else` arm running the pre-existing code
+verbatim). Live-measured anyway (not just argued): `parity_report.py` with the flag OFF reproduces
+the exact pre-existing historical baseline on all 3 levels -- `DX.dx` 13/26 `p_base` / geometry EXACT
+/ lighting 100%; UNATCO nodes/surfs/leaves 6314/3616/762 d=+0 each, verts d=+5, points d=+16, vectors
+d=+0; Wanchai nodes/surfs/leaves 11648/5284/3371 d=+0 each, verts d=+74, points d=+16, vectors d=-8.
+Full crate `cargo test --quiet`: 99/99 (98 pre-existing + 1 new structural-safety test pinning this
+round's flag on the simplest unsplit case, since it cannot be corrupted the way UNATCO's crash shows
+for cross-brush-split geometry).
+
+**Not shipped; `DX.dx` does NOT reach FULL PARITY this round.** `UEDCLI_BSPCSG_INCREMENTAL_POINTS`
+stays off by default, kept as a real (not post-hoc) incremental-architecture attempt with its own
+regression test, for the same reason round 10's post-hoc experiment was kept: so a future round has a
+known-bad incremental baseline to beat rather than re-deriving this result. **What's still open,
+precisely:** the real editor's `bspRefresh` cadence is evidently FINER-GRAINED than "once per
+completed brush" -- round 9's "5 calls for 5 brushes" count for `DX.dx` is consistent with a
+per-brush cadence ONLY because `DX.dx` has zero real cross-brush splits (round 9: "26 nodes = 26
+surfs, no shared `iLink`"); it does not by itself prove the cadence IS per-brush, and this round's
+UNATCO crash is direct evidence it is NOT -- some finer unit within a brush's own `bspBrushCSG`
+processing (plausibly per-`FilterWorldThroughBrush` call, or per some subtree unit inside the LOOP2
+descent) must be the real trigger, catching points inserted-but-not-yet-node-referenced at a grain
+this round's per-brush cadence is too coarse to see. Finding that finer unit needs a live gdb capture
+counting `bspRefresh` call TIMING against finer pipeline checkpoints than round 9's own trace covered
+(it counted calls, not what triggered each one) -- not attempted this round, budget. Code:
+`uedcli-native/src/bspcsg.rs` (`incremental_points_enabled`, the `bsp_add_node` reversed-insertion
+branch, the per-brush `bsp_refresh_points_vectors` call in `bsp_brush_csg`, the repartition-clear
+`keep_points` extension, the end-of-build branch replacing `reorder_points_canonical`, and
+`incremental_points_keeps_the_simplest_subtract_case_structurally_safe_but_not_parity_exact`).
+Worktree `.claude/worktrees/bspcsg-incremental-points`, left uncommitted per this round's
+instructions.

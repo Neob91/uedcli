@@ -743,3 +743,46 @@ this round. `uedcli-native/src/*` untouched. New harness committed:
 `dev/docs/spikes/2026-09-01-dx-pbase-points-trace/harness/build_tjunction_trunk.py` +
 `dev/docs/spikes/2026-09-01-dx-pbase-points-trace/logs/bspaddpoint-call-trace.log`. Worktree
 `.claude/worktrees/pbase-round12-tjunction`, left uncommitted.
+
+## Round 13 (2026-09-01): first real IMPLEMENTATION attempt -- MEASURED NEGATIVE on all 3 tracked levels; not shipped
+
+Full detail: `native-materialize-findings.md`, "Round 13: first real IMPLEMENTATION attempt at the
+incremental point-pool architecture rounds 9-12 scoped". Mandate: rounds 9-12 fully characterized the
+insertion rule but never implemented the real incremental (non-post-hoc) architecture; this round
+built it for real, gated, and measured.
+
+New fact found first: `model.points` is unconditionally cleared before `bspRepartition`'s own rebuild
+in native's current pipeline, discarding Pass-1's incremental order by construction -- explaining WHY
+`reorder_points_canonical`'s post-hoc reconstruction exists at all. Implemented, behind new flag
+`UEDCLI_BSPCSG_INCREMENTAL_POINTS` (off by default, zero effect unless set): (1) inline Origin+
+reversed-ring insertion at first-allocation in `bsp_add_node` (round 9's rule, applied live instead of
+post-hoc); (2) per-brush `bspRefresh`-equivalent Points/Vectors GC in `bsp_brush_csg`'s tail, reusing
+the already-existing but previously-unwired `passes::bsp_refresh_points_vectors`; (3) keep Points/
+Vectors alive across the repartition clear; (4) replace the end-of-build `reorder_points_canonical`
+reconstruction with a bare order-preserving orphan-drop when the flag is set.
+
+**Measured on `DX.dx` (`parity_report.py`, cached golden): WORSE, not better -- 25/26 `p_base` diffs
+vs the default path's 13/26, geometry still EXACT (no structural regression), and the result is
+IDENTICAL with or without the insertion-order reversal rule** -- isolating that the damage is in the
+keep-alive + per-brush-GC mechanism itself, not the insertion-order rule. **On UNATCO the flag makes
+the native build FAIL outright** (`vert iVertex index -1 out of range` -- a dangling point reference),
+plausibly because a per-brush-only GC cadence can't see a point a LATER brush's cross-brush WTB
+re-split will still need. **Wanchai does NOT crash and even improves slightly** (verts/points deltas
+shrink; node/surf/leaf stays EXACT) -- an unresolved, unreconciled asymmetry with UNATCO's crash on
+what should be the same mechanism.
+
+**Non-regression CONFIRMED on all 3 levels** -- every change is flag-gated with an unmodified `else`
+arm, and live-measured with the flag off to reproduce the exact pre-existing baseline on `DX.dx`/
+UNATCO/Wanchai. Full crate `cargo test --quiet`: 99/99 (98 pre-existing + 1 new structural-safety
+test). `DX.dx` does NOT reach FULL PARITY this round. `UEDCLI_BSPCSG_INCREMENTAL_POINTS` stays off by
+default, kept as a real (not post-hoc) negative-result experiment with its own regression test, same
+convention as round 10's `UEDCLI_BSPCSG_POINTS_ORIGIN_REVERSED`.
+
+**Open, precisely:** the real editor's `bspRefresh` cadence is evidently finer-grained than "once per
+completed brush" -- `DX.dx`'s "5 calls for 5 brushes" (round 9) is consistent with a per-brush cadence
+only because `DX.dx` has zero cross-brush splits; this round's UNATCO crash is direct evidence the
+real cadence is finer. Finding the actual trigger unit needs a live gdb capture correlating each
+`bspRefresh` call against finer intra-brush pipeline checkpoints than round 9's trace covered (it
+counted calls, not what triggered each one) -- not attempted this round, budget. Code:
+`uedcli-native/src/bspcsg.rs`. Worktree `.claude/worktrees/bspcsg-incremental-points`, left
+uncommitted per this round's instructions.
