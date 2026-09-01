@@ -32,13 +32,6 @@ architecture, etc.: a user cannot open them. State the fact plainly in the user 
 confidence marker if it's an engine claim), and put the evidence pointer in the developer doc.
 Developer docs freely cite spikes and each other.
 
-## Style — docs served via `uedcli docs`
-
-Everything `uedcli docs list`/`show`/`search` serves (`uedcli/userdocs.py`: `docs/reference/`,
-`docs/usage/`, `docs/leveldesign/`) reads as plain, terse reference documentation — direct
-statements, no narrative or dramatic phrasing, no theatrics. Expand only where correctness or
-usability requires it, never for flavor. *(Owner ruling, 2026-09-01.)*
-
 ## The developer docs split by role — keep each in its lane, and current
 
 - **`dev/docs/architecture.md` + `dev/docs/unrealed/*.md`** — what IS (current implementation +

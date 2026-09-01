@@ -48,14 +48,11 @@ the BSP and whether it can seal a zone.
   semisolid does not cut the world BSP (it splits only itself). 📖
 - Semisolid keeps node count low. Because it cuts only itself, use it to localise off-grid, curved,
   or fine detail so it doesn't emit world-splitting planes; collision is unaffected.
-- A semisolid may touch another semisolid — that's fine, and it does not affect solid geometry. Two
-  semisolids *overlapping* is untested; probably best avoided. *(Owner ruling, 2026-09-01, superseding
-  this bullet's earlier 📖-tagged claim that touching semisolids "reliably wrecks the local BSP" — that
-  claim, and the `brush intersect`-weld fix it prescribed, no longer apply to the semisolid-semisolid
-  case.)*
-- A semisolid must still not touch a nonsolid or a zone portal — this reliably wrecks the local BSP
-  (invisible polys / HOM / merged zones). 📖 (Unaffected by the correction above, which concerns only
-  two semisolids touching each other.)
+- A semisolid must not touch another semisolid, a nonsolid, or a zone portal — this reliably wrecks
+  the local BSP (invisible polys / HOM / merged zones). 📖 To make two touching semisolids safe, weld
+  them into one brush with `brush intersect` (see below). 📖 This is the narrow case where intersect
+  earns its keep, distinct from the "always intersect touching brushes" myth rejected below (which is
+  about routinely intersecting solid on-grid brushes that don't need it).
 
 ```
 brush build cube --csg add --solidity semisolid --width 128 --breadth 16 --height 16 | actor add -   # a decorative beam
@@ -125,8 +122,7 @@ genuinely off-grid by design.
    z-fights (flickers) — lift it ≥1 uu, because 1 uu is wider than the 0.25 uu split band. Never leave
    two surfaces almost-but-not-quite in the same plane.
 5. Push off-grid / curved / detail geometry to semisolid. It receives cuts but emits no
-   world-splitting planes — keep it clear of nonsolids/portals (see above); touching another
-   semisolid is fine.
+   world-splitting planes — keep it clear of other semisolids/nonsolids/portals (see above).
 6. Watch node count. Every brush face is a partitioning plane; an awkward face becomes a "supercut"
    that splits many others and seeds error. Aim for a node:poly ratio around 2:1 (retail UT maps run
    ~2.5–2.6:1; an unsplit cube is 1:1); a high ratio (rule of thumb, roughly >4:1) is a warning sign,
@@ -149,9 +145,9 @@ Work through these repair moves (`materialize` again after each to check):
 - "Off-grid causes a floating-point overflow" — no; it's the tolerance bands above.
 - "High node count itself causes holes" — correlation, not cause; the only hard node effect is that
   overflowing the ~65,536 static-node count blocks the save (the crash is the separate ~128,000-point limit).
-- "Always intersect/deintersect touching brushes" — unnecessary on-grid, and often adds complexity;
-  two touching semisolids need no weld either (see the solidity section above). *(Owner ruling,
-  2026-09-01, superseding this bullet's earlier "one real exception" claim.)*
+- "Always intersect/deintersect touching brushes" — unnecessary on-grid, and often adds complexity.
+  (The one real exception is two touching semisolids, which should be welded into one brush — see
+  "Solidity is stored per-face" above; a narrow safety case, not a routine habit.)
 - "Overlapping brushes cause holes" — false; only coplanar-coincident + off-grid surfaces do.
 - Antiportals and static-mesh round-trip repair are UE2+ techniques — they do not exist in UE1.
 

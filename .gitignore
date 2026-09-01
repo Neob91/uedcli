@@ -23,7 +23,3 @@ dev/games/
 # Per-machine project selection `dev/scripts/setup-game-preview.sh` writes at the repo root
 # (`game = "<name>"` + local paths). Machine-local, not shared state — never committed.
 /uedcli.toml
-
-# Scratch level trunks. Levels created in the tool tree are throwaway (durable trunks
-# live in separate project repos); the demo regenerates its own each run.
-/maps/

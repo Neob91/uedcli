@@ -18,7 +18,6 @@ from the feature recipes in the parent dir (water, doors, lifts). All are engine
 | [octagonal-column.md](octagonal-column.md)     | A faceted round pillar (and how "round" is done at all) |
 | [ring-cornice.md](ring-cornice.md)             | A ring of blocks around an axis — the fake-a-curve copy-rotate pattern |
 | [add-subtract-twin.md](add-subtract-twin.md)   | A solid piece + its matching carved recess (the seat-the-trim workflow) |
-| [mitered-corner.md](mitered-corner.md)         | Welding/mitering two abutting trim strips at a corner, instead of a touch/overlap |
 | [l-ledge.md](l-ledge.md)                       | A shelf/curb whose cross-section is an L — the simplest drawn-profile sweep |
 | [arch-voussoir.md](arch-voussoir.md)           | One wedge stone of a masonry arch — a trapezoid swept through the wall |
 | [curved-corridor.md](curved-corridor.md)       | A passage that bends — a cross-section revolved around the bend centre |
