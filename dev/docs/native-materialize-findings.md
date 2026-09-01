@@ -4635,3 +4635,72 @@ in the corpus, alongside DX.dx/NYC Bar.
 **NSFHQ04: unchanged** (nodes d=-92, surfs d=+1, leaves d=-26, all still `LENGTH MISMATCH`) — matches
 the prior round's own finding that `Brush8321` is a major but not sole driver there (removing it made
 native's count MOVE, not converge), so correctly reproducing it doesn't close the gap alone.
+
+## Area51 Entrance / Training Final breadth check: CsgOper-absent-first-brush pattern does NOT apply; Area51's entire residual localized live to one brush (`Brush1852`), mechanism not yet found (2026-09-01)
+
+Checked whether the shipped `528e602` (`CsgOper::Active`) fix retroactively closes any of Area51
+Entrance's or Training Final's residual, per the standing 3-for-3 pattern (Vandenberg Gas/
+FreeClinic08/NSFHQ04, all `CsgOper`-absent world-CSG-index-0 brushes). **Negative for both**: Area51's
+first world-CSG brush (`Brush529`) and Training Final's (`Brush55`) both carry an explicit
+`CsgOper=CSG_Subtract`; a full-corpus scan found **zero** `CsgOper`-absent `Engine.Brush` actors across
+either level's entire world-CSG brush set (1343 for Area51, 764 for Training Final). Also algebraically
+inert here regardless: `528e602`'s only behavior changes are gated on `CsgOper::Active`, which neither
+level's brush set contains at all (both are pure Add/Subtract).
+
+**Stale-`.venv`-build false alarm caught and corrected.** A first measurement (before any deliberate
+rebuild) showed Area51 catastrophically under-built (nodes native=3834 vs golden=12630) — wildly
+inconsistent with the corpus table's recorded `d=+85`. Bisected by checking out
+`uedcli-native/src`+`uedcli/native/brush_marshal.py` at `c7b8b0b`→`d07622e`→`4b7b186`→`528e602` (current
+HEAD) into the worktree and rebuilding via `bin/test -k bspcsg` at each point: all four give the
+correct `d=+85`, proving the bad reading was a stale/incorrectly-built `.venv` extension (mtime looked
+newer than source but content wasn't current) — exactly the standing-directive trap, not a real
+regression. Source restored to HEAD before continuing; **fresh re-measure confirms both levels'
+residuals are UNCHANGED from the last breadth pass**: Area51 nodes native=12715 golden=12630 `d=+85`,
+surfs exact `d=+0`, leaves native=3315 golden=3264 `d=+51`, verts `d=+1055`, points `d=+99`, vectors
+`d=-9`. Training Final nodes native=11227 golden=11122 `d=+105`, surfs exact `d=+0`, leaves native=861
+golden=848 `d=+13`, verts `d=+1464`, points `d=+286`, vectors `d=+11`. Both geometry 1/6 (surfs only).
+
+**Static per-brush node-owner attribution (final-tree) is diffuse on both — the fc08/nsfhq04
+"wrong level of attribution" trap, confirmed again.** Area51: 548/1343 brushes differ (abs-sum 2095,
+net `+85`), no dominant outlier. Training Final: 297/764 brushes differ (abs-sum 1533, net `+105`);
+notable but unconfirmed lead — 4 near-consecutive small (6-poly `CSG_Add`) brushes `Brush907`/`909`/
+`911`/`915` (world-CSG idx 660-668) carry large partially-offsetting diffs (`+71`/`+71`/`-52`/`+77`),
+reminiscent of the still-open `smuggler-4-surf-delta-traced-to-4-pf-semisolid` repeated-composite-prop
+shape — not live-verified this round.
+
+**Area51: live prefix binary search (reusing `prefix_search_lib.py` from
+`dev/docs/spikes/2026-09-01-fc08-nsfhq04-csgactive/harness/`, same method that found FreeClinic08's
+`Brush586`/NSFHQ04's `Brush8321`) localizes the ENTIRE residual to ONE brush.** Full prefix (n=1343)
+reproduces `d_nodes=+85 d_surfs=+0 d_leaves=+51` exactly (harness validated against `parity_report.py`).
+Binary search: n=1 exact; n=672 already diverges (`d_nodes=+169 d_leaves=+54` — non-monotonic, more
+than the final delta, so later brushes partially cancel it); converges to **n=506 (`Brush1851`) exact,
+n=507 (adding `Brush1852`) diverges** (`d_nodes=+48 d_surfs=+0 d_leaves=-18` at that prefix size).
+
+**Decisive test: removing `Brush1852` from the FULL 1343-brush level closes the residual to ZERO on
+all three counts**, both sides freshly rebuilt (native in-process, editor via `build_ued_golden.py
+--world-only --no-light --no-obj-load`): native (no `Brush1852`) nodes=12580 surfs=6057 leaves=3264;
+editor (no `Brush1852`) nodes=12580 surfs=6057 leaves=3264 — **`d_nodes=+0 d_surfs=+0 d_leaves=+0`**.
+Same shape as FreeClinic08's `Brush586`: one brush fully explains a level's entire structural residual.
+
+**The isolated addition's own numbers show WHERE it goes wrong.** Adding `Brush1852` to the 1342-brush
+base: native gains **+135 nodes, +51 leaves**; the real editor gains **+50 nodes, +0 leaves** — the
+editor absorbs this brush's CSG_Add with no new leaf region at all, native creates 51 new ones.
+`Brush1852` (`CsgOper=CSG_Add`, 6 polys, `Rotation=(Yaw=-49152)`, no mirror scale) is one of 4
+placements of the same-shape prop (`Brush1849`/`1850`/`1851`/`1852`, all identical 6-poly geometry and
+rotation) — the first 3 (different `Location`s, all exact through n=506) build byte-identical, the 4th
+alone diverges, so the divergence is NOT the brush's own geometry (proven identical to 3 exact copies)
+but something about how it CSGs against the world tree accumulated by that point (its `Location`
+differs from the other 3, suggesting the trigger is positional/context-dependent, not the brush shape).
+
+**No fix shipped — mechanism not disassembly-confirmed, per the no-guessing rule.** The shape (a small
+`CSG_Add` producing extra native leaves while the editor absorbs it with none) is suggestive of an
+Add-brush-largely-inside-solid over-fragmentation class, but no live capture ties it to a specific
+`bspcsg.rs` code path this round. Training Final not live-localized (static lead only, see above,
+followup). Non-regression: no code changed this round, no gate re-run needed. Board:
+`area51-entrance-training-final-residual-localized` (new item this round).
+
+Harness (this worktree, not yet committed to a spike dir — coordinating session should commit under
+`dev/docs/spikes/` if kept): `_scratch/area51_attrib.py`/`_scratch/tf_attrib.py` (static per-brush
+node-owner attribution, `vandenberg_attrib.py`-style), `_scratch/area51_prefix_search.py` (prefix
+binary search, wraps `prefix_search_lib.PrefixSearch` with this worktree's paths),
+`_scratch/area51_remove1852.py` (the decisive removal test).
