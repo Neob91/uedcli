@@ -4116,3 +4116,86 @@ live-verification step; the full-level attribution is a straightforward reuse of
 `fc08_surf_diff.py`'s already-committed pattern against OceanLab's own cached trunk/golden
 (`/tmp/uedcli-parity-cache/4e3757c3f3b2144f3750084db83cdbbc8bd4412047aadffa17c0494f4fa51a39/`,
 worktree-local trunk copy at `_scratch/uedcli-parity-cache/<same hash>/trunk/`).
+
+## NYC 747 -5 surf residual — root-caused and FIXED: `bsp_validate_brush_links`'s texture-identity check was never wired up, an unconditional no-op (2026-09-01)
+
+Follow-up to the OceanLab Lab fix above, whose write-up flagged NYC 747's post-fix residual (surfs
+native=2021 golden=2026 d=-5, sign FLIPPED from the pre-fix +12) as "plausibly the same mechanism,
+not independently re-investigated." Directly checked: **NOT the same mechanism.**
+
+**Per-brush surf attribution** (`fc08_surf_diff.py`'s method, new script
+`dev/docs/spikes/2026-09-01-oceanlab-overbuild/harness/nyc747_surf_diff.py`) found **exactly one**
+brush differs: `Brush473` (idx 300 of 373 world-CSG brushes), native=117 surfs vs golden=122 (d=-5) —
+the level's entire net residual, zero cancellation. `Brush473` is a 291-poly `CSG_Add PolyFlags=32`
+(PF_Semisolid) brush, unscaled/unrotated (`MainScale`/`PostScale` both identity) — the OceanLab
+noisy-`verts[0]` mechanism (a construction-noise coplanarity miss) does not apply, and the sign is
+opposite (native here UNDER-counts surfs; OceanLab's affected brushes OVER-counted).
+
+**Root cause: `bsp_validate_brush_links`'s "same Texture" gate was an unconditional no-op for every
+freshly-ingested brush in the whole corpus — `FPoly.texture` was never populated from the T3D
+`Texture=` at brush-marshal time.** A new env-gated diagnostic (`UEDCLI_BSPCSG_LINK_DUMP=<actor_index
+>|ALL`, added to `bspcsg.rs`'s `brush_loop1`, dumps each poly's resolved link root + base/normal/
+texture/axes) showed **all 291 of Brush473's polys carry `texture=0`** — the `FPoly::new` default —
+so `polys[i].texture != polys[j].texture` (the gate's 3rd criterion) trivially passes (0==0) for
+every pair, on every brush, always. Grepping every assignment to `FPoly.texture` in the crate found
+exactly one (`bspcsg.rs:1047`, `p.texture = s.texture_ref`, inside the REPARTITION reconstruction
+path that rebuilds FPolys from already-resolved `BspSurf`s) — the per-poly texture NAME from the T3D
+was dropped entirely in `brush_marshal.py`'s `_build_brush_input`/`lib.rs`'s `brush_from_tuple`
+marshal path, which never carried a texture-identity field at all (the pre-existing 12-field PyO3
+tuple-arity workaround bundled `tex_v_flat`/`origins_flat`/`vec_xform_flat`/`pans_flat` in a nested
+tuple, but texture identity was never added).
+
+Cross-checked against the real, live-editor-built full-level golden (per-poly `i_brush_poly` on each
+of Brush473's 122 golden `BspSurf`s — all 122 distinct, i.e. every surviving golden surf maps to a
+UNIQUE original poly index): comparing that set against native's pre-fix 118 `bsp_validate_brush_
+links` groups found 5 polys (`21`, `38`, `39`, `173`, `289`) that golden keeps as separate surfs but
+native merged into 5 OTHER polys' groups (`20`, `35`×2, `140`, `288`). Every one of those 5 wrong
+merges pairs polys with matching plane/normal/TextureU/TextureV/PolyFlags but a DIFFERENT authored
+T3D `Texture=` (e.g. poly21 `Texture=CoreTexMetal.GripMetlFloor_A` merging into poly20's `Texture=
+Airfield.AF_IronWOriv_A` — two real, different textures on axis-aligned wall panels that happen to
+share the same infinite plane, normal and UV-axis convention). With the gate blind to texture
+identity, every such coincidence merges; the fix restores exactly the discrimination the
+already-decoded algorithm calls for. (An earlier pure-Python reimplementation of the link algorithm,
+run first, gave 123 groups where native's real Rust build gave 118 — confirming a hand-rolled
+`FPoly::calc_normal`/link-loop reimplementation is not trustworthy evidence here; the env-gated Rust
+dump, not a Python simulation, is what pinned the real mechanism.)
+
+**Fix**: added a 5th field (`textures_flat: Vec<i32>`) to the nested marshal-tuple bundle —
+`brush_marshal.py`'s `_build_brush_input` computes a per-call dedup id per poly's `Texture=` (a
+`None` texture gets its own id too, so two untextured faces still compare equal, matching a real
+`Material == Material` NULL-pointer compare); `lib.rs`'s `brush_from_tuple` threads it into
+`FPoly.texture` per poly (absent/empty -> keeps the pre-fix default 0, so an unpopulated caller sees
+no behavior change). `bsp_validate_brush_links` itself is untouched — its texture-equality check was
+already correct, just fed a constant. New regression test (`brush_from_tuple_threads_per_poly_
+texture_identity`, `lib.rs`) pins the round-trip and the empty-list fallback.
+
+**Result — NYC 747 surfs now byte-exact.** Before (post-`Base`-fix, pre-this-fix): surfs
+native=2021 golden=2026 (d=-5), Brush473 alone native=117 golden=122. After: **surfs native=2026
+golden=2026 (d=+0), 0 differing brushes.** Nodes/leaves/verts/points/vectors unchanged (nodes d=+68,
+leaves d=-10) — a separate, still-open residual, the same `bsp_build`/`FindBestSplit`-tie-break
+repartition-order class already open on UNATCO/freeclinic08/nsfhq04/OceanLab Lab: same face set
+(surfs now exact both times), tree-shape-only divergence. Not investigated further this round.
+
+**Non-regression, all four required goldens** (`parity_report.py`, cached goldens, re-run fresh
+after this fix): `DX.dx` exact on all 6 counts (26/26/5/250/32/6, d=+0); NYC Bar (`02_NYC_Bar.dx`)
+exact on all 6 (1620/953/283/20878/2762/138, d=+0); UNATCO (`03_NYC_UNATCOHQ.dx`) nodes/surfs/leaves
+exact (6314/3616/762, d=+0), verts+5/points+16/vectors+0 (matching the pre-existing `unatco-verts-
+points-residual-after-the-zone` figures exactly, unchanged); OceanLab Lab (`14_OceanLab_Lab.dx`)
+surfs exact (11278/11278, d=+0, unchanged from its own already-shipped fix), nodes+465/leaves+86/
+verts+3980/points+1003/vectors-66 (matching that item's own documented still-open residual exactly,
+unchanged). `cargo test`: 101/101 (100 pre-existing + 1 new). Scoped pytest (`test_native_scale`,
+`test_preview_native`, `test_native_surf_pan`, `test_brush_merge`, `test_preview_faces`): 164/164.
+
+Harness: new script `dev/docs/spikes/2026-09-01-oceanlab-overbuild/harness/nyc747_surf_diff.py`
+(per-brush surf attribution for `03_NYC_747.dx`, `fc08_surf_diff.py`'s pattern reused). The env-gated
+Rust diagnostic (`UEDCLI_BSPCSG_LINK_DUMP`, `bspcsg.rs`'s `brush_loop1`) is committed as a permanent
+diagnostic (matches the existing `UEDCLI_BSPCSG_PREMERGE_DUMP`/`UEDCLI_BSPCSG_SOUP_ORDER` pattern,
+zero effect on the default path). The golden `i_brush_poly` cross-check and the pure-Python link
+simulator were one-shot ad-hoc analysis, not promoted beyond this write-up.
+
+## Left uncommitted
+
+This item's code changes (`uedcli-native/src/bspcsg.rs`, `uedcli-native/src/lib.rs`,
+`uedcli/native/brush_marshal.py`) are uncommitted in the worktree `nyc747-parity-residual` per this
+round's task instructions — the coordinating session verifies (full non-regression incl. re-running
+`parity_report.py` on DX.dx/NYC Bar/UNATCO/OceanLab Lab) and commits.

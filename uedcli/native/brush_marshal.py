@@ -178,6 +178,18 @@ def _build_brush_input(name, actor):
     # 16-bit on-disk slot here, as `unbuilt.py` does for the brush's own `Polys`: unmasked, a pan
     # past 2**31 reaches the CSG core as an out-of-range int and surfaces as an `OverflowError`.
     pans_flat: list[int] = []
+    # PER-POLY authored texture IDENTITY (the T3D `Texture=` on each Polygon), as a per-call dedup
+    # small int (a `None` texture gets its own id too, so two untextured faces still compare equal —
+    # `bspValidateBrush`'s real `Material == Material` gate is a pointer/reference compare, and
+    # `None == None` is trivially true in C++ too). Feeds `bsp_validate_brush_links`'s "same Texture"
+    # gate (`bspcsg.rs`): WITHOUT this, every freshly-ingested poly's Rust `FPoly.texture` stays at
+    # the `FPoly::new` default (0) for every poly of every brush, so that gate was an unconditional
+    # no-op at ingestion — found live on `03_NYC_747.dx`'s `Brush473` (291 polys, no case in the
+    # corpus before it happened to have two coplanar/same-facing/same-axis polys with GENUINELY
+    # different textures, so the gap never surfaced). Not a package-wide texture id (irrelevant here
+    # — only EQUALITY among this brush's own polys matters, never compared across brushes/calls).
+    textures_flat: list[int] = []
+    _tex_ids: dict[str | None, int] = {}
     have_all_origins = True
     have_all_normals = True
     def _axis(a):
@@ -210,6 +222,8 @@ def _build_brush_input(name, actor):
         tex_v_flat += _axis(getattr(poly, "texture_v", None))
         pan = getattr(poly, "pan", None) or (0, 0)
         pans_flat += [int(pan[0]) & 0xFFFF, int(pan[1]) & 0xFFFF]
+        tex_name = getattr(poly, "texture", None)
+        textures_flat.append(_tex_ids.setdefault(tex_name, len(_tex_ids)))
     if scaled or not have_all_normals:
         normals_flat = []                                # scaled: authored normal is pre-scale ->
         #                                                  Rust CalcNormal from the transformed winding
@@ -219,9 +233,10 @@ def _build_brush_input(name, actor):
     # A SCALED brush KEEPS its authored per-poly Origin (transformed by `L` in `FPoly::transform`,
     # exactly as the editor's `FPoly::Transform` maps `Base`): the surf `pBase` the editor stores is the
     # transformed authored Origin, not a ring corner (§92 §45).
-    # `tex_v_flat`, `origins_flat`, `vec_xform_flat` and `pans_flat` ride bundled in one tuple (PyO3
-    # tuple FromPyObject caps at 12).  `vec_xform_flat` is the 9-float covariant face-normal map for a
-    # scaled (non-mirror) brush, or empty (unscaled/mirror -> Rust keeps the winding-normal path).
+    # `tex_v_flat`, `origins_flat`, `vec_xform_flat`, `pans_flat` and `textures_flat` ride bundled in
+    # one tuple (PyO3 tuple FromPyObject caps at 12).  `vec_xform_flat` is the 9-float covariant
+    # face-normal map for a scaled (non-mirror) brush, or empty (unscaled/mirror -> Rust keeps the
+    # winding-normal path).
     return (verts_flat, poly_sizes, normals_flat, oper, poly_flags,
             list(loc), R, list(prepivot), list(scale), poly_flags_flat,
-            tex_u_flat, (tex_v_flat, origins_flat, vec_xform_flat, pans_flat))
+            tex_u_flat, (tex_v_flat, origins_flat, vec_xform_flat, pans_flat, textures_flat))

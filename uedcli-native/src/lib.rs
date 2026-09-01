@@ -84,6 +84,12 @@ impl Built {
 /// It rides bundled with `tex_v_flat` in a nested tuple because PyO3's `FromPyObject` for tuples
 /// tops out at 12 fields; the bundle keeps the marshalled arity at 12.
 /// `oper`: 1=Add, 2=Subtract, 3=Intersect, 4=Deintersect.
+/// The bundle's 5th element, `textures_flat`, is a PER-POLY authored-texture IDENTITY: a per-call
+/// dedup small int (`brush_marshal.py`'s `_tex_ids`, a `None` texture gets its own id), used ONLY
+/// for `bsp_validate_brush_links`'s "same Texture" equality gate — NOT a real package texture ref
+/// (that's resolved separately at export time). Empty list -> every poly's `FPoly.texture` keeps the
+/// `FPoly::new` default (0), which makes the gate an unconditional no-op (every poly "equal") — the
+/// pre-fix behavior, kept as the fallback shape for any caller that doesn't populate it.
 type BrushTuple = (
     Vec<f32>,
     Vec<usize>,
@@ -96,7 +102,7 @@ type BrushTuple = (
     [f32; 3],
     Vec<u32>,
     Vec<f32>,
-    (Vec<f32>, Vec<f32>, Vec<f32>, Vec<i32>),
+    (Vec<f32>, Vec<f32>, Vec<f32>, Vec<i32>, Vec<i32>),
 );
 
 fn oper_from_i32(o: i32) -> Result<csg::CsgOper, model::BuildError> {
@@ -124,7 +130,7 @@ fn brush_from_tuple(t: &BrushTuple) -> Result<build::BrushInput, model::BuildErr
         scale,
         poly_flags_flat,
         tex_u_flat,
-        (tex_v_flat, origins_flat, vec_xform_flat, pans_flat),
+        (tex_v_flat, origins_flat, vec_xform_flat, pans_flat, textures_flat),
     ) = t;
     // `vec_xform_flat` = 9 floats (row-major `(L⁻¹)ᵀ`, ABrush::BuildCoords VectorXform) for a SCALED
     // brush, else empty.  When present, `bsp_brush_csg` recomputes each face normal covariantly
@@ -192,6 +198,13 @@ fn brush_from_tuple(t: &BrushTuple) -> Result<build::BrushInput, model::BuildErr
         // per-poly authored texture pan (T3D Pan U/V) -> the surf's PanU/PanV.
         if pans_flat.len() >= (pi + 1) * 2 {
             p.pan = [pans_flat[pi * 2], pans_flat[pi * 2 + 1]];
+        }
+        // per-poly authored texture IDENTITY (a per-call dedup id, `brush_marshal.py`'s
+        // `_tex_ids`) -> `bsp_validate_brush_links`'s "same Texture" equality gate.  Absent
+        // (empty list) -> keep the `FPoly::new` default (0), so the gate stays a no-op exactly as
+        // before this field existed (no behavior change for a caller that doesn't populate it).
+        if textures_flat.len() >= pi + 1 {
+            p.texture = textures_flat[pi];
         }
         polys.push(p);
     }
@@ -420,6 +433,67 @@ fn render_frame(
     };
     let img = py.allow_threads(|| render::render(&rpolys, &rtex, &cam, width, height));
     Ok(PyBytes::new_bound(py, &img).unbind())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// NYC 747 finding (2026-09-01, `native-materialize-findings.md` "NYC 747 -5 surf residual"):
+    /// before this fix, `brush_from_tuple` never populated `FPoly.texture` from the marshalled
+    /// tuple at all (no field carried it), so every freshly-ingested poly kept the `FPoly::new`
+    /// default (0) — making `bsp_validate_brush_links`'s "same Texture" equality gate an
+    /// unconditional no-op (every poly "equal") for every brush ever ingested. This pins the
+    /// marshal fix: the bundle's 5th element (`textures_flat`) must round-trip into `FPoly.texture`
+    /// per poly, and an empty list must fall back to the pre-fix default (0) unchanged.
+    #[test]
+    fn brush_from_tuple_threads_per_poly_texture_identity() {
+        let quad = |z: f32| {
+            vec![
+                0.0, 0.0, z, 8.0, 0.0, z, 8.0, 8.0, z, 0.0, 8.0, z,
+            ]
+        };
+        let mut verts_flat = quad(0.0);
+        verts_flat.extend(quad(0.0));
+        let t: BrushTuple = (
+            verts_flat,
+            vec![4, 4],
+            vec![],
+            1,
+            0,
+            [0.0, 0.0, 0.0],
+            [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
+            [0.0, 0.0, 0.0],
+            [1.0, 1.0, 1.0],
+            vec![],
+            vec![],
+            (vec![], vec![], vec![], vec![], vec![7, 9]),
+        );
+        let brush = brush_from_tuple(&t).expect("valid brush tuple");
+        assert_eq!(brush.polys[0].texture, 7, "poly 0's textures_flat id must reach FPoly.texture");
+        assert_eq!(brush.polys[1].texture, 9, "poly 1's textures_flat id must reach FPoly.texture");
+
+        // Empty textures_flat (a caller that hasn't been updated) -> the pre-fix default (0), so
+        // `bsp_validate_brush_links`'s texture gate stays a no-op exactly as before this field
+        // existed — no behavior change for an unpopulated caller.
+        let t_empty: BrushTuple = (
+            t.0.clone(),
+            t.1.clone(),
+            vec![],
+            1,
+            0,
+            [0.0, 0.0, 0.0],
+            [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
+            [0.0, 0.0, 0.0],
+            [1.0, 1.0, 1.0],
+            vec![],
+            vec![],
+            (vec![], vec![], vec![], vec![], vec![]),
+        );
+        let brush_empty = brush_from_tuple(&t_empty).expect("valid brush tuple");
+        assert_eq!(brush_empty.polys[0].texture, 0);
+        assert_eq!(brush_empty.polys[1].texture, 0);
+    }
 }
 
 #[pymodule]

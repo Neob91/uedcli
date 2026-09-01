@@ -2415,6 +2415,35 @@ fn brush_loop1(brush: &build::BrushInput, actor_index: i32, poly_flags: u32) -> 
     // chases through `temp[i_link]`, mis-sharing a surf or panicking out of bounds (cold-review
     // finding, 2026-07-19).
     let links = bsp_validate_brush_links(&brush.polys);
+
+    // LINK-GROUP DUMP (UEDCLI_BSPCSG_LINK_DUMP=<actor_index>|ALL) — env-gated, read-only diagnostic,
+    // zero effect on the default path. Prints the per-brush `bsp_validate_brush_links` group count and,
+    // for each poly, its resolved root link index + base/normal, so a surf-count residual can be
+    // attributed to a specific merge/non-merge pair without re-deriving the algorithm in Python (a
+    // pure-Python reimplementation risks not matching `FPoly::calc_normal`'s exact behavior on a large
+    // many-vertex poly set — this dumps the REAL Rust-computed groups instead).
+    if let Ok(want) = std::env::var("UEDCLI_BSPCSG_LINK_DUMP") {
+        let matches = want == "ALL" || want.parse::<i32>().ok() == Some(actor_index);
+        if matches {
+            let groups: std::collections::BTreeSet<i32> = links.iter().copied().collect();
+            eprintln!("LINK_DUMP actor={} n_polys={} n_groups={}", actor_index, brush.polys.len(), groups.len());
+            for (i, p) in brush.polys.iter().enumerate() {
+                eprintln!(
+                    "  poly[{i:3}] link={:3} base=({:.6},{:.6},{:.6}) v0=({:.6},{:.6},{:.6}) tex={:?} tu={:?} tv={:?} flags={}",
+                    links[i], p.base.x, p.base.y, p.base.z,
+                    p.verts.first().map(|v| v.x).unwrap_or(0.0),
+                    p.verts.first().map(|v| v.y).unwrap_or(0.0),
+                    p.verts.first().map(|v| v.z).unwrap_or(0.0),
+                    p.texture, p.texture_u, p.texture_v, p.poly_flags,
+                );
+                let mut w = p.clone();
+                w.normal = Vec3::new(0.0, 0.0, 0.0);
+                let fin = if w.calc_normal() { w.normal } else { p.normal };
+                eprintln!("           finalized_normal=({:.6},{:.6},{:.6})", fin.x, fin.y, fin.z);
+            }
+        }
+    }
+
     let mut brush_to_temp = vec![-1i32; brush.polys.len()];
 
     // LOOP 1: transform brush polys into a temp poly list.
