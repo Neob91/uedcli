@@ -133,6 +133,14 @@ def test_resolve_polys_rejects_a_non_numeric_index():
         resolve_polys("x", actor, brush_name="B1")
 
 
+def test_resolve_polys_rejects_a_doubly_signed_index():
+    # `--3` used to slip past the guard (`.lstrip("-")` strips every leading `-`) and reach
+    # `int()` raw, escaping as a bare ValueError naming neither the brush nor the verb.
+    actor = _brush_actor("B1", [_quad()])
+    with pytest.raises(ValueError, match=r"'B1': bad poly index '--3'"):
+        resolve_polys("--3", actor, brush_name="B1")
+
+
 def test_resolve_polys_all_on_a_brush_with_no_polys_is_an_error():
     actor = _brush_actor("B1", [])
     with pytest.raises(ValueError, match="'B1' has no polys to select"):

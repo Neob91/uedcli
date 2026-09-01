@@ -228,6 +228,7 @@ def clip(args) -> int:
     # cannot leave a half-written result or a stale "unchanged" note on a run that exits 2.
     discarded: list[str] = []
     whole: list[str] = []
+    clipped: list[str] = []
     for actor in actors:
         # The plane is world-space; map it into this brush's LOCAL frame (vertices are local). For a
         # rotated/scaled brush this clips the local PolyList by the pulled-back plane and preserves
@@ -242,16 +243,20 @@ def clip(args) -> int:
         if kind == "whole":
             whole.append(actor.name)
             continue
+        before = len(actor.brush.polys)
         try:
             actor.brush = clipmod.clip_brush(actor.brush, local_point, local_normal,
                                              keep_negative=keep_negative)
             validate_brush(actor.brush)
         except GeometryError as e:
             raise CommandError(f"brush clip: {actor.name}: {e}") from None
+        clipped.append(f"brush clip: clipped {actor.name}: {before}→{len(actor.brush.polys)} faces")
     if discarded:
         raise CommandError(
             f"brush clip: plane discards the whole brush for: {', '.join(discarded)} — the clip "
             f"would remove every face (nothing kept on the --keep {args.keep} side)")
+    for line in clipped:
+        print(line, file=sys.stderr)
     for name in whole:
         print(f"brush clip: plane did not intersect brush {name} — emitted unchanged",
               file=sys.stderr)

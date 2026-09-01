@@ -12,9 +12,12 @@ Two layers:
 from __future__ import annotations
 
 import uuid
+from unittest import mock
 
 import pytest
 
+from uedcli import config
+from uedcli.editor import EditorNotReadyError
 from uedcli.native import csg_golden as g
 
 FIXTURES = sorted(g.FIXTURE_DIR.glob("*.json")) if g.FIXTURE_DIR.exists() else []
@@ -57,19 +60,40 @@ def test_comparator_flags_a_count_difference():
     assert not ok and "nodes" in diff
 
 
+def test_regenerate_requires_a_project():
+    with mock.patch("uedcli.config.resolve_project", return_value=None):
+        with pytest.raises(config.ConfigError, match="not in a uedcli project"):
+            g.regenerate()
+
+
+def test_regenerate_tears_down_the_editor_even_when_it_never_becomes_ready(tmp_path):
+    # ensure_editor can raise EditorNotReadyError after partially provisioning the per-id
+    # wineprefix volume (uedcli/editor.py:ensure_editor docstring); stop_editor must still run
+    # (by editor_id, not by a container name ensure_editor never returned) so the volume isn't
+    # leaked. Regression for the bug where `ensure_editor(...)` ran before the `try:`.
+    project = config.Project(root=str(tmp_path), game="deusex")
+    with mock.patch("uedcli.config.resolve_project", return_value=project), \
+         mock.patch("uedcli.editor.ensure_editor", side_effect=EditorNotReadyError("x")), \
+         mock.patch("uedcli.editor.stop_editor") as stop:
+        with pytest.raises(EditorNotReadyError):
+            g.regenerate(editor_id="fixed-id")
+    stop.assert_called_once_with("fixed-id", config.state_dir(str(tmp_path)))
+
+
 # --- integration -------------------------------------------------------------
 
 @pytest.fixture(scope="module")
-def ephemeral_driver():
+def ephemeral_driver(tmp_path_factory):
     from uedcli.driver import Driver
     from uedcli import editor as editor_mod
 
     editor_id = str(uuid.uuid4())
-    container = editor_mod.ensure_editor(editor_id)
+    state_dir = tmp_path_factory.mktemp("ephemeral_driver_state")
+    container = editor_mod.ensure_editor(editor_id, state_dir=state_dir)
     try:
         yield Driver(container=container)
     finally:
-        editor_mod.stop_editor(editor_id)
+        editor_mod.stop_editor(editor_id, state_dir)
 
 
 @pytest.mark.integration

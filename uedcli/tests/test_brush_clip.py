@@ -54,7 +54,7 @@ def test_it_clips_a_cube_into_a_seven_face_chamfer_in_one_pipe(monkeypatch, caps
                    plane=[(Decimal(96), Decimal(0), Decimal(0)),
                           (Decimal(1), Decimal(0), Decimal(1))])
     assert rc == 0
-    assert cap.err == ""
+    assert cap.err == "brush clip: clipped Cube: 6→7 faces\n"
     level = parse_t3d(cap.out)
     assert list(level.actors) == ["Cube"]
     polys = level.actors["Cube"].brush.polys
@@ -153,6 +153,7 @@ def test_it_passes_a_missed_brush_through_unchanged_with_a_note(monkeypatch, cap
                    axis="z", offset=Decimal(100000), keep="below")
     assert rc == 0
     assert "did not intersect brush Cube" in cap.err
+    assert "clipped" not in cap.err                         # unchanged brush gets no clip confirmation
     got = parse_t3d(cap.out).actors["Cube"].brush
     assert [p.vertices for p in got.polys] == [p.vertices for p in src.brush.polys]  # untouched
 
@@ -174,6 +175,21 @@ def test_it_collects_every_discarded_brush_before_failing(monkeypatch, capsys):
     assert rc == 2
     assert cap.out == ""
     assert "CubeA" in cap.err and "CubeB" in cap.err
+
+
+def test_it_prints_no_stale_clip_confirmation_when_a_later_brush_is_discarded(monkeypatch, capsys):
+    # All-or-nothing (line 227's invariant) applies to the new "clipped" confirmation too: if
+    # CubeA (straddles the plane) clips successfully but CubeB (wholly on the discarded side)
+    # fails the whole run, CubeA's confirmation must not leak to stderr on a run that emits
+    # nothing to stdout.
+    a = _cube("CubeA")                                      # straddles x=0
+    b = _cube("CubeB", at=(1000, 0, 0))                     # wholly x>0 (discarded, keep=below)
+    rc, cap = _run(_t3d(a, b), monkeypatch, capsys,
+                   axis="x", offset=Decimal(0), keep="below")
+    assert rc == 2
+    assert cap.out == ""
+    assert "clipped" not in cap.err
+    assert "discards the whole brush" in cap.err and "CubeB" in cap.err
 
 
 def test_it_names_the_actor_on_a_degenerate_clip_result(monkeypatch, capsys):

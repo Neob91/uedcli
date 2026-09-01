@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import copy
 import json
+import os
 import subprocess
 import uuid
 from collections import defaultdict
@@ -355,14 +356,21 @@ def regenerate(editor_id: str | None = None, *, cases: list[str] | None = None,
     `dx-lum-uned` container — mints its own uuid7 editor and tears it down in `finally`.
     """
     from ..driver import Driver
-    from .. import editor as editor_mod
+    from .. import config, editor as editor_mod
+
+    project = config.resolve_project(cwd=os.getcwd())
+    if project is None:
+        raise config.ConfigError(
+            "not in a uedcli project (no uedcli.toml found here or above) — "
+            "native.csg_golden.regenerate needs a project's state_dir")
+    state_dir = config.state_dir(project.root, create=True)
 
     editor_id = editor_id or str(uuid.uuid4())
     names = cases or list(CORPUS)
     results: dict[str, dict] = {}
 
-    container = editor_mod.ensure_editor(editor_id)
     try:
+        container = editor_mod.ensure_editor(editor_id, state_dir=state_dir)
         driver = Driver(container=container)
         for name in names:
             actors = CORPUS[name]()
@@ -399,7 +407,7 @@ def regenerate(editor_id: str | None = None, *, cases: list[str] | None = None,
                 print(f"[{name}] surfs={c['surfs']} nodes={c['nodes']} leaves={c['leaves']} "
                       f"verts={c['verts']} zones={c['zones']} stable={stable}", flush=True)
     finally:
-        editor_mod.stop_editor(editor_id)
+        editor_mod.stop_editor(editor_id, state_dir)
     return results
 
 

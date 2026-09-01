@@ -23,6 +23,7 @@ dev/docs/rationale/surface.md (the split, the centroid re-anchor, the out-of-pla
 from __future__ import annotations
 
 import math
+import re
 from decimal import Decimal
 
 from . import rotation, vertex
@@ -80,7 +81,7 @@ def resolve_polys(selector: str, actor: Actor, *, brush_name: str) -> set[int]:
     indices: set[int] = set()
     for part in selector.split(","):
         part = part.strip()
-        if not part.lstrip("-").isdigit():
+        if not re.fullmatch(r"-?\d+", part):
             raise ValueError(f"{brush_name!r}: bad poly index {part!r} (expected an integer)")
         idx = int(part)
         if not (0 <= idx < n):
