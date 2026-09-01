@@ -705,3 +705,41 @@ full-height/width overlap) before the fragment-insertion-order question can be c
 code touched. Worktree `.claude/worktrees/bspcsg-split-fragment-trace`, left uncommitted; the
 synthetic trunk/golden/gdb log are throwaway (not committed -- the T3D recipe in the findings-ledger
 entry is enough to regenerate).
+
+## Round 12 (2026-09-01): a corner-bite variant DEFEATS the merge -- persisting-fragment rule found, confirmed as an unforced extension of round 11's; no fix shipped
+
+Full detail: `native-materialize-findings.md`, "Round 12: a corner-bite variant DEFEATS the coplanar
+merge". Mandate: round 11 flagged two variants to defeat the merge (a T-junction, or a third brush
+interrupting one side of the cut only) -- this round built the second.
+
+`Room` (subtract) + `PillarB`/`PillarC` (add, 512-cubes, 256uu X overlap -- IDENTICAL to round 11's
+own geometry, kept as an in-build control) + `PillarD` (add, a 64×128×128 corner-bite box well clear
+of both the split boundary and `PillarB`, notching only the OUTER half of PillarC's +Y/+Z faces).
+Verified BEFORE any live trace, by direct model inspection of the built golden (no gdb needed): the
++Y/+Z faces resolve to 3 disjoint final BSP nodes sharing one surf -- a real persisting split -- while
+the untouched -Y/-Z faces resolve to exactly 1 node each, reproducing round 11's "re-merged into one
+whole polygon" finding exactly as a control (with one addendum: the remerged ring keeps 6 vertices,
+not 4 -- the two historical split points survive as extra collinear vertices rather than a clean
+re-derivation).
+
+Live gdb capture (607 calls, `bspaddpoint_call_trace.py` reused unmodified) decoded: PillarC's own
+split-vs-PillarB reproduces round 11's transient rule exactly (forward-winding rings, only the first
+ring's start gets `alloc_surf`) -- then LOOP2 remerges it BEFORE `PillarD` is even processed (new
+fact: the merge pass runs PER-BRUSH, not once at the very end). `PillarD`'s later notch cut never
+allocates a fresh surf at all -- it reuses the already-allocated surf/`p_base` via ordinary dedup
+`Vertex` calls, and every final node's ring (persisting or not) walks forward, never reversed.
+**Persistence does not change the insertion rule** -- a persisting fragment set gets exactly the same
+treatment as a transient one; one `alloc_surf` per canonical surf ever, reused by every later split
+regardless of which brush causes it. Base-block relative order is untouched (round 9's rule holds
+unchanged for a surf whose ring later splits and persists), but a literal absolute-index
+last-hit reconstruction still fails broadly (1/60 points match raw) -- confirming round 10's
+"a single end-of-build resort can't replay this" finding generalizes to the persisting-split case too.
+
+No fix attempted -- the rule is now fully characterized for both transient and persisting splits, but
+the real fix (an incremental point-pool model replaying insertion + the periodic drop/readd
+choreography in build order, now also needing to replay PER-BRUSH merge-then-resplit cycles) is the
+same architecture change rounds 9/10 already scoped, still unbuilt, and too large to prototype blind
+this round. `uedcli-native/src/*` untouched. New harness committed:
+`dev/docs/spikes/2026-09-01-dx-pbase-points-trace/harness/build_tjunction_trunk.py` +
+`dev/docs/spikes/2026-09-01-dx-pbase-points-trace/logs/bspaddpoint-call-trace.log`. Worktree
+`.claude/worktrees/pbase-round12-tjunction`, left uncommitted.

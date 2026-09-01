@@ -3655,3 +3655,105 @@ touched — `uedcli-native/src/*` untouched this round). Harness reused unmodifi
 are throwaway, left in the round's own worktree (`.claude/worktrees/bspcsg-split-fragment-trace`,
 `_scratch/split-trace/`), not committed, not needed by a future round (the T3D recipe above is enough
 to regenerate).
+
+## Round 12 (2026-09-01): a corner-bite variant DEFEATS the coplanar merge -- live-captured a genuine PERSISTING split; the fragment-insertion rule is confirmed as a natural extension of round 11's, not a different rule; no fix shipped
+
+Task: round 11 captured a real mid-CSG-split `bspAddPoint` sequence but the split was fully
+TRANSIENT (merged back before save) -- its own conclusion named two variants to try to defeat the
+merge: differing Y/Z extents between the two overlapping brushes (a true T-junction), or a third
+brush interrupting one side of the cut only. This round built the second variant.
+
+**Design, new committed harness (`dev/docs/spikes/2026-09-01-dx-pbase-points-trace/harness/
+build_tjunction_trunk.py`):** `Room` (`CSG_Subtract`, 2048³) + `PillarB`/`PillarC` (`CSG_Add`,
+512-cubes overlapping 256uu along X -- IDENTICAL to round 11's own geometry, kept as an in-build
+reproducibility control) + `PillarD` (`CSG_Add`, a 64×128×128 corner-bite box at `(432,224,224)`,
+X:[400,464] -- well inside PillarC's outer split half [256,512], 144uu clear of the X=256 split
+boundary and entirely clear of `PillarB`). `PillarD` pokes past PillarC's +Y (Y=256) and +Z (Z=256)
+face planes only, carving a notch into the OUTER fragment of those two faces alone; -Y/-Z are
+untouched.
+
+**Verified BEFORE any live trace that the split genuinely persists (direct model inspection of the
+built golden, no gdb needed for this check).** `dev/docs/spikes/2026-09-01-dx-pbase-points-trace/
+harness` companion inspection (throwaway `_scratch/tjunction/inspect_golden.py`, not committed --
+trivial to regenerate from `parity_compare.parse_dx_model` + the pkg export table) parses the built
+`.dx` and groups `model.nodes` by shared `i_surf`. Result: surf 12 (`i_actor=PillarC`,
+`i_brush_poly=2`, the +Y face) and surf 14 (`i_brush_poly=4`, +Z) each resolve to **3 separate final
+BSP nodes** sharing one surf index -- a genuinely disjoint, non-reunited set of fragments (X ranges
+`[464,512]` / `[0,400]` / `[400,464]`, the last cut short in Z where PillarD's notch removed
+material). The CONTROL faces, untouched by PillarD -- surf 13 (-Y, `i_brush_poly=3`) and surf 15
+(-Z, `i_brush_poly=5`) -- each resolve to exactly **1 final node**, reproducing round 11's "all
+straddling surfs end up as ONE whole node" finding exactly, on independent geometry. One addendum to
+round 11's characterization: the re-merged whole face is a 6-vertex ring, not the clean 4-vertex
+rectangle round 11 reported -- it retains the two historical split-boundary points as extra
+COLLINEAR vertices rather than being cleanly re-derived from scratch.
+
+**Live gdb capture (reusing `bspaddpoint_call_trace.py` unmodified, same VAs as rounds 9/11): 607
+calls, log committed at `dev/docs/spikes/2026-09-01-dx-pbase-points-trace/logs/
+bspaddpoint-call-trace.log`.** Decoded (throwaway `_scratch/tjunction/decode_trace.py` /
+`compare_final_order.py`, not committed -- trivial to regenerate):
+
+1. **PillarC's own LOOP1-vs-PillarB split (calls 121-161) reproduces round 11's transient-split rule
+   EXACTLY, on independent geometry:** two 4-vertex rings sharing the cut edge, both walked FORWARD
+   (no reversal), only the outer ring's start gets `Exact=1`/`alloc_surf`, the inner ring's start is
+   an ordinary tolerance-dedup `Vertex` call. Confirms round 11's rule is not a one-geometry fluke.
+2. **That split is re-merged by LOOP2 (calls 162-207) BEFORE `PillarD` is even processed** -- new
+   fact not in round 11 (whose synthetic case had only 2 brushes, so this couldn't be observed):
+   `bspMergeCoplanars` (or an equivalent per-brush fusion) runs PER-BRUSH, incrementally, not once
+   globally at the very end of `csgRebuild`. The remerged polygon keeps the two split points as extra
+   collinear ring vertices (the 6-vertex addendum above).
+3. **`PillarD`'s own CSG pass (calls 208-275) never emits a fresh `Exact=1`/`alloc_surf` call for
+   surf 12/14.** Grepped the full 607-call trace for every `Exact=1` marker (48 total, all ≤ call
+   275) -- the notch cut reuses the ALREADY-ALLOCATED surf (and its `p_base`, fixed back at call 172
+   when PillarC's own re-merged +Y polygon was added to the world) via ordinary dedup `Vertex` calls
+   only, splitting it into the 3 final disjoint nodes without ever re-allocating the surf. **This is
+   the answer to the round's central question: persistence does NOT change the insertion rule.** A
+   fragment set that persists gets exactly the same treatment as one that's about to be merged away --
+   one `Exact=1`/`alloc_surf` at whichever CSG step FIRST creates the polygon (which may itself be a
+   later, already-remerged whole, not the original raw split), and every subsequent split by ANY later
+   brush reuses that one surf/`p_base` via plain dedup `Vertex` calls, forever -- confirmed here across
+   TWO further splitting events (PillarB's cut, then PillarD's notch) on the one canonical surf.
+4. **Every final node's vertex ring (9/10/11 on surf 12, 17/18/19 on surf 14) walks FORWARD winding,
+   never reversed** -- the same rule holds for the actual persisting, final geometry, not just the
+   transient intermediate rings round 11 captured.
+5. **Base-block relative order is UNCHANGED from round 9's rule.** Golden's real `Points[12..15]` are
+   PillarC's 4 side-face Origins in AUTHORED polygon order (`poly2,3,4,5` = `+Y,-Y,+Z,-Z`, `cube()`'s
+   own face order) -- exactly round 9's "Origin first, per polygon, in authored CSG order" rule,
+   holding even though poly2/poly4's own ring later undergoes a persisting split. The live trace's
+   LAST-HIT `ret_idx` for these 4 points (10,11,12,13) preserves the identical relative order (a
+   uniform −2 compaction offset versus their real final index), consistent with round 9's "`bspRefresh`
+   preserves relative order, only drops-and-closes-gap" mechanism extending unchanged to a surf whose
+   ring is a persisting split.
+6. **But a literal absolute-index last-hit reconstruction still fails broadly** (only 1/60 golden
+   points match their trace `ret_idx` at the raw-index level; the rest hold a per-brush-group offset
+   that is internally uniform but differs unpredictably block to block: −8 for Room's cap points,
+   roughly −3 for PillarB's, +2 for PillarC's own side-face Origins, +8..+16 for PillarD's).
+   Confirms round 10's finding generalizes to the persisting-split case too: recovering the true final
+   index needs the exact incremental drop/readd depth per point (how many further `bspRefresh`/
+   `bspRepartition` cycles happen to touch it), which is not a function of the final model alone --
+   the SAME reason round 10's post-hoc single resort failed on `DX.dx`'s much simpler unsplit case.
+
+**Net verdict.** The corner-bite variant DOES defeat the coplanar merge (confirmed via direct
+model inspection, with a same-build reproducibility control). The persisting-fragment insertion rule
+is now found, precisely, and it's a clean, forced extension of round 11's transient rule rather than a
+new one: forward winding always, one `alloc_surf` per canonical surf ever, every later split (by the
+original interrupting brush or a completely different, later one) reuses it via plain dedup calls.
+New fact for a future incremental-model implementation: the merge pass that can erase a split
+fragment runs PER-BRUSH, not once at the end -- an incremental point-pool architecture must replay
+merge-then-resplit cycles at every brush boundary, not just track one final merge. Base-block relative
+order is untouched by any of this (round 9's rule already covers it). What's still missing is
+UNCHANGED from round 10: a real architecture replacing `reorder_points_canonical`'s single end-of-build
+resort with an incremental model that replays insertion AND the periodic per-point drop/readd
+choreography in build order -- round 10 already proved a post-hoc pass can't fake this, and this round
+confirms the same limit holds for a persisting multi-brush split, not just DX.dx's unsplit boxes.
+
+**No fix attempted, none should be** -- per the standing no-guessing rule, the rule is now fully
+characterized for both transient and persisting cases, but implementing the incremental replay is the
+same real architecture change rounds 9/10 already scoped, still unbuilt; prototyping it blind without
+budget for a full non-regression pass on UNATCO/Wanchai would repeat round 10's mistake in a much
+larger, more complex form. `uedcli-native/src/*` untouched this round. `DX.dx`/UNATCO/Wanchai `p_base`
+counts unchanged (no production code touched). New harness committed:
+`dev/docs/spikes/2026-09-01-dx-pbase-points-trace/harness/build_tjunction_trunk.py` (builds the
+T-junction/corner-bite trunk) and `dev/docs/spikes/2026-09-01-dx-pbase-points-trace/logs/
+bspaddpoint-call-trace.log` (this round's 607-call capture, kept for future comparison alongside
+round 9/11's methodology). Worktree `.claude/worktrees/pbase-round12-tjunction`, left uncommitted per
+this round's instructions.
