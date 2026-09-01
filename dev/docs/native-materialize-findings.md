@@ -3757,3 +3757,29 @@ T-junction/corner-bite trunk) and `dev/docs/spikes/2026-09-01-dx-pbase-points-tr
 bspaddpoint-call-trace.log` (this round's 607-call capture, kept for future comparison alongside
 round 9/11's methodology). Worktree `.claude/worktrees/pbase-round12-tjunction`, left uncommitted per
 this round's instructions.
+
+## Breadth table refreshed (2026-09-01): re-measured all 18 cached corpus levels post `light30` fix
+
+The 2026-08-31 breadth table (search "Breadth golden-caching pass") predates today's `light30`
+row-padding-carry fix (`1ef4fe4`). Re-ran `parity_report.py` against all 18 cached goldens (no new
+editor builds -- cache hits throughout) to get current numbers.
+
+Geometry is unchanged on every level (today's work didn't touch default geometry code paths --
+the `bspcsg.rs` experiments from rounds today are gated off by default). Lighting improved on
+every level whose geometry is close enough for records to positionally line up:
+
+| level | lighting before | lighting after |
+|---|---:|---:|
+| NYC Bar | 87.7% | 93.1% |
+| UNATCO | 83.6% | 90.9% |
+| NYC ShipFan | 69.7% | 75.0% |
+| NYC Underground (04) | 55.8% | 66.6% |
+| Wanchai Market | 75.5% | 80.0% |
+| Paris Club | 76.8% | 87.4% |
+| HK Helibase | 67.0% | 69.7% |
+| Paris Chateau | 81.8% | 87.6% |
+| Wanchai Garage / Paris Underground / Area51 Entrance / Training Final / FreeClinic08 / NYC 747 / Vandenberg Gas / OceanLab Lab / NSFHQ04 | (severe geometry break) | unchanged -- almost no record can positionally line up when node/leaf counts themselves diverge |
+
+Still **zero levels at full byte parity**; geometry-6/6 count-exact stays 2/21 (DX.dx, NYC Bar).
+Full per-level table shown to the owner as an artifact this round; not reproduced in full here to
+avoid duplicating `parity_report.py`'s own output -- rerun it directly for exact current numbers.
