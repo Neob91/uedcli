@@ -15,6 +15,13 @@ algorithm — never a rounding tweak, tolerance fudge, or alternate formula chos
 to measure better. If the real algorithm isn't confidently known, log the gap as unresolved rather
 than shipping an approximation.
 
+**Re-emphasised (owner, 2026-09-01):** every fix must be confirmed against UnrealEd's real behavior
+before shipping — the algorithm must be functionally identical, not just numerically closer. Model
+instance: the OceanLab Lab `bsp_validate_brush_links` fix (search "OceanLab Lab +27 surf
+over-build") was live-verified against a real UED22 build (an isolated context golden) before
+shipping — native's predicted surf-group count matched the live editor's exactly, not just measured
+to reduce the delta.
+
 ## Before adding or changing an entry
 
 1. Search this file for the same topic/mechanism (the RVA, function name, or subject).
