@@ -3204,9 +3204,83 @@ No source changed (`uedcli-native/src/` untouched); this was pure characterizati
 `.claude/worktrees/lighting-divergence-breakdown` (branch of the same name), left uncommitted per this
 round's instructions. Board item: `lighting-bits-only-divergence-localizes-to`.
 
-## 2026-09-01: `grid`-only bucket's Points/Vectors VALUE drift — root mechanism found (numeric proof,
-## not live gdb) and quantified: CSG_Add faces wrongly keep the AUTHORED (6-decimal-text) normal where
-## the real editor recomputes it, contradicting the existing §92 §48 "Add keeps authored" rule
+## `bits`-only bucket: real root cause found and FIXED -- not `line_clear`, a `row_padding` state-carry bug. NYC Bar shadow bits 99.76%->100.00%, UNATCO 99.27%->99.998% (2026-09-01, offline + live docker)
+
+Traced the recurring-bad-light finding above (`Light30` on 7 NYC Bar surfaces) to ground. Docker was
+back this round (confirmed via `docker run --rm hello-world`), so a live gdb trace was prepared
+(`editor_tree_oracle.start_dbg_editor`/the `linecheck_*.py` breakpoint pattern), but turned out
+unnecessary: an OFFLINE check settled it first, since `LIGHT APPLY` never rebuilds BSP so golden's own
+saved tree/bits are ground truth for a replay, and the replay alone pinned an exact mechanism -- no
+live capture needed to close this one.
+
+**Step 1 -- ruled out `line_clear` itself.** New `light30_offline_check.py` (reuses
+`line_clear_v2_algorithm_check.py`'s exact port of the shipped `linecheck.rs` v2 algorithm) replayed
+every lumel of `Light30`'s participation against golden's own real BSP tree. First pass (no radius
+gate) showed only 74% agreement -- alarming, but a repeat of round 7's own already-documented mistake
+(`--radius-aware` was defined but never wired into that script): most of the "disagreement" was
+`line_clear` being asked about lumels the real bake never queries at all (outside
+`(LightRadius+1)*25` world radius). Re-run WITH the same `d.dot(&d) < wr2` gate `light.rs::bake_surf`
+applies before ever calling `line_clear`: **4728/4728 in-range bits, 100.00% agreement.** `line_clear`
+is bit-perfect for every real query this light makes. The `9827f07` port is not implicated.
+
+**Step 2 -- confirmed the mismatch is real but lives entirely in PADDING bits.** `find_bad_light_records.py`
+(new) rebuilds native's own lit `.dx` (`parity_compare.build_native_lit_dx`) and diffs each light's own
+sub-plane against golden's, reproducing the standing finding exactly (`Light30` bad on records
+23/26/28/38/40/91/867). `light30_geom_compare.py` (new) then compared native's vs golden's own
+`p_base`/`v_normal`/`v_texture_u`/`v_texture_v` for those 7 records: 5/7 byte-identical on every input
+(ruling out the separate, already-known Points/Vectors ULP-drift mechanism for those); the other 2
+(records 38/40) DO carry real ULP-level vector drift, a second, independent, already-tracked
+mechanism (the "`grid`-only" bucket's root cause from the entry above) -- not investigated further
+here since it's the same open geometry-side question. Direct hex dump of the mismatching bytes on all
+7 shows the SAME shape every time: native's tail byte(s) hold a repeating non-zero pattern where
+golden's are `0x00` -- e.g. record 23 `native=f9f9f8` vs `golden=f9f900`, record 867 (33-row) native's
+last several bytes repeat `e0` where golden is all `00`. The REAL lumel bits (index < `USize`) match
+exactly on both sides in every case; only the bits beyond `USize` (the packer's own padding, per
+`row_padding`, `a_row_is_packed_to_its_last_whole_byte`) differ.
+
+**Step 3 -- decisive replay pinned the exact wrong state-carry.** `light.rs::bake_surf` declares `let
+mut last_clear = false;` ONCE, before the whole `for v in 0..v_size` row loop, so the value
+`row_padding` repeats into a byte's padding bits can carry forward from an earlier lumel query
+arbitrarily far back -- across an intervening run of radius-culled (real, in-range-tested-false)
+lumels, across a byte boundary, even across a ROW boundary -- as long as no ray runs in between to
+refresh it. Reimplemented `bake_surf`'s row-packing loop three ways in Python against golden's own
+stored geometry/tree (persist-for-the-whole-record = current code; reset-once-per-ROW;
+reset-once-per-output-BYTE) and replayed each against the real recorded bytes for all 7 `Light30`
+records: persist matches 0/7, reset-per-row matches 6/7 (fails record 91, whose row spans 2 bytes),
+**reset-per-BYTE matches 7/7 exactly, byte for byte.** The real editor evidently keeps no state longer
+than the one packed output byte it is currently filling.
+
+**Fix shipped:** moved `let mut last_clear = false;` from before the `v` loop to the top of the `for
+byte in 0..row_bytes` loop (`uedcli-native/src/light.rs`) -- one line moved, `row_padding` itself
+untouched. New regression test `row_padding_carry_does_not_survive_a_byte_boundary`: an EMPTY model
+(`line_clear` trivially returns CLEAR for any query -- isolates the packing bug from any occlusion
+concern) with one 12-lumel-wide (`USize=12`, 2 bytes) surf and a light positioned so byte 0 (lumels
+0-7) is fully in range and CLEAR, byte 1's real bits (8-11) are out of range, and 12-15 are true
+padding; asserts the padding stays `0x00` rather than inheriting byte 0's stale CLEAR. Verified RED
+against the pre-fix code (`0xf0`) and GREEN after. `cargo test --lib`: 96/96 (was 95/95 -- the one new
+test), `cargo test --lib light::`: 13/13.
+
+**Measured before/after** (`parity_report.py`, self-built goldens, cache-hit, no re-extraction):
+
+| level | shadow bits (before -> after) | `LightMap` records byte-identical (before -> after) |
+|---|---|---|
+| NYC Bar (`02_NYC_Bar.dx`) | 420064/421088 (99.76%) -> **421088/421088 (100.00%)** | 821/936 (87.71%) -> **871/936 (93.06%)**, +50 |
+| UNATCO (`03_NYC_UNATCOHQ.dx`) | 3729140/3756584 (99.27%) -> **3756504/3756584 (99.998%)**, 80 bits left | 2797/3345 (83.6%) -> **3042/3345 (90.94%)**, +245 |
+| `DX.dx` | 1536/1536 (100%, unchanged) | 26/26 (100%, unchanged) -- no regression |
+
+NYC Bar's shadow-bit gap is now fully closed. UNATCO has 80 wrong bits left (of 3.76M) -- not chased
+further this round; likely a residual instance of the same ULP-drift geometry mechanism noted for
+records 38/40 above, or a genuinely new tail worth a fresh offline sweep before assuming so. The
+remaining NOT-byte-identical records on both levels are dominated by the `grid`-only bucket (real
+Points/Vectors value drift, already tracked, exhausted 4+ rounds) and the small `run`-differs bucket
+(the known `GetVisibleSurfs` gap) -- neither touched this round.
+
+Work done in worktree `.claude/worktrees/lighting-light30-bits-trace` (branch of the same name), left
+uncommitted per this round's instructions. New spike:
+`dev/docs/spikes/2026-09-01-light30-bits-trace/harness/` (`light30_offline_check.py`,
+`find_bad_light_records.py`, `light30_geom_compare.py`). Board items:
+`lighting-bits-only-divergence-localizes-to`, `native-light-apply-bake-where-it-stands-and`.
+## 2026-09-01: `grid`-only bucket's Points/Vectors VALUE drift — root mechanism found (numeric proof, not live gdb) and quantified: CSG_Add faces wrongly keep the AUTHORED (6-decimal-text) normal where the real editor recomputes it, contradicting the existing §92 §48 "Add keeps authored" rule
 
 Task: live-trace the CSG split arithmetic behind the `grid`-only bucket's Points/Vectors value drift
 (`lighting-bits-only-divergence-localizes-to`, "grid-only bucket" section) — 54-393 points/47-136
