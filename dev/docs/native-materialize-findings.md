@@ -4620,3 +4620,18 @@ extractor), `fc08_n13_node_owner.py` (per-brush node-owner attribution), `fc08_n
 `freeclinic08-nsfhq04-1-surf-under-build-root` (this thread, 4th continuation) and
 `vandenberg-gas-csg-active-csgoper-brush-causes` (corrected + cross-referenced).
 is the only measurement taken against already-shipped code.
+
+## Confirmation: the shipped CsgOper::Active fix (528e602) already closes FreeClinic08's structural residual (2026-09-01)
+
+Re-measured FreeClinic08 and NSFHQ04 directly against the already-shipped fix (predicted by the
+prior round's isolated-brush-removal test, not yet checked at the time it landed).
+
+**FreeClinic08: nodes/surfs/leaves now ALL byte-count exact** (was `LENGTH MISMATCH` on all three;
+nodes d=-30, surfs d=+1, leaves d=-23 -> all d=+0). Residual verts d=+1/points d=+20 (was -729/-23)
+— a near-total closure, exactly matching the prior round's prediction that `Brush586` alone fully
+explained this level's structural residual. FreeClinic08 is now one of the geometry-closest levels
+in the corpus, alongside DX.dx/NYC Bar.
+
+**NSFHQ04: unchanged** (nodes d=-92, surfs d=+1, leaves d=-26, all still `LENGTH MISMATCH`) — matches
+the prior round's own finding that `Brush8321` is a major but not sole driver there (removing it made
+native's count MOVE, not converge), so correctly reproducing it doesn't close the gap alone.
