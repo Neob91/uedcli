@@ -1,7 +1,7 @@
 +++
 priority = "p2"
 kind = "debug"
-summary = "freeclinic08/nsfhq04's node deficit traced to the world-level bsp_build reconstruction (-38 nodes/-23 leaves on freeclinic08's structural-only set) — NOT the same repartition_frontier bug UNATCO's fix (bcc3693) closed; that fix is confirmed a no-op for these two levels"
+summary = "freeclinic08's ENTIRE structural-only node/leaf residual (-38/-23) ROOT-CAUSED: Brush586, the level's first world-CSG brush, has no CsgOper= (real default CSG_Active) — the SAME unfixed Vandenberg Gas Brush230 mechanism. Removing it alone makes the remaining 140 brushes byte-identical. nsfhq04's Brush8321 (also index-0, no CsgOper=) is confirmed a SIGNIFICANT driver too, but does not fully explain nsfhq04's residual alone. No fix shipped (mechanism still unknown, same as Vandenberg)."
 +++
 
 # freeclinic08/nsfhq04 +1-surf under-build
@@ -313,3 +313,109 @@ New files (`dev/docs/spikes/2026-08-29-unatco-repart-live-diff/harness/`): `fpol
 `ctx_polys_struct_probe.py`, `ctx_polys_struct_probe2.py`. Log:
 `.../logs/fpolys-stage-order-fc08struct.log`. Full write-up:
 `native-materialize-findings.md`, search "Poly-list order divergence localized one stage further".
+
+## 2026-09-01, 4th continuation: root cause found — it's the Vandenberg Gas `CsgOper`-absent-brush mechanism, not a diffuse repartition tie-break
+
+Picked up the concrete next step named above: a live per-brush Pass-1 tree-shape trace to attribute
+the `+70`-poly PREMERGE gap to specific brushes. Used a cheaper technique instead of new GDB
+instrumentation: since Pass 1 is a pure sequential fold (brush *i*'s CSG add depends only on brushes
+`1..i-1`, and the ONE world-level `bspRepartition` runs after ALL of them), truncating the
+structural-only 141-brush list to its first *N* (in CSG order) and building BOTH sides (native
+in-process, editor via a fresh `build_ued_golden.py` `MAP REBUILD`) reproduces the exact Pass-1 state
+after *N* incremental adds. Binary-searching *N* by final node/surf/leaf count (no new disassembly)
+localizes the first diverging brush directly.
+
+**Binary search result (freeclinic08 structural-only order)**: prefix *n*=12 is byte-exact
+(nodes=surfs=leaves match); *n*=13 (adds `Brush47`, a plain 6-poly axis-aligned `CSG_Subtract` box,
+no flags/rotation) diverges by nodes=-12/leaves=-4 in this 13-brush minimal case. Per-brush
+node-plane-owner attribution (`node.i_surf -> surf.i_actor`) on this minimal case found the missing
+12 nodes were NOT attributed to Brush47 itself — they were spread across `Brush1`(-2)/`Brush4`(-2)/
+`Brush7`(-2)/`Brush9`(-2)/`Brush10`(-4), all brushes ADDED BEFORE Brush47. This is the same
+"downstream repartition reshuffling" shape every prior round hit — until the actual root cause
+surfaced:
+
+**`Brush586` — the level's very FIRST world-CSG brush (position 0 of 141, present in every prefix
+tested including *n*=1) — has NO `CsgOper=` property at all.** `Engine.Brush.CsgOper`'s real class
+default is `CSG_Active` (ordinal 0); native's `brush_marshal.py` currently defaults an absent
+`CsgOper` to `CSG_Add` (`raw.get("CsgOper", "CSG_Add")`) — **exactly the mechanism
+`vandenberg-gas-csg-active-csgoper-brush-causes` already found and left unfixed** ("the real editor
+does something else entirely... roughly halves the resulting geometry of what follows it", live
+A/B/C-verified there). That item's own scope claim — "`Brush230` is the ONLY non-Mover `Engine.Brush`
+actor with no `CsgOper=` across every cached level trunk checked... `freeclinic08`, `nsfhq04`" — is
+**factually wrong**: both this level's `Brush586` and `nsfhq04`'s `Brush8321` are also `CsgOper`-absent,
+and both sit at world-CSG index 0, same as Vandenberg's `Brush230` — this looks like a recurring
+OG-DX authoring pattern (a level's first-ever placed brush, before an explicit CSG op was chosen in
+the original editor), not a one-off.
+
+**Decisive live test — freeclinic08 (`fc08_n12_noactive_search.py`, `fc08_full_noactive.log`)**:
+built the SAME brush set with `Brush586` removed, both native and live-editor.
+- 12-brush set (`Brush1`..`Brush47`, the exact minimal case above, minus `Brush586`): native
+  nodes=68/surfs=62/leaves=15, editor **nodes=68/surfs=62/leaves=15 — EXACT, d=+0/+0/+0**.
+- Full 140-brush structural-only set (all of freeclinic08's structural brushes minus `Brush586`
+  alone): native nodes=1135/surfs=658/leaves=284, editor **nodes=1135/surfs=658/leaves=284 — EXACT,
+  d=+0/+0/+0**.
+
+**`Brush586` alone fully explains freeclinic08's entire structural-only residual** (the WITH-`Brush586`
+baseline was native=1141/editor=1179 nodes, native=290/editor=313 leaves — the -38/-23 this whole
+thread has chased since round 1). The "diffuse, 75-of-141-brushes, tie-break-shaped" node-owner
+spread every earlier round measured was a real symptom but the WRONG level of attribution: ONE
+brush's mishandled `CsgOper` cascades its error through the entire incremental Pass-1 tree, and by
+the time you look at FINAL node ownership it reads as scattered across dozens of unrelated brushes
+(cancellation), obscuring the single upstream cause.
+
+**nsfhq04 — same mechanism confirmed present and significant, but does NOT fully explain the
+residual alone** (`nsfhq04_noactive.log`). `Brush8321` (world-CSG index 0, same no-`CsgOper=`
+pattern) removed from the full 660-brush structural-only set: native nodes=4958/surfs=2170/
+leaves=1484 vs editor **nodes=4721/surfs=2170/leaves=1438 — d_nodes=+237/d_leaves=+46**, i.e. WORSE
+than the WITH-`Brush8321` baseline (native=4975/editor=4958, d_nodes=+17/d_leaves=-26). Removing the
+brush makes native's own count barely move (4975→4958, -17) while the REAL editor's count moves by
+237 (4958→4721) — the real `CsgOper=CSG_Active` brush has a LARGE true effect on this level that
+native's current (wrong) `CSG_Add`-substitute barely reproduces in either direction; the closer WITH-
+`Brush8321` match was accidental error cancellation, not correctness. Surfs stay exact either way
+(2170=2170 both configurations) — consistent with the surf axis being independent (Pass-2/semisolid
+concern, already root-caused as `Brush531`'s `PF_Semisolid` misclassification, see "The +1 surf,
+precisely" above).
+
+**No fix shipped** — same standing reason as `vandenberg-gas-csg-active-csgoper-brush-causes`: the
+Rust core has no representation for `CsgOper::Active` at all, and the real mechanism (what the editor
+actually does with a `CsgOper`-absent brush) is unknown without disassembly, not attempted this
+round. This round's contribution is confirming the mechanism is NOT a Vandenberg-only curiosity —
+it fully explains one level's entire structural residual and is a major (if not sole) driver of a
+second, and the "first brush has no stated `CsgOper`" pattern likely recurs across the wider OG-DX
+corpus (unmeasured beyond these 3 levels). See `native-materialize-findings.md`, search "Vandenberg
+Gas mechanism confirmed on freeclinic08/nsfhq04" for the full write-up and the cross-reference into
+the Vandenberg item.
+
+**Methodology note, important for other concurrent investigations this session**: this round found
+and fixed a real contamination bug in its own harness — `sys.path.insert(0, "/workspace/uedcli")`
+(the shared main checkout) resolves `uedcli`/`brush_marshal.py` from whatever a CONCURRENT agent has
+uncommitted there, not this investigation's isolated worktree. Silently nondeterministic: a `BuildError:
+unknown CsgOper 0` appeared and disappeared across otherwise-identical reruns because the main
+checkout's `brush_marshal.py` was being actively edited (by a different session's own Vandenberg
+work) between runs. Fixed by pointing every `sys.path` entry at the worktree instead
+(`prefix_search_lib.py`'s header comment has the detail). Any script built during this session that
+imported from a bare `/workspace/uedcli` path rather than its own worktree should be treated as
+suspect.
+
+## Harness (this round)
+
+Committed under `dev/docs/spikes/2026-09-01-fc08-nsfhq04-csgactive/harness/`: `prefix_search_lib.py`
+(the shared prefix-binary-search library — native in-process build + live-editor `build_ued_golden.py`
+build, per-*N* compare), `fc08_prefix_search.py`/`nsfhq04_prefix_search.py` (level-specific CLIs over
+the library), `nsfhq04_filter_trunk.py` (structural-only trunk extractor, `smuggler_filter_trunk.py`'s
+pattern), `fc08_n13_node_owner.py` (per-brush node-owner attribution on the 13-brush minimal case),
+`fc08_n12_noactive_search.py` (the decisive Brush586-removal test). Logs under
+`dev/docs/spikes/2026-09-01-fc08-nsfhq04-csgactive/logs/`.
+
+## Not fixed / still open
+
+- The real `CsgOper=CSG_Active` mechanism (shared blocker with `vandenberg-gas-csg-active-csgoper-
+  brush-causes`) — needs disassembly, not attempted.
+- nsfhq04's residual beyond `Brush8321`'s contribution is unmeasured (the no-Brush8321 test shows the
+  mechanism is significant but not sufficient; whether the REMAINDER is the diffuse tie-break class or
+  something else is unknown).
+- The full (non-structural-only, 305/992-brush) level residuals were not re-tested with the offending
+  brush removed this round — only the structural-only isolates. The Pass-2 semisolid brushes'
+  interaction with a wrongly-modeled Pass-1 world shell is unmeasured.
+- Whether other OG-DX levels share a `CsgOper`-absent first brush is unmeasured beyond these 3
+  (Vandenberg Gas, freeclinic08, nsfhq04) out of the 21-level corpus.

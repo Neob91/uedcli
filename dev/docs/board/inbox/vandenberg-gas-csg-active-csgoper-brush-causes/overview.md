@@ -1,7 +1,7 @@
 +++
 priority = "p2"
 kind = "debug"
-summary = "Vandenberg Gas' node/vert over-build (+606/+9480) traced to Brush230 (idx 0, CsgOper absent = CSG_Active). Round 2 (2026-09-01): disassembly shows the real editor dispatches CsgOper=Active identically to Subtract inside bspBrushCSG; fix shipped (uncommitted, worktree vandenberg-csg-active), node delta cut to +32, verified non-regressing on 5 tracked levels."
+summary = "Vandenberg Gas' node/vert over-build (+606/+9480) traced to Brush230 (idx 0, CsgOper absent = CSG_Active). Round 2 (2026-09-01): disassembly shows the real editor dispatches CsgOper=Active identically to Subtract inside bspBrushCSG; fix shipped (uncommitted, worktree vandenberg-csg-active), node delta cut to +32, verified non-regressing on 5 tracked levels. CONFIRMED RECURRING: freeclinic08's Brush586 and nsfhq04's Brush8321 are the SAME pattern (also index-0, also CsgOper-absent) -- this item's own 'Brush230 is the ONLY instance' scope claim was wrong. Fully explains freeclinic08's entire structural-only residual; a major but not sole driver of nsfhq04's."
 +++
 
 # Vandenberg Gas: CSG_Active-CsgOper brush causes a real, unexplained geometry reduction
@@ -64,22 +64,41 @@ here. This is a distinct, new, unexplained mechanism.
 
 ## Scope / regression risk
 
-`Brush230` is the ONLY non-Mover `Engine.Brush` actor with no `CsgOper=` across every cached level
-trunk checked (DX.dx, NYC Bar, UNATCO, Wanchai Market, OceanLab Lab, NYC 747, freeclinic08,
-nsfhq04) — so this is very likely low-frequency across the corpus, though unmeasured beyond the
-cached set. Whether the same mechanism explains part of the level's remaining diffuse 402-brush
-node-owner residual (net +606 vs Brush54's own +901, heavy cancellation) is unmeasured.
+**CORRECTED (2026-09-01, `freeclinic08-nsfhq04-1-surf-under-build-root`'s 4th continuation) —
+`Brush230` is NOT the only instance.** freeclinic08's `Brush586` and nsfhq04's `Brush8321` are BOTH
+also non-Mover `Engine.Brush` actors with no `CsgOper=`, and BOTH sit at world-CSG index 0 — same as
+`Brush230`. This looks like a recurring OG-DX authoring pattern (a level's first-ever placed brush,
+before an explicit CSG op was chosen in the original editor), not a rare fluke: 3 of a handful of
+levels checked so far carry it. Concretely measured impact on the other two:
+
+- **freeclinic08**: removing `Brush586` alone from the 141-brush structural-only set makes the
+  remaining 140 brushes build BYTE-IDENTICAL to the live editor (nodes/surfs/leaves all d=+0) — this
+  ONE brush fully explains that level's entire structural-only residual (was nodes d=-38/leaves d=-23
+  with it present).
+- **nsfhq04**: removing `Brush8321` from the 660-brush structural-only set does NOT reach exact —
+  d_nodes goes from +17 (with) to +237 (without), i.e. WORSE, revealing native's current handling
+  barely reacts to this brush (native's own count moves 17 nodes) while the real editor's build moves
+  237 nodes when it's added/removed — a large real effect native does not reproduce in either
+  direction; the closer WITH-`Brush8321` match was accidental cancellation, not correctness.
+
+Full write-up: `native-materialize-findings.md`, search "Vandenberg Gas mechanism confirmed on
+freeclinic08/nsfhq04". Whether the same mechanism explains part of THIS level's own remaining diffuse
+402-brush node-owner residual (net +606 vs Brush54's own +901, heavy cancellation) is still unmeasured.
+**Now that the fix has shipped (Round 2), freeclinic08 and nsfhq04's residuals should be re-measured
+against it directly** -- the fix may already substantially improve or fully close freeclinic08's
+structural-only residual, since a lone-brush removal test showed that residual is 100% attributable
+to this exact mechanism.
 
 ## Next steps (not done this round)
 
 - Disassemble `csgRebuild`'s per-brush dispatch (`Editor.dll`) to find what it actually does for
   `CsgOper == CSG_Active` (0) — a genuinely different branch, an off-by-one jump-table read, or
-  something else. `dev/docs/unrealed/extracting-from-dll.md` has the method.
+  something else. `dev/docs/unrealed/extracting-from-dll.md` has the method. Now DECODED and FIXED (Round 2) -- was confirmed to fully explain freeclinic08's residual and be a major driver of nsfhq04's before the fix shipped; re-measure both against the shipped fix.
 - Once understood, decide whether native needs a real `CsgOper::Active` handling path (would need
   Rust + marshal changes) and re-verify against this item's own A/B/C goldens
   (`dev/docs/spikes/2026-09-01-vandenberg-gas-node-overbuild/harness/`) plus the full level.
-- Check whether other OG levels carry a similar CsgOper-absent brush (not found in the cached set,
-  but the cached set doesn't cover the whole 21-level corpus).
+- Check whether other OG levels beyond freeclinic08/nsfhq04/Vandenberg Gas carry a similar
+  CsgOper-absent first brush (still unmeasured across the rest of the 21-level corpus).
 
 ## Harness
 
