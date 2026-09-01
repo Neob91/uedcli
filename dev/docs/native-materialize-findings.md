@@ -3584,3 +3584,74 @@ periodic reachability-GC compaction in build order — the architecture change b
 prior one identified, still unbuilt. Code: `uedcli-native/src/bspcsg.rs` (`unsplit_ring` module,
 `points_origin_reversed_enabled`, the two new `bspcsg::tests` cases). Worktree
 `.claude/worktrees/bsp-insertion-order`, left uncommitted per this round's instructions.
+
+## Round 11 (2026-09-01): live-captured a genuine mid-CSG-split `bspAddPoint` sequence on a synthetic 2-brush case — decoded, but the split turned out fully TRANSIENT (`bspMergeCoplanars`-equivalent erases it before the final model), so the rule for a PERSISTING split fragment (the UNATCO/Wanchai case) is still unconfirmed. No fix attempted.
+
+Task: round 9 pinned "`Origin` then reversed `Vertex` ring" for `DX.dx`'s UNSPLIT boxes; round 10
+showed a post-hoc replay of that rule can't work regardless of gating. This round's mandate: capture
+the real `bspAddPoint` sequence for a genuine CSG-SPLIT polygon fragment (UNATCO/Wanchai's actual
+`p_base` residual shape), live, to see whether the same rule extends or a different one applies.
+
+**DX.dx has no real split** — round 9 already noted its 5 brushes are plain unsplit boxes; confirmed
+again this round (26 nodes = 26 surfs, no shared `iLink`). Built a synthetic 2/3-brush trunk instead
+(`_scratch/split-trace/maps/split2` in the round's own worktree, not committed — throwaway):
+`Room` (`CSG_Subtract`, a 2048³ hollow box) + `PillarB`/`PillarC` (`CSG_Add`, two 512-cube "pillars"
+overlapping by 256uu along X, same Y/Z extents) — the minimal shape that forces `bspBrushCSG` to
+actually split a polygon against another brush's existing planes, built via
+`dev/docs/spikes/2026-07-15-native-materialize/harness/build_ued_golden.py` (`--world-only --no-light
+--no-obj-load`) then re-traced with the existing `bspaddpoint_call_trace.py` harness
+(`dev/docs/spikes/2026-09-01-dx-pbase-points-trace/harness/`) — reused as-is, no new VAs needed.
+(First attempt used two bare `CSG_Add` boxes only, no `Subtract` — got a genuinely EMPTY built model,
+0 nodes: confirms the world starts SOLID, not empty, so a pure-`Add` brush with nothing subtracted
+first adds nothing new. Documented here so a future round doesn't repeat the same dead end.)
+
+**Live capture: 383 `bspAddPoint` calls total across the `MAP REBUILD`.** Chunking by the `Exact=1`
+Origin marker (round 9's own signature) gives 35 groups; every UNSPLIT face's group is 5 calls
+(Origin + 4 Vertex, one of the 4 landing back on Origin's own point via the tolerance dedup) — but
+four groups (one per straddling face of `PillarC`) are **9 calls**, not 5: `Origin` once (`Exact=1`),
+then **8** `Vertex` calls. Decoded (per-face, e.g. `PillarC`'s +Z face, authored corners A(256,-256,256)
+→B(768,-256,256)→C(768,256,256)→D(256,256,256)): `[Origin=A] [new-mid1(512,-256,256)] [B] [C]
+[new-mid2(512,256,256)] [A(dedup)] [new-mid1(dedup)] [new-mid2(dedup)] [D]`. Read as two 4-vertex
+rings sharing the cut edge at X=512: **ring 1 = [mid1, B, C, mid2]** (the outer, X:512–768 half) and
+**ring 2 = [A, mid1, mid2, D]** (the inner, X:256–512 half, sharing `PillarB`'s already-added volume)
+— both walked in the polygon's OWN forward winding direction (not reversed), and **only the FIRST
+ring's start gets an `Exact=1` Origin call; the second ring's start point is inserted as an ordinary
+tolerance-dedup Vertex call**, i.e. `alloc_surf` (which sets `p_base`) fires once, and the second
+fragment reuses it via `iLink` — exactly the branch native's own `bsp_add_node` already implements
+(`bspcsg.rs` ~313: `if edpoly.i_link < 0 { alloc_surf(...) } else { edpoly.i_link }`), not a missing
+mechanism.
+
+**But the split is TRANSIENT: none of the 4 fragments persists in the final built model.** Parsed the
+separately-built golden (`parity_compare.parse_dx_model`, no gdb needed for this check) — every one
+of `PillarC`'s 4 straddling surfs (`ibrushpoly` 0/1/2/3) is a single 4-vertex node spanning the FULL
+authored range (256–768), byte-identical to the UNSPLIT authored polygon, not either half. So
+whatever split the live trace shows mid-build gets fused back into one whole polygon before the final
+`p_base`/points array is written — consistent with `bspMergeCoplanars` (`bspcsg.rs` line 1952,
+`bsp_merge_coplanars`, already ported from the real `Editor.dll 0x36200`/`0x36480`): two `iLink`-
+sharing, coplanar, same-texture, adjacent fragments are a canonical merge candidate, and this
+synthetic case's fragments are maximally mergeable (same plane, same texture, sharing one full edge,
+no third neighbor interrupting). `PillarB`'s own faces (the OTHER side of the same overlap) DO show a
+real, PERSISTING trim in the final model (their authored 0–512 range is cut down to 0–256, the
+portion outside `PillarC`) — but that trim comes from a full-polygon "already solid, drop" classification
+against `PillarC`'s volume (round 9's non-split "whole polygon in/out" case), not from a surviving
+split fragment; it offered no new information over round 9.
+
+**Net result: a real, live, decoded mid-CSG-split `bspAddPoint` sequence was captured end-to-end, but
+this specific synthetic geometry was the wrong shape to answer the actual open question** — it
+exercises a split that always gets merged back away, not the UNATCO/Wanchai case (924/3709 residual
+`p_base` diffs) where a split fragment survives as its OWN final surf. The two rings' insertion order
+(forward, unreversed, per-fragment; second fragment skips `alloc_surf`) is confirmed for a
+**transient** split; whether the SAME rule holds for a fragment that is never remerged (differing
+neighbor geometry/texture on the two sides of the cut, so `merge_group_pred` never fires) is still
+open. A future round needs a synthetic case built specifically to defeat the merge — e.g. two
+overlapping brushes with DIFFERENT Y/Z extents (a true T-junction, not a flush full-height/width
+overlap) or a third brush interrupting one side of the cut only.
+
+**No fix attempted, none should be** — the incremental point-pool architecture rounds 9/10 already
+scoped is not worth prototyping against a rule not yet confirmed for the case it needs to cover; per
+the standing no-guessing rule. `DX.dx`/UNATCO/Wanchai `p_base` counts unchanged (no production code
+touched — `uedcli-native/src/*` untouched this round). Harness reused unmodified
+(`bspaddpoint_call_trace.py`, `points_pool_refresh_trace.py`); the synthetic trunk + golden + gdb log
+are throwaway, left in the round's own worktree (`.claude/worktrees/bspcsg-split-fragment-trace`,
+`_scratch/split-trace/`), not committed, not needed by a future round (the T3D recipe above is enough
+to regenerate).

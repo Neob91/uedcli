@@ -670,3 +670,38 @@ Not shipped -- flag stays off by default, zero effect on the default path. Kept 
 experiment with its own regression tests (`bspcsg::tests`, 2 new cases) so this specific dead end
 isn't re-attempted blind. `DX.dx` remains `p_base` 13/26 -- does NOT reach FULL PARITY. Worktree
 `.claude/worktrees/bsp-insertion-order`, left uncommitted.
+
+## Round 11 (2026-09-01): live-captured a genuine CSG-split `bspAddPoint` sequence on a synthetic case -- decoded, but the split was fully transient (merged back before the final model), so the fragment rule UNATCO/Wanchai actually need is still unconfirmed
+
+Full detail: `native-materialize-findings.md`, "Round 11: live-captured a genuine mid-CSG-split
+`bspAddPoint` sequence". Mandate: round 9 pinned the insertion rule for UNSPLIT polygons only and
+explicitly punted on whether it extends to CSG-SPLIT fragments -- the case that actually dominates
+UNATCO/Wanchai's residual (924/3709 `p_base` diffs come from real polygon splitting, not whole-brush
+in/out classification like `DX.dx`). This round tried to close that gap with a live capture.
+
+`DX.dx` has no real split (confirmed again -- 26 nodes = 26 surfs). Built a synthetic 2/3-brush trunk
+instead (a hollow room + two overlapping "pillar" `CSG_Add` boxes, 256uu overlap) via the existing
+`build_ued_golden.py` + `bspaddpoint_call_trace.py` harnesses (no new gdb VAs needed -- straight
+reuse). Live capture found a real split: 4 of 35 polygon groups in the 383-call trace are 9 calls
+(Origin + 8 Vertex) instead of the usual 5, decoding cleanly as two 4-vertex fragment rings sharing
+the cut edge, each walked in the polygon's own forward winding, with only the FIRST fragment getting
+a fresh `Exact=1` Origin/`alloc_surf` call -- the second reuses it via `iLink`, exactly the branch
+native's `bsp_add_node` already implements.
+
+**But none of the 4 captured split fragments survive in the final built model** -- parsing the
+golden showed all 4 straddling surfs end up as ONE whole node each, spanning the full authored range,
+identical to an unsplit polygon. `bspMergeCoplanars` (already ported in native as
+`bsp_merge_coplanars`, `bspcsg.rs`) fuses maximally-mergeable adjacent fragments (same plane, same
+texture, sharing a full edge, no third neighbor) back together before the model is saved -- exactly
+what this synthetic geometry produces. So the round captured a real split end-to-end but the wrong
+SHAPE of split: it answers "what does the editor do with a split fragment that gets merged back",
+not "what does it do with one that survives" -- the latter is what UNATCO/Wanchai's residual needs.
+
+**No fix attempted.** Per the standing no-guessing rule, prototyping the incremental point-pool
+architecture (rounds 9/10's scoped fix) against a rule not yet confirmed for the case it needs to
+cover isn't worth doing blind. A future round needs a synthetic case built to DEFEAT the merge (e.g.
+differing Y/Z extents between the two overlapping brushes -- a true T-junction, not a flush
+full-height/width overlap) before the fragment-insertion-order question can be closed. No production
+code touched. Worktree `.claude/worktrees/bspcsg-split-fragment-trace`, left uncommitted; the
+synthetic trunk/golden/gdb log are throwaway (not committed -- the T3D recipe in the findings-ledger
+entry is enough to regenerate).
