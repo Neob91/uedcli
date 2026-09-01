@@ -6,7 +6,7 @@ world state."""
 import sys
 from pathlib import Path
 
-ROOT = Path("/workspace/uedcli/.claude/worktrees/agent-a38a132200c3a063b")
+ROOT = Path(__file__).resolve().parents[5]
 LOGDIR = ROOT / "_scratch/area51-oracle-logs"
 
 log506 = (LOGDIR / "area51-addfunc-506.log").read_text().splitlines()

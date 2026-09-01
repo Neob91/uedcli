@@ -5197,3 +5197,132 @@ Harness added this round, all under
 `dev/docs/spikes/2026-09-01-fc08-nsfhq04-csgactive/harness/`: `nsfhq04_dist_threshold_probe.py`,
 `nsfhq04_brush842_attrib.py`, `nsfhq04_native_leaf_dump.py`, `nsfhq04_addfunc_oracle.py`,
 `nsfhq04_compare_tail.py`. Board: `freeclinic08-nsfhq04-1-surf-under-build-root`, appended.
+
+## Brush1852 "26 vs 17 over-fragmentation" framing is very likely a wrong-pipeline-stage measurement, not a confirmed root cause — a coordinator cross-check (mid-session) caught this before the traversal-order trace shipped anything (2026-09-01)
+
+Dispatched to run a node-visit-SEQUENCE trace (native `bspcsg.rs` DESC trace vs a new live editor
+`FilterEdPoly`-loophead trace) to test the "traversal-order/tie-break among coplanar nodes" hypothesis
+the prior round left open. Mid-session, a coordinator cross-check flagged that NSFHQ04's parallel
+investigation (Brush842) had just found its own "raw fragment tail count" measurement was contaminated
+by unscoped world-level repartition activity (3.5x inflation, 42 raw vs 12 properly-scoped) and that
+Brush842 itself turned out classify-BSP-EXACT once properly isolated — the real NSFHQ04 residual is
+diffuse across 172 other brushes. Asked to re-verify the SAME risk here before continuing. It checked
+out, and worse than suspected — three independent findings, all pointing the same way:
+
+**1. My own attempt at a properly-scoped editor-side trace reproduced the SAME class of bug directly.**
+New harness `area51_filteredpoly_descent.py` breaks at `FilterEdPoly`'s loop head (`0x10032cb6`, the
+address `editor_descent.py` already validated live) and — since the editor's `EdPoly` struct carries
+no `actor`/`i_brush_poly` bookkeeping (that's native's own extension) — filters by `EdPoly->Normal`
+(offset `+0xc`) matching Brush1852 `i_brush_poly=4`'s known normal `(-0.707107,-0.707107,0.0)` (added
+to `bspcsg.rs`'s existing DESC trace this round as `edN=`, confirmed constant across all 47 of native's
+own descent steps for this poly — splitting a polygon never changes its own face normal). Ran it live
+against a fresh single-session `MAP REBUILD` of the Area51 Entrance n=507 prefix (the SAME golden the
+native-side probe uses). Result: **12 FEP lines, all at node indices 0–52** — nowhere near Brush1852's
+real descent (native's own trace for this exact poly visits node indices up to 7380, deep into a
+mature ~thousands-of-nodes n=506 tree, since Brush1852 is brush #507 of 507, processed dead last). This
+is a clean FALSE-POSITIVE COLLISION: some unrelated, small, EARLY brush happens to share the exact
+same 45°-diagonal face normal, and my filter had no way to tell them apart. Face-normal alone is not a
+safe per-poly identity at full-level scale — exactly the class of scoping fragility the coordinator
+warned about, independently reproduced. (A second, compounding bug in the same script: `_wait_quiescent`
+polls the FILTERED match count for stability, which is fine for an unconditional trace like
+`area51_addfunc_oracle.py`'s but wrong for a sparse filtered one — long stretches of a 507-brush build
+produce zero new filtered hits even while the build is still very much in progress, so quiescence
+almost certainly fired before the rebuild ever reached brush 507 at all.)
+
+**2. `build_ued_golden.py`'s own docs independently confirm the contamination vector NSFHQ04 found.**
+A bare `MAP REBUILD` is documented (that script's own `--rebuild-cmd` help text) as `csgRebuild`
+(per-brush CSG, what `AddBrushToWorldFunc`/`FilterEdPoly` do) followed by `bspBuild`
+(`bspRepartition GOOD/Balance-12/stride=NumPolys/20`) — a GLOBAL, whole-tree repartition pass that
+runs ONCE, AFTER every brush's own CSG, with a stride parameter that is a function of the TOTAL poly
+count at that point. Any trace-window or line-count-delta measurement taken during a full `MAP REBUILD`
+(exactly what the prior round's `area51_compare_tail.py` editor "17" figure was — `lines507[len(
+lines506):]`, a raw AFUNC line-count delta between two SEPARATE editor processes) risks conflating a
+specific brush's own CSG-add calls with this later, brush-count-sensitive, unrelated pass. This is the
+SAME contamination class NSFHQ04 found, confirmed here from the harness's own documentation rather than
+by re-deriving it live.
+
+**3. Bigger and more fundamental: native's OWN production pipeline shows the CSG-incremental tree is
+torn down and rebuilt before the final Nodes/Surfs/Verts are emitted — so "terminal classify-BSP
+fragment count" (this entire investigative thread's central metric, all the way back to the prior
+round's "26 vs 17") is very likely measuring the WRONG PIPELINE STAGE.** `bspcsg.rs::build_geometry_bspcsg`
+(the actual function `level materialize`'s native path calls) runs the per-brush `FilterEdPoly`/
+`leaf_func`/`bsp_add_node` CSG descent (everything this session and the prior one have been tracing)
+to build an INTERMEDIATE tree, then at line ~2946 calls `bsp_build_fpolys` to flatten that tree back
+into a bare poly SOUP ("in the editor's EXACT order" — mirrors `MakeEdPolys`), then at line ~3050 feeds
+that soup into a SEPARATE `bsp_build` call which **repartitions the poly list into a fresh node tree
+from scratch** (cost-based `FindBestSplit`, matching `build.rs`'s documented byte-verified `MAP REBUILD`
+partition params `Balance=50, PortalBias=70, OPTIMAL`) — this is what actually produces the final
+Nodes/Surfs/Verts array. The CSG-incremental tree's own shape (what `FilterEdPoly`'s recursive descent
+visits, what "terminal fragment count" counts) is discarded once it has served its ONE purpose — decid-
+ing which polygons survive CSG and what they look like — and never directly becomes the final tree.
+A difference in the incremental-CSG fragment count does not, by itself, predict or explain a difference
+in the final node/leaf count; what matters is (a) whether the SURVIVING POLY SOUP differs between native
+and editor, and (b) whether the SEPARATE repartition step handles that soup identically. (There is
+already an `UEDCLI_BSPCSG_SOUP_ORDER` env-gated debug hook for dumping the soup-order stage, suggesting
+a prior round already anticipated this distinction — it does not appear to have been cross-checked
+against the CSG-classify-fragment framing before this round.)
+
+**Full-level static node-owner attribution corroborates this reframe, and does NOT support "Brush1852
+itself is exact" as decisively as it does NOT support "Brush1852 itself is the direct cause".**
+`area51_attrib.py` (fixed this round to self-resolve its `ROOT`/`GOLDEN` paths — was hardcoded to a
+now-gone ephemeral worktree) computes final-tree node-plane ownership (`node.i_surf -> surf.i_actor`)
+per brush, native vs a real editor golden, at the FULL 1343-brush scale. Result: **548/1343 brushes
+differ in node ownership, abs-sum=2095 vs net=+85 (the level's whole residual) — massive cancellation,
+Brush1852 not even in the top 40** (largest: `Brush500` `d=-48`, `Brush3255` `d=-38`, `Brush1178`
+`d=+37`, …). This is the exact "diffuse, no dominant outlier" shape already flagged for Training Final
+and for NSFHQ04's own (now-resolved) Brush842 case — consistent with the divergence actually living in
+the LATER, whole-tree-sensitive repartition stage (finding 3 above), which would ripple across however
+many brushes are processed after whatever triggers it, not sit locally on the one brush that happened
+to trigger it. This does NOT contradict the earlier decisive removal test (removing Brush1852 from the
+full 1343-brush level closes the residual to exactly `d_nodes=+0 d_surfs=+0 d_leaves=+0`, live-verified
+both sides) — that test is still solid evidence that Brush1852's PRESENCE is necessary and sufficient
+to trigger the residual. What it no longer supports is the INTERPRETATION that Brush1852's own CSG
+classify logic is where the bug lives; a brush-count-sensitive threshold in the later repartition stage
+(e.g. `stride=NumPolys/20` crossing a boundary exactly when Brush1852 is added) would produce the SAME
+removal-test result without Brush1852's own CSG being wrong at all.
+
+**Conclusion: stopped before shipping anything, per the no-guessing rule — the traversal-order/iLink
+tie-break hypothesis this round was dispatched to test is very likely NOT the right lever**, since it
+is scoped to the same CSG-add stage this round's evidence now says is not what determines the final
+tree. Did not complete the dispatched trace (the live editor-side FilterEdPoly descent for Brush1852
+poly 4 — collected, but known-contaminated per finding 1, so not used for any conclusion). Recommended
+next steps for whoever picks this up: (a) compare the POLY-SOUP stage (`bsp_build_fpolys`/
+`UEDCLI_BSPCSG_SOUP_ORDER`) between native and editor for Brush1852's own contribution, not the CSG
+classify-fragment count; (b) if the soup matches, the divergence is in the LATER `bsp_build`/repartition
+stage's poly-order or threshold sensitivity — the same open "world-level-repartition poly-order" class
+already tracked for UNATCO/NSFHQ04/Training Final, not a Brush1852-specific bug; (c) a genuinely
+brush-scoped live editor trace (if still wanted) needs EITHER a same-session incremental single-brush
+add (`EDIT PASTE` onto an already-built n=506 golden, avoiding a second full `MAP REBUILD`'s repartition
+pass entirely) or a much tighter cross-side correlator than face-normal alone (e.g. normal AND the
+first-hit world node's own plane, paired as a tuple, to disambiguate collisions) — `area51_fep_seq_compare.py`
+(committed this round) is ready to consume such a trace's output once one exists, pairing steps by
+`(Normal, plane_w)` rather than raw node index (`area51_frag_diff.py` already established raw indices
+use unrelated numbering schemes across the two sides).
+
+Harness added this round: `area51_filteredpoly_descent.py` (the live editor `FilterEdPoly`-loophead
+trace, edN-scoped — collected but flagged contaminated, kept for its method/fix value, not its result),
+`area51_fep_seq_compare.py` (native-vs-editor DESC/FEP plane-sequence pairing, ready once a clean
+editor-side trace exists). `bspcsg.rs`'s DESC trace gained two new fields this round (`edN=`, the
+poly's own Normal; the 4th `N=` component, `plane_w = Base·Normal`, the same convention as the editor's
+raw `FPlane`) — debug-print-only, env-gated, no behavior change. Fixed stale hardcoded `ROOT`/`GOLDEN`
+worktree paths (pointing at now-deleted ephemeral session worktrees) in `area51_subset.py`,
+`area51_addfunc_oracle.py`, `area51_frag_diff.py`, `area51_native_leaf_dump.py`, `area51_compare_tail.py`,
+`area51_attrib.py` to self-resolve via `Path(__file__)`, so this whole harness family is reusable from
+any worktree again.
+
+**Update, same session: the traversal-order/iLink tie-break hypothesis is independently RULED OUT, not
+just deprioritized.** A parallel session's full decompile read of `FilterEdPoly`/`FilterLeaf` (`b23de44`,
+"full FilterEdPoly/FilterLeaf decompile confirms port exact; iPlane chain never read in classify")
+confirms the port is exact AND that neither function ever reads a node's `iPlane`
+(coplanar-sibling/`iLink` chain) during classify — only `bsp_add_node`'s INSERT-time tail-walk touches
+it. Both sides are structurally blind to that chain during the descent this whole thread has been
+tracing, so a traversal-order/tie-break difference among coplanar-grouped nodes cannot be the mechanism
+regardless of the pipeline-stage question above; this is now closed off by full-decompile confirmation,
+not just a spot-check. The SAME parallel session also disproved NSFHQ04's Brush842 over-fragmentation
+hypothesis by live gdb trace (byte-exact descent, 19 vs 19) — the same symptom shape as this round's
+finding that Brush1852 is not a full-level node-owner outlier. Both threads now point at the same open
+question: is Area51's Brush1852 residual the SAME diffuse world-level-repartition-poly-order class
+NSFHQ04's Brush842 turned out to be? Not yet checked directly for Area51 (would need the equivalent
+byte-exact-descent live trace, done properly single-session/incremental this time per finding 1 above,
+or the poly-soup/repartition-stage comparison from the "next steps" list) — flagging as the concrete
+next action rather than guessing.

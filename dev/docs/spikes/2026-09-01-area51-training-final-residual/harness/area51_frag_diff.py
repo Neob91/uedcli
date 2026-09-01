@@ -10,7 +10,7 @@ import re
 from collections import Counter
 from pathlib import Path
 
-ROOT = Path("/workspace/uedcli/.claude/worktrees/agent-a38a132200c3a063b")
+ROOT = Path(__file__).resolve().parents[5]
 
 
 def parse_native(path):

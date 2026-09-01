@@ -9,7 +9,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-ROOT = Path("/workspace/uedcli/.claude/worktrees/agent-a38a132200c3a063b")
+ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "dev/docs/spikes/2026-07-15-native-materialize/harness"))
 sys.path.insert(0, str(ROOT / "dev/docs/spikes/2026-06-27-decontainerize-uedcli/harness"))

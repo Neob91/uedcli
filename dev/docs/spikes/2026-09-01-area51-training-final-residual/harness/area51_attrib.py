@@ -9,7 +9,7 @@ import sys
 from collections import Counter
 from pathlib import Path
 
-ROOT = Path("/workspace/uedcli/.claude/worktrees/breadth-parity-fresh")
+ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "dev/docs/spikes/2026-07-15-native-materialize/harness"))
 sys.path.insert(0, str(ROOT / "dev/docs/spikes/2026-07-15-native-materialize/harness/editor-tree-oracle"))

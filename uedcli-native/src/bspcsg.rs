@@ -888,11 +888,17 @@ fn filter_ed_poly(
                 }
                 Split::Split(f, b) => format!("SPLIT f_nv={} b_nv={}", f.verts.len(), b.verts.len()),
             };
+            // `plane_w` = Base·Normal = the UE1 `FPlane.W` convention the editor's own `nodeN`
+            // dump (`area51_filteredpoly_descent.py`, offset +0xc of the packed plane) reads
+            // directly -- printed here so a node can be paired cross-side by (Normal, W), not by
+            // its (unrelated-numbering) index.
+            let plane_w = base.dot(&normal);
             eprintln!(
-                "DESC actor={} i_brush_poly={} i_link={} node={} nsurf={} iF={} iB={} csg={} nv={} N=({:.4},{:.4},{:.4}) min={:.5} max={:.5} -> {}",
+                "DESC actor={} i_brush_poly={} i_link={} node={} nsurf={} iF={} iB={} csg={} nv={} N=({:.4},{:.4},{:.4},{:.4}) edN=({:.6},{:.6},{:.6}) min={:.5} max={:.5} -> {}",
                 edpoly.actor, edpoly.i_brush_poly, edpoly.i_link,
                 i_node, node_surf, i_front, i_back, csg as i32, edpoly.verts.len(),
-                normal.x, normal.y, normal.z, mn, mx, cls
+                normal.x, normal.y, normal.z, plane_w,
+                edpoly.normal.x, edpoly.normal.y, edpoly.normal.z, mn, mx, cls
             );
         }
 

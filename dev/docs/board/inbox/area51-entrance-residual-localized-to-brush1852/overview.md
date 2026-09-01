@@ -1,7 +1,7 @@
 +++
 priority = "p1"
 kind = "debug"
-summary = "Area51 Entrance's entire +85 node/+51 leaf residual live-localized to Brush1852; live-traced to classify-BSP over-fragmentation (26 vs 17 terminal fragments), NOT a keep/discard bug (disassembly-verified). `angr` decompiler round located FilterEdPoly/FilterLeaf/SplitWithPlane by address and ruled out a float-epsilon-flip; exact split-divergence mechanism still not pinned. Training Final open, static lead only."
+summary = "Area51 Entrance's entire +85 node/+51 leaf residual live-localized (removal test) to Brush1852. The 'classify-BSP over-fragmentation, 26 vs 17 terminal fragments' MECHANISM claim is now doubted: a coordinator cross-check + this round's evidence (own trace collision, confirmed MAP-REBUILD repartition contamination, and — bigger — native's OWN pipeline discards the CSG-incremental tree and rebuilds from a poly soup before final Nodes/Surfs/Verts) all point at the wrong pipeline stage having been measured. Full-level node-owner attribution shows Brush1852 not even in the top 40 of 548 differing brushes (diffuse, same class as NSFHQ04/UNATCO/Training Final). No fix shipped; traversal-order hypothesis abandoned as premature. Training Final open, static lead only."
 +++
 
 # Area51 Entrance residual localized to Brush1852; Training Final still open
@@ -113,3 +113,57 @@ traced as BYTE-EXACT. Re-checking Area51's 26-vs-17 figure against a `LEAF`-only
 this round) may show `Brush1852` is likewise exact, and the real residual lives in the one-time
 world-level `bspBuildFPolys`/`bspMergeCoplanars`/`bspBuild` repartition — the same open class as
 UNATCO's and freeclinic08/nsfhq04's residuals.
+
+## Coordinator cross-check REDIRECTS this whole thread: the "26 vs 17" mechanism is likely measuring the wrong pipeline stage (2026-09-01)
+
+Dispatched to run the loophead-level dual trace the previous entry flagged as next. A mid-session
+coordinator cross-check (prompted by NSFHQ04's Brush842 turning out classify-BSP-EXACT once properly
+scoped — their own raw count had been 3.5x-inflated by unscoped world-level repartition activity) asked
+to re-verify this thread's scoping before continuing. It does not hold up, for three independent
+reasons — full detail: `dev/docs/native-materialize-findings.md`, search "Brush1852 '26 vs 17
+over-fragmentation' framing is very likely a wrong-pipeline-stage measurement".
+
+1. A new properly-scoped-attempt editor trace (`area51_filteredpoly_descent.py`, `FilterEdPoly`
+   loophead + `EdPoly->Normal` correlator) reproduced the SAME contamination class directly: a clean
+   false-positive collision with an unrelated early brush sharing Brush1852 poly 4's exact face normal.
+2. `build_ued_golden.py`'s own docs confirm `MAP REBUILD` = per-brush CSG + a GLOBAL, poly-count-
+   sensitive `bspRepartition` pass (`stride=NumPolys/20`) — the prior round's editor "17" figure
+   (`area51_compare_tail.py`, a raw AFUNC line-count delta between two separate builds) is exposed to
+   exactly this.
+3. **Bigger:** native's own `bspcsg.rs::build_geometry_bspcsg` (the real `level materialize` path)
+   throws away the CSG-incremental tree (what this whole thread has been tracing) and rebuilds the
+   final Nodes/Surfs/Verts from a flattened poly soup via a separate `bsp_build` repartition call.
+   "Terminal classify-BSP fragment count" does not directly determine the final tree shape.
+
+Full-level node-owner attribution (`area51_attrib.py`, path-fixed and re-run this round) shows
+Brush1852 NOT in the top 40 of 548 differing brushes (abs-sum=2095 vs net=+85 — diffuse, massive
+cancellation) — the same shape as NSFHQ04/Training Final, not a localized-to-one-brush shape. This does
+NOT overturn the removal test (Brush1852's presence still closes the residual to exactly `+0/+0/+0`
+when removed) — it overturns the INTERPRETATION that Brush1852's own CSG logic is the bug; a
+brush-count-sensitive threshold in the LATER repartition stage crossing exactly when Brush1852 is added
+would produce the same removal-test result with nothing wrong in Brush1852's own classify logic.
+
+**No fix shipped. The traversal-order/tie-break hypothesis is abandoned as premature** — it targets the
+same CSG-add stage this round's evidence says is not what determines the final tree. Next steps for
+whoever picks this up: compare the POLY-SOUP stage (`bsp_build_fpolys`/`UEDCLI_BSPCSG_SOUP_ORDER`) for
+Brush1852's own contribution, not the CSG classify-fragment count; if that matches, the divergence is
+in the repartition stage's poly-order/threshold sensitivity — the same open class as UNATCO/NSFHQ04/
+Training Final.
+
+Harness added: `area51_filteredpoly_descent.py` (collected but flagged contaminated — kept for its
+method), `area51_fep_seq_compare.py` (native/editor plane-sequence pairing, ready for a clean trace).
+Fixed stale hardcoded worktree paths (pointing at now-deleted ephemeral sessions) in `area51_subset.py`,
+`area51_addfunc_oracle.py`, `area51_frag_diff.py`, `area51_native_leaf_dump.py`,
+`area51_compare_tail.py`, `area51_attrib.py` to self-resolve via `Path(__file__)`.
+
+**Traversal-order hypothesis independently RULED OUT (not just deprioritized).** A parallel session's
+full decompile read of `FilterEdPoly`/`FilterLeaf` (master `b23de44`) confirms the port is exact and
+that neither function ever reads a node's `iPlane`/`iLink` coplanar-sibling chain during classify —
+only `bsp_add_node`'s insert-time tail-walk touches it. Both sides are structurally blind to that chain,
+so a coplanar/`iLink` traversal-order difference cannot be the mechanism, full stop. The same session
+disproved NSFHQ04's analogous Brush842 hypothesis by live gdb trace (byte-exact, 19 vs 19) — the same
+diffuse, no-dominant-outlier shape as this round's Area51 node-owner attribution. Open question for
+whoever picks this up: is Brush1852 the SAME diffuse world-level-repartition-poly-order class Brush842
+turned out to be? Not yet checked directly (needs either a same-session incremental single-brush-add
+live trace or the poly-soup/repartition-stage comparison already flagged above) — the next concrete
+step, not yet taken.

@@ -14,7 +14,7 @@ import sys
 import time
 from pathlib import Path
 
-ROOT = Path("/workspace/uedcli/.claude/worktrees/agent-a38a132200c3a063b")
+ROOT = Path(__file__).resolve().parents[5]
 HARNESS = ROOT / "dev/docs/spikes/2026-07-15-native-materialize/harness"
 ORACLE_DIR = HARNESS / "editor-tree-oracle"
 sys.path.insert(0, str(ROOT))
