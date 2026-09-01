@@ -470,3 +470,23 @@ classify-BSP descent, the SAME symptom shape (node/leaf-only delta, surf-exact) 
 Entrance `Brush1852` investigation converged on this same round. Not proven the same root cause; not
 disassembly-confirmed. No fix shipped. Full detail: `native-materialize-findings.md`, search "NSFHQ04
 5th continuation".
+
+## 2026-09-01, 6th continuation: full FilterEdPoly/FilterLeaf decompile -- port confirmed exact;
+## corroborates this thread's own "poly-list ORDER, not scoring" finding from the other direction
+
+Dispatched to fully decompile and read the real editor's classify-BSP function (`FilterEdPoly`/
+`FilterLeaf`), not just locate it, to understand the mechanism behind both this level's `Brush842`
+and the parallel Area51 `Brush1852` residual. Full detail: `native-materialize-findings.md`, search
+"coplanar iPlane node-chain is NEVER read". Result: checked every branch of both functions
+(vertex-overflow pre-split, Front/Back recursion order, the `Split` case's front-before-back order,
+the out-of-place-coplanar path, the coplanar facing-test, `FilterLeaf`'s 3-way dispatch) against
+`bspcsg.rs` -- no divergence found. New fact: neither function reads a node's `iPlane`
+(coplanar-sibling chain) field during classify -- that chain is walked only at brush/node INSERT time
+(`bsp_add_node`), never during the filter descent, on either side. This rules out "the classify
+function itself picks a different coplanar-chain member" as a mechanism and points at tree SHAPE
+(insertion order/linkage) instead -- the SAME conclusion this thread's own "poly-list ORDER, not
+scoring" continuation (above) already reached independently for freeclinic08/nsfhq04's Pass-1 world
+tree. Two independent methods (live gdb capture here, static decompile there) now agree the bug class
+is upstream tree-build order, not the classify function. Does not by itself explain `Brush842`
+specifically (its near-non-planar poly is still unexplained). No fix shipped. Harness + saved
+pseudo-C: `dev/docs/spikes/2026-09-01-filteredpoly-full-decompile/harness/`.

@@ -828,6 +828,15 @@ fn filter_leaf(
 
 /// `FilterEdPoly` (`0x32bf0`): push `edpoly` down the world tree, splitting at each node plane,
 /// propagating `Outside`, and adding surviving fragments as nodes at leaves.
+///
+/// **Full `angr`-decompile cross-check (2026-09-01, `dev/docs/spikes/2026-09-01-filteredpoly-full-
+/// decompile/`): every branch below (vertex-overflow pre-split order, Front/Back tail recursion,
+/// `Split`'s front-before-back order, the out-of-place-coplanar path, the facing-test) matches the
+/// decompiled pseudo-C with no divergence.** Confirmed this function (and `filter_leaf`) NEVER reads
+/// a node's `i_plane` (coplanar-sibling chain) — only `bsp_add_node`'s insert-time tail-walk touches
+/// it. A coplanar-node traversal-order bug, if real, cannot live in this function: it is blind to the
+/// chain by construction, on both sides. See the findings ledger, search "coplanar `iPlane` node-chain
+/// is NEVER read", for the full comparison.
 #[allow(clippy::too_many_arguments)]
 fn filter_ed_poly(
     model: &mut Model,

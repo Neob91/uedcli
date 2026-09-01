@@ -5018,7 +5018,96 @@ Harness added this round: `find_addfunc_callers.py` (the `E8`-scan / raw-VA-imme
 finder — documents the "call is indirect, scan for the immediate instead" method for reuse),
 `area51_dist_threshold_probe.py` (the `DESC`-trace threshold-margin diagnostic).
 
-## NSFHQ04 6th continuation: epsilon-flip AND the whole "`Brush842` over-fragments" framing both
+## Full `FilterEdPoly`/`FilterLeaf` decompile: structural port confirmed exact end-to-end; the
+## coplanar `iPlane` node-chain is NEVER read during classify — narrows the Area51/NSFHQ04
+## traversal-order hypothesis away from the classify function itself (2026-09-01)
+
+Follow-up to the prior round's `angr` caller-scan (above): full decompile of both functions, read
+line-by-line against `bspcsg.rs`'s `filter_ed_poly`/`filter_leaf`/`bsp_add_node` and `fpoly.rs`'s
+`split_with_plane`/`split_in_half`. Fresh worktree off `master`. `CFGFast` over `Editor.dll` (835 KB
+`.text`, 9147 funcs) ~2m15s; `proj.analyses.Decompiler(fn, cfg=cfg.model)` on `FilterEdPoly`
+(`0x10032bf0`) and `FilterLeaf` (`0x10033130`).
+
+**Tooling trap for reuse: `fn.normalize()` is required before `Decompiler`, and its absence fails
+SILENTLY.** Without it, `Decompiler.__init__` raises `ValueError: Decompilation must work on
+normalized function graphs` — but `angr`'s own "resilience" wrapper catches and logs it, so
+`dec.codegen.text` comes back as a 12-byte near-empty stub with no exception surfaced to the caller.
+A future session must check `codegen` is non-trivial, not just that the call didn't throw.
+
+**Cross-check result: no divergence found anywhere in either function's own logic.** Point by point
+against `bspcsg.rs`:
+- **`>=14`-vertex `SplitInHalf` pre-split**: same `NumVertices` field read, same order — recurse on
+  the split-off half FIRST (direct self-call), then fall through to keep processing the retained
+  first half in the same loop iteration. Matches.
+- **Front/Back single-child tail recursion**: `SplitWithPlane`'s Front/Back return codes drive a
+  `i_node = child; continue` loop for a non-terminal child, `FilterLeaf` + return for a `-1` (leaf)
+  child. Matches.
+- **`Split` (straddle) case**: both fragments are ALWAYS visited, FRONT unconditionally before BACK,
+  each independently either `FilterLeaf`'d (child `-1`) or recursed into — no early return between
+  them. Matches `bspcsg.rs`'s `Split::Split` arm exactly, order included.
+- **Out-of-place coplanar** (rare re-entrant case): decompiles to a debug counter bump + `FOutputDevice::Logf(L"FilterEdPoly:
+  Encountered out-of-place coplanar")`, then falls straight into the ordinary front-continue path —
+  confirms `bspcsg.rs`'s own comment ("Out-of-place coplanar (rare): classify as Front") is not just
+  plausible but the literal binary behavior, log message included.
+  Zero geometric effect (the bump is a pure engine-side stat, not ported, and doesn't need to be).
+- **Ordinary coplanar (facing test)**: `dot = edpoly.normal · node.plane` via `FPlane::operator|`;
+  `dot>=0` → front child is "facing" else back, `Coplanar{i_original_node, i_back_node=other_child,
+  back_seed=other_out, processing_back=false}` built, then facing-child-empty short-circuits straight
+  to the back pass while facing-child-present recurses into it first. Matches `bspcsg.rs` arg-for-arg.
+- **`FilterLeaf`'s 3-way dispatch** (ordinary leaf / `processing_back` classify / front-pass-done →
+  descend other side) decompiles to the same 3 branches; the `(leaf_outside, front_outside)` →
+  `{COPLANAR_INSIDE, COPLANAR_OUTSIDE, FACING_OUT, FACING_IN}` 4-way truth table was hand-derived from
+  the decompiled branch conditions and matches `bspcsg.rs`'s `filter_leaf` on all 4 combinations.
+- **No degenerate/near-empty-fragment special case anywhere in `FilterEdPoly` itself**: a `Split`
+  fragment is recursed/leaf-classified unconditionally regardless of resulting vertex count — no
+  `NumVertices>=3` gate in this function (that's `Fix`'s job inside `SplitWithPlane`, already ported).
+  Matches.
+- `SplitWithPlane`'s `VeryPrecise` arg is a literal `0` at both decompiled call-sites — re-confirms
+  (not independently re-derived) the prior round's disassembly finding.
+
+**The one new, decisive fact this round adds: neither function ever reads a node's `iPlane` field
+(the coplanar-SIBLING chain pointer — distinct from a poly's own `i_link` surf-identity attribute)
+anywhere.** Exhaustively enumerated every `FBspNode` struct offset either decompiled function
+touches: only two ever appear, `iFront` and `iBack`, both read off the SAME node object reached at
+`i_node` — no third offset in the `iPlane` position appears in `FilterEdPoly` or `FilterLeaf` at all.
+`bspcsg.rs`'s `filter_ed_poly` independently never reads `model.nodes[i_node].i_plane` either
+(confirmed by direct source read, not just absence-of-mention) — **this is a MATCH, not a
+divergence**. `iPlane` IS walked in the real editor, but only at INSERT time, inside `bspAddNode`'s
+`NodePlace==NODE_PLANE` branch (`bspcsg.rs`'s own `bsp_add_node`, mirrored line-for-line: `while
+node.i_plane != -1 { i = node.i_plane }`, a plain append-to-chain-tail) — outside this round's two
+assigned functions, disassembly-cited elsewhere already, not independently re-verified this round.
+
+**Conclusion — narrows, does not confirm, the leading Area51/NSFHQ04 hypothesis.** The prior round's
+"traversal-order/tie-break difference among coplanar-grouped nodes" candidate, AS APPLIED TO
+`FilterEdPoly`'s classify descent, has no mechanism to act through: the descent is blind to the
+`iPlane` chain by construction, on BOTH sides. If a genuine coplanar-node traversal-order effect is
+real, it can only come from WHICH node ends up occupying a given `i_front`/`i_back`/chain-tail slot
+(a tree-SHAPE difference from earlier `bsp_add_node` calls), never from `FilterEdPoly` picking a
+different chain member during classify — because it never looks at the chain at all. This
+corroborates, from the opposite direction, the parallel `freeclinic08`/`nsfhq04` thread's
+independently-reached "poly-list ORDER, not scoring" finding (this file, search "poly-list ORDER
+mismatch"): both threads now point at a tree-shape/insertion-order divergence UPSTREAM of the
+classify function, not a bug in the classify function's own logic. Closing Area51/NSFHQ04 needs a
+live trace of `bsp_add_node`'s own linkage decisions or Pass-1 tree-shape (the freeclinic08 thread's
+own next step), not further reading of `FilterEdPoly` pseudo-C — reading it further is very unlikely
+to find anything new since the port has now been checked against the binary exhaustively, branch by
+branch, twice (raw disasm, this round's decompile).
+
+**No fix shipped** — no divergence found to fix; this round's job was understanding, not a fix.
+
+Harness: `dev/docs/spikes/2026-09-01-filteredpoly-full-decompile/harness/decompile_fep.py` (the
+`CFGFast` + normalize + `Decompiler` recipe, addresses hardcoded) plus the two saved pseudo-C outputs
+(`FilterEdPoly.decompiled.c`, `FilterLeaf.decompiled.c`) for future reference — re-decompiling costs
+~2m15s of `CFGFast`, these files let a future session skip straight to reading.
+
+**Follow-up (same session, read fresh before this note): a concurrent NSFHQ04 round (below,
+"NSFHQ04 6th continuation") landed while this entry was being written and live-traced `Brush842`'s
+own incremental classify-BSP add as byte-exact against the editor** — corroborating this entry's
+conclusion (no divergence in `FilterEdPoly`/`FilterLeaf`'s own logic) from an independent,
+live-gdb angle rather than a static decompile. It also flags that the raw `NADD`-tail method the
+PRIOR Area51 round used to get "26 vs 17" fragments is not properly per-brush-scoped (it also
+captures the world-level repartition's own node-seeding) and may be inflated — worth re-checking
+against a `LEAF add=true`-only count before trusting that figure. See that entry for detail.
 ## DISPROVEN — live gdb trace shows its own classify-BSP descent is byte-exact; the real residual is
 ## diffuse, at the one-time world-level repartition, same class as UNATCO's open problem (2026-09-01)
 

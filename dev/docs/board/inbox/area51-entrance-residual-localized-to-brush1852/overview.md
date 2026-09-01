@@ -86,3 +86,30 @@ its two threshold constants (`0.25` default, `0.01` "VeryPrecise") match `fpoly.
 out a float-precision epsilon-flip as the mechanism**. No fix shipped; the remaining lead is a
 traversal-order/tie-break difference among coplanar-grouped nodes, not a classify or threshold bug —
 needs the loophead-level dual trace the prior round already flagged as the next step.
+
+## Full decompile round (2026-09-01) — port confirmed exact; narrows the traversal-order lead
+
+Full detail: `dev/docs/native-materialize-findings.md`, search "coplanar `iPlane` node-chain is
+NEVER read". Decompiled both `FilterEdPoly` and `FilterLeaf` in full (not just located them) and
+checked every branch (vertex-overflow pre-split order, Front/Back tail recursion, the `Split` case's
+front-before-back order, the out-of-place-coplanar rare path, the facing-test/`Coplanar` branch, and
+`FilterLeaf`'s 3-way dispatch + 4-way cospatial truth table) against `bspcsg.rs` line-by-line — **no
+divergence found in either function's own logic**. New fact: neither function ever reads a node's
+`iPlane` (coplanar-sibling chain) field — the chain is walked only at INSERT time inside
+`bsp_add_node`, never during classify, on either side. This means the leading "traversal-order among
+coplanar nodes" hypothesis has no mechanism to act through inside `FilterEdPoly` itself — if real, it
+must come from tree SHAPE (which node occupies a slot), not from the classify function choosing among
+chain siblings. Corroborates the parallel `freeclinic08`/`nsfhq04` thread's independent "poly-list
+ORDER, not scoring" finding: both threads now point upstream, at tree-build/insertion order, not at
+the classify function. No fix shipped. Harness + saved pseudo-C:
+`dev/docs/spikes/2026-09-01-filteredpoly-full-decompile/harness/`.
+
+**Caveat flagged by the concurrent NSFHQ04 thread, unverified here**: `native-materialize-findings.md`
+("NSFHQ04 6th continuation") reports this item's own "native kept: 26" `NADD`-based fragment count for
+`Brush1852` may be inflated — the raw `NADD` dump is not per-brush-scoped (it also captures the
+one-time world-level repartition's own node-seeding), where NSFHQ04's `LEAF add=true`-only count came
+out 3.5x smaller than its own `NADD`-tail count for the analogous `Brush842` case, which then live-gdb
+traced as BYTE-EXACT. Re-checking Area51's 26-vs-17 figure against a `LEAF`-only count (not attempted
+this round) may show `Brush1852` is likewise exact, and the real residual lives in the one-time
+world-level `bspBuildFPolys`/`bspMergeCoplanars`/`bspBuild` repartition — the same open class as
+UNATCO's and freeclinic08/nsfhq04's residuals.
