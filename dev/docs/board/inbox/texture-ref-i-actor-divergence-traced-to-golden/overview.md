@@ -644,3 +644,29 @@ rather than a shipped fix, per the standing no-guessing rule.
 
 `DX.dx` stays at geometry EXACT / lighting 100% / `p_base` 13/26 -- does not reach FULL PARITY this
 round. Worktree `.claude/worktrees/dx-pbase-live-gdb`, left uncommitted.
+
+## Round 10 (2026-09-01): tried the gated, post-hoc version of round 9's insertion-order rule -- MEASURED and it makes `p_base` WORSE on all 3 tracked levels; not shipped
+
+Full detail: `native-materialize-findings.md`, "Round 10: tried the gated, post-hoc version of the
+§10.20-REFUTED insertion-order rule". Summary here since this item owns the `p_base` sub-thread.
+
+Found that `PF_SPLIT_MARKER` (the obvious "was this split" signal) is unusable for this purpose --
+it's reset every `bspBrushCSG` LOOP 2 entry for an unrelated purpose -- and built a cheaper, data-only
+gate instead (`unsplit_ring::unsplit_reversed_ring`, `bspcsg.rs`, behind
+`UEDCLI_BSPCSG_POINTS_ORIGIN_REVERSED`, off by default): proves per-surf, from data already in scope
+(no new pipeline tracking), whether its final ring is its brush's own untouched authored polygon, and
+only then replays "Origin then reversed ring" in `reorder_points_canonical`'s bases-first loop.
+
+Measured via `parity_report.py` against the existing goldens (all 3 cache-hit, no live editor needed):
+node/surf/leaf topology unaffected on every level (safety held by construction), but surf `p_base`
+diffs got WORSE everywhere -- `DX.dx` 13/26 -> 20/26, UNATCO 3592/3709 -> 3612/3729, Wanchai
+5249/8696 -> 5252/8699. A clean three-for-three negative result: even gated to the single safest case
+(a surf PROVEN unsplit by direct value comparison, not a lineage-flag guess), a post-hoc resort over
+the final model cannot reproduce the golden's true order -- confirms experimentally that the real
+order needs the INCREMENTAL insertion + periodic drop-then-readd compaction replayed in build order,
+which a single end-of-build pass structurally cannot do regardless of how precisely it's gated.
+
+Not shipped -- flag stays off by default, zero effect on the default path. Kept as a negative-result
+experiment with its own regression tests (`bspcsg::tests`, 2 new cases) so this specific dead end
+isn't re-attempted blind. `DX.dx` remains `p_base` 13/26 -- does NOT reach FULL PARITY. Worktree
+`.claude/worktrees/bsp-insertion-order`, left uncommitted.

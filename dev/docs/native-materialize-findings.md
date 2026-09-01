@@ -3508,3 +3508,79 @@ on any level small enough to dump the whole pool cheaply), `bspaddpoint_call_tra
 CSG-insertion-order investigation). `DX.dx` remains at geometry EXACT / lighting 100% / `p_base` 13/26
 unresolved — does NOT reach FULL PARITY this round. Worktree `.claude/worktrees/dx-pbase-live-gdb`,
 left uncommitted per this round's instructions.
+
+## Round 10: tried the gated, post-hoc version of the §10.20-REFUTED insertion-order rule — MEASURED, and it makes `p_base` WORSE on all 3 tracked levels; node/surf/leaf-EXACT survives unchanged; not shipped
+
+Task: the prior round found the exact mechanism (`Origin` then reversed `Vertex` list, per polygon)
+but explicitly punted on shipping it, since `reorder_points_canonical` (`bspcsg.rs`) is a single
+post-hoc resort over the FINAL model, not an incremental replay, and the rule was only confirmed for
+`DX.dx`'s unsplit boxes. Mandate: find a way to apply the rule SCOPED to provably-unsplit surfs only,
+without risking `UNATCO`/Wanchai's split-polygon path — implement + measure if it looks safe, else
+characterize the entanglement precisely.
+
+**`PF_SPLIT_MARKER` (the one bit that looked like a reusable "was this split" signal) is a dead end —
+confirmed by reading the code, not assumed.** `FPoly::empty_copy` (`fpoly.rs`) ORs it into every
+fragment `split_with_plane`/`split_in_half` produce, but `bsp_brush_csg` (`bspcsg.rs` ~line 2546)
+unconditionally clears it (`poly_flags &= 0x7fff_ffff`) on every poly entering LOOP 2's world filter,
+for LOOP 2's own unrelated purpose (the WTB re-add gate, §1247). So by the time a poly reaches
+`bsp_add_node`, the bit answers "was this fragment cut during THIS filter descent", not "was this
+polygon ever split, anywhere in the pipeline" — using it for the latter would need a NEW, separate,
+cross-cutting flag correctly OR-combined at every split/merge site (`split_with_plane`,
+`split_in_half`, `bsp_merge_coplanars::union_group`, `bspRepartition`'s own `split_poly_list`, …),
+which is real new architecture, not a small patch.
+
+**Found a cheaper, data-only gate instead — no new flag threaded through the pipeline.** `canon_surf_keys`
+(§10.19) already sorts `model.surfs` into `(i_actor, i_brush_poly)` CSG-processing order before
+`reorder_points_canonical` runs, and `build_geometry_bspcsg`'s own `brushes: &[BrushInput]` parameter
+(already in scope at the call site) holds every brush's original, AUTHORED, per-poly `Vertex` list.
+So per surf, `unsplit_reversed_ring` (new, `bspcsg.rs`) can PROVE — from data already available, no
+tracking added anywhere else — whether that surf's own final ring is its brush's untouched authored
+polygon: exactly one owning node (no `iLink` sharing), the node's vertex COUNT matches the authored
+polygon's count, and the ring's actual WORLD points match the authored polygon (transformed by the
+same `rot`/`prepivot`/`location` `brush_loop1` applies) as a value set, within tolerance. Only when all
+three hold does `reorder_points_canonical`'s bases-first loop push that surf's own ring (reversed)
+right after its `p_base`, interleaved per-surf in canonical order — replicating the live-decoded call
+shape. Every other surf falls through unchanged to the existing base-only push. Landed behind
+`UEDCLI_BSPCSG_POINTS_ORIGIN_REVERSED` (off by default), TDD'd: two new `bspcsg.rs` unit tests pin the
+gate firing on a hand-built unsplit ring (`Origin` then reversed ring, matching the live trace exactly)
+and NOT firing when the ring's vertex count doesn't match the authored polygon (the split-fragment
+proxy). `cargo test --lib bspcsg` 26/26, full crate `cargo test --quiet` 98/98, both pass with the
+flag unset (default path byte-unchanged, confirmed — this alone required no live editor: pure
+Rust + the cached goldens).
+
+**Measured on all 3 tracked levels via `parity_report.py` against the existing `/tmp/uedcli-parity-cache/`
+goldens (no live editor spin-up needed — all 3 cache-hit).** Node/surf/leaf topology is IDENTICAL
+flag-on vs flag-off on every level (the safety argument holds by construction: the gate only permutes
+`model.points`' internal order and remaps `p_base`/`i_vertex` consistently — it never touches
+`model.nodes`/`model.surfs`/`model.verts` structurally) — geometry counts, verts/points/vectors
+deltas, and lighting (records + shadow bits) are byte-identical on/off for `UNATCO` and Wanchai. But
+the `p_base`-order metric the fix targets got WORSE everywhere, not better:
+
+| level     | surf `p_base` diffs, flag OFF (baseline) | flag ON            |
+|-----------|------------------------------------------:|--------------------:|
+| `DX.dx`   | 13/26                                      | **20/26**            |
+| `UNATCO`  | 3592/3709                                  | **3612/3729**        |
+| Wanchai   | 5249/8696 (incl. unrelated texture-ref case diffs) | **5252/8699** |
+
+`DX.dx` does NOT reach FULL PARITY with the flag on — it regresses (13 -> 20). This is a clean,
+three-for-three negative result, not a partial win: even restricted to the single safest possible
+case (a surf whose ring is PROVEN, by direct value comparison, to be its brush's untouched authored
+polygon — no lineage-flag guesswork), replaying "Origin then reversed ring" as a POST-HOC pass over
+the final model does not reproduce the golden's true order. This confirms, experimentally rather than
+just architecturally, the prior round's own concern: the real order is a function of the INCREMENTAL
+insertion sequence interleaved with periodic (per-`bspRefresh`-call) drop-then-readd compaction, which
+a single end-of-build resort — however precisely gated — structurally cannot replay, because the
+final model retains no memory of which points were inserted, dropped, and re-inserted at which point
+during the build. Gating correctly identifies WHICH surfs are safe to touch without risking structure,
+but "safe to touch" and "produces the right answer" turned out to be independent questions here.
+
+**Not shipped; nothing changes on the default path.** `UEDCLI_BSPCSG_POINTS_ORIGIN_REVERSED` stays
+off by default (zero effect unless explicitly set) — kept in the tree as a negative-result experiment
+with its own regression tests (pins the exact gated behavior so a future attempt at the real
+incremental-replay architecture has a known-bad post-hoc baseline to beat, and so nobody re-discovers
+"just resort the final surfs" as a shortcut without re-deriving this result). A real fix needs
+`reorder_points_canonical` replaced by an incremental point-pool model that replays insertion AND the
+periodic reachability-GC compaction in build order — the architecture change both this round and the
+prior one identified, still unbuilt. Code: `uedcli-native/src/bspcsg.rs` (`unsplit_ring` module,
+`points_origin_reversed_enabled`, the two new `bspcsg::tests` cases). Worktree
+`.claude/worktrees/bsp-insertion-order`, left uncommitted per this round's instructions.

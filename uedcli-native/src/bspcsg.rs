@@ -117,6 +117,21 @@ fn add_recompute_normal_enabled() -> bool {
     *FLAG.get_or_init(|| std::env::var("UEDCLI_BSPCSG_ADD_RECOMPUTE_NORMAL").is_ok())
 }
 
+/// `UEDCLI_BSPCSG_POINTS_ORIGIN_REVERSED` — EXPERIMENT, off by default. Live gdb (`native-
+/// materialize-findings.md`, "DX.dx's p_base residual: §10.20 hypothesis REFUTED", 2026-09-01)
+/// decoded the real editor's per-polygon `bspAddPoint` call order: a polygon's `Origin` first
+/// (exact dedup), then its `Vertex` ring in REVERSE authored order (tolerance dedup) — confirmed
+/// live on `Brush3`, cross-checked offline on `Brush8`. See `reorder_points_canonical`'s doc
+/// comment for how this is applied and why it is gated to provably-unsplit surfs only.
+///
+/// Deliberately NOT `OnceLock`-cached (unlike `add_recompute_normal_enabled`/`point_nearest_enabled`
+/// above): this is called at most once per build (not a hot per-point path), and an uncached read
+/// lets a single test toggle the var and compare on/off within one process, matching
+/// `UEDCLI_BSPCSG_WORLD_KEEP_POINTS`'s existing convention (`bspcsg.rs` tests, `passes.rs`).
+fn points_origin_reversed_enabled() -> bool {
+    std::env::var("UEDCLI_BSPCSG_POINTS_ORIGIN_REVERSED").is_ok()
+}
+
 fn bsp_add_point(model: &mut Model, v: Vec3) -> i32 {
     // FindNearestVertex threshold 0.002 (fp-classification-sites §7).
     if point_nearest_enabled() {
@@ -3106,7 +3121,7 @@ pub fn build_geometry_bspcsg(brushes: &[build::BrushInput]) -> Result<Model, Bui
         // §10.20: drop unreferenced points and re-sort the referenced ones into the editor's on-disk
         // bases-then-rings layout.  A pure Points relabel + surf.pBase/vert.iVertex renumber — no
         // node/vector/bound touched.  Runs last (after bounds), so pBase/iVertex are the only refs.
-        reorder_points_canonical(&mut model);
+        reorder_points_canonical(&mut model, brushes);
     }
     Ok(model)
 }
@@ -3345,7 +3360,24 @@ fn rebuild_vector_pool(model: &mut Model) {
 /// model (native's own incremental pool does not reproduce it either; see §10.20).  So the Points
 /// section is structurally correct but not byte-exact; the residual is that intra-block order + an
 /// ~84-point sub-0.002 FP-value floor.
-fn reorder_points_canonical(model: &mut Model) {
+///
+/// **`UEDCLI_BSPCSG_POINTS_ORIGIN_REVERSED` (off by default): the round-10 attempt at the above
+/// residual, gated to surfs it can PROVE are safe.** The live-decoded rule (Origin then reversed
+/// Vertex ring, per polygon) can only be replayed here — a pure post-hoc pass over the FINAL model,
+/// with no memory of CSG-time insertion order — for a surf whose own final ring genuinely IS the
+/// brush's authored T3D polygon, untouched: `unsplit_reversed_ring` proves this per-surf, using only
+/// data already in `model` + the original `brushes` (no new flag threaded through the CSG pipeline —
+/// deliberately avoided: `FPoly::PF_SPLIT_MARKER` looked like a reusable "was this split" signal but
+/// is reset at every `bspBrushCSG` LOOP 2 entry for an unrelated, narrower purpose (the WTB re-add
+/// gate), so it cannot answer "was this poly EVER split, anywhere in the whole pipeline" without a
+/// new cross-cutting flag — out of scope for this gated experiment). When the check fails (the
+/// overwhelming majority of surfs on any level with real CSG splitting, i.e. UNATCO/Wanchai), the
+/// surf falls through unchanged to the base-only push below. The gate is purely ADDITIVE — it can
+/// only pull a surf's own ring points earlier into the base block (still deduped by the same
+/// first-wins `push`); it never drops, adds, or renumbers a point VALUE and never touches
+/// `model.nodes`/`model.surfs`/`model.verts` structurally, so node/surf/leaf topology cannot regress
+/// regardless of the gate's own correctness.
+fn reorder_points_canonical(model: &mut Model, brushes: &[build::BrushInput]) {
     if model.points.is_empty() {
         return;
     }
@@ -3377,6 +3409,18 @@ fn reorder_points_canonical(model: &mut Model) {
         }
         eprintln!("REORDER_POINTS_REACHABLE_ONLY kept={}", kept_reachable);
     }
+    // §10.20-round-10 gate (see doc comment above): per-surf, the reversed ring of OLD point indices
+    // to push right after that surf's own Origin — `None` unless `unsplit_reversed_ring` can PROVE
+    // the surf's final ring is the brush's own untouched authored polygon. Computed once, up front,
+    // over an immutable view of `model` — kept separate from the mutating `push` closure below.
+    let extra_pushes: Vec<Option<Vec<i32>>> = if points_origin_reversed_enabled() {
+        let owning_node = unsplit_ring::owning_node_map(&model.nodes);
+        (0..model.surfs.len())
+            .map(|si| unsplit_ring::unsplit_reversed_ring(model, brushes, &owning_node, si))
+            .collect()
+    } else {
+        Vec::new()
+    };
     {
         let mut push = |old_i: i32| {
             if old_i >= 0 {
@@ -3388,8 +3432,13 @@ fn reorder_points_canonical(model: &mut Model) {
             }
         };
         // bases first, in canonical surf order
-        for s in &model.surfs {
+        for (si, s) in model.surfs.iter().enumerate() {
             push(s.p_base);
+            if let Some(Some(rev)) = extra_pushes.get(si) {
+                for &iv in rev {
+                    push(iv);
+                }
+            }
         }
         // then ring verts, in node-array order
         for node in &model.nodes {
@@ -3435,6 +3484,92 @@ fn reorder_points_canonical(model: &mut Model) {
         if v.i_vertex >= 0 {
             v.i_vertex = old_to_new[v.i_vertex as usize];
         }
+    }
+}
+
+/// The `UEDCLI_BSPCSG_POINTS_ORIGIN_REVERSED` gate: proves, from FINAL model data alone (no new
+/// tracking threaded through the CSG pipeline), whether a surf's ring is its brush's own untouched
+/// authored polygon — see `reorder_points_canonical`'s doc comment for why this data-only proof was
+/// chosen over reusing `FPoly::PF_SPLIT_MARKER` or threading a new lineage flag.
+mod unsplit_ring {
+    use super::{build, Model};
+    use std::collections::{HashMap, HashSet};
+
+    /// `i_surf -> the one node whose i_surf == that surf`, for surfs referenced by EXACTLY one live
+    /// node (num_vertices > 0). A surf shared by more than one node (a coplanar/T-junction/repartition
+    /// split all funnel through `iLink` sharing) is excluded — its own ring alone cannot stand in for
+    /// "the whole original polygon".
+    pub(super) fn owning_node_map(nodes: &[crate::model::BspNode]) -> HashMap<i32, i32> {
+        let mut owning: HashMap<i32, i32> = HashMap::new();
+        let mut ambiguous: HashSet<i32> = HashSet::new();
+        for (ni, nd) in nodes.iter().enumerate() {
+            if nd.i_surf < 0 || nd.num_vertices <= 0 || ambiguous.contains(&nd.i_surf) {
+                continue;
+            }
+            if owning.contains_key(&nd.i_surf) {
+                owning.remove(&nd.i_surf);
+                ambiguous.insert(nd.i_surf);
+            } else {
+                owning.insert(nd.i_surf, ni as i32);
+            }
+        }
+        owning
+    }
+
+    /// For surf `si`: `Some(reversed OLD point indices of its own ring)` iff (a) it has exactly one
+    /// owning node, (b) that node's vertex COUNT matches the brush's own T3D-authored polygon
+    /// (`brushes[i_actor].polys[i_brush_poly]`) vertex count, and (c) the node ring's actual WORLD
+    /// point VALUES are, as a set, within `THRESH_POINTS_ARE_SAME` of the authored polygon transformed
+    /// by the SAME `rot`/`prepivot`/`location` `brush_loop1` applies. Any failure (out-of-range actor/
+    /// poly index, count mismatch, a single missing/extra point, `transform` erroring) returns `None`
+    /// — never a partial/best-effort ring. This is a pure read: it never mutates `model`.
+    pub(super) fn unsplit_reversed_ring(
+        model: &Model,
+        brushes: &[build::BrushInput],
+        owning_node: &HashMap<i32, i32>,
+        si: usize,
+    ) -> Option<Vec<i32>> {
+        let surf = model.surfs.get(si)?;
+        if surf.i_actor < 0 || surf.i_brush_poly < 0 {
+            return None;
+        }
+        let node = &model.nodes[*owning_node.get(&(si as i32))? as usize];
+        let b = brushes.get(surf.i_actor as usize)?;
+        let orig = b.polys.get(surf.i_brush_poly as usize)?;
+        if orig.verts.len() != node.num_vertices as usize {
+            return None;
+        }
+        let mut world = orig.clone();
+        world.transform(&b.rot, &b.prepivot, &b.location).ok()?;
+
+        let mut ring: Vec<i32> = Vec::with_capacity(node.num_vertices as usize);
+        for k in 0..node.num_vertices {
+            let idx = (node.i_vert_pool + k) as usize;
+            ring.push(model.verts.get(idx)?.i_vertex);
+        }
+        if ring.iter().any(|&iv| iv < 0 || iv as usize >= model.points.len()) {
+            return None;
+        }
+
+        // Order-independent value-set match: every ring point must pair 1:1 with a distinct authored
+        // (transformed) vertex within tolerance — proves the ring carries exactly the brush's own
+        // polygon, no more, no fewer (rules out a T-junction-grown or partially-welded ring).
+        let mut used = vec![false; world.verts.len()];
+        for &iv in &ring {
+            let p = model.points[iv as usize];
+            match world
+                .verts
+                .iter()
+                .enumerate()
+                .position(|(i, wv)| !used[i] && p.sub(wv).size() < super::THRESH_POINTS_ARE_SAME)
+            {
+                Some(i) => used[i] = true,
+                None => return None,
+            }
+        }
+
+        ring.reverse();
+        Some(ring)
     }
 }
 
@@ -4844,6 +4979,144 @@ mod tests {
             cleared.points.len(),
             "with the missing bspRefresh Points/Vectors compaction ported, keeping CSG-phase points \
              should reach the same final count as clearing, not balloon unboundedly"
+        );
+    }
+
+    /// `UEDCLI_BSPCSG_POINTS_ORIGIN_REVERSED` (round-10 §10.20 experiment): a hand-built one-surf,
+    /// one-node model whose ring is byte-identical to its brush's own authored polygon (identity
+    /// transform) — the exact shape `unsplit_reversed_ring` must clear. Calls
+    /// `reorder_points_canonical` directly (not the full `build_geometry_bspcsg` pipeline) so the
+    /// fixture pins ONLY the gate + push-order logic, independent of CSG seeding/repartition
+    /// behavior. A, B, C, D mirror `native-materialize-findings.md`'s live-decoded `Brush3` poly0
+    /// trace: authored `Vertex` order A,B,C,D (`Origin` = A = V0); the real editor's captured call
+    /// sequence was `Origin=A, then D,C,B,A` (A redundant — already registered by `Origin`).
+    #[test]
+    fn points_origin_reversed_replays_origin_then_reversed_ring_for_a_provably_unsplit_surf() {
+        let a = Vec3::new(0.0, 0.0, 0.0);
+        let b = Vec3::new(64.0, 0.0, 0.0);
+        let c = Vec3::new(64.0, 64.0, 0.0);
+        let d = Vec3::new(0.0, 64.0, 0.0);
+        let x = Vec3::new(999.0, 999.0, 999.0); // an unrelated point, reached via a 2nd node's ring.
+
+        let build_model = || {
+            let mut m = Model::default();
+            m.points = vec![a, b, c, d, x];
+            m.surfs.push(BspSurf {
+                texture_ref: 0,
+                poly_flags: 0,
+                p_base: 0, // A
+                v_normal: -1,
+                v_texture_u: -1,
+                v_texture_v: -1,
+                i_actor: 0,
+                i_brush_poly: 0,
+                pan: [0, 0],
+                i_light_map: -1,
+            });
+            let plane = Plane { x: 0.0, y: 0.0, z: 1.0, w: 0.0 };
+            m.nodes.push(BspNode::leaf(plane, 0, 0, 4)); // this surf's own node: ring A,B,C,D forward
+            m.nodes.push(BspNode::leaf(plane, -1, 4, 1)); // unrelated 2nd node: ring [X]
+            m.verts = vec![
+                BspVert { i_vertex: 0, i_side: -1 }, // A
+                BspVert { i_vertex: 1, i_side: -1 }, // B
+                BspVert { i_vertex: 2, i_side: -1 }, // C
+                BspVert { i_vertex: 3, i_side: -1 }, // D
+                BspVert { i_vertex: 4, i_side: -1 }, // X
+            ];
+            m
+        };
+        let brushes = [build::BrushInput {
+            polys: vec![FPoly::new(vec![a, b, c, d])],
+            oper: CsgOper::Add,
+            poly_flags: 0,
+            rot: [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
+            prepivot: Vec3::new(0.0, 0.0, 0.0),
+            location: Vec3::new(0.0, 0.0, 0.0),
+            scale: Vec3::new(1.0, 1.0, 1.0),
+            vec_xform: None,
+        }];
+
+        let mut off = build_model();
+        std::env::remove_var("UEDCLI_BSPCSG_POINTS_ORIGIN_REVERSED");
+        reorder_points_canonical(&mut off, &brushes);
+        assert_eq!(
+            off.points,
+            vec![a, b, c, d, x],
+            "flag OFF (default): unchanged base-only push, bases-then-rings layout"
+        );
+
+        let mut on = build_model();
+        std::env::set_var("UEDCLI_BSPCSG_POINTS_ORIGIN_REVERSED", "1");
+        reorder_points_canonical(&mut on, &brushes);
+        std::env::remove_var("UEDCLI_BSPCSG_POINTS_ORIGIN_REVERSED");
+        assert_eq!(
+            on.points,
+            vec![a, d, c, b, x],
+            "flag ON: Origin (A) first, then the ring REVERSED (D,C,B — A already registered as \
+             Origin, so its own reversed-list occurrence dedups away), matching the live-decoded \
+             editor call sequence exactly"
+        );
+        assert_eq!(
+            on.surfs[0].p_base, 0,
+            "p_base must still resolve to A's new index (0) after the remap"
+        );
+    }
+
+    /// The gate must NOT fire when the ring doesn't match the brush's own authored polygon — the
+    /// proxy for "this surf was split" this experiment relies on in place of a real split-lineage
+    /// flag (see `reorder_points_canonical`'s doc comment for why). Same fixture, but the node's
+    /// ring is missing point D (as a genuine CSG split fragment's ring would be) — falls through to
+    /// the unchanged base-only push.
+    #[test]
+    fn points_origin_reversed_falls_back_when_the_ring_does_not_match_the_authored_polygon() {
+        let a = Vec3::new(0.0, 0.0, 0.0);
+        let b = Vec3::new(64.0, 0.0, 0.0);
+        let c = Vec3::new(64.0, 64.0, 0.0);
+        let d = Vec3::new(0.0, 64.0, 0.0);
+
+        let mut m = Model::default();
+        m.points = vec![a, b, c, d];
+        m.surfs.push(BspSurf {
+            texture_ref: 0,
+            poly_flags: 0,
+            p_base: 0,
+            v_normal: -1,
+            v_texture_u: -1,
+            v_texture_v: -1,
+            i_actor: 0,
+            i_brush_poly: 0,
+            pan: [0, 0],
+            i_light_map: -1,
+        });
+        let plane = Plane { x: 0.0, y: 0.0, z: 1.0, w: 0.0 };
+        // A fragment's ring: only 3 of the original 4 verts (A,B,C) -- a split-shaped ring.
+        m.nodes.push(BspNode::leaf(plane, 0, 0, 3));
+        m.verts = vec![
+            BspVert { i_vertex: 0, i_side: -1 },
+            BspVert { i_vertex: 1, i_side: -1 },
+            BspVert { i_vertex: 2, i_side: -1 },
+        ];
+        let brushes = [build::BrushInput {
+            polys: vec![FPoly::new(vec![a, b, c, d])], // original brush poly still has 4 verts
+            oper: CsgOper::Add,
+            poly_flags: 0,
+            rot: [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
+            prepivot: Vec3::new(0.0, 0.0, 0.0),
+            location: Vec3::new(0.0, 0.0, 0.0),
+            scale: Vec3::new(1.0, 1.0, 1.0),
+            vec_xform: None,
+        }];
+
+        std::env::set_var("UEDCLI_BSPCSG_POINTS_ORIGIN_REVERSED", "1");
+        reorder_points_canonical(&mut m, &brushes);
+        std::env::remove_var("UEDCLI_BSPCSG_POINTS_ORIGIN_REVERSED");
+
+        assert_eq!(
+            m.points,
+            vec![a, b, c],
+            "vertex-count mismatch (3 vs the authored 4) must fail the gate -- falls back to the \
+             unchanged base-only push + node-order ring push, never a reordering built on a \
+             fragment's own (non-authored) ring"
         );
     }
 }
