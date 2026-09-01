@@ -4704,3 +4704,76 @@ Harness (this worktree, not yet committed to a spike dir — coordinating sessio
 node-owner attribution, `vandenberg_attrib.py`-style), `_scratch/area51_prefix_search.py` (prefix
 binary search, wraps `prefix_search_lib.PrefixSearch` with this worktree's paths),
 `_scratch/area51_remove1852.py` (the decisive removal test).
+
+## Session status snapshot #2 (2026-09-01, before another context compaction)
+
+Supersedes nothing in the first snapshot (search "Session status snapshot (2026-09-01, before a
+context compaction)") — this one covers everything that happened AFTER it, once the owner pivoted
+the sweep to the WORST-parity levels instead of the closest ones.
+
+**Parity: still zero levels at full byte parity.** Geometry-6/6 count-exact: 3/20 measured levels
+(`DX.dx`, and two `NYC_Bar` cache entries — `02_`/`08_`). `DX.dx`'s nodes array remains the only
+content-exact array anywhere in the corpus. Full fine-grained table generated and shown to the
+owner as an artifact this round (not reproduced here — regenerate via `parity_report.py` for exact
+current numbers, this ledger tracks mechanisms, not a live scoreboard).
+
+**Shipped this stretch (all committed to master, all live-verified, all independently reverified
+with a genuinely fresh rebuild before commit):**
+- **`528e602` — added `CsgOper::Active`, disassembly-confirmed to dispatch inside `bspBrushCSG`
+  identically to `Subtract`** (three independent dispatch sites, all literal-ordinal equality
+  tests, never range checks). `Engine.Brush.CsgOper`'s real class default is `CSG_Active` (0), not
+  `CSG_Add` as `brush_marshal.py` assumed for any brush with an absent `CsgOper=`. Root cause: a
+  brush actor that never went through a real `BRUSH ADD`/`SUBTRACT` exec command (i.e. a level's
+  own first-ever-placed brush, before the original 1999 author picked an explicit op) silently
+  carries this default. **Owner ruling, pinned above under "Standing directives": reproduce this
+  faithfully even though the triggering brush looks like unintentional authoring — never silently
+  correct the data.** Closed Vandenberg Gas's dominant residual (nodes +606→+32, surfs now exact).
+- **The same mechanism, once shipped, retroactively fixed a level nobody had directly targeted**:
+  FreeClinic08's nodes/surfs/leaves are now ALL byte-count exact (was `LENGTH MISMATCH` on all
+  three) — its own `Brush586` is the same class-default-`CsgOper`-absent pattern. Found only by
+  re-checking after the fact, not predicted in advance.
+- The pattern recurs a 3rd time on NSFHQ04 (`Brush8321`) but only PARTIALLY explains its residual
+  there (confirmed via live prefix-removal: removing it makes native's count diverge FURTHER, not
+  converge — a major but not sole driver). NSFHQ04 unchanged by the fix, as predicted.
+- Area51 Entrance and Training Final do NOT have this pattern at all (checked their full brush sets,
+  zero `CsgOper`-absent brushes) — ruled out cleanly, not assumed.
+
+**New open thread this stretch:**
+- Area51 Entrance's entire structural residual (+85 nodes/+51 leaves, surfs already exact) is
+  live-localized to ONE brush, `Brush1852` — removing it from the full 1343-brush level closes the
+  gap to zero on both native and a fresh editor rebuild (same "one brush explains everything" shape
+  as FreeClinic08's `Brush586`). Mechanism NOT disassembly-confirmed: the real editor absorbs this
+  small `CSG_Add` brush with zero new leaves; native creates 51. Not the brush's own geometry (3
+  identical-shape sibling placements build byte-exact) — something position/context-dependent about
+  how it CSGs against the accumulated world tree at that point. Thread:
+  `area51-entrance-residual-localized-to-brush1852`.
+- Training Final: only a static, unconfirmed lead (4 near-consecutive small `CSG_Add` brushes with
+  large partially-offsetting diffs) — not live-localized this round.
+
+**Process notes worth keeping**, beyond what's already in the first snapshot:
+- A `/tmp` tmpfs (512M cap) genuinely filled completely this stretch (`No space left on device`),
+  silently risking every background job including the live parity-table generation. Cleared ~150M
+  of loose one-off `.dx`/`.json`/`.t3d` scratch files from completed, already-committed rounds.
+  `/tmp` usage is worth a periodic `df -h /tmp` sanity check on a long session — it fills silently
+  and several tools (JSON diff dumps especially) write large temp files there without warning.
+  A stale-build false alarm THIS caused (a transiently wrong Area51 measurement, `nodes=3834` vs
+  the real `+85` delta) was correctly bisected and corrected by the investigating agent rather than
+  reported as a regression — a good model for how to handle a surprising number: verify the build
+  is genuinely fresh (or bisect across known-good commits) before trusting it, every time.
+- Subagents that stall with a stub ("waiting for background job X") sometimes DO eventually
+  produce real, valuable findings if resumed rather than abandoned — two rounds this stretch
+  (NSFHQ04's harness-contamination fix, Area51's full localization) looked stalled/stubbed on a
+  first or second check but converged on genuine results after being resumed with a direct request
+  to report synthesized findings now. Worth one or two resumes before concluding a thread is a dead
+  end, even past the usual "nudge once, take over" threshold — but don't wait indefinitely either.
+- A subagent working in a SHARED/reused worktree (not a fresh one, despite instructions) risks
+  reading a CONCURRENT agent's in-flight uncommitted edits via a shared-checkout `sys.path` —
+  caused nondeterministic `BuildError`s in the NSFHQ04 round. Always import from the SAME isolated
+  worktree the comparison is running in, never the main checkout, when multiple agents may be
+  active.
+
+**Nothing currently in flight** — every dispatched thread this stretch has concluded (fixed, or
+open with a clear next step recorded in its own board item). The natural next targets, in rough
+priority order: Area51 Entrance's `Brush1852` mechanism (needs live gdb/disassembly, has a precise
+minimal repro already), NSFHQ04's residual beyond `Brush8321`, Training Final's unconfirmed lead,
+or returning to the `p_base`/`node_flags` threads from the first snapshot.
