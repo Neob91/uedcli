@@ -5861,3 +5861,78 @@ Ready for a future round: Training Final's static lead (`Brush907`/`909`/`911`/`
 660-668) can now be retried with the live prefix binary search (`tf_prefix_search.py`/`tf_probe.py`,
 `dev/docs/spikes/2026-09-01-area51-training-final-residual/harness/`) without this specific stall —
 host contention (the other named flakiness source in the prior round) is a separate, unaddressed risk.
+
+## Rotated-brush Transform math: bit-exact on every currently-open-residual brush; ONE real (but content-thin) gap found in the rotation-MATRIX compose, not the transform apply (2026-09-02)
+
+Dedicated pass at the standing hypothesis (task brief: "the two independent full CSG/BSP decompile
+passes both confirmed the pipeline faithful, so the remaining node/leaf-count divergence on
+ROTATED-brush levels must be upstream, in the transform's exact vertex/normal floats"). Fresh
+worktree off `master` `9988365`. Harness: `dev/docs/spikes/2026-09-02-rotated-brush-transform/harness/`.
+
+**`FPoly::Transform` itself (`Engine.dll` RVA `0x152360`, `angr`-decompiled fresh,
+`FPoly__Transform.decompiled.c`): confirmed faithful.** The vertex/Base path
+(`SubV(v,PrePivot)` → `TransformVectorBy` → `AddV(.,Location)`, per point) matches
+`fpoly.rs::FPoly::transform` exactly, same op-order. Independently re-confirms (via decompile, not
+the prior live-capture method) the already-known §92 §52 fact: the real function applies a SECOND
+`SafeNormalSlow` to the rotated Normal UNCONDITIONALLY, every poly, every CsgOper — `fpoly.rs`'s own
+bare `transform()` does not (callers apply it selectively; see `bspcsg.rs`'s Subtract-only rule). Not
+revisited — §92 §53 already measured that closing this entire normal-precision campaign moves
+UNATCO's node-plane SET by exactly zero (sub-ULP differences round to the same plane key), so this is
+known parity-irrelevant, not re-chased here.
+
+**The ROTATION MATRIX construction (`rot`, what `FPoly::transform` is called WITH) is a genuinely
+different algorithm than `uedcli/rotation.py`'s.** Traced `ABrush::BuildCoords` (`Engine.dll`
+`0x111390`, raw disasm) → `FCoords::operator*(FRotator)` (`core.dll` `0x179d0`) →
+`FCoords::operator*=(FRotator)` (`core.dll` `0x18a10`) → `FCoords::operator*=(FCoords)` (`core.dll`
+`0x17df0`). The real editor builds THREE separate single-axis `FCoords` (Roll, then Pitch, then Yaw,
+reading the GMath table with the already-ported `(x>>2)&0x3fff` indexing) and chains
+`this = ((this*Roll)*Pitch)*Yaw`, ENTIRELY in scalar float32 SSE (`mulss`/`addss`, no double
+anywhere). `rotation.py::euler_to_matrix_uu` instead computes `matmul(Rz(yaw), matmul(Ry(pitch),
+Rx(roll)))` as ONE Python-**double** product, f32-cast only at the Rust FFI boundary — 3 chained f32
+products vs. 1 double product, a real structural difference the module's own header already flags
+("a genuine NON-cardinal multi-axis FRotator ... ULP-approximate") while separately (and, per this
+round, WRONGLY) asserting "DX content has NONE" of it.
+
+**Corpus scan (`scan_noncardinal.py`/`scan_brush_3axis.py`, all 21 cached `_scratch/geo-confirm-*`
+trunks): the "DX content has none" claim is false, but the gap case is vanishingly rare on
+brushes.** 421 `Rotation=`s with 2+ simultaneously non-cardinal axes exist (mostly point actors);
+narrowed to Brush actors, 4 have exactly 2 non-cardinal axes (OceanLab Lab `Brush1849`/`Brush1081`/
+`Brush2409`, NYC Underground04 `Brush134`) and exactly **2 brushes total** have all THREE axes
+simultaneously non-cardinal (the only case where the compose-order difference can bite, since a
+cardinal partner axis is an exact ±1/0 signed-permutation matrix that introduces zero rounding
+regardless of compose order/precision) — both in Vandenberg Gas: `Brush2` and `Brush246`.
+
+**Numeric check (`check_multiaxis_noncardinal.py`): real, but tiny.** Double-then-cast vs a
+per-step-f32 compose (same Roll→Pitch→Yaw order/shape, NOT a byte-exact port of the `0x18a10`
+per-axis stack layout — caveat below): all 4 real 2-axis-non-cardinal brushes and Vandenberg
+`Brush2` round-trip to **0 ULP** difference; Vandenberg **`Brush246` diverges by 1 ULP** in matrix
+entry `[0][1]` (`0x3cfd8b2e` vs `0x3cfd8b2d`). Synthetic 3-axis stress angles reproduce the same
+1-ULP-class gap readily, so this is a real precision effect, not a fluke of one input.
+
+**Why this does not explain any currently-open residual.** Area51 `Brush1852`
+(`Rotation=(Yaw=-49152)` ≡ `Yaw=16384`, single-axis EXACTLY cardinal 90°) is a signed-permutation
+matrix — provably bit-exact under ANY compose algorithm, no rounding possible. NSFHQ04 `Brush842`
+is already live-gdb-proven byte-exact in its own classify descent (unrelated to transform precision)
+and is also a cardinal rotation. NYC 747/OceanLab Lab/Training Final have exact surf counts (correct
+face set) with only node/leaf-count divergence, and none of their trunks contains a 3-axis-non-cardinal
+brush (OceanLab's 2-axis brushes measure 0 ULP). Vandenberg Gas is the only level with the gap case,
+but its own residual is already attributed to the disassembly-confirmed, unrelated `CsgOper::Active`
+mechanism (shipped) and the vertex-ring-pooling threshold (gated `UEDCLI_BSPCSG_RING_NEAR`) — neither
+investigation flagged rotation precision, and per §92 §53's precedent (a much larger normal-precision
+fix moved UNATCO's node-plane SET by zero), a 1-ULP difference on 2 of ~1,343 brushes is very unlikely
+to flip a `FindBestSplit` tie-break. **Not measured live this round** (no cached-golden A/B was run
+with a candidate fix) — budget went to the disassembly instead; noted as left undone.
+
+**Conclusion: negative result for the task's hypothesis.** The rotated-brush transform math is
+bit-exact for every brush actually implicated in an open node/leaf-count residual. The one genuine
+gap found (rotation-matrix compose order/precision) is disassembly-confirmed real but affects exactly
+2 brushes in the whole cached corpus, in a level whose residual has other, already-explained causes.
+**Not shipped** — no fix attempted (the gap's real-content footprint is too thin to justify one without
+a live measurement showing it moves anything, and the exact per-axis `0x18a10` stack layout was not
+fully decoded). `cargo test`/`bin/test` unaffected (read-only investigation, no source changes to
+`uedcli-native/` or `uedcli/rotation.py`).
+
+Board: `rotation-py-3-axis-non-cardinal-fcoords-compose` (new, inbox, p3) carries the full writeup +
+left-undone list. Harness: `dev/docs/spikes/2026-09-02-rotated-brush-transform/harness/`
+(`decompile_transform.py`, `scan_noncardinal.py`, `scan_brush_3axis.py`,
+`check_multiaxis_noncardinal.py`, `disasm_buildcoords.txt`, the two `.decompiled.c` files).

@@ -1,0 +1,381 @@
+0x10111390  push    ebp
+0x10111391  mov     ebp, esp
+0x10111393  push    -1
+0x10111395  push    0x101eab10
+0x1011139a  mov     eax, dword ptr fs:[0]
+0x101113a0  push    eax
+0x101113a1  sub     esp, 0xd0
+0x101113a7  push    ebx
+0x101113a8  push    esi
+0x101113a9  push    edi
+0x101113aa  mov     eax, dword ptr [0x10279424]  ; f32=-0.00294341
+0x101113af  xor     eax, ebp
+0x101113b1  push    eax
+0x101113b2  lea     eax, [ebp - 0xc]
+0x101113b5  mov     dword ptr fs:[0], eax
+0x101113bb  mov     dword ptr [ebp - 0x10], esp
+0x101113be  mov     dword ptr [ebp - 4], 0
+0x101113c5  wait    
+0x101113c6  lea     edi, [ecx + 0x220]
+0x101113cc  lea     eax, [ecx + 0xdc]
+0x101113d2  mov     dword ptr [ebp - 0x14], eax
+0x101113d5  lea     esi, [ecx + 0x234]
+0x101113db  mov     ebx, dword ptr [ebp + 8]
+0x101113de  test    ebx, ebx
+0x101113e0  je      0x1011146f
+0x101113e6  push    edi
+0x101113e7  lea     ecx, [ebp - 0xac]
+0x101113ed  push    ecx
+0x101113ee  push    eax
+0x101113ef  lea     eax, [ebp - 0x4c]
+0x101113f2  push    eax
+0x101113f3  push    esi
+0x101113f4  lea     eax, [ebp - 0x7c]
+0x101113f7  push    eax
+0x101113f8  mov     ecx, dword ptr [0x101f92e8]  ; IAT-> Core.dll!?GMath@@3VFGlobalMath@@A
+0x101113fe  lea     ecx, [ecx + 0x18]
+0x10111401  call    dword ptr [0x101f9228]  ; IAT-> Core.dll!??DFCoords@@QBE?AV0@ABVFScale@@@Z
+0x10111407  mov     ecx, eax
+0x10111409  call    dword ptr [0x101f9224]  ; IAT-> Core.dll!??DFCoords@@QBE?AV0@ABVFRotator@@@Z
+0x1011140f  mov     ecx, eax
+0x10111411  call    dword ptr [0x101f9228]  ; IAT-> Core.dll!??DFCoords@@QBE?AV0@ABVFScale@@@Z
+0x10111417  push    eax
+0x10111418  mov     ecx, ebx
+0x1011141a  call    dword ptr [0x101f9240]  ; IAT-> Core.dll!??4FCoords@@QAEAAV0@$$QAV0@@Z
+0x10111420  lea     eax, [ebp - 0x7c]
+0x10111423  push    eax
+0x10111424  push    esi
+0x10111425  lea     eax, [ebp - 0x4c]
+0x10111428  push    eax
+0x10111429  push    dword ptr [ebp - 0x14]
+0x1011142c  lea     eax, [ebp - 0xac]
+0x10111432  push    eax
+0x10111433  push    edi
+0x10111434  lea     eax, [ebp - 0xdc]
+0x1011143a  push    eax
+0x1011143b  mov     ecx, dword ptr [0x101f92e8]  ; IAT-> Core.dll!?GMath@@3VFGlobalMath@@A
+0x10111441  lea     ecx, [ecx + 0x18]
+0x10111444  call    dword ptr [0x101f9230]  ; IAT-> Core.dll!??KFCoords@@QBE?AV0@ABVFScale@@@Z
+0x1011144a  mov     ecx, eax
+0x1011144c  call    dword ptr [0x101f922c]  ; IAT-> Core.dll!??KFCoords@@QBE?AV0@ABVFRotator@@@Z
+0x10111452  mov     ecx, eax
+0x10111454  call    dword ptr [0x101f9230]  ; IAT-> Core.dll!??KFCoords@@QBE?AV0@ABVFScale@@@Z
+0x1011145a  mov     ecx, eax
+0x1011145c  call    dword ptr [0x101f9220]  ; IAT-> Core.dll!?Transpose@FCoords@@QBE?AV1@XZ
+0x10111462  push    eax
+0x10111463  lea     ecx, [ebx + 0x30]
+0x10111466  call    dword ptr [0x101f9240]  ; IAT-> Core.dll!??4FCoords@@QAEAAV0@$$QAV0@@Z
+0x1011146c  mov     eax, dword ptr [ebp - 0x14]
+0x1011146f  mov     ebx, dword ptr [ebp + 0xc]
+0x10111472  test    ebx, ebx
+0x10111474  je      0x10111500
+0x1011147a  push    esi
+0x1011147b  lea     ecx, [ebp - 0xdc]
+0x10111481  push    ecx
+0x10111482  push    eax
+0x10111483  lea     eax, [ebp - 0x7c]
+0x10111486  push    eax
+0x10111487  push    edi
+0x10111488  lea     eax, [ebp - 0x4c]
+0x1011148b  push    eax
+0x1011148c  mov     ecx, dword ptr [0x101f92e8]  ; IAT-> Core.dll!?GMath@@3VFGlobalMath@@A
+0x10111492  lea     ecx, [ecx + 0x18]
+0x10111495  call    dword ptr [0x101f9230]  ; IAT-> Core.dll!??KFCoords@@QBE?AV0@ABVFScale@@@Z
+0x1011149b  mov     ecx, eax
+0x1011149d  call    dword ptr [0x101f922c]  ; IAT-> Core.dll!??KFCoords@@QBE?AV0@ABVFRotator@@@Z
+0x101114a3  mov     ecx, eax
+0x101114a5  call    dword ptr [0x101f9230]  ; IAT-> Core.dll!??KFCoords@@QBE?AV0@ABVFScale@@@Z
+0x101114ab  push    eax
+0x101114ac  mov     ecx, ebx
+0x101114ae  call    dword ptr [0x101f9240]  ; IAT-> Core.dll!??4FCoords@@QAEAAV0@$$QAV0@@Z
+0x101114b4  lea     eax, [ebp - 0xdc]
+0x101114ba  push    eax
+0x101114bb  push    edi
+0x101114bc  lea     eax, [ebp - 0x7c]
+0x101114bf  push    eax
+0x101114c0  push    dword ptr [ebp - 0x14]
+0x101114c3  lea     eax, [ebp - 0x4c]
+0x101114c6  push    eax
+0x101114c7  push    esi
+0x101114c8  lea     eax, [ebp - 0xac]
+0x101114ce  push    eax
+0x101114cf  mov     ecx, dword ptr [0x101f92e8]  ; IAT-> Core.dll!?GMath@@3VFGlobalMath@@A
+0x101114d5  lea     ecx, [ecx + 0x18]
+0x101114d8  call    dword ptr [0x101f9228]  ; IAT-> Core.dll!??DFCoords@@QBE?AV0@ABVFScale@@@Z
+0x101114de  mov     ecx, eax
+0x101114e0  call    dword ptr [0x101f9224]  ; IAT-> Core.dll!??DFCoords@@QBE?AV0@ABVFRotator@@@Z
+0x101114e6  mov     ecx, eax
+0x101114e8  call    dword ptr [0x101f9228]  ; IAT-> Core.dll!??DFCoords@@QBE?AV0@ABVFScale@@@Z
+0x101114ee  mov     ecx, eax
+0x101114f0  call    dword ptr [0x101f9220]  ; IAT-> Core.dll!?Transpose@FCoords@@QBE?AV1@XZ
+0x101114f6  push    eax
+0x101114f7  lea     ecx, [ebx + 0x30]
+0x101114fa  call    dword ptr [0x101f9240]  ; IAT-> Core.dll!??4FCoords@@QAEAAV0@$$QAV0@@Z
+0x10111500  mov     ecx, esi
+0x10111502  call    dword ptr [0x101f9214]  ; IAT-> Core.dll!?Orientation@FScale@@QAEMXZ
+0x10111508  fstp    dword ptr [ebp + 8]
+0x1011150b  mov     ecx, edi
+0x1011150d  call    dword ptr [0x101f9214]  ; IAT-> Core.dll!?Orientation@FScale@@QAEMXZ
+0x10111513  fmul    dword ptr [ebp + 8]
+0x10111516  wait    
+0x10111517  mov     ecx, dword ptr [ebp - 0xc]
+0x1011151a  mov     dword ptr fs:[0], ecx
+0x10111521  pop     ecx
+0x10111522  pop     edi
+0x10111523  pop     esi
+0x10111524  pop     ebx
+0x10111525  mov     esp, ebp
+0x10111527  pop     ebp
+0x10111528  ret     8
+0x1011152b  push    0x101fb200
+0x10111530  push    0x101f9f40
+0x100179d0  push    ebp
+0x100179d1  mov     ebp, esp
+0x100179d3  sub     esp, 0x30
+0x100179d6  movups  xmm0, xmmword ptr [ecx]
+0x100179d9  push    esi
+0x100179da  push    dword ptr [ebp + 0xc]
+0x100179dd  movups  xmmword ptr [ebp - 0x30], xmm0
+0x100179e1  movups  xmm0, xmmword ptr [ecx + 0x10]
+0x100179e5  movups  xmmword ptr [ebp - 0x20], xmm0
+0x100179e9  movups  xmm0, xmmword ptr [ecx + 0x20]
+0x100179ed  lea     ecx, [ebp - 0x30]
+0x100179f0  movups  xmmword ptr [ebp - 0x10], xmm0
+0x100179f4  call    0x10018a10
+0x100179f9  mov     esi, dword ptr [ebp + 8]
+0x100179fc  mov     edx, eax
+0x100179fe  mov     ecx, dword ptr [edx]
+0x10017a00  mov     dword ptr [esi], ecx
+0x10017a02  mov     ecx, dword ptr [edx + 4]
+0x10017a05  mov     dword ptr [esi + 4], ecx
+0x10017a08  mov     ecx, dword ptr [edx + 8]
+0x10017a0b  mov     dword ptr [esi + 8], ecx
+0x10017a0e  mov     eax, dword ptr [edx + 0xc]
+0x10017a11  mov     dword ptr [esi + 0xc], eax
+0x10017a14  mov     eax, dword ptr [edx + 0x10]
+0x10017a17  mov     dword ptr [esi + 0x10], eax
+0x10017a1a  mov     eax, dword ptr [edx + 0x14]
+0x10017a1d  mov     dword ptr [esi + 0x14], eax
+0x10017a20  mov     eax, dword ptr [edx + 0x18]
+0x10017a23  mov     dword ptr [esi + 0x18], eax
+0x10017a26  mov     eax, dword ptr [edx + 0x1c]
+0x10017a29  mov     dword ptr [esi + 0x1c], eax
+0x10017a2c  mov     eax, dword ptr [edx + 0x20]
+0x10017a2f  mov     dword ptr [esi + 0x20], eax
+0x10017a32  mov     eax, esi
+0x10017a34  mov     ecx, dword ptr [edx + 0x24]
+0x10017a37  mov     dword ptr [esi + 0x24], ecx
+0x10017a3a  mov     ecx, dword ptr [edx + 0x28]
+0x10017a3d  mov     dword ptr [esi + 0x28], ecx
+0x10017a40  mov     ecx, dword ptr [edx + 0x2c]
+0x10017a43  mov     dword ptr [esi + 0x2c], ecx
+0x10017a46  pop     esi
+0x10017a47  mov     esp, ebp
+0x10017a49  pop     ebp
+0x10017a4a  ret     8
+0x10017a4d  int3    
+--- operator*=(FRotator) 0x18a10 ---
+0x10018a10  push    ebp
+0x10018a11  mov     ebp, esp
+0x10018a13  sub     esp, 0x30
+0x10018a16  movaps  xmm0, xmmword ptr [0x100a0aa0]  ; f32=0
+0x10018a1d  push    esi
+0x10018a1e  mov     esi, dword ptr [ebp + 8]
+0x10018a21  push    edi
+0x10018a22  mov     edi, ecx
+0x10018a24  mov     dword ptr [ebp - 0x20], 0x80000000
+0x10018a2b  movups  xmmword ptr [ebp - 0x30], xmm0
+0x10018a2f  mov     edx, dword ptr [esi + 8]
+0x10018a32  mov     eax, edx
+0x10018a34  sar     eax, 2
+0x10018a37  and     eax, 0x3fff
+0x10018a3c  mov     dword ptr [ebp - 0x1c], 0
+0x10018a43  mov     dword ptr [ebp - 0x18], 0x80000000
+0x10018a4a  mov     dword ptr [ebp - 0xc], 0
+0x10018a51  movss   xmm2, dword ptr [eax*4 + 0x1013e934]
+0x10018a5a  lea     eax, [edx + 0x4000]
+0x10018a60  sar     eax, 2
+0x10018a63  and     eax, 0x3fff
+0x10018a68  movss   dword ptr [ebp - 0x10], xmm2
+0x10018a6d  xorps   xmm2, xmmword ptr [0x100a0ae0]  ; f32=-0
+0x10018a74  movss   dword ptr [ebp - 8], xmm2
+0x10018a79  movss   xmm1, dword ptr [eax*4 + 0x1013e934]
+0x10018a82  lea     eax, [ebp - 0x30]
+0x10018a85  push    eax
+0x10018a86  movss   dword ptr [ebp - 0x14], xmm1
+0x10018a8b  movss   dword ptr [ebp - 4], xmm1
+0x10018a90  call    0x10017df0
+0x10018a95  mov     ecx, dword ptr [esi]
+0x10018a97  mov     eax, ecx
+0x10018a99  sar     eax, 2
+0x10018a9c  and     eax, 0x3fff
+0x10018aa1  mov     dword ptr [ebp - 0x30], 0
+0x10018aa8  mov     dword ptr [ebp - 0x2c], 0
+0x10018aaf  mov     dword ptr [ebp - 0x28], 0
+0x10018ab6  mov     dword ptr [ebp - 0x20], 0
+0x10018abd  movss   xmm2, dword ptr [eax*4 + 0x1013e934]
+0x10018ac6  lea     eax, [ecx + 0x4000]
+0x10018acc  sar     eax, 2
+0x10018acf  movaps  xmm0, xmm2
+0x10018ad2  xorps   xmm0, xmmword ptr [0x100a0ae0]  ; f32=-0
+0x10018ad9  and     eax, 0x3fff
+0x10018ade  mov     ecx, edi
+0x10018ae0  movss   dword ptr [ebp - 0x1c], xmm0
+0x10018ae5  mov     dword ptr [ebp - 0x18], 0
+0x10018aec  mov     dword ptr [ebp - 0x14], 0x3f800000
+0x10018af3  movss   xmm1, dword ptr [eax*4 + 0x1013e934]
+0x10018afc  lea     eax, [ebp - 0x30]
+0x10018aff  push    eax
+0x10018b00  movss   dword ptr [ebp - 0x24], xmm1
+0x10018b05  mov     dword ptr [ebp - 0x10], 0x80000000
+0x10018b0c  movss   dword ptr [ebp - 0xc], xmm2
+0x10018b11  mov     dword ptr [ebp - 8], 0
+0x10018b18  movss   dword ptr [ebp - 4], xmm1
+0x10018b1d  call    0x10017df0
+0x10018b22  mov     ecx, dword ptr [esi + 4]
+0x10018b25  mov     eax, ecx
+0x10018b27  sar     eax, 2
+0x10018b2a  and     eax, 0x3fff
+0x10018b2f  mov     dword ptr [ebp - 0x30], 0
+0x10018b36  mov     dword ptr [ebp - 0x2c], 0
+0x10018b3d  mov     dword ptr [ebp - 0x28], 0
+0x10018b44  mov     dword ptr [ebp - 0x1c], 0x80000000
+0x10018b4b  movss   xmm2, dword ptr [eax*4 + 0x1013e934]
+0x10018b54  lea     eax, [ecx + 0x4000]
+0x10018b5a  sar     eax, 2
+0x10018b5d  movaps  xmm0, xmm2
+0x10018b60  xorps   xmm0, xmmword ptr [0x100a0ae0]  ; f32=-0
+0x10018b67  and     eax, 0x3fff
+0x10018b6c  movss   dword ptr [ebp - 0x20], xmm0
+0x10018b71  mov     ecx, edi
+0x10018b73  movaps  xmm0, xmmword ptr [0x100a0ab0]  ; f32=0
+0x10018b7a  movss   dword ptr [ebp - 0x18], xmm2
+0x10018b7f  movss   xmm1, dword ptr [eax*4 + 0x1013e934]
+0x10018b88  lea     eax, [ebp - 0x30]
+0x10018b8b  push    eax
+0x10018b8c  movss   dword ptr [ebp - 0x24], xmm1
+0x10018b91  movss   dword ptr [ebp - 0x14], xmm1
+0x10018b96  movups  xmmword ptr [ebp - 0x10], xmm0
+0x10018b9a  call    0x10017df0
+0x10018b9f  mov     eax, edi
+0x10018ba1  pop     edi
+0x10018ba2  pop     esi
+0x10018ba3  mov     esp, ebp
+0x10018ba5  pop     ebp
+--- operator*=(FCoords) 0x17df0 ---
+0x10017df0  push    ebp
+0x10017df1  mov     ebp, esp
+0x10017df3  mov     eax, dword ptr [ebp + 8]
+0x10017df6  movss   xmm4, dword ptr [ecx]
+0x10017dfa  movss   xmm5, dword ptr [ecx + 4]
+0x10017dff  movss   xmm3, dword ptr [ecx + 8]
+0x10017e04  subss   xmm5, dword ptr [eax + 4]
+0x10017e09  subss   xmm4, dword ptr [eax]
+0x10017e0d  subss   xmm3, dword ptr [eax + 8]
+0x10017e12  movaps  xmm2, xmm5
+0x10017e15  movaps  xmm1, xmm5
+0x10017e18  mulss   xmm2, dword ptr [eax + 0x10]
+0x10017e1d  movaps  xmm0, xmm4
+0x10017e20  mulss   xmm0, dword ptr [eax + 0xc]
+0x10017e25  mulss   xmm1, dword ptr [eax + 0x1c]
+0x10017e2a  mulss   xmm5, dword ptr [eax + 0x28]
+0x10017e2f  addss   xmm2, xmm0
+0x10017e33  movaps  xmm0, xmm3
+0x10017e36  mulss   xmm0, dword ptr [eax + 0x14]
+0x10017e3b  addss   xmm2, xmm0
+0x10017e3f  movaps  xmm0, xmm4
+0x10017e42  mulss   xmm0, dword ptr [eax + 0x18]
+0x10017e47  mulss   xmm4, dword ptr [eax + 0x24]
+0x10017e4c  addss   xmm1, xmm0
+0x10017e50  movaps  xmm0, xmm3
+0x10017e53  mulss   xmm0, dword ptr [eax + 0x20]
+0x10017e58  mulss   xmm3, dword ptr [eax + 0x2c]
+0x10017e5d  addss   xmm5, xmm4
+0x10017e61  addss   xmm1, xmm0
+0x10017e65  movss   dword ptr [ecx], xmm2
+0x10017e69  addss   xmm5, xmm3
+0x10017e6d  movss   dword ptr [ecx + 4], xmm1
+0x10017e72  movss   dword ptr [ecx + 8], xmm5
+0x10017e77  movss   xmm4, dword ptr [ecx + 0x10]
+0x10017e7c  movss   xmm5, dword ptr [ecx + 0xc]
+0x10017e81  movaps  xmm3, xmm4
+0x10017e84  mulss   xmm3, dword ptr [eax + 0x10]
+0x10017e89  movaps  xmm0, xmm5
+0x10017e8c  mulss   xmm0, dword ptr [eax + 0xc]
+0x10017e91  movaps  xmm1, xmm5
+0x10017e94  movss   xmm2, dword ptr [ecx + 0x14]
+0x10017e99  mulss   xmm1, dword ptr [eax + 0x18]
+0x10017e9e  mulss   xmm5, dword ptr [eax + 0x24]
+0x10017ea3  addss   xmm3, xmm0
+0x10017ea7  movaps  xmm0, xmm2
+0x10017eaa  mulss   xmm0, dword ptr [eax + 0x14]
+0x10017eaf  addss   xmm3, xmm0
+0x10017eb3  movaps  xmm0, xmm4
+0x10017eb6  mulss   xmm0, dword ptr [eax + 0x1c]
+0x10017ebb  mulss   xmm4, dword ptr [eax + 0x28]
+0x10017ec0  addss   xmm1, xmm0
+0x10017ec4  movaps  xmm0, xmm2
+0x10017ec7  mulss   xmm0, dword ptr [eax + 0x20]
+0x10017ecc  mulss   xmm2, dword ptr [eax + 0x2c]
+0x10017ed1  addss   xmm5, xmm4
+0x10017ed5  addss   xmm1, xmm0
+0x10017ed9  movss   dword ptr [ecx + 0xc], xmm3
+0x10017ede  addss   xmm5, xmm2
+0x10017ee2  movss   dword ptr [ecx + 0x10], xmm1
+0x10017ee7  movss   dword ptr [ecx + 0x14], xmm5
+0x10017eec  movss   xmm4, dword ptr [ecx + 0x1c]
+0x10017ef1  movss   xmm5, dword ptr [ecx + 0x18]
+0x10017ef6  movaps  xmm3, xmm4
+0x10017ef9  mulss   xmm3, dword ptr [eax + 0x10]
+0x10017efe  movaps  xmm0, xmm5
+0x10017f01  mulss   xmm0, dword ptr [eax + 0xc]
+0x10017f06  movaps  xmm1, xmm5
+0x10017f09  movss   xmm2, dword ptr [ecx + 0x20]
+0x10017f0e  mulss   xmm1, dword ptr [eax + 0x18]
+0x10017f13  mulss   xmm5, dword ptr [eax + 0x24]
+0x10017f18  addss   xmm3, xmm0
+0x10017f1c  movaps  xmm0, xmm2
+0x10017f1f  mulss   xmm0, dword ptr [eax + 0x14]
+0x10017f24  addss   xmm3, xmm0
+0x10017f28  movaps  xmm0, xmm4
+0x10017f2b  mulss   xmm0, dword ptr [eax + 0x1c]
+0x10017f30  mulss   xmm4, dword ptr [eax + 0x28]
+0x10017f35  addss   xmm1, xmm0
+0x10017f39  movaps  xmm0, xmm2
+0x10017f3c  mulss   xmm0, dword ptr [eax + 0x20]
+0x10017f41  mulss   xmm2, dword ptr [eax + 0x2c]
+0x10017f46  addss   xmm5, xmm4
+0x10017f4a  addss   xmm1, xmm0
+0x10017f4e  movss   dword ptr [ecx + 0x18], xmm3
+0x10017f53  addss   xmm5, xmm2
+0x10017f57  movss   dword ptr [ecx + 0x1c], xmm1
+0x10017f5c  movss   dword ptr [ecx + 0x20], xmm5
+0x10017f61  movss   xmm4, dword ptr [ecx + 0x28]
+0x10017f66  movss   xmm5, dword ptr [ecx + 0x24]
+0x10017f6b  movaps  xmm3, xmm4
+0x10017f6e  mulss   xmm3, dword ptr [eax + 0x10]
+0x10017f73  movaps  xmm0, xmm5
+0x10017f76  mulss   xmm0, dword ptr [eax + 0xc]
+0x10017f7b  movaps  xmm1, xmm5
+0x10017f7e  movss   xmm2, dword ptr [ecx + 0x2c]
+0x10017f83  mulss   xmm1, dword ptr [eax + 0x18]
+0x10017f88  mulss   xmm5, dword ptr [eax + 0x24]
+0x10017f8d  addss   xmm3, xmm0
+0x10017f91  movaps  xmm0, xmm2
+0x10017f94  mulss   xmm0, dword ptr [eax + 0x14]
+0x10017f99  addss   xmm3, xmm0
+0x10017f9d  movaps  xmm0, xmm4
+0x10017fa0  mulss   xmm0, dword ptr [eax + 0x1c]
+0x10017fa5  mulss   xmm4, dword ptr [eax + 0x28]
+0x10017faa  addss   xmm1, xmm0
+0x10017fae  movaps  xmm0, xmm2
+0x10017fb1  mulss   xmm0, dword ptr [eax + 0x20]
+0x10017fb6  mulss   xmm2, dword ptr [eax + 0x2c]
+0x10017fbb  addss   xmm5, xmm4
+0x10017fbf  mov     eax, ecx
+0x10017fc1  addss   xmm1, xmm0
+0x10017fc5  movss   dword ptr [ecx + 0x24], xmm3
+0x10017fca  addss   xmm5, xmm2
+0x10017fce  movss   dword ptr [ecx + 0x28], xmm1
+0x10017fd3  movss   dword ptr [ecx + 0x2c], xmm5
+0x10017fd8  pop     ebp

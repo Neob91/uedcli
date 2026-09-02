@@ -241,3 +241,16 @@ logic and `FilterEdPoly`/`FilterLeaf`'s classify descent are now fully checked a
 unexamined piece is `bsp_brush_csg`'s own `AddFunc`/`leaf_func` dispatch (which decides WHETHER/WHEN to
 call `bspAddNode` at all, per brush) and the world-brush processing/poly-soup order feeding it — not
 yet decompiled or live-traced at this level of detail.
+
+## Rotated-brush transform-precision hypothesis: RULED OUT for `Brush1852` specifically (2026-09-02)
+
+Dispatched to check whether `FPoly::Transform`'s exact vertex/normal floats (not the CSG/BSP pipeline
+itself, already closed off above) explain the residual. `Brush1852`'s `Rotation=(Yaw=-49152)` ≡
+`Yaw=16384` mod 65536 — a single-axis, EXACTLY cardinal (90°) rotation, whose matrix is a
+signed-permutation (entries in {-1,0,1}): no floating-point rounding occurs under ANY compose
+algorithm, so this brush's transformed verts/normal are provably bit-exact regardless of how the
+rotation matrix is built. Full writeup (including a genuine, disassembly-confirmed but
+content-thin gap found elsewhere, in Vandenberg Gas, not this brush): `native-materialize-findings.md`,
+search "Rotated-brush Transform math"; new board item `rotation-py-3-axis-non-cardinal-fcoords-compose`.
+Confirms the "next step" already named above (`bsp_brush_csg`'s `AddFunc`/poly-soup order) remains the
+live lead for this item — transform precision is closed off as a candidate.

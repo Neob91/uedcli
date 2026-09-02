@@ -538,3 +538,14 @@ decides WHETHER/WHEN to call `bspAddNode` at all, per brush) and the world-brush
 order feeding it — not yet decompiled or live-traced at this level of detail. A live per-brush Pass-1
 tree-shape trace (`prepart_tree_*`, not yet run at world level for nsfhq04) remains the most direct way
 to attribute the divergence to `Brush842` or a specific decision.
+
+## Rotated-brush transform-precision hypothesis: RULED OUT for `Brush842` specifically (2026-09-02)
+
+Dispatched to check whether `FPoly::Transform`'s exact vertex/normal floats explain the residual
+(the CSG/BSP pipeline itself is already closed off above). `Brush842`'s own classify-BSP descent was
+already live-gdb-proven byte-exact (6th continuation, above) — unrelated to transform precision — and
+its rotation is a cardinal 180°-flip, same signed-permutation-matrix argument as Area51's `Brush1852`
+(see that item's own addendum). Full writeup, including a genuine but content-thin gap found
+elsewhere (Vandenberg Gas, not this level): `native-materialize-findings.md`, search "Rotated-brush
+Transform math"; new board item `rotation-py-3-axis-non-cardinal-fcoords-compose`. `bsp_brush_csg`'s
+poly-soup order remains the live lead for this item.
