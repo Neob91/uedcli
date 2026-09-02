@@ -110,10 +110,11 @@ def test_board_holds_only_the_eight_stages() -> None:
     A loose `.md` at the top level is how the old shape comes back one file at a time — someone
     parks a list somewhere rather than filing items, and the board quietly has two homes again.
     """
+    allowed = set(STAGES) | {"README.md", "bd-id-map.tsv"}
     entries = {p.name for p in BOARD.iterdir() if not p.name.startswith(".")}
-    assert entries == set(STAGES) | {"README.md"}, (
-        f"unexpected entries in dev/docs/board/: {sorted(entries - set(STAGES) - {'README.md'})}; "
-        f"missing: {sorted(set(STAGES) | {'README.md'} - entries)}"
+    assert entries == allowed, (
+        f"unexpected entries in dev/docs/board/: {sorted(entries - allowed)}; "
+        f"missing: {sorted(allowed - entries)}"
     )
 
 
@@ -258,7 +259,20 @@ def test_slug_references_resolve(doc: Path) -> None:
     """Every ``board item `<slug>``` in the tree names an item that exists."""
     if _rel(doc) in _MAY_DEFINE_THE_FORM:
         pytest.skip("documents the reference form itself")
-    slugs = {i.name for i in _items()}
+    # Slugs migrated to beads (see bd-id-map.tsv) still count as resolvable: the
+    # map is their permanent forwarding address, so old citations stay valid.
+    migrated = {
+        line.split("\t")[0]
+        for line in (BOARD / "bd-id-map.tsv").read_text().splitlines()
+        if line and not line.startswith("#")
+    }
+    # A container item (e.g. to-build/native-materialize/) holds sub-items one
+    # level down; their names are citable too.
+    nested = {
+        d.name for i in _items() for d in i.glob("*")
+        if d.is_dir() and d.name != "questions"
+    }
+    slugs = {i.name for i in _items()} | nested | migrated
     text = doc.read_text(encoding="utf-8", errors="replace")
     dangling = [
         s for m in _SLUG_REF.finditer(text)

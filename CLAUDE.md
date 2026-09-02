@@ -4,10 +4,10 @@ Every decision that is the owner's to make goes through Claude Code's `AskUserQu
 prose in the chat, where it gets skimmed, half-answered, or scrolls away. This covers design forks,
 `direction/` rulings, sequencing calls, and anything a review escalates.
 
-Never overrule the owner silently, and never downgrade a real question into a board item to avoid
+Never overrule the owner silently, and never downgrade a real question into a bd issue to avoid
 asking it. If a rule of theirs points one way and you judge otherwise, that is a question for the
-widget, not a deviation recorded in a commit message and moved past. The board is for a real finding
-that is out of scope for the current change. *(Owner ruling, 2026-07-26.)*
+widget, not a deviation recorded in a commit message and moved past. The tracker is for a real
+finding that is out of scope for the current change. *(Owner ruling, 2026-07-26.)*
 
 ### A decision is implemented as given, never altered without an explicit yes
 
@@ -26,15 +26,15 @@ Wherever the decision was made — a spec, chat, a one-line answer:
   ruled, including its known costs, and pin those costs in a test or doc so they are recorded rather
   than quietly re-fixed later.
 
-### dev/docs — never edit without the owner's approval, except the board
+### dev/docs — never edit without the owner's approval
 
 Get the owner's explicit yes before you create, edit, reword, or delete anything under `dev/docs/` —
 `architecture.md`, `rationale/`, `rules/`, `unrealed/`, `spikes/`, `direction/`, and the rest. Propose
 the exact text and wait; "it follows from what they said" does not satisfy this. When a doc looks
 stale, ask — do not edit.
 
-The one exception is `dev/docs/board/`, which stays agent-operated: log findings
-(`bin/board new inbox`), move items between stages, and trim `done/` entries without asking.
+Issue tracking is agent-operated and lives in beads (`bd`), not under `dev/docs/`. The residual
+`dev/docs/board/` (one in-flight item cluster plus `bd-id-map.tsv`) is also agent-operated.
 
 `dev/docs/direction/<topic>.md` is the strictest case and carries extra handling. **Default to
 leaving it alone.** It records a genuinely new or changed *direction* — a shift in what the product
@@ -47,13 +47,11 @@ owner decided — product intent and process rulings alike — revised in place,
 dated history (git keeps that); evidence citations and live-finding dates stay. Down to a single
 `Rejected` bullet, do not touch it without a yes; moving a topic out needs a yes too.
 `direction/README.md` is the exception within the exception: its index rows and short model statement
-may be maintained freely (no topic content, never an `@` import). Park a decision awaiting a yes in the
-`questions/` directory of the board item it concerns — the proposed text verbatim, empty `## Answer` —
-added to its respective item, never logged as a standalone issue. Only when NO board item owns the
-decision (nothing on the board covers the work it gates) do you file it standalone with
-`bin/board new inbox '[OWNER — confirm] …'` (`kind = "owner-question"`), the proposed text in its
-`overview.md`. Commits
-touching `dev/docs/direction/` carry a `Confirmed: <topic>` trailer.
+may be maintained freely (no topic content, never an `@` import). Park a decision awaiting a yes on
+the bd issue it concerns: append an `## Open question` section with the proposed text verbatim and
+set the issue `blocked` — never a standalone issue. Only when NO issue owns the decision do you file
+one standalone (`bd create '[OWNER — confirm] …' -t task -l owner-question`, status `blocked`).
+Commits touching `dev/docs/direction/` carry a `Confirmed: <topic>` trailer.
 
 Nothing mechanical enforces any of this. Why it is shaped this way: `dev/docs/direction/process.md`.
 
@@ -103,7 +101,7 @@ The detail and the rejected alternatives live in `dev/docs/direction/conventions
 
 ## Keep it short and plain
 
-Each document, docstring, code comment, commit message, and board item — including this file — should
+Each document, docstring, code comment, commit message, and bd issue — including this file — should
 be as short as possible without losing meaning, and written in plain language. These are the rules
 most often broken.
 
@@ -145,29 +143,25 @@ Document new learnings about how UnrealEd functions, our goals, or architectural
 — `dev/docs/unrealed/` for engine findings, back-referenced from code comments. The public
 documentation is very lacking and discovering this knowledge is expensive.
 
-## The board — the backlog, and where findings go
+## Issues — the backlog, and where findings go
 
-The board is one directory per work item (`dev/docs/board/<stage>/<slug>/overview.md`, plus optional
-`spec.md`, `plan.md`, and `questions/<q>.md`). The stage queues are named for the next action an item
-needs: `inbox/` (un-triaged capture, including anything you'd flag for the owner) → `to-spec/` →
-`to-spike/` → `to-plan/` → `to-build/` (the ready-to-build queue), plus `someday/`, `stale/`, and
-`done/`. An item advances with a single `git mv`. Read `dev/docs/board/README.md` before working the
-board — stages, frontmatter, slugs, and the question flow.
+Issues live in beads (`bd`); the Beads Issue Tracker section below has the command reference. The
+2026-09-02 migration from `dev/docs/board/` is mapped in `dev/docs/board/bd-id-map.tsv`; old
+``board item `slug``` citations resolve through it. Specs live in an issue's design field, plans in
+its notes field.
 
 Three rules bind every session:
 
-- Log a finding with `bin/board new inbox '<title>'`. It creates a valid item and prints its path;
-  write the detail into that `overview.md`. Anything that would otherwise live only in chat goes
+- Log a finding with `bd create '<title>'`. Anything that would otherwise live only in chat goes
   here: a provisional call, an assumption, a risk, a deviation from spec/plan, work you deliberately
-  didn't do. If something gets deferred mid-implementation, file a separate item rather than letting
+  didn't do. If something gets deferred mid-implementation, file a separate issue rather than letting
   the original cover both halves.
-- Run `bin/board answered` at session start, and before pulling work off `to-build/`. A question the
-  owner has answered is invisible otherwise. The commit that folds an answer out also deletes the
-  question file — if you find it already gone, another session has done it; stop.
-- A question raised mid-pipeline does not move its item. Write it into that item's own `questions/`
-  directory and leave the item in whatever stage it had reached. *(Owner ruling, 2026-07-27.)*
-
-`bin/board questions|answered|ls|show|new` — `bin/board --help`. It needs no venv.
+- Check `bd list --status blocked` at session start and before pulling work off `bd ready`. A
+  blocked issue carries an `## Open question` for the owner; when the owner has answered (a comment
+  or an edit), fold the decision into its durable home (`direction/` for the owner's rulings,
+  `rationale/` for an agent's), then unblock the issue.
+- A question raised mid-pipeline does not close or re-queue its issue. Append it to that issue and
+  set it `blocked`. *(Owner ruling, 2026-07-27.)*
 
 ## Read-on-demand docs — the router
 
@@ -202,3 +196,59 @@ afford to miss; the doc carries the rest:
 - `dev/docs/rules/tests.md` — read before running tests. Run them via `bin/test`, never bare `pytest`; uedcli and its suite are host-native, not containerised.
 - `dev/docs/rules/spikes.md` — read before starting or finishing a spike. Commit the harness to `dev/docs/spikes/<slug>/`, never leave it in `_scratch/`; pin every checkable finding with a committed regression test or it rots.
 - `dev/docs/rules/background-work.md` — read before starting a background job or long wait. Never leave one on a single open-ended wait — the editor wedges silently; pair a tracked job with a ~20-minute hang-detector, and never poll on short wake-ups.
+
+
+<!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:6cd5cc61 -->
+## Beads Issue Tracker
+
+This project uses **bd (beads)** for issue tracking. Run `bd prime` to see full workflow context and commands.
+
+### Quick Reference
+
+```bash
+bd ready              # Find available work
+bd show <id>          # View issue details
+bd update <id> --claim  # Claim work
+bd close <id>         # Complete work
+```
+
+### Rules
+
+- Use `bd` for ALL task tracking — do NOT use TodoWrite, TaskCreate, or markdown TODO lists
+- Run `bd prime` for detailed command reference and session close protocol
+- Use `bd remember` for persistent knowledge — do NOT use MEMORY.md files
+
+**Architecture in one line:** issues live in a local Dolt DB; sync uses `refs/dolt/data` on your git remote; `.beads/issues.jsonl` is a passive export. See https://github.com/gastownhall/beads/blob/main/docs/SYNC_CONCEPTS.md for details and anti-patterns.
+
+## Agent Context Profiles
+
+The managed Beads block is task-tracking guidance, not permission to override repository, user, or orchestrator instructions.
+
+- **Conservative (default)**: Use `bd` for task tracking. Do not run git commits, git pushes, or Dolt remote sync unless explicitly asked. At handoff, report changed files, validation, and suggested next commands.
+- **Minimal**: Keep tool instruction files as pointers to `bd prime`; use the same conservative git policy unless active instructions say otherwise.
+- **Team-maintainer**: Only when the repository explicitly opts in, agents may close beads, run quality gates, commit, and push as part of session close. A current "do not commit" or "do not push" instruction still wins.
+
+## Session Completion
+
+This protocol applies when ending a Beads implementation workflow. It is subordinate to explicit user, repository, and orchestrator instructions.
+
+1. **File issues for remaining work** - Create beads for anything that needs follow-up
+2. **Run quality gates** (if code changed) - Tests, linters, builds
+3. **Update issue status** - Close finished work, update in-progress items
+4. **Handle git/sync by active profile**:
+   ```bash
+   # Conservative/minimal/default: report status and proposed commands; wait for approval.
+   git status
+
+   # Team-maintainer opt-in only, unless current instructions forbid it:
+   git pull --rebase
+   git push
+   git status
+   ```
+5. **Hand off** - Summarize changes, validation, issue status, and any blocked sync/commit/push step
+
+**Critical rules:**
+- Explicit user or orchestrator instructions override this Beads block.
+- Do not commit or push without clear authority from the active profile or the current user request.
+- If a required sync or push is blocked, stop and report the exact command and error.
+<!-- END BEADS INTEGRATION -->

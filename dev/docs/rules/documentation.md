@@ -79,9 +79,9 @@ answers are load-bearing and must not be lost or silently overridden. Because sp
 the decision must land in a durable doc before the spec is deleted:
 
 - A decision the owner made → `dev/docs/direction/<topic>.md`, revised in place. Propose the exact
-  wording and wait for their yes. While it waits, park it with
-  `bin/board new inbox '[OWNER — confirm] …'`, carrying the proposed text verbatim, so it survives
-  the session ending.
+  wording and wait for their yes. While it waits, park it on the bd issue it concerns (or
+  `bd create '[OWNER — confirm] …'` if none owns it), carrying the proposed text verbatim, so it
+  survives the session ending.
 - A decision you made (an implementation choice) → `dev/docs/rationale/<topic>.md`, revised in place,
   with its `Rejected` alternatives and `Refs`.
 

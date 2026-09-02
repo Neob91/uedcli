@@ -73,9 +73,8 @@ The pose grammar and both backends (`--game`, offline `--native`) are in
 - [`dev/docs/unrealed/`](dev/docs/unrealed/README.md) — the verified UnrealEd-2-under-wine
   knowledge base: `commands.md` (exec verbs), `quirks.md` (gotchas), `rendering.md`
   (screenshots), `extracting-from-dll.md`. **Read before touching the driver.**
-- [`dev/docs/board/`](dev/docs/board/README.md) — the roadmap, as a stage-queue cluster. Each
-  work item is a **directory** and the stage it is in **is** the directory it sits in, so it
-  advances with one `git mv`: `inbox/` (capture pool — also holds AI flags for the owner + their
-  open questions) → `to-spec/` → `to-spike/` → `to-plan/` → `to-build/` (the build queue), plus
-  `someday/`, `stale/` and `done/`.
+- Issues — the roadmap and backlog — live in [beads](https://github.com/steveyegge/beads) (`bd`);
+  data syncs via `refs/dolt/data` on origin. The former `dev/docs/board/` was migrated 2026-09-02
+  (slug map: `dev/docs/board/bd-id-map.tsv`); the directory remains only for one in-flight item
+  cluster.
 - Original design spec: `docs/superpowers/specs/2026-06-16-uedcli-design.md` (repo root).
