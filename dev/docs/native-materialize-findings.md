@@ -5726,3 +5726,93 @@ measurement via the existing `UEDCLI_BSPCSG_RING_NEAR`/`UEDCLI_BSPCSG_MERGE_NEIG
 already shipped gated-off in `bspcsg.rs`); the native ext build itself (`maturin build --release`)
 and a spot-check against the `dx` level (all 4 configs byte-identical, `nodes=surfs=leaves=verts=0`
 delta) are the only correctness checks this round needed.
+
+## NYC 747 rotated-brush transform cross-validation: localized the residual to a diffuse, unrotated-brush class; found (and confirmed FOR THE FIRST TIME) a real few-ULP `FPoly::transform` divergence on the level's one non-cardinal multi-axis brush, but it does NOT explain the residual (2026-09-02)
+
+Independent, parallel cross-validation of the same hypothesis being tested on Area51 Entrance:
+`rotation.py`'s own module header flags a THEORETICAL gap — a genuine NON-CARDINAL multi-axis
+FRotator composes its 3×3 in Python double (`euler_to_matrix_uu` → `matmul(Rz, matmul(Ry, Rx))`,
+what `brush_marshal._build_brush_input` hands the Rust `FPoly::transform` as `rot`), while the real
+editor composes in float32 `FCoords`; every rotation checked up to now was single-axis or CARDINAL
+multi-axis, both proven bit-identical, so the gap was flagged "unexercised and UNMEASURED against the
+editor." NYC 747 (`03_NYC_747.dx`) currently sits at nodes native=4530 golden=4462 (d=+68), surfs
+EXACT (2026/2026), leaves native=560 golden=570 (d=-10) — unchanged from every prior round including
+the `INDEPENDENT PASS` ring-pool measurement, confirmed fresh this round (`parity_report.py`, cache
+hit on golden hash `3c2fa428…`).
+
+**Step 1 — inventory every world-CSG brush's Rotation** (`nyc747_scan_rotations.py`, fresh worktree
+off `master` `9988365`): 373 world-CSG brushes, 195 rotated (non-identity). Of those, exactly **ONE**
+is a genuine non-cardinal multi-axis case: `Brush562`, `Rotation=(Pitch=32768,Yaw=32768,Roll=59392)`
+— Pitch/Yaw are both cardinal (180°), but `Roll=59392` is not a multiple of 16384 (59392/16384 =
+3.625). This is the first confirmed real instance of the theoretical case `rotation.py` flags as
+unmeasured, anywhere in the corpus checked so far.
+
+**Step 2 — is Brush562 actually implicated in the residual?** Since surfs are already exact (unlike
+the earlier OceanLab/NYC747 surf-count fixes), the surf-count attribution method
+(`nyc747_surf_diff.py`) shows nothing; used node-plane-OWNER attribution instead
+(`node.i_surf → surf.i_actor`, `vandenberg_attrib.py`'s method — `nyc747_attrib.py`). Result: 155/373
+brushes differ in node-plane-ownership (abs-sum 754, net +68, matching the level's full delta).
+**Brush562's own node ownership is IDENTICAL: native=8, editor=8** — it contributes ZERO to the
+residual. The dominant single outlier is `Brush473` (CSG_Add, 291 polys, **no Rotation at all**,
+d=+124 — nearly double the level's whole net delta, heavily cancelled by everything else), and most
+of the rest of the diff list is unrotated small brushes (`npolys=6`, simple boxes) plus several
+*single-axis, cardinal* `Yaw=±32768`/`Yaw=-32768` rotated brushes (already proven bit-exact per
+`rotation.py`'s own scope note) — the same diffuse "FindBestSplit tie-break"-class signature already
+on record for UNATCO/nsfhq04/Training Final/Area51, not a rotation-transform signature.
+
+**Step 3 — bit-level check of Brush562's rotation matrix anyway** (`brush562_bitcheck.py`), per the
+task's explicit requirement to verify the transform math bit-exactness directly, not just infer it
+from the attribution result. Simulated the real editor's float32 `FCoords` compose (each axis matrix
+built from f32 GMath table values, every multiply-accumulate rounded to f32 at each step, same
+Rz·(Ry·Rx) association) and diffed it entry-by-entry against the production
+double-precision `euler_to_matrix_uu` result. **One entry differs: `R[0][1]`, by 2 ULP**
+(double-path 0x32cf302e vs simulated-f32-path 0x32cf3030, magnitude ~2.4e-8) — every other entry is
+bit-identical. This is the first actual MEASUREMENT of the gap `rotation.py` only theorized.
+
+**Step 4 — does that 2-ULP matrix entry propagate to a real vertex/normal/plane difference?**
+(`brush562_vertex_compare.py`): paired every one of Brush562's 8 native node planes against the
+golden's actual 8 node planes (nearest-plane match, since node/surf order need not agree even when
+the plane SET does). **5 of 8 are byte-identical** (the two axis-aligned cap planes untouched by the
+Roll tilt, `(1,0,0,…)`/`(-1,0,0,…)`). **3 of 8 differ by 1–6 ULP** in the components touched by the
+Roll rotation (e.g. plane `(-1.2126e-7, 0.55557030…, -0.83146960…, -724.16876…)` native vs
+`(-1.2126e-7, 0.55557024…, -0.83146960…, -724.16870…)` editor — Y and W off by 1 ULP each; a third
+plane off by up to 6 ULP across three components). **So the transform IS measurably, confirmedly NOT
+bit-exact for this rotated brush** — the theoretical gap is real, not hypothetical, and this is the
+first live-golden confirmation of it anywhere in the codebase.
+
+**Conclusion.** Two things are both true and do not contradict each other: (1) `FPoly::transform`'s
+double-precision rotation-matrix compose has a genuine, now-measured few-ULP divergence from the real
+editor's float32 `FCoords` compose on a genuine non-cardinal multi-axis rotation — exactly the
+mechanism the task's hypothesis proposed, confirmed bit-for-bit against a live self-built golden, not
+inferred. (2) It does **not** explain NYC 747's open node/leaf-count residual: Brush562's own node
+ownership is exactly right (8=8, no extra/missing splits — a few-ULP plane-VALUE drift with no
+tree-SHAPE consequence for this brush's specific geometry), and the level's actual dominant
+contributor (`Brush473`, d=+124) carries no rotation whatsoever. The residual is the same diffuse,
+still-unexplained tree-shape class already open on UNATCO/nsfhq04/Training Final/Area51 Entrance —
+this round did not move it, and per the standing no-guessing rule **no fix was shipped** (nothing to
+narrow: Brush562 already matches).
+
+**Worth a separate look, NOT scoped to this round:** the confirmed few-ULP `plane`-value drift is a
+genuine CONTENT-exactness gap (would show up as a `parity_report.py` "content NOT EXACT" field diff
+even on a level that's already node/surf/leaf-COUNT-exact), relevant to the standing full-byte-parity
+goal independent of any node/leaf-count residual. Filed as a board inbox item rather than fixed here —
+fixing it means porting a float32 `FCoords`-style compose into `rotation.py`/`fpoly.rs` specifically
+for the non-cardinal multi-axis case, unverified against any level that would actually benefit (no
+DX level in the corpus is known to be blocked on this — Brush562 itself is not), and this round found
+no live case to validate a fix against.
+
+**Left uncommitted / for reconciliation:** this round touched no production code (`uedcli-native/src`,
+`uedcli/`) — only the harness scripts under
+`dev/docs/spikes/2026-09-02-nyc747-rotated-transform/harness/`. If the parallel Area51 Entrance agent
+independently ships a `fpoly.rs`/`rotation.py` change for the same non-cardinal-multi-axis ULP gap,
+this round's Brush562 measurement (2 ULP matrix / 1–6 ULP plane) is a second, independent data point
+for it — not a conflicting one — since it confirms the mechanism is real without needing the fix to
+close NYC 747's own residual.
+
+Harness: `dev/docs/spikes/2026-09-02-nyc747-rotated-transform/harness/` — `nyc747_scan_rotations.py`
+(rotation inventory), `nyc747_attrib.py` (node-plane-owner attribution), `brush562_bitcheck.py`
+(matrix-level bit compare), `brush562_vertex_compare.py` (plane-level bit compare against the live
+golden). Fresh worktree off `master` `9988365`. `bin/test -k fpoly`: 17/17 pass. Full `bin/test`:
+same pre-existing 10 failures as every prior round (2 `test_board.py` frontmatter on unrelated items,
+7 `test_csg_native_differential.py` tuple-length `ValueError`s, 1 `test_doc_links.py`) — zero
+regression, since zero production code changed.
