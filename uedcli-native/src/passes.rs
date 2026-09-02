@@ -323,6 +323,82 @@ pub fn bsp_refresh_points_vectors(model: &mut Model) {
     model.vectors = new_vectors;
 }
 
+/// `bsp_refresh_points_vectors` with the real `bspRefresh`'s ORPHAN-VERT semantics
+/// (`bspRefresh @0x36cd0`, read off the decompile 2026-09-02): the editor never compacts the verts
+/// array and remaps `i_vertex` ONLY through live node vert pools (its final loop walks
+/// `nodes[i].iVertPool..+NumVertices`) — an orphan vert (no node pool names it, e.g. a
+/// `bspRepartition` subtree call's discarded reconstruction) keeps its now-STALE numeric `i_vertex`
+/// and is serialized that way (goldens carry them). Point/vector marking is identical to
+/// `bsp_refresh_points_vectors` (all surfs' refs + live pools) — orphan verts pin nothing.
+pub fn bsp_refresh_points_vectors_stale_orphans(model: &mut Model) {
+    let mut live_vert = vec![false; model.verts.len()];
+    for n in &model.nodes {
+        for k in 0..n.num_vertices {
+            if let Some(slot) = live_vert.get_mut((n.i_vert_pool + k) as usize) {
+                *slot = true;
+            }
+        }
+    }
+    let mut pt_used = vec![false; model.points.len()];
+    let mut vec_used = vec![false; model.vectors.len()];
+    for s in &model.surfs {
+        if s.p_base >= 0 {
+            pt_used[s.p_base as usize] = true;
+        }
+        for r in [s.v_normal, s.v_texture_u, s.v_texture_v] {
+            if r >= 0 {
+                vec_used[r as usize] = true;
+            }
+        }
+    }
+    for (vi, v) in model.verts.iter().enumerate() {
+        if live_vert[vi] && v.i_vertex >= 0 {
+            pt_used[v.i_vertex as usize] = true;
+        }
+    }
+
+    let mut pt_remap = vec![-1i32; model.points.len()];
+    let mut new_points = Vec::new();
+    for (i, &used) in pt_used.iter().enumerate() {
+        if used {
+            pt_remap[i] = new_points.len() as i32;
+            new_points.push(model.points[i]);
+        }
+    }
+    let mut vec_remap = vec![-1i32; model.vectors.len()];
+    let mut new_vectors = Vec::new();
+    for (i, &used) in vec_used.iter().enumerate() {
+        if used {
+            vec_remap[i] = new_vectors.len() as i32;
+            new_vectors.push(model.vectors[i]);
+        }
+    }
+
+    for s in &mut model.surfs {
+        if s.p_base >= 0 {
+            s.p_base = pt_remap[s.p_base as usize];
+        }
+        if s.v_normal >= 0 {
+            s.v_normal = vec_remap[s.v_normal as usize];
+        }
+        if s.v_texture_u >= 0 {
+            s.v_texture_u = vec_remap[s.v_texture_u as usize];
+        }
+        if s.v_texture_v >= 0 {
+            s.v_texture_v = vec_remap[s.v_texture_v as usize];
+        }
+    }
+    for (vi, v) in model.verts.iter_mut().enumerate() {
+        if live_vert[vi] && v.i_vertex >= 0 {
+            v.i_vertex = pt_remap[v.i_vertex as usize];
+        }
+        // orphan vert: i_vertex left STALE on purpose (see doc comment).
+    }
+
+    model.points = new_points;
+    model.vectors = new_vectors;
+}
+
 // --- bspBuildBounds (§7.4): render Bounds + collision LeafHulls -------------
 //
 // Faithful port of UnrealEd `UEditorEngine::bspBuildBounds` (Editor.dll 0xaace0) and its

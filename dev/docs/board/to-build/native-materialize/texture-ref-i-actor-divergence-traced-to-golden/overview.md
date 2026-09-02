@@ -818,3 +818,39 @@ No production code touched. New harness:
 `dev/docs/spikes/2026-09-01-dx-pbase-points-trace/harness/combined_refresh_addpoint_trace.py` (log:
 `.../logs/combined-tjunction.log`). Worktree `.claude/worktrees/pbase-round14-refresh-cadence`, left
 uncommitted per this round's instructions.
+
+## Round 15 (2026-09-02): DX.dx `p_base` CLOSED under the gated incremental-points path; mechanism fully decompile-pinned; not default
+
+Full detail: `native-materialize-findings.md`, "Round 15". Summary here since this item owns the
+`p_base` sub-thread.
+
+Both open questions from rounds 13/14 resolved from ALREADY-COMMITTED decompile output
+(`2026-09-02-csg-pipeline-breadth-decompile/harness/`), no new gdb:
+
+- Round 9's "Origin then REVERSED ring" was never an insertion rule — it is `bspAddNode`'s plain
+  forward walk over a Subtract-leaf poly `SubtractBrushFromWorldFunc` had already `Reverse()`d.
+  Native reverses in the same place, so the DEFAULT forward walk already matches; round 13's
+  explicit `.rev()` was a double-reversal (measured: base trios exactly backwards). Deleted.
+- The rebuild-phase GC choreography maps 1:1 onto round 14's 5 `bspRefresh` calls:
+  `bspBuild@0x35ef0` zeroes every node's `NumVertices` then refreshes (bases-only keep — round 9's
+  44->19) then `EmptyModel(0,0)`; post-`SplitPolyList` refresh; `bspRepartition` tail refresh
+  (no-op); frontier tails; and the true LAST Points GC inside `bspOptGeom` post-near-merge
+  (`0x100368f4`, the Wanchai-thread round-4 live finding). Also: `bspRefresh` never compacts verts
+  and remaps `i_vertex` only through live node pools — orphan verts ship with STALE refs (goldens
+  carry them; `DX.dx`'s 250 verts include 104).
+
+Shipped flag-gated (`UEDCLI_BSPCSG_INCREMENTAL_POINTS`, default OFF, default path re-verified
+byte-identical): GC calls moved to those exact sites, `.rev()` deleted, stale-orphan-faithful GC
+variant (`passes::bsp_refresh_points_vectors_stale_orphans`), OOB guard in
+`bspoptgeom::merge_near_points`. **`DX.dx` flag-on: `p_base` 13/26 -> 0/26, surfs content-identical,
+geometry EXACT, lighting 100%** — this thread's 14-round residual is closed there; DX's remaining
+FULL-PARITY gap is leaves `i_permeating` (separate item). Golden-pinned cargo test
+`incremental_points_reproduces_dx_brush3_golden_p_base_order`; 105/105.
+
+Corpus (offline flag-on-vs-off structural A/B, `incremental_ab.py`): UNATCO/Wanchai/NYC Bar/
+Chateau/Underground structurally identical (nodes/surfs/leaves/verts), no crash (round 13's UNATCO
+crash gone), and points COUNT moves toward golden where known (UNATCO 10768->10758 vs golden
+10752). Area51 flag-on has a real drift: 1 node's back-zone + verts +8 — ring dedup against the
+kept (vs fresh) pool, unresolved. Golden p_base parity for UNATCO/Wanchai flag-on NOT measured this
+round — their cache entries were mid-rebuild by the concurrent sweep agent. That measurement + the
+Area51 drift are the gates for any default-flip; default stays off.

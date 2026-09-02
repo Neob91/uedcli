@@ -6217,3 +6217,95 @@ Two related gaps found but NOT fixed here (out of `sweep_corpus.py`'s scope, fil
 `parity-cache-has-no-cross-process-lock` (concurrent processes can race the same content-hash cache
 entry — mitigated by this driver's own default `--concurrency 1`, not fixed at the source) and
 `shared-parity-trunk-extraction-cache-grows` (the new shared trunk cache has no pruning policy).
+
+## Round 15 (2026-09-02): DX.dx `p_base` CLOSED (flag-on) — the "reversed ring" was never a rule, and the full rebuild-phase GC choreography is now decompile-pinned; shipped flag-gated, default path untouched
+
+Task (p_base round 15): re-measure `DX.dx`'s residual on current `master`, then resolve the
+still-open "exact rebuild-phase call site" question using the already-committed full CSG/BSP
+pipeline decompiles (`dev/docs/spikes/2026-09-02-csg-pipeline-breadth-decompile/harness/`) before
+any fresh disassembly. Both parts landed. Fresh worktree off master (`worktree-agent-a54c9886de61a249e`).
+
+**Baseline re-measured first: unchanged.** `parity_report.py` on `DX.dx` (cache hit): geometry
+EXACT (26/26/5/250/32/6 all d=+0), lighting 100% (26/26 records, 1536/1536 bits), surfs `p_base`
+13/26 diffs, leaves `i_permeating` 5 (separate thread) — byte-identical to round 14's recorded
+state despite `CsgOper::Active`/`RING_NEAR`/wrap-trim landing since.
+
+### The two mechanism findings (both read off already-committed decompile output, no new gdb)
+
+**1. Round 9's "Origin then REVERSED authored ring" is NOT an insertion rule — it is `bspAddNode`'s
+plain FORWARD vertex walk over a poly `SubtractBrushFromWorldFunc` had already `Reverse()`d**
+(inward-facing storage, the same reverse native's `leaf_func` `LeafFunc::Subtract` arm already
+does). On the T3D-authored axis the calls merely LOOK reversed; an Add fragment's forward-looking
+sequence (rounds 11/12) is the same walk over a non-reversed poly. Consequence: native's DEFAULT
+forward ring walk already reproduces the editor's exact `bspAddPoint` order, and round 13's
+flag-gated explicit `.rev()` walk was a DOUBLE-reversal — measured directly this round: with it,
+`DX.dx`'s base-block trios come out exactly backwards vs golden (`[A,E,F,G,H]` native vs
+`[A,E,H,G,F]` golden); with it deleted, exact. Deleted.
+
+**2. The rebuild-phase `bspRefresh` choreography, mapped 1:1 onto round 14's 5-call trace from the
+decompiles** (`bspBuild.decompiled.c`, `bspRepartition.decompiled.c`, `bspRefresh.decompiled.c`):
+
+| round-14 call | real call site | what it does to Points |
+|---|---|---|
+| rfidx=1 | `bspBuild@0x35ef0` `arg_2==0`: zeroes EVERY node's `NumVertices` (`[node+0x36]=0` loop), then `bspRefresh(model, NoRemapSurfs=1)`, then `EmptyModel(0,0)` | ring marking sees NO rings -> keeps ONLY surf-`p_base` points, order-preserving. Exactly round 9's live 44->19 "bases only" observation — and why the final layout is bases-first: rings are dropped here and re-appended by the rebuild's own `SplitPolyList`/`bspAddNode` calls. |
+| rfidx=2 | `bspBuild`'s post-`SplitPolyList` `bspRefresh` | full marking (all surfs' `p_base` + live rings) |
+| rfidx=3 | `bspRepartition@0x49fc0`'s tail `bspRefresh` (line 34) | no-op right after rfidx=2 |
+| rfidx=4/5 | the frontier `bspRepartition(node, 2)` tails | last `bspRefresh` calls of the build |
+| (post) | inside `bspOptGeom`, after the ShrinkModel-style near-merge, before the weld (`0x100368f4` — the `wanchai-verts-points-residual-independently` round-4 live finding, reused) | the true LAST Points GC; drops the near-merge's abandoned duplicates |
+
+Plus one decompile-only correction that all prior rounds missed: **`bspRefresh` NEVER compacts the
+verts array and remaps `i_vertex` only through live node pools** (its final loop) — orphan verts
+(e.g. `repartition_frontier`'s discarded reconstructions) survive to disk with STALE numeric
+`i_vertex` values, and goldens carry them (`DX.dx`'s 250 verts include 104 such orphans; an
+experimental repack broke that exact count). Round 13's end-of-build orphan-drop (`-1`-ing them)
+was another of its regressions.
+
+### Shipped (all inside `UEDCLI_BSPCSG_INCREMENTAL_POINTS`; default path byte-identical, re-verified)
+
+`uedcli-native/src/bspcsg.rs` / `passes.rs` / `bspoptgeom.rs`: (a) round 13's per-brush GC deleted
+(round 14 disproved the site); (b) `compact_points_to_surf_bases` pre-repartition (rfidx=1
+semantics); (c) existing post-`bsp_build` GC kept (rfidx=2); (d)
+`passes::bsp_refresh_points_vectors_stale_orphans` — the orphan-faithful GC variant — after
+`repartition_frontier`+`compact_unreachable_nodes` (rfidx=4/5) and inside `bsp_opt_geom` post-merge
+(`0x100368f4`); (e) round 13's `.rev()` ring walk deleted outright (default forward walk is the
+editor's); (f) `bspoptgeom::merge_near_points`'s all-verts remap guards out-of-range stale orphan
+refs instead of panicking (the editor's raw remap reads garbage memory there; the exact UNATCO
+flag-on panic this round hit first).
+
+**Result on `DX.dx` (flag on): surfs content-identical — `p_base` 13/26 -> 0/26, geometry still
+EXACT, lighting still 100%.** The 14-round `p_base` thread is closed on `DX.dx`. Remaining DX gap
+to FULL PARITY: leaves `i_permeating` 5/5 (separate, pre-existing thread). New golden-pinned cargo
+test `incremental_points_reproduces_dx_brush3_golden_p_base_order` (`Brush3`'s verbatim T3D polys
+-> golden `p_base` `[0,1,1,3,4,2]` + base block `[A,E,H,G,F]`); full crate suite 105/105.
+
+### Corpus regression measurement (structural A/B flag-on vs flag-off, offline, no goldens needed — `spikes/2026-09-01-dx-pbase-points-trace/harness/incremental_ab.py`)
+
+| level | structure (nodes/surfs/leaves/verts, flag-on vs off) | points off -> on (golden) |
+|---|---|---|
+| `DX.dx` | identical | 32 -> 32 (32 — exact both ways) |
+| UNATCO | identical | 10768 -> 10758 (10752 — d +16 -> **+6**) |
+| Wanchai Market | identical | 16808 -> 16809 (16791) |
+| `02_NYC_Bar` | identical | 2762 -> 2762 (2762 — exact both ways) |
+| Paris Chateau | identical | 17953 -> 17922 (n/a) |
+| NYC Underground | identical | 2622 -> 2607 (n/a) |
+| Area51 Entrance | **DRIFT**: 1 node's back-side `i_zone` 0 -> 1, verts +8 | 17720 -> 17718 (n/a) |
+
+No build failure anywhere (round 13's UNATCO crash gone — it was the per-brush GC + the `-1`
+orphan-drop, both removed). Every remaining "dangling" ref is a stale-ORPHAN-vert ref (DX 0,
+UNATCO 98, Area51 670 …), categorized fatal-vs-orphan by the harness: zero fatal (`p_base`/live
+rings all valid). Area51's drift is the ring-dedup-against-a-kept-pool (vs fresh-pool) effect —
+a NEAR-tolerance (0.015) `bspAddPoint` hit landing on a different point; whether golden sides with
+flag-on or flag-off there is unmeasured (its golden was mid-rebuild).
+
+**Not made default.** Flag-off remains byte-identical everywhere (re-verified `DX.dx` 13/26
+baseline reproduced exactly). Golden-parity measurement for UNATCO/Wanchai/NYC Bar flag-on is
+blocked right now on their golden cache entries being mid-rebuild by the concurrent sweep agent
+(`status: building`) — measuring would have raced a live editor build. That measurement is the
+gate for any default-flip decision, and Area51's structural drift already argues the dedup-drift
+question needs an answer first.
+
+Post-review addendum: the reviewer's flagged env-flag test race was then HIT LIVE by the full
+`bin/test` run (the new golden test observed a concurrent test's `remove_var` mid-build); fixed by
+serializing this crate's libtest via `uedcli-native/.cargo/config.toml` (`RUST_TEST_THREADS=1`,
+suite <0.1s so serial is free) — board item `cargo-env-flag-tests-race-the-process-global`, which
+also records the remaining minor set/remove-guard gap.

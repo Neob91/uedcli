@@ -101,6 +101,15 @@ fn build_table(model: &Model) -> Vec<Vec<(i32, i32)>> {
 /// the module doc + `dev/docs/spikes/.../82-bspbrushcsg-port-decode.md` for the pipeline.
 pub fn bsp_opt_geom(model: &mut Model) {
     merge_near_points(model);
+    // The editor's LAST Points GC of the whole build sits HERE — inside `bspOptGeom`, right after
+    // the ShrinkModel-style near-merge and BEFORE the T-junction weld (`Editor.dll 0x100368f4`,
+    // live-confirmed to land exactly on the final golden Points count on UNATCO+Wanchai — board
+    // item `wanchai-verts-points-residual-independently`, round 4). It is what drops the
+    // near-merge's abandoned duplicate points. Gated with the incremental-points experiment; the
+    // default path's end-of-build `reorder_points_canonical` subsumes it there.
+    if crate::bspcsg::incremental_points_enabled() {
+        crate::passes::bsp_refresh_points_vectors_stale_orphans(model);
+    }
     eliminate_tjunctions(model);
     build_side_links(model);
 }
@@ -163,10 +172,17 @@ fn merge_near_points(model: &mut Model) {
         }
     }
     // Apply the remap to every vertex reference (single indirection; only if anything merged).
+    // An ORPHAN vert (no node pool names it) can carry a STALE `i_vertex` from a prior
+    // points GC — the real `bspRefresh` deliberately leaves orphans un-remapped
+    // (`passes::bsp_refresh_points_vectors_stale_orphans`), so a stale ref may be out of range;
+    // skip those instead of panicking (the editor's raw remap reads whatever memory sits there —
+    // the value is garbage either way and nothing live reads it).
     let merged = remap.iter().enumerate().filter(|(i, &r)| r != *i as i32).count();
     if merged > 0 {
         for v in &mut model.verts {
-            v.i_vertex = remap[v.i_vertex as usize];
+            if let Some(&r) = remap.get(v.i_vertex as usize) {
+                v.i_vertex = r;
+            }
         }
     }
     if std::env::var("UEDCLI_OPTGEOM_DEBUG").is_ok() {

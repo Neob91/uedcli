@@ -132,23 +132,21 @@ fn points_origin_reversed_enabled() -> bool {
     std::env::var("UEDCLI_BSPCSG_POINTS_ORIGIN_REVERSED").is_ok()
 }
 
-/// `UEDCLI_BSPCSG_INCREMENTAL_POINTS` — EXPERIMENT, off by default. Round 13's attempt at the real
-/// incremental point-pool architecture rounds 9-12 scoped (`native-materialize-findings.md`,
-/// search "Round 13"): unlike `UEDCLI_BSPCSG_POINTS_ORIGIN_REVERSED` (a POST-HOC resort over the
-/// FINAL model, already measured and rejected — round 10), this changes insertion order INLINE, at
-/// the moment each polygon actually reaches `bsp_add_node` during Pass 1 CSG, and additionally:
-/// (a) keeps the Points/Vectors pools alive across the `bspRepartition` clear (extends
-/// `UEDCLI_BSPCSG_WORLD_KEEP_POINTS`'s scope), because the real editor's Points pool is the SAME
-/// object throughout the whole build, never wiped — round 9's live capture found the base-block
-/// order already baked in "before the world's very first `bspRefresh` call", i.e. during Pass 1,
-/// which native's default path cannot preserve since it clears `model.points` before repartition;
-/// (b) runs `passes::bsp_refresh_points_vectors` (order-preserving reachability GC — drops orphans,
-/// never reorders survivors) once per brush, in `bsp_brush_csg`'s tail — matching round 9's own
-/// measured cadence (`DX.dx`: exactly 5 `bspRefresh` calls for exactly 5 brushes). This is the
-/// "downstream bounding mechanism" `UEDCLI_BSPCSG_WORLD_KEEP_POINTS`'s own doc comment says is
-/// missing (that flag alone, keeping Points with NO periodic compaction, overshoots badly on
-/// UNATCO/Wanchai — this flag's whole premise is that periodic per-brush GC is exactly that bound).
-fn incremental_points_enabled() -> bool {
+/// `UEDCLI_BSPCSG_INCREMENTAL_POINTS` — the real incremental point-pool architecture (rounds 9-15,
+/// `native-materialize-findings.md`): reproduce the editor's Points-array order by REPLAYING its
+/// build-order insertion + GC choreography instead of the default path's end-of-build
+/// `reorder_points_canonical` reconstruction.
+/// (a) Keeps the Points pool alive across the `bspRepartition` clear (the real editor's pool is the
+/// SAME object throughout the build, never wiped — `EmptyModel(0,0)` keeps Points); insertion order
+/// itself needs NO special rule: `bsp_add_node`'s plain forward ring walk over leaf-emitted polys
+/// (Subtract rings already `Reverse()`d by `leaf_func`) IS the editor's captured `bspAddPoint`
+/// sequence (round 15, killing round 13's explicit reversed walk — a double-reversal).
+/// (b) Runs the Points GC at the editor's REAL `bspRefresh` call sites only — pre-repartition
+/// (`compact_points_to_surf_bases`, = `bspBuild@0x35ef0`'s NumVertices-zeroed refresh before
+/// `EmptyModel(0,0)`), post-`bsp_build` (its second refresh), and after the frontier repartitions
+/// (`bspRepartition@0x49fc0`'s tail refresh) — never during brush CSG (round 14 live trace), never
+/// after optgeom. Closes `DX.dx`'s `p_base` residual to 0/26.
+pub(crate) fn incremental_points_enabled() -> bool {
     std::env::var("UEDCLI_BSPCSG_INCREMENTAL_POINTS").is_ok()
 }
 
@@ -359,31 +357,22 @@ fn bsp_add_node(
     let nf = derive_nf(surf_pf, node_flags);
 
     let i_vert_pool = model.verts.len() as i32;
-    // bspAddPoint each vertex, collapsing CONSECUTIVE duplicates (0x3532a).
+    // bspAddPoint each vertex, collapsing CONSECUTIVE duplicates (0x3532a) — a plain FORWARD walk,
+    // same as the real `bspAddNode`.
     //
-    // Round 13 (`incremental_points_enabled`'s doc comment): the real editor's own `bspAddPoint`
-    // call order for a genuinely NEW, never-split polygon (round 9, live gdb) is `Origin` (already
-    // handled above by `alloc_surf`, which inserts `edpoly.base`) THEN the `Vertex` ring in
-    // REVERSED authored order. `model.verts` itself must stay in the polygon's own FORWARD
-    // geometric order (it is the node's real rendering/BSP ring) — only the ORDER new points get
-    // PUSHED into `model.points` changes, resolved by walking `edpoly.verts` backwards and writing
-    // each result into its ORIGINAL forward slot (a dedup lookup, not a fresh insert, whichever
-    // direction hits a given point first).  Scoped to a first-allocation of a NEW surf only: round
-    // 11/12 confirmed a SPLIT fragment (reusing an EXISTING surf via `i_link`) walks forward, never
-    // reversed — `is_new_surf` is exactly that distinction for a poly that was never split during
-    // its OWN filter descent (the only case rounds 9-12 confirmed reversal for).
+    // Round 15 note (kills round 13's flag-gated reversed walk that lived here): round 9's live
+    // "Origin then REVERSED authored ring" `bspAddPoint` sequence is NOT a special insertion rule —
+    // it is this same forward walk over a poly whose winding `SubtractBrushFromWorldFunc` had
+    // already `Reverse()`d (inward-facing, `leaf_func`'s `e.reverse()`), so on the T3D-authored
+    // axis it merely LOOKS reversed. Native reverses in the same place, so the forward walk already
+    // reproduces the editor's exact point-insertion order; an extra explicit reversal here
+    // double-reversed Subtract rings back to authored-forward order (measured: `DX.dx` base-block
+    // trios came out exactly backwards vs golden with it, exact with it removed).
     // Node vertex RING pooling uses the NEAR (0.015) threshold in the real editor (`bspAddNode
     // 0x352fd push 0` → `bspAddPoint arg_2=0`), NOT the SAME (0.002) used for the surf pBase.
     let ring_tol = ring_point_tol();
-    let ivs: Vec<i32> = if incremental_points_enabled() && is_new_surf {
-        let mut out = vec![0i32; edpoly.verts.len()];
-        for k in (0..edpoly.verts.len()).rev() {
-            out[k] = bsp_add_point_tol(model, edpoly.verts[k], ring_tol);
-        }
-        out
-    } else {
-        edpoly.verts.iter().map(|v| bsp_add_point_tol(model, *v, ring_tol)).collect()
-    };
+    let ivs: Vec<i32> =
+        edpoly.verts.iter().map(|v| bsp_add_point_tol(model, *v, ring_tol)).collect();
     let mut last_iv: i32 = -1;
     let mut nv = 0i32;
     for &iv in &ivs {
@@ -2795,14 +2784,36 @@ fn bsp_brush_csg(model: &mut Model, brush: &build::BrushInput, actor_index: i32,
     // vector no one reads.
     debug_assert!(sink.is_empty(), "Add/Subtract leaves must not collect faces");
 
-    // `UEDCLI_BSPCSG_INCREMENTAL_POINTS` (round 13, see `incremental_points_enabled`'s doc comment):
-    // per-brush Points/Vectors reachability GC, matching the real editor's own per-brush `bspRefresh`
-    // cadence (round 9: 5 calls for `DX.dx`'s 5 brushes). Order-preserving (drops orphans, never
-    // reorders survivors) — safe to call unconditionally when the flag is on; a no-op when nothing
-    // is unreachable yet.
-    if incremental_points_enabled() {
-        passes::bsp_refresh_points_vectors(model);
+    // Round 14 REMOVED round 13's per-brush `bsp_refresh_points_vectors` call that lived here: the
+    // live interleaved trace (`combined_refresh_addpoint_trace.py`) proved `bspRefresh` fires ZERO
+    // times during brush CSG — all its calls belong to the rebuild phase (`bspBuild` pre/post +
+    // `bspRepartition` tails, see `build_geometry_bspcsg`). A GC here misclassifies ring-only points
+    // (not yet node-linked) as unreachable — round 13's measured UNATCO crash + `DX.dx` regression.
+}
+
+/// The rebuild-phase PRE-repartition `bspRefresh` (`bspBuild @0x35ef0`, `arg_2==0` path): the editor
+/// first zeroes EVERY node's `NumVertices` (the `[node+0x36]=0` loop right before the call), then
+/// calls `bspRefresh(model, NoRemapSurfs=1)` — so its point-marking loop (`bspRefresh @0x36cd0`:
+/// `p_base` of every surf + every node's ring verts) sees NO rings at all, and `NoRemapSurfs=1`
+/// keeps every surf.  Net effect on Points: keep ONLY `p_base`-referenced points, order-preserving —
+/// exactly round 9's live 44 -> 19 = bases-only observation (golden `Points[0..18]`), and why the
+/// final layout is bases-first: rings are dropped here and freshly re-appended by the rebuild's own
+/// `bspAddPoint` calls.  At native's matching seam everything except `model.points` is cleared right
+/// after, so only the kept-points set/order matters.
+fn compact_points_to_surf_bases(model: &mut Model) {
+    let mut pt_used = vec![false; model.points.len()];
+    for s in &model.surfs {
+        if s.p_base >= 0 {
+            pt_used[s.p_base as usize] = true;
+        }
     }
+    let mut kept = Vec::with_capacity(model.points.len());
+    for (i, &u) in pt_used.iter().enumerate() {
+        if u {
+            kept.push(model.points[i]);
+        }
+    }
+    model.points = kept;
 }
 
 // --- finalize (leaves/zones/bounds), mirroring build.rs::finalize_leaves_and_bbox ------------
@@ -3099,6 +3110,12 @@ pub fn build_geometry_bspcsg(brushes: &[build::BrushInput]) -> Result<Model, Bui
         // passes reconcile it to. The real editor's downstream mechanism that keeps this bounded is
         // not yet identified — do not re-attempt a bare "keep" without finding it first. See board
         // item `wanchai-verts-points-residual-independently`.
+        // Round 15 (rebuild-phase choreography, from `bspBuild.decompiled.c`): the editor GCs the
+        // Points pool to surf bases only BEFORE `EmptyModel(0,0)` (round 14's rfidx=1) — run that
+        // here so the kept pool entering the rebuild matches the editor's.
+        if incremental_points_enabled() {
+            compact_points_to_surf_bases(&mut model);
+        }
         model.nodes.clear();
         model.surfs.clear();
         model.verts.clear();
@@ -3242,6 +3259,20 @@ pub fn build_geometry_bspcsg(brushes: &[build::BrushInput]) -> Result<Model, Bui
     // (`bsp_refresh` does not collect nodes, only surfs/verts — see `compact_unreachable_nodes`).
     repartition_frontier(&mut model, &repart_frontier_a, &repart_frontier_b)?;
     compact_unreachable_nodes(&mut model);
+    // Round 15: each frontier `bspRepartition(node, 2)` ends with a full `bspRefresh`
+    // (`bspRepartition.decompiled.c` line 34 / round 14's rfidx=4/5 — the LAST Points GCs of the
+    // whole build; nothing after optgeom ever GCs). The real `bspRefresh` at this site runs with
+    // `NoRemapSurfs=1` (every surf kept), compacts nodes (here already done by
+    // `compact_unreachable_nodes`) and GCs Points/Vectors — but NEVER compacts the verts array,
+    // and remaps `i_vertex` only through live node pools (`bspRefresh.decompiled.c`'s final loop):
+    // `repartition_frontier`'s orphan verts survive to disk with STALE `i_vertex` values (golden
+    // keeps them — `DX.dx` verts 250 includes 104 such orphans; a repack here broke that count).
+    // Hence the `_stale_orphans` variant, not `bsp_refresh_points_vectors` (whose all-verts remap
+    // would set orphans to `-1` and panic `bsp_opt_geom`'s all-verts near-merge remap — the exact
+    // UNATCO flag-on panic measured this round).
+    if incremental_points_enabled() {
+        passes::bsp_refresh_points_vectors_stale_orphans(&mut model);
+    }
     if stage_counts {
         eprintln!(
             "STAGE post-repartition-frontier nodes={} verts={} points={}",
@@ -3301,18 +3332,11 @@ pub fn build_geometry_bspcsg(brushes: &[build::BrushInput]) -> Result<Model, Bui
         reorder_surfs_canonical(&mut model, &canon_surf_keys);
         rebuild_vector_pool(&mut model);
         if incremental_points_enabled() {
-            // Round 13: with Points kept alive across the repartition clear + per-brush GC applied
-            // (`incremental_points_enabled`'s doc comment), `model.points` is ALREADY in the real
-            // editor's own incremental order at this point — `reorder_points_canonical`'s own
-            // bases-then-rings RECONSTRUCTION would discard that (it derives order purely from the
-            // FINAL surf/node structure, ignoring insertion history — confirmed by direct measurement
-            // this round: running it after the keep-points+per-brush-GC change had ZERO effect on
-            // `DX.dx`'s p_base diffs, byte-identical output with the flag on vs off, because this
-            // call was unconditionally overwriting the incremental order right back to the same
-            // structural walk). So here we only do the FINAL orphan-drop (order-preserving, never
-            // reorders survivors — the same `bspRefresh` Points/Vectors semantics rounds 9/12
-            // confirmed), not a resort.
-            passes::bsp_refresh_points_vectors(&mut model);
+            // Round 15: `model.points` is already in the editor's own incremental order, GC'd at
+            // the editor's real call sites (pre-repartition, post-`bsp_build`, frontier tails).
+            // The editor never GCs after the frontier repartitions — optgeom's additions survive
+            // untouched — so nothing runs here. (Round 13's end-of-build orphan-drop was one of
+            // its measured regressions: it dropped orphan-vert points the golden keeps.)
         } else {
             // §10.20: drop unreferenced points and re-sort the referenced ones into the editor's
             // on-disk bases-then-rings layout.  A pure Points relabel + surf.pBase/vert.iVertex
@@ -5310,25 +5334,16 @@ mod tests {
         );
     }
 
-    /// `UEDCLI_BSPCSG_INCREMENTAL_POINTS` (round 13): structural safety pin for the real
-    /// incremental-point-pool attempt (`incremental_points_enabled`'s doc comment) — NOT a parity
-    /// win. Live-measured this round via `parity_report.py` against the cached `DX.dx` golden (no
-    /// live editor needed, see `native-materialize-findings.md` "Round 13"): the flag keeps
-    /// geometry EXACT (all 6 counts byte-identical, 26/26/5/250/32/6) but makes surf `p_base`
-    /// content WORSE, not better — 25/26 diffs vs the default path's 13/26, with or without the
-    /// inline Origin+reversed-ring insertion rule (measured both ways, same 25/26 result). On
-    /// UNATCO the flag is worse than a parity regression: the native build itself fails
-    /// (`vert iVertex index -1 out of range` — a dangling reference the per-brush GC drops
-    /// prematurely, likely because a WTB-path re-split of an EXISTING surf on a LATER brush still
-    /// needs a point this flag's per-brush-only GC already considered unreachable and dropped).
-    /// This is exactly why the flag stays off by default and un-recommended — see the round-13
-    /// write-up for the open question (the real editor's `bspRefresh` cadence is evidently finer
-    /// than "once per completed brush"). This test only pins that the flag does not corrupt the
-    /// SIMPLEST case (a single world-subtract, DX.dx's `Brush3` shape — no cross-brush WTB
-    /// re-splitting) structurally: same surf/node counts as the default path, and every point
-    /// still reachable (no dangling `-1` index of the kind that crashes UNATCO).
+    /// `UEDCLI_BSPCSG_INCREMENTAL_POINTS` (rounds 13-15): structural safety pin for the
+    /// incremental point-pool path (`incremental_points_enabled`'s doc comment). Round 15 rewired
+    /// the GC to the editor's real `bspRefresh` call sites (pre-repartition bases-only, post-
+    /// `bsp_build`, frontier tails — never per-brush, never after optgeom), which closed `DX.dx`'s
+    /// surf `p_base` residual to 0/26 (`parity_report.py`, cached golden). This test pins the
+    /// structural invariants round 13's per-brush GC violated (UNATCO's live
+    /// `vert iVertex index -1 out of range` crash): same surf/node counts as the default path, and
+    /// every `p_base`/ring-vertex point reference valid.
     #[test]
-    fn incremental_points_keeps_the_simplest_subtract_case_structurally_safe_but_not_parity_exact() {
+    fn incremental_points_keeps_the_simplest_subtract_case_structurally_safe() {
         let brushes = [box_brush(
             256.0,
             256.0,
@@ -5371,6 +5386,64 @@ mod tests {
                     v.i_vertex
                 );
             }
+        }
+    }
+
+    /// Round 15 golden pin (`dev/docs/spikes/2026-09-01-dx-pbase-points-trace/`): `DX.dx`'s
+    /// `Brush3` — its exact authored T3D polys (Origin = V0 on every face) as a lone world
+    /// Subtract — must, with `UEDCLI_BSPCSG_INCREMENTAL_POINTS` on, reproduce the UED22 golden's
+    /// own `p_base` assignment `[0,1,1,3,4,2]` and base-block point order `[A,E,H,G,F]`
+    /// (cached `DX.dx` golden, surfs 0-5 / `Points[0..5]`; round 9's live gdb decoded the same
+    /// values from the editor's `bspAddPoint` sequence). Pins the two round-15 mechanisms: the
+    /// Subtract-leaf `Reverse()` making the plain forward ring walk equal the editor's insertion
+    /// order, and the pre-repartition bases-only Points GC (`compact_points_to_surf_bases`).
+    #[test]
+    fn incremental_points_reproduces_dx_brush3_golden_p_base_order() {
+        let f = |verts: [[f32; 3]; 4], n: [f32; 3]| {
+            let mut p = FPoly::new(verts.iter().map(|v| Vec3::new(v[0], v[1], v[2])).collect());
+            p.normal = Vec3::new(n[0], n[1], n[2]);
+            p
+        };
+        let s = 512.0;
+        // DX.dx Brush3, verbatim authored order (T3D trunk `maps/dx`).
+        let polys = vec![
+            f([[-s, -s, s], [s, -s, s], [s, s, s], [-s, s, s]], [0.0, 0.0, 1.0]),
+            f([[-s, s, -s], [s, s, -s], [s, -s, -s], [-s, -s, -s]], [0.0, 0.0, -1.0]),
+            f([[-s, s, -s], [-s, s, s], [s, s, s], [s, s, -s]], [0.0, 1.0, 0.0]),
+            f([[s, -s, -s], [s, -s, s], [-s, -s, s], [-s, -s, -s]], [0.0, -1.0, 0.0]),
+            f([[s, s, -s], [s, s, s], [s, -s, s], [s, -s, -s]], [1.0, 0.0, 0.0]),
+            f([[-s, -s, -s], [-s, -s, s], [-s, s, s], [-s, s, -s]], [-1.0, 0.0, 0.0]),
+        ];
+        let brush = build::BrushInput {
+            polys,
+            oper: CsgOper::Subtract,
+            poly_flags: 0,
+            rot: [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
+            prepivot: Vec3::new(0.0, 0.0, 0.0),
+            location: Vec3::new(0.0, 0.0, 0.0),
+            scale: Vec3::new(1.0, 1.0, 1.0),
+            vec_xform: None,
+        };
+        std::env::set_var("UEDCLI_BSPCSG_INCREMENTAL_POINTS", "1");
+        let m = build_geometry_bspcsg(&[brush]).unwrap();
+        std::env::remove_var("UEDCLI_BSPCSG_INCREMENTAL_POINTS");
+
+        let p_base: Vec<i32> = m.surfs.iter().map(|s| s.p_base).collect();
+        assert_eq!(p_base, vec![0, 1, 1, 3, 4, 2], "golden DX.dx surfs 0-5 p_base");
+        let expected_bases = [
+            [-s, -s, s],  // A: poly0 Origin
+            [-s, s, -s],  // E: poly1/poly2 Origin
+            [-s, -s, -s], // H: poly1's reversed ring, 1st push (poly5's Origin)
+            [s, -s, -s],  // G: poly1's reversed ring, 2nd push (poly3's Origin)
+            [s, s, -s],   // F: poly1's reversed ring, 3rd push (poly4's Origin)
+        ];
+        for (i, e) in expected_bases.iter().enumerate() {
+            let p = &m.points[i];
+            assert_eq!(
+                (p.x, p.y, p.z),
+                (e[0], e[1], e[2]),
+                "golden DX.dx Points[{i}]"
+            );
         }
     }
 

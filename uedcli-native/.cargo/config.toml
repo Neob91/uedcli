@@ -1,0 +1,6 @@
+# Serialize libtest: several bspcsg tests set/remove process-global UEDCLI_BSPCSG_* env flags that
+# build_geometry_bspcsg re-reads at multiple gate sites, so a parallel test thread can observe a
+# flag mid-flip and build a hybrid pipeline (a real flake, hit 2026-09-02 — board item
+# `cargo-env-flag-tests-race-the-process-global`). The whole suite runs in <0.1s; serial is free.
+[env]
+RUST_TEST_THREADS = "1"
