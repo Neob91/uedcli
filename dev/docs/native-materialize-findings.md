@@ -5326,3 +5326,58 @@ NSFHQ04's Brush842 turned out to be? Not yet checked directly for Area51 (would 
 byte-exact-descent live trace, done properly single-session/incremental this time per finding 1 above,
 or the poly-soup/repartition-stage comparison from the "next steps" list) — flagging as the concrete
 next action rather than guessing.
+
+## Training Final live prefix search: BLOCKED by a reproducible editor operational stall, not level content — no mechanism finding this round (2026-09-02)
+
+Fresh worktree off `master` (fast-forwarded `da119b3`→`b23de44`, which carries the full decompile
+round through "coplanar `iPlane` node-chain is NEVER read"). Native `.so` rebuilt fresh (mtime
+confirmed newer than `bspcsg.rs`). Sanity check reproduced the documented residual exactly from this
+worktree's own trunk copy + the cached editor golden: native nodes=11227 surfs=5307 leaves=861,
+editor nodes=11122 surfs=5307 leaves=848 (`d_nodes=+105 d_surfs=+0 d_leaves=+13`) — confirms the
+worktree/build setup is sound before attempting anything live.
+
+**Goal: adapt the `prefix_search_lib.py` live prefix binary search (`fc08_prefix_search.py`/
+`nsfhq04_prefix_search.py`/`area51_prefix_search.py`'s method) to Training Final's 764-brush
+world-CSG set, to test the existing static lead (`Brush907`/`909`/`911`/`915`, world-CSG idx
+660-668) live.** Wrote `tf_prefix_search.py` (classic `binary_search()`, lo=1/hi=764) and
+`tf_probe.py` (targeted `compare(n)` calls at chosen prefixes, to test the static-lead window
+directly without a full log2 search). n=764 (full prefix, `build_ued_golden.py --world-only
+--no-light --no-obj-load`) built and matched the sanity check exactly on the first try.
+
+**Every OTHER prefix size tried — n=1 (2 attempts), n=660 (2 attempts), n=650 (1 attempt) —
+timed out in `build_ued_golden.py`'s `_wait_idle` step (`map-new` once at its hardcoded 1800s
+cap, `rebuild[0]` once at the `--rebuild-timeout` 2400s cap), never producing a second live data
+point.** Live-diagnosed, not just retried blind: `docker exec <container> wmctrl -l` during a stall
+found the documented "Cleaning up..." GC `xmessage` dialog (`unrealed/quirks.md` "Stability")
+present and blocking on at least 2 of the stalls. `build_ued_golden.py`'s `_wait_idle` does NOT call
+`Driver.dismiss_blocking_dialog()` defensively on each poll (unlike `qualify.dump_obj_dependencies`,
+which already does per that same doc) — a real, fixable gap in the harness, distinct from the CSG
+question this round is chasing. Manually dismissing the dialog live (`xdotool windowactivate --sync`
++ `key Return`, the documented technique) unblocked the container's CPU from a dialog-driven plateau,
+but on the SAME container the CPU then sat borderline at 18-46% (repeatedly crossing the 30%
+`_wait_idle` threshold) for 25+ more minutes without ever sustaining 8 consecutive quiet reads,
+distinct from the dialog symptom. Both symptoms recurred across n=1/650/660 — three unrelated prefix
+sizes, ruling out a size- or content-specific `MAP NEW` hang (the natural alternative hypothesis) in
+favor of general operational flakiness, plausibly host contention from this session's many
+concurrently-running agent-worktree containers (`docker ps` showed 2-3 other long-lived `uned-*`
+containers throughout, up to 11h old).
+
+**No live second data point obtained; the static lead (`Brush907`/`909`/`911`/`915`) remains
+UNCONFIRMED.** Per the standing no-guessing rule, not attempting a `bspcsg.rs` fix with zero live
+divergence evidence to act on. **Not a wasted round**: rules out that the static lead's brushes
+themselves cause an editor-side `MAP NEW` hang (they don't — the hang recurred on prefix sizes that
+exclude them, e.g. n=1/n=650), and pins a concrete, actionable harness gap (`_wait_idle` missing the
+standard dialog-dismiss defensiveness) that will keep costing future live-search rounds on ANY level
+until fixed — not fixed here (out of this round's scope; the fix belongs in
+`build_ued_golden.py`/`driver.py`, not `bspcsg.rs`).
+
+`bin/test`: cargo test 102/102 pass; pytest 13177 passed / 10 failed / 45 skipped / 1 xfailed
+(662s) — the same pre-existing 10 (2 `test_board.py` frontmatter, 7 `test_csg_native_differential.py`
+tuple-length `ValueError`s, 1 `test_doc_links.py`) as prior rounds; zero `uedcli-native/src` or
+`uedcli/` changes made this round, so this only re-confirms no regression.
+
+Harness added this round, under
+`dev/docs/spikes/2026-09-01-area51-training-final-residual/harness/`: `tf_prefix_search.py` (the
+full lo/hi binary search, generalized-library-based), `tf_probe.py` (targeted single-prefix
+`compare(n)` probing with retry, used to test the static-lead window directly). Board:
+`area51-entrance-residual-localized-to-brush1852`, appended (Training Final section).

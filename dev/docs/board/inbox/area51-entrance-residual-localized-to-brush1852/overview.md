@@ -1,7 +1,7 @@
 +++
 priority = "p1"
 kind = "debug"
-summary = "Area51 Entrance's entire +85 node/+51 leaf residual live-localized (removal test) to Brush1852. The 'classify-BSP over-fragmentation, 26 vs 17 terminal fragments' MECHANISM claim is now doubted: a coordinator cross-check + this round's evidence (own trace collision, confirmed MAP-REBUILD repartition contamination, and — bigger — native's OWN pipeline discards the CSG-incremental tree and rebuilds from a poly soup before final Nodes/Surfs/Verts) all point at the wrong pipeline stage having been measured. Full-level node-owner attribution shows Brush1852 not even in the top 40 of 548 differing brushes (diffuse, same class as NSFHQ04/UNATCO/Training Final). No fix shipped; traversal-order hypothesis abandoned as premature. Training Final open, static lead only."
+summary = "Area51 Entrance's entire +85 node/+51 leaf residual live-localized (removal test) to Brush1852. The 'classify-BSP over-fragmentation, 26 vs 17 terminal fragments' MECHANISM claim is now doubted: a coordinator cross-check + evidence (own trace collision, confirmed MAP-REBUILD repartition contamination, and — bigger — native's OWN pipeline discards the CSG-incremental tree and rebuilds from a poly soup before final Nodes/Surfs/Verts) all point at the wrong pipeline stage having been measured. Full-level node-owner attribution shows Brush1852 not even in the top 40 of 548 differing brushes (diffuse, same class as NSFHQ04/UNATCO/Training Final). No fix shipped; traversal-order hypothesis abandoned as premature. Training Final open, static lead unconfirmed — a live-search attempt was blocked by a reproducible build_ued_golden.py operational stall (missing GC-dialog dismissal + borderline CPU-idle threshold), not level content."
 +++
 
 # Area51 Entrance residual localized to Brush1852; Training Final still open
@@ -49,14 +49,33 @@ on both sides, correlated finer than Base/Normal (full vertex list or split-path
 sandbox infrastructure fix (`docker cp` is broken here whenever a `:ro` mount is present; use `docker
 exec -i ... cat` instead — affects `editor_tree_oracle.py`/`editor_descent.py` too).
 
-## Training Final — open, static lead only
+## Training Final — open, static lead still unconfirmed; live-search attempt BLOCKED by infra, not content (2026-09-02)
 
 Residual (nodes native=11227 golden=11122 `d=+105`, surfs exact, leaves `d=+13`) not live-localized
-this round. Static per-brush node-owner attribution is diffuse (297/764 brushes differ, no dominant
+yet. Static per-brush node-owner attribution is diffuse (297/764 brushes differ, no dominant
 outlier — same "wrong level of attribution" trap as everywhere else), but flags a lead: 4
 near-consecutive small (6-poly `CSG_Add`) brushes `Brush907`/`909`/`911`/`915` (world-CSG idx 660-668)
-carry large, partially-offsetting diffs (`+71`/`+71`/`-52`/`+77`). Needs its own live prefix binary
-search (same harness, adapted) to confirm or refute before trusting this lead.
+carry large, partially-offsetting diffs (`+71`/`+71`/`-52`/`+77`).
+
+**Attempted the live prefix binary search this round (2026-09-02, fresh worktree off `master`
+`b23de44`); could NOT get a second live data point.** n=764 (full prefix) built and matched the
+known residual exactly on the first try. Every OTHER prefix size tried — n=1 (2x), n=660 (2x), n=650
+(1x) — timed out in `build_ued_golden.py`'s `_wait_idle`. Live-diagnosed (not just retried blind):
+`wmctrl -l` inside the stalled container found the documented "Cleaning up..." GC `xmessage` dialog
+present and blocking (`unrealed/quirks.md` "Stability") — `build_ued_golden.py` doesn't defensively
+dismiss it, unlike `qualify.dump_obj_dependencies`. Manually dismissing it unblocked the dialog
+symptom but the SAME container then sat borderline at the 30% CPU idle threshold for 25+ more
+minutes without resolving — a second, distinct flakiness source, plausibly host contention from
+this session's several other long-lived `uned-*` containers. Recurred across 3 unrelated prefix
+sizes, ruling out a size/content-specific `MAP NEW` hang. Full detail: `dev/docs/
+native-materialize-findings.md`, search "Training Final live prefix search: BLOCKED".
+
+**The static lead (`Brush907`/`909`/`911`/`915`) is therefore still unconfirmed — neither
+strengthened nor refuted this round.** Next attempt should either patch `build_ued_golden.py`'s
+`_wait_idle` to call `Driver.dismiss_blocking_dialog()` defensively each poll (mirroring
+`qualify.dump_obj_dependencies`), or run when this host has fewer concurrent agent sessions/editor
+containers. Harness added this round (targeted `tf_probe.py` + generalized `tf_prefix_search.py`)
+is ready to reuse once the build reliably completes.
 
 ## Harness
 
@@ -67,7 +86,9 @@ editor golden builder), `area51_addfunc_oracle.py` (live gdb trace of the editor
 `AddBrushToWorldFunc`), `area51_native_leaf_dump.py` (native's matching classify trace),
 `area51_compare_tail.py` / `area51_frag_diff.py` (tail-diff and fragment comparison),
 `find_addfunc_callers.py` (static caller-scan used to locate `FilterEdPoly`), `area51_dist_threshold_probe.py`
-(the split-threshold-margin diagnostic).
+(the split-threshold-margin diagnostic), `tf_prefix_search.py` (generalized `prefix_search_lib.py`
+binary search adapted for Training Final's 764-brush set), `tf_probe.py` (targeted single-prefix
+probing with retry, for testing a specific window like the static lead without a full search).
 
 ## `angr` decompiler round (2026-09-01) — mechanism still open
 
