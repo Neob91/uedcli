@@ -93,7 +93,19 @@ def test_list_enumerates_every_texture_sorted(cli):
     rc, out, _ = cli("list")
     refs = out.split()
     assert refs == sorted(refs, key=str.casefold)     # case-insensitive, like the class arm
-    assert refs == ["Deco.Wall", "Fx.Flame", "PkgA.Grille", "PkgB.Twin"]
+    # Engine.u carries 32 same-package-classed Texture exports (editor icon sprites, DefaultTexture,
+    # Border, ConsoleBack, Texture0-3) alongside the 4 synthetic fixture textures above.
+    assert refs == [
+        "Deco.Wall", "Engine.Border", "Engine.ConsoleBack", "Engine.DefaultTexture",
+        "Engine.S_Actor", "Engine.S_Ambient", "Engine.S_Ammo", "Engine.S_Camera",
+        "Engine.S_ClipMarker", "Engine.S_ClipMarker1", "Engine.S_ClipMarker2",
+        "Engine.S_ClipMarker3", "Engine.S_Corpse", "Engine.S_Counter", "Engine.S_Dispatcher",
+        "Engine.S_Flag", "Engine.S_Interp", "Engine.S_Inventory", "Engine.S_Keypoint",
+        "Engine.S_Light", "Engine.S_Patrol", "Engine.S_Pawn", "Engine.S_Pickup",
+        "Engine.S_Player", "Engine.S_SpecialEvent", "Engine.S_Teleport", "Engine.S_Trigger",
+        "Engine.S_Weapon", "Engine.S_ZoneInfo", "Engine.Texture0", "Engine.Texture1",
+        "Engine.Texture2", "Engine.Texture3", "Fx.Flame", "PkgA.Grille", "PkgB.Twin",
+    ]
 
 
 def test_list_group_filter_needs_no_decode(cli):

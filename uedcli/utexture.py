@@ -85,6 +85,10 @@ class Package:
     imports: list[tuple[int, int, int, int]]
     exports: list[dict]
     buf: bytes
+    # The package's own stem as loaded (e.g. "Engine" for `Engine.u`), or None when not given —
+    # needed only to qualify a class defined IN this same package (`class_fqcn_of_export`'s
+    # same-package case). Named `stem`, not `name`, to not collide with the `name()` accessor below.
+    stem: str | None = None
 
     def name(self, idx: int) -> str | None:
         """Name-table entry `idx`, or None if the index is out of range.
@@ -112,10 +116,14 @@ class Package:
         return self.name_of_ref(self.exports[i0]["cls"]) if 0 <= i0 < len(self.exports) else None
 
 
-def load_package(path: str) -> Package:
+def load_package(path: str, *, stem: str | None = None) -> Package:
     """Parse a package file's header + name/import/export tables. Raises ValueError on a
     non-package / truncated / structurally impossible file (the resolver catches this and
-    reports `package-unreadable`)."""
+    reports `package-unreadable`).
+
+    `stem` names the package as loaded (e.g. "Engine" for `Engine.u`) and is stored on the
+    returned `Package`; omit it and a same-package class ref (`class_fqcn_of_export`) stays
+    unresolved."""
     with open(path, "rb") as f:
         buf = f.read()
     tag, ver_l, _flags, namecnt, nameoff, expcnt, expoff, impcnt, impoff = \
@@ -171,7 +179,7 @@ def load_package(path: str) -> Package:
             soff, pos = _ci(buf, pos)
         exports.append(dict(cls=cls, sup=sup, outer=outer, nm=nm,
                             flags=flv, ssize=ssize, soff=soff))
-    return Package(version, names, imports, exports, buf)
+    return Package(version, names, imports, exports, buf, stem=stem)
 
 
 # --- tagged property list (UE1 FPropertyTag) ----------------------------------
@@ -372,9 +380,9 @@ def textures(pkg: Package, class_index=None) -> list[int]:
     unqualified name — every existing caller and the tests that assert it stay unchanged.
     A `ClassIndex` WIDENS the match to every `Engine.Texture` DESCENDANT (`FireTexture`,
     `ScriptedTexture`, …) via `descends_from(class_fqcn_of_export(pkg, i), "Engine.Texture")`.
-    A `None` fqcn (a class defined locally in this package, `class_fqcn_of_export` returns
-    None) is not a texture and is skipped — never fed to `descends_from`, whose
-    `None.casefold()` would crash."""
+    A `None` fqcn (a dangling class ref, an export that is itself a class, or a same-package
+    class when the package's own `stem` is unknown) is not a texture and is skipped — never fed
+    to `descends_from`, whose `None.casefold()` would crash."""
     if class_index is None:
         return [i for i, e in enumerate(pkg.exports) if pkg.class_of_export(i) == "Texture"]
     out = []
@@ -386,16 +394,26 @@ def textures(pkg: Package, class_index=None) -> list[int]:
 
 
 def class_fqcn_of_export(pkg: Package, i0: int) -> str | None:
-    """`Package.Class` for the export at 0-based index `i0`, or None when the class is not an
-    IMPORT (a class defined in this same package, or an export that is itself a class).
+    """`Package.Class` for the export at 0-based index `i0`, or None when it cannot be
+    resolved: a dangling class ref, the export IS a class itself (no class classes it), or
+    the class is a same-package export and `pkg.stem` is unknown.
 
     Needed because resolving a class's property defaults requires the fully qualified name:
     a texture's class is `Texture`, but `Engine.Texture` is what names it across packages. The
-    qualifier comes from the class import's own package ref, not from the file it appears in.
+    class ref is either an IMPORT — the qualifier is the import's own package ref, not the file
+    it appears in — or, when it points at an export IN THIS SAME PACKAGE (e.g.
+    `Engine.DefaultTexture`, a `Texture` instance living directly in `Engine.u` alongside the
+    `Texture` class itself), the qualifier is the package's own `stem`.
     """
     cls_ref = pkg.exports[i0]["cls"]
-    if cls_ref >= 0:                             # 0 = None; >0 = a class export in THIS package
+    if cls_ref == 0:                              # 0 = None: the export IS a class, not classed
         return None
+    if cls_ref > 0:                               # a class export in THIS package
+        if pkg.stem is None:
+            return None
+        j = cls_ref - 1
+        inner = pkg.name(pkg.exports[j]["nm"]) if 0 <= j < len(pkg.exports) else None
+        return f"{pkg.stem}.{inner}" if inner else None
     j = -cls_ref - 1
     if not 0 <= j < len(pkg.imports):
         return None
@@ -642,7 +660,8 @@ class TextureResolver:
                 self._pkg_cache[key] = None
             else:
                 try:
-                    self._pkg_cache[key] = load_package(path)
+                    self._pkg_cache[key] = load_package(
+                        path, stem=self._stem_spelling.get(key, stem))
                 except (OSError, ValueError, struct.error, IndexError):
                     # The package IS on the path but will not open or parse. Recorded
                     # separately from "no such stem": the two need different fixes, and until

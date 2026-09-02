@@ -66,6 +66,42 @@ def test_it_resolves_a_subclass_procedural_to_no_mip_data_only_when_widened(tmp_
     assert widened.resolve("Fx.Flame").case == "no-mip-data"
 
 
+# ── same-package class fqcn (`Engine.DefaultTexture`'s shape) ──────────────────────────────────────
+
+def _same_package_texture_pkg(*, stem: str | None) -> utexture.Package:
+    """A minimal package: export 0 is the `Texture` class itself; export 1 is `DefaultTexture`, an
+    INSTANCE of it classed by a same-package export ref (`cls=1`, not an import) — the real
+    `Engine.DefaultTexture` shape: a `Texture` living directly in `Engine.u` alongside the `Texture`
+    class itself."""
+    names = ["Texture", "DefaultTexture", "None"]
+    exports = [
+        {"cls": 0, "sup": 0, "outer": 0, "nm": 0, "flags": 0, "ssize": 0, "soff": 0},
+        {"cls": 1, "sup": 0, "outer": 0, "nm": 1, "flags": 0, "ssize": 0, "soff": 0},
+    ]
+    return utexture.Package(version=68, names=names, imports=[], exports=exports, buf=b"", stem=stem)
+
+
+def test_class_fqcn_of_export_resolves_a_same_package_class():
+    """The bug: a class defined IN this same package (not an IMPORT) must still resolve an FQCN,
+    not just the cross-package import case."""
+    pkg = _same_package_texture_pkg(stem="Engine")
+    assert utexture.class_fqcn_of_export(pkg, 1) == "Engine.Texture"
+
+
+def test_class_fqcn_of_export_same_package_class_needs_a_known_stem():
+    """Without the package's own stem there is nothing to qualify a same-package class with —
+    stays None (the known-cost case, not a crash or a guess)."""
+    pkg = _same_package_texture_pkg(stem=None)
+    assert utexture.class_fqcn_of_export(pkg, 1) is None
+
+
+def test_textures_widened_match_sees_a_same_package_texture(index):
+    """The reported bug end to end: `Engine.DefaultTexture` must register under the widened
+    `Engine.Texture`-descendant match instead of being silently skipped."""
+    pkg = _same_package_texture_pkg(stem="Engine")
+    assert utexture.textures(pkg, index) == [1]
+
+
 # ── T0: enumeration over the search path ───────────────────────────────────────────────────────────
 
 def test_it_enumerates_texture_and_subclass_but_not_nontexture(tmp_path, index):
