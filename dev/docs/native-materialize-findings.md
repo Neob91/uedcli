@@ -6158,3 +6158,62 @@ dropped to 2) both point at CPU contention, not the `_wait_idle` logic itself. *
 either** — a separate round is building a proper cache-aware sweep script per the owner's direct
 request; not duplicated here to avoid two sets of editor builds contending again. Only real data this
 round: `DX.dx`'s report above.
+
+## `sweep_corpus.py` — the canonical corpus-wide parity sweep driver (2026-09-02)
+
+Two independent agents this session swept the 18-level breadth corpus from scratch and both hit
+`TimeoutError: editor not idle after 1800s [obj-load]` at 87-96% CPU running 3+ concurrent Wine/docker
+editor instances — a driver-level CONCURRENCY problem, not a `parity_report.py` bug — and trunk
+extraction (offline UCC batchexport) was being redone from scratch every sweep even for a level a
+PRIOR run had already extracted, because `parity_pipeline.build_root()` keys that cache under the
+CALLING worktree's own `_scratch/` (a bind-mount constraint, not a bug), which a fresh disposable
+worktree never shares with whatever worktree an earlier sweep ran from. Independently confirmed this
+session: 7/7 sweep attempts failed at 3-7 concurrent builds; 1-2 concurrency succeeds reliably.
+
+**`dev/docs/spikes/2026-08-31-native-parity-report/harness/sweep_corpus.py` fixes both, and is now
+THE canonical way to measure corpus-wide parity — future rounds, including the recurring 2h cron
+cycles, should call it directly rather than improvising a new driver each time:**
+
+```
+.venv/bin/python dev/docs/spikes/2026-08-31-native-parity-report/harness/sweep_corpus.py \
+    [--concurrency N] [--levels L1.dx,L2.dx,...] [--out FILE] [--work-dir DIR]
+```
+
+- Calls `parity_report.py` unmodified (via `sweep_worker_shim.py`, one real OS subprocess per level)
+  — never reinvents its comparison logic. `--concurrency` defaults to **1** (the measured-safe
+  value above); a real hang-detector (`Popen.kill()` past a generous per-level bound, extraction's
+  1800s ceiling + the rebuild timeout + margin) records a wedged level `TIMED_OUT` and moves on
+  without blocking the rest of the sweep — proven with a fake instant "editor" in
+  `test_sweep_corpus.py` (bounded-concurrency + hang-kill both pinned, no docker needed).
+- Fixes the trunk-extraction cache gap: `sweep_worker_shim.py` monkeypatches
+  `parity_pipeline.build_root` (the same seam `test_parity_pipeline.py` already uses) to
+  `sweep_lib.shared_trunk_cache_root()` — a FIXED location,
+  `<main checkout>/.claude/worktrees/uedcli-parity-trunk-cache/`, shared by every worktree on this box
+  and outliving any single worktree's removal. Measured on `DX.dx`: cold-trunk run 10.1s, warm-trunk
+  rerun 4.1s — the gap is far larger on a real level (extraction alone is bounded at 1800s).
+  Self-built-golden caching (`/tmp/uedcli-parity-cache/`, content-hash-keyed) needed no fix — it
+  was already correctly shared; `sweep_corpus.py` calls `parity_report.py` unmodified for that half.
+- Writes one JSON (`sweep_lib.SweepRun`/`LevelResult`) the sweep fully controls; `sweep_to_xlsx.py`
+  is a separate adapter loading that JSON into the tracking workbook (15-column layout matching the
+  existing `2026-09-02_0957Z` sheet) — sweep logic and spreadsheet-writing stay decoupled.
+- Reports geometry (6 counts), the STRUCTURAL content check (`content_exact_fraction`,
+  index-for-index nodes/surfs/leaves — distinct from the count-only geometry check; a level can be
+  6/6 on counts while this is well below 1.0, e.g. `DX.dx` below, and `content_length_mismatch` is
+  flagged separately so a length mismatch is never hidden inside a near-1.0 fraction), and lighting
+  byte-identical/shadow-bit percentages — never collapsed into a single "matched: yes/no".
+- 70/70 offline tests pass (`sweep_lib`/`sweep_corpus`/`sweep_to_xlsx`, no docker). Live-verified
+  end to end on `DX.dx` (cache hit, 4s) and `02_NYC_Bar.dx` (real cold extract + self-build).
+
+**Incidental finding while wiring this up: `uedcli_native`'s compiled `.so` was stale relative to
+committed Rust source** (`textures_flat`, the 5th field of the per-poly bundle documented in
+`lib.rs`'s `BrushTuple`, already existed in source but the `.venv`'s `.so` predated it), making
+`parity_compare.py`'s `build_native_model` fail on EVERY level with `ValueError: expected tuple of
+length 4, but got tuple of length 5` — reproduced calling `parity_report.py` directly, unrelated to
+the sweep. Fixed by rebuilding via the existing `ensure_native_ext` (`bin/_venv.sh`) — no source
+changed, just a stale build artifact refreshed. Anyone hitting this same error should do the same
+before assuming a real regression.
+
+Two related gaps found but NOT fixed here (out of `sweep_corpus.py`'s scope, filed to the board):
+`parity-cache-has-no-cross-process-lock` (concurrent processes can race the same content-hash cache
+entry — mitigated by this driver's own default `--concurrency 1`, not fixed at the source) and
+`shared-parity-trunk-extraction-cache-grows` (the new shared trunk cache has no pruning policy).
