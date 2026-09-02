@@ -60,13 +60,24 @@ def canonicalize_self_refs(t3d: str) -> str:
 # What the post-verify COMPARES is only AUTHORED content. A property is authored iff it is
 # `var()`-EDITABLE (CPF_Edit in the schema, `ClassInfo.editable`) OR one of the few authored through
 # UnrealEd's SPECIAL editors — which the UnrealScript compiler marks non-editable: `PrePivot` (the
-# pivot tool) and a mover's `KeyPos`/`KeyRot` (the keyframe tool). Every OTHER non-editable property
-# is engine-managed state the level author never sets — `Region`/`OldLocation`/`bSelected` (load),
-# `SavedPos`/`BasePos` (mover PostLoad), the nav-graph arrays (PATHS BUILD),
-# `DistanceFromPlayer`/`LastRenderTime` (per-frame), `FootRegion` (load) — and is dropped from the
-# compare. This one schema-read rule replaces a hand-maintained computed-prop list (owner ruling
-# 2026-08-24: "exclude non-editable properties automatically").
-_RETAIN_NONEDIT: frozenset[str] = frozenset({"prepivot", "keypos", "keyrot"})
+# pivot tool, declared on `Engine.Actor`) and a mover's `KeyPos`/`KeyRot` (the keyframe tool,
+# declared on `Engine.Mover`). Every OTHER non-editable property is engine-managed state the level
+# author never sets — `Region`/`OldLocation`/`bSelected` (load), `SavedPos`/`BasePos` (mover
+# PostLoad), the nav-graph arrays (PATHS BUILD), `DistanceFromPlayer`/`LastRenderTime` (per-frame),
+# `FootRegion` (load) — and is dropped from the compare. This one schema-read rule replaces a
+# hand-maintained computed-prop list (owner ruling 2026-08-24: "exclude non-editable properties
+# automatically").
+#
+# Keyed on (declaring class, prop name), NOT bare prop name (owner ruling, 2026-09-02): a bare-name
+# match would wrongly retain an unrelated non-editable property on some OTHER class that happens to
+# share one of these names (e.g. a mod class with its own non-editable `PrePivot`-named field that
+# is NOT UnrealEd's pivot tool). `owner` is `ClassInfo.owners[prop]` — the class that actually
+# DECLARES the property, walked up the Super chain, not the actor's own (sub)class.
+_RETAIN_NONEDIT: frozenset[tuple[str, str]] = frozenset({
+    ("engine.actor", "prepivot"),
+    ("engine.mover", "keypos"),
+    ("engine.mover", "keyrot"),
+})
 # Engine-managed props with NO schema entry to read a flag from, so they stay matched by name:
 # `AIProfile(N)` (indexed navigation weight) by prefix, `prevNavigationPoint` (native; its pair
 # `nextNavigationPoint` IS a `var` and the edit-rule drops it) exactly.
@@ -100,13 +111,18 @@ def is_computed_key(key: str) -> bool:
     return any(k.startswith(p) for p in _COMPUTED_PREFIXES)
 
 
-def is_authored_prop(name_casefold: str, *, editable: bool | None) -> bool:
+def is_authored_prop(name_casefold: str, *, editable: bool | None,
+                     owner_casefold: str | None = None) -> bool:
     """COMPARE rule: whether property `name_casefold` is AUTHORED content the post-verify compares.
     True iff it is `var()`-editable (`editable`, from `ClassInfo.editable`) or a special-editor
-    exception (`PrePivot`, mover `KeyPos`/`KeyRot`). An unknown property (`editable is None`) is kept
-    and compared untyped. Non-editable engine state — and the schema-less `AIProfile`/
-    `prevNavigationPoint` — is not authored."""
-    if name_casefold in _RETAIN_NONEDIT:
+    exception (`PrePivot` declared on `Engine.Actor`, mover `KeyPos`/`KeyRot` declared on
+    `Engine.Mover` — matched on `(owner_casefold, name_casefold)`, so an unrelated class's own
+    non-editable property that happens to share one of these bare names is NOT retained).
+    `owner_casefold` is the DECLARING class (`ClassInfo.owners[name_casefold]`, casefolded), not the
+    actor's own (sub)class; omit it (or pass None) if unknown — the exception then never matches. An
+    unknown property (`editable is None`) is kept and compared untyped. Non-editable engine state —
+    and the schema-less `AIProfile`/`prevNavigationPoint` — is not authored."""
+    if owner_casefold is not None and (owner_casefold, name_casefold) in _RETAIN_NONEDIT:
         return True
     if name_casefold in _COMPUTED_GLOBAL:
         return False
@@ -431,7 +447,8 @@ def _actor_values(a: Actor, info, ignore: frozenset[tuple[str, str]] = frozenset
     for k, v in a.props:
         key = prop_key(k)
         owner = info.owners.get(key[0])
-        if not is_authored_prop(key[0], editable=info.editable.get(key[0])):
+        if not is_authored_prop(key[0], editable=info.editable.get(key[0]),
+                                owner_casefold=owner.casefold() if owner else None):
             continue
         if ignore and owner and (owner.casefold(), key[0]) in ignore:
             continue

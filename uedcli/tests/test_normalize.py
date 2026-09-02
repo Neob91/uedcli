@@ -69,12 +69,56 @@ def test_edit_rule_strips_non_editable_keeps_authored_and_special_editors():
     # var()-editable authored props -> kept
     assert is_authored_prop("tag", editable=True)
     assert is_authored_prop("userlist", editable=True)
-    # special-editor exceptions: non-editable but authored -> kept
-    assert is_authored_prop("prepivot", editable=False)
-    assert is_authored_prop("keypos", editable=False)
-    assert is_authored_prop("keyrot", editable=False)
+    # special-editor exceptions: non-editable but authored -> kept, ONLY when declared by the
+    # exact class the exception is scoped to (owner ruling 2026-09-02: keyed on (class, prop), not
+    # bare prop name)
+    assert is_authored_prop("prepivot", editable=False, owner_casefold="engine.actor")
+    assert is_authored_prop("keypos", editable=False, owner_casefold="engine.mover")
+    assert is_authored_prop("keyrot", editable=False, owner_casefold="engine.mover")
+    # same bare names, declared by an UNRELATED class -> NOT retained (the whole point of scoping
+    # by owner: a mod class's own non-editable field that happens to share one of these names is
+    # not UnrealEd's pivot/keyframe tool and must not be silently kept)
+    assert not is_authored_prop("prepivot", editable=False, owner_casefold="deusex.somemodclass")
+    assert not is_authored_prop("keypos", editable=False, owner_casefold="deusex.somemodclass")
+    # no owner known at all -> exception can't match, falls through to the editable check
+    assert not is_authored_prop("prepivot", editable=False, owner_casefold=None)
+    assert not is_authored_prop("prepivot", editable=False)   # owner_casefold defaults to None
     # unknown prop (no schema entry) -> kept, compared untyped
     assert is_authored_prop("somemodprop", editable=None)
+
+
+def test_retain_nonedit_scoping_end_to_end_via_compare_view():
+    """The full pipeline, not just `is_authored_prop` in isolation: `Engine.Mover`'s own `KeyPos` is
+    authored content the compare must distinguish (present vs. absent -> NOT equal), but an
+    unrelated class's own non-editable field that happens to be NAMED `KeyPos` is engine-managed
+    noise the compare must ignore (present vs. absent -> equal) — the exact scenario that motivated
+    scoping `_RETAIN_NONEDIT` by (declaring class, prop) instead of bare name. `StubDefaults` keys
+    `owners` by the class actually QUERIED (`ClassInfo.for_class`'s argument, i.e. the actor's own
+    `Class=`), so the "unrelated class" case below uses a differently-classed actor, not just a
+    differently-keyed schema table under the same actor class."""
+    from uedcli.normalize import compare_view
+
+    def _level_with(cls, prop_line):
+        return parse_t3d(
+            f"Begin Map\nBegin Actor Class={cls} Name=M\n"
+            f"{prop_line}"
+            '    Name="M"\nEnd Actor\nEnd Map\n')
+
+    # Engine.Mover.KeyPos: the real special case -> authored, distinguishes present/absent
+    mover_defaults = StubDefaults(schema={"Engine.Mover": {"KeyPos": "struct:X=float,Y=float,Z=float"}},
+                                  noneditable={"keypos"})
+    with_prop = _level_with("Engine.Mover", "    KeyPos(1)=(Z=256.000000)\n")
+    without_prop = _level_with("Engine.Mover", "")
+    assert compare_view(with_prop, defaults=mover_defaults) != compare_view(without_prop, defaults=mover_defaults)
+
+    # A DIFFERENT class with its own non-editable field that happens to be named `KeyPos` -> NOT
+    # authored (owner is "deusex.somemodclass", not "engine.mover"), present/absent must compare
+    # EQUAL (dropped from comparison either way)
+    other_defaults = StubDefaults(schema={"DeusEx.SomeModClass": {"KeyPos": "struct:X=float,Y=float,Z=float"}},
+                                  noneditable={"keypos"})
+    with_prop2 = _level_with("DeusEx.SomeModClass", "    KeyPos(1)=(Z=256.000000)\n")
+    without_prop2 = _level_with("DeusEx.SomeModClass", "")
+    assert compare_view(with_prop2, defaults=other_defaults) == compare_view(without_prop2, defaults=other_defaults)
 
 
 def test_stable_actor_ordering():
