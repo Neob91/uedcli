@@ -6046,3 +6046,87 @@ Harness: `dev/docs/spikes/2026-09-02-oceanlab-rotated-transform/harness/` (`ocea
 at this round's worktree and extended to dump raw vector/point pool bits; `oceanlab_prefix_search.py` —
 generalizes `prefix_search_lib.py`'s `PrefixSearch` to a fixed-sample sweep rather than a full binary
 search, since a single culprit was not assumed going in).
+
+## World-brush processing ORDER and per-brush `bspRefresh` cadence: both CONFIRMED faithful — closes off hypotheses (b) and (a) for the UNATCO/NSFHQ04/Area51/OceanLab-class node/leaf-count residual (2026-09-02)
+
+Task: with the CSG/BSP pipeline logic itself (27 functions, two independent decompile passes) and
+rotated-brush transform precision (three independent rounds — Area51, NYC747, OceanLab, this same
+session) both ruled out as the driver of the still-open node/leaf-count-only residual, tested the two
+remaining candidates named as untested in the "6th continuation" ledger entry (search "Full
+`bspAddNode` decompile", "Narrows the remaining surface"): does native process world-CSG brushes in
+the same order as the real editor's `csgRebuild`, and does the real editor's per-brush `bspRefresh`
+run at the same points native's port does. Fresh worktree off `master` (synced mid-task to `7c01388`
+by the coordinator after a stale-base fork — verified via `git log`/`git fetch origin master`, not
+taken on faith).
+
+**Hypothesis (b) — brush processing order: CONFIRMED faithful, via close reading of already-committed
+disassembly evidence, not a new live capture.** The INDEPENDENT PASS round (this file, "csgRebuild
+(pass order): confirmed FAITHFUL") had already `angr`-decompiled `csgRebuild` itself
+(`dev/docs/spikes/2026-09-02-csg-pipeline-breadth-decompile/harness/csgRebuild.decompiled.c`) but its
+ledger entry only asserts "faithful," with no documented reasoning for the brush-ORDER question
+specifically. Read the actual pseudo-C: the structural-brush apply loop (lines 187-212) and the
+detail-brush apply loop (lines 245-262) are each a **plain ascending walk over `Level->Actors[]` by
+array index** (`k`/`m`, incremented by 1 each iteration, no sort, no secondary key, no reverse), first
+counted (for the progress bar), then applied via the vtable slot `+532` call (`bspBrushCSG`) in that
+same index order — filtered per-pass by `IsStaticBrush` + (structural pass) NOT the detail-brush flag
+combination / (detail pass) exactly that combination. This is the SAME two-pass (structural-then-
+detail) split, over the SAME index-ordered walk, that `uedcli-native/src/bspcsg.rs::build_geometry_bspcsg`
+already implements: `for (bi, b) in brushes.iter().enumerate()` skipping `detail_pass(b, pf)` in Pass 1,
+then (a second such loop, not reproduced here) applying only those brushes in Pass 2 — and
+`uedcli/native/materialize.py::build_world_model`'s `for name in level.order:` is exactly the array the
+Rust core receives, unreordered. **No divergence**: both sides walk the identical brush sequence in
+the identical order, with the identical structural/detail split. This closes hypothesis (b) — brush
+processing order was never actually a live risk, given how the existing prefix-localization technique
+(build native's first N brushes vs. the editor's first N brushes via `EDIT PASTE`+`MAP REBUILD`, used
+successfully across freeclinic08/NSFHQ04/Area51/Vandenberg to localize single-brush root causes like
+`CsgOper::Active`) implicitly assumes exactly this fact and has repeatedly produced disassembly-
+confirmed correct attributions from it (e.g. `Brush586`'s `CsgOper::Active` fix closed freeclinic08's
+ENTIRE residual to `d=+0/+0/+0` — a result that could not happen by chance if the two sides were
+walking brushes in different orders).
+
+**Hypothesis (a) — `bspRefresh` cadence: the NODE-tree-shape-relevant half is CONFIRMED faithful and
+already unconditionally ported; the gated/experimental half is a different axis (verts/points pool,
+not node/leaf tree shape) and does not bear on this residual.** `bspcsg.rs`'s own doc comments (already
+committed, `incremental_points_enabled`'s doc block and the `bsp_brush_csg` tail comment at line ~2781)
+record that `bspBrushCSG`'s real tail (`Editor.dll 0x35de1`) calls `bspCleanup` UNCONDITIONALLY after
+every Add/Subtract brush — this is the part of "the real editor's per-brush refresh" that actually
+determines NODE/LEAF tree shape (NF_IsNew clear + FWTB-dead-node splice, so the next brush filters
+through an already-cleaned tree); native's `bsp_cleanup(model)` runs unconditionally in that same tail
+position, every brush, already — not gated. The SEPARATE `passes::bsp_refresh_points_vectors` call
+(the Points/Vectors reachability GC, matching a previously live-gdb-measured "5 `bspRefresh` calls for
+5 brushes on `DX.dx`" cadence) is real but gated behind `UEDCLI_BSPCSG_INCREMENTAL_POINTS`
+(experimental, off by default) — however per its own doc comment this GC "does NOT collect nodes, only
+surfs/verts", so it is a verts/points-pool-exactness concern, not a node/leaf-count-tree-shape
+concern, and is therefore orthogonal to the residual this task is scoped to (surf-count-exact,
+node/leaf-count-only divergence). **No live capture was run this round** — the disassembly evidence for
+both the unconditional `bspCleanup` cadence and the `bspRefresh`-cadence measurement it's compared
+against were already committed by prior rounds; this round's contribution is establishing that the
+node-tree-shape-relevant piece is not gated/experimental, closing off the "maybe it only runs at the
+end, not per-brush" reading of the open question.
+
+**Conclusion.** Both of the task's two priority hypotheses check out faithful, adding to the session's
+now-5-for-5 rule-out record (CSG/BSP logic: 27 functions faithful; rotated-brush transform: bit-exact
+or negligible on every implicated brush across 3 independent rounds; brush order: faithful; per-brush
+node-tree refresh: faithful). **No fix shipped** — nothing to fix, both hypotheses came back clean.
+Per the task's own step 5, this narrows the remaining hypothesis space to (c) (brush inclusion/class-
+filter differences — already implicitly ruled out by the residual's own signature: a silently
+skipped/misclassified brush would change the FACE SET, i.e. the surf count, which stays exact across
+every affected level, so this is not re-tested standalone here) and, most likely, the mechanism the
+UNATCO thread's own investigation already isolated one stage further: a genuine tree-SHAPE difference
+already present in the real editor's Pass-1 incrementally-built world tree, upstream of
+`bspBuildFPolys`/`bspMergeCoplanars`/`bspRepartition`/`bsp_add_node` (all separately decompile-confirmed
+faithful) and now also upstream of brush order and per-brush refresh cadence (both confirmed faithful
+here) — i.e. within `bsp_brush_csg`'s own per-brush classify-BSP descent/insert cycle itself, on a
+SPECIFIC BRUSH not yet identified for UNATCO (unlike freeclinic08/Area51/NSFHQ04, no live per-brush
+Pass-1 tree-shape trace — the `prepart_tree_*` technique — has been run to completion for UNATCO
+itself this session; that remains the most direct next step).
+
+`bin/test -k bspcsg`: 104/104 cargo tests pass (fresh build, `.so` rebuilt via `bin/test`'s own
+`ensure_native_ext`, this worktree only). No production code touched (`uedcli-native/src/*`,
+`uedcli/*` untouched) — read-only cross-reference of already-committed decompile output
+(`csgRebuild.decompiled.c`) against already-committed `bspcsg.rs`/`materialize.py` source; no new
+harness script, since the evidence needed (the decompiled pseudo-C, the doc-commented disassembly
+findings) was already committed by prior rounds and just hadn't been read at this level of detail for
+the specific order/cadence questions. No cached UNATCO golden was rebuilt or re-measured this round —
+this is a pure code/decompile cross-reference, independent of any specific level's current residual
+numbers.

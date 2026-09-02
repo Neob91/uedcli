@@ -549,3 +549,24 @@ its rotation is a cardinal 180°-flip, same signed-permutation-matrix argument a
 elsewhere (Vandenberg Gas, not this level): `native-materialize-findings.md`, search "Rotated-brush
 Transform math"; new board item `rotation-py-3-axis-non-cardinal-fcoords-compose`. `bsp_brush_csg`'s
 poly-soup order remains the live lead for this item.
+
+## World-brush processing ORDER: confirmed faithful — closes off one half of the last-named open lead (2026-09-02)
+
+Picked up the "world-brush processing/poly-soup order feeding it — not yet decompiled or live-traced"
+lead named above (task was UNATCO-scoped, this item is the cross-reference target for that thread).
+Read the already-committed `csgRebuild.decompiled.c`
+(`dev/docs/spikes/2026-09-02-csg-pipeline-breadth-decompile/harness/`) at the loop-structure level: the
+structural- and detail-brush apply loops are each a plain ascending `Level->Actors[]` array-index walk
+(no sort, no secondary key), matching `bspcsg.rs::build_geometry_bspcsg`'s own `brushes.iter().enumerate()`
++ `materialize.py`'s `for name in level.order:` exactly, including the structural-then-detail two-pass
+split. Also checked the per-brush `bspRefresh` cadence question: the NODE-tree-shape-relevant half
+(`bspCleanup`, `Editor.dll 0x35de1`) already runs unconditionally per-brush on native's side
+(`bsp_cleanup`, not gated); the gated `UEDCLI_BSPCSG_INCREMENTAL_POINTS` experiment is a separate
+verts/points-pool concern per its own doc comment, not node/leaf tree shape. **Both close clean — no
+divergence found, no fix shipped.** Full writeup: `native-materialize-findings.md`, search "World-brush
+processing ORDER and per-brush `bspRefresh` cadence".
+
+Narrows `bsp_brush_csg`'s remaining unexamined surface to its own per-brush classify-BSP descent/insert
+cycle on a specific not-yet-identified brush — the `prepart_tree_*` live trace this item has named twice
+now remains the most direct next step, for UNATCO specifically (never run to completion there this
+session; freeclinic08/Area51/NSFHQ04 all have theirs).
