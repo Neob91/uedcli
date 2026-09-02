@@ -183,20 +183,20 @@ def main() -> int:
         ed = Driver(container=container)
         print(f"editor up: {container}", flush=True)
         ensure_load(ed, ref_pkgs, search_dirs=host_search_dirs, mounts=mounts)
-        _wait_idle(container, label="obj-load")
+        _wait_idle(ed, label="obj-load")
         ed.map_new()
-        _wait_idle(container, label="map-new")
+        _wait_idle(ed, label="map-new")
         _re_add(ed, actors)
-        _wait_idle(container, label="re-add", timeout=args.rebuild_timeout)
+        _wait_idle(ed, label="re-add", timeout=args.rebuild_timeout)
         for i, cmd in enumerate(c.strip() for c in args.rebuild_cmd.split(";") if c.strip()):
             print(f"  REBUILD[{i}]: {cmd} ...", flush=True)
             ed.exec(cmd)
-            _wait_idle(container, label=f"rebuild[{i}]", timeout=args.rebuild_timeout,
+            _wait_idle(ed, label=f"rebuild[{i}]", timeout=args.rebuild_timeout,
                        quiet_reads=args.quiet_reads)
         if not args.no_light:
             print("  LIGHT APPLY ...", flush=True)
             ed.light_apply()
-            _wait_idle(container, label="light-apply", timeout=args.rebuild_timeout,
+            _wait_idle(ed, label="light-apply", timeout=args.rebuild_timeout,
                        quiet_reads=args.quiet_reads)
         work_out = xfer.work_path("dx")
         print("  MAP SAVE ...", flush=True)

@@ -6130,3 +6130,14 @@ findings) was already committed by prior rounds and just hadn't been read at thi
 the specific order/cadence questions. No cached UNATCO golden was rebuilt or re-measured this round —
 this is a pure code/decompile cross-reference, independent of any specific level's current residual
 numbers.
+
+**2026-09-02 — `build_ued_lit_golden.py`'s `_wait_idle` call sites fixed (`Driver`, not `str`)** — commit
+`2c3b3ff` changed `build_ued_golden.py`'s `_wait_idle` to take a `Driver` (calls
+`driver.dismiss_blocking_dialog()` each poll) but `build_ued_lit_golden.py` imports that same function
+while its 5 call sites still passed the bare container-name string, crashing every lit-golden build with
+`AttributeError: 'str' object has no attribute 'dismiss_blocking_dialog'` on the first wait (`obj-load`).
+Fixed by passing the already-constructed `ed = Driver(container=container)` (line 183) instead of
+`container` at all 5 sites (`obj-load`/`map-new`/`re-add`/`rebuild[i]`/`light-apply`), matching
+`build_ued_golden.py`'s own pattern. Live-verified on `DX.dx`: `obj-load` now completes in 764s with no
+crash (previously 100% reproducible on the first call). Board item
+`build-ued-lit-golden-py-wait-idle-driver-str`.
