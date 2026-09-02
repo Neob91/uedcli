@@ -5936,3 +5936,113 @@ Board: `rotation-py-3-axis-non-cardinal-fcoords-compose` (new, inbox, p3) carrie
 left-undone list. Harness: `dev/docs/spikes/2026-09-02-rotated-brush-transform/harness/`
 (`decompile_transform.py`, `scan_noncardinal.py`, `scan_brush_3axis.py`,
 `check_multiaxis_noncardinal.py`, `disasm_buildcoords.txt`, the two `.decompiled.c` files).
+
+## OceanLab Lab (2026-09-02): rotated-brush transform bit-exactness INDEPENDENTLY tested — measurably
+## non-bit-exact but NOT the driver; the residual is diffuse and NON-MONOTONIC across brush-insertion
+## order, cross-validating the INDEPENDENT PASS's conclusion from a different angle
+
+Parallel, independent cross-validation of the "upstream FP transform, not CSG/BSP logic" hypothesis
+(this file, search "INDEPENDENT PASS — full-breadth decompile" and "Full `bspAddNode` decompile"),
+run concurrently with two other agents testing the same hypothesis on Area51 Entrance and NYC 747.
+This round targets OceanLab Lab (`14_OceanLab_Lab.dx`, 1886 world-CSG brushes) — the largest
+node/leaf residual in the corpus (nodes native=29998 golden=29533 d=+465, leaves native=4055
+golden=3969 d=+86, surfs exact since the `bsp_validate_brush_links` fix, verts d=+3980, points
+d=+1003, vectors d=-66 — re-confirmed on current `master` before starting). Worktree branched from a
+stale base; synced to current master (`9988365`, includes `CsgOper::Active`, the full-breadth
+decompile, and the `bspAddNode` wrap-trim) before any measurement, per a mid-task correction —
+verified via `git log --oneline <old-base>..master` before merging, not taken on faith.
+
+**Step 1 — inventory: OceanLab has by far the largest population of genuine non-cardinal multi-axis
+rotated brushes in the corpus.** `rotation.py`'s own module header already flags a known, previously
+UNMEASURED gap: a multi-axis `FRotator` composed from CARDINAL components (0/90/180/270° on each
+axis) is bit-exact (Python-double `matmul` agrees with the editor's float32 `FCoords` compose after
+the final f32 cast), but a GENUINE non-cardinal multi-axis rotation is only "ULP-approximate,
+unmeasured — no DX level exercises it" (as of that writing). A trunk scan of OceanLab's 2745 actors
+found **94 actors with a non-cardinal multi-axis `Rotation`**, of which ~25 are `CsgOper=CSG_Add`
+world brushes (e.g. `Brush1081` `Pitch=-2968,Yaw=-3072`; `Brush1849/1850/1851`
+`Yaw=-8192,Roll=-15360`; the `Brush509`-`516` group `Yaw=3072,Roll=16384`; `Brush1881` 3-axis). No
+other corpus level comes close (NSFHQ04's Brush842 was noted as "the first non-axis-aligned rotation
+in the level" — i.e. one instance, not dozens) — a plausible reason OceanLab's residual is an order
+of magnitude larger than its peers.
+
+**Step 2 — live prefix binary search (generalized from
+`2026-09-01-fc08-nsfhq04-csgactive/harness/prefix_search_lib.py`), sampled at 6 points across the
+1886-brush world-CSG order (`oceanlab_prefix_search.py`, real `MAP NEW`→`EDIT PASTE`→`MAP REBUILD`
+editor round-trips, not synthetic):**
+
+| n (world-csg brushes) | d_nodes | d_surfs | d_leaves |
+|---:|---:|---:|---:|
+| 100 | +0 | +0 | +0 |
+| 400 | +0 | +0 | +0 |
+| 800 | +13 | +0 | +0 |
+| 1200 | +309 | +0 | +109 |
+| 1600 | **+1140** | +1 | **+244** |
+| 1886 (full) | +465 | +0 | +86 |
+
+**This does NOT localize to one brush.** Unlike Area51/NSFHQ04/Training Final's earlier rounds (a
+clean single-brush jump), OceanLab's residual grows across a wide range (800→1600) and then
+**shrinks by 675 nodes and 158 leaves as 286 MORE brushes are added** (n=1600→1886) — a strict
+single-culprit-brush model cannot produce a net DECREASE from adding brushes; only a cumulative,
+order-sensitive interaction (later brushes' subtracts pruning/repartitioning trees built by earlier
+ones) explains it. This is the "systemic, not one bad brush" outcome this round's task flagged as a
+valid, different-in-kind finding for an unusually large residual — confirmed, not assumed.
+
+**Step 3 — bit-level transform check on two of the identified non-cardinal-rotated brush groups, live
+against a real UED22 build** (`oceanlab_isolate_golden.py` + `oceanlab_isolate_check.py`, the
+existing OceanLab context-isolation technique — synthetic ADD shell + SUBTRACT room around the
+brush(es), real `MAP NEW`→`EDIT PASTE`→`MAP REBUILD`):
+
+- `Brush1081` (`Pitch=-2968,Yaw=-3072`) isolated: native nodes=14 surfs=14 leaves=1, editor
+  nodes=14 surfs=14 leaves=1 — **counts match exactly**. Face-normal bits do NOT: e.g. native
+  `(0.3905463218688965, 0.7510242462158203, 0.5323881506919861)` vs editor
+  `(0.3905463218688965, 0.7510194778442383, 0.5323941707611084)` — x bit-identical, y/z differ by
+  ~4.8e-6 / ~6.0e-6 (tens of ULPs at this magnitude, not a last-bit rounding artifact). Points pool
+  shows the same scale of drift (e.g. native `(1729.171630859375, -565.3137817382812,
+  -589.2099609375)` vs editor's matching point `(1729.1680908203125, -565.3211669921875,
+  -589.2149658203125)`, ~0.004-0.007uu apart).
+- `Brush1849`+`Brush1850`+`Brush1851` (`Yaw=-8192,Roll=-15360`, same rotation, 3 brushes together)
+  isolated: native nodes=26 surfs=23 leaves=1, editor nodes=26 surfs=23 leaves=1 — **counts match
+  exactly again**. Normals again diverge by several ULPs (e.g. native
+  `(-0.7037019729614258,-0.7037018537521362,0.0980171412229538)` vs editor
+  `(-0.7037017941474915,-0.7037020325660706,0.09801716357469559)`).
+
+**Ruled out: the rotation-matrix COMPOSE-ORDER hypothesis `rotation.py`'s header itself raises is NOT
+the mechanism here.** Simulated the editor's presumed float32 SSE compose (each multiply-accumulate
+rounded to f32 individually, left-to-right reduction, no FMA — the same convention `fpoly.rs`'s
+module doc already claims) against the current Python-double-then-cast-once path, for every
+non-cardinal rotation in the inventory above. **21 of 22 distinct rotation combos round to
+bit-identical f32 matrix entries either way** (the one exception, `Brush1881`'s 3-axis case, differs
+in exactly one entry by 1 ULP) — so composing in double vs. simulated f32 predicts NO observable
+difference for `Brush1081` or `Brush1849`-`51`'s matrices, yet the live comparison shows a real,
+several-ULP divergence regardless. **The actual mechanism is elsewhere in the transform/CSG-split
+arithmetic** — most likely the already-flagged-but-not-fully-pinned "§92 §52 second `SafeNormalSlow`
+in `FPoly::Transform`" precision gap (this file, "`grid`-only bucket's Points/Vectors VALUE drift"),
+not the multi-axis composition-order concern. Not chased to a disassembly-confirmed root cause this
+round — out of scope once Step 2 showed transform precision isn't the residual's driver (below).
+
+**Conclusion: the rotated-brush transform IS measurably non-bit-exact (confirmed live, two
+independent brush groups) but this magnitude of drift does not explain OceanLab's residual.** Both
+isolated tests match the editor's node/surf/leaf counts EXACTLY despite real, several-ULP-to-few-
+thousandths normal/vertex drift — a magnitude too small to flip a `FindBestSplit`/coplanar-merge
+threshold in either isolated context. Combined with the prefix sweep's non-monotonic, order-sensitive
+growth (which no per-brush transform-precision bug can produce), this independently cross-validates —
+from a different angle (live bit-level measurement vs. the other rounds' full pipeline decompile) —
+the INDEPENDENT PASS's conclusion that the primary open UNATCO/NSFHQ04/Area51/OceanLab-class
+node-over-build problem is a poly-list-order/repartition tie-break sensitivity, not an upstream
+FP-transform bug. OceanLab's unusually large, non-monotonic residual is best explained by it simply
+having far more world-CSG brushes (1886, the corpus max) and far more non-cardinal-rotated brushes
+(94) than any peer level, amplifying the same pre-existing structural divergence class, not by a
+rotation-specific defect of its own.
+
+**No fix shipped** — none found that is both disassembly-confirmed and measured to close or narrow
+the residual, per the standing no-guessing rule; `uedcli-native/src/*` untouched this round.
+`cargo test`: 104/104 unchanged (no production code touched). `fpoly.rs` may need reconciling with
+concurrent Area51/NYC747-round changes if either of those rounds ships a transform fix — this round's
+own measurement argues against one being needed for OceanLab specifically, but does not rule out a
+narrower fix helping the other two levels.
+
+Harness: `dev/docs/spikes/2026-09-02-oceanlab-rotated-transform/harness/` (`oceanlab_isolate_golden.py`,
+`oceanlab_isolate_check.py` — adapted from the `2026-09-01-oceanlab-overbuild` round's harness, retargeted
+at this round's worktree and extended to dump raw vector/point pool bits; `oceanlab_prefix_search.py` —
+generalizes `prefix_search_lib.py`'s `PrefixSearch` to a fixed-sample sweep rather than a full binary
+search, since a single culprit was not assumed going in).
