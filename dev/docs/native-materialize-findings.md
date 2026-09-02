@@ -5478,3 +5478,146 @@ is untouched by anything in this pass and remains the real open problem.
 prior rounds (2 `test_board.py` frontmatter on unrelated items, 7 `test_csg_native_differential.py`
 tuple-length `ValueError`s, 1 `test_doc_links.py`), all present on `master` `ea1bc3f` before this
 round's gated-off changes.
+
+## Full `bspAddNode` decompile: a genuine, disassembly-confirmed insertion-logic gap FOUND and FIXED (a post-loop wrap-vertex trim) — but MEASURED ZERO effect on every tested level; the poly-list-order/tree-shape mystery remains open (2026-09-02)
+
+Continuation of the "poly-list ORDER mismatch" thread (this file, search "coplanar `iPlane` node-chain
+is NEVER read" and "Poly-list order divergence localized one stage further"). That work confirmed
+`FilterEdPoly`/`FilterLeaf` (the classify descent) are exact and are structurally BLIND to the `iPlane`
+coplanar-sibling chain during classify — the chain is touched only at INSERT time, inside `bspAddNode`'s
+own `NodePlace==NODE_PLANE` branch. This round reads THAT function in full (not just the zone/leaf tail
+block already disassembly-cited in `bspcsg.rs`, `Editor.dll` `0x3524a`-`0x352c7`/`0x3535b`-`0x3539c`) to
+check every ordering/placement decision against `bspcsg.rs::bsp_add_node` (~line 311).
+
+**Tooling: two `angr` traps found and worked around, one of them a genuine upstream bug.**
+`CFGFast` over `Editor.dll` (~2 min, cached) finds `bspAddNode` cleanly at `0x10034e80` (matches the
+already-known entry-args fact in this file). `Decompiler(fn, cfg=cfg.model)` (after the already-known
+`fn.normalize()` requirement) still failed SILENTLY (`dec.codegen` came back `None`, worse than the
+FilterEdPoly round's "near-empty stub" — no text to inspect at all). Root-caused: installed `angr`
+9.3.3's own `SimStruct.offsets` property (`sim_type.py:1699-1703`) computes
+`align = ty.alignment * self._arch.byte_width` and only THEN checks `if align is NotImplemented` — but
+`SimStruct`/`SimUnion.alignment` legitimately return the literal `NotImplemented` when every field's own
+alignment is itself unresolved (a struct-inside-a-struct `angr`'s type inference gave up on, e.g. some
+`UModel` `TArray`-internal field) — so `NotImplemented * int` raises `TypeError` before the very guard
+meant to catch it. This fires inside the resilience-wrapped codegen call and `angr` swallows the
+exception too. Fixed by monkey-patching `SimStruct.offsets` with a corrected version that checks
+`NotImplemented` BEFORE multiplying (fixing `angr`'s own ordering bug, not routing around real type
+info) — lets codegen finish; ~10.8 KB of readable pseudo-C. A handful of bottom-typed struct fields
+still render as raw-offset/plain-int casts rather than named members; every non-obvious line below was
+cross-checked against raw `capstone` disassembly, not trusted from pseudo-C alone (same caveat the
+FilterEdPoly round already flagged).
+
+**Cross-check result, point by point against `bsp_add_node`:**
+- **`NODE_PLANE` tail-walk** (`while node.i_plane != -1 { i = node.i_plane }` to resolve the REAL
+  `i_parent`): happens as the literal FIRST executable logic in the real function too — before surf
+  resolution, before the `>16`-vertex check. Matches.
+- **Surf alloc/reuse gate**: the real editor tests EXACT equality (`iLink == Surfs.Num()` → alloc new)
+  and, on the else branch, hard-asserts `iLink != -1` (`appFailAssert("EdPoly->iLink!=INDEX_NONE", …
+  UnBsp.cpp, 233)`) and `iLink < Surfs.Num()` (`appFailAssert(…, 234)`) rather than `bspcsg.rs`'s
+  permissive `i_link < 0 || i_link >= surfs.len()` → alloc-new. Functionally equivalent for any
+  well-formed input (the two formulas agree on every value a real `iLink` can hold: `-1`, `==Surfs.Num()`,
+  or a valid existing index) — the real editor's asserts just mean `iLink == -1` reaching `bspAddNode` is
+  a program-bug condition, not a silent auto-recovery path. Not shipped as a change (no observable
+  behavior difference identified), noted for completeness per the task's "however small" instruction.
+- **`>16`-vertex split-in-half**: the real editor resolves the surf and derives `NodeFlags`
+  (`derive_nf`-equivalent) ONCE, using the ORIGINAL edpoly's `iLink`, THEN checks the vertex count and —
+  if splitting — passes the ALREADY-DERIVED flags into both recursive calls (front half first, self-call;
+  back half second, `NodePlace=NODE_PLANE` chained onto the front's own new node). `bspcsg.rs` instead
+  recurses first and lets EACH recursive call independently resolve its own surf/derive its own flags
+  from the raw, unmodified `node_flags` argument. Structurally different call shape, but functionally
+  identical output: `derive_nf`'s bit-setting is pure OR (`|= 1`, `|= 4`, `|= 2`), so re-deriving from an
+  already-derived value is idempotent, and both fragments end up sharing the same surf either way (the
+  second call's `iLink` is a stale pre-resolution copy that lands exactly on the just-created surf's real
+  index on re-resolution). No behavior difference; not shipped.
+- **Front/Back/Plane parent-linkage + zone/leaf inheritance**: independently re-derives, via a DIFFERENT
+  technique (full decompile + capstone, not the live-gdb method that produced the existing doc comment),
+  the EXACT same three formulas already in `bspcsg.rs`'s `inherit_parent_leaf_zone` doc comment
+  (`NODE_Root`: `iLeaf=-1,-1; iZone=0,0`; `NODE_Front`/`NODE_Back`: both sides copy `parent.iLeaf/iZone
+  [NodePlace]`; `NODE_Plane`: the `k = (newPlane|parentPlane)<0` swap formula). Byte-for-byte match,
+  confirming the 2026-08-27 disassembly finding via an independent method. The NODE_PLANE branch's own
+  tail-append (`parent(tail).iPlane = newNode`) also matches `bsp_add_node`'s existing chain-tail-append
+  semantics exactly.
+- **Vertex-pool dedup loop** (consecutive-only): matches — same `bspAddPoint`-per-vertex call, same
+  "skip if equal to the immediately preceding pushed value" collapse.
+
+**The one real divergence found: a post-loop "wrap trim" `bsp_add_node` does not implement.**
+Disassembly-confirmed independently of the pseudo-C (raw `capstone` dump,
+`0x100353a1`-`0x100353ef`, cross-checked line-for-line): after the consecutive-only dedup loop, the real
+editor compares the FIRST pushed pool entry's point index against the LAST pushed entry's
+(`cmp eax, [edi+ecx*8-8]` at `0x100353b0`) — if they're equal (a ring whose authored last vertex,
+after dedup, still closes back onto its first), it decrements the reported vertex count by one
+(`dec dh` at `0x100353b6`) WITHOUT popping the vert-pool array entry itself (the real editor
+over-allocates the pool region for the pre-trim count and simply under-reports it, so later nodes'
+`iVertPool` offsets stay correctly aligned with the real editor's own array growth). Then, if the
+resulting count drops under 3, it is treated as a degenerate "Infinitesimal polygon"
+(`FOutputDevice::Logf(L"bspAddNode: Infinitesimal polygon %i (%i)")`, `0x100353bb`-`0x100353eb`) and
+`NumVertices` is forced to 0 rather than left as a genuine 1/2-vertex sliver. `bsp_add_node` had neither
+check.
+
+**Fixed** (`uedcli-native/src/bspcsg.rs`, after the vertex-pool loop): ports both checks exactly,
+including NOT popping the vert-pool array on trim (to preserve later `i_vert_pool` alignment). Pinned
+with two new unit tests constructed directly against `bsp_add_node` (not just cargo-tested via a full
+build): `add_node_drops_a_wrap_duplicate_closing_vertex_from_the_count_not_the_pool` (a 5-vertex ring
+whose last vertex repeats the first trims to `num_vertices=4` while `model.verts.len()` stays 5, and a
+SECOND node added right after starts its own pool region at index 5, not 4) and
+`add_node_reports_zero_vertices_for_a_degenerate_post_trim_result` (a 3-vertex "poly" that trims to 1
+distinct vertex reports `num_vertices=0`). Both confirm the new code path is genuinely REACHABLE and
+correct, not dead code — `cargo test bspcsg`: 104/104 (102 pre-existing + 2 new).
+
+**MEASURED, before shipping, per the standing no-guessing rule: ZERO effect on every tested level.**
+Used the existing `/tmp/uedcli-parity-cache` shared golden-build oracle
+(`dev/docs/spikes/2026-08-31-native-parity-report/harness/parity_report.py`, cache HITS throughout — no
+live editor needed) for a clean A/B (a temporary env-gated toggle around the fix, removed before
+shipping) on the six levels most relevant to this exact investigation thread — the two structural-tree-
+shape residuals this thread is centrally about, plus four others as a breadth/regression check:
+
+| level | nodes (native/golden) | surfs | leaves | fix ON vs OFF |
+|---|---|---|---|---|
+| freeclinic08 (`08_NYC_FreeClinic.dx`) | 2522/2522 (d=+0) | 1580/1580 | 313/313 | IDENTICAL |
+| nsfhq04 (`04_NYC_NSFHQ.dx`) | 7564/7656 (d=-92) | 3831/3830 | 1492/1518 | IDENTICAL |
+| UNATCO (`01_NYC_UNATCOHQ.dx`) | 6740/6390 (d=+350) | 3598/3595 | 861/822 | IDENTICAL |
+| Wanchai Market | 11648/11648 (d=+0) | 5284/5284 | 3371/3371 | IDENTICAL |
+| Training Final | 11227/11122 (d=+105) | 5307/5307 | 861/848 | IDENTICAL |
+| Area51 Entrance | 12715/12630 (d=+85) | 6058/6058 | 3315/3264 | IDENTICAL |
+
+Every geometry count (nodes/surfs/leaves/verts/points/vectors) is byte-identical with the fix on vs off,
+on all six levels — the wrap-trim case the disassembly confirms IS real in the editor's own algorithm
+apparently never triggers for any of these levels' actual CSG-fragment output (no ring's authored last
+vertex happens to duplicate its first after consecutive-only dedup, in the specific fragment shapes
+these builds produce). **This does NOT explain NSFHQ04's diffuse Brush842-class residual, UNATCO's
+larger one, Training Final's `Brush907`/`909`/`911`/`915` lead, or Area51's `Brush1852` residual — none
+of them.**
+
+**Shipped anyway, as a faithful-port correctness fix, NOT as a fix for the open poly-order mystery.**
+It is a genuine, twice-independently-disassembly-confirmed (pseudo-C AND raw capstone) gap from the
+real algorithm, costs nothing (zero regression across 6 levels, 104/104 cargo tests), and is pinned by
+two new unit tests that prove it fires on realistic-shaped input — consistent with this project's
+standing "faithfully reproduce the real algorithm" convention even where a specific case doesn't move
+today's measured parity. It is explicitly NOT claimed to explain any of this investigation's open
+residuals.
+
+**Where this leaves the poly-list-order/tree-shape mystery.** With this round, `bspAddNode`'s own
+insertion logic (parent-slot selection, `iPlane` chain tail-append, zone/leaf inheritance, surf
+alloc/reuse, vertex-pool population) is now FULLY checked — decompiled in full and cross-referenced
+against raw disassembly, not just spot-verified — and matches `bspcsg.rs` in every respect that has any
+observable effect. Combined with the existing full `FilterEdPoly`/`FilterLeaf` decompile (classify
+descent, also exact), **both ends of the pipeline `bsp_add_node` sits between are now closed off as
+candidates.** The remaining, unexamined surface is narrower than before this round: not "does
+`bspAddNode` link nodes correctly" (now checked, yes) and not "does the classify descent walk the tree
+correctly" (already checked, yes) — but WHICH EdPolys get generated, and in what per-brush sequence,
+during `bsp_brush_csg`'s own incremental per-brush CSG loop (the `AddFunc`/`leaf_func` dispatch that
+DECIDES whether/when to call `bspAddNode` at all, and the world-brush processing order feeding it) —
+neither of which this round's decompile covered. That is the concrete next step for whoever picks this
+up; a live per-brush Pass-1 tree-shape trace (the `prepart_tree_*` technique, not yet run at world level
+for any of these levels) remains the most direct way to attribute the divergence to a specific brush/
+decision, as already named in this file's prior rounds.
+
+Harness (`dev/docs/spikes/2026-08-29-unatco-repart-live-diff/harness/`): `decompile_bspaddnode.py` (the
+`angr` recipe, including the `SimStruct.offsets` monkeypatch, documented inline),
+`bspAddNode.decompiled.c` (the saved pseudo-C, ~10.8 KB, for future reference — re-decompiling costs the
+same ~2 min `CFGFast` as the FilterEdPoly round), `disasm_bspaddnode_tail.py` (the raw `capstone` dump
+used to cross-check the wrap-trim finding independently of the pseudo-C). `bspcsg.rs` change: the
+wrap-trim + infinitesimal-polygon guard after the vertex-pool loop (~15 lines), plus 2 new unit tests.
+Full `bin/test` run clean before shipping (see commit). Board:
+`area51-entrance-residual-localized-to-brush1852` and `freeclinic08-nsfhq04-1-surf-under-build-root`,
+both appended.

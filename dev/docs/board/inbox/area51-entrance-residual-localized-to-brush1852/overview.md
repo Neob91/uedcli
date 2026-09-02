@@ -204,3 +204,31 @@ node count, but has **ZERO effect on Area51's or Training Final's residual** (an
 oceanlab): those are rotated-brush levels whose ring vertices sit at exact positions, never in the
 0.002–0.015 gap. So the ring-pool threshold is NOT the Brush1852 / Training-Final lever — that
 world-repartition node-over-build remains open. NOT shipped (gated off, `cargo test` 102/102).
+
+## `bsp_add_node`'s own insertion logic fully decompiled and checked — closed off as a candidate; a real but INERT gap found and fixed (2026-09-02)
+
+Picked up the `bsp_add_node`'s-own-linkage-decisions half of the "next step" named above (the other
+half, the poly-soup/repartition-stage comparison, still untaken). Full `angr` decompile of
+`bspAddNode` (`Editor.dll 0x10034e80`, ~10.8 KB pseudo-C, cross-checked against raw `capstone`
+disassembly for every non-obvious line) against `bspcsg.rs::bsp_add_node`: the `NODE_PLANE` tail-walk
+order, the surf alloc/reuse gate, the `>16`-vertex split-in-half, and — independently re-deriving the
+existing 2026-08-27 disassembly finding via a different method — the Front/Back/Plane parent-linkage
+and zone/leaf-inheritance formulas ALL match, with zero observable-effect differences. `bsp_add_node`
+is now closed off as a candidate mechanism for Area51's (or NSFHQ04's) residual, the same way the prior
+full `FilterEdPoly`/`FilterLeaf` decompile closed off the classify descent.
+
+One real divergence WAS found — a post-loop "wrap trim" (drop a ring's redundant closing vertex if it
+duplicates its first vertex after consecutive-only dedup, plus a degenerate-<3-vertex guard) that
+`bsp_add_node` didn't implement — disassembly-confirmed twice (pseudo-C + raw capstone) and FIXED
+(pinned by 2 new unit tests). But measured, via the offline `/tmp/uedcli-parity-cache` oracle
+(`parity_report.py`, no live editor needed), to have **ZERO effect** on Area51 Entrance specifically
+(native/golden nodes 12715/12630 `d=+85`, surfs 6058/6058 `d=+0`, leaves 3315/3264 `d=+51` — byte-
+identical with the fix on vs off) and on 5 other levels including NSFHQ04. Shipped anyway as a faithful-
+port fix (zero regression), but it does NOT explain Brush1852's residual. Full detail:
+`native-materialize-findings.md`, search "Full `bspAddNode` decompile".
+
+**Narrows the remaining surface for whoever picks this up next**: both `bspAddNode`'s own insertion
+logic and `FilterEdPoly`/`FilterLeaf`'s classify descent are now fully checked and exact. The
+unexamined piece is `bsp_brush_csg`'s own `AddFunc`/`leaf_func` dispatch (which decides WHETHER/WHEN to
+call `bspAddNode` at all, per brush) and the world-brush processing/poly-soup order feeding it — not
+yet decompiled or live-traced at this level of detail.

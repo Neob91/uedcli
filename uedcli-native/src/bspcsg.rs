@@ -152,12 +152,6 @@ fn incremental_points_enabled() -> bool {
     std::env::var("UEDCLI_BSPCSG_INCREMENTAL_POINTS").is_ok()
 }
 
-/// `UEDCLI_BSPCSG_ADDNODE_WELD` — see `bsp_add_node`'s vertex-pool tail. Ports the real
-/// `bspAddNode` wrap-dup collapse + `nv<3` degenerate kill (`Editor.dll 0x353a1`-`0x353ef`).
-fn addnode_weld_enabled() -> bool {
-    std::env::var("UEDCLI_BSPCSG_ADDNODE_WELD").is_ok()
-}
-
 fn bsp_add_point(model: &mut Model, v: Vec3) -> i32 {
     // FindNearestVertex threshold 0.002 (fp-classification-sites §7).
     bsp_add_point_tol(model, v, THRESH_POINTS_ARE_SAME)
@@ -405,35 +399,20 @@ fn bsp_add_node(
         last_iv = iv;
         nv += 1;
     }
-
-    // `UEDCLI_BSPCSG_ADDNODE_WELD` — EXPERIMENT, off by default. The real `bspAddNode`
-    // (`Editor.dll 0x353a1`-`0x353ef`, raw-disassembled 2026-09-02) has a vertex-pool tail native
-    // never ported:
-    //   * WRAP-DUP COLLAPSE (`0x353a1`): if `iVertPool[0].iVertex == iVertPool[nv-1].iVertex` (the
-    //     FIRST and LAST *pooled* indices coincide — the closing vertex snapped to the same pool
-    //     point as the opening one, which `FPoly::Fix`'s geometric wrap-check can miss because the
-    //     two raw verts can be up to ~2·THRESH apart yet both dedup to a third existing point), drop
-    //     the last (`nv--`). Native's loop above only collapses CONSECUTIVE dups, never the wrap.
-    //   * DEGENERATE KILL (`0x353bb`): if the final `nv < 3`, set `NumVertices = 0` (a dead
-    //     plane-only splitter) and bump `GBadNodeCount`. Native currently keeps a `nv==2`/`nv==1`
-    //     node ALIVE, so `is_csg_filter` (nv>0) treats it as CSG-solid and it flips `Outside` during
-    //     the SAME-pass and later brushes' descent — where the editor's dead node does not.
-    // Both are downstream-masked for the repartition SOUP (native's `bsp_node_to_fpoly`
-    // reconstruction runs `remove_colinears`, which drops a coincident wrap vertex and rejects a
-    // sub-3-vert ring anyway), so this only bites via the Pass-1 `is_csg` propagation. Gated as an
-    // experiment pending a parity measurement, not switched on, per the no-guessing rule.
-    if addnode_weld_enabled() {
-        if nv >= 2 {
-            let first_iv = model.verts[i_vert_pool as usize].i_vertex;
-            let last_pooled = model.verts[(i_vert_pool + nv - 1) as usize].i_vertex;
-            if first_iv == last_pooled {
-                model.verts.pop();
-                nv -= 1;
-            }
-        }
-        if nv < 3 {
-            nv = 0; // dead node: verts stay in the pool (bspRefresh GCs them), NumVertices=0.
-        }
+    // bspAddNode's post-loop wrap trim [DISASM Editor.dll 0x100353a1-0x100353b8, decoded
+    // 2026-09-02]: consecutive-only dedup above doesn't catch a ring whose LAST distinct vertex
+    // equals its FIRST (a closed-loop duplicate). The real editor compares the first-pushed pool
+    // entry's point index against the last-pushed one and drops the count by one if they match --
+    // the vert-pool ARRAY itself is left as-is (not popped), so later nodes' `i_vert_pool` offsets
+    // stay aligned with the real editor's own over-allocate-then-undercount behavior. Then
+    // [DISASM 0x100353bb-0x100353eb]: any resulting count under 3 is treated as a degenerate
+    // ("Infinitesimal polygon", `FOutputDevice::Logf`) node -- NumVertices forced to 0 rather than
+    // left as a genuine 1/2-vertex sliver.
+    if nv >= 2 && ivs[0] == *ivs.last().unwrap() {
+        nv -= 1;
+    }
+    if nv < 3 {
+        nv = 0;
     }
 
     let w = edpoly.base.dot(&edpoly.normal);
@@ -3921,6 +3900,58 @@ mod tests {
         let flip = bsp_add_node(&mut m, root, NODE_PLANE, 0, &quad(0.0, false));
         assert_eq!(m.nodes[flip as usize].i_leaf, [9, 7]);
         assert_eq!(m.nodes[flip as usize].i_zone, [5, 3]);
+    }
+
+    /// `bspAddNode`'s post-loop wrap trim [DISASM Editor.dll 0x100353a1-0x100353b8]: a ring whose
+    /// authored LAST vertex duplicates its FIRST (consecutive-only dedup above doesn't catch this,
+    /// since the dupes aren't adjacent in the loop) loses that redundant closing vertex from the
+    /// reported count -- but the vert-pool array itself is left as-is (not popped), so a SECOND
+    /// node added right after keeps the real editor's `i_vert_pool` offset (one past every pushed
+    /// slot, trimmed one included).
+    #[test]
+    fn add_node_drops_a_wrap_duplicate_closing_vertex_from_the_count_not_the_pool() {
+        let mut p = FPoly::new(vec![
+            Vec3::new(0.0, 0.0, 0.0),
+            Vec3::new(10.0, 0.0, 0.0),
+            Vec3::new(10.0, 10.0, 0.0),
+            Vec3::new(0.0, 10.0, 0.0),
+            Vec3::new(0.0, 0.0, 0.0), // closes the ring back onto the first vertex
+        ]);
+        p.normal = Vec3::new(0.0, 0.0, 1.0);
+        let mut m = Model::default();
+        let root = bsp_add_node(&mut m, -1, NODE_ROOT, 0, &p);
+        assert_eq!(
+            m.nodes[root as usize].num_vertices, 4,
+            "the redundant closing vertex must not be counted"
+        );
+        assert_eq!(m.verts.len(), 5, "the pool itself keeps all 5 pushed slots, not popped");
+
+        // A second node added right after must start its own pool region past ALL 5 slots (the
+        // real editor's own over-allocate-then-undercount behavior), not past only the 4 counted.
+        let mut q = FPoly::new(vec![
+            Vec3::new(100.0, 0.0, 0.0),
+            Vec3::new(110.0, 0.0, 0.0),
+            Vec3::new(110.0, 10.0, 0.0),
+        ]);
+        q.normal = Vec3::new(0.0, 0.0, 1.0);
+        bsp_add_node(&mut m, root, NODE_FRONT, 0, &q);
+        assert_eq!(m.nodes[root as usize + 1].i_vert_pool, 5);
+    }
+
+    /// `bspAddNode`'s "Infinitesimal polygon" guard [DISASM 0x100353bb-0x100353eb]: if the wrap
+    /// trim above leaves fewer than 3 vertices, the real editor reports `NumVertices=0` rather
+    /// than a genuine 1/2-vertex sliver.
+    #[test]
+    fn add_node_reports_zero_vertices_for_a_degenerate_post_trim_result() {
+        let mut p = FPoly::new(vec![
+            Vec3::new(0.0, 0.0, 0.0),
+            Vec3::new(10.0, 0.0, 0.0),
+            Vec3::new(0.0, 0.0, 0.0), // wrap trim leaves only 1 distinct vertex
+        ]);
+        p.normal = Vec3::new(0.0, 0.0, 1.0);
+        let mut m = Model::default();
+        let root = bsp_add_node(&mut m, -1, NODE_ROOT, 0, &p);
+        assert_eq!(m.nodes[root as usize].num_vertices, 0);
     }
 
     /// Descent solidity on the FINAL (engine-convention) model: solid iff the region resolves to

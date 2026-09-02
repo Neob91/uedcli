@@ -504,3 +504,37 @@ Area51) is a rotated-brush case whose ring vertices land at exact rotated positi
 0.002–0.015 gap — so the ring threshold is not its lever. The world-repartition node-over-build
 remains open. Also confirmed: the earlier freeclinic08 "PREMERGE 1333 vs 1263" divergence is the
 already-fixed `CsgOper::Active` case; nothing new there. NOT shipped (gated off, `cargo test` 102/102).
+
+## 2026-09-02: `bsp_add_node`'s own insertion logic fully decompiled and checked — closed off as a candidate; a real but INERT gap found and fixed
+
+Continuation of the "poly-list ORDER, not scoring" thread: with `FilterEdPoly`/`FilterLeaf` (the
+classify descent) already confirmed exact and confirmed blind to the `iPlane` chain during classify,
+the remaining unchecked piece was `bsp_add_node` itself — the function that DOES walk that chain, at
+insert time. Full `angr` decompile of the real `bspAddNode` (`Editor.dll 0x10034e80`, ~10.8 KB
+pseudo-C, cross-checked against raw `capstone` disassembly for every non-obvious line) against
+`bspcsg.rs::bsp_add_node`: the `NODE_PLANE` tail-walk order, the surf alloc/reuse gate, the
+`>16`-vertex split-in-half, and the Front/Back/Plane parent-linkage + zone/leaf-inheritance formulas
+(independently re-deriving the existing 2026-08-27 disassembly finding via a different method) ALL
+match, with zero observable-effect differences. `bsp_add_node` is now closed off as a candidate
+mechanism, the same way the FilterEdPoly/FilterLeaf decompile closed off the classify descent.
+
+One real divergence WAS found and disassembly-confirmed twice (pseudo-C + raw capstone): a post-loop
+"wrap trim" — the real editor drops a ring's redundant closing vertex if it duplicates its first
+vertex (after the existing consecutive-only dedup), plus a degenerate-<3-vertex guard — that
+`bsp_add_node` didn't implement. FIXED, pinned by 2 new unit tests. But measured, via the offline
+`/tmp/uedcli-parity-cache` oracle (`parity_report.py`, no live editor needed, clean A/B with a
+temporary env-gated toggle), to have **ZERO effect** on nsfhq04 specifically (native/golden nodes
+7564/7656 `d=-92`, surfs 3831/3830 `d=+1`, leaves 1492/1518 `d=-26` — byte-identical fix on vs off) and
+on freeclinic08 (already node/surf/leaf-exact post-`CsgOper::Active`; verts/points residual `d=+1`/
+`d=+20` also unchanged by this fix) and 4 other levels. Shipped anyway as a faithful-port correctness
+fix (zero regression, 104/104 cargo tests), NOT as an explanation for `Brush842`'s residual, which
+remains diffuse and unexplained. Full detail: `native-materialize-findings.md`, search "Full
+`bspAddNode` decompile".
+
+**Narrows the remaining surface**: both ends of the pipeline `bsp_add_node` sits between — its own
+insertion/linkage logic, and `FilterEdPoly`/`FilterLeaf`'s classify descent — are now fully decompiled
+and checked exact. The unexamined piece is `bsp_brush_csg`'s own `AddFunc`/`leaf_func` dispatch (which
+decides WHETHER/WHEN to call `bspAddNode` at all, per brush) and the world-brush processing/poly-soup
+order feeding it — not yet decompiled or live-traced at this level of detail. A live per-brush Pass-1
+tree-shape trace (`prepart_tree_*`, not yet run at world level for nsfhq04) remains the most direct way
+to attribute the divergence to `Brush842` or a specific decision.
