@@ -100,7 +100,7 @@ def _cpu_pct(container: str) -> float:
     return float((r.stdout.strip().rstrip("%")) or 0.0)
 
 
-def _wait_idle(container: str, *, label: str, thresh: float = 30.0, quiet_reads: int = 8,
+def _wait_idle(driver: Driver, *, label: str, thresh: float = 30.0, quiet_reads: int = 8,
                min_seconds: float = 0.0, timeout: float = 1800.0) -> float:
     """Block until the editor container CPU stays under `thresh`% for `quiet_reads` CONSECUTIVE
     reads (~1.5 s/read via docker stats) — the editor finished the console command — or raise
@@ -110,12 +110,20 @@ def _wait_idle(container: str, *, label: str, thresh: float = 30.0, quiet_reads:
     then portalize/zone) with brief CPU lulls BETWEEN phases. A short quiet window fires during such
     a lull and MAP SAVE then captures a PARTIALLY-rebuilt level (symptom: a plausible node count but a
     truncated Leaves array). `min_seconds` refuses to declare idle before that much wall time has
-    passed since the command, as a floor against an instant-idle false positive."""
+    passed since the command, as a floor against an instant-idle false positive.
+
+    Each poll defensively dismisses the "Cleaning up..." GC `xmessage` dialog
+    (`Driver.dismiss_blocking_dialog()`), mirroring `qualify.dump_obj_dependencies`/
+    `_read_loaded_classes` (`unrealed/quirks.md` "Stability"). The dialog never auto-closes headless;
+    left up, this barrier has nothing to dismiss it and the caller times out at `timeout`
+    (observed live, Training Final 2026-09-02, at both the `map-new` 1800s default and the
+    `--rebuild-timeout` 2400s cap)."""
     t0 = time.time()
     quiet = 0
     last = -1.0
     while True:
-        cpu = _cpu_pct(container)
+        driver.dismiss_blocking_dialog()
+        cpu = _cpu_pct(driver.container)
         last = cpu
         quiet = quiet + 1 if cpu < thresh else 0
         el = time.time() - t0
@@ -243,20 +251,20 @@ def main() -> int:
             print("  (--no-obj-load: skipping OBJ LOAD of referenced packages)", flush=True)
         else:
             ensure_load(ed, ref_pkgs, search_dirs=host_search_dirs, mounts=mounts)
-            _wait_idle(container, label="obj-load")
+            _wait_idle(ed, label="obj-load")
         ed.map_new()
-        _wait_idle(container, label="map-new")
+        _wait_idle(ed, label="map-new")
         _re_add(ed, actors)
-        _wait_idle(container, label="re-add", timeout=args.rebuild_timeout)
+        _wait_idle(ed, label="re-add", timeout=args.rebuild_timeout)
         for i, cmd in enumerate(c.strip() for c in args.rebuild_cmd.split(";") if c.strip()):
             print(f"  REBUILD[{i}]: {cmd} ...", flush=True)
             ed.exec(cmd)
-            _wait_idle(container, label=f"rebuild[{i}]", timeout=args.rebuild_timeout,
+            _wait_idle(ed, label=f"rebuild[{i}]", timeout=args.rebuild_timeout,
                        quiet_reads=args.quiet_reads, min_seconds=args.rebuild_min_seconds)
         if not args.no_light:
             print("  LIGHT APPLY ...", flush=True)
             ed.light_apply()
-            _wait_idle(container, label="light-apply", timeout=args.rebuild_timeout,
+            _wait_idle(ed, label="light-apply", timeout=args.rebuild_timeout,
                        quiet_reads=args.quiet_reads)
         work_out = xfer.work_path("dx")
         print("  MAP SAVE ...", flush=True)

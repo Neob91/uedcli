@@ -77,6 +77,15 @@ strengthened nor refuted this round.** Next attempt should either patch `build_u
 containers. Harness added this round (targeted `tf_probe.py` + generalized `tf_prefix_search.py`)
 is ready to reuse once the build reliably completes.
 
+**Infra blocker FIXED (2026-09-02)**: `build_ued_golden.py`'s `_wait_idle` now calls
+`Driver.dismiss_blocking_dialog()` on every poll, mirroring `qualify.dump_obj_dependencies` — the
+missing half named above. Verified live (a fresh 1-brush scratch trunk built end-to-end through the
+patched function; details: `dev/docs/native-materialize-findings.md`, search "`build_ued_golden.py`'s
+`_wait_idle` now defensively dismisses the GC dialog"). The GC-dialog symptom is closed; the other
+named flakiness source (borderline CPU-idle threshold under host contention) is NOT addressed and may
+still affect a retry. A future round can retry Training Final's live prefix search against the static
+lead without hitting the dialog stall.
+
 ## Harness
 
 Committed under `dev/docs/spikes/2026-09-01-area51-training-final-residual/harness/`:

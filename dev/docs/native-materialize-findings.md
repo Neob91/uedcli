@@ -5816,3 +5816,48 @@ golden). Fresh worktree off `master` `9988365`. `bin/test -k fpoly`: 17/17 pass.
 same pre-existing 10 failures as every prior round (2 `test_board.py` frontmatter on unrelated items,
 7 `test_csg_native_differential.py` tuple-length `ValueError`s, 1 `test_doc_links.py`) — zero
 regression, since zero production code changed.
+
+## `build_ued_golden.py`'s `_wait_idle` now defensively dismisses the GC dialog — fixes the operational stall that blocked Training Final's live prefix search (2026-09-02)
+
+Infra fix, not a CSG/BSP finding — addresses the harness gap the prior "Training Final live prefix
+search: BLOCKED" round (above) flagged: `_wait_idle` polled `docker stats` for CPU-idle but never
+called `Driver.dismiss_blocking_dialog()`, unlike `qualify.dump_obj_dependencies`/`_read_loaded_classes`
+(`unrealed/quirks.md` "Stability"), so the "Cleaning up..." GC `xmessage` dialog — which never
+auto-closes headless — could sit forever with nothing to dismiss it, timing the caller out at its own
+ceiling (observed live: `map-new` at 1800s, `rebuild[0]` at the 2400s `--rebuild-timeout`).
+
+**Fix** (`dev/docs/spikes/2026-07-15-native-materialize/harness/build_ued_golden.py`): `_wait_idle` now
+takes the `Driver` (was the bare container-name string) and calls `driver.dismiss_blocking_dialog()`
+on every poll iteration, before the `docker stats` CPU read — mirroring the established
+`qualify.py` pattern exactly (same call, same per-iteration cadence), not inventing a new one. All 5
+call sites in `main()` (`obj-load`/`map-new`/`re-add`/`rebuild[i]`/`light-apply`) updated to pass the
+already-constructed `Driver` instance instead of the container name.
+
+**Verified two ways:**
+1. Offline mocked unit check (no docker) against a `Driver` stub: confirms `dismiss_blocking_dialog()`
+   fires every poll in both the normal case (dialog never present — behavior identical to the
+   pre-fix function) and a dialog-present-then-clears case, with the idle-detection state machine
+   (`quiet_reads`/`thresh`/`timeout`) otherwise unchanged.
+2. **Live end-to-end smoke test**, no `Test_Castle` needed (a fresh 1-brush scratch trunk built via
+   `uedcli brush build cube` + `actor add -`, run through the PATCHED `build_ued_golden.py
+   --world-only --no-light --no-obj-load` against a real ephemeral editor container): completed
+   successfully — `map-new` idle after 377s, `re-add` after 33s, `rebuild[0]` after 179s, `MAP SAVE`
+   wrote a valid 2908-byte `.dx`, exit 0. The 377s `map-new` wall time for a single-brush level (far
+   longer than CPU-bound work alone would take) is consistent with the GC dialog having actually
+   appeared and been dismissed mid-poll, not just an inert no-op path. Did not attempt to reproduce
+   the original hang directly (non-deterministic per the prior round, and reproducing it needs
+   sustained host contention this round didn't have) — the live smoke test instead confirms the
+   patched function completes a real build cleanly, which is the documented fallback for this case.
+
+Other spike harnesses under `dev/docs/spikes/*/harness/` (`build_ued_lit_golden.py`,
+`oceanlab_isolate_golden.py`, `geo_golden_driver.py`, `vandenberg_*_golden.py`, `a51_editor_prefix.py`,
+etc.) carry their OWN independent copies of `_wait_idle` — this fix only touches
+`2026-07-15-native-materialize/harness/build_ued_golden.py`, the one the Training Final round actually
+hit and the one this task was scoped to. The same gap likely exists in those other copies; not fixed
+here (out of scope for this round, no live evidence any of them hit it) — worth checking before relying
+on one of them for a long live drive.
+
+Ready for a future round: Training Final's static lead (`Brush907`/`909`/`911`/`915`, world-CSG idx
+660-668) can now be retried with the live prefix binary search (`tf_prefix_search.py`/`tf_probe.py`,
+`dev/docs/spikes/2026-09-01-area51-training-final-residual/harness/`) without this specific stall —
+host contention (the other named flakiness source in the prior round) is a separate, unaddressed risk.
