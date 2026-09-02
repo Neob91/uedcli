@@ -1,9 +1,4 @@
-# The board (`dev/docs/board/`) — MIGRATED TO BEADS
-
-**2026-09-02: issue tracking moved to beads (`bd`).** Surviving items were imported
-(`bd-id-map.tsv` maps every slug to its bd id, or `DROPPED`/`DONE`); new findings go to
-`bd create`. This directory remains only for `to-build/native-materialize` (in flight when the
-migration ran) and the map. The rules below apply to that residue alone.
+# The board (`dev/docs/board/`)
 
 The work-state cluster for uedcli. **Each work item is a directory**, and the stage it is in **is
 the directory it sits in**. An item advances with one `git mv`.

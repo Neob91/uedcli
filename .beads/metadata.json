@@ -1,7 +1,0 @@
-{
-  "database": "dolt",
-  "backend": "dolt",
-  "dolt_mode": "embedded",
-  "dolt_database": "uedcli",
-  "project_id": "7ab24e1d-e283-456f-8a05-c2b92c248cd6"
-}

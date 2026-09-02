@@ -196,26 +196,20 @@ def test_a_reopened_question_leaves_the_fold_out_queue() -> None:
 def test_show_resolves_a_real_slug() -> None:
     """Only `show`'s failure path was tested, so it could have returned the wrong stage unnoticed.
 
-    Uses a probe item rather than a named real one: since the beads migration the board holds no
-    stage-level item this test could rely on (same reasoning as the temp board below — no stage
-    guarantees contents).
+    The expected stage is read off the filesystem rather than written in: an item advances by
+    `git mv`, so pinning the stage here would redden the suite every time this item moved, which
+    is exactly the churn the slug-not-path convention exists to avoid.
     """
-    d = _question_item("someday", "zz-show-probe", "\nOption B.\n")
-    try:
-        proc = _run("show", "zz-show-probe")
-        assert proc.returncode == 0, proc.stderr
-        assert proc.stdout.strip() == "dev/docs/board/someday/zz-show-probe"
-    finally:
-        _rmtree(d)
+    slug = "unified-asset-catalog"
+    stage = next(d.parent.name for d in (REPO / "dev/docs/board").glob(f"*/{slug}") if d.is_dir())
+    proc = _run("show", slug)
+    assert proc.returncode == 0, proc.stderr
+    assert proc.stdout.strip() == f"dev/docs/board/{stage}/{slug}"
 
 
 def test_ls_filters_by_stage() -> None:
-    d = _question_item("to-spike", "zz-ls-stage-probe", "\nOption B.\n")
-    try:
-        out = _run("ls", "to-spike").stdout
-        assert out.strip() and all(" to-spike " in ln for ln in out.splitlines())
-    finally:
-        _rmtree(d)
+    out = _run("ls", "to-spike").stdout
+    assert out.strip() and all(" to-spike " in ln for ln in out.splitlines())
 
 
 def test_ls_rejects_two_stages() -> None:
