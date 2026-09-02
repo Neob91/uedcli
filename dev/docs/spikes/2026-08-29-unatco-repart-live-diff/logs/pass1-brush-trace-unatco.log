@@ -1,0 +1,419 @@
+[New LWP 153]
+[New LWP 169]
+[New LWP 170]
+[New LWP 171]
+[New LWP 172]
+[New LWP 173]
+[New LWP 174]
+[New LWP 175]
+[New LWP 176]
+[New LWP 177]
+[New LWP 178]
+[New LWP 179]
+[New LWP 180]
+[New LWP 181]
+[New LWP 182]
+[New LWP 183]
+[New LWP 184]
+[New LWP 185]
+[New LWP 186]
+[New LWP 187]
+[New LWP 188]
+[New LWP 189]
+[New LWP 190]
+[New LWP 191]
+[New LWP 192]
+[New LWP 193]
+[New LWP 194]
+[New LWP 195]
+[New LWP 196]
+[New LWP 197]
+[New LWP 198]
+[New LWP 251]
+[New LWP 252]
+[New LWP 253]
+[Thread debugging using libthread_db enabled]
+Using host libthread_db library "/lib/x86_64-linux-gnu/libthread_db.so.1".
+0xf7f3ecfc in __kernel_vsyscall ()
+Breakpoint 1 at 0x100355e0
+Breakpoint 2 at 0x10049fc0
+ORACLE_ATTACHED
+CSGENTRY k=0 model=0x58eec04 nodes=0 verts=0 vectors=0 points=0 surfs=0
+CSGENTRY k=1 model=0x58eec04 nodes=6 verts=24 vectors=8 points=8 surfs=6
+CSGENTRY k=2 model=0x58eec04 nodes=12 verts=48 vectors=14 points=19 surfs=12
+CSGENTRY k=3 model=0x58eec04 nodes=22 verts=88 vectors=15 points=34 surfs=18
+CSGENTRY k=4 model=0x58eec04 nodes=28 verts=112 vectors=20 points=48 surfs=24
+CSGENTRY k=5 model=0x58eec04 nodes=43 verts=172 vectors=25 points=69 surfs=29
+CSGENTRY k=6 model=0x58eec04 nodes=57 verts=228 vectors=30 points=88 surfs=35
+CSGENTRY k=7 model=0x58eec04 nodes=71 verts=284 vectors=30 points=103 surfs=40
+CSGENTRY k=8 model=0x58eec04 nodes=101 verts=444 vectors=30 points=149 surfs=46
+CSGENTRY k=9 model=0x58eec04 nodes=107 verts=484 vectors=30 points=162 surfs=52
+CSGENTRY k=10 model=0x58eec04 nodes=116 verts=520 vectors=30 points=172 surfs=57
+CSGENTRY k=11 model=0x58eec04 nodes=129 verts=588 vectors=35 points=194 surfs=63
+CSGENTRY k=12 model=0x58eec04 nodes=139 verts=628 vectors=35 points=207 surfs=69
+CSGENTRY k=13 model=0x58eec04 nodes=161 verts=772 vectors=35 points=246 surfs=75
+CSGENTRY k=14 model=0x58eec04 nodes=180 verts=880 vectors=35 points=274 surfs=80
+CSGENTRY k=15 model=0x58eec04 nodes=190 verts=920 vectors=35 points=287 surfs=86
+CSGENTRY k=16 model=0x58eec04 nodes=214 verts=1048 vectors=35 points=320 surfs=91
+CSGENTRY k=17 model=0x58eec04 nodes=230 verts=1112 vectors=35 points=337 surfs=95
+CSGENTRY k=18 model=0x58eec04 nodes=246 verts=1200 vectors=35 points=357 surfs=99
+CSGENTRY k=19 model=0x58eec04 nodes=272 verts=1368 vectors=40 points=407 surfs=105
+CSGENTRY k=20 model=0x58eec04 nodes=298 verts=1564 vectors=40 points=464 surfs=111
+CSGENTRY k=21 model=0x58eec04 nodes=311 verts=1648 vectors=40 points=489 surfs=117
+CSGENTRY k=22 model=0x58eec04 nodes=326 verts=1780 vectors=40 points=533 surfs=121
+CSGENTRY k=23 model=0x58eec04 nodes=341 verts=1900 vectors=40 points=573 surfs=125
+CSGENTRY k=24 model=0x58eec04 nodes=357 verts=1988 vectors=40 points=602 surfs=131
+CSGENTRY k=25 model=0x58eec04 nodes=369 verts=2036 vectors=40 points=618 surfs=136
+CSGENTRY k=26 model=0x58eec04 nodes=383 verts=2176 vectors=40 points=666 surfs=142
+CSGENTRY k=27 model=0x58eec04 nodes=397 verts=2292 vectors=40 points=706 surfs=148
+CSGENTRY k=28 model=0x58eec04 nodes=404 verts=2344 vectors=45 points=723 surfs=154
+CSGENTRY k=29 model=0x58eec04 nodes=411 verts=2380 vectors=45 points=735 surfs=160
+CSGENTRY k=30 model=0x58eec04 nodes=417 verts=2404 vectors=45 points=748 surfs=166
+CSGENTRY k=31 model=0x58eec04 nodes=427 verts=2476 vectors=45 points=769 surfs=172
+CSGENTRY k=32 model=0x58eec04 nodes=478 verts=2728 vectors=45 points=838 surfs=178
+CSGENTRY k=33 model=0x58eec04 nodes=520 verts=3032 vectors=45 points=927 surfs=184
+CSGENTRY k=34 model=0x58eec04 nodes=544 verts=3160 vectors=45 points=961 surfs=188
+CSGENTRY k=35 model=0x58eec04 nodes=556 verts=3208 vectors=46 points=977 surfs=192
+CSGENTRY k=36 model=0x58eec04 nodes=564 verts=3240 vectors=46 points=985 surfs=196
+CSGENTRY k=37 model=0x58eec04 nodes=631 verts=3700 vectors=46 points=1111 surfs=202
+CSGENTRY k=38 model=0x58eec04 nodes=647 verts=3836 vectors=46 points=1148 surfs=208
+CSGENTRY k=39 model=0x58eec04 nodes=657 verts=3892 vectors=46 points=1165 surfs=212
+CSGENTRY k=40 model=0x58eec04 nodes=671 verts=3964 vectors=46 points=1186 surfs=216
+CSGENTRY k=41 model=0x58eec04 nodes=684 verts=4024 vectors=46 points=1203 surfs=220
+CSGENTRY k=42 model=0x58eec04 nodes=700 verts=4100 vectors=46 points=1223 surfs=224
+CSGENTRY k=43 model=0x58eec04 nodes=720 verts=4248 vectors=50 points=1260 surfs=228
+CSGENTRY k=44 model=0x58eec04 nodes=736 verts=4312 vectors=50 points=1277 surfs=232
+CSGENTRY k=45 model=0x58eec04 nodes=747 verts=4380 vectors=50 points=1302 surfs=238
+CSGENTRY k=46 model=0x58eec04 nodes=757 verts=4444 vectors=50 points=1321 surfs=242
+CSGENTRY k=47 model=0x58eec04 nodes=765 verts=4476 vectors=53 points=1331 surfs=246
+CSGENTRY k=48 model=0x58eec04 nodes=805 verts=4716 vectors=53 points=1405 surfs=252
+CSGENTRY k=49 model=0x58eec04 nodes=815 verts=4852 vectors=53 points=1441 surfs=256
+CSGENTRY k=50 model=0x58eec04 nodes=824 verts=4936 vectors=55 points=1469 surfs=261
+CSGENTRY k=51 model=0x58eec04 nodes=834 verts=5044 vectors=57 points=1503 surfs=265
+CSGENTRY k=52 model=0x58eec04 nodes=841 verts=5080 vectors=58 points=1515 surfs=270
+CSGENTRY k=53 model=0x58eec04 nodes=848 verts=5124 vectors=58 points=1530 surfs=275
+CSGENTRY k=54 model=0x58eec04 nodes=856 verts=5176 vectors=58 points=1548 surfs=280
+CSGENTRY k=55 model=0x58eec04 nodes=866 verts=5328 vectors=58 points=1598 surfs=286
+CSGENTRY k=56 model=0x58eec04 nodes=881 verts=5436 vectors=58 points=1620 surfs=290
+CSGENTRY k=57 model=0x58eec04 nodes=906 verts=5600 vectors=58 points=1673 surfs=296
+CSGENTRY k=58 model=0x58eec04 nodes=931 verts=5742 vectors=60 points=1711 surfs=302
+CSGENTRY k=59 model=0x58eec04 nodes=945 verts=5854 vectors=60 points=1746 surfs=307
+CSGENTRY k=60 model=0x58eec04 nodes=966 verts=5970 vectors=60 points=1779 surfs=312
+CSGENTRY k=61 model=0x58eec04 nodes=995 verts=6177 vectors=62 points=1826 surfs=318
+CSGENTRY k=62 model=0x58eec04 nodes=1006 verts=6313 vectors=64 points=1868 surfs=323
+CSGENTRY k=63 model=0x58eec04 nodes=1014 verts=6373 vectors=64 points=1885 surfs=328
+CSGENTRY k=64 model=0x58eec04 nodes=1023 verts=6433 vectors=64 points=1901 surfs=332
+CSGENTRY k=65 model=0x58eec04 nodes=1031 verts=6505 vectors=64 points=1919 surfs=336
+CSGENTRY k=66 model=0x58eec04 nodes=1057 verts=6708 vectors=64 points=1965 surfs=342
+CSGENTRY k=67 model=0x58eec04 nodes=1067 verts=6780 vectors=64 points=1986 surfs=346
+CSGENTRY k=68 model=0x58eec04 nodes=1077 verts=6872 vectors=64 points=2013 surfs=350
+CSGENTRY k=69 model=0x58eec04 nodes=1087 verts=6964 vectors=64 points=2039 surfs=354
+CSGENTRY k=70 model=0x58eec04 nodes=1100 verts=7036 vectors=65 points=2060 surfs=359
+CSGENTRY k=71 model=0x58eec04 nodes=1114 verts=7204 vectors=67 points=2106 surfs=364
+CSGENTRY k=72 model=0x58eec04 nodes=1129 verts=7374 vectors=69 points=2145 surfs=368
+CSGENTRY k=73 model=0x58eec04 nodes=1158 verts=7590 vectors=69 points=2204 surfs=374
+CSGENTRY k=74 model=0x58eec04 nodes=1166 verts=7670 vectors=69 points=2232 surfs=379
+CSGENTRY k=75 model=0x58eec04 nodes=1179 verts=7794 vectors=69 points=2271 surfs=384
+CSGENTRY k=76 model=0x58eec04 nodes=1188 verts=7894 vectors=69 points=2312 surfs=389
+CSGENTRY k=77 model=0x58eec04 nodes=1202 verts=8062 vectors=69 points=2366 surfs=394
+CSGENTRY k=78 model=0x58eec04 nodes=1211 verts=8162 vectors=69 points=2404 surfs=399
+CSGENTRY k=79 model=0x58eec04 nodes=1221 verts=8311 vectors=69 points=2444 surfs=403
+CSGENTRY k=80 model=0x58eec04 nodes=1230 verts=8395 vectors=69 points=2477 surfs=408
+CSGENTRY k=81 model=0x58eec04 nodes=1239 verts=8479 vectors=69 points=2510 surfs=413
+CSGENTRY k=82 model=0x58eec04 nodes=1248 verts=8563 vectors=69 points=2543 surfs=418
+CSGENTRY k=83 model=0x58eec04 nodes=1254 verts=8619 vectors=69 points=2568 surfs=424
+CSGENTRY k=84 model=0x58eec04 nodes=1263 verts=8731 vectors=69 points=2613 surfs=429
+CSGENTRY k=85 model=0x58eec04 nodes=1272 verts=8843 vectors=69 points=2658 surfs=434
+CSGENTRY k=86 model=0x58eec04 nodes=1281 verts=8955 vectors=69 points=2703 surfs=439
+CSGENTRY k=87 model=0x58eec04 nodes=1288 verts=9023 vectors=69 points=2722 surfs=442
+CSGENTRY k=88 model=0x58eec04 nodes=1298 verts=9063 vectors=71 points=2738 surfs=446
+CSGENTRY k=89 model=0x58eec04 nodes=1307 verts=9099 vectors=71 points=2755 surfs=451
+CSGENTRY k=90 model=0x58eec04 nodes=1317 verts=9235 vectors=71 points=2801 surfs=457
+CSGENTRY k=91 model=0x58eec04 nodes=1333 verts=9299 vectors=71 points=2815 surfs=459
+CSGENTRY k=92 model=0x58eec04 nodes=1349 verts=9459 vectors=71 points=2857 surfs=461
+CSGENTRY k=93 model=0x58eec04 nodes=1359 verts=9595 vectors=71 points=2903 surfs=467
+CSGENTRY k=94 model=0x58eec04 nodes=1375 verts=9755 vectors=71 points=2945 surfs=469
+CSGENTRY k=95 model=0x58eec04 nodes=1391 verts=9819 vectors=71 points=2959 surfs=471
+CSGENTRY k=96 model=0x58eec04 nodes=1400 verts=9855 vectors=73 points=2971 surfs=476
+CSGENTRY k=97 model=0x58eec04 nodes=1409 verts=9939 vectors=75 points=3004 surfs=481
+CSGENTRY k=98 model=0x58eec04 nodes=1437 verts=10083 vectors=75 points=3046 surfs=487
+CSGENTRY k=99 model=0x58eec04 nodes=1451 verts=10139 vectors=75 points=3069 surfs=493
+CSGENTRY k=100 model=0x58eec04 nodes=1460 verts=10187 vectors=75 points=3090 surfs=498
+CSGENTRY k=101 model=0x58eec04 nodes=1471 verts=10231 vectors=75 points=3105 surfs=501
+CSGENTRY k=102 model=0x58eec04 nodes=1480 verts=10299 vectors=75 points=3123 surfs=503
+CSGENTRY k=103 model=0x58eec04 nodes=1489 verts=10423 vectors=77 points=3157 surfs=506
+CSGENTRY k=104 model=0x58eec04 nodes=1498 verts=10567 vectors=77 points=3207 surfs=510
+CSGENTRY k=105 model=0x58eec04 nodes=1637 verts=11182 vectors=189 points=3477 surfs=571
+CSGENTRY k=106 model=0x58eec04 nodes=1639 verts=11190 vectors=189 points=3478 surfs=572
+CSGENTRY k=107 model=0x58eec04 nodes=1663 verts=11334 vectors=189 points=3516 surfs=578
+CSGENTRY k=108 model=0x58eec04 nodes=1669 verts=11358 vectors=189 points=3529 surfs=579
+CSGENTRY k=109 model=0x58eec04 nodes=1736 verts=11714 vectors=189 points=3620 surfs=585
+CSGENTRY k=110 model=0x58eec04 nodes=1746 verts=11754 vectors=189 points=3634 surfs=591
+CSGENTRY k=111 model=0x58eec04 nodes=1764 verts=11858 vectors=189 points=3664 surfs=595
+CSGENTRY k=112 model=0x58eec04 nodes=1766 verts=11866 vectors=191 points=3670 surfs=596
+CSGENTRY k=113 model=0x58eec04 nodes=1776 verts=11906 vectors=191 points=3684 surfs=602
+CSGENTRY k=114 model=0x58eec04 nodes=1794 verts=12026 vectors=191 points=3714 surfs=606
+CSGENTRY k=115 model=0x58eec04 nodes=1796 verts=12034 vectors=191 points=3720 surfs=607
+CSGENTRY k=116 model=0x58eec04 nodes=1802 verts=12058 vectors=195 points=3734 surfs=613
+CSGENTRY k=117 model=0x58eec04 nodes=1813 verts=12114 vectors=197 points=3749 surfs=616
+CSGENTRY k=118 model=0x58eec04 nodes=1820 verts=12190 vectors=197 points=3774 surfs=621
+CSGENTRY k=119 model=0x58eec04 nodes=1829 verts=12250 vectors=209 points=3799 surfs=626
+CSGENTRY k=120 model=0x58eec04 nodes=1838 verts=12310 vectors=209 points=3824 surfs=631
+CSGENTRY k=121 model=0x58eec04 nodes=1848 verts=12382 vectors=209 points=3850 surfs=637
+CSGENTRY k=122 model=0x58eec04 nodes=1862 verts=12534 vectors=209 points=3900 surfs=642
+CSGENTRY k=123 model=0x58eec04 nodes=1873 verts=12650 vectors=209 points=3935 surfs=645
+CSGENTRY k=124 model=0x58eec04 nodes=1883 verts=12798 vectors=209 points=3982 surfs=649
+CSGENTRY k=125 model=0x58eec04 nodes=1893 verts=12854 vectors=209 points=4001 surfs=653
+CSGENTRY k=126 model=0x58eec04 nodes=1902 verts=12930 vectors=209 points=4030 surfs=658
+CSGENTRY k=127 model=0x58eec04 nodes=1912 verts=12970 vectors=209 points=4046 surfs=662
+CSGENTRY k=128 model=0x58eec04 nodes=1924 verts=13018 vectors=217 points=4066 surfs=666
+CSGENTRY k=129 model=0x58eec04 nodes=1942 verts=13090 vectors=217 points=4088 surfs=670
+CSGENTRY k=130 model=0x58eec04 nodes=1951 verts=13190 vectors=217 points=4114 surfs=676
+CSGENTRY k=131 model=0x58eec04 nodes=1964 verts=13266 vectors=217 points=4131 surfs=678
+CSGENTRY k=132 model=0x58eec04 nodes=1980 verts=13362 vectors=217 points=4157 surfs=683
+CSGENTRY k=133 model=0x58eec04 nodes=1986 verts=13386 vectors=217 points=4171 surfs=689
+CSGENTRY k=134 model=0x58eec04 nodes=1995 verts=13454 vectors=217 points=4195 surfs=694
+CSGENTRY k=135 model=0x58eec04 nodes=2017 verts=13542 vectors=217 points=4215 surfs=698
+CSGENTRY k=136 model=0x58eec04 nodes=2026 verts=13594 vectors=217 points=4228 surfs=702
+CSGENTRY k=137 model=0x58eec04 nodes=2029 verts=13606 vectors=217 points=4237 surfs=703
+CSGENTRY k=138 model=0x58eec04 nodes=2030 verts=13610 vectors=217 points=4242 surfs=704
+CSGENTRY k=139 model=0x58eec04 nodes=2107 verts=13966 vectors=217 points=4346 surfs=710
+CSGENTRY k=140 model=0x58eec04 nodes=2125 verts=14076 vectors=224 points=4374 surfs=715
+CSGENTRY k=141 model=0x58eec04 nodes=2163 verts=14280 vectors=224 points=4442 surfs=724
+CSGENTRY k=142 model=0x58eec04 nodes=2167 verts=14296 vectors=226 points=4452 surfs=725
+CSGENTRY k=143 model=0x58eec04 nodes=2171 verts=14312 vectors=226 points=4463 surfs=726
+CSGENTRY k=144 model=0x58eec04 nodes=2175 verts=14328 vectors=227 points=4463 surfs=727
+CSGENTRY k=145 model=0x58eec04 nodes=2179 verts=14344 vectors=227 points=4464 surfs=728
+CSGENTRY k=146 model=0x58eec04 nodes=2183 verts=14360 vectors=227 points=4474 surfs=729
+CSGENTRY k=147 model=0x58eec04 nodes=2187 verts=14376 vectors=227 points=4485 surfs=730
+CSGENTRY k=148 model=0x58eec04 nodes=2191 verts=14392 vectors=227 points=4485 surfs=731
+CSGENTRY k=149 model=0x58eec04 nodes=2195 verts=14408 vectors=227 points=4486 surfs=732
+CSGENTRY k=150 model=0x58eec04 nodes=2199 verts=14424 vectors=227 points=4496 surfs=733
+CSGENTRY k=151 model=0x58eec04 nodes=2203 verts=14440 vectors=227 points=4507 surfs=734
+CSGENTRY k=152 model=0x58eec04 nodes=2207 verts=14456 vectors=227 points=4507 surfs=735
+CSGENTRY k=153 model=0x58eec04 nodes=2211 verts=14472 vectors=227 points=4508 surfs=736
+CSGENTRY k=154 model=0x58eec04 nodes=2219 verts=14516 vectors=227 points=4525 surfs=741
+CSGENTRY k=155 model=0x58eec04 nodes=2228 verts=14576 vectors=229 points=4546 surfs=746
+CSGENTRY k=156 model=0x58eec04 nodes=2256 verts=14724 vectors=229 points=4590 surfs=752
+CSGENTRY k=157 model=0x58eec04 nodes=2286 verts=15008 vectors=229 points=4658 surfs=756
+CSGENTRY k=158 model=0x58eec04 nodes=2288 verts=15016 vectors=229 points=4664 surfs=757
+CSGENTRY k=159 model=0x58eec04 nodes=2296 verts=15112 vectors=229 points=4697 surfs=762
+CSGENTRY k=160 model=0x58eec04 nodes=2297 verts=15116 vectors=229 points=4702 surfs=763
+CSGENTRY k=161 model=0x58eec04 nodes=2307 verts=15196 vectors=229 points=4728 surfs=767
+CSGENTRY k=162 model=0x58eec04 nodes=2308 verts=15200 vectors=229 points=4733 surfs=768
+CSGENTRY k=163 model=0x58eec04 nodes=2314 verts=15224 vectors=233 points=4747 surfs=774
+CSGENTRY k=164 model=0x58eec04 nodes=2325 verts=15280 vectors=235 points=4762 surfs=777
+CSGENTRY k=165 model=0x58eec04 nodes=2331 verts=15304 vectors=239 points=4776 surfs=783
+CSGENTRY k=166 model=0x58eec04 nodes=2342 verts=15360 vectors=241 points=4791 surfs=786
+CSGENTRY k=167 model=0x58eec04 nodes=2348 verts=15400 vectors=241 points=4809 surfs=792
+CSGENTRY k=168 model=0x58eec04 nodes=2359 verts=15472 vectors=241 points=4828 surfs=795
+CSGENTRY k=169 model=0x58eec04 nodes=2365 verts=15516 vectors=243 points=4850 surfs=801
+CSGENTRY k=170 model=0x58eec04 nodes=2376 verts=15592 vectors=243 points=4873 surfs=804
+CSGENTRY k=171 model=0x58eec04 nodes=2382 verts=15648 vectors=243 points=4899 surfs=810
+CSGENTRY k=172 model=0x58eec04 nodes=2393 verts=15732 vectors=243 points=4924 surfs=813
+CSGENTRY k=173 model=0x58eec04 nodes=2399 verts=15776 vectors=243 points=4946 surfs=819
+CSGENTRY k=174 model=0x58eec04 nodes=2410 verts=15852 vectors=243 points=4971 surfs=822
+CSGENTRY k=175 model=0x58eec04 nodes=2411 verts=15856 vectors=243 points=4976 surfs=823
+CSGENTRY k=176 model=0x58eec04 nodes=2412 verts=15860 vectors=243 points=4981 surfs=824
+CSGENTRY k=177 model=0x58eec04 nodes=2420 verts=15982 vectors=243 points=5013 surfs=829
+CSGENTRY k=178 model=0x58eec04 nodes=2442 verts=16102 vectors=247 points=5048 surfs=835
+CSGENTRY k=179 model=0x58eec04 nodes=2456 verts=16286 vectors=247 points=5096 surfs=840
+CSGENTRY k=180 model=0x58eec04 nodes=2476 verts=16510 vectors=247 points=5158 surfs=846
+CSGENTRY k=181 model=0x58eec04 nodes=2494 verts=16838 vectors=247 points=5242 surfs=850
+CSGENTRY k=182 model=0x58eec04 nodes=2496 verts=16846 vectors=247 points=5242 surfs=851
+CSGENTRY k=183 model=0x58eec04 nodes=2538 verts=17102 vectors=247 points=5319 surfs=857
+CSGENTRY k=184 model=0x58eec04 nodes=2555 verts=17202 vectors=249 points=5355 surfs=863
+CSGENTRY k=185 model=0x58eec04 nodes=2576 verts=17350 vectors=249 points=5392 surfs=866
+CSGENTRY k=186 model=0x58eec04 nodes=2616 verts=17574 vectors=251 points=5460 surfs=871
+CSGENTRY k=187 model=0x58eec04 nodes=2647 verts=17784 vectors=253 points=5512 surfs=876
+CSGENTRY k=188 model=0x58eec04 nodes=2682 verts=17971 vectors=257 points=5559 surfs=881
+CSGENTRY k=189 model=0x58eec04 nodes=2704 verts=18123 vectors=257 points=5596 surfs=886
+CSGENTRY k=190 model=0x58eec04 nodes=2739 verts=18367 vectors=257 points=5659 surfs=892
+CSGENTRY k=191 model=0x58eec04 nodes=2769 verts=18711 vectors=257 points=5744 surfs=896
+CSGENTRY k=192 model=0x58eec04 nodes=2773 verts=18727 vectors=257 points=5744 surfs=897
+CSGENTRY k=193 model=0x58eec04 nodes=2804 verts=18973 vectors=261 points=5804 surfs=901
+CSGENTRY k=194 model=0x58eec04 nodes=2829 verts=19241 vectors=261 points=5876 surfs=907
+CSGENTRY k=195 model=0x58eec04 nodes=2847 verts=19361 vectors=261 points=5909 surfs=911
+CSGENTRY k=196 model=0x58eec04 nodes=2861 verts=19513 vectors=261 points=5944 surfs=915
+CSGENTRY k=197 model=0x58eec04 nodes=2894 verts=19686 vectors=261 points=5988 surfs=919
+CSGENTRY k=198 model=0x58eec04 nodes=2933 verts=19986 vectors=261 points=6067 surfs=925
+CSGENTRY k=199 model=0x58eec04 nodes=2967 verts=20380 vectors=263 points=6153 surfs=929
+CSGENTRY k=200 model=0x58eec04 nodes=2993 verts=20576 vectors=263 points=6211 surfs=933
+CSGENTRY k=201 model=0x58eec04 nodes=3007 verts=20664 vectors=263 points=6234 surfs=937
+CSGENTRY k=202 model=0x58eec04 nodes=3057 verts=21063 vectors=263 points=6342 surfs=943
+CSGENTRY k=203 model=0x58eec04 nodes=3075 verts=21167 vectors=263 points=6370 surfs=947
+CSGENTRY k=204 model=0x58eec04 nodes=3089 verts=21255 vectors=263 points=6390 surfs=951
+CSGENTRY k=205 model=0x58eec04 nodes=3117 verts=21465 vectors=263 points=6446 surfs=955
+CSGENTRY k=206 model=0x58eec04 nodes=3131 verts=21537 vectors=263 points=6464 surfs=959
+CSGENTRY k=207 model=0x58eec04 nodes=3133 verts=21545 vectors=263 points=6470 surfs=960
+CSGENTRY k=208 model=0x58eec04 nodes=3135 verts=21553 vectors=263 points=6476 surfs=961
+CSGENTRY k=209 model=0x58eec04 nodes=3137 verts=21561 vectors=263 points=6482 surfs=962
+CSGENTRY k=210 model=0x58eec04 nodes=3139 verts=21569 vectors=263 points=6488 surfs=963
+CSGENTRY k=211 model=0x58eec04 nodes=3141 verts=21577 vectors=263 points=6494 surfs=964
+CSGENTRY k=212 model=0x58eec04 nodes=3143 verts=21585 vectors=263 points=6500 surfs=965
+CSGENTRY k=213 model=0x58eec04 nodes=3166 verts=21746 vectors=263 points=6536 surfs=969
+CSGENTRY k=214 model=0x58eec04 nodes=3180 verts=21879 vectors=263 points=6563 surfs=973
+CSGENTRY k=215 model=0x58eec04 nodes=3253 verts=22352 vectors=263 points=6705 surfs=979
+CSGENTRY k=216 model=0x58eec04 nodes=3334 verts=22976 vectors=263 points=6940 surfs=1002
+CSGENTRY k=217 model=0x58eec04 nodes=3368 verts=23292 vectors=263 points=7056 surfs=1014
+CSGENTRY k=218 model=0x58eec04 nodes=3379 verts=23428 vectors=263 points=7087 surfs=1016
+CSGENTRY k=219 model=0x58eec04 nodes=3405 verts=23556 vectors=263 points=7118 surfs=1018
+CSGENTRY k=220 model=0x58eec04 nodes=3412 verts=23616 vectors=263 points=7132 surfs=1020
+CSGENTRY k=221 model=0x58eec04 nodes=3419 verts=23656 vectors=263 points=7141 surfs=1023
+CSGENTRY k=222 model=0x58eec04 nodes=3430 verts=23732 vectors=264 points=7159 surfs=1025
+CSGENTRY k=223 model=0x58eec04 nodes=3440 verts=23819 vectors=266 points=7181 surfs=1027
+CSGENTRY k=224 model=0x58eec04 nodes=3514 verts=24526 vectors=268 points=7377 surfs=1032
+CSGENTRY k=225 model=0x58eec04 nodes=3539 verts=24668 vectors=268 points=7399 surfs=1037
+CSGENTRY k=226 model=0x58eec04 nodes=3570 verts=24884 vectors=270 points=7447 surfs=1040
+CSGENTRY k=227 model=0x58eec04 nodes=3578 verts=24976 vectors=270 points=7471 surfs=1044
+CSGENTRY k=228 model=0x58eec04 nodes=3594 verts=25076 vectors=270 points=7497 surfs=1048
+CSGENTRY k=229 model=0x58eec04 nodes=3606 verts=25176 vectors=270 points=7520 surfs=1052
+CSGENTRY k=230 model=0x58eec04 nodes=3627 verts=25284 vectors=271 points=7545 surfs=1057
+CSGENTRY k=231 model=0x58eec04 nodes=3638 verts=25352 vectors=271 points=7561 surfs=1061
+CSGENTRY k=232 model=0x58eec04 nodes=3667 verts=25633 vectors=272 points=7639 surfs=1066
+CSGENTRY k=233 model=0x58eec04 nodes=3689 verts=25809 vectors=273 points=7679 surfs=1071
+CSGENTRY k=234 model=0x58eec04 nodes=3701 verts=25921 vectors=273 points=7701 surfs=1075
+CSGENTRY k=235 model=0x58eec04 nodes=3717 verts=26198 vectors=273 points=7778 surfs=1079
+CSGENTRY k=236 model=0x58eec04 nodes=3717 verts=26198 vectors=273 points=7778 surfs=1079
+CSGENTRY k=237 model=0x58eec04 nodes=3717 verts=26206 vectors=273 points=7780 surfs=1079
+CSGENTRY k=238 model=0x58eec04 nodes=3717 verts=26206 vectors=273 points=7780 surfs=1079
+CSGENTRY k=239 model=0x58eec04 nodes=3717 verts=26238 vectors=273 points=7788 surfs=1079
+CSGENTRY k=240 model=0x58eec04 nodes=3717 verts=26238 vectors=273 points=7788 surfs=1079
+CSGENTRY k=241 model=0x58eec04 nodes=3717 verts=26238 vectors=273 points=7788 surfs=1079
+CSGENTRY k=242 model=0x58eec04 nodes=3717 verts=26262 vectors=273 points=7798 surfs=1079
+CSGENTRY k=243 model=0x58eec04 nodes=3759 verts=26530 vectors=273 points=7891 surfs=1096
+CSGENTRY k=244 model=0x58eec04 nodes=3759 verts=26530 vectors=273 points=7891 surfs=1096
+CSGENTRY k=245 model=0x58eec04 nodes=3768 verts=26694 vectors=273 points=7936 surfs=1099
+CSGENTRY k=246 model=0x58eec04 nodes=3768 verts=26694 vectors=273 points=7936 surfs=1099
+CSGENTRY k=247 model=0x58eec04 nodes=3768 verts=26694 vectors=273 points=7936 surfs=1099
+CSGENTRY k=248 model=0x58eec04 nodes=3768 verts=26694 vectors=273 points=7936 surfs=1099
+CSGENTRY k=249 model=0x58eec04 nodes=3806 verts=26894 vectors=273 points=8006 surfs=1117
+CSGENTRY k=250 model=0x58eec04 nodes=3806 verts=26910 vectors=273 points=8010 surfs=1117
+CSGENTRY k=251 model=0x58eec04 nodes=3828 verts=27059 vectors=276 points=8055 surfs=1123
+CSGENTRY k=252 model=0x58eec04 nodes=3842 verts=27155 vectors=276 points=8076 surfs=1128
+CSGENTRY k=253 model=0x58eec04 nodes=3860 verts=27227 vectors=276 points=8092 surfs=1134
+CSGENTRY k=254 model=0x58eec04 nodes=3874 verts=27355 vectors=276 points=8124 surfs=1139
+CSGENTRY k=255 model=0x58eec04 nodes=3894 verts=27507 vectors=276 points=8163 surfs=1143
+CSGENTRY k=256 model=0x58eec04 nodes=3985 verts=27864 vectors=296 points=8263 surfs=1157
+CSGENTRY k=257 model=0x58eec04 nodes=4023 verts=28098 vectors=296 points=8316 surfs=1162
+CSGENTRY k=258 model=0x58eec04 nodes=4109 verts=28435 vectors=296 points=8406 surfs=1174
+CSGENTRY k=259 model=0x58eec04 nodes=4133 verts=28531 vectors=296 points=8438 surfs=1180
+CSGENTRY k=260 model=0x58eec04 nodes=4162 verts=28671 vectors=296 points=8466 surfs=1185
+CSGENTRY k=261 model=0x58eec04 nodes=4200 verts=28851 vectors=296 points=8509 surfs=1190
+CSGENTRY k=262 model=0x58eec04 nodes=4214 verts=28907 vectors=296 points=8531 surfs=1196
+CSGENTRY k=263 model=0x58eec04 nodes=4238 verts=29092 vectors=296 points=8569 surfs=1201
+CSGENTRY k=264 model=0x58eec04 nodes=4293 verts=29312 vectors=296 points=8642 surfs=1218
+CSGENTRY k=265 model=0x58eec04 nodes=4360 verts=29888 vectors=296 points=8878 surfs=1238
+CSGENTRY k=266 model=0x58eec04 nodes=4386 verts=30104 vectors=296 points=8937 surfs=1243
+CSGENTRY k=267 model=0x58eec04 nodes=4406 verts=30232 vectors=296 points=8966 surfs=1248
+CSGENTRY k=268 model=0x58eec04 nodes=4434 verts=30520 vectors=298 points=9031 surfs=1250
+CSGENTRY k=269 model=0x58eec04 nodes=4455 verts=30644 vectors=298 points=9064 surfs=1255
+CSGENTRY k=270 model=0x58eec04 nodes=4467 verts=30954 vectors=300 points=9151 surfs=1259
+CSGENTRY k=271 model=0x58eec04 nodes=4476 verts=31114 vectors=300 points=9201 surfs=1262
+CSGENTRY k=272 model=0x58eec04 nodes=4486 verts=31262 vectors=300 points=9251 surfs=1266
+CSGENTRY k=273 model=0x58eec04 nodes=4532 verts=31502 vectors=300 points=9319 surfs=1272
+CSGENTRY k=274 model=0x58eec04 nodes=4561 verts=31655 vectors=300 points=9351 surfs=1274
+CSGENTRY k=275 model=0x58eec04 nodes=4577 verts=31751 vectors=300 points=9381 surfs=1280
+CSGENTRY k=276 model=0x58eec04 nodes=4601 verts=31927 vectors=300 points=9435 surfs=1286
+CSGENTRY k=277 model=0x58eec04 nodes=4615 verts=32063 vectors=300 points=9481 surfs=1292
+CSGENTRY k=278 model=0x58eec04 nodes=4649 verts=32313 vectors=300 points=9543 surfs=1296
+CSGENTRY k=279 model=0x58eec04 nodes=4653 verts=32329 vectors=300 points=9554 surfs=1297
+CSGENTRY k=280 model=0x58eec04 nodes=4663 verts=32469 vectors=300 points=9608 surfs=1303
+CSGENTRY k=281 model=0x58eec04 nodes=4677 verts=32641 vectors=300 points=9661 surfs=1306
+CSGENTRY k=282 model=0x58eec04 nodes=4698 verts=32949 vectors=300 points=9744 surfs=1311
+CSGENTRY k=283 model=0x58eec04 nodes=4734 verts=33365 vectors=300 points=9846 surfs=1315
+CSGENTRY k=284 model=0x58eec04 nodes=4740 verts=33389 vectors=300 points=9860 surfs=1316
+CSGENTRY k=285 model=0x58eec04 nodes=4754 verts=33525 vectors=300 points=9899 surfs=1321
+CSGENTRY k=286 model=0x58eec04 nodes=4766 verts=33652 vectors=300 points=9936 surfs=1326
+CSGENTRY k=287 model=0x58eec04 nodes=4780 verts=33732 vectors=300 points=9963 surfs=1331
+CSGENTRY k=288 model=0x58eec04 nodes=4792 verts=33823 vectors=300 points=9992 surfs=1336
+CSGENTRY k=289 model=0x58eec04 nodes=4834 verts=34247 vectors=300 points=10100 surfs=1340
+CSGENTRY k=290 model=0x58eec04 nodes=4837 verts=34259 vectors=301 points=10109 surfs=1341
+CSGENTRY k=291 model=0x58eec04 nodes=4879 verts=34654 vectors=301 points=10211 surfs=1345
+CSGENTRY k=292 model=0x58eec04 nodes=4882 verts=34666 vectors=301 points=10220 surfs=1346
+CSGENTRY k=293 model=0x58eec04 nodes=4902 verts=34858 vectors=301 points=10272 surfs=1350
+CSGENTRY k=294 model=0x58eec04 nodes=4922 verts=35046 vectors=301 points=10324 surfs=1354
+CSGENTRY k=295 model=0x58eec04 nodes=4973 verts=35426 vectors=301 points=10421 surfs=1358
+CSGENTRY k=296 model=0x58eec04 nodes=5004 verts=35672 vectors=301 points=10483 surfs=1363
+CSGENTRY k=297 model=0x58eec04 nodes=5022 verts=35852 vectors=301 points=10531 surfs=1368
+CSGENTRY k=298 model=0x58eec04 nodes=5039 verts=36112 vectors=304 points=10593 surfs=1372
+CSGENTRY k=299 model=0x58eec04 nodes=5062 verts=36220 vectors=304 points=10624 surfs=1378
+CSGENTRY k=300 model=0x58eec04 nodes=5078 verts=36284 vectors=306 points=10648 surfs=1384
+CSGENTRY k=301 model=0x58eec04 nodes=5088 verts=36368 vectors=308 points=10673 surfs=1390
+CSGENTRY k=302 model=0x58eec04 nodes=5113 verts=36524 vectors=308 points=10715 surfs=1396
+CSGENTRY k=303 model=0x58eec04 nodes=5138 verts=36632 vectors=308 points=10744 surfs=1402
+CSGENTRY k=304 model=0x58eec04 nodes=5167 verts=36803 vectors=308 points=10775 surfs=1408
+CSGENTRY k=305 model=0x58eec04 nodes=5212 verts=36983 vectors=308 points=10816 surfs=1414
+CSGENTRY k=306 model=0x58eec04 nodes=5244 verts=37183 vectors=308 points=10866 surfs=1419
+CSGENTRY k=307 model=0x58eec04 nodes=5255 verts=37337 vectors=308 points=10900 surfs=1423
+CSGENTRY k=308 model=0x58eec04 nodes=5278 verts=37519 vectors=308 points=10950 surfs=1428
+CSGENTRY k=309 model=0x58eec04 nodes=5310 verts=37765 vectors=308 points=11009 surfs=1433
+CSGENTRY k=310 model=0x58eec04 nodes=5335 verts=37893 vectors=308 points=11042 surfs=1439
+CSGENTRY k=311 model=0x58eec04 nodes=5360 verts=38029 vectors=308 points=11084 surfs=1445
+CSGENTRY k=312 model=0x58eec04 nodes=5376 verts=38101 vectors=308 points=11106 surfs=1450
+CSGENTRY k=313 model=0x58eec04 nodes=5379 verts=38113 vectors=308 points=11115 surfs=1451
+CSGENTRY k=314 model=0x58eec04 nodes=5382 verts=38125 vectors=308 points=11124 surfs=1452
+CSGENTRY k=315 model=0x58eec04 nodes=5461 verts=38544 vectors=308 points=11228 surfs=1458
+CSGENTRY k=316 model=0x58eec04 nodes=5513 verts=38951 vectors=309 points=11332 surfs=1464
+CSGENTRY k=317 model=0x58eec04 nodes=5566 verts=39246 vectors=310 points=11403 surfs=1470
+CSGENTRY k=318 model=0x58eec04 nodes=5586 verts=39414 vectors=310 points=11443 surfs=1472
+CSGENTRY k=319 model=0x58eec04 nodes=5598 verts=39510 vectors=310 points=11467 surfs=1474
+CSGENTRY k=320 model=0x58eec04 nodes=5606 verts=39550 vectors=310 points=11479 surfs=1477
+CSGENTRY k=321 model=0x58eec04 nodes=5614 verts=39606 vectors=310 points=11494 surfs=1480
+CSGENTRY k=322 model=0x58eec04 nodes=5621 verts=39650 vectors=310 points=11505 surfs=1484
+CSGENTRY k=323 model=0x58eec04 nodes=5634 verts=39751 vectors=310 points=11533 surfs=1488
+CSGENTRY k=324 model=0x58eec04 nodes=5642 verts=39819 vectors=310 points=11550 surfs=1490
+CSGENTRY k=325 model=0x58eec04 nodes=5655 verts=39903 vectors=310 points=11570 surfs=1493
+CSGENTRY k=326 model=0x58eec04 nodes=5662 verts=39975 vectors=310 points=11587 surfs=1496
+CSGENTRY k=327 model=0x58eec04 nodes=5672 verts=40054 vectors=310 points=11608 surfs=1499
+CSGENTRY k=328 model=0x58eec04 nodes=5681 verts=40130 vectors=310 points=11623 surfs=1503
+CSGENTRY k=329 model=0x58eec04 nodes=5690 verts=40197 vectors=310 points=11635 surfs=1507
+CSGENTRY k=330 model=0x58eec04 nodes=5725 verts=40433 vectors=310 points=11683 surfs=1510
+CSGENTRY k=331 model=0x58eec04 nodes=5759 verts=40693 vectors=310 points=11740 surfs=1513
+CSGENTRY k=332 model=0x58eec04 nodes=5771 verts=40765 vectors=311 points=11751 surfs=1516
+CSGENTRY k=333 model=0x58eec04 nodes=5783 verts=40837 vectors=311 points=11761 surfs=1519
+CSGENTRY k=334 model=0x58eec04 nodes=5797 verts=40893 vectors=311 points=11777 surfs=1524
+CSGENTRY k=335 model=0x58eec04 nodes=5817 verts=41005 vectors=311 points=11811 surfs=1528
+CSGENTRY k=336 model=0x58eec04 nodes=5842 verts=41141 vectors=311 points=11847 surfs=1532
+CSGENTRY k=337 model=0x58eec04 nodes=5892 verts=41417 vectors=311 points=11908 surfs=1536
+CSGENTRY k=338 model=0x58eec04 nodes=5922 verts=41617 vectors=311 points=11964 surfs=1542
+CSGENTRY k=339 model=0x58eec04 nodes=5922 verts=41629 vectors=311 points=11968 surfs=1542
+CSGENTRY k=340 model=0x58eec04 nodes=5942 verts=41763 vectors=311 points=12002 surfs=1547
+CSGENTRY k=341 model=0x58eec04 nodes=5957 verts=41873 vectors=311 points=12031 surfs=1551
+CSGENTRY k=342 model=0x58eec04 nodes=5974 verts=41996 vectors=311 points=12063 surfs=1554
+CSGENTRY k=343 model=0x58eec04 nodes=5983 verts=42032 vectors=311 points=12080 surfs=1559
+CSGENTRY k=344 model=0x58eec04 nodes=5996 verts=42132 vectors=311 points=12117 surfs=1564
+CSGENTRY k=345 model=0x58eec04 nodes=6016 verts=42276 vectors=311 points=12153 surfs=1569
+CSGENTRY k=346 model=0x58eec04 nodes=6056 verts=42580 vectors=336 points=12266 surfs=1593
+CSGENTRY k=347 model=0x58eec04 nodes=6088 verts=42752 vectors=336 points=12307 surfs=1609
+CSGENTRY k=348 model=0x58eec04 nodes=6097 verts=42800 vectors=336 points=12322 surfs=1614
+CSGENTRY k=349 model=0x58eec04 nodes=6113 verts=42983 vectors=336 points=12368 surfs=1617
+CSGENTRY k=350 model=0x58eec04 nodes=6133 verts=43283 vectors=336 points=12448 surfs=1621
+CSGENTRY k=351 model=0x58eec04 nodes=6152 verts=43579 vectors=337 points=12526 surfs=1626
+CSGENTRY k=352 model=0x58eec04 nodes=6167 verts=43909 vectors=338 points=12607 surfs=1630
+CSGENTRY k=353 model=0x58eec04 nodes=6193 verts=44245 vectors=338 points=12691 surfs=1635
+CSGENTRY k=354 model=0x58eec04 nodes=6208 verts=44583 vectors=338 points=12766 surfs=1639
+CSGENTRY k=355 model=0x58eec04 nodes=6218 verts=44635 vectors=338 points=12788 surfs=1645
+CSGENTRY k=356 model=0x58eec04 nodes=6234 verts=44735 vectors=338 points=12815 surfs=1648
+CSGENTRY k=357 model=0x58eec04 nodes=6243 verts=44879 vectors=338 points=12866 surfs=1653
+CSGENTRY k=358 model=0x58eec04 nodes=6249 verts=44947 vectors=338 points=12895 surfs=1659
+CSGENTRY k=359 model=0x58eec04 nodes=6260 verts=44991 vectors=338 points=12911 surfs=1664
+CSGENTRY k=360 model=0x58eec04 nodes=6270 verts=45091 vectors=338 points=12945 surfs=1669
+CSGENTRY k=361 model=0x58eec04 nodes=6281 verts=45195 vectors=338 points=12981 surfs=1674
+CSGENTRY k=362 model=0x58eec04 nodes=6291 verts=45235 vectors=338 points=12995 surfs=1679
+CSGENTRY k=363 model=0x58eec04 nodes=6297 verts=45303 vectors=346 points=13024 surfs=1685
+CSGENTRY k=364 model=0x58eec04 nodes=6304 verts=45375 vectors=346 points=13045 surfs=1690
+CSGENTRY k=365 model=0x58eec04 nodes=6306 verts=45383 vectors=346 points=13052 surfs=1691
+CSGENTRY k=366 model=0x58eec04 nodes=6308 verts=45391 vectors=346 points=13059 surfs=1692
+CSGENTRY k=367 model=0x58eec04 nodes=6310 verts=45399 vectors=346 points=13066 surfs=1693
+CSGENTRY k=368 model=0x58eec04 nodes=6312 verts=45407 vectors=346 points=13073 surfs=1694
+CSGENTRY k=369 model=0x58eec04 nodes=6314 verts=45415 vectors=346 points=13080 surfs=1695
+CSGENTRY k=370 model=0x58eec04 nodes=6316 verts=45423 vectors=346 points=13087 surfs=1696
+CSGENTRY k=371 model=0x58eec04 nodes=6322 verts=45683 vectors=346 points=13173 surfs=1702
+CSGENTRY k=372 model=0x58eec04 nodes=6331 verts=45719 vectors=346 points=13185 surfs=1707
+CSGENTRY k=373 model=0x58eec04 nodes=6340 verts=45755 vectors=346 points=13197 surfs=1712
+CSGENTRY k=374 model=0x58eec04 nodes=6341 verts=45759 vectors=346 points=13201 surfs=1713
+CSGENTRY k=375 model=0x58eec04 nodes=6342 verts=45763 vectors=346 points=13205 surfs=1714
+P1END calls=376 model=0x58eec04 nodes=6368 verts=45943 vectors=348 points=13258 surfs=1720
+TREEEND
+[Inferior 1 (process 33) detached]

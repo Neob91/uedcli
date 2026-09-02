@@ -103,7 +103,7 @@ def _build_brush_input(name, actor):
     except ValueError:
         poly_flags = 0
     from .. import rotation as ROT
-    from ..transform import covariant_axes, flip_winding, reject_degenerate, DegenerateTransformError
+    from ..transform import flip_winding, reject_degenerate, DegenerateTransformError
     # A brush is "scaled" when either MainScale (local/pre-rotation) or PostScale (world/post-rotation)
     # is non-identity (incl. sheer).  Only then do we bake the full linear map + drop authored normals;
     # every unscaled brush keeps the exact prior path (rotation-only), preserving byte-parity.
@@ -113,13 +113,16 @@ def _build_brush_input(name, actor):
     tex_cov = None
     vec_xform_flat: list[float] = []                     # scaled: (L⁻¹)ᵀ VectorXform for the normal
     if scaled:
-        # The vertex transform IS the full double linear map `L = PostScale·R·MainScale`, passed as the
-        # Rust `rot`: `FPoly::transform` yields `world = L·(v−PrePivot)+Loc`, and `scale` stays identity
-        # so the core's reject never fires.  `L` includes sheer (`fscale_matrix`'s off-diagonal), so a
-        # sheared scale bakes correctly into both the verts (here) and the normal (covariant below) — no
-        # sheer reject is needed (it existed only for the deleted diagonal-only f32 construction).
-        L = ROT.actor_linear(actor)                      # PostScale·R·MainScale (double)
-        R = L
+        # The vertex transform is `L = PostScale·R·MainScale`, passed as the Rust `rot`:
+        # `FPoly::transform` yields `world = L·(v−PrePivot)+Loc`, and `scale` stays identity so the
+        # core's reject never fires.  `L` includes sheer, so a sheared scale bakes correctly into
+        # both the verts and the normal (covariant below).  The VERT map is the EDITOR-FAITHFUL f32
+        # `ABrush::BuildCoords` PointXform chain (`rotation.editor_point_xform`), not the double
+        # compose — the two differ by 1-ULP chain-rounding on multi-component scale/rotation
+        # brushes (same live-gdb round as `editor_vector_xform`; the double `actor_linear` is kept
+        # only for the analysis-side inverse/covariant helpers below).
+        L = ROT.actor_linear(actor)                      # PostScale·R·MainScale (double, analysis)
+        R = ROT.editor_point_xform(actor)                # f32 BuildCoords PointXform (verts)
         # A zero/degenerate scale axis makes L singular -> the covariant `(L⁻¹)ᵀ` inversion below would
         # ZeroDivisionError and reach the CLI user.  Reject cleanly, naming the brush.
         try:
@@ -143,7 +146,13 @@ def _build_brush_input(name, actor):
         # asymmetric by non-uniform scale).  Gated off a mirror: there the covariant image flips
         # orientation, so the ring-reverse + `calc_normal` path stays.
         if not mirror:
-            NT = covariant_axes(L)                       # (L⁻¹)ᵀ
+            # NOT `covariant_axes(L)` (double `(L⁻¹)ᵀ`, f32-cast): the editor builds VectorXform as
+            # an all-f32 `(Unit / MainScale / Rotation / PostScale).Transpose()` chain whose entries
+            # differ by 1 ULP (`1.0f/0.624999f = 0x3fcccce3` vs double's `0x3fcccce2`), and that ULP
+            # decides whether `SafeNormalSlow` lands the exact `±1.0` axis normal the editor stores
+            # in the node plane (UNATCO Brush578 nodes 359-364, live-gdb 2026-09-02 —
+            # `pass1_normal_probe_unatco.py`; `rotation.editor_vector_xform`'s own doc comment).
+            NT = ROT.editor_vector_xform(actor)
             vec_xform_flat = [float(NT[r][c]) for r in range(3) for c in range(3)]
     else:
         Rm = ROT.actor_matrix(actor)                     # None == renders-as-identity (low-bit fields)

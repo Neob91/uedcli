@@ -296,19 +296,23 @@ def test_rotated_scaled_vec_xform_is_the_covariant_inverse_transpose():
         f"local +x normal must covariant-map to world +y under yaw=90; got {wn}"
 
 
-# ── the rot+scale VERTEX transform (double `actor_linear`) + authored base ──
-# `_build_brush_input` bakes the scaled brush's world transform as the DOUBLE `L = PostScale·R·MainScale`
-# (`rotation.actor_linear`), passed as the Rust `rot`, and KEEPS the authored per-poly Origin (the surf
-# `pBase` the editor stores is the transformed authored Origin, not a ring corner).  The f32 `FCoords`
-# PointXform that once reproduced editor BYTE-parity is gone — it was vestigial once native materialize
-# was removed (no surviving consumer — draft preview / the CSG boolean verbs — needs editor byte-parity).
+# ── the rot+scale VERTEX transform (f32 `editor_point_xform`) + authored base ──
+# `_build_brush_input` bakes the scaled brush's world transform as the EDITOR-FAITHFUL f32
+# `ABrush::BuildCoords` PointXform chain (`rotation.editor_point_xform` — live-gdb-confirmed against
+# the real editor's transformed Base/vert bits, 2026-09-02 pass1-trace round: Vandenberg Brush54
+# 339/412 Origins match ONLY the f32 chain, 0 only-double), passed as the Rust `rot`, and KEEPS the
+# authored per-poly Origin (the surf `pBase` the editor stores is the transformed authored Origin,
+# not a ring corner).  This SUPERSEDES the earlier "f32 PointXform is vestigial" state: native
+# materialize byte-parity is the standing goal again, and the double `actor_linear` compose is 1 ULP
+# off the editor on multi-component scale/rotation brushes.
 
 
-def test_scaled_brush_wires_actor_linear_as_the_transform_matrix():
-    """The vertex transform tuple[6] IS the double `actor_linear` map `L = PostScale·R·MainScale` — the
-    unified apply, not a separate f32 PointXform.  Guards the wiring: a scaled brush must hand the Rust
-    core the full double `L` as `rot` (so `FPoly::transform` yields `L·(v−PrePivot)+Loc`) with the
-    `scale` tuple left identity (index 8) so the core's scaled-brush reject never fires."""
+def test_scaled_brush_wires_editor_point_xform_as_the_transform_matrix():
+    """The vertex transform tuple[6] IS the f32 `editor_point_xform` chain — bit-equal to the double
+    `actor_linear` on single-scale/cardinal brushes (no chain rounding) but the f32 chain on the
+    multi-component ones.  Guards the wiring: a scaled brush must hand the Rust core that map as
+    `rot` (so `FPoly::transform` yields `L·(v−PrePivot)+Loc`) with the `scale` tuple left identity
+    (index 8) so the core's scaled-brush reject never fires."""
     from uedcli import rotation as ROT
     lvl = _one_add_brush_level("Yaw180", cube(64, 32, 16),
                                post_scale=FScale(scale=(0.249997, 1.0, 1.0)))
@@ -316,11 +320,11 @@ def test_scaled_brush_wires_actor_linear_as_the_transform_matrix():
     a.props.append(("Rotation", "(Yaw=32768)"))            # 180° — a cardinal cross-term brush
     tup = brush_marshal._build_brush_input("Yaw180", a)
     R_returned, scale = tup[6], tup[8]
-    L = ROT.actor_linear(a)
+    P = ROT.editor_point_xform(a)
     for r in range(3):
         for c in range(3):
-            assert R_returned[r][c] == L[r][c], \
-                f"tuple[6][{r}][{c}]={R_returned[r][c]} must be the double actor_linear {L[r][c]}"
+            assert R_returned[r][c] == P[r][c], \
+                f"tuple[6][{r}][{c}]={R_returned[r][c]} must be editor_point_xform {P[r][c]}"
     assert tuple(scale) == (1.0, 1.0, 1.0), "the scale tuple must stay identity (L is baked into rot)"
 
 

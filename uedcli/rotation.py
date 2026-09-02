@@ -304,6 +304,128 @@ def actor_linear(actor):
     return L
 
 
+# ── editor-faithful VectorXform (ABrush::BuildCoords covariant chain) ───────────────────────────
+#
+# The editor maps a scaled brush's face normal by `Coords->VectorXform =
+# (GMath.UnitCoords / MainScale / Rotation / PostScale).Transpose()` (ABrush::BuildCoords,
+# Engine.dll 0x111390) and then `SafeNormalSlow`s it inside `FPoly::Transform`. Every step is
+# scalar FLOAT32 (`divss`/`mulss`/`addss`), so the entries differ by 1 ULP from the
+# double-precision `(L⁻¹)ᵀ` (`transform.covariant_axes`) — e.g. `1.0f/0.624999f = 0x3fcccce3`
+# (f32 chain) vs `f32(1/0.624999) = 0x3fcccce2` (double), and that single ULP decides whether
+# `SafeNormalSlow` lands an axis normal on the exact `±1.0` the editor stores in the node plane
+# (UNATCO Brush578, live-gdb-confirmed 2026-09-02: `pass1_normal_probe_unatco.py`). The chain below
+# replicates the binary op-for-op; f32 emulation via `_f32` after each op is exact (add/mul of f32
+# in double is exact pre-round; f32 division via double is correctly rounded, Figueroa 2p+2).
+# Disassembly: `FCoords::operator/=(FScale)` core.dll 0x18bb0, `operator/=(FRotator)` 0x18a10,
+# `operator*=(FCoords)` 0x17df0, `FSheerSnap` 0x1e7c0 — spike
+# `dev/docs/spikes/2026-08-29-unatco-repart-live-diff/` (pass1 trace round).
+
+_SHEER_DIV_SLOT = {  # ESheerAxis ordinal → (row, col) of the −snap entry in operator/=(FScale)
+    "SHEER_XY": (0, 1), "SHEER_XZ": (0, 2), "SHEER_YX": (1, 0),
+    "SHEER_YZ": (1, 2), "SHEER_ZX": (2, 0), "SHEER_ZY": (2, 1),
+}
+
+
+def _sheer_snap_f32(rate: float) -> float:
+    """`FSheerSnap` (core.dll 0x1e7c0): piecewise f32 snap of a sheer rate."""
+    r = _f32(rate)
+    if r < _f32(-0.65):
+        return _f32(r + _f32(0.15))
+    if r > _f32(0.65):
+        return _f32(r - _f32(0.15))
+    if r < _f32(-0.55):
+        return -0.5
+    if r > _f32(0.55):
+        return 0.5
+    if r < _f32(-0.05):
+        return _f32(r + _f32(0.05))
+    if r > _f32(0.05):
+        return _f32(r - _f32(0.05))
+    return 0.0
+
+
+def _fcoords_mul_axes(rows, B):
+    """`FCoords::operator*=(FCoords)` (core.dll 0x17df0), axes only: each row r of `this` becomes
+    `(r·B[0], r·B[1], r·B[2])` with the binary's own f32 sum order `((y·+x·)+z·)`."""
+    return [
+        [_f32(_f32(_f32(r[1] * b[1]) + _f32(r[0] * b[0])) + _f32(r[2] * b[2])) for b in B]
+        for r in rows
+    ]
+
+
+def _fcoords_div_scale(rows, fscale):
+    """`FCoords::operator/=(FScale)` (core.dll 0x18bb0), axes only: divide each row component-wise
+    by the f32 scale, then multiply by the unit-with-`−FSheerSnap(rate)` de-sheer coords."""
+    s = [_f32(float(c)) for c in fscale.scale]
+    rows = [[_f32(r[0] / s[0]), _f32(r[1] / s[1]), _f32(r[2] / s[2])] for r in rows]
+    sheer = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
+    ri, ci = _SHEER_DIV_SLOT[fscale.sheer_axis]
+    sheer[ri][ci] = -_sheer_snap_f32(float(fscale.sheer_rate))
+    return _fcoords_mul_axes(rows, sheer)
+
+
+def _fcoords_div_rotator(rows, uu):
+    """`FCoords::operator/=(FRotator)` (core.dll 0x18a10), axes only: chain the three transposed
+    single-axis coords Roll→Pitch→Yaw via `operator*=(FCoords)`, GMath f32 trig, signed zeros
+    exactly as the binary builds them."""
+    pitch, yaw, roll = uu
+    sr, cr = gmath_sin(roll), gmath_cos(roll)
+    rows = _fcoords_mul_axes(rows, [[1.0, -0.0, 0.0], [-0.0, cr, sr], [0.0, -sr, cr]])
+    sp, cp = gmath_sin(pitch), gmath_cos(pitch)
+    rows = _fcoords_mul_axes(rows, [[cp, 0.0, -sp], [0.0, 1.0, -0.0], [sp, 0.0, cp]])
+    sy, cy = gmath_sin(yaw), gmath_cos(yaw)
+    rows = _fcoords_mul_axes(rows, [[cy, -sy, -0.0], [sy, cy, 0.0], [0.0, 0.0, 1.0]])
+    return rows
+
+
+def _fcoords_mul_scale(rows, fscale):
+    """`FCoords::operator*=(FScale)` (core.dll 0x18180), axes only: multiply by the
+    unit-with-`+FSheerSnap(rate)` sheer coords FIRST, then scale each row component-wise (f32)."""
+    sheer = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
+    ri, ci = _SHEER_DIV_SLOT[fscale.sheer_axis]
+    sheer[ri][ci] = _sheer_snap_f32(float(fscale.sheer_rate))
+    rows = _fcoords_mul_axes(rows, sheer)
+    s = [_f32(float(c)) for c in fscale.scale]
+    return [[_f32(r[0] * s[0]), _f32(r[1] * s[1]), _f32(r[2] * s[2])] for r in rows]
+
+
+def _fcoords_mul_rotator(rows, uu):
+    """`FCoords::operator*=(FRotator)` (core.dll 0x17fe0), axes only: chain the three forward
+    single-axis coords Yaw→Pitch→Roll via `operator*=(FCoords)`, GMath f32 trig."""
+    pitch, yaw, roll = uu
+    sy, cy = gmath_sin(yaw), gmath_cos(yaw)
+    rows = _fcoords_mul_axes(rows, [[cy, sy, 0.0], [-sy, cy, 0.0], [0.0, 0.0, 1.0]])
+    sp, cp = gmath_sin(pitch), gmath_cos(pitch)
+    rows = _fcoords_mul_axes(rows, [[cp, 0.0, sp], [0.0, 1.0, 0.0], [-sp, 0.0, cp]])
+    sr, cr = gmath_sin(roll), gmath_cos(roll)
+    rows = _fcoords_mul_axes(rows, [[1.0, 0.0, 0.0], [0.0, cr, -sr], [0.0, sr, cr]])
+    return rows
+
+
+def editor_point_xform(actor):
+    """The brush's forward vertex map exactly as `ABrush::BuildCoords` builds PointXform:
+    `Unit * PostScale * Rotation * MainScale`, all-f32 (in FCoords `v·row`-dot semantics that
+    composition applies MainScale first — the accumulated axes ROWS are directly the standard
+    `out = M·v` matrix).  Equals `actor_linear`'s double `L = PostScale·R·MainScale` up to 1-ULP
+    chain-rounding on multi-component scale/rotation brushes."""
+    rows = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
+    rows = _fcoords_mul_scale(rows, actor_post_scale(actor))
+    rows = _fcoords_mul_rotator(rows, actor_rotation_uu(actor))
+    rows = _fcoords_mul_scale(rows, actor_main_scale(actor))
+    return rows
+
+
+def editor_vector_xform(actor):
+    """The brush's covariant normal map exactly as `ABrush::BuildCoords` builds it:
+    `(Unit / MainScale / Rotation / PostScale).Transpose()`, all-f32. Row-major 3×3, consumed by
+    the Rust core's `transform_vector_by` (row·vector dots, the editor's `TransformVectorBy`)."""
+    rows = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
+    rows = _fcoords_div_scale(rows, actor_main_scale(actor))
+    rows = _fcoords_div_rotator(rows, actor_rotation_uu(actor))
+    rows = _fcoords_div_scale(rows, actor_post_scale(actor))
+    return transpose(rows)
+
+
 def rotate_local(R, v):
     """Rotate a LOCAL Decimal vertex by R (None=identity), returning a Decimal triple. None
     short-circuits to the unchanged Decimal so the unrotated path is byte-identical (exact integers

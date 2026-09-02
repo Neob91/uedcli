@@ -570,3 +570,27 @@ Narrows `bsp_brush_csg`'s remaining unexamined surface to its own per-brush clas
 cycle on a specific not-yet-identified brush — the `prepart_tree_*` live trace this item has named twice
 now remains the most direct next step, for UNATCO specifically (never run to completion there this
 session; freeclinic08/Area51/NSFHQ04 all have theirs).
+
+## 2026-09-02: UNATCO's per-brush Pass-1 trace finally RUN — tree shape bit-identical, divergence
+## was 100 plane-ULPs from the scaled-brush transform; editor-faithful f32 chain SHIPPED
+
+The live per-brush Pass-1 tree-shape trace this item named three times ran to completion for UNATCO
+(`pass1_brush_trace_unatco.py` + `UEDCLI_BSPCSG_BRUSH_STATE` + `pass1_compare.py`, all committed to
+the 2026-08-29 spike harness). Editor and native agree on nodes/surfs at ALL 376 structural steps
+and the final Pass-1 trees are bit-identical in every linkage field (6368 nodes) — for UNATCO there
+was never a shape divergence to find. The real delta: 100 nodes' plane floats 1 ULP off, first at
+node 359 (`Brush578`, k=24, scaled `PostScale`). Root cause live-gdb+disassembly-confirmed: the
+editor builds `ABrush::BuildCoords` PointXform/VectorXform in per-step f32; native composed in
+double. Fix shipped (`rotation.editor_vector_xform`/`editor_point_xform`), validated bit-exact on
+live captures (UNATCO Brush578 6/6 Bases; Vandenberg Brush54 412/412 normals, 339/412 P-only
+Bases), pinned by 4 tests. UNATCO's remaining 73 Pass-1 plane-ULP nodes all sit on UNSCALED
+CSG_Add/Subtract brushes — the separate, already-open `UEDCLI_BSPCSG_ADD_RECOMPUTE_NORMAL` thread.
+Corpus A/B (18 offline goldens): 4 levels' plane-content improves, 13 byte-identical, Vandenberg's
+count parity exposed as error cancellation (new board item
+`vandenberg-count-parity-was-error-cancellation`). Full write-up:
+`native-materialize-findings.md`, search "UNATCO live per-brush Pass-1 tree-shape trace".
+
+Consequence for THIS item (nsfhq04): UNATCO's Pass-1 "tree carries more fragments" framing (from
+freeclinic08's pre-`CsgOper::Active` PREMERGE numbers) does not generalize — UNATCO's Pass-1 tree
+was already exact. nsfhq04's own -92-node residual remains open; its next step stays the same
+technique (`pass1_brush_trace_unatco.py` now takes any golden path) applied to its OWN golden.

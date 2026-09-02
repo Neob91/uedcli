@@ -2974,6 +2974,20 @@ pub fn build_geometry_bspcsg(brushes: &[build::BrushInput]) -> Result<Model, Bui
 
     // Pass 1: STRUCTURAL brushes (incremental) — now INCLUDING any NotSolid non-semisolid brush,
     // portal or not (see `detail_pass`).
+    //
+    // PER-BRUSH STATE DUMP (UEDCLI_BSPCSG_BRUSH_STATE) — env-gated, read-only diagnostic for the
+    // live per-brush Pass-1 tree-shape trace (pairs with the editor-side `pass1_brush_trace_*.py`
+    // gdb capture breaking at `bspBrushCSG` entry `0x100355e0`).  `COUNTS` emits one `BRUSHSTATE`
+    // line after every Pass-1 CSG add (k = 0-based structural-call index, matching the editor's
+    // k-th `bspBrushCSG` call; bi = world-CSG actor index); `FULL:<lo>-<hi>` additionally dumps
+    // every node (plane float bits + linkage) after each brush with `lo <= k <= hi`.
+    let brush_state = std::env::var("UEDCLI_BSPCSG_BRUSH_STATE").ok();
+    let full_range: Option<(usize, usize)> = brush_state.as_deref().and_then(|v| {
+        let r = v.strip_prefix("FULL:")?;
+        let (lo, hi) = r.split_once('-')?;
+        Some((lo.parse().ok()?, hi.parse().ok()?))
+    });
+    let mut k = 0usize;
     for (bi, b) in brushes.iter().enumerate() {
         let pf = eff_flags(b);
         if detail_pass(b, pf) {
@@ -2982,6 +2996,26 @@ pub fn build_geometry_bspcsg(brushes: &[build::BrushInput]) -> Result<Model, Bui
         bsp_brush_csg(&mut model, b, bi as i32, pf);
         // bsp_brush_csg's tail already runs bsp_cleanup per-brush (mirrors bspBrushCSG @0x35de1),
         // so the incremental tree here is already the editor's post-cleanup structure.
+        if brush_state.is_some() {
+            eprintln!(
+                "BRUSHSTATE k={} bi={} nodes={} surfs={} verts={} points={} vectors={}",
+                k, bi, model.nodes.len(), model.surfs.len(), model.verts.len(),
+                model.points.len(), model.vectors.len()
+            );
+            if let Some((lo, hi)) = full_range {
+                if k >= lo && k <= hi {
+                    for (i, n) in model.nodes.iter().enumerate() {
+                        eprintln!(
+                            "P1NODE k={} i={} pb={:08x},{:08x},{:08x},{:08x} iF={} iB={} iP={} isurf={} nv={} nf={:#x}",
+                            k, i, n.plane.x.to_bits(), n.plane.y.to_bits(),
+                            n.plane.z.to_bits(), n.plane.w.to_bits(),
+                            n.i_front, n.i_back, n.i_plane, n.i_surf, n.num_vertices, n.node_flags
+                        );
+                    }
+                }
+            }
+        }
+        k += 1;
     }
 
     // TREE-STRUCT DUMP (UEDCLI_BSPCSG_TREE_STRUCT) — env-gated; native counterpart of the editor's

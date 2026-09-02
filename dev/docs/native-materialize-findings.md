@@ -6332,3 +6332,71 @@ For a corpus-wide report, this is per-level, one row/block per level, plus a rol
 many levels hit `FULL PARITY: YES`. `parity_report.py` (single level) and `sweep_corpus.py`
 (corpus) are the only tools that produce these numbers — see the tool doc above; never hand-report
 a subset (e.g. "6/6 counts match" alone) as if it were parity.
+
+## UNATCO live per-brush Pass-1 tree-shape trace: tree SHAPE is bit-identical — the divergence is 100 plane-VALUE ULPs; root-caused to `ABrush::BuildCoords`' all-f32 transform chain; editor-faithful `editor_vector_xform`/`editor_point_xform` SHIPPED (2026-09-02)
+
+Task: the thrice-named "live per-brush Pass-1 tree-shape trace" for UNATCO, never previously run to
+completion. New harness (committed, `dev/docs/spikes/2026-08-29-unatco-repart-live-diff/harness/`):
+`pass1_brush_trace_unatco.py` (gdb: break `bspBrushCSG` entry `0x100355e0` — vtable slot +532
+statically confirmed to hold that address — dump Model counts + `dump binary memory` of the full
+`Nodes` array at every one of the 376 structural calls, plus the world-`bspRepartition`-entry final
+state), `pass1_native_states.py` + a new env-gated `UEDCLI_BSPCSG_BRUSH_STATE` (`COUNTS` /
+`FULL:<lo>-<hi>`) per-brush dump in `bspcsg.rs`, `pass1_compare.py` (aligner + bit-differ).
+
+**Result 1 — the hypothesis this thread carried since the freeclinic08 PREMERGE round is DEAD for
+UNATCO: there is NO tree-shape divergence anywhere in Pass 1.** Editor and native agree on
+nodes/surfs at every one of the 376 per-brush steps (both end Pass 1 at nodes=6368/surfs=1720), and
+the final Pass-1 trees are bit-identical in EVERY node's iFront/iBack/iPlane/iSurf/NumVertices —
+6368/6368 nodes, zero linkage diffs. (The verts/points pools diverge from k=2 onward — editor GCs
+per-brush, native doesn't — the known, separate `INCREMENTAL_POINTS` axis; nodes/surfs unaffected.)
+The ONLY divergence: **100 nodes whose plane floats differ by 1 ULP** — first at node 359
+(`Brush578`, k=24): editor stores the exact axis `0xbf800000`, native `0xbf7fffff`.
+
+**Result 2 — root cause, live-gdb + disassembly + offline-replication confirmed: the editor builds
+the scaled-brush transform matrices in per-step FLOAT32, native in double.** A second capture
+(`pass1_normal_probe_unatco.py`: poly Normal/Base bits before `FPoly::Transform` at `0x10035892`,
+after it at `0x10035898`, and at `bspFilterFPoly` entry `0x10031f50`) shows the editor's normals are
+already exact units RIGHT OUT of `FPoly::Transform`. Chain fully decoded from the binaries
+(`FCoords::operator/=(FScale)` core.dll `0x18bb0`, `/=(FRotator)` `0x18a10`, `*=(FScale)` `0x18180`,
+`*=(FRotator)` `0x17fe0`, `*=(FCoords)` `0x17df0`, `FSheerSnap` `0x1e7c0`, `SafeNormalSlow` `0x27180`
+— SSE f32 sum, f64-widened sqrt): `VectorXform = (Unit / S(+0x220)=MainScale / Rotation /
+S(+0x234)=PostScale).Transpose()`, every op f32. `1.0f/0.624999f = 0x3fcccce3`; native's double
+`(L⁻¹)ᵀ` gives `0x3fcccce2` — and that single ULP decides whether `SafeNormalSlow` lands the exact
+`±1.0` (offline replication `vecxform_replicate578.py` reproduces both sides bit-for-bit).
+
+**Fix shipped (`uedcli/rotation.py` + `uedcli/native/brush_marshal.py`):**
+`rotation.editor_vector_xform` (normals) and `rotation.editor_point_xform` (verts/Base — order
+pinned: PointXform = `Unit * PostScale * Rotation * MainScale` in FCoords semantics, raw axes rows
+= the standard matrix) replace the double `(L⁻¹)ᵀ`/`actor_linear` on the scaled-brush marshal path.
+Three independent live bit-exact validations: (a) UNATCO `Brush578` — all 6 post-Transform Base
+values match; (b) Vandenberg `Brush54` (412-poly dome, MainScale·PostScale) — predicted
+`SafeNormalSlow(vx·calc_normal(local))` matches ALL 412 captured post-Transform normals, 0 misses,
+and the same capture proves the editor's Transform INPUT normal is `calc_normal(local)` (119/119
+decidable, 0 authored) — native's `nloc` was already right; (c) `Brush54` Base: 339/412 captured
+Origins match ONLY the f32-chain prediction, 0 only-double. Pinned by 4 new tests in
+`uedcli/tests/test_rotation.py`.
+
+**Measured (offline 18-level A/B, `vecxform_ab_levels.py`, `_scratch/geo-confirm-*` goldens):**
+- UNATCO: counts unchanged (nodes/surfs/leaves/vectors exact, verts +11/points +16 unchanged);
+  final-model plane-bit-exact nodes 5646→5660/6314; the live-captured Pass-1 tree diff drops
+  100→73 plane-ULP nodes, ALL 27 scaled-brush diffs closed; the remaining 73 sit on UNSCALED
+  CSG_Add/Subtract brushes — the already-documented, separate `UEDCLI_BSPCSG_ADD_RECOMPUTE_NORMAL`
+  authored-vs-recomputed thread (node 815 editor value matches neither authored nor
+  `SafeNormalSlow(authored)`; consistent with CalcNormal-derived, per that thread's own evidence).
+- Wanchai plane-exact 10975→11014, ParisChateau 5709→5746, Helibase 3342→3362; counts unchanged.
+- 13 other levels (incl. DX, NYC Bar, FreeClinic08, NSFHQ04, Area51, OceanLab): byte-identical.
+- **Vandenberg Gas REGRESSES on counts** (nodes −6→+659, leaves −56→+309, surfs +0→+7) while its
+  plane-content stays ~0% either way (50/10677 → 7/10683). The −6 was error CANCELLATION, not
+  correctness: with the per-poly world inputs now live-proven bit-identical to the editor's, the
+  count swing proves a LARGE compensating divergence further down Vandenberg's build (same
+  cancellation precedent as nsfhq04's `Brush8321`). Board finding filed
+  (`vandenberg-count-parity-was-error-cancellation`); NOT re-fudged per the standing rule.
+
+`bin/test`: full suite green before ship (pytest + 104 cargo, re-run after the point-xform half).
+The old `bspAddNode`-wrap/`RING_NEAR` diagnostics are untouched. Also fixed en route: the pass1
+trace harness initially captured an EMPTY rebuild because `wine_ctl exec` is fire-and-forget and
+`docker stats` CPU% reads a constant ~50% on this box for an IDLE container (in-container `top`
+shows 0%) so `build_ued_golden._wait_idle`'s 30% threshold can never fire here — likely the same
+mechanism behind this session's corpus-sweep `obj-load` 1800s timeouts; my harness waits on
+`/proc/<pid>/stat` of `unrealed.exe` instead (`wait_editor_idle`, `pass1_brush_trace_unatco.py`).
+Separate board finding filed (`docker-stats-cpu-reads-a-constant-50-for-an`).

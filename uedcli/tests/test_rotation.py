@@ -288,3 +288,87 @@ def test_it_emits_an_fvector_string_omitting_zero_axes_at_six_dp():
     assert r.emit_fvector((Decimal("32.5"), Decimal(0), Decimal("-64"))) == (
         "(X=32.500000,Z=-64.000000)")
     assert r.emit_fvector((Decimal(0), Decimal(0), Decimal(0))) == "()"
+
+
+def test_editor_vector_xform_is_the_f32_buildcoords_chain_not_the_double_inverse():
+    """Engine fact (spike 2026-08-29-unatco-repart-live-diff, pass1 rounds, live-gdb 2026-09-02):
+    `ABrush::BuildCoords` builds VectorXform as an all-f32 `(Unit / MainScale / Rotation /
+    PostScale).Transpose()` chain — `1.0f/0.624999f = 0x3fcccce3`, one ULP ABOVE the
+    double-inverted `covariant_axes` value (`0x3fcccce2`), and that ULP is what lets the editor's
+    `SafeNormalSlow` land the exact `±1.0` axis normal stored in UNATCO Brush578's node planes."""
+    from uedcli import rotation as r
+    from uedcli.transform import FScale, covariant_axes
+
+    a = SimpleNamespace(
+        props=[], main_scale=None,
+        post_scale=FScale(scale=(Decimal("1.062501"), Decimal("0.624999"), Decimal("1"))))
+    vx = r.editor_vector_xform(a)
+    bits = [struct.unpack("<I", struct.pack("<f", vx[i][i]))[0] for i in range(3)]
+    assert bits == [0x3f70f0e3, 0x3fcccce3, 0x3f800000]
+    cov = covariant_axes(r.actor_linear(a))
+    cov_bits = [struct.unpack("<I", struct.pack("<f", _f32(cov[i][i])))[0] for i in range(3)]
+    assert cov_bits == [0x3f70f0e2, 0x3fcccce2, 0x3f800000]   # the 1-ULP-under double values
+
+
+def test_editor_vector_xform_equals_the_rotation_matrix_for_a_pure_rotation():
+    """A pure rotation's covariant map IS the rotation; the f32 FCoords chain must land on the
+    forward `euler_to_matrix_uu` values (bit-exact here: cardinal + one non-cardinal axis)."""
+    from uedcli import rotation as r
+
+    for rot in ("(Yaw=16384)", "(Pitch=4096)"):
+        a = SimpleNamespace(props=[("Rotation", rot)], main_scale=None, post_scale=None)
+        vx = r.editor_vector_xform(a)
+        R = r.euler_to_matrix_uu(*r.actor_rotation_uu(a))
+        for i in range(3):
+            for j in range(3):
+                assert _f32(vx[i][j]) == _f32(R[i][j])
+
+
+def test_editor_point_xform_is_the_f32_buildcoords_chain_not_the_double_compose():
+    """Engine fact (same spike round, Vandenberg `Brush54` live capture: 339/412 transformed
+    Origins match ONLY the f32-chain prediction, 0 only-double): PointXform is the all-f32
+    `Unit * PostScale * Rotation * MainScale` FCoords chain; its diagonal for Brush54's
+    MainScale(1.243502 uniform)·PostScale(1.393913,1.149680,1.158020) sits 1 ULP ABOVE the double
+    product on the x/y axes."""
+    from uedcli import rotation as r
+    from uedcli.transform import FScale
+
+    ms = FScale(scale=(Decimal("1.243502"), Decimal("1.243502"), Decimal("1.243502")))
+    ps = FScale(scale=(Decimal("1.393913"), Decimal("1.149680"), Decimal("1.158020")))
+    a = SimpleNamespace(props=[], main_scale=ms, post_scale=ps)
+    P = r.editor_point_xform(a)
+    bits = [struct.unpack("<I", struct.pack("<f", P[i][i]))[0] for i in range(3)]
+    assert bits == [0x3fdddde1, 0x3fb6fe19, 0x3fb851ed]
+    L = r.actor_linear(a)
+    lbits = [struct.unpack("<I", struct.pack("<f", _f32(L[i][i])))[0] for i in range(3)]
+    assert lbits == [0x3fdddde0, 0x3fb6fe18, 0x3fb851ed]   # double compose: 1 ULP under on x/y
+
+
+def test_editor_point_xform_equals_actor_linear_when_no_chain_rounding():
+    """Where no chain-rounding can occur, the f32 chain and the double compose agree: bit-for-bit
+    (f32-cast) for a diagonal single scale and for a cardinal rotation + scale, and to <=1e-6
+    relative for a non-cardinal 3-axis rotation with both scales — pins `_fcoords_mul_rotator`'s
+    sign/order (a transposed or reordered axis matrix errs at O(1), not ULPs)."""
+    from uedcli import rotation as r
+    from uedcli.transform import FScale
+
+    ps = FScale(scale=(Decimal("1.062501"), Decimal("0.624999"), Decimal("1")))
+    a = SimpleNamespace(props=[], main_scale=None, post_scale=ps)
+    P, L = r.editor_point_xform(a), r.actor_linear(a)
+    for i in range(3):
+        for j in range(3):
+            assert _f32(P[i][j]) == _f32(L[i][j])
+
+    ms = FScale(scale=(Decimal("2.0"), Decimal("0.5"), Decimal("1.0")))
+    b = SimpleNamespace(props=[("Rotation", "(Yaw=16384)")], main_scale=ms, post_scale=ps)
+    P, L = r.editor_point_xform(b), r.actor_linear(b)
+    for i in range(3):
+        for j in range(3):
+            assert _f32(P[i][j]) == _f32(L[i][j])
+
+    c = SimpleNamespace(props=[("Rotation", "(Pitch=1234,Yaw=5678,Roll=910)")],
+                        main_scale=ms, post_scale=ps)
+    P, L = r.editor_point_xform(c), r.actor_linear(c)
+    for i in range(3):
+        for j in range(3):
+            assert abs(P[i][j] - L[i][j]) <= 1e-6 * max(1.0, abs(L[i][j]))
