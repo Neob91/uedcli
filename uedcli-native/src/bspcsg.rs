@@ -161,8 +161,7 @@ fn bsp_add_point(model: &mut Model, v: Vec3) -> i32 {
 /// the threshold by `bspAddPoint`'s `arg_2` flag (`0x3545c`: `arg_2 ? 0.002 : 0.015`, both f32
 /// constants read from `.rdata`, decoded 2026-09-02): the surf `pBase` add passes `1` → **0.002
 /// (SAME)**, but the node vertex-RING add (`bspAddNode 0x352fd`, `push 0`) passes `0` → **0.015
-/// (NEAR)**. Native historically pooled BOTH at 0.002; `UEDCLI_BSPCSG_RING_NEAR` restores the real
-/// 0.015 ring threshold (see the ring loop in `bsp_add_node`).
+/// (NEAR)** (see `ring_point_tol` below, used by the ring loop in `bsp_add_node`).
 fn bsp_add_point_tol(model: &mut Model, v: Vec3, tol: f32) -> i32 {
     if point_nearest_enabled() {
         if let Some((i, dist)) = nearest(&model.points, &v) {
@@ -181,14 +180,13 @@ fn bsp_add_point_tol(model: &mut Model, v: Vec3, tol: f32) -> i32 {
     (model.points.len() - 1) as i32
 }
 
-/// The node vertex-RING `bspAddPoint` threshold: 0.015 (NEAR) when `UEDCLI_BSPCSG_RING_NEAR` is set
-/// (the real editor's value, `bspAddNode 0x352fd push 0`), else native's historical 0.002.
+/// The node vertex-RING `bspAddPoint` threshold: 0.015 (NEAR), the real editor's value
+/// (`bspAddNode 0x352fd push 0`). Corpus-measured 2026-09-02 (see the findings ledger, "full-corpus
+/// RING_NEAR/MERGE_NEIGHBOR_SAME A/B measurement"): 0 currently-exact levels lose exactness, 5
+/// improve, 3 regress on verts only, 1 (Vandenberg Gas) is a genuine cross-count tradeoff. Owner
+/// approved shipping as default 2026-09-02.
 fn ring_point_tol() -> f32 {
-    if std::env::var("UEDCLI_BSPCSG_RING_NEAR").is_ok() {
-        THRESH_POINTS_ARE_NEAR
-    } else {
-        THRESH_POINTS_ARE_SAME
-    }
+    THRESH_POINTS_ARE_NEAR
 }
 
 fn bsp_add_vector(model: &mut Model, v: Vec3, exact: bool) -> i32 {
