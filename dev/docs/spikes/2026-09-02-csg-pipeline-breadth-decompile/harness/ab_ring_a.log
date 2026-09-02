@@ -1,0 +1,45 @@
+
+=== 06_hongkong_wanchai_market ===
+  count      golden      off   d_off       on    d_on
+  nodes       11648    11648      +0    11648      +0
+  surfs        5284     5284      +0     5284      +0
+  leaves       3371     3371      +0     3371      +0
+  verts      169313   169387     +74   169412     +99
+  points      16791    16807     +16    16808     +17
+  vectors       487      479      -8      479      -8
+
+=== 03_nyc_unatcohq ===
+  count      golden      off   d_off       on    d_on
+  nodes        6314     6314      +0     6314      +0
+  surfs        3616     3616      +0     3616      +0
+  leaves        762      762      +0      762      +0
+  verts       76488    76493      +5    76499     +11
+  points      10752    10768     +16    10768     +16
+  vectors       599      599      +0      599      +0
+
+=== 08_nyc_bar ===
+  count      golden      off   d_off       on    d_on
+  nodes        1617     1617      +0     1617      +0
+  surfs         953      953      +0      953      +0
+  leaves        283      283      +0      283      +0
+  verts       20877    20877      +0    20877      +0
+  points       2758     2758      +0     2758      +0
+  vectors       142      142      +0      142      +0
+
+=== dx ===
+  count      golden      off   d_off       on    d_on
+  nodes          26       26      +0       26      +0
+  surfs          26       26      +0       26      +0
+  leaves          5        5      +0        5      +0
+  verts         250      250      +0      250      +0
+  points         32       32      +0       32      +0
+  vectors         6        6      +0        6      +0
+
+=== 12_vandenberg_gas ===
+  count      golden      off   d_off       on    d_on
+  nodes       10683    10715     +32    10677      -6
+  surfs        4554     4554      +0     4554      +0
+  leaves       3468     3473      +5     3412     -56
+  verts      144950   144824    -126   143596   -1354
+  points      15030    15069     +39    14996     -34
+  vectors      1523     1505     -18     1505     -18

@@ -490,3 +490,17 @@ tree. Two independent methods (live gdb capture here, static decompile there) no
 is upstream tree-build order, not the classify function. Does not by itself explain `Brush842`
 specifically (its near-non-planar poly is still unexplained). No fix shipped. Harness + saved
 pseudo-C: `dev/docs/spikes/2026-09-01-filteredpoly-full-decompile/harness/`.
+
+## Independent full-pipeline decompile pass (2026-09-02) — NSFHQ04 node residual NOT moved by the one divergence found
+
+A second, independent pass `angr`-decompiled the ENTIRE CSG/BSP build chain and confirmed every
+function faithful to `bspcsg.rs` except the node vertex-RING pooling threshold: the editor welds ring
+vertices at 0.015 (NEAR, `bspAddPoint arg_2=0`), native pooled at 0.002. Full detail:
+`native-materialize-findings.md`, search "INDEPENDENT PASS — full-breadth decompile".
+
+Measured (gated `UEDCLI_BSPCSG_RING_NEAR`): NSFHQ04's full-level node delta is UNCHANGED (-92 → -92),
+as are 747 (+68) and OceanLab (+465). Only scaled-brush Vandenberg moved (+32→-6). NSFHQ04 (like
+Area51) is a rotated-brush case whose ring vertices land at exact rotated positions, outside the
+0.002–0.015 gap — so the ring threshold is not its lever. The world-repartition node-over-build
+remains open. Also confirmed: the earlier freeclinic08 "PREMERGE 1333 vs 1263" divergence is the
+already-fixed `CsgOper::Active` case; nothing new there. NOT shipped (gated off, `cargo test` 102/102).

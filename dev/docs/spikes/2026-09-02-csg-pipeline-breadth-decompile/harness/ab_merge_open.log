@@ -1,0 +1,45 @@
+
+=== 04_nyc_nsfhq ===
+  count      golden      off   d_off       on    d_on
+  nodes        7656     7564     -92     7426    -230
+  surfs        3830     3831      +1     3830      +0
+  leaves       1518     1492     -26     1494     -24
+  verts       99801    98027   -1774    98207   -1594
+  points      11714    11585    -129    11501    -213
+  vectors       293      294      +1      294      +1
+
+=== 03_nyc_747 ===
+  count      golden      off   d_off       on    d_on
+  nodes        4462     4530     +68     4172    -290
+  surfs        2026     2026      +0     2026      +0
+  leaves        570      560     -10      511     -59
+  verts       57267    57965    +698    54727   -2540
+  points       6504     6731    +227     6294    -210
+  vectors       468      461      -7      461      -7
+
+=== 14_oceanlab_lab ===
+  count      golden      off   d_off       on    d_on
+  nodes       29533    29998    +465    30335    +802
+  surfs       11278    11278      +0    11277      -1
+  leaves       3969     4055     +86     4133    +164
+  verts      313664   317644   +3980   320230   +6566
+  points      39711    40714   +1003    41044   +1333
+  vectors      3631     3565     -66     3565     -66
+
+=== 12_vandenberg_gas ===
+  count      golden      off   d_off       on    d_on
+  nodes       10683    10715     +32    10715     +32
+  surfs        4554     4554      +0     4554      +0
+  leaves       3468     3473      +5     3473      +5
+  verts      144950   144824    -126   144824    -126
+  points      15030    15069     +39    15069     +39
+  vectors      1523     1505     -18     1505     -18
+
+=== 03_nyc_unatcohq ===
+  count      golden      off   d_off       on    d_on
+  nodes        6314     6314      +0     6314      +0
+  surfs        3616     3616      +0     3616      +0
+  leaves        762      762      +0      762      +0
+  verts       76488    76493      +5    76493      +5
+  points      10752    10768     +16    10768     +16
+  vectors       599      599      +0      599      +0

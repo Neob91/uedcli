@@ -5381,3 +5381,100 @@ Harness added this round, under
 full lo/hi binary search, generalized-library-based), `tf_probe.py` (targeted single-prefix
 `compare(n)` probing with retry, used to test the static-lead window directly). Board:
 `area51-entrance-residual-localized-to-brush1852`, appended (Training Final section).
+
+## INDEPENDENT PASS — full-breadth decompile of the CSG/BSP build pipeline: the whole pipeline is faithful EXCEPT the node vertex-RING pooling threshold (0.015 NEAR, native used 0.002); native's `TryToMerge`-neighbour=0.015 is a symptom-patch for it. Root-cause found + measured, NOT shipped (gated) — improves scaled-brush node counts, does NOT move the rotated-brush open cases (2026-09-02)
+
+Second, independent pass at the UNATCO/Area51/NSFHQ04/Training Final world-repartition node-over-build
+problem, run in parallel with another agent, deliberately BROADER than one or two functions: `angr`
+decompiled EVERY function in the CSG/BSP build call chain and each was read line-by-line against
+`bspcsg.rs`. Fresh worktree off `master` (`ea1bc3f`). Harness + all 27 saved pseudo-C files:
+`dev/docs/spikes/2026-09-02-csg-pipeline-breadth-decompile/harness/` (`decompile_pipeline.py` — the
+`CFGFast`+normalize+`Decompiler` recipe with every address; `measure_addnode_weld.py`/`measure_flag.py`
+— the offline A/B geometry harness over the cached parity goldens).
+
+**Decompiled + confirmed FAITHFUL to `bspcsg.rs`, branch by branch (no divergence):** `csgRebuild`
+(pass order), `bspRepartition` (BuildFPolys→MergeCoplanars→bspBuild→bspRefresh), `bspBuildFPolys`/
+`MakeEdPolys` (pre-order **self→iFront(+0x24)→iBack(+0x20)→iPlane(+0x28)** tree walk), `bspBuild`
+(feeds `SplitPolyList` in plain Polys-array order), `SplitPolyList` (Split→front/back append, `>=14`
+`SplitInHalf`, front-before-back recursion), `FindBestSplit` (score `|F-B|*Bal + (100-Bal)*splits`,
+`Inc` stride GOOD=`n/20`/LAME=`n/4`, eligibility slot-walk, portal split-weight 16, portal-bias, best
+= lowest-score-first-wins), `bspMergeCoplanars` (index-order grouping, anchor skip-gated / candidate
+NOT skip-gated, original-index-order compaction), `MergeCoplanarPolys` (fixpoint upper-triangle
+accumulate), `CleanupNodes` (recursion order + Case-A coplanar-promote-with-swap / Case-B splice),
+`FilterWorldThroughBrush` (bound-sphere prune, recursion order, `GLastCoplanar`=iPlane-chain-tail,
+re-add), `AddWorldToBrushFunc`/`SubtractWorldToBrushFunc` (re-add/discard sets), `bspAddNode` (iPlane
+chain-tail insert, surf alloc, `derive_nf`, `>16`-vert storage split, iLeaf/iZone parent-seeding,
+child linkage), `bspNodeToFPoly` (reconstruction + `RemoveColinears` + `<3`→NumVertices=0),
+`bspValidateBrush` (surf-link grouping), `bspAddPoint`/`bspAddVector`. **The port is exact everywhere
+this pass could reach — corroborating (from a wider angle) the prior rounds that found
+`FilterEdPoly`/`FilterLeaf`/`FindBestSplit`/`bspMergeCoplanars` individually faithful.**
+
+**THE ONE REAL DIVERGENCE — the node vertex-RING pooling threshold.** `bspAddPoint` (`0x35430`)
+selects its `FindNearestVertex` threshold from its `arg_2` flag (`0x3545c`: `arg_2 ? 0.002 : 0.015`,
+both f32 constants at `.rdata` `0x100dcb…`, decoded this pass). `bspAddNode`'s two call sites
+(raw-disassembled, decompile crashed on this one function): the surf **pBase** add (`0x34f0b`) pushes
+`1` → **0.002 (SAME)**, but the node **vertex-ring** add (`0x352fd`) pushes `0` → **0.015 (NEAR)**.
+`bspcsg.rs` pooled BOTH at 0.002. So the real editor welds a node's own ring vertices at the *looser*
+0.015, the surf base at 0.002.
+
+**Native's `try_to_merge` neighbour threshold (0.015) is a downstream SYMPTOM-PATCH for this.** Fresh
+raw disassembly of `TryToMerge` (`0x34b10`): all THREE coincidence tests — the step-2 anchor
+(`call 0x34bdb`) AND both step-3 neighbour edge tests (`0x34c46`, `0x34ca9`) — `call 0x10032b90`,
+which is `FPointsAreSame` (±0.002 box). There is NO `FPointsAreNear` call anywhere in the function, so
+the binary uses **0.002 for the neighbours too**, contradicting the current default's NEAR (0.015). The
+0.015 was introduced by `bspmergecoplanars-8-case-merge-gap-live-traced` for Wanchai Brush754's PostScale
+seam (corners 0.00439 apart): the editor fuses that pair because its 0.015 RING pooling already welded
+the two corners to ONE point (so `FPointsAreSame`(0.002) then passes trivially); native, pooling the
+ring at 0.002, kept them separate and papered over it by loosening the *merge* threshold instead.
+The faithful binary is: ring pool **0.015 (NEAR)**, merge anchor+neighbour **0.002 (SAME)**.
+
+**Also found (disassembly-confirmed) but MEASURED INERT: two omissions in `bspAddNode`'s vertex-pool
+tail (`0x353a1`-`0x353ef`).** A WRAP-DUP collapse (`iVertPool[0].iVertex == iVertPool[nv-1].iVertex`
+→ drop the last) and a `nv<3` degenerate KILL (`NumVertices=0`, bump `GBadNodeCount`). Native ported
+neither. Both are downstream-masked (`bsp_node_to_fpoly`'s `RemoveColinears` drops a coincident wrap
+vertex and rejects a sub-3 ring at repartition anyway). `UEDCLI_BSPCSG_ADDNODE_WELD` A/B: **ZERO effect
+on all 8 tested levels** (DX/UNATCO/bar/747/oceanlab/nsfhq/area51/vandenberg/trainingfinal) — never
+triggers on the corpus. Clean negative.
+
+**Measurements (offline A/B vs cached parity goldens, `measure_flag.py`).** `UEDCLI_BSPCSG_RING_NEAR`
+(ring pool 0.015; the faithful `+MERGE_NEIGHBOR_SAME` combo is IDENTICAL — once the ring welds seams to
+one point, the merge threshold no longer bites), native-vs-golden node/leaf delta OFF→ON:
+
+| level | nodes off→on | surfs | leaves off→on | verts off→on | note |
+|-------|--------------|-------|---------------|--------------|------|
+| `06_wanchai_market` | +0 → **+0** | +0 | +0 → **+0** | +74 → +99 | stays node/surf/leaf EXACT — the Wanchai fix is preserved WITHOUT the 0.015-merge hack |
+| `03_nyc_unatcohq` | +0 → **+0** | +0 | +0 → **+0** | +5 → +11 | stays EXACT |
+| `08_nyc_bar` | +0 → +0 | +0 | +0 → +0 | +0 → +0 | unchanged (grid geometry, no sub-0.015 seams) |
+| `dx` | +0 → +0 | +0 | +0 → +0 | +0 → +0 | unchanged |
+| `12_vandenberg_gas` | **+32 → -6** | +0 | +5 → **-56** | -126 → **-1354** | scaled brushes: nodes improve, leaves/verts REGRESS |
+| `04_nyc_nsfhq` | -92 → **-92** | +1 | -26 → -26 | -1774 → -1714 | node count UNCHANGED |
+| `03_nyc_747` | +68 → **+68** | +0 | -10 → -10 | +698 → +717 | node count UNCHANGED |
+| `14_oceanlab_lab` | +465 → **+465** | +0 | +86 → +86 | +3980 → +5198 | node count UNCHANGED |
+
+`UEDCLI_BSPCSG_MERGE_NEIGHBOR_SAME` ALONE (without ring-near) is NOT shippable: it REGRESSES Wanchai
+(+0→+20 nodes/+13 leaves — the exact residual 0.015-merge fixed) and swings 747 (+68→-290) and
+oceanlab (+465→+802) — confirming it is only correct *paired* with the ring fix.
+
+**Conclusion.** The ring-pool threshold (0.015 NEAR) is a genuine, disassembly-confirmed root-cause
+divergence, and native's `try_to_merge`-neighbour=0.015 is its symptom-patch. The faithful combination
+(ring 0.015 + merge-neighbour 0.002) **preserves every currently-EXACT level** (Wanchai/UNATCO/bar/DX
+node/surf/leaf unchanged) and **improves Vandenberg's node count (+32→-6)** — but it also **regresses
+Vandenberg leaves/verts** (native's +32 nodes was partly two errors cancelling; the correct ring-pool
+exposes a separate leaf/vert divergence) and has **ZERO effect on the primary open cases**
+(nsfhq/747/oceanlab node over-build UNCHANGED). Those are rotated- (not scaled-) brush levels whose
+ring vertices land at exact rotated positions, never in the 0.002–0.015 gap, so the ring threshold is
+not their lever — the primary UNATCO-class world-repartition node-over-build problem is **still open**
+after this pass. **NOT shipped** (default byte-unchanged, `cargo test` 102/102): per the standing rule,
+a change that improves one count while regressing others on a level is a tradeoff for the owner, not a
+silent default flip. Both fixes are committed **gated OFF** (`UEDCLI_BSPCSG_RING_NEAR`,
+`UEDCLI_BSPCSG_MERGE_NEIGHBOR_SAME`, `UEDCLI_BSPCSG_ADDNODE_WELD`) with the disassembly citations in
+their code comments, so a future round can re-measure without re-deriving. Open follow-ups: (a) the
+editor's `bspAddPoint` uses `FindNearestVertex` (NEAREST-within), native's default ring pool is
+FIRST-within — the large Vandenberg vert overshoot (-1354) is likely this, worth pairing with ring-near
+before judging vert parity; (b) the rotated-brush node-over-build (nsfhq/747/oceanlab/area51/trainingfinal)
+is untouched by anything in this pass and remains the real open problem.
+
+`bin/test` full run: cargo 102/102; pytest 13184 passed / 10 failed — the SAME pre-existing 10 as
+prior rounds (2 `test_board.py` frontmatter on unrelated items, 7 `test_csg_native_differential.py`
+tuple-length `ValueError`s, 1 `test_doc_links.py`), all present on `master` `ea1bc3f` before this
+round's gated-off changes.

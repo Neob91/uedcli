@@ -1,0 +1,27 @@
+
+=== 15_area51_entrance ===
+  count      golden      off   d_off       on    d_on
+  nodes       12630    12715     +85    12715     +85
+  surfs        6058     6058      +0     6058      +0
+  leaves       3264     3315     +51     3315     +51
+  verts      172269   173324   +1055   173324   +1055
+  points      17619    17718     +99    17718     +99
+  vectors       928      919      -9      919      -9
+
+=== 12_vandenberg_gas ===
+  count      golden      off   d_off       on    d_on
+  nodes       10683    10715     +32    10715     +32
+  surfs        4554     4554      +0     4554      +0
+  leaves       3468     3473      +5     3473      +5
+  verts      144950   144824    -126   144824    -126
+  points      15030    15069     +39    15069     +39
+  vectors      1523     1505     -18     1505     -18
+
+=== 00_trainingfinal ===
+  count      golden      off   d_off       on    d_on
+  nodes       11122    11227    +105    11227    +105
+  surfs        5307     5307      +0     5307      +0
+  leaves        848      861     +13      861     +13
+  verts      115560   117024   +1464   117024   +1464
+  points      16473    16759    +286    16759    +286
+  vectors       631      642     +11      642     +11

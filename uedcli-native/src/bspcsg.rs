@@ -152,23 +152,49 @@ fn incremental_points_enabled() -> bool {
     std::env::var("UEDCLI_BSPCSG_INCREMENTAL_POINTS").is_ok()
 }
 
+/// `UEDCLI_BSPCSG_ADDNODE_WELD` — see `bsp_add_node`'s vertex-pool tail. Ports the real
+/// `bspAddNode` wrap-dup collapse + `nv<3` degenerate kill (`Editor.dll 0x353a1`-`0x353ef`).
+fn addnode_weld_enabled() -> bool {
+    std::env::var("UEDCLI_BSPCSG_ADDNODE_WELD").is_ok()
+}
+
 fn bsp_add_point(model: &mut Model, v: Vec3) -> i32 {
     // FindNearestVertex threshold 0.002 (fp-classification-sites §7).
+    bsp_add_point_tol(model, v, THRESH_POINTS_ARE_SAME)
+}
+
+/// `bspAddPoint` (`0x35430`) with an explicit `FindNearestVertex` threshold. The real editor selects
+/// the threshold by `bspAddPoint`'s `arg_2` flag (`0x3545c`: `arg_2 ? 0.002 : 0.015`, both f32
+/// constants read from `.rdata`, decoded 2026-09-02): the surf `pBase` add passes `1` → **0.002
+/// (SAME)**, but the node vertex-RING add (`bspAddNode 0x352fd`, `push 0`) passes `0` → **0.015
+/// (NEAR)**. Native historically pooled BOTH at 0.002; `UEDCLI_BSPCSG_RING_NEAR` restores the real
+/// 0.015 ring threshold (see the ring loop in `bsp_add_node`).
+fn bsp_add_point_tol(model: &mut Model, v: Vec3, tol: f32) -> i32 {
     if point_nearest_enabled() {
         if let Some((i, dist)) = nearest(&model.points, &v) {
-            if dist < THRESH_POINTS_ARE_SAME {
+            if dist < tol {
                 return i as i32;
             }
         }
     } else {
         for (i, p) in model.points.iter().enumerate() {
-            if v.sub(p).size() < THRESH_POINTS_ARE_SAME {
+            if v.sub(p).size() < tol {
                 return i as i32;
             }
         }
     }
     model.points.push(v);
     (model.points.len() - 1) as i32
+}
+
+/// The node vertex-RING `bspAddPoint` threshold: 0.015 (NEAR) when `UEDCLI_BSPCSG_RING_NEAR` is set
+/// (the real editor's value, `bspAddNode 0x352fd push 0`), else native's historical 0.002.
+fn ring_point_tol() -> f32 {
+    if std::env::var("UEDCLI_BSPCSG_RING_NEAR").is_ok() {
+        THRESH_POINTS_ARE_NEAR
+    } else {
+        THRESH_POINTS_ARE_SAME
+    }
 }
 
 fn bsp_add_vector(model: &mut Model, v: Vec3, exact: bool) -> i32 {
@@ -354,14 +380,17 @@ fn bsp_add_node(
     // 11/12 confirmed a SPLIT fragment (reusing an EXISTING surf via `i_link`) walks forward, never
     // reversed — `is_new_surf` is exactly that distinction for a poly that was never split during
     // its OWN filter descent (the only case rounds 9-12 confirmed reversal for).
+    // Node vertex RING pooling uses the NEAR (0.015) threshold in the real editor (`bspAddNode
+    // 0x352fd push 0` → `bspAddPoint arg_2=0`), NOT the SAME (0.002) used for the surf pBase.
+    let ring_tol = ring_point_tol();
     let ivs: Vec<i32> = if incremental_points_enabled() && is_new_surf {
         let mut out = vec![0i32; edpoly.verts.len()];
         for k in (0..edpoly.verts.len()).rev() {
-            out[k] = bsp_add_point(model, edpoly.verts[k]);
+            out[k] = bsp_add_point_tol(model, edpoly.verts[k], ring_tol);
         }
         out
     } else {
-        edpoly.verts.iter().map(|v| bsp_add_point(model, *v)).collect()
+        edpoly.verts.iter().map(|v| bsp_add_point_tol(model, *v, ring_tol)).collect()
     };
     let mut last_iv: i32 = -1;
     let mut nv = 0i32;
@@ -375,6 +404,36 @@ fn bsp_add_node(
         });
         last_iv = iv;
         nv += 1;
+    }
+
+    // `UEDCLI_BSPCSG_ADDNODE_WELD` — EXPERIMENT, off by default. The real `bspAddNode`
+    // (`Editor.dll 0x353a1`-`0x353ef`, raw-disassembled 2026-09-02) has a vertex-pool tail native
+    // never ported:
+    //   * WRAP-DUP COLLAPSE (`0x353a1`): if `iVertPool[0].iVertex == iVertPool[nv-1].iVertex` (the
+    //     FIRST and LAST *pooled* indices coincide — the closing vertex snapped to the same pool
+    //     point as the opening one, which `FPoly::Fix`'s geometric wrap-check can miss because the
+    //     two raw verts can be up to ~2·THRESH apart yet both dedup to a third existing point), drop
+    //     the last (`nv--`). Native's loop above only collapses CONSECUTIVE dups, never the wrap.
+    //   * DEGENERATE KILL (`0x353bb`): if the final `nv < 3`, set `NumVertices = 0` (a dead
+    //     plane-only splitter) and bump `GBadNodeCount`. Native currently keeps a `nv==2`/`nv==1`
+    //     node ALIVE, so `is_csg_filter` (nv>0) treats it as CSG-solid and it flips `Outside` during
+    //     the SAME-pass and later brushes' descent — where the editor's dead node does not.
+    // Both are downstream-masked for the repartition SOUP (native's `bsp_node_to_fpoly`
+    // reconstruction runs `remove_colinears`, which drops a coincident wrap vertex and rejects a
+    // sub-3-vert ring anyway), so this only bites via the Pass-1 `is_csg` propagation. Gated as an
+    // experiment pending a parity measurement, not switched on, per the no-guessing rule.
+    if addnode_weld_enabled() {
+        if nv >= 2 {
+            let first_iv = model.verts[i_vert_pool as usize].i_vertex;
+            let last_pooled = model.verts[(i_vert_pool + nv - 1) as usize].i_vertex;
+            if first_iv == last_pooled {
+                model.verts.pop();
+                nv -= 1;
+            }
+        }
+        if nv < 3 {
+            nv = 0; // dead node: verts stay in the pool (bspRefresh GCs them), NumVertices=0.
+        }
     }
 
     let w = edpoly.base.dot(&edpoly.normal);
@@ -2208,13 +2267,29 @@ fn try_to_merge(a: &FPoly, b: &FPoly) -> Option<FPoly> {
     //    of exact register (a fractional-brush seam) still fuse, matching the editor.
     let mut end1 = start1;
     let mut end2 = start2;
+    // `UEDCLI_BSPCSG_MERGE_NEIGHBOR_SAME` — EXPERIMENT. Fresh raw disassembly of `TryToMerge`
+    // (`Editor.dll 0x34b10`, 2026-09-02) shows all THREE coincidence tests — the step-2 anchor
+    // (`0x34bdb`) AND both step-3 neighbour edge tests (`0x34c46`, `0x34ca9`) — `call 0x10032b90`,
+    // which is `FPointsAreSame` with the ±0.002 box (constants `0x100dcb3c`/`0x100dcaf8`). There is
+    // NO call to a looser `FPointsAreNear` anywhere in the function. So the binary uses 0.002 for the
+    // neighbours too, contradicting the current default's NEAR (0.015) (introduced by the Wanchai
+    // Brush754 seam-gap round `bspmergecoplanars-8-case-merge-gap-live-traced`, which very likely
+    // patched a POOLING mismatch symptom in the merge threshold instead — see the findings ledger).
+    // Gated to measure 0.002-for-neighbours across the corpus before touching the default.
+    let neigh = |p: &Vec3, q: &Vec3| {
+        if std::env::var("UEDCLI_BSPCSG_MERGE_NEIGHBOR_SAME").is_ok() {
+            points_are_same(p, q)
+        } else {
+            points_are_near(p, q)
+        }
+    };
     let (tf1, tf2) = (wrap(start1 + 1, nv1), wrap(start2 - 1, nv2));
-    if points_are_near(&a.verts[tf1 as usize], &b.verts[tf2 as usize]) {
+    if neigh(&a.verts[tf1 as usize], &b.verts[tf2 as usize]) {
         end1 = tf1;
         start2 = tf2;
     } else {
         let (tb1, tb2) = (wrap(start1 - 1, nv1), wrap(start2 + 1, nv2));
-        if points_are_near(&a.verts[tb1 as usize], &b.verts[tb2 as usize]) {
+        if neigh(&a.verts[tb1 as usize], &b.verts[tb2 as usize]) {
             start1 = tb1;
             end2 = tb2;
         } else {

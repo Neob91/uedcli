@@ -1,0 +1,171 @@
+loaded <Arch X86 (LE)> 0x10000000
+cfg functions: 9147
+wrote bspBrushCSG.decompiled.c (15411 bytes, fn size 2226)
+wrote bspFilterFPoly.decompiled.c (1335 bytes, fn size 157)
+wrote FilterEdPoly.decompiled.c (10171 bytes, fn size 1275)
+wrote FilterLeaf.decompiled.c (2270 bytes, fn size 230)
+wrote AddBrushToWorldFunc.decompiled.c (2226 bytes, fn size 136)
+wrote SubtractBrushFromWorldFunc.decompiled.c (1684 bytes, fn size 133)
+wrote FilterWorldThroughBrush.decompiled.c (6048 bytes, fn size 823)
+wrote AddWorldToBrushFunc.decompiled.c (2330 bytes, fn size 201)
+wrote SubtractWorldToBrushFunc.decompiled.c (2330 bytes, fn size 201)
+ERROR    | 2026-09-02 03:55:22,236 | angr.analyses.analysis | Caught and logged TypeError with resilience: unsupported operand type(s) for *: 'NotImplementedType' and 'int'
+Traceback (most recent call last):
+  File "/home/agent/.local/lib/python3.12/site-packages/angr/analyses/analysis.py", line 313, in _resilience
+    yield
+  File "/home/agent/.local/lib/python3.12/site-packages/angr/analyses/decompiler/decompiler.py", line 241, in __init__
+    self._decompile_with_cache()
+  File "/home/agent/.local/lib/python3.12/site-packages/angr/analyses/decompiler/decompiler.py", line 287, in _decompile_with_cache
+    self._decompile()
+  File "/home/agent/.local/lib/python3.12/site-packages/angr/utils/timing.py", line 73, in timed_func
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/agent/.local/lib/python3.12/site-packages/angr/analyses/decompiler/decompiler.py", line 571, in _decompile
+    codegen = self.project.analyses[self._codegen_cls].prep(kb=self.kb, fail_fast=self._fail_fast)(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/agent/.local/lib/python3.12/site-packages/angr/analyses/analysis.py", line 249, in wrapper
+    oself.__init__(*args, **kwargs)
+  File "/home/agent/.local/lib/python3.12/site-packages/angr/analyses/decompiler/structured_codegen/c.py", line 3050, in __init__
+    self._analyze()
+  File "/home/agent/.local/lib/python3.12/site-packages/angr/analyses/decompiler/structured_codegen/c.py", line 3088, in _analyze
+    obj = self._handle(self._sequence)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/agent/.local/lib/python3.12/site-packages/angr/analyses/decompiler/structured_codegen/c.py", line 3664, in _handle
+    else handler(node, lvalue=lvalue, likely_signed=likely_signed, type_=type_, ref=ref)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/agent/.local/lib/python3.12/site-packages/angr/analyses/decompiler/structured_codegen/c.py", line 3679, in _handle_Sequence
+    lines.append(self._handle(node, is_expr=False))
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/agent/.local/lib/python3.12/site-packages/angr/analyses/decompiler/structured_codegen/c.py", line 3664, in _handle
+    else handler(node, lvalue=lvalue, likely_signed=likely_signed, type_=type_, ref=ref)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/agent/.local/lib/python3.12/site-packages/angr/analyses/decompiler/structured_codegen/c.py", line 3722, in _handle_Condition
+    else_node = self._handle(condition_node.false_node, is_expr=False) if condition_node.false_node else None
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/agent/.local/lib/python3.12/site-packages/angr/analyses/decompiler/structured_codegen/c.py", line 3664, in _handle
+    else handler(node, lvalue=lvalue, likely_signed=likely_signed, type_=type_, ref=ref)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/agent/.local/lib/python3.12/site-packages/angr/analyses/decompiler/structured_codegen/c.py", line 3679, in _handle_Sequence
+    lines.append(self._handle(node, is_expr=False))
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/agent/.local/lib/python3.12/site-packages/angr/analyses/decompiler/structured_codegen/c.py", line 3664, in _handle
+    else handler(node, lvalue=lvalue, likely_signed=likely_signed, type_=type_, ref=ref)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/agent/.local/lib/python3.12/site-packages/angr/analyses/decompiler/structured_codegen/c.py", line 3805, in _handle_AILBlock
+    cstmt = self._handle(stmt, is_expr=False)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/agent/.local/lib/python3.12/site-packages/angr/analyses/decompiler/structured_codegen/c.py", line 3664, in _handle
+    else handler(node, lvalue=lvalue, likely_signed=likely_signed, type_=type_, ref=ref)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/agent/.local/lib/python3.12/site-packages/angr/analyses/decompiler/structured_codegen/c.py", line 3822, in _handle_Stmt_Store
+    cdata = self._handle(stmt.data)
+            ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/agent/.local/lib/python3.12/site-packages/angr/analyses/decompiler/structured_codegen/c.py", line 3664, in _handle
+    else handler(node, lvalue=lvalue, likely_signed=likely_signed, type_=type_, ref=ref)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/agent/.local/lib/python3.12/site-packages/angr/analyses/decompiler/structured_codegen/c.py", line 4192, in _handle_Expr_Load
+    return self._access(addr_expr, ty, False, negotiate)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/agent/.local/lib/python3.12/site-packages/angr/analyses/decompiler/structured_codegen/c.py", line 3639, in _access
+    return self._access_constant_offset(kernel, constant, data_type, lvalue, renegotiate_type)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/agent/.local/lib/python3.12/site-packages/angr/analyses/decompiler/structured_codegen/c.py", line 3379, in _access_constant_offset
+    stride = 1 if base_type.size is None else base_type.size // self.project.arch.byte_width or 1
+                  ^^^^^^^^^^^^^^
+  File "/home/agent/.local/lib/python3.12/site-packages/angr/sim_type.py", line 1791, in size
+    if not self.offsets:
+           ^^^^^^^^^^^^
+  File "/home/agent/.local/lib/python3.12/site-packages/angr/sim_type.py", line 1700, in offsets
+    align = ty.alignment * self._arch.byte_width
+            ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+TypeError: unsupported operand type(s) for *: 'NotImplementedType' and 'int'
+ERROR    | 2026-09-02 03:55:24,114 | angr.analyses.analysis | Caught and logged TypeError with resilience: unsupported operand type(s) for *: 'NotImplementedType' and 'int'
+Traceback (most recent call last):
+  File "/home/agent/.local/lib/python3.12/site-packages/angr/analyses/analysis.py", line 313, in _resilience
+    yield
+  File "/home/agent/.local/lib/python3.12/site-packages/angr/analyses/decompiler/decompiler.py", line 254, in __init__
+    self._decompile_with_cache()
+  File "/home/agent/.local/lib/python3.12/site-packages/angr/analyses/decompiler/decompiler.py", line 287, in _decompile_with_cache
+    self._decompile()
+  File "/home/agent/.local/lib/python3.12/site-packages/angr/utils/timing.py", line 73, in timed_func
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/agent/.local/lib/python3.12/site-packages/angr/analyses/decompiler/decompiler.py", line 571, in _decompile
+    codegen = self.project.analyses[self._codegen_cls].prep(kb=self.kb, fail_fast=self._fail_fast)(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/agent/.local/lib/python3.12/site-packages/angr/analyses/analysis.py", line 249, in wrapper
+    oself.__init__(*args, **kwargs)
+  File "/home/agent/.local/lib/python3.12/site-packages/angr/analyses/decompiler/structured_codegen/c.py", line 3050, in __init__
+    self._analyze()
+  File "/home/agent/.local/lib/python3.12/site-packages/angr/analyses/decompiler/structured_codegen/c.py", line 3088, in _analyze
+    obj = self._handle(self._sequence)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/agent/.local/lib/python3.12/site-packages/angr/analyses/decompiler/structured_codegen/c.py", line 3664, in _handle
+    else handler(node, lvalue=lvalue, likely_signed=likely_signed, type_=type_, ref=ref)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/agent/.local/lib/python3.12/site-packages/angr/analyses/decompiler/structured_codegen/c.py", line 3679, in _handle_Sequence
+    lines.append(self._handle(node, is_expr=False))
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/agent/.local/lib/python3.12/site-packages/angr/analyses/decompiler/structured_codegen/c.py", line 3664, in _handle
+    else handler(node, lvalue=lvalue, likely_signed=likely_signed, type_=type_, ref=ref)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/agent/.local/lib/python3.12/site-packages/angr/analyses/decompiler/structured_codegen/c.py", line 3722, in _handle_Condition
+    else_node = self._handle(condition_node.false_node, is_expr=False) if condition_node.false_node else None
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/agent/.local/lib/python3.12/site-packages/angr/analyses/decompiler/structured_codegen/c.py", line 3664, in _handle
+    else handler(node, lvalue=lvalue, likely_signed=likely_signed, type_=type_, ref=ref)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/agent/.local/lib/python3.12/site-packages/angr/analyses/decompiler/structured_codegen/c.py", line 3679, in _handle_Sequence
+    lines.append(self._handle(node, is_expr=False))
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/agent/.local/lib/python3.12/site-packages/angr/analyses/decompiler/structured_codegen/c.py", line 3664, in _handle
+    else handler(node, lvalue=lvalue, likely_signed=likely_signed, type_=type_, ref=ref)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/agent/.local/lib/python3.12/site-packages/angr/analyses/decompiler/structured_codegen/c.py", line 3805, in _handle_AILBlock
+    cstmt = self._handle(stmt, is_expr=False)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/agent/.local/lib/python3.12/site-packages/angr/analyses/decompiler/structured_codegen/c.py", line 3664, in _handle
+    else handler(node, lvalue=lvalue, likely_signed=likely_signed, type_=type_, ref=ref)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/agent/.local/lib/python3.12/site-packages/angr/analyses/decompiler/structured_codegen/c.py", line 3822, in _handle_Stmt_Store
+    cdata = self._handle(stmt.data)
+            ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/agent/.local/lib/python3.12/site-packages/angr/analyses/decompiler/structured_codegen/c.py", line 3664, in _handle
+    else handler(node, lvalue=lvalue, likely_signed=likely_signed, type_=type_, ref=ref)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/agent/.local/lib/python3.12/site-packages/angr/analyses/decompiler/structured_codegen/c.py", line 4192, in _handle_Expr_Load
+    return self._access(addr_expr, ty, False, negotiate)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/agent/.local/lib/python3.12/site-packages/angr/analyses/decompiler/structured_codegen/c.py", line 3639, in _access
+    return self._access_constant_offset(kernel, constant, data_type, lvalue, renegotiate_type)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/agent/.local/lib/python3.12/site-packages/angr/analyses/decompiler/structured_codegen/c.py", line 3379, in _access_constant_offset
+    stride = 1 if base_type.size is None else base_type.size // self.project.arch.byte_width or 1
+                  ^^^^^^^^^^^^^^
+  File "/home/agent/.local/lib/python3.12/site-packages/angr/sim_type.py", line 1791, in size
+    if not self.offsets:
+           ^^^^^^^^^^^^
+  File "/home/agent/.local/lib/python3.12/site-packages/angr/sim_type.py", line 1700, in offsets
+    align = ty.alignment * self._arch.byte_width
+            ~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+TypeError: unsupported operand type(s) for *: 'NotImplementedType' and 'int'
+bspAddNode TRIVIAL OUTPUT (0 bytes) — normalize/resilience trap?
+wrote bspAddNode.decompiled.c (0 bytes, fn size 1399)
+wrote bspAddPoint.decompiled.c (1772 bytes, fn size 199)
+wrote bspAddVector.decompiled.c (1148 bytes, fn size 122)
+wrote bspCleanup.decompiled.c (980 bytes, fn size 99)
+wrote CleanupNodes.decompiled.c (5640 bytes, fn size 650)
+wrote bspValidateBrush.decompiled.c (9910 bytes, fn size 631)
+wrote csgRebuild.decompiled.c (8953 bytes, fn size 1212)
+wrote bspRepartition.decompiled.c (1363 bytes, fn size 186)
+wrote bspBuildFPolys.decompiled.c (1454 bytes, fn size 149)
+wrote MakeEdPolys.decompiled.c (1747 bytes, fn size 244)
+wrote bspMergeCoplanars.decompiled.c (9199 bytes, fn size 887)
+wrote MergeCoplanarPolys.decompiled.c (2453 bytes, fn size 210)
+wrote TryToMerge.decompiled.c (6764 bytes, fn size 815)
+wrote bspBuild.decompiled.c (3456 bytes, fn size 347)
+wrote SplitPolyList.decompiled.c (6563 bytes, fn size 827)
+wrote FindBestSplit.decompiled.c (8419 bytes, fn size 819)
+wrote bspRefresh.decompiled.c (9675 bytes, fn size 1218)
+wrote bspNodeToFPoly.decompiled.c (4729 bytes, fn size 638)
+wrote bspUnlinkPolys.decompiled.c (1250 bytes, fn size 132)

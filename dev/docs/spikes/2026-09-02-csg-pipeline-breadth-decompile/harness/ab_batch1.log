@@ -1,0 +1,45 @@
+
+=== 03_nyc_unatcohq ===
+  count      golden      off   d_off       on    d_on
+  nodes        6314     6314      +0     6314      +0
+  surfs        3616     3616      +0     3616      +0
+  leaves        762      762      +0      762      +0
+  verts       76488    76493      +5    76493      +5
+  points      10752    10768     +16    10768     +16
+  vectors       599      599      +0      599      +0
+
+=== 08_nyc_bar ===
+  count      golden      off   d_off       on    d_on
+  nodes        1617     1617      +0     1617      +0
+  surfs         953      953      +0      953      +0
+  leaves        283      283      +0      283      +0
+  verts       20877    20877      +0    20877      +0
+  points       2758     2758      +0     2758      +0
+  vectors       142      142      +0      142      +0
+
+=== 03_nyc_747 ===
+  count      golden      off   d_off       on    d_on
+  nodes        4462     4530     +68     4530     +68
+  surfs        2026     2026      +0     2026      +0
+  leaves        570      560     -10      560     -10
+  verts       57267    57965    +698    57965    +698
+  points       6504     6731    +227     6731    +227
+  vectors       468      461      -7      461      -7
+
+=== 14_oceanlab_lab ===
+  count      golden      off   d_off       on    d_on
+  nodes       29533    29998    +465    29998    +465
+  surfs       11278    11278      +0    11278      +0
+  leaves       3969     4055     +86     4055     +86
+  verts      313664   317644   +3980   317644   +3980
+  points      39711    40714   +1003    40714   +1003
+  vectors      3631     3565     -66     3565     -66
+
+=== 04_nyc_nsfhq ===
+  count      golden      off   d_off       on    d_on
+  nodes        7656     7564     -92     7564     -92
+  surfs        3830     3831      +1     3831      +1
+  leaves       1518     1492     -26     1492     -26
+  verts       99801    98027   -1774    98027   -1774
+  points      11714    11585    -129    11585    -129
+  vectors       293      294      +1      294      +1

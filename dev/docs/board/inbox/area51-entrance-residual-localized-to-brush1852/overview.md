@@ -188,3 +188,19 @@ whoever picks this up: is Brush1852 the SAME diffuse world-level-repartition-pol
 turned out to be? Not yet checked directly (needs either a same-session incremental single-brush-add
 live trace or the poly-soup/repartition-stage comparison already flagged above) — the next concrete
 step, not yet taken.
+
+## Independent full-pipeline decompile pass (2026-09-02) — ring-pool threshold root-caused, but Area51/Training-Final NOT moved by it
+
+A second, independent pass `angr`-decompiled EVERY function in the CSG/BSP build chain (not just
+`FilterEdPoly`/`FilterLeaf`) and read each against `bspcsg.rs`. Full detail:
+`native-materialize-findings.md`, search "INDEPENDENT PASS — full-breadth decompile".
+
+The whole pipeline is faithful except ONE thing: the real editor pools a node's own vertex RING at
+0.015 (NEAR) — `bspAddPoint arg_2=0` at `bspAddNode 0x352fd` — while pooling the surf pBase at 0.002
+(SAME); native pooled both at 0.002. (Native's `try_to_merge`-neighbour=0.015 turns out to be a
+symptom-patch for this — all three `TryToMerge` coincidence tests call `FPointsAreSame`/0.002 in the
+binary.) A gated `UEDCLI_BSPCSG_RING_NEAR` fix preserves every exact level and improves Vandenberg's
+node count, but has **ZERO effect on Area51's or Training Final's residual** (and none on nsfhq/747/
+oceanlab): those are rotated-brush levels whose ring vertices sit at exact positions, never in the
+0.002–0.015 gap. So the ring-pool threshold is NOT the Brush1852 / Training-Final lever — that
+world-repartition node-over-build remains open. NOT shipped (gated off, `cargo test` 102/102).
