@@ -5621,3 +5621,108 @@ wrap-trim + infinitesimal-polygon guard after the vertex-pool loop (~15 lines), 
 Full `bin/test` run clean before shipping (see commit). Board:
 `area51-entrance-residual-localized-to-brush1852` and `freeclinic08-nsfhq04-1-surf-under-build-root`,
 both appended.
+
+## Full-corpus A/B of `UEDCLI_BSPCSG_RING_NEAR` / `UEDCLI_BSPCSG_MERGE_NEIGHBOR_SAME`: RING_NEAR and BOTH are byte-identical on every level (corpus-wide confirmation); 5 levels improve, 3 regress (verts-only), 1 is the known Vandenberg tradeoff, 1 gets a genuinely clean multi-count win. DECISION NEEDED — not shipped, not decided here (2026-09-02)
+
+Broadens the single-level (Vandenberg Gas) A/B from "INDEPENDENT PASS — full-breadth decompile" (this
+file, above) to every level with a cached golden in `/tmp/uedcli-parity-cache/` (20 of 23 cache
+entries; 3 excluded as gaps — see below). Pure measurement round: no source change, no default
+flipped. Fresh worktree off `master` (`9988365`), native ext rebuilt clean (`.so` mtime confirmed
+fresh). Harness: `dev/docs/spikes/2026-09-02-ring-threshold-corpus-measurement/harness/
+measure_corpus.py` (adapted from the prior round's `measure_flag.py` — same cached-golden, no-live-
+editor A/B technique, generalized from one flag/11 levels to three configs/every cached level), raw
+JSON output and the table-builder script committed alongside it.
+
+**Gaps (not measured — cache incomplete, not rebuilt per the "fast broad pass, not a deep dive"
+instruction):** `04_nyc_street` (status `building`), `99_endgame4` (status `extracting`),
+`dxmp_smuggler` (status `building`). A future round wanting these needs a live editor golden build.
+
+**Corpus-wide confirmation: RING_NEAR and BOTH are IDENTICAL on all 20 measured levels, no
+exception.** This was previously observed only on Vandenberg Gas ("once the ring welds seams to one
+point, the merge threshold no longer bites"); it now holds everywhere in the corpus, including levels
+where MERGE_NEIGHBOR_SAME ALONE differs sharply from OFF (`03_nyc_747`, `04_nyc_nsfhq`,
+`06_hongkong_wanchai_market`, `14_oceanlab_lab`) — RING_NEAR fully absorbs the merge-threshold's
+effect in every one of those cases too, not just Vandenberg's.
+
+**Per-level nodes/surfs/leaves/verts delta (native − golden), each cell `n/s/l/v`:**
+
+| level                      | OFF n/s/l/v       | RING_NEAR n/s/l/v | MERGE_NEIGHBOR_SAME n/s/l/v | BOTH n/s/l/v      | note |
+| -------------------------- | ----------------- | ----------------- | --------------------------- | ----------------- | --- |
+| 00_trainingfinal           | +105/+0/+13/+1464 | -59/+0/-11/+229   | +105/+0/+13/+1464           | -59/+0/-11/+229   | RING_NEAR/BOTH strictly better on ALL 4 counts |
+| 01_nyc_unatcohq            | +350/+3/+39/+3242 | +350/+3/+39/+3248 | +350/+3/+39/+3242           | +350/+3/+39/+3248 |  |
+| 02_nyc_bar                 | +0/+0/+0/+0       | +0/+0/+0/+0       | +0/+0/+0/+0                 | +0/+0/+0/+0       |  |
+| 03_nyc_747                 | +68/+0/-10/+698   | +68/+0/-10/+717   | -290/+0/-59/-2540           | +68/+0/-10/+717   |  |
+| 03_nyc_unatcohq            | +0/+0/+0/+5       | +0/+0/+0/+11      | +0/+0/+0/+5                 | +0/+0/+0/+11      |  |
+| 04_nyc_nsfhq               | -92/+1/-26/-1774  | -92/+1/-26/-1714  | -230/+0/-24/-1594           | -92/+1/-26/-1714  |  |
+| 04_nyc_underground         | +0/+0/+0/+26      | +0/+0/+0/+41      | +0/+0/+0/+26                | +0/+0/+0/+41      |  |
+| 06_hongkong_helibase       | +9/+0/+0/+122     | +9/+0/+0/+101     | +9/+0/+0/+122               | +9/+0/+0/+101     |  |
+| 06_hongkong_wanchai_garage | -68/+0/-12/-1224  | -68/+0/-12/-1222  | -68/+0/-12/-1224            | -68/+0/-12/-1222  |  |
+| 06_hongkong_wanchai_market | +0/+0/+0/+74      | +0/+0/+0/+99      | +20/+0/+13/+210             | +0/+0/+0/+99      | MERGE_NEIGHBOR_SAME alone breaks node/surf/leaf exactness |
+| 08_nyc_bar                 | +0/+0/+0/+0       | +0/+0/+0/+0       | +0/+0/+0/+0                 | +0/+0/+0/+0       |  |
+| 08_nyc_freeclinic          | +0/+0/+0/+1       | +0/+0/+0/+1       | +0/+0/+0/+1                 | +0/+0/+0/+1       |  |
+| 09_nyc_shipfan             | +0/+0/+0/+1       | +0/+0/+0/+1       | +0/+0/+0/+1                 | +0/+0/+0/+1       |  |
+| 10_paris_chateau           | +4/+0/+0/+16      | +4/+0/+0/+16      | +4/+0/+0/+16                | +4/+0/+0/+16      |  |
+| 10_paris_club              | +2/+0/+0/+36      | +2/+0/+0/+76      | +2/+0/+0/+36                | +2/+0/+0/+76      |  |
+| 11_paris_underground       | -108/+0/-4/-1306  | -108/+0/-4/-1306  | -108/+0/-4/-1306            | -108/+0/-4/-1306  |  |
+| 12_vandenberg_gas          | +32/+0/+5/-126    | -6/+0/-56/-1354   | +32/+0/+5/-126              | -6/+0/-56/-1354   | RING_NEAR/BOTH: nodes better, leaves/verts worse (tradeoff) |
+| 14_oceanlab_lab            | +465/+0/+86/+3980 | +465/+0/+86/+5198 | +802/-1/+164/+6566          | +465/+0/+86/+5198 |  |
+| 15_area51_entrance         | +85/+0/+51/+1055  | +85/+0/+51/+1038  | +85/+0/+51/+1055            | +85/+0/+51/+1038  |  |
+| dx                         | +0/+0/+0/+0       | +0/+0/+0/+0       | +0/+0/+0/+0                 | +0/+0/+0/+0       |  |
+
+**MERGE_NEIGHBOR_SAME alone: confirmed NOT shippable, corpus-wide.** It never strictly improves any
+level (every cell it changes from OFF is either unchanged or worse). It breaks `06_hongkong_
+wanchai_market`'s node/surf/leaf exactness (+20 nodes/+13 leaves, reproducing this file's earlier
+Wanchai regression finding exactly) and swings `03_nyc_747` (+68→-290 nodes), `04_nyc_nsfhq` (-92→-230
+nodes), and `14_oceanlab_lab` (+465→+802 nodes) sharply worse. Consistent with the standing
+conclusion that the 0.015 merge-neighbor threshold is a symptom-patch for the ring-pool threshold, not
+an independently correct value.
+
+**RING_NEAR / BOTH: a genuine multi-way tradeoff across the corpus, not a clean win.**
+
+- **Zero currently-exact levels lose node/surf/leaf exactness.** All 8 levels with `OFF` nodes=surfs=
+  leaves=0 (`02_nyc_bar`, `03_nyc_unatcohq`, `04_nyc_underground`, `06_hongkong_wanchai_market`,
+  `08_nyc_bar`, `08_nyc_freeclinic`, `09_nyc_shipfan`, `dx`) stay structurally exact under RING_NEAR/
+  BOTH. But **3 of those 8 regress on verts** (`03_nyc_unatcohq` +5→+11, `04_nyc_underground` +26→+41,
+  `06_hongkong_wanchai_market` +74→+99) — a real cost against the project's actual goal (full BYTE
+  parity, not just the looser node/surf/leaf "EXACT" label; see the `goal-full-byte-parity` note this
+  file's readers should already have in mind).
+- **5 levels improve** (`00_trainingfinal`, `04_nyc_nsfhq`, `06_hongkong_helibase`,
+  `06_hongkong_wanchai_garage`, `15_area51_entrance`) — but 4 of the 5 (all but `00_trainingfinal`)
+  improve ONLY on verts; nodes/surfs/leaves are byte-identical to OFF. This matches the earlier
+  single-level finding that the ring threshold "does NOT move the rotated-brush open cases" — these 4
+  are exactly that class (`nsfhq`/`helibase`/`wanchai_garage`/`area51` node counts are untouched,
+  confirming the primary UNATCO-class world-repartition over-build problem is still not this lever).
+- **`00_trainingfinal` is a genuinely NEW, cleaner result than anything found before this round:**
+  nodes +105→**-59** (magnitude 105→59), leaves +13→**-11** (13→11), verts +1464→**+229** (1464→229)
+  — every one of the 4 counts moves toward zero, none regress. This is the first level found in this
+  whole investigation thread where RING_NEAR/BOTH improves node AND leaf AND vert magnitude together,
+  not just verts, and not as a nodes-vs-leaves tradeoff like Vandenberg. Worth flagging loudly:
+  whatever caused this level's original over-build looks closer to Vandenberg's scaled-brush class
+  than the rotated-brush class the other 4 improving levels belong to, and here the fix is unambiguous.
+- **3 levels regress, verts-only** (`01_nyc_unatcohq` +3242→+3248, `03_nyc_747` +698→+717,
+  `10_paris_club` +36→+76) — none currently node/surf/leaf-exact, so no exactness is lost, but the
+  regression is real and, for `10_paris_club`, more than doubles the vert delta.
+- **`12_vandenberg_gas` reproduces the exact prior single-level finding** (nodes +32→-6 improves,
+  leaves +5→-56 and verts -126→-1354 regress) — the corpus run is a clean replication, not a new
+  result, and confirms this round's harness against the already-published number.
+- **`11_paris_underground` shows ZERO effect** from any flag (identical across all 4 configs) — no
+  sub-0.015 ring seams present in this level's CSG fragments.
+
+**Conclusion — DECISION NEEDED, not made here.** Per the standing rule (a change that improves some
+counts while regressing others on any level is a tradeoff for the owner, not a silent default flip),
+none of RING_NEAR/MERGE_NEIGHBOR_SAME/BOTH is shipped or defaulted on by this round. The corpus data
+narrows the tradeoff's shape but does not resolve it:
+- MERGE_NEIGHBOR_SAME alone is now conclusively dead — no level anywhere in the corpus favors it over
+  OFF or over RING_NEAR/BOTH.
+- RING_NEAR (== BOTH) is a **net-positive-leaning but not clean** change: 5 levels improve (1 of them,
+  `00_trainingfinal`, unambiguously and on every count) vs 3 that regress (all verts-only, no lost
+  exactness) vs 1 genuine cross-count tradeoff (Vandenberg) vs 11 unaffected. Whether "5 up / 3 down
+  (verts-only) / 1 mixed / 11 flat, with one clean multi-count win" clears the bar for shipping as the
+  new default, stays gated for opt-in measurement, or needs the `00_trainingfinal`-class win isolated
+  from the rest, is the owner's call.
+
+`bin/test` not run — zero `.rs`/`.py` production files touched this round (pure env-var-gated
+measurement via the existing `UEDCLI_BSPCSG_RING_NEAR`/`UEDCLI_BSPCSG_MERGE_NEIGHBOR_SAME` flags
+already shipped gated-off in `bspcsg.rs`); the native ext build itself (`maturin build --release`)
+and a spot-check against the `dx` level (all 4 configs byte-identical, `nodes=surfs=leaves=verts=0`
+delta) are the only correctness checks this round needed.
