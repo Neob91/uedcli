@@ -6141,3 +6141,20 @@ Fixed by passing the already-constructed `ed = Driver(container=container)` (lin
 `build_ued_golden.py`'s own pattern. Live-verified on `DX.dx`: `obj-load` now completes in 764s with no
 crash (previously 100% reproducible on the first call). Board item
 `build-ued-lit-golden-py-wait-idle-driver-str`.
+
+**2026-09-02 — breadth parity re-sweep (retry): fix confirmed, corpus mostly blocked by two separate
+issues, not re-fixed here** — re-verified the `_wait_idle` fix live on `DX.dx`: real comparison
+produced (geometry 6/6 exact, content NOT exact — `surfs`/`leaves` field diffs, lighting 100%
+byte-identical — NOT full parity). The other 17 corpus levels hit two SEPARATE, pre-existing issues:
+(1) `dev/docs/board/inbox/docker-mount-source-permission-fails-from-main/` — trunk extraction from the
+main checkout fails instantly (`umodel_win32` mount permission denied); confirmed the documented
+worktree workaround works (extraction succeeds cleanly from a fresh worktree, `NYC ShipFan`/`NYC
+Underground`/`Wanchai Market`/`Paris Club`/`HK Helibase`/`Wanchai Garage`/`Paris Underground`/`Paris
+Chateau` all extracted fine). (2) NOT previously logged: **running >2 concurrent editor builds causes
+systemic `obj-load` failure** — every one of 7 attempts under 3-7-way concurrency died with
+`TimeoutError: editor not idle after 1800s [obj-load]` at 87-96% CPU (Wine/docker CPU contention, not
+an editor hang); `DX.dx` and `Paris Chateau` (which cleared `obj-load` at 1282s once concurrency
+dropped to 2) both point at CPU contention, not the `_wait_idle` logic itself. **No fix shipped for
+either** — a separate round is building a proper cache-aware sweep script per the owner's direct
+request; not duplicated here to avoid two sets of editor builds contending again. Only real data this
+round: `DX.dx`'s report above.
