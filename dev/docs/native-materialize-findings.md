@@ -6309,3 +6309,26 @@ Post-review addendum: the reviewer's flagged env-flag test race was then HIT LIV
 serializing this crate's libtest via `uedcli-native/.cargo/config.toml` (`RUST_TEST_THREADS=1`,
 suite <0.1s so serial is free) — board item `cargo-env-flag-tests-race-the-process-global`, which
 also records the remaining minor set/remove-guard gap.
+
+## Standard parity status report format (owner-defined, 2026-09-02)
+
+Every "what's parity status" answer, for one level or the whole corpus, reports these fields —
+never fewer, never collapsed into a single percentage:
+
+1. **Geometry counts** — nodes/surfs/leaves/verts/points/vectors, native vs golden, delta each.
+   `N/6 exact` only describes counts matching, not content.
+2. **Content-exact fraction** — index-for-index comparison of each geometry array (`parity_report.py`'s
+   `content` section: per-array `exact` bool + `indices_differ` list + lengths). Report this
+   separately from (1) — a count match is not a content match. State the fraction (e.g. `68.4%`)
+   and which arrays/indices diverge, not just pass/fail.
+3. **Lighting** — `LightMap` byte-identical record count/percentage, and shadow-bit agreement
+   count/percentage, as two separate numbers.
+4. **Verdict** — `FULL PARITY: YES` only if (1) is 6/6 exact AND (2) is 100% AND (3) is 100/100%.
+   Anything else is `NO`, with which of the three failed.
+5. **Provenance** — golden cache hash/build timestamp (or "fresh build"), so the number is
+   reproducible and dated.
+
+For a corpus-wide report, this is per-level, one row/block per level, plus a rollup count of how
+many levels hit `FULL PARITY: YES`. `parity_report.py` (single level) and `sweep_corpus.py`
+(corpus) are the only tools that produce these numbers — see the tool doc above; never hand-report
+a subset (e.g. "6/6 counts match" alone) as if it were parity.
