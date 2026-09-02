@@ -18,7 +18,7 @@ every read pulled in 4,000 lines to get one item. Two agents now touch two paths
 
 | Directory | Holds | Next action |
 |--------------|--------------------------------------------------|---|
-| `inbox/` | un-triaged capture; anything flagged for the owner | triage → `git mv` |
+| `inbox/` | un-triaged capture | triage → `git mv` |
 | `to-spec/` | needs a spec | write `spec.md` in the item |
 | `to-spike/` | needs a live/offline investigation first | run a spike → `dev/docs/spikes/` |
 | `to-plan/` | has a reviewed spec | write `plan.md` in the item |
@@ -29,10 +29,8 @@ every read pulled in 4,000 lines to get one item. Two agents now touch two paths
 
 Four conventions the suite cannot check, because none of them is machine-decidable:
 
-- **`inbox/` is the pre-pipeline pool AND the head of stream**, not a queue. Everything lands here
-  first: ideas, gaps, bugs, chores, anything flagged for the owner (a provisional call, an
-  assumption, a risk, a deviation from spec or plan, or work deliberately not done), and their own
-  open questions. **There is no separate `flagged`/`to-resolve` lane** — the owner resolves their own
+- **`inbox/` is the pre-pipeline pool AND the head of stream**, not a queue. New items land here
+  first. **There is no separate `flagged`/`to-resolve` lane** — the owner resolves their own
   items by deleting them or triaging them forward. A real change of *direction* is recorded in the
   owning [`../direction/`](../direction/README.md) topic; a routine feature or implementation ruling
   stays in the item's `spec.md` and, for the why, `rationale/`.
@@ -89,8 +87,9 @@ path citation rots silently, a stale slug reddens the suite.
 
 A file under `questions/` is **a blocker**, not a discussion log: the thing that must be answered
 before the item can be planned or built. **An owner-question — any decision awaiting the owner's yes —
-is added here, to the item it concerns, not logged as a standalone board item** (only a decision no
-item owns gets its own `owner-question` item; see `CLAUDE.md`).
+is added here, to the item it concerns, never logged as a standalone board item** (a decision no item
+owns is asked directly via `AskUserQuestion`; see `CLAUDE.md`). The `owner-question` kind survives
+only for existing items.
 
 **The item does not move.** A question raised against an item is filed in that item's own
 `questions/` directory and the item stays in whatever stage it is in. It is not bounced to the
@@ -113,8 +112,8 @@ bin/board show <slug>          resolve a slug to its current path
 bin/board new <stage> <title>  create an item with a valid stub
 ```
 
-**Log a review finding with `bin/board new inbox '<title>'`**, and **run `bin/board answered` at
-session start** — an answer nobody reads is the failure mode this whole shape exists to prevent.
+**Run `bin/board answered` at session start** — an answer nobody reads is the failure mode this
+whole shape exists to prevent.
 
 ## Goals (carried from the old `todo.md` header)
 

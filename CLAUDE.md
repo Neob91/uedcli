@@ -49,10 +49,8 @@ dated history (git keeps that); evidence citations and live-finding dates stay. 
 `direction/README.md` is the exception within the exception: its index rows and short model statement
 may be maintained freely (no topic content, never an `@` import). Park a decision awaiting a yes in the
 `questions/` directory of the board item it concerns — the proposed text verbatim, empty `## Answer` —
-added to its respective item, never logged as a standalone issue. Only when NO board item owns the
-decision (nothing on the board covers the work it gates) do you file it standalone with
-`bin/board new inbox '[OWNER — confirm] …'` (`kind = "owner-question"`), the proposed text in its
-`overview.md`. Commits
+added to its respective item, never logged as a standalone issue. A decision NO board item owns is
+asked directly (`AskUserQuestion`), not filed as a standalone item. Commits
 touching `dev/docs/direction/` carry a `Confirmed: <topic>` trailer.
 
 Nothing mechanical enforces any of this. Why it is shaped this way: `dev/docs/direction/process.md`.
