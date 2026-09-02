@@ -150,12 +150,8 @@ Issues live in beads (`bd`); the Beads Issue Tracker section below has the comma
 ``board item `slug``` citations resolve through it. Specs live in an issue's design field, plans in
 its notes field.
 
-Three rules bind every session:
+Two rules bind every session:
 
-- Log a finding with `bd create '<title>'`. Anything that would otherwise live only in chat goes
-  here: a provisional call, an assumption, a risk, a deviation from spec/plan, work you deliberately
-  didn't do. If something gets deferred mid-implementation, file a separate issue rather than letting
-  the original cover both halves.
 - Check `bd list --status blocked` at session start and before pulling work off `bd ready`. A
   blocked issue carries an `## Open question` for the owner; when the owner has answered (a comment
   or an edit), fold the decision into its durable home (`direction/` for the owner's rulings,
