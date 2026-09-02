@@ -223,9 +223,12 @@ def test_floats_are_written_at_six_decimals(paste_text):
 
     uedcli's ordinary CLI rendering trims `24.000000` to `24`, which is friendlier to read but does
     not match the editor. Import deliberately uses the editor's spelling so an imported tree is
-    textually comparable with an editor export of the same map.
+    textually comparable with an editor export of the same map. `ProbePillar`'s `Location` is a real
+    authored (`var()`-editable) property, unlike engine-managed state such as `OldLocation` (which
+    import no longer writes at all — see `test_a_property_equal_to_a_non_zero_class_default_is_
+    omitted_entirely`'s docstring for why).
     """
-    assert "OldLocation=(X=-500.000000,Y=-300.000000,Z=300.000000)" in paste_text
+    assert "Location=(X=256.000000)" in paste_text
 
 
 def test_a_byte_valued_struct_member_is_written_as_its_enum_name(paste_text):
@@ -251,10 +254,11 @@ def test_struct_members_equal_to_the_class_default_are_dropped(paste_text):
     assert "MainScale=(SheerAxis=SHEER_ZX)" in paste_text
     assert "MainScale=(X=1.000000" not in paste_text
 
-    # `Region` keeps only the members that actually differ, and differs between actors: the
-    # builder brush sits in zone 1, the LevelInfo carries the unset leaf index.
-    assert "Region=(Zone=LevelInfo'paste.LevelInfo0',iLeaf=-1)" in paste_text
-    assert "Region=(Zone=LevelInfo'paste.LevelInfo0',ZoneNumber=1)" in paste_text
+    # `Region` is NOT a counter-example of member-dropping here: it is engine-managed (non-`var()`,
+    # not a special-editor exception), so import now drops the whole property, not just its
+    # unchanged members (owner ruling 2026-09-02 — see `normalize.is_authored_prop`). It must be
+    # absent entirely, not partially rendered.
+    assert "Region=" not in paste_text
 
 
 @pytest.mark.parametrize("scale,expected", [
@@ -297,9 +301,17 @@ def test_the_member_drop_recurses_into_a_NESTED_struct(scale, expected):
 
 
 def test_names_and_strings_are_quoted_and_object_refs_are_typed(paste_text):
-    """The three reference-ish value forms all take the shapes `MAP EXPORT` uses."""
+    """The three reference-ish value forms all take the shapes `MAP EXPORT` uses.
+
+    The object-ref case used `Level=LevelInfo'paste.LevelInfo0'` — `Level` is engine-managed
+    (recomputed on every import/materialize, not `var()`-editable), so import no longer writes it
+    at all (owner ruling 2026-09-02). `Brush=Model'paste.Model_ProbeRoom'` is a real object ref in
+    the same `Class'Pkg.Name'` shape, from `ProbeRoom`'s own actor block — it goes through a
+    different code path (the brush-model reference, held back until after the geometry block; see
+    `render_actor`'s docstring), but the TEXT FORM under test here is identical.
+    """
     assert 'Tag="LevelInfo"' in paste_text                       # a name, quoted
-    assert "Level=LevelInfo'paste.LevelInfo0'" in paste_text      # an object ref, Class'Pkg.Name'
+    assert "Brush=Model'paste.Model_ProbeRoom'" in paste_text     # an object ref, Class'Pkg.Name'
     assert "CsgOper=CSG_Subtract" in paste_text                   # a plain enum byte, unquoted
 
 
@@ -315,9 +327,40 @@ def test_a_property_equal_to_a_non_zero_class_default_is_omitted_entirely(paste_
 
     # Match the property LINE, not the bare substring — `OldLocation=` contains it.
     assert "\n    Location=" not in camera
-    # …while the separate, genuinely-stored `OldLocation` DOES carry that same default triple,
-    # which is what makes the omission above meaningful rather than an artefact of an empty actor.
-    assert "OldLocation=(X=-500.000000,Y=-300.000000,Z=300.000000)" in camera
+    # …while `Tag` (a real `var()`-editable property this actor DOES carry, unlike the
+    # engine-managed `OldLocation` — owner ruling 2026-09-02, import no longer writes that at all)
+    # proves the omission above is real absence, not an artefact of an empty actor.
+    assert 'Tag="U2Viewport0"' in camera
+
+
+def test_non_editable_non_authored_props_are_dropped_and_reported():
+    """Engine-managed properties (`OldLocation`, `Region`, `Level`, …) are not `var()`-editable and
+    not a special-editor exception (`normalize.is_authored_prop`), so import drops them entirely
+    (owner ruling 2026-09-02) instead of writing them into the trunk.
+
+    This is what a same-map object-property reference like `MyMarker` needs: it is populated by a
+    Build Paths-style editor step, not hand-authored, so it is non-editable — dropping it here means
+    it is never written qualified with the SOURCE map's name in the first place (the failure mode
+    `import.md`'s "References between actors keep the source map's name" caveat describes), rather
+    than surviving into the trunk and failing to resolve on the next materialize under the new
+    trunk's own identity.
+
+    `paste.dx` has no `MyMarker`-carrying actor to exercise directly, so this pins the same
+    mechanism on properties it does carry — `OldLocation`/`Region`/`Level`, all engine-managed,
+    same as the individual per-property assertions above, but checked ACROSS THE WHOLE decoded text
+    (not just Camera6/LevelInfo0) and via the real `import_map` entry point with `notes` wired up,
+    so a regression that reintroduces any of them anywhere is caught, and the drop is confirmed
+    reported rather than silent."""
+    notes: list[str] = []
+    dx = _FIXTURES / "paste.dx"
+    pkg = load_package(str(dx), name=dx.stem)
+    text = mapimport.import_map(pkg, _class_index(), mapimport.ImportSchema(resolver=_resolver),
+                                notes=notes)
+
+    for prop_line in ("OldLocation=", "Region=", "Level="):
+        assert prop_line not in text, f"{prop_line} is engine-managed and must not survive import"
+
+    assert any("dropped" in n and "non-authored" in n for n in notes), notes
 
 
 # ── integrity gates ──────────────────────────────────────────────────────────────────────────

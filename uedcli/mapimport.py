@@ -49,7 +49,9 @@ import struct
 from decimal import Decimal
 
 from . import emit, model, uprops
+from .classdefaults import CPF_EDIT
 from .classindex import ENGINE_ACTOR
+from .normalize import is_authored_prop
 from .native.actor_write import FPoly
 from .native.umodel import parse_model_body
 from .upackage import (
@@ -425,14 +427,27 @@ def render_prop(pkg: Package, tag: PropertyTag, fqcn: str, *,
 # ── one actor ────────────────────────────────────────────────────────────────────────────────
 
 @_decode_guard
-def render_actor(pkg: Package, export_index0: int, *, schema: ImportSchema) -> str:
+def render_actor(pkg: Package, export_index0: int, *, schema: ImportSchema,
+                 notes: list[str] | None = None) -> str:
     """One actor export → its `Begin Actor … End Actor` T3D block.
 
     The block's shape mirrors what `MAP EXPORT` writes (`unrealed/t3d.md`): the class name BARE
     (the editor never qualifies it on export; `level import` re-qualifies on ingest), then the
-    properties in the order the map serialized them — which is the same order the editor exports,
-    because both walk the class's property list — then, for a brush, the inline geometry block
-    followed by the `Brush=Model'…'` reference, then the trailing `Name="…"`.
+    AUTHORED properties in the order the map serialized them — which is the same order the editor
+    exports, because both walk the class's property list — then, for a brush, the inline geometry
+    block followed by the `Brush=Model'…'` reference, then the trailing `Name="…"`.
+
+    A non-authored property is dropped (owner ruling, 2026-09-02): one that is not `var()`-editable
+    and not a special-editor exception (`normalize.is_authored_prop` — the SAME rule the post-verify
+    compare already used, now also applied here at write time). This is what a plain object-property
+    reference like `MyMarker` needs — Build Paths (or an equivalent editor build step) populates it
+    with a same-map self-reference that `level import` otherwise writes qualified with the SOURCE
+    map's name (a separate, still-open limitation — see `import.md`'s "References between actors
+    keep the source map's name"), which fails to resolve on a materialize under the new trunk's own
+    identity. Dropping it here means it is never written at all, so there is nothing to fail to
+    resolve. Each actor's drop count is appended to `notes` (never silent) when `notes` is given.
+    An UNKNOWN property (no schema entry — `is_authored_prop`'s `editable=None` case) is always
+    kept, compared/rendered untyped, same fallback as the compare side.
 
     The `Brush=` reference is held back until AFTER the geometry block on purpose: an actor that
     binds its model before the model is defined imports with no usable bound and cannot be selected
@@ -453,12 +468,25 @@ def render_actor(pkg: Package, export_index0: int, *, schema: ImportSchema) -> s
     start = _skip_state_frame(pkg, e)
     tags, _pos = read_property_tags(pkg, start, e["soff"] + e["ssize"])
     brush_ref: int | None = None
+    class_props = schema.props(fqcn)
+    dropped: list[str] = []
     for tag in tags:
         if tag.name == "Brush" and tag.ptype == PT_OBJECT:
             brush_ref, _ = read_compact_index(tag.raw, 0)
             continue
+        tag_key = tag.name.casefold()
+        prop = class_props.get(tag_key)
+        editable = bool(prop.property_flags & CPF_EDIT) if prop else None
+        owner_casefold = prop.owner.casefold() if prop else None
+        if not is_authored_prop(tag_key, editable=editable, owner_casefold=owner_casefold):
+            dropped.append(tag.name)
+            continue
         for key, value in render_prop(pkg, tag, fqcn, schema=schema):
             lines.append(f"    {key}={value}")
+    if notes is not None and dropped:
+        notes.append(f"{name}: dropped {len(dropped)} non-authored propert"
+                     f"{'y' if len(dropped) == 1 else 'ies'} (not var()-editable, not a special-"
+                     f"editor exception): {', '.join(sorted(set(dropped)))}")
     if brush_ref is not None:
         brush = brush_of(pkg, brush_ref)
         lines.append(emit.emit_brush(brush))
@@ -593,7 +621,7 @@ def import_map(pkg: Package, index, schema: ImportSchema, *,
                               f"{pkg.object_path(e['cls'])} does not descend from {ENGINE_ACTOR} "
                               "(is the right class package on the search path?)")
 
-    blocks = [render_actor(pkg, idx0, schema=schema) for idx0 in order]
+    blocks = [render_actor(pkg, idx0, schema=schema, notes=notes) for idx0 in order]
     return "Begin Map\n" + "\n".join(blocks) + "\nEnd Map\n"
 
 

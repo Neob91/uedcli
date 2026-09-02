@@ -365,11 +365,15 @@ def test_assemble_rewrites_the_levels_own_package_refs_to_mylevel(tmp_path):
         "the level's own package leaked into the package tables as an import"
     got = decode_dx_level_offline(str(dx), index=_index(),
                                   schema=mapimport.ImportSchema(resolver=_resolver))
-    # Both refs came back as EXPORT refs -- the decode qualifies them with the package's own name,
-    # which is the `.dx`'s stem (`Map`), not the trunk's `03_NYC_UNATCOHQ`.
+    # `previousPath` (Engine.NavigationPoint) and `Base` (Engine.Actor) are both NOT `var()`-editable
+    # (checked directly against the real schema: property_flags & CPF_EDIT == 0 for both) and
+    # neither is a special-editor exception, so decode correctly drops them entirely (owner ruling
+    # 2026-09-02) — they never even reach the point where their package qualifier would matter. The
+    # `pkg.imports` check above is what actually pins the assemble-side fix this test is about (the
+    # engine load aborting on a leaked private-object import); this decode-side check only confirms
+    # decode does not resurrect them.
     p1 = dict(got.actors["PathNode1"].props)
-    assert p1["previousPath"] == "PathNode'Map.PathNode0'"
-    assert p1["Base"] == "Teleporter'Map.Teleporter0'"
+    assert "previousPath" not in p1 and "Base" not in p1
 
 
 def test_native_materialize_builds_and_verifies_a_map_with_no_editor(tmp_path, capsys):
