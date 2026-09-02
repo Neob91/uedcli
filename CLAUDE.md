@@ -156,11 +156,14 @@ board — stages, frontmatter, slugs, and the question flow.
 
 Three rules bind every session:
 
+<<<<<<< HEAD
 - Log a finding with `bin/board new inbox '<title>'`. It creates a valid item and prints its path;
   write the detail into that `overview.md`. Anything that would otherwise live only in chat goes
   here: a provisional call, an assumption, a risk, a deviation from spec/plan, work you deliberately
   didn't do. If something gets deferred mid-implementation, file a separate item rather than letting
   the original cover both halves.
+=======
+>>>>>>> worktree-revert-beads
 - Run `bin/board answered` at session start, and before pulling work off `to-build/`. A question the
   owner has answered is invisible otherwise. The commit that folds an answer out also deletes the
   question file — if you find it already gone, another session has done it; stop.
