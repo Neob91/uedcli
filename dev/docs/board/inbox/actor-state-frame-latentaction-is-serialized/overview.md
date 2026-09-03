@@ -1,6 +1,6 @@
 +++
 priority = "p1"
-kind = "finding"
+kind = "unknown"
 summary = "UnrealEd cannot reproduce its OWN output byte-for-byte: two independent builds of one trunk differ in 4 bytes at body offset 10-13 of 933 of 1416 `RF_HasStack` (actor) exports, plus the GUID and one elapsed-time float. The bytes sit where `FStateFrame`'s `LatentAction` INT goes and look like uninitialized heap pointers. A hard ceiling on the full-byte-parity goal: those bytes are unmatchable by anything, native included, so they have to be excluded from the parity definition."
 depends-on = ["texture-ref-i-actor-divergence-traced-to-golden"]
 +++

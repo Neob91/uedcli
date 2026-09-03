@@ -12,7 +12,8 @@ export.
 """
 from __future__ import annotations
 
-from .actor_write import Prop, PT_STRUCT, struct_vector, struct_pointregion
+from .actor_write import (Prop, PT_BYTE, PT_INT, PT_OBJECT, PT_STRUCT, StructValue,
+                          struct_vector)
 from . import assemble as ASM
 from .props import convert_actor_props
 
@@ -60,13 +61,30 @@ def default_class_packages():
     return build_class_package_index(packages.schema_search_dirs(project, user_config))
 
 
+def _pointregion_prop(name: str, *, zone: str) -> Prop:
+    """The editor's stamp for a placed actor's `PointRegion` in an UNBUILT world:
+    Zone=<the LevelInfo>, iLeaf=-1, ZoneNumber=0 (UNATCO import golden, 2026-09-02). The Zone
+    late-binds to the LevelInfo export via `ObjRef` (raw bytes cannot carry a forward ref)."""
+    return Prop(name, PT_STRUCT, StructValue("PointRegion", [
+        Prop("Zone", PT_OBJECT, ASM.ObjRef(zone)),
+        Prop("iLeaf", PT_INT, -1),
+        Prop("ZoneNumber", PT_BYTE, 0)]), struct_name="PointRegion")
+
+
 def _trunk_to_actorspecs(level, schema):
     """Convert trunk Actors to `ActorSpec`s carrying TYPED `FPropertyTag`s: each raw T3D
     `(key,value)` prop is typed via `props.convert_actor_props` against `schema` (an `ImportSchema`
     or a bare `schema_lookup` callback); `Location` is routed from the actor's typed field.
     Returns `(point_actors, brush_actors, warnings)`."""
     actors, brush_actors, warnings = [], [], []
-    for name, a in level.actors.items():
+    li_name = next((n for n, a in level.actors.items()
+                    if (a.cls or "").split(".")[-1] == "LevelInfo"), "LevelInfo0")
+    # Spec order = `level.order` (the import order the caller established, e.g.
+    # `levelinfo_first_order`) -- the Actors array and export layout are both built from it, so
+    # the dict's insertion order must not leak in when the two differ.
+    ordered = [(n, level.actors[n]) for n in (level.order or list(level.actors))
+               if n in level.actors]
+    for name, a in ordered:
         cls = a.cls or "Engine.Actor"
         short = cls.split(".")[-1]
         props = []
@@ -75,11 +93,20 @@ def _trunk_to_actorspecs(level, schema):
             if (x, y, z) != (0.0, 0.0, 0.0):
                 props.append(Prop("Location", PT_STRUCT, struct_vector(x, y, z),
                                   struct_name="Vector"))
-        # Every PLACED actor carries a `Region` (PointRegion); the engine RECOMPUTES it on load, so
-        # a placeholder (Zone=None, iLeaf=-1, ZoneNumber=0) is correct.
-        props.append(Prop("Region", PT_STRUCT, struct_pointregion(0, -1, 0),
-                          struct_name="PointRegion"))
-        raw_props = a.props
+        # Every PLACED actor carries a `Region` (PointRegion). The editor stamps
+        # Zone=<the LevelInfo> (iLeaf=-1, ZoneNumber=0) on import into an unbuilt world -- verified
+        # on the UNATCO import golden, 2026-09-02 -- so the Zone late-binds to the LevelInfo export
+        # via an ObjRef member (raw bytes cannot carry a forward ref). Skip when the trunk authors
+        # `Region` itself (then the typed path serializes the authored value).
+        if not any(k.casefold() == "region" for k, _v in a.props):
+            props.append(_pointregion_prop("Region", zone=li_name))
+        # The editor RESETS these nav-runtime fields when a level is imported (they end up equal
+        # to the class default and are omitted from the save -- UNATCO import golden, 2026-09-02);
+        # `PATHS BUILD` regenerates them. Serializing a trunk-carried value would diverge from any
+        # editor-made map.
+        raw_props = [(k, v) for (k, v) in a.props
+                     if k.split("(")[0].casefold() not in
+                     ("previouspath", "visnoreachpaths", "nextordered", "prevordered")]
         if a.brush is not None:
             # DROP the trunk's `Brush=Model'MyLevel.<shape>'` string prop: `assemble._brush_body`
             # re-synthesizes the shape link as a LOCAL export ref. Left in, `convert_prop` would

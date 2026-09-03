@@ -79,9 +79,20 @@ def rewrite_self_package_refs(level) -> None:
     if not self_pkgs:
         return
     # Every place the package name can appear, matching what the T3D-text rewrite this replaced
-    # reached: prop values, poly textures, and the actor's own class.
+    # reached: prop values, poly textures, and the actor's own class. EXCEPTION: an authored
+    # PointRegion prop (FootRegion/HeadRegion/Region) whose Zone carries the level's own ORIGINAL
+    # package qualifier is what the EDITOR fails to resolve at import (the session's level is
+    # `MyLevel`), resetting the whole struct to spawn state -- byte-measured on the OceanLab
+    # golden (`Zone=WaterZone'14_OceanLab_Lab.WaterZone0'` -> `(None,-1,0)`, 16/16; every
+    # `MyLevel.`-qualified ref kept, 20/20). Reproduce the reset, don't rescue the ref.
+    def _prop_value(k: str, v: str) -> str:
+        if (k.split("(")[0].casefold() in ("footregion", "headregion", "region")
+                and any(f"{pkg}." in v for pkg in self_pkgs)):
+            return "(Zone=None,iLeaf=-1,ZoneNumber=0)"
+        return _to_mylevel(v, self_pkgs)
+
     for a in level.actors.values():
-        a.props = [(k, _to_mylevel(v, self_pkgs)) for k, v in a.props]
+        a.props = [(k, _prop_value(k, v)) for k, v in a.props]
         if a.cls:
             a.cls = _to_mylevel(a.cls, self_pkgs)
         for p in (a.brush.polys if a.brush is not None else ()):
@@ -162,15 +173,127 @@ def _fpolys(brush, texture_ref=None, *, actor: str = "?") -> list[FPoly]:
         if len(p.vertices) < 3:
             raise DegeneratePoly(f"actor {actor!r} polygon {i} has {len(p.vertices)} vertices; "
                                  f"the editor would discard it and leave a hole")
-    return [FPoly(verts=[tuple(v) for v in p.vertices],
-                  base=tuple(p.origin), normal=tuple(p.normal),
-                  texture_u=tuple(p.texture_u), texture_v=tuple(p.texture_v),
-                  poly_flags=p.flags or 0, item=p.item,
-                  texture_ref=(texture_ref(p.texture) if texture_ref and p.texture else 0),
-                  # PanU/PanV serialize as u16; a real level's pans are signed and wrap, so mask
-                  # rather than let struct.pack reject them.
-                  pan_u=(p.pan or (0, 0))[0] & 0xFFFF, pan_v=(p.pan or (0, 0))[1] & 0xFFFF)
-            for p in brush.polys]
+    out = [FPoly(verts=[tuple(v) for v in p.vertices],
+                 base=tuple(p.origin),
+                 normal=(_calc_normal(p.vertices) or tuple(p.normal)),
+                 texture_u=tuple(p.texture_u), texture_v=tuple(p.texture_v),
+                 poly_flags=p.flags or 0, item=p.item,
+                 texture_ref=(texture_ref(p.texture) if texture_ref and p.texture else 0),
+                 # PanU/PanV serialize as u16; a real level's pans are signed and wrap, so mask
+                 # rather than let struct.pack reject them.
+                 pan_u=(p.pan or (0, 0))[0] & 0xFFFF, pan_v=(p.pan or (0, 0))[1] & 0xFFFF)
+           for p in brush.polys]
+    # The editor's import runs the bspValidateBrush LINK phase (Editor.dll 0x37290; exact mirror
+    # of `bspcsg.rs::bsp_validate_brush_links`): j links to i iff same texture object, EXACT
+    # TextureU/V, same PolyFlags, finalized-normal dot > 0.9999, and |N_i . (Base_j - Base_i)| in
+    # the +-0.001 coplanar band -- sequential 0..n-1 when nothing links.
+    nrm = [fp.normal for fp in out]                      # already the finalized (winding) normal
+    for i, fp in enumerate(out):
+        if fp.i_link != -1:
+            continue
+        fp.i_link = i
+        for j in range(i + 1, len(out)):
+            o = out[j]
+            if o.i_link != -1 or o.texture_ref != fp.texture_ref:
+                continue
+            if o.texture_u != fp.texture_u or o.texture_v != fp.texture_v:
+                continue
+            if o.poly_flags != fp.poly_flags:
+                continue
+            # both predicates in the editor's f32 chain (x*x + y*y then + z*z, each op rounded)
+            dot = _f32(_f32(_f32(nrm[i][0] * nrm[j][0]) + _f32(nrm[i][1] * nrm[j][1]))
+                       + _f32(nrm[i][2] * nrm[j][2]))
+            if dot <= _f32(0.9999):
+                continue
+            db = tuple(_f32(o.base[k] - fp.base[k]) for k in range(3))
+            d = _f32(_f32(_f32(nrm[i][0] * db[0]) + _f32(nrm[i][1] * db[1]))
+                     + _f32(nrm[i][2] * db[2]))
+            if _f32(-0.001) < d < _f32(0.001):
+                o.i_link = i
+    return out
+
+
+def _f32(x: float) -> float:
+    import struct as _s
+    return _s.unpack("<f", _s.pack("<f", x))[0]
+
+
+def _calc_normal(verts) -> tuple | None:
+    """`FPoly::CalcNormal` (Engine.dll 0x150510), byte-faithful f32 chain: summed cross products
+    off vert 0, then `NormalizeSlow` -- magnitude as f32(sqrt_f64(f32 mag2)). The editor's T3D
+    importer RECOMPUTES every poly normal this way, discarding the authored `Normal=` (an authored
+    axis 1.0 comes back 0.99999994); byte parity requires reproducing it. Mirrors
+    `uedcli-native/src/fpoly.rs::calc_normal`."""
+    import math
+    v = [tuple(_f32(c) for c in p) for p in verts]
+    nx = ny = nz = 0.0
+    x0, y0, z0 = v[0]
+    for i in range(2, len(v)):
+        ax, ay, az = _f32(v[i - 1][0] - x0), _f32(v[i - 1][1] - y0), _f32(v[i - 1][2] - z0)
+        bx, by, bz = _f32(v[i][0] - x0), _f32(v[i][1] - y0), _f32(v[i][2] - z0)
+        cx = _f32(_f32(ay * bz) - _f32(az * by))
+        cy = _f32(_f32(az * bx) - _f32(ax * bz))
+        cz = _f32(_f32(ax * by) - _f32(ay * bx))
+        nx, ny, nz = _f32(nx + cx), _f32(ny + cy), _f32(nz + cz)
+    mag2 = _f32(_f32(_f32(nx * nx) + _f32(ny * ny)) + _f32(nz * nz))
+    if mag2 < 1e-8:
+        return None
+    inv = _f32(1.0 / _f32(math.sqrt(mag2)))
+    return (_f32(nx * inv), _f32(ny * inv), _f32(nz * inv))
+
+
+def _shape_bounds(polys: list[FPoly]) -> tuple | None:
+    """A brush SHAPE model's computed local-space bbox + bounding sphere as
+    `(bbox_min, bbox_max, sphere)`. The sphere is centered on the bbox midpoint with
+    radius = sqrt(max per-VERTEX squared distance, f32 op chain) * 1.001 -- double-precision sqrt
+    and multiply, narrowed to f32 once. NOT the bbox half-diagonal: a brush whose bbox corner is
+    not an actual vertex gets a tighter sphere. Full 41-byte prefix verified against all 762
+    brush shape models of the UNATCO import golden (2026-09-02; the old |extent|-based radius
+    missed 144 of them by 1 ulp or more). None for an empty poly list (prefix stays zeroed)."""
+    import math
+    import struct as _s
+
+    def f32(x: float) -> float:
+        return _s.unpack("<f", _s.pack("<f", x))[0]
+
+    vs = [tuple(f32(c) for c in v) for fp in polys for v in fp.verts]
+    if not vs:
+        return None
+    mn = tuple(min(v[i] for v in vs) for i in range(3))
+    mx = tuple(max(v[i] for v in vs) for i in range(3))
+    center = tuple(f32(f32(mn[i] + mx[i]) * 0.5) for i in range(3))
+    max_sq = max(f32(f32(f32(f32(v[0] - center[0]) * f32(v[0] - center[0]))
+                         + f32(f32(v[1] - center[1]) * f32(v[1] - center[1])))
+                     + f32(f32(v[2] - center[2]) * f32(v[2] - center[2]))) for v in vs)
+    radius = f32(math.sqrt(max_sq) * f32(1.001))
+    return mn, mx, (*center, radius)
+
+
+def build_mover_shape_model(polys: list[FPoly]) -> tuple[UM.Model, list[int]]:
+    """The editor's `csgPrepMovingBrush`, natively: build a MOVER's private shape-model BSP over
+    its own local-space `polys` (as `_fpolys` produces them). UED22 builds one for every mover at
+    `MAP IMPORT`/rebuild, so a saved map never ships a mover with an empty shape model.
+
+    Returns `(model, links)`: a `umodel.Model` with the BSP arrays populated (nodes/surfs/verts/
+    points/vectors/render bounds/collision leaf hulls, `NumSharedSides=4`,
+    `RootOutside=Linked=1`, bbox+sphere computed from the polys) -- the caller still sets
+    `none_index` and `field_0x54` -- and the per-poly `iLink` list the editor leaves in the
+    mover's saved `Polys` (the assigned surf index for a poly the build consumed whole, the
+    `bspValidateBrush` link for one it split). Byte-verified against all 28 built mover models +
+    `Polys` bodies of the UNATCO import golden (2026-09-02). Requires the `uedcli_native`
+    extension (heavy compute lives in Rust)."""
+    import uedcli_native
+    built, links = uedcli_native.build_brush_model(
+        [([c for v in fp.verts for c in v], fp.base, fp.normal, fp.texture_u, fp.texture_v,
+          fp.poly_flags, fp.texture_ref, fp.pan_u, fp.pan_v) for fp in polys])
+    body = uedcli_native.serialize_model(built)
+    m = UM.parse_model_body(body, 0, len(body))
+    m.root_outside = m.linked = 1
+    b = _shape_bounds(polys)
+    if b is not None:
+        m.bbox_min, m.bbox_max, m.sphere = b[0], b[1], b[2]
+        m.bbox_valid = 1
+    return m, links
 
 
 def _patch_native_surf_refs(asm, model, csg_brushes, tex_ref) -> None:
@@ -193,9 +316,136 @@ def _patch_native_surf_refs(asm, model, csg_brushes, tex_ref) -> None:
                 s.texture_ref = tex_ref(tex)
 
 
-def assemble_unbuilt(level, *, version: int = 68, level_name: str = "MyLevel",
+# The six viewport Camera actors + the LevelSummary a fresh UED22 session serializes into every
+# MAP SAVE (retail maps carry them too; UNATCO import golden, 2026-09-02). Camera VIEWPORT STATE
+# (ShowFlags/RendMap/OldLocation/...) is editor-session output inside the parity exclusion mask;
+# these fixed values pin the byte layout only.
+_FLAGS_CAMERA = 0x02340000
+_FLAGS_SUMMARY = 0x00070004
+_CAMERA_OLD_LOCATION = (-500.0, -300.0, 300.0)
+
+# The ALWAYS-synthesized simple builder brush (owner ruling, 2026-09-03): UED22 adopts Actors[1]
+# as its red builder brush and excludes it from CSG at every rebuild -- live-measured, even the
+# editor's OWN import-save loses its first content brush's geometry at any later `MAP REBUILD`.
+# The shape name `Brush` is `normalize.BUILDER_BRUSH_MODEL_NAME`, so the post-verify recognises
+# and drops the actor; `Polys4` is the counter name the editor's own builder polys would carry. A
+# trunk actor colliding with these names raises `_reserve`'s duplicate error (clean exit 2).
+_BUILDER = "DefaultBrush"
+_BUILDER_SHAPE = "Brush"
+# (name, ShowFlags, RendMap, Tag, Misc1, bHidden, Location, bHiddenEd)
+_CAMERAS = (
+    ("Camera6", 1997, 13, "U2Viewport0", None, False, None, True),
+    ("Camera7", 1993, 14, "U2Viewport1", None, False, None, True),
+    ("Camera8", 1993, 5, "U2Viewport2", None, False, None, False),
+    ("Camera9", 1993, 15, "U2Viewport3", None, False, None, True),
+    ("Camera10", 8832, 18, "MeshBrowser", None, False,
+     (-655.7438354492188, -0.0, -0.0), False),
+    ("Camera11", 8832, 17, "TextureBrowser", 128, True, None, True),
+)
+
+
+def _camera_props(li_name: str, showflags, rendmap, tag, misc1, hidden, location,
+                  hidden_ed) -> list:
+    """One viewport Camera actor's props (unordered -- `_actor_body` rank-sorts)."""
+    from uedcli.native.materialize import _pointregion_prop
+    props = [Prop("Player", AW.PT_OBJECT, 0),
+             Prop("ShowFlags", AW.PT_INT, showflags),
+             Prop("RendMap", AW.PT_INT, rendmap),
+             Prop("bAdmin", AW.PT_BOOL, True),
+             _pointregion_prop("FootRegion", zone=li_name),
+             _pointregion_prop("HeadRegion", zone=li_name),
+             Prop("Level", AW.PT_OBJECT, ASM.ObjRef(li_name)),
+             Prop("Tag", AW.PT_NAME, tag),
+             Prop("Base", AW.PT_OBJECT, ASM.ObjRef(li_name)),
+             _pointregion_prop("Region", zone=li_name),
+             Prop("OldLocation", AW.PT_STRUCT,
+                  AW.struct_vector(*_CAMERA_OLD_LOCATION), struct_name="Vector")]
+    if misc1 is not None:
+        props.append(Prop("Misc1", AW.PT_INT, misc1))
+    if hidden:
+        props.append(Prop("bHidden", AW.PT_BOOL, True))
+    if location is not None:
+        props.append(Prop("Location", AW.PT_STRUCT,
+                          AW.struct_vector(*location), struct_name="Vector"))
+    if hidden_ed:
+        props.append(Prop("bHiddenEd", AW.PT_BOOL, True))
+    return props
+
+
+def _actor_body(asm, name: str, qualified_class: str, props: list, rank_for,
+                warnings: list) -> bytes:
+    """StateFrame + tagged props in the editor's SERIALIZATION order
+    (`class_serialization_order`): rank by name, static-array elements by index, unknown names
+    last in build order (stable sort)."""
+    try:
+        rank = rank_for(qualified_class)
+    except Exception as e:
+        rank = {}
+        warnings.append(f"{qualified_class}: no serialization order ({e}); emitting build order")
+    ordered = sorted(props, key=lambda p: (rank.get(p.name.casefold(), len(rank)),
+                                           p.array_index or 0))
+    return (AW.state_frame(asm.exports[asm.index_of[name]].cls)
+            + AW.write_props(asm.name_index,
+                             [asm._resolve_prop_value(p) for p in ordered]))
+
+
+def _seed_tables(asm, pkg) -> None:
+    """PARITY-GATE oracle injection, never set in production: pre-intern the golden's name table
+    and replay its import table so the two linker-order unknowns (name/import order -- editor
+    hash-map iteration artifacts, see the 2026-09-02 spike) come from the oracle and every OTHER
+    byte is judged by the gate."""
+    for n in pkg.names:
+        asm.name_index(n)
+    # Verbatim table copy (the golden's own order can FORWARD-reference an outer sub-package, so
+    # a parent-first replay through the resolver cannot reproduce it), then register each entry in
+    # the resolver's memos so assembly lookups reuse these entries instead of minting new ones.
+    from .codec import ref_import
+    from .pkg_write import ImportRec
+    for j, (cp, cn, pi, on) in enumerate(pkg.imports):
+        kind = pkg.names[cn]
+        chain, ref = [], pi
+        while ref < 0:
+            k = -ref - 1
+            chain.append(pkg.names[pkg.imports[k][3]])
+            ref = pkg.imports[k][2]
+        outer = ".".join(reversed(chain))
+        name = pkg.names[on]
+        asm.resolver.imports.append(ImportRec(
+            class_package=asm.name_index(pkg.names[cp]), class_name=asm.name_index(kind),
+            package_index=pi, object_name=asm.name_index(name)))
+        r = ref_import(j)
+        if kind == "Package":
+            asm.resolver._pkg[f"{outer}.{name}" if outer else name] = r
+        elif kind == "Class":
+            asm.resolver._cls[(outer, name)] = r
+        else:
+            asm.resolver._obj[(f"{outer}", kind, name)] = r
+
+
+def _map_import_load_files(level, pkg_dirs) -> list[tuple[str, str]]:
+    """The editor's OBJ-LOAD manifest resolved to (pkg_name, host_file), in the same
+    sorted `_level_referenced_packages` order the golden `MAP IMPORT` used -- the input
+    to the import-table creation-order model."""
+    from uedcli.apply import _level_referenced_packages
+    from uedcli.packages import obj_load_entries
+    return obj_load_entries(_level_referenced_packages(level),
+                            [d for d in (pkg_dirs or ()) if d])
+
+
+def _map_import_t3d(level) -> str:
+    """The whole-level T3D the editor's `MAP IMPORT` consumes, in its import
+    (`levelinfo_first_order`) order -- the map-time name creation sequence's source."""
+    from uedcli.emit import emit_map
+    from uedcli.materialize import levelinfo_first_order
+    classes = {n: level.actors[n].cls for n in level.order}
+    has_brush = {n: level.actors[n].brush is not None for n in level.order}
+    order = levelinfo_first_order(level.order, classes, has_brush)
+    return emit_map([level.actors[n] for n in order])
+
+
+def assemble_unbuilt(level, *, version: int = 69, level_name: str = "MyLevel",
                      schema=None, pkg_dirs=None, world_model=None, csg_brushes=None,
-                     zone_actors=None, light_names=None):
+                     zone_actors=None, light_names=None, table_oracle=None):
     """`assemble_level` with an EMPTY world Model and REAL per-brush polys.
 
     `schema` is the `ImportSchema` (or bare `schema_lookup` callback) that types every actor prop
@@ -203,6 +453,14 @@ def assemble_unbuilt(level, *, version: int = 68, level_name: str = "MyLevel",
     cannot do without: the class -> defining-package map (so `DeusExMover` imports from `DeusEx`, not
     `Engine`) and the texture group map (so a poly's 2-part `Package.Name` becomes the
     `Package.Group.Name` the game requires). Omit them only for an engine-classes-only probe level.
+
+    When `pkg_dirs` are given and no `table_oracle` is passed, the name/import tables are made
+    editor-identical with NO oracle via a TWO-PASS build: pass 1 assembles with insertion-order
+    tables, then `saveorder.compute_tables` derives the editor's `MAP SAVE` name/import order (the
+    reverse-engineered creation-order + count-descending `appQsort` model, spike 2026-09-02) and
+    pass 2 re-assembles with those tables pre-seeded. Import order is byte-exact; name order is exact
+    but for a UNATCO-scale placed-actor sub-order residual (owner-excluded from the parity bar).
+    An explicit `table_oracle` (parity-gate golden seeding) skips the two pass.
 
     `world_model` opts out of the empty world Model: pass a BUILT `umodel.Model`
     (`materialize.build_world_model`) plus its `csg_brushes` join list and `zone_actors` map and the
@@ -218,6 +476,35 @@ def assemble_unbuilt(level, *, version: int = 68, level_name: str = "MyLevel",
 
     Returns `(package_bytes, warnings)`."""
     rewrite_self_package_refs(level)
+    # The generative-table two-pass covers the UNBUILT path (empty world Model). A baked
+    # `world_model` is the `materialize` path: its `_patch_*` MUTATE the model, so a second
+    # pass would double-patch it, and its table order was never validated against a built
+    # golden -- keep that path single-pass (insertion-order tables, unchanged).
+    if pkg_dirs and table_oracle is None and world_model is None:
+        from uedcli.native.saveorder import compute_tables, map_name_sequence
+        load_files = _map_import_load_files(level, pkg_dirs)
+        pass1, _w1 = _assemble_once(
+            level, version=version, level_name=level_name, schema=schema, pkg_dirs=pkg_dirs,
+            world_model=world_model, csg_brushes=csg_brushes, zone_actors=zone_actors,
+            light_names=light_names, table_oracle=None)
+        spec = compute_tables(pass1, load_files,
+                              map_name_sequence(pass1, _map_import_t3d(level)))
+        return _assemble_once(
+            level, version=version, level_name=level_name, schema=schema, pkg_dirs=pkg_dirs,
+            world_model=world_model, csg_brushes=csg_brushes, zone_actors=zone_actors,
+            light_names=light_names, table_oracle=spec)
+    return _assemble_once(
+        level, version=version, level_name=level_name, schema=schema, pkg_dirs=pkg_dirs,
+        world_model=world_model, csg_brushes=csg_brushes, zone_actors=zone_actors,
+        light_names=light_names, table_oracle=table_oracle)
+
+
+def _assemble_once(level, *, version: int = 69, level_name: str = "MyLevel",
+                   schema=None, pkg_dirs=None, world_model=None, csg_brushes=None,
+                   zone_actors=None, light_names=None, table_oracle=None):
+    """One assembly pass (`level` already `rewrite_self_package_refs`-normalised). With
+    `table_oracle` (a golden `Package` or a `saveorder.TableSpec`) the name/import tables
+    come pre-seeded; without it they are insertion-order."""
     actors, brush_actors, warnings = _trunk_to_actorspecs(level, schema or (lambda fqcn: {}))
     present = {a.name for a in actors + brush_actors}
     for spec in actors + brush_actors:
@@ -231,120 +518,279 @@ def assemble_unbuilt(level, *, version: int = 68, level_name: str = "MyLevel",
         # `FireTexture`, ...), which then look unresolvable and fail the build.
         texture_groups = build_texture_group_index(pkg_dirs, kinds=_TEXTURE_KINDS)
         texture_kinds = _texture_kind_index(pkg_dirs)
+    seeded_names = None
+    if table_oracle is not None:
+        from .pkg_write import NameTable
+        seeded_names = NameTable()
+        for n in table_oracle.names:
+            seeded_names.index(n)
     asm = ASM._Assembler(version, level_name, texture_groups=texture_groups,
-                         class_packages=class_packages)
+                         class_packages=class_packages, names=seeded_names)
+    if table_oracle is not None:
+        _seed_tables(asm, table_oracle)
 
-    # A T3D export stores textures UNQUALIFIED, and 49 of Deus Ex's 2389 texture names live in two or
-    # more packages. Resolve the level's own package set first, from the names that are unambiguous,
-    # then use it to settle the rest -- so the choice is made from packages this level demonstrably
-    # uses, never an arbitrary first-match.
+    # A T3D export stores textures UNQUALIFIED, and 49 of Deus Ex's 2389 texture names live in two
+    # or more packages. The EDITOR resolves such a name against its loaded packages in OBJ LOAD
+    # order -- the referenced-package list in raw ASCII sort, capitals before lowercase (measured:
+    # `Area51Wall_A` -> `CoreTexMetal`, not `area51textures`, on the UNATCO import golden,
+    # 2026-09-02) -- so the writer picks the ASCII-first ORIGINAL-CASE package stem, never a
+    # level-usage heuristic.
     by_name: dict[str, set[str]] = {}
     for (pkg_stem, obj), _group in texture_groups.items():
         by_name.setdefault(obj, set()).add(pkg_stem)
-    used = {next(iter(c)) for name, c in
-            ((n, by_name.get(n.casefold(), set())) for n in _texture_names(level)) if len(c) == 1}
+    stem_case: dict[str, str] = {}
+    for d in (x for x in (pkg_dirs or ()) if x):
+        for f in list(Path(d).glob("*.utx")) + list(Path(d).glob("*.u")):
+            stem_case.setdefault(f.stem.casefold(), f.stem)
+
+    from uedcli.apply import _level_referenced_packages
+    ref_pkgs = {p.casefold() for p in _level_referenced_packages(level)}
 
     def tex_ref(name: str) -> int:
         if name.casefold() in ("none", ""):        # T3D's spelling for "no texture"
             return 0
-        if "." in name:
-            head = name.split(".")[0].casefold()
-            return asm.resolver.object_ref(
-                texture_kinds.get((head, name.split(".")[-1].casefold()), "Texture"), name)
-        candidates = by_name.get(name.casefold(), set())
+        # The editor's importer binds a poly texture by BARE NAME even when the T3D qualifies it
+        # (measured: trunk `area51textures.Area51Wall_A` -> golden `CoreTexMetal.Metal...`), so
+        # the qualifier is dropped and the name resolves against the level's referenced packages
+        # in OBJ LOAD order (raw ASCII sort of original-case stems).
+        base = name.split(".")[-1].casefold()
+        candidates = by_name.get(base, set())
         if not candidates:
+            if "." in name:                        # explicit qualifier, name not in the scan index
+                head = name.split(".")[0].casefold()
+                return asm.resolver.object_ref(texture_kinds.get((head, base), "Texture"), name)
             raise ValueError(f"texture {name!r} is not in any package on the search path -- a "
                              f"substituted default is not acceptable, fix the search path")
-        if len(candidates) > 1:
-            narrowed = candidates & used
-            if len(narrowed) != 1:
-                raise ValueError(
-                    f"texture {name!r} is ambiguous -- defined by {', '.join(sorted(candidates))}"
-                    + (f", and this level uses {', '.join(sorted(narrowed))}" if narrowed else
-                       ", none of which this level otherwise uses")
-                    + "; qualify it in the trunk")
-            candidates = narrowed
-        pkg_stem = next(iter(candidates))
-        return asm.resolver.object_ref(texture_kinds.get((pkg_stem, name.casefold()), "Texture"),
-                                       f"{pkg_stem}.{name}")
+        loaded = candidates & ref_pkgs
+        pkg_stem = min(loaded or candidates, key=lambda s: stem_case.get(s, s))
+        return asm.resolver.object_ref(texture_kinds.get((pkg_stem, base), "Texture"),
+                                       f"{stem_case.get(pkg_stem, pkg_stem)}.{name.split('.')[-1]}")
 
-    url = URL(map=("Index.unr" if version >= 69 else "Index.dx"))
+    # UED22 stamps its own engine defaults into the saved URL (`unreal://...:7777`), regardless of
+    # the game the content targets (UNATCO import golden, 2026-09-02).
+    url = URL(protocol="unreal", port=7777,
+              map=("Index.unr" if version >= 69 else "Index.dx"))
+
+    # The editor's tagged-property SERIALIZATION order, per class, from the SAME schema search
+    # path (the editor's own `.u` shadow the game's -- the two disagree on prop set AND order).
+    from uedcli.uprops.uclass import class_serialization_order
+    schema_paths: dict[str, str] = {}
+    for d in (x for x in (pkg_dirs or ()) if x):
+        for f in Path(d).glob("*.u"):
+            schema_paths.setdefault(f.stem.casefold(), str(f))
+    rank_pkgs: dict = {}
+    ranks: dict[str, dict[str, int]] = {}
+
+    def rank_for(fqcn: str) -> dict[str, int]:
+        r = ranks.get(fqcn.casefold())
+        if r is None:
+            r = class_serialization_order(
+                fqcn, resolver=lambda p: schema_paths.get(p.casefold()), _pkgs=rank_pkgs)
+            ranks[fqcn.casefold()] = r
+        return r
 
     li = next((a for a in actors if a.is_level_info), None)
     li_name = li.name if li else "LevelInfo0"
     asm.levelinfo_name = li_name
-    ASM._reserve_actor(asm, li_name, "Engine.LevelInfo",
-                       lambda: ASM._levelinfo_body(asm, li_name, li.props if li else []),
-                       flags=ASM._FLAGS_ACTOR)
 
-    # Actors[1] is always the builder brush (the editor's red brush); it is not authored. Its inner
-    # shape MUST be the reserved unnumbered model name `Brush` (`normalize.BUILDER_BRUSH_MODEL_NAME`)
-    # so the post-verify's `is_builder_brush` recognises and drops it -- a `Model_*` name would read as
-    # a content brush and surface as a spurious extra actor.
-    dshape, dbrush = "Brush", "DefaultBrush"
-    asm._reserve(dshape + "Polys", "Engine.Polys", ASM._FLAGS_LOAD,
-                 lambda: AW.write_upolys_body(asm.name_index, ASM._builder_cube_polys()))
-    asm._reserve(dshape, "Engine.Model", ASM._FLAGS_BRUSH,
-                 lambda: ASM._empty_model_body(asm, polys_name=dshape + "Polys"))
-    ASM._reserve_actor(asm, dbrush, "Engine.Brush",
-                       lambda: ASM._brush_body(asm, dbrush, ASM.ObjRef(dshape),
-                                               csg_oper=None, extra=[]),
-                       flags=ASM._FLAGS_BRUSH_ACTOR)
+    # The editor stamps `Base=<the LevelInfo>` at SPAWN, before the T3D props apply, so the
+    # decision reads the CLASS-DEFAULT flags: bStatic=False, bCollideWorld=True,
+    # Physics=PHYS_None. Perfect separation on the UNATCO golden (141/1250, zero exceptions) and
+    # on OceanLab -- where the class-vs-effective distinction is live: `MiniSub0` authors
+    # Physics=PHYS_Swimming yet IS stamped (class default PHYS_None), `GasGrenade1` authors
+    # PHYS_None yet is NOT (class default PHYS_Projectile). An authored `Base` flows through the
+    # typed props instead.
+    from uedcli.classdefaults import ClassDefaults
+    cdefaults = ClassDefaults(lambda p: schema_paths.get(p.casefold()))
 
-    # No `!= dbrush` filter: a real trunk brush named `DefaultBrush` must collide with the reserved
-    # builder-brush export above and raise `_reserve`'s duplicate-name error (→ clean exit 2), never
-    # be silently dropped.
-    for b in brush_actors:
-        shape = f"Model_{b.name}"
-        src = level.actors.get(b.name)
-        polys = _fpolys(src.brush, tex_ref, actor=b.name) if src is not None and src.brush else []
-        asm._reserve(f"{shape}Polys", "Engine.Polys", ASM._FLAGS_BRUSH_POLYS,
-                     (lambda p=polys: AW.write_upolys_body(asm.name_index, p)))
-        asm._reserve(shape, "Engine.Model", ASM._FLAGS_BRUSH,
-                     (lambda s=shape: ASM._empty_model_body(asm, polys_name=s + "Polys")))
-        ASM._reserve_actor(asm, b.name, b.qualified_class,
-                           (lambda b=b, shape=shape: ASM._brush_body(
-                               asm, b.name, ASM.ObjRef(shape), csg_oper=None,
-                               extra=[asm._resolve_prop_value(p) for p in b.props])),
-                           flags=ASM._FLAGS_BRUSH_ACTOR)
+    def _base_stamped(name: str) -> bool:
+        a = level.actors.get(name)
+        if a is None or any(k.split("(")[0].casefold() == "base" for k, _v in a.props):
+            return False
+        try:
+            d = cdefaults.for_class(a.cls).defaults
+        except Exception:
+            return False
+        return (str(d.get(("bstatic", 0))) != "True"
+                and str(d.get(("bcollideworld", 0))) == "True"
+                and str(d.get(("physics", 0)) or "PHYS_None") == "PHYS_None")
+
+    def _li_body():
+        # Level->self plus the editor's save-time stamps: TimeSeconds/AIProfile (session clock and
+        # counters -- inside the parity exclusion mask, emitted as zeros to pin the layout) and
+        # Summary -> the LevelSummary export.
+        props = [Prop("Level", AW.PT_OBJECT, ASM.ObjRef(li_name)),
+                 Prop("TimeSeconds", AW.PT_FLOAT, 0.0),
+                 Prop("AIProfile", AW.PT_INT, 0),
+                 Prop("Summary", AW.PT_OBJECT, ASM.ObjRef("LevelSummary"))]
+        return _actor_body(asm, li_name, "Engine.LevelInfo",
+                           props + list(li.props if li else []), rank_for, warnings)
+    ASM._reserve_actor(asm, li_name, "Engine.LevelInfo", _li_body, flags=ASM._FLAGS_ACTOR)
+
+    # The world Model + its empty Polys child carry the editor's fixed fresh-session names
+    # (`Model2`/`Polys3`); there is NO synthesized builder brush -- a `MAP IMPORT` save has none
+    # (the first content brush is hoisted into the builder's Actors[1] slot instead). Reservation
+    # order below IS the editor's export-table order, emulated exactly (the closed form at the
+    # `ordered` block; element-exact on all four 2026-09-02 import goldens).
+    wm_polys, wm_name = "Polys3", "Model2"
+
+    if world_model is None:
+        wm = UM.Model()
+        wm.none_index = asm.name_index("None")
+        wm.num_shared_sides = 4                          # the editor's fresh world model constant
+
+        def _world_model_body():
+            wm.field_0x54 = asm.eref(wm_polys)
+            return UM.write_model_body(wm)
+    else:
+        world_model.none_index = asm.name_index("None")
+
+        def _world_model_body():
+            world_model.field_0x54 = asm.eref(wm_polys)
+            _patch_native_surf_refs(asm, world_model, csg_brushes or [], tex_ref)
+            ASM._patch_zone_refs(asm, world_model, zone_actors)
+            ASM._patch_light_refs(asm, world_model, light_names)
+            return UM.write_model_body(world_model)
 
     others = [a for a in actors if not a.is_level_info]
-    for a in others:
+    points = [a for a in others if not a.is_brush]
+
+    def _point_desc(a):
         def _body(a=a):
             authored = list(a.props)
             has_level = any(getattr(p, "name", "").casefold() == "level" for p in authored)
             props = authored if has_level else \
                 [Prop("Level", AW.PT_OBJECT, ASM.ObjRef(li_name))] + authored
-            return (AW.state_frame(asm.exports[asm.index_of[a.name]].cls)
-                    + AW.write_props(asm.name_index,
-                                     [asm._resolve_prop_value(p) for p in props]))
-        ASM._reserve_actor(asm, a.name, a.qualified_class, _body)
+            if _base_stamped(a.name):
+                props = props + [Prop("Base", AW.PT_OBJECT, ASM.ObjRef(li_name))]
+            return _actor_body(asm, a.name, a.qualified_class, props, rank_for, warnings)
+        return (a.name, a.qualified_class, ASM._FLAGS_ACTOR, _body)
 
-    lm = "Model_Level"
-    if world_model is None:
-        empty = UM.Model()
-        empty.none_index = 0
-        asm._reserve(lm, "Engine.Model", ASM._FLAGS_LOAD, lambda: UM.write_model_body(empty))
-    else:
-        world_model.none_index = 0
+    def _shape_model_body(polys_name: str, polys: list) -> bytes:
+        # A brush SHAPE model carries a COMPUTED local-space bbox + bounding sphere
+        # (`_shape_bounds`), NumSharedSides=4 and RootOutside=Linked=1 -- all verified against
+        # the UNATCO import golden's per-brush models (2026-09-02).
+        m = UM.Model(none_index=asm.name_index("None"))
+        m.field_0x54 = asm.eref(polys_name)
+        m.num_shared_sides = 4
+        m.root_outside = m.linked = 1
+        b = _shape_bounds(polys)
+        if b is not None:
+            m.bbox_min, m.bbox_max, m.sphere = b[0], b[1], b[2]
+            m.bbox_valid = 1
+        return UM.write_model_body(m)
 
-        def _world_model_body():
-            _patch_native_surf_refs(asm, world_model, csg_brushes or [], tex_ref)
-            ASM._patch_zone_refs(asm, world_model, zone_actors)
-            ASM._patch_light_refs(asm, world_model, light_names)
-            return UM.write_model_body(world_model)
-        asm._reserve(lm, "Engine.Model", ASM._FLAGS_LOAD, _world_model_body)
+    # A MOVER is a dynamic actor the GAME loads: the golden marks the mover actor 0x02070001 and
+    # its shape Model 0x00070001 (load-all), unlike a static brush's edit-only 0x02340001/0x00340001.
+    from uedcli.classindex import ClassIndex
+    from uedcli.movers import is_mover
+    class_index = ClassIndex.from_files(sorted(set(schema_paths.items())))
+
+    def _is_mover(name: str) -> bool:
+        a = level.actors.get(name)
+        try:
+            return a is not None and is_mover(a, class_index)
+        except Exception:
+            return False
+
+    def _brush_desc(b):
+        def _bbody(b=b):
+            props = [Prop("Level", AW.PT_OBJECT, ASM.ObjRef(li_name)),
+                     Prop("Brush", AW.PT_OBJECT, ASM.ObjRef(f"Model_{b.name}"))] + list(b.props)
+            if _base_stamped(b.name):
+                props = props + [Prop("Base", AW.PT_OBJECT, ASM.ObjRef(li_name))]
+            return _actor_body(asm, b.name, b.qualified_class, props, rank_for, warnings)
+        return (b.name, b.qualified_class,
+                ASM._FLAGS_ACTOR if _is_mover(b.name) else ASM._FLAGS_BRUSH_ACTOR, _bbody)
+
+    def _cam_desc(cam):
+        return (cam[0], "Engine.Camera", _FLAGS_CAMERA,
+                (lambda c=cam: _actor_body(asm, c[0], "Engine.Camera",
+                                           _camera_props(li_name, *c[1:]),
+                                           rank_for, warnings)))
+
+    # The creation STREAM: points, brush actors, then per-brush (Model, Polys) pairs -- the editor
+    # builds the shape models in a post pass -- with LevelSummary created just before the last
+    # Polys. Brush i's Polys is counter-named `Polys(6+2i)` (2 ticks per brush; 3..5 consumed at
+    # MAP NEW).
+    stream = [_point_desc(a) for a in points] + [_brush_desc(b) for b in brush_actors]
+    for i, b in enumerate(brush_actors):
+        shape, polys_name = f"Model_{b.name}", f"Polys{6 + 2 * i}"
+        src = level.actors.get(b.name)
+        polys = _fpolys(src.brush, tex_ref, actor=b.name) if src is not None and src.brush else []
+        if _is_mover(b.name) and polys:
+            # A MOVER ships its BUILT private shape model (`csgPrepMovingBrush`); the build also
+            # reassigns the saved polys' iLinks (surf index for a whole-consumed poly, the
+            # validate link for a split one).
+            def _mover_model_body(pn=polys_name, p=polys):
+                m, links = build_mover_shape_model(p)
+                for fp, ln in zip(p, links):
+                    fp.i_link = ln
+                m.none_index = asm.name_index("None")
+                m.field_0x54 = asm.eref(pn)
+                return UM.write_model_body(m)
+            stream.append((shape, "Engine.Model", ASM._FLAGS_LOAD, _mover_model_body))
+        else:
+            stream.append((shape, "Engine.Model",
+                           ASM._FLAGS_LOAD if _is_mover(b.name) else ASM._FLAGS_BRUSH,
+                           (lambda pn=polys_name, p=polys: _shape_model_body(pn, p))))
+        if i == len(brush_actors) - 1:
+            stream.append(("LevelSummary", "Engine.LevelSummary", _FLAGS_SUMMARY,
+                           lambda: AW.write_props(asm.name_index,
+                                                  [Prop("Title", AW.PT_STR, "Untitled")])))
+        stream.append((polys_name, "Engine.Polys", ASM._FLAGS_BRUSH_POLYS,
+                       (lambda p=polys: AW.write_upolys_body(asm.name_index, p))))
 
     def _level_body():
-        # The `Actors` array is the level's actor order and must be FAITHFUL to the trunk (UnrealEd
-        # interleaves brushes and non-brushes by CSG order; grouping brushes-first would reorder every
-        # non-brush actor). `LevelInfo` is always Actors[0] and the builder brush always Actors[1];
-        # every other actor follows in trunk order. (`reserve` order above is the separate export-table
-        # order, which the editor reshuffles harmlessly.)
-        rest = [n for n in (level.order or list(level.actors))
-                if n != li_name]                 # a real `dbrush`-named actor already errored above
-        refs = [asm.eref(li_name), asm.eref(dbrush)] + [asm.eref(n) for n in rest]
-        return write_level_body(none_index=0, actor_refs=refs, model_ref=asm.eref(lm),
-                                url=url, reach_specs=None)
-    asm._reserve(level_name, "Engine.Level", ASM._FLAGS_LEVEL, _level_body)
+        # Actors[1] is a SYNTHESIZED simple builder brush (owner ruling, 2026-09-03): UED22
+        # adopts Actors[1] as its red builder brush and keeps it OUT of CSG at every rebuild --
+        # live-measured, the editor's own import-save loses its first content brush's geometry at
+        # any later `MAP REBUILD` (same-session or after reload). Feeding it a sacrificial
+        # builder keeps every content brush carving. This is the one ruled deviation from the
+        # import-golden byte layout.
+        refs = ([asm.eref(li_name), asm.eref(_BUILDER)]
+                + [asm.eref(a.name) for a in points]
+                + [asm.eref(b.name) for b in brush_actors]
+                + [asm.eref(c[0]) for c in _CAMERAS])
+        return write_level_body(none_index=asm.name_index("None"), actor_refs=refs,
+                                model_ref=asm.eref(wm_name), url=url, reach_specs=None)
+
+    # EXPORT-TABLE order: the closed form derived element-exact from the four 2026-09-02 import
+    # goldens -- preamble [Polys3, Camera6, Camera7, Model2] after the LevelInfo, the object at
+    # stream rank R = (n_points + 3*n_brushes - 1) // 2 hoisted into the last freed low slot with
+    # Camera11 in its stream position, then Camera8..10 + the ULevel last -- with the ruled
+    # always-present builder brush triple (`Polys4`/`Brush`/`DefaultBrush`, the editor's own
+    # counter names) spliced in right after the LevelInfo.
+    def _builder_shape_body():
+        m = UM.Model(none_index=asm.name_index("None"))
+        m.field_0x54 = asm.eref("Polys4")
+        m.num_shared_sides = 4
+        return UM.write_model_body(m)
+
+    builder = [
+        ("Polys4", "Engine.Polys", ASM._FLAGS_LOAD,
+         lambda: AW.write_upolys_body(asm.name_index, ASM._builder_cube_polys())),
+        (_BUILDER_SHAPE, "Engine.Model", ASM._FLAGS_BRUSH, _builder_shape_body),
+        (_BUILDER, "Engine.Brush", ASM._FLAGS_BRUSH_ACTOR,
+         lambda: _actor_body(asm, _BUILDER, "Engine.Brush",
+                             [Prop("Level", AW.PT_OBJECT, ASM.ObjRef(li_name)),
+                              Prop("Brush", AW.PT_OBJECT, ASM.ObjRef(_BUILDER_SHAPE))],
+                             rank_for, warnings)),
+    ]
+    R = (len(points) + 3 * len(brush_actors) - 1) // 2
+    if 0 <= R < len(stream):
+        mid = [stream[R]] + [d if i != R else _cam_desc(_CAMERAS[5])
+                             for i, d in enumerate(stream)]
+    else:                                            # empty level: nothing to hoist
+        mid = list(stream) + [_cam_desc(_CAMERAS[5])]
+    ordered = (builder
+               + [(wm_polys, "Engine.Polys", ASM._FLAGS_LOAD,
+                   lambda: AW.write_upolys_body(asm.name_index, [])),
+                  _cam_desc(_CAMERAS[0]), _cam_desc(_CAMERAS[1]),
+                  (wm_name, "Engine.Model", ASM._FLAGS_LOAD, _world_model_body)]
+               + mid
+               + [_cam_desc(c) for c in _CAMERAS[2:5]]
+               + [(level_name, "Engine.Level", ASM._FLAGS_LEVEL, _level_body)])
+    for name, qcls, flags, body in ordered:
+        asm._reserve(name, qcls, flags, body)
     return asm.build(), warnings

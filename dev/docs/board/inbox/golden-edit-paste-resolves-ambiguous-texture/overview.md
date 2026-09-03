@@ -1,6 +1,6 @@
 +++
 priority = "p2"
-kind = "finding"
+kind = "unknown"
 summary = "On `02_NYC_Bar`, 139/953 surfs' textures differ between native and its self-built golden — and NATIVE is the correct side: the trunk and the ORIGINAL shipped map both say `NewYorkCity.Metal.trough1`, the golden says `NYCBar.Metal.trough1`. The editor's `EDIT PASTE` T3D texture lookup picks a different package when the same leaf name exists in two loaded packages, and drops the texture entirely (`texture_ref = 0`) when the named package was not `OBJ LOAD`ed. A golden-fidelity limit, not a native bug."
 depends-on = ["texture-ref-i-actor-divergence-traced-to-golden"]
 +++

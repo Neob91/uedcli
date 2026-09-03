@@ -67,10 +67,20 @@ _REF_SUFFIXES = (".md", ".py", ".sh", ".toml", ".rs")
 
 
 def _items() -> list[Path]:
-    """Every item directory, across every stage that exists yet."""
-    return sorted(
-        d for stage in STAGES for d in (BOARD / stage).glob("*") if d.is_dir()
-    )
+    """Every item directory, across every stage that exists yet. A stage dir may hold a GROUP
+    directory (no `overview.md` of its own) whose children are the items — the owner-ruled
+    `to-build/native-materialize/` consolidation shape — so a dir without `overview.md` recurses
+    one level."""
+    out: list[Path] = []
+    for stage in STAGES:
+        for d in (BOARD / stage).glob("*"):
+            if not d.is_dir():
+                continue
+            if (d / "overview.md").is_file():
+                out.append(d)
+            else:
+                out.extend(sub for sub in d.glob("*") if sub.is_dir())
+    return sorted(out)
 
 
 def _rel(p: Path) -> str:

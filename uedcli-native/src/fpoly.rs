@@ -82,6 +82,12 @@ pub struct FPoly {
     /// Authored texture pan (T3D `Pan U=/V=`), copied verbatim into the surf's `PanU`/`PanV`.  The
     /// transform does not touch it and every split fragment inherits it (`empty_copy`).
     pub pan: [i32; 2],
+    /// SOURCE-poly index for the mover build's saved-`iLink` tracking (`build_brush_model`): set on
+    /// each input poly, and deliberately DROPPED (-1) by `empty_copy` so a split FRAGMENT is never
+    /// mistaken for its whole original — the editor rewrites a `Polys` element's `iLink` only when
+    /// the pointed-at original itself is consumed whole (splitter/coplanar), never via a fragment
+    /// copy.  -1 (untracked) everywhere else.
+    pub src: i32,
 }
 
 impl FPoly {
@@ -98,6 +104,7 @@ impl FPoly {
             i_link: -1,
             i_brush_poly: -1,
             pan: [0, 0],
+            src: -1,
         }
     }
 
@@ -439,6 +446,7 @@ impl FPoly {
             i_link: self.i_link,
             i_brush_poly: self.i_brush_poly,
             pan: self.pan,
+            src: -1, // a fragment is not its source poly (see the field doc)
         }
     }
 }

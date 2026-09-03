@@ -3,8 +3,9 @@ value layouts + UPolys/FPoly.
 
 Promoted from `prop_writer.py` (property tags, round-trip proven) and
 `upolys_decode.py` (FPoly format, EOF-validated 6566/6587).  Section 30.2 pins the
-StateFrame and struct layouts; the writer picks canonical size codes (the loader
-accepts any valid FPropertyTag encoding — byte-match with the editor is not required).
+StateFrame and struct layouts. Tag encodings mirror the EDITOR's exact choices (fixed size
+codes, the bool size_code-5 form, no index byte on static-array element 0) -- byte parity
+with a UED22 `MAP SAVE` is the bar since the 2026-09-02 unbuilt-parity ruling.
 """
 from __future__ import annotations
 
@@ -111,10 +112,16 @@ def _array_body(name_index, av: ArrayValue) -> bytes:
     return bytes(out)
 
 
+_SIZE_FIXED = {1: 0, 2: 1, 4: 2, 12: 3, 16: 4}
+
+
 def _size_code_and_bytes(n: int) -> tuple[int, bytes]:
-    """Explicit-size encoding for a variable-length value: (size_code, size bytes), matching the
-    reader's `size_code == 5/6/7` branches (1/2/4-byte little-endian length). A struct/array value
-    routinely exceeds 255 bytes, so this is not optional."""
+    """Size encoding for a variable-length value: (size_code, size bytes). The editor uses the
+    FIXED codes 0..4 for the exact sizes 1/2/4/12/16 (no size byte on disk — a Vector struct is
+    code 3) and the explicit 5/6/7 forms (1/2/4-byte little-endian length) only for other sizes;
+    matching that is part of byte parity with a `MAP SAVE` (UNATCO import golden, 2026-09-02)."""
+    if n in _SIZE_FIXED:
+        return _SIZE_FIXED[n], b""
     if n < 0x100:
         return 5, bytes([n])
     if n < 0x10000:
@@ -145,9 +152,15 @@ def write_prop(name_index, p: Prop) -> bytes:
     `name_index(str)->int` resolves names; Object values are already integer object-refs, Name
     values are strings resolved via name_index."""
     out = bytearray(write_ci(name_index(p.name)))
-    arr = p.array_index is not None
+    # Element 0 of a static array serializes as a PLAIN tag -- no array bit, no index byte; only
+    # elements >0 carry info bit 7 + the index (UNATCO import golden, 2026-09-02).
+    arr = bool(p.array_index)
     if p.ptype == PT_BOOL:
-        out.append(_info(PT_BOOL, 0, bool(p.value)))
+        # The editor emits a bool tag as size_code 5 + an explicit ZERO size byte (0xd3/0x53 00),
+        # not the compact size_code-0 form -- byte parity requires matching it (UNATCO import
+        # golden, 2026-09-02). The value still rides info bit 7.
+        out.append(_info(PT_BOOL, 5, bool(p.value)))
+        out.append(0)
         return bytes(out)
     # Fixed-size types carry no explicit size byte (reader: size_code 0..4 -> _SIZE_FIXED), and the
     # array index (when present) follows the info byte directly.
@@ -181,9 +194,10 @@ def write_prop(name_index, p: Prop) -> bytes:
 
 
 def _emit_array_index(out: bytearray, idx) -> None:
-    """Static-array element index byte(s).  For idx < 0x80 a single byte; the reader
-    accepts 1 or 3 further bytes for larger indices (we keep indices small)."""
-    if idx is None:
+    """Static-array element index byte(s) -- only for elements > 0 (element 0 is a plain tag).
+    For idx < 0x80 a single byte; the reader accepts 1 or 3 further bytes for larger indices (we
+    keep indices small)."""
+    if not idx:
         return
     if idx < 0x80:
         out.append(idx)
@@ -213,10 +227,6 @@ def struct_rotator(pitch, yaw, roll) -> bytes:
 
 def struct_scale(sx, sy, sz, sheer_rate=0.0, sheer_axis=5) -> bytes:
     return struct.pack("<ffff", sx, sy, sz, sheer_rate) + bytes([sheer_axis])
-
-
-def struct_pointregion(zone_ref=0, i_leaf=-1, zone_number=0) -> bytes:
-    return write_ci(zone_ref) + struct.pack("<i", i_leaf) + bytes([zone_number])
 
 
 def struct_color(r, g, b, a=0) -> bytes:
@@ -271,7 +281,11 @@ def write_upolys_body(name_index, polys) -> bytes:
     out = bytearray(write_ci(name_index("None")))
     out += struct.pack("<ii", len(polys), len(polys))
     for fp in polys:
+        # An unlabeled poly's Item is the NAME "None" (the editor serializes its name index, which
+        # need not be 0), never a raw 0 index. A caller-preset item_index is honored.
         if fp.item is not None:
             fp.item_index = name_index(fp.item)
+        elif not fp.item_index:
+            fp.item_index = name_index("None")
         out += write_fpoly(fp)
     return bytes(out)

@@ -299,3 +299,61 @@ def class_default_tags(pkg: Package, class_name: str) -> list[PropertyTag]:
         raise SchemaError(f"{pkg.name}.{class_name}: defaults did not consume to body end "
                           f"(cursor {p} != {end}, {end - p} bytes left)")
     return tags
+
+
+def class_children_ref(pkg: Package, class_index1: int) -> int:
+    """A Class export's `UStruct.Children` head ref. Unlike `Struct`/field exports, a Class body
+    has NO leading UObject tagged-prop header: [SuperField][Next][ScriptText][Children]…"""
+    e = pkg.exports[class_index1 - 1]
+    buf, p = pkg.buf, e["soff"]
+    _sup, p = _read_compact_index(buf, p)
+    _next, p = _read_compact_index(buf, p)
+    _st, p = _read_compact_index(buf, p)
+    children, _p = _read_compact_index(buf, p)
+    return children
+
+
+def class_serialization_order(fqcn: str, *, resolver, _pkgs: dict | None = None) -> dict[str, int]:
+    """`casefold(prop name) -> rank` in the editor's tagged-property SERIALIZATION order for
+    `fqcn`: each class's own `UStruct.Children` linked list in chain order, most-derived class
+    first, first occurrence winning on a name collision. This is the order a `MAP SAVE` writes
+    FPropertyTags in (validated on every 2026-09-02 unbuilt golden, 100% of actors) — NOT the
+    export-scan order `own_class_properties` returns. Resolve against the EDITOR's packages
+    (UED22 `Engine.u`/`DeusEx.u`): the game's differ in prop set and order."""
+    from .ufield import _field_next
+    pkgs = _pkgs if _pkgs is not None else {}
+    order: list[str] = []
+    seen: set[str] = set()
+    cur = fqcn
+    for _ in range(64):
+        if "." not in cur:
+            raise SchemaError(f"class must be fully qualified (Package.Class): {cur!r}")
+        pkg_name, class_name = cur.split(".", 1)
+        key = pkg_name.casefold()
+        if key not in pkgs:
+            path = resolver(pkg_name)
+            if path is None:
+                raise SchemaError(f"cannot resolve package {pkg_name!r} for {fqcn!r}")
+            pkgs[key] = load_package(path, name=pkg_name)
+        pkg = pkgs[key]
+        ci = class_export_index(pkg, class_name)
+        if ci is None:
+            raise SchemaError(f"class not found in {pkg_name}: {class_name}")
+        node = class_children_ref(pkg, ci)
+        for _ in range(8192):
+            if node <= 0:
+                break
+            e = pkg.exports[node - 1]
+            if pkg.name_of_ref(e["cls"]) in PROPERTY_TYPES:
+                nm = pkg.names[e["nm"]]
+                if nm.casefold() not in seen:
+                    seen.add(nm.casefold())
+                    order.append(nm)
+            node = _field_next(pkg, node)
+        else:
+            raise SchemaError(f"{cur}: Children chain did not terminate")
+        sup = _super_fqcn(pkg, class_name)
+        if sup is None:
+            break
+        cur = sup
+    return {n.casefold(): i for i, n in enumerate(order)}

@@ -119,6 +119,14 @@ def build_texture_group_index(pkg_dirs, kinds=("Texture",)) -> dict:
     return index
 
 
+# Boot-registered native code packages' canonical spellings (DLL registration wins over the
+# on-disk filename case).
+_NATIVE_PACKAGE_CASE = {"fire": "Fire", "engine": "Engine", "core": "Core", "editor": "Editor",
+                        "ipdrv": "IpDrv", "render": "Render", "window": "Window",
+                        "galaxy": "Galaxy", "deusex": "DeusEx", "extension": "Extension",
+                        "deusextext": "DeusExText", "consys": "ConSys"}
+
+
 class Resolver:
     def __init__(self, names: NameTable, texture_groups: dict | None = None,
                  class_packages: dict | None = None):
@@ -203,6 +211,10 @@ class Resolver:
         # import ("Can't find <kind> in file" / "Can't find Class in file").
         owner = ("Core" if kind.casefold() in ("class", "package")
                  else self.class_packages.get(kind.casefold()) or "Engine")
+        # A NATIVE code package is registered proper-cased at editor boot from its DLL, whatever
+        # the on-disk file case (`fire.u` -> package `Fire`; OceanLab golden, 2026-09-03) -- the
+        # class-package index carries file stems, so map the known native packages back.
+        owner = _NATIVE_PACKAGE_CASE.get(owner.casefold(), owner)
         r = self._add(ImportRec(class_package=self.names.index(owner),
                                 class_name=self.names.index(kind),
                                 package_index=outer,
@@ -224,6 +236,12 @@ class Resolver:
             raise ValueError(f"unqualified {object_class} reference (no package): {qualified!r}")
         package = parts[0]
         name = parts[-1]
+        if object_class == "Class":
+            # a class-valued PROP (`Class'DeusEx.AnnaNavarre'`) must share the ONE Core.Class
+            # import a class REF minted, not a second `_obj`-keyed duplicate (the editor keeps one).
+            return self.class_ref(package, name)
+        if object_class == "Package":
+            return self.package_ref(qualified)
         sub = ".".join(parts[1:-1]) if len(parts) > 2 else None
         if sub is None:
             # re-attach the group the trunk's 2-part `Package.Name` dropped (else the game can't

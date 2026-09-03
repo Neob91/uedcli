@@ -1,11 +1,11 @@
 # Spec — native `intersect`/`deintersect` over an in-tree brush set
 
 **Status:** DESIGN ONLY (no code). Ephemeral per-feature scratch; the durable record is
-[`dev/docs/decisions.md`](../../../decisions.md) `2026-07-24 16:32 UTC` + (on landing) `architecture.md` /
+the decision ledger (deleted; git history) `2026-07-24 16:32 UTC` + (on landing) `architecture.md` /
 `unrealed/*.md`. **Date:** 2026-07-24.
 
 **Read first:**
-- [`dev/docs/spikes/2026-07-15-native-materialize/re-raw-zones/bspbrushcsg-intersect-deintersect-decode.md`](../../../spikes/2026-07-15-native-materialize/re-raw-zones/bspbrushcsg-intersect-deintersect-decode.md)
+- [`dev/docs/spikes/2026-07-15-native-materialize/re-raw-zones/bspbrushcsg-intersect-deintersect-decode.md`](../../../../spikes/2026-07-15-native-materialize/re-raw-zones/bspbrushcsg-intersect-deintersect-decode.md)
   — the instruction-level decode of UnrealEd's `BRUSH FROM INTERSECTION/DEINTERSECTION` (the ground-truth
   oracle for winding + flags).
 - `dispatch.py:975` `_stash_intersect_impl` / `1034` `_stash_deintersect_impl` — the current
@@ -143,7 +143,7 @@ flag steps are the explicit `--solidity` overrides — `solid` = blanket `& ~0x2
 **Do the editor's operation, with the scaffolding synthesized internally — staying on the tested rails.**
 `bsp_brush_csg` **already has the exact stub to fill** — `bspcsg.rs:1845`:
 `if oper != Add && oper != Subtract { return; // Intersect/Deintersect not used by MAP REBUILD }`. The decoded
-tail ([RE doc](../../../spikes/2026-07-15-native-materialize/re-raw-zones/bspbrushcsg-intersect-deintersect-decode.md)
+tail ([RE doc](../../../../spikes/2026-07-15-native-materialize/re-raw-zones/bspbrushcsg-intersect-deintersect-decode.md)
 §1) is exactly what goes there. Some building blocks are already ported: `bsp_filter_fpoly` (`bspcsg.rs:710`),
 `filter_ed_poly` (`:570`), and the **straddle recursion** of `filter_world_through_brush` (`:834`). The
 genuinely new Rust code is the tail driver + the **four intersect/deintersect leaf callbacks**
@@ -268,7 +268,7 @@ integration-gated — `CLAUDE.md` "Background/long-running work", `pytest.ini`):
   no `--split`, 2026-07-24 18:12)*
 - **All-additive under `deintersect`** (or all-subtractive under `intersect`) → the guard errors with the
   cross-verb guidance (matches `dispatch.py:431-438`).
-- **Non-brush names** (lights) in the set → warn+skip (like `brush poly find`, `decisions.md 2026-07-24 16:28`);
+- **Non-brush names** (lights) in the set → warn+skip (like `brush poly find`, decision ledger (deleted) 2026-07-24 16:28);
   **unknown** name → hard exit-2. A **`Mover`** source is not a world-CSG brush → warn+skip.
 - **Rotated source brushes** — flow through `_build_brush_input`; covered by golden (e).
 - **Large sets** — `actor find --folder castle | brush intersect -` feeds O(n) brushes into incremental CSG;
@@ -339,8 +339,8 @@ The shared-flag design depends on a cross-cutting CLI change to the **generators
 (`brush build` shapes, `actor build`), emitted as the `// uedcli-folder:`/`// uedcli-labels:` carriers;
 **(2)** REMOVE `--folder`/`--label` from `actor add` (it becomes a pure carrier-consumer; post-hoc changes
 use `actor folder set` / `actor label`); **(3)** ditch `--group` from `brush build` (→ `--prop Group=`). This
-REVERSES the "folder/label live on `actor add`, not generators" rule (`direction.md`, decisions 2026-07-18
-actor-folders / 2026-07-22 actor-labels) — reconciled in `direction.md`. `brush intersect/deintersect` inherit
+REVERSES the "folder/label live on `actor add`, not generators" rule (direction tree, decisions 2026-07-18
+actor-folders / 2026-07-22 actor-labels) — reconciled in the direction tree. `brush intersect/deintersect` inherit
 the resulting common set. **Sequencing:** this cleanup lands (with its own review) before or alongside the
 intersect/deintersect build.
 
@@ -357,5 +357,5 @@ The load-bearing choices (the brush-set reframing + internally-synthesized backg
 decoded `builder ∩ world` port filling the `bspcsg.rs:1845` stub — NOT a `bsp_build_fpolys` shortcut; the
 `LOOP-1` flag rule owned by the Rust merge; the T3D-stdin generator interface + dropped wrappers + shared
 `brush build` flags; the generator-flag cleanup; rejected alternatives) are in
-[`dev/docs/decisions.md`](../../../decisions.md) `2026-07-24 16:32 UTC` + the generator-flag entry (corrected/extended
+the decision ledger (deleted; git history) `2026-07-24 16:32 UTC` + the generator-flag entry (corrected/extended
 post-review + post-design-iteration). This spec is ephemeral; the ledger is durable.

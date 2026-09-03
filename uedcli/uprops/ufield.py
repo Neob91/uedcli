@@ -5,7 +5,8 @@ from __future__ import annotations
 
 import struct
 
-from ..upackage import Package, SchemaError, read_compact_index as _read_compact_index
+from ..upackage import (Package, SchemaError, read_compact_index as _read_compact_index,
+                        read_property_tags as _read_property_tags)
 from .base import (CPF_NET, PROPERTY_TYPES, Prop, _KINDS_WITH_TYPE_REF, _last_compact,
                    _safe_name, _schema_guard)
 
@@ -28,7 +29,11 @@ def _decode_property(pkg: Package, export_index1: int, owner_fqcn: str, *, _inne
     if sz <= 0:
         raise SchemaError(f"property {pkg.names[e['nm']]} has empty serial body (ssize={sz})")
     buf = pkg.buf
-    _none, p = _read_compact_index(buf, so)         # UObject empty tagged-prop-list terminator (==0)
+    # The UObject tagged-prop header is usually the bare None terminator, but NOT always: UED22
+    # `Engine.Actor.Touching` (the `var const array<actor,4>` hack) carries a real IntProperty tag
+    # named "0" before its None. Reading one compact as the terminator desyncs every later field
+    # (live finding, 2026-09-02, prop-order derivation).
+    _tags, p = _read_property_tags(pkg, so, so + sz)
     _super, p = _read_compact_index(buf, p)         # UField.SuperField
     _next, p = _read_compact_index(buf, p)          # UField.Next
     array_dim = struct.unpack_from("<I", buf, p)[0] or 1; p += 4
@@ -256,13 +261,13 @@ def _skip_script(pkg: Package, pos: int, script_size: int) -> int:
 
 
 def _field_next(pkg: Package, export_index1: int) -> int:
-    """A UProperty export's `UField.Next` ref (the Children linked-list pointer): the 3rd compact
-    of its body ([None][SuperField][Next]…)."""
+    """A UField export's `UField.Next` ref (the Children linked-list pointer): the compact after
+    the UObject tagged-prop header + SuperField. The header is usually a bare None but can carry a
+    real tag (UED22 `Engine.Actor.Touching`) -- see `_decode_property`."""
     e = pkg.exports[export_index1 - 1]
-    buf, p = pkg.buf, e["soff"]
-    _none, p = _read_compact_index(buf, p)
-    _sup, p = _read_compact_index(buf, p)
-    nxt, _p = _read_compact_index(buf, p)
+    _tags, p = _read_property_tags(pkg, e["soff"], e["soff"] + e["ssize"])
+    _sup, p = _read_compact_index(pkg.buf, p)
+    nxt, _p = _read_compact_index(pkg.buf, p)
     return nxt
 
 

@@ -8,8 +8,8 @@
   (the prerequisite).
 - Part B: [`spec.md`](spec.md)
   (depends on A's shared flags + emit locus).
-- Ground truth: [`dev/docs/spikes/2026-07-15-native-materialize/re-raw-zones/bspbrushcsg-intersect-deintersect-decode.md`](../../../spikes/2026-07-15-native-materialize/re-raw-zones/bspbrushcsg-intersect-deintersect-decode.md).
-- Decisions: `decisions.md` 2026-07-24 16:32 / 17:04 / 17:56 / 18:12 / 18:33.
+- Ground truth: [`dev/docs/spikes/2026-07-15-native-materialize/re-raw-zones/bspbrushcsg-intersect-deintersect-decode.md`](../../../../spikes/2026-07-15-native-materialize/re-raw-zones/bspbrushcsg-intersect-deintersect-decode.md).
+- Decisions: the decision ledger (deleted; git history) 2026-07-24 16:32 / 17:04 / 17:56 / 18:12 / 18:33.
 
 **Why together, A first.** B's verbs share `brush build`'s flag set AND emit their carriers through the same
 `emit_actor_t3d` locus that A builds — so A must land first (or in the same branch, before B's verb code).

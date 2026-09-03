@@ -75,12 +75,13 @@ class ActorSpec:
 
 class _Assembler:
     def __init__(self, version: int, level_name: str, texture_groups: dict | None = None,
-                 class_packages: dict | None = None):
+                 class_packages: dict | None = None, names: NameTable | None = None):
         self.version = version
         self.level_name = level_name
-        self.names = NameTable()
-        # "None" must be name index 0 so the UModel prefix ci(None) is a single byte.
-        assert self.names.index("None") == 0
+        # A pre-seeded table (the parity gate's oracle order) is honored; "None" then need not be
+        # index 0, only single-byte ci (<64) for the UModel/UPolys prefix.
+        self.names = names if names is not None else NameTable()
+        assert self.names.index("None") < 64
         self.resolver = Resolver(self.names, texture_groups=texture_groups,
                                  class_packages=class_packages)
         self.exports: list[ExportRec] = []
@@ -130,8 +131,29 @@ class _Assembler:
 
     def build(self) -> bytes:
         # Body fns run AFTER all exports are reserved, so eref() resolves any forward ref.
+        # While a body builds, `name_index` is wrapped so the names its tags/labels reference
+        # accumulate the export's OWN load-context bits (an edit-only Camera/Brush contributes
+        # LoadForEdit only) -- names minted through the resolver bypass the wrapper and stay
+        # table-context (all three bits), matching the editor's per-name flags.
+        real_index = self.names.index
         for i, fn in enumerate(self._body_fns):
-            self.exports[i].body = fn()
+            bits = self.exports[i].flags & 0x70000
+
+            def tracking(s: str, *, _bits=bits) -> int:
+                idx = real_index(s)
+                self.names.mark(idx, _bits)
+                return idx
+            self.name_index = tracking
+            try:
+                self.exports[i].body = fn()
+            finally:
+                self.name_index = real_index
+        for e in self.exports:                           # table references: full load bits
+            self.names.mark(e.name, 0x70000)
+        for im in self.resolver.imports:
+            for idx in (im.class_package, im.class_name, im.object_name):
+                self.names.mark(idx, 0x70000)
+        self.names.apply_editor_intrinsics()
         return build_package(version=self.version, licensee=0, package_flags=0x00000001,
                              names=self.names, imports=self.resolver.imports,
                              exports=self.exports)

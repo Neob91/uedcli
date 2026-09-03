@@ -1,6 +1,6 @@
 +++
 priority = "p1"
-kind = "bug"
+kind = "debug"
 summary = "docker stats CPUPerc reads ~50-58% for a FULLY IDLE editor container on this box (in-container top shows 0.0% across all processes; observed on the 21h-idle stub too, 2026-09-02). build_ued_golden._wait_idle's <30%-for-8-reads barrier can therefore NEVER fire, so every editor build/golden rebuild times out at 1800s — very likely the real mechanism behind this session's corpus-sweep obj-load TimeoutErrors, previously attributed to concurrency. Workaround exists; _wait_idle itself not fixed."
 +++
 

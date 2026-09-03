@@ -151,6 +151,15 @@ class Model:
     none_index: int = 0                            # name index of "None" (for the prefix)
     bbox_min: tuple = (0.0, 0.0, 0.0)
     bbox_max: tuple = (0.0, 0.0, 0.0)
+    # The prefix FBox IsValid byte + FSphere. The editor serializes IsValid=0 and a zero-radius
+    # centroid sphere for the LEVEL model, but a COMPUTED box+sphere (IsValid=1) for each brush
+    # SHAPE model; `sphere=None` keeps the old derived-center/0-radius behavior.
+    bbox_valid: int = 0
+    sphere: tuple | None = None
+    # The two trailing i32s (RootOutside, Linked): 0/0 on the level model, 1/1 on the editor's
+    # brush shape models (UNATCO import golden, 2026-09-02).
+    root_outside: int = 0
+    linked: int = 0
 
 
 # --- writer (Python oracle) ------------------------------------------------
@@ -234,13 +243,17 @@ def _enc_prefix(m: Model) -> bytes:
     if len(out) != 1:
         raise ValueError("Model 'None' name index must encode to a single byte "
                          f"(index {m.none_index}); keep it < 64")
-    # FBox IsValid: UnrealEd leaves the level UModel's UPrimitive bbox uncomputed at save and
-    # serializes IsValid=0 (verified vs DX/Maps/Test_Castle.dx prefix byte 25 == 0, 2026-07-18).
-    out += enc_f32x3(m.bbox_min) + enc_f32x3(m.bbox_max) + enc_u8(0)   # FBox IsValid
-    cx = (m.bbox_min[0] + m.bbox_max[0]) / 2.0
-    cy = (m.bbox_min[1] + m.bbox_max[1]) / 2.0
-    cz = (m.bbox_min[2] + m.bbox_max[2]) / 2.0
-    out += enc_f32x3((cx, cy, cz)) + enc_f32(0.0)                      # FSphere
+    # FBox IsValid: UnrealEd leaves the LEVEL UModel's UPrimitive bbox uncomputed at save
+    # (IsValid=0, zero-radius centroid sphere; verified vs DX/Maps/Test_Castle.dx prefix byte 25,
+    # 2026-07-18) but writes a computed box+sphere on brush SHAPE models (`bbox_valid`/`sphere`).
+    out += enc_f32x3(m.bbox_min) + enc_f32x3(m.bbox_max) + enc_u8(m.bbox_valid & 0xFF)
+    if m.sphere is not None:
+        out += enc_f32x3(m.sphere[:3]) + enc_f32(m.sphere[3])
+    else:
+        cx = (m.bbox_min[0] + m.bbox_max[0]) / 2.0
+        cy = (m.bbox_min[1] + m.bbox_max[1]) / 2.0
+        cz = (m.bbox_min[2] + m.bbox_max[2]) / 2.0
+        out += enc_f32x3((cx, cy, cz)) + enc_f32(0.0)                  # FSphere
     assert len(out) == _PREFIX, len(out)
     return bytes(out)
 
@@ -275,8 +288,8 @@ def write_model_body(m: Model) -> bytes:
     out += write_ci(len(m.lights))
     for r in m.lights:
         out += write_ci(r)
-    out += enc_i32(0)       # trailing i32
-    out += enc_i32(0)       # trailing i32
+    out += enc_i32(m.root_outside)
+    out += enc_i32(m.linked)
     return bytes(out)
 
 

@@ -320,6 +320,64 @@ fn intersect_brushset(
         .collect())
 }
 
+/// One local-space brush poly for `build_brush_model`, marshalled FLAT (§8.1):
+/// `(verts_flat, base, normal, tex_u, tex_v, poly_flags, texture_ref, pan_u, pan_v)`.
+/// `verts_flat` = the ring as x,y,z triples; `base`/`normal`/`tex_u`/`tex_v` are the poly's
+/// STORED values (T3D `Origin=`/`Normal=`/`TextureU=`/`TextureV=`), passed verbatim — the mover
+/// build never recomputes them.  `texture_ref` is the REAL package object-ref of the poly's
+/// texture (import<0, 0=none); unlike the world-CSG path it lands in the surf unchanged, so no
+/// post-build texture patch is needed.
+type BrushPolyTuple = (
+    Vec<f32>,
+    [f32; 3],
+    [f32; 3],
+    [f32; 3],
+    [f32; 3],
+    u32,
+    i32,
+    i32,
+    i32,
+);
+
+/// `build_brush_model` — the editor's `csgPrepMovingBrush`: build a MOVER's private shape-model
+/// BSP over the brush's OWN local-space polys (no CSG), with render bounds + collision leaf
+/// hulls.  Returns `(Built, links)`: the model handle for `serialize_model`, plus the per-input-
+/// poly `iLink` the editor leaves in the mover's saved `Polys` (assigned surf index for a poly
+/// consumed whole; the `bspValidateBrush` link for a split one).  Errors surface as `BuildError`.
+#[pyfunction]
+fn build_brush_model(py: Python<'_>, polys: Vec<BrushPolyTuple>) -> PyResult<(Built, Vec<i32>)> {
+    let (model, links) = py
+        .allow_threads(|| {
+            let mut fps: Vec<fpoly::FPoly> = Vec::with_capacity(polys.len());
+            for (pi, (verts_flat, base, normal, tex_u, tex_v, pf, tex, pan_u, pan_v)) in
+                polys.iter().enumerate()
+            {
+                if verts_flat.len() % 3 != 0 {
+                    return Err(model::BuildError(format!(
+                        "poly {pi}: verts_flat length {} is not a multiple of 3",
+                        verts_flat.len()
+                    )));
+                }
+                let verts: Vec<model::Vec3> = verts_flat
+                    .chunks_exact(3)
+                    .map(|c| model::Vec3::new(c[0], c[1], c[2]))
+                    .collect();
+                let mut p = fpoly::FPoly::new(verts);
+                p.base = model::Vec3::new(base[0], base[1], base[2]);
+                p.normal = model::Vec3::new(normal[0], normal[1], normal[2]);
+                p.texture_u = model::Vec3::new(tex_u[0], tex_u[1], tex_u[2]);
+                p.texture_v = model::Vec3::new(tex_v[0], tex_v[1], tex_v[2]);
+                p.poly_flags = *pf;
+                p.texture = *tex;
+                p.pan = [*pan_u, *pan_v];
+                fps.push(p);
+            }
+            bspcsg::build_brush_model(&fps)
+        })
+        .map_err(map_err)?;
+    Ok((Built { model }, links))
+}
+
 /// `serialize_model` (§8.1) — the built UModel body as `bytes`.  Pinned byte-identical to
 /// the Python oracle by §6 gate 5.
 #[pyfunction]
@@ -507,6 +565,7 @@ fn uedcli_native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(build_geometry, m)?)?;
     m.add_function(wrap_pyfunction!(build_geometry_bspcsg, m)?)?;
     m.add_function(wrap_pyfunction!(intersect_brushset, m)?)?;
+    m.add_function(wrap_pyfunction!(build_brush_model, m)?)?;
     m.add_function(wrap_pyfunction!(serialize_model, m)?)?;
     m.add_function(wrap_pyfunction!(bake_lighting, m)?)?;
     m.add_function(wrap_pyfunction!(render_frame, m)?)?;

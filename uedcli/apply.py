@@ -110,7 +110,7 @@ def _assembly_level(result: dict[str, str], materialized_order: list[str], pkg_d
 
     Built in materialized (CSG-precedence) order — LevelInfo first, points, then brushes; the brush
     subsequence keeps its order_value order, which is what CSG reads. Movers carry their key-0 base
-    pose in `BasePos`/`BaseRot`: the editor derives those on IMPORT but NOT on `MAP LOAD`, so write
+    pose in `BasePos`/`BaseRot`: the editor derives those at REBUILD but NOT on `MAP LOAD`, so write
     them ourselves or `MAP REBUILD` zeroes the mover's Location."""
     from pathlib import Path as _P
     from .classindex import ClassIndex
@@ -139,7 +139,7 @@ def _materialize(driver, *, result: dict[str, str], materialized_order: list[str
     entirely, and carries every authored value (structs, arrays, movers' keyframes, `PrePivot`) no
     console verb can express. EVERY actor -- movers included -- is written into the package in trunk
     order, so the built `Actors` array is 100% faithful (no `MAP IMPORTADD` append). Movers carry
-    their key-0 base pose in `BasePos`/`BaseRot` (`set_base_pose`), which the editor derives on IMPORT
+    their key-0 base pose in `BasePos`/`BaseRot` (`set_base_pose`), which the editor derives at REBUILD
     but not on `MAP LOAD`; `MAP REBUILD` then builds each mover's private model and the world CSG.
     Records into the caller's `begin_script` EXEC batch; the eager side-effects
     (assembling the `.dx`, writing the /work files, the ini `Paths` edit) run live so the script's
@@ -347,10 +347,6 @@ def _materialize_native(*, result: dict[str, str], materialized_order: list[str]
     pkg_dirs = [str(d) for d in (search_dirs or [])]
     try:
         level, class_index = _assembly_level(result, materialized_order, pkg_dirs)
-        if movers := [n for n in level.order if is_mover(level.actors[n], class_index)]:
-            print(f"warning: native materialize: {len(movers)} mover(s) present, geometry unbuilt "
-                  f"(the native path has no mover-CSG support yet): {', '.join(movers)}",
-                  file=sys.stderr)
         # Reuse the post-verify's resolver when it exists — a `ClassDefaults` is a per-invocation
         # memo over ONE shared package map, and a second one re-loads every package and re-decodes
         # every class. It is `None` only under `--no-verify`, and the map's content must not depend

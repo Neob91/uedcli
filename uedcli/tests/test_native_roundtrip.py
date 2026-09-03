@@ -6,7 +6,7 @@ This is the fast, deterministic guard for WRITER/DECODER fidelity. Shapes exerci
 struct (`MainScale`), static-array struct props (a mover's `KeyPos`/`KeyRot` with `NumKeys`>2), an
 enum byte (`CsgOper`), a `None` object ref (`Skin`), an over-range `FRotator`, a non-zero
 `PrePivot`, grouped (3-part) and 2-part poly textures, and two CSG brushes in a defined order plus
-the writer's own builder brush (dropped by the decode). Editor-side behaviour is out of scope (that
+the editor-session objects the writer synthesizes (viewport cameras, dropped by the decode). Editor-side behaviour is out of scope (that
 needs the live editor container); dynamic-array serialization is covered by
 `test_native_props.test_dynamic_array_is_count_then_elements` (no editable dynamic array exists in
 the committed schema to drive one here).
@@ -120,8 +120,14 @@ def _write_and_decode(level, tmp_path):
 
 
 def test_native_writer_roundtrip_matches_intended(tmp_path):
+    from uedcli.materialize import levelinfo_first_order
     level = _synthesize_level()
     dx, _warns = _write_and_decode(level, tmp_path)
+    # predict the saved Actors array the way production does: import order (LevelInfo, points,
+    # brushes); the synthesized builder brush and cameras are dropped by the decode
+    has_brush = {n: level.actors[n].brush is not None for n in level.order}
+    classes = {n: level.actors[n].cls for n in level.order}
+    level.order = levelinfo_first_order(level.order, classes, has_brush)
     result = verify_dx_matches(dx_path=str(dx), expected=level, defaults=ClassDefaults(_resolver),
                                index=_index(), schema=mapimport.ImportSchema(resolver=_resolver))
     assert result.ok, result.message
@@ -135,7 +141,9 @@ def test_native_writer_roundtrip_preserves_each_shape(tmp_path):
     got = decode_dx_level_offline(str(dx), index=_index(),
                                   schema=mapimport.ImportSchema(resolver=_resolver))
     assert warnings == []
-    assert sorted(got.actors) == ["B_add", "B_sub", "L1", "LevelInfo0", "M1"]
+    # the six editor viewport cameras are level content in a UED22-identical save
+    assert sorted(got.actors) == ["B_add", "B_sub", "Camera10", "Camera11", "Camera6", "Camera7",
+                                  "Camera8", "Camera9", "L1", "LevelInfo0", "M1"]
     # Grouped (3-part) and 2-part poly textures both survive the writer/decoder.
     assert got.actors["B_add"].brush.polys[0].texture == "LUM_CoreTex.Tile.grey_stone_tile"
     assert got.actors["B_sub"].brush.polys[0].texture == "CoreTexMetal.Area51Wall_A"
@@ -365,13 +373,11 @@ def test_assemble_rewrites_the_levels_own_package_refs_to_mylevel(tmp_path):
         "the level's own package leaked into the package tables as an import"
     got = decode_dx_level_offline(str(dx), index=_index(),
                                   schema=mapimport.ImportSchema(resolver=_resolver))
-    # `previousPath` (Engine.NavigationPoint) and `Base` (Engine.Actor) are both NOT `var()`-editable
-    # (checked directly against the real schema: property_flags & CPF_EDIT == 0 for both) and
-    # neither is a special-editor exception, so decode correctly drops them entirely (owner ruling
-    # 2026-09-02) — they never even reach the point where their package qualifier would matter. The
-    # `pkg.imports` check above is what actually pins the assemble-side fix this test is about (the
-    # engine load aborting on a leaked private-object import); this decode-side check only confirms
-    # decode does not resurrect them.
+# `previousPath` is dropped by the WRITER (a nav-runtime field the editor resets on import;
+    # its T3D line above still exercises the NAV_SELF_REF package probe), and the decode
+    # additionally drops `Base` with every non-`var()`-editable prop (CPF_EDIT unset; owner ruling
+    # 2026-09-02). The `pkg.imports` check above is what pins the assemble-side fix this test is
+    # about (the engine load aborting on a leaked private-object import).
     p1 = dict(got.actors["PathNode1"].props)
     assert "previousPath" not in p1 and "Base" not in p1
 
@@ -402,7 +408,8 @@ def test_native_materialize_builds_and_verifies_a_map_with_no_editor(tmp_path, c
     assert built.nodes, "the installed map ships no world BSP"
     assert not list((tmp_path / ".uedcli" / "tmp").glob("*.dx")), "a staging temp was stranded"
     err = capsys.readouterr().err
-    assert "1 mover(s) present, geometry unbuilt" in err and "M1" in err
+    # movers build their private shape models natively now -- no "geometry unbuilt" warning
+    assert "geometry unbuilt" not in err
     assert "NOT verified: the BSP tree" in err
     # The lighting bake ran and its output is INTERNALLY CONSISTENT in the installed map: the level's
     # one `Engine.Light` is gathered, and every lightmappable surf links a record. (This fixture's

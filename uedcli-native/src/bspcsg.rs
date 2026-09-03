@@ -1536,6 +1536,7 @@ fn build_brush_temp_bsp(temp_polys: &[FPoly]) -> Result<Model, BuildError> {
         TEMP_PORTAL_BIAS,
         Opt::Lame,
         &mut 0,
+        None,
     )?;
     for n in tm.nodes.iter_mut() {
         n.node_flags &= !NF_IS_NEW;
@@ -1704,8 +1705,14 @@ fn find_best_split_trace(polys: &[FPoly], balance: i32, portal_bias: i32, opt: O
 }
 
 /// `SplitPolyList` (`0x34530`): make `FindBestSplit`'s plane a node, chain its coplanars, partition
-/// the rest, recurse front/back.  Emits into `model`.  `share_surfs` seeds `iLink=Surfs.Num` on the
-/// splitter (bspBuild's `RebuildSimplePolys` path).
+/// the rest, recurse front/back.  Emits into `model`.  `rsp_links` engages the engine's
+/// `RebuildSimplePolys` mode: seed `iLink=Surfs.Num` on the splitter (a fresh surf per call) and
+/// `Surfs.Num()-1` on its coplanars (share the splitter's surf) — the bspBuild-from-brush-polys
+/// path (`build_brush_model`).  The Vec records each SOURCE poly's assigned link (indexed by
+/// `FPoly::src`), mirroring the editor's in-place `Polys` mutation: a poly consumed WHOLE gets its
+/// saved `iLink` rewritten to the assigned surf; a split poly's entry is never touched (fragments
+/// are copies, `src=-1`).  The repartition/temp-brush callers pass `None` (iLink pre-seeded).
+#[allow(clippy::too_many_arguments)]
 fn split_poly_list(
     model: &mut Model,
     i_parent: i32,
@@ -1716,6 +1723,7 @@ fn split_poly_list(
     portal_bias: i32,
     opt: Opt,
     call_id: &mut usize,
+    mut rsp_links: Option<&mut Vec<i32>>,
 ) -> Result<(), BuildError> {
     if polys.is_empty() {
         return Ok(());
@@ -1738,7 +1746,13 @@ fn split_poly_list(
     } else {
         (find_best_split_exact(&polys, balance, portal_bias, opt), None)
     };
-    let splitter_poly = polys[i_best].clone();
+    let mut splitter_poly = polys[i_best].clone();
+    if let Some(links) = rsp_links.as_deref_mut() {
+        splitter_poly.i_link = model.surfs.len() as i32; // fresh surf for this call's splitter
+        if splitter_poly.src >= 0 {
+            links[splitter_poly.src as usize] = splitter_poly.i_link;
+        }
+    }
     let i_node = bsp_add_node(model, i_parent, place, NF_IS_NEW, &splitter_poly);
     if let Some(rows) = splitter {
         eprintln!(
@@ -1791,6 +1805,13 @@ fn split_poly_list(
             Split::Front => front.push(p),
             Split::Back => back.push(p),
             Split::Coplanar => {
+                let mut p = p;
+                if let Some(links) = rsp_links.as_deref_mut() {
+                    p.i_link = model.surfs.len() as i32 - 1; // share the splitter's fresh surf
+                    if p.src >= 0 {
+                        links[p.src as usize] = p.i_link;
+                    }
+                }
                 bsp_add_node(model, i_node, NODE_PLANE, NF_IS_NEW, &p);
             }
             Split::Split(mut f, mut b) => {
@@ -1835,6 +1856,7 @@ fn split_poly_list(
         portal_bias,
         opt,
         call_id,
+        rsp_links.as_deref_mut(),
     )?;
     split_poly_list(
         model,
@@ -1846,6 +1868,7 @@ fn split_poly_list(
         portal_bias,
         opt,
         call_id,
+        rsp_links,
     )?;
     Ok(())
 }
@@ -2013,7 +2036,7 @@ fn repartition_frontier(model: &mut Model, list_a: &[i32], list_b: &[i32]) -> Re
         let before_points = model.points.len();
 
         let mut scratch = model.clone();
-        split_poly_list(&mut scratch, parent, place, merged, 0, BALANCE, PORTAL_BIAS, Opt::Good, &mut call_id)?;
+        split_poly_list(&mut scratch, parent, place, merged, 0, BALANCE, PORTAL_BIAS, Opt::Good, &mut call_id, None)?;
         // Keep the Verts/Points growth (the real editor's permanent leak); discard everything else
         // in `scratch` — its new node tree and its own copy of the parent's rewritten child pointer
         // never touch `model`.
@@ -2311,7 +2334,7 @@ fn bsp_build(model: &mut Model, polys: Vec<FPoly>) -> Result<(), BuildError> {
         p.i_link = i_surf;
     }
     // Repartition: the byte-verified 12/0/GOOD engine params.
-    split_poly_list(model, -1, NODE_ROOT, ready, 0, BALANCE, PORTAL_BIAS, Opt::Good, &mut 0)
+    split_poly_list(model, -1, NODE_ROOT, ready, 0, BALANCE, PORTAL_BIAS, Opt::Good, &mut 0, None)
 }
 
 // --- driver: bspBrushCSG ---------------------------------------------------------------------
@@ -3382,6 +3405,87 @@ pub fn build_geometry_bspcsg(brushes: &[build::BrushInput]) -> Result<Model, Bui
     Ok(model)
 }
 
+// --- csgPrepMovingBrush: a mover's private shape-model build --------------------------------
+
+// The mover-build `bspBuild` partition params, derived from the 28 built mover models in the
+// UNATCO `MAP IMPORT` golden (2026-09-02): GOOD/15 reproduces every node tree byte-exactly, and
+// both are DISCRIMINATED by the goldens (Balance=50: 10/28 diverge; Opt=LAME: 6/28).  PortalBias
+// is NOT exercised (no mover brush carries a PF_Portal poly, so the discount never fires) — its
+// value is unconfirmed by bytes.
+const MOVER_BALANCE: i32 = 15;
+const MOVER_PORTAL_BIAS: i32 = 70;
+
+/// `csgPrepMovingBrush`: build a MOVER's private shape `UModel` over the brush's OWN local-space
+/// polys — a plain `bspBuild` (no CSG), then bounds.  The editor runs this for every mover at
+/// `MAP IMPORT`/rebuild, so a saved map carries a small BUILT model per mover where
+/// `assemble_unbuilt` used to write an empty one.
+///
+/// Pipeline (golden-derived, all 28 UNATCO mover models byte-identical):
+///   `SplitPolyList` with `RebuildSimplePolys` surf seeding (fresh surf per splitter, coplanars
+///   share it — surfs allocate in NODE-EMIT order), clear `NF_IsNew`, exchange children into the
+///   engine's on-disk convention, then the `FilterBound` bounds/hulls pass.  `RootOutside=true`
+///   (the golden trailer is 1/1; `Linked` is serialized by the Python writer).
+///
+/// The caller passes the polys exactly as stored in the brush's `Polys` (base/normal/axes/pan/
+/// texture ref verbatim); `num_shared_sides` comes out 4 (the engine's fresh-model constant) and
+/// zones/leaves stay empty — no zone pass runs on a brush model.
+///
+/// Also returns the per-SOURCE-poly `iLink` the editor leaves in the mover's saved `Polys`: the
+/// build mutates the brush's own `Polys` elements in place, so a poly consumed WHOLE (splitter or
+/// coplanar) ends with its assigned surf index, while a SPLIT poly keeps its pre-build value —
+/// the `bspValidateBrush` link (group-leader poly index).  Golden-verified over the 28 UNATCO
+/// mover `Polys` bodies (12 of which differ from the plain validate result).
+pub fn build_brush_model(polys: &[FPoly]) -> Result<(Model, Vec<i32>), BuildError> {
+    let mut model = Model::default();
+    model.root_outside = true;
+    model.num_shared_sides = 4;
+    // Pre-build links: what a poly's saved iLink stays at when the build splits it.
+    let mut links = bsp_validate_brush_links(polys);
+    let ready: Vec<FPoly> = polys
+        .iter()
+        .enumerate()
+        .filter(|(_, p)| p.verts.len() >= 3)
+        .map(|(i, p)| {
+            let mut q = p.clone();
+            q.src = i as i32;
+            q
+        })
+        .collect();
+    if ready.is_empty() {
+        return Ok((model, links));
+    }
+    split_poly_list(
+        &mut model,
+        -1,
+        NODE_ROOT,
+        ready,
+        0,
+        MOVER_BALANCE,
+        MOVER_PORTAL_BIAS,
+        Opt::Good,
+        &mut 0,
+        Some(&mut links),
+    )?;
+    for n in model.nodes.iter_mut() {
+        n.node_flags &= !NF_IS_NEW;
+    }
+    swap_node_children(&mut model);
+    passes::bsp_build_bounds(&mut model);
+    // Local-space bbox over the pooled points (the Python shape-model writer recomputes the
+    // serialized prefix bbox/sphere from the brush polys, so this is informational).
+    if !model.points.is_empty() {
+        let mut mn = model.points[0];
+        let mut mx = model.points[0];
+        for p in &model.points {
+            mn = Vec3::new(mn.x.min(p.x), mn.y.min(p.y), mn.z.min(p.z));
+            mx = Vec3::new(mx.x.max(p.x), mx.y.max(p.y), mx.z.max(p.z));
+        }
+        model.bbox_min = mn;
+        model.bbox_max = mx;
+    }
+    Ok((model, links))
+}
+
 /// The `bspBrushCSG` **Intersect/Deintersect tail** (`0x35ab3`) — the whole of the editor's
 /// `BRUSH FROM INTERSECTION` / `BRUSH FROM DEINTERSECTION`, reframed onto a stateless in-tree brush
 /// SET (spec in board item `bspcsg-core-apply-scaled-brushes`; RE
@@ -3833,6 +3937,146 @@ mod unsplit_ring {
 mod tests {
     use super::*;
     use crate::csg::CsgOper;
+
+    /// Decode one mover-build fixture (`dev/docs/spikes/2026-09-02-unbuilt-structure-parity/harness/extract_mover_fixtures.py` format):
+    /// `(none_index, field_0x54, polys, saved_links)` — `saved_links` is the golden `Polys`
+    /// body's per-poly `iLink` after `csgPrepMovingBrush`.
+    pub(super) fn decode_mover_fixture(blob: &[u8]) -> (i32, i32, Vec<FPoly>, Vec<i32>) {
+        let i32_at = |o: usize| i32::from_le_bytes(blob[o..o + 4].try_into().unwrap());
+        let f32_at = |o: usize| f32::from_le_bytes(blob[o..o + 4].try_into().unwrap());
+        let v3_at = |o: usize| Vec3::new(f32_at(o), f32_at(o + 4), f32_at(o + 8));
+        let (none_index, f54, n_polys) = (i32_at(0), i32_at(4), i32_at(8) as usize);
+        let mut off = 12usize;
+        let mut polys = Vec::with_capacity(n_polys);
+        for _ in 0..n_polys {
+            let nv = i32_at(off) as usize;
+            let (base, normal, tu, tv) =
+                (v3_at(off + 4), v3_at(off + 16), v3_at(off + 28), v3_at(off + 40));
+            off += 52;
+            let mut verts = Vec::with_capacity(nv);
+            for _ in 0..nv {
+                verts.push(v3_at(off));
+                off += 12;
+            }
+            let mut p = FPoly::new(verts);
+            p.base = base;
+            p.normal = normal;
+            p.texture_u = tu;
+            p.texture_v = tv;
+            p.poly_flags = i32_at(off) as u32;
+            p.texture = i32_at(off + 4);
+            p.pan = [i32_at(off + 8), i32_at(off + 12)];
+            off += 16;
+            polys.push(p);
+        }
+        let mut saved_links = Vec::with_capacity(n_polys);
+        for _ in 0..n_polys {
+            saved_links.push(i32_at(off));
+            off += 4;
+        }
+        assert_eq!(off, blob.len(), "fixture blob not fully consumed");
+        (none_index, f54, polys, saved_links)
+    }
+
+    /// `build_brush_model` over a fixture's polys, serialized with `field_0x54`/`none_index`
+    /// aligned to the golden's; returns `(body, built_links, saved_links)`.  The 42-byte prefix
+    /// (bbox/sphere — Python-owned) and the 8-byte trailer (`RootOutside`/`Linked` — golden 1/1,
+    /// Rust serializer writes the level's 0/0) are the caller's to exclude.
+    pub(super) fn mover_fixture_body(blob: &[u8]) -> (Vec<u8>, Vec<i32>, Vec<i32>) {
+        let (none_index, f54, polys, saved_links) = decode_mover_fixture(blob);
+        let (mut m, links) = build_brush_model(&polys).unwrap();
+        m.none_index = none_index;
+        m.field_0x54 = f54;
+        (crate::model_write::serialize(&m).unwrap(), links, saved_links)
+    }
+
+    /// Pinned mover fixtures (committed bytes extracted from the UNATCO `MAP IMPORT` golden,
+    /// 2026-09-02): the three smallest shape models (a plain box each) + `Mover0` (coplanar-chain
+    /// surf sharing, 24 polys → 18 surfs).  Byte-exact model body — minus the 42-byte prefix and
+    /// 8-byte trailer, which the Python shape-model writer owns — and the saved `Polys` iLink.
+    #[test]
+    fn mover_model_fixtures_byte_exact() {
+        let cases: [(&str, &[u8], &[u8]); 4] = [
+            (
+                "Model_DeusExMover0",
+                include_bytes!("../fixtures/mover/Model_DeusExMover0.polys"),
+                include_bytes!("../fixtures/mover/Model_DeusExMover0.body"),
+            ),
+            (
+                "Model_DeusExMover5",
+                include_bytes!("../fixtures/mover/Model_DeusExMover5.polys"),
+                include_bytes!("../fixtures/mover/Model_DeusExMover5.body"),
+            ),
+            (
+                "Model_DeusExMover21",
+                include_bytes!("../fixtures/mover/Model_DeusExMover21.polys"),
+                include_bytes!("../fixtures/mover/Model_DeusExMover21.body"),
+            ),
+            (
+                "Model_DeusExMover22",
+                include_bytes!("../fixtures/mover/Model_DeusExMover22.polys"),
+                include_bytes!("../fixtures/mover/Model_DeusExMover22.body"),
+            ),
+        ];
+        for (name, blob, want) in cases {
+            let (got, links, saved_links) = mover_fixture_body(blob);
+            assert_eq!(got.len(), want.len(), "{name}: body length");
+            let cut = got.iter().zip(want.iter()).position(|(a, b)| a != b);
+            assert!(
+                got[42..got.len() - 8] == want[42..want.len() - 8],
+                "{name}: body bytes diverge (first at {cut:?})"
+            );
+            assert_eq!(links, saved_links, "{name}: saved Polys iLink");
+        }
+    }
+
+    /// Corpus sweep vs the extracted UNATCO golden mover fixtures — dev-gated on
+    /// `UEDCLI_MOVER_FIXDIR` (the goldens live in `_scratch`, not the repo); a no-op without it.
+    #[test]
+    fn mover_golden_sweep() {
+        let Ok(dir) = std::env::var("UEDCLI_MOVER_FIXDIR") else {
+            return;
+        };
+        let mut names: Vec<String> = std::fs::read_dir(&dir)
+            .unwrap()
+            .filter_map(|e| {
+                let n = e.unwrap().file_name().into_string().unwrap();
+                n.strip_suffix(".polys").map(str::to_string)
+            })
+            .collect();
+        names.sort();
+        let (mut pass, mut fail) = (0, 0);
+        for name in &names {
+            let blob = std::fs::read(format!("{dir}/{name}.polys")).unwrap();
+            let want = std::fs::read(format!("{dir}/{name}.body")).unwrap();
+            let (got, links, saved_links) = mover_fixture_body(&blob);
+            let body_ok = got.len() == want.len()
+                && got[42..got.len() - 8] == want[42..want.len() - 8];
+            let links_ok = links == saved_links;
+            if body_ok && links_ok {
+                pass += 1;
+            } else {
+                fail += 1;
+                let cut = got
+                    .iter()
+                    .zip(want.iter())
+                    .position(|(a, b)| a != b)
+                    .unwrap_or(got.len().min(want.len()));
+                eprintln!(
+                    "MOVER_DIFF {name}: body {} (got {} bytes want {}, first diff at {cut}); \
+                     links {} (got {:?} want {:?})",
+                    if body_ok { "ok" } else { "DIFF" },
+                    got.len(),
+                    want.len(),
+                    if links_ok { "ok" } else { "DIFF" },
+                    links,
+                    saved_links
+                );
+            }
+        }
+        eprintln!("MOVER_SWEEP pass={pass} fail={fail}");
+        assert_eq!(fail, 0, "{fail} mover models diverge from the golden");
+    }
 
     /// A box brush centred at `loc`, half-extents `(hx,hy,hz)`, OUTWARD normals, CCW from outside.
     fn box_brush(hx: f32, hy: f32, hz: f32, loc: Vec3, oper: CsgOper) -> build::BrushInput {
@@ -4406,6 +4650,7 @@ mod tests {
             PORTAL_BIAS,
             Opt::Good,
             &mut 0,
+            None,
         )
         .unwrap();
 

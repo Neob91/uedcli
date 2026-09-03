@@ -35,6 +35,7 @@ class NameTable:
     def __init__(self) -> None:
         self._names: list[str] = []
         self._idx: dict[str, int] = {}
+        self._flags: dict[int, int] = {}   # index -> accumulated RF_LoadFor* bits (see mark())
 
     def index(self, s: str) -> int:
         i = self._idx.get(s)
@@ -51,18 +52,42 @@ class NameTable:
     def names(self) -> list[str]:
         return list(self._names)
 
-    # Name-table entry flags. Real maps carry RF_LoadForClient|Server|Edit (0x70000)
-    # on names (the dominant DXOnly value is 0x70010); the engine SKIPS loading objects
-    # whose NAME lacks these load bits, so a from-scratch package that leaves them 0
-    # never instantiates its ULevel ("Failed to find object 'Level None.MyLevel'").
-    # 0x70010 is load-safe (all three Load contexts) and matches the common real value.
+    # Name-table entry flags: 0x10 | the union of RF_LoadFor* context bits over every site that
+    # references the name -- a body reference contributes its export's own load bits (an edit-only
+    # Camera/Brush body contributes LoadForEdit only), a table (import/export) reference all three.
+    # The engine SKIPS loading objects whose NAME lacks the load bits, so an unmarked name defaults
+    # to all three. A fixed set of engine-registered names additionally carries intrinsic upper
+    # bits. All measured off the 2026-09-02 UED22 import goldens (constant across levels once the
+    # reference-context union is accounted for).
     NAME_FLAGS = 0x00070010
+    _INTRINSIC = {n.casefold(): 0x04000400 for n in
+                  ("None", "Class", "Package", "Vector", "Rotator", "Outer", "Event")}
+    _INTRINSIC.update({n.casefold(): 0x04000000 for n in
+                       ("Camera", "Core", "Engine", "InitialState", "Message", "Sound", "Tag",
+                        "Texture", "Title", "Trigger",
+                        # native texture classes (Fire.dll/Engine registrations) -- measured off
+                        # the OceanLab golden (WetTexture/FireTexture); siblings included as the
+                        # same registration family
+                        "WetTexture", "WaterTexture", "FireTexture", "IceTexture",
+                        "WavyTexture", "ScriptedTexture", "FractalTexture")})
+
+    def mark(self, index: int, load_bits: int) -> None:
+        """OR `load_bits` (masked to 0x70000) into the name's accumulated load context."""
+        self._flags[index] = self._flags.get(index, 0) | (load_bits & 0x70000)
+
+    def apply_editor_intrinsics(self) -> None:
+        """OR the engine-registered names' intrinsic upper bits into the accumulated flags --
+        called by the LEVEL assembler only (a `.u` stub keeps the flat legacy flags)."""
+        for i, s in enumerate(self._names):
+            extra = self._INTRINSIC.get(s.casefold())
+            if extra:
+                self._flags[i] = self._flags.get(i, 0x70000) | extra
 
     def encode(self) -> bytes:
         out = bytearray()
-        for s in self._names:
+        for i, s in enumerate(self._names):
             b = s.encode("latin-1") + b"\x00"
-            out += write_ci(len(b)) + b + struct.pack("<I", self.NAME_FLAGS)
+            out += write_ci(len(b)) + b + struct.pack("<I", 0x10 | self._flags.get(i, 0x70000))
         return bytes(out)
 
 
