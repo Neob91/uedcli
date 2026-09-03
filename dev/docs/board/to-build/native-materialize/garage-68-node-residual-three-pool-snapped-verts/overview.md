@@ -46,3 +46,33 @@ and FBS stages are faithful given equal inputs.
 
 Evidence: spike `2026-09-03-built-parity-worst-tier` §6, its `logs/wg-n40-premerge-native.log` +
 `logs/fpolys-stage-order-wg-n40-verts.log`, `wg-prefix-search.log`.
+
+## Fix-round progress (2026-09-03, branch `garage-pool-snap` @ `5215cf2` — investigation only, no code change yet)
+
+Native predicate today: `bspcsg.rs::bsp_add_point_tol` = FIRST-within linear scan over the WHOLE
+`model.points` pool (0.015 ring / 0.002 pBase); `zones.rs::fill_ring_verts` same shape at
+`RING_POINT_TOL`. Editor predicate per the committed decodes (`fp-classification-sites.md` §7,
+findings ledger "THE ONE REAL DIVERGENCE"): `bspAddPoint` (Editor `0x35430`) calls
+`UModel::FindNearestVertex` (Engine `0x1adeb0`, recursive body `0x1adb60`), accepts if the real
+(f64-sqrt) distance ≤ thresh, NEAREST not first — and the recursive body is a BSP-TREE walk
+(descends by `PlaneDot` sign), i.e. it can only see verts REFERENCED BY NODE RINGS reachable from
+the walk in the tree as built at that moment — never the whole Points pool. That tree restriction
+is the missing piece that fits every measurement: Brush20's 0.0006-away pool point exists but the
+tree walk at n=40 need not reach a ring referencing it (editor keeps Brush21's 3 seam verts
+distinct; native's whole-pool scan welds), and the 2-brush case is EXACT because the walk context
+differs — the snap needs the n≈39 tree.
+
+Still UNDECODED (blocks the port; next session starts here):
+
+1. Engine `0x1adb60` recursive body: the pruning band (`±MinRadius`), whether the on-plane case
+   recurses front then checks only that node's `iPlane` chain and RETURNS (back subtree invisible),
+   whether `Surf.pBase` is a candidate, and the radius-shrink order.
+2. Editor `0x35430` MISS tail (after the `comiss` pair at `0x100354b4`): whether add-new
+   linear-scans the pool (AddThing-style, and any `GFastRebuild` gating) or plain-appends.
+
+Disassemble per `dev/docs/unrealed/extracting-from-dll.md` (`pefile`+`capstone`, harness
+`_scratch/bspspike/`; DLLs under `Tools/uedcli/uned/UED22/` — do not `find /`, it hangs). Then:
+one shared tree-walk `find_nearest_vertex` for every `bspAddPoint` site (`bspcsg.rs` ring+pBase,
+`build.rs`, `zones.rs::fill_ring_verts`), exact miss fallback; regression test pinning the 3
+Brush21 verts from the committed logs; guard FreeClinic points + Club/Chateau/NYC-Underground
+nodes; then the corpus A/B gates from the task.
