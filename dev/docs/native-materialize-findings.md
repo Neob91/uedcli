@@ -6502,3 +6502,43 @@ unpushed. Next step: root-cause why `find_nearest_vertex`'s tree-restricted sear
 the whole-pool scan on DX/Bar/ShipFan/FreeClinic specifically — likely the radius-shrink-as-you-
 descend or on-plane early-return band (both flagged as unconfirmed specifics in the `c442e4b`
 commit message) is too aggressive/wrong outside Garage's specific case.
+
+## Round 3 (`1916dc0`, worktree `agent-ad8c36bc0dc8e72a8`, branch `garage-pool-snap-fix-round2-cont`): pBase+chain fix is real but does NOT close DX/Bar — different bug, now precisely localized (2026-09-03)
+
+Coordinator took over after a second agent stall (see board item). The agent's uncommitted work
+was real, disasm-cited, and correctly diagnosed a genuine gap: round 2's `find_nearest_vertex`
+port only scanned a node's own vertex ring, missing the surf `pBase` candidate (`+0x8`) and the
+`i_plane` coplanar-sibling chain (`+0x28`) that `Engine.dll 0x1adb60` also checks; also fixed a
+radius-precision bug (propagating a child's exact `dist_sq` instead of resquaring the returned,
+already-sqrt'd distance). Two new unit tests pin both mechanisms directly. Coordinator committed
+this after verifying: cargo 115/115, full pytest 13205 passed (only the one pre-existing
+`test_doc_links` failure — plus a board-slug collision the coordinator introduced in an earlier
+merge, now fixed separately), board test 5197/5197.
+
+**Corpus A/B with the fix applied (flag on) vs. the ORIGINAL flag-off baseline — real additional
+wins beyond round 2's**: `06_HongKong_Helibase.dx` and `00_TrainingFinal.dx` both gain
+`nodes_match` (new, not present under round 2's code) on top of round 2's existing Garage/NSFHQ/
+Area51/Underground wins.
+
+**But DX.dx and 02_NYC_Bar.dx's `points_match` regression is UNCHANGED — identical before and
+after this fix** (`points_match: False`, identical `notes` string on both). The pBase/chain fix is
+real but is not the DX/Bar mechanism; it's a separate, third bug.
+
+**Precisely localized this round**: `parity_report.py` on DX.dx (flag on) shows
+`points native=39 golden=32 d=+7` — the OPPOSITE direction from Garage's problem. Garage's bug was
+UNDER-pooling avoided (good) via the tree walk correctly keeping distinct points the old whole-pool
+scan wrongly welded. DX's bug is OVER-creation: native's tree-restricted search is failing to find
+an existing near-duplicate point that the old whole-pool scan (correctly, apparently) always found
+regardless of tree state — i.e. `find_nearest_vertex` MISSES a match the real
+`Engine.dll UModel::FindNearestVertex` presumably also finds via some path not yet ported (a third
+gap, distinct from pBase/chain), or DX's specific insertion order reaches a tree state where the
+existing point genuinely isn't reachable yet — meaning either the port is still incomplete, or the
+call SITE (which node/radius it starts the search from, or which call in `bsp_add_point_tol`
+invokes it) is wrong for this case. Not yet disassembled further this round.
+
+**NOT merged** — branch `garage-pool-snap-fix-round2-cont` stays in worktree
+`agent-ad8c36bc0dc8e72a8`, unpushed (commit `1916dc0` on top of `70bf271`). Still gated behind
+`UEDCLI_BSPCSG_POINT_NEAREST` (default off, so this WIP has zero effect on default behavior either
+way). Next step: get the exact 7 extra points' coordinates and their would-be nearest neighbor in
+the golden's 32-point set (small level, tractable), then trace which specific `bspAddPoint` call
+site and tree state produces the miss.
