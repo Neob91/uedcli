@@ -365,14 +365,13 @@ pub fn bake(model: &mut Model, lights: &[LightInput]) -> Result<(), BuildError> 
     validate_indices(model)?;
     validate_finite(model)?;
 
-    // `Model.Lights` region 1 (per-leaf permeating light lists) is NOT wired in here yet:
-    // `permeating_lights::write_permeating_region` exists and is unit-tested, but on UNATCO its
-    // leaf-reachability SET matches the editor exactly (748/762) while the per-leaf light CONTENT
-    // does not (4/762 exact) -- see `port-the-per-leaf-permeating-light-lists-model`. Shipping
-    // wrong-but-plausible light lists is worse than the current honest `iPermeating = -1` gap.
-    // 2026-08-31: `split_with_plane_fast` closed most of the gap (727/762, 95.4%) but not all of
-    // it -- still wrong-but-plausible, not wrong-but-absent. Owner's original call (commit
-    // 8d7fe30) stands unless/until they say otherwise; do not flip this without an explicit yes.
+    // `Model.Lights` region 1 (per-leaf permeating light lists), disassembly-confirmed and
+    // reproduced 95.4% leaf-exact on UNATCO (`port-the-per-leaf-permeating-light-lists-model`;
+    // the remaining ~4.6% are extra, never missing, lights -- an over-inclusion, not a corrupt
+    // read). Owner's original hold (commit `8d7fe30`, "wrong-but-plausible is worse than the
+    // honest -1 gap") reversed 2026-09-03: the mechanism is fully known and reproduced, so wire
+    // it in rather than leave every leaf's real data absent.
+    crate::permeating_lights::write_permeating_region(model, lights);
 
     if std::env::var("UEDCLI_VISGATE_DUMP").is_ok() {
         let mut surfaced = 0usize;
