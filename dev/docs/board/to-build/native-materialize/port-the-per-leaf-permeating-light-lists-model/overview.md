@@ -5,6 +5,19 @@ summary = "`Model.Lights` has two regions: the per-LEAF permeating light lists (
 spikes = ["dev/docs/spikes/2026-08-29-permeating-lights/"]
 +++
 
+## Status 2026-09-03: WIRED IN (`8bdb078`) — owner ruling reverses `8d7fe30`
+
+Owner explicitly reversed the 2026-08-31 hold: the mechanism is fully disasm-confirmed and
+reproduced, so `write_permeating_region` is now called from `light::bake`. Verified on an
+isolated cube-subtract + one-light case (structurally exact, unlike UNATCO, so it isolates this
+fix cleanly): the previously-divergent leaf record now matches the editor exactly, closing that
+case to full byte parity (geometry 6/6, content byte-identical, lighting 100%). UNATCO's own
+95.4%/4.6% split (below) is unchanged by this wiring — it only decides whether to SHIP that known
+accuracy, not whether it's more accurate. cargo 112/112 (scoped run, not full pytest per standing
+instruction). The remaining ~4.6%-mismatch leaves (over-inclusion, never missing lights) are still
+open — not this item's remaining scope, see "Two things to verify" below for the one still-open
+sub-mechanism (`SP_Coplanar` branch behavior).
+
 ## Status 2026-08-31: `SplitWithPlaneFast` decoded, content mostly fixed — still NOT wired into `light::bake`
 
 Both "verify before porting" items below addressed — see updated bullets. `clip_beam`'s naive
