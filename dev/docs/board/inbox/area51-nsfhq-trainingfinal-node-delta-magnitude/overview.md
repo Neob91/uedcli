@@ -26,3 +26,13 @@ goes vectors 0→+1 with no offsetting gain — overall geometry score regresses
 small parity regression from this round that the "no exact level loses exactness" framing didn't
 cover (it only tracks node/surf/leaf). Needs its own look: which vector(s) on which brush/poly, and
 whether it's the same CalcNormal rule or a downstream consumer of it.
+
+## Verified 2026-09-03: TrainingFinal's `+158/+0/-17` still holds at current master (`321f5dd`)
+
+Rechecked with `tf_prefix_search.py baseline` (native vs the cached lit golden, current native
+code at `cf91f81`/`321f5dd`): `d_nodes=+158 d_surfs=+0 d_leaves=-17`, exactly matching this item's
+recorded post-fix number — nothing changed for TrainingFinal between `a7be107` and the `321f5dd`
+merge. Separately, the localized mechanism from `trainingfinal-59-node-residual-brush162-recomputed-normal`
+(Brush162's sloped-surf normal) is now confirmed bit-exact in its minimal 3-brush oracle — but that
+does not move this level's aggregate, consistent with the spike's "smeared over ~150 brushes"
+finding. TrainingFinal's own localization (this item's scope) is still open.

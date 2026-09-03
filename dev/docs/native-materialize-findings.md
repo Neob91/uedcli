@@ -6440,3 +6440,31 @@ already-structure-wrong levels (NSFHQ −1714→−1741, Garage −1222→−125
 Remaining, filed: `verts-residual-on-structure-exact-levels` (orphan-slot gaps, needs live
 per-emission capture — golden orphan `iVertex` are stale, offline content diffing is meaningless)
 and `points-residual-live-ring-near-threshold-drift` (+6/+3/+1 live-ring drift extras).
+
+## TrainingFinal Brush162: the normal fix closes the oracle, not the level (2026-09-03 verification)
+
+Question: does `321f5dd` (merged Vandenberg fix — float32-π sine table + uniform
+`SNS(X·CalcNormal(local))` normal rule) close TrainingFinal's Brush162 divergence
+(`trainingfinal-59-node-residual-brush162-recomputed-normal`)? Offline, current native at `cf91f81`
+(includes `321f5dd`), against the cached lit golden — no live editor rebuild (no `uned` container
+available in this environment; the editor-side bits used below were already live-captured and
+pinned by the prior spike, and editor behavior does not change).
+
+- **Oracle CLOSED**: rerunning the minimal `[Brush663, Brush1, Brush162]` case
+  (`tf_brush162_normal_probe.py`, new), the sloped surf's normal is now bit-identical to the pinned
+  editor value on all three f32 words (`0xb3797439/0x3f2a13c0/0x3f3f5638`) — was 2-6 ULPs off
+  per component pre-fix. Counts stay EXACT (50/29/25), as before.
+- **Level UNCHANGED**: `tf_prefix_search.py baseline` gives `d_nodes=+158 d_surfs=+0 d_leaves=-17`
+  — identical to the number already recorded in `area51-nsfhq-trainingfinal-node-delta-magnitude`
+  as the post-fix state, not this item's own pre-fix `-59/+0/-11`. `321f5dd` changed nothing for
+  TrainingFinal beyond what `a7be107` already did.
+- Per the spike's own attribution, Brush162 was one of "~150 brushes" carrying the same
+  recompute-ULP family smeared across the level; closing one brush's bits does not move a diffuse
+  many-brush aggregate. Whether Brush162 is still the first divergent brush in the FULL-LEVEL
+  order (vs. the isolated oracle) is unverified — needs a live rebuild of the n=687 prefix, blocked
+  on editor-container availability here.
+
+Verdict: **partial** — mechanism confirmed and fixed at the oracle, level residual not moved.
+TrainingFinal needs its own fresh localization pass (tracked in
+`area51-nsfhq-trainingfinal-node-delta-magnitude`); the Brush162 item's remaining scope is narrower
+than its title now suggests.

@@ -48,3 +48,23 @@ brushes, and match it bit-for-bit; the 3-brush case above is the cheap live orac
 fixes (surf-normal bits, no tree needed).
 
 Evidence: spike `2026-09-03-built-parity-worst-tier` §7, `tf-prefix-search.log`.
+
+## Verified 2026-09-03: the [`Brush663`, `Brush1`, `Brush162`] oracle is now bit-exact, the level is not
+
+`321f5dd` (the merged Vandenberg fix: float32-π sine table + uniform `SNS(X·CalcNormal(local))`
+face-normal rule) closes the mechanism this item names, at the oracle: rerunning the minimal
+3-brush case against current native, the sloped surf's normal is now bit-identical to the pinned
+editor value on all three words (`0xb3797439/0x3f2a13c0/0x3f3f5638`), where before it differed by
+2-6 ULPs per component. Probe: `tf_brush162_normal_probe.py` (added alongside this note).
+
+That does NOT close TrainingFinal. Offline native-vs-cached-golden baseline (`tf_prefix_search.py
+baseline`, current native): `d_nodes=+158 d_surfs=+0 d_leaves=-17` — unchanged from the number
+already recorded post-fix in `area51-nsfhq-trainingfinal-node-delta-magnitude`, not this item's own
+`-59/+0/-11` (that number is now stale/pre-fix). Per the spike's own finding, this brush's normal
+was one of "~150 brushes" carrying the same recompute-ULP family smeared across the level — fixing
+one brush's bits does not move a diffuse many-brush aggregate. Whether `Brush162` is still the
+first divergent brush in the full-level order (as opposed to the isolated oracle) is unverified:
+that needs a live editor rebuild of the n=687 prefix, and no `uned` editor container is available
+in this environment. Tracking the level number moved to `area51-nsfhq-trainingfinal-node-delta-magnitude`;
+this item's remaining scope is narrower than its title now suggests — the recompute-site mechanism
+is confirmed and fixed, TrainingFinal's residual needs its own fresh localization pass.
