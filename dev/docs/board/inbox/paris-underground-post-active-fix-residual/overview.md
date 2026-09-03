@@ -13,3 +13,6 @@ Post-fix offline measure (native `build_geometry_bspcsg` vs cached golden): nati
 where it moved to is unmeasured — the spike's prefix goldens (`_scratch/pu-prefix/`) are gone, so a
 new prefix search (`dev/docs/spikes/2026-09-03-built-parity-worst-tier/harness/pu_prefix_search.py`)
 is needed to localize.
+
+Update: with the Pass-D kill/retarget (done item `pass-d-zone-split-emits-degenerate-zero-area`),
+nodes d = **+1** (surfs/leaves exact) — 4 of the +5 were killable ringless fragments.

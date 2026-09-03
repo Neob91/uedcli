@@ -792,6 +792,159 @@ fn collect_zone_barriers(model: &Model) -> HashSet<(i32, i32)> {
     barriers
 }
 
+/// Consume the ordered Pass-D emissions (walk+landing order, the editor's per-landing `bspAddNode`
+/// order).  Every landing appends its ring verts to the pool (`fill_ring_verts`, the real
+/// `bspAddNode` fill); an `Orphan` adds only verts (no node — the editor's killed fragments, whose
+/// verts stay uncompacted → the +6113-vert re-emit that takes the pool 4405→10518, §82 §10.16), a
+/// `Frag` additionally creates a real coplanar node spliced onto the owner's `i_plane` chain.
+///
+/// The returned `tail_order` records the editor's NODE-ARRAY EMISSION ORDER for the split groups so
+/// the caller (`bspcsg::finalize`) can relabel the node array to match `Test_Castle.dx`
+/// byte-for-byte (node planes positional, not just multiset).  UnrealEd's `AssignAllZones` KILLS
+/// each split original and appends ALL its zone fragments at the TAIL of `Model->Nodes` (then
+/// `bspCleanup` removes the dead original) — so every split node, original included, lands in the
+/// tail cluster in walk order.  Native instead KEEPS the original in place (early index) and
+/// appends only the extra fragments, which scatters the group and makes the on-disk node ORDER
+/// diverge from the editor even though the TREE is node-for-node isomorphic (§82 §10.17).  We
+/// therefore emit, per split (in walk order — the editor's order), `[original, frag1, frag2, …]`;
+/// the caller moves exactly these nodes to the array tail in this order (a pure, tree-preserving
+/// relabel).  A node's `Frag` emissions are contiguous (each node is Pass-D'd once), so tracking
+/// the last frag owner delimits one split group even with interleaved orphans.
+fn consume_passd_emissions(model: &mut Model, emissions: Vec<Emit>) -> Vec<usize> {
+    let mut tail_order: Vec<usize> = Vec::new();
+    let mut last_frag_owner: i32 = -1;
+    // Owner whose `OriginalRing` landing was KILLED (`fix_ring` collapse, or `fill_ring_verts`
+    // reporting 0 — "Infinitesimal polygon"): in the editor the split branch has already killed the
+    // ORIGINAL node, this first fragment dies ringless inside `bspAddNode`, and the post-Pass-D
+    // `bspCleanup` (§70 §1 pass table) culls both — the face's node is the NEXT surviving fragment.
+    // Native keeps the original in place of surviving[0], so the first fragment that survives the
+    // fill retargets the original (ring + zone pair) instead of creating a new node.  Without this,
+    // the original ships its FULL BASE ring PLUS a separate fragment node — `10_Paris_Club` surf 89
+    // shipped two identical quad nodes where the golden has one (board:
+    // `pass-d-zone-split-emits-degenerate-zero-area`).  If no fragment survives, the original keeps
+    // its base ring (the editor would cull the node entirely; not representable without a node
+    // delete, and not observed on the corpus).
+    let mut pending_retarget: i32 = -1;
+    let dump_emit = std::env::var("UEDCLI_PASSD_DUMP").is_ok();
+    for e in emissions {
+        match e {
+            Emit::Orphan(owner, verts) => {
+                // `FPoly::Fix`-style coordinate collapse first (`fix_ring`, 0.002): a fragment
+                // that falls under 3 verts here never reaches `bspAddNode` in the editor — 0 pool
+                // slots (the castle +9 orphan overshoot, §70 §12). Survivors go through the real
+                // `bspAddNode` fill (`fill_ring_verts`): NEAR pooling into the live pool,
+                // consecutive-index collapse, slots for what the editor would allocate.
+                let verts = fix_ring(&verts);
+                if verts.len() < 3 {
+                    continue; // degenerate landing — editor's NumVertices<3 fragment (still no node)
+                }
+                let vp = model.verts.len();
+                if dump_emit {
+                    eprintln!("EMIT type=Orphan owner={} isurf={} vp={} len={}", owner, model.nodes[owner].i_surf, vp, verts.len());
+                }
+                fill_ring_verts(model, &verts); // reported count unused — no node reads it
+            }
+            Emit::OriginalRing { owner, verts } => {
+                let verts = fix_ring(&verts);
+                if verts.len() < 3 {
+                    pending_retarget = owner as i32; // killed pre-fill (no slots) — see above
+                    continue;
+                }
+                // The editor's surviving zone fragments are live rings filled by `bspAddPoint`,
+                // which appends a genuinely-new corner when none is near (the editor's own Pass D
+                // adds ~+3 such points); castle-calibrated ZERO-delta (§70 §11).
+                let (vp, nv) = fill_ring_verts(model, &verts);
+                if nv == 0 {
+                    pending_retarget = owner as i32; // ringless fill (slots stay) — see above
+                    continue;
+                }
+                if dump_emit {
+                    eprintln!("EMIT type=OrigRing owner={} isurf={} vp={} len={}", owner, model.nodes[owner].i_surf, vp, nv);
+                }
+                let n = &mut model.nodes[owner];
+                n.i_vert_pool = vp;
+                n.num_vertices = nv;
+                // The editor killed the original and appended this — its first surviving fragment —
+                // at the node-array tail with the rest of the split group, so the owner joins the
+                // tail cluster even if every later fragment of the group dies in the fill.
+                tail_order.push(owner);
+                last_frag_owner = owner as i32;
+            }
+            Emit::Frag {
+                owner,
+                i_zone,
+                verts,
+            } => {
+                let verts = fix_ring(&verts);
+                if verts.len() < 3 {
+                    continue;
+                }
+                let (vp, nv) = fill_ring_verts(model, &verts);
+                if nv == 0 {
+                    // Ringless fill — the editor's fragment node is created with NumVertices=0 and
+                    // the post-Pass-D `bspCleanup` culls it: net, NO node (slots stay).
+                    continue;
+                }
+                if pending_retarget == owner as i32 {
+                    // This owner's first fragment was killed; this one becomes the ring (and zone
+                    // pair) the retained original carries instead of a new node.
+                    pending_retarget = -1;
+                    if dump_emit {
+                        eprintln!("EMIT type=FragRetarget owner={} isurf={} vp={} len={}", owner, model.nodes[owner].i_surf, vp, nv);
+                    }
+                    let n = &mut model.nodes[owner];
+                    n.i_vert_pool = vp;
+                    n.num_vertices = nv;
+                    n.i_zone = i_zone;
+                    // The editor appends every split fragment at the node-array tail; the original
+                    // now stands for one, so it joins the tail cluster.
+                    if last_frag_owner != owner as i32 {
+                        tail_order.push(owner);
+                        last_frag_owner = owner as i32;
+                    }
+                    continue;
+                }
+                if dump_emit {
+                    eprintln!("EMIT type=Frag owner={} isurf={} vp={} len={}", owner, model.nodes[owner].i_surf, vp, nv);
+                }
+                let (plane, i_surf, node_flags) = {
+                    let n = &model.nodes[owner];
+                    (n.plane, n.i_surf, n.node_flags) // owner flags NF_IsNew-cleared by the caller
+                };
+                let new_idx = model.nodes.len() as i32;
+                model.nodes.push(crate::model::BspNode {
+                    plane,
+                    zone_mask: 0,
+                    node_flags,
+                    i_vert_pool: vp,
+                    i_surf,
+                    i_front: -1,
+                    i_back: -1,
+                    i_plane: -1,
+                    i_collision_bound: -1,
+                    i_render_bound: -1,
+                    i_zone,
+                    num_vertices: nv,
+                    i_leaf: [-1, -1],
+                });
+                // Splice onto the tail of the owner's coplanar (i_plane) chain.
+                let mut t = owner as i32;
+                while model.nodes[t as usize].i_plane >= 0 {
+                    t = model.nodes[t as usize].i_plane;
+                }
+                model.nodes[t as usize].i_plane = new_idx;
+                // tail_order: push the owner once per split group (first frag seen), then this frag.
+                if last_frag_owner != owner as i32 {
+                    tail_order.push(owner);
+                    last_frag_owner = owner as i32;
+                }
+                tail_order.push(new_idx as usize);
+            }
+        }
+    }
+    tail_order
+}
+
 // --- top-level -------------------------------------------------------------
 
 /// Full leaf + zone assignment (replaces the single-zone stub).  Call ONCE per build: the reset
@@ -900,109 +1053,7 @@ pub fn assign_leaves_and_zones(model: &mut Model) -> Vec<usize> {
     for (idx, iz) in assigns {
         model.nodes[idx].i_zone = iz;
     }
-    // Consume the ordered emissions (walk+landing order, the editor's per-landing `bspAddNode`
-    // order).  Every landing appends its ring verts to the pool (`append_ring_verts`, bspAddPoint
-    // dedup); an `Orphan` adds only verts (no node — the editor's killed fragments, whose verts stay
-    // uncompacted → the +6113-vert re-emit that takes the pool 4405→10518, §82 §10.16), a `Frag`
-    // additionally creates a real coplanar node spliced onto the owner's `i_plane` chain.
-    //
-    // `tail_order` records the editor's NODE-ARRAY EMISSION ORDER for the split groups so the caller
-    // (`bspcsg::finalize`) can relabel the node array to match `Test_Castle.dx` byte-for-byte (node
-    // planes positional, not just multiset).  UnrealEd's `AssignAllZones` KILLS each split original
-    // and appends ALL its zone fragments at the TAIL of `Model->Nodes` (then `bspCleanup` removes the
-    // dead original) — so every split node, original included, lands in the tail cluster in walk
-    // order.  Native instead KEEPS the original in place (early index) and appends only the extra
-    // fragments, which scatters the group and makes the on-disk node ORDER diverge from the editor
-    // even though the TREE is node-for-node isomorphic (§82 §10.17).  We therefore emit, per split
-    // (in walk order — the editor's order), `[original, frag1, frag2, …]`; the caller moves exactly
-    // these nodes to the array tail in this order (a pure, tree-preserving relabel).  A node's `Frag`
-    // emissions are contiguous (each node is Pass-D'd once), so tracking the last frag owner delimits
-    // one split group even with interleaved orphans.
-    let mut tail_order: Vec<usize> = Vec::new();
-    let mut last_frag_owner: i32 = -1;
-    let dump_emit = std::env::var("UEDCLI_PASSD_DUMP").is_ok();
-    for e in emissions {
-        match e {
-            Emit::Orphan(owner, verts) => {
-                // `FPoly::Fix`-style coordinate collapse first (`fix_ring`, 0.002): a fragment
-                // that falls under 3 verts here never reaches `bspAddNode` in the editor — 0 pool
-                // slots (the castle +9 orphan overshoot, §70 §12). Survivors go through the real
-                // `bspAddNode` fill (`fill_ring_verts`): NEAR pooling into the live pool,
-                // consecutive-index collapse, slots for what the editor would allocate.
-                let verts = fix_ring(&verts);
-                if verts.len() < 3 {
-                    continue; // degenerate landing — editor's NumVertices<3 fragment (still no node)
-                }
-                let vp = model.verts.len();
-                if dump_emit {
-                    eprintln!("EMIT type=Orphan owner={} isurf={} vp={} len={}", owner, model.nodes[owner].i_surf, vp, verts.len());
-                }
-                fill_ring_verts(model, &verts); // reported count unused — no node reads it
-            }
-            Emit::OriginalRing { owner, verts } => {
-                let verts = fix_ring(&verts);
-                if verts.len() < 3 {
-                    continue; // degenerate first fragment — leave the original's base ring in place
-                }
-                // The editor's surviving zone fragments are live rings filled by `bspAddPoint`,
-                // which appends a genuinely-new corner when none is near (the editor's own Pass D
-                // adds ~+3 such points); castle-calibrated ZERO-delta (§70 §11).
-                let (vp, nv) = fill_ring_verts(model, &verts);
-                if dump_emit {
-                    eprintln!("EMIT type=OrigRing owner={} isurf={} vp={} len={}", owner, model.nodes[owner].i_surf, vp, nv);
-                }
-                let n = &mut model.nodes[owner];
-                n.i_vert_pool = vp;
-                n.num_vertices = nv;
-            }
-            Emit::Frag {
-                owner,
-                i_zone,
-                verts,
-            } => {
-                let verts = fix_ring(&verts);
-                if verts.len() < 3 {
-                    continue;
-                }
-                let (vp, nv) = fill_ring_verts(model, &verts);
-                if dump_emit {
-                    eprintln!("EMIT type=Frag owner={} isurf={} vp={} len={}", owner, model.nodes[owner].i_surf, vp, nv);
-                }
-                let (plane, i_surf, node_flags) = {
-                    let n = &model.nodes[owner];
-                    (n.plane, n.i_surf, n.node_flags) // owner flags NF_IsNew-cleared by the caller
-                };
-                let new_idx = model.nodes.len() as i32;
-                model.nodes.push(crate::model::BspNode {
-                    plane,
-                    zone_mask: 0,
-                    node_flags,
-                    i_vert_pool: vp,
-                    i_surf,
-                    i_front: -1,
-                    i_back: -1,
-                    i_plane: -1,
-                    i_collision_bound: -1,
-                    i_render_bound: -1,
-                    i_zone,
-                    num_vertices: nv,
-                    i_leaf: [-1, -1],
-                });
-                // Splice onto the tail of the owner's coplanar (i_plane) chain.
-                let mut t = owner as i32;
-                while model.nodes[t as usize].i_plane >= 0 {
-                    t = model.nodes[t as usize].i_plane;
-                }
-                model.nodes[t as usize].i_plane = new_idx;
-                // tail_order: push the owner once per split group (first frag seen), then this frag.
-                if last_frag_owner != owner as i32 {
-                    tail_order.push(owner);
-                    last_frag_owner = owner as i32;
-                }
-                tail_order.push(new_idx as usize);
-            }
-        }
-    }
+    let tail_order = consume_passd_emissions(model, emissions);
 
     // TEMP diagnostic (UEDCLI_PASSD_DUMP): full vert-pool layout right after Pass-D re-emit —
     // per-node iVertPool/NumVertices + total verts — so the orphan-run structure can be diffed vs
@@ -1217,5 +1268,107 @@ mod tests {
         let (_, nv2) = fill_ring_verts(&mut m2, &wrap);
         assert_eq!(nv2, 0, "wrap-closing dup undercounts to 2 -> infinitesimal -> 0");
         assert_eq!(m2.verts.len(), 3, "the wrap slot itself is kept");
+    }
+
+    /// Regression for `pass-d-zone-split-emits-degenerate-zero-area`: the exact `10_Paris_Club`
+    /// `Brush20` Pass-D landing set (spike `2026-09-03-built-parity-worst-tier`, `club_precise.py`
+    /// full-precision dump).  `Brush30`'s portal plane at `W=-1328.0001220703125` grazes the face's
+    /// `x=1328` edge, so two of the split's landings are zero-area edge strips with exact-duplicate
+    /// corners.  Both must be KILLED before a node ships (they were native's whole `+2` node
+    /// residual; no editor golden corpus-wide stores a <3-distinct-point ring), and — because the
+    /// first surviving landing of this split IS one of the strips — the consume loop must retarget
+    /// the retained original onto the real quad landing rather than keep its base ring AND create a
+    /// fragment node (that shipped two identical quad nodes on surf 89 where the golden has one).
+    /// The retarget itself is corpus-verified (club `+1 -> +0`); here the kill half is pinned.
+    #[test]
+    fn club_brush20_strip_landings_are_killed() {
+        // Strip [A, P1, P1, A] (native pre-fix node 2083) — exact dup corners: dies in `fix_ring`
+        // (never reaches the fill; no slots).
+        let strip_a = [
+            [1328.0001220703125, -169.01390075683594, 96.0],
+            [1328.0, 63.999969482421875, 96.0],
+            [1328.0, 63.999969482421875, 96.0],
+            [1328.0001220703125, -169.01390075683594, 96.0],
+        ];
+        assert!(fix_ring(&strip_a).len() < 3, "strip [A,P1,P1,A] must collapse before the fill");
+
+        // Strip [P0, A, A] (native pre-fix node 2084).
+        let strip_b = [
+            [1328.0001220703125, -192.00003051757812, 96.0],
+            [1328.0001220703125, -169.01390075683594, 96.0],
+            [1328.0001220703125, -169.01390075683594, 96.0],
+        ];
+        assert!(fix_ring(&strip_b).len() < 3, "strip [P0,A,A] must collapse before the fill");
+
+        // A strip whose corners are 0.002..0.015 apart passes `fix_ring` but pools to < 3 distinct
+        // indices in the NEAR (0.015) fill: reported nv=0 ("Infinitesimal polygon").  The consume
+        // loop must then ship NO node — the editor creates it ringless and the post-Pass-D
+        // `bspCleanup` culls it.
+        let mut m = Model::default();
+        let near_strip = [
+            [0.0, 0.0, 0.0],
+            [0.01, 60.0, 0.0],
+            [0.0, 60.0, 0.0],
+            [0.01, 0.0, 0.0],
+        ];
+        assert_eq!(fix_ring(&near_strip).len(), 4, "0.01-uu corners survive the 0.002 collapse");
+        let (_, nv) = fill_ring_verts(&mut m, &near_strip);
+        assert_eq!(nv, 0, "NEAR pooling collapses the strip to 2 indices -> infinitesimal -> 0");
+    }
+
+    /// The consume loop's kill/retarget rules on a synthetic split group (the club shape and its
+    /// mirror).  Editor semantics (`passD-assignzones-7400.md` §1/§5 + the §70 §1 post-Pass-D
+    /// `bspCleanup`): the split branch kills the ORIGINAL up front and appends every fragment at
+    /// the node-array tail; a fragment whose fill collapses below 3 verts is ringless and culled —
+    /// so the face's one node is the first FILL-SURVIVING fragment, in the tail cluster, and a
+    /// ringless fragment never ships as a node.
+    #[test]
+    fn consume_emissions_retargets_killed_original_and_ships_no_ringless_node() {
+        use super::{consume_passd_emissions, Emit};
+        let plane = Plane { x: 0.0, y: 0.0, z: 1.0, w: 96.0 };
+        let quad = vec![
+            [0.0, 0.0, 96.0],
+            [64.0, 0.0, 96.0],
+            [64.0, 64.0, 96.0],
+            [0.0, 64.0, 96.0],
+        ];
+        // Exact-duplicate corners -> killed in fix_ring (the club strip shape).
+        let strip = vec![
+            [100.0, 0.0, 96.0],
+            [100.0, 60.0, 96.0],
+            [100.0, 60.0, 96.0],
+            [100.0, 0.0, 96.0],
+        ];
+
+        // Club shape: the first surviving landing is the strip -> the quad Frag must retarget the
+        // retained original (ring + iZone), NOT add a second node.
+        let mut m = Model::default();
+        m.nodes.push(BspNode::leaf(plane, 7, -1, 0));
+        let tail = consume_passd_emissions(
+            &mut m,
+            vec![
+                Emit::OriginalRing { owner: 0, verts: strip.clone() },
+                Emit::Frag { owner: 0, i_zone: [1, 2], verts: quad.clone() },
+            ],
+        );
+        assert_eq!(m.nodes.len(), 1, "no separate fragment node — the original is retargeted");
+        assert_eq!(m.nodes[0].num_vertices, 4, "the original carries the surviving quad ring");
+        assert_eq!(m.nodes[0].i_zone, [1, 2], "the retarget carries the fragment's zone pair");
+        assert_eq!(tail, vec![0], "the retargeted original joins the tail cluster");
+
+        // Mirror: the OriginalRing survives and the only Frag dies -> still exactly one node, and
+        // the owner still joins the tail cluster (the editor's surviving fragment sits at the tail).
+        let mut m2 = Model::default();
+        m2.nodes.push(BspNode::leaf(plane, 7, -1, 0));
+        let tail2 = consume_passd_emissions(
+            &mut m2,
+            vec![
+                Emit::OriginalRing { owner: 0, verts: quad },
+                Emit::Frag { owner: 0, i_zone: [1, 2], verts: strip },
+            ],
+        );
+        assert_eq!(m2.nodes.len(), 1, "the ringless fragment ships no node");
+        assert_eq!(m2.nodes[0].num_vertices, 4);
+        assert_eq!(tail2, vec![0], "an all-later-fragments-dead split still moves to the tail");
     }
 }
