@@ -6468,3 +6468,37 @@ Verdict: **partial** — mechanism confirmed and fixed at the oracle, level resi
 TrainingFinal needs its own fresh localization pass (tracked in
 `area51-nsfhq-trainingfinal-node-delta-magnitude`); the Brush162 item's remaining scope is narrower
 than its title now suggests.
+
+## Garage `find_nearest_vertex` fix (`c442e4b`, uncommitted-to-master): real wins, real regression, NOT merged (2026-09-03)
+
+Verified `c442e4b` (branch `garage-pool-snap-fix-round2`, worktree `agent-a14189a804e86a9c4`) via
+an offline 18-level corpus A/B, `UEDCLI_BSPCSG_POINT_NEAREST` unset vs. set
+(`sweep_corpus.py`, warm golden cache; `parity_report.py`'s `*_match` = array-length equality).
+
+**Real wins** (`*_match` flips false→true, `geometry_match_count` up): `06_HongKong_WanChai_
+Garage.dx` 2→4/6 (nodes+leaves length-exact — the fix's own target: `LENGTH MISMATCH` → exact);
+`04_NYC_NSFHQ.dx` 1→4/6 (nodes+surfs+leaves); `15_Area51_Entrance.dx` 1→3/6 (nodes+leaves);
+`11_Paris_Underground.dx` 3→4/6 (nodes).
+
+**Real regression, NOT acceptable per the standing no-exact-level-loses-exactness gate**:
+`points_match` flips true→false on **`DX.dx`** (the campaign's simplest reference level,
+previously 6/6) and `02_NYC_Bar.dx`; also flips on `09_NYC_ShipFan.dx`/`08_NYC_FreeClinic.dx`
+(already non-exact overall, but points count specifically regresses there too). DX.dx's own
+nodes/surfs/leaves content is byte-identical before and after (`notes` unchanged) — only the
+points ARRAY LENGTH changes, meaning the ported `find_nearest_vertex`'s pruning/radius-shrink
+logic pools (or fails to pool) at least one point differently on DX's simpler brush set than the
+unfixed whole-pool scan did, and does so WRONG there while being RIGHT for Garage's Brush21/
+Brush20 case.
+
+**Also found, independent of the regression**: the fix as committed is gated behind
+`UEDCLI_BSPCSG_POINT_NEAREST`, defaulting OFF — `uedcli/native/materialize.py` calls
+`build_geometry_bspcsg` unconditionally (no env-var check on the Python side), so as committed
+this flag is a real "old way behind a flag" (matches the pattern `321f5dd` deliberately removed
+`UEDCLI_BSPCSG_ADD_RECOMPUTE_NORMAL` for). Not merged for BOTH reasons: the flag needs to go
+either way, and the underlying logic regresses DX before it can go.
+
+**Not merged.** Branch `garage-pool-snap-fix-round2` stays in worktree `agent-a14189a804e86a9c4`,
+unpushed. Next step: root-cause why `find_nearest_vertex`'s tree-restricted search diverges from
+the whole-pool scan on DX/Bar/ShipFan/FreeClinic specifically — likely the radius-shrink-as-you-
+descend or on-plane early-return band (both flagged as unconfirmed specifics in the `c442e4b`
+commit message) is too aggressive/wrong outside Garage's specific case.
