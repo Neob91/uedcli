@@ -3,10 +3,10 @@
 # the staged boot map + the game entrypoint. The .u compile happens in build-image.sh's
 # MOUNTED builder step (a Docker RUN cannot see the asset mounts). Build:
 #   docker build -t uedcli-game -f uedcli/game/Dockerfile uedcli/game
-# --platform: dx-lum-uned is amd64 (the wine/x86 DeusEx stack), so pin it — else on an arm64 host
-# the build looks for a nonexistent arm64 manifest ("no match for platform"). amd64 runs via the
-# same qemu emulation the base already uses; on an amd64 host this is a no-op.
-FROM --platform=linux/amd64 dx-lum-uned
+# --platform: ued-x86-runtime is amd64 (the wine/x86 DeusEx stack), so pin it — else on an arm64
+# host the build looks for a nonexistent arm64 manifest ("no match for platform"). amd64 runs via
+# the same qemu emulation the base already uses; on an amd64 host this is a no-op.
+FROM --platform=linux/amd64 ued-x86-runtime:latest
 ENV LAUNCH_UED=0
 
 # Bake a WARM wineprefix (gate fold: a per-command ephemeral boot must not pay a cold

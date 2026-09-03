@@ -44,7 +44,7 @@ dev/scripts/setup-game-preview.sh                     # fully autonomous: the bu
 dev/scripts/setup-game-preview.sh /path/to/DeusEx     # or: --url https://…/DeusEx-installer.exe
 ```
 
-It builds the `dx-lum-uned` base image, installs the game files (`install-deusex-assets.sh
+It builds the `ued-x86-runtime` base image, installs the game files (`install-deusex-assets.sh
 --with-maps`), writes `~/.uedcli/config.toml` `[games.deusex]` and a project `uedcli.toml`, then
 renders one frame to prove it works (`--no-verify` skips that; `--dry-run` shows the plan). The
 `uedcli-game` image and the preview package compile automatically on first use — no UnrealEd/UCC

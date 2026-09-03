@@ -4,7 +4,7 @@
 # `level photo --game` renders truly-lit in-game frames of a level by booting the real game
 # engine headless in a container. That needs four things a fresh clone does NOT have, and which
 # no single step otherwise provisions:
-#   1. the `dx-lum-uned` base image (wine + Xvfb + the committed UED22 UCC) — nothing builds it;
+#   1. the `ued-x86-runtime` base image (wine + Xvfb + the committed UED22 UCC) — nothing builds it;
 #   2. the game's own files (copyrighted, user-supplied, gitignored) — via install-deusex-assets.sh;
 #   3. `~/.uedcli/config.toml` `[games.<game>].paths` pointing at those files — hand-written today;
 #   4. a project `uedcli.toml` selecting the game — hand-written today.
@@ -98,12 +98,16 @@ fi
 [[ -x "$INSTALLER" ]] || { echo "error: $INSTALLER not found — expected beside this script." >&2; exit 2; }
 echo "  docker ok; bin/uedcli present"
 
-# --- Step 1: the dx-lum-uned base image --------------------------------------------------------
-say "step 1: dx-lum-uned base image"
-if docker image inspect dx-lum-uned:latest >/dev/null 2>&1; then
+# --- Step 1: the ued-x86-runtime base image ----------------------------------------------------
+# The tag built here MUST match what uedcli/game/Dockerfile's FROM and build-image.sh's `docker
+# run` use — uned/docker-compose.yml builds+runs `ued-x86-runtime:latest`; `dx-lum-uned` is only
+# that image's standing CONTAINER name, never an image tag (mixing the two up is what silently
+# breaks the first `level photo --game` with a Docker Hub "pull access denied" for `dx-lum-uned`).
+say "step 1: ued-x86-runtime base image"
+if docker image inspect ued-x86-runtime:latest >/dev/null 2>&1; then
     echo "  present — skip"
 elif [[ "$dry_run" == 1 ]]; then
-    would "build dx-lum-uned:latest from $TOOL_ROOT/uned/"
+    would "build ued-x86-runtime:latest from $TOOL_ROOT/uned/"
 else
     echo "  building (wine + Xvfb + the committed UED22 UCC; a few minutes)…"
     # amd64: the whole stack is x86 (wine runs x86 DeusEx). On an arm64 host it builds+runs under
@@ -112,9 +116,9 @@ else
     if docker compose version >/dev/null 2>&1; then
         ( cd "$TOOL_ROOT/uned" && docker compose build )
     else
-        docker build --platform=linux/amd64 -t dx-lum-uned "$TOOL_ROOT/uned"
+        docker build --platform=linux/amd64 -t ued-x86-runtime "$TOOL_ROOT/uned"
     fi
-    echo "  built dx-lum-uned:latest"
+    echo "  built ued-x86-runtime:latest"
 fi
 
 # --- Step 2: the game files --------------------------------------------------------------------

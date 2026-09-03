@@ -27,7 +27,7 @@ else
   echo "== step 1: compile UedPreview (engine-only, regular UED22 UCC) in a builder =="
   B=uedcli-game-imgbuild
   docker rm -f "$B" >/dev/null 2>&1 || true
-  docker run -d --name "$B" -e LAUNCH_UED=0 --entrypoint bash dx-lum-uned -lc 'sleep 3600' >/dev/null
+  docker run -d --name "$B" -e LAUNCH_UED=0 --entrypoint bash ued-x86-runtime:latest -lc 'sleep 3600' >/dev/null
   for _ in $(seq 1 30); do docker exec "$B" wine --version >/dev/null 2>&1 && break; sleep 2; done
   # /work is created by the base entrypoint, which the bash --entrypoint override bypasses — so make
   # it here, else `docker cp … :/work/uscript` fails "Could not find the file /work in container".
