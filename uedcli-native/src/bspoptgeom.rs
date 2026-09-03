@@ -185,6 +185,31 @@ fn merge_near_points(model: &mut Model) {
             }
         }
     }
+    // Ring fix-up — the function's final block [DISASM Editor.dll 0x10033f29-0x10033f9b, decoded
+    // 2026-09-03, spike 2026-09-03-verts-points-residual]: for EVERY node (unconditional, not
+    // gated on `merged > 0`), drop each ring vert whose post-remap `iVertex` equals its CYCLIC
+    // predecessor's (`j == 0` compares against the last vert, so a wrap-closing duplicate dies
+    // too), compacting the surviving `(iVertex, iSide)` pairs down within the ring's own slots
+    // (`mov [esi+ebx*8]`, `mov [esi+ebx*8+4]`); then `NumVertices = survivors if survivors >= 3
+    // else 0` (`cmp ebx, 3; cmovge`). Pool slots past the survivor count stay allocated — the
+    // editor never shrinks the region, matching the golden's 3-slot/nv=0 and 4-slot/nv=3 nodes
+    // (Underground nodes 1586/1744/1745, the level's whole ring-nv residual).
+    for ni in 0..model.nodes.len() {
+        let (ivp, nv) = {
+            let nd = &model.nodes[ni];
+            (nd.i_vert_pool as usize, nd.num_vertices as usize)
+        };
+        let mut kept = 0usize;
+        for j in 0..nv {
+            let prev = if j > 0 { j - 1 } else { nv - 1 };
+            if model.verts[ivp + j].i_vertex == model.verts[ivp + prev].i_vertex {
+                continue;
+            }
+            model.verts[ivp + kept] = model.verts[ivp + j];
+            kept += 1;
+        }
+        model.nodes[ni].num_vertices = if kept >= 3 { kept as i32 } else { 0 };
+    }
     if std::env::var("UEDCLI_OPTGEOM_DEBUG").is_ok() {
         eprintln!("OPTGEOM merge_near_points: {} of {} points remapped", merged, n);
     }
@@ -833,5 +858,49 @@ mod tests {
         merge_near_points(&mut m);
         assert_eq!(m.verts[0].i_vertex, 0);
         assert_eq!(m.verts[1].i_vertex, 1);
+    }
+
+    /// The ring fix-up at `merge_near_points`' tail (DISASM `Editor.dll 0x10033f29-0x10033f9b`;
+    /// spike `2026-09-03-verts-points-residual`): cyclic index-equal ring verts are dropped
+    /// count-only (slots stay allocated), survivors compact down within the ring's own slots,
+    /// and a ring left under 3 is zeroed. Golden-pinned on `04_NYC_Underground` nodes
+    /// 1586/1744 (3 slots, nv=0) and 1745 (4 slots, nv=3 with the survivors compacted).
+    #[test]
+    fn ring_fixup_compacts_index_equal_verts_and_zeroes_degenerate_rings() {
+        let mut m = Model::default();
+        // Points 0/1 are 0.1 apart (< 0.25) so the remap folds 1 -> 0, creating the wrap dup;
+        // the second ring's adjacent dup (2,2) needs no merge to trigger the fix-up.
+        m.points = vec![
+            Vec3::new(0.0, 0.0, 0.0),
+            Vec3::new(0.1, 0.0, 0.0),
+            Vec3::new(10.0, 0.0, 0.0),
+            Vec3::new(10.0, 10.0, 0.0),
+            Vec3::new(0.0, 10.0, 0.0),
+        ];
+        let mk = |iv: i32, side: i32| BspVert { i_vertex: iv, i_side: side };
+        // Ring A (pool 0..3): [0, 2, 1] -> after remap [0, 2, 0]: wrap dup -> 2 survivors -> nv=0.
+        // Ring B (pool 3..7): [2, 3, 3, 4]: adjacent dup -> [2, 3, 4] compacted, nv=3, slot 4 kept.
+        m.verts = vec![
+            mk(0, -1), mk(2, -1), mk(1, -1),
+            mk(2, 10), mk(3, 11), mk(3, 12), mk(4, 13),
+        ];
+        let pl = Plane { x: 0.0, y: 0.0, z: 1.0, w: 0.0 };
+        m.nodes = vec![leaf_node(pl, 0, 3), leaf_node(pl, 3, 4)];
+
+        merge_near_points(&mut m);
+
+        assert_eq!(m.nodes[0].num_vertices, 0, "wrap-dup ring collapses under 3 -> zeroed");
+        assert_eq!(m.nodes[1].num_vertices, 3, "adjacent dup dropped count-only");
+        assert_eq!(m.verts.len(), 7, "pool slots are never shrunk");
+        assert_eq!(
+            (m.verts[3].i_vertex, m.verts[4].i_vertex, m.verts[5].i_vertex),
+            (2, 3, 4),
+            "survivors compact down within the ring's own slots"
+        );
+        assert_eq!(
+            (m.verts[3].i_side, m.verts[4].i_side, m.verts[5].i_side),
+            (10, 11, 13),
+            "iSide travels with its surviving iVertex pair"
+        );
     }
 }

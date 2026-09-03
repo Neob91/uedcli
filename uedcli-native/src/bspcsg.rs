@@ -3710,9 +3710,10 @@ fn rebuild_vector_pool(model: &mut Model) {
 ///     base block (decoded: `Points[0]` is surf 0's base), then the rings.  Native's repartition
 ///     rebuild interleaved base+ring per node in split order; this restores the editor's block layout.
 /// The pool is already tolerance-deduped (`bsp_add_point`, 0.002), so first-appearance by EXACT index
-/// reproduces the same distinct set — no re-weld.  A point is referenced iff some `surf.pBase` or
-/// `vert.iVertex` names it (the only two ref classes), so renumbering those is sufficient; no node
-/// plane/link, vector, or bound is touched.
+/// reproduces the same distinct set — no re-weld.  A point is referenced iff some `surf.pBase` or a
+/// NODE-RANGE `vert.iVertex` names it (the editor's own GC rule — orphan verts don't keep a point
+/// alive and are never renumbered), so renumbering those is sufficient; no node plane/link, vector,
+/// or bound is touched.
 ///
 /// NOTE: this matches the editor's LAYOUT (bases-first block) and its point VALUES (2dp), but NOT its
 /// exact intra-block order — the editor's base/ring sub-order is a deeper `bspRefresh` reachability-
@@ -3806,16 +3807,15 @@ fn reorder_points_canonical(model: &mut Model, brushes: &[build::BrushInput]) {
                 push(model.verts[(node.i_vert_pool + k) as usize].i_vertex);
             }
         }
-        // Finally, every OTHER vert's own point, in pool order — covers `repartition_frontier`'s
-        // orphan verts (`unatco-verts-points-residual-after-the-zone`: the real editor's per-call
-        // reconstruction is discarded structurally but permanently grows Verts/Points, so these
-        // verts are never node-reachable by design). Re-audits the NOTE below: unlike the
-        // `bsp_opt_geom::insert_point` orphans it already covers, a `repartition_frontier` orphan
-        // can name a BRAND NEW point no live ring uses at all — without this pass, that point gets
-        // dropped and the orphan's `i_vertex` hits the `-1` sentinel just below.
-        for v in &model.verts {
-            push(v.i_vertex);
-        }
+        // Deliberately NO walk over orphan verts (verts covered by no node's vert-pool range):
+        // the real editor's GC keeps a point iff a surf `p_base` or a NODE-RANGE vert names it
+        // (fresh 2026-08-30 `bspRefresh` disassembly, `passes::bsp_refresh_points_vectors`'s doc
+        // comment), so a point only an orphan vert names is dropped — and the orphan's `i_vertex`
+        // is left UNREMAPPED, a stale pre-compaction index. Golden evidence on all four
+        // verts/points-residual levels (spike `2026-09-03-verts-points-residual`): every golden
+        // ships orphan verts whose `i_vertex` is PAST the compacted pool end (ShipFan: 252
+        // out-of-range, min exactly == `points.len()`), while native's old keep-orphan-points walk
+        // here kept those points alive (+16..+21 Points per level).
     }
     if std::env::var("UEDCLI_REORDER_POINTS_DIAG").is_ok() {
         eprintln!(
@@ -3835,13 +3835,19 @@ fn reorder_points_canonical(model: &mut Model, brushes: &[build::BrushInput]) {
             s.p_base = old_to_new[s.p_base as usize];
         }
     }
-    // Renumber EVERY vert's iVertex — including orphan verts (`bsp_opt_geom::insert_point`'s
-    // abandoned-ring-block orphans, and `repartition_frontier`'s discarded-reconstruction orphans).
-    // `old_to_new[..]` is never `-1` for any vert reached here: the `order` walk above now includes
-    // every vert's own point directly (not just node-reachable ones), so nothing an orphan names can
-    // be dropped, regardless of whether any live node ring also names it.
-    for v in &mut model.verts {
-        if v.i_vertex >= 0 {
+    // Renumber only NODE-RANGE verts' iVertex (always pushed above, so never -1). Orphan verts
+    // keep their old numeric index untouched — the editor never rewrites them (see the golden
+    // evidence in the walk comment above), so after compaction they dangle, possibly past the
+    // pool end, exactly like the golden's own orphan verts. Nothing downstream reads an orphan's
+    // iVertex (bake/preview/serializer all walk node ranges or write raw).
+    let mut node_range_vert = vec![false; model.verts.len()];
+    for node in &model.nodes {
+        for k in 0..node.num_vertices {
+            node_range_vert[(node.i_vert_pool + k) as usize] = true;
+        }
+    }
+    for (vi, v) in model.verts.iter_mut().enumerate() {
+        if node_range_vert[vi] && v.i_vertex >= 0 {
             v.i_vertex = old_to_new[v.i_vertex as usize];
         }
     }
@@ -5861,6 +5867,61 @@ mod tests {
             "vertex-count mismatch (3 vs the authored 4) must fail the gate -- falls back to the \
              unchanged base-only push + node-order ring push, never a reordering built on a \
              fragment's own (non-authored) ring"
+        );
+    }
+
+    /// The editor's points-GC rule (spike `2026-09-03-verts-points-residual`): a point named ONLY
+    /// by an orphan vert (no surf `p_base`, no node-range vert) is dropped, and the orphan's
+    /// `i_vertex` is left numerically untouched — a stale, possibly out-of-range index, exactly
+    /// what the goldens ship (ShipFan: 252 orphan verts with `i_vertex` >= `points.len()`, min ==
+    /// `points.len()`). Before this rule, `reorder_points_canonical` kept every orphan-named point
+    /// alive, leaving native +16..+21 Points over the golden on all four residual levels.
+    #[test]
+    fn orphan_only_points_are_dropped_and_orphan_verts_keep_stale_indices() {
+        let a = Vec3::new(0.0, 0.0, 0.0);
+        let b = Vec3::new(64.0, 0.0, 0.0);
+        let c = Vec3::new(64.0, 64.0, 0.0);
+        let orphan_pt = Vec3::new(999.0, 999.0, 999.0);
+
+        let mut m = Model::default();
+        m.points = vec![a, b, c, orphan_pt];
+        m.surfs.push(BspSurf {
+            texture_ref: 0,
+            poly_flags: 0,
+            p_base: 0,
+            v_normal: -1,
+            v_texture_u: -1,
+            v_texture_v: -1,
+            i_actor: 0,
+            i_brush_poly: 0,
+            pan: [0, 0],
+            i_light_map: -1,
+        });
+        let plane = Plane { x: 0.0, y: 0.0, z: 1.0, w: 0.0 };
+        m.nodes.push(BspNode::leaf(plane, 0, 0, 3)); // ring covers verts [0..3)
+        m.verts = vec![
+            BspVert { i_vertex: 0, i_side: -1 }, // A (ring)
+            BspVert { i_vertex: 1, i_side: -1 }, // B (ring)
+            BspVert { i_vertex: 2, i_side: -1 }, // C (ring)
+            BspVert { i_vertex: 3, i_side: -1 }, // ORPHAN vert -> orphan_pt (no ring covers it)
+        ];
+
+        reorder_points_canonical(&mut m, &[]);
+
+        assert_eq!(
+            m.points,
+            vec![a, b, c],
+            "a point named only by an orphan vert must be GC'd, matching the editor"
+        );
+        assert_eq!(
+            m.verts[3].i_vertex, 3,
+            "the orphan vert's iVertex must stay numerically untouched (stale, here past the \
+             compacted pool end) — the editor never rewrites orphan verts"
+        );
+        assert_eq!(
+            (m.verts[0].i_vertex, m.verts[1].i_vertex, m.verts[2].i_vertex),
+            (0, 1, 2),
+            "node-range verts must be remapped to the compacted pool as before"
         );
     }
 }

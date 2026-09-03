@@ -397,61 +397,63 @@ enum Emit {
     },
 }
 
-/// Append one landing's ring verts to `model.verts`, resolving each world point through the Points
-/// pool by the editor's `bspAddPoint` dedup (EUCLIDEAN `dist < 0.002`, `THRESH_POINTS_ARE_SAME` —
-/// `fp-classification-sites.md §7`; first-vs-nearest is count-invariant, only the reused index
-/// differs).  Returns the base vert-pool index of the appended ring.
-///
-/// `create_points` controls what happens for a vertex with NO existing point within threshold:
-///   * `true` (a LIVE `Frag` ring — read by render/collision/bounds): append a NEW point, so the
-///     fragment's geometry is faithful (matches `bspAddPoint`'s tail-append).
-///   * `false` (an ORPHAN re-emit): snap to the NEAREST existing point instead of adding one.  The
-///     editor's orphan verts carry STALE point indices anyway — Pass D's killed-fragment verts are
-///     never remapped by the post-D `bspRefresh` point-compaction (which only remaps LIVE node-ring
-///     `vert.iVertex` and drops unreferenced points), and they are never read (no live node ring
-///     references them).  So the editor's final Points pool is bounded by ring/`pBase` references,
-///     NOT by orphan verts; native must likewise NOT let the orphan re-emit inflate the pool (a raw
-///     append added +447 spurious points, §82 §10.16 follow-up).  The snapped index is not
-///     byte-faithful to the editor's stale index, but that residual is inherent to skipping the
-///     compaction dance; the point COUNT and the Verts section SIZE are what this closes.
-fn append_ring_verts(model: &mut Model, verts: &[[f32; 3]], create_points: bool) -> i32 {
+/// `bspAddNode`'s ring FILL, applied to one Pass-D landing — every landing goes through
+/// `bspAddNode` in the editor (`passD-assignzones-7400.md §4/§5`), so the fill is
+/// landing-type-agnostic:
+///   * each world point resolves through the REAL Points pool at the ring `bspAddPoint`
+///     threshold (`THRESH_POINTS_ARE_NEAR` 0.015, `bspAddNode 0x352fd push 0` — the same NEAR
+///     pooling every other `bspAddNode` call ships), CREATING a real pool point when nothing is
+///     near.  A point created for a killed landing ends up referenced only by orphan verts and
+///     is dropped by the end-of-build GC (`reorder_points_canonical`, editor rule) — reproducing
+///     the editor's own transient-then-GC'd Pass-D points, whose stale orphan `iVertex` dangle
+///     past the compacted pool end in every golden (spike `2026-09-03-verts-points-residual`).
+///     The old 0.002-pool + snap-to-nearest orphan hack predates that GC and is gone.
+///   * a vert resolving to the same pool index as the previously PUSHED one is skipped, no slot
+///     (the fill loop's consecutive-index collapse, decompile 2026-09-02);
+///   * a ring whose last pushed index equals its first is under-COUNTED by one, slot kept
+///     (the post-loop wrap trim, DISASM `Editor.dll 0x100353a1-0x100353b8`);
+///   * a count under 3 reports 0 ("Infinitesimal polygon"), slots kept.
+/// Returns `(base vert-pool index, reported NumVertices)`; an `Orphan` caller ignores the count
+/// (no node reads it).
+fn fill_ring_verts(model: &mut Model, verts: &[[f32; 3]]) -> (i32, i32) {
     let vp = model.verts.len() as i32;
+    let mut first_iv = -1i32;
+    let mut last_iv = -1i32;
+    let mut nv = 0i32;
     for v in verts {
         let pt = crate::model::Vec3::new(v[0], v[1], v[2]);
-        // First existing point within the bspAddPoint threshold (count-invariant vs nearest).
+        // First existing point within the ring threshold (count-invariant vs nearest), else append.
         let mut pi = -1i32;
         for (idx, p) in model.points.iter().enumerate() {
-            if pt.sub(p).size() < crate::fpoly::THRESH_POINTS_ARE_SAME {
+            if pt.sub(p).size() < crate::build::RING_POINT_TOL {
                 pi = idx as i32;
                 break;
             }
         }
         if pi < 0 {
-            if create_points {
-                pi = model.points.len() as i32;
-                model.points.push(pt);
-            } else {
-                // Orphan with no near point: snap to the nearest existing point (never grow the
-                // pool).  Index is inert — no live ring reads this vert.
-                let mut best = f32::MAX;
-                for (idx, p) in model.points.iter().enumerate() {
-                    let d = pt.sub(p).size();
-                    if d < best {
-                        best = d;
-                        pi = idx as i32;
-                    }
-                }
-                if pi < 0 {
-                    pi = 0; // empty pool guard (unreachable once any point exists)
-                }
-            }
+            pi = model.points.len() as i32;
+            model.points.push(pt);
+        }
+        if pi == last_iv {
+            continue;
         }
         model.verts.push(crate::model::BspVert {
             i_vertex: pi,
             i_side: -1,
         });
+        if nv == 0 {
+            first_iv = pi;
+        }
+        last_iv = pi;
+        nv += 1;
     }
-    vp
+    if nv >= 2 && first_iv == last_iv {
+        nv -= 1;
+    }
+    if nv < 3 {
+        nv = 0;
+    }
+    (vp, nv)
 }
 
 /// Collapse consecutive near-duplicate vertices (`< THRESH_POINTS_ARE_SAME`, cyclic).
@@ -464,21 +466,15 @@ fn append_ring_verts(model: &mut Model, verts: &[[f32; 3]], create_points: bool)
 /// dropping** (by resolved point INDEX) + a first==last dedupe, then `if final NumVertices < 3 →
 /// NumVertices = 0` (the fragment is emitted with no ring — 0 pool slots).
 ///
-/// Native's Pass-D ORPHAN path does not resolve verts the editor's way — the editor's `bspAddPoint`
-/// ADDS a point when none is near, but native SNAPS an orphan vert to the nearest existing point
-/// (`append_ring_verts(create_points=false)`, to avoid inflating the Points pool — §82 §10.16).  So
-/// the editor's index-equality collapse cannot be replayed on native's snap-indices; the faithful
-/// signal is instead the COORDINATE degeneracy the editor's fill loop is really detecting — two ring
-/// corners within `THRESH_POINTS_ARE_SAME` (they would resolve to one point either way).  `clip_poly`
-/// (Sutherland–Hodgman with a `1e-4` on-plane band) can push a vertex coincident with its predecessor
-/// at a plane-grazing corner; on `Test_Castle.dx` exactly 3 orphan triangles are `[A, B, B]` with the
-/// `B,B` edge `0.000183` uu (< `0.002`) — this collapses each to 2 verts, dropped by the caller's
-/// `< 3` guard, closing the +9 vert-pool overshoot at `bspOptGeom` entry (native 10527 → 10518;
-/// §70 §12).  The kept fp-noise slivers (`0.0417` uu wide) and the small triangle (`0.017` uu edges)
-/// are ABOVE the threshold, so this leaves every editor-emitted ring untouched.  Applied to orphans
-/// only — the live `OriginalRing`/`Frag` path resolves ADD-style like the editor and carries no
-/// within-threshold corner on this map; making the collapse universal + index-based is flagged in
-/// `board/inbox/` for a map that puts a grazing-corner dup on a live fragment.
+/// `clip_poly` (Sutherland–Hodgman with a `1e-4` on-plane band) can push a vertex coincident with
+/// its predecessor at a plane-grazing corner; on `Test_Castle.dx` exactly 3 orphan triangles are
+/// `[A, B, B]` with the `B,B` edge `0.000183` uu (< `0.002`) — this collapses each to 2 verts,
+/// dropped by the caller's `< 3` guard, closing the +9 vert-pool overshoot at `bspOptGeom` entry
+/// (native 10527 → 10518; §70 §12).  The kept fp-noise slivers (`0.0417` uu wide) and the small
+/// triangle (`0.017` uu edges) are ABOVE the threshold, so this leaves every editor-emitted ring
+/// untouched.  Applied to EVERY landing (the once-flagged universal + index-based collapse):
+/// this pass is the `FPoly::Fix`-equivalent coordinate collapse; the editor's index-equality
+/// collapse at fill time is `fill_ring_verts`' consecutive-index skip, which runs after it.
 fn fix_ring(verts: &[[f32; 3]]) -> Vec<[f32; 3]> {
     let n = verts.len();
     if n == 0 {
@@ -928,11 +924,11 @@ pub fn assign_leaves_and_zones(model: &mut Model) -> Vec<usize> {
     for e in emissions {
         match e {
             Emit::Orphan(owner, verts) => {
-                // Reproduce the editor's `bspAddNode` degenerate-drop (the collapse lives INSIDE
-                // `bspAddNode`, not a pre-pass — see `fix_ring` doc + `passD-assignzones-7400.md §5`).
-                // A ring left with < 3 real verts is a fragment whose vertex-fill collapsed below
-                // `NumVertices==3`, so the editor emits it with 0 pool slots — closing the +9 orphan
-                // overshoot (§70 §12).
+                // `FPoly::Fix`-style coordinate collapse first (`fix_ring`, 0.002): a fragment
+                // that falls under 3 verts here never reaches `bspAddNode` in the editor — 0 pool
+                // slots (the castle +9 orphan overshoot, §70 §12). Survivors go through the real
+                // `bspAddNode` fill (`fill_ring_verts`): NEAR pooling into the live pool,
+                // consecutive-index collapse, slots for what the editor would allocate.
                 let verts = fix_ring(&verts);
                 if verts.len() < 3 {
                     continue; // degenerate landing — editor's NumVertices<3 fragment (still no node)
@@ -941,38 +937,36 @@ pub fn assign_leaves_and_zones(model: &mut Model) -> Vec<usize> {
                 if dump_emit {
                     eprintln!("EMIT type=Orphan owner={} isurf={} vp={} len={}", owner, model.nodes[owner].i_surf, vp, verts.len());
                 }
-                append_ring_verts(model, &verts, false); // never grow the point pool for orphans
+                fill_ring_verts(model, &verts); // reported count unused — no node reads it
             }
             Emit::OriginalRing { owner, verts } => {
+                let verts = fix_ring(&verts);
                 if verts.len() < 3 {
                     continue; // degenerate first fragment — leave the original's base ring in place
                 }
-                // `create_points=true` is EDITOR-FAITHFUL: the editor's surviving zone fragments are
-                // live rings filled by `bspAddPoint`, which appends a genuinely-new corner when none
-                // is near (the editor's own Pass D adds ~+3 such points).  On the calibration castle
-                // this is measured ZERO-delta — the first fragment's clip corners are all shared with
-                // an adjacent surviving `Frag` piece (a false `all_same` means ≥2 surviving zone
-                // pieces), so `model.points.len()` stays 2061 (ground_truth_bytediff, §70 §11).  A new
-                // point here on some other map would MATCH the editor (its live fragment adds it too).
-                let vp = append_ring_verts(model, &verts, true); // live ring — faithful geometry
+                // The editor's surviving zone fragments are live rings filled by `bspAddPoint`,
+                // which appends a genuinely-new corner when none is near (the editor's own Pass D
+                // adds ~+3 such points); castle-calibrated ZERO-delta (§70 §11).
+                let (vp, nv) = fill_ring_verts(model, &verts);
                 if dump_emit {
-                    eprintln!("EMIT type=OrigRing owner={} isurf={} vp={} len={}", owner, model.nodes[owner].i_surf, vp, verts.len());
+                    eprintln!("EMIT type=OrigRing owner={} isurf={} vp={} len={}", owner, model.nodes[owner].i_surf, vp, nv);
                 }
                 let n = &mut model.nodes[owner];
                 n.i_vert_pool = vp;
-                n.num_vertices = verts.len() as i32;
+                n.num_vertices = nv;
             }
             Emit::Frag {
                 owner,
                 i_zone,
                 verts,
             } => {
+                let verts = fix_ring(&verts);
                 if verts.len() < 3 {
                     continue;
                 }
-                let vp = append_ring_verts(model, &verts, true); // live ring — faithful geometry
+                let (vp, nv) = fill_ring_verts(model, &verts);
                 if dump_emit {
-                    eprintln!("EMIT type=Frag owner={} isurf={} vp={} len={}", owner, model.nodes[owner].i_surf, vp, verts.len());
+                    eprintln!("EMIT type=Frag owner={} isurf={} vp={} len={}", owner, model.nodes[owner].i_surf, vp, nv);
                 }
                 let (plane, i_surf, node_flags) = {
                     let n = &model.nodes[owner];
@@ -991,7 +985,7 @@ pub fn assign_leaves_and_zones(model: &mut Model) -> Vec<usize> {
                     i_collision_bound: -1,
                     i_render_bound: -1,
                     i_zone,
-                    num_vertices: verts.len() as i32,
+                    num_vertices: nv,
                     i_leaf: [-1, -1],
                 });
                 // Splice onto the tail of the owner's coplanar (i_plane) chain.
@@ -1107,7 +1101,7 @@ fn build_zone_mask(model: &mut Model, ni: i32) -> u64 {
 
 #[cfg(test)]
 mod tests {
-    use super::{assign_leaves, fix_ring};
+    use super::{assign_leaves, fill_ring_verts, fix_ring};
     use crate::model::{BspNode, Model, Plane};
 
     /// Pass A must visit `i_front` before `i_back` at every branch -- confirmed 2026-08-31 by
@@ -1190,5 +1184,38 @@ mod tests {
             [0.0, 10.0, 0.0],
         ];
         assert_eq!(fix_ring(&clean).len(), 4);
+    }
+
+    /// `fill_ring_verts` = `bspAddNode`'s ring fill for a Pass-D landing (see its doc comment):
+    /// NEAR (0.015) pooling that CREATES real points, consecutive-index collapse (no slot),
+    /// wrap trim (slot kept, count down one), <3 -> reported 0.
+    #[test]
+    fn fill_ring_verts_pools_at_near_and_applies_the_fill_collapses() {
+        use crate::model::Vec3;
+        let mut m = crate::model::Model::default();
+        m.points = vec![Vec3::new(0.0, 0.0, 0.0)];
+        // v0 pools onto the existing point (0.01 < 0.015); v1 creates; v2 is a consecutive dup of
+        // v1 at 0.01 (same NEW index -> skipped, no slot); v3 creates.
+        let ring = [
+            [0.01, 0.0, 0.0],
+            [10.0, 0.0, 0.0],
+            [10.01, 0.0, 0.0],
+            [10.0, 10.0, 0.0],
+        ];
+        let (vp, nv) = fill_ring_verts(&mut m, &ring);
+        assert_eq!((vp, nv), (0, 3));
+        assert_eq!(m.points.len(), 3, "two new points created at NEAR pooling, dup pooled away");
+        assert_eq!(m.verts.len(), 3, "the consecutive dup allocates no slot");
+        assert_eq!(
+            (m.verts[0].i_vertex, m.verts[1].i_vertex, m.verts[2].i_vertex),
+            (0, 1, 2)
+        );
+
+        // Wrap dup: [A, B, A] (all far apart except last == first) -> 3 slots, reported 2 -> 0.
+        let mut m2 = crate::model::Model::default();
+        let wrap = [[0.0, 0.0, 0.0], [50.0, 0.0, 0.0], [0.001, 0.0, 0.0]];
+        let (_, nv2) = fill_ring_verts(&mut m2, &wrap);
+        assert_eq!(nv2, 0, "wrap-closing dup undercounts to 2 -> infinitesimal -> 0");
+        assert_eq!(m2.verts.len(), 3, "the wrap slot itself is kept");
     }
 }

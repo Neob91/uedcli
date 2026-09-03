@@ -535,3 +535,16 @@ residual from the 2026-07-18 Test_Castle spike (§10.20), reproduced cleanly her
 count noise to obscure it. Full detail: `native-materialize-findings.md`, "`DX.dx`'s `p_base`
 reordering"; `texture-ref-i-actor-divergence-traced-to-golden` round 5. No fix shipped, no code changed,
 no regression risk (read-only re-measurement).
+
+## 2026-09-03: points-GC editor rule + Pass-D `bspAddNode` fill shipped (spike
+## `2026-09-03-verts-points-residual`) — Wanchai verts +99 -> +84, points +17 unchanged
+
+The four structure-EXACT levels' points residual root cause landed: native kept points that only
+ORPHAN verts reference, the editor's GC drops them (golden evidence: dangling orphan `iVertex`
+past the pool end on every checked golden). `reorder_points_canonical` now applies the editor
+rule; UNATCO points `+16 -> +6`, ShipFan `+21 -> +1`, Underground `+18 -> +3`, FreeClinic
+`+20 -> 0`. Wanchai's own points stay `+17` (its RING_NEAR-baseline value; the earlier "+16"
+predates the RING_NEAR default) — consistent with this item's old finding that orphan-point
+retention contributes 0 on Wanchai. The Pass-D `fill_ring_verts` change (NEAR pooling +
+consecutive-index collapse, replacing the 0.002 snap path) took Wanchai verts `+99 -> +84`.
+Structure stays EXACT. Remainder tracked in `verts-residual-on-structure-exact-levels`.

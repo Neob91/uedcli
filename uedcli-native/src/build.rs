@@ -16,6 +16,9 @@ use rayon::prelude::*;
 
 const THRESH_NORMALS_ARE_SAME: f32 = 2.0e-5;
 const THRESH_POINTS_ARE_NEAR: f32 = 0.015;
+/// The ring `bspAddPoint` threshold, shared with `zones::fill_ring_verts` (Pass-D landings go
+/// through the same `bspAddNode` fill as every other node).
+pub const RING_POINT_TOL: f32 = THRESH_POINTS_ARE_NEAR;
 const NF_IS_NEW: u8 = 0x20;
 /// Transient marker for a synthetic solid-bound node inserted by `bound_leaked_solid_leaves`.
 /// Not a real engine NodeFlag on disk — `finalize_leaves_and_bbox` clears it after `zones` reads it.

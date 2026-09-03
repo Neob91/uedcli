@@ -28,3 +28,17 @@ Evidence: `sections/70 §12`, `42 §9`.
   `DoFront=d>=−R / DoBack=d<=R`). Native's box prune (tighter) was replaced with the sphere in
   `bspcsg.rs` — output byte-invariant (uncleared verts now EXACTLY 17120 = editor). `bspoptgeom.rs`
   correct/frozen; `bspAddPoint` FIRST-vs-NEAREST is a red herring for pool SIZE.
+
+## 2026-09-03: the orphan/points relationship is now editor-faithful in MECHANISM; stale-index
+## BYTE parity remains open
+
+Two shipped changes (spike `2026-09-03-verts-points-residual`) implement the editor's real orphan
+semantics this item circled: `reorder_points_canonical` now uses the editor's GC rule (a point
+lives iff a surf `p_base` or NODE-RANGE vert names it; orphan verts keep a point alive no longer,
+and are never renumbered — golden evidence: every golden ships orphan verts with `iVertex` past
+the pool end, min == `points.len()` on ShipFan), and Pass-D landings now go through the real
+`bspAddNode` fill (`zones.rs::fill_ring_verts`: NEAR 0.015 pooling that CREATES pool points; a
+killed landing's points end orphan-only and get GC'd — the snap-to-nearest orphan hack is gone).
+Native orphan `iVertex` now dangle past the compacted pool exactly like the editor's, but their
+VALUES are native's own pre-GC numbering, not the editor's transient numbering — the byte residual
+this item tracks is unchanged in kind, smaller in surface.

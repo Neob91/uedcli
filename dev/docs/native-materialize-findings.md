@@ -6400,3 +6400,44 @@ shows 0%) so `build_ued_golden._wait_idle`'s 30% threshold can never fire here �
 mechanism behind this session's corpus-sweep `obj-load` 1800s timeouts; my harness waits on
 `/proc/<pid>/stat` of `unrealed.exe` instead (`wait_editor_idle`, `pass1_brush_trace_unatco.py`).
 Separate board finding filed (`docker-stats-cpu-reads-a-constant-50-for-an`).
+
+## Verts/points pool residual on the four structure-EXACT levels: three faithful ports shipped (2026-09-03)
+
+Round target: `03_NYC_UNATCOHQ` (+11 verts/+16 points vs golden, RING_NEAR baseline),
+`09_NYC_ShipFan` (+1/+21), `04_NYC_Underground` (+41/+18), `08_NYC_FreeClinic` (+1/+20). All work
+offline against cached goldens; spike + harness: `dev/docs/spikes/2026-09-03-verts-points-residual/`.
+
+1. **Points GC ignores orphan verts** (✅ golden bytes + prior 2026-08-30 `bspRefresh` disasm) —
+   every golden ships orphan verts whose `iVertex` dangles PAST the compacted Points pool end
+   (ShipFan 252 out-of-range, min == `points.len()`; FreeClinic 762; Underground 2406; UNATCO
+   1278): the editor drops points only orphan verts name and never renumbers orphans. Native's
+   `reorder_points_canonical` kept them (the all-verts third walk). Fixed: keep-set = `p_base` +
+   node-range verts only; orphan `iVertex` untouched; `light.rs` index validation narrowed to
+   node-range verts (the goldens themselves would fail the old whole-array check). Points d:
+   +16/+21/+18/+20 → **+6/+1/+3/0**.
+2. **The 0.25 point-merge (`Editor.dll 0x33dc0`) ends with a per-node ring fix-up** (📖 fresh
+   disasm `0x10033f29`-`0x10033f9b`, plus golden slot/nv signatures) — cyclic index-equal ring
+   verts dropped COUNT-only, survivors' `(iVertex, iSide)` compacted within the ring's own slots,
+   `NumVertices = survivors if >= 3 else 0`. Ported into `bspoptgeom::merge_near_points`; pins
+   Underground's 3 `num_vertices` diffs (golden 3-slot/nv=0 twice, 4-slot/nv=3 once — matched
+   exactly). Counts unchanged; node content improves.
+3. **Pass-D landings now use `bspAddNode`'s real ring fill** (`zones::fill_ring_verts`, replacing
+   the 0.002-pool + snap-to-nearest `append_ring_verts`): NEAR 0.015 pooling that CREATES pool
+   points (killed landings' points end orphan-only → GC'd by fix 1, reproducing the goldens'
+   dangling stale indices), consecutive-index collapse, wrap trim, <3 → nv=0; `fix_ring` (the
+   `FPoly::Fix` 0.002 collapse) runs first for every landing, live rings included. Unlocked BY
+   fix 1 (the old +447-spurious-points objection to a faithful append no longer applies).
+
+**Corpus A/B vs the RING_NEAR baseline (17 cached levels): no structure-exact level loses
+exactness; nodes IMPROVE on 4 levels (Helibase +9→+5, Chateau +4→+2, Club +2→+1, OceanLab
++465→+412) and regress on none; points improve nearly everywhere (Helibase +272→+24, OceanLab
++1020→+772, FreeClinic +20→0, ShipFan +21→+1); verts improve on 6 levels (UNATCO +11→+6,
+Underground +41→+24, Wanchai +99→+84, 747, Area51, TrainingFinal) and grow in magnitude only on
+already-structure-wrong levels (NSFHQ −1714→−1741, Garage −1222→−1253, Chateau +16→+65, Helibase
++101→+151, OceanLab +5198→+5271, Vandenberg −1354→−1469).** DX/NYC-Bar stay all-zero. `cargo test
+--release` 109/109; `regression_gate.py` GATE: PASS throughout.
+
+Remaining, filed: `verts-residual-on-structure-exact-levels` (orphan-slot gaps, needs live
+per-emission capture — golden orphan `iVertex` are stale, offline content diffing is meaningless)
+and `points-residual-live-ring-near-threshold-drift` (+6/+3/+1 live-ring drift extras).
+

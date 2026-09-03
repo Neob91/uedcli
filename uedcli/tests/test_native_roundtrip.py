@@ -373,7 +373,7 @@ def test_assemble_rewrites_the_levels_own_package_refs_to_mylevel(tmp_path):
         "the level's own package leaked into the package tables as an import"
     got = decode_dx_level_offline(str(dx), index=_index(),
                                   schema=mapimport.ImportSchema(resolver=_resolver))
-# `previousPath` is dropped by the WRITER (a nav-runtime field the editor resets on import;
+    # `previousPath` is dropped by the WRITER (a nav-runtime field the editor resets on import;
     # its T3D line above still exercises the NAV_SELF_REF package probe), and the decode
     # additionally drops `Base` with every non-`var()`-editable prop (CPF_EDIT unset; owner ruling
     # 2026-09-02). The `pkg.imports` check above is what pins the assemble-side fix this test is
