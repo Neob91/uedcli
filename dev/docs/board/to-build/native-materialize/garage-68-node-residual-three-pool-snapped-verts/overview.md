@@ -76,3 +76,32 @@ one shared tree-walk `find_nearest_vertex` for every `bspAddPoint` site (`bspcsg
 `build.rs`, `zones.rs::fill_ring_verts`), exact miss fallback; regression test pinning the 3
 Brush21 verts from the committed logs; guard FreeClinic points + Club/Chateau/NYC-Underground
 nodes; then the corpus A/B gates from the task.
+
+## Fix-round 2 (2026-09-03, branch `garage-pool-snap-fix-round2` @ `c442e4b` — coded, NOT MERGED)
+
+Both undecoded pieces above are now decoded and address-cited in the commit (`Engine.dll 0x1adb60`
+recursive body; `Editor.dll 0x35430`+`0x31ae0` miss tail — the miss path turns out to be TWO-stage,
+tree search then a gated whole-pool per-axis box-scan fallback, NOT ported, flagged separately).
+`find_nearest_vertex`/`find_nearest_vertex_at` ported into `bspcsg.rs`, wired into
+`bsp_add_point_tol`'s Points-pool path only (`build.rs`/`zones.rs` deliberately untouched — each
+has its own unexamined wrinkle). Two unit tests pin the real Brush21/Brush20 coords. `cargo test`
+113/113 green, full `bin/test` clean of new failures.
+
+**Coordinator-verified 18-level corpus A/B** (env var on/off, warm cache;
+`dev/docs/native-materialize-findings.md` "Garage `find_nearest_vertex` fix" entry has the full
+numbers): real wins on Garage (2→4/6, the fix's own target — `LENGTH MISMATCH` closes), NSFHQ04
+(1→4/6), Area51 (1→3/6), Paris Underground (3→4/6). **Real regression**: `points_match` flips
+true→false on `DX.dx` (previously 6/6, the campaign's simplest reference level) and `02_NYC_Bar.dx`,
+plus on the already-non-exact ShipFan/FreeClinic. This is not acceptable per the standing
+no-exact-level-regresses gate — **NOT merged**.
+
+Separately, the commit gates the new logic behind `UEDCLI_BSPCSG_POINT_NEAREST` (default OFF)
+while `materialize.py` calls `build_geometry_bspcsg` unconditionally — an "old way behind a flag"
+regardless of the regression (the exact pattern `321f5dd` removed `UEDCLI_BSPCSG_ADD_RECOMPUTE_
+NORMAL` for). The flag has to go either way once the logic is right.
+
+**Next session starts here**: root-cause why the tree-restricted `find_nearest_vertex` diverges
+from the whole-pool scan on DX/Bar's (much simpler) brush sets — likely the radius-shrink-as-you-
+descend or the on-plane early-return band is too aggressive/wrong outside Garage's specific
+geometry. Branch `garage-pool-snap-fix-round2` is sitting unpushed in worktree
+`agent-a14189a804e86a9c4` — read its diff before restarting rather than re-deriving the decode.
