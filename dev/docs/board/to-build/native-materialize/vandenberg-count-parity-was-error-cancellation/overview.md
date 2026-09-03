@@ -31,3 +31,16 @@ accepts its golden — the k=0..8 normal-probe capture is in
 `_scratch/pass1-trace/pass1-normal-probe-golden_vandenberg-gas.log` of the 2026-09-02 worktree;
 logs also under `dev/docs/spikes/2026-08-29-unatco-repart-live-diff/logs/`) to find the first
 diverging brush the same way UNATCO's was cleared.
+
+## 2026-09-03: the post-merge sweep "regression" IS this item — bisected, not the mover merge
+
+The fresh baseline sweep (tab `2026-09-03T01h49Z`) flagged Vandenberg `010000 -> 000000` vs the
+pre-merge tab and attributed it to `8c4950f` (the unbuilt-parity/mover merge). Offline bisect
+against the cached golden (same `.dx` both runs): `4c7b72d` builds the OLD numbers
+(`-6/+0/-56`), `ccfaaa2` — this item's own f32-chain ship, pushed in the same batch as the merge —
+builds the new (`+659/+7/+309`); `8c4950f`'s mover/`rsp_links` content adds nothing on top. No
+mover enters or leaves world CSG: the +7 surf delta is 9 semisolid Pass-2 brushes (8 of them the
+`Brush154`-family cardinal-multi 10-poly Adds at +1 each, 1 scaled at -1) — downstream cascade of
+the Pass-1 tree shift over the level's 318 scaled brushes, matching this item's "compensating
+divergence further down" reading. The lighting drop (0.28% -> 0.00%) is the same cascade. Nothing
+new to revert; the next step above stands.

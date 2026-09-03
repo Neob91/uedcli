@@ -155,3 +155,36 @@ rather than silently reproduced. Not built this round (out of scope; flagging pe
 402-brush node-owner residual (this item's own round-1 open question) is still unmeasured; whether
 any of the other ~13 OG levels beyond the 8 already checked carries a similar `CsgOper`-absent brush
 is still unmeasured.
+
+## Round 3 (2026-09-03) — Active-as-Subtract REFUTED at the outcome level by a 2-brush live A/B
+
+Paris Underground's remaining `-108/+0/-4` residual prefix-searched live
+(`dev/docs/spikes/2026-09-03-built-parity-worst-tier/`, log committed there): first diverging brush
+is n=2. The pair is `Brush1246` — the level's `CsgOper`-absent first brush, a default 256-cube at
+the origin (n=1 alone builds exact) — plus `Brush328`, a plain 6-poly `CSG_Subtract` overlapping
+most of the cube. Counts:
+
+| build                                        | nodes | surfs | leaves |
+|----------------------------------------------|-------|-------|--------|
+| editor, as authored (`CsgOper` absent)       | 16    | 12    | 6      |
+| editor, `Brush1246` -> explicit `CSG_Subtract` | 14  | 11    | 2      |
+| native, either variant                       | 14    | 11    | 2      |
+
+Native matches the explicit-Subtract editor build exactly and is A/B-insensitive to the variant
+(`pu_two_brush.py`) — so the shipped Round-2 model (`CsgOper::Active` behaves as Subtract) is
+right about the filter dispatch but wrong about the outcome: the editor's
+Active-led build KEEPS the cube's ceiling surf and full-height wall rings (un-split, T-vertex only)
+and `Brush328`'s floor fragment over the cube footprint, partitioning the space into 6 leaves,
+where the Subtract-led build annihilates/trims them (`pu_two_dump.py` has both models in full).
+The retained faces mean later brushes never cut an Active brush's faces the way they cut a real
+Subtract's, and the leaf structure differs — consistent with nsfhq04's earlier "the editor moves
+237 nodes when `Brush8321` is added, native moves 17".
+
+Round 2's disassembly showed every geometry-gating `CsgOper` test in `bspBrushCSG` is a literal
+`==1`/`==3`/`==4` compare with one "`==2`-only side effect irrelevant to geometry" — that side
+effect is now the prime suspect and needs re-reading; it is evidently not irrelevant. Freeclinic08
+staying byte-exact under Active-as-Subtract is not a counterexample worth keeping the model for:
+whether `Brush586`'s volume ends up identically carved either way there is untested, and the 2-brush
+golden is strictly stronger evidence. Scope: this remaining gap plausibly drives Paris Underground's
+whole `-108` (first divergence IS this pair) and part of nsfhq04's `-92`/Vandenberg's residual; it
+cannot explain WanChai Garage or Training Final (no `CsgOper`-absent brush in either).

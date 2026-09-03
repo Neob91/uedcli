@@ -1,0 +1,123 @@
+[11_paris_underground] 582 actors; 272 world-csg brushes; 310 other actors
+  [n=272] building editor golden: /workspace/uedcli/.claude/worktrees/agent-ad0a3fa75ac3f913c/.venv/bin/python /workspace/uedcli/.claude/worktrees/agent-ad0a3fa75ac3f913c/dev/docs/spikes/2026-07-15-native-materialize/harness/build_ued_golden.py --trunk /workspace/uedcli/.claude/worktrees/agent-ad0a3fa75ac3f913c/_scratch/pu-prefix/n0272/maps/11_paris_underground --out /workspace/uedcli/.claude/worktrees/agent-ad0a3fa75ac3f913c/_scratch/pu-prefix/n0272/golden_n0272.dx --world-only --no-light --no-obj-load --overwrite
+trunk 11_paris_underground: 582 actors; building 273 (272 brush) world_only=True lit=False
+referenced packages to OBJ LOAD: ['Catacombs', 'CoreTexCeramic', 'CoreTexGlass', 'CoreTexMetal', 'CoreTexMisc', 'CoreTexTiles', 'Engine', 'Paris', 'ParisCathedral_Music']
+editor up: uned-01a064fc-3106-7694-b64a-bcc4521e8c44
+  (--no-obj-load: skipping OBJ LOAD of referenced packages)
+    [map-new] idle after 16s (cpu 9.5%, 8 quiet reads)
+    [re-add] idle after 16s (cpu 22.7%, 8 quiet reads)
+  REBUILD[0]: MAP REBUILD ...
+    [rebuild[0]] idle after 29s (cpu 9.5%, 8 quiet reads)
+  MAP SAVE ...
+WROTE /workspace/uedcli/.claude/worktrees/agent-ad0a3fa75ac3f913c/_scratch/pu-prefix/n0272/golden_n0272.dx (703523 bytes container-side, 703523 host-side)
+n= 272 brush=Brush1206            native(nodes=2319,surfs=1396,leaves=372) editor(nodes=2427,surfs=1396,leaves=376) d_nodes=-108 d_surfs=+0 d_leaves=-4
+  [n=1] building editor golden: /workspace/uedcli/.claude/worktrees/agent-ad0a3fa75ac3f913c/.venv/bin/python /workspace/uedcli/.claude/worktrees/agent-ad0a3fa75ac3f913c/dev/docs/spikes/2026-07-15-native-materialize/harness/build_ued_golden.py --trunk /workspace/uedcli/.claude/worktrees/agent-ad0a3fa75ac3f913c/_scratch/pu-prefix/n0001/maps/11_paris_underground --out /workspace/uedcli/.claude/worktrees/agent-ad0a3fa75ac3f913c/_scratch/pu-prefix/n0001/golden_n0001.dx --world-only --no-light --no-obj-load --overwrite
+trunk 11_paris_underground: 311 actors; building 2 (1 brush) world_only=True lit=False
+referenced packages to OBJ LOAD: ['Engine', 'ParisCathedral_Music']
+editor up: uned-01a064fd-90a4-7ec6-b6b1-d471808ba329
+  (--no-obj-load: skipping OBJ LOAD of referenced packages)
+    [map-new] idle after 16s (cpu 9.4%, 8 quiet reads)
+    [re-add] idle after 16s (cpu 9.2%, 8 quiet reads)
+  REBUILD[0]: MAP REBUILD ...
+    [rebuild[0]] idle after 18s (cpu 21.4%, 8 quiet reads)
+  MAP SAVE ...
+WROTE /workspace/uedcli/.claude/worktrees/agent-ad0a3fa75ac3f913c/_scratch/pu-prefix/n0001/golden_n0001.dx (4659 bytes container-side, 4659 host-side)
+n=   1 brush=Brush1246            native(nodes=6,surfs=6,leaves=1) editor(nodes=6,surfs=6,leaves=1) d_nodes=+0 d_surfs=+0 d_leaves=+0
+  [n=136] building editor golden: /workspace/uedcli/.claude/worktrees/agent-ad0a3fa75ac3f913c/.venv/bin/python /workspace/uedcli/.claude/worktrees/agent-ad0a3fa75ac3f913c/dev/docs/spikes/2026-07-15-native-materialize/harness/build_ued_golden.py --trunk /workspace/uedcli/.claude/worktrees/agent-ad0a3fa75ac3f913c/_scratch/pu-prefix/n0136/maps/11_paris_underground --out /workspace/uedcli/.claude/worktrees/agent-ad0a3fa75ac3f913c/_scratch/pu-prefix/n0136/golden_n0136.dx --world-only --no-light --no-obj-load --overwrite
+trunk 11_paris_underground: 446 actors; building 137 (136 brush) world_only=True lit=False
+referenced packages to OBJ LOAD: ['Catacombs', 'CoreTexCeramic', 'CoreTexGlass', 'CoreTexMetal', 'CoreTexMisc', 'Engine', 'Paris', 'ParisCathedral_Music']
+editor up: uned-01a064fe-c70f-7886-84fa-5d2a048c7163
+  (--no-obj-load: skipping OBJ LOAD of referenced packages)
+    [map-new] idle after 16s (cpu 8.8%, 8 quiet reads)
+    [re-add] idle after 16s (cpu 9.6%, 8 quiet reads)
+  REBUILD[0]: MAP REBUILD ...
+    [rebuild[0]] idle after 18s (cpu 24.2%, 8 quiet reads)
+  MAP SAVE ...
+WROTE /workspace/uedcli/.claude/worktrees/agent-ad0a3fa75ac3f913c/_scratch/pu-prefix/n0136/golden_n0136.dx (552410 bytes container-side, 552410 host-side)
+n= 136 brush=Brush317             native(nodes=1439,surfs=785,leaves=271) editor(nodes=1476,surfs=786,leaves=268) d_nodes=-37 d_surfs=-1 d_leaves=+3
+  [n=68] building editor golden: /workspace/uedcli/.claude/worktrees/agent-ad0a3fa75ac3f913c/.venv/bin/python /workspace/uedcli/.claude/worktrees/agent-ad0a3fa75ac3f913c/dev/docs/spikes/2026-07-15-native-materialize/harness/build_ued_golden.py --trunk /workspace/uedcli/.claude/worktrees/agent-ad0a3fa75ac3f913c/_scratch/pu-prefix/n0068/maps/11_paris_underground --out /workspace/uedcli/.claude/worktrees/agent-ad0a3fa75ac3f913c/_scratch/pu-prefix/n0068/golden_n0068.dx --world-only --no-light --no-obj-load --overwrite
+trunk 11_paris_underground: 378 actors; building 69 (68 brush) world_only=True lit=False
+referenced packages to OBJ LOAD: ['Catacombs', 'CoreTexCeramic', 'CoreTexMetal', 'Engine', 'Paris', 'ParisCathedral_Music']
+editor up: uned-01a06500-22c1-7a38-a5ac-c7997bff7abc
+  (--no-obj-load: skipping OBJ LOAD of referenced packages)
+    [map-new] idle after 16s (cpu 21.4%, 8 quiet reads)
+    [re-add] idle after 16s (cpu 21.0%, 8 quiet reads)
+  REBUILD[0]: MAP REBUILD ...
+    [rebuild[0]] idle after 18s (cpu 6.3%, 8 quiet reads)
+  MAP SAVE ...
+WROTE /workspace/uedcli/.claude/worktrees/agent-ad0a3fa75ac3f913c/_scratch/pu-prefix/n0068/golden_n0068.dx (314322 bytes container-side, 314322 host-side)
+n=  68 brush=Brush124             native(nodes=815,surfs=471,leaves=162) editor(nodes=805,surfs=472,leaves=170) d_nodes=+10 d_surfs=-1 d_leaves=-8
+  [n=34] building editor golden: /workspace/uedcli/.claude/worktrees/agent-ad0a3fa75ac3f913c/.venv/bin/python /workspace/uedcli/.claude/worktrees/agent-ad0a3fa75ac3f913c/dev/docs/spikes/2026-07-15-native-materialize/harness/build_ued_golden.py --trunk /workspace/uedcli/.claude/worktrees/agent-ad0a3fa75ac3f913c/_scratch/pu-prefix/n0034/maps/11_paris_underground --out /workspace/uedcli/.claude/worktrees/agent-ad0a3fa75ac3f913c/_scratch/pu-prefix/n0034/golden_n0034.dx --world-only --no-light --no-obj-load --overwrite
+trunk 11_paris_underground: 344 actors; building 35 (34 brush) world_only=True lit=False
+referenced packages to OBJ LOAD: ['Catacombs', 'CoreTexCeramic', 'CoreTexMetal', 'Engine', 'Paris', 'ParisCathedral_Music']
+editor up: uned-01a06501-79f9-7b48-a823-f0623da0b8b2
+  (--no-obj-load: skipping OBJ LOAD of referenced packages)
+    [map-new] idle after 16s (cpu 6.7%, 8 quiet reads)
+    [re-add] idle after 16s (cpu 20.7%, 8 quiet reads)
+  REBUILD[0]: MAP REBUILD ...
+    [rebuild[0]] idle after 50s (cpu 6.1%, 8 quiet reads)
+  MAP SAVE ...
+WROTE /workspace/uedcli/.claude/worktrees/agent-ad0a3fa75ac3f913c/_scratch/pu-prefix/n0034/golden_n0034.dx (212718 bytes container-side, 212718 host-side)
+n=  34 brush=Brush155             native(nodes=542,surfs=302,leaves=126) editor(nodes=553,surfs=303,leaves=132) d_nodes=-11 d_surfs=-1 d_leaves=-6
+  [n=17] building editor golden: /workspace/uedcli/.claude/worktrees/agent-ad0a3fa75ac3f913c/.venv/bin/python /workspace/uedcli/.claude/worktrees/agent-ad0a3fa75ac3f913c/dev/docs/spikes/2026-07-15-native-materialize/harness/build_ued_golden.py --trunk /workspace/uedcli/.claude/worktrees/agent-ad0a3fa75ac3f913c/_scratch/pu-prefix/n0017/maps/11_paris_underground --out /workspace/uedcli/.claude/worktrees/agent-ad0a3fa75ac3f913c/_scratch/pu-prefix/n0017/golden_n0017.dx --world-only --no-light --no-obj-load --overwrite
+trunk 11_paris_underground: 327 actors; building 18 (17 brush) world_only=True lit=False
+referenced packages to OBJ LOAD: ['Catacombs', 'CoreTexCeramic', 'Engine', 'Paris', 'ParisCathedral_Music']
+editor up: uned-01a06503-2f7d-7302-875a-9b2d2a2eb67a
+  (--no-obj-load: skipping OBJ LOAD of referenced packages)
+    [map-new] idle after 16s (cpu 20.3%, 8 quiet reads)
+    [re-add] idle after 16s (cpu 9.1%, 8 quiet reads)
+  REBUILD[0]: MAP REBUILD ...
+    [rebuild[0]] idle after 18s (cpu 8.3%, 8 quiet reads)
+  MAP SAVE ...
+WROTE /workspace/uedcli/.claude/worktrees/agent-ad0a3fa75ac3f913c/_scratch/pu-prefix/n0017/golden_n0017.dx (65618 bytes container-side, 65618 host-side)
+n=  17 brush=Brush1393            native(nodes=161,surfs=102,leaves=37) editor(nodes=159,surfs=103,leaves=36) d_nodes=+2 d_surfs=-1 d_leaves=+1
+  [n=9] building editor golden: /workspace/uedcli/.claude/worktrees/agent-ad0a3fa75ac3f913c/.venv/bin/python /workspace/uedcli/.claude/worktrees/agent-ad0a3fa75ac3f913c/dev/docs/spikes/2026-07-15-native-materialize/harness/build_ued_golden.py --trunk /workspace/uedcli/.claude/worktrees/agent-ad0a3fa75ac3f913c/_scratch/pu-prefix/n0009/maps/11_paris_underground --out /workspace/uedcli/.claude/worktrees/agent-ad0a3fa75ac3f913c/_scratch/pu-prefix/n0009/golden_n0009.dx --world-only --no-light --no-obj-load --overwrite
+trunk 11_paris_underground: 319 actors; building 10 (9 brush) world_only=True lit=False
+referenced packages to OBJ LOAD: ['Catacombs', 'CoreTexCeramic', 'Engine', 'Paris', 'ParisCathedral_Music']
+editor up: uned-01a06504-6790-7abb-9d94-177309110a2d
+  (--no-obj-load: skipping OBJ LOAD of referenced packages)
+    [map-new] idle after 40s (cpu 12.7%, 8 quiet reads)
+    [re-add] idle after 16s (cpu 23.0%, 8 quiet reads)
+  REBUILD[0]: MAP REBUILD ...
+    [rebuild[0]] idle after 18s (cpu 7.3%, 8 quiet reads)
+  MAP SAVE ...
+WROTE /workspace/uedcli/.claude/worktrees/agent-ad0a3fa75ac3f913c/_scratch/pu-prefix/n0009/golden_n0009.dx (35080 bytes container-side, 35080 host-side)
+n=   9 brush=Brush158             native(nodes=82,surfs=53,leaves=21) editor(nodes=83,surfs=54,leaves=19) d_nodes=-1 d_surfs=-1 d_leaves=+2
+  [n=5] building editor golden: /workspace/uedcli/.claude/worktrees/agent-ad0a3fa75ac3f913c/.venv/bin/python /workspace/uedcli/.claude/worktrees/agent-ad0a3fa75ac3f913c/dev/docs/spikes/2026-07-15-native-materialize/harness/build_ued_golden.py --trunk /workspace/uedcli/.claude/worktrees/agent-ad0a3fa75ac3f913c/_scratch/pu-prefix/n0005/maps/11_paris_underground --out /workspace/uedcli/.claude/worktrees/agent-ad0a3fa75ac3f913c/_scratch/pu-prefix/n0005/golden_n0005.dx --world-only --no-light --no-obj-load --overwrite
+trunk 11_paris_underground: 315 actors; building 6 (5 brush) world_only=True lit=False
+referenced packages to OBJ LOAD: ['Catacombs', 'CoreTexCeramic', 'Engine', 'Paris', 'ParisCathedral_Music']
+editor up: uned-01a06506-1a31-75f9-b5a2-e7fbd2685c4d
+  (--no-obj-load: skipping OBJ LOAD of referenced packages)
+    [map-new] idle after 17s (cpu 6.7%, 8 quiet reads)
+    [re-add] idle after 16s (cpu 21.6%, 8 quiet reads)
+  REBUILD[0]: MAP REBUILD ...
+    [rebuild[0]] idle after 18s (cpu 7.7%, 8 quiet reads)
+  MAP SAVE ...
+WROTE /workspace/uedcli/.claude/worktrees/agent-ad0a3fa75ac3f913c/_scratch/pu-prefix/n0005/golden_n0005.dx (23977 bytes container-side, 23977 host-side)
+n=   5 brush=Brush142             native(nodes=54,surfs=31,leaves=17) editor(nodes=58,surfs=32,leaves=14) d_nodes=-4 d_surfs=-1 d_leaves=+3
+  [n=3] building editor golden: /workspace/uedcli/.claude/worktrees/agent-ad0a3fa75ac3f913c/.venv/bin/python /workspace/uedcli/.claude/worktrees/agent-ad0a3fa75ac3f913c/dev/docs/spikes/2026-07-15-native-materialize/harness/build_ued_golden.py --trunk /workspace/uedcli/.claude/worktrees/agent-ad0a3fa75ac3f913c/_scratch/pu-prefix/n0003/maps/11_paris_underground --out /workspace/uedcli/.claude/worktrees/agent-ad0a3fa75ac3f913c/_scratch/pu-prefix/n0003/golden_n0003.dx --world-only --no-light --no-obj-load --overwrite
+trunk 11_paris_underground: 313 actors; building 4 (3 brush) world_only=True lit=False
+referenced packages to OBJ LOAD: ['Catacombs', 'Engine', 'Paris', 'ParisCathedral_Music']
+editor up: uned-01a06507-5232-7173-b33e-66807f3a96a3
+  (--no-obj-load: skipping OBJ LOAD of referenced packages)
+    [map-new] idle after 16s (cpu 8.8%, 8 quiet reads)
+    [re-add] idle after 16s (cpu 7.8%, 8 quiet reads)
+  REBUILD[0]: MAP REBUILD ...
+    [rebuild[0]] idle after 18s (cpu 6.4%, 8 quiet reads)
+  MAP SAVE ...
+WROTE /workspace/uedcli/.claude/worktrees/agent-ad0a3fa75ac3f913c/_scratch/pu-prefix/n0003/golden_n0003.dx (16026 bytes container-side, 16026 host-side)
+n=   3 brush=Brush1378            native(nodes=36,surfs=21,leaves=14) editor(nodes=39,surfs=22,leaves=17) d_nodes=-3 d_surfs=-1 d_leaves=-3
+  [n=2] building editor golden: /workspace/uedcli/.claude/worktrees/agent-ad0a3fa75ac3f913c/.venv/bin/python /workspace/uedcli/.claude/worktrees/agent-ad0a3fa75ac3f913c/dev/docs/spikes/2026-07-15-native-materialize/harness/build_ued_golden.py --trunk /workspace/uedcli/.claude/worktrees/agent-ad0a3fa75ac3f913c/_scratch/pu-prefix/n0002/maps/11_paris_underground --out /workspace/uedcli/.claude/worktrees/agent-ad0a3fa75ac3f913c/_scratch/pu-prefix/n0002/golden_n0002.dx --world-only --no-light --no-obj-load --overwrite
+trunk 11_paris_underground: 312 actors; building 3 (2 brush) world_only=True lit=False
+referenced packages to OBJ LOAD: ['Catacombs', 'Engine', 'Paris', 'ParisCathedral_Music']
+editor up: uned-01a06508-87cd-742d-aa17-624bbd7b9fd1
+  (--no-obj-load: skipping OBJ LOAD of referenced packages)
+    [map-new] idle after 16s (cpu 9.2%, 8 quiet reads)
+    [re-add] idle after 16s (cpu 9.4%, 8 quiet reads)
+  REBUILD[0]: MAP REBUILD ...
+    [rebuild[0]] idle after 18s (cpu 20.6%, 8 quiet reads)
+  MAP SAVE ...
+WROTE /workspace/uedcli/.claude/worktrees/agent-ad0a3fa75ac3f913c/_scratch/pu-prefix/n0002/golden_n0002.dx (7939 bytes container-side, 7939 host-side)
+n=   2 brush=Brush328             native(nodes=14,surfs=11,leaves=2) editor(nodes=16,surfs=12,leaves=6) d_nodes=-2 d_surfs=-1 d_leaves=-4
+
+FIRST DIVERGING BRUSH [11_paris_underground]: n=2 -> Brush328 (prefix n=1=Brush1246 exact, n=2 not)
