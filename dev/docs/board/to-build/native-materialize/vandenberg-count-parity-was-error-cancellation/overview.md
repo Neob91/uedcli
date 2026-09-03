@@ -44,3 +44,9 @@ mover enters or leaves world CSG: the +7 surf delta is 9 semisolid Pass-2 brushe
 the Pass-1 tree shift over the level's 318 scaled brushes, matching this item's "compensating
 divergence further down" reading. The lighting drop (0.28% -> 0.00%) is the same cascade. Nothing
 new to revert; the next step above stands.
+
+Also ruled out (2026-09-03): the corrected `CsgOper::Active` semantics
+(`vandenberg-gas-csg-active-csgoper-brush-causes` Round 4) are a strict no-op here — the native
+build is sha256-IDENTICAL pre/post that fix (`Brush230` is a lone 1-poly Active brush nothing
+overlaps within its one-brush deferral window). The `+659/+7/+309` residual is entirely this
+item's f32-chain divergence.

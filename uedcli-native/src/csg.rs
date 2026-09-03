@@ -24,18 +24,24 @@ const CSG_SUBTRACT_MASK: u32 = 0x28; // PF_Semisolid | PF_NotSolid
 ///
 /// `Active` is `Engine.Brush.CsgOper`'s CLASS DEFAULT — a brush actor gets it only when it never
 /// went through a real `BRUSH ADD`/`SUBTRACT`/etc (an absent `CsgOper=` in the T3D). Disassembly
-/// (`Editor.dll bspBrushCSG 0x355e0`, live-verified 2026-09-01 against this tree's own
-/// `uned/UED22/Editor.dll`) shows every CsgOper-dispatch inside `bspBrushCSG` is a literal
-/// equality test against a SPECIFIC ordinal (`cmp CsgOper,1` for Add, `cmp CsgOper,3` for
-/// Intersect, `cmp CsgOper,2` for one Subtract-only side effect) — never a range/validity check —
-/// so `CsgOper=0` falls through every one of those tests into whichever branch is the "not this
-/// specific value" default, which is the SUBTRACT-shaped one at all THREE dispatch points that
-/// gate node/surf/vert output (`subtractMask`, the LOOP-2 pass-1 filter func, the world-through-
-/// brush leaf func — RVAs `0x10035688`, `0x10035a84`-`0x10035a95`, `0x10033472`-`0x1003347f`).
+/// (`Editor.dll bspBrushCSG 0x355e0`, 2026-09-01 + the 2026-09-03 re-read, against this tree's own
+/// `uned/UED22/Editor.dll`): every CsgOper dispatch is a literal ordinal test, so ordinal 0 takes
+/// the "not this value" arm everywhere.  Net semantics — Subtract-SHAPED going in, but NOT
+/// outcome-equivalent to Subtract:
+///   * pass 1 (brush polys -> world) is exactly Subtract's (`subtractMask` `0x10035688`, filter
+///     func `0x10035a84`-`0x95`: Subtract unless `==1`);
+///   * the world is NEVER cut: `FilterWorldThroughBrush`'s filter body is gated on literal
+///     `CsgOper==1||==2` (`0x100333dd`), so for 0 the walk does nothing;
+///   * NO `bspCleanup` after the op (`0x10035dcd`-`0x35dd5`, literal `==1||==2`), so an Active
+///     brush's nodes keep `NF_IsNew` until the next Add/Subtract brush's cleanup: that next
+///     brush's descent sees them non-CSG (`FBspNode::IsCsg` masks NF_IsNew — its polys classify
+///     against the PRE-Active solidity) and its world cut skips their whole subtree
+///     (`0x100332d4`).  Live-pinned by the Paris Underground 2-brush 16/12/6-vs-14/11/2 gap
+///     (spike `2026-09-03-built-parity-worst-tier`).
 /// A real placed brush actor is never AUTHORED with `CsgOper=CSG_Active` on purpose — this variant
 /// exists to reproduce the editor's real (likely-unintended-by-the-level-author) behavior when one
 /// is, not because `Active` is a meaningful world-CSG operation in its own right. See
-/// `dev/docs/board/inbox/vandenberg-gas-csg-active-csgoper-brush-causes/overview.md`.
+/// `dev/docs/board/to-build/native-materialize/vandenberg-gas-csg-active-csgoper-brush-causes/`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CsgOper {
     Active,

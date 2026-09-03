@@ -2773,16 +2773,24 @@ fn bsp_brush_csg(model: &mut Model, brush: &build::BrushInput, actor_index: i32,
 
     // Cut the world with the brush (skip for non-solid/semisolid brushes): build the brush's convex
     // temp BSP, then filter every existing world face down it (split-and-re-add, §8.1).
-    if !model.nodes.is_empty() && (poly_flags & 0x28) == 0 {
+    //
+    // ACTIVE never cuts the world (2026-09-03 re-disassembly): inside `FilterWorldThroughBrush`
+    // (`0x33250`) the per-world-node filter body is gated on LITERAL `CsgOper==1||==2`
+    // (`0x100333dd cmp ecx,1; je body; cmp ecx,2; je body`, `==3`/`==4` divert to the intersect
+    // funcs, anything else — ordinal 0 included — falls to the recursion tail at `0x10033503`), so
+    // for `Active` the editor walks the world tree doing NOTHING.  The 0x33472 cmove (Subtract func
+    // unless `==1`) sits INSIDE that gated body and is unreachable for `Active` — round 2's
+    // "Active takes the Subtract world-cut" reading decoded the cmove but missed the gate.
+    // Skipping the call is outcome-equivalent to the editor's empty walk.
+    if oper != csg::CsgOper::Active && !model.nodes.is_empty() && (poly_flags & 0x28) == 0 {
         if let Ok(brush_temp) = build_brush_temp_bsp(&temp) {
             filter_world_through_brush(
                 model,
                 &brush_temp,
-                // World-thru-brush leaf func select (`Editor.dll 0x33472`-`0x1003347f`, independently
-                // re-disassembled 2026-09-01): `eax=SubtractFunc(0x34980); cmp CsgOper,1; cmove
-                // eax,AddFunc(0x31b90)` — Subtract is the pre-cmove DEFAULT, overridden to Add only on
-                // a literal `CsgOper==1`. `Active` (0) does not match, so it takes the Subtract func,
-                // same as real Subtract.
+                // World-thru-brush leaf func select (`Editor.dll 0x33472`-`0x1003347f`):
+                // `eax=SubtractFunc(0x34980); cmp CsgOper,1; cmove eax,AddFunc(0x31b90)` — only
+                // ever reached with `CsgOper==1||2` (gate above), so this is a plain Add/Subtract
+                // choice.
                 oper != csg::CsgOper::Add,
                 None,
                 &mut sink,
@@ -2790,18 +2798,29 @@ fn bsp_brush_csg(model: &mut Model, brush: &build::BrushInput, actor_index: i32,
         }
     }
 
-    // bspBrushCSG TAIL (Editor.dll `0x35de1`): after every Add/Subtract brush the engine calls
-    // `bspCleanup` UNCONDITIONALLY.  This does double duty — it recursively clears NF_IsNew (so the
-    // NEXT brush sees these faces as CSG-solid) AND splices the FWTB-DEAD (`nv==0`) nodes out of the
-    // tree, so the next brush filters through a CLEANED tree that descends ALIVE coplanar anchors,
-    // not dead chain-heads.  Doing this per-brush (not once at the end) is what makes native's
-    // incremental world tree match the editor's node-for-node: a dead chain-head left in place flips
-    // a splitter's orientation and reverses fragment emit order (§10.8 node-4 + the RoofNE #184
-    // swap).  Replaces the old flat NF_IsNew clear, which cleared the flag but left dead nodes as
-    // splitters.  (csgRebuild passes bBuildBounds=0, so bspBuildBounds is skipped; the per-brush
-    // bspMergeCoplanars it also runs with bMergePolys=1 operates on Model->Polys, which native
-    // rebuilds from the nodes at repartition — so it does not affect node-tree parity.)
-    bsp_cleanup(model);
+    // bspBrushCSG TAIL (Editor.dll `0x35dcd`-`0x35dd5`): `bspCleanup` runs only for a LITERAL
+    // `CsgOper==1||==2` (`cmp edx,1; je body; cmp edx,2; jne skip` — the `==2` compare round 2
+    // misattributed to the NumZones reset at `0x356a2`, a separate site).  This does double duty —
+    // it recursively clears NF_IsNew (so the NEXT brush sees these faces as CSG-solid) AND splices
+    // the FWTB-DEAD (`nv==0`) nodes out of the tree, so the next brush filters through a CLEANED
+    // tree that descends ALIVE coplanar anchors, not dead chain-heads.  Doing this per-brush (not
+    // once at the end) is what makes native's incremental world tree match the editor's
+    // node-for-node: a dead chain-head left in place flips a splitter's orientation and reverses
+    // fragment emit order (§10.8 node-4 + the RoofNE #184 swap).  (csgRebuild passes
+    // bBuildBounds=0, so bspBuildBounds is skipped; the per-brush bspMergeCoplanars it also runs
+    // with bMergePolys=1 operates on Model->Polys, which native rebuilds from the nodes at
+    // repartition — so it does not affect node-tree parity.)
+    //
+    // An ACTIVE brush therefore leaves ALL its new nodes flagged NF_IsNew until the next
+    // Add/Subtract brush's cleanup clears them.  While flagged, they (a) do not flip `Outside` in
+    // the next brush's descent (`FBspNode::IsCsg` masks NF_IsNew — `is_csg_filter`), so that
+    // brush's polys classify against the PRE-Active world solidity, and (b) shield themselves and
+    // their whole subtree from that brush's world cut (`FilterWorldThroughBrush` returns on
+    // NF_IsNew, `0x100332d4`).  This is the live-confirmed 16/12/6-vs-14/11/2 Paris Underground
+    // 2-brush outcome gap (spike `2026-09-03-built-parity-worst-tier`).
+    if oper == csg::CsgOper::Add || oper == csg::CsgOper::Subtract {
+        bsp_cleanup(model);
+    }
     // The Add/Subtract leaves are node-GROWING, never collecting: nothing may have landed in the
     // sink. Pinned so a future `LeafFunc::Collect` use here cannot silently accumulate into a
     // vector no one reads.
@@ -3017,8 +3036,9 @@ pub fn build_geometry_bspcsg(brushes: &[build::BrushInput]) -> Result<Model, Bui
             continue;
         }
         bsp_brush_csg(&mut model, b, bi as i32, pf);
-        // bsp_brush_csg's tail already runs bsp_cleanup per-brush (mirrors bspBrushCSG @0x35de1),
-        // so the incremental tree here is already the editor's post-cleanup structure.
+        // bsp_brush_csg's tail already runs bsp_cleanup per Add/Subtract brush (mirrors bspBrushCSG
+        // @0x35dcd), so the incremental tree here is already the editor's post-cleanup structure —
+        // except right after an Active brush, whose nodes stay NF_IsNew (also editor-faithful).
         if brush_state.is_some() {
             eprintln!(
                 "BRUSHSTATE k={} bi={} nodes={} surfs={} verts={} points={} vectors={}",
@@ -3197,8 +3217,9 @@ pub fn build_geometry_bspcsg(brushes: &[build::BrushInput]) -> Result<Model, Bui
         //
         // `NF_IsNew` is a per-brush TRANSIENT: `FBspNode::IsCsg()` (our `is_csg_filter`, mask 0x21)
         // reports a flagged node as NON-solid, so that the nodes a brush adds cannot influence how
-        // that same brush's remaining faces classify.  The engine clears it in `bspCleanup` once the
-        // brush is done, which is why `bsp_brush_csg` ends with `bsp_cleanup`.
+        // that same brush's remaining faces classify.  The engine clears it in `bspCleanup` once an
+        // Add/Subtract brush is done, which is why `bsp_brush_csg` ends with a gated `bsp_cleanup`
+        // (an Active brush deliberately keeps its flags — see its tail comment).
         //
         // The repartition builds its whole tree through `split_poly_list` -> `bsp_add_node(…,
         // NF_IS_NEW, …)`, so EVERY node comes out flagged, and nothing cleared it before Pass 2 ran.
@@ -4493,17 +4514,16 @@ mod tests {
         }
     }
 
-    /// `CsgOper::Active` (T3D's absent-`CsgOper=` class default, ordinal 0) must dispatch inside
-    /// `bsp_brush_csg` IDENTICALLY to `CsgOper::Subtract` — disassembly-confirmed 2026-09-01
-    /// (`Editor.dll bspBrushCSG 0x355e0`, live-verified against this tree's own `uned/UED22/
-    /// Editor.dll`): every CsgOper dispatch that gates node/surf output tests a LITERAL ordinal
-    /// equality (`cmp CsgOper,1` for Add at `0x10035688`/`0x10035a84`-`0x95`, `cmp CsgOper,3` for
-    /// Intersect at `0x100359d3`), never a range/validity check, so ordinal 0 falls through every
-    /// one of them into the same "not this specific value" branch Subtract(2) takes. Pins the FIX
-    /// for `dev/docs/board/inbox/vandenberg-gas-csg-active-csgoper-brush-causes/overview.md`: an
-    /// early `bsp_brush_csg` guard used to silently no-op any oper that wasn't literally Add or
-    /// Subtract, which (once `Active` became representable) would have shipped the ALREADY-REFUTED
-    /// "skip the brush" hypothesis (live A/B/C build "A").
+    /// A LONE `CsgOper::Active` brush (T3D's absent-`CsgOper=` class default, ordinal 0) builds
+    /// IDENTICALLY to a lone `CsgOper::Subtract`: pass 1 is Subtract-shaped (`0x10035688`/
+    /// `0x10035a84`-`0x95`, Subtract unless a literal `CsgOper==1`), and the two ops' remaining
+    /// differences — no world cut (`0x100333dd`), no tail `bspCleanup` (`0x10035dcd`) — are
+    /// invisible with no prior world and no following brush.  Pins the ORIGINAL fix for
+    /// `vandenberg-gas-csg-active-csgoper-brush-causes`: an early `bsp_brush_csg` guard used to
+    /// silently no-op any oper that wasn't literally Add or Subtract, which would have shipped the
+    /// ALREADY-REFUTED "skip the brush" hypothesis (live A/B/C build "A").  Where Active DOES
+    /// diverge from Subtract — brush interactions — is pinned by
+    /// `active_led_pair_keeps_buried_faces_uncut` below.
     #[test]
     fn csg_active_dispatches_exactly_like_subtract() {
         let geom = (256.0, 256.0, 128.0, Vec3::new(0.0, 0.0, 0.0));
@@ -4532,6 +4552,89 @@ mod tests {
                 "Active and Subtract must carve the identical surf normals"
             );
         }
+    }
+
+    /// The Paris Underground 2-brush minimal case (spike `2026-09-03-built-parity-worst-tier`;
+    /// Active-led editor golden pinned in its committed `pu-prefix-search.log` n=2 line, the
+    /// explicit-Subtract golden by `pu_two_subtract_golden.py`, recorded in `spike.md` and the
+    /// board item): `Brush1246` — the
+    /// level's `CsgOper`-ABSENT (= Active) first brush, a default 256-cube at the origin — followed
+    /// by `Brush328`, a plain 6-poly `CSG_Subtract` box overlapping most of the cube.  Fixture
+    /// geometry below is the two brushes' authored T3D (face order, windings, `Location`) verbatim.
+    ///
+    /// Editor, as authored (Active-led):        16 nodes / 12 surfs / 6 leaves
+    /// Editor, `Brush1246` -> explicit Subtract: 14 nodes / 11 surfs / 2 leaves
+    ///
+    /// The Active brush skips its tail `bspCleanup` (`0x10035dcd`: literal `CsgOper==1||==2`), so
+    /// its nodes stay `NF_IsNew` through `Brush328`'s op: `Brush328`'s descent classifies against
+    /// the PRE-Active (all-solid) world (`IsCsg` masks NF_IsNew) — keeping its floor over the cube
+    /// footprint — and its world cut skips the flagged subtree (`0x100332d4`) — keeping the cube's
+    /// ceiling and full-height walls un-cut.  Before this fix native built BOTH variants 14/11/2.
+    #[test]
+    fn active_led_pair_keeps_buried_faces_uncut() {
+        // Authored face order/windings: Brush1246 = +z, -z, +y, -y, +x, -x; Brush328 (local coords,
+        // Location (368,-576,112)) = +z, -z, -y, +y, -x, +x.
+        let quad = |n: (f32, f32, f32), v: [(f32, f32, f32); 4]| {
+            let mut p = FPoly::new(v.iter().map(|&(x, y, z)| Vec3::new(x, y, z)).collect());
+            p.normal = Vec3::new(n.0, n.1, n.2);
+            p
+        };
+        let brush = |polys: Vec<FPoly>, oper: CsgOper, loc: Vec3| build::BrushInput {
+            polys,
+            oper,
+            poly_flags: 0,
+            rot: [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
+            prepivot: Vec3::new(0.0, 0.0, 0.0),
+            location: loc,
+            scale: Vec3::new(1.0, 1.0, 1.0),
+            vec_xform: None,
+        };
+        let cube = |oper: CsgOper| {
+            let s = 128.0;
+            brush(
+                vec![
+                    quad((0., 0., 1.), [(-s, -s, s), (s, -s, s), (s, s, s), (-s, s, s)]),
+                    quad((0., 0., -1.), [(-s, s, -s), (s, s, -s), (s, -s, -s), (-s, -s, -s)]),
+                    quad((0., 1., 0.), [(-s, s, -s), (-s, s, s), (s, s, s), (s, s, -s)]),
+                    quad((0., -1., 0.), [(s, -s, -s), (s, -s, s), (-s, -s, s), (-s, -s, -s)]),
+                    quad((1., 0., 0.), [(s, s, -s), (s, s, s), (s, -s, s), (s, -s, -s)]),
+                    quad((-1., 0., 0.), [(-s, -s, -s), (-s, -s, s), (-s, s, s), (-s, s, -s)]),
+                ],
+                oper,
+                Vec3::new(0.0, 0.0, 0.0),
+            )
+        };
+        let brush328 = || {
+            let (x, y, z) = (672.0, 832.0, 176.0);
+            brush(
+                vec![
+                    quad((0., 0., 1.), [(x, y, z), (-x, y, z), (-x, -y, z), (x, -y, z)]),
+                    quad((0., 0., -1.), [(x, -y, -z), (-x, -y, -z), (-x, y, -z), (x, y, -z)]),
+                    quad((0., -1., 0.), [(x, -y, -z), (x, -y, z), (-x, -y, z), (-x, -y, -z)]),
+                    quad((0., 1., 0.), [(-x, y, -z), (-x, y, z), (x, y, z), (x, y, -z)]),
+                    quad((-1., 0., 0.), [(-x, -y, -z), (-x, -y, z), (-x, y, z), (-x, y, -z)]),
+                    quad((1., 0., 0.), [(x, y, -z), (x, y, z), (x, -y, z), (x, -y, -z)]),
+                ],
+                CsgOper::Subtract,
+                Vec3::new(368.0, -576.0, 112.0),
+            )
+        };
+
+        let active_led =
+            build_geometry_bspcsg(&[cube(CsgOper::Active), brush328()]).unwrap();
+        assert_eq!(
+            (active_led.nodes.len(), active_led.surfs.len(), active_led.leaves.len()),
+            (16, 12, 6),
+            "Active-led pair must match the live editor golden 16/12/6"
+        );
+
+        let subtract_led =
+            build_geometry_bspcsg(&[cube(CsgOper::Subtract), brush328()]).unwrap();
+        assert_eq!(
+            (subtract_led.nodes.len(), subtract_led.surfs.len(), subtract_led.leaves.len()),
+            (14, 11, 2),
+            "explicit-Subtract-led pair must match the live editor golden 14/11/2"
+        );
     }
 
     /// `bspValidateBrush` coplanar-link (Editor.dll 0x37290; §92 stage-2, spec

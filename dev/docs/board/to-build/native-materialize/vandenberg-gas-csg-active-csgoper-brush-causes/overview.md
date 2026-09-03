@@ -1,7 +1,7 @@
 +++
 priority = "p2"
 kind = "debug"
-summary = "Vandenberg Gas' node/vert over-build (+606/+9480) traced to Brush230 (idx 0, CsgOper absent = CSG_Active). Round 2 (2026-09-01): disassembly shows the real editor dispatches CsgOper=Active identically to Subtract inside bspBrushCSG; fix shipped (uncommitted, worktree vandenberg-csg-active), node delta cut to +32, verified non-regressing on 5 tracked levels. CONFIRMED RECURRING: freeclinic08's Brush586 and nsfhq04's Brush8321 are the SAME pattern (also index-0, also CsgOper-absent) -- this item's own 'Brush230 is the ONLY instance' scope claim was wrong. Fully explains freeclinic08's entire structural-only residual; a major but not sole driver of nsfhq04's."
+summary = "CsgOper-absent (= CSG_Active) first brushes (Vandenberg Brush230, freeclinic08 Brush586, nsfhq04 Brush8321, Paris Underground Brush1246). Round 2 shipped Active-as-Subtract; Round 3 refuted it at the outcome level (2-brush live A/B 16/12/6 vs 14/11/2). Round 4 (2026-09-03): re-disassembly found the missed literal ==1||==2 gates -- an Active op never cuts the world (FilterWorldThroughBrush body gated at 0x333dd) and skips tail bspCleanup (0x35dcd), so its nodes stay NF_IsNew through the NEXT brush (non-CSG for Outside, subtree shielded from the world cut). Ported + cargo-pinned (16/12/6 natively). Paris Underground nodes d=-108 -> +5 (surfs/leaves exact); NSFHQ/Vandenberg byte-unchanged (their Active brushes are spatially isolated -- those residuals have other causes)."
 +++
 
 # Vandenberg Gas: CSG_Active-CsgOper brush causes a real, unexplained geometry reduction
@@ -188,3 +188,65 @@ whether `Brush586`'s volume ends up identically carved either way there is untes
 golden is strictly stronger evidence. Scope: this remaining gap plausibly drives Paris Underground's
 whole `-108` (first divergence IS this pair) and part of nsfhq04's `-92`/Vandenberg's residual; it
 cannot explain WanChai Garage or Training Final (no `CsgOper`-absent brush in either).
+
+## Round 4 (2026-09-03) — the true Active semantics decoded and ported
+
+Re-disassembled `bspBrushCSG` (`0x355e0`) and `FilterWorldThroughBrush` (`0x33250`) against this
+tree's own `uned/UED22/Editor.dll`. Round 2's per-site reads were correct but it missed TWO
+composite literal `==1||==2` gates, and misattributed one of them:
+
+- `0x10035dcd`-`0x35dd5` (`cmp edx,1; je body; cmp edx,2; jne skip`): the tail
+  `bspCleanup(Model)` (vtable+0x204) + optional `bspBuildBounds` (+0x208) run ONLY for a literal
+  Add/Subtract. Round 2 saw "one `==2`-only site" and matched it to the `Model->NumZones=0` reset at
+  `0x356a2` (real, and genuinely zones-only); this SECOND `==2` compare is the one that matters.
+  An Active op skips cleanup, so its new nodes keep `NF_IsNew` (and `NF_IsFront`/`NF_IsBack`; dead
+  `nv==0` nodes stay unspliced) until the NEXT Add/Subtract brush's cleanup clears them. While
+  flagged: `FBspNode::IsCsg` (mask includes 0x20) reads them as non-CSG, so the next brush's
+  descent classifies against the PRE-Active solidity; and `FilterWorldThroughBrush` returns at any
+  `NF_IsNew` node (`0x100332d4 test byte [node+0x37],0x20`), shielding the whole flagged subtree
+  from that brush's world cut. Both observed editor behaviors of the 2-brush case (`Brush328`'s
+  floor kept over the cube footprint; the cube's ceiling/walls un-cut) follow mechanically.
+- `0x100333dd` (inside `FilterWorldThroughBrush`, per world node): the Add/Subtract world-filter
+  body is gated on literal `CsgOper==1||==2` (`==3`/`==4` divert to the intersect funcs; anything
+  else falls to the recursion tail at `0x10033503`). For `Active` the editor walks the world tree
+  doing NOTHING — an Active op never cuts existing world faces. Round 2's `0x33472` cmove read
+  ("Active takes the Subtract world-cut func") decoded an instruction that is unreachable for
+  ordinal 0.
+
+Round 2's pass-1 findings stand: `subtractMask` (`0x35688`) and the brush-to-world filter func
+(`0x35a84`-`0x95`) are Subtract-shaped for `Active`.
+
+**Port** (`uedcli-native/src/bspcsg.rs::bsp_brush_csg`): skip `filter_world_through_brush` and the
+tail `bsp_cleanup` for `CsgOper::Active`; the existing `NF_IsNew` machinery (`is_csg_filter`,
+`filter_world_recurse`'s NF_IsNew return) supplies the rest with no further change.
+`csg::CsgOper::Active`'s doc comment now carries the corrected semantics. The §92 §48
+Subtract-normal-recompute gate stays deliberately un-extended (unchanged evidence).
+
+**Pinned**: cargo `active_led_pair_keeps_buried_faces_uncut` (`bspcsg.rs`) — the Paris Underground
+pair as authored-T3D fixture geometry, asserting the live editor goldens from the committed spike
+log (`2026-09-03-built-parity-worst-tier/pu-prefix-search.log`): Active-led 16 nodes/12 surfs/6
+leaves, explicit-Subtract-led 14/11/2. Both match natively post-port (pre-port native built 14/11/2
+for both). `csg_active_dispatches_exactly_like_subtract` (lone-brush equivalence) stays green; full
+`cargo test --release` 108/108.
+
+**Per-level (offline, cached goldens, native `build_geometry_bspcsg` d = native − golden
+nodes/surfs/leaves):**
+
+| level                | before (20fb0e6)   | after            |
+|----------------------|--------------------|------------------|
+| 11_Paris_Underground | -108 / +0 / -4     | **+5 / +0 / +0** |
+| 04_NYC_NSFHQ         | -92 / +1 / -26     | unchanged (build sha256-identical) |
+| 12_Vandenberg_Gas    | +659 / +7 / +309   | unchanged (build sha256-identical) |
+| 08_NYC_FreeClinic    | +0 / +0 / +0       | +0 / +0 / +0     |
+
+Underground's verts/points moved -1306/-143 → +40/+1. Round 3's "plausibly part of nsfhq04's
+-92/Vandenberg's residual" is REFUTED: both Active brushes there are spatially isolated
+(`Brush8321` a 6-poly cube parked at z=8000; `Brush230` a lone 1-poly), so the one-brush deferral
+window overlaps nothing and the builds are byte-identical pre/post. Their residuals have other
+causes (Vandenberg: the f32-chain item; nsfhq04: unattributed). Underground's remaining `+5/+40/+1`
+is a different, smaller mechanism, out of this round's scope.
+
+**Not extended to the photo path**: `csg.rs::point_in_solid` (the `build.rs`/`level photo --native`
+replay-CSG oracle) still models an Active brush as an instant Subtract; the true semantics defer
+its solidity effect past the next brush. Filed separately (board inbox,
+`photo-path point_in_solid models Active as instant Subtract`).
