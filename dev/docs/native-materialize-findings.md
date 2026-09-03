@@ -6440,4 +6440,3 @@ already-structure-wrong levels (NSFHQ −1714→−1741, Garage −1222→−125
 Remaining, filed: `verts-residual-on-structure-exact-levels` (orphan-slot gaps, needs live
 per-emission capture — golden orphan `iVertex` are stale, offline content diffing is meaningless)
 and `points-residual-live-ring-near-threshold-drift` (+6/+3/+1 live-ring drift extras).
-
