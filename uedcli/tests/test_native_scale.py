@@ -124,13 +124,13 @@ def test_scaled_brush_emitted_texture_u_is_covariant_precancel():
         f"an emitted tex_u magnitude equals the forward-L value s={s} in {sorted(mags)}"
 
 
-def test_mirror_scaled_brush_pre_reverses_each_poly_ring():
-    """A MIRRORED scaled brush (`PostScale (-2,2,2)`, `det(L)<0`) must PRE-reverse every poly's vertex
-    ring so the post-`L` world winding stays outward-CCW — the Rust core assumes Orientation +1 and
-    never re-flips, so without the reversal `calc_normal` yields inward normals and a subtract builds
-    inside-out.  Compare the emitted per-poly ring (tuple index 0, grouped by index 1 `poly_sizes`)
-    against the same brush under a non-mirror positive scale: each ring is exactly reversed (so the
-    first-triangle winding flips).  Unit-level rewrite of the deleted end-to-end mirror regression."""
+def test_mirror_scaled_brush_signals_orientation_and_keeps_rings_unreversed():
+    """A MIRRORED scaled brush (`PostScale (-2,2,2)`, `det(L)<0`) signals `orientation=-1` (nested
+    tuple, last element) and passes its rings UNREVERSED: the Rust core reverses each ring AFTER the
+    vertex map, exactly as the editor's `FPoly::Transform` does on Orientation<0 (spike
+    2026-06-25-scale-transform-mechanics), so the local `CalcNormal` sees the editor's stored
+    winding (2026-09-03 Vandenberg first-divergent-brush round; replaced the old pre-reverse,
+    whose reversed-ring CalcNormal was NOT the exact bit-negation of the editor's)."""
     from uedcli import rotation as ROT
     from uedcli.transform import det3
     mir = _one_add_brush_level("Mir", cube(64, 64, 32), post_scale=FScale(scale=(-2, 2, 2)))
@@ -140,20 +140,10 @@ def test_mirror_scaled_brush_pre_reverses_each_poly_ring():
     tm = brush_marshal._build_brush_input("Mir", mir.actors["Mir"])
     tb = brush_marshal._build_brush_input("Base", base.actors["Base"])
     assert tm[1] == tb[1], f"poly_sizes differ (mirror {tm[1]} vs baseline {tb[1]})"
-
-    def _rings(tup):
-        verts = [tup[0][i:i + 3] for i in range(0, len(tup[0]), 3)]
-        rings, off = [], 0
-        for n in tup[1]:
-            rings.append(verts[off:off + n])
-            off += n
-        return rings
-
-    rm, rb = _rings(tm), _rings(tb)
-    for i, (ring_m, ring_b) in enumerate(zip(rm, rb)):
-        assert ring_m == list(reversed(ring_b)), (
-            f"poly {i} ring not pre-reversed under a mirror: {ring_m} vs reversed baseline "
-            f"{list(reversed(ring_b))} — det(L)<0 winding fix dropped")
+    assert tm[11][5] == -1, "mirror must signal orientation=-1"
+    assert tb[11][5] == 1, "non-mirror must signal orientation=+1"
+    assert tm[0] == tb[0], "mirror rings must be passed UNREVERSED (identical to baseline)"
+    assert len(tm[11][2]) == 9, "a mirror must carry the 9-float VectorXform (not the old gate-off)"
 
 
 def test_zero_scale_axis_raises_clean_error_not_zerodivision():

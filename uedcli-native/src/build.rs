@@ -780,6 +780,12 @@ pub struct BrushInput {
     /// normal covariant-mapped by this matrix then `SafeNormalSlow` — instead of `calc_normal` over
     /// the L-warped world winding (which is 1 ULP under unit on asymmetric faces; §92 §43).
     pub vec_xform: Option<[[f32; 3]; 3]>,
+    /// `ABrush::BuildCoords`' Orientation: `-1` for a MIRRORED brush (`det L < 0`), else `+1`.
+    /// `FPoly::Transform` (Engine.dll 0x152360) reverses each ring's vertex order AFTER the vertex
+    /// map when Orientation < 0 (spike 2026-06-25-scale-transform-mechanics) — so the poly rings
+    /// arrive UNREVERSED (local CalcNormal keeps the editor's bits) and each pipeline reverses
+    /// post-transform.
+    pub orientation: i32,
 }
 
 /// The N-1 pipeline: run the CSG leaf-filter per brush (actor order), merge coplanars, build
@@ -817,6 +823,11 @@ pub fn build_geometry_from_brushes(brushes: &[BrushInput]) -> Result<Model, Buil
             let mut q = p.clone();
             q.actor = bi as i32;
             if q.transform(&b.rot, &b.prepivot, &b.location).is_ok() {
+                if b.orientation < 0 {
+                    // Mirrored brush: `FPoly::Transform`'s post-map ring reversal (verts only),
+                    // restoring outward-CCW winding — see `BrushInput::orientation`.
+                    q.verts.reverse();
+                }
                 wp.push(q);
             }
         }
@@ -1126,6 +1137,7 @@ mod tests {
             location: loc,
             scale: Vec3::new(1.0, 1.0, 1.0),
             vec_xform: None,
+            orientation: 1,
         }
     }
 

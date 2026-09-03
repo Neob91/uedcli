@@ -42,13 +42,19 @@ _UU = 65536
 # Two subtleties that a naive `f32(sin(idx·2π/N))` / `f32(cos(idx·2π/N))` gets WRONG (both pinned §92 §41,
 # each worth ~1 float32 ULP in the transformed vertex — the entire UNATCO rotated-brush byte residual):
 #
-#   (1) THE ANGLE IS CAST TO FLOAT32 BEFORE `sin`.  UE1 builds the table with
-#       `TrigFLOAT[k] = appSin((FLOAT)k * 2.f * PI / (FLOAT)NUM_ANGLES)`, and `appSin(FLOAT)` takes a
-#       float32 parameter — so the double angle is ROUNDED TO float32 before the libm `sin`.  For k=8192
-#       (180°) that float32 angle is `f32(π)=3.14159274` (8.7e-8 PAST π), so the stored sine is
-#       `sin(f32(π)) = -8.742278e-08`, NOT the ~0 that `f32(sin(π_double))` yields.  That tiny nonzero
-#       sin(180°), times a vertex coordinate, is exactly the 1-ULP transform shift the editor produces
-#       and native did not (Brush639 node-315 plane offset −312.0 → −311.99997).
+#   (1) THE ANGLE IS BUILT FROM FLOAT32 π AND CAST TO FLOAT32 BEFORE `sin`.  UE1 builds the table
+#       with `TrigFLOAT[k] = appSin((FLOAT)k * 2.f * PI / (FLOAT)NUM_ANGLES)` where `PI` is the
+#       engine's FLOAT32 constant (`0x40490fdb = 3.14159274`) and `appSin(FLOAT)` takes a float32
+#       parameter — so the angle is `f32(k · 2 · π_f32 / N)`, then libm `sin` in double, stored f32.
+#       Using DOUBLE π here instead produced a table wrong in 4683/16384 entries (up to ~32 ULPs) —
+#       every non-cardinal index drifts, which is why Vandenberg's non-cardinal rotated brushes'
+#       Pass-1 node planes missed the editor's by tens of ULPs while the cardinal-only levels never
+#       noticed.  The full 16384-entry table was captured from the LIVE editor's memory
+#       (`FGlobalMath::TrigFLOAT`, core.dll static VA 0x1013e934, rebased at runtime) and this
+#       formula reproduces it bit-for-bit, 0/16384 mismatches
+#       (`dev/docs/spikes/2026-09-03-vandenberg-first-divergent-brush/`, `logs/sintab-live.bin`).
+#       For k=8192 (180°) the f32 angle is 8.7e-8 PAST π, so the stored sine is
+#       `sin(f32(π)) = -8.742278e-08`, NOT ~0 — the 1-ULP transform shift of Brush639 node-315.
 #
 #   (2) COS IS `sin` OF A QUARTER-SHIFTED TABLE INDEX, not a separate `cos` call: UE1's `CosTab(i)` reads
 #       `TrigFLOAT[((i>>2)+NUM_ANGLES/4)&mask]`.  Reading the same table (rather than `math.cos`) keeps
@@ -68,10 +74,12 @@ def _f32(x: float) -> float:
 
 
 # The editor's `FGlobalMath::TrigFLOAT[NUM_ANGLES]`, reproduced bit-exactly (see the two subtleties
-# above).  `_f32(math.sin(_f32(...)))` mirrors `appSin((FLOAT)k*2f*PI/(FLOAT)N)`: the inner `_f32` is
-# the FLOAT32 cast the `appSin(FLOAT)` parameter imposes on the angle; libm `sin` runs in double; the
-# outer `_f32` is the FLOAT storage of `TrigFLOAT[k]`.
-_TRIG = tuple(_f32(math.sin(_f32(k * 2.0 * math.pi / _TRIG_N))) for k in range(_TRIG_N))
+# above).  `_f32(math.sin(_f32(...)))` mirrors `appSin((FLOAT)k*2f*PI/(FLOAT)N)` with FLOAT32 π: the
+# inner `_f32` is the cast the `appSin(FLOAT)` parameter imposes on the angle; libm `sin` runs in
+# double; the outer `_f32` is the FLOAT storage of `TrigFLOAT[k]`.  Verified 0/16384 mismatches
+# against the live-captured table (subtlety (1) above).
+_PI32 = _f32(math.pi)
+_TRIG = tuple(_f32(math.sin(_f32(k * 2.0 * _PI32 / _TRIG_N))) for k in range(_TRIG_N))
 
 
 def gmath_sin(uu: int) -> float:

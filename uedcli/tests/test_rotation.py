@@ -25,10 +25,12 @@ def test_gmath_trig_uses_truncated_16384_table_not_float():
     # to index 1024 — a property plain float sin(field/65536·2π) does NOT have.
     assert gmath_sin(4092) == gmath_sin(4095)                 # same truncated index 1023
     assert gmath_sin(4096) != gmath_sin(4095)                 # index 1024 ≠ 1023
-    # Editor-exact table entry: appSin CASTS THE ANGLE TO FLOAT32 first (§92 §41), so the stored
-    # value is f32(sin(f32(idx·2π/16384))), NOT f32(sin(idx·2π/16384)).
-    assert gmath_sin(4095) == _f32(math.sin(_f32(1023 * 2 * math.pi / 16384)))   # truncate, not round
-    assert gmath_sin(4095) != _f32(math.sin(1024 * 2 * math.pi / 16384))
+    # Editor-exact table entry: the angle is built from FLOAT32 π and cast to FLOAT32 before `sin`
+    # (§92 §41 + the 2026-09-03 full live-table capture), so the stored value is
+    # f32(sin(f32(idx·2·π_f32/16384))), NOT any double-π variant.
+    pi32 = _f32(math.pi)
+    assert gmath_sin(4095) == _f32(math.sin(_f32(1023 * 2 * pi32 / 16384)))   # truncate, not round
+    assert gmath_sin(4095) != _f32(math.sin(1024 * 2 * pi32 / 16384))
     # cos is `sin` of a QUARTER-SHIFTED table index (CosTab(i)=TrigFLOAT[((i>>2)+N/4)&mask], §92 §41),
     # not a separate math.cos — it reads the very same float32 table entry, one quarter-turn along.
     assert gmath_cos(4095) == gmath_sin(4095 + 4 * 4096)      # +NUM_ANGLES/4 in field units (4096<<2)
@@ -72,6 +74,22 @@ def test_gmath_table_is_editor_exact_float32_yaw_180():
     # the SAME table — CosTab(i) = TrigFLOAT[((i>>2)+4096)&mask]. A field shift of 4·4096 = +90°.
     for uu in (0, 4, 4095, 8192, 16384, 32768, 49151, 60000):
         assert gmath_cos(uu) == gmath_sin(uu + 4 * 4096)
+
+
+def test_gmath_table_matches_live_captured_noncardinal_entries():
+    # The full 16384-entry `FGlobalMath::TrigFLOAT` was dumped from the LIVE editor's memory
+    # (core.dll static VA 0x1013e934; `dev/docs/spikes/2026-09-03-vandenberg-first-divergent-brush/`,
+    # `logs/sintab-live.bin`) and the table formula reproduces it 0/16384.  The discriminating fact:
+    # the angle uses FLOAT32 π — with double π, 4683 entries drift by up to ~32 ULPs, which is what
+    # made every non-cardinal rotated brush's Pass-1 node plane miss the editor's bits (Vandenberg
+    # Brush151/Brush693 live trace).  Literals below are the live-captured bits, HARD-CODED.
+    def b(x):
+        return struct.unpack("<I", struct.pack("<f", x))[0]
+
+    assert b(gmath_sin(5 << 2)) == 0x3AFB53C8        # idx 5 — double-π gives ...c7
+    assert b(gmath_sin(16128 << 2)) == 0xBDC8BD04    # idx 16128 (Pitch=-1024) — double-π gives ...44
+    assert b(gmath_sin(5000 << 2)) == 0x3F70C501     # idx 5000 — double-π gives ...02
+    assert b(gmath_sin(3840 << 2)) == 0x3F7EC46D     # idx 3840 — agrees with double-π (control)
 
 
 def test_euler_matrix_uu_reads_the_table_for_a_non_cardinal_field():

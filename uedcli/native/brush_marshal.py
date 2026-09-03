@@ -73,11 +73,12 @@ def _build_brush_input(name, actor):
     reject guard never fires.
 
     GATED on non-identity scale (incl. sheer): an UNSCALED brush keeps the exact rotation-only path,
-    byte-identical to baseline.  For a SCALED brush we DROP the authored per-poly normals (empty →
-    the Rust core recomputes from the TRANSFORMED winding; the authored local normal is pre-scale)
-    but KEEP the authored Origins (`FPoly::transform` maps each by `L`, exactly as the editor's
-    `FPoly::Transform` maps `Base` — the surf `pBase`).  A MIRRORED brush (`det L < 0`) has each
-    per-poly ring PRE-reversed (the `mirror` note below) so the post-`L` winding stays outward-CCW.
+    byte-identical to baseline.  For a SCALED brush we DROP the authored per-poly normals (the Rust
+    core derives every face normal as the editor does — `SNS(VectorXform · CalcNormal(local))`, see
+    `bspcsg.rs::brush_loop1`) but KEEP the authored Origins (`FPoly::transform` maps each by `L`,
+    exactly as the editor's `FPoly::Transform` maps `Base` — the surf `pBase`).  A MIRRORED brush
+    (`det L < 0`) signals `orientation=-1` so the Rust core reverses each ring AFTER the vertex
+    map, as the editor's `FPoly::Transform` does (the `mirror` note below).
     The transform is DOUBLE precision throughout (the f32 editor-parity vertex/normal path was
     vestigial once native materialize was removed — no surviving consumer needs editor byte-parity).
     Scale lives in the typed `actor.main_scale`/`post_scale` fields (not `props`), so
@@ -135,25 +136,21 @@ def _build_brush_input(name, actor):
         # a poly's TextureU/TextureV as to its verts, but axes are COVECTORS mapping by `(L⁻¹)ᵀ`.  We
         # pass `(LᵀL)⁻¹·texUV` so the core's forward `L·((LᵀL)⁻¹·texUV) = (L⁻¹)ᵀ·texUV` — the editor's
         # covariant axis.  Gated on `scaled`: an unscaled brush (`tex_cov` None) passes axes unchanged.
-        # MIRROR (`det L < 0`): the linear map inverts winding, so the L-transformed ring runs CW and
-        # `calc_normal` (CCW→outward) would yield INWARD normals — a subtract builds inside-out.  The
-        # Rust core assumes Orientation +1 and never re-flips, so we PRE-reverse each poly's ring below
-        # (as `transform.bake` does) — after `L` the winding is outward-CCW again.
+        # MIRROR (`det L < 0`): the linear map inverts winding.  The Rust core reverses each ring
+        # AFTER the vertex map, exactly as the editor's `FPoly::Transform` does on Orientation<0
+        # (spike 2026-06-25) — signalled via the `orientation` tuple field below.  The rings are
+        # passed UNREVERSED so the Rust-side local `CalcNormal` sees the editor's stored winding.
         mirror = flip_winding(L)
-        # Non-mirror: pass the covariant face-normal map `(L⁻¹)ᵀ` so the Rust core recomputes each scaled
-        # face's normal via `VectorXform + SafeNormalSlow` (the editor's way — a unit axis normal), NOT
-        # `calc_normal` over the L-warped world winding (which yields a non-axis normal on a face made
-        # asymmetric by non-uniform scale).  Gated off a mirror: there the covariant image flips
-        # orientation, so the ring-reverse + `calc_normal` path stays.
-        if not mirror:
-            # NOT `covariant_axes(L)` (double `(L⁻¹)ᵀ`, f32-cast): the editor builds VectorXform as
-            # an all-f32 `(Unit / MainScale / Rotation / PostScale).Transpose()` chain whose entries
-            # differ by 1 ULP (`1.0f/0.624999f = 0x3fcccce3` vs double's `0x3fcccce2`), and that ULP
-            # decides whether `SafeNormalSlow` lands the exact `±1.0` axis normal the editor stores
-            # in the node plane (UNATCO Brush578 nodes 359-364, live-gdb 2026-09-02 —
-            # `pass1_normal_probe_unatco.py`; `rotation.editor_vector_xform`'s own doc comment).
-            NT = ROT.editor_vector_xform(actor)
-            vec_xform_flat = [float(NT[r][c]) for r in range(3) for c in range(3)]
+        # Pass the covariant face-normal map so the Rust core computes each face's normal as the
+        # editor does — `SafeNormalSlow(VectorXform · CalcNormal(local))` — never `calc_normal` over
+        # the L-warped world winding (a non-axis normal on a face made asymmetric by non-uniform
+        # scale).  NOT `covariant_axes(L)` (double `(L⁻¹)ᵀ`, f32-cast): the editor builds VectorXform
+        # as an all-f32 `(Unit / MainScale / Rotation / PostScale).Transpose()` chain whose entries
+        # differ by 1 ULP (`1.0f/0.624999f = 0x3fcccce3` vs double's `0x3fcccce2`), and that ULP
+        # decides whether `SafeNormalSlow` lands the exact `±1.0` axis normal the editor stores in
+        # the node plane (UNATCO Brush578 nodes 359-364, live-gdb 2026-09-02).
+        NT = ROT.editor_vector_xform(actor)
+        vec_xform_flat = [float(NT[r][c]) for r in range(3) for c in range(3)]
     else:
         Rm = ROT.actor_matrix(actor)                     # None == renders-as-identity (low-bit fields)
         R = _IDENTITY_ROT if Rm is None else [[float(x) for x in row] for row in Rm]
@@ -223,10 +220,7 @@ def _build_brush_input(name, actor):
     for poly in actor.brush.polys:
         poly_sizes.append(len(poly.vertices))
         poly_flags_flat.append(int(getattr(poly, "flags", 0) or 0) & 0xFFFFFFFF)
-        # Reverse the ring for a mirrored (det<0) brush so the post-L world winding stays
-        # outward-CCW (see the `mirror` note above); an unmirrored/unscaled brush keeps ring order.
-        ring = list(reversed(poly.vertices)) if mirror else poly.vertices
-        for v in ring:
+        for v in poly.vertices:
             verts_flat += [float(v[0]), float(v[1]), float(v[2])]
         if poly.normal is not None:
             normals_flat += [float(poly.normal[0]), float(poly.normal[1]),
@@ -253,10 +247,11 @@ def _build_brush_input(name, actor):
     # A SCALED brush KEEPS its authored per-poly Origin (transformed by `L` in `FPoly::transform`,
     # exactly as the editor's `FPoly::Transform` maps `Base`): the surf `pBase` the editor stores is the
     # transformed authored Origin, not a ring corner (§92 §45).
-    # `tex_v_flat`, `origins_flat`, `vec_xform_flat`, `pans_flat` and `textures_flat` ride bundled in
-    # one tuple (PyO3 tuple FromPyObject caps at 12).  `vec_xform_flat` is the 9-float covariant
-    # face-normal map for a scaled (non-mirror) brush, or empty (unscaled/mirror -> Rust keeps the
-    # winding-normal path).
+    # `tex_v_flat`, `origins_flat`, `vec_xform_flat`, `pans_flat`, `textures_flat` and `orientation`
+    # ride bundled in one tuple (PyO3 tuple FromPyObject caps at 12).  `vec_xform_flat` is the
+    # 9-float covariant face-normal map for a scaled brush (mirror included), or empty (unscaled ->
+    # Rust maps the local CalcNormal by `rot` instead); `orientation` is -1 for a mirror.
     return (verts_flat, poly_sizes, normals_flat, oper, poly_flags,
             list(loc), R, list(prepivot), list(scale), poly_flags_flat,
-            tex_u_flat, (tex_v_flat, origins_flat, vec_xform_flat, pans_flat, textures_flat))
+            tex_u_flat, (tex_v_flat, origins_flat, vec_xform_flat, pans_flat, textures_flat,
+                         -1 if mirror else 1))

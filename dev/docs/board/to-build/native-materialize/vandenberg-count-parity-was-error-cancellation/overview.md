@@ -1,7 +1,7 @@
 +++
 priority = "p2"
 kind = "debug"
-summary = "Vandenberg Gas's near-exact node count (d=-6 with RING_NEAR) was error cancellation: shipping the live-confirmed editor-faithful f32 scaled-brush transform chain (editor_vector_xform/editor_point_xform, 2026-09-02) swings it to d=+659 while 17 other levels improve or stay byte-identical. With per-poly world inputs now live-proven bit-identical to the editor's, a large compensating divergence must exist further down Vandenberg's build. Mechanism unknown."
+summary = "2026-09-03 per-brush Pass-1 trace round: NO brush diverges on counts; Pass-1 trees structurally identical, divergence was plane VALUES. Two mechanisms CONFIRMED+fixed (GMath table used double PI — 4683/16384 entries wrong; per-face normal = SNS(X·CalcNormal(local)), authored ignored — plus editor-faithful mirror post-transform reversal). Vandenberg +659/+7/+309 -> +397/-1/+238; the residual is localized ENTIRELY to the world bspRepartition (editor enters Pass 2 at 8702 nodes, native 9191; soup sizes 6158 vs 6156). Next: the 2-poly soup diff / repartition scoring."
 +++
 
 # Vandenberg count parity was error cancellation
@@ -50,3 +50,27 @@ Also ruled out (2026-09-03): the corrected `CsgOper::Active` semantics
 build is sha256-IDENTICAL pre/post that fix (`Brush230` is a lone 1-poly Active brush nothing
 overlaps within its one-brush deferral window). The `+659/+7/+309` residual is entirely this
 item's f32-chain divergence.
+
+## 2026-09-03: per-brush Pass-1 trace run — two mechanisms fixed, residual localized to the repartition
+
+Full round: `dev/docs/spikes/2026-09-03-vandenberg-first-divergent-brush/spike.md`. The trace found
+NO count-diverging brush: all 728 Pass-1 steps agree, final Pass-1 trees structurally identical;
+the divergence was 2996 plane-VALUE nodes (first: node 734, k=13 `Brush41`, unscaled unrotated Add).
+Fixed (commits `b2199cd`, `a7be107`):
+
+- `rotation.py`'s GMath table built its angle with double π; the editor uses FLOAT32 π —
+  4683/16384 entries wrong (up to ~32 ULPs, every non-cardinal index). Live-captured full table
+  reproduced 0/16384.
+- Per-face normal is `SNS(X · CalcNormal(local))` for EVERY brush poly (importer stores CalcNormal
+  over the authored normal — proven from the golden's own Polys bytes; `FPoly::Transform`
+  renormalizes unconditionally). Replaces Add-keeps-authored/§48-Subtract-only/dot-guard; mirrors
+  now use the editor's post-transform ring reversal (`BrushInput::orientation`).
+
+Pass-1 plane diff 2996 → 65 (all ~1-ULP, mostly `plw`; no count effect — left open). Counts
+`+659/+7/+309` → `+397/-1/+238`. The remaining +397 is localized ENTIRELY to the one-shot world
+`bspRepartition`: editor enters Pass 2 at 8702 nodes/4118 surfs, native at 9191/3839 (+489 nodes;
+the surf gap is orphan-trim timing — the editor later drops the same 279, final surfs d=-1). World
+`FindBestSplit` soups: editor 6158 polys (captured,
+`2026-08-29-unatco-repart-live-diff/logs/fbs-world-poly-order-vandenberg-gas.log`) vs native 6156 —
+next step is diffing those soups (`UEDCLI_BSPCSG_SOUP_ORDER` vs the FBSPOLY capture) and, if they
+match, the repartition scoring/recursion.

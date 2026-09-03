@@ -321,6 +321,7 @@ mod tests {
             location: loc,
             scale: Vec3::new(1.0, 1.0, 1.0),
             vec_xform: None,
+            orientation: 1,
         }
     }
 

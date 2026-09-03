@@ -1,0 +1,18 @@
+10_paris_club                4/6 nodes=+0 surfs=+0 leaves=+0 verts=+39 points=+5 vectors=+0 sha=9399cc0d980b
+06_hongkong_wanchai_garage   2/6 nodes=-68 surfs=+0 leaves=-12 verts=-1253 points=-42 vectors=+0 sha=6396cb019557
+06_hongkong_helibase         3/6 nodes=+2 surfs=+0 leaves=+0 verts=+94 points=+24 vectors=+0 sha=7e396887bd5c
+dx                           6/6 nodes=+0 surfs=+0 leaves=+0 verts=+0 points=+0 vectors=+0 sha=46a60673c98f
+03_nyc_747                   1/6 nodes=+68 surfs=+0 leaves=-10 verts=+702 points=+213 vectors=-7 sha=2ec900cbbb5b
+03_nyc_unatcohq              4/6 nodes=+0 surfs=+0 leaves=+0 verts=+6 points=+6 vectors=+0 sha=508146f8700e
+08_nyc_freeclinic            5/6 nodes=+0 surfs=+0 leaves=+0 verts=+1 points=+0 vectors=+0 sha=dac337fbf10c
+14_oceanlab_lab              1/6 nodes=+390 surfs=+0 leaves=+86 verts=+4521 points=+772 vectors=-66 sha=c3f3d1f82c95
+15_area51_entrance           1/6 nodes=+85 surfs=+0 leaves=+51 verts=+1012 points=+97 vectors=-9 sha=d783de204531
+09_nyc_shipfan               4/6 nodes=+0 surfs=+0 leaves=+0 verts=+1 points=+1 vectors=+0 sha=0ff39d520798
+12_vandenberg_gas            0/6 nodes=+659 surfs=+7 leaves=+309 verts=+6557 points=+669 vectors=-18 sha=bfde5c9ae2ab
+04_nyc_nsfhq                 0/6 nodes=-92 surfs=+1 leaves=-26 verts=-1741 points=-139 vectors=+1 sha=c43b81faf048
+02_nyc_bar                   6/6 nodes=+0 surfs=+0 leaves=+0 verts=+0 points=+0 vectors=+0 sha=44649b6deb6d
+11_paris_underground         3/6 nodes=+1 surfs=+0 leaves=+0 verts=+21 points=+1 vectors=+0 sha=fa0ebb9f39c2
+10_paris_chateau             3/6 nodes=+0 surfs=+0 leaves=+0 verts=-6 points=+12 vectors=+2 sha=b1d3bd05be9d
+04_nyc_underground           4/6 nodes=+0 surfs=+0 leaves=+0 verts=+24 points=+3 vectors=+0 sha=bfe61fd36d19
+00_trainingfinal             1/6 nodes=-59 surfs=+0 leaves=-11 verts=+181 points=+52 vectors=+11 sha=c8dc60b86c77
+rc=0

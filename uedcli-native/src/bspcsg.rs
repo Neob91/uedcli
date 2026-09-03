@@ -102,21 +102,6 @@ fn point_nearest_enabled() -> bool {
     *FLAG.get_or_init(|| std::env::var("UEDCLI_BSPCSG_POINT_NEAREST").is_ok())
 }
 
-/// `UEDCLI_BSPCSG_ADD_RECOMPUTE_NORMAL` — EXPERIMENT, off by default. Extends the §92 §48
-/// winding-recompute (currently gated to `CsgOper::Subtract` only, matching
-/// `subtract_recomputes_slant_normal_while_add_keeps_authored`) to CSG_Add faces too. Measured
-/// motivation: on real, unmodified NYC Bar/UNATCO content, every value-mismatched (native vs
-/// golden) surf normal traces to a CSG_Add face storing the AUTHORED T3D text (6-decimal, lossy)
-/// while golden stores a value 1-2 ULP from a from-scratch `CalcNormal`-over-local-winding
-/// reconstruction, not from the authored text (`lighting-bits-only-divergence-localizes-to`,
-/// 2026-09-01 round). This directly contradicts the "Add keeps authored" premise §48 pinned from
-/// castle-bastion evidence, but has NOT been live-gdb-confirmed for a CSG_Add brush — gated as an
-/// experiment, not switched to default, per the no-guessing-without-live-confirmation rule.
-fn add_recompute_normal_enabled() -> bool {
-    static FLAG: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    *FLAG.get_or_init(|| std::env::var("UEDCLI_BSPCSG_ADD_RECOMPUTE_NORMAL").is_ok())
-}
-
 /// `UEDCLI_BSPCSG_POINTS_ORIGIN_REVERSED` — EXPERIMENT, off by default. Live gdb (`native-
 /// materialize-findings.md`, "DX.dx's p_base residual: §10.20 hypothesis REFUTED", 2026-09-01)
 /// decoded the real editor's per-polygon `bspAddPoint` call order: a polygon's `Origin` first
@@ -124,7 +109,7 @@ fn add_recompute_normal_enabled() -> bool {
 /// live on `Brush3`, cross-checked offline on `Brush8`. See `reorder_points_canonical`'s doc
 /// comment for how this is applied and why it is gated to provably-unsplit surfs only.
 ///
-/// Deliberately NOT `OnceLock`-cached (unlike `add_recompute_normal_enabled`/`point_nearest_enabled`
+/// Deliberately NOT `OnceLock`-cached (unlike `point_nearest_enabled`
 /// above): this is called at most once per build (not a hot per-point path), and an uncached read
 /// lets a single test toggle the var and compare on/off within one process, matching
 /// `UEDCLI_BSPCSG_WORLD_KEEP_POINTS`'s existing convention (`bspcsg.rs` tests, `passes.rs`).
@@ -2426,54 +2411,6 @@ fn bsp_validate_brush_links(polys: &[FPoly]) -> Vec<i32> {
     links
 }
 
-/// `bspBrushCSG` (`0x355e0`): apply ONE brush incrementally to the growing world Model.
-/// True iff `n` is an EXACT unit axis normal (two components exactly `0.0`, one exactly `±1.0`).
-/// The editor stores such faces' authored `±1` verbatim; `CalcNormal` of a large non-square axis
-/// rectangle double-rounds to `0.99999994` (§92 §46), so the subtract-recompute below MUST skip
-/// axis faces or it would regress every axis surf.
-fn is_unit_axis(n: &Vec3) -> bool {
-    let mut zeros = 0;
-    let mut ones = 0;
-    for c in [n.x, n.y, n.z] {
-        if c == 0.0 {
-            zeros += 1;
-        } else if c == 1.0 || c == -1.0 {
-            ones += 1;
-        }
-    }
-    zeros == 2 && ones == 1
-}
-
-/// True iff `rot` is a PURE rotation (each row unit-length within tol, determinant +1) — NOT a
-/// scale/mirror map. A scaled or mirrored brush bakes its linear map `L` (e.g. `diag(-8,8,8)` or a
-/// mirror `diag(-1,1,1)`) into `rot` with `vec_xform = None`; multiplying a unit local normal by
-/// such an `L` would de-normalize it (non-uniform scale) or FLIP it (a mirror — orthonormal rows, so
-/// the length check alone can't see it), so the §48 subtract-recompute (which maps the local normal
-/// by `rot` assuming a rotation) MUST skip those — they are handled by the covariant `vec_xform`
-/// path (scaled, non-mirror) or `brush_marshal.py`'s ring-pre-reverse + `FPoly::finalize` winding
-/// recompute (mirror; `_build_brush_input`'s own doc: "Gated off a mirror: there the covariant image
-/// flips orientation, so the ring-reverse + calc_normal path stays"). A reflection has orthonormal
-/// rows just like a rotation — only `determinant<0` tells them apart — so the length-only check let
-/// a mirrored Subtract brush's already-correct `finalize()` normal get overwritten by this recompute
-/// (using the mirror-baked `rot` on the ALREADY-reversed local winding), producing systematically
-/// inverted (inward) face normals for the whole brush: `build_brush_temp_bsp` then builds that
-/// brush's own convex partition inside-out, so `filter_world_through_brush` misclassifies
-/// spatially-unrelated world faces as interior and discards them — live-traced root cause of
-/// `native-under-builds-area51-entrance-geometry` and the wider severe-under-build family (Wanchai
-/// Garage/Paris Underground/NYC 747/OceanLab Lab).
-fn rot_is_pure_rotation(rot: &[[f32; 3]; 3]) -> bool {
-    for r in rot {
-        let len2 = r[0] * r[0] + r[1] * r[1] + r[2] * r[2];
-        if (len2 - 1.0).abs() > 1.0e-3 {
-            return false;
-        }
-    }
-    let det = rot[0][0] * (rot[1][1] * rot[2][2] - rot[1][2] * rot[2][1])
-        - rot[0][1] * (rot[1][0] * rot[2][2] - rot[1][2] * rot[2][0])
-        + rot[0][2] * (rot[1][0] * rot[2][1] - rot[1][1] * rot[2][0]);
-    det > 0.0
-}
-
 /// `bspBrushCSG` **LOOP 1** (`0x35791`) — transform the brush's polys into world space and adjust
 /// their flags, producing the engine's `TempModel->Polys`.  Shared by every `CsgOper`: Add/Subtract
 /// feed it to LOOP 2, Intersect/Deintersect feed it to the tail at `0x35ab3` (`intersect_brushset`).
@@ -2529,13 +2466,25 @@ fn brush_loop1(brush: &build::BrushInput, actor_index: i32, poly_flags: u32) -> 
     let mut temp: Vec<FPoly> = Vec::new();
     for (i, p) in brush.polys.iter().enumerate() {
         let mut ed = p.clone();
-        // SCALED brush (§92 §43): the editor's `FPoly::Transform` maps the face normal by the
-        // `ABrush::BuildCoords` VectorXform `(L⁻¹)ᵀ` then `SafeNormalSlow` — NOT `calc_normal` over
-        // the L-warped world winding, which is 1 ULP under unit (`0.99999994`) on a face that became
-        // asymmetric under non-uniform PostScale (Brush578's ±x/±y → the N=30 committed twins, node
-        // 359-364).  Capture the LOCAL winding normal (the editor's finalized brush-local normal)
-        // BEFORE the transform so we can covariant-map it below.
-        let local_normal: Option<Vec3> = brush.vec_xform.map(|_| {
+        // THE EDITOR'S NORMAL PIPELINE, UNIFORM FOR EVERY BRUSH POLY (2026-09-03, Vandenberg
+        // first-divergent-brush round; spike `2026-09-03-vandenberg-first-divergent-brush/`):
+        //   1. The T3D importer STORES `CalcNormal(local winding)` over the authored normal —
+        //      live golden bytes: Vandenberg Brush41's stored Polys normal is `bf75341a/3e931f43`
+        //      (= CalcNormal) while the authored text parses to `bf753416/3e931f47`.
+        //   2. `FPoly::Transform` (Engine.dll 0x152360) maps that stored normal by VectorXform and
+        //      applies `SafeNormalSlow` UNCONDITIONALLY, on every poly (§92 §52).
+        // So the world face normal is `SafeNormalSlow(X · CalcNormal(local))`, with X = the
+        // `ABrush::BuildCoords` VectorXform (scaled/mirrored brushes — `brush.vec_xform`) or the
+        // plain rotation (unscaled — `brush.rot`).  This replaces the former three-way split
+        // (authored-kept Add / §48 Subtract-only recompute / dot<0.9999 disagree-guard): §48's
+        // "Add keeps authored" castle evidence was coincidental — the castle's authored T3D
+        // values ARE `SNS(CalcNormal(local))` for its faces (its T3D was itself an editor export
+        // of import-recomputed normals), so the uniform rule reproduces them bit-for-bit.  Axis
+        // faces are byte-stable too: `CalcNormal` of a large axis rect is `0.99999994·axis`, and
+        // `SafeNormalSlow` lands that back on the exact `±1.0` the editor stores.  Validated
+        // offline against the live per-brush Pass-1 gdb capture of the full Vandenberg build
+        // (`vdb_model_check.py`: every explained plane-bit diff matches this rule).
+        let local_normal: Vec3 = {
             let mut w = p.clone();
             w.normal = Vec3::new(0.0, 0.0, 0.0);
             if w.calc_normal() {
@@ -2543,7 +2492,7 @@ fn brush_loop1(brush: &build::BrushInput, actor_index: i32, poly_flags: u32) -> 
             } else {
                 p.normal
             }
-        });
+        };
         ed.poly_flags = (ed.poly_flags | poly_flags) & !not_poly_flags;
         ed.actor = actor_index;
         ed.i_brush_poly = i as i32;
@@ -2553,96 +2502,23 @@ fn brush_loop1(brush: &build::BrushInput, actor_index: i32, poly_flags: u32) -> 
         {
             continue;
         }
+        if brush.orientation < 0 {
+            // Mirrored brush: `FPoly::Transform`'s Orientation<0 post-map ring reversal (verts
+            // only, no normal negation — spike 2026-06-25) — see `BrushInput::orientation`.
+            ed.verts.reverse();
+        }
         if ed.finalize().is_err() {
             continue;
         }
-        if let (Some(vx), Some(nloc)) = (brush.vec_xform.as_ref(), local_normal) {
-            // Faithful editor normal: `SafeNormalSlow(N_local.TransformVectorBy(VectorXform))`.  For
-            // an axis face this renormalizes to the EXACT unit axis (`0x3f800000`), matching the
-            // editor's stored node plane; `calc_normal(world)` gave `0x3f7fffff`.  Overrides the
-            // `finalize` winding normal above (which the scaled path only used to reject degenerate
-            // faces).  A degenerate covariant image (|N|²<1e-8) keeps the winding normal.
-            if let Some(n) = safe_normal_slow(&transform_vector_by(&nloc, vx)) {
-                ed.normal = n;
-            }
-        } else if (oper == csg::CsgOper::Subtract || add_recompute_normal_enabled())
-            && !is_unit_axis(&p.normal)
-            && rot_is_pure_rotation(&brush.rot)
-        {
-            // DELIBERATELY NOT extended to `CsgOper::Active` (2026-09-01): every OTHER Active-vs-
-            // Subtract dispatch in `bspBrushCSG` was independently disassembled this round and
-            // confirmed identical (see `csg::CsgOper::Active`'s doc comment), but §48's "Subtract
-            // recomputes, Add keeps authored" rule was derived empirically from a real-level census
-            // (`op_axis_census.py`) that contained only Add/Subtract brushes — never disassembled to
-            // instruction level, so there is no evidence it keys on literal `CsgOper==2` vs "not
-            // Add" like every other dispatch here does. Extending it to `Active` on that pattern
-            // alone would be exactly the un-derived guess the no-guessing rule forbids. Un-affected
-            // by the current fix (Brush230, the live motivating case, is a single poly).
-            //
-            // §92 §48 SUBTRACT NORMAL RECOMPUTE — the editor's per-face normal DECISION rule.
-            // For a CSG_Subtract brush, UnrealEd's `bspBrushCSG` filters the RECONSTRUCTED brush-model
-            // polys (`bspBuildFPolys` -> `FPoly::Finalize` -> `CalcNormal` over the brush-LOCAL
-            // winding), NOT the authored T3D normals; a CSG_Add brush keeps its authored normal (the
-            // `else` path).  This is the split pinned in §46/§47: the editor STORES `CalcNormal(local)`
-            // for the dome (subtract, `0x…07a5`) but the AUTHORED `f7` (`0x3f3504f7`) for the castle
-            // bastion (add) — SAME kind of unscaled non-axis face, different CSG op.  All 86 UNATCO
-            // N=105 committed-tree normal twins are on subtract brushes (Brush755 dome, Brush745 wedge,
-            // Brush336 T-junction); the 240 UNATCO Add slanted faces keep authored (native already
-            // matched the golden there).  Compute over the LOCAL (pre-transform) winding — the large
-            // WORLD coords lose f32 precision (§46: world winding -> `0x…077d`, local -> the editor's
-            // `0x…07a5`) — then rotate to world (the editor's `FPoly::Transform` rotates the finalized
-            // local normal).  Axis faces are excluded (`is_unit_axis`): `CalcNormal` of a large axis
-            // rect is `0.99999994` but the editor keeps the exact `±1`.
-            //
-            // CASTLE-SAFE (the §46 raw-local recompute regressed the castle ONLY because it recomputed
-            // ADD faces too): the castle's 80 slanted faces are ALL CSG_Add (bastions/towers) and its
-            // 102 subtract faces are ALL axis — so with this Subtract+`!is_unit_axis` gate NO castle
-            // surf is touched (byte-identity preserved).  Census: the committed harness
-            // `dev/docs/spikes/2026-07-15-native-materialize/harness/derisk-normal-weld/op_axis_census.py`.
-            //
-            // NOTE (weld residual): `calc_normal(raw local)` reproduces the editor bit-exactly for
-            // facets whose verts are distinct (no `bspAddPoint` weld — dome ib=3/20/44/61); facets
-            // sharing a welded vertex are 1-2 ULP off (§46).  Closing those fully needs the brush-model
-            // `bspBuildFPolys` reconstruction/weld (`build_brush_temp_bsp` + `bsp_node_to_fpoly`),
-            // deferred — this raw-local pass closes the bulk castle-safely.
-            let mut wl = p.clone();
-            wl.normal = Vec3::new(0.0, 0.0, 0.0);
-            if wl.calc_normal() {
-                let nl = wl.normal;
-                let r = &brush.rot;
-                let rotated = Vec3::new(
-                    r[0][0] * nl.x + r[0][1] * nl.y + r[0][2] * nl.z,
-                    r[1][0] * nl.x + r[1][1] * nl.y + r[1][2] * nl.z,
-                    r[2][0] * nl.x + r[2][1] * nl.y + r[2][2] * nl.z,
-                );
-                // §92 §52: the editor's `FPoly::Transform` applies a SECOND `SafeNormalSlow` to the
-                // rotated finalized normal — `CalcNormal` already normalized once at brush-model
-                // build (a live gdb capture of the paste `CalcNormal` OUTPUT proved it equals native's
-                // `calc_normal(local)` byte-for-byte, 78/78), and `FPoly::Transform` re-normalizes on
-                // top of that.  Native stored only the once-normalized `nl`, so it was 1-2 ULP off on
-                // the 19 non-axis dome facets (the "twins" earlier mis-attributed to a world-CSG
-                // `bspAddPoint` vertex pool — REFUTED: `MAP REBUILD` calls `CalcNormal` ZERO times,
-                // gdb-proven over 5878 `bspAddNode` calls; the twin is this dropped re-normalization).
-                // `safe_normal_slow` renormalizes `(0,0,±1)`-type axis vectors to themselves exactly,
-                // and this path is `!is_unit_axis`-gated anyway, so the castle (no non-axis subtract
-                // face) is untouched.  Mirrors the scaled path at line ~1744.
-                ed.normal = safe_normal_slow(&rotated).unwrap_or(rotated);
-            }
-        } else {
-            // UNSCALED CSG_Add (and subtract AXIS faces): re-derive the face plane normal from its
-            // (transformed) winding only when the authored normal DISAGREES.  Some T3D brush faces
-            // carry a STALE/projected authored normal (e.g. sloped bastion-roof faces store their
-            // horizontal AXIS normal `(0.707,0.707,0)` while the verts lie in a slanted plane).
-            // Trusting it makes `bspAddNode` store a VERTICAL node plane for a slanted face, so the
-            // incremental descent bounds the roof as a vertical prism and routes adjacent exterior
-            // void into a solid leaf (the near-wall false-solids).  Replace only when the winding
-            // disagrees (`dot < 0.9999`) so consistent faces keep their byte-identical authored
-            // normal.  Mirrors `build.rs` §7.1.
-            let mut w = ed.clone();
-            w.normal = Vec3::new(0.0, 0.0, 0.0);
-            if w.calc_normal() && ed.normal.dot(&w.normal) < 0.9999 {
-                ed.normal = w.normal;
-            }
+        // `SafeNormalSlow(X · CalcNormal(local))` — see the pipeline comment above.  For an axis
+        // face this lands the EXACT unit axis; for a scaled brush it is the covariant editor value
+        // `calc_normal(world)` misses (§92 §43).  A degenerate mapped image (|N|² < 1e-8) keeps the
+        // `finalize`/transform normal.  For a MIRRORED brush `local_normal` was computed on the
+        // UNREVERSED ring (above, before the Orientation reversal), exactly as the editor's
+        // stored-poly normal is — and VectorXform (det < 0) maps it to the outward world normal.
+        let x: &[[f32; 3]; 3] = brush.vec_xform.as_ref().unwrap_or(&brush.rot);
+        if let Some(n) = safe_normal_slow(&transform_vector_by(&local_normal, x)) {
+            ed.normal = n;
         }
         // §8.2: NO LOOP-1 reverse.  `ABrush::BuildCoords` returns Orientation +1 for identity scale
         // regardless of Add/Subtract, so the descent uses the OUTWARD brush normal; the single flip
@@ -3304,6 +3180,28 @@ pub fn build_geometry_bspcsg(brushes: &[build::BrushInput]) -> Result<Model, Bui
         }
         // Detail brushes still need NF_IsNew cleared per pass; bsp_brush_csg handles that.
         bsp_brush_csg(&mut model, b, bi as i32, pf);
+        // BRUSHSTATE continues into Pass 2 (k keeps counting past the 728 structural calls), so the
+        // per-brush count trace aligns against the editor's Pass-2 `bspBrushCSG` entries too.
+        if brush_state.is_some() {
+            eprintln!(
+                "BRUSHSTATE k={} bi={} nodes={} surfs={} verts={} points={} vectors={}",
+                k, bi, model.nodes.len(), model.surfs.len(), model.verts.len(),
+                model.points.len(), model.vectors.len()
+            );
+            if let Some((lo, hi)) = full_range {
+                if k >= lo && k <= hi {
+                    for (i, n) in model.nodes.iter().enumerate() {
+                        eprintln!(
+                            "P1NODE k={} i={} pb={:08x},{:08x},{:08x},{:08x} iF={} iB={} iP={} isurf={} nv={} nf={:#x}",
+                            k, i, n.plane.x.to_bits(), n.plane.y.to_bits(),
+                            n.plane.z.to_bits(), n.plane.w.to_bits(),
+                            n.i_front, n.i_back, n.i_plane, n.i_surf, n.num_vertices, n.node_flags
+                        );
+                    }
+                }
+            }
+        }
+        k += 1;
     }
     if stage_counts {
         eprintln!(
@@ -4179,6 +4077,7 @@ mod tests {
             location: loc,
             scale: Vec3::new(1.0, 1.0, 1.0),
             vec_xform: None,
+            orientation: 1,
         }
     }
 
@@ -4588,6 +4487,7 @@ mod tests {
             location: loc,
             scale: Vec3::new(1.0, 1.0, 1.0),
             vec_xform: None,
+            orientation: 1,
         };
         let cube = |oper: CsgOper| {
             let s = 128.0;
@@ -4919,33 +4819,6 @@ mod tests {
         );
     }
 
-    #[test]
-    fn is_unit_axis_and_rot_pure_rotation_guards() {
-        // §92 §48: the subtract-recompute fires only for a NON-axis face on a PURE-rotation brush.
-        assert!(is_unit_axis(&Vec3::new(0.0, 0.0, 1.0)));
-        assert!(is_unit_axis(&Vec3::new(-1.0, 0.0, 0.0)));
-        assert!(!is_unit_axis(&Vec3::new(0.7071, 0.0, 0.7071))); // slanted -> recompute-eligible
-        assert!(!is_unit_axis(&Vec3::new(0.0, 0.0, 0.99999994))); // near-axis is NOT exact axis
-        let ident = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]];
-        assert!(rot_is_pure_rotation(&ident));
-        // A yaw rotation stays orthonormal.
-        let yaw = [[0.0, -1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0]];
-        assert!(rot_is_pure_rotation(&yaw));
-        // A scale/mirror baked into `rot` (as materialize does for a scaled brush) is NOT a rotation
-        // — it must be REJECTED so the recompute never de-normalizes the mapped normal (the mirror
-        // `diag(-8,8,8)` regression).
-        let mirror = [[-8.0, 0.0, 0.0], [0.0, 8.0, 0.0], [0.0, 0.0, 8.0]];
-        assert!(!rot_is_pure_rotation(&mirror));
-        // A PURE mirror (no scale, e.g. `MainScale=(-1,1,1)`) has orthonormal (unit-length) rows,
-        // same as a real rotation — only the determinant sign (-1 vs +1) tells them apart. Missing
-        // this let a mirrored Subtract brush's already-correct `finalize()` normal get overwritten
-        // by the §48 recompute, producing inside-out `build_brush_temp_bsp` trees and a
-        // spatially-nonsensical over-carve of unrelated world geometry (root cause of
-        // `native-under-builds-area51-entrance-geometry`, live-traced on Wanchai Garage's Brush24).
-        let pure_mirror = [[-1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]];
-        assert!(!rot_is_pure_rotation(&pure_mirror));
-    }
-
     /// A right-triangular-prism (wedge) whose single slanted face carries an AUTHORED normal a few
     /// ULP off its winding `CalcNormal`.  `oper` picks Add vs Subtract; `slant_authored` is stamped
     /// on the slant face.
@@ -4980,14 +4853,18 @@ mod tests {
             location: Vec3::new(0.0, 0.0, 0.0),
             scale: Vec3::new(1.0, 1.0, 1.0),
             vec_xform: None,
+            orientation: 1,
         }
     }
 
     #[test]
-    fn subtract_recomputes_slant_normal_while_add_keeps_authored() {
-        // §92 §48 — the editor's per-face normal DECISION rule, pinned on a synthetic slanted face.
-        // The slant winding's CalcNormal is the RECOMPUTED value; the AUTHORED normal is that value
-        // nudged a few ULP (so `dot > 0.9999`, mimicking the castle bastion `f7` vs `f3` / the dome).
+    fn every_face_normal_is_sns_of_local_calcnormal_authored_ignored() {
+        // The uniform normal rule (2026-09-03 Vandenberg first-divergent-brush round, replacing §92
+        // §48's Subtract-only split): the importer stores CalcNormal(local) over the authored
+        // normal (live golden bytes: Vandenberg Brush41 Polys stores bf75341a/3e931f43 = CalcNormal
+        // while the authored text parses to bf753416/3e931f47), and `FPoly::Transform` re-normalizes
+        // with SafeNormalSlow on EVERY poly (§92 §52).  So Add and Subtract BOTH store
+        // `safe_normal_slow(CalcNormal(local))`; a perturbed authored normal is ignored for both.
         let mut probe = FPoly::new(vec![
             Vec3::new(128.0, -64.0, -64.0),
             Vec3::new(128.0, 64.0, -64.0),
@@ -5037,13 +4914,15 @@ mod tests {
         let (ax, az) = slant_bits(&add);
         assert_eq!(
             (ax, az),
-            (authored.x.abs().to_bits(), authored.z.abs().to_bits()),
-            "ADD slant normal must KEEP the authored normal (dot>0.9999), not recompute"
+            (sx, sz),
+            "ADD stores the same safe_normal_slow(CalcNormal(local)) — the authored normal is \
+             ignored (uniform rule; the old Add-keeps-authored reading was coincidental castle \
+             evidence, refuted by Vandenberg Brush41's live golden bytes)"
         );
         assert_ne!(
-            (sx, sz),
             (ax, az),
-            "the two ops must diverge on the same face — that IS the §48 decision"
+            (authored.x.abs().to_bits(), authored.z.abs().to_bits()),
+            "the perturbed authored normal must NOT survive into the built model"
         );
     }
 
@@ -5129,6 +5008,7 @@ mod tests {
             location: loc,
             scale: Vec3::new(1.0, 1.0, 1.0),
             vec_xform: None,
+            orientation: 1,
         }
     }
 
@@ -5214,6 +5094,7 @@ mod tests {
             location: loc,
             scale: Vec3::new(1.0, 1.0, 1.0),
             vec_xform: None,
+            orientation: 1,
         }
     }
 
@@ -5811,6 +5692,7 @@ mod tests {
             location: Vec3::new(0.0, 0.0, 0.0),
             scale: Vec3::new(1.0, 1.0, 1.0),
             vec_xform: None,
+            orientation: 1,
         };
         std::env::set_var("UEDCLI_BSPCSG_INCREMENTAL_POINTS", "1");
         let m = build_geometry_bspcsg(&[brush]).unwrap();
@@ -5887,6 +5769,7 @@ mod tests {
             location: Vec3::new(0.0, 0.0, 0.0),
             scale: Vec3::new(1.0, 1.0, 1.0),
             vec_xform: None,
+            orientation: 1,
         }];
 
         let mut off = build_model();
@@ -5958,6 +5841,7 @@ mod tests {
             location: Vec3::new(0.0, 0.0, 0.0),
             scale: Vec3::new(1.0, 1.0, 1.0),
             vec_xform: None,
+            orientation: 1,
         }];
 
         std::env::set_var("UEDCLI_BSPCSG_POINTS_ORIGIN_REVERSED", "1");

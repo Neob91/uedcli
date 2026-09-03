@@ -90,6 +90,8 @@ impl Built {
 /// (that's resolved separately at export time). Empty list -> every poly's `FPoly.texture` keeps the
 /// `FPoly::new` default (0), which makes the gate an unconditional no-op (every poly "equal") — the
 /// pre-fix behavior, kept as the fallback shape for any caller that doesn't populate it.
+/// The bundle's 6th element is `orientation` (`BrushInput::orientation`): -1 for a mirrored brush
+/// (`det L < 0`; rings arrive unreversed and get reversed post-transform), else +1.
 type BrushTuple = (
     Vec<f32>,
     Vec<usize>,
@@ -102,7 +104,7 @@ type BrushTuple = (
     [f32; 3],
     Vec<u32>,
     Vec<f32>,
-    (Vec<f32>, Vec<f32>, Vec<f32>, Vec<i32>, Vec<i32>),
+    (Vec<f32>, Vec<f32>, Vec<f32>, Vec<i32>, Vec<i32>, i32),
 );
 
 fn oper_from_i32(o: i32) -> Result<csg::CsgOper, model::BuildError> {
@@ -134,7 +136,7 @@ fn brush_from_tuple(t: &BrushTuple) -> Result<build::BrushInput, model::BuildErr
         scale,
         poly_flags_flat,
         tex_u_flat,
-        (tex_v_flat, origins_flat, vec_xform_flat, pans_flat, textures_flat),
+        (tex_v_flat, origins_flat, vec_xform_flat, pans_flat, textures_flat, orientation),
     ) = t;
     // `vec_xform_flat` = 9 floats (row-major `(L⁻¹)ᵀ`, ABrush::BuildCoords VectorXform) for a SCALED
     // brush, else empty.  When present, `bsp_brush_csg` recomputes each face normal covariantly
@@ -221,6 +223,7 @@ fn brush_from_tuple(t: &BrushTuple) -> Result<build::BrushInput, model::BuildErr
         location: model::Vec3::new(loc[0], loc[1], loc[2]),
         scale: model::Vec3::new(scale[0], scale[1], scale[2]),
         vec_xform,
+        orientation: *orientation,
     })
 }
 
@@ -529,7 +532,7 @@ mod tests {
             [1.0, 1.0, 1.0],
             vec![],
             vec![],
-            (vec![], vec![], vec![], vec![], vec![7, 9]),
+            (vec![], vec![], vec![], vec![], vec![7, 9], 1),
         );
         let brush = brush_from_tuple(&t).expect("valid brush tuple");
         assert_eq!(brush.polys[0].texture, 7, "poly 0's textures_flat id must reach FPoly.texture");
@@ -550,7 +553,7 @@ mod tests {
             [1.0, 1.0, 1.0],
             vec![],
             vec![],
-            (vec![], vec![], vec![], vec![], vec![]),
+            (vec![], vec![], vec![], vec![], vec![], 1),
         );
         let brush_empty = brush_from_tuple(&t_empty).expect("valid brush tuple");
         assert_eq!(brush_empty.polys[0].texture, 0);
