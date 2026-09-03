@@ -105,3 +105,32 @@ from the whole-pool scan on DX/Bar's (much simpler) brush sets — likely the ra
 descend or the on-plane early-return band is too aggressive/wrong outside Garage's specific
 geometry. Branch `garage-pool-snap-fix-round2` is sitting unpushed in worktree
 `agent-a14189a804e86a9c4` — read its diff before restarting rather than re-deriving the decode.
+
+## Fix-round 3 (2026-09-03, branch `garage-pool-snap-fix-round2-cont` @ `1916dc0`, worktree `agent-ad8c36bc0dc8e72a8` — coded, NOT MERGED, coordinator took over after a 2nd stall)
+
+Correctly diagnosed and fixed a real gap: round 2's port only scanned a node's OWN ring, missing
+the surf `pBase` candidate (`+0x8`) and the `i_plane` coplanar-sibling chain (`+0x28`) — both
+disasm-confirmed, pinned by 2 new unit tests. Also fixed a resquare-vs-propagate radius precision
+bug. Gates green (cargo 115/115, full pytest clean except the one pre-existing failure).
+
+**This fix is REAL but DOES NOT close DX/Bar** — adds two NEW level wins beyond round 2's
+(`06_HongKong_Helibase.dx`, `00_TrainingFinal.dx` both gain `nodes_match`), but DX.dx/`02_NYC_Bar.dx`
+regress IDENTICALLY before and after (same `points_match: False`, same content notes) — the
+pBase/chain gap was real but is not the DX/Bar mechanism. It's a third, separate bug.
+
+**Precisely localized**: `parity_report.py` on DX.dx (flag on) → `points native=39 golden=32 d=+7`
+— the OPPOSITE direction from Garage's own fix target. Garage's bug was native OVER-pooling
+(welding points the editor kept distinct — tree-restriction correctly fixes this). DX's bug is
+native UNDER-pooling / OVER-creating: the tree-restricted search fails to find an existing
+near-duplicate point that the OLD whole-pool scan always found regardless of tree state. Either
+the port is still missing a reachability path the real `Engine.dll UModel::FindNearestVertex` has,
+or the call site/tree-state assumption is wrong for DX's construction order. NOT yet disassembled
+further. Full detail + all 3 rounds' corpus numbers: `native-materialize-findings.md`, search
+"Round 3 (`1916dc0`".
+
+**Next session starts here**: DX.dx is TINY (39 vs 32 points) — get the 7 extra points' exact
+coordinates and their would-be nearest golden neighbor (offline, via the cached golden + a native
+rebuild), then trace which specific `bspAddPoint` call/tree-state produces the miss. Branch
+`garage-pool-snap-fix-round2-cont` sits unpushed in worktree `agent-ad8c36bc0dc8e72a8` (commit
+`1916dc0` on `70bf271`) — read its diff before restarting. `agent-a14189a804e86a9c4` (round 2's
+original worktree) is now superseded/stale, safe to remove.
