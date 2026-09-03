@@ -1,0 +1,21 @@
+[06_hongkong_wanchai_garage] 351 actors; 198 world-csg brushes; 153 other actors
+  [n=198] reusing existing golden /workspace/uedcli/.claude/worktrees/agent-ad0a5506c35551641/_scratch/wg-prefix/n0198/golden_n0198.dx
+n= 198 brush=Brush158             native(nodes=2078,surfs=1083,leaves=410) editor(nodes=2146,surfs=1083,leaves=422) d_nodes=-68 d_surfs=+0 d_leaves=-12
+  [n=1] reusing existing golden /workspace/uedcli/.claude/worktrees/agent-ad0a5506c35551641/_scratch/wg-prefix/n0001/golden_n0001.dx
+n=   1 brush=Brush128             native(nodes=6,surfs=6,leaves=1) editor(nodes=6,surfs=6,leaves=1) d_nodes=+0 d_surfs=+0 d_leaves=+0
+  [n=99] reusing existing golden /workspace/uedcli/.claude/worktrees/agent-ad0a5506c35551641/_scratch/wg-prefix/n0099/golden_n0099.dx
+n=  99 brush=Brush86              native(nodes=1279,surfs=574,leaves=323) editor(nodes=1179,surfs=574,leaves=304) d_nodes=+100 d_surfs=+0 d_leaves=+19
+  [n=50] reusing existing golden /workspace/uedcli/.claude/worktrees/agent-ad0a5506c35551641/_scratch/wg-prefix/n0050/golden_n0050.dx
+n=  50 brush=Brush24              native(nodes=796,surfs=426,leaves=182) editor(nodes=808,surfs=426,leaves=191) d_nodes=-12 d_surfs=+0 d_leaves=-9
+  [n=25] reusing existing golden /workspace/uedcli/.claude/worktrees/agent-ad0a5506c35551641/_scratch/wg-prefix/n0025/golden_n0025.dx
+n=  25 brush=Brush1874            native(nodes=195,surfs=123,leaves=23) editor(nodes=195,surfs=123,leaves=23) d_nodes=+0 d_surfs=+0 d_leaves=+0
+  [n=37] reusing existing golden /workspace/uedcli/.claude/worktrees/agent-ad0a5506c35551641/_scratch/wg-prefix/n0037/golden_n0037.dx
+n=  37 brush=Brush18              native(nodes=314,surfs=198,leaves=61) editor(nodes=314,surfs=198,leaves=61) d_nodes=+0 d_surfs=+0 d_leaves=+0
+  [n=43] reusing existing golden /workspace/uedcli/.claude/worktrees/agent-ad0a5506c35551641/_scratch/wg-prefix/n0043/golden_n0043.dx
+n=  43 brush=Brush2               native(nodes=579,surfs=292,leaves=142) editor(nodes=570,surfs=292,leaves=141) d_nodes=+9 d_surfs=+0 d_leaves=+1
+  [n=40] reusing existing golden /workspace/uedcli/.claude/worktrees/agent-ad0a5506c35551641/_scratch/wg-prefix/n0040/golden_n0040.dx
+n=  40 brush=Brush21              native(nodes=387,surfs=233,leaves=74) editor(nodes=374,surfs=233,leaves=74) d_nodes=+13 d_surfs=+0 d_leaves=+0
+  [n=38] reusing existing golden /workspace/uedcli/.claude/worktrees/agent-ad0a5506c35551641/_scratch/wg-prefix/n0038/golden_n0038.dx
+n=  38 brush=Brush19              native(nodes=317,surfs=201,leaves=62) editor(nodes=317,surfs=201,leaves=62) d_nodes=+0 d_surfs=+0 d_leaves=+0
+  [n=39] reusing existing golden /workspace/uedcli/.claude/worktrees/agent-ad0a5506c35551641/_scratch/wg-prefix/n0039/golden_n0039.dx
+n=  39 brush=Brush20              native(nodes=372,surfs=229,leaves=74) editor(nodes=372,surfs=229,leaves=74) d_nodes=+0 d_surfs=+0 d_leaves=+0

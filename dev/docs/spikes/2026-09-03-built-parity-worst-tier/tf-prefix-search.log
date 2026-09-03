@@ -1,0 +1,176 @@
+[00_trainingfinal] 1142 actors; 764 world-csg brushes; 378 other actors
+  [n=764] building editor golden: /workspace/uedcli/.claude/worktrees/agent-ad0a5506c35551641/.venv/bin/python /workspace/uedcli/.claude/worktrees/agent-ad0a5506c35551641/dev/docs/spikes/2026-07-15-native-materialize/harness/build_ued_golden.py --trunk /workspace/uedcli/.claude/worktrees/agent-ad0a5506c35551641/_scratch/tf-prefix/n0764/maps/00_trainingfinal --out /workspace/uedcli/.claude/worktrees/agent-ad0a5506c35551641/_scratch/tf-prefix/n0764/golden_n0764.dx --world-only --no-light --no-obj-load --overwrite
+trunk 00_trainingfinal: 1142 actors; building 765 (764 brush) world_only=True lit=False
+referenced packages to OBJ LOAD: ['Catacombs', 'Cmd_tunnels', 'Constructor', 'CoreTexConcrete', 'CoreTexFoliage', 'CoreTexGlass', 'CoreTexMetal', 'CoreTexMisc', 'CoreTexStone', 'Engine', 'NYCBar', 'Rocket', 'Training_Music', 'UNATCO', 'V_Com_Center', 'area51textures']
+editor up: uned-01a06551-a9be-766b-a710-fd993f1cecfd
+  (--no-obj-load: skipping OBJ LOAD of referenced packages)
+    [map-new] idle after 16s (cpu 19.7%, 8 quiet reads)
+    [re-add] idle after 18s (cpu 7.2%, 8 quiet reads)
+  REBUILD[0]: MAP REBUILD ...
+    [rebuild[0]] idle after 44s (cpu 21.1%, 8 quiet reads)
+  MAP SAVE ...
+WROTE /workspace/uedcli/.claude/worktrees/agent-ad0a5506c35551641/_scratch/tf-prefix/n0764/golden_n0764.dx (2717288 bytes container-side, 2717288 host-side)
+n= 764 brush=Brush211             native(nodes=11063,surfs=5307,leaves=837) editor(nodes=11122,surfs=5307,leaves=848) d_nodes=-59 d_surfs=+0 d_leaves=-11
+  [n=1] building editor golden: /workspace/uedcli/.claude/worktrees/agent-ad0a5506c35551641/.venv/bin/python /workspace/uedcli/.claude/worktrees/agent-ad0a5506c35551641/dev/docs/spikes/2026-07-15-native-materialize/harness/build_ued_golden.py --trunk /workspace/uedcli/.claude/worktrees/agent-ad0a5506c35551641/_scratch/tf-prefix/n0001/maps/00_trainingfinal --out /workspace/uedcli/.claude/worktrees/agent-ad0a5506c35551641/_scratch/tf-prefix/n0001/golden_n0001.dx --world-only --no-light --no-obj-load --overwrite
+trunk 00_trainingfinal: 379 actors; building 2 (1 brush) world_only=True lit=False
+referenced packages to OBJ LOAD: ['Engine', 'Training_Music', 'UNATCO']
+editor up: uned-01a06553-5676-7a24-86b5-39863d3557ec
+  (--no-obj-load: skipping OBJ LOAD of referenced packages)
+    [map-new] idle after 33s (cpu 9.5%, 8 quiet reads)
+    [re-add] idle after 16s (cpu 21.6%, 8 quiet reads)
+  REBUILD[0]: MAP REBUILD ...
+    [rebuild[0]] idle after 18s (cpu 24.2%, 8 quiet reads)
+  MAP SAVE ...
+WROTE /workspace/uedcli/.claude/worktrees/agent-ad0a5506c35551641/_scratch/tf-prefix/n0001/golden_n0001.dx (4688 bytes container-side, 4688 host-side)
+n=   1 brush=Brush55              native(nodes=6,surfs=6,leaves=1) editor(nodes=6,surfs=6,leaves=1) d_nodes=+0 d_surfs=+0 d_leaves=+0
+  [n=382] building editor golden: /workspace/uedcli/.claude/worktrees/agent-ad0a5506c35551641/.venv/bin/python /workspace/uedcli/.claude/worktrees/agent-ad0a5506c35551641/dev/docs/spikes/2026-07-15-native-materialize/harness/build_ued_golden.py --trunk /workspace/uedcli/.claude/worktrees/agent-ad0a5506c35551641/_scratch/tf-prefix/n0382/maps/00_trainingfinal --out /workspace/uedcli/.claude/worktrees/agent-ad0a5506c35551641/_scratch/tf-prefix/n0382/golden_n0382.dx --world-only --no-light --no-obj-load --overwrite
+trunk 00_trainingfinal: 760 actors; building 383 (382 brush) world_only=True lit=False
+referenced packages to OBJ LOAD: ['Catacombs', 'Cmd_tunnels', 'Constructor', 'CoreTexConcrete', 'CoreTexFoliage', 'CoreTexGlass', 'CoreTexMetal', 'CoreTexMisc', 'CoreTexStone', 'Engine', 'NYCBar', 'Training_Music', 'UNATCO', 'area51textures']
+editor up: uned-01a06554-e7b0-797a-b0d8-030019c3732e
+  (--no-obj-load: skipping OBJ LOAD of referenced packages)
+    [map-new] idle after 16s (cpu 7.6%, 8 quiet reads)
+    [re-add] idle after 16s (cpu 25.9%, 8 quiet reads)
+  REBUILD[0]: MAP REBUILD ...
+    [rebuild[0]] idle after 25s (cpu 8.3%, 8 quiet reads)
+  MAP SAVE ...
+WROTE /workspace/uedcli/.claude/worktrees/agent-ad0a5506c35551641/_scratch/tf-prefix/n0382/golden_n0382.dx (1339029 bytes container-side, 1339029 host-side)
+n= 382 brush=Brush624             native(nodes=5405,surfs=2707,leaves=275) editor(nodes=5405,surfs=2707,leaves=275) d_nodes=+0 d_surfs=+0 d_leaves=+0
+  [n=573] building editor golden: /workspace/uedcli/.claude/worktrees/agent-ad0a5506c35551641/.venv/bin/python /workspace/uedcli/.claude/worktrees/agent-ad0a5506c35551641/dev/docs/spikes/2026-07-15-native-materialize/harness/build_ued_golden.py --trunk /workspace/uedcli/.claude/worktrees/agent-ad0a5506c35551641/_scratch/tf-prefix/n0573/maps/00_trainingfinal --out /workspace/uedcli/.claude/worktrees/agent-ad0a5506c35551641/_scratch/tf-prefix/n0573/golden_n0573.dx --world-only --no-light --no-obj-load --overwrite
+trunk 00_trainingfinal: 951 actors; building 574 (573 brush) world_only=True lit=False
+referenced packages to OBJ LOAD: ['Catacombs', 'Cmd_tunnels', 'Constructor', 'CoreTexConcrete', 'CoreTexFoliage', 'CoreTexGlass', 'CoreTexMetal', 'CoreTexMisc', 'CoreTexStone', 'Engine', 'NYCBar', 'Training_Music', 'UNATCO', 'V_Com_Center', 'area51textures']
+editor up: uned-01a06556-7ad0-7b7e-8229-f81aadb9669e
+  (--no-obj-load: skipping OBJ LOAD of referenced packages)
+    [map-new] idle after 16s (cpu 9.3%, 8 quiet reads)
+    [re-add] idle after 16s (cpu 14.3%, 8 quiet reads)
+  REBUILD[0]: MAP REBUILD ...
+    [rebuild[0]] idle after 35s (cpu 22.5%, 8 quiet reads)
+  MAP SAVE ...
+WROTE /workspace/uedcli/.claude/worktrees/agent-ad0a5506c35551641/_scratch/tf-prefix/n0573/golden_n0573.dx (1903732 bytes container-side, 1903732 host-side)
+n= 573 brush=Brush819             native(nodes=7583,surfs=3785,leaves=484) editor(nodes=7583,surfs=3785,leaves=484) d_nodes=+0 d_surfs=+0 d_leaves=+0
+  [n=668] building editor golden: /workspace/uedcli/.claude/worktrees/agent-ad0a5506c35551641/.venv/bin/python /workspace/uedcli/.claude/worktrees/agent-ad0a5506c35551641/dev/docs/spikes/2026-07-15-native-materialize/harness/build_ued_golden.py --trunk /workspace/uedcli/.claude/worktrees/agent-ad0a5506c35551641/_scratch/tf-prefix/n0668/maps/00_trainingfinal --out /workspace/uedcli/.claude/worktrees/agent-ad0a5506c35551641/_scratch/tf-prefix/n0668/golden_n0668.dx --world-only --no-light --no-obj-load --overwrite
+trunk 00_trainingfinal: 1046 actors; building 669 (668 brush) world_only=True lit=False
+referenced packages to OBJ LOAD: ['Catacombs', 'Cmd_tunnels', 'Constructor', 'CoreTexConcrete', 'CoreTexFoliage', 'CoreTexGlass', 'CoreTexMetal', 'CoreTexMisc', 'CoreTexStone', 'Engine', 'NYCBar', 'Training_Music', 'UNATCO', 'V_Com_Center', 'area51textures']
+Traceback (most recent call last):
+  File "/workspace/uedcli/.claude/worktrees/agent-ad0a5506c35551641/dev/docs/spikes/2026-07-15-native-materialize/harness/build_ued_golden.py", line 288, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "/workspace/uedcli/.claude/worktrees/agent-ad0a5506c35551641/dev/docs/spikes/2026-07-15-native-materialize/harness/build_ued_golden.py", line 247, in main
+    container = ensure_editor(ed_id, mounts=mounts, state_dir=state_dir)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/uedcli/.claude/worktrees/agent-ad0a5506c35551641/uedcli/editor.py", line 410, in ensure_editor
+    _spin_up()
+  File "/workspace/uedcli/.claude/worktrees/agent-ad0a5506c35551641/uedcli/editor.py", line 401, in _spin_up
+    raise DriverError(f"`docker compose run` failed to start editor container {container}: "
+uedcli.driver.DriverError: `docker compose run` failed to start editor container uned-01a06558-1aec-7572-a75d-f6679c5451a9: Container uned-01a06558-1aec-7572-a75d-f6679c5451a9 Creating 
+ Container uned-01a06558-1aec-7572-a75d-f6679c5451a9 Error response from daemon: failed to copy files: write /home/rootless/.local/share/docker/volumes/uned-wp-01a06558-1aec-7572-a75d-f6679c5451a9/_data/drive_c/windows/system32/advapi32.dll: no space left on device 
+Error response from daemon: failed to copy files: write /home/rootless/.local/share/docker/volumes/uned-wp-01a06558-1aec-7572-a75d-f6679c5451a9/_data/drive_c/windows/system32/advapi32.dll: no space left on device
+The host is out of disk — reclaim space (e.g. `docker builder prune`).
+Traceback (most recent call last):
+  File "/workspace/uedcli/.claude/worktrees/agent-ad0a5506c35551641/dev/docs/spikes/2026-09-03-built-parity-worst-tier/harness/tf_prefix_search.py", line 46, in <module>
+    main()
+  File "/workspace/uedcli/.claude/worktrees/agent-ad0a5506c35551641/dev/docs/spikes/2026-09-03-built-parity-worst-tier/harness/tf_prefix_search.py", line 42, in main
+    ps.binary_search()
+  File "/workspace/uedcli/.claude/worktrees/agent-ad0a5506c35551641/dev/docs/spikes/2026-09-03-built-parity-worst-tier/harness/prefix_search_lib.py", line 138, in binary_search
+    d = self.compare(mid)
+        ^^^^^^^^^^^^^^^^^
+  File "/workspace/uedcli/.claude/worktrees/agent-ad0a5506c35551641/dev/docs/spikes/2026-09-03-built-parity-worst-tier/harness/prefix_search_lib.py", line 115, in compare
+    gm = self.editor_counts(n, force=force)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/uedcli/.claude/worktrees/agent-ad0a5506c35551641/dev/docs/spikes/2026-09-03-built-parity-worst-tier/harness/prefix_search_lib.py", line 110, in editor_counts
+    raise RuntimeError(f"build_ued_golden.py failed for n={n} (rc={r.returncode})")
+RuntimeError: build_ued_golden.py failed for n=668 (rc=1)
+[00_trainingfinal] 1142 actors; 764 world-csg brushes; 378 other actors
+  [n=764] reusing existing golden /workspace/uedcli/.claude/worktrees/agent-ad0a5506c35551641/_scratch/tf-prefix/n0764/golden_n0764.dx
+n= 764 brush=Brush211             native(nodes=11063,surfs=5307,leaves=837) editor(nodes=11122,surfs=5307,leaves=848) d_nodes=-59 d_surfs=+0 d_leaves=-11
+  [n=1] reusing existing golden /workspace/uedcli/.claude/worktrees/agent-ad0a5506c35551641/_scratch/tf-prefix/n0001/golden_n0001.dx
+n=   1 brush=Brush55              native(nodes=6,surfs=6,leaves=1) editor(nodes=6,surfs=6,leaves=1) d_nodes=+0 d_surfs=+0 d_leaves=+0
+  [n=382] reusing existing golden /workspace/uedcli/.claude/worktrees/agent-ad0a5506c35551641/_scratch/tf-prefix/n0382/golden_n0382.dx
+n= 382 brush=Brush624             native(nodes=5405,surfs=2707,leaves=275) editor(nodes=5405,surfs=2707,leaves=275) d_nodes=+0 d_surfs=+0 d_leaves=+0
+  [n=573] reusing existing golden /workspace/uedcli/.claude/worktrees/agent-ad0a5506c35551641/_scratch/tf-prefix/n0573/golden_n0573.dx
+n= 573 brush=Brush819             native(nodes=7583,surfs=3785,leaves=484) editor(nodes=7583,surfs=3785,leaves=484) d_nodes=+0 d_surfs=+0 d_leaves=+0
+  [n=668] building editor golden: /workspace/uedcli/.claude/worktrees/agent-ad0a5506c35551641/.venv/bin/python /workspace/uedcli/.claude/worktrees/agent-ad0a5506c35551641/dev/docs/spikes/2026-07-15-native-materialize/harness/build_ued_golden.py --trunk /workspace/uedcli/.claude/worktrees/agent-ad0a5506c35551641/_scratch/tf-prefix/n0668/maps/00_trainingfinal --out /workspace/uedcli/.claude/worktrees/agent-ad0a5506c35551641/_scratch/tf-prefix/n0668/golden_n0668.dx --world-only --no-light --no-obj-load --overwrite
+trunk 00_trainingfinal: 1046 actors; building 669 (668 brush) world_only=True lit=False
+referenced packages to OBJ LOAD: ['Catacombs', 'Cmd_tunnels', 'Constructor', 'CoreTexConcrete', 'CoreTexFoliage', 'CoreTexGlass', 'CoreTexMetal', 'CoreTexMisc', 'CoreTexStone', 'Engine', 'NYCBar', 'Training_Music', 'UNATCO', 'V_Com_Center', 'area51textures']
+editor up: uned-01a06559-8f86-7fb1-a058-67eff32ddf8c
+  (--no-obj-load: skipping OBJ LOAD of referenced packages)
+    [map-new] idle after 16s (cpu 22.0%, 8 quiet reads)
+    [re-add] idle after 16s (cpu 6.4%, 8 quiet reads)
+  REBUILD[0]: MAP REBUILD ...
+    [rebuild[0]] idle after 40s (cpu 6.1%, 8 quiet reads)
+  MAP SAVE ...
+WROTE /workspace/uedcli/.claude/worktrees/agent-ad0a5506c35551641/_scratch/tf-prefix/n0668/golden_n0668.dx (2239806 bytes container-side, 2239806 host-side)
+n= 668 brush=Brush908             native(nodes=9110,surfs=4388,leaves=545) editor(nodes=9110,surfs=4388,leaves=545) d_nodes=+0 d_surfs=+0 d_leaves=+0
+  [n=716] building editor golden: /workspace/uedcli/.claude/worktrees/agent-ad0a5506c35551641/.venv/bin/python /workspace/uedcli/.claude/worktrees/agent-ad0a5506c35551641/dev/docs/spikes/2026-07-15-native-materialize/harness/build_ued_golden.py --trunk /workspace/uedcli/.claude/worktrees/agent-ad0a5506c35551641/_scratch/tf-prefix/n0716/maps/00_trainingfinal --out /workspace/uedcli/.claude/worktrees/agent-ad0a5506c35551641/_scratch/tf-prefix/n0716/golden_n0716.dx --world-only --no-light --no-obj-load --overwrite
+trunk 00_trainingfinal: 1094 actors; building 717 (716 brush) world_only=True lit=False
+referenced packages to OBJ LOAD: ['Catacombs', 'Cmd_tunnels', 'Constructor', 'CoreTexConcrete', 'CoreTexFoliage', 'CoreTexGlass', 'CoreTexMetal', 'CoreTexMisc', 'CoreTexStone', 'Engine', 'NYCBar', 'Rocket', 'Training_Music', 'UNATCO', 'V_Com_Center', 'area51textures']
+editor up: uned-01a0655b-6b92-79f4-a12a-0e8c733e0b59
+  (--no-obj-load: skipping OBJ LOAD of referenced packages)
+    [map-new] idle after 16s (cpu 20.5%, 8 quiet reads)
+    [re-add] idle after 16s (cpu 6.6%, 8 quiet reads)
+  REBUILD[0]: MAP REBUILD ...
+    [rebuild[0]] idle after 42s (cpu 7.6%, 8 quiet reads)
+  MAP SAVE ...
+WROTE /workspace/uedcli/.claude/worktrees/agent-ad0a5506c35551641/_scratch/tf-prefix/n0716/golden_n0716.dx (2436626 bytes container-side, 2436626 host-side)
+n= 716 brush=Brush1008            native(nodes=9924,surfs=4666,leaves=762) editor(nodes=9926,surfs=4666,leaves=763) d_nodes=-2 d_surfs=+0 d_leaves=-1
+  [n=692] building editor golden: /workspace/uedcli/.claude/worktrees/agent-ad0a5506c35551641/.venv/bin/python /workspace/uedcli/.claude/worktrees/agent-ad0a5506c35551641/dev/docs/spikes/2026-07-15-native-materialize/harness/build_ued_golden.py --trunk /workspace/uedcli/.claude/worktrees/agent-ad0a5506c35551641/_scratch/tf-prefix/n0692/maps/00_trainingfinal --out /workspace/uedcli/.claude/worktrees/agent-ad0a5506c35551641/_scratch/tf-prefix/n0692/golden_n0692.dx --world-only --no-light --no-obj-load --overwrite
+trunk 00_trainingfinal: 1070 actors; building 693 (692 brush) world_only=True lit=False
+referenced packages to OBJ LOAD: ['Catacombs', 'Cmd_tunnels', 'Constructor', 'CoreTexConcrete', 'CoreTexFoliage', 'CoreTexGlass', 'CoreTexMetal', 'CoreTexMisc', 'CoreTexStone', 'Engine', 'NYCBar', 'Rocket', 'Training_Music', 'UNATCO', 'V_Com_Center', 'area51textures']
+editor up: uned-01a0655d-5199-7873-bdb9-6f7215087fe0
+  (--no-obj-load: skipping OBJ LOAD of referenced packages)
+    [map-new] idle after 16s (cpu 21.1%, 8 quiet reads)
+    [re-add] idle after 98s (cpu 21.1%, 8 quiet reads)
+  REBUILD[0]: MAP REBUILD ...
+    [rebuild[0]] idle after 39s (cpu 7.2%, 8 quiet reads)
+  MAP SAVE ...
+WROTE /workspace/uedcli/.claude/worktrees/agent-ad0a5506c35551641/_scratch/tf-prefix/n0692/golden_n0692.dx (2335576 bytes container-side, 2335576 host-side)
+n= 692 brush=Brush666             native(nodes=9621,surfs=4529,leaves=655) editor(nodes=9564,surfs=4529,leaves=633) d_nodes=+57 d_surfs=+0 d_leaves=+22
+  [n=680] building editor golden: /workspace/uedcli/.claude/worktrees/agent-ad0a5506c35551641/.venv/bin/python /workspace/uedcli/.claude/worktrees/agent-ad0a5506c35551641/dev/docs/spikes/2026-07-15-native-materialize/harness/build_ued_golden.py --trunk /workspace/uedcli/.claude/worktrees/agent-ad0a5506c35551641/_scratch/tf-prefix/n0680/maps/00_trainingfinal --out /workspace/uedcli/.claude/worktrees/agent-ad0a5506c35551641/_scratch/tf-prefix/n0680/golden_n0680.dx --world-only --no-light --no-obj-load --overwrite
+trunk 00_trainingfinal: 1058 actors; building 681 (680 brush) world_only=True lit=False
+referenced packages to OBJ LOAD: ['Catacombs', 'Cmd_tunnels', 'Constructor', 'CoreTexConcrete', 'CoreTexFoliage', 'CoreTexGlass', 'CoreTexMetal', 'CoreTexMisc', 'CoreTexStone', 'Engine', 'NYCBar', 'Rocket', 'Training_Music', 'UNATCO', 'V_Com_Center', 'area51textures']
+editor up: uned-01a06560-45c0-78e8-a3c9-61f2f4fbad31
+  (--no-obj-load: skipping OBJ LOAD of referenced packages)
+    [map-new] idle after 16s (cpu 5.1%, 8 quiet reads)
+    [re-add] idle after 18s (cpu 5.9%, 8 quiet reads)
+  REBUILD[0]: MAP REBUILD ...
+    [rebuild[0]] idle after 39s (cpu 5.8%, 8 quiet reads)
+  MAP SAVE ...
+WROTE /workspace/uedcli/.claude/worktrees/agent-ad0a5506c35551641/_scratch/tf-prefix/n0680/golden_n0680.dx (2280572 bytes container-side, 2280572 host-side)
+n= 680 brush=Brush663             native(nodes=9287,surfs=4442,leaves=583) editor(nodes=9287,surfs=4442,leaves=583) d_nodes=+0 d_surfs=+0 d_leaves=+0
+  [n=686] building editor golden: /workspace/uedcli/.claude/worktrees/agent-ad0a5506c35551641/.venv/bin/python /workspace/uedcli/.claude/worktrees/agent-ad0a5506c35551641/dev/docs/spikes/2026-07-15-native-materialize/harness/build_ued_golden.py --trunk /workspace/uedcli/.claude/worktrees/agent-ad0a5506c35551641/_scratch/tf-prefix/n0686/maps/00_trainingfinal --out /workspace/uedcli/.claude/worktrees/agent-ad0a5506c35551641/_scratch/tf-prefix/n0686/golden_n0686.dx --world-only --no-light --no-obj-load --overwrite
+trunk 00_trainingfinal: 1064 actors; building 687 (686 brush) world_only=True lit=False
+referenced packages to OBJ LOAD: ['Catacombs', 'Cmd_tunnels', 'Constructor', 'CoreTexConcrete', 'CoreTexFoliage', 'CoreTexGlass', 'CoreTexMetal', 'CoreTexMisc', 'CoreTexStone', 'Engine', 'NYCBar', 'Rocket', 'Training_Music', 'UNATCO', 'V_Com_Center', 'area51textures']
+editor up: uned-01a06562-2e9a-7fda-b189-66a56facaaf6
+  (--no-obj-load: skipping OBJ LOAD of referenced packages)
+    [map-new] idle after 16s (cpu 6.2%, 8 quiet reads)
+    [re-add] idle after 18s (cpu 6.7%, 8 quiet reads)
+  REBUILD[0]: MAP REBUILD ...
+    [rebuild[0]] idle after 39s (cpu 9.1%, 8 quiet reads)
+  MAP SAVE ...
+WROTE /workspace/uedcli/.claude/worktrees/agent-ad0a5506c35551641/_scratch/tf-prefix/n0686/golden_n0686.dx (2322940 bytes container-side, 2322940 host-side)
+n= 686 brush=Brush161             native(nodes=9486,surfs=4496,leaves=628) editor(nodes=9486,surfs=4496,leaves=628) d_nodes=+0 d_surfs=+0 d_leaves=+0
+  [n=689] building editor golden: /workspace/uedcli/.claude/worktrees/agent-ad0a5506c35551641/.venv/bin/python /workspace/uedcli/.claude/worktrees/agent-ad0a5506c35551641/dev/docs/spikes/2026-07-15-native-materialize/harness/build_ued_golden.py --trunk /workspace/uedcli/.claude/worktrees/agent-ad0a5506c35551641/_scratch/tf-prefix/n0689/maps/00_trainingfinal --out /workspace/uedcli/.claude/worktrees/agent-ad0a5506c35551641/_scratch/tf-prefix/n0689/golden_n0689.dx --world-only --no-light --no-obj-load --overwrite
+trunk 00_trainingfinal: 1067 actors; building 690 (689 brush) world_only=True lit=False
+referenced packages to OBJ LOAD: ['Catacombs', 'Cmd_tunnels', 'Constructor', 'CoreTexConcrete', 'CoreTexFoliage', 'CoreTexGlass', 'CoreTexMetal', 'CoreTexMisc', 'CoreTexStone', 'Engine', 'NYCBar', 'Rocket', 'Training_Music', 'UNATCO', 'V_Com_Center', 'area51textures']
+editor up: uned-01a06563-f1a6-7e2a-9a21-0c48b07ff0d4
+  (--no-obj-load: skipping OBJ LOAD of referenced packages)
+    [map-new] idle after 16s (cpu 20.4%, 8 quiet reads)
+    [re-add] idle after 16s (cpu 7.5%, 8 quiet reads)
+  REBUILD[0]: MAP REBUILD ...
+    [rebuild[0]] idle after 37s (cpu 20.6%, 8 quiet reads)
+  MAP SAVE ...
+WROTE /workspace/uedcli/.claude/worktrees/agent-ad0a5506c35551641/_scratch/tf-prefix/n0689/golden_n0689.dx (2336800 bytes container-side, 2336800 host-side)
+n= 689 brush=Brush164             native(nodes=9607,surfs=4513,leaves=616) editor(nodes=9565,surfs=4513,leaves=624) d_nodes=+42 d_surfs=+0 d_leaves=-8
+  [n=687] building editor golden: /workspace/uedcli/.claude/worktrees/agent-ad0a5506c35551641/.venv/bin/python /workspace/uedcli/.claude/worktrees/agent-ad0a5506c35551641/dev/docs/spikes/2026-07-15-native-materialize/harness/build_ued_golden.py --trunk /workspace/uedcli/.claude/worktrees/agent-ad0a5506c35551641/_scratch/tf-prefix/n0687/maps/00_trainingfinal --out /workspace/uedcli/.claude/worktrees/agent-ad0a5506c35551641/_scratch/tf-prefix/n0687/golden_n0687.dx --world-only --no-light --no-obj-load --overwrite
+trunk 00_trainingfinal: 1065 actors; building 688 (687 brush) world_only=True lit=False
+referenced packages to OBJ LOAD: ['Catacombs', 'Cmd_tunnels', 'Constructor', 'CoreTexConcrete', 'CoreTexFoliage', 'CoreTexGlass', 'CoreTexMetal', 'CoreTexMisc', 'CoreTexStone', 'Engine', 'NYCBar', 'Rocket', 'Training_Music', 'UNATCO', 'V_Com_Center', 'area51textures']
+editor up: uned-01a06565-b4d2-7346-abfe-d57ec84fef39
+  (--no-obj-load: skipping OBJ LOAD of referenced packages)
+    [map-new] idle after 16s (cpu 5.5%, 8 quiet reads)
+    [re-add] idle after 40s (cpu 9.4%, 8 quiet reads)
+  REBUILD[0]: MAP REBUILD ...
+    [rebuild[0]] idle after 39s (cpu 9.1%, 8 quiet reads)
+  MAP SAVE ...
+WROTE /workspace/uedcli/.claude/worktrees/agent-ad0a5506c35551641/_scratch/tf-prefix/n0687/golden_n0687.dx (2337405 bytes container-side, 2337405 host-side)
+n= 687 brush=Brush162             native(nodes=9457,surfs=4502,leaves=637) editor(nodes=9564,surfs=4502,leaves=650) d_nodes=-107 d_surfs=+0 d_leaves=-13
+
+FIRST DIVERGING BRUSH [00_trainingfinal]: n=687 -> Brush162 (prefix n=686=Brush161 exact, n=687 not)

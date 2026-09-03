@@ -20,6 +20,11 @@ Usage: broad_shadow_sweep.py GOLDEN.dx TRUNK_PROJECT_DIR TRUNK_REL [--target N] 
 
 Round 10: added `--dump-v1-only PATH` -- writes EVERY v1-only-correct (v1 right, v2 wrong) case as
 one JSON line to PATH, not just the first-20 printed sample the original script capped at.
+
+Round 11: added `--dump-v2-only PATH` -- mirrors `--dump-v1-only` for the OPPOSITE bucket (v1 wrong,
+v2 correct -- the "fix" population round 8's 262-case ship decision drew from). Built to audit
+whether any of round 8's "fixes" are themselves `NF_BrightCorners`-timing artifacts, the same
+mechanism round 10 found on the regression side.
 """
 from __future__ import annotations
 
@@ -55,6 +60,12 @@ def main() -> int:
         dump_f = dump_path.open("w")
     else:
         dump_f = None
+    dump_v2_path = None
+    if "--dump-v2-only" in sys.argv:
+        dump_v2_path = Path(sys.argv[sys.argv.index("--dump-v2-only") + 1])
+        dump_v2_f = dump_v2_path.open("w")
+    else:
+        dump_v2_f = None
 
     repo = str(ROOT)
     upackage, umodel = _load(repo)
@@ -140,6 +151,11 @@ def main() -> int:
                                 dump_f.flush()
                         if r2 == eb and r1 != eb:
                             v2_only_correct += 1
+                            if dump_v2_f is not None:
+                                dump_v2_f.write(json.dumps(
+                                    dict(record=k, light=lname, v=v, u=u, golden=eb, v1=r1, v2=r2,
+                                         p=list(p), loc=list(loc))) + "\n")
+                                dump_v2_f.flush()
                         if len(v1v2_disagree_examples) < 20:
                             v1v2_disagree_examples.append(
                                 dict(record=k, light=lname, v=v, u=u, golden=eb, v1=r1, v2=r2))
@@ -164,6 +180,9 @@ def main() -> int:
     if dump_f is not None:
         dump_f.close()
         print(f"[broadsweep] wrote {v1_only_correct} v1-only-correct cases to {dump_path}", flush=True)
+    if dump_v2_f is not None:
+        dump_v2_f.close()
+        print(f"[broadsweep] wrote {v2_only_correct} v2-only-correct cases to {dump_v2_path}", flush=True)
 
     elapsed = time.monotonic() - start_t
     print(f"\n[broadsweep] DONE reason={'target/timeout' if stopped_early else 'exhausted level'} "

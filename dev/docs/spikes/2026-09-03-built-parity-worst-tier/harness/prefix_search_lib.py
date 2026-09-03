@@ -79,12 +79,29 @@ class PrefixSearch:
         mi = max(models, key=lambda i: pkg.exports[i]["ssize"])
         return UM.parse_model_body(pkg.buf, pkg.exports[mi]["soff"], pkg.exports[mi]["ssize"])
 
+    @staticmethod
+    def _yield_editor_slot(timeout=3600, poll=60):
+        """One uned container at a time (session rule): if another `uned-*` is running (e.g. the
+        corpus sweep), wait for it before starting our ephemeral editor."""
+        import time
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            r = subprocess.run(["docker", "ps", "--format", "{{.Names}}"],
+                               capture_output=True, text=True)
+            others = [nm for nm in r.stdout.split() if nm.startswith("uned-")]
+            if not others:
+                return
+            print(f"  editor slot busy ({others}); yielding {poll}s", flush=True)
+            time.sleep(poll)
+        raise RuntimeError(f"editor slot still busy after {timeout}s")
+
     def editor_counts(self, n, *, force=False):
         dst, proj = self._write_prefix_trunk(n)
         golden = proj / f"golden_n{n:04d}.dx"
         if golden.exists() and not force:
             print(f"  [n={n}] reusing existing golden {golden}")
         else:
+            self._yield_editor_slot()
             cmd = [PYEXE, str(BUILD_SCRIPT), "--trunk", str(dst), "--out", str(golden),
                    "--world-only", "--no-light", "--no-obj-load", "--overwrite"]
             print(f"  [n={n}] building editor golden: {' '.join(cmd)}", flush=True)

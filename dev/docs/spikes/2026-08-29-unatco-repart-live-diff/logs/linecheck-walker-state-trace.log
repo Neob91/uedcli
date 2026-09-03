@@ -1,19 +1,4 @@
 [New LWP 148]
-[New LWP 157]
-[New LWP 158]
-[New LWP 159]
-[New LWP 160]
-[New LWP 161]
-[New LWP 162]
-[New LWP 163]
-[New LWP 164]
-[New LWP 165]
-[New LWP 166]
-[New LWP 167]
-[New LWP 168]
-[New LWP 169]
-[New LWP 170]
-[New LWP 171]
 [New LWP 172]
 [New LWP 173]
 [New LWP 174]
@@ -28,18 +13,33 @@
 [New LWP 183]
 [New LWP 184]
 [New LWP 185]
-[New LWP 201]
-[New LWP 247]
-[New LWP 248]
-[New LWP 249]
+[New LWP 186]
+[New LWP 187]
+[New LWP 188]
+[New LWP 189]
+[New LWP 190]
+[New LWP 191]
+[New LWP 192]
+[New LWP 193]
+[New LWP 194]
+[New LWP 195]
+[New LWP 196]
+[New LWP 197]
+[New LWP 198]
+[New LWP 199]
+[New LWP 200]
+[New LWP 240]
+[New LWP 243]
+[New LWP 244]
+[New LWP 245]
 [Thread debugging using libthread_db enabled]
 Using host libthread_db library "/lib/x86_64-linux-gnu/libthread_db.so.1".
-0xf7f82cfc in __kernel_vsyscall ()
+0xf7fb5cfc in __kernel_vsyscall ()
 CONST1=-0.00100000005
 CONST2=0.00100000005
 Breakpoint 1 at 0x100a5043
 ORACLE_ATTACHED
-SURF_ENTER isurf=1060
+SURF_ENTER isurf=1979
 Breakpoint 2 at 0x100a5a04
 Breakpoint 3 at 0x17ce1cd
 Breakpoint 4 at 0x17ce231
@@ -65,258 +65,1116 @@ Breakpoint 23 at 0x17ce464
 Breakpoint 24 at 0x17ce4ac
 Breakpoint 25 at 0x17ce439
 Breakpoint 26 at 0x100a5a07
-RAY_ENTER ray=1 px=1412 py=527.875 pz=192.125015
+RAY_ENTER ray=1 px=1024.125 py=-1643.99988 pz=-192.125
 NODE ray=1 depth=1 inode=0 node=0xded0024 edi_in=0
-DOTS ray=1 depth=1 D1=193.144501 D2=114.803421
-  BRANCH ray=1 depth=1 kind=FRONT_CSG edi_before=0
-  TAIL ray=1 depth=1 next_inode=2 edi_after=1
-NODE ray=1 depth=2 inode=2 node=0xded00a4 edi_in=1
-DOTS ray=1 depth=2 D1=393.40863 D2=452.733307
-  BRANCH ray=1 depth=2 kind=FRONT_CSG edi_before=1
-  TAIL ray=1 depth=2 next_inode=6 edi_after=1
-NODE ray=1 depth=3 inode=6 node=0xded01a4 edi_in=1
-DOTS ray=1 depth=3 D1=4 D2=12.005249
+DOTS ray=1 depth=1 D1=-325.350464 D2=-331.661133
+  BRANCH ray=1 depth=1 kind=BACK_CSG edi_before=0
+  TAIL ray=1 depth=1 next_inode=5172 edi_after=0
+NODE ray=1 depth=2 inode=5172 node=0xdf20d24 edi_in=0
+DOTS ray=1 depth=2 D1=128.125 D2=246.994751
+  BRANCH ray=1 depth=2 kind=FRONT_CSG edi_before=0
+  TAIL ray=1 depth=2 next_inode=5193 edi_after=1
+NODE ray=1 depth=3 inode=5193 node=0xdf21264 edi_in=1
+DOTS ray=1 depth=3 D1=192.125 D2=142.919189
   BRANCH ray=1 depth=3 kind=FRONT_CSG edi_before=1
-  TAIL ray=1 depth=3 next_inode=44 edi_after=1
-NODE ray=1 depth=4 inode=44 node=0xded0b24 edi_in=1
-DOTS ray=1 depth=4 D1=192.125015 D2=279.901642
+  TAIL ray=1 depth=3 next_inode=5252 edi_after=1
+NODE ray=1 depth=4 inode=5252 node=0xdf22124 edi_in=1
+DOTS ray=1 depth=4 D1=319.875 D2=201.005249
   BRANCH ray=1 depth=4 kind=FRONT_CSG edi_before=1
-  TAIL ray=1 depth=4 next_inode=85 edi_after=1
-NODE ray=1 depth=5 inode=85 node=0xded1564 edi_in=1
-DOTS ray=1 depth=5 D1=64.1250153 D2=151.901642
+  TAIL ray=1 depth=4 next_inode=5280 edi_after=1
+NODE ray=1 depth=5 inode=5280 node=0xdf22824 edi_in=1
+DOTS ray=1 depth=5 D1=276.000122 D2=372.726074
   BRANCH ray=1 depth=5 kind=FRONT_CSG edi_before=1
-  TAIL ray=1 depth=5 next_inode=103 edi_after=1
-NODE ray=1 depth=6 inode=103 node=0xded19e4 edi_in=1
-DOTS ray=1 depth=6 D1=-208.125 D2=-202.945251
+  TAIL ray=1 depth=5 next_inode=5301 edi_after=1
+NODE ray=1 depth=6 inode=5301 node=0xdf22d64 edi_in=1
+DOTS ray=1 depth=6 D1=-20.0001221 D2=-116.726074
   BRANCH ray=1 depth=6 kind=BACK_CSG edi_before=1
-  TAIL ray=1 depth=6 next_inode=275 edi_after=0
-NODE ray=1 depth=7 inode=275 node=0xded44e4 edi_in=0
-DOTS ray=1 depth=7 D1=107.874985 D2=20.0983582
+  TAIL ray=1 depth=6 next_inode=5382 edi_after=0
+NODE ray=1 depth=7 inode=5382 node=0xdf241a4 edi_in=0
+DOTS ray=1 depth=7 D1=4.00097656 D2=100.726929
   BRANCH ray=1 depth=7 kind=FRONT_CSG edi_before=0
-  TAIL ray=1 depth=7 next_inode=279 edi_after=1
-NODE ray=1 depth=8 inode=279 node=0xded45e4 edi_in=1
-DOTS ray=1 depth=8 D1=420 D2=411.994751
+  TAIL ray=1 depth=7 next_inode=5391 edi_after=1
+NODE ray=1 depth=8 inode=5391 node=0xdf243e4 edi_in=1
+DOTS ray=1 depth=8 D1=64.125 D2=182.994751
   BRANCH ray=1 depth=8 kind=FRONT_CSG edi_before=1
-  TAIL ray=1 depth=8 next_inode=280 edi_after=1
-NODE ray=1 depth=9 inode=280 node=0xded4624 edi_in=1
-DOTS ray=1 depth=9 D1=191.875 D2=197.054749
+  TAIL ray=1 depth=8 next_inode=5394 edi_after=1
+NODE ray=1 depth=9 inode=5394 node=0xdf244a4 edi_in=1
+DOTS ray=1 depth=9 D1=64.125 D2=14.9191895
   BRANCH ray=1 depth=9 kind=FRONT_CSG edi_before=1
-  TAIL ray=1 depth=9 next_inode=282 edi_after=1
-NODE ray=1 depth=10 inode=282 node=0xded46a4 edi_in=1
-DOTS ray=1 depth=10 D1=-236.000244 D2=-227.994995
-  BRANCH ray=1 depth=10 kind=BACK_CSG edi_before=1
-  TAIL ray=1 depth=10 next_inode=306 edi_after=0
-NODE ray=1 depth=11 inode=306 node=0xded4ca4 edi_in=0
-DOTS ray=1 depth=11 D1=192.125 D2=186.945251
-  BRANCH ray=1 depth=11 kind=FRONT_CSG edi_before=0
-  TAIL ray=1 depth=11 next_inode=310 edi_after=1
-NODE ray=1 depth=12 inode=310 node=0xded4da4 edi_in=1
-DOTS ray=1 depth=12 D1=-0.125 D2=5.05474854
-  CROSS_D1 ray=1 depth=12 D1=-0.125
-  NEARFLAG ray=1 depth=12 flag=0
-  RECURSE_CALL ray=1 depth=12 child=322 state_out=0
-NODE ray=1 depth=13 inode=322 node=0xded50a4 edi_in=0
-DOTS ray=1 depth=13 D1=48.1250153 D2=50.2432861
-  BRANCH ray=1 depth=13 kind=FRONT_CSG edi_before=0
-  TAIL ray=1 depth=13 next_inode=324 edi_after=1
-NODE ray=1 depth=14 inode=324 node=0xded5124 edi_in=1
-DOTS ray=1 depth=14 D1=-15.8751221 D2=-16.0001221
-  BRANCH ray=1 depth=14 kind=BACK_CSG edi_before=1
-  TAIL ray=1 depth=14 next_inode=-1 edi_after=0
-  TERMINAL_B ray=1 depth=14 edi=0
-  TERMINAL_GLOBALCHECK ray=1 depth=14 edi=0 global=0 bl_bit10=0
-  TERMINAL_WRITEOUT ray=1 depth=14 edx=0 edi=0
-  RECURSE_RETURN ray=1 depth=14 result=0
-  SHORTCIRCUIT_BLOCKED ray=1 depth=14
-RAY_RETURN ray=1 result=0
-RAY_ENTER ray=2 px=1412 py=576.125 pz=192.125015
+  TAIL ray=1 depth=9 next_inode=5396 edi_after=1
+NODE ray=1 depth=10 inode=5396 node=0xdf24524 edi_in=1
+DOTS ray=1 depth=10 D1=127.875 D2=177.080811
+  BRANCH ray=1 depth=10 kind=FRONT_CSG edi_before=1
+  TAIL ray=1 depth=10 next_inode=-1 edi_after=1
+  TERMINAL_B ray=1 depth=10 edi=1
+  TERMINAL_RETURN_EDI ray=1 depth=10 edi=1
+RAY_RETURN ray=1 result=1
+RAY_ENTER ray=2 px=1039.875 py=-1643.99988 pz=-192.125
 NODE ray=2 depth=1 inode=0 node=0xded0024 edi_in=0
-DOTS ray=2 depth=1 D1=212.484009 D2=114.803421
-  BRANCH ray=2 depth=1 kind=FRONT_CSG edi_before=0
-  TAIL ray=2 depth=1 next_inode=2 edi_after=1
-NODE ray=2 depth=2 inode=2 node=0xded00a4 edi_in=1
-DOTS ray=2 depth=2 D1=359.774597 D2=452.733307
-  BRANCH ray=2 depth=2 kind=FRONT_CSG edi_before=1
-  TAIL ray=2 depth=2 next_inode=6 edi_after=1
-NODE ray=2 depth=3 inode=6 node=0xded01a4 edi_in=1
-DOTS ray=2 depth=3 D1=4 D2=12.005249
+DOTS ray=2 depth=1 D1=-325.350464 D2=-331.661133
+  BRANCH ray=2 depth=1 kind=BACK_CSG edi_before=0
+  TAIL ray=2 depth=1 next_inode=5172 edi_after=0
+NODE ray=2 depth=2 inode=5172 node=0xdf20d24 edi_in=0
+DOTS ray=2 depth=2 D1=143.875 D2=246.994751
+  BRANCH ray=2 depth=2 kind=FRONT_CSG edi_before=0
+  TAIL ray=2 depth=2 next_inode=5193 edi_after=1
+NODE ray=2 depth=3 inode=5193 node=0xdf21264 edi_in=1
+DOTS ray=2 depth=3 D1=192.125 D2=142.919189
   BRANCH ray=2 depth=3 kind=FRONT_CSG edi_before=1
-  TAIL ray=2 depth=3 next_inode=44 edi_after=1
-NODE ray=2 depth=4 inode=44 node=0xded0b24 edi_in=1
-DOTS ray=2 depth=4 D1=192.125015 D2=279.901642
+  TAIL ray=2 depth=3 next_inode=5252 edi_after=1
+NODE ray=2 depth=4 inode=5252 node=0xdf22124 edi_in=1
+DOTS ray=2 depth=4 D1=304.125 D2=201.005249
   BRANCH ray=2 depth=4 kind=FRONT_CSG edi_before=1
-  TAIL ray=2 depth=4 next_inode=85 edi_after=1
-NODE ray=2 depth=5 inode=85 node=0xded1564 edi_in=1
-DOTS ray=2 depth=5 D1=64.1250153 D2=151.901642
+  TAIL ray=2 depth=4 next_inode=5280 edi_after=1
+NODE ray=2 depth=5 inode=5280 node=0xdf22824 edi_in=1
+DOTS ray=2 depth=5 D1=276.000122 D2=372.726074
   BRANCH ray=2 depth=5 kind=FRONT_CSG edi_before=1
-  TAIL ray=2 depth=5 next_inode=103 edi_after=1
-NODE ray=2 depth=6 inode=103 node=0xded19e4 edi_in=1
-DOTS ray=2 depth=6 D1=-159.875 D2=-202.945251
+  TAIL ray=2 depth=5 next_inode=5301 edi_after=1
+NODE ray=2 depth=6 inode=5301 node=0xdf22d64 edi_in=1
+DOTS ray=2 depth=6 D1=-20.0001221 D2=-116.726074
   BRANCH ray=2 depth=6 kind=BACK_CSG edi_before=1
-  TAIL ray=2 depth=6 next_inode=275 edi_after=0
-NODE ray=2 depth=7 inode=275 node=0xded44e4 edi_in=0
-DOTS ray=2 depth=7 D1=107.874985 D2=20.0983582
+  TAIL ray=2 depth=6 next_inode=5382 edi_after=0
+NODE ray=2 depth=7 inode=5382 node=0xdf241a4 edi_in=0
+DOTS ray=2 depth=7 D1=4.00097656 D2=100.726929
   BRANCH ray=2 depth=7 kind=FRONT_CSG edi_before=0
-  TAIL ray=2 depth=7 next_inode=279 edi_after=1
-NODE ray=2 depth=8 inode=279 node=0xded45e4 edi_in=1
-DOTS ray=2 depth=8 D1=420 D2=411.994751
+  TAIL ray=2 depth=7 next_inode=5391 edi_after=1
+NODE ray=2 depth=8 inode=5391 node=0xdf243e4 edi_in=1
+DOTS ray=2 depth=8 D1=79.875 D2=182.994751
   BRANCH ray=2 depth=8 kind=FRONT_CSG edi_before=1
-  TAIL ray=2 depth=8 next_inode=280 edi_after=1
-NODE ray=2 depth=9 inode=280 node=0xded4624 edi_in=1
-DOTS ray=2 depth=9 D1=240.125 D2=197.054749
+  TAIL ray=2 depth=8 next_inode=5394 edi_after=1
+NODE ray=2 depth=9 inode=5394 node=0xdf244a4 edi_in=1
+DOTS ray=2 depth=9 D1=64.125 D2=14.9191895
   BRANCH ray=2 depth=9 kind=FRONT_CSG edi_before=1
-  TAIL ray=2 depth=9 next_inode=282 edi_after=1
-NODE ray=2 depth=10 inode=282 node=0xded46a4 edi_in=1
-DOTS ray=2 depth=10 D1=-236.000244 D2=-227.994995
-  BRANCH ray=2 depth=10 kind=BACK_CSG edi_before=1
-  TAIL ray=2 depth=10 next_inode=306 edi_after=0
-NODE ray=2 depth=11 inode=306 node=0xded4ca4 edi_in=0
-DOTS ray=2 depth=11 D1=143.875 D2=186.945251
-  BRANCH ray=2 depth=11 kind=FRONT_CSG edi_before=0
-  TAIL ray=2 depth=11 next_inode=310 edi_after=1
-NODE ray=2 depth=12 inode=310 node=0xded4da4 edi_in=1
-DOTS ray=2 depth=12 D1=48.125 D2=5.05474854
-  BRANCH ray=2 depth=12 kind=FRONT_CSG edi_before=1
-  TAIL ray=2 depth=12 next_inode=312 edi_after=1
-NODE ray=2 depth=13 inode=312 node=0xded4e24 edi_in=1
-DOTS ray=2 depth=13 D1=220 D2=211.994751
-  BRANCH ray=2 depth=13 kind=FRONT_CSG edi_before=1
-  TAIL ray=2 depth=13 next_inode=315 edi_after=1
-NODE ray=2 depth=14 inode=315 node=0xded4ee4 edi_in=1
-DOTS ray=2 depth=14 D1=48.1250458 D2=135.901672
-  BRANCH ray=2 depth=14 kind=FRONT_CSG edi_before=1
-  TAIL ray=2 depth=14 next_inode=-1 edi_after=1
-  TERMINAL_B ray=2 depth=14 edi=1
-  TERMINAL_RETURN_EDI ray=2 depth=14 edi=1
+  TAIL ray=2 depth=9 next_inode=5396 edi_after=1
+NODE ray=2 depth=10 inode=5396 node=0xdf24524 edi_in=1
+DOTS ray=2 depth=10 D1=127.875 D2=177.080811
+  BRANCH ray=2 depth=10 kind=FRONT_CSG edi_before=1
+  TAIL ray=2 depth=10 next_inode=-1 edi_after=1
+  TERMINAL_B ray=2 depth=10 edi=1
+  TERMINAL_RETURN_EDI ray=2 depth=10 edi=1
 RAY_RETURN ray=2 result=1
-RAY_ENTER ray=3 px=1412 py=527.875 pz=143.875015
+RAY_ENTER ray=3 px=1024.125 py=-1643.99988 pz=-234.708328
 NODE ray=3 depth=1 inode=0 node=0xded0024 edi_in=0
-DOTS ray=3 depth=1 D1=237.349106 D2=114.803421
-  BRANCH ray=3 depth=1 kind=FRONT_CSG edi_before=0
-  TAIL ray=3 depth=1 next_inode=2 edi_after=1
-NODE ray=3 depth=2 inode=2 node=0xded00a4 edi_in=1
-DOTS ray=3 depth=2 D1=358.813599 D2=452.733307
-  BRANCH ray=3 depth=2 kind=FRONT_CSG edi_before=1
-  TAIL ray=3 depth=2 next_inode=6 edi_after=1
-NODE ray=3 depth=3 inode=6 node=0xded01a4 edi_in=1
-DOTS ray=3 depth=3 D1=4 D2=12.005249
+DOTS ray=3 depth=1 D1=-286.337402 D2=-331.661133
+  BRANCH ray=3 depth=1 kind=BACK_CSG edi_before=0
+  TAIL ray=3 depth=1 next_inode=5172 edi_after=0
+NODE ray=3 depth=2 inode=5172 node=0xdf20d24 edi_in=0
+DOTS ray=3 depth=2 D1=128.125 D2=246.994751
+  BRANCH ray=3 depth=2 kind=FRONT_CSG edi_before=0
+  TAIL ray=3 depth=2 next_inode=5193 edi_after=1
+NODE ray=3 depth=3 inode=5193 node=0xdf21264 edi_in=1
+DOTS ray=3 depth=3 D1=234.708328 D2=142.919189
   BRANCH ray=3 depth=3 kind=FRONT_CSG edi_before=1
-  TAIL ray=3 depth=3 next_inode=44 edi_after=1
-NODE ray=3 depth=4 inode=44 node=0xded0b24 edi_in=1
-DOTS ray=3 depth=4 D1=143.875015 D2=279.901642
+  TAIL ray=3 depth=3 next_inode=5252 edi_after=1
+NODE ray=3 depth=4 inode=5252 node=0xdf22124 edi_in=1
+DOTS ray=3 depth=4 D1=319.875 D2=201.005249
   BRANCH ray=3 depth=4 kind=FRONT_CSG edi_before=1
-  TAIL ray=3 depth=4 next_inode=85 edi_after=1
-NODE ray=3 depth=5 inode=85 node=0xded1564 edi_in=1
-DOTS ray=3 depth=5 D1=15.8750153 D2=151.901642
+  TAIL ray=3 depth=4 next_inode=5280 edi_after=1
+NODE ray=3 depth=5 inode=5280 node=0xdf22824 edi_in=1
+DOTS ray=3 depth=5 D1=276.000122 D2=372.726074
   BRANCH ray=3 depth=5 kind=FRONT_CSG edi_before=1
-  TAIL ray=3 depth=5 next_inode=103 edi_after=1
-NODE ray=3 depth=6 inode=103 node=0xded19e4 edi_in=1
-DOTS ray=3 depth=6 D1=-208.125 D2=-202.945251
+  TAIL ray=3 depth=5 next_inode=5301 edi_after=1
+NODE ray=3 depth=6 inode=5301 node=0xdf22d64 edi_in=1
+DOTS ray=3 depth=6 D1=-20.0001221 D2=-116.726074
   BRANCH ray=3 depth=6 kind=BACK_CSG edi_before=1
-  TAIL ray=3 depth=6 next_inode=275 edi_after=0
-NODE ray=3 depth=7 inode=275 node=0xded44e4 edi_in=0
-DOTS ray=3 depth=7 D1=156.124985 D2=20.0983582
+  TAIL ray=3 depth=6 next_inode=5382 edi_after=0
+NODE ray=3 depth=7 inode=5382 node=0xdf241a4 edi_in=0
+DOTS ray=3 depth=7 D1=4.00097656 D2=100.726929
   BRANCH ray=3 depth=7 kind=FRONT_CSG edi_before=0
-  TAIL ray=3 depth=7 next_inode=279 edi_after=1
-NODE ray=3 depth=8 inode=279 node=0xded45e4 edi_in=1
-DOTS ray=3 depth=8 D1=420 D2=411.994751
+  TAIL ray=3 depth=7 next_inode=5391 edi_after=1
+NODE ray=3 depth=8 inode=5391 node=0xdf243e4 edi_in=1
+DOTS ray=3 depth=8 D1=64.125 D2=182.994751
   BRANCH ray=3 depth=8 kind=FRONT_CSG edi_before=1
-  TAIL ray=3 depth=8 next_inode=280 edi_after=1
-NODE ray=3 depth=9 inode=280 node=0xded4624 edi_in=1
-DOTS ray=3 depth=9 D1=191.875 D2=197.054749
+  TAIL ray=3 depth=8 next_inode=5394 edi_after=1
+NODE ray=3 depth=9 inode=5394 node=0xdf244a4 edi_in=1
+DOTS ray=3 depth=9 D1=106.708328 D2=14.9191895
   BRANCH ray=3 depth=9 kind=FRONT_CSG edi_before=1
-  TAIL ray=3 depth=9 next_inode=282 edi_after=1
-NODE ray=3 depth=10 inode=282 node=0xded46a4 edi_in=1
-DOTS ray=3 depth=10 D1=-236.000244 D2=-227.994995
-  BRANCH ray=3 depth=10 kind=BACK_CSG edi_before=1
-  TAIL ray=3 depth=10 next_inode=306 edi_after=0
-NODE ray=3 depth=11 inode=306 node=0xded4ca4 edi_in=0
-DOTS ray=3 depth=11 D1=192.125 D2=186.945251
-  BRANCH ray=3 depth=11 kind=FRONT_CSG edi_before=0
-  TAIL ray=3 depth=11 next_inode=310 edi_after=1
-NODE ray=3 depth=12 inode=310 node=0xded4da4 edi_in=1
-DOTS ray=3 depth=12 D1=-0.125 D2=5.05474854
-  CROSS_D1 ray=3 depth=12 D1=-0.125
-  NEARFLAG ray=3 depth=12 flag=0
-  RECURSE_CALL ray=3 depth=12 child=322 state_out=0
-NODE ray=3 depth=13 inode=322 node=0xded50a4 edi_in=0
-DOTS ray=3 depth=13 D1=-0.124984741 D2=3.15766907
-  CROSS_D1 ray=3 depth=13 D1=-0.124984741
-  NEARFLAG ray=3 depth=13 flag=0
-  RECURSE_CALL ray=3 depth=13 child=-1 state_out=0
-  TERMINAL_A ray=3 depth=13 edi=0
-  TERMINAL_B ray=3 depth=13 edi=0
-  TERMINAL_GLOBALCHECK ray=3 depth=13 edi=0 global=0 bl_bit10=0
-  TERMINAL_WRITEOUT ray=3 depth=13 edx=0 edi=0
-  RECURSE_RETURN ray=3 depth=13 result=0
-  SHORTCIRCUIT_BLOCKED ray=3 depth=13
-  RECURSE_RETURN ray=3 depth=13 result=0
-  SHORTCIRCUIT_BLOCKED ray=3 depth=13
-RAY_RETURN ray=3 result=0
-RAY_ENTER ray=4 px=1412 py=576.125 pz=143.875015
+  TAIL ray=3 depth=9 next_inode=5396 edi_after=1
+NODE ray=3 depth=10 inode=5396 node=0xdf24524 edi_in=1
+DOTS ray=3 depth=10 D1=85.2916718 D2=177.080811
+  BRANCH ray=3 depth=10 kind=FRONT_CSG edi_before=1
+  TAIL ray=3 depth=10 next_inode=-1 edi_after=1
+  TERMINAL_B ray=3 depth=10 edi=1
+  TERMINAL_RETURN_EDI ray=3 depth=10 edi=1
+RAY_RETURN ray=3 result=1
+RAY_ENTER ray=4 px=1039.875 py=-1643.99988 pz=-234.708328
 NODE ray=4 depth=1 inode=0 node=0xded0024 edi_in=0
-DOTS ray=4 depth=1 D1=256.688599 D2=114.803421
-  BRANCH ray=4 depth=1 kind=FRONT_CSG edi_before=0
-  TAIL ray=4 depth=1 next_inode=2 edi_after=1
-NODE ray=4 depth=2 inode=2 node=0xded00a4 edi_in=1
-DOTS ray=4 depth=2 D1=325.179565 D2=452.733307
-  BRANCH ray=4 depth=2 kind=FRONT_CSG edi_before=1
-  TAIL ray=4 depth=2 next_inode=6 edi_after=1
-NODE ray=4 depth=3 inode=6 node=0xded01a4 edi_in=1
-DOTS ray=4 depth=3 D1=4 D2=12.005249
+DOTS ray=4 depth=1 D1=-286.337402 D2=-331.661133
+  BRANCH ray=4 depth=1 kind=BACK_CSG edi_before=0
+  TAIL ray=4 depth=1 next_inode=5172 edi_after=0
+NODE ray=4 depth=2 inode=5172 node=0xdf20d24 edi_in=0
+DOTS ray=4 depth=2 D1=143.875 D2=246.994751
+  BRANCH ray=4 depth=2 kind=FRONT_CSG edi_before=0
+  TAIL ray=4 depth=2 next_inode=5193 edi_after=1
+NODE ray=4 depth=3 inode=5193 node=0xdf21264 edi_in=1
+DOTS ray=4 depth=3 D1=234.708328 D2=142.919189
   BRANCH ray=4 depth=3 kind=FRONT_CSG edi_before=1
-  TAIL ray=4 depth=3 next_inode=44 edi_after=1
-NODE ray=4 depth=4 inode=44 node=0xded0b24 edi_in=1
-DOTS ray=4 depth=4 D1=143.875015 D2=279.901642
+  TAIL ray=4 depth=3 next_inode=5252 edi_after=1
+NODE ray=4 depth=4 inode=5252 node=0xdf22124 edi_in=1
+DOTS ray=4 depth=4 D1=304.125 D2=201.005249
   BRANCH ray=4 depth=4 kind=FRONT_CSG edi_before=1
-  TAIL ray=4 depth=4 next_inode=85 edi_after=1
-NODE ray=4 depth=5 inode=85 node=0xded1564 edi_in=1
-DOTS ray=4 depth=5 D1=15.8750153 D2=151.901642
+  TAIL ray=4 depth=4 next_inode=5280 edi_after=1
+NODE ray=4 depth=5 inode=5280 node=0xdf22824 edi_in=1
+DOTS ray=4 depth=5 D1=276.000122 D2=372.726074
   BRANCH ray=4 depth=5 kind=FRONT_CSG edi_before=1
-  TAIL ray=4 depth=5 next_inode=103 edi_after=1
-NODE ray=4 depth=6 inode=103 node=0xded19e4 edi_in=1
-DOTS ray=4 depth=6 D1=-159.875 D2=-202.945251
+  TAIL ray=4 depth=5 next_inode=5301 edi_after=1
+NODE ray=4 depth=6 inode=5301 node=0xdf22d64 edi_in=1
+DOTS ray=4 depth=6 D1=-20.0001221 D2=-116.726074
   BRANCH ray=4 depth=6 kind=BACK_CSG edi_before=1
-  TAIL ray=4 depth=6 next_inode=275 edi_after=0
-NODE ray=4 depth=7 inode=275 node=0xded44e4 edi_in=0
-DOTS ray=4 depth=7 D1=156.124985 D2=20.0983582
+  TAIL ray=4 depth=6 next_inode=5382 edi_after=0
+NODE ray=4 depth=7 inode=5382 node=0xdf241a4 edi_in=0
+DOTS ray=4 depth=7 D1=4.00097656 D2=100.726929
   BRANCH ray=4 depth=7 kind=FRONT_CSG edi_before=0
-  TAIL ray=4 depth=7 next_inode=279 edi_after=1
-NODE ray=4 depth=8 inode=279 node=0xded45e4 edi_in=1
-DOTS ray=4 depth=8 D1=420 D2=411.994751
+  TAIL ray=4 depth=7 next_inode=5391 edi_after=1
+NODE ray=4 depth=8 inode=5391 node=0xdf243e4 edi_in=1
+DOTS ray=4 depth=8 D1=79.875 D2=182.994751
   BRANCH ray=4 depth=8 kind=FRONT_CSG edi_before=1
-  TAIL ray=4 depth=8 next_inode=280 edi_after=1
-NODE ray=4 depth=9 inode=280 node=0xded4624 edi_in=1
-DOTS ray=4 depth=9 D1=240.125 D2=197.054749
+  TAIL ray=4 depth=8 next_inode=5394 edi_after=1
+NODE ray=4 depth=9 inode=5394 node=0xdf244a4 edi_in=1
+DOTS ray=4 depth=9 D1=106.708328 D2=14.9191895
   BRANCH ray=4 depth=9 kind=FRONT_CSG edi_before=1
-  TAIL ray=4 depth=9 next_inode=282 edi_after=1
-NODE ray=4 depth=10 inode=282 node=0xded46a4 edi_in=1
-DOTS ray=4 depth=10 D1=-236.000244 D2=-227.994995
-  BRANCH ray=4 depth=10 kind=BACK_CSG edi_before=1
-  TAIL ray=4 depth=10 next_inode=306 edi_after=0
-NODE ray=4 depth=11 inode=306 node=0xded4ca4 edi_in=0
-DOTS ray=4 depth=11 D1=143.875 D2=186.945251
-  BRANCH ray=4 depth=11 kind=FRONT_CSG edi_before=0
-  TAIL ray=4 depth=11 next_inode=310 edi_after=1
-NODE ray=4 depth=12 inode=310 node=0xded4da4 edi_in=1
-DOTS ray=4 depth=12 D1=48.125 D2=5.05474854
-  BRANCH ray=4 depth=12 kind=FRONT_CSG edi_before=1
-  TAIL ray=4 depth=12 next_inode=312 edi_after=1
-NODE ray=4 depth=13 inode=312 node=0xded4e24 edi_in=1
-DOTS ray=4 depth=13 D1=220 D2=211.994751
-  BRANCH ray=4 depth=13 kind=FRONT_CSG edi_before=1
-  TAIL ray=4 depth=13 next_inode=315 edi_after=1
-NODE ray=4 depth=14 inode=315 node=0xded4ee4 edi_in=1
-DOTS ray=4 depth=14 D1=-0.124954224 D2=135.901672
-  CROSS_D1 ray=4 depth=14 D1=-0.124954224
-  NEARFLAG ray=4 depth=14 flag=0
-  RECURSE_CALL ray=4 depth=14 child=-1 state_out=0
-  TERMINAL_A ray=4 depth=14 edi=0
-  TERMINAL_B ray=4 depth=14 edi=0
-  TERMINAL_GLOBALCHECK ray=4 depth=14 edi=0 global=0 bl_bit10=0
-  TERMINAL_WRITEOUT ray=4 depth=14 edx=0 edi=0
-  RECURSE_RETURN ray=4 depth=14 result=0
-  SHORTCIRCUIT_BLOCKED ray=4 depth=14
-RAY_RETURN ray=4 result=0
+  TAIL ray=4 depth=9 next_inode=5396 edi_after=1
+NODE ray=4 depth=10 inode=5396 node=0xdf24524 edi_in=1
+DOTS ray=4 depth=10 D1=85.2916718 D2=177.080811
+  BRANCH ray=4 depth=10 kind=FRONT_CSG edi_before=1
+  TAIL ray=4 depth=10 next_inode=-1 edi_after=1
+  TERMINAL_B ray=4 depth=10 edi=1
+  TERMINAL_RETURN_EDI ray=4 depth=10 edi=1
+RAY_RETURN ray=4 result=1
+RAY_ENTER ray=5 px=1024.125 py=-1643.99988 pz=-277.291656
+NODE ray=5 depth=1 inode=0 node=0xded0024 edi_in=0
+DOTS ray=5 depth=1 D1=-247.324402 D2=-331.661133
+  BRANCH ray=5 depth=1 kind=BACK_CSG edi_before=0
+  TAIL ray=5 depth=1 next_inode=5172 edi_after=0
+NODE ray=5 depth=2 inode=5172 node=0xdf20d24 edi_in=0
+DOTS ray=5 depth=2 D1=128.125 D2=246.994751
+  BRANCH ray=5 depth=2 kind=FRONT_CSG edi_before=0
+  TAIL ray=5 depth=2 next_inode=5193 edi_after=1
+NODE ray=5 depth=3 inode=5193 node=0xdf21264 edi_in=1
+DOTS ray=5 depth=3 D1=277.291656 D2=142.919189
+  BRANCH ray=5 depth=3 kind=FRONT_CSG edi_before=1
+  TAIL ray=5 depth=3 next_inode=5252 edi_after=1
+NODE ray=5 depth=4 inode=5252 node=0xdf22124 edi_in=1
+DOTS ray=5 depth=4 D1=319.875 D2=201.005249
+  BRANCH ray=5 depth=4 kind=FRONT_CSG edi_before=1
+  TAIL ray=5 depth=4 next_inode=5280 edi_after=1
+NODE ray=5 depth=5 inode=5280 node=0xdf22824 edi_in=1
+DOTS ray=5 depth=5 D1=276.000122 D2=372.726074
+  BRANCH ray=5 depth=5 kind=FRONT_CSG edi_before=1
+  TAIL ray=5 depth=5 next_inode=5301 edi_after=1
+NODE ray=5 depth=6 inode=5301 node=0xdf22d64 edi_in=1
+DOTS ray=5 depth=6 D1=-20.0001221 D2=-116.726074
+  BRANCH ray=5 depth=6 kind=BACK_CSG edi_before=1
+  TAIL ray=5 depth=6 next_inode=5382 edi_after=0
+NODE ray=5 depth=7 inode=5382 node=0xdf241a4 edi_in=0
+DOTS ray=5 depth=7 D1=4.00097656 D2=100.726929
+  BRANCH ray=5 depth=7 kind=FRONT_CSG edi_before=0
+  TAIL ray=5 depth=7 next_inode=5391 edi_after=1
+NODE ray=5 depth=8 inode=5391 node=0xdf243e4 edi_in=1
+DOTS ray=5 depth=8 D1=64.125 D2=182.994751
+  BRANCH ray=5 depth=8 kind=FRONT_CSG edi_before=1
+  TAIL ray=5 depth=8 next_inode=5394 edi_after=1
+NODE ray=5 depth=9 inode=5394 node=0xdf244a4 edi_in=1
+DOTS ray=5 depth=9 D1=149.291656 D2=14.9191895
+  BRANCH ray=5 depth=9 kind=FRONT_CSG edi_before=1
+  TAIL ray=5 depth=9 next_inode=5396 edi_after=1
+NODE ray=5 depth=10 inode=5396 node=0xdf24524 edi_in=1
+DOTS ray=5 depth=10 D1=42.7083435 D2=177.080811
+  BRANCH ray=5 depth=10 kind=FRONT_CSG edi_before=1
+  TAIL ray=5 depth=10 next_inode=-1 edi_after=1
+  TERMINAL_B ray=5 depth=10 edi=1
+  TERMINAL_RETURN_EDI ray=5 depth=10 edi=1
+RAY_RETURN ray=5 result=1
+RAY_ENTER ray=6 px=1039.875 py=-1643.99988 pz=-277.291656
+NODE ray=6 depth=1 inode=0 node=0xded0024 edi_in=0
+DOTS ray=6 depth=1 D1=-247.324402 D2=-331.661133
+  BRANCH ray=6 depth=1 kind=BACK_CSG edi_before=0
+  TAIL ray=6 depth=1 next_inode=5172 edi_after=0
+NODE ray=6 depth=2 inode=5172 node=0xdf20d24 edi_in=0
+DOTS ray=6 depth=2 D1=143.875 D2=246.994751
+  BRANCH ray=6 depth=2 kind=FRONT_CSG edi_before=0
+  TAIL ray=6 depth=2 next_inode=5193 edi_after=1
+NODE ray=6 depth=3 inode=5193 node=0xdf21264 edi_in=1
+DOTS ray=6 depth=3 D1=277.291656 D2=142.919189
+  BRANCH ray=6 depth=3 kind=FRONT_CSG edi_before=1
+  TAIL ray=6 depth=3 next_inode=5252 edi_after=1
+NODE ray=6 depth=4 inode=5252 node=0xdf22124 edi_in=1
+DOTS ray=6 depth=4 D1=304.125 D2=201.005249
+  BRANCH ray=6 depth=4 kind=FRONT_CSG edi_before=1
+  TAIL ray=6 depth=4 next_inode=5280 edi_after=1
+NODE ray=6 depth=5 inode=5280 node=0xdf22824 edi_in=1
+DOTS ray=6 depth=5 D1=276.000122 D2=372.726074
+  BRANCH ray=6 depth=5 kind=FRONT_CSG edi_before=1
+  TAIL ray=6 depth=5 next_inode=5301 edi_after=1
+NODE ray=6 depth=6 inode=5301 node=0xdf22d64 edi_in=1
+DOTS ray=6 depth=6 D1=-20.0001221 D2=-116.726074
+  BRANCH ray=6 depth=6 kind=BACK_CSG edi_before=1
+  TAIL ray=6 depth=6 next_inode=5382 edi_after=0
+NODE ray=6 depth=7 inode=5382 node=0xdf241a4 edi_in=0
+DOTS ray=6 depth=7 D1=4.00097656 D2=100.726929
+  BRANCH ray=6 depth=7 kind=FRONT_CSG edi_before=0
+  TAIL ray=6 depth=7 next_inode=5391 edi_after=1
+NODE ray=6 depth=8 inode=5391 node=0xdf243e4 edi_in=1
+DOTS ray=6 depth=8 D1=79.875 D2=182.994751
+  BRANCH ray=6 depth=8 kind=FRONT_CSG edi_before=1
+  TAIL ray=6 depth=8 next_inode=5394 edi_after=1
+NODE ray=6 depth=9 inode=5394 node=0xdf244a4 edi_in=1
+DOTS ray=6 depth=9 D1=149.291656 D2=14.9191895
+  BRANCH ray=6 depth=9 kind=FRONT_CSG edi_before=1
+  TAIL ray=6 depth=9 next_inode=5396 edi_after=1
+NODE ray=6 depth=10 inode=5396 node=0xdf24524 edi_in=1
+DOTS ray=6 depth=10 D1=42.7083435 D2=177.080811
+  BRANCH ray=6 depth=10 kind=FRONT_CSG edi_before=1
+  TAIL ray=6 depth=10 next_inode=-1 edi_after=1
+  TERMINAL_B ray=6 depth=10 edi=1
+  TERMINAL_RETURN_EDI ray=6 depth=10 edi=1
+RAY_RETURN ray=6 result=1
+RAY_ENTER ray=7 px=1024.125 py=-1643.99988 pz=-319.875
+NODE ray=7 depth=1 inode=0 node=0xded0024 edi_in=0
+DOTS ray=7 depth=1 D1=-208.31134 D2=-331.661133
+  BRANCH ray=7 depth=1 kind=BACK_CSG edi_before=0
+  TAIL ray=7 depth=1 next_inode=5172 edi_after=0
+NODE ray=7 depth=2 inode=5172 node=0xdf20d24 edi_in=0
+DOTS ray=7 depth=2 D1=128.125 D2=246.994751
+  BRANCH ray=7 depth=2 kind=FRONT_CSG edi_before=0
+  TAIL ray=7 depth=2 next_inode=5193 edi_after=1
+NODE ray=7 depth=3 inode=5193 node=0xdf21264 edi_in=1
+DOTS ray=7 depth=3 D1=319.875 D2=142.919189
+  BRANCH ray=7 depth=3 kind=FRONT_CSG edi_before=1
+  TAIL ray=7 depth=3 next_inode=5252 edi_after=1
+NODE ray=7 depth=4 inode=5252 node=0xdf22124 edi_in=1
+DOTS ray=7 depth=4 D1=319.875 D2=201.005249
+  BRANCH ray=7 depth=4 kind=FRONT_CSG edi_before=1
+  TAIL ray=7 depth=4 next_inode=5280 edi_after=1
+NODE ray=7 depth=5 inode=5280 node=0xdf22824 edi_in=1
+DOTS ray=7 depth=5 D1=276.000122 D2=372.726074
+  BRANCH ray=7 depth=5 kind=FRONT_CSG edi_before=1
+  TAIL ray=7 depth=5 next_inode=5301 edi_after=1
+NODE ray=7 depth=6 inode=5301 node=0xdf22d64 edi_in=1
+DOTS ray=7 depth=6 D1=-20.0001221 D2=-116.726074
+  BRANCH ray=7 depth=6 kind=BACK_CSG edi_before=1
+  TAIL ray=7 depth=6 next_inode=5382 edi_after=0
+NODE ray=7 depth=7 inode=5382 node=0xdf241a4 edi_in=0
+DOTS ray=7 depth=7 D1=4.00097656 D2=100.726929
+  BRANCH ray=7 depth=7 kind=FRONT_CSG edi_before=0
+  TAIL ray=7 depth=7 next_inode=5391 edi_after=1
+NODE ray=7 depth=8 inode=5391 node=0xdf243e4 edi_in=1
+DOTS ray=7 depth=8 D1=64.125 D2=182.994751
+  BRANCH ray=7 depth=8 kind=FRONT_CSG edi_before=1
+  TAIL ray=7 depth=8 next_inode=5394 edi_after=1
+NODE ray=7 depth=9 inode=5394 node=0xdf244a4 edi_in=1
+DOTS ray=7 depth=9 D1=191.875 D2=14.9191895
+  BRANCH ray=7 depth=9 kind=FRONT_CSG edi_before=1
+  TAIL ray=7 depth=9 next_inode=5396 edi_after=1
+NODE ray=7 depth=10 inode=5396 node=0xdf24524 edi_in=1
+DOTS ray=7 depth=10 D1=0.125 D2=177.080811
+  BRANCH ray=7 depth=10 kind=FRONT_CSG edi_before=1
+  TAIL ray=7 depth=10 next_inode=-1 edi_after=1
+  TERMINAL_B ray=7 depth=10 edi=1
+  TERMINAL_RETURN_EDI ray=7 depth=10 edi=1
+RAY_RETURN ray=7 result=1
+RAY_ENTER ray=8 px=1039.875 py=-1643.99988 pz=-319.875
+NODE ray=8 depth=1 inode=0 node=0xded0024 edi_in=0
+DOTS ray=8 depth=1 D1=-208.31134 D2=-331.661133
+  BRANCH ray=8 depth=1 kind=BACK_CSG edi_before=0
+  TAIL ray=8 depth=1 next_inode=5172 edi_after=0
+NODE ray=8 depth=2 inode=5172 node=0xdf20d24 edi_in=0
+DOTS ray=8 depth=2 D1=143.875 D2=246.994751
+  BRANCH ray=8 depth=2 kind=FRONT_CSG edi_before=0
+  TAIL ray=8 depth=2 next_inode=5193 edi_after=1
+NODE ray=8 depth=3 inode=5193 node=0xdf21264 edi_in=1
+DOTS ray=8 depth=3 D1=319.875 D2=142.919189
+  BRANCH ray=8 depth=3 kind=FRONT_CSG edi_before=1
+  TAIL ray=8 depth=3 next_inode=5252 edi_after=1
+NODE ray=8 depth=4 inode=5252 node=0xdf22124 edi_in=1
+DOTS ray=8 depth=4 D1=304.125 D2=201.005249
+  BRANCH ray=8 depth=4 kind=FRONT_CSG edi_before=1
+  TAIL ray=8 depth=4 next_inode=5280 edi_after=1
+NODE ray=8 depth=5 inode=5280 node=0xdf22824 edi_in=1
+DOTS ray=8 depth=5 D1=276.000122 D2=372.726074
+  BRANCH ray=8 depth=5 kind=FRONT_CSG edi_before=1
+  TAIL ray=8 depth=5 next_inode=5301 edi_after=1
+NODE ray=8 depth=6 inode=5301 node=0xdf22d64 edi_in=1
+DOTS ray=8 depth=6 D1=-20.0001221 D2=-116.726074
+  BRANCH ray=8 depth=6 kind=BACK_CSG edi_before=1
+  TAIL ray=8 depth=6 next_inode=5382 edi_after=0
+NODE ray=8 depth=7 inode=5382 node=0xdf241a4 edi_in=0
+DOTS ray=8 depth=7 D1=4.00097656 D2=100.726929
+  BRANCH ray=8 depth=7 kind=FRONT_CSG edi_before=0
+  TAIL ray=8 depth=7 next_inode=5391 edi_after=1
+NODE ray=8 depth=8 inode=5391 node=0xdf243e4 edi_in=1
+DOTS ray=8 depth=8 D1=79.875 D2=182.994751
+  BRANCH ray=8 depth=8 kind=FRONT_CSG edi_before=1
+  TAIL ray=8 depth=8 next_inode=5394 edi_after=1
+NODE ray=8 depth=9 inode=5394 node=0xdf244a4 edi_in=1
+DOTS ray=8 depth=9 D1=191.875 D2=14.9191895
+  BRANCH ray=8 depth=9 kind=FRONT_CSG edi_before=1
+  TAIL ray=8 depth=9 next_inode=5396 edi_after=1
+NODE ray=8 depth=10 inode=5396 node=0xdf24524 edi_in=1
+DOTS ray=8 depth=10 D1=0.125 D2=177.080811
+  BRANCH ray=8 depth=10 kind=FRONT_CSG edi_before=1
+  TAIL ray=8 depth=10 next_inode=-1 edi_after=1
+  TERMINAL_B ray=8 depth=10 edi=1
+  TERMINAL_RETURN_EDI ray=8 depth=10 edi=1
+RAY_RETURN ray=8 result=1
+RAY_ENTER ray=9 px=1024.125 py=-1643.99988 pz=-192.125
+NODE ray=9 depth=1 inode=0 node=0xded0024 edi_in=0
+DOTS ray=9 depth=1 D1=-325.350464 D2=-216.728271
+  BRANCH ray=9 depth=1 kind=BACK_CSG edi_before=0
+  TAIL ray=9 depth=1 next_inode=5172 edi_after=0
+NODE ray=9 depth=2 inode=5172 node=0xdf20d24 edi_in=0
+DOTS ray=9 depth=2 D1=128.125 D2=238.562378
+  BRANCH ray=9 depth=2 kind=FRONT_CSG edi_before=0
+  TAIL ray=9 depth=2 next_inode=5193 edi_after=1
+NODE ray=9 depth=3 inode=5193 node=0xdf21264 edi_in=1
+DOTS ray=9 depth=3 D1=192.125 D2=150.519562
+  BRANCH ray=9 depth=3 kind=FRONT_CSG edi_before=1
+  TAIL ray=9 depth=3 next_inode=5252 edi_after=1
+NODE ray=9 depth=4 inode=5252 node=0xdf22124 edi_in=1
+DOTS ray=9 depth=4 D1=319.875 D2=209.437622
+  BRANCH ray=9 depth=4 kind=FRONT_CSG edi_before=1
+  TAIL ray=9 depth=4 next_inode=5280 edi_after=1
+NODE ray=9 depth=5 inode=5280 node=0xdf22824 edi_in=1
+DOTS ray=9 depth=5 D1=276.000122 D2=642.098877
+  BRANCH ray=9 depth=5 kind=FRONT_CSG edi_before=1
+  TAIL ray=9 depth=5 next_inode=5301 edi_after=1
+NODE ray=9 depth=6 inode=5301 node=0xdf22d64 edi_in=1
+DOTS ray=9 depth=6 D1=-20.0001221 D2=-386.098877
+  BRANCH ray=9 depth=6 kind=BACK_CSG edi_before=1
+  TAIL ray=9 depth=6 next_inode=5382 edi_after=0
+NODE ray=9 depth=7 inode=5382 node=0xdf241a4 edi_in=0
+DOTS ray=9 depth=7 D1=4.00097656 D2=370.099731
+  BRANCH ray=9 depth=7 kind=FRONT_CSG edi_before=0
+  TAIL ray=9 depth=7 next_inode=5391 edi_after=1
+NODE ray=9 depth=8 inode=5391 node=0xdf243e4 edi_in=1
+DOTS ray=9 depth=8 D1=64.125 D2=174.562378
+  BRANCH ray=9 depth=8 kind=FRONT_CSG edi_before=1
+  TAIL ray=9 depth=8 next_inode=5394 edi_after=1
+NODE ray=9 depth=9 inode=5394 node=0xdf244a4 edi_in=1
+DOTS ray=9 depth=9 D1=64.125 D2=22.5195618
+  BRANCH ray=9 depth=9 kind=FRONT_CSG edi_before=1
+  TAIL ray=9 depth=9 next_inode=5396 edi_after=1
+NODE ray=9 depth=10 inode=5396 node=0xdf24524 edi_in=1
+DOTS ray=9 depth=10 D1=127.875 D2=169.480438
+  BRANCH ray=9 depth=10 kind=FRONT_CSG edi_before=1
+  TAIL ray=9 depth=10 next_inode=-1 edi_after=1
+  TERMINAL_B ray=9 depth=10 edi=1
+  TERMINAL_RETURN_EDI ray=9 depth=10 edi=1
+RAY_RETURN ray=9 result=1
+RAY_ENTER ray=10 px=1039.875 py=-1643.99988 pz=-192.125
+NODE ray=10 depth=1 inode=0 node=0xded0024 edi_in=0
+DOTS ray=10 depth=1 D1=-325.350464 D2=-216.728271
+  BRANCH ray=10 depth=1 kind=BACK_CSG edi_before=0
+  TAIL ray=10 depth=1 next_inode=5172 edi_after=0
+NODE ray=10 depth=2 inode=5172 node=0xdf20d24 edi_in=0
+DOTS ray=10 depth=2 D1=143.875 D2=238.562378
+  BRANCH ray=10 depth=2 kind=FRONT_CSG edi_before=0
+  TAIL ray=10 depth=2 next_inode=5193 edi_after=1
+NODE ray=10 depth=3 inode=5193 node=0xdf21264 edi_in=1
+DOTS ray=10 depth=3 D1=192.125 D2=150.519562
+  BRANCH ray=10 depth=3 kind=FRONT_CSG edi_before=1
+  TAIL ray=10 depth=3 next_inode=5252 edi_after=1
+NODE ray=10 depth=4 inode=5252 node=0xdf22124 edi_in=1
+DOTS ray=10 depth=4 D1=304.125 D2=209.437622
+  BRANCH ray=10 depth=4 kind=FRONT_CSG edi_before=1
+  TAIL ray=10 depth=4 next_inode=5280 edi_after=1
+NODE ray=10 depth=5 inode=5280 node=0xdf22824 edi_in=1
+DOTS ray=10 depth=5 D1=276.000122 D2=642.098877
+  BRANCH ray=10 depth=5 kind=FRONT_CSG edi_before=1
+  TAIL ray=10 depth=5 next_inode=5301 edi_after=1
+NODE ray=10 depth=6 inode=5301 node=0xdf22d64 edi_in=1
+DOTS ray=10 depth=6 D1=-20.0001221 D2=-386.098877
+  BRANCH ray=10 depth=6 kind=BACK_CSG edi_before=1
+  TAIL ray=10 depth=6 next_inode=5382 edi_after=0
+NODE ray=10 depth=7 inode=5382 node=0xdf241a4 edi_in=0
+DOTS ray=10 depth=7 D1=4.00097656 D2=370.099731
+  BRANCH ray=10 depth=7 kind=FRONT_CSG edi_before=0
+  TAIL ray=10 depth=7 next_inode=5391 edi_after=1
+NODE ray=10 depth=8 inode=5391 node=0xdf243e4 edi_in=1
+DOTS ray=10 depth=8 D1=79.875 D2=174.562378
+  BRANCH ray=10 depth=8 kind=FRONT_CSG edi_before=1
+  TAIL ray=10 depth=8 next_inode=5394 edi_after=1
+NODE ray=10 depth=9 inode=5394 node=0xdf244a4 edi_in=1
+DOTS ray=10 depth=9 D1=64.125 D2=22.5195618
+  BRANCH ray=10 depth=9 kind=FRONT_CSG edi_before=1
+  TAIL ray=10 depth=9 next_inode=5396 edi_after=1
+NODE ray=10 depth=10 inode=5396 node=0xdf24524 edi_in=1
+DOTS ray=10 depth=10 D1=127.875 D2=169.480438
+  BRANCH ray=10 depth=10 kind=FRONT_CSG edi_before=1
+  TAIL ray=10 depth=10 next_inode=-1 edi_after=1
+  TERMINAL_B ray=10 depth=10 edi=1
+  TERMINAL_RETURN_EDI ray=10 depth=10 edi=1
+RAY_RETURN ray=10 result=1
+RAY_ENTER ray=11 px=1024.125 py=-1643.99988 pz=-234.708328
+NODE ray=11 depth=1 inode=0 node=0xded0024 edi_in=0
+DOTS ray=11 depth=1 D1=-286.337402 D2=-216.728271
+  BRANCH ray=11 depth=1 kind=BACK_CSG edi_before=0
+  TAIL ray=11 depth=1 next_inode=5172 edi_after=0
+NODE ray=11 depth=2 inode=5172 node=0xdf20d24 edi_in=0
+DOTS ray=11 depth=2 D1=128.125 D2=238.562378
+  BRANCH ray=11 depth=2 kind=FRONT_CSG edi_before=0
+  TAIL ray=11 depth=2 next_inode=5193 edi_after=1
+NODE ray=11 depth=3 inode=5193 node=0xdf21264 edi_in=1
+DOTS ray=11 depth=3 D1=234.708328 D2=150.519562
+  BRANCH ray=11 depth=3 kind=FRONT_CSG edi_before=1
+  TAIL ray=11 depth=3 next_inode=5252 edi_after=1
+NODE ray=11 depth=4 inode=5252 node=0xdf22124 edi_in=1
+DOTS ray=11 depth=4 D1=319.875 D2=209.437622
+  BRANCH ray=11 depth=4 kind=FRONT_CSG edi_before=1
+  TAIL ray=11 depth=4 next_inode=5280 edi_after=1
+NODE ray=11 depth=5 inode=5280 node=0xdf22824 edi_in=1
+DOTS ray=11 depth=5 D1=276.000122 D2=642.098877
+  BRANCH ray=11 depth=5 kind=FRONT_CSG edi_before=1
+  TAIL ray=11 depth=5 next_inode=5301 edi_after=1
+NODE ray=11 depth=6 inode=5301 node=0xdf22d64 edi_in=1
+DOTS ray=11 depth=6 D1=-20.0001221 D2=-386.098877
+  BRANCH ray=11 depth=6 kind=BACK_CSG edi_before=1
+  TAIL ray=11 depth=6 next_inode=5382 edi_after=0
+NODE ray=11 depth=7 inode=5382 node=0xdf241a4 edi_in=0
+DOTS ray=11 depth=7 D1=4.00097656 D2=370.099731
+  BRANCH ray=11 depth=7 kind=FRONT_CSG edi_before=0
+  TAIL ray=11 depth=7 next_inode=5391 edi_after=1
+NODE ray=11 depth=8 inode=5391 node=0xdf243e4 edi_in=1
+DOTS ray=11 depth=8 D1=64.125 D2=174.562378
+  BRANCH ray=11 depth=8 kind=FRONT_CSG edi_before=1
+  TAIL ray=11 depth=8 next_inode=5394 edi_after=1
+NODE ray=11 depth=9 inode=5394 node=0xdf244a4 edi_in=1
+DOTS ray=11 depth=9 D1=106.708328 D2=22.5195618
+  BRANCH ray=11 depth=9 kind=FRONT_CSG edi_before=1
+  TAIL ray=11 depth=9 next_inode=5396 edi_after=1
+NODE ray=11 depth=10 inode=5396 node=0xdf24524 edi_in=1
+DOTS ray=11 depth=10 D1=85.2916718 D2=169.480438
+  BRANCH ray=11 depth=10 kind=FRONT_CSG edi_before=1
+  TAIL ray=11 depth=10 next_inode=-1 edi_after=1
+  TERMINAL_B ray=11 depth=10 edi=1
+  TERMINAL_RETURN_EDI ray=11 depth=10 edi=1
+RAY_RETURN ray=11 result=1
+RAY_ENTER ray=12 px=1039.875 py=-1643.99988 pz=-234.708328
+NODE ray=12 depth=1 inode=0 node=0xded0024 edi_in=0
+DOTS ray=12 depth=1 D1=-286.337402 D2=-216.728271
+  BRANCH ray=12 depth=1 kind=BACK_CSG edi_before=0
+  TAIL ray=12 depth=1 next_inode=5172 edi_after=0
+NODE ray=12 depth=2 inode=5172 node=0xdf20d24 edi_in=0
+DOTS ray=12 depth=2 D1=143.875 D2=238.562378
+  BRANCH ray=12 depth=2 kind=FRONT_CSG edi_before=0
+  TAIL ray=12 depth=2 next_inode=5193 edi_after=1
+NODE ray=12 depth=3 inode=5193 node=0xdf21264 edi_in=1
+DOTS ray=12 depth=3 D1=234.708328 D2=150.519562
+  BRANCH ray=12 depth=3 kind=FRONT_CSG edi_before=1
+  TAIL ray=12 depth=3 next_inode=5252 edi_after=1
+NODE ray=12 depth=4 inode=5252 node=0xdf22124 edi_in=1
+DOTS ray=12 depth=4 D1=304.125 D2=209.437622
+  BRANCH ray=12 depth=4 kind=FRONT_CSG edi_before=1
+  TAIL ray=12 depth=4 next_inode=5280 edi_after=1
+NODE ray=12 depth=5 inode=5280 node=0xdf22824 edi_in=1
+DOTS ray=12 depth=5 D1=276.000122 D2=642.098877
+  BRANCH ray=12 depth=5 kind=FRONT_CSG edi_before=1
+  TAIL ray=12 depth=5 next_inode=5301 edi_after=1
+NODE ray=12 depth=6 inode=5301 node=0xdf22d64 edi_in=1
+DOTS ray=12 depth=6 D1=-20.0001221 D2=-386.098877
+  BRANCH ray=12 depth=6 kind=BACK_CSG edi_before=1
+  TAIL ray=12 depth=6 next_inode=5382 edi_after=0
+NODE ray=12 depth=7 inode=5382 node=0xdf241a4 edi_in=0
+DOTS ray=12 depth=7 D1=4.00097656 D2=370.099731
+  BRANCH ray=12 depth=7 kind=FRONT_CSG edi_before=0
+  TAIL ray=12 depth=7 next_inode=5391 edi_after=1
+NODE ray=12 depth=8 inode=5391 node=0xdf243e4 edi_in=1
+DOTS ray=12 depth=8 D1=79.875 D2=174.562378
+  BRANCH ray=12 depth=8 kind=FRONT_CSG edi_before=1
+  TAIL ray=12 depth=8 next_inode=5394 edi_after=1
+NODE ray=12 depth=9 inode=5394 node=0xdf244a4 edi_in=1
+DOTS ray=12 depth=9 D1=106.708328 D2=22.5195618
+  BRANCH ray=12 depth=9 kind=FRONT_CSG edi_before=1
+  TAIL ray=12 depth=9 next_inode=5396 edi_after=1
+NODE ray=12 depth=10 inode=5396 node=0xdf24524 edi_in=1
+DOTS ray=12 depth=10 D1=85.2916718 D2=169.480438
+  BRANCH ray=12 depth=10 kind=FRONT_CSG edi_before=1
+  TAIL ray=12 depth=10 next_inode=-1 edi_after=1
+  TERMINAL_B ray=12 depth=10 edi=1
+  TERMINAL_RETURN_EDI ray=12 depth=10 edi=1
+RAY_RETURN ray=12 result=1
+RAY_ENTER ray=13 px=1024.125 py=-1643.99988 pz=-277.291656
+NODE ray=13 depth=1 inode=0 node=0xded0024 edi_in=0
+DOTS ray=13 depth=1 D1=-247.324402 D2=-216.728271
+  BRANCH ray=13 depth=1 kind=BACK_CSG edi_before=0
+  TAIL ray=13 depth=1 next_inode=5172 edi_after=0
+NODE ray=13 depth=2 inode=5172 node=0xdf20d24 edi_in=0
+DOTS ray=13 depth=2 D1=128.125 D2=238.562378
+  BRANCH ray=13 depth=2 kind=FRONT_CSG edi_before=0
+  TAIL ray=13 depth=2 next_inode=5193 edi_after=1
+NODE ray=13 depth=3 inode=5193 node=0xdf21264 edi_in=1
+DOTS ray=13 depth=3 D1=277.291656 D2=150.519562
+  BRANCH ray=13 depth=3 kind=FRONT_CSG edi_before=1
+  TAIL ray=13 depth=3 next_inode=5252 edi_after=1
+NODE ray=13 depth=4 inode=5252 node=0xdf22124 edi_in=1
+DOTS ray=13 depth=4 D1=319.875 D2=209.437622
+  BRANCH ray=13 depth=4 kind=FRONT_CSG edi_before=1
+  TAIL ray=13 depth=4 next_inode=5280 edi_after=1
+NODE ray=13 depth=5 inode=5280 node=0xdf22824 edi_in=1
+DOTS ray=13 depth=5 D1=276.000122 D2=642.098877
+  BRANCH ray=13 depth=5 kind=FRONT_CSG edi_before=1
+  TAIL ray=13 depth=5 next_inode=5301 edi_after=1
+NODE ray=13 depth=6 inode=5301 node=0xdf22d64 edi_in=1
+DOTS ray=13 depth=6 D1=-20.0001221 D2=-386.098877
+  BRANCH ray=13 depth=6 kind=BACK_CSG edi_before=1
+  TAIL ray=13 depth=6 next_inode=5382 edi_after=0
+NODE ray=13 depth=7 inode=5382 node=0xdf241a4 edi_in=0
+DOTS ray=13 depth=7 D1=4.00097656 D2=370.099731
+  BRANCH ray=13 depth=7 kind=FRONT_CSG edi_before=0
+  TAIL ray=13 depth=7 next_inode=5391 edi_after=1
+NODE ray=13 depth=8 inode=5391 node=0xdf243e4 edi_in=1
+DOTS ray=13 depth=8 D1=64.125 D2=174.562378
+  BRANCH ray=13 depth=8 kind=FRONT_CSG edi_before=1
+  TAIL ray=13 depth=8 next_inode=5394 edi_after=1
+NODE ray=13 depth=9 inode=5394 node=0xdf244a4 edi_in=1
+DOTS ray=13 depth=9 D1=149.291656 D2=22.5195618
+  BRANCH ray=13 depth=9 kind=FRONT_CSG edi_before=1
+  TAIL ray=13 depth=9 next_inode=5396 edi_after=1
+NODE ray=13 depth=10 inode=5396 node=0xdf24524 edi_in=1
+DOTS ray=13 depth=10 D1=42.7083435 D2=169.480438
+  BRANCH ray=13 depth=10 kind=FRONT_CSG edi_before=1
+  TAIL ray=13 depth=10 next_inode=-1 edi_after=1
+  TERMINAL_B ray=13 depth=10 edi=1
+  TERMINAL_RETURN_EDI ray=13 depth=10 edi=1
+RAY_RETURN ray=13 result=1
+RAY_ENTER ray=14 px=1039.875 py=-1643.99988 pz=-277.291656
+NODE ray=14 depth=1 inode=0 node=0xded0024 edi_in=0
+DOTS ray=14 depth=1 D1=-247.324402 D2=-216.728271
+  BRANCH ray=14 depth=1 kind=BACK_CSG edi_before=0
+  TAIL ray=14 depth=1 next_inode=5172 edi_after=0
+NODE ray=14 depth=2 inode=5172 node=0xdf20d24 edi_in=0
+DOTS ray=14 depth=2 D1=143.875 D2=238.562378
+  BRANCH ray=14 depth=2 kind=FRONT_CSG edi_before=0
+  TAIL ray=14 depth=2 next_inode=5193 edi_after=1
+NODE ray=14 depth=3 inode=5193 node=0xdf21264 edi_in=1
+DOTS ray=14 depth=3 D1=277.291656 D2=150.519562
+  BRANCH ray=14 depth=3 kind=FRONT_CSG edi_before=1
+  TAIL ray=14 depth=3 next_inode=5252 edi_after=1
+NODE ray=14 depth=4 inode=5252 node=0xdf22124 edi_in=1
+DOTS ray=14 depth=4 D1=304.125 D2=209.437622
+  BRANCH ray=14 depth=4 kind=FRONT_CSG edi_before=1
+  TAIL ray=14 depth=4 next_inode=5280 edi_after=1
+NODE ray=14 depth=5 inode=5280 node=0xdf22824 edi_in=1
+DOTS ray=14 depth=5 D1=276.000122 D2=642.098877
+  BRANCH ray=14 depth=5 kind=FRONT_CSG edi_before=1
+  TAIL ray=14 depth=5 next_inode=5301 edi_after=1
+NODE ray=14 depth=6 inode=5301 node=0xdf22d64 edi_in=1
+DOTS ray=14 depth=6 D1=-20.0001221 D2=-386.098877
+  BRANCH ray=14 depth=6 kind=BACK_CSG edi_before=1
+  TAIL ray=14 depth=6 next_inode=5382 edi_after=0
+NODE ray=14 depth=7 inode=5382 node=0xdf241a4 edi_in=0
+DOTS ray=14 depth=7 D1=4.00097656 D2=370.099731
+  BRANCH ray=14 depth=7 kind=FRONT_CSG edi_before=0
+  TAIL ray=14 depth=7 next_inode=5391 edi_after=1
+NODE ray=14 depth=8 inode=5391 node=0xdf243e4 edi_in=1
+DOTS ray=14 depth=8 D1=79.875 D2=174.562378
+  BRANCH ray=14 depth=8 kind=FRONT_CSG edi_before=1
+  TAIL ray=14 depth=8 next_inode=5394 edi_after=1
+NODE ray=14 depth=9 inode=5394 node=0xdf244a4 edi_in=1
+DOTS ray=14 depth=9 D1=149.291656 D2=22.5195618
+  BRANCH ray=14 depth=9 kind=FRONT_CSG edi_before=1
+  TAIL ray=14 depth=9 next_inode=5396 edi_after=1
+NODE ray=14 depth=10 inode=5396 node=0xdf24524 edi_in=1
+DOTS ray=14 depth=10 D1=42.7083435 D2=169.480438
+  BRANCH ray=14 depth=10 kind=FRONT_CSG edi_before=1
+  TAIL ray=14 depth=10 next_inode=-1 edi_after=1
+  TERMINAL_B ray=14 depth=10 edi=1
+  TERMINAL_RETURN_EDI ray=14 depth=10 edi=1
+RAY_RETURN ray=14 result=1
+RAY_ENTER ray=15 px=1024.125 py=-1643.99988 pz=-319.875
+NODE ray=15 depth=1 inode=0 node=0xded0024 edi_in=0
+DOTS ray=15 depth=1 D1=-208.31134 D2=-216.728271
+  BRANCH ray=15 depth=1 kind=BACK_CSG edi_before=0
+  TAIL ray=15 depth=1 next_inode=5172 edi_after=0
+NODE ray=15 depth=2 inode=5172 node=0xdf20d24 edi_in=0
+DOTS ray=15 depth=2 D1=128.125 D2=238.562378
+  BRANCH ray=15 depth=2 kind=FRONT_CSG edi_before=0
+  TAIL ray=15 depth=2 next_inode=5193 edi_after=1
+NODE ray=15 depth=3 inode=5193 node=0xdf21264 edi_in=1
+DOTS ray=15 depth=3 D1=319.875 D2=150.519562
+  BRANCH ray=15 depth=3 kind=FRONT_CSG edi_before=1
+  TAIL ray=15 depth=3 next_inode=5252 edi_after=1
+NODE ray=15 depth=4 inode=5252 node=0xdf22124 edi_in=1
+DOTS ray=15 depth=4 D1=319.875 D2=209.437622
+  BRANCH ray=15 depth=4 kind=FRONT_CSG edi_before=1
+  TAIL ray=15 depth=4 next_inode=5280 edi_after=1
+NODE ray=15 depth=5 inode=5280 node=0xdf22824 edi_in=1
+DOTS ray=15 depth=5 D1=276.000122 D2=642.098877
+  BRANCH ray=15 depth=5 kind=FRONT_CSG edi_before=1
+  TAIL ray=15 depth=5 next_inode=5301 edi_after=1
+NODE ray=15 depth=6 inode=5301 node=0xdf22d64 edi_in=1
+DOTS ray=15 depth=6 D1=-20.0001221 D2=-386.098877
+  BRANCH ray=15 depth=6 kind=BACK_CSG edi_before=1
+  TAIL ray=15 depth=6 next_inode=5382 edi_after=0
+NODE ray=15 depth=7 inode=5382 node=0xdf241a4 edi_in=0
+DOTS ray=15 depth=7 D1=4.00097656 D2=370.099731
+  BRANCH ray=15 depth=7 kind=FRONT_CSG edi_before=0
+  TAIL ray=15 depth=7 next_inode=5391 edi_after=1
+NODE ray=15 depth=8 inode=5391 node=0xdf243e4 edi_in=1
+DOTS ray=15 depth=8 D1=64.125 D2=174.562378
+  BRANCH ray=15 depth=8 kind=FRONT_CSG edi_before=1
+  TAIL ray=15 depth=8 next_inode=5394 edi_after=1
+NODE ray=15 depth=9 inode=5394 node=0xdf244a4 edi_in=1
+DOTS ray=15 depth=9 D1=191.875 D2=22.5195618
+  BRANCH ray=15 depth=9 kind=FRONT_CSG edi_before=1
+  TAIL ray=15 depth=9 next_inode=5396 edi_after=1
+NODE ray=15 depth=10 inode=5396 node=0xdf24524 edi_in=1
+DOTS ray=15 depth=10 D1=0.125 D2=169.480438
+  BRANCH ray=15 depth=10 kind=FRONT_CSG edi_before=1
+  TAIL ray=15 depth=10 next_inode=-1 edi_after=1
+  TERMINAL_B ray=15 depth=10 edi=1
+  TERMINAL_RETURN_EDI ray=15 depth=10 edi=1
+RAY_RETURN ray=15 result=1
+RAY_ENTER ray=16 px=1039.875 py=-1643.99988 pz=-319.875
+NODE ray=16 depth=1 inode=0 node=0xded0024 edi_in=0
+DOTS ray=16 depth=1 D1=-208.31134 D2=-216.728271
+  BRANCH ray=16 depth=1 kind=BACK_CSG edi_before=0
+  TAIL ray=16 depth=1 next_inode=5172 edi_after=0
+NODE ray=16 depth=2 inode=5172 node=0xdf20d24 edi_in=0
+DOTS ray=16 depth=2 D1=143.875 D2=238.562378
+  BRANCH ray=16 depth=2 kind=FRONT_CSG edi_before=0
+  TAIL ray=16 depth=2 next_inode=5193 edi_after=1
+NODE ray=16 depth=3 inode=5193 node=0xdf21264 edi_in=1
+DOTS ray=16 depth=3 D1=319.875 D2=150.519562
+  BRANCH ray=16 depth=3 kind=FRONT_CSG edi_before=1
+  TAIL ray=16 depth=3 next_inode=5252 edi_after=1
+NODE ray=16 depth=4 inode=5252 node=0xdf22124 edi_in=1
+DOTS ray=16 depth=4 D1=304.125 D2=209.437622
+  BRANCH ray=16 depth=4 kind=FRONT_CSG edi_before=1
+  TAIL ray=16 depth=4 next_inode=5280 edi_after=1
+NODE ray=16 depth=5 inode=5280 node=0xdf22824 edi_in=1
+DOTS ray=16 depth=5 D1=276.000122 D2=642.098877
+  BRANCH ray=16 depth=5 kind=FRONT_CSG edi_before=1
+  TAIL ray=16 depth=5 next_inode=5301 edi_after=1
+NODE ray=16 depth=6 inode=5301 node=0xdf22d64 edi_in=1
+DOTS ray=16 depth=6 D1=-20.0001221 D2=-386.098877
+  BRANCH ray=16 depth=6 kind=BACK_CSG edi_before=1
+  TAIL ray=16 depth=6 next_inode=5382 edi_after=0
+NODE ray=16 depth=7 inode=5382 node=0xdf241a4 edi_in=0
+DOTS ray=16 depth=7 D1=4.00097656 D2=370.099731
+  BRANCH ray=16 depth=7 kind=FRONT_CSG edi_before=0
+  TAIL ray=16 depth=7 next_inode=5391 edi_after=1
+NODE ray=16 depth=8 inode=5391 node=0xdf243e4 edi_in=1
+DOTS ray=16 depth=8 D1=79.875 D2=174.562378
+  BRANCH ray=16 depth=8 kind=FRONT_CSG edi_before=1
+  TAIL ray=16 depth=8 next_inode=5394 edi_after=1
+NODE ray=16 depth=9 inode=5394 node=0xdf244a4 edi_in=1
+DOTS ray=16 depth=9 D1=191.875 D2=22.5195618
+  BRANCH ray=16 depth=9 kind=FRONT_CSG edi_before=1
+  TAIL ray=16 depth=9 next_inode=5396 edi_after=1
+NODE ray=16 depth=10 inode=5396 node=0xdf24524 edi_in=1
+DOTS ray=16 depth=10 D1=0.125 D2=169.480438
+  BRANCH ray=16 depth=10 kind=FRONT_CSG edi_before=1
+  TAIL ray=16 depth=10 next_inode=-1 edi_after=1
+  TERMINAL_B ray=16 depth=10 edi=1
+  TERMINAL_RETURN_EDI ray=16 depth=10 edi=1
+RAY_RETURN ray=16 result=1
+RAY_ENTER ray=17 px=1024.125 py=-1643.99988 pz=-192.125
+NODE ray=17 depth=1 inode=0 node=0xded0024 edi_in=0
+DOTS ray=17 depth=1 D1=-325.350464 D2=-109.377533
+  BRANCH ray=17 depth=1 kind=BACK_CSG edi_before=0
+  TAIL ray=17 depth=1 next_inode=5172 edi_after=0
+NODE ray=17 depth=2 inode=5172 node=0xdf20d24 edi_in=0
+DOTS ray=17 depth=2 D1=128.125 D2=236.84314
+  BRANCH ray=17 depth=2 kind=FRONT_CSG edi_before=0
+  TAIL ray=17 depth=2 next_inode=5193 edi_after=1
+NODE ray=17 depth=3 inode=5193 node=0xdf21264 edi_in=1
+DOTS ray=17 depth=3 D1=192.125 D2=150.857758
+  BRANCH ray=17 depth=3 kind=FRONT_CSG edi_before=1
+  TAIL ray=17 depth=3 next_inode=5252 edi_after=1
+NODE ray=17 depth=4 inode=5252 node=0xdf22124 edi_in=1
+DOTS ray=17 depth=4 D1=319.875 D2=211.15686
+  BRANCH ray=17 depth=4 kind=FRONT_CSG edi_before=1
+  TAIL ray=17 depth=4 next_inode=5280 edi_after=1
+NODE ray=17 depth=5 inode=5280 node=0xdf22824 edi_in=1
+DOTS ray=17 depth=5 D1=276.000122 D2=909.154358
+  BRANCH ray=17 depth=5 kind=FRONT_CSG edi_before=1
+  TAIL ray=17 depth=5 next_inode=5301 edi_after=1
+NODE ray=17 depth=6 inode=5301 node=0xdf22d64 edi_in=1
+DOTS ray=17 depth=6 D1=-20.0001221 D2=-653.154358
+  BRANCH ray=17 depth=6 kind=BACK_CSG edi_before=1
+  TAIL ray=17 depth=6 next_inode=5382 edi_after=0
+NODE ray=17 depth=7 inode=5382 node=0xdf241a4 edi_in=0
+DOTS ray=17 depth=7 D1=4.00097656 D2=637.155212
+  BRANCH ray=17 depth=7 kind=FRONT_CSG edi_before=0
+  TAIL ray=17 depth=7 next_inode=5391 edi_after=1
+NODE ray=17 depth=8 inode=5391 node=0xdf243e4 edi_in=1
+DOTS ray=17 depth=8 D1=64.125 D2=172.84314
+  BRANCH ray=17 depth=8 kind=FRONT_CSG edi_before=1
+  TAIL ray=17 depth=8 next_inode=5394 edi_after=1
+NODE ray=17 depth=9 inode=5394 node=0xdf244a4 edi_in=1
+DOTS ray=17 depth=9 D1=64.125 D2=22.8577576
+  BRANCH ray=17 depth=9 kind=FRONT_CSG edi_before=1
+  TAIL ray=17 depth=9 next_inode=5396 edi_after=1
+NODE ray=17 depth=10 inode=5396 node=0xdf24524 edi_in=1
+DOTS ray=17 depth=10 D1=127.875 D2=169.142242
+  BRANCH ray=17 depth=10 kind=FRONT_CSG edi_before=1
+  TAIL ray=17 depth=10 next_inode=-1 edi_after=1
+  TERMINAL_B ray=17 depth=10 edi=1
+  TERMINAL_RETURN_EDI ray=17 depth=10 edi=1
+RAY_RETURN ray=17 result=1
+RAY_ENTER ray=18 px=1039.875 py=-1643.99988 pz=-192.125
+NODE ray=18 depth=1 inode=0 node=0xded0024 edi_in=0
+DOTS ray=18 depth=1 D1=-325.350464 D2=-109.377533
+  BRANCH ray=18 depth=1 kind=BACK_CSG edi_before=0
+  TAIL ray=18 depth=1 next_inode=5172 edi_after=0
+NODE ray=18 depth=2 inode=5172 node=0xdf20d24 edi_in=0
+DOTS ray=18 depth=2 D1=143.875 D2=236.84314
+  BRANCH ray=18 depth=2 kind=FRONT_CSG edi_before=0
+  TAIL ray=18 depth=2 next_inode=5193 edi_after=1
+NODE ray=18 depth=3 inode=5193 node=0xdf21264 edi_in=1
+DOTS ray=18 depth=3 D1=192.125 D2=150.857758
+  BRANCH ray=18 depth=3 kind=FRONT_CSG edi_before=1
+  TAIL ray=18 depth=3 next_inode=5252 edi_after=1
+NODE ray=18 depth=4 inode=5252 node=0xdf22124 edi_in=1
+DOTS ray=18 depth=4 D1=304.125 D2=211.15686
+  BRANCH ray=18 depth=4 kind=FRONT_CSG edi_before=1
+  TAIL ray=18 depth=4 next_inode=5280 edi_after=1
+NODE ray=18 depth=5 inode=5280 node=0xdf22824 edi_in=1
+DOTS ray=18 depth=5 D1=276.000122 D2=909.154358
+  BRANCH ray=18 depth=5 kind=FRONT_CSG edi_before=1
+  TAIL ray=18 depth=5 next_inode=5301 edi_after=1
+NODE ray=18 depth=6 inode=5301 node=0xdf22d64 edi_in=1
+DOTS ray=18 depth=6 D1=-20.0001221 D2=-653.154358
+  BRANCH ray=18 depth=6 kind=BACK_CSG edi_before=1
+  TAIL ray=18 depth=6 next_inode=5382 edi_after=0
+NODE ray=18 depth=7 inode=5382 node=0xdf241a4 edi_in=0
+DOTS ray=18 depth=7 D1=4.00097656 D2=637.155212
+  BRANCH ray=18 depth=7 kind=FRONT_CSG edi_before=0
+  TAIL ray=18 depth=7 next_inode=5391 edi_after=1
+NODE ray=18 depth=8 inode=5391 node=0xdf243e4 edi_in=1
+DOTS ray=18 depth=8 D1=79.875 D2=172.84314
+  BRANCH ray=18 depth=8 kind=FRONT_CSG edi_before=1
+  TAIL ray=18 depth=8 next_inode=5394 edi_after=1
+NODE ray=18 depth=9 inode=5394 node=0xdf244a4 edi_in=1
+DOTS ray=18 depth=9 D1=64.125 D2=22.8577576
+  BRANCH ray=18 depth=9 kind=FRONT_CSG edi_before=1
+  TAIL ray=18 depth=9 next_inode=5396 edi_after=1
+NODE ray=18 depth=10 inode=5396 node=0xdf24524 edi_in=1
+DOTS ray=18 depth=10 D1=127.875 D2=169.142242
+  BRANCH ray=18 depth=10 kind=FRONT_CSG edi_before=1
+  TAIL ray=18 depth=10 next_inode=-1 edi_after=1
+  TERMINAL_B ray=18 depth=10 edi=1
+  TERMINAL_RETURN_EDI ray=18 depth=10 edi=1
+RAY_RETURN ray=18 result=1
+RAY_ENTER ray=19 px=1024.125 py=-1643.99988 pz=-234.708328
+NODE ray=19 depth=1 inode=0 node=0xded0024 edi_in=0
+DOTS ray=19 depth=1 D1=-286.337402 D2=-109.377533
+  BRANCH ray=19 depth=1 kind=BACK_CSG edi_before=0
+  TAIL ray=19 depth=1 next_inode=5172 edi_after=0
+NODE ray=19 depth=2 inode=5172 node=0xdf20d24 edi_in=0
+DOTS ray=19 depth=2 D1=128.125 D2=236.84314
+  BRANCH ray=19 depth=2 kind=FRONT_CSG edi_before=0
+  TAIL ray=19 depth=2 next_inode=5193 edi_after=1
+NODE ray=19 depth=3 inode=5193 node=0xdf21264 edi_in=1
+DOTS ray=19 depth=3 D1=234.708328 D2=150.857758
+  BRANCH ray=19 depth=3 kind=FRONT_CSG edi_before=1
+  TAIL ray=19 depth=3 next_inode=5252 edi_after=1
+NODE ray=19 depth=4 inode=5252 node=0xdf22124 edi_in=1
+DOTS ray=19 depth=4 D1=319.875 D2=211.15686
+  BRANCH ray=19 depth=4 kind=FRONT_CSG edi_before=1
+  TAIL ray=19 depth=4 next_inode=5280 edi_after=1
+NODE ray=19 depth=5 inode=5280 node=0xdf22824 edi_in=1
+DOTS ray=19 depth=5 D1=276.000122 D2=909.154358
+  BRANCH ray=19 depth=5 kind=FRONT_CSG edi_before=1
+  TAIL ray=19 depth=5 next_inode=5301 edi_after=1
+NODE ray=19 depth=6 inode=5301 node=0xdf22d64 edi_in=1
+DOTS ray=19 depth=6 D1=-20.0001221 D2=-653.154358
+  BRANCH ray=19 depth=6 kind=BACK_CSG edi_before=1
+  TAIL ray=19 depth=6 next_inode=5382 edi_after=0
+NODE ray=19 depth=7 inode=5382 node=0xdf241a4 edi_in=0
+DOTS ray=19 depth=7 D1=4.00097656 D2=637.155212
+  BRANCH ray=19 depth=7 kind=FRONT_CSG edi_before=0
+  TAIL ray=19 depth=7 next_inode=5391 edi_after=1
+NODE ray=19 depth=8 inode=5391 node=0xdf243e4 edi_in=1
+DOTS ray=19 depth=8 D1=64.125 D2=172.84314
+  BRANCH ray=19 depth=8 kind=FRONT_CSG edi_before=1
+  TAIL ray=19 depth=8 next_inode=5394 edi_after=1
+NODE ray=19 depth=9 inode=5394 node=0xdf244a4 edi_in=1
+DOTS ray=19 depth=9 D1=106.708328 D2=22.8577576
+  BRANCH ray=19 depth=9 kind=FRONT_CSG edi_before=1
+  TAIL ray=19 depth=9 next_inode=5396 edi_after=1
+NODE ray=19 depth=10 inode=5396 node=0xdf24524 edi_in=1
+DOTS ray=19 depth=10 D1=85.2916718 D2=169.142242
+  BRANCH ray=19 depth=10 kind=FRONT_CSG edi_before=1
+  TAIL ray=19 depth=10 next_inode=-1 edi_after=1
+  TERMINAL_B ray=19 depth=10 edi=1
+  TERMINAL_RETURN_EDI ray=19 depth=10 edi=1
+RAY_RETURN ray=19 result=1
+RAY_ENTER ray=20 px=1039.875 py=-1643.99988 pz=-234.708328
+NODE ray=20 depth=1 inode=0 node=0xded0024 edi_in=0
+DOTS ray=20 depth=1 D1=-286.337402 D2=-109.377533
+  BRANCH ray=20 depth=1 kind=BACK_CSG edi_before=0
+  TAIL ray=20 depth=1 next_inode=5172 edi_after=0
+NODE ray=20 depth=2 inode=5172 node=0xdf20d24 edi_in=0
+DOTS ray=20 depth=2 D1=143.875 D2=236.84314
+  BRANCH ray=20 depth=2 kind=FRONT_CSG edi_before=0
+  TAIL ray=20 depth=2 next_inode=5193 edi_after=1
+NODE ray=20 depth=3 inode=5193 node=0xdf21264 edi_in=1
+DOTS ray=20 depth=3 D1=234.708328 D2=150.857758
+  BRANCH ray=20 depth=3 kind=FRONT_CSG edi_before=1
+  TAIL ray=20 depth=3 next_inode=5252 edi_after=1
+NODE ray=20 depth=4 inode=5252 node=0xdf22124 edi_in=1
+DOTS ray=20 depth=4 D1=304.125 D2=211.15686
+  BRANCH ray=20 depth=4 kind=FRONT_CSG edi_before=1
+  TAIL ray=20 depth=4 next_inode=5280 edi_after=1
+NODE ray=20 depth=5 inode=5280 node=0xdf22824 edi_in=1
+DOTS ray=20 depth=5 D1=276.000122 D2=909.154358
+  BRANCH ray=20 depth=5 kind=FRONT_CSG edi_before=1
+  TAIL ray=20 depth=5 next_inode=5301 edi_after=1
+NODE ray=20 depth=6 inode=5301 node=0xdf22d64 edi_in=1
+DOTS ray=20 depth=6 D1=-20.0001221 D2=-653.154358
+  BRANCH ray=20 depth=6 kind=BACK_CSG edi_before=1
+  TAIL ray=20 depth=6 next_inode=5382 edi_after=0
+NODE ray=20 depth=7 inode=5382 node=0xdf241a4 edi_in=0
+DOTS ray=20 depth=7 D1=4.00097656 D2=637.155212
+  BRANCH ray=20 depth=7 kind=FRONT_CSG edi_before=0
+  TAIL ray=20 depth=7 next_inode=5391 edi_after=1
+NODE ray=20 depth=8 inode=5391 node=0xdf243e4 edi_in=1
+DOTS ray=20 depth=8 D1=79.875 D2=172.84314
+  BRANCH ray=20 depth=8 kind=FRONT_CSG edi_before=1
+  TAIL ray=20 depth=8 next_inode=5394 edi_after=1
+NODE ray=20 depth=9 inode=5394 node=0xdf244a4 edi_in=1
+DOTS ray=20 depth=9 D1=106.708328 D2=22.8577576
+  BRANCH ray=20 depth=9 kind=FRONT_CSG edi_before=1
+  TAIL ray=20 depth=9 next_inode=5396 edi_after=1
+NODE ray=20 depth=10 inode=5396 node=0xdf24524 edi_in=1
+DOTS ray=20 depth=10 D1=85.2916718 D2=169.142242
+  BRANCH ray=20 depth=10 kind=FRONT_CSG edi_before=1
+  TAIL ray=20 depth=10 next_inode=-1 edi_after=1
+  TERMINAL_B ray=20 depth=10 edi=1
+  TERMINAL_RETURN_EDI ray=20 depth=10 edi=1
+RAY_RETURN ray=20 result=1
+RAY_ENTER ray=21 px=1024.125 py=-1643.99988 pz=-277.291656
+NODE ray=21 depth=1 inode=0 node=0xded0024 edi_in=0
+DOTS ray=21 depth=1 D1=-247.324402 D2=-109.377533
+  BRANCH ray=21 depth=1 kind=BACK_CSG edi_before=0
+  TAIL ray=21 depth=1 next_inode=5172 edi_after=0
+NODE ray=21 depth=2 inode=5172 node=0xdf20d24 edi_in=0
+DOTS ray=21 depth=2 D1=128.125 D2=236.84314
+  BRANCH ray=21 depth=2 kind=FRONT_CSG edi_before=0
+  TAIL ray=21 depth=2 next_inode=5193 edi_after=1
+NODE ray=21 depth=3 inode=5193 node=0xdf21264 edi_in=1
+DOTS ray=21 depth=3 D1=277.291656 D2=150.857758
+  BRANCH ray=21 depth=3 kind=FRONT_CSG edi_before=1
+  TAIL ray=21 depth=3 next_inode=5252 edi_after=1
+NODE ray=21 depth=4 inode=5252 node=0xdf22124 edi_in=1
+DOTS ray=21 depth=4 D1=319.875 D2=211.15686
+  BRANCH ray=21 depth=4 kind=FRONT_CSG edi_before=1
+  TAIL ray=21 depth=4 next_inode=5280 edi_after=1
+NODE ray=21 depth=5 inode=5280 node=0xdf22824 edi_in=1
+DOTS ray=21 depth=5 D1=276.000122 D2=909.154358
+  BRANCH ray=21 depth=5 kind=FRONT_CSG edi_before=1
+  TAIL ray=21 depth=5 next_inode=5301 edi_after=1
+NODE ray=21 depth=6 inode=5301 node=0xdf22d64 edi_in=1
+DOTS ray=21 depth=6 D1=-20.0001221 D2=-653.154358
+  BRANCH ray=21 depth=6 kind=BACK_CSG edi_before=1
+  TAIL ray=21 depth=6 next_inode=5382 edi_after=0
+NODE ray=21 depth=7 inode=5382 node=0xdf241a4 edi_in=0
+DOTS ray=21 depth=7 D1=4.00097656 D2=637.155212
+  BRANCH ray=21 depth=7 kind=FRONT_CSG edi_before=0
+  TAIL ray=21 depth=7 next_inode=5391 edi_after=1
+NODE ray=21 depth=8 inode=5391 node=0xdf243e4 edi_in=1
+DOTS ray=21 depth=8 D1=64.125 D2=172.84314
+  BRANCH ray=21 depth=8 kind=FRONT_CSG edi_before=1
+  TAIL ray=21 depth=8 next_inode=5394 edi_after=1
+NODE ray=21 depth=9 inode=5394 node=0xdf244a4 edi_in=1
+DOTS ray=21 depth=9 D1=149.291656 D2=22.8577576
+  BRANCH ray=21 depth=9 kind=FRONT_CSG edi_before=1
+  TAIL ray=21 depth=9 next_inode=5396 edi_after=1
+NODE ray=21 depth=10 inode=5396 node=0xdf24524 edi_in=1
+DOTS ray=21 depth=10 D1=42.7083435 D2=169.142242
+  BRANCH ray=21 depth=10 kind=FRONT_CSG edi_before=1
+  TAIL ray=21 depth=10 next_inode=-1 edi_after=1
+  TERMINAL_B ray=21 depth=10 edi=1
+  TERMINAL_RETURN_EDI ray=21 depth=10 edi=1
+RAY_RETURN ray=21 result=1
+RAY_ENTER ray=22 px=1039.875 py=-1643.99988 pz=-277.291656
+NODE ray=22 depth=1 inode=0 node=0xded0024 edi_in=0
+DOTS ray=22 depth=1 D1=-247.324402 D2=-109.377533
+  BRANCH ray=22 depth=1 kind=BACK_CSG edi_before=0
+  TAIL ray=22 depth=1 next_inode=5172 edi_after=0
+NODE ray=22 depth=2 inode=5172 node=0xdf20d24 edi_in=0
+DOTS ray=22 depth=2 D1=143.875 D2=236.84314
+  BRANCH ray=22 depth=2 kind=FRONT_CSG edi_before=0
+  TAIL ray=22 depth=2 next_inode=5193 edi_after=1
+NODE ray=22 depth=3 inode=5193 node=0xdf21264 edi_in=1
+DOTS ray=22 depth=3 D1=277.291656 D2=150.857758
+  BRANCH ray=22 depth=3 kind=FRONT_CSG edi_before=1
+  TAIL ray=22 depth=3 next_inode=5252 edi_after=1
+NODE ray=22 depth=4 inode=5252 node=0xdf22124 edi_in=1
+DOTS ray=22 depth=4 D1=304.125 D2=211.15686
+  BRANCH ray=22 depth=4 kind=FRONT_CSG edi_before=1
+  TAIL ray=22 depth=4 next_inode=5280 edi_after=1
+NODE ray=22 depth=5 inode=5280 node=0xdf22824 edi_in=1
+DOTS ray=22 depth=5 D1=276.000122 D2=909.154358
+  BRANCH ray=22 depth=5 kind=FRONT_CSG edi_before=1
+  TAIL ray=22 depth=5 next_inode=5301 edi_after=1
+NODE ray=22 depth=6 inode=5301 node=0xdf22d64 edi_in=1
+DOTS ray=22 depth=6 D1=-20.0001221 D2=-653.154358
+  BRANCH ray=22 depth=6 kind=BACK_CSG edi_before=1
+  TAIL ray=22 depth=6 next_inode=5382 edi_after=0
+NODE ray=22 depth=7 inode=5382 node=0xdf241a4 edi_in=0
+DOTS ray=22 depth=7 D1=4.00097656 D2=637.155212
+  BRANCH ray=22 depth=7 kind=FRONT_CSG edi_before=0
+  TAIL ray=22 depth=7 next_inode=5391 edi_after=1
+NODE ray=22 depth=8 inode=5391 node=0xdf243e4 edi_in=1
+DOTS ray=22 depth=8 D1=79.875 D2=172.84314
+  BRANCH ray=22 depth=8 kind=FRONT_CSG edi_before=1
+  TAIL ray=22 depth=8 next_inode=5394 edi_after=1
+NODE ray=22 depth=9 inode=5394 node=0xdf244a4 edi_in=1
+DOTS ray=22 depth=9 D1=149.291656 D2=22.8577576
+  BRANCH ray=22 depth=9 kind=FRONT_CSG edi_before=1
+  TAIL ray=22 depth=9 next_inode=5396 edi_after=1
+NODE ray=22 depth=10 inode=5396 node=0xdf24524 edi_in=1
+DOTS ray=22 depth=10 D1=42.7083435 D2=169.142242
+  BRANCH ray=22 depth=10 kind=FRONT_CSG edi_before=1
+  TAIL ray=22 depth=10 next_inode=-1 edi_after=1
+  TERMINAL_B ray=22 depth=10 edi=1
+  TERMINAL_RETURN_EDI ray=22 depth=10 edi=1
+RAY_RETURN ray=22 result=1
+RAY_ENTER ray=23 px=1024.125 py=-1643.99988 pz=-319.875
+NODE ray=23 depth=1 inode=0 node=0xded0024 edi_in=0
+DOTS ray=23 depth=1 D1=-208.31134 D2=-109.377533
+  BRANCH ray=23 depth=1 kind=BACK_CSG edi_before=0
+  TAIL ray=23 depth=1 next_inode=5172 edi_after=0
+NODE ray=23 depth=2 inode=5172 node=0xdf20d24 edi_in=0
+DOTS ray=23 depth=2 D1=128.125 D2=236.84314
+  BRANCH ray=23 depth=2 kind=FRONT_CSG edi_before=0
+  TAIL ray=23 depth=2 next_inode=5193 edi_after=1
+NODE ray=23 depth=3 inode=5193 node=0xdf21264 edi_in=1
+DOTS ray=23 depth=3 D1=319.875 D2=150.857758
+  BRANCH ray=23 depth=3 kind=FRONT_CSG edi_before=1
+  TAIL ray=23 depth=3 next_inode=5252 edi_after=1
+NODE ray=23 depth=4 inode=5252 node=0xdf22124 edi_in=1
+DOTS ray=23 depth=4 D1=319.875 D2=211.15686
+  BRANCH ray=23 depth=4 kind=FRONT_CSG edi_before=1
+  TAIL ray=23 depth=4 next_inode=5280 edi_after=1
+NODE ray=23 depth=5 inode=5280 node=0xdf22824 edi_in=1
+DOTS ray=23 depth=5 D1=276.000122 D2=909.154358
+  BRANCH ray=23 depth=5 kind=FRONT_CSG edi_before=1
+  TAIL ray=23 depth=5 next_inode=5301 edi_after=1
+NODE ray=23 depth=6 inode=5301 node=0xdf22d64 edi_in=1
+DOTS ray=23 depth=6 D1=-20.0001221 D2=-653.154358
+  BRANCH ray=23 depth=6 kind=BACK_CSG edi_before=1
+  TAIL ray=23 depth=6 next_inode=5382 edi_after=0
+NODE ray=23 depth=7 inode=5382 node=0xdf241a4 edi_in=0
+DOTS ray=23 depth=7 D1=4.00097656 D2=637.155212
+  BRANCH ray=23 depth=7 kind=FRONT_CSG edi_before=0
+  TAIL ray=23 depth=7 next_inode=5391 edi_after=1
+NODE ray=23 depth=8 inode=5391 node=0xdf243e4 edi_in=1
+DOTS ray=23 depth=8 D1=64.125 D2=172.84314
+  BRANCH ray=23 depth=8 kind=FRONT_CSG edi_before=1
+  TAIL ray=23 depth=8 next_inode=5394 edi_after=1
+NODE ray=23 depth=9 inode=5394 node=0xdf244a4 edi_in=1
+DOTS ray=23 depth=9 D1=191.875 D2=22.8577576
+  BRANCH ray=23 depth=9 kind=FRONT_CSG edi_before=1
+  TAIL ray=23 depth=9 next_inode=5396 edi_after=1
+NODE ray=23 depth=10 inode=5396 node=0xdf24524 edi_in=1
+DOTS ray=23 depth=10 D1=0.125 D2=169.142242
+  BRANCH ray=23 depth=10 kind=FRONT_CSG edi_before=1
+  TAIL ray=23 depth=10 next_inode=-1 edi_after=1
+  TERMINAL_B ray=23 depth=10 edi=1
+  TERMINAL_RETURN_EDI ray=23 depth=10 edi=1
+RAY_RETURN ray=23 result=1
+RAY_ENTER ray=24 px=1039.875 py=-1643.99988 pz=-319.875
+NODE ray=24 depth=1 inode=0 node=0xded0024 edi_in=0
+DOTS ray=24 depth=1 D1=-208.31134 D2=-109.377533
+  BRANCH ray=24 depth=1 kind=BACK_CSG edi_before=0
+  TAIL ray=24 depth=1 next_inode=5172 edi_after=0
+NODE ray=24 depth=2 inode=5172 node=0xdf20d24 edi_in=0
+DOTS ray=24 depth=2 D1=143.875 D2=236.84314
+  BRANCH ray=24 depth=2 kind=FRONT_CSG edi_before=0
+  TAIL ray=24 depth=2 next_inode=5193 edi_after=1
+NODE ray=24 depth=3 inode=5193 node=0xdf21264 edi_in=1
+DOTS ray=24 depth=3 D1=319.875 D2=150.857758
+  BRANCH ray=24 depth=3 kind=FRONT_CSG edi_before=1
+  TAIL ray=24 depth=3 next_inode=5252 edi_after=1
+NODE ray=24 depth=4 inode=5252 node=0xdf22124 edi_in=1
+DOTS ray=24 depth=4 D1=304.125 D2=211.15686
+  BRANCH ray=24 depth=4 kind=FRONT_CSG edi_before=1
+  TAIL ray=24 depth=4 next_inode=5280 edi_after=1
+NODE ray=24 depth=5 inode=5280 node=0xdf22824 edi_in=1
+DOTS ray=24 depth=5 D1=276.000122 D2=909.154358
+  BRANCH ray=24 depth=5 kind=FRONT_CSG edi_before=1
+  TAIL ray=24 depth=5 next_inode=5301 edi_after=1
+NODE ray=24 depth=6 inode=5301 node=0xdf22d64 edi_in=1
+DOTS ray=24 depth=6 D1=-20.0001221 D2=-653.154358
+  BRANCH ray=24 depth=6 kind=BACK_CSG edi_before=1
+  TAIL ray=24 depth=6 next_inode=5382 edi_after=0
+NODE ray=24 depth=7 inode=5382 node=0xdf241a4 edi_in=0
+DOTS ray=24 depth=7 D1=4.00097656 D2=637.155212
+  BRANCH ray=24 depth=7 kind=FRONT_CSG edi_before=0
+  TAIL ray=24 depth=7 next_inode=5391 edi_after=1
+NODE ray=24 depth=8 inode=5391 node=0xdf243e4 edi_in=1
+DOTS ray=24 depth=8 D1=79.875 D2=172.84314
+  BRANCH ray=24 depth=8 kind=FRONT_CSG edi_before=1
+  TAIL ray=24 depth=8 next_inode=5394 edi_after=1
+NODE ray=24 depth=9 inode=5394 node=0xdf244a4 edi_in=1
+DOTS ray=24 depth=9 D1=191.875 D2=22.8577576
+  BRANCH ray=24 depth=9 kind=FRONT_CSG edi_before=1
+  TAIL ray=24 depth=9 next_inode=5396 edi_after=1
+NODE ray=24 depth=10 inode=5396 node=0xdf24524 edi_in=1
+DOTS ray=24 depth=10 D1=0.125 D2=169.142242
+  BRANCH ray=24 depth=10 kind=FRONT_CSG edi_before=1
+  TAIL ray=24 depth=10 next_inode=-1 edi_after=1
+  TERMINAL_B ray=24 depth=10 edi=1
+  TERMINAL_RETURN_EDI ray=24 depth=10 edi=1
+RAY_RETURN ray=24 result=1
+RAY_ENTER ray=25 px=1024.125 py=-1643.99988 pz=-192.125
+NODE ray=25 depth=1 inode=0 node=0xded0024 edi_in=0
+DOTS ray=25 depth=1 D1=-325.350464 D2=-21.685791
+  BRANCH ray=25 depth=1 kind=BACK_CSG edi_before=0
+  TAIL ray=25 depth=1 next_inode=5172 edi_after=0
+NODE ray=25 depth=2 inode=5172 node=0xdf20d24 edi_in=0
+DOTS ray=25 depth=2 D1=128.125 D2=472.099976
+  BRANCH ray=25 depth=2 kind=FRONT_CSG edi_before=0
+  TAIL ray=25 depth=2 next_inode=5193 edi_after=1
+NODE ray=25 depth=3 inode=5193 node=0xdf21264 edi_in=1
+DOTS ray=25 depth=3 D1=192.125 D2=113.155861
+  BRANCH ray=25 depth=3 kind=FRONT_CSG edi_before=1
+  TAIL ray=25 depth=3 next_inode=5252 edi_after=1
+NODE ray=25 depth=4 inode=5252 node=0xdf22124 edi_in=1
+DOTS ray=25 depth=4 D1=319.875 D2=-24.0999756
+  CROSS_D1 ray=25 depth=4 D1=319.875
+  NEARFLAG ray=25 depth=4 flag=1
+  RECURSE_CALL ray=25 depth=4 child=5280 state_out=0
+NODE ray=25 depth=5 inode=5280 node=0xdf22824 edi_in=1
+DOTS ray=25 depth=5 D1=276.000122 D2=1148.38464
+  BRANCH ray=25 depth=5 kind=FRONT_CSG edi_before=1
+  TAIL ray=25 depth=5 next_inode=5301 edi_after=1
+NODE ray=25 depth=6 inode=5301 node=0xdf22d64 edi_in=1
+DOTS ray=25 depth=6 D1=-20.0001221 D2=-892.384644
+  BRANCH ray=25 depth=6 kind=BACK_CSG edi_before=1
+  TAIL ray=25 depth=6 next_inode=5382 edi_after=0
+NODE ray=25 depth=7 inode=5382 node=0xdf241a4 edi_in=0
+DOTS ray=25 depth=7 D1=4.00097656 D2=876.385498
+  BRANCH ray=25 depth=7 kind=FRONT_CSG edi_before=0
+  TAIL ray=25 depth=7 next_inode=5391 edi_after=1
+NODE ray=25 depth=8 inode=5391 node=0xdf243e4 edi_in=1
+DOTS ray=25 depth=8 D1=64.125 D2=384
+  BRANCH ray=25 depth=8 kind=FRONT_CSG edi_before=1
+  TAIL ray=25 depth=8 next_inode=5394 edi_after=1
+NODE ray=25 depth=9 inode=5394 node=0xdf244a4 edi_in=1
+DOTS ray=25 depth=9 D1=64.125 D2=-9.31130981
+  CROSS_D1 ray=25 depth=9 D1=64.125
+  NEARFLAG ray=25 depth=9 flag=1
+  RECURSE_CALL ray=25 depth=9 child=5396 state_out=0
+NODE ray=25 depth=10 inode=5396 node=0xdf24524 edi_in=1
+DOTS ray=25 depth=10 D1=127.875 D2=192
+  BRANCH ray=25 depth=10 kind=FRONT_CSG edi_before=1
+  TAIL ray=25 depth=10 next_inode=-1 edi_after=1
+  TERMINAL_B ray=25 depth=10 edi=1
+  TERMINAL_RETURN_EDI ray=25 depth=10 edi=1
+  RECURSE_RETURN ray=25 depth=10 result=1
+  FARBRANCH ray=25 depth=10 kind=B edi_in=1 extra_flags=0x14 nodeflags=0x0
+  FAROUT ray=25 depth=10 edi_new=0
+  TAIL ray=25 depth=10 next_inode=-1 edi_after=0
+  TERMINAL_B ray=25 depth=10 edi=0
+  TERMINAL_GLOBALCHECK ray=25 depth=10 edi=0 global=1 bl_bit10=16
+  TERMINAL_WRITEOUT ray=25 depth=10 edx=5394 edi=0
+  RECURSE_RETURN ray=25 depth=10 result=0
+  SHORTCIRCUIT_BLOCKED ray=25 depth=10
+RAY_RETURN ray=25 result=0
 TARGET_DONE
 [Inferior 1 (process 33) detached]
