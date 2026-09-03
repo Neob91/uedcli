@@ -28,3 +28,12 @@ from those +6 (node `i_vert_pool`, surf `p_base`, leaf `i_permeating`), plus a f
 
 So UNATCO's whole geometry gap is native over-producing 6 verts + 6 points. Isolating it via the
 world-only bisect over [8,734]; N=8 is byte-identical (verts 398/398, points 88/88).
+
+## UNATCO first divergence (world-only bisect [8,734])
+
+N=136 clean, **N=137 first divergence**. Brush #137 = `Brush85`, a single-poly two-sided non-solid
+translucent glass sheet (`PolyFlags=268`). Delta: +1 node, +16 verts, +2 points; surfs/leaves/vecs
+equal. Order-independent: surf multiset identical; node-plane multiset differs by exactly ONE extra
+native node at plane (0,0,1,240) — an extra Z=240 repartition split triggered by Brush85's presence
+in the candidate soup, not Brush85's own plane. A `bspRepartition` split-selection divergence
+(same class as the Vandenberg residual). Board: `board/inbox/unatco-first-divergent-brush-137-brush85-glass`.
