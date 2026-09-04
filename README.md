@@ -21,14 +21,15 @@ supported game.
 - **Query & edit by name** — `find` / `show` / `clip` / `replace` compose over stdin (pipe one command's output into the next).
 - **Decode retail maps** — `level import` turns a compiled `.dx`/`.unr` into a queryable, diffable T3D tree, natively.
 - **Render offline** — labeled wireframes and CSG-solved textured views, without the editor.
-- **Faithful build** — unbuilt T3D output already matches UnrealEd byte-for-byte; the full `level materialize` build — compiling the trunk to a playable map (BSP + lighting) — is being driven to the same parity.
+- **Native build (in progress)** — `level materialize` compiles the trunk to a playable map (BSP + lighting); that step currently depends on the editor, with ongoing work to remove the dependency entirely.
 - **Git-native** — levels are per-actor T3D files that diff and merge like code.
 
 ## What it is
 
 uedcli exposes UnrealEd's level-editing as text an agent can drive: every read and edit is native
-compute against per-actor T3D files in git, without the editor. The one step still delegated to
-the editor is the final `level materialize` build (BSP + lighting) — being brought native too.
+compute against per-actor T3D files in git, without the editor. The one step that still depends on
+the editor is the final `level materialize` build (BSP + lighting); ongoing work will remove that
+dependency entirely.
 
 ## See it work
 
