@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """The BUILT MAP IMPORT golden — the full-binary parity reference (owner ruling 2026-09-04).
 
-`MAP NEW` -> `MAP IMPORT FILE=` (whole-level T3D) -> `MAP REBUILD` -> `LIGHT APPLY` -> `MAP SAVE`.
+`MAP IMPORT[ADD] FILE=` (whole-level T3D, a sacrificial builder brush prepended as Actors[1]) ->
+`MAP REBUILD` -> `LIGHT APPLY` -> `MAP SAVE`.
 
 MAP IMPORT is the editor ingest path whose SERIALIZATION native's `assemble_unbuilt` already
 byte-matches (the 2026-09-02 unbuilt-structure-parity work) AND which brings Movers in with their
@@ -31,6 +32,7 @@ sys.path.insert(0, str(NATIVE_MAT_HARNESS))
 
 from uedcli import config, trunk, xfer                              # noqa: E402
 from uedcli.apply import _level_referenced_packages                 # noqa: E402
+from uedcli.model import Actor, Brush, Polygon                      # noqa: E402
 from uedcli.container_assets import resource_mounts                 # noqa: E402
 from uedcli.driver import Driver, to_z_path                         # noqa: E402
 from uedcli.editor import ensure_editor, stop_editor                # noqa: E402
@@ -43,6 +45,32 @@ from build_ued_golden import _scratch_project, _wait_idle           # noqa: E402
 from build_ued_import_golden import _quote_str_props                # noqa: E402
 
 
+def _dummy_builder_actor() -> Actor:
+    """A sacrificial builder brush to prepend as `Actors[1]` (owner ruling 2026-09-04). UED22
+    excludes `Actors[1]` from CSG by POSITION at every rebuild, so this absorbs the loss instead of
+    the first real world brush. Mirrors native's synthesized builder (`unbuilt.py` `_BUILDER` =
+    `DefaultBrush`, shape `Brush`, the 2-face builder cube of `assemble._builder_cube_polys`) so the
+    editor reference and native materialize align. `Engine.Brush` + model name `Brush` + no `CsgOper`
+    => `normalize.is_builder_brush` recognises it."""
+    faces = [
+        ((0.0, 0.0, 128.0), (0.0, 0.0, 1.0),
+         [(-128.0, -128.0, 128.0), (-128.0, 128.0, 128.0),
+          (128.0, 128.0, 128.0), (128.0, -128.0, 128.0)]),
+        ((0.0, 0.0, -128.0), (0.0, 0.0, -1.0),
+         [(128.0, -128.0, -128.0), (128.0, 128.0, -128.0),
+          (-128.0, 128.0, -128.0), (-128.0, -128.0, -128.0)]),
+    ]
+    polys = [Polygon(origin=base, normal=normal, texture_u=(1.0, 0.0, 0.0),
+                     texture_v=(0.0, 1.0, 0.0), vertices=verts)
+             for base, normal, verts in faces]
+    # `Brush=Model'MyLevel.Brush'` binds the actor to its inline model (a real brush actor carries
+    # the equivalent line; without it UnrealEd imports an actor with a null brush and crashes on
+    # rebuild). Qualified `Engine.Brush` matches native's `_BUILDER`.
+    return Actor(name="DefaultBrush", cls="Engine.Brush",
+                 props=[("Brush", "Model'MyLevel.Brush'")],
+                 brush=Brush(model_name="Brush", polys=polys))
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--trunk", required=True)
@@ -52,11 +80,13 @@ def main() -> int:
     ap.add_argument("--import-verb", default="MAP IMPORT",
                     help="editor ingest verb: `MAP IMPORT` (replace level) or `MAP IMPORTADD` "
                          "(add to the MAP NEW level).")
-    ap.add_argument("--map-new-first", action="store_true",
-                    help="run `MAP NEW` before the ingest verb, so its default builder brush occupies "
-                         "the sacrificial Actors[1] slot UED22 excludes from CSG. REQUIRED with "
-                         "`MAP IMPORTADD` to avoid losing the first real brush (else its CSG is "
-                         "dropped; see board/ued22-world-bsp-differs-per-ingest-verb-paste).")
+    ap.add_argument("--no-dummy-builder", action="store_true",
+                    help="skip prepending the sacrificial builder brush at Actors[1] (default: "
+                         "prepend it). WITHOUT it, `MAP IMPORTADD` drops the first REAL world brush "
+                         "from CSG -- the defective build (see "
+                         "board/ued22-world-bsp-differs-per-ingest-verb-paste). MAP NEW's own builder "
+                         "does NOT help: `MAP IMPORTADD FILE=` discards it, so the dummy must be in "
+                         "the imported T3D.")
     ap.add_argument("--rebuild-cmd", default="MAP REBUILD",
                     help="';'-separated rebuild verbs (default bare `MAP REBUILD`).")
     ap.add_argument("--no-light", action="store_true", help="skip LIGHT APPLY")
@@ -85,9 +115,13 @@ def main() -> int:
     imp_order = levelinfo_first_order(lvl.order, classes, has_brush)
     _quote_str_props(lvl, imp_order, project, user_config)
     actors = [lvl.actors[n] for n in imp_order]
-    n_brush = sum(1 for n in imp_order if has_brush[n])
+    # Prepend the sacrificial builder brush so it lands in Actors[1] (LevelInfo stays Actors[0]),
+    # the slot UED22 drops from CSG -- else the first REAL world brush is lost (owner ruling).
+    if not args.no_dummy_builder:
+        actors.insert(1, _dummy_builder_actor())
+    n_brush = sum(1 for a in actors if a.brush is not None)
     print(f"trunk {trunk_dir.name}: importing {len(actors)} actors ({n_brush} brush) "
-          f"lit={not args.no_light}", flush=True)
+          f"dummy_builder={not args.no_dummy_builder} lit={not args.no_light}", flush=True)
 
     ref_pkgs = _level_referenced_packages(
         type("L", (), {"actors": {n: lvl.actors[n] for n in imp_order}})())
@@ -102,9 +136,6 @@ def main() -> int:
         print(f"editor up: {container}", flush=True)
         ensure_load(ed, ref_pkgs, search_dirs=host_search_dirs, mounts=mounts)
         _wait_idle(ed, label="obj-load")
-        if args.map_new_first:
-            ed.map_new()
-            _wait_idle(ed, label="map-new")
         t3d_path = ed.write_work_file(emit_map(actors), ext="t3d")
         ed.exec(f"{args.import_verb} FILE={to_z_path(t3d_path)}")
         _wait_idle(ed, label="map-import", timeout=args.timeout, quiet_reads=args.quiet_reads)
