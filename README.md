@@ -18,10 +18,10 @@ supported game.
 ![Building two rooms and a corridor: commands on the left, the diagram rendering in sync on the right](docs/images/readme/build-synced.svg)
 
 - **Author geometry as text** — parametric `brush build` generators (`cube`, `staircase`, `spiral`, `revolve`, …) emit T3D you can pipe anywhere.
-- **Query & edit by name** — `find` / `show` / `clip` / `replace` compose over stdin.
+- **Query & edit by name** — `find` / `show` / `clip` / `replace` compose over stdin (pipe one command's output into the next).
 - **Decode retail maps** — `level import` turns a compiled `.dx`/`.unr` into a queryable, diffable T3D tree, natively.
 - **Render offline** — labeled wireframes and CSG-solved textured views, without the editor.
-- **Faithful build** — unbuilt T3D output already matches UnrealEd byte-for-byte; the full `level materialize` build (BSP + lighting) is being driven to the same parity, verified incrementally.
+- **Faithful build** — unbuilt T3D output already matches UnrealEd byte-for-byte; the full `level materialize` build — compiling the trunk to a playable map (BSP + lighting) — is being driven to the same parity, verified incrementally.
 - **Git-native** — levels are per-actor T3D files that diff and merge like code.
 
 ## What it is
