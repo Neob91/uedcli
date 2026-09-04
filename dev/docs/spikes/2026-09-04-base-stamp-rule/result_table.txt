@@ -1,0 +1,32 @@
+class                      anc                     phys              bCW bStat  Base  target
+-----------------------------------------------------------------------------------------------
+DeusEx.Pinball             Decoration              PHYS_Falling       T   F    YES   levelinfo levelinfo0
+DeusEx.Toilet              Decoration              PHYS_None          T   F    YES   levelinfo levelinfo0
+DeusEx.TrashBag            Decoration              PHYS_Falling       T   F    YES   levelinfo levelinfo0
+DeusEx.DataCube            Decoration              PHYS_Falling       T   F    YES   levelinfo levelinfo0
+DeusEx.ComputerPersonal    Decoration              PHYS_Falling       T   F    YES   levelinfo levelinfo0
+DeusEx.SecurityCamera      Decoration              PHYS_Rotating      F   F    no    
+DeusEx.AmmoRocket          Inventory               PHYS_Falling       F   F    no    
+DeusEx.WeaponPistol        Inventory               PHYS_Falling       F   F    no    
+DeusEx.Bartender           Pawn                    PHYS_None          T   F    YES   levelinfo levelinfo0
+DeusEx.Spark               Effects                 PHYS_None          T   F    no    
+DeusEx.ParticleProxy       Effects                 PHYS_None          T   F    no    
+DeusEx.GasGrenade          Projectile              PHYS_Falling       T   F    no    
+Engine.Light               Light                   PHYS_None          F   T    no    
+Engine.PathNode            NavigationPoint         PHYS_None          F   T    no    
+Engine.PatrolPoint         NavigationPoint         PHYS_None          F   T    no    
+Engine.AmbientSound        Keypoint                PHYS_None          F   T    no    
+Engine.InterpolationPoint  Keypoint                PHYS_None          F   F    no    
+DeusEx.MoverCollider       Keypoint                PHYS_None          F   F    no    
+Engine.Trigger             Triggers                PHYS_None          F   F    no    
+DeusEx.AlarmLight          Decoration              PHYS_Rotating      T   F    YES   levelinfo levelinfo0
+DeusEx.SatelliteDish       Decoration              PHYS_Rotating      T   F    YES   levelinfo levelinfo0
+DeusEx.Poolball            Decoration              PHYS_Rolling       T   F    YES   levelinfo levelinfo0
+DeusEx.Fish                Pawn                    PHYS_Swimming      T   F    YES   levelinfo levelinfo0
+DeusEx.Fly                 Pawn                    PHYS_Flying        T   F    YES   levelinfo levelinfo0
+DeusEx.CarWrecked          Decoration              PHYS_None          T   T    YES   levelinfo levelinfo0
+DeusEx.FirePlug            Decoration              PHYS_None          T   T    YES   levelinfo levelinfo0
+DeusEx.DeusExMover         Mover/Brush             PHYS_MovingBrush   F   F    no    
+
+STAMPED: ['Decoration', 'Pawn']
+NOT   : ['Decoration', 'Effects', 'Inventory', 'Keypoint', 'Light', 'Mover/Brush', 'NavigationPoint', 'Projectile', 'Triggers']
