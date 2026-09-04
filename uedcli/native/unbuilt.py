@@ -642,15 +642,19 @@ def _assemble_once(level, *, version: int = 69, level_name: str = "MyLevel",
     li_name = li.name if li else "LevelInfo0"
     asm.levelinfo_name = li_name
 
-    # The editor stamps `Base=<the LevelInfo>` at SPAWN, before the T3D props apply, so the
-    # decision reads the CLASS-DEFAULT flags: bStatic=False, bCollideWorld=True,
-    # Physics=PHYS_None. Perfect separation on the UNATCO golden (141/1250, zero exceptions) and
-    # on OceanLab -- where the class-vs-effective distinction is live: `MiniSub0` authors
-    # Physics=PHYS_Swimming yet IS stamped (class default PHYS_None), `GasGrenade1` authors
-    # PHYS_None yet is NOT (class default PHYS_Projectile). An authored `Base` flows through the
-    # typed props instead.
+    # The editor's SpawnActor->FindBase stamps `Base=<the LevelInfo>` at SPAWN, before the T3D props
+    # apply, so the decision reads CLASS-DEFAULT flags: it fires iff bCollideWorld AND
+    # IsA(Decoration|Inventory|Pawn). No physics clause, no bStatic clause -- both refuted by the
+    # 27-class UED22 matrix (spike 2026-09-04-base-stamp-rule): Falling/Rotating/Rolling/Swimming/
+    # Flying decos+pawns are all stamped; static CarWrecked/FirePlug are stamped; Effects/Projectile
+    # (Spark/GasGrenade) are NOT, by ancestry; SecurityCamera (bCollideWorld=False) is NOT. Inventory
+    # is inert here (no concrete Inventory class defaults bCollideWorld=True) but kept faithful to the
+    # editor's IsA set. An authored `Base` wins (spawn precedes T3D apply), so it is never restamped.
     from uedcli.classdefaults import ClassDefaults
+    from uedcli.classindex import ClassIndex
     cdefaults = ClassDefaults(lambda p: schema_paths.get(p.casefold()))
+    class_index = ClassIndex.from_files(sorted(set(schema_paths.items())))
+    _BASE_STAMP_ANCESTORS = ("Engine.Decoration", "Engine.Inventory", "Engine.Pawn")
 
     def _base_stamped(name: str) -> bool:
         a = level.actors.get(name)
@@ -660,9 +664,9 @@ def _assemble_once(level, *, version: int = 69, level_name: str = "MyLevel",
             d = cdefaults.for_class(a.cls).defaults
         except Exception:
             return False
-        return (str(d.get(("bstatic", 0))) != "True"
-                and str(d.get(("bcollideworld", 0))) == "True"
-                and str(d.get(("physics", 0)) or "PHYS_None") == "PHYS_None")
+        if str(d.get(("bcollideworld", 0))) != "True":
+            return False
+        return any(class_index.descends_from(a.cls, base) for base in _BASE_STAMP_ANCESTORS)
 
     def _li_body():
         # Level->self plus the editor's save-time stamps: TimeSeconds/AIProfile (session clock and
@@ -731,9 +735,7 @@ def _assemble_once(level, *, version: int = 69, level_name: str = "MyLevel",
 
     # A MOVER is a dynamic actor the GAME loads: the golden marks the mover actor 0x02070001 and
     # its shape Model 0x00070001 (load-all), unlike a static brush's edit-only 0x02340001/0x00340001.
-    from uedcli.classindex import ClassIndex
-    from uedcli.movers import is_mover
-    class_index = ClassIndex.from_files(sorted(set(schema_paths.items())))
+    from uedcli.movers import is_mover  # class_index built above (base-stamp gate)
 
     def _is_mover(name: str) -> bool:
         a = level.actors.get(name)

@@ -514,6 +514,61 @@ def test_content_brush_shape_polys_keep_ilink_minus_one():
     assert all(fp.i_link != -1 for fp in _builder_cube_polys())
 
 
+def _actor_authors_base(dx_path: str, actor_name: str) -> bool:
+    """True if the SAVED actor body carries a `Base` tagged property. Reads raw tags (the offline
+    decoder drops `Base` as non-`var()`-editable), skipping the StateFrame every RF_HasStack actor
+    carries: Node(ci), StateNode(ci), ProbeMask(8), LatentAction(4), Offset(ci) when Node!=0."""
+    from uedcli.upackage import load_package, read_compact_index, read_property_tags
+    pkg = load_package(dx_path)
+    i0 = next(i for i, e in enumerate(pkg.exports)
+              if pkg.names[e["nm"]].casefold() == actor_name.casefold())
+    e = pkg.exports[i0]
+    pos, end = e["soff"], e["soff"] + e["ssize"]
+    node, pos = read_compact_index(pkg.buf, pos)
+    _statenode, pos = read_compact_index(pkg.buf, pos)
+    pos += 12
+    if node != 0:
+        _offset, pos = read_compact_index(pkg.buf, pos)
+    tags, _ = read_property_tags(pkg, pos, end)
+    return any(t.name.casefold() == "base" for t in tags)
+
+
+@pytest.mark.skipif(not (_UED22 / "DeusEx.u").is_file(),
+                    reason="committed UED22/DeusEx.u not present (Deco/Effects class defaults)")
+def test_base_stamp_rule_collideworld_and_ancestry(tmp_path):
+    """The editor stamps `Base=LevelInfo` at spawn iff class-default bCollideWorld AND
+    IsA(Decoration|Inventory|Pawn) -- no physics/bStatic clause (spike 2026-09-04-base-stamp-rule):
+    - `DeusEx.Pinball` (Decoration, bCollideWorld=True, class-default PHYS_Falling) IS stamped
+      (proves no physics-must-be-None clause);
+    - `DeusEx.Spark` (Effects, bCollideWorld=True) is NOT (ancestry gate excludes it despite bCW);
+    - `DeusEx.SecurityCamera` (Decoration, bCollideWorld=False) is NOT;
+    - an actor that AUTHORS `Base` keeps its own, never a second stamp."""
+    def _actor(cls: str, name: str, extra: str = "") -> str:
+        return (f"Begin Actor Class={cls} Name={name}\n"
+                f"    Location=(X=64.000000,Y=64.000000,Z=64.000000)\n{extra}"
+                f"    Name=\"{name}\"\nEnd Actor\n")
+    t3d = ("Begin Map\n"
+           "Begin Actor Class=Engine.LevelInfo Name=LevelInfo0\n    Name=\"LevelInfo0\"\nEnd Actor\n"
+           + _actor("DeusEx.Pinball", "Pinball0")
+           + _actor("DeusEx.Spark", "Spark0")
+           + _actor("DeusEx.SecurityCamera", "SecCam0")
+           + _actor("DeusEx.Pinball", "PinballBased",
+                    extra="    Base=LevelInfo'MyLevel.LevelInfo0'\n")
+           + "End Map\n")
+    level = model.parse_t3d(t3d)
+    level.order = level_order(level)
+    normalize_level(level)
+    pkg_dirs = [str(_UED22)]
+    dx_bytes, _warnings = assemble_unbuilt(level, schema=substrate_schema(*pkg_dirs),
+                                           pkg_dirs=pkg_dirs)
+    dx = tmp_path / "Map.dx"
+    dx.write_bytes(dx_bytes)
+    assert _actor_authors_base(str(dx), "Pinball0")       # Decoration + bCollideWorld -> stamped
+    assert not _actor_authors_base(str(dx), "Spark0")     # Effects: bCW True but ancestry excludes
+    assert not _actor_authors_base(str(dx), "SecCam0")    # Decoration but bCollideWorld=False
+    assert _actor_authors_base(str(dx), "PinballBased")   # authored Base flows through (not dropped)
+
+
 def test_brush_bdynamiclight_is_dropped(tmp_path):
     """The editor resets `bDynamicLight` to the class default on a brush at MAP IMPORT and omits it
     from the save; a trunk-authored `bDynamicLight=True` on a brush must not reach the built map
