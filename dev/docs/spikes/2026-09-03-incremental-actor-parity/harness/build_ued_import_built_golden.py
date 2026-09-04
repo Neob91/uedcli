@@ -41,7 +41,7 @@ from uedcli.materialize import levelinfo_first_order, _short_class  # noqa: E402
 from uedcli.packages import editor_search_dirs, ensure_load         # noqa: E402
 from uedcli.uuid7 import uuid7                                      # noqa: E402
 
-from build_ued_golden import _scratch_project, _wait_idle           # noqa: E402
+from build_ued_golden import _scratch_project                       # noqa: E402
 from build_ued_import_golden import _quote_str_props                # noqa: E402
 
 
@@ -134,22 +134,27 @@ def main() -> int:
         container = ensure_editor(ed_id, mounts=mounts, state_dir=state_dir)
         ed = Driver(container=container)
         print(f"editor up: {container}", flush=True)
-        ensure_load(ed, ref_pkgs, search_dirs=host_search_dirs, mounts=mounts)
-        _wait_idle(ed, label="obj-load")
+        # Write the IMPORT source EAGERLY — it must exist before the EXEC script runs.
         t3d_path = ed.write_work_file(emit_map(actors), ext="t3d")
-        ed.exec(f"{args.import_verb} FILE={to_z_path(t3d_path)}")
-        _wait_idle(ed, label="map-import", timeout=args.timeout, quiet_reads=args.quiet_reads)
-        for i, cmd in enumerate(c.strip() for c in args.rebuild_cmd.split(";") if c.strip()):
-            print(f"  REBUILD[{i}]: {cmd} ...", flush=True)
-            ed.exec(cmd)
-            _wait_idle(ed, label=f"rebuild[{i}]", timeout=args.timeout, quiet_reads=args.quiet_reads)
-        if not args.no_light:
-            print("  LIGHT APPLY ...", flush=True)
-            ed.light_apply()
-            _wait_idle(ed, label="light-apply", timeout=args.timeout, quiet_reads=args.quiet_reads)
         work_out = xfer.work_path("dx")
-        print("  MAP SAVE ...", flush=True)
-        size = ed.map_save(work_out)
+        # ONE `EXEC <file>` batch instead of a CPU-idle barrier after every verb. The engine runs the
+        # script line-by-line through its OWN exec loop — each heavy verb (MAP REBUILD/LIGHT APPLY)
+        # completes before the next line — so completion is a SINGLE signal: the saved .dx appearing
+        # (`run_script(produces=…)`). This is the same fast path `apply.run_materialize` uses (spike
+        # 2026-07-18-exec-file-console-batch); `_wait_idle`/`quiet_reads` are no longer used here.
+        ed.begin_script()
+        ensure_load(ed, ref_pkgs, search_dirs=host_search_dirs, mounts=mounts)  # OBJ LOADs recorded
+        if args.map_new_first:
+            ed.map_new()
+        ed.exec(f"{args.import_verb} FILE={to_z_path(t3d_path)}")
+        for cmd in (c.strip() for c in args.rebuild_cmd.split(";") if c.strip()):
+            ed.exec(cmd)
+        if not args.no_light:
+            ed.light_apply()
+        ed.exec(f"MAP SAVE FILE={to_z_path(work_out)}")
+        print("  EXEC batch: OBJ LOAD -> import -> rebuild -> light -> MAP SAVE (one submission) ...",
+              flush=True)
+        size = ed.run_script(produces=work_out, timeout=args.timeout)
         host_out.parent.mkdir(parents=True, exist_ok=True)
         xfer.cp_out(container, work_out, str(host_out))
         print(f"WROTE {host_out} ({size} bytes container-side, "
