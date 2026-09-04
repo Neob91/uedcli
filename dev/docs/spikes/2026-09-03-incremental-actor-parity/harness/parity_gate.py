@@ -176,14 +176,25 @@ def _model_tail(idt: Ident, pos: int, end: int) -> list:
         start[0] = npos
         return npos
 
+    def mask_at(pos: int) -> int:
+        _, npos = read_compact_index(buf, pos)
+        flush(pos)
+        toks.append(("MV",))                            # masked orphan-vert iVertex
+        start[0] = npos
+        return npos
+
     for _ in range(2):                                  # Vectors, Points
         n, pos = read_compact_index(buf, pos); pos += 12 * n
     n, pos = read_compact_index(buf, pos)               # Nodes
+    live_verts: set[int] = set()                        # vert slots in a live node ring
     for _ in range(n):
         pos += 16 + 8 + 1
+        node_cis = []
         for _ in range(4 + 5 + 1):
-            _, pos = read_compact_index(buf, pos)
+            v, pos = read_compact_index(buf, pos)
+            node_cis.append(v)
         pos += 8
+        live_verts.update(range(node_cis[0], node_cis[0] + node_cis[9]))  # iVertPool..+NumVertices
     n, pos = read_compact_index(buf, pos)               # Surfs
     for _ in range(n):
         pos = obj_at(pos)                               # Texture
@@ -193,9 +204,17 @@ def _model_tail(idt: Ident, pos: int, end: int) -> list:
         pos += 4
         pos = obj_at(pos)                               # Actor (brush)
     n, pos = read_compact_index(buf, pos)               # Verts
-    for _ in range(n):
-        _, pos = read_compact_index(buf, pos)
-        _, pos = read_compact_index(buf, pos)
+    for i in range(n):
+        # An orphan vert (slot in no live node ring) has an iVertex nothing dereferences: UED22's
+        # own build stores an out-of-range orphan iVertex and its maps ship/play. Mask it (excluded
+        # 2026-09-04, two opus reviews + owner); iSide and every live vert stay compared. Divergent
+        # liveness => node rings differ => the Nodes tokens already FAIL, so a per-buffer orphan set
+        # is safe (it can't hide a live-vert divergence).
+        if i in live_verts:
+            _, pos = read_compact_index(buf, pos)       # iVertex (live: compared)
+        else:
+            pos = mask_at(pos)                          # iVertex (orphan: excluded)
+        _, pos = read_compact_index(buf, pos)           # iSide (always compared)
     pos += 4                                            # NumSharedSides
     nz = struct.unpack_from("<i", buf, pos)[0]; pos += 4
     for _ in range(nz):
