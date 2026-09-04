@@ -117,3 +117,15 @@ gate: the comparison must be IDENTITY/permutation-based, not raw-byte-skip — r
 export orders; still assert the surviving (non-None) Actors set AND order match (Actors order = CSG
 precedence, gameplay-load-bearing), and `MyLevel` + all import names unchanged. Only then are the raw
 export order / counter names / null slots safe to ignore.
+
+### Opus review #2 (2026-09-04): also inconsequential to GAMEPLAY, RUNTIME, SAVEGAMES
+
+Grounded in the package format + retail corpus + compiled scripts. Polys names never script-visible
+(gameplay resolves by class+Tag or qualified DynamicLoadObject; no FindObject on map-local BSP).
+`Actors` array is not script-indexable (no `Level.Actors[N]`); iterators skip None and follow Actors
+ORDER; inter-actor refs are export indices, not array positions. Export order: the savegame
+counterexample FAILS — Deus Ex `SaveGame` writes a full self-contained `.dxs` package re-serialized
+from memory with its own tables (the shipped `.dx` order/holes/names are never persisted from the
+file; the `.dxs` resolves against itself); NetIndex is runtime-assigned. Same soundness condition
+(identity/permutation gate; surviving Actors set+order asserted). Residual assumption (corpus-backed):
+no engine path depends on a specific inter-object PostLoad/creation order.
