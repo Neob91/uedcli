@@ -15,14 +15,10 @@ build artifact. Deus Ex is the first supported game.
 > stable: verbs, flags and output change without notice. It's **mostly AI-built**, and some
 > docs are still being cleaned up. No support.
 
-![Composing a colonnade hall from text verbs and rendering it — no editor](docs/images/readme/hall-cast.svg)
+![Building a room from text verbs — terminal on the left, the CSG diagram rendering in sync on the right](docs/images/readme/build-synced.svg)
 
-The pipeline above builds a colonnade hall from `brush build` generators and renders it offline —
-no editor, no GUI. It produces:
-
-![hall.png — the rendered wireframe](docs/images/readme/hall-iso.png)
-
-*`hall.png`: gold = the subtracted room volume, blue = the additive columns and staircase.*
+*Left: the commands. Right: `actor diagram` re-rendering as each brush is added — a room, a
+carved doorway (gold = subtracted), two columns (blue = added). All offline, no editor.*
 
 - **Author geometry as text** — parametric `brush build` generators (`cube`, `staircase`, `spiral`, `revolve`, …) emit T3D you can pipe anywhere.
 - **Query & edit by name** — `find` / `show` / `clip` / `replace` compose over stdin; no GUI selection.
@@ -51,7 +47,7 @@ The `brush build` verbs — `cube`, `cylinder`, `cone`, `sheet`, `staircase`, `s
 `extrude`, `revolve` — print T3D to stdout; `actor diagram` renders any T3D, as a labeled
 wireframe or a CSG-solved view textured from your project's textures — both offline:
 
-![The hall, CSG-solved and textured offline](docs/images/readme/hall-textured.png)
+![The same room, CSG-solved and textured offline](docs/images/readme/room-textured.png)
 
 **Verbs compose over stdin.** Query verbs print one name per line; mutating verbs read that set
 from `-`. Clip a placed brush in place with show → clip → replace:
