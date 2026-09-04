@@ -111,7 +111,11 @@ def _trunk_to_actorspecs(level, schema):
             # DROP the trunk's `Brush=Model'MyLevel.<shape>'` string prop: `assemble._brush_body`
             # re-synthesizes the shape link as a LOCAL export ref. Left in, `convert_prop` would
             # resolve `MyLevel.<shape>` to a bogus package import that collides with the ULevel export.
-            raw_props = [(k, v) for (k, v) in raw_props if k != "Brush"]
+            # Also DROP `bDynamicLight`: the editor resets it to the class default (False) on a brush
+            # at MAP IMPORT and omits it from the save, so a trunk-authored `bDynamicLight=True`
+            # diverges from any editor build (byte-verified, UNATCO Brush74 at N=2).
+            raw_props = [(k, v) for (k, v) in raw_props
+                         if k != "Brush" and k.split("(")[0].casefold() != "bdynamiclight"]
         # MainScale/PostScale are typed model fields now, not props -- re-inject them as T3D strings
         # so they still serialize into the object's FPropertyTags (a Scale struct via convert_prop).
         from ..transform import emit_fscale
