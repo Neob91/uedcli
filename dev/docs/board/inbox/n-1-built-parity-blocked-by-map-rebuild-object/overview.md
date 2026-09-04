@@ -105,3 +105,15 @@ and the builder's stamped body. The built path may therefore DIVERGE from the 20
 builder ruling (Polys4/unbuilt shape → built needs Polys6 + Tag/Region stamp + rebuilt order) — this
 divergence is owner-approved. Fixes (a) builder Tag/Region stamp + (b) route built path through
 `saveorder.compute_tables` are being landed; an exclusion-aware parity gate encodes the 3 exclusions.
+
+### Opus review verdict (2026-09-04): all three CONFIRMED render-inconsequential
+
+Corpus-grounded (not native-code inference): shipped retail maps normally carry 29–329 `Actors`
+`None`-holes (`00_Intro` 329, `02_NYC_Street` 134) and export-order≠actor-order — the game loads them
+fine. Every intra-package ref is a signed export index resolved by identity; only the level object
+(`MyLevel`) and cross-package imports resolve by name, both unchanged. SOUNDNESS CONDITION on the
+gate: the comparison must be IDENTITY/permutation-based, not raw-byte-skip — resolve every ObjRef
+(Actors entries, Base/Owner/Level/Region, UModel refs) by class+outer-chain and remap across the two
+export orders; still assert the surviving (non-None) Actors set AND order match (Actors order = CSG
+precedence, gameplay-load-bearing), and `MyLevel` + all import names unchanged. Only then are the raw
+export order / counter names / null slots safe to ignore.
