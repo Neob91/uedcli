@@ -26,7 +26,7 @@ UnrealEd is a GUI editor: point-and-click, with no interface an agent can drive.
 authoring, decoding compiled maps, offline rendering — as small **verbs that pipe together**
 (`find` → `clip` → `replace`). Reads and edits are native compute against the T3D files in git;
 no editor in the loop. The one step still delegated to the editor is the final `level materialize`
-build (BSP + lighting bake), being brought native too. Because it's all text, an agent can drive
+build (BSP + lighting), being brought native too. Because it's all text, an agent can drive
 it end to end.
 
 ## See it work
