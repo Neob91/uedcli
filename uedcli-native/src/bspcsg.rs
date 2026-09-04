@@ -3528,11 +3528,28 @@ fn reorder_surfs_canonical(model: &mut Model, canon: &[(i32, i32)]) {
     for (new_i, &old_i) in new_order.iter().enumerate() {
         old_to_new[old_i] = new_i as i32;
     }
+    // The retained CSG soup (`model.polys`) froze each poly's `i_link = i_surf` at repartition
+    // `bsp_build`, indexing this same pre-canonical Surfs pool. It must be remapped, but NOT to the
+    // dense on-disk surf index the nodes use: UED22 numbers `Model.Polys` iLink in the FULL canon
+    // (incremental-CSG) surf space — the `canon` snapshot the repartition rebuilt from, which can be
+    // LARGER than the final pool when repartition merged a surf away. So the editor's iLink leaves a
+    // GAP at the merged surf's canon rank and can exceed the final surf count (e.g. WanChai N=4:
+    // 16 final surfs, a poly with iLink 16). Map each soup poly to its surf's canon RANK, not the
+    // dense index. When `canon` has no gap (UNATCO/NYC_Bar N=4) the rank equals the dense index.
+    let old_to_rank: Vec<i32> = (0..n).map(|i| {
+        let k = (model.surfs[i].i_actor, model.surfs[i].i_brush_poly);
+        rank.get(&k).copied().unwrap_or(base) as i32
+    }).collect();
     let new_surfs: Vec<BspSurf> = new_order.iter().map(|&i| model.surfs[i].clone()).collect();
     model.surfs = new_surfs;
     for node in &mut model.nodes {
         if node.i_surf >= 0 && (node.i_surf as usize) < old_to_new.len() {
             node.i_surf = old_to_new[node.i_surf as usize];
+        }
+    }
+    for p in &mut model.polys {
+        if p.i_link >= 0 && (p.i_link as usize) < old_to_rank.len() {
+            p.i_link = old_to_rank[p.i_link as usize];
         }
     }
 }
@@ -5294,6 +5311,44 @@ mod tests {
             vec![(-1, 0, 0), (0, -1, 0), (0, 0, -1), (0, 0, 1), (0, 1, 0), (1, 0, 0)],
             "all six ±axis box faces must appear exactly once"
         );
+    }
+
+    /// `reorder_surfs_canonical` must renumber the retained soup's `i_link` (2026-09-04 regression:
+    /// the soup froze `i_link = i_surf` at repartition `bsp_build` and was never remapped). Two
+    /// distinct maps: NODES take the dense on-disk surf index (`old_to_new`); the soup's `Model.Polys`
+    /// iLink takes the surf's CANON RANK — the incremental-CSG surf space repartition rebuilt from,
+    /// which is larger than the final pool when repartition merged a surf away, so the iLink leaves a
+    /// GAP at the merged rank and can exceed the final surf count (WanChai N=4: iLink 16, 16 surfs).
+    #[test]
+    fn reorder_surfs_canonical_renumbers_the_retained_soup_i_link() {
+        let surf = |actor: i32, bp: i32| BspSurf {
+            texture_ref: 0, poly_flags: 0, p_base: 0, v_normal: 0, v_texture_u: 0, v_texture_v: 0,
+            i_actor: actor, i_brush_poly: bp, pan: [0, 0], i_light_map: -1,
+        };
+        let plane = Plane { x: 0.0, y: 0.0, z: 1.0, w: 0.0 };
+
+        // (a) No-gap permutation: canon keys == final surfs. Rank == dense index, so nodes and the
+        // soup take the SAME 3-cycle map [1,2,0].
+        let mut m = Model::default();
+        m.surfs = vec![surf(2, 0), surf(2, 1), surf(2, 2)];
+        m.nodes = (0..3).map(|s| BspNode::leaf(plane, s, 0, 0)).collect();
+        m.polys = (0..3).map(|s| { let mut p = FPoly::new(vec![]); p.i_link = s; p }).collect();
+        reorder_surfs_canonical(&mut m, &[(2, 2), (2, 0), (2, 1)]);
+        assert_eq!(m.nodes.iter().map(|nd| nd.i_surf).collect::<Vec<_>>(), vec![1, 2, 0]);
+        assert_eq!(m.polys.iter().map(|p| p.i_link).collect::<Vec<_>>(), vec![1, 2, 0]);
+
+        // (b) Gap: canon carries a 4th key (9,9) at rank 1 that repartition merged away — no final
+        // surf holds it. Nodes stay dense [0,1,2]; the soup skips rank 1 and reaches iLink 3, one
+        // past the final 3-surf pool — reproducing UED22's out-of-range Polys iLink.
+        let mut g = Model::default();
+        g.surfs = vec![surf(2, 0), surf(2, 1), surf(2, 2)];
+        g.nodes = (0..3).map(|s| BspNode::leaf(plane, s, 0, 0)).collect();
+        g.polys = (0..3).map(|s| { let mut p = FPoly::new(vec![]); p.i_link = s; p }).collect();
+        reorder_surfs_canonical(&mut g, &[(2, 0), (9, 9), (2, 1), (2, 2)]);
+        assert_eq!(g.nodes.iter().map(|nd| nd.i_surf).collect::<Vec<_>>(), vec![0, 1, 2],
+                   "nodes keep the dense on-disk surf index");
+        assert_eq!(g.polys.iter().map(|p| p.i_link).collect::<Vec<_>>(), vec![0, 2, 3],
+                   "soup iLink takes the canon rank, gapping the merged-away surf");
     }
 
     /// Round 15 golden pin (`dev/docs/spikes/2026-09-01-dx-pbase-points-trace/`): `DX.dx`'s
