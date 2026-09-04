@@ -2,6 +2,7 @@
 
 ![pre-alpha](https://img.shields.io/badge/status-pre--alpha-orange)
 ![Python 3.12](https://img.shields.io/badge/python-3.12-blue)
+![license MIT](https://img.shields.io/badge/license-MIT-green)
 ![built with Claude](https://img.shields.io/badge/built%20with-Claude-8A5CF6)
 
 **Build, edit and render Unreal Engine 1 game levels from the command line — no GUI, so an AI
@@ -99,3 +100,7 @@ level to edit and lit `--game` renders — you supply your own Deus Ex copy;
 
 Targets one engine (UE1) and, so far, one game (Deus Ex). Coverage is uneven; use it to
 explore, not to depend on. Issues and ideas welcome.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
