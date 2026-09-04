@@ -620,13 +620,24 @@ def _assemble_once(level, *, version: int = 69, level_name: str = "MyLevel",
     url = URL(protocol="unreal", port=7777,
               map=("Index.unr" if version >= 69 else "Index.dx"))
 
-    # The editor's tagged-property SERIALIZATION order, per class, from the SAME schema search
-    # path (the editor's own `.u` shadow the game's -- the two disagree on prop set AND order).
-    from uedcli.uprops.uclass import class_serialization_order
+    # Schema search path for the base-stamp/mover class decisions below: the game's own v68 `.u`
+    # (bCollideWorld/ancestry answered as the game declares them).
     schema_paths: dict[str, str] = {}
     for d in (x for x in (pkg_dirs or ()) if x):
         for f in Path(d).glob("*.u"):
             schema_paths.setdefault(f.stem.casefold(), str(f))
+
+    # The editor's tagged-property SERIALIZATION order, per class, MUST come from the UED22
+    # substrate (`.u` the editor itself iterates at MAP SAVE), NOT the game's v68 `.u` -- the two
+    # disagree on prop order: e.g. `Engine.Actor.AmbientSound` ranks after `SoundVolume` in the
+    # game schema but right after `Tag` in UED22, the order the golden carries. So the rank
+    # resolver shadows any game copy of a package with the UED22 one.
+    from uedcli import tool_assets
+    from uedcli.uprops.uclass import class_serialization_order
+    rank_schema_paths: dict[str, str] = {}
+    for d in [str(tool_assets.uned_dir() / "UED22"), *(x for x in (pkg_dirs or ()) if x)]:
+        for f in Path(d).glob("*.u"):
+            rank_schema_paths.setdefault(f.stem.casefold(), str(f))
     rank_pkgs: dict = {}
     ranks: dict[str, dict[str, int]] = {}
 
@@ -634,7 +645,7 @@ def _assemble_once(level, *, version: int = 69, level_name: str = "MyLevel",
         r = ranks.get(fqcn.casefold())
         if r is None:
             r = class_serialization_order(
-                fqcn, resolver=lambda p: schema_paths.get(p.casefold()), _pkgs=rank_pkgs)
+                fqcn, resolver=lambda p: rank_schema_paths.get(p.casefold()), _pkgs=rank_pkgs)
             ranks[fqcn.casefold()] = r
         return r
 
