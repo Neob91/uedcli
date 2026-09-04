@@ -66,3 +66,11 @@ Rebuild native from a cached subset directly (no shipped-`.dx` lookup):
 `parity_compare.build_native_lit_dx(subset, subset.parent.parent)` on
 `_scratch/actor-parity/<level>/N2/maps/<level>`; gate with `parity_gate.py`. INCREMENTAL_POINTS is a
 runtime env read, so it toggles without a recompile.
+
+## Owner ruling 2026-09-04 — texture-name CASE folded into the gate (opus-confirmed)
+
+FName case is inconsequential (UE1 FNames are case-insensitive; native's `Sky` matches the `.utx`,
+the editor's `sky` is boot-order FName-pool state, not authored). `parity_gate.py` now compares
+name-table CONTENT, import paths, and every name/identity CASE-INSENSITIVELY (`_cf` casefold; still
+string-equality otherwise, so a genuine wrong-name still FAILS). This clears all WanChai texture-ref
+case residuals. Question folded.

@@ -46,8 +46,17 @@ from uedcli.native.saveorder import _model_polys_map  # noqa: E402
 PT_BYTE, PT_INT, PT_BOOL, PT_FLOAT, PT_OBJECT, PT_NAME, PT_ARRAY, PT_STRUCT, PT_STR = \
     1, 2, 3, 4, 5, 6, 9, 10, 13
 RF_HasStack = 0x02000000
-_POLYS_COUNTER = re.compile(r"^Polys\d+$")
-_LI_MASKED_PROPS = {"TimeSeconds", "AIProfile"}
+_POLYS_COUNTER = re.compile(r"^Polys\d+$", re.IGNORECASE)
+_LI_MASKED_PROPS = {"timeseconds", "aiprofile"}
+
+
+def _cf(s: str) -> str:
+    """Case-fold a name/identity for comparison. UE1 FNames are case-INSENSITIVE, so two names that
+    differ only in case are the SAME FName and resolve to the same object; the editor's process-global
+    FName pool can serialize either spelling (e.g. `CoreTexSky.Sky` vs `.sky`) — boot-order-determined,
+    not authored. Folding case (still requiring string equality otherwise) neutralises that without
+    masking a genuine wrong-name (owner ruling + opus confirmation 2026-09-04)."""
+    return s.casefold()
 
 
 class Ident:
@@ -79,7 +88,7 @@ class Ident:
         else:
             leaf = p.names[p.exports[i0]["nm"]]
         path = ".".join(reversed(chain + [leaf]))
-        return f"{cls} {path}"
+        return _cf(f"{cls} {path}")
 
     def import_identity(self, j: int) -> str:
         p = self.p
@@ -91,7 +100,7 @@ class Ident:
             if o >= 0:
                 break
             k = -o - 1
-        return f"import {p.names[cp]}.{p.names[cn]} '{'.'.join(reversed(chain))}'"
+        return _cf(f"import {p.names[cp]}.{p.names[cn]} '{'.'.join(reversed(chain))}'")
 
     def ref_identity(self, ref: int) -> str:
         if ref == 0:
@@ -109,7 +118,7 @@ def _canon_value(idt: Ident, t) -> object:
         return ("bool", t.bool_value)
     if t.ptype == PT_NAME:
         idx, _ = read_compact_index(t.raw, 0)
-        return ("name", p.names[idx] if 0 <= idx < len(p.names) else idx)
+        return ("name", _cf(p.names[idx]) if 0 <= idx < len(p.names) else idx)
     if t.ptype == PT_OBJECT:
         ref, _ = read_compact_index(t.raw, 0)
         return ("obj", idt.ref_identity(ref))
@@ -128,7 +137,7 @@ def _canon_props(idt: Ident, pos: int, end: int, *, mask_props: set[str] = froze
     tags, _ = read_property_tags(idt.p, pos, end)
     out = []
     for t in tags:
-        val = ("MASKED",) if t.name in mask_props else _canon_value(idt, t)
+        val = ("MASKED",) if t.name.casefold() in mask_props else _canon_value(idt, t)
         out.append((t.name, t.array_index, t.struct_name, val))
     return out
 
@@ -230,7 +239,7 @@ def _polys_tail(idt: Ident, pos: int, end: int) -> list:
     def ref_at(pos: int, kind: str) -> int:
         v, npos = read_compact_index(buf, pos)
         flush(pos)
-        toks.append((kind, idt.ref_identity(v) if kind == "O" else idt.p.names[v]))
+        toks.append((kind, idt.ref_identity(v) if kind == "O" else _cf(idt.p.names[v])))
         start[0] = npos
         return npos
 
@@ -345,7 +354,7 @@ def _fold_name(n: str) -> str:
 
 def _name_multiset(p) -> dict:
     from collections import Counter
-    return Counter(_fold_name(n) for n in p.names)
+    return Counter(_cf(_fold_name(n)) for n in p.names)
 
 
 # --------------------------------------------------------------------------- the gate
@@ -388,7 +397,7 @@ def gate(native_path: str, ued_path: str) -> tuple[bool, list[str]]:
     only_b = sorted(set(ids_b) - set(ids_a))
     if only_a or only_b:
         fails.append(f"export SET differs: only-native={only_a[:8]} only-ued={only_b[:8]}")
-    if "Level MyLevel" not in ids_a or "Level MyLevel" not in ids_b:
+    if "level mylevel" not in ids_a or "level mylevel" not in ids_b:
         fails.append("Level 'MyLevel' export missing on one side")
 
     for ident in sorted(set(ids_a) & set(ids_b)):
