@@ -17,8 +17,9 @@ build artifact. Deus Ex is the first supported game.
 
 ![Building a room from text verbs — terminal on the left, the CSG diagram rendering in sync on the right](docs/images/readme/build-synced.svg)
 
-*Left: the commands. Right: `actor diagram` re-rendering after each step — a room, then a solid
-block clipped down into a platform. Gold = subtracted, blue = added. All offline, no editor.*
+*Left: the commands. Right: `actor diagram` re-rendering after each step — two 45°-chamfered
+rooms joined by a corridor, with a semisolid column at the centre, then rotated 45°. Gold =
+subtracted, blue = added, pink = semisolid. All offline, no editor.*
 
 - **Author geometry as text** — parametric `brush build` generators (`cube`, `staircase`, `spiral`, `revolve`, …) emit T3D you can pipe anywhere.
 - **Query & edit by name** — `find` / `show` / `clip` / `replace` compose over stdin; no GUI selection.
@@ -47,7 +48,7 @@ The `brush build` verbs — `cube`, `cylinder`, `cone`, `sheet`, `staircase`, `s
 `extrude`, `revolve` — print T3D to stdout; `actor diagram` renders any T3D, as a labeled
 wireframe or a CSG-solved view textured from your project's textures — both offline:
 
-![The same room, CSG-solved and textured offline](docs/images/readme/room-textured.png)
+![The same scene, CSG-solved and textured offline](docs/images/readme/room-textured.png)
 
 **Verbs compose over stdin.** Query verbs print one name per line; mutating verbs read that set
 from `-`. Clip a placed brush in place with show → clip → replace:
