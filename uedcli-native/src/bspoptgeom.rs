@@ -246,8 +246,15 @@ pub fn eliminate_tjunctions(model: &mut Model) -> usize {
             // edge sees the freshly-shared vertex (see `add_point_link`'s table update).
             if !edge_shared_elsewhere(&table, p_a, p_b, ni as i32) {
                 edges_calling += 1;
-                inserted += add_point_link(model, &mut table, 0, p_a);
+                // Editor order (`Editor.dll 0x100369b8`-`0x100369f4`, re-disassembled 2026-09-04):
+                // the CURRENT vertex `B` is welded first (`[ebp-0x30]`=B pushed at 0x100369c7),
+                // the PREVIOUS `A=B-1` second (`[ebp-0x28]` at 0x100369e5) — i.e. `p_b` then `p_a`.
+                // When one edge's two endpoints both trigger a final ring re-append into two
+                // different nodes, this order fixes their FVert-pool offsets (the append order),
+                // so getting it backwards swaps those two rings' `iVertPool`. (The 2026-07-18
+                // decode in `42-bspoptgeom-decode.md` had the two calls reversed.)
                 inserted += add_point_link(model, &mut table, 0, p_b);
+                inserted += add_point_link(model, &mut table, 0, p_a);
             }
             b += 1;
         }
@@ -604,6 +611,55 @@ mod tests {
         n.i_back = -1;
         n.i_plane = -1;
         n
+    }
+
+    /// Pass-1 endpoint order (`Editor.dll 0x100369b8`-`0x100369f4`): for an edge `(A=B-1, B)` the
+    /// editor welds the CURRENT vertex `p_b` FIRST, the PREVIOUS `p_a` second.  When ONE edge's two
+    /// endpoints each split a DIFFERENT node's ring, that order sets which grown ring is appended to
+    /// `Verts` first — i.e. their `iVertPool` offsets.  Getting it backwards swaps the two rings
+    /// (the WanChai N=5 nodes 4/17 `iVertPool` 282↔288 divergence, 2026-09-04).
+    ///
+    /// Fixture: R = [p_b,(apex),p_a] so the (p_a,p_b) edge is the WRAP edge b=0 (both endpoints
+    /// first-seen there); X's ring is split at p_b, Y's at p_a; all three coplanar, chained R→X→Y.
+    /// Editor order welds p_b→X before p_a→Y, so `X.iVertPool < Y.iVertPool`.
+    #[test]
+    fn pass1_welds_current_vertex_before_previous() {
+        let mut m = Model::default();
+        m.points = vec![
+            Vec3::new(10.0, 0.0, 0.0),   // 0  p_b
+            Vec3::new(5.0, 20.0, 0.0),   // 1  R apex
+            Vec3::new(0.0, 0.0, 0.0),    // 2  p_a
+            Vec3::new(10.0, -5.0, 0.0),  // 3  X (CCW box right of x=10; left edge midpoint = p_b)
+            Vec3::new(20.0, -5.0, 0.0),  // 4  X
+            Vec3::new(20.0, 5.0, 0.0),   // 5  X
+            Vec3::new(10.0, 5.0, 0.0),   // 6  X
+            Vec3::new(-20.0, -5.0, 0.0), // 7  Y (CCW box left of x=0; edge 8->9 midpoint = p_a)
+            Vec3::new(0.0, -5.0, 0.0),   // 8  Y
+            Vec3::new(0.0, 5.0, 0.0),    // 9  Y
+            Vec3::new(-20.0, 5.0, 0.0),  // 10 Y
+        ];
+        let pl = Plane { x: 0.0, y: 0.0, z: 1.0, w: 0.0 };
+        m.verts = (0..11).map(|i| BspVert { i_vertex: i, i_side: -1 }).collect();
+        let mut r = leaf_node(pl, 0, 3); // ring verts 0,1,2 = p_b, apex, p_a
+        r.i_plane = 1;
+        let mut x = leaf_node(pl, 3, 4); // ring verts 3,4,5,6
+        x.i_plane = 2;
+        let y = leaf_node(pl, 7, 4); // ring verts 7,8,9,10
+        m.nodes = vec![r, x, y];
+
+        eliminate_tjunctions(&mut m);
+        let ring = |n: &BspNode| -> Vec<i32> {
+            (0..n.num_vertices)
+                .map(|j| m.verts[(n.i_vert_pool + j) as usize].i_vertex)
+                .collect()
+        };
+        assert!(ring(&m.nodes[1]).contains(&0), "X gained p_b (point 0): {:?}", ring(&m.nodes[1]));
+        assert!(ring(&m.nodes[2]).contains(&2), "Y gained p_a (point 2): {:?}", ring(&m.nodes[2]));
+        assert!(
+            m.nodes[1].i_vert_pool < m.nodes[2].i_vert_pool,
+            "editor welds current vertex (p_b→X) before previous (p_a→Y): X.iVertPool={} Y.iVertPool={}",
+            m.nodes[1].i_vert_pool, m.nodes[2].i_vert_pool
+        );
     }
 
     /// Two coplanar-adjacent quads sharing one edge (opposite winding) → exactly one shared side,
