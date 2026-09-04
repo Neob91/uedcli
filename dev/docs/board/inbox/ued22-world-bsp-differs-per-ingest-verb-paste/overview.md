@@ -61,3 +61,17 @@ Net: **MAP IMPORTADD of a T3D whose first brush is a sacrificial builder** yield
 (6314) AND carries movers with their models AND matches native's serialization — a single valid
 full-binary reference. Retail (5188) stays unreproducible and is not a byte target.
 [[incremental-actor-parity]]
+
+## Owner ruling 2026-09-04 — the symmetric dummy-builder convention
+
+ALWAYS add a dummy builder brush; make the two builds symmetric so
+`UED22 IMPORTADD-with-dummy == native materialize`:
+- **UED22 IMPORTADD reference**: emit an explicit dummy builder brush as `Actors[1]` (MAP NEW's
+  builder is discarded by `MAP IMPORTADD FILE=`, so it must be in the imported T3D). Match native's
+  synthesized builder (`unbuilt.py` `_BUILDER` = `DefaultBrush`/`Brush`) so the two packages align.
+- **native build**: skip `Actors[1]` by POSITION, dropping the `is_builder_brush` heuristic from
+  `build_world_model` (materialize.py:266). For a real content trunk this is a no-op (the extracted
+  trunk carries no builder brush — 0 `is_builder_brush` hits on UNATCO — and native's synthesized
+  dummy is already excluded from CSG by not being a CSG input). Keep the `is_builder_brush` function:
+  it has many other callers (add/parse/stash/preview filters).
+- Both then exclude `Actors[1]` identically ⇒ world = CSG(`Actors[2..]`) = real brushes = 6314.
