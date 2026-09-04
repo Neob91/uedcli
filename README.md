@@ -4,11 +4,11 @@
 ![Python 3.12](https://img.shields.io/badge/python-3.12-blue)
 ![built with Claude](https://img.shields.io/badge/built%20with-Claude-8A5CF6)
 
-**uedcli reimplements UnrealEd's level-editing capability as a CLI for agents.** Query, author,
-build and render classic Unreal Engine 1 levels — Deus Ex to start — through composable text
-commands. No GUI, and no editor in the loop: brush geometry, CSG, T3D authoring, map decoding
-and rendering all run natively, in-process. The git-tracked T3D model (Unreal's text scene
-format) is the source of truth; the `.dx`/`.unr` map is a build artifact.
+**Build, edit and render Unreal Engine 1 game levels from the command line — no GUI, so an AI
+agent can do it end to end.** uedcli reimplements UnrealEd (the Unreal 1 editor) as text: brush
+geometry, CSG, and rendering run natively, in-process, no editor in the loop. The git-tracked T3D
+model (Unreal's text scene format) is the source of truth; the compiled `.dx`/`.unr` map is a
+build artifact. Deus Ex is the first supported game.
 
 > **Pre-alpha — expect breaking changes.** Published to get it out there, not because it's
 > stable: verbs, flags and output change without notice. It's **mostly AI-built**, and some
@@ -19,17 +19,23 @@ format) is the source of truth; the `.dx`/`.unr` map is a build artifact.
 *A subtracted room (gold) with additive pillars and a staircase (blue), built by piping
 `brush build` generators into `actor diagram` and rendered offline — no editor open.*
 
+- **Author geometry as text** — parametric `brush build` generators (`cube`, `staircase`, `spiral`, `revolve`, …) emit T3D you can pipe anywhere.
+- **Query & edit by name** — `find` / `show` / `clip` / `replace` compose over stdin; no GUI selection.
+- **Decode retail maps** — `level import` turns a compiled `.dx`/`.unr` into a queryable, diffable T3D tree, natively.
+- **Render offline** — labeled wireframes and CSG-solved textured views, no editor.
+- **Faithful build** — unbuilt T3D output already matches UnrealEd byte-for-byte; the full `level materialize` build (BSP + lighting) is being driven to the same parity, verified incrementally.
+- **Git-native** — levels are per-actor T3D files that diff and merge like code.
+
 ## What it is
 
-UnrealEd is a GUI editor: point-and-click, with no interface an agent can drive. uedcli
-**reimplements its level-editing capability as text** — brush geometry and CSG, T3D level
-authoring, decoding compiled maps, offline rendering — as small **verbs that pipe together**
-(`find` → `clip` → `replace`). Reads and edits are native compute against the T3D files in git;
-no editor in the loop. The one step still delegated to the editor is the final `level materialize`
-build (BSP + lighting), being brought native too. Because it's all text, an agent can drive
-it end to end.
+UnrealEd is a GUI editor — point-and-click, with no interface an agent can drive. uedcli exposes
+that same level-editing power as text an agent can drive: every read and edit is native compute
+against per-actor T3D files in git, no editor involved. The one step still delegated to the
+editor is the final `level materialize` build (BSP + lighting) — being brought native too.
 
 ## See it work
+
+![Piping brush build into actor diagram, live](docs/images/readme/compose-cast.svg)
 
 **Build geometry from stateless generators and render it — no game files, no editor:**
 
@@ -40,7 +46,7 @@ uedcli brush build cube --width 768 --breadth 512 --height 288 --csg subtract --
 
 The `brush build` verbs — `cube`, `cylinder`, `cone`, `sheet`, `staircase`, `spiral`,
 `extrude`, `revolve` — print T3D to stdout; `actor diagram` renders any T3D, as a labeled
-wireframe or a CSG-solved view textured from your project's textures (both offline, no editor):
+wireframe or a CSG-solved view textured from your project's textures — both offline:
 
 ![The same room, CSG-solved and textured offline](docs/images/readme/room-textured.png)
 
@@ -85,9 +91,8 @@ level to edit and lit `--game` renders — you supply your own Deus Ex copy;
   task-oriented guides (`docs/usage/`).
 - [`dev/docs/architecture.md`](dev/docs/architecture.md) — layers, the write pattern,
   invariants, the T3D trunk, how to add a verb.
-- [`dev/docs/unrealed/`](dev/docs/unrealed/README.md) — the verified UnrealEd-2-under-wine
-  knowledge base (exec verbs, quirks, rendering). Public docs on the engine are almost
-  nonexistent.
+- [`dev/docs/unrealed/`](dev/docs/unrealed/README.md) — the verified UnrealEd knowledge base
+  (exec verbs, quirks, rendering). Public docs on the engine are almost nonexistent.
 - [`dev/docs/board/`](dev/docs/board/README.md) — the roadmap, as a stage-queue of work items.
 
 ## Project status
