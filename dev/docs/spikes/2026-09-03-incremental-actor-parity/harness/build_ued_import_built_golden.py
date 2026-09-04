@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[5]
@@ -89,6 +90,11 @@ def main() -> int:
                          "the imported T3D.")
     ap.add_argument("--rebuild-cmd", default="MAP REBUILD",
                     help="';'-separated rebuild verbs (default bare `MAP REBUILD`).")
+    ap.add_argument("--settle-secs", type=float, default=2.0,
+                    help="after the EXEC batch's save, let the editor TICK this long, then re-save. "
+                         "A too-fast batch omits tick-stamped LevelInfo session fields "
+                         "(TimeSeconds/AIProfile/bHidden/bHiddenEd); the settle+re-save stamps them "
+                         "to match native, with none of the per-verb idle barriers.")
     ap.add_argument("--no-light", action="store_true", help="skip LIGHT APPLY")
     ap.add_argument("--timeout", type=float, default=3600.0)
     ap.add_argument("--quiet-reads", type=int, default=30)
@@ -136,25 +142,30 @@ def main() -> int:
         print(f"editor up: {container}", flush=True)
         # Write the IMPORT source EAGERLY — it must exist before the EXEC script runs.
         t3d_path = ed.write_work_file(emit_map(actors), ext="t3d")
-        work_out = xfer.work_path("dx")
         # ONE `EXEC <file>` batch instead of a CPU-idle barrier after every verb. The engine runs the
         # script line-by-line through its OWN exec loop — each heavy verb (MAP REBUILD/LIGHT APPLY)
-        # completes before the next line — so completion is a SINGLE signal: the saved .dx appearing
-        # (`run_script(produces=…)`). This is the same fast path `apply.run_materialize` uses (spike
-        # 2026-07-18-exec-file-console-batch); `_wait_idle`/`quiet_reads` are no longer used here.
+        # completes before the next — so completion is a SINGLE signal: the saved .dx appearing
+        # (`run_script(produces=…)`). Same fast path `apply.run_materialize` uses (spike
+        # 2026-07-18-exec-file-console-batch).
+        work_scratch = xfer.work_path("dx")
         ed.begin_script()
         ensure_load(ed, ref_pkgs, search_dirs=host_search_dirs, mounts=mounts)  # OBJ LOADs recorded
-        if args.map_new_first:
-            ed.map_new()
         ed.exec(f"{args.import_verb} FILE={to_z_path(t3d_path)}")
         for cmd in (c.strip() for c in args.rebuild_cmd.split(";") if c.strip()):
             ed.exec(cmd)
         if not args.no_light:
             ed.light_apply()
-        ed.exec(f"MAP SAVE FILE={to_z_path(work_out)}")
+        ed.exec(f"MAP SAVE FILE={to_z_path(work_scratch)}")
         print("  EXEC batch: OBJ LOAD -> import -> rebuild -> light -> MAP SAVE (one submission) ...",
               flush=True)
-        size = ed.run_script(produces=work_out, timeout=args.timeout)
+        ed.run_script(produces=work_scratch, timeout=args.timeout)
+        # Let the editor TICK so it stamps the tick-dependent LevelInfo session fields a too-fast
+        # batch omits (TimeSeconds/AIProfile/bHidden/bHiddenEd — not authored, editor-stamped), then
+        # re-save. Matches native's shape without masking, with none of the per-verb idle barriers.
+        time.sleep(args.settle_secs)
+        work_out = xfer.work_path("dx")
+        print(f"  settle {args.settle_secs}s + second MAP SAVE ...", flush=True)
+        size = ed.map_save(work_out)
         host_out.parent.mkdir(parents=True, exist_ok=True)
         xfer.cp_out(container, work_out, str(host_out))
         print(f"WROTE {host_out} ({size} bytes container-side, "
