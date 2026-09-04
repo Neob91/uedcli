@@ -152,7 +152,7 @@
             "order": "reorder EXISTING actors' CSG precedence by minting new order_values (no geometry change). CSG order is the (order_value, name) sort; --first makes an actor carve/add BEFORE everything else. Multiple actors move as a block preserving their relative order",
             "delete": "delete one or more actors from $UEDCLI_LEVEL",
             "bbox": "print the world axis-aligned bounding box (min/max/size/center) enclosing the given actors — ONE box over the whole set (a single actor prints its own box; the multi-actor case IS the union, so there is no --union flag: `actor find --folder castle.* | actor bbox -` gives the union). Honours each actor's rotation/scale/location; a point actor contributes a zero-size box at its Location",
-            "move": "move a single actor to/by a world coordinate",
+            "move": "move actor(s) by a world delta (--by, any count) or one actor to an absolute point (--to)",
             "prop": "read, set, or clear an actor's properties model-side, validated against the actor's class schema (no editor). Sub-verbs: set / unset / get",
             "rotate": "rotate a group of actors around a pivot (PITCH,YAW,ROLL in unreal rotation units, 16384 = 90°)",
             "diagram": "self-rendered orthographic wireframe of actors from $UEDCLI_LEVEL (brushes coloured by CSG op; point actors as sprites/markers). Model-side, host-only — no editor"
@@ -1900,15 +1900,15 @@
             {
               "class": "_StoreAction",
               "option_strings": [],
-              "dest": "name",
-              "nargs": null,
+              "dest": "names",
+              "nargs": "+",
               "const": null,
               "default": null,
               "required": true,
               "choices": null,
               "metavar": null,
               "converter": null,
-              "help": "actor Name to move (case-insensitive)",
+              "help": "actor Names to move (case-insensitive), or the single token - to read a newline-separated name list from stdin (e.g. `actor find … | actor move - --by 0,0,-64`); - is the sole source, not mixable",
               "mutex_group": null
             },
             {
@@ -1924,7 +1924,7 @@
               "choices": null,
               "metavar": "X,Y,Z",
               "converter": "parse_coord",
-              "help": "absolute world target position",
+              "help": "absolute world target — ONE actor only (a set → exit 2; use --by for a set)",
               "mutex_group": [
                 0,
                 0
@@ -1943,7 +1943,7 @@
               "choices": null,
               "metavar": "DX,DY,DZ",
               "converter": "parse_coord",
-              "help": "world delta applied to the actor's current Location",
+              "help": "world delta added to EVERY target's Location (any count; negatives allowed)",
               "mutex_group": [
                 0,
                 1

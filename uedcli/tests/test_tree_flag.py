@@ -254,7 +254,7 @@ def test_tree_level_edits_a_non_ambient_level(tmp_path, monkeypatch):
     trunk.write_level(proj / "maps" / "other",
                       Level(actors={"Wall": Actor(name="Wall", cls="Light", location=(0, 0, 0))},
                             order=["Wall"]), {"Wall": "m"})
-    args = _ns(cmd="actor", sub="move", name="Wall", to=(Decimal(5), Decimal(0), Decimal(0)),
+    args = _ns(cmd="actor", sub="move", names=["Wall"], to=(Decimal(5), Decimal(0), Decimal(0)),
                by=None, tree="level/other", project=str(proj))
     assert dispatch.dispatch(args) == 0
     got, _ = trunk.read_level(proj / "maps" / "other")
@@ -444,7 +444,7 @@ def test_stash_edit_end_to_end_through_dispatch(tmp_path, monkeypatch):
     # the prefab/level E2Es. `actor move --tree stash/bay` must land on the on-disk stash.
     proj, _ = _project(tmp_path, monkeypatch)
     _seed_stash(proj, "bay")
-    args = _ns(cmd="actor", sub="move", name="Box", to=(Decimal(5), Decimal(0), Decimal(0)),
+    args = _ns(cmd="actor", sub="move", names=["Box"], to=(Decimal(5), Decimal(0), Decimal(0)),
                by=None, tree="stash/bay", project=str(proj))
     assert dispatch.dispatch(args) == 0
     reread = level_sources.StashLevelSource(_register(proj), "bay").load()

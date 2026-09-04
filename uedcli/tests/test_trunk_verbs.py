@@ -93,7 +93,7 @@ def test_actor_delete_mutates_the_trunk(tmp_path, monkeypatch):
 def test_actor_move_persists_to_the_trunk(tmp_path, monkeypatch):
     proj, name = _project_with_level(tmp_path, monkeypatch)
     rc = dispatch.dispatch(_ns(cmd="actor", sub="move", project=str(proj),
-                               name="A_1", to=[10, 20, 30], by=None))
+                               names=["A_1"], to=[10, 20, 30], by=None))
     assert rc == 0
     got, _ = trunk.read_level(proj / "maps" / name)
     assert got.actors["A_1"].location == (10, 20, 30)                  # the move landed in the trunk

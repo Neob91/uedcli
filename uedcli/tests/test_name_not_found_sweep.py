@@ -117,6 +117,7 @@ _STDIN = [
     ("actor-bbox-stdin", ["actor", "bbox", "-"], f"{BAD}\n"),
     ("actor-delete-stdin", ["actor", "delete", "-"], f"{BAD}\n"),
     ("actor-order-stdin", ["actor", "order", "-", "--first"], f"{BAD}\n"),
+    ("actor-move-stdin", ["actor", "move", "-", "--by", "0,0,10"], f"{BAD}\n"),
     ("actor-rotate-stdin", ["actor", "rotate", "-", "--by", "0,0,90"], f"{BAD}\n"),
     ("actor-scale-stdin", ["brush", "scale", "-", "--by", "2,2,2"], f"{BAD}\n"),
     ("actor-apply-transform-stdin", ["brush", "apply-transform", "-"], f"{BAD}\n"),

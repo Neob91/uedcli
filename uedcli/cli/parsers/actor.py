@@ -347,13 +347,19 @@ def register(sub) -> None:
         help="emit the box as JSON ({min,max,size,center}, each {x,y,z}) instead of the text lines")
     _tree_flag(bbox)
 
-    mv = asub.add_parser("move", help="move a single actor to/by a world coordinate")
-    mv.add_argument("name", help="actor Name to move (case-insensitive)")
+    mv = asub.add_parser(
+        "move",
+        help="move actor(s) by a world delta (--by, any count) or one actor to an absolute "
+             "point (--to)")
+    mv.add_argument("names", nargs="+",
+                    help="actor Names to move (case-insensitive), or the single token - to read a "
+                         "newline-separated name list from stdin (e.g. `actor find … | actor move "
+                         "- --by 0,0,-64`); - is the sole source, not mixable")
     g = mv.add_mutually_exclusive_group(required=True)
-    g.add_argument("--to", type=parse_coord, metavar="X,Y,Z",
-                   help="absolute world target position")
-    g.add_argument("--by", type=parse_coord, metavar="DX,DY,DZ",
-                   help="world delta applied to the actor's current Location")
+    g.add_argument("--to", type=parse_coord, default=None, metavar="X,Y,Z",
+                   help="absolute world target — ONE actor only (a set → exit 2; use --by for a set)")
+    g.add_argument("--by", type=parse_coord, default=None, metavar="DX,DY,DZ",
+                   help="world delta added to EVERY target's Location (any count; negatives allowed)")
     _tree_flag(mv)
 
     pr = asub.add_parser(

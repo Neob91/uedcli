@@ -17,7 +17,7 @@ Query, mutate, and organize actors. See also [diagram](diagram.md) for rendering
 | [`actor add`](add.md) | mutate | write a T3D snippet into the trunk as new actors |
 | [`actor duplicate`](duplicate.md) | mutate | copy actors under fresh names, offset or anchored |
 | [`actor delete`](delete.md) | mutate | delete actors, restoring swept neighbours |
-| [`actor move`](move.md) | mutate | move a single actor |
+| [`actor move`](move.md) | mutate | translate a set by a delta (`--by`), or one actor to a point (`--to`) |
 | [`actor rotate`](rotate.md) | mutate | rotate a group of actors around a pivot |
 | [`actor order`](order.md) | mutate | reorder existing actors' CSG precedence |
 | [`actor prop set/unset`](prop.md) | mutate | set or clear properties in one atomic, schema-validated edit |
