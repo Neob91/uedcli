@@ -72,6 +72,24 @@ canonical parity-comparison entry point. It encodes the exact bar above (identit
 the exclusion set, the surviving-Actors assertion) and gives a PASS/FAIL. Use it; do not write a new
 comparison from scratch. `actor_parity.py` (same dir) drives the first-N-actors subset build + gate.
 
+## Testing (project rule, owner 2026-09-04)
+
+Tests must NOT block the parity work. For this project specifically:
+
+- **Run only the FEW tests relevant to the change — never the whole `pytest` suite.** This applies to
+  subagents AND the main session. The full suite is slow and crashes on the shared `/tmp` (512 MB,
+  other sessions churn it). Relevant files are typically `uedcli/tests/test_native_roundtrip.py`,
+  `test_materialize_defaultbrush.py`, `test_materialize_verb.py`, `test_normalize.py`, and
+  `test_board.py` (only when board items changed).
+- **Always in a STABLE repo dir**, never the shared `/tmp`: `TMPDIR=$PWD/_scratch/pttmp` and
+  `pytest -p no:cacheprovider -o cache_dir=_scratch/pttmp/pc`. Never pipe `bin/test`/`pytest` through
+  `tail` (it masks the exit code).
+- **Run tests in PARALLEL with the build/fix work, not as a gate** — they don't hold up a build or a
+  merge. **Bake any needed test fix into the same subagent change** that touches the code.
+- `cargo test` (the native core goldens) is fast and runs via the build image; keep it green, but it
+  is not the bottleneck — pytest is.
+- Pre-existing reds on master unrelated to this work: `test_doc_links`, `test_native_lit_room_ships_light_export_refs`.
+
 ## Where the detail lives
 
 - Process + rulings: `dev/docs/board/to-build/native-materialize/incremental-lockstep-full-structural-parity/`
