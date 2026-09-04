@@ -54,8 +54,10 @@ CORR2=$("$UED" "${P[@]}" actor duplicate "$CORR" --by 460,-460,0 2>/dev/null | t
 "$UED" "${P[@]}" actor prop set "$CORR2" Rotation.Yaw=-16384 >/dev/null 2>&1
 render "$FRAMES/x8.png"
 
-# 9) duplicate the chamfered room to the arch's far end
-"$UED" "${P[@]}" actor duplicate "$ROOM" --by 940,-940,0 >/dev/null 2>&1
+# 9) duplicate the chamfered room to the arch's far end, turned 90 degrees so
+# its less-clipped corners face the arch, same as room 1 does
+ROOM2=$("$UED" "${P[@]}" actor duplicate "$ROOM" --by 940,-940,0 2>/dev/null | tail -1)
+"$UED" "${P[@]}" actor prop set "$ROOM2" Rotation.Yaw=16384 >/dev/null 2>&1
 render "$FRAMES/x9.png"
 
 # 10-11) a semisolid cube column in the centre of each room
@@ -64,5 +66,5 @@ render "$FRAMES/x10.png"
 "$UED" "${P[@]}" brush build cube --width 120 --breadth 120 --height 320 --solidity semisolid --at 940,-940,160 --base-name Col 2>/dev/null | "$UED" "${P[@]}" actor add - >/dev/null 2>&1
 render "$FRAMES/x11.png"
 
-python3 "$HERE/render-synced-svg.py" "$FRAMES" "$ROOM" "$CORR" "$CORR2" "$OUT"
+python3 "$HERE/render-synced-svg.py" "$FRAMES" "$ROOM" "$CORR" "$CORR2" "$ROOM2" "$OUT"
 echo "wrote $OUT"

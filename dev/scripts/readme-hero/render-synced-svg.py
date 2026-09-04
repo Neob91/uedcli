@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Assemble the synced README hero SVG from rendered frames + the pipeline's names.
 
-Usage: render-synced-svg.py FRAMEDIR ROOM CORR CORR2 OUT.svg
+Usage: render-synced-svg.py FRAMEDIR ROOM CORR CORR2 ROOM2 OUT.svg
 Called by build-hero.sh. FRAMEDIR holds x1.png..x11.png (one per pipeline step);
-ROOM/CORR/CORR2 are the actor names the pipeline assigned, echoed into the
-shown commands so the terminal text matches what was actually run.
+ROOM/CORR/CORR2/ROOM2 are the actor names the pipeline assigned, echoed into
+the shown commands so the terminal text matches what was actually run.
 
 Left panel: a terminal revealing each command. Right panel: the level's
 `actor diagram` render after that command. Both are driven off one looping
@@ -12,7 +12,7 @@ timeline, so they stay in sync. The corner-clip phase is compressed 2.5x.
 """
 import base64, sys, html
 
-FRAMES, ROOM, CORR, CORR2, OUT = sys.argv[1:6]
+FRAMES, ROOM, CORR, CORR2, ROOM2, OUT = sys.argv[1:7]
 DUR = 36  # seconds, looping
 
 def b64(name):
@@ -44,6 +44,7 @@ rows = [
     (43,  "cmd",  f"uedcli actor duplicate {CORR} --by 460,-460,0   # a second corridor, out of the arch"),
     (43,  "cmd",  f"uedcli actor prop set {CORR2} Rotation.Yaw=-16384   # turned to keep going straight"),
     (51,  "cmd",  f"uedcli actor duplicate {ROOM} --by 940,-940,0   # the second room, at the arch's far end"),
+    (51,  "cmd",  f"uedcli actor prop set {ROOM2} Rotation.Yaw=16384   # turned to face the arch"),
     (59,  "cmd",  "uedcli brush build cube --width 120 --breadth 120 --height 320 --solidity semisolid --at 0,0,160 \\"),
     (59,  "cont", "| uedcli actor add -                          # column, room 1"),
     (67,  "cmd",  "uedcli brush build cube --width 120 --breadth 120 --height 320 --solidity semisolid --at 940,-940,160 \\"),
