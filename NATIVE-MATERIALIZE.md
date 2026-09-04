@@ -56,6 +56,11 @@ match; the surviving (non-`None`) `Actors` set AND order must match (Actors orde
   native's `.utx`-faithful `Sky`), not the trunk. The gate compares names, import paths, and every
   identity **casefold-equal** — a genuine wrong name still FAILS. Game-inconsequential (lookups are
   case-insensitive).
+- BSP node `node_flags` bits **`NF_PolyOccluded` (0x08)** + **`NF_BoxOccluded` (0x10)** (two opus
+  reviews + owner, 2026-09-04). Per-frame renderer occlusion scratch: the shipping game's
+  `URender::OccludeBsp` clears+recomputes them every frame from the camera, and `IsCsg` collision
+  strips 0x10 before testing — no reader consumes the persisted bits. The gate masks `node_flags &
+  ~0x18`; every other node-flag bit (NotCsg/NotVisBlocking/IsFront/…) stays compared.
 
 Any NEW candidate exclusion needs an opus review confirming inconsequence + the owner's explicit yes
 before it counts. No content carveouts (Movers included — native must build their private models).

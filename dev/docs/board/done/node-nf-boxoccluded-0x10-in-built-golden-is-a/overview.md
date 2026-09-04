@@ -64,3 +64,11 @@ the owner's explicit yes** before it counts as an exclusion. Parked here; do not
 - Cached: `_scratch/actor-parity/06_hongkong_wanchai_market/{native_N6,ref_N6}.dx`.
 - Gate: `parity_gate.py native_N6.dx ref_N6.dx` → 1 residual (`BODY model model2`).
 - Disasm sites above are in `uned/UED22/{Editor,Engine,Render}.dll`.
+
+## Resolved 2026-09-04 — EXCLUDED (owner + two opus reviews)
+
+`node_flags` bits NF_PolyOccluded (0x08) + NF_BoxOccluded (0x10) are per-frame renderer occlusion
+scratch, never read from the saved package (shipping-game `URender::OccludeBsp` clears+recomputes
+per frame; IsCsg strips 0x10). Gate masks `node_flags & ~0x18`; all other bits still compared
+(byte-flip test: 0x04 still FAILS, 0x10 PASSES). All three levels pass N=1..6. Recorded in
+NATIVE-MATERIALIZE.md.

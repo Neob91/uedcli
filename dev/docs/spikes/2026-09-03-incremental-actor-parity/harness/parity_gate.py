@@ -183,12 +183,19 @@ def _model_tail(idt: Ident, pos: int, end: int) -> list:
         start[0] = npos
         return npos
 
+    def nodeflags_at(pos: int) -> int:
+        flush(pos)
+        toks.append(("NF", buf[pos] & ~0x18))           # drop render-occlusion scratch bits
+        start[0] = pos + 1
+        return pos + 1
+
     for _ in range(2):                                  # Vectors, Points
         n, pos = read_compact_index(buf, pos); pos += 12 * n
     n, pos = read_compact_index(buf, pos)               # Nodes
     live_verts: set[int] = set()                        # vert slots in a live node ring
     for _ in range(n):
-        pos += 16 + 8 + 1
+        pos += 16 + 8                                   # FPlane + zone_mask (literal)
+        pos = nodeflags_at(pos)                          # node_flags: drop NF_PolyOccluded|NF_BoxOccluded
         node_cis = []
         for _ in range(4 + 5 + 1):
             v, pos = read_compact_index(buf, pos)
