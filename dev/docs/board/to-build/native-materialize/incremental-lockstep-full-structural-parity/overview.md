@@ -58,3 +58,15 @@ owner-ruled per-save-random engine fields: 16-byte package GUID, save timestamps
 
 Refs: `board/ued22-world-bsp-differs-per-ingest-verb-paste` (the Actors[1] cause + dummy convention),
 `spikes/2026-09-03-incremental-actor-parity`, `spikes/2026-09-02-unbuilt-structure-parity` (byte tools).
+
+## Owner ruling 2026-09-04 — consolidate to ONE parity script
+
+`parity_gate.py` is THE canonical parity-comparison script (documented in root `NATIVE-MATERIALIZE.md`,
+auto-loaded from `CLAUDE.md`). Purge the recent overlapping DRIVERS once parity_gate absorbs the
+primitives it needs: delete `subset_parity.py`, `actor_parity.py`, `parity_report.py`,
+`parity_compare.py`, `parity_lib.py`/`parity_pipeline.py` (fold needed bits in), `sweep_*`,
+`breadth_gate.py`, and their now-orphaned tests (`test_parity_*`, `test_sweep_*`) — AFTER parity_gate
+is self-contained and still passes N=1 on all three levels + `bin/test` green. Keep the reference
+BUILDERS (`build_ued_import_built_golden.py` etc.) and historical spike harnesses that are cited
+evidence but are not parity drivers. Do NOT delete the primitives parity_gate still imports until
+they're inlined.
