@@ -187,6 +187,10 @@ pub struct Model {
     pub verts: Vec<BspVert>,
     pub num_shared_sides: i32,
     pub zones: Vec<Zone>,
+    /// Post-`bspBuild` FPoly soup — the merged CSG world polys `bspBuild` consumed, retained verbatim
+    /// (the editor keeps them in `Model.Polys`; each poly's `i_link` is its allocated surf index).
+    /// Empty except on the world build. Consumed by Python assembly to emit `Model.Polys` byte-exact.
+    pub polys: Vec<crate::fpoly::FPoly>,
     pub field_0x54: i32,
     /// Render-bound `FBox` array (UModel+0xc0), indexed by node `i_render_bound`.  Built by the
     /// faithful `FilterBound` port (`passes::bsp_build_bounds`): one FBox per INTERIOR node
@@ -230,6 +234,7 @@ impl Default for Model {
             verts: Vec::new(),
             num_shared_sides: 0,
             zones: Vec::new(),
+            polys: Vec::new(),
             field_0x54: 0,
             bounds: Vec::new(),
             leaf_hulls: Vec::new(),

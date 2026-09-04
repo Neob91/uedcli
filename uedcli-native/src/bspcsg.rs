@@ -131,8 +131,12 @@ fn points_origin_reversed_enabled() -> bool {
 /// `EmptyModel(0,0)`), post-`bsp_build` (its second refresh), and after the frontier repartitions
 /// (`bspRepartition@0x49fc0`'s tail refresh) — never during brush CSG (round 14 live trace), never
 /// after optgeom. Closes `DX.dx`'s `p_base` residual to 0/26.
+/// DEFAULT since 2026-09-04 (owner ruling): the editor's incremental Points order is the ONLY
+/// byte-parity-correct pool order (matches UED22's `Model2` on UNATCO/WanChai N=2). Opt OUT to the
+/// legacy end-of-build `reorder_points_canonical` reconstruction with `UEDCLI_BSPCSG_CANONICAL_POINTS`
+/// (kept only so the two paths stay differentially testable — no production caller sets it).
 pub(crate) fn incremental_points_enabled() -> bool {
-    std::env::var("UEDCLI_BSPCSG_INCREMENTAL_POINTS").is_ok()
+    std::env::var("UEDCLI_BSPCSG_CANONICAL_POINTS").is_err()
 }
 
 fn bsp_add_point(model: &mut Model, v: Vec3) -> i32 {
@@ -2318,6 +2322,16 @@ fn bsp_build(model: &mut Model, polys: Vec<FPoly>) -> Result<(), BuildError> {
         };
         p.i_link = i_surf;
     }
+    // Retain the soup the editor keeps in `Model.Polys` (each poly's `i_link` now its surf index).
+    // bspBuild marks every processed poly `PF_EdProcessed` (0x40000000) and that bit ends up in the
+    // saved `Model.Polys`; OR it onto the SOUP CLONE only — the polys fed to the partitioner below
+    // must keep their real flags (PF_Portal etc. drive `find_best_split`'s scoring).
+    const PF_ED_PROCESSED: u32 = 0x4000_0000;
+    let mut soup = ready.clone();
+    for p in soup.iter_mut() {
+        p.poly_flags |= PF_ED_PROCESSED;
+    }
+    model.polys = soup;
     // Repartition: the byte-verified 12/0/GOOD engine params.
     split_poly_list(model, -1, NODE_ROOT, ready, 0, BALANCE, PORTAL_BIAS, Opt::Good, &mut 0, None)
 }
@@ -5621,10 +5635,10 @@ mod tests {
             CsgOper::Subtract,
         )];
 
-        std::env::set_var("UEDCLI_BSPCSG_INCREMENTAL_POINTS", "1");
-        let incremental = build_geometry_bspcsg(&brushes).unwrap();
-        std::env::remove_var("UEDCLI_BSPCSG_INCREMENTAL_POINTS");
+        let incremental = build_geometry_bspcsg(&brushes).unwrap();  // default is now incremental
+        std::env::set_var("UEDCLI_BSPCSG_CANONICAL_POINTS", "1");
         let default_path = build_geometry_bspcsg(&brushes).unwrap();
+        std::env::remove_var("UEDCLI_BSPCSG_CANONICAL_POINTS");
 
         assert_eq!(
             incremental.surfs.len(),
@@ -5655,6 +5669,23 @@ mod tests {
                     v.i_vertex
                 );
             }
+        }
+    }
+
+    /// The world CSG soup is RETAINED (`Model.polys`, 2026-09-04): the editor keeps the post-`bspBuild`
+    /// FPoly list in `Model.Polys` and Python assembly emits it. For a lone unsplit box every surf maps
+    /// to exactly one soup poly, each carrying `PF_EdProcessed` (0x40000000) and `i_link` == its surf.
+    #[test]
+    fn world_build_retains_the_csg_soup_with_ed_processed_set() {
+        let brushes = [box_brush(256.0, 256.0, 128.0, Vec3::new(0.0, 0.0, 0.0), CsgOper::Add)];
+        let m = build_geometry_bspcsg(&brushes).unwrap();
+        assert_eq!(m.polys.len(), m.surfs.len(), "one soup poly per surf on an unsplit box");
+        assert!(!m.polys.is_empty(), "the soup must be retained, not discarded");
+        for (i, p) in m.polys.iter().enumerate() {
+            assert_eq!(p.poly_flags & 0x4000_0000, 0x4000_0000,
+                       "soup poly {i} must carry PF_EdProcessed");
+            assert!(p.i_link >= 0 && (p.i_link as usize) < m.surfs.len(),
+                    "soup poly {i} i_link must be a valid surf index, got {}", p.i_link);
         }
     }
 
@@ -5694,9 +5725,7 @@ mod tests {
             vec_xform: None,
             orientation: 1,
         };
-        std::env::set_var("UEDCLI_BSPCSG_INCREMENTAL_POINTS", "1");
-        let m = build_geometry_bspcsg(&[brush]).unwrap();
-        std::env::remove_var("UEDCLI_BSPCSG_INCREMENTAL_POINTS");
+        let m = build_geometry_bspcsg(&[brush]).unwrap();  // incremental is the default path now
 
         let p_base: Vec<i32> = m.surfs.iter().map(|s| s.p_base).collect();
         assert_eq!(p_base, vec![0, 1, 1, 3, 4, 2], "golden DX.dx surfs 0-5 p_base");
