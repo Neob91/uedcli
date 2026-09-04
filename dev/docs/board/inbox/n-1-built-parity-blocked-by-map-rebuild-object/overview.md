@@ -1,6 +1,6 @@
 +++
 priority = "p1"
-kind = "finding"
+kind = "debug"
 summary = "N=1 built parity blocked by MAP REBUILD object/actor lifecycle (export order, Polys counter names, Actors None-holes)"
 +++
 
@@ -92,3 +92,16 @@ This is a question for the owner, not a silent deviation.
 
 No code changed. `native_N1`/`ref_N1` cached under `_scratch/actor-parity/03_nyc_unatcohq/`.
 Pre-existing test red unrelated to this: `test_doc_links` (a superpowers spec anchor).
+
+## Owner ruling 2026-09-04 — exclude the rebuild-GC bookkeeping (opus-confirmed pending)
+
+The editor's MAP REBUILD object-table GC bookkeeping is EXCLUDED from the native byte-parity bar
+(owner chose this over cracking the rebuild lifecycle; an opus reviewer confirms render-inconsequence):
+- object auto-counter NAMES (`Polys4` vs `Polys6`),
+- Level `Actors` array `None`-holes,
+- export-table ORDER / freed-slot reuse.
+Everything else stays byte-exact: all object BODIES, geometry, lighting, name/import CONTENT+order,
+and the builder's stamped body. The built path may therefore DIVERGE from the 2026-09-03 unbuilt
+builder ruling (Polys4/unbuilt shape → built needs Polys6 + Tag/Region stamp + rebuilt order) — this
+divergence is owner-approved. Fixes (a) builder Tag/Region stamp + (b) route built path through
+`saveorder.compute_tables` are being landed; an exclusion-aware parity gate encodes the 3 exclusions.
