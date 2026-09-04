@@ -51,6 +51,11 @@ match; the surviving (non-`None`) `Actors` set AND order must match (Actors orde
   dereferences it: UED22's own build stores an out-of-range orphan `iVertex` and its maps ship/play.
   Masked with **dynamic per-build liveness** (only verts outside every live ring; `iSide` and all
   live verts stay compared) — divergent liveness changes the node rings, which are still compared.
+- `FName` CASE in name/import tables (owner + opus, 2026-09-04). UE1 `FName` is case-insensitive but
+  case-preserving; the editor's spelling comes from its boot-order global name pool (e.g. `sky` vs
+  native's `.utx`-faithful `Sky`), not the trunk. The gate compares names, import paths, and every
+  identity **casefold-equal** — a genuine wrong name still FAILS. Game-inconsequential (lookups are
+  case-insensitive).
 
 Any NEW candidate exclusion needs an opus review confirming inconsequence + the owner's explicit yes
 before it counts. No content carveouts (Movers included — native must build their private models).
