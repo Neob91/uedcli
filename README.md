@@ -21,13 +21,13 @@ format) is the source of truth; the `.dx`/`.unr` map is a build artifact.
 
 ## What it is
 
-UnrealEd is a crash-prone, GUI-only, largely undocumented editor from 1998. Rather than drive
-it, uedcli **reimplements what it does** — brush geometry and CSG, T3D level authoring, decoding
-compiled maps, offline rendering — as small **verbs that pipe together** (`find` → `clip` →
-`replace`). Reads and edits are native compute against the T3D files in git; the editor is never
-in the read/edit loop. The one step still delegated to the original editor is the final
-`level materialize` build (BSP + lighting bake) — and that's being brought native too. Because
-it's all text, an LLM can drive it end to end.
+UnrealEd is a GUI editor: point-and-click, with no interface an agent can drive. uedcli
+**reimplements its level-editing capability as text** — brush geometry and CSG, T3D level
+authoring, decoding compiled maps, offline rendering — as small **verbs that pipe together**
+(`find` → `clip` → `replace`). Reads and edits are native compute against the T3D files in git;
+no editor in the loop. The one step still delegated to the editor is the final `level materialize`
+build (BSP + lighting bake), being brought native too. Because it's all text, an agent can drive
+it end to end.
 
 ## See it work
 
