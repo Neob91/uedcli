@@ -1,6 +1,8 @@
----
-kind: finding
----
++++
+priority = "p2"
+kind = "debug"
+summary = "UED22 world BSP differs per ingest verb; root cause = Actors[1] builder-brush slot excluded from CSG; retail tree unreproducible; native == EDIT PASTE tree."
++++
 
 # Why UED22's world BSP differs by ingest verb — ROOT CAUSE: the Actors[1] builder-brush slot
 

@@ -1,6 +1,8 @@
----
-kind: finding
----
++++
+priority = "p3"
+kind = "debug"
+summary = "UNATCO first divergence localized to brush #137 (Brush85) via the incremental harness — a world-only geometry probe against the (superseded) paste golden; superseded by the Actors[1] builder-slot root cause."
++++
 
 # UNATCO first-divergent brush: #137 `Brush85` glass sheet → one extra Z=240 repartition split
 
