@@ -1,81 +1,92 @@
 # uedcli
 
-A control layer that turns the live UnrealEd-2.2-under-wine editor (in the `dx-lum-uned`
-container, driven by `Tools/uedcli/uned/wine_ctl.py`) into a **queryable, scriptable, auditable**
-level-design surface an LLM can drive entirely as text — no GUI. You issue semantic
-by-name commands; T3D is internal plumbing. The level **model is the source of truth**;
-the `.dx` is a build artifact; UnrealEd is the compiler/renderer/validator.
+![pre-alpha](https://img.shields.io/badge/status-pre--alpha-orange)
+![Python 3.12](https://img.shields.io/badge/python-3.12-blue)
+![built with Claude](https://img.shields.io/badge/built%20with-Claude-8A5CF6)
+
+**A text-only control layer for UnrealEd 2.2 (Unreal Engine 1).** Query, edit, build and
+render classic UE1 levels — Deus Ex to start — through composable commands, no GUI. The T3D
+level model (Unreal's text scene format) is the source of truth; the `.dx` map is a build
+artifact; UnrealEd is the compiler and renderer.
+
+> **Pre-alpha — expect breaking changes.** Published to get it out there, not because it's
+> stable: verbs, flags and output change without notice. It's **mostly AI-built**, and some
+> docs are still being cleaned up. No support.
+
+![A room built from composable brush verbs, rendered by actor diagram](docs/images/readme/hero-room-wire.png)
+
+*A subtracted room (gold) with additive pillars and a staircase (blue), built by piping
+`brush build` generators into `actor diagram` and rendered offline — no editor open.*
+
+## What it is
+
+UnrealEd is a crash-prone, GUI-only, largely undocumented editor from 1998. uedcli wraps a
+headless UnrealEd-2.2-under-wine and turns level design into scriptable text: small
+single-purpose **verbs that pipe together** (`find` → `clip` → `replace`), the T3D files kept
+in git as the model, and offline renderers. Because it's all text, an LLM can drive it end to
+end.
+
+## See it work
+
+**Build geometry from stateless generators and render it — no game files, no editor:**
+
+```bash
+uedcli brush build cube --width 768 --breadth 512 --height 288 --csg subtract --base-name Room \
+  | uedcli actor diagram --from-t3d - --view iso --out room.png
+```
+
+The `brush build` verbs — `cube`, `cylinder`, `cone`, `sheet`, `staircase`, `spiral`,
+`extrude`, `revolve` — print T3D to stdout; `actor diagram` renders any T3D, as a labeled
+wireframe or a textured, CSG-solved view (all offline):
+
+![The same room, CSG-solved and textured offline](docs/images/readme/room-textured.png)
+
+**Verbs compose over stdin.** Query verbs print one name per line; mutating verbs read that set
+from `-`. Clip a placed brush in place with show → clip → replace:
+
+```bash
+uedcli actor find --exact-class Brush \
+  | uedcli actor diagram -                       # render the set
+
+uedcli actor show Brush41 \
+  | uedcli brush clip - --axis z --offset 128 --keep below \
+  | uedcli brush replace Brush41 -               # cut it, put it back
+```
+
+**Render lit, in-game frames** by booting the real engine headless (`level photo --game`), or a
+fast offline draft (`level photo --native`). See
+[`docs/reference/level/photo.md`](docs/reference/level/photo.md).
 
 ## Quickstart
 
-uedcli is **pure Python 3.12** (one dep, `Pillow`). It runs **host-native** through the `bin/uedcli`
-launcher, which self-creates and reuses a dev venv (`bin/_venv.sh`, `.venv/`) — the host needs
-`python3.12` on `PATH`, nothing else. Only the editor/build containers uedcli *drives* use Docker.
-(Releases will be standalone Nuitka binaries; see [`dev/docs/dev-runtime.md`](dev/docs/dev-runtime.md).)
+uedcli is host-native Python **3.12** with one dependency (`Pillow`). The `bin/uedcli` launcher
+creates a dev venv on first run; the host just needs `python3.12` on `PATH`. Docker is only
+needed for the editor/build containers uedcli drives.
 
 ```bash
-# put the launcher on PATH (self-creates the dev venv on first run)
-export PATH="$PWD/Tools/uedcli/bin:$PATH"   # or: ln -s "$PWD/Tools/uedcli/bin/uedcli" ~/.local/bin/
+export PATH="$PWD/bin:$PATH"     # or symlink bin/uedcli into ~/.local/bin/
 
-uedcli level status
-uedcli actor find --exact-class Brush
-uedcli brush poly list Brush41
-uedcli actor diagram Brush41 --out /tmp/b41.png   # color quad wireframe PNG, poly-index labels
-# brush clip is a T3D filter (stdin→stdout); clip a placed brush in place with show→clip→replace
-uedcli actor show Brush41 | uedcli brush clip - --axis z --offset 128 --keep below | uedcli brush replace Brush41 -
-
-# offline unit tests (committed fixtures, no editor container) — same venv, host-native
-bin/test          # path-qualified: `test` alone is a shell builtin
+uedcli --help
+bin/test                         # offline unit tests (committed fixtures, no editor)
 ```
 
-Prefer a native interpreter? Everything above also works as `python3 -m uedcli …` /
-`python -m pytest uedcli -q` from a Python **3.12** environment with `Pillow>=11`.
+The `brush`/`actor`/`level` verbs above run inside a uedcli project. To create one — plus a
+level to edit and lit `--game` renders — you supply your own Deus Ex copy;
+`dev/scripts/setup-game-preview.sh` provisions everything (see
+[`dev/docs/deusex-assets-setup.md`](dev/docs/deusex-assets-setup.md)).
 
-## In-game photo setup (`level photo --game`)
+## Documentation
 
-`level photo --game` (the default photo backend) renders truly-lit in-game frames by booting the
-real game engine headless in a container. It needs Docker and the game's own files (copyrighted,
-user-supplied). One script provisions everything from a Deus Ex copy — a local install or
-ACE-installer directory, a download `--url`, or, with no argument at all, a built-in default
-download (the archive.org GOTY installer, checksum-pinned):
-
-```bash
-dev/scripts/setup-game-preview.sh                     # fully autonomous: the built-in default
-dev/scripts/setup-game-preview.sh /path/to/DeusEx     # or: --url https://…/DeusEx-installer.exe
-```
-
-It builds the `ued-x86-runtime` base image, installs the game files (`install-deusex-assets.sh
---with-maps`), writes `~/.uedcli/config.toml` `[games.deusex]` and a project `uedcli.toml`, then
-renders one frame to prove it works (`--no-verify` skips that; `--dry-run` shows the plan). The
-`uedcli-game` image and the preview package compile automatically on first use — no UnrealEd/UCC
-toolchain to install. Where to get a Deus Ex copy:
-[`dev/docs/deusex-assets-setup.md`](dev/docs/deusex-assets-setup.md).
-
-Once set up (from a project — the repo root is one):
-
-```bash
-uedcli level photo --game 'at:0,0,64;rot:0,0' --out-dir /tmp/shots   # a lit still of the trunk level
-# or point at a prebuilt map instead of the trunk:
-uedcli level photo --game --map dev/games/deusex/Maps/00_Training.dx 'at:0,0,64;rot:0,0' --out-dir /tmp/shots
-```
-
-The pose grammar and both backends (`--game`, offline `--native`) are in
-[`docs/reference/level/photo.md`](docs/reference/level/photo.md).
-
-## Documentation — see [`docs/`](docs/)
-
-- [`docs/reference/`](docs/reference/actor/README.md) — the CLI: query/mutate verbs, the `actor
-  diagram` viewer, `brush poly list`, brush clip, `stash`/`prefab`, the texture catalog
-  (`list`/`search`/`tags`/`classify`). [`docs/usage/`](docs/usage/README.md) has task-oriented
-  guides.
-- [`dev/docs/architecture.md`](dev/docs/architecture.md) — layers/modules, the write
-  pattern, invariants, the git-tracked T3D trunk, how to add a verb, testing, the substrate.
+- [`docs/`](docs/README.md) — user-facing: the CLI reference (`docs/reference/`) and
+  task-oriented guides (`docs/usage/`).
+- [`dev/docs/architecture.md`](dev/docs/architecture.md) — layers, the write pattern,
+  invariants, the T3D trunk, how to add a verb.
 - [`dev/docs/unrealed/`](dev/docs/unrealed/README.md) — the verified UnrealEd-2-under-wine
-  knowledge base: `commands.md` (exec verbs), `quirks.md` (gotchas), `rendering.md`
-  (screenshots), `extracting-from-dll.md`. **Read before touching the driver.**
-- [`dev/docs/board/`](dev/docs/board/README.md) — the roadmap, as a stage-queue cluster. Each
-  work item is a **directory** and the stage it is in **is** the directory it sits in, so it
-  advances with one `git mv`: `inbox/` (capture pool — also holds AI flags for the owner + their
-  open questions) → `to-spec/` → `to-spike/` → `to-plan/` → `to-build/` (the build queue), plus
-  `someday/`, `stale/` and `done/`.
-- Original design spec: `docs/superpowers/specs/2026-06-16-uedcli-design.md` (repo root).
+  knowledge base (exec verbs, quirks, rendering). Public docs on the engine are almost
+  nonexistent.
+- [`dev/docs/board/`](dev/docs/board/README.md) — the roadmap, as a stage-queue of work items.
+
+## Project status
+
+Targets one engine (UE1) and, so far, one game (Deus Ex). Coverage is uneven; use it to
+explore, not to depend on. Issues and ideas welcome.
